@@ -6,7 +6,6 @@
 #include "parser.h"
 #include "utils.h"
 
-
 ASTNode *create_node(NodeType type, const char *value) {
     fprintf(stderr, "Creating node of type %d with value '%s'\n", type, value ? value : "NULL");
 
@@ -24,15 +23,24 @@ ASTNode *create_node(NodeType type, const char *value) {
     return node;
 }
 
-
 ASTNode *parse_expression(const TokenList *tokens, size_t *index) {
     ASTNode *node = NULL;
 
-    if (tokens->tokens[*index].type == TOKEN_IDENTIFIER || tokens->tokens[*index].type == TOKEN_NUMBER) {
-        node = create_node(NODE_LITERAL, tokens->tokens[*index].value);
-        (*index)++;
+    if (*index >= tokens->count) {
+        fprintf(stderr, "Error: Unexpected end of tokens in expression\n");
+        exit(EXIT_FAILURE);
     }
 
+    // Handle literals (numbers, identifiers, or strings)
+    if (tokens->tokens[*index].type == TOKEN_IDENTIFIER || tokens->tokens[*index].type == TOKEN_NUMBER || tokens->tokens[*index].type == TOKEN_STRING) {
+        node = create_node(NODE_LITERAL, tokens->tokens[*index].value);
+        (*index)++;
+    } else {
+        fprintf(stderr, "Error: Expected literal or identifier, got '%s'\n", tokens->tokens[*index].value);
+        exit(EXIT_FAILURE);
+    }
+
+    // Handle binary operations
     while (*index < tokens->count && tokens->tokens[*index].type == TOKEN_OPERATOR) {
         ASTNode *op_node = create_node(NODE_BINARY_OP, tokens->tokens[*index].value);
         (*index)++;
@@ -45,10 +53,21 @@ ASTNode *parse_expression(const TokenList *tokens, size_t *index) {
 }
 
 ASTNode *parse_statement(const TokenList *tokens, size_t *index) {
+    if (*index >= tokens->count) {
+        fprintf(stderr, "Error: Unexpected end of tokens in statement\n");
+        exit(EXIT_FAILURE);
+    }
+
     if (tokens->tokens[*index].type == TOKEN_PRINT) {
         (*index)++;
         ASTNode *node = create_node(NODE_PRINT, NULL);
-        node->left = parse_expression(tokens, index);
+        // Check if the next token is a string or an expression
+        if (*index < tokens->count && tokens->tokens[*index].type == TOKEN_STRING) {
+            node->left = create_node(NODE_LITERAL, tokens->tokens[*index].value);
+            (*index)++;
+        } else {
+            node->left = parse_expression(tokens, index);
+        }
         return node;
     } else if (tokens->tokens[*index].type == TOKEN_IDENTIFIER && strcmp(tokens->tokens[*index].value, "let") == 0) {
         (*index)++;

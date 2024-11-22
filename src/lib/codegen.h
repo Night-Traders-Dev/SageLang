@@ -3,10 +3,10 @@
 #ifndef CODEGEN_H
 #define CODEGEN_H
 
-#include "parser.h"
 #include <stdio.h>
+#include "parser.h"
 
-// Generates C code from the AST
-void generate_code(const ASTNode *node, FILE *file);
+void generate_code(ASTNode *node, FILE *output);
+void reset_codegen_state();
 
 #endif // CODEGEN_H
