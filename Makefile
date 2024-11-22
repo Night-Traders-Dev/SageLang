@@ -1,22 +1,15 @@
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c11
-CFLAGSDEBUG = -Wall -Wextra -std=c11 -g
+CFLAGS = -Wall -Wextra -std=c11 -g
 LDFLAGS =
 
 # Directories
-SRC_DIR = .
-LIB_DIR = $(SRC_DIR)/lib
-ARM_DIR = $(SRC_DIR)/sage_arm
-RISC_DIR = $(SRC_DIR)/sage_risc
-BUILD_DIR = build
+SRC_DIR = src
+LIB_DIR = src/lib
+BUILD_DIR = src/build
 
 # Source files
-SOURCES = $(SRC_DIR)/sage_compiler.c \
-          $(LIB_DIR)/tokenizer.c \
-          $(LIB_DIR)/parser.c \
-          $(ARM_DIR)/sage_arm.c \
-          $(RISC_DIR)/sage_risc.c
+SOURCES = $(SRC_DIR)/sage.c $(LIB_DIR)/lexer.c $(LIB_DIR)/parser.c $(LIB_DIR)/codegen.c
 
 # Object files
 OBJECTS = $(patsubst %.c, %.o, $(SOURCES))
@@ -27,7 +20,7 @@ TARGET = sage_compiler
 # Default target
 all: $(TARGET)
 
-# Build the main executable
+# Build the compiler
 $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $(OBJECTS) -o $(TARGET) $(LDFLAGS)
 
@@ -35,14 +28,14 @@ $(TARGET): $(OBJECTS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Debug target
-debug: CFLAGS=$(CFLAGSDEBUG)
-debug: clean $(TARGET)
-
 # Clean build files
 clean:
 	rm -f $(TARGET) $(OBJECTS)
 	rm -rf $(BUILD_DIR)
+
+# Create build directory
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
 # Rebuild everything
 rebuild: clean all
