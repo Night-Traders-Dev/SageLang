@@ -9,6 +9,10 @@
 typedef enum {
     TOKEN_PRINT,
     TOKEN_STRING,
+    TOKEN_LET,
+    TOKEN_IDENTIFIER,
+    TOKEN_NUMBER,
+    TOKEN_OPERATOR,
     TOKEN_EOF
 } TokenType;
 

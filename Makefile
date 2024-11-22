@@ -12,7 +12,8 @@ BUILD_DIR = build
 SOURCES = $(SRC_DIR)/sage.c \
           $(LIB_DIR)/lexer.c \
           $(LIB_DIR)/parser.c \
-          $(LIB_DIR)/codegen.c
+          $(LIB_DIR)/codegen.c \
+          $(LIB_DIR)/utils.c
 
 # Object files
 OBJECTS = $(patsubst %.c, %.o, $(SOURCES))

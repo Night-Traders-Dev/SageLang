@@ -46,6 +46,8 @@ int main(int argc, char *argv[]) {
         free_ast(ast);
         return EXIT_FAILURE;
     }
+
+    fprintf(output, "#include <stdio.h>\n#include <stdlib.h>\n\n");
     generate_code(ast, output);
     fclose(output);
 
