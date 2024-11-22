@@ -1,5 +1,3 @@
-// src/lib/parser.c
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -104,6 +102,17 @@ ASTNode *parse(const TokenList *tokens) {
             seq_node->right = stmt;
             root = seq_node;
         }
+    }
+
+    // Append an explicit end node
+    ASTNode *end_node = create_node(NODE_END, NULL);
+    if (root) {
+        ASTNode *seq_node = create_node(NODE_SEQUENCE, NULL);
+        seq_node->left = root;
+        seq_node->right = end_node;
+        root = seq_node;
+    } else {
+        root = end_node;
     }
 
     return root;

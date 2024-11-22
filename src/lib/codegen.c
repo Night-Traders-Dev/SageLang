@@ -14,7 +14,8 @@ void generate_code(ASTNode *node, FILE *output) {
     // Print standard imports if not already printed
     if (!has_printed_imports) {
         fprintf(output, "#include <stdio.h>\n");
-        fprintf(output, "#include <stdlib.h>\n\n");
+        fprintf(output, "#include <stdlib.h>\n");
+        fprintf(output, "\n");
         fprintf(output, "int main() {\n");
         has_printed_imports = 1;
     }
@@ -59,14 +60,13 @@ void generate_code(ASTNode *node, FILE *output) {
             generate_code(node->right, output);
             break;
 
+        case NODE_END:
+            fprintf(output, "}\n");
+            break;
+
         default:
             fprintf(stderr, "Error: Unsupported node type %d\n", node->type);
             exit(EXIT_FAILURE);
-    }
-
-    // Add closing bracket at the end of the main function
-    if (node->type == NODE_SEQUENCE && node->right == NULL) {
-        fprintf(output, "}\n");
     }
 }
 

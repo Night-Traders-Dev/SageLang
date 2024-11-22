@@ -10,7 +10,8 @@ typedef enum {
     NODE_VAR_DECL,
     NODE_BINARY_OP,
     NODE_LITERAL,
-    NODE_SEQUENCE
+    NODE_SEQUENCE,
+    NODE_END
 } NodeType;
 
 typedef struct ASTNode {
@@ -21,7 +22,7 @@ typedef struct ASTNode {
 } ASTNode;
 
 ASTNode *parse(const TokenList *tokens);
-ASTNode *parse_statement(const TokenList *tokens, size_t *index);  // Declare the function
+ASTNode *parse_statement(const TokenList *tokens, size_t *index); // Declare the function
 void free_ast(ASTNode *node);
 
 #endif
