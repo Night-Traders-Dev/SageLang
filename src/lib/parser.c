@@ -1,3 +1,5 @@
+// src/lib/parser.c
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +8,8 @@
 
 
 ASTNode *create_node(NodeType type, const char *value) {
+    fprintf(stderr, "Creating node of type %d with value '%s'\n", type, value ? value : "NULL");
+
     ASTNode *node = malloc(sizeof(ASTNode));
     if (!node) {
         perror("Error allocating AST node");
@@ -19,6 +23,7 @@ ASTNode *create_node(NodeType type, const char *value) {
 
     return node;
 }
+
 
 ASTNode *parse_expression(const TokenList *tokens, size_t *index) {
     ASTNode *node = NULL;

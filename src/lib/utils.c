@@ -1,5 +1,6 @@
+// src/lib/utils.c
+
 #include "utils.h"
-#include <stddef.h>
 
 #ifndef HAVE_STRDUP
 char *strdup(const char *s) {
