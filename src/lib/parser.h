@@ -18,4 +18,3 @@ ASTNode *parse(const TokenList *tokens);
 void free_ast(ASTNode *node);
 
 #endif
-

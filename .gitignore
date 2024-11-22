@@ -1,8 +1,5 @@
-src/build
-src/dist
-src/sage_compiler.o
-src/sage_compiler
-src/lib/parser.o
-src/lib/tokenizer.o
-src/sage_asm/sage_asm.o
-src/sage_risc/sage_risc.o
+build
+build/
+src/*.o
+src/lib/*.o
+sage_compiler

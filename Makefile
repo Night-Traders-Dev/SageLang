@@ -5,11 +5,14 @@ LDFLAGS =
 
 # Directories
 SRC_DIR = src
-LIB_DIR = src/lib
-BUILD_DIR = src/build
+LIB_DIR = $(SRC_DIR)/lib
+BUILD_DIR = build
 
 # Source files
-SOURCES = $(SRC_DIR)/sage.c $(LIB_DIR)/lexer.c $(LIB_DIR)/parser.c $(LIB_DIR)/codegen.c
+SOURCES = $(SRC_DIR)/sage.c \
+          $(LIB_DIR)/lexer.c \
+          $(LIB_DIR)/parser.c \
+          $(LIB_DIR)/codegen.c
 
 # Object files
 OBJECTS = $(patsubst %.c, %.o, $(SOURCES))
@@ -18,7 +21,7 @@ OBJECTS = $(patsubst %.c, %.o, $(SOURCES))
 TARGET = sage_compiler
 
 # Default target
-all: $(TARGET)
+all: $(BUILD_DIR) $(TARGET)
 
 # Build the compiler
 $(TARGET): $(OBJECTS)
@@ -28,14 +31,14 @@ $(TARGET): $(OBJECTS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Create build directory if it doesn't exist
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+
 # Clean build files
 clean:
 	rm -f $(TARGET) $(OBJECTS)
 	rm -rf $(BUILD_DIR)
-
-# Create build directory
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
 
 # Rebuild everything
 rebuild: clean all

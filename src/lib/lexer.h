@@ -1,20 +1,28 @@
-#ifndef PARSER_H
-#define PARSER_H
+#ifndef LEXER_H
+#define LEXER_H
 
-#include "lexer.h"
+#include <stddef.h>
+
+#define MAX_TOKENS 1024
+#define MAX_TOKEN_LENGTH 256
 
 typedef enum {
-    NODE_PRINT
-} NodeType;
+    TOKEN_PRINT,
+    TOKEN_STRING,
+    TOKEN_EOF
+} TokenType;
 
-typedef struct ASTNode {
-    NodeType type;
+typedef struct {
+    TokenType type;
     char *value;
-    struct ASTNode *left;
-    struct ASTNode *right;
-} ASTNode;
+} Token;
 
-ASTNode *parse(const TokenList *tokens);
-void free_ast(ASTNode *node);
+typedef struct {
+    Token tokens[MAX_TOKENS];
+    size_t count;
+} TokenList;
+
+TokenList lex(const char *source_code);
+void free_tokens(TokenList *tokens);
 
 #endif
