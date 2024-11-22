@@ -49,10 +49,11 @@ void generate_code(ASTNode *node, FILE *output) {
                 fprintf(output, "    printf(\"%%s\\n\", ");
             } else {
                 // Otherwise, assume it's an integer expression
-                fprintf(output, "    printf(\"%%d\\n\", ");
+                fprintf(output, "    printf(\"");
             }
             generate_code(node->left, output);
-            fprintf(output, ");\n");
+            fprintf(output, "\");\n");
+
             break;
 
         case NODE_SEQUENCE:
