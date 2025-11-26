@@ -72,18 +72,22 @@ static TokenType check_keyword(int start_index, int length, const char* rest, To
     return TOKEN_IDENTIFIER;
 }
 
+
 static TokenType identifier_type() {
     switch (start[0]) {
-        case 'e':
+        case 'a': return check_keyword(1, 2, "nd", TOKEN_AND); // Added 'and'
+
+        case 'e': 
             if (current - start > 1) {
                 switch (start[1]) {
                     case 'l':
                         if (current - start > 2 && start[2] == 's') return check_keyword(3, 1, "e", TOKEN_ELSE);
-                        if (current - start > 2 && start[2] == 'i') return check_keyword(3, 1, "f", TOKEN_IF);
+                        if (current - start > 2 && start[2] == 'i') return check_keyword(3, 1, "f", TOKEN_IF); // This catches 'elif'
                         break;
                 }
             }
             break;
+
         case 'f': 
             if (current - start > 1) {
                 switch (start[1]) {
@@ -92,9 +96,13 @@ static TokenType identifier_type() {
                 }
             }
             break;
+
         case 'i': return check_keyword(1, 1, "f", TOKEN_IF);
         case 'l': return check_keyword(1, 2, "et", TOKEN_LET);
         case 'n': return check_keyword(1, 2, "il", TOKEN_NIL); // nil
+
+        case 'o': return check_keyword(1, 1, "r", TOKEN_OR);   // Added 'or'
+
         case 'p': 
             if (current - start > 1) {
                 switch(start[1]) {
@@ -105,6 +113,7 @@ static TokenType identifier_type() {
                 }
             }
             break;
+
         case 'r': return check_keyword(1, 5, "eturn", TOKEN_RETURN);
         case 't': return check_keyword(1, 3, "rue", TOKEN_TRUE); // true
         case 'v': return check_keyword(1, 2, "ar", TOKEN_VAR);
@@ -112,6 +121,7 @@ static TokenType identifier_type() {
     }
     return TOKEN_IDENTIFIER;
 }
+
 
 static Token identifier() {
     while (isalnum(peek()) || peek() == '_') advance();
