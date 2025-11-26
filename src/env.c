@@ -29,7 +29,7 @@ Env* env_create(Env* parent) {
 }
 
 
-void env_define(Env* env, const char* name, int length, double value) {
+void env_define(Env* env, const char* name, int length, Value value) {
     // Search ONLY in current scope (head) to update
     EnvNode* current = env->head;
     while (current != NULL) {
@@ -49,7 +49,7 @@ void env_define(Env* env, const char* name, int length, double value) {
 }
 
 
-int env_get(Env* env, const char* name, int length, double* out_value) {
+int env_get(Env* env, const char* name, int length, Value* out_value) {
     Env* current_env = env;
 
     // Search current scope, then parent, then parent's parent...

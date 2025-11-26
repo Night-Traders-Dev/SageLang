@@ -4,12 +4,13 @@
 #include "interpreter.h"
 #include "token.h"
 #include "env.h"
+#include "value.h"
 
-// --- Function Registry (Simple Global Linked List) ---
+// --- Function Registry ---
 typedef struct ProcNode {
     const char* name;
     int name_len;
-    ProcStmt stmt; // Copy of the AST node struct
+    ProcStmt stmt;
     struct ProcNode* next;
 } ProcNode;
 
@@ -35,78 +36,118 @@ static ProcStmt* find_function(const char* name, int len) {
     return NULL;
 }
 
+// --- Helper: Truthiness ---
+static int is_truthy(Value v) {
+    if (IS_NIL(v)) return 0;
+    if (IS_BOOL(v)) return AS_BOOL(v);
+    return 1; 
+}
+
+// --- Forward Declaration ---
+static Value eval_expr(Expr* expr, Env* env);
+
 // --- Evaluator ---
 
-static double eval_expr(Expr* expr, Env* env);
+static Value eval_binary(BinaryExpr* b, Env* env) {
+    Value left = eval_expr(b->left, env);
+    Value right = eval_expr(b->right, env);
 
-static double eval_binary(BinaryExpr* b, Env* env) {
-    double left = eval_expr(b->left, env);
-    double right = eval_expr(b->right, env);
+    // Comparison
+    if (b->op.type == TOKEN_GT || b->op.type == TOKEN_LT) {
+        if (!IS_NUMBER(left) || !IS_NUMBER(right)) {
+            fprintf(stderr, "Runtime Error: Operands must be numbers.");
+            return val_nil();
+        }
+        double l = AS_NUMBER(left);
+        double r = AS_NUMBER(right);
+        if (b->op.type == TOKEN_GT) return val_bool(l > r);
+        if (b->op.type == TOKEN_LT) return val_bool(l < r);
+    }
 
+    // Arithmetic
     switch (b->op.type) {
-        case TOKEN_PLUS:  return left + right;
-        case TOKEN_MINUS: return left - right;
-        case TOKEN_STAR:  return left * right;
-        case TOKEN_SLASH:
-            if (right == 0) {
-                fprintf(stderr, "Runtime Error: Division by zero.");
-                return 0;
+        case TOKEN_PLUS:
+            if (IS_NUMBER(left) && IS_NUMBER(right)) {
+                return val_number(AS_NUMBER(left) + AS_NUMBER(right));
             }
-            return left / right;
-        case TOKEN_GT:    return left > right ? 1.0 : 0.0;
-        case TOKEN_LT:    return left < right ? 1.0 : 0.0;
-        default:          return 0;
+            // String concatenation
+            if (IS_STRING(left) && IS_STRING(right)) {
+                // Simple concat (leaks memory without GC, but works for demo)
+                char* s1 = AS_STRING(left);
+                char* s2 = AS_STRING(right);
+                int len1 = strlen(s1);
+                int len2 = strlen(s2);
+                char* result = malloc(len1 + len2 + 1);
+                strcpy(result, s1);
+                strcat(result, s2);
+                return val_string(result);
+            }
+
+            fprintf(stderr, "Runtime Error: Operands must be numbers or strings.");
+            return val_nil();
+
+        case TOKEN_MINUS:
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return val_nil();
+            return val_number(AS_NUMBER(left) - AS_NUMBER(right));
+
+        case TOKEN_STAR:
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return val_nil();
+            return val_number(AS_NUMBER(left) * AS_NUMBER(right));
+
+        case TOKEN_SLASH:
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return val_nil();
+            if (AS_NUMBER(right) == 0) return val_nil();
+            return val_number(AS_NUMBER(left) / AS_NUMBER(right));
+
+        default:
+            return val_nil();
     }
 }
 
-static double eval_expr(Expr* expr, Env* env) {
+static Value eval_expr(Expr* expr, Env* env) {
     switch (expr->type) {
-        case EXPR_NUMBER:
-            return expr->as.number.value;
+        case EXPR_NUMBER: return val_number(expr->as.number.value);
+        case EXPR_STRING: return val_string(expr->as.string.value);
+        case EXPR_BOOL:   return val_bool(expr->as.boolean.value);
+        case EXPR_NIL:    return val_nil();
+
         case EXPR_BINARY:
             return eval_binary(&expr->as.binary, env);
+
         case EXPR_VARIABLE: {
-            double val;
+            Value val;
             Token t = expr->as.variable.name;
             if (env_get(env, t.start, t.length, &val)) {
                 return val;
             }
             fprintf(stderr, "Runtime Error: Undefined variable '%.*s'.", t.length, t.start);
-            return 0;
+            return val_nil();
         }
+
         case EXPR_CALL: {
             Token callee = expr->as.call.callee;
             ProcStmt* func = find_function(callee.start, callee.length);
             if (!func) {
-                fprintf(stderr, "Runtime Error: Undefined procedure '%.*s'.", callee.length, callee.start);
-                return 0;
+                fprintf(stderr, "Runtime Error: Undefined procedure.");
+                return val_nil();
             }
 
             if (expr->as.call.arg_count != func->param_count) {
-                 fprintf(stderr, "Runtime Error: Expected %d arguments but got %d.",
-                        func->param_count, expr->as.call.arg_count);
-                 return 0;
+                 fprintf(stderr, "Runtime Error: Arity mismatch.");
+                 return val_nil();
             }
 
-            // 1. Create new scope (child of global/current)
-            // Using 'env' as parent creates a closure-like effect (lexical scope)
-            // Using 'functions' implies global scope. For simplicity, use 'env'.
-            Env* scope = env_create(env);
-
-            // 2. Bind arguments
+            Env* scope = env_create(env); 
             for (int i = 0; i < func->param_count; i++) {
-                double argVal = eval_expr(expr->as.call.args[i], env); // Eval in CALLER scope
+                Value argVal = eval_expr(expr->as.call.args[i], env);
                 Token paramName = func->params[i];
                 env_define(scope, paramName.start, paramName.length, argVal);
             }
-
-            // 3. Execute body
             interpret(func->body, scope);
-            // In future: return value from interpret or use a result register
-            return 0; 
+            return val_nil(); 
         }
         default:
-            return 0;
+            return val_nil();
     }
 }
 
@@ -115,12 +156,13 @@ void interpret(Stmt* stmt, Env* env) {
 
     switch (stmt->type) {
         case STMT_PRINT: {
-            double val = eval_expr(stmt->as.print.expression, env);
-            printf("%g", val);
+            Value val = eval_expr(stmt->as.print.expression, env);
+            print_value(val);
+            printf("\n");
             break;
         }
         case STMT_LET: {
-            double val = 0;
+            Value val = val_nil();
             if (stmt->as.let.initializer != NULL) {
                 val = eval_expr(stmt->as.let.initializer, env);
             }
@@ -141,8 +183,8 @@ void interpret(Stmt* stmt, Env* env) {
             break;
         }
         case STMT_IF: {
-            double cond = eval_expr(stmt->as.if_stmt.condition, env);
-            if (cond != 0.0) {
+            Value cond = eval_expr(stmt->as.if_stmt.condition, env);
+            if (is_truthy(cond)) {
                 interpret(stmt->as.if_stmt.then_branch, env);
             } else if (stmt->as.if_stmt.else_branch != NULL) {
                 interpret(stmt->as.if_stmt.else_branch, env);
@@ -151,8 +193,8 @@ void interpret(Stmt* stmt, Env* env) {
         }
         case STMT_WHILE: {
             while (1) {
-                double cond = eval_expr(stmt->as.while_stmt.condition, env);
-                if (cond == 0.0) break;
+                Value cond = eval_expr(stmt->as.while_stmt.condition, env);
+                if (!is_truthy(cond)) break;
                 interpret(stmt->as.while_stmt.body, env);
             }
             break;

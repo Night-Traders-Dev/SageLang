@@ -26,16 +26,29 @@ typedef struct {
     int arg_count;
 } CallExpr;
 
+typedef struct {
+    char* value;
+} StringExpr;
+
+typedef struct {
+    int value;
+} BoolExpr;
+
 struct Expr {
     enum {
         EXPR_NUMBER,
         EXPR_BINARY,
+        EXPR_STRING,
+        EXPR_BOOL,
+        EXPR_NIL,
         EXPR_VARIABLE,
         EXPR_CALL
     } type;
     union {
         NumberExpr number;
         BinaryExpr binary;
+        StringExpr string;
+        BoolExpr boolean;
         VariableExpr variable;
         CallExpr call;
     } as;
@@ -100,8 +113,12 @@ struct Stmt {
 // Constructors
 Expr* new_number_expr(double value);
 Expr* new_binary_expr(Expr* left, Token op, Expr* right);
+Expr* new_string_expr(char* value);
+Expr* new_bool_expr(int value);
+Expr* new_nil_expr();
 Expr* new_variable_expr(Token name);
 Expr* new_call_expr(Token callee, Expr** args, int arg_count);
+
 
 Stmt* new_print_stmt(Expr* expression);
 Stmt* new_expr_stmt(Expr* expression);

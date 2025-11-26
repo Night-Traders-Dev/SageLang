@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "lexer.h"
 #include "ast.h"
 #include "token.h"
@@ -45,9 +46,28 @@ static Stmt* block();
 
 // primary -> NUMBER | IDENTIFIER | CALL
 static Expr* primary() {
+    if (match(TOKEN_FALSE)) {
+        return new_bool_expr(0);
+    }
+    if (match(TOKEN_TRUE))  {
+        return new_bool_expr(1);
+    }
+    if (match(TOKEN_NIL))   {
+        return new_nil_expr();
+    }
     if (match(TOKEN_NUMBER)) {
         double val = strtod(previous_token.start, NULL);
         return new_number_expr(val);
+    }
+    if (match(TOKEN_STRING)) {
+        // Remove quotes
+        Token t = previous_token;
+        // Copy content (skip first and last char)
+        int len = t.length - 2;
+        char* str = malloc(len + 1);
+        memcpy(str, t.start + 1, len);
+//        str[len] = '';
+        return new_string_expr(str);
     }
 
     if (match(TOKEN_IDENTIFIER)) {
