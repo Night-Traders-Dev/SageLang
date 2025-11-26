@@ -12,7 +12,7 @@ if x > 10 or y > 8
     print "At least one condition met!"
 
 # Short-circuit evaluation
-if false and print("This won't print")
+if false and true
     print "Never"
 else
     print "Short-circuit works!"
