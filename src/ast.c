@@ -17,6 +17,22 @@ Expr* new_binary_expr(Expr* left, Token op, Expr* right) {
     return e;
 }
 
+Expr* new_variable_expr(Token name) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_VARIABLE;
+    e->as.variable.name = name;
+    return e;
+}
+
+Expr* new_call_expr(Token callee, Expr** args, int arg_count) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_CALL;
+    e->as.call.callee = callee;
+    e->as.call.args = args;
+    e->as.call.arg_count = arg_count;
+    return e;
+}
+
 Expr* new_string_expr(char* value) {
     Expr* e = malloc(sizeof(Expr));
     e->type = EXPR_STRING;
@@ -34,22 +50,6 @@ Expr* new_bool_expr(int value) {
 Expr* new_nil_expr() {
     Expr* e = malloc(sizeof(Expr));
     e->type = EXPR_NIL;
-    return e;
-}
-
-Expr* new_variable_expr(Token name) {
-    Expr* e = malloc(sizeof(Expr));
-    e->type = EXPR_VARIABLE;
-    e->as.variable.name = name;
-    return e;
-}
-
-Expr* new_call_expr(Token callee, Expr** args, int arg_count) {
-    Expr* e = malloc(sizeof(Expr));
-    e->type = EXPR_CALL;
-    e->as.call.callee = callee;
-    e->as.call.args = args;
-    e->as.call.arg_count = arg_count;
     return e;
 }
 
@@ -112,6 +112,14 @@ Stmt* new_proc_stmt(Token name, Token* params, int param_count, Stmt* body) {
     s->as.proc.params = params;
     s->as.proc.param_count = param_count;
     s->as.proc.body = body;
+    s->next = NULL;
+    return s;
+}
+
+Stmt* new_return_stmt(Expr* value) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_RETURN;
+    s->as.ret.value = value;
     s->next = NULL;
     return s;
 }

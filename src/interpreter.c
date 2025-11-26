@@ -7,7 +7,7 @@
 #include "env.h"
 #include "value.h"
 
-// --- Function Registry (User Defined Procs) ---
+// --- Function Registry ---
 typedef struct ProcNode {
     const char* name;
     int name_len;
@@ -45,12 +45,10 @@ static Value clock_native(int argCount, Value* args) {
 
 static Value input_native(int argCount, Value* args) {
     char buffer[1024];
-    // Print prompt? No, just read.
     if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
         size_t len = strlen(buffer);
         if (len > 0 && buffer[len-1] == '\n') buffer[len-1] = '\0';
 
-        // Deep copy string
         char* str = malloc(len + 1);
         strcpy(str, buffer);
         return val_string(str);
@@ -58,10 +56,19 @@ static Value input_native(int argCount, Value* args) {
     return val_nil();
 }
 
-// Public API to init stdlib
+static Value tonumber_native(int argCount, Value* args) {
+    if (argCount != 1) return val_nil();
+    if (IS_NUMBER(args[0])) return args[0];
+    if (IS_STRING(args[0])) {
+        return val_number(strtod(AS_STRING(args[0]), NULL));
+    }
+    return val_nil();
+}
+
 void init_stdlib(Env* env) {
     env_define(env, "clock", 5, val_native(clock_native));
     env_define(env, "input", 5, val_native(input_native));
+    env_define(env, "tonumber", 8, val_native(tonumber_native));
 }
 
 // --- Helper: Truthiness ---
@@ -80,13 +87,14 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
     Value left = eval_expr(b->left, env);
     Value right = eval_expr(b->right, env);
 
-    // Comparison
+    // Equality
     if (b->op.type == TOKEN_EQ || b->op.type == TOKEN_NEQ) {
         int equal = values_equal(left, right);
         if (b->op.type == TOKEN_EQ) return val_bool(equal);
         if (b->op.type == TOKEN_NEQ) return val_bool(!equal);
     }
 
+    // Comparison
     if (b->op.type == TOKEN_GT || b->op.type == TOKEN_LT) {
         if (!IS_NUMBER(left) || !IS_NUMBER(right)) {
             fprintf(stderr, "Runtime Error: Operands must be numbers.");
@@ -141,10 +149,10 @@ static Value eval_expr(Expr* expr, Env* env) {
         case EXPR_STRING: return val_string(expr->as.string.value);
         case EXPR_BOOL:   return val_bool(expr->as.boolean.value);
         case EXPR_NIL:    return val_nil();
-
+        
         case EXPR_BINARY:
             return eval_binary(&expr->as.binary, env);
-
+        
         case EXPR_VARIABLE: {
             Value val;
             Token t = expr->as.variable.name;
@@ -154,15 +162,14 @@ static Value eval_expr(Expr* expr, Env* env) {
             fprintf(stderr, "Runtime Error: Undefined variable '%.*s'.", t.length, t.start);
             return val_nil();
         }
-
+        
         case EXPR_CALL: {
             Token callee = expr->as.call.callee;
-
-            // 1. Check Environment (Variables / Native Functions)
+            
+            // 1. Check Environment (Native Functions)
             Value funcVal;
             if (env_get(env, callee.start, callee.length, &funcVal)) {
                 if (funcVal.type == VAL_NATIVE) {
-                    // Evaluate args
                     Value args[255];
                     int count = expr->as.call.arg_count;
                     for (int i = 0; i < count; i++) {
@@ -170,8 +177,6 @@ static Value eval_expr(Expr* expr, Env* env) {
                     }
                     return funcVal.as.native(count, args);
                 }
-                // If it's a variable but NOT a native fn (e.g. a number), error?
-                // For now, fall through or error.
             }
 
             // 2. Check User Function Registry
@@ -188,8 +193,9 @@ static Value eval_expr(Expr* expr, Env* env) {
                     Token paramName = func->params[i];
                     env_define(scope, paramName.start, paramName.length, argVal);
                 }
-                interpret(func->body, scope);
-                return val_nil(); 
+
+                ExecResult res = interpret(func->body, scope);
+                return res.value; // Return the function's result
             }
 
             fprintf(stderr, "Runtime Error: Undefined procedure '%.*s'.", callee.length, callee.start);
@@ -200,15 +206,15 @@ static Value eval_expr(Expr* expr, Env* env) {
     }
 }
 
-void interpret(Stmt* stmt, Env* env) {
-    if (!stmt) return;
+ExecResult interpret(Stmt* stmt, Env* env) {
+    if (!stmt) return (ExecResult){ val_nil(), 0 };
 
     switch (stmt->type) {
         case STMT_PRINT: {
             Value val = eval_expr(stmt->as.print.expression, env);
             print_value(val);
             printf("\n");
-            break;
+            return (ExecResult){ val_nil(), 0 };
         }
         case STMT_LET: {
             Value val = val_nil();
@@ -217,40 +223,48 @@ void interpret(Stmt* stmt, Env* env) {
             }
             Token t = stmt->as.let.name;
             env_define(env, t.start, t.length, val);
-            break;
+            return (ExecResult){ val_nil(), 0 };
         }
         case STMT_EXPRESSION: {
             (void)eval_expr(stmt->as.expression, env);
-            break;
+            return (ExecResult){ val_nil(), 0 };
         }
         case STMT_BLOCK: {
             Stmt* current = stmt->as.block.statements;
             while (current != NULL) {
-                interpret(current, env);
+                ExecResult res = interpret(current, env);
+                if (res.is_returning) return res;
                 current = current->next;
             }
-            break;
+            return (ExecResult){ val_nil(), 0 };
         }
         case STMT_IF: {
             Value cond = eval_expr(stmt->as.if_stmt.condition, env);
             if (is_truthy(cond)) {
-                interpret(stmt->as.if_stmt.then_branch, env);
+                return interpret(stmt->as.if_stmt.then_branch, env);
             } else if (stmt->as.if_stmt.else_branch != NULL) {
-                interpret(stmt->as.if_stmt.else_branch, env);
+                return interpret(stmt->as.if_stmt.else_branch, env);
             }
-            break;
+            return (ExecResult){ val_nil(), 0 };
         }
         case STMT_WHILE: {
             while (1) {
                 Value cond = eval_expr(stmt->as.while_stmt.condition, env);
                 if (!is_truthy(cond)) break;
-                interpret(stmt->as.while_stmt.body, env);
+                ExecResult res = interpret(stmt->as.while_stmt.body, env);
+                if (res.is_returning) return res;
             }
-            break;
+            return (ExecResult){ val_nil(), 0 };
         }
         case STMT_PROC: {
             define_function(&stmt->as.proc);
-            break;
+            return (ExecResult){ val_nil(), 0 };
+        }
+        case STMT_RETURN: {
+            Value val = val_nil();
+            if (stmt->as.ret.value) val = eval_expr(stmt->as.ret.value, env);
+            return (ExecResult){ val, 1 };
         }
     }
+    return (ExecResult){ val_nil(), 0 };
 }

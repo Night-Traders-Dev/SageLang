@@ -3,8 +3,14 @@
 
 #include "ast.h"
 #include "env.h"
+#include "value.h"
 
-void interpret(Stmt* stmt, Env* env);
+typedef struct {
+    Value value;
+    int is_returning;
+} ExecResult;
+
+ExecResult interpret(Stmt* stmt, Env* env);
 void init_stdlib(Env* env);
 
 #endif

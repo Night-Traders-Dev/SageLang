@@ -37,18 +37,18 @@ typedef struct {
 struct Expr {
     enum {
         EXPR_NUMBER,
-        EXPR_BINARY,
         EXPR_STRING,
         EXPR_BOOL,
         EXPR_NIL,
+        EXPR_BINARY,
         EXPR_VARIABLE,
         EXPR_CALL
     } type;
     union {
         NumberExpr number;
-        BinaryExpr binary;
         StringExpr string;
         BoolExpr boolean;
+        BinaryExpr binary;
         VariableExpr variable;
         CallExpr call;
     } as;
@@ -88,6 +88,10 @@ typedef struct {
     Stmt* body;
 } ProcStmt;
 
+typedef struct {
+    Expr* value;
+} ReturnStmt;
+
 struct Stmt {
     enum {
         STMT_PRINT,
@@ -96,7 +100,8 @@ struct Stmt {
         STMT_IF,
         STMT_BLOCK,
         STMT_WHILE,
-        STMT_PROC
+        STMT_PROC,
+        STMT_RETURN
     } type;
     union {
         PrintStmt print;
@@ -105,6 +110,7 @@ struct Stmt {
         BlockStmt block;
         WhileStmt while_stmt;
         ProcStmt proc;
+        ReturnStmt ret;
         Expr* expression;
     } as;
     Stmt* next;
@@ -113,12 +119,11 @@ struct Stmt {
 // Constructors
 Expr* new_number_expr(double value);
 Expr* new_binary_expr(Expr* left, Token op, Expr* right);
+Expr* new_variable_expr(Token name);
+Expr* new_call_expr(Token callee, Expr** args, int arg_count);
 Expr* new_string_expr(char* value);
 Expr* new_bool_expr(int value);
 Expr* new_nil_expr();
-Expr* new_variable_expr(Token name);
-Expr* new_call_expr(Token callee, Expr** args, int arg_count);
-
 
 Stmt* new_print_stmt(Expr* expression);
 Stmt* new_expr_stmt(Expr* expression);
@@ -126,6 +131,7 @@ Stmt* new_let_stmt(Token name, Expr* initializer);
 Stmt* new_if_stmt(Expr* condition, Stmt* then_branch, Stmt* else_branch);
 Stmt* new_block_stmt(Stmt* statements);
 Stmt* new_while_stmt(Expr* condition, Stmt* body);
-Stmt* new_proc_stmt(Token name, Token* params, int param_count, Stmt* body); // <-- Added
+Stmt* new_proc_stmt(Token name, Token* params, int param_count, Stmt* body);
+Stmt* new_return_stmt(Expr* value);
 
 #endif
