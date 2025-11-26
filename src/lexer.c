@@ -233,6 +233,8 @@ Token scan_token() {
     switch (c) {
         case '(': return make_token(TOKEN_LPAREN);
         case ')': return make_token(TOKEN_RPAREN);
+        case '[': return make_token(TOKEN_LBRACKET);
+        case ']': return make_token(TOKEN_RBRACKET);
         case '+': return make_token(TOKEN_PLUS);
         case '-': return make_token(TOKEN_MINUS);
         case '*': return make_token(TOKEN_STAR);
