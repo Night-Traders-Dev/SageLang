@@ -2,19 +2,22 @@
 
 **A clean, indentation-based systems programming language built in C.**
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level aspirations of C. It is currently in the **bootstrapping phase**, with a working interpreter written in C, supporting variables, control flow, and blocks.
+Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level aspirations of C. It is currently in the **bootstrapping phase**, with a fully working interpreter written in C.
 
 ## 🚀 Features (Implemented)
 
 - **Indentation-based syntax**: No braces `{}` for blocks; just clean, consistent indentation.
-- **Interpreter**: A tree-walking interpreter written in standard C.
-- **Variables & Environment**: Lexically scoped variables using `let`.
+- **Type System**: Support for **Integers**, **Strings**, **Booleans**, and **Nil**.
+- **Functions**:
+  - Define functions with `proc name(args):`.
+  - Full support for recursion and lexical scoping.
+- **Native Standard Library**:
+  - Built-in functions like `print`, `input`, `clock`, and `tonumber`.
+- **Variables**: Lexically scoped variables using `let`.
 - **Control Flow**:
   - `if` / `else` conditionals.
   - `while` loops.
-- **Arithmetic**: Standard operators (`+`, `-`, `*`, `/`) with precedence.
-- **Comparisons**: `>`, `<`, equality logic.
-- **File Execution**: Runs `.sage` source files directly.
+- **Arithmetic & Logic**: Standard operators (`+`, `-`, `*`, `/`), string concatenation, and comparisons (`==`, `!=`, `>`, `<`).
 
 ## 🛠 Building Sage
 
@@ -26,68 +29,82 @@ Sage has zero dependencies and builds with standard GCC/Clang.
 
 ### Build Steps
 1. Clone the repository:
-   ```
-   git clone https://github.com/Night-Traders-Dev/SageLang.git
-   cd SageLang
-   ```
+```
+
+git clone https://github.com/Night-Traders-Dev/SageLang.git
+cd SageLang
+
+```
 
 2. Compile:
-   ```
-   make
-   ```
-   This produces the `sage` executable.
+```
+
+make
+
+```
+This produces the `sage` executable.
 
 3. Run tests:
-   ```
-   ./sage examples/test.sage
-   ```
+```
+
+./sage examples/guess.sage
+
+```
 
 ## 📄 Example Code
 
-**examples/test.sage**
+**`examples/guess.sage`**
 
 ```
-let x = 3
-while x > 0
-    print x
-    let x = x - 1
 
-if x < 5
-    print 0
-else
-    print 999
-```
 
-**Output:**
-```
-3
-2
-1
-0
-```
+# A simple number guessing game
+
+let target = 42
+let running = true
+
+print "Guess a number between 0 and 100!"
+
+while running
+let guess_str = input()
+let guess = tonumber(guess_str)
+
+    if guess == target
+        print "Correct! You win!"
+        let running = false
+    else
+        if guess < target
+            print "Too low!"
+        else
+            print "Too high!"
+    ```
 
 ## 🗺 Roadmap
 
 - [x] **Phase 1: Core Logic** (Lexer, Parser, Interpreter, Variables, Loops)
-- [ ] **Phase 2: Functions** (`proc` definitions, calls, stack frames)
-- [ ] **Phase 3: Types** (Static typing `x: int`, structs)
-- [ ] **Phase 4: Compilation** (Codegen to C or LLVM IR)
-- [ ] **Phase 5: Self-Hosting** (Re-writing the Sage compiler in Sage)
+- [x] **Phase 2: Functions** (`proc` definitions, calls, recursion)
+- [x] **Phase 3: Types** (Strings, Booleans, Native Functions)
+- [ ] **Phase 4: Memory Management** (Garbage Collection)
+- [ ] **Phase 5: Compilation** (Codegen to C or LLVM IR)
+- [ ] **Phase 6: Self-Hosting** (Re-writing the Sage compiler in Sage)
 
 ## 📂 Project Structure
 
 ```
+
 sage/
-├── include/        # Header files (AST, Lexer, Parser, Env)
-├── src/            # C implementation
-│   ├── main.c      # Entry point & file reading
-│   ├── lexer.c     # Tokenization & Indentation handling
-│   ├── parser.c    # Recursive descent parser
-│   ├── ast.c       # AST node constructors
-│   ├── env.c       # Environment (scope) management
-│   └── interpreter.c # Tree-walking evaluator
-├── examples/       # Example .sage scripts
-└── Makefile        # Build script
+├── include/        \# Header files (AST, Lexer, Parser, Env, Value)
+├── src/            \# C implementation
+│   ├── main.c      \# Entry point \& file reading
+│   ├── lexer.c     \# Tokenization \& Indentation handling
+│   ├── parser.c    \# Recursive descent parser
+│   ├── ast.c       \# AST node constructors
+│   ├── env.c       \# Environment (scope) management
+│   ├── value.c     \# Type system \& Object representation
+│   └── interpreter.c \# Tree-walking evaluator
+├── examples/       \# Example .sage scripts
+└── Makefile        \# Build script
+
 ```
 
 ## 🤝 Contributing
@@ -103,4 +120,3 @@ Sage is an educational project aimed at understanding compiler construction. Con
 ## 📜 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
-
