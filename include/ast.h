@@ -20,16 +20,24 @@ typedef struct {
     Token name;
 } VariableExpr;
 
+typedef struct {
+    Token callee;
+    Expr** args;
+    int arg_count;
+} CallExpr;
+
 struct Expr {
     enum {
         EXPR_NUMBER,
         EXPR_BINARY,
-        EXPR_VARIABLE
+        EXPR_VARIABLE,
+        EXPR_CALL
     } type;
     union {
         NumberExpr number;
         BinaryExpr binary;
         VariableExpr variable;
+        CallExpr call;
     } as;
 };
 
@@ -48,8 +56,12 @@ typedef struct {
 typedef struct {
     Expr* condition;
     Stmt* then_branch;
-    Stmt* else_branch; // may be NULL
+    Stmt* else_branch;
 } IfStmt;
+
+typedef struct {
+    struct Stmt* statements;
+} BlockStmt;
 
 typedef struct {
     Expr* condition;
@@ -57,8 +69,11 @@ typedef struct {
 } WhileStmt;
 
 typedef struct {
-    struct Stmt* statements; // Head of a linked list of statements
-} BlockStmt;
+    Token name;
+    Token* params;
+    int param_count;
+    Stmt* body;
+} ProcStmt;
 
 struct Stmt {
     enum {
@@ -66,15 +81,17 @@ struct Stmt {
         STMT_EXPRESSION,
         STMT_LET,
         STMT_IF,
+        STMT_BLOCK,
         STMT_WHILE,
-        STMT_BLOCK
+        STMT_PROC
     } type;
     union {
         PrintStmt print;
         LetStmt let;
         IfStmt if_stmt;
-        WhileStmt while_stmt;
         BlockStmt block;
+        WhileStmt while_stmt;
+        ProcStmt proc;
         Expr* expression;
     } as;
     Stmt* next;
@@ -84,12 +101,14 @@ struct Stmt {
 Expr* new_number_expr(double value);
 Expr* new_binary_expr(Expr* left, Token op, Expr* right);
 Expr* new_variable_expr(Token name);
+Expr* new_call_expr(Token callee, Expr** args, int arg_count);
 
 Stmt* new_print_stmt(Expr* expression);
 Stmt* new_expr_stmt(Expr* expression);
 Stmt* new_let_stmt(Token name, Expr* initializer);
 Stmt* new_if_stmt(Expr* condition, Stmt* then_branch, Stmt* else_branch);
-Stmt* new_while_stmt(Expr* condition, Stmt* body);
 Stmt* new_block_stmt(Stmt* statements);
+Stmt* new_while_stmt(Expr* condition, Stmt* body);
+Stmt* new_proc_stmt(Token name, Token* params, int param_count, Stmt* body); // <-- Added
 
 #endif

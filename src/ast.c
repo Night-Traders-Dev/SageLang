@@ -24,6 +24,15 @@ Expr* new_variable_expr(Token name) {
     return e;
 }
 
+Expr* new_call_expr(Token callee, Expr** args, int arg_count) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_CALL;
+    e->as.call.callee = callee;
+    e->as.call.args = args;
+    e->as.call.arg_count = arg_count;
+    return e;
+}
+
 Stmt* new_print_stmt(Expr* expression) {
     Stmt* s = malloc(sizeof(Stmt));
     s->type = STMT_PRINT;
@@ -59,6 +68,13 @@ Stmt* new_if_stmt(Expr* condition, Stmt* then_branch, Stmt* else_branch) {
     return s;
 }
 
+Stmt* new_block_stmt(Stmt* statements) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_BLOCK;
+    s->as.block.statements = statements;
+    s->next = NULL;
+    return s;
+}
 
 Stmt* new_while_stmt(Expr* condition, Stmt* body) {
     Stmt* s = malloc(sizeof(Stmt));
@@ -69,11 +85,13 @@ Stmt* new_while_stmt(Expr* condition, Stmt* body) {
     return s;
 }
 
-
-Stmt* new_block_stmt(Stmt* statements) {
+Stmt* new_proc_stmt(Token name, Token* params, int param_count, Stmt* body) {
     Stmt* s = malloc(sizeof(Stmt));
-    s->type = STMT_BLOCK;
-    s->as.block.statements = statements;
+    s->type = STMT_PROC;
+    s->as.proc.name = name;
+    s->as.proc.params = params;
+    s->as.proc.param_count = param_count;
+    s->as.proc.body = body;
     s->next = NULL;
     return s;
 }
