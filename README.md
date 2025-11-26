@@ -77,7 +77,7 @@ let guess = tonumber(guess_str)
             print "Too low!"
         else
             print "Too high!"
-    ```
+```
 
 ## 🗺 Roadmap
 
