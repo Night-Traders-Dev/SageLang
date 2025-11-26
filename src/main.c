@@ -38,6 +38,7 @@ static void run(const char* source) {
     init_lexer(source);
     parser_init();
     Env* env = env_create(NULL);
+    init_stdlib(env);
 
     while (1) {
          Stmt* result = parse();

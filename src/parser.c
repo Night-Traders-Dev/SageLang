@@ -48,7 +48,6 @@ static Stmt* block();
 
 // primary -> NUMBER | IDENTIFIER | CALL
 static Expr* primary() {
-    fprintf(stderr, "DEBUG: primary got type %d\n", current_token.type);
     if (match(TOKEN_FALSE)) {
         return new_bool_expr(0);
     }
