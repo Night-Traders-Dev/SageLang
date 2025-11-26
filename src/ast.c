@@ -53,6 +53,24 @@ Expr* new_nil_expr() {
     return e;
 }
 
+Expr* new_array_expr(Expr** elements, int count) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_ARRAY;
+    e->as.array.elements = elements;
+    e->as.array.count = count;
+    return e;
+}
+
+Expr* new_index_expr(Expr* array, Expr* index) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_INDEX;
+    e->as.index.array = array;
+    e->as.index.index = index;
+    return e;
+}
+
+
+
 Stmt* new_print_stmt(Expr* expression) {
     Stmt* s = malloc(sizeof(Stmt));
     s->type = STMT_PRINT;

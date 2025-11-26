@@ -40,11 +40,12 @@ static void consume(TokenType type, const char* message) {
 
 // Forward declarations
 static Expr* expression();
+static Expr* postfix();
 static Stmt* declaration();
 static Stmt* statement();
 static Stmt* block();
 
-// primary -> NUMBER | STRING | BOOLEAN | NIL | ( expression ) | IDENTIFIER | CALL
+// primary -> NUMBER | STRING | BOOLEAN | NIL | ( expression ) | [ elements ] | IDENTIFIER | CALL
 static Expr* primary() {
     // 1. Literals
     if (match(TOKEN_FALSE)) return new_bool_expr(0);
@@ -58,13 +59,33 @@ static Expr* primary() {
         return expr;
     }
 
-    // 3. Numbers
+    // 3. Array Literals: [ expr, expr, ... ]
+    if (match(TOKEN_LBRACKET)) {
+        Expr** elements = NULL;
+        int count = 0;
+        int capacity = 0;
+
+        if (!check(TOKEN_RBRACKET)) {
+            do {
+                Expr* elem = expression();
+                if (count >= capacity) {
+                    capacity = capacity == 0 ? 4 : capacity * 2;
+                    elements = realloc(elements, sizeof(Expr*) * capacity);
+                }
+                elements[count++] = elem;
+            } while (match(TOKEN_COMMA));
+        }
+        consume(TOKEN_RBRACKET, "Expect ']' after array elements.");
+        return new_array_expr(elements, count);
+    }
+
+    // 4. Numbers
     if (match(TOKEN_NUMBER)) {
         double val = strtod(previous_token.start, NULL);
         return new_number_expr(val);
     }
 
-    // 4. Strings
+    // 5. Strings
     if (match(TOKEN_STRING)) {
         Token t = previous_token;
         int len = t.length - 2;
@@ -74,7 +95,7 @@ static Expr* primary() {
         return new_string_expr(str);
     }
 
-    // 5. Identifiers (Variables) & Function Calls
+    // 6. Identifiers (Variables) & Function Calls
     if (match(TOKEN_IDENTIFIER)) {
         Token name = previous_token;
 
@@ -102,15 +123,17 @@ static Expr* primary() {
         return new_variable_expr(name);
     }
 
-    fprintf(stderr, "[Line %d] Expect expression.", current_token.line);
+    fprintf(stderr, "[Line %d] Expect expression.\n", current_token.line);
     exit(1);
 }
 
+
+
 static Expr* term() {
-    Expr* expr = primary();
+    Expr* expr = postfix();
     while (match(TOKEN_STAR) || match(TOKEN_SLASH)) {
         Token op = previous_token;
-        Expr* right = primary();
+        Expr* right = postfix();
         expr = new_binary_expr(expr, op, right);
     }
     return expr;
@@ -163,6 +186,18 @@ static Expr* logical_or() {
         Expr* right = logical_and();
         expr = new_binary_expr(expr, op, right);
     }
+    return expr;
+}
+
+static Expr* postfix() {
+    Expr* expr = primary();
+
+    while (match(TOKEN_LBRACKET)) {
+        Expr* index = expression();
+        consume(TOKEN_RBRACKET, "Expect ']' after index.");
+        expr = new_index_expr(expr, index);
+    }
+
     return expr;
 }
 

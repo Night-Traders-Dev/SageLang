@@ -5,13 +5,21 @@ struct Value;
 typedef struct Value Value;
 typedef Value (*NativeFn)(int argCount, Value* args);
 
+// Array structure
+typedef struct {
+    Value* elements;
+    int count;
+    int capacity;
+} ArrayValue;
+
 typedef enum {
     VAL_NUMBER,
     VAL_BOOL,
     VAL_NIL,
     VAL_STRING,
     VAL_FUNCTION,
-    VAL_NATIVE
+    VAL_NATIVE,
+    VAL_ARRAY
 } ValueType;
 
 struct Value {
@@ -21,6 +29,7 @@ struct Value {
         int boolean;
         char* string; // Simple heap-allocated string for now
         NativeFn native;
+        ArrayValue* array; 
     } as;
 };
 
@@ -41,9 +50,13 @@ Value val_bool(int value);
 Value val_nil();
 Value val_string(char* value);
 Value val_native(NativeFn fn);
+Value val_array();
 
 // Helpers
 void print_value(Value v);
 int values_equal(Value a, Value b);
+void array_push(Value* arr, Value val);
+Value array_get(Value* arr, int index);
+void array_set(Value* arr, int index, Value val);
 
 #endif

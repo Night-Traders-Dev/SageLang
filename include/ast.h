@@ -34,6 +34,17 @@ typedef struct {
     int value;
 } BoolExpr;
 
+typedef struct {
+    Expr** elements;
+    int count;
+} ArrayExpr;
+
+typedef struct {
+    Expr* array;
+    Expr* index;
+} IndexExpr;
+
+
 struct Expr {
     enum {
         EXPR_NUMBER,
@@ -42,7 +53,9 @@ struct Expr {
         EXPR_NIL,
         EXPR_BINARY,
         EXPR_VARIABLE,
-        EXPR_CALL
+        EXPR_CALL,
+        EXPR_ARRAY,
+        EXPR_INDEX
     } type;
     union {
         NumberExpr number;
@@ -51,6 +64,8 @@ struct Expr {
         BinaryExpr binary;
         VariableExpr variable;
         CallExpr call;
+        ArrayExpr array;
+        IndexExpr index;
     } as;
 };
 
@@ -124,6 +139,8 @@ Expr* new_call_expr(Token callee, Expr** args, int arg_count);
 Expr* new_string_expr(char* value);
 Expr* new_bool_expr(int value);
 Expr* new_nil_expr();
+Expr* new_array_expr(Expr** elements, int count);
+Expr* new_index_expr(Expr* array, Expr* index);
 
 Stmt* new_print_stmt(Expr* expression);
 Stmt* new_expr_stmt(Expr* expression);

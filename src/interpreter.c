@@ -65,10 +65,43 @@ static Value tonumber_native(int argCount, Value* args) {
     return val_nil();
 }
 
+static Value len_native(int argCount, Value* args) {
+    if (argCount != 1) return val_nil();
+    if (args[0].type == VAL_ARRAY) {
+        return val_number(args[0].as.array->count);
+    }
+    if (args[0].type == VAL_STRING) {
+        return val_number(strlen(AS_STRING(args[0])));
+    }
+    return val_nil();
+}
+
+static Value push_native(int argCount, Value* args) {
+    if (argCount != 2) return val_nil();
+    if (args[0].type != VAL_ARRAY) return val_nil();
+    array_push(&args[0], args[1]);
+    return val_nil();
+}
+
+static Value pop_native(int argCount, Value* args) {
+    if (argCount != 1) return val_nil();
+    if (args[0].type != VAL_ARRAY) return val_nil();
+    
+    ArrayValue* a = args[0].as.array;
+    if (a->count == 0) return val_nil();
+    
+    Value result = a->elements[a->count - 1];
+    a->count--;
+    return result;
+}
+
 void init_stdlib(Env* env) {
     env_define(env, "clock", 5, val_native(clock_native));
     env_define(env, "input", 5, val_native(input_native));
     env_define(env, "tonumber", 8, val_native(tonumber_native));
+    env_define(env, "len", 3, val_native(len_native));
+    env_define(env, "push", 4, val_native(push_native));
+    env_define(env, "pop", 3, val_native(pop_native));
 }
 
 // --- Helper: Truthiness ---
@@ -118,7 +151,7 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
     // Comparison
     if (b->op.type == TOKEN_GT || b->op.type == TOKEN_LT) {
         if (!IS_NUMBER(left) || !IS_NUMBER(right)) {
-            fprintf(stderr, "Runtime Error: Operands must be numbers.");
+            fprintf(stderr, "Runtime Error: Operands must be numbers.\n");
             return val_nil();
         }
         double l = AS_NUMBER(left);
@@ -143,7 +176,7 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
                 strcat(result, s2);
                 return val_string(result);
             }
-            fprintf(stderr, "Runtime Error: Operands must be numbers or strings.");
+            fprintf(stderr, "Runtime Error: Operands must be numbers or strings.\n");
             return val_nil();
 
         case TOKEN_MINUS:
@@ -164,13 +197,35 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
     }
 }
 
-
 static Value eval_expr(Expr* expr, Env* env) {
     switch (expr->type) {
         case EXPR_NUMBER: return val_number(expr->as.number.value);
         case EXPR_STRING: return val_string(expr->as.string.value);
         case EXPR_BOOL:   return val_bool(expr->as.boolean.value);
         case EXPR_NIL:    return val_nil();
+        
+        case EXPR_ARRAY: {
+            Value arr = val_array();
+            for (int i = 0; i < expr->as.array.count; i++) {
+                Value elem = eval_expr(expr->as.array.elements[i], env);
+                array_push(&arr, elem);
+            }
+            return arr;
+        }
+
+        case EXPR_INDEX: {
+            Value arr = eval_expr(expr->as.index.array, env);
+            Value idx = eval_expr(expr->as.index.index, env);
+            
+            if (arr.type != VAL_ARRAY || !IS_NUMBER(idx)) {
+                fprintf(stderr, "Runtime Error: Invalid array indexing.\n");
+                return val_nil();
+            }
+            
+            int index = (int)AS_NUMBER(idx);
+            return array_get(&arr, index);
+        }
+
         case EXPR_BINARY:
             return eval_binary(&expr->as.binary, env);
 
@@ -180,11 +235,13 @@ static Value eval_expr(Expr* expr, Env* env) {
             if (env_get(env, t.start, t.length, &val)) {
                 return val;
             }
-            fprintf(stderr, "Runtime Error: Undefined variable '%.*s'.", t.length, t.start);
+            fprintf(stderr, "Runtime Error: Undefined variable '%.*s'.\n", t.length, t.start);
             return val_nil();
         }
+
         case EXPR_CALL: {
             Token callee = expr->as.call.callee;
+            
             // 1. Check Environment (Native Functions)
             Value funcVal;
             if (env_get(env, callee.start, callee.length, &funcVal)) {
@@ -202,7 +259,7 @@ static Value eval_expr(Expr* expr, Env* env) {
             ProcStmt* func = find_function(callee.start, callee.length);
             if (func) {
                 if (expr->as.call.arg_count != func->param_count) {
-                     fprintf(stderr, "Runtime Error: Arity mismatch.");
+                     fprintf(stderr, "Runtime Error: Arity mismatch.\n");
                      return val_nil();
                 }
 
@@ -214,12 +271,13 @@ static Value eval_expr(Expr* expr, Env* env) {
                 }
 
                 ExecResult res = interpret(func->body, scope);
-                return res.value; // Return the function's result
+                return res.value;
             }
 
-            fprintf(stderr, "Runtime Error: Undefined procedure '%.*s'.", callee.length, callee.start);
+            fprintf(stderr, "Runtime Error: Undefined procedure '%.*s'.\n", callee.length, callee.start);
             return val_nil();
         }
+
         default:
             return val_nil();
     }
@@ -235,6 +293,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             printf("\n");
             return (ExecResult){ val_nil(), 0 };
         }
+
         case STMT_LET: {
             Value val = val_nil();
             if (stmt->as.let.initializer != NULL) {
@@ -244,10 +303,12 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             env_define(env, t.start, t.length, val);
             return (ExecResult){ val_nil(), 0 };
         }
+
         case STMT_EXPRESSION: {
             (void)eval_expr(stmt->as.expression, env);
             return (ExecResult){ val_nil(), 0 };
         }
+
         case STMT_BLOCK: {
             Stmt* current = stmt->as.block.statements;
             while (current != NULL) {
@@ -257,6 +318,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             }
             return (ExecResult){ val_nil(), 0 };
         }
+
         case STMT_IF: {
             Value cond = eval_expr(stmt->as.if_stmt.condition, env);
             if (is_truthy(cond)) {
@@ -266,6 +328,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             }
             return (ExecResult){ val_nil(), 0 };
         }
+
         case STMT_WHILE: {
             while (1) {
                 Value cond = eval_expr(stmt->as.while_stmt.condition, env);
@@ -275,10 +338,12 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             }
             return (ExecResult){ val_nil(), 0 };
         }
+
         case STMT_PROC: {
             define_function(&stmt->as.proc);
             return (ExecResult){ val_nil(), 0 };
         }
+
         case STMT_RETURN: {
             Value val = val_nil();
             if (stmt->as.ret.value) val = eval_expr(stmt->as.ret.value, env);
