@@ -46,6 +46,7 @@ static Stmt* block();
 
 // primary -> NUMBER | IDENTIFIER | CALL
 static Expr* primary() {
+    fprintf(stderr, "DEBUG: primary got type %d\n", current_token.type);
     if (match(TOKEN_FALSE)) {
         return new_bool_expr(0);
     }
@@ -66,7 +67,7 @@ static Expr* primary() {
         int len = t.length - 2;
         char* str = malloc(len + 1);
         memcpy(str, t.start + 1, len);
-//        str[len] = '';
+        str[len] = '\0';
         return new_string_expr(str);
     }
 
