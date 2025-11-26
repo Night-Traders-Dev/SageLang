@@ -44,17 +44,27 @@ static Stmt* declaration();
 static Stmt* statement();
 static Stmt* block();
 
-// primary -> NUMBER | IDENTIFIER | CALL | STRING | TRUE | FALSE | NIL
+// primary -> NUMBER | STRING | BOOLEAN | NIL | ( expression ) | IDENTIFIER | CALL
 static Expr* primary() {
+    // 1. Literals
     if (match(TOKEN_FALSE)) return new_bool_expr(0);
     if (match(TOKEN_TRUE))  return new_bool_expr(1);
     if (match(TOKEN_NIL))   return new_nil_expr();
 
+    // 2. Grouping Expressions: ( expr )
+    if (match(TOKEN_LPAREN)) {
+        Expr* expr = expression();
+        consume(TOKEN_RPAREN, "Expect ')' after expression.");
+        return expr;
+    }
+
+    // 3. Numbers
     if (match(TOKEN_NUMBER)) {
         double val = strtod(previous_token.start, NULL);
         return new_number_expr(val);
     }
 
+    // 4. Strings
     if (match(TOKEN_STRING)) {
         Token t = previous_token;
         int len = t.length - 2;
@@ -64,9 +74,11 @@ static Expr* primary() {
         return new_string_expr(str);
     }
 
+    // 5. Identifiers (Variables) & Function Calls
     if (match(TOKEN_IDENTIFIER)) {
         Token name = previous_token;
 
+        // Check for function call: Identifier + '('
         if (match(TOKEN_LPAREN)) {
             Expr** args = NULL;
             int count = 0;
@@ -86,6 +98,7 @@ static Expr* primary() {
             return new_call_expr(name, args, count);
         }
 
+        // Just a variable access
         return new_variable_expr(name);
     }
 
@@ -133,8 +146,28 @@ static Expr* equality() {
     return expr;
 }
 
+static Expr* logical_and() {
+    Expr* expr = equality();
+    while (match(TOKEN_AND)) {
+        Token op = previous_token;
+        Expr* right = equality();
+        expr = new_binary_expr(expr, op, right);
+    }
+    return expr;
+}
+
+static Expr* logical_or() {
+    Expr* expr = logical_and();
+    while (match(TOKEN_OR)) {
+        Token op = previous_token;
+        Expr* right = logical_and();
+        expr = new_binary_expr(expr, op, right);
+    }
+    return expr;
+}
+
 static Expr* expression() {
-    return equality();
+    return logical_or();
 }
 
 static Stmt* print_statement() {
@@ -149,6 +182,7 @@ static Stmt* block() {
     Stmt* current = NULL;
 
     while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
+        // Skip blank lines inside blocks
         if (match(TOKEN_NEWLINE)) {
             continue;
         }
@@ -229,7 +263,7 @@ static Stmt* statement() {
 }
 
 static Stmt* declaration() {
-    // Skip leading newlines
+    // Skip leading newlines/comments
     while (match(TOKEN_NEWLINE));
 
     if (check(TOKEN_DEDENT) || check(TOKEN_EOF)) {
@@ -260,7 +294,7 @@ static Stmt* declaration() {
         match(TOKEN_NEWLINE);
         return stmt;
     }
-    
+
     Stmt* stmt = statement();
     match(TOKEN_NEWLINE);
     return stmt;

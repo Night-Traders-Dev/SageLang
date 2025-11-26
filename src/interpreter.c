@@ -84,7 +84,28 @@ static Value eval_expr(Expr* expr, Env* env);
 // --- Evaluator ---
 
 static Value eval_binary(BinaryExpr* b, Env* env) {
+    // Evaluate left operand first
     Value left = eval_expr(b->left, env);
+
+    // Short-circuit OR: if left is truthy, skip right and return true
+    if (b->op.type == TOKEN_OR) {
+        if (is_truthy(left)) {
+            return val_bool(1);
+        }
+        Value right = eval_expr(b->right, env);
+        return val_bool(is_truthy(right));
+    }
+
+    // Short-circuit AND: if left is falsy, skip right and return false
+    if (b->op.type == TOKEN_AND) {
+        if (!is_truthy(left)) {
+            return val_bool(0);
+        }
+        Value right = eval_expr(b->right, env);
+        return val_bool(is_truthy(right));
+    }
+
+    // For all other operators, evaluate right side
     Value right = eval_expr(b->right, env);
 
     // Equality
@@ -143,16 +164,16 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
     }
 }
 
+
 static Value eval_expr(Expr* expr, Env* env) {
     switch (expr->type) {
         case EXPR_NUMBER: return val_number(expr->as.number.value);
         case EXPR_STRING: return val_string(expr->as.string.value);
         case EXPR_BOOL:   return val_bool(expr->as.boolean.value);
         case EXPR_NIL:    return val_nil();
-        
         case EXPR_BINARY:
             return eval_binary(&expr->as.binary, env);
-        
+
         case EXPR_VARIABLE: {
             Value val;
             Token t = expr->as.variable.name;
@@ -162,10 +183,8 @@ static Value eval_expr(Expr* expr, Env* env) {
             fprintf(stderr, "Runtime Error: Undefined variable '%.*s'.", t.length, t.start);
             return val_nil();
         }
-        
         case EXPR_CALL: {
             Token callee = expr->as.call.callee;
-            
             // 1. Check Environment (Native Functions)
             Value funcVal;
             if (env_get(env, callee.start, callee.length, &funcVal)) {
