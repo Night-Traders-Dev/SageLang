@@ -24,6 +24,13 @@ Value val_nil() {
     return v;
 }
 
+Value val_native(NativeFn fn) {
+    Value v;
+    v.type = VAL_NATIVE;
+    v.as.native = fn;
+    return v;
+}
+
 Value val_string(char* value) {
     Value v;
     v.type = VAL_STRING;
@@ -38,6 +45,7 @@ void print_value(Value v) {
         case VAL_NIL:    printf("nil"); break;
         case VAL_STRING: printf("%s", AS_STRING(v)); break;
         case VAL_FUNCTION: printf("<fn>"); break;
+        case VAL_NATIVE: printf("<native fn>"); break;
     }
 }
 

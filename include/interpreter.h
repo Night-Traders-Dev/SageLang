@@ -5,5 +5,6 @@
 #include "env.h"
 
 void interpret(Stmt* stmt, Env* env);
+void init_stdlib(Env* env);
 
 #endif
