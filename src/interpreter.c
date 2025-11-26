@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "interpreter.h"
 #include "token.h"
 #include "env.h"
 #include "value.h"
 
-// --- Function Registry ---
+// --- Function Registry (User Defined Procs) ---
 typedef struct ProcNode {
     const char* name;
     int name_len;
@@ -34,6 +35,33 @@ static ProcStmt* find_function(const char* name, int len) {
         current = current->next;
     }
     return NULL;
+}
+
+// --- Native Functions ---
+
+static Value clock_native(int argCount, Value* args) {
+    return val_number((double)clock() / CLOCKS_PER_SEC);
+}
+
+static Value input_native(int argCount, Value* args) {
+    char buffer[1024];
+    // Print prompt? No, just read.
+    if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+        size_t len = strlen(buffer);
+        if (len > 0 && buffer[len-1] == '\n') buffer[len-1] = '\0';
+
+        // Deep copy string
+        char* str = malloc(len + 1);
+        strcpy(str, buffer);
+        return val_string(str);
+    }
+    return val_nil();
+}
+
+// Public API to init stdlib
+void init_stdlib(Env* env) {
+    env_define(env, "clock", 5, val_native(clock_native));
+    env_define(env, "input", 5, val_native(input_native));
 }
 
 // --- Helper: Truthiness ---
@@ -70,9 +98,7 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
             if (IS_NUMBER(left) && IS_NUMBER(right)) {
                 return val_number(AS_NUMBER(left) + AS_NUMBER(right));
             }
-            // String concatenation
             if (IS_STRING(left) && IS_STRING(right)) {
-                // Simple concat (leaks memory without GC, but works for demo)
                 char* s1 = AS_STRING(left);
                 char* s2 = AS_STRING(right);
                 int len1 = strlen(s1);
@@ -82,7 +108,6 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
                 strcat(result, s2);
                 return val_string(result);
             }
-
             fprintf(stderr, "Runtime Error: Operands must be numbers or strings.");
             return val_nil();
 
@@ -126,25 +151,43 @@ static Value eval_expr(Expr* expr, Env* env) {
 
         case EXPR_CALL: {
             Token callee = expr->as.call.callee;
+
+            // 1. Check Environment (Variables / Native Functions)
+            Value funcVal;
+            if (env_get(env, callee.start, callee.length, &funcVal)) {
+                if (funcVal.type == VAL_NATIVE) {
+                    // Evaluate args
+                    Value args[255];
+                    int count = expr->as.call.arg_count;
+                    for (int i = 0; i < count; i++) {
+                        args[i] = eval_expr(expr->as.call.args[i], env);
+                    }
+                    return funcVal.as.native(count, args);
+                }
+                // If it's a variable but NOT a native fn (e.g. a number), error?
+                // For now, fall through or error.
+            }
+
+            // 2. Check User Function Registry
             ProcStmt* func = find_function(callee.start, callee.length);
-            if (!func) {
-                fprintf(stderr, "Runtime Error: Undefined procedure.");
-                return val_nil();
+            if (func) {
+                if (expr->as.call.arg_count != func->param_count) {
+                     fprintf(stderr, "Runtime Error: Arity mismatch.");
+                     return val_nil();
+                }
+
+                Env* scope = env_create(env); 
+                for (int i = 0; i < func->param_count; i++) {
+                    Value argVal = eval_expr(expr->as.call.args[i], env);
+                    Token paramName = func->params[i];
+                    env_define(scope, paramName.start, paramName.length, argVal);
+                }
+                interpret(func->body, scope);
+                return val_nil(); 
             }
 
-            if (expr->as.call.arg_count != func->param_count) {
-                 fprintf(stderr, "Runtime Error: Arity mismatch.");
-                 return val_nil();
-            }
-
-            Env* scope = env_create(env); 
-            for (int i = 0; i < func->param_count; i++) {
-                Value argVal = eval_expr(expr->as.call.args[i], env);
-                Token paramName = func->params[i];
-                env_define(scope, paramName.start, paramName.length, argVal);
-            }
-            interpret(func->body, scope);
-            return val_nil(); 
+            fprintf(stderr, "Runtime Error: Undefined procedure '%.*s'.", callee.length, callee.start);
+            return val_nil();
         }
         default:
             return val_nil();
