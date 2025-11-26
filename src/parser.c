@@ -40,31 +40,23 @@ static void consume(TokenType type, const char* message) {
 
 // Forward declarations
 static Expr* expression();
-static Expr* equality();
 static Stmt* declaration();
 static Stmt* statement();
 static Stmt* block();
 
-
-// primary -> NUMBER | IDENTIFIER | CALL
+// primary -> NUMBER | IDENTIFIER | CALL | STRING | TRUE | FALSE | NIL
 static Expr* primary() {
-    if (match(TOKEN_FALSE)) {
-        return new_bool_expr(0);
-    }
-    if (match(TOKEN_TRUE))  {
-        return new_bool_expr(1);
-    }
-    if (match(TOKEN_NIL))   {
-        return new_nil_expr();
-    }
+    if (match(TOKEN_FALSE)) return new_bool_expr(0);
+    if (match(TOKEN_TRUE))  return new_bool_expr(1);
+    if (match(TOKEN_NIL))   return new_nil_expr();
+
     if (match(TOKEN_NUMBER)) {
         double val = strtod(previous_token.start, NULL);
         return new_number_expr(val);
     }
+
     if (match(TOKEN_STRING)) {
-        // Remove quotes
         Token t = previous_token;
-        // Copy content (skip first and last char)
         int len = t.length - 2;
         char* str = malloc(len + 1);
         memcpy(str, t.start + 1, len);
@@ -75,7 +67,6 @@ static Expr* primary() {
     if (match(TOKEN_IDENTIFIER)) {
         Token name = previous_token;
 
-        // Check for Function Call: identifier(args)
         if (match(TOKEN_LPAREN)) {
             Expr** args = NULL;
             int count = 0;
@@ -132,10 +123,8 @@ static Expr* comparison() {
     return expr;
 }
 
-
 static Expr* equality() {
-    Expr* expr = comparison(); // Call the next level down
-
+    Expr* expr = comparison();
     while (match(TOKEN_EQ) || match(TOKEN_NEQ)) {
         Token op = previous_token;
         Expr* right = comparison();
@@ -153,21 +142,19 @@ static Stmt* print_statement() {
     return new_print_stmt(value);
 }
 
-
 static Stmt* block() {
     consume(TOKEN_INDENT, "Expect indentation after block start.");
-
+    
     Stmt* head = NULL;
     Stmt* current = NULL;
 
     while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
-
         if (match(TOKEN_NEWLINE)) {
             continue;
         }
 
         Stmt* stmt = declaration();
-
+        
         if (head == NULL) {
             head = stmt;
             current = head;
@@ -181,7 +168,6 @@ static Stmt* block() {
     return new_block_stmt(head);
 }
 
-
 static Stmt* if_statement() {
     Expr* condition = expression();
     consume(TOKEN_NEWLINE, "Expect newline after if condition.");
@@ -192,7 +178,7 @@ static Stmt* if_statement() {
         consume(TOKEN_NEWLINE, "Expect newline after else.");
         else_branch = block();
     }
-
+    
     return new_if_stmt(condition, then_branch, else_branch);
 }
 
@@ -203,7 +189,6 @@ static Stmt* while_statement() {
     return new_while_stmt(condition, body);
 }
 
-// proc name(p1, p2):
 static Stmt* proc_declaration() {
     consume(TOKEN_IDENTIFIER, "Expect procedure name.");
     Token name = previous_token;
@@ -244,7 +229,23 @@ static Stmt* statement() {
 }
 
 static Stmt* declaration() {
+    // Skip leading newlines
+    while (match(TOKEN_NEWLINE));
+
+    if (check(TOKEN_DEDENT) || check(TOKEN_EOF)) {
+        return NULL;
+    }
+
     if (match(TOKEN_PROC)) return proc_declaration();
+
+    if (match(TOKEN_RETURN)) {
+        Expr* value = NULL;
+        if (!check(TOKEN_NEWLINE)) {
+            value = expression();
+        }
+        match(TOKEN_NEWLINE);
+        return new_return_stmt(value);
+    }
 
     if (match(TOKEN_LET)) {
         consume(TOKEN_IDENTIFIER, "Expect variable name.");
@@ -256,10 +257,10 @@ static Stmt* declaration() {
         }
 
         Stmt* stmt = new_let_stmt(name, initializer);
-        match(TOKEN_NEWLINE); // Consume newline for let
+        match(TOKEN_NEWLINE);
         return stmt;
     }
-
+    
     Stmt* stmt = statement();
     match(TOKEN_NEWLINE);
     return stmt;
