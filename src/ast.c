@@ -106,6 +106,17 @@ Stmt* new_if_stmt(Expr* condition, Stmt* then_branch, Stmt* else_branch) {
     return s;
 }
 
+Stmt* new_for_stmt(Token variable, Expr* iterable, Stmt* body) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_FOR;
+    s->as.for_stmt.variable = variable;
+    s->as.for_stmt.iterable = iterable;
+    s->as.for_stmt.body = body;
+    s->next = NULL;
+    return s;
+}
+
+
 Stmt* new_block_stmt(Stmt* statements) {
     Stmt* s = malloc(sizeof(Stmt));
     s->type = STMT_BLOCK;

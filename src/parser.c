@@ -45,6 +45,22 @@ static Stmt* declaration();
 static Stmt* statement();
 static Stmt* block();
 
+static Stmt* for_statement() {
+    consume(TOKEN_IDENTIFIER, "Expect loop variable.");
+    Token var = previous_token;
+
+    consume(TOKEN_IN, "Expect 'in' after loop variable.");
+
+    Expr* iterable = expression();
+    consume(TOKEN_NEWLINE, "Expect newline after for clause.");
+
+    Stmt* body = block();
+
+    return new_for_stmt(var, iterable, body);
+}
+
+
+
 // primary -> NUMBER | STRING | BOOLEAN | NIL | ( expression ) | [ elements ] | IDENTIFIER | CALL
 static Expr* primary() {
     // 1. Literals
@@ -292,6 +308,7 @@ static Stmt* statement() {
     if (match(TOKEN_PRINT)) return print_statement();
     if (match(TOKEN_IF)) return if_statement();
     if (match(TOKEN_WHILE)) return while_statement();
+    if (match(TOKEN_FOR)) return for_statement();
 
     Expr* expr = expression();
     return new_expr_stmt(expr);

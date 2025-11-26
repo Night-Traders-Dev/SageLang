@@ -107,6 +107,13 @@ typedef struct {
     Expr* value;
 } ReturnStmt;
 
+typedef struct {
+    Token variable;  // Loop variable (e.g., 'i' or 'item')
+    Expr* iterable;  // What we're iterating over (array or range)
+    Stmt* body;      // Loop body
+} ForStmt;
+
+
 struct Stmt {
     enum {
         STMT_PRINT,
@@ -116,6 +123,7 @@ struct Stmt {
         STMT_BLOCK,
         STMT_WHILE,
         STMT_PROC,
+        STMT_FOR,
         STMT_RETURN
     } type;
     union {
@@ -126,10 +134,13 @@ struct Stmt {
         WhileStmt while_stmt;
         ProcStmt proc;
         ReturnStmt ret;
+        ForStmt for_stmt;
         Expr* expression;
     } as;
     Stmt* next;
 };
+
+
 
 // Constructors
 Expr* new_number_expr(double value);
@@ -149,6 +160,7 @@ Stmt* new_if_stmt(Expr* condition, Stmt* then_branch, Stmt* else_branch);
 Stmt* new_block_stmt(Stmt* statements);
 Stmt* new_while_stmt(Expr* condition, Stmt* body);
 Stmt* new_proc_stmt(Token name, Token* params, int param_count, Stmt* body);
+Stmt* new_for_stmt(Token variable, Expr* iterable, Stmt* body);
 Stmt* new_return_stmt(Expr* value);
 
 #endif
