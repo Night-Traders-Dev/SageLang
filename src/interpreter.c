@@ -95,6 +95,27 @@ static Value pop_native(int argCount, Value* args) {
     return result;
 }
 
+static Value range_native(int argCount, Value* args) {
+    if (argCount < 1 || argCount > 2) return val_nil();
+    
+    int start = 0, end = 0;
+    
+    if (argCount == 1) {
+        if (!IS_NUMBER(args[0])) return val_nil();
+        end = (int)AS_NUMBER(args[0]);
+    } else {
+        if (!IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+        start = (int)AS_NUMBER(args[0]);
+        end = (int)AS_NUMBER(args[1]);
+    }
+
+    Value arr = val_array();
+    for (int i = start; i < end; i++) {
+        array_push(&arr, val_number(i));
+    }
+    return arr;
+}
+
 void init_stdlib(Env* env) {
     env_define(env, "clock", 5, val_native(clock_native));
     env_define(env, "input", 5, val_native(input_native));
@@ -102,6 +123,7 @@ void init_stdlib(Env* env) {
     env_define(env, "len", 3, val_native(len_native));
     env_define(env, "push", 4, val_native(push_native));
     env_define(env, "pop", 3, val_native(pop_native));
+    env_define(env, "range", 5, val_native(range_native));
 }
 
 // --- Helper: Truthiness ---
@@ -336,6 +358,33 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 ExecResult res = interpret(stmt->as.while_stmt.body, env);
                 if (res.is_returning) return res;
             }
+            return (ExecResult){ val_nil(), 0 };
+        }
+
+        case STMT_FOR: {
+            Value iterable = eval_expr(stmt->as.for_stmt.iterable, env);
+            
+            if (iterable.type != VAL_ARRAY) {
+                fprintf(stderr, "Runtime Error: for loop iterable must be an array.\n");
+                return (ExecResult){ val_nil(), 0 };
+            }
+
+            // Create new scope for loop variable
+            Env* loop_env = env_create(env);
+            Token var = stmt->as.for_stmt.variable;
+
+            ArrayValue* arr = iterable.as.array;
+            for (int i = 0; i < arr->count; i++) {
+                // Set loop variable to current element
+                env_define(loop_env, var.start, var.length, arr->elements[i]);
+
+                // Execute body
+                ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
+                
+                // Early return propagates
+                if (res.is_returning) return res;
+            }
+
             return (ExecResult){ val_nil(), 0 };
         }
 

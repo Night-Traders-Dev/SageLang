@@ -97,7 +97,9 @@ static TokenType identifier_type() {
             }
             break;
 
-        case 'i': return check_keyword(1, 1, "f", TOKEN_IF);
+        case 'i': 
+            if (current - start == 1) return check_keyword(1, 0, "", TOKEN_IN);
+            return check_keyword(1, 1, "f", TOKEN_IF);
         case 'l': return check_keyword(1, 2, "et", TOKEN_LET);
         case 'n': return check_keyword(1, 2, "il", TOKEN_NIL); // nil
 
