@@ -1,9 +1,11 @@
 #ifndef SAGE_ENV_H
 #define SAGE_ENV_H
 
+#include "value.h"
+
 typedef struct EnvNode {
     char* name;
-    double value;
+    Value value;
     struct EnvNode* next;
 } EnvNode;
 
@@ -13,7 +15,7 @@ typedef struct Env {
 } Env;
 
 Env* env_create(Env* parent);
-void env_define(Env* env, const char* name, int length, double value);
-int env_get(Env* env, const char* name, int length, double* value);
+void env_define(Env* env, const char* name, int length, Value value);
+int env_get(Env* env, const char* name, int length, Value* value);
 
 #endif

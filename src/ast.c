@@ -17,6 +17,26 @@ Expr* new_binary_expr(Expr* left, Token op, Expr* right) {
     return e;
 }
 
+Expr* new_string_expr(char* value) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_STRING;
+    e->as.string.value = value;
+    return e;
+}
+
+Expr* new_bool_expr(int value) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_BOOL;
+    e->as.boolean.value = value;
+    return e;
+}
+
+Expr* new_nil_expr() {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_NIL;
+    return e;
+}
+
 Expr* new_variable_expr(Token name) {
     Expr* e = malloc(sizeof(Expr));
     e->type = EXPR_VARIABLE;
