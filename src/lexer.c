@@ -8,13 +8,13 @@
 static const char* start;
 static const char* current;
 static int line;
-static int at_beginning_of_line; 
+static int at_beginning_of_line;
 
 // Indentation Stack
 #define MAX_INDENT_LEVELS 100
 static int indent_stack[MAX_INDENT_LEVELS];
 static int indent_stack_top = 0;
-static int pending_dedents = 0; 
+static int pending_dedents = 0;
 
 void init_lexer(const char* source) {
     start = source;
@@ -23,7 +23,7 @@ void init_lexer(const char* source) {
     at_beginning_of_line = 1;
 
     indent_stack_top = 0;
-    indent_stack[0] = 0; 
+    indent_stack[0] = 0;
     pending_dedents = 0;
 }
 
@@ -74,7 +74,7 @@ static TokenType check_keyword(int start_index, int length, const char* rest, To
 
 static TokenType identifier_type() {
     switch (start[0]) {
-        case 'e': 
+        case 'e':
             if (current - start > 1) {
                 switch (start[1]) {
                     case 'l':
@@ -156,7 +156,7 @@ Token scan_token() {
 
         if (peek() == '\n') {
             line++;
-            advance(); 
+            advance();
             at_beginning_of_line = 1;
             start = current;
             return scan_token();
@@ -167,7 +167,7 @@ Token scan_token() {
             if (indent_stack_top >= MAX_INDENT_LEVELS - 1) return error_token("Too much nesting.");
             indent_stack[++indent_stack_top] = spaces;
             return make_token(TOKEN_INDENT);
-        } 
+        }
         else if (spaces < current_indent) {
             while (indent_stack_top > 0 && indent_stack[indent_stack_top] > spaces) {
                 indent_stack_top--;
@@ -176,7 +176,7 @@ Token scan_token() {
             if (indent_stack[indent_stack_top] != spaces) {
                 return error_token("Indentation error.");
             }
-            pending_dedents--; 
+            pending_dedents--;
             return make_token(TOKEN_DEDENT);
         }
     }
