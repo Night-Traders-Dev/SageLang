@@ -1,5 +1,4 @@
-let x = 3
-while x > 0
-    print x
-    let x = x - 1
-print 0
+proc greet(n):
+    print n * 2
+
+greet(5)

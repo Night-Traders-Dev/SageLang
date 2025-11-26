@@ -1,4 +1,3 @@
-// src/lexer.c
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -9,23 +8,22 @@
 static const char* start;
 static const char* current;
 static int line;
-static int at_beginning_of_line; // Flag to check indentation
+static int at_beginning_of_line;
 
 // Indentation Stack
 #define MAX_INDENT_LEVELS 100
 static int indent_stack[MAX_INDENT_LEVELS];
 static int indent_stack_top = 0;
-static int pending_dedents = 0; // How many DEDENTs we need to emit
+static int pending_dedents = 0;
 
 void init_lexer(const char* source) {
     start = source;
     current = source;
     line = 1;
     at_beginning_of_line = 1;
-    
-    // Reset Indentation Stack
+
     indent_stack_top = 0;
-    indent_stack[0] = 0; // Base level is 0
+    indent_stack[0] = 0;
     pending_dedents = 0;
 }
 
@@ -65,9 +63,8 @@ static Token error_token(const char* message) {
     return token;
 }
 
-// --- Keyword Logic (Same as before) ---
 static TokenType check_keyword(int start_index, int length, const char* rest, TokenType type) {
-    if (current - start == start_index + length && 
+    if (current - start == start_index + length &&
         memcmp(start + start_index, rest, length) == 0) {
         return type;
     }
@@ -76,7 +73,7 @@ static TokenType check_keyword(int start_index, int length, const char* rest, To
 
 static TokenType identifier_type() {
     switch (start[0]) {
-        case 'e': 
+        case 'e':
             if (current - start > 1) {
                 switch (start[1]) {
                     case 'l':
@@ -89,10 +86,10 @@ static TokenType identifier_type() {
         case 'f': return check_keyword(1, 2, "or", TOKEN_FOR);
         case 'i': return check_keyword(1, 1, "f", TOKEN_IF);
         case 'l': return check_keyword(1, 2, "et", TOKEN_LET);
-        case 'p': 
+        case 'p':
             if (current - start > 1) {
                 switch(start[1]) {
-                    case 'r': 
+                    case 'r':
                         if (current - start > 2 && start[2] == 'i') return check_keyword(3, 2, "nt", TOKEN_PRINT); 
                         if (current - start > 2 && start[2] == 'o') return check_keyword(3, 1, "c", TOKEN_PROC);
                         break;
@@ -114,68 +111,55 @@ static Token identifier() {
 static Token number() {
     while (isdigit(peek())) advance();
     if (peek() == '.' && isdigit(peek_next())) {
-        advance(); 
+        advance();
         while (isdigit(peek())) advance();
     }
     return make_token(TOKEN_NUMBER);
 }
 
-// --- Main Scan Logic ---
-
 Token scan_token() {
-    // 1. Handle pending dedents from previous scan
     if (pending_dedents > 0) {
         pending_dedents--;
         return make_token(TOKEN_DEDENT);
     }
 
-    // 2. Handle Indentation at start of line
     if (at_beginning_of_line) {
         at_beginning_of_line = 0;
-        
-        // Count spaces
         int spaces = 0;
         while (peek() == ' ') {
             advance();
             spaces++;
         }
-        
-        // Ignore blank lines (lines with only whitespace)
+
+        // Check for newline (empty line)
         if (peek() == '\n') {
-            // Consume the newline logic below will handle line increment
-            // But we just restart scan to skip this empty line
             line++;
-            advance(); 
+            advance();
             at_beginning_of_line = 1;
             start = current;
             return scan_token();
         }
 
-        // Indentation logic
         int current_indent = indent_stack[indent_stack_top];
-        
         if (spaces > current_indent) {
             if (indent_stack_top >= MAX_INDENT_LEVELS - 1) return error_token("Too much nesting.");
             indent_stack[++indent_stack_top] = spaces;
             return make_token(TOKEN_INDENT);
-        } 
+        }
         else if (spaces < current_indent) {
-            // Calculate how many dedents to emit
             while (indent_stack_top > 0 && indent_stack[indent_stack_top] > spaces) {
                 indent_stack_top--;
                 pending_dedents++;
             }
-            // Check for misalignment error
             if (indent_stack[indent_stack_top] != spaces) {
                 return error_token("Indentation error.");
             }
-            // Return the first DEDENT immediately
-            pending_dedents--; 
+            pending_dedents--;
             return make_token(TOKEN_DEDENT);
         }
     }
 
-    // 3. Skip standard whitespace (between tokens)
+    // Skip whitespace: space, carriage return, tab
     while (peek() == ' ' || peek() == '\r' || peek() == '\t') {
         advance();
     }
@@ -183,7 +167,6 @@ Token scan_token() {
     start = current;
 
     if (is_at_end()) {
-        // Emit DEDENTs at EOF if we are still indented
         if (indent_stack_top > 0) {
             indent_stack_top--;
             return make_token(TOKEN_DEDENT);
@@ -193,18 +176,14 @@ Token scan_token() {
 
     char c = advance();
 
-    // 4. Handle Newline
     if (c == '\n') {
         line++;
         at_beginning_of_line = 1;
         return make_token(TOKEN_NEWLINE);
     }
 
-    // 5. Comments
     if (c == '#') {
         while (peek() != '\n' && !is_at_end()) advance();
-        // Recursively call scan_token to get the *next* real token
-        // (The newline after the comment will be handled in the next call)
         return scan_token();
     }
 
@@ -218,10 +197,11 @@ Token scan_token() {
         case '-': return make_token(TOKEN_MINUS);
         case '*': return make_token(TOKEN_STAR);
         case '/': return make_token(TOKEN_SLASH);
-        case '<': return make_token(TOKEN_LT); 
+        case '<': return make_token(TOKEN_LT);
         case '>': return make_token(TOKEN_GT);
         case '=': return make_token(TOKEN_ASSIGN);
-        case ':': return make_token(TOKEN_ERROR); // Colon might be used later, or ignore
+        case ',': return make_token(TOKEN_COMMA);
+        case ':': return make_token(TOKEN_COLON);
     }
 
     return error_token("Unexpected character.");
