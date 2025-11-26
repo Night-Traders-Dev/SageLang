@@ -40,9 +40,11 @@ static void consume(TokenType type, const char* message) {
 
 // Forward declarations
 static Expr* expression();
+static Expr* equality();
 static Stmt* declaration();
 static Stmt* statement();
 static Stmt* block();
+
 
 // primary -> NUMBER | IDENTIFIER | CALL
 static Expr* primary() {
@@ -131,14 +133,27 @@ static Expr* comparison() {
     return expr;
 }
 
+
+static Expr* equality() {
+    Expr* expr = comparison(); // Call the next level down
+
+    while (match(TOKEN_EQ) || match(TOKEN_NEQ)) {
+        Token op = previous_token;
+        Expr* right = comparison();
+        expr = new_binary_expr(expr, op, right);
+    }
+    return expr;
+}
+
 static Expr* expression() {
-    return comparison();
+    return equality();
 }
 
 static Stmt* print_statement() {
     Expr* value = expression();
     return new_print_stmt(value);
 }
+
 
 static Stmt* block() {
     consume(TOKEN_INDENT, "Expect indentation after block start.");
@@ -147,6 +162,11 @@ static Stmt* block() {
     Stmt* current = NULL;
 
     while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
+
+        if (match(TOKEN_NEWLINE)) {
+            continue;
+        }
+
         Stmt* stmt = declaration();
 
         if (head == NULL) {
@@ -161,6 +181,7 @@ static Stmt* block() {
     consume(TOKEN_DEDENT, "Expect dedent at end of block.");
     return new_block_stmt(head);
 }
+
 
 static Stmt* if_statement() {
     Expr* condition = expression();
@@ -246,6 +267,10 @@ static Stmt* declaration() {
 }
 
 Stmt* parse() {
+    while (current_token.type == TOKEN_NEWLINE) {
+        advance_parser();
+    }
+
     if (current_token.type == TOKEN_EOF) return NULL;
     return declaration();
 }

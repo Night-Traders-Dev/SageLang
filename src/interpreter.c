@@ -81,6 +81,12 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
     Value right = eval_expr(b->right, env);
 
     // Comparison
+    if (b->op.type == TOKEN_EQ || b->op.type == TOKEN_NEQ) {
+        int equal = values_equal(left, right);
+        if (b->op.type == TOKEN_EQ) return val_bool(equal);
+        if (b->op.type == TOKEN_NEQ) return val_bool(!equal);
+    }
+
     if (b->op.type == TOKEN_GT || b->op.type == TOKEN_LT) {
         if (!IS_NUMBER(left) || !IS_NUMBER(right)) {
             fprintf(stderr, "Runtime Error: Operands must be numbers.");

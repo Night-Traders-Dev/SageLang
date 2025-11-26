@@ -140,6 +140,13 @@ static Token string() {
     return make_token(TOKEN_STRING);
 }
 
+static int match_char(char expected) {
+    if (is_at_end()) return 0;
+    if (*current != expected) return 0;
+    current++;
+    return 1;
+}
+
 Token scan_token() {
     if (pending_dedents > 0) {
         pending_dedents--;
@@ -219,12 +226,12 @@ Token scan_token() {
         case '+': return make_token(TOKEN_PLUS);
         case '-': return make_token(TOKEN_MINUS);
         case '*': return make_token(TOKEN_STAR);
-        case '/': return make_token(TOKEN_SLASH);
-        case '<': return make_token(TOKEN_LT); 
-        case '>': return make_token(TOKEN_GT);
-        case '=': return make_token(TOKEN_ASSIGN);
-        case ',': return make_token(TOKEN_COMMA); 
-        case ':': return make_token(TOKEN_COLON); 
+        case ',': return make_token(TOKEN_COMMA);
+        case ':': return make_token(TOKEN_COLON);
+        case '!': return make_token(match_char('=') ? TOKEN_NEQ : TOKEN_ERROR);
+        case '=': return make_token(match_char('=') ? TOKEN_EQ : TOKEN_ASSIGN);
+        case '<': return make_token(match_char('=') ? TOKEN_LTE : TOKEN_LT);
+        case '>': return make_token(match_char('=') ? TOKEN_GTE : TOKEN_GT);
     }
 
     return error_token("Unexpected character.");
