@@ -56,6 +56,6 @@ int values_equal(Value a, Value b) {
         case VAL_BOOL:   return AS_BOOL(a) == AS_BOOL(b);
         case VAL_NIL:    return 1;
         case VAL_STRING: return strcmp(AS_STRING(a), AS_STRING(b)) == 0;
-        default:         return 0; // Functions not comparable yet
+        default:         return 0;
     }
 }
