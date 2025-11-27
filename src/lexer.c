@@ -77,6 +77,10 @@ static TokenType identifier_type() {
     switch (start[0]) {
         case 'a': return check_keyword(1, 2, "nd", TOKEN_AND);
 
+        case 'b': return check_keyword(1, 4, "reak", TOKEN_BREAK);
+
+        case 'c': return check_keyword(1, 7, "ontinue", TOKEN_CONTINUE);
+
         case 'e': 
             if (current - start > 1) {
                 switch (start[1]) {
@@ -243,11 +247,15 @@ Token scan_token() {
         case ')': return make_token(TOKEN_RPAREN);
         case '[': return make_token(TOKEN_LBRACKET);
         case ']': return make_token(TOKEN_RBRACKET);
+        case '{': return make_token(TOKEN_LBRACE);
+        case '}': return make_token(TOKEN_RBRACE);
         case '+': return make_token(TOKEN_PLUS);
         case '-': return make_token(TOKEN_MINUS);
         case '*': return make_token(TOKEN_STAR);
+        case '/': return make_token(TOKEN_SLASH);
         case ',': return make_token(TOKEN_COMMA);
         case ':': return make_token(TOKEN_COLON);
+        case '.': return make_token(TOKEN_DOT);
         case '!': return make_token(match_char('=') ? TOKEN_NEQ : TOKEN_ERROR);
         case '=': return make_token(match_char('=') ? TOKEN_EQ : TOKEN_ASSIGN);
         case '<': return make_token(match_char('=') ? TOKEN_LTE : TOKEN_LT);
