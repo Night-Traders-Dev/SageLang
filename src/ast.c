@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include "ast.h"
 
+// ========== EXPRESSION CONSTRUCTORS ==========
+
 Expr* new_number_expr(double value) {
     Expr* e = malloc(sizeof(Expr));
     e->type = EXPR_NUMBER;
@@ -69,7 +71,33 @@ Expr* new_index_expr(Expr* array, Expr* index) {
     return e;
 }
 
+Expr* new_dict_expr(char** keys, Expr** values, int count) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_DICT;
+    e->as.dict.keys = keys;
+    e->as.dict.values = values;
+    e->as.dict.count = count;
+    return e;
+}
 
+Expr* new_tuple_expr(Expr** elements, int count) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_TUPLE;
+    e->as.tuple.elements = elements;
+    e->as.tuple.count = count;
+    return e;
+}
+
+Expr* new_slice_expr(Expr* array, Expr* start, Expr* end) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_SLICE;
+    e->as.slice.array = array;
+    e->as.slice.start = start;
+    e->as.slice.end = end;
+    return e;
+}
+
+// ========== STATEMENT CONSTRUCTORS ==========
 
 Stmt* new_print_stmt(Expr* expression) {
     Stmt* s = malloc(sizeof(Stmt));
@@ -116,7 +144,6 @@ Stmt* new_for_stmt(Token variable, Expr* iterable, Stmt* body) {
     return s;
 }
 
-
 Stmt* new_block_stmt(Stmt* statements) {
     Stmt* s = malloc(sizeof(Stmt));
     s->type = STMT_BLOCK;
@@ -149,6 +176,20 @@ Stmt* new_return_stmt(Expr* value) {
     Stmt* s = malloc(sizeof(Stmt));
     s->type = STMT_RETURN;
     s->as.ret.value = value;
+    s->next = NULL;
+    return s;
+}
+
+Stmt* new_break_stmt() {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_BREAK;
+    s->next = NULL;
+    return s;
+}
+
+Stmt* new_continue_stmt() {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_CONTINUE;
     s->next = NULL;
     return s;
 }
