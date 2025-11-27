@@ -1,7 +1,7 @@
 #ifndef SAGE_VALUE_H
 #define SAGE_VALUE_H
 
-struct Value;
+// Forward declaration
 typedef struct Value Value;
 typedef Value (*NativeFn)(int argCount, Value* args);
 
@@ -13,9 +13,10 @@ typedef struct {
 } ArrayValue;
 
 // Dictionary entry (key-value pair)
+// Using pointer to avoid circular dependency
 typedef struct {
     char* key;
-    Value value;
+    Value* value;  // Changed to pointer
 } DictEntry;
 
 // Dictionary structure (simple hash map)
