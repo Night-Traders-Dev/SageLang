@@ -34,7 +34,7 @@ static void consume(TokenType type, const char* message) {
         advance_parser();
         return;
     }
-    fprintf(stderr, "[Line %d] Error: %s (Got type %d)", current_token.line, message, current_token.type);
+    fprintf(stderr, "[Line %d] Error: %s (Got type %d)\n", current_token.line, message, current_token.type);
     exit(1);
 }
 
@@ -46,12 +46,24 @@ static Stmt* statement();
 static Stmt* block();
 
 static Stmt* for_statement() {
-    consume(TOKEN_IDENTIFIER, "Expect loop variable.");
-    Token var = previous_token;
+    // 'for' keyword already consumed
+    // Now we expect: IDENTIFIER 'in' EXPRESSION ':' NEWLINE BLOCK
+    
+    if (!check(TOKEN_IDENTIFIER)) {
+        fprintf(stderr, "[Line %d] Error: Expect loop variable after 'for'.\n", current_token.line);
+        exit(1);
+    }
+    
+    Token var = current_token;
+    advance_parser();
 
     consume(TOKEN_IN, "Expect 'in' after loop variable.");
 
     Expr* iterable = expression();
+    
+    // Optional colon
+    match(TOKEN_COLON);
+    
     consume(TOKEN_NEWLINE, "Expect newline after for clause.");
 
     Stmt* body = block();
@@ -255,11 +267,16 @@ static Stmt* block() {
 
 static Stmt* if_statement() {
     Expr* condition = expression();
+    
+    // Optional colon
+    match(TOKEN_COLON);
+    
     consume(TOKEN_NEWLINE, "Expect newline after if condition.");
     Stmt* then_branch = block();
 
     Stmt* else_branch = NULL;
     if (match(TOKEN_ELSE)) {
+        match(TOKEN_COLON);
         consume(TOKEN_NEWLINE, "Expect newline after else.");
         else_branch = block();
     }
@@ -269,6 +286,10 @@ static Stmt* if_statement() {
 
 static Stmt* while_statement() {
     Expr* condition = expression();
+    
+    // Optional colon
+    match(TOKEN_COLON);
+    
     consume(TOKEN_NEWLINE, "Expect newline after while condition.");
     Stmt* body = block();
     return new_while_stmt(condition, body);
