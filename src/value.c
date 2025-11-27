@@ -122,17 +122,6 @@ Value array_slice(Value* arr, int start, int end) {
 
 // ========== DICTIONARY OPERATIONS ==========
 
-// Simple hash function for strings
-static unsigned int hash_string(const char* str) {
-    unsigned int hash = 2166136261u;
-    while (*str) {
-        hash ^= (unsigned char)(*str);
-        hash *= 16777619;
-        str++;
-    }
-    return hash;
-}
-
 void dict_set(Value* dict, const char* key, Value value) {
     if (dict->type != VAL_DICT) return;
     DictValue* d = dict->as.dict;
@@ -140,7 +129,7 @@ void dict_set(Value* dict, const char* key, Value value) {
     // Check if key already exists
     for (int i = 0; i < d->count; i++) {
         if (strcmp(d->entries[i].key, key) == 0) {
-            d->entries[i].value = value;
+            *(d->entries[i].value) = value;  // Update existing value
             return;
         }
     }
@@ -153,7 +142,9 @@ void dict_set(Value* dict, const char* key, Value value) {
     
     d->entries[d->count].key = malloc(strlen(key) + 1);
     strcpy(d->entries[d->count].key, key);
-    d->entries[d->count].value = value;
+    
+    d->entries[d->count].value = malloc(sizeof(Value));  // Allocate Value
+    *(d->entries[d->count].value) = value;               // Copy value
     d->count++;
 }
 
@@ -163,7 +154,7 @@ Value dict_get(Value* dict, const char* key) {
     
     for (int i = 0; i < d->count; i++) {
         if (strcmp(d->entries[i].key, key) == 0) {
-            return d->entries[i].value;
+            return *(d->entries[i].value);  // Dereference pointer
         }
     }
     return val_nil();
@@ -188,6 +179,7 @@ void dict_delete(Value* dict, const char* key) {
     for (int i = 0; i < d->count; i++) {
         if (strcmp(d->entries[i].key, key) == 0) {
             free(d->entries[i].key);
+            free(d->entries[i].value);  // Free Value pointer
             // Shift remaining entries
             for (int j = i; j < d->count - 1; j++) {
                 d->entries[j] = d->entries[j + 1];
@@ -217,7 +209,7 @@ Value dict_values(Value* dict) {
     
     Value result = val_array();
     for (int i = 0; i < d->count; i++) {
-        array_push(&result, d->entries[i].value);
+        array_push(&result, *(d->entries[i].value));  // Dereference pointer
     }
     return result;
 }
@@ -431,7 +423,7 @@ void print_value(Value v) {
             for (int i = 0; i < d->count; i++) {
                 if (i > 0) printf(", ");
                 printf("\"%s\": ", d->entries[i].key);
-                print_value(d->entries[i].value);
+                print_value(*(d->entries[i].value));  // Dereference pointer
             }
             printf("}");
             break;
