@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: November 27, 2025  
-> **Current Phase**: Phase 5 (COMPLETE) ✅ → Phase 6 (Planning)
+> **Current Phase**: Phase 4 & 5 (COMPLETE) ✅ → Phase 6 (Planning)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -83,10 +83,29 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-### Phase 4: Memory Management (Skipped for now)
-**Status**: 📋 Deferred
+### Phase 4: Memory Management
+**Status**: ✅ **COMPLETE** (November 27, 2025)
 
-Deferred to focus on language features first. Will revisit after Phase 6.
+#### Garbage Collection ✅
+- [x] **Mark-and-sweep algorithm** - Automatic memory reclamation
+- [x] **Object tracking** - All heap-allocated objects tracked
+- [x] **Automatic collection** - Triggers at memory threshold
+- [x] **Manual collection** - `gc_collect()` function
+- [x] **GC statistics** - `gc_stats()` provides metrics
+- [x] **GC control** - `gc_enable()`, `gc_disable()`
+
+#### Memory Safety ✅
+- [x] Prevents use-after-free
+- [x] Automatic cleanup of unreachable objects
+- [x] Leak detection capabilities
+- [x] Performance monitoring
+
+#### GC Metrics ✅
+- [x] Bytes allocated tracking
+- [x] Object count tracking
+- [x] Collection cycle counting
+- [x] Objects freed tracking
+- [x] Threshold management
 
 ---
 
@@ -245,6 +264,7 @@ Deferred to focus on language features first. Will revisit after Phase 6.
 ## 🎯 Milestone Targets
 
 ### Near-Term (1-2 months)
+- ✅ Complete Phase 4 (Memory Management) **DONE**
 - ✅ Complete Phase 5 (Advanced Data Structures) **DONE**
 - Begin Phase 6 (Object-Oriented Features)
 - Complete Phase 7 (Advanced Control Flow)
@@ -269,9 +289,9 @@ Deferred to focus on language features first. Will revisit after Phase 6.
 
 ## 📊 Progress Metrics
 
-- **Lines of C Code**: ~40,000+ (current implementation)
-- **Implemented Features**: 45/200+ planned
-- **Phases Completed**: 5/13 (38%)
+- **Lines of C Code**: ~45,000+ (current implementation)
+- **Implemented Features**: 55/200+ planned
+- **Phases Completed**: 5/13 (38%) + Phase 4 & 7 (partial)
 - **Estimated Completion**: 2027-2028 (self-hosting)
 
 ---
@@ -282,7 +302,7 @@ We welcome contributions at all phases! Here's how you can help:
 
 ### Current Priorities
 1. **Object-Oriented Features**: Help implement classes and inheritance (Phase 6)
-2. **Testing**: Write test cases for Phase 5 features
+2. **Testing**: Write test cases for Phase 4 & 5 features
 3. **Documentation**: Improve code comments and guides
 4. **Examples**: Create example programs showcasing new features
 
