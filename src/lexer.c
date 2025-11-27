@@ -75,14 +75,14 @@ static TokenType check_keyword(int start_index, int length, const char* rest, To
 
 static TokenType identifier_type() {
     switch (start[0]) {
-        case 'a': return check_keyword(1, 2, "nd", TOKEN_AND); // Added 'and'
+        case 'a': return check_keyword(1, 2, "nd", TOKEN_AND);
 
         case 'e': 
             if (current - start > 1) {
                 switch (start[1]) {
                     case 'l':
                         if (current - start > 2 && start[2] == 's') return check_keyword(3, 1, "e", TOKEN_ELSE);
-                        if (current - start > 2 && start[2] == 'i') return check_keyword(3, 1, "f", TOKEN_IF); // This catches 'elif'
+                        if (current - start > 2 && start[2] == 'i') return check_keyword(3, 1, "f", TOKEN_IF); // elif
                         break;
                 }
             }
@@ -91,19 +91,25 @@ static TokenType identifier_type() {
         case 'f': 
             if (current - start > 1) {
                 switch (start[1]) {
-                    case 'a': return check_keyword(2, 3, "lse", TOKEN_FALSE); // false
-                    case 'o': return check_keyword(2, 1, "r", TOKEN_FOR);     // for
+                    case 'a': return check_keyword(2, 3, "lse", TOKEN_FALSE);
+                    case 'o': return check_keyword(2, 1, "r", TOKEN_FOR);
                 }
             }
             break;
 
-        case 'i': 
-            if (current - start == 1) return check_keyword(1, 0, "", TOKEN_IN);
-            return check_keyword(1, 1, "f", TOKEN_IF);
+        case 'i':
+            if (current - start > 1) {
+                switch (start[1]) {
+                    case 'f': return check_keyword(2, 0, "", TOKEN_IF);  // "if"
+                    case 'n': return check_keyword(2, 0, "", TOKEN_IN);  // "in"
+                }
+            }
+            break;
+            
         case 'l': return check_keyword(1, 2, "et", TOKEN_LET);
-        case 'n': return check_keyword(1, 2, "il", TOKEN_NIL); // nil
+        case 'n': return check_keyword(1, 2, "il", TOKEN_NIL);
 
-        case 'o': return check_keyword(1, 1, "r", TOKEN_OR);   // Added 'or'
+        case 'o': return check_keyword(1, 1, "r", TOKEN_OR);
 
         case 'p': 
             if (current - start > 1) {
@@ -117,7 +123,7 @@ static TokenType identifier_type() {
             break;
 
         case 'r': return check_keyword(1, 5, "eturn", TOKEN_RETURN);
-        case 't': return check_keyword(1, 3, "rue", TOKEN_TRUE); // true
+        case 't': return check_keyword(1, 3, "rue", TOKEN_TRUE);
         case 'v': return check_keyword(1, 2, "ar", TOKEN_VAR);
         case 'w': return check_keyword(1, 4, "hile", TOKEN_WHILE);
     }
