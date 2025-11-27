@@ -6,6 +6,7 @@
 #include "token.h"
 #include "env.h"
 #include "value.h"
+#include "gc.h"
 
 // --- Function Registry ---
 typedef struct ProcNode {
@@ -197,6 +198,35 @@ static Value dict_delete_native(int argCount, Value* args) {
     return val_nil();
 }
 
+// GC functions
+static Value gc_collect_native(int argCount, Value* args) {
+    gc_collect();
+    return val_nil();
+}
+
+static Value gc_stats_native(int argCount, Value* args) {
+    GCStats stats = gc_get_stats();
+    Value dict = val_dict();
+    
+    dict_set(&dict, "bytes_allocated", val_number(stats.bytes_allocated));
+    dict_set(&dict, "num_objects", val_number(stats.num_objects));
+    dict_set(&dict, "collections", val_number(stats.collections));
+    dict_set(&dict, "objects_freed", val_number(stats.objects_freed));
+    dict_set(&dict, "next_gc", val_number(stats.next_gc));
+    
+    return dict;
+}
+
+static Value gc_enable_native(int argCount, Value* args) {
+    gc_enable();
+    return val_nil();
+}
+
+static Value gc_disable_native(int argCount, Value* args) {
+    gc_disable();
+    return val_nil();
+}
+
 void init_stdlib(Env* env) {
     // Core functions
     env_define(env, "clock", 5, val_native(clock_native));
@@ -223,6 +253,12 @@ void init_stdlib(Env* env) {
     env_define(env, "dict_values", 11, val_native(dict_values_native));
     env_define(env, "dict_has", 8, val_native(dict_has_native));
     env_define(env, "dict_delete", 11, val_native(dict_delete_native));
+    
+    // GC functions
+    env_define(env, "gc_collect", 10, val_native(gc_collect_native));
+    env_define(env, "gc_stats", 8, val_native(gc_stats_native));
+    env_define(env, "gc_enable", 9, val_native(gc_enable_native));
+    env_define(env, "gc_disable", 10, val_native(gc_disable_native));
 }
 
 // --- Helper: Truthiness ---
