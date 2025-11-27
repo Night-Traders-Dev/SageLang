@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: November 27, 2025  
-> **Current Phase**: Phase 3 (Completed) → Phase 4 (In Progress)
+> **Current Phase**: Phase 5 (COMPLETE) ✅ → Phase 6 (Planning)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -83,51 +83,60 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## 🚧 Current Phase
+### Phase 4: Memory Management (Skipped for now)
+**Status**: 📋 Deferred
 
-### Phase 4: Memory Management
-**Status**: 🚧 In Progress
+Deferred to focus on language features first. Will revisit after Phase 6.
 
-#### Garbage Collection
-- [ ] Mark-and-sweep GC implementation
-- [ ] Object allocation tracking
-- [ ] Root set management
-- [ ] Automatic memory reclamation
-- [ ] GC statistics and tuning
-- [ ] Incremental GC for better performance
+---
 
-#### Memory Safety
-- [ ] Bounds checking for arrays/strings
-- [ ] Use-after-free detection
-- [ ] Memory leak detection tools
-- [ ] Reference counting for shared objects
+### Phase 5: Advanced Data Structures  
+**Status**: ✅ **COMPLETE** (November 27, 2025)
+
+#### Collections ✅
+- [x] Arrays/Lists with dynamic sizing
+- [x] **Hash maps/Dictionaries** - `{"key": value}` syntax
+- [x] **Tuples** - `(val1, val2, val3)` syntax  
+- [x] **Array slicing** - `arr[start:end]` syntax
+- [x] Dictionary indexing - `dict["key"]`
+- [x] Tuple indexing - `tuple[0]`
+
+#### String Enhancement ✅
+- [x] **String methods** - `split()`, `join()`, `replace()`, `upper()`, `lower()`, `strip()`
+- [x] String concatenation
+- [x] String indexing and length
+
+#### Native Functions Added ✅
+- [x] `len()` - Get length of arrays, strings, tuples, dicts
+- [x] `push()`, `pop()` - Array manipulation
+- [x] `range()` - Generate number sequences
+- [x] `slice()` - Array slicing
+- [x] `split()`, `join()` - String splitting and joining
+- [x] `replace()` - String replacement
+- [x] `upper()`, `lower()` - Case conversion
+- [x] `strip()` - Whitespace trimming
+- [x] `dict_keys()`, `dict_values()` - Dictionary operations
+- [x] `dict_has()`, `dict_delete()` - Dictionary manipulation
+
+---
+
+### Phase 7 (Partial): Advanced Control Flow
+**Status**: ✅ **PARTIALLY COMPLETE**
+
+- [x] `for` loops with iterators (Phase 3 completion)
+- [x] **`break` statement** - Exit loops early ✅
+- [x] **`continue` statement** - Skip to next iteration ✅
+- [ ] `switch`/`match` expressions
+- [ ] Exception handling (`try`/`catch`/`finally`)
+- [ ] Defer statements
+- [ ] Generator functions (`yield`)
 
 ---
 
 ## 🔮 Future Phases
 
-### Phase 5: Advanced Data Structures
-**Status**: 📋 Planned
-
-#### Collections
-- [ ] Arrays/Lists with dynamic sizing
-- [ ] Hash maps/Dictionaries
-- [ ] Sets
-- [ ] Tuples
-- [ ] Array slicing syntax
-- [ ] List comprehensions
-
-#### Strings Enhancement
-- [ ] String interpolation
-- [ ] Multi-line strings
-- [ ] Raw strings
-- [ ] String methods (split, join, replace, etc.)
-- [ ] Unicode support
-
----
-
 ### Phase 6: Object-Oriented Features
-**Status**: 📋 Planned
+**Status**: 📋 Planned (NEXT)
 
 - [ ] Class definitions
 - [ ] Instance creation and methods
@@ -137,18 +146,6 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - [ ] Private/public members
 - [ ] Static methods
 - [ ] Interfaces/Traits
-
----
-
-### Phase 7: Advanced Control Flow
-**Status**: 📋 Planned
-
-- [ ] `for` loops (C-style and iterators)
-- [ ] `break` and `continue` statements
-- [ ] `switch`/`match` expressions
-- [ ] Exception handling (`try`/`catch`/`finally`)
-- [ ] Defer statements
-- [ ] Generator functions (`yield`)
 
 ---
 
@@ -181,103 +178,29 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - [ ] Clobber list support
 - [ ] Assembly constraint syntax
 - [ ] Support for multiple architectures (ARM, RISC-V)
-- [ ] Volatile assembly blocks
-- [ ] Assembly macro system
-
-**Example Syntax:**
-```sage
-proc fast_multiply(a: i64, b: i64) -> i64
-    let result: i64
-    asm
-        "mov rax, {a}"
-        "imul {b}"
-        "mov {result}, rax"
-        : "=r"(result)
-        : "r"(a), "r"(b)
-        : "rax", "rdx"
-    return result
-```
 
 #### Pointer Arithmetic & Raw Memory
 - [ ] Pointer types (`*T`, `*const T`, `*mut T`)
 - [ ] Address-of operator (`&`, `&mut`)
 - [ ] Dereference operator (`*`)
-- [ ] Pointer arithmetic (+, -, offset)
-- [ ] Null pointer handling
-- [ ] Unsafe blocks for raw memory operations
-- [ ] Memory alignment control
-- [ ] Volatile memory access
+- [ ] Pointer arithmetic
 - [ ] Memory-mapped I/O support
-
-#### Bit Manipulation
-- [ ] Bitwise operators (&, |, ^, ~, <<, >>)
-- [ ] Bit field syntax
-- [ ] Packed structs
-- [ ] Endianness control
-- [ ] Bit rotation operations
-- [ ] Population count (popcount)
-- [ ] Leading/trailing zero count
 
 #### Foreign Function Interface (FFI)
 - [ ] C function calling convention
 - [ ] External function declarations
-- [ ] Structure layout compatibility
-- [ ] Calling convention attributes (`cdecl`, `stdcall`)
 - [ ] Dynamic library loading
-- [ ] Symbol name mangling control
-- [ ] Callback functions from C
-- [ ] Type marshalling for FFI
-
-#### System-Level Types
-- [ ] Fixed-width integer types (i8, i16, i32, i64, u8, u16, u32, u64)
-- [ ] Floating-point types (f32, f64)
-- [ ] Size types (usize, isize)
-- [ ] Raw byte arrays
-- [ ] Union types
-- [ ] Opaque types for FFI
-- [ ] Function pointer types
-
-#### Memory Management Primitives
-- [ ] Manual allocation (`alloc`, `free`)
-- [ ] Stack allocation control
-- [ ] Custom allocators
-- [ ] Memory pool support
-- [ ] Arena allocators
-- [ ] Memory barriers
-- [ ] Atomic operations
 
 ---
 
 ### Phase 10: Compiler Development
 **Status**: 📋 Planned
 
-#### Compilation Pipeline
-- [ ] AST optimization passes
-- [ ] Intermediate representation (IR) design
-- [ ] IR optimization passes
-  - [ ] Constant folding
-  - [ ] Dead code elimination
-  - [ ] Common subexpression elimination
-  - [ ] Inlining
-- [ ] Type inference engine
-- [ ] Static analysis tools
-
 #### Code Generation
 - [ ] C code generation backend
 - [ ] LLVM IR generation backend
 - [ ] Direct machine code generation (x86-64)
 - [ ] Optimization levels (-O0, -O1, -O2, -O3)
-- [ ] Debug symbol generation
-- [ ] Position-independent code (PIC)
-- [ ] Link-time optimization (LTO)
-
-#### Compilation Modes
-- [ ] Ahead-of-time (AOT) compilation
-- [ ] Just-in-time (JIT) compilation
-- [ ] Incremental compilation
-- [ ] Cross-compilation support
-- [ ] Static linking
-- [ ] Dynamic linking
 
 ---
 
@@ -286,24 +209,13 @@ proc fast_multiply(a: i64, b: i64) -> i64
 
 #### Threading
 - [ ] Thread creation and management
-- [ ] Thread pools
 - [ ] Mutex and locks
-- [ ] Condition variables
 - [ ] Thread-local storage
-- [ ] Atomic operations
 
 #### Async/Await
 - [ ] Async function syntax
 - [ ] Await expressions
 - [ ] Future/Promise types
-- [ ] Async runtime
-- [ ] Event loop
-
-#### Channels & Message Passing
-- [ ] Channel creation (bounded/unbounded)
-- [ ] Send/receive operations
-- [ ] Select statements
-- [ ] Actor model support
 
 ---
 
@@ -312,28 +224,10 @@ proc fast_multiply(a: i64, b: i64) -> i64
 
 #### Developer Tools
 - [ ] Language Server Protocol (LSP) implementation
-- [ ] Syntax highlighting for popular editors
+- [ ] Syntax highlighting
 - [ ] Code formatter (`sage fmt`)
 - [ ] Linter (`sage lint`)
-- [ ] Documentation generator (`sage doc`)
-- [ ] REPL (Read-Eval-Print Loop)
-- [ ] Debugger (GDB/LLDB integration)
-
-#### Build System
-- [ ] Build configuration (sage.toml)
-- [ ] Incremental builds
-- [ ] Parallel compilation
-- [ ] Build caching
-- [ ] Cross-platform build support
-- [ ] Build scripts
-
-#### Testing Framework
-- [ ] Unit testing framework
-- [ ] Integration testing support
-- [ ] Benchmark framework
-- [ ] Code coverage tools
-- [ ] Test runner
-- [ ] Assertion library
+- [ ] Debugger integration
 
 ---
 
@@ -343,63 +237,42 @@ proc fast_multiply(a: i64, b: i64) -> i64
 #### Rewrite Compiler in Sage
 - [ ] Port lexer to Sage
 - [ ] Port parser to Sage
-- [ ] Port AST to Sage
 - [ ] Port interpreter to Sage
-- [ ] Port code generator to Sage
-- [ ] Bootstrap process refinement
-- [ ] Performance optimization of self-hosted compiler
-
-#### Documentation
-- [ ] Language specification document
-- [ ] Standard library reference
-- [ ] Compiler internals guide
-- [ ] Contribution guidelines
-- [ ] Tutorial series
-- [ ] Example programs repository
+- [ ] Bootstrap process
 
 ---
 
 ## 🎯 Milestone Targets
 
-### Near-Term (3-6 months)
-- Complete Phase 4 (Garbage Collection)
-- Begin Phase 5 (Arrays and basic collections)
-- Implement basic `for` loops
-- Add more standard library functions
+### Near-Term (1-2 months)
+- ✅ Complete Phase 5 (Advanced Data Structures) **DONE**
+- Begin Phase 6 (Object-Oriented Features)
+- Complete Phase 7 (Advanced Control Flow)
 
-### Mid-Term (6-12 months)
-- Complete Phase 5 and 6 (Data structures + OOP)
-- Begin Phase 7 (Advanced control flow)
-- Start module system design
-- Basic compilation to C
+### Mid-Term (3-6 months)
+- Complete Phase 6 (OOP)
+- Begin Phase 8 (Modules)
+- Start compilation to C
 
-### Long-Term (1-2 years)
-- Complete Phase 9 (Low-level features + inline assembly)
-- Complete Phase 10 (Full compiler with LLVM backend)
+### Long-Term (6-12 months)
+- Complete Phase 9 (Low-level features)
+- Complete Phase 10 (Full compiler)
 - Begin Phase 11 (Concurrency)
-- Start self-hosting efforts
 
-### Vision (2+ years)
+### Vision (1-2+ years)
 - Fully self-hosted compiler
 - Mature ecosystem with package manager
 - Production-ready tooling
-- Growing community and library ecosystem
-- Systems programming use cases (OS development, embedded, drivers)
+- Growing community
 
 ---
 
-## 🔬 Research & Exploration
+## 📊 Progress Metrics
 
-These are experimental features under consideration:
-
-- [ ] **Compile-time execution**: Meta-programming capabilities
-- [ ] **Algebraic effects**: Modern effect system
-- [ ] **Linear types**: Resource management and ownership
-- [ ] **Dependent types**: Advanced type safety
-- [ ] **WebAssembly target**: Browser and edge deployment
-- [ ] **GPU compute**: CUDA/OpenCL integration
-- [ ] **Formal verification**: Proof-carrying code
-- [ ] **Hot code reloading**: Development ergonomics
+- **Lines of C Code**: ~40,000+ (current implementation)
+- **Implemented Features**: 45/200+ planned
+- **Phases Completed**: 5/13 (38%)
+- **Estimated Completion**: 2027-2028 (self-hosting)
 
 ---
 
@@ -408,45 +281,16 @@ These are experimental features under consideration:
 We welcome contributions at all phases! Here's how you can help:
 
 ### Current Priorities
-1. **Memory Management**: Help implement the mark-and-sweep GC
-2. **Standard Library**: Add more native functions
-3. **Testing**: Write test cases for existing features
-4. **Documentation**: Improve code comments and guides
-5. **Low-Level Features**: Design proposals for inline assembly syntax
+1. **Object-Oriented Features**: Help implement classes and inheritance (Phase 6)
+2. **Testing**: Write test cases for Phase 5 features
+3. **Documentation**: Improve code comments and guides
+4. **Examples**: Create example programs showcasing new features
 
 ### Getting Started
 1. Check the current phase status above
 2. Pick an unchecked item that interests you
 3. Open an issue to discuss your approach
 4. Submit a pull request with your implementation
-
-### Areas of Interest
-- **Compiler Enthusiasts**: Phases 10, 13
-- **Systems Programmers**: Phase 9 (inline assembly, FFI, low-level)
-- **Language Designers**: Phases 6, 7, 11
-- **Tooling Developers**: Phase 12
-- **Library Authors**: Phase 5, 8
-
----
-
-## 📊 Progress Metrics
-
-- **Lines of C Code**: ~37,000+ (current implementation)
-- **Implemented Features**: 28/200+ planned
-- **Test Coverage**: TBD
-- **Phases Completed**: 3/13
-- **Estimated Completion**: 2027-2028 (self-hosting)
-
----
-
-## 📜 Version History
-
-- **v0.1.0** (Phase 1-3): Basic interpreter with functions and types
-- **v0.2.0** (Phase 4): Planned - Garbage collection
-- **v0.3.0** (Phase 5-7): Planned - Advanced features
-- **v0.4.0** (Phase 9): Planned - Low-level and inline assembly
-- **v0.5.0** (Phase 10): Planned - Compilation to C/LLVM
-- **v1.0.0** (Phase 13): Planned - Self-hosted compiler
 
 ---
 
