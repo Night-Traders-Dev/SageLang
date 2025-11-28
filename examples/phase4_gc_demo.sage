@@ -16,7 +16,7 @@ print ""
 # 2. Create many objects to trigger GC
 print "2. Creating many objects..."
 let arrays = []
-for i in range(100)
+for i in range(100):
     let arr = [i, i+1, i+2, i+3, i+4]
     push(arrays, arr)
 
@@ -39,7 +39,7 @@ print ""
 # 4. Dictionary memory test
 print "4. Dictionary memory test:"
 let dicts = []
-for i in range(50)
+for i in range(50):
     let d = {"id": "test", "value": "data"}
     push(dicts, d)
 
@@ -52,7 +52,7 @@ print ""
 # 5. Tuple memory test  
 print "5. Tuple memory test:"
 let tuples = []
-for i in range(50)
+for i in range(50):
     let t = (i, i * 2, i * 3)
     push(tuples, t)
 
