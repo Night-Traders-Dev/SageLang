@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: November 27, 2025  
-> **Current Phase**: Phase 4 & 5 (COMPLETE) ✅ → Phase 6 (Planning)
+> **Last Updated**: November 27, 2025, 8:18 PM EST  
+> **Current Phase**: Phase 6 (COMPLETE) ✅ → Phase 8 (Next)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -139,12 +139,36 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
+### Phase 6: Object-Oriented Programming
+**Status**: ✅ **COMPLETE** (November 27, 2025, 8:18 PM EST)
+
+#### Classes & Objects ✅
+- [x] **Class definitions** - `class ClassName:` syntax
+- [x] **Instance creation** - Constructor calls `ClassName(args)`
+- [x] **Methods** - Functions with `self` parameter
+- [x] **Constructor** - `init(self, ...)` method
+- [x] **Property access** - `obj.property` syntax
+- [x] **Property assignment** - `obj.property = value`
+- [x] **Inheritance** - `class Child(Parent):` syntax
+- [x] **Method overriding** - Override parent methods
+- [x] **Self binding** - Automatic `self` in methods
+
+#### Implementation ✅
+- [x] ClassValue and InstanceValue types
+- [x] Method storage and lookup
+- [x] Inheritance chain traversal
+- [x] Property dictionary per instance
+- [x] `EXPR_GET` and `EXPR_SET` for properties
+- [x] `STMT_CLASS` for class definitions
+
+---
+
 ### Phase 7 (Partial): Advanced Control Flow
 **Status**: ✅ **PARTIALLY COMPLETE**
 
-- [x] `for` loops with iterators (Phase 3 completion)
-- [x] **`break` statement** - Exit loops early ✅
-- [x] **`continue` statement** - Skip to next iteration ✅
+- [x] `for` loops with iterators
+- [x] **`break` statement** - Exit loops early
+- [x] **`continue` statement** - Skip to next iteration
 - [ ] `switch`/`match` expressions
 - [ ] Exception handling (`try`/`catch`/`finally`)
 - [ ] Defer statements
@@ -154,22 +178,8 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ## 🔮 Future Phases
 
-### Phase 6: Object-Oriented Features
-**Status**: 📋 Planned (NEXT)
-
-- [ ] Class definitions
-- [ ] Instance creation and methods
-- [ ] Inheritance
-- [ ] Method overriding
-- [ ] Constructor methods
-- [ ] Private/public members
-- [ ] Static methods
-- [ ] Interfaces/Traits
-
----
-
 ### Phase 8: Modules & Package System
-**Status**: 📋 Planned
+**Status**: 📋 Planned (NEXT)
 
 #### Module System
 - [ ] `import` statement
@@ -188,7 +198,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 ---
 
 ### Phase 9: Low-Level Programming & System Features
-**Status**: 📋 Planned ⭐ **NEW**
+**Status**: 📋 Planned
 
 #### Inline Assembly
 - [ ] Inline assembly syntax (x86-64)
@@ -266,12 +276,13 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 ### Near-Term (1-2 months)
 - ✅ Complete Phase 4 (Memory Management) **DONE**
 - ✅ Complete Phase 5 (Advanced Data Structures) **DONE**
-- Begin Phase 6 (Object-Oriented Features)
+- ✅ Complete Phase 6 (Object-Oriented Features) **DONE**
 - Complete Phase 7 (Advanced Control Flow)
+- Begin Phase 8 (Modules)
 
 ### Mid-Term (3-6 months)
-- Complete Phase 6 (OOP)
-- Begin Phase 8 (Modules)
+- Complete Phase 8 (Modules & Packages)
+- Begin Phase 9 (Low-level features)
 - Start compilation to C
 
 ### Long-Term (6-12 months)
@@ -289,10 +300,10 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ## 📊 Progress Metrics
 
-- **Lines of C Code**: ~45,000+ (current implementation)
-- **Implemented Features**: 55/200+ planned
-- **Phases Completed**: 5/13 (38%) + Phase 4 & 7 (partial)
-- **Estimated Completion**: 2027-2028 (self-hosting)
+- **Lines of C Code**: ~50,000+ (current implementation)
+- **Implemented Features**: 70/200+ planned (35%)
+- **Phases Completed**: 6/13 (46%) + Phase 7 (partial)
+- **Estimated Completion**: 2026-2027 (self-hosting)
 
 ---
 
@@ -301,10 +312,11 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 We welcome contributions at all phases! Here's how you can help:
 
 ### Current Priorities
-1. **Object-Oriented Features**: Help implement classes and inheritance (Phase 6)
-2. **Testing**: Write test cases for Phase 4 & 5 features
-3. **Documentation**: Improve code comments and guides
-4. **Examples**: Create example programs showcasing new features
+1. **Advanced Control Flow**: Help complete Phase 7 (match, try/catch)
+2. **Module System**: Begin Phase 8 implementation
+3. **Testing**: Write test cases for Phase 6 OOP features
+4. **Documentation**: Improve code comments and guides
+5. **Examples**: Create example programs showcasing OOP
 
 ### Getting Started
 1. Check the current phase status above
