@@ -301,7 +301,7 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
         if (b->op.type == TOKEN_NEQ) return val_bool(!equal);
     }
 
-    if (b->op.type == TOKEN_GT || b->op.type == TOKEN_LT) {
+    if (b->op.type == TOKEN_GT || b->op.type == TOKEN_LT || b->op.type == TOKEN_GTE || b->op.type == TOKEN_LTE) {
         if (!IS_NUMBER(left) || !IS_NUMBER(right)) {
             fprintf(stderr, "Runtime Error: Operands must be numbers.\n");
             return val_nil();
@@ -310,6 +310,8 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
         double r = AS_NUMBER(right);
         if (b->op.type == TOKEN_GT) return val_bool(l > r);
         if (b->op.type == TOKEN_LT) return val_bool(l < r);
+        if (b->op.type == TOKEN_GTE) return val_bool(l >= r);
+        if (b->op.type == TOKEN_LTE) return val_bool(l <= r);
     }
 
     switch (b->op.type) {
