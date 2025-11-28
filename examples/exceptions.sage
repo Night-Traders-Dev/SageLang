@@ -88,10 +88,8 @@ proc check_age(age):
         print "Invalid age " + str(age) + ": " + e
 
 let ages = [-5, 25, 200, 30]
-let i = 0
-while i < len(ages):
+for i in range(len(ages)):
     check_age(ages[i])
-    let i = i + 1
 
 print "---"
 
@@ -113,4 +111,4 @@ catch e:
     print "Error: " + e
 
 print "---"
-print "All exception examples completed!
+print "All exception examples completed!"
