@@ -1,8 +1,10 @@
 #ifndef SAGE_VALUE_H
 #define SAGE_VALUE_H
 
-// Forward declaration
+// Forward declarations
 typedef struct Value Value;
+typedef struct ClassValue ClassValue;
+typedef struct InstanceValue InstanceValue;
 typedef Value (*NativeFn)(int argCount, Value* args);
 
 // Array structure
@@ -13,10 +15,9 @@ typedef struct {
 } ArrayValue;
 
 // Dictionary entry (key-value pair)
-// Using pointer to avoid circular dependency
 typedef struct {
     char* key;
-    Value* value;  // Changed to pointer
+    Value* value;
 } DictEntry;
 
 // Dictionary structure (simple hash map)
@@ -32,6 +33,28 @@ typedef struct {
     int count;
 } TupleValue;
 
+// Method structure
+typedef struct {
+    char* name;
+    int name_len;
+    void* method_stmt;  // Pointer to ProcStmt (avoid circular dependency)
+} Method;
+
+// Class structure
+struct ClassValue {
+    char* name;
+    int name_len;
+    ClassValue* parent;  // For inheritance
+    Method* methods;
+    int method_count;
+};
+
+// Instance structure
+struct InstanceValue {
+    ClassValue* class_def;
+    DictValue* fields;  // Instance variables
+};
+
 typedef enum {
     VAL_NUMBER,
     VAL_BOOL,
@@ -41,7 +64,9 @@ typedef enum {
     VAL_NATIVE,
     VAL_ARRAY,
     VAL_DICT,
-    VAL_TUPLE
+    VAL_TUPLE,
+    VAL_CLASS,
+    VAL_INSTANCE
 } ValueType;
 
 struct Value {
@@ -54,6 +79,8 @@ struct Value {
         ArrayValue* array;
         DictValue* dict;
         TupleValue* tuple;
+        ClassValue* class_val;
+        InstanceValue* instance;
     } as;
 };
 
@@ -65,14 +92,18 @@ struct Value {
 #define IS_ARRAY(v)  ((v).type == VAL_ARRAY)
 #define IS_DICT(v)   ((v).type == VAL_DICT)
 #define IS_TUPLE(v)  ((v).type == VAL_TUPLE)
+#define IS_CLASS(v)  ((v).type == VAL_CLASS)
+#define IS_INSTANCE(v) ((v).type == VAL_INSTANCE)
 
-// Macros for accessing values (unsafe if unchecked)
+// Macros for accessing values
 #define AS_NUMBER(v) ((v).as.number)
 #define AS_BOOL(v)   ((v).as.boolean)
 #define AS_STRING(v) ((v).as.string)
 #define AS_ARRAY(v)  ((v).as.array)
 #define AS_DICT(v)   ((v).as.dict)
 #define AS_TUPLE(v)  ((v).as.tuple)
+#define AS_CLASS(v)  ((v).as.class_val)
+#define AS_INSTANCE(v) ((v).as.instance)
 
 // Constructors
 Value val_number(double value);
@@ -83,6 +114,8 @@ Value val_native(NativeFn fn);
 Value val_array();
 Value val_dict();
 Value val_tuple(Value* elements, int count);
+Value val_class(ClassValue* class_val);
+Value val_instance(InstanceValue* instance);
 
 // Helpers
 void print_value(Value v);
@@ -112,5 +145,15 @@ char* string_replace(const char* str, const char* old, const char* new_str);
 char* string_upper(const char* str);
 char* string_lower(const char* str);
 char* string_strip(const char* str);
+
+// Class operations
+ClassValue* class_create(const char* name, int name_len, ClassValue* parent);
+void class_add_method(ClassValue* class_val, const char* name, int name_len, void* method_stmt);
+Method* class_find_method(ClassValue* class_val, const char* name, int name_len);
+
+// Instance operations
+InstanceValue* instance_create(ClassValue* class_def);
+void instance_set_field(InstanceValue* instance, const char* name, Value value);
+Value instance_get_field(InstanceValue* instance, const char* name);
 
 #endif
