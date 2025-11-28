@@ -39,11 +39,7 @@ print ""
 print "2. DICTIONARIES (Hash Maps)"
 print "---------------------------"
 
-let config = {
-    "host": "localhost",
-    "port": "8080",
-    "debug": "true"
-}
+let config = {"host": "localhost", "port": "8080", "debug": "true"}
 
 print "Initial dictionary:"
 print "Host:"
@@ -51,26 +47,26 @@ print config["host"]
 print "Port:"
 print config["port"]
 
-config["timeout"] = "30"
+let config2 = {"host": "localhost", "port": "8080", "debug": "true", "timeout": "30"}
 print "Added timeout=30"
 
 print "All keys:"
-let keys = dict_keys(config)
+let keys = dict_keys(config2)
 for key in keys:
     print key
 
 print "All values:"
-let values = dict_values(config)
+let values = dict_values(config2)
 for val in values:
     print val
 
-if dict_has(config, "debug"):
+if dict_has(config2, "debug"):
     print "'debug' key exists"
 
-dict_delete(config, "debug")
+dict_delete(config2, "debug")
 print "Deleted 'debug' key"
 
-let updated_keys = dict_keys(config)
+let updated_keys = dict_keys(config2)
 print "Keys after deletion:"
 for k in updated_keys:
     print k
@@ -115,11 +111,7 @@ print ""
 print "4. NESTED STRUCTURES"
 print "--------------------"
 
-let matrix = [
-    [1, 2, 3],
-    [4, 5, 6],
-    [7, 8, 9]
-]
+let matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
 
 print "Matrix (nested arrays):"
 for row in matrix:
@@ -128,11 +120,10 @@ for row in matrix:
 print "Element at [1][2]:"
 print matrix[1][2]
 
-let users = [
-    {"name": "Alice", "role": "admin"},
-    {"name": "Bob", "role": "user"},
-    {"name": "Carol", "role": "user"}
-]
+let user1 = {"name": "Alice", "role": "admin"}
+let user2 = {"name": "Bob", "role": "user"}
+let user3 = {"name": "Carol", "role": "user"}
+let users = [user1, user2, user3]
 
 print "Users (array of dicts):"
 for user in users:
