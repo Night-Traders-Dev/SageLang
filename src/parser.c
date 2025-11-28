@@ -238,10 +238,56 @@ static Expr* postfix() {
                 expr = new_index_expr(expr, start_or_index);
             }
         } else if (match(TOKEN_DOT)) {
-            // Property access: obj.property
+            // Property access: obj.property or method call obj.method()
             consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
             Token property = previous_token;
-            expr = new_get_expr(expr, property);
+            
+            // Check for method call: obj.method(args)
+            if (match(TOKEN_LPAREN)) {
+                // Parse arguments
+                Expr** args = NULL;
+                int count = 0;
+                int capacity = 0;
+
+                if (!check(TOKEN_RPAREN)) {
+                    do {
+                        Expr* arg = expression();
+                        if (count >= capacity) {
+                            capacity = capacity == 0 ? 4 : capacity * 2;
+                            args = realloc(args, sizeof(Expr*) * capacity);
+                        }
+                        args[count++] = arg;
+                    } while (match(TOKEN_COMMA));
+                }
+                consume(TOKEN_RPAREN, "Expect ')' after arguments.");
+                
+                // Create a special call expression that includes the object
+                // We'll store the object in expr and create a call with the method name
+                // For now, we create a GET expr and the interpreter will handle it
+                // Actually, we need a different approach - let's use a special marker
+                
+                // Store the GET expression with method name, then wrap in a CALL
+                // The interpreter will detect CALL of a GET and treat it as a method call
+                Expr* get_expr = new_get_expr(expr, property);
+                expr = new_call_expr(property, args, count);
+                // Store the object in the first "arg" position secretly
+                // Actually, let's modify call to store object separately
+                // For now: reuse CALL but interpreter detects pattern
+                
+                // Better approach: modify CallExpr to optionally store object
+                // For now, let's make the interpreter smarter
+                expr->as.call.args = realloc(expr->as.call.args, sizeof(Expr*) * (count + 1));
+                // Shift args right
+                for (int i = count; i > 0; i--) {
+                    expr->as.call.args[i] = expr->as.call.args[i-1];
+                }
+                // Store GET expression as first arg (special marker)
+                expr->as.call.args[0] = get_expr;
+                expr->as.call.arg_count = count + 1; // Include hidden arg
+            } else {
+                // Just property access
+                expr = new_get_expr(expr, property);
+            }
         } else {
             break;
         }
