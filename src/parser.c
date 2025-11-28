@@ -261,31 +261,15 @@ static Expr* postfix() {
                 }
                 consume(TOKEN_RPAREN, "Expect ')' after arguments.");
                 
-                // Create a special call expression that includes the object
-                // We'll store the object in expr and create a call with the method name
-                // For now, we create a GET expr and the interpreter will handle it
-                // Actually, we need a different approach - let's use a special marker
-                
-                // Store the GET expression with method name, then wrap in a CALL
-                // The interpreter will detect CALL of a GET and treat it as a method call
                 Expr* get_expr = new_get_expr(expr, property);
                 expr = new_call_expr(property, args, count);
-                // Store the object in the first "arg" position secretly
-                // Actually, let's modify call to store object separately
-                // For now: reuse CALL but interpreter detects pattern
-                
-                // Better approach: modify CallExpr to optionally store object
-                // For now, let's make the interpreter smarter
                 expr->as.call.args = realloc(expr->as.call.args, sizeof(Expr*) * (count + 1));
-                // Shift args right
                 for (int i = count; i > 0; i--) {
                     expr->as.call.args[i] = expr->as.call.args[i-1];
                 }
-                // Store GET expression as first arg (special marker)
                 expr->as.call.args[0] = get_expr;
-                expr->as.call.arg_count = count + 1; // Include hidden arg
+                expr->as.call.arg_count = count + 1;
             } else {
-                // Just property access
                 expr = new_get_expr(expr, property);
             }
         } else {
@@ -427,6 +411,13 @@ static Stmt* while_statement() {
     return new_while_stmt(condition, body);
 }
 
+// PHASE 7: Defer statement parser
+static Stmt* defer_statement() {
+    // defer statement (single statement only)
+    Stmt* stmt = statement();
+    return new_defer_stmt(stmt);
+}
+
 static Stmt* proc_declaration() {
     // Accept TOKEN_IDENTIFIER or TOKEN_INIT (for init method)
     if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_INIT) {
@@ -520,6 +511,7 @@ static Stmt* statement() {
     if (match(TOKEN_IF)) return if_statement();
     if (match(TOKEN_WHILE)) return while_statement();
     if (match(TOKEN_FOR)) return for_statement();
+    if (match(TOKEN_DEFER)) return defer_statement();  // PHASE 7: Defer
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
 
