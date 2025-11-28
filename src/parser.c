@@ -382,31 +382,43 @@ static Stmt* while_statement() {
 }
 
 static Stmt* proc_declaration() {
-    consume(TOKEN_IDENTIFIER, "Expect procedure name.");
-    Token name = previous_token;
+    // Accept TOKEN_IDENTIFIER or TOKEN_INIT (for init method)
+    if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_INIT) {
+        Token name = current_token;
+        advance_parser();
+        
+        consume(TOKEN_LPAREN, "Expect '(' after procedure name.");
 
-    consume(TOKEN_LPAREN, "Expect '(' after procedure name.");
+        Token* params = NULL;
+        int count = 0;
+        int capacity = 0;
 
-    Token* params = NULL;
-    int count = 0;
-    int capacity = 0;
+        if (!check(TOKEN_RPAREN)) {
+            do {
+                // Accept SELF or IDENTIFIER for parameters
+                if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER) {
+                    if (count >= capacity) {
+                        capacity = capacity == 0 ? 4 : capacity * 2;
+                        params = realloc(params, sizeof(Token) * capacity);
+                    }
+                    params[count++] = current_token;
+                    advance_parser();
+                } else {
+                    fprintf(stderr, "[Line %d] Error: Expect parameter name.\n", current_token.line);
+                    exit(1);
+                }
+            } while (match(TOKEN_COMMA));
+        }
+        consume(TOKEN_RPAREN, "Expect ')' after parameters.");
+        match(TOKEN_COLON);
+        consume(TOKEN_NEWLINE, "Expect newline before procedure body.");
+        Stmt* body = block();
 
-    if (!check(TOKEN_RPAREN)) {
-        do {
-            consume(TOKEN_IDENTIFIER, "Expect parameter name.");
-            if (count >= capacity) {
-                capacity = capacity == 0 ? 4 : capacity * 2;
-                params = realloc(params, sizeof(Token) * capacity);
-            }
-            params[count++] = previous_token;
-        } while (match(TOKEN_COMMA));
+        return new_proc_stmt(name, params, count, body);
     }
-    consume(TOKEN_RPAREN, "Expect ')' after parameters.");
-    match(TOKEN_COLON);
-    consume(TOKEN_NEWLINE, "Expect newline before procedure body.");
-    Stmt* body = block();
-
-    return new_proc_stmt(name, params, count, body);
+    
+    fprintf(stderr, "[Line %d] Error: Expect procedure name.\n", current_token.line);
+    exit(1);
 }
 
 static Stmt* class_declaration() {
