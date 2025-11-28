@@ -57,7 +57,7 @@ static Stmt* for_statement() {
     consume(TOKEN_IN, "Expect 'in' after loop variable.");
 
     Expr* iterable = expression();
-    match(TOKEN_COLON);
+    consume(TOKEN_COLON, "Expect ':' after for clause.");
     consume(TOKEN_NEWLINE, "Expect newline after for clause.");
 
     Stmt* body = block();
@@ -405,13 +405,13 @@ static Stmt* block() {
 
 static Stmt* if_statement() {
     Expr* condition = expression();
-    match(TOKEN_COLON);
+    consume(TOKEN_COLON, "Expect ':' after if condition.");
     consume(TOKEN_NEWLINE, "Expect newline after if condition.");
     Stmt* then_branch = block();
 
     Stmt* else_branch = NULL;
     if (match(TOKEN_ELSE)) {
-        match(TOKEN_COLON);
+        consume(TOKEN_COLON, "Expect ':' after else.");
         consume(TOKEN_NEWLINE, "Expect newline after else.");
         else_branch = block();
     }
@@ -421,7 +421,7 @@ static Stmt* if_statement() {
 
 static Stmt* while_statement() {
     Expr* condition = expression();
-    match(TOKEN_COLON);
+    consume(TOKEN_COLON, "Expect ':' after while condition.");
     consume(TOKEN_NEWLINE, "Expect newline after while condition.");
     Stmt* body = block();
     return new_while_stmt(condition, body);
@@ -456,7 +456,7 @@ static Stmt* proc_declaration() {
             } while (match(TOKEN_COMMA));
         }
         consume(TOKEN_RPAREN, "Expect ')' after parameters.");
-        match(TOKEN_COLON);
+        consume(TOKEN_COLON, "Expect ':' after procedure signature.");
         consume(TOKEN_NEWLINE, "Expect newline before procedure body.");
         Stmt* body = block();
 
@@ -481,7 +481,7 @@ static Stmt* class_declaration() {
         has_parent = 1;
     }
     
-    match(TOKEN_COLON);
+    consume(TOKEN_COLON, "Expect ':' after class header.");
     consume(TOKEN_NEWLINE, "Expect newline after class header.");
     consume(TOKEN_INDENT, "Expect indentation in class body.");
     
