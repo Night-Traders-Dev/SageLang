@@ -163,7 +163,7 @@ typedef struct {
     Stmt* methods;  // Linked list of method definitions (ProcStmt)
 } ClassStmt;
 
-// Match expression: match value: case pattern: ...
+// PHASE 7: Match expression
 typedef struct {
     Expr* pattern;  // Pattern to match against
     Stmt* body;     // Code to execute if matched
@@ -175,6 +175,11 @@ typedef struct {
     int case_count;
     Stmt* default_case;    // Optional default clause
 } MatchStmt;
+
+// PHASE 7: Defer statement
+typedef struct {
+    Stmt* statement;  // Statement to execute on scope exit
+} DeferStmt;
 
 struct Stmt {
     enum {
@@ -190,7 +195,8 @@ struct Stmt {
         STMT_BREAK,
         STMT_CONTINUE,
         STMT_CLASS,
-        STMT_MATCH
+        STMT_MATCH,
+        STMT_DEFER
     } type;
     union {
         PrintStmt print;
@@ -203,6 +209,7 @@ struct Stmt {
         ForStmt for_stmt;
         ClassStmt class_stmt;
         MatchStmt match_stmt;
+        DeferStmt defer;
         Expr* expression;
     } as;
     Stmt* next;
@@ -239,5 +246,6 @@ Stmt* new_continue_stmt();
 Stmt* new_class_stmt(Token name, Token parent, int has_parent, Stmt* methods);
 Stmt* new_match_stmt(Expr* value, CaseClause** cases, int case_count, Stmt* default_case);
 CaseClause* new_case_clause(Expr* pattern, Stmt* body);
+Stmt* new_defer_stmt(Stmt* statement);
 
 #endif
