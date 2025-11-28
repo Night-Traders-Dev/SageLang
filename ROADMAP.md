@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: November 28, 2025, 9:00 AM EST  
-> **Current Phase**: Phase 6 (COMPLETE) ✅ → Phase 8 (Next)
+> **Last Updated**: November 28, 2025, 11:30 AM EST  
+> **Current Phase**: Phase 7 (60% complete) → Phase 8 (Next)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -29,6 +29,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - [x] Statement parsing (assignments, control flow)
 - [x] Indentation-based block parsing
 - [x] Error reporting with line numbers
+- [x] **Unary expressions** - Support for `-x` negative numbers
 
 #### Basic Interpreter
 - [x] Tree-walking interpreter
@@ -37,6 +38,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - [x] Basic arithmetic operations (+, -, *, /)
 - [x] Comparison operators (==, !=, <, >, <=, >=)
 - [x] Logical operators (and, or, not)
+- [x] **Unary operators** - Negative numbers in expressions
 
 #### Variables & Scoping
 - [x] `let` keyword for variable declarations
@@ -74,12 +76,14 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - [x] Nil type
 - [x] Type representation in Value structs
 - [x] String concatenation
+- [x] **Exception type** - VAL_EXCEPTION with message
 
 #### Native Functions (Standard Library)
 - [x] `print()` - Output to console
 - [x] `input()` - Read from stdin
 - [x] `clock()` - Get current time
 - [x] `tonumber()` - String to number conversion
+- [x] **`str()`** - Number/bool to string conversion
 
 ---
 
@@ -160,20 +164,43 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - [x] Property dictionary per instance
 - [x] `EXPR_GET` and `EXPR_SET` for properties
 - [x] `STMT_CLASS` for class definitions
-- [x] **Comparison operators** - Full support for `>=` and `<=` in parser and interpreter
+- [x] **Comparison operators** - Full support for `>=` and `<=`
 
 ---
 
-### Phase 7 (Partial): Advanced Control Flow
-**Status**: ✅ **PARTIALLY COMPLETE**
+### Phase 7: Advanced Control Flow
+**Status**: 🔄 **60% COMPLETE** (In Progress)
 
-- [x] `for` loops with iterators
+#### Completed Features ✅
+- [x] **`for` loops** - Iterator-based loops (`for x in array:`)
 - [x] **`break` statement** - Exit loops early
 - [x] **`continue` statement** - Skip to next iteration
-- [ ] `switch`/`match` expressions
-- [ ] Exception handling (`try`/`catch`/`finally`)
-- [ ] Defer statements
-- [ ] Generator functions (`yield`)
+- [x] **Exception handling** ✅ **COMPLETE** (November 28, 2025, 11:30 AM EST)
+  - [x] `try:` blocks
+  - [x] `catch e:` clauses (with exception binding)
+  - [x] `finally:` blocks (always execute)
+  - [x] `raise "message"` statements
+  - [x] Exception propagation through function calls
+  - [x] Nested try/catch support
+  - [x] Exception re-raising
+  - [x] ExceptionValue type (VAL_EXCEPTION)
+  - [x] ExecResult.is_throwing flag
+  - [x] Full exception handling test suite (7 examples)
+
+#### Remaining Features 📋
+- [ ] **`match`/`switch` expressions** - Pattern matching
+  - [ ] Match statement syntax
+  - [ ] Pattern matching on types
+  - [ ] Exhaustiveness checking
+  - [ ] Guard clauses
+- [ ] **`defer` statements** - Deferred execution
+  - [ ] Defer statement syntax
+  - [ ] Defer stack implementation
+  - [ ] Execution on scope exit
+- [ ] **Generator functions** - Lazy evaluation
+  - [ ] `yield` keyword
+  - [ ] Generator state management
+  - [ ] Iterator protocol
 
 ---
 
@@ -278,7 +305,8 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - ✅ Complete Phase 4 (Memory Management) **DONE**
 - ✅ Complete Phase 5 (Advanced Data Structures) **DONE**
 - ✅ Complete Phase 6 (Object-Oriented Features) **DONE**
-- Complete Phase 7 (Advanced Control Flow)
+- ✅ Exception Handling (Phase 7 - Part 3) **DONE**
+- Complete Phase 7 (Match expressions, defer, generators)
 - Begin Phase 8 (Modules)
 
 ### Mid-Term (3-6 months)
@@ -301,9 +329,10 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ## 📊 Progress Metrics
 
-- **Lines of C Code**: ~50,000+ (current implementation)
-- **Implemented Features**: 75/200+ planned (37%)
-- **Phases Completed**: 6/13 (46%) + Phase 7 (partial)
+- **Lines of C Code**: ~52,000+ (current implementation)
+- **Implemented Features**: 82/200+ planned (41%)
+- **Phases Completed**: 6.6/13 (51%)
+  - Phase 7: 60% complete (3/5 major features)
 - **Estimated Completion**: 2026-2027 (self-hosting)
 
 ---
@@ -313,11 +342,11 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 We welcome contributions at all phases! Here's how you can help:
 
 ### Current Priorities
-1. **Advanced Control Flow**: Help complete Phase 7 (match, try/catch)
+1. **Complete Phase 7**: Match expressions, defer statements, generators
 2. **Module System**: Begin Phase 8 implementation
-3. **Testing**: Write test cases for Phase 6 OOP features
-4. **Documentation**: Improve code comments and guides
-5. **Examples**: Create example programs showcasing OOP
+3. **Testing**: Write comprehensive test cases for exceptions and OOP
+4. **Documentation**: Improve code comments and exception handling guides
+5. **Examples**: Create real-world exception handling examples
 
 ### Getting Started
 1. Check the current phase status above
