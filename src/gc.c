@@ -207,7 +207,9 @@ static void gc_sweep() {
 void gc_collect() {
     if (!gc_state.enabled) return;
     
+#ifdef GC_DEBUG
     size_t before = gc_state.stats.num_objects;
+#endif
     
     // Mark phase
     gc_mark_all_roots();
@@ -223,10 +225,9 @@ void gc_collect() {
     
     gc_state.stats.collections++;
     
+#ifdef GC_DEBUG
     size_t after = gc_state.stats.num_objects;
     size_t freed = before - after;
-    
-#ifdef GC_DEBUG
     printf("[GC] Collected %zu objects (%zu -> %zu)\n", freed, before, after);
     printf("[GC] Next collection at %zu bytes\n", gc_state.stats.next_gc);
 #endif
