@@ -23,7 +23,7 @@ typedef struct {
 
 // Dictionary structure (simple hash map)
 typedef struct {
-    DictValue* entries;
+    DictEntry* entries;  // FIXED: was DictValue* entries
     int count;
     int capacity;
 } DictValue;
