@@ -80,16 +80,29 @@ proc validate_age(age):
         raise "Age too high"
     return true
 
-proc check_age(age):
-    try:
-        validate_age(age)
-        print "Age " + str(age) + " is valid"
-    catch e:
-        print "Invalid age " + str(age) + ": " + e
+try:
+    validate_age(-5)
+    print "Age -5 is valid"
+catch e:
+    print "Invalid age -5: " + e
 
-let ages = [-5, 25, 200, 30]
-for i in range(len(ages)):
-    check_age(ages[i])
+try:
+    validate_age(25)
+    print "Age 25 is valid"
+catch e:
+    print "Invalid age 25: " + e
+
+try:
+    validate_age(200)
+    print "Age 200 is valid"
+catch e:
+    print "Invalid age 200: " + e
+
+try:
+    validate_age(30)
+    print "Age 30 is valid"
+catch e:
+    print "Invalid age 30: " + e
 
 print "---"
 
