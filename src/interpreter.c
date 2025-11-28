@@ -437,8 +437,15 @@ static Value eval_expr(Expr* expr, Env* env) {
                 return val_nil();
             }
             
+            // Extract property name from token (create null-terminated string)
             Token prop = expr->as.get.property;
-            return instance_get_field(object.as.instance, prop.start);
+            char* prop_name = malloc(prop.length + 1);
+            strncpy(prop_name, prop.start, prop.length);
+            prop_name[prop.length] = '\0';
+            
+            Value result = instance_get_field(object.as.instance, prop_name);
+            free(prop_name);
+            return result;
         }
 
         case EXPR_SET: {
@@ -450,8 +457,15 @@ static Value eval_expr(Expr* expr, Env* env) {
             }
             
             Value value = eval_expr(expr->as.set.value, env);
+            
+            // Extract property name from token (create null-terminated string)
             Token prop = expr->as.set.property;
-            instance_set_field(object.as.instance, prop.start, value);
+            char* prop_name = malloc(prop.length + 1);
+            strncpy(prop_name, prop.start, prop.length);
+            prop_name[prop.length] = '\0';
+            
+            instance_set_field(object.as.instance, prop_name, value);
+            free(prop_name);
             return value;
         }
 
