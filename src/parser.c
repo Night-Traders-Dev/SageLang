@@ -65,6 +65,54 @@ static Stmt* for_statement() {
     return new_for_stmt(var, iterable, body);
 }
 
+// PHASE 7: Try/catch/finally statement
+static Stmt* try_statement() {
+    // try:
+    consume(TOKEN_COLON, "Expect ':' after 'try'.");
+    consume(TOKEN_NEWLINE, "Expect newline after try.");
+    Stmt* try_block = block();
+    
+    // Parse catch clauses
+    CatchClause** catches = NULL;
+    int catch_count = 0;
+    int catch_capacity = 0;
+    
+    while (match(TOKEN_CATCH)) {
+        // catch e:
+        consume(TOKEN_IDENTIFIER, "Expect exception variable after 'catch'.");
+        Token exception_var = previous_token;
+        
+        consume(TOKEN_COLON, "Expect ':' after catch variable.");
+        consume(TOKEN_NEWLINE, "Expect newline after catch clause.");
+        Stmt* catch_body = block();
+        
+        CatchClause* clause = new_catch_clause(exception_var, catch_body);
+        
+        if (catch_count >= catch_capacity) {
+            catch_capacity = catch_capacity == 0 ? 2 : catch_capacity * 2;
+            catches = realloc(catches, sizeof(CatchClause*) * catch_capacity);
+        }
+        catches[catch_count++] = clause;
+    }
+    
+    // Optional finally:
+    Stmt* finally_block = NULL;
+    if (match(TOKEN_FINALLY)) {
+        consume(TOKEN_COLON, "Expect ':' after 'finally'.");
+        consume(TOKEN_NEWLINE, "Expect newline after finally.");
+        finally_block = block();
+    }
+    
+    return new_try_stmt(try_block, catches, catch_count, finally_block);
+}
+
+// PHASE 7: Raise statement  
+static Stmt* raise_statement() {
+    // raise expression
+    Expr* exception = expression();
+    return new_raise_stmt(exception);
+}
+
 // primary -> NUMBER | STRING | BOOLEAN | NIL | SELF | ( expr/tuple ) | [ array ] | { dict } | IDENTIFIER | CALL
 static Expr* primary() {
     // Literals
@@ -238,13 +286,10 @@ static Expr* postfix() {
                 expr = new_index_expr(expr, start_or_index);
             }
         } else if (match(TOKEN_DOT)) {
-            // Property access: obj.property or method call obj.method()
             consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
             Token property = previous_token;
             
-            // Check for method call: obj.method(args)
             if (match(TOKEN_LPAREN)) {
-                // Parse arguments
                 Expr** args = NULL;
                 int count = 0;
                 int capacity = 0;
@@ -261,31 +306,15 @@ static Expr* postfix() {
                 }
                 consume(TOKEN_RPAREN, "Expect ')' after arguments.");
                 
-                // Create a special call expression that includes the object
-                // We'll store the object in expr and create a call with the method name
-                // For now, we create a GET expr and the interpreter will handle it
-                // Actually, we need a different approach - let's use a special marker
-                
-                // Store the GET expression with method name, then wrap in a CALL
-                // The interpreter will detect CALL of a GET and treat it as a method call
                 Expr* get_expr = new_get_expr(expr, property);
                 expr = new_call_expr(property, args, count);
-                // Store the object in the first "arg" position secretly
-                // Actually, let's modify call to store object separately
-                // For now: reuse CALL but interpreter detects pattern
-                
-                // Better approach: modify CallExpr to optionally store object
-                // For now, let's make the interpreter smarter
                 expr->as.call.args = realloc(expr->as.call.args, sizeof(Expr*) * (count + 1));
-                // Shift args right
                 for (int i = count; i > 0; i--) {
                     expr->as.call.args[i] = expr->as.call.args[i-1];
                 }
-                // Store GET expression as first arg (special marker)
                 expr->as.call.args[0] = get_expr;
-                expr->as.call.arg_count = count + 1; // Include hidden arg
+                expr->as.call.arg_count = count + 1;
             } else {
-                // Just property access
                 expr = new_get_expr(expr, property);
             }
         } else {
@@ -359,7 +388,6 @@ static Expr* logical_or() {
 static Expr* assignment() {
     Expr* expr = logical_or();
     
-    // Check for property assignment: obj.prop = value
     if (expr->type == EXPR_GET && match(TOKEN_ASSIGN)) {
         Expr* value = assignment();
         return new_set_expr(expr->as.get.object, expr->as.get.property, value);
@@ -428,7 +456,6 @@ static Stmt* while_statement() {
 }
 
 static Stmt* proc_declaration() {
-    // Accept TOKEN_IDENTIFIER or TOKEN_INIT (for init method)
     if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_INIT) {
         Token name = current_token;
         advance_parser();
@@ -441,7 +468,6 @@ static Stmt* proc_declaration() {
 
         if (!check(TOKEN_RPAREN)) {
             do {
-                // Accept SELF or IDENTIFIER for parameters
                 if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER) {
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
@@ -471,7 +497,6 @@ static Stmt* class_declaration() {
     consume(TOKEN_IDENTIFIER, "Expect class name.");
     Token name = previous_token;
     
-    // Check for inheritance: class Child(Parent):
     Token parent;
     int has_parent = 0;
     if (match(TOKEN_LPAREN)) {
@@ -485,7 +510,6 @@ static Stmt* class_declaration() {
     consume(TOKEN_NEWLINE, "Expect newline after class header.");
     consume(TOKEN_INDENT, "Expect indentation in class body.");
     
-    // Parse methods (all methods are proc declarations)
     Stmt* method_head = NULL;
     Stmt* method_current = NULL;
     
@@ -520,6 +544,8 @@ static Stmt* statement() {
     if (match(TOKEN_IF)) return if_statement();
     if (match(TOKEN_WHILE)) return while_statement();
     if (match(TOKEN_FOR)) return for_statement();
+    if (match(TOKEN_TRY)) return try_statement();      // PHASE 7: Exception handling
+    if (match(TOKEN_RAISE)) return raise_statement();  // PHASE 7: Exception handling
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
 
