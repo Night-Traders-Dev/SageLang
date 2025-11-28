@@ -9,7 +9,67 @@
 #include "gc.h"
 #include "ast.h"
 
-// --- Function Registry ---
+// ========== PHASE 7: DEFER STACK ==========
+
+typedef struct {
+    Stmt** statements;   // Array of deferred statements
+    int count;           // Number of deferred statements
+    int capacity;        // Capacity of array
+} DeferStack;
+
+static DeferStack* defer_stack = NULL;
+
+static void defer_stack_init() {
+    if (defer_stack == NULL) {
+        defer_stack = malloc(sizeof(DeferStack));
+        defer_stack->statements = NULL;
+        defer_stack->count = 0;
+        defer_stack->capacity = 0;
+    }
+}
+
+static void defer_stack_push(Stmt* stmt) {
+    defer_stack_init();
+    
+    if (defer_stack->count >= defer_stack->capacity) {
+        defer_stack->capacity = defer_stack->capacity == 0 ? 4 : defer_stack->capacity * 2;
+        defer_stack->statements = realloc(defer_stack->statements, 
+                                         sizeof(Stmt*) * defer_stack->capacity);
+    }
+    
+    defer_stack->statements[defer_stack->count++] = stmt;
+}
+
+static void defer_stack_execute(Env* env) {
+    if (defer_stack == NULL || defer_stack->count == 0) return;
+    
+    // Execute in LIFO order (reverse)
+    for (int i = defer_stack->count - 1; i >= 0; i--) {
+        interpret(defer_stack->statements[i], env);
+    }
+    
+    // Clear the defer stack
+    defer_stack->count = 0;
+}
+
+static int defer_stack_save() {
+    defer_stack_init();
+    return defer_stack->count;
+}
+
+static void defer_stack_restore(int saved_count, Env* env) {
+    if (defer_stack == NULL) return;
+    
+    // Execute defers added in this scope
+    for (int i = defer_stack->count - 1; i >= saved_count; i--) {
+        interpret(defer_stack->statements[i], env);
+    }
+    
+    // Restore stack to saved state
+    defer_stack->count = saved_count;
+}
+
+// === Function Registry ===
 typedef struct ProcNode {
     const char* name;
     int name_len;
@@ -39,7 +99,7 @@ static ProcStmt* find_function(const char* name, int len) {
     return NULL;
 }
 
-// --- Native Functions ---
+// === Native Functions ===
 
 static Value clock_native(int argCount, Value* args) {
     return val_number((double)clock() / CLOCKS_PER_SEC);
@@ -262,33 +322,29 @@ void init_stdlib(Env* env) {
     env_define(env, "gc_disable", 10, val_native(gc_disable_native));
 }
 
-// --- Helper: Truthiness ---
+// === Helper: Truthiness ===
 static int is_truthy(Value v) {
     if (IS_NIL(v)) return 0;
     if (IS_BOOL(v)) return AS_BOOL(v);
     return 1; 
 }
 
-// --- Forward Declaration ---
+// === Forward Declaration ===
 static Value eval_expr(Expr* expr, Env* env);
 
-// --- Evaluator ---
+// === Expression Evaluator ===
 
 static Value eval_binary(BinaryExpr* b, Env* env) {
     Value left = eval_expr(b->left, env);
 
     if (b->op.type == TOKEN_OR) {
-        if (is_truthy(left)) {
-            return val_bool(1);
-        }
+        if (is_truthy(left)) return val_bool(1);
         Value right = eval_expr(b->right, env);
         return val_bool(is_truthy(right));
     }
 
     if (b->op.type == TOKEN_AND) {
-        if (!is_truthy(left)) {
-            return val_bool(0);
-        }
+        if (!is_truthy(left)) return val_bool(0);
         Value right = eval_expr(b->right, env);
         return val_bool(is_truthy(right));
     }
@@ -439,7 +495,6 @@ static Value eval_expr(Expr* expr, Env* env) {
                 return val_nil();
             }
             
-            // Extract property name from token (create null-terminated string)
             Token prop = expr->as.get.property;
             char* prop_name = malloc(prop.length + 1);
             strncpy(prop_name, prop.start, prop.length);
@@ -460,7 +515,6 @@ static Value eval_expr(Expr* expr, Env* env) {
             
             Value value = eval_expr(expr->as.set.value, env);
             
-            // Extract property name from token (create null-terminated string)
             Token prop = expr->as.set.property;
             char* prop_name = malloc(prop.length + 1);
             strncpy(prop_name, prop.start, prop.length);
@@ -487,9 +541,8 @@ static Value eval_expr(Expr* expr, Env* env) {
         case EXPR_CALL: {
             Token callee = expr->as.call.callee;
             
-            // Check for method call pattern: first arg is EXPR_GET
+            // Check for method call pattern
             if (expr->as.call.arg_count > 0 && expr->as.call.args[0]->type == EXPR_GET) {
-                // Method call: obj.method(args)
                 Expr* get_expr = expr->as.call.args[0];
                 Value object = eval_expr(get_expr->as.get.object, env);
                 
@@ -498,13 +551,11 @@ static Value eval_expr(Expr* expr, Env* env) {
                     return val_nil();
                 }
                 
-                // Extract method name
                 Token method_token = get_expr->as.get.property;
                 char* method_name = malloc(method_token.length + 1);
                 strncpy(method_name, method_token.start, method_token.length);
                 method_name[method_token.length] = '\0';
                 
-                // Find method
                 Method* method = class_find_method(object.as.instance->class_def, method_name, method_token.length);
                 
                 if (!method) {
@@ -515,11 +566,9 @@ static Value eval_expr(Expr* expr, Env* env) {
                 
                 ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
                 
-                // Create method scope with self
                 Env* method_env = env_create(env);
                 env_define(method_env, "self", 4, object);
                 
-                // Bind parameters (skip self as first param, skip hidden GET arg)
                 int param_start = (method_stmt->param_count > 0 && 
                                   strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
                 
@@ -531,16 +580,13 @@ static Value eval_expr(Expr* expr, Env* env) {
                     }
                 }
                 
-                // Execute method
                 ExecResult res = interpret(method_stmt->body, method_env);
                 free(method_name);
                 return res.value;
             }
             
-            // Check for class constructor call
             Value classVal;
             if (env_get(env, callee.start, callee.length, &classVal)) {
-                // Native function
                 if (classVal.type == VAL_NATIVE) {
                     Value args[255];
                     int count = expr->as.call.arg_count;
@@ -550,22 +596,18 @@ static Value eval_expr(Expr* expr, Env* env) {
                     return classVal.as.native(count, args);
                 }
                 
-                // Class constructor
                 if (classVal.type == VAL_CLASS) {
                     ClassValue* class_def = classVal.as.class_val;
                     InstanceValue* instance = instance_create(class_def);
                     Value inst_val = val_instance(instance);
                     
-                    // Look for init method
                     Method* init_method = class_find_method(class_def, "init", 4);
                     if (init_method) {
                         ProcStmt* init_stmt = (ProcStmt*)init_method->method_stmt;
                         
-                        // Create method scope with self
                         Env* method_env = env_create(env);
                         env_define(method_env, "self", 4, inst_val);
                         
-                        // Bind parameters (skip self as first param)
                         int param_start = (init_stmt->param_count > 0 && 
                                           strncmp(init_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
                         
@@ -584,7 +626,6 @@ static Value eval_expr(Expr* expr, Env* env) {
                 }
             }
 
-            // Regular function call
             ProcStmt* func = find_function(callee.start, callee.length);
             if (func) {
                 if (expr->as.call.arg_count != func->param_count) {
@@ -599,7 +640,12 @@ static Value eval_expr(Expr* expr, Env* env) {
                     env_define(scope, paramName.start, paramName.length, argVal);
                 }
 
+                // Save defer stack before function call
+                int saved_defers = defer_stack_save();
                 ExecResult res = interpret(func->body, scope);
+                // Restore defer stack after function call
+                defer_stack_restore(saved_defers, scope);
+                
                 return res.value;
             }
 
@@ -611,6 +657,8 @@ static Value eval_expr(Expr* expr, Env* env) {
             return val_nil();
     }
 }
+
+// === Statement Interpreter ===
 
 ExecResult interpret(Stmt* stmt, Env* env) {
     if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0 };
@@ -639,12 +687,21 @@ ExecResult interpret(Stmt* stmt, Env* env) {
         }
 
         case STMT_BLOCK: {
+            int saved_defers = defer_stack_save();
+            
             Stmt* current = stmt->as.block.statements;
             while (current != NULL) {
                 ExecResult res = interpret(current, env);
-                if (res.is_returning || res.is_breaking || res.is_continuing) return res;
+                if (res.is_returning || res.is_breaking || res.is_continuing) {
+                    // Execute defers before exiting block
+                    defer_stack_restore(saved_defers, env);
+                    return res;
+                }
                 current = current->next;
             }
+            
+            // Execute defers at end of block
+            defer_stack_restore(saved_defers, env);
             return (ExecResult){ val_nil(), 0, 0, 0 };
         }
 
@@ -695,6 +752,12 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             return (ExecResult){ val_nil(), 0, 0, 0 };
         }
 
+        case STMT_DEFER: {
+            // PHASE 7: Add statement to defer stack
+            defer_stack_push(stmt->as.defer.statement);
+            return (ExecResult){ val_nil(), 0, 0, 0 };
+        }
+
         case STMT_BREAK:
             return (ExecResult){ val_nil(), 0, 1, 0 };
 
@@ -707,7 +770,6 @@ ExecResult interpret(Stmt* stmt, Env* env) {
         }
 
         case STMT_CLASS: {
-            // Get parent class if specified
             ClassValue* parent = NULL;
             if (stmt->as.class_stmt.has_parent) {
                 Value parent_val;
@@ -725,11 +787,9 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 }
             }
             
-            // Create class
             Token name = stmt->as.class_stmt.name;
             ClassValue* class_val = class_create(name.start, name.length, parent);
             
-            // Add methods
             Stmt* method = stmt->as.class_stmt.methods;
             while (method != NULL) {
                 if (method->type == STMT_PROC) {
@@ -739,7 +799,6 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 method = method->next;
             }
             
-            // Register class in environment
             Value class_value = val_class(class_val);
             env_define(env, name.start, name.length, class_value);
             
