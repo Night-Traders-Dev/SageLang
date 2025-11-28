@@ -115,6 +115,9 @@ static Stmt* raise_statement() {
 
 // primary -> NUMBER | STRING | BOOLEAN | NIL | SELF | ( expr/tuple ) | [ array ] | { dict } | IDENTIFIER | CALL
 static Expr* primary() {
+    // DEBUG: Print current token when entering primary
+    fprintf(stderr, "[DEBUG] primary() at line %d, token type: %d\n", current_token.line, current_token.type);
+    
     // Literals
     if (match(TOKEN_FALSE)) return new_bool_expr(0);
     if (match(TOKEN_TRUE))  return new_bool_expr(1);
@@ -540,6 +543,9 @@ static Stmt* class_declaration() {
 }
 
 static Stmt* statement() {
+    // DEBUG: Print what statement we're trying to parse
+    fprintf(stderr, "[DEBUG] statement() at line %d, token type: %d\n", current_token.line, current_token.type);
+    
     if (match(TOKEN_PRINT)) return print_statement();
     if (match(TOKEN_IF)) return if_statement();
     if (match(TOKEN_WHILE)) return while_statement();
