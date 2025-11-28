@@ -65,23 +65,27 @@ static Stmt* for_statement() {
     return new_for_stmt(var, iterable, body);
 }
 
-// primary -> NUMBER | STRING | BOOLEAN | NIL | ( expr/tuple ) | [ array ] | { dict } | IDENTIFIER | CALL
+// primary -> NUMBER | STRING | BOOLEAN | NIL | SELF | ( expr/tuple ) | [ array ] | { dict } | IDENTIFIER | CALL
 static Expr* primary() {
     // Literals
     if (match(TOKEN_FALSE)) return new_bool_expr(0);
     if (match(TOKEN_TRUE))  return new_bool_expr(1);
     if (match(TOKEN_NIL))   return new_nil_expr();
+    
+    // Self keyword (treated as variable)
+    if (match(TOKEN_SELF)) {
+        Token self_token = previous_token;
+        return new_variable_expr(self_token);
+    }
 
     // Parentheses: ( expr ) or tuple (a, b, c)
     if (match(TOKEN_LPAREN)) {
-        // Empty tuple ()
         if (match(TOKEN_RPAREN)) {
             return new_tuple_expr(NULL, 0);
         }
 
         Expr* first = expression();
         
-        // Check if it's a tuple: (expr, ...)
         if (match(TOKEN_COMMA)) {
             Expr** elements = NULL;
             int count = 0;
@@ -89,7 +93,6 @@ static Expr* primary() {
             elements = malloc(sizeof(Expr*) * capacity);
             elements[count++] = first;
             
-            // Could be trailing comma (val,) or more elements
             if (!check(TOKEN_RPAREN)) {
                 do {
                     if (count >= capacity) {
@@ -104,12 +107,11 @@ static Expr* primary() {
             return new_tuple_expr(elements, count);
         }
         
-        // Just a grouping expression
         consume(TOKEN_RPAREN, "Expect ')' after expression.");
         return first;
     }
 
-    // Dictionary Literals: {"key": val, ...}
+    // Dictionary Literals
     if (match(TOKEN_LBRACE)) {
         char** keys = NULL;
         Expr** values = NULL;
@@ -118,11 +120,9 @@ static Expr* primary() {
 
         if (!check(TOKEN_RBRACE)) {
             do {
-                // Expect string key
                 consume(TOKEN_STRING, "Expect string key in dictionary.");
                 Token key_token = previous_token;
                 
-                // Extract key string (without quotes)
                 int len = key_token.length - 2;
                 char* key = malloc(len + 1);
                 memcpy(key, key_token.start + 1, len);
@@ -146,7 +146,7 @@ static Expr* primary() {
         return new_dict_expr(keys, values, count);
     }
 
-    // Array Literals: [expr, expr, ...]
+    // Array Literals
     if (match(TOKEN_LBRACKET)) {
         Expr** elements = NULL;
         int count = 0;
@@ -182,11 +182,10 @@ static Expr* primary() {
         return new_string_expr(str);
     }
 
-    // Identifiers (Variables) & Function Calls
+    // Identifiers & Function/Constructor Calls
     if (match(TOKEN_IDENTIFIER)) {
         Token name = previous_token;
 
-        // Function call: Identifier(args)
         if (match(TOKEN_LPAREN)) {
             Expr** args = NULL;
             int count = 0;
@@ -218,21 +217,16 @@ static Expr* postfix() {
 
     while (1) {
         if (match(TOKEN_LBRACKET)) {
-            // Check for slice: arr[start:end]
             Expr* start_or_index = NULL;
             Expr* end = NULL;
             
-            // Handle arr[:end]
             if (!check(TOKEN_COLON)) {
                 start_or_index = expression();
             }
             
-            // Check for colon (slice syntax)
             if (match(TOKEN_COLON)) {
-                // It's a slice
-                Expr* start = start_or_index;  // Could be NULL for [:end]
+                Expr* start = start_or_index;
                 
-                // Handle arr[start:]
                 if (!check(TOKEN_RBRACKET)) {
                     end = expression();
                 }
@@ -240,10 +234,14 @@ static Expr* postfix() {
                 consume(TOKEN_RBRACKET, "Expect ']' after slice.");
                 expr = new_slice_expr(expr, start, end);
             } else {
-                // Regular index access
                 consume(TOKEN_RBRACKET, "Expect ']' after index.");
                 expr = new_index_expr(expr, start_or_index);
             }
+        } else if (match(TOKEN_DOT)) {
+            // Property access: obj.property
+            consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
+            Token property = previous_token;
+            expr = new_get_expr(expr, property);
         } else {
             break;
         }
@@ -312,8 +310,20 @@ static Expr* logical_or() {
     return expr;
 }
 
+static Expr* assignment() {
+    Expr* expr = logical_or();
+    
+    // Check for property assignment: obj.prop = value
+    if (expr->type == EXPR_GET && match(TOKEN_ASSIGN)) {
+        Expr* value = assignment();
+        return new_set_expr(expr->as.get.object, expr->as.get.property, value);
+    }
+    
+    return expr;
+}
+
 static Expr* expression() {
-    return logical_or();
+    return assignment();
 }
 
 static Stmt* print_statement() {
@@ -399,6 +409,54 @@ static Stmt* proc_declaration() {
     return new_proc_stmt(name, params, count, body);
 }
 
+static Stmt* class_declaration() {
+    consume(TOKEN_IDENTIFIER, "Expect class name.");
+    Token name = previous_token;
+    
+    // Check for inheritance: class Child(Parent):
+    Token parent;
+    int has_parent = 0;
+    if (match(TOKEN_LPAREN)) {
+        consume(TOKEN_IDENTIFIER, "Expect parent class name.");
+        parent = previous_token;
+        consume(TOKEN_RPAREN, "Expect ')' after parent class.");
+        has_parent = 1;
+    }
+    
+    match(TOKEN_COLON);
+    consume(TOKEN_NEWLINE, "Expect newline after class header.");
+    consume(TOKEN_INDENT, "Expect indentation in class body.");
+    
+    // Parse methods (all methods are proc declarations)
+    Stmt* method_head = NULL;
+    Stmt* method_current = NULL;
+    
+    while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
+        if (match(TOKEN_NEWLINE)) {
+            continue;
+        }
+        
+        if (match(TOKEN_PROC)) {
+            Stmt* method = proc_declaration();
+            
+            if (method_head == NULL) {
+                method_head = method;
+                method_current = method;
+            } else {
+                method_current->next = method;
+                method_current = method;
+            }
+        } else {
+            fprintf(stderr, "[Line %d] Only methods allowed in class body.\n", current_token.line);
+            exit(1);
+        }
+    }
+    
+    consume(TOKEN_DEDENT, "Expect dedent after class body.");
+    
+    return new_class_stmt(name, parent, has_parent, method_head);
+}
+
 static Stmt* statement() {
     if (match(TOKEN_PRINT)) return print_statement();
     if (match(TOKEN_IF)) return if_statement();
@@ -418,6 +476,7 @@ static Stmt* declaration() {
         return NULL;
     }
 
+    if (match(TOKEN_CLASS)) return class_declaration();
     if (match(TOKEN_PROC)) return proc_declaration();
 
     if (match(TOKEN_RETURN)) {
