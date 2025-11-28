@@ -114,6 +114,19 @@ static Stmt* raise_statement() {
     return new_raise_stmt(exception);
 }
 
+// PHASE 7: Yield statement (NEW)
+static Stmt* yield_statement() {
+    // yield <expression>
+    // yield can also be used without a value: yield (yields nil)
+    Expr* value = NULL;
+    
+    if (!check(TOKEN_NEWLINE) && !check(TOKEN_EOF) && !check(TOKEN_DEDENT)) {
+        value = expression();
+    }
+    
+    return new_yield_stmt(value);
+}
+
 // primary -> NUMBER | STRING | BOOLEAN | NIL | SELF | ( expr/tuple ) | [ array ] | { dict } | IDENTIFIER | CALL
 static Expr* primary() {
     // Literals
@@ -560,6 +573,7 @@ static Stmt* statement() {
     if (match(TOKEN_FOR)) return for_statement();
     if (match(TOKEN_TRY)) return try_statement();
     if (match(TOKEN_RAISE)) return raise_statement();
+    if (match(TOKEN_YIELD)) return yield_statement();  // NEW: Add yield support
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
 
