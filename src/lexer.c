@@ -72,14 +72,20 @@ static TokenType check_keyword(int start_index, int length, const char* rest, To
     return TOKEN_IDENTIFIER;
 }
 
-
 static TokenType identifier_type() {
     switch (start[0]) {
         case 'a': return check_keyword(1, 2, "nd", TOKEN_AND);
 
         case 'b': return check_keyword(1, 4, "reak", TOKEN_BREAK);
 
-        case 'c': return check_keyword(1, 7, "ontinue", TOKEN_CONTINUE);
+        case 'c':
+            if (current - start > 1) {
+                switch (start[1]) {
+                    case 'l': return check_keyword(2, 3, "ass", TOKEN_CLASS);
+                    case 'o': return check_keyword(2, 6, "ntinue", TOKEN_CONTINUE);
+                }
+            }
+            break;
 
         case 'e': 
             if (current - start > 1) {
@@ -104,8 +110,11 @@ static TokenType identifier_type() {
         case 'i':
             if (current - start > 1) {
                 switch (start[1]) {
-                    case 'f': return check_keyword(2, 0, "", TOKEN_IF);  // "if"
-                    case 'n': return check_keyword(2, 0, "", TOKEN_IN);  // "in"
+                    case 'f': return check_keyword(2, 0, "", TOKEN_IF);    // "if"
+                    case 'n':
+                        if (current - start == 2) return check_keyword(2, 0, "", TOKEN_IN);  // "in"
+                        if (current - start == 4) return check_keyword(2, 2, "it", TOKEN_INIT); // "init"
+                        break;
                 }
             }
             break;
@@ -127,13 +136,15 @@ static TokenType identifier_type() {
             break;
 
         case 'r': return check_keyword(1, 5, "eturn", TOKEN_RETURN);
+        
+        case 's': return check_keyword(1, 3, "elf", TOKEN_SELF);
+        
         case 't': return check_keyword(1, 3, "rue", TOKEN_TRUE);
         case 'v': return check_keyword(1, 2, "ar", TOKEN_VAR);
         case 'w': return check_keyword(1, 4, "hile", TOKEN_WHILE);
     }
     return TOKEN_IDENTIFIER;
 }
-
 
 static Token identifier() {
     while (isalnum(peek()) || peek() == '_') advance();
@@ -237,7 +248,7 @@ Token scan_token() {
         return scan_token();
     }
 
-    if (c == '"') return string(); // Handle string literals
+    if (c == '"') return string();
 
     if (isalpha(c) || c == '_') return identifier();
     if (isdigit(c)) return number();
