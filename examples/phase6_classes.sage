@@ -138,11 +138,11 @@ class BankAccount:
         print amount
     
     proc withdraw(self, amount):
-        if self.balance >= amount
+        if self.balance >= amount:
             self.balance = self.balance - amount
             print "Withdrew:"
             print amount
-        else
+        else:
             print "Insufficient funds"
     
     proc get_balance(self):
