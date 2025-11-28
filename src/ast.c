@@ -97,6 +97,23 @@ Expr* new_slice_expr(Expr* array, Expr* start, Expr* end) {
     return e;
 }
 
+Expr* new_get_expr(Expr* object, Token property) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_GET;
+    e->as.get.object = object;
+    e->as.get.property = property;
+    return e;
+}
+
+Expr* new_set_expr(Expr* object, Token property, Expr* value) {
+    Expr* e = malloc(sizeof(Expr));
+    e->type = EXPR_SET;
+    e->as.set.object = object;
+    e->as.set.property = property;
+    e->as.set.value = value;
+    return e;
+}
+
 // ========== STATEMENT CONSTRUCTORS ==========
 
 Stmt* new_print_stmt(Expr* expression) {
@@ -190,6 +207,17 @@ Stmt* new_break_stmt() {
 Stmt* new_continue_stmt() {
     Stmt* s = malloc(sizeof(Stmt));
     s->type = STMT_CONTINUE;
+    s->next = NULL;
+    return s;
+}
+
+Stmt* new_class_stmt(Token name, Token parent, int has_parent, Stmt* methods) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_CLASS;
+    s->as.class_stmt.name = name;
+    s->as.class_stmt.parent = parent;
+    s->as.class_stmt.has_parent = has_parent;
+    s->as.class_stmt.methods = methods;
     s->next = NULL;
     return s;
 }
