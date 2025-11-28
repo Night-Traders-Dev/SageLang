@@ -13,7 +13,7 @@ Sage is a new programming language that combines the readability of Python (inde
 - **Control Flow**: `if`/`else`, `while`, `for` loops, `break`, and `continue`
 - **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical (`and`, `or`, `not`)
 
-### Object-Oriented Programming 🎉 **NEW**
+### Object-Oriented Programming 🎉 **COMPLETE**
 - **Classes**: `class ClassName:` with full inheritance support
 - **Constructors**: `init(self, ...)` method for initialization
 - **Methods**: Functions with automatic `self` binding
@@ -323,6 +323,6 @@ Distributed under the MIT License. See `LICENSE` for more information.
 **Built with ❤️ for systems programming enthusiasts**
 
 **Recent Milestones:**
-- ✅ November 27, 2025: Phase 6 Complete - Object-Oriented Programming
-- ✅ November 27, 2025: Phase 5 Complete - Advanced Data Structures
-- ✅ November 27, 2025: Phase 4 Complete - Garbage Collection
+- ✅ November 28, 2025: Phase 6 Complete - Object-Oriented Programming with full OOP support
+- ✅ November 27, 2025: Phase 5 Complete - Advanced Data Structures (Arrays, Dicts, Tuples)
+- ✅ November 27, 2025: Phase 4 Complete - Garbage Collection (Mark-and-Sweep GC)
