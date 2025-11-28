@@ -72,17 +72,17 @@ print ""
 print "5. Break and Continue:"
 
 print "Using break (stop at 5):"
-for i in range(10)
-    if i == 5
+for i in range(10):
+    if i == 5:
         break
     print i
 
 print ""
 print "Using continue (skip 3 and 7):"
-for i in range(10)
-    if i == 3
+for i in range(10):
+    if i == 3:
         continue
-    if i == 7
+    if i == 7:
         continue
     print i
 
