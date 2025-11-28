@@ -318,7 +318,7 @@ static Expr* addition() {
 
 static Expr* comparison() {
     Expr* expr = addition();
-    while (match(TOKEN_GT) || match(TOKEN_LT)) {
+    while (match(TOKEN_GT) || match(TOKEN_LT) || match(TOKEN_GTE) || match(TOKEN_LTE)) {
         Token op = previous_token;
         Expr* right = addition();
         expr = new_binary_expr(expr, op, right);
