@@ -279,3 +279,13 @@ Stmt* new_raise_stmt(Expr* exception) {
     s->next = NULL;
     return s;
 }
+
+// ========== PHASE 7: GENERATORS (YIELD) ==========
+
+Stmt* new_yield_stmt(Expr* value) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_YIELD;
+    s->as.yield_stmt.value = value;
+    s->next = NULL;
+    return s;
+}
