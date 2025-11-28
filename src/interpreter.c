@@ -271,41 +271,6 @@ static int is_truthy(Value v) {
 
 // --- Forward Declaration ---
 static Value eval_expr(Expr* expr, Env* env);
-static Value call_method(InstanceValue* instance, const char* method_name, Expr** args, int arg_count, Env* env);
-
-// --- Method Call Helper ---
-static Value call_method(InstanceValue* instance, const char* method_name, Expr** args, int arg_count, Env* env) {
-    // Look up method in class
-    Method* method = class_find_method(instance->class_def, method_name, strlen(method_name));
-    
-    if (!method) {
-        fprintf(stderr, "Runtime Error: Undefined method '%s'.\n", method_name);
-        return val_nil();
-    }
-    
-    ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
-    
-    // Create method scope with self
-    Env* method_env = env_create(env);
-    Value inst_val = val_instance(instance);
-    env_define(method_env, "self", 4, inst_val);
-    
-    // Bind parameters (skip self as first param if present)
-    int param_start = (method_stmt->param_count > 0 && 
-                      strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
-    
-    for (int i = param_start; i < method_stmt->param_count; i++) {
-        if (i - param_start < arg_count) {
-            Value arg = eval_expr(args[i - param_start], env);
-            env_define(method_env, method_stmt->params[i].start, 
-                     method_stmt->params[i].length, arg);
-        }
-    }
-    
-    // Execute method
-    ExecResult res = interpret(method_stmt->body, method_env);
-    return res.value;
-}
 
 // --- Evaluator ---
 
@@ -519,6 +484,56 @@ static Value eval_expr(Expr* expr, Env* env) {
 
         case EXPR_CALL: {
             Token callee = expr->as.call.callee;
+            
+            // Check for method call pattern: first arg is EXPR_GET
+            if (expr->as.call.arg_count > 0 && expr->as.call.args[0]->type == EXPR_GET) {
+                // Method call: obj.method(args)
+                Expr* get_expr = expr->as.call.args[0];
+                Value object = eval_expr(get_expr->as.get.object, env);
+                
+                if (!IS_INSTANCE(object)) {
+                    fprintf(stderr, "Runtime Error: Cannot call method on non-instance.\n");
+                    return val_nil();
+                }
+                
+                // Extract method name
+                Token method_token = get_expr->as.get.property;
+                char* method_name = malloc(method_token.length + 1);
+                strncpy(method_name, method_token.start, method_token.length);
+                method_name[method_token.length] = '\0';
+                
+                // Find method
+                Method* method = class_find_method(object.as.instance->class_def, method_name, method_token.length);
+                
+                if (!method) {
+                    fprintf(stderr, "Runtime Error: Undefined method '%s'.\n", method_name);
+                    free(method_name);
+                    return val_nil();
+                }
+                
+                ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
+                
+                // Create method scope with self
+                Env* method_env = env_create(env);
+                env_define(method_env, "self", 4, object);
+                
+                // Bind parameters (skip self as first param, skip hidden GET arg)
+                int param_start = (method_stmt->param_count > 0 && 
+                                  strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
+                
+                for (int i = param_start; i < method_stmt->param_count; i++) {
+                    if (i - param_start + 1 < expr->as.call.arg_count) {
+                        Value arg = eval_expr(expr->as.call.args[i - param_start + 1], env);
+                        env_define(method_env, method_stmt->params[i].start, 
+                                 method_stmt->params[i].length, arg);
+                    }
+                }
+                
+                // Execute method
+                ExecResult res = interpret(method_stmt->body, method_env);
+                free(method_name);
+                return res.value;
+            }
             
             // Check for class constructor call
             Value classVal;
