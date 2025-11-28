@@ -67,6 +67,29 @@ static Value tonumber_native(int argCount, Value* args) {
     return val_nil();
 }
 
+// PHASE 7: str() function for number-to-string conversion
+static Value str_native(int argCount, Value* args) {
+    if (argCount != 1) return val_nil();
+    
+    char buffer[256];
+    if (IS_NUMBER(args[0])) {
+        snprintf(buffer, sizeof(buffer), "%g", AS_NUMBER(args[0]));
+        char* str = malloc(strlen(buffer) + 1);
+        strcpy(str, buffer);
+        return val_string(str);
+    }
+    if (IS_STRING(args[0])) {
+        return args[0];
+    }
+    if (IS_BOOL(args[0])) {
+        char* str = AS_BOOL(args[0]) ? "true" : "false";
+        char* result = malloc(strlen(str) + 1);
+        strcpy(result, str);
+        return val_string(result);
+    }
+    return val_string("nil");
+}
+
 static Value len_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
     if (args[0].type == VAL_ARRAY) {
@@ -233,6 +256,7 @@ void init_stdlib(Env* env) {
     env_define(env, "clock", 5, val_native(clock_native));
     env_define(env, "input", 5, val_native(input_native));
     env_define(env, "tonumber", 8, val_native(tonumber_native));
+    env_define(env, "str", 3, val_native(str_native));
     env_define(env, "len", 3, val_native(len_native));
     
     // Array functions
@@ -439,7 +463,6 @@ static Value eval_expr(Expr* expr, Env* env) {
                 return val_nil();
             }
             
-            // Extract property name from token (create null-terminated string)
             Token prop = expr->as.get.property;
             char* prop_name = malloc(prop.length + 1);
             strncpy(prop_name, prop.start, prop.length);
@@ -460,7 +483,6 @@ static Value eval_expr(Expr* expr, Env* env) {
             
             Value value = eval_expr(expr->as.set.value, env);
             
-            // Extract property name from token (create null-terminated string)
             Token prop = expr->as.set.property;
             char* prop_name = malloc(prop.length + 1);
             strncpy(prop_name, prop.start, prop.length);
@@ -487,9 +509,8 @@ static Value eval_expr(Expr* expr, Env* env) {
         case EXPR_CALL: {
             Token callee = expr->as.call.callee;
             
-            // Check for method call pattern: first arg is EXPR_GET
+            // Check for method call pattern
             if (expr->as.call.arg_count > 0 && expr->as.call.args[0]->type == EXPR_GET) {
-                // Method call: obj.method(args)
                 Expr* get_expr = expr->as.call.args[0];
                 Value object = eval_expr(get_expr->as.get.object, env);
                 
@@ -498,13 +519,11 @@ static Value eval_expr(Expr* expr, Env* env) {
                     return val_nil();
                 }
                 
-                // Extract method name
                 Token method_token = get_expr->as.get.property;
                 char* method_name = malloc(method_token.length + 1);
                 strncpy(method_name, method_token.start, method_token.length);
                 method_name[method_token.length] = '\0';
                 
-                // Find method
                 Method* method = class_find_method(object.as.instance->class_def, method_name, method_token.length);
                 
                 if (!method) {
@@ -515,11 +534,9 @@ static Value eval_expr(Expr* expr, Env* env) {
                 
                 ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
                 
-                // Create method scope with self
                 Env* method_env = env_create(env);
                 env_define(method_env, "self", 4, object);
                 
-                // Bind parameters (skip self as first param, skip hidden GET arg)
                 int param_start = (method_stmt->param_count > 0 && 
                                   strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
                 
@@ -531,16 +548,13 @@ static Value eval_expr(Expr* expr, Env* env) {
                     }
                 }
                 
-                // Execute method
                 ExecResult res = interpret(method_stmt->body, method_env);
                 free(method_name);
                 return res.value;
             }
             
-            // Check for class constructor call
             Value classVal;
             if (env_get(env, callee.start, callee.length, &classVal)) {
-                // Native function
                 if (classVal.type == VAL_NATIVE) {
                     Value args[255];
                     int count = expr->as.call.arg_count;
@@ -550,22 +564,18 @@ static Value eval_expr(Expr* expr, Env* env) {
                     return classVal.as.native(count, args);
                 }
                 
-                // Class constructor
                 if (classVal.type == VAL_CLASS) {
                     ClassValue* class_def = classVal.as.class_val;
                     InstanceValue* instance = instance_create(class_def);
                     Value inst_val = val_instance(instance);
                     
-                    // Look for init method
                     Method* init_method = class_find_method(class_def, "init", 4);
                     if (init_method) {
                         ProcStmt* init_stmt = (ProcStmt*)init_method->method_stmt;
                         
-                        // Create method scope with self
                         Env* method_env = env_create(env);
                         env_define(method_env, "self", 4, inst_val);
                         
-                        // Bind parameters (skip self as first param)
                         int param_start = (init_stmt->param_count > 0 && 
                                           strncmp(init_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
                         
@@ -584,7 +594,6 @@ static Value eval_expr(Expr* expr, Env* env) {
                 }
             }
 
-            // Regular function call
             ProcStmt* func = find_function(callee.start, callee.length);
             if (func) {
                 if (expr->as.call.arg_count != func->param_count) {
@@ -613,14 +622,14 @@ static Value eval_expr(Expr* expr, Env* env) {
 }
 
 ExecResult interpret(Stmt* stmt, Env* env) {
-    if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0 };
+    if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
 
     switch (stmt->type) {
         case STMT_PRINT: {
             Value val = eval_expr(stmt->as.print.expression, env);
             print_value(val);
             printf("\n");
-            return (ExecResult){ val_nil(), 0, 0, 0 };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
 
         case STMT_LET: {
@@ -630,22 +639,25 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             }
             Token t = stmt->as.let.name;
             env_define(env, t.start, t.length, val);
-            return (ExecResult){ val_nil(), 0, 0, 0 };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
 
         case STMT_EXPRESSION: {
             (void)eval_expr(stmt->as.expression, env);
-            return (ExecResult){ val_nil(), 0, 0, 0 };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
 
         case STMT_BLOCK: {
             Stmt* current = stmt->as.block.statements;
             while (current != NULL) {
                 ExecResult res = interpret(current, env);
-                if (res.is_returning || res.is_breaking || res.is_continuing) return res;
+                // PHASE 7: Propagate exceptions too
+                if (res.is_returning || res.is_breaking || res.is_continuing || res.is_throwing) {
+                    return res;
+                }
                 current = current->next;
             }
-            return (ExecResult){ val_nil(), 0, 0, 0 };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
 
         case STMT_IF: {
@@ -655,7 +667,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             } else if (stmt->as.if_stmt.else_branch != NULL) {
                 return interpret(stmt->as.if_stmt.else_branch, env);
             }
-            return (ExecResult){ val_nil(), 0, 0, 0 };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
 
         case STMT_WHILE: {
@@ -668,7 +680,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 if (res.is_breaking) break;
                 if (res.is_continuing) continue;
             }
-            return (ExecResult){ val_nil(), 0, 0, 0 };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
 
         case STMT_FOR: {
@@ -676,7 +688,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             
             if (iterable.type != VAL_ARRAY) {
                 fprintf(stderr, "Runtime Error: for loop iterable must be an array.\n");
-                return (ExecResult){ val_nil(), 0, 0, 0 };
+                return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
             }
 
             Env* loop_env = env_create(env);
@@ -692,22 +704,21 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 if (res.is_continuing) continue;
             }
 
-            return (ExecResult){ val_nil(), 0, 0, 0 };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
 
         case STMT_BREAK:
-            return (ExecResult){ val_nil(), 0, 1, 0 };
+            return (ExecResult){ val_nil(), 0, 1, 0, 0, val_nil() };
 
         case STMT_CONTINUE:
-            return (ExecResult){ val_nil(), 0, 0, 1 };
+            return (ExecResult){ val_nil(), 0, 0, 1, 0, val_nil() };
 
         case STMT_PROC: {
             define_function(&stmt->as.proc);
-            return (ExecResult){ val_nil(), 0, 0, 0 };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
 
         case STMT_CLASS: {
-            // Get parent class if specified
             ClassValue* parent = NULL;
             if (stmt->as.class_stmt.has_parent) {
                 Value parent_val;
@@ -717,19 +728,17 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                         parent = parent_val.as.class_val;
                     } else {
                         fprintf(stderr, "Runtime Error: Parent must be a class.\n");
-                        return (ExecResult){ val_nil(), 0, 0, 0 };
+                        return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
                     }
                 } else {
                     fprintf(stderr, "Runtime Error: Undefined parent class.\n");
-                    return (ExecResult){ val_nil(), 0, 0, 0 };
+                    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
                 }
             }
             
-            // Create class
             Token name = stmt->as.class_stmt.name;
             ClassValue* class_val = class_create(name.start, name.length, parent);
             
-            // Add methods
             Stmt* method = stmt->as.class_stmt.methods;
             while (method != NULL) {
                 if (method->type == STMT_PROC) {
@@ -739,18 +748,69 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 method = method->next;
             }
             
-            // Register class in environment
             Value class_value = val_class(class_val);
             env_define(env, name.start, name.length, class_value);
             
-            return (ExecResult){ val_nil(), 0, 0, 0 };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
 
         case STMT_RETURN: {
             Value val = val_nil();
             if (stmt->as.ret.value) val = eval_expr(stmt->as.ret.value, env);
-            return (ExecResult){ val, 1, 0, 0 };
+            return (ExecResult){ val, 1, 0, 0, 0, val_nil() };
         }
+
+        // PHASE 7: Exception handling
+        case STMT_TRY: {
+            ExecResult try_result = interpret(stmt->as.try_stmt.try_block, env);
+            
+            // If exception thrown, try to catch it
+            if (try_result.is_throwing) {
+                for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+                    CatchClause* catch_clause = stmt->as.try_stmt.catches[i];
+                    Env* catch_env = env_create(env);
+                    Token var = catch_clause->exception_var;
+                    
+                    // Bind exception to variable
+                    Value exc_msg;
+                    if (IS_EXCEPTION(try_result.exception_value)) {
+                        exc_msg = val_string(try_result.exception_value.as.exception->message);
+                    } else {
+                        exc_msg = try_result.exception_value;
+                    }
+                    env_define(catch_env, var.start, var.length, exc_msg);
+                    
+                    ExecResult catch_result = interpret(catch_clause->body, catch_env);
+                    if (!catch_result.is_throwing) {
+                        try_result = catch_result;
+                        break;
+                    }
+                    try_result = catch_result;
+                }
+            }
+            
+            // Always execute finally block
+            if (stmt->as.try_stmt.finally_block != NULL) {
+                interpret(stmt->as.try_stmt.finally_block, env);
+            }
+            
+            return try_result;
+        }
+
+        case STMT_RAISE: {
+            Value exc_val = eval_expr(stmt->as.raise.exception, env);
+            if (IS_STRING(exc_val)) {
+                exc_val = val_exception(AS_STRING(exc_val));
+            } else if (!IS_EXCEPTION(exc_val)) {
+                exc_val = val_exception("Unknown error");
+            }
+            return (ExecResult){ val_nil(), 0, 0, 0, 1, exc_val };
+        }
+
+        // PHASE 7: Stubs for match and defer (to be implemented separately)
+        case STMT_MATCH:
+        case STMT_DEFER:
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
     }
-    return (ExecResult){ val_nil(), 0, 0, 0 };
+    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
 }
