@@ -427,6 +427,78 @@ static Stmt* while_statement() {
     return new_while_stmt(condition, body);
 }
 
+// PHASE 7: Match statement parser
+static Stmt* match_statement() {
+    // match value:
+    Expr* value = expression();
+    consume(TOKEN_COLON, "Expect ':' after match value.");
+    consume(TOKEN_NEWLINE, "Expect newline after match statement.");
+    consume(TOKEN_INDENT, "Expect indentation in match body.");
+    
+    // Parse case clauses
+    CaseClause** cases = NULL;
+    int case_count = 0;
+    int case_capacity = 0;
+    Stmt* default_case = NULL;
+    
+    while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
+        // Skip blank lines
+        if (match(TOKEN_NEWLINE)) {
+            continue;
+        }
+        
+        if (match(TOKEN_CASE)) {
+            // case pattern:
+            Expr* pattern = expression();
+            consume(TOKEN_COLON, "Expect ':' after case pattern.");
+            consume(TOKEN_NEWLINE, "Expect newline after case clause.");
+            
+            // Parse case body (single statement or block)
+            Stmt* case_body;
+            if (check(TOKEN_INDENT)) {
+                case_body = block();
+            } else {
+                // Single statement on same line (after indent)
+                case_body = statement();
+                match(TOKEN_NEWLINE);
+            }
+            
+            // Create case clause
+            CaseClause* clause = new_case_clause(pattern, case_body);
+            
+            // Add to cases array
+            if (case_count >= case_capacity) {
+                case_capacity = case_capacity == 0 ? 4 : case_capacity * 2;
+                cases = realloc(cases, sizeof(CaseClause*) * case_capacity);
+            }
+            cases[case_count++] = clause;
+            
+        } else if (match(TOKEN_DEFAULT)) {
+            // default:
+            consume(TOKEN_COLON, "Expect ':' after default.");
+            consume(TOKEN_NEWLINE, "Expect newline after default clause.");
+            
+            // Parse default body
+            if (check(TOKEN_INDENT)) {
+                default_case = block();
+            } else {
+                default_case = statement();
+                match(TOKEN_NEWLINE);
+            }
+            
+            // Default should be last, break out
+            break;
+        } else {
+            fprintf(stderr, "[Line %d] Error: Expect 'case' or 'default' in match body.\n", current_token.line);
+            exit(1);
+        }
+    }
+    
+    consume(TOKEN_DEDENT, "Expect dedent at end of match statement.");
+    
+    return new_match_stmt(value, cases, case_count, default_case);
+}
+
 static Stmt* proc_declaration() {
     // Accept TOKEN_IDENTIFIER or TOKEN_INIT (for init method)
     if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_INIT) {
@@ -520,6 +592,7 @@ static Stmt* statement() {
     if (match(TOKEN_IF)) return if_statement();
     if (match(TOKEN_WHILE)) return while_statement();
     if (match(TOKEN_FOR)) return for_statement();
+    if (match(TOKEN_MATCH)) return match_statement();  // PHASE 7: Match statement
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
 
