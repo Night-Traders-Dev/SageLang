@@ -198,6 +198,11 @@ typedef struct {
     Expr* exception;       // Exception value to raise
 } RaiseStmt;
 
+// PHASE 7: Yield statement (generators)
+typedef struct {
+    Expr* value;  // Expression to yield (can be NULL for yield without value)
+} YieldStmt;
+
 struct Stmt {
     enum {
         STMT_PRINT,
@@ -215,7 +220,8 @@ struct Stmt {
         STMT_MATCH,
         STMT_DEFER,
         STMT_TRY,
-        STMT_RAISE
+        STMT_RAISE,
+        STMT_YIELD  // NEW: Generator yield
     } type;
     union {
         PrintStmt print;
@@ -231,6 +237,7 @@ struct Stmt {
         DeferStmt defer;
         TryStmt try_stmt;
         RaiseStmt raise;
+        YieldStmt yield_stmt;  // NEW: Generator yield
         Expr* expression;
     } as;
     Stmt* next;
@@ -271,5 +278,6 @@ Stmt* new_defer_stmt(Stmt* statement);
 Stmt* new_try_stmt(Stmt* try_block, CatchClause** catches, int catch_count, Stmt* finally_block);
 CatchClause* new_catch_clause(Token exception_var, Stmt* body);
 Stmt* new_raise_stmt(Expr* exception);
+Stmt* new_yield_stmt(Expr* value);  // NEW: Generator yield constructor
 
 #endif
