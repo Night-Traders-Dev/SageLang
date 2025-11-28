@@ -40,6 +40,7 @@ static void consume(TokenType type, const char* message) {
 
 // Forward declarations
 static Expr* expression();
+static Expr* unary();
 static Expr* postfix();
 static Stmt* declaration();
 static Stmt* statement();
@@ -115,9 +116,6 @@ static Stmt* raise_statement() {
 
 // primary -> NUMBER | STRING | BOOLEAN | NIL | SELF | ( expr/tuple ) | [ array ] | { dict } | IDENTIFIER | CALL
 static Expr* primary() {
-    // DEBUG: Print current token when entering primary
-    fprintf(stderr, "[DEBUG] primary() at line %d, token type: %d\n", current_token.line, current_token.type);
-    
     // Literals
     if (match(TOKEN_FALSE)) return new_bool_expr(0);
     if (match(TOKEN_TRUE))  return new_bool_expr(1);
@@ -263,6 +261,18 @@ static Expr* primary() {
     exit(1);
 }
 
+// NEW: Unary expressions (-, not)
+static Expr* unary() {
+    // Handle unary minus and not
+    if (match(TOKEN_MINUS) || match(TOKEN_NOT)) {
+        Token op = previous_token;
+        Expr* right = unary();  // Right associative
+        return new_binary_expr(new_number_expr(0), op, right);  // Represent -x as (0 - x)
+    }
+    
+    return postfix();
+}
+
 static Expr* postfix() {
     Expr* expr = primary();
 
@@ -329,10 +339,10 @@ static Expr* postfix() {
 }
 
 static Expr* term() {
-    Expr* expr = postfix();
+    Expr* expr = unary();  // Changed from postfix() to unary()
     while (match(TOKEN_STAR) || match(TOKEN_SLASH)) {
         Token op = previous_token;
-        Expr* right = postfix();
+        Expr* right = unary();  // Changed from postfix() to unary()
         expr = new_binary_expr(expr, op, right);
     }
     return expr;
@@ -543,9 +553,6 @@ static Stmt* class_declaration() {
 }
 
 static Stmt* statement() {
-    // DEBUG: Print what statement we're trying to parse
-    fprintf(stderr, "[DEBUG] statement() at line %d, token type: %d\n", current_token.line, current_token.type);
-    
     if (match(TOKEN_PRINT)) return print_statement();
     if (match(TOKEN_IF)) return if_statement();
     if (match(TOKEN_WHILE)) return while_statement();
