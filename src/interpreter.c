@@ -271,7 +271,6 @@ static int is_truthy(Value v) {
 
 // --- Forward Declaration ---
 static Value eval_expr(Expr* expr, Env* env);
-static ExecResult interpret(Stmt* stmt, Env* env);
 
 // --- Evaluator ---
 
