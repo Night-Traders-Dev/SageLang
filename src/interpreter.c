@@ -7,6 +7,7 @@
 #include "env.h"
 #include "value.h"
 #include "gc.h"
+#include "ast.h"
 
 // --- Function Registry ---
 typedef struct ProcNode {
@@ -270,13 +271,13 @@ static int is_truthy(Value v) {
 
 // --- Forward Declaration ---
 static Value eval_expr(Expr* expr, Env* env);
+static ExecResult interpret(Stmt* stmt, Env* env);
 
 // --- Evaluator ---
 
 static Value eval_binary(BinaryExpr* b, Env* env) {
     Value left = eval_expr(b->left, env);
 
-    // Short-circuit OR
     if (b->op.type == TOKEN_OR) {
         if (is_truthy(left)) {
             return val_bool(1);
@@ -285,7 +286,6 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
         return val_bool(is_truthy(right));
     }
 
-    // Short-circuit AND
     if (b->op.type == TOKEN_AND) {
         if (!is_truthy(left)) {
             return val_bool(0);
@@ -296,14 +296,12 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
 
     Value right = eval_expr(b->right, env);
 
-    // Equality
     if (b->op.type == TOKEN_EQ || b->op.type == TOKEN_NEQ) {
         int equal = values_equal(left, right);
         if (b->op.type == TOKEN_EQ) return val_bool(equal);
         if (b->op.type == TOKEN_NEQ) return val_bool(!equal);
     }
 
-    // Comparison
     if (b->op.type == TOKEN_GT || b->op.type == TOKEN_LT) {
         if (!IS_NUMBER(left) || !IS_NUMBER(right)) {
             fprintf(stderr, "Runtime Error: Operands must be numbers.\n");
@@ -315,7 +313,6 @@ static Value eval_binary(BinaryExpr* b, Env* env) {
         if (b->op.type == TOKEN_LT) return val_bool(l < r);
     }
 
-    // Arithmetic
     switch (b->op.type) {
         case TOKEN_PLUS:
             if (IS_NUMBER(left) && IS_NUMBER(right)) {
@@ -389,19 +386,16 @@ static Value eval_expr(Expr* expr, Env* env) {
             Value arr = eval_expr(expr->as.index.array, env);
             Value idx = eval_expr(expr->as.index.index, env);
             
-            // Array indexing
             if (arr.type == VAL_ARRAY && IS_NUMBER(idx)) {
                 int index = (int)AS_NUMBER(idx);
                 return array_get(&arr, index);
             }
             
-            // Tuple indexing
             if (arr.type == VAL_TUPLE && IS_NUMBER(idx)) {
                 int index = (int)AS_NUMBER(idx);
                 return tuple_get(&arr, index);
             }
             
-            // Dictionary indexing
             if (arr.type == VAL_DICT && IS_STRING(idx)) {
                 return dict_get(&arr, AS_STRING(idx));
             }
@@ -436,6 +430,32 @@ static Value eval_expr(Expr* expr, Env* env) {
             return array_slice(&arr, start, end);
         }
 
+        case EXPR_GET: {
+            Value object = eval_expr(expr->as.get.object, env);
+            
+            if (!IS_INSTANCE(object)) {
+                fprintf(stderr, "Runtime Error: Only instances have properties.\n");
+                return val_nil();
+            }
+            
+            Token prop = expr->as.get.property;
+            return instance_get_field(object.as.instance, prop.start);
+        }
+
+        case EXPR_SET: {
+            Value object = eval_expr(expr->as.set.object, env);
+            
+            if (!IS_INSTANCE(object)) {
+                fprintf(stderr, "Runtime Error: Only instances have properties.\n");
+                return val_nil();
+            }
+            
+            Value value = eval_expr(expr->as.set.value, env);
+            Token prop = expr->as.set.property;
+            instance_set_field(object.as.instance, prop.start, value);
+            return value;
+        }
+
         case EXPR_BINARY:
             return eval_binary(&expr->as.binary, env);
 
@@ -452,20 +472,54 @@ static Value eval_expr(Expr* expr, Env* env) {
         case EXPR_CALL: {
             Token callee = expr->as.call.callee;
             
-            // Check Environment (Native Functions)
-            Value funcVal;
-            if (env_get(env, callee.start, callee.length, &funcVal)) {
-                if (funcVal.type == VAL_NATIVE) {
+            // Check for class constructor call
+            Value classVal;
+            if (env_get(env, callee.start, callee.length, &classVal)) {
+                // Native function
+                if (classVal.type == VAL_NATIVE) {
                     Value args[255];
                     int count = expr->as.call.arg_count;
                     for (int i = 0; i < count; i++) {
                         args[i] = eval_expr(expr->as.call.args[i], env);
                     }
-                    return funcVal.as.native(count, args);
+                    return classVal.as.native(count, args);
+                }
+                
+                // Class constructor
+                if (classVal.type == VAL_CLASS) {
+                    ClassValue* class_def = classVal.as.class_val;
+                    InstanceValue* instance = instance_create(class_def);
+                    Value inst_val = val_instance(instance);
+                    
+                    // Look for init method
+                    Method* init_method = class_find_method(class_def, "init", 4);
+                    if (init_method) {
+                        ProcStmt* init_stmt = (ProcStmt*)init_method->method_stmt;
+                        
+                        // Create method scope with self
+                        Env* method_env = env_create(env);
+                        env_define(method_env, "self", 4, inst_val);
+                        
+                        // Bind parameters (skip self as first param)
+                        int param_start = (init_stmt->param_count > 0 && 
+                                          strncmp(init_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
+                        
+                        for (int i = param_start; i < init_stmt->param_count; i++) {
+                            if (i - param_start < expr->as.call.arg_count) {
+                                Value arg = eval_expr(expr->as.call.args[i - param_start], env);
+                                env_define(method_env, init_stmt->params[i].start, 
+                                         init_stmt->params[i].length, arg);
+                            }
+                        }
+                        
+                        interpret(init_stmt->body, method_env);
+                    }
+                    
+                    return inst_val;
                 }
             }
 
-            // Check User Function Registry
+            // Regular function call
             ProcStmt* func = find_function(callee.start, callee.length);
             if (func) {
                 if (expr->as.call.arg_count != func->param_count) {
@@ -584,6 +638,46 @@ ExecResult interpret(Stmt* stmt, Env* env) {
 
         case STMT_PROC: {
             define_function(&stmt->as.proc);
+            return (ExecResult){ val_nil(), 0, 0, 0 };
+        }
+
+        case STMT_CLASS: {
+            // Get parent class if specified
+            ClassValue* parent = NULL;
+            if (stmt->as.class_stmt.has_parent) {
+                Value parent_val;
+                Token parent_name = stmt->as.class_stmt.parent;
+                if (env_get(env, parent_name.start, parent_name.length, &parent_val)) {
+                    if (parent_val.type == VAL_CLASS) {
+                        parent = parent_val.as.class_val;
+                    } else {
+                        fprintf(stderr, "Runtime Error: Parent must be a class.\n");
+                        return (ExecResult){ val_nil(), 0, 0, 0 };
+                    }
+                } else {
+                    fprintf(stderr, "Runtime Error: Undefined parent class.\n");
+                    return (ExecResult){ val_nil(), 0, 0, 0 };
+                }
+            }
+            
+            // Create class
+            Token name = stmt->as.class_stmt.name;
+            ClassValue* class_val = class_create(name.start, name.length, parent);
+            
+            // Add methods
+            Stmt* method = stmt->as.class_stmt.methods;
+            while (method != NULL) {
+                if (method->type == STMT_PROC) {
+                    ProcStmt* proc = &method->as.proc;
+                    class_add_method(class_val, proc->name.start, proc->name.length, (void*)proc);
+                }
+                method = method->next;
+            }
+            
+            // Register class in environment
+            Value class_value = val_class(class_val);
+            env_define(env, name.start, name.length, class_value);
+            
             return (ExecResult){ val_nil(), 0, 0, 0 };
         }
 
