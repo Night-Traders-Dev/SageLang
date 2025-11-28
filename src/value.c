@@ -73,6 +73,20 @@ Value val_tuple(Value* elements, int count) {
     return v;
 }
 
+Value val_class(ClassValue* class_val) {
+    Value v;
+    v.type = VAL_CLASS;
+    v.as.class_val = class_val;
+    return v;
+}
+
+Value val_instance(InstanceValue* instance) {
+    Value v;
+    v.type = VAL_INSTANCE;
+    v.as.instance = instance;
+    return v;
+}
+
 // ========== ARRAY OPERATIONS ==========
 
 void array_push(Value* arr, Value val) {
@@ -104,11 +118,9 @@ Value array_slice(Value* arr, int start, int end) {
     if (arr->type != VAL_ARRAY) return val_nil();
     ArrayValue* a = arr->as.array;
     
-    // Handle negative indices
     if (start < 0) start = a->count + start;
     if (end < 0) end = a->count + end;
     
-    // Clamp to valid range
     if (start < 0) start = 0;
     if (end > a->count) end = a->count;
     if (start >= end) return val_array();
@@ -126,15 +138,13 @@ void dict_set(Value* dict, const char* key, Value value) {
     if (dict->type != VAL_DICT) return;
     DictValue* d = dict->as.dict;
     
-    // Check if key already exists
     for (int i = 0; i < d->count; i++) {
         if (strcmp(d->entries[i].key, key) == 0) {
-            *(d->entries[i].value) = value;  // Update existing value
+            *(d->entries[i].value) = value;
             return;
         }
     }
     
-    // Add new entry
     if (d->count >= d->capacity) {
         d->capacity = d->capacity == 0 ? 8 : d->capacity * 2;
         d->entries = realloc(d->entries, sizeof(DictEntry) * d->capacity);
@@ -143,8 +153,8 @@ void dict_set(Value* dict, const char* key, Value value) {
     d->entries[d->count].key = malloc(strlen(key) + 1);
     strcpy(d->entries[d->count].key, key);
     
-    d->entries[d->count].value = malloc(sizeof(Value));  // Allocate Value
-    *(d->entries[d->count].value) = value;               // Copy value
+    d->entries[d->count].value = malloc(sizeof(Value));
+    *(d->entries[d->count].value) = value;
     d->count++;
 }
 
@@ -154,7 +164,7 @@ Value dict_get(Value* dict, const char* key) {
     
     for (int i = 0; i < d->count; i++) {
         if (strcmp(d->entries[i].key, key) == 0) {
-            return *(d->entries[i].value);  // Dereference pointer
+            return *(d->entries[i].value);
         }
     }
     return val_nil();
@@ -179,8 +189,7 @@ void dict_delete(Value* dict, const char* key) {
     for (int i = 0; i < d->count; i++) {
         if (strcmp(d->entries[i].key, key) == 0) {
             free(d->entries[i].key);
-            free(d->entries[i].value);  // Free Value pointer
-            // Shift remaining entries
+            free(d->entries[i].value);
             for (int j = i; j < d->count - 1; j++) {
                 d->entries[j] = d->entries[j + 1];
             }
@@ -209,7 +218,7 @@ Value dict_values(Value* dict) {
     
     Value result = val_array();
     for (int i = 0; i < d->count; i++) {
-        array_push(&result, *(d->entries[i].value));  // Dereference pointer
+        array_push(&result, *(d->entries[i].value));
     }
     return result;
 }
@@ -232,7 +241,6 @@ Value string_split(const char* str, const char* delimiter) {
     
     int del_len = strlen(delimiter);
     if (del_len == 0) {
-        // Split into individual characters
         for (int i = 0; str[i]; i++) {
             char* ch = malloc(2);
             ch[0] = str[i];
@@ -254,7 +262,6 @@ Value string_split(const char* str, const char* delimiter) {
         start = found + del_len;
     }
     
-    // Add remaining part
     char* part = malloc(strlen(start) + 1);
     strcpy(part, start);
     array_push(&result, val_string(part));
@@ -268,7 +275,6 @@ Value string_join(Value* arr, const char* separator) {
     
     if (a->count == 0) return val_string("");
     
-    // Calculate total length
     int total_len = 0;
     int sep_len = strlen(separator);
     
@@ -300,7 +306,6 @@ char* string_replace(const char* str, const char* old, const char* new_str) {
     int old_len = strlen(old);
     int new_len = strlen(new_str);
     
-    // Count occurrences
     int count = 0;
     const char* tmp = str;
     while ((tmp = strstr(tmp, old)) != NULL) {
@@ -314,12 +319,10 @@ char* string_replace(const char* str, const char* old, const char* new_str) {
         return result;
     }
     
-    // Allocate result
     int result_len = strlen(str) + count * (new_len - old_len);
     char* result = malloc(result_len + 1);
     result[0] = '\0';
     
-    // Build result
     const char* src = str;
     const char* found;
     
@@ -357,7 +360,6 @@ char* string_lower(const char* str) {
 char* string_strip(const char* str) {
     if (!str) return NULL;
     
-    // Find start (skip leading whitespace)
     while (*str && isspace(*str)) str++;
     
     if (*str == '\0') {
@@ -366,7 +368,6 @@ char* string_strip(const char* str) {
         return result;
     }
     
-    // Find end (skip trailing whitespace)
     const char* end = str + strlen(str) - 1;
     while (end > str && isspace(*end)) end--;
     
@@ -376,6 +377,84 @@ char* string_strip(const char* str) {
     result[len] = '\0';
     
     return result;
+}
+
+// ========== CLASS OPERATIONS ==========
+
+ClassValue* class_create(const char* name, int name_len, ClassValue* parent) {
+    ClassValue* class_val = malloc(sizeof(ClassValue));
+    class_val->name = malloc(name_len + 1);
+    strncpy(class_val->name, name, name_len);
+    class_val->name[name_len] = '\0';
+    class_val->name_len = name_len;
+    class_val->parent = parent;
+    class_val->methods = NULL;
+    class_val->method_count = 0;
+    return class_val;
+}
+
+void class_add_method(ClassValue* class_val, const char* name, int name_len, void* method_stmt) {
+    // Reallocate methods array
+    class_val->methods = realloc(class_val->methods, sizeof(Method) * (class_val->method_count + 1));
+    
+    Method* m = &class_val->methods[class_val->method_count];
+    m->name = malloc(name_len + 1);
+    strncpy(m->name, name, name_len);
+    m->name[name_len] = '\0';
+    m->name_len = name_len;
+    m->method_stmt = method_stmt;
+    
+    class_val->method_count++;
+}
+
+Method* class_find_method(ClassValue* class_val, const char* name, int name_len) {
+    // Search in current class
+    for (int i = 0; i < class_val->method_count; i++) {
+        if (class_val->methods[i].name_len == name_len &&
+            strncmp(class_val->methods[i].name, name, name_len) == 0) {
+            return &class_val->methods[i];
+        }
+    }
+    
+    // Search in parent class (inheritance)
+    if (class_val->parent) {
+        return class_find_method(class_val->parent, name, name_len);
+    }
+    
+    return NULL;
+}
+
+// ========== INSTANCE OPERATIONS ==========
+
+InstanceValue* instance_create(ClassValue* class_def) {
+    InstanceValue* instance = malloc(sizeof(InstanceValue));
+    instance->class_def = class_def;
+    
+    // Create fields dictionary
+    Value fields_dict = val_dict();
+    instance->fields = fields_dict.as.dict;
+    
+    return instance;
+}
+
+void instance_set_field(InstanceValue* instance, const char* name, Value value) {
+    if (!instance || !instance->fields) return;
+    
+    Value dict_val;
+    dict_val.type = VAL_DICT;
+    dict_val.as.dict = instance->fields;
+    
+    dict_set(&dict_val, name, value);
+}
+
+Value instance_get_field(InstanceValue* instance, const char* name) {
+    if (!instance || !instance->fields) return val_nil();
+    
+    Value dict_val;
+    dict_val.type = VAL_DICT;
+    dict_val.as.dict = instance->fields;
+    
+    return dict_get(&dict_val, name);
 }
 
 // ========== HELPERS ==========
@@ -423,7 +502,7 @@ void print_value(Value v) {
             for (int i = 0; i < d->count; i++) {
                 if (i > 0) printf(", ");
                 printf("\"%s\": ", d->entries[i].key);
-                print_value(*(d->entries[i].value));  // Dereference pointer
+                print_value(*(d->entries[i].value));
             }
             printf("}");
             break;
@@ -436,8 +515,18 @@ void print_value(Value v) {
                 if (i > 0) printf(", ");
                 print_value(t->elements[i]);
             }
-            if (t->count == 1) printf(","); // Single-element tuple
+            if (t->count == 1) printf(",");
             printf(")");
+            break;
+        }
+        
+        case VAL_CLASS: {
+            printf("<class %s>", v.as.class_val->name);
+            break;
+        }
+        
+        case VAL_INSTANCE: {
+            printf("<instance of %s>", v.as.instance->class_def->name);
             break;
         }
     }
@@ -459,6 +548,6 @@ int values_equal(Value a, Value b) {
             }
             return 1;
         }
-        default: return 0; // Arrays and dicts compare by reference
+        default: return 0;
     }
 }
