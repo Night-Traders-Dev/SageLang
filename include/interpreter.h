@@ -10,6 +10,8 @@ typedef struct {
     int is_returning;
     int is_breaking;
     int is_continuing;
+    int is_throwing;        // PHASE 7: Exception throwing
+    Value exception_value;  // PHASE 7: Exception being thrown
 } ExecResult;
 
 ExecResult interpret(Stmt* stmt, Env* env);
