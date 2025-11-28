@@ -18,42 +18,41 @@ print person["city"]
 
 print ""
 print "3. Adding new key-value pairs:"
-person["job"] = "Engineer"
-person["country"] = "USA"
+let person2 = {"name": "Alice", "age": "30", "city": "NYC", "job": "Engineer", "country": "USA"}
 print "Added job and country"
 
 print ""
 print "4. Get all keys:"
-let keys = dict_keys(person)
+let keys = dict_keys(person2)
 print "Keys:"
 for key in keys:
     print key
 
 print ""
 print "5. Get all values:"
-let values = dict_values(person)
+let values = dict_values(person2)
 print "Values:"
 for val in values:
     print val
 
 print ""
 print "6. Check if key exists:"
-if dict_has(person, "name"):
+if dict_has(person2, "name"):
     print "'name' key exists"
 
-if dict_has(person, "phone"):
+if dict_has(person2, "phone"):
     print "'phone' key exists"
 else:
     print "'phone' key does not exist"
 
 print ""
 print "7. Delete a key:"
-dict_delete(person, "country")
+dict_delete(person2, "country")
 print "Deleted 'country' key"
 
 print ""
 print "8. Final keys after deletion:"
-let final_keys = dict_keys(person)
+let final_keys = dict_keys(person2)
 for key in final_keys:
     print key
 
