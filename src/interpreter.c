@@ -695,6 +695,34 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             return (ExecResult){ val_nil(), 0, 0, 0 };
         }
 
+        case STMT_MATCH: {
+            // PHASE 7: Match expression evaluation
+            // Evaluate the match value once
+            Value match_value = eval_expr(stmt->as.match_stmt.value, env);
+            
+            // Try each case in order
+            for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+                CaseClause* case_clause = stmt->as.match_stmt.cases[i];
+                
+                // Evaluate the pattern
+                Value pattern_value = eval_expr(case_clause->pattern, env);
+                
+                // Compare using values_equal()
+                if (values_equal(match_value, pattern_value)) {
+                    // Execute this case body and return
+                    return interpret(case_clause->body, env);
+                }
+            }
+            
+            // If no case matched, try default clause
+            if (stmt->as.match_stmt.default_case != NULL) {
+                return interpret(stmt->as.match_stmt.default_case, env);
+            }
+            
+            // No match and no default - just continue
+            return (ExecResult){ val_nil(), 0, 0, 0 };
+        }
+
         case STMT_BREAK:
             return (ExecResult){ val_nil(), 0, 1, 0 };
 
