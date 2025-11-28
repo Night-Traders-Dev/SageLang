@@ -163,6 +163,19 @@ typedef struct {
     Stmt* methods;  // Linked list of method definitions (ProcStmt)
 } ClassStmt;
 
+// Match expression: match value: case pattern: ...
+typedef struct {
+    Expr* pattern;  // Pattern to match against
+    Stmt* body;     // Code to execute if matched
+} CaseClause;
+
+typedef struct {
+    Expr* value;           // Value to match
+    CaseClause** cases;    // Array of case clauses
+    int case_count;
+    Stmt* default_case;    // Optional default clause
+} MatchStmt;
+
 struct Stmt {
     enum {
         STMT_PRINT,
@@ -176,7 +189,8 @@ struct Stmt {
         STMT_RETURN,
         STMT_BREAK,
         STMT_CONTINUE,
-        STMT_CLASS
+        STMT_CLASS,
+        STMT_MATCH
     } type;
     union {
         PrintStmt print;
@@ -188,6 +202,7 @@ struct Stmt {
         ReturnStmt ret;
         ForStmt for_stmt;
         ClassStmt class_stmt;
+        MatchStmt match_stmt;
         Expr* expression;
     } as;
     Stmt* next;
@@ -222,5 +237,7 @@ Stmt* new_return_stmt(Expr* value);
 Stmt* new_break_stmt();
 Stmt* new_continue_stmt();
 Stmt* new_class_stmt(Token name, Token parent, int has_parent, Stmt* methods);
+Stmt* new_match_stmt(Expr* value, CaseClause** cases, int case_count, Stmt* default_case);
+CaseClause* new_case_clause(Expr* pattern, Stmt* body);
 
 #endif
