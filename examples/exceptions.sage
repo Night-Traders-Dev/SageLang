@@ -73,36 +73,27 @@ print "---"
 
 # Example 6: Validation pattern
 print "=== Example 6: Validation Pattern ==="
-proc validate_age(age):
-    if age < 0:
-        raise "Age cannot be negative"
-    if age > 150:
-        raise "Age too high"
-    return true
+proc check_value(val):
+    if val < 0:
+        raise "Negative value not allowed"
+    if val > 100:
+        raise "Value too large"
+    print "Value is valid"
 
 try:
-    validate_age(-5)
-    print "Age -5 is valid"
+    check_value(-5)
 catch e:
-    print "Invalid age -5: " + e
+    print "Error: " + e
 
 try:
-    validate_age(25)
-    print "Age 25 is valid"
+    check_value(150)
 catch e:
-    print "Invalid age 25: " + e
+    print "Error: " + e
 
 try:
-    validate_age(200)
-    print "Age 200 is valid"
+    check_value(50)
 catch e:
-    print "Invalid age 200: " + e
-
-try:
-    validate_age(30)
-    print "Age 30 is valid"
-catch e:
-    print "Invalid age 30: " + e
+    print "Error: " + e
 
 print "---"
 
