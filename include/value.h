@@ -55,6 +55,11 @@ struct InstanceValue {
     DictValue* fields;  // Instance variables
 };
 
+// PHASE 7: Exception structure
+typedef struct {
+    char* message;  // Error message
+} ExceptionValue;
+
 typedef enum {
     VAL_NUMBER,
     VAL_BOOL,
@@ -66,7 +71,8 @@ typedef enum {
     VAL_DICT,
     VAL_TUPLE,
     VAL_CLASS,
-    VAL_INSTANCE
+    VAL_INSTANCE,
+    VAL_EXCEPTION
 } ValueType;
 
 struct Value {
@@ -81,6 +87,7 @@ struct Value {
         TupleValue* tuple;
         ClassValue* class_val;
         InstanceValue* instance;
+        ExceptionValue* exception;
     } as;
 };
 
@@ -94,6 +101,7 @@ struct Value {
 #define IS_TUPLE(v)  ((v).type == VAL_TUPLE)
 #define IS_CLASS(v)  ((v).type == VAL_CLASS)
 #define IS_INSTANCE(v) ((v).type == VAL_INSTANCE)
+#define IS_EXCEPTION(v) ((v).type == VAL_EXCEPTION)
 
 // Macros for accessing values
 #define AS_NUMBER(v) ((v).as.number)
@@ -104,6 +112,7 @@ struct Value {
 #define AS_TUPLE(v)  ((v).as.tuple)
 #define AS_CLASS(v)  ((v).as.class_val)
 #define AS_INSTANCE(v) ((v).as.instance)
+#define AS_EXCEPTION(v) ((v).as.exception)
 
 // Constructors
 Value val_number(double value);
@@ -116,6 +125,7 @@ Value val_dict();
 Value val_tuple(Value* elements, int count);
 Value val_class(ClassValue* class_val);
 Value val_instance(InstanceValue* instance);
+Value val_exception(const char* message);
 
 // Helpers
 void print_value(Value v);
