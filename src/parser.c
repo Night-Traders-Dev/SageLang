@@ -261,13 +261,14 @@ static Expr* primary() {
     exit(1);
 }
 
-// NEW: Unary expressions (-, not)
+// NEW: Unary expressions (handle negative numbers)
 static Expr* unary() {
-    // Handle unary minus and not
-    if (match(TOKEN_MINUS) || match(TOKEN_NOT)) {
+    // Handle unary minus: -5, -x
+    if (match(TOKEN_MINUS)) {
         Token op = previous_token;
         Expr* right = unary();  // Right associative
-        return new_binary_expr(new_number_expr(0), op, right);  // Represent -x as (0 - x)
+        // Represent -x as (0 - x)
+        return new_binary_expr(new_number_expr(0), op, right);
     }
     
     return postfix();
@@ -339,10 +340,10 @@ static Expr* postfix() {
 }
 
 static Expr* term() {
-    Expr* expr = unary();  // Changed from postfix() to unary()
+    Expr* expr = unary();
     while (match(TOKEN_STAR) || match(TOKEN_SLASH)) {
         Token op = previous_token;
-        Expr* right = unary();  // Changed from postfix() to unary()
+        Expr* right = unary();
         expr = new_binary_expr(expr, op, right);
     }
     return expr;
@@ -557,8 +558,8 @@ static Stmt* statement() {
     if (match(TOKEN_IF)) return if_statement();
     if (match(TOKEN_WHILE)) return while_statement();
     if (match(TOKEN_FOR)) return for_statement();
-    if (match(TOKEN_TRY)) return try_statement();      // PHASE 7: Exception handling
-    if (match(TOKEN_RAISE)) return raise_statement();  // PHASE 7: Exception handling
+    if (match(TOKEN_TRY)) return try_statement();
+    if (match(TOKEN_RAISE)) return raise_statement();
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
 
