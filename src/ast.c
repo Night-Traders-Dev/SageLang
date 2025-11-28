@@ -241,3 +241,13 @@ Stmt* new_match_stmt(Expr* value, CaseClause** cases, int case_count, Stmt* defa
     s->next = NULL;
     return s;
 }
+
+// ========== PHASE 7: DEFER STATEMENT ==========
+
+Stmt* new_defer_stmt(Stmt* statement) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_DEFER;
+    s->as.defer.statement = statement;
+    s->next = NULL;
+    return s;
+}
