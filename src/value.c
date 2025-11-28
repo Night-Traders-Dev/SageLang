@@ -87,6 +87,19 @@ Value val_instance(InstanceValue* instance) {
     return v;
 }
 
+// PHASE 7: Exception constructor
+Value val_exception(const char* message) {
+    Value v;
+    v.type = VAL_EXCEPTION;
+    v.as.exception = malloc(sizeof(ExceptionValue));
+    v.as.exception->message = malloc(strlen(message) + 1);
+    strcpy(v.as.exception->message, message);
+    return v;
+}
+
+// Remaining code identical to before...
+// [I'll include the rest for completeness]
+
 // ========== ARRAY OPERATIONS ==========
 
 void array_push(Value* arr, Value val) {
@@ -394,7 +407,6 @@ ClassValue* class_create(const char* name, int name_len, ClassValue* parent) {
 }
 
 void class_add_method(ClassValue* class_val, const char* name, int name_len, void* method_stmt) {
-    // Reallocate methods array
     class_val->methods = realloc(class_val->methods, sizeof(Method) * (class_val->method_count + 1));
     
     Method* m = &class_val->methods[class_val->method_count];
@@ -408,7 +420,6 @@ void class_add_method(ClassValue* class_val, const char* name, int name_len, voi
 }
 
 Method* class_find_method(ClassValue* class_val, const char* name, int name_len) {
-    // Search in current class
     for (int i = 0; i < class_val->method_count; i++) {
         if (class_val->methods[i].name_len == name_len &&
             strncmp(class_val->methods[i].name, name, name_len) == 0) {
@@ -416,7 +427,6 @@ Method* class_find_method(ClassValue* class_val, const char* name, int name_len)
         }
     }
     
-    // Search in parent class (inheritance)
     if (class_val->parent) {
         return class_find_method(class_val->parent, name, name_len);
     }
@@ -430,7 +440,6 @@ InstanceValue* instance_create(ClassValue* class_def) {
     InstanceValue* instance = malloc(sizeof(InstanceValue));
     instance->class_def = class_def;
     
-    // Create fields dictionary
     Value fields_dict = val_dict();
     instance->fields = fields_dict.as.dict;
     
@@ -529,6 +538,11 @@ void print_value(Value v) {
             printf("<instance of %s>", v.as.instance->class_def->name);
             break;
         }
+        
+        case VAL_EXCEPTION: {
+            printf("Exception: %s", v.as.exception->message);
+            break;
+        }
     }
 }
 
@@ -548,6 +562,8 @@ int values_equal(Value a, Value b) {
             }
             return 1;
         }
+        case VAL_EXCEPTION: 
+            return strcmp(a.as.exception->message, b.as.exception->message) == 0;
         default: return 0;
     }
 }
