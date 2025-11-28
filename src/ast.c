@@ -221,3 +221,23 @@ Stmt* new_class_stmt(Token name, Token parent, int has_parent, Stmt* methods) {
     s->next = NULL;
     return s;
 }
+
+// ========== PHASE 7: MATCH EXPRESSION ==========
+
+CaseClause* new_case_clause(Expr* pattern, Stmt* body) {
+    CaseClause* c = malloc(sizeof(CaseClause));
+    c->pattern = pattern;
+    c->body = body;
+    return c;
+}
+
+Stmt* new_match_stmt(Expr* value, CaseClause** cases, int case_count, Stmt* default_case) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_MATCH;
+    s->as.match_stmt.value = value;
+    s->as.match_stmt.cases = cases;
+    s->as.match_stmt.case_count = case_count;
+    s->as.match_stmt.default_case = default_case;
+    s->next = NULL;
+    return s;
+}
