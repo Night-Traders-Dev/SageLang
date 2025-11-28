@@ -46,8 +46,8 @@ typedef struct {
 
 // Dictionary literal: {"key1": val1, "key2": val2}
 typedef struct {
-    char** keys;     // Array of string keys
-    Expr** values;   // Array of value expressions
+    char** keys;
+    Expr** values;
     int count;
 } DictExpr;
 
@@ -60,9 +60,22 @@ typedef struct {
 // Slice expression: arr[start:end]
 typedef struct {
     Expr* array;
-    Expr* start;  // Can be NULL for [:end]
-    Expr* end;    // Can be NULL for [start:]
+    Expr* start;
+    Expr* end;
 } SliceExpr;
+
+// Property access: object.property
+typedef struct {
+    Expr* object;
+    Token property;
+} GetExpr;
+
+// Property assignment: object.property = value
+typedef struct {
+    Expr* object;
+    Token property;
+    Expr* value;
+} SetExpr;
 
 struct Expr {
     enum {
@@ -77,7 +90,9 @@ struct Expr {
         EXPR_INDEX,
         EXPR_DICT,
         EXPR_TUPLE,
-        EXPR_SLICE
+        EXPR_SLICE,
+        EXPR_GET,
+        EXPR_SET
     } type;
     union {
         NumberExpr number;
@@ -91,6 +106,8 @@ struct Expr {
         DictExpr dict;
         TupleExpr tuple;
         SliceExpr slice;
+        GetExpr get;
+        SetExpr set;
     } as;
 };
 
@@ -133,10 +150,18 @@ typedef struct {
 } ReturnStmt;
 
 typedef struct {
-    Token variable;  // Loop variable (e.g., 'i' or 'item')
-    Expr* iterable;  // What we're iterating over (array or range)
-    Stmt* body;      // Loop body
+    Token variable;
+    Expr* iterable;
+    Stmt* body;
 } ForStmt;
+
+// Class definition: class Name(Parent): ...
+typedef struct {
+    Token name;
+    Token parent;  // Optional parent class
+    int has_parent;
+    Stmt* methods;  // Linked list of method definitions (ProcStmt)
+} ClassStmt;
 
 struct Stmt {
     enum {
@@ -150,7 +175,8 @@ struct Stmt {
         STMT_FOR,
         STMT_RETURN,
         STMT_BREAK,
-        STMT_CONTINUE
+        STMT_CONTINUE,
+        STMT_CLASS
     } type;
     union {
         PrintStmt print;
@@ -161,6 +187,7 @@ struct Stmt {
         ProcStmt proc;
         ReturnStmt ret;
         ForStmt for_stmt;
+        ClassStmt class_stmt;
         Expr* expression;
     } as;
     Stmt* next;
@@ -179,6 +206,8 @@ Expr* new_index_expr(Expr* array, Expr* index);
 Expr* new_dict_expr(char** keys, Expr** values, int count);
 Expr* new_tuple_expr(Expr** elements, int count);
 Expr* new_slice_expr(Expr* array, Expr* start, Expr* end);
+Expr* new_get_expr(Expr* object, Token property);
+Expr* new_set_expr(Expr* object, Token property, Expr* value);
 
 // Statement Constructors
 Stmt* new_print_stmt(Expr* expression);
@@ -192,5 +221,6 @@ Stmt* new_for_stmt(Token variable, Expr* iterable, Stmt* body);
 Stmt* new_return_stmt(Expr* value);
 Stmt* new_break_stmt();
 Stmt* new_continue_stmt();
+Stmt* new_class_stmt(Token name, Token parent, int has_parent, Stmt* methods);
 
 #endif
