@@ -81,8 +81,25 @@ static TokenType identifier_type() {
         case 'c':
             if (current - start > 1) {
                 switch (start[1]) {
+                    case 'a':
+                        if (current - start > 2 && start[2] == 's') return check_keyword(3, 1, "e", TOKEN_CASE);
+                        if (current - start > 2 && start[2] == 't') return check_keyword(3, 2, "ch", TOKEN_CATCH);
+                        break;
                     case 'l': return check_keyword(2, 3, "ass", TOKEN_CLASS);
                     case 'o': return check_keyword(2, 6, "ntinue", TOKEN_CONTINUE);
+                }
+            }
+            break;
+
+        case 'd':
+            if (current - start > 1) {
+                switch (start[1]) {
+                    case 'e':
+                        if (current - start > 2 && start[2] == 'f') {
+                            if (current - start > 3 && start[3] == 'a') return check_keyword(4, 3, "ult", TOKEN_DEFAULT);
+                            if (current - start > 3 && start[3] == 'e') return check_keyword(4, 1, "r", TOKEN_DEFER);
+                        }
+                        break;
                 }
             }
             break;
@@ -102,6 +119,7 @@ static TokenType identifier_type() {
             if (current - start > 1) {
                 switch (start[1]) {
                     case 'a': return check_keyword(2, 3, "lse", TOKEN_FALSE);
+                    case 'i': return check_keyword(2, 5, "nally", TOKEN_FINALLY);
                     case 'o': return check_keyword(2, 1, "r", TOKEN_FOR);
                 }
             }
@@ -120,6 +138,9 @@ static TokenType identifier_type() {
             break;
             
         case 'l': return check_keyword(1, 2, "et", TOKEN_LET);
+        
+        case 'm': return check_keyword(1, 4, "atch", TOKEN_MATCH);
+        
         case 'n': return check_keyword(1, 2, "il", TOKEN_NIL);
 
         case 'o': return check_keyword(1, 1, "r", TOKEN_OR);
@@ -135,13 +156,33 @@ static TokenType identifier_type() {
             }
             break;
 
-        case 'r': return check_keyword(1, 5, "eturn", TOKEN_RETURN);
+        case 'r':
+            if (current - start > 1) {
+                switch (start[1]) {
+                    case 'a': return check_keyword(2, 3, "ise", TOKEN_RAISE);
+                    case 'e': return check_keyword(2, 4, "turn", TOKEN_RETURN);
+                }
+            }
+            break;
         
         case 's': return check_keyword(1, 3, "elf", TOKEN_SELF);
         
-        case 't': return check_keyword(1, 3, "rue", TOKEN_TRUE);
+        case 't':
+            if (current - start > 1) {
+                switch (start[1]) {
+                    case 'r':
+                        if (current - start > 2 && start[2] == 'u') return check_keyword(3, 1, "e", TOKEN_TRUE);
+                        if (current - start > 2 && start[2] == 'y') return check_keyword(3, 0, "", TOKEN_TRY);
+                        break;
+                }
+            }
+            break;
+            
         case 'v': return check_keyword(1, 2, "ar", TOKEN_VAR);
+        
         case 'w': return check_keyword(1, 4, "hile", TOKEN_WHILE);
+        
+        case 'y': return check_keyword(1, 4, "ield", TOKEN_YIELD);
     }
     return TOKEN_IDENTIFIER;
 }
