@@ -97,8 +97,21 @@ Value val_exception(const char* message) {
     return v;
 }
 
-// Remaining code identical to before...
-// [I'll include the rest for completeness]
+// PHASE 7: Generator constructor
+Value val_generator(void* body, void* params, int param_count, Environment* closure) {
+    Value v;
+    v.type = VAL_GENERATOR;
+    v.as.generator = malloc(sizeof(GeneratorValue));
+    v.as.generator->body = body;
+    v.as.generator->params = params;
+    v.as.generator->param_count = param_count;
+    v.as.generator->closure = closure;
+    v.as.generator->gen_env = NULL;  // Created on first next() call
+    v.as.generator->is_started = 0;
+    v.as.generator->is_exhausted = 0;
+    v.as.generator->current_stmt = NULL;
+    return v;
+}
 
 // ========== ARRAY OPERATIONS ==========
 
@@ -543,6 +556,17 @@ void print_value(Value v) {
             printf("Exception: %s", v.as.exception->message);
             break;
         }
+        
+        case VAL_GENERATOR: {
+            if (v.as.generator->is_exhausted) {
+                printf("<generator (exhausted)>");
+            } else if (v.as.generator->is_started) {
+                printf("<generator (active)>");
+            } else {
+                printf("<generator>");
+            }
+            break;
+        }
     }
 }
 
@@ -564,6 +588,8 @@ int values_equal(Value a, Value b) {
         }
         case VAL_EXCEPTION: 
             return strcmp(a.as.exception->message, b.as.exception->message) == 0;
+        case VAL_GENERATOR:
+            return a.as.generator == b.as.generator;  // Same generator object
         default: return 0;
     }
 }
