@@ -1,6 +1,6 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: November 27, 2025, 8:18 PM EST  
+> **Last Updated**: November 28, 2025, 9:00 AM EST  
 > **Current Phase**: Phase 6 (COMPLETE) ✅ → Phase 8 (Next)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
@@ -140,7 +140,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 ---
 
 ### Phase 6: Object-Oriented Programming
-**Status**: ✅ **COMPLETE** (November 27, 2025, 8:18 PM EST)
+**Status**: ✅ **COMPLETE** (November 28, 2025, 9:00 AM EST)
 
 #### Classes & Objects ✅
 - [x] **Class definitions** - `class ClassName:` syntax
@@ -160,6 +160,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - [x] Property dictionary per instance
 - [x] `EXPR_GET` and `EXPR_SET` for properties
 - [x] `STMT_CLASS` for class definitions
+- [x] **Comparison operators** - Full support for `>=` and `<=` in parser and interpreter
 
 ---
 
@@ -301,7 +302,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 ## 📊 Progress Metrics
 
 - **Lines of C Code**: ~50,000+ (current implementation)
-- **Implemented Features**: 70/200+ planned (35%)
+- **Implemented Features**: 75/200+ planned (37%)
 - **Phases Completed**: 6/13 (46%) + Phase 7 (partial)
 - **Estimated Completion**: 2026-2027 (self-hosting)
 
