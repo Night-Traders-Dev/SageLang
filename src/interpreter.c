@@ -14,6 +14,31 @@
 #define EVAL_EXCEPTION(exc) ((ExecResult){ val_nil(), 0, 0, 0, 1, (exc) })
 #define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, val_nil() })
 
+// PHASE 7: Defer stack for managing deferred statements
+typedef struct DeferNode {
+    Stmt* statement;
+    struct DeferNode* next;
+} DeferNode;
+
+typedef struct {
+    DeferNode* head;
+} DeferStack;
+
+static DeferStack* create_defer_stack() {
+    DeferStack* stack = malloc(sizeof(DeferStack));
+    stack->head = NULL;
+    return stack;
+}
+
+static void push_defer(DeferStack* stack, Stmt* stmt) {
+    DeferNode* node = malloc(sizeof(DeferNode));
+    node->statement = stmt;
+    node->next = stack->head;
+    stack->head = node;
+}
+
+static void execute_defers(DeferStack* stack, Env* env);
+
 // --- Function Registry ---
 typedef struct ProcNode {
     const char* name;
@@ -300,6 +325,7 @@ static int is_truthy(Value v) {
 
 // --- Forward Declaration ---
 static ExecResult eval_expr(Expr* expr, Env* env);
+static ExecResult interpret_with_defer(Stmt* stmt, Env* env, DeferStack* defer_stack);
 
 // --- Evaluator ---
 
@@ -654,7 +680,6 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 }
 
                 ExecResult res = interpret(func->body, scope);
-                // CRITICAL: Propagate exceptions from function calls!
                 if (res.is_throwing) return res;
                 return EVAL_RESULT(res.value);
             }
@@ -668,7 +693,20 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
     }
 }
 
-ExecResult interpret(Stmt* stmt, Env* env) {
+// PHASE 7: Execute all deferred statements in LIFO order
+static void execute_defers(DeferStack* stack, Env* env) {
+    DeferNode* current = stack->head;
+    while (current != NULL) {
+        interpret(current->statement, env);
+        DeferNode* next = current->next;
+        free(current);
+        current = next;
+    }
+    stack->head = NULL;
+}
+
+// Internal interpreter with defer stack support
+static ExecResult interpret_with_defer(Stmt* stmt, Env* env, DeferStack* defer_stack) {
     if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
 
     switch (stmt->type) {
@@ -701,7 +739,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
         case STMT_BLOCK: {
             Stmt* current = stmt->as.block.statements;
             while (current != NULL) {
-                ExecResult res = interpret(current, env);
+                ExecResult res = interpret_with_defer(current, env, defer_stack);
                 if (res.is_returning || res.is_breaking || res.is_continuing || res.is_throwing) {
                     return res;
                 }
@@ -715,9 +753,9 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             if (cond_result.is_throwing) return cond_result;
             
             if (is_truthy(cond_result.value)) {
-                return interpret(stmt->as.if_stmt.then_branch, env);
+                return interpret_with_defer(stmt->as.if_stmt.then_branch, env, defer_stack);
             } else if (stmt->as.if_stmt.else_branch != NULL) {
-                return interpret(stmt->as.if_stmt.else_branch, env);
+                return interpret_with_defer(stmt->as.if_stmt.else_branch, env, defer_stack);
             }
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
@@ -728,7 +766,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 if (cond_result.is_throwing) return cond_result;
                 if (!is_truthy(cond_result.value)) break;
                 
-                ExecResult res = interpret(stmt->as.while_stmt.body, env);
+                ExecResult res = interpret_with_defer(stmt->as.while_stmt.body, env, defer_stack);
                 if (res.is_returning || res.is_throwing) return res;
                 if (res.is_breaking) break;
                 if (res.is_continuing) continue;
@@ -753,7 +791,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             for (int i = 0; i < arr->count; i++) {
                 env_define(loop_env, var.start, var.length, arr->elements[i]);
 
-                ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
+                ExecResult res = interpret_with_defer(stmt->as.for_stmt.body, loop_env, defer_stack);
                 if (res.is_returning || res.is_throwing) return res;
                 if (res.is_breaking) break;
                 if (res.is_continuing) continue;
@@ -820,7 +858,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
         }
 
         case STMT_TRY: {
-            ExecResult try_result = interpret(stmt->as.try_stmt.try_block, env);
+            ExecResult try_result = interpret_with_defer(stmt->as.try_stmt.try_block, env, defer_stack);
             
             if (try_result.is_throwing) {
                 for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
@@ -836,7 +874,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                     }
                     env_define(catch_env, var.start, var.length, exc_msg);
                     
-                    ExecResult catch_result = interpret(catch_clause->body, catch_env);
+                    ExecResult catch_result = interpret_with_defer(catch_clause->body, catch_env, defer_stack);
                     if (!catch_result.is_throwing) {
                         try_result = catch_result;
                         break;
@@ -846,7 +884,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             }
             
             if (stmt->as.try_stmt.finally_block != NULL) {
-                interpret(stmt->as.try_stmt.finally_block, env);
+                interpret_with_defer(stmt->as.try_stmt.finally_block, env, defer_stack);
             }
             
             return try_result;
@@ -865,9 +903,61 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             return (ExecResult){ val_nil(), 0, 0, 0, 1, exc_val };
         }
 
-        case STMT_MATCH:
-        case STMT_DEFER:
+        // PHASE 7: Match statement
+        case STMT_MATCH: {
+            ExecResult value_result = eval_expr(stmt->as.match_stmt.value, env);
+            if (value_result.is_throwing) return value_result;
+            Value match_value = value_result.value;
+            
+            // Try each case
+            for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+                CaseClause* case_clause = stmt->as.match_stmt.cases[i];
+                ExecResult pattern_result = eval_expr(case_clause->pattern, env);
+                if (pattern_result.is_throwing) return pattern_result;
+                
+                // Check if pattern matches
+                if (values_equal(match_value, pattern_result.value)) {
+                    return interpret_with_defer(case_clause->body, env, defer_stack);
+                }
+            }
+            
+            // No case matched, execute default if present
+            if (stmt->as.match_stmt.default_case != NULL) {
+                return interpret_with_defer(stmt->as.match_stmt.default_case, env, defer_stack);
+            }
+            
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+        }
+
+        // PHASE 7: Defer statement
+        case STMT_DEFER: {
+            push_defer(defer_stack, stmt->as.defer.statement);
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+        }
+
+        // PHASE 7: Yield statement (basic implementation - placeholder for full generators)
+        case STMT_YIELD: {
+            // For now, yield just evaluates the expression and returns nil
+            // Full generator support would require saving/restoring execution state
+            if (stmt->as.yield_stmt.value != NULL) {
+                ExecResult result = eval_expr(stmt->as.yield_stmt.value, env);
+                if (result.is_throwing) return result;
+                // In a full implementation, this value would be yielded to the caller
+            }
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+        }
     }
     return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+}
+
+// Public interpret function that manages defer stack
+ExecResult interpret(Stmt* stmt, Env* env) {
+    DeferStack* defer_stack = create_defer_stack();
+    ExecResult result = interpret_with_defer(stmt, env, defer_stack);
+    
+    // Execute deferred statements before returning
+    execute_defers(defer_stack, env);
+    free(defer_stack);
+    
+    return result;
 }
