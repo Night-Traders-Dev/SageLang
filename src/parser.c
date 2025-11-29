@@ -482,6 +482,13 @@ static Stmt* while_statement() {
     return new_while_stmt(condition, body);
 }
 
+// PHASE 7: Defer statement parser
+static Stmt* defer_statement() {
+    // defer statement (single statement only)
+    Stmt* stmt = statement();
+    return new_defer_stmt(stmt);
+}
+
 static Stmt* proc_declaration() {
     if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_INIT) {
         Token name = current_token;
@@ -571,6 +578,7 @@ static Stmt* statement() {
     if (match(TOKEN_IF)) return if_statement();
     if (match(TOKEN_WHILE)) return while_statement();
     if (match(TOKEN_FOR)) return for_statement();
+    if (match(TOKEN_DEFER)) return defer_statement();  // PHASE 7: Defer
     if (match(TOKEN_TRY)) return try_statement();
     if (match(TOKEN_RAISE)) return raise_statement();
     if (match(TOKEN_YIELD)) return yield_statement();  // NEW: Add yield support

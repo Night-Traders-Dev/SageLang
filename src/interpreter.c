@@ -9,6 +9,67 @@
 #include "gc.h"
 #include "ast.h"
 
+// ========== PHASE 7: DEFER STACK ==========
+
+typedef struct {
+    Stmt** statements;   // Array of deferred statements
+    int count;           // Number of deferred statements
+    int capacity;        // Capacity of array
+} DeferStack;
+
+static DeferStack* defer_stack = NULL;
+
+static void defer_stack_init() {
+    if (defer_stack == NULL) {
+        defer_stack = malloc(sizeof(DeferStack));
+        defer_stack->statements = NULL;
+        defer_stack->count = 0;
+        defer_stack->capacity = 0;
+    }
+}
+
+static void defer_stack_push(Stmt* stmt) {
+    defer_stack_init();
+    
+    if (defer_stack->count >= defer_stack->capacity) {
+        defer_stack->capacity = defer_stack->capacity == 0 ? 4 : defer_stack->capacity * 2;
+        defer_stack->statements = realloc(defer_stack->statements, 
+                                         sizeof(Stmt*) * defer_stack->capacity);
+    }
+    
+    defer_stack->statements[defer_stack->count++] = stmt;
+}
+
+static void defer_stack_execute(Env* env) {
+    if (defer_stack == NULL || defer_stack->count == 0) return;
+    
+    // Execute in LIFO order (reverse)
+    for (int i = defer_stack->count - 1; i >= 0; i--) {
+        interpret(defer_stack->statements[i], env);
+    }
+    
+    // Clear the defer stack
+    defer_stack->count = 0;
+}
+
+static int defer_stack_save() {
+    defer_stack_init();
+    return defer_stack->count;
+}
+
+static void defer_stack_restore(int saved_count, Env* env) {
+    if (defer_stack == NULL) return;
+    
+    // Execute defers added in this scope
+    for (int i = defer_stack->count - 1; i >= saved_count; i--) {
+        interpret(defer_stack->statements[i], env);
+    }
+    
+    // Restore stack to saved state
+    defer_stack->count = saved_count;
+}
+
+// === Function Registry ===
 // Helper macro for creating normal expression results
 #define EVAL_RESULT(v) ((ExecResult){ (v), 0, 0, 0, 0, val_nil() })
 #define EVAL_EXCEPTION(exc) ((ExecResult){ val_nil(), 0, 0, 0, 1, (exc) })
@@ -44,7 +105,7 @@ static ProcStmt* find_function(const char* name, int len) {
     return NULL;
 }
 
-// --- Native Functions ---
+// === Native Functions ===
 
 static Value clock_native(int argCount, Value* args) {
     return val_number((double)clock() / CLOCKS_PER_SEC);
@@ -291,17 +352,19 @@ void init_stdlib(Env* env) {
     env_define(env, "gc_disable", 10, val_native(gc_disable_native));
 }
 
-// --- Helper: Truthiness ---
+// === Helper: Truthiness ===
 static int is_truthy(Value v) {
     if (IS_NIL(v)) return 0;
     if (IS_BOOL(v)) return AS_BOOL(v);
     return 1; 
 }
 
+// === Forward Declaration ===
+static Value eval_expr(Expr* expr, Env* env);
 // --- Forward Declaration ---
 static ExecResult eval_expr(Expr* expr, Env* env);
 
-// --- Evaluator ---
+// === Expression Evaluator ===
 
 static ExecResult eval_binary(BinaryExpr* b, Env* env) {
     ExecResult left_result = eval_expr(b->left, env);
@@ -309,6 +372,15 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
     Value left = left_result.value;
 
     if (b->op.type == TOKEN_OR) {
+        if (is_truthy(left)) return val_bool(1);
+        Value right = eval_expr(b->right, env);
+        return val_bool(is_truthy(right));
+    }
+
+    if (b->op.type == TOKEN_AND) {
+        if (!is_truthy(left)) return val_bool(0);
+        Value right = eval_expr(b->right, env);
+        return val_bool(is_truthy(right));
         if (is_truthy(left)) {
             return EVAL_RESULT(val_bool(1));
         }
@@ -653,7 +725,13 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     env_define(scope, paramName.start, paramName.length, arg_result.value);
                 }
 
+                // Save defer stack before function call
+                int saved_defers = defer_stack_save();
                 ExecResult res = interpret(func->body, scope);
+                // Restore defer stack after function call
+                defer_stack_restore(saved_defers, scope);
+                
+                return res.value;
                 // CRITICAL: Propagate exceptions from function calls!
                 if (res.is_throwing) return res;
                 return EVAL_RESULT(res.value);
@@ -667,6 +745,8 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             return EVAL_RESULT(val_nil());
     }
 }
+
+// === Statement Interpreter ===
 
 ExecResult interpret(Stmt* stmt, Env* env) {
     if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
@@ -699,14 +779,23 @@ ExecResult interpret(Stmt* stmt, Env* env) {
         }
 
         case STMT_BLOCK: {
+            int saved_defers = defer_stack_save();
+            
             Stmt* current = stmt->as.block.statements;
             while (current != NULL) {
                 ExecResult res = interpret(current, env);
+                if (res.is_returning || res.is_breaking || res.is_continuing) {
+                    // Execute defers before exiting block
+                    defer_stack_restore(saved_defers, env);
                 if (res.is_returning || res.is_breaking || res.is_continuing || res.is_throwing) {
                     return res;
                 }
                 current = current->next;
             }
+            
+            // Execute defers at end of block
+            defer_stack_restore(saved_defers, env);
+            return (ExecResult){ val_nil(), 0, 0, 0 };
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
         }
 
@@ -760,6 +849,12 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             }
 
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+        }
+
+        case STMT_DEFER: {
+            // PHASE 7: Add statement to defer stack
+            defer_stack_push(stmt->as.defer.statement);
+            return (ExecResult){ val_nil(), 0, 0, 0 };
         }
 
         case STMT_BREAK:

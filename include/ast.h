@@ -218,6 +218,7 @@ struct Stmt {
         STMT_CONTINUE,
         STMT_CLASS,
         STMT_MATCH,
+        STMT_DEFER
         STMT_DEFER,
         STMT_TRY,
         STMT_RAISE,
