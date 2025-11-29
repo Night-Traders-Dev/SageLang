@@ -256,8 +256,8 @@ static Value gc_disable_native(int argCount, Value* args) {
     return val_nil();
 }
 
-// PHASE 7: Generator next() function - Forward declaration
-static ExecResult interpret(Stmt* stmt, Env* env);
+// PHASE 7: Generator next() function - Forward declaration (REMOVED static keyword)
+ExecResult interpret(Stmt* stmt, Env* env);
 
 static Value native_next(int arg_count, Value* args) {
     if (arg_count != 1) {
