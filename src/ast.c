@@ -241,3 +241,51 @@ Stmt* new_match_stmt(Expr* value, CaseClause** cases, int case_count, Stmt* defa
     s->next = NULL;
     return s;
 }
+
+// ========== PHASE 7: DEFER STATEMENT ==========
+
+Stmt* new_defer_stmt(Stmt* statement) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_DEFER;
+    s->as.defer.statement = statement;
+    s->next = NULL;
+    return s;
+}
+
+// ========== PHASE 7: EXCEPTION HANDLING ==========
+
+CatchClause* new_catch_clause(Token exception_var, Stmt* body) {
+    CatchClause* c = malloc(sizeof(CatchClause));
+    c->exception_var = exception_var;
+    c->body = body;
+    return c;
+}
+
+Stmt* new_try_stmt(Stmt* try_block, CatchClause** catches, int catch_count, Stmt* finally_block) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_TRY;
+    s->as.try_stmt.try_block = try_block;
+    s->as.try_stmt.catches = catches;
+    s->as.try_stmt.catch_count = catch_count;
+    s->as.try_stmt.finally_block = finally_block;
+    s->next = NULL;
+    return s;
+}
+
+Stmt* new_raise_stmt(Expr* exception) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_RAISE;
+    s->as.raise.exception = exception;
+    s->next = NULL;
+    return s;
+}
+
+// ========== PHASE 7: GENERATORS (YIELD) ==========
+
+Stmt* new_yield_stmt(Expr* value) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_YIELD;
+    s->as.yield_stmt.value = value;
+    s->next = NULL;
+    return s;
+}

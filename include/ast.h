@@ -176,6 +176,33 @@ typedef struct {
     Stmt* default_case;    // Optional default clause
 } MatchStmt;
 
+// PHASE 7: Defer statement
+typedef struct {
+    Stmt* statement;  // Statement to execute on scope exit
+} DeferStmt;
+
+// PHASE 7: Exception handling
+typedef struct {
+    Token exception_var;   // Variable to bind exception to
+    Stmt* body;            // Code to execute if exception caught
+} CatchClause;
+
+typedef struct {
+    Stmt* try_block;       // Code to try
+    CatchClause** catches; // Array of catch handlers
+    int catch_count;
+    Stmt* finally_block;   // Optional finally block (always executes)
+} TryStmt;
+
+typedef struct {
+    Expr* exception;       // Exception value to raise
+} RaiseStmt;
+
+// PHASE 7: Yield statement (generators)
+typedef struct {
+    Expr* value;  // Expression to yield (can be NULL for yield without value)
+} YieldStmt;
+
 struct Stmt {
     enum {
         STMT_PRINT,
@@ -190,7 +217,12 @@ struct Stmt {
         STMT_BREAK,
         STMT_CONTINUE,
         STMT_CLASS,
-        STMT_MATCH
+        STMT_MATCH,
+        STMT_DEFER
+        STMT_DEFER,
+        STMT_TRY,
+        STMT_RAISE,
+        STMT_YIELD  // NEW: Generator yield
     } type;
     union {
         PrintStmt print;
@@ -203,6 +235,10 @@ struct Stmt {
         ForStmt for_stmt;
         ClassStmt class_stmt;
         MatchStmt match_stmt;
+        DeferStmt defer;
+        TryStmt try_stmt;
+        RaiseStmt raise;
+        YieldStmt yield_stmt;  // NEW: Generator yield
         Expr* expression;
     } as;
     Stmt* next;
@@ -239,5 +275,10 @@ Stmt* new_continue_stmt();
 Stmt* new_class_stmt(Token name, Token parent, int has_parent, Stmt* methods);
 Stmt* new_match_stmt(Expr* value, CaseClause** cases, int case_count, Stmt* default_case);
 CaseClause* new_case_clause(Expr* pattern, Stmt* body);
+Stmt* new_defer_stmt(Stmt* statement);
+Stmt* new_try_stmt(Stmt* try_block, CatchClause** catches, int catch_count, Stmt* finally_block);
+CatchClause* new_catch_clause(Token exception_var, Stmt* body);
+Stmt* new_raise_stmt(Expr* exception);
+Stmt* new_yield_stmt(Expr* value);  // NEW: Generator yield constructor
 
 #endif

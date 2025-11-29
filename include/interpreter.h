@@ -10,6 +10,9 @@ typedef struct {
     int is_returning;
     int is_breaking;
     int is_continuing;
+    int is_throwing;
+    Value exception_value;
+    int is_yielding;  // NEW: For generator yield support
 } ExecResult;
 
 ExecResult interpret(Stmt* stmt, Env* env);

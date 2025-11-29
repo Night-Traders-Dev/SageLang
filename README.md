@@ -2,18 +2,26 @@
 
 **A clean, indentation-based systems programming language built in C.**
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It is currently in the **advanced development phase**, with a fully working interpreter featuring **Object-Oriented Programming**, **Garbage Collection**, and rich data structures.
+Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It is currently in the **advanced development phase**, with a fully working interpreter featuring **Object-Oriented Programming**, **Exception Handling**, **Garbage Collection**, and rich data structures.
 
 ## 🚀 Features (Implemented)
 
 ### Core Language
 - **Indentation-based syntax**: No braces `{}` for blocks; just clean, consistent indentation
-- **Type System**: Support for **Integers**, **Strings**, **Booleans**, **Nil**, **Arrays**, **Dictionaries**, **Tuples**, **Classes**, and **Instances**
+- **Type System**: Support for **Integers**, **Strings**, **Booleans**, **Nil**, **Arrays**, **Dictionaries**, **Tuples**, **Classes**, **Instances**, and **Exceptions**
 - **Functions**: Define functions with `proc name(args):` with full recursion, closures, and first-class function support
-- **Control Flow**: `if`/`else`, `while`, `for` loops, `break`, and `continue`
-- **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical (`and`, `or`, `not`)
+- **Control Flow**: `if`/`else`, `while`, `for` loops, `break`, `continue`, and **exception handling**
+- **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical (`and`, `or`), unary (`-`)
 
-### Object-Oriented Programming 🎉 **COMPLETE**
+### Exception Handling 🎉 **NEW**
+- **Try/Catch/Finally**: Full exception handling with `try:`, `catch e:`, and `finally:`
+- **Raise Statements**: Throw exceptions with `raise "error message"`
+- **Exception Propagation**: Exceptions bubble through function calls
+- **Finally Blocks**: Cleanup code that always executes
+- **Nested Exceptions**: Catch and re-raise in nested try blocks
+- **Type Safety**: Exception type with message field
+
+### Object-Oriented Programming ✅
 - **Classes**: `class ClassName:` with full inheritance support
 - **Constructors**: `init(self, ...)` method for initialization
 - **Methods**: Functions with automatic `self` binding
@@ -37,9 +45,10 @@ Sage is a new programming language that combines the readability of Python (inde
 - **Methods**: `split()`, `join()`, `replace()`, `upper()`, `lower()`, `strip()`
 - **Concatenation**: `"Hello" + " World"`
 - **Indexing**: Access individual characters
+- **Conversion**: `str()` function for number-to-string conversion
 
 ### Standard Library (30+ Native Functions)
-- **Core**: `print()`, `input()`, `clock()`, `tonumber()`, `len()`
+- **Core**: `print()`, `input()`, `clock()`, `tonumber()`, `str()`, `len()`
 - **Arrays**: `push()`, `pop()`, `range()`, `slice()`
 - **Strings**: `split()`, `join()`, `replace()`, `upper()`, `lower()`, `strip()`
 - **Dictionaries**: `dict_keys()`, `dict_values()`, `dict_has()`, `dict_delete()`
@@ -68,10 +77,58 @@ This produces the `sage` executable.
 
 3. Run examples:
 ```bash
+./sage examples/exceptions.sage
 ./sage examples/phase6_classes.sage
 ```
 
 ## 📝 Example Code
+
+### Exception Handling
+
+**`examples/exceptions.sage`**
+
+```sage
+# Basic try/catch
+try:
+    print "Attempting risky operation"
+    raise "Something went wrong!"
+    print "This won't execute"
+catch e:
+    print "Caught: " + e
+
+# Function exceptions
+proc divide(a, b):
+    if b == 0:
+        raise "Division by zero!"
+    return a / b
+
+try:
+    let result = divide(10, 2)
+    print "Result: " + str(result)
+    let bad = divide(10, 0)  # Raises exception
+    print "Won't reach here"
+catch e:
+    print "Math error: " + e
+
+# Finally blocks (always execute)
+try:
+    print "Trying..."
+    raise "Error"
+catch e:
+    print "Caught: " + e
+finally:
+    print "Cleanup always runs"
+
+# Resource cleanup pattern
+proc process_file(filename):
+    print "Opening: " + filename
+    try:
+        if filename == "bad.txt":
+            raise "File not found"
+        print "Processing: " + filename
+    finally:
+        print "Closing: " + filename
+```
 
 ### Object-Oriented Programming
 
@@ -85,11 +142,8 @@ class Person:
         self.age = age
     
     proc greet(self):
-        print "Hello, my name is"
-        print self.name
-        print "I am"
-        print self.age
-        print "years old"
+        print "Hello, my name is " + self.name
+        print "I am " + str(self.age) + " years old"
     
     proc birthday(self):
         self.age = self.age + 1
@@ -129,9 +183,7 @@ class Dog(Animal):
         print "Woof! Woof!"
     
     proc info(self):
-        print self.name
-        print "is a"
-        print self.breed
+        print self.name + " is a " + self.breed
 
 let dog = Dog("Rex", "Golden Retriever")
 dog.speak()  # Prints "Woof! Woof!"
@@ -185,8 +237,8 @@ gc_enable()
 - [x] **Phase 3: Types & Stdlib** (Strings, Booleans, Native Functions)
 - [x] **Phase 4: Memory Management** (Mark-and-Sweep Garbage Collection)
 - [x] **Phase 5: Advanced Data Structures** (Arrays, Dictionaries, Tuples, Slicing)
-- [x] **Phase 6: Object-Oriented Programming** (Classes, Inheritance, Methods) ✅ **COMPLETE**
-- [x] **Phase 7: Control Flow** (Partial: `break`, `continue`) 🔄
+- [x] **Phase 6: Object-Oriented Programming** (Classes, Inheritance, Methods) ✅
+- [x] **Phase 7: Control Flow** (for, break, continue, **exception handling**) 🔄 60%
 - [ ] **Phase 8: Modules & Packages** (Imports, Package Manager) 📋 **NEXT**
 - [ ] **Phase 9: Low-Level Programming** ⭐ *Planned*
   - Inline assembly (x86-64, ARM, RISC-V)
@@ -206,6 +258,7 @@ Sage aims to be a **systems programming language** that:
 - Maintains clean, readable syntax (like Python)
 - Provides low-level control (like C/Rust)
 - Supports modern OOP with classes and inheritance
+- Has robust exception handling for error management
 - Enables inline assembly for performance-critical code
 - Compiles to native code via C or LLVM
 - Eventually becomes self-hosted
@@ -246,34 +299,35 @@ proc write_memory(ptr: *mut u8, value: u8)
 ## 📊 Project Stats
 
 - **Language**: C
-- **Lines of Code**: ~50,000+
-- **Phases Completed**: 6/13 (46%)
-- **Status**: Advanced Development (OOP Complete)
+- **Lines of Code**: ~52,000+
+- **Phases Completed**: 6.6/13 (51%)
+- **Status**: Advanced Development (OOP + Exceptions Complete)
 - **License**: MIT
-- **Current Version**: v0.6.0
+- **Current Version**: v0.7.0
 
 ## 💾 Project Structure
 
 ```
 sage/
 ├── include/          # Header files
-│   ├── ast.h         # AST nodes (classes, methods, properties)
+│   ├── ast.h         # AST nodes (classes, methods, exceptions)
 │   ├── lexer.h       # Tokenization
 │   ├── parser.h      # Syntax analysis
 │   ├── env.h         # Scope management
-│   ├── value.h       # Type system (classes, instances)
+│   ├── value.h       # Type system (classes, instances, exceptions)
 │   ├── gc.h          # Garbage collection
-│   └── interpreter.h # Evaluator
+│   └── interpreter.h # Evaluator (ExecResult with exceptions)
 ├── src/              # C implementation
 │   ├── main.c        # Entry point
-│   ├── lexer.c       # Tokenizer (class, self, init keywords)
-│   ├── parser.c      # Parser (class definitions, property access)
+│   ├── lexer.c       # Tokenizer (try, catch, finally, raise)
+│   ├── parser.c      # Parser (exception statements, unary ops)
 │   ├── ast.c         # AST constructors
-│   ├── env.c         # Environment
-│   ├── value.c       # Values (ClassValue, InstanceValue)
+│   ├── env.h         # Environment
+│   ├── value.c       # Values (ExceptionValue type)
 │   ├── gc.c          # Mark-and-sweep GC
-│   └── interpreter.c # Evaluator (class instantiation, methods)
+│   └── interpreter.c # Evaluator (exception propagation)
 ├── examples/         # Example programs
+│   ├── exceptions.sage      # Exception handling demo ✨ NEW
 │   ├── phase6_classes.sage  # OOP demonstration
 │   ├── phase5_data.sage     # Data structures
 │   └── phase4_gc_demo.sage  # GC examples
@@ -287,9 +341,9 @@ sage/
 Sage is an educational project aimed at understanding compiler construction and language design. Contributions are welcome!
 
 ### Current Focus Areas
-1. **Module System**: Phase 8 implementation (imports, packages)
-2. **Complete Control Flow**: `switch`/`match`, exception handling
-3. **Testing**: Write test cases for OOP features
+1. **Complete Phase 7**: Match expressions, defer statements, generators
+2. **Module System**: Phase 8 implementation (imports, packages)
+3. **Testing**: Write test cases for exception handling and OOP
 4. **Standard Library**: Adding more native functions
 5. **Documentation**: Improving code comments and guides
 
@@ -323,6 +377,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 **Built with ❤️ for systems programming enthusiasts**
 
 **Recent Milestones:**
-- ✅ November 28, 2025: Phase 6 Complete - Object-Oriented Programming with full OOP support
-- ✅ November 27, 2025: Phase 5 Complete - Advanced Data Structures (Arrays, Dicts, Tuples)
-- ✅ November 27, 2025: Phase 4 Complete - Garbage Collection (Mark-and-Sweep GC)
+- ✅ November 28, 2025, 11:30 AM: Phase 7 Exception Handling Complete - try/catch/finally/raise fully working
+- ✅ November 28, 2025, 9:00 AM: Phase 6 Complete - Object-Oriented Programming
+- ✅ November 27, 2025: Phase 5 Complete - Advanced Data Structures
+- ✅ November 27, 2025: Phase 4 Complete - Garbage Collection
