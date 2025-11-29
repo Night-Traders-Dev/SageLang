@@ -35,6 +35,14 @@ Sage is a new programming language that combines the readability of Python (inde
 - **Tuples**: Immutable sequences `(val1, val2, val3)`
 - **Array Slicing**: Pythonic slice syntax for arrays
 
+- ### Generators & Lazy Evaluation 🆕
+
+- **`yield` statements**: Create generator functions for lazy evaluation
+- **Iterator protocol**: Use `next(generator)` to get values on-demand
+- **Infinite sequences**: Generators can produce unlimited values
+- **State preservation**: Generator state persists between `next()` calls
+- **Memory efficient**: Only compute values when needed
+
 ### Memory Management
 - **Garbage Collection**: Automatic mark-and-sweep GC
 - **GC Control**: `gc_collect()`, `gc_enable()`, `gc_disable()`
@@ -212,6 +220,39 @@ let point = (10, 20, 30)
 print point[0]  # 10
 ```
 
+### Generators
+
+```sage
+# Basic generator with yield
+proc count_up_to(n):
+    let i = 0
+    while i < n:
+        yield i
+        i = i + 1
+
+let gen = count_up_to(5)
+print next(gen)  # 0
+print next(gen)  # 1
+print next(gen)  # 2
+
+# Infinite Fibonacci generator
+proc fibonacci():
+    let a = 0
+    let b = 1
+    while true:
+        yield a
+        let temp = a + b
+        a = b
+        b = temp
+
+let fib = fibonacci()
+print next(fib)  # 0
+print next(fib)  # 1
+print next(fib)  # 1
+print next(fib)  # 2
+print next(fib)  # 3
+```
+
 ### Memory Management
 
 ```sage
@@ -238,7 +279,7 @@ gc_enable()
 - [x] **Phase 4: Memory Management** (Mark-and-Sweep Garbage Collection)
 - [x] **Phase 5: Advanced Data Structures** (Arrays, Dictionaries, Tuples, Slicing)
 - [x] **Phase 6: Object-Oriented Programming** (Classes, Inheritance, Methods) ✅
-- [x] **Phase 7: Control Flow** (for, break, continue, **exception handling**) 🔄 60%
+- [x] **Phase 7: Control Flow** (for, break, continue, **exception handling**)**generators**) ✅ 100%
 - [ ] **Phase 8: Modules & Packages** (Imports, Package Manager) 📋 **NEXT**
 - [ ] **Phase 9: Low-Level Programming** ⭐ *Planned*
   - Inline assembly (x86-64, ARM, RISC-V)
