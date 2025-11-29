@@ -10,9 +10,9 @@
 #include "ast.h"
 
 // Helper macro for creating normal expression results
-#define EVAL_RESULT(v) ((ExecResult){ (v), 0, 0, 0, 0, val_nil() })
-#define EVAL_EXCEPTION(exc) ((ExecResult){ val_nil(), 0, 0, 0, 1, (exc) })
-#define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, val_nil() })
+#define EVAL_RESULT(v) ((ExecResult){ (v), 0, 0, 0, 0, val_nil(), 0, NULL })
+#define EVAL_EXCEPTION(exc) ((ExecResult){ val_nil(), 0, 0, 0, 1, (exc), 0, NULL })
+#define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, val_nil(), 0, NULL })
 
 // --- Function Registry ---
 typedef struct ProcNode {
@@ -256,6 +256,57 @@ static Value gc_disable_native(int argCount, Value* args) {
     return val_nil();
 }
 
+// PHASE 7: Generator next() function - Forward declaration
+static ExecResult interpret(Stmt* stmt, Env* env);
+
+static Value native_next(int arg_count, Value* args) {
+    if (arg_count != 1) {
+        fprintf(stderr, "next() expects 1 argument\n");
+        exit(1);
+    }
+    if (!IS_GENERATOR(args[0])) {
+        fprintf(stderr, "next() expects a generator\n");
+        exit(1);
+    }
+    
+    GeneratorValue* gen = AS_GENERATOR(args[0]);
+    if (gen->is_exhausted) return val_nil();
+    
+    // Initialize generator environment on first call
+    if (!gen->is_started) {
+        gen->gen_env = env_create(gen->closure);
+        gen->current_stmt = gen->body;
+        gen->is_started = 1;
+    }
+    
+    Stmt* current = (Stmt*)gen->current_stmt;
+    
+    while (current != NULL) {
+        ExecResult result = interpret(current, gen->gen_env);
+        
+        if (result.is_yielding) {
+            gen->current_stmt = result.next_stmt;
+            return result.value;
+        }
+        
+        if (result.is_returning || current->next == NULL) {
+            gen->is_exhausted = 1;
+            return val_nil();
+        }
+        
+        if (result.is_throwing) {
+            gen->is_exhausted = 1;
+            fprintf(stderr, "Exception in generator\n");
+            exit(1);
+        }
+        
+        current = current->next;
+    }
+    
+    gen->is_exhausted = 1;
+    return val_nil();
+}
+
 void init_stdlib(Env* env) {
     // Core functions
     env_define(env, "clock", 5, val_native(clock_native));
@@ -289,6 +340,9 @@ void init_stdlib(Env* env) {
     env_define(env, "gc_stats", 8, val_native(gc_stats_native));
     env_define(env, "gc_enable", 9, val_native(gc_enable_native));
     env_define(env, "gc_disable", 10, val_native(gc_disable_native));
+    
+    // PHASE 7: Generator function
+    env_define(env, "next", 4, val_native(native_next));
 }
 
 // --- Helper: Truthiness ---
@@ -296,6 +350,23 @@ static int is_truthy(Value v) {
     if (IS_NIL(v)) return 0;
     if (IS_BOOL(v)) return AS_BOOL(v);
     return 1; 
+}
+
+// PHASE 7: Helper to detect if a statement block contains yield
+static int contains_yield(Stmt* body) {
+    Stmt* current = body;
+    while (current != NULL) {
+        if (current->type == STMT_YIELD) return 1;
+        if (current->type == STMT_BLOCK && contains_yield(current->as.block.statements)) return 1;
+        if (current->type == STMT_IF) {
+            if (contains_yield(current->as.if_stmt.then_branch)) return 1;
+            if (current->as.if_stmt.else_branch && contains_yield(current->as.if_stmt.else_branch)) return 1;
+        }
+        if (current->type == STMT_WHILE && contains_yield(current->as.while_stmt.body)) return 1;
+        if (current->type == STMT_FOR && contains_yield(current->as.for_stmt.body)) return 1;
+        current = current->next;
+    }
+    return 0;
 }
 
 // --- Forward Declaration ---
@@ -669,7 +740,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 }
 
 ExecResult interpret(Stmt* stmt, Env* env) {
-    if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+    if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
 
     switch (stmt->type) {
         case STMT_PRINT: {
@@ -677,7 +748,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             if (result.is_throwing) return result;
             print_value(result.value);
             printf("\n");
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_LET: {
@@ -689,13 +760,13 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             }
             Token t = stmt->as.let.name;
             env_define(env, t.start, t.length, val);
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_EXPRESSION: {
             ExecResult result = eval_expr(stmt->as.expression, env);
             if (result.is_throwing) return result;
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_BLOCK: {
@@ -707,7 +778,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 }
                 current = current->next;
             }
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_IF: {
@@ -719,7 +790,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             } else if (stmt->as.if_stmt.else_branch != NULL) {
                 return interpret(stmt->as.if_stmt.else_branch, env);
             }
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_WHILE: {
@@ -733,7 +804,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 if (res.is_breaking) break;
                 if (res.is_continuing) continue;
             }
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_FOR: {
@@ -743,7 +814,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             
             if (iterable.type != VAL_ARRAY) {
                 fprintf(stderr, "Runtime Error: for loop iterable must be an array.\n");
-                return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+                return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
             }
 
             Env* loop_env = env_create(env);
@@ -759,18 +830,31 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 if (res.is_continuing) continue;
             }
 
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_BREAK:
-            return (ExecResult){ val_nil(), 0, 1, 0, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 1, 0, 0, val_nil(), 0, NULL };
 
         case STMT_CONTINUE:
-            return (ExecResult){ val_nil(), 0, 0, 1, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 0, 1, 0, val_nil(), 0, NULL };
 
+        // PHASE 7: Modified STMT_PROC to detect generators
         case STMT_PROC: {
-            define_function(&stmt->as.proc);
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+            Token name = stmt->as.proc.name;
+            int is_generator = contains_yield(stmt->as.proc.body);
+            
+            Value func_val;
+            if (is_generator) {
+                func_val = val_generator(stmt->as.proc.body, stmt->as.proc.params, 
+                                        stmt->as.proc.param_count, env);
+            } else {
+                define_function(&stmt->as.proc);
+                return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            }
+            
+            env_define(env, name.start, name.length, func_val);
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_CLASS: {
@@ -783,11 +867,11 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                         parent = parent_val.as.class_val;
                     } else {
                         fprintf(stderr, "Runtime Error: Parent must be a class.\n");
-                        return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+                        return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
                     }
                 } else {
                     fprintf(stderr, "Runtime Error: Undefined parent class.\n");
-                    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+                    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
                 }
             }
             
@@ -806,7 +890,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             Value class_value = val_class(class_val);
             env_define(env, name.start, name.length, class_value);
             
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_RETURN: {
@@ -816,7 +900,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 if (result.is_throwing) return result;
                 val = result.value;
             }
-            return (ExecResult){ val, 1, 0, 0, 0, val_nil() };
+            return (ExecResult){ val, 1, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_TRY: {
@@ -862,12 +946,28 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             } else if (!IS_EXCEPTION(exc_val)) {
                 exc_val = val_exception("Unknown error");
             }
-            return (ExecResult){ val_nil(), 0, 0, 0, 1, exc_val };
+            return (ExecResult){ val_nil(), 0, 0, 0, 1, exc_val, 0, NULL };
+        }
+
+        // PHASE 7: Yield statement execution
+        case STMT_YIELD: {
+            Value yield_value = val_nil();
+            if (stmt->as.yield_stmt.value != NULL) {
+                ExecResult result = eval_expr(stmt->as.yield_stmt.value, env);
+                if (result.is_throwing) return result;
+                yield_value = result.value;
+            }
+            
+            ExecResult result = {0};
+            result.value = yield_value;
+            result.is_yielding = 1;
+            result.next_stmt = stmt->next;
+            return result;
         }
 
         case STMT_MATCH:
         case STMT_DEFER:
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
     }
-    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil() };
+    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
 }
