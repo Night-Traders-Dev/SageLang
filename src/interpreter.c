@@ -574,6 +574,23 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
         }
 
         case EXPR_SET: {
+            // Handle variable assignment (object is NULL)
+            if (expr->as.set.object == NULL) {
+                // Variable reassignment: x = value
+                Token var_name = expr->as.set.property;
+                ExecResult val_result = eval_expr(expr->as.set.value, env);
+                if (val_result.is_throwing) return val_result;
+                Value value = val_result.value;
+                
+                // Try to update the variable in the environment
+                if (!env_assign(env, var_name.start, var_name.length, value)) {
+                    fprintf(stderr, "Runtime Error: Undefined variable '%.*s'.\n", var_name.length, var_name.start);
+                    return EVAL_RESULT(val_nil());
+                }
+                return EVAL_RESULT(value);
+            }
+            
+            // Property assignment: obj.prop = value
             ExecResult obj_result = eval_expr(expr->as.set.object, env);
             if (obj_result.is_throwing) return obj_result;
             Value object = obj_result.value;
