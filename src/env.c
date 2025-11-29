@@ -66,3 +66,22 @@ int env_get(Env* env, const char* name, int length, Value* out_value) {
     }
     return 0;
 }
+
+// Assign to an existing variable (searches up the scope chain)
+int env_assign(Env* env, const char* name, int length, Value value) {
+    Env* current_env = env;
+
+    // Search current scope, then parent, then parent's parent...
+    while (current_env != NULL) {
+        EnvNode* current = current_env->head;
+        while (current != NULL) {
+            if (strncmp(current->name, name, length) == 0 && current->name[length] == '\0') {
+                current->value = value;
+                return 1; // Found and updated
+            }
+            current = current->next;
+        }
+        current_env = current_env->parent;
+    }
+    return 0; // Not found
+}
