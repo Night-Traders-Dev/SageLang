@@ -273,9 +273,9 @@ static Value native_next(int arg_count, Value* args) {
     if (gen->is_exhausted) return val_nil();
     
     // Initialize generator environment on first call
+    // Create a child environment of the closure to allow local variables
     if (!gen->is_started) {
-        // Use the closure (which already has parameters bound) as the environment
-        gen->gen_env = gen->closure;
+        gen->gen_env = env_create(gen->closure);
         gen->current_stmt = gen->body;
         gen->is_started = 1;
     }
