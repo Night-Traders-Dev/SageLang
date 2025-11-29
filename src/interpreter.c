@@ -273,37 +273,41 @@ static Value native_next(int arg_count, Value* args) {
     if (gen->is_exhausted) return val_nil();
     
     // Initialize generator environment on first call
-    // Create a child environment of the closure to allow local variables
     if (!gen->is_started) {
         gen->gen_env = env_create(gen->closure);
         gen->current_stmt = gen->body;
         gen->is_started = 1;
     }
     
-    Stmt* current = (Stmt*)gen->current_stmt;
+    // For generators, we always resume from the saved position
+    // The position points to the BLOCK containing the entire function body
+    Stmt* resume_from = (Stmt*)gen->current_stmt;
     
-    while (current != NULL) {
-        ExecResult result = interpret(current, gen->gen_env);
-        
-        if (result.is_yielding) {
-            gen->current_stmt = result.next_stmt;
-            return result.value;
-        }
-        
-        if (result.is_returning || current->next == NULL) {
-            gen->is_exhausted = 1;
-            return val_nil();
-        }
-        
-        if (result.is_throwing) {
-            gen->is_exhausted = 1;
-            fprintf(stderr, "Exception in generator\n");
-            exit(1);
-        }
-        
-        current = current->next;
+    if (resume_from == NULL) {
+        gen->is_exhausted = 1;
+        return val_nil();
     }
     
+    ExecResult result = interpret(resume_from, gen->gen_env);
+    
+    if (result.is_yielding) {
+        // Save where to resume from next time
+        gen->current_stmt = result.next_stmt;
+        return result.value;
+    }
+    
+    if (result.is_returning) {
+        gen->is_exhausted = 1;
+        return result.value;
+    }
+    
+    if (result.is_throwing) {
+        gen->is_exhausted = 1;
+        fprintf(stderr, "Exception in generator\n");
+        exit(1);
+    }
+    
+    // Generator completed without yielding or returning
     gen->is_exhausted = 1;
     return val_nil();
 }
@@ -814,7 +818,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             Stmt* current = stmt->as.block.statements;
             while (current != NULL) {
                 ExecResult res = interpret(current, env);
-                if (res.is_returning || res.is_breaking || res.is_continuing || res.is_throwing) {
+                if (res.is_returning || res.is_breaking || res.is_continuing || res.is_throwing || res.is_yielding) {
                     return res;
                 }
                 current = current->next;
@@ -842,6 +846,15 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 
                 ExecResult res = interpret(stmt->as.while_stmt.body, env);
                 if (res.is_returning || res.is_throwing) return res;
+                
+                // CRITICAL: Handle yield in generator context
+                if (res.is_yielding) {
+                    // Return yield result but set next_stmt to THIS while loop
+                    // so we re-enter the loop on next next() call
+                    res.next_stmt = stmt;
+                    return res;
+                }
+                
                 if (res.is_breaking) break;
                 if (res.is_continuing) continue;
             }
@@ -867,6 +880,15 @@ ExecResult interpret(Stmt* stmt, Env* env) {
 
                 ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
                 if (res.is_returning || res.is_throwing) return res;
+                
+                // Handle yield in generator context
+                if (res.is_yielding) {
+                    // For FOR loops, we need more complex state management
+                    // For now, just return the yield
+                    res.next_stmt = stmt;
+                    return res;
+                }
+                
                 if (res.is_breaking) break;
                 if (res.is_continuing) continue;
             }
