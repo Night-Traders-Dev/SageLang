@@ -114,7 +114,7 @@ static Stmt* raise_statement() {
     return new_raise_stmt(exception);
 }
 
-// PHASE 7: Yield statement (NEW)
+// PHASE 7: Yield statement
 static Stmt* yield_statement() {
     // yield <expression>
     // yield can also be used without a value: yield (yields nil)
@@ -420,6 +420,14 @@ static Expr* assignment() {
         return new_set_expr(expr->as.get.object, expr->as.get.property, value);
     }
     
+    // Handle regular variable assignment: x = value
+    if (expr->type == EXPR_VARIABLE && match(TOKEN_ASSIGN)) {
+        Expr* value = assignment();
+        // Create a binary assignment expression (reusing EXPR_BINARY with special marker)
+        // OR better: create assignment as SET with NULL object
+        return new_set_expr(NULL, expr->as.variable.name, value);
+    }
+    
     return expr;
 }
 
@@ -573,11 +581,18 @@ static Stmt* statement() {
     if (match(TOKEN_FOR)) return for_statement();
     if (match(TOKEN_TRY)) return try_statement();
     if (match(TOKEN_RAISE)) return raise_statement();
-    if (match(TOKEN_YIELD)) return yield_statement();  // NEW: Add yield support
+    if (match(TOKEN_YIELD)) return yield_statement();
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
 
     Expr* expr = expression();
+    
+    // Handle assignment statements (x = value) where expr is a SET expression with NULL object
+    if (expr->type == EXPR_SET && expr->as.set.object == NULL) {
+        // This is a variable assignment, treat it as a statement
+        return new_expr_stmt(expr);
+    }
+    
     return new_expr_stmt(expr);
 }
 
