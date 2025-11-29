@@ -66,6 +66,62 @@ static Stmt* for_statement() {
     return new_for_stmt(var, iterable, body);
 }
 
+// PHASE 7: Match statement
+static Stmt* match_statement() {
+    // match value:
+    Expr* value = expression();
+    consume(TOKEN_COLON, "Expect ':' after match value.");
+    consume(TOKEN_NEWLINE, "Expect newline after match.");
+    consume(TOKEN_INDENT, "Expect indentation in match body.");
+    
+    // Parse case clauses
+    CaseClause** cases = NULL;
+    int case_count = 0;
+    int case_capacity = 0;
+    Stmt* default_case = NULL;
+    
+    while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
+        if (match(TOKEN_NEWLINE)) {
+            continue;
+        }
+        
+        if (match(TOKEN_CASE)) {
+            // case pattern:
+            Expr* pattern = expression();
+            consume(TOKEN_COLON, "Expect ':' after case pattern.");
+            consume(TOKEN_NEWLINE, "Expect newline after case.");
+            Stmt* body = block();
+            
+            CaseClause* clause = new_case_clause(pattern, body);
+            
+            if (case_count >= case_capacity) {
+                case_capacity = case_capacity == 0 ? 4 : case_capacity * 2;
+                cases = realloc(cases, sizeof(CaseClause*) * case_capacity);
+            }
+            cases[case_count++] = clause;
+        } else if (match(TOKEN_DEFAULT)) {
+            // default:
+            consume(TOKEN_COLON, "Expect ':' after default.");
+            consume(TOKEN_NEWLINE, "Expect newline after default.");
+            default_case = block();
+            break;  // default must be last
+        } else {
+            fprintf(stderr, "[Line %d] Expect 'case' or 'default' in match body.\n", current_token.line);
+            exit(1);
+        }
+    }
+    
+    consume(TOKEN_DEDENT, "Expect dedent after match body.");
+    return new_match_stmt(value, cases, case_count, default_case);
+}
+
+// PHASE 7: Defer statement
+static Stmt* defer_statement() {
+    // defer statement
+    Stmt* stmt = statement();
+    return new_defer_stmt(stmt);
+}
+
 // PHASE 7: Try/catch/finally statement
 static Stmt* try_statement() {
     // try:
@@ -114,7 +170,7 @@ static Stmt* raise_statement() {
     return new_raise_stmt(exception);
 }
 
-// PHASE 7: Yield statement (NEW)
+// PHASE 7: Yield statement
 static Stmt* yield_statement() {
     // yield <expression>
     // yield can also be used without a value: yield (yields nil)
@@ -571,9 +627,11 @@ static Stmt* statement() {
     if (match(TOKEN_IF)) return if_statement();
     if (match(TOKEN_WHILE)) return while_statement();
     if (match(TOKEN_FOR)) return for_statement();
+    if (match(TOKEN_MATCH)) return match_statement();  // NEW: Add match support
     if (match(TOKEN_TRY)) return try_statement();
     if (match(TOKEN_RAISE)) return raise_statement();
-    if (match(TOKEN_YIELD)) return yield_statement();  // NEW: Add yield support
+    if (match(TOKEN_DEFER)) return defer_statement();  // NEW: Add defer support
+    if (match(TOKEN_YIELD)) return yield_statement();
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
 
