@@ -677,6 +677,29 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     return EVAL_RESULT(classVal.as.native(count, args));
                 }
                 
+                // PHASE 7: Handle generator function calls - create fresh generator instance
+                if (classVal.type == VAL_GENERATOR) {
+                    // Create a new generator instance from the template
+                    GeneratorValue* template = classVal.as.generator;
+                    
+                    // Create a new environment for this specific generator instance
+                    Env* gen_closure = env_create(env);
+                    
+                    // Bind parameters if any
+                    if (template->param_count > 0 && template->params != NULL) {
+                        Token* params = (Token*)template->params;
+                        for (int i = 0; i < template->param_count && i < expr->as.call.arg_count; i++) {
+                            ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                            if (arg_result.is_throwing) return arg_result;
+                            env_define(gen_closure, params[i].start, params[i].length, arg_result.value);
+                        }
+                    }
+                    
+                    // Create a fresh generator instance with its own closure
+                    return EVAL_RESULT(val_generator(template->body, template->params, 
+                                                     template->param_count, gen_closure));
+                }
+                
                 if (classVal.type == VAL_CLASS) {
                     ClassValue* class_def = classVal.as.class_val;
                     InstanceValue* instance = instance_create(class_def);
