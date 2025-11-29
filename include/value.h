@@ -5,6 +5,7 @@
 typedef struct Value Value;
 typedef struct ClassValue ClassValue;
 typedef struct InstanceValue InstanceValue;
+typedef struct Environment Environment;  // Forward declare
 typedef Value (*NativeFn)(int argCount, Value* args);
 
 // Array structure
@@ -22,7 +23,7 @@ typedef struct {
 
 // Dictionary structure (simple hash map)
 typedef struct {
-    DictEntry* entries;
+    DictEntry* entries;  // FIXED: was DictValue* entries
     int count;
     int capacity;
 } DictValue;
@@ -55,6 +56,23 @@ struct InstanceValue {
     DictValue* fields;  // Instance variables
 };
 
+// PHASE 7: Exception structure
+typedef struct {
+    char* message;  // Error message
+} ExceptionValue;
+
+// PHASE 7: Generator structure (for yield support)
+typedef struct {
+    void* body;              // Pointer to Stmt (function body containing yields)
+    void* params;            // Pointer to Token array (parameters)
+    int param_count;         // Number of parameters
+    Environment* closure;    // Captured environment when generator was created
+    Environment* gen_env;    // Generator's execution environment (preserved state)
+    int is_started;          // Has generator been started?
+    int is_exhausted;        // Has generator finished?
+    void* current_stmt;      // Current statement position (for resumption)
+} GeneratorValue;
+
 typedef enum {
     VAL_NUMBER,
     VAL_BOOL,
@@ -66,7 +84,9 @@ typedef enum {
     VAL_DICT,
     VAL_TUPLE,
     VAL_CLASS,
-    VAL_INSTANCE
+    VAL_INSTANCE,
+    VAL_EXCEPTION,
+    VAL_GENERATOR  // NEW: Generator type
 } ValueType;
 
 struct Value {
@@ -81,6 +101,8 @@ struct Value {
         TupleValue* tuple;
         ClassValue* class_val;
         InstanceValue* instance;
+        ExceptionValue* exception;
+        GeneratorValue* generator;  // NEW: Generator value
     } as;
 };
 
@@ -94,6 +116,8 @@ struct Value {
 #define IS_TUPLE(v)  ((v).type == VAL_TUPLE)
 #define IS_CLASS(v)  ((v).type == VAL_CLASS)
 #define IS_INSTANCE(v) ((v).type == VAL_INSTANCE)
+#define IS_EXCEPTION(v) ((v).type == VAL_EXCEPTION)
+#define IS_GENERATOR(v) ((v).type == VAL_GENERATOR)  // NEW
 
 // Macros for accessing values
 #define AS_NUMBER(v) ((v).as.number)
@@ -104,6 +128,8 @@ struct Value {
 #define AS_TUPLE(v)  ((v).as.tuple)
 #define AS_CLASS(v)  ((v).as.class_val)
 #define AS_INSTANCE(v) ((v).as.instance)
+#define AS_EXCEPTION(v) ((v).as.exception)
+#define AS_GENERATOR(v) ((v).as.generator)  // NEW
 
 // Constructors
 Value val_number(double value);
@@ -116,6 +142,8 @@ Value val_dict();
 Value val_tuple(Value* elements, int count);
 Value val_class(ClassValue* class_val);
 Value val_instance(InstanceValue* instance);
+Value val_exception(const char* message);
+Value val_generator(void* body, void* params, int param_count, Environment* closure);  // NEW
 
 // Helpers
 void print_value(Value v);

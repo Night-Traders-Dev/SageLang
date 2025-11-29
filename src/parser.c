@@ -40,6 +40,7 @@ static void consume(TokenType type, const char* message) {
 
 // Forward declarations
 static Expr* expression();
+static Expr* unary();
 static Expr* postfix();
 static Stmt* declaration();
 static Stmt* statement();
@@ -63,6 +64,67 @@ static Stmt* for_statement() {
     Stmt* body = block();
 
     return new_for_stmt(var, iterable, body);
+}
+
+// PHASE 7: Try/catch/finally statement
+static Stmt* try_statement() {
+    // try:
+    consume(TOKEN_COLON, "Expect ':' after 'try'.");
+    consume(TOKEN_NEWLINE, "Expect newline after try.");
+    Stmt* try_block = block();
+    
+    // Parse catch clauses
+    CatchClause** catches = NULL;
+    int catch_count = 0;
+    int catch_capacity = 0;
+    
+    while (match(TOKEN_CATCH)) {
+        // catch e:
+        consume(TOKEN_IDENTIFIER, "Expect exception variable after 'catch'.");
+        Token exception_var = previous_token;
+        
+        consume(TOKEN_COLON, "Expect ':' after catch variable.");
+        consume(TOKEN_NEWLINE, "Expect newline after catch clause.");
+        Stmt* catch_body = block();
+        
+        CatchClause* clause = new_catch_clause(exception_var, catch_body);
+        
+        if (catch_count >= catch_capacity) {
+            catch_capacity = catch_capacity == 0 ? 2 : catch_capacity * 2;
+            catches = realloc(catches, sizeof(CatchClause*) * catch_capacity);
+        }
+        catches[catch_count++] = clause;
+    }
+    
+    // Optional finally:
+    Stmt* finally_block = NULL;
+    if (match(TOKEN_FINALLY)) {
+        consume(TOKEN_COLON, "Expect ':' after 'finally'.");
+        consume(TOKEN_NEWLINE, "Expect newline after finally.");
+        finally_block = block();
+    }
+    
+    return new_try_stmt(try_block, catches, catch_count, finally_block);
+}
+
+// PHASE 7: Raise statement  
+static Stmt* raise_statement() {
+    // raise expression
+    Expr* exception = expression();
+    return new_raise_stmt(exception);
+}
+
+// PHASE 7: Yield statement (NEW)
+static Stmt* yield_statement() {
+    // yield <expression>
+    // yield can also be used without a value: yield (yields nil)
+    Expr* value = NULL;
+    
+    if (!check(TOKEN_NEWLINE) && !check(TOKEN_EOF) && !check(TOKEN_DEDENT)) {
+        value = expression();
+    }
+    
+    return new_yield_stmt(value);
 }
 
 // primary -> NUMBER | STRING | BOOLEAN | NIL | SELF | ( expr/tuple ) | [ array ] | { dict } | IDENTIFIER | CALL
@@ -212,6 +274,19 @@ static Expr* primary() {
     exit(1);
 }
 
+// NEW: Unary expressions (handle negative numbers)
+static Expr* unary() {
+    // Handle unary minus: -5, -x
+    if (match(TOKEN_MINUS)) {
+        Token op = previous_token;
+        Expr* right = unary();  // Right associative
+        // Represent -x as (0 - x)
+        return new_binary_expr(new_number_expr(0), op, right);
+    }
+    
+    return postfix();
+}
+
 static Expr* postfix() {
     Expr* expr = primary();
 
@@ -238,13 +313,10 @@ static Expr* postfix() {
                 expr = new_index_expr(expr, start_or_index);
             }
         } else if (match(TOKEN_DOT)) {
-            // Property access: obj.property or method call obj.method()
             consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
             Token property = previous_token;
             
-            // Check for method call: obj.method(args)
             if (match(TOKEN_LPAREN)) {
-                // Parse arguments
                 Expr** args = NULL;
                 int count = 0;
                 int capacity = 0;
@@ -281,10 +353,10 @@ static Expr* postfix() {
 }
 
 static Expr* term() {
-    Expr* expr = postfix();
+    Expr* expr = unary();
     while (match(TOKEN_STAR) || match(TOKEN_SLASH)) {
         Token op = previous_token;
-        Expr* right = postfix();
+        Expr* right = unary();
         expr = new_binary_expr(expr, op, right);
     }
     return expr;
@@ -343,7 +415,6 @@ static Expr* logical_or() {
 static Expr* assignment() {
     Expr* expr = logical_or();
     
-    // Check for property assignment: obj.prop = value
     if (expr->type == EXPR_GET && match(TOKEN_ASSIGN)) {
         Expr* value = assignment();
         return new_set_expr(expr->as.get.object, expr->as.get.property, value);
@@ -419,7 +490,6 @@ static Stmt* defer_statement() {
 }
 
 static Stmt* proc_declaration() {
-    // Accept TOKEN_IDENTIFIER or TOKEN_INIT (for init method)
     if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_INIT) {
         Token name = current_token;
         advance_parser();
@@ -432,7 +502,6 @@ static Stmt* proc_declaration() {
 
         if (!check(TOKEN_RPAREN)) {
             do {
-                // Accept SELF or IDENTIFIER for parameters
                 if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER) {
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
@@ -462,7 +531,6 @@ static Stmt* class_declaration() {
     consume(TOKEN_IDENTIFIER, "Expect class name.");
     Token name = previous_token;
     
-    // Check for inheritance: class Child(Parent):
     Token parent;
     int has_parent = 0;
     if (match(TOKEN_LPAREN)) {
@@ -476,7 +544,6 @@ static Stmt* class_declaration() {
     consume(TOKEN_NEWLINE, "Expect newline after class header.");
     consume(TOKEN_INDENT, "Expect indentation in class body.");
     
-    // Parse methods (all methods are proc declarations)
     Stmt* method_head = NULL;
     Stmt* method_current = NULL;
     
@@ -512,6 +579,9 @@ static Stmt* statement() {
     if (match(TOKEN_WHILE)) return while_statement();
     if (match(TOKEN_FOR)) return for_statement();
     if (match(TOKEN_DEFER)) return defer_statement();  // PHASE 7: Defer
+    if (match(TOKEN_TRY)) return try_statement();
+    if (match(TOKEN_RAISE)) return raise_statement();
+    if (match(TOKEN_YIELD)) return yield_statement();  // NEW: Add yield support
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
 
