@@ -17,5 +17,6 @@ typedef struct Env {
 Env* env_create(Env* parent);
 void env_define(Env* env, const char* name, int length, Value value);
 int env_get(Env* env, const char* name, int length, Value* value);
+int env_assign(Env* env, const char* name, int length, Value value);
 
 #endif
