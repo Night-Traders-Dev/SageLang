@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include "ast.h"
 
 // ========== EXPRESSION CONSTRUCTORS ==========
@@ -286,6 +287,20 @@ Stmt* new_yield_stmt(Expr* value) {
     Stmt* s = malloc(sizeof(Stmt));
     s->type = STMT_YIELD;
     s->as.yield_stmt.value = value;
+    s->next = NULL;
+    return s;
+}
+
+// ========== PHASE 8: MODULE IMPORTS ==========
+
+Stmt* new_import_stmt(char* module_name, char** items, int item_count, char* alias, int import_all) {
+    Stmt* s = malloc(sizeof(Stmt));
+    s->type = STMT_IMPORT;
+    s->as.import.module_name = strdup(module_name);
+    s->as.import.items = items;
+    s->as.import.item_count = item_count;
+    s->as.import.alias = alias ? strdup(alias) : NULL;
+    s->as.import.import_all = import_all;
     s->next = NULL;
     return s;
 }
