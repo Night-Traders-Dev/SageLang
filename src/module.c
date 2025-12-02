@@ -8,9 +8,10 @@
 #include <string.h>
 #include <sys/stat.h>
 
-// Forward declaration for parse function from parser.c
+// Forward declarations
 extern Stmt* parse();
 extern void parser_init();
+extern ExecResult interpret(Stmt* stmt, Env* env);
 
 // Global module cache
 ModuleCache* global_module_cache = NULL;
@@ -167,7 +168,7 @@ bool execute_module(Module* module, Environment* global_env) {
     }
     
     // Execute the module in its own environment
-    ExecResult result = execute(ast, module->env);
+    ExecResult result = interpret(ast, module->env);
     
     free(source);
     module->is_loading = false;
@@ -234,17 +235,13 @@ bool import_all(Environment* env, const char* module_name) {
         return false;
     }
     
-    // Import all exported values from module into current environment
-    // For now, we'll create a namespace object that holds the module's environment
-    // This allows: import math; math.sqrt(16)
-    
-    // Create a module value (we'll need to add VAL_MODULE type)
+    // Create a module value (temporary - will be VAL_MODULE)
     Value module_val;
-    module_val.type = VAL_STRING;  // Temporary - will be VAL_MODULE
+    module_val.type = VAL_STRING;
     module_val.as.string = strdup(module_name);
     
-    // Define module in current environment
-    env_define(env, module_name, module_val);
+    // Define module in current environment (with name length)
+    env_define(env, module_name, strlen(module_name), module_val);
     
     return true;
 }
@@ -273,15 +270,15 @@ bool import_from(Environment* env, const char* module_name, ImportItem* items, i
         const char* alias = items[i].alias ? items[i].alias : item_name;
         
         // Look up the item in the module's environment
-        Value* value = env_get(module->env, item_name);
-        if (!value) {
+        Value value;
+        if (!env_get(module->env, item_name, strlen(item_name), &value)) {
             fprintf(stderr, "Error: Module '%s' has no attribute '%s'\n", 
                     module_name, item_name);
             return false;
         }
         
         // Define in current environment (with alias if provided)
-        env_define(env, alias, *value);
+        env_define(env, alias, strlen(alias), value);
     }
     
     return true;
@@ -310,8 +307,8 @@ bool import_as(Environment* env, const char* module_name, const char* alias) {
     module_val.type = VAL_STRING;  // Temporary - will be VAL_MODULE
     module_val.as.string = strdup(module_name);
     
-    // Define with alias
-    env_define(env, alias, module_val);
+    // Define with alias (with name length)
+    env_define(env, alias, strlen(alias), module_val);
     
     return true;
 }
@@ -339,7 +336,6 @@ bool import_module(Environment* env, ImportData* import_data) {
 void init_module_system() {
     if (!global_module_cache) {
         global_module_cache = create_module_cache();
-        // Register standard library modules
         register_stdlib_modules(global_module_cache);
     }
 }
@@ -354,25 +350,20 @@ void cleanup_module_system() {
 
 // Register standard library modules (stub for now)
 void register_stdlib_modules(ModuleCache* cache) {
-    // TODO: Register built-in modules like math, io, string
-    // These will be implemented as native C modules
     (void)cache;  // Suppress unused parameter warning
 }
 
 // Create math module (stub)
 Module* create_math_module() {
-    // TODO: Implement native math module
     return NULL;
 }
 
 // Create io module (stub)
 Module* create_io_module() {
-    // TODO: Implement native I/O module
     return NULL;
 }
 
 // Create string module (stub)
 Module* create_string_module() {
-    // TODO: Implement native string utilities module
     return NULL;
 }
