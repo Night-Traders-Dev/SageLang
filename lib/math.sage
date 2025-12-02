@@ -1,80 +1,61 @@
-# lib/math.sage
-# Math utilities module
+# Math Library Module
+# Basic mathematical functions
 
-proc sqrt(n):
-    # Simple Newton-Raphson square root approximation
-    if n < 0:
+proc sqrt(x):
+    # Simple Newton's method for square root
+    if x < 0:
         raise "Cannot compute square root of negative number"
     
-    if n == 0:
+    if x == 0:
         return 0
     
-    let guess = n / 2
-    let epsilon = 0.0001
+    let guess = x / 2
+    let epsilon = 0.00001
     let iterations = 0
-    let max_iterations = 100
+    let max_iter = 100
     
-    while iterations < max_iterations:
-        let next_guess = (guess + n / guess) / 2
-        let diff = guess - next_guess
+    while iterations < max_iter:
+        let new_guess = (guess + x / guess) / 2
+        let diff = guess - new_guess
         if diff < 0:
             diff = 0 - diff
         
         if diff < epsilon:
-            return next_guess
+            return new_guess
         
-        guess = next_guess
+        guess = new_guess
         iterations = iterations + 1
     
     return guess
 
-proc abs(n):
-    # Return absolute value
-    if n < 0:
-        return 0 - n
-    return n
+proc abs(x):
+    if x < 0:
+        return 0 - x
+    return x
 
 proc max(a, b):
-    # Return maximum of two numbers
     if a > b:
         return a
     return b
 
 proc min(a, b):
-    # Return minimum of two numbers
     if a < b:
         return a
     return b
 
-proc pow(base, exponent):
-    # Calculate base^exponent
-    if exponent == 0:
+proc pow(base, exp):
+    if exp == 0:
         return 1
     
-    let result = 1
-    let i = 0
-    while i < exponent:
+    let result = base
+    let i = 1
+    
+    while i < exp:
         result = result * base
         i = i + 1
     
     return result
 
-proc factorial(n):
-    # Calculate factorial
-    if n < 0:
-        raise "Factorial not defined for negative numbers"
-    
-    if n == 0:
-        return 1
-    
-    let result = 1
-    let i = 1
-    while i <= n:
-        result = result * i
-        i = i + 1
-    
-    return result
-
-# Module constants
+# Math constants
 let PI = 3.14159265359
 let E = 2.71828182846
