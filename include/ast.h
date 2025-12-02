@@ -203,6 +203,15 @@ typedef struct {
     Expr* value;  // Expression to yield (can be NULL for yield without value)
 } YieldStmt;
 
+// PHASE 8: Import statement
+typedef struct {
+    char* module_name;     // Name of module to import
+    char** items;          // Items to import (NULL for "import module")
+    int item_count;        // Number of items (0 for "import module")
+    char* alias;           // Alias for module or item (NULL if no alias)
+    int import_all;        // 1 for "import module", 0 for "from module import"
+} ImportStmt;
+
 struct Stmt {
     enum {
         STMT_PRINT,
@@ -221,7 +230,8 @@ struct Stmt {
         STMT_DEFER,
         STMT_TRY,
         STMT_RAISE,
-        STMT_YIELD  // NEW: Generator yield
+        STMT_YIELD,     // Phase 7: Generator yield
+        STMT_IMPORT     // Phase 8: Module import
     } type;
     union {
         PrintStmt print;
@@ -237,7 +247,8 @@ struct Stmt {
         DeferStmt defer;
         TryStmt try_stmt;
         RaiseStmt raise;
-        YieldStmt yield_stmt;  // NEW: Generator yield
+        YieldStmt yield_stmt;   // Phase 7: Generator yield
+        ImportStmt import;      // Phase 8: Module import
         Expr* expression;
     } as;
     Stmt* next;
@@ -278,6 +289,7 @@ Stmt* new_defer_stmt(Stmt* statement);
 Stmt* new_try_stmt(Stmt* try_block, CatchClause** catches, int catch_count, Stmt* finally_block);
 CatchClause* new_catch_clause(Token exception_var, Stmt* body);
 Stmt* new_raise_stmt(Expr* exception);
-Stmt* new_yield_stmt(Expr* value);  // NEW: Generator yield constructor
+Stmt* new_yield_stmt(Expr* value);  // Phase 7: Generator yield constructor
+Stmt* new_import_stmt(char* module_name, char** items, int item_count, char* alias, int import_all);  // Phase 8: Import constructor
 
 #endif
