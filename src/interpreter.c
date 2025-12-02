@@ -1035,16 +1035,16 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             char** items = stmt->as.import.items;
             int item_count = stmt->as.import.item_count;
             char* alias = stmt->as.import.alias;
-            int import_all = stmt->as.import.import_all;
+            int import_all_flag = stmt->as.import.import_all;
             
             // Handle different import types
-            if (import_all && !alias) {
+            if (import_all_flag && !alias) {
                 // import module_name (no alias)
-                if (!import_module(env, module_name)) {
+                if (!import_all(env, module_name)) {
                     fprintf(stderr, "Error: Failed to import module '%s'\n", module_name);
                     return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL };
                 }
-            } else if (import_all && alias) {
+            } else if (import_all_flag && alias) {
                 // import module_name as alias
                 if (!import_as(env, module_name, alias)) {
                     fprintf(stderr, "Error: Failed to import module '%s' as '%s'\n", module_name, alias);
