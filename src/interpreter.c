@@ -45,23 +45,6 @@ static ProcStmt* find_function(const char* name, int len) {
     return NULL;
 }
 
-// PHASE 8: New value type for function references
-typedef struct {
-    ProcStmt* proc;
-} FunctionValue;
-
-Value val_function(ProcStmt* proc) {
-    FunctionValue* func = gc_allocate(sizeof(FunctionValue), GC_FUNCTION);
-    func->proc = proc;
-    Value v;
-    v.type = VAL_FUNCTION;
-    v.as.function = func;
-    return v;
-}
-
-#define IS_FUNCTION(v) ((v).type == VAL_FUNCTION)
-#define AS_FUNCTION(v) ((v).as.function->proc)
-
 // --- Native Functions ---
 
 static Value clock_native(int argCount, Value* args) {
