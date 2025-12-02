@@ -74,7 +74,14 @@ static TokenType check_keyword(int start_index, int length, const char* rest, To
 
 static TokenType identifier_type() {
     switch (start[0]) {
-        case 'a': return check_keyword(1, 2, "nd", TOKEN_AND);
+        case 'a':
+            if (current - start > 1) {
+                switch (start[1]) {
+                    case 'n': return check_keyword(2, 1, "d", TOKEN_AND);
+                    case 's': return check_keyword(2, 0, "", TOKEN_AS);  // "as"
+                }
+            }
+            break;
 
         case 'b': return check_keyword(1, 4, "reak", TOKEN_BREAK);
 
@@ -121,6 +128,7 @@ static TokenType identifier_type() {
                     case 'a': return check_keyword(2, 3, "lse", TOKEN_FALSE);
                     case 'i': return check_keyword(2, 5, "nally", TOKEN_FINALLY);
                     case 'o': return check_keyword(2, 1, "r", TOKEN_FOR);
+                    case 'r': return check_keyword(2, 2, "om", TOKEN_FROM);  // "from"
                 }
             }
             break;
@@ -129,6 +137,7 @@ static TokenType identifier_type() {
             if (current - start > 1) {
                 switch (start[1]) {
                     case 'f': return check_keyword(2, 0, "", TOKEN_IF);    // "if"
+                    case 'm': return check_keyword(2, 4, "port", TOKEN_IMPORT);  // "import"
                     case 'n':
                         if (current - start == 2) return check_keyword(2, 0, "", TOKEN_IN);  // "in"
                         if (current - start == 4) return check_keyword(2, 2, "it", TOKEN_INIT); // "init"
