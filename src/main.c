@@ -6,6 +6,7 @@
 #include "interpreter.h"
 #include "env.h"
 #include "gc.h"
+#include "module.h"  // Phase 8: Module system
 
 Stmt* parse();
 void parser_init();
@@ -51,6 +52,9 @@ static void run(const char* source) {
 int main(int argc, const char* argv[]) {
     // Initialize garbage collector
     gc_init();
+    
+    // PHASE 8: Initialize module system
+    init_module_system();
     
     if (argc == 1) {
         // REPL mode (interactive) could go here later
