@@ -127,6 +127,71 @@ static Stmt* yield_statement() {
     return new_yield_stmt(value);
 }
 
+// PHASE 8: Import statement
+static Stmt* import_statement() {
+    // Three forms:
+    // 1. import module_name
+    // 2. import module_name as alias
+    // 3. from module_name import item1, item2, ...
+    
+    if (match(TOKEN_FROM)) {
+        // from module_name import item1, item2
+        consume(TOKEN_IDENTIFIER, "Expect module name after 'from'.");
+        Token module_token = previous_token;
+        
+        // Copy module name
+        char* module_name = malloc(module_token.length + 1);
+        memcpy(module_name, module_token.start, module_token.length);
+        module_name[module_token.length] = '\0';
+        
+        consume(TOKEN_IMPORT, "Expect 'import' after module name.");
+        
+        // Parse imported items
+        char** items = NULL;
+        int item_count = 0;
+        int capacity = 0;
+        
+        do {
+            consume(TOKEN_IDENTIFIER, "Expect identifier in import list.");
+            Token item_token = previous_token;
+            
+            if (item_count >= capacity) {
+                capacity = capacity == 0 ? 4 : capacity * 2;
+                items = realloc(items, sizeof(char*) * capacity);
+            }
+            
+            items[item_count] = malloc(item_token.length + 1);
+            memcpy(items[item_count], item_token.start, item_token.length);
+            items[item_count][item_token.length] = '\0';
+            item_count++;
+            
+        } while (match(TOKEN_COMMA));
+        
+        return new_import_stmt(module_name, items, item_count, NULL, 0);
+    }
+    
+    // import module_name [as alias]
+    consume(TOKEN_IDENTIFIER, "Expect module name after 'import'.");
+    Token module_token = previous_token;
+    
+    char* module_name = malloc(module_token.length + 1);
+    memcpy(module_name, module_token.start, module_token.length);
+    module_name[module_token.length] = '\0';
+    
+    char* alias = NULL;
+    if (match(TOKEN_AS)) {
+        consume(TOKEN_IDENTIFIER, "Expect alias after 'as'.");
+        Token alias_token = previous_token;
+        
+        alias = malloc(alias_token.length + 1);
+        memcpy(alias, alias_token.start, alias_token.length);
+        alias[alias_token.length] = '\0';
+    }
+    
+    // import_all = 1 (importing entire module)
+    return new_import_stmt(module_name, NULL, 0, alias, 1);
+}
+
 // primary -> NUMBER | STRING | BOOLEAN | NIL | SELF | ( expr/tuple ) | [ array ] | { dict } | IDENTIFIER | CALL
 static Expr* primary() {
     // Literals
@@ -605,6 +670,13 @@ static Stmt* declaration() {
 
     if (match(TOKEN_CLASS)) return class_declaration();
     if (match(TOKEN_PROC)) return proc_declaration();
+    
+    // PHASE 8: Import statements
+    if (match(TOKEN_IMPORT) || check(TOKEN_FROM)) {
+        Stmt* stmt = import_statement();
+        match(TOKEN_NEWLINE);
+        return stmt;
+    }
 
     if (match(TOKEN_RETURN)) {
         Expr* value = NULL;
