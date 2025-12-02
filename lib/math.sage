@@ -18,7 +18,8 @@ proc sqrt(x):
         let new_guess = (guess + x / guess) / 2
         let diff = guess - new_guess
         if diff < 0:
-            diff = 0 - diff
+            let abs_diff = 0 - diff
+            diff = abs_diff
         
         if diff < epsilon:
             return new_guess
