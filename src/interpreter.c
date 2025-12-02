@@ -45,6 +45,23 @@ static ProcStmt* find_function(const char* name, int len) {
     return NULL;
 }
 
+// PHASE 8: New value type for function references
+typedef struct {
+    ProcStmt* proc;
+} FunctionValue;
+
+Value val_function(ProcStmt* proc) {
+    FunctionValue* func = gc_allocate(sizeof(FunctionValue), GC_FUNCTION);
+    func->proc = proc;
+    Value v;
+    v.type = VAL_FUNCTION;
+    v.as.function = func;
+    return v;
+}
+
+#define IS_FUNCTION(v) ((v).type == VAL_FUNCTION)
+#define AS_FUNCTION(v) ((v).as.function->proc)
+
 // --- Native Functions ---
 
 static Value clock_native(int argCount, Value* args) {
@@ -700,6 +717,27 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     return EVAL_RESULT(classVal.as.native(count, args));
                 }
                 
+                // PHASE 8: Handle function values from environment
+                if (classVal.type == VAL_FUNCTION) {
+                    ProcStmt* func = AS_FUNCTION(classVal);
+                    if (expr->as.call.arg_count != func->param_count) {
+                        fprintf(stderr, "Runtime Error: Arity mismatch.\n");
+                        return EVAL_RESULT(val_nil());
+                    }
+
+                    Env* scope = env_create(env); 
+                    for (int i = 0; i < func->param_count; i++) {
+                        ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                        if (arg_result.is_throwing) return arg_result;
+                        Token paramName = func->params[i];
+                        env_define(scope, paramName.start, paramName.length, arg_result.value);
+                    }
+
+                    ExecResult res = interpret(func->body, scope);
+                    if (res.is_throwing) return res;
+                    return EVAL_RESULT(res.value);
+                }
+                
                 // PHASE 7: Handle generator function calls - create fresh generator instance
                 if (classVal.type == VAL_GENERATOR) {
                     // Create a new generator instance from the template
@@ -755,6 +793,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 }
             }
 
+            // Fallback to global function registry
             ProcStmt* func = find_function(callee.start, callee.length);
             if (func) {
                 if (expr->as.call.arg_count != func->param_count) {
@@ -903,7 +942,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
         case STMT_CONTINUE:
             return (ExecResult){ val_nil(), 0, 0, 1, 0, val_nil(), 0, NULL };
 
-        // PHASE 7: Modified STMT_PROC to detect generators
+        // PHASE 8: Modified STMT_PROC to add functions to environment
         case STMT_PROC: {
             Token name = stmt->as.proc.name;
             int is_generator = contains_yield(stmt->as.proc.body);
@@ -913,8 +952,10 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 func_val = val_generator(stmt->as.proc.body, stmt->as.proc.params, 
                                         stmt->as.proc.param_count, env);
             } else {
+                // Add to global registry for backwards compatibility
                 define_function(&stmt->as.proc);
-                return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+                // PHASE 8: Also add to environment for module exports
+                func_val = val_function(&stmt->as.proc);
             }
             
             env_define(env, name.start, name.length, func_val);
