@@ -11,21 +11,23 @@ proc sqrt(x):
     
     let guess = x / 2
     let epsilon = 0.00001
-    let iterations = 0
     let max_iter = 100
+    let i = 0
     
-    while iterations < max_iter:
+    while i < max_iter:
         let new_guess = (guess + x / guess) / 2
         let diff = guess - new_guess
-        if diff < 0:
-            let abs_diff = 0 - diff
-            diff = abs_diff
         
-        if diff < epsilon:
+        # Check if close enough (use abs)
+        let check_diff = diff
+        if check_diff < 0:
+            check_diff = 0 - check_diff
+        
+        if check_diff < epsilon:
             return new_guess
         
         guess = new_guess
-        iterations = iterations + 1
+        i = i + 1
     
     return guess
 
@@ -49,11 +51,11 @@ proc pow(base, exp):
         return 1
     
     let result = base
-    let i = 1
+    let count = 1
     
-    while i < exp:
+    while count < exp:
         result = result * base
-        i = i + 1
+        count = count + 1
     
     return result
 
