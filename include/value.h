@@ -74,6 +74,11 @@ typedef struct {
     void* current_stmt;      // Current statement position (for resumption)
 } GeneratorValue;
 
+// PHASE 8: Function value structure (for module exports)
+typedef struct {
+    void* proc;  // Pointer to ProcStmt
+} FunctionValue;
+
 typedef enum {
     VAL_NUMBER,
     VAL_BOOL,
@@ -97,6 +102,7 @@ struct Value {
         int boolean;
         char* string;
         NativeFn native;
+        FunctionValue* function;  // PHASE 8: Function value
         ArrayValue* array;
         DictValue* dict;
         TupleValue* tuple;
@@ -112,6 +118,7 @@ struct Value {
 #define IS_BOOL(v)   ((v).type == VAL_BOOL)
 #define IS_NIL(v)    ((v).type == VAL_NIL)
 #define IS_STRING(v) ((v).type == VAL_STRING)
+#define IS_FUNCTION(v) ((v).type == VAL_FUNCTION)  // PHASE 8
 #define IS_ARRAY(v)  ((v).type == VAL_ARRAY)
 #define IS_DICT(v)   ((v).type == VAL_DICT)
 #define IS_TUPLE(v)  ((v).type == VAL_TUPLE)
@@ -124,6 +131,7 @@ struct Value {
 #define AS_NUMBER(v) ((v).as.number)
 #define AS_BOOL(v)   ((v).as.boolean)
 #define AS_STRING(v) ((v).as.string)
+#define AS_FUNCTION(v) ((v).as.function->proc)  // PHASE 8
 #define AS_ARRAY(v)  ((v).as.array)
 #define AS_DICT(v)   ((v).as.dict)
 #define AS_TUPLE(v)  ((v).as.tuple)
@@ -138,6 +146,7 @@ Value val_bool(int value);
 Value val_nil();
 Value val_string(char* value);
 Value val_native(NativeFn fn);
+Value val_function(void* proc);  // PHASE 8
 Value val_array();
 Value val_dict();
 Value val_tuple(Value* elements, int count);
