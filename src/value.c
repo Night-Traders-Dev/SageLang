@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include "value.h"
+#include "gc.h"
 
 // ========== VALUE CONSTRUCTORS ==========
 
@@ -38,6 +39,15 @@ Value val_string(char* value) {
     Value v;
     v.type = VAL_STRING;
     v.as.string = value;
+    return v;
+}
+
+// PHASE 8: Function value constructor
+Value val_function(void* proc) {
+    Value v;
+    v.type = VAL_FUNCTION;
+    v.as.function = gc_allocate(sizeof(FunctionValue), GC_FUNCTION);
+    v.as.function->proc = proc;
     return v;
 }
 
@@ -577,6 +587,7 @@ int values_equal(Value a, Value b) {
         case VAL_BOOL:   return AS_BOOL(a) == AS_BOOL(b);
         case VAL_NIL:    return 1;
         case VAL_STRING: return strcmp(AS_STRING(a), AS_STRING(b)) == 0;
+        case VAL_FUNCTION: return a.as.function->proc == b.as.function->proc;
         case VAL_TUPLE: {
             TupleValue* ta = a.as.tuple;
             TupleValue* tb = b.as.tuple;
