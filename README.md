@@ -2,24 +2,32 @@
 
 **A clean, indentation-based systems programming language built in C.**
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It is currently in the **advanced development phase**, with a fully working interpreter featuring **Object-Oriented Programming**, **Exception Handling**, **Garbage Collection**, and rich data structures.
+Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It is currently in the **advanced development phase**, with a fully working interpreter featuring **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, and rich data structures.
 
 ## 🚀 Features (Implemented)
 
 ### Core Language
 - **Indentation-based syntax**: No braces `{}` for blocks; just clean, consistent indentation
-- **Type System**: Support for **Integers**, **Strings**, **Booleans**, **Nil**, **Arrays**, **Dictionaries**, **Tuples**, **Classes**, **Instances**, and **Exceptions**
+- **Type System**: Support for **Integers**, **Strings**, **Booleans**, **Nil**, **Arrays**, **Dictionaries**, **Tuples**, **Classes**, **Instances**, **Exceptions**, and **Generators**
 - **Functions**: Define functions with `proc name(args):` with full recursion, closures, and first-class function support
 - **Control Flow**: `if`/`else`, `while`, `for` loops, `break`, `continue`, and **exception handling**
 - **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical (`and`, `or`), unary (`-`)
 
-### Exception Handling 🎉 **NEW**
+### Exception Handling ✅
 - **Try/Catch/Finally**: Full exception handling with `try:`, `catch e:`, and `finally:`
 - **Raise Statements**: Throw exceptions with `raise "error message"`
 - **Exception Propagation**: Exceptions bubble through function calls
 - **Finally Blocks**: Cleanup code that always executes
 - **Nested Exceptions**: Catch and re-raise in nested try blocks
 - **Type Safety**: Exception type with message field
+
+### Generators & Lazy Evaluation ✅
+- **`yield` statements**: Create generator functions for lazy evaluation
+- **Iterator protocol**: Use `next(generator)` to get values on-demand
+- **Infinite sequences**: Generators can produce unlimited values
+- **State preservation**: Generator state persists between `next()` calls
+- **Memory efficient**: Only compute values when needed
+- **Generator functions**: Automatically detected via `yield` keyword
 
 ### Object-Oriented Programming ✅
 - **Classes**: `class ClassName:` with full inheritance support
@@ -34,14 +42,6 @@ Sage is a new programming language that combines the readability of Python (inde
 - **Dictionaries**: Hash maps with `{"key": value}` syntax
 - **Tuples**: Immutable sequences `(val1, val2, val3)`
 - **Array Slicing**: Pythonic slice syntax for arrays
-
-- ### Generators & Lazy Evaluation 🆕
-
-- **`yield` statements**: Create generator functions for lazy evaluation
-- **Iterator protocol**: Use `next(generator)` to get values on-demand
-- **Infinite sequences**: Generators can produce unlimited values
-- **State preservation**: Generator state persists between `next()` calls
-- **Memory efficient**: Only compute values when needed
 
 ### Memory Management
 - **Garbage Collection**: Automatic mark-and-sweep GC
@@ -61,6 +61,7 @@ Sage is a new programming language that combines the readability of Python (inde
 - **Strings**: `split()`, `join()`, `replace()`, `upper()`, `lower()`, `strip()`
 - **Dictionaries**: `dict_keys()`, `dict_values()`, `dict_has()`, `dict_delete()`
 - **GC**: `gc_collect()`, `gc_stats()`, `gc_enable()`, `gc_disable()`
+- **Generators**: `next()` for iterator protocol
 
 ## 🛠 Building Sage
 
@@ -86,10 +87,61 @@ This produces the `sage` executable.
 3. Run examples:
 ```bash
 ./sage examples/exceptions.sage
+./sage examples/generators.sage
 ./sage examples/phase6_classes.sage
 ```
 
 ## 📝 Example Code
+
+### Generators (New! ✨)
+
+**`examples/generators.sage`**
+
+```sage
+# Basic generator with yield
+proc count_up_to(n):
+    let i = 0
+    while i < n:
+        yield i
+        i = i + 1
+
+let gen = count_up_to(5)
+print next(gen)  # 0
+print next(gen)  # 1
+print next(gen)  # 2
+print next(gen)  # 3
+print next(gen)  # 4
+
+# Infinite Fibonacci generator
+proc fibonacci():
+    let a = 0
+    let b = 1
+    while true:
+        yield a
+        let temp = a + b
+        a = b
+        b = temp
+
+let fib = fibonacci()
+print next(fib)  # 0
+print next(fib)  # 1
+print next(fib)  # 1
+print next(fib)  # 2
+print next(fib)  # 3
+print next(fib)  # 5
+
+# Generator with parameters
+proc range_step(start, end, step):
+    let i = start
+    while i < end:
+        yield i
+        i = i + step
+
+let evens = range_step(0, 10, 2)
+print next(evens)  # 0
+print next(evens)  # 2
+print next(evens)  # 4
+```
 
 ### Exception Handling
 
@@ -220,39 +272,6 @@ let point = (10, 20, 30)
 print point[0]  # 10
 ```
 
-### Generators
-
-```sage
-# Basic generator with yield
-proc count_up_to(n):
-    let i = 0
-    while i < n:
-        yield i
-        i = i + 1
-
-let gen = count_up_to(5)
-print next(gen)  # 0
-print next(gen)  # 1
-print next(gen)  # 2
-
-# Infinite Fibonacci generator
-proc fibonacci():
-    let a = 0
-    let b = 1
-    while true:
-        yield a
-        let temp = a + b
-        a = b
-        b = temp
-
-let fib = fibonacci()
-print next(fib)  # 0
-print next(fib)  # 1
-print next(fib)  # 1
-print next(fib)  # 2
-print next(fib)  # 3
-```
-
 ### Memory Management
 
 ```sage
@@ -279,8 +298,8 @@ gc_enable()
 - [x] **Phase 4: Memory Management** (Mark-and-Sweep Garbage Collection)
 - [x] **Phase 5: Advanced Data Structures** (Arrays, Dictionaries, Tuples, Slicing)
 - [x] **Phase 6: Object-Oriented Programming** (Classes, Inheritance, Methods) ✅
-- [x] **Phase 7: Control Flow** (for, break, continue, **exception handling**)**generators**) ✅ 100%
-- [ ] **Phase 8: Modules & Packages** (Imports, Package Manager) 📋 **NEXT**
+- [x] **Phase 7: Control Flow** (for, break, continue, exceptions, generators) ✅ **100% COMPLETE**
+- [ ] **Phase 8: Modules & Packages** (Imports, Package Manager) 🔄 **IN PROGRESS**
 - [ ] **Phase 9: Low-Level Programming** ⭐ *Planned*
   - Inline assembly (x86-64, ARM, RISC-V)
   - Pointer arithmetic and raw memory access
@@ -300,21 +319,22 @@ Sage aims to be a **systems programming language** that:
 - Provides low-level control (like C/Rust)
 - Supports modern OOP with classes and inheritance
 - Has robust exception handling for error management
+- Enables lazy evaluation with generators
 - Enables inline assembly for performance-critical code
 - Compiles to native code via C or LLVM
 - Eventually becomes self-hosted
 
 ### Future Capabilities
 
-**Module System:**
+**Module System (In Progress):**
 ```sage
 # Import modules
 import math
-import io from std
+from math import sqrt, pow
 
 # Use imported functions
-let result = math.sqrt(16)
-io.write_file("output.txt", "Hello")
+let result = sqrt(16.0)  # 4.0
+let power = pow(2, 8)    # 256
 ```
 
 **Low-Level Programming:**
@@ -340,35 +360,41 @@ proc write_memory(ptr: *mut u8, value: u8)
 ## 📊 Project Stats
 
 - **Language**: C
-- **Lines of Code**: ~52,000+
-- **Phases Completed**: 6.6/13 (51%)
-- **Status**: Advanced Development (OOP + Exceptions Complete)
+- **Lines of Code**: ~55,000+
+- **Phases Completed**: 7/13 (54%)
+- **Status**: Advanced Development (Phase 7 Complete, Phase 8 In Progress)
 - **License**: MIT
-- **Current Version**: v0.7.0
+- **Current Version**: v0.8.0-dev
 
 ## 💾 Project Structure
 
 ```
 sage/
 ├── include/          # Header files
-│   ├── ast.h         # AST nodes (classes, methods, exceptions)
+│   ├── ast.h         # AST nodes (classes, methods, exceptions, generators)
 │   ├── lexer.h       # Tokenization
 │   ├── parser.h      # Syntax analysis
 │   ├── env.h         # Scope management
-│   ├── value.h       # Type system (classes, instances, exceptions)
+│   ├── value.h       # Type system (classes, instances, exceptions, generators)
 │   ├── gc.h          # Garbage collection
-│   └── interpreter.h # Evaluator (ExecResult with exceptions)
+│   ├── module.h      # Module system (Phase 8)
+│   └── interpreter.h # Evaluator (ExecResult with exceptions & yield)
 ├── src/              # C implementation
 │   ├── main.c        # Entry point
-│   ├── lexer.c       # Tokenizer (try, catch, finally, raise)
-│   ├── parser.c      # Parser (exception statements, unary ops)
+│   ├── lexer.c       # Tokenizer (try, catch, finally, raise, yield)
+│   ├── parser.c      # Parser (exception statements, yield, imports)
 │   ├── ast.c         # AST constructors
-│   ├── env.h         # Environment
-│   ├── value.c       # Values (ExceptionValue type)
+│   ├── env.c         # Environment management
+│   ├── value.c       # Values (ExceptionValue, GeneratorValue)
 │   ├── gc.c          # Mark-and-sweep GC
-│   └── interpreter.c # Evaluator (exception propagation)
+│   ├── module.c      # Module loading and imports
+│   └── interpreter.c # Evaluator (exception propagation, yield support)
+├── lib/              # Standard library modules
+│   ├── math.sage     # Mathematical functions
+│   └── (more to come)
 ├── examples/         # Example programs
-│   ├── exceptions.sage      # Exception handling demo ✨ NEW
+│   ├── generators.sage      # Generator demo ✨ NEW
+│   ├── exceptions.sage      # Exception handling demo
 │   ├── phase6_classes.sage  # OOP demonstration
 │   ├── phase5_data.sage     # Data structures
 │   └── phase4_gc_demo.sage  # GC examples
@@ -382,11 +408,11 @@ sage/
 Sage is an educational project aimed at understanding compiler construction and language design. Contributions are welcome!
 
 ### Current Focus Areas
-1. **Complete Phase 7**: Match expressions, defer statements, generators
-2. **Module System**: Phase 8 implementation (imports, packages)
-3. **Testing**: Write test cases for exception handling and OOP
-4. **Standard Library**: Adding more native functions
-5. **Documentation**: Improving code comments and guides
+1. **Complete Phase 8**: Module system implementation (imports, standard library modules)
+2. **Testing**: Write test cases for generators and module imports
+3. **Standard Library**: Building out `lib/` modules (math, io, collections)
+4. **Documentation**: Improving code comments and guides
+5. **Bug Fixes**: Resolving issues with module loading
 
 ### How to Contribute
 1. Fork the project
@@ -418,7 +444,9 @@ Distributed under the MIT License. See `LICENSE` for more information.
 **Built with ❤️ for systems programming enthusiasts**
 
 **Recent Milestones:**
-- ✅ November 28, 2025, 11:30 AM: Phase 7 Exception Handling Complete - try/catch/finally/raise fully working
+- ✅ December 1, 2025: Phase 8 Started - Module system implementation in progress
+- ✅ November 29, 2025, 3:00 PM: Phase 7 Complete - Generators with yield/next fully working
+- ✅ November 28, 2025, 11:30 AM: Exception Handling Complete - try/catch/finally/raise
 - ✅ November 28, 2025, 9:00 AM: Phase 6 Complete - Object-Oriented Programming
 - ✅ November 27, 2025: Phase 5 Complete - Advanced Data Structures
 - ✅ November 27, 2025: Phase 4 Complete - Garbage Collection
