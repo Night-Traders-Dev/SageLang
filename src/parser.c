@@ -184,7 +184,6 @@ static Stmt* import_statement() {
             
         } while (match(TOKEN_COMMA));
         
-        // ✅ UPDATED: Pass item_aliases to new_import_stmt
         return new_import_stmt(module_name, items, item_aliases, item_count, NULL, 0);
     }
     
