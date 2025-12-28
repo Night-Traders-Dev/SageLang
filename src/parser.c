@@ -127,15 +127,16 @@ static Stmt* yield_statement() {
     return new_yield_stmt(value);
 }
 
-// PHASE 8: Import statement
+// PHASE 8: Import statement - WITH ALIASING SUPPORT
 static Stmt* import_statement() {
     // Three forms:
     // 1. import module_name
     // 2. import module_name as alias
     // 3. from module_name import item1, item2, ...
+    // 4. from module_name import item1 as alias1, item2 as alias2
     
     if (match(TOKEN_FROM)) {
-        // from module_name import item1, item2
+        // from module_name import item1 [as alias1], item2 [as alias2], ...
         consume(TOKEN_IDENTIFIER, "Expect module name after 'from'.");
         Token module_token = previous_token;
         
@@ -146,8 +147,9 @@ static Stmt* import_statement() {
         
         consume(TOKEN_IMPORT, "Expect 'import' after module name.");
         
-        // Parse imported items
+        // Parse imported items and their aliases
         char** items = NULL;
+        char** item_aliases = NULL;  // ✅ NEW: Store aliases
         int item_count = 0;
         int capacity = 0;
         
@@ -158,16 +160,32 @@ static Stmt* import_statement() {
             if (item_count >= capacity) {
                 capacity = capacity == 0 ? 4 : capacity * 2;
                 items = realloc(items, sizeof(char*) * capacity);
+                item_aliases = realloc(item_aliases, sizeof(char*) * capacity);  // ✅ NEW
             }
             
+            // Store the original item name
             items[item_count] = malloc(item_token.length + 1);
             memcpy(items[item_count], item_token.start, item_token.length);
             items[item_count][item_token.length] = '\0';
+            
+            // ✅ NEW: Check for 'as alias'
+            if (match(TOKEN_AS)) {
+                consume(TOKEN_IDENTIFIER, "Expect alias name after 'as'.");
+                Token alias_token = previous_token;
+                
+                item_aliases[item_count] = malloc(alias_token.length + 1);
+                memcpy(item_aliases[item_count], alias_token.start, alias_token.length);
+                item_aliases[item_count][alias_token.length] = '\0';
+            } else {
+                item_aliases[item_count] = NULL;  // No alias for this item
+            }
+            
             item_count++;
             
         } while (match(TOKEN_COMMA));
         
-        return new_import_stmt(module_name, items, item_count, NULL, 0);
+        // ✅ UPDATED: Pass item_aliases to new_import_stmt
+        return new_import_stmt(module_name, items, item_aliases, item_count, NULL, 0);
     }
     
     // import module_name [as alias]
@@ -189,7 +207,8 @@ static Stmt* import_statement() {
     }
     
     // import_all = 1 (importing entire module)
-    return new_import_stmt(module_name, NULL, 0, alias, 1);
+    // item_aliases = NULL (not used for module-level imports)
+    return new_import_stmt(module_name, NULL, NULL, 0, alias, 1);
 }
 
 // primary -> NUMBER | STRING | BOOLEAN | NIL | SELF | ( expr/tuple ) | [ array ] | { dict } | IDENTIFIER | CALL

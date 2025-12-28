@@ -203,13 +203,13 @@ typedef struct {
     Expr* value;  // Expression to yield (can be NULL for yield without value)
 } YieldStmt;
 
-// PHASE 8: Import statement
 typedef struct {
-    char* module_name;     // Name of module to import
-    char** items;          // Items to import (NULL for "import module")
-    int item_count;        // Number of items (0 for "import module")
-    char* alias;           // Alias for module or item (NULL if no alias)
-    int import_all;        // 1 for "import module", 0 for "from module import"
+    char* module_name;      // Name of module to import
+    char** items;           // Items to import (NULL for "import module")
+    char** item_aliases;    // ✅ NEW: Aliases for items (from X import Y as Z)
+    int item_count;         // Number of items (0 for "import module")
+    char* alias;            // Alias for module (import X as Y)
+    int import_all;         // 1 for "import module", 0 for "from module import"
 } ImportStmt;
 
 struct Stmt {
@@ -290,6 +290,6 @@ Stmt* new_try_stmt(Stmt* try_block, CatchClause** catches, int catch_count, Stmt
 CatchClause* new_catch_clause(Token exception_var, Stmt* body);
 Stmt* new_raise_stmt(Expr* exception);
 Stmt* new_yield_stmt(Expr* value);  // Phase 7: Generator yield constructor
-Stmt* new_import_stmt(char* module_name, char** items, int item_count, char* alias, int import_all);  // Phase 8: Import constructor
+Stmt* new_import_stmt(char* module_name, char** items, char** item_aliases, int item_count, char* alias, int import_all);  // Phase 8: Import constructor
 
 #endif
