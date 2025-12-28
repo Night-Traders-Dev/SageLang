@@ -2,6 +2,9 @@
 
 **A clean, indentation-based systems programming language built in C.**
 
+![SageLang Logo](assets/SageLang.jpg)
+
+
 Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It is currently in the **advanced development phase**, with a fully working interpreter featuring **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, and rich data structures.
 
 ## 🚀 Features (Implemented)
