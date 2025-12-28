@@ -46,7 +46,7 @@ Value val_string(char* value) {
 Value val_function(void* proc) {
     Value v;
     v.type = VAL_FUNCTION;
-    v.as.function = gc_allocate(sizeof(FunctionValue), OBJ_FUNCTION);
+    v.as.function = gc_alloc(VAL_FUNCTION, sizeof(FunctionValue));
     v.as.function->proc = proc;
     return v;
 }
