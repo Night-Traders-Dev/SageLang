@@ -246,43 +246,34 @@ bool import_all(Environment* env, const char* module_name) {
     return true;
 }
 
-// Import specific items: from math import sqrt, cos
 bool import_from(Environment* env, const char* module_name, ImportItem* items, int count) {
     if (!global_module_cache) {
         fprintf(stderr, "Error: Module system not initialized\n");
         return false;
     }
-    
-    // Load the module
+
     Module* module = load_module(global_module_cache, module_name);
-    if (!module) {
-        return false;
-    }
-    
-    // Execute module if not already loaded
-    if (!execute_module(module, env)) {
-        return false;
-    }
-    
-    // Import each specified item
+    if (!module) return false;
+
+    if (!execute_module(module, env)) return false;
+
     for (int i = 0; i < count; i++) {
         const char* item_name = items[i].name;
-        const char* alias = items[i].alias ? items[i].alias : item_name;
+        const char* bind_name = items[i].alias ? items[i].alias : item_name;  // ✅ NEW
         
-        // Look up the item in the module's environment
         Value value;
         if (!env_get(module->env, item_name, strlen(item_name), &value)) {
-            fprintf(stderr, "Error: Module '%s' has no attribute '%s'\n", 
-                    module_name, item_name);
+            fprintf(stderr, "Error: Module '%s' has no attribute '%s'\n",
+            module_name, item_name);
             return false;
         }
-        
-        // Define in current environment (with alias if provided)
-        env_define(env, alias, strlen(alias), value);
+
+        env_define(env, bind_name, strlen(bind_name), value);  // ✅ FIX: Use alias or original
     }
-    
+
     return true;
 }
+
 
 // Import with alias: import math as m
 bool import_as(Environment* env, const char* module_name, const char* alias) {

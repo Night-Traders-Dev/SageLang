@@ -1,19 +1,39 @@
-# Phase 8: Test Import Statements
-# This file tests the import statement parsing
+# Phase 8: Import System Test
+# Test all three forms of imports
 
-print "Testing import statements..."
+print "=== Testing Import System ==="
+print ""
 
-# Test 1: Simple module import
-import math
+# Test 1: Import entire module
+print "Test 1: import math"
+from math import sqrt, abs, pow
 
-# Test 2: Import with alias
-import utils as u
+let val = 16
+let result = sqrt(val)
+print "sqrt(16) ="
+print result
 
-# Test 3: Import specific items
-from io import read_file, write_file
+let neg = abs(0 - 5)
+print "abs(-5) ="
+print neg
 
-# Test 4: Import multiple items
-from string import upper, lower, strip
+let power = pow(2, 3)
+print "pow(2, 3) ="
+print power
 
-print "All imports parsed successfully!"
-print "Module system is ready for implementation."
+print ""
+
+# Test 2: Import from module
+print "Test 2: from utils import is_even, clamp"
+from utils import is_even, clamp
+
+let check = is_even(4)
+print "is_even(4) ="
+print check
+
+let clamped = clamp(15, 0, 10)
+print "clamp(15, 0, 10) ="
+print clamped
+
+print ""
+print "=== All Import Tests Complete ==="

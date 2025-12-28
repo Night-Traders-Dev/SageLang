@@ -293,14 +293,14 @@ Stmt* new_yield_stmt(Expr* value) {
 
 // ========== PHASE 8: MODULE IMPORTS ==========
 
-Stmt* new_import_stmt(char* module_name, char** items, int item_count, char* alias, int import_all) {
-    Stmt* s = malloc(sizeof(Stmt));
-    s->type = STMT_IMPORT;
-    s->as.import.module_name = strdup(module_name);
-    s->as.import.items = items;
-    s->as.import.item_count = item_count;
-    s->as.import.alias = alias ? strdup(alias) : NULL;
-    s->as.import.import_all = import_all;
-    s->next = NULL;
-    return s;
+Stmt* new_import_stmt(char* module_name, char** items, char** item_aliases, int item_count, char* alias, int import_all) {
+    Stmt* stmt = malloc(sizeof(Stmt));
+    stmt->type = STMT_IMPORT;
+    stmt->as.import.module_name = module_name;
+    stmt->as.import.items = items;
+    stmt->as.import.item_aliases = item_aliases;
+    stmt->as.import.item_count = item_count;
+    stmt->as.import.alias = alias;
+    stmt->as.import.import_all = import_all;
+    return stmt;
 }

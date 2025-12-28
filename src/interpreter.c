@@ -1079,17 +1079,18 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 ImportItem* import_items = malloc(sizeof(ImportItem) * item_count);
                 for (int i = 0; i < item_count; i++) {
                     import_items[i].name = items[i];
-                    import_items[i].alias = NULL;  // TODO: support 'from X import Y as Z'
+                    import_items[i].alias = stmt->as.import.item_aliases[i];  // ✅ FIX: Use parsed alias
                 }
-                
+
                 if (!import_from(env, module_name, import_items, item_count)) {
                     fprintf(stderr, "Error: Failed to import from module '%s'\n", module_name);
                     free(import_items);
                     return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL };
                 }
-                
+
                 free(import_items);
             }
+
             
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
