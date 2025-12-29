@@ -42,14 +42,15 @@ Value val_string(char* value) {
     return v;
 }
 
-// PHASE 8: Function value constructor
-Value val_function(void* proc) {
+Value val_function(void* proc, Env* closure) {
     Value v;
     v.type = VAL_FUNCTION;
     v.as.function = gc_alloc(VAL_FUNCTION, sizeof(FunctionValue));
     v.as.function->proc = proc;
+    v.as.function->closure = closure;
     return v;
 }
+
 
 Value val_array() {
     Value v;

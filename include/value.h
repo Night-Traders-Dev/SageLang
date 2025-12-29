@@ -1,3 +1,5 @@
+/* PATCHED: value.h */
+
 #ifndef SAGE_VALUE_H
 #define SAGE_VALUE_H
 
@@ -5,8 +7,9 @@
 typedef struct Value Value;
 typedef struct ClassValue ClassValue;
 typedef struct InstanceValue InstanceValue;
-typedef struct Env Env;  // Forward declare from env.h
-typedef Env Environment;  // Alias for compatibility
+typedef struct Env Env; // Forward declare from env.h
+typedef Env Environment; // Alias for compatibility
+
 typedef Value (*NativeFn)(int argCount, Value* args);
 
 // Array structure
@@ -24,7 +27,7 @@ typedef struct {
 
 // Dictionary structure (simple hash map)
 typedef struct {
-    DictEntry* entries;  // FIXED: was DictValue* entries
+    DictEntry* entries; // FIXED: was DictValue* entries
     int count;
     int capacity;
 } DictValue;
@@ -39,14 +42,14 @@ typedef struct {
 typedef struct {
     char* name;
     int name_len;
-    void* method_stmt;  // Pointer to ProcStmt (avoid circular dependency)
+    void* method_stmt; // Pointer to ProcStmt (avoid circular dependency)
 } Method;
 
 // Class structure
 struct ClassValue {
     char* name;
     int name_len;
-    ClassValue* parent;  // For inheritance
+    ClassValue* parent; // For inheritance
     Method* methods;
     int method_count;
 };
@@ -54,29 +57,30 @@ struct ClassValue {
 // Instance structure
 struct InstanceValue {
     ClassValue* class_def;
-    DictValue* fields;  // Instance variables
+    DictValue* fields; // Instance variables
 };
 
 // PHASE 7: Exception structure
 typedef struct {
-    char* message;  // Error message
+    char* message; // Error message
 } ExceptionValue;
 
 // PHASE 7: Generator structure (for yield support)
 typedef struct {
-    void* body;              // Pointer to Stmt (function body containing yields)
-    void* params;            // Pointer to Token array (parameters)
-    int param_count;         // Number of parameters
-    Env* closure;            // Captured environment when generator was created
-    Env* gen_env;            // Generator's execution environment (preserved state)
-    int is_started;          // Has generator been started?
-    int is_exhausted;        // Has generator finished?
-    void* current_stmt;      // Current statement position (for resumption)
+    void* body; // Pointer to Stmt (function body containing yields)
+    void* params; // Pointer to Token array (parameters)
+    int param_count; // Number of parameters
+    Env* closure; // Captured environment when generator was created
+    Env* gen_env; // Generator's execution environment (preserved state)
+    int is_started; // Has generator been started?
+    int is_exhausted; // Has generator finished?
+    void* current_stmt; // Current statement position (for resumption)
 } GeneratorValue;
 
 // PHASE 8: Function value structure (for module exports)
 typedef struct {
-    void* proc;  // Pointer to ProcStmt
+    void* proc; // Pointer to ProcStmt
+    Env* closure; // ✅ NEW: Closure environment where function was defined
 } FunctionValue;
 
 typedef enum {
@@ -92,7 +96,7 @@ typedef enum {
     VAL_CLASS,
     VAL_INSTANCE,
     VAL_EXCEPTION,
-    VAL_GENERATOR  // NEW: Generator type
+    VAL_GENERATOR // NEW: Generator type
 } ValueType;
 
 struct Value {
@@ -102,43 +106,43 @@ struct Value {
         int boolean;
         char* string;
         NativeFn native;
-        FunctionValue* function;  // PHASE 8: Function value
+        FunctionValue* function; // PHASE 8: Function value
         ArrayValue* array;
         DictValue* dict;
         TupleValue* tuple;
         ClassValue* class_val;
         InstanceValue* instance;
         ExceptionValue* exception;
-        GeneratorValue* generator;  // NEW: Generator value
+        GeneratorValue* generator; // NEW: Generator value
     } as;
 };
 
 // Macros for checking type
 #define IS_NUMBER(v) ((v).type == VAL_NUMBER)
-#define IS_BOOL(v)   ((v).type == VAL_BOOL)
-#define IS_NIL(v)    ((v).type == VAL_NIL)
+#define IS_BOOL(v) ((v).type == VAL_BOOL)
+#define IS_NIL(v) ((v).type == VAL_NIL)
 #define IS_STRING(v) ((v).type == VAL_STRING)
-#define IS_FUNCTION(v) ((v).type == VAL_FUNCTION)  // PHASE 8
-#define IS_ARRAY(v)  ((v).type == VAL_ARRAY)
-#define IS_DICT(v)   ((v).type == VAL_DICT)
-#define IS_TUPLE(v)  ((v).type == VAL_TUPLE)
-#define IS_CLASS(v)  ((v).type == VAL_CLASS)
+#define IS_FUNCTION(v) ((v).type == VAL_FUNCTION) // PHASE 8
+#define IS_ARRAY(v) ((v).type == VAL_ARRAY)
+#define IS_DICT(v) ((v).type == VAL_DICT)
+#define IS_TUPLE(v) ((v).type == VAL_TUPLE)
+#define IS_CLASS(v) ((v).type == VAL_CLASS)
 #define IS_INSTANCE(v) ((v).type == VAL_INSTANCE)
 #define IS_EXCEPTION(v) ((v).type == VAL_EXCEPTION)
-#define IS_GENERATOR(v) ((v).type == VAL_GENERATOR)  // NEW
+#define IS_GENERATOR(v) ((v).type == VAL_GENERATOR) // NEW
 
 // Macros for accessing values
 #define AS_NUMBER(v) ((v).as.number)
-#define AS_BOOL(v)   ((v).as.boolean)
+#define AS_BOOL(v) ((v).as.boolean)
 #define AS_STRING(v) ((v).as.string)
-#define AS_FUNCTION(v) ((v).as.function->proc)  // PHASE 8
-#define AS_ARRAY(v)  ((v).as.array)
-#define AS_DICT(v)   ((v).as.dict)
-#define AS_TUPLE(v)  ((v).as.tuple)
-#define AS_CLASS(v)  ((v).as.class_val)
+#define AS_FUNCTION(v) ((v).as.function->proc) // PHASE 8
+#define AS_ARRAY(v) ((v).as.array)
+#define AS_DICT(v) ((v).as.dict)
+#define AS_TUPLE(v) ((v).as.tuple)
+#define AS_CLASS(v) ((v).as.class_val)
 #define AS_INSTANCE(v) ((v).as.instance)
 #define AS_EXCEPTION(v) ((v).as.exception)
-#define AS_GENERATOR(v) ((v).as.generator)  // NEW
+#define AS_GENERATOR(v) ((v).as.generator) // NEW
 
 // Constructors
 Value val_number(double value);
@@ -146,14 +150,14 @@ Value val_bool(int value);
 Value val_nil();
 Value val_string(char* value);
 Value val_native(NativeFn fn);
-Value val_function(void* proc);  // PHASE 8
+Value val_function(void* proc, Env* closure); // ✅ CHANGED: Added closure parameter
 Value val_array();
 Value val_dict();
 Value val_tuple(Value* elements, int count);
 Value val_class(ClassValue* class_val);
 Value val_instance(InstanceValue* instance);
 Value val_exception(const char* message);
-Value val_generator(void* body, void* params, int param_count, Env* closure);  // NEW
+Value val_generator(void* body, void* params, int param_count, Env* closure); // NEW
 
 // Helpers
 void print_value(Value v);

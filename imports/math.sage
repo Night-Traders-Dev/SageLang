@@ -1,36 +1,34 @@
-# Math Module for SageLang - UPDATED with all functions
+# math.sage
 
-proc add(a, b):
-    return a + b
+proc add(x, y):
+    return (x + y)
 
-proc subtract(a, b):
-    return a - b
+proc subtract(x, y):
+    return (x - y)
 
-proc multiply(a, b):
-    return a * b
+proc multiply(x, y):
+    return (x * y)
 
-proc divide(a, b):
+proc divide(x, y):
     if (b == 0):
-        print("Error: Division by zero")
         return 0
-    return a / b
+    return (x / y)
 
 proc sqrt(x):
     if (x < 0):
-        print("Error: Cannot take square root of negative number")
         return 0
-    # Simple Newton's method approximation
-    if (x == 0):
+
+    elif (x == 0):
         return 0
-    if (x == 1):
+    elif (x == 1):
         return 1
-    
-    var result = x
-    var i = 0
-    while (i < 10):
-        result = (result + x / result) / 2
-        i = i + 1
-    return result
+    else:
+        var result = x
+        var i = 0
+        while (i < 10):
+            result = (result + x / result) / 2
+            i = i + 1
+        return result
 
 proc square(x):
     return x * x
@@ -40,13 +38,13 @@ proc abs(x):
         return -x
     return x
 
-proc max(a, b):
-    if (a > b):
+proc max(x, y):
+    if (x > y):
         return a
     return b
 
-proc min(a, b):
-    if (a < b):
+proc min(x, y):
+    if (x < y):
         return a
     return b
 
@@ -62,19 +60,17 @@ proc pow(base, exp):
     return power(base, exp)
 
 proc sin(x):
-    # Approximate sine using Taylor series (simplified)
     if (x == 0): 
         return 0
-    return 0  # Placeholder for actual sin implementation
+    return 0
 
 proc cos(x):
-    # Approximate cosine using Taylor series (simplified)
     if (x == 0): 
         return 1
-    return 1  # Placeholder for actual cos implementation
+    return 1
 
 proc pi():
     return 3.14159265359
 
 # Test that module loads correctly
-# print("Math module loaded successfully!")
+print("Math module loaded successfully!")
