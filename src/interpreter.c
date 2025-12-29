@@ -711,7 +711,8 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                         return EVAL_RESULT(val_nil());
                     }
 
-                    Env* scope = env_create(env); 
+                    Env* closure = classVal.as.function->closure;
+                    Env* scope = env_create(closure);
                     for (int i = 0; i < func->param_count; i++) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
                         if (arg_result.is_throwing) return arg_result;
@@ -946,7 +947,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 // Add to global registry for backwards compatibility
                 define_function(&stmt->as.proc);
                 // PHASE 8: Also add to environment for module exports
-                func_val = val_function(&stmt->as.proc);
+                func_val = val_function(&stmt->as.proc, env);
             }
             
             env_define(env, name.start, name.length, func_val);
