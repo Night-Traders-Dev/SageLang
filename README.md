@@ -4,7 +4,6 @@
 
 ![SageLang Logo](assets/SageLang.jpg)
 
-
 Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It is currently in the **advanced development phase**, with a fully working interpreter featuring **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, and rich data structures.
 
 ## 🚀 Features (Implemented)
@@ -203,11 +202,11 @@ class Person:
     proc init(self, name, age):
         self.name = name
         self.age = age
-    
+
     proc greet(self):
         print "Hello, my name is " + self.name
         print "I am " + str(self.age) + " years old"
-    
+
     proc birthday(self):
         self.age = self.age + 1
         print "Happy birthday!"
@@ -232,7 +231,7 @@ print alice.age
 class Animal:
     proc init(self, name):
         self.name = name
-    
+
     proc speak(self):
         print "Some sound"
 
@@ -241,10 +240,10 @@ class Dog(Animal):
     proc init(self, name, breed):
         self.name = name
         self.breed = breed
-    
+
     proc speak(self):
         print "Woof! Woof!"
-    
+
     proc info(self):
         print self.name + " is a " + self.breed
 
@@ -302,7 +301,14 @@ gc_enable()
 - [x] **Phase 5: Advanced Data Structures** (Arrays, Dictionaries, Tuples, Slicing)
 - [x] **Phase 6: Object-Oriented Programming** (Classes, Inheritance, Methods) ✅
 - [x] **Phase 7: Control Flow** (for, break, continue, exceptions, generators) ✅ **100% COMPLETE**
-- [ ] **Phase 8: Modules & Packages** (Imports, Package Manager) 🔄 **IN PROGRESS**
+- [ ] **Phase 8: Modules & Packages** (Imports, Package Manager) 🔄 **IN PROGRESS (60%)**
+  - [x] Import statement parsing (`import`, `from...import`)
+  - [x] Module loader infrastructure  
+  - [x] Module caching system
+  - [x] Function closure support for exports
+  - [ ] Complete module execution pipeline 🚧
+  - [ ] Symbol export/import resolution 🚧
+  - [ ] Standard library modules
 - [ ] **Phase 9: Low-Level Programming** ⭐ *Planned*
   - Inline assembly (x86-64, ARM, RISC-V)
   - Pointer arithmetic and raw memory access
@@ -343,9 +349,9 @@ let power = pow(2, 8)    # 256
 **Low-Level Programming:**
 ```sage
 # Inline assembly
-proc fast_multiply(a: i64, b: i64) -> i64
+proc fast_multiply(a: i64, b: i64) -> i64:
     let result: i64
-    asm
+    asm:
         "mov rax, {a}"
         "imul {b}"
         "mov {result}, rax"
@@ -355,8 +361,8 @@ proc fast_multiply(a: i64, b: i64) -> i64
     return result
 
 # Pointer operations
-proc write_memory(ptr: *mut u8, value: u8)
-    unsafe
+proc write_memory(ptr: *mut u8, value: u8):
+    unsafe:
         *ptr = value
 ```
 
@@ -365,7 +371,8 @@ proc write_memory(ptr: *mut u8, value: u8)
 - **Language**: C
 - **Lines of Code**: ~55,000+
 - **Phases Completed**: 7/13 (54%)
-- **Status**: Advanced Development (Phase 7 Complete, Phase 8 In Progress)
+- **Phase 8 Progress**: 60% (Module system infrastructure complete, execution pipeline in progress)
+- **Status**: Advanced Development
 - **License**: MIT
 - **Current Version**: v0.8.0-dev
 
@@ -374,33 +381,36 @@ proc write_memory(ptr: *mut u8, value: u8)
 ```
 sage/
 ├── include/          # Header files
-│   ├── ast.h         # AST nodes (classes, methods, exceptions, generators)
+│   ├── ast.h         # AST nodes (classes, methods, exceptions, generators, imports)
 │   ├── lexer.h       # Tokenization
 │   ├── parser.h      # Syntax analysis
 │   ├── env.h         # Scope management
-│   ├── value.h       # Type system (classes, instances, exceptions, generators)
+│   ├── value.h       # Type system (FunctionValue with closures)
 │   ├── gc.h          # Garbage collection
 │   ├── module.h      # Module system (Phase 8)
 │   └── interpreter.h # Evaluator (ExecResult with exceptions & yield)
 ├── src/              # C implementation
 │   ├── main.c        # Entry point
-│   ├── lexer.c       # Tokenizer (try, catch, finally, raise, yield)
-│   ├── parser.c      # Parser (exception statements, yield, imports)
+│   ├── lexer.c       # Tokenizer (import keywords)
+│   ├── parser.c      # Parser (import statements)
 │   ├── ast.c         # AST constructors
 │   ├── env.c         # Environment management
-│   ├── value.c       # Values (ExceptionValue, GeneratorValue)
+│   ├── value.c       # Values (FunctionValue closures)
 │   ├── gc.c          # Mark-and-sweep GC
-│   ├── module.c      # Module loading and imports
-│   └── interpreter.c # Evaluator (exception propagation, yield support)
+│   ├── module.c      # Module loading and caching
+│   └── interpreter.c # Evaluator (exception propagation, yield, imports)
 ├── lib/              # Standard library modules
-│   ├── math.sage     # Mathematical functions
-│   └── (more to come)
+│   ├── math.sage     # Mathematical functions (in development)
+│   └── (more planned)
 ├── examples/         # Example programs
-│   ├── generators.sage      # Generator demo ✨ NEW
+│   ├── generators.sage      # Generator demo ✨
 │   ├── exceptions.sage      # Exception handling demo
 │   ├── phase6_classes.sage  # OOP demonstration
 │   ├── phase5_data.sage     # Data structures
 │   └── phase4_gc_demo.sage  # GC examples
+├── testing/          # Test files
+│   ├── test.sage     # Import testing
+│   └── math.sage     # Test module
 ├── ROADMAP.md        # Detailed development roadmap
 ├── Makefile          # Build script
 └── README.md         # This file
@@ -410,12 +420,12 @@ sage/
 
 Sage is an educational project aimed at understanding compiler construction and language design. Contributions are welcome!
 
-### Current Focus Areas
-1. **Complete Phase 8**: Module system implementation (imports, standard library modules)
-2. **Testing**: Write test cases for generators and module imports
+### Current Focus Areas (Phase 8 - 60% Complete)
+1. **Module Execution Pipeline**: Fix function export/import closure handling
+2. **Symbol Resolution**: Complete environment isolation for modules
 3. **Standard Library**: Building out `lib/` modules (math, io, collections)
-4. **Documentation**: Improving code comments and guides
-5. **Bug Fixes**: Resolving issues with module loading
+4. **Testing**: Write comprehensive test cases for module imports
+5. **Bug Fixes**: Resolve module loading edge cases
 
 ### How to Contribute
 1. Fork the project
@@ -447,6 +457,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 **Built with ❤️ for systems programming enthusiasts**
 
 **Recent Milestones:**
+- ✅ December 28, 2025: Phase 8 60% - Function closure support added, module infrastructure complete
 - ✅ December 1, 2025: Phase 8 Started - Module system implementation in progress
 - ✅ November 29, 2025, 3:00 PM: Phase 7 Complete - Generators with yield/next fully working
 - ✅ November 28, 2025, 11:30 AM: Exception Handling Complete - try/catch/finally/raise

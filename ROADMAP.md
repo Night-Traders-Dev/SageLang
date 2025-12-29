@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: December 1, 2025, 7:50 PM EST
-> **Current Phase**: Phase 8 (30% complete) 🔄 IN PROGRESS
+> **Last Updated**: December 28, 2025, 9:10 PM EST
+> **Current Phase**: Phase 8 (60% complete) 🔄 IN PROGRESS
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -205,25 +205,31 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 ## 🔄 Current Phase
 
 ### Phase 8: Modules & Package System
-**Status**: 🔄 **30% COMPLETE** (In Progress - December 1, 2025)
+**Status**: 🔄 **60% COMPLETE** (In Progress - December 28, 2025)
 
-#### Module System (In Progress)
-- [x] **`import` statement parsing** - Syntax support
-- [x] **`from X import Y` parsing** - Selective imports
+#### Module System Implementation ✅ (Core Infrastructure)
+- [x] **`import` statement parsing** - Full syntax support
+- [x] **`from X import Y` parsing** - Selective imports with aliases
+- [x] **`import X as Y` parsing** - Module aliasing
 - [x] **Module AST node** - STMT_IMPORT representation
-- [x] **Module loader** - Basic file loading infrastructure
-- [x] **Standard library location** - `lib/` directory
-- [x] **Module caching** - Load modules once
-- [ ] **Module execution** - Run module code in isolated environment 🚧 IN PROGRESS
-- [ ] **Symbol export** - Export functions/values from modules
-- [ ] **Import resolution** - Find and load requested symbols
-- [ ] **Namespace management** - Prevent naming conflicts
-- [ ] **Circular dependency detection** - Avoid infinite loops
-- [ ] **Relative imports** - `from .sibling import func`
-- [ ] **Import aliases** - `import math as m`
+- [x] **Module loader infrastructure** - File loading and caching
+- [x] **Module caching** - Load modules once, reuse everywhere
+- [x] **Search path system** - `./`, `./lib/`, `./modules/`
+- [x] **Function closures** - FunctionValue stores Env* closure
+- [x] **Closure capture** - Functions remember defining environment
+
+#### Module Execution (In Progress) 🚧
+- [x] **Module parsing** - Lex and parse imported files
+- [x] **Module environment creation** - Isolated namespace per module
+- [x] **Import statement execution** - import/from/as handling
+- [ ] **Module execution pipeline** - Complete environment parent chain 🚧 **ACTIVE**
+- [ ] **Symbol export** - Functions visible to importers 🚧 **ACTIVE**
+- [ ] **Symbol resolution** - Correct closure lookup 🚧 **ACTIVE**
+- [ ] **Circular dependency detection** - Prevent infinite loops
+- [ ] **Error reporting** - Clear import failure messages
 
 #### Standard Library Modules (Planned)
-- [x] **`lib/math.sage`** - Basic math module created
+- [x] **`testing/math.sage`** - Basic test module created
 - [ ] **Math functions** - sqrt, pow, sin, cos, tan, abs, floor, ceil
 - [ ] **`lib/io.sage`** - File I/O operations
 - [ ] **`lib/collections.sage`** - Additional data structures
@@ -231,15 +237,25 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - [ ] **`lib/sys.sage`** - System information
 
 #### Module Features (Planned)
+- [ ] **Relative imports** - `from .sibling import func`
 - [ ] **Module-level variables** - Global state in modules
 - [ ] **Module initialization** - Run code on first import
 - [ ] **Re-export support** - `from X import *`
 - [ ] **Submodules** - Nested module packages
+- [ ] **Module objects** - VAL_MODULE type for module values
 
-#### Known Issues
-- 🚧 Function export/import not working correctly
-- 🚧 Module environment isolation incomplete
-- 🚧 Symbol resolution needs refinement
+#### Known Issues & Active Work
+- 🚧 **Module environment parent chain** - Needs to use passed `global_env` not `g_global_env`
+- 🚧 **Function closure execution** - Functions need to execute in their closure, not caller env
+- 🚧 **Symbol visibility** - Imported functions not executing correctly
+- 🚧 **Environment isolation** - Module environments need proper scoping
+
+#### Technical Achievements (Phase 8)
+- **FunctionValue now stores closures**: Added `Env* closure` field to capture defining environment
+- **val_function signature updated**: Now takes `(void* proc, Env* closure)` parameters
+- **Function call uses closure**: Creates scope from function's closure, not caller's environment
+- **STMT_PROC captures environment**: Functions defined in modules capture their module env
+- **Module caching system**: Prevents redundant module loads and circular dependencies
 
 ---
 
@@ -336,27 +352,30 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ## 🎯 Milestone Targets
 
-### Near-Term (Current - 1 month)
+### Near-Term (Current - 2 weeks)
 - ✅ Complete Phase 7 (Control Flow) **DONE**
-- 🔄 Complete Phase 8 (Module System) **IN PROGRESS**
-  - ✅ Parser support
-  - 🔄 Module loading and execution
-  - 📅 Symbol export/import
+- 🔄 Complete Phase 8 (Module System) **IN PROGRESS (60%)**
+  - ✅ Parser support **DONE**
+  - ✅ Module loading infrastructure **DONE**
+  - ✅ Function closure support **DONE**
+  - 🚧 Module execution pipeline **ACTIVE**
+  - 📅 Symbol export/import resolution
   - 📅 Standard library modules
 
-### Mid-Term (2-4 months)
-- Complete Phase 8 fully (all import variants)
-- Build standard library (math, io, collections)
+### Mid-Term (1-2 months)
+- Complete Phase 8 fully (all import variants working)
+- Build standard library (math, io, collections, string, sys)
+- Write comprehensive module tests
 - Begin Phase 9 (Low-level features)
 - Prototype inline assembly
 
-### Long-Term (4-8 months)
+### Long-Term (2-4 months)
 - Complete Phase 9 (Low-level features)
 - Complete Phase 10 (Full compiler)
 - Begin Phase 11 (Concurrency)
 - Start C backend code generation
 
-### Vision (8-18+ months)
+### Vision (6-12+ months)
 - Fully self-hosted compiler
 - Mature ecosystem with package manager
 - Production-ready tooling
@@ -367,21 +386,30 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 ## 📊 Progress Metrics
 
 - **Lines of C Code**: ~55,000+ (current implementation)
-- **Implemented Features**: 95/220+ planned (43%)
+- **Implemented Features**: 110/240+ planned (46%)
 - **Phases Completed**: 7/13 (54%)
-  - Phase 8: 30% complete (3/10 major features)
+  - Phase 8: 60% complete (6/10 major features)
 - **Estimated Completion**: 2026-2027 (self-hosting)
 
 ---
 
 ## 📝 Recent Updates
 
+### December 28, 2025, 9:10 PM EST
+- **Phase 8 Progress: 60% Complete**
+- Added function closure support to FunctionValue struct
+- Updated val_function() to capture environment at definition time
+- Modified function calls to use closure environment instead of caller environment
+- STMT_PROC now captures defining environment in function values
+- Module infrastructure fully operational (parsing, loading, caching)
+- Identified and documented module execution pipeline bug
+- Created testing framework for imports
+
 ### December 1, 2025
 - Started Phase 8: Module system implementation
 - Added import statement parsing
 - Created module loader infrastructure
 - Built `lib/math.sage` standard library module
-- Identified function export/import issues
 
 ### November 29, 2025, 3:00 PM EST
 - ✅ **Phase 7 Complete (100%)**
@@ -402,22 +430,29 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 We welcome contributions at all phases! Here's how you can help:
 
-### Current Priorities (Phase 8)
-1. **Module System Debugging** - Fix function export/import issues
-2. **Standard Library** - Implement math, io, string modules
-3. **Testing** - Create module import test cases
-4. **Documentation** - Write module system guide
-5. **Examples** - Real-world module usage examples
+### Current Priorities (Phase 8 - 60% Complete)
+1. **Module Execution Pipeline** - Fix environment parent chain bug in `module.c`
+2. **Symbol Resolution** - Ensure imported functions execute with correct closures
+3. **Testing** - Create comprehensive test cases for all import types
+4. **Standard Library** - Implement math, io, string, sys modules
+5. **Documentation** - Write module system usage guide
+
+### High-Impact Tasks (Help Wanted!)
+- **Bug Fix**: Module environment should use passed `global_env` not `g_global_env`
+- **Feature**: Implement `import math as m` fully
+- **Feature**: Add error messages for failed imports
+- **Testing**: Write tests for circular dependency detection
+- **Documentation**: Create module authoring guide
 
 ### Getting Started
 1. Check the current phase status above
-2. Pick an unchecked item that interests you
+2. Pick an unchecked item or known issue
 3. Open an issue to discuss your approach
 4. Submit a pull request with your implementation
 
 ### Development Areas
 - **Core Language**: Parser, interpreter, type system
-- **Standard Library**: Built-in modules and functions
+- **Module System**: Import resolution, standard library
 - **Tooling**: Build system, testing framework
 - **Documentation**: Guides, examples, API docs
 - **Testing**: Unit tests, integration tests
