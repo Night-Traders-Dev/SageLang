@@ -153,7 +153,7 @@ bool execute_module(Module* module, Environment* global_env) {
     }
     
     // Create module environment (child of global)
-    module->env = env_create(g_global_env);
+    module->env = env_create(global_env);
     
     // Lex and parse the module
     init_lexer(source);
