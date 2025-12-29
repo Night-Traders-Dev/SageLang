@@ -6,10 +6,12 @@
 #include "interpreter.h"
 #include "env.h"
 #include "gc.h"
-#include "module.h"  // Phase 8: Module system
+#include "module.h"
 
 Stmt* parse();
 void parser_init();
+extern Environment* g_global_env;
+
 
 // Helper to read entire file into memory
 static char* read_file(const char* path) {
@@ -40,6 +42,7 @@ static void run(const char* source) {
     init_lexer(source);
     parser_init();
     Env* env = env_create(NULL);
+    g_global_env = env;
     init_stdlib(env);
 
     while (1) {

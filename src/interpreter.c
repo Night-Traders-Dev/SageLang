@@ -25,6 +25,9 @@ typedef struct ProcNode {
 
 static ProcNode* functions = NULL;
 
+Environment* g_global_env = NULL;
+
+
 static void define_function(ProcStmt* stmt) {
     ProcNode* node = malloc(sizeof(ProcNode));
     node->name = stmt->name.start; 
@@ -808,6 +811,11 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 }
 
 ExecResult interpret(Stmt* stmt, Env* env) {
+    static int first_call = 1;
+    if (first_call && stmt != NULL) {
+        g_global_env = env;
+        first_call = 0;
+    }
     if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
 
     switch (stmt->type) {

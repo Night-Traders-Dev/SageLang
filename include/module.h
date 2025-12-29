@@ -83,4 +83,7 @@ Module* create_string_module();
 void init_module_system();
 void cleanup_module_system();
 
+extern Environment* g_global_env;  // Global environment for module loading
+
+
 #endif
