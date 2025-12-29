@@ -80,7 +80,7 @@ bool heartbeat_core1_alive(void) {
 #include <stdbool.h>
 #include <time.h>
 #include <pthread.h>
-#include <unistd.h>
+#include <unistd.h>  // For usleep()
 
 static volatile bool thread_running = false;
 static volatile bool should_exit = false;
