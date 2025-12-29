@@ -8,7 +8,7 @@
 
 CC = gcc
 CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L
-LDFLAGS = -lm
+LDFLAGS = -lm -lpthread
 
 # Directories
 SRC_DIR = src
@@ -43,7 +43,7 @@ MAIN_SOURCE = $(SRC_DIR)/main.c
 # Optional heartbeat source
 ifneq (,$(wildcard $(SRC_DIR)/heartbeat.c))
     CORE_SOURCES += $(SRC_DIR)/heartbeat.c
-    $(info Including heartbeat.c)
+    $(info Including heartbeat.c with pthread support)
 endif
 
 # Headers
@@ -56,6 +56,11 @@ HEADERS = \
     $(INC_DIR)/module.h \
     $(INC_DIR)/token.h \
     $(INC_DIR)/value.h
+
+# Optional heartbeat header
+ifneq (,$(wildcard $(INC_DIR)/heartbeat.h))
+    HEADERS += $(INC_DIR)/heartbeat.h
+endif
 
 # Object files
 CORE_OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CORE_SOURCES))
