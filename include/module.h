@@ -2,9 +2,20 @@
 #ifndef SAGE_MODULE_H
 #define SAGE_MODULE_H
 
+
+#define _POSIX_C_SOURCE 200809L  // For strdup() and other POSIX functions
+
+#include "module.h"
+#include "lexer.h"
+#include "ast.h"
 #include "value.h"
 #include "env.h"
+#include "interpreter.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <stdbool.h>
+#include <sys/stat.h>
 
 // Maximum path length for module files
 #define MAX_MODULE_PATH 1024
