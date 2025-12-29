@@ -3,6 +3,12 @@
 // Pico: Uses GPIO and multicore
 // Linux: Uses pthread and console output
 
+// Define feature test macros BEFORE any includes
+#ifndef PICO_BUILD
+#define _POSIX_C_SOURCE 200809L
+#define _DEFAULT_SOURCE  // For usleep() on some systems
+#endif
+
 #ifdef PICO_BUILD
 // ============================================================================
 // Raspberry Pi Pico Implementation
