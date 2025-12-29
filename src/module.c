@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 
 // Forward declarations
 extern Stmt* parse();
@@ -67,11 +66,18 @@ void add_search_path(ModuleCache* cache, const char* path) {
     cache->search_path_count++;
 }
 
-// Check if a file exists
+#ifdef PICO_BUILD
+static bool file_exists(const char* path) {
+    (void)path;  // Unused parameter
+    return false;  // No filesystem on Pico
+}
+#else
+#include <sys/stat.h>
 static bool file_exists(const char* path) {
     struct stat buffer;
     return (stat(path, &buffer) == 0);
 }
+#endif
 
 // Resolve module path by searching in search paths
 char* resolve_module_path(ModuleCache* cache, const char* name) {
