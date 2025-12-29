@@ -1,36 +1,43 @@
 cmake_minimum_required(VERSION 3.13)
 
 # ============================================================================
-# Project Configuration
+# CRITICAL: Pico SDK Import MUST come BEFORE project()
 # ============================================================================
 
-project(SageLang VERSION 0.8.0 LANGUAGES C CXX ASM)
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# ============================================================================
-# Build Options
-# ============================================================================
-
+# Build Options - MUST be set before pico_sdk_import
 option(BUILD_PICO "Build for Raspberry Pi Pico (RP2040)" OFF)
 option(ENABLE_DEBUG "Enable debug symbols and logging" OFF)
 option(ENABLE_TESTS "Build test executables" OFF)
 
-# ============================================================================
-# Pico SDK Setup (if building for Pico)
-# ============================================================================
-
+# Import Pico SDK if building for Pico (BEFORE project())
 if(BUILD_PICO)
+    # Set Pico platform before anything else
+    set(PICO_PLATFORM rp2040)
+
     # Include Pico SDK (must have pico_sdk_import.cmake in project root)
     include(pico_sdk_import.cmake)
+endif()
 
-    # Initialize the Pico SDK
+# ============================================================================
+# Project Configuration
+# ============================================================================
+
+project(SageLang VERSION 0.8.0 LANGUAGES C CXX ASM)
+
+# Initialize Pico SDK AFTER project() but before anything else
+if(BUILD_PICO)
     pico_sdk_init()
-
     message(STATUS "Building for Raspberry Pi Pico (RP2040)")
     add_compile_definitions(PICO_BUILD=1)
 endif()
+
+# ============================================================================
+# Standard Settings
+# ============================================================================
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ============================================================================
 # Compiler Flags
@@ -52,8 +59,10 @@ add_compile_options(
     -Wno-unused-function
 )
 
-# Add POSIX source for strdup
-add_compile_definitions(_POSIX_C_SOURCE=200809L)
+# Add POSIX source for strdup (desktop only)
+if(NOT BUILD_PICO)
+    add_compile_definitions(_POSIX_C_SOURCE=200809L)
+endif()
 
 # ============================================================================
 # Source Files
@@ -85,7 +94,7 @@ set(SAGE_HEADERS
     include/value.h
 )
 
-# Hardware abstraction sources (optional)
+# Hardware abstraction sources (Pico only)
 set(SAGE_BOARD_SOURCES
     boards/pico_gpio.c
 )
@@ -120,8 +129,8 @@ if(NOT BUILD_PICO)
         ${SAGE_CORE_SOURCES}
     )
 
-    # Link math library
-    target_link_libraries(sage m)
+    # Link math and pthread libraries
+    target_link_libraries(sage m pthread)
 
     # Install target
     install(TARGETS sage DESTINATION bin)
@@ -196,7 +205,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_lexer.c
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(test_lexer m)
+    target_link_libraries(test_lexer m pthread)
     add_test(NAME LexerTest COMMAND test_lexer)
 
     # Parser test
@@ -204,7 +213,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_parser.c
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(test_parser m)
+    target_link_libraries(test_parser m pthread)
     add_test(NAME ParserTest COMMAND test_parser)
 
     # GC test
@@ -212,7 +221,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_gc.c
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(test_gc m)
+    target_link_libraries(test_gc m pthread)
     add_test(NAME GCTest COMMAND test_gc)
 
     message(STATUS "Test executables enabled")
@@ -296,43 +305,12 @@ if(BUILD_PICO)
     message(STATUS "")
     message(STATUS "Pico SDK Configuration:")
     message(STATUS "  - Pico SDK path: ${PICO_SDK_PATH}")
-    message(STATUS "  - Board: pico (RP2040)")
+    message(STATUS "  - Platform: ${PICO_PLATFORM}")
+    message(STATUS "  - Board: ${PICO_BOARD}")
+    message(STATUS "  - C Compiler: ${CMAKE_C_COMPILER}")
+    message(STATUS "  - ASM Compiler: ${CMAKE_ASM_COMPILER}")
     message(STATUS "  - Output: sage_pico.uf2")
 endif()
 
 message(STATUS "=================================================")
 message(STATUS "")
-
-# ============================================================================
-# Documentation
-# ============================================================================
-
-# Usage:
-# 
-# Standard build (Linux/Desktop):
-#   mkdir build && cd build
-#   cmake ..
-#   make -j$(nproc)
-#   ./sage ../examples/hello.sage
-#
-# Pico build:
-#   mkdir build_pico && cd build_pico
-#   cmake -DBUILD_PICO=ON ..
-#   make -j$(nproc)
-#   # Copy sage_pico.uf2 to Pico in BOOTSEL mode
-#
-# Debug build:
-#   cmake -DENABLE_DEBUG=ON ..
-#   make
-#
-# With tests:
-#   cmake -DENABLE_TESTS=ON ..
-#   make
-#   ctest
-#
-# Run examples (desktop only):
-#   make run_example
-#   make run_all_examples
-#
-# Install:
-#   sudo make install
