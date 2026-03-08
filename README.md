@@ -66,6 +66,7 @@ Sage is a new programming language that combines the readability of Python (inde
 - **Generators**: `next()` for iterator protocol
 - **FFI**: `ffi_open()`, `ffi_call()`, `ffi_close()`, `ffi_sym()`
 - **Memory**: `mem_alloc()`, `mem_free()`, `mem_read()`, `mem_write()`, `mem_size()`, `addressof()`
+- **Assembly**: `asm_exec()`, `asm_compile()`, `asm_arch()` (x86-64, aarch64, rv64)
 
 ## 🛠 Building Sage
 
@@ -309,7 +310,7 @@ gc_enable()
   - [x] Bit manipulation (`&`, `|`, `^`, `~`, `<<`, `>>`)
   - [x] FFI (`ffi_open`, `ffi_call`, `ffi_close`, `ffi_sym`)
   - [x] Raw memory (`mem_alloc`, `mem_read`, `mem_write`, `mem_free`, `mem_size`, `addressof`)
-  - Inline assembly (x86-64, ARM, RISC-V)
+  - [x] Inline assembly (`asm_exec`, `asm_compile`, `asm_arch` — x86-64, aarch64, rv64)
 - [ ] **Phase 10: Compiler Development** (C/LLVM IR codegen)
 - [ ] **Phase 11: Concurrency** (Threads, Async/Await)
 - [ ] **Phase 12: Tooling** (LSP, Formatter, Debugger, REPL)
@@ -366,7 +367,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 
 - **Language**: C
 - **Phases Completed**: 8.5/13 (65%)
-- **Test Suite**: 91 automated tests, 23 categories, 100% pass rate
+- **Test Suite**: 96 automated tests, 24 categories, 100% pass rate
 - **Status**: Advanced Development
 - **License**: MIT
 - **Current Version**: v0.9.0-dev

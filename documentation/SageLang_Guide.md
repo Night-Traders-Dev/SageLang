@@ -395,6 +395,9 @@ SageLang provides built-in functions injected into global environment via `init_
 | `mem_write(ptr, off, type, val)` | `(pointer, number, string, value) → nil` | Write value at ptr+offset |
 | `mem_size(ptr)` | `pointer → number` | Get allocation size |
 | `addressof(val)` | `value → number` | Get memory address of a value |
+| `asm_exec(code, ret, ...)` | `(string, string, ...) → value` | Compile and execute assembly |
+| `asm_compile(code, arch, out)` | `(string, string, string) → bool` | Cross-compile assembly to object file |
+| `asm_arch()` | `() → string` | Get host architecture name |
 
 ### 2.8 Module System (module.h / module.c)
 
@@ -695,6 +698,32 @@ mem_free(buf)
 ```
 
 Supported types for `mem_read`/`mem_write`: `"byte"` (1 byte), `"int"` (4 bytes), `"double"` (8 bytes), `"string"` (read-only, null-terminated).
+
+**Inline Assembly** (x86-64, aarch64, rv64):
+```sagelang
+# Detect host architecture
+print asm_arch()           # "x86_64"
+
+# Execute x86-64 assembly: return a constant
+let val = asm_exec("    mov $42, %rax", "int")
+print val                  # 42
+
+# Add two integers (args in rdi, rsi per System V ABI)
+let sum = asm_exec("    mov %rdi, %rax\n    add %rsi, %rax", "int", 10, 32)
+print sum                  # 42
+
+# Add two doubles (args in xmm0, xmm1)
+let r = asm_exec("    addsd %xmm1, %xmm0", "double", 1.5, 2.7)
+print r                    # 4.2
+
+# Cross-compile for aarch64 (requires aarch64-linux-gnu-as)
+let ok = asm_compile("    mov x0, #42", "aarch64", "/tmp/out.o")
+
+# Cross-compile for RISC-V 64 (requires riscv64-linux-gnu-as)
+let ok2 = asm_compile("    li a0, 42", "rv64", "/tmp/out_rv.o")
+```
+
+Supported architectures: `"x86_64"`, `"aarch64"`, `"rv64"`. Return types: `"int"`, `"double"`, `"void"`. Up to 4 numeric arguments.
 
 ---
 
@@ -1306,6 +1335,7 @@ next(gen)
 ffi_open(path) ffi_call(lib, fn, ret, ...) ffi_sym(lib, name) ffi_close(lib)
 mem_alloc(n) mem_free(ptr) mem_read(ptr, off, type) mem_write(ptr, off, type, val)
 mem_size(ptr) addressof(val)
+asm_exec(code, ret, ...) asm_compile(code, arch, out) asm_arch()
 ```
 
 ### Operators

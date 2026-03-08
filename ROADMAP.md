@@ -309,13 +309,15 @@ A cross-cutting audit and hardening pass across the entire codebase.
 - [x] **Operator precedence** - Correct C-style precedence (shift → comparison → & → ^ → | → logical)
 - [x] **Test coverage** - 6 automated tests for bitwise operations
 
-#### Inline Assembly
-- [ ] Inline assembly syntax (x86-64)
-- [ ] Register allocation for assembly blocks
-- [ ] Input/output operand specification
-- [ ] Clobber list support
-- [ ] Assembly constraint syntax
-- [ ] Support for multiple architectures (ARM, RISC-V)
+#### Inline Assembly ✅
+- [x] **`asm_exec(code, ret_type, ...args)`** - Compile and execute assembly on host architecture
+- [x] **`asm_compile(code, arch, output)`** - Cross-compile assembly to object file
+- [x] **`asm_arch()`** - Detect host architecture
+- [x] **x86-64 support** - Native execution with System V ABI calling convention
+- [x] **aarch64 support** - Cross-compilation via `aarch64-linux-gnu-as`
+- [x] **RISC-V 64 support** - Cross-compilation via `riscv64-linux-gnu-as`
+- [x] **Return types** - `"int"`, `"double"`, `"void"` with up to 4 arguments
+- [x] **Test coverage** - 5 automated tests for assembly operations
 
 #### Pointer Arithmetic & Raw Memory ✅
 - [x] **`mem_alloc(size)`** - Allocate raw memory (zero-initialized, capped at 64MB)
@@ -434,7 +436,7 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ## 📊 Progress Metrics
 
 - **Phases Completed**: 8.5/13 (65%)
-- **Test Suite**: 91 automated tests, 23 categories, 100% pass rate
+- **Test Suite**: 96 automated tests, 24 categories, 100% pass rate
 - **Estimated Completion**: 2026-2027 (self-hosting)
 
 ---
@@ -443,6 +445,10 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ### March 8, 2026
 
+- **Phase 9: Inline Assembly (Multi-Architecture)**
+- `asm_exec`, `asm_compile`, `asm_arch` native functions
+- x86-64 native execution, aarch64 and rv64 cross-compilation
+- 5 new automated tests (96 total, 24 categories)
 - **Phase 9: Raw Memory Operations**
 - `mem_alloc`, `mem_free`, `mem_read`, `mem_write`, `mem_size`, `addressof` native functions
 - New `VAL_POINTER` type with bounds checking and ownership tracking
