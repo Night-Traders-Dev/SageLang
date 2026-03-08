@@ -12,11 +12,13 @@ typedef struct EnvNode {
 typedef struct Env {
     EnvNode* head;      // Variables in this scope
     struct Env* parent; // Enclosing scope
+    struct Env* alloc_next; // Internal registry for shutdown cleanup
 } Env;
 
 Env* env_create(Env* parent);
 void env_define(Env* env, const char* name, int length, Value value);
 int env_get(Env* env, const char* name, int length, Value* value);
 int env_assign(Env* env, const char* name, int length, Value value);
+void env_cleanup_all(void);
 
 #endif

@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include "env.h"
 
+static Env* allocated_envs = NULL;
+
 // Helper function to duplicate a string with a max length (similar to strndup)
 static char* my_strndup(const char* s, size_t n) {
     char* result;
@@ -25,6 +27,8 @@ Env* env_create(Env* parent) {
     Env* env = malloc(sizeof(Env));
     env->head = NULL;
     env->parent = parent;
+    env->alloc_next = allocated_envs;
+    allocated_envs = env;
     return env;
 }
 
@@ -84,4 +88,21 @@ int env_assign(Env* env, const char* name, int length, Value value) {
         current_env = current_env->parent;
     }
     return 0; // Not found
+}
+
+void env_cleanup_all(void) {
+    while (allocated_envs != NULL) {
+        Env* env = allocated_envs;
+        allocated_envs = allocated_envs->alloc_next;
+
+        EnvNode* current = env->head;
+        while (current != NULL) {
+            EnvNode* next = current->next;
+            free(current->name);
+            free(current);
+            current = next;
+        }
+
+        free(env);
+    }
 }

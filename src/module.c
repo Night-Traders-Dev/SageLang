@@ -34,6 +34,7 @@ void destroy_module_cache(ModuleCache* cache) {
     Module* current = cache->modules;
     while (current) {
         Module* next = current->next;
+        free_stmt(current->ast);
         free(current->name);
         free(current->path);
         free(current->source);
@@ -168,18 +169,29 @@ bool execute_module(Module* module, Environment* global_env) {
         // Modules see the shared global scope and stdlib, not the caller's local scope.
         module->env = env_create(module_parent_env(global_env));
     }
-    
-    // Lex and parse the module
-    init_lexer(module->source);
-    parser_init();
 
-    while (1) {
-        Stmt* ast = parse();
-        if (ast == NULL) {
-            break;
+    if (module->ast == NULL) {
+        // Parse the module once and retain the AST for exported function/method lifetimes.
+        init_lexer(module->source);
+        parser_init();
+
+        while (1) {
+            Stmt* ast = parse();
+            if (ast == NULL) {
+                break;
+            }
+
+            if (module->ast == NULL) {
+                module->ast = ast;
+            } else {
+                module->ast_tail->next = ast;
+            }
+            module->ast_tail = ast;
         }
+    }
 
-        ExecResult result = interpret(ast, module->env);
+    for (Stmt* current = module->ast; current != NULL; current = current->next) {
+        ExecResult result = interpret(current, module->env);
         if (result.is_throwing) {
             fprintf(stderr, "Error: Exception in module '%s': ", module->name);
             if (result.exception_value.type == VAL_EXCEPTION) {
@@ -222,6 +234,8 @@ Module* load_module(ModuleCache* cache, const char* name) {
     module->name = strdup(name);
     module->path = path;
     module->source = NULL;
+    module->ast = NULL;
+    module->ast_tail = NULL;
     module->env = NULL;
     module->is_loaded = false;
     module->is_loading = false;

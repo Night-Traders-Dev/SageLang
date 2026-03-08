@@ -12,6 +12,30 @@
 
 extern Environment* g_global_env;
 
+static Stmt* g_program_ast = NULL;
+static Stmt* g_program_ast_tail = NULL;
+
+static void retain_program_stmt(Stmt* stmt) {
+    if (stmt == NULL) {
+        return;
+    }
+
+    if (g_program_ast == NULL) {
+        g_program_ast = stmt;
+    } else {
+        g_program_ast_tail->next = stmt;
+    }
+    g_program_ast_tail = stmt;
+}
+
+static void cleanup_runtime_state(void) {
+    free_stmt(g_program_ast);
+    g_program_ast = NULL;
+    g_program_ast_tail = NULL;
+    env_cleanup_all();
+    g_global_env = NULL;
+}
+
 
 // Helper to read entire file into memory
 static char* read_file(const char* path) {
@@ -48,6 +72,7 @@ static void run(const char* source) {
     while (1) {
          Stmt* result = parse();
          if (result == NULL) break;
+         retain_program_stmt(result);
          interpret(result, env);
     }
 }
@@ -63,6 +88,8 @@ int main(int argc, const char* argv[]) {
         // REPL mode (interactive) could go here later
         fprintf(stderr, "Usage: sage [path] | sage -c \"source\"\n");
         gc_shutdown();
+        cleanup_module_system();
+        cleanup_runtime_state();
         exit(64);
     } else if (argc == 3 && strcmp(argv[1], "-c") == 0) {
         run(argv[2]);
@@ -75,11 +102,13 @@ int main(int argc, const char* argv[]) {
         fprintf(stderr, "Usage: sage [path] | sage -c \"source\"\n");
         gc_shutdown();
         cleanup_module_system();
+        cleanup_runtime_state();
         exit(64);
     }
 
     // Cleanup and shutdown GC
     gc_shutdown();
     cleanup_module_system();
+    cleanup_runtime_state();
     return 0;
 }
