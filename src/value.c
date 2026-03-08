@@ -148,6 +148,28 @@ Value val_generator(void* body, void* params, int param_count, Environment* clos
     return v;
 }
 
+// Phase 9: FFI library handle constructor
+Value val_clib(void* handle, const char* name) {
+    Value v;
+    v.type = VAL_CLIB;
+    v.as.clib = SAGE_ALLOC(sizeof(CLibValue));
+    v.as.clib->handle = handle;
+    v.as.clib->name = SAGE_ALLOC(strlen(name) + 1);
+    strcpy(v.as.clib->name, name);
+    return v;
+}
+
+// Phase 9: Raw pointer constructor
+Value val_pointer(void* ptr, size_t size, int owned) {
+    Value v;
+    v.type = VAL_POINTER;
+    v.as.pointer = SAGE_ALLOC(sizeof(PointerValue));
+    v.as.pointer->ptr = ptr;
+    v.as.pointer->size = size;
+    v.as.pointer->owned = owned;
+    return v;
+}
+
 // ========== ARRAY OPERATIONS ==========
 
 void array_push(Value* arr, Value val) {
@@ -689,6 +711,16 @@ void print_value(Value v) {
             }
             break;
         }
+
+        case VAL_CLIB: {
+            printf("<clib \"%s\">", v.as.clib->name);
+            break;
+        }
+
+        case VAL_POINTER: {
+            printf("<pointer %p size=%zu>", v.as.pointer->ptr, v.as.pointer->size);
+            break;
+        }
     }
 }
 
@@ -715,6 +747,10 @@ int values_equal(Value a, Value b) {
             return a.as.module->module == b.as.module->module;
         case VAL_GENERATOR:
             return a.as.generator == b.as.generator;  // Same generator object
+        case VAL_CLIB:
+            return a.as.clib->handle == b.as.clib->handle;
+        case VAL_POINTER:
+            return a.as.pointer->ptr == b.as.pointer->ptr;
         default: return 0;
     }
 }

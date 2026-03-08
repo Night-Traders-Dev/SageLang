@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdint.h>   // uintptr_t
+#include <dlfcn.h>    // Phase 9: FFI (dlopen, dlsym, dlclose)
 #include "interpreter.h"
 #include "token.h"
 #include "env.h"
@@ -323,6 +325,367 @@ static Value native_next(int arg_count, Value* args) {
     return val_nil();
 }
 
+// ============================================================================
+// Phase 9: FFI Functions
+// ============================================================================
+
+// ffi_open("libname.so") -> CLib handle
+static Value ffi_open_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) {
+        fprintf(stderr, "ffi_open() expects 1 string argument (library path).\n");
+        return val_nil();
+    }
+    const char* lib_name = AS_STRING(args[0]);
+    void* handle = dlopen(lib_name, RTLD_LAZY);
+    if (!handle) {
+        fprintf(stderr, "ffi_open: %s\n", dlerror());
+        return val_nil();
+    }
+    return val_clib(handle, lib_name);
+}
+
+// ffi_close(lib) -> nil
+static Value ffi_close_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_CLIB(args[0])) {
+        fprintf(stderr, "ffi_close() expects 1 clib argument.\n");
+        return val_nil();
+    }
+    CLibValue* lib = AS_CLIB(args[0]);
+    if (lib->handle) {
+        dlclose(lib->handle);
+        lib->handle = NULL;
+    }
+    return val_nil();
+}
+
+// ffi_call(lib, "func_name", "return_type", [args...])
+// Supported return types: "double", "int", "void", "string"
+// Args are automatically marshaled from Sage values
+static Value ffi_call_native(int argCount, Value* args) {
+    if (argCount < 3 || argCount > 4) {
+        fprintf(stderr, "ffi_call() expects 3-4 arguments: (lib, func_name, return_type, [args]).\n");
+        return val_nil();
+    }
+    if (!IS_CLIB(args[0])) {
+        fprintf(stderr, "ffi_call(): first argument must be a clib handle.\n");
+        return val_nil();
+    }
+    if (!IS_STRING(args[1])) {
+        fprintf(stderr, "ffi_call(): second argument must be function name string.\n");
+        return val_nil();
+    }
+    if (!IS_STRING(args[2])) {
+        fprintf(stderr, "ffi_call(): third argument must be return type string.\n");
+        return val_nil();
+    }
+
+    CLibValue* lib = AS_CLIB(args[0]);
+    if (!lib->handle) {
+        fprintf(stderr, "ffi_call(): library handle is closed.\n");
+        return val_nil();
+    }
+
+    const char* func_name = AS_STRING(args[1]);
+    const char* ret_type = AS_STRING(args[2]);
+
+    // Look up symbol
+    dlerror(); // Clear errors
+    void* sym = dlsym(lib->handle, func_name);
+    char* error = dlerror();
+    if (error) {
+        fprintf(stderr, "ffi_call: %s\n", error);
+        return val_nil();
+    }
+
+    // Get args array
+    int call_argc = 0;
+    ArrayValue* call_args = NULL;
+    if (argCount == 4) {
+        if (!IS_ARRAY(args[3])) {
+            fprintf(stderr, "ffi_call(): fourth argument must be an array of arguments.\n");
+            return val_nil();
+        }
+        call_args = AS_ARRAY(args[3]);
+        call_argc = call_args->count;
+    }
+
+    // POSIX guarantees dlsym void* converts to function pointers.
+    // Suppress -Wpedantic for these necessary casts.
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wpedantic"
+
+    if (strcmp(ret_type, "double") == 0) {
+        if (call_argc == 0) {
+            double (*fn)(void) = (double (*)(void))sym;
+            return val_number(fn());
+        } else if (call_argc == 1 && IS_NUMBER(call_args->elements[0])) {
+            double (*fn)(double) = (double (*)(double))sym;
+            return val_number(fn(AS_NUMBER(call_args->elements[0])));
+        } else if (call_argc == 2 && IS_NUMBER(call_args->elements[0]) && IS_NUMBER(call_args->elements[1])) {
+            double (*fn)(double, double) = (double (*)(double, double))sym;
+            return val_number(fn(AS_NUMBER(call_args->elements[0]), AS_NUMBER(call_args->elements[1])));
+        } else if (call_argc == 3 && IS_NUMBER(call_args->elements[0]) && IS_NUMBER(call_args->elements[1]) && IS_NUMBER(call_args->elements[2])) {
+            double (*fn)(double, double, double) = (double (*)(double, double, double))sym;
+            return val_number(fn(AS_NUMBER(call_args->elements[0]), AS_NUMBER(call_args->elements[1]), AS_NUMBER(call_args->elements[2])));
+        }
+        fprintf(stderr, "ffi_call: unsupported argument types for double return.\n");
+        return val_nil();
+    }
+
+    if (strcmp(ret_type, "int") == 0) {
+        if (call_argc == 0) {
+            int (*fn)(void) = (int (*)(void))sym;
+            return val_number((double)fn());
+        } else if (call_argc == 1 && IS_NUMBER(call_args->elements[0])) {
+            int (*fn)(int) = (int (*)(int))sym;
+            return val_number((double)fn((int)AS_NUMBER(call_args->elements[0])));
+        } else if (call_argc == 1 && IS_STRING(call_args->elements[0])) {
+            int (*fn)(const char*) = (int (*)(const char*))sym;
+            return val_number((double)fn(AS_STRING(call_args->elements[0])));
+        } else if (call_argc == 2 && IS_NUMBER(call_args->elements[0]) && IS_NUMBER(call_args->elements[1])) {
+            int (*fn)(int, int) = (int (*)(int, int))sym;
+            return val_number((double)fn((int)AS_NUMBER(call_args->elements[0]), (int)AS_NUMBER(call_args->elements[1])));
+        }
+        fprintf(stderr, "ffi_call: unsupported argument types for int return.\n");
+        return val_nil();
+    }
+
+    if (strcmp(ret_type, "long") == 0) {
+        if (call_argc == 1 && IS_NUMBER(call_args->elements[0])) {
+            long (*fn)(long) = (long (*)(long))sym;
+            return val_number((double)fn((long)AS_NUMBER(call_args->elements[0])));
+        } else if (call_argc == 1 && IS_STRING(call_args->elements[0])) {
+            long (*fn)(const char*) = (long (*)(const char*))sym;
+            return val_number((double)fn(AS_STRING(call_args->elements[0])));
+        } else if (call_argc == 2 && IS_NUMBER(call_args->elements[0]) && IS_NUMBER(call_args->elements[1])) {
+            long (*fn)(long, long) = (long (*)(long, long))sym;
+            return val_number((double)fn((long)AS_NUMBER(call_args->elements[0]), (long)AS_NUMBER(call_args->elements[1])));
+        }
+        fprintf(stderr, "ffi_call: unsupported argument types for long return.\n");
+        return val_nil();
+    }
+
+    if (strcmp(ret_type, "string") == 0) {
+        if (call_argc == 0) {
+            const char* (*fn)(void) = (const char* (*)(void))sym;
+            const char* result = fn();
+            return result ? val_string(result) : val_nil();
+        } else if (call_argc == 1 && IS_STRING(call_args->elements[0])) {
+            const char* (*fn)(const char*) = (const char* (*)(const char*))sym;
+            const char* result = fn(AS_STRING(call_args->elements[0]));
+            return result ? val_string(result) : val_nil();
+        }
+        fprintf(stderr, "ffi_call: unsupported argument types for string return.\n");
+        return val_nil();
+    }
+
+    if (strcmp(ret_type, "void") == 0) {
+        if (call_argc == 0) {
+            void (*fn)(void) = (void (*)(void))sym;
+            fn();
+            return val_nil();
+        } else if (call_argc == 1 && IS_NUMBER(call_args->elements[0])) {
+            void (*fn)(int) = (void (*)(int))sym;
+            fn((int)AS_NUMBER(call_args->elements[0]));
+            return val_nil();
+        } else if (call_argc == 1 && IS_STRING(call_args->elements[0])) {
+            void (*fn)(const char*) = (void (*)(const char*))sym;
+            fn(AS_STRING(call_args->elements[0]));
+            return val_nil();
+        }
+        fprintf(stderr, "ffi_call: unsupported argument types for void return.\n");
+        return val_nil();
+    }
+
+    #pragma GCC diagnostic pop
+
+    fprintf(stderr, "ffi_call: unknown return type '%s'. Use 'double', 'int', 'long', 'string', or 'void'.\n", ret_type);
+    return val_nil();
+}
+
+// ffi_sym(lib, "symbol_name") -> true/false (check if symbol exists)
+static Value ffi_sym_native(int argCount, Value* args) {
+    if (argCount != 2 || !IS_CLIB(args[0]) || !IS_STRING(args[1])) {
+        fprintf(stderr, "ffi_sym() expects (clib, string).\n");
+        return val_bool(0);
+    }
+    CLibValue* lib = AS_CLIB(args[0]);
+    if (!lib->handle) return val_bool(0);
+
+    dlerror();
+    dlsym(lib->handle, AS_STRING(args[1]));
+    return val_bool(dlerror() == NULL);
+}
+
+// ========== Phase 9: Raw Memory Operations ==========
+
+// mem_alloc(size) -> pointer
+static Value mem_alloc_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_NUMBER(args[0])) {
+        fprintf(stderr, "mem_alloc() expects (number).\n");
+        return val_nil();
+    }
+    size_t size = (size_t)AS_NUMBER(args[0]);
+    if (size == 0 || size > 1024 * 1024 * 64) { // Cap at 64MB
+        fprintf(stderr, "mem_alloc(): invalid size (0 < size <= 64MB).\n");
+        return val_nil();
+    }
+    void* ptr = calloc(1, size); // Zero-initialized
+    if (!ptr) {
+        fprintf(stderr, "mem_alloc(): allocation failed.\n");
+        return val_nil();
+    }
+    return val_pointer(ptr, size, 1);
+}
+
+// mem_free(ptr) -> nil
+static Value mem_free_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_POINTER(args[0])) {
+        fprintf(stderr, "mem_free() expects (pointer).\n");
+        return val_nil();
+    }
+    PointerValue* p = AS_POINTER(args[0]);
+    if (p->ptr && p->owned) {
+        free(p->ptr);
+        p->ptr = NULL;
+        p->size = 0;
+        p->owned = 0;
+    }
+    return val_nil();
+}
+
+// mem_read(ptr, offset, type) -> value
+// type: "byte", "int", "double", "string"
+static Value mem_read_native(int argCount, Value* args) {
+    if (argCount != 3 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1]) || !IS_STRING(args[2])) {
+        fprintf(stderr, "mem_read() expects (pointer, offset, type_string).\n");
+        return val_nil();
+    }
+    PointerValue* p = AS_POINTER(args[0]);
+    if (!p->ptr) {
+        fprintf(stderr, "mem_read(): null pointer.\n");
+        return val_nil();
+    }
+    size_t offset = (size_t)AS_NUMBER(args[1]);
+    const char* type = AS_STRING(args[2]);
+
+    // Bounds checking for owned memory
+    if (p->size > 0) {
+        size_t needed = 0;
+        if (strcmp(type, "byte") == 0) needed = 1;
+        else if (strcmp(type, "int") == 0) needed = sizeof(int);
+        else if (strcmp(type, "double") == 0) needed = sizeof(double);
+        else if (strcmp(type, "string") == 0) needed = 1; // at least 1 byte
+        if (offset + needed > p->size) {
+            fprintf(stderr, "mem_read(): offset %zu + %zu bytes exceeds allocation size %zu.\n",
+                    offset, needed, p->size);
+            return val_nil();
+        }
+    }
+
+    unsigned char* base = (unsigned char*)p->ptr + offset;
+
+    if (strcmp(type, "byte") == 0) {
+        return val_number((double)*base);
+    } else if (strcmp(type, "int") == 0) {
+        int val;
+        memcpy(&val, base, sizeof(int));
+        return val_number((double)val);
+    } else if (strcmp(type, "double") == 0) {
+        double val;
+        memcpy(&val, base, sizeof(double));
+        return val_number(val);
+    } else if (strcmp(type, "string") == 0) {
+        return val_string((const char*)base);
+    } else {
+        fprintf(stderr, "mem_read(): unknown type '%s' (use byte/int/double/string).\n", type);
+        return val_nil();
+    }
+}
+
+// mem_write(ptr, offset, type, value) -> nil
+static Value mem_write_native(int argCount, Value* args) {
+    if (argCount != 4 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1]) || !IS_STRING(args[2])) {
+        fprintf(stderr, "mem_write() expects (pointer, offset, type_string, value).\n");
+        return val_nil();
+    }
+    PointerValue* p = AS_POINTER(args[0]);
+    if (!p->ptr) {
+        fprintf(stderr, "mem_write(): null pointer.\n");
+        return val_nil();
+    }
+    size_t offset = (size_t)AS_NUMBER(args[1]);
+    const char* type = AS_STRING(args[2]);
+
+    // Bounds checking for owned memory
+    if (p->size > 0) {
+        size_t needed = 0;
+        if (strcmp(type, "byte") == 0) needed = 1;
+        else if (strcmp(type, "int") == 0) needed = sizeof(int);
+        else if (strcmp(type, "double") == 0) needed = sizeof(double);
+        if (needed > 0 && offset + needed > p->size) {
+            fprintf(stderr, "mem_write(): offset %zu + %zu bytes exceeds allocation size %zu.\n",
+                    offset, needed, p->size);
+            return val_nil();
+        }
+    }
+
+    unsigned char* base = (unsigned char*)p->ptr + offset;
+
+    if (strcmp(type, "byte") == 0) {
+        if (!IS_NUMBER(args[3])) {
+            fprintf(stderr, "mem_write(): byte value must be a number.\n");
+            return val_nil();
+        }
+        *base = (unsigned char)AS_NUMBER(args[3]);
+    } else if (strcmp(type, "int") == 0) {
+        if (!IS_NUMBER(args[3])) {
+            fprintf(stderr, "mem_write(): int value must be a number.\n");
+            return val_nil();
+        }
+        int val = (int)AS_NUMBER(args[3]);
+        memcpy(base, &val, sizeof(int));
+    } else if (strcmp(type, "double") == 0) {
+        if (!IS_NUMBER(args[3])) {
+            fprintf(stderr, "mem_write(): double value must be a number.\n");
+            return val_nil();
+        }
+        double val = AS_NUMBER(args[3]);
+        memcpy(base, &val, sizeof(double));
+    } else {
+        fprintf(stderr, "mem_write(): unknown type '%s' (use byte/int/double).\n", type);
+    }
+    return val_nil();
+}
+
+// mem_size(ptr) -> number
+static Value mem_size_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_POINTER(args[0])) {
+        fprintf(stderr, "mem_size() expects (pointer).\n");
+        return val_nil();
+    }
+    return val_number((double)AS_POINTER(args[0])->size);
+}
+
+// addressof(value) -> number (address as integer, for inspection only)
+static Value addressof_native(int argCount, Value* args) {
+    if (argCount != 1) {
+        fprintf(stderr, "addressof() expects (value).\n");
+        return val_nil();
+    }
+    // Return address of the underlying data
+    void* addr = NULL;
+    switch (args[0].type) {
+        case VAL_STRING:   addr = (void*)AS_STRING(args[0]); break;
+        case VAL_ARRAY:    addr = (void*)AS_ARRAY(args[0]); break;
+        case VAL_DICT:     addr = (void*)AS_DICT(args[0]); break;
+        case VAL_POINTER:  addr = AS_POINTER(args[0])->ptr; break;
+        case VAL_INSTANCE: addr = (void*)args[0].as.instance; break;
+        default:           addr = (void*)&args[0]; break;
+    }
+    return val_number((double)(uintptr_t)addr);
+}
+
 void init_stdlib(Env* env) {
     // Core functions
     env_define(env, "clock", 5, val_native(clock_native));
@@ -359,6 +722,20 @@ void init_stdlib(Env* env) {
     
     // PHASE 7: Generator function
     env_define(env, "next", 4, val_native(native_next));
+
+    // Phase 9: FFI functions
+    env_define(env, "ffi_open", 8, val_native(ffi_open_native));
+    env_define(env, "ffi_close", 9, val_native(ffi_close_native));
+    env_define(env, "ffi_call", 8, val_native(ffi_call_native));
+    env_define(env, "ffi_sym", 7, val_native(ffi_sym_native));
+
+    // Phase 9: Memory operations
+    env_define(env, "mem_alloc", 9, val_native(mem_alloc_native));
+    env_define(env, "mem_free", 8, val_native(mem_free_native));
+    env_define(env, "mem_read", 8, val_native(mem_read_native));
+    env_define(env, "mem_write", 9, val_native(mem_write_native));
+    env_define(env, "mem_size", 8, val_native(mem_size_native));
+    env_define(env, "addressof", 9, val_native(addressof_native));
 }
 
 // --- Helper: Truthiness ---

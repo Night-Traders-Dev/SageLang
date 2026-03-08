@@ -1,5 +1,71 @@
 # SageLang Updates
 
+## March 8, 2026 - Phase 9.3: Raw Memory Operations
+
+SageLang now supports direct memory allocation, reading, and writing for low-level programming.
+
+### Memory Functions
+
+- **`mem_alloc(size)`**: Allocate zero-initialized raw memory (up to 64MB), returns a pointer value
+- **`mem_free(ptr)`**: Free allocated memory and invalidate the pointer
+- **`mem_read(ptr, offset, type)`**: Read a value at ptr+offset. Types: `"byte"`, `"int"`, `"double"`, `"string"`
+- **`mem_write(ptr, offset, type, val)`**: Write a value at ptr+offset. Types: `"byte"`, `"int"`, `"double"`
+- **`mem_size(ptr)`**: Get the size of an allocation
+- **`addressof(val)`**: Get the memory address of any value (as a number)
+
+### Implementation Details
+
+- New `VAL_POINTER` value type with `PointerValue` struct tracking raw pointer, size, and ownership
+- Bounds checking prevents reads/writes past the end of owned allocations
+- Memory is zero-initialized via `calloc` for safety
+- Allocation capped at 64MB to prevent abuse
+- `mem_free` invalidates the pointer (sets to NULL) to prevent use-after-free
+
+### Files Modified
+
+- `include/value.h` — `PointerValue` struct, `VAL_POINTER` enum, macros, constructor
+- `src/value.c` — `val_pointer()` constructor, print/equality support
+- `src/interpreter.c` — 6 memory native functions registered in `init_stdlib()`
+
+### Test Suite
+
+- 5 new tests in `tests/23_memory/`: alloc/free, byte ops, int/double ops, addressof, byte buffer
+- Total: 91 tests across 23 categories, all passing
+
+---
+
+## March 8, 2026 - Phase 9.2: Foreign Function Interface (FFI)
+
+SageLang can now call functions in shared C libraries via `dlopen`/`dlsym`.
+
+### FFI Functions
+
+- **`ffi_open(path)`**: Open a shared library (`.so`/`.dylib`/`.dll`), returns a library handle
+- **`ffi_call(lib, func, ret_type, ...args)`**: Call a function in the library. `ret_type` is `"double"`, `"int"`, `"long"`, `"string"`, or `"void"`
+- **`ffi_sym(lib, name)`**: Check if a symbol exists in the library (returns `true`/`false`)
+- **`ffi_close(lib)`**: Close the library handle
+
+### Implementation Details
+
+- New `VAL_CLIB` value type wraps `dlopen` handle and library name
+- `ffi_call` supports 0–3 arguments, with numeric and string argument types
+- Uses `#pragma GCC diagnostic` to safely cast `void*` to function pointers (POSIX-guaranteed)
+- Added `-ldl` to linker flags
+
+### Files Modified
+
+- `include/value.h` — `CLibValue` struct, `VAL_CLIB` enum, macros, constructor
+- `src/value.c` — `val_clib()` constructor, print/equality support
+- `src/interpreter.c` — 4 FFI native functions registered in `init_stdlib()`
+- `Makefile` — `-ldl` added to `LDFLAGS`
+
+### Test Suite
+
+- 3 new tests in `tests/22_ffi/`: math library calls, libc string functions, symbol checking
+- Total: 86 tests across 22 categories, all passing
+
+---
+
 ## March 8, 2026 - Phase 9: Bitwise Operators (First Low-Level Feature)
 
 The first feature of Phase 9 (Low-Level Programming): full bitwise operator support.
