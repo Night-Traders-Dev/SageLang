@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "env.h"
+#include "gc.h"
 
 static Env* allocated_envs = NULL;
 
@@ -15,7 +16,7 @@ static char* my_strndup(const char* s, size_t n) {
         len++;
     }
 
-    result = (char*)malloc(len + 1);
+    result = (char*)SAGE_ALLOC(len + 1);
     if (!result) return NULL;
 
     memcpy(result, s, len);
@@ -24,9 +25,10 @@ static char* my_strndup(const char* s, size_t n) {
 }
 
 Env* env_create(Env* parent) {
-    Env* env = malloc(sizeof(Env));
+    Env* env = SAGE_ALLOC(sizeof(Env));
     env->head = NULL;
     env->parent = parent;
+    env->marked = 0;
     env->alloc_next = allocated_envs;
     allocated_envs = env;
     return env;
@@ -45,7 +47,7 @@ void env_define(Env* env, const char* name, int length, Value value) {
     }
 
     // Create new in current scope
-    EnvNode* node = malloc(sizeof(EnvNode));
+    EnvNode* node = SAGE_ALLOC(sizeof(EnvNode));
     node->name = my_strndup(name, length);
     node->value = value;
     node->next = env->head;
@@ -104,5 +106,39 @@ void env_cleanup_all(void) {
         }
 
         free(env);
+    }
+}
+
+// Free environments not marked as reachable during GC
+void env_sweep_unmarked(void) {
+    Env** ptr = &allocated_envs;
+    while (*ptr != NULL) {
+        Env* env = *ptr;
+        if (!env->marked) {
+            // Remove from list and free
+            *ptr = env->alloc_next;
+
+            EnvNode* node = env->head;
+            while (node != NULL) {
+                EnvNode* next = node->next;
+                free(node->name);
+                free(node);
+                node = next;
+            }
+            free(env);
+        } else {
+            // Reachable — clear mark for next cycle and advance
+            env->marked = 0;
+            ptr = &env->alloc_next;
+        }
+    }
+}
+
+// Clear all env marks (used if sweep is skipped)
+void env_clear_marks(void) {
+    Env* env = allocated_envs;
+    while (env != NULL) {
+        env->marked = 0;
+        env = env->alloc_next;
     }
 }

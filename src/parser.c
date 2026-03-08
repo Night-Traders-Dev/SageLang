@@ -5,9 +5,14 @@
 #include "parser.h"
 #include "ast.h"
 #include "token.h"
+#include "gc.h"
 
 static Token current_token;
 static Token previous_token;
+
+// Parser recursion depth limit to prevent stack overflow on malicious input
+#define MAX_PARSER_DEPTH 500
+static int parser_depth = 0;
 
 static void advance_parser(void) {
     previous_token = current_token;
@@ -104,7 +109,7 @@ static Stmt* try_statement() {
         
         if (catch_count >= catch_capacity) {
             catch_capacity = catch_capacity == 0 ? 2 : catch_capacity * 2;
-            catches = realloc(catches, sizeof(CatchClause*) * catch_capacity);
+            catches = SAGE_REALLOC(catches, sizeof(CatchClause*) * catch_capacity);
         }
         catches[catch_count++] = clause;
     }
@@ -154,7 +159,7 @@ static Stmt* import_statement() {
         Token module_token = previous_token;
         
         // Copy module name
-        char* module_name = malloc(module_token.length + 1);
+        char* module_name = SAGE_ALLOC(module_token.length + 1);
         memcpy(module_name, module_token.start, module_token.length);
         module_name[module_token.length] = '\0';
         
@@ -172,12 +177,12 @@ static Stmt* import_statement() {
             
             if (item_count >= capacity) {
                 capacity = capacity == 0 ? 4 : capacity * 2;
-                items = realloc(items, sizeof(char*) * capacity);
-                item_aliases = realloc(item_aliases, sizeof(char*) * capacity);  // ✅ NEW
+                items = SAGE_REALLOC(items, sizeof(char*) * capacity);
+                item_aliases = SAGE_REALLOC(item_aliases, sizeof(char*) * capacity);  // ✅ NEW
             }
             
             // Store the original item name
-            items[item_count] = malloc(item_token.length + 1);
+            items[item_count] = SAGE_ALLOC(item_token.length + 1);
             memcpy(items[item_count], item_token.start, item_token.length);
             items[item_count][item_token.length] = '\0';
             
@@ -186,7 +191,7 @@ static Stmt* import_statement() {
                 consume(TOKEN_IDENTIFIER, "Expect alias name after 'as'.");
                 Token alias_token = previous_token;
                 
-                item_aliases[item_count] = malloc(alias_token.length + 1);
+                item_aliases[item_count] = SAGE_ALLOC(alias_token.length + 1);
                 memcpy(item_aliases[item_count], alias_token.start, alias_token.length);
                 item_aliases[item_count][alias_token.length] = '\0';
             } else {
@@ -204,7 +209,7 @@ static Stmt* import_statement() {
     consume(TOKEN_IDENTIFIER, "Expect module name after 'import'.");
     Token module_token = previous_token;
     
-    char* module_name = malloc(module_token.length + 1);
+    char* module_name = SAGE_ALLOC(module_token.length + 1);
     memcpy(module_name, module_token.start, module_token.length);
     module_name[module_token.length] = '\0';
     
@@ -213,7 +218,7 @@ static Stmt* import_statement() {
         consume(TOKEN_IDENTIFIER, "Expect alias after 'as'.");
         Token alias_token = previous_token;
         
-        alias = malloc(alias_token.length + 1);
+        alias = SAGE_ALLOC(alias_token.length + 1);
         memcpy(alias, alias_token.start, alias_token.length);
         alias[alias_token.length] = '\0';
     }
@@ -248,14 +253,14 @@ static Expr* primary() {
             Expr** elements = NULL;
             int count = 0;
             int capacity = 4;
-            elements = malloc(sizeof(Expr*) * capacity);
+            elements = SAGE_ALLOC(sizeof(Expr*) * capacity);
             elements[count++] = first;
             
             if (!check(TOKEN_RPAREN)) {
                 do {
                     if (count >= capacity) {
                         capacity *= 2;
-                        elements = realloc(elements, sizeof(Expr*) * capacity);
+                        elements = SAGE_REALLOC(elements, sizeof(Expr*) * capacity);
                     }
                     elements[count++] = expression();
                 } while (match(TOKEN_COMMA) && !check(TOKEN_RPAREN));
@@ -282,7 +287,7 @@ static Expr* primary() {
                 Token key_token = previous_token;
                 
                 int len = key_token.length - 2;
-                char* key = malloc(len + 1);
+                char* key = SAGE_ALLOC(len + 1);
                 memcpy(key, key_token.start + 1, len);
                 key[len] = '\0';
                 
@@ -291,8 +296,8 @@ static Expr* primary() {
                 
                 if (count >= capacity) {
                     capacity = capacity == 0 ? 4 : capacity * 2;
-                    keys = realloc(keys, sizeof(char*) * capacity);
-                    values = realloc(values, sizeof(Expr*) * capacity);
+                    keys = SAGE_REALLOC(keys, sizeof(char*) * capacity);
+                    values = SAGE_REALLOC(values, sizeof(Expr*) * capacity);
                 }
                 keys[count] = key;
                 values[count] = value;
@@ -315,7 +320,7 @@ static Expr* primary() {
                 Expr* elem = expression();
                 if (count >= capacity) {
                     capacity = capacity == 0 ? 4 : capacity * 2;
-                    elements = realloc(elements, sizeof(Expr*) * capacity);
+                    elements = SAGE_REALLOC(elements, sizeof(Expr*) * capacity);
                 }
                 elements[count++] = elem;
             } while (match(TOKEN_COMMA));
@@ -334,7 +339,7 @@ static Expr* primary() {
     if (match(TOKEN_STRING)) {
         Token t = previous_token;
         int len = t.length - 2;
-        char* str = malloc(len + 1);
+        char* str = SAGE_ALLOC(len + 1);
         memcpy(str, t.start + 1, len);
         str[len] = '\0';
         return new_string_expr(str);
@@ -382,7 +387,7 @@ static Expr* postfix() {
                     Expr* arg = expression();
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
-                        args = realloc(args, sizeof(Expr*) * capacity);
+                        args = SAGE_REALLOC(args, sizeof(Expr*) * capacity);
                     }
                     args[count++] = arg;
                 } while (match(TOKEN_COMMA));
@@ -507,7 +512,14 @@ static Expr* assignment() {
 }
 
 static Expr* expression() {
-    return assignment();
+    if (++parser_depth > MAX_PARSER_DEPTH) {
+        fprintf(stderr, "[Line %d] Error: Maximum nesting depth exceeded (%d).\n",
+                current_token.line, MAX_PARSER_DEPTH);
+        exit(1);
+    }
+    Expr* result = assignment();
+    parser_depth--;
+    return result;
 }
 
 static Stmt* print_statement() {
@@ -516,6 +528,11 @@ static Stmt* print_statement() {
 }
 
 static Stmt* block() {
+    if (++parser_depth > MAX_PARSER_DEPTH) {
+        fprintf(stderr, "[Line %d] Error: Maximum nesting depth exceeded (%d).\n",
+                current_token.line, MAX_PARSER_DEPTH);
+        exit(1);
+    }
     consume(TOKEN_INDENT, "Expect indentation after block start.");
     
     Stmt* head = NULL;
@@ -538,6 +555,7 @@ static Stmt* block() {
     }
 
     consume(TOKEN_DEDENT, "Expect dedent at end of block.");
+    parser_depth--;
     return new_block_stmt(head);
 }
 
@@ -581,7 +599,7 @@ static Stmt* proc_declaration() {
                 if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER) {
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
-                        params = realloc(params, sizeof(Token) * capacity);
+                        params = SAGE_REALLOC(params, sizeof(Token) * capacity);
                     }
                     params[count++] = current_token;
                     advance_parser();

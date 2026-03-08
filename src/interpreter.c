@@ -19,6 +19,10 @@ Environment* g_global_env = NULL;
 Environment* g_gc_root_env = NULL;
 static Stmt* g_generator_resume_target = NULL;
 
+// Recursion depth tracking to prevent stack overflow
+#define MAX_RECURSION_DEPTH 1000
+static int g_recursion_depth = 0;
+
 static int stmt_contains_target(Stmt* stmt, Stmt* target) {
     if (stmt == NULL || target == NULL) return 0;
     if (stmt == target) return 1;
@@ -65,7 +69,7 @@ static Value input_native(int argCount, Value* args) {
         size_t len = strlen(buffer);
         if (len > 0 && buffer[len-1] == '\n') buffer[len-1] = '\0';
 
-        char* str = malloc(len + 1);
+        char* str = SAGE_ALLOC(len + 1);
         strcpy(str, buffer);
         return val_string_take(str);
     }
@@ -88,7 +92,7 @@ static Value str_native(int argCount, Value* args) {
     char buffer[256];
     if (IS_NUMBER(args[0])) {
         snprintf(buffer, sizeof(buffer), "%g", AS_NUMBER(args[0]));
-        char* str = malloc(strlen(buffer) + 1);
+        char* str = SAGE_ALLOC(strlen(buffer) + 1);
         strcpy(str, buffer);
         return val_string_take(str);
     }
@@ -97,7 +101,7 @@ static Value str_native(int argCount, Value* args) {
     }
     if (IS_BOOL(args[0])) {
         char* str = AS_BOOL(args[0]) ? "true" : "false";
-        char* result = malloc(strlen(str) + 1);
+        char* result = SAGE_ALLOC(strlen(str) + 1);
         strcpy(result, str);
         return val_string_take(result);
     }
@@ -383,6 +387,7 @@ static int contains_yield(Stmt* body) {
 
 // --- Forward Declaration ---
 static ExecResult eval_expr(Expr* expr, Env* env);
+static ExecResult eval_expr_impl(Expr* expr, Env* env);
 static ExecResult interpret_inner(Stmt* stmt, Env* env);
 
 // --- Evaluator ---
@@ -445,11 +450,11 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             if (IS_STRING(left) && IS_STRING(right)) {
                 char* s1 = AS_STRING(left);
                 char* s2 = AS_STRING(right);
-                int len1 = strlen(s1);
-                int len2 = strlen(s2);
-                char* result = malloc(len1 + len2 + 1);
-                strcpy(result, s1);
-                strcat(result, s2);
+                size_t len1 = strlen(s1);
+                size_t len2 = strlen(s2);
+                char* result = SAGE_ALLOC(len1 + len2 + 1);
+                memcpy(result, s1, len1);
+                memcpy(result + len1, s2, len2 + 1);
                 return EVAL_RESULT(val_string_take(result));
             }
             fprintf(stderr, "Runtime Error: Operands must be numbers or strings.\n");
@@ -479,6 +484,17 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
 }
 
 static ExecResult eval_expr(Expr* expr, Env* env) {
+    if (++g_recursion_depth > MAX_RECURSION_DEPTH) {
+        g_recursion_depth--;
+        fprintf(stderr, "Runtime Error: Maximum recursion depth exceeded (%d).\n", MAX_RECURSION_DEPTH);
+        return EVAL_EXCEPTION(val_exception("Maximum recursion depth exceeded"));
+    }
+    ExecResult result = eval_expr_impl(expr, env);
+    g_recursion_depth--;
+    return result;
+}
+
+static ExecResult eval_expr_impl(Expr* expr, Env* env) {
     switch (expr->type) {
         case EXPR_NUMBER: return EVAL_RESULT(val_number(expr->as.number.value));
         case EXPR_STRING: return EVAL_RESULT(val_string(expr->as.string.value));
@@ -506,7 +522,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
         }
 
         case EXPR_TUPLE: {
-            Value* elements = malloc(sizeof(Value) * expr->as.tuple.count);
+            Value* elements = SAGE_ALLOC(sizeof(Value) * expr->as.tuple.count);
             for (int i = 0; i < expr->as.tuple.count; i++) {
                 ExecResult elem_result = eval_expr(expr->as.tuple.elements[i], env);
                 if (elem_result.is_throwing) {
@@ -582,7 +598,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             Token prop = expr->as.get.property;
 
             if (IS_INSTANCE(object)) {
-                char* prop_name = malloc(prop.length + 1);
+                char* prop_name = SAGE_ALLOC(prop.length + 1);
                 strncpy(prop_name, prop.start, prop.length);
                 prop_name[prop.length] = '\0';
 
@@ -638,7 +654,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             Value value = val_result.value;
             
             Token prop = expr->as.set.property;
-            char* prop_name = malloc(prop.length + 1);
+            char* prop_name = SAGE_ALLOC(prop.length + 1);
             strncpy(prop_name, prop.start, prop.length);
             prop_name[prop.length] = '\0';
             
@@ -670,7 +686,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 
                 if (IS_INSTANCE(object)) {
                     Token method_token = callee_expr->as.get.property;
-                    char* method_name = malloc(method_token.length + 1);
+                    char* method_name = SAGE_ALLOC(method_token.length + 1);
                     strncpy(method_name, method_token.start, method_token.length);
                     method_name[method_token.length] = '\0';
 
@@ -1094,7 +1110,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 }
             } else {
                 // from module_name import item1, item2, ...
-                ImportItem* import_items = malloc(sizeof(ImportItem) * item_count);
+                ImportItem* import_items = SAGE_ALLOC(sizeof(ImportItem) * item_count);
                 for (int i = 0; i < item_count; i++) {
                     import_items[i].name = items[i];
                     import_items[i].alias = stmt->as.import.item_aliases[i];  // ✅ FIX: Use parsed alias

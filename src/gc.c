@@ -14,12 +14,7 @@
 extern Environment* g_global_env;
 extern Environment* g_gc_root_env;
 
-typedef struct MarkedEnv {
-    Env* env;
-    struct MarkedEnv* next;
-} MarkedEnv;
-
-static MarkedEnv* gc_marked_envs = NULL;
+// Environment marking now uses Env.marked flag directly (O(1) per env)
 
 static Env* gc_root_env(void) {
     if (g_gc_root_env != NULL) {
@@ -28,13 +23,7 @@ static Env* gc_root_env(void) {
     return g_global_env;
 }
 
-static void gc_clear_marked_envs(void) {
-    while (gc_marked_envs != NULL) {
-        MarkedEnv* next = gc_marked_envs->next;
-        free(gc_marked_envs);
-        gc_marked_envs = next;
-    }
-}
+// No longer needed — env marks are cleared during env_sweep_unmarked()
 
 static int gc_try_mark_object(void* object) {
     if (object == NULL) {
@@ -52,23 +41,10 @@ static int gc_try_mark_object(void* object) {
 }
 
 static int gc_try_mark_env(Env* env) {
-    MarkedEnv* current = gc_marked_envs;
-    while (current != NULL) {
-        if (current->env == env) {
-            return 0;
-        }
-        current = current->next;
+    if (env->marked) {
+        return 0;  // Already marked this cycle
     }
-
-    MarkedEnv* marked = malloc(sizeof(MarkedEnv));
-    if (marked == NULL) {
-        fprintf(stderr, "Error: GC environment tracking allocation failed\n");
-        exit(1);
-    }
-
-    marked->env = env;
-    marked->next = gc_marked_envs;
-    gc_marked_envs = marked;
+    env->marked = 1;
     return 1;
 }
 
@@ -83,9 +59,11 @@ static void gc_release_object(GCHeader* header) {
         }
         case VAL_DICT: {
             DictValue* dict = object;
-            for (int i = 0; i < dict->count; i++) {
-                free(dict->entries[i].key);
-                free(dict->entries[i].value);
+            for (int i = 0; i < dict->capacity; i++) {
+                if (dict->entries[i].key != NULL) {
+                    free(dict->entries[i].key);
+                    free(dict->entries[i].value);
+                }
             }
             free(dict->entries);
             break;
@@ -134,7 +112,8 @@ void gc_init(void) {
     gc.bytes_allocated = 0;
     gc.bytes_freed = 0;
     gc.enabled = 1;  // GC starts enabled
-    
+    gc.pin_count = 0;
+
     if (gc_debug) {
         fprintf(stderr, "[GC] Garbage collector initialized\n");
     }
@@ -166,9 +145,17 @@ void gc_shutdown(void) {
 // Memory Allocation with GC Support
 // ============================================================================
 
+void gc_pin(void) {
+    gc.pin_count++;
+}
+
+void gc_unpin(void) {
+    if (gc.pin_count > 0) gc.pin_count--;
+}
+
 void* gc_alloc(int type, size_t size) {
-    // Check if GC should run
-    if (gc.enabled && gc.objects_since_gc > GC_THRESHOLD) {
+    // Check if GC should run (suppressed when pinned)
+    if (gc.enabled && gc.pin_count == 0 && gc.objects_since_gc > GC_THRESHOLD) {
         Env* root = gc_root_env();
         if (root != NULL) {
             gc_collect_with_root(root);
@@ -180,8 +167,8 @@ void* gc_alloc(int type, size_t size) {
     GCHeader* header = (GCHeader*)malloc(total_size);
     
     if (header == NULL) {
-        fprintf(stderr, "Error: Memory allocation failed\n");
-        return NULL;
+        fprintf(stderr, "Fatal: GC allocation failed (%zu bytes)\n", total_size);
+        abort();
     }
     
     // Initialize header
@@ -252,10 +239,10 @@ void gc_mark_value(Value val) {
     
     if (val.type == VAL_DICT) {
         if (gc_try_mark_object(val.as.dict)) {
-            // Mark all values in dict
+            // Mark all values in dict (hash table: iterate by capacity, skip empty slots)
             DictValue* dict = val.as.dict;
-            for (int i = 0; i < dict->count; i++) {
-                if (dict->entries[i].value != NULL) {
+            for (int i = 0; i < dict->capacity; i++) {
+                if (dict->entries[i].key != NULL && dict->entries[i].value != NULL) {
                     gc_mark_value(*dict->entries[i].value);
                 }
             }
@@ -393,43 +380,38 @@ void gc_mark_call_stack(void) {
 
 // Master marking function - marks all reachable objects
 void gc_mark(void) {
-    gc_clear_marked_envs();
     gc.marked_count = 0;
-    
+
     if (gc_debug) {
         fprintf(stderr, "[GC] Starting mark phase\n");
     }
-    
+
     gc_mark_from_root(gc_root_env());
-    gc_clear_marked_envs();
 }
 
 // Wrapper to mark from root environment (call this from your interpreter)
 void gc_mark_from_root(Env* root_env) {
-    gc_clear_marked_envs();
     gc.marked_count = 0;
-    
+
     if (gc_debug) {
         fprintf(stderr, "[GC] Starting mark phase from root\n");
     }
-    
+
     // Mark all globals
     if (root_env != NULL) {
         gc_mark_env(root_env);
     }
-    
+
     // Mark function registry
     gc_mark_function_registry();
-    
+
     // Mark call stack (via environment traversal)
     gc_mark_call_stack();
-    
+
     if (gc_debug) {
-        fprintf(stderr, "[GC] Mark phase complete: %d objects marked\n", 
+        fprintf(stderr, "[GC] Mark phase complete: %d objects marked\n",
                 gc.marked_count);
     }
-
-    gc_clear_marked_envs();
 }
 
 // ============================================================================
@@ -438,29 +420,30 @@ void gc_mark_from_root(Env* root_env) {
 
 void gc_sweep(void) {
     gc.freed_count = 0;
-    
+
     if (gc_debug) {
         fprintf(stderr, "[GC] Starting sweep phase\n");
     }
-    
+
+    // Sweep GC-managed objects (values)
     void** current = (void**)&gc.objects;
-    
+
     while (*current != NULL) {
         GCHeader* header = (GCHeader*)*current;
-        
+
         if (!header->marked) {
             // Object is unreachable - free it
             void* unreached = *current;
             *current = header->next;
-            
+
             gc.object_count--;
             gc.freed_count++;
-            
+
             if (gc_debug) {
-                fprintf(stderr, "[GC] Freeing unmarked object (type=%d)\n", 
+                fprintf(stderr, "[GC] Freeing unmarked object (type=%d)\n",
                         header->type);
             }
-            
+
             gc_release_object(header);
             free(unreached);
         } else {
@@ -469,9 +452,12 @@ void gc_sweep(void) {
             current = (void**)&header->next;
         }
     }
-    
+
+    // Sweep unreachable environments (marks cleared inside)
+    env_sweep_unmarked();
+
     if (gc_debug) {
-        fprintf(stderr, "[GC] Sweep phase complete: %d objects freed\n", 
+        fprintf(stderr, "[GC] Sweep phase complete: %d objects freed\n",
                 gc.freed_count);
     }
 }

@@ -6,6 +6,7 @@
 #include "gc.h"
 #include "module.h"
 
+
 // ========== VALUE CONSTRUCTORS ==========
 
 Value val_number(double value) {
@@ -91,7 +92,7 @@ Value val_tuple(Value* elements, int count) {
     v.type = VAL_TUPLE;
     v.as.tuple = gc_alloc(VAL_TUPLE, sizeof(TupleValue));
     v.as.tuple->count = count;
-    v.as.tuple->elements = malloc(sizeof(Value) * count);
+    v.as.tuple->elements = SAGE_ALLOC(sizeof(Value) * count);
     for (int i = 0; i < count; i++) {
         v.as.tuple->elements[i] = elements[i];
     }
@@ -125,7 +126,7 @@ Value val_exception(const char* message) {
     Value v;
     v.type = VAL_EXCEPTION;
     v.as.exception = gc_alloc(VAL_EXCEPTION, sizeof(ExceptionValue));
-    v.as.exception->message = malloc(strlen(message) + 1);
+    v.as.exception->message = SAGE_ALLOC(strlen(message) + 1);
     strcpy(v.as.exception->message, message);
     return v;
 }
@@ -155,7 +156,7 @@ void array_push(Value* arr, Value val) {
 
     if (a->count >= a->capacity) {
         a->capacity = a->capacity == 0 ? 4 : a->capacity * 2;
-        a->elements = realloc(a->elements, sizeof(Value) * a->capacity);
+        a->elements = SAGE_REALLOC(a->elements, sizeof(Value) * a->capacity);
     }
     a->elements[a->count++] = val;
 }
@@ -192,82 +193,148 @@ Value array_slice(Value* arr, int start, int end) {
     return result;
 }
 
-// ========== DICTIONARY OPERATIONS ==========
+// ========== DICTIONARY OPERATIONS (HASH TABLE) ==========
+
+// FNV-1a hash function
+static unsigned int dict_hash(const char* key) {
+    unsigned int hash = 2166136261u;
+    for (const char* p = key; *p; p++) {
+        hash ^= (unsigned char)*p;
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+// Find the slot for a key (returns index). If key is not present,
+// returns the index of the first empty slot where it should go.
+static int dict_find_slot(DictValue* d, const char* key, unsigned int hash) {
+    int mask = d->capacity - 1;  // capacity is always power of 2
+    int idx = (int)(hash & (unsigned int)mask);
+    for (;;) {
+        DictEntry* e = &d->entries[idx];
+        if (e->key == NULL) return idx;  // Empty slot
+        if (e->hash == hash && strcmp(e->key, key) == 0) return idx;  // Found
+        idx = (idx + 1) & mask;  // Linear probing
+    }
+}
+
+// Grow the hash table and rehash all entries
+static void dict_grow(DictValue* d) {
+    int old_capacity = d->capacity;
+    DictEntry* old_entries = d->entries;
+
+    d->capacity = old_capacity == 0 ? 8 : old_capacity * 2;
+    d->entries = SAGE_ALLOC(sizeof(DictEntry) * d->capacity);
+    memset(d->entries, 0, sizeof(DictEntry) * d->capacity);
+    d->count = 0;
+
+    for (int i = 0; i < old_capacity; i++) {
+        if (old_entries[i].key != NULL) {
+            int slot = dict_find_slot(d, old_entries[i].key, old_entries[i].hash);
+            d->entries[slot] = old_entries[i];
+            d->count++;
+        }
+    }
+    free(old_entries);
+}
 
 void dict_set(Value* dict, const char* key, Value value) {
     if (dict->type != VAL_DICT) return;
     DictValue* d = dict->as.dict;
-    
-    for (int i = 0; i < d->count; i++) {
-        if (strcmp(d->entries[i].key, key) == 0) {
-            *(d->entries[i].value) = value;
-            return;
-        }
+
+    // Grow if load factor > 75%
+    if (d->capacity == 0 || d->count * 4 >= d->capacity * 3) {
+        dict_grow(d);
     }
-    
-    if (d->count >= d->capacity) {
-        d->capacity = d->capacity == 0 ? 8 : d->capacity * 2;
-        d->entries = realloc(d->entries, sizeof(DictEntry) * d->capacity);
+
+    unsigned int hash = dict_hash(key);
+    int slot = dict_find_slot(d, key, hash);
+
+    if (d->entries[slot].key != NULL) {
+        // Key exists, update value
+        *(d->entries[slot].value) = value;
+        return;
     }
-    
-    d->entries[d->count].key = malloc(strlen(key) + 1);
-    strcpy(d->entries[d->count].key, key);
-    
-    d->entries[d->count].value = malloc(sizeof(Value));
-    *(d->entries[d->count].value) = value;
+
+    // New entry
+    size_t klen = strlen(key);
+    d->entries[slot].key = SAGE_ALLOC(klen + 1);
+    memcpy(d->entries[slot].key, key, klen + 1);
+    d->entries[slot].hash = hash;
+    d->entries[slot].value = SAGE_ALLOC(sizeof(Value));
+    *(d->entries[slot].value) = value;
     d->count++;
 }
 
 Value dict_get(Value* dict, const char* key) {
     if (dict->type != VAL_DICT) return val_nil();
     DictValue* d = dict->as.dict;
-    
-    for (int i = 0; i < d->count; i++) {
-        if (strcmp(d->entries[i].key, key) == 0) {
-            return *(d->entries[i].value);
-        }
-    }
-    return val_nil();
+    if (d->capacity == 0) return val_nil();
+
+    unsigned int hash = dict_hash(key);
+    int slot = dict_find_slot(d, key, hash);
+
+    if (d->entries[slot].key == NULL) return val_nil();
+    return *(d->entries[slot].value);
 }
 
 int dict_has(Value* dict, const char* key) {
     if (dict->type != VAL_DICT) return 0;
     DictValue* d = dict->as.dict;
-    
-    for (int i = 0; i < d->count; i++) {
-        if (strcmp(d->entries[i].key, key) == 0) {
-            return 1;
-        }
-    }
-    return 0;
+    if (d->capacity == 0) return 0;
+
+    unsigned int hash = dict_hash(key);
+    int slot = dict_find_slot(d, key, hash);
+
+    return d->entries[slot].key != NULL;
 }
 
 void dict_delete(Value* dict, const char* key) {
     if (dict->type != VAL_DICT) return;
     DictValue* d = dict->as.dict;
-    
-    for (int i = 0; i < d->count; i++) {
-        if (strcmp(d->entries[i].key, key) == 0) {
-            free(d->entries[i].key);
-            free(d->entries[i].value);
-            for (int j = i; j < d->count - 1; j++) {
-                d->entries[j] = d->entries[j + 1];
-            }
-            d->count--;
-            return;
+    if (d->capacity == 0) return;
+
+    unsigned int hash = dict_hash(key);
+    int slot = dict_find_slot(d, key, hash);
+
+    if (d->entries[slot].key == NULL) return;  // Not found
+
+    // Free the entry
+    free(d->entries[slot].key);
+    free(d->entries[slot].value);
+    d->entries[slot].key = NULL;
+    d->entries[slot].value = NULL;
+    d->count--;
+
+    // Rehash subsequent entries to fix probe chain (backward-shift deletion)
+    int mask = d->capacity - 1;
+    int idx = (slot + 1) & mask;
+    while (d->entries[idx].key != NULL) {
+        int natural = (int)(d->entries[idx].hash & (unsigned int)mask);
+        // Check if this entry is displaced past the deleted slot
+        if ((idx > slot && (natural <= slot || natural > idx)) ||
+            (idx < slot && (natural <= slot && natural > idx))) {
+            d->entries[slot] = d->entries[idx];
+            d->entries[idx].key = NULL;
+            d->entries[idx].value = NULL;
+            slot = idx;
         }
+        idx = (idx + 1) & mask;
     }
 }
 
 Value dict_keys(Value* dict) {
     if (dict->type != VAL_DICT) return val_nil();
     DictValue* d = dict->as.dict;
-    
+
     Value result = val_array();
-    for (int i = 0; i < d->count; i++) {
-        char* key_copy = malloc(strlen(d->entries[i].key) + 1);
-        strcpy(key_copy, d->entries[i].key);
-        array_push(&result, val_string_take(key_copy));
+    for (int i = 0; i < d->capacity; i++) {
+        if (d->entries[i].key != NULL) {
+            size_t klen = strlen(d->entries[i].key);
+            char* key_copy = SAGE_ALLOC(klen + 1);
+            memcpy(key_copy, d->entries[i].key, klen + 1);
+            array_push(&result, val_string_take(key_copy));
+        }
     }
     return result;
 }
@@ -275,10 +342,12 @@ Value dict_keys(Value* dict) {
 Value dict_values(Value* dict) {
     if (dict->type != VAL_DICT) return val_nil();
     DictValue* d = dict->as.dict;
-    
+
     Value result = val_array();
-    for (int i = 0; i < d->count; i++) {
-        array_push(&result, *(d->entries[i].value));
+    for (int i = 0; i < d->capacity; i++) {
+        if (d->entries[i].key != NULL) {
+            array_push(&result, *(d->entries[i].value));
+        }
     }
     return result;
 }
@@ -302,7 +371,7 @@ Value string_split(const char* str, const char* delimiter) {
     int del_len = strlen(delimiter);
     if (del_len == 0) {
         for (int i = 0; str[i]; i++) {
-            char* ch = malloc(2);
+            char* ch = SAGE_ALLOC(2);
             ch[0] = str[i];
             ch[1] = '\0';
             array_push(&result, val_string_take(ch));
@@ -315,14 +384,14 @@ Value string_split(const char* str, const char* delimiter) {
     
     while ((found = strstr(start, delimiter)) != NULL) {
         int len = found - start;
-        char* part = malloc(len + 1);
+        char* part = SAGE_ALLOC(len + 1);
         strncpy(part, start, len);
         part[len] = '\0';
         array_push(&result, val_string_take(part));
         start = found + del_len;
     }
     
-    char* part = malloc(strlen(start) + 1);
+    char* part = SAGE_ALLOC(strlen(start) + 1);
     strcpy(part, start);
     array_push(&result, val_string_take(part));
     
@@ -332,74 +401,84 @@ Value string_split(const char* str, const char* delimiter) {
 Value string_join(Value* arr, const char* separator) {
     if (arr->type != VAL_ARRAY) return val_nil();
     ArrayValue* a = arr->as.array;
-    
+
     if (a->count == 0) return val_string("");
-    
-    int total_len = 0;
-    int sep_len = strlen(separator);
-    
+
+    size_t total_len = 0;
+    size_t sep_len = strlen(separator);
+
     for (int i = 0; i < a->count; i++) {
         if (a->elements[i].type == VAL_STRING) {
             total_len += strlen(AS_STRING(a->elements[i]));
         }
         if (i < a->count - 1) total_len += sep_len;
     }
-    
-    char* result = malloc(total_len + 1);
-    result[0] = '\0';
-    
+
+    char* result = SAGE_ALLOC(total_len + 1);
+    char* wp = result;  // Write pointer (O(n) instead of O(n²) strcat)
+
     for (int i = 0; i < a->count; i++) {
         if (a->elements[i].type == VAL_STRING) {
-            strcat(result, AS_STRING(a->elements[i]));
+            size_t slen = strlen(AS_STRING(a->elements[i]));
+            memcpy(wp, AS_STRING(a->elements[i]), slen);
+            wp += slen;
         }
         if (i < a->count - 1) {
-            strcat(result, separator);
+            memcpy(wp, separator, sep_len);
+            wp += sep_len;
         }
     }
-    
+    *wp = '\0';
+
     return val_string_take(result);
 }
 
 char* string_replace(const char* str, const char* old, const char* new_str) {
     if (!str || !old || !new_str) return NULL;
-    
-    int old_len = strlen(old);
-    int new_len = strlen(new_str);
-    
-    int count = 0;
+
+    size_t old_len = strlen(old);
+    size_t new_len = strlen(new_str);
+    size_t str_len = strlen(str);
+
+    // Count occurrences
+    size_t count = 0;
     const char* tmp = str;
     while ((tmp = strstr(tmp, old)) != NULL) {
         count++;
         tmp += old_len;
     }
-    
+
     if (count == 0) {
-        char* result = malloc(strlen(str) + 1);
-        strcpy(result, str);
+        char* result = SAGE_ALLOC(str_len + 1);
+        memcpy(result, str, str_len + 1);
         return result;
     }
-    
-    int result_len = strlen(str) + count * (new_len - old_len);
-    char* result = malloc(result_len + 1);
-    result[0] = '\0';
-    
+
+    size_t result_len = str_len + count * (new_len - old_len);
+    char* result = SAGE_ALLOC(result_len + 1);
+    char* wp = result;  // Write pointer (O(n) instead of O(n²) strcat)
+
     const char* src = str;
     const char* found;
-    
+
     while ((found = strstr(src, old)) != NULL) {
-        int len = found - src;
-        strncat(result, src, len);
-        strcat(result, new_str);
+        size_t prefix_len = (size_t)(found - src);
+        memcpy(wp, src, prefix_len);
+        wp += prefix_len;
+        memcpy(wp, new_str, new_len);
+        wp += new_len;
         src = found + old_len;
     }
-    strcat(result, src);
-    
+    // Copy remaining tail
+    size_t tail_len = strlen(src);
+    memcpy(wp, src, tail_len + 1);
+
     return result;
 }
 
 char* string_upper(const char* str) {
     if (!str) return NULL;
-    char* result = malloc(strlen(str) + 1);
+    char* result = SAGE_ALLOC(strlen(str) + 1);
     for (int i = 0; str[i]; i++) {
         result[i] = toupper(str[i]);
     }
@@ -409,7 +488,7 @@ char* string_upper(const char* str) {
 
 char* string_lower(const char* str) {
     if (!str) return NULL;
-    char* result = malloc(strlen(str) + 1);
+    char* result = SAGE_ALLOC(strlen(str) + 1);
     for (int i = 0; str[i]; i++) {
         result[i] = tolower(str[i]);
     }
@@ -423,7 +502,7 @@ char* string_strip(const char* str) {
     while (*str && isspace(*str)) str++;
     
     if (*str == '\0') {
-        char* result = malloc(1);
+        char* result = SAGE_ALLOC(1);
         result[0] = '\0';
         return result;
     }
@@ -432,32 +511,34 @@ char* string_strip(const char* str) {
     while (end > str && isspace(*end)) end--;
     
     int len = end - str + 1;
-    char* result = malloc(len + 1);
+    char* result = SAGE_ALLOC(len + 1);
     strncpy(result, str, len);
     result[len] = '\0';
-    
+
     return result;
 }
 
 // ========== CLASS OPERATIONS ==========
 
 ClassValue* class_create(const char* name, int name_len, ClassValue* parent) {
+    gc_pin();  // Prevent GC during multi-step initialization
     ClassValue* class_val = gc_alloc(VAL_CLASS, sizeof(ClassValue));
-    class_val->name = malloc(name_len + 1);
+    class_val->name = SAGE_ALLOC(name_len + 1);
     strncpy(class_val->name, name, name_len);
     class_val->name[name_len] = '\0';
     class_val->name_len = name_len;
     class_val->parent = parent;
     class_val->methods = NULL;
     class_val->method_count = 0;
+    gc_unpin();
     return class_val;
 }
 
 void class_add_method(ClassValue* class_val, const char* name, int name_len, void* method_stmt) {
-    class_val->methods = realloc(class_val->methods, sizeof(Method) * (class_val->method_count + 1));
+    class_val->methods = SAGE_REALLOC(class_val->methods, sizeof(Method) * (class_val->method_count + 1));
     
     Method* m = &class_val->methods[class_val->method_count];
-    m->name = malloc(name_len + 1);
+    m->name = SAGE_ALLOC(name_len + 1);
     strncpy(m->name, name, name_len);
     m->name[name_len] = '\0';
     m->name_len = name_len;
@@ -484,12 +565,14 @@ Method* class_find_method(ClassValue* class_val, const char* name, int name_len)
 // ========== INSTANCE OPERATIONS ==========
 
 InstanceValue* instance_create(ClassValue* class_def) {
+    gc_pin();  // Prevent GC between the two gc_alloc calls
     InstanceValue* instance = gc_alloc(VAL_INSTANCE, sizeof(InstanceValue));
     instance->class_def = class_def;
-    
+
     Value fields_dict = val_dict();
     instance->fields = fields_dict.as.dict;
-    
+    gc_unpin();
+
     return instance;
 }
 

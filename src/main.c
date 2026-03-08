@@ -46,14 +46,16 @@ static char* read_file(const char* path) {
     }
 
     fseek(file, 0L, SEEK_END);
-    size_t fileSize = ftell(file);
-    rewind(file);
-
-    char* buffer = (char*)malloc(fileSize + 1);
-    if (buffer == NULL) {
-        fprintf(stderr, "Not enough memory to read \"%s\".\n", path);
+    long fileSizeLong = ftell(file);
+    if (fileSizeLong < 0) {
+        fprintf(stderr, "Could not determine size of \"%s\".\n", path);
+        fclose(file);
         exit(74);
     }
+    size_t fileSize = (size_t)fileSizeLong;
+    rewind(file);
+
+    char* buffer = (char*)SAGE_ALLOC(fileSize + 1);
 
     size_t bytesRead = fread(buffer, sizeof(char), fileSize, file);
     buffer[bytesRead] = '\0';

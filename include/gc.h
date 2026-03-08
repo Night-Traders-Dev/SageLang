@@ -6,12 +6,37 @@
 #ifndef SAGELANG_GC_H
 #define SAGELANG_GC_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "value.h"
 #include "env.h"
 
 // GC configuration
 #define GC_HEAP_SIZE (1024 * 1024)  // 1MB heap
 #define GC_THRESHOLD 1000            // Run GC after allocating 1000 objects
+
+// Safe allocation macro - aborts with diagnostic on OOM
+#define SAGE_ALLOC(size) sage_safe_malloc(size, __FILE__, __LINE__)
+#define SAGE_REALLOC(ptr, size) sage_safe_realloc(ptr, size, __FILE__, __LINE__)
+
+static inline void* sage_safe_malloc(size_t size, const char* file, int line) {
+    void* ptr = malloc(size);
+    if (ptr == NULL && size > 0) {
+        fprintf(stderr, "Fatal: Out of memory allocating %zu bytes at %s:%d\n", size, file, line);
+        abort();
+    }
+    return ptr;
+}
+
+static inline void* sage_safe_realloc(void* old, size_t size, const char* file, int line) {
+    void* ptr = realloc(old, size);
+    if (ptr == NULL && size > 0) {
+        fprintf(stderr, "Fatal: Out of memory reallocating %zu bytes at %s:%d\n", size, file, line);
+        abort();
+    }
+    return ptr;
+}
 
 // GC object header (prepended to all allocated objects)
 typedef struct {
@@ -40,6 +65,7 @@ typedef struct {
     unsigned long bytes_allocated;  // Total bytes allocated
     unsigned long bytes_freed;      // Total bytes freed
     int enabled;                // Is GC enabled?
+    int pin_count;              // When > 0, auto-collection is suppressed
 } GC;
 
 // Global GC instance
@@ -53,6 +79,10 @@ void gc_collect_with_root(Env* root_env);  // Use this one!
 void gc_mark(void);
 void gc_mark_from_root(Env* root_env);     // Use this one!
 void gc_sweep(void);
+
+// GC pinning - suppress collection during multi-step allocations
+void gc_pin(void);    // Increment pin count (suppresses auto-collection)
+void gc_unpin(void);  // Decrement pin count (re-enables auto-collection)
 
 // Memory allocation
 void* gc_alloc(int type, size_t size);
