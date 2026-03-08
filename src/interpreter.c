@@ -15,37 +15,42 @@
 #define EVAL_EXCEPTION(exc) ((ExecResult){ val_nil(), 0, 0, 0, 1, (exc), 0, NULL })
 #define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, val_nil(), 0, NULL })
 
-// --- Function Registry ---
-typedef struct ProcNode {
-    const char* name;
-    int name_len;
-    ProcStmt stmt;
-    struct ProcNode* next;
-} ProcNode;
-
-static ProcNode* functions = NULL;
-
 Environment* g_global_env = NULL;
+Environment* g_gc_root_env = NULL;
+static Stmt* g_generator_resume_target = NULL;
 
+static int stmt_contains_target(Stmt* stmt, Stmt* target) {
+    if (stmt == NULL || target == NULL) return 0;
+    if (stmt == target) return 1;
 
-static void define_function(ProcStmt* stmt) {
-    ProcNode* node = malloc(sizeof(ProcNode));
-    node->name = stmt->name.start; 
-    node->name_len = stmt->name.length;
-    node->stmt = *stmt;
-    node->next = functions;
-    functions = node;
-}
-
-static ProcStmt* find_function(const char* name, int len) {
-    ProcNode* current = functions;
-    while (current) {
-        if (strncmp(current->name, name, len) == 0 && len == current->name_len) {
-            return &current->stmt;
+    switch (stmt->type) {
+        case STMT_BLOCK:
+            for (Stmt* current = stmt->as.block.statements; current != NULL; current = current->next) {
+                if (stmt_contains_target(current, target)) return 1;
+            }
+            return 0;
+        case STMT_IF:
+            return stmt_contains_target(stmt->as.if_stmt.then_branch, target) ||
+                   stmt_contains_target(stmt->as.if_stmt.else_branch, target);
+        case STMT_WHILE:
+            return stmt_contains_target(stmt->as.while_stmt.body, target);
+        case STMT_FOR:
+            return stmt_contains_target(stmt->as.for_stmt.body, target);
+        case STMT_TRY: {
+            if (stmt_contains_target(stmt->as.try_stmt.try_block, target) ||
+                stmt_contains_target(stmt->as.try_stmt.finally_block, target)) {
+                return 1;
+            }
+            for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+                if (stmt_contains_target(stmt->as.try_stmt.catches[i]->body, target)) {
+                    return 1;
+                }
+            }
+            return 0;
         }
-        current = current->next;
+        default:
+            return 0;
     }
-    return NULL;
 }
 
 // --- Native Functions ---
@@ -62,7 +67,7 @@ static Value input_native(int argCount, Value* args) {
 
         char* str = malloc(len + 1);
         strcpy(str, buffer);
-        return val_string(str);
+        return val_string_take(str);
     }
     return val_nil();
 }
@@ -85,7 +90,7 @@ static Value str_native(int argCount, Value* args) {
         snprintf(buffer, sizeof(buffer), "%g", AS_NUMBER(args[0]));
         char* str = malloc(strlen(buffer) + 1);
         strcpy(str, buffer);
-        return val_string(str);
+        return val_string_take(str);
     }
     if (IS_STRING(args[0])) {
         return args[0];
@@ -94,7 +99,7 @@ static Value str_native(int argCount, Value* args) {
         char* str = AS_BOOL(args[0]) ? "true" : "false";
         char* result = malloc(strlen(str) + 1);
         strcpy(result, str);
-        return val_string(result);
+        return val_string_take(result);
     }
     return val_string("nil");
 }
@@ -173,28 +178,28 @@ static Value replace_native(int argCount, Value* args) {
     if (argCount != 3) return val_nil();
     if (!IS_STRING(args[0]) || !IS_STRING(args[1]) || !IS_STRING(args[2])) return val_nil();
     char* result = string_replace(AS_STRING(args[0]), AS_STRING(args[1]), AS_STRING(args[2]));
-    return val_string(result);
+    return val_string_take(result);
 }
 
 static Value upper_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
     if (!IS_STRING(args[0])) return val_nil();
     char* result = string_upper(AS_STRING(args[0]));
-    return val_string(result);
+    return val_string_take(result);
 }
 
 static Value lower_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
     if (!IS_STRING(args[0])) return val_nil();
     char* result = string_lower(AS_STRING(args[0]));
-    return val_string(result);
+    return val_string_take(result);
 }
 
 static Value strip_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
     if (!IS_STRING(args[0])) return val_nil();
     char* result = string_strip(AS_STRING(args[0]));
-    return val_string(result);
+    return val_string_take(result);
 }
 
 static Value slice_native(int argCount, Value* args) {
@@ -279,24 +284,21 @@ static Value native_next(int arg_count, Value* args) {
     // Initialize generator environment on first call
     if (!gen->is_started) {
         gen->gen_env = env_create(gen->closure);
-        gen->current_stmt = gen->body;
         gen->is_started = 1;
     }
-    
-    // For generators, we always resume from the saved position
-    // The position points to the BLOCK containing the entire function body
-    Stmt* resume_from = (Stmt*)gen->current_stmt;
-    
-    if (resume_from == NULL) {
+
+    if (gen->has_resume_target && gen->current_stmt == NULL) {
         gen->is_exhausted = 1;
         return val_nil();
     }
-    
-    ExecResult result = interpret(resume_from, gen->gen_env);
+
+    g_generator_resume_target = gen->has_resume_target ? (Stmt*)gen->current_stmt : NULL;
+    ExecResult result = interpret((Stmt*)gen->body, gen->gen_env);
+    g_generator_resume_target = NULL;
     
     if (result.is_yielding) {
-        // Save where to resume from next time
         gen->current_stmt = result.next_stmt;
+        gen->has_resume_target = 1;
         return result.value;
     }
     
@@ -313,6 +315,7 @@ static Value native_next(int arg_count, Value* args) {
     
     // Generator completed without yielding or returning
     gen->is_exhausted = 1;
+    gen->has_resume_target = 0;
     return val_nil();
 }
 
@@ -380,6 +383,7 @@ static int contains_yield(Stmt* body) {
 
 // --- Forward Declaration ---
 static ExecResult eval_expr(Expr* expr, Env* env);
+static ExecResult interpret_inner(Stmt* stmt, Env* env);
 
 // --- Evaluator ---
 
@@ -387,6 +391,10 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
     ExecResult left_result = eval_expr(b->left, env);
     if (left_result.is_throwing) return left_result;
     Value left = left_result.value;
+
+    if (b->op.type == TOKEN_NOT) {
+        return EVAL_RESULT(val_bool(!is_truthy(left)));
+    }
 
     if (b->op.type == TOKEN_OR) {
         if (is_truthy(left)) {
@@ -442,7 +450,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 char* result = malloc(len1 + len2 + 1);
                 strcpy(result, s1);
                 strcat(result, s2);
-                return EVAL_RESULT(val_string(result));
+                return EVAL_RESULT(val_string_take(result));
             }
             fprintf(stderr, "Runtime Error: Operands must be numbers or strings.\n");
             return EVAL_RESULT(val_nil());
@@ -459,6 +467,11 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
             if (AS_NUMBER(right) == 0) return EVAL_RESULT(val_nil());
             return EVAL_RESULT(val_number(AS_NUMBER(left) / AS_NUMBER(right)));
+
+        case TOKEN_PERCENT:
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            if ((int)AS_NUMBER(right) == 0) return EVAL_RESULT(val_nil());
+            return EVAL_RESULT(val_number((int)AS_NUMBER(left) % (int)AS_NUMBER(right)));
 
         default:
             return EVAL_RESULT(val_nil());
@@ -566,20 +579,31 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             ExecResult obj_result = eval_expr(expr->as.get.object, env);
             if (obj_result.is_throwing) return obj_result;
             Value object = obj_result.value;
-            
-            if (!IS_INSTANCE(object)) {
-                fprintf(stderr, "Runtime Error: Only instances have properties.\n");
-                return EVAL_RESULT(val_nil());
-            }
-            
             Token prop = expr->as.get.property;
-            char* prop_name = malloc(prop.length + 1);
-            strncpy(prop_name, prop.start, prop.length);
-            prop_name[prop.length] = '\0';
-            
-            Value result = instance_get_field(object.as.instance, prop_name);
-            free(prop_name);
-            return EVAL_RESULT(result);
+
+            if (IS_INSTANCE(object)) {
+                char* prop_name = malloc(prop.length + 1);
+                strncpy(prop_name, prop.start, prop.length);
+                prop_name[prop.length] = '\0';
+
+                Value result = instance_get_field(object.as.instance, prop_name);
+                free(prop_name);
+                return EVAL_RESULT(result);
+            }
+
+            if (IS_MODULE(object)) {
+                int found = 0;
+                Value result = module_get_attr(AS_MODULE(object), prop.start, prop.length, &found);
+                if (!found) {
+                    fprintf(stderr, "Runtime Error: Module '%s' has no attribute '%.*s'.\n",
+                            AS_MODULE(object)->name, prop.length, prop.start);
+                    return EVAL_RESULT(val_nil());
+                }
+                return EVAL_RESULT(result);
+            }
+
+            fprintf(stderr, "Runtime Error: Only instances and modules have properties.\n");
+            return EVAL_RESULT(val_nil());
         }
 
         case EXPR_SET: {
@@ -637,158 +661,75 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
         }
 
         case EXPR_CALL: {
-            Token callee = expr->as.call.callee;
-            
-            // Check for method call pattern
-            if (expr->as.call.arg_count > 0 && expr->as.call.args[0]->type == EXPR_GET) {
-                Expr* get_expr = expr->as.call.args[0];
-                ExecResult obj_result = eval_expr(get_expr->as.get.object, env);
+            Expr* callee_expr = expr->as.call.callee;
+
+            if (callee_expr->type == EXPR_GET) {
+                ExecResult obj_result = eval_expr(callee_expr->as.get.object, env);
                 if (obj_result.is_throwing) return obj_result;
                 Value object = obj_result.value;
-                
-                if (!IS_INSTANCE(object)) {
-                    fprintf(stderr, "Runtime Error: Cannot call method on non-instance.\n");
-                    return EVAL_RESULT(val_nil());
-                }
-                
-                Token method_token = get_expr->as.get.property;
-                char* method_name = malloc(method_token.length + 1);
-                strncpy(method_name, method_token.start, method_token.length);
-                method_name[method_token.length] = '\0';
-                
-                Method* method = class_find_method(object.as.instance->class_def, method_name, method_token.length);
-                
-                if (!method) {
-                    fprintf(stderr, "Runtime Error: Undefined method '%s'.\n", method_name);
-                    free(method_name);
-                    return EVAL_RESULT(val_nil());
-                }
-                
-                ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
-                
-                Env* method_env = env_create(env);
-                env_define(method_env, "self", 4, object);
-                
-                int param_start = (method_stmt->param_count > 0 && 
-                                  strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
-                
-                for (int i = param_start; i < method_stmt->param_count; i++) {
-                    if (i - param_start + 1 < expr->as.call.arg_count) {
-                        ExecResult arg_result = eval_expr(expr->as.call.args[i - param_start + 1], env);
-                        if (arg_result.is_throwing) {
-                            free(method_name);
-                            return arg_result;
-                        }
-                        env_define(method_env, method_stmt->params[i].start, 
-                                 method_stmt->params[i].length, arg_result.value);
-                    }
-                }
-                
-                ExecResult res = interpret(method_stmt->body, method_env);
-                free(method_name);
-                if (res.is_throwing) return res;
-                return EVAL_RESULT(res.value);
-            }
-            
-            Value classVal;
-            if (env_get(env, callee.start, callee.length, &classVal)) {
-                if (classVal.type == VAL_NATIVE) {
-                    Value args[255];
-                    int count = expr->as.call.arg_count;
-                    for (int i = 0; i < count; i++) {
-                        ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                        if (arg_result.is_throwing) return arg_result;
-                        args[i] = arg_result.value;
-                    }
-                    return EVAL_RESULT(classVal.as.native(count, args));
-                }
-                
-                // PHASE 8: Handle function values from environment
-                if (classVal.type == VAL_FUNCTION) {
-                    ProcStmt* func = AS_FUNCTION(classVal);
-                    if (expr->as.call.arg_count != func->param_count) {
-                        fprintf(stderr, "Runtime Error: Arity mismatch.\n");
+
+                if (IS_INSTANCE(object)) {
+                    Token method_token = callee_expr->as.get.property;
+                    char* method_name = malloc(method_token.length + 1);
+                    strncpy(method_name, method_token.start, method_token.length);
+                    method_name[method_token.length] = '\0';
+
+                    Method* method = class_find_method(object.as.instance->class_def, method_name, method_token.length);
+                    if (!method) {
+                        fprintf(stderr, "Runtime Error: Undefined method '%s'.\n", method_name);
+                        free(method_name);
                         return EVAL_RESULT(val_nil());
                     }
 
-                    Env* closure = classVal.as.function->closure;
-                    Env* scope = env_create(closure);
-                    for (int i = 0; i < func->param_count; i++) {
-                        ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                        if (arg_result.is_throwing) return arg_result;
-                        Token paramName = func->params[i];
-                        env_define(scope, paramName.start, paramName.length, arg_result.value);
+                    ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
+                    Env* method_env = env_create(env);
+                    env_define(method_env, "self", 4, object);
+
+                    int param_start = (method_stmt->param_count > 0 &&
+                                      strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
+
+                    for (int i = param_start; i < method_stmt->param_count; i++) {
+                        if (i - param_start < expr->as.call.arg_count) {
+                            ExecResult arg_result = eval_expr(expr->as.call.args[i - param_start], env);
+                            if (arg_result.is_throwing) {
+                                free(method_name);
+                                return arg_result;
+                            }
+                            env_define(method_env, method_stmt->params[i].start,
+                                       method_stmt->params[i].length, arg_result.value);
+                        }
                     }
 
-                    ExecResult res = interpret(func->body, scope);
+                    ExecResult res = interpret(method_stmt->body, method_env);
+                    free(method_name);
                     if (res.is_throwing) return res;
                     return EVAL_RESULT(res.value);
                 }
-                
-                // PHASE 7: Handle generator function calls - create fresh generator instance
-                if (classVal.type == VAL_GENERATOR) {
-                    // Create a new generator instance from the template
-                    GeneratorValue* template = classVal.as.generator;
-                    
-                    // Create a new environment for this specific generator instance
-                    Env* gen_closure = env_create(env);
-                    
-                    // Bind parameters if any
-                    if (template->param_count > 0 && template->params != NULL) {
-                        Token* params = (Token*)template->params;
-                        for (int i = 0; i < template->param_count && i < expr->as.call.arg_count; i++) {
-                            ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                            if (arg_result.is_throwing) return arg_result;
-                            env_define(gen_closure, params[i].start, params[i].length, arg_result.value);
-                        }
-                    }
-                    
-                    // Create a fresh generator instance with its own closure
-                    return EVAL_RESULT(val_generator(template->body, template->params, 
-                                                     template->param_count, gen_closure));
-                }
-                
-                if (classVal.type == VAL_CLASS) {
-                    ClassValue* class_def = classVal.as.class_val;
-                    InstanceValue* instance = instance_create(class_def);
-                    Value inst_val = val_instance(instance);
-                    
-                    Method* init_method = class_find_method(class_def, "init", 4);
-                    if (init_method) {
-                        ProcStmt* init_stmt = (ProcStmt*)init_method->method_stmt;
-                        
-                        Env* method_env = env_create(env);
-                        env_define(method_env, "self", 4, inst_val);
-                        
-                        int param_start = (init_stmt->param_count > 0 && 
-                                          strncmp(init_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
-                        
-                        for (int i = param_start; i < init_stmt->param_count; i++) {
-                            if (i - param_start < expr->as.call.arg_count) {
-                                ExecResult arg_result = eval_expr(expr->as.call.args[i - param_start], env);
-                                if (arg_result.is_throwing) return arg_result;
-                                env_define(method_env, init_stmt->params[i].start, 
-                                         init_stmt->params[i].length, arg_result.value);
-                            }
-                        }
-                        
-                        ExecResult init_res = interpret(init_stmt->body, method_env);
-                        if (init_res.is_throwing) return init_res;
-                    }
-                    
-                    return EVAL_RESULT(inst_val);
-                }
             }
 
-            // Fallback to global function registry
-            ProcStmt* func = find_function(callee.start, callee.length);
-            if (func) {
+            ExecResult callee_result = eval_expr(callee_expr, env);
+            if (callee_result.is_throwing) return callee_result;
+            Value callee_value = callee_result.value;
+
+            if (callee_value.type == VAL_NATIVE) {
+                Value args[255];
+                int count = expr->as.call.arg_count;
+                for (int i = 0; i < count; i++) {
+                    ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                    if (arg_result.is_throwing) return arg_result;
+                    args[i] = arg_result.value;
+                }
+                return EVAL_RESULT(callee_value.as.native(count, args));
+            }
+
+            if (callee_value.type == VAL_FUNCTION) {
+                ProcStmt* func = AS_FUNCTION(callee_value);
                 if (expr->as.call.arg_count != func->param_count) {
-                     fprintf(stderr, "Runtime Error: Arity mismatch.\n");
-                     return EVAL_RESULT(val_nil());
+                    fprintf(stderr, "Runtime Error: Arity mismatch.\n");
+                    return EVAL_RESULT(val_nil());
                 }
 
-                Env* scope = env_create(env); 
+                Env* scope = env_create(callee_value.as.function->closure);
                 for (int i = 0; i < func->param_count; i++) {
                     ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
                     if (arg_result.is_throwing) return arg_result;
@@ -797,12 +738,62 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 }
 
                 ExecResult res = interpret(func->body, scope);
-                // CRITICAL: Propagate exceptions from function calls!
                 if (res.is_throwing) return res;
                 return EVAL_RESULT(res.value);
             }
 
-            fprintf(stderr, "Runtime Error: Undefined procedure '%.*s'.\n", callee.length, callee.start);
+            if (callee_value.type == VAL_GENERATOR) {
+                GeneratorValue* template = callee_value.as.generator;
+                if (expr->as.call.arg_count != template->param_count) {
+                    fprintf(stderr, "Runtime Error: Arity mismatch.\n");
+                    return EVAL_RESULT(val_nil());
+                }
+
+                Env* gen_closure = env_create(template->closure);
+                if (template->param_count > 0 && template->params != NULL) {
+                    Token* params = (Token*)template->params;
+                    for (int i = 0; i < template->param_count; i++) {
+                        ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                        if (arg_result.is_throwing) return arg_result;
+                        env_define(gen_closure, params[i].start, params[i].length, arg_result.value);
+                    }
+                }
+
+                return EVAL_RESULT(val_generator(template->body, template->params,
+                                                 template->param_count, gen_closure));
+            }
+
+            if (callee_value.type == VAL_CLASS) {
+                ClassValue* class_def = callee_value.as.class_val;
+                InstanceValue* instance = instance_create(class_def);
+                Value inst_val = val_instance(instance);
+
+                Method* init_method = class_find_method(class_def, "init", 4);
+                if (init_method) {
+                    ProcStmt* init_stmt = (ProcStmt*)init_method->method_stmt;
+                    Env* method_env = env_create(env);
+                    env_define(method_env, "self", 4, inst_val);
+
+                    int param_start = (init_stmt->param_count > 0 &&
+                                      strncmp(init_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
+
+                    for (int i = param_start; i < init_stmt->param_count; i++) {
+                        if (i - param_start < expr->as.call.arg_count) {
+                            ExecResult arg_result = eval_expr(expr->as.call.args[i - param_start], env);
+                            if (arg_result.is_throwing) return arg_result;
+                            env_define(method_env, init_stmt->params[i].start,
+                                       init_stmt->params[i].length, arg_result.value);
+                        }
+                    }
+
+                    ExecResult init_res = interpret(init_stmt->body, method_env);
+                    if (init_res.is_throwing) return init_res;
+                }
+
+                return EVAL_RESULT(inst_val);
+            }
+
+            fprintf(stderr, "Runtime Error: Value is not callable.\n");
             return EVAL_RESULT(val_nil());
         }
 
@@ -812,12 +803,29 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 }
 
 ExecResult interpret(Stmt* stmt, Env* env) {
+    Env* previous_gc_root = g_gc_root_env;
+    g_gc_root_env = env;
+    ExecResult result = interpret_inner(stmt, env);
+    g_gc_root_env = previous_gc_root;
+    return result;
+}
+
+static ExecResult interpret_inner(Stmt* stmt, Env* env) {
     static int first_call = 1;
     if (first_call && stmt != NULL) {
         g_global_env = env;
         first_call = 0;
     }
     if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+
+    if (g_generator_resume_target != NULL && stmt != g_generator_resume_target &&
+        !stmt_contains_target(stmt, g_generator_resume_target)) {
+        return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+    }
+
+    if (stmt == g_generator_resume_target) {
+        g_generator_resume_target = NULL;
+    }
 
     switch (stmt->type) {
         case STMT_PRINT: {
@@ -850,7 +858,13 @@ ExecResult interpret(Stmt* stmt, Env* env) {
             Stmt* current = stmt->as.block.statements;
             while (current != NULL) {
                 ExecResult res = interpret(current, env);
-                if (res.is_returning || res.is_breaking || res.is_continuing || res.is_throwing || res.is_yielding) {
+                if (res.is_yielding) {
+                    if (res.next_stmt == NULL) {
+                        res.next_stmt = current->next;
+                    }
+                    return res;
+                }
+                if (res.is_returning || res.is_breaking || res.is_continuing || res.is_throwing) {
                     return res;
                 }
                 current = current->next;
@@ -879,11 +893,10 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 ExecResult res = interpret(stmt->as.while_stmt.body, env);
                 if (res.is_returning || res.is_throwing) return res;
                 
-                // CRITICAL: Handle yield in generator context
                 if (res.is_yielding) {
-                    // Return yield result but set next_stmt to THIS while loop
-                    // so we re-enter the loop on next next() call
-                    res.next_stmt = stmt;
+                    if (res.next_stmt == NULL) {
+                        res.next_stmt = stmt;
+                    }
                     return res;
                 }
                 
@@ -913,11 +926,10 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
                 if (res.is_returning || res.is_throwing) return res;
                 
-                // Handle yield in generator context
                 if (res.is_yielding) {
-                    // For FOR loops, we need more complex state management
-                    // For now, just return the yield
-                    res.next_stmt = stmt;
+                    if (res.next_stmt == NULL) {
+                        res.next_stmt = stmt;
+                    }
                     return res;
                 }
                 
@@ -944,9 +956,6 @@ ExecResult interpret(Stmt* stmt, Env* env) {
                 func_val = val_generator(stmt->as.proc.body, stmt->as.proc.params, 
                                         stmt->as.proc.param_count, env);
             } else {
-                // Add to global registry for backwards compatibility
-                define_function(&stmt->as.proc);
-                // PHASE 8: Also add to environment for module exports
                 func_val = val_function(&stmt->as.proc, env);
             }
             

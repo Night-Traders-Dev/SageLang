@@ -2,19 +2,32 @@
 #include <stdio.h>
 #include <string.h>
 #include "lexer.h"
+#include "parser.h"
 #include "ast.h"
 #include "token.h"
 
 static Token current_token;
 static Token previous_token;
 
-static void advance_parser() {
+static void advance_parser(void) {
     previous_token = current_token;
     current_token = scan_token();
 }
 
-void parser_init() {
+void parser_init(void) {
     advance_parser();
+}
+
+ParserState parser_get_state(void) {
+    ParserState state;
+    state.current_token = current_token;
+    state.previous_token = previous_token;
+    return state;
+}
+
+void parser_set_state(ParserState state) {
+    current_token = state.current_token;
+    previous_token = state.previous_token;
 }
 
 static int check(TokenType type) {
@@ -39,12 +52,12 @@ static void consume(TokenType type, const char* message) {
 }
 
 // Forward declarations
-static Expr* expression();
-static Expr* unary();
-static Expr* postfix();
-static Stmt* declaration();
-static Stmt* statement();
-static Stmt* block();
+static Expr* expression(void);
+static Expr* unary(void);
+static Expr* postfix(void);
+static Stmt* declaration(void);
+static Stmt* statement(void);
+static Stmt* block(void);
 
 static Stmt* for_statement() {
     if (!check(TOKEN_IDENTIFIER)) {
@@ -327,29 +340,9 @@ static Expr* primary() {
         return new_string_expr(str);
     }
 
-    // Identifiers & Function/Constructor Calls
+    // Identifiers
     if (match(TOKEN_IDENTIFIER)) {
         Token name = previous_token;
-
-        if (match(TOKEN_LPAREN)) {
-            Expr** args = NULL;
-            int count = 0;
-            int capacity = 0;
-
-            if (!check(TOKEN_RPAREN)) {
-                do {
-                    Expr* arg = expression();
-                    if (count >= capacity) {
-                        capacity = capacity == 0 ? 4 : capacity * 2;
-                        args = realloc(args, sizeof(Expr*) * capacity);
-                    }
-                    args[count++] = arg;
-                } while (match(TOKEN_COMMA));
-            }
-            consume(TOKEN_RPAREN, "Expect ')' after arguments.");
-            return new_call_expr(name, args, count);
-        }
-
         return new_variable_expr(name);
     }
 
@@ -366,6 +359,11 @@ static Expr* unary() {
         // Represent -x as (0 - x)
         return new_binary_expr(new_number_expr(0), op, right);
     }
+    if (match(TOKEN_NOT)) {
+        Token op = previous_token;
+        Expr* right = unary();
+        return new_binary_expr(right, op, NULL);
+    }
     
     return postfix();
 }
@@ -374,7 +372,24 @@ static Expr* postfix() {
     Expr* expr = primary();
 
     while (1) {
-        if (match(TOKEN_LBRACKET)) {
+        if (match(TOKEN_LPAREN)) {
+            Expr** args = NULL;
+            int count = 0;
+            int capacity = 0;
+
+            if (!check(TOKEN_RPAREN)) {
+                do {
+                    Expr* arg = expression();
+                    if (count >= capacity) {
+                        capacity = capacity == 0 ? 4 : capacity * 2;
+                        args = realloc(args, sizeof(Expr*) * capacity);
+                    }
+                    args[count++] = arg;
+                } while (match(TOKEN_COMMA));
+            }
+            consume(TOKEN_RPAREN, "Expect ')' after arguments.");
+            expr = new_call_expr(expr, args, count);
+        } else if (match(TOKEN_LBRACKET)) {
             Expr* start_or_index = NULL;
             Expr* end = NULL;
             
@@ -398,35 +413,7 @@ static Expr* postfix() {
         } else if (match(TOKEN_DOT)) {
             consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
             Token property = previous_token;
-            
-            if (match(TOKEN_LPAREN)) {
-                Expr** args = NULL;
-                int count = 0;
-                int capacity = 0;
-
-                if (!check(TOKEN_RPAREN)) {
-                    do {
-                        Expr* arg = expression();
-                        if (count >= capacity) {
-                            capacity = capacity == 0 ? 4 : capacity * 2;
-                            args = realloc(args, sizeof(Expr*) * capacity);
-                        }
-                        args[count++] = arg;
-                    } while (match(TOKEN_COMMA));
-                }
-                consume(TOKEN_RPAREN, "Expect ')' after arguments.");
-                
-                Expr* get_expr = new_get_expr(expr, property);
-                expr = new_call_expr(property, args, count);
-                expr->as.call.args = realloc(expr->as.call.args, sizeof(Expr*) * (count + 1));
-                for (int i = count; i > 0; i--) {
-                    expr->as.call.args[i] = expr->as.call.args[i-1];
-                }
-                expr->as.call.args[0] = get_expr;
-                expr->as.call.arg_count = count + 1;
-            } else {
-                expr = new_get_expr(expr, property);
-            }
+            expr = new_get_expr(expr, property);
         } else {
             break;
         }
@@ -437,7 +424,7 @@ static Expr* postfix() {
 
 static Expr* term() {
     Expr* expr = unary();
-    while (match(TOKEN_STAR) || match(TOKEN_SLASH)) {
+    while (match(TOKEN_STAR) || match(TOKEN_SLASH) || match(TOKEN_PERCENT)) {
         Token op = previous_token;
         Expr* right = unary();
         expr = new_binary_expr(expr, op, right);
@@ -705,7 +692,7 @@ static Stmt* declaration() {
         return new_return_stmt(value);
     }
 
-    if (match(TOKEN_LET)) {
+    if (match(TOKEN_LET) || match(TOKEN_VAR)) {
         consume(TOKEN_IDENTIFIER, "Expect variable name.");
         Token name = previous_token;
 
@@ -724,7 +711,7 @@ static Stmt* declaration() {
     return stmt;
 }
 
-Stmt* parse() {
+Stmt* parse(void) {
     while (current_token.type == TOKEN_NEWLINE) {
         advance_parser();
     }

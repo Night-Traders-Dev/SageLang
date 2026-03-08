@@ -21,7 +21,7 @@ typedef struct {
 } VariableExpr;
 
 typedef struct {
-    Token callee;
+    Expr* callee;
     Expr** args;
     int arg_count;
 } CallExpr;
@@ -258,7 +258,7 @@ struct Stmt {
 Expr* new_number_expr(double value);
 Expr* new_binary_expr(Expr* left, Token op, Expr* right);
 Expr* new_variable_expr(Token name);
-Expr* new_call_expr(Token callee, Expr** args, int arg_count);
+Expr* new_call_expr(Expr* callee, Expr** args, int arg_count);
 Expr* new_string_expr(char* value);
 Expr* new_bool_expr(int value);
 Expr* new_nil_expr();

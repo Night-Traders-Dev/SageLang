@@ -2,20 +2,11 @@
 #ifndef SAGE_MODULE_H
 #define SAGE_MODULE_H
 
-
-#define _POSIX_C_SOURCE 200809L  // For strdup() and other POSIX functions
-
-#include "module.h"
 #include "lexer.h"
 #include "ast.h"
 #include "value.h"
 #include "env.h"
-#include "interpreter.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <stdbool.h>
-#include <sys/stat.h>
 
 // Maximum path length for module files
 #define MAX_MODULE_PATH 1024
@@ -27,6 +18,7 @@
 typedef struct Module {
     char* name;              // Module name (e.g., "math", "io")
     char* path;              // Full file path to module
+    char* source;            // Persistent source buffer for AST/token lifetime
     Environment* env;        // Module's exported environment
     bool is_loaded;          // Whether module has been loaded
     bool is_loading;         // Circular dependency detection
@@ -77,6 +69,7 @@ char* resolve_module_path(ModuleCache* cache, const char* name);
 
 // Module execution
 bool execute_module(Module* module, Environment* global_env);
+Value module_get_attr(Module* module, const char* name, int length, int* found);
 
 // Import handling
 bool import_module(Environment* env, ImportData* import_data);

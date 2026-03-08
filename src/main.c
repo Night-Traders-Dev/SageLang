@@ -1,15 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "lexer.h"
 #include "token.h"
 #include "ast.h"
+#include "parser.h"
 #include "interpreter.h"
 #include "env.h"
 #include "gc.h"
 #include "module.h"
 
-Stmt* parse();
-void parser_init();
 extern Environment* g_global_env;
 
 
@@ -61,21 +61,25 @@ int main(int argc, const char* argv[]) {
     
     if (argc == 1) {
         // REPL mode (interactive) could go here later
-        fprintf(stderr, "Usage: sage [path]\n");
+        fprintf(stderr, "Usage: sage [path] | sage -c \"source\"\n");
         gc_shutdown();
         exit(64);
+    } else if (argc == 3 && strcmp(argv[1], "-c") == 0) {
+        run(argv[2]);
     } else if (argc == 2) {
         // File mode
         char* source = read_file(argv[1]);
         run(source);
         free(source);
     } else {
-        fprintf(stderr, "Usage: sage [path]\n");
+        fprintf(stderr, "Usage: sage [path] | sage -c \"source\"\n");
         gc_shutdown();
+        cleanup_module_system();
         exit(64);
     }
 
     // Cleanup and shutdown GC
     gc_shutdown();
+    cleanup_module_system();
     return 0;
 }
