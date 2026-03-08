@@ -161,6 +161,9 @@ test: $(TARGET)
 	@echo ""
 	@echo "Test 3: Functions"
 	@./$(TARGET) testing/test.sage && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 4: Bundled Libraries"
+	@./$(TARGET) testing/lib_suite.sage && echo "✅ Pass" || echo "❌ Fail"
 
 # ============================================================================
 # Cleanup
