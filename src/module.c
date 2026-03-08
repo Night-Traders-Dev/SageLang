@@ -1,16 +1,12 @@
 // src/module.c
 #include "module.h"
 #include "lexer.h"
+#include "parser.h"
 #include "ast.h"
 #include "interpreter.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-// Forward declarations
-extern Stmt* parse();
-extern void parser_init();
-extern ExecResult interpret(Stmt* stmt, Env* env);
 
 // Global module cache
 ModuleCache* global_module_cache = NULL;
@@ -40,9 +36,7 @@ void destroy_module_cache(ModuleCache* cache) {
         Module* next = current->next;
         free(current->name);
         free(current->path);
-        if (current->env) {
-            // Environment will be cleaned up by GC
-        }
+        free(current->source);
         free(current);
         current = next;
     }
@@ -138,8 +132,19 @@ static char* read_file(const char* path) {
     return buffer;
 }
 
+static Environment* module_parent_env(Environment* target_env) {
+    if (g_global_env != NULL) {
+        return g_global_env;
+    }
+    return target_env;
+}
+
 // Execute a module and populate its environment
 bool execute_module(Module* module, Environment* global_env) {
+    LexerState saved_lexer = lexer_get_state();
+    ParserState saved_parser = parser_get_state();
+    bool ok = true;
+
     if (module->is_loaded) {
         return true;  // Already loaded
     }
@@ -151,46 +156,50 @@ bool execute_module(Module* module, Environment* global_env) {
     
     module->is_loading = true;
     
-    // Read module source code
-    char* source = read_file(module->path);
-    if (!source) {
+    if (module->source == NULL) {
+        module->source = read_file(module->path);
+    }
+    if (!module->source) {
         module->is_loading = false;
         return false;
     }
     
-    // Create module environment (child of global)
-    module->env = env_create(global_env);
+    if (module->env == NULL) {
+        // Modules see the shared global scope and stdlib, not the caller's local scope.
+        module->env = env_create(module_parent_env(global_env));
+    }
     
     // Lex and parse the module
-    init_lexer(source);
+    init_lexer(module->source);
     parser_init();
-    Stmt* ast = parse();
-    
-    if (!ast) {
-        fprintf(stderr, "Error: Failed to parse module '%s'\n", module->name);
-        free(source);
-        module->is_loading = false;
-        return false;
-    }
-    
-    // Execute the module in its own environment
-    ExecResult result = interpret(ast, module->env);
-    
-    free(source);
-    module->is_loading = false;
-    
-    if (result.is_throwing) {
-        fprintf(stderr, "Error: Exception in module '%s': ", module->name);
-        if (result.value.type == VAL_EXCEPTION) {
-            fprintf(stderr, "%s\n", result.value.as.exception->message);
-        } else {
-            fprintf(stderr, "Unknown error\n");
+
+    while (1) {
+        Stmt* ast = parse();
+        if (ast == NULL) {
+            break;
         }
-        return false;
+
+        ExecResult result = interpret(ast, module->env);
+        if (result.is_throwing) {
+            fprintf(stderr, "Error: Exception in module '%s': ", module->name);
+            if (result.exception_value.type == VAL_EXCEPTION) {
+                fprintf(stderr, "%s\n", result.exception_value.as.exception->message);
+            } else {
+                fprintf(stderr, "Unknown error\n");
+            }
+            ok = false;
+            break;
+        }
     }
-    
-    module->is_loaded = true;
-    return true;
+
+    module->is_loading = false;
+    if (ok) {
+        module->is_loaded = true;
+    }
+
+    parser_set_state(saved_parser);
+    lexer_set_state(saved_lexer);
+    return ok;
 }
 
 // Load a module (create if not in cache)
@@ -212,6 +221,7 @@ Module* load_module(ModuleCache* cache, const char* name) {
     module = malloc(sizeof(Module));
     module->name = strdup(name);
     module->path = path;
+    module->source = NULL;
     module->env = NULL;
     module->is_loaded = false;
     module->is_loading = false;
@@ -237,17 +247,12 @@ bool import_all(Environment* env, const char* module_name) {
     }
     
     // Execute module if not already loaded
-    if (!execute_module(module, env)) {
+    if (!execute_module(module, module_parent_env(env))) {
         return false;
     }
     
-    // Create a module value (temporary - will be VAL_MODULE)
-    Value module_val;
-    module_val.type = VAL_STRING;
-    module_val.as.string = strdup(module_name);
-    
     // Define module in current environment (with name length)
-    env_define(env, module_name, strlen(module_name), module_val);
+    env_define(env, module_name, strlen(module_name), val_module(module));
     
     return true;
 }
@@ -261,7 +266,7 @@ bool import_from(Environment* env, const char* module_name, ImportItem* items, i
     Module* module = load_module(global_module_cache, module_name);
     if (!module) return false;
 
-    if (!execute_module(module, env)) return false;
+    if (!execute_module(module, module_parent_env(env))) return false;
 
     for (int i = 0; i < count; i++) {
         const char* item_name = items[i].name;
@@ -295,19 +300,31 @@ bool import_as(Environment* env, const char* module_name, const char* alias) {
     }
     
     // Execute module if not already loaded
-    if (!execute_module(module, env)) {
+    if (!execute_module(module, module_parent_env(env))) {
         return false;
     }
     
-    // Create module value
-    Value module_val;
-    module_val.type = VAL_STRING;  // Temporary - will be VAL_MODULE
-    module_val.as.string = strdup(module_name);
-    
     // Define with alias (with name length)
-    env_define(env, alias, strlen(alias), module_val);
+    env_define(env, alias, strlen(alias), val_module(module));
     
     return true;
+}
+
+Value module_get_attr(Module* module, const char* name, int length, int* found) {
+    Value value = val_nil();
+
+    if (module == NULL || module->env == NULL) {
+        if (found) *found = 0;
+        return value;
+    }
+
+    if (env_get(module->env, name, length, &value)) {
+        if (found) *found = 1;
+        return value;
+    }
+
+    if (found) *found = 0;
+    return value;
 }
 
 // Main import function that handles all import types

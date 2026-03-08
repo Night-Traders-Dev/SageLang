@@ -7,6 +7,7 @@
 typedef struct Value Value;
 typedef struct ClassValue ClassValue;
 typedef struct InstanceValue InstanceValue;
+typedef struct Module Module;
 typedef struct Env Env; // Forward declare from env.h
 typedef Env Environment; // Alias for compatibility
 
@@ -75,6 +76,7 @@ typedef struct {
     int is_started; // Has generator been started?
     int is_exhausted; // Has generator finished?
     void* current_stmt; // Current statement position (for resumption)
+    int has_resume_target; // Whether current_stmt is a valid resume target
 } GeneratorValue;
 
 // PHASE 8: Function value structure (for module exports)
@@ -82,6 +84,10 @@ typedef struct {
     void* proc; // Pointer to ProcStmt
     Env* closure; // ✅ NEW: Closure environment where function was defined
 } FunctionValue;
+
+typedef struct {
+    Module* module;
+} ModuleValue;
 
 typedef enum {
     VAL_NUMBER,
@@ -95,6 +101,7 @@ typedef enum {
     VAL_TUPLE,
     VAL_CLASS,
     VAL_INSTANCE,
+    VAL_MODULE,
     VAL_EXCEPTION,
     VAL_GENERATOR // NEW: Generator type
 } ValueType;
@@ -112,6 +119,7 @@ struct Value {
         TupleValue* tuple;
         ClassValue* class_val;
         InstanceValue* instance;
+        ModuleValue* module;
         ExceptionValue* exception;
         GeneratorValue* generator; // NEW: Generator value
     } as;
@@ -128,6 +136,7 @@ struct Value {
 #define IS_TUPLE(v) ((v).type == VAL_TUPLE)
 #define IS_CLASS(v) ((v).type == VAL_CLASS)
 #define IS_INSTANCE(v) ((v).type == VAL_INSTANCE)
+#define IS_MODULE(v) ((v).type == VAL_MODULE)
 #define IS_EXCEPTION(v) ((v).type == VAL_EXCEPTION)
 #define IS_GENERATOR(v) ((v).type == VAL_GENERATOR) // NEW
 
@@ -141,6 +150,7 @@ struct Value {
 #define AS_TUPLE(v) ((v).as.tuple)
 #define AS_CLASS(v) ((v).as.class_val)
 #define AS_INSTANCE(v) ((v).as.instance)
+#define AS_MODULE(v) ((v).as.module->module)
 #define AS_EXCEPTION(v) ((v).as.exception)
 #define AS_GENERATOR(v) ((v).as.generator) // NEW
 
@@ -148,7 +158,8 @@ struct Value {
 Value val_number(double value);
 Value val_bool(int value);
 Value val_nil();
-Value val_string(char* value);
+Value val_string(const char* value);
+Value val_string_take(char* value);
 Value val_native(NativeFn fn);
 Value val_function(void* proc, Env* closure); // ✅ CHANGED: Added closure parameter
 Value val_array();
@@ -156,6 +167,7 @@ Value val_dict();
 Value val_tuple(Value* elements, int count);
 Value val_class(ClassValue* class_val);
 Value val_instance(InstanceValue* instance);
+Value val_module(Module* module);
 Value val_exception(const char* message);
 Value val_generator(void* body, void* params, int param_count, Env* closure); // NEW
 

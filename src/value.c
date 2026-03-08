@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include "value.h"
 #include "gc.h"
+#include "module.h"
 
 // ========== VALUE CONSTRUCTORS ==========
 
@@ -35,10 +36,23 @@ Value val_native(NativeFn fn) {
     return v;
 }
 
-Value val_string(char* value) {
+static char* gc_string_copy(const char* value) {
+    size_t len = strlen(value);
+    char* copy = gc_alloc(VAL_STRING, len + 1);
+    memcpy(copy, value, len + 1);
+    return copy;
+}
+
+Value val_string(const char* value) {
     Value v;
     v.type = VAL_STRING;
-    v.as.string = value;
+    v.as.string = gc_string_copy(value == NULL ? "" : value);
+    return v;
+}
+
+Value val_string_take(char* value) {
+    Value v = val_string(value == NULL ? "" : value);
+    free(value);
     return v;
 }
 
@@ -55,7 +69,7 @@ Value val_function(void* proc, Env* closure) {
 Value val_array() {
     Value v;
     v.type = VAL_ARRAY;
-    v.as.array = malloc(sizeof(ArrayValue));
+    v.as.array = gc_alloc(VAL_ARRAY, sizeof(ArrayValue));
     v.as.array->elements = NULL;
     v.as.array->count = 0;
     v.as.array->capacity = 0;
@@ -65,7 +79,7 @@ Value val_array() {
 Value val_dict() {
     Value v;
     v.type = VAL_DICT;
-    v.as.dict = malloc(sizeof(DictValue));
+    v.as.dict = gc_alloc(VAL_DICT, sizeof(DictValue));
     v.as.dict->entries = NULL;
     v.as.dict->count = 0;
     v.as.dict->capacity = 0;
@@ -75,7 +89,7 @@ Value val_dict() {
 Value val_tuple(Value* elements, int count) {
     Value v;
     v.type = VAL_TUPLE;
-    v.as.tuple = malloc(sizeof(TupleValue));
+    v.as.tuple = gc_alloc(VAL_TUPLE, sizeof(TupleValue));
     v.as.tuple->count = count;
     v.as.tuple->elements = malloc(sizeof(Value) * count);
     for (int i = 0; i < count; i++) {
@@ -98,11 +112,19 @@ Value val_instance(InstanceValue* instance) {
     return v;
 }
 
+Value val_module(Module* module) {
+    Value v;
+    v.type = VAL_MODULE;
+    v.as.module = gc_alloc(VAL_MODULE, sizeof(ModuleValue));
+    v.as.module->module = module;
+    return v;
+}
+
 // PHASE 7: Exception constructor
 Value val_exception(const char* message) {
     Value v;
     v.type = VAL_EXCEPTION;
-    v.as.exception = malloc(sizeof(ExceptionValue));
+    v.as.exception = gc_alloc(VAL_EXCEPTION, sizeof(ExceptionValue));
     v.as.exception->message = malloc(strlen(message) + 1);
     strcpy(v.as.exception->message, message);
     return v;
@@ -112,7 +134,7 @@ Value val_exception(const char* message) {
 Value val_generator(void* body, void* params, int param_count, Environment* closure) {
     Value v;
     v.type = VAL_GENERATOR;
-    v.as.generator = malloc(sizeof(GeneratorValue));
+    v.as.generator = gc_alloc(VAL_GENERATOR, sizeof(GeneratorValue));
     v.as.generator->body = body;
     v.as.generator->params = params;
     v.as.generator->param_count = param_count;
@@ -121,6 +143,7 @@ Value val_generator(void* body, void* params, int param_count, Environment* clos
     v.as.generator->is_started = 0;
     v.as.generator->is_exhausted = 0;
     v.as.generator->current_stmt = NULL;
+    v.as.generator->has_resume_target = 0;
     return v;
 }
 
@@ -244,7 +267,7 @@ Value dict_keys(Value* dict) {
     for (int i = 0; i < d->count; i++) {
         char* key_copy = malloc(strlen(d->entries[i].key) + 1);
         strcpy(key_copy, d->entries[i].key);
-        array_push(&result, val_string(key_copy));
+        array_push(&result, val_string_take(key_copy));
     }
     return result;
 }
@@ -282,7 +305,7 @@ Value string_split(const char* str, const char* delimiter) {
             char* ch = malloc(2);
             ch[0] = str[i];
             ch[1] = '\0';
-            array_push(&result, val_string(ch));
+            array_push(&result, val_string_take(ch));
         }
         return result;
     }
@@ -295,13 +318,13 @@ Value string_split(const char* str, const char* delimiter) {
         char* part = malloc(len + 1);
         strncpy(part, start, len);
         part[len] = '\0';
-        array_push(&result, val_string(part));
+        array_push(&result, val_string_take(part));
         start = found + del_len;
     }
     
     char* part = malloc(strlen(start) + 1);
     strcpy(part, start);
-    array_push(&result, val_string(part));
+    array_push(&result, val_string_take(part));
     
     return result;
 }
@@ -334,7 +357,7 @@ Value string_join(Value* arr, const char* separator) {
         }
     }
     
-    return val_string(result);
+    return val_string_take(result);
 }
 
 char* string_replace(const char* str, const char* old, const char* new_str) {
@@ -419,7 +442,7 @@ char* string_strip(const char* str) {
 // ========== CLASS OPERATIONS ==========
 
 ClassValue* class_create(const char* name, int name_len, ClassValue* parent) {
-    ClassValue* class_val = malloc(sizeof(ClassValue));
+    ClassValue* class_val = gc_alloc(VAL_CLASS, sizeof(ClassValue));
     class_val->name = malloc(name_len + 1);
     strncpy(class_val->name, name, name_len);
     class_val->name[name_len] = '\0';
@@ -461,7 +484,7 @@ Method* class_find_method(ClassValue* class_val, const char* name, int name_len)
 // ========== INSTANCE OPERATIONS ==========
 
 InstanceValue* instance_create(ClassValue* class_def) {
-    InstanceValue* instance = malloc(sizeof(InstanceValue));
+    InstanceValue* instance = gc_alloc(VAL_INSTANCE, sizeof(InstanceValue));
     instance->class_def = class_def;
     
     Value fields_dict = val_dict();
@@ -562,6 +585,11 @@ void print_value(Value v) {
             printf("<instance of %s>", v.as.instance->class_def->name);
             break;
         }
+
+        case VAL_MODULE: {
+            printf("<module %s>", v.as.module->module->name);
+            break;
+        }
         
         case VAL_EXCEPTION: {
             printf("Exception: %s", v.as.exception->message);
@@ -600,6 +628,8 @@ int values_equal(Value a, Value b) {
         }
         case VAL_EXCEPTION: 
             return strcmp(a.as.exception->message, b.as.exception->message) == 0;
+        case VAL_MODULE:
+            return a.as.module->module == b.as.module->module;
         case VAL_GENERATOR:
             return a.as.generator == b.as.generator;  // Same generator object
         default: return 0;

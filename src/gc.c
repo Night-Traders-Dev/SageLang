@@ -9,6 +9,110 @@
 #include "gc.h"
 #include "value.h"
 #include "env.h"
+#include "module.h"
+
+extern Environment* g_global_env;
+extern Environment* g_gc_root_env;
+
+typedef struct MarkedEnv {
+    Env* env;
+    struct MarkedEnv* next;
+} MarkedEnv;
+
+static MarkedEnv* gc_marked_envs = NULL;
+
+static Env* gc_root_env(void) {
+    if (g_gc_root_env != NULL) {
+        return g_gc_root_env;
+    }
+    return g_global_env;
+}
+
+static void gc_clear_marked_envs(void) {
+    while (gc_marked_envs != NULL) {
+        MarkedEnv* next = gc_marked_envs->next;
+        free(gc_marked_envs);
+        gc_marked_envs = next;
+    }
+}
+
+static int gc_try_mark_object(void* object) {
+    if (object == NULL) {
+        return 0;
+    }
+
+    GCHeader* header = (GCHeader*)object - 1;
+    if (header->marked) {
+        return 0;
+    }
+
+    header->marked = 1;
+    gc.marked_count++;
+    return 1;
+}
+
+static int gc_try_mark_env(Env* env) {
+    MarkedEnv* current = gc_marked_envs;
+    while (current != NULL) {
+        if (current->env == env) {
+            return 0;
+        }
+        current = current->next;
+    }
+
+    MarkedEnv* marked = malloc(sizeof(MarkedEnv));
+    if (marked == NULL) {
+        fprintf(stderr, "Error: GC environment tracking allocation failed\n");
+        exit(1);
+    }
+
+    marked->env = env;
+    marked->next = gc_marked_envs;
+    gc_marked_envs = marked;
+    return 1;
+}
+
+static void gc_release_object(GCHeader* header) {
+    void* object = header + 1;
+
+    switch (header->type) {
+        case VAL_ARRAY: {
+            ArrayValue* array = object;
+            free(array->elements);
+            break;
+        }
+        case VAL_DICT: {
+            DictValue* dict = object;
+            for (int i = 0; i < dict->count; i++) {
+                free(dict->entries[i].key);
+                free(dict->entries[i].value);
+            }
+            free(dict->entries);
+            break;
+        }
+        case VAL_TUPLE: {
+            TupleValue* tuple = object;
+            free(tuple->elements);
+            break;
+        }
+        case VAL_CLASS: {
+            ClassValue* class_val = object;
+            for (int i = 0; i < class_val->method_count; i++) {
+                free(class_val->methods[i].name);
+            }
+            free(class_val->methods);
+            free(class_val->name);
+            break;
+        }
+        case VAL_EXCEPTION: {
+            ExceptionValue* exception = object;
+            free(exception->message);
+            break;
+        }
+        default:
+            break;
+    }
+}
 
 // Global GC state
 GC gc = {0};
@@ -45,7 +149,9 @@ void gc_shutdown(void) {
     // Free any remaining objects
     void* obj = gc.objects;
     while (obj != NULL) {
-        void* next = ((GCHeader*)obj)->next;
+        GCHeader* header = obj;
+        void* next = header->next;
+        gc_release_object(header);
         free(obj);
         obj = next;
     }
@@ -63,7 +169,10 @@ void gc_shutdown(void) {
 void* gc_alloc(int type, size_t size) {
     // Check if GC should run
     if (gc.enabled && gc.objects_since_gc > GC_THRESHOLD) {
-        gc_collect();
+        Env* root = gc_root_env();
+        if (root != NULL) {
+            gc_collect_with_root(root);
+        }
     }
     
     // Allocate memory with GC header
@@ -125,19 +234,13 @@ void gc_mark_value(Value val) {
     }
     
     if (val.type == VAL_STRING) {
-        if (val.as.string != NULL) {
-            GCHeader* header = (GCHeader*)(val.as.string) - 1;
-            header->marked = 1;
-            gc.marked_count++;
+        if (gc_try_mark_object(val.as.string)) {
         }
         return;
     }
     
     if (val.type == VAL_ARRAY) {
-        if (val.as.array != NULL) {
-            GCHeader* header = (GCHeader*)(val.as.array) - 1;
-            header->marked = 1;
-            gc.marked_count++;
+        if (gc_try_mark_object(val.as.array)) {
             // Mark all elements in array
             ArrayValue* arr = val.as.array;
             for (int i = 0; i < arr->count; i++) {
@@ -148,10 +251,7 @@ void gc_mark_value(Value val) {
     }
     
     if (val.type == VAL_DICT) {
-        if (val.as.dict != NULL) {
-            GCHeader* header = (GCHeader*)(val.as.dict) - 1;
-            header->marked = 1;
-            gc.marked_count++;
+        if (gc_try_mark_object(val.as.dict)) {
             // Mark all values in dict
             DictValue* dict = val.as.dict;
             for (int i = 0; i < dict->count; i++) {
@@ -164,10 +264,7 @@ void gc_mark_value(Value val) {
     }
     
     if (val.type == VAL_TUPLE) {
-        if (val.as.tuple != NULL) {
-            GCHeader* header = (GCHeader*)(val.as.tuple) - 1;
-            header->marked = 1;
-            gc.marked_count++;
+        if (gc_try_mark_object(val.as.tuple)) {
             // Mark all elements in tuple
             TupleValue* tuple = val.as.tuple;
             for (int i = 0; i < tuple->count; i++) {
@@ -178,11 +275,10 @@ void gc_mark_value(Value val) {
     }
     
     if (val.type == VAL_FUNCTION) {
-        if (val.as.function != NULL) {
-            GCHeader* header = (GCHeader*)(val.as.function) - 1;
-            header->marked = 1;
-            gc.marked_count++;
-            // Mark function - proc is code (not collected), no closure in struct
+        if (gc_try_mark_object(val.as.function)) {
+            if (val.as.function->closure != NULL) {
+                gc_mark_env(val.as.function->closure);
+            }
         }
         return;
     }
@@ -193,10 +289,7 @@ void gc_mark_value(Value val) {
     }
     
     if (val.type == VAL_GENERATOR) {
-        if (val.as.generator != NULL) {
-            GCHeader* header = (GCHeader*)(val.as.generator) - 1;
-            header->marked = 1;
-            gc.marked_count++;
+        if (gc_try_mark_object(val.as.generator)) {
             // Mark generator's environments
             GeneratorValue* gen = val.as.generator;
             if (gen->closure != NULL) {
@@ -210,21 +303,21 @@ void gc_mark_value(Value val) {
     }
     
     if (val.type == VAL_CLASS) {
-        if (val.as.class_val != NULL) {
-            GCHeader* header = (GCHeader*)(val.as.class_val) - 1;
-            header->marked = 1;
-            gc.marked_count++;
+        if (gc_try_mark_object(val.as.class_val)) {
+            if (val.as.class_val->parent != NULL) {
+                gc_mark_value((Value){.type = VAL_CLASS, .as.class_val = val.as.class_val->parent});
+            }
         }
         return;
     }
     
     if (val.type == VAL_INSTANCE) {
-        if (val.as.instance != NULL) {
-            GCHeader* header = (GCHeader*)(val.as.instance) - 1;
-            header->marked = 1;
-            gc.marked_count++;
+        if (gc_try_mark_object(val.as.instance)) {
             // Mark instance's fields
             InstanceValue* inst = val.as.instance;
+            if (inst->class_def != NULL) {
+                gc_mark_value((Value){.type = VAL_CLASS, .as.class_val = inst->class_def});
+            }
             if (inst->fields != NULL) {
                 // Mark the fields dict
                 gc_mark_value((Value){.type = VAL_DICT, .as.dict = inst->fields});
@@ -234,10 +327,16 @@ void gc_mark_value(Value val) {
     }
     
     if (val.type == VAL_EXCEPTION) {
-        if (val.as.exception != NULL) {
-            GCHeader* header = (GCHeader*)(val.as.exception) - 1;
-            header->marked = 1;
-            gc.marked_count++;
+        if (gc_try_mark_object(val.as.exception)) {
+        }
+        return;
+    }
+
+    if (val.type == VAL_MODULE) {
+        if (gc_try_mark_object(val.as.module)) {
+            if (val.as.module->module != NULL && val.as.module->module->env != NULL) {
+                gc_mark_env(val.as.module->module->env);
+            }
         }
         return;
     }
@@ -247,6 +346,10 @@ void gc_mark_value(Value val) {
 // This was TODO: Mark environment variables
 void gc_mark_env(Env* env) {
     while (env != NULL) {
+        if (!gc_try_mark_env(env)) {
+            return;
+        }
+
         if (gc_debug) {
             fprintf(stderr, "[GC] Marking environment %p\n", (void*)env);
         }
@@ -290,18 +393,20 @@ void gc_mark_call_stack(void) {
 
 // Master marking function - marks all reachable objects
 void gc_mark(void) {
+    gc_clear_marked_envs();
     gc.marked_count = 0;
     
     if (gc_debug) {
         fprintf(stderr, "[GC] Starting mark phase\n");
     }
     
-    // Basic GC mark without environment
-    // This is called without root - for compatibility
+    gc_mark_from_root(gc_root_env());
+    gc_clear_marked_envs();
 }
 
 // Wrapper to mark from root environment (call this from your interpreter)
 void gc_mark_from_root(Env* root_env) {
+    gc_clear_marked_envs();
     gc.marked_count = 0;
     
     if (gc_debug) {
@@ -323,6 +428,8 @@ void gc_mark_from_root(Env* root_env) {
         fprintf(stderr, "[GC] Mark phase complete: %d objects marked\n", 
                 gc.marked_count);
     }
+
+    gc_clear_marked_envs();
 }
 
 // ============================================================================
@@ -354,6 +461,7 @@ void gc_sweep(void) {
                         header->type);
             }
             
+            gc_release_object(header);
             free(unreached);
         } else {
             // Object is reachable - unmark for next cycle

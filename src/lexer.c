@@ -10,8 +10,6 @@ static const char* current;
 static int line;
 static int at_beginning_of_line;
 
-// Indentation Stack
-#define MAX_INDENT_LEVELS 100
 static int indent_stack[MAX_INDENT_LEVELS];
 static int indent_stack_top = 0;
 static int pending_dedents = 0;
@@ -27,7 +25,29 @@ void init_lexer(const char* source) {
     pending_dedents = 0;
 }
 
-static int is_at_end() {
+LexerState lexer_get_state(void) {
+    LexerState state;
+    state.start = start;
+    state.current = current;
+    state.line = line;
+    state.at_beginning_of_line = at_beginning_of_line;
+    memcpy(state.indent_stack, indent_stack, sizeof(indent_stack));
+    state.indent_stack_top = indent_stack_top;
+    state.pending_dedents = pending_dedents;
+    return state;
+}
+
+void lexer_set_state(LexerState state) {
+    start = state.start;
+    current = state.current;
+    line = state.line;
+    at_beginning_of_line = state.at_beginning_of_line;
+    memcpy(indent_stack, state.indent_stack, sizeof(indent_stack));
+    indent_stack_top = state.indent_stack_top;
+    pending_dedents = state.pending_dedents;
+}
+
+static int is_at_end(void) {
     return *current == '\0';
 }
 
@@ -72,7 +92,7 @@ static TokenType check_keyword(int start_index, int length, const char* rest, To
     return TOKEN_IDENTIFIER;
 }
 
-static TokenType identifier_type() {
+static TokenType identifier_type(void) {
     switch (start[0]) {
         case 'a':
             if (current - start > 1) {
@@ -150,7 +170,14 @@ static TokenType identifier_type() {
         
         case 'm': return check_keyword(1, 4, "atch", TOKEN_MATCH);
         
-        case 'n': return check_keyword(1, 2, "il", TOKEN_NIL);
+        case 'n':
+            if (current - start > 1) {
+                switch (start[1]) {
+                    case 'i': return check_keyword(2, 1, "l", TOKEN_NIL);
+                    case 'o': return check_keyword(2, 1, "t", TOKEN_NOT);
+                }
+            }
+            break;
 
         case 'o': return check_keyword(1, 1, "r", TOKEN_OR);
 
@@ -230,7 +257,7 @@ static int match_char(char expected) {
     return 1;
 }
 
-Token scan_token() {
+Token scan_token(void) {
     if (pending_dedents > 0) {
         pending_dedents--;
         return make_token(TOKEN_DEDENT);
@@ -314,6 +341,7 @@ Token scan_token() {
         case '-': return make_token(TOKEN_MINUS);
         case '*': return make_token(TOKEN_STAR);
         case '/': return make_token(TOKEN_SLASH);
+        case '%': return make_token(TOKEN_PERCENT);
         case ',': return make_token(TOKEN_COMMA);
         case ':': return make_token(TOKEN_COLON);
         case '.': return make_token(TOKEN_DOT);

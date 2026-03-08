@@ -27,7 +27,7 @@ Expr* new_variable_expr(Token name) {
     return e;
 }
 
-Expr* new_call_expr(Token callee, Expr** args, int arg_count) {
+Expr* new_call_expr(Expr* callee, Expr** args, int arg_count) {
     Expr* e = malloc(sizeof(Expr));
     e->type = EXPR_CALL;
     e->as.call.callee = callee;
