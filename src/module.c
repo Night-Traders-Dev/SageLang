@@ -7,15 +7,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "gc.h"
 
 // Global module cache
 ModuleCache* global_module_cache = NULL;
 
 // Create a new module cache
 ModuleCache* create_module_cache() {
-    ModuleCache* cache = malloc(sizeof(ModuleCache));
+    ModuleCache* cache = SAGE_ALLOC(sizeof(ModuleCache));
     cache->modules = NULL;
-    cache->search_paths = malloc(sizeof(char*) * MAX_SEARCH_PATHS);
+    cache->search_paths = SAGE_ALLOC(sizeof(char*) * MAX_SEARCH_PATHS);
     cache->search_path_count = 0;
     
     // Add default search paths
@@ -74,25 +75,70 @@ static bool file_exists(const char* path) {
 }
 #endif
 
+// Validate module name: only allow alphanumeric, underscore, and single dots (no path separators)
+static bool is_valid_module_name(const char* name) {
+    if (name == NULL || name[0] == '\0') return false;
+    for (const char* p = name; *p != '\0'; p++) {
+        char c = *p;
+        if (c == '/' || c == '\\') return false;  // No path separators
+        if (c == '.' && *(p + 1) == '.') return false;  // No ".." sequences
+    }
+    return true;
+}
+
+#ifndef PICO_BUILD
+#include <limits.h>
+// Verify resolved path is within the search directory (prevent path traversal)
+static bool path_is_within(const char* resolved, const char* search_dir) {
+    char real_search[PATH_MAX];
+    char real_resolved[PATH_MAX];
+
+    if (realpath(search_dir, real_search) == NULL) return false;
+    if (realpath(resolved, real_resolved) == NULL) return false;
+
+    size_t search_len = strlen(real_search);
+    return strncmp(real_resolved, real_search, search_len) == 0 &&
+           (real_resolved[search_len] == '/' || real_resolved[search_len] == '\0');
+}
+#endif
+
 // Resolve module path by searching in search paths
 char* resolve_module_path(ModuleCache* cache, const char* name) {
+    // Reject module names with path traversal attempts
+    if (!is_valid_module_name(name)) {
+        fprintf(stderr, "Error: Invalid module name '%s' (path traversal not allowed)\n", name);
+        return NULL;
+    }
+
     char path[MAX_MODULE_PATH];
-    
+
     // Try each search path
     for (int i = 0; i < cache->search_path_count; i++) {
         // Try .sage extension
         snprintf(path, MAX_MODULE_PATH, "%s/%s.sage", cache->search_paths[i], name);
         if (file_exists(path)) {
+#ifndef PICO_BUILD
+            if (!path_is_within(path, cache->search_paths[i])) {
+                fprintf(stderr, "Error: Module '%s' resolves outside search directory\n", name);
+                continue;
+            }
+#endif
             return strdup(path);
         }
-        
+
         // Try without extension (for directories with __init__.sage)
         snprintf(path, MAX_MODULE_PATH, "%s/%s/__init__.sage", cache->search_paths[i], name);
         if (file_exists(path)) {
+#ifndef PICO_BUILD
+            if (!path_is_within(path, cache->search_paths[i])) {
+                fprintf(stderr, "Error: Module '%s' resolves outside search directory\n", name);
+                continue;
+            }
+#endif
             return strdup(path);
         }
     }
-    
+
     return NULL;
 }
 
@@ -118,9 +164,13 @@ static char* read_file(const char* path) {
     
     fseek(file, 0, SEEK_END);
     long length = ftell(file);
+    if (length < 0) {
+        fclose(file);
+        return NULL;
+    }
     fseek(file, 0, SEEK_SET);
     
-    char* buffer = malloc(length + 1);
+    char* buffer = SAGE_ALLOC(length + 1);
     if (!buffer) {
         fclose(file);
         return NULL;
@@ -230,7 +280,7 @@ Module* load_module(ModuleCache* cache, const char* name) {
     }
     
     // Create new module
-    module = malloc(sizeof(Module));
+    module = SAGE_ALLOC(sizeof(Module));
     module->name = strdup(name);
     module->path = path;
     module->source = NULL;

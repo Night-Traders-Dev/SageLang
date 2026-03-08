@@ -20,17 +20,18 @@ typedef struct {
     int capacity;
 } ArrayValue;
 
-// Dictionary entry (key-value pair)
+// Dictionary entry (key-value pair) - used in open-addressing hash table
 typedef struct {
-    char* key;
+    char* key;        // NULL means empty slot
     Value* value;
+    unsigned int hash; // Cached hash of key
 } DictEntry;
 
-// Dictionary structure (simple hash map)
+// Dictionary structure (open-addressing hash table)
 typedef struct {
-    DictEntry* entries; // FIXED: was DictValue* entries
-    int count;
-    int capacity;
+    DictEntry* entries;
+    int count;       // Number of active entries
+    int capacity;    // Total slots (always a power of 2)
 } DictValue;
 
 // Tuple structure (fixed-size, immutable)

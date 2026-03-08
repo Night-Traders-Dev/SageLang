@@ -258,6 +258,8 @@ static int match_char(char expected) {
 }
 
 Token scan_token(void) {
+    // Outer loop replaces recursive calls for blank lines and comments
+    for (;;) {
     if (pending_dedents > 0) {
         pending_dedents--;
         return make_token(TOKEN_DEDENT);
@@ -276,7 +278,7 @@ Token scan_token(void) {
             advance();
             at_beginning_of_line = 1;
             start = current;
-            return scan_token();
+            continue;  // Was: return scan_token();
         }
 
         int current_indent = indent_stack[indent_stack_top];
@@ -322,7 +324,7 @@ Token scan_token(void) {
 
     if (c == '#') {
         while (peek() != '\n' && !is_at_end()) advance();
-        return scan_token();
+        continue;  // Was: return scan_token();
     }
 
     if (c == '"') return string();
@@ -352,4 +354,5 @@ Token scan_token(void) {
     }
 
     return error_token("Unexpected character.");
+    } // end for(;;)
 }
