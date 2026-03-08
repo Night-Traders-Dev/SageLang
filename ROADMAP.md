@@ -351,10 +351,11 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ---
 
 ### Phase 10: Compiler Development
-**Status**: 📋 Planned
+**Status**: 🚧 In Progress
 
 #### Code Generation
-- [ ] C code generation backend
+- [x] Initial C code generation backend (`sage --emit-c`, `sage --compile`) for a restricted procedural subset
+- [ ] Expand C backend coverage to modules, collections, objects, and exceptions
 - [ ] LLVM IR generation backend
 - [ ] Direct machine code generation (x86-64)
 - [ ] Optimization levels (-O0, -O1, -O2, -O3)
@@ -504,10 +505,10 @@ We welcome contributions at all phases! Here's how you can help:
 
 ### Current Priorities (Phase 10)
 
-1. **Compiler Development** - C code generation, LLVM IR backend
-2. **Standard Library** - Implement math, io, string, sys modules in Sage
-3. **Testing** - Expand test suite for new features
-4. **Documentation** - Keep guide and roadmap current
+1. **Compiler Development** - Expand the initial C backend and begin LLVM planning
+2. **Runtime Gaps** - Add compiler-friendly primitives like better file I/O and map mutation
+3. **Testing** - Expand compiler smoke coverage and unsupported-feature diagnostics
+4. **Documentation** - Keep guide and roadmap current as Phase 10 broadens
 
 ### Getting Started
 1. Check the current phase status above

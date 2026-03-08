@@ -119,6 +119,28 @@ This produces the `sage` executable.
 ./sage examples/phase6_classes.sage
 ```
 
+### Compiler Preview
+
+Phase 10 has started with an initial C backend.
+
+```bash
+./sage --emit-c testing/compiler_smoke.sage -o compiler_smoke.c
+./sage --compile testing/compiler_smoke.sage -o compiler_smoke
+./compiler_smoke
+```
+
+Current backend support is intentionally narrow:
+- top-level `proc` definitions
+- `let`, assignment, `print`, `if`/`else`, `while`, `return`
+- arithmetic, comparison, logical, and bitwise operators
+- string literals, string concatenation, and `str(...)`
+- direct calls to top-level procedures
+
+Not yet supported in the C backend:
+- imports, classes, methods, closures, generators, exceptions
+- arrays, dictionaries, tuples, indexing, slicing, property access
+- `for` loops and nested procedure declarations
+
 ## 📝 Example Code
 
 ### Generators (New! ✨)
@@ -335,7 +357,7 @@ gc_enable()
   - [x] Raw memory (`mem_alloc`, `mem_read`, `mem_write`, `mem_free`, `mem_size`, `addressof`)
   - [x] Inline assembly (`asm_exec`, `asm_compile`, `asm_arch` — x86-64, aarch64, rv64)
   - [x] C struct interop (`struct_def`, `struct_new`, `struct_get`, `struct_set`, `struct_size`)
-- [ ] **Phase 10: Compiler Development** (C/LLVM IR codegen)
+- [ ] **Phase 10: Compiler Development** (Initial C backend landed; LLVM/direct codegen pending)
 - [ ] **Phase 11: Concurrency** (Threads, Async/Await)
 - [ ] **Phase 12: Tooling** (LSP, Formatter, Debugger, REPL)
 - [ ] **Phase 13: Self-Hosting** (Rewrite compiler in Sage)
@@ -444,10 +466,10 @@ sage/
 Sage is an educational project aimed at understanding compiler construction and language design. Contributions are welcome!
 
 ### Current Focus Areas (Phase 10 - Compiler Development)
-1. **C Code Generation**: Compile Sage to C source
+1. **Expand the C Backend**: Broaden coverage beyond the current procedural subset
 2. **LLVM IR Backend**: Generate LLVM IR for native compilation
-3. **Standard Library**: Building `lib/` modules (math, io, collections)
-4. **Optimization**: Constant folding, dead code elimination
+3. **Compiler Pipeline**: Add analysis/optimization passes like constant folding
+4. **Bootstrap Readiness**: Improve file I/O and compiler-oriented library support
 
 ### How to Contribute
 1. Fork the project
@@ -481,6 +503,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 **Recent Milestones:**
 
 - March 8, 2026: Phase 8.5 Complete - Security & performance hardening, 77-test suite
+- March 8, 2026: Phase 10 Started - Initial C backend with `--emit-c` and `--compile`
 - March 2026: Phase 8 Complete - Module system fully working
 - November 29, 2025: Phase 7 Complete - Generators with yield/next
 - November 28, 2025: Phase 6 Complete - Object-Oriented Programming
