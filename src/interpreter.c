@@ -687,6 +687,233 @@ static Value addressof_native(int argCount, Value* args) {
     return val_number((double)(uintptr_t)addr);
 }
 
+// ========== Phase 9: C Struct Interop ==========
+
+// Helper: get size and alignment for a C type string
+static int struct_type_info(const char* type, size_t* out_size, size_t* out_align) {
+    if (strcmp(type, "char") == 0 || strcmp(type, "byte") == 0) {
+        *out_size = 1; *out_align = 1;
+    } else if (strcmp(type, "short") == 0) {
+        *out_size = sizeof(short); *out_align = sizeof(short);
+    } else if (strcmp(type, "int") == 0) {
+        *out_size = sizeof(int); *out_align = sizeof(int);
+    } else if (strcmp(type, "long") == 0) {
+        *out_size = sizeof(long); *out_align = sizeof(long);
+    } else if (strcmp(type, "float") == 0) {
+        *out_size = sizeof(float); *out_align = sizeof(float);
+    } else if (strcmp(type, "double") == 0) {
+        *out_size = sizeof(double); *out_align = sizeof(double);
+    } else if (strcmp(type, "ptr") == 0) {
+        *out_size = sizeof(void*); *out_align = sizeof(void*);
+    } else {
+        return -1;
+    }
+    return 0;
+}
+
+// Helper: align offset to alignment boundary
+static size_t align_to(size_t offset, size_t alignment) {
+    return (offset + alignment - 1) & ~(alignment - 1);
+}
+
+// struct_def(fields) -> dict
+// fields: array of [name, type] pairs
+// Returns a dict with field metadata:
+//   "__size__" -> total struct size (number)
+//   "__align__" -> struct alignment (number)
+//   "field_name" -> [offset, size, type] (tuple)
+static Value struct_def_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_ARRAY(args[0])) {
+        fprintf(stderr, "struct_def() expects (array of [name, type] pairs).\n");
+        return val_nil();
+    }
+
+    ArrayValue* fields = AS_ARRAY(args[0]);
+    Value result = val_dict();
+    size_t offset = 0;
+    size_t max_align = 1;
+
+    for (int i = 0; i < fields->count; i++) {
+        Value field = fields->elements[i];
+        if (!IS_ARRAY(field)) {
+            fprintf(stderr, "struct_def(): each field must be [name, type].\n");
+            return val_nil();
+        }
+        ArrayValue* pair = AS_ARRAY(field);
+        if (pair->count != 2 || !IS_STRING(pair->elements[0]) || !IS_STRING(pair->elements[1])) {
+            fprintf(stderr, "struct_def(): each field must be [name_string, type_string].\n");
+            return val_nil();
+        }
+
+        const char* name = AS_STRING(pair->elements[0]);
+        const char* type = AS_STRING(pair->elements[1]);
+
+        size_t fsize, falign;
+        if (struct_type_info(type, &fsize, &falign) != 0) {
+            fprintf(stderr, "struct_def(): unknown type '%s'.\n", type);
+            return val_nil();
+        }
+
+        // Align offset
+        offset = align_to(offset, falign);
+        if (falign > max_align) max_align = falign;
+
+        // Store field info as tuple: (offset, size, type_string)
+        Value tuple_elems[3];
+        tuple_elems[0] = val_number((double)offset);
+        tuple_elems[1] = val_number((double)fsize);
+        tuple_elems[2] = val_string(type);
+        dict_set(&result, name, val_tuple(tuple_elems, 3));
+
+        offset += fsize;
+    }
+
+    // Align total size to struct alignment
+    offset = align_to(offset, max_align);
+
+    dict_set(&result, "__size__", val_number((double)offset));
+    dict_set(&result, "__align__", val_number((double)max_align));
+
+    return result;
+}
+
+// struct_new(def) -> pointer
+// Allocates zeroed memory for the struct
+static Value struct_new_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_DICT(args[0])) {
+        fprintf(stderr, "struct_new() expects (struct_def dict).\n");
+        return val_nil();
+    }
+
+    Value size_val = dict_get(&args[0], "__size__");
+    if (!IS_NUMBER(size_val)) {
+        fprintf(stderr, "struct_new(): invalid struct definition (missing __size__).\n");
+        return val_nil();
+    }
+
+    size_t size = (size_t)AS_NUMBER(size_val);
+    void* ptr = calloc(1, size);
+    if (!ptr) {
+        fprintf(stderr, "struct_new(): allocation failed.\n");
+        return val_nil();
+    }
+    return val_pointer(ptr, size, 1);
+}
+
+// struct_get(ptr, def, field_name) -> value
+static Value struct_get_native(int argCount, Value* args) {
+    if (argCount != 3 || !IS_POINTER(args[0]) || !IS_DICT(args[1]) || !IS_STRING(args[2])) {
+        fprintf(stderr, "struct_get() expects (pointer, struct_def, field_name).\n");
+        return val_nil();
+    }
+
+    PointerValue* p = AS_POINTER(args[0]);
+    if (!p->ptr) {
+        fprintf(stderr, "struct_get(): null pointer.\n");
+        return val_nil();
+    }
+
+    Value field_info = dict_get(&args[1], AS_STRING(args[2]));
+    if (!IS_TUPLE(field_info) || field_info.as.tuple->count != 3) {
+        fprintf(stderr, "struct_get(): unknown field '%s'.\n", AS_STRING(args[2]));
+        return val_nil();
+    }
+
+    size_t offset = (size_t)AS_NUMBER(field_info.as.tuple->elements[0]);
+    const char* type = AS_STRING(field_info.as.tuple->elements[2]);
+    unsigned char* base = (unsigned char*)p->ptr + offset;
+
+    if (strcmp(type, "char") == 0 || strcmp(type, "byte") == 0) {
+        return val_number((double)*base);
+    } else if (strcmp(type, "short") == 0) {
+        short v; memcpy(&v, base, sizeof(short));
+        return val_number((double)v);
+    } else if (strcmp(type, "int") == 0) {
+        int v; memcpy(&v, base, sizeof(int));
+        return val_number((double)v);
+    } else if (strcmp(type, "long") == 0) {
+        long v; memcpy(&v, base, sizeof(long));
+        return val_number((double)v);
+    } else if (strcmp(type, "float") == 0) {
+        float v; memcpy(&v, base, sizeof(float));
+        return val_number((double)v);
+    } else if (strcmp(type, "double") == 0) {
+        double v; memcpy(&v, base, sizeof(double));
+        return val_number(v);
+    } else if (strcmp(type, "ptr") == 0) {
+        void* v; memcpy(&v, base, sizeof(void*));
+        return val_pointer(v, 0, 0); // Non-owned external pointer
+    }
+    return val_nil();
+}
+
+// struct_set(ptr, def, field_name, value) -> nil
+static Value struct_set_native(int argCount, Value* args) {
+    if (argCount != 4 || !IS_POINTER(args[0]) || !IS_DICT(args[1]) || !IS_STRING(args[2])) {
+        fprintf(stderr, "struct_set() expects (pointer, struct_def, field_name, value).\n");
+        return val_nil();
+    }
+
+    PointerValue* p = AS_POINTER(args[0]);
+    if (!p->ptr) {
+        fprintf(stderr, "struct_set(): null pointer.\n");
+        return val_nil();
+    }
+
+    Value field_info = dict_get(&args[1], AS_STRING(args[2]));
+    if (!IS_TUPLE(field_info) || field_info.as.tuple->count != 3) {
+        fprintf(stderr, "struct_set(): unknown field '%s'.\n", AS_STRING(args[2]));
+        return val_nil();
+    }
+
+    size_t offset = (size_t)AS_NUMBER(field_info.as.tuple->elements[0]);
+    const char* type = AS_STRING(field_info.as.tuple->elements[2]);
+    unsigned char* base = (unsigned char*)p->ptr + offset;
+
+    if (!IS_NUMBER(args[3]) && strcmp(type, "ptr") != 0) {
+        fprintf(stderr, "struct_set(): value must be a number for type '%s'.\n", type);
+        return val_nil();
+    }
+
+    if (strcmp(type, "char") == 0 || strcmp(type, "byte") == 0) {
+        *base = (unsigned char)AS_NUMBER(args[3]);
+    } else if (strcmp(type, "short") == 0) {
+        short v = (short)AS_NUMBER(args[3]);
+        memcpy(base, &v, sizeof(short));
+    } else if (strcmp(type, "int") == 0) {
+        int v = (int)AS_NUMBER(args[3]);
+        memcpy(base, &v, sizeof(int));
+    } else if (strcmp(type, "long") == 0) {
+        long v = (long)AS_NUMBER(args[3]);
+        memcpy(base, &v, sizeof(long));
+    } else if (strcmp(type, "float") == 0) {
+        float v = (float)AS_NUMBER(args[3]);
+        memcpy(base, &v, sizeof(float));
+    } else if (strcmp(type, "double") == 0) {
+        double v = AS_NUMBER(args[3]);
+        memcpy(base, &v, sizeof(double));
+    } else if (strcmp(type, "ptr") == 0) {
+        if (!IS_POINTER(args[3])) {
+            fprintf(stderr, "struct_set(): value must be a pointer for type 'ptr'.\n");
+            return val_nil();
+        }
+        void* v = AS_POINTER(args[3])->ptr;
+        memcpy(base, &v, sizeof(void*));
+    }
+    return val_nil();
+}
+
+// struct_size(def) -> number
+static Value struct_size_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_DICT(args[0])) {
+        fprintf(stderr, "struct_size() expects (struct_def dict).\n");
+        return val_nil();
+    }
+    Value size_val = dict_get(&args[0], "__size__");
+    if (!IS_NUMBER(size_val)) return val_nil();
+    return size_val;
+}
+
 // ========== Phase 9: Inline Assembly ==========
 
 // Helper: process \n and \t escape sequences in assembly code strings
@@ -1045,6 +1272,13 @@ void init_stdlib(Env* env) {
     env_define(env, "mem_write", 9, val_native(mem_write_native));
     env_define(env, "mem_size", 8, val_native(mem_size_native));
     env_define(env, "addressof", 9, val_native(addressof_native));
+
+    // Phase 9: C struct interop
+    env_define(env, "struct_def", 10, val_native(struct_def_native));
+    env_define(env, "struct_new", 10, val_native(struct_new_native));
+    env_define(env, "struct_get", 10, val_native(struct_get_native));
+    env_define(env, "struct_set", 10, val_native(struct_set_native));
+    env_define(env, "struct_size", 11, val_native(struct_size_native));
 
     // Phase 9: Inline assembly
     env_define(env, "asm_exec", 8, val_native(asm_exec_native));

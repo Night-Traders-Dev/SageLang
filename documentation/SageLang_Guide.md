@@ -398,6 +398,11 @@ SageLang provides built-in functions injected into global environment via `init_
 | `asm_exec(code, ret, ...)` | `(string, string, ...) → value` | Compile and execute assembly |
 | `asm_compile(code, arch, out)` | `(string, string, string) → bool` | Cross-compile assembly to object file |
 | `asm_arch()` | `() → string` | Get host architecture name |
+| `struct_def(fields)` | `array → dict` | Define C struct layout with alignment |
+| `struct_new(def)` | `dict → pointer` | Allocate zeroed struct instance |
+| `struct_get(ptr, def, name)` | `(pointer, dict, string) → value` | Read struct field |
+| `struct_set(ptr, def, name, val)` | `(pointer, dict, string, value) → nil` | Write struct field |
+| `struct_size(def)` | `dict → number` | Get total struct size |
 
 ### 2.8 Module System (module.h / module.c)
 
@@ -724,6 +729,33 @@ let ok2 = asm_compile("    li a0, 42", "rv64", "/tmp/out_rv.o")
 ```
 
 Supported architectures: `"x86_64"`, `"aarch64"`, `"rv64"`. Return types: `"int"`, `"double"`, `"void"`. Up to 4 numeric arguments.
+
+**C Struct Interop**:
+```sagelang
+# Define a C-compatible struct: { int x; int y; double z; }
+let Point = struct_def([["x", "int"], ["y", "int"], ["z", "double"]])
+print struct_size(Point)   # 16 (with alignment)
+
+# Allocate and populate
+let p = struct_new(Point)
+struct_set(p, Point, "x", 10)
+struct_set(p, Point, "y", 20)
+struct_set(p, Point, "z", 3.14)
+
+# Read fields
+print struct_get(p, Point, "x")   # 10
+print struct_get(p, Point, "y")   # 20
+print struct_get(p, Point, "z")   # 3.14
+
+mem_free(p)
+
+# Alignment example: { char a; double b; int c; }
+# Layout: a@0, pad(7), b@8, c@16, pad(4) = 24 bytes
+let S = struct_def([["a", "char"], ["b", "double"], ["c", "int"]])
+print struct_size(S)              # 24
+```
+
+Supported types: `"char"`, `"byte"` (1), `"short"` (2), `"int"` (4), `"long"` (8), `"float"` (4), `"double"` (8), `"ptr"` (8). Alignment follows C ABI rules.
 
 ---
 
@@ -1336,6 +1368,8 @@ ffi_open(path) ffi_call(lib, fn, ret, ...) ffi_sym(lib, name) ffi_close(lib)
 mem_alloc(n) mem_free(ptr) mem_read(ptr, off, type) mem_write(ptr, off, type, val)
 mem_size(ptr) addressof(val)
 asm_exec(code, ret, ...) asm_compile(code, arch, out) asm_arch()
+struct_def(fields) struct_new(def) struct_get(ptr, def, name)
+struct_set(ptr, def, name, val) struct_size(def)
 ```
 
 ### Operators
