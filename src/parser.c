@@ -355,7 +355,7 @@ static Expr* primary() {
     exit(1);
 }
 
-// NEW: Unary expressions (handle negative numbers)
+// Unary expressions (handle negative numbers and bitwise NOT)
 static Expr* unary() {
     // Handle unary minus: -5, -x
     if (match(TOKEN_MINUS)) {
@@ -369,7 +369,13 @@ static Expr* unary() {
         Expr* right = unary();
         return new_binary_expr(right, op, NULL);
     }
-    
+    // Phase 9: Bitwise NOT (~x)
+    if (match(TOKEN_TILDE)) {
+        Token op = previous_token;
+        Expr* right = unary();
+        return new_binary_expr(right, op, NULL);
+    }
+
     return postfix();
 }
 
@@ -447,11 +453,22 @@ static Expr* addition() {
     return expr;
 }
 
-static Expr* comparison() {
+// Phase 9: Shift operators (<< >>), between addition and comparison
+static Expr* shift() {
     Expr* expr = addition();
-    while (match(TOKEN_GT) || match(TOKEN_LT) || match(TOKEN_GTE) || match(TOKEN_LTE)) {
+    while (match(TOKEN_LSHIFT) || match(TOKEN_RSHIFT)) {
         Token op = previous_token;
         Expr* right = addition();
+        expr = new_binary_expr(expr, op, right);
+    }
+    return expr;
+}
+
+static Expr* comparison() {
+    Expr* expr = shift();
+    while (match(TOKEN_GT) || match(TOKEN_LT) || match(TOKEN_GTE) || match(TOKEN_LTE)) {
+        Token op = previous_token;
+        Expr* right = shift();
         expr = new_binary_expr(expr, op, right);
     }
     return expr;
@@ -467,11 +484,44 @@ static Expr* equality() {
     return expr;
 }
 
-static Expr* logical_and() {
+// Phase 9: Bitwise AND (&), between equality and bitwise XOR
+static Expr* bitwise_and() {
     Expr* expr = equality();
-    while (match(TOKEN_AND)) {
+    while (match(TOKEN_AMP)) {
         Token op = previous_token;
         Expr* right = equality();
+        expr = new_binary_expr(expr, op, right);
+    }
+    return expr;
+}
+
+// Phase 9: Bitwise XOR (^), between bitwise AND and bitwise OR
+static Expr* bitwise_xor() {
+    Expr* expr = bitwise_and();
+    while (match(TOKEN_CARET)) {
+        Token op = previous_token;
+        Expr* right = bitwise_and();
+        expr = new_binary_expr(expr, op, right);
+    }
+    return expr;
+}
+
+// Phase 9: Bitwise OR (|), between bitwise XOR and logical AND
+static Expr* bitwise_or() {
+    Expr* expr = bitwise_xor();
+    while (match(TOKEN_PIPE)) {
+        Token op = previous_token;
+        Expr* right = bitwise_xor();
+        expr = new_binary_expr(expr, op, right);
+    }
+    return expr;
+}
+
+static Expr* logical_and() {
+    Expr* expr = bitwise_or();
+    while (match(TOKEN_AND)) {
+        Token op = previous_token;
+        Expr* right = bitwise_or();
         expr = new_binary_expr(expr, op, right);
     }
     return expr;

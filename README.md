@@ -13,7 +13,7 @@ Sage is a new programming language that combines the readability of Python (inde
 - **Type System**: Support for **Integers**, **Strings**, **Booleans**, **Nil**, **Arrays**, **Dictionaries**, **Tuples**, **Classes**, **Instances**, **Exceptions**, and **Generators**
 - **Functions**: Define functions with `proc name(args):` with full recursion, closures, and first-class function support
 - **Control Flow**: `if`/`else`, `while`, `for` loops, `break`, `continue`, and **exception handling**
-- **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical (`and`, `or`), unary (`-`)
+- **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical (`and`, `or`), bitwise (`&`, `|`, `^`, `~`, `<<`, `>>`), unary (`-`)
 
 ### Exception Handling ✅
 - **Try/Catch/Finally**: Full exception handling with `try:`, `catch e:`, and `finally:`
@@ -301,19 +301,13 @@ gc_enable()
 - [x] **Phase 5: Advanced Data Structures** (Arrays, Dictionaries, Tuples, Slicing)
 - [x] **Phase 6: Object-Oriented Programming** (Classes, Inheritance, Methods) ✅
 - [x] **Phase 7: Control Flow** (for, break, continue, exceptions, generators) ✅ **100% COMPLETE**
-- [ ] **Phase 8: Modules & Packages** (Imports, Package Manager) 🔄 **IN PROGRESS (60%)**
-  - [x] Import statement parsing (`import`, `from...import`)
-  - [x] Module loader infrastructure  
-  - [x] Module caching system
-  - [x] Function closure support for exports
-  - [ ] Complete module execution pipeline 🚧
-  - [ ] Symbol export/import resolution 🚧
-  - [ ] Standard library modules
-- [ ] **Phase 9: Low-Level Programming** ⭐ *Planned*
+- [x] **Phase 8: Modules & Packages** (import, from-import, import-as, module caching, path security) ✅
+- [x] **Phase 8.5: Security & Performance Hardening** (recursion limits, OOM safety, hash table dicts, GC env integration, test suite) ✅
+- [ ] **Phase 9: Low-Level Programming** ⭐ *In Progress*
+  - [x] Bit manipulation (`&`, `|`, `^`, `~`, `<<`, `>>`)
   - Inline assembly (x86-64, ARM, RISC-V)
   - Pointer arithmetic and raw memory access
   - FFI (Foreign Function Interface)
-  - Bit manipulation
 - [ ] **Phase 10: Compiler Development** (C/LLVM IR codegen)
 - [ ] **Phase 11: Concurrency** (Threads, Async/Await)
 - [ ] **Phase 12: Tooling** (LSP, Formatter, Debugger, REPL)
@@ -369,12 +363,11 @@ proc write_memory(ptr: *mut u8, value: u8):
 ## 📊 Project Stats
 
 - **Language**: C
-- **Lines of Code**: ~55,000+
-- **Phases Completed**: 7/13 (54%)
-- **Phase 8 Progress**: 60% (Module system infrastructure complete, execution pipeline in progress)
+- **Phases Completed**: 8.5/13 (65%)
+- **Test Suite**: 83 automated tests, 21 categories, 100% pass rate
 - **Status**: Advanced Development
 - **License**: MIT
-- **Current Version**: v0.8.0-dev
+- **Current Version**: v0.9.0-dev
 
 ## 💾 Project Structure
 
@@ -408,10 +401,13 @@ sage/
 │   ├── phase6_classes.sage  # OOP demonstration
 │   ├── phase5_data.sage     # Data structures
 │   └── phase4_gc_demo.sage  # GC examples
-├── testing/          # Test files
-│   ├── test.sage     # Import testing
-│   └── math.sage     # Test module
+├── tests/            # Automated test suite (77 tests)
+│   ├── run_tests.sh  # Test runner script
+│   ├── 01_variables/ # Variable declaration tests
+│   ├── ...           # 20 test categories
+│   └── 20_gc/        # Garbage collection tests
 ├── ROADMAP.md        # Detailed development roadmap
+├── UPDATES.md        # Changelog
 ├── Makefile          # Build script
 └── README.md         # This file
 ```
@@ -420,12 +416,11 @@ sage/
 
 Sage is an educational project aimed at understanding compiler construction and language design. Contributions are welcome!
 
-### Current Focus Areas (Phase 8 - 60% Complete)
-1. **Module Execution Pipeline**: Fix function export/import closure handling
-2. **Symbol Resolution**: Complete environment isolation for modules
-3. **Standard Library**: Building out `lib/` modules (math, io, collections)
-4. **Testing**: Write comprehensive test cases for module imports
-5. **Bug Fixes**: Resolve module loading edge cases
+### Current Focus Areas (Phase 9 - Low-Level Programming)
+1. **Inline Assembly**: x86-64 and ARM assembly blocks
+2. **Pointer Arithmetic**: Raw memory access
+3. **FFI**: Foreign function interface for C interop
+4. **Standard Library**: Building `lib/` modules (math, io, collections)
 
 ### How to Contribute
 1. Fork the project
@@ -457,10 +452,10 @@ Distributed under the MIT License. See `LICENSE` for more information.
 **Built with ❤️ for systems programming enthusiasts**
 
 **Recent Milestones:**
-- ✅ December 28, 2025: Phase 8 60% - Function closure support added, module infrastructure complete
-- ✅ December 1, 2025: Phase 8 Started - Module system implementation in progress
-- ✅ November 29, 2025, 3:00 PM: Phase 7 Complete - Generators with yield/next fully working
-- ✅ November 28, 2025, 11:30 AM: Exception Handling Complete - try/catch/finally/raise
-- ✅ November 28, 2025, 9:00 AM: Phase 6 Complete - Object-Oriented Programming
-- ✅ November 27, 2025: Phase 5 Complete - Advanced Data Structures
-- ✅ November 27, 2025: Phase 4 Complete - Garbage Collection
+
+- March 8, 2026: Phase 8.5 Complete - Security & performance hardening, 77-test suite
+- March 2026: Phase 8 Complete - Module system fully working
+- November 29, 2025: Phase 7 Complete - Generators with yield/next
+- November 28, 2025: Phase 6 Complete - Object-Oriented Programming
+- November 27, 2025: Phase 5 Complete - Advanced Data Structures
+- November 27, 2025: Phase 4 Complete - Garbage Collection

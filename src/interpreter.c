@@ -401,6 +401,15 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
         return EVAL_RESULT(val_bool(!is_truthy(left)));
     }
 
+    // Phase 9: Bitwise NOT (~x)
+    if (b->op.type == TOKEN_TILDE) {
+        if (!IS_NUMBER(left)) {
+            fprintf(stderr, "Runtime Error: Bitwise NOT operand must be a number.\n");
+            return EVAL_RESULT(val_nil());
+        }
+        return EVAL_RESULT(val_number((double)(~(long long)AS_NUMBER(left))));
+    }
+
     if (b->op.type == TOKEN_OR) {
         if (is_truthy(left)) {
             return EVAL_RESULT(val_bool(1));
@@ -477,6 +486,27 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
             if ((int)AS_NUMBER(right) == 0) return EVAL_RESULT(val_nil());
             return EVAL_RESULT(val_number((int)AS_NUMBER(left) % (int)AS_NUMBER(right)));
+
+        // Phase 9: Bitwise operators
+        case TOKEN_AMP:
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) & (long long)AS_NUMBER(right))));
+
+        case TOKEN_PIPE:
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) | (long long)AS_NUMBER(right))));
+
+        case TOKEN_CARET:
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) ^ (long long)AS_NUMBER(right))));
+
+        case TOKEN_LSHIFT:
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) << (long long)AS_NUMBER(right))));
+
+        case TOKEN_RSHIFT:
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) >> (long long)AS_NUMBER(right))));
 
         default:
             return EVAL_RESULT(val_nil());

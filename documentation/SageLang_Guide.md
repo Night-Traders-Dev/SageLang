@@ -74,7 +74,7 @@ main.c
 
 **Token Types** (from token.h):
 - **Keywords**: `let`, `var`, `proc`, `if`, `else`, `while`, `for`, `in`, `return`, `print`, `class`, `self`, `init`, `break`, `continue`, `and`, `or`, `try`, `catch`, `finally`, `raise`, `yield`, `defer`, `match`, `case`, `default`, `import`, `from`, `as`, `true`, `false`, `nil`
-- **Operators**: `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`
+- **Operators**: `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `&`, `|`, `^`, `~`, `<<`, `>>`
 - **Punctuation**: `(`, `)`, `[`, `]`, `{`, `}`, `:`, `,`, `.`
 - **Structural**: `INDENT`, `DEDENT`, `NEWLINE`, `EOF`, `ERROR`
 
@@ -188,10 +188,11 @@ struct Value {
 - `array_get(arr, index)`, `array_set(arr, index, val)`: Access/modify.
 - `array_slice(arr, start, end)`: Subarray (negative indices supported).
 
-**Dictionary Operations**:
-- `dict_set(dict, key, value)`: Insert/update (string keys only).
-- `dict_get(dict, key)`, `dict_has(dict, key)`, `dict_delete(dict, key)`.
-- `dict_keys(dict)`, `dict_values(dict)`: Return as arrays.
+**Dictionary Operations** (O(1) amortized via hash table):
+- `dict_set(dict, key, value)`: Insert/update using FNV-1a hashing with open-addressing and linear probing. Table grows at 75% load factor.
+- `dict_get(dict, key)`, `dict_has(dict, key)`: O(1) average lookup.
+- `dict_delete(dict, key)`: Backward-shift deletion preserves probe chain integrity (no tombstones).
+- `dict_keys(dict)`, `dict_values(dict)`: Return as arrays (iterates capacity, skips empty slots).
 
 **String Operations**:
 - `string_split(str, delim)`, `string_join(arr, sep)`: Splitting/joining arrays.
@@ -210,8 +211,10 @@ struct Value {
 **Environment Structure**:
 ```c
 struct Env {
-  EnvNode* head;      // Variables defined in this scope (linked list)
-  struct Env* parent; // Enclosing scope
+  EnvNode* head;        // Variables defined in this scope (linked list)
+  struct Env* parent;   // Enclosing scope
+  struct Env* alloc_next; // Internal registry for GC/shutdown cleanup
+  int marked;           // GC mark flag (0 = unmarked, 1 = reachable)
 };
 
 struct EnvNode {
@@ -602,6 +605,33 @@ print sin(0)
 print cos(0)
 ```
 
+### Phase 9: Low-Level Programming (In Progress)
+
+**Bitwise Operators**:
+```sagelang
+# Bitwise AND, OR, XOR
+print 5 & 3       # 1  (0101 & 0011 = 0001)
+print 5 | 3       # 7  (0101 | 0011 = 0111)
+print 5 ^ 3       # 6  (0101 ^ 0011 = 0110)
+
+# Bitwise NOT
+print ~0           # -1 (all bits flipped)
+
+# Shift operators
+print 1 << 4       # 16 (shift left by 4)
+print 16 >> 2      # 4  (shift right by 2)
+
+# Practical: extract lower nibble
+let val = 255
+let mask = 15
+print val & mask   # 15
+
+# Practical: check if bit is set
+let x = 7
+let bit2 = (x >> 2) & 1
+print bit2 == 1    # true
+```
+
 ---
 
 ## Part 4: Writing SageLang Programs
@@ -637,6 +667,14 @@ print 5 < 10           # true
 # Logical
 print true and false   # false
 print true or false    # true
+
+# Bitwise
+print 5 & 3            # 1
+print 5 | 3            # 7
+print 5 ^ 3            # 6
+print ~0               # -1
+print 1 << 4           # 16
+print 16 >> 2          # 4
 ```
 
 **String Operations**:
@@ -966,13 +1004,17 @@ next(gen)                          # Resume, reach end, is_exhausted=1
 1. Assignment (`=`)
 2. Logical OR (`or`)
 3. Logical AND (`and`)
-4. Equality (`==`, `!=`)
-5. Comparison (`<`, `>`, `<=`, `>=`)
-6. Addition/Subtraction (`+`, `-`)
-7. Multiplication/Division (`*`, `/`)
-8. Unary (`-`)
-9. Postfix (indexing, slicing, property access)
-10. Primary (literals, variables, parens, function calls)
+4. Bitwise OR (`|`)
+5. Bitwise XOR (`^`)
+6. Bitwise AND (`&`)
+7. Equality (`==`, `!=`)
+8. Comparison (`<`, `>`, `<=`, `>=`)
+9. Shift (`<<`, `>>`)
+10. Addition/Subtraction (`+`, `-`)
+11. Multiplication/Division (`*`, `/`, `%`)
+12. Unary (`-`, `not`, `~`)
+13. Postfix (indexing, slicing, property access)
+14. Primary (literals, variables, parens, function calls)
 
 **Associativity**:
 - **Left**: Most binary operators (`+`, `-`, `*`, `/`, `==`, `!=`, `<`, `>`, etc.).
@@ -1201,9 +1243,10 @@ next(gen)
 
 ### Operators
 ```
-Arithmetic:    + - * /
+Arithmetic:    + - * / %
 Comparison:    == != < > <= >=
-Logical:       and or
+Logical:       and or not
+Bitwise:       & | ^ ~ << >>
 Assignment:    =
 Indexing:      arr[i]
 Slicing:       arr[a:b]
