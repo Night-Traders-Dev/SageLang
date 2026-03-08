@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: March 8, 2026
-> **Current Phase**: Phase 8 Complete, Phase 8.5 (Security & Performance Hardening) Complete
+> **Current Phase**: Phase 9 Complete (Low-Level Programming)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -297,7 +297,7 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ## 🔮 Future Phases
 
 ### Phase 9: Low-Level Programming & System Features
-**Status**: 🚧 In Progress
+**Status**: ✅ Complete
 
 #### Bit Manipulation ✅
 - [x] **Bitwise AND** (`&`) - Integer bitwise AND
@@ -338,7 +338,15 @@ A cross-cutting audit and hardening pass across the entire codebase.
 - [x] **Argument types**: numbers (as double/int/long), strings (as const char*)
 - [x] **VAL_CLIB type** - New value type for library handles
 - [x] **Test coverage** - 3 automated tests for FFI operations
-- [ ] Struct interop with C
+#### C Struct Interop ✅
+- [x] **`struct_def(fields)`** - Define struct layout with C-compatible alignment
+- [x] **`struct_new(def)`** - Allocate zeroed struct instance
+- [x] **`struct_get(ptr, def, field)`** - Read field value from struct
+- [x] **`struct_set(ptr, def, field, val)`** - Write field value to struct
+- [x] **`struct_size(def)`** - Get total struct size (with padding)
+- [x] **8 C types** - `char`, `byte`, `short`, `int`, `long`, `float`, `double`, `ptr`
+- [x] **Proper alignment** - Natural alignment per field, tail padding to max alignment
+- [x] **Test coverage** - 4 automated tests for struct operations
 
 ---
 
@@ -435,8 +443,8 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ## 📊 Progress Metrics
 
-- **Phases Completed**: 8.5/13 (65%)
-- **Test Suite**: 96 automated tests, 24 categories, 100% pass rate
+- **Phases Completed**: 9/13 (69%)
+- **Test Suite**: 100 automated tests, 25 categories, 100% pass rate
 - **Estimated Completion**: 2026-2027 (self-hosting)
 
 ---
@@ -445,10 +453,13 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ### March 8, 2026
 
+- **Phase 9 Complete: Low-Level Programming**
+- C struct interop: `struct_def`, `struct_new`, `struct_get`, `struct_set`, `struct_size`
+- 4 new automated tests (100 total, 25 categories)
 - **Phase 9: Inline Assembly (Multi-Architecture)**
 - `asm_exec`, `asm_compile`, `asm_arch` native functions
 - x86-64 native execution, aarch64 and rv64 cross-compilation
-- 5 new automated tests (96 total, 24 categories)
+- 5 automated tests
 - **Phase 9: Raw Memory Operations**
 - `mem_alloc`, `mem_free`, `mem_read`, `mem_write`, `mem_size`, `addressof` native functions
 - New `VAL_POINTER` type with bounds checking and ownership tracking
@@ -491,9 +502,9 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 We welcome contributions at all phases! Here's how you can help:
 
-### Current Priorities (Phase 9)
+### Current Priorities (Phase 10)
 
-1. **Low-Level Features** - Inline assembly, pointer arithmetic, FFI
+1. **Compiler Development** - C code generation, LLVM IR backend
 2. **Standard Library** - Implement math, io, string, sys modules in Sage
 3. **Testing** - Expand test suite for new features
 4. **Documentation** - Keep guide and roadmap current

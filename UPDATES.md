@@ -1,5 +1,22 @@
 # SageLang Updates
 
+## March 8, 2026 - Phase 9 Complete: Low-Level Programming
+
+Phase 9 is now complete with all 5 sub-features implemented.
+
+### Phase 9.5: C Struct Interop
+
+- **`struct_def(fields)`**: Define C struct layout from `["name", "type"]` pairs with proper alignment
+- **`struct_new(def)`**: Allocate zeroed struct instance
+- **`struct_get(ptr, def, field)`** / **`struct_set(ptr, def, field, val)`**: Read/write fields
+- **`struct_size(def)`**: Get total struct size (including padding)
+- Types: `"char"`, `"byte"`, `"short"`, `"int"`, `"long"`, `"float"`, `"double"`, `"ptr"`
+- Proper C ABI alignment: each field aligned to natural boundary, tail padding to max alignment
+- 4 new tests in `tests/25_structs/`
+- Total: 100 tests across 25 categories, all passing
+
+---
+
 ## March 8, 2026 - Phase 9.4: Inline Assembly (Multi-Architecture)
 
 SageLang can now compile and execute raw assembly code, with support for x86-64, aarch64, and RISC-V 64 architectures.

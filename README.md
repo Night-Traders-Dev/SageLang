@@ -67,6 +67,7 @@ Sage is a new programming language that combines the readability of Python (inde
 - **FFI**: `ffi_open()`, `ffi_call()`, `ffi_close()`, `ffi_sym()`
 - **Memory**: `mem_alloc()`, `mem_free()`, `mem_read()`, `mem_write()`, `mem_size()`, `addressof()`
 - **Assembly**: `asm_exec()`, `asm_compile()`, `asm_arch()` (x86-64, aarch64, rv64)
+- **Structs**: `struct_def()`, `struct_new()`, `struct_get()`, `struct_set()`, `struct_size()`
 
 ## 🛠 Building Sage
 
@@ -306,11 +307,12 @@ gc_enable()
 - [x] **Phase 7: Control Flow** (for, break, continue, exceptions, generators) ✅ **100% COMPLETE**
 - [x] **Phase 8: Modules & Packages** (import, from-import, import-as, module caching, path security) ✅
 - [x] **Phase 8.5: Security & Performance Hardening** (recursion limits, OOM safety, hash table dicts, GC env integration, test suite) ✅
-- [ ] **Phase 9: Low-Level Programming** ⭐ *In Progress*
+- [x] **Phase 9: Low-Level Programming** ✅
   - [x] Bit manipulation (`&`, `|`, `^`, `~`, `<<`, `>>`)
   - [x] FFI (`ffi_open`, `ffi_call`, `ffi_close`, `ffi_sym`)
   - [x] Raw memory (`mem_alloc`, `mem_read`, `mem_write`, `mem_free`, `mem_size`, `addressof`)
   - [x] Inline assembly (`asm_exec`, `asm_compile`, `asm_arch` — x86-64, aarch64, rv64)
+  - [x] C struct interop (`struct_def`, `struct_new`, `struct_get`, `struct_set`, `struct_size`)
 - [ ] **Phase 10: Compiler Development** (C/LLVM IR codegen)
 - [ ] **Phase 11: Concurrency** (Threads, Async/Await)
 - [ ] **Phase 12: Tooling** (LSP, Formatter, Debugger, REPL)
@@ -366,8 +368,8 @@ proc write_memory(ptr: *mut u8, value: u8):
 ## 📊 Project Stats
 
 - **Language**: C
-- **Phases Completed**: 8.5/13 (65%)
-- **Test Suite**: 96 automated tests, 24 categories, 100% pass rate
+- **Phases Completed**: 9/13 (69%)
+- **Test Suite**: 100 automated tests, 25 categories, 100% pass rate
 - **Status**: Advanced Development
 - **License**: MIT
 - **Current Version**: v0.9.0-dev
@@ -419,11 +421,11 @@ sage/
 
 Sage is an educational project aimed at understanding compiler construction and language design. Contributions are welcome!
 
-### Current Focus Areas (Phase 9 - Low-Level Programming)
-1. **Inline Assembly**: x86-64 and ARM assembly blocks
-2. **Pointer Arithmetic**: Raw memory access
-3. **FFI**: Foreign function interface for C interop
-4. **Standard Library**: Building `lib/` modules (math, io, collections)
+### Current Focus Areas (Phase 10 - Compiler Development)
+1. **C Code Generation**: Compile Sage to C source
+2. **LLVM IR Backend**: Generate LLVM IR for native compilation
+3. **Standard Library**: Building `lib/` modules (math, io, collections)
+4. **Optimization**: Constant folding, dead code elimination
 
 ### How to Contribute
 1. Fork the project
