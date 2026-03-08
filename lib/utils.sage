@@ -1,29 +1,53 @@
-# Utility Functions Module
-# Common utility and helper functions
-
-proc is_even(n):
-    let remainder = n - (n / 2) * 2
-    if remainder == 0:
-        return true
-    return false
-
-proc is_odd(n):
-    return not is_even(n)
-
-proc clamp(value, min_val, max_val):
-    if value < min_val:
-        return min_val
-    if value > max_val:
-        return max_val
+proc identity(value):
     return value
 
+proc choose(condition, when_true, when_false):
+    if condition:
+        return when_true
+    return when_false
+
+proc default_if_nil(value, fallback):
+    if value == nil:
+        return fallback
+    return value
+
+proc is_even(n):
+    return n % 2 == 0
+
+proc is_odd(n):
+    return n % 2 != 0
+
+proc between(value, lower, upper):
+    if value < lower:
+        return false
+    if value > upper:
+        return false
+    return true
+
 proc swap(a, b):
-    # Returns tuple with swapped values
     return (b, a)
 
-proc sign(x):
-    if x > 0:
-        return 1
-    if x < 0:
-        return 0 - 1
-    return 0
+proc head(values):
+    if len(values) == 0:
+        return nil
+    return values[0]
+
+proc last(values):
+    if len(values) == 0:
+        return nil
+    return values[len(values) - 1]
+
+proc repeat_value(value, count):
+    let result = []
+    let i = 0
+    while i < count:
+        push(result, value)
+        i = i + 1
+    return result
+
+proc times(count, fn):
+    let i = 0
+    while i < count:
+        fn(i)
+        i = i + 1
+    return nil

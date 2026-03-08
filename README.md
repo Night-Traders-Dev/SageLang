@@ -69,6 +69,28 @@ Sage is a new programming language that combines the readability of Python (inde
 - **Assembly**: `asm_exec()`, `asm_compile()`, `asm_arch()` (x86-64, aarch64, rv64)
 - **Structs**: `struct_def()`, `struct_new()`, `struct_get()`, `struct_set()`, `struct_size()`
 
+### Bundled `lib/` Modules
+- **`math`**: arithmetic helpers, `pow_int`, `factorial`, `gcd`, `lcm`, `sqrt`, distance helpers
+- **`arrays`**: `map`, `filter`, `reduce`, `unique`, `zip`, `chunk`, `flatten`, `concat`
+- **`strings`**: whitespace cleanup, `contains`, substring counting, padding, case formatting helpers
+- **`dicts`**: query-oriented helpers for dictionary size, fallback reads, entries, and key checks
+- **`iter`**: reusable generators such as `count`, `range_step`, `enumerate_array`, `cycle`, and `take`
+- **`stats`**: `mean`, `variance`, `stddev`, `cumulative`, and normalization helpers
+- **`assert`**: assertion helpers for writing Sage test scripts
+- **`utils`**: general helpers like `default_if_nil`, `swap`, `head`, `last`, and `repeat_value`
+
+Example:
+```sage
+from math import factorial
+import arrays as arr
+
+proc double(x):
+    return x * 2
+
+print factorial(5)
+print arr.map([1, 2, 3], double)
+```
+
 ## 🛠 Building Sage
 
 Sage has zero dependencies and builds with standard GCC/Clang.
