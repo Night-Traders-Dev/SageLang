@@ -349,8 +349,12 @@ Token scan_token(void) {
         case '.': return make_token(TOKEN_DOT);
         case '!': return make_token(match_char('=') ? TOKEN_NEQ : TOKEN_ERROR);
         case '=': return make_token(match_char('=') ? TOKEN_EQ : TOKEN_ASSIGN);
-        case '<': return make_token(match_char('=') ? TOKEN_LTE : TOKEN_LT);
-        case '>': return make_token(match_char('=') ? TOKEN_GTE : TOKEN_GT);
+        case '<': return make_token(match_char('<') ? TOKEN_LSHIFT : (match_char('=') ? TOKEN_LTE : TOKEN_LT));
+        case '>': return make_token(match_char('>') ? TOKEN_RSHIFT : (match_char('=') ? TOKEN_GTE : TOKEN_GT));
+        case '&': return make_token(TOKEN_AMP);
+        case '|': return make_token(TOKEN_PIPE);
+        case '^': return make_token(TOKEN_CARET);
+        case '~': return make_token(TOKEN_TILDE);
     }
 
     return error_token("Unexpected character.");
