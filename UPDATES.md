@@ -1,5 +1,35 @@
 # SageLang Updates
 
+## March 8, 2026 - Phase 9.4: Inline Assembly (Multi-Architecture)
+
+SageLang can now compile and execute raw assembly code, with support for x86-64, aarch64, and RISC-V 64 architectures.
+
+### Assembly Functions
+
+- **`asm_exec(code, ret_type, ...args)`**: Compile and execute assembly on the host architecture. Return types: `"int"`, `"double"`, `"void"`. Up to 4 numeric arguments passed via ABI registers.
+- **`asm_compile(code, arch, output_path)`**: Cross-compile assembly to an object file. Architectures: `"x86_64"`, `"aarch64"`, `"rv64"`.
+- **`asm_arch()`**: Returns the host architecture name (e.g., `"x86_64"`)
+
+### Implementation Details
+
+- Assembly is compiled via temp files: `.s` → `as` → `.o` → `gcc -shared` → `.so` → `dlopen`/`dlsym`
+- Escape sequences `\n` and `\t` processed in code strings (since SageLang strings are raw)
+- Cross-compilation uses `aarch64-linux-gnu-as` / `riscv64-linux-gnu-as` toolchains
+- System V ABI calling convention: integer args in rdi/rsi/rdx/rcx (x86-64), x0-x3 (aarch64), a0-a3 (rv64)
+- Double args passed via xmm0-3 (x86-64), d0-3 (aarch64), fa0-3 (rv64)
+- Temp files cleaned up after execution
+
+### Files Modified
+
+- `src/interpreter.c` — `asm_exec`, `asm_compile`, `asm_arch` native functions with multi-arch support
+
+### Test Suite
+
+- 5 new tests in `tests/24_assembly/`: basic ops, arguments, doubles, arch detection, cross-compilation
+- Total: 96 tests across 24 categories, all passing
+
+---
+
 ## March 8, 2026 - Phase 9.3: Raw Memory Operations
 
 SageLang now supports direct memory allocation, reading, and writing for low-level programming.

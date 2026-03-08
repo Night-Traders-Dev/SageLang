@@ -3,6 +3,7 @@
 #include <string.h>
 #include <time.h>
 #include <stdint.h>   // uintptr_t
+#include <unistd.h>   // getpid, unlink
 #include <dlfcn.h>    // Phase 9: FFI (dlopen, dlsym, dlclose)
 #include "interpreter.h"
 #include "token.h"
@@ -686,6 +687,314 @@ static Value addressof_native(int argCount, Value* args) {
     return val_number((double)(uintptr_t)addr);
 }
 
+// ========== Phase 9: Inline Assembly ==========
+
+// Helper: process \n and \t escape sequences in assembly code strings
+static char* asm_process_escapes(const char* raw) {
+    size_t len = strlen(raw);
+    char* out = SAGE_ALLOC(len + 1);
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (raw[i] == '\\' && i + 1 < len) {
+            if (raw[i + 1] == 'n') { out[j++] = '\n'; i++; continue; }
+            if (raw[i + 1] == 't') { out[j++] = '\t'; i++; continue; }
+        }
+        out[j++] = raw[i];
+    }
+    out[j] = '\0';
+    return out;
+}
+
+// Helper: detect host architecture and return assembler flags
+static const char* asm_detect_arch(void) {
+#if defined(__x86_64__) || defined(_M_X64)
+    return "x86_64";
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    return "aarch64";
+#elif defined(__riscv) && __riscv_xlen == 64
+    return "rv64";
+#else
+    return "unknown";
+#endif
+}
+
+// Helper: get assembler command for architecture
+// For native arch, uses system `as`. For cross, tries arch-specific cross-assembler.
+static int asm_get_commands(const char* arch, const char* asm_path,
+                            const char* obj_path, const char* so_path,
+                            char* as_cmd, size_t as_sz,
+                            char* ld_cmd, size_t ld_sz) {
+    const char* host_arch = asm_detect_arch();
+    int cross = (strcmp(arch, host_arch) != 0);
+
+    if (strcmp(arch, "x86_64") == 0) {
+        if (cross) {
+            snprintf(as_cmd, as_sz, "x86_64-linux-gnu-as -o %s %s 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "x86_64-linux-gnu-gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+        } else {
+            snprintf(as_cmd, as_sz, "as --64 -o %s %s 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+        }
+    } else if (strcmp(arch, "aarch64") == 0) {
+        if (cross) {
+            snprintf(as_cmd, as_sz, "aarch64-linux-gnu-as -o %s %s 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "aarch64-linux-gnu-gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+        } else {
+            snprintf(as_cmd, as_sz, "as -o %s %s 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+        }
+    } else if (strcmp(arch, "rv64") == 0) {
+        if (cross) {
+            snprintf(as_cmd, as_sz, "riscv64-linux-gnu-as -o %s %s 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "riscv64-linux-gnu-gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+        } else {
+            snprintf(as_cmd, as_sz, "as -o %s %s 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+        }
+    } else {
+        return -1; // Unknown arch
+    }
+    return cross ? 1 : 0;
+}
+
+// Helper: write the assembly source file with proper function wrapper
+static int asm_write_source(const char* path, const char* code, const char* arch) {
+    FILE* f = fopen(path, "w");
+    if (!f) return -1;
+
+    fprintf(f, ".text\n");
+    fprintf(f, ".globl sage_asm_fn\n");
+
+    // Architecture-specific directives
+    if (strcmp(arch, "x86_64") == 0 || strcmp(arch, "aarch64") == 0 || strcmp(arch, "rv64") == 0) {
+        fprintf(f, ".type sage_asm_fn, @function\n");
+    }
+
+    fprintf(f, "sage_asm_fn:\n");
+    fprintf(f, "%s\n", code);
+
+    // Architecture-specific return instruction
+    if (strcmp(arch, "x86_64") == 0) {
+        fprintf(f, "    ret\n");
+    } else if (strcmp(arch, "aarch64") == 0) {
+        fprintf(f, "    ret\n");
+    } else if (strcmp(arch, "rv64") == 0) {
+        fprintf(f, "    ret\n"); // RISC-V pseudo-instruction (jalr x0, x1, 0)
+    }
+
+    fprintf(f, ".size sage_asm_fn, .-sage_asm_fn\n");
+    fclose(f);
+    return 0;
+}
+
+// asm_exec(code, ret_type, ...args) -> value
+// Compiles assembly to a temp shared library, calls it, returns result.
+// code: string of assembly instructions (\n for newlines)
+// ret_type: "int", "double", or "void"
+// args: up to 4 numeric arguments
+// Uses host architecture by default. For cross-compilation, see asm_compile().
+static Value asm_exec_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) {
+        fprintf(stderr, "asm_exec() expects (code_string, ret_type, ...args).\n");
+        return val_nil();
+    }
+
+    char* code = asm_process_escapes(AS_STRING(args[0]));
+    const char* ret_type = AS_STRING(args[1]);
+    int num_args = argCount - 2;
+    const char* arch = asm_detect_arch();
+    Value result = val_nil();
+
+    if (num_args > 4) {
+        fprintf(stderr, "asm_exec(): max 4 arguments supported.\n");
+        free(code);
+        return val_nil();
+    }
+
+    for (int i = 0; i < num_args; i++) {
+        if (!IS_NUMBER(args[i + 2])) {
+            fprintf(stderr, "asm_exec(): argument %d must be a number.\n", i);
+            free(code);
+            return val_nil();
+        }
+    }
+
+    // Generate temp file names
+    char asm_path[256], obj_path[256], so_path[256];
+    snprintf(asm_path, sizeof(asm_path), "/tmp/sage_asm_%d.s", getpid());
+    snprintf(obj_path, sizeof(obj_path), "/tmp/sage_asm_%d.o", getpid());
+    snprintf(so_path, sizeof(so_path), "/tmp/sage_asm_%d.so", getpid());
+
+    // Write assembly source
+    if (asm_write_source(asm_path, code, arch) != 0) {
+        fprintf(stderr, "asm_exec(): failed to create temp file.\n");
+        free(code);
+        return val_nil();
+    }
+    free(code);
+
+    // Get assembler/linker commands
+    char as_cmd[512], ld_cmd[512];
+    if (asm_get_commands(arch, asm_path, obj_path, so_path,
+                         as_cmd, sizeof(as_cmd), ld_cmd, sizeof(ld_cmd)) < 0) {
+        fprintf(stderr, "asm_exec(): unsupported architecture '%s'.\n", arch);
+        unlink(asm_path);
+        return val_nil();
+    }
+
+    // Assemble
+    if (system(as_cmd) != 0) {
+        fprintf(stderr, "asm_exec(): assembly failed for %s.\n", arch);
+        unlink(asm_path);
+        return val_nil();
+    }
+
+    // Link as shared library
+    if (system(ld_cmd) != 0) {
+        fprintf(stderr, "asm_exec(): linking failed.\n");
+        unlink(asm_path);
+        unlink(obj_path);
+        return val_nil();
+    }
+
+    // Load and call
+    void* handle = dlopen(so_path, RTLD_LAZY);
+    if (!handle) {
+        fprintf(stderr, "asm_exec(): dlopen failed: %s\n", dlerror());
+        goto cleanup_files;
+    }
+
+    void* sym = dlsym(handle, "sage_asm_fn");
+    if (!sym) {
+        fprintf(stderr, "asm_exec(): symbol lookup failed.\n");
+        dlclose(handle);
+        goto cleanup_files;
+    }
+
+    // Call function via appropriate signature
+    int use_double = (strcmp(ret_type, "double") == 0);
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+    if (use_double) {
+        double dargs[4] = {0};
+        for (int i = 0; i < num_args; i++) dargs[i] = AS_NUMBER(args[i + 2]);
+
+        double (*fn0)(void) = (double (*)(void))sym;
+        double (*fn1)(double) = (double (*)(double))sym;
+        double (*fn2)(double, double) = (double (*)(double, double))sym;
+        double (*fn3)(double, double, double) = (double (*)(double, double, double))sym;
+        double (*fn4)(double, double, double, double) = (double (*)(double, double, double, double))sym;
+
+        double dres;
+        switch (num_args) {
+            case 0: dres = fn0(); break;
+            case 1: dres = fn1(dargs[0]); break;
+            case 2: dres = fn2(dargs[0], dargs[1]); break;
+            case 3: dres = fn3(dargs[0], dargs[1], dargs[2]); break;
+            case 4: dres = fn4(dargs[0], dargs[1], dargs[2], dargs[3]); break;
+            default: dres = 0; break;
+        }
+        result = val_number(dres);
+    } else if (strcmp(ret_type, "void") == 0) {
+        long long iargs[4] = {0};
+        for (int i = 0; i < num_args; i++) iargs[i] = (long long)AS_NUMBER(args[i + 2]);
+
+        void (*fn0)(void) = (void (*)(void))sym;
+        void (*fn1)(long long) = (void (*)(long long))sym;
+        void (*fn2)(long long, long long) = (void (*)(long long, long long))sym;
+
+        switch (num_args) {
+            case 0: fn0(); break;
+            case 1: fn1(iargs[0]); break;
+            case 2: fn2(iargs[0], iargs[1]); break;
+            default: fn0(); break;
+        }
+    } else {
+        // "int" / "long" - integer return
+        long long iargs[4] = {0};
+        for (int i = 0; i < num_args; i++) iargs[i] = (long long)AS_NUMBER(args[i + 2]);
+
+        long long (*fn0)(void) = (long long (*)(void))sym;
+        long long (*fn1)(long long) = (long long (*)(long long))sym;
+        long long (*fn2)(long long, long long) = (long long (*)(long long, long long))sym;
+        long long (*fn3)(long long, long long, long long) = (long long (*)(long long, long long, long long))sym;
+        long long (*fn4)(long long, long long, long long, long long) = (long long (*)(long long, long long, long long, long long))sym;
+
+        long long ires;
+        switch (num_args) {
+            case 0: ires = fn0(); break;
+            case 1: ires = fn1(iargs[0]); break;
+            case 2: ires = fn2(iargs[0], iargs[1]); break;
+            case 3: ires = fn3(iargs[0], iargs[1], iargs[2]); break;
+            case 4: ires = fn4(iargs[0], iargs[1], iargs[2], iargs[3]); break;
+            default: ires = 0; break;
+        }
+        result = val_number((double)ires);
+    }
+#pragma GCC diagnostic pop
+
+    dlclose(handle);
+
+cleanup_files:
+    unlink(asm_path);
+    unlink(obj_path);
+    unlink(so_path);
+
+    return result;
+}
+
+// asm_compile(code, arch, output_path) -> bool
+// Cross-compile assembly for a target architecture without executing.
+// arch: "x86_64", "aarch64", or "rv64"
+// output_path: path to write the .o object file
+static Value asm_compile_native(int argCount, Value* args) {
+    if (argCount != 3 || !IS_STRING(args[0]) || !IS_STRING(args[1]) || !IS_STRING(args[2])) {
+        fprintf(stderr, "asm_compile() expects (code_string, arch, output_path).\n");
+        return val_bool(0);
+    }
+
+    char* code = asm_process_escapes(AS_STRING(args[0]));
+    const char* arch = AS_STRING(args[1]);
+    const char* output_path = AS_STRING(args[2]);
+
+    // Write assembly source
+    char asm_path[256];
+    snprintf(asm_path, sizeof(asm_path), "/tmp/sage_xasm_%d.s", getpid());
+
+    if (asm_write_source(asm_path, code, arch) != 0) {
+        fprintf(stderr, "asm_compile(): failed to create temp file.\n");
+        free(code);
+        return val_bool(0);
+    }
+    free(code);
+
+    // Get assembler command (we only need the assembler, not linker)
+    char as_cmd[512], ld_cmd[512];
+    if (asm_get_commands(arch, asm_path, output_path, "/dev/null",
+                         as_cmd, sizeof(as_cmd), ld_cmd, sizeof(ld_cmd)) < 0) {
+        fprintf(stderr, "asm_compile(): unsupported architecture '%s'.\n", arch);
+        unlink(asm_path);
+        return val_bool(0);
+    }
+
+    // Assemble to object file (output_path is already in as_cmd as obj_path)
+    int ok = (system(as_cmd) == 0);
+    unlink(asm_path);
+
+    if (!ok) {
+        fprintf(stderr, "asm_compile(): assembly failed for %s. Is the cross-assembler installed?\n", arch);
+    }
+    return val_bool(ok);
+}
+
+// asm_arch() -> string
+// Returns the host architecture name
+static Value asm_arch_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_string(asm_detect_arch());
+}
+
 void init_stdlib(Env* env) {
     // Core functions
     env_define(env, "clock", 5, val_native(clock_native));
@@ -736,6 +1045,11 @@ void init_stdlib(Env* env) {
     env_define(env, "mem_write", 9, val_native(mem_write_native));
     env_define(env, "mem_size", 8, val_native(mem_size_native));
     env_define(env, "addressof", 9, val_native(addressof_native));
+
+    // Phase 9: Inline assembly
+    env_define(env, "asm_exec", 8, val_native(asm_exec_native));
+    env_define(env, "asm_compile", 11, val_native(asm_compile_native));
+    env_define(env, "asm_arch", 8, val_native(asm_arch_native));
 }
 
 // --- Helper: Truthiness ---
