@@ -292,4 +292,8 @@ Stmt* new_raise_stmt(Expr* exception);
 Stmt* new_yield_stmt(Expr* value);  // Phase 7: Generator yield constructor
 Stmt* new_import_stmt(char* module_name, char** items, char** item_aliases, int item_count, char* alias, int import_all);  // Phase 8: Import constructor
 
+// AST cleanup
+void free_expr(Expr* expr);
+void free_stmt(Stmt* stmt);
+
 #endif

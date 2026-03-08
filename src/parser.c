@@ -486,16 +486,21 @@ static Expr* assignment() {
     Expr* expr = logical_or();
     
     if (expr->type == EXPR_GET && match(TOKEN_ASSIGN)) {
+        Expr* object = expr->as.get.object;
+        Token property = expr->as.get.property;
+        free(expr);
         Expr* value = assignment();
-        return new_set_expr(expr->as.get.object, expr->as.get.property, value);
+        return new_set_expr(object, property, value);
     }
     
     // Handle regular variable assignment: x = value
     if (expr->type == EXPR_VARIABLE && match(TOKEN_ASSIGN)) {
+        Token name = expr->as.variable.name;
+        free(expr);
         Expr* value = assignment();
         // Create a binary assignment expression (reusing EXPR_BINARY with special marker)
         // OR better: create assignment as SET with NULL object
-        return new_set_expr(NULL, expr->as.variable.name, value);
+        return new_set_expr(NULL, name, value);
     }
     
     return expr;

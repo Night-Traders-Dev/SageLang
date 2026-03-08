@@ -19,6 +19,8 @@ typedef struct Module {
     char* name;              // Module name (e.g., "math", "io")
     char* path;              // Full file path to module
     char* source;            // Persistent source buffer for AST/token lifetime
+    Stmt* ast;               // Parsed AST retained for function/method lifetimes
+    Stmt* ast_tail;          // Tail pointer for incremental parsing
     Environment* env;        // Module's exported environment
     bool is_loaded;          // Whether module has been loaded
     bool is_loading;         // Circular dependency detection

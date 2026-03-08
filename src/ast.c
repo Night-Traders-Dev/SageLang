@@ -302,5 +302,176 @@ Stmt* new_import_stmt(char* module_name, char** items, char** item_aliases, int 
     stmt->as.import.item_count = item_count;
     stmt->as.import.alias = alias;
     stmt->as.import.import_all = import_all;
+    stmt->next = NULL;
     return stmt;
+}
+
+static void free_case_clause(CaseClause* clause) {
+    if (clause == NULL) {
+        return;
+    }
+
+    free_expr(clause->pattern);
+    free_stmt(clause->body);
+    free(clause);
+}
+
+static void free_catch_clause(CatchClause* clause) {
+    if (clause == NULL) {
+        return;
+    }
+
+    free_stmt(clause->body);
+    free(clause);
+}
+
+void free_expr(Expr* expr) {
+    if (expr == NULL) {
+        return;
+    }
+
+    switch (expr->type) {
+        case EXPR_STRING:
+            free(expr->as.string.value);
+            break;
+        case EXPR_BINARY:
+            free_expr(expr->as.binary.left);
+            free_expr(expr->as.binary.right);
+            break;
+        case EXPR_CALL:
+            free_expr(expr->as.call.callee);
+            for (int i = 0; i < expr->as.call.arg_count; i++) {
+                free_expr(expr->as.call.args[i]);
+            }
+            free(expr->as.call.args);
+            break;
+        case EXPR_ARRAY:
+            for (int i = 0; i < expr->as.array.count; i++) {
+                free_expr(expr->as.array.elements[i]);
+            }
+            free(expr->as.array.elements);
+            break;
+        case EXPR_INDEX:
+            free_expr(expr->as.index.array);
+            free_expr(expr->as.index.index);
+            break;
+        case EXPR_DICT:
+            for (int i = 0; i < expr->as.dict.count; i++) {
+                free(expr->as.dict.keys[i]);
+                free_expr(expr->as.dict.values[i]);
+            }
+            free(expr->as.dict.keys);
+            free(expr->as.dict.values);
+            break;
+        case EXPR_TUPLE:
+            for (int i = 0; i < expr->as.tuple.count; i++) {
+                free_expr(expr->as.tuple.elements[i]);
+            }
+            free(expr->as.tuple.elements);
+            break;
+        case EXPR_SLICE:
+            free_expr(expr->as.slice.array);
+            free_expr(expr->as.slice.start);
+            free_expr(expr->as.slice.end);
+            break;
+        case EXPR_GET:
+            free_expr(expr->as.get.object);
+            break;
+        case EXPR_SET:
+            free_expr(expr->as.set.object);
+            free_expr(expr->as.set.value);
+            break;
+        case EXPR_NUMBER:
+        case EXPR_BOOL:
+        case EXPR_NIL:
+        case EXPR_VARIABLE:
+            break;
+    }
+
+    free(expr);
+}
+
+void free_stmt(Stmt* stmt) {
+    while (stmt != NULL) {
+        Stmt* next = stmt->next;
+
+        switch (stmt->type) {
+            case STMT_PRINT:
+                free_expr(stmt->as.print.expression);
+                break;
+            case STMT_EXPRESSION:
+                free_expr(stmt->as.expression);
+                break;
+            case STMT_LET:
+                free_expr(stmt->as.let.initializer);
+                break;
+            case STMT_IF:
+                free_expr(stmt->as.if_stmt.condition);
+                free_stmt(stmt->as.if_stmt.then_branch);
+                free_stmt(stmt->as.if_stmt.else_branch);
+                break;
+            case STMT_BLOCK:
+                free_stmt(stmt->as.block.statements);
+                break;
+            case STMT_WHILE:
+                free_expr(stmt->as.while_stmt.condition);
+                free_stmt(stmt->as.while_stmt.body);
+                break;
+            case STMT_PROC:
+                free(stmt->as.proc.params);
+                free_stmt(stmt->as.proc.body);
+                break;
+            case STMT_FOR:
+                free_expr(stmt->as.for_stmt.iterable);
+                free_stmt(stmt->as.for_stmt.body);
+                break;
+            case STMT_RETURN:
+                free_expr(stmt->as.ret.value);
+                break;
+            case STMT_CLASS:
+                free_stmt(stmt->as.class_stmt.methods);
+                break;
+            case STMT_MATCH:
+                free_expr(stmt->as.match_stmt.value);
+                for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+                    free_case_clause(stmt->as.match_stmt.cases[i]);
+                }
+                free(stmt->as.match_stmt.cases);
+                free_stmt(stmt->as.match_stmt.default_case);
+                break;
+            case STMT_DEFER:
+                free_stmt(stmt->as.defer.statement);
+                break;
+            case STMT_TRY:
+                free_stmt(stmt->as.try_stmt.try_block);
+                for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+                    free_catch_clause(stmt->as.try_stmt.catches[i]);
+                }
+                free(stmt->as.try_stmt.catches);
+                free_stmt(stmt->as.try_stmt.finally_block);
+                break;
+            case STMT_RAISE:
+                free_expr(stmt->as.raise.exception);
+                break;
+            case STMT_YIELD:
+                free_expr(stmt->as.yield_stmt.value);
+                break;
+            case STMT_IMPORT:
+                free(stmt->as.import.module_name);
+                for (int i = 0; i < stmt->as.import.item_count; i++) {
+                    free(stmt->as.import.items[i]);
+                    free(stmt->as.import.item_aliases[i]);
+                }
+                free(stmt->as.import.items);
+                free(stmt->as.import.item_aliases);
+                free(stmt->as.import.alias);
+                break;
+            case STMT_BREAK:
+            case STMT_CONTINUE:
+                break;
+        }
+
+        free(stmt);
+        stmt = next;
+    }
 }
