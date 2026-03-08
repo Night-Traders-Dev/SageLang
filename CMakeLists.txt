@@ -70,6 +70,7 @@ endif()
 
 set(SAGE_CORE_SOURCES
     src/ast.c
+    src/compiler.c
     src/env.c
     src/gc.c
     src/interpreter.c
@@ -85,6 +86,7 @@ set(SAGE_MAIN_SOURCE
 
 set(SAGE_HEADERS
     include/ast.h
+    include/compiler.h
     include/env.h
     include/gc.h
     include/interpreter.h

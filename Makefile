@@ -30,6 +30,7 @@ endif
 
 CORE_SOURCES = \
     $(SRC_DIR)/ast.c \
+    $(SRC_DIR)/compiler.c \
     $(SRC_DIR)/env.c \
     $(SRC_DIR)/gc.c \
     $(SRC_DIR)/interpreter.c \
@@ -49,6 +50,7 @@ endif
 # Headers
 HEADERS = \
     $(INC_DIR)/ast.h \
+    $(INC_DIR)/compiler.h \
     $(INC_DIR)/env.h \
     $(INC_DIR)/gc.h \
     $(INC_DIR)/interpreter.h \
@@ -164,6 +166,13 @@ test: $(TARGET)
 	@echo ""
 	@echo "Test 4: Bundled Libraries"
 	@./$(TARGET) testing/lib_suite.sage && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 5: Phase 10 C Backend"
+	@mkdir -p .tmp
+	@./$(TARGET) --emit-c testing/compiler_smoke.sage -o .tmp/compiler_smoke.c
+	@./$(TARGET) --compile testing/compiler_smoke.sage -o .tmp/compiler_smoke
+	@./.tmp/compiler_smoke > .tmp/compiler_smoke.out
+	@diff -u testing/compiler_smoke.expected .tmp/compiler_smoke.out && echo "✅ Pass" || echo "❌ Fail"
 
 # ============================================================================
 # Cleanup
