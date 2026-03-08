@@ -8,7 +8,7 @@
 
 CC = gcc
 CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L
-LDFLAGS = -lm -lpthread
+LDFLAGS = -lm -lpthread -ldl
 
 # Directories
 SRC_DIR = src

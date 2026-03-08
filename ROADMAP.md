@@ -317,18 +317,25 @@ A cross-cutting audit and hardening pass across the entire codebase.
 - [ ] Assembly constraint syntax
 - [ ] Support for multiple architectures (ARM, RISC-V)
 
-#### Pointer Arithmetic & Raw Memory
-- [ ] Pointer types (`*T`, `*const T`, `*mut T`)
-- [ ] Address-of operator (`&`, `&mut`)
-- [ ] Dereference operator (`*`)
-- [ ] Pointer arithmetic
-- [ ] Memory-mapped I/O support
-- [ ] Unsafe blocks for raw operations
+#### Pointer Arithmetic & Raw Memory ✅
+- [x] **`mem_alloc(size)`** - Allocate raw memory (zero-initialized, capped at 64MB)
+- [x] **`mem_free(ptr)`** - Free allocated memory
+- [x] **`mem_read(ptr, offset, type)`** - Read value at ptr+offset (`"byte"`, `"int"`, `"double"`, `"string"`)
+- [x] **`mem_write(ptr, offset, type, val)`** - Write value at ptr+offset
+- [x] **`mem_size(ptr)`** - Get allocation size
+- [x] **`addressof(val)`** - Get memory address of a value (as number)
+- [x] **VAL_POINTER type** - New value type for raw memory handles with bounds checking
+- [x] **Test coverage** - 5 automated tests for memory operations
 
-#### Foreign Function Interface (FFI)
-- [ ] C function calling convention
-- [ ] External function declarations
-- [ ] Dynamic library loading
+#### Foreign Function Interface (FFI) ✅
+- [x] **`ffi_open(path)`** - Load shared library via `dlopen()`
+- [x] **`ffi_call(lib, name, ret_type, args)`** - Call C function via `dlsym()`
+- [x] **`ffi_close(lib)`** - Unload shared library via `dlclose()`
+- [x] **`ffi_sym(lib, name)`** - Check if symbol exists
+- [x] **Return types**: `"double"`, `"int"`, `"long"`, `"string"`, `"void"`
+- [x] **Argument types**: numbers (as double/int/long), strings (as const char*)
+- [x] **VAL_CLIB type** - New value type for library handles
+- [x] **Test coverage** - 3 automated tests for FFI operations
 - [ ] Struct interop with C
 
 ---
@@ -427,7 +434,7 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ## 📊 Progress Metrics
 
 - **Phases Completed**: 8.5/13 (65%)
-- **Test Suite**: 83 automated tests, 21 categories, 100% pass rate
+- **Test Suite**: 91 automated tests, 23 categories, 100% pass rate
 - **Estimated Completion**: 2026-2027 (self-hosting)
 
 ---
@@ -436,10 +443,18 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ### March 8, 2026
 
+- **Phase 9: Raw Memory Operations**
+- `mem_alloc`, `mem_free`, `mem_read`, `mem_write`, `mem_size`, `addressof` native functions
+- New `VAL_POINTER` type with bounds checking and ownership tracking
+- 5 new automated tests (91 total, 23 categories)
+- **Phase 9: FFI (Foreign Function Interface)**
+- `ffi_open`, `ffi_call`, `ffi_close`, `ffi_sym` for C library interop via dlopen/dlsym
+- New `VAL_CLIB` type for library handles
+- 3 automated tests for FFI operations
 - **Phase 9 Started: Bitwise Operators**
 - Full set of bitwise operators: `&`, `|`, `^`, `~`, `<<`, `>>`
 - Correct C-style operator precedence integrated into parser
-- 6 new automated tests (83 total, 21 categories)
+- 6 new automated tests
 - **Phase 8.5 Complete: Security & Performance Hardening**
 - Full codebase audit: recursion limits, OOM safety, GC pinning, path traversal prevention
 - Dictionary rewritten as O(1) hash table (FNV-1a, open-addressing, backward-shift delete)

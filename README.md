@@ -57,13 +57,15 @@ Sage is a new programming language that combines the readability of Python (inde
 - **Indexing**: Access individual characters
 - **Conversion**: `str()` function for number-to-string conversion
 
-### Standard Library (30+ Native Functions)
+### Standard Library (35+ Native Functions)
 - **Core**: `print()`, `input()`, `clock()`, `tonumber()`, `str()`, `len()`
 - **Arrays**: `push()`, `pop()`, `range()`, `slice()`
 - **Strings**: `split()`, `join()`, `replace()`, `upper()`, `lower()`, `strip()`
 - **Dictionaries**: `dict_keys()`, `dict_values()`, `dict_has()`, `dict_delete()`
 - **GC**: `gc_collect()`, `gc_stats()`, `gc_enable()`, `gc_disable()`
 - **Generators**: `next()` for iterator protocol
+- **FFI**: `ffi_open()`, `ffi_call()`, `ffi_close()`, `ffi_sym()`
+- **Memory**: `mem_alloc()`, `mem_free()`, `mem_read()`, `mem_write()`, `mem_size()`, `addressof()`
 
 ## 🛠 Building Sage
 
@@ -305,9 +307,9 @@ gc_enable()
 - [x] **Phase 8.5: Security & Performance Hardening** (recursion limits, OOM safety, hash table dicts, GC env integration, test suite) ✅
 - [ ] **Phase 9: Low-Level Programming** ⭐ *In Progress*
   - [x] Bit manipulation (`&`, `|`, `^`, `~`, `<<`, `>>`)
+  - [x] FFI (`ffi_open`, `ffi_call`, `ffi_close`, `ffi_sym`)
+  - [x] Raw memory (`mem_alloc`, `mem_read`, `mem_write`, `mem_free`, `mem_size`, `addressof`)
   - Inline assembly (x86-64, ARM, RISC-V)
-  - Pointer arithmetic and raw memory access
-  - FFI (Foreign Function Interface)
 - [ ] **Phase 10: Compiler Development** (C/LLVM IR codegen)
 - [ ] **Phase 11: Concurrency** (Threads, Async/Await)
 - [ ] **Phase 12: Tooling** (LSP, Formatter, Debugger, REPL)
@@ -364,7 +366,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 
 - **Language**: C
 - **Phases Completed**: 8.5/13 (65%)
-- **Test Suite**: 83 automated tests, 21 categories, 100% pass rate
+- **Test Suite**: 91 automated tests, 23 categories, 100% pass rate
 - **Status**: Advanced Development
 - **License**: MIT
 - **Current Version**: v0.9.0-dev

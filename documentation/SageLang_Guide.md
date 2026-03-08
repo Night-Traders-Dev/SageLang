@@ -385,6 +385,16 @@ SageLang provides built-in functions injected into global environment via `init_
 | `gc_stats()` | `() → dict` | Get GC statistics |
 | `gc_enable()`, `gc_disable()` | `() → nil` | Control automatic GC |
 | `next(gen)` | `generator → value` | Resume generator, get next yielded value |
+| `ffi_open(path)` | `string → clib` | Open shared library via dlopen |
+| `ffi_call(lib, func, ret, ...)` | `(clib, string, string, ...) → value` | Call C function in library |
+| `ffi_sym(lib, name)` | `(clib, string) → bool` | Check if symbol exists in library |
+| `ffi_close(lib)` | `clib → nil` | Close shared library handle |
+| `mem_alloc(size)` | `number → pointer` | Allocate raw memory (zero-initialized) |
+| `mem_free(ptr)` | `pointer → nil` | Free allocated memory |
+| `mem_read(ptr, off, type)` | `(pointer, number, string) → value` | Read value at ptr+offset |
+| `mem_write(ptr, off, type, val)` | `(pointer, number, string, value) → nil` | Write value at ptr+offset |
+| `mem_size(ptr)` | `pointer → number` | Get allocation size |
+| `addressof(val)` | `value → number` | Get memory address of a value |
 
 ### 2.8 Module System (module.h / module.c)
 
@@ -631,6 +641,60 @@ let x = 7
 let bit2 = (x >> 2) & 1
 print bit2 == 1    # true
 ```
+
+**Foreign Function Interface (FFI)**:
+```sagelang
+# Open a shared C library
+let libm = ffi_open("libm.so.6")
+
+# Call C functions with return type and arguments
+let result = ffi_call(libm, "sqrt", "double", 144.0)
+print result       # 12
+
+let s = ffi_call(libm, "sin", "double", 0.0)
+print s            # 0
+
+# Check if a symbol exists
+print ffi_sym(libm, "cos")    # true
+print ffi_sym(libm, "bogus")  # false
+
+# Close when done
+ffi_close(libm)
+
+# Call libc functions
+let libc = ffi_open("libc.so.6")
+let n = ffi_call(libc, "strlen", "long", "hello")
+print n            # 5
+ffi_close(libc)
+```
+
+FFI supports return types: `"double"`, `"int"`, `"long"`, `"string"`, `"void"`, with up to 3 arguments (numeric or string).
+
+**Raw Memory Operations**:
+```sagelang
+# Allocate 32 bytes of raw memory
+let buf = mem_alloc(32)
+print mem_size(buf)    # 32
+
+# Write and read different types
+mem_write(buf, 0, "byte", 42)
+print mem_read(buf, 0, "byte")     # 42
+
+mem_write(buf, 4, "int", 12345)
+print mem_read(buf, 4, "int")      # 12345
+
+mem_write(buf, 8, "double", 3.14)
+print mem_read(buf, 8, "double")   # 3.14
+
+# Get memory address of any value
+let arr = [1, 2, 3]
+print addressof(arr)   # memory address as number
+
+# Free when done
+mem_free(buf)
+```
+
+Supported types for `mem_read`/`mem_write`: `"byte"` (1 byte), `"int"` (4 bytes), `"double"` (8 bytes), `"string"` (read-only, null-terminated).
 
 ---
 
@@ -1239,6 +1303,9 @@ str(x) tonumber(s) input() clock()
 dict_keys(d) dict_values(d) dict_has(d, k) dict_delete(d, k)
 gc_collect() gc_stats() gc_enable() gc_disable()
 next(gen)
+ffi_open(path) ffi_call(lib, fn, ret, ...) ffi_sym(lib, name) ffi_close(lib)
+mem_alloc(n) mem_free(ptr) mem_read(ptr, off, type) mem_write(ptr, off, type, val)
+mem_size(ptr) addressof(val)
 ```
 
 ### Operators

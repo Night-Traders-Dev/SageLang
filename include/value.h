@@ -3,6 +3,8 @@
 #ifndef SAGE_VALUE_H
 #define SAGE_VALUE_H
 
+#include <stddef.h> // size_t
+
 // Forward declarations
 typedef struct Value Value;
 typedef struct ClassValue ClassValue;
@@ -90,6 +92,19 @@ typedef struct {
     Module* module;
 } ModuleValue;
 
+// Phase 9: FFI - C library handle
+typedef struct {
+    void* handle;   // dlopen handle
+    char* name;     // library name for display
+} CLibValue;
+
+// Phase 9: Raw pointer/memory handle
+typedef struct {
+    void* ptr;      // Raw memory pointer
+    size_t size;    // Allocated size (0 if external/unknown)
+    int owned;      // Whether we should free this on cleanup
+} PointerValue;
+
 typedef enum {
     VAL_NUMBER,
     VAL_BOOL,
@@ -104,7 +119,9 @@ typedef enum {
     VAL_INSTANCE,
     VAL_MODULE,
     VAL_EXCEPTION,
-    VAL_GENERATOR // NEW: Generator type
+    VAL_GENERATOR,
+    VAL_CLIB,      // Phase 9: FFI library handle
+    VAL_POINTER    // Phase 9: Raw memory pointer
 } ValueType;
 
 struct Value {
@@ -122,7 +139,9 @@ struct Value {
         InstanceValue* instance;
         ModuleValue* module;
         ExceptionValue* exception;
-        GeneratorValue* generator; // NEW: Generator value
+        GeneratorValue* generator;
+        CLibValue* clib;        // Phase 9: FFI library handle
+        PointerValue* pointer;  // Phase 9: Raw memory pointer
     } as;
 };
 
@@ -139,7 +158,9 @@ struct Value {
 #define IS_INSTANCE(v) ((v).type == VAL_INSTANCE)
 #define IS_MODULE(v) ((v).type == VAL_MODULE)
 #define IS_EXCEPTION(v) ((v).type == VAL_EXCEPTION)
-#define IS_GENERATOR(v) ((v).type == VAL_GENERATOR) // NEW
+#define IS_GENERATOR(v) ((v).type == VAL_GENERATOR)
+#define IS_CLIB(v) ((v).type == VAL_CLIB)
+#define IS_POINTER(v) ((v).type == VAL_POINTER)
 
 // Macros for accessing values
 #define AS_NUMBER(v) ((v).as.number)
@@ -153,7 +174,9 @@ struct Value {
 #define AS_INSTANCE(v) ((v).as.instance)
 #define AS_MODULE(v) ((v).as.module->module)
 #define AS_EXCEPTION(v) ((v).as.exception)
-#define AS_GENERATOR(v) ((v).as.generator) // NEW
+#define AS_GENERATOR(v) ((v).as.generator)
+#define AS_CLIB(v) ((v).as.clib)
+#define AS_POINTER(v) ((v).as.pointer)
 
 // Constructors
 Value val_number(double value);
@@ -170,7 +193,9 @@ Value val_class(ClassValue* class_val);
 Value val_instance(InstanceValue* instance);
 Value val_module(Module* module);
 Value val_exception(const char* message);
-Value val_generator(void* body, void* params, int param_count, Env* closure); // NEW
+Value val_generator(void* body, void* params, int param_count, Env* closure);
+Value val_clib(void* handle, const char* name); // Phase 9: FFI
+Value val_pointer(void* ptr, size_t size, int owned); // Phase 9: Raw memory
 
 // Helpers
 void print_value(Value v);
