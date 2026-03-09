@@ -11,7 +11,7 @@ class PIOAssembler:
     proc parse(self, source):
         # Pass 1: Resolve Labels
         let instr_count = 0
-        let lines = source.split("\n")
+        let lines = split(source, "\n")
         
         for line in lines:
             # Strip comments and whitespace
@@ -21,14 +21,14 @@ class PIOAssembler:
             
             # Save label addresses
             if (line.endswith(":")):
-                let label_name = line.replace(":", "")
+                let label_name = replace(line, ":", "")
                 self.labels[label_name] = instr_count
             else:
                 instr_count = instr_count + 1
 
         # Pass 2: Generate Opcodes
         for line in lines:
-            line = line.split("#")[0].strip()
+            line = strip(split(line, "#")[0])
             if (line == "" or line.endswith(":")):
                 continue
             
@@ -38,7 +38,7 @@ class PIOAssembler:
         return self.opcodes
 
     proc encode_instruction(self, line):
-        let parts = line.split(" ")
+        let parts = split(line, " ")
         let instr = parts[0]
         let opcode = 0
         
