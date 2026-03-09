@@ -158,6 +158,11 @@ static Expr* fold_expr(Expr* expr) {
             expr->as.index.array = fold_expr(expr->as.index.array);
             expr->as.index.index = fold_expr(expr->as.index.index);
             break;
+        case EXPR_INDEX_SET:
+            expr->as.index_set.array = fold_expr(expr->as.index_set.array);
+            expr->as.index_set.index = fold_expr(expr->as.index_set.index);
+            expr->as.index_set.value = fold_expr(expr->as.index_set.value);
+            break;
         case EXPR_DICT:
             for (int i = 0; i < expr->as.dict.count; i++) {
                 expr->as.dict.values[i] = fold_expr(expr->as.dict.values[i]);

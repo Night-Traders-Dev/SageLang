@@ -1,5 +1,62 @@
 # SageLang Updates
 
+## March 9, 2026 - Phase 12 Complete: Tooling Ecosystem
+
+Phase 12 delivers a complete developer tooling ecosystem for SageLang: an interactive REPL, code formatter, linter, syntax highlighting, and a Language Server Protocol (LSP) server.
+
+### REPL (Read-Eval-Print Loop)
+
+- **`sage` (no args) or `sage --repl`** - Launches interactive REPL
+- **Multi-line block support** - Automatic continuation for indented blocks (if/while/proc/class)
+- **Error recovery** - Parse and runtime errors displayed without exiting the session
+- **Built-in commands** - `:help` for usage info, `:quit` to exit
+
+### Code Formatter
+
+- **`sage fmt <file>`** - Format a Sage source file in place
+- **`sage fmt --check <file>`** - Check formatting without modifying the file (exit code 1 if changes needed)
+- Normalizes indentation, spacing, and blank lines for consistent style
+
+### Linter
+
+- **`sage lint <file>`** - Static analysis with 13 rules across three categories
+- **Error rules (E001-E003)** - Syntax and structural errors
+- **Warning rules (W001-W005)** - Potential bugs and bad practices
+- **Style rules (S001-S005)** - Code style and naming conventions
+- Reports file, line, rule code, and message for each finding
+
+### Syntax Highlighting
+
+- **TextMate grammar** - `editors/sage.tmLanguage.json` for any TextMate-compatible editor
+- **VSCode extension** - `editors/vscode/` with language configuration and theme support
+
+### Language Server Protocol (LSP)
+
+- **`sage --lsp`** - LSP server mode integrated into the main `sage` binary
+- **`sage-lsp` standalone binary** - Dedicated LSP server for editor integration
+- **Diagnostics** - Real-time error and warning reporting on save
+- **Completion** - Keyword and symbol completions
+- **Hover** - Type information and documentation on hover
+- **Formatting** - Format-on-save via `textDocument/formatting`
+
+### Files Modified/Created
+
+- `src/repl.c` - REPL implementation with multi-line support and error recovery
+- `src/formatter.c` - Code formatter with in-place and check modes
+- `src/linter.c` - Linter with 13 rules (errors, warnings, style)
+- `src/lsp.c` - LSP server (diagnostics, completion, hover, formatting)
+- `include/repl.h`, `include/formatter.h`, `include/linter.h`, `include/lsp.h` - Headers
+- `src/main.c` - CLI dispatch for `--repl`, `fmt`, `lint`, `--lsp`
+- `editors/sage.tmLanguage.json` - TextMate grammar for syntax highlighting
+- `editors/vscode/` - VSCode extension (package.json, language configuration)
+
+### Test Suite
+
+- 4 new compiler tests (Tests 25-28): REPL, formatter, linter, LSP
+- Total: 112 interpreter tests across 28 categories + 28 compiler tests, all passing
+
+---
+
 ## March 9, 2026 - Phase 11 Complete: Concurrency & Parallelism
 
 Phase 11 brings threading, async/await, native standard library modules, and expanded compiler backends.

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <setjmp.h>
 #include "lexer.h"
 #include "token.h"
 #include "ast.h"
@@ -13,8 +14,16 @@
 #include "compiler.h"
 #include "llvm_backend.h"
 #include "codegen.h"
+#include "repl.h"
+#include "formatter.h"
+#include "linter.h"
+#include "lsp.h"
 
 extern Environment* g_global_env;
+
+// Phase 12: REPL error recovery globals
+int g_repl_mode = 0;
+jmp_buf g_repl_error_jmp;
 
 static Stmt* g_program_ast = NULL;
 static Stmt* g_program_ast_tail = NULL;
@@ -42,8 +51,10 @@ static void cleanup_runtime_state(void) {
 
 static void print_usage(FILE* stream) {
     fprintf(stream,
-            "Usage: sage [path]\n"
-            "       sage -c \"source\"\n"
+            "Usage: sage                    Start interactive REPL\n"
+            "       sage [path]             Run a Sage source file\n"
+            "       sage --repl             Start interactive REPL\n"
+            "       sage -c \"source\"        Execute source string\n"
             "       sage --emit-c <input.sage> [-o output.c] [-O0..3] [-g]\n"
             "       sage --compile <input.sage> [-o output] [--cc compiler] [-O0..3] [-g]\n"
             "       sage --emit-llvm <input.sage> [-o output.ll] [-O0..3] [-g]\n"
@@ -51,7 +62,11 @@ static void print_usage(FILE* stream) {
             "       sage --emit-asm <input.sage> [-o output.s] [--target arch] [-O0..3]\n"
             "       sage --compile-native <input.sage> [-o output] [--target arch] [-O0..3]\n"
             "       sage --emit-pico-c <input.sage> [-o output.c]\n"
-            "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n");
+            "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n"
+            "       sage fmt <file>          Format a Sage source file in-place\n"
+            "       sage fmt --check <file>  Check if file is already formatted\n"
+            "       sage lint <file>         Lint a Sage source file\n"
+            "       sage --lsp              Start LSP server (stdin/stdout)\n");
 }
 
 static int parse_codegen_options(int argc, const char* argv[], int start_index,
@@ -202,6 +217,207 @@ static char* read_file(const char* path) {
     return buffer;
 }
 
+// Phase 12: Print a value for the REPL (with type-aware formatting)
+static void repl_print_value(Value v) {
+    if (IS_NIL(v)) return;  // Don't print nil results
+    if (IS_STRING(v)) {
+        printf("\"%s\"\n", AS_STRING(v));
+    } else {
+        print_value(v);
+        printf("\n");
+    }
+}
+
+// Phase 12: Check if a line ends with ':' (indicating a block start)
+static int line_starts_block(const char* line) {
+    size_t len = strlen(line);
+    // Walk backwards past whitespace
+    while (len > 0 && (line[len - 1] == ' ' || line[len - 1] == '\t' ||
+                       line[len - 1] == '\r' || line[len - 1] == '\n')) {
+        len--;
+    }
+    return (len > 0 && line[len - 1] == ':');
+}
+
+// Phase 12: Read a line from stdin with a prompt
+static char* repl_readline(const char* prompt) {
+    printf("%s", prompt);
+    fflush(stdout);
+
+    size_t capacity = 256;
+    char* line = malloc(capacity);
+    if (!line) return NULL;
+
+    size_t len = 0;
+    int c;
+    while ((c = fgetc(stdin)) != EOF && c != '\n') {
+        if (len + 1 >= capacity) {
+            capacity *= 2;
+            char* new_line = realloc(line, capacity);
+            if (!new_line) { free(line); return NULL; }
+            line = new_line;
+        }
+        line[len++] = (char)c;
+    }
+
+    if (c == EOF && len == 0) {
+        free(line);
+        return NULL;  // EOF with no input
+    }
+
+    line[len] = '\0';
+    return line;
+}
+
+// Phase 12: Track REPL source buffers (tokens point into these)
+typedef struct ReplBuf {
+    char* data;
+    struct ReplBuf* next;
+} ReplBuf;
+
+static ReplBuf* g_repl_buffers = NULL;
+
+static void repl_keep_buffer(char* buf) {
+    ReplBuf* node = malloc(sizeof(ReplBuf));
+    node->data = buf;
+    node->next = g_repl_buffers;
+    g_repl_buffers = node;
+}
+
+static void repl_free_buffers(void) {
+    ReplBuf* cur = g_repl_buffers;
+    while (cur) {
+        ReplBuf* next = cur->next;
+        free(cur->data);
+        free(cur);
+        cur = next;
+    }
+    g_repl_buffers = NULL;
+}
+
+// Phase 12: Interactive REPL
+static void run_repl(void) {
+    printf("Sage REPL v0.12.0\n");
+    printf("Type :help for help, :quit to exit.\n");
+
+    Env* env = env_create(NULL);
+    g_global_env = env;
+    init_stdlib(env);
+    g_repl_mode = 1;
+
+    while (1) {
+        char* line = repl_readline("sage> ");
+        if (line == NULL) {
+            // EOF (Ctrl-D)
+            printf("\n");
+            break;
+        }
+
+        // Skip empty lines
+        if (line[0] == '\0') {
+            free(line);
+            continue;
+        }
+
+        // Handle REPL commands
+        if (strcmp(line, ":quit") == 0 || strcmp(line, ":exit") == 0) {
+            free(line);
+            break;
+        }
+
+        if (strcmp(line, ":help") == 0) {
+            printf("Sage REPL Commands:\n");
+            printf("  :help       Show this help message\n");
+            printf("  :quit       Exit the REPL (also :exit or Ctrl-D)\n");
+            printf("\n");
+            printf("Enter Sage expressions and statements.\n");
+            printf("Multi-line blocks (if, for, while, proc, class) are\n");
+            printf("detected automatically when a line ends with ':'.\n");
+            printf("End a block with an empty line.\n");
+            free(line);
+            continue;
+        }
+
+        // Multi-line input: if line ends with ':', read continuation lines
+        size_t buf_capacity = 1024;
+        size_t buf_len = 0;
+        // Declared volatile to survive longjmp from error recovery
+        char* volatile buffer = malloc(buf_capacity);
+        if (!buffer) { free(line); continue; }
+
+        // Copy first line
+        size_t line_len = strlen(line);
+        if (line_len + 2 > buf_capacity) {
+            buf_capacity = line_len + 256;
+            buffer = realloc(buffer, buf_capacity);
+        }
+        memcpy(buffer, line, line_len);
+        buffer[line_len] = '\n';
+        buf_len = line_len + 1;
+
+        if (line_starts_block(line)) {
+            // Read continuation lines until empty line
+            int indent_depth = 1;
+            (void)indent_depth;
+
+            while (1) {
+                char* cont = repl_readline("...   ");
+                if (cont == NULL) {
+                    // EOF during multi-line input
+                    break;
+                }
+
+                // Empty line ends the block
+                if (cont[0] == '\0') {
+                    free(cont);
+                    break;
+                }
+
+                size_t cont_len = strlen(cont);
+                // Ensure buffer has enough space
+                while (buf_len + cont_len + 2 > buf_capacity) {
+                    buf_capacity *= 2;
+                    buffer = realloc(buffer, buf_capacity);
+                }
+                memcpy(buffer + buf_len, cont, cont_len);
+                buf_len += cont_len;
+                buffer[buf_len++] = '\n';
+
+                free(cont);
+            }
+        }
+
+        buffer[buf_len] = '\0';
+        free(line);
+
+        // Parse and interpret with error recovery
+        if (setjmp(g_repl_error_jmp) == 0) {
+            init_lexer(buffer);
+            parser_init();
+
+            while (1) {
+                Stmt* stmt = parse();
+                if (stmt == NULL) break;
+                retain_program_stmt(stmt);
+                ExecResult result = interpret(stmt, env);
+
+                // If it was an expression statement, print the result
+                if (stmt->type == STMT_EXPRESSION && !IS_NIL(result.value)) {
+                    repl_print_value(result.value);
+                }
+            }
+        }
+        // If setjmp returned non-zero, an error occurred and we recovered
+
+        // Don't free buffer -- tokens in the AST point into it.
+        // Instead, keep it alive for the session.
+        repl_keep_buffer((char*)buffer);
+    }
+
+    g_repl_mode = 0;
+    repl_free_buffers();
+}
+
 static void run(const char* source) {
     init_lexer(source);
     parser_init();
@@ -233,8 +449,13 @@ int main(int argc, const char* argv[]) {
     init_module_system();
 
     if (argc == 1) {
-        print_usage(stderr);
-        CLEANUP_AND_EXIT(64);
+        // No arguments: start REPL
+        run_repl();
+    } else if (argc == 2 && strcmp(argv[1], "--repl") == 0) {
+        // Explicit REPL flag
+        run_repl();
+    } else if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+        print_usage(stdout);
     } else if (argc == 3 && strcmp(argv[1], "-c") == 0) {
         run(argv[2]);
     } else if (argc >= 3 && strcmp(argv[1], "--emit-c") == 0) {
@@ -462,6 +683,71 @@ int main(int argc, const char* argv[]) {
 
         printf("Built UF2: %s\n", uf2_path);
         free(source);
+    } else if (argc >= 3 && strcmp(argv[1], "fmt") == 0) {
+        // Phase 12: Code formatter
+        int check_mode = 0;
+        const char* fmt_file = NULL;
+
+        if (argc == 3) {
+            fmt_file = argv[2];
+        } else if (argc == 4 && strcmp(argv[2], "--check") == 0) {
+            check_mode = 1;
+            fmt_file = argv[3];
+        } else {
+            fprintf(stderr, "Usage: sage fmt [--check] <file>\n");
+            CLEANUP_AND_EXIT(64);
+        }
+
+        FormatOptions fmt_opts = format_default_options();
+
+        if (check_mode) {
+            /* Read original file */
+            FILE* f = fopen(fmt_file, "rb");
+            if (!f) {
+                fprintf(stderr, "sage fmt: cannot open '%s'\n", fmt_file);
+                CLEANUP_AND_EXIT(74);
+            }
+            fseek(f, 0, SEEK_END);
+            long sz = ftell(f);
+            rewind(f);
+            char* original = malloc((size_t)sz + 1);
+            size_t nread = fread(original, 1, (size_t)sz, f);
+            original[nread] = '\0';
+            fclose(f);
+
+            char* formatted = format_source(original, fmt_opts);
+            int differs = (strcmp(original, formatted) != 0);
+            free(original);
+            free(formatted);
+
+            if (differs) {
+                fprintf(stderr, "%s: needs formatting\n", fmt_file);
+                CLEANUP_AND_EXIT(1);
+            } else {
+                printf("%s: already formatted\n", fmt_file);
+            }
+        } else {
+            if (!format_file(fmt_file, NULL, fmt_opts)) {
+                CLEANUP_AND_EXIT(1);
+            }
+            printf("Formatted: %s\n", fmt_file);
+        }
+    } else if (argc >= 3 && strcmp(argv[1], "lint") == 0) {
+        // Phase 12: Code linter
+        const char* lint_file_path = argv[2];
+        LintOptions lint_opts = lint_default_options();
+        int issues = lint_file(lint_file_path, lint_opts);
+        if (issues < 0) {
+            CLEANUP_AND_EXIT(74);
+        } else if (issues > 0) {
+            fprintf(stderr, "\n%d issue%s found.\n", issues, issues == 1 ? "" : "s");
+            CLEANUP_AND_EXIT(1);
+        } else {
+            printf("No issues found.\n");
+        }
+    } else if (argc == 2 && strcmp(argv[1], "--lsp") == 0) {
+        // Phase 12: Language Server Protocol mode
+        lsp_run();
     } else if (argc == 2) {
         // File mode
         char* source = read_file(argv[1]);

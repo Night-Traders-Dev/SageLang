@@ -310,14 +310,15 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             isel_append(ctx, v);
             return r;
         }
+        case EXPR_INDEX_SET:
         case EXPR_DICT:
         case EXPR_TUPLE:
         case EXPR_SLICE:
         case EXPR_GET:
         case EXPR_SET:
         case EXPR_AWAIT:
-            // TODO: async/await not supported in codegen backend
-            fprintf(stderr, "Codegen backend: unsupported expression type %d (dict/tuple/slice/get/set/await not yet implemented)\n", expr->type);
+            // TODO: not yet supported in codegen backend
+            fprintf(stderr, "Codegen backend: unsupported expression type %d (index_set/dict/tuple/slice/get/set/await not yet implemented)\n", expr->type);
             /* fallthrough */
         default: {
             int r = isel_vreg(ctx);

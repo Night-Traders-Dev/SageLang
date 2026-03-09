@@ -44,6 +44,13 @@ typedef struct {
     Expr* index;
 } IndexExpr;
 
+// Index assignment: arr[i] = val, dict[key] = val
+typedef struct {
+    Expr* array;
+    Expr* index;
+    Expr* value;
+} IndexSetExpr;
+
 // Dictionary literal: {"key1": val1, "key2": val2}
 typedef struct {
     char** keys;
@@ -98,6 +105,7 @@ struct Expr {
         EXPR_SLICE,
         EXPR_GET,
         EXPR_SET,
+        EXPR_INDEX_SET,
         EXPR_AWAIT
     } type;
     union {
@@ -109,6 +117,7 @@ struct Expr {
         CallExpr call;
         ArrayExpr array;
         IndexExpr index;
+        IndexSetExpr index_set;
         DictExpr dict;
         TupleExpr tuple;
         SliceExpr slice;
@@ -273,6 +282,7 @@ Expr* new_bool_expr(int value);
 Expr* new_nil_expr();
 Expr* new_array_expr(Expr** elements, int count);
 Expr* new_index_expr(Expr* array, Expr* index);
+Expr* new_index_set_expr(Expr* array, Expr* index, Expr* value);
 Expr* new_dict_expr(char** keys, Expr** values, int count);
 Expr* new_tuple_expr(Expr** elements, int count);
 Expr* new_slice_expr(Expr* array, Expr* start, Expr* end);

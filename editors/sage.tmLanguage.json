@@ -1,0 +1,178 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Sage",
+  "scopeName": "source.sage",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings-double" },
+    { "include": "#strings-single" },
+    { "include": "#numbers" },
+    { "include": "#proc-definition" },
+    { "include": "#class-definition" },
+    { "include": "#builtin-functions" },
+    { "include": "#constants" },
+    { "include": "#keywords-control" },
+    { "include": "#keywords-other" },
+    { "include": "#storage-types" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "name": "comment.line.number-sign.sage",
+      "match": "#.*$"
+    },
+    "strings-double": {
+      "name": "string.quoted.double.sage",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.sage" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.sage" }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.sage",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "strings-single": {
+      "name": "string.quoted.single.sage",
+      "begin": "'",
+      "end": "'",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.sage" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.sage" }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.sage",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.sage",
+          "match": "\\b[0-9]+\\.[0-9]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.sage",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+    "proc-definition": {
+      "match": "\\b(proc)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
+      "captures": {
+        "1": { "name": "storage.type.sage" },
+        "2": { "name": "entity.name.function.sage" }
+      }
+    },
+    "class-definition": {
+      "match": "\\b(class)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+      "captures": {
+        "1": { "name": "storage.type.sage" },
+        "2": { "name": "entity.name.class.sage" }
+      }
+    },
+    "builtin-functions": {
+      "match": "\\b(str|len|tonumber|clock|input|push|pop|range|slice|split|join|replace|upper|lower|strip|dict_keys|dict_values|dict_has|dict_delete|type|mem_alloc|mem_free|mem_read|mem_write|mem_size|struct_def|struct_new|struct_get|struct_set|struct_size|asm_arch|ffi_open|ffi_close|ffi_call|ffi_sym)\\s*(?=\\()",
+      "name": "support.function.sage"
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.sage",
+          "match": "\\b(true|false|nil)\\b"
+        },
+        {
+          "name": "variable.language.sage",
+          "match": "\\b(self)\\b"
+        },
+        {
+          "name": "entity.name.function.sage",
+          "match": "\\b(init)\\b"
+        }
+      ]
+    },
+    "keywords-control": {
+      "name": "keyword.control.sage",
+      "match": "\\b(if|else|elif|for|while|break|continue|return|try|catch|finally|raise|match|case|default)\\b"
+    },
+    "keywords-other": {
+      "name": "keyword.other.sage",
+      "match": "\\b(let|var|import|from|as|in|async|await|defer|yield|print|and|or|not)\\b"
+    },
+    "storage-types": {
+      "name": "storage.type.sage",
+      "match": "\\b(proc|class)\\b"
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.sage",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.assignment.sage",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.arithmetic.sage",
+          "match": "\\+|-|\\*|/|%"
+        },
+        {
+          "name": "keyword.operator.bitwise.sage",
+          "match": "&|\\||\\^|~|<<|>>"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.section.parens.begin.sage",
+          "match": "\\("
+        },
+        {
+          "name": "punctuation.section.parens.end.sage",
+          "match": "\\)"
+        },
+        {
+          "name": "punctuation.section.brackets.begin.sage",
+          "match": "\\["
+        },
+        {
+          "name": "punctuation.section.brackets.end.sage",
+          "match": "\\]"
+        },
+        {
+          "name": "punctuation.section.braces.begin.sage",
+          "match": "\\{"
+        },
+        {
+          "name": "punctuation.section.braces.end.sage",
+          "match": "\\}"
+        },
+        {
+          "name": "punctuation.separator.colon.sage",
+          "match": ":"
+        },
+        {
+          "name": "punctuation.separator.comma.sage",
+          "match": ","
+        },
+        {
+          "name": "punctuation.accessor.dot.sage",
+          "match": "\\."
+        }
+      ]
+    }
+  }
+}

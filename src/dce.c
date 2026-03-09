@@ -86,6 +86,11 @@ static void collect_used_names_expr(NameSet** used, const Expr* expr) {
             collect_used_names_expr(used, expr->as.index.array);
             collect_used_names_expr(used, expr->as.index.index);
             break;
+        case EXPR_INDEX_SET:
+            collect_used_names_expr(used, expr->as.index_set.array);
+            collect_used_names_expr(used, expr->as.index_set.index);
+            collect_used_names_expr(used, expr->as.index_set.value);
+            break;
         case EXPR_DICT:
             for (int i = 0; i < expr->as.dict.count; i++) {
                 collect_used_names_expr(used, expr->as.dict.values[i]);
@@ -210,6 +215,8 @@ static int has_side_effects(const Expr* expr) {
             return has_side_effects(expr->as.binary.left) || has_side_effects(expr->as.binary.right);
         case EXPR_INDEX:
             return has_side_effects(expr->as.index.array) || has_side_effects(expr->as.index.index);
+        case EXPR_INDEX_SET:
+            return 1; // index_set is always a side effect (assignment)
         case EXPR_ARRAY:
             for (int i = 0; i < expr->as.array.count; i++) {
                 if (has_side_effects(expr->as.array.elements[i])) return 1;

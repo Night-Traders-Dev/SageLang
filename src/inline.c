@@ -86,6 +86,10 @@ static int expr_references_name(const Expr* expr, const char* name) {
         case EXPR_INDEX:
             return expr_references_name(expr->as.index.array, name) ||
                    expr_references_name(expr->as.index.index, name);
+        case EXPR_INDEX_SET:
+            return expr_references_name(expr->as.index_set.array, name) ||
+                   expr_references_name(expr->as.index_set.index, name) ||
+                   expr_references_name(expr->as.index_set.value, name);
         case EXPR_DICT:
             for (int i = 0; i < expr->as.dict.count; i++) {
                 if (expr_references_name(expr->as.dict.values[i], name)) return 1;
@@ -189,6 +193,13 @@ static Expr* substitute_expr(const Expr* expr, Token* params, int param_count, E
         free_expr(result->as.index.index);
         result->as.index.array = substitute_expr(expr->as.index.array, params, param_count, args);
         result->as.index.index = substitute_expr(expr->as.index.index, params, param_count, args);
+    } else if (result->type == EXPR_INDEX_SET) {
+        free_expr(result->as.index_set.array);
+        free_expr(result->as.index_set.index);
+        free_expr(result->as.index_set.value);
+        result->as.index_set.array = substitute_expr(expr->as.index_set.array, params, param_count, args);
+        result->as.index_set.index = substitute_expr(expr->as.index_set.index, params, param_count, args);
+        result->as.index_set.value = substitute_expr(expr->as.index_set.value, params, param_count, args);
     } else if (result->type == EXPR_ARRAY) {
         for (int i = 0; i < result->as.array.count; i++) {
             free_expr(result->as.array.elements[i]);
@@ -270,6 +281,11 @@ static Expr* inline_expr(Expr* expr, InlineCandidate* candidates) {
         case EXPR_INDEX:
             expr->as.index.array = inline_expr(expr->as.index.array, candidates);
             expr->as.index.index = inline_expr(expr->as.index.index, candidates);
+            break;
+        case EXPR_INDEX_SET:
+            expr->as.index_set.array = inline_expr(expr->as.index_set.array, candidates);
+            expr->as.index_set.index = inline_expr(expr->as.index_set.index, candidates);
+            expr->as.index_set.value = inline_expr(expr->as.index_set.value, candidates);
             break;
         case EXPR_DICT:
             for (int i = 0; i < expr->as.dict.count; i++) {

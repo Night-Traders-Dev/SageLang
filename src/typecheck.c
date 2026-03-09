@@ -154,6 +154,12 @@ static SageType infer_expr(TypeMap* map, const Expr* expr) {
         case EXPR_INDEX:
             result = make_type(SAGE_TYPE_UNKNOWN);
             break;
+        case EXPR_INDEX_SET:
+            infer_expr(map, expr->as.index_set.array);
+            infer_expr(map, expr->as.index_set.index);
+            infer_expr(map, expr->as.index_set.value);
+            result = make_type(SAGE_TYPE_UNKNOWN);
+            break;
         case EXPR_SLICE:
             result = make_type(SAGE_TYPE_UNKNOWN);
             break;
