@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "ast.h"
+#include "gc.h"
 #include "lexer.h"
 #include "parser.h"
 #include "pass.h"
@@ -61,26 +62,26 @@ static int llc_new_label(LLVMCompiler* lc) {
 static int llc_add_string(LLVMCompiler* lc, const char* str) {
     if (lc->string_count >= lc->string_cap) {
         lc->string_cap = lc->string_cap ? lc->string_cap * 2 : 16;
-        lc->strings = realloc(lc->strings, sizeof(char*) * (size_t)lc->string_cap);
+        lc->strings = SAGE_REALLOC(lc->strings, sizeof(char*) * (size_t)lc->string_cap);
     }
-    lc->strings[lc->string_count] = strdup(str);
+    lc->strings[lc->string_count] = SAGE_STRDUP(str);
     return lc->string_count++;
 }
 
 static void llc_add_proc(LLVMCompiler* lc, const char* name) {
     if (lc->proc_count >= lc->proc_cap) {
         lc->proc_cap = lc->proc_cap ? lc->proc_cap * 2 : 16;
-        lc->proc_names = realloc(lc->proc_names, sizeof(char*) * (size_t)lc->proc_cap);
+        lc->proc_names = SAGE_REALLOC(lc->proc_names, sizeof(char*) * (size_t)lc->proc_cap);
     }
-    lc->proc_names[lc->proc_count++] = strdup(name);
+    lc->proc_names[lc->proc_count++] = SAGE_STRDUP(name);
 }
 
 static void llc_add_global(LLVMCompiler* lc, const char* name) {
     if (lc->global_count >= lc->global_cap) {
         lc->global_cap = lc->global_cap ? lc->global_cap * 2 : 16;
-        lc->global_names = realloc(lc->global_names, sizeof(char*) * (size_t)lc->global_cap);
+        lc->global_names = SAGE_REALLOC(lc->global_names, sizeof(char*) * (size_t)lc->global_cap);
     }
-    lc->global_names[lc->global_count++] = strdup(name);
+    lc->global_names[lc->global_count++] = SAGE_STRDUP(name);
 }
 
 static void llc_free(LLVMCompiler* lc) {
@@ -117,7 +118,7 @@ static void ll_line(LLVMCompiler* lc, const char* fmt, ...) {
 // ============================================================================
 
 static char* token_to_str(Token tok) {
-    char* s = malloc((size_t)tok.length + 1);
+    char* s = SAGE_ALLOC((size_t)tok.length + 1);
     memcpy(s, tok.start, (size_t)tok.length);
     s[tok.length] = '\0';
     return s;
@@ -298,7 +299,7 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             // Emit arguments
             int* arg_regs = NULL;
             if (expr->as.call.arg_count > 0) {
-                arg_regs = malloc(sizeof(int) * (size_t)expr->as.call.arg_count);
+                arg_regs = SAGE_ALLOC(sizeof(int) * (size_t)expr->as.call.arg_count);
                 for (int i = 0; i < expr->as.call.arg_count; i++) {
                     arg_regs[i] = llvm_emit_expr(lc, expr->as.call.args[i]);
                 }
@@ -353,6 +354,17 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             int idx = llvm_emit_expr(lc, expr->as.index.index);
             int r = llc_new_reg(lc);
             ll_line(lc, "%%%d = call %%SageValue @sage_rt_index(%%SageValue %%%d, %%SageValue %%%d)", r, arr, idx);
+            return r;
+        }
+        case EXPR_DICT:
+        case EXPR_TUPLE:
+        case EXPR_SLICE:
+        case EXPR_GET:
+        case EXPR_SET: {
+            fprintf(stderr, "LLVM backend: unsupported expression type %d (dict/tuple/slice/get/set not yet implemented)\n", expr->type);
+            int r = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+            lc->failed = 1;
             return r;
         }
         default: {
@@ -461,6 +473,9 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             }
             break;
         }
+        case STMT_PROC:
+            // Procs handled at top level
+            break;
         case STMT_FOR:
         case STMT_CLASS:
         case STMT_MATCH:
@@ -471,8 +486,8 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
         case STMT_IMPORT:
         case STMT_BREAK:
         case STMT_CONTINUE:
-        case STMT_PROC:
-            // Procs handled at top level
+            fprintf(stderr, "LLVM backend: unsupported statement type %d (for/class/match/try/raise/defer/yield/import/break/continue not yet implemented)\n", stmt->type);
+            lc->failed = 1;
             break;
     }
 }

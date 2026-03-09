@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "gc.h"
 
 // ============================================================================
 // Function Inlining Pass
@@ -128,7 +129,7 @@ static InlineCandidate* collect_candidates(Stmt* program) {
         // Check for recursion
         if (expr_references_name(ret_expr, name)) continue;
 
-        InlineCandidate* c = malloc(sizeof(InlineCandidate));
+        InlineCandidate* c = SAGE_ALLOC(sizeof(InlineCandidate));
         memcpy(c->name, name, (size_t)(len + 1));
         c->param_count = s->as.proc.param_count;
         c->params = s->as.proc.params;
@@ -186,6 +187,36 @@ static Expr* substitute_expr(const Expr* expr, Token* params, int param_count, E
         free_expr(result->as.index.index);
         result->as.index.array = substitute_expr(expr->as.index.array, params, param_count, args);
         result->as.index.index = substitute_expr(expr->as.index.index, params, param_count, args);
+    } else if (result->type == EXPR_ARRAY) {
+        for (int i = 0; i < result->as.array.count; i++) {
+            free_expr(result->as.array.elements[i]);
+            result->as.array.elements[i] = substitute_expr(expr->as.array.elements[i], params, param_count, args);
+        }
+    } else if (result->type == EXPR_DICT) {
+        for (int i = 0; i < result->as.dict.count; i++) {
+            free_expr(result->as.dict.values[i]);
+            result->as.dict.values[i] = substitute_expr(expr->as.dict.values[i], params, param_count, args);
+        }
+    } else if (result->type == EXPR_TUPLE) {
+        for (int i = 0; i < result->as.tuple.count; i++) {
+            free_expr(result->as.tuple.elements[i]);
+            result->as.tuple.elements[i] = substitute_expr(expr->as.tuple.elements[i], params, param_count, args);
+        }
+    } else if (result->type == EXPR_SLICE) {
+        free_expr(result->as.slice.array);
+        free_expr(result->as.slice.start);
+        free_expr(result->as.slice.end);
+        result->as.slice.array = substitute_expr(expr->as.slice.array, params, param_count, args);
+        result->as.slice.start = substitute_expr(expr->as.slice.start, params, param_count, args);
+        result->as.slice.end = substitute_expr(expr->as.slice.end, params, param_count, args);
+    } else if (result->type == EXPR_GET) {
+        free_expr(result->as.get.object);
+        result->as.get.object = substitute_expr(expr->as.get.object, params, param_count, args);
+    } else if (result->type == EXPR_SET) {
+        free_expr(result->as.set.object);
+        free_expr(result->as.set.value);
+        result->as.set.object = substitute_expr(expr->as.set.object, params, param_count, args);
+        result->as.set.value = substitute_expr(expr->as.set.value, params, param_count, args);
     }
 
     return result;
