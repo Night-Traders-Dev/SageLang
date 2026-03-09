@@ -16,6 +16,7 @@
 #include "ast.h"
 #include "lexer.h"
 #include "parser.h"
+#include "pass.h"
 
 typedef struct NameEntry {
     char* sage_name;
@@ -524,7 +525,7 @@ static void collect_global_lets(Compiler* compiler, Stmt* stmt) {
     }
 }
 
-static Stmt* parse_program(const char* source);
+Stmt* parse_program(const char* source);
 
 static int is_in_import_list(ImportStmt* import, const char* name) {
     for (int i = 0; i < import->item_count; i++) {
@@ -2879,7 +2880,7 @@ static void emit_main_function(Compiler* compiler, Stmt* program, CompilerTarget
     emit_line(compiler, "}");
 }
 
-static Stmt* parse_program(const char* source) {
+Stmt* parse_program(const char* source) {
     init_lexer(source);
     parser_init();
 
@@ -3108,8 +3109,8 @@ static int run_command_with_sdk(char* const argv[], const char* pico_sdk_path) {
     return WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
-static int write_c_output(const char* source, const char* input_path, const char* output_path,
-                          CompilerTarget target) {
+static int write_c_output_internal(const char* source, const char* input_path, const char* output_path,
+                                   CompilerTarget target, int opt_level, int debug_info) {
     FILE* out = fopen(output_path, "wb");
     if (out == NULL) {
         fprintf(stderr, "Could not open compiler output \"%s\": %s\n", output_path, strerror(errno));
@@ -3123,6 +3124,17 @@ static int write_c_output(const char* source, const char* input_path, const char
     compiler.next_unique_id = 1;
 
     Stmt* program = parse_program(source);
+
+    // Run optimization passes if requested
+    if (opt_level > 0) {
+        PassContext pass_ctx;
+        pass_ctx.opt_level = opt_level;
+        pass_ctx.debug_info = debug_info;
+        pass_ctx.verbose = 0;
+        pass_ctx.input_path = input_path;
+        program = run_passes(program, &pass_ctx);
+    }
+
     collect_top_level_symbols(&compiler, program);
 
     if (!compiler.failed) {
@@ -3153,13 +3165,18 @@ static int write_c_output(const char* source, const char* input_path, const char
 }
 
 int compile_source_to_c(const char* source, const char* input_path, const char* output_path) {
-    return write_c_output(source, input_path, output_path, COMPILER_TARGET_HOST);
+    return write_c_output_internal(source, input_path, output_path, COMPILER_TARGET_HOST, 0, 0);
+}
+
+int compile_source_to_c_opt(const char* source, const char* input_path, const char* output_path,
+                            int opt_level, int debug_info) {
+    return write_c_output_internal(source, input_path, output_path, COMPILER_TARGET_HOST, opt_level, debug_info);
 }
 
 int compile_source_to_executable(const char* source, const char* input_path,
                                  const char* c_output_path, const char* exe_output_path,
                                  const char* cc_command) {
-    if (!write_c_output(source, input_path, c_output_path, COMPILER_TARGET_HOST)) {
+    if (!write_c_output_internal(source, input_path, c_output_path, COMPILER_TARGET_HOST, 0, 0)) {
         return 0;
     }
 
@@ -3190,8 +3207,46 @@ int compile_source_to_executable(const char* source, const char* input_path,
     return 1;
 }
 
+int compile_source_to_executable_opt(const char* source, const char* input_path,
+                                     const char* c_output_path, const char* exe_output_path,
+                                     const char* cc_command, int opt_level, int debug_info) {
+    if (!write_c_output_internal(source, input_path, c_output_path, COMPILER_TARGET_HOST, opt_level, debug_info)) {
+        return 0;
+    }
+
+    const char* cc = (cc_command != NULL && cc_command[0] != '\0') ? cc_command : "cc";
+    pid_t pid = fork();
+    if (pid < 0) {
+        fprintf(stderr, "Could not fork compiler process.\n");
+        return 0;
+    }
+
+    if (pid == 0) {
+        if (debug_info) {
+            execlp(cc, cc, "-std=c11", "-g", c_output_path, "-o", exe_output_path, (char*)NULL);
+        } else {
+            execlp(cc, cc, "-std=c11", c_output_path, "-o", exe_output_path, (char*)NULL);
+        }
+        fprintf(stderr, "Could not execute C compiler \"%s\": %s\n", cc, strerror(errno));
+        _exit(127);
+    }
+
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) {
+        fprintf(stderr, "Could not wait for C compiler \"%s\".\n", cc);
+        return 0;
+    }
+
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        fprintf(stderr, "C compiler \"%s\" failed while building \"%s\".\n", cc, exe_output_path);
+        return 0;
+    }
+
+    return 1;
+}
+
 int compile_source_to_pico_c(const char* source, const char* input_path, const char* output_path) {
-    return write_c_output(source, input_path, output_path, COMPILER_TARGET_PICO);
+    return write_c_output_internal(source, input_path, output_path, COMPILER_TARGET_PICO, 0, 0);
 }
 
 int compile_source_to_pico_uf2(const char* source, const char* input_path,
@@ -3252,7 +3307,7 @@ int compile_source_to_pico_uf2(const char* source, const char* input_path,
     snprintf(source_file_name, sizeof(source_file_name), "%s.c", effective_program_name);
     char* source_path = path_join(effective_output_dir, source_file_name);
 
-    if (!write_c_output(source, input_path, source_path, COMPILER_TARGET_PICO)) {
+    if (!write_c_output_internal(source, input_path, source_path, COMPILER_TARGET_PICO, 0, 0)) {
         free(repo_root);
         free(import_path);
         free(build_dir);
