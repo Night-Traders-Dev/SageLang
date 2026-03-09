@@ -21,4 +21,9 @@ Thumbs.db
 temp/
 tmp/
 .tmp/
+build/
+dist/
+obj/
+obj_asan/
+
 
