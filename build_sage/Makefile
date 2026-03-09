@@ -615,6 +615,30 @@ src/module.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/module.c.s
 .PHONY : src/module.c.s
 
+src/net.o: src/net.c.o
+.PHONY : src/net.o
+
+# target to build an object file
+src/net.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/net.c.o
+.PHONY : src/net.c.o
+
+src/net.i: src/net.c.i
+.PHONY : src/net.i
+
+# target to preprocess a source file
+src/net.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/net.c.i
+.PHONY : src/net.c.i
+
+src/net.s: src/net.c.s
+.PHONY : src/net.s
+
+# target to generate assembly for a file
+src/net.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/net.c.s
+.PHONY : src/net.c.s
+
 src/parser.o: src/parser.c.o
 .PHONY : src/parser.o
 
@@ -801,6 +825,9 @@ help:
 	@echo "... src/module.o"
 	@echo "... src/module.i"
 	@echo "... src/module.s"
+	@echo "... src/net.o"
+	@echo "... src/net.i"
+	@echo "... src/net.s"
 	@echo "... src/parser.o"
 	@echo "... src/parser.i"
 	@echo "... src/parser.s"

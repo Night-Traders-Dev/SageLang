@@ -34,6 +34,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/sage.dir/src/main.c.o.d"
   "CMakeFiles/sage.dir/src/module.c.o"
   "CMakeFiles/sage.dir/src/module.c.o.d"
+  "CMakeFiles/sage.dir/src/net.c.o"
+  "CMakeFiles/sage.dir/src/net.c.o.d"
   "CMakeFiles/sage.dir/src/parser.c.o"
   "CMakeFiles/sage.dir/src/parser.c.o.d"
   "CMakeFiles/sage.dir/src/pass.c.o"
