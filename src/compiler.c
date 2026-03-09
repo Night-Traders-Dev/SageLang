@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE
 #include "compiler.h"
 
 #include <ctype.h>
