@@ -375,6 +375,13 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             ll_line(lc, "%%%d = call %%SageValue @sage_rt_index(%%SageValue %%%d, %%SageValue %%%d)", r, arr, idx);
             return r;
         }
+        case EXPR_INDEX_SET: {
+            int arr = llvm_emit_expr(lc, expr->as.index_set.array);
+            int idx = llvm_emit_expr(lc, expr->as.index_set.index);
+            int val = llvm_emit_expr(lc, expr->as.index_set.value);
+            ll_line(lc, "call void @sage_rt_index_set(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", arr, idx, val);
+            return val;
+        }
         case EXPR_DICT: {
             int dict_reg = llc_new_reg(lc);
             ll_line(lc, "%%%d = call %%SageValue @sage_rt_dict_new()", dict_reg);

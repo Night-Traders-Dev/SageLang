@@ -85,6 +85,11 @@ Expr* clone_expr(const Expr* expr) {
             e->as.index.array = clone_expr(expr->as.index.array);
             e->as.index.index = clone_expr(expr->as.index.index);
             break;
+        case EXPR_INDEX_SET:
+            return new_index_set_expr(
+                clone_expr(expr->as.index_set.array),
+                clone_expr(expr->as.index_set.index),
+                clone_expr(expr->as.index_set.value));
         case EXPR_DICT: {
             e->as.dict.count = expr->as.dict.count;
             if (expr->as.dict.count > 0) {

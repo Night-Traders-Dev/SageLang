@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: March 9, 2026
-> **Current Phase**: Phase 11 Complete (Concurrency & Parallelism)
+> **Current Phase**: Phase 12 Complete (Tooling Ecosystem)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -293,8 +293,6 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ---
 
-## 🔮 Future Phases
-
 ### Phase 9: Low-Level Programming & System Features
 **Status**: ✅ Complete
 
@@ -418,18 +416,40 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ---
 
 ### Phase 12: Tooling Ecosystem
-**Status**: 📋 Planned
+**Status**: ✅ **COMPLETE** (March 9, 2026)
 
-#### Developer Tools
-- [ ] Language Server Protocol (LSP) implementation
-- [ ] Syntax highlighting
-- [ ] Code formatter (`sage fmt`)
-- [ ] Linter (`sage lint`)
-- [ ] Debugger integration
-- [ ] Package manager CLI
-- [ ] REPL (Read-Eval-Print Loop)
+#### REPL ✅
+- [x] **Interactive REPL** - `sage` (no args) or `sage --repl` launches interactive mode
+- [x] **Multi-line block support** - Automatic continuation for indented blocks
+- [x] **Error recovery** - Errors displayed without exiting the session
+- [x] **Built-in commands** - `:help`, `:quit` for REPL control
+
+#### Code Formatter ✅
+- [x] **`sage fmt <file>`** - Format Sage source files in place
+- [x] **`sage fmt --check <file>`** - Check formatting without modifying files
+- [x] **Consistent style** - Normalizes indentation, spacing, and blank lines
+
+#### Linter ✅
+- [x] **`sage lint <file>`** - Static analysis with 13 rules
+- [x] **Error rules (E001-E003)** - Syntax and structural errors
+- [x] **Warning rules (W001-W005)** - Potential bugs and bad practices
+- [x] **Style rules (S001-S005)** - Code style and naming conventions
+
+#### Syntax Highlighting ✅
+- [x] **TextMate grammar** - `editors/sage.tmLanguage.json`
+- [x] **VSCode extension** - `editors/vscode/` with full language support
+
+#### Language Server Protocol (LSP) ✅
+- [x] **`sage --lsp`** - LSP server mode integrated into main binary
+- [x] **`sage-lsp` standalone binary** - Dedicated LSP server
+- [x] **Diagnostics** - Real-time error reporting
+- [x] **Completion** - Keyword and symbol completions
+- [x] **Hover** - Type and documentation on hover
+- [x] **Formatting** - Format-on-save via LSP
 
 ---
+
+## 🔮 Future Phases
 
 ### Phase 13: Self-Hosting
 **Status**: 📋 Planned (Final Goal)
@@ -447,22 +467,19 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ### Near-Term (Current)
 
-- Begin Phase 12 (Tooling Ecosystem)
-- LSP implementation for editor integration
-- REPL (Read-Eval-Print Loop) for interactive development
-- Code formatter (`sage fmt`)
+- Begin Phase 13 (Self-Hosting)
+- Port lexer to Sage
+- Port parser to Sage
 
 ### Mid-Term (1-2 months)
 
-- Complete Phase 12 (Full tooling)
-- Linter (`sage lint`), debugger integration
-- Package manager CLI
+- Port interpreter to Sage
+- Bootstrap process (Sage compiling itself)
 
 ### Long-Term (2-4 months)
 
-- Complete Phase 12 (Full tooling)
-- Begin Phase 13 (Self-hosting)
-- Port lexer and parser to Sage
+- Complete self-hosting compiler
+- Performance optimization of self-hosted compiler
 
 ### Vision (6-12+ months)
 
@@ -475,8 +492,8 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ## 📊 Progress Metrics
 
-- **Phases Completed**: 11/13 (85%)
-- **Test Suite**: 112 interpreter tests + 24 compiler tests, 28 categories, 100% pass rate
+- **Phases Completed**: 12/13 (~92%)
+- **Test Suite**: 112 interpreter tests + 28 compiler tests, 28 categories, 100% pass rate
 - **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
 - **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
 - **Estimated Completion**: 2026-2027 (self-hosting)
@@ -487,6 +504,13 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ### March 9, 2026
 
+- **Phase 12 Complete: Tooling Ecosystem**
+- REPL: `sage` (no args) or `sage --repl` with multi-line blocks, error recovery, `:help`/`:quit`
+- Formatter: `sage fmt <file>` (in-place) and `sage fmt --check <file>` (check only)
+- Linter: `sage lint <file>` with 13 rules (E001-E003 errors, W001-W005 warnings, S001-S005 style)
+- Syntax highlighting: TextMate grammar (`editors/sage.tmLanguage.json`), VSCode extension (`editors/vscode/`)
+- LSP server: `sage --lsp` or standalone `sage-lsp` binary with diagnostics, completion, hover, formatting
+- 4 new compiler tests (Tests 25-28) — 112 interpreter + 28 compiler tests total
 - **Phase 11 Complete: Concurrency & Parallelism**
 - Native standard library modules: `math`, `io`, `string`, `sys` with `create_native_module()` infrastructure
 - Thread module: `thread.spawn`, `thread.join`, `thread.mutex`, `thread.lock`, `thread.unlock`, `thread.sleep`, `thread.id`
@@ -582,11 +606,11 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 We welcome contributions at all phases! Here's how you can help:
 
-### Current Priorities (Phase 12+)
+### Current Priorities (Phase 13)
 
-1. **Tooling** - LSP, REPL, formatter, linter, debugger integration
-2. **Backend Coverage** - Expand LLVM and native backends for class/module/async support
-3. **Self-Hosting** - Begin porting lexer and parser to Sage
+1. **Self-Hosting** - Port lexer, parser, and interpreter to Sage
+2. **Bootstrap Process** - Sage compiling itself
+3. **Backend Coverage** - Expand LLVM and native backends for class/module/async support
 4. **Package Manager** - CLI for dependency management
 
 ### Getting Started

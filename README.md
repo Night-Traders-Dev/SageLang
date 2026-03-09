@@ -97,6 +97,14 @@ let future = compute(42)
 print await future     # 1764
 ```
 
+### Developer Tooling
+
+- **REPL**: `sage` (no args) or `sage --repl` for interactive development with multi-line blocks, error recovery, `:help`/`:quit`
+- **Formatter**: `sage fmt <file>` formats in place, `sage fmt --check <file>` checks without modifying
+- **Linter**: `sage lint <file>` with 13 rules (E001-E003 errors, W001-W005 warnings, S001-S005 style)
+- **Syntax Highlighting**: TextMate grammar (`editors/sage.tmLanguage.json`), VSCode extension (`editors/vscode/`)
+- **LSP Server**: `sage --lsp` or standalone `sage-lsp` binary with diagnostics, completion, hover, formatting
+
 ### Bundled `lib/` Modules
 - **`math`**: arithmetic helpers, `pow_int`, `factorial`, `gcd`, `lcm`, `sqrt`, distance helpers
 - **`arrays`**: `map`, `filter`, `reduce`, `unique`, `zip`, `chunk`, `flatten`, `concat`
@@ -179,6 +187,35 @@ Sage includes three compiler backends, all with optimization passes (`-O0` throu
 ```
 
 The C backend supports the full language including classes, modules, exceptions, and all builtins. The LLVM and native backends support scalar control flow, arrays, dictionaries, tuples, slicing, property access, for-in loops, and break/continue.
+
+### Developer Tools
+
+**REPL** (interactive mode):
+
+```bash
+./sage                  # Launch REPL (no arguments)
+./sage --repl           # Explicit REPL flag
+```
+
+**Formatter**:
+
+```bash
+./sage fmt program.sage             # Format file in place
+./sage fmt --check program.sage     # Check formatting (no changes)
+```
+
+**Linter**:
+
+```bash
+./sage lint program.sage            # Run linter (13 rules)
+```
+
+**LSP Server** (for editor integration):
+
+```bash
+./sage --lsp            # Start LSP server via main binary
+./sage-lsp              # Standalone LSP server binary
+```
 
 ## 📝 Example Code
 
@@ -398,7 +435,7 @@ gc_enable()
   - [x] C struct interop (`struct_def`, `struct_new`, `struct_get`, `struct_set`, `struct_size`)
 - [x] **Phase 10: Compiler Development** (C backend, LLVM IR, native ASM, optimization passes) ✅
 - [x] **Phase 11: Concurrency & Stdlib** (Native modules, threads, async/await, backend expansion) ✅
-- [ ] **Phase 12: Tooling** (LSP, Formatter, Debugger, REPL)
+- [x] **Phase 12: Tooling** (REPL, Formatter, Linter, Syntax Highlighting, LSP) ✅
 - [ ] **Phase 13: Self-Hosting** (Rewrite compiler in Sage)
 
 **📝 For a detailed breakdown of all planned features, see [ROADMAP.md](ROADMAP.md)**
@@ -440,12 +477,12 @@ proc write_memory(ptr: *mut u8, value: u8):
 ## 📊 Project Stats
 
 - **Language**: C
-- **Phases Completed**: 11/13 (85%)
-- **Test Suite**: 112 interpreter tests + 24 compiler tests, 28 categories, 100% pass rate
+- **Phases Completed**: 12/13 (~92%)
+- **Test Suite**: 112 interpreter tests + 28 compiler tests, 28 categories, 100% pass rate
 - **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
 - **Status**: Advanced Development
 - **License**: MIT
-- **Current Version**: v0.11.0-dev
+- **Current Version**: v0.12.0-dev
 
 ## 💾 Project Structure
 
@@ -478,7 +515,14 @@ sage/
 │   ├── typecheck.c   # Type checking pass
 │   ├── constfold.c   # Constant folding pass
 │   ├── dce.c         # Dead code elimination pass
-│   └── inline.c      # Function inlining pass
+│   ├── inline.c      # Function inlining pass
+│   ├── repl.c        # Interactive REPL
+│   ├── formatter.c   # Code formatter
+│   ├── linter.c      # Static analysis linter
+│   └── lsp.c         # Language Server Protocol server
+├── editors/          # Editor integration
+│   ├── sage.tmLanguage.json  # TextMate grammar
+│   └── vscode/       # VSCode extension
 ├── lib/              # Standard library modules
 │   ├── math.sage     # Mathematical functions (in development)
 │   └── (more planned)
@@ -488,7 +532,7 @@ sage/
 │   ├── phase6_classes.sage  # OOP demonstration
 │   ├── phase5_data.sage     # Data structures
 │   └── phase4_gc_demo.sage  # GC examples
-├── tests/            # Automated test suite (112 tests)
+├── tests/            # Automated test suite (112 interpreter + 28 compiler)
 │   ├── run_tests.sh  # Test runner script
 │   ├── 01_variables/ # Variable declaration tests
 │   ├── ...           # 28 test categories
@@ -505,12 +549,12 @@ sage/
 
 Sage is an educational project aimed at understanding compiler construction and language design. Contributions are welcome!
 
-### Current Focus Areas (Phase 12 - Tooling)
+### Current Focus Areas (Phase 13 - Self-Hosting)
 
-1. **Language Server Protocol (LSP)**: IDE integration with completions and diagnostics
-2. **REPL**: Interactive read-eval-print loop
-3. **Code Formatter**: `sage fmt` for consistent style
-4. **Bootstrap Readiness**: Prepare for self-hosting compiler in Phase 13
+1. **Port Lexer to Sage**: Rewrite the tokenizer in SageLang
+2. **Port Parser to Sage**: Rewrite the recursive descent parser in SageLang
+3. **Port Interpreter to Sage**: Rewrite the tree-walking evaluator in SageLang
+4. **Bootstrap Process**: Sage compiling itself
 
 ### How to Contribute
 1. Fork the project
@@ -543,6 +587,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
+- March 9, 2026: Phase 12 Complete - REPL, formatter, linter, syntax highlighting, LSP server
 - March 9, 2026: Phase 11 Complete - Native stdlib, threads, async/await, backend expansion
 - March 9, 2026: Phase 10 Complete - C/LLVM/native backends, optimization passes
 - March 8, 2026: Phase 8.5 Complete - Security & performance hardening

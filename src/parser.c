@@ -6,6 +6,7 @@
 #include "ast.h"
 #include "token.h"
 #include "gc.h"
+#include "repl.h"
 
 static Token current_token;
 static Token previous_token;
@@ -53,7 +54,7 @@ static void consume(TokenType type, const char* message) {
         return;
     }
     fprintf(stderr, "[Line %d] Error: %s (Got type %d)\n", current_token.line, message, current_token.type);
-    exit(1);
+    sage_error_exit();
 }
 
 // Forward declarations
@@ -67,7 +68,7 @@ static Stmt* block(void);
 static Stmt* for_statement() {
     if (!check(TOKEN_IDENTIFIER)) {
         fprintf(stderr, "[Line %d] Error: Expect loop variable after 'for'.\n", current_token.line);
-        exit(1);
+        sage_error_exit();
     }
     
     Token var = current_token;
@@ -352,7 +353,7 @@ static Expr* primary() {
     }
 
     fprintf(stderr, "[Line %d] Expect expression.\n", current_token.line);
-    exit(1);
+    sage_error_exit();
 }
 
 // Unary expressions (handle negative numbers and bitwise NOT)
@@ -553,16 +554,23 @@ static Expr* assignment() {
         return new_set_expr(object, property, value);
     }
     
+    // Handle index assignment: arr[i] = value, dict[key] = value
+    if (expr->type == EXPR_INDEX && match(TOKEN_ASSIGN)) {
+        Expr* array = expr->as.index.array;
+        Expr* index = expr->as.index.index;
+        free(expr);
+        Expr* value = assignment();
+        return new_index_set_expr(array, index, value);
+    }
+
     // Handle regular variable assignment: x = value
     if (expr->type == EXPR_VARIABLE && match(TOKEN_ASSIGN)) {
         Token name = expr->as.variable.name;
         free(expr);
         Expr* value = assignment();
-        // Create a binary assignment expression (reusing EXPR_BINARY with special marker)
-        // OR better: create assignment as SET with NULL object
         return new_set_expr(NULL, name, value);
     }
-    
+
     return expr;
 }
 
@@ -570,7 +578,7 @@ static Expr* expression() {
     if (++parser_depth > MAX_PARSER_DEPTH) {
         fprintf(stderr, "[Line %d] Error: Maximum nesting depth exceeded (%d).\n",
                 current_token.line, MAX_PARSER_DEPTH);
-        exit(1);
+        sage_error_exit();
     }
     Expr* result = assignment();
     parser_depth--;
@@ -586,7 +594,7 @@ static Stmt* block() {
     if (++parser_depth > MAX_PARSER_DEPTH) {
         fprintf(stderr, "[Line %d] Error: Maximum nesting depth exceeded (%d).\n",
                 current_token.line, MAX_PARSER_DEPTH);
-        exit(1);
+        sage_error_exit();
     }
     consume(TOKEN_INDENT, "Expect indentation after block start.");
     
@@ -660,7 +668,7 @@ static Stmt* proc_declaration() {
                     advance_parser();
                 } else {
                     fprintf(stderr, "[Line %d] Error: Expect parameter name.\n", current_token.line);
-                    exit(1);
+                    sage_error_exit();
                 }
             } while (match(TOKEN_COMMA));
         }
@@ -673,7 +681,7 @@ static Stmt* proc_declaration() {
     }
     
     fprintf(stderr, "[Line %d] Error: Expect procedure name.\n", current_token.line);
-    exit(1);
+    sage_error_exit();
 }
 
 static Stmt* async_proc_declaration() {
@@ -699,7 +707,7 @@ static Stmt* async_proc_declaration() {
                     advance_parser();
                 } else {
                     fprintf(stderr, "[Line %d] Error: Expect parameter name.\n", current_token.line);
-                    exit(1);
+                    sage_error_exit();
                 }
             } while (match(TOKEN_COMMA));
         }
@@ -712,7 +720,7 @@ static Stmt* async_proc_declaration() {
     }
 
     fprintf(stderr, "[Line %d] Error: Expect procedure name after 'async proc'.\n", current_token.line);
-    exit(1);
+    sage_error_exit();
 }
 
 static Stmt* class_declaration() {
@@ -752,7 +760,7 @@ static Stmt* class_declaration() {
             }
         } else {
             fprintf(stderr, "[Line %d] Only methods allowed in class body.\n", current_token.line);
-            exit(1);
+            sage_error_exit();
         }
     }
     

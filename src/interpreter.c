@@ -15,6 +15,7 @@
 #include "gc.h"
 #include "ast.h"
 #include "module.h"  // Phase 8: Module system
+#include "repl.h"    // Phase 12: REPL error recovery
 
 // Helper macro for creating normal expression results
 #define EVAL_RESULT(v) ((ExecResult){ (v), 0, 0, 0, 0, val_nil(), 0, NULL })
@@ -27,7 +28,7 @@ static Stmt* g_generator_resume_target = NULL;
 
 // Recursion depth tracking to prevent stack overflow
 #define MAX_RECURSION_DEPTH 1000
-static int g_recursion_depth = 0;
+static __thread int g_recursion_depth = 0;
 
 static int stmt_contains_target(Stmt* stmt, Stmt* target) {
     if (stmt == NULL || target == NULL) return 0;
@@ -216,10 +217,27 @@ static Value strip_native(int argCount, Value* args) {
 
 static Value slice_native(int argCount, Value* args) {
     if (argCount != 3) return val_nil();
-    if (!IS_ARRAY(args[0]) || !IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) return val_nil();
+    if (!IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) return val_nil();
     int start = (int)AS_NUMBER(args[1]);
     int end = (int)AS_NUMBER(args[2]);
-    return array_slice(&args[0], start, end);
+    if (IS_ARRAY(args[0])) {
+        return array_slice(&args[0], start, end);
+    }
+    if (IS_STRING(args[0])) {
+        char* str = AS_STRING(args[0]);
+        int slen = (int)strlen(str);
+        if (start < 0) start += slen;
+        if (end < 0) end += slen;
+        if (start < 0) start = 0;
+        if (end > slen) end = slen;
+        if (start >= end) return val_string(SAGE_STRDUP(""));
+        int len = end - start;
+        char* result = SAGE_ALLOC(len + 1);
+        memcpy(result, str + start, len);
+        result[len] = '\0';
+        return val_string(result);
+    }
+    return val_nil();
 }
 
 // Dictionary functions
@@ -283,11 +301,11 @@ ExecResult interpret(Stmt* stmt, Env* env);
 static Value native_next(int arg_count, Value* args) {
     if (arg_count != 1) {
         fprintf(stderr, "next() expects 1 argument\n");
-        exit(1);
+        sage_error_exit();
     }
     if (!IS_GENERATOR(args[0])) {
         fprintf(stderr, "next() expects a generator\n");
-        exit(1);
+        sage_error_exit();
     }
     
     GeneratorValue* gen = AS_GENERATOR(args[0]);
@@ -322,7 +340,7 @@ static Value native_next(int arg_count, Value* args) {
     if (result.is_throwing) {
         gen->is_exhausted = 1;
         fprintf(stderr, "Exception in generator\n");
-        exit(1);
+        sage_error_exit();
     }
     
     // Generator completed without yielding or returning
@@ -1379,16 +1397,23 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
     }
 
     if (b->op.type == TOKEN_GT || b->op.type == TOKEN_LT || b->op.type == TOKEN_GTE || b->op.type == TOKEN_LTE) {
-        if (!IS_NUMBER(left) || !IS_NUMBER(right)) {
-            fprintf(stderr, "Runtime Error: Operands must be numbers.\n");
-            return EVAL_RESULT(val_nil());
+        if (IS_NUMBER(left) && IS_NUMBER(right)) {
+            double l = AS_NUMBER(left);
+            double r = AS_NUMBER(right);
+            if (b->op.type == TOKEN_GT) return EVAL_RESULT(val_bool(l > r));
+            if (b->op.type == TOKEN_LT) return EVAL_RESULT(val_bool(l < r));
+            if (b->op.type == TOKEN_GTE) return EVAL_RESULT(val_bool(l >= r));
+            if (b->op.type == TOKEN_LTE) return EVAL_RESULT(val_bool(l <= r));
         }
-        double l = AS_NUMBER(left);
-        double r = AS_NUMBER(right);
-        if (b->op.type == TOKEN_GT) return EVAL_RESULT(val_bool(l > r));
-        if (b->op.type == TOKEN_LT) return EVAL_RESULT(val_bool(l < r));
-        if (b->op.type == TOKEN_GTE) return EVAL_RESULT(val_bool(l >= r));
-        if (b->op.type == TOKEN_LTE) return EVAL_RESULT(val_bool(l <= r));
+        if (IS_STRING(left) && IS_STRING(right)) {
+            int cmp = strcmp(AS_STRING(left), AS_STRING(right));
+            if (b->op.type == TOKEN_GT) return EVAL_RESULT(val_bool(cmp > 0));
+            if (b->op.type == TOKEN_LT) return EVAL_RESULT(val_bool(cmp < 0));
+            if (b->op.type == TOKEN_GTE) return EVAL_RESULT(val_bool(cmp >= 0));
+            if (b->op.type == TOKEN_LTE) return EVAL_RESULT(val_bool(cmp <= 0));
+        }
+        fprintf(stderr, "Runtime Error: Operands must be numbers or strings.\n");
+        return EVAL_RESULT(val_nil());
     }
 
     switch (b->op.type) {
@@ -1523,11 +1548,54 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                 return EVAL_RESULT(tuple_get(&arr, index));
             }
             
+            if (arr.type == VAL_STRING && IS_NUMBER(idx)) {
+                int index = (int)AS_NUMBER(idx);
+                char* str = AS_STRING(arr);
+                int slen = (int)strlen(str);
+                if (index < 0) index += slen;
+                if (index < 0 || index >= slen) {
+                    fprintf(stderr, "Runtime Error: String index out of bounds.\n");
+                    return EVAL_RESULT(val_nil());
+                }
+                char* ch = SAGE_ALLOC(2);
+                ch[0] = str[index];
+                ch[1] = '\0';
+                return EVAL_RESULT(val_string(ch));
+            }
+
             if (arr.type == VAL_DICT && IS_STRING(idx)) {
                 return EVAL_RESULT(dict_get(&arr, AS_STRING(idx)));
             }
-            
+
             fprintf(stderr, "Runtime Error: Invalid indexing operation.\n");
+            return EVAL_RESULT(val_nil());
+        }
+
+        case EXPR_INDEX_SET: {
+            ExecResult arr_result = eval_expr(expr->as.index_set.array, env);
+            if (arr_result.is_throwing) return arr_result;
+            Value arr = arr_result.value;
+
+            ExecResult idx_result = eval_expr(expr->as.index_set.index, env);
+            if (idx_result.is_throwing) return idx_result;
+            Value idx = idx_result.value;
+
+            ExecResult val_result = eval_expr(expr->as.index_set.value, env);
+            if (val_result.is_throwing) return val_result;
+            Value value = val_result.value;
+
+            if (arr.type == VAL_ARRAY && IS_NUMBER(idx)) {
+                int index = (int)AS_NUMBER(idx);
+                array_set(&arr, index, value);
+                return EVAL_RESULT(value);
+            }
+
+            if (arr.type == VAL_DICT && IS_STRING(idx)) {
+                dict_set(&arr, AS_STRING(idx), value);
+                return EVAL_RESULT(value);
+            }
+
+            fprintf(stderr, "Runtime Error: Invalid index assignment.\n");
             return EVAL_RESULT(val_nil());
         }
 
@@ -1885,7 +1953,8 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
         case STMT_EXPRESSION: {
             ExecResult result = eval_expr(stmt->as.expression, env);
             if (result.is_throwing) return result;
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            // Return actual value (used by REPL to display expression results)
+            return (ExecResult){ result.value, 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
         case STMT_BLOCK: {

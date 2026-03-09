@@ -1550,6 +1550,125 @@ The garbage collector is protected by a pthread mutex. All GC operations (alloca
 
 ---
 
+---
+
+## Part 12: Developer Tooling (Phase 12)
+
+SageLang includes a complete set of developer tools for interactive development, code quality, and editor integration.
+
+### 12.1 REPL (Read-Eval-Print Loop)
+
+Launch the interactive REPL by running `sage` with no arguments or with the `--repl` flag:
+
+```bash
+sage
+sage --repl
+```
+
+The REPL supports multi-line blocks (indented code is automatically continued), error recovery (errors are displayed without exiting), and built-in commands.
+
+**Built-in Commands**:
+
+| Command | Description |
+| ------- | ----------- |
+| `:help` | Show REPL usage information |
+| `:quit` | Exit the REPL |
+
+**Example Session**:
+
+```text
+sage> let x = 10
+sage> proc double(n):
+....>     return n * 2
+sage> print double(x)
+20
+sage> :quit
+```
+
+### 12.2 Code Formatter
+
+The formatter normalizes indentation, spacing, and blank lines for consistent code style.
+
+```bash
+sage fmt program.sage             # Format file in place
+sage fmt --check program.sage     # Check formatting (exit code 1 if changes needed)
+```
+
+**Example**:
+
+```bash
+$ sage fmt --check messy.sage
+messy.sage: would reformat
+$ sage fmt messy.sage
+$ sage fmt --check messy.sage
+messy.sage: ok
+```
+
+### 12.3 Linter
+
+The linter performs static analysis with 13 rules across three categories:
+
+```bash
+sage lint program.sage
+```
+
+**Rule Categories**:
+
+| Category | Rules | Description |
+| -------- | ----- | ----------- |
+| Errors | E001-E003 | Syntax and structural errors |
+| Warnings | W001-W005 | Potential bugs and bad practices |
+| Style | S001-S005 | Code style and naming conventions |
+
+**Example Output**:
+
+```text
+program.sage:5: W003 unused variable 'temp'
+program.sage:12: S002 line too long (exceeds 100 characters)
+program.sage:20: E001 undefined variable 'foo'
+```
+
+### 12.4 Syntax Highlighting
+
+SageLang provides editor support via TextMate grammars:
+
+- **TextMate grammar**: `editors/sage.tmLanguage.json` works with any TextMate-compatible editor (VSCode, Sublime Text, etc.)
+- **VSCode extension**: `editors/vscode/` provides full language support including syntax highlighting and language configuration
+
+**Installing the VSCode Extension**:
+
+1. Copy or symlink `editors/vscode/` into `~/.vscode/extensions/sage-lang/`
+2. Restart VSCode
+3. Open any `.sage` file to see syntax highlighting
+
+### 12.5 Language Server Protocol (LSP)
+
+The LSP server provides IDE-like features for any editor that supports the Language Server Protocol.
+
+```bash
+sage --lsp              # Start LSP server via main binary
+sage-lsp                # Standalone LSP server binary
+```
+
+**Capabilities**:
+
+| Feature | Description |
+| ------- | ----------- |
+| Diagnostics | Real-time error and warning reporting on file save |
+| Completion | Keyword and symbol completions as you type |
+| Hover | Type information and documentation on hover |
+| Formatting | Format-on-save via `textDocument/formatting` |
+
+**Editor Configuration** (VSCode `settings.json`):
+
+```json
+{
+    "sage.lsp.path": "/path/to/sage-lsp"
+}
+```
+
+---
+
 ### Example Programs
 
 **Hello World**:

@@ -73,6 +73,15 @@ Expr* new_index_expr(Expr* array, Expr* index) {
     return e;
 }
 
+Expr* new_index_set_expr(Expr* array, Expr* index, Expr* value) {
+    Expr* e = SAGE_ALLOC(sizeof(Expr));
+    e->type = EXPR_INDEX_SET;
+    e->as.index_set.array = array;
+    e->as.index_set.index = index;
+    e->as.index_set.value = value;
+    return e;
+}
+
 Expr* new_dict_expr(char** keys, Expr** values, int count) {
     Expr* e = SAGE_ALLOC(sizeof(Expr));
     e->type = EXPR_DICT;
@@ -373,6 +382,11 @@ void free_expr(Expr* expr) {
         case EXPR_INDEX:
             free_expr(expr->as.index.array);
             free_expr(expr->as.index.index);
+            break;
+        case EXPR_INDEX_SET:
+            free_expr(expr->as.index_set.array);
+            free_expr(expr->as.index_set.index);
+            free_expr(expr->as.index_set.value);
             break;
         case EXPR_DICT:
             for (int i = 0; i < expr->as.dict.count; i++) {

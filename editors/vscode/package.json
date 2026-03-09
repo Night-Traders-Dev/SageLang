@@ -1,0 +1,53 @@
+{
+  "name": "sage-lang",
+  "displayName": "Sage Language",
+  "description": "Syntax highlighting and language server support for SageLang",
+  "version": "0.2.0",
+  "publisher": "sagelang",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:sage"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "sage",
+        "aliases": ["Sage", "sage", "SageLang"],
+        "extensions": [".sage"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sage",
+        "scopeName": "source.sage",
+        "path": "./syntaxes/sage.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Sage Language Server",
+      "properties": {
+        "sage.lsp.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable the Sage language server."
+        },
+        "sage.lsp.path": {
+          "type": "string",
+          "default": "sage",
+          "description": "Path to the sage executable (used as 'sage --lsp'). Alternatively set to 'sage-lsp' for the standalone binary."
+        }
+      }
+    }
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.0"
+  }
+}

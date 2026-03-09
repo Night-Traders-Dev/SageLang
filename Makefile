@@ -35,11 +35,14 @@ CORE_SOURCES = \
     $(SRC_DIR)/constfold.c \
     $(SRC_DIR)/dce.c \
     $(SRC_DIR)/env.c \
+    $(SRC_DIR)/formatter.c \
     $(SRC_DIR)/gc.c \
     $(SRC_DIR)/inline.c \
     $(SRC_DIR)/interpreter.c \
+    $(SRC_DIR)/linter.c \
     $(SRC_DIR)/lexer.c \
     $(SRC_DIR)/llvm_backend.c \
+    $(SRC_DIR)/lsp.c \
     $(SRC_DIR)/module.c \
     $(SRC_DIR)/parser.c \
     $(SRC_DIR)/pass.c \
@@ -61,10 +64,13 @@ HEADERS = \
     $(INC_DIR)/codegen.h \
     $(INC_DIR)/compiler.h \
     $(INC_DIR)/env.h \
+    $(INC_DIR)/formatter.h \
     $(INC_DIR)/gc.h \
     $(INC_DIR)/interpreter.h \
     $(INC_DIR)/lexer.h \
+    $(INC_DIR)/linter.h \
     $(INC_DIR)/llvm_backend.h \
+    $(INC_DIR)/lsp.h \
     $(INC_DIR)/module.h \
     $(INC_DIR)/pass.h \
     $(INC_DIR)/token.h \
@@ -81,8 +87,11 @@ CORE_OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CORE_SOURCES))
 MAIN_OBJECT = $(OBJ_DIR)/main.o
 ALL_OBJECTS = $(CORE_OBJECTS) $(MAIN_OBJECT)
 
-# Binary
+# Binaries
 TARGET = sage
+LSP_TARGET = sage-lsp
+LSP_MAIN_SOURCE = $(SRC_DIR)/lsp_main.c
+LSP_MAIN_OBJECT = $(OBJ_DIR)/lsp_main.o
 
 # ============================================================================
 # Build Rules
@@ -90,7 +99,7 @@ TARGET = sage
 
 .PHONY: all clean run install uninstall help test examples
 
-all: $(TARGET)
+all: $(TARGET) $(LSP_TARGET)
 
 # Link executable
 $(TARGET): $(ALL_OBJECTS)
@@ -98,6 +107,17 @@ $(TARGET): $(ALL_OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 	@echo "✅ Built: $(TARGET)"
 	@echo "   Run with: ./$(TARGET) examples/hello.sage"
+
+# LSP server binary (standalone)
+$(LSP_TARGET): $(LSP_MAIN_OBJECT) $(CORE_OBJECTS)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "Built: $(LSP_TARGET)"
+
+$(LSP_MAIN_OBJECT): $(LSP_MAIN_SOURCE) $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(CFLAGS) -I$(INC_DIR) -c $< -o $@
+	@echo "Compiled: $<"
 
 # Compile source files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(HEADERS)
@@ -141,10 +161,11 @@ BINDIR = $(PREFIX)/bin
 LIBDIR = $(PREFIX)/share/sage
 DOCDIR = $(PREFIX)/share/doc/sage
 
-install: $(TARGET)
+install: $(TARGET) $(LSP_TARGET)
 	@echo "Installing SageLang to $(PREFIX)..."
 	install -d $(BINDIR)
 	install -m 755 $(TARGET) $(BINDIR)
+	install -m 755 $(LSP_TARGET) $(BINDIR)
 	install -d $(LIBDIR)/lib
 	install -d $(LIBDIR)/examples
 	cp -r lib/*.sage $(LIBDIR)/lib/
@@ -156,7 +177,7 @@ install: $(TARGET)
 
 uninstall:
 	@echo "Uninstalling SageLang..."
-	rm -f $(BINDIR)/$(TARGET)
+	rm -f $(BINDIR)/$(TARGET) $(BINDIR)/$(LSP_TARGET)
 	rm -rf $(LIBDIR)
 	rm -rf $(DOCDIR)
 	@echo "✅ Uninstallation complete"
@@ -287,13 +308,40 @@ test: $(TARGET)
 	@./$(TARGET) --compile testing/compiler_smoke.sage -o .tmp/compiler_smoke_debug -g
 	@./.tmp/compiler_smoke_debug > .tmp/compiler_smoke_debug.out
 	@diff -u testing/compiler_smoke.expected .tmp/compiler_smoke_debug.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 25: REPL"
+	@echo ":quit" | ./$(TARGET) --repl 2>&1 | grep -q "Sage REPL" && echo "✅ Pass (banner shown)" || (echo "❌ Fail (banner)"; exit 1)
+	@echo "1 + 2" | ./$(TARGET) --repl 2>&1 | grep -q "sage> 3" && echo "✅ Pass (expression eval)" || (echo "❌ Fail (expression eval)"; exit 1)
+	@echo ""
+	@echo "Test 26: Formatter"
+	@printf "let   x=1\nlet y =  2\n" > .tmp/fmt_test.sage
+	@./$(TARGET) fmt .tmp/fmt_test.sage && echo "✅ Pass (fmt ran)" || (echo "❌ Fail (fmt)"; exit 1)
+	@./$(TARGET) fmt --check .tmp/fmt_test.sage && echo "✅ Pass (--check clean)" || (echo "❌ Fail (--check)"; exit 1)
+	@printf "let   x=1\nlet y =  2\n" > .tmp/fmt_dirty.sage
+	@./$(TARGET) fmt --check .tmp/fmt_dirty.sage 2>&1; \
+		test $$? -ne 0 && echo "✅ Pass (--check detects unformatted)" || (echo "❌ Fail (--check should fail)"; exit 1)
+	@echo ""
+	@echo "Test 27: Linter"
+	@printf "proc badName():\n    let x = 1\n    print 42\n" > .tmp/lint_bad.sage
+	@./$(TARGET) lint .tmp/lint_bad.sage 2>&1; \
+		test $$? -ne 0 && echo "✅ Pass (lint found issues)" || (echo "❌ Fail (lint should find issues)"; exit 1)
+	@printf "# Greet the user\nproc good_name():\n    print 42\n" > .tmp/lint_clean.sage
+	@./$(TARGET) lint .tmp/lint_clean.sage && echo "✅ Pass (lint clean)" || (echo "❌ Fail (lint clean)"; exit 1)
+	@echo ""
+	@echo "Test 28: LSP"
+	@python3 -c "\
+	import sys; \
+	msg = '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"capabilities\":{}}}'; \
+	header = 'Content-Length: %d\r\n\r\n' % len(msg); \
+	sys.stdout.write(header + msg); \
+	sys.stdout.flush()" | timeout 5 ./$(TARGET) --lsp 2>/dev/null | head -c 4096 | grep -q '"sage-lsp"' && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 
 # ============================================================================
 # Cleanup
 # ============================================================================
 
 clean:
-	rm -rf $(OBJ_DIR) $(TARGET)
+	rm -rf $(OBJ_DIR) $(TARGET) $(LSP_TARGET)
 	@echo "✅ Cleaned build artifacts"
 
 clean-all: clean

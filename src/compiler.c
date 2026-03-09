@@ -1422,6 +1422,18 @@ static char* emit_expr(Compiler* compiler, Expr* expr) {
             return emit_array_expr(compiler, &expr->as.array);
         case EXPR_INDEX:
             return emit_index_expr(compiler, &expr->as.index);
+        case EXPR_INDEX_SET: {
+            char* arr = emit_expr(compiler, expr->as.index_set.array);
+            char* idx = emit_expr(compiler, expr->as.index_set.index);
+            char* val = emit_expr(compiler, expr->as.index_set.value);
+            StringBuffer sb;
+            sb_init(&sb);
+            sb_appendf(&sb, "sage_index_set(%s, %s, %s)", arr, idx, val);
+            free(arr);
+            free(idx);
+            free(val);
+            return sb_take(&sb);
+        }
         case EXPR_SLICE:
             return emit_slice_expr(compiler, &expr->as.slice);
         case EXPR_SET:
