@@ -1,11 +1,3 @@
-proc endswith(a, b):
-    let test = split(a, "")
-    if test[len(test) - 1] == b:
-        return true
-    else:
-        return false
+from strings import endswith
 
-
-
-let test = endswith("hello", "o")
-print test
+print endswith("hello", "o")
