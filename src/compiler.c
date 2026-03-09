@@ -2,10 +2,13 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -42,6 +45,11 @@ typedef struct {
     ProcEntry* procs;
     NameEntry* locals;
 } Compiler;
+
+typedef enum {
+    COMPILER_TARGET_HOST,
+    COMPILER_TARGET_PICO
+} CompilerTarget;
 
 static void sb_init(StringBuffer* sb) {
     sb->cap = 128;
@@ -857,12 +865,21 @@ static void emit_stmt_list(Compiler* compiler, Stmt* stmt) {
     }
 }
 
-static void emit_runtime_prelude(FILE* out) {
+static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
     fputs(
         "#include <stdarg.h>\n"
         "#include <stdio.h>\n"
         "#include <stdlib.h>\n"
         "#include <string.h>\n"
+        ,
+        out
+    );
+
+    if (target == COMPILER_TARGET_PICO) {
+        fputs("#include \"pico/stdlib.h\"\n", out);
+    }
+
+    fputs(
         "\n"
         "typedef struct SageValue SageValue;\n"
         "\n"
@@ -1292,9 +1309,14 @@ static void emit_function_definitions(Compiler* compiler, Stmt* program) {
     }
 }
 
-static void emit_main_function(Compiler* compiler, Stmt* program) {
+static void emit_main_function(Compiler* compiler, Stmt* program, CompilerTarget target) {
     emit_line(compiler, "int main(void) {");
     compiler->indent++;
+
+    if (target == COMPILER_TARGET_PICO) {
+        emit_line(compiler, "stdio_init_all();");
+        emit_line(compiler, "sleep_ms(2000);");
+    }
 
     for (NameEntry* global = compiler->globals; global != NULL; global = global->next) {
         emit_line(compiler, "%s = sage_slot_undefined();", global->c_name);
@@ -1341,7 +1363,213 @@ static Stmt* parse_program(const char* source) {
     return head;
 }
 
-static int write_c_output(const char* source, const char* input_path, const char* output_path) {
+static int path_exists(const char* path) {
+    return access(path, F_OK) == 0;
+}
+
+static int ensure_directory(const char* path) {
+    char buffer[PATH_MAX];
+    size_t len = strlen(path);
+    if (len == 0 || len >= sizeof(buffer)) {
+        fprintf(stderr, "Compiler error: invalid output directory path.\n");
+        return 0;
+    }
+
+    memcpy(buffer, path, len + 1);
+    if (len > 1 && buffer[len - 1] == '/') {
+        buffer[len - 1] = '\0';
+    }
+
+    for (char* cursor = buffer + 1; *cursor != '\0'; cursor++) {
+        if (*cursor == '/') {
+            *cursor = '\0';
+            if (mkdir(buffer, 0777) != 0 && errno != EEXIST) {
+                fprintf(stderr, "Compiler error: could not create directory \"%s\": %s\n",
+                        buffer, strerror(errno));
+                return 0;
+            }
+            *cursor = '/';
+        }
+    }
+
+    if (mkdir(buffer, 0777) != 0 && errno != EEXIST) {
+        fprintf(stderr, "Compiler error: could not create directory \"%s\": %s\n",
+                buffer, strerror(errno));
+        return 0;
+    }
+
+    return 1;
+}
+
+static char* path_join(const char* left, const char* right) {
+    size_t left_len = strlen(left);
+    size_t right_len = strlen(right);
+    int needs_sep = left_len > 0 && left[left_len - 1] != '/';
+    char* joined = malloc(left_len + right_len + (needs_sep ? 2 : 1));
+    if (joined == NULL) {
+        fprintf(stderr, "Out of memory joining compiler paths.\n");
+        exit(1);
+    }
+
+    memcpy(joined, left, left_len);
+    if (needs_sep) {
+        joined[left_len++] = '/';
+    }
+    memcpy(joined + left_len, right, right_len + 1);
+    return joined;
+}
+
+static char* derive_program_name(const char* input_path) {
+    const char* basename = strrchr(input_path, '/');
+    basename = basename == NULL ? input_path : basename + 1;
+
+    size_t len = strlen(basename);
+    const char* last_dot = strrchr(basename, '.');
+    if (last_dot != NULL) {
+        len = (size_t)(last_dot - basename);
+    }
+
+    char* raw_name = malloc(len + 1);
+    if (raw_name == NULL) {
+        fprintf(stderr, "Out of memory deriving Pico program name.\n");
+        exit(1);
+    }
+    memcpy(raw_name, basename, len);
+    raw_name[len] = '\0';
+
+    char* sanitized = sanitize_identifier(raw_name);
+    free(raw_name);
+    if (sanitized[0] == '\0') {
+        free(sanitized);
+        return str_dup("sage_program");
+    }
+    return sanitized;
+}
+
+static char* escape_cmake_string(const char* text) {
+    StringBuffer sb;
+    sb_init(&sb);
+
+    for (size_t i = 0; text[i] != '\0'; i++) {
+        if (text[i] == '\\' || text[i] == '"' || text[i] == ';') {
+            sb_append_char(&sb, '\\');
+        }
+        sb_append_char(&sb, text[i]);
+    }
+
+    return sb_take(&sb);
+}
+
+static char* find_repo_root(void) {
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        return NULL;
+    }
+
+    char current[PATH_MAX];
+    memcpy(current, cwd, sizeof(current));
+
+    while (1) {
+        char* candidate = path_join(current, "pico_sdk_import.cmake");
+        int found = path_exists(candidate);
+        free(candidate);
+        if (found) {
+            return str_dup(current);
+        }
+
+        char* slash = strrchr(current, '/');
+        if (slash == NULL) {
+            break;
+        }
+        if (slash == current) {
+            current[1] = '\0';
+        } else {
+            *slash = '\0';
+        }
+
+        candidate = path_join(current, "pico_sdk_import.cmake");
+        found = path_exists(candidate);
+        free(candidate);
+        if (found) {
+            return str_dup(current);
+        }
+
+        if (strcmp(current, "/") == 0) {
+            break;
+        }
+    }
+
+    return NULL;
+}
+
+static int write_pico_cmake_lists(const char* cmake_path, const char* import_path,
+                                  const char* source_path, const char* program_name,
+                                  const char* pico_board) {
+    FILE* out = fopen(cmake_path, "wb");
+    if (out == NULL) {
+        fprintf(stderr, "Compiler error: could not open \"%s\": %s\n",
+                cmake_path, strerror(errno));
+        return 0;
+    }
+
+    char* escaped_import = escape_cmake_string(import_path);
+    char* escaped_source = escape_cmake_string(source_path);
+    char* escaped_program = escape_cmake_string(program_name);
+    char* escaped_board = escape_cmake_string(pico_board);
+
+    fprintf(out,
+            "cmake_minimum_required(VERSION 3.13)\n"
+            "set(PICO_BOARD \"%s\" CACHE STRING \"RP2040 board\")\n"
+            "include(\"%s\")\n"
+            "project(%s LANGUAGES C CXX ASM)\n"
+            "set(CMAKE_C_STANDARD 11)\n"
+            "set(CMAKE_CXX_STANDARD 17)\n"
+            "pico_sdk_init()\n"
+            "add_executable(%s \"%s\")\n"
+            "target_link_libraries(%s pico_stdlib)\n"
+            "pico_enable_stdio_usb(%s 1)\n"
+            "pico_enable_stdio_uart(%s 0)\n"
+            "pico_add_extra_outputs(%s)\n",
+            escaped_board, escaped_import, escaped_program, escaped_program,
+            escaped_source, escaped_program, escaped_program, escaped_program,
+            escaped_program);
+
+    free(escaped_import);
+    free(escaped_source);
+    free(escaped_program);
+    free(escaped_board);
+
+    fclose(out);
+    return 1;
+}
+
+static int run_command_with_sdk(char* const argv[], const char* pico_sdk_path) {
+    pid_t pid = fork();
+    if (pid < 0) {
+        fprintf(stderr, "Compiler error: could not fork %s.\n", argv[0]);
+        return 0;
+    }
+
+    if (pid == 0) {
+        if (pico_sdk_path != NULL && pico_sdk_path[0] != '\0') {
+            setenv("PICO_SDK_PATH", pico_sdk_path, 1);
+        }
+        execvp(argv[0], argv);
+        fprintf(stderr, "Compiler error: could not execute %s: %s\n", argv[0], strerror(errno));
+        _exit(127);
+    }
+
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) {
+        fprintf(stderr, "Compiler error: could not wait for %s.\n", argv[0]);
+        return 0;
+    }
+
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+static int write_c_output(const char* source, const char* input_path, const char* output_path,
+                          CompilerTarget target) {
     FILE* out = fopen(output_path, "wb");
     if (out == NULL) {
         fprintf(stderr, "Could not open compiler output \"%s\": %s\n", output_path, strerror(errno));
@@ -1358,7 +1586,7 @@ static int write_c_output(const char* source, const char* input_path, const char
     collect_top_level_symbols(&compiler, program);
 
     if (!compiler.failed) {
-        emit_runtime_prelude(out);
+        emit_runtime_prelude(out, target);
         compiler.indent = 0;
         emit_proc_prototypes(&compiler);
         if (compiler.procs != NULL) {
@@ -1370,7 +1598,7 @@ static int write_c_output(const char* source, const char* input_path, const char
         }
         emit_function_definitions(&compiler, program);
         if (!compiler.failed) {
-            emit_main_function(&compiler, program);
+            emit_main_function(&compiler, program, target);
         }
     }
 
@@ -1382,13 +1610,13 @@ static int write_c_output(const char* source, const char* input_path, const char
 }
 
 int compile_source_to_c(const char* source, const char* input_path, const char* output_path) {
-    return write_c_output(source, input_path, output_path);
+    return write_c_output(source, input_path, output_path, COMPILER_TARGET_HOST);
 }
 
 int compile_source_to_executable(const char* source, const char* input_path,
                                  const char* c_output_path, const char* exe_output_path,
                                  const char* cc_command) {
-    if (!write_c_output(source, input_path, c_output_path)) {
+    if (!write_c_output(source, input_path, c_output_path, COMPILER_TARGET_HOST)) {
         return 0;
     }
 
@@ -1416,5 +1644,146 @@ int compile_source_to_executable(const char* source, const char* input_path,
         return 0;
     }
 
+    return 1;
+}
+
+int compile_source_to_pico_c(const char* source, const char* input_path, const char* output_path) {
+    return write_c_output(source, input_path, output_path, COMPILER_TARGET_PICO);
+}
+
+int compile_source_to_pico_uf2(const char* source, const char* input_path,
+                               const char* output_dir, const char* program_name,
+                               const char* pico_board, const char* pico_sdk_path,
+                               char* uf2_path_out, size_t uf2_path_out_size) {
+    const char* sdk_path = pico_sdk_path;
+    if (sdk_path == NULL || sdk_path[0] == '\0') {
+        sdk_path = getenv("PICO_SDK_PATH");
+    }
+    if (sdk_path == NULL || sdk_path[0] == '\0') {
+        fprintf(stderr, "Compiler error: PICO_SDK_PATH is not set. Use --sdk or set the environment variable.\n");
+        return 0;
+    }
+
+    const char* board = (pico_board != NULL && pico_board[0] != '\0') ? pico_board : "pico";
+    char* effective_program_name = (program_name != NULL && program_name[0] != '\0')
+        ? sanitize_identifier(program_name)
+        : derive_program_name(input_path);
+
+    char* effective_output_dir = NULL;
+    if (output_dir != NULL && output_dir[0] != '\0') {
+        effective_output_dir = str_dup(output_dir);
+    } else {
+        effective_output_dir = path_join(".tmp", effective_program_name);
+    }
+
+    if (!ensure_directory(effective_output_dir)) {
+        free(effective_program_name);
+        free(effective_output_dir);
+        return 0;
+    }
+
+    char resolved_output_dir[PATH_MAX];
+    if (realpath(effective_output_dir, resolved_output_dir) == NULL) {
+        fprintf(stderr, "Compiler error: could not resolve output directory \"%s\": %s\n",
+                effective_output_dir, strerror(errno));
+        free(effective_program_name);
+        free(effective_output_dir);
+        return 0;
+    }
+    free(effective_output_dir);
+    effective_output_dir = str_dup(resolved_output_dir);
+
+    char* repo_root = find_repo_root();
+    if (repo_root == NULL) {
+        fprintf(stderr, "Compiler error: could not locate repo root containing pico_sdk_import.cmake.\n");
+        free(effective_program_name);
+        free(effective_output_dir);
+        return 0;
+    }
+
+    char* import_path = path_join(repo_root, "pico_sdk_import.cmake");
+    char* build_dir = path_join(effective_output_dir, "build");
+    char* cmake_path = path_join(effective_output_dir, "CMakeLists.txt");
+
+    char source_file_name[PATH_MAX];
+    snprintf(source_file_name, sizeof(source_file_name), "%s.c", effective_program_name);
+    char* source_path = path_join(effective_output_dir, source_file_name);
+
+    if (!write_c_output(source, input_path, source_path, COMPILER_TARGET_PICO)) {
+        free(repo_root);
+        free(import_path);
+        free(build_dir);
+        free(cmake_path);
+        free(source_path);
+        free(effective_program_name);
+        free(effective_output_dir);
+        return 0;
+    }
+
+    if (!write_pico_cmake_lists(cmake_path, import_path, source_path, effective_program_name, board)) {
+        free(repo_root);
+        free(import_path);
+        free(build_dir);
+        free(cmake_path);
+        free(source_path);
+        free(effective_program_name);
+        free(effective_output_dir);
+        return 0;
+    }
+
+    char* cmake_argv[] = { "cmake", "-S", effective_output_dir, "-B", build_dir, NULL };
+    if (!run_command_with_sdk(cmake_argv, sdk_path)) {
+        fprintf(stderr, "Compiler error: Pico CMake configure failed.\n");
+        free(repo_root);
+        free(import_path);
+        free(build_dir);
+        free(cmake_path);
+        free(source_path);
+        free(effective_program_name);
+        free(effective_output_dir);
+        return 0;
+    }
+
+    char* build_argv[] = { "cmake", "--build", build_dir, NULL };
+    if (!run_command_with_sdk(build_argv, sdk_path)) {
+        fprintf(stderr, "Compiler error: Pico build failed.\n");
+        free(repo_root);
+        free(import_path);
+        free(build_dir);
+        free(cmake_path);
+        free(source_path);
+        free(effective_program_name);
+        free(effective_output_dir);
+        return 0;
+    }
+
+    char uf2_name[PATH_MAX];
+    snprintf(uf2_name, sizeof(uf2_name), "%s.uf2", effective_program_name);
+    char* uf2_path = path_join(build_dir, uf2_name);
+    if (!path_exists(uf2_path)) {
+        fprintf(stderr, "Compiler error: expected UF2 was not produced at \"%s\".\n", uf2_path);
+        free(uf2_path);
+        free(repo_root);
+        free(import_path);
+        free(build_dir);
+        free(cmake_path);
+        free(source_path);
+        free(effective_program_name);
+        free(effective_output_dir);
+        return 0;
+    }
+
+    if (uf2_path_out != NULL && uf2_path_out_size > 0) {
+        snprintf(uf2_path_out, uf2_path_out_size, "%s", uf2_path);
+    }
+
+    free(uf2_path);
+    free(repo_root);
+    free(import_path);
+    free(build_dir);
+    free(cmake_path);
+    free(source_path);
+    free(effective_program_name);
+    free(effective_output_dir);
     return 1;
 }
