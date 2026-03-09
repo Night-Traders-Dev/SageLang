@@ -347,7 +347,7 @@ Token scan_token(void) {
         case ',': return make_token(TOKEN_COMMA);
         case ':': return make_token(TOKEN_COLON);
         case '.': return make_token(TOKEN_DOT);
-        case '!': return make_token(match_char('=') ? TOKEN_NEQ : TOKEN_ERROR);
+        case '!': return match_char('=') ? make_token(TOKEN_NEQ) : error_token("Unexpected '!' (use 'not' for logical negation).");
         case '=': return make_token(match_char('=') ? TOKEN_EQ : TOKEN_ASSIGN);
         case '<': return make_token(match_char('<') ? TOKEN_LSHIFT : (match_char('=') ? TOKEN_LTE : TOKEN_LT));
         case '>': return make_token(match_char('>') ? TOKEN_RSHIFT : (match_char('=') ? TOKEN_GTE : TOKEN_GT));

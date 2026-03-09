@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "ast.h"
+#include "gc.h"
 #include "lexer.h"
 #include "parser.h"
 #include "pass.h"
@@ -23,10 +24,10 @@ extern Stmt* parse_program(const char* source);
 void codebuf_init(CodeBuffer* buf) {
     buf->code_cap = 4096;
     buf->code_len = 0;
-    buf->code = malloc(buf->code_cap);
+    buf->code = SAGE_ALLOC(buf->code_cap);
     buf->data_cap = 4096;
     buf->data_len = 0;
-    buf->data = malloc(buf->data_cap);
+    buf->data = SAGE_ALLOC(buf->data_cap);
 }
 
 void codebuf_free(CodeBuffer* buf) {
@@ -40,7 +41,7 @@ static void codebuf_grow(CodeBuffer* buf, size_t needed) {
     while (buf->code_cap < buf->code_len + needed) {
         buf->code_cap *= 2;
     }
-    buf->code = realloc(buf->code, buf->code_cap);
+    buf->code = SAGE_REALLOC(buf->code, buf->code_cap);
 }
 
 void codebuf_emit8(CodeBuffer* buf, uint8_t byte) {
@@ -77,7 +78,8 @@ void codebuf_emit_data(CodeBuffer* buf, const uint8_t* data, size_t len) {
 // ============================================================================
 
 VInst* vinst_new(VInstKind kind) {
-    VInst* v = calloc(1, sizeof(VInst));
+    VInst* v = SAGE_ALLOC(sizeof(VInst));
+    memset(v, 0, sizeof(VInst));
     v->kind = kind;
     v->dest = -1;
     v->src1 = -1;
@@ -107,7 +109,7 @@ void isel_init(ISelContext* ctx) {
     ctx->next_vreg = 0;
     ctx->next_label = 0;
     ctx->string_pool_cap = 16;
-    ctx->string_pool = malloc(sizeof(char*) * 16);
+    ctx->string_pool = SAGE_ALLOC(sizeof(char*) * 16);
 }
 
 void isel_free(ISelContext* ctx) {
@@ -134,15 +136,15 @@ static int isel_vreg(ISelContext* ctx) {
 static char* isel_label(ISelContext* ctx) {
     char buf[32];
     snprintf(buf, sizeof(buf), ".L%d", ctx->next_label++);
-    return strdup(buf);
+    return SAGE_STRDUP(buf);
 }
 
 static int isel_add_string(ISelContext* ctx, const char* str) {
     if (ctx->string_pool_count >= ctx->string_pool_cap) {
         ctx->string_pool_cap *= 2;
-        ctx->string_pool = realloc(ctx->string_pool, sizeof(char*) * (size_t)ctx->string_pool_cap);
+        ctx->string_pool = SAGE_REALLOC(ctx->string_pool, sizeof(char*) * (size_t)ctx->string_pool_cap);
     }
-    ctx->string_pool[ctx->string_pool_count] = strdup(str);
+    ctx->string_pool[ctx->string_pool_count] = SAGE_STRDUP(str);
     return ctx->string_pool_count++;
 }
 
@@ -151,7 +153,7 @@ static int isel_add_string(ISelContext* ctx, const char* str) {
 // ============================================================================
 
 static char* tok_str(Token tok) {
-    char* s = malloc((size_t)tok.length + 1);
+    char* s = SAGE_ALLOC((size_t)tok.length + 1);
     memcpy(s, tok.start, (size_t)tok.length);
     s[tok.length] = '\0';
     return s;
@@ -183,7 +185,7 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             int r = isel_vreg(ctx);
             VInst* v = vinst_new(VINST_LOAD_STRING);
             v->dest = r;
-            v->imm_string = strdup(expr->as.string.value);
+            v->imm_string = SAGE_STRDUP(expr->as.string.value);
             isel_append(ctx, v);
             isel_add_string(ctx, expr->as.string.value);
             return r;
@@ -252,7 +254,7 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
         case EXPR_CALL: {
             int* arg_regs = NULL;
             if (expr->as.call.arg_count > 0) {
-                arg_regs = malloc(sizeof(int) * (size_t)expr->as.call.arg_count);
+                arg_regs = SAGE_ALLOC(sizeof(int) * (size_t)expr->as.call.arg_count);
                 for (int i = 0; i < expr->as.call.arg_count; i++) {
                     arg_regs[i] = isel_expr(ctx, expr->as.call.args[i]);
                 }
@@ -308,6 +310,13 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             isel_append(ctx, v);
             return r;
         }
+        case EXPR_DICT:
+        case EXPR_TUPLE:
+        case EXPR_SLICE:
+        case EXPR_GET:
+        case EXPR_SET:
+            fprintf(stderr, "Codegen backend: unsupported expression type %d (dict/tuple/slice/get/set not yet implemented)\n", expr->type);
+            /* fallthrough */
         default: {
             int r = isel_vreg(ctx);
             VInst* v = vinst_new(VINST_LOAD_NIL);
@@ -361,30 +370,30 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
 
             VInst* br = vinst_new(VINST_BRANCH);
             br->src1 = cond;
-            br->label = strdup(then_label);
-            br->label_false = stmt->as.if_stmt.else_branch ? strdup(else_label) : strdup(merge_label);
+            br->label = SAGE_STRDUP(then_label);
+            br->label_false = stmt->as.if_stmt.else_branch ? SAGE_STRDUP(else_label) : SAGE_STRDUP(merge_label);
             isel_append(ctx, br);
 
             VInst* tl = vinst_new(VINST_LABEL);
-            tl->label = strdup(then_label);
+            tl->label = SAGE_STRDUP(then_label);
             isel_append(ctx, tl);
             isel_stmt_list(ctx, stmt->as.if_stmt.then_branch);
             VInst* jmp1 = vinst_new(VINST_JUMP);
-            jmp1->label = strdup(merge_label);
+            jmp1->label = SAGE_STRDUP(merge_label);
             isel_append(ctx, jmp1);
 
             if (stmt->as.if_stmt.else_branch) {
                 VInst* el = vinst_new(VINST_LABEL);
-                el->label = strdup(else_label);
+                el->label = SAGE_STRDUP(else_label);
                 isel_append(ctx, el);
                 isel_stmt_list(ctx, stmt->as.if_stmt.else_branch);
                 VInst* jmp2 = vinst_new(VINST_JUMP);
-                jmp2->label = strdup(merge_label);
+                jmp2->label = SAGE_STRDUP(merge_label);
                 isel_append(ctx, jmp2);
             }
 
             VInst* ml = vinst_new(VINST_LABEL);
-            ml->label = strdup(merge_label);
+            ml->label = SAGE_STRDUP(merge_label);
             isel_append(ctx, ml);
 
             free(then_label);
@@ -398,30 +407,30 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             char* end_label = isel_label(ctx);
 
             VInst* jmp0 = vinst_new(VINST_JUMP);
-            jmp0->label = strdup(cond_label);
+            jmp0->label = SAGE_STRDUP(cond_label);
             isel_append(ctx, jmp0);
 
             VInst* cl = vinst_new(VINST_LABEL);
-            cl->label = strdup(cond_label);
+            cl->label = SAGE_STRDUP(cond_label);
             isel_append(ctx, cl);
 
             int cond = isel_expr(ctx, stmt->as.while_stmt.condition);
             VInst* br = vinst_new(VINST_BRANCH);
             br->src1 = cond;
-            br->label = strdup(body_label);
-            br->label_false = strdup(end_label);
+            br->label = SAGE_STRDUP(body_label);
+            br->label_false = SAGE_STRDUP(end_label);
             isel_append(ctx, br);
 
             VInst* bl = vinst_new(VINST_LABEL);
-            bl->label = strdup(body_label);
+            bl->label = SAGE_STRDUP(body_label);
             isel_append(ctx, bl);
             isel_stmt_list(ctx, stmt->as.while_stmt.body);
             VInst* jmp1 = vinst_new(VINST_JUMP);
-            jmp1->label = strdup(cond_label);
+            jmp1->label = SAGE_STRDUP(cond_label);
             isel_append(ctx, jmp1);
 
             VInst* el = vinst_new(VINST_LABEL);
-            el->label = strdup(end_label);
+            el->label = SAGE_STRDUP(end_label);
             isel_append(ctx, el);
 
             free(cond_label);
@@ -439,6 +448,18 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             isel_append(ctx, v);
             break;
         }
+        case STMT_FOR:
+        case STMT_CLASS:
+        case STMT_MATCH:
+        case STMT_TRY:
+        case STMT_RAISE:
+        case STMT_DEFER:
+        case STMT_YIELD:
+        case STMT_IMPORT:
+        case STMT_BREAK:
+        case STMT_CONTINUE:
+            fprintf(stderr, "Codegen backend: unsupported statement type %d\n", stmt->type);
+            break;
         default:
             break;
     }

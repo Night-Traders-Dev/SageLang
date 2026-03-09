@@ -75,7 +75,7 @@ static Value input_native(int argCount, Value* args) {
         if (len > 0 && buffer[len-1] == '\n') buffer[len-1] = '\0';
 
         char* str = SAGE_ALLOC(len + 1);
-        strcpy(str, buffer);
+        memcpy(str, buffer, len + 1);
         return val_string_take(str);
     }
     return val_nil();
@@ -97,8 +97,9 @@ static Value str_native(int argCount, Value* args) {
     char buffer[256];
     if (IS_NUMBER(args[0])) {
         snprintf(buffer, sizeof(buffer), "%g", AS_NUMBER(args[0]));
-        char* str = SAGE_ALLOC(strlen(buffer) + 1);
-        strcpy(str, buffer);
+        size_t slen = strlen(buffer);
+        char* str = SAGE_ALLOC(slen + 1);
+        memcpy(str, buffer, slen + 1);
         return val_string_take(str);
     }
     if (IS_STRING(args[0])) {
@@ -106,8 +107,9 @@ static Value str_native(int argCount, Value* args) {
     }
     if (IS_BOOL(args[0])) {
         char* str = AS_BOOL(args[0]) ? "true" : "false";
-        char* result = SAGE_ALLOC(strlen(str) + 1);
-        strcpy(result, str);
+        size_t slen = strlen(str);
+        char* result = SAGE_ALLOC(slen + 1);
+        memcpy(result, str, slen + 1);
         return val_string_take(result);
     }
     return val_string("nil");
@@ -1695,8 +1697,12 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
             Value callee_value = callee_result.value;
 
             if (callee_value.type == VAL_NATIVE) {
-                Value args[255];
                 int count = expr->as.call.arg_count;
+                if (count > 255) {
+                    fprintf(stderr, "Runtime Error: Too many arguments (%d, max 255).\n", count);
+                    return EVAL_RESULT(val_nil());
+                }
+                Value args[255];
                 for (int i = 0; i < count; i++) {
                     ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
                     if (arg_result.is_throwing) return arg_result;

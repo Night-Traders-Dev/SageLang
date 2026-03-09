@@ -126,8 +126,9 @@ Value val_exception(const char* message) {
     Value v;
     v.type = VAL_EXCEPTION;
     v.as.exception = gc_alloc(VAL_EXCEPTION, sizeof(ExceptionValue));
-    v.as.exception->message = SAGE_ALLOC(strlen(message) + 1);
-    strcpy(v.as.exception->message, message);
+    size_t msg_len = strlen(message);
+    v.as.exception->message = SAGE_ALLOC(msg_len + 1);
+    memcpy(v.as.exception->message, message, msg_len + 1);
     return v;
 }
 
@@ -154,8 +155,9 @@ Value val_clib(void* handle, const char* name) {
     v.type = VAL_CLIB;
     v.as.clib = SAGE_ALLOC(sizeof(CLibValue));
     v.as.clib->handle = handle;
-    v.as.clib->name = SAGE_ALLOC(strlen(name) + 1);
-    strcpy(v.as.clib->name, name);
+    size_t name_len = strlen(name);
+    v.as.clib->name = SAGE_ALLOC(name_len + 1);
+    memcpy(v.as.clib->name, name, name_len + 1);
     return v;
 }
 
@@ -413,8 +415,9 @@ Value string_split(const char* str, const char* delimiter) {
         start = found + del_len;
     }
     
-    char* part = SAGE_ALLOC(strlen(start) + 1);
-    strcpy(part, start);
+    size_t tail_len = strlen(start);
+    char* part = SAGE_ALLOC(tail_len + 1);
+    memcpy(part, start, tail_len + 1);
     array_push(&result, val_string_take(part));
     
     return result;

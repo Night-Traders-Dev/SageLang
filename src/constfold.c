@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "gc.h"
 
 // ============================================================================
 // Constant Folding Pass
@@ -98,7 +99,7 @@ static Expr* fold_binary(Expr* expr) {
             const char* rs = bin->right->as.string.value;
             size_t llen = strlen(ls);
             size_t rlen = strlen(rs);
-            char* concat = malloc(llen + rlen + 1);
+            char* concat = SAGE_ALLOC(llen + rlen + 1);
             memcpy(concat, ls, llen);
             memcpy(concat + llen, rs, rlen + 1);
 

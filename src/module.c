@@ -60,7 +60,7 @@ void add_search_path(ModuleCache* cache, const char* path) {
         return;
     }
     
-    cache->search_paths[cache->search_path_count] = strdup(path);
+    cache->search_paths[cache->search_path_count] = SAGE_STRDUP(path);
     cache->search_path_count++;
 }
 
@@ -117,7 +117,11 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
     // Try each search path
     for (int i = 0; i < cache->search_path_count; i++) {
         // Try .sage extension
-        snprintf(path, MAX_MODULE_PATH, "%s/%s.sage", cache->search_paths[i], name);
+        int written = snprintf(path, MAX_MODULE_PATH, "%s/%s.sage", cache->search_paths[i], name);
+        if (written >= MAX_MODULE_PATH) {
+            fprintf(stderr, "Error: Module path too long for '%s'\n", name);
+            continue;
+        }
         if (file_exists(path)) {
 #ifndef PICO_BUILD
             if (!path_is_within(path, cache->search_paths[i])) {
@@ -125,11 +129,12 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
                 continue;
             }
 #endif
-            return strdup(path);
+            return SAGE_STRDUP(path);
         }
 
         // Try without extension (for directories with __init__.sage)
-        snprintf(path, MAX_MODULE_PATH, "%s/%s/__init__.sage", cache->search_paths[i], name);
+        written = snprintf(path, MAX_MODULE_PATH, "%s/%s/__init__.sage", cache->search_paths[i], name);
+        if (written >= MAX_MODULE_PATH) continue;
         if (file_exists(path)) {
 #ifndef PICO_BUILD
             if (!path_is_within(path, cache->search_paths[i])) {
@@ -137,7 +142,7 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
                 continue;
             }
 #endif
-            return strdup(path);
+            return SAGE_STRDUP(path);
         }
     }
 
@@ -283,7 +288,7 @@ Module* load_module(ModuleCache* cache, const char* name) {
     
     // Create new module
     module = SAGE_ALLOC(sizeof(Module));
-    module->name = strdup(name);
+    module->name = SAGE_STRDUP(name);
     module->path = path;
     module->source = NULL;
     module->ast = NULL;

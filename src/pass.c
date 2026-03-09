@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "gc.h"
 
 // ============================================================================
 // Token Cloning
@@ -15,7 +16,7 @@ Token clone_token(Token tok) {
     t.length = tok.length;
     // Token.start points into the original source; copy the string
     if (tok.start != NULL && tok.length > 0) {
-        char* s = malloc((size_t)tok.length + 1);
+        char* s = SAGE_ALLOC((size_t)tok.length + 1);
         memcpy(s, tok.start, (size_t)tok.length);
         s[tok.length] = '\0';
         t.start = s;
@@ -32,7 +33,7 @@ Token clone_token(Token tok) {
 Expr* clone_expr(const Expr* expr) {
     if (expr == NULL) return NULL;
 
-    Expr* e = malloc(sizeof(Expr));
+    Expr* e = SAGE_ALLOC(sizeof(Expr));
     e->type = expr->type;
 
     switch (expr->type) {
@@ -40,7 +41,7 @@ Expr* clone_expr(const Expr* expr) {
             e->as.number.value = expr->as.number.value;
             break;
         case EXPR_STRING:
-            e->as.string.value = expr->as.string.value ? strdup(expr->as.string.value) : NULL;
+            e->as.string.value = expr->as.string.value ? SAGE_STRDUP(expr->as.string.value) : NULL;
             break;
         case EXPR_BOOL:
             e->as.boolean.value = expr->as.boolean.value;
@@ -59,7 +60,7 @@ Expr* clone_expr(const Expr* expr) {
             e->as.call.callee = clone_expr(expr->as.call.callee);
             e->as.call.arg_count = expr->as.call.arg_count;
             if (expr->as.call.arg_count > 0) {
-                e->as.call.args = malloc(sizeof(Expr*) * (size_t)expr->as.call.arg_count);
+                e->as.call.args = SAGE_ALLOC(sizeof(Expr*) * (size_t)expr->as.call.arg_count);
                 for (int i = 0; i < expr->as.call.arg_count; i++) {
                     e->as.call.args[i] = clone_expr(expr->as.call.args[i]);
                 }
@@ -71,7 +72,7 @@ Expr* clone_expr(const Expr* expr) {
         case EXPR_ARRAY: {
             e->as.array.count = expr->as.array.count;
             if (expr->as.array.count > 0) {
-                e->as.array.elements = malloc(sizeof(Expr*) * (size_t)expr->as.array.count);
+                e->as.array.elements = SAGE_ALLOC(sizeof(Expr*) * (size_t)expr->as.array.count);
                 for (int i = 0; i < expr->as.array.count; i++) {
                     e->as.array.elements[i] = clone_expr(expr->as.array.elements[i]);
                 }
@@ -87,10 +88,10 @@ Expr* clone_expr(const Expr* expr) {
         case EXPR_DICT: {
             e->as.dict.count = expr->as.dict.count;
             if (expr->as.dict.count > 0) {
-                e->as.dict.keys = malloc(sizeof(char*) * (size_t)expr->as.dict.count);
-                e->as.dict.values = malloc(sizeof(Expr*) * (size_t)expr->as.dict.count);
+                e->as.dict.keys = SAGE_ALLOC(sizeof(char*) * (size_t)expr->as.dict.count);
+                e->as.dict.values = SAGE_ALLOC(sizeof(Expr*) * (size_t)expr->as.dict.count);
                 for (int i = 0; i < expr->as.dict.count; i++) {
-                    e->as.dict.keys[i] = strdup(expr->as.dict.keys[i]);
+                    e->as.dict.keys[i] = SAGE_STRDUP(expr->as.dict.keys[i]);
                     e->as.dict.values[i] = clone_expr(expr->as.dict.values[i]);
                 }
             } else {
@@ -102,7 +103,7 @@ Expr* clone_expr(const Expr* expr) {
         case EXPR_TUPLE: {
             e->as.tuple.count = expr->as.tuple.count;
             if (expr->as.tuple.count > 0) {
-                e->as.tuple.elements = malloc(sizeof(Expr*) * (size_t)expr->as.tuple.count);
+                e->as.tuple.elements = SAGE_ALLOC(sizeof(Expr*) * (size_t)expr->as.tuple.count);
                 for (int i = 0; i < expr->as.tuple.count; i++) {
                     e->as.tuple.elements[i] = clone_expr(expr->as.tuple.elements[i]);
                 }
@@ -136,7 +137,7 @@ Expr* clone_expr(const Expr* expr) {
 
 static CaseClause* clone_case_clause(const CaseClause* c) {
     if (c == NULL) return NULL;
-    CaseClause* nc = malloc(sizeof(CaseClause));
+    CaseClause* nc = SAGE_ALLOC(sizeof(CaseClause));
     nc->pattern = clone_expr(c->pattern);
     nc->body = clone_stmt_list(c->body);
     return nc;
@@ -144,7 +145,7 @@ static CaseClause* clone_case_clause(const CaseClause* c) {
 
 static CatchClause* clone_catch_clause(const CatchClause* c) {
     if (c == NULL) return NULL;
-    CatchClause* nc = malloc(sizeof(CatchClause));
+    CatchClause* nc = SAGE_ALLOC(sizeof(CatchClause));
     nc->exception_var = clone_token(c->exception_var);
     nc->body = clone_stmt_list(c->body);
     return nc;
@@ -153,7 +154,7 @@ static CatchClause* clone_catch_clause(const CatchClause* c) {
 Stmt* clone_stmt(const Stmt* stmt) {
     if (stmt == NULL) return NULL;
 
-    Stmt* s = malloc(sizeof(Stmt));
+    Stmt* s = SAGE_ALLOC(sizeof(Stmt));
     s->type = stmt->type;
     s->next = NULL;
 
@@ -184,7 +185,7 @@ Stmt* clone_stmt(const Stmt* stmt) {
             s->as.proc.name = clone_token(stmt->as.proc.name);
             s->as.proc.param_count = stmt->as.proc.param_count;
             if (stmt->as.proc.param_count > 0) {
-                s->as.proc.params = malloc(sizeof(Token) * (size_t)stmt->as.proc.param_count);
+                s->as.proc.params = SAGE_ALLOC(sizeof(Token) * (size_t)stmt->as.proc.param_count);
                 for (int i = 0; i < stmt->as.proc.param_count; i++) {
                     s->as.proc.params[i] = clone_token(stmt->as.proc.params[i]);
                 }
@@ -215,7 +216,7 @@ Stmt* clone_stmt(const Stmt* stmt) {
             s->as.match_stmt.value = clone_expr(stmt->as.match_stmt.value);
             s->as.match_stmt.case_count = stmt->as.match_stmt.case_count;
             if (stmt->as.match_stmt.case_count > 0) {
-                s->as.match_stmt.cases = malloc(sizeof(CaseClause*) * (size_t)stmt->as.match_stmt.case_count);
+                s->as.match_stmt.cases = SAGE_ALLOC(sizeof(CaseClause*) * (size_t)stmt->as.match_stmt.case_count);
                 for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
                     s->as.match_stmt.cases[i] = clone_case_clause(stmt->as.match_stmt.cases[i]);
                 }
@@ -232,7 +233,7 @@ Stmt* clone_stmt(const Stmt* stmt) {
             s->as.try_stmt.try_block = clone_stmt_list(stmt->as.try_stmt.try_block);
             s->as.try_stmt.catch_count = stmt->as.try_stmt.catch_count;
             if (stmt->as.try_stmt.catch_count > 0) {
-                s->as.try_stmt.catches = malloc(sizeof(CatchClause*) * (size_t)stmt->as.try_stmt.catch_count);
+                s->as.try_stmt.catches = SAGE_ALLOC(sizeof(CatchClause*) * (size_t)stmt->as.try_stmt.catch_count);
                 for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
                     s->as.try_stmt.catches[i] = clone_catch_clause(stmt->as.try_stmt.catches[i]);
                 }
@@ -249,20 +250,20 @@ Stmt* clone_stmt(const Stmt* stmt) {
             s->as.yield_stmt.value = clone_expr(stmt->as.yield_stmt.value);
             break;
         case STMT_IMPORT: {
-            s->as.import.module_name = stmt->as.import.module_name ? strdup(stmt->as.import.module_name) : NULL;
+            s->as.import.module_name = stmt->as.import.module_name ? SAGE_STRDUP(stmt->as.import.module_name) : NULL;
             s->as.import.item_count = stmt->as.import.item_count;
             if (stmt->as.import.item_count > 0) {
-                s->as.import.items = malloc(sizeof(char*) * (size_t)stmt->as.import.item_count);
-                s->as.import.item_aliases = malloc(sizeof(char*) * (size_t)stmt->as.import.item_count);
+                s->as.import.items = SAGE_ALLOC(sizeof(char*) * (size_t)stmt->as.import.item_count);
+                s->as.import.item_aliases = SAGE_ALLOC(sizeof(char*) * (size_t)stmt->as.import.item_count);
                 for (int i = 0; i < stmt->as.import.item_count; i++) {
-                    s->as.import.items[i] = stmt->as.import.items[i] ? strdup(stmt->as.import.items[i]) : NULL;
-                    s->as.import.item_aliases[i] = stmt->as.import.item_aliases[i] ? strdup(stmt->as.import.item_aliases[i]) : NULL;
+                    s->as.import.items[i] = stmt->as.import.items[i] ? SAGE_STRDUP(stmt->as.import.items[i]) : NULL;
+                    s->as.import.item_aliases[i] = stmt->as.import.item_aliases[i] ? SAGE_STRDUP(stmt->as.import.item_aliases[i]) : NULL;
                 }
             } else {
                 s->as.import.items = NULL;
                 s->as.import.item_aliases = NULL;
             }
-            s->as.import.alias = stmt->as.import.alias ? strdup(stmt->as.import.alias) : NULL;
+            s->as.import.alias = stmt->as.import.alias ? SAGE_STRDUP(stmt->as.import.alias) : NULL;
             s->as.import.import_all = stmt->as.import.import_all;
             break;
         }

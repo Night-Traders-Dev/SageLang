@@ -38,6 +38,17 @@ static inline void* sage_safe_realloc(void* old, size_t size, const char* file, 
     return ptr;
 }
 
+static inline char* sage_safe_strdup(const char* str, const char* file, int line) {
+    if (str == NULL) return NULL;
+    char* ptr = strdup(str);
+    if (ptr == NULL) {
+        fprintf(stderr, "Fatal: Out of memory in strdup at %s:%d\n", file, line);
+        abort();
+    }
+    return ptr;
+}
+#define SAGE_STRDUP(str) sage_safe_strdup(str, __FILE__, __LINE__)
+
 // GC object header (prepended to all allocated objects)
 typedef struct {
     int marked;           // Has this object been marked in this cycle?
