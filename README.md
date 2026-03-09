@@ -4,7 +4,7 @@
 
 ![SageLang Logo](assets/SageLang.jpg)
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, and three compiler backends (C, LLVM IR, native assembly).
+Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR, native assembly), and a **self-hosted interpreter** written in Sage itself.
 
 ## 🚀 Features (Implemented)
 
@@ -104,6 +104,21 @@ print await future     # 1764
 - **Linter**: `sage lint <file>` with 13 rules (E001-E003 errors, W001-W005 warnings, S001-S005 style)
 - **Syntax Highlighting**: TextMate grammar (`editors/sage.tmLanguage.json`), VSCode extension (`editors/vscode/`)
 - **LSP Server**: `sage --lsp` or standalone `sage-lsp` binary with diagnostics, completion, hover, formatting
+
+### Self-Hosting / Bootstrap
+
+Sage can run Sage programs through a self-hosted interpreter written entirely in SageLang. The lexer, parser, and interpreter have been ported from C to Sage (~1,920 lines total).
+
+```bash
+cd self_host && ../sage sage.sage program.sage
+```
+
+- **Lexer** (`lexer.sage`, ~300 lines) - Indentation-aware tokenizer with dict-based keyword lookup
+- **Parser** (`parser.sage`, ~700 lines) - Recursive descent with 12 precedence levels
+- **Interpreter** (`interpreter.sage`, ~920 lines) - Tree-walking evaluator with dict-based values
+- **Bootstrap coverage**: arithmetic, variables, control flow, functions, recursion, closures, classes, inheritance, arrays, dicts, strings, try/catch, break/continue
+- **178 self-host tests**: lexer (12), parser (130), interpreter (18), bootstrap (18)
+- GC must be disabled for self-hosted code (`gc_disable()`)
 
 ### Bundled `lib/` Modules
 - **`math`**: arithmetic helpers, `pow_int`, `factorial`, `gcd`, `lcm`, `sqrt`, distance helpers
@@ -436,7 +451,7 @@ gc_enable()
 - [x] **Phase 10: Compiler Development** (C backend, LLVM IR, native ASM, optimization passes) ✅
 - [x] **Phase 11: Concurrency & Stdlib** (Native modules, threads, async/await, backend expansion) ✅
 - [x] **Phase 12: Tooling** (REPL, Formatter, Linter, Syntax Highlighting, LSP) ✅
-- [ ] **Phase 13: Self-Hosting** (Rewrite compiler in Sage)
+- [x] **Phase 13: Self-Hosting** (Lexer, parser, interpreter ported to Sage, full bootstrap) ✅
 
 **📝 For a detailed breakdown of all planned features, see [ROADMAP.md](ROADMAP.md)**
 
@@ -450,7 +465,7 @@ Sage aims to be a **systems programming language** that:
 - Enables lazy evaluation with generators
 - Enables inline assembly for performance-critical code
 - Compiles to native code via C or LLVM
-- Eventually becomes self-hosted
+- Is self-hosted (Sage interpreter written in Sage)
 
 ### Future Capabilities
 
@@ -477,12 +492,13 @@ proc write_memory(ptr: *mut u8, value: u8):
 ## 📊 Project Stats
 
 - **Language**: C
-- **Phases Completed**: 12/13 (~92%)
-- **Test Suite**: 112 interpreter tests + 28 compiler tests, 28 categories, 100% pass rate
+- **Phases Completed**: 13/13 (100%)
+- **Test Suite**: 112 interpreter tests + 28 compiler tests + 178 self-host tests, 100% pass rate
 - **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
-- **Status**: Advanced Development
+- **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
+- **Status**: Self-Hosted
 - **License**: MIT
-- **Current Version**: v0.12.0-dev
+- **Current Version**: v0.13.0-dev
 
 ## 💾 Project Structure
 
@@ -532,6 +548,17 @@ sage/
 │   ├── phase6_classes.sage  # OOP demonstration
 │   ├── phase5_data.sage     # Data structures
 │   └── phase4_gc_demo.sage  # GC examples
+├── self_host/        # Self-hosted Sage interpreter (Phase 13)
+│   ├── sage.sage     # Bootstrap entry point
+│   ├── token.sage    # Token type definitions
+│   ├── ast.sage      # AST node constructors
+│   ├── lexer.sage    # Self-hosted lexer (~300 lines)
+│   ├── parser.sage   # Self-hosted parser (~700 lines)
+│   ├── interpreter.sage  # Self-hosted interpreter (~920 lines)
+│   ├── test_lexer.sage       # Lexer tests (12)
+│   ├── test_parser.sage      # Parser tests (130)
+│   ├── test_interpreter.sage # Interpreter tests (18)
+│   └── test_bootstrap.sage   # Bootstrap tests (18)
 ├── tests/            # Automated test suite (112 interpreter + 28 compiler)
 │   ├── run_tests.sh  # Test runner script
 │   ├── 01_variables/ # Variable declaration tests
@@ -549,12 +576,12 @@ sage/
 
 Sage is an educational project aimed at understanding compiler construction and language design. Contributions are welcome!
 
-### Current Focus Areas (Phase 13 - Self-Hosting)
+### Current Focus Areas
 
-1. **Port Lexer to Sage**: Rewrite the tokenizer in SageLang
-2. **Port Parser to Sage**: Rewrite the recursive descent parser in SageLang
-3. **Port Interpreter to Sage**: Rewrite the tree-walking evaluator in SageLang
-4. **Bootstrap Process**: Sage compiling itself
+1. **Backend Expansion**: Extend LLVM and native backends for class/module/async support
+2. **Package Manager**: CLI for dependency management
+3. **Self-Hosted Compiler**: Extend self-hosted interpreter to emit C/LLVM/assembly
+4. **Ecosystem Growth**: Standard library expansion, community building
 
 ### How to Contribute
 1. Fork the project
@@ -587,6 +614,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
+- March 9, 2026: Phase 13 Complete - Self-hosted lexer, parser, interpreter with full bootstrap
 - March 9, 2026: Phase 12 Complete - REPL, formatter, linter, syntax highlighting, LSP server
 - March 9, 2026: Phase 11 Complete - Native stdlib, threads, async/await, backend expansion
 - March 9, 2026: Phase 10 Complete - C/LLVM/native backends, optimization passes

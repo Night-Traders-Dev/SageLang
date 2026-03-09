@@ -748,8 +748,8 @@ int main(int argc, const char* argv[]) {
     } else if (argc == 2 && strcmp(argv[1], "--lsp") == 0) {
         // Phase 12: Language Server Protocol mode
         lsp_run();
-    } else if (argc == 2) {
-        // File mode
+    } else if (argc >= 2) {
+        // File mode (extra args accessible via sys.args())
         char* source = read_file(argv[1]);
         run(source);
         free(source);

@@ -161,7 +161,7 @@ proc test_class():
     let s = stmts[0]
     assert_eq(s.type, STMT_CLASS, "class: stmt type")
     assert_eq(s.name.text, "Dog", "class: name")
-    assert_eq(s.has_parent, 0, "class: no parent")
+    assert_eq(s.has_parent, false, "class: no parent")
     assert_true(s.methods != nil, "class: has methods")
     assert_eq(s.methods.type, STMT_PROC, "class: first method is proc")
     assert_eq(s.methods.name.text, "init", "class: init method")
@@ -176,7 +176,7 @@ proc test_class_inherit():
     let s = stmts[0]
     assert_eq(s.type, STMT_CLASS, "inherit: stmt type")
     assert_eq(s.name.text, "Puppy", "inherit: name")
-    assert_eq(s.has_parent, 1, "inherit: has parent")
+    assert_eq(s.has_parent, true, "inherit: has parent")
     assert_eq(s.parent.text, "Dog", "inherit: parent name")
 
 # --- Test 13: Return statement ---

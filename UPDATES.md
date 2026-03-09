@@ -1,5 +1,57 @@
 # SageLang Updates
 
+## March 9, 2026 - Phase 13 Complete: Self-Hosting
+
+Phase 13 delivers a self-hosted Sage interpreter written entirely in SageLang. The lexer, parser, and interpreter have been ported from C to Sage, enabling Sage to run Sage programs through its own pipeline.
+
+### Self-Hosted Components
+
+- **Lexer** (`self_host/lexer.sage`, ~300 lines) - Indentation-aware tokenizer with dict-based keyword lookup
+- **Parser** (`self_host/parser.sage`, ~700 lines) - Recursive descent parser with 12 precedence levels
+- **Interpreter** (`self_host/interpreter.sage`, ~920 lines) - Tree-walking evaluator with dict-based value representation
+- **Token definitions** (`self_host/token.sage`) - Token type constants
+- **AST definitions** (`self_host/ast.sage`) - Dict-based AST node constructors
+- **Bootstrap entry** (`self_host/sage.sage`) - Runs target `.sage` files through the self-hosted interpreter
+
+### New Native Builtins (7)
+
+- **`type()`** - Returns value type as string
+- **`chr()`** - Number to character conversion
+- **`ord()`** - Character to number conversion
+- **`startswith()`** - String prefix check
+- **`endswith()`** - String suffix check
+- **`contains()`** - Substring search
+- **`indexof()`** - Find substring position
+
+### Bootstrap Coverage
+
+- Arithmetic, variables, if/else, while, for loops
+- Functions, recursion, closures, nested functions
+- Classes, inheritance, method dispatch
+- Arrays, dicts, strings, string builtins
+- Try/catch, break/continue, boolean ops
+- GC must be disabled for self-hosted code (`gc_disable()`)
+
+### Notable Fix
+
+- **Truthiness bug** - 0 is truthy in Sage; must use `true`/`false` for booleans
+
+### Running the Self-Hosted Interpreter
+
+```bash
+cd self_host && ../sage sage.sage <file.sage>
+```
+
+### Test Suites
+
+- `test_lexer.sage` - 12/12 tests passing
+- `test_parser.sage` - 130/130 tests passing
+- `test_interpreter.sage` - 18/18 tests passing
+- `test_bootstrap.sage` - 18/18 tests passing
+- All existing tests maintained: 112 interpreter tests + 28 compiler tests
+
+---
+
 ## March 9, 2026 - Phase 12 Complete: Tooling Ecosystem
 
 Phase 12 delivers a complete developer tooling ecosystem for SageLang: an interactive REPL, code formatter, linter, syntax highlighting, and a Language Server Protocol (LSP) server.
