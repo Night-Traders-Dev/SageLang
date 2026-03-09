@@ -2,6 +2,7 @@
 ## The first pass scans the text to find labels (like .wrap_target:) and records their line numbers so that jmp instructions can branch to them. 
 ## The second pass parses the mnemonics and bitwise-packs them into the 16-bit opcodes the RP2040 hardware expects.
 
+from strings import endswith
 
 class PIOAssembler:
     proc init(self):
