@@ -1,5 +1,79 @@
 # SageLang Updates
 
+## March 9, 2026 - Networking Modules & cJSON Port
+
+### Networking Modules (src/net.c, ~850 lines)
+
+Four new native modules for network programming, backed by libcurl and OpenSSL:
+
+#### `socket` Module (15 functions + constants)
+
+Low-level POSIX socket operations:
+- `socket.create(family, type, proto)` — Create a socket
+- `socket.bind(sock, host, port)` / `socket.listen(sock, backlog)` / `socket.accept(sock)`
+- `socket.connect(sock, host, port)` / `socket.send(sock, data)` / `socket.recv(sock, size)`
+- `socket.sendto(sock, data, host, port)` / `socket.recvfrom(sock, size)` — UDP
+- `socket.close(sock)` / `socket.setopt(sock, level, name, val)` / `socket.poll(sock, timeout_ms)`
+- `socket.resolve(hostname)` / `socket.getpeername(sock)` / `socket.nonblock(sock, enable)`
+- Constants: `AF_INET`, `AF_INET6`, `SOCK_STREAM`, `SOCK_DGRAM`, `SOCK_RAW`, `IPPROTO_TCP`, `IPPROTO_UDP`
+
+#### `tcp` Module (9 functions)
+
+High-level TCP with automatic buffering:
+- `tcp.connect(host, port)` / `tcp.listen(host, port, backlog)`
+- `tcp.accept(server)` / `tcp.send(sock, data)` / `tcp.recv(sock, size)`
+- `tcp.sendall(sock, data)` / `tcp.recvall(sock, size)` / `tcp.recvline(sock)`
+- `tcp.close(sock)`
+
+#### `http` Module (9 functions)
+
+HTTP/HTTPS client via libcurl:
+- `http.get(url, opts?)` / `http.post(url, body, opts?)` / `http.put(url, body, opts?)`
+- `http.delete(url, opts?)` / `http.patch(url, body, opts?)` / `http.head(url, opts?)`
+- `http.download(url, path, opts?)` / `http.escape(str)` / `http.unescape(str)`
+- All request functions return `{status, body, headers}` dicts
+- Options dict: `timeout`, `follow`, `verify`, `user_agent`, `headers`, `cainfo`
+
+#### `ssl` Module (13 functions)
+
+OpenSSL TLS/SSL bindings:
+- `ssl.context(method?)` / `ssl.load_cert(ctx, cert, key)` / `ssl.wrap(ctx, sock)`
+- `ssl.connect(ssl)` / `ssl.accept(ssl)` / `ssl.send(ssl, data)` / `ssl.recv(ssl, size)`
+- `ssl.shutdown(ssl)` / `ssl.free(ssl)` / `ssl.free_context(ctx)`
+- `ssl.error(ssl, ret)` / `ssl.peer_cert(ssl)` / `ssl.set_verify(ctx, mode)`
+
+### cJSON Port (lib/json.sage, ~1,050 lines)
+
+Complete 1:1 port of Dave Gamble's [cJSON](https://github.com/DaveGamble/cJSON) library, exposing the same API:
+
+- **Parsing**: `cJSON_Parse`, `cJSON_ParseWithLength`, `cJSON_GetErrorPtr`
+- **Printing**: `cJSON_Print` (formatted), `cJSON_PrintUnformatted` (compact), `cJSON_PrintBuffered`
+- **Creation** (13 functions): `cJSON_CreateNull/True/False/Bool/Number/String/Raw/Array/Object`, `CreateIntArray/DoubleArray/FloatArray/StringArray`
+- **Query** (7): `cJSON_GetArraySize`, `GetArrayItem`, `GetObjectItem` (case-insensitive), `GetObjectItemCaseSensitive`, `HasObjectItem`, `GetStringValue`, `GetNumberValue`
+- **Type checks** (10): `cJSON_IsInvalid/False/True/Bool/Null/Number/String/Array/Object/Raw`
+- **Array modification** (5): `AddItemToArray`, `InsertItemInArray`, `DetachItemFromArray`, `DeleteItemFromArray`, `ReplaceItemInArray`
+- **Object modification** (8): `AddItemToObject/CS`, `DetachItemFromObject/CaseSensitive`, `DeleteItemFromObject/CaseSensitive`, `ReplaceItemInObject/CaseSensitive`
+- **Helpers** (9): `cJSON_AddNullToObject`, `AddTrueToObject`, `AddFalseToObject`, `AddBoolToObject`, `AddNumberToObject`, `AddStringToObject`, `AddRawToObject`, `AddArrayToObject`, `AddObjectToObject`
+- **Utility** (7): `cJSON_Duplicate`, `Compare`, `Minify`, `Delete`, `SetValuestring`, `SetNumberHelper`, `Version`
+- **Sage extras** (2): `cJSON_ToSage` (tree→native dict/array), `cJSON_FromSage` (native→tree)
+
+### Build System Changes
+
+- `Makefile`: Added `-lcurl -lssl -lcrypto` to LDFLAGS, `net.c` to CORE_SOURCES
+- `CMakeLists.txt`: Added PkgConfig for libcurl and openssl, all targets link `${CURL_LIBRARIES} ${OPENSSL_LIBRARIES}`
+
+### Test Suite
+
+- 88 new JSON tests (`tests/test_json.sage`) covering parse, print, create, query, type checks, array/object manipulation, duplicate, compare, minify, roundtrip, escape sequences, nested structures, case sensitivity, and Sage conversion
+- All existing tests maintained: 112 interpreter + 28 compiler + 178 self-host
+
+### Interpreter Bugs Discovered
+
+- **Instance `==` always returns false** — Sage class instances cannot be compared by reference with `==`. Workaround: compare by structural position (e.g., `item.prev == nil` to detect first child).
+- **elif chains with 5+ branches malfunction** — The 4th+ branch in a long elif chain inside a class method can produce incorrect results. Workaround: extract to a helper function with early returns.
+
+---
+
 ## March 9, 2026 - Build System: CMake and Make Support for Self-Hosted Builds
 
 The build system now supports building SageLang in two modes: from C sources (default) and self-hosted (Sage-on-Sage). Both Make and CMake are supported.
