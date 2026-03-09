@@ -360,7 +360,10 @@ A cross-cutting audit and hardening pass across the entire codebase.
 - [x] Tuple literals and indexing
 - [x] Exception handling (`try`/`catch`/`finally`/`raise`) via `setjmp`/`longjmp`
 - [x] Property access (`obj.prop`) compiled as dict key lookup
-- [x] Additional builtins: `tonumber()`
+- [x] String builtins: `split`, `join`, `replace`, `upper`, `lower`, `strip`
+- [x] Memory builtins: `mem_alloc`, `mem_free`, `mem_read`, `mem_write`, `mem_size`
+- [x] Struct builtins: `struct_def`, `struct_new`, `struct_get`, `struct_set`, `struct_size`
+- [x] Additional builtins: `tonumber()`, `clock()`, `input()`
 - [ ] Expand C backend coverage to modules and objects/classes
 - [ ] LLVM IR generation backend
 - [ ] Direct machine code generation (x86-64)
@@ -451,7 +454,7 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ## 📊 Progress Metrics
 
 - **Phases Completed**: 9/13 (69%)
-- **Test Suite**: 100 interpreter tests + 11 compiler tests, 25 categories, 100% pass rate
+- **Test Suite**: 100 interpreter tests + 14 compiler tests, 25 categories, 100% pass rate
 - **Estimated Completion**: 2026-2027 (self-hosting)
 
 ---
@@ -467,7 +470,11 @@ A cross-cutting audit and hardening pass across the entire codebase.
 - Exception handling: `try`/`catch`/`finally`/`raise` via `setjmp`/`longjmp`
 - Property access (`obj.prop`) as dict key lookup
 - `tonumber()` builtin in C backend
-- 4 new compiler tests (11 total), all passing
+- String builtins: `split`, `join`, `replace`, `upper`, `lower`, `strip`
+- Memory builtins: `mem_alloc`, `mem_free`, `mem_read`, `mem_write`, `mem_size`
+- Struct builtins: `struct_def`, `struct_new`, `struct_get`, `struct_set`, `struct_size`
+- `clock()` and `input()` builtins (host target only)
+- 7 new compiler tests (14 total), all passing
 - Fixed Pico codegen test to use `grep` instead of `rg`
 
 - **Phase 9 Complete: Low-Level Programming**

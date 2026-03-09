@@ -806,6 +806,258 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
         return sb_take(&sb);
     }
 
+    if (strcmp(callee_name, "upper") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "upper() expects exactly one argument");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_upper(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "lower") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "lower() expects exactly one argument");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_lower(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "strip") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "strip() expects exactly one argument");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_strip_fn(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "split") == 0) {
+        if (call->arg_count != 2) {
+            compiler_error(compiler, "split() expects exactly two arguments");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* str_arg = emit_expr(compiler, call->args[0]);
+            char* delim_arg = emit_expr(compiler, call->args[1]);
+            sb_appendf(&sb, "sage_split_fn(%s, %s)", str_arg, delim_arg);
+            free(str_arg);
+            free(delim_arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "join") == 0) {
+        if (call->arg_count != 2) {
+            compiler_error(compiler, "join() expects exactly two arguments");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arr_arg = emit_expr(compiler, call->args[0]);
+            char* delim_arg = emit_expr(compiler, call->args[1]);
+            sb_appendf(&sb, "sage_join_fn(%s, %s)", arr_arg, delim_arg);
+            free(arr_arg);
+            free(delim_arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "replace") == 0) {
+        if (call->arg_count != 3) {
+            compiler_error(compiler, "replace() expects exactly three arguments");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* str_arg = emit_expr(compiler, call->args[0]);
+            char* old_arg = emit_expr(compiler, call->args[1]);
+            char* new_arg = emit_expr(compiler, call->args[2]);
+            sb_appendf(&sb, "sage_replace_fn(%s, %s, %s)", str_arg, old_arg, new_arg);
+            free(str_arg);
+            free(old_arg);
+            free(new_arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "mem_alloc") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "mem_alloc() expects exactly one argument");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_mem_alloc(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "mem_free") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "mem_free() expects exactly one argument");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_mem_free(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "mem_read") == 0) {
+        if (call->arg_count != 3) {
+            compiler_error(compiler, "mem_read() expects exactly three arguments");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* ptr = emit_expr(compiler, call->args[0]);
+            char* off = emit_expr(compiler, call->args[1]);
+            char* type = emit_expr(compiler, call->args[2]);
+            sb_appendf(&sb, "sage_mem_read(%s, %s, %s)", ptr, off, type);
+            free(ptr); free(off); free(type);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "mem_write") == 0) {
+        if (call->arg_count != 4) {
+            compiler_error(compiler, "mem_write() expects exactly four arguments");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* ptr = emit_expr(compiler, call->args[0]);
+            char* off = emit_expr(compiler, call->args[1]);
+            char* type = emit_expr(compiler, call->args[2]);
+            char* val = emit_expr(compiler, call->args[3]);
+            sb_appendf(&sb, "sage_mem_write(%s, %s, %s, %s)", ptr, off, type, val);
+            free(ptr); free(off); free(type); free(val);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "mem_size") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "mem_size() expects exactly one argument");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_mem_size(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "struct_def") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "struct_def() expects exactly one argument");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_struct_def(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "struct_new") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "struct_new() expects exactly one argument");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_struct_new(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "struct_get") == 0) {
+        if (call->arg_count != 3) {
+            compiler_error(compiler, "struct_get() expects exactly three arguments");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* ptr = emit_expr(compiler, call->args[0]);
+            char* def = emit_expr(compiler, call->args[1]);
+            char* field = emit_expr(compiler, call->args[2]);
+            sb_appendf(&sb, "sage_struct_get(%s, %s, %s)", ptr, def, field);
+            free(ptr); free(def); free(field);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "struct_set") == 0) {
+        if (call->arg_count != 4) {
+            compiler_error(compiler, "struct_set() expects exactly four arguments");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* ptr = emit_expr(compiler, call->args[0]);
+            char* def = emit_expr(compiler, call->args[1]);
+            char* field = emit_expr(compiler, call->args[2]);
+            char* val = emit_expr(compiler, call->args[3]);
+            sb_appendf(&sb, "sage_struct_set(%s, %s, %s, %s)", ptr, def, field, val);
+            free(ptr); free(def); free(field); free(val);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "struct_size") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "struct_size() expects exactly one argument");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_struct_size(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "clock") == 0) {
+        if (call->arg_count != 0) {
+            compiler_error(compiler, "clock() expects no arguments");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            sb_append(&sb, "sage_clock_fn()");
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "input") == 0) {
+        if (call->arg_count == 0) {
+            sb_append(&sb, "sage_input_fn(sage_nil())");
+        } else if (call->arg_count == 1) {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_input_fn(%s)", arg);
+            free(arg);
+        } else {
+            compiler_error(compiler, "input() expects zero or one argument");
+            sb_append(&sb, "sage_nil()");
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
     if (strcmp(callee_name, "slice") == 0) {
         if (call->arg_count != 3) {
             compiler_error(compiler, "slice() expects exactly three arguments in the C backend");
@@ -1665,6 +1917,344 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "\n",
         out
     );
+
+    /* String builtins */
+    fputs(
+        "#include <ctype.h>\n"
+        "static SageValue sage_upper(SageValue value) {\n"
+        "    if (value.type != SAGE_TAG_STRING) return sage_nil();\n"
+        "    size_t len = strlen(value.as.string);\n"
+        "    char* result = (char*)malloc(len + 1);\n"
+        "    if (result == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    for (size_t i = 0; i < len; i++) result[i] = (char)toupper((unsigned char)value.as.string[i]);\n"
+        "    result[len] = '\\0';\n"
+        "    return sage_string(result);\n"
+        "}\n"
+        "static SageValue sage_lower(SageValue value) {\n"
+        "    if (value.type != SAGE_TAG_STRING) return sage_nil();\n"
+        "    size_t len = strlen(value.as.string);\n"
+        "    char* result = (char*)malloc(len + 1);\n"
+        "    if (result == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    for (size_t i = 0; i < len; i++) result[i] = (char)tolower((unsigned char)value.as.string[i]);\n"
+        "    result[len] = '\\0';\n"
+        "    return sage_string(result);\n"
+        "}\n"
+        "static SageValue sage_strip_fn(SageValue value) {\n"
+        "    if (value.type != SAGE_TAG_STRING) return sage_nil();\n"
+        "    const char* s = value.as.string;\n"
+        "    while (*s && isspace((unsigned char)*s)) s++;\n"
+        "    const char* end = s + strlen(s);\n"
+        "    while (end > s && isspace((unsigned char)*(end - 1))) end--;\n"
+        "    size_t len = (size_t)(end - s);\n"
+        "    char* result = (char*)malloc(len + 1);\n"
+        "    if (result == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    memcpy(result, s, len);\n"
+        "    result[len] = '\\0';\n"
+        "    return sage_string(result);\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    fputs(
+        "static SageValue sage_split_fn(SageValue str_val, SageValue delim_val) {\n"
+        "    if (str_val.type != SAGE_TAG_STRING || delim_val.type != SAGE_TAG_STRING) return sage_array();\n"
+        "    const char* s = str_val.as.string;\n"
+        "    const char* delim = delim_val.as.string;\n"
+        "    size_t dlen = strlen(delim);\n"
+        "    SageValue result = sage_array();\n"
+        "    if (dlen == 0) {\n"
+        "        for (size_t i = 0; s[i]; i++) {\n"
+        "            char buf[2] = {s[i], '\\0'};\n"
+        "            sage_array_push_raw(result.as.array, sage_string(sage_dup_string(buf)));\n"
+        "        }\n"
+        "        return result;\n"
+        "    }\n"
+        "    const char* start = s;\n"
+        "    const char* found;\n"
+        "    while ((found = strstr(start, delim)) != NULL) {\n"
+        "        size_t len = (size_t)(found - start);\n"
+        "        char* part = (char*)malloc(len + 1);\n"
+        "        if (part == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "        memcpy(part, start, len);\n"
+        "        part[len] = '\\0';\n"
+        "        sage_array_push_raw(result.as.array, sage_string(part));\n"
+        "        start = found + dlen;\n"
+        "    }\n"
+        "    sage_array_push_raw(result.as.array, sage_string(sage_dup_string(start)));\n"
+        "    return result;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_join_fn(SageValue arr_val, SageValue delim_val) {\n"
+        "    if (arr_val.type != SAGE_TAG_ARRAY || delim_val.type != SAGE_TAG_STRING) return sage_nil();\n"
+        "    SageArray* arr = arr_val.as.array;\n"
+        "    const char* delim = delim_val.as.string;\n"
+        "    size_t dlen = strlen(delim);\n"
+        "    if (arr->count == 0) return sage_string(sage_dup_string(\"\"));\n"
+        "    size_t total = 0;\n"
+        "    for (int i = 0; i < arr->count; i++) {\n"
+        "        if (arr->elements[i].type == SAGE_TAG_STRING) total += strlen(arr->elements[i].as.string);\n"
+        "        if (i > 0) total += dlen;\n"
+        "    }\n"
+        "    char* result = (char*)malloc(total + 1);\n"
+        "    if (result == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    char* p = result;\n"
+        "    for (int i = 0; i < arr->count; i++) {\n"
+        "        if (i > 0) { memcpy(p, delim, dlen); p += dlen; }\n"
+        "        if (arr->elements[i].type == SAGE_TAG_STRING) {\n"
+        "            size_t len = strlen(arr->elements[i].as.string);\n"
+        "            memcpy(p, arr->elements[i].as.string, len);\n"
+        "            p += len;\n"
+        "        }\n"
+        "    }\n"
+        "    *p = '\\0';\n"
+        "    return sage_string(result);\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    fputs(
+        "static SageValue sage_replace_fn(SageValue str_val, SageValue old_val, SageValue new_val) {\n"
+        "    if (str_val.type != SAGE_TAG_STRING || old_val.type != SAGE_TAG_STRING || new_val.type != SAGE_TAG_STRING)\n"
+        "        return sage_nil();\n"
+        "    const char* s = str_val.as.string;\n"
+        "    const char* old_s = old_val.as.string;\n"
+        "    const char* new_s = new_val.as.string;\n"
+        "    size_t old_len = strlen(old_s);\n"
+        "    size_t new_len = strlen(new_s);\n"
+        "    if (old_len == 0) return sage_string(sage_dup_string(s));\n"
+        "    size_t count = 0;\n"
+        "    const char* tmp = s;\n"
+        "    while ((tmp = strstr(tmp, old_s)) != NULL) { count++; tmp += old_len; }\n"
+        "    size_t result_len = strlen(s) + count * (new_len - old_len);\n"
+        "    char* result = (char*)malloc(result_len + 1);\n"
+        "    if (result == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    char* p = result;\n"
+        "    while (*s) {\n"
+        "        if (strncmp(s, old_s, old_len) == 0) {\n"
+        "            memcpy(p, new_s, new_len);\n"
+        "            p += new_len;\n"
+        "            s += old_len;\n"
+        "        } else {\n"
+        "            *p++ = *s++;\n"
+        "        }\n"
+        "    }\n"
+        "    *p = '\\0';\n"
+        "    return sage_string(result);\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    /* Memory builtins */
+    fputs(
+        "#include <stdint.h>\n"
+        "\n"
+        "typedef struct {\n"
+        "    void* ptr;\n"
+        "    size_t size;\n"
+        "    int owned;\n"
+        "} SagePointer;\n"
+        "\n"
+        "static SageValue sage_mem_alloc(SageValue size_val) {\n"
+        "    if (size_val.type != SAGE_TAG_NUMBER) { fputs(\"mem_alloc(): expects number\\n\", stderr); return sage_nil(); }\n"
+        "    size_t size = (size_t)size_val.as.number;\n"
+        "    if (size == 0 || size > 1024*1024*64) { fputs(\"mem_alloc(): invalid size\\n\", stderr); return sage_nil(); }\n"
+        "    SagePointer* sp = (SagePointer*)malloc(sizeof(SagePointer));\n"
+        "    if (sp == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    sp->ptr = calloc(1, size);\n"
+        "    if (sp->ptr == NULL) { free(sp); sage_fail(\"Runtime Error: out of memory\"); }\n"
+        "    sp->size = size;\n"
+        "    sp->owned = 1;\n"
+        "    SageValue v; v.type = SAGE_TAG_NUMBER; v.as.number = (double)(uintptr_t)sp;\n"
+        "    return v;\n"
+        "}\n"
+        "\n"
+        "static SagePointer* sage_as_pointer(SageValue v) {\n"
+        "    if (v.type != SAGE_TAG_NUMBER) return NULL;\n"
+        "    return (SagePointer*)(uintptr_t)v.as.number;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_mem_free(SageValue ptr_val) {\n"
+        "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
+        "    if (sp == NULL) { fputs(\"mem_free(): expects pointer\\n\", stderr); return sage_nil(); }\n"
+        "    if (sp->ptr && sp->owned) { free(sp->ptr); sp->ptr = NULL; sp->size = 0; }\n"
+        "    free(sp);\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    fputs(
+        "static SageValue sage_mem_read(SageValue ptr_val, SageValue off_val, SageValue type_val) {\n"
+        "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
+        "    if (sp == NULL || sp->ptr == NULL || off_val.type != SAGE_TAG_NUMBER || type_val.type != SAGE_TAG_STRING)\n"
+        "        return sage_nil();\n"
+        "    size_t offset = (size_t)off_val.as.number;\n"
+        "    const char* type = type_val.as.string;\n"
+        "    unsigned char* base = (unsigned char*)sp->ptr + offset;\n"
+        "    if (strcmp(type, \"byte\") == 0) { return sage_number((double)*base); }\n"
+        "    if (strcmp(type, \"int\") == 0) { int v; memcpy(&v, base, sizeof(int)); return sage_number((double)v); }\n"
+        "    if (strcmp(type, \"double\") == 0) { double v; memcpy(&v, base, sizeof(double)); return sage_number(v); }\n"
+        "    if (strcmp(type, \"string\") == 0) { return sage_string(sage_dup_string((const char*)base)); }\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_mem_write(SageValue ptr_val, SageValue off_val, SageValue type_val, SageValue val) {\n"
+        "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
+        "    if (sp == NULL || sp->ptr == NULL || off_val.type != SAGE_TAG_NUMBER || type_val.type != SAGE_TAG_STRING)\n"
+        "        return sage_nil();\n"
+        "    size_t offset = (size_t)off_val.as.number;\n"
+        "    const char* type = type_val.as.string;\n"
+        "    unsigned char* base = (unsigned char*)sp->ptr + offset;\n"
+        "    if (strcmp(type, \"byte\") == 0 && val.type == SAGE_TAG_NUMBER) { *base = (unsigned char)val.as.number; }\n"
+        "    else if (strcmp(type, \"int\") == 0 && val.type == SAGE_TAG_NUMBER) { int v = (int)val.as.number; memcpy(base, &v, sizeof(int)); }\n"
+        "    else if (strcmp(type, \"double\") == 0 && val.type == SAGE_TAG_NUMBER) { double v = val.as.number; memcpy(base, &v, sizeof(double)); }\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_mem_size(SageValue ptr_val) {\n"
+        "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
+        "    if (sp == NULL) return sage_nil();\n"
+        "    return sage_number((double)sp->size);\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    /* Struct builtins */
+    fputs(
+        "static int sage_struct_type_info(const char* type, size_t* out_size, size_t* out_align) {\n"
+        "    if (strcmp(type,\"char\")==0||strcmp(type,\"byte\")==0) { *out_size=1; *out_align=1; return 0; }\n"
+        "    if (strcmp(type,\"short\")==0) { *out_size=sizeof(short); *out_align=sizeof(short); return 0; }\n"
+        "    if (strcmp(type,\"int\")==0) { *out_size=sizeof(int); *out_align=sizeof(int); return 0; }\n"
+        "    if (strcmp(type,\"long\")==0) { *out_size=sizeof(long); *out_align=sizeof(long); return 0; }\n"
+        "    if (strcmp(type,\"float\")==0) { *out_size=sizeof(float); *out_align=sizeof(float); return 0; }\n"
+        "    if (strcmp(type,\"double\")==0) { *out_size=sizeof(double); *out_align=sizeof(double); return 0; }\n"
+        "    if (strcmp(type,\"ptr\")==0) { *out_size=sizeof(void*); *out_align=sizeof(void*); return 0; }\n"
+        "    return -1;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_struct_def(SageValue fields) {\n"
+        "    if (fields.type != SAGE_TAG_ARRAY) return sage_nil();\n"
+        "    SageValue def = sage_make_dict();\n"
+        "    size_t offset = 0, max_align = 1;\n"
+        "    for (int i = 0; i < fields.as.array->count; i++) {\n"
+        "        SageValue pair = fields.as.array->elements[i];\n"
+        "        if (pair.type != SAGE_TAG_ARRAY || pair.as.array->count < 2) continue;\n"
+        "        if (pair.as.array->elements[0].type != SAGE_TAG_STRING ||\n"
+        "            pair.as.array->elements[1].type != SAGE_TAG_STRING) continue;\n"
+        "        const char* name = pair.as.array->elements[0].as.string;\n"
+        "        const char* type = pair.as.array->elements[1].as.string;\n"
+        "        size_t fsize, falign;\n"
+        "        if (sage_struct_type_info(type, &fsize, &falign) != 0) continue;\n"
+        "        if (falign > max_align) max_align = falign;\n"
+        "        size_t rem = offset % falign;\n"
+        "        if (rem != 0) offset += falign - rem;\n"
+        ,
+        out
+    );
+
+    fputs(
+        "        /* store field: \"name\" -> [offset, type] */\n"
+        "        SageValue field_info = sage_make_array(2, (SageValue[]){\n"
+        "            sage_number((double)offset), sage_string(type)\n"
+        "        });\n"
+        "        sage_dict_set(def.as.dict, name, field_info);\n"
+        "        offset += fsize;\n"
+        "    }\n"
+        "    size_t rem = offset % max_align;\n"
+        "    if (rem != 0) offset += max_align - rem;\n"
+        "    sage_dict_set(def.as.dict, \"__size__\", sage_number((double)offset));\n"
+        "    sage_dict_set(def.as.dict, \"__align__\", sage_number((double)max_align));\n"
+        "    return def;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_struct_new(SageValue def) {\n"
+        "    if (def.type != SAGE_TAG_DICT) return sage_nil();\n"
+        "    SageValue size_val = sage_dict_get(def.as.dict, \"__size__\");\n"
+        "    if (size_val.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+        "    size_t size = (size_t)size_val.as.number;\n"
+        "    SagePointer* sp = (SagePointer*)malloc(sizeof(SagePointer));\n"
+        "    if (sp == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    sp->ptr = calloc(1, size);\n"
+        "    if (sp->ptr == NULL) { free(sp); sage_fail(\"Runtime Error: out of memory\"); }\n"
+        "    sp->size = size;\n"
+        "    sp->owned = 1;\n"
+        "    SageValue v; v.type = SAGE_TAG_NUMBER; v.as.number = (double)(uintptr_t)sp;\n"
+        "    return v;\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    fputs(
+        "static SageValue sage_struct_get(SageValue ptr_val, SageValue def, SageValue field_name) {\n"
+        "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
+        "    if (sp == NULL || sp->ptr == NULL || def.type != SAGE_TAG_DICT || field_name.type != SAGE_TAG_STRING)\n"
+        "        return sage_nil();\n"
+        "    SageValue info = sage_dict_get(def.as.dict, field_name.as.string);\n"
+        "    if (info.type != SAGE_TAG_ARRAY || info.as.array->count < 2) return sage_nil();\n"
+        "    size_t offset = (size_t)info.as.array->elements[0].as.number;\n"
+        "    const char* type = info.as.array->elements[1].as.string;\n"
+        "    unsigned char* base = (unsigned char*)sp->ptr + offset;\n"
+        "    if (strcmp(type,\"char\")==0||strcmp(type,\"byte\")==0) return sage_number((double)*base);\n"
+        "    if (strcmp(type,\"short\")==0) { short v; memcpy(&v,base,sizeof(short)); return sage_number((double)v); }\n"
+        "    if (strcmp(type,\"int\")==0) { int v; memcpy(&v,base,sizeof(int)); return sage_number((double)v); }\n"
+        "    if (strcmp(type,\"long\")==0) { long v; memcpy(&v,base,sizeof(long)); return sage_number((double)v); }\n"
+        "    if (strcmp(type,\"float\")==0) { float v; memcpy(&v,base,sizeof(float)); return sage_number((double)v); }\n"
+        "    if (strcmp(type,\"double\")==0) { double v; memcpy(&v,base,sizeof(double)); return sage_number(v); }\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_struct_set(SageValue ptr_val, SageValue def, SageValue field_name, SageValue val) {\n"
+        "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
+        "    if (sp == NULL || sp->ptr == NULL || def.type != SAGE_TAG_DICT || field_name.type != SAGE_TAG_STRING)\n"
+        "        return sage_nil();\n"
+        "    SageValue info = sage_dict_get(def.as.dict, field_name.as.string);\n"
+        "    if (info.type != SAGE_TAG_ARRAY || info.as.array->count < 2) return sage_nil();\n"
+        "    size_t offset = (size_t)info.as.array->elements[0].as.number;\n"
+        "    const char* type = info.as.array->elements[1].as.string;\n"
+        "    unsigned char* base = (unsigned char*)sp->ptr + offset;\n"
+        "    if (val.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+        "    if (strcmp(type,\"char\")==0||strcmp(type,\"byte\")==0) { *base = (unsigned char)val.as.number; }\n"
+        "    else if (strcmp(type,\"short\")==0) { short v=(short)val.as.number; memcpy(base,&v,sizeof(short)); }\n"
+        "    else if (strcmp(type,\"int\")==0) { int v=(int)val.as.number; memcpy(base,&v,sizeof(int)); }\n"
+        "    else if (strcmp(type,\"long\")==0) { long v=(long)val.as.number; memcpy(base,&v,sizeof(long)); }\n"
+        "    else if (strcmp(type,\"float\")==0) { float v=(float)val.as.number; memcpy(base,&v,sizeof(float)); }\n"
+        "    else if (strcmp(type,\"double\")==0) { double v=val.as.number; memcpy(base,&v,sizeof(double)); }\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_struct_size(SageValue def) {\n"
+        "    if (def.type != SAGE_TAG_DICT) return sage_nil();\n"
+        "    return sage_dict_get(def.as.dict, \"__size__\");\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    /* clock() and input() */
+    if (target != COMPILER_TARGET_PICO) {
+        fputs(
+            "#include <time.h>\n"
+            "static SageValue sage_clock_fn(void) {\n"
+            "    return sage_number((double)clock() / CLOCKS_PER_SEC);\n"
+            "}\n"
+            "static SageValue sage_input_fn(SageValue prompt) {\n"
+            "    if (prompt.type == SAGE_TAG_STRING) fputs(prompt.as.string, stdout);\n"
+            "    char buf[4096];\n"
+            "    if (fgets(buf, sizeof(buf), stdin) == NULL) return sage_nil();\n"
+            "    size_t len = strlen(buf);\n"
+            "    if (len > 0 && buf[len-1] == '\\n') buf[--len] = '\\0';\n"
+            "    return sage_string(sage_dup_string(buf));\n"
+            "}\n"
+            "\n",
+            out
+        );
+    }
 }
 
 static void emit_proc_prototypes(Compiler* compiler) {
