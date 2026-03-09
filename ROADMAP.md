@@ -355,7 +355,13 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 #### Code Generation
 - [x] Initial C code generation backend (`sage --emit-c`, `sage --compile`) for scalar control flow and array operations
-- [ ] Expand C backend coverage to modules, dictionaries, tuples, objects, and exceptions
+- [x] For-in loops over arrays (`for x in arr:`)
+- [x] Dictionary literals, indexing, `dict_keys`, `dict_values`, `dict_has`, `dict_delete`
+- [x] Tuple literals and indexing
+- [x] Exception handling (`try`/`catch`/`finally`/`raise`) via `setjmp`/`longjmp`
+- [x] Property access (`obj.prop`) compiled as dict key lookup
+- [x] Additional builtins: `tonumber()`
+- [ ] Expand C backend coverage to modules and objects/classes
 - [ ] LLVM IR generation backend
 - [ ] Direct machine code generation (x86-64)
 - [ ] Optimization levels (-O0, -O1, -O2, -O3)
@@ -445,7 +451,7 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ## 📊 Progress Metrics
 
 - **Phases Completed**: 9/13 (69%)
-- **Test Suite**: 100 automated tests, 25 categories, 100% pass rate
+- **Test Suite**: 100 interpreter tests + 11 compiler tests, 25 categories, 100% pass rate
 - **Estimated Completion**: 2026-2027 (self-hosting)
 
 ---
@@ -453,6 +459,16 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ## 📝 Recent Updates
 
 ### March 8, 2026
+
+- **Phase 10 Progress: C Backend Expansion**
+- For-in loops compiled to C (array iteration)
+- Dictionary support: literals, indexing, `dict_keys`, `dict_values`, `dict_has`, `dict_delete`
+- Tuple support: literals and indexing
+- Exception handling: `try`/`catch`/`finally`/`raise` via `setjmp`/`longjmp`
+- Property access (`obj.prop`) as dict key lookup
+- `tonumber()` builtin in C backend
+- 4 new compiler tests (11 total), all passing
+- Fixed Pico codegen test to use `grep` instead of `rg`
 
 - **Phase 9 Complete: Low-Level Programming**
 - C struct interop: `struct_def`, `struct_new`, `struct_get`, `struct_set`, `struct_size`

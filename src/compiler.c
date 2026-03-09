@@ -338,11 +338,33 @@ static void collect_local_lets(Compiler* compiler, Stmt* stmt, NameEntry** local
             case STMT_PROC:
                 compiler_error(compiler, "nested procedure declarations are not supported by the C backend");
                 return;
-            case STMT_FOR:
+            case STMT_FOR: {
+                char* var_name = token_to_string(stmt->as.for_stmt.variable);
+                if (find_name_entry(*locals, var_name) == NULL) {
+                    add_name_entry(compiler, locals, var_name, "sage_local");
+                }
+                free(var_name);
+                collect_local_lets(compiler, stmt->as.for_stmt.body, locals);
+                break;
+            }
+            case STMT_TRY: {
+                collect_local_lets(compiler, stmt->as.try_stmt.try_block, locals);
+                for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+                    char* catch_var = token_to_string(stmt->as.try_stmt.catches[i]->exception_var);
+                    if (find_name_entry(*locals, catch_var) == NULL) {
+                        add_name_entry(compiler, locals, catch_var, "sage_local");
+                    }
+                    free(catch_var);
+                    collect_local_lets(compiler, stmt->as.try_stmt.catches[i]->body, locals);
+                }
+                if (stmt->as.try_stmt.finally_block != NULL) {
+                    collect_local_lets(compiler, stmt->as.try_stmt.finally_block, locals);
+                }
+                break;
+            }
             case STMT_CLASS:
             case STMT_MATCH:
             case STMT_DEFER:
-            case STMT_TRY:
             case STMT_RAISE:
             case STMT_YIELD:
             case STMT_IMPORT:
@@ -381,6 +403,30 @@ static void collect_global_lets(Compiler* compiler, Stmt* stmt) {
             case STMT_WHILE:
                 collect_global_lets(compiler, stmt->as.while_stmt.body);
                 break;
+            case STMT_FOR: {
+                char* var_name = token_to_string(stmt->as.for_stmt.variable);
+                if (find_proc_entry(compiler->procs, var_name) != NULL) {
+                    compiler_error(compiler, "for-loop variable '%s' conflicts with procedure name", var_name);
+                } else {
+                    add_name_entry(compiler, &compiler->globals, var_name, "sage_global");
+                }
+                free(var_name);
+                collect_global_lets(compiler, stmt->as.for_stmt.body);
+                break;
+            }
+            case STMT_TRY: {
+                collect_global_lets(compiler, stmt->as.try_stmt.try_block);
+                for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+                    char* catch_var = token_to_string(stmt->as.try_stmt.catches[i]->exception_var);
+                    add_name_entry(compiler, &compiler->globals, catch_var, "sage_global");
+                    free(catch_var);
+                    collect_global_lets(compiler, stmt->as.try_stmt.catches[i]->body);
+                }
+                if (stmt->as.try_stmt.finally_block != NULL) {
+                    collect_global_lets(compiler, stmt->as.try_stmt.finally_block);
+                }
+                break;
+            }
             default:
                 break;
         }
@@ -481,6 +527,62 @@ static char* emit_slice_expr(Compiler* compiler, SliceExpr* slice) {
     free(array_expr);
     free(start_expr);
     free(end_expr);
+    return sb_take(&sb);
+}
+
+static char* emit_dict_expr(Compiler* compiler, DictExpr* dict) {
+    StringBuffer sb;
+    sb_init(&sb);
+    // Build dict by calling sage_make_dict() then sage_dict_set() for each entry
+    // We need a compound expression using comma operator
+    if (dict->count == 0) {
+        sb_append(&sb, "sage_make_dict()");
+        return sb_take(&sb);
+    }
+
+    // Use a statement expression (GCC extension) or a helper approach
+    // For portability, use a helper function call pattern
+    // We'll emit: sage_build_dict_N(key1, val1, key2, val2, ...)
+    // Actually, simpler: use comma operator with a temp
+    // Let's use a block expression approach that works with GCC/Clang
+    sb_append(&sb, "({SageValue _d = sage_make_dict();");
+    for (int i = 0; i < dict->count; i++) {
+        char* escaped = escape_c_string(dict->keys[i]);
+        char* val = emit_expr(compiler, dict->values[i]);
+        if (compiler->failed) {
+            free(escaped);
+            free(val);
+            free(sb_take(&sb));
+            return str_dup("sage_nil()");
+        }
+        sb_appendf(&sb, "sage_dict_set(_d.as.dict,\"%s\",%s);", escaped, val);
+        free(escaped);
+        free(val);
+    }
+    sb_append(&sb, "_d;})");
+    return sb_take(&sb);
+}
+
+static char* emit_tuple_expr(Compiler* compiler, TupleExpr* tuple) {
+    StringBuffer sb;
+    sb_init(&sb);
+    if (tuple->count == 0) {
+        sb_append(&sb, "sage_make_tuple(0, NULL)");
+        return sb_take(&sb);
+    }
+
+    sb_appendf(&sb, "sage_make_tuple(%d, (SageValue[]){", tuple->count);
+    for (int i = 0; i < tuple->count; i++) {
+        char* element = emit_expr(compiler, tuple->elements[i]);
+        if (i > 0) sb_append(&sb, ", ");
+        sb_append(&sb, element);
+        free(element);
+        if (compiler->failed) {
+            free(sb_take(&sb));
+            return str_dup("sage_nil()");
+        }
+    }
+    sb_append(&sb, "})");
     return sb_take(&sb);
 }
 
@@ -635,6 +737,75 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
         return sb_take(&sb);
     }
 
+    if (strcmp(callee_name, "tonumber") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "tonumber() expects exactly one argument in the C backend");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_tonumber(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "dict_keys") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "dict_keys() expects exactly one argument in the C backend");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_dict_keys_fn(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "dict_values") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "dict_values() expects exactly one argument in the C backend");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_dict_values_fn(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "dict_has") == 0) {
+        if (call->arg_count != 2) {
+            compiler_error(compiler, "dict_has() expects exactly two arguments in the C backend");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* dict_arg = emit_expr(compiler, call->args[0]);
+            char* key_arg = emit_expr(compiler, call->args[1]);
+            sb_appendf(&sb, "sage_dict_has_fn(%s, %s)", dict_arg, key_arg);
+            free(dict_arg);
+            free(key_arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "dict_delete") == 0) {
+        if (call->arg_count != 2) {
+            compiler_error(compiler, "dict_delete() expects exactly two arguments in the C backend");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* dict_arg = emit_expr(compiler, call->args[0]);
+            char* key_arg = emit_expr(compiler, call->args[1]);
+            sb_appendf(&sb, "sage_dict_delete_fn(%s, %s)", dict_arg, key_arg);
+            free(dict_arg);
+            free(key_arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
     if (strcmp(callee_name, "slice") == 0) {
         if (call->arg_count != 3) {
             compiler_error(compiler, "slice() expects exactly three arguments in the C backend");
@@ -751,10 +922,22 @@ static char* emit_expr(Compiler* compiler, Expr* expr) {
         case EXPR_SET:
             return emit_set_expr(compiler, &expr->as.set);
         case EXPR_DICT:
+            return emit_dict_expr(compiler, &expr->as.dict);
         case EXPR_TUPLE:
-        case EXPR_GET:
-            compiler_error(compiler, "expression kind is not yet supported by the Phase 10 C backend");
-            return str_dup("sage_nil()");
+            return emit_tuple_expr(compiler, &expr->as.tuple);
+        case EXPR_GET: {
+            /* property access: object.property — emit as dict get for now */
+            char* object = emit_expr(compiler, expr->as.get.object);
+            char* prop = token_to_string(expr->as.get.property);
+            char* escaped = escape_c_string(prop);
+            StringBuffer sb;
+            sb_init(&sb);
+            sb_appendf(&sb, "sage_index(%s, sage_string(\"%s\"))", object, escaped);
+            free(object);
+            free(prop);
+            free(escaped);
+            return sb_take(&sb);
+        }
     }
 
     compiler_error(compiler, "unknown expression kind");
@@ -844,12 +1027,101 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             break;
         case STMT_PROC:
             break;
-        case STMT_FOR:
+        case STMT_FOR: {
+            char* iterable = emit_expr(compiler, stmt->as.for_stmt.iterable);
+            char* var_name = token_to_string(stmt->as.for_stmt.variable);
+            const char* slot_name = resolve_slot_name(compiler, var_name);
+            if (slot_name == NULL) {
+                compiler_error(compiler, "for-loop variable '%s' was not collected", var_name);
+                free(var_name);
+                free(iterable);
+                break;
+            }
+            char* iter_var = make_unique_name(compiler, "sage_iter", var_name);
+            char* idx_var = make_unique_name(compiler, "sage_idx", var_name);
+            emit_line(compiler, "{");
+            compiler->indent++;
+            emit_line(compiler, "SageValue %s = %s;", iter_var, iterable);
+            emit_line(compiler, "if (%s.type == SAGE_TAG_ARRAY) {", iter_var);
+            compiler->indent++;
+            emit_line(compiler, "for (int %s = 0; %s < %s.as.array->count; %s++) {",
+                       idx_var, idx_var, iter_var, idx_var);
+            compiler->indent++;
+            emit_line(compiler, "sage_define_slot(&%s, %s.as.array->elements[%s]);",
+                       slot_name, iter_var, idx_var);
+            emit_embedded_block(compiler, stmt->as.for_stmt.body);
+            compiler->indent--;
+            emit_line(compiler, "}");
+            compiler->indent--;
+            emit_line(compiler, "} else if (%s.type == SAGE_TAG_STRING) {", iter_var);
+            compiler->indent++;
+            emit_line(compiler, "int _len = (int)strlen(%s.as.string);", iter_var);
+            emit_line(compiler, "for (int %s = 0; %s < _len; %s++) {",
+                       idx_var, idx_var, idx_var);
+            compiler->indent++;
+            emit_line(compiler, "char _ch[2] = {%s.as.string[%s], '\\0'};",
+                       iter_var, idx_var);
+            emit_line(compiler, "sage_define_slot(&%s, sage_string(sage_dup_string(_ch)));",
+                       slot_name);
+            emit_embedded_block(compiler, stmt->as.for_stmt.body);
+            compiler->indent--;
+            emit_line(compiler, "}");
+            compiler->indent--;
+            emit_line(compiler, "}");
+            compiler->indent--;
+            emit_line(compiler, "}");
+            free(var_name);
+            free(iterable);
+            free(iter_var);
+            free(idx_var);
+            break;
+        }
+        case STMT_TRY: {
+            TryStmt* try_stmt = &stmt->as.try_stmt;
+            emit_line(compiler, "{");
+            compiler->indent++;
+            emit_line(compiler, "if (sage_try_depth >= SAGE_MAX_TRY_DEPTH) sage_fail(\"Runtime Error: try nesting too deep\");");
+            emit_line(compiler, "int _caught = 0;");
+            emit_line(compiler, "sage_try_depth++;");
+            emit_line(compiler, "if (setjmp(sage_try_stack[sage_try_depth - 1]) == 0) {");
+            emit_embedded_block(compiler, try_stmt->try_block);
+            emit_line(compiler, "} else {");
+            compiler->indent++;
+            emit_line(compiler, "_caught = 1;");
+            if (try_stmt->catch_count > 0) {
+                char* catch_var = token_to_string(try_stmt->catches[0]->exception_var);
+                const char* catch_slot = resolve_slot_name(compiler, catch_var);
+                if (catch_slot != NULL) {
+                    emit_line(compiler, "sage_define_slot(&%s, sage_exception_value);", catch_slot);
+                }
+                free(catch_var);
+            }
+            compiler->indent--;
+            emit_line(compiler, "}");
+            emit_line(compiler, "sage_try_depth--;");
+            if (try_stmt->catch_count > 0) {
+                emit_line(compiler, "if (_caught) {");
+                emit_embedded_block(compiler, try_stmt->catches[0]->body);
+                emit_line(compiler, "}");
+            }
+            if (try_stmt->finally_block != NULL) {
+                emit_embedded_block(compiler, try_stmt->finally_block);
+            }
+            compiler->indent--;
+            emit_line(compiler, "}");
+            break;
+        }
+        case STMT_RAISE: {
+            char* expr = stmt->as.raise.exception != NULL
+                ? emit_expr(compiler, stmt->as.raise.exception)
+                : str_dup("sage_string(\"exception\")");
+            emit_line(compiler, "sage_raise(%s);", expr);
+            free(expr);
+            break;
+        }
         case STMT_CLASS:
         case STMT_MATCH:
         case STMT_DEFER:
-        case STMT_TRY:
-        case STMT_RAISE:
         case STMT_YIELD:
         case STMT_IMPORT:
             compiler_error(compiler, "statement kind is not yet supported by the Phase 10 C backend");
@@ -868,6 +1140,7 @@ static void emit_stmt_list(Compiler* compiler, Stmt* stmt) {
 
 static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
     fputs(
+        "#include <setjmp.h>\n"
         "#include <stdarg.h>\n"
         "#include <stdio.h>\n"
         "#include <stdlib.h>\n"
@@ -890,12 +1163,26 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    SageValue* elements;\n"
         "} SageArray;\n"
         "\n"
+        "typedef struct {\n"
+        "    char** keys;\n"
+        "    SageValue* values;\n"
+        "    int count;\n"
+        "    int capacity;\n"
+        "} SageDict;\n"
+        "\n"
+        "typedef struct {\n"
+        "    SageValue* elements;\n"
+        "    int count;\n"
+        "} SageTuple;\n"
+        "\n"
         "typedef enum {\n"
         "    SAGE_TAG_NIL,\n"
         "    SAGE_TAG_NUMBER,\n"
         "    SAGE_TAG_BOOL,\n"
         "    SAGE_TAG_STRING,\n"
-        "    SAGE_TAG_ARRAY\n"
+        "    SAGE_TAG_ARRAY,\n"
+        "    SAGE_TAG_DICT,\n"
+        "    SAGE_TAG_TUPLE\n"
         "} SageTag;\n"
         "\n"
         "struct SageValue {\n"
@@ -905,6 +1192,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        int boolean;\n"
         "        const char* string;\n"
         "        SageArray* array;\n"
+        "        SageDict* dict;\n"
+        "        SageTuple* tuple;\n"
         "    } as;\n"
         "};\n"
         "\n"
@@ -912,6 +1201,12 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    int defined;\n"
         "    SageValue value;\n"
         "} SageSlot;\n"
+        "\n"
+        "/* Exception handling via setjmp/longjmp */\n"
+        "#define SAGE_MAX_TRY_DEPTH 64\n"
+        "static jmp_buf sage_try_stack[SAGE_MAX_TRY_DEPTH];\n"
+        "static SageValue sage_exception_value;\n"
+        "static int sage_try_depth = 0;\n"
         "\n"
         "static void sage_fail(const char* message) {\n"
         "    fputs(message, stderr);\n"
@@ -942,6 +1237,71 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "static SageValue sage_string(const char* value) { SageValue v; v.type = SAGE_TAG_STRING; v.as.string = value; return v; }\n"
         "static SageValue sage_array(void) { SageValue v; v.type = SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
         "static SageSlot sage_slot_undefined(void) { SageSlot slot; slot.defined = 0; slot.value = sage_nil(); return slot; }\n"
+        "\n"
+        ,
+        out
+    );
+
+    fputs(
+        "static SageValue sage_make_dict(void) {\n"
+        "    SageDict* dict = (SageDict*)malloc(sizeof(SageDict));\n"
+        "    if (dict == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    dict->keys = NULL;\n"
+        "    dict->values = NULL;\n"
+        "    dict->count = 0;\n"
+        "    dict->capacity = 0;\n"
+        "    SageValue v; v.type = SAGE_TAG_DICT; v.as.dict = dict;\n"
+        "    return v;\n"
+        "}\n"
+        "\n"
+        "static void sage_dict_set(SageDict* dict, const char* key, SageValue value) {\n"
+        "    for (int i = 0; i < dict->count; i++) {\n"
+        "        if (strcmp(dict->keys[i], key) == 0) {\n"
+        "            dict->values[i] = value;\n"
+        "            return;\n"
+        "        }\n"
+        "    }\n"
+        "    if (dict->count >= dict->capacity) {\n"
+        "        int cap = dict->capacity == 0 ? 4 : dict->capacity * 2;\n"
+        "        dict->keys = (char**)realloc(dict->keys, sizeof(char*) * (size_t)cap);\n"
+        "        dict->values = (SageValue*)realloc(dict->values, sizeof(SageValue) * (size_t)cap);\n"
+        "        if (dict->keys == NULL || dict->values == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "        dict->capacity = cap;\n"
+        "    }\n"
+        "    dict->keys[dict->count] = sage_dup_string(key);\n"
+        "    dict->values[dict->count] = value;\n"
+        "    dict->count++;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_dict_get(SageDict* dict, const char* key) {\n"
+        "    for (int i = 0; i < dict->count; i++) {\n"
+        "        if (strcmp(dict->keys[i], key) == 0) return dict->values[i];\n"
+        "    }\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_make_tuple(int count, const SageValue* values) {\n"
+        "    SageTuple* tuple = (SageTuple*)malloc(sizeof(SageTuple));\n"
+        "    if (tuple == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    tuple->count = count;\n"
+        "    tuple->elements = (SageValue*)malloc(sizeof(SageValue) * (size_t)count);\n"
+        "    if (tuple->elements == NULL && count > 0) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    for (int i = 0; i < count; i++) tuple->elements[i] = values[i];\n"
+        "    SageValue v; v.type = SAGE_TAG_TUPLE; v.as.tuple = tuple;\n"
+        "    return v;\n"
+        "}\n"
+        "\n"
+        "static void sage_raise(SageValue value) {\n"
+        "    if (sage_try_depth > 0) {\n"
+        "        sage_exception_value = value;\n"
+        "        longjmp(sage_try_stack[sage_try_depth - 1], 1);\n"
+        "    }\n"
+        "    fputs(\"Unhandled exception: \", stderr);\n"
+        "    if (value.type == SAGE_TAG_STRING) fputs(value.as.string, stderr);\n"
+        "    else fputs(\"(unknown)\", stderr);\n"
+        "    fputc('\\n', stderr);\n"
+        "    exit(1);\n"
+        "}\n"
         "\n"
         "static void sage_array_reserve(SageArray* array, int needed) {\n"
         "    if (array->capacity >= needed) return;\n"
@@ -1007,6 +1367,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        case SAGE_TAG_BOOL: return left.as.boolean == right.as.boolean;\n"
         "        case SAGE_TAG_STRING: return strcmp(left.as.string, right.as.string) == 0;\n"
         "        case SAGE_TAG_ARRAY: return left.as.array == right.as.array;\n"
+        "        case SAGE_TAG_DICT: return left.as.dict == right.as.dict;\n"
+        "        case SAGE_TAG_TUPLE: return left.as.tuple == right.as.tuple;\n"
         "    }\n"
         "    return 0;\n"
         "}\n"
@@ -1023,6 +1385,23 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "                sage_print_value(value.as.array->elements[i]);\n"
         "            }\n"
         "            fputc(']', stdout);\n"
+        "            break;\n"
+        "        case SAGE_TAG_DICT:\n"
+        "            fputc('{', stdout);\n"
+        "            for (int i = 0; i < value.as.dict->count; i++) {\n"
+        "                if (i > 0) fputs(\", \", stdout);\n"
+        "                printf(\"\\\"%s\\\": \", value.as.dict->keys[i]);\n"
+        "                sage_print_value(value.as.dict->values[i]);\n"
+        "            }\n"
+        "            fputc('}', stdout);\n"
+        "            break;\n"
+        "        case SAGE_TAG_TUPLE:\n"
+        "            fputc('(', stdout);\n"
+        "            for (int i = 0; i < value.as.tuple->count; i++) {\n"
+        "                if (i > 0) fputs(\", \", stdout);\n"
+        "                sage_print_value(value.as.tuple->elements[i]);\n"
+        "            }\n"
+        "            fputc(')', stdout);\n"
         "            break;\n"
         "        case SAGE_TAG_NIL: fputs(\"nil\", stdout); break;\n"
         "    }\n"
@@ -1045,7 +1424,11 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        case SAGE_TAG_NIL:\n"
         "            return sage_string(\"nil\");\n"
         "        case SAGE_TAG_ARRAY:\n"
-        "            return sage_string(\"nil\");\n"
+        "            return sage_string(\"<array>\");\n"
+        "        case SAGE_TAG_DICT:\n"
+        "            return sage_string(\"<dict>\");\n"
+        "        case SAGE_TAG_TUPLE:\n"
+        "            return sage_string(\"<tuple>\");\n"
         "    }\n"
         "    return sage_string(\"nil\");\n"
         "}\n"
@@ -1058,14 +1441,33 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "static SageValue sage_len(SageValue value) {\n"
         "    if (value.type == SAGE_TAG_STRING) return sage_number((double)strlen(value.as.string));\n"
         "    if (value.type == SAGE_TAG_ARRAY) return sage_number((double)value.as.array->count);\n"
+        "    if (value.type == SAGE_TAG_DICT) return sage_number((double)value.as.dict->count);\n"
+        "    if (value.type == SAGE_TAG_TUPLE) return sage_number((double)value.as.tuple->count);\n"
         "    return sage_nil();\n"
         "}\n"
         "\n"
-        "static SageValue sage_index(SageValue array, SageValue index) {\n"
-        "    if (array.type != SAGE_TAG_ARRAY || index.type != SAGE_TAG_NUMBER) return sage_nil();\n"
-        "    int idx = (int)index.as.number;\n"
-        "    if (idx < 0 || idx >= array.as.array->count) return sage_nil();\n"
-        "    return array.as.array->elements[idx];\n"
+        "static SageValue sage_index(SageValue collection, SageValue index) {\n"
+        "    if (collection.type == SAGE_TAG_ARRAY && index.type == SAGE_TAG_NUMBER) {\n"
+        "        int idx = (int)index.as.number;\n"
+        "        if (idx < 0 || idx >= collection.as.array->count) return sage_nil();\n"
+        "        return collection.as.array->elements[idx];\n"
+        "    }\n"
+        "    if (collection.type == SAGE_TAG_DICT && index.type == SAGE_TAG_STRING) {\n"
+        "        return sage_dict_get(collection.as.dict, index.as.string);\n"
+        "    }\n"
+        "    if (collection.type == SAGE_TAG_TUPLE && index.type == SAGE_TAG_NUMBER) {\n"
+        "        int idx = (int)index.as.number;\n"
+        "        if (idx < 0 || idx >= collection.as.tuple->count) return sage_nil();\n"
+        "        return collection.as.tuple->elements[idx];\n"
+        "    }\n"
+        "    if (collection.type == SAGE_TAG_STRING && index.type == SAGE_TAG_NUMBER) {\n"
+        "        int idx = (int)index.as.number;\n"
+        "        int len = (int)strlen(collection.as.string);\n"
+        "        if (idx < 0 || idx >= len) return sage_nil();\n"
+        "        char buf[2] = {collection.as.string[idx], '\\0'};\n"
+        "        return sage_string(sage_dup_string(buf));\n"
+        "    }\n"
+        "    return sage_nil();\n"
         "}\n"
         "\n"
         "static SageValue sage_slice(SageValue array, SageValue start, SageValue end) {\n"
@@ -1206,6 +1608,59 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "static SageValue sage_rshift(SageValue left, SageValue right) {\n"
         "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) sage_fail(\"Runtime Error: Operands must be numbers.\");\n"
         "    return sage_number((double)(((long long)left.as.number) >> ((long long)right.as.number)));\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_tonumber(SageValue value) {\n"
+        "    if (value.type == SAGE_TAG_NUMBER) return value;\n"
+        "    if (value.type == SAGE_TAG_STRING) {\n"
+        "        char* end;\n"
+        "        double result = strtod(value.as.string, &end);\n"
+        "        if (end != value.as.string && *end == '\\0') return sage_number(result);\n"
+        "    }\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_dict_keys_fn(SageValue dict_val) {\n"
+        "    if (dict_val.type != SAGE_TAG_DICT) return sage_array();\n"
+        "    SageValue result = sage_array();\n"
+        "    for (int i = 0; i < dict_val.as.dict->count; i++) {\n"
+        "        sage_array_push_raw(result.as.array, sage_string(dict_val.as.dict->keys[i]));\n"
+        "    }\n"
+        "    return result;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_dict_values_fn(SageValue dict_val) {\n"
+        "    if (dict_val.type != SAGE_TAG_DICT) return sage_array();\n"
+        "    SageValue result = sage_array();\n"
+        "    for (int i = 0; i < dict_val.as.dict->count; i++) {\n"
+        "        sage_array_push_raw(result.as.array, dict_val.as.dict->values[i]);\n"
+        "    }\n"
+        "    return result;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_dict_has_fn(SageValue dict_val, SageValue key) {\n"
+        "    if (dict_val.type != SAGE_TAG_DICT || key.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+        "    for (int i = 0; i < dict_val.as.dict->count; i++) {\n"
+        "        if (strcmp(dict_val.as.dict->keys[i], key.as.string) == 0) return sage_bool(1);\n"
+        "    }\n"
+        "    return sage_bool(0);\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_dict_delete_fn(SageValue dict_val, SageValue key) {\n"
+        "    if (dict_val.type != SAGE_TAG_DICT || key.type != SAGE_TAG_STRING) return sage_nil();\n"
+        "    SageDict* dict = dict_val.as.dict;\n"
+        "    for (int i = 0; i < dict->count; i++) {\n"
+        "        if (strcmp(dict->keys[i], key.as.string) == 0) {\n"
+        "            free(dict->keys[i]);\n"
+        "            for (int j = i; j < dict->count - 1; j++) {\n"
+        "                dict->keys[j] = dict->keys[j + 1];\n"
+        "                dict->values[j] = dict->values[j + 1];\n"
+        "            }\n"
+        "            dict->count--;\n"
+        "            return sage_bool(1);\n"
+        "        }\n"
+        "    }\n"
+        "    return sage_bool(0);\n"
         "}\n"
         "\n",
         out
