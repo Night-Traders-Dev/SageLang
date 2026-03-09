@@ -351,9 +351,10 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ---
 
 ### Phase 10: Compiler Development
-**Status**: 🚧 In Progress
+**Status**: ✅ **COMPLETE** (March 2026)
 
-#### Code Generation
+#### Code Generation ✅
+
 - [x] Initial C code generation backend (`sage --emit-c`, `sage --compile`) for scalar control flow and array operations
 - [x] For-in loops over arrays (`for x in arr:`)
 - [x] Dictionary literals, indexing, `dict_keys`, `dict_values`, `dict_has`, `dict_delete`
@@ -367,17 +368,18 @@ A cross-cutting audit and hardening pass across the entire codebase.
 - [x] Classes and objects: class definitions, inheritance, method dispatch, property get/set, constructors
 - [x] Module imports: `import`/`from X import Y` with file resolution, inline compilation
 - [x] Architecture detection: `asm_arch()` returns host arch at compile time (x86_64, aarch64, rv64)
-- [ ] LLVM IR generation backend
-- [ ] Direct machine code generation (x86-64, aarch64, rv64)
-- [ ] Optimization levels (-O0, -O1, -O2, -O3)
-- [ ] Debug information generation
+- [x] LLVM IR generation backend (`sage --emit-llvm`, `sage --compile-llvm`)
+- [x] Direct machine code generation (`sage --emit-asm`, `sage --compile-native`) for x86-64, aarch64, rv64
+- [x] Optimization levels (`-O0` through `-O3`)
+- [x] Debug information generation (`-g` flag)
 
-#### Compilation Pipeline
-- [ ] Multi-pass compilation
-- [ ] Type checking pass
-- [ ] Constant folding
-- [ ] Dead code elimination
-- [ ] Inlining optimization
+#### Compilation Pipeline ✅
+
+- [x] Multi-pass compilation (`run_passes()` infrastructure in `src/pass.c`)
+- [x] Type checking pass (`src/typecheck.c`, best-effort type inference at `-O1+`)
+- [x] Constant folding (`src/constfold.c`, numeric/string/boolean at `-O1+`)
+- [x] Dead code elimination (`src/dce.c`, unused lets/procs, unreachable code at `-O2+`)
+- [x] Inlining optimization (`src/inline.c`, single-return non-recursive procs at `-O3`)
 
 ---
 
