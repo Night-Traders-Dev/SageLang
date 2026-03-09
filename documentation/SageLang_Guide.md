@@ -1173,7 +1173,38 @@ next(gen)                          # Resume, reach end, is_exhausted=1
 
 ### 6.1 Building the Interpreter
 
-**Files to Compile** (typical GCC):
+Sage supports two build modes: building from C sources (default) and a self-hosted mode where the Sage interpreter runs Sage code.
+
+**Build from C (Make)**:
+
+```bash
+make clean && make -j$(nproc)    # Produces the 'sage' executable
+./sage program.sage
+```
+
+**Build from C (CMake)**:
+
+```bash
+cmake -B build && cmake --build build
+```
+
+**Self-Hosted Build** (builds a C host interpreter, then uses it to run the Sage bootstrap):
+
+```bash
+make sage-boot FILE=program.sage          # Run a file through the self-hosted interpreter
+make test-selfhost                         # Run all 178 self-hosted tests
+
+# Or via CMake:
+cmake -B build -DBUILD_SAGE=ON && cmake --build build
+cmake --build build --target test_selfhost
+```
+
+Note: `-DBUILD_SAGE=ON` and the default C build are mutually exclusive. With `BUILD_SAGE`, the C host is built as `sage_host` instead of `sage`.
+
+Additional CMake options: `-DBUILD_PICO=ON` (Pico embedded), `-DENABLE_DEBUG=ON` (debug symbols), `-DENABLE_TESTS=ON` (C test executables).
+
+**Manual compilation** (for reference):
+
 ```bash
 gcc -o sagelang \
   src/lexer.c \
@@ -1186,11 +1217,6 @@ gcc -o sagelang \
   src/module.c \
   src/main.c \
   -lm
-```
-
-**Execution**:
-```bash
-./sagelang program.sage
 ```
 
 ### 6.2 Main Entry Point (main.c)

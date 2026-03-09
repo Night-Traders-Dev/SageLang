@@ -144,30 +144,66 @@ print arr.map([1, 2, 3], double)
 
 ## 🛠 Building Sage
 
-Sage has zero dependencies and builds with standard GCC/Clang.
+Sage has zero dependencies and builds with standard GCC/Clang. The build system supports two modes: building from C sources (default) and a self-hosted mode that uses the Sage interpreter to run Sage code.
 
 ### Prerequisites
 - A C compiler (`gcc` or `clang`)
-- `make`
+- `make` (and optionally `cmake` for CMake builds)
 
-### Build Steps
-1. Clone the repository:
+### Build from C (Default)
+
 ```bash
 git clone https://github.com/Night-Traders-Dev/SageLang.git
 cd SageLang
-```
-
-2. Compile:
-```bash
 make clean && make -j$(nproc)
 ```
 This produces the `sage` executable.
 
-3. Run examples:
+Run examples:
 ```bash
 ./sage examples/exceptions.sage
 ./sage examples/generators.sage
 ./sage examples/phase6_classes.sage
+```
+
+### Self-Hosted Build (Sage-on-Sage)
+
+The self-hosted mode first compiles the C host interpreter (`sage_host`), then uses it to run the Sage bootstrap:
+
+```bash
+make sage-boot FILE=self_host/test_bootstrap.sage   # Run a .sage file through the self-hosted interpreter
+make test-selfhost                                   # Run all 178 self-hosted tests
+make test-selfhost-lexer                             # Lexer tests only (12)
+make test-selfhost-parser                            # Parser tests only (130)
+make test-selfhost-interpreter                       # Interpreter tests only (18)
+make test-selfhost-bootstrap                         # Bootstrap tests only (18)
+make test-all                                        # Run ALL tests (C + self-hosted)
+```
+
+### CMake Build
+
+CMake supports the same two modes via build options:
+
+```bash
+# Default: build sage and sage-lsp from C
+cmake -B build && cmake --build build
+
+# Self-hosted mode: build sage_host, then run self-hosted tests
+cmake -B build -DBUILD_SAGE=ON && cmake --build build
+cmake --build build --target test_selfhost
+
+# Other CMake options:
+#   -DBUILD_PICO=ON      Pico embedded build
+#   -DENABLE_DEBUG=ON     Debug symbols
+#   -DENABLE_TESTS=ON     C test executables
+```
+
+Note: `-DBUILD_SAGE=ON` and the default C build are mutually exclusive. With `BUILD_SAGE`, the C host is built as `sage_host` instead of `sage`.
+
+Convenience Make targets for CMake:
+```bash
+make cmake-sage            # Setup CMake self-hosted build
+make cmake-sage-build      # Build and run self-hosted tests via CMake
 ```
 
 ### Compiler Backends
