@@ -1,3 +1,8 @@
+## The assembler needs a two-pass architecture. 
+## The first pass scans the text to find labels (like .wrap_target:) and records their line numbers so that jmp instructions can branch to them. 
+## The second pass parses the mnemonics and bitwise-packs them into the 16-bit opcodes the RP2040 hardware expects.
+
+
 class PIOAssembler
     proc init(self)
         self.labels = {}
