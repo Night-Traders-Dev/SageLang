@@ -454,12 +454,12 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 #### Self-Hosted Interpreter ✅
 
-- [x] **Token definitions** - `self_host/token.sage` with token type constants
-- [x] **AST definitions** - `self_host/ast.sage` with dict-based node constructors
-- [x] **Lexer** - `self_host/lexer.sage` (~300 lines), dict-based keyword lookup, indentation-aware tokenization
-- [x] **Parser** - `self_host/parser.sage` (~700 lines), recursive descent with 12 precedence levels
-- [x] **Interpreter** - `self_host/interpreter.sage` (~920 lines), dict-based value representation, tree-walking evaluation
-- [x] **Bootstrap entry point** - `self_host/sage.sage` runs target `.sage` files through the self-hosted pipeline
+- [x] **Token definitions** - `src/sage/token.sage` with token type constants
+- [x] **AST definitions** - `src/sage/ast.sage` with dict-based node constructors
+- [x] **Lexer** - `src/sage/lexer.sage` (~300 lines), dict-based keyword lookup, indentation-aware tokenization
+- [x] **Parser** - `src/sage/parser.sage` (~700 lines), recursive descent with 12 precedence levels
+- [x] **Interpreter** - `src/sage/interpreter.sage` (~920 lines), dict-based value representation, tree-walking evaluation
+- [x] **Bootstrap entry point** - `src/sage/sage.sage` runs target `.sage` files through the self-hosted pipeline
 
 #### Native Builtins Added ✅
 
@@ -591,9 +591,9 @@ Note: `-DBUILD_SAGE=ON` and the default C build are mutually exclusive. With `BU
 - Build system updated for libcurl and openssl linking
 - Interpreter bugs documented: instance `==` always false, elif chains with 5+ branches
 - **Phase 13 Complete: Self-Hosting**
-- Self-hosted lexer (`self_host/lexer.sage`, ~300 lines), parser (`self_host/parser.sage`, ~700 lines), interpreter (`self_host/interpreter.sage`, ~920 lines)
-- Token definitions (`self_host/token.sage`) and AST definitions (`self_host/ast.sage`)
-- Bootstrap entry point (`self_host/sage.sage`) runs `.sage` files through the self-hosted pipeline
+- Self-hosted lexer (`src/sage/lexer.sage`, ~300 lines), parser (`src/sage/parser.sage`, ~700 lines), interpreter (`src/sage/interpreter.sage`, ~920 lines)
+- Token definitions (`src/sage/token.sage`) and AST definitions (`src/sage/ast.sage`)
+- Bootstrap entry point (`src/sage/sage.sage`) runs `.sage` files through the self-hosted pipeline
 - 7 new native builtins: `type()`, `chr()`, `ord()`, `startswith()`, `endswith()`, `contains()`, `indexof()`
 - 178 self-host tests: lexer (12), parser (130), interpreter (18), bootstrap (18)
 - All existing tests maintained: 112 interpreter + 28 compiler tests

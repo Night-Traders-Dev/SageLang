@@ -133,7 +133,7 @@ print await future     # 1764
 Sage can run Sage programs through a self-hosted interpreter written entirely in SageLang. The lexer, parser, and interpreter have been ported from C to Sage (~1,920 lines total).
 
 ```bash
-cd self_host && ../sage sage.sage program.sage
+cd src/sage && ../../sage sage.sage program.sage
 ```
 
 - **Lexer** (`lexer.sage`, ~300 lines) - Indentation-aware tokenizer with dict-based keyword lookup
@@ -196,7 +196,7 @@ Run examples:
 The self-hosted mode first compiles the C host interpreter (`sage_host`), then uses it to run the Sage bootstrap:
 
 ```bash
-make sage-boot FILE=self_host/test_bootstrap.sage   # Run a .sage file through the self-hosted interpreter
+make sage-boot FILE=src/sage/test_bootstrap.sage    # Run a .sage file through the self-hosted interpreter
 make test-selfhost                                   # Run all 178 self-hosted tests
 make test-selfhost-lexer                             # Lexer tests only (12)
 make test-selfhost-parser                            # Parser tests only (130)
@@ -617,17 +617,27 @@ sage/
 │   ├── phase6_classes.sage  # OOP demonstration
 │   ├── phase5_data.sage     # Data structures
 │   └── phase4_gc_demo.sage  # GC examples
-├── self_host/        # Self-hosted Sage interpreter (Phase 13)
-│   ├── sage.sage     # Bootstrap entry point
-│   ├── token.sage    # Token type definitions
-│   ├── ast.sage      # AST node constructors
-│   ├── lexer.sage    # Self-hosted lexer (~300 lines)
-│   ├── parser.sage   # Self-hosted parser (~700 lines)
-│   ├── interpreter.sage  # Self-hosted interpreter (~920 lines)
-│   ├── test_lexer.sage       # Lexer tests (12)
-│   ├── test_parser.sage      # Parser tests (130)
-│   ├── test_interpreter.sage # Interpreter tests (18)
-│   └── test_bootstrap.sage   # Bootstrap tests (18)
+├── src/
+│   ├── c/            # C implementation
+│   │   ├── main.c    # Entry point
+│   │   ├── lexer.c   # Tokenizer
+│   │   ├── parser.c  # Recursive descent parser
+│   │   ├── interpreter.c  # Tree-walking interpreter
+│   │   ├── compiler.c     # C code generation backend
+│   │   ├── llvm_backend.c # LLVM IR backend
+│   │   ├── codegen.c      # Native assembly backend
+│   │   └── ...            # 24 C source files total
+│   └── sage/         # Self-hosted Sage compiler (Phase 13+)
+│       ├── sage.sage     # Bootstrap entry point
+│       ├── token.sage    # Token type definitions
+│       ├── ast.sage      # AST node constructors
+│       ├── lexer.sage    # Self-hosted lexer (~300 lines)
+│       ├── parser.sage   # Self-hosted parser (~700 lines)
+│       ├── interpreter.sage  # Self-hosted interpreter (~920 lines)
+│       ├── test_lexer.sage       # Lexer tests (12)
+│       ├── test_parser.sage      # Parser tests (130)
+│       ├── test_interpreter.sage # Interpreter tests (18)
+│       └── test_bootstrap.sage   # Bootstrap tests (18)
 ├── tests/            # Automated test suite (112 interpreter + 28 compiler + 88 JSON)
 │   ├── run_tests.sh  # Test runner script
 │   ├── test_json.sage # cJSON port test suite (88 tests)

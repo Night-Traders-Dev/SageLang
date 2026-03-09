@@ -11,7 +11,7 @@ CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L
 LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto
 
 # Directories
-SRC_DIR = src
+SRC_DIR = src/c
 INC_DIR = include
 OBJ_DIR = obj
 BIN_DIR = .
@@ -349,37 +349,55 @@ sage-boot: $(TARGET)
 		exit 1; \
 	fi
 	@echo "Running via self-hosted Sage interpreter..."
-	cd self_host && ../$(TARGET) sage.sage $(abspath $(FILE))
+	cd src/sage && ../../$(TARGET) sage.sage $(abspath $(FILE))
 
 # Run all self-hosted tests
 test-selfhost: $(TARGET)
 	@echo ""
 	@echo "=== Self-Hosted Lexer Tests ==="
-	@cd self_host && ../$(TARGET) test_lexer.sage
+	@cd src/sage && ../../$(TARGET) test_lexer.sage
 	@echo ""
 	@echo "=== Self-Hosted Parser Tests ==="
-	@cd self_host && ../$(TARGET) test_parser.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) test_parser.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Interpreter Tests ==="
-	@cd self_host && ../$(TARGET) test_interpreter.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) test_interpreter.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Bootstrap Integration Tests ==="
-	@cd self_host && ../$(TARGET) test_bootstrap.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) test_bootstrap.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Self-Hosted Formatter Tests ==="
+	@cd src/sage && ../../$(TARGET) test_formatter.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Self-Hosted Linter Tests ==="
+	@cd src/sage && ../../$(TARGET) test_linter.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Self-Hosted Value Tests ==="
+	@cd src/sage && ../../$(TARGET) test_value.sage 2>&1 | tail -3
 	@echo ""
 	@echo "✅ All self-hosted tests complete"
 
 # Run individual self-hosted test suites
 test-selfhost-lexer: $(TARGET)
-	cd self_host && ../$(TARGET) test_lexer.sage
+	cd src/sage && ../../$(TARGET) test_lexer.sage
 
 test-selfhost-parser: $(TARGET)
-	cd self_host && ../$(TARGET) test_parser.sage
+	cd src/sage && ../../$(TARGET) test_parser.sage
 
 test-selfhost-interpreter: $(TARGET)
-	cd self_host && ../$(TARGET) test_interpreter.sage
+	cd src/sage && ../../$(TARGET) test_interpreter.sage
 
 test-selfhost-bootstrap: $(TARGET)
-	cd self_host && ../$(TARGET) test_bootstrap.sage
+	cd src/sage && ../../$(TARGET) test_bootstrap.sage
+
+test-selfhost-formatter: $(TARGET)
+	cd src/sage && ../../$(TARGET) test_formatter.sage
+
+test-selfhost-linter: $(TARGET)
+	cd src/sage && ../../$(TARGET) test_linter.sage
+
+test-selfhost-value: $(TARGET)
+	cd src/sage && ../../$(TARGET) test_value.sage
 
 # Run ALL tests (C + self-hosted)
 test-all: test test-selfhost
@@ -437,11 +455,11 @@ stats:
 	@echo "SageLang Code Statistics"
 	@echo "========================"
 	@echo "C Source files:"
-	@find src -name "*.c" | wc -l
+	@find src/c -name "*.c" | wc -l
 	@echo "Header files:"
 	@find include -name "*.h" | wc -l
 	@echo "Total lines of C code:"
-	@find src include -name "*.[ch]" | xargs wc -l | tail -1
+	@find src/c include -name "*.[ch]" | xargs wc -l | tail -1
 	@echo ""
 	@echo "Sage Example files:"
 	@find examples -name "*.sage" | wc -l
@@ -506,4 +524,6 @@ help:
 .PHONY: all clean clean-all run examples test install uninstall \
         debug cmake cmake-build cmake-sage cmake-sage-build cmake-pico \
         sage-boot test-selfhost test-selfhost-lexer test-selfhost-parser \
-        test-selfhost-interpreter test-selfhost-bootstrap test-all stats help
+        test-selfhost-interpreter test-selfhost-bootstrap \
+        test-selfhost-formatter test-selfhost-linter test-selfhost-value \
+        test-all stats help

@@ -1599,7 +1599,7 @@ SageLang is **self-hosted**: the lexer, parser, and interpreter have been ported
 
 ### 13.1 Architecture
 
-The self-hosted interpreter lives in `self_host/` and consists of:
+The self-hosted interpreter lives in `src/sage/` and consists of:
 
 | File | Description | Size |
 |------|-------------|------|
@@ -1613,8 +1613,8 @@ The self-hosted interpreter lives in `self_host/` and consists of:
 ### 13.2 Running Self-Hosted Code
 
 ```bash
-cd self_host
-../sage sage.sage program.sage
+cd src/sage
+../../sage sage.sage program.sage
 ```
 
 The bootstrap reads a `.sage` file, tokenizes it, parses it to an AST, and evaluates it — all in Sage running on the C interpreter.
