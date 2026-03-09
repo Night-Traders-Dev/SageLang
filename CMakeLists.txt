@@ -78,31 +78,31 @@ endif()
 # ============================================================================
 
 set(SAGE_CORE_SOURCES
-    src/ast.c
-    src/codegen.c
-    src/compiler.c
-    src/constfold.c
-    src/dce.c
-    src/env.c
-    src/formatter.c
-    src/gc.c
-    src/inline.c
-    src/interpreter.c
-    src/linter.c
-    src/lexer.c
-    src/llvm_backend.c
-    src/lsp.c
-    src/module.c
-    src/net.c
-    src/parser.c
-    src/pass.c
-    src/stdlib.c
-    src/typecheck.c
-    src/value.c
+    src/c/ast.c
+    src/c/codegen.c
+    src/c/compiler.c
+    src/c/constfold.c
+    src/c/dce.c
+    src/c/env.c
+    src/c/formatter.c
+    src/c/gc.c
+    src/c/inline.c
+    src/c/interpreter.c
+    src/c/linter.c
+    src/c/lexer.c
+    src/c/llvm_backend.c
+    src/c/lsp.c
+    src/c/module.c
+    src/c/net.c
+    src/c/parser.c
+    src/c/pass.c
+    src/c/stdlib.c
+    src/c/typecheck.c
+    src/c/value.c
 )
 
 set(SAGE_MAIN_SOURCE
-    src/main.c
+    src/c/main.c
 )
 
 set(SAGE_HEADERS
@@ -136,17 +136,17 @@ set(SAGE_BOARD_HEADERS
 
 # Self-hosted Sage sources
 set(SAGE_SELF_HOST_SOURCES
-    self_host/token.sage
-    self_host/lexer.sage
-    self_host/ast.sage
-    self_host/parser.sage
-    self_host/interpreter.sage
-    self_host/sage.sage
+    src/sage/token.sage
+    src/sage/lexer.sage
+    src/sage/ast.sage
+    src/sage/parser.sage
+    src/sage/interpreter.sage
+    src/sage/sage.sage
 )
 
 # Optional heartbeat implementation
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/heartbeat.c")
-    list(APPEND SAGE_CORE_SOURCES src/heartbeat.c)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/c/heartbeat.c")
+    list(APPEND SAGE_CORE_SOURCES src/c/heartbeat.c)
     message(STATUS "Including heartbeat.c")
 endif()
 
@@ -156,7 +156,7 @@ endif()
 
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/c
 )
 
 # ============================================================================
@@ -174,9 +174,9 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     target_link_libraries(sage m pthread dl ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
 
     # LSP server binary (standalone)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/lsp_main.c")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/c/lsp_main.c")
         add_executable(sage-lsp
-            src/lsp_main.c
+            src/c/lsp_main.c
             ${SAGE_CORE_SOURCES}
         )
         target_link_libraries(sage-lsp m pthread dl ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
@@ -202,43 +202,43 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
     # Usage: cmake --build build -- sage_boot SAGE_FILE=path/to/file.sage
     add_custom_target(sage_boot
         COMMAND $<TARGET_FILE:sage>
-            ${CMAKE_CURRENT_SOURCE_DIR}/self_host/sage.sage
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/sage.sage
             ${SAGE_FILE}
         DEPENDS sage
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/sage
         COMMENT "Running via self-hosted Sage interpreter"
     )
 
     # Self-hosted test targets
     add_custom_target(test_selfhost_lexer
         COMMAND $<TARGET_FILE:sage>
-            ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_lexer.sage
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test_lexer.sage
         DEPENDS sage
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/sage
         COMMENT "Running self-hosted lexer tests"
     )
 
     add_custom_target(test_selfhost_parser
         COMMAND $<TARGET_FILE:sage>
-            ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_parser.sage
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test_parser.sage
         DEPENDS sage
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/sage
         COMMENT "Running self-hosted parser tests"
     )
 
     add_custom_target(test_selfhost_interpreter
         COMMAND $<TARGET_FILE:sage>
-            ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_interpreter.sage
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test_interpreter.sage
         DEPENDS sage
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/sage
         COMMENT "Running self-hosted interpreter tests"
     )
 
     add_custom_target(test_selfhost_bootstrap
         COMMAND $<TARGET_FILE:sage>
-            ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_bootstrap.sage
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test_bootstrap.sage
         DEPENDS sage
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/sage
         COMMENT "Running bootstrap integration tests"
     )
 
@@ -251,7 +251,7 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
 
     message(STATUS "Building self-hosted (Sage bootstrap) mode")
     message(STATUS "  Host binary: sage")
-    message(STATUS "  Bootstrap:   self_host/sage.sage")
+    message(STATUS "  Bootstrap:   src/sage/sage.sage")
     message(STATUS "  Targets:     sage_boot, test_selfhost")
 endif()
 
@@ -288,9 +288,9 @@ if(BUILD_PICO)
     message(STATUS "Building Pico executable: sage_pico.uf2")
 
     # Optional: Build heartbeat example
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/heartbeat.c")
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/c/heartbeat.c")
         add_executable(heartbeat_example
-            src/heartbeat.c
+            src/c/heartbeat.c
             ${SAGE_BOARD_SOURCES}
         )
 
@@ -392,8 +392,8 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     )
 
     # Install self-hosted sources
-    install(DIRECTORY self_host/
-        DESTINATION share/sage/self_host
+    install(DIRECTORY src/sage/
+        DESTINATION share/sage/src/sage
         FILES_MATCHING PATTERN "*.sage"
     )
 
@@ -445,7 +445,7 @@ if(BUILD_SAGE)
     message(STATUS "")
     message(STATUS "Self-Hosted Build:")
     message(STATUS "  - Host binary:  sage (C)")
-    message(STATUS "  - Bootstrap:    self_host/sage.sage")
+    message(STATUS "  - Bootstrap:    src/sage/sage.sage")
     message(STATUS "  - Run files:    make sage_boot SAGE_FILE=<file>")
     message(STATUS "  - Run tests:    make test_selfhost")
 endif()

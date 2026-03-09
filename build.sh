@@ -84,7 +84,7 @@ step_ok "v${version:-0.13.0}"
 
 printf "    ${DIM}Compiler:  %s${RESET}\n" "${compiler:-gcc}"
 printf "    ${DIM}Mode:      Self-hosted (BUILD_SAGE=ON)${RESET}\n"
-printf "    ${DIM}Host:      sage (C) → self_host/sage.sage${RESET}\n"
+printf "    ${DIM}Host:      sage (C) → src/sage/sage.sage${RESET}\n"
 
 # ============================================================
 #  3. Build host interpreter
@@ -194,10 +194,10 @@ printf "  ${SAGE} SageLang v${version:-0.13.0}\n"
 printf "\n"
 printf "  ${BOLD}Binaries:${RESET}\n"
 printf "    ${ARROW} build_sage/sage         ${DIM}(C host interpreter)${RESET}\n"
-printf "    ${ARROW} self_host/sage.sage     ${DIM}(self-hosted bootstrap)${RESET}\n"
+printf "    ${ARROW} src/sage/sage.sage      ${DIM}(self-hosted bootstrap)${RESET}\n"
 printf "\n"
 printf "  ${BOLD}Usage:${RESET}\n"
 printf "    ${DIM}\$ ${RESET}./build_sage/sage examples/hello.sage             ${DIM}# C interpreter${RESET}\n"
-printf "    ${DIM}\$ ${RESET}cd self_host && ../build_sage/sage sage.sage app.sage  ${DIM}# Self-hosted${RESET}\n"
+printf "    ${DIM}\$ ${RESET}cd src/sage && ../../build_sage/sage sage.sage app.sage  ${DIM}# Self-hosted${RESET}\n"
 printf "    ${DIM}\$ ${RESET}make sage-boot FILE=app.sage                      ${DIM}# Via Make${RESET}\n"
 printf "\n"

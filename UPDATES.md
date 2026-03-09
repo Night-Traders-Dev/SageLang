@@ -104,7 +104,7 @@ The build system now supports building SageLang in two modes: from C sources (de
 
 - The self-hosted build first compiles the C host interpreter, then uses it to run the Sage bootstrap
 - `BUILD_SAGE` and default C build are mutually exclusive (`sage_host` instead of `sage`)
-- Self-hosted tests are in `self_host/` directory: `test_lexer.sage`, `test_parser.sage`, `test_interpreter.sage`, `test_bootstrap.sage`
+- Self-hosted tests are in `src/sage/` directory: `test_lexer.sage`, `test_parser.sage`, `test_interpreter.sage`, `test_bootstrap.sage`
 
 ---
 
@@ -114,12 +114,12 @@ Phase 13 delivers a self-hosted Sage interpreter written entirely in SageLang. T
 
 ### Self-Hosted Components
 
-- **Lexer** (`self_host/lexer.sage`, ~300 lines) - Indentation-aware tokenizer with dict-based keyword lookup
-- **Parser** (`self_host/parser.sage`, ~700 lines) - Recursive descent parser with 12 precedence levels
-- **Interpreter** (`self_host/interpreter.sage`, ~920 lines) - Tree-walking evaluator with dict-based value representation
-- **Token definitions** (`self_host/token.sage`) - Token type constants
-- **AST definitions** (`self_host/ast.sage`) - Dict-based AST node constructors
-- **Bootstrap entry** (`self_host/sage.sage`) - Runs target `.sage` files through the self-hosted interpreter
+- **Lexer** (`src/sage/lexer.sage`, ~300 lines) - Indentation-aware tokenizer with dict-based keyword lookup
+- **Parser** (`src/sage/parser.sage`, ~700 lines) - Recursive descent parser with 12 precedence levels
+- **Interpreter** (`src/sage/interpreter.sage`, ~920 lines) - Tree-walking evaluator with dict-based value representation
+- **Token definitions** (`src/sage/token.sage`) - Token type constants
+- **AST definitions** (`src/sage/ast.sage`) - Dict-based AST node constructors
+- **Bootstrap entry** (`src/sage/sage.sage`) - Runs target `.sage` files through the self-hosted interpreter
 
 ### New Native Builtins (7)
 
@@ -147,7 +147,7 @@ Phase 13 delivers a self-hosted Sage interpreter written entirely in SageLang. T
 ### Running the Self-Hosted Interpreter
 
 ```bash
-cd self_host && ../sage sage.sage <file.sage>
+cd src/sage && ../../sage sage.sage <file.sage>
 ```
 
 ### Test Suites
