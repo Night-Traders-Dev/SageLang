@@ -1,3 +1,12 @@
+---
+title: "The SageLang Programming Language"
+subtitle: "A Comprehensive Guide"
+author: "Jacob Yates"
+date: "March 2026"
+toc: true
+---
+
+
 # The SageLang Programming Language: A Comprehensive Guide
 
 ## Executive Summary
