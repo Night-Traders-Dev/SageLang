@@ -132,13 +132,14 @@ Phase 10 has started with an initial C backend.
 Current backend support is intentionally narrow:
 - top-level `proc` definitions
 - `let`, assignment, `print`, `if`/`else`, `while`, `return`
+- array literals, array indexing/slicing, and `len`/`push`/`pop`/`range`/`slice`
 - arithmetic, comparison, logical, and bitwise operators
 - string literals, string concatenation, and `str(...)`
 - direct calls to top-level procedures
 
 Not yet supported in the C backend:
 - imports, classes, methods, closures, generators, exceptions
-- arrays, dictionaries, tuples, indexing, slicing, property access
+- dictionaries, tuples, property access
 - `for` loops and nested procedure declarations
 
 ## 📝 Example Code
