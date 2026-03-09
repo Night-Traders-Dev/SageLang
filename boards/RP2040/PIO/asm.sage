@@ -22,7 +22,7 @@ class PIOAssembler:
             # Save label addresses
             if (line.endswith(":")):
                 let label_name = replace(line, ":", "")
-                self.labels[label_name] = instr_count
+#                self.labels[label_name] = instr_count
             else:
                 instr_count = instr_count + 1
 
