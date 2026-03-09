@@ -7,20 +7,21 @@ gc_disable()
 import io
 import sys
 from parser import parse_source
-from interpreter import Interpreter
+from interpreter import new_interpreter, exec_program
 
 proc main():
     let argv = sys.args()
-    if len(argv) < 2:
-        print "Usage: sage <file.sage>"
+    # argv[0] = host sage, argv[1] = sage.sage, argv[2] = target file
+    if len(argv) < 3:
+        print "Usage: sage sage.sage <file.sage>"
         return
-    let filename = argv[1]
+    let filename = argv[2]
     let source = io.readfile(filename)
     if source == nil:
         print "Error: Could not read file '" + filename + "'"
         return
-    let interp = Interpreter()
+    let genv = new_interpreter()
     let stmts = parse_source(source)
-    interp.exec_program(stmts)
+    exec_program(genv, stmts)
 
 main()

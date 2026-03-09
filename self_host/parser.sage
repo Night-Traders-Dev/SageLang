@@ -453,12 +453,12 @@ class Parser:
         self.consume(token.TOKEN_IDENTIFIER, "Expect class name.")
         let name = self.previous()
         let parent = nil
-        let has_parent = 0
+        let has_parent = false
         if self.match_tok(token.TOKEN_LPAREN):
             self.consume(token.TOKEN_IDENTIFIER, "Expect parent class name.")
             parent = self.previous()
             self.consume(token.TOKEN_RPAREN, "Expect ')' after parent class.")
-            has_parent = 1
+            has_parent = true
         self.consume(token.TOKEN_COLON, "Expect ':' after class header.")
         self.consume(token.TOKEN_NEWLINE, "Expect newline after class header.")
         self.consume(token.TOKEN_INDENT, "Expect indentation in class body.")

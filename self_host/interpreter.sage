@@ -776,7 +776,8 @@ proc exec_stmt(stmt, env):
 
     # --- Class ---
     if stype == STMT_CLASS:
-        let name = stmt.name.text
+        let name_tok = stmt.name
+        let name = name_tok.text
         let cls = {}
         cls["__interp_type"] = "class"
         cls["name"] = name
@@ -785,7 +786,8 @@ proc exec_stmt(stmt, env):
 
         # Resolve parent class
         if stmt.has_parent:
-            let parent_name = stmt.parent.text
+            let ptok = stmt.parent
+            let parent_name = ptok.text
             let parent_val = env_get(env, parent_name)
             if type(parent_val) == "dict" and dict_has(parent_val, "__interp_type") and parent_val["__interp_type"] == "class":
                 cls["parent"] = parent_val
@@ -803,7 +805,8 @@ proc exec_stmt(stmt, env):
         let method_node = stmt.methods
         while method_node != nil:
             if method_node.type == STMT_PROC:
-                let mname = method_node.name.text
+                let mn_tok = method_node.name
+                let mname = mn_tok.text
                 let mfunc = {}
                 mfunc["__interp_type"] = "function"
                 mfunc["name"] = mname

@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: March 9, 2026
-> **Current Phase**: Phase 12 Complete (Tooling Ecosystem)
+> **Current Phase**: Phase 13 Complete (Self-Hosting)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -449,54 +449,75 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ---
 
-## 🔮 Future Phases
-
 ### Phase 13: Self-Hosting
-**Status**: 📋 Planned (Final Goal)
+**Status**: ✅ **COMPLETE** (March 9, 2026)
 
-#### Rewrite Compiler in Sage
-- [ ] Port lexer to Sage
-- [ ] Port parser to Sage
-- [ ] Port interpreter to Sage
-- [ ] Bootstrap process
-- [ ] Performance optimization
+#### Self-Hosted Interpreter ✅
+
+- [x] **Token definitions** - `self_host/token.sage` with token type constants
+- [x] **AST definitions** - `self_host/ast.sage` with dict-based node constructors
+- [x] **Lexer** - `self_host/lexer.sage` (~300 lines), dict-based keyword lookup, indentation-aware tokenization
+- [x] **Parser** - `self_host/parser.sage` (~700 lines), recursive descent with 12 precedence levels
+- [x] **Interpreter** - `self_host/interpreter.sage` (~920 lines), dict-based value representation, tree-walking evaluation
+- [x] **Bootstrap entry point** - `self_host/sage.sage` runs target `.sage` files through the self-hosted pipeline
+
+#### Native Builtins Added ✅
+
+- [x] **`type()`** - Returns value type as string
+- [x] **`chr()`** - Number to character conversion
+- [x] **`ord()`** - Character to number conversion
+- [x] **`startswith()`** - String prefix check
+- [x] **`endswith()`** - String suffix check
+- [x] **`contains()`** - Substring search
+- [x] **`indexof()`** - Find substring position
+
+#### Bootstrap Coverage ✅
+
+- [x] Arithmetic, variables, if/else, while, for loops
+- [x] Functions, recursion, closures, nested functions
+- [x] Classes, inheritance, method dispatch
+- [x] Arrays, dicts, strings, string builtins
+- [x] Try/catch, break/continue, boolean ops
+- [x] GC disabled for self-hosted code (`gc_disable()`)
+
+#### Test Suites ✅
+
+- [x] `test_lexer.sage` - 12/12 tests passing
+- [x] `test_parser.sage` - 130/130 tests passing
+- [x] `test_interpreter.sage` - 18/18 tests passing
+- [x] `test_bootstrap.sage` - 18/18 tests passing
+- [x] Existing tests maintained: 112 interpreter + 28 compiler tests
 
 ---
 
-## 🎯 Milestone Targets
+## 🔮 Future Directions
 
-### Near-Term (Current)
+### Package Manager
 
-- Begin Phase 13 (Self-Hosting)
-- Port lexer to Sage
-- Port parser to Sage
+- [ ] CLI for dependency management
+- [ ] Package registry
+- [ ] Version resolution
 
-### Mid-Term (1-2 months)
+### Backend Expansion
 
-- Port interpreter to Sage
-- Bootstrap process (Sage compiling itself)
+- [ ] LLVM and native backends for class/module/async support
+- [ ] WebAssembly backend
 
-### Long-Term (2-4 months)
+### Ecosystem Growth
 
-- Complete self-hosting compiler
-- Performance optimization of self-hosted compiler
-
-### Vision (6-12+ months)
-
-- Fully self-hosted compiler
-- Mature ecosystem with package manager
-- Production-ready tooling
-- Growing community
+- [ ] Mature standard library
+- [ ] Production-ready tooling
+- [ ] Growing community
 
 ---
 
 ## 📊 Progress Metrics
 
-- **Phases Completed**: 12/13 (~92%)
-- **Test Suite**: 112 interpreter tests + 28 compiler tests, 28 categories, 100% pass rate
+- **Phases Completed**: 13/13 (100%)
+- **Test Suite**: 112 interpreter tests + 28 compiler tests + 178 self-host tests, 100% pass rate
 - **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
 - **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
-- **Estimated Completion**: 2026-2027 (self-hosting)
+- **Self-Hosting**: Lexer, parser, and interpreter ported to Sage with full bootstrap
 
 ---
 
@@ -504,6 +525,14 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ### March 9, 2026
 
+- **Phase 13 Complete: Self-Hosting**
+- Self-hosted lexer (`self_host/lexer.sage`, ~300 lines), parser (`self_host/parser.sage`, ~700 lines), interpreter (`self_host/interpreter.sage`, ~920 lines)
+- Token definitions (`self_host/token.sage`) and AST definitions (`self_host/ast.sage`)
+- Bootstrap entry point (`self_host/sage.sage`) runs `.sage` files through the self-hosted pipeline
+- 7 new native builtins: `type()`, `chr()`, `ord()`, `startswith()`, `endswith()`, `contains()`, `indexof()`
+- 178 self-host tests: lexer (12), parser (130), interpreter (18), bootstrap (18)
+- All existing tests maintained: 112 interpreter + 28 compiler tests
+- Run: `cd self_host && ../sage sage.sage <file.sage>`
 - **Phase 12 Complete: Tooling Ecosystem**
 - REPL: `sage` (no args) or `sage --repl` with multi-line blocks, error recovery, `:help`/`:quit`
 - Formatter: `sage fmt <file>` (in-place) and `sage fmt --check <file>` (check only)
@@ -606,12 +635,12 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 We welcome contributions at all phases! Here's how you can help:
 
-### Current Priorities (Phase 13)
+### Current Priorities
 
-1. **Self-Hosting** - Port lexer, parser, and interpreter to Sage
-2. **Bootstrap Process** - Sage compiling itself
-3. **Backend Coverage** - Expand LLVM and native backends for class/module/async support
-4. **Package Manager** - CLI for dependency management
+1. **Backend Coverage** - Expand LLVM and native backends for class/module/async support
+2. **Package Manager** - CLI for dependency management
+3. **Self-Hosted Compiler** - Extend self-hosted interpreter to emit C/LLVM/assembly
+4. **Ecosystem Growth** - Standard library expansion, community building
 
 ### Getting Started
 1. Check the current phase status above
