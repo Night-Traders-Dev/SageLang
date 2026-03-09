@@ -220,6 +220,21 @@ test: $(TARGET)
 	@./$(TARGET) --compile testing/compiler_structs.sage -o .tmp/compiler_structs
 	@./.tmp/compiler_structs > .tmp/compiler_structs.out
 	@diff -u testing/compiler_structs.expected .tmp/compiler_structs.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 15: Phase 10 Classes"
+	@./$(TARGET) --compile testing/compiler_classes.sage -o .tmp/compiler_classes
+	@./.tmp/compiler_classes > .tmp/compiler_classes.out
+	@diff -u testing/compiler_classes.expected .tmp/compiler_classes.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 16: Phase 10 Modules"
+	@./$(TARGET) --compile testing/compiler_modules.sage -o .tmp/compiler_modules
+	@./.tmp/compiler_modules > .tmp/compiler_modules.out
+	@diff -u testing/compiler_modules.expected .tmp/compiler_modules.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 17: Phase 10 Architecture Detection"
+	@./$(TARGET) --compile testing/compiler_arch.sage -o .tmp/compiler_arch
+	@./.tmp/compiler_arch > .tmp/compiler_arch.out
+	@diff -u testing/compiler_arch.expected .tmp/compiler_arch.out && echo "✅ Pass" || echo "❌ Fail"
 
 # ============================================================================
 # Cleanup
