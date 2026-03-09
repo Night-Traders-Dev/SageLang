@@ -30,6 +30,20 @@ typedef struct ProcEntry {
     struct ProcEntry* next;
 } ProcEntry;
 
+typedef struct ClassInfo {
+    char* class_name;
+    char* parent_name;
+    Stmt* methods;
+    struct ClassInfo* next;
+} ClassInfo;
+
+typedef struct ImportedModule {
+    char* name;
+    char* source;
+    Stmt* ast;
+    struct ImportedModule* next;
+} ImportedModule;
+
 typedef struct {
     char* data;
     size_t len;
@@ -45,6 +59,8 @@ typedef struct {
     NameEntry* globals;
     ProcEntry* procs;
     NameEntry* locals;
+    ClassInfo* classes;
+    ImportedModule* modules;
 } Compiler;
 
 typedef enum {
@@ -314,6 +330,80 @@ static ProcEntry* add_proc_entry(Compiler* compiler, const char* sage_name, int 
     return entry;
 }
 
+static ClassInfo* find_class_info(ClassInfo* list, const char* name) {
+    for (ClassInfo* c = list; c != NULL; c = c->next) {
+        if (strcmp(c->class_name, name) == 0) return c;
+    }
+    return NULL;
+}
+
+static ClassInfo* add_class_info(Compiler* compiler, const char* name, const char* parent, Stmt* methods) {
+    ClassInfo* info = malloc(sizeof(ClassInfo));
+    if (info == NULL) { fprintf(stderr, "Out of memory\n"); exit(1); }
+    info->class_name = str_dup(name);
+    info->parent_name = parent ? str_dup(parent) : NULL;
+    info->methods = methods;
+    info->next = compiler->classes;
+    compiler->classes = info;
+    return info;
+}
+
+static void free_class_info(ClassInfo* list) {
+    while (list != NULL) {
+        ClassInfo* next = list->next;
+        free(list->class_name);
+        free(list->parent_name);
+        free(list);
+        list = next;
+    }
+}
+
+static void free_imported_modules(ImportedModule* list) {
+    while (list != NULL) {
+        ImportedModule* next = list->next;
+        free(list->name);
+        free(list->source);
+        free_stmt(list->ast);
+        free(list);
+        list = next;
+    }
+}
+
+static char* read_file_contents(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return NULL;
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    if (size < 0) { fclose(f); return NULL; }
+    fseek(f, 0, SEEK_SET);
+    char* buf = malloc((size_t)size + 1);
+    if (!buf) { fclose(f); return NULL; }
+    size_t nread = fread(buf, 1, (size_t)size, f);
+    buf[nread] = '\0';
+    fclose(f);
+    return buf;
+}
+
+static char* resolve_module_path_for_compiler(const Compiler* compiler, const char* module_name) {
+    char dir[PATH_MAX];
+    if (compiler->input_path != NULL) {
+        strncpy(dir, compiler->input_path, sizeof(dir) - 1);
+        dir[sizeof(dir) - 1] = '\0';
+        char* slash = strrchr(dir, '/');
+        if (slash) *(slash + 1) = '\0';
+        else strcpy(dir, "./");
+    } else {
+        strcpy(dir, "./");
+    }
+    char path[PATH_MAX];
+    const char* search[] = { "", "lib/", "modules/" };
+    for (int i = 0; i < 3; i++) {
+        snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], module_name);
+        if (access(path, F_OK) == 0) return str_dup(path);
+    }
+    return NULL;
+}
+
 static void collect_local_lets(Compiler* compiler, Stmt* stmt, NameEntry** locals) {
     while (stmt != NULL) {
         switch (stmt->type) {
@@ -434,17 +524,104 @@ static void collect_global_lets(Compiler* compiler, Stmt* stmt) {
     }
 }
 
+static Stmt* parse_program(const char* source);
+
+static int is_in_import_list(ImportStmt* import, const char* name) {
+    for (int i = 0; i < import->item_count; i++) {
+        if (strcmp(import->items[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
+static void process_import(Compiler* compiler, ImportStmt* import) {
+    /* Check if already loaded */
+    for (ImportedModule* m = compiler->modules; m != NULL; m = m->next) {
+        if (strcmp(m->name, import->module_name) == 0) return;
+    }
+
+    char* module_path = resolve_module_path_for_compiler(compiler, import->module_name);
+    if (module_path == NULL) {
+        compiler_error(compiler, "cannot find module '%s'", import->module_name);
+        return;
+    }
+
+    char* source = read_file_contents(module_path);
+    if (source == NULL) {
+        compiler_error(compiler, "cannot read module '%s' at '%s'", import->module_name, module_path);
+        free(module_path);
+        return;
+    }
+
+    Stmt* ast = parse_program(source);
+
+    ImportedModule* mod = malloc(sizeof(ImportedModule));
+    if (mod == NULL) { fprintf(stderr, "Out of memory\n"); exit(1); }
+    mod->name = str_dup(import->module_name);
+    mod->source = source;
+    mod->ast = ast;
+    mod->next = compiler->modules;
+    compiler->modules = mod;
+
+    /* Collect module's procs and classes */
+    for (Stmt* s = ast; s != NULL; s = s->next) {
+        if (s->type == STMT_PROC) {
+            char* name = token_to_string(s->as.proc.name);
+            if (import->import_all || is_in_import_list(import, name)) {
+                add_proc_entry(compiler, name, s->as.proc.param_count);
+            }
+            free(name);
+        }
+        if (s->type == STMT_CLASS) {
+            char* class_name = token_to_string(s->as.class_stmt.name);
+            if (import->import_all || is_in_import_list(import, class_name)) {
+                char* parent_name = NULL;
+                if (s->as.class_stmt.has_parent) {
+                    parent_name = token_to_string(s->as.class_stmt.parent);
+                }
+                add_class_info(compiler, class_name, parent_name, s->as.class_stmt.methods);
+                free(parent_name);
+            }
+            free(class_name);
+        }
+    }
+
+    /* Collect module's globals */
+    for (Stmt* s = ast; s != NULL; s = s->next) {
+        if (s->type != STMT_PROC && s->type != STMT_CLASS) {
+            collect_global_lets(compiler, s);
+        }
+    }
+
+    free(module_path);
+}
+
 static void collect_top_level_symbols(Compiler* compiler, Stmt* program) {
+    /* First pass: collect procs, classes, and imports */
     for (Stmt* stmt = program; stmt != NULL; stmt = stmt->next) {
         if (stmt->type == STMT_PROC) {
             char* name = token_to_string(stmt->as.proc.name);
             add_proc_entry(compiler, name, stmt->as.proc.param_count);
             free(name);
         }
+        if (stmt->type == STMT_CLASS) {
+            char* class_name = token_to_string(stmt->as.class_stmt.name);
+            char* parent_name = NULL;
+            if (stmt->as.class_stmt.has_parent) {
+                parent_name = token_to_string(stmt->as.class_stmt.parent);
+            }
+            add_class_info(compiler, class_name, parent_name, stmt->as.class_stmt.methods);
+            free(class_name);
+            free(parent_name);
+        }
+        if (stmt->type == STMT_IMPORT) {
+            process_import(compiler, &stmt->as.import);
+            if (compiler->failed) return;
+        }
     }
 
+    /* Second pass: collect global lets */
     for (Stmt* stmt = program; stmt != NULL; stmt = stmt->next) {
-        if (stmt->type != STMT_PROC) {
+        if (stmt->type != STMT_PROC && stmt->type != STMT_CLASS) {
             collect_global_lets(compiler, stmt);
         }
     }
@@ -655,6 +832,30 @@ static char* emit_binary_expr(Compiler* compiler, BinaryExpr* binary) {
 }
 
 static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
+    /* Method call: obj.method(args) */
+    if (call->callee->type == EXPR_GET) {
+        char* obj = emit_expr(compiler, call->callee->as.get.object);
+        char* method = token_to_string(call->callee->as.get.property);
+        StringBuffer msb;
+        sb_init(&msb);
+        if (call->arg_count == 0) {
+            sb_appendf(&msb, "sage_call_method(%s, \"%s\", 0, NULL)", obj, method);
+        } else {
+            sb_appendf(&msb, "sage_call_method(%s, \"%s\", %d, (SageValue[]){",
+                       obj, method, call->arg_count);
+            for (int i = 0; i < call->arg_count; i++) {
+                if (i > 0) sb_append(&msb, ", ");
+                char* arg = emit_expr(compiler, call->args[i]);
+                sb_append(&msb, arg);
+                free(arg);
+            }
+            sb_append(&msb, "})");
+        }
+        free(obj);
+        free(method);
+        return sb_take(&msb);
+    }
+
     if (call->callee->type != EXPR_VARIABLE) {
         compiler_error(compiler, "only direct function calls are supported by the C backend");
         return str_dup("sage_nil()");
@@ -1075,6 +1276,43 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
         return sb_take(&sb);
     }
 
+    if (strcmp(callee_name, "asm_arch") == 0) {
+        if (call->arg_count != 0) {
+            compiler_error(compiler, "asm_arch() expects no arguments");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            sb_append(&sb, "sage_arch_fn()");
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    /* Class constructor call: ClassName(args) */
+    ClassInfo* cls = find_class_info(compiler->classes, callee_name);
+    if (cls != NULL) {
+        sb_appendf(&sb, "sage_construct(\"%s\", ", cls->class_name);
+        if (cls->parent_name) {
+            sb_appendf(&sb, "\"%s\"", cls->parent_name);
+        } else {
+            sb_append(&sb, "NULL");
+        }
+        sb_appendf(&sb, ", %d, ", call->arg_count);
+        if (call->arg_count == 0) {
+            sb_append(&sb, "NULL)");
+        } else {
+            sb_append(&sb, "(SageValue[]){");
+            for (int i = 0; i < call->arg_count; i++) {
+                if (i > 0) sb_append(&sb, ", ");
+                char* arg = emit_expr(compiler, call->args[i]);
+                sb_append(&sb, arg);
+                free(arg);
+            }
+            sb_append(&sb, "})");
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
     ProcEntry* proc = find_proc_entry(compiler->procs, callee_name);
     if (proc == NULL) {
         compiler_error(compiler, "call target '%s' is not supported by the C backend", callee_name);
@@ -1105,8 +1343,21 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
 static char* emit_set_expr(Compiler* compiler, SetExpr* set) {
     if (set->object != NULL) {
-        compiler_error(compiler, "property assignment is not supported by the C backend");
-        return str_dup("sage_nil()");
+        /* Property assignment: obj.prop = value */
+        char* obj = emit_expr(compiler, set->object);
+        char* prop = token_to_string(set->property);
+        char* escaped = escape_c_string(prop);
+        char* val = emit_expr(compiler, set->value);
+        StringBuffer sb;
+        sb_init(&sb);
+        sb_appendf(&sb, "({SageValue _obj = %s; SageValue _val = %s; "
+                   "sage_dict_set(_obj.as.dict, \"%s\", _val); _val;})",
+                   obj, val, escaped);
+        free(obj);
+        free(prop);
+        free(escaped);
+        free(val);
+        return sb_take(&sb);
     }
 
     char* name = token_to_string(set->property);
@@ -1372,10 +1623,26 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             break;
         }
         case STMT_CLASS:
+            break;  /* Methods emitted as top-level functions; registration at main start */
+        case STMT_IMPORT: {
+            /* Emit module-level code inline at import site */
+            ImportStmt* imp = &stmt->as.import;
+            for (ImportedModule* m = compiler->modules; m != NULL; m = m->next) {
+                if (strcmp(m->name, imp->module_name) == 0) {
+                    for (Stmt* s = m->ast; s != NULL; s = s->next) {
+                        if (s->type != STMT_PROC && s->type != STMT_CLASS) {
+                            emit_stmt(compiler, s);
+                            if (compiler->failed) return;
+                        }
+                    }
+                    break;
+                }
+            }
+            break;
+        }
         case STMT_MATCH:
         case STMT_DEFER:
         case STMT_YIELD:
-        case STMT_IMPORT:
             compiler_error(compiler, "statement kind is not yet supported by the Phase 10 C backend");
             break;
     }
@@ -2236,6 +2503,114 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         out
     );
 
+    /* Class/object system */
+    fputs(
+        "typedef SageValue (*SageMethodFn)(SageValue, int, SageValue*);\n"
+        "typedef struct { const char* class_name; const char* method_name; SageMethodFn fn; } SageMethodEntry;\n"
+        "typedef struct { const char* name; const char* parent; } SageClassEntry;\n"
+        "#define SAGE_MAX_METHODS 256\n"
+        "#define SAGE_MAX_CLASSES 64\n"
+        "static SageMethodEntry sage_method_table[SAGE_MAX_METHODS];\n"
+        "static int sage_method_count = 0;\n"
+        "static SageClassEntry sage_class_registry[SAGE_MAX_CLASSES];\n"
+        "static int sage_class_count = 0;\n"
+        "\n"
+        "static void sage_register_class(const char* name, const char* parent) {\n"
+        "    if (sage_class_count >= SAGE_MAX_CLASSES) sage_fail(\"too many classes\");\n"
+        "    sage_class_registry[sage_class_count].name = name;\n"
+        "    sage_class_registry[sage_class_count].parent = parent;\n"
+        "    sage_class_count++;\n"
+        "}\n"
+        "\n"
+        "static void sage_register_method(const char* cls, const char* name, SageMethodFn fn) {\n"
+        "    if (sage_method_count >= SAGE_MAX_METHODS) sage_fail(\"too many methods\");\n"
+        "    sage_method_table[sage_method_count].class_name = cls;\n"
+        "    sage_method_table[sage_method_count].method_name = name;\n"
+        "    sage_method_table[sage_method_count].fn = fn;\n"
+        "    sage_method_count++;\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    fputs(
+        "static SageValue sage_call_method(SageValue obj, const char* method, int argc, SageValue* argv) {\n"
+        "    if (obj.type != SAGE_TAG_DICT) {\n"
+        "        fprintf(stderr, \"Runtime Error: method call on non-instance.\\n\");\n"
+        "        exit(1);\n"
+        "    }\n"
+        "    SageValue class_val = sage_dict_get(obj.as.dict, \"__class__\");\n"
+        "    if (class_val.type != SAGE_TAG_STRING) {\n"
+        "        fprintf(stderr, \"Runtime Error: no __class__ on instance.\\n\");\n"
+        "        exit(1);\n"
+        "    }\n"
+        "    const char* current = class_val.as.string;\n"
+        "    while (current != NULL) {\n"
+        "        for (int i = 0; i < sage_method_count; i++) {\n"
+        "            if (strcmp(sage_method_table[i].class_name, current) == 0 &&\n"
+        "                strcmp(sage_method_table[i].method_name, method) == 0) {\n"
+        "                return sage_method_table[i].fn(obj, argc, argv);\n"
+        "            }\n"
+        "        }\n"
+        "        const char* parent = NULL;\n"
+        "        for (int j = 0; j < sage_class_count; j++) {\n"
+        "            if (strcmp(sage_class_registry[j].name, current) == 0) {\n"
+        "                parent = sage_class_registry[j].parent;\n"
+        "                break;\n"
+        "            }\n"
+        "        }\n"
+        "        current = parent;\n"
+        "    }\n"
+        "    fprintf(stderr, \"Runtime Error: Undefined method '%s'.\\n\", method);\n"
+        "    exit(1);\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_construct(const char* class_name, const char* parent_name, int argc, SageValue* argv) {\n"
+        "    SageValue inst = sage_make_dict();\n"
+        "    sage_dict_set(inst.as.dict, \"__class__\", sage_string(class_name));\n"
+        "    if (parent_name != NULL) sage_dict_set(inst.as.dict, \"__parent__\", sage_string(parent_name));\n"
+        "    const char* current = class_name;\n"
+        "    while (current != NULL) {\n"
+        "        for (int i = 0; i < sage_method_count; i++) {\n"
+        "            if (strcmp(sage_method_table[i].class_name, current) == 0 &&\n"
+        "                strcmp(sage_method_table[i].method_name, \"init\") == 0) {\n"
+        "                sage_method_table[i].fn(inst, argc, argv);\n"
+        "                return inst;\n"
+        "            }\n"
+        "        }\n"
+        "        const char* parent = NULL;\n"
+        "        for (int j = 0; j < sage_class_count; j++) {\n"
+        "            if (strcmp(sage_class_registry[j].name, current) == 0) {\n"
+        "                parent = sage_class_registry[j].parent;\n"
+        "                break;\n"
+        "            }\n"
+        "        }\n"
+        "        current = parent;\n"
+        "    }\n"
+        "    return inst;\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    /* Architecture detection */
+    fputs(
+        "static SageValue sage_arch_fn(void) {\n"
+        "#if defined(__x86_64__) || defined(_M_X64)\n"
+        "    return sage_string(\"x86_64\");\n"
+        "#elif defined(__aarch64__) || defined(_M_ARM64)\n"
+        "    return sage_string(\"aarch64\");\n"
+        "#elif defined(__riscv) && __riscv_xlen == 64\n"
+        "    return sage_string(\"rv64\");\n"
+        "#else\n"
+        "    return sage_string(\"unknown\");\n"
+        "#endif\n"
+        "}\n"
+        "\n",
+        out
+    );
+
     /* clock() and input() */
     if (target != COMPILER_TARGET_PICO) {
         fputs(
@@ -2344,7 +2719,109 @@ static void emit_function_definition(Compiler* compiler, Stmt* stmt) {
     compiler->locals = previous_locals;
 }
 
+static void emit_method_definition(Compiler* compiler, ClassInfo* cls, Stmt* method) {
+    ProcStmt* proc = &method->as.proc;
+    char* method_name = token_to_string(proc->name);
+
+    int has_self = (proc->param_count > 0 &&
+                    proc->params[0].length == 4 &&
+                    strncmp(proc->params[0].start, "self", 4) == 0);
+    int param_start = has_self ? 1 : 0;
+
+    NameEntry* previous_locals = compiler->locals;
+    compiler->locals = NULL;
+
+    /* Add self as a local */
+    add_name_entry(compiler, &compiler->locals, "self", "sage_local");
+
+    /* Add non-self params as locals */
+    for (int i = param_start; i < proc->param_count; i++) {
+        char* pname = token_to_string(proc->params[i]);
+        if (find_name_entry(compiler->locals, pname) == NULL) {
+            add_name_entry(compiler, &compiler->locals, pname, "sage_local");
+        }
+        free(pname);
+    }
+
+    collect_local_lets(compiler, proc->body, &compiler->locals);
+    if (compiler->failed) {
+        free_name_entries(compiler->locals);
+        compiler->locals = previous_locals;
+        free(method_name);
+        return;
+    }
+
+    emit_indent(compiler);
+    fprintf(compiler->out, "static SageValue sage_method_%s_%s(SageValue _self, int _argc, SageValue* _argv) {\n",
+            cls->class_name, method_name);
+    compiler->indent++;
+
+    emit_slot_declarations(compiler, compiler->locals);
+
+    /* Bind self */
+    NameEntry* self_entry = find_name_entry(compiler->locals, "self");
+    emit_line(compiler, "sage_define_slot(&%s, _self);", self_entry->c_name);
+
+    /* Bind params from argv */
+    int argv_idx = 0;
+    for (int i = param_start; i < proc->param_count; i++) {
+        char* pname = token_to_string(proc->params[i]);
+        NameEntry* entry = find_name_entry(compiler->locals, pname);
+        emit_line(compiler, "sage_define_slot(&%s, _argv[%d]);", entry->c_name, argv_idx++);
+        free(pname);
+    }
+
+    emit_line(compiler, "(void)_argc;");
+
+    emit_stmt_list(compiler, proc->body);
+    emit_line(compiler, "return sage_nil();");
+
+    compiler->indent--;
+    emit_line(compiler, "}");
+    fputc('\n', compiler->out);
+
+    free_name_entries(compiler->locals);
+    compiler->locals = previous_locals;
+    free(method_name);
+}
+
+static void emit_method_prototypes(Compiler* compiler) {
+    for (ClassInfo* cls = compiler->classes; cls != NULL; cls = cls->next) {
+        for (Stmt* method = cls->methods; method != NULL; method = method->next) {
+            if (method->type == STMT_PROC) {
+                char* method_name = token_to_string(method->as.proc.name);
+                emit_indent(compiler);
+                fprintf(compiler->out,
+                        "static SageValue sage_method_%s_%s(SageValue _self, int _argc, SageValue* _argv);\n",
+                        cls->class_name, method_name);
+                free(method_name);
+            }
+        }
+    }
+}
+
 static void emit_function_definitions(Compiler* compiler, Stmt* program) {
+    /* Emit module functions first */
+    for (ImportedModule* m = compiler->modules; m != NULL; m = m->next) {
+        for (Stmt* stmt = m->ast; stmt != NULL; stmt = stmt->next) {
+            if (stmt->type == STMT_PROC) {
+                emit_function_definition(compiler, stmt);
+                if (compiler->failed) return;
+            }
+        }
+    }
+
+    /* Emit class methods */
+    for (ClassInfo* cls = compiler->classes; cls != NULL; cls = cls->next) {
+        for (Stmt* method = cls->methods; method != NULL; method = method->next) {
+            if (method->type == STMT_PROC) {
+                emit_method_definition(compiler, cls, method);
+                if (compiler->failed) return;
+            }
+        }
+    }
+
+    /* Emit main program functions */
     for (Stmt* stmt = program; stmt != NULL; stmt = stmt->next) {
         if (stmt->type == STMT_PROC) {
             emit_function_definition(compiler, stmt);
@@ -2368,8 +2845,25 @@ static void emit_main_function(Compiler* compiler, Stmt* program, CompilerTarget
         emit_line(compiler, "%s = sage_slot_undefined();", global->c_name);
     }
 
+    /* Register classes and methods */
+    for (ClassInfo* cls = compiler->classes; cls != NULL; cls = cls->next) {
+        if (cls->parent_name) {
+            emit_line(compiler, "sage_register_class(\"%s\", \"%s\");", cls->class_name, cls->parent_name);
+        } else {
+            emit_line(compiler, "sage_register_class(\"%s\", NULL);", cls->class_name);
+        }
+        for (Stmt* method = cls->methods; method != NULL; method = method->next) {
+            if (method->type == STMT_PROC) {
+                char* mname = token_to_string(method->as.proc.name);
+                emit_line(compiler, "sage_register_method(\"%s\", \"%s\", sage_method_%s_%s);",
+                         cls->class_name, mname, cls->class_name, mname);
+                free(mname);
+            }
+        }
+    }
+
     for (Stmt* stmt = program; stmt != NULL; stmt = stmt->next) {
-        if (stmt->type != STMT_PROC) {
+        if (stmt->type != STMT_PROC && stmt->type != STMT_CLASS) {
             emit_stmt(compiler, stmt);
             if (compiler->failed) {
                 compiler->indent--;
@@ -2635,7 +3129,8 @@ static int write_c_output(const char* source, const char* input_path, const char
         emit_runtime_prelude(out, target);
         compiler.indent = 0;
         emit_proc_prototypes(&compiler);
-        if (compiler.procs != NULL) {
+        emit_method_prototypes(&compiler);
+        if (compiler.procs != NULL || compiler.classes != NULL) {
             fputc('\n', out);
         }
         emit_global_slots(&compiler);
@@ -2652,6 +3147,8 @@ static int write_c_output(const char* source, const char* input_path, const char
     free_stmt(program);
     free_name_entries(compiler.globals);
     free_proc_entries(compiler.procs);
+    free_class_info(compiler.classes);
+    free_imported_modules(compiler.modules);
     return compiler.failed ? 0 : 1;
 }
 

@@ -363,10 +363,12 @@ A cross-cutting audit and hardening pass across the entire codebase.
 - [x] String builtins: `split`, `join`, `replace`, `upper`, `lower`, `strip`
 - [x] Memory builtins: `mem_alloc`, `mem_free`, `mem_read`, `mem_write`, `mem_size`
 - [x] Struct builtins: `struct_def`, `struct_new`, `struct_get`, `struct_set`, `struct_size`
-- [x] Additional builtins: `tonumber()`, `clock()`, `input()`
-- [ ] Expand C backend coverage to modules and objects/classes
+- [x] Additional builtins: `tonumber()`, `clock()`, `input()`, `asm_arch()`
+- [x] Classes and objects: class definitions, inheritance, method dispatch, property get/set, constructors
+- [x] Module imports: `import`/`from X import Y` with file resolution, inline compilation
+- [x] Architecture detection: `asm_arch()` returns host arch at compile time (x86_64, aarch64, rv64)
 - [ ] LLVM IR generation backend
-- [ ] Direct machine code generation (x86-64)
+- [ ] Direct machine code generation (x86-64, aarch64, rv64)
 - [ ] Optimization levels (-O0, -O1, -O2, -O3)
 - [ ] Debug information generation
 
@@ -454,12 +456,20 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ## 📊 Progress Metrics
 
 - **Phases Completed**: 9/13 (69%)
-- **Test Suite**: 100 interpreter tests + 14 compiler tests, 25 categories, 100% pass rate
+- **Test Suite**: 100 interpreter tests + 17 compiler tests, 25 categories, 100% pass rate
 - **Estimated Completion**: 2026-2027 (self-hosting)
 
 ---
 
 ## 📝 Recent Updates
+
+### March 8, 2026 (continued)
+
+- **Phase 10 Progress: Classes, Modules, Architecture Detection**
+- Classes/objects compiled to C: class definitions, inheritance, method dispatch via vtable, property get/set, constructors
+- Module imports compiled to C: `import`/`from X import Y` with file resolution, inline code emission
+- `asm_arch()` builtin: compile-time architecture detection (x86_64, aarch64, rv64)
+- 3 new compiler tests (17 total), all passing
 
 ### March 8, 2026
 
