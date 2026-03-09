@@ -337,6 +337,55 @@ test: $(TARGET)
 	sys.stdout.flush()" | timeout 5 ./$(TARGET) --lsp 2>/dev/null | head -c 4096 | grep -q '"sage-lsp"' && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 
 # ============================================================================
+# Self-Hosted Sage Build (Bootstrap)
+# ============================================================================
+
+# Build the C host, then run a file through the self-hosted interpreter
+# Usage: make sage-boot FILE=path/to/file.sage
+sage-boot: $(TARGET)
+	@if [ -z "$(FILE)" ]; then \
+		echo "Usage: make sage-boot FILE=path/to/file.sage"; \
+		exit 1; \
+	fi
+	@echo "Running via self-hosted Sage interpreter..."
+	cd self_host && ../$(TARGET) sage.sage $(abspath $(FILE))
+
+# Run all self-hosted tests
+test-selfhost: $(TARGET)
+	@echo ""
+	@echo "=== Self-Hosted Lexer Tests ==="
+	@cd self_host && ../$(TARGET) test_lexer.sage
+	@echo ""
+	@echo "=== Self-Hosted Parser Tests ==="
+	@cd self_host && ../$(TARGET) test_parser.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Self-Hosted Interpreter Tests ==="
+	@cd self_host && ../$(TARGET) test_interpreter.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Bootstrap Integration Tests ==="
+	@cd self_host && ../$(TARGET) test_bootstrap.sage 2>&1 | tail -3
+	@echo ""
+	@echo "✅ All self-hosted tests complete"
+
+# Run individual self-hosted test suites
+test-selfhost-lexer: $(TARGET)
+	cd self_host && ../$(TARGET) test_lexer.sage
+
+test-selfhost-parser: $(TARGET)
+	cd self_host && ../$(TARGET) test_parser.sage
+
+test-selfhost-interpreter: $(TARGET)
+	cd self_host && ../$(TARGET) test_interpreter.sage
+
+test-selfhost-bootstrap: $(TARGET)
+	cd self_host && ../$(TARGET) test_bootstrap.sage
+
+# Run ALL tests (C + self-hosted)
+test-all: test test-selfhost
+	@echo ""
+	@echo "✅ All C and self-hosted tests complete"
+
+# ============================================================================
 # Cleanup
 # ============================================================================
 
@@ -362,6 +411,16 @@ cmake-build: cmake
 	cd build && make -j$$(nproc)
 	@echo "✅ CMake build complete"
 	@echo "   Run with: ./build/sage examples/hello.sage"
+
+cmake-sage: clean
+	@echo "Setting up CMake self-hosted Sage build..."
+	mkdir -p build_sage
+	cd build_sage && cmake -DBUILD_SAGE=ON ..
+	@echo "✅ Sage CMake configured. Run: cd build_sage && make test_selfhost"
+
+cmake-sage-build: cmake-sage
+	cd build_sage && make -j$$(nproc) test_selfhost
+	@echo "✅ Self-hosted tests complete"
 
 cmake-pico: clean
 	@echo "Setting up Pico build..."
@@ -393,20 +452,32 @@ stats:
 # ============================================================================
 
 help:
-	@echo "SageLang Makefile - v0.8.0"
-	@echo "=========================="
+	@echo "SageLang Makefile - v0.13.0"
+	@echo "==========================="
 	@echo ""
-	@echo "Build Targets:"
-	@echo "  make              - Build sage executable (default)"
+	@echo "Build Targets (C):"
+	@echo "  make              - Build sage executable from C (default)"
 	@echo "  make debug        - Build with debug symbols"
 	@echo "  make clean        - Remove build artifacts"
 	@echo "  make clean-all    - Remove all build directories"
+	@echo ""
+	@echo "Self-Hosted (Sage):"
+	@echo "  make sage-boot FILE=<f>  - Run a .sage file via self-hosted interpreter"
+	@echo "  make test-selfhost       - Run all self-hosted tests (178 tests)"
+	@echo "  make test-selfhost-lexer      - Run lexer tests only"
+	@echo "  make test-selfhost-parser     - Run parser tests only"
+	@echo "  make test-selfhost-interpreter - Run interpreter tests only"
+	@echo "  make test-selfhost-bootstrap  - Run bootstrap tests only"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test         - Run C compiler/interpreter tests"
+	@echo "  make test-selfhost - Run self-hosted tests"
+	@echo "  make test-all     - Run ALL tests (C + self-hosted)"
 	@echo ""
 	@echo "Development:"
 	@echo "  make run          - Run hello.sage example"
 	@echo "  make examples     - Run all examples"
 	@echo "  make run-<name>   - Run specific example (e.g., make run-fibonacci)"
-	@echo "  make test         - Run basic tests"
 	@echo "  make stats        - Show code statistics"
 	@echo ""
 	@echo "Installation:"
@@ -414,27 +485,24 @@ help:
 	@echo "  make uninstall    - Remove installation"
 	@echo "  PREFIX=/path      - Custom install location"
 	@echo ""
-	@echo "CMake (Recommended for Pico):"
-	@echo "  make cmake        - Setup CMake build"
-	@echo "  make cmake-build  - Build with CMake"
-	@echo "  make cmake-pico   - Setup Pico CMake build"
+	@echo "CMake:"
+	@echo "  make cmake            - Setup CMake build (C)"
+	@echo "  make cmake-build      - Build with CMake (C)"
+	@echo "  make cmake-sage       - Setup CMake build (Sage self-hosted)"
+	@echo "  make cmake-pico       - Setup Pico CMake build"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make                    # Build"
-	@echo "  make run                # Run hello example"
-	@echo "  make run-fibonacci      # Run fibonacci example"
-	@echo "  sudo make install       # System-wide install"
-	@echo "  make DEBUG=1            # Debug build"
-	@echo "  make cmake-pico         # Setup Pico build"
-	@echo ""
-	@echo "For Pico builds, use CMake:"
-	@echo "  mkdir build_pico && cd build_pico"
-	@echo "  cmake -DBUILD_PICO=ON .."
-	@echo "  make -j$$(nproc)"
+	@echo "  make                                  # Build from C"
+	@echo "  make sage-boot FILE=hello.sage        # Run via self-hosted Sage"
+	@echo "  make test-all                         # Run all tests"
+	@echo "  sudo make install                     # System-wide install"
+	@echo "  make DEBUG=1                          # Debug build"
 
 # ============================================================================
 # Phony Targets Declaration
 # ============================================================================
 
 .PHONY: all clean clean-all run examples test install uninstall \
-        debug cmake cmake-build cmake-pico stats help
+        debug cmake cmake-build cmake-sage cmake-sage-build cmake-pico \
+        sage-boot test-selfhost test-selfhost-lexer test-selfhost-parser \
+        test-selfhost-interpreter test-selfhost-bootstrap test-all stats help

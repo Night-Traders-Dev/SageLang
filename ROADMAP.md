@@ -490,6 +490,39 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ---
 
+## 🔧 Build System
+
+Sage supports two build modes via both Make and CMake:
+
+### Make Targets
+
+| Target | Description |
+| ------ | ----------- |
+| `make` | Build `sage` from C sources (default) |
+| `make sage-boot FILE=<file>` | Run a `.sage` file through the self-hosted interpreter |
+| `make test-selfhost` | Run all 178 self-hosted tests |
+| `make test-selfhost-lexer` | Lexer tests (12) |
+| `make test-selfhost-parser` | Parser tests (130) |
+| `make test-selfhost-interpreter` | Interpreter tests (18) |
+| `make test-selfhost-bootstrap` | Bootstrap tests (18) |
+| `make test-all` | Run ALL tests (C + self-hosted) |
+| `make cmake-sage` | Setup CMake self-hosted build |
+| `make cmake-sage-build` | Build and run self-hosted tests via CMake |
+
+### CMake Options
+
+| Option | Description |
+| ------ | ----------- |
+| (default) | Build `sage` and `sage-lsp` from C |
+| `-DBUILD_SAGE=ON` | Self-hosted mode: builds `sage_host`, provides `sage_boot`, `test_selfhost`, and per-suite test targets |
+| `-DBUILD_PICO=ON` | Pico embedded build |
+| `-DENABLE_DEBUG=ON` | Debug symbols |
+| `-DENABLE_TESTS=ON` | C test executables |
+
+Note: `-DBUILD_SAGE=ON` and the default C build are mutually exclusive. With `BUILD_SAGE`, the C host is built as `sage_host` instead of `sage`.
+
+---
+
 ## 🔮 Future Directions
 
 ### Package Manager

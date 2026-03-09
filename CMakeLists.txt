@@ -6,6 +6,7 @@ cmake_minimum_required(VERSION 3.13)
 
 # Build Options - MUST be set before pico_sdk_import
 option(BUILD_PICO "Build for Raspberry Pi Pico (RP2040)" OFF)
+option(BUILD_SAGE "Build using self-hosted Sage interpreter (bootstrap)" OFF)
 option(ENABLE_DEBUG "Enable debug symbols and logging" OFF)
 option(ENABLE_TESTS "Build test executables" OFF)
 
@@ -22,7 +23,7 @@ endif()
 # Project Configuration
 # ============================================================================
 
-project(SageLang VERSION 0.8.0 LANGUAGES C CXX ASM)
+project(SageLang VERSION 0.13.0 LANGUAGES C CXX ASM)
 
 # Initialize Pico SDK AFTER project() but before anything else
 if(BUILD_PICO)
@@ -70,13 +71,24 @@ endif()
 
 set(SAGE_CORE_SOURCES
     src/ast.c
+    src/codegen.c
     src/compiler.c
+    src/constfold.c
+    src/dce.c
     src/env.c
+    src/formatter.c
     src/gc.c
+    src/inline.c
     src/interpreter.c
+    src/linter.c
     src/lexer.c
+    src/llvm_backend.c
+    src/lsp.c
     src/module.c
     src/parser.c
+    src/pass.c
+    src/stdlib.c
+    src/typecheck.c
     src/value.c
 )
 
@@ -86,13 +98,21 @@ set(SAGE_MAIN_SOURCE
 
 set(SAGE_HEADERS
     include/ast.h
+    include/codegen.h
     include/compiler.h
     include/env.h
+    include/formatter.h
     include/gc.h
     include/interpreter.h
     include/lexer.h
+    include/linter.h
+    include/llvm_backend.h
+    include/lsp.h
     include/module.h
+    include/pass.h
+    include/repl.h
     include/token.h
+    include/typecheck.h
     include/value.h
 )
 
@@ -103,6 +123,16 @@ set(SAGE_BOARD_SOURCES
 
 set(SAGE_BOARD_HEADERS
     include/pico_gpio.h
+)
+
+# Self-hosted Sage sources
+set(SAGE_SELF_HOST_SOURCES
+    self_host/token.sage
+    self_host/lexer.sage
+    self_host/ast.sage
+    self_host/parser.sage
+    self_host/interpreter.sage
+    self_host/sage.sage
 )
 
 # Optional heartbeat implementation
@@ -121,23 +151,99 @@ include_directories(
 )
 
 # ============================================================================
-# Main Executable (Desktop/Linux build)
+# Main Executable (Desktop/Linux C build)
 # ============================================================================
 
-if(NOT BUILD_PICO)
-    # Standard desktop executable
+if(NOT BUILD_PICO AND NOT BUILD_SAGE)
+    # Standard desktop executable built from C
     add_executable(sage
         ${SAGE_MAIN_SOURCE}
         ${SAGE_CORE_SOURCES}
     )
 
-    # Link math and pthread libraries
-    target_link_libraries(sage m pthread)
+    # Link math, pthread, and dl libraries
+    target_link_libraries(sage m pthread dl)
 
-    # Install target
-    install(TARGETS sage DESTINATION bin)
+    # LSP server binary (standalone)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/lsp_main.c")
+        add_executable(sage-lsp
+            src/lsp_main.c
+            ${SAGE_CORE_SOURCES}
+        )
+        target_link_libraries(sage-lsp m pthread dl)
+        message(STATUS "Building LSP server: sage-lsp")
+    endif()
 
-    message(STATUS "Building standard executable: sage")
+    message(STATUS "Building C executable: sage")
+endif()
+
+# ============================================================================
+# Self-Hosted Sage Build (Bootstrap)
+# ============================================================================
+
+if(BUILD_SAGE AND NOT BUILD_PICO)
+    # First build the C host interpreter (needed to bootstrap)
+    add_executable(sage_host
+        ${SAGE_MAIN_SOURCE}
+        ${SAGE_CORE_SOURCES}
+    )
+    target_link_libraries(sage_host m pthread dl)
+
+    # Custom target: run a .sage file through the self-hosted interpreter
+    # Usage: cmake --build build -- sage_boot SAGE_FILE=path/to/file.sage
+    add_custom_target(sage_boot
+        COMMAND $<TARGET_FILE:sage_host>
+            ${CMAKE_CURRENT_SOURCE_DIR}/self_host/sage.sage
+            ${SAGE_FILE}
+        DEPENDS sage_host
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
+        COMMENT "Running via self-hosted Sage interpreter"
+    )
+
+    # Self-hosted test targets
+    add_custom_target(test_selfhost_lexer
+        COMMAND $<TARGET_FILE:sage_host>
+            ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_lexer.sage
+        DEPENDS sage_host
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
+        COMMENT "Running self-hosted lexer tests"
+    )
+
+    add_custom_target(test_selfhost_parser
+        COMMAND $<TARGET_FILE:sage_host>
+            ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_parser.sage
+        DEPENDS sage_host
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
+        COMMENT "Running self-hosted parser tests"
+    )
+
+    add_custom_target(test_selfhost_interpreter
+        COMMAND $<TARGET_FILE:sage_host>
+            ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_interpreter.sage
+        DEPENDS sage_host
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
+        COMMENT "Running self-hosted interpreter tests"
+    )
+
+    add_custom_target(test_selfhost_bootstrap
+        COMMAND $<TARGET_FILE:sage_host>
+            ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_bootstrap.sage
+        DEPENDS sage_host
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
+        COMMENT "Running bootstrap integration tests"
+    )
+
+    # Run all self-hosted tests
+    add_custom_target(test_selfhost
+        DEPENDS test_selfhost_lexer test_selfhost_parser
+                test_selfhost_interpreter test_selfhost_bootstrap
+        COMMENT "Running all self-hosted tests"
+    )
+
+    message(STATUS "Building self-hosted (Sage bootstrap) mode")
+    message(STATUS "  Host binary: sage_host")
+    message(STATUS "  Bootstrap:   self_host/sage.sage")
+    message(STATUS "  Targets:     sage_boot, test_selfhost")
 endif()
 
 # ============================================================================
@@ -196,7 +302,7 @@ if(BUILD_PICO)
 endif()
 
 # ============================================================================
-# Test Executables (optional)
+# Test Executables (optional, C tests)
 # ============================================================================
 
 if(ENABLE_TESTS AND NOT BUILD_PICO)
@@ -207,7 +313,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_lexer.c
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(test_lexer m pthread)
+    target_link_libraries(test_lexer m pthread dl)
     add_test(NAME LexerTest COMMAND test_lexer)
 
     # Parser test
@@ -215,7 +321,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_parser.c
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(test_parser m pthread)
+    target_link_libraries(test_parser m pthread dl)
     add_test(NAME ParserTest COMMAND test_parser)
 
     # GC test
@@ -223,7 +329,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_gc.c
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(test_gc m pthread)
+    target_link_libraries(test_gc m pthread dl)
     add_test(NAME GCTest COMMAND test_gc)
 
     message(STATUS "Test executables enabled")
@@ -233,7 +339,7 @@ endif()
 # Custom Targets (Desktop only)
 # ============================================================================
 
-if(NOT BUILD_PICO)
+if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     # Run sage with an example
     add_custom_target(run_example
         COMMAND $<TARGET_FILE:sage> ${CMAKE_CURRENT_SOURCE_DIR}/examples/hello.sage
@@ -259,15 +365,26 @@ endif()
 # Installation (Desktop only)
 # ============================================================================
 
-if(NOT BUILD_PICO)
+if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     # Install sage executable
     install(TARGETS sage
         RUNTIME DESTINATION bin
     )
 
+    # Install LSP server
+    if(TARGET sage-lsp)
+        install(TARGETS sage-lsp RUNTIME DESTINATION bin)
+    endif()
+
     # Install standard library modules
     install(DIRECTORY lib/
         DESTINATION share/sage/lib
+        FILES_MATCHING PATTERN "*.sage"
+    )
+
+    # Install self-hosted sources
+    install(DIRECTORY self_host/
+        DESTINATION share/sage/self_host
         FILES_MATCHING PATTERN "*.sage"
     )
 
@@ -278,7 +395,7 @@ if(NOT BUILD_PICO)
     )
 
     # Install documentation
-    install(FILES 
+    install(FILES
         README.md
         ROADMAP.md
         LICENSE
@@ -298,6 +415,7 @@ message(STATUS "=================================================")
 message(STATUS "Build type:      ${CMAKE_BUILD_TYPE}")
 message(STATUS "C Compiler:      ${CMAKE_C_COMPILER}")
 message(STATUS "Build for Pico:  ${BUILD_PICO}")
+message(STATUS "Build in Sage:   ${BUILD_SAGE}")
 message(STATUS "Debug mode:      ${ENABLE_DEBUG}")
 message(STATUS "Tests enabled:   ${ENABLE_TESTS}")
 message(STATUS "Source dir:      ${CMAKE_CURRENT_SOURCE_DIR}")
@@ -312,6 +430,15 @@ if(BUILD_PICO)
     message(STATUS "  - C Compiler: ${CMAKE_C_COMPILER}")
     message(STATUS "  - ASM Compiler: ${CMAKE_ASM_COMPILER}")
     message(STATUS "  - Output: sage_pico.uf2")
+endif()
+
+if(BUILD_SAGE)
+    message(STATUS "")
+    message(STATUS "Self-Hosted Build:")
+    message(STATUS "  - Host binary:  sage_host (C)")
+    message(STATUS "  - Bootstrap:    self_host/sage.sage")
+    message(STATUS "  - Run files:    make sage_boot SAGE_FILE=<file>")
+    message(STATUS "  - Run tests:    make test_selfhost")
 endif()
 
 message(STATUS "=================================================")

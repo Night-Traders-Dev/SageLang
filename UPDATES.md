@@ -1,5 +1,39 @@
 # SageLang Updates
 
+## March 9, 2026 - Build System: CMake and Make Support for Self-Hosted Builds
+
+The build system now supports building SageLang in two modes: from C sources (default) and self-hosted (Sage-on-Sage). Both Make and CMake are supported.
+
+### Makefile Targets
+
+- `make` - Build `sage` from C (default, unchanged)
+- `make sage-boot FILE=<file>` - Run a `.sage` file through the self-hosted Sage interpreter
+- `make test-selfhost` - Run all 178 self-hosted tests (lexer 12, parser 130, interpreter 18, bootstrap 18)
+- `make test-selfhost-lexer` / `test-selfhost-parser` / `test-selfhost-interpreter` / `test-selfhost-bootstrap` - Individual test suites
+- `make test-all` - Run ALL tests (C + self-hosted)
+- `make cmake-sage` - Setup CMake self-hosted build
+- `make cmake-sage-build` - Build and run self-hosted tests via CMake
+
+### CMakeLists.txt Options
+
+- Default (no flags) - Builds `sage` and `sage-lsp` from C
+- `-DBUILD_SAGE=ON` - Self-hosted mode: builds `sage_host` (C host), then provides targets:
+  - `sage_boot` - Run files via bootstrap (needs `SAGE_FILE=path`)
+  - `test_selfhost` - Run all self-hosted tests
+  - `test_selfhost_lexer`, `test_selfhost_parser`, `test_selfhost_interpreter`, `test_selfhost_bootstrap` - Individual suites
+- `-DBUILD_PICO=ON` - Pico embedded build (unchanged)
+- `-DENABLE_DEBUG=ON` - Debug symbols
+- `-DENABLE_TESTS=ON` - C test executables
+- Version updated to 0.13.0
+
+### Key Details
+
+- The self-hosted build first compiles the C host interpreter, then uses it to run the Sage bootstrap
+- `BUILD_SAGE` and default C build are mutually exclusive (`sage_host` instead of `sage`)
+- Self-hosted tests are in `self_host/` directory: `test_lexer.sage`, `test_parser.sage`, `test_interpreter.sage`, `test_bootstrap.sage`
+
+---
+
 ## March 9, 2026 - Phase 13 Complete: Self-Hosting
 
 Phase 13 delivers a self-hosted Sage interpreter written entirely in SageLang. The lexer, parser, and interpreter have been ported from C to Sage, enabling Sage to run Sage programs through its own pipeline.
