@@ -183,52 +183,52 @@ endif()
 
 if(BUILD_SAGE AND NOT BUILD_PICO)
     # First build the C host interpreter (needed to bootstrap)
-    add_executable(sage_host
+    add_executable(sage
         ${SAGE_MAIN_SOURCE}
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(sage_host m pthread dl)
+    target_link_libraries(sage m pthread dl)
 
     # Custom target: run a .sage file through the self-hosted interpreter
     # Usage: cmake --build build -- sage_boot SAGE_FILE=path/to/file.sage
     add_custom_target(sage_boot
-        COMMAND $<TARGET_FILE:sage_host>
+        COMMAND $<TARGET_FILE:sage>
             ${CMAKE_CURRENT_SOURCE_DIR}/self_host/sage.sage
             ${SAGE_FILE}
-        DEPENDS sage_host
+        DEPENDS sage
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
         COMMENT "Running via self-hosted Sage interpreter"
     )
 
     # Self-hosted test targets
     add_custom_target(test_selfhost_lexer
-        COMMAND $<TARGET_FILE:sage_host>
+        COMMAND $<TARGET_FILE:sage>
             ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_lexer.sage
-        DEPENDS sage_host
+        DEPENDS sage
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
         COMMENT "Running self-hosted lexer tests"
     )
 
     add_custom_target(test_selfhost_parser
-        COMMAND $<TARGET_FILE:sage_host>
+        COMMAND $<TARGET_FILE:sage>
             ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_parser.sage
-        DEPENDS sage_host
+        DEPENDS sage
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
         COMMENT "Running self-hosted parser tests"
     )
 
     add_custom_target(test_selfhost_interpreter
-        COMMAND $<TARGET_FILE:sage_host>
+        COMMAND $<TARGET_FILE:sage>
             ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_interpreter.sage
-        DEPENDS sage_host
+        DEPENDS sage
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
         COMMENT "Running self-hosted interpreter tests"
     )
 
     add_custom_target(test_selfhost_bootstrap
-        COMMAND $<TARGET_FILE:sage_host>
+        COMMAND $<TARGET_FILE:sage>
             ${CMAKE_CURRENT_SOURCE_DIR}/self_host/test_bootstrap.sage
-        DEPENDS sage_host
+        DEPENDS sage
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/self_host
         COMMENT "Running bootstrap integration tests"
     )
@@ -241,7 +241,7 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
     )
 
     message(STATUS "Building self-hosted (Sage bootstrap) mode")
-    message(STATUS "  Host binary: sage_host")
+    message(STATUS "  Host binary: sage")
     message(STATUS "  Bootstrap:   self_host/sage.sage")
     message(STATUS "  Targets:     sage_boot, test_selfhost")
 endif()
@@ -435,7 +435,7 @@ endif()
 if(BUILD_SAGE)
     message(STATUS "")
     message(STATUS "Self-Hosted Build:")
-    message(STATUS "  - Host binary:  sage_host (C)")
+    message(STATUS "  - Host binary:  sage (C)")
     message(STATUS "  - Bootstrap:    self_host/sage.sage")
     message(STATUS "  - Run files:    make sage_boot SAGE_FILE=<file>")
     message(STATUS "  - Run tests:    make test_selfhost")
