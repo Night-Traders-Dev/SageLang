@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**SageLang** is a **Python-inspired, systems-oriented programming language** written in C for the RP2040 microcontroller ecosystem. It is a statically-allocated, tree-walking interpreter that combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language is implemented across eight phased development cycles, progressing from core arithmetic and control flow through advanced features like generators, exception handling, and a module system for code reuse. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
+**SageLang** is a **Python-inspired, systems-oriented programming language** written in C for the RP2040 microcontroller ecosystem. It is a statically-allocated, tree-walking interpreter that combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language is implemented across eleven phased development cycles, progressing from core arithmetic and control flow through advanced features like generators, exception handling, a module system, compiler backends (C, LLVM IR, native assembly), and concurrency with threading and async/await. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
 
 ---
 
@@ -32,6 +32,8 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **Generators** | Full `yield` support with resumable state; `next()` function to iterate |
 | **Exceptions** | `try/catch/finally/raise` with explicit exception objects and message strings |
 | **Modules** | `import module`, `import module as alias`, `from module import x, y`, `from module import x as y` |
+| **Standard Library** | Native modules: `math`, `io`, `string`, `sys`, `thread` |
+| **Concurrency** | `thread.spawn`/`thread.join`, mutexes, `async proc`/`await` |
 
 ### 1.3 Execution Model
 
@@ -1385,6 +1387,169 @@ Property:      obj.field
 Call:          func(args)
 ```
 
+---
+
+## Part 10: Native Standard Library Modules (Phase 11)
+
+SageLang provides built-in native modules that are pre-loaded into the module cache and available via `import` without any file on disk.
+
+### 10.1 Math Module
+
+```sagelang
+import math
+
+print math.sqrt(16)    # 4
+print math.sin(math.pi) # ~0
+print math.floor(3.7)  # 3
+print math.ceil(3.2)   # 4
+print math.abs(-5)     # 5
+print math.pow(2, 10)  # 1024
+print math.log(math.e) # 1
+```
+
+Available functions: `sqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `abs`, `pow`, `log`
+Constants: `pi` (3.14159...), `e` (2.71828...)
+
+### 10.2 IO Module
+
+```sagelang
+import io
+
+io.writefile("test.txt", "Hello, World!")
+let content = io.readfile("test.txt")
+print content  # Hello, World!
+
+io.appendfile("test.txt", "\nLine 2")
+print io.exists("test.txt")  # true
+
+io.rename("test.txt", "renamed.txt")
+io.remove("renamed.txt")
+```
+
+Available functions: `readfile`, `writefile`, `appendfile`, `exists`, `remove`, `rename`
+
+### 10.3 String Module
+
+```sagelang
+import string
+
+print string.char(65)        # A
+print string.ord("A")        # 65
+print string.startswith("hello", "he")  # true
+print string.endswith("hello", "lo")    # true
+print string.contains("hello", "ell")   # true
+print string.repeat("ab", 3)            # ababab
+print string.reverse("hello")           # olleh
+```
+
+Available functions: `char`, `ord`, `startswith`, `endswith`, `contains`, `repeat`, `reverse`
+
+### 10.4 Sys Module
+
+```sagelang
+import sys
+
+print sys.platform()  # linux, darwin, or windows
+print sys.version()   # Sage version string
+let path = sys.env("HOME")
+print path
+```
+
+Available functions: `args`, `exit`, `platform`, `version`, `env`, `setenv`
+
+---
+
+## Part 11: Concurrency and Async/Await (Phase 11)
+
+### 11.1 Thread Module
+
+The `thread` module provides low-level threading primitives backed by pthreads.
+
+```sagelang
+import thread
+
+proc worker(name):
+    print name
+    return 42
+
+# Spawn a thread
+let t = thread.spawn(worker, "hello")
+
+# Wait for result
+let result = thread.join(t)
+print result  # 42
+```
+
+#### Thread Functions
+
+| Function | Description |
+| -------- | ----------- |
+| `thread.spawn(proc, args...)` | Spawn a new thread running `proc` with given arguments |
+| `thread.join(t)` | Block until thread `t` completes, return its result |
+| `thread.mutex()` | Create a new mutex |
+| `thread.lock(m)` | Acquire mutex `m` (blocks if held) |
+| `thread.unlock(m)` | Release mutex `m` |
+| `thread.sleep(ms)` | Sleep for `ms` milliseconds |
+| `thread.id()` | Return current thread identifier |
+
+#### Mutex Example
+
+```sagelang
+import thread
+
+let m = thread.mutex()
+
+proc critical_section():
+    thread.lock(m)
+    # ... protected code ...
+    thread.unlock(m)
+```
+
+### 11.2 Async/Await
+
+The `async proc` keyword declares a procedure that runs asynchronously. Calling it spawns a background thread and returns a thread handle. Use `await` to retrieve the result.
+
+```sagelang
+async proc compute(x):
+    return x * x
+
+# Calling an async proc spawns a thread
+let future = compute(5)
+
+# await blocks until the thread completes
+let result = await future
+print result  # 25
+```
+
+#### Parallel Execution
+
+```sagelang
+async proc slow_add(a, b):
+    return a + b
+
+# Launch two computations in parallel
+let f1 = slow_add(1, 2)
+let f2 = slow_add(3, 4)
+
+# Await both results
+let r1 = await f1
+let r2 = await f2
+print r1 + r2  # 10
+```
+
+#### How It Works
+
+1. `async proc` is parsed as `STMT_ASYNC_PROC` and sets `is_async = 1` on the `FunctionValue`
+2. When called, the interpreter pre-evaluates arguments and spawns a thread via `thread_spawn_native`
+3. The call returns a `VAL_THREAD` value (a thread handle)
+4. `await` on a `VAL_THREAD` calls `pthread_join` and returns the thread's result value
+
+### 11.3 GC Thread Safety
+
+The garbage collector is protected by a pthread mutex. All GC operations (allocation, collection, marking, sweeping) acquire the lock, ensuring safe concurrent allocation from multiple threads.
+
+---
+
 ### Example Programs
 
 **Hello World**:
@@ -1426,4 +1591,3 @@ class Rectangle:
 let rect = Rectangle(5, 3)
 print rect.area()  # 15
 ```
-

@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: March 9, 2026
-> **Current Phase**: Phase 10 Complete (Compiler Development)
+> **Current Phase**: Phase 11 Complete (Concurrency & Parallelism)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -237,7 +237,6 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - [ ] **Relative imports** - `from .sibling import func`
 - [ ] **Re-export support** - `from X import *`
 - [ ] **Submodules** - Nested module packages
-- [ ] **Standard library modules** - math, io, collections, string, sys
 
 ---
 
@@ -384,19 +383,37 @@ A cross-cutting audit and hardening pass across the entire codebase.
 ---
 
 ### Phase 11: Concurrency & Parallelism
-**Status**: 📋 Planned
+**Status**: ✅ **COMPLETE** (March 9, 2026)
 
-#### Threading
-- [ ] Thread creation and management
-- [ ] Mutex and locks
-- [ ] Thread-local storage
-- [ ] Atomic operations
+#### Native Standard Library Modules ✅
 
-#### Async/Await
-- [ ] Async function syntax
-- [ ] Await expressions
-- [ ] Future/Promise types
-- [ ] Event loop implementation
+- [x] **`math` module** - `sqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `abs`, `pow`, `log`, `pi`, `e`
+- [x] **`io` module** - `readfile`, `writefile`, `appendfile`, `exists`, `remove`, `rename`
+- [x] **`string` module** - `char`, `ord`, `startswith`, `endswith`, `contains`, `repeat`, `reverse`
+- [x] **`sys` module** - `args`, `exit`, `platform`, `version`, `env`, `setenv`
+- [x] **Native module infrastructure** - `create_native_module()` pre-loads into module cache
+
+#### Threading ✅
+
+- [x] **Thread creation** - `thread.spawn(proc, args...)` via pthreads
+- [x] **Thread joining** - `thread.join(t)` waits for completion and returns result
+- [x] **Mutex support** - `thread.mutex()`, `thread.lock(m)`, `thread.unlock(m)`
+- [x] **Thread sleep** - `thread.sleep(ms)` millisecond delay
+- [x] **Thread ID** - `thread.id()` returns current thread identifier
+- [x] **GC thread safety** - Mutex-protected garbage collection
+
+#### Async/Await ✅
+
+- [x] **`async proc` syntax** - Parsed as STMT_ASYNC_PROC, sets `is_async` flag
+- [x] **`await` expressions** - EXPR_AWAIT joins async thread and returns result
+- [x] **Automatic thread spawning** - Calling async proc spawns background thread
+- [x] **Result retrieval** - `await` blocks until thread completes, returns value
+
+#### Backend Support ✅
+
+- [x] **LLVM backend** - Dict, tuple, slice, get/set, for-in loops, break/continue
+- [x] **Native codegen** - For-in loops, break/continue with loop label stacks
+- [x] **All passes updated** - EXPR_AWAIT and STMT_ASYNC_PROC in pass.c, constfold, dce, inline, typecheck
 
 ---
 
@@ -430,15 +447,16 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ### Near-Term (Current)
 
-- Begin Phase 11 (Concurrency & Parallelism)
-- Build standard library modules (math, io, collections)
-- Expand LLVM and native backends to cover remaining expression/statement types
+- Begin Phase 12 (Tooling Ecosystem)
+- LSP implementation for editor integration
+- REPL (Read-Eval-Print Loop) for interactive development
+- Code formatter (`sage fmt`)
 
 ### Mid-Term (1-2 months)
 
-- Complete Phase 11 (Concurrency)
-- Begin Phase 12 (Tooling Ecosystem)
-- LSP implementation, REPL, formatter
+- Complete Phase 12 (Full tooling)
+- Linter (`sage lint`), debugger integration
+- Package manager CLI
 
 ### Long-Term (2-4 months)
 
@@ -457,8 +475,8 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ## 📊 Progress Metrics
 
-- **Phases Completed**: 10/13 (77%)
-- **Test Suite**: 100 interpreter tests + 24 compiler tests, 25 categories, 100% pass rate
+- **Phases Completed**: 11/13 (85%)
+- **Test Suite**: 112 interpreter tests + 24 compiler tests, 28 categories, 100% pass rate
 - **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
 - **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
 - **Estimated Completion**: 2026-2027 (self-hosting)
@@ -469,6 +487,14 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ### March 9, 2026
 
+- **Phase 11 Complete: Concurrency & Parallelism**
+- Native standard library modules: `math`, `io`, `string`, `sys` with `create_native_module()` infrastructure
+- Thread module: `thread.spawn`, `thread.join`, `thread.mutex`, `thread.lock`, `thread.unlock`, `thread.sleep`, `thread.id`
+- Async/await: `async proc` syntax, `await` expressions, automatic thread spawning on async call
+- GC thread safety with mutex-protected collection
+- LLVM backend expanded: dict, tuple, slice, get/set, for-in loops, break/continue with loop label stacks
+- Native codegen expanded: for-in loops, break/continue with loop label stacks
+- 12 new interpreter tests (threads, async, stdlib) — 112 total across 28 categories
 - **Phase 10 Complete: Compiler Development**
 - LLVM IR generation backend (`--emit-llvm`, `--compile-llvm`) with runtime declarations
 - Direct machine code generation (`--emit-asm`, `--compile-native`) via VInst IR for x86-64, aarch64, rv64
@@ -556,12 +582,12 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 We welcome contributions at all phases! Here's how you can help:
 
-### Current Priorities (Phase 11+)
+### Current Priorities (Phase 12+)
 
-1. **Concurrency** - Thread creation, mutexes, async/await prototype
-2. **Standard Library** - math, io, collections, string, sys modules
-3. **Backend Coverage** - Expand LLVM and native backends for dict/tuple/slice/class/module support
-4. **Tooling** - LSP, REPL, formatter, linter
+1. **Tooling** - LSP, REPL, formatter, linter, debugger integration
+2. **Backend Coverage** - Expand LLVM and native backends for class/module/async support
+3. **Self-Hosting** - Begin porting lexer and parser to Sage
+4. **Package Manager** - CLI for dependency management
 
 ### Getting Started
 1. Check the current phase status above

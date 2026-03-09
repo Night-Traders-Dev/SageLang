@@ -4,7 +4,7 @@
 
 ![SageLang Logo](assets/SageLang.jpg)
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It is currently in the **advanced development phase**, with a fully working interpreter featuring **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, and rich data structures.
+Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, and three compiler backends (C, LLVM IR, native assembly).
 
 ## 🚀 Features (Implemented)
 
@@ -69,6 +69,34 @@ Sage is a new programming language that combines the readability of Python (inde
 - **Assembly**: `asm_exec()`, `asm_compile()`, `asm_arch()` (x86-64, aarch64, rv64)
 - **Structs**: `struct_def()`, `struct_new()`, `struct_get()`, `struct_set()`, `struct_size()`
 
+### Concurrency & Async/Await
+
+- **Threads**: `thread.spawn()`, `thread.join()`, `thread.mutex()`, `thread.lock()`, `thread.unlock()`
+- **Async Procs**: `async proc name():` spawns work on a new thread when called
+- **Await**: `await future` joins the thread and returns the result
+- **Thread Safety**: GC mutex for safe concurrent memory management
+
+### Native Standard Library Modules
+
+- **`math`**: 25 functions + 5 constants (sin, cos, tan, sqrt, pow, log, floor, ceil, round, abs, pi, e, inf, tau, etc.)
+- **`io`**: File operations (readfile, writefile, appendfile, exists, remove, isdir, filesize)
+- **`string`**: String utilities (find, rfind, startswith, endswith, contains, char_at, ord, chr, repeat, count, substr, reverse)
+- **`sys`**: System info (args, exit, getenv, clock, sleep, version, platform)
+- **`thread`**: Threading primitives (spawn, join, mutex, lock, unlock, sleep, id)
+
+Example:
+```sage
+import math
+print math.sqrt(16)    # 4
+print math.pi          # 3.14159...
+
+async proc compute(x):
+    return x * x
+
+let future = compute(42)
+print await future     # 1764
+```
+
 ### Bundled `lib/` Modules
 - **`math`**: arithmetic helpers, `pow_int`, `factorial`, `gcd`, `lcm`, `sqrt`, distance helpers
 - **`arrays`**: `map`, `filter`, `reduce`, `unique`, `zip`, `chunk`, `flatten`, `concat`
@@ -119,37 +147,38 @@ This produces the `sage` executable.
 ./sage examples/phase6_classes.sage
 ```
 
-### Compiler Preview
+### Compiler Backends
 
-Phase 10 has started with an initial C backend.
+Sage includes three compiler backends, all with optimization passes (`-O0` through `-O3`):
+
+**C Backend** (most complete):
 
 ```bash
-./sage --emit-c testing/compiler_smoke.sage -o compiler_smoke.c
-./sage --compile testing/compiler_smoke.sage -o compiler_smoke
-./compiler_smoke
+./sage --emit-c program.sage -o program.c     # Emit C source
+./sage --compile program.sage -o program       # Compile to executable
 ```
 
-For RP2040/Pico firmware builds:
+**LLVM IR Backend**:
 
 ```bash
-./sage --emit-pico-c examples/hello.sage -o hello_pico.c
+./sage --emit-llvm program.sage -o program.ll  # Emit LLVM IR
+./sage --compile-llvm program.sage -o program  # Compile via clang
+```
+
+**Native Assembly Backend** (x86-64, aarch64, rv64):
+
+```bash
+./sage --emit-asm program.sage -o program.s    # Emit assembly
+./sage --compile-native program.sage -o program
+```
+
+**RP2040/Pico firmware**:
+
+```bash
 ./sage --compile-pico examples/hello.sage -o build_hello_pico --sdk /path/to/pico-sdk
 ```
 
-That produces `build_hello_pico/build/hello.uf2`.
-
-Current backend support is intentionally narrow:
-- top-level `proc` definitions
-- `let`, assignment, `print`, `if`/`else`, `while`, `return`
-- array literals, array indexing/slicing, and `len`/`push`/`pop`/`range`/`slice`
-- arithmetic, comparison, logical, and bitwise operators
-- string literals, string concatenation, and `str(...)`
-- direct calls to top-level procedures
-
-Not yet supported in the C backend:
-- imports, classes, methods, closures, generators, exceptions
-- dictionaries, tuples, property access
-- `for` loops and nested procedure declarations
+The C backend supports the full language including classes, modules, exceptions, and all builtins. The LLVM and native backends support scalar control flow, arrays, dictionaries, tuples, slicing, property access, for-in loops, and break/continue.
 
 ## 📝 Example Code
 
@@ -367,8 +396,8 @@ gc_enable()
   - [x] Raw memory (`mem_alloc`, `mem_read`, `mem_write`, `mem_free`, `mem_size`, `addressof`)
   - [x] Inline assembly (`asm_exec`, `asm_compile`, `asm_arch` — x86-64, aarch64, rv64)
   - [x] C struct interop (`struct_def`, `struct_new`, `struct_get`, `struct_set`, `struct_size`)
-- [ ] **Phase 10: Compiler Development** (Initial C backend landed; LLVM/direct codegen pending)
-- [ ] **Phase 11: Concurrency** (Threads, Async/Await)
+- [x] **Phase 10: Compiler Development** (C backend, LLVM IR, native ASM, optimization passes) ✅
+- [x] **Phase 11: Concurrency & Stdlib** (Native modules, threads, async/await, backend expansion) ✅
 - [ ] **Phase 12: Tooling** (LSP, Formatter, Debugger, REPL)
 - [ ] **Phase 13: Self-Hosting** (Rewrite compiler in Sage)
 
@@ -387,17 +416,6 @@ Sage aims to be a **systems programming language** that:
 - Eventually becomes self-hosted
 
 ### Future Capabilities
-
-**Module System (In Progress):**
-```sage
-# Import modules
-import math
-from math import sqrt, pow
-
-# Use imported functions
-let result = sqrt(16.0)  # 4.0
-let power = pow(2, 8)    # 256
-```
 
 **Low-Level Programming:**
 ```sage
@@ -422,11 +440,12 @@ proc write_memory(ptr: *mut u8, value: u8):
 ## 📊 Project Stats
 
 - **Language**: C
-- **Phases Completed**: 9/13 (69%)
-- **Test Suite**: 100 automated tests, 25 categories, 100% pass rate
+- **Phases Completed**: 11/13 (85%)
+- **Test Suite**: 112 interpreter tests + 24 compiler tests, 28 categories, 100% pass rate
+- **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
 - **Status**: Advanced Development
 - **License**: MIT
-- **Current Version**: v0.9.0-dev
+- **Current Version**: v0.11.0-dev
 
 ## 💾 Project Structure
 
@@ -443,14 +462,23 @@ sage/
 │   └── interpreter.h # Evaluator (ExecResult with exceptions & yield)
 ├── src/              # C implementation
 │   ├── main.c        # Entry point
-│   ├── lexer.c       # Tokenizer (import keywords)
-│   ├── parser.c      # Parser (import statements)
+│   ├── lexer.c       # Tokenizer (keywords including async/await)
+│   ├── parser.c      # Parser (all statement/expression types)
 │   ├── ast.c         # AST constructors
 │   ├── env.c         # Environment management
-│   ├── value.c       # Values (FunctionValue closures)
-│   ├── gc.c          # Mark-and-sweep GC
+│   ├── value.c       # Values (functions, threads, mutexes)
+│   ├── gc.c          # Mark-and-sweep GC (thread-safe)
 │   ├── module.c      # Module loading and caching
-│   └── interpreter.c # Evaluator (exception propagation, yield, imports)
+│   ├── stdlib.c      # Native stdlib modules (math, io, string, sys, thread)
+│   ├── interpreter.c # Evaluator (exceptions, yield, imports, async/await)
+│   ├── compiler.c    # C code generation backend
+│   ├── llvm_backend.c # LLVM IR generation backend
+│   ├── codegen.c     # Native assembly backend (x86-64, aarch64, rv64)
+│   ├── pass.c        # Optimization pass infrastructure
+│   ├── typecheck.c   # Type checking pass
+│   ├── constfold.c   # Constant folding pass
+│   ├── dce.c         # Dead code elimination pass
+│   └── inline.c      # Function inlining pass
 ├── lib/              # Standard library modules
 │   ├── math.sage     # Mathematical functions (in development)
 │   └── (more planned)
@@ -460,11 +488,13 @@ sage/
 │   ├── phase6_classes.sage  # OOP demonstration
 │   ├── phase5_data.sage     # Data structures
 │   └── phase4_gc_demo.sage  # GC examples
-├── tests/            # Automated test suite (77 tests)
+├── tests/            # Automated test suite (112 tests)
 │   ├── run_tests.sh  # Test runner script
 │   ├── 01_variables/ # Variable declaration tests
-│   ├── ...           # 20 test categories
-│   └── 20_gc/        # Garbage collection tests
+│   ├── ...           # 28 test categories
+│   ├── 26_stdlib/    # Standard library module tests
+│   ├── 27_threads/   # Thread concurrency tests
+│   └── 28_async/     # Async/await tests
 ├── ROADMAP.md        # Detailed development roadmap
 ├── UPDATES.md        # Changelog
 ├── Makefile          # Build script
@@ -475,11 +505,12 @@ sage/
 
 Sage is an educational project aimed at understanding compiler construction and language design. Contributions are welcome!
 
-### Current Focus Areas (Phase 10 - Compiler Development)
-1. **Expand the C Backend**: Broaden coverage beyond the current procedural subset
-2. **LLVM IR Backend**: Generate LLVM IR for native compilation
-3. **Compiler Pipeline**: Add analysis/optimization passes like constant folding
-4. **Bootstrap Readiness**: Improve file I/O and compiler-oriented library support
+### Current Focus Areas (Phase 12 - Tooling)
+
+1. **Language Server Protocol (LSP)**: IDE integration with completions and diagnostics
+2. **REPL**: Interactive read-eval-print loop
+3. **Code Formatter**: `sage fmt` for consistent style
+4. **Bootstrap Readiness**: Prepare for self-hosting compiler in Phase 13
 
 ### How to Contribute
 1. Fork the project
@@ -512,9 +543,9 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
-- March 8, 2026: Phase 8.5 Complete - Security & performance hardening, 77-test suite
-- March 8, 2026: Phase 10 Started - Initial C backend with `--emit-c` and `--compile`
-- March 2026: Phase 8 Complete - Module system fully working
+- March 9, 2026: Phase 11 Complete - Native stdlib, threads, async/await, backend expansion
+- March 9, 2026: Phase 10 Complete - C/LLVM/native backends, optimization passes
+- March 8, 2026: Phase 8.5 Complete - Security & performance hardening
 - November 29, 2025: Phase 7 Complete - Generators with yield/next
 - November 28, 2025: Phase 6 Complete - Object-Oriented Programming
 - November 27, 2025: Phase 5 Complete - Advanced Data Structures

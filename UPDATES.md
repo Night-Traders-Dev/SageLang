@@ -1,5 +1,90 @@
 # SageLang Updates
 
+## March 9, 2026 - Phase 11 Complete: Concurrency & Parallelism
+
+Phase 11 brings threading, async/await, native standard library modules, and expanded compiler backends.
+
+### Native Standard Library Modules
+
+- **`math` module** - `sqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `abs`, `pow`, `log`, `pi`, `e`
+- **`io` module** - `readfile`, `writefile`, `appendfile`, `exists`, `remove`, `rename`
+- **`string` module** - `char`, `ord`, `startswith`, `endswith`, `contains`, `repeat`, `reverse`
+- **`sys` module** - `args`, `exit`, `platform`, `version`, `env`, `setenv`
+- Native module infrastructure: `create_native_module()` pre-loads modules into cache before file resolution
+
+### Thread Module
+
+- **`thread.spawn(proc, args...)`** - Spawn a new thread running a procedure with pre-evaluated arguments
+- **`thread.join(t)`** - Wait for thread completion and return its result
+- **`thread.mutex()`** - Create a mutex for synchronization
+- **`thread.lock(m)` / `thread.unlock(m)`** - Lock and unlock mutexes
+- **`thread.sleep(ms)`** - Sleep for milliseconds
+- **`thread.id()`** - Get current thread identifier
+- **GC thread safety** - Garbage collector protected with pthread mutex
+
+### Async/Await
+
+- **`async proc` syntax** - Declares an asynchronous procedure (sets `is_async` flag on FunctionValue)
+- **`await` expression** - Joins async thread and retrieves the return value
+- Calling an async proc automatically spawns a background thread via `thread_spawn_native`
+- New AST nodes: `STMT_ASYNC_PROC`, `EXPR_AWAIT`
+- Lexer: `async` and `await` keywords
+- All compiler passes updated: pass.c, constfold.c, dce.c, inline.c, typecheck.c
+
+### LLVM Backend Expansion
+
+- Dictionary literals, tuple literals, slice expressions
+- Property access (`EXPR_GET`) and property assignment (`EXPR_SET`)
+- `for...in` loops using `sage_rt_array_len` + counter + `sage_rt_index`
+- `break` and `continue` with loop label stack (`loop_cond_labels[]`, `loop_end_labels[]`, `loop_depth`)
+- 11 new runtime function declarations (dict, tuple, slice, get/set, array_len, range)
+
+### Native Codegen Expansion
+
+- `for...in` loops using `VINST_CALL_BUILTIN("len")` + counter + `VINST_INDEX`
+- `break` and `continue` with loop label stack in `ISelContext`
+- Updated `STMT_WHILE` to push/pop loop labels
+
+### Files Modified
+
+- `src/stdlib.c` - Thread module functions, native module infrastructure
+- `src/module.c` - `register_stdlib_modules()`, `create_native_module()`
+- `include/module.h` - Thread module declaration
+- `include/token.h` - `TOKEN_ASYNC`, `TOKEN_AWAIT`
+- `include/ast.h` - `AwaitExpr`, `EXPR_AWAIT`, `STMT_ASYNC_PROC`
+- `src/ast.c` - Constructors and free functions for new nodes
+- `src/lexer.c` - `async`/`await` keyword recognition
+- `src/parser.c` - `async_proc_declaration()`, `await` in `unary()`
+- `include/value.h` - `is_async` field on FunctionValue
+- `src/value.c` - Initialize `is_async = 0`
+- `src/interpreter.c` - Async proc execution, await joining, thread spawning
+- `src/llvm_backend.c` - Loop labels, dict/tuple/slice/get/set/for-in/break/continue
+- `include/codegen.h` - Loop label stack in ISelContext
+- `src/codegen.c` - For-in loops, break/continue with loop labels
+- `src/pass.c`, `src/constfold.c`, `src/dce.c`, `src/inline.c`, `src/typecheck.c`, `src/compiler.c` - New node handling
+
+### Test Suite
+
+- 4 new tests in `tests/27_threads/`: basic spawn, thread args, mutex, thread ID
+- 3 new tests in `tests/28_async/`: basic async, async args, async parallel
+- 5 new tests in `tests/26_stdlib/`: math, io, string, sys modules
+- Total: 112 interpreter tests across 28 categories + 24 compiler tests, all passing
+
+---
+
+## March 9, 2026 - Phase 10 Complete: Compiler Development
+
+Full compiler pipeline with three backends: C codegen, LLVM IR, and native assembly.
+
+- C backend: complete coverage of all language features (classes, modules, exceptions, builtins)
+- LLVM IR backend: `--emit-llvm` / `--compile-llvm` with runtime declarations
+- Native assembly backend: `--emit-asm` / `--compile-native` for x86-64, aarch64, rv64
+- Optimization passes: type checking (`-O1+`), constant folding (`-O1+`), dead code elimination (`-O2+`), function inlining (`-O3`)
+- Debug information: `-g` flag
+- 24 compiler tests, all passing
+
+---
+
 ## March 8, 2026 - Phase 9 Complete: Low-Level Programming
 
 Phase 9 is now complete with all 5 sub-features implemented.
