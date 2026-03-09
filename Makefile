@@ -179,6 +179,12 @@ test: $(TARGET)
 	@./$(TARGET) --compile testing/compiler_arrays.sage -o .tmp/compiler_arrays
 	@./.tmp/compiler_arrays > .tmp/compiler_arrays.out
 	@diff -u testing/compiler_arrays.expected .tmp/compiler_arrays.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 7: Phase 10 Pico Codegen"
+	@./$(TARGET) --emit-pico-c examples/hello.sage -o .tmp/hello_pico.c && \
+		rg -F -q '#include "pico/stdlib.h"' .tmp/hello_pico.c && \
+		rg -F -q 'stdio_init_all();' .tmp/hello_pico.c && \
+		rg -F -q 'sleep_ms(2000);' .tmp/hello_pico.c && echo "✅ Pass" || echo "❌ Fail"
 
 # ============================================================================
 # Cleanup

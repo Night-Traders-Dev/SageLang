@@ -43,7 +43,9 @@ static void print_usage(FILE* stream) {
             "Usage: sage [path]\n"
             "       sage -c \"source\"\n"
             "       sage --emit-c <input.sage> [-o output.c]\n"
-            "       sage --compile <input.sage> [-o output] [--cc compiler]\n");
+            "       sage --compile <input.sage> [-o output] [--cc compiler]\n"
+            "       sage --emit-pico-c <input.sage> [-o output.c]\n"
+            "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n");
 }
 
 static int parse_codegen_options(int argc, const char* argv[], int start_index,
@@ -64,6 +66,48 @@ static int parse_codegen_options(int argc, const char* argv[], int start_index,
                 return 0;
             }
             *cc_command = argv[++i];
+        } else {
+            fprintf(stderr, "Unknown option: %s\n", argv[i]);
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int parse_pico_options(int argc, const char* argv[], int start_index,
+                              const char** output_dir, const char** board,
+                              const char** program_name, const char** sdk_path) {
+    *output_dir = NULL;
+    *board = NULL;
+    *program_name = NULL;
+    *sdk_path = NULL;
+
+    for (int i = start_index; i < argc; i++) {
+        if (strcmp(argv[i], "-o") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Missing output directory after -o.\n");
+                return 0;
+            }
+            *output_dir = argv[++i];
+        } else if (strcmp(argv[i], "--board") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Missing board after --board.\n");
+                return 0;
+            }
+            *board = argv[++i];
+        } else if (strcmp(argv[i], "--name") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Missing program name after --name.\n");
+                return 0;
+            }
+            *program_name = argv[++i];
+        } else if (strcmp(argv[i], "--sdk") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Missing SDK path after --sdk.\n");
+                return 0;
+            }
+            *sdk_path = argv[++i];
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
             return 0;
@@ -218,6 +262,62 @@ int main(int argc, const char* argv[]) {
         unlink(temp_c_path);
         free(source);
         free(derived_output);
+    } else if (argc >= 3 && strcmp(argv[1], "--emit-pico-c") == 0) {
+        const char* explicit_output = NULL;
+        const char* ignored_cc = NULL;
+        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc)) {
+            print_usage(stderr);
+            gc_shutdown();
+            cleanup_module_system();
+            cleanup_runtime_state();
+            exit(64);
+        }
+
+        char* source = read_file(argv[2]);
+        char* derived_output = NULL;
+        const char* output_path = explicit_output;
+        if (output_path == NULL) {
+            derived_output = derive_output_path(argv[2], ".pico.c", 1);
+            output_path = derived_output;
+        }
+
+        if (!compile_source_to_pico_c(source, argv[2], output_path)) {
+            free(source);
+            free(derived_output);
+            gc_shutdown();
+            cleanup_module_system();
+            cleanup_runtime_state();
+            exit(1);
+        }
+
+        free(source);
+        free(derived_output);
+    } else if (argc >= 3 && strcmp(argv[1], "--compile-pico") == 0) {
+        const char* output_dir = NULL;
+        const char* board = NULL;
+        const char* program_name = NULL;
+        const char* sdk_path = NULL;
+        if (!parse_pico_options(argc, argv, 3, &output_dir, &board, &program_name, &sdk_path)) {
+            print_usage(stderr);
+            gc_shutdown();
+            cleanup_module_system();
+            cleanup_runtime_state();
+            exit(64);
+        }
+
+        char* source = read_file(argv[2]);
+        char uf2_path[1024];
+        if (!compile_source_to_pico_uf2(source, argv[2], output_dir, program_name,
+                                        board, sdk_path, uf2_path, sizeof(uf2_path))) {
+            free(source);
+            gc_shutdown();
+            cleanup_module_system();
+            cleanup_runtime_state();
+            exit(1);
+        }
+
+        printf("Built UF2: %s\n", uf2_path);
+        free(source);
     } else if (argc == 2) {
         // File mode
         char* source = read_file(argv[1]);

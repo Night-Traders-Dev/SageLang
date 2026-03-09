@@ -129,6 +129,15 @@ Phase 10 has started with an initial C backend.
 ./compiler_smoke
 ```
 
+For RP2040/Pico firmware builds:
+
+```bash
+./sage --emit-pico-c examples/hello.sage -o hello_pico.c
+./sage --compile-pico examples/hello.sage -o build_hello_pico --sdk /path/to/pico-sdk
+```
+
+That produces `build_hello_pico/build/hello.uf2`.
+
 Current backend support is intentionally narrow:
 - top-level `proc` definitions
 - `let`, assignment, `print`, `if`/`else`, `while`, `return`
