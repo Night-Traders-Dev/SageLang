@@ -173,6 +173,12 @@ test: $(TARGET)
 	@./$(TARGET) --compile testing/compiler_smoke.sage -o .tmp/compiler_smoke
 	@./.tmp/compiler_smoke > .tmp/compiler_smoke.out
 	@diff -u testing/compiler_smoke.expected .tmp/compiler_smoke.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 6: Phase 10 Arrays"
+	@./$(TARGET) --emit-c testing/compiler_arrays.sage -o .tmp/compiler_arrays.c
+	@./$(TARGET) --compile testing/compiler_arrays.sage -o .tmp/compiler_arrays
+	@./.tmp/compiler_arrays > .tmp/compiler_arrays.out
+	@diff -u testing/compiler_arrays.expected .tmp/compiler_arrays.out && echo "✅ Pass" || echo "❌ Fail"
 
 # ============================================================================
 # Cleanup

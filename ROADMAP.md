@@ -354,8 +354,8 @@ A cross-cutting audit and hardening pass across the entire codebase.
 **Status**: 🚧 In Progress
 
 #### Code Generation
-- [x] Initial C code generation backend (`sage --emit-c`, `sage --compile`) for a restricted procedural subset
-- [ ] Expand C backend coverage to modules, collections, objects, and exceptions
+- [x] Initial C code generation backend (`sage --emit-c`, `sage --compile`) for scalar control flow and array operations
+- [ ] Expand C backend coverage to modules, dictionaries, tuples, objects, and exceptions
 - [ ] LLVM IR generation backend
 - [ ] Direct machine code generation (x86-64)
 - [ ] Optimization levels (-O0, -O1, -O2, -O3)

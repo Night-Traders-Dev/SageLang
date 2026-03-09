@@ -411,6 +411,70 @@ static const char* resolve_slot_name(Compiler* compiler, const char* sage_name) 
 
 static char* emit_expr(Compiler* compiler, Expr* expr);
 
+static char* emit_array_expr(Compiler* compiler, ArrayExpr* array) {
+    StringBuffer sb;
+    sb_init(&sb);
+    if (array->count == 0) {
+        sb_append(&sb, "sage_make_array(0, NULL)");
+        return sb_take(&sb);
+    }
+
+    sb_appendf(&sb, "sage_make_array(%d, (SageValue[]){", array->count);
+
+    for (int i = 0; i < array->count; i++) {
+        char* element = emit_expr(compiler, array->elements[i]);
+        if (i > 0) {
+            sb_append(&sb, ", ");
+        }
+        sb_append(&sb, element);
+        free(element);
+        if (compiler->failed) {
+            free(sb_take(&sb));
+            return str_dup("sage_nil()");
+        }
+    }
+
+    sb_append(&sb, "})");
+    return sb_take(&sb);
+}
+
+static char* emit_index_expr(Compiler* compiler, IndexExpr* index) {
+    char* array_expr = emit_expr(compiler, index->array);
+    char* index_expr = emit_expr(compiler, index->index);
+    if (compiler->failed) {
+        free(array_expr);
+        free(index_expr);
+        return str_dup("sage_nil()");
+    }
+
+    StringBuffer sb;
+    sb_init(&sb);
+    sb_appendf(&sb, "sage_index(%s, %s)", array_expr, index_expr);
+    free(array_expr);
+    free(index_expr);
+    return sb_take(&sb);
+}
+
+static char* emit_slice_expr(Compiler* compiler, SliceExpr* slice) {
+    char* array_expr = emit_expr(compiler, slice->array);
+    char* start_expr = slice->start != NULL ? emit_expr(compiler, slice->start) : str_dup("sage_nil()");
+    char* end_expr = slice->end != NULL ? emit_expr(compiler, slice->end) : str_dup("sage_nil()");
+    if (compiler->failed) {
+        free(array_expr);
+        free(start_expr);
+        free(end_expr);
+        return str_dup("sage_nil()");
+    }
+
+    StringBuffer sb;
+    sb_init(&sb);
+    sb_appendf(&sb, "sage_slice(%s, %s, %s)", array_expr, start_expr, end_expr);
+    free(array_expr);
+    free(start_expr);
+    free(end_expr);
+    return sb_take(&sb);
+}
+
 static char* emit_binary_expr(Compiler* compiler, BinaryExpr* binary) {
     char* left = emit_expr(compiler, binary->left);
     if (compiler->failed) {
@@ -497,6 +561,83 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
             char* arg = emit_expr(compiler, call->args[0]);
             sb_appendf(&sb, "sage_str(%s)", arg);
             free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "len") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "len() expects exactly one argument in the C backend");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_len(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "push") == 0) {
+        if (call->arg_count != 2) {
+            compiler_error(compiler, "push() expects exactly two arguments in the C backend");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* array_arg = emit_expr(compiler, call->args[0]);
+            char* value_arg = emit_expr(compiler, call->args[1]);
+            sb_appendf(&sb, "sage_push(%s, %s)", array_arg, value_arg);
+            free(array_arg);
+            free(value_arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "pop") == 0) {
+        if (call->arg_count != 1) {
+            compiler_error(compiler, "pop() expects exactly one argument in the C backend");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_pop(%s)", arg);
+            free(arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "range") == 0) {
+        if (call->arg_count == 1) {
+            char* arg = emit_expr(compiler, call->args[0]);
+            sb_appendf(&sb, "sage_range1(%s)", arg);
+            free(arg);
+        } else if (call->arg_count == 2) {
+            char* start_arg = emit_expr(compiler, call->args[0]);
+            char* end_arg = emit_expr(compiler, call->args[1]);
+            sb_appendf(&sb, "sage_range2(%s, %s)", start_arg, end_arg);
+            free(start_arg);
+            free(end_arg);
+        } else {
+            compiler_error(compiler, "range() expects one or two arguments in the C backend");
+            sb_append(&sb, "sage_nil()");
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "slice") == 0) {
+        if (call->arg_count != 3) {
+            compiler_error(compiler, "slice() expects exactly three arguments in the C backend");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* array_arg = emit_expr(compiler, call->args[0]);
+            char* start_arg = emit_expr(compiler, call->args[1]);
+            char* end_arg = emit_expr(compiler, call->args[2]);
+            sb_appendf(&sb, "sage_slice(%s, %s, %s)", array_arg, start_arg, end_arg);
+            free(array_arg);
+            free(start_arg);
+            free(end_arg);
         }
         free(callee_name);
         return sb_take(&sb);
@@ -592,13 +733,16 @@ static char* emit_expr(Compiler* compiler, Expr* expr) {
         }
         case EXPR_CALL:
             return emit_call_expr(compiler, &expr->as.call);
+        case EXPR_ARRAY:
+            return emit_array_expr(compiler, &expr->as.array);
+        case EXPR_INDEX:
+            return emit_index_expr(compiler, &expr->as.index);
+        case EXPR_SLICE:
+            return emit_slice_expr(compiler, &expr->as.slice);
         case EXPR_SET:
             return emit_set_expr(compiler, &expr->as.set);
-        case EXPR_ARRAY:
-        case EXPR_INDEX:
         case EXPR_DICT:
         case EXPR_TUPLE:
-        case EXPR_SLICE:
         case EXPR_GET:
             compiler_error(compiler, "expression kind is not yet supported by the Phase 10 C backend");
             return str_dup("sage_nil()");
@@ -715,25 +859,36 @@ static void emit_stmt_list(Compiler* compiler, Stmt* stmt) {
 
 static void emit_runtime_prelude(FILE* out) {
     fputs(
+        "#include <stdarg.h>\n"
         "#include <stdio.h>\n"
         "#include <stdlib.h>\n"
         "#include <string.h>\n"
+        "\n"
+        "typedef struct SageValue SageValue;\n"
+        "\n"
+        "typedef struct {\n"
+        "    int count;\n"
+        "    int capacity;\n"
+        "    SageValue* elements;\n"
+        "} SageArray;\n"
         "\n"
         "typedef enum {\n"
         "    SAGE_TAG_NIL,\n"
         "    SAGE_TAG_NUMBER,\n"
         "    SAGE_TAG_BOOL,\n"
-        "    SAGE_TAG_STRING\n"
+        "    SAGE_TAG_STRING,\n"
+        "    SAGE_TAG_ARRAY\n"
         "} SageTag;\n"
         "\n"
-        "typedef struct {\n"
+        "struct SageValue {\n"
         "    SageTag type;\n"
         "    union {\n"
         "        double number;\n"
         "        int boolean;\n"
         "        const char* string;\n"
+        "        SageArray* array;\n"
         "    } as;\n"
-        "} SageValue;\n"
+        "};\n"
         "\n"
         "typedef struct {\n"
         "    int defined;\n"
@@ -754,13 +909,50 @@ static void emit_runtime_prelude(FILE* out) {
         "    return copy;\n"
         "}\n"
         "\n"
+        "static SageArray* sage_new_array(void) {\n"
+        "    SageArray* array = (SageArray*)malloc(sizeof(SageArray));\n"
+        "    if (array == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    array->count = 0;\n"
+        "    array->capacity = 0;\n"
+        "    array->elements = NULL;\n"
+        "    return array;\n"
+        "}\n"
+        "\n"
         "static SageValue sage_nil(void) { SageValue v; v.type = SAGE_TAG_NIL; v.as.number = 0; return v; }\n"
         "static SageValue sage_number(double value) { SageValue v; v.type = SAGE_TAG_NUMBER; v.as.number = value; return v; }\n"
         "static SageValue sage_bool(int value) { SageValue v; v.type = SAGE_TAG_BOOL; v.as.boolean = value ? 1 : 0; return v; }\n"
         "static SageValue sage_string(const char* value) { SageValue v; v.type = SAGE_TAG_STRING; v.as.string = value; return v; }\n"
+        "static SageValue sage_array(void) { SageValue v; v.type = SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
         "static SageSlot sage_slot_undefined(void) { SageSlot slot; slot.defined = 0; slot.value = sage_nil(); return slot; }\n"
-        "static SageSlot sage_slot_defined(SageValue value) { SageSlot slot; slot.defined = 1; slot.value = value; return slot; }\n"
         "\n"
+        "static void sage_array_reserve(SageArray* array, int needed) {\n"
+        "    if (array->capacity >= needed) return;\n"
+        "    int capacity = array->capacity == 0 ? 4 : array->capacity;\n"
+        "    while (capacity < needed) capacity *= 2;\n"
+        "    SageValue* elements = (SageValue*)realloc(array->elements, sizeof(SageValue) * (size_t)capacity);\n"
+        "    if (elements == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    array->elements = elements;\n"
+        "    array->capacity = capacity;\n"
+        "}\n"
+        "\n"
+        "static void sage_array_push_raw(SageArray* array, SageValue value) {\n"
+        "    sage_array_reserve(array, array->count + 1);\n"
+        "    array->elements[array->count++] = value;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_make_array(int count, const SageValue* values) {\n"
+        "    SageValue array = sage_array();\n"
+        "    for (int i = 0; i < count; i++) {\n"
+        "        sage_array_push_raw(array.as.array, values[i]);\n"
+        "    }\n"
+        "    return array;\n"
+        "}\n"
+        "\n"
+        ,
+        out
+    );
+
+    fputs(
         "static int sage_truthy(SageValue value) {\n"
         "    if (value.type == SAGE_TAG_NIL) return 0;\n"
         "    if (value.type == SAGE_TAG_BOOL) return value.as.boolean;\n"
@@ -780,11 +972,6 @@ static void emit_runtime_prelude(FILE* out) {
         "    slot->value = value;\n"
         "}\n"
         "\n"
-        ,
-        out
-    );
-
-    fputs(
         "static SageValue sage_assign_slot(SageSlot* slot, const char* name, SageValue value) {\n"
         "    if (!slot->defined) {\n"
         "        fprintf(stderr, \"Runtime Error: Undefined variable '%s'.\\n\", name);\n"
@@ -801,8 +988,31 @@ static void emit_runtime_prelude(FILE* out) {
         "        case SAGE_TAG_NUMBER: return left.as.number == right.as.number;\n"
         "        case SAGE_TAG_BOOL: return left.as.boolean == right.as.boolean;\n"
         "        case SAGE_TAG_STRING: return strcmp(left.as.string, right.as.string) == 0;\n"
+        "        case SAGE_TAG_ARRAY: return left.as.array == right.as.array;\n"
         "    }\n"
         "    return 0;\n"
+        "}\n"
+        "\n"
+        "static void sage_print_value(SageValue value) {\n"
+        "    switch (value.type) {\n"
+        "        case SAGE_TAG_NUMBER: printf(\"%g\", value.as.number); break;\n"
+        "        case SAGE_TAG_BOOL: fputs(value.as.boolean ? \"true\" : \"false\", stdout); break;\n"
+        "        case SAGE_TAG_STRING: fputs(value.as.string, stdout); break;\n"
+        "        case SAGE_TAG_ARRAY:\n"
+        "            fputc('[', stdout);\n"
+        "            for (int i = 0; i < value.as.array->count; i++) {\n"
+        "                if (i > 0) fputs(\", \", stdout);\n"
+        "                sage_print_value(value.as.array->elements[i]);\n"
+        "            }\n"
+        "            fputc(']', stdout);\n"
+        "            break;\n"
+        "        case SAGE_TAG_NIL: fputs(\"nil\", stdout); break;\n"
+        "    }\n"
+        "}\n"
+        "\n"
+        "static void sage_print_ln(SageValue value) {\n"
+        "    sage_print_value(value);\n"
+        "    fputc('\\n', stdout);\n"
         "}\n"
         "\n"
         "static SageValue sage_str(SageValue value) {\n"
@@ -816,17 +1026,77 @@ static void emit_runtime_prelude(FILE* out) {
         "            return sage_string(value.as.boolean ? \"true\" : \"false\");\n"
         "        case SAGE_TAG_NIL:\n"
         "            return sage_string(\"nil\");\n"
+        "        case SAGE_TAG_ARRAY:\n"
+        "            return sage_string(\"nil\");\n"
         "    }\n"
         "    return sage_string(\"nil\");\n"
         "}\n"
         "\n"
-        "static void sage_print_ln(SageValue value) {\n"
-        "    switch (value.type) {\n"
-        "        case SAGE_TAG_NUMBER: printf(\"%g\\n\", value.as.number); break;\n"
-        "        case SAGE_TAG_BOOL: printf(value.as.boolean ? \"true\\n\" : \"false\\n\"); break;\n"
-        "        case SAGE_TAG_STRING: printf(\"%s\\n\", value.as.string); break;\n"
-        "        case SAGE_TAG_NIL: printf(\"nil\\n\"); break;\n"
+        ,
+        out
+    );
+
+    fputs(
+        "static SageValue sage_len(SageValue value) {\n"
+        "    if (value.type == SAGE_TAG_STRING) return sage_number((double)strlen(value.as.string));\n"
+        "    if (value.type == SAGE_TAG_ARRAY) return sage_number((double)value.as.array->count);\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_index(SageValue array, SageValue index) {\n"
+        "    if (array.type != SAGE_TAG_ARRAY || index.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+        "    int idx = (int)index.as.number;\n"
+        "    if (idx < 0 || idx >= array.as.array->count) return sage_nil();\n"
+        "    return array.as.array->elements[idx];\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_slice(SageValue array, SageValue start, SageValue end) {\n"
+        "    if (array.type != SAGE_TAG_ARRAY) return sage_nil();\n"
+        "    int start_index = 0;\n"
+        "    int end_index = array.as.array->count;\n"
+        "    if (start.type == SAGE_TAG_NUMBER) start_index = (int)start.as.number;\n"
+        "    else if (start.type != SAGE_TAG_NIL) return sage_nil();\n"
+        "    if (end.type == SAGE_TAG_NUMBER) end_index = (int)end.as.number;\n"
+        "    else if (end.type != SAGE_TAG_NIL) return sage_nil();\n"
+        "    if (start_index < 0) start_index = array.as.array->count + start_index;\n"
+        "    if (end_index < 0) end_index = array.as.array->count + end_index;\n"
+        "    if (start_index < 0) start_index = 0;\n"
+        "    if (end_index > array.as.array->count) end_index = array.as.array->count;\n"
+        "    if (start_index >= end_index) return sage_array();\n"
+        "    SageValue result = sage_array();\n"
+        "    for (int i = start_index; i < end_index; i++) {\n"
+        "        sage_array_push_raw(result.as.array, array.as.array->elements[i]);\n"
         "    }\n"
+        "    return result;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_push(SageValue array, SageValue value) {\n"
+        "    if (array.type != SAGE_TAG_ARRAY) return sage_nil();\n"
+        "    sage_array_push_raw(array.as.array, value);\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_pop(SageValue array) {\n"
+        "    if (array.type != SAGE_TAG_ARRAY || array.as.array->count == 0) return sage_nil();\n"
+        "    return array.as.array->elements[--array.as.array->count];\n"
+        "}\n"
+        "\n"
+        ,
+        out
+    );
+
+    fputs(
+        "static SageValue sage_range2(SageValue start, SageValue end) {\n"
+        "    if (start.type != SAGE_TAG_NUMBER || end.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+        "    SageValue result = sage_array();\n"
+        "    for (int i = (int)start.as.number; i < (int)end.as.number; i++) {\n"
+        "        sage_array_push_raw(result.as.array, sage_number((double)i));\n"
+        "    }\n"
+        "    return result;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_range1(SageValue end) {\n"
+        "    return sage_range2(sage_number(0), end);\n"
         "}\n"
         "\n"
         "static SageValue sage_add(SageValue left, SageValue right) {\n"
@@ -890,15 +1160,15 @@ static void emit_runtime_prelude(FILE* out) {
         "static SageValue sage_not(SageValue value) { return sage_bool(!sage_truthy(value)); }\n"
         "static SageValue sage_and(SageValue left, SageValue right) { return sage_bool(sage_truthy(left) && sage_truthy(right)); }\n"
         "static SageValue sage_or(SageValue left, SageValue right) { return sage_bool(sage_truthy(left) || sage_truthy(right)); }\n"
+        "static SageValue sage_bit_not(SageValue value) {\n"
+        "    if (value.type != SAGE_TAG_NUMBER) sage_fail(\"Runtime Error: Bitwise NOT operand must be a number.\");\n"
+        "    return sage_number((double)(~(long long)value.as.number));\n"
+        "}\n"
         ,
         out
     );
 
     fputs(
-        "static SageValue sage_bit_not(SageValue value) {\n"
-        "    if (value.type != SAGE_TAG_NUMBER) sage_fail(\"Runtime Error: Bitwise NOT operand must be a number.\");\n"
-        "    return sage_number((double)(~(long long)value.as.number));\n"
-        "}\n"
         "static SageValue sage_bit_and(SageValue left, SageValue right) {\n"
         "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) sage_fail(\"Runtime Error: Operands must be numbers.\");\n"
         "    return sage_number((double)(((long long)left.as.number) & ((long long)right.as.number)));\n"
