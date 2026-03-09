@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: March 8, 2026
-> **Current Phase**: Phase 9 Complete (Low-Level Programming)
+> **Last Updated**: March 9, 2026
+> **Current Phase**: Phase 10 Complete (Compiler Development)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -254,8 +254,8 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 #### Memory Safety ✅
 
-- [x] **Safe allocation wrappers** - `SAGE_ALLOC`/`SAGE_REALLOC` macros abort on OOM (never return NULL)
-- [x] **All malloc/realloc replaced** - Every call site across all source files uses safe wrappers
+- [x] **Safe allocation wrappers** - `SAGE_ALLOC`/`SAGE_REALLOC`/`SAGE_STRDUP` macros abort on OOM (never return NULL)
+- [x] **All malloc/realloc/strdup replaced** - Every call site across all source files uses safe wrappers
 - [x] **GC allocation hardened** - `gc_alloc` aborts on failure instead of returning NULL
 - [x] **GC pinning** - `gc_pin()`/`gc_unpin()` prevent collection during multi-step allocations
 - [x] **ftell error checks** - File size reads check for -1 return
@@ -288,7 +288,7 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 #### Test Suite ✅
 
-- [x] **77 automated tests** across 20 categories
+- [x] **100 automated interpreter tests** across 25 categories + **24 compiler tests**
 - [x] **Bash test runner** with EXPECT/EXPECT_ERROR pattern matching
 - [x] **Full coverage**: variables, arithmetic, comparison, logic, strings, control flow, loops, functions, arrays, dicts, tuples, classes, inheritance, exceptions, generators, modules, closures, builtins, edge cases, GC
 
@@ -430,21 +430,21 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ### Near-Term (Current)
 
-- Begin Phase 9 (Low-level features)
-- Prototype inline assembly or FFI
+- Begin Phase 11 (Concurrency & Parallelism)
 - Build standard library modules (math, io, collections)
+- Expand LLVM and native backends to cover remaining expression/statement types
 
 ### Mid-Term (1-2 months)
 
-- Complete Phase 9 (Low-level features)
-- Begin Phase 10 (Compiler development)
-- Start C backend code generation
+- Complete Phase 11 (Concurrency)
+- Begin Phase 12 (Tooling Ecosystem)
+- LSP implementation, REPL, formatter
 
 ### Long-Term (2-4 months)
 
-- Complete Phase 10 (Full compiler)
-- Begin Phase 11 (Concurrency)
-- Async/await or threading prototype
+- Complete Phase 12 (Full tooling)
+- Begin Phase 13 (Self-hosting)
+- Port lexer and parser to Sage
 
 ### Vision (6-12+ months)
 
@@ -457,13 +457,31 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 ## 📊 Progress Metrics
 
-- **Phases Completed**: 9/13 (69%)
-- **Test Suite**: 100 interpreter tests + 17 compiler tests, 25 categories, 100% pass rate
+- **Phases Completed**: 10/13 (77%)
+- **Test Suite**: 100 interpreter tests + 24 compiler tests, 25 categories, 100% pass rate
+- **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
+- **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
 - **Estimated Completion**: 2026-2027 (self-hosting)
 
 ---
 
 ## 📝 Recent Updates
+
+### March 9, 2026
+
+- **Phase 10 Complete: Compiler Development**
+- LLVM IR generation backend (`--emit-llvm`, `--compile-llvm`) with runtime declarations
+- Direct machine code generation (`--emit-asm`, `--compile-native`) via VInst IR for x86-64, aarch64, rv64
+- Optimization passes: type checking (`-O1+`), constant folding (`-O1+`), dead code elimination (`-O2+`), function inlining (`-O3`)
+- Debug information generation (`-g` flag)
+- 24 compiler tests, all passing
+- **Codebase Audit & Hardening**
+- All `malloc`/`realloc`/`strdup` replaced with `SAGE_ALLOC`/`SAGE_REALLOC`/`SAGE_STRDUP` across entire codebase
+- Fixed inlining pass: 6 missing expression types in `substitute_expr()` (ARRAY, DICT, TUPLE, SLICE, GET, SET)
+- Added explicit warnings for unimplemented features in LLVM and native backends
+- Improved lexer error message for bare `!` operator
+- Bounds check for native call arguments (max 255)
+- Replaced unsafe `strcpy` with `memcpy` in interpreter and value.c
 
 ### March 8, 2026 (continued)
 
@@ -538,12 +556,12 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 We welcome contributions at all phases! Here's how you can help:
 
-### Current Priorities (Phase 10)
+### Current Priorities (Phase 11+)
 
-1. **Compiler Development** - Expand the initial C backend and begin LLVM planning
-2. **Runtime Gaps** - Add compiler-friendly primitives like better file I/O and map mutation
-3. **Testing** - Expand compiler smoke coverage and unsupported-feature diagnostics
-4. **Documentation** - Keep guide and roadmap current as Phase 10 broadens
+1. **Concurrency** - Thread creation, mutexes, async/await prototype
+2. **Standard Library** - math, io, collections, string, sys modules
+3. **Backend Coverage** - Expand LLVM and native backends for dict/tuple/slice/class/module support
+4. **Tooling** - LSP, REPL, formatter, linter
 
 ### Getting Started
 1. Check the current phase status above
