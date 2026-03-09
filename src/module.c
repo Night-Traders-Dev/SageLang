@@ -1,4 +1,5 @@
 // src/module.c
+#define _DEFAULT_SOURCE
 #include "module.h"
 #include "lexer.h"
 #include "parser.h"
