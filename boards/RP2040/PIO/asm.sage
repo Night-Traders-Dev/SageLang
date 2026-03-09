@@ -3,33 +3,33 @@
 ## The second pass parses the mnemonics and bitwise-packs them into the 16-bit opcodes the RP2040 hardware expects.
 
 
-class PIOAssembler
-    proc init(self)
+class PIOAssembler:
+    proc init(self):
         self.labels = {}
         self.opcodes = []
 
-    proc parse(self, source)
+    proc parse(self, source):
         # Pass 1: Resolve Labels
         let instr_count = 0
         let lines = source.split("\n")
         
-        for line in lines
+        for line in lines:
             # Strip comments and whitespace
             line = line.split("#")[0].strip()
-            if (line == "")
+            if (line == ""):
                 continue
             
             # Save label addresses
-            if (line.endswith(":"))
+            if (line.endswith(":")):
                 let label_name = line.replace(":", "")
                 self.labels[label_name] = instr_count
-            else
+            else:
                 instr_count = instr_count + 1
 
         # Pass 2: Generate Opcodes
-        for line in lines
+        for line in lines:
             line = line.split("#")[0].strip()
-            if (line == "" or line.endswith(":"))
+            if (line == "" or line.endswith(":")):
                 continue
             
             let opcode = self.encode_instruction(line)
@@ -37,13 +37,13 @@ class PIOAssembler
             
         return self.opcodes
 
-    proc encode_instruction(self, line)
+    proc encode_instruction(self, line):
         let parts = line.split(" ")
         let instr = parts[0]
         let opcode = 0
         
         # JMP Instruction format: 000 | Delay/Side(5) | Condition(3) | Address(5)
-        if (instr == "jmp")
+        if (instr == "jmp"):
             let target = parts[1]
             let addr = self.labels[target]
             
@@ -51,10 +51,10 @@ class PIOAssembler
             opcode = (0b000 << 13) | addr 
             
         # SET Instruction format: 111 | Delay/Side(5) | Destination(3) | Data(5)
-        if (instr == "set")
+        if (instr == "set"):
             let dest_str = parts[1]
             let dest_val = 0
-            if (dest_str == "pins")
+            if (dest_str == "pins"):
                 dest_val = 0b000
                 
             let data = parts[2].to_int()
