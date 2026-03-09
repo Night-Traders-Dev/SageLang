@@ -459,6 +459,7 @@ static void collect_local_lets(Compiler* compiler, Stmt* stmt, NameEntry** local
             case STMT_RAISE:
             case STMT_YIELD:
             case STMT_IMPORT:
+            case STMT_ASYNC_PROC:
                 break;
             case STMT_PRINT:
             case STMT_EXPRESSION:
@@ -1425,6 +1426,10 @@ static char* emit_expr(Compiler* compiler, Expr* expr) {
             return emit_slice_expr(compiler, &expr->as.slice);
         case EXPR_SET:
             return emit_set_expr(compiler, &expr->as.set);
+        case EXPR_AWAIT:
+            // TODO: async/await not supported in C backend
+            compiler_error(compiler, "await expressions not yet supported in C backend");
+            return str_dup("sage_nil()");
         case EXPR_DICT:
             return emit_dict_expr(compiler, &expr->as.dict);
         case EXPR_TUPLE:
@@ -1645,6 +1650,10 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
         case STMT_DEFER:
         case STMT_YIELD:
             compiler_error(compiler, "statement kind is not yet supported by the Phase 10 C backend");
+            break;
+        case STMT_ASYNC_PROC:
+            // TODO: async/await not supported in C backend
+            compiler_error(compiler, "async proc not yet supported in C backend");
             break;
     }
 }

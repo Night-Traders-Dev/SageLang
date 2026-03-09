@@ -116,6 +116,13 @@ Expr* new_set_expr(Expr* object, Token property, Expr* value) {
     return e;
 }
 
+Expr* new_await_expr(Expr* expression) {
+    Expr* e = SAGE_ALLOC(sizeof(Expr));
+    e->type = EXPR_AWAIT;
+    e->as.await.expression = expression;
+    return e;
+}
+
 // ========== STATEMENT CONSTRUCTORS ==========
 
 Stmt* new_print_stmt(Expr* expression) {
@@ -307,6 +314,17 @@ Stmt* new_import_stmt(char* module_name, char** items, char** item_aliases, int 
     return stmt;
 }
 
+Stmt* new_async_proc_stmt(Token name, Token* params, int param_count, Stmt* body) {
+    Stmt* s = SAGE_ALLOC(sizeof(Stmt));
+    s->type = STMT_ASYNC_PROC;
+    s->as.async_proc.name = name;
+    s->as.async_proc.params = params;
+    s->as.async_proc.param_count = param_count;
+    s->as.async_proc.body = body;
+    s->next = NULL;
+    return s;
+}
+
 static void free_case_clause(CaseClause* clause) {
     if (clause == NULL) {
         return;
@@ -381,6 +399,9 @@ void free_expr(Expr* expr) {
         case EXPR_SET:
             free_expr(expr->as.set.object);
             free_expr(expr->as.set.value);
+            break;
+        case EXPR_AWAIT:
+            free_expr(expr->as.await.expression);
             break;
         case EXPR_NUMBER:
         case EXPR_BOOL:
@@ -466,6 +487,10 @@ void free_stmt(Stmt* stmt) {
                 free(stmt->as.import.items);
                 free(stmt->as.import.item_aliases);
                 free(stmt->as.import.alias);
+                break;
+            case STMT_ASYNC_PROC:
+                free(stmt->as.async_proc.params);
+                free_stmt(stmt->as.async_proc.body);
                 break;
             case STMT_BREAK:
             case STMT_CONTINUE:

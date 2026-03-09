@@ -126,6 +126,8 @@ Expr* clone_expr(const Expr* expr) {
             e->as.set.property = clone_token(expr->as.set.property);
             e->as.set.value = clone_expr(expr->as.set.value);
             break;
+        case EXPR_AWAIT:
+            return new_await_expr(clone_expr(expr->as.await.expression));
     }
 
     return e;
@@ -266,6 +268,15 @@ Stmt* clone_stmt(const Stmt* stmt) {
             s->as.import.alias = stmt->as.import.alias ? SAGE_STRDUP(stmt->as.import.alias) : NULL;
             s->as.import.import_all = stmt->as.import.import_all;
             break;
+        }
+        case STMT_ASYNC_PROC: {
+            Stmt* body = clone_stmt_list(stmt->as.async_proc.body);
+            Token* params = NULL;
+            if (stmt->as.async_proc.param_count > 0) {
+                params = malloc(sizeof(Token) * stmt->as.async_proc.param_count);
+                memcpy(params, stmt->as.async_proc.params, sizeof(Token) * stmt->as.async_proc.param_count);
+            }
+            return new_async_proc_stmt(stmt->as.async_proc.name, params, stmt->as.async_proc.param_count, body);
         }
     }
 

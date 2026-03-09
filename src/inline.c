@@ -105,6 +105,8 @@ static int expr_references_name(const Expr* expr, const char* name) {
         case EXPR_SET:
             return expr_references_name(expr->as.set.object, name) ||
                    expr_references_name(expr->as.set.value, name);
+        case EXPR_AWAIT:
+            return 0;
         default:
             return 0;
     }
@@ -291,6 +293,8 @@ static Expr* inline_expr(Expr* expr, InlineCandidate* candidates) {
             expr->as.set.object = inline_expr(expr->as.set.object, candidates);
             expr->as.set.value = inline_expr(expr->as.set.value, candidates);
             break;
+        case EXPR_AWAIT:
+            break;
         default:
             break;
     }
@@ -364,6 +368,8 @@ static void inline_stmt(Stmt* stmt, InlineCandidate* candidates) {
             break;
         case STMT_YIELD:
             stmt->as.yield_stmt.value = inline_expr(stmt->as.yield_stmt.value, candidates);
+            break;
+        case STMT_ASYNC_PROC:
             break;
         default:
             break;

@@ -81,9 +81,15 @@ bool import_as(Environment* env, const char* module_name, const char* alias);
 
 // Standard library modules
 void register_stdlib_modules(ModuleCache* cache);
-Module* create_math_module();
-Module* create_io_module();
-Module* create_string_module();
+Module* create_native_module(ModuleCache* cache, const char* name);
+Module* create_math_module(ModuleCache* cache);
+Module* create_io_module(ModuleCache* cache);
+Module* create_string_module(ModuleCache* cache);
+Module* create_sys_module(ModuleCache* cache);
+Module* create_thread_module(ModuleCache* cache);
+
+// Sys module argc/argv (set from main before module init)
+void sage_set_args(int argc, const char** argv);
 
 // Module initialization
 void init_module_system();
