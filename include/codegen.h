@@ -113,6 +113,10 @@ typedef struct {
     char** string_pool;
     int string_pool_count;
     int string_pool_cap;
+    // Loop label stack for break/continue
+    char* loop_cond_labels[64];
+    char* loop_end_labels[64];
+    int loop_depth;
 } ISelContext;
 
 void isel_init(ISelContext* ctx);

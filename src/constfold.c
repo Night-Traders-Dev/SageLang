@@ -180,6 +180,8 @@ static Expr* fold_expr(Expr* expr) {
             expr->as.set.object = fold_expr(expr->as.set.object);
             expr->as.set.value = fold_expr(expr->as.set.value);
             break;
+        case EXPR_AWAIT:
+            break;
         default:
             break;
     }
@@ -298,6 +300,7 @@ static void fold_stmt(Stmt* stmt) {
         case STMT_IMPORT:
         case STMT_BREAK:
         case STMT_CONTINUE:
+        case STMT_ASYNC_PROC:
             break;
     }
 }

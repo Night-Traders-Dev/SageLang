@@ -375,6 +375,11 @@ static Expr* unary() {
         Expr* right = unary();
         return new_binary_expr(right, op, NULL);
     }
+    // Phase 11: await expression
+    if (match(TOKEN_AWAIT)) {
+        Expr* right = unary();
+        return new_await_expr(right);
+    }
 
     return postfix();
 }
@@ -671,6 +676,45 @@ static Stmt* proc_declaration() {
     exit(1);
 }
 
+static Stmt* async_proc_declaration() {
+    consume(TOKEN_PROC, "Expect 'proc' after 'async'.");
+    if (current_token.type == TOKEN_IDENTIFIER) {
+        Token name = current_token;
+        advance_parser();
+
+        consume(TOKEN_LPAREN, "Expect '(' after procedure name.");
+
+        Token* params = NULL;
+        int count = 0;
+        int capacity = 0;
+
+        if (!check(TOKEN_RPAREN)) {
+            do {
+                if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER) {
+                    if (count >= capacity) {
+                        capacity = capacity == 0 ? 4 : capacity * 2;
+                        params = SAGE_REALLOC(params, sizeof(Token) * capacity);
+                    }
+                    params[count++] = current_token;
+                    advance_parser();
+                } else {
+                    fprintf(stderr, "[Line %d] Error: Expect parameter name.\n", current_token.line);
+                    exit(1);
+                }
+            } while (match(TOKEN_COMMA));
+        }
+        consume(TOKEN_RPAREN, "Expect ')' after parameters.");
+        consume(TOKEN_COLON, "Expect ':' after procedure signature.");
+        consume(TOKEN_NEWLINE, "Expect newline before procedure body.");
+        Stmt* body = block();
+
+        return new_async_proc_stmt(name, params, count, body);
+    }
+
+    fprintf(stderr, "[Line %d] Error: Expect procedure name after 'async proc'.\n", current_token.line);
+    exit(1);
+}
+
 static Stmt* class_declaration() {
     consume(TOKEN_IDENTIFIER, "Expect class name.");
     Token name = previous_token;
@@ -747,6 +791,7 @@ static Stmt* declaration() {
     }
 
     if (match(TOKEN_CLASS)) return class_declaration();
+    if (match(TOKEN_ASYNC)) return async_proc_declaration();
     if (match(TOKEN_PROC)) return proc_declaration();
     
     // PHASE 8: Import statements

@@ -4,6 +4,7 @@
 #include <time.h>
 #include <stdint.h>   // uintptr_t
 #include <unistd.h>   // getpid, unlink
+#include <pthread.h>  // Phase 11: async/await thread joining
 #ifndef SAGE_NO_FFI
 #include <dlfcn.h>    // Phase 9: FFI (dlopen, dlsym, dlclose)
 #endif
@@ -1632,6 +1633,26 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
             return EVAL_RESULT(value);
         }
 
+        case EXPR_AWAIT: {
+            ExecResult inner = eval_expr(expr->as.await.expression, env);
+            if (inner.is_throwing) return inner;
+            Value v = inner.value;
+            if (IS_THREAD(v)) {
+                // Join the thread and return its result
+                ThreadValue* tv = AS_THREAD(v);
+                if (!tv->joined) {
+                    pthread_t* handle = (pthread_t*)tv->handle;
+                    pthread_join(*handle, NULL);
+                    tv->joined = 1;
+                }
+                typedef struct { FunctionValue* func; int arg_count; Value* args; Value result; } SageThreadData;
+                SageThreadData* td = (SageThreadData*)tv->data;
+                return EVAL_RESULT(td->result);
+            }
+            // If not a thread, just return the value (already resolved)
+            return EVAL_RESULT(v);
+        }
+
         case EXPR_BINARY:
             return eval_binary(&expr->as.binary, env);
 
@@ -1718,13 +1739,37 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                     return EVAL_RESULT(val_nil());
                 }
 
+                // Pre-evaluate all arguments
+                Value* eval_args = NULL;
+                if (func->param_count > 0) {
+                    eval_args = SAGE_ALLOC(sizeof(Value) * func->param_count);
+                    for (int i = 0; i < func->param_count; i++) {
+                        ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                        if (arg_result.is_throwing) { free(eval_args); return arg_result; }
+                        eval_args[i] = arg_result.value;
+                    }
+                }
+
+                if (callee_value.as.function->is_async) {
+                    // Async call: spawn thread, return thread handle
+                    Value spawn_args[1 + func->param_count];
+                    spawn_args[0] = callee_value;
+                    for (int i = 0; i < func->param_count; i++) {
+                        spawn_args[i + 1] = eval_args[i];
+                    }
+                    free(eval_args);
+                    // Use thread_spawn_native from stdlib.c (declared as extern)
+                    extern Value thread_spawn_native(int argCount, Value* args);
+                    Value handle = thread_spawn_native(1 + func->param_count, spawn_args);
+                    return EVAL_RESULT(handle);
+                }
+
                 Env* scope = env_create(callee_value.as.function->closure);
                 for (int i = 0; i < func->param_count; i++) {
-                    ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                    if (arg_result.is_throwing) return arg_result;
                     Token paramName = func->params[i];
-                    env_define(scope, paramName.start, paramName.length, arg_result.value);
+                    env_define(scope, paramName.start, paramName.length, eval_args[i]);
                 }
+                free(eval_args);
 
                 ExecResult res = interpret(func->body, scope);
                 if (res.is_throwing) return res;
@@ -1939,15 +1984,23 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
         case STMT_PROC: {
             Token name = stmt->as.proc.name;
             int is_generator = contains_yield(stmt->as.proc.body);
-            
+
             Value func_val;
             if (is_generator) {
-                func_val = val_generator(stmt->as.proc.body, stmt->as.proc.params, 
+                func_val = val_generator(stmt->as.proc.body, stmt->as.proc.params,
                                         stmt->as.proc.param_count, env);
             } else {
                 func_val = val_function(&stmt->as.proc, env);
             }
-            
+
+            env_define(env, name.start, name.length, func_val);
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+        }
+
+        case STMT_ASYNC_PROC: {
+            Token name = stmt->as.async_proc.name;
+            Value func_val = val_function(&stmt->as.async_proc, env);
+            func_val.as.function->is_async = 1;
             env_define(env, name.start, name.length, func_val);
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }

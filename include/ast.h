@@ -77,6 +77,11 @@ typedef struct {
     Expr* value;
 } SetExpr;
 
+// Await expression: await expr
+typedef struct {
+    Expr* expression;
+} AwaitExpr;
+
 struct Expr {
     enum {
         EXPR_NUMBER,
@@ -92,7 +97,8 @@ struct Expr {
         EXPR_TUPLE,
         EXPR_SLICE,
         EXPR_GET,
-        EXPR_SET
+        EXPR_SET,
+        EXPR_AWAIT
     } type;
     union {
         NumberExpr number;
@@ -108,6 +114,7 @@ struct Expr {
         SliceExpr slice;
         GetExpr get;
         SetExpr set;
+        AwaitExpr await;
     } as;
 };
 
@@ -231,7 +238,8 @@ struct Stmt {
         STMT_TRY,
         STMT_RAISE,
         STMT_YIELD,     // Phase 7: Generator yield
-        STMT_IMPORT     // Phase 8: Module import
+        STMT_IMPORT,    // Phase 8: Module import
+        STMT_ASYNC_PROC // Phase 11: Async procedure
     } type;
     union {
         PrintStmt print;
@@ -249,6 +257,7 @@ struct Stmt {
         RaiseStmt raise;
         YieldStmt yield_stmt;   // Phase 7: Generator yield
         ImportStmt import;      // Phase 8: Module import
+        ProcStmt async_proc;    // Phase 11: Async procedure (same layout as proc)
         Expr* expression;
     } as;
     Stmt* next;
@@ -269,6 +278,7 @@ Expr* new_tuple_expr(Expr** elements, int count);
 Expr* new_slice_expr(Expr* array, Expr* start, Expr* end);
 Expr* new_get_expr(Expr* object, Token property);
 Expr* new_set_expr(Expr* object, Token property, Expr* value);
+Expr* new_await_expr(Expr* expression);
 
 // Statement Constructors
 Stmt* new_print_stmt(Expr* expression);
@@ -291,6 +301,7 @@ CatchClause* new_catch_clause(Token exception_var, Stmt* body);
 Stmt* new_raise_stmt(Expr* exception);
 Stmt* new_yield_stmt(Expr* value);  // Phase 7: Generator yield constructor
 Stmt* new_import_stmt(char* module_name, char** items, char** item_aliases, int item_count, char* alias, int import_all);  // Phase 8: Import constructor
+Stmt* new_async_proc_stmt(Token name, Token* params, int param_count, Stmt* body);  // Phase 11: Async proc
 
 // AST cleanup
 void free_expr(Expr* expr);

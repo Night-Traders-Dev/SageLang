@@ -163,6 +163,8 @@ static SageType infer_expr(TypeMap* map, const Expr* expr) {
         case EXPR_SET:
             result = make_type(SAGE_TYPE_UNKNOWN);
             break;
+        case EXPR_AWAIT:
+            break;
     }
 
     typemap_set(map, expr, result);
@@ -249,6 +251,7 @@ static void infer_stmt(TypeMap* map, Stmt* stmt) {
         case STMT_IMPORT:
         case STMT_BREAK:
         case STMT_CONTINUE:
+        case STMT_ASYNC_PROC:
             break;
     }
 }

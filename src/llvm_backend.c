@@ -49,6 +49,10 @@ typedef struct {
     char** global_names;
     int global_count;
     int global_cap;
+    // Loop label stack for break/continue
+    int loop_cond_labels[64];
+    int loop_end_labels[64];
+    int loop_depth;
 } LLVMCompiler;
 
 static int llc_new_reg(LLVMCompiler* lc) {
@@ -184,6 +188,21 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_index(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_is_truthy(%%SageValue)\n");
     ll_emit(lc, "declare i32 @sage_rt_get_bool(%%SageValue)\n");
+    // Dict operations
+    ll_emit(lc, "declare %%SageValue @sage_rt_dict_new()\n");
+    ll_emit(lc, "declare void @sage_rt_dict_set(%%SageValue, i8*, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_dict_get(%%SageValue, i8*)\n");
+    // Tuple
+    ll_emit(lc, "declare %%SageValue @sage_rt_tuple_new(i32)\n");
+    ll_emit(lc, "declare void @sage_rt_tuple_set(%%SageValue, i32, %%SageValue)\n");
+    // Slice
+    ll_emit(lc, "declare %%SageValue @sage_rt_slice(%%SageValue, %%SageValue, %%SageValue)\n");
+    // Property access
+    ll_emit(lc, "declare %%SageValue @sage_rt_get_attr(%%SageValue, i8*)\n");
+    ll_emit(lc, "declare void @sage_rt_set_attr(%%SageValue, i8*, %%SageValue)\n");
+    // Array iteration
+    ll_emit(lc, "declare i32 @sage_rt_array_len(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_range(%%SageValue)\n");
     ll_emit(lc, "\n");
 }
 
@@ -356,15 +375,68 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             ll_line(lc, "%%%d = call %%SageValue @sage_rt_index(%%SageValue %%%d, %%SageValue %%%d)", r, arr, idx);
             return r;
         }
-        case EXPR_DICT:
-        case EXPR_TUPLE:
-        case EXPR_SLICE:
-        case EXPR_GET:
+        case EXPR_DICT: {
+            int dict_reg = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_dict_new()", dict_reg);
+            for (int i = 0; i < expr->as.dict.count; i++) {
+                int val = llvm_emit_expr(lc, expr->as.dict.values[i]);
+                int str_id = llc_add_string(lc, expr->as.dict.keys[i]);
+                size_t slen = strlen(expr->as.dict.keys[i]) + 1;
+                int ptr = llc_new_reg(lc);
+                ll_line(lc, "%%%d = getelementptr [%zu x i8], [%zu x i8]* @.str.%d, i64 0, i64 0",
+                        ptr, slen, slen, str_id);
+                ll_line(lc, "call void @sage_rt_dict_set(%%SageValue %%%d, i8* %%%d, %%SageValue %%%d)", dict_reg, ptr, val);
+            }
+            return dict_reg;
+        }
+        case EXPR_TUPLE: {
+            int tup_reg = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_tuple_new(i32 %d)", tup_reg, expr->as.tuple.count);
+            for (int i = 0; i < expr->as.tuple.count; i++) {
+                int elem = llvm_emit_expr(lc, expr->as.tuple.elements[i]);
+                ll_line(lc, "call void @sage_rt_tuple_set(%%SageValue %%%d, i32 %d, %%SageValue %%%d)", tup_reg, i, elem);
+            }
+            return tup_reg;
+        }
+        case EXPR_SLICE: {
+            int arr = llvm_emit_expr(lc, expr->as.slice.array);
+            int start = llvm_emit_expr(lc, expr->as.slice.start);
+            int end = llvm_emit_expr(lc, expr->as.slice.end);
+            int r = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_slice(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arr, start, end);
+            return r;
+        }
+        case EXPR_GET: {
+            int obj = llvm_emit_expr(lc, expr->as.get.object);
+            char* prop = token_to_str(expr->as.get.property);
+            int str_id = llc_add_string(lc, prop);
+            size_t slen = strlen(prop) + 1;
+            int ptr = llc_new_reg(lc);
+            ll_line(lc, "%%%d = getelementptr [%zu x i8], [%zu x i8]* @.str.%d, i64 0, i64 0",
+                    ptr, slen, slen, str_id);
+            int r = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_get_attr(%%SageValue %%%d, i8* %%%d)", r, obj, ptr);
+            free(prop);
+            return r;
+        }
         case EXPR_SET: {
-            fprintf(stderr, "LLVM backend: unsupported expression type %d (dict/tuple/slice/get/set not yet implemented)\n", expr->type);
+            int obj = llvm_emit_expr(lc, expr->as.set.object);
+            int val = llvm_emit_expr(lc, expr->as.set.value);
+            char* prop = token_to_str(expr->as.set.property);
+            int str_id = llc_add_string(lc, prop);
+            size_t slen = strlen(prop) + 1;
+            int ptr = llc_new_reg(lc);
+            ll_line(lc, "%%%d = getelementptr [%zu x i8], [%zu x i8]* @.str.%d, i64 0, i64 0",
+                    ptr, slen, slen, str_id);
+            ll_line(lc, "call void @sage_rt_set_attr(%%SageValue %%%d, i8* %%%d, %%SageValue %%%d)", obj, ptr, val);
+            free(prop);
+            return llvm_emit_expr(lc, expr->as.set.value);
+        }
+        case EXPR_AWAIT: {
+            // Await not supported in LLVM backend
+            fprintf(stderr, "LLVM backend: await not supported in compiled mode\n");
             int r = llc_new_reg(lc);
             ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
-            lc->failed = 1;
             return r;
         }
         default: {
@@ -442,6 +514,11 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             int body_label = llc_new_label(lc);
             int end_label = llc_new_label(lc);
 
+            // Push loop labels for break/continue
+            lc->loop_cond_labels[lc->loop_depth] = cond_label;
+            lc->loop_end_labels[lc->loop_depth] = end_label;
+            lc->loop_depth++;
+
             ll_line(lc, "br label %%L%d", cond_label);
             ll_emit(lc, "L%d:\n", cond_label);
 
@@ -457,6 +534,7 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             ll_line(lc, "br label %%L%d", cond_label);
 
             ll_emit(lc, "L%d:\n", end_label);
+            lc->loop_depth--;
             break;
         }
         case STMT_BLOCK:
@@ -476,7 +554,83 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
         case STMT_PROC:
             // Procs handled at top level
             break;
-        case STMT_FOR:
+        case STMT_FOR: {
+            // for variable in iterable: body
+            // Emit iterable (must be array)
+            int iter = llvm_emit_expr(lc, stmt->as.for_stmt.iterable);
+            int len_reg = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call i32 @sage_rt_array_len(%%SageValue %%%d)", len_reg, iter);
+
+            // Allocate loop variable and counter
+            char* var_name = token_to_str(stmt->as.for_stmt.variable);
+            ll_line(lc, "%%%s = alloca %%SageValue", var_name);
+            int idx_ptr = llc_new_reg(lc);
+            ll_line(lc, "%%%d = alloca i32", idx_ptr);
+            ll_line(lc, "store i32 0, i32* %%%d", idx_ptr);
+
+            int cond_label = llc_new_label(lc);
+            int body_label = llc_new_label(lc);
+            int end_label = llc_new_label(lc);
+
+            // Push loop labels for break/continue
+            lc->loop_cond_labels[lc->loop_depth] = cond_label;
+            lc->loop_end_labels[lc->loop_depth] = end_label;
+            lc->loop_depth++;
+
+            ll_line(lc, "br label %%L%d", cond_label);
+            ll_emit(lc, "L%d:\n", cond_label);
+
+            int cur_idx = llc_new_reg(lc);
+            ll_line(lc, "%%%d = load i32, i32* %%%d", cur_idx, idx_ptr);
+            int cmp = llc_new_reg(lc);
+            ll_line(lc, "%%%d = icmp slt i32 %%%d, %%%d", cmp, cur_idx, len_reg);
+            ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d", cmp, body_label, end_label);
+
+            ll_emit(lc, "L%d:\n", body_label);
+
+            // Get current element: arr[idx]
+            // Convert i32 idx to SageValue number for indexing
+            int idx_double = llc_new_reg(lc);
+            ll_line(lc, "%%%d = sitofp i32 %%%d to double", idx_double, cur_idx);
+            int idx_sage = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %%%d)", idx_sage, idx_double);
+            int elem = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_index(%%SageValue %%%d, %%SageValue %%%d)", elem, iter, idx_sage);
+
+            // Store element in loop variable
+            ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", elem, var_name);
+
+            llvm_emit_stmt_list(lc, stmt->as.for_stmt.body);
+
+            // Increment counter
+            int next_idx = llc_new_reg(lc);
+            ll_line(lc, "%%%d = add i32 %%%d, 1", next_idx, cur_idx);
+            ll_line(lc, "store i32 %%%d, i32* %%%d", next_idx, idx_ptr);
+            ll_line(lc, "br label %%L%d", cond_label);
+
+            ll_emit(lc, "L%d:\n", end_label);
+
+            lc->loop_depth--;
+            free(var_name);
+            break;
+        }
+        case STMT_BREAK: {
+            if (lc->loop_depth > 0) {
+                ll_line(lc, "br label %%L%d", lc->loop_end_labels[lc->loop_depth - 1]);
+                // Emit unreachable label for any following code
+                int unr = llc_new_label(lc);
+                ll_emit(lc, "L%d:\n", unr);
+            }
+            break;
+        }
+        case STMT_CONTINUE: {
+            if (lc->loop_depth > 0) {
+                ll_line(lc, "br label %%L%d", lc->loop_cond_labels[lc->loop_depth - 1]);
+                int unr = llc_new_label(lc);
+                ll_emit(lc, "L%d:\n", unr);
+            }
+            break;
+        }
         case STMT_CLASS:
         case STMT_MATCH:
         case STMT_TRY:
@@ -484,9 +638,8 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
         case STMT_DEFER:
         case STMT_YIELD:
         case STMT_IMPORT:
-        case STMT_BREAK:
-        case STMT_CONTINUE:
-            fprintf(stderr, "LLVM backend: unsupported statement type %d (for/class/match/try/raise/defer/yield/import/break/continue not yet implemented)\n", stmt->type);
+        case STMT_ASYNC_PROC:
+            fprintf(stderr, "LLVM backend: unsupported statement type %d\n", stmt->type);
             lc->failed = 1;
             break;
     }

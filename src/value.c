@@ -63,6 +63,7 @@ Value val_function(void* proc, Env* closure) {
     v.as.function = gc_alloc(VAL_FUNCTION, sizeof(FunctionValue));
     v.as.function->proc = proc;
     v.as.function->closure = closure;
+    v.as.function->is_async = 0;
     return v;
 }
 
@@ -169,6 +170,20 @@ Value val_pointer(void* ptr, size_t size, int owned) {
     v.as.pointer->ptr = ptr;
     v.as.pointer->size = size;
     v.as.pointer->owned = owned;
+    return v;
+}
+
+Value val_thread(ThreadValue* tv) {
+    Value v;
+    v.type = VAL_THREAD;
+    v.as.thread = tv;
+    return v;
+}
+
+Value val_mutex(MutexValue* mv) {
+    Value v;
+    v.type = VAL_MUTEX;
+    v.as.mutex = mv;
     return v;
 }
 
@@ -724,6 +739,16 @@ void print_value(Value v) {
             printf("<pointer %p size=%zu>", v.as.pointer->ptr, v.as.pointer->size);
             break;
         }
+
+        case VAL_THREAD: {
+            printf("<thread %p>", v.as.thread->handle);
+            break;
+        }
+
+        case VAL_MUTEX: {
+            printf("<mutex %p>", v.as.mutex->handle);
+            break;
+        }
     }
 }
 
@@ -754,6 +779,10 @@ int values_equal(Value a, Value b) {
             return a.as.clib->handle == b.as.clib->handle;
         case VAL_POINTER:
             return a.as.pointer->ptr == b.as.pointer->ptr;
+        case VAL_THREAD:
+            return a.as.thread == b.as.thread;
+        case VAL_MUTEX:
+            return a.as.mutex == b.as.mutex;
         default: return 0;
     }
 }

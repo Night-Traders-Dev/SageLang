@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include "gc.h"
 #include "value.h"
 #include "env.h"
@@ -13,6 +14,17 @@
 
 extern Environment* g_global_env;
 extern Environment* g_gc_root_env;
+
+// Thread safety: global GC mutex
+static pthread_mutex_t gc_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void gc_lock(void) {
+    pthread_mutex_lock(&gc_mutex);
+}
+
+void gc_unlock(void) {
+    pthread_mutex_unlock(&gc_mutex);
+}
 
 // Environment marking now uses Env.marked flag directly (O(1) per env)
 

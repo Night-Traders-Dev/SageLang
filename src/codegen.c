@@ -315,7 +315,9 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
         case EXPR_SLICE:
         case EXPR_GET:
         case EXPR_SET:
-            fprintf(stderr, "Codegen backend: unsupported expression type %d (dict/tuple/slice/get/set not yet implemented)\n", expr->type);
+        case EXPR_AWAIT:
+            // TODO: async/await not supported in codegen backend
+            fprintf(stderr, "Codegen backend: unsupported expression type %d (dict/tuple/slice/get/set/await not yet implemented)\n", expr->type);
             /* fallthrough */
         default: {
             int r = isel_vreg(ctx);
@@ -406,6 +408,10 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             char* body_label = isel_label(ctx);
             char* end_label = isel_label(ctx);
 
+            ctx->loop_cond_labels[ctx->loop_depth] = cond_label;
+            ctx->loop_end_labels[ctx->loop_depth] = end_label;
+            ctx->loop_depth++;
+
             VInst* jmp0 = vinst_new(VINST_JUMP);
             jmp0->label = SAGE_STRDUP(cond_label);
             isel_append(ctx, jmp0);
@@ -433,6 +439,7 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             el->label = SAGE_STRDUP(end_label);
             isel_append(ctx, el);
 
+            ctx->loop_depth--;
             free(cond_label);
             free(body_label);
             free(end_label);
@@ -448,7 +455,138 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             isel_append(ctx, v);
             break;
         }
-        case STMT_FOR:
+        case STMT_FOR: {
+            // Emit iterable
+            int iter = isel_expr(ctx, stmt->as.for_stmt.iterable);
+            // Use CALL_BUILTIN to get array length
+            int len_reg = isel_vreg(ctx);
+            VInst* len_call = vinst_new(VINST_CALL_BUILTIN);
+            len_call->dest = len_reg;
+            len_call->func_name = SAGE_STRDUP("len");
+            len_call->call_args = SAGE_ALLOC(sizeof(int));
+            len_call->call_args[0] = iter;
+            len_call->call_arg_count = 1;
+            isel_append(ctx, len_call);
+
+            // Counter variable
+            int idx_reg = isel_vreg(ctx);
+            VInst* idx_init = vinst_new(VINST_LOAD_IMM);
+            idx_init->dest = idx_reg;
+            idx_init->imm_number = 0.0;
+            isel_append(ctx, idx_init);
+
+            char* var_name = tok_str(stmt->as.for_stmt.variable);
+            VInst* init_store = vinst_new(VINST_STORE_GLOBAL);
+            init_store->src1 = idx_reg;
+            init_store->imm_string = SAGE_STRDUP("__for_idx__");
+            isel_append(ctx, init_store);
+
+            char* cond_label = isel_label(ctx);
+            char* body_label = isel_label(ctx);
+            char* end_label = isel_label(ctx);
+
+            ctx->loop_cond_labels[ctx->loop_depth] = cond_label;
+            ctx->loop_end_labels[ctx->loop_depth] = end_label;
+            ctx->loop_depth++;
+
+            VInst* jmp0 = vinst_new(VINST_JUMP);
+            jmp0->label = SAGE_STRDUP(cond_label);
+            isel_append(ctx, jmp0);
+
+            VInst* cl = vinst_new(VINST_LABEL);
+            cl->label = SAGE_STRDUP(cond_label);
+            isel_append(ctx, cl);
+
+            // Load counter, compare with length
+            int cur_idx = isel_vreg(ctx);
+            VInst* load_idx = vinst_new(VINST_LOAD_GLOBAL);
+            load_idx->dest = cur_idx;
+            load_idx->imm_string = SAGE_STRDUP("__for_idx__");
+            isel_append(ctx, load_idx);
+
+            int cmp = isel_vreg(ctx);
+            VInst* lt = vinst_new(VINST_LT);
+            lt->dest = cmp;
+            lt->src1 = cur_idx;
+            lt->src2 = len_reg;
+            isel_append(ctx, lt);
+
+            VInst* br = vinst_new(VINST_BRANCH);
+            br->src1 = cmp;
+            br->label = SAGE_STRDUP(body_label);
+            br->label_false = SAGE_STRDUP(end_label);
+            isel_append(ctx, br);
+
+            VInst* bl = vinst_new(VINST_LABEL);
+            bl->label = SAGE_STRDUP(body_label);
+            isel_append(ctx, bl);
+
+            // Get element: arr[idx]
+            int elem = isel_vreg(ctx);
+            VInst* index_v = vinst_new(VINST_INDEX);
+            index_v->dest = elem;
+            index_v->src1 = iter;
+            index_v->src2 = cur_idx;
+            isel_append(ctx, index_v);
+
+            // Store in loop variable
+            VInst* store_var = vinst_new(VINST_STORE_GLOBAL);
+            store_var->src1 = elem;
+            store_var->imm_string = SAGE_STRDUP(var_name);
+            isel_append(ctx, store_var);
+
+            isel_stmt_list(ctx, stmt->as.for_stmt.body);
+
+            // Increment counter: idx = idx + 1
+            int one_reg = isel_vreg(ctx);
+            VInst* one = vinst_new(VINST_LOAD_IMM);
+            one->dest = one_reg;
+            one->imm_number = 1.0;
+            isel_append(ctx, one);
+
+            int next_idx = isel_vreg(ctx);
+            VInst* add = vinst_new(VINST_ADD);
+            add->dest = next_idx;
+            add->src1 = cur_idx;
+            add->src2 = one_reg;
+            isel_append(ctx, add);
+
+            VInst* store_idx = vinst_new(VINST_STORE_GLOBAL);
+            store_idx->src1 = next_idx;
+            store_idx->imm_string = SAGE_STRDUP("__for_idx__");
+            isel_append(ctx, store_idx);
+
+            VInst* jmp1 = vinst_new(VINST_JUMP);
+            jmp1->label = SAGE_STRDUP(cond_label);
+            isel_append(ctx, jmp1);
+
+            VInst* el = vinst_new(VINST_LABEL);
+            el->label = SAGE_STRDUP(end_label);
+            isel_append(ctx, el);
+
+            ctx->loop_depth--;
+            free(var_name);
+            free(cond_label);
+            free(body_label);
+            free(end_label);
+            break;
+        }
+        case STMT_BREAK: {
+            if (ctx->loop_depth > 0) {
+                VInst* jmp = vinst_new(VINST_JUMP);
+                jmp->label = SAGE_STRDUP(ctx->loop_end_labels[ctx->loop_depth - 1]);
+                isel_append(ctx, jmp);
+            }
+            break;
+        }
+        case STMT_CONTINUE: {
+            if (ctx->loop_depth > 0) {
+                VInst* jmp = vinst_new(VINST_JUMP);
+                jmp->label = SAGE_STRDUP(ctx->loop_cond_labels[ctx->loop_depth - 1]);
+                isel_append(ctx, jmp);
+            }
+            break;
+        }
         case STMT_CLASS:
         case STMT_MATCH:
         case STMT_TRY:
@@ -456,8 +594,7 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
         case STMT_DEFER:
         case STMT_YIELD:
         case STMT_IMPORT:
-        case STMT_BREAK:
-        case STMT_CONTINUE:
+        case STMT_ASYNC_PROC:
             fprintf(stderr, "Codegen backend: unsupported statement type %d\n", stmt->type);
             break;
         default:

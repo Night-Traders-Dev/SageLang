@@ -85,7 +85,8 @@ typedef struct {
 // PHASE 8: Function value structure (for module exports)
 typedef struct {
     void* proc; // Pointer to ProcStmt
-    Env* closure; // ✅ NEW: Closure environment where function was defined
+    Env* closure; // Closure environment where function was defined
+    int is_async; // Phase 11: async function flag
 } FunctionValue;
 
 typedef struct {
@@ -105,6 +106,18 @@ typedef struct {
     int owned;      // Whether we should free this on cleanup
 } PointerValue;
 
+// Phase 11: Thread handle
+typedef struct {
+    void* handle;       // pthread_t* (opaque to avoid pthread.h in header)
+    void* data;         // SageThreadData* (thread entry data)
+    int joined;         // Whether thread has been joined
+} ThreadValue;
+
+// Phase 11: Mutex handle
+typedef struct {
+    void* handle;       // pthread_mutex_t* (opaque)
+} MutexValue;
+
 typedef enum {
     VAL_NUMBER,
     VAL_BOOL,
@@ -121,7 +134,9 @@ typedef enum {
     VAL_EXCEPTION,
     VAL_GENERATOR,
     VAL_CLIB,      // Phase 9: FFI library handle
-    VAL_POINTER    // Phase 9: Raw memory pointer
+    VAL_POINTER,   // Phase 9: Raw memory pointer
+    VAL_THREAD,    // Phase 11: Thread handle
+    VAL_MUTEX      // Phase 11: Mutex handle
 } ValueType;
 
 struct Value {
@@ -142,6 +157,8 @@ struct Value {
         GeneratorValue* generator;
         CLibValue* clib;        // Phase 9: FFI library handle
         PointerValue* pointer;  // Phase 9: Raw memory pointer
+        ThreadValue* thread;    // Phase 11: Thread handle
+        MutexValue* mutex;      // Phase 11: Mutex handle
     } as;
 };
 
@@ -161,6 +178,8 @@ struct Value {
 #define IS_GENERATOR(v) ((v).type == VAL_GENERATOR)
 #define IS_CLIB(v) ((v).type == VAL_CLIB)
 #define IS_POINTER(v) ((v).type == VAL_POINTER)
+#define IS_THREAD(v) ((v).type == VAL_THREAD)
+#define IS_MUTEX(v) ((v).type == VAL_MUTEX)
 
 // Macros for accessing values
 #define AS_NUMBER(v) ((v).as.number)
@@ -177,6 +196,8 @@ struct Value {
 #define AS_GENERATOR(v) ((v).as.generator)
 #define AS_CLIB(v) ((v).as.clib)
 #define AS_POINTER(v) ((v).as.pointer)
+#define AS_THREAD(v) ((v).as.thread)
+#define AS_MUTEX(v) ((v).as.mutex)
 
 // Constructors
 Value val_number(double value);
@@ -196,6 +217,8 @@ Value val_exception(const char* message);
 Value val_generator(void* body, void* params, int param_count, Env* closure);
 Value val_clib(void* handle, const char* name); // Phase 9: FFI
 Value val_pointer(void* ptr, size_t size, int owned); // Phase 9: Raw memory
+Value val_thread(ThreadValue* tv); // Phase 11: Thread
+Value val_mutex(MutexValue* mv);   // Phase 11: Mutex
 
 // Helpers
 void print_value(Value v);

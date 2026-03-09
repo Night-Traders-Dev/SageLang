@@ -98,7 +98,10 @@ static TokenType identifier_type(void) {
             if (current - start > 1) {
                 switch (start[1]) {
                     case 'n': return check_keyword(2, 1, "d", TOKEN_AND);
-                    case 's': return check_keyword(2, 0, "", TOKEN_AS);  // "as"
+                    case 's':
+                        if (current - start > 2 && start[2] == 'y') return check_keyword(3, 2, "nc", TOKEN_ASYNC);
+                        return check_keyword(2, 0, "", TOKEN_AS);
+                    case 'w': return check_keyword(2, 3, "ait", TOKEN_AWAIT);
                 }
             }
             break;

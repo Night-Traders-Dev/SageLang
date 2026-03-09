@@ -108,6 +108,8 @@ static void collect_used_names_expr(NameSet** used, const Expr* expr) {
             collect_used_names_expr(used, expr->as.set.object);
             collect_used_names_expr(used, expr->as.set.value);
             break;
+        case EXPR_AWAIT:
+            break;
         default:
             break;
     }
@@ -186,6 +188,7 @@ static void collect_used_names_stmt(NameSet** used, const Stmt* stmt) {
         case STMT_IMPORT:
         case STMT_BREAK:
         case STMT_CONTINUE:
+        case STMT_ASYNC_PROC:
             break;
     }
 }
@@ -201,6 +204,8 @@ static int has_side_effects(const Expr* expr) {
             return 1; // function calls always have potential side effects
         case EXPR_SET:
             return 1; // property assignment
+        case EXPR_AWAIT:
+            return 1; // await has side effects
         case EXPR_BINARY:
             return has_side_effects(expr->as.binary.left) || has_side_effects(expr->as.binary.right);
         case EXPR_INDEX:

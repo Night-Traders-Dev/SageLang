@@ -229,6 +229,7 @@ int main(int argc, const char* argv[]) {
     gc_init();
 
     // PHASE 8: Initialize module system
+    sage_set_args(argc, argv);
     init_module_system();
 
     if (argc == 1) {

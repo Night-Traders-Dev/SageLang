@@ -82,6 +82,10 @@ typedef struct {
 // Global GC instance
 extern GC gc;
 
+// Thread safety for GC
+void gc_lock(void);
+void gc_unlock(void);
+
 // Core GC functions
 void gc_init(void);
 void gc_shutdown(void);

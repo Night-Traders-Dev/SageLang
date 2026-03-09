@@ -433,22 +433,11 @@ void cleanup_module_system() {
     }
 }
 
-// Register standard library modules (stub for now)
+// Register standard library modules (implemented in stdlib.c)
 void register_stdlib_modules(ModuleCache* cache) {
-    (void)cache;  // Suppress unused parameter warning
-}
-
-// Create math module (stub)
-Module* create_math_module() {
-    return NULL;
-}
-
-// Create io module (stub)
-Module* create_io_module() {
-    return NULL;
-}
-
-// Create string module (stub)
-Module* create_string_module() {
-    return NULL;
+    create_math_module(cache);
+    create_io_module(cache);
+    create_string_module(cache);
+    create_sys_module(cache);
+    create_thread_module(cache);
 }
