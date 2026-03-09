@@ -1362,73 +1362,6 @@ print stats  # {"bytes_allocated": ..., "num_objects": ..., ...}
 
 ---
 
-## Conclusion
-
-**SageLang** is a comprehensive, well-structured scripting language for systems and embedded programming. Its design combines the approachability of Python with low-level control through direct memory access, FFI, and inline assembly. The phased development approach (Phases 1–14) progresses from core features through advanced topics including OOP, generators, compilation backends (C, LLVM IR, native assembly), concurrency, networking, JSON processing, and a self-hosted interpreter — all fully implemented and integrated.
-
-**Key Takeaways**:
-- **Lexer + Parser + Interpreter** pipeline is modular and extensible.
-- **Value system** supports dynamic typing with heap-allocated complex objects and GC.
-- **Scoped environments** enable closures and lexical scoping.
-- **Exception handling**, **generators**, and **async/await** provide modern control flow.
-- **Module system** enables code reuse with native (C) and Sage library modules.
-- **Mark-and-sweep GC** manages memory automatically with thread safety.
-- **Multiple backends**: tree-walking interpreter, C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64).
-- **Networking**: POSIX sockets, TCP, HTTP/HTTPS (libcurl), SSL/TLS (OpenSSL).
-- **Self-hosted**: Lexer, parser, and interpreter ported to Sage with full bootstrap.
-- **Test suite**: 132 interpreter + 28 compiler + 178 self-host + 88 JSON tests, 100% pass rate.
-
-SageLang offers a practical balance between ease of use and systems-level control, making it ideal for prototyping, education, embedded scripting, and learning language implementation.
-
----
-
-## Appendix: Quick Reference
-
-### Keywords
-```
-let var proc if else elif while for in return print
-and or not break continue class self init
-try catch finally raise yield defer
-match case default import from as
-async await unsafe
-true false nil
-```
-
-### Built-in Functions
-```
-len(x) push(arr, val) pop(arr) range(a, b)
-split(str, delim) join(arr, sep) replace(s, old, new)
-upper(s) lower(s) strip(s) slice(arr, a, b)
-str(x) tonumber(s) input() clock()
-type(x) chr(n) ord(c)
-startswith(s, prefix) endswith(s, suffix)
-contains(s, sub) indexof(s, sub)
-dict_keys(d) dict_values(d) dict_has(d, k) dict_delete(d, k)
-gc_collect() gc_stats() gc_enable() gc_disable()
-next(gen)
-ffi_open(path) ffi_call(lib, fn, ret, ...) ffi_sym(lib, name) ffi_close(lib)
-mem_alloc(n) mem_free(ptr) mem_read(ptr, off, type) mem_write(ptr, off, type, val)
-mem_size(ptr) addressof(val)
-asm_exec(code, ret, ...) asm_compile(code, arch, out) asm_arch()
-struct_def(fields) struct_new(def) struct_get(ptr, def, name)
-struct_set(ptr, def, name, val) struct_size(def)
-```
-
-### Operators
-```
-Arithmetic:    + - * / %
-Comparison:    == != < > <= >=
-Logical:       and or not
-Bitwise:       & | ^ ~ << >>
-Assignment:    =
-Indexing:      arr[i]
-Slicing:       arr[a:b]
-Property:      obj.field
-Call:          func(args)
-```
-
----
-
 ## Part 9: Bundled Library Modules (lib/)
 
 SageLang ships with a set of **pure-Sage library modules** in the `lib/` directory. These are importable via `import` or `from ... import` when running from the project root (the module resolver searches `./lib/`).
@@ -2263,3 +2196,73 @@ print back["users"][0]["name"]  # Alice
 - **`cJSON_GetObjectItem`** does **case-insensitive** matching (uses `lower()`). Use `cJSON_GetObjectItemCaseSensitive` for exact matching.
 - **`cJSON_Delete`** is a no-op (Sage has GC), included for API compatibility with C cJSON.
 - **Type constants**: `cJSON_Invalid=0`, `cJSON_False=1`, `cJSON_True=2`, `cJSON_NULL=4`, `cJSON_Number=8`, `cJSON_String=16`, `cJSON_Array=32`, `cJSON_Object=64`, `cJSON_Raw=128`
+
+---
+
+## Conclusion
+
+**SageLang** is a comprehensive, well-structured scripting language for systems and embedded programming. Its design combines the approachability of Python with low-level control through direct memory access, FFI, and inline assembly. The phased development approach (Phases 1–14) progresses from core features through advanced topics including OOP, generators, compilation backends (C, LLVM IR, native assembly), concurrency, networking, JSON processing, and a self-hosted interpreter — all fully implemented and integrated.
+
+**Key Takeaways**:
+- **Lexer + Parser + Interpreter** pipeline is modular and extensible.
+- **Value system** supports dynamic typing with heap-allocated complex objects and GC.
+- **Scoped environments** enable closures and lexical scoping.
+- **Exception handling**, **generators**, and **async/await** provide modern control flow.
+- **Module system** enables code reuse with native (C) and Sage library modules.
+- **Mark-and-sweep GC** manages memory automatically with thread safety.
+- **Multiple backends**: tree-walking interpreter, C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64).
+- **Networking**: POSIX sockets, TCP, HTTP/HTTPS (libcurl), SSL/TLS (OpenSSL).
+- **Self-hosted**: Lexer, parser, and interpreter ported to Sage with full bootstrap.
+- **Test suite**: 132 interpreter + 28 compiler + 178 self-host + 88 JSON tests, 100% pass rate.
+
+SageLang offers a practical balance between ease of use and systems-level control, making it ideal for prototyping, education, embedded scripting, and learning language implementation.
+
+---
+
+## Appendix: Quick Reference
+
+### Keywords
+
+```
+let var proc if else elif while for in return print
+and or not break continue class self init
+try catch finally raise yield defer
+match case default import from as
+async await unsafe
+true false nil
+```
+
+### Built-in Functions
+
+```
+len(x) push(arr, val) pop(arr) range(a, b)
+split(str, delim) join(arr, sep) replace(s, old, new)
+upper(s) lower(s) strip(s) slice(arr, a, b)
+str(x) tonumber(s) input() clock()
+type(x) chr(n) ord(c)
+startswith(s, prefix) endswith(s, suffix)
+contains(s, sub) indexof(s, sub)
+dict_keys(d) dict_values(d) dict_has(d, k) dict_delete(d, k)
+gc_collect() gc_stats() gc_enable() gc_disable()
+next(gen)
+ffi_open(path) ffi_call(lib, fn, ret, ...) ffi_sym(lib, name) ffi_close(lib)
+mem_alloc(n) mem_free(ptr) mem_read(ptr, off, type) mem_write(ptr, off, type, val)
+mem_size(ptr) addressof(val)
+asm_exec(code, ret, ...) asm_compile(code, arch, out) asm_arch()
+struct_def(fields) struct_new(def) struct_get(ptr, def, name)
+struct_set(ptr, def, name, val) struct_size(def)
+```
+
+### Operators
+
+```
+Arithmetic:    + - * / %
+Comparison:    == != < > <= >=
+Logical:       and or not
+Bitwise:       & | ^ ~ << >>
+Assignment:    =
+Indexing:      arr[i]
+Slicing:       arr[a:b]
+Property:      obj.field
+Call:          func(args)
+```
