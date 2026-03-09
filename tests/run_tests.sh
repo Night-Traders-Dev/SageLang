@@ -34,10 +34,15 @@ run_test() {
     fi
 
     # Run the test from its directory (so module imports find sibling .sage files)
+    # Exception: lib tests and top-level tests run from project root so ./lib/ imports resolve
     local test_dir test_base actual exit_code
     test_dir=$(dirname "$test_file")
     test_base=$(basename "$test_file")
-    actual=$(cd "$test_dir" && "$SAGE" "$test_base" 2>&1) && exit_code=0 || exit_code=$?
+    if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
+        actual=$(cd "$SCRIPT_DIR" && "$SAGE" "$test_file" 2>&1) && exit_code=0 || exit_code=$?
+    else
+        actual=$(cd "$test_dir" && "$SAGE" "$test_base" 2>&1) && exit_code=0 || exit_code=$?
+    fi
 
     if [ "$actual" = "$expected" ]; then
         echo -e "  ${GREEN}PASS${NC} $test_name"
@@ -68,7 +73,11 @@ run_error_test() {
     local test_dir test_base output exit_code
     test_dir=$(dirname "$test_file")
     test_base=$(basename "$test_file")
-    output=$(cd "$test_dir" && "$SAGE" "$test_base" 2>&1) && exit_code=0 || exit_code=$?
+    if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
+        output=$(cd "$SCRIPT_DIR" && "$SAGE" "$test_file" 2>&1) && exit_code=0 || exit_code=$?
+    else
+        output=$(cd "$test_dir" && "$SAGE" "$test_base" 2>&1) && exit_code=0 || exit_code=$?
+    fi
 
     if echo "$output" | grep -qF "$expected_error"; then
         echo -e "  ${GREEN}PASS${NC} $test_name"
@@ -104,7 +113,7 @@ for category_dir in "$TESTS_DIR"/*/; do
     echo ""
 done
 
-# Also run top-level test files
+# Also run top-level test files (from project root so lib/ imports resolve)
 for test_file in "$TESTS_DIR"/*.sage; do
     [ -f "$test_file" ] || continue
     if grep -q '^# EXPECT_ERROR: ' "$test_file"; then
