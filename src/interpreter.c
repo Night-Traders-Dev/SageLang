@@ -4,7 +4,9 @@
 #include <time.h>
 #include <stdint.h>   // uintptr_t
 #include <unistd.h>   // getpid, unlink
+#ifndef SAGE_NO_FFI
 #include <dlfcn.h>    // Phase 9: FFI (dlopen, dlsym, dlclose)
+#endif
 #include "interpreter.h"
 #include "token.h"
 #include "env.h"
@@ -327,8 +329,10 @@ static Value native_next(int arg_count, Value* args) {
 }
 
 // ============================================================================
-// Phase 9: FFI Functions
+// Phase 9: FFI Functions (requires dlfcn.h - disabled with SAGE_NO_FFI)
 // ============================================================================
+
+#ifndef SAGE_NO_FFI
 
 // ffi_open("libname.so") -> CLib handle
 static Value ffi_open_native(int argCount, Value* args) {
@@ -517,6 +521,8 @@ static Value ffi_sym_native(int argCount, Value* args) {
     dlsym(lib->handle, AS_STRING(args[1]));
     return val_bool(dlerror() == NULL);
 }
+
+#endif // SAGE_NO_FFI
 
 // ========== Phase 9: Raw Memory Operations ==========
 
@@ -1014,6 +1020,7 @@ static int asm_write_source(const char* path, const char* code, const char* arch
     return 0;
 }
 
+#ifndef SAGE_NO_FFI
 // asm_exec(code, ret_type, ...args) -> value
 // Compiles assembly to a temp shared library, calls it, returns result.
 // code: string of assembly instructions (\n for newlines)
@@ -1170,6 +1177,7 @@ cleanup_files:
 
     return result;
 }
+#endif // SAGE_NO_FFI
 
 // asm_compile(code, arch, output_path) -> bool
 // Cross-compile assembly for a target architecture without executing.
@@ -1259,11 +1267,13 @@ void init_stdlib(Env* env) {
     // PHASE 7: Generator function
     env_define(env, "next", 4, val_native(native_next));
 
+#ifndef SAGE_NO_FFI
     // Phase 9: FFI functions
     env_define(env, "ffi_open", 8, val_native(ffi_open_native));
     env_define(env, "ffi_close", 9, val_native(ffi_close_native));
     env_define(env, "ffi_call", 8, val_native(ffi_call_native));
     env_define(env, "ffi_sym", 7, val_native(ffi_sym_native));
+#endif
 
     // Phase 9: Memory operations
     env_define(env, "mem_alloc", 9, val_native(mem_alloc_native));
@@ -1281,7 +1291,9 @@ void init_stdlib(Env* env) {
     env_define(env, "struct_size", 11, val_native(struct_size_native));
 
     // Phase 9: Inline assembly
+#ifndef SAGE_NO_FFI
     env_define(env, "asm_exec", 8, val_native(asm_exec_native));
+#endif
     env_define(env, "asm_compile", 11, val_native(asm_compile_native));
     env_define(env, "asm_arch", 8, val_native(asm_arch_native));
 }
