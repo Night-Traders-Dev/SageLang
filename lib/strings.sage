@@ -48,3 +48,11 @@ proc dash_case(text):
 
 proc snake_case(text):
     return lower(join(words(replace(text, "-", " ")), "_"))
+
+proc endswith(a, b):
+    let end = split(a, "")
+    if end[len(end) - 1] == b:
+        return true
+    else:
+        return false
+
