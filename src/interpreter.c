@@ -215,6 +215,80 @@ static Value strip_native(int argCount, Value* args) {
     return val_string_take(result);
 }
 
+// type(val) -> string name of type
+static Value type_native(int argCount, Value* args) {
+    if (argCount != 1) return val_nil();
+    switch (args[0].type) {
+        case VAL_NIL: return val_string("nil");
+        case VAL_NUMBER: return val_string("number");
+        case VAL_BOOL: return val_string("bool");
+        case VAL_STRING: return val_string("string");
+        case VAL_ARRAY: return val_string("array");
+        case VAL_DICT: return val_string("dict");
+        case VAL_FUNCTION: return val_string("function");
+        case VAL_NATIVE: return val_string("native");
+        case VAL_INSTANCE: return val_string("instance");
+        case VAL_TUPLE: return val_string("tuple");
+        case VAL_GENERATOR: return val_string("generator");
+        default: return val_string("unknown");
+    }
+}
+
+// chr(n) -> single-character string from ASCII code
+static Value chr_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_NUMBER(args[0])) return val_nil();
+    int code = (int)AS_NUMBER(args[0]);
+    if (code < 0 || code > 127) return val_nil();
+    char* s = SAGE_ALLOC(2);
+    s[0] = (char)code;
+    s[1] = '\0';
+    return val_string_take(s);
+}
+
+// ord(s) -> ASCII code of first character
+static Value ord_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) return val_nil();
+    char* s = AS_STRING(args[0]);
+    if (s[0] == '\0') return val_nil();
+    return val_number((double)(unsigned char)s[0]);
+}
+
+// startswith(s, prefix) -> bool
+static Value startswith_native(int argCount, Value* args) {
+    if (argCount != 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_nil();
+    char* s = AS_STRING(args[0]);
+    char* prefix = AS_STRING(args[1]);
+    size_t plen = strlen(prefix);
+    return val_bool(strncmp(s, prefix, plen) == 0);
+}
+
+// endswith(s, suffix) -> bool
+static Value endswith_native(int argCount, Value* args) {
+    if (argCount != 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_nil();
+    char* s = AS_STRING(args[0]);
+    char* suffix = AS_STRING(args[1]);
+    size_t slen = strlen(s);
+    size_t suflen = strlen(suffix);
+    if (suflen > slen) return val_bool(0);
+    return val_bool(strcmp(s + slen - suflen, suffix) == 0);
+}
+
+// contains(s, sub) -> bool
+static Value contains_native(int argCount, Value* args) {
+    if (argCount != 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_nil();
+    return val_bool(strstr(AS_STRING(args[0]), AS_STRING(args[1])) != NULL);
+}
+
+// indexof(s, sub) -> number (-1 if not found)
+static Value indexof_native(int argCount, Value* args) {
+    if (argCount != 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_nil();
+    char* s = AS_STRING(args[0]);
+    char* sub = AS_STRING(args[1]);
+    char* found = strstr(s, sub);
+    if (found == NULL) return val_number(-1);
+    return val_number((double)(found - s));
+}
+
 static Value slice_native(int argCount, Value* args) {
     if (argCount != 3) return val_nil();
     if (!IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) return val_nil();
@@ -1272,7 +1346,14 @@ void init_stdlib(Env* env) {
     env_define(env, "upper", 5, val_native(upper_native));
     env_define(env, "lower", 5, val_native(lower_native));
     env_define(env, "strip", 5, val_native(strip_native));
-    
+    env_define(env, "type", 4, val_native(type_native));
+    env_define(env, "chr", 3, val_native(chr_native));
+    env_define(env, "ord", 3, val_native(ord_native));
+    env_define(env, "startswith", 10, val_native(startswith_native));
+    env_define(env, "endswith", 8, val_native(endswith_native));
+    env_define(env, "contains", 8, val_native(contains_native));
+    env_define(env, "indexof", 7, val_native(indexof_native));
+
     // Dictionary functions
     env_define(env, "dict_keys", 9, val_native(dict_keys_native));
     env_define(env, "dict_values", 11, val_native(dict_values_native));
