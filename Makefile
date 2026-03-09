@@ -205,6 +205,21 @@ test: $(TARGET)
 	@./$(TARGET) --compile testing/compiler_exceptions.sage -o .tmp/compiler_exceptions
 	@./.tmp/compiler_exceptions > .tmp/compiler_exceptions.out
 	@diff -u testing/compiler_exceptions.expected .tmp/compiler_exceptions.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 12: Phase 10 String Builtins"
+	@./$(TARGET) --compile testing/compiler_strings.sage -o .tmp/compiler_strings
+	@./.tmp/compiler_strings > .tmp/compiler_strings.out
+	@diff -u testing/compiler_strings.expected .tmp/compiler_strings.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 13: Phase 10 Memory Builtins"
+	@./$(TARGET) --compile testing/compiler_memory.sage -o .tmp/compiler_memory
+	@./.tmp/compiler_memory > .tmp/compiler_memory.out
+	@diff -u testing/compiler_memory.expected .tmp/compiler_memory.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 14: Phase 10 Struct Builtins"
+	@./$(TARGET) --compile testing/compiler_structs.sage -o .tmp/compiler_structs
+	@./.tmp/compiler_structs > .tmp/compiler_structs.out
+	@diff -u testing/compiler_structs.expected .tmp/compiler_structs.out && echo "✅ Pass" || echo "❌ Fail"
 
 # ============================================================================
 # Cleanup
