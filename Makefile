@@ -182,9 +182,29 @@ test: $(TARGET)
 	@echo ""
 	@echo "Test 7: Phase 10 Pico Codegen"
 	@./$(TARGET) --emit-pico-c examples/hello.sage -o .tmp/hello_pico.c && \
-		rg -F -q '#include "pico/stdlib.h"' .tmp/hello_pico.c && \
-		rg -F -q 'stdio_init_all();' .tmp/hello_pico.c && \
-		rg -F -q 'sleep_ms(2000);' .tmp/hello_pico.c && echo "✅ Pass" || echo "❌ Fail"
+		grep -F -q '#include "pico/stdlib.h"' .tmp/hello_pico.c && \
+		grep -F -q 'stdio_init_all();' .tmp/hello_pico.c && \
+		grep -F -q 'sleep_ms(2000);' .tmp/hello_pico.c && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 8: Phase 10 For Loops"
+	@./$(TARGET) --compile testing/compiler_for_loops.sage -o .tmp/compiler_for_loops
+	@./.tmp/compiler_for_loops > .tmp/compiler_for_loops.out
+	@diff -u testing/compiler_for_loops.expected .tmp/compiler_for_loops.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 9: Phase 10 Dictionaries"
+	@./$(TARGET) --compile testing/compiler_dicts.sage -o .tmp/compiler_dicts
+	@./.tmp/compiler_dicts > .tmp/compiler_dicts.out
+	@diff -u testing/compiler_dicts.expected .tmp/compiler_dicts.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 10: Phase 10 Tuples"
+	@./$(TARGET) --compile testing/compiler_tuples.sage -o .tmp/compiler_tuples
+	@./.tmp/compiler_tuples > .tmp/compiler_tuples.out
+	@diff -u testing/compiler_tuples.expected .tmp/compiler_tuples.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 11: Phase 10 Exceptions"
+	@./$(TARGET) --compile testing/compiler_exceptions.sage -o .tmp/compiler_exceptions
+	@./.tmp/compiler_exceptions > .tmp/compiler_exceptions.out
+	@diff -u testing/compiler_exceptions.expected .tmp/compiler_exceptions.out && echo "✅ Pass" || echo "❌ Fail"
 
 # ============================================================================
 # Cleanup
