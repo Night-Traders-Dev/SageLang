@@ -84,11 +84,34 @@ Sage is a new programming language that combines the readability of Python (inde
 - **`sys`**: System info (args, exit, getenv, clock, sleep, version, platform)
 - **`thread`**: Threading primitives (spawn, join, mutex, lock, unlock, sleep, id)
 
+### Networking Modules
+
+- **`socket`**: Low-level POSIX sockets (create, bind, listen, accept, connect, send, recv, sendto, recvfrom, close, setopt, poll, resolve, nonblock) with constants (AF_INET, AF_INET6, SOCK_STREAM, SOCK_DGRAM, SOCK_RAW, IPPROTO_TCP, IPPROTO_UDP)
+- **`tcp`**: High-level TCP (connect, listen, accept, send, recv, sendall, recvall, recvline, close)
+- **`http`**: HTTP/HTTPS client via libcurl (get, post, put, delete, patch, head, download, escape, unescape) — returns `{status, body, headers}` dicts with options for timeout, redirects, SSL verification, custom headers
+- **`ssl`**: OpenSSL bindings (context, load_cert, wrap, connect, accept, send, recv, shutdown, free, free_context, error, peer_cert, set_verify)
+
+### JSON Library (cJSON Port)
+
+- **`lib/json.sage`**: Complete 1:1 port of Dave Gamble's [cJSON](https://github.com/DaveGamble/cJSON) library (~1,050 lines)
+- Full API: `cJSON_Parse`, `cJSON_Print`, `cJSON_PrintUnformatted`, `cJSON_Create*`, `cJSON_Get*`, `cJSON_Is*`, `cJSON_Add*ToObject`, `cJSON_Duplicate`, `cJSON_Compare`, `cJSON_Minify`
+- Array/object manipulation: insert, detach, delete, replace items
+- Sage-native conversion: `cJSON_ToSage` (tree→native dict/array), `cJSON_FromSage` (native→tree)
+- 88 tests passing
+
 Example:
 ```sage
 import math
 print math.sqrt(16)    # 4
 print math.pi          # 3.14159...
+
+import http
+let resp = http.get("https://example.com")
+print resp["status"]   # 200
+
+from json import cJSON_Parse, cJSON_Print, cJSON_ToSage
+let root = cJSON_Parse(resp["body"])
+let native = cJSON_ToSage(root)
 
 async proc compute(x):
     return x * x
@@ -129,6 +152,7 @@ cd self_host && ../sage sage.sage program.sage
 - **`stats`**: `mean`, `variance`, `stddev`, `cumulative`, and normalization helpers
 - **`assert`**: assertion helpers for writing Sage test scripts
 - **`utils`**: general helpers like `default_if_nil`, `swap`, `head`, `last`, and `repeat_value`
+- **`json`**: Complete 1:1 cJSON port — parse, print, create, query, modify JSON trees (88 tests)
 
 Example:
 ```sage
@@ -149,6 +173,7 @@ Sage has zero dependencies and builds with standard GCC/Clang. The build system 
 ### Prerequisites
 - A C compiler (`gcc` or `clang`)
 - `make` (and optionally `cmake` for CMake builds)
+- `libcurl` and `openssl` development libraries (for networking modules)
 
 ### Build from C (Default)
 
@@ -529,7 +554,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 
 - **Language**: C
 - **Phases Completed**: 13/13 (100%)
-- **Test Suite**: 112 interpreter tests + 28 compiler tests + 178 self-host tests, 100% pass rate
+- **Test Suite**: 112 interpreter tests + 28 compiler tests + 178 self-host tests + 88 JSON tests, 100% pass rate
 - **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
 - **Status**: Self-Hosted
@@ -559,6 +584,7 @@ sage/
 │   ├── gc.c          # Mark-and-sweep GC (thread-safe)
 │   ├── module.c      # Module loading and caching
 │   ├── stdlib.c      # Native stdlib modules (math, io, string, sys, thread)
+│   ├── net.c         # Networking modules (socket, tcp, http, ssl)
 │   ├── interpreter.c # Evaluator (exceptions, yield, imports, async/await)
 │   ├── compiler.c    # C code generation backend
 │   ├── llvm_backend.c # LLVM IR generation backend
@@ -575,9 +601,16 @@ sage/
 ├── editors/          # Editor integration
 │   ├── sage.tmLanguage.json  # TextMate grammar
 │   └── vscode/       # VSCode extension
-├── lib/              # Standard library modules
-│   ├── math.sage     # Mathematical functions (in development)
-│   └── (more planned)
+├── lib/              # Standard library modules (Sage)
+│   ├── math.sage     # Math helpers (factorial, gcd, etc.)
+│   ├── arrays.sage   # Array utilities (map, filter, reduce, etc.)
+│   ├── strings.sage  # String utilities
+│   ├── dicts.sage    # Dictionary helpers
+│   ├── iter.sage     # Reusable generators
+│   ├── stats.sage    # Statistics helpers
+│   ├── assert.sage   # Test assertion helpers
+│   ├── utils.sage    # General utilities
+│   └── json.sage     # cJSON port (1:1 API, 88 tests)
 ├── examples/         # Example programs
 │   ├── generators.sage      # Generator demo ✨
 │   ├── exceptions.sage      # Exception handling demo
@@ -595,8 +628,9 @@ sage/
 │   ├── test_parser.sage      # Parser tests (130)
 │   ├── test_interpreter.sage # Interpreter tests (18)
 │   └── test_bootstrap.sage   # Bootstrap tests (18)
-├── tests/            # Automated test suite (112 interpreter + 28 compiler)
+├── tests/            # Automated test suite (112 interpreter + 28 compiler + 88 JSON)
 │   ├── run_tests.sh  # Test runner script
+│   ├── test_json.sage # cJSON port test suite (88 tests)
 │   ├── 01_variables/ # Variable declaration tests
 │   ├── ...           # 28 test categories
 │   ├── 26_stdlib/    # Standard library module tests
@@ -650,6 +684,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
+- March 9, 2026: Networking modules (socket, tcp, http, ssl) + cJSON port (88 tests)
 - March 9, 2026: Phase 13 Complete - Self-hosted lexer, parser, interpreter with full bootstrap
 - March 9, 2026: Phase 12 Complete - REPL, formatter, linter, syntax highlighting, LSP server
 - March 9, 2026: Phase 11 Complete - Native stdlib, threads, async/await, backend expansion

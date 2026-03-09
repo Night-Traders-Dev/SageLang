@@ -523,6 +523,32 @@ Note: `-DBUILD_SAGE=ON` and the default C build are mutually exclusive. With `BU
 
 ---
 
+### Phase 14: Networking & Data Interchange
+**Status**: ✅ **COMPLETE** (March 9, 2026)
+
+#### Native Networking Modules (src/net.c) ✅
+
+- [x] **`socket` module** - Low-level POSIX sockets (create, bind, listen, accept, connect, send, recv, sendto, recvfrom, close, setopt, poll, resolve, nonblock) with AF_INET/AF_INET6, SOCK_STREAM/SOCK_DGRAM/SOCK_RAW constants
+- [x] **`tcp` module** - High-level TCP (connect, listen, accept, send, recv, sendall, recvall, recvline, close)
+- [x] **`http` module** - HTTP/HTTPS client via libcurl (get, post, put, delete, patch, head, download, escape, unescape) with options for timeout, redirects, SSL verification, custom headers
+- [x] **`ssl` module** - OpenSSL TLS/SSL bindings (context, load_cert, wrap, connect, accept, send, recv, shutdown, free, free_context, error, peer_cert, set_verify)
+- [x] **Build system** - libcurl and openssl linked via pkg-config in both Make and CMake
+
+#### cJSON Port (lib/json.sage) ✅
+
+- [x] **Complete 1:1 API port** - ~1,050 lines, mirrors Dave Gamble's cJSON
+- [x] **Parsing** - `cJSON_Parse`, `cJSON_ParseWithLength`, `cJSON_GetErrorPtr`
+- [x] **Printing** - `cJSON_Print` (formatted), `cJSON_PrintUnformatted` (compact)
+- [x] **Creation** - 13 functions: Null, True, False, Bool, Number, String, Raw, Array, Object, IntArray, DoubleArray, FloatArray, StringArray
+- [x] **Query** - GetArraySize, GetArrayItem, GetObjectItem (case-insensitive), GetObjectItemCaseSensitive, HasObjectItem, GetStringValue, GetNumberValue
+- [x] **Type checks** - 10 functions: IsInvalid, IsFalse, IsTrue, IsBool, IsNull, IsNumber, IsString, IsArray, IsObject, IsRaw
+- [x] **Modification** - Array insert/detach/delete/replace, Object add/detach/delete/replace (both case-sensitive and insensitive)
+- [x] **Utility** - Duplicate, Compare, Minify, Delete, SetValuestring, SetNumberHelper, Version
+- [x] **Sage extras** - `cJSON_ToSage` (tree→native), `cJSON_FromSage` (native→tree)
+- [x] **Test suite** - 88 tests passing
+
+---
+
 ## 🔮 Future Directions
 
 ### Package Manager
@@ -546,8 +572,8 @@ Note: `-DBUILD_SAGE=ON` and the default C build are mutually exclusive. With `BU
 
 ## 📊 Progress Metrics
 
-- **Phases Completed**: 13/13 (100%)
-- **Test Suite**: 112 interpreter tests + 28 compiler tests + 178 self-host tests, 100% pass rate
+- **Phases Completed**: 14/14 (100%)
+- **Test Suite**: 112 interpreter tests + 28 compiler tests + 178 self-host tests + 88 JSON tests, 100% pass rate
 - **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
 - **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
 - **Self-Hosting**: Lexer, parser, and interpreter ported to Sage with full bootstrap
@@ -558,6 +584,12 @@ Note: `-DBUILD_SAGE=ON` and the default C build are mutually exclusive. With `BU
 
 ### March 9, 2026
 
+- **Phase 14 Complete: Networking & Data Interchange**
+- Native networking modules: `socket` (15 functions + constants), `tcp` (9 functions), `http` (9 functions via libcurl), `ssl` (13 functions via OpenSSL)
+- cJSON port (`lib/json.sage`, ~1,050 lines) — complete 1:1 API with 88 tests
+- Sage extras: `cJSON_ToSage` / `cJSON_FromSage` for native value conversion
+- Build system updated for libcurl and openssl linking
+- Interpreter bugs documented: instance `==` always false, elif chains with 5+ branches
 - **Phase 13 Complete: Self-Hosting**
 - Self-hosted lexer (`self_host/lexer.sage`, ~300 lines), parser (`self_host/parser.sage`, ~700 lines), interpreter (`self_host/interpreter.sage`, ~920 lines)
 - Token definitions (`self_host/token.sage`) and AST definitions (`self_host/ast.sage`)

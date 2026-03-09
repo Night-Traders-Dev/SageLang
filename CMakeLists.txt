@@ -65,6 +65,14 @@ if(NOT BUILD_PICO)
     add_compile_definitions(_POSIX_C_SOURCE=200809L)
 endif()
 
+# Find networking dependencies (desktop only)
+if(NOT BUILD_PICO)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(CURL REQUIRED libcurl)
+    pkg_check_modules(OPENSSL REQUIRED openssl)
+    include_directories(${CURL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIRS})
+endif()
+
 # ============================================================================
 # Source Files
 # ============================================================================
@@ -85,6 +93,7 @@ set(SAGE_CORE_SOURCES
     src/llvm_backend.c
     src/lsp.c
     src/module.c
+    src/net.c
     src/parser.c
     src/pass.c
     src/stdlib.c
@@ -162,7 +171,7 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     )
 
     # Link math, pthread, and dl libraries
-    target_link_libraries(sage m pthread dl)
+    target_link_libraries(sage m pthread dl ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
 
     # LSP server binary (standalone)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/lsp_main.c")
@@ -170,7 +179,7 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
             src/lsp_main.c
             ${SAGE_CORE_SOURCES}
         )
-        target_link_libraries(sage-lsp m pthread dl)
+        target_link_libraries(sage-lsp m pthread dl ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
         message(STATUS "Building LSP server: sage-lsp")
     endif()
 
@@ -187,7 +196,7 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
         ${SAGE_MAIN_SOURCE}
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(sage m pthread dl)
+    target_link_libraries(sage m pthread dl ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
 
     # Custom target: run a .sage file through the self-hosted interpreter
     # Usage: cmake --build build -- sage_boot SAGE_FILE=path/to/file.sage
@@ -313,7 +322,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_lexer.c
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(test_lexer m pthread dl)
+    target_link_libraries(test_lexer m pthread dl ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
     add_test(NAME LexerTest COMMAND test_lexer)
 
     # Parser test
@@ -321,7 +330,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_parser.c
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(test_parser m pthread dl)
+    target_link_libraries(test_parser m pthread dl ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
     add_test(NAME ParserTest COMMAND test_parser)
 
     # GC test
@@ -329,7 +338,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_gc.c
         ${SAGE_CORE_SOURCES}
     )
-    target_link_libraries(test_gc m pthread dl)
+    target_link_libraries(test_gc m pthread dl ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
     add_test(NAME GCTest COMMAND test_gc)
 
     message(STATUS "Test executables enabled")

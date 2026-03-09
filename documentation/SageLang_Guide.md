@@ -11,7 +11,7 @@ toc: true
 
 ## Executive Summary
 
-**SageLang** is a **Python-inspired, systems-oriented programming language** written in C for the RP2040 microcontroller ecosystem. It is a statically-allocated, tree-walking interpreter that combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language is implemented across eleven phased development cycles, progressing from core arithmetic and control flow through advanced features like generators, exception handling, a module system, compiler backends (C, LLVM IR, native assembly), and concurrency with threading and async/await. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
+**SageLang** is a **Python-inspired, systems-oriented programming language** written in C for the RP2040 microcontroller ecosystem. It is a statically-allocated, tree-walking interpreter that combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language is implemented across fourteen phased development cycles, progressing from core arithmetic and control flow through advanced features like generators, exception handling, a module system, compiler backends (C, LLVM IR, native assembly), concurrency with threading and async/await, networking (sockets, TCP, HTTP/HTTPS, SSL), and a cJSON port for JSON processing. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
 
 ---
 
@@ -41,7 +41,8 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **Generators** | Full `yield` support with resumable state; `next()` function to iterate |
 | **Exceptions** | `try/catch/finally/raise` with explicit exception objects and message strings |
 | **Modules** | `import module`, `import module as alias`, `from module import x, y`, `from module import x as y` |
-| **Standard Library** | Native modules: `math`, `io`, `string`, `sys`, `thread` |
+| **Standard Library** | Native modules: `math`, `io`, `string`, `sys`, `thread`, `socket`, `tcp`, `http`, `ssl` |
+| **Networking** | POSIX sockets, TCP, HTTP/HTTPS (libcurl), SSL/TLS (OpenSSL) |
 | **Concurrency** | `thread.spawn`/`thread.join`, mutexes, `async proc`/`await` |
 
 ### 1.3 Execution Model
@@ -1745,3 +1746,218 @@ class Rectangle:
 let rect = Rectangle(5, 3)
 print rect.area()  # 15
 ```
+
+## Part 13: Networking (Phase 14)
+
+SageLang provides four native networking modules backed by libcurl and OpenSSL. These are implemented in C (`src/net.c`) and registered as native modules.
+
+### 13.1 Socket Module
+
+Low-level POSIX socket operations with constants for address families and socket types.
+
+```sagelang
+import socket
+
+# TCP client
+let sock = socket.create(socket.AF_INET, socket.SOCK_STREAM, 0)
+socket.connect(sock, "example.com", 80)
+socket.send(sock, "GET / HTTP/1.0" + chr(13) + chr(10) + chr(13) + chr(10))
+let response = socket.recv(sock, 4096)
+print response
+socket.close(sock)
+
+# DNS resolution
+let ip = socket.resolve("example.com")
+print ip  # "93.184.216.34"
+
+# UDP
+let udp = socket.create(socket.AF_INET, socket.SOCK_DGRAM, 0)
+socket.sendto(udp, "hello", "127.0.0.1", 9999)
+socket.close(udp)
+```
+
+**Constants**: `AF_INET`, `AF_INET6`, `SOCK_STREAM`, `SOCK_DGRAM`, `SOCK_RAW`, `IPPROTO_TCP`, `IPPROTO_UDP`
+
+**Functions** (15): `create`, `bind`, `listen`, `accept`, `connect`, `send`, `recv`, `sendto`, `recvfrom`, `close`, `setopt`, `poll`, `resolve`, `getpeername`, `nonblock`
+
+### 13.2 TCP Module
+
+High-level TCP with automatic buffering and convenience functions.
+
+```sagelang
+import tcp
+
+# Client
+let conn = tcp.connect("example.com", 80)
+tcp.sendall(conn, "GET / HTTP/1.0" + chr(13) + chr(10) + chr(13) + chr(10))
+let line = tcp.recvline(conn)
+print line
+tcp.close(conn)
+
+# Server
+let server = tcp.listen("0.0.0.0", 8080, 5)
+let client = tcp.accept(server)
+tcp.send(client, "Hello from Sage!")
+tcp.close(client)
+tcp.close(server)
+```
+
+**Functions** (9): `connect`, `listen`, `accept`, `send`, `recv`, `sendall`, `recvall`, `recvline`, `close`
+
+### 13.3 HTTP Module
+
+HTTP/HTTPS client via libcurl. All request functions return a dict with `status`, `body`, and `headers` keys.
+
+```sagelang
+import http
+
+# Simple GET
+let resp = http.get("https://httpbin.org/get")
+print resp["status"]   # 200
+print resp["body"]
+
+# POST with options
+let opts = {"timeout": 30, "headers": {"Content-Type": "application/json"}}
+let resp2 = http.post("https://httpbin.org/post", "{}", opts)
+
+# Download file
+http.download("https://example.com/file.txt", "/tmp/file.txt")
+
+# URL encoding
+print http.escape("hello world")    # "hello%20world"
+print http.unescape("hello%20world") # "hello world"
+```
+
+**Functions** (9): `get`, `post`, `put`, `delete`, `patch`, `head`, `download`, `escape`, `unescape`
+
+**Options dict keys**: `timeout` (seconds), `follow` (bool, follow redirects), `verify` (bool, SSL verification), `user_agent` (string), `headers` (dict of header name→value pairs), `cainfo` (CA certificate path)
+
+### 13.4 SSL Module
+
+OpenSSL TLS/SSL bindings for encrypted socket communication.
+
+```sagelang
+import socket
+import ssl
+
+let sock = socket.create(socket.AF_INET, socket.SOCK_STREAM, 0)
+socket.connect(sock, "example.com", 443)
+
+let ctx = ssl.context()
+let s = ssl.wrap(ctx, sock)
+ssl.connect(s)
+ssl.send(s, "GET / HTTP/1.1" + chr(13) + chr(10) + "Host: example.com" + chr(13) + chr(10) + chr(13) + chr(10))
+let data = ssl.recv(s, 4096)
+print data
+
+ssl.shutdown(s)
+ssl.free(s)
+ssl.free_context(ctx)
+socket.close(sock)
+```
+
+**Functions** (13): `context`, `load_cert`, `wrap`, `connect`, `accept`, `send`, `recv`, `shutdown`, `free`, `free_context`, `error`, `peer_cert`, `set_verify`
+
+### 13.5 Important Notes
+
+- **No escape sequences**: Sage strings are raw. Use `chr(13) + chr(10)` for CRLF, `chr(34)` for double-quote, `chr(92)` for backslash.
+- **HTTP module** handles HTTPS automatically via libcurl — no need for manual SSL setup for HTTP requests.
+- **Build requirement**: libcurl and openssl development libraries must be installed.
+
+---
+
+## Part 14: JSON Library (cJSON Port)
+
+SageLang includes a complete 1:1 port of Dave Gamble's [cJSON](https://github.com/DaveGamble/cJSON) library in `lib/json.sage` (~1,050 lines). It uses a linked-list tree structure mirroring the C original.
+
+### 14.1 Basic Usage
+
+```sagelang
+gc_disable()  # Required for class-heavy code
+
+from json import cJSON_Parse, cJSON_Print, cJSON_PrintUnformatted
+from json import cJSON_GetObjectItem, cJSON_GetStringValue, cJSON_GetNumberValue
+from json import cJSON_ToSage, cJSON_Delete
+
+# Parse JSON string (use chr(34) for double-quotes in Sage)
+let json_str = "{" + chr(34) + "name" + chr(34) + ":" + chr(34) + "Alice" + chr(34) + "," + chr(34) + "age" + chr(34) + ":30}"
+let root = cJSON_Parse(json_str)
+
+# Query values
+let name = cJSON_GetStringValue(cJSON_GetObjectItem(root, "name"))
+let age = cJSON_GetNumberValue(cJSON_GetObjectItem(root, "age"))
+print name  # Alice
+print age   # 30
+
+# Print JSON
+print cJSON_Print(root)           # Formatted (pretty-printed)
+print cJSON_PrintUnformatted(root)  # Compact
+
+# Convert to native Sage dict
+let native = cJSON_ToSage(root)
+print native["name"]  # Alice
+
+cJSON_Delete(root)  # No-op in GC language, included for API compatibility
+```
+
+### 14.2 Creating JSON
+
+```sagelang
+gc_disable()
+from json import cJSON_CreateObject, cJSON_CreateArray
+from json import cJSON_AddStringToObject, cJSON_AddNumberToObject
+from json import cJSON_AddBoolToObject, cJSON_AddNullToObject
+from json import cJSON_AddArrayToObject, cJSON_AddItemToArray
+from json import cJSON_CreateNumber, cJSON_PrintUnformatted
+
+let obj = cJSON_CreateObject()
+cJSON_AddStringToObject(obj, "name", "Bob")
+cJSON_AddNumberToObject(obj, "age", 25)
+cJSON_AddBoolToObject(obj, "active", true)
+cJSON_AddNullToObject(obj, "deleted_at")
+
+let tags = cJSON_AddArrayToObject(obj, "tags")
+cJSON_AddItemToArray(tags, cJSON_CreateNumber(1))
+cJSON_AddItemToArray(tags, cJSON_CreateNumber(2))
+
+print cJSON_PrintUnformatted(obj)
+# {"name":"Bob","age":25,"active":true,"deleted_at":null,"tags":[1,2]}
+```
+
+### 14.3 Sage-Native Conversion
+
+```sagelang
+gc_disable()
+from json import cJSON_FromSage, cJSON_ToSage, cJSON_Print
+
+# Native Sage value → cJSON tree
+let data = {"users": [{"name": "Alice"}, {"name": "Bob"}], "count": 2}
+let tree = cJSON_FromSage(data)
+print cJSON_Print(tree)
+
+# cJSON tree → native Sage value
+let back = cJSON_ToSage(tree)
+print back["users"][0]["name"]  # Alice
+```
+
+### 14.4 API Reference
+
+| Category | Functions |
+|----------|-----------|
+| **Parsing** | `cJSON_Parse`, `cJSON_ParseWithLength`, `cJSON_GetErrorPtr` |
+| **Printing** | `cJSON_Print`, `cJSON_PrintUnformatted`, `cJSON_PrintBuffered` |
+| **Creation** | `cJSON_CreateNull/True/False/Bool/Number/String/Raw/Array/Object`, `CreateIntArray/DoubleArray/FloatArray/StringArray` |
+| **Query** | `cJSON_GetArraySize`, `GetArrayItem`, `GetObjectItem`, `GetObjectItemCaseSensitive`, `HasObjectItem`, `GetStringValue`, `GetNumberValue` |
+| **Type Checks** | `cJSON_IsInvalid/False/True/Bool/Null/Number/String/Array/Object/Raw` |
+| **Array Ops** | `AddItemToArray`, `InsertItemInArray`, `DetachItemFromArray`, `DeleteItemFromArray`, `ReplaceItemInArray` |
+| **Object Ops** | `AddItemToObject/CS`, `DetachItemFromObject/CaseSensitive`, `DeleteItemFromObject/CaseSensitive`, `ReplaceItemInObject/CaseSensitive` |
+| **Helpers** | `cJSON_AddNullToObject`, `AddTrue/False/Bool/Number/String/Raw/Array/ObjectToObject` |
+| **Utility** | `cJSON_Duplicate`, `Compare`, `Minify`, `Delete`, `SetValuestring`, `SetNumberHelper`, `Version` |
+| **Sage Extras** | `cJSON_ToSage` (tree→native), `cJSON_FromSage` (native→tree) |
+
+### 14.5 Important Notes
+
+- **GC must be disabled** (`gc_disable()`) when using json.sage — class-heavy code triggers GC segfaults.
+- **`cJSON_GetObjectItem`** does **case-insensitive** matching (uses `lower()`). Use `cJSON_GetObjectItemCaseSensitive` for exact matching.
+- **`cJSON_Delete`** is a no-op (Sage has GC), included for API compatibility with C cJSON.
+- **Type constants**: `cJSON_Invalid=0`, `cJSON_False=1`, `cJSON_True=2`, `cJSON_NULL=4`, `cJSON_Number=8`, `cJSON_String=16`, `cJSON_Array=32`, `cJSON_Object=64`, `cJSON_Raw=128`

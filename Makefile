@@ -8,7 +8,7 @@
 
 CC = gcc
 CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L
-LDFLAGS = -lm -lpthread -ldl
+LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto
 
 # Directories
 SRC_DIR = src
@@ -46,6 +46,7 @@ CORE_SOURCES = \
     $(SRC_DIR)/module.c \
     $(SRC_DIR)/parser.c \
     $(SRC_DIR)/pass.c \
+    $(SRC_DIR)/net.c \
     $(SRC_DIR)/stdlib.c \
     $(SRC_DIR)/typecheck.c \
     $(SRC_DIR)/value.c
