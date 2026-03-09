@@ -21,9 +21,10 @@ class PIOAssembler:
                 continue
             
             # Save label addresses
-            if (endswith(line, ":")):
+            if endswith(line, ":"):
                 let label_name = replace(line, ":", "")
-#                self.labels[label_name] = instr_count
+                let idx = tonumber(label_name)
+                #self.labels[idx] = instr_count
             else:
                 instr_count = instr_count + 1
 

@@ -56,3 +56,19 @@ proc endswith(a, b):
     else:
         return false
 
+proc from_bin(bits):
+    let start = 0
+    let bitList = split(bits, "")
+    if len(bits) >= 2:
+        if bitList[0] == "0":
+            if bitList[1] == "b":
+                start = 2
+    let result = 0
+    let i = start
+    while i < len(bits):
+        result = result * 2
+        if bitList[i] == "1":
+            result = result + 1
+        i = i + 1
+    return result
+
