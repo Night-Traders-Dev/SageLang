@@ -11,6 +11,8 @@
 #include "gc.h"
 #include "module.h"
 #include "compiler.h"
+#include "llvm_backend.h"
+#include "codegen.h"
 
 extern Environment* g_global_env;
 
@@ -42,16 +44,24 @@ static void print_usage(FILE* stream) {
     fprintf(stream,
             "Usage: sage [path]\n"
             "       sage -c \"source\"\n"
-            "       sage --emit-c <input.sage> [-o output.c]\n"
-            "       sage --compile <input.sage> [-o output] [--cc compiler]\n"
+            "       sage --emit-c <input.sage> [-o output.c] [-O0..3] [-g]\n"
+            "       sage --compile <input.sage> [-o output] [--cc compiler] [-O0..3] [-g]\n"
+            "       sage --emit-llvm <input.sage> [-o output.ll] [-O0..3] [-g]\n"
+            "       sage --compile-llvm <input.sage> [-o output] [-O0..3] [-g]\n"
+            "       sage --emit-asm <input.sage> [-o output.s] [--target arch] [-O0..3]\n"
+            "       sage --compile-native <input.sage> [-o output] [--target arch] [-O0..3]\n"
             "       sage --emit-pico-c <input.sage> [-o output.c]\n"
             "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n");
 }
 
 static int parse_codegen_options(int argc, const char* argv[], int start_index,
-                                 const char** output_path, const char** cc_command) {
+                                 const char** output_path, const char** cc_command,
+                                 int* opt_level, int* debug_info, const char** target_arch) {
     *output_path = NULL;
     *cc_command = NULL;
+    *opt_level = 0;
+    *debug_info = 0;
+    if (target_arch) *target_arch = NULL;
 
     for (int i = start_index; i < argc; i++) {
         if (strcmp(argv[i], "-o") == 0) {
@@ -66,6 +76,23 @@ static int parse_codegen_options(int argc, const char* argv[], int start_index,
                 return 0;
             }
             *cc_command = argv[++i];
+        } else if (strcmp(argv[i], "--target") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Missing target after --target.\n");
+                return 0;
+            }
+            if (target_arch) *target_arch = argv[++i];
+            else ++i;
+        } else if (strcmp(argv[i], "-O0") == 0) {
+            *opt_level = 0;
+        } else if (strcmp(argv[i], "-O1") == 0) {
+            *opt_level = 1;
+        } else if (strcmp(argv[i], "-O2") == 0) {
+            *opt_level = 2;
+        } else if (strcmp(argv[i], "-O3") == 0) {
+            *opt_level = 3;
+        } else if (strcmp(argv[i], "-g") == 0) {
+            *debug_info = 1;
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
             return 0;
@@ -138,6 +165,15 @@ static char* derive_output_path(const char* input_path, const char* suffix, int 
     return output;
 }
 
+static CodegenTarget parse_target_arch(const char* arch) {
+    if (arch == NULL) return codegen_detect_host_target();
+    if (strcmp(arch, "x86-64") == 0 || strcmp(arch, "x86_64") == 0) return CODEGEN_TARGET_X86_64;
+    if (strcmp(arch, "aarch64") == 0 || strcmp(arch, "arm64") == 0) return CODEGEN_TARGET_AARCH64;
+    if (strcmp(arch, "rv64") == 0 || strcmp(arch, "riscv64") == 0) return CODEGEN_TARGET_RV64;
+    fprintf(stderr, "Unknown target architecture: %s (supported: x86-64, aarch64, rv64)\n", arch);
+    exit(64);
+}
+
 
 // Helper to read entire file into memory
 static char* read_file(const char* path) {
@@ -181,31 +217,34 @@ static void run(const char* source) {
     }
 }
 
+#define CLEANUP_AND_EXIT(code) do { \
+    gc_shutdown(); \
+    cleanup_module_system(); \
+    cleanup_runtime_state(); \
+    exit(code); \
+} while(0)
+
 int main(int argc, const char* argv[]) {
     // Initialize garbage collector
     gc_init();
-    
+
     // PHASE 8: Initialize module system
     init_module_system();
-    
+
     if (argc == 1) {
-        // REPL mode (interactive) could go here later
         print_usage(stderr);
-        gc_shutdown();
-        cleanup_module_system();
-        cleanup_runtime_state();
-        exit(64);
+        CLEANUP_AND_EXIT(64);
     } else if (argc == 3 && strcmp(argv[1], "-c") == 0) {
         run(argv[2]);
     } else if (argc >= 3 && strcmp(argv[1], "--emit-c") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;
-        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc)) {
+        const char* ignored_target = NULL;
+        int opt_level = 0, debug_info = 0;
+        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+                                   &opt_level, &debug_info, &ignored_target)) {
             print_usage(stderr);
-            gc_shutdown();
-            cleanup_module_system();
-            cleanup_runtime_state();
-            exit(64);
+            CLEANUP_AND_EXIT(64);
         }
 
         char* source = read_file(argv[2]);
@@ -216,13 +255,10 @@ int main(int argc, const char* argv[]) {
             output_path = derived_output;
         }
 
-        if (!compile_source_to_c(source, argv[2], output_path)) {
+        if (!compile_source_to_c_opt(source, argv[2], output_path, opt_level, debug_info)) {
             free(source);
             free(derived_output);
-            gc_shutdown();
-            cleanup_module_system();
-            cleanup_runtime_state();
-            exit(1);
+            CLEANUP_AND_EXIT(1);
         }
 
         free(source);
@@ -230,12 +266,12 @@ int main(int argc, const char* argv[]) {
     } else if (argc >= 3 && strcmp(argv[1], "--compile") == 0) {
         const char* explicit_output = NULL;
         const char* cc_command = NULL;
-        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &cc_command)) {
+        const char* ignored_target = NULL;
+        int opt_level = 0, debug_info = 0;
+        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &cc_command,
+                                   &opt_level, &debug_info, &ignored_target)) {
             print_usage(stderr);
-            gc_shutdown();
-            cleanup_module_system();
-            cleanup_runtime_state();
-            exit(64);
+            CLEANUP_AND_EXIT(64);
         }
 
         char* source = read_file(argv[2]);
@@ -249,28 +285,144 @@ int main(int argc, const char* argv[]) {
         char temp_c_path[256];
         snprintf(temp_c_path, sizeof(temp_c_path), "/tmp/sagec_%d.c", (int)getpid());
 
-        if (!compile_source_to_executable(source, argv[2], temp_c_path, exe_output, cc_command)) {
+        if (!compile_source_to_executable_opt(source, argv[2], temp_c_path, exe_output,
+                                              cc_command, opt_level, debug_info)) {
             unlink(temp_c_path);
             free(source);
             free(derived_output);
-            gc_shutdown();
-            cleanup_module_system();
-            cleanup_runtime_state();
-            exit(1);
+            CLEANUP_AND_EXIT(1);
         }
 
         unlink(temp_c_path);
         free(source);
         free(derived_output);
+    } else if (argc >= 3 && strcmp(argv[1], "--emit-llvm") == 0) {
+        const char* explicit_output = NULL;
+        const char* ignored_cc = NULL;
+        const char* ignored_target = NULL;
+        int opt_level = 0, debug_info = 0;
+        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+                                   &opt_level, &debug_info, &ignored_target)) {
+            print_usage(stderr);
+            CLEANUP_AND_EXIT(64);
+        }
+
+        char* source = read_file(argv[2]);
+        char* derived_output = NULL;
+        const char* output_path = explicit_output;
+        if (output_path == NULL) {
+            derived_output = derive_output_path(argv[2], ".ll", 1);
+            output_path = derived_output;
+        }
+
+        if (!compile_source_to_llvm_ir(source, argv[2], output_path, opt_level, debug_info)) {
+            free(source);
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+
+        free(source);
+        free(derived_output);
+    } else if (argc >= 3 && strcmp(argv[1], "--compile-llvm") == 0) {
+        const char* explicit_output = NULL;
+        const char* ignored_cc = NULL;
+        const char* ignored_target = NULL;
+        int opt_level = 0, debug_info = 0;
+        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+                                   &opt_level, &debug_info, &ignored_target)) {
+            print_usage(stderr);
+            CLEANUP_AND_EXIT(64);
+        }
+
+        char* source = read_file(argv[2]);
+        char* derived_output = NULL;
+        const char* exe_output = explicit_output;
+        if (exe_output == NULL) {
+            derived_output = derive_output_path(argv[2], "", 1);
+            exe_output = derived_output;
+        }
+
+        char temp_ll_path[256];
+        snprintf(temp_ll_path, sizeof(temp_ll_path), "/tmp/sagell_%d.ll", (int)getpid());
+
+        if (!compile_source_to_llvm_executable(source, argv[2], temp_ll_path, exe_output,
+                                               opt_level, debug_info)) {
+            unlink(temp_ll_path);
+            free(source);
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+
+        unlink(temp_ll_path);
+        free(source);
+        free(derived_output);
+    } else if (argc >= 3 && strcmp(argv[1], "--emit-asm") == 0) {
+        const char* explicit_output = NULL;
+        const char* ignored_cc = NULL;
+        const char* target_arch_str = NULL;
+        int opt_level = 0, debug_info = 0;
+        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+                                   &opt_level, &debug_info, &target_arch_str)) {
+            print_usage(stderr);
+            CLEANUP_AND_EXIT(64);
+        }
+
+        CodegenTarget target = parse_target_arch(target_arch_str);
+
+        char* source = read_file(argv[2]);
+        char* derived_output = NULL;
+        const char* output_path = explicit_output;
+        if (output_path == NULL) {
+            derived_output = derive_output_path(argv[2], ".s", 1);
+            output_path = derived_output;
+        }
+
+        if (!compile_source_to_asm(source, argv[2], output_path, target, opt_level, debug_info)) {
+            free(source);
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+
+        free(source);
+        free(derived_output);
+    } else if (argc >= 3 && strcmp(argv[1], "--compile-native") == 0) {
+        const char* explicit_output = NULL;
+        const char* ignored_cc = NULL;
+        const char* target_arch_str = NULL;
+        int opt_level = 0, debug_info = 0;
+        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+                                   &opt_level, &debug_info, &target_arch_str)) {
+            print_usage(stderr);
+            CLEANUP_AND_EXIT(64);
+        }
+
+        CodegenTarget target = parse_target_arch(target_arch_str);
+
+        char* source = read_file(argv[2]);
+        char* derived_output = NULL;
+        const char* exe_output = explicit_output;
+        if (exe_output == NULL) {
+            derived_output = derive_output_path(argv[2], "", 1);
+            exe_output = derived_output;
+        }
+
+        if (!compile_source_to_native(source, argv[2], exe_output, target, opt_level, debug_info)) {
+            free(source);
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+
+        free(source);
+        free(derived_output);
     } else if (argc >= 3 && strcmp(argv[1], "--emit-pico-c") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;
-        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc)) {
+        const char* ignored_target = NULL;
+        int ignored_opt = 0, ignored_dbg = 0;
+        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+                                   &ignored_opt, &ignored_dbg, &ignored_target)) {
             print_usage(stderr);
-            gc_shutdown();
-            cleanup_module_system();
-            cleanup_runtime_state();
-            exit(64);
+            CLEANUP_AND_EXIT(64);
         }
 
         char* source = read_file(argv[2]);
@@ -284,10 +436,7 @@ int main(int argc, const char* argv[]) {
         if (!compile_source_to_pico_c(source, argv[2], output_path)) {
             free(source);
             free(derived_output);
-            gc_shutdown();
-            cleanup_module_system();
-            cleanup_runtime_state();
-            exit(1);
+            CLEANUP_AND_EXIT(1);
         }
 
         free(source);
@@ -299,10 +448,7 @@ int main(int argc, const char* argv[]) {
         const char* sdk_path = NULL;
         if (!parse_pico_options(argc, argv, 3, &output_dir, &board, &program_name, &sdk_path)) {
             print_usage(stderr);
-            gc_shutdown();
-            cleanup_module_system();
-            cleanup_runtime_state();
-            exit(64);
+            CLEANUP_AND_EXIT(64);
         }
 
         char* source = read_file(argv[2]);
@@ -310,10 +456,7 @@ int main(int argc, const char* argv[]) {
         if (!compile_source_to_pico_uf2(source, argv[2], output_dir, program_name,
                                         board, sdk_path, uf2_path, sizeof(uf2_path))) {
             free(source);
-            gc_shutdown();
-            cleanup_module_system();
-            cleanup_runtime_state();
-            exit(1);
+            CLEANUP_AND_EXIT(1);
         }
 
         printf("Built UF2: %s\n", uf2_path);
@@ -325,10 +468,7 @@ int main(int argc, const char* argv[]) {
         free(source);
     } else {
         print_usage(stderr);
-        gc_shutdown();
-        cleanup_module_system();
-        cleanup_runtime_state();
-        exit(64);
+        CLEANUP_AND_EXIT(64);
     }
 
     // Cleanup and shutdown GC

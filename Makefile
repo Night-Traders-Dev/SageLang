@@ -30,13 +30,20 @@ endif
 
 CORE_SOURCES = \
     $(SRC_DIR)/ast.c \
+    $(SRC_DIR)/codegen.c \
     $(SRC_DIR)/compiler.c \
+    $(SRC_DIR)/constfold.c \
+    $(SRC_DIR)/dce.c \
     $(SRC_DIR)/env.c \
     $(SRC_DIR)/gc.c \
+    $(SRC_DIR)/inline.c \
     $(SRC_DIR)/interpreter.c \
     $(SRC_DIR)/lexer.c \
+    $(SRC_DIR)/llvm_backend.c \
     $(SRC_DIR)/module.c \
     $(SRC_DIR)/parser.c \
+    $(SRC_DIR)/pass.c \
+    $(SRC_DIR)/typecheck.c \
     $(SRC_DIR)/value.c
 
 MAIN_SOURCE = $(SRC_DIR)/main.c
@@ -50,13 +57,17 @@ endif
 # Headers
 HEADERS = \
     $(INC_DIR)/ast.h \
+    $(INC_DIR)/codegen.h \
     $(INC_DIR)/compiler.h \
     $(INC_DIR)/env.h \
     $(INC_DIR)/gc.h \
     $(INC_DIR)/interpreter.h \
     $(INC_DIR)/lexer.h \
+    $(INC_DIR)/llvm_backend.h \
     $(INC_DIR)/module.h \
+    $(INC_DIR)/pass.h \
     $(INC_DIR)/token.h \
+    $(INC_DIR)/typecheck.h \
     $(INC_DIR)/value.h
 
 # Optional heartbeat header
@@ -235,6 +246,46 @@ test: $(TARGET)
 	@./$(TARGET) --compile testing/compiler_arch.sage -o .tmp/compiler_arch
 	@./.tmp/compiler_arch > .tmp/compiler_arch.out
 	@diff -u testing/compiler_arch.expected .tmp/compiler_arch.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 18: Constant Folding (-O1)"
+	@./$(TARGET) --compile testing/compiler_constfold.sage -o .tmp/compiler_constfold -O1
+	@./.tmp/compiler_constfold > .tmp/compiler_constfold.out
+	@diff -u testing/compiler_constfold.expected .tmp/compiler_constfold.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 19: Dead Code Elimination (-O2)"
+	@./$(TARGET) --compile testing/compiler_dce.sage -o .tmp/compiler_dce -O2
+	@./.tmp/compiler_dce > .tmp/compiler_dce.out
+	@diff -u testing/compiler_dce.expected .tmp/compiler_dce.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 20: Function Inlining (-O3)"
+	@./$(TARGET) --compile testing/compiler_inline.sage -o .tmp/compiler_inline -O3
+	@./.tmp/compiler_inline > .tmp/compiler_inline.out
+	@diff -u testing/compiler_inline.expected .tmp/compiler_inline.out && echo "✅ Pass" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 21: Optimization Levels (-O0 through -O3)"
+	@./$(TARGET) --compile testing/compiler_optlevels.sage -o .tmp/compiler_optlevels_o0 -O0
+	@./.tmp/compiler_optlevels_o0 > .tmp/compiler_optlevels_o0.out
+	@diff -u testing/compiler_optlevels.expected .tmp/compiler_optlevels_o0.out && echo "✅ -O0 Pass" || echo "❌ -O0 Fail"
+	@./$(TARGET) --compile testing/compiler_optlevels.sage -o .tmp/compiler_optlevels_o1 -O1
+	@./.tmp/compiler_optlevels_o1 > .tmp/compiler_optlevels_o1.out
+	@diff -u testing/compiler_optlevels.expected .tmp/compiler_optlevels_o1.out && echo "✅ -O1 Pass" || echo "❌ -O1 Fail"
+	@./$(TARGET) --compile testing/compiler_optlevels.sage -o .tmp/compiler_optlevels_o2 -O2
+	@./.tmp/compiler_optlevels_o2 > .tmp/compiler_optlevels_o2.out
+	@diff -u testing/compiler_optlevels.expected .tmp/compiler_optlevels_o2.out && echo "✅ -O2 Pass" || echo "❌ -O2 Fail"
+	@./$(TARGET) --compile testing/compiler_optlevels.sage -o .tmp/compiler_optlevels_o3 -O3
+	@./.tmp/compiler_optlevels_o3 > .tmp/compiler_optlevels_o3.out
+	@diff -u testing/compiler_optlevels.expected .tmp/compiler_optlevels_o3.out && echo "✅ -O3 Pass" || echo "❌ -O3 Fail"
+	@echo ""
+	@echo "Test 22: LLVM IR Generation"
+	@./$(TARGET) --emit-llvm testing/compiler_smoke.sage -o .tmp/compiler_smoke.ll && echo "✅ Pass (LLVM IR emitted)" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 23: Assembly Generation (host target)"
+	@./$(TARGET) --emit-asm testing/compiler_smoke.sage -o .tmp/compiler_smoke.s && echo "✅ Pass (ASM emitted)" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 24: Debug Info (-g flag)"
+	@./$(TARGET) --compile testing/compiler_smoke.sage -o .tmp/compiler_smoke_debug -g
+	@./.tmp/compiler_smoke_debug > .tmp/compiler_smoke_debug.out
+	@diff -u testing/compiler_smoke.expected .tmp/compiler_smoke_debug.out && echo "✅ Pass" || echo "❌ Fail"
 
 # ============================================================================
 # Cleanup
