@@ -1,5 +1,27 @@
 # SageLang Updates
 
+## March 10, 2026 - Documentation Refresh, CLI Reference, and REPL Commands
+
+### Documentation Refresh
+
+- `README.md` now includes an implementation-derived build parameter reference for both Make and CMake
+- `README.md` now includes a full `sage` CLI parameter reference covering every top-level mode and backend-specific flag handled in `src/c/main.c`
+- `documentation/SageLang_Guide.md` now mirrors the current build surface, CLI surface, and REPL command set from source instead of older draft wording
+
+### REPL Improvements
+
+- Added new interactive REPL commands in `src/c/main.c`:
+  - `:vars [prefix]` - list current bindings, optionally filtered by prefix
+  - `:type <expr>` - evaluate an expression and print its runtime type and value
+  - `:load <file>` - execute a Sage file in the current REPL session
+  - `:reset` - recreate the REPL environment and module cache
+  - `:pwd` / `:cd <dir>` - inspect or change the working directory
+  - `:gc` - run garbage collection and print GC statistics
+- Expanded `:help` output so the runtime help now matches the available REPL commands
+- Updated `sage --help` text so `--emit-asm` and `--compile-native` advertise the `-g` flag accepted by the implementation
+
+---
+
 ## March 9, 2026 - Networking Modules & cJSON Port
 
 ### Networking Modules (src/net.c, ~850 lines)
@@ -65,7 +87,7 @@ Complete 1:1 port of Dave Gamble's [cJSON](https://github.com/DaveGamble/cJSON) 
 ### Test Suite
 
 - 88 new JSON tests (`tests/test_json.sage`) covering parse, print, create, query, type checks, array/object manipulation, duplicate, compare, minify, roundtrip, escape sequences, nested structures, case sensitivity, and Sage conversion
-- All existing tests maintained: 112 interpreter + 28 compiler + 178 self-host
+- All existing C and self-hosted test coverage maintained
 
 ### Interpreter Bugs Discovered
 
@@ -82,8 +104,8 @@ The build system now supports building SageLang in two modes: from C sources (de
 
 - `make` - Build `sage` from C (default, unchanged)
 - `make sage-boot FILE=<file>` - Run a `.sage` file through the self-hosted Sage interpreter
-- `make test-selfhost` - Run all 178 self-hosted tests (lexer 12, parser 130, interpreter 18, bootstrap 18)
-- `make test-selfhost-lexer` / `test-selfhost-parser` / `test-selfhost-interpreter` / `test-selfhost-bootstrap` - Individual test suites
+- `make test-selfhost` - Run the full self-hosted suite (lexer, parser, interpreter, bootstrap, tooling, passes, stdlib, compiler, LSP, CLI)
+- `make test-selfhost-lexer` / `test-selfhost-parser` / `test-selfhost-interpreter` / `test-selfhost-bootstrap` - Individual core suites
 - `make test-all` - Run ALL tests (C + self-hosted)
 - `make cmake-sage` - Setup CMake self-hosted build
 - `make cmake-sage-build` - Build and run self-hosted tests via CMake
@@ -91,7 +113,7 @@ The build system now supports building SageLang in two modes: from C sources (de
 ### CMakeLists.txt Options
 
 - Default (no flags) - Builds `sage` and `sage-lsp` from C
-- `-DBUILD_SAGE=ON` - Self-hosted mode: builds `sage_host` (C host), then provides targets:
+- `-DBUILD_SAGE=ON` - Self-hosted mode: builds `sage` and provides targets:
   - `sage_boot` - Run files via bootstrap (needs `SAGE_FILE=path`)
   - `test_selfhost` - Run all self-hosted tests
   - `test_selfhost_lexer`, `test_selfhost_parser`, `test_selfhost_interpreter`, `test_selfhost_bootstrap` - Individual suites
@@ -103,7 +125,7 @@ The build system now supports building SageLang in two modes: from C sources (de
 ### Key Details
 
 - The self-hosted build first compiles the C host interpreter, then uses it to run the Sage bootstrap
-- `BUILD_SAGE` and default C build are mutually exclusive (`sage_host` instead of `sage`)
+- `BUILD_SAGE` and the default desktop CMake path are mutually exclusive modes, but both produce a `sage` executable
 - Self-hosted tests are in `src/sage/` directory: `test_lexer.sage`, `test_parser.sage`, `test_interpreter.sage`, `test_bootstrap.sage`
 
 ---
@@ -169,7 +191,7 @@ Phase 12 delivers a complete developer tooling ecosystem for SageLang: an intera
 - **`sage` (no args) or `sage --repl`** - Launches interactive REPL
 - **Multi-line block support** - Automatic continuation for indented blocks (if/while/proc/class)
 - **Error recovery** - Parse and runtime errors displayed without exiting the session
-- **Built-in commands** - `:help` for usage info, `:quit` to exit
+- **Built-in commands** - `:help`, `:quit`, `:exit`, `:vars`, `:type`, `:load`, `:reset`, `:pwd`, `:cd`, `:gc`
 
 ### Code Formatter
 
@@ -201,7 +223,7 @@ Phase 12 delivers a complete developer tooling ecosystem for SageLang: an intera
 
 ### Files Modified/Created
 
-- `src/repl.c` - REPL implementation with multi-line support and error recovery
+- `src/main.c` - REPL implementation, CLI dispatch, and REPL command handling
 - `src/formatter.c` - Code formatter with in-place and check modes
 - `src/linter.c` - Linter with 13 rules (errors, warnings, style)
 - `src/lsp.c` - LSP server (diagnostics, completion, hover, formatting)
