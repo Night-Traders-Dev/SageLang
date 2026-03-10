@@ -68,7 +68,7 @@ include CMakeFiles/sage_boot.dir/progress.make
 
 CMakeFiles/sage_boot: sage
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Running via self-hosted Sage interpreter"
-	cd /home/kraken/Devel/sagelang/self_host && /home/kraken/Devel/sagelang/build_sage/sage /home/kraken/Devel/sagelang/self_host/sage.sage
+	cd /home/kraken/Devel/sagelang/src/sage && /home/kraken/Devel/sagelang/build_sage/sage /home/kraken/Devel/sagelang/src/sage/sage.sage
 
 CMakeFiles/sage_boot.dir/codegen:
 .PHONY : CMakeFiles/sage_boot.dir/codegen

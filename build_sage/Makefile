@@ -207,557 +207,557 @@ test_selfhost/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost.dir/build.make CMakeFiles/test_selfhost.dir/build
 .PHONY : test_selfhost/fast
 
-src/ast.o: src/ast.c.o
-.PHONY : src/ast.o
+src/c/ast.o: src/c/ast.c.o
+.PHONY : src/c/ast.o
 
 # target to build an object file
-src/ast.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/ast.c.o
-.PHONY : src/ast.c.o
+src/c/ast.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/ast.c.o
+.PHONY : src/c/ast.c.o
 
-src/ast.i: src/ast.c.i
-.PHONY : src/ast.i
+src/c/ast.i: src/c/ast.c.i
+.PHONY : src/c/ast.i
 
 # target to preprocess a source file
-src/ast.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/ast.c.i
-.PHONY : src/ast.c.i
+src/c/ast.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/ast.c.i
+.PHONY : src/c/ast.c.i
 
-src/ast.s: src/ast.c.s
-.PHONY : src/ast.s
+src/c/ast.s: src/c/ast.c.s
+.PHONY : src/c/ast.s
 
 # target to generate assembly for a file
-src/ast.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/ast.c.s
-.PHONY : src/ast.c.s
+src/c/ast.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/ast.c.s
+.PHONY : src/c/ast.c.s
 
-src/codegen.o: src/codegen.c.o
-.PHONY : src/codegen.o
+src/c/codegen.o: src/c/codegen.c.o
+.PHONY : src/c/codegen.o
 
 # target to build an object file
-src/codegen.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/codegen.c.o
-.PHONY : src/codegen.c.o
+src/c/codegen.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/codegen.c.o
+.PHONY : src/c/codegen.c.o
 
-src/codegen.i: src/codegen.c.i
-.PHONY : src/codegen.i
+src/c/codegen.i: src/c/codegen.c.i
+.PHONY : src/c/codegen.i
 
 # target to preprocess a source file
-src/codegen.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/codegen.c.i
-.PHONY : src/codegen.c.i
+src/c/codegen.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/codegen.c.i
+.PHONY : src/c/codegen.c.i
 
-src/codegen.s: src/codegen.c.s
-.PHONY : src/codegen.s
+src/c/codegen.s: src/c/codegen.c.s
+.PHONY : src/c/codegen.s
 
 # target to generate assembly for a file
-src/codegen.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/codegen.c.s
-.PHONY : src/codegen.c.s
+src/c/codegen.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/codegen.c.s
+.PHONY : src/c/codegen.c.s
 
-src/compiler.o: src/compiler.c.o
-.PHONY : src/compiler.o
+src/c/compiler.o: src/c/compiler.c.o
+.PHONY : src/c/compiler.o
 
 # target to build an object file
-src/compiler.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/compiler.c.o
-.PHONY : src/compiler.c.o
+src/c/compiler.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/compiler.c.o
+.PHONY : src/c/compiler.c.o
 
-src/compiler.i: src/compiler.c.i
-.PHONY : src/compiler.i
+src/c/compiler.i: src/c/compiler.c.i
+.PHONY : src/c/compiler.i
 
 # target to preprocess a source file
-src/compiler.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/compiler.c.i
-.PHONY : src/compiler.c.i
+src/c/compiler.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/compiler.c.i
+.PHONY : src/c/compiler.c.i
 
-src/compiler.s: src/compiler.c.s
-.PHONY : src/compiler.s
+src/c/compiler.s: src/c/compiler.c.s
+.PHONY : src/c/compiler.s
 
 # target to generate assembly for a file
-src/compiler.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/compiler.c.s
-.PHONY : src/compiler.c.s
+src/c/compiler.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/compiler.c.s
+.PHONY : src/c/compiler.c.s
 
-src/constfold.o: src/constfold.c.o
-.PHONY : src/constfold.o
+src/c/constfold.o: src/c/constfold.c.o
+.PHONY : src/c/constfold.o
 
 # target to build an object file
-src/constfold.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/constfold.c.o
-.PHONY : src/constfold.c.o
+src/c/constfold.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/constfold.c.o
+.PHONY : src/c/constfold.c.o
 
-src/constfold.i: src/constfold.c.i
-.PHONY : src/constfold.i
+src/c/constfold.i: src/c/constfold.c.i
+.PHONY : src/c/constfold.i
 
 # target to preprocess a source file
-src/constfold.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/constfold.c.i
-.PHONY : src/constfold.c.i
+src/c/constfold.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/constfold.c.i
+.PHONY : src/c/constfold.c.i
 
-src/constfold.s: src/constfold.c.s
-.PHONY : src/constfold.s
+src/c/constfold.s: src/c/constfold.c.s
+.PHONY : src/c/constfold.s
 
 # target to generate assembly for a file
-src/constfold.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/constfold.c.s
-.PHONY : src/constfold.c.s
+src/c/constfold.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/constfold.c.s
+.PHONY : src/c/constfold.c.s
 
-src/dce.o: src/dce.c.o
-.PHONY : src/dce.o
+src/c/dce.o: src/c/dce.c.o
+.PHONY : src/c/dce.o
 
 # target to build an object file
-src/dce.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/dce.c.o
-.PHONY : src/dce.c.o
+src/c/dce.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/dce.c.o
+.PHONY : src/c/dce.c.o
 
-src/dce.i: src/dce.c.i
-.PHONY : src/dce.i
+src/c/dce.i: src/c/dce.c.i
+.PHONY : src/c/dce.i
 
 # target to preprocess a source file
-src/dce.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/dce.c.i
-.PHONY : src/dce.c.i
+src/c/dce.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/dce.c.i
+.PHONY : src/c/dce.c.i
 
-src/dce.s: src/dce.c.s
-.PHONY : src/dce.s
+src/c/dce.s: src/c/dce.c.s
+.PHONY : src/c/dce.s
 
 # target to generate assembly for a file
-src/dce.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/dce.c.s
-.PHONY : src/dce.c.s
+src/c/dce.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/dce.c.s
+.PHONY : src/c/dce.c.s
 
-src/env.o: src/env.c.o
-.PHONY : src/env.o
+src/c/env.o: src/c/env.c.o
+.PHONY : src/c/env.o
 
 # target to build an object file
-src/env.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/env.c.o
-.PHONY : src/env.c.o
+src/c/env.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/env.c.o
+.PHONY : src/c/env.c.o
 
-src/env.i: src/env.c.i
-.PHONY : src/env.i
+src/c/env.i: src/c/env.c.i
+.PHONY : src/c/env.i
 
 # target to preprocess a source file
-src/env.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/env.c.i
-.PHONY : src/env.c.i
+src/c/env.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/env.c.i
+.PHONY : src/c/env.c.i
 
-src/env.s: src/env.c.s
-.PHONY : src/env.s
+src/c/env.s: src/c/env.c.s
+.PHONY : src/c/env.s
 
 # target to generate assembly for a file
-src/env.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/env.c.s
-.PHONY : src/env.c.s
+src/c/env.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/env.c.s
+.PHONY : src/c/env.c.s
 
-src/formatter.o: src/formatter.c.o
-.PHONY : src/formatter.o
+src/c/formatter.o: src/c/formatter.c.o
+.PHONY : src/c/formatter.o
 
 # target to build an object file
-src/formatter.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/formatter.c.o
-.PHONY : src/formatter.c.o
+src/c/formatter.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/formatter.c.o
+.PHONY : src/c/formatter.c.o
 
-src/formatter.i: src/formatter.c.i
-.PHONY : src/formatter.i
+src/c/formatter.i: src/c/formatter.c.i
+.PHONY : src/c/formatter.i
 
 # target to preprocess a source file
-src/formatter.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/formatter.c.i
-.PHONY : src/formatter.c.i
+src/c/formatter.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/formatter.c.i
+.PHONY : src/c/formatter.c.i
 
-src/formatter.s: src/formatter.c.s
-.PHONY : src/formatter.s
+src/c/formatter.s: src/c/formatter.c.s
+.PHONY : src/c/formatter.s
 
 # target to generate assembly for a file
-src/formatter.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/formatter.c.s
-.PHONY : src/formatter.c.s
+src/c/formatter.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/formatter.c.s
+.PHONY : src/c/formatter.c.s
 
-src/gc.o: src/gc.c.o
-.PHONY : src/gc.o
+src/c/gc.o: src/c/gc.c.o
+.PHONY : src/c/gc.o
 
 # target to build an object file
-src/gc.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/gc.c.o
-.PHONY : src/gc.c.o
+src/c/gc.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/gc.c.o
+.PHONY : src/c/gc.c.o
 
-src/gc.i: src/gc.c.i
-.PHONY : src/gc.i
+src/c/gc.i: src/c/gc.c.i
+.PHONY : src/c/gc.i
 
 # target to preprocess a source file
-src/gc.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/gc.c.i
-.PHONY : src/gc.c.i
+src/c/gc.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/gc.c.i
+.PHONY : src/c/gc.c.i
 
-src/gc.s: src/gc.c.s
-.PHONY : src/gc.s
+src/c/gc.s: src/c/gc.c.s
+.PHONY : src/c/gc.s
 
 # target to generate assembly for a file
-src/gc.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/gc.c.s
-.PHONY : src/gc.c.s
+src/c/gc.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/gc.c.s
+.PHONY : src/c/gc.c.s
 
-src/heartbeat.o: src/heartbeat.c.o
-.PHONY : src/heartbeat.o
+src/c/heartbeat.o: src/c/heartbeat.c.o
+.PHONY : src/c/heartbeat.o
 
 # target to build an object file
-src/heartbeat.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/heartbeat.c.o
-.PHONY : src/heartbeat.c.o
+src/c/heartbeat.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/heartbeat.c.o
+.PHONY : src/c/heartbeat.c.o
 
-src/heartbeat.i: src/heartbeat.c.i
-.PHONY : src/heartbeat.i
+src/c/heartbeat.i: src/c/heartbeat.c.i
+.PHONY : src/c/heartbeat.i
 
 # target to preprocess a source file
-src/heartbeat.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/heartbeat.c.i
-.PHONY : src/heartbeat.c.i
+src/c/heartbeat.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/heartbeat.c.i
+.PHONY : src/c/heartbeat.c.i
 
-src/heartbeat.s: src/heartbeat.c.s
-.PHONY : src/heartbeat.s
+src/c/heartbeat.s: src/c/heartbeat.c.s
+.PHONY : src/c/heartbeat.s
 
 # target to generate assembly for a file
-src/heartbeat.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/heartbeat.c.s
-.PHONY : src/heartbeat.c.s
+src/c/heartbeat.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/heartbeat.c.s
+.PHONY : src/c/heartbeat.c.s
 
-src/inline.o: src/inline.c.o
-.PHONY : src/inline.o
+src/c/inline.o: src/c/inline.c.o
+.PHONY : src/c/inline.o
 
 # target to build an object file
-src/inline.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/inline.c.o
-.PHONY : src/inline.c.o
+src/c/inline.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/inline.c.o
+.PHONY : src/c/inline.c.o
 
-src/inline.i: src/inline.c.i
-.PHONY : src/inline.i
+src/c/inline.i: src/c/inline.c.i
+.PHONY : src/c/inline.i
 
 # target to preprocess a source file
-src/inline.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/inline.c.i
-.PHONY : src/inline.c.i
+src/c/inline.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/inline.c.i
+.PHONY : src/c/inline.c.i
 
-src/inline.s: src/inline.c.s
-.PHONY : src/inline.s
+src/c/inline.s: src/c/inline.c.s
+.PHONY : src/c/inline.s
 
 # target to generate assembly for a file
-src/inline.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/inline.c.s
-.PHONY : src/inline.c.s
+src/c/inline.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/inline.c.s
+.PHONY : src/c/inline.c.s
 
-src/interpreter.o: src/interpreter.c.o
-.PHONY : src/interpreter.o
+src/c/interpreter.o: src/c/interpreter.c.o
+.PHONY : src/c/interpreter.o
 
 # target to build an object file
-src/interpreter.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/interpreter.c.o
-.PHONY : src/interpreter.c.o
+src/c/interpreter.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/interpreter.c.o
+.PHONY : src/c/interpreter.c.o
 
-src/interpreter.i: src/interpreter.c.i
-.PHONY : src/interpreter.i
+src/c/interpreter.i: src/c/interpreter.c.i
+.PHONY : src/c/interpreter.i
 
 # target to preprocess a source file
-src/interpreter.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/interpreter.c.i
-.PHONY : src/interpreter.c.i
+src/c/interpreter.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/interpreter.c.i
+.PHONY : src/c/interpreter.c.i
 
-src/interpreter.s: src/interpreter.c.s
-.PHONY : src/interpreter.s
+src/c/interpreter.s: src/c/interpreter.c.s
+.PHONY : src/c/interpreter.s
 
 # target to generate assembly for a file
-src/interpreter.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/interpreter.c.s
-.PHONY : src/interpreter.c.s
+src/c/interpreter.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/interpreter.c.s
+.PHONY : src/c/interpreter.c.s
 
-src/lexer.o: src/lexer.c.o
-.PHONY : src/lexer.o
+src/c/lexer.o: src/c/lexer.c.o
+.PHONY : src/c/lexer.o
 
 # target to build an object file
-src/lexer.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/lexer.c.o
-.PHONY : src/lexer.c.o
+src/c/lexer.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/lexer.c.o
+.PHONY : src/c/lexer.c.o
 
-src/lexer.i: src/lexer.c.i
-.PHONY : src/lexer.i
+src/c/lexer.i: src/c/lexer.c.i
+.PHONY : src/c/lexer.i
 
 # target to preprocess a source file
-src/lexer.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/lexer.c.i
-.PHONY : src/lexer.c.i
+src/c/lexer.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/lexer.c.i
+.PHONY : src/c/lexer.c.i
 
-src/lexer.s: src/lexer.c.s
-.PHONY : src/lexer.s
+src/c/lexer.s: src/c/lexer.c.s
+.PHONY : src/c/lexer.s
 
 # target to generate assembly for a file
-src/lexer.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/lexer.c.s
-.PHONY : src/lexer.c.s
+src/c/lexer.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/lexer.c.s
+.PHONY : src/c/lexer.c.s
 
-src/linter.o: src/linter.c.o
-.PHONY : src/linter.o
+src/c/linter.o: src/c/linter.c.o
+.PHONY : src/c/linter.o
 
 # target to build an object file
-src/linter.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/linter.c.o
-.PHONY : src/linter.c.o
+src/c/linter.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/linter.c.o
+.PHONY : src/c/linter.c.o
 
-src/linter.i: src/linter.c.i
-.PHONY : src/linter.i
+src/c/linter.i: src/c/linter.c.i
+.PHONY : src/c/linter.i
 
 # target to preprocess a source file
-src/linter.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/linter.c.i
-.PHONY : src/linter.c.i
+src/c/linter.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/linter.c.i
+.PHONY : src/c/linter.c.i
 
-src/linter.s: src/linter.c.s
-.PHONY : src/linter.s
+src/c/linter.s: src/c/linter.c.s
+.PHONY : src/c/linter.s
 
 # target to generate assembly for a file
-src/linter.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/linter.c.s
-.PHONY : src/linter.c.s
+src/c/linter.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/linter.c.s
+.PHONY : src/c/linter.c.s
 
-src/llvm_backend.o: src/llvm_backend.c.o
-.PHONY : src/llvm_backend.o
+src/c/llvm_backend.o: src/c/llvm_backend.c.o
+.PHONY : src/c/llvm_backend.o
 
 # target to build an object file
-src/llvm_backend.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/llvm_backend.c.o
-.PHONY : src/llvm_backend.c.o
+src/c/llvm_backend.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/llvm_backend.c.o
+.PHONY : src/c/llvm_backend.c.o
 
-src/llvm_backend.i: src/llvm_backend.c.i
-.PHONY : src/llvm_backend.i
+src/c/llvm_backend.i: src/c/llvm_backend.c.i
+.PHONY : src/c/llvm_backend.i
 
 # target to preprocess a source file
-src/llvm_backend.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/llvm_backend.c.i
-.PHONY : src/llvm_backend.c.i
+src/c/llvm_backend.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/llvm_backend.c.i
+.PHONY : src/c/llvm_backend.c.i
 
-src/llvm_backend.s: src/llvm_backend.c.s
-.PHONY : src/llvm_backend.s
+src/c/llvm_backend.s: src/c/llvm_backend.c.s
+.PHONY : src/c/llvm_backend.s
 
 # target to generate assembly for a file
-src/llvm_backend.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/llvm_backend.c.s
-.PHONY : src/llvm_backend.c.s
+src/c/llvm_backend.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/llvm_backend.c.s
+.PHONY : src/c/llvm_backend.c.s
 
-src/lsp.o: src/lsp.c.o
-.PHONY : src/lsp.o
+src/c/lsp.o: src/c/lsp.c.o
+.PHONY : src/c/lsp.o
 
 # target to build an object file
-src/lsp.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/lsp.c.o
-.PHONY : src/lsp.c.o
+src/c/lsp.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/lsp.c.o
+.PHONY : src/c/lsp.c.o
 
-src/lsp.i: src/lsp.c.i
-.PHONY : src/lsp.i
+src/c/lsp.i: src/c/lsp.c.i
+.PHONY : src/c/lsp.i
 
 # target to preprocess a source file
-src/lsp.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/lsp.c.i
-.PHONY : src/lsp.c.i
+src/c/lsp.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/lsp.c.i
+.PHONY : src/c/lsp.c.i
 
-src/lsp.s: src/lsp.c.s
-.PHONY : src/lsp.s
+src/c/lsp.s: src/c/lsp.c.s
+.PHONY : src/c/lsp.s
 
 # target to generate assembly for a file
-src/lsp.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/lsp.c.s
-.PHONY : src/lsp.c.s
+src/c/lsp.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/lsp.c.s
+.PHONY : src/c/lsp.c.s
 
-src/main.o: src/main.c.o
-.PHONY : src/main.o
+src/c/main.o: src/c/main.c.o
+.PHONY : src/c/main.o
 
 # target to build an object file
-src/main.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/main.c.o
-.PHONY : src/main.c.o
+src/c/main.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/main.c.o
+.PHONY : src/c/main.c.o
 
-src/main.i: src/main.c.i
-.PHONY : src/main.i
+src/c/main.i: src/c/main.c.i
+.PHONY : src/c/main.i
 
 # target to preprocess a source file
-src/main.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/main.c.i
-.PHONY : src/main.c.i
+src/c/main.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/main.c.i
+.PHONY : src/c/main.c.i
 
-src/main.s: src/main.c.s
-.PHONY : src/main.s
+src/c/main.s: src/c/main.c.s
+.PHONY : src/c/main.s
 
 # target to generate assembly for a file
-src/main.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/main.c.s
-.PHONY : src/main.c.s
+src/c/main.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/main.c.s
+.PHONY : src/c/main.c.s
 
-src/module.o: src/module.c.o
-.PHONY : src/module.o
+src/c/module.o: src/c/module.c.o
+.PHONY : src/c/module.o
 
 # target to build an object file
-src/module.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/module.c.o
-.PHONY : src/module.c.o
+src/c/module.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/module.c.o
+.PHONY : src/c/module.c.o
 
-src/module.i: src/module.c.i
-.PHONY : src/module.i
+src/c/module.i: src/c/module.c.i
+.PHONY : src/c/module.i
 
 # target to preprocess a source file
-src/module.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/module.c.i
-.PHONY : src/module.c.i
+src/c/module.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/module.c.i
+.PHONY : src/c/module.c.i
 
-src/module.s: src/module.c.s
-.PHONY : src/module.s
+src/c/module.s: src/c/module.c.s
+.PHONY : src/c/module.s
 
 # target to generate assembly for a file
-src/module.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/module.c.s
-.PHONY : src/module.c.s
+src/c/module.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/module.c.s
+.PHONY : src/c/module.c.s
 
-src/net.o: src/net.c.o
-.PHONY : src/net.o
+src/c/net.o: src/c/net.c.o
+.PHONY : src/c/net.o
 
 # target to build an object file
-src/net.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/net.c.o
-.PHONY : src/net.c.o
+src/c/net.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/net.c.o
+.PHONY : src/c/net.c.o
 
-src/net.i: src/net.c.i
-.PHONY : src/net.i
+src/c/net.i: src/c/net.c.i
+.PHONY : src/c/net.i
 
 # target to preprocess a source file
-src/net.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/net.c.i
-.PHONY : src/net.c.i
+src/c/net.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/net.c.i
+.PHONY : src/c/net.c.i
 
-src/net.s: src/net.c.s
-.PHONY : src/net.s
+src/c/net.s: src/c/net.c.s
+.PHONY : src/c/net.s
 
 # target to generate assembly for a file
-src/net.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/net.c.s
-.PHONY : src/net.c.s
+src/c/net.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/net.c.s
+.PHONY : src/c/net.c.s
 
-src/parser.o: src/parser.c.o
-.PHONY : src/parser.o
+src/c/parser.o: src/c/parser.c.o
+.PHONY : src/c/parser.o
 
 # target to build an object file
-src/parser.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/parser.c.o
-.PHONY : src/parser.c.o
+src/c/parser.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/parser.c.o
+.PHONY : src/c/parser.c.o
 
-src/parser.i: src/parser.c.i
-.PHONY : src/parser.i
+src/c/parser.i: src/c/parser.c.i
+.PHONY : src/c/parser.i
 
 # target to preprocess a source file
-src/parser.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/parser.c.i
-.PHONY : src/parser.c.i
+src/c/parser.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/parser.c.i
+.PHONY : src/c/parser.c.i
 
-src/parser.s: src/parser.c.s
-.PHONY : src/parser.s
+src/c/parser.s: src/c/parser.c.s
+.PHONY : src/c/parser.s
 
 # target to generate assembly for a file
-src/parser.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/parser.c.s
-.PHONY : src/parser.c.s
+src/c/parser.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/parser.c.s
+.PHONY : src/c/parser.c.s
 
-src/pass.o: src/pass.c.o
-.PHONY : src/pass.o
+src/c/pass.o: src/c/pass.c.o
+.PHONY : src/c/pass.o
 
 # target to build an object file
-src/pass.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/pass.c.o
-.PHONY : src/pass.c.o
+src/c/pass.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/pass.c.o
+.PHONY : src/c/pass.c.o
 
-src/pass.i: src/pass.c.i
-.PHONY : src/pass.i
+src/c/pass.i: src/c/pass.c.i
+.PHONY : src/c/pass.i
 
 # target to preprocess a source file
-src/pass.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/pass.c.i
-.PHONY : src/pass.c.i
+src/c/pass.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/pass.c.i
+.PHONY : src/c/pass.c.i
 
-src/pass.s: src/pass.c.s
-.PHONY : src/pass.s
+src/c/pass.s: src/c/pass.c.s
+.PHONY : src/c/pass.s
 
 # target to generate assembly for a file
-src/pass.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/pass.c.s
-.PHONY : src/pass.c.s
+src/c/pass.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/pass.c.s
+.PHONY : src/c/pass.c.s
 
-src/stdlib.o: src/stdlib.c.o
-.PHONY : src/stdlib.o
+src/c/stdlib.o: src/c/stdlib.c.o
+.PHONY : src/c/stdlib.o
 
 # target to build an object file
-src/stdlib.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/stdlib.c.o
-.PHONY : src/stdlib.c.o
+src/c/stdlib.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/stdlib.c.o
+.PHONY : src/c/stdlib.c.o
 
-src/stdlib.i: src/stdlib.c.i
-.PHONY : src/stdlib.i
+src/c/stdlib.i: src/c/stdlib.c.i
+.PHONY : src/c/stdlib.i
 
 # target to preprocess a source file
-src/stdlib.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/stdlib.c.i
-.PHONY : src/stdlib.c.i
+src/c/stdlib.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/stdlib.c.i
+.PHONY : src/c/stdlib.c.i
 
-src/stdlib.s: src/stdlib.c.s
-.PHONY : src/stdlib.s
+src/c/stdlib.s: src/c/stdlib.c.s
+.PHONY : src/c/stdlib.s
 
 # target to generate assembly for a file
-src/stdlib.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/stdlib.c.s
-.PHONY : src/stdlib.c.s
+src/c/stdlib.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/stdlib.c.s
+.PHONY : src/c/stdlib.c.s
 
-src/typecheck.o: src/typecheck.c.o
-.PHONY : src/typecheck.o
+src/c/typecheck.o: src/c/typecheck.c.o
+.PHONY : src/c/typecheck.o
 
 # target to build an object file
-src/typecheck.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/typecheck.c.o
-.PHONY : src/typecheck.c.o
+src/c/typecheck.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/typecheck.c.o
+.PHONY : src/c/typecheck.c.o
 
-src/typecheck.i: src/typecheck.c.i
-.PHONY : src/typecheck.i
+src/c/typecheck.i: src/c/typecheck.c.i
+.PHONY : src/c/typecheck.i
 
 # target to preprocess a source file
-src/typecheck.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/typecheck.c.i
-.PHONY : src/typecheck.c.i
+src/c/typecheck.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/typecheck.c.i
+.PHONY : src/c/typecheck.c.i
 
-src/typecheck.s: src/typecheck.c.s
-.PHONY : src/typecheck.s
+src/c/typecheck.s: src/c/typecheck.c.s
+.PHONY : src/c/typecheck.s
 
 # target to generate assembly for a file
-src/typecheck.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/typecheck.c.s
-.PHONY : src/typecheck.c.s
+src/c/typecheck.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/typecheck.c.s
+.PHONY : src/c/typecheck.c.s
 
-src/value.o: src/value.c.o
-.PHONY : src/value.o
+src/c/value.o: src/c/value.c.o
+.PHONY : src/c/value.o
 
 # target to build an object file
-src/value.c.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/value.c.o
-.PHONY : src/value.c.o
+src/c/value.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/value.c.o
+.PHONY : src/c/value.c.o
 
-src/value.i: src/value.c.i
-.PHONY : src/value.i
+src/c/value.i: src/c/value.c.i
+.PHONY : src/c/value.i
 
 # target to preprocess a source file
-src/value.c.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/value.c.i
-.PHONY : src/value.c.i
+src/c/value.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/value.c.i
+.PHONY : src/c/value.c.i
 
-src/value.s: src/value.c.s
-.PHONY : src/value.s
+src/c/value.s: src/c/value.c.s
+.PHONY : src/c/value.s
 
 # target to generate assembly for a file
-src/value.c.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/value.c.s
-.PHONY : src/value.c.s
+src/c/value.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/value.c.s
+.PHONY : src/c/value.c.s
 
 # Help Target
 help:
@@ -774,75 +774,75 @@ help:
 	@echo "... test_selfhost_lexer"
 	@echo "... test_selfhost_parser"
 	@echo "... sage"
-	@echo "... src/ast.o"
-	@echo "... src/ast.i"
-	@echo "... src/ast.s"
-	@echo "... src/codegen.o"
-	@echo "... src/codegen.i"
-	@echo "... src/codegen.s"
-	@echo "... src/compiler.o"
-	@echo "... src/compiler.i"
-	@echo "... src/compiler.s"
-	@echo "... src/constfold.o"
-	@echo "... src/constfold.i"
-	@echo "... src/constfold.s"
-	@echo "... src/dce.o"
-	@echo "... src/dce.i"
-	@echo "... src/dce.s"
-	@echo "... src/env.o"
-	@echo "... src/env.i"
-	@echo "... src/env.s"
-	@echo "... src/formatter.o"
-	@echo "... src/formatter.i"
-	@echo "... src/formatter.s"
-	@echo "... src/gc.o"
-	@echo "... src/gc.i"
-	@echo "... src/gc.s"
-	@echo "... src/heartbeat.o"
-	@echo "... src/heartbeat.i"
-	@echo "... src/heartbeat.s"
-	@echo "... src/inline.o"
-	@echo "... src/inline.i"
-	@echo "... src/inline.s"
-	@echo "... src/interpreter.o"
-	@echo "... src/interpreter.i"
-	@echo "... src/interpreter.s"
-	@echo "... src/lexer.o"
-	@echo "... src/lexer.i"
-	@echo "... src/lexer.s"
-	@echo "... src/linter.o"
-	@echo "... src/linter.i"
-	@echo "... src/linter.s"
-	@echo "... src/llvm_backend.o"
-	@echo "... src/llvm_backend.i"
-	@echo "... src/llvm_backend.s"
-	@echo "... src/lsp.o"
-	@echo "... src/lsp.i"
-	@echo "... src/lsp.s"
-	@echo "... src/main.o"
-	@echo "... src/main.i"
-	@echo "... src/main.s"
-	@echo "... src/module.o"
-	@echo "... src/module.i"
-	@echo "... src/module.s"
-	@echo "... src/net.o"
-	@echo "... src/net.i"
-	@echo "... src/net.s"
-	@echo "... src/parser.o"
-	@echo "... src/parser.i"
-	@echo "... src/parser.s"
-	@echo "... src/pass.o"
-	@echo "... src/pass.i"
-	@echo "... src/pass.s"
-	@echo "... src/stdlib.o"
-	@echo "... src/stdlib.i"
-	@echo "... src/stdlib.s"
-	@echo "... src/typecheck.o"
-	@echo "... src/typecheck.i"
-	@echo "... src/typecheck.s"
-	@echo "... src/value.o"
-	@echo "... src/value.i"
-	@echo "... src/value.s"
+	@echo "... src/c/ast.o"
+	@echo "... src/c/ast.i"
+	@echo "... src/c/ast.s"
+	@echo "... src/c/codegen.o"
+	@echo "... src/c/codegen.i"
+	@echo "... src/c/codegen.s"
+	@echo "... src/c/compiler.o"
+	@echo "... src/c/compiler.i"
+	@echo "... src/c/compiler.s"
+	@echo "... src/c/constfold.o"
+	@echo "... src/c/constfold.i"
+	@echo "... src/c/constfold.s"
+	@echo "... src/c/dce.o"
+	@echo "... src/c/dce.i"
+	@echo "... src/c/dce.s"
+	@echo "... src/c/env.o"
+	@echo "... src/c/env.i"
+	@echo "... src/c/env.s"
+	@echo "... src/c/formatter.o"
+	@echo "... src/c/formatter.i"
+	@echo "... src/c/formatter.s"
+	@echo "... src/c/gc.o"
+	@echo "... src/c/gc.i"
+	@echo "... src/c/gc.s"
+	@echo "... src/c/heartbeat.o"
+	@echo "... src/c/heartbeat.i"
+	@echo "... src/c/heartbeat.s"
+	@echo "... src/c/inline.o"
+	@echo "... src/c/inline.i"
+	@echo "... src/c/inline.s"
+	@echo "... src/c/interpreter.o"
+	@echo "... src/c/interpreter.i"
+	@echo "... src/c/interpreter.s"
+	@echo "... src/c/lexer.o"
+	@echo "... src/c/lexer.i"
+	@echo "... src/c/lexer.s"
+	@echo "... src/c/linter.o"
+	@echo "... src/c/linter.i"
+	@echo "... src/c/linter.s"
+	@echo "... src/c/llvm_backend.o"
+	@echo "... src/c/llvm_backend.i"
+	@echo "... src/c/llvm_backend.s"
+	@echo "... src/c/lsp.o"
+	@echo "... src/c/lsp.i"
+	@echo "... src/c/lsp.s"
+	@echo "... src/c/main.o"
+	@echo "... src/c/main.i"
+	@echo "... src/c/main.s"
+	@echo "... src/c/module.o"
+	@echo "... src/c/module.i"
+	@echo "... src/c/module.s"
+	@echo "... src/c/net.o"
+	@echo "... src/c/net.i"
+	@echo "... src/c/net.s"
+	@echo "... src/c/parser.o"
+	@echo "... src/c/parser.i"
+	@echo "... src/c/parser.s"
+	@echo "... src/c/pass.o"
+	@echo "... src/c/pass.i"
+	@echo "... src/c/pass.s"
+	@echo "... src/c/stdlib.o"
+	@echo "... src/c/stdlib.i"
+	@echo "... src/c/stdlib.s"
+	@echo "... src/c/typecheck.o"
+	@echo "... src/c/typecheck.i"
+	@echo "... src/c/typecheck.s"
+	@echo "... src/c/value.o"
+	@echo "... src/c/value.i"
+	@echo "... src/c/value.s"
 .PHONY : help
 
 

@@ -68,7 +68,7 @@ include CMakeFiles/test_selfhost_parser.dir/progress.make
 
 CMakeFiles/test_selfhost_parser: sage
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Running self-hosted parser tests"
-	cd /home/kraken/Devel/sagelang/self_host && /home/kraken/Devel/sagelang/build_sage/sage /home/kraken/Devel/sagelang/self_host/test_parser.sage
+	cd /home/kraken/Devel/sagelang/src/sage && /home/kraken/Devel/sagelang/build_sage/sage /home/kraken/Devel/sagelang/src/sage/test_parser.sage
 
 CMakeFiles/test_selfhost_parser.dir/codegen:
 .PHONY : CMakeFiles/test_selfhost_parser.dir/codegen
