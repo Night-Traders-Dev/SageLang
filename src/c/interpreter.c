@@ -28,7 +28,11 @@ static Stmt* g_generator_resume_target = NULL;
 
 // Recursion depth tracking to prevent stack overflow
 #define MAX_RECURSION_DEPTH 1000
+#if SAGE_PLATFORM_PICO
+static int g_recursion_depth = 0;  // No TLS on Cortex-M0+
+#else
 static __thread int g_recursion_depth = 0;
+#endif
 
 static int stmt_contains_target(Stmt* stmt, Stmt* target) {
     if (stmt == NULL || target == NULL) return 0;
@@ -1900,6 +1904,11 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                 }
 
                 if (callee_value.as.function->is_async) {
+#if SAGE_PLATFORM_PICO
+                    free(eval_args);
+                    fprintf(stderr, "Runtime Error: async/await not supported on RP2040.\n");
+                    return EVAL_RESULT(make_nil());
+#else
                     // Async call: spawn thread, return thread handle
                     Value spawn_args[1 + func->param_count];
                     spawn_args[0] = callee_value;
@@ -1911,6 +1920,7 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                     extern Value thread_spawn_native(int argCount, Value* args);
                     Value handle = thread_spawn_native(1 + func->param_count, spawn_args);
                     return EVAL_RESULT(handle);
+#endif
                 }
 
                 Env* scope = env_create(callee_value.as.function->closure);

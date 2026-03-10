@@ -687,6 +687,30 @@ src/c/pass.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/pass.c.s
 .PHONY : src/c/pass.c.s
 
+src/c/sage_thread.o: src/c/sage_thread.c.o
+.PHONY : src/c/sage_thread.o
+
+# target to build an object file
+src/c/sage_thread.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/sage_thread.c.o
+.PHONY : src/c/sage_thread.c.o
+
+src/c/sage_thread.i: src/c/sage_thread.c.i
+.PHONY : src/c/sage_thread.i
+
+# target to preprocess a source file
+src/c/sage_thread.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/sage_thread.c.i
+.PHONY : src/c/sage_thread.c.i
+
+src/c/sage_thread.s: src/c/sage_thread.c.s
+.PHONY : src/c/sage_thread.s
+
+# target to generate assembly for a file
+src/c/sage_thread.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/sage_thread.c.s
+.PHONY : src/c/sage_thread.c.s
+
 src/c/stdlib.o: src/c/stdlib.c.o
 .PHONY : src/c/stdlib.o
 
@@ -834,6 +858,9 @@ help:
 	@echo "... src/c/pass.o"
 	@echo "... src/c/pass.i"
 	@echo "... src/c/pass.s"
+	@echo "... src/c/sage_thread.o"
+	@echo "... src/c/sage_thread.i"
+	@echo "... src/c/sage_thread.s"
 	@echo "... src/c/stdlib.o"
 	@echo "... src/c/stdlib.i"
 	@echo "... src/c/stdlib.s"

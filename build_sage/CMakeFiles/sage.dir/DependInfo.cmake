@@ -28,6 +28,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/kraken/Devel/sagelang/src/c/net.c" "CMakeFiles/sage.dir/src/c/net.c.o" "gcc" "CMakeFiles/sage.dir/src/c/net.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/parser.c" "CMakeFiles/sage.dir/src/c/parser.c.o" "gcc" "CMakeFiles/sage.dir/src/c/parser.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/pass.c" "CMakeFiles/sage.dir/src/c/pass.c.o" "gcc" "CMakeFiles/sage.dir/src/c/pass.c.o.d"
+  "/home/kraken/Devel/sagelang/src/c/sage_thread.c" "CMakeFiles/sage.dir/src/c/sage_thread.c.o" "gcc" "CMakeFiles/sage.dir/src/c/sage_thread.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/stdlib.c" "CMakeFiles/sage.dir/src/c/stdlib.c.o" "gcc" "CMakeFiles/sage.dir/src/c/stdlib.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/typecheck.c" "CMakeFiles/sage.dir/src/c/typecheck.c.o" "gcc" "CMakeFiles/sage.dir/src/c/typecheck.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/value.c" "CMakeFiles/sage.dir/src/c/value.c.o" "gcc" "CMakeFiles/sage.dir/src/c/value.c.o.d"
