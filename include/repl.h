@@ -1,6 +1,19 @@
 #ifndef SAGE_REPL_H
 #define SAGE_REPL_H
 
+#include "sage_thread.h"
+
+#if SAGE_PLATFORM_PICO
+
+// No REPL on embedded — error always exits
+#define g_repl_mode 0
+
+static inline void sage_error_exit(void) {
+    exit(1);
+}
+
+#else
+
 #include <setjmp.h>
 
 // REPL error recovery: when g_repl_mode is set, errors longjmp back
@@ -17,4 +30,6 @@ static inline void sage_error_exit(void) {
     exit(1);
 }
 
-#endif
+#endif // SAGE_PLATFORM_PICO
+
+#endif // SAGE_REPL_H

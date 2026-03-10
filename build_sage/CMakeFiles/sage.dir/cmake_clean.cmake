@@ -40,6 +40,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/sage.dir/src/c/parser.c.o.d"
   "CMakeFiles/sage.dir/src/c/pass.c.o"
   "CMakeFiles/sage.dir/src/c/pass.c.o.d"
+  "CMakeFiles/sage.dir/src/c/sage_thread.c.o"
+  "CMakeFiles/sage.dir/src/c/sage_thread.c.o.d"
   "CMakeFiles/sage.dir/src/c/stdlib.c.o"
   "CMakeFiles/sage.dir/src/c/stdlib.c.o.d"
   "CMakeFiles/sage.dir/src/c/typecheck.c.o"
