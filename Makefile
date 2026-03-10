@@ -397,6 +397,15 @@ test-selfhost: $(TARGET)
 	@mkdir -p /tmp/sage_test_modules
 	@cd src/sage && ../../$(TARGET) test/test_module.sage 2>&1 | tail -3
 	@echo ""
+	@echo "=== Self-Hosted LLVM Backend Tests ==="
+	@cd src/sage && ../../$(TARGET) test/test_llvm_backend.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Self-Hosted Codegen Tests ==="
+	@cd src/sage && ../../$(TARGET) test/test_codegen.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Self-Hosted C Compiler Tests ==="
+	@cd src/sage && ../../$(TARGET) test/test_compiler.sage 2>&1 | tail -3
+	@echo ""
 	@echo "✅ All self-hosted tests complete"
 
 # Run individual self-hosted test suites
@@ -442,6 +451,15 @@ test-selfhost-stdlib: $(TARGET)
 test-selfhost-module: $(TARGET)
 	@mkdir -p /tmp/sage_test_modules
 	cd src/sage && ../../$(TARGET) test/test_module.sage
+
+test-selfhost-llvm-backend: $(TARGET)
+	cd src/sage && ../../$(TARGET) test/test_llvm_backend.sage
+
+test-selfhost-codegen: $(TARGET)
+	cd src/sage && ../../$(TARGET) test/test_codegen.sage
+
+test-selfhost-compiler: $(TARGET)
+	cd src/sage && ../../$(TARGET) test/test_compiler.sage
 
 # Run ALL tests (C + self-hosted)
 test-all: test test-selfhost
@@ -572,4 +590,5 @@ help:
         test-selfhost-formatter test-selfhost-linter test-selfhost-value \
         test-selfhost-pass test-selfhost-constfold test-selfhost-dce test-selfhost-inline \
         test-selfhost-typecheck test-selfhost-stdlib test-selfhost-module \
+        test-selfhost-llvm-backend test-selfhost-codegen test-selfhost-compiler \
         test-all stats help
