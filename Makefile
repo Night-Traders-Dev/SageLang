@@ -8,7 +8,12 @@
 
 CC = gcc
 CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L
+# Platform-conditional linking: pthread only on desktop (not RP2040)
+ifndef PICO_BUILD
 LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto
+else
+LDFLAGS = -lm
+endif
 
 # Directories
 SRC_DIR = src/c
@@ -47,6 +52,7 @@ CORE_SOURCES = \
     $(SRC_DIR)/parser.c \
     $(SRC_DIR)/pass.c \
     $(SRC_DIR)/net.c \
+    $(SRC_DIR)/sage_thread.c \
     $(SRC_DIR)/stdlib.c \
     $(SRC_DIR)/typecheck.c \
     $(SRC_DIR)/value.c
@@ -56,7 +62,7 @@ MAIN_SOURCE = $(SRC_DIR)/main.c
 # Optional heartbeat source
 ifneq (,$(wildcard $(SRC_DIR)/heartbeat.c))
     CORE_SOURCES += $(SRC_DIR)/heartbeat.c
-    $(info Including heartbeat.c with pthread support)
+    $(info Including heartbeat.c)
 endif
 
 # Headers
@@ -75,6 +81,7 @@ HEADERS = \
     $(INC_DIR)/module.h \
     $(INC_DIR)/pass.h \
     $(INC_DIR)/token.h \
+    $(INC_DIR)/sage_thread.h \
     $(INC_DIR)/typecheck.h \
     $(INC_DIR)/value.h
 
@@ -406,6 +413,15 @@ test-selfhost: $(TARGET)
 	@echo "=== Self-Hosted C Compiler Tests ==="
 	@cd src/sage && ../../$(TARGET) test/test_compiler.sage 2>&1 | tail -3
 	@echo ""
+	@echo "=== Self-Hosted Error Reporting Tests ==="
+	@cd src/sage && ../../$(TARGET) test/test_errors.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Self-Hosted LSP Tests ==="
+	@cd src/sage && ../../$(TARGET) test/test_lsp.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Self-Hosted Sage CLI Tests ==="
+	@cd src/sage && ../../$(TARGET) test/test_sage_cli.sage 2>&1 | tail -3
+	@echo ""
 	@echo "✅ All self-hosted tests complete"
 
 # Run individual self-hosted test suites
@@ -460,6 +476,15 @@ test-selfhost-codegen: $(TARGET)
 
 test-selfhost-compiler: $(TARGET)
 	cd src/sage && ../../$(TARGET) test/test_compiler.sage
+
+test-selfhost-errors: $(TARGET)
+	cd src/sage && ../../$(TARGET) test/test_errors.sage
+
+test-selfhost-lsp: $(TARGET)
+	cd src/sage && ../../$(TARGET) test/test_lsp.sage
+
+test-selfhost-sage-cli: $(TARGET)
+	cd src/sage && ../../$(TARGET) test/test_sage_cli.sage
 
 # Run ALL tests (C + self-hosted)
 test-all: test test-selfhost
@@ -591,4 +616,5 @@ help:
         test-selfhost-pass test-selfhost-constfold test-selfhost-dce test-selfhost-inline \
         test-selfhost-typecheck test-selfhost-stdlib test-selfhost-module \
         test-selfhost-llvm-backend test-selfhost-codegen test-selfhost-compiler \
+        test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
         test-all stats help

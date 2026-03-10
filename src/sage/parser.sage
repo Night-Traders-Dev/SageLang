@@ -8,6 +8,7 @@ import token
 from token import Token
 from lexer import tokenize
 from ast import Expr, Stmt, CatchClause
+import errors
 from ast import EXPR_NUMBER, EXPR_STRING, EXPR_BOOL, EXPR_NIL
 from ast import EXPR_BINARY, EXPR_VARIABLE, EXPR_CALL, EXPR_ARRAY
 from ast import EXPR_INDEX, EXPR_DICT, EXPR_TUPLE, EXPR_SLICE
@@ -31,10 +32,24 @@ from ast import async_proc_stmt, defer_stmt
 let MAX_DEPTH = 500
 
 class Parser:
-    proc init(tokens):
+    proc init(tokens, source, filename):
         self.tokens = tokens
         self.pos = 0
         self.depth = 0
+        self.source = source
+        self.filename = filename
+        self.error_ctx = nil
+
+    proc get_error_ctx():
+        if self.error_ctx == nil:
+            self.error_ctx = errors.make_error_context(self.source, self.filename)
+        return self.error_ctx
+
+    proc parse_error(tok, message, hint):
+        let ctx = self.get_error_ctx()
+        let col = -1
+        let formatted = errors.format_error(ctx, tok.line, col, "Error", message, hint)
+        raise formatted
 
     # --- Token access ---
 
@@ -65,7 +80,13 @@ class Parser:
         if self.check(tok_type):
             return self.advance()
         let tok = self.peek()
-        raise "[Line " + str(tok.line) + "] Error: " + message + " (got " + token.token_type_name(tok.type) + ")"
+        let got_name = token.token_type_name(tok.type)
+        let hint = "got " + got_name
+        if got_name == "NEWLINE":
+            hint = "got end of line -- did you forget something?"
+        if got_name == "EOF":
+            hint = "got end of file -- the code may be incomplete"
+        self.parse_error(tok, message, hint)
 
     # --- Expression parsing (precedence climbing) ---
 
@@ -73,7 +94,7 @@ class Parser:
         self.depth = self.depth + 1
         if self.depth > MAX_DEPTH:
             let tok = self.peek()
-            raise "[Line " + str(tok.line) + "] Error: Maximum nesting depth exceeded."
+            self.parse_error(tok, "Maximum nesting depth exceeded", "reduce the depth of nested expressions")
         let result = self.parse_assignment()
         self.depth = self.depth - 1
         return result
@@ -330,7 +351,17 @@ class Parser:
             return variable_expr(self.previous())
 
         let tok = self.peek()
-        raise "[Line " + str(tok.line) + "] Error: Expect expression. (got " + token.token_type_name(tok.type) + ")"
+        let got_name = token.token_type_name(tok.type)
+        let hint = nil
+        if got_name == "NEWLINE":
+            hint = "unexpected end of line -- expected a value or expression"
+        if got_name == "COLON":
+            hint = "unexpected ':' -- did you forget the condition?"
+        if got_name == "RPAREN":
+            hint = "unexpected ')' -- mismatched parentheses?"
+        if hint == nil:
+            hint = "got " + got_name + " which cannot start an expression"
+        self.parse_error(tok, "Expected expression", hint)
 
     # --- Statement parsing ---
 
@@ -342,7 +373,7 @@ class Parser:
         self.depth = self.depth + 1
         if self.depth > MAX_DEPTH:
             let tok = self.peek()
-            raise "[Line " + str(tok.line) + "] Error: Maximum nesting depth exceeded."
+            self.parse_error(tok, "Maximum nesting depth exceeded", "reduce the depth of nested blocks")
         self.consume(token.TOKEN_INDENT, "Expect indentation after block start.")
         let head = nil
         let current = nil
@@ -384,7 +415,7 @@ class Parser:
     proc parse_for():
         if not self.check(token.TOKEN_IDENTIFIER):
             let tok = self.peek()
-            raise "[Line " + str(tok.line) + "] Error: Expect loop variable after 'for'."
+            self.parse_error(tok, "Expected loop variable after 'for'", "for loops require a variable name: for x in ...")
         let var_tok = self.advance()
         self.consume(token.TOKEN_IN, "Expect 'in' after loop variable.")
         let iterable = self.parse_expression()
@@ -397,7 +428,7 @@ class Parser:
         let name_type = self.peek_type()
         if name_type != token.TOKEN_IDENTIFIER and name_type != token.TOKEN_INIT:
             let tok = self.peek()
-            raise "[Line " + str(tok.line) + "] Error: Expect procedure name."
+            self.parse_error(tok, "Expected procedure name", "proc must be followed by a name: proc my_function():")
         let name = self.advance()
         self.consume(token.TOKEN_LPAREN, "Expect '(' after procedure name.")
         let params = []
@@ -407,14 +438,14 @@ class Parser:
                 push(params, self.advance())
             else:
                 let tok = self.peek()
-                raise "[Line " + str(tok.line) + "] Error: Expect parameter name."
+                self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
             while self.match_tok(token.TOKEN_COMMA):
                 let pt2 = self.peek_type()
                 if pt2 == token.TOKEN_SELF or pt2 == token.TOKEN_IDENTIFIER:
                     push(params, self.advance())
                 else:
                     let tok = self.peek()
-                    raise "[Line " + str(tok.line) + "] Error: Expect parameter name."
+                    self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
         self.consume(token.TOKEN_RPAREN, "Expect ')' after parameters.")
         self.consume(token.TOKEN_COLON, "Expect ':' after procedure signature.")
         self.consume(token.TOKEN_NEWLINE, "Expect newline before procedure body.")
@@ -425,7 +456,7 @@ class Parser:
         self.consume(token.TOKEN_PROC, "Expect 'proc' after 'async'.")
         if not self.check(token.TOKEN_IDENTIFIER):
             let tok = self.peek()
-            raise "[Line " + str(tok.line) + "] Error: Expect procedure name after 'async proc'."
+            self.parse_error(tok, "Expected procedure name after 'async proc'", "async proc must be followed by a name")
         let name = self.advance()
         self.consume(token.TOKEN_LPAREN, "Expect '(' after procedure name.")
         let params = []
@@ -435,14 +466,14 @@ class Parser:
                 push(params, self.advance())
             else:
                 let tok = self.peek()
-                raise "[Line " + str(tok.line) + "] Error: Expect parameter name."
+                self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
             while self.match_tok(token.TOKEN_COMMA):
                 let pt2 = self.peek_type()
                 if pt2 == token.TOKEN_SELF or pt2 == token.TOKEN_IDENTIFIER:
                     push(params, self.advance())
                 else:
                     let tok = self.peek()
-                    raise "[Line " + str(tok.line) + "] Error: Expect parameter name."
+                    self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
         self.consume(token.TOKEN_RPAREN, "Expect ')' after parameters.")
         self.consume(token.TOKEN_COLON, "Expect ':' after procedure signature.")
         self.consume(token.TOKEN_NEWLINE, "Expect newline before procedure body.")
@@ -477,7 +508,7 @@ class Parser:
                     method_current = method
             else:
                 let tok = self.peek()
-                raise "[Line " + str(tok.line) + "] Error: Only methods allowed in class body."
+                self.parse_error(tok, "Only methods allowed in class body", "use 'proc' to define methods inside a class")
         self.consume(token.TOKEN_DEDENT, "Expect dedent after class body.")
         return class_stmt(name, parent, has_parent, method_head)
 
@@ -640,6 +671,9 @@ class Parser:
 # -----------------------------------------
 
 proc parse_source(source):
+    return parse_source_file(source, "<input>")
+
+proc parse_source_file(source, filename):
     let tokens = tokenize(source)
-    let p = Parser(tokens)
+    let p = Parser(tokens, source, filename)
     return p.parse_program()

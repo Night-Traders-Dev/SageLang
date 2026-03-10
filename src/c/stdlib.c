@@ -18,8 +18,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
-#include <pthread.h>
 #include <stdint.h>
+#include "sage_thread.h"
 
 // ============================================================================
 // Helper: Create a native module (pre-loaded, no .sage file needed)
@@ -601,8 +601,8 @@ Value thread_spawn_native(int argCount, Value* args) {
     }
 
     // Create thread
-    pthread_t* handle = SAGE_ALLOC(sizeof(pthread_t));
-    int err = pthread_create(handle, NULL, sage_thread_entry, td);
+    sage_thread_t* handle = SAGE_ALLOC(sizeof(sage_thread_t));
+    int err = sage_thread_create(handle, sage_thread_entry, td);
     if (err != 0) {
         fprintf(stderr, "Runtime Error: Failed to create thread (error %d).\n", err);
         free(td->args);
@@ -634,8 +634,8 @@ static Value thread_join_native(int argCount, Value* args) {
         return td->result;
     }
 
-    pthread_t* handle = (pthread_t*)tv->handle;
-    pthread_join(*handle, NULL);
+    sage_thread_t* handle = (sage_thread_t*)tv->handle;
+    sage_thread_join(*handle, NULL);
     tv->joined = 1;
 
     SageThreadData* td = (SageThreadData*)tv->data;
@@ -646,8 +646,8 @@ static Value thread_join_native(int argCount, Value* args) {
 static Value thread_mutex_native(int argCount, Value* args) {
     (void)argCount; (void)args;
 
-    pthread_mutex_t* mtx = SAGE_ALLOC(sizeof(pthread_mutex_t));
-    pthread_mutex_init(mtx, NULL);
+    sage_mutex_t* mtx = SAGE_ALLOC(sizeof(sage_mutex_t));
+    sage_mutex_init(mtx);
 
     MutexValue* mv = SAGE_ALLOC(sizeof(MutexValue));
     mv->handle = mtx;
@@ -661,8 +661,8 @@ static Value thread_lock_native(int argCount, Value* args) {
         fprintf(stderr, "Runtime Error: thread.lock requires a mutex.\n");
         return val_nil();
     }
-    pthread_mutex_t* mtx = (pthread_mutex_t*)AS_MUTEX(args[0])->handle;
-    pthread_mutex_lock(mtx);
+    sage_mutex_t* mtx = (sage_mutex_t*)AS_MUTEX(args[0])->handle;
+    sage_mutex_lock(mtx);
     return val_nil();
 }
 
@@ -672,8 +672,8 @@ static Value thread_unlock_native(int argCount, Value* args) {
         fprintf(stderr, "Runtime Error: thread.unlock requires a mutex.\n");
         return val_nil();
     }
-    pthread_mutex_t* mtx = (pthread_mutex_t*)AS_MUTEX(args[0])->handle;
-    pthread_mutex_unlock(mtx);
+    sage_mutex_t* mtx = (sage_mutex_t*)AS_MUTEX(args[0])->handle;
+    sage_mutex_unlock(mtx);
     return val_nil();
 }
 
@@ -681,19 +681,14 @@ static Value thread_unlock_native(int argCount, Value* args) {
 static Value thread_sleep_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_NUMBER(args[0])) return val_nil();
     double seconds = AS_NUMBER(args[0]);
-    if (seconds > 0) {
-        struct timespec ts;
-        ts.tv_sec = (time_t)seconds;
-        ts.tv_nsec = (long)((seconds - (double)ts.tv_sec) * 1e9);
-        nanosleep(&ts, NULL);
-    }
+    sage_sleep_secs(seconds);
     return val_nil();
 }
 
 // thread.id() -> current thread id as number
 static Value thread_id_native(int argCount, Value* args) {
     (void)argCount; (void)args;
-    return val_number((double)(uintptr_t)pthread_self());
+    return val_number((double)sage_thread_id());
 }
 
 Module* create_thread_module(ModuleCache* cache) {
