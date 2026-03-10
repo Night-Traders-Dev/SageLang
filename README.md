@@ -122,7 +122,7 @@ print await future     # 1764
 
 ### Developer Tooling
 
-- **REPL**: `sage` (no args) or `sage --repl` for interactive development with multi-line blocks, error recovery, `:help`/`:quit`
+- **REPL**: `sage` (no args) or `sage --repl` for interactive development with multi-line blocks, error recovery, and built-in commands such as `:help`, `:vars`, `:type`, `:load`, `:reset`, `:pwd`, `:cd`, and `:gc`
 - **Formatter**: `sage fmt <file>` formats in place, `sage fmt --check <file>` checks without modifying
 - **Linter**: `sage lint <file>` with 13 rules (E001-E003 errors, W001-W005 warnings, S001-S005 style)
 - **Syntax Highlighting**: TextMate grammar (`editors/sage.tmLanguage.json`), VSCode extension (`editors/vscode/`)
@@ -140,7 +140,7 @@ cd src/sage && ../../sage sage.sage program.sage
 - **Parser** (`parser.sage`, ~700 lines) - Recursive descent with 12 precedence levels
 - **Interpreter** (`interpreter.sage`, ~920 lines) - Tree-walking evaluator with dict-based values
 - **Bootstrap coverage**: arithmetic, variables, control flow, functions, recursion, closures, classes, inheritance, arrays, dicts, strings, try/catch, break/continue
-- **178 self-host tests**: lexer (12), parser (130), interpreter (18), bootstrap (18)
+- **Self-hosted test suites**: lexer, parser, interpreter, bootstrap, formatter, linter, value, optimization passes, stdlib, module loading, codegen, compiler, LSP, and CLI coverage
 - GC must be disabled for self-hosted code (`gc_disable()`)
 
 ### Bundled `lib/` Modules
@@ -168,12 +168,17 @@ print arr.map([1, 2, 3], double)
 
 ## 🛠 Building Sage
 
-Sage has zero dependencies and builds with standard GCC/Clang. The build system supports two modes: building from C sources (default) and a self-hosted mode that uses the Sage interpreter to run Sage code.
+Sage’s desktop build links against `libm`, `pthread`, `dl`, `libcurl`, and OpenSSL. The project supports three build paths:
+
+- Desktop C build: produces `sage` and `sage-lsp`
+- Self-hosted bootstrap flow: uses the C interpreter to run `src/sage/sage.sage`
+- Pico/RP2040 build: via CMake and the Pico SDK
 
 ### Prerequisites
-- A C compiler (`gcc` or `clang`)
-- `make` (and optionally `cmake` for CMake builds)
-- `libcurl` and `openssl` development libraries (for networking modules)
+- A C compiler such as `gcc`, `clang`, or `cc`
+- `make` and/or `cmake`
+- Desktop libraries and headers for `libcurl` and OpenSSL
+- For Pico builds: a valid `PICO_SDK_PATH`
 
 ### Build from C (Default)
 
@@ -182,7 +187,7 @@ git clone https://github.com/Night-Traders-Dev/SageLang.git
 cd SageLang
 make clean && make -j$(nproc)
 ```
-This produces the `sage` executable.
+This produces `./sage` and `./sage-lsp`.
 
 Run examples:
 ```bash
@@ -193,16 +198,32 @@ Run examples:
 
 ### Self-Hosted Build (Sage-on-Sage)
 
-The self-hosted mode first compiles the C host interpreter (`sage_host`), then uses it to run the Sage bootstrap:
+The self-hosted flow still builds the C `sage` executable first, then uses it to execute the Sage bootstrap sources under `src/sage/`:
 
 ```bash
-make sage-boot FILE=src/sage/test_bootstrap.sage    # Run a .sage file through the self-hosted interpreter
-make test-selfhost                                   # Run all 178 self-hosted tests
-make test-selfhost-lexer                             # Lexer tests only (12)
-make test-selfhost-parser                            # Parser tests only (130)
-make test-selfhost-interpreter                       # Interpreter tests only (18)
-make test-selfhost-bootstrap                         # Bootstrap tests only (18)
-make test-all                                        # Run ALL tests (C + self-hosted)
+make sage-boot FILE=examples/hello.sage
+make test-selfhost
+make test-selfhost-lexer
+make test-selfhost-parser
+make test-selfhost-interpreter
+make test-selfhost-bootstrap
+make test-selfhost-formatter
+make test-selfhost-linter
+make test-selfhost-value
+make test-selfhost-pass
+make test-selfhost-constfold
+make test-selfhost-dce
+make test-selfhost-inline
+make test-selfhost-typecheck
+make test-selfhost-stdlib
+make test-selfhost-module
+make test-selfhost-llvm-backend
+make test-selfhost-codegen
+make test-selfhost-compiler
+make test-selfhost-errors
+make test-selfhost-lsp
+make test-selfhost-sage-cli
+make test-all
 ```
 
 ### CMake Build
@@ -213,85 +234,110 @@ CMake supports the same two modes via build options:
 # Default: build sage and sage-lsp from C
 cmake -B build && cmake --build build
 
-# Self-hosted mode: build sage_host, then run self-hosted tests
+# Self-hosted mode: build sage, then run self-hosted targets
 cmake -B build -DBUILD_SAGE=ON && cmake --build build
 cmake --build build --target test_selfhost
 
-# Other CMake options:
-#   -DBUILD_PICO=ON      Pico embedded build
-#   -DENABLE_DEBUG=ON     Debug symbols
-#   -DENABLE_TESTS=ON     C test executables
+# Pico/RP2040 build
+cmake -B build_pico -DBUILD_PICO=ON -DPICO_BOARD=pico
+cmake --build build_pico
 ```
 
-Note: `-DBUILD_SAGE=ON` and the default C build are mutually exclusive. With `BUILD_SAGE`, the C host is built as `sage_host` instead of `sage`.
+When `BUILD_SAGE=ON`, the executable target is still `sage`; the build adds the custom bootstrap targets such as `sage_boot` and `test_selfhost`.
 
 Convenience Make targets for CMake:
 ```bash
+make cmake                 # Configure a desktop CMake build
+make cmake-build           # Build the desktop CMake tree
 make cmake-sage            # Setup CMake self-hosted build
 make cmake-sage-build      # Build and run self-hosted tests via CMake
+make cmake-pico            # Setup a Pico CMake build
 ```
 
-### Compiler Backends
+### Build Parameters
 
-Sage includes three compiler backends, all with optimization passes (`-O0` through `-O3`):
+#### Make Variables
 
-**C Backend** (most complete):
+| Variable | Default | Effect |
+| -------- | ------- | ------ |
+| `CC` | `gcc` | C compiler used for `make` builds |
+| `CFLAGS` | `-std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L` | Base compile flags for the desktop build |
+| `LDFLAGS` | `-lm -lpthread -ldl -lcurl -lssl -lcrypto` | Desktop link flags; switches to `-lm` when `PICO_BUILD` is set |
+| `DEBUG` | `0` | `DEBUG=1` adds `-g -O0 -DDEBUG` |
+| `PREFIX` | `/usr/local` | Install prefix for `make install` |
+| `FILE` | unset | Required by `make sage-boot FILE=<path>` |
+| `PICO_BUILD` | unset | Internal Make switch that changes link flags for non-desktop builds |
 
-```bash
-./sage --emit-c program.sage -o program.c     # Emit C source
-./sage --compile program.sage -o program       # Compile to executable
-```
+#### CMake Cache Variables And Environment Inputs
 
-**LLVM IR Backend**:
+| Parameter | Default | Effect |
+| --------- | ------- | ------ |
+| `BUILD_PICO` | `OFF` | Enables the Pico/RP2040 build and imports `pico_sdk_import.cmake` before `project()` |
+| `BUILD_SAGE` | `OFF` | Enables bootstrap/self-hosted build targets such as `sage_boot` and `test_selfhost` |
+| `ENABLE_DEBUG` | `OFF` | Adds `-g -O0 -DDEBUG` |
+| `ENABLE_TESTS` | `OFF` | Builds optional C test executables and enables `ctest` targets |
+| `CMAKE_BUILD_TYPE` | generator default | Standard CMake build type summary field |
+| `CMAKE_C_COMPILER` | toolchain default | Chooses the C compiler shown in the config summary |
+| `CMAKE_INSTALL_PREFIX` | CMake default | Install destination for `cmake --install` |
+| `PICO_SDK_PATH` | unset | Required for Pico builds unless your environment already exports it |
+| `PICO_BOARD` | `pico` | Pico board name used by Pico SDK builds |
+| `SAGE_FILE` | unset | Input file consumed by the `sage_boot` custom target in self-hosted builds |
 
-```bash
-./sage --emit-llvm program.sage -o program.ll  # Emit LLVM IR
-./sage --compile-llvm program.sage -o program  # Compile via clang
-```
+### `sage` Parameter Reference
 
-**Native Assembly Backend** (x86-64, aarch64, rv64):
+#### Top-Level Invocations
 
-```bash
-./sage --emit-asm program.sage -o program.s    # Emit assembly
-./sage --compile-native program.sage -o program
-```
+| Command | Meaning | Notes |
+| ------- | ------- | ----- |
+| `sage` | Start the interactive REPL | Same as `sage --repl` |
+| `sage --repl` | Start the interactive REPL | Multi-line blocks are supported |
+| `sage --help` | Print CLI usage | Shows compiler, tooling, and REPL entry points |
+| `sage -c "source"` | Execute a source string | Runs without loading a file |
+| `sage <file.sage> [arg ...]` | Run a Sage source file | Extra arguments are available through `sys.args()` |
+| `sage --lsp` | Start the LSP server on stdin/stdout | `sage-lsp` is the standalone companion binary |
+| `sage fmt <file>` | Format a file in place | Prints `Formatted: <file>` on success |
+| `sage fmt --check <file>` | Check formatting without rewriting | Exit code `1` when formatting is needed |
+| `sage lint <file>` | Run the static linter | Exit code `1` when issues are found |
 
-**RP2040/Pico firmware**:
+#### Compiler And Codegen Commands
 
-```bash
-./sage --compile-pico examples/hello.sage -o build_hello_pico --sdk /path/to/pico-sdk
-```
+| Command | Output Default | Supported Options |
+| ------- | -------------- | ----------------- |
+| `sage --emit-c <input.sage>` | `<input>.c` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --compile <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--cc <compiler>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --emit-llvm <input.sage>` | `<input>.ll` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --compile-llvm <input.sage>` | `<input-without-.sage>` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --emit-asm <input.sage>` | `<input>.s` | `-o <path>`, `--target <arch>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --compile-native <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--target <arch>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --emit-pico-c <input.sage>` | `<input>.pico.c` | `-o <path>` |
+| `sage --compile-pico <input.sage>` | `.tmp/<program-name>` build dir and `<program-name>.uf2` | `-o <dir>`, `--board <name>`, `--name <program>`, `--sdk <path>` |
 
-The C backend supports the full language including classes, modules, exceptions, and all builtins. The LLVM and native backends support scalar control flow, arrays, dictionaries, tuples, slicing, property access, for-in loops, and break/continue.
+#### Option Semantics
 
-### Developer Tools
+| Option | Applies To | Meaning |
+| ------ | ---------- | ------- |
+| `-o <path>` | All emit/compile commands, plus `--compile-pico` | Output file or output directory depending on command |
+| `--cc <compiler>` | `--compile` | Overrides the host C compiler; defaults to `cc` |
+| `--target <arch>` | `--emit-asm`, `--compile-native` | Target architecture. Accepted values: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64` |
+| `-O0` / `-O1` / `-O2` / `-O3` | C, LLVM, and native codegen commands | Optimization pass level selected in `src/c/main.c` |
+| `-g` | C, LLVM, asm, and native compile/emit commands | Enables debug information in the generated output path |
+| `--board <name>` | `--compile-pico` | Pico board name; defaults to `pico` |
+| `--name <program>` | `--compile-pico` | Program name used for generated file names; defaults to the input basename |
+| `--sdk <path>` | `--compile-pico` | Pico SDK path; falls back to the `PICO_SDK_PATH` environment variable |
 
-**REPL** (interactive mode):
+### REPL Commands
 
-```bash
-./sage                  # Launch REPL (no arguments)
-./sage --repl           # Explicit REPL flag
-```
-
-**Formatter**:
-
-```bash
-./sage fmt program.sage             # Format file in place
-./sage fmt --check program.sage     # Check formatting (no changes)
-```
-
-**Linter**:
-
-```bash
-./sage lint program.sage            # Run linter (13 rules)
-```
-
-**LSP Server** (for editor integration):
-
-```bash
-./sage --lsp            # Start LSP server via main binary
-./sage-lsp              # Standalone LSP server binary
-```
+| Command | Meaning |
+| ------- | ------- |
+| `:help` | Print REPL help |
+| `:quit` / `:exit` | Leave the session |
+| `:vars [prefix]` | List current REPL bindings, optionally filtered by prefix |
+| `:type <expr>` | Evaluate an expression and print its runtime type and value |
+| `:load <file>` | Execute a Sage file inside the current session |
+| `:reset` | Reset the session, global bindings, and module cache |
+| `:pwd` | Print the current working directory |
+| `:cd <dir>` | Change the working directory |
+| `:gc` | Run garbage collection and print GC statistics |
 
 ## 📝 Example Code
 
@@ -554,10 +600,10 @@ proc write_memory(ptr: *mut u8, value: u8):
 
 - **Language**: C
 - **Phases Completed**: 13/13 (100%)
-- **Test Suite**: 112 interpreter tests + 28 compiler tests + 178 self-host tests + 88 JSON tests, 100% pass rate
+- **Test Suite**: C interpreter/compiler tests, JSON coverage, and broad self-hosted suites for parsing, execution, tooling, optimization, codegen, compiler, LSP, and CLI behavior
 - **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
-- **Status**: Self-Hosted
+- **Status**: Active development with a working self-hosted interpreter
 - **License**: MIT
 - **Current Version**: v0.13.0-dev
 
@@ -594,7 +640,7 @@ sage/
 │   ├── constfold.c   # Constant folding pass
 │   ├── dce.c         # Dead code elimination pass
 │   ├── inline.c      # Function inlining pass
-│   ├── repl.c        # Interactive REPL
+│   ├── main.c        # CLI entry point and REPL implementation
 │   ├── formatter.c   # Code formatter
 │   ├── linter.c      # Static analysis linter
 │   └── lsp.c         # Language Server Protocol server

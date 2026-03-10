@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <setjmp.h>
+#include <ctype.h>
 #include "lexer.h"
 #include "token.h"
 #include "ast.h"
@@ -59,14 +60,38 @@ static void print_usage(FILE* stream) {
             "       sage --compile <input.sage> [-o output] [--cc compiler] [-O0..3] [-g]\n"
             "       sage --emit-llvm <input.sage> [-o output.ll] [-O0..3] [-g]\n"
             "       sage --compile-llvm <input.sage> [-o output] [-O0..3] [-g]\n"
-            "       sage --emit-asm <input.sage> [-o output.s] [--target arch] [-O0..3]\n"
-            "       sage --compile-native <input.sage> [-o output] [--target arch] [-O0..3]\n"
+            "       sage --emit-asm <input.sage> [-o output.s] [--target arch] [-O0..3] [-g]\n"
+            "       sage --compile-native <input.sage> [-o output] [--target arch] [-O0..3] [-g]\n"
             "       sage --emit-pico-c <input.sage> [-o output.c]\n"
             "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n"
             "       sage fmt <file>          Format a Sage source file in-place\n"
             "       sage fmt --check <file>  Check if file is already formatted\n"
             "       sage lint <file>         Lint a Sage source file\n"
             "       sage --lsp              Start LSP server (stdin/stdout)\n");
+}
+
+static const char* value_type_name(Value v) {
+    switch (v.type) {
+        case VAL_NIL: return "nil";
+        case VAL_NUMBER: return "number";
+        case VAL_BOOL: return "bool";
+        case VAL_STRING: return "string";
+        case VAL_FUNCTION: return "function";
+        case VAL_NATIVE: return "native";
+        case VAL_ARRAY: return "array";
+        case VAL_DICT: return "dict";
+        case VAL_TUPLE: return "tuple";
+        case VAL_CLASS: return "class";
+        case VAL_INSTANCE: return "instance";
+        case VAL_MODULE: return "module";
+        case VAL_EXCEPTION: return "exception";
+        case VAL_GENERATOR: return "generator";
+        case VAL_CLIB: return "clib";
+        case VAL_POINTER: return "pointer";
+        case VAL_THREAD: return "thread";
+        case VAL_MUTEX: return "mutex";
+        default: return "unknown";
+    }
 }
 
 static int parse_codegen_options(int argc, const char* argv[], int start_index,
@@ -180,6 +205,29 @@ static char* derive_output_path(const char* input_path, const char* suffix, int 
     return output;
 }
 
+static const char* skip_space(const char* s) {
+    while (*s != '\0' && isspace((unsigned char)*s)) {
+        s++;
+    }
+    return s;
+}
+
+static int command_matches(const char* line, const char* command, const char** arg_out) {
+    size_t command_len = strlen(command);
+    if (strncmp(line, command, command_len) != 0) {
+        return 0;
+    }
+
+    if (line[command_len] != '\0' && !isspace((unsigned char)line[command_len])) {
+        return 0;
+    }
+
+    if (arg_out != NULL) {
+        *arg_out = skip_space(line + command_len);
+    }
+    return 1;
+}
+
 static CodegenTarget parse_target_arch(const char* arch) {
     if (arch == NULL) return codegen_detect_host_target();
     if (strcmp(arch, "x86-64") == 0 || strcmp(arch, "x86_64") == 0) return CODEGEN_TARGET_X86_64;
@@ -217,6 +265,38 @@ static char* read_file(const char* path) {
     return buffer;
 }
 
+static char* try_read_file(const char* path) {
+    FILE* file = fopen(path, "rb");
+    if (file == NULL) {
+        return NULL;
+    }
+
+    if (fseek(file, 0L, SEEK_END) != 0) {
+        fclose(file);
+        return NULL;
+    }
+
+    long file_size_long = ftell(file);
+    if (file_size_long < 0) {
+        fclose(file);
+        return NULL;
+    }
+
+    size_t file_size = (size_t)file_size_long;
+    rewind(file);
+
+    char* buffer = malloc(file_size + 1);
+    if (buffer == NULL) {
+        fclose(file);
+        return NULL;
+    }
+
+    size_t bytes_read = fread(buffer, sizeof(char), file_size, file);
+    buffer[bytes_read] = '\0';
+    fclose(file);
+    return buffer;
+}
+
 // Phase 12: Print a value for the REPL (with type-aware formatting)
 static void repl_print_value(Value v) {
     if (IS_NIL(v)) return;  // Don't print nil results
@@ -225,6 +305,14 @@ static void repl_print_value(Value v) {
     } else {
         print_value(v);
         printf("\n");
+    }
+}
+
+static void repl_print_value_inline(Value v) {
+    if (IS_STRING(v)) {
+        printf("\"%s\"", AS_STRING(v));
+    } else {
+        print_value(v);
     }
 }
 
@@ -295,6 +383,114 @@ static void repl_free_buffers(void) {
     g_repl_buffers = NULL;
 }
 
+static void repl_print_help(void) {
+    printf("Sage REPL Commands:\n");
+    printf("  :help              Show this help message\n");
+    printf("  :quit              Exit the REPL (also :exit or Ctrl-D)\n");
+    printf("  :exit              Exit the REPL\n");
+    printf("  :vars [prefix]     List current REPL bindings, optionally filtered by prefix\n");
+    printf("  :type <expr>       Evaluate an expression and print its type and value\n");
+    printf("  :load <file>       Load and execute a Sage file in the current session\n");
+    printf("  :reset             Reset the REPL session, globals, and module cache\n");
+    printf("  :pwd               Print the current working directory\n");
+    printf("  :cd <dir>          Change the current working directory\n");
+    printf("  :gc                Run garbage collection and print GC stats\n");
+    printf("\n");
+    printf("Enter Sage expressions and statements.\n");
+    printf("Multi-line blocks (if, for, while, proc, class) are\n");
+    printf("detected automatically when a line ends with ':'.\n");
+    printf("End a block with an empty line.\n");
+}
+
+static void repl_list_bindings(Env* env, const char* prefix) {
+    int shown = 0;
+    size_t prefix_len = (prefix != NULL) ? strlen(prefix) : 0;
+
+    for (EnvNode* node = env->head; node != NULL; node = node->next) {
+        if (prefix_len > 0 && strncmp(node->name, prefix, prefix_len) != 0) {
+            continue;
+        }
+
+        printf("%-16s %-10s ", node->name, value_type_name(node->value));
+        repl_print_value_inline(node->value);
+        printf("\n");
+        shown++;
+    }
+
+    if (shown == 0) {
+        if (prefix_len > 0) {
+            printf("No bindings match prefix \"%s\".\n", prefix);
+        } else {
+            printf("No bindings in the current REPL scope.\n");
+        }
+    } else {
+        printf("%d binding%s shown.\n", shown, shown == 1 ? "" : "s");
+    }
+}
+
+static void repl_print_gc_stats(Env* env) {
+    g_global_env = env;
+    gc_collect_with_root(env);
+
+    GCStats stats = gc_get_stats();
+    printf("collections=%d objects=%d freed_last=%d next_gc=%d bytes_allocated=%lu\n",
+           stats.collections,
+           stats.num_objects,
+           stats.objects_freed,
+           stats.next_gc,
+           stats.bytes_allocated);
+}
+
+static void repl_reset_session(Env** env_ptr) {
+    free_stmt(g_program_ast);
+    g_program_ast = NULL;
+    g_program_ast_tail = NULL;
+    repl_free_buffers();
+    cleanup_module_system();
+    env_cleanup_all();
+
+    init_module_system();
+    *env_ptr = env_create(NULL);
+    g_global_env = *env_ptr;
+    init_stdlib(*env_ptr);
+
+    printf("REPL session reset.\n");
+}
+
+static void repl_execute_source(char* buffer, Env* env, int print_expr_results,
+                                Value* last_value, int* last_is_expression) {
+    if (last_value != NULL) {
+        *last_value = val_nil();
+    }
+    if (last_is_expression != NULL) {
+        *last_is_expression = 0;
+    }
+
+    init_lexer(buffer);
+    parser_init();
+
+    while (1) {
+        Stmt* stmt = parse();
+        if (stmt == NULL) break;
+        retain_program_stmt(stmt);
+        ExecResult result = interpret(stmt, env);
+
+        if (stmt->type == STMT_EXPRESSION) {
+            if (last_value != NULL) {
+                *last_value = result.value;
+            }
+            if (last_is_expression != NULL) {
+                *last_is_expression = 1;
+            }
+            if (print_expr_results && !IS_NIL(result.value)) {
+                repl_print_value(result.value);
+            }
+        } else if (last_is_expression != NULL) {
+            *last_is_expression = 0;
+        }
+    }
+}
+
 // Phase 12: Interactive REPL
 static void run_repl(void) {
     printf("Sage REPL v0.12.0\n");
@@ -326,14 +522,117 @@ static void run_repl(void) {
         }
 
         if (strcmp(line, ":help") == 0) {
-            printf("Sage REPL Commands:\n");
-            printf("  :help       Show this help message\n");
-            printf("  :quit       Exit the REPL (also :exit or Ctrl-D)\n");
-            printf("\n");
-            printf("Enter Sage expressions and statements.\n");
-            printf("Multi-line blocks (if, for, while, proc, class) are\n");
-            printf("detected automatically when a line ends with ':'.\n");
-            printf("End a block with an empty line.\n");
+            repl_print_help();
+            free(line);
+            continue;
+        }
+
+        if (line[0] == ':') {
+            const char* arg = NULL;
+
+            if (command_matches(line, ":vars", &arg)) {
+                repl_list_bindings(env, (*arg != '\0') ? arg : NULL);
+                free(line);
+                continue;
+            }
+
+            if (command_matches(line, ":pwd", NULL)) {
+                char cwd[4096];
+                if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                    printf("%s\n", cwd);
+                } else {
+                    perror("getcwd");
+                }
+                free(line);
+                continue;
+            }
+
+            if (command_matches(line, ":cd", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :cd <dir>\n");
+                } else if (chdir(arg) != 0) {
+                    perror("chdir");
+                } else {
+                    char cwd[4096];
+                    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                        printf("%s\n", cwd);
+                    }
+                }
+                free(line);
+                continue;
+            }
+
+            if (command_matches(line, ":gc", NULL)) {
+                repl_print_gc_stats(env);
+                free(line);
+                continue;
+            }
+
+            if (command_matches(line, ":reset", NULL)) {
+                repl_reset_session(&env);
+                free(line);
+                continue;
+            }
+
+            if (command_matches(line, ":load", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :load <file>\n");
+                    free(line);
+                    continue;
+                }
+
+                char* buffer = try_read_file(arg);
+                if (buffer == NULL) {
+                    fprintf(stderr, "sage repl: could not open \"%s\"\n", arg);
+                    free(line);
+                    continue;
+                }
+
+                if (setjmp(g_repl_error_jmp) == 0) {
+                    repl_execute_source(buffer, env, 0, NULL, NULL);
+                    printf("Loaded: %s\n", arg);
+                }
+                repl_keep_buffer(buffer);
+                free(line);
+                continue;
+            }
+
+            if (command_matches(line, ":type", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :type <expr>\n");
+                    free(line);
+                    continue;
+                }
+
+                size_t arg_len = strlen(arg);
+                char* buffer = malloc(arg_len + 2);
+                if (buffer == NULL) {
+                    free(line);
+                    continue;
+                }
+                memcpy(buffer, arg, arg_len);
+                buffer[arg_len] = '\n';
+                buffer[arg_len + 1] = '\0';
+
+                if (setjmp(g_repl_error_jmp) == 0) {
+                    Value last_value = val_nil();
+                    int last_is_expression = 0;
+                    repl_execute_source(buffer, env, 0, &last_value, &last_is_expression);
+                    if (last_is_expression) {
+                        printf("%s = ", value_type_name(last_value));
+                        repl_print_value_inline(last_value);
+                        printf("\n");
+                    } else {
+                        printf("Expression did not produce a value.\n");
+                    }
+                }
+                repl_keep_buffer(buffer);
+                free(line);
+                continue;
+            }
+
+            printf("Unknown REPL command: %s\n", line);
+            printf("Type :help for available commands.\n");
             free(line);
             continue;
         }
@@ -392,20 +691,7 @@ static void run_repl(void) {
 
         // Parse and interpret with error recovery
         if (setjmp(g_repl_error_jmp) == 0) {
-            init_lexer(buffer);
-            parser_init();
-
-            while (1) {
-                Stmt* stmt = parse();
-                if (stmt == NULL) break;
-                retain_program_stmt(stmt);
-                ExecResult result = interpret(stmt, env);
-
-                // If it was an expression statement, print the result
-                if (stmt->type == STMT_EXPRESSION && !IS_NIL(result.value)) {
-                    repl_print_value(result.value);
-                }
-            }
+            repl_execute_source((char*)buffer, env, 1, NULL, NULL);
         }
         // If setjmp returned non-zero, an error occurred and we recovered
 
