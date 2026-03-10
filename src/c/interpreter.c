@@ -1907,7 +1907,7 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
 #if SAGE_PLATFORM_PICO
                     free(eval_args);
                     fprintf(stderr, "Runtime Error: async/await not supported on RP2040.\n");
-                    return EVAL_RESULT(make_nil());
+                    return EVAL_RESULT(val_nil());
 #else
                     // Async call: spawn thread, return thread handle
                     Value spawn_args[1 + func->param_count];
