@@ -68,7 +68,7 @@ include CMakeFiles/test_selfhost_lexer.dir/progress.make
 
 CMakeFiles/test_selfhost_lexer: sage
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Running self-hosted lexer tests"
-	cd /home/kraken/Devel/sagelang/src/sage && /home/kraken/Devel/sagelang/build_sage/sage /home/kraken/Devel/sagelang/src/sage/test_lexer.sage
+	cd /home/kraken/Devel/sagelang/src/sage && /home/kraken/Devel/sagelang/build_sage/sage /home/kraken/Devel/sagelang/src/sage/test/test_lexer.sage
 
 CMakeFiles/test_selfhost_lexer.dir/codegen:
 .PHONY : CMakeFiles/test_selfhost_lexer.dir/codegen

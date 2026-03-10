@@ -212,7 +212,7 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
     # Self-hosted test targets
     add_custom_target(test_selfhost_lexer
         COMMAND $<TARGET_FILE:sage>
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test_lexer.sage
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test/test_lexer.sage
         DEPENDS sage
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/sage
         COMMENT "Running self-hosted lexer tests"
@@ -220,7 +220,7 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
 
     add_custom_target(test_selfhost_parser
         COMMAND $<TARGET_FILE:sage>
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test_parser.sage
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test/test_parser.sage
         DEPENDS sage
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/sage
         COMMENT "Running self-hosted parser tests"
@@ -228,7 +228,7 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
 
     add_custom_target(test_selfhost_interpreter
         COMMAND $<TARGET_FILE:sage>
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test_interpreter.sage
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test/test_interpreter.sage
         DEPENDS sage
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/sage
         COMMENT "Running self-hosted interpreter tests"
@@ -236,7 +236,7 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
 
     add_custom_target(test_selfhost_bootstrap
         COMMAND $<TARGET_FILE:sage>
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test_bootstrap.sage
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/sage/test/test_bootstrap.sage
         DEPENDS sage
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/sage
         COMMENT "Running bootstrap integration tests"
