@@ -17,6 +17,7 @@ from token import TOKEN_NOT, TOKEN_TILDE, TOKEN_OR, TOKEN_AND
 from token import TOKEN_EQ, TOKEN_NEQ, TOKEN_GT, TOKEN_LT, TOKEN_GTE, TOKEN_LTE
 from token import TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, TOKEN_SLASH, TOKEN_PERCENT
 from token import TOKEN_AMP, TOKEN_PIPE, TOKEN_CARET, TOKEN_LSHIFT, TOKEN_RSHIFT
+import errors
 
 # Control flow signal kinds
 let SIGNAL_NORMAL = 0
@@ -29,6 +30,68 @@ let MAX_RECURSION = 500
 
 # Recursion depth counter (module-level)
 let g_depth = 0
+
+# Error context for rich error messages (module-level)
+let g_error_ctx = nil
+
+proc set_error_context(source, filename):
+    g_error_ctx = errors.make_error_context(source, filename)
+
+# Extract line number from an expression node (-1 if unknown)
+proc get_expr_line(expr):
+    if expr == nil:
+        return -1
+    let etype = expr.type
+    # EXPR_VARIABLE: name is a token
+    if etype == EXPR_VARIABLE:
+        return expr.name.line
+    # EXPR_BINARY: op is a token
+    if etype == EXPR_BINARY:
+        return expr.op.line
+    # EXPR_GET: property is a token
+    if etype == EXPR_GET:
+        return expr.property.line
+    # EXPR_SET: property is a token
+    if etype == EXPR_SET:
+        return expr.property.line
+    # EXPR_CALL: recurse into callee
+    if etype == EXPR_CALL:
+        return get_expr_line(expr.callee)
+    # EXPR_INDEX / EXPR_INDEX_SET / EXPR_SLICE: recurse into object
+    if etype == EXPR_INDEX:
+        return get_expr_line(expr.object)
+    if etype == EXPR_INDEX_SET:
+        return get_expr_line(expr.object)
+    if etype == EXPR_SLICE:
+        return get_expr_line(expr.object)
+    return -1
+
+# Extract line number from a statement node (-1 if unknown)
+proc get_stmt_line(stmt):
+    if stmt == nil:
+        return -1
+    let stype = stmt.type
+    if stype == STMT_LET:
+        return stmt.name.line
+    if stype == STMT_PROC:
+        return stmt.name.line
+    if stype == STMT_FOR:
+        return stmt.variable.line
+    if stype == STMT_CLASS:
+        return stmt.name.line
+    if stype == STMT_PRINT:
+        return get_expr_line(stmt.expression)
+    if stype == STMT_EXPRESSION:
+        return get_expr_line(stmt.expression)
+    return -1
+
+# Raise a rich runtime error if error context is available
+proc runtime_error(line, message, hint):
+    if g_error_ctx != nil:
+        if line > 0:
+            let msg = errors.format_error(g_error_ctx, line, -1, "Runtime Error", message, hint)
+            raise msg
+    raise "Runtime Error: " + message
 
 # -----------------------------------------
 # Environment functions (dict-based)
@@ -249,7 +312,7 @@ proc call_native(name, args):
         return contains(args[0], args[1])
     if name == "indexof":
         return indexof(args[0], args[1])
-    raise "Unknown native function: " + name
+    runtime_error(-1, "Unknown native function: " + name, nil)
 
 # -----------------------------------------
 # Register builtins into an environment
@@ -300,7 +363,7 @@ proc eval_expr(expr, env):
     g_depth = g_depth + 1
     if g_depth > MAX_RECURSION:
         g_depth = g_depth - 1
-        raise "Maximum recursion depth exceeded"
+        runtime_error(get_expr_line(expr), "Maximum recursion depth exceeded", "limit is " + str(MAX_RECURSION) + " frames")
     let result = eval_expr_impl(expr, env)
     g_depth = g_depth - 1
     return result
@@ -324,7 +387,10 @@ proc eval_expr_impl(expr, env):
     # --- Variable ---
     if etype == EXPR_VARIABLE:
         let name = expr.name.text
-        return env_get(env, name)
+        try:
+            return env_get(env, name)
+        catch err:
+            runtime_error(expr.name.line, "Undefined variable '" + name + "'", nil)
 
     # --- Binary ---
     if etype == EXPR_BINARY:
@@ -372,7 +438,7 @@ proc eval_expr_impl(expr, env):
             return obj[idx]
         if type(obj) == "dict":
             return obj[idx]
-        raise "Runtime Error: Invalid indexing operation."
+        runtime_error(get_expr_line(expr), "Cannot index into value of type '" + type(obj) + "'", "only arrays, strings, and dicts can be indexed")
 
     # --- Index set ---
     if etype == EXPR_INDEX_SET:
@@ -411,12 +477,12 @@ proc eval_expr_impl(expr, env):
                 let found = find_method(cls, prop_name)
                 if found != nil:
                     return found
-                raise "Undefined property '" + prop_name + "'"
+                runtime_error(expr.property.line, "Undefined property '" + prop_name + "'", "this instance does not have a field or method named '" + prop_name + "'")
             # Regular dict or module-like access
             if dict_has(obj, prop_name):
                 return obj[prop_name]
-            raise "Undefined property '" + prop_name + "'"
-        raise "Only instances and dicts have properties."
+            runtime_error(expr.property.line, "Undefined property '" + prop_name + "'", nil)
+        runtime_error(expr.property.line, "Only instances and dicts have properties", "got value of type '" + type(obj) + "'")
 
     # --- Set property ---
     if etype == EXPR_SET:
@@ -436,7 +502,7 @@ proc eval_expr_impl(expr, env):
                 return val
             obj[prop_name] = val
             return val
-        raise "Only instances have settable properties."
+        runtime_error(expr.property.line, "Only instances have settable properties", "got value of type '" + type(obj) + "'")
 
     # --- Call ---
     if etype == EXPR_CALL:
@@ -446,7 +512,7 @@ proc eval_expr_impl(expr, env):
     if etype == EXPR_AWAIT:
         return eval_expr(expr.expression, env)
 
-    raise "Unknown expression type: " + str(etype)
+    runtime_error(-1, "Unknown expression type: " + str(etype), nil)
 
 # -----------------------------------------
 # Binary expression evaluation
@@ -517,11 +583,11 @@ proc eval_binary(expr, env):
         return left * right
     if op_type == TOKEN_SLASH:
         if right == 0:
-            raise "Division by zero"
+            runtime_error(expr.op.line, "Division by zero", nil)
         return left / right
     if op_type == TOKEN_PERCENT:
         if right == 0:
-            raise "Modulo by zero"
+            runtime_error(expr.op.line, "Modulo by zero", nil)
         return left % right
 
     # Bitwise operators
@@ -536,7 +602,7 @@ proc eval_binary(expr, env):
     if op_type == TOKEN_RSHIFT:
         return left >> right
 
-    raise "Unknown binary operator type: " + str(op_type)
+    runtime_error(expr.op.line, "Unknown binary operator type: " + str(op_type), nil)
 
 # -----------------------------------------
 # Helper: find method in class hierarchy
@@ -568,7 +634,7 @@ proc eval_call(expr, env):
             let cls = obj["class"]
             let method_val = find_method(cls, method_name)
             if method_val == nil:
-                raise "Undefined method '" + method_name + "'"
+                runtime_error(callee_expr.property.line, "Undefined method '" + method_name + "'", nil)
             # Evaluate arguments
             let args = []
             let i = 0
@@ -610,10 +676,10 @@ proc eval_call(expr, env):
         i = i + 1
 
     if type(callee) != "dict":
-        raise "Value is not callable"
+        runtime_error(get_expr_line(callee_expr), "Value is not callable", "got value of type '" + type(callee) + "'")
 
     if not dict_has(callee, "__interp_type"):
-        raise "Value is not callable"
+        runtime_error(get_expr_line(callee_expr), "Value is not callable", "got a dict that is not a function or class")
 
     let callee_type = callee["__interp_type"]
 
@@ -665,7 +731,7 @@ proc eval_call(expr, env):
             exec_stmt(init_method["body"], init_env)
         return inst
 
-    raise "Value is not callable (__interp_type=" + callee_type + ")"
+    runtime_error(get_expr_line(callee_expr), "Value is not callable", "got '" + callee_type + "'")
 
 # -----------------------------------------
 # Statement execution
@@ -730,7 +796,7 @@ proc exec_stmt(stmt, env):
     if stype == STMT_FOR:
         let iterable = eval_expr(stmt.iterable, env)
         if type(iterable) != "array":
-            raise "Runtime Error: for loop iterable must be an array."
+            runtime_error(stmt.variable.line, "for loop iterable must be an array", "got value of type '" + type(iterable) + "'")
         let loop_env = env_new(env)
         let var_name = stmt.variable.text
         let i = 0
@@ -799,7 +865,7 @@ proc exec_stmt(stmt, env):
                     cls["methods"][pkeys[pi]] = parent_methods[pkeys[pi]]
                     pi = pi + 1
             else:
-                raise "Parent must be a class"
+                runtime_error(stmt.name.line, "Parent '" + parent_name + "' is not a class", nil)
 
         # Add methods (linked list from parser)
         let method_node = stmt.methods
@@ -853,7 +919,7 @@ proc exec_stmt(stmt, env):
     if stype == STMT_YIELD:
         return result_normal(nil)
 
-    raise "Unknown statement type: " + str(stype)
+    runtime_error(get_stmt_line(stmt), "Unknown statement type: " + str(stype), nil)
 
 # -----------------------------------------
 # Execute a block (linked list of statements)
@@ -919,4 +985,10 @@ proc new_interpreter():
 proc run_source(genv, source):
     from parser import parse_source
     let stmts = parse_source(source)
+    return exec_program(genv, stmts)
+
+proc run_source_file(genv, source, filename):
+    from parser import parse_source_file
+    set_error_context(source, filename)
+    let stmts = parse_source_file(source, filename)
     return exec_program(genv, stmts)

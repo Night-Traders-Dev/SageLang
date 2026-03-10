@@ -85,12 +85,11 @@ bool heartbeat_core1_alive(void) {
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
-#include <pthread.h>
-#include <unistd.h>  // For usleep()
+#include "sage_thread.h"
 
 static volatile bool thread_running = false;
 static volatile bool should_exit = false;
-static pthread_t heartbeat_thread;
+static sage_thread_t heartbeat_thread;
 
 // Thread function for background heartbeat
 static void* heartbeat_thread_func(void* arg) {
@@ -101,7 +100,7 @@ static void* heartbeat_thread_func(void* arg) {
 
     while (!should_exit) {
         printf("💓 Thread heartbeat: %d\n", count++);
-        usleep(1000000);  // 1 second
+        sage_usleep(1000000);  // 1 second
     }
 
     thread_running = false;
@@ -113,14 +112,14 @@ void heartbeat_init(void) {
     printf("Initializing desktop heartbeat system...\n");
 
     // Create background thread
-    if (pthread_create(&heartbeat_thread, NULL, heartbeat_thread_func, NULL) != 0) {
+    if (sage_thread_create(&heartbeat_thread, heartbeat_thread_func, NULL) != 0) {
         fprintf(stderr, "Error: Failed to create heartbeat thread\n");
         return;
     }
 
     // Wait for thread to start
     while (!thread_running) {
-        usleep(1000);
+        sage_usleep(1000);
     }
 
     printf("✅ Heartbeat system initialized (thread-based)\n");
@@ -152,7 +151,7 @@ void heartbeat_cleanup(void) {
     if (thread_running) {
         printf("Stopping heartbeat thread...\n");
         should_exit = true;
-        pthread_join(heartbeat_thread, NULL);
+        sage_thread_join(heartbeat_thread, NULL);
         printf("✅ Heartbeat thread stopped\n");
     }
 }
@@ -193,7 +192,7 @@ int main(void) {
         #ifdef PICO_BUILD
         sleep_ms(100);
         #else
-        usleep(100000);  // 100ms
+        sage_usleep(100000);  // 100ms
         #endif
 
         // Print status every 10 iterations

@@ -4,7 +4,7 @@
 #include <time.h>
 #include <stdint.h>   // uintptr_t
 #include <unistd.h>   // getpid, unlink
-#include <pthread.h>  // Phase 11: async/await thread joining
+#include "sage_thread.h"  // Phase 11: async/await thread joining
 #ifndef SAGE_NO_FFI
 #include <dlfcn.h>    // Phase 9: FFI (dlopen, dlsym, dlclose)
 #endif
@@ -1790,8 +1790,8 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                 // Join the thread and return its result
                 ThreadValue* tv = AS_THREAD(v);
                 if (!tv->joined) {
-                    pthread_t* handle = (pthread_t*)tv->handle;
-                    pthread_join(*handle, NULL);
+                    sage_thread_t* handle = (sage_thread_t*)tv->handle;
+                    sage_thread_join(*handle, NULL);
                     tv->joined = 1;
                 }
                 typedef struct { FunctionValue* func; int arg_count; Value* args; Value result; } SageThreadData;
