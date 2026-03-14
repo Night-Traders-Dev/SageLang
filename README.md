@@ -6,6 +6,14 @@
 
 Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR, native assembly), and a **self-hosted interpreter** written in Sage itself.
 
+## Codebase Metrics
+
+These charts are refreshed by `make charts` and also as part of the default `make` build. They count authored, non-empty tracked lines and exclude vendored dependencies plus generated build artifacts.
+
+![SageLang repository LOC by language](assets/charts/repo-loc.svg)
+
+![SageLang self-hosted Sage LOC vs native C LOC](assets/charts/compiler-loc.svg)
+
 ## 🚀 Features (Implemented)
 
 ### Core Language

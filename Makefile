@@ -7,6 +7,7 @@
 # ============================================================================
 
 CC = gcc
+PYTHON ?= python3
 CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L
 # Platform-conditional linking: pthread only on desktop (not RP2040)
 ifndef PICO_BUILD
@@ -21,6 +22,7 @@ INC_DIR = include
 OBJ_DIR = obj
 BIN_DIR = .
 BOARD_DIR = boards
+CHART_SCRIPT = scripts/generate_loc_charts.py
 
 # Debug flags
 DEBUG ?= 0
@@ -107,9 +109,9 @@ LSP_MAIN_OBJECT = $(OBJ_DIR)/lsp_main.o
 # Build Rules
 # ============================================================================
 
-.PHONY: all clean run install uninstall help test examples
+.PHONY: all clean run install uninstall help test examples charts
 
-all: $(TARGET) $(LSP_TARGET)
+all: $(TARGET) $(LSP_TARGET) charts
 
 # Link executable
 $(TARGET): $(ALL_OBJECTS)
@@ -161,6 +163,11 @@ run-%: $(TARGET)
 # Debug build
 debug:
 	$(MAKE) DEBUG=1
+
+# Refresh repository LOC charts for the README
+charts:
+	@$(PYTHON) $(CHART_SCRIPT)
+	@echo "Updated README chart assets"
 
 # ============================================================================
 # Installation
@@ -586,6 +593,7 @@ help:
 	@echo "  make run          - Run hello.sage example"
 	@echo "  make examples     - Run all examples"
 	@echo "  make run-<name>   - Run specific example (e.g., make run-fibonacci)"
+	@echo "  make charts       - Refresh README LOC charts"
 	@echo "  make stats        - Show code statistics"
 	@echo ""
 	@echo "Installation:"
@@ -610,7 +618,7 @@ help:
 # Phony Targets Declaration
 # ============================================================================
 
-.PHONY: all clean clean-all run examples test install uninstall \
+.PHONY: all clean clean-all run examples test install uninstall charts \
         debug cmake cmake-build cmake-sage cmake-sage-build cmake-pico \
         sage-boot test-selfhost test-selfhost-lexer test-selfhost-parser \
         test-selfhost-interpreter test-selfhost-bootstrap \
