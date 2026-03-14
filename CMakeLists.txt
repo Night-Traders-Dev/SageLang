@@ -83,6 +83,7 @@ set(SAGE_CORE_SOURCES
     src/c/compiler.c
     src/c/constfold.c
     src/c/dce.c
+    src/c/diagnostic.c
     src/c/env.c
     src/c/formatter.c
     src/c/gc.c
@@ -110,6 +111,7 @@ set(SAGE_HEADERS
     include/ast.h
     include/codegen.h
     include/compiler.h
+    include/diagnostic.h
     include/env.h
     include/formatter.h
     include/gc.h

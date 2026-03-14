@@ -13,6 +13,7 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/kraken/Devel/sagelang/src/c/compiler.c" "CMakeFiles/sage.dir/src/c/compiler.c.o" "gcc" "CMakeFiles/sage.dir/src/c/compiler.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/constfold.c" "CMakeFiles/sage.dir/src/c/constfold.c.o" "gcc" "CMakeFiles/sage.dir/src/c/constfold.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/dce.c" "CMakeFiles/sage.dir/src/c/dce.c.o" "gcc" "CMakeFiles/sage.dir/src/c/dce.c.o.d"
+  "/home/kraken/Devel/sagelang/src/c/diagnostic.c" "CMakeFiles/sage.dir/src/c/diagnostic.c.o" "gcc" "CMakeFiles/sage.dir/src/c/diagnostic.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/env.c" "CMakeFiles/sage.dir/src/c/env.c.o" "gcc" "CMakeFiles/sage.dir/src/c/env.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/formatter.c" "CMakeFiles/sage.dir/src/c/formatter.c.o" "gcc" "CMakeFiles/sage.dir/src/c/formatter.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/gc.c" "CMakeFiles/sage.dir/src/c/gc.c.o" "gcc" "CMakeFiles/sage.dir/src/c/gc.c.o.d"

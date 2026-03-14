@@ -8,17 +8,25 @@
 static const char* start;
 static const char* current;
 static int line;
+static int token_line;
 static int at_beginning_of_line;
+static const char* line_start;
+static const char* token_line_start;
+static const char* current_filename;
 
 static int indent_stack[MAX_INDENT_LEVELS];
 static int indent_stack_top = 0;
 static int pending_dedents = 0;
 
-void init_lexer(const char* source) {
+void init_lexer(const char* source, const char* filename) {
     start = source;
     current = source;
     line = 1;
+    token_line = 1;
     at_beginning_of_line = 1;
+    line_start = source;
+    token_line_start = source;
+    current_filename = filename;
 
     indent_stack_top = 0;
     indent_stack[0] = 0;
@@ -30,7 +38,11 @@ LexerState lexer_get_state(void) {
     state.start = start;
     state.current = current;
     state.line = line;
+    state.token_line = token_line;
     state.at_beginning_of_line = at_beginning_of_line;
+    state.line_start = line_start;
+    state.token_line_start = token_line_start;
+    state.filename = current_filename;
     memcpy(state.indent_stack, indent_stack, sizeof(indent_stack));
     state.indent_stack_top = indent_stack_top;
     state.pending_dedents = pending_dedents;
@@ -41,7 +53,11 @@ void lexer_set_state(LexerState state) {
     start = state.start;
     current = state.current;
     line = state.line;
+    token_line = state.token_line;
     at_beginning_of_line = state.at_beginning_of_line;
+    line_start = state.line_start;
+    token_line_start = state.token_line_start;
+    current_filename = state.filename;
     memcpy(indent_stack, state.indent_stack, sizeof(indent_stack));
     indent_stack_top = state.indent_stack_top;
     pending_dedents = state.pending_dedents;
@@ -70,7 +86,10 @@ static Token make_token(TokenType type) {
     token.type = type;
     token.start = start;
     token.length = (int)(current - start);
-    token.line = line;
+    token.line = token_line;
+    token.column = (int)(start - token_line_start);
+    token.line_start = token_line_start;
+    token.filename = current_filename;
     return token;
 }
 
@@ -79,7 +98,10 @@ static Token error_token(const char* message) {
     token.type = TOKEN_ERROR;
     token.start = message;
     token.length = (int)strlen(message);
-    token.line = line;
+    token.line = token_line;
+    token.column = (int)(start - token_line_start);
+    token.line_start = token_line_start;
+    token.filename = current_filename;
     return token;
 }
 
@@ -242,8 +264,13 @@ static Token number() {
 
 static Token string() {
     while (peek() != '"' && !is_at_end()) {
-        if (peek() == '\n') line++;
+        if (peek() == '\n') {
+            line++;
+        }
         advance();
+        if (current[-1] == '\n') {
+            line_start = current;
+        }
     }
 
     if (is_at_end()) return error_token("Unterminated string.");
@@ -264,12 +291,18 @@ Token scan_token(void) {
     // Outer loop replaces recursive calls for blank lines and comments
     for (;;) {
     if (pending_dedents > 0) {
+        start = current;
+        token_line = line;
+        token_line_start = line_start;
         pending_dedents--;
         return make_token(TOKEN_DEDENT);
     }
 
     if (at_beginning_of_line) {
         at_beginning_of_line = 0;
+        start = current;
+        token_line = line;
+        token_line_start = line_start;
         int spaces = 0;
         while (peek() == ' ') {
             advance();
@@ -277,10 +310,13 @@ Token scan_token(void) {
         }
 
         if (peek() == '\n') {
-            line++;
-            advance();
-            at_beginning_of_line = 1;
             start = current;
+            token_line = line;
+            token_line_start = line_start;
+            advance();
+            line++;
+            line_start = current;
+            at_beginning_of_line = 1;
             continue;  // Was: return scan_token();
         }
 
@@ -308,6 +344,8 @@ Token scan_token(void) {
     }
 
     start = current;
+    token_line = line;
+    token_line_start = line_start;
 
     if (is_at_end()) {
         if (indent_stack_top > 0) {
@@ -320,9 +358,11 @@ Token scan_token(void) {
     char c = advance();
 
     if (c == '\n') {
+        Token token = make_token(TOKEN_NEWLINE);
         line++;
+        line_start = current;
         at_beginning_of_line = 1;
-        return make_token(TOKEN_NEWLINE);
+        return token;
     }
 
     if (c == '#') {

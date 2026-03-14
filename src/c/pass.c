@@ -13,7 +13,10 @@ Token clone_token(Token tok) {
     Token t;
     t.type = tok.type;
     t.line = tok.line;
+    t.column = tok.column;
     t.length = tok.length;
+    t.line_start = tok.line_start;
+    t.filename = tok.filename;
     // Token.start points into the original source; copy the string
     if (tok.start != NULL && tok.length > 0) {
         char* s = SAGE_ALLOC((size_t)tok.length + 1);

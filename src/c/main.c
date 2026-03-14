@@ -466,7 +466,7 @@ static void repl_execute_source(char* buffer, Env* env, int print_expr_results,
         *last_is_expression = 0;
     }
 
-    init_lexer(buffer);
+    init_lexer(buffer, "<repl>");
     parser_init();
 
     while (1) {
@@ -704,8 +704,8 @@ static void run_repl(void) {
     repl_free_buffers();
 }
 
-static void run(const char* source) {
-    init_lexer(source);
+static void run(const char* source, const char* filename) {
+    init_lexer(source, filename);
     parser_init();
     Env* env = env_create(NULL);
     g_global_env = env;
@@ -743,7 +743,7 @@ int main(int argc, const char* argv[]) {
     } else if (argc == 2 && strcmp(argv[1], "--help") == 0) {
         print_usage(stdout);
     } else if (argc == 3 && strcmp(argv[1], "-c") == 0) {
-        run(argv[2]);
+        run(argv[2], "<command>");
     } else if (argc >= 3 && strcmp(argv[1], "--emit-c") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;
@@ -1037,7 +1037,7 @@ int main(int argc, const char* argv[]) {
     } else if (argc >= 2) {
         // File mode (extra args accessible via sys.args())
         char* source = read_file(argv[1]);
-        run(source);
+        run(source, argv[1]);
         free(source);
     } else {
         print_usage(stderr);

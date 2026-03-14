@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include "ast.h"
+#include "diagnostic.h"
 #include "lexer.h"
 #include "parser.h"
 #include "pass.h"
@@ -40,6 +41,7 @@ typedef struct ClassInfo {
 
 typedef struct ImportedModule {
     char* name;
+    char* path;
     char* source;
     Stmt* ast;
     struct ImportedModule* next;
@@ -250,18 +252,101 @@ static ProcEntry* find_proc_entry(ProcEntry* list, const char* sage_name) {
     return NULL;
 }
 
+static int token_span(const Token* token) {
+    return (token != NULL && token->length > 0) ? token->length : 1;
+}
+
+static void compiler_verror(Compiler* compiler, const Token* token,
+                            const char* help, const char* fmt, va_list args) {
+    if (token != NULL) {
+        sage_vprint_token_diagnosticf("error", token, compiler->input_path,
+                                      token_span(token), help, fmt, args);
+    } else {
+        fprintf(stderr, "error");
+        if (compiler->input_path != NULL) {
+            fprintf(stderr, " in %s", compiler->input_path);
+        }
+        fprintf(stderr, ": ");
+        vfprintf(stderr, fmt, args);
+        fprintf(stderr, "\n");
+        if (help != NULL && help[0] != '\0') {
+            fprintf(stderr, "  = help: %s\n", help);
+        }
+    }
+    compiler->failed = 1;
+}
+
+static void compiler_error_at(Compiler* compiler, const Token* token,
+                              const char* help, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    compiler_verror(compiler, token, help, fmt, args);
+    va_end(args);
+}
+
 static void compiler_error(Compiler* compiler, const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    fprintf(stderr, "Compiler error");
-    if (compiler->input_path != NULL) {
-        fprintf(stderr, " in %s", compiler->input_path);
-    }
-    fprintf(stderr, ": ");
-    vfprintf(stderr, fmt, args);
-    fprintf(stderr, "\n");
+    compiler_verror(compiler, NULL, NULL, fmt, args);
     va_end(args);
-    compiler->failed = 1;
+}
+
+static const Token* expr_token(const Expr* expr) {
+    if (expr == NULL) return NULL;
+
+    switch (expr->type) {
+        case EXPR_BINARY:
+            return &expr->as.binary.op;
+        case EXPR_VARIABLE:
+            return &expr->as.variable.name;
+        case EXPR_CALL:
+            return expr_token(expr->as.call.callee);
+        case EXPR_INDEX:
+            return expr_token(expr->as.index.array);
+        case EXPR_INDEX_SET:
+            return expr_token(expr->as.index_set.array);
+        case EXPR_SLICE:
+            return expr_token(expr->as.slice.array);
+        case EXPR_GET:
+            return &expr->as.get.property;
+        case EXPR_SET:
+            return &expr->as.set.property;
+        case EXPR_AWAIT:
+            return expr_token(expr->as.await.expression);
+        default:
+            return NULL;
+    }
+}
+
+static const Token* stmt_token(const Stmt* stmt) {
+    if (stmt == NULL) return NULL;
+
+    switch (stmt->type) {
+        case STMT_PRINT:
+            return expr_token(stmt->as.print.expression);
+        case STMT_EXPRESSION:
+            return expr_token(stmt->as.expression);
+        case STMT_LET:
+            return &stmt->as.let.name;
+        case STMT_IF:
+            return expr_token(stmt->as.if_stmt.condition);
+        case STMT_WHILE:
+            return expr_token(stmt->as.while_stmt.condition);
+        case STMT_PROC:
+            return &stmt->as.proc.name;
+        case STMT_FOR:
+            return &stmt->as.for_stmt.variable;
+        case STMT_RETURN:
+            return expr_token(stmt->as.ret.value);
+        case STMT_CLASS:
+            return &stmt->as.class_stmt.name;
+        case STMT_RAISE:
+            return expr_token(stmt->as.raise.exception);
+        case STMT_ASYNC_PROC:
+            return &stmt->as.async_proc.name;
+        default:
+            return NULL;
+    }
 }
 
 static void emit_indent(Compiler* compiler) {
@@ -308,11 +393,16 @@ static NameEntry* add_name_entry(Compiler* compiler, NameEntry** list,
     return entry;
 }
 
-static ProcEntry* add_proc_entry(Compiler* compiler, const char* sage_name, int param_count) {
+static ProcEntry* add_proc_entry(Compiler* compiler, const char* sage_name,
+                                 int param_count, const Token* token) {
     ProcEntry* existing = find_proc_entry(compiler->procs, sage_name);
     if (existing != NULL) {
         if (existing->param_count != param_count) {
-            compiler_error(compiler, "procedure '%s' redefined with different arity", sage_name);
+            compiler_error_at(compiler, token,
+                              "rename one of the procedures or keep the parameter counts consistent",
+                              "procedure '%s' is redefined with %d parameter%s; the earlier definition used %d",
+                              sage_name, param_count, param_count == 1 ? "" : "s",
+                              existing->param_count);
         }
         return existing;
     }
@@ -336,6 +426,109 @@ static ClassInfo* find_class_info(ClassInfo* list, const char* name) {
         if (strcmp(c->class_name, name) == 0) return c;
     }
     return NULL;
+}
+
+static int bounded_edit_distance(const char* left, const char* right) {
+    size_t left_len = strlen(left);
+    size_t right_len = strlen(right);
+
+    if (left_len == 0) return (int)right_len;
+    if (right_len == 0) return (int)left_len;
+    if (left_len > 63 || right_len > 63) return 99;
+
+    int previous[64];
+    int current[64];
+
+    for (size_t j = 0; j <= right_len; j++) {
+        previous[j] = (int)j;
+    }
+
+    for (size_t i = 1; i <= left_len; i++) {
+        current[0] = (int)i;
+        for (size_t j = 1; j <= right_len; j++) {
+            int cost = left[i - 1] == right[j - 1] ? 0 : 1;
+            int deletion = previous[j] + 1;
+            int insertion = current[j - 1] + 1;
+            int substitution = previous[j - 1] + cost;
+            int best = deletion < insertion ? deletion : insertion;
+            current[j] = substitution < best ? substitution : best;
+        }
+        memcpy(previous, current, sizeof(int) * (right_len + 1));
+    }
+
+    return previous[right_len];
+}
+
+static void consider_suggestion(const char* needle, const char* candidate,
+                                const char** best_name, int* best_score) {
+    if (candidate == NULL || candidate[0] == '\0' || strcmp(candidate, needle) == 0) {
+        return;
+    }
+
+    int score = bounded_edit_distance(needle, candidate);
+    if (score > 3) {
+        return;
+    }
+
+    if (*best_name == NULL || score < *best_score ||
+        (score == *best_score && strcmp(candidate, *best_name) < 0)) {
+        *best_name = candidate;
+        *best_score = score;
+    }
+}
+
+static const char* find_name_suggestion(Compiler* compiler, const char* name) {
+    static const char* builtins[] = {
+        "str", "len", "push", "pop", "range", "tonumber",
+        "dict_keys", "dict_values", "dict_has", "dict_delete",
+        "upper", "lower", "strip", "split", "join", "replace",
+        "mem_alloc", "mem_free", "mem_read", "mem_write", "mem_size",
+        "struct_def", "struct_new", "struct_get", "struct_set", "struct_size",
+        "clock", "input", "slice", "asm_arch"
+    };
+
+    const char* best_name = NULL;
+    int best_score = 99;
+
+    for (NameEntry* local = compiler->locals; local != NULL; local = local->next) {
+        consider_suggestion(name, local->sage_name, &best_name, &best_score);
+    }
+    for (NameEntry* global = compiler->globals; global != NULL; global = global->next) {
+        consider_suggestion(name, global->sage_name, &best_name, &best_score);
+    }
+    for (ProcEntry* proc = compiler->procs; proc != NULL; proc = proc->next) {
+        consider_suggestion(name, proc->sage_name, &best_name, &best_score);
+    }
+    for (ClassInfo* class_info = compiler->classes; class_info != NULL; class_info = class_info->next) {
+        consider_suggestion(name, class_info->class_name, &best_name, &best_score);
+    }
+    for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
+        consider_suggestion(name, builtins[i], &best_name, &best_score);
+    }
+
+    return best_name;
+}
+
+static const char* compiler_unknown_name_help(Compiler* compiler, const char* name,
+                                              const char* fallback,
+                                              char* buffer, size_t buffer_size) {
+    const char* suggestion = find_name_suggestion(compiler, name);
+    if (suggestion != NULL) {
+        snprintf(buffer, buffer_size, "did you mean '%s'?", suggestion);
+        return buffer;
+    }
+    return fallback;
+}
+
+static void compiler_builtin_arity_error(Compiler* compiler, CallExpr* call,
+                                         const char* builtin_name,
+                                         const char* usage,
+                                         const char* expected) {
+    compiler_error_at(compiler, expr_token(call->callee), usage,
+                      "%s() expects %s argument%s, but this call has %d",
+                      builtin_name, expected,
+                      strcmp(expected, "1") == 0 ? "" : "s",
+                      call->arg_count);
 }
 
 static ClassInfo* add_class_info(Compiler* compiler, const char* name, const char* parent, Stmt* methods) {
@@ -526,7 +719,7 @@ static void collect_global_lets(Compiler* compiler, Stmt* stmt) {
     }
 }
 
-Stmt* parse_program(const char* source);
+Stmt* parse_program(const char* source, const char* input_path);
 
 static int is_in_import_list(ImportStmt* import, const char* name) {
     for (int i = 0; i < import->item_count; i++) {
@@ -554,11 +747,12 @@ static void process_import(Compiler* compiler, ImportStmt* import) {
         return;
     }
 
-    Stmt* ast = parse_program(source);
+    Stmt* ast = parse_program(source, module_path);
 
     ImportedModule* mod = malloc(sizeof(ImportedModule));
     if (mod == NULL) { fprintf(stderr, "Out of memory\n"); exit(1); }
     mod->name = str_dup(import->module_name);
+    mod->path = module_path;
     mod->source = source;
     mod->ast = ast;
     mod->next = compiler->modules;
@@ -569,7 +763,7 @@ static void process_import(Compiler* compiler, ImportStmt* import) {
         if (s->type == STMT_PROC) {
             char* name = token_to_string(s->as.proc.name);
             if (import->import_all || is_in_import_list(import, name)) {
-                add_proc_entry(compiler, name, s->as.proc.param_count);
+                add_proc_entry(compiler, name, s->as.proc.param_count, &s->as.proc.name);
             }
             free(name);
         }
@@ -593,8 +787,6 @@ static void process_import(Compiler* compiler, ImportStmt* import) {
             collect_global_lets(compiler, s);
         }
     }
-
-    free(module_path);
 }
 
 static void collect_top_level_symbols(Compiler* compiler, Stmt* program) {
@@ -602,7 +794,7 @@ static void collect_top_level_symbols(Compiler* compiler, Stmt* program) {
     for (Stmt* stmt = program; stmt != NULL; stmt = stmt->next) {
         if (stmt->type == STMT_PROC) {
             char* name = token_to_string(stmt->as.proc.name);
-            add_proc_entry(compiler, name, stmt->as.proc.param_count);
+            add_proc_entry(compiler, name, stmt->as.proc.param_count, &stmt->as.proc.name);
             free(name);
         }
         if (stmt->type == STMT_CLASS) {
@@ -819,7 +1011,10 @@ static char* emit_binary_expr(Compiler* compiler, BinaryExpr* binary) {
     }
 
     if (helper == NULL) {
-        compiler_error(compiler, "unsupported binary operator in C backend");
+        compiler_error_at(compiler, &binary->op,
+                          "the C backend only supports operators with built-in runtime helpers",
+                          "binary operator '%.*s' is not supported by the C backend",
+                          binary->op.length, binary->op.start);
         free(left);
         free(right);
         return str_dup("sage_nil()");
@@ -859,7 +1054,9 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
     }
 
     if (call->callee->type != EXPR_VARIABLE) {
-        compiler_error(compiler, "only direct function calls are supported by the C backend");
+        compiler_error_at(compiler, expr_token(call->callee),
+                          "call a named procedure, class constructor, or builtin directly",
+                          "only direct function calls are supported by the C backend");
         return str_dup("sage_nil()");
     }
 
@@ -869,7 +1066,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "str") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "str() expects exactly one argument in the C backend");
+            compiler_builtin_arity_error(compiler, call, "str", "usage: str(value)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -882,7 +1079,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "len") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "len() expects exactly one argument in the C backend");
+            compiler_builtin_arity_error(compiler, call, "len", "usage: len(value)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -895,7 +1092,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "push") == 0) {
         if (call->arg_count != 2) {
-            compiler_error(compiler, "push() expects exactly two arguments in the C backend");
+            compiler_builtin_arity_error(compiler, call, "push", "usage: push(array, value)", "2");
             sb_append(&sb, "sage_nil()");
         } else {
             char* array_arg = emit_expr(compiler, call->args[0]);
@@ -910,7 +1107,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "pop") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "pop() expects exactly one argument in the C backend");
+            compiler_builtin_arity_error(compiler, call, "pop", "usage: pop(array)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -933,7 +1130,9 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
             free(start_arg);
             free(end_arg);
         } else {
-            compiler_error(compiler, "range() expects one or two arguments in the C backend");
+            compiler_builtin_arity_error(compiler, call, "range",
+                                         "usage: range(stop) or range(start, stop)",
+                                         "1 or 2");
             sb_append(&sb, "sage_nil()");
         }
         free(callee_name);
@@ -942,7 +1141,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "tonumber") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "tonumber() expects exactly one argument in the C backend");
+            compiler_builtin_arity_error(compiler, call, "tonumber", "usage: tonumber(value)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -955,7 +1154,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "dict_keys") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "dict_keys() expects exactly one argument in the C backend");
+            compiler_builtin_arity_error(compiler, call, "dict_keys", "usage: dict_keys(dict_value)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -968,7 +1167,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "dict_values") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "dict_values() expects exactly one argument in the C backend");
+            compiler_builtin_arity_error(compiler, call, "dict_values", "usage: dict_values(dict_value)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -981,7 +1180,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "dict_has") == 0) {
         if (call->arg_count != 2) {
-            compiler_error(compiler, "dict_has() expects exactly two arguments in the C backend");
+            compiler_builtin_arity_error(compiler, call, "dict_has", "usage: dict_has(dict_value, key)", "2");
             sb_append(&sb, "sage_nil()");
         } else {
             char* dict_arg = emit_expr(compiler, call->args[0]);
@@ -996,7 +1195,8 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "dict_delete") == 0) {
         if (call->arg_count != 2) {
-            compiler_error(compiler, "dict_delete() expects exactly two arguments in the C backend");
+            compiler_builtin_arity_error(compiler, call, "dict_delete",
+                                         "usage: dict_delete(dict_value, key)", "2");
             sb_append(&sb, "sage_nil()");
         } else {
             char* dict_arg = emit_expr(compiler, call->args[0]);
@@ -1011,7 +1211,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "upper") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "upper() expects exactly one argument");
+            compiler_builtin_arity_error(compiler, call, "upper", "usage: upper(text)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -1024,7 +1224,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "lower") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "lower() expects exactly one argument");
+            compiler_builtin_arity_error(compiler, call, "lower", "usage: lower(text)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -1037,7 +1237,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "strip") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "strip() expects exactly one argument");
+            compiler_builtin_arity_error(compiler, call, "strip", "usage: strip(text)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -1050,7 +1250,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "split") == 0) {
         if (call->arg_count != 2) {
-            compiler_error(compiler, "split() expects exactly two arguments");
+            compiler_builtin_arity_error(compiler, call, "split", "usage: split(text, separator)", "2");
             sb_append(&sb, "sage_nil()");
         } else {
             char* str_arg = emit_expr(compiler, call->args[0]);
@@ -1065,7 +1265,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "join") == 0) {
         if (call->arg_count != 2) {
-            compiler_error(compiler, "join() expects exactly two arguments");
+            compiler_builtin_arity_error(compiler, call, "join", "usage: join(parts, separator)", "2");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arr_arg = emit_expr(compiler, call->args[0]);
@@ -1080,7 +1280,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "replace") == 0) {
         if (call->arg_count != 3) {
-            compiler_error(compiler, "replace() expects exactly three arguments");
+            compiler_builtin_arity_error(compiler, call, "replace", "usage: replace(text, old, new)", "3");
             sb_append(&sb, "sage_nil()");
         } else {
             char* str_arg = emit_expr(compiler, call->args[0]);
@@ -1097,7 +1297,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "mem_alloc") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "mem_alloc() expects exactly one argument");
+            compiler_builtin_arity_error(compiler, call, "mem_alloc", "usage: mem_alloc(size)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -1110,7 +1310,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "mem_free") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "mem_free() expects exactly one argument");
+            compiler_builtin_arity_error(compiler, call, "mem_free", "usage: mem_free(pointer)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -1123,7 +1323,8 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "mem_read") == 0) {
         if (call->arg_count != 3) {
-            compiler_error(compiler, "mem_read() expects exactly three arguments");
+            compiler_builtin_arity_error(compiler, call, "mem_read",
+                                         "usage: mem_read(pointer, offset, type_name)", "3");
             sb_append(&sb, "sage_nil()");
         } else {
             char* ptr = emit_expr(compiler, call->args[0]);
@@ -1138,7 +1339,8 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "mem_write") == 0) {
         if (call->arg_count != 4) {
-            compiler_error(compiler, "mem_write() expects exactly four arguments");
+            compiler_builtin_arity_error(compiler, call, "mem_write",
+                                         "usage: mem_write(pointer, offset, type_name, value)", "4");
             sb_append(&sb, "sage_nil()");
         } else {
             char* ptr = emit_expr(compiler, call->args[0]);
@@ -1154,7 +1356,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "mem_size") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "mem_size() expects exactly one argument");
+            compiler_builtin_arity_error(compiler, call, "mem_size", "usage: mem_size(pointer)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -1167,7 +1369,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "struct_def") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "struct_def() expects exactly one argument");
+            compiler_builtin_arity_error(compiler, call, "struct_def", "usage: struct_def(fields)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -1180,7 +1382,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "struct_new") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "struct_new() expects exactly one argument");
+            compiler_builtin_arity_error(compiler, call, "struct_new", "usage: struct_new(definition)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -1193,7 +1395,8 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "struct_get") == 0) {
         if (call->arg_count != 3) {
-            compiler_error(compiler, "struct_get() expects exactly three arguments");
+            compiler_builtin_arity_error(compiler, call, "struct_get",
+                                         "usage: struct_get(pointer, definition, field_name)", "3");
             sb_append(&sb, "sage_nil()");
         } else {
             char* ptr = emit_expr(compiler, call->args[0]);
@@ -1208,7 +1411,8 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "struct_set") == 0) {
         if (call->arg_count != 4) {
-            compiler_error(compiler, "struct_set() expects exactly four arguments");
+            compiler_builtin_arity_error(compiler, call, "struct_set",
+                                         "usage: struct_set(pointer, definition, field_name, value)", "4");
             sb_append(&sb, "sage_nil()");
         } else {
             char* ptr = emit_expr(compiler, call->args[0]);
@@ -1224,7 +1428,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "struct_size") == 0) {
         if (call->arg_count != 1) {
-            compiler_error(compiler, "struct_size() expects exactly one argument");
+            compiler_builtin_arity_error(compiler, call, "struct_size", "usage: struct_size(definition)", "1");
             sb_append(&sb, "sage_nil()");
         } else {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -1237,7 +1441,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "clock") == 0) {
         if (call->arg_count != 0) {
-            compiler_error(compiler, "clock() expects no arguments");
+            compiler_builtin_arity_error(compiler, call, "clock", "usage: clock()", "0");
             sb_append(&sb, "sage_nil()");
         } else {
             sb_append(&sb, "sage_clock_fn()");
@@ -1254,7 +1458,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
             sb_appendf(&sb, "sage_input_fn(%s)", arg);
             free(arg);
         } else {
-            compiler_error(compiler, "input() expects zero or one argument");
+            compiler_builtin_arity_error(compiler, call, "input", "usage: input() or input(prompt)", "0 or 1");
             sb_append(&sb, "sage_nil()");
         }
         free(callee_name);
@@ -1263,7 +1467,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "slice") == 0) {
         if (call->arg_count != 3) {
-            compiler_error(compiler, "slice() expects exactly three arguments in the C backend");
+            compiler_builtin_arity_error(compiler, call, "slice", "usage: slice(value, start, end)", "3");
             sb_append(&sb, "sage_nil()");
         } else {
             char* array_arg = emit_expr(compiler, call->args[0]);
@@ -1280,7 +1484,7 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     if (strcmp(callee_name, "asm_arch") == 0) {
         if (call->arg_count != 0) {
-            compiler_error(compiler, "asm_arch() expects no arguments");
+            compiler_builtin_arity_error(compiler, call, "asm_arch", "usage: asm_arch()", "0");
             sb_append(&sb, "sage_nil()");
         } else {
             sb_append(&sb, "sage_arch_fn()");
@@ -1317,14 +1521,25 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
 
     ProcEntry* proc = find_proc_entry(compiler->procs, callee_name);
     if (proc == NULL) {
-        compiler_error(compiler, "call target '%s' is not supported by the C backend", callee_name);
+        char help[256];
+        compiler_error_at(compiler, expr_token(call->callee),
+                          compiler_unknown_name_help(
+                              compiler, callee_name,
+                              "only known procedures, class constructors, and builtins can be compiled",
+                              help, sizeof(help)),
+                          "unknown call target '%s' in compiled code", callee_name);
         free(callee_name);
         return str_dup("sage_nil()");
     }
 
     if (proc->param_count != call->arg_count) {
-        compiler_error(compiler, "call to '%s' has arity %d, expected %d",
-                       callee_name, call->arg_count, proc->param_count);
+        char help[256];
+        snprintf(help, sizeof(help), "change this call to pass %d argument%s",
+                 proc->param_count, proc->param_count == 1 ? "" : "s");
+        compiler_error_at(compiler, expr_token(call->callee), help,
+                          "call to '%s' passes %d argument%s, but the procedure expects %d",
+                          callee_name, call->arg_count, call->arg_count == 1 ? "" : "s",
+                          proc->param_count);
         free(callee_name);
         return str_dup("sage_nil()");
     }
@@ -1365,7 +1580,13 @@ static char* emit_set_expr(Compiler* compiler, SetExpr* set) {
     char* name = token_to_string(set->property);
     const char* slot_name = resolve_slot_name(compiler, name);
     if (slot_name == NULL) {
-        compiler_error(compiler, "assignment to undefined variable '%s'", name);
+        char help[256];
+        compiler_error_at(compiler, &set->property,
+                          compiler_unknown_name_help(
+                              compiler, name,
+                              "declare the variable first with let or var before assigning to it",
+                              help, sizeof(help)),
+                          "cannot assign to unknown name '%s' in compiled code", name);
         free(name);
         return str_dup("sage_nil()");
     }
@@ -1405,7 +1626,13 @@ static char* emit_expr(Compiler* compiler, Expr* expr) {
             char* name = token_to_string(expr->as.variable.name);
             const char* slot_name = resolve_slot_name(compiler, name);
             if (slot_name == NULL) {
-                compiler_error(compiler, "variable '%s' is not available in the C backend scope", name);
+                char help[256];
+                compiler_error_at(compiler, &expr->as.variable.name,
+                                  compiler_unknown_name_help(
+                                      compiler, name,
+                                      "declare the value first or spell the name exactly as it was defined",
+                                      help, sizeof(help)),
+                                  "unknown name '%s' in compiled code", name);
                 free(name);
                 return str_dup("sage_nil()");
             }
@@ -1440,7 +1667,9 @@ static char* emit_expr(Compiler* compiler, Expr* expr) {
             return emit_set_expr(compiler, &expr->as.set);
         case EXPR_AWAIT:
             // TODO: async/await not supported in C backend
-            compiler_error(compiler, "await expressions not yet supported in C backend");
+            compiler_error_at(compiler, expr_token(expr),
+                              "async code currently runs only in the interpreter",
+                              "await expressions are not yet supported in the C backend");
             return str_dup("sage_nil()");
         case EXPR_DICT:
             return emit_dict_expr(compiler, &expr->as.dict);
@@ -1461,7 +1690,8 @@ static char* emit_expr(Compiler* compiler, Expr* expr) {
         }
     }
 
-    compiler_error(compiler, "unknown expression kind");
+    compiler_error_at(compiler, expr_token(expr), NULL,
+                      "internal compiler error: unknown expression kind");
     return str_dup("sage_nil()");
 }
 
@@ -1495,7 +1725,9 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             char* name = token_to_string(stmt->as.let.name);
             const char* slot_name = resolve_slot_name(compiler, name);
             if (slot_name == NULL) {
-                compiler_error(compiler, "let target '%s' was not collected for code generation", name);
+                compiler_error_at(compiler, &stmt->as.let.name, NULL,
+                                  "internal compiler error: let target '%s' was not collected for code generation",
+                                  name);
                 free(name);
                 break;
             }
@@ -1553,7 +1785,9 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             char* var_name = token_to_string(stmt->as.for_stmt.variable);
             const char* slot_name = resolve_slot_name(compiler, var_name);
             if (slot_name == NULL) {
-                compiler_error(compiler, "for-loop variable '%s' was not collected", var_name);
+                compiler_error_at(compiler, &stmt->as.for_stmt.variable, NULL,
+                                  "internal compiler error: for-loop variable '%s' was not collected",
+                                  var_name);
                 free(var_name);
                 free(iterable);
                 break;
@@ -1661,11 +1895,15 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
         case STMT_MATCH:
         case STMT_DEFER:
         case STMT_YIELD:
-            compiler_error(compiler, "statement kind is not yet supported by the Phase 10 C backend");
+            compiler_error_at(compiler, stmt_token(stmt),
+                              "try the interpreter for this program, or stay within the currently compiled subset",
+                              "this statement kind is not yet supported by the C backend");
             break;
         case STMT_ASYNC_PROC:
             // TODO: async/await not supported in C backend
-            compiler_error(compiler, "async proc not yet supported in C backend");
+            compiler_error_at(compiler, &stmt->as.async_proc.name,
+                              "async code currently runs only in the interpreter",
+                              "async procedures are not yet supported in the C backend");
             break;
     }
 }
@@ -2686,7 +2924,8 @@ static void emit_function_definition(Compiler* compiler, Stmt* stmt) {
     ProcEntry* proc = find_proc_entry(compiler->procs, proc_name);
     free(proc_name);
     if (proc == NULL) {
-        compiler_error(compiler, "missing proc metadata during code generation");
+        compiler_error_at(compiler, &proc_stmt->name, NULL,
+                          "internal compiler error: missing procedure metadata during code generation");
         return;
     }
 
@@ -2694,7 +2933,10 @@ static void emit_function_definition(Compiler* compiler, Stmt* stmt) {
     for (int i = 0; i < proc_stmt->param_count; i++) {
         char* param_name = token_to_string(proc_stmt->params[i]);
         if (find_name_entry(params, param_name) != NULL) {
-            compiler_error(compiler, "duplicate parameter '%s' in procedure", param_name);
+            compiler_error_at(compiler, &proc_stmt->params[i],
+                              "rename one of the parameters so every parameter name is unique",
+                              "duplicate parameter '%s' in procedure '%.*s'",
+                              param_name, proc_stmt->name.length, proc_stmt->name.start);
             free(param_name);
             return;
         }
@@ -2901,8 +3143,8 @@ static void emit_main_function(Compiler* compiler, Stmt* program, CompilerTarget
     emit_line(compiler, "}");
 }
 
-Stmt* parse_program(const char* source) {
-    init_lexer(source);
+Stmt* parse_program(const char* source, const char* input_path) {
+    init_lexer(source, input_path);
     parser_init();
 
     Stmt* head = NULL;
@@ -3144,7 +3386,7 @@ static int write_c_output_internal(const char* source, const char* input_path, c
     compiler.input_path = input_path;
     compiler.next_unique_id = 1;
 
-    Stmt* program = parse_program(source);
+    Stmt* program = parse_program(source, input_path);
 
     // Run optimization passes if requested
     if (opt_level > 0) {

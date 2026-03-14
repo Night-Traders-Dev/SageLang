@@ -229,7 +229,7 @@ bool execute_module(Module* module, Environment* global_env) {
 
     if (module->ast == NULL) {
         // Parse the module once and retain the AST for exported function/method lifetimes.
-        init_lexer(module->source);
+        init_lexer(module->source, module->path);
         parser_init();
 
         while (1) {

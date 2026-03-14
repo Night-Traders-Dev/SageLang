@@ -19,6 +19,40 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+capture_test_output() {
+    local test_file="$1"
+    local run_mode test_dir test_base tmp_path
+    run_mode=$(grep '^# RUN: ' "$test_file" | head -1 | sed 's/^# RUN: //')
+    test_dir=$(dirname "$test_file")
+    test_base=$(basename "$test_file")
+
+    case "$run_mode" in
+        ""|"run")
+            if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
+                TEST_OUTPUT=$(cd "$SCRIPT_DIR" && "$SAGE" "$test_file" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
+            else
+                TEST_OUTPUT=$(cd "$test_dir" && "$SAGE" "$test_base" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
+            fi
+            ;;
+        "emit-c")
+            mkdir -p "$SCRIPT_DIR/.tmp"
+            tmp_path=$(mktemp "$SCRIPT_DIR/.tmp/test_emit_XXXXXX.c")
+            TEST_OUTPUT=$(cd "$SCRIPT_DIR" && "$SAGE" --emit-c "$test_file" -o "$tmp_path" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
+            rm -f "$tmp_path"
+            ;;
+        "compile")
+            mkdir -p "$SCRIPT_DIR/.tmp"
+            tmp_path=$(mktemp "$SCRIPT_DIR/.tmp/test_compile_XXXXXX.bin")
+            TEST_OUTPUT=$(cd "$SCRIPT_DIR" && "$SAGE" --compile "$test_file" -o "$tmp_path" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
+            rm -f "$tmp_path"
+            ;;
+        *)
+            TEST_OUTPUT="Unknown # RUN mode '$run_mode' in $test_file"
+            TEST_EXIT_CODE=2
+            ;;
+    esac
+}
+
 run_test() {
     local test_file="$1"
     local test_name
@@ -33,16 +67,9 @@ run_test() {
         return
     fi
 
-    # Run the test from its directory (so module imports find sibling .sage files)
-    # Exception: lib tests and top-level tests run from project root so ./lib/ imports resolve
-    local test_dir test_base actual exit_code
-    test_dir=$(dirname "$test_file")
-    test_base=$(basename "$test_file")
-    if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
-        actual=$(cd "$SCRIPT_DIR" && "$SAGE" "$test_file" 2>&1) && exit_code=0 || exit_code=$?
-    else
-        actual=$(cd "$test_dir" && "$SAGE" "$test_base" 2>&1) && exit_code=0 || exit_code=$?
-    fi
+    local actual
+    capture_test_output "$test_file"
+    actual="$TEST_OUTPUT"
 
     if [ "$actual" = "$expected" ]; then
         echo -e "  ${GREEN}PASS${NC} $test_name"
@@ -61,31 +88,33 @@ run_error_test() {
     local test_name
     test_name=$(basename "$test_file" .sage)
 
-    # Extract expected error substring from # EXPECT_ERROR: comments
-    local expected_error
-    expected_error=$(grep '^# EXPECT_ERROR: ' "$test_file" | sed 's/^# EXPECT_ERROR: //')
+    local expected_errors=()
+    mapfile -t expected_errors < <(grep '^# EXPECT_ERROR: ' "$test_file" | sed 's/^# EXPECT_ERROR: //')
 
-    if [ -z "$expected_error" ]; then
+    if [ "${#expected_errors[@]}" -eq 0 ]; then
         echo -e "  ${YELLOW}SKIP${NC} $test_name (no EXPECT_ERROR comment)"
         return
     fi
 
-    local test_dir test_base output exit_code
-    test_dir=$(dirname "$test_file")
-    test_base=$(basename "$test_file")
-    if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
-        output=$(cd "$SCRIPT_DIR" && "$SAGE" "$test_file" 2>&1) && exit_code=0 || exit_code=$?
-    else
-        output=$(cd "$test_dir" && "$SAGE" "$test_base" 2>&1) && exit_code=0 || exit_code=$?
-    fi
+    local output missing=()
+    capture_test_output "$test_file"
+    output="$TEST_OUTPUT"
 
-    if echo "$output" | grep -qF "$expected_error"; then
+    for expected_error in "${expected_errors[@]}"; do
+        if ! echo "$output" | grep -qF -- "$expected_error"; then
+            missing+=("$expected_error")
+        fi
+    done
+
+    if [ "${#missing[@]}" -eq 0 ]; then
         echo -e "  ${GREEN}PASS${NC} $test_name"
         ((PASS++))
     else
         echo -e "  ${RED}FAIL${NC} $test_name"
         ERRORS="${ERRORS}\n${RED}--- FAIL: ${test_name} ---${NC}\n"
-        ERRORS="${ERRORS}  Expected error containing: ${expected_error}\n"
+        for expected_error in "${missing[@]}"; do
+            ERRORS="${ERRORS}  Missing error text: ${expected_error}\n"
+        done
         ERRORS="${ERRORS}  Got:\n$(echo "$output" | sed 's/^/    /')\n"
         ((FAIL++))
     fi
