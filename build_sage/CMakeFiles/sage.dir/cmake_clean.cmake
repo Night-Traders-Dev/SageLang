@@ -10,6 +10,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/sage.dir/src/c/constfold.c.o.d"
   "CMakeFiles/sage.dir/src/c/dce.c.o"
   "CMakeFiles/sage.dir/src/c/dce.c.o.d"
+  "CMakeFiles/sage.dir/src/c/diagnostic.c.o"
+  "CMakeFiles/sage.dir/src/c/diagnostic.c.o.d"
   "CMakeFiles/sage.dir/src/c/env.c.o"
   "CMakeFiles/sage.dir/src/c/env.c.o.d"
   "CMakeFiles/sage.dir/src/c/formatter.c.o"

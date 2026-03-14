@@ -37,6 +37,12 @@
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/diagnostic.c.o -c /home/kraken/Devel/sagelang/src/c/diagnostic.c",
+  "file": "/home/kraken/Devel/sagelang/src/c/diagnostic.c",
+  "output": "CMakeFiles/sage.dir/src/c/diagnostic.c.o"
+},
+{
+  "directory": "/home/kraken/Devel/sagelang/build_sage",
   "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/env.c.o -c /home/kraken/Devel/sagelang/src/c/env.c",
   "file": "/home/kraken/Devel/sagelang/src/c/env.c",
   "output": "CMakeFiles/sage.dir/src/c/env.c.o"

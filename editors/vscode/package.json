@@ -1,25 +1,52 @@
 {
   "name": "sage-lang",
   "displayName": "Sage Language",
-  "description": "Syntax highlighting and language server support for SageLang",
-  "version": "0.2.0",
+  "description": "Syntax highlighting and language configuration support for SageLang",
+  "version": "0.4.0",
   "publisher": "sagelang",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.75.0"
   },
   "categories": [
     "Programming Languages"
   ],
-  "activationEvents": [
-    "onLanguage:sage"
+  "keywords": [
+    "sage",
+    "sagelang",
+    "syntax",
+    "highlighting",
+    "language"
   ],
-  "main": "./extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Night-Traders-Dev/SageLang.git"
+  },
+  "homepage": "https://github.com/Night-Traders-Dev/SageLang",
+  "files": [
+    "language-configuration.json",
+    "syntaxes/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.2"
+  },
   "contributes": {
     "languages": [
       {
         "id": "sage",
-        "aliases": ["Sage", "sage", "SageLang"],
-        "extensions": [".sage"],
+        "aliases": [
+          "Sage",
+          "sage",
+          "SageLang"
+        ],
+        "extensions": [
+          ".sage"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -29,25 +56,6 @@
         "scopeName": "source.sage",
         "path": "./syntaxes/sage.tmLanguage.json"
       }
-    ],
-    "configuration": {
-      "type": "object",
-      "title": "Sage Language Server",
-      "properties": {
-        "sage.lsp.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable/disable the Sage language server."
-        },
-        "sage.lsp.path": {
-          "type": "string",
-          "default": "sage",
-          "description": "Path to the sage executable (used as 'sage --lsp'). Alternatively set to 'sage-lsp' for the standalone binary."
-        }
-      }
-    }
-  },
-  "dependencies": {
-    "vscode-languageclient": "^9.0.0"
+    ]
   }
 }

@@ -39,6 +39,7 @@ CORE_SOURCES = \
     $(SRC_DIR)/compiler.c \
     $(SRC_DIR)/constfold.c \
     $(SRC_DIR)/dce.c \
+    $(SRC_DIR)/diagnostic.c \
     $(SRC_DIR)/env.c \
     $(SRC_DIR)/formatter.c \
     $(SRC_DIR)/gc.c \
@@ -70,6 +71,7 @@ HEADERS = \
     $(INC_DIR)/ast.h \
     $(INC_DIR)/codegen.h \
     $(INC_DIR)/compiler.h \
+    $(INC_DIR)/diagnostic.h \
     $(INC_DIR)/env.h \
     $(INC_DIR)/formatter.h \
     $(INC_DIR)/gc.h \

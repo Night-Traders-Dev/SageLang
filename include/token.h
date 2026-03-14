@@ -43,6 +43,9 @@ typedef struct {
     const char* start;
     int length;
     int line;
+    int column;
+    const char* line_start;
+    const char* filename;
 } Token;
 
 #endif

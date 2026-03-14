@@ -327,6 +327,30 @@ src/c/dce.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/dce.c.s
 .PHONY : src/c/dce.c.s
 
+src/c/diagnostic.o: src/c/diagnostic.c.o
+.PHONY : src/c/diagnostic.o
+
+# target to build an object file
+src/c/diagnostic.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/diagnostic.c.o
+.PHONY : src/c/diagnostic.c.o
+
+src/c/diagnostic.i: src/c/diagnostic.c.i
+.PHONY : src/c/diagnostic.i
+
+# target to preprocess a source file
+src/c/diagnostic.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/diagnostic.c.i
+.PHONY : src/c/diagnostic.c.i
+
+src/c/diagnostic.s: src/c/diagnostic.c.s
+.PHONY : src/c/diagnostic.s
+
+# target to generate assembly for a file
+src/c/diagnostic.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/diagnostic.c.s
+.PHONY : src/c/diagnostic.c.s
+
 src/c/env.o: src/c/env.c.o
 .PHONY : src/c/env.o
 
@@ -813,6 +837,9 @@ help:
 	@echo "... src/c/dce.o"
 	@echo "... src/c/dce.i"
 	@echo "... src/c/dce.s"
+	@echo "... src/c/diagnostic.o"
+	@echo "... src/c/diagnostic.i"
+	@echo "... src/c/diagnostic.s"
 	@echo "... src/c/env.o"
 	@echo "... src/c/env.i"
 	@echo "... src/c/env.s"

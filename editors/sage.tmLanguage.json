@@ -1,58 +1,99 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "Sage",
+  "name": "SageLang",
   "scopeName": "source.sage",
+  "fileTypes": [
+    "sage"
+  ],
   "patterns": [
-    { "include": "#comments" },
-    { "include": "#strings-double" },
-    { "include": "#strings-single" },
-    { "include": "#numbers" },
-    { "include": "#proc-definition" },
-    { "include": "#class-definition" },
-    { "include": "#builtin-functions" },
-    { "include": "#constants" },
-    { "include": "#keywords-control" },
-    { "include": "#keywords-other" },
-    { "include": "#storage-types" },
-    { "include": "#operators" },
-    { "include": "#punctuation" }
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#imports"
+    },
+    {
+      "include": "#declarations"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#module-names"
+    },
+    {
+      "include": "#builtins"
+    },
+    {
+      "include": "#member-access"
+    },
+    {
+      "include": "#function-calls"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
+    }
   ],
   "repository": {
     "comments": {
       "name": "comment.line.number-sign.sage",
       "match": "#.*$"
     },
-    "strings-double": {
-      "name": "string.quoted.double.sage",
-      "begin": "\"",
-      "end": "\"",
-      "beginCaptures": {
-        "0": { "name": "punctuation.definition.string.begin.sage" }
-      },
-      "endCaptures": {
-        "0": { "name": "punctuation.definition.string.end.sage" }
-      },
+    "strings": {
       "patterns": [
         {
-          "name": "constant.character.escape.sage",
-          "match": "\\\\."
-        }
-      ]
-    },
-    "strings-single": {
-      "name": "string.quoted.single.sage",
-      "begin": "'",
-      "end": "'",
-      "beginCaptures": {
-        "0": { "name": "punctuation.definition.string.begin.sage" }
-      },
-      "endCaptures": {
-        "0": { "name": "punctuation.definition.string.end.sage" }
-      },
-      "patterns": [
+          "name": "string.quoted.double.sage",
+          "begin": "\"",
+          "end": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.sage"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.sage"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.sage",
+              "match": "\\\\."
+            }
+          ]
+        },
         {
-          "name": "constant.character.escape.sage",
-          "match": "\\\\."
+          "name": "string.quoted.single.sage",
+          "begin": "'",
+          "end": "'",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.sage"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.sage"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.sage",
+              "match": "\\\\."
+            }
+          ]
         }
       ]
     },
@@ -60,59 +101,227 @@
       "patterns": [
         {
           "name": "constant.numeric.float.sage",
-          "match": "\\b[0-9]+\\.[0-9]+\\b"
+          "match": "(?<![\\w.])(?:\\d+\\.\\d+|\\d+\\.)(?:[eE][+-]?\\d+)?\\b"
         },
         {
           "name": "constant.numeric.integer.sage",
-          "match": "\\b[0-9]+\\b"
+          "match": "(?<![\\w.])\\d+\\b"
         }
       ]
     },
-    "proc-definition": {
-      "match": "\\b(proc)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(",
-      "captures": {
-        "1": { "name": "storage.type.sage" },
-        "2": { "name": "entity.name.function.sage" }
-      }
+    "imports": {
+      "patterns": [
+        {
+          "begin": "\\b(from)\\s+([A-Za-z_][A-Za-z0-9_]*)(\\s+)(import)\\b",
+          "end": "$",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.import.sage"
+            },
+            "2": {
+              "name": "entity.name.namespace.sage"
+            },
+            "4": {
+              "name": "keyword.control.import.sage"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.language.import.wildcard.sage",
+              "match": "\\*"
+            },
+            {
+              "name": "keyword.control.import.sage",
+              "match": "\\b(as)\\b"
+            },
+            {
+              "name": "variable.other.readwrite.import.sage",
+              "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\b"
+            },
+            {
+              "name": "punctuation.separator.comma.sage",
+              "match": ","
+            }
+          ]
+        },
+        {
+          "match": "\\b(import)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s+(as)\\s+([A-Za-z_][A-Za-z0-9_]*))?",
+          "captures": {
+            "1": {
+              "name": "keyword.control.import.sage"
+            },
+            "2": {
+              "name": "entity.name.namespace.sage"
+            },
+            "3": {
+              "name": "keyword.control.import.sage"
+            },
+            "4": {
+              "name": "entity.name.namespace.alias.sage"
+            }
+          }
+        }
+      ]
     },
-    "class-definition": {
-      "match": "\\b(class)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
-      "captures": {
-        "1": { "name": "storage.type.sage" },
-        "2": { "name": "entity.name.class.sage" }
-      }
-    },
-    "builtin-functions": {
-      "match": "\\b(str|len|tonumber|clock|input|push|pop|range|slice|split|join|replace|upper|lower|strip|dict_keys|dict_values|dict_has|dict_delete|type|mem_alloc|mem_free|mem_read|mem_write|mem_size|struct_def|struct_new|struct_get|struct_set|struct_size|asm_arch|ffi_open|ffi_close|ffi_call|ffi_sym)\\s*(?=\\()",
-      "name": "support.function.sage"
+    "declarations": {
+      "patterns": [
+        {
+          "match": "\\b(async)(\\s+)(proc)\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+          "captures": {
+            "1": {
+              "name": "storage.modifier.async.sage"
+            },
+            "3": {
+              "name": "storage.type.function.sage"
+            },
+            "4": {
+              "name": "entity.name.function.sage"
+            }
+          }
+        },
+        {
+          "match": "\\b(proc)\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+          "captures": {
+            "1": {
+              "name": "storage.type.function.sage"
+            },
+            "2": {
+              "name": "entity.name.function.sage"
+            }
+          }
+        },
+        {
+          "match": "\\b(class)\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\s*\\(\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\))?",
+          "captures": {
+            "1": {
+              "name": "storage.type.class.sage"
+            },
+            "2": {
+              "name": "entity.name.class.sage"
+            },
+            "3": {
+              "name": "entity.other.inherited-class.sage"
+            }
+          }
+        },
+        {
+          "match": "\\b(let|var)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.modifier.variable.sage"
+            },
+            "2": {
+              "name": "variable.other.definition.sage"
+            }
+          }
+        }
+      ]
     },
     "constants": {
       "patterns": [
         {
-          "name": "constant.language.sage",
-          "match": "\\b(true|false|nil)\\b"
+          "name": "constant.language.boolean.sage",
+          "match": "\\b(true|false)\\b"
         },
         {
-          "name": "variable.language.sage",
-          "match": "\\b(self)\\b"
+          "name": "constant.language.nil.sage",
+          "match": "\\bnil\\b"
         },
         {
-          "name": "entity.name.function.sage",
-          "match": "\\b(init)\\b"
+          "name": "variable.language.self.sage",
+          "match": "\\bself\\b"
+        },
+        {
+          "name": "support.function.magic.sage",
+          "match": "\\binit\\b"
         }
       ]
     },
-    "keywords-control": {
-      "name": "keyword.control.sage",
-      "match": "\\b(if|else|elif|for|while|break|continue|return|try|catch|finally|raise|match|case|default)\\b"
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.sage",
+          "match": "\\b(if|elif|else|for|while|in|break|continue|return|print|try|catch|finally|raise|yield|defer|match|case|default|await)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.sage",
+          "match": "\\b(and|or|not)\\b"
+        },
+        {
+          "name": "keyword.other.sage",
+          "match": "\\b(async|unsafe|import|from|as)\\b"
+        }
+      ]
     },
-    "keywords-other": {
-      "name": "keyword.other.sage",
-      "match": "\\b(let|var|import|from|as|in|async|await|defer|yield|print|and|or|not)\\b"
+    "module-names": {
+      "name": "support.type.module.sage",
+      "match": "\\b(thread|io|sys|math|string|socket|tcp|http|ssl|json|arrays|strings|dicts|iter|stats|assert|utils)\\b"
     },
-    "storage-types": {
-      "name": "storage.type.sage",
-      "match": "\\b(proc|class)\\b"
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.sage",
+          "match": "\\b(len|push|pop|range|split|join|replace|upper|lower|strip|slice|str|tonumber|input|clock|type|chr|ord|startswith|endswith|contains|indexof|dict_keys|dict_values|dict_has|dict_delete|gc_collect|gc_stats|gc_enable|gc_disable|next|ffi_open|ffi_call|ffi_sym|ffi_close|mem_alloc|mem_free|mem_read|mem_write|mem_size|addressof|asm_exec|asm_compile|asm_arch|struct_def|struct_new|struct_get|struct_set|struct_size)\\b(?=\\s*\\()"
+        }
+      ]
+    },
+    "member-access": {
+      "patterns": [
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(\\.)\\s*([A-Z][A-Z0-9_]*)\\b",
+          "captures": {
+            "1": {
+              "name": "variable.other.object.sage"
+            },
+            "2": {
+              "name": "punctuation.accessor.dot.sage"
+            },
+            "3": {
+              "name": "constant.other.sage"
+            }
+          }
+        },
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\()",
+          "captures": {
+            "1": {
+              "name": "variable.other.object.sage"
+            },
+            "2": {
+              "name": "punctuation.accessor.dot.sage"
+            },
+            "3": {
+              "name": "support.function.member.sage"
+            }
+          }
+        },
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "variable.other.object.sage"
+            },
+            "2": {
+              "name": "punctuation.accessor.dot.sage"
+            },
+            "3": {
+              "name": "variable.other.property.sage"
+            }
+          }
+        }
+      ]
+    },
+    "function-calls": {
+      "patterns": [
+        {
+          "match": "(?<!\\.)\\b(?!if\\b|elif\\b|else\\b|for\\b|while\\b|match\\b|case\\b|default\\b|proc\\b|class\\b|return\\b|try\\b|catch\\b|finally\\b|raise\\b|yield\\b|await\\b|print\\b|import\\b|from\\b|as\\b|let\\b|var\\b|and\\b|or\\b|not\\b)([A-Za-z_][A-Za-z0-9_]*)\\b(?=\\s*\\()",
+          "captures": {
+            "1": {
+              "name": "entity.name.function.call.sage"
+            }
+          }
+        }
+      ]
     },
     "operators": {
       "patterns": [
@@ -122,7 +331,7 @@
         },
         {
           "name": "keyword.operator.assignment.sage",
-          "match": "="
+          "match": "(?<![=!<>])=(?!=)"
         },
         {
           "name": "keyword.operator.arithmetic.sage",
@@ -130,7 +339,7 @@
         },
         {
           "name": "keyword.operator.bitwise.sage",
-          "match": "&|\\||\\^|~|<<|>>"
+          "match": "<<|>>|&|\\||\\^|~"
         }
       ]
     },

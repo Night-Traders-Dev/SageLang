@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "diagnostic.h"
 #include "lexer.h"
 #include "parser.h"
 #include "ast.h"
@@ -15,9 +16,94 @@ static Token previous_token;
 #define MAX_PARSER_DEPTH 500
 static int parser_depth = 0;
 
+static int token_span(const Token* token) {
+    return (token != NULL && token->length > 0) ? token->length : 1;
+}
+
+static void parser_report(Token token, int span, const char* message, const char* help) {
+    sage_print_token_diagnosticf("error", &token, NULL, span > 0 ? span : 1,
+                                 help, "%s", message);
+    sage_error_exit();
+}
+
+static const char* parser_expected_help(TokenType expected, Token got) {
+    switch (expected) {
+        case TOKEN_COLON:
+            if (got.type == TOKEN_NEWLINE || got.type == TOKEN_EOF) {
+                return "add ':' before the end of the line to start the block";
+            }
+            return "blocks in Sage start with ':'";
+        case TOKEN_NEWLINE:
+            if (got.type == TOKEN_EOF) {
+                return "add a newline to finish this statement";
+            }
+            return "put the block on the next line after ':'";
+        case TOKEN_IDENTIFIER:
+            return "identifiers start with a letter or '_'";
+        case TOKEN_RPAREN:
+            return "check for a missing ')' earlier in this expression";
+        case TOKEN_RBRACKET:
+            return "check for a missing ']'";
+        case TOKEN_RBRACE:
+            return "check for a missing '}'";
+        default:
+            break;
+    }
+
+    if (got.type == TOKEN_NEWLINE) {
+        return "this line ended before the statement was complete";
+    }
+    if (got.type == TOKEN_EOF) {
+        return "the file ended before the statement was complete";
+    }
+    return NULL;
+}
+
+static void parser_expected_error(Token token, TokenType expected, const char* message) {
+    char formatted[512];
+    const char* found = sage_token_display_name(token.type);
+    size_t message_len = strlen(message);
+    if (message_len > 0 && message[message_len - 1] == '.') {
+        message_len--;
+    }
+
+    if (strncmp(message, "Expect ", 7) == 0 && message_len > 7) {
+        snprintf(formatted, sizeof(formatted), "expected %.*s, found %s",
+                 (int)(message_len - 7), message + 7, found);
+    } else {
+        snprintf(formatted, sizeof(formatted), "%.*s (found %s)",
+                 (int)message_len, message, found);
+    }
+
+    parser_report(token, token_span(&token), formatted,
+                  parser_expected_help(expected, token));
+}
+
+static const char* parser_expression_help(Token token) {
+    switch (token.type) {
+        case TOKEN_NEWLINE:
+            return "the line ended where Sage expected a value or expression";
+        case TOKEN_COLON:
+            return "did you forget the condition or value before ':'?";
+        case TOKEN_RPAREN:
+            return "there may be an extra ')'";
+        case TOKEN_RBRACKET:
+            return "there may be an extra ']'";
+        case TOKEN_RBRACE:
+            return "there may be an extra '}'";
+        case TOKEN_EOF:
+            return "the file ended before the expression was complete";
+        default:
+            return "expressions can start with names, literals, '(', '[', or '{'";
+    }
+}
+
 static void advance_parser(void) {
     previous_token = current_token;
     current_token = scan_token();
+    if (current_token.type == TOKEN_ERROR) {
+        parser_report(current_token, 1, current_token.start, NULL);
+    }
 }
 
 void parser_init(void) {
@@ -53,8 +139,7 @@ static void consume(TokenType type, const char* message) {
         advance_parser();
         return;
     }
-    fprintf(stderr, "[Line %d] Error: %s (Got type %d)\n", current_token.line, message, current_token.type);
-    sage_error_exit();
+    parser_expected_error(current_token, type, message);
 }
 
 // Forward declarations
@@ -67,8 +152,9 @@ static Stmt* block(void);
 
 static Stmt* for_statement() {
     if (!check(TOKEN_IDENTIFIER)) {
-        fprintf(stderr, "[Line %d] Error: Expect loop variable after 'for'.\n", current_token.line);
-        sage_error_exit();
+        parser_report(current_token, token_span(&current_token),
+                      "expected loop variable after 'for'",
+                      "for loops need a variable name: for item in values:");
     }
     
     Token var = current_token;
@@ -352,8 +438,14 @@ static Expr* primary() {
         return new_variable_expr(name);
     }
 
-    fprintf(stderr, "[Line %d] Expect expression.\n", current_token.line);
-    sage_error_exit();
+    {
+        char message[256];
+        snprintf(message, sizeof(message), "expected expression, found %s",
+                 sage_token_display_name(current_token.type));
+        parser_report(current_token, token_span(&current_token), message,
+                      parser_expression_help(current_token));
+    }
+    return NULL;
 }
 
 // Unary expressions (handle negative numbers and bitwise NOT)
@@ -576,9 +668,11 @@ static Expr* assignment() {
 
 static Expr* expression() {
     if (++parser_depth > MAX_PARSER_DEPTH) {
-        fprintf(stderr, "[Line %d] Error: Maximum nesting depth exceeded (%d).\n",
-                current_token.line, MAX_PARSER_DEPTH);
-        sage_error_exit();
+        char message[128];
+        snprintf(message, sizeof(message),
+                 "maximum nesting depth exceeded (%d)", MAX_PARSER_DEPTH);
+        parser_report(current_token, 1, message,
+                      "reduce the depth of nested expressions");
     }
     Expr* result = assignment();
     parser_depth--;
@@ -592,9 +686,11 @@ static Stmt* print_statement() {
 
 static Stmt* block() {
     if (++parser_depth > MAX_PARSER_DEPTH) {
-        fprintf(stderr, "[Line %d] Error: Maximum nesting depth exceeded (%d).\n",
-                current_token.line, MAX_PARSER_DEPTH);
-        sage_error_exit();
+        char message[128];
+        snprintf(message, sizeof(message),
+                 "maximum nesting depth exceeded (%d)", MAX_PARSER_DEPTH);
+        parser_report(current_token, 1, message,
+                      "reduce the depth of nested blocks");
     }
     consume(TOKEN_INDENT, "Expect indentation after block start.");
     
@@ -667,8 +763,9 @@ static Stmt* proc_declaration() {
                     params[count++] = current_token;
                     advance_parser();
                 } else {
-                    fprintf(stderr, "[Line %d] Error: Expect parameter name.\n", current_token.line);
-                    sage_error_exit();
+                    parser_report(current_token, token_span(&current_token),
+                                  "expected parameter name",
+                                  "parameters must be identifiers");
                 }
             } while (match(TOKEN_COMMA));
         }
@@ -680,8 +777,10 @@ static Stmt* proc_declaration() {
         return new_proc_stmt(name, params, count, body);
     }
     
-    fprintf(stderr, "[Line %d] Error: Expect procedure name.\n", current_token.line);
-    sage_error_exit();
+    parser_report(current_token, token_span(&current_token),
+                  "expected procedure name",
+                  "write a name after 'proc', for example: proc greet(name):");
+    return NULL;
 }
 
 static Stmt* async_proc_declaration() {
@@ -706,8 +805,9 @@ static Stmt* async_proc_declaration() {
                     params[count++] = current_token;
                     advance_parser();
                 } else {
-                    fprintf(stderr, "[Line %d] Error: Expect parameter name.\n", current_token.line);
-                    sage_error_exit();
+                    parser_report(current_token, token_span(&current_token),
+                                  "expected parameter name",
+                                  "parameters must be identifiers");
                 }
             } while (match(TOKEN_COMMA));
         }
@@ -719,8 +819,10 @@ static Stmt* async_proc_declaration() {
         return new_async_proc_stmt(name, params, count, body);
     }
 
-    fprintf(stderr, "[Line %d] Error: Expect procedure name after 'async proc'.\n", current_token.line);
-    sage_error_exit();
+    parser_report(current_token, token_span(&current_token),
+                  "expected procedure name after 'async proc'",
+                  "write a name after 'async proc', for example: async proc fetch():");
+    return NULL;
 }
 
 static Stmt* class_declaration() {
@@ -759,8 +861,9 @@ static Stmt* class_declaration() {
                 method_current = method;
             }
         } else {
-            fprintf(stderr, "[Line %d] Only methods allowed in class body.\n", current_token.line);
-            sage_error_exit();
+            parser_report(current_token, token_span(&current_token),
+                          "only methods are allowed in a class body",
+                          "use 'proc' to define methods inside a class");
         }
     }
     
