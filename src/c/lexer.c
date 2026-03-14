@@ -253,7 +253,23 @@ static Token identifier() {
     return make_token(identifier_type());
 }
 
+static int is_binary_digit(char c) {
+    return c == '0' || c == '1';
+}
+
 static Token number() {
+    if (start[0] == '0' && (peek() == 'b' || peek() == 'B')) {
+        advance();
+        if (!is_binary_digit(peek())) {
+            return error_token("Invalid binary literal: expected at least one binary digit after '0b'.");
+        }
+        while (is_binary_digit(peek())) advance();
+        if (isalnum((unsigned char)peek()) || peek() == '_') {
+            return error_token("Invalid binary literal: use only 0 or 1 after '0b'.");
+        }
+        return make_token(TOKEN_NUMBER);
+    }
+
     while (isdigit(peek())) advance();
     if (peek() == '.' && isdigit(peek_next())) {
         advance();

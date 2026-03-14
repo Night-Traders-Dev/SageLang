@@ -90,6 +90,12 @@ proc main():
     if check("float number", t10[0].type == token.TOKEN_NUMBER and t10[0].text == "3.14"):
         pass_count = pass_count + 1
 
+    # Test 10b: Binary numbers
+    let t10b = tokenize("0b1010")
+    total = total + 1
+    if check("binary number", t10b[0].type == token.TOKEN_NUMBER and t10b[0].text == "0b1010"):
+        pass_count = pass_count + 1
+
     # Test 11: All control flow keywords
     let t11 = tokenize("for while break continue return if else")
     total = total + 1
