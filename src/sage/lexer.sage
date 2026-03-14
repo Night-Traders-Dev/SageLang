@@ -61,6 +61,11 @@ proc is_digit(c):
         return false
     return c >= "0" and c <= "9"
 
+proc is_binary_digit(c):
+    if c == nil:
+        return false
+    return c == "0" or c == "1"
+
 proc is_alnum(c):
     return is_alpha(c) or is_digit(c)
 
@@ -129,6 +134,17 @@ class Lexer:
     # Scan a number literal
     proc scan_number():
         let start_pos = self.pos - 1
+        if self.source[start_pos] == "0" and (self.peek() == "b" or self.peek() == "B"):
+            self.advance()
+            if not is_binary_digit(self.peek()):
+                return self.error_token("Invalid binary literal: expected at least one binary digit after '0b'.")
+            while is_binary_digit(self.peek()):
+                self.advance()
+            if is_alnum(self.peek()) or self.peek() == "_":
+                return self.error_token("Invalid binary literal: use only 0 or 1 after '0b'.")
+            let binary_text = slice(self.source, start_pos, self.pos)
+            return self.make_token(token.TOKEN_NUMBER, binary_text)
+
         while is_digit(self.peek()):
             self.advance()
         # Check for decimal point

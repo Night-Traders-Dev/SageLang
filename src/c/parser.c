@@ -142,6 +142,33 @@ static void consume(TokenType type, const char* message) {
     parser_expected_error(current_token, type, message);
 }
 
+static double parse_number_literal(Token token) {
+    if (token.length >= 2 && token.start[0] == '0' &&
+        (token.start[1] == 'b' || token.start[1] == 'B')) {
+        double value = 0;
+        for (int i = 2; i < token.length; i++) {
+            value = (value * 2) + (token.start[i] - '0');
+        }
+        return value;
+    }
+
+    char inline_buffer[128];
+    char* heap_buffer = NULL;
+    char* parse_buffer = inline_buffer;
+
+    if (token.length >= (int)sizeof(inline_buffer)) {
+        heap_buffer = SAGE_ALLOC((size_t)token.length + 1);
+        parse_buffer = heap_buffer;
+    }
+
+    memcpy(parse_buffer, token.start, (size_t)token.length);
+    parse_buffer[token.length] = '\0';
+
+    double value = strtod(parse_buffer, NULL);
+    free(heap_buffer);
+    return value;
+}
+
 // Forward declarations
 static Expr* expression(void);
 static Expr* unary(void);
@@ -418,7 +445,7 @@ static Expr* primary() {
 
     // Numbers
     if (match(TOKEN_NUMBER)) {
-        double val = strtod(previous_token.start, NULL);
+        double val = parse_number_literal(previous_token);
         return new_number_expr(val);
     }
 

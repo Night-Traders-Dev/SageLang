@@ -31,6 +31,18 @@ from ast import async_proc_stmt, defer_stmt
 # Maximum parser recursion depth
 let MAX_DEPTH = 500
 
+proc parse_number_literal(text):
+    if len(text) >= 2 and text[0] == "0" and (text[1] == "b" or text[1] == "B"):
+        let value = 0
+        let i = 2
+        while i < len(text):
+            value = value * 2
+            if text[i] == "1":
+                value = value + 1
+            i = i + 1
+        return value
+    return tonumber(text)
+
 class Parser:
     proc init(tokens, source, filename):
         self.tokens = tokens
@@ -338,7 +350,7 @@ class Parser:
         # Number literal
         if self.match_tok(token.TOKEN_NUMBER):
             let tok = self.previous()
-            return number_expr(tonumber(tok.text))
+            return number_expr(parse_number_literal(tok.text))
 
         # String literal
         if self.match_tok(token.TOKEN_STRING):
