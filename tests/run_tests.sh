@@ -46,6 +46,24 @@ capture_test_output() {
             TEST_OUTPUT=$(cd "$SCRIPT_DIR" && "$SAGE" --compile "$test_file" -o "$tmp_path" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
             rm -f "$tmp_path"
             ;;
+        "compile-run")
+            mkdir -p "$SCRIPT_DIR/.tmp"
+            tmp_path=$(mktemp "$SCRIPT_DIR/.tmp/test_compile_run_XXXXXX.bin")
+            local compile_output run_output run_cwd
+            compile_output=$(cd "$SCRIPT_DIR" && "$SAGE" --compile "$test_file" -o "$tmp_path" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
+            if [ "$TEST_EXIT_CODE" -eq 0 ]; then
+                if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
+                    run_cwd="$SCRIPT_DIR"
+                else
+                    run_cwd="$test_dir"
+                fi
+                run_output=$(cd "$run_cwd" && "$tmp_path" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
+                TEST_OUTPUT="$run_output"
+            else
+                TEST_OUTPUT="$compile_output"
+            fi
+            rm -f "$tmp_path"
+            ;;
         *)
             TEST_OUTPUT="Unknown # RUN mode '$run_mode' in $test_file"
             TEST_EXIT_CODE=2

@@ -13,8 +13,9 @@
 #include "env.h"
 
 // GC configuration
-#define GC_HEAP_SIZE (1024 * 1024)  // 1MB heap
-#define GC_THRESHOLD 1000            // Run GC after allocating 1000 objects
+#define GC_HEAP_SIZE (1024 * 1024)        // 1MB heap
+#define GC_MIN_TRIGGER_OBJECTS 128        // Minimum live objects before auto-GC
+#define GC_MIN_TRIGGER_BYTES (64 * 1024)  // Minimum managed bytes before auto-GC
 
 // Safe allocation macro - aborts with diagnostic on OOM
 #define SAGE_ALLOC(size) sage_safe_malloc(size, __FILE__, __LINE__)
@@ -53,16 +54,19 @@ static inline char* sage_safe_strdup(const char* str, const char* file, int line
 typedef struct {
     int marked;           // Has this object been marked in this cycle?
     int type;             // Object type (VAL_STRING, VAL_ARRAY, etc.)
+    size_t size;          // Bytes owned directly by this object payload
     void* next;           // Next object in linked list
 } GCHeader;
 
 // GC Statistics struct (for gc_stats native function)
 typedef struct {
     unsigned long bytes_allocated;  // Total bytes allocated
+    unsigned long current_bytes;    // Managed bytes currently live
     int num_objects;                // Current number of objects
     int collections;                // Number of GC collections run
     int objects_freed;              // Objects freed in last collection
     int next_gc;                    // Objects until next GC
+    unsigned long next_gc_bytes;    // Managed-byte threshold for next GC
 } GCStats;
 
 // Garbage collector state
@@ -75,6 +79,8 @@ typedef struct {
     int freed_count;            // Objects freed this cycle
     unsigned long bytes_allocated;  // Total bytes allocated
     unsigned long bytes_freed;      // Total bytes freed
+    unsigned long next_gc_bytes;    // Managed-byte threshold for next GC
+    int next_gc_objects;            // Live-object threshold for next GC
     int enabled;                // Is GC enabled?
     int pin_count;              // When > 0, auto-collection is suppressed
 } GC;
@@ -102,6 +108,11 @@ void gc_unpin(void);  // Decrement pin count (re-enables auto-collection)
 // Memory allocation
 void* gc_alloc(int type, size_t size);
 void gc_free(void* obj);
+
+// Track auxiliary heap buffers owned by GC-managed objects.
+void gc_track_external_allocation(size_t size);
+void gc_track_external_resize(size_t old_size, size_t new_size);
+void gc_track_external_free(size_t size);
 
 // Mark functions for different object types
 void gc_mark_value(Value val);

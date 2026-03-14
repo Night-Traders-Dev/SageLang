@@ -37,6 +37,80 @@ static Env* gc_root_env(void) {
 
 // No longer needed — env marks are cleared during env_sweep_unmarked()
 
+static unsigned long gc_live_bytes(void) {
+    return gc.bytes_allocated - gc.bytes_freed;
+}
+
+static unsigned long gc_min_bytes_padding(void) {
+    return GC_MIN_TRIGGER_BYTES / 2;
+}
+
+static int gc_min_object_padding(void) {
+    return GC_MIN_TRIGGER_OBJECTS / 2;
+}
+
+static void gc_recompute_thresholds(unsigned long reclaimed_bytes,
+                                    int reclaimed_objects) {
+    unsigned long live_bytes = gc_live_bytes();
+    int live_objects = gc.object_count;
+
+    unsigned long byte_padding = live_bytes / 2;
+    int object_padding = live_objects / 2;
+
+    if (byte_padding < gc_min_bytes_padding()) {
+        byte_padding = gc_min_bytes_padding();
+    }
+    if (object_padding < gc_min_object_padding()) {
+        object_padding = gc_min_object_padding();
+    }
+
+    if (gc.collections == 0) {
+        byte_padding = GC_MIN_TRIGGER_BYTES;
+        object_padding = GC_MIN_TRIGGER_OBJECTS;
+    } else if (reclaimed_bytes <= live_bytes / 8) {
+        byte_padding /= 2;
+        if (byte_padding < gc_min_bytes_padding()) {
+            byte_padding = gc_min_bytes_padding();
+        }
+    } else if (reclaimed_bytes >= live_bytes) {
+        byte_padding *= 2;
+    }
+
+    if (gc.collections == 0) {
+        object_padding = GC_MIN_TRIGGER_OBJECTS;
+    } else if (reclaimed_objects <= live_objects / 8) {
+        object_padding /= 2;
+        if (object_padding < gc_min_object_padding()) {
+            object_padding = gc_min_object_padding();
+        }
+    } else if (reclaimed_objects >= live_objects) {
+        object_padding *= 2;
+    }
+
+    gc.next_gc_bytes = live_bytes + byte_padding;
+    if (gc.next_gc_bytes < GC_MIN_TRIGGER_BYTES) {
+        gc.next_gc_bytes = GC_MIN_TRIGGER_BYTES;
+    }
+
+    gc.next_gc_objects = live_objects + object_padding;
+    if (gc.next_gc_objects < GC_MIN_TRIGGER_OBJECTS) {
+        gc.next_gc_objects = GC_MIN_TRIGGER_OBJECTS;
+    }
+}
+
+static int gc_should_collect(size_t incoming_size) {
+    if (!gc.enabled || gc.pin_count > 0) {
+        return 0;
+    }
+
+    if ((gc.object_count + 1) >= gc.next_gc_objects) {
+        return 1;
+    }
+
+    return gc_live_bytes() + (unsigned long)sizeof(GCHeader) + (unsigned long)incoming_size
+        >= gc.next_gc_bytes;
+}
+
 static int gc_try_mark_object(void* object) {
     if (object == NULL) {
         return 0;
@@ -60,19 +134,24 @@ static int gc_try_mark_env(Env* env) {
     return 1;
 }
 
-static void gc_release_object(GCHeader* header) {
+static size_t gc_release_object(GCHeader* header) {
     void* object = header + 1;
+    size_t freed = sizeof(GCHeader) + header->size;
 
     switch (header->type) {
         case VAL_ARRAY: {
             ArrayValue* array = object;
+            freed += sizeof(Value) * (size_t)array->capacity;
             free(array->elements);
             break;
         }
         case VAL_DICT: {
             DictValue* dict = object;
+            freed += sizeof(DictEntry) * (size_t)dict->capacity;
             for (int i = 0; i < dict->capacity; i++) {
                 if (dict->entries[i].key != NULL) {
+                    freed += strlen(dict->entries[i].key) + 1;
+                    freed += sizeof(Value);
                     free(dict->entries[i].key);
                     free(dict->entries[i].value);
                 }
@@ -82,12 +161,16 @@ static void gc_release_object(GCHeader* header) {
         }
         case VAL_TUPLE: {
             TupleValue* tuple = object;
+            freed += sizeof(Value) * (size_t)tuple->count;
             free(tuple->elements);
             break;
         }
         case VAL_CLASS: {
             ClassValue* class_val = object;
+            freed += strlen(class_val->name) + 1;
+            freed += sizeof(Method) * (size_t)class_val->method_count;
             for (int i = 0; i < class_val->method_count; i++) {
+                freed += strlen(class_val->methods[i].name) + 1;
                 free(class_val->methods[i].name);
             }
             free(class_val->methods);
@@ -96,12 +179,15 @@ static void gc_release_object(GCHeader* header) {
         }
         case VAL_EXCEPTION: {
             ExceptionValue* exception = object;
+            freed += strlen(exception->message) + 1;
             free(exception->message);
             break;
         }
         default:
             break;
     }
+
+    return freed;
 }
 
 // Global GC state
@@ -123,6 +209,8 @@ void gc_init(void) {
     gc.freed_count = 0;
     gc.bytes_allocated = 0;
     gc.bytes_freed = 0;
+    gc.next_gc_bytes = GC_MIN_TRIGGER_BYTES;
+    gc.next_gc_objects = GC_MIN_TRIGGER_OBJECTS;
     gc.enabled = 1;  // GC starts enabled
     gc.pin_count = 0;
 
@@ -142,7 +230,7 @@ void gc_shutdown(void) {
     while (obj != NULL) {
         GCHeader* header = obj;
         void* next = header->next;
-        gc_release_object(header);
+        gc.bytes_freed += gc_release_object(header);
         free(obj);
         obj = next;
     }
@@ -167,7 +255,7 @@ void gc_unpin(void) {
 
 void* gc_alloc(int type, size_t size) {
     // Check if GC should run (suppressed when pinned)
-    if (gc.enabled && gc.pin_count == 0 && gc.objects_since_gc > GC_THRESHOLD) {
+    if (gc_should_collect(size)) {
         Env* root = gc_root_env();
         if (root != NULL) {
             gc_collect_with_root(root);
@@ -186,6 +274,7 @@ void* gc_alloc(int type, size_t size) {
     // Initialize header
     header->marked = 0;
     header->type = type;
+    header->size = size;
     
     // Add to object list
     header->next = gc.objects;
@@ -209,16 +298,30 @@ void gc_free(void* obj) {
     if (obj == NULL) return;
     
     GCHeader* header = (GCHeader*)obj - 1;
-    size_t size = sizeof(GCHeader);  // Approximate size
-    
-    gc.bytes_freed += size;
+    gc.bytes_freed += gc_release_object(header);
     gc.freed_count++;
     
     if (gc_debug) {
-        fprintf(stderr, "[GC] Freed %zu bytes\n", size);
+        fprintf(stderr, "[GC] Freed %zu bytes\n", sizeof(GCHeader) + header->size);
     }
     
     free(header);
+}
+
+void gc_track_external_allocation(size_t size) {
+    gc.bytes_allocated += (unsigned long)size;
+}
+
+void gc_track_external_resize(size_t old_size, size_t new_size) {
+    if (new_size >= old_size) {
+        gc.bytes_allocated += (unsigned long)(new_size - old_size);
+    } else {
+        gc.bytes_freed += (unsigned long)(old_size - new_size);
+    }
+}
+
+void gc_track_external_free(size_t size) {
+    gc.bytes_freed += (unsigned long)size;
 }
 
 // ============================================================================
@@ -456,7 +559,7 @@ void gc_sweep(void) {
                         header->type);
             }
 
-            gc_release_object(header);
+            gc.bytes_freed += gc_release_object(header);
             free(unreached);
         } else {
             // Object is reachable - unmark for next cycle
@@ -486,6 +589,9 @@ void gc_collect(void) {
                 gc.collections + 1);
     }
     
+    unsigned long before_bytes = gc_live_bytes();
+    int before_objects = gc.object_count;
+
     // Mark phase: find all reachable objects
     gc_mark();
     
@@ -495,6 +601,8 @@ void gc_collect(void) {
     // Reset counter
     gc.objects_since_gc = 0;
     gc.collections++;
+    gc_recompute_thresholds(before_bytes - gc_live_bytes(),
+                            before_objects - gc.object_count);
     
     if (gc_debug) {
         fprintf(stderr, "[GC] Collection complete: %d objects remaining\n\n", 
@@ -511,6 +619,9 @@ void gc_collect_with_root(Env* root_env) {
                 gc.collections + 1);
     }
     
+    unsigned long before_bytes = gc_live_bytes();
+    int before_objects = gc.object_count;
+
     // Mark phase with root environment
     gc_mark_from_root(root_env);
     
@@ -520,6 +631,8 @@ void gc_collect_with_root(Env* root_env) {
     // Reset counter
     gc.objects_since_gc = 0;
     gc.collections++;
+    gc_recompute_thresholds(before_bytes - gc_live_bytes(),
+                            before_objects - gc.object_count);
     
     if (gc_debug) {
         fprintf(stderr, "[GC] Collection complete: %d objects remaining\n\n", 
@@ -539,9 +652,11 @@ void gc_print_stats(void) {
     printf("Total bytes allocated:  %lu\n", gc.bytes_allocated);
     printf("Total bytes freed:      %lu\n", gc.bytes_freed);
     printf("Current memory usage:   %lu bytes\n", 
-           gc.bytes_allocated - gc.bytes_freed);
+           gc_live_bytes());
     printf("Marked in last cycle:   %d\n", gc.marked_count);
     printf("Freed in last cycle:    %d\n", gc.freed_count);
+    printf("Next GC object target:  %d\n", gc.next_gc_objects);
+    printf("Next GC byte target:    %lu\n", gc.next_gc_bytes);
     printf("GC enabled:             %s\n", gc.enabled ? "yes" : "no");
     printf("=====================================\n");
 }
@@ -560,11 +675,13 @@ void gc_disable_debug(void) {
 GCStats gc_get_stats(void) {
     GCStats stats;
     stats.bytes_allocated = gc.bytes_allocated;
+    stats.current_bytes = gc_live_bytes();
     stats.num_objects = gc.object_count;
     stats.collections = gc.collections;
     stats.objects_freed = gc.freed_count;
-    stats.next_gc = GC_THRESHOLD - gc.objects_since_gc;
+    stats.next_gc = gc.next_gc_objects - gc.object_count;
     if (stats.next_gc < 0) stats.next_gc = 0;
+    stats.next_gc_bytes = gc.next_gc_bytes;
     return stats;
 }
 
