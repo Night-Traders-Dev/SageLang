@@ -352,15 +352,24 @@ static Value gc_collect_native(int argCount, Value* args) {
 
 static Value gc_stats_native(int argCount, Value* args) {
     GCStats stats = gc_get_stats();
+    gc_pin();
     Value dict = val_dict();
     
     dict_set(&dict, "bytes_allocated", val_number(stats.bytes_allocated));
+    dict_set(&dict, "current_bytes", val_number(stats.current_bytes));
     dict_set(&dict, "num_objects", val_number(stats.num_objects));
     dict_set(&dict, "collections", val_number(stats.collections));
     dict_set(&dict, "objects_freed", val_number(stats.objects_freed));
     dict_set(&dict, "next_gc", val_number(stats.next_gc));
+    dict_set(&dict, "next_gc_bytes", val_number(stats.next_gc_bytes));
     
+    gc_unpin();
     return dict;
+}
+
+static Value gc_collections_native(int argCount, Value* args) {
+    GCStats stats = gc_get_stats();
+    return val_number(stats.collections);
 }
 
 static Value gc_enable_native(int argCount, Value* args) {
@@ -1367,6 +1376,7 @@ void init_stdlib(Env* env) {
     // GC functions
     env_define(env, "gc_collect", 10, val_native(gc_collect_native));
     env_define(env, "gc_stats", 8, val_native(gc_stats_native));
+    env_define(env, "gc_collections", 14, val_native(gc_collections_native));
     env_define(env, "gc_enable", 9, val_native(gc_enable_native));
     env_define(env, "gc_disable", 10, val_native(gc_disable_native));
     
@@ -1582,36 +1592,51 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
         case EXPR_NIL:    return EVAL_RESULT(val_nil());
         
         case EXPR_ARRAY: {
+            gc_pin();
             Value arr = val_array();
             for (int i = 0; i < expr->as.array.count; i++) {
                 ExecResult elem_result = eval_expr(expr->as.array.elements[i], env);
-                if (elem_result.is_throwing) return elem_result;
+                if (elem_result.is_throwing) {
+                    gc_unpin();
+                    return elem_result;
+                }
                 array_push(&arr, elem_result.value);
             }
+            gc_unpin();
             return EVAL_RESULT(arr);
         }
 
         case EXPR_DICT: {
+            gc_pin();
             Value dict = val_dict();
             for (int i = 0; i < expr->as.dict.count; i++) {
                 ExecResult val_result = eval_expr(expr->as.dict.values[i], env);
-                if (val_result.is_throwing) return val_result;
+                if (val_result.is_throwing) {
+                    gc_unpin();
+                    return val_result;
+                }
                 dict_set(&dict, expr->as.dict.keys[i], val_result.value);
             }
+            gc_unpin();
             return EVAL_RESULT(dict);
         }
 
         case EXPR_TUPLE: {
+            gc_pin();
             Value* elements = SAGE_ALLOC(sizeof(Value) * expr->as.tuple.count);
             for (int i = 0; i < expr->as.tuple.count; i++) {
                 ExecResult elem_result = eval_expr(expr->as.tuple.elements[i], env);
                 if (elem_result.is_throwing) {
                     free(elements);
+                    gc_unpin();
                     return elem_result;
                 }
                 elements[i] = elem_result.value;
             }
-            return EVAL_RESULT(val_tuple(elements, expr->as.tuple.count));
+            Value tuple = val_tuple(elements, expr->as.tuple.count);
+            free(elements);
+            gc_unpin();
+            return EVAL_RESULT(tuple);
         }
 
         case EXPR_INDEX: {

@@ -94,6 +94,7 @@ Value val_tuple(Value* elements, int count) {
     v.as.tuple = gc_alloc(VAL_TUPLE, sizeof(TupleValue));
     v.as.tuple->count = count;
     v.as.tuple->elements = SAGE_ALLOC(sizeof(Value) * count);
+    gc_track_external_allocation(sizeof(Value) * (size_t)count);
     for (int i = 0; i < count; i++) {
         v.as.tuple->elements[i] = elements[i];
     }
@@ -129,6 +130,7 @@ Value val_exception(const char* message) {
     v.as.exception = gc_alloc(VAL_EXCEPTION, sizeof(ExceptionValue));
     size_t msg_len = strlen(message);
     v.as.exception->message = SAGE_ALLOC(msg_len + 1);
+    gc_track_external_allocation(msg_len + 1);
     memcpy(v.as.exception->message, message, msg_len + 1);
     return v;
 }
@@ -194,8 +196,10 @@ void array_push(Value* arr, Value val) {
     ArrayValue* a = arr->as.array;
 
     if (a->count >= a->capacity) {
+        size_t old_bytes = sizeof(Value) * (size_t)a->capacity;
         a->capacity = a->capacity == 0 ? 4 : a->capacity * 2;
         a->elements = SAGE_REALLOC(a->elements, sizeof(Value) * a->capacity);
+        gc_track_external_resize(old_bytes, sizeof(Value) * (size_t)a->capacity);
     }
     a->elements[a->count++] = val;
 }
@@ -264,6 +268,8 @@ static void dict_grow(DictValue* d) {
 
     d->capacity = old_capacity == 0 ? 8 : old_capacity * 2;
     d->entries = SAGE_ALLOC(sizeof(DictEntry) * d->capacity);
+    gc_track_external_resize(sizeof(DictEntry) * (size_t)old_capacity,
+                             sizeof(DictEntry) * (size_t)d->capacity);
     memset(d->entries, 0, sizeof(DictEntry) * d->capacity);
     d->count = 0;
 
@@ -298,9 +304,11 @@ void dict_set(Value* dict, const char* key, Value value) {
     // New entry
     size_t klen = strlen(key);
     d->entries[slot].key = SAGE_ALLOC(klen + 1);
+    gc_track_external_allocation(klen + 1);
     memcpy(d->entries[slot].key, key, klen + 1);
     d->entries[slot].hash = hash;
     d->entries[slot].value = SAGE_ALLOC(sizeof(Value));
+    gc_track_external_allocation(sizeof(Value));
     *(d->entries[slot].value) = value;
     d->count++;
 }
@@ -339,6 +347,8 @@ void dict_delete(Value* dict, const char* key) {
     if (d->entries[slot].key == NULL) return;  // Not found
 
     // Free the entry
+    gc_track_external_free(strlen(d->entries[slot].key) + 1);
+    gc_track_external_free(sizeof(Value));
     free(d->entries[slot].key);
     free(d->entries[slot].value);
     d->entries[slot].key = NULL;
@@ -366,6 +376,7 @@ Value dict_keys(Value* dict) {
     if (dict->type != VAL_DICT) return val_nil();
     DictValue* d = dict->as.dict;
 
+    gc_pin();
     Value result = val_array();
     for (int i = 0; i < d->capacity; i++) {
         if (d->entries[i].key != NULL) {
@@ -375,6 +386,7 @@ Value dict_keys(Value* dict) {
             array_push(&result, val_string_take(key_copy));
         }
     }
+    gc_unpin();
     return result;
 }
 
@@ -382,12 +394,14 @@ Value dict_values(Value* dict) {
     if (dict->type != VAL_DICT) return val_nil();
     DictValue* d = dict->as.dict;
 
+    gc_pin();
     Value result = val_array();
     for (int i = 0; i < d->capacity; i++) {
         if (d->entries[i].key != NULL) {
             array_push(&result, *(d->entries[i].value));
         }
     }
+    gc_unpin();
     return result;
 }
 
@@ -407,6 +421,7 @@ Value string_split(const char* str, const char* delimiter) {
     
     if (!str || !delimiter) return result;
     
+    gc_pin();
     int del_len = strlen(delimiter);
     if (del_len == 0) {
         for (int i = 0; str[i]; i++) {
@@ -415,6 +430,7 @@ Value string_split(const char* str, const char* delimiter) {
             ch[1] = '\0';
             array_push(&result, val_string_take(ch));
         }
+        gc_unpin();
         return result;
     }
     
@@ -435,6 +451,7 @@ Value string_split(const char* str, const char* delimiter) {
     memcpy(part, start, tail_len + 1);
     array_push(&result, val_string_take(part));
     
+    gc_unpin();
     return result;
 }
 
@@ -564,6 +581,7 @@ ClassValue* class_create(const char* name, int name_len, ClassValue* parent) {
     gc_pin();  // Prevent GC during multi-step initialization
     ClassValue* class_val = gc_alloc(VAL_CLASS, sizeof(ClassValue));
     class_val->name = SAGE_ALLOC(name_len + 1);
+    gc_track_external_allocation(name_len + 1);
     strncpy(class_val->name, name, name_len);
     class_val->name[name_len] = '\0';
     class_val->name_len = name_len;
@@ -575,10 +593,13 @@ ClassValue* class_create(const char* name, int name_len, ClassValue* parent) {
 }
 
 void class_add_method(ClassValue* class_val, const char* name, int name_len, void* method_stmt) {
+    size_t old_bytes = sizeof(Method) * (size_t)class_val->method_count;
     class_val->methods = SAGE_REALLOC(class_val->methods, sizeof(Method) * (class_val->method_count + 1));
+    gc_track_external_resize(old_bytes, sizeof(Method) * (size_t)(class_val->method_count + 1));
     
     Method* m = &class_val->methods[class_val->method_count];
     m->name = SAGE_ALLOC(name_len + 1);
+    gc_track_external_allocation(name_len + 1);
     strncpy(m->name, name, name_len);
     m->name[name_len] = '\0';
     m->name_len = name_len;

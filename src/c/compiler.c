@@ -57,6 +57,7 @@ typedef struct {
     FILE* out;
     const char* input_path;
     int failed;
+    int in_function_body;
     int indent;
     int next_unique_id;
     NameEntry* globals;
@@ -904,33 +905,38 @@ static char* emit_slice_expr(Compiler* compiler, SliceExpr* slice) {
 static char* emit_dict_expr(Compiler* compiler, DictExpr* dict) {
     StringBuffer sb;
     sb_init(&sb);
-    // Build dict by calling sage_make_dict() then sage_dict_set() for each entry
-    // We need a compound expression using comma operator
     if (dict->count == 0) {
         sb_append(&sb, "sage_make_dict()");
         return sb_take(&sb);
     }
 
-    // Use a statement expression (GCC extension) or a helper approach
-    // For portability, use a helper function call pattern
-    // We'll emit: sage_build_dict_N(key1, val1, key2, val2, ...)
-    // Actually, simpler: use comma operator with a temp
-    // Let's use a block expression approach that works with GCC/Clang
-    sb_append(&sb, "({SageValue _d = sage_make_dict();");
+    sb_appendf(&sb, "sage_make_dict_from_entries(%d, (const char*[]){", dict->count);
     for (int i = 0; i < dict->count; i++) {
         char* escaped = escape_c_string(dict->keys[i]);
-        char* val = emit_expr(compiler, dict->values[i]);
+        if (i > 0) {
+            sb_append(&sb, ", ");
+        }
+        sb_appendf(&sb, "\"%s\"", escaped);
+        free(escaped);
         if (compiler->failed) {
-            free(escaped);
-            free(val);
             free(sb_take(&sb));
             return str_dup("sage_nil()");
         }
-        sb_appendf(&sb, "sage_dict_set(_d.as.dict,\"%s\",%s);", escaped, val);
-        free(escaped);
-        free(val);
     }
-    sb_append(&sb, "_d;})");
+    sb_append(&sb, "}, (SageValue[]){");
+    for (int i = 0; i < dict->count; i++) {
+        char* val = emit_expr(compiler, dict->values[i]);
+        if (i > 0) {
+            sb_append(&sb, ", ");
+        }
+        sb_append(&sb, val);
+        free(val);
+        if (compiler->failed) {
+            free(sb_take(&sb));
+            return str_dup("sage_nil()");
+        }
+    }
+    sb_append(&sb, "})");
     return sb_take(&sb);
 }
 
@@ -1204,6 +1210,61 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
             sb_appendf(&sb, "sage_dict_delete_fn(%s, %s)", dict_arg, key_arg);
             free(dict_arg);
             free(key_arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "gc_collect") == 0) {
+        if (call->arg_count != 0) {
+            compiler_builtin_arity_error(compiler, call, "gc_collect", "usage: gc_collect()", "0");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            sb_append(&sb, "sage_gc_collect_fn()");
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "gc_stats") == 0) {
+        if (call->arg_count != 0) {
+            compiler_builtin_arity_error(compiler, call, "gc_stats", "usage: gc_stats()", "0");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            sb_append(&sb, "sage_gc_stats_fn()");
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "gc_collections") == 0) {
+        if (call->arg_count != 0) {
+            compiler_builtin_arity_error(compiler, call, "gc_collections", "usage: gc_collections()", "0");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            sb_append(&sb, "sage_gc_collections_fn()");
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "gc_enable") == 0) {
+        if (call->arg_count != 0) {
+            compiler_builtin_arity_error(compiler, call, "gc_enable", "usage: gc_enable()", "0");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            sb_append(&sb, "sage_gc_enable_fn()");
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "gc_disable") == 0) {
+        if (call->arg_count != 0) {
+            compiler_builtin_arity_error(compiler, call, "gc_disable", "usage: gc_disable()", "0");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            sb_append(&sb, "sage_gc_disable_fn()");
         }
         free(callee_name);
         return sb_take(&sb);
@@ -1768,7 +1829,11 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             char* expr = stmt->as.ret.value != NULL
                 ? emit_expr(compiler, stmt->as.ret.value)
                 : str_dup("sage_nil()");
-            emit_line(compiler, "return %s;", expr);
+            if (compiler->in_function_body) {
+                emit_line(compiler, "return sage_gc_return(&sage_gc_frame, %s);", expr);
+            } else {
+                emit_line(compiler, "return %s;", expr);
+            }
             free(expr);
             break;
         }
@@ -1816,8 +1881,8 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             compiler->indent++;
             emit_line(compiler, "char _ch[2] = {%s.as.string[%s], '\\0'};",
                        iter_var, idx_var);
-            emit_line(compiler, "sage_define_slot(&%s, sage_string(sage_dup_string(_ch)));",
-                       slot_name);
+            emit_line(compiler, "sage_define_slot(&%s, sage_string(_ch));",
+                     slot_name);
             emit_embedded_block(compiler, stmt->as.for_stmt.body);
             compiler->indent--;
             emit_line(compiler, "}");
@@ -1935,6 +2000,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
     fputs(
         "\n"
         "typedef struct SageValue SageValue;\n"
+        "typedef struct SageGcHeader SageGcHeader;\n"
+        "typedef struct SageGcFrame SageGcFrame;\n"
         "\n"
         "typedef struct {\n"
         "    int count;\n"
@@ -1981,6 +2048,43 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    SageValue value;\n"
         "} SageSlot;\n"
         "\n"
+        "typedef enum {\n"
+        "    SAGE_GC_STRING,\n"
+        "    SAGE_GC_ARRAY,\n"
+        "    SAGE_GC_DICT,\n"
+        "    SAGE_GC_TUPLE\n"
+        "} SageGcKind;\n"
+        "\n"
+        "struct SageGcHeader {\n"
+        "    unsigned char marked;\n"
+        "    unsigned char kind;\n"
+        "    size_t size;\n"
+        "    SageGcHeader* next;\n"
+        "};\n"
+        "\n"
+        "struct SageGcFrame {\n"
+        "    SageGcFrame* prev;\n"
+        "    SageSlot** slots;\n"
+        "    int slot_count;\n"
+        "};\n"
+        "\n"
+        "typedef struct {\n"
+        "    SageGcHeader* objects;\n"
+        "    SageGcFrame* frames;\n"
+        "    int object_count;\n"
+        "    int collections;\n"
+        "    int pin_count;\n"
+        "    unsigned long bytes_allocated;\n"
+        "    unsigned long bytes_freed;\n"
+        "    unsigned long next_gc_bytes;\n"
+        "    int next_gc_objects;\n"
+        "    int enabled;\n"
+        "} SageGcState;\n"
+        "\n"
+        "#define SAGE_GC_MIN_TRIGGER_BYTES 65536UL\n"
+        "#define SAGE_GC_MIN_TRIGGER_OBJECTS 128\n"
+        "static SageGcState sage_gc = {NULL, NULL, 0, 0, 0, 0, 0, SAGE_GC_MIN_TRIGGER_BYTES, SAGE_GC_MIN_TRIGGER_OBJECTS, 1};\n"
+        "\n"
         "/* Exception handling via setjmp/longjmp */\n"
         "#define SAGE_MAX_TRY_DEPTH 64\n"
         "static jmp_buf sage_try_stack[SAGE_MAX_TRY_DEPTH];\n"
@@ -1993,17 +2097,209 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    exit(1);\n"
         "}\n"
         "\n"
+        "static unsigned long sage_gc_live_bytes(void) {\n"
+        "    return sage_gc.bytes_allocated - sage_gc.bytes_freed;\n"
+        "}\n"
+        "\n"
+        "static void sage_gc_recompute_thresholds(unsigned long reclaimed_bytes, int reclaimed_objects) {\n"
+        "    unsigned long live_bytes = sage_gc_live_bytes();\n"
+        "    int live_objects = sage_gc.object_count;\n"
+        "    unsigned long byte_padding = live_bytes / 2;\n"
+        "    int object_padding = live_objects / 2;\n"
+        "    if (byte_padding < (SAGE_GC_MIN_TRIGGER_BYTES / 2)) byte_padding = SAGE_GC_MIN_TRIGGER_BYTES / 2;\n"
+        "    if (object_padding < (SAGE_GC_MIN_TRIGGER_OBJECTS / 2)) object_padding = SAGE_GC_MIN_TRIGGER_OBJECTS / 2;\n"
+        "    if (reclaimed_bytes <= live_bytes / 8) {\n"
+        "        byte_padding /= 2;\n"
+        "        if (byte_padding < (SAGE_GC_MIN_TRIGGER_BYTES / 2)) byte_padding = SAGE_GC_MIN_TRIGGER_BYTES / 2;\n"
+        "    } else if (reclaimed_bytes >= live_bytes) {\n"
+        "        byte_padding *= 2;\n"
+        "    }\n"
+        "    if (reclaimed_objects <= live_objects / 8) {\n"
+        "        object_padding /= 2;\n"
+        "        if (object_padding < (SAGE_GC_MIN_TRIGGER_OBJECTS / 2)) object_padding = SAGE_GC_MIN_TRIGGER_OBJECTS / 2;\n"
+        "    } else if (reclaimed_objects >= live_objects) {\n"
+        "        object_padding *= 2;\n"
+        "    }\n"
+        "    sage_gc.next_gc_bytes = live_bytes + byte_padding;\n"
+        "    if (sage_gc.next_gc_bytes < SAGE_GC_MIN_TRIGGER_BYTES) sage_gc.next_gc_bytes = SAGE_GC_MIN_TRIGGER_BYTES;\n"
+        "    sage_gc.next_gc_objects = live_objects + object_padding;\n"
+        "    if (sage_gc.next_gc_objects < SAGE_GC_MIN_TRIGGER_OBJECTS) sage_gc.next_gc_objects = SAGE_GC_MIN_TRIGGER_OBJECTS;\n"
+        "}\n"
+        "\n"
+        "static int sage_gc_try_mark(void* object) {\n"
+        "    if (object == NULL) return 0;\n"
+        "    SageGcHeader* header = ((SageGcHeader*)object) - 1;\n"
+        "    if (header->marked) return 0;\n"
+        "    header->marked = 1;\n"
+        "    return 1;\n"
+        "}\n"
+        "\n"
+        "static void sage_gc_mark_value(SageValue value);\n"
+        "\n"
+        "static void sage_gc_mark_roots(void) {\n"
+        "    for (SageGcFrame* frame = sage_gc.frames; frame != NULL; frame = frame->prev) {\n"
+        "        if (frame->slots == NULL) continue;\n"
+        "        for (int i = 0; i < frame->slot_count; i++) {\n"
+        "            if (frame->slots[i] != NULL && frame->slots[i]->defined) {\n"
+        "                sage_gc_mark_value(frame->slots[i]->value);\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+        "    if (sage_try_depth > 0) sage_gc_mark_value(sage_exception_value);\n"
+        "}\n"
+        "\n"
+        "static size_t sage_gc_release_object(SageGcHeader* header) {\n"
+        "    void* object = (void*)(header + 1);\n"
+        "    size_t freed = sizeof(SageGcHeader) + header->size;\n"
+        "    switch ((SageGcKind)header->kind) {\n"
+        "        case SAGE_GC_STRING:\n"
+        "            break;\n"
+        "        case SAGE_GC_ARRAY: {\n"
+        "            SageArray* array = (SageArray*)object;\n"
+        "            freed += sizeof(SageValue) * (size_t)array->capacity;\n"
+        "            free(array->elements);\n"
+        "            break;\n"
+        "        }\n"
+        "        case SAGE_GC_DICT: {\n"
+        "            SageDict* dict = (SageDict*)object;\n"
+        "            freed += sizeof(char*) * (size_t)dict->capacity;\n"
+        "            freed += sizeof(SageValue) * (size_t)dict->capacity;\n"
+        "            for (int i = 0; i < dict->count; i++) {\n"
+        "                if (dict->keys[i] != NULL) {\n"
+        "                    freed += strlen(dict->keys[i]) + 1;\n"
+        "                    free(dict->keys[i]);\n"
+        "                }\n"
+        "            }\n"
+        "            free(dict->keys);\n"
+        "            free(dict->values);\n"
+        "            break;\n"
+        "        }\n"
+        "        case SAGE_GC_TUPLE: {\n"
+        "            SageTuple* tuple = (SageTuple*)object;\n"
+        "            freed += sizeof(SageValue) * (size_t)tuple->count;\n"
+        "            free(tuple->elements);\n"
+        "            break;\n"
+        "        }\n"
+        "    }\n"
+        "    return freed;\n"
+        "}\n"
+        "\n"
+        "static void sage_gc_collect(void) {\n"
+        "    if (!sage_gc.enabled) return;\n"
+        "    unsigned long before_bytes = sage_gc_live_bytes();\n"
+        "    int before_objects = sage_gc.object_count;\n"
+        "    sage_gc_mark_roots();\n"
+        "    SageGcHeader** current = &sage_gc.objects;\n"
+        "    while (*current != NULL) {\n"
+        "        SageGcHeader* header = *current;\n"
+        "        if (!header->marked) {\n"
+        "            *current = header->next;\n"
+        "            sage_gc.object_count--;\n"
+        "            sage_gc.bytes_freed += sage_gc_release_object(header);\n"
+        "            free(header);\n"
+        "        } else {\n"
+        "            header->marked = 0;\n"
+        "            current = &header->next;\n"
+        "        }\n"
+        "    }\n"
+        "    sage_gc.collections++;\n"
+        "    sage_gc_recompute_thresholds(before_bytes - sage_gc_live_bytes(), before_objects - sage_gc.object_count);\n"
+        "}\n"
+        "\n"
+        "static int sage_gc_should_collect(size_t incoming_size) {\n"
+        "    if (!sage_gc.enabled || sage_gc.pin_count > 0) return 0;\n"
+        "    if ((sage_gc.object_count + 1) >= sage_gc.next_gc_objects) return 1;\n"
+        "    return sage_gc_live_bytes() + (unsigned long)sizeof(SageGcHeader) + (unsigned long)incoming_size >= sage_gc.next_gc_bytes;\n"
+        "}\n"
+        "\n"
+        "static void* sage_gc_alloc(SageGcKind kind, size_t size) {\n"
+        "    if (sage_gc.frames != NULL && sage_gc_should_collect(size)) sage_gc_collect();\n"
+        "    size_t total = sizeof(SageGcHeader) + size;\n"
+        "    SageGcHeader* header = (SageGcHeader*)malloc(total);\n"
+        "    if (header == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    header->marked = 0;\n"
+        "    header->kind = (unsigned char)kind;\n"
+        "    header->size = size;\n"
+        "    header->next = sage_gc.objects;\n"
+        "    sage_gc.objects = header;\n"
+        "    sage_gc.object_count++;\n"
+        "    sage_gc.bytes_allocated += (unsigned long)total;\n"
+        "    return (void*)(header + 1);\n"
+        "}\n"
+        "\n"
+        "static void sage_gc_push_frame(SageGcFrame* frame, SageSlot** slots, int slot_count) {\n"
+        "    frame->prev = sage_gc.frames;\n"
+        "    frame->slots = slots;\n"
+        "    frame->slot_count = slot_count;\n"
+        "    sage_gc.frames = frame;\n"
+        "}\n"
+        "\n"
+        "static void sage_gc_pop_frame(SageGcFrame* frame) {\n"
+        "    if (sage_gc.frames == frame) sage_gc.frames = frame->prev;\n"
+        "}\n"
+        "\n"
+        "static void sage_gc_pin(void) { sage_gc.pin_count++; }\n"
+        "static void sage_gc_unpin(void) { if (sage_gc.pin_count > 0) sage_gc.pin_count--; }\n"
+        "\n"
+        "static SageValue sage_gc_return(SageGcFrame* frame, SageValue value) {\n"
+        "    sage_gc_pop_frame(frame);\n"
+        "    return value;\n"
+        "}\n"
+        "\n"
+        "static void sage_gc_shutdown(void) {\n"
+        "    SageGcHeader* object = sage_gc.objects;\n"
+        "    while (object != NULL) {\n"
+        "        SageGcHeader* next = object->next;\n"
+        "        sage_gc.bytes_freed += sage_gc_release_object(object);\n"
+        "        free(object);\n"
+        "        object = next;\n"
+        "    }\n"
+        "    sage_gc.objects = NULL;\n"
+        "    sage_gc.object_count = 0;\n"
+        "}\n"
+        "\n"
+        "static void sage_gc_mark_value(SageValue value) {\n"
+        "    switch (value.type) {\n"
+        "        case SAGE_TAG_STRING:\n"
+        "            (void)sage_gc_try_mark((void*)value.as.string);\n"
+        "            return;\n"
+        "        case SAGE_TAG_ARRAY:\n"
+        "            if (sage_gc_try_mark(value.as.array)) {\n"
+        "                for (int i = 0; i < value.as.array->count; i++) sage_gc_mark_value(value.as.array->elements[i]);\n"
+        "            }\n"
+        "            return;\n"
+        "        case SAGE_TAG_DICT:\n"
+        "            if (sage_gc_try_mark(value.as.dict)) {\n"
+        "                for (int i = 0; i < value.as.dict->count; i++) sage_gc_mark_value(value.as.dict->values[i]);\n"
+        "            }\n"
+        "            return;\n"
+        "        case SAGE_TAG_TUPLE:\n"
+        "            if (sage_gc_try_mark(value.as.tuple)) {\n"
+        "                for (int i = 0; i < value.as.tuple->count; i++) sage_gc_mark_value(value.as.tuple->elements[i]);\n"
+        "            }\n"
+        "            return;\n"
+        "        default:\n"
+        "            return;\n"
+        "    }\n"
+        "}\n"
+        "\n"
         "static char* sage_dup_string(const char* text) {\n"
+            "    size_t len = strlen(text);\n"
+            "    char* copy = (char*)malloc(len + 1);\n"
+            "    if (copy == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+            "    memcpy(copy, text, len + 1);\n"
+            "    return copy;\n"
+        "}\n"
+        "\n"
+        "static char* sage_gc_copy_string(const char* text) {\n"
         "    size_t len = strlen(text);\n"
-        "    char* copy = (char*)malloc(len + 1);\n"
-        "    if (copy == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    char* copy = (char*)sage_gc_alloc(SAGE_GC_STRING, len + 1);\n"
         "    memcpy(copy, text, len + 1);\n"
         "    return copy;\n"
         "}\n"
         "\n"
         "static SageArray* sage_new_array(void) {\n"
-        "    SageArray* array = (SageArray*)malloc(sizeof(SageArray));\n"
-        "    if (array == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    SageArray* array = (SageArray*)sage_gc_alloc(SAGE_GC_ARRAY, sizeof(SageArray));\n"
         "    array->count = 0;\n"
         "    array->capacity = 0;\n"
         "    array->elements = NULL;\n"
@@ -2013,7 +2309,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "static SageValue sage_nil(void) { SageValue v; v.type = SAGE_TAG_NIL; v.as.number = 0; return v; }\n"
         "static SageValue sage_number(double value) { SageValue v; v.type = SAGE_TAG_NUMBER; v.as.number = value; return v; }\n"
         "static SageValue sage_bool(int value) { SageValue v; v.type = SAGE_TAG_BOOL; v.as.boolean = value ? 1 : 0; return v; }\n"
-        "static SageValue sage_string(const char* value) { SageValue v; v.type = SAGE_TAG_STRING; v.as.string = value; return v; }\n"
+        "static SageValue sage_string(const char* value) { SageValue v; v.type = SAGE_TAG_STRING; v.as.string = sage_gc_copy_string(value == NULL ? \"\" : value); return v; }\n"
+        "static SageValue sage_string_take(char* value) { SageValue v = sage_string(value == NULL ? \"\" : value); free(value); return v; }\n"
         "static SageValue sage_array(void) { SageValue v; v.type = SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
         "static SageSlot sage_slot_undefined(void) { SageSlot slot; slot.defined = 0; slot.value = sage_nil(); return slot; }\n"
         "\n"
@@ -2023,8 +2320,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
 
     fputs(
         "static SageValue sage_make_dict(void) {\n"
-        "    SageDict* dict = (SageDict*)malloc(sizeof(SageDict));\n"
-        "    if (dict == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    SageDict* dict = (SageDict*)sage_gc_alloc(SAGE_GC_DICT, sizeof(SageDict));\n"
         "    dict->keys = NULL;\n"
         "    dict->values = NULL;\n"
         "    dict->count = 0;\n"
@@ -2052,6 +2348,16 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    dict->count++;\n"
         "}\n"
         "\n"
+        "static SageValue sage_make_dict_from_entries(int count, const char** keys, const SageValue* values) {\n"
+        "    sage_gc_pin();\n"
+        "    SageValue dict = sage_make_dict();\n"
+        "    for (int i = 0; i < count; i++) {\n"
+        "        sage_dict_set(dict.as.dict, keys[i], values[i]);\n"
+        "    }\n"
+        "    sage_gc_unpin();\n"
+        "    return dict;\n"
+        "}\n"
+        "\n"
         "static SageValue sage_dict_get(SageDict* dict, const char* key) {\n"
         "    for (int i = 0; i < dict->count; i++) {\n"
         "        if (strcmp(dict->keys[i], key) == 0) return dict->values[i];\n"
@@ -2060,13 +2366,14 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "}\n"
         "\n"
         "static SageValue sage_make_tuple(int count, const SageValue* values) {\n"
-        "    SageTuple* tuple = (SageTuple*)malloc(sizeof(SageTuple));\n"
-        "    if (tuple == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    sage_gc_pin();\n"
+        "    SageTuple* tuple = (SageTuple*)sage_gc_alloc(SAGE_GC_TUPLE, sizeof(SageTuple));\n"
         "    tuple->count = count;\n"
         "    tuple->elements = (SageValue*)malloc(sizeof(SageValue) * (size_t)count);\n"
         "    if (tuple->elements == NULL && count > 0) sage_fail(\"Runtime Error: out of memory\");\n"
         "    for (int i = 0; i < count; i++) tuple->elements[i] = values[i];\n"
         "    SageValue v; v.type = SAGE_TAG_TUPLE; v.as.tuple = tuple;\n"
+        "    sage_gc_unpin();\n"
         "    return v;\n"
         "}\n"
         "\n"
@@ -2098,10 +2405,12 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "}\n"
         "\n"
         "static SageValue sage_make_array(int count, const SageValue* values) {\n"
+        "    sage_gc_pin();\n"
         "    SageValue array = sage_array();\n"
         "    for (int i = 0; i < count; i++) {\n"
         "        sage_array_push_raw(array.as.array, values[i]);\n"
         "    }\n"
+        "    sage_gc_unpin();\n"
         "    return array;\n"
         "}\n"
         "\n"
@@ -2197,7 +2506,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        case SAGE_TAG_STRING: return value;\n"
         "        case SAGE_TAG_NUMBER:\n"
         "            snprintf(buffer, sizeof(buffer), \"%g\", value.as.number);\n"
-        "            return sage_string(sage_dup_string(buffer));\n"
+        "            return sage_string(buffer);\n"
         "        case SAGE_TAG_BOOL:\n"
         "            return sage_string(value.as.boolean ? \"true\" : \"false\");\n"
         "        case SAGE_TAG_NIL:\n"
@@ -2244,28 +2553,30 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        int len = (int)strlen(collection.as.string);\n"
         "        if (idx < 0 || idx >= len) return sage_nil();\n"
         "        char buf[2] = {collection.as.string[idx], '\\0'};\n"
-        "        return sage_string(sage_dup_string(buf));\n"
+        "        return sage_string(buf);\n"
         "    }\n"
         "    return sage_nil();\n"
         "}\n"
         "\n"
         "static SageValue sage_slice(SageValue array, SageValue start, SageValue end) {\n"
         "    if (array.type != SAGE_TAG_ARRAY) return sage_nil();\n"
+        "    sage_gc_pin();\n"
         "    int start_index = 0;\n"
         "    int end_index = array.as.array->count;\n"
         "    if (start.type == SAGE_TAG_NUMBER) start_index = (int)start.as.number;\n"
-        "    else if (start.type != SAGE_TAG_NIL) return sage_nil();\n"
+        "    else if (start.type != SAGE_TAG_NIL) { sage_gc_unpin(); return sage_nil(); }\n"
         "    if (end.type == SAGE_TAG_NUMBER) end_index = (int)end.as.number;\n"
-        "    else if (end.type != SAGE_TAG_NIL) return sage_nil();\n"
+        "    else if (end.type != SAGE_TAG_NIL) { sage_gc_unpin(); return sage_nil(); }\n"
         "    if (start_index < 0) start_index = array.as.array->count + start_index;\n"
         "    if (end_index < 0) end_index = array.as.array->count + end_index;\n"
         "    if (start_index < 0) start_index = 0;\n"
         "    if (end_index > array.as.array->count) end_index = array.as.array->count;\n"
-        "    if (start_index >= end_index) return sage_array();\n"
+        "    if (start_index >= end_index) { SageValue empty = sage_array(); sage_gc_unpin(); return empty; }\n"
         "    SageValue result = sage_array();\n"
         "    for (int i = start_index; i < end_index; i++) {\n"
         "        sage_array_push_raw(result.as.array, array.as.array->elements[i]);\n"
         "    }\n"
+        "    sage_gc_unpin();\n"
         "    return result;\n"
         "}\n"
         "\n"
@@ -2287,10 +2598,12 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
     fputs(
         "static SageValue sage_range2(SageValue start, SageValue end) {\n"
         "    if (start.type != SAGE_TAG_NUMBER || end.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+        "    sage_gc_pin();\n"
         "    SageValue result = sage_array();\n"
         "    for (int i = (int)start.as.number; i < (int)end.as.number; i++) {\n"
         "        sage_array_push_raw(result.as.array, sage_number((double)i));\n"
         "    }\n"
+        "    sage_gc_unpin();\n"
         "    return result;\n"
         "}\n"
         "\n"
@@ -2309,7 +2622,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        if (result == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
         "        memcpy(result, left.as.string, len1);\n"
         "        memcpy(result + len1, right.as.string, len2 + 1);\n"
-        "        return sage_string(result);\n"
+        "        return sage_string_take(result);\n"
         "    }\n"
         "    sage_fail(\"Runtime Error: Operands must be numbers or strings.\");\n"
         "    return sage_nil();\n"
@@ -2401,19 +2714,23 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "\n"
         "static SageValue sage_dict_keys_fn(SageValue dict_val) {\n"
         "    if (dict_val.type != SAGE_TAG_DICT) return sage_array();\n"
+        "    sage_gc_pin();\n"
         "    SageValue result = sage_array();\n"
         "    for (int i = 0; i < dict_val.as.dict->count; i++) {\n"
         "        sage_array_push_raw(result.as.array, sage_string(dict_val.as.dict->keys[i]));\n"
         "    }\n"
+        "    sage_gc_unpin();\n"
         "    return result;\n"
         "}\n"
         "\n"
         "static SageValue sage_dict_values_fn(SageValue dict_val) {\n"
         "    if (dict_val.type != SAGE_TAG_DICT) return sage_array();\n"
+        "    sage_gc_pin();\n"
         "    SageValue result = sage_array();\n"
         "    for (int i = 0; i < dict_val.as.dict->count; i++) {\n"
         "        sage_array_push_raw(result.as.array, dict_val.as.dict->values[i]);\n"
         "    }\n"
+        "    sage_gc_unpin();\n"
         "    return result;\n"
         "}\n"
         "\n"
@@ -2445,6 +2762,49 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         out
     );
 
+    fputs(
+        "static SageValue sage_gc_collect_fn(void) {\n"
+        "    sage_gc_collect();\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_gc_enable_fn(void) {\n"
+        "    sage_gc.enabled = 1;\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_gc_disable_fn(void) {\n"
+        "    sage_gc.enabled = 0;\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_gc_stats_fn(void) {\n"
+        "    int next_gc = sage_gc.next_gc_objects - sage_gc.object_count;\n"
+        "    if (next_gc < 0) next_gc = 0;\n"
+        "    return sage_make_dict_from_entries(7,\n"
+        "        (const char*[]){\"bytes_allocated\", \"current_bytes\", \"num_objects\", \"collections\", \"objects_freed\", \"next_gc\", \"next_gc_bytes\"},\n"
+        "        (SageValue[]){\n"
+        "            sage_number((double)sage_gc.bytes_allocated),\n"
+        "            sage_number((double)sage_gc_live_bytes()),\n"
+        "            sage_number((double)sage_gc.object_count),\n"
+        "            sage_number((double)sage_gc.collections),\n"
+        "            sage_number(0),\n"
+        "            sage_number((double)next_gc),\n"
+        "            sage_number((double)sage_gc.next_gc_bytes)\n"
+        "        });\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    fputs(
+        "static SageValue sage_gc_collections_fn(void) {\n"
+        "    return sage_number((double)sage_gc.collections);\n"
+        "}\n"
+        "\n",
+        out
+    );
+
     /* String builtins */
     fputs(
         "#include <ctype.h>\n"
@@ -2455,7 +2815,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    if (result == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
         "    for (size_t i = 0; i < len; i++) result[i] = (char)toupper((unsigned char)value.as.string[i]);\n"
         "    result[len] = '\\0';\n"
-        "    return sage_string(result);\n"
+        "    return sage_string_take(result);\n"
         "}\n"
         "static SageValue sage_lower(SageValue value) {\n"
         "    if (value.type != SAGE_TAG_STRING) return sage_nil();\n"
@@ -2464,7 +2824,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    if (result == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
         "    for (size_t i = 0; i < len; i++) result[i] = (char)tolower((unsigned char)value.as.string[i]);\n"
         "    result[len] = '\\0';\n"
-        "    return sage_string(result);\n"
+        "    return sage_string_take(result);\n"
         "}\n"
         "static SageValue sage_strip_fn(SageValue value) {\n"
         "    if (value.type != SAGE_TAG_STRING) return sage_nil();\n"
@@ -2477,7 +2837,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    if (result == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
         "    memcpy(result, s, len);\n"
         "    result[len] = '\\0';\n"
-        "    return sage_string(result);\n"
+        "    return sage_string_take(result);\n"
         "}\n"
         "\n",
         out
@@ -2486,6 +2846,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
     fputs(
         "static SageValue sage_split_fn(SageValue str_val, SageValue delim_val) {\n"
         "    if (str_val.type != SAGE_TAG_STRING || delim_val.type != SAGE_TAG_STRING) return sage_array();\n"
+        "    sage_gc_pin();\n"
         "    const char* s = str_val.as.string;\n"
         "    const char* delim = delim_val.as.string;\n"
         "    size_t dlen = strlen(delim);\n"
@@ -2493,8 +2854,9 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    if (dlen == 0) {\n"
         "        for (size_t i = 0; s[i]; i++) {\n"
         "            char buf[2] = {s[i], '\\0'};\n"
-        "            sage_array_push_raw(result.as.array, sage_string(sage_dup_string(buf)));\n"
+        "            sage_array_push_raw(result.as.array, sage_string(buf));\n"
         "        }\n"
+        "        sage_gc_unpin();\n"
         "        return result;\n"
         "    }\n"
         "    const char* start = s;\n"
@@ -2505,10 +2867,11 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        if (part == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
         "        memcpy(part, start, len);\n"
         "        part[len] = '\\0';\n"
-        "        sage_array_push_raw(result.as.array, sage_string(part));\n"
+        "        sage_array_push_raw(result.as.array, sage_string_take(part));\n"
         "        start = found + dlen;\n"
         "    }\n"
-        "    sage_array_push_raw(result.as.array, sage_string(sage_dup_string(start)));\n"
+        "    sage_array_push_raw(result.as.array, sage_string(start));\n"
+        "    sage_gc_unpin();\n"
         "    return result;\n"
         "}\n"
         "\n"
@@ -2517,7 +2880,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    SageArray* arr = arr_val.as.array;\n"
         "    const char* delim = delim_val.as.string;\n"
         "    size_t dlen = strlen(delim);\n"
-        "    if (arr->count == 0) return sage_string(sage_dup_string(\"\"));\n"
+        "    if (arr->count == 0) return sage_string(\"\");\n"
         "    size_t total = 0;\n"
         "    for (int i = 0; i < arr->count; i++) {\n"
         "        if (arr->elements[i].type == SAGE_TAG_STRING) total += strlen(arr->elements[i].as.string);\n"
@@ -2535,7 +2898,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        }\n"
         "    }\n"
         "    *p = '\\0';\n"
-        "    return sage_string(result);\n"
+        "    return sage_string_take(result);\n"
         "}\n"
         "\n",
         out
@@ -2550,7 +2913,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    const char* new_s = new_val.as.string;\n"
         "    size_t old_len = strlen(old_s);\n"
         "    size_t new_len = strlen(new_s);\n"
-        "    if (old_len == 0) return sage_string(sage_dup_string(s));\n"
+        "    if (old_len == 0) return sage_string(s);\n"
         "    size_t count = 0;\n"
         "    const char* tmp = s;\n"
         "    while ((tmp = strstr(tmp, old_s)) != NULL) { count++; tmp += old_len; }\n"
@@ -2568,7 +2931,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        }\n"
         "    }\n"
         "    *p = '\\0';\n"
-        "    return sage_string(result);\n"
+        "    return sage_string_take(result);\n"
         "}\n"
         "\n",
         out
@@ -2625,7 +2988,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    if (strcmp(type, \"byte\") == 0) { return sage_number((double)*base); }\n"
         "    if (strcmp(type, \"int\") == 0) { int v; memcpy(&v, base, sizeof(int)); return sage_number((double)v); }\n"
         "    if (strcmp(type, \"double\") == 0) { double v; memcpy(&v, base, sizeof(double)); return sage_number(v); }\n"
-        "    if (strcmp(type, \"string\") == 0) { return sage_string(sage_dup_string((const char*)base)); }\n"
+        "    if (strcmp(type, \"string\") == 0) { return sage_string((const char*)base); }\n"
         "    return sage_nil();\n"
         "}\n"
         "\n"
@@ -2666,6 +3029,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "\n"
         "static SageValue sage_struct_def(SageValue fields) {\n"
         "    if (fields.type != SAGE_TAG_ARRAY) return sage_nil();\n"
+        "    sage_gc_pin();\n"
         "    SageValue def = sage_make_dict();\n"
         "    size_t offset = 0, max_align = 1;\n"
         "    for (int i = 0; i < fields.as.array->count; i++) {\n"
@@ -2696,6 +3060,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    if (rem != 0) offset += max_align - rem;\n"
         "    sage_dict_set(def.as.dict, \"__size__\", sage_number((double)offset));\n"
         "    sage_dict_set(def.as.dict, \"__align__\", sage_number((double)max_align));\n"
+        "    sage_gc_unpin();\n"
         "    return def;\n"
         "}\n"
         "\n"
@@ -2827,9 +3192,11 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "}\n"
         "\n"
         "static SageValue sage_construct(const char* class_name, const char* parent_name, int argc, SageValue* argv) {\n"
+        "    sage_gc_pin();\n"
         "    SageValue inst = sage_make_dict();\n"
         "    sage_dict_set(inst.as.dict, \"__class__\", sage_string(class_name));\n"
         "    if (parent_name != NULL) sage_dict_set(inst.as.dict, \"__parent__\", sage_string(parent_name));\n"
+        "    sage_gc_unpin();\n"
         "    const char* current = class_name;\n"
         "    while (current != NULL) {\n"
         "        for (int i = 0; i < sage_method_count; i++) {\n"
@@ -2884,7 +3251,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
             "    if (fgets(buf, sizeof(buf), stdin) == NULL) return sage_nil();\n"
             "    size_t len = strlen(buf);\n"
             "    if (len > 0 && buf[len-1] == '\\n') buf[--len] = '\\0';\n"
-            "    return sage_string(sage_dup_string(buf));\n"
+            "    return sage_string(buf);\n"
             "}\n"
             "\n",
             out
@@ -2912,10 +3279,42 @@ static void emit_global_slots(Compiler* compiler) {
     }
 }
 
+static int count_name_entries(NameEntry* entries) {
+    int count = 0;
+    for (NameEntry* entry = entries; entry != NULL; entry = entry->next) {
+        count++;
+    }
+    return count;
+}
+
 static void emit_slot_declarations(Compiler* compiler, NameEntry* locals) {
     for (NameEntry* local = locals; local != NULL; local = local->next) {
         emit_line(compiler, "SageSlot %s = sage_slot_undefined();", local->c_name);
     }
+}
+
+static void emit_slot_frame_setup(Compiler* compiler, NameEntry* locals,
+                                  const char* roots_name, const char* frame_name) {
+    int count = count_name_entries(locals);
+
+    if (count == 0) {
+        emit_line(compiler, "SageGcFrame %s;", frame_name);
+        emit_line(compiler, "sage_gc_push_frame(&%s, NULL, 0);", frame_name);
+        return;
+    }
+
+    emit_indent(compiler);
+    fprintf(compiler->out, "SageSlot* %s[%d] = {", roots_name, count);
+    int index = 0;
+    for (NameEntry* local = locals; local != NULL; local = local->next, index++) {
+        if (index > 0) {
+            fputs(", ", compiler->out);
+        }
+        fprintf(compiler->out, "&%s", local->c_name);
+    }
+    fputs("};\n", compiler->out);
+    emit_line(compiler, "SageGcFrame %s;", frame_name);
+    emit_line(compiler, "sage_gc_push_frame(&%s, %s, %d);", frame_name, roots_name, count);
 }
 
 static void emit_function_definition(Compiler* compiler, Stmt* stmt) {
@@ -2965,6 +3364,7 @@ static void emit_function_definition(Compiler* compiler, Stmt* stmt) {
     compiler->indent++;
 
     emit_slot_declarations(compiler, compiler->locals);
+    emit_slot_frame_setup(compiler, compiler->locals, "sage_gc_roots", "sage_gc_frame");
     for (int i = 0; i < proc_stmt->param_count; i++) {
         char* param_name = token_to_string(proc_stmt->params[i]);
         NameEntry* param = find_name_entry(compiler->locals, param_name);
@@ -2972,8 +3372,10 @@ static void emit_function_definition(Compiler* compiler, Stmt* stmt) {
         emit_line(compiler, "sage_define_slot(&%s, arg%d);", param->c_name, i);
     }
 
+    compiler->in_function_body = 1;
     emit_stmt_list(compiler, proc_stmt->body);
-    emit_line(compiler, "return sage_nil();");
+    compiler->in_function_body = 0;
+    emit_line(compiler, "return sage_gc_return(&sage_gc_frame, sage_nil());");
 
     compiler->indent--;
     emit_line(compiler, "}");
@@ -3021,6 +3423,7 @@ static void emit_method_definition(Compiler* compiler, ClassInfo* cls, Stmt* met
     compiler->indent++;
 
     emit_slot_declarations(compiler, compiler->locals);
+    emit_slot_frame_setup(compiler, compiler->locals, "sage_gc_roots", "sage_gc_frame");
 
     /* Bind self */
     NameEntry* self_entry = find_name_entry(compiler->locals, "self");
@@ -3037,8 +3440,10 @@ static void emit_method_definition(Compiler* compiler, ClassInfo* cls, Stmt* met
 
     emit_line(compiler, "(void)_argc;");
 
+    compiler->in_function_body = 1;
     emit_stmt_list(compiler, proc->body);
-    emit_line(compiler, "return sage_nil();");
+    compiler->in_function_body = 0;
+    emit_line(compiler, "return sage_gc_return(&sage_gc_frame, sage_nil());");
 
     compiler->indent--;
     emit_line(compiler, "}");
@@ -3108,6 +3513,7 @@ static void emit_main_function(Compiler* compiler, Stmt* program, CompilerTarget
     for (NameEntry* global = compiler->globals; global != NULL; global = global->next) {
         emit_line(compiler, "%s = sage_slot_undefined();", global->c_name);
     }
+    emit_slot_frame_setup(compiler, compiler->globals, "sage_gc_global_roots", "sage_gc_main_frame");
 
     /* Register classes and methods */
     for (ClassInfo* cls = compiler->classes; cls != NULL; cls = cls->next) {
@@ -3138,6 +3544,8 @@ static void emit_main_function(Compiler* compiler, Stmt* program, CompilerTarget
         }
     }
 
+    emit_line(compiler, "sage_gc_pop_frame(&sage_gc_main_frame);");
+    emit_line(compiler, "sage_gc_shutdown();");
     emit_line(compiler, "return 0;");
     compiler->indent--;
     emit_line(compiler, "}");
