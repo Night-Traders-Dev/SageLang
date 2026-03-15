@@ -10,6 +10,7 @@ import io
 import sys
 import pass
 import compiler
+import bytecode
 import llvm_backend
 import codegen
 import formatter
@@ -43,6 +44,7 @@ proc print_usage():
     print ""
     print "Compiler flags:"
     print "  --emit-c <file>       Compile to C source"
+    print "  --emit-vm <file>      Compile to VM bytecode artifact"
     print "  --emit-llvm <file>    Compile to LLVM IR"
     print "  --emit-asm <file>     Compile to assembly"
     print ""
@@ -91,6 +93,14 @@ proc parse_args():
 
         if arg == "--emit-c":
             result["mode"] = "emit-c"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--emit-vm" or arg == "--emit-bytecode":
+            result["mode"] = "emit-vm"
             i = i + 1
             if i < argc:
                 result["input"] = argv[i]
@@ -278,6 +288,32 @@ proc mode_emit_c(args):
     print "Wrote " + out
 
 # ============================================================================
+# Mode: Emit VM Artifact
+# ============================================================================
+
+proc mode_emit_vm(args):
+    let path = args["input"]
+    if path == nil:
+        print "Error: No input file specified"
+        return
+    let source = read_input(path)
+    if source == nil:
+        return
+    let stmts = parse_source_file(source, path)
+    if args["opt_level"] > 0:
+        let ctx = make_pass_ctx(args)
+        stmts = pass.run_passes(stmts, ctx)
+    let artifact = bytecode.compile_to_vm_artifact(stmts)
+    if artifact == nil:
+        print "Error: VM compilation failed: " + bytecode.get_error()
+        return
+    let out = args["output"]
+    if out == nil:
+        out = derive_output(path, ".svm")
+    io.writefile(out, artifact)
+    print "Wrote " + out
+
+# ============================================================================
 # Mode: Emit LLVM IR
 # ============================================================================
 
@@ -406,6 +442,10 @@ proc main():
 
     if mode == "emit-c":
         mode_emit_c(args)
+        return
+
+    if mode == "emit-vm":
+        mode_emit_vm(args)
         return
 
     if mode == "emit-llvm":

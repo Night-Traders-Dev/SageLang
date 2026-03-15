@@ -506,12 +506,18 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                         case BC_OP_SUB: out = val_number(AS_NUMBER(left) - AS_NUMBER(right)); break;
                         case BC_OP_MUL: out = val_number(AS_NUMBER(left) * AS_NUMBER(right)); break;
                         case BC_OP_DIV:
-                            if (AS_NUMBER(right) == 0) { result = vm_error("Division by zero."); goto done; }
-                            out = val_number(AS_NUMBER(left) / AS_NUMBER(right));
+                            if (AS_NUMBER(right) == 0) {
+                                out = val_nil();
+                            } else {
+                                out = val_number(AS_NUMBER(left) / AS_NUMBER(right));
+                            }
                             break;
                         case BC_OP_MOD:
-                            if (r == 0) { result = vm_error("Modulo by zero."); goto done; }
-                            out = val_number((double)(l % r));
+                            if ((int)AS_NUMBER(right) == 0) {
+                                out = val_nil();
+                            } else {
+                                out = val_number((double)((int)AS_NUMBER(left) % (int)AS_NUMBER(right)));
+                            }
                             break;
                         case BC_OP_BIT_AND: out = val_number((double)(l & r)); break;
                         case BC_OP_BIT_OR: out = val_number((double)(l | r)); break;
@@ -701,5 +707,21 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 done:
     g_active_vm = previous_vm;
     g_gc_root_env = previous_gc_root;
+    return result;
+}
+
+ExecResult vm_execute_program(BytecodeProgram* program, Env* env) {
+    ExecResult result = vm_normal(val_nil());
+    if (program == NULL) {
+        return result;
+    }
+
+    for (int i = 0; i < program->chunk_count; i++) {
+        result = vm_execute_chunk(&program->chunks[i], env);
+        if (result.is_throwing) {
+            return result;
+        }
+    }
+
     return result;
 }

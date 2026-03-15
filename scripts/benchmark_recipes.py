@@ -274,14 +274,29 @@ def collect_recipe_results(
             runs=runs,
             warmups=warmups,
         ),
-        RecipeResult(
+        benchmark_compiled_recipe(
             name="sage-compiled-vm",
-            status="unsupported",
-            reason=(
-                "the current CLI exposes the VM only as a runtime backend "
-                "(`sage --runtime bytecode` or `--runtime vm`), not as an ahead-of-time "
-                "compile target or bytecode artifact format"
-            ),
+            repo_root=repo_root,
+            build_steps=[
+                (
+                    [
+                        str(sage_bin),
+                        "--emit-vm",
+                        str(workload),
+                        "-o",
+                        "{tmpdir}/recipe-compiled-vm.svm",
+                    ],
+                    repo_root,
+                ),
+            ],
+            run_command=[
+                str(sage_bin),
+                "--run-vm",
+                "{tmpdir}/recipe-compiled-vm.svm",
+            ],
+            run_cwd=repo_root,
+            runs=runs,
+            warmups=warmups,
         ),
         benchmark_compiled_recipe(
             name="sage-compiled-sage",

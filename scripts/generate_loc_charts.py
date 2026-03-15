@@ -351,6 +351,16 @@ def summarize_benchmark_issue(result: RecipeResult, expected_output: str | None)
     if result.reason.startswith("checksum mismatch:"):
         expected = expected_output if expected_output is not None else "the baseline"
         return f"{label}: checksum validation failed against {expected}."
+    if result.reason.startswith("build step failed\n") or result.reason.startswith("compiled program failed\n"):
+        if "stderr:\n" in result.reason:
+            detail = result.reason.split("stderr:\n", 1)[1].splitlines()[0].strip()
+            if detail:
+                return f"{label}: {detail}"
+        if "stdout:\n" in result.reason:
+            detail = result.reason.split("stdout:\n", 1)[1].splitlines()[0].strip()
+            if detail:
+                return f"{label}: {detail}"
+        return f"{label}: build or execution failed."
     return f"{label}: {result.reason}"
 
 

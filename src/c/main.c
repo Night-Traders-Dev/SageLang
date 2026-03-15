@@ -19,7 +19,9 @@
 #include "formatter.h"
 #include "linter.h"
 #include "lsp.h"
+#include "program.h"
 #include "runtime.h"
+#include "vm.h"
 
 extern Environment* g_global_env;
 
@@ -58,6 +60,8 @@ static void print_usage(FILE* stream) {
             "       sage --repl             Start interactive REPL\n"
             "       sage [--runtime ast|bytecode|auto] -c \"source\"\n"
             "       sage --emit-c <input.sage> [-o output.c] [-O0..3] [-g]\n"
+            "       sage --emit-vm <input.sage> [-o output.svm] [-O0..3] [-g]\n"
+            "       sage --run-vm <input.svm>\n"
             "       sage --compile <input.sage> [-o output] [--cc compiler] [-O0..3] [-g]\n"
             "       sage --emit-llvm <input.sage> [-o output.ll] [-O0..3] [-g]\n"
             "       sage --compile-llvm <input.sage> [-o output] [-O0..3] [-g]\n"
@@ -787,6 +791,51 @@ int main(int argc, const char* argv[]) {
 
         free(source);
         free(derived_output);
+    } else if (cmd_argc >= 3 &&
+               (strcmp(cmd_argv[1], "--emit-vm") == 0 || strcmp(cmd_argv[1], "--emit-bytecode") == 0)) {
+        const char* explicit_output = NULL;
+        const char* ignored_cc = NULL;
+        const char* ignored_target = NULL;
+        int opt_level = 0, debug_info = 0;
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
+                                   &opt_level, &debug_info, &ignored_target)) {
+            print_usage(stderr);
+            CLEANUP_AND_EXIT(64);
+        }
+
+        char* source = read_file(cmd_argv[2]);
+        char* derived_output = NULL;
+        const char* output_path = explicit_output;
+        if (output_path == NULL) {
+            derived_output = derive_output_path(cmd_argv[2], ".svm", 1);
+            output_path = derived_output;
+        }
+
+        if (!compile_source_to_vm_artifact(source, cmd_argv[2], output_path, opt_level, debug_info)) {
+            free(source);
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+
+        free(source);
+        free(derived_output);
+    } else if (cmd_argc == 3 &&
+               (strcmp(cmd_argv[1], "--run-vm") == 0 || strcmp(cmd_argv[1], "--run-bytecode") == 0)) {
+        BytecodeProgram program;
+        char error[256];
+        Env* env = NULL;
+
+        bytecode_program_init(&program);
+        if (!bytecode_program_read_file(&program, cmd_argv[2], error, sizeof(error))) {
+            fprintf(stderr, "VM artifact error: %s\n", error[0] ? error : "unknown error");
+            CLEANUP_AND_EXIT(1);
+        }
+
+        env = env_create(NULL);
+        g_global_env = env;
+        init_stdlib(env);
+        (void)vm_execute_program(&program, env);
+        bytecode_program_free(&program);
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile") == 0) {
         const char* explicit_output = NULL;
         const char* cc_command = NULL;

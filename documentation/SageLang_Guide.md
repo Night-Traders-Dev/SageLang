@@ -1308,6 +1308,8 @@ The C-hosted `sage` binary now supports three runtime selections:
 
 - The lexer and parser are unchanged; the VM reuses the same AST front-end.
 - Each parsed top-level statement is compiled to a transient bytecode chunk, then executed immediately.
+- The C-hosted toolchain can also emit a strict ahead-of-time VM artifact with `sage --emit-vm file.sage` and execute it later with `sage --run-vm file.svm`.
+- The self-hosted CLI can emit the same artifact format with `sage sage.sage --emit-vm file.sage`.
 - The VM is **hybrid** today: unsupported statements fall back to the AST interpreter through an explicit AST-bridge opcode instead of failing the whole program.
 - Values, environments, modules, classes, instances, and the GC are shared between AST and bytecode execution.
 
@@ -1378,7 +1380,7 @@ It measures:
 - `sage-interpreted-c-ast`: the C-hosted tree-walking interpreter
 - `sage-interpreted-vm`: the C-hosted bytecode VM runtime
 - `sage-compiled-c`: the native C backend compiled to a host executable
-- `sage-compiled-vm`: reserved for an ahead-of-time VM target when one exists
+- `sage-compiled-vm`: the C-hosted ahead-of-time VM artifact (`--emit-vm` + `--run-vm`)
 - `sage-compiled-sage`: the self-hosted Sage compiler path that emits C and then compiles it with the host toolchain
 
 Workload source: `benchmarks/runtime_compare.sage`
@@ -1390,7 +1392,7 @@ Generated chart assets:
 
 Current caveats:
 
-- `sage-compiled-vm` is intentionally reported as unsupported today because the VM is a runtime backend, not an ahead-of-time artifact format yet.
+- `sage-compiled-vm` now exists as a strict ahead-of-time artifact path, but it still fails workloads that need AST fallback instead of full bytecode lowering.
 - `sage-compiled-sage` is still experimental and currently fails checksum validation on the default benchmark workload, so it is called out in the chart footer instead of being charted as a valid timing result.
 
 Interpretation:
