@@ -1320,14 +1320,14 @@ The C-hosted `sage` binary now supports three runtime selections:
 - Global variables (`let`, assignment, reads)
 - Arithmetic, comparison, logical, and bitwise operators
 - Arrays, tuples, dicts, indexing, slicing, and property access
-- `print`, expression statements, `if`, `while`
+- `print`, expression statements, `if`, `while`, and array `for`
 - Ahead-of-time proc definitions, proc calls, nested proc calls, explicit `return`, and implicit `nil` returns
 - Calls to native functions, Sage functions, classes, and instance methods
 
 **What still bridges or stays unsupported**:
 
 - In hybrid `--runtime bytecode` mode: top-level statements the VM does not yet lower directly, including proc/class definitions that are still easier to execute through the AST path.
-- In strict `--emit-vm` mode: constructs such as `for`, `break`, `continue`, `yield`, `async proc`, exception-heavy paths, imports that need AST execution, and class/method lowering still fail compilation instead of bridging.
+- In strict `--emit-vm` mode: constructs such as `break`, `continue`, `yield`, `async proc`, exception-heavy paths, imports that need AST execution, and class/method lowering still fail compilation instead of bridging.
 - Complex features where parity is more important than forcing incomplete bytecode support
 
 The practical result is that `bytecode` mode is already useful for long-running scripts and engine-style workloads, `--emit-vm` is now a real ahead-of-time path for a meaningful strict subset of Sage, and `ast` mode remains the reference path for maximum behavioral confidence.

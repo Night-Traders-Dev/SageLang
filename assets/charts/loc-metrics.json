@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-03-15 03:25 UTC",
+  "generated_at": "2026-03-15 03:31 UTC",
   "repo_languages": [
     {
       "language": "C",
-      "lines": 20922
+      "lines": 21003
     },
     {
       "language": "Sage",
-      "lines": 18757
+      "lines": 18816
     },
     {
       "language": "JSON",
@@ -33,7 +33,7 @@
   "compiler_comparison": [
     {
       "label": "Self-Hosted Sage Core",
-      "lines": 9707
+      "lines": 9753
     },
     {
       "label": "Native C Core",
@@ -53,11 +53,11 @@
         "reason": "",
         "output": "11520",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.0071887340000102995,
-        "total_median_seconds": 0.0071887340000102995,
+        "run_median_seconds": 0.007726412000920391,
+        "total_median_seconds": 0.007726412000920391,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.007215789399924688,
-        "total_mean_seconds": 0.007215789399924688
+        "run_mean_seconds": 0.007996214600279928,
+        "total_mean_seconds": 0.007996214600279928
       },
       {
         "name": "sage-interpreted-vm",
@@ -66,11 +66,11 @@
         "reason": "",
         "output": "11520",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.006755329000043275,
-        "total_median_seconds": 0.006755329000043275,
+        "run_median_seconds": 0.008713535999049782,
+        "total_median_seconds": 0.008713535999049782,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.006912873799956287,
-        "total_mean_seconds": 0.006912873799956287
+        "run_mean_seconds": 0.008619044799706899,
+        "total_mean_seconds": 0.008619044799706899
       },
       {
         "name": "sage-compiled-c",
@@ -78,12 +78,12 @@
         "status": "ok",
         "reason": "",
         "output": "11520",
-        "build_median_seconds": 0.10561831399991206,
-        "run_median_seconds": 0.0015553919993180898,
-        "total_median_seconds": 0.10714418899988232,
-        "build_mean_seconds": 0.10649685640000825,
-        "run_mean_seconds": 0.001554250399749435,
-        "total_mean_seconds": 0.10805110679975768
+        "build_median_seconds": 0.11286195600041538,
+        "run_median_seconds": 0.0017826950006565312,
+        "total_median_seconds": 0.11418573599985393,
+        "build_mean_seconds": 0.11475474039980327,
+        "run_mean_seconds": 0.001735295800244785,
+        "total_mean_seconds": 0.11649003620004805
       },
       {
         "name": "sage-compiled-vm",
@@ -91,12 +91,12 @@
         "status": "ok",
         "reason": "",
         "output": "11520",
-        "build_median_seconds": 0.0034517900003265822,
-        "run_median_seconds": 0.005919919999541889,
-        "total_median_seconds": 0.00956577200031461,
-        "build_mean_seconds": 0.003589220799949544,
-        "run_mean_seconds": 0.005801586200141174,
-        "total_mean_seconds": 0.009390807000090717
+        "build_median_seconds": 0.003842062998955953,
+        "run_median_seconds": 0.006572037000296405,
+        "total_median_seconds": 0.010383258999354439,
+        "build_mean_seconds": 0.004024588199536083,
+        "run_mean_seconds": 0.006419229400489712,
+        "total_mean_seconds": 0.010443817600025796
       },
       {
         "name": "sage-compiled-sage",
@@ -104,12 +104,12 @@
         "status": "failed",
         "reason": "checksum mismatch: expected '11520', got ''",
         "output": "",
-        "build_median_seconds": 0.09046900500015909,
-        "run_median_seconds": 0.0006720829996993416,
-        "total_median_seconds": 0.09112943499985704,
-        "build_mean_seconds": 0.09211148640024476,
-        "run_mean_seconds": 0.0007568685998194269,
-        "total_mean_seconds": 0.09286835500006418
+        "build_median_seconds": 0.10009085599813261,
+        "run_median_seconds": 0.0008093959986581467,
+        "total_median_seconds": 0.10079139699701045,
+        "build_mean_seconds": 0.09955871619895333,
+        "run_mean_seconds": 0.0008126205997541547,
+        "total_mean_seconds": 0.1003713367987075
       }
     ]
   }

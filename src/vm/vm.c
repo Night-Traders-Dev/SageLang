@@ -15,7 +15,7 @@ extern Environment* g_gc_root_env;
 
 typedef struct ActiveVm {
     BytecodeChunk* chunk;
-    Env* env;
+    Env* current_env;
     Value stack[VM_STACK_MAX];
     int stack_count;
     struct ActiveVm* parent;
@@ -59,6 +59,7 @@ void vm_mark_roots(void) {
     for (ActiveVm* active = g_active_vm; active != NULL; active = active->parent) {
         vm_mark_chunk_constants(active->chunk);
         vm_mark_program_constants(active->chunk != NULL ? active->chunk->program : NULL);
+        gc_mark_env(active->current_env);
 
         for (int i = 0; i < active->stack_count; i++) {
             gc_mark_value(active->stack[i]);
@@ -249,7 +250,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 
     memset(&vm, 0, sizeof(vm));
     vm.chunk = chunk;
-    vm.env = env;
+    vm.current_env = env;
     vm.parent = previous_vm;
 
     g_gc_root_env = env;
@@ -292,7 +293,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 uint16_t name_index = read_u16(chunk, &ip);
                 Value name = chunk->constants[name_index];
                 Value resolved = val_nil();
-                if (!env_get(env, AS_STRING(name), (int)strlen(AS_STRING(name)), &resolved)) {
+                if (!env_get(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), &resolved)) {
                     result = vm_error("Undefined variable.");
                     goto done;
                 }
@@ -306,14 +307,14 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 uint16_t name_index = read_u16(chunk, &ip);
                 Value name = chunk->constants[name_index];
                 Value value = vm_pop(&vm);
-                env_define(env, AS_STRING(name), (int)strlen(AS_STRING(name)), value);
+                env_define(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), value);
                 break;
             }
             case BC_OP_SET_GLOBAL: {
                 uint16_t name_index = read_u16(chunk, &ip);
                 Value name = chunk->constants[name_index];
                 Value value = vm_peek(&vm, 0);
-                if (!env_assign(env, AS_STRING(name), (int)strlen(AS_STRING(name)), value)) {
+                if (!env_assign(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), value)) {
                     result = vm_error("Undefined variable.");
                     goto done;
                 }
@@ -329,8 +330,8 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 }
 
                 Value name = chunk->constants[name_index];
-                Value function = val_bytecode_function(&chunk->program->functions[function_index], env);
-                env_define(env, AS_STRING(name), (int)strlen(AS_STRING(name)), function);
+                Value function = val_bytecode_function(&chunk->program->functions[function_index], vm.current_env);
+                env_define(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), function);
                 break;
             }
             case BC_OP_GET_PROPERTY: {
@@ -646,7 +647,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     args[i] = vm_pop(&vm);
                 }
                 Value callee = vm_pop(&vm);
-                ExecResult call_result = call_function_value(callee, arg_count, args, env);
+                ExecResult call_result = call_function_value(callee, arg_count, args, vm.current_env);
                 if (call_result.is_throwing) {
                     result = call_result;
                     goto done;
@@ -665,7 +666,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     args[i] = vm_pop(&vm);
                 }
                 Value object = vm_pop(&vm);
-                ExecResult call_result = call_method_value(object, AS_STRING(chunk->constants[name_index]), arg_count, args, env);
+                ExecResult call_result = call_method_value(object, AS_STRING(chunk->constants[name_index]), arg_count, args, vm.current_env);
                 if (call_result.is_throwing) {
                     result = call_result;
                     goto done;
@@ -737,9 +738,43 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 printf("\n");
                 break;
             }
+            case BC_OP_PUSH_ENV:
+                vm.current_env = env_create(vm.current_env);
+                break;
+            case BC_OP_POP_ENV:
+                if (vm.current_env == NULL || vm.current_env->parent == NULL) {
+                    result = vm_error("Cannot pop the root VM scope.");
+                    goto done;
+                }
+                vm.current_env = vm.current_env->parent;
+                break;
+            case BC_OP_DUP: {
+                uint8_t distance = read_u8(chunk, &ip);
+                if ((int)distance >= vm.stack_count) {
+                    result = vm_error("Invalid VM stack duplicate.");
+                    goto done;
+                }
+                if (!vm_push(&vm, vm_peek(&vm, (int)distance))) {
+                    result = vm_error("VM stack overflow.");
+                    goto done;
+                }
+                break;
+            }
+            case BC_OP_ARRAY_LEN: {
+                Value value = vm_pop(&vm);
+                if (!IS_ARRAY(value)) {
+                    result = vm_error("for loop iterable must be an array.");
+                    goto done;
+                }
+                if (!vm_push(&vm, val_number((double)value.as.array->count))) {
+                    result = vm_error("VM stack overflow.");
+                    goto done;
+                }
+                break;
+            }
             case BC_OP_EXEC_AST_STMT: {
                 uint16_t stmt_index = read_u16(chunk, &ip);
-                ExecResult ast_result = interpret(chunk->ast_stmts[stmt_index], env);
+                ExecResult ast_result = interpret(chunk->ast_stmts[stmt_index], vm.current_env);
                 if (ast_result.is_throwing) {
                     result = ast_result;
                     goto done;
