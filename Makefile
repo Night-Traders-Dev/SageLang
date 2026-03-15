@@ -177,7 +177,7 @@ debug:
 	$(MAKE) DEBUG=1
 
 # Refresh repository metrics and benchmark charts for the README
-charts:
+charts: $(TARGET)
 	@$(PYTHON) $(CHART_SCRIPT)
 	@echo "Updated README metric and benchmark chart assets"
 
