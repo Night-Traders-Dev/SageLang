@@ -831,6 +831,30 @@ src/vm/bytecode.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/bytecode.c.s
 .PHONY : src/vm/bytecode.c.s
 
+src/vm/program.o: src/vm/program.c.o
+.PHONY : src/vm/program.o
+
+# target to build an object file
+src/vm/program.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/program.c.o
+.PHONY : src/vm/program.c.o
+
+src/vm/program.i: src/vm/program.c.i
+.PHONY : src/vm/program.i
+
+# target to preprocess a source file
+src/vm/program.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/program.c.i
+.PHONY : src/vm/program.c.i
+
+src/vm/program.s: src/vm/program.c.s
+.PHONY : src/vm/program.s
+
+# target to generate assembly for a file
+src/vm/program.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/program.c.s
+.PHONY : src/vm/program.c.s
+
 src/vm/runtime.o: src/vm/runtime.c.o
 .PHONY : src/vm/runtime.o
 
@@ -972,6 +996,9 @@ help:
 	@echo "... src/vm/bytecode.o"
 	@echo "... src/vm/bytecode.i"
 	@echo "... src/vm/bytecode.s"
+	@echo "... src/vm/program.o"
+	@echo "... src/vm/program.i"
+	@echo "... src/vm/program.s"
 	@echo "... src/vm/runtime.o"
 	@echo "... src/vm/runtime.i"
 	@echo "... src/vm/runtime.s"

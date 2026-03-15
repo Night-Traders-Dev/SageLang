@@ -52,6 +52,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/sage.dir/src/c/value.c.o.d"
   "CMakeFiles/sage.dir/src/vm/bytecode.c.o"
   "CMakeFiles/sage.dir/src/vm/bytecode.c.o.d"
+  "CMakeFiles/sage.dir/src/vm/program.c.o"
+  "CMakeFiles/sage.dir/src/vm/program.c.o.d"
   "CMakeFiles/sage.dir/src/vm/runtime.c.o"
   "CMakeFiles/sage.dir/src/vm/runtime.c.o.d"
   "CMakeFiles/sage.dir/src/vm/vm.c.o"
