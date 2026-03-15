@@ -50,7 +50,11 @@ typedef enum {
     BC_OP_DICT,
     BC_OP_PRINT,
     BC_OP_EXEC_AST_STMT,
-    BC_OP_RETURN
+    BC_OP_RETURN,
+    BC_OP_PUSH_ENV,
+    BC_OP_POP_ENV,
+    BC_OP_DUP,
+    BC_OP_ARRAY_LEN
 } BytecodeOp;
 
 typedef enum {

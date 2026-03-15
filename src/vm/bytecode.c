@@ -161,6 +161,11 @@ static int emit_define_function(BytecodeCompiler* compiler, Token token, int fun
            emit_u16(compiler, (uint16_t)function_index, token.line, token.column);
 }
 
+static int emit_dup(BytecodeCompiler* compiler, uint8_t distance, int line, int column) {
+    return emit_op(compiler, BC_OP_DUP, line, column) &&
+           emit_u8(compiler, distance, line, column);
+}
+
 static int emit_ast_stmt(BytecodeCompiler* compiler, Stmt* stmt) {
     if (compiler->mode == BYTECODE_COMPILE_STRICT) {
         (void)stmt;
@@ -512,6 +517,53 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             if (!patch_jump(compiler, exit_jump, current_offset(compiler))) return 0;
             if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+            return 1;
+        }
+        case STMT_FOR: {
+            Token loop_var = stmt->as.for_stmt.variable;
+
+            if (!compile_expr(compiler, stmt->as.for_stmt.iterable)) break;
+            if (!emit_op(compiler, BC_OP_PUSH_ENV, loop_var.line, loop_var.column)) return 0;
+            if (!emit_constant(compiler, val_number(0), loop_var.line, loop_var.column)) return 0;
+
+            int loop_start = current_offset(compiler);
+
+            if (!emit_dup(compiler, 0, loop_var.line, loop_var.column) ||
+                !emit_dup(compiler, 2, loop_var.line, loop_var.column) ||
+                !emit_op(compiler, BC_OP_ARRAY_LEN, loop_var.line, loop_var.column) ||
+                !emit_op(compiler, BC_OP_LESS, loop_var.line, loop_var.column)) {
+                return 0;
+            }
+
+            int exit_jump = emit_jump(compiler, BC_OP_JUMP_IF_FALSE, loop_var.line, loop_var.column);
+            if (exit_jump < 0) return 0;
+            if (!emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column)) return 0;
+
+            if (!emit_dup(compiler, 1, loop_var.line, loop_var.column) ||
+                !emit_dup(compiler, 1, loop_var.line, loop_var.column) ||
+                !emit_op(compiler, BC_OP_GET_INDEX, loop_var.line, loop_var.column) ||
+                !emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, loop_var)) {
+                return 0;
+            }
+
+            if (!compile_stmt(compiler, stmt->as.for_stmt.body, 0)) return 0;
+
+            if (!emit_constant(compiler, val_number(1), loop_var.line, loop_var.column) ||
+                !emit_op(compiler, BC_OP_ADD, loop_var.line, loop_var.column) ||
+                !emit_op(compiler, BC_OP_JUMP, loop_var.line, loop_var.column) ||
+                !emit_u16(compiler, (uint16_t)loop_start, loop_var.line, loop_var.column)) {
+                return 0;
+            }
+
+            if (!patch_jump(compiler, exit_jump, current_offset(compiler)) ||
+                !emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column) ||
+                !emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column) ||
+                !emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column) ||
+                !emit_op(compiler, BC_OP_POP_ENV, loop_var.line, loop_var.column)) {
+                return 0;
+            }
+
+            if (want_result) return emit_op(compiler, BC_OP_NIL, loop_var.line, loop_var.column);
             return 1;
         }
         case STMT_RETURN:

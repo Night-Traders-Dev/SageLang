@@ -75,6 +75,10 @@ let BC_OP_DICT = 40
 let BC_OP_PRINT = 41
 let BC_OP_EXEC_AST_STMT = 42
 let BC_OP_RETURN = 43
+let BC_OP_PUSH_ENV = 44
+let BC_OP_POP_ENV = 45
+let BC_OP_DUP = 46
+let BC_OP_ARRAY_LEN = 47
 
 proc set_error(message):
     last_error = message
@@ -153,6 +157,11 @@ proc emit_define_function(chunk, tok, function_index):
     emit_op(chunk, BC_OP_DEFINE_FUNCTION)
     emit_u16(chunk, name_index)
     emit_u16(chunk, function_index)
+    return true
+
+proc emit_dup(chunk, distance):
+    emit_op(chunk, BC_OP_DUP)
+    emit_u8(chunk, distance)
     return true
 
 proc emit_jump(chunk, op):
@@ -535,6 +544,50 @@ proc compile_stmt(program, chunk, stmt, want_result, allow_return):
         if not patch_jump(chunk, exit_jump, current_offset(chunk)):
             return false
         emit_op(chunk, BC_OP_POP)
+        if want_result:
+            emit_op(chunk, BC_OP_NIL)
+        return true
+
+    if stmt.type == ast.STMT_FOR:
+        let loop_var = stmt.variable
+        if not compile_expr(chunk, stmt.iterable):
+            return false
+        emit_op(chunk, BC_OP_PUSH_ENV)
+        if not emit_constant(chunk, number_constant(0, "0")):
+            return false
+
+        let loop_start = current_offset(chunk)
+        if not emit_dup(chunk, 0):
+            return false
+        if not emit_dup(chunk, 2):
+            return false
+        emit_op(chunk, BC_OP_ARRAY_LEN)
+        emit_op(chunk, BC_OP_LESS)
+        let exit_jump = emit_jump(chunk, BC_OP_JUMP_IF_FALSE)
+        emit_op(chunk, BC_OP_POP)
+
+        if not emit_dup(chunk, 1):
+            return false
+        if not emit_dup(chunk, 1):
+            return false
+        emit_op(chunk, BC_OP_GET_INDEX)
+        emit_name_op(chunk, BC_OP_DEFINE_GLOBAL, loop_var)
+
+        if not compile_stmt(program, chunk, stmt.body, false, allow_return):
+            return false
+
+        if not emit_constant(chunk, number_constant(1, "1")):
+            return false
+        emit_op(chunk, BC_OP_ADD)
+        emit_op(chunk, BC_OP_JUMP)
+        emit_u16(chunk, loop_start)
+
+        if not patch_jump(chunk, exit_jump, current_offset(chunk)):
+            return false
+        emit_op(chunk, BC_OP_POP)
+        emit_op(chunk, BC_OP_POP)
+        emit_op(chunk, BC_OP_POP)
+        emit_op(chunk, BC_OP_POP_ENV)
         if want_result:
             emit_op(chunk, BC_OP_NIL)
         return true
