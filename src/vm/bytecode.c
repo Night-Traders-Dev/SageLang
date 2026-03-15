@@ -9,6 +9,7 @@
 
 typedef struct {
     BytecodeChunk* chunk;
+    BytecodeCompileMode mode;
     char* error;
     size_t error_size;
 } BytecodeCompiler;
@@ -146,6 +147,13 @@ static int emit_name_op(BytecodeCompiler* compiler, BytecodeOp op, Token token) 
 }
 
 static int emit_ast_stmt(BytecodeCompiler* compiler, Stmt* stmt) {
+    if (compiler->mode == BYTECODE_COMPILE_STRICT) {
+        (void)stmt;
+        set_error(compiler,
+                  "Statement requires AST fallback and cannot be emitted as a compiled VM artifact yet.");
+        return 0;
+    }
+
     int index = add_ast_stmt(compiler, stmt);
     if (index < 0) return 0;
     if (index > 0xffff) {
@@ -490,8 +498,14 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
 }
 
 int bytecode_compile_statement(BytecodeChunk* chunk, Stmt* stmt, char* error, size_t error_size) {
+    return bytecode_compile_statement_mode(chunk, stmt, BYTECODE_COMPILE_HYBRID, error, error_size);
+}
+
+int bytecode_compile_statement_mode(BytecodeChunk* chunk, Stmt* stmt, BytecodeCompileMode mode,
+                                    char* error, size_t error_size) {
     BytecodeCompiler compiler;
     compiler.chunk = chunk;
+    compiler.mode = mode;
     compiler.error = error;
     compiler.error_size = error_size;
     if (error != NULL && error_size > 0) {

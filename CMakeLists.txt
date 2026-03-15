@@ -105,6 +105,7 @@ set(SAGE_CORE_SOURCES
 
 set(SAGE_VM_SOURCES
     src/vm/bytecode.c
+    src/vm/program.c
     src/vm/runtime.c
     src/vm/vm.c
 )
@@ -150,6 +151,7 @@ set(SAGE_SELF_HOST_SOURCES
     src/sage/lexer.sage
     src/sage/ast.sage
     src/sage/parser.sage
+    src/sage/bytecode.sage
     src/sage/interpreter.sage
     src/sage/sage.sage
 )

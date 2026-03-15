@@ -99,12 +99,25 @@ assert_contains(error_msg2, "hint:", "error has hint")
 print nl + "--- compile_to_c pipeline ---"
 
 import compiler
+import bytecode
 
 let c_src = "print 42"
 let c_stmts = parse_source(c_src)
 let c_output = compiler.compile_to_c(c_stmts)
 assert_contains(c_output, "sage_print", "C output has sage_print")
 assert_contains(c_output, "int main", "C output has main")
+
+# ============================================================================
+# Test compilation to VM artifact
+# ============================================================================
+
+print nl + "--- compile_to_vm_artifact pipeline ---"
+
+let vm_src = "let x = 10" + nl + "print x"
+let vm_stmts = parse_source(vm_src)
+let vm_output = bytecode.compile_to_vm_artifact(vm_stmts)
+assert_contains(vm_output, "SAGEBC1", "VM artifact has header")
+assert_contains(vm_output, "chunks 2", "VM artifact has chunk count")
 
 # ============================================================================
 # Test compilation to LLVM IR

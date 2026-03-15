@@ -63,6 +63,7 @@ CORE_SOURCES = \
 
 VM_SOURCES = \
     $(VM_DIR)/bytecode.c \
+    $(VM_DIR)/program.c \
     $(VM_DIR)/runtime.c \
     $(VM_DIR)/vm.c
 

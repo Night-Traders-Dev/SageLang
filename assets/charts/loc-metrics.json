@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-03-15 01:35 UTC",
+  "generated_at": "2026-03-15 02:33 UTC",
   "repo_languages": [
     {
       "language": "C",
-      "lines": 20042
+      "lines": 20125
     },
     {
       "language": "Sage",
-      "lines": 18129
+      "lines": 18175
     },
     {
       "language": "JSON",
@@ -15,7 +15,7 @@
     },
     {
       "language": "Makefile",
-      "lines": 570
+      "lines": 571
     },
     {
       "language": "Shell",
@@ -23,7 +23,7 @@
     },
     {
       "language": "CMake",
-      "lines": 408
+      "lines": 410
     },
     {
       "language": "Dockerfile",
@@ -33,11 +33,11 @@
   "compiler_comparison": [
     {
       "label": "Self-Hosted Sage Core",
-      "lines": 9105
+      "lines": 9141
     },
     {
       "label": "Native C Core",
-      "lines": 18739
+      "lines": 18783
     }
   ],
   "recipe_benchmark": {
@@ -53,11 +53,11 @@
         "reason": "",
         "output": "11520",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.006935379999958968,
-        "total_median_seconds": 0.006935379999958968,
+        "run_median_seconds": 0.007541729999502422,
+        "total_median_seconds": 0.007541729999502422,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.00703232079999907,
-        "total_mean_seconds": 0.00703232079999907
+        "run_mean_seconds": 0.007425332199818513,
+        "total_mean_seconds": 0.007425332199818513
       },
       {
         "name": "sage-interpreted-vm",
@@ -66,11 +66,11 @@
         "reason": "",
         "output": "11520",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.007128527000077156,
-        "total_median_seconds": 0.007128527000077156,
+        "run_median_seconds": 0.007670986000448465,
+        "total_median_seconds": 0.007670986000448465,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.007116453599928718,
-        "total_mean_seconds": 0.007116453599928718
+        "run_mean_seconds": 0.00829162260015437,
+        "total_mean_seconds": 0.00829162260015437
       },
       {
         "name": "sage-compiled-c",
@@ -78,18 +78,18 @@
         "status": "ok",
         "reason": "",
         "output": "11520",
-        "build_median_seconds": 0.11108844399996087,
-        "run_median_seconds": 0.001534773999992467,
-        "total_median_seconds": 0.11268198699985987,
-        "build_mean_seconds": 0.11136958479992246,
-        "run_mean_seconds": 0.0015597327999785193,
-        "total_mean_seconds": 0.11292931759990096
+        "build_median_seconds": 0.1104014560005453,
+        "run_median_seconds": 0.0016998169994622003,
+        "total_median_seconds": 0.11172527400049148,
+        "build_mean_seconds": 0.11331225680005445,
+        "run_mean_seconds": 0.0016439121998701011,
+        "total_mean_seconds": 0.11495616899992456
       },
       {
         "name": "sage-compiled-vm",
         "label": "Compiled (VM)",
-        "status": "unsupported",
-        "reason": "the current CLI exposes the VM only as a runtime backend (`sage --runtime bytecode` or `--runtime vm`), not as an ahead-of-time compile target or bytecode artifact format",
+        "status": "failed",
+        "reason": "build step failed\ncommand: /home/kraken/Devel/sagelang/sage --emit-vm /home/kraken/Devel/sagelang/benchmarks/runtime_compare.sage -o /home/kraken/Devel/sagelang/.tmp/sage-compiled-vm-s2x7h44d/recipe-compiled-vm.svm\ncwd: /home/kraken/Devel/sagelang\nstderr:\nVM compile error: Statement requires AST fallback and cannot be emitted as a compiled VM artifact yet.",
         "output": null,
         "build_median_seconds": null,
         "run_median_seconds": null,
@@ -104,12 +104,12 @@
         "status": "failed",
         "reason": "checksum mismatch: expected '11520', got ''",
         "output": "",
-        "build_median_seconds": 0.09546092799996586,
-        "run_median_seconds": 0.0010321109998585598,
-        "total_median_seconds": 0.09656057400002283,
-        "build_mean_seconds": 0.09721003320000818,
-        "run_mean_seconds": 0.001001821199997721,
-        "total_mean_seconds": 0.0982118544000059
+        "build_median_seconds": 0.0924249610006882,
+        "run_median_seconds": 0.0008791830005066004,
+        "total_median_seconds": 0.09326263699949777,
+        "build_mean_seconds": 0.09509663740027463,
+        "run_mean_seconds": 0.0008638958001029095,
+        "total_mean_seconds": 0.09596053320037753
       }
     ]
   }

@@ -52,6 +52,11 @@ typedef enum {
     BC_OP_RETURN
 } BytecodeOp;
 
+typedef enum {
+    BYTECODE_COMPILE_HYBRID,
+    BYTECODE_COMPILE_STRICT
+} BytecodeCompileMode;
+
 typedef struct {
     uint8_t* code;
     int code_count;
@@ -72,5 +77,7 @@ typedef struct {
 void bytecode_chunk_init(BytecodeChunk* chunk);
 void bytecode_chunk_free(BytecodeChunk* chunk);
 int bytecode_compile_statement(BytecodeChunk* chunk, Stmt* stmt, char* error, size_t error_size);
+int bytecode_compile_statement_mode(BytecodeChunk* chunk, Stmt* stmt, BytecodeCompileMode mode,
+                                    char* error, size_t error_size);
 
 #endif
