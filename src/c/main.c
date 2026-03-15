@@ -19,6 +19,7 @@
 #include "formatter.h"
 #include "linter.h"
 #include "lsp.h"
+#include "runtime.h"
 
 extern Environment* g_global_env;
 
@@ -53,9 +54,9 @@ static void cleanup_runtime_state(void) {
 static void print_usage(FILE* stream) {
     fprintf(stream,
             "Usage: sage                    Start interactive REPL\n"
-            "       sage [path]             Run a Sage source file\n"
+            "       sage [--runtime ast|bytecode|auto] [path]\n"
             "       sage --repl             Start interactive REPL\n"
-            "       sage -c \"source\"        Execute source string\n"
+            "       sage [--runtime ast|bytecode|auto] -c \"source\"\n"
             "       sage --emit-c <input.sage> [-o output.c] [-O0..3] [-g]\n"
             "       sage --compile <input.sage> [-o output] [--cc compiler] [-O0..3] [-g]\n"
             "       sage --emit-llvm <input.sage> [-o output.ll] [-O0..3] [-g]\n"
@@ -457,7 +458,8 @@ static void repl_reset_session(Env** env_ptr) {
     printf("REPL session reset.\n");
 }
 
-static void repl_execute_source(char* buffer, Env* env, int print_expr_results,
+static void repl_execute_source(char* buffer, Env* env, SageRuntimeMode runtime_mode,
+                                int print_expr_results,
                                 Value* last_value, int* last_is_expression) {
     if (last_value != NULL) {
         *last_value = val_nil();
@@ -473,7 +475,7 @@ static void repl_execute_source(char* buffer, Env* env, int print_expr_results,
         Stmt* stmt = parse();
         if (stmt == NULL) break;
         retain_program_stmt(stmt);
-        ExecResult result = interpret(stmt, env);
+        ExecResult result = sage_execute_stmt(stmt, env, runtime_mode);
 
         if (stmt->type == STMT_EXPRESSION) {
             if (last_value != NULL) {
@@ -492,7 +494,7 @@ static void repl_execute_source(char* buffer, Env* env, int print_expr_results,
 }
 
 // Phase 12: Interactive REPL
-static void run_repl(void) {
+static void run_repl(SageRuntimeMode runtime_mode) {
     printf("Sage REPL v0.12.0\n");
     printf("Type :help for help, :quit to exit.\n");
 
@@ -589,7 +591,7 @@ static void run_repl(void) {
                 }
 
                 if (setjmp(g_repl_error_jmp) == 0) {
-                    repl_execute_source(buffer, env, 0, NULL, NULL);
+                    repl_execute_source(buffer, env, runtime_mode, 0, NULL, NULL);
                     printf("Loaded: %s\n", arg);
                 }
                 repl_keep_buffer(buffer);
@@ -617,7 +619,7 @@ static void run_repl(void) {
                 if (setjmp(g_repl_error_jmp) == 0) {
                     Value last_value = val_nil();
                     int last_is_expression = 0;
-                    repl_execute_source(buffer, env, 0, &last_value, &last_is_expression);
+                    repl_execute_source(buffer, env, runtime_mode, 0, &last_value, &last_is_expression);
                     if (last_is_expression) {
                         printf("%s = ", value_type_name(last_value));
                         repl_print_value_inline(last_value);
@@ -691,7 +693,7 @@ static void run_repl(void) {
 
         // Parse and interpret with error recovery
         if (setjmp(g_repl_error_jmp) == 0) {
-            repl_execute_source((char*)buffer, env, 1, NULL, NULL);
+            repl_execute_source((char*)buffer, env, runtime_mode, 1, NULL, NULL);
         }
         // If setjmp returned non-zero, an error occurred and we recovered
 
@@ -704,7 +706,7 @@ static void run_repl(void) {
     repl_free_buffers();
 }
 
-static void run(const char* source, const char* filename) {
+static void run(const char* source, const char* filename, SageRuntimeMode runtime_mode) {
     init_lexer(source, filename);
     parser_init();
     Env* env = env_create(NULL);
@@ -715,7 +717,7 @@ static void run(const char* source, const char* filename) {
          Stmt* result = parse();
          if (result == NULL) break;
          retain_program_stmt(result);
-         interpret(result, env);
+         sage_execute_stmt(result, env, runtime_mode);
     }
 }
 
@@ -727,6 +729,10 @@ static void run(const char* source, const char* filename) {
 } while(0)
 
 int main(int argc, const char* argv[]) {
+    SageRuntimeMode runtime_mode = SAGE_RUNTIME_AST;
+    const char** cmd_argv = argv;
+    int cmd_argc = argc;
+
     // Initialize garbage collector
     gc_init();
 
@@ -734,36 +740,46 @@ int main(int argc, const char* argv[]) {
     sage_set_args(argc, argv);
     init_module_system();
 
-    if (argc == 1) {
+    if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--runtime") == 0) {
+        if (!sage_runtime_parse_mode(cmd_argv[2], &runtime_mode)) {
+            fprintf(stderr, "Unknown runtime mode: %s (expected ast, bytecode, or auto)\n", cmd_argv[2]);
+            print_usage(stderr);
+            CLEANUP_AND_EXIT(64);
+        }
+        cmd_argv += 2;
+        cmd_argc -= 2;
+    }
+
+    if (cmd_argc == 1) {
         // No arguments: start REPL
-        run_repl();
-    } else if (argc == 2 && strcmp(argv[1], "--repl") == 0) {
+        run_repl(runtime_mode);
+    } else if (cmd_argc == 2 && strcmp(cmd_argv[1], "--repl") == 0) {
         // Explicit REPL flag
-        run_repl();
-    } else if (argc == 2 && strcmp(argv[1], "--help") == 0) {
+        run_repl(runtime_mode);
+    } else if (cmd_argc == 2 && strcmp(cmd_argv[1], "--help") == 0) {
         print_usage(stdout);
-    } else if (argc == 3 && strcmp(argv[1], "-c") == 0) {
-        run(argv[2], "<command>");
-    } else if (argc >= 3 && strcmp(argv[1], "--emit-c") == 0) {
+    } else if (cmd_argc == 3 && strcmp(cmd_argv[1], "-c") == 0) {
+        run(cmd_argv[2], "<command>", runtime_mode);
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--emit-c") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;
         const char* ignored_target = NULL;
         int opt_level = 0, debug_info = 0;
-        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
                                    &opt_level, &debug_info, &ignored_target)) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(argv[2]);
+        char* source = read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* output_path = explicit_output;
         if (output_path == NULL) {
-            derived_output = derive_output_path(argv[2], ".c", 1);
+            derived_output = derive_output_path(cmd_argv[2], ".c", 1);
             output_path = derived_output;
         }
 
-        if (!compile_source_to_c_opt(source, argv[2], output_path, opt_level, debug_info)) {
+        if (!compile_source_to_c_opt(source, cmd_argv[2], output_path, opt_level, debug_info)) {
             free(source);
             free(derived_output);
             CLEANUP_AND_EXIT(1);
@@ -771,29 +787,29 @@ int main(int argc, const char* argv[]) {
 
         free(source);
         free(derived_output);
-    } else if (argc >= 3 && strcmp(argv[1], "--compile") == 0) {
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile") == 0) {
         const char* explicit_output = NULL;
         const char* cc_command = NULL;
         const char* ignored_target = NULL;
         int opt_level = 0, debug_info = 0;
-        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &cc_command,
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &cc_command,
                                    &opt_level, &debug_info, &ignored_target)) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(argv[2]);
+        char* source = read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* exe_output = explicit_output;
         if (exe_output == NULL) {
-            derived_output = derive_output_path(argv[2], "", 1);
+            derived_output = derive_output_path(cmd_argv[2], "", 1);
             exe_output = derived_output;
         }
 
         char temp_c_path[256];
         snprintf(temp_c_path, sizeof(temp_c_path), "/tmp/sagec_%d.c", (int)getpid());
 
-        if (!compile_source_to_executable_opt(source, argv[2], temp_c_path, exe_output,
+        if (!compile_source_to_executable_opt(source, cmd_argv[2], temp_c_path, exe_output,
                                               cc_command, opt_level, debug_info)) {
             unlink(temp_c_path);
             free(source);
@@ -804,26 +820,26 @@ int main(int argc, const char* argv[]) {
         unlink(temp_c_path);
         free(source);
         free(derived_output);
-    } else if (argc >= 3 && strcmp(argv[1], "--emit-llvm") == 0) {
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--emit-llvm") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;
         const char* ignored_target = NULL;
         int opt_level = 0, debug_info = 0;
-        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
                                    &opt_level, &debug_info, &ignored_target)) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(argv[2]);
+        char* source = read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* output_path = explicit_output;
         if (output_path == NULL) {
-            derived_output = derive_output_path(argv[2], ".ll", 1);
+            derived_output = derive_output_path(cmd_argv[2], ".ll", 1);
             output_path = derived_output;
         }
 
-        if (!compile_source_to_llvm_ir(source, argv[2], output_path, opt_level, debug_info)) {
+        if (!compile_source_to_llvm_ir(source, cmd_argv[2], output_path, opt_level, debug_info)) {
             free(source);
             free(derived_output);
             CLEANUP_AND_EXIT(1);
@@ -831,29 +847,29 @@ int main(int argc, const char* argv[]) {
 
         free(source);
         free(derived_output);
-    } else if (argc >= 3 && strcmp(argv[1], "--compile-llvm") == 0) {
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile-llvm") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;
         const char* ignored_target = NULL;
         int opt_level = 0, debug_info = 0;
-        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
                                    &opt_level, &debug_info, &ignored_target)) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(argv[2]);
+        char* source = read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* exe_output = explicit_output;
         if (exe_output == NULL) {
-            derived_output = derive_output_path(argv[2], "", 1);
+            derived_output = derive_output_path(cmd_argv[2], "", 1);
             exe_output = derived_output;
         }
 
         char temp_ll_path[256];
         snprintf(temp_ll_path, sizeof(temp_ll_path), "/tmp/sagell_%d.ll", (int)getpid());
 
-        if (!compile_source_to_llvm_executable(source, argv[2], temp_ll_path, exe_output,
+        if (!compile_source_to_llvm_executable(source, cmd_argv[2], temp_ll_path, exe_output,
                                                opt_level, debug_info)) {
             unlink(temp_ll_path);
             free(source);
@@ -864,12 +880,12 @@ int main(int argc, const char* argv[]) {
         unlink(temp_ll_path);
         free(source);
         free(derived_output);
-    } else if (argc >= 3 && strcmp(argv[1], "--emit-asm") == 0) {
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--emit-asm") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;
         const char* target_arch_str = NULL;
         int opt_level = 0, debug_info = 0;
-        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
                                    &opt_level, &debug_info, &target_arch_str)) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
@@ -877,15 +893,15 @@ int main(int argc, const char* argv[]) {
 
         CodegenTarget target = parse_target_arch(target_arch_str);
 
-        char* source = read_file(argv[2]);
+        char* source = read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* output_path = explicit_output;
         if (output_path == NULL) {
-            derived_output = derive_output_path(argv[2], ".s", 1);
+            derived_output = derive_output_path(cmd_argv[2], ".s", 1);
             output_path = derived_output;
         }
 
-        if (!compile_source_to_asm(source, argv[2], output_path, target, opt_level, debug_info)) {
+        if (!compile_source_to_asm(source, cmd_argv[2], output_path, target, opt_level, debug_info)) {
             free(source);
             free(derived_output);
             CLEANUP_AND_EXIT(1);
@@ -893,12 +909,12 @@ int main(int argc, const char* argv[]) {
 
         free(source);
         free(derived_output);
-    } else if (argc >= 3 && strcmp(argv[1], "--compile-native") == 0) {
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile-native") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;
         const char* target_arch_str = NULL;
         int opt_level = 0, debug_info = 0;
-        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
                                    &opt_level, &debug_info, &target_arch_str)) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
@@ -906,15 +922,15 @@ int main(int argc, const char* argv[]) {
 
         CodegenTarget target = parse_target_arch(target_arch_str);
 
-        char* source = read_file(argv[2]);
+        char* source = read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* exe_output = explicit_output;
         if (exe_output == NULL) {
-            derived_output = derive_output_path(argv[2], "", 1);
+            derived_output = derive_output_path(cmd_argv[2], "", 1);
             exe_output = derived_output;
         }
 
-        if (!compile_source_to_native(source, argv[2], exe_output, target, opt_level, debug_info)) {
+        if (!compile_source_to_native(source, cmd_argv[2], exe_output, target, opt_level, debug_info)) {
             free(source);
             free(derived_output);
             CLEANUP_AND_EXIT(1);
@@ -922,26 +938,26 @@ int main(int argc, const char* argv[]) {
 
         free(source);
         free(derived_output);
-    } else if (argc >= 3 && strcmp(argv[1], "--emit-pico-c") == 0) {
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--emit-pico-c") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;
         const char* ignored_target = NULL;
         int ignored_opt = 0, ignored_dbg = 0;
-        if (!parse_codegen_options(argc, argv, 3, &explicit_output, &ignored_cc,
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
                                    &ignored_opt, &ignored_dbg, &ignored_target)) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(argv[2]);
+        char* source = read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* output_path = explicit_output;
         if (output_path == NULL) {
-            derived_output = derive_output_path(argv[2], ".pico.c", 1);
+            derived_output = derive_output_path(cmd_argv[2], ".pico.c", 1);
             output_path = derived_output;
         }
 
-        if (!compile_source_to_pico_c(source, argv[2], output_path)) {
+        if (!compile_source_to_pico_c(source, cmd_argv[2], output_path)) {
             free(source);
             free(derived_output);
             CLEANUP_AND_EXIT(1);
@@ -949,19 +965,19 @@ int main(int argc, const char* argv[]) {
 
         free(source);
         free(derived_output);
-    } else if (argc >= 3 && strcmp(argv[1], "--compile-pico") == 0) {
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile-pico") == 0) {
         const char* output_dir = NULL;
         const char* board = NULL;
         const char* program_name = NULL;
         const char* sdk_path = NULL;
-        if (!parse_pico_options(argc, argv, 3, &output_dir, &board, &program_name, &sdk_path)) {
+        if (!parse_pico_options(cmd_argc, cmd_argv, 3, &output_dir, &board, &program_name, &sdk_path)) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(argv[2]);
+        char* source = read_file(cmd_argv[2]);
         char uf2_path[1024];
-        if (!compile_source_to_pico_uf2(source, argv[2], output_dir, program_name,
+        if (!compile_source_to_pico_uf2(source, cmd_argv[2], output_dir, program_name,
                                         board, sdk_path, uf2_path, sizeof(uf2_path))) {
             free(source);
             CLEANUP_AND_EXIT(1);
@@ -969,16 +985,16 @@ int main(int argc, const char* argv[]) {
 
         printf("Built UF2: %s\n", uf2_path);
         free(source);
-    } else if (argc >= 3 && strcmp(argv[1], "fmt") == 0) {
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "fmt") == 0) {
         // Phase 12: Code formatter
         int check_mode = 0;
         const char* fmt_file = NULL;
 
-        if (argc == 3) {
-            fmt_file = argv[2];
-        } else if (argc == 4 && strcmp(argv[2], "--check") == 0) {
+        if (cmd_argc == 3) {
+            fmt_file = cmd_argv[2];
+        } else if (cmd_argc == 4 && strcmp(cmd_argv[2], "--check") == 0) {
             check_mode = 1;
-            fmt_file = argv[3];
+            fmt_file = cmd_argv[3];
         } else {
             fprintf(stderr, "Usage: sage fmt [--check] <file>\n");
             CLEANUP_AND_EXIT(64);
@@ -1018,9 +1034,9 @@ int main(int argc, const char* argv[]) {
             }
             printf("Formatted: %s\n", fmt_file);
         }
-    } else if (argc >= 3 && strcmp(argv[1], "lint") == 0) {
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "lint") == 0) {
         // Phase 12: Code linter
-        const char* lint_file_path = argv[2];
+        const char* lint_file_path = cmd_argv[2];
         LintOptions lint_opts = lint_default_options();
         int issues = lint_file(lint_file_path, lint_opts);
         if (issues < 0) {
@@ -1031,13 +1047,13 @@ int main(int argc, const char* argv[]) {
         } else {
             printf("No issues found.\n");
         }
-    } else if (argc == 2 && strcmp(argv[1], "--lsp") == 0) {
+    } else if (cmd_argc == 2 && strcmp(cmd_argv[1], "--lsp") == 0) {
         // Phase 12: Language Server Protocol mode
         lsp_run();
-    } else if (argc >= 2) {
+    } else if (cmd_argc >= 2) {
         // File mode (extra args accessible via sys.args())
-        char* source = read_file(argv[1]);
-        run(source, argv[1]);
+        char* source = read_file(cmd_argv[1]);
+        run(source, cmd_argv[1], runtime_mode);
         free(source);
     } else {
         print_usage(stderr);

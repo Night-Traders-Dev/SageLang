@@ -11,6 +11,7 @@
 #include "value.h"
 #include "env.h"
 #include "module.h"
+#include "vm.h"
 
 extern Environment* g_global_env;
 extern Environment* g_gc_root_env;
@@ -522,6 +523,9 @@ void gc_mark_from_root(Env* root_env) {
 
     // Mark call stack (via environment traversal)
     gc_mark_call_stack();
+
+    // Mark active bytecode VM state when bytecode runtime is executing.
+    vm_mark_roots();
 
     if (gc_debug) {
         fprintf(stderr, "[GC] Mark phase complete: %d objects marked\n",
