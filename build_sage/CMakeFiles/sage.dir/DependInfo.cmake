@@ -33,6 +33,9 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/kraken/Devel/sagelang/src/c/stdlib.c" "CMakeFiles/sage.dir/src/c/stdlib.c.o" "gcc" "CMakeFiles/sage.dir/src/c/stdlib.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/typecheck.c" "CMakeFiles/sage.dir/src/c/typecheck.c.o" "gcc" "CMakeFiles/sage.dir/src/c/typecheck.c.o.d"
   "/home/kraken/Devel/sagelang/src/c/value.c" "CMakeFiles/sage.dir/src/c/value.c.o" "gcc" "CMakeFiles/sage.dir/src/c/value.c.o.d"
+  "/home/kraken/Devel/sagelang/src/vm/bytecode.c" "CMakeFiles/sage.dir/src/vm/bytecode.c.o" "gcc" "CMakeFiles/sage.dir/src/vm/bytecode.c.o.d"
+  "/home/kraken/Devel/sagelang/src/vm/runtime.c" "CMakeFiles/sage.dir/src/vm/runtime.c.o" "gcc" "CMakeFiles/sage.dir/src/vm/runtime.c.o.d"
+  "/home/kraken/Devel/sagelang/src/vm/vm.c" "CMakeFiles/sage.dir/src/vm/vm.c.o" "gcc" "CMakeFiles/sage.dir/src/vm/vm.c.o.d"
   "" "sage" "gcc" "CMakeFiles/sage.dir/link.d"
   )
 

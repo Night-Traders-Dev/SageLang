@@ -1,152 +1,170 @@
 [
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/main.c.o -c /home/kraken/Devel/sagelang/src/c/main.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/main.c.o -c /home/kraken/Devel/sagelang/src/c/main.c",
   "file": "/home/kraken/Devel/sagelang/src/c/main.c",
   "output": "CMakeFiles/sage.dir/src/c/main.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/ast.c.o -c /home/kraken/Devel/sagelang/src/c/ast.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/ast.c.o -c /home/kraken/Devel/sagelang/src/c/ast.c",
   "file": "/home/kraken/Devel/sagelang/src/c/ast.c",
   "output": "CMakeFiles/sage.dir/src/c/ast.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/codegen.c.o -c /home/kraken/Devel/sagelang/src/c/codegen.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/codegen.c.o -c /home/kraken/Devel/sagelang/src/c/codegen.c",
   "file": "/home/kraken/Devel/sagelang/src/c/codegen.c",
   "output": "CMakeFiles/sage.dir/src/c/codegen.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/compiler.c.o -c /home/kraken/Devel/sagelang/src/c/compiler.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/compiler.c.o -c /home/kraken/Devel/sagelang/src/c/compiler.c",
   "file": "/home/kraken/Devel/sagelang/src/c/compiler.c",
   "output": "CMakeFiles/sage.dir/src/c/compiler.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/constfold.c.o -c /home/kraken/Devel/sagelang/src/c/constfold.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/constfold.c.o -c /home/kraken/Devel/sagelang/src/c/constfold.c",
   "file": "/home/kraken/Devel/sagelang/src/c/constfold.c",
   "output": "CMakeFiles/sage.dir/src/c/constfold.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/dce.c.o -c /home/kraken/Devel/sagelang/src/c/dce.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/dce.c.o -c /home/kraken/Devel/sagelang/src/c/dce.c",
   "file": "/home/kraken/Devel/sagelang/src/c/dce.c",
   "output": "CMakeFiles/sage.dir/src/c/dce.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/diagnostic.c.o -c /home/kraken/Devel/sagelang/src/c/diagnostic.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/diagnostic.c.o -c /home/kraken/Devel/sagelang/src/c/diagnostic.c",
   "file": "/home/kraken/Devel/sagelang/src/c/diagnostic.c",
   "output": "CMakeFiles/sage.dir/src/c/diagnostic.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/env.c.o -c /home/kraken/Devel/sagelang/src/c/env.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/env.c.o -c /home/kraken/Devel/sagelang/src/c/env.c",
   "file": "/home/kraken/Devel/sagelang/src/c/env.c",
   "output": "CMakeFiles/sage.dir/src/c/env.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/formatter.c.o -c /home/kraken/Devel/sagelang/src/c/formatter.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/formatter.c.o -c /home/kraken/Devel/sagelang/src/c/formatter.c",
   "file": "/home/kraken/Devel/sagelang/src/c/formatter.c",
   "output": "CMakeFiles/sage.dir/src/c/formatter.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/gc.c.o -c /home/kraken/Devel/sagelang/src/c/gc.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/gc.c.o -c /home/kraken/Devel/sagelang/src/c/gc.c",
   "file": "/home/kraken/Devel/sagelang/src/c/gc.c",
   "output": "CMakeFiles/sage.dir/src/c/gc.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/inline.c.o -c /home/kraken/Devel/sagelang/src/c/inline.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/inline.c.o -c /home/kraken/Devel/sagelang/src/c/inline.c",
   "file": "/home/kraken/Devel/sagelang/src/c/inline.c",
   "output": "CMakeFiles/sage.dir/src/c/inline.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/interpreter.c.o -c /home/kraken/Devel/sagelang/src/c/interpreter.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/interpreter.c.o -c /home/kraken/Devel/sagelang/src/c/interpreter.c",
   "file": "/home/kraken/Devel/sagelang/src/c/interpreter.c",
   "output": "CMakeFiles/sage.dir/src/c/interpreter.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/linter.c.o -c /home/kraken/Devel/sagelang/src/c/linter.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/linter.c.o -c /home/kraken/Devel/sagelang/src/c/linter.c",
   "file": "/home/kraken/Devel/sagelang/src/c/linter.c",
   "output": "CMakeFiles/sage.dir/src/c/linter.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/lexer.c.o -c /home/kraken/Devel/sagelang/src/c/lexer.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/lexer.c.o -c /home/kraken/Devel/sagelang/src/c/lexer.c",
   "file": "/home/kraken/Devel/sagelang/src/c/lexer.c",
   "output": "CMakeFiles/sage.dir/src/c/lexer.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/llvm_backend.c.o -c /home/kraken/Devel/sagelang/src/c/llvm_backend.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/llvm_backend.c.o -c /home/kraken/Devel/sagelang/src/c/llvm_backend.c",
   "file": "/home/kraken/Devel/sagelang/src/c/llvm_backend.c",
   "output": "CMakeFiles/sage.dir/src/c/llvm_backend.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/lsp.c.o -c /home/kraken/Devel/sagelang/src/c/lsp.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/lsp.c.o -c /home/kraken/Devel/sagelang/src/c/lsp.c",
   "file": "/home/kraken/Devel/sagelang/src/c/lsp.c",
   "output": "CMakeFiles/sage.dir/src/c/lsp.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/module.c.o -c /home/kraken/Devel/sagelang/src/c/module.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/module.c.o -c /home/kraken/Devel/sagelang/src/c/module.c",
   "file": "/home/kraken/Devel/sagelang/src/c/module.c",
   "output": "CMakeFiles/sage.dir/src/c/module.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/net.c.o -c /home/kraken/Devel/sagelang/src/c/net.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/net.c.o -c /home/kraken/Devel/sagelang/src/c/net.c",
   "file": "/home/kraken/Devel/sagelang/src/c/net.c",
   "output": "CMakeFiles/sage.dir/src/c/net.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/parser.c.o -c /home/kraken/Devel/sagelang/src/c/parser.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/parser.c.o -c /home/kraken/Devel/sagelang/src/c/parser.c",
   "file": "/home/kraken/Devel/sagelang/src/c/parser.c",
   "output": "CMakeFiles/sage.dir/src/c/parser.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/pass.c.o -c /home/kraken/Devel/sagelang/src/c/pass.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/pass.c.o -c /home/kraken/Devel/sagelang/src/c/pass.c",
   "file": "/home/kraken/Devel/sagelang/src/c/pass.c",
   "output": "CMakeFiles/sage.dir/src/c/pass.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/sage_thread.c.o -c /home/kraken/Devel/sagelang/src/c/sage_thread.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/sage_thread.c.o -c /home/kraken/Devel/sagelang/src/c/sage_thread.c",
   "file": "/home/kraken/Devel/sagelang/src/c/sage_thread.c",
   "output": "CMakeFiles/sage.dir/src/c/sage_thread.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/stdlib.c.o -c /home/kraken/Devel/sagelang/src/c/stdlib.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/stdlib.c.o -c /home/kraken/Devel/sagelang/src/c/stdlib.c",
   "file": "/home/kraken/Devel/sagelang/src/c/stdlib.c",
   "output": "CMakeFiles/sage.dir/src/c/stdlib.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/typecheck.c.o -c /home/kraken/Devel/sagelang/src/c/typecheck.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/typecheck.c.o -c /home/kraken/Devel/sagelang/src/c/typecheck.c",
   "file": "/home/kraken/Devel/sagelang/src/c/typecheck.c",
   "output": "CMakeFiles/sage.dir/src/c/typecheck.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/value.c.o -c /home/kraken/Devel/sagelang/src/c/value.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/value.c.o -c /home/kraken/Devel/sagelang/src/c/value.c",
   "file": "/home/kraken/Devel/sagelang/src/c/value.c",
   "output": "CMakeFiles/sage.dir/src/c/value.c.o"
 },
 {
   "directory": "/home/kraken/Devel/sagelang/build_sage",
-  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/heartbeat.c.o -c /home/kraken/Devel/sagelang/src/c/heartbeat.c",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/c/heartbeat.c.o -c /home/kraken/Devel/sagelang/src/c/heartbeat.c",
   "file": "/home/kraken/Devel/sagelang/src/c/heartbeat.c",
   "output": "CMakeFiles/sage.dir/src/c/heartbeat.c.o"
+},
+{
+  "directory": "/home/kraken/Devel/sagelang/build_sage",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/vm/bytecode.c.o -c /home/kraken/Devel/sagelang/src/vm/bytecode.c",
+  "file": "/home/kraken/Devel/sagelang/src/vm/bytecode.c",
+  "output": "CMakeFiles/sage.dir/src/vm/bytecode.c.o"
+},
+{
+  "directory": "/home/kraken/Devel/sagelang/build_sage",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/vm/runtime.c.o -c /home/kraken/Devel/sagelang/src/vm/runtime.c",
+  "file": "/home/kraken/Devel/sagelang/src/vm/runtime.c",
+  "output": "CMakeFiles/sage.dir/src/vm/runtime.c.o"
+},
+{
+  "directory": "/home/kraken/Devel/sagelang/build_sage",
+  "command": "/usr/bin/cc -D_POSIX_C_SOURCE=200809L -I/usr/include/p11-kit-1 -I/usr/include/mit-krb5 -I/home/kraken/Devel/sagelang/include -I/home/kraken/Devel/sagelang/src/c -I/home/kraken/Devel/sagelang/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -o CMakeFiles/sage.dir/src/vm/vm.c.o -c /home/kraken/Devel/sagelang/src/vm/vm.c",
+  "file": "/home/kraken/Devel/sagelang/src/vm/vm.c",
+  "output": "CMakeFiles/sage.dir/src/vm/vm.c.o"
 }
 ]

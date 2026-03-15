@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate repository LOC charts for the SageLang README."""
+"""Generate repository metric and benchmark charts for the SageLang README."""
 
 from __future__ import annotations
 
@@ -8,8 +8,17 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable
 from xml.sax.saxutils import escape
+
+from benchmark_recipes import (
+    RecipeResult,
+    collect_recipe_results,
+    mean_or_none as recipe_mean_or_none,
+    median_or_none as recipe_median_or_none,
+    recipe_label,
+    validate_recipe_checksums,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -17,6 +26,13 @@ CHART_DIR = REPO_ROOT / "assets" / "charts"
 METRICS_JSON = CHART_DIR / "loc-metrics.json"
 REPO_CHART = CHART_DIR / "repo-loc.svg"
 COMPILER_CHART = CHART_DIR / "compiler-loc.svg"
+BENCHMARK_TOTAL_CHART = CHART_DIR / "benchmark-recipes-total.svg"
+BENCHMARK_RUN_CHART = CHART_DIR / "benchmark-recipes-run.svg"
+
+BENCHMARK_WORKLOAD = REPO_ROOT / "benchmarks" / "runtime_compare.sage"
+BENCHMARK_RUNS = 5
+BENCHMARK_WARMUPS = 1
+BENCHMARK_CC = "cc"
 
 EXCLUDED_PREFIXES = (
     "editors/vscode/node_modules/",
@@ -46,13 +62,32 @@ LANGUAGE_BADGE_TEXT = {
     "JSON": "#111827",
 }
 
+RECIPE_COLORS = {
+    "sage-interpreted-c-ast": "#3A86FF",
+    "sage-interpreted-vm": "#14B8A6",
+    "sage-compiled-c": "#F97316",
+    "sage-compiled-vm": "#94A3B8",
+    "sage-compiled-sage": "#FACC15",
+    "placeholder": "#64748B",
+}
+
+RECIPE_BADGES = {
+    "sage-interpreted-c-ast": "AST",
+    "sage-interpreted-vm": "VM",
+    "sage-compiled-c": "C BIN",
+    "sage-compiled-vm": "VM BIN",
+    "sage-compiled-sage": "SAGE BIN",
+    "placeholder": "N/A",
+}
+
 
 @dataclass
 class Bar:
     label: str
-    value: int
+    value: float
     color: str
     detail: str
+    badge_label: str | None = None
 
 
 def run_git_ls_files() -> list[str]:
@@ -135,12 +170,24 @@ def collect_compiler_counts() -> list[tuple[str, int]]:
     ]
 
 
-def fmt_count(value: int) -> str:
-    if value >= 1_000_000:
-        return f"{value / 1_000_000:.1f}M"
-    if value >= 1_000:
-        return f"{value / 1_000:.1f}K"
-    return str(value)
+def fmt_count(value: float) -> str:
+    rounded = int(round(value))
+    if rounded >= 1_000_000:
+        return f"{rounded / 1_000_000:.1f}M"
+    if rounded >= 1_000:
+        return f"{rounded / 1_000:.1f}K"
+    return str(rounded)
+
+
+def fmt_duration(value: float) -> str:
+    if value >= 1.0:
+        return f"{value:.2f}s"
+    millis = value * 1000.0
+    if millis >= 100:
+        return f"{millis:.0f}ms"
+    if millis >= 10:
+        return f"{millis:.1f}ms"
+    return f"{millis:.2f}ms"
 
 
 def hex_to_rgb(color: str) -> tuple[int, int, int]:
@@ -165,6 +212,7 @@ def render_horizontal_chart(
     bars: list[Bar],
     output_path: Path,
     footer_lines: list[str] | None = None,
+    value_formatter: Callable[[float], str] = fmt_count,
 ) -> None:
     if not bars:
         raise ValueError("Cannot render a chart without data")
@@ -175,7 +223,7 @@ def render_horizontal_chart(
     margin_top = 135
     bar_height = 44
     bar_gap = 22
-    footer_padding = 80 if footer_lines else 44
+    footer_padding = 80 + max(0, (len(footer_lines or []) - 1) * 24)
     plot_width = width - margin_left - margin_right
     plot_height = len(bars) * bar_height + max(0, len(bars) - 1) * bar_gap
     height = margin_top + plot_height + footer_padding
@@ -216,7 +264,7 @@ def render_horizontal_chart(
     for step in range(grid_steps + 1):
         ratio = step / grid_steps
         x = margin_left + plot_width * ratio
-        value_label = fmt_count(int(round(max_value * ratio)))
+        value_label = value_formatter(max_value * ratio)
         svg.append(
             f'<line x1="{x:.1f}" y1="{margin_top - 20}" x2="{x:.1f}" y2="{margin_top + plot_height + 6}" '
             'stroke="#182231" stroke-width="1"/>'
@@ -231,17 +279,19 @@ def render_horizontal_chart(
         y = margin_top + index * (bar_height + bar_gap)
         badge_y = y + 6
         bar_width = plot_width * (bar.value / max_value if max_value else 0)
+        badge = (bar.badge_label or bar.label).upper()
+        badge_width = max(92, min(220, 34 + len(badge) * 10))
         badge_fill = adjust_color(bar.color, 0.9)
         badge_text = LANGUAGE_BADGE_TEXT.get(bar.label, "#E2E8F0")
-        count_text = f"{fmt_count(bar.value)}"
-        share_text = f"{(bar.value / total) * 100:.1f}%"
+        count_text = value_formatter(bar.value)
+        share_text = f"{(bar.value / total) * 100:.1f}%" if total else "0.0%"
 
         svg.extend(
             [
-                f'<rect x="30" y="{badge_y:.1f}" width="170" height="32" rx="10" fill="{badge_fill}" opacity="0.95"/>',
-                f'<text x="115" y="{badge_y + 22:.1f}" text-anchor="middle" fill="{badge_text}" '
+                f'<rect x="30" y="{badge_y:.1f}" width="{badge_width}" height="32" rx="10" fill="{badge_fill}" opacity="0.95"/>',
+                f'<text x="{30 + badge_width / 2:.1f}" y="{badge_y + 22:.1f}" text-anchor="middle" fill="{badge_text}" '
                 'font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">'
-                f"{escape(bar.label.upper())}</text>",
+                f"{escape(badge)}</text>",
                 f'<rect x="{margin_left}" y="{y}" width="{plot_width}" height="{bar_height}" rx="12" fill="#131D2A" stroke="#233041"/>',
                 f'<rect x="{margin_left}" y="{y}" width="{bar_width:.1f}" height="{bar_height}" rx="12" fill="url(#bar-gradient-{index})"/>',
                 f'<line x1="{margin_left + 2:.1f}" y1="{y + 2:.1f}" x2="{margin_left + max(2, bar_width - 2):.1f}" y2="{y + 2:.1f}" stroke="#F8FAFC" stroke-opacity="0.18"/>',
@@ -294,15 +344,93 @@ def build_compiler_bars(compiler_counts: list[tuple[str, int]]) -> list[Bar]:
     ]
 
 
+def summarize_benchmark_issue(result: RecipeResult, expected_output: str | None) -> str:
+    label = recipe_label(result.name)
+    if result.status == "unsupported":
+        return f"{label}: no ahead-of-time VM compile target exists yet."
+    if result.reason.startswith("checksum mismatch:"):
+        expected = expected_output if expected_output is not None else "the baseline"
+        return f"{label}: checksum validation failed against {expected}."
+    return f"{label}: {result.reason}"
+
+
+def build_benchmark_bars(results: list[RecipeResult], metric: str) -> list[Bar]:
+    valid_results = [result for result in results if result.status == "ok"]
+    if not valid_results:
+        return [
+            Bar(
+                label="Unavailable",
+                value=1.0,
+                color=RECIPE_COLORS["placeholder"],
+                detail="Benchmark data unavailable",
+                badge_label=RECIPE_BADGES["placeholder"],
+            )
+        ]
+
+    baseline_result = next((result for result in valid_results if result.name == "sage-interpreted-c-ast"), valid_results[0])
+    baseline_samples = baseline_result.total_samples if metric == "total" else baseline_result.run_samples
+    baseline_value = recipe_median_or_none(baseline_samples) or 1.0
+
+    bars: list[Bar] = []
+    for result in valid_results:
+        samples = result.total_samples if metric == "total" else result.run_samples
+        value = recipe_median_or_none(samples)
+        if value is None:
+            continue
+        relative = value / baseline_value if baseline_value else 0.0
+        metric_text = "build + run" if metric == "total" else "execution only"
+        bars.append(
+            Bar(
+                label=recipe_label(result.name),
+                value=value,
+                color=RECIPE_COLORS.get(result.name, RECIPE_COLORS["placeholder"]),
+                detail=f"{recipe_label(result.name)} · {metric_text} · {relative:.2f}x vs AST",
+                badge_label=RECIPE_BADGES.get(result.name),
+            )
+        )
+
+    return bars
+
+
+def serialize_benchmark_results(results: list[RecipeResult]) -> list[dict[str, object]]:
+    payload = []
+    for result in results:
+        payload.append(
+            {
+                "name": result.name,
+                "label": recipe_label(result.name),
+                "status": result.status,
+                "reason": result.reason,
+                "output": result.output,
+                "build_median_seconds": recipe_median_or_none(result.build_samples),
+                "run_median_seconds": recipe_median_or_none(result.run_samples),
+                "total_median_seconds": recipe_median_or_none(result.total_samples),
+                "build_mean_seconds": recipe_mean_or_none(result.build_samples),
+                "run_mean_seconds": recipe_mean_or_none(result.run_samples),
+                "total_mean_seconds": recipe_mean_or_none(result.total_samples),
+            }
+        )
+    return payload
+
+
 def write_metrics_json(
     generated_at: str,
     repo_counts: list[tuple[str, int]],
     compiler_counts: list[tuple[str, int]],
+    benchmark_results: list[RecipeResult],
+    benchmark_checksum: str | None,
 ) -> None:
     payload = {
         "generated_at": generated_at,
         "repo_languages": [{"language": language, "lines": count} for language, count in repo_counts],
         "compiler_comparison": [{"label": label, "lines": count} for label, count in compiler_counts],
+        "recipe_benchmark": {
+            "workload": str(BENCHMARK_WORKLOAD.relative_to(REPO_ROOT)),
+            "runs": BENCHMARK_RUNS,
+            "warmups": BENCHMARK_WARMUPS,
+            "checksum": benchmark_checksum,
+            "results": serialize_benchmark_results(benchmark_results),
+        },
     }
     METRICS_JSON.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
@@ -313,12 +441,32 @@ def main() -> None:
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     repo_counts = collect_repo_language_counts()
     compiler_counts = collect_compiler_counts()
+    benchmark_results = collect_recipe_results(
+        REPO_ROOT,
+        BENCHMARK_WORKLOAD,
+        BENCHMARK_RUNS,
+        BENCHMARK_WARMUPS,
+        BENCHMARK_CC,
+    )
+    benchmark_checksum = validate_recipe_checksums(benchmark_results)
 
     repo_bars = build_repo_bars(repo_counts)
     compiler_bars = build_compiler_bars(compiler_counts)
+    benchmark_total_bars = build_benchmark_bars(benchmark_results, "total")
+    benchmark_run_bars = build_benchmark_bars(benchmark_results, "run")
 
     compiler_delta = compiler_counts[1][1] - compiler_counts[0][1]
     ratio = compiler_counts[0][1] / compiler_counts[1][1] if compiler_counts[1][1] else 0.0
+
+    issue_lines = [summarize_benchmark_issue(result, benchmark_checksum) for result in benchmark_results if result.status != "ok"]
+    benchmark_footer = [
+        f"Settings: {BENCHMARK_RUNS} timed runs, {BENCHMARK_WARMUPS} warmup on {BENCHMARK_WORKLOAD.relative_to(REPO_ROOT)}.",
+        "Totals include compile + link + execution; the run chart isolates execution-only cost.",
+    ]
+    if benchmark_checksum is not None:
+        benchmark_footer.append(f"Checksum target: {benchmark_checksum}.")
+    benchmark_footer.extend(issue_lines)
+    benchmark_footer.append(f"Last refreshed: {generated_at}")
 
     render_horizontal_chart(
         title="SageLang Repository LOC by Language",
@@ -326,6 +474,7 @@ def main() -> None:
         bars=repo_bars,
         output_path=REPO_CHART,
         footer_lines=[f"Last refreshed: {generated_at}"],
+        value_formatter=fmt_count,
     )
 
     render_horizontal_chart(
@@ -338,11 +487,32 @@ def main() -> None:
             f"Self-hosted Sage is {ratio:.1%} of the native C core today.",
             f"Last refreshed: {generated_at}",
         ],
+        value_formatter=fmt_count,
     )
 
-    write_metrics_json(generated_at, repo_counts, compiler_counts)
+    render_horizontal_chart(
+        title="Recipe Benchmark: Total Median Time",
+        subtitle="End-to-end wall time for the default workload. Compiled recipes include code generation, host C compile, and execution.",
+        bars=benchmark_total_bars,
+        output_path=BENCHMARK_TOTAL_CHART,
+        footer_lines=benchmark_footer,
+        value_formatter=fmt_duration,
+    )
+
+    render_horizontal_chart(
+        title="Recipe Benchmark: Execution-Only Median Time",
+        subtitle="Steady-state runtime on the default workload for recipes that passed checksum validation.",
+        bars=benchmark_run_bars,
+        output_path=BENCHMARK_RUN_CHART,
+        footer_lines=benchmark_footer,
+        value_formatter=fmt_duration,
+    )
+
+    write_metrics_json(generated_at, repo_counts, compiler_counts, benchmark_results, benchmark_checksum)
     print(f"Wrote {REPO_CHART.relative_to(REPO_ROOT)}")
     print(f"Wrote {COMPILER_CHART.relative_to(REPO_ROOT)}")
+    print(f"Wrote {BENCHMARK_TOTAL_CHART.relative_to(REPO_ROOT)}")
+    print(f"Wrote {BENCHMARK_RUN_CHART.relative_to(REPO_ROOT)}")
     print(f"Wrote {METRICS_JSON.relative_to(REPO_ROOT)}")
 
 

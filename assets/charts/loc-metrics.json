@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-03-15 00:53 UTC",
+  "generated_at": "2026-03-15 01:34 UTC",
   "repo_languages": [
     {
       "language": "C",
-      "lines": 18772
+      "lines": 20042
     },
     {
       "language": "Sage",
-      "lines": 18070
+      "lines": 18105
     },
     {
       "language": "JSON",
-      "lines": 4630
+      "lines": 4703
     },
     {
       "language": "Makefile",
@@ -39,5 +39,78 @@
       "label": "Native C Core",
       "lines": 18739
     }
-  ]
+  ],
+  "recipe_benchmark": {
+    "workload": "benchmarks/runtime_compare.sage",
+    "runs": 5,
+    "warmups": 1,
+    "checksum": "11520",
+    "results": [
+      {
+        "name": "sage-interpreted-c-ast",
+        "label": "Interpreted (C + AST)",
+        "status": "ok",
+        "reason": "",
+        "output": "11520",
+        "build_median_seconds": 0.0,
+        "run_median_seconds": 0.006771942000113995,
+        "total_median_seconds": 0.006771942000113995,
+        "build_mean_seconds": 0.0,
+        "run_mean_seconds": 0.006861469000068609,
+        "total_mean_seconds": 0.006861469000068609
+      },
+      {
+        "name": "sage-interpreted-vm",
+        "label": "Interpreted (VM)",
+        "status": "ok",
+        "reason": "",
+        "output": "11520",
+        "build_median_seconds": 0.0,
+        "run_median_seconds": 0.00848844500001178,
+        "total_median_seconds": 0.00848844500001178,
+        "build_mean_seconds": 0.0,
+        "run_mean_seconds": 0.008220972399976744,
+        "total_mean_seconds": 0.008220972399976744
+      },
+      {
+        "name": "sage-compiled-c",
+        "label": "Compiled (C)",
+        "status": "ok",
+        "reason": "",
+        "output": "11520",
+        "build_median_seconds": 0.113784257999896,
+        "run_median_seconds": 0.0017026489999807382,
+        "total_median_seconds": 0.11547467899981712,
+        "build_mean_seconds": 0.11913778119997005,
+        "run_mean_seconds": 0.0017787333999422117,
+        "total_mean_seconds": 0.12091651459991226
+      },
+      {
+        "name": "sage-compiled-vm",
+        "label": "Compiled (VM)",
+        "status": "unsupported",
+        "reason": "the current CLI exposes the VM only as a runtime backend (`sage --runtime bytecode` or `--runtime vm`), not as an ahead-of-time compile target or bytecode artifact format",
+        "output": null,
+        "build_median_seconds": null,
+        "run_median_seconds": null,
+        "total_median_seconds": null,
+        "build_mean_seconds": null,
+        "run_mean_seconds": null,
+        "total_mean_seconds": null
+      },
+      {
+        "name": "sage-compiled-sage",
+        "label": "Compiled (Sage)",
+        "status": "failed",
+        "reason": "checksum mismatch: expected '11520', got ''",
+        "output": "",
+        "build_median_seconds": 0.09046668400014823,
+        "run_median_seconds": 0.0010407489999124664,
+        "total_median_seconds": 0.0915074330000607,
+        "build_mean_seconds": 0.09401030860008178,
+        "run_mean_seconds": 0.0010538321999320032,
+        "total_mean_seconds": 0.09506414080001377
+      }
+    ]
+  }
 }

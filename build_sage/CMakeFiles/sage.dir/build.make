@@ -422,6 +422,48 @@ CMakeFiles/sage.dir/src/c/heartbeat.c.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/sage.dir/src/c/heartbeat.c.s"
 	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/kraken/Devel/sagelang/src/c/heartbeat.c -o CMakeFiles/sage.dir/src/c/heartbeat.c.s
 
+CMakeFiles/sage.dir/src/vm/bytecode.c.o: CMakeFiles/sage.dir/flags.make
+CMakeFiles/sage.dir/src/vm/bytecode.c.o: /home/kraken/Devel/sagelang/src/vm/bytecode.c
+CMakeFiles/sage.dir/src/vm/bytecode.c.o: CMakeFiles/sage.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Building C object CMakeFiles/sage.dir/src/vm/bytecode.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/sage.dir/src/vm/bytecode.c.o -MF CMakeFiles/sage.dir/src/vm/bytecode.c.o.d -o CMakeFiles/sage.dir/src/vm/bytecode.c.o -c /home/kraken/Devel/sagelang/src/vm/bytecode.c
+
+CMakeFiles/sage.dir/src/vm/bytecode.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/sage.dir/src/vm/bytecode.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/kraken/Devel/sagelang/src/vm/bytecode.c > CMakeFiles/sage.dir/src/vm/bytecode.c.i
+
+CMakeFiles/sage.dir/src/vm/bytecode.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/sage.dir/src/vm/bytecode.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/kraken/Devel/sagelang/src/vm/bytecode.c -o CMakeFiles/sage.dir/src/vm/bytecode.c.s
+
+CMakeFiles/sage.dir/src/vm/runtime.c.o: CMakeFiles/sage.dir/flags.make
+CMakeFiles/sage.dir/src/vm/runtime.c.o: /home/kraken/Devel/sagelang/src/vm/runtime.c
+CMakeFiles/sage.dir/src/vm/runtime.c.o: CMakeFiles/sage.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=$(CMAKE_PROGRESS_27) "Building C object CMakeFiles/sage.dir/src/vm/runtime.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/sage.dir/src/vm/runtime.c.o -MF CMakeFiles/sage.dir/src/vm/runtime.c.o.d -o CMakeFiles/sage.dir/src/vm/runtime.c.o -c /home/kraken/Devel/sagelang/src/vm/runtime.c
+
+CMakeFiles/sage.dir/src/vm/runtime.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/sage.dir/src/vm/runtime.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/kraken/Devel/sagelang/src/vm/runtime.c > CMakeFiles/sage.dir/src/vm/runtime.c.i
+
+CMakeFiles/sage.dir/src/vm/runtime.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/sage.dir/src/vm/runtime.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/kraken/Devel/sagelang/src/vm/runtime.c -o CMakeFiles/sage.dir/src/vm/runtime.c.s
+
+CMakeFiles/sage.dir/src/vm/vm.c.o: CMakeFiles/sage.dir/flags.make
+CMakeFiles/sage.dir/src/vm/vm.c.o: /home/kraken/Devel/sagelang/src/vm/vm.c
+CMakeFiles/sage.dir/src/vm/vm.c.o: CMakeFiles/sage.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=$(CMAKE_PROGRESS_28) "Building C object CMakeFiles/sage.dir/src/vm/vm.c.o"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -MD -MT CMakeFiles/sage.dir/src/vm/vm.c.o -MF CMakeFiles/sage.dir/src/vm/vm.c.o.d -o CMakeFiles/sage.dir/src/vm/vm.c.o -c /home/kraken/Devel/sagelang/src/vm/vm.c
+
+CMakeFiles/sage.dir/src/vm/vm.c.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing C source to CMakeFiles/sage.dir/src/vm/vm.c.i"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -E /home/kraken/Devel/sagelang/src/vm/vm.c > CMakeFiles/sage.dir/src/vm/vm.c.i
+
+CMakeFiles/sage.dir/src/vm/vm.c.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling C source to assembly CMakeFiles/sage.dir/src/vm/vm.c.s"
+	/usr/bin/cc $(C_DEFINES) $(C_INCLUDES) $(C_FLAGS) -S /home/kraken/Devel/sagelang/src/vm/vm.c -o CMakeFiles/sage.dir/src/vm/vm.c.s
+
 # Object files for target sage
 sage_OBJECTS = \
 "CMakeFiles/sage.dir/src/c/main.c.o" \
@@ -448,7 +490,10 @@ sage_OBJECTS = \
 "CMakeFiles/sage.dir/src/c/stdlib.c.o" \
 "CMakeFiles/sage.dir/src/c/typecheck.c.o" \
 "CMakeFiles/sage.dir/src/c/value.c.o" \
-"CMakeFiles/sage.dir/src/c/heartbeat.c.o"
+"CMakeFiles/sage.dir/src/c/heartbeat.c.o" \
+"CMakeFiles/sage.dir/src/vm/bytecode.c.o" \
+"CMakeFiles/sage.dir/src/vm/runtime.c.o" \
+"CMakeFiles/sage.dir/src/vm/vm.c.o"
 
 # External object files for target sage
 sage_EXTERNAL_OBJECTS =
@@ -478,10 +523,13 @@ sage: CMakeFiles/sage.dir/src/c/stdlib.c.o
 sage: CMakeFiles/sage.dir/src/c/typecheck.c.o
 sage: CMakeFiles/sage.dir/src/c/value.c.o
 sage: CMakeFiles/sage.dir/src/c/heartbeat.c.o
+sage: CMakeFiles/sage.dir/src/vm/bytecode.c.o
+sage: CMakeFiles/sage.dir/src/vm/runtime.c.o
+sage: CMakeFiles/sage.dir/src/vm/vm.c.o
 sage: CMakeFiles/sage.dir/build.make
 sage: CMakeFiles/sage.dir/compiler_depend.ts
 sage: CMakeFiles/sage.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=$(CMAKE_PROGRESS_26) "Linking C executable sage"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=$(CMAKE_PROGRESS_29) "Linking C executable sage"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/sage.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

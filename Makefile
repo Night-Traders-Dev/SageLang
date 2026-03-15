@@ -176,10 +176,10 @@ run-%: $(TARGET)
 debug:
 	$(MAKE) DEBUG=1
 
-# Refresh repository LOC charts for the README
+# Refresh repository metrics and benchmark charts for the README
 charts:
 	@$(PYTHON) $(CHART_SCRIPT)
-	@echo "Updated README chart assets"
+	@echo "Updated README metric and benchmark chart assets"
 
 # ============================================================================
 # Installation
