@@ -13,11 +13,12 @@ extern Environment* g_gc_root_env;
 
 #define VM_STACK_MAX 1024
 
-typedef struct {
+typedef struct ActiveVm {
     BytecodeChunk* chunk;
     Env* env;
     Value stack[VM_STACK_MAX];
     int stack_count;
+    struct ActiveVm* parent;
 } ActiveVm;
 
 static ActiveVm* g_active_vm = NULL;
@@ -34,15 +35,34 @@ static int vm_is_truthy(Value value) {
     return 1;
 }
 
-void vm_mark_roots(void) {
-    if (g_active_vm == NULL) return;
+static void vm_mark_chunk_constants(BytecodeChunk* chunk) {
+    if (chunk == NULL) return;
 
-    for (int i = 0; i < g_active_vm->chunk->constant_count; i++) {
-        gc_mark_value(g_active_vm->chunk->constants[i]);
+    for (int i = 0; i < chunk->constant_count; i++) {
+        gc_mark_value(chunk->constants[i]);
+    }
+}
+
+static void vm_mark_program_constants(BytecodeProgram* program) {
+    if (program == NULL) return;
+
+    for (int i = 0; i < program->function_count; i++) {
+        vm_mark_chunk_constants(&program->functions[i].chunk);
     }
 
-    for (int i = 0; i < g_active_vm->stack_count; i++) {
-        gc_mark_value(g_active_vm->stack[i]);
+    for (int i = 0; i < program->chunk_count; i++) {
+        vm_mark_chunk_constants(&program->chunks[i]);
+    }
+}
+
+void vm_mark_roots(void) {
+    for (ActiveVm* active = g_active_vm; active != NULL; active = active->parent) {
+        vm_mark_chunk_constants(active->chunk);
+        vm_mark_program_constants(active->chunk != NULL ? active->chunk->program : NULL);
+
+        for (int i = 0; i < active->stack_count; i++) {
+            gc_mark_value(active->stack[i]);
+        }
     }
 }
 
@@ -93,17 +113,34 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
     }
 
     if (callee.type == VAL_FUNCTION) {
-        ProcStmt* func = (ProcStmt*)AS_FUNCTION(callee);
-        if (arg_count != func->param_count) {
-            return vm_error("Arity mismatch.");
-        }
-
         if (callee.as.function->is_async) {
 #if SAGE_PLATFORM_PICO
             return vm_error("async/await not supported on RP2040.");
 #else
             return vm_error("async Sage functions are not executed by the bytecode VM yet.");
 #endif
+        }
+
+        if (callee.as.function->is_vm) {
+            BytecodeFunction* function = callee.as.function->vm_function;
+            if (function == NULL) {
+                return vm_error("Invalid VM function.");
+            }
+            if (arg_count != function->param_count) {
+                return vm_error("Arity mismatch.");
+            }
+
+            Env* scope = env_create(callee.as.function->closure);
+            for (int i = 0; i < function->param_count; i++) {
+                env_define(scope, function->params[i], (int)strlen(function->params[i]), args[i]);
+            }
+
+            return vm_execute_chunk(&function->chunk, scope);
+        }
+
+        ProcStmt* func = (ProcStmt*)AS_FUNCTION(callee);
+        if (arg_count != func->param_count) {
+            return vm_error("Arity mismatch.");
         }
 
         Env* scope = env_create(callee.as.function->closure);
@@ -213,6 +250,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     memset(&vm, 0, sizeof(vm));
     vm.chunk = chunk;
     vm.env = env;
+    vm.parent = previous_vm;
 
     g_gc_root_env = env;
     g_active_vm = &vm;
@@ -279,6 +317,20 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     result = vm_error("Undefined variable.");
                     goto done;
                 }
+                break;
+            }
+            case BC_OP_DEFINE_FUNCTION: {
+                uint16_t name_index = read_u16(chunk, &ip);
+                uint16_t function_index = read_u16(chunk, &ip);
+
+                if (chunk->program == NULL || function_index >= chunk->program->function_count) {
+                    result = vm_error("Invalid compiled VM function reference.");
+                    goto done;
+                }
+
+                Value name = chunk->constants[name_index];
+                Value function = val_bytecode_function(&chunk->program->functions[function_index], env);
+                env_define(env, AS_STRING(name), (int)strlen(AS_STRING(name)), function);
                 break;
             }
             case BC_OP_GET_PROPERTY: {

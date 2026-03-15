@@ -15,6 +15,7 @@ typedef enum {
     BC_OP_GET_GLOBAL,
     BC_OP_DEFINE_GLOBAL,
     BC_OP_SET_GLOBAL,
+    BC_OP_DEFINE_FUNCTION,
     BC_OP_GET_PROPERTY,
     BC_OP_SET_PROPERTY,
     BC_OP_GET_INDEX,
@@ -57,6 +58,12 @@ typedef enum {
     BYTECODE_COMPILE_STRICT
 } BytecodeCompileMode;
 
+typedef int (*BytecodeBuildFunctionFn)(void* data, ProcStmt* proc,
+                                       char* error, size_t error_size,
+                                       int* function_index_out);
+
+struct BytecodeProgram;
+
 typedef struct {
     uint8_t* code;
     int code_count;
@@ -72,6 +79,8 @@ typedef struct {
     Stmt** ast_stmts;
     int ast_stmt_count;
     int ast_stmt_capacity;
+
+    struct BytecodeProgram* program;
 } BytecodeChunk;
 
 void bytecode_chunk_init(BytecodeChunk* chunk);
@@ -79,5 +88,13 @@ void bytecode_chunk_free(BytecodeChunk* chunk);
 int bytecode_compile_statement(BytecodeChunk* chunk, Stmt* stmt, char* error, size_t error_size);
 int bytecode_compile_statement_mode(BytecodeChunk* chunk, Stmt* stmt, BytecodeCompileMode mode,
                                     char* error, size_t error_size);
+int bytecode_compile_statement_with_functions(BytecodeChunk* chunk, Stmt* stmt, BytecodeCompileMode mode,
+                                              BytecodeBuildFunctionFn build_function,
+                                              void* build_function_data,
+                                              char* error, size_t error_size);
+int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
+                                   BytecodeBuildFunctionFn build_function,
+                                   void* build_function_data,
+                                   char* error, size_t error_size);
 
 #endif

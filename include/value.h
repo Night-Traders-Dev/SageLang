@@ -12,6 +12,7 @@ typedef struct InstanceValue InstanceValue;
 typedef struct Module Module;
 typedef struct Env Env; // Forward declare from env.h
 typedef Env Environment; // Alias for compatibility
+typedef struct BytecodeFunction BytecodeFunction;
 
 typedef Value (*NativeFn)(int argCount, Value* args);
 
@@ -87,6 +88,8 @@ typedef struct {
     void* proc; // Pointer to ProcStmt
     Env* closure; // Closure environment where function was defined
     int is_async; // Phase 11: async function flag
+    int is_vm; // VM-backed compiled function flag
+    BytecodeFunction* vm_function; // Bytecode metadata when is_vm == 1
 } FunctionValue;
 
 typedef struct {
@@ -207,6 +210,7 @@ Value val_string(const char* value);
 Value val_string_take(char* value);
 Value val_native(NativeFn fn);
 Value val_function(void* proc, Env* closure); // ✅ CHANGED: Added closure parameter
+Value val_bytecode_function(BytecodeFunction* function, Env* closure);
 Value val_array();
 Value val_dict();
 Value val_tuple(Value* elements, int count);

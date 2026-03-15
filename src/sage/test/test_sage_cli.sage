@@ -117,7 +117,14 @@ let vm_src = "let x = 10" + nl + "print x"
 let vm_stmts = parse_source(vm_src)
 let vm_output = bytecode.compile_to_vm_artifact(vm_stmts)
 assert_contains(vm_output, "SAGEBC1", "VM artifact has header")
+assert_contains(vm_output, "functions 0", "VM artifact has empty function table")
 assert_contains(vm_output, "chunks 2", "VM artifact has chunk count")
+
+let vm_proc_src = "proc add(a, b):" + nl + "    return a + b" + nl + nl + "print add(5, 7)"
+let vm_proc_stmts = parse_source(vm_proc_src)
+let vm_proc_output = bytecode.compile_to_vm_artifact(vm_proc_stmts)
+assert_contains(vm_proc_output, "functions 1", "VM proc artifact has function table")
+assert_contains(vm_proc_output, "endfunction", "VM proc artifact terminates function payload")
 
 # ============================================================================
 # Test compilation to LLVM IR

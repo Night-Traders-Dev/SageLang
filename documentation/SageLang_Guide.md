@@ -1309,8 +1309,9 @@ The C-hosted `sage` binary now supports three runtime selections:
 - The lexer and parser are unchanged; the VM reuses the same AST front-end.
 - Each parsed top-level statement is compiled to a transient bytecode chunk, then executed immediately.
 - The C-hosted toolchain can also emit a strict ahead-of-time VM artifact with `sage --emit-vm file.sage` and execute it later with `sage --run-vm file.svm`.
-- The self-hosted CLI can emit the same artifact format with `sage sage.sage --emit-vm file.sage`.
-- The VM is **hybrid** today: unsupported statements fall back to the AST interpreter through an explicit AST-bridge opcode instead of failing the whole program.
+- The self-hosted CLI can emit the same artifact format with `sage sage.sage --emit-vm file.sage`, including compiled proc bodies and returns.
+- `sage --runtime bytecode` remains **hybrid** today: unsupported top-level statements fall back to the AST interpreter through an explicit AST-bridge opcode instead of failing the whole program.
+- `sage --emit-vm` is intentionally stricter: unsupported constructs fail compilation instead of silently bridging at runtime.
 - Values, environments, modules, classes, instances, and the GC are shared between AST and bytecode execution.
 
 **What runs natively in the VM today**:
@@ -1320,16 +1321,16 @@ The C-hosted `sage` binary now supports three runtime selections:
 - Arithmetic, comparison, logical, and bitwise operators
 - Arrays, tuples, dicts, indexing, slicing, and property access
 - `print`, expression statements, `if`, `while`
+- Ahead-of-time proc definitions, proc calls, nested proc calls, explicit `return`, and implicit `nil` returns
 - Calls to native functions, Sage functions, classes, and instance methods
 
-**What still bridges back to AST when needed**:
+**What still bridges or stays unsupported**:
 
-- Top-level statements the VM does not yet lower directly
-- Function bodies and method bodies
-- Advanced control flow such as `yield`, `return`/`break`/`continue` heavy lowering, and some exception paths
+- In hybrid `--runtime bytecode` mode: top-level statements the VM does not yet lower directly, including proc/class definitions that are still easier to execute through the AST path.
+- In strict `--emit-vm` mode: constructs such as `for`, `break`, `continue`, `yield`, `async proc`, exception-heavy paths, imports that need AST execution, and class/method lowering still fail compilation instead of bridging.
 - Complex features where parity is more important than forcing incomplete bytecode support
 
-The practical result is that `bytecode` mode is already useful for long-running scripts and engine-style workloads, while `ast` mode remains the reference path for maximum behavioral confidence.
+The practical result is that `bytecode` mode is already useful for long-running scripts and engine-style workloads, `--emit-vm` is now a real ahead-of-time path for a meaningful strict subset of Sage, and `ast` mode remains the reference path for maximum behavioral confidence.
 
 ---
 
@@ -1392,7 +1393,7 @@ Generated chart assets:
 
 Current caveats:
 
-- `sage-compiled-vm` now exists as a strict ahead-of-time artifact path, but it still fails workloads that need AST fallback instead of full bytecode lowering.
+- `sage-compiled-vm` now passes the default benchmark workload and is charted as a real execution lane, but it is still a strict subset backend: unsupported constructs fail during `--emit-vm` instead of falling back at runtime.
 - `sage-compiled-sage` is still experimental and currently fails checksum validation on the default benchmark workload, so it is called out in the chart footer instead of being charted as a valid timing result.
 
 Interpretation:

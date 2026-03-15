@@ -19,7 +19,9 @@ proc clone_expr(expr):
         return nil
     let t = expr.type
     if t == ast.EXPR_NUMBER:
-        return ast.number_expr(expr.value)
+        let cloned = ast.number_expr(expr.value)
+        cloned.text = expr.text
+        return cloned
     if t == ast.EXPR_STRING:
         return ast.string_expr(expr.value)
     if t == ast.EXPR_BOOL:
