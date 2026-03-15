@@ -807,6 +807,78 @@ src/c/value.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/c/value.c.s
 .PHONY : src/c/value.c.s
 
+src/vm/bytecode.o: src/vm/bytecode.c.o
+.PHONY : src/vm/bytecode.o
+
+# target to build an object file
+src/vm/bytecode.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/bytecode.c.o
+.PHONY : src/vm/bytecode.c.o
+
+src/vm/bytecode.i: src/vm/bytecode.c.i
+.PHONY : src/vm/bytecode.i
+
+# target to preprocess a source file
+src/vm/bytecode.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/bytecode.c.i
+.PHONY : src/vm/bytecode.c.i
+
+src/vm/bytecode.s: src/vm/bytecode.c.s
+.PHONY : src/vm/bytecode.s
+
+# target to generate assembly for a file
+src/vm/bytecode.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/bytecode.c.s
+.PHONY : src/vm/bytecode.c.s
+
+src/vm/runtime.o: src/vm/runtime.c.o
+.PHONY : src/vm/runtime.o
+
+# target to build an object file
+src/vm/runtime.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/runtime.c.o
+.PHONY : src/vm/runtime.c.o
+
+src/vm/runtime.i: src/vm/runtime.c.i
+.PHONY : src/vm/runtime.i
+
+# target to preprocess a source file
+src/vm/runtime.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/runtime.c.i
+.PHONY : src/vm/runtime.c.i
+
+src/vm/runtime.s: src/vm/runtime.c.s
+.PHONY : src/vm/runtime.s
+
+# target to generate assembly for a file
+src/vm/runtime.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/runtime.c.s
+.PHONY : src/vm/runtime.c.s
+
+src/vm/vm.o: src/vm/vm.c.o
+.PHONY : src/vm/vm.o
+
+# target to build an object file
+src/vm/vm.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/vm.c.o
+.PHONY : src/vm/vm.c.o
+
+src/vm/vm.i: src/vm/vm.c.i
+.PHONY : src/vm/vm.i
+
+# target to preprocess a source file
+src/vm/vm.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/vm.c.i
+.PHONY : src/vm/vm.c.i
+
+src/vm/vm.s: src/vm/vm.c.s
+.PHONY : src/vm/vm.s
+
+# target to generate assembly for a file
+src/vm/vm.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/src/vm/vm.c.s
+.PHONY : src/vm/vm.c.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -897,6 +969,15 @@ help:
 	@echo "... src/c/value.o"
 	@echo "... src/c/value.i"
 	@echo "... src/c/value.s"
+	@echo "... src/vm/bytecode.o"
+	@echo "... src/vm/bytecode.i"
+	@echo "... src/vm/bytecode.s"
+	@echo "... src/vm/runtime.o"
+	@echo "... src/vm/runtime.i"
+	@echo "... src/vm/runtime.s"
+	@echo "... src/vm/vm.o"
+	@echo "... src/vm/vm.i"
+	@echo "... src/vm/vm.s"
 .PHONY : help
 
 

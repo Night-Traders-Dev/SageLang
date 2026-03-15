@@ -528,11 +528,14 @@ CMakeFiles/sage.dir/src/c/gc.c.o: /home/kraken/Devel/sagelang/src/c/gc.c \
   /home/kraken/Devel/sagelang/include/ast.h \
   /home/kraken/Devel/sagelang/include/env.h \
   /home/kraken/Devel/sagelang/include/gc.h \
+  /home/kraken/Devel/sagelang/include/interpreter.h \
   /home/kraken/Devel/sagelang/include/lexer.h \
   /home/kraken/Devel/sagelang/include/module.h \
   /home/kraken/Devel/sagelang/include/sage_thread.h \
   /home/kraken/Devel/sagelang/include/token.h \
   /home/kraken/Devel/sagelang/include/value.h \
+  /home/kraken/Devel/sagelang/src/vm/bytecode.h \
+  /home/kraken/Devel/sagelang/src/vm/vm.h \
   /usr/include/features-time64.h \
   /usr/include/features.h \
   /usr/include/pthread.h \
@@ -1090,6 +1093,7 @@ CMakeFiles/sage.dir/src/c/main.c.o: /home/kraken/Devel/sagelang/src/c/main.c \
   /home/kraken/Devel/sagelang/include/sage_thread.h \
   /home/kraken/Devel/sagelang/include/token.h \
   /home/kraken/Devel/sagelang/include/value.h \
+  /home/kraken/Devel/sagelang/src/vm/runtime.h \
   /usr/include/ctype.h \
   /usr/include/features-time64.h \
   /usr/include/features.h \
@@ -1932,6 +1936,199 @@ CMakeFiles/sage.dir/src/c/value.c.o: /home/kraken/Devel/sagelang/src/c/value.c \
   /usr/lib/gcc/x86_64-linux-gnu/15/include/stdbool.h \
   /usr/lib/gcc/x86_64-linux-gnu/15/include/stddef.h
 
+CMakeFiles/sage.dir/src/vm/bytecode.c.o: /home/kraken/Devel/sagelang/src/vm/bytecode.c \
+  /home/kraken/Devel/sagelang/include/ast.h \
+  /home/kraken/Devel/sagelang/include/env.h \
+  /home/kraken/Devel/sagelang/include/gc.h \
+  /home/kraken/Devel/sagelang/include/token.h \
+  /home/kraken/Devel/sagelang/include/value.h \
+  /home/kraken/Devel/sagelang/src/vm/bytecode.h \
+  /usr/include/features-time64.h \
+  /usr/include/features.h \
+  /usr/include/stdc-predef.h \
+  /usr/include/stdint.h \
+  /usr/include/stdio.h \
+  /usr/include/stdlib.h \
+  /usr/include/string.h \
+  /usr/include/x86_64-linux-gnu/bits/floatn-common.h \
+  /usr/include/x86_64-linux-gnu/bits/floatn.h \
+  /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
+  /usr/include/x86_64-linux-gnu/bits/long-double.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-intn.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-least.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio2-decl.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio2.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio_lim.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib-bsearch.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib-float.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib.h \
+  /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
+  /usr/include/x86_64-linux-gnu/bits/time64.h \
+  /usr/include/x86_64-linux-gnu/bits/timesize.h \
+  /usr/include/x86_64-linux-gnu/bits/types.h \
+  /usr/include/x86_64-linux-gnu/bits/types/FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__fpos_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__locale_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__mbstate_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/locale_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/typesizes.h \
+  /usr/include/x86_64-linux-gnu/bits/waitflags.h \
+  /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
+  /usr/include/x86_64-linux-gnu/bits/wchar.h \
+  /usr/include/x86_64-linux-gnu/bits/wordsize.h \
+  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
+  /usr/include/x86_64-linux-gnu/gnu/stubs.h \
+  /usr/include/x86_64-linux-gnu/sys/cdefs.h \
+  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdarg.h \
+  /usr/lib/gcc/x86_64-linux-gnu/15/include/stddef.h \
+  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdint.h
+
+CMakeFiles/sage.dir/src/vm/runtime.c.o: /home/kraken/Devel/sagelang/src/vm/runtime.c \
+  /home/kraken/Devel/sagelang/include/ast.h \
+  /home/kraken/Devel/sagelang/include/env.h \
+  /home/kraken/Devel/sagelang/include/gc.h \
+  /home/kraken/Devel/sagelang/include/interpreter.h \
+  /home/kraken/Devel/sagelang/include/token.h \
+  /home/kraken/Devel/sagelang/include/value.h \
+  /home/kraken/Devel/sagelang/src/vm/bytecode.h \
+  /home/kraken/Devel/sagelang/src/vm/runtime.h \
+  /home/kraken/Devel/sagelang/src/vm/vm.h \
+  /usr/include/features-time64.h \
+  /usr/include/features.h \
+  /usr/include/stdc-predef.h \
+  /usr/include/stdint.h \
+  /usr/include/stdio.h \
+  /usr/include/stdlib.h \
+  /usr/include/string.h \
+  /usr/include/x86_64-linux-gnu/bits/floatn-common.h \
+  /usr/include/x86_64-linux-gnu/bits/floatn.h \
+  /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
+  /usr/include/x86_64-linux-gnu/bits/long-double.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-intn.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-least.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio2-decl.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio2.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio_lim.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib-bsearch.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib-float.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib.h \
+  /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
+  /usr/include/x86_64-linux-gnu/bits/time64.h \
+  /usr/include/x86_64-linux-gnu/bits/timesize.h \
+  /usr/include/x86_64-linux-gnu/bits/types.h \
+  /usr/include/x86_64-linux-gnu/bits/types/FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__fpos_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__locale_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__mbstate_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/locale_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/typesizes.h \
+  /usr/include/x86_64-linux-gnu/bits/waitflags.h \
+  /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
+  /usr/include/x86_64-linux-gnu/bits/wchar.h \
+  /usr/include/x86_64-linux-gnu/bits/wordsize.h \
+  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
+  /usr/include/x86_64-linux-gnu/gnu/stubs.h \
+  /usr/include/x86_64-linux-gnu/sys/cdefs.h \
+  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdarg.h \
+  /usr/lib/gcc/x86_64-linux-gnu/15/include/stddef.h \
+  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdint.h
+
+CMakeFiles/sage.dir/src/vm/vm.c.o: /home/kraken/Devel/sagelang/src/vm/vm.c \
+  /home/kraken/Devel/sagelang/include/ast.h \
+  /home/kraken/Devel/sagelang/include/env.h \
+  /home/kraken/Devel/sagelang/include/gc.h \
+  /home/kraken/Devel/sagelang/include/interpreter.h \
+  /home/kraken/Devel/sagelang/include/lexer.h \
+  /home/kraken/Devel/sagelang/include/module.h \
+  /home/kraken/Devel/sagelang/include/repl.h \
+  /home/kraken/Devel/sagelang/include/sage_thread.h \
+  /home/kraken/Devel/sagelang/include/token.h \
+  /home/kraken/Devel/sagelang/include/value.h \
+  /home/kraken/Devel/sagelang/src/vm/bytecode.h \
+  /home/kraken/Devel/sagelang/src/vm/vm.h \
+  /usr/include/features-time64.h \
+  /usr/include/features.h \
+  /usr/include/pthread.h \
+  /usr/include/sched.h \
+  /usr/include/setjmp.h \
+  /usr/include/stdc-predef.h \
+  /usr/include/stdint.h \
+  /usr/include/stdio.h \
+  /usr/include/stdlib.h \
+  /usr/include/string.h \
+  /usr/include/time.h \
+  /usr/include/x86_64-linux-gnu/bits/atomic_wide_counter.h \
+  /usr/include/x86_64-linux-gnu/bits/cpu-set.h \
+  /usr/include/x86_64-linux-gnu/bits/endian.h \
+  /usr/include/x86_64-linux-gnu/bits/endianness.h \
+  /usr/include/x86_64-linux-gnu/bits/floatn-common.h \
+  /usr/include/x86_64-linux-gnu/bits/floatn.h \
+  /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
+  /usr/include/x86_64-linux-gnu/bits/long-double.h \
+  /usr/include/x86_64-linux-gnu/bits/pthreadtypes-arch.h \
+  /usr/include/x86_64-linux-gnu/bits/pthreadtypes.h \
+  /usr/include/x86_64-linux-gnu/bits/sched.h \
+  /usr/include/x86_64-linux-gnu/bits/setjmp.h \
+  /usr/include/x86_64-linux-gnu/bits/setjmp2.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-intn.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-least.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio2-decl.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio2.h \
+  /usr/include/x86_64-linux-gnu/bits/stdio_lim.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib-bsearch.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib-float.h \
+  /usr/include/x86_64-linux-gnu/bits/stdlib.h \
+  /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
+  /usr/include/x86_64-linux-gnu/bits/struct_mutex.h \
+  /usr/include/x86_64-linux-gnu/bits/struct_rwlock.h \
+  /usr/include/x86_64-linux-gnu/bits/thread-shared-types.h \
+  /usr/include/x86_64-linux-gnu/bits/time.h \
+  /usr/include/x86_64-linux-gnu/bits/time64.h \
+  /usr/include/x86_64-linux-gnu/bits/timesize.h \
+  /usr/include/x86_64-linux-gnu/bits/types.h \
+  /usr/include/x86_64-linux-gnu/bits/types/FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__fpos_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__locale_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__mbstate_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/__sigset_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/clock_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/clockid_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/locale_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_FILE.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct___jmp_buf_tag.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_sched_param.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_tm.h \
+  /usr/include/x86_64-linux-gnu/bits/types/time_t.h \
+  /usr/include/x86_64-linux-gnu/bits/types/timer_t.h \
+  /usr/include/x86_64-linux-gnu/bits/typesizes.h \
+  /usr/include/x86_64-linux-gnu/bits/waitflags.h \
+  /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
+  /usr/include/x86_64-linux-gnu/bits/wchar.h \
+  /usr/include/x86_64-linux-gnu/bits/wordsize.h \
+  /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
+  /usr/include/x86_64-linux-gnu/gnu/stubs.h \
+  /usr/include/x86_64-linux-gnu/sys/cdefs.h \
+  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdarg.h \
+  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdbool.h \
+  /usr/lib/gcc/x86_64-linux-gnu/15/include/stddef.h \
+  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdint.h
+
 sage: /lib/i386-linux-gnu/libbrotlicommon.so.1 \
   /lib/i386-linux-gnu/libbrotlidec.so.1 \
   /lib/i386-linux-gnu/libcom_err.so.2 \
@@ -2057,14 +2254,19 @@ sage: /lib/i386-linux-gnu/libbrotlicommon.so.1 \
   CMakeFiles/sage.dir/src/c/sage_thread.c.o \
   CMakeFiles/sage.dir/src/c/stdlib.c.o \
   CMakeFiles/sage.dir/src/c/typecheck.c.o \
-  CMakeFiles/sage.dir/src/c/value.c.o
+  CMakeFiles/sage.dir/src/c/value.c.o \
+  CMakeFiles/sage.dir/src/vm/bytecode.c.o \
+  CMakeFiles/sage.dir/src/vm/runtime.c.o \
+  CMakeFiles/sage.dir/src/vm/vm.c.o
 
+
+CMakeFiles/sage.dir/src/vm/vm.c.o:
+
+CMakeFiles/sage.dir/src/vm/runtime.c.o:
 
 CMakeFiles/sage.dir/src/c/value.c.o:
 
 CMakeFiles/sage.dir/src/c/typecheck.c.o:
-
-CMakeFiles/sage.dir/src/c/net.c.o:
 
 CMakeFiles/sage.dir/src/c/lsp.c.o:
 
@@ -2194,6 +2396,8 @@ CMakeFiles/sage.dir/src/c/constfold.c.o:
 
 /lib/i386-linux-gnu/libbrotlicommon.so.1:
 
+/home/kraken/Devel/sagelang/src/vm/vm.c:
+
 /usr/lib/x86_64-linux-gnu/libpthread.a:
 
 /home/kraken/Devel/sagelang/src/c/value.c:
@@ -2300,19 +2504,23 @@ CMakeFiles/sage.dir/src/c/stdlib.c.o:
 
 /usr/include/openssl/srtp.h:
 
+/usr/include/openssl/safestack.h:
+
+/usr/include/openssl/rsaerr.h:
+
 /usr/include/x86_64-linux-gnu/bits/types/__fpos64_t.h:
 
 /usr/include/asm-generic/socket.h:
 
 /usr/include/x86_64-linux-gnu/sys/ucontext.h:
 
-/usr/include/x86_64-linux-gnu/sys/types.h:
-
 /usr/include/openssl/params.h:
 
 /usr/include/openssl/types.h:
 
 /usr/include/x86_64-linux-gnu/bits/wchar.h:
+
+/home/kraken/Devel/sagelang/src/vm/runtime.c:
 
 /home/kraken/Devel/sagelang/include/codegen.h:
 
@@ -2376,6 +2584,8 @@ CMakeFiles/sage.dir/src/c/compiler.c.o:
 
 /usr/include/unistd.h:
 
+/home/kraken/Devel/sagelang/src/vm/bytecode.h:
+
 /usr/include/setjmp.h:
 
 /usr/include/x86_64-linux-gnu/bits/stdint-intn.h:
@@ -2389,6 +2599,10 @@ CMakeFiles/sage.dir/src/c/compiler.c.o:
 /usr/lib/i386-linux-gnu/libunistring.so.5:
 
 /usr/include/x86_64-linux-gnu/bits/sigaction.h:
+
+/usr/include/openssl/sha.h:
+
+/usr/include/x86_64-linux-gnu/bits/types/siginfo_t.h:
 
 /usr/include/x86_64-linux-gnu/bits/struct_rwlock.h:
 
@@ -2476,6 +2690,8 @@ CMakeFiles/sage.dir/src/c/llvm_backend.c.o:
 
 /usr/include/x86_64-linux-gnu/bits/types/__sigset_t.h:
 
+CMakeFiles/sage.dir/src/vm/bytecode.c.o:
+
 /usr/include/x86_64-linux-gnu/bits/byteswap.h:
 
 /usr/include/openssl/dsa.h:
@@ -2551,6 +2767,8 @@ CMakeFiles/sage.dir/src/c/llvm_backend.c.o:
 /usr/include/x86_64-linux-gnu/bits/types/struct_timeval.h:
 
 /usr/include/openssl/objects.h:
+
+/home/kraken/Devel/sagelang/src/vm/bytecode.c:
 
 /usr/include/features-time64.h:
 
@@ -2658,10 +2876,6 @@ CMakeFiles/sage.dir/src/c/main.c.o:
 
 /home/kraken/Devel/sagelang/include/pass.h:
 
-/usr/include/x86_64-linux-gnu/bits/types/siginfo_t.h:
-
-/usr/include/openssl/sha.h:
-
 /usr/include/x86_64-linux-gnu/bits/types/struct_osockaddr.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/sigevent_t.h:
@@ -2728,6 +2942,12 @@ CMakeFiles/sage.dir/src/c/dce.c.o:
 
 /home/kraken/Devel/sagelang/src/c/env.c:
 
+/home/kraken/Devel/sagelang/include/interpreter.h:
+
+/usr/include/x86_64-linux-gnu/sys/types.h:
+
+/home/kraken/Devel/sagelang/src/vm/vm.h:
+
 /usr/lib/x86_64-linux-gnu/libcurl.so:
 
 /lib/x86_64-linux-gnu/libz.so.1:
@@ -2792,8 +3012,6 @@ CMakeFiles/sage.dir/src/c/dce.c.o:
 
 /home/kraken/Devel/sagelang/src/c/interpreter.c:
 
-/home/kraken/Devel/sagelang/include/interpreter.h:
-
 /usr/include/dlfcn.h:
 
 /usr/include/x86_64-linux-gnu/bits/dlfcn.h:
@@ -2824,6 +3042,10 @@ CMakeFiles/sage.dir/src/c/env.c.o:
 
 /home/kraken/Devel/sagelang/src/c/main.c:
 
+CMakeFiles/sage.dir/src/c/net.c.o:
+
+/home/kraken/Devel/sagelang/src/vm/runtime.h:
+
 /home/kraken/Devel/sagelang/src/c/net.c:
 
 /usr/lib/x86_64-linux-gnu/libm.so:
@@ -2853,8 +3075,6 @@ CMakeFiles/sage.dir/src/c/env.c.o:
 /usr/include/linux/stddef.h:
 
 /usr/include/net/if.h:
-
-/usr/include/openssl/safestack.h:
 
 /usr/include/openssl/core_dispatch.h:
 
@@ -2941,5 +3161,3 @@ CMakeFiles/sage.dir/src/c/sage_thread.c.o:
 /usr/include/x86_64-linux-gnu/bits/cpu-set.h:
 
 /usr/include/openssl/quic.h:
-
-/usr/include/openssl/rsaerr.h:

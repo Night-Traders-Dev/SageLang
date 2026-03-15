@@ -11,7 +11,7 @@ toc: true
 
 ## Executive Summary
 
-**SageLang** is a **Python-inspired, systems-oriented programming language** written in C for the RP2040 microcontroller ecosystem. It is a statically-allocated, tree-walking interpreter that combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language is implemented across fourteen phased development cycles, progressing from core arithmetic and control flow through advanced features like generators, exception handling, a module system, compiler backends (C, LLVM IR, native assembly), concurrency with threading and async/await, networking (sockets, TCP, HTTP/HTTPS, SSL), and a cJSON port for JSON processing. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
+**SageLang** is a **Python-inspired, systems-oriented programming language** written in C for the RP2040 microcontroller ecosystem. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports two interpreter backends on the C host: the original AST tree-walking runtime and a newer stack-based bytecode VM, while also retaining compiler backends (C, LLVM IR, native assembly) and a self-hosted interpreter written in Sage itself. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
 
 ---
 
@@ -47,14 +47,14 @@ SageLang is designed as an **educational and practical embedded scripting langua
 
 ### 1.3 Execution Model
 
-SageLang operates as a **single-pass, tree-walking interpreter**:
+SageLang uses a shared front-end with multiple execution backends:
 
 1. **Source Code** → **Lexer** (tokenization with indentation tracking)
 2. **Tokens** → **Parser** (recursive descent, builds AST)
-3. **AST** → **Interpreter** (evaluates statements and expressions)
-4. **Runtime Values** stored in **Heap** managed by **GC**
+3. **AST** → either the **AST interpreter** or the **bytecode compiler + VM**
+4. **Runtime Values** stored in the shared **heap** managed by **GC**
 
-The interpreter maintains a **global environment** and creates **child environments** for scopes (function calls, blocks, class instances). All computations produce **tagged `Value` objects** that are either stack-allocated (numbers, bools) or heap-allocated (arrays, dicts, strings via malloc).
+All execution modes share the same object model: a **global environment**, nested **child environments** for scopes, and **tagged `Value` objects** that are either immediate (numbers, bools) or GC-managed heap values (arrays, dicts, strings, classes, instances, functions, generators).
 
 ---
 
@@ -1291,8 +1291,43 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 3. **Initialize parser** (advance to first token).
 4. **Create global environment** and initialize stdlib.
 5. **Parse declarations** (statements and function definitions).
-6. **Interpret each statement** in global environment.
+6. **Execute each statement** using the selected runtime backend.
 7. **Return** at EOF.
+
+### 6.4 Runtime Backends: AST vs Bytecode VM
+
+The C-hosted `sage` binary now supports three runtime selections:
+
+| Mode | Command | Current Behavior |
+|------|---------|------------------|
+| `ast` | `sage --runtime ast file.sage` | Original tree-walking interpreter; highest maturity and easiest to debug |
+| `bytecode` | `sage --runtime bytecode file.sage` | Lowers each top-level statement to bytecode and executes it on the stack VM |
+| `auto` | `sage --runtime auto file.sage` | Currently routes through the same hybrid VM path as `bytecode` |
+
+**Current VM architecture**:
+
+- The lexer and parser are unchanged; the VM reuses the same AST front-end.
+- Each parsed top-level statement is compiled to a transient bytecode chunk, then executed immediately.
+- The VM is **hybrid** today: unsupported statements fall back to the AST interpreter through an explicit AST-bridge opcode instead of failing the whole program.
+- Values, environments, modules, classes, instances, and the GC are shared between AST and bytecode execution.
+
+**What runs natively in the VM today**:
+
+- Literals (`number`, `string`, `bool`, `nil`)
+- Global variables (`let`, assignment, reads)
+- Arithmetic, comparison, logical, and bitwise operators
+- Arrays, tuples, dicts, indexing, slicing, and property access
+- `print`, expression statements, `if`, `while`
+- Calls to native functions, Sage functions, classes, and instance methods
+
+**What still bridges back to AST when needed**:
+
+- Top-level statements the VM does not yet lower directly
+- Function bodies and method bodies
+- Advanced control flow such as `yield`, `return`/`break`/`continue` heavy lowering, and some exception paths
+- Complex features where parity is more important than forcing incomplete bytecode support
+
+The practical result is that `bytecode` mode is already useful for long-running scripts and engine-style workloads, while `ast` mode remains the reference path for maximum behavioral confidence.
 
 ---
 
@@ -1302,8 +1337,13 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 
 **Known Limitations**:
 - **String interning**: Strings are not interned; identical strings create separate allocations.
-- **Circular references**: GC does not detect cycles (e.g., array containing instance containing array). Use weak references (not implemented) or manual cleanup.
+- **Non-GC allocations**: AST nodes, token buffers, and other manual allocations outside the `Value` heap still need explicit ownership and cleanup discipline.
 - **Manual `malloc`**: Some internal allocations (e.g., AST nodes, Token data) use `malloc` without GC tracking. Only heap-allocated Values are GC'd.
+
+**Cycle collection**:
+
+- The GC is now a tracing mark-and-sweep collector that can reclaim **circular references** among GC-managed Sage values such as arrays, dicts, tuples, classes, instances, functions, and generators.
+- Cycles are only collectable when every object in the cycle is represented in the managed `Value` graph. Raw pointers, external allocations, and ad hoc native-side ownership still sit outside that guarantee.
 
 **Practical Tips**:
 - Call `gc_collect()` periodically in long-running loops to prevent heap explosion.
@@ -1313,15 +1353,51 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 ### 7.2 Performance Characteristics
 
 **Interpreter Overhead**:
-- **Tree-walking**: No bytecode compilation; each node is interpreted individually. Slower than bytecode VM but simpler.
+- **AST runtime**: Walks the parsed tree directly. It is still the simplest and most mature execution path.
+- **Bytecode VM**: Adds a statement-at-a-time lowering step, then executes stack bytecode. On mixed arithmetic/loop workloads it is already modestly faster than AST mode, even before deeper optimizations.
 - **Nested scopes**: Linear search up parent chain; O(depth) for variable lookup.
-- **GC pauses**: Mark-and-sweep can pause execution during collection; threshold of ~1000 objects may be too small for many applications.
+- **GC pauses**: Mark-and-sweep still pauses execution during collection, but the trigger is now dynamic and based on both object count and managed bytes.
 
-**Optimization Opportunities** (not implemented):
-- Bytecode compilation and VM execution.
+**Optimization Opportunities**:
+- Bytecode functions and method bodies, so fewer calls bridge back to AST.
+- Local-slot or register-based VM frames instead of env-backed global lookups for more code.
 - Variable lookup caching (memoization).
 - Generational GC (mark only young objects frequently).
 - JIT compilation for hot paths.
+
+### 7.2.1 Current Recipe Benchmark
+
+The repository now includes a five-recipe benchmark:
+
+```bash
+python3 scripts/benchmark_recipes.py --runs 5 --warmups 1
+```
+
+It measures:
+
+- `sage-interpreted-c-ast`: the C-hosted tree-walking interpreter
+- `sage-interpreted-vm`: the C-hosted bytecode VM runtime
+- `sage-compiled-c`: the native C backend compiled to a host executable
+- `sage-compiled-vm`: reserved for an ahead-of-time VM target when one exists
+- `sage-compiled-sage`: the self-hosted Sage compiler path that emits C and then compiles it with the host toolchain
+
+Workload source: `benchmarks/runtime_compare.sage`
+
+Generated chart assets:
+
+- `assets/charts/benchmark-recipes-total.svg`
+- `assets/charts/benchmark-recipes-run.svg`
+
+Current caveats:
+
+- `sage-compiled-vm` is intentionally reported as unsupported today because the VM is a runtime backend, not an ahead-of-time artifact format yet.
+- `sage-compiled-sage` is still experimental and currently fails checksum validation on the default benchmark workload, so it is called out in the chart footer instead of being charted as a valid timing result.
+
+Interpretation:
+
+- `sage-interpreted-vm` is the direct runtime-backend comparison against `sage-interpreted-c-ast`.
+- `sage-compiled-c` has the lowest execution-only runtime on the default workload, but its total wall time includes code generation and host compilation.
+- The total-time chart answers "time to result"; the execution-only chart answers "steady-state runtime after the binary already exists."
 
 ### 7.3 Extending SageLang with Native Functions
 

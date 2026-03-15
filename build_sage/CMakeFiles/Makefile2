@@ -91,12 +91,12 @@ clean: CMakeFiles/test_selfhost.dir/clean
 CMakeFiles/sage.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26 "Built target sage"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29 "Built target sage"
 .PHONY : CMakeFiles/sage.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/sage.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 26
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 29
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/sage.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 0
 .PHONY : CMakeFiles/sage.dir/rule
@@ -108,7 +108,7 @@ sage: CMakeFiles/sage.dir/rule
 # codegen rule for target.
 CMakeFiles/sage.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage.dir/build.make CMakeFiles/sage.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26 "Finished codegen for target sage"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29 "Finished codegen for target sage"
 .PHONY : CMakeFiles/sage.dir/codegen
 
 # clean rule for target.
@@ -123,12 +123,12 @@ CMakeFiles/sage.dir/clean:
 CMakeFiles/sage_boot.dir/all: CMakeFiles/sage.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage_boot.dir/build.make CMakeFiles/sage_boot.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage_boot.dir/build.make CMakeFiles/sage_boot.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=27 "Built target sage_boot"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=30 "Built target sage_boot"
 .PHONY : CMakeFiles/sage_boot.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/sage_boot.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 27
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 30
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/sage_boot.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 0
 .PHONY : CMakeFiles/sage_boot.dir/rule
@@ -140,7 +140,7 @@ sage_boot: CMakeFiles/sage_boot.dir/rule
 # codegen rule for target.
 CMakeFiles/sage_boot.dir/codegen: CMakeFiles/sage.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/sage_boot.dir/build.make CMakeFiles/sage_boot.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=27 "Finished codegen for target sage_boot"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=30 "Finished codegen for target sage_boot"
 .PHONY : CMakeFiles/sage_boot.dir/codegen
 
 # clean rule for target.
@@ -155,12 +155,12 @@ CMakeFiles/sage_boot.dir/clean:
 CMakeFiles/test_selfhost_lexer.dir/all: CMakeFiles/sage.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_lexer.dir/build.make CMakeFiles/test_selfhost_lexer.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_lexer.dir/build.make CMakeFiles/test_selfhost_lexer.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=31 "Built target test_selfhost_lexer"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=34 "Built target test_selfhost_lexer"
 .PHONY : CMakeFiles/test_selfhost_lexer.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/test_selfhost_lexer.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 27
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 30
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/test_selfhost_lexer.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 0
 .PHONY : CMakeFiles/test_selfhost_lexer.dir/rule
@@ -172,7 +172,7 @@ test_selfhost_lexer: CMakeFiles/test_selfhost_lexer.dir/rule
 # codegen rule for target.
 CMakeFiles/test_selfhost_lexer.dir/codegen: CMakeFiles/sage.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_lexer.dir/build.make CMakeFiles/test_selfhost_lexer.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=31 "Finished codegen for target test_selfhost_lexer"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=34 "Finished codegen for target test_selfhost_lexer"
 .PHONY : CMakeFiles/test_selfhost_lexer.dir/codegen
 
 # clean rule for target.
@@ -187,12 +187,12 @@ CMakeFiles/test_selfhost_lexer.dir/clean:
 CMakeFiles/test_selfhost_parser.dir/all: CMakeFiles/sage.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_parser.dir/build.make CMakeFiles/test_selfhost_parser.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_parser.dir/build.make CMakeFiles/test_selfhost_parser.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=32 "Built target test_selfhost_parser"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=35 "Built target test_selfhost_parser"
 .PHONY : CMakeFiles/test_selfhost_parser.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/test_selfhost_parser.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 27
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 30
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/test_selfhost_parser.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 0
 .PHONY : CMakeFiles/test_selfhost_parser.dir/rule
@@ -204,7 +204,7 @@ test_selfhost_parser: CMakeFiles/test_selfhost_parser.dir/rule
 # codegen rule for target.
 CMakeFiles/test_selfhost_parser.dir/codegen: CMakeFiles/sage.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_parser.dir/build.make CMakeFiles/test_selfhost_parser.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=32 "Finished codegen for target test_selfhost_parser"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=35 "Finished codegen for target test_selfhost_parser"
 .PHONY : CMakeFiles/test_selfhost_parser.dir/codegen
 
 # clean rule for target.
@@ -219,12 +219,12 @@ CMakeFiles/test_selfhost_parser.dir/clean:
 CMakeFiles/test_selfhost_interpreter.dir/all: CMakeFiles/sage.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_interpreter.dir/build.make CMakeFiles/test_selfhost_interpreter.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_interpreter.dir/build.make CMakeFiles/test_selfhost_interpreter.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=30 "Built target test_selfhost_interpreter"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=33 "Built target test_selfhost_interpreter"
 .PHONY : CMakeFiles/test_selfhost_interpreter.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/test_selfhost_interpreter.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 27
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 30
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/test_selfhost_interpreter.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 0
 .PHONY : CMakeFiles/test_selfhost_interpreter.dir/rule
@@ -236,7 +236,7 @@ test_selfhost_interpreter: CMakeFiles/test_selfhost_interpreter.dir/rule
 # codegen rule for target.
 CMakeFiles/test_selfhost_interpreter.dir/codegen: CMakeFiles/sage.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_interpreter.dir/build.make CMakeFiles/test_selfhost_interpreter.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=30 "Finished codegen for target test_selfhost_interpreter"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=33 "Finished codegen for target test_selfhost_interpreter"
 .PHONY : CMakeFiles/test_selfhost_interpreter.dir/codegen
 
 # clean rule for target.
@@ -251,12 +251,12 @@ CMakeFiles/test_selfhost_interpreter.dir/clean:
 CMakeFiles/test_selfhost_bootstrap.dir/all: CMakeFiles/sage.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_bootstrap.dir/build.make CMakeFiles/test_selfhost_bootstrap.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_bootstrap.dir/build.make CMakeFiles/test_selfhost_bootstrap.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=29 "Built target test_selfhost_bootstrap"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=32 "Built target test_selfhost_bootstrap"
 .PHONY : CMakeFiles/test_selfhost_bootstrap.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/test_selfhost_bootstrap.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 27
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 30
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/test_selfhost_bootstrap.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 0
 .PHONY : CMakeFiles/test_selfhost_bootstrap.dir/rule
@@ -268,7 +268,7 @@ test_selfhost_bootstrap: CMakeFiles/test_selfhost_bootstrap.dir/rule
 # codegen rule for target.
 CMakeFiles/test_selfhost_bootstrap.dir/codegen: CMakeFiles/sage.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost_bootstrap.dir/build.make CMakeFiles/test_selfhost_bootstrap.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=29 "Finished codegen for target test_selfhost_bootstrap"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=32 "Finished codegen for target test_selfhost_bootstrap"
 .PHONY : CMakeFiles/test_selfhost_bootstrap.dir/codegen
 
 # clean rule for target.
@@ -286,12 +286,12 @@ CMakeFiles/test_selfhost.dir/all: CMakeFiles/test_selfhost_lexer.dir/all
 CMakeFiles/test_selfhost.dir/all: CMakeFiles/test_selfhost_parser.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost.dir/build.make CMakeFiles/test_selfhost.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost.dir/build.make CMakeFiles/test_selfhost.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=28 "Built target test_selfhost"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=31 "Built target test_selfhost"
 .PHONY : CMakeFiles/test_selfhost.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/test_selfhost.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 31
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 34
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/test_selfhost.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/kraken/Devel/sagelang/build_sage/CMakeFiles 0
 .PHONY : CMakeFiles/test_selfhost.dir/rule
@@ -306,7 +306,7 @@ CMakeFiles/test_selfhost.dir/codegen: CMakeFiles/test_selfhost_bootstrap.dir/all
 CMakeFiles/test_selfhost.dir/codegen: CMakeFiles/test_selfhost_lexer.dir/all
 CMakeFiles/test_selfhost.dir/codegen: CMakeFiles/test_selfhost_parser.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/test_selfhost.dir/build.make CMakeFiles/test_selfhost.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=28 "Finished codegen for target test_selfhost"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/kraken/Devel/sagelang/build_sage/CMakeFiles --progress-num=31 "Finished codegen for target test_selfhost"
 .PHONY : CMakeFiles/test_selfhost.dir/codegen
 
 # clean rule for target.

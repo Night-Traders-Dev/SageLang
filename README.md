@@ -14,6 +14,16 @@ These charts are refreshed by `make charts` and also as part of the default `mak
 
 ![SageLang self-hosted Sage LOC vs native C LOC](assets/charts/compiler-loc.svg)
 
+## Benchmark Metrics
+
+These charts are also refreshed by `make charts`. They are generated from `python3 scripts/benchmark_recipes.py --runs 5 --warmups 1` against `benchmarks/runtime_compare.sage`, so the absolute timings are machine-specific while the relative shape is the useful signal.
+
+Recipes that are currently unsupported or fail checksum validation are called out in the chart footers instead of being drawn as misleading bars.
+
+![SageLang recipe benchmark total median time](assets/charts/benchmark-recipes-total.svg)
+
+![SageLang recipe benchmark execution-only median time](assets/charts/benchmark-recipes-run.svg)
+
 ## 🚀 Features (Implemented)
 
 ### Core Language
