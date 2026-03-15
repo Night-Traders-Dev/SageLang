@@ -4,19 +4,27 @@ gc_disable()
 #
 # Emits the same strict AOT artifact format as src/vm/program.c:
 #   SAGEBC1
-#   chunks N
-#   chunk
+#   functions N
+#   function
+#   params P
+#   param <len>
+#   <hex-bytes>
 #   constants M
 #   number <value>
 #   string <len>
 #   <hex-bytes>
 #   code <len>
 #   <hex-bytes>
+#   endfunction
+#   chunks N
+#   chunk
+#   ...
 #   endchunk
 # ============================================================================
 
 import token
 import ast
+import stdlib
 
 let NL = chr(10)
 let HEX_DIGITS = "0123456789abcdef"
@@ -31,41 +39,42 @@ let BC_OP_POP = 4
 let BC_OP_GET_GLOBAL = 5
 let BC_OP_DEFINE_GLOBAL = 6
 let BC_OP_SET_GLOBAL = 7
-let BC_OP_GET_PROPERTY = 8
-let BC_OP_SET_PROPERTY = 9
-let BC_OP_GET_INDEX = 10
-let BC_OP_SET_INDEX = 11
-let BC_OP_SLICE = 12
-let BC_OP_ADD = 13
-let BC_OP_SUB = 14
-let BC_OP_MUL = 15
-let BC_OP_DIV = 16
-let BC_OP_MOD = 17
-let BC_OP_NEGATE = 18
-let BC_OP_EQUAL = 19
-let BC_OP_NOT_EQUAL = 20
-let BC_OP_GREATER = 21
-let BC_OP_GREATER_EQUAL = 22
-let BC_OP_LESS = 23
-let BC_OP_LESS_EQUAL = 24
-let BC_OP_BIT_AND = 25
-let BC_OP_BIT_OR = 26
-let BC_OP_BIT_XOR = 27
-let BC_OP_BIT_NOT = 28
-let BC_OP_SHIFT_LEFT = 29
-let BC_OP_SHIFT_RIGHT = 30
-let BC_OP_NOT = 31
-let BC_OP_TRUTHY = 32
-let BC_OP_JUMP = 33
-let BC_OP_JUMP_IF_FALSE = 34
-let BC_OP_CALL = 35
-let BC_OP_CALL_METHOD = 36
-let BC_OP_ARRAY = 37
-let BC_OP_TUPLE = 38
-let BC_OP_DICT = 39
-let BC_OP_PRINT = 40
-let BC_OP_EXEC_AST_STMT = 41
-let BC_OP_RETURN = 42
+let BC_OP_DEFINE_FUNCTION = 8
+let BC_OP_GET_PROPERTY = 9
+let BC_OP_SET_PROPERTY = 10
+let BC_OP_GET_INDEX = 11
+let BC_OP_SET_INDEX = 12
+let BC_OP_SLICE = 13
+let BC_OP_ADD = 14
+let BC_OP_SUB = 15
+let BC_OP_MUL = 16
+let BC_OP_DIV = 17
+let BC_OP_MOD = 18
+let BC_OP_NEGATE = 19
+let BC_OP_EQUAL = 20
+let BC_OP_NOT_EQUAL = 21
+let BC_OP_GREATER = 22
+let BC_OP_GREATER_EQUAL = 23
+let BC_OP_LESS = 24
+let BC_OP_LESS_EQUAL = 25
+let BC_OP_BIT_AND = 26
+let BC_OP_BIT_OR = 27
+let BC_OP_BIT_XOR = 28
+let BC_OP_BIT_NOT = 29
+let BC_OP_SHIFT_LEFT = 30
+let BC_OP_SHIFT_RIGHT = 31
+let BC_OP_NOT = 32
+let BC_OP_TRUTHY = 33
+let BC_OP_JUMP = 34
+let BC_OP_JUMP_IF_FALSE = 35
+let BC_OP_CALL = 36
+let BC_OP_CALL_METHOD = 37
+let BC_OP_ARRAY = 38
+let BC_OP_TUPLE = 39
+let BC_OP_DICT = 40
+let BC_OP_PRINT = 41
+let BC_OP_EXEC_AST_STMT = 42
+let BC_OP_RETURN = 43
 
 proc set_error(message):
     last_error = message
@@ -79,6 +88,12 @@ proc new_chunk():
     chunk["code"] = []
     chunk["constants"] = []
     return chunk
+
+proc new_program():
+    let program = {}
+    program["chunks"] = []
+    program["functions"] = []
+    return program
 
 proc current_offset(chunk):
     return len(chunk["code"])
@@ -100,6 +115,18 @@ proc add_constant(chunk, value):
     push(chunk["constants"], value)
     return len(chunk["constants"]) - 1
 
+proc number_constant(value, text):
+    let constant = {}
+    constant["kind"] = "number"
+    constant["value"] = value
+    constant["text"] = text
+    return constant
+
+proc canonical_number_text(expr):
+    if len(expr.text) >= 2 and expr.text[0] == "0" and (expr.text[1] == "b" or expr.text[1] == "B"):
+        return format_int_constant(expr.value)
+    return expr.text
+
 proc emit_constant(chunk, value):
     let index = add_constant(chunk, value)
     if index > 65535:
@@ -108,12 +135,24 @@ proc emit_constant(chunk, value):
     emit_u16(chunk, index)
     return true
 
+proc emit_number_constant(chunk, expr):
+    return emit_constant(chunk, number_constant(expr.value, canonical_number_text(expr)))
+
 proc emit_name_op(chunk, op, tok):
     let index = add_constant(chunk, tok.text)
     if index > 65535:
         return set_error("Bytecode name pool exceeded 65535 entries.")
     emit_op(chunk, op)
     emit_u16(chunk, index)
+    return true
+
+proc emit_define_function(chunk, tok, function_index):
+    let name_index = add_constant(chunk, tok.text)
+    if name_index > 65535 or function_index > 65535:
+        return set_error("Bytecode function table exceeded 65535 entries.")
+    emit_op(chunk, BC_OP_DEFINE_FUNCTION)
+    emit_u16(chunk, name_index)
+    emit_u16(chunk, function_index)
     return true
 
 proc emit_jump(chunk, op):
@@ -129,40 +168,46 @@ proc patch_jump(chunk, patch_location, target):
     chunk["code"][patch_location + 1] = target & 255
     return true
 
-proc stmt_has_nonlocal_control(stmt):
+proc stmt_requires_ast_fallback(stmt, allow_return):
     if stmt == nil:
         return false
 
-    if stmt.type == ast.STMT_BREAK or stmt.type == ast.STMT_CONTINUE or stmt.type == ast.STMT_RETURN or stmt.type == ast.STMT_YIELD:
+    if stmt.type == ast.STMT_BREAK or stmt.type == ast.STMT_CONTINUE or stmt.type == ast.STMT_YIELD:
         return true
+
+    if stmt.type == ast.STMT_RETURN:
+        return not allow_return
 
     if stmt.type == ast.STMT_BLOCK:
         let inner = stmt.statements
         while inner != nil:
-            if stmt_has_nonlocal_control(inner):
+            if stmt_requires_ast_fallback(inner, allow_return):
                 return true
             inner = inner.next
         return false
 
     if stmt.type == ast.STMT_IF:
-        return stmt_has_nonlocal_control(stmt.then_branch) or stmt_has_nonlocal_control(stmt.else_branch)
+        return stmt_requires_ast_fallback(stmt.then_branch, allow_return) or stmt_requires_ast_fallback(stmt.else_branch, allow_return)
 
     if stmt.type == ast.STMT_WHILE:
-        return stmt_has_nonlocal_control(stmt.body)
+        return stmt_requires_ast_fallback(stmt.body, allow_return)
 
     if stmt.type == ast.STMT_FOR:
-        return stmt_has_nonlocal_control(stmt.body)
+        return stmt_requires_ast_fallback(stmt.body, allow_return)
 
     if stmt.type == ast.STMT_TRY:
-        if stmt_has_nonlocal_control(stmt.try_block) or stmt_has_nonlocal_control(stmt.finally_block):
+        if stmt_requires_ast_fallback(stmt.try_block, allow_return) or stmt_requires_ast_fallback(stmt.finally_block, allow_return):
             return true
         for clause in stmt.catches:
-            if stmt_has_nonlocal_control(clause.body):
+            if stmt_requires_ast_fallback(clause.body, allow_return):
                 return true
         return false
 
-    if stmt.type == ast.STMT_PROC or stmt.type == ast.STMT_ASYNC_PROC or stmt.type == ast.STMT_CLASS:
+    if stmt.type == ast.STMT_PROC or stmt.type == ast.STMT_CLASS:
         return false
+
+    if stmt.type == ast.STMT_ASYNC_PROC:
+        return true
 
     return false
 
@@ -202,7 +247,7 @@ proc compile_expr(chunk, expr):
         return true
 
     if expr.type == ast.EXPR_NUMBER:
-        return emit_constant(chunk, expr.value)
+        return emit_number_constant(chunk, expr)
 
     if expr.type == ast.EXPR_STRING:
         return emit_constant(chunk, expr.value)
@@ -382,21 +427,36 @@ proc compile_expr(chunk, expr):
 
     return set_error("Unsupported expression in bytecode mode.")
 
-proc compile_block(chunk, stmt):
+proc compile_block(program, chunk, stmt, allow_return):
     let inner = stmt.statements
     while inner != nil:
-        if not compile_stmt(chunk, inner, false):
+        if not compile_stmt(program, chunk, inner, false, allow_return):
             return false
         inner = inner.next
     return true
 
-proc compile_stmt(chunk, stmt, want_result):
+proc compile_proc_function(program, stmt):
+    let function = {}
+    function["params"] = []
+    for i in range(stmt.param_count):
+        push(function["params"], stmt.params[i].text)
+    function["chunk"] = new_chunk()
+
+    if not compile_stmt(program, function["chunk"], stmt.body, false, true):
+        return -1
+
+    emit_op(function["chunk"], BC_OP_NIL)
+    emit_op(function["chunk"], BC_OP_RETURN)
+    push(program["functions"], function)
+    return len(program["functions"]) - 1
+
+proc compile_stmt(program, chunk, stmt, want_result, allow_return):
     if stmt == nil:
         if want_result:
             emit_op(chunk, BC_OP_NIL)
         return true
 
-    if stmt_has_nonlocal_control(stmt):
+    if stmt_requires_ast_fallback(stmt, allow_return):
         return unsupported_stmt()
 
     if stmt.type == ast.STMT_PRINT:
@@ -418,6 +478,16 @@ proc compile_stmt(chunk, stmt, want_result):
             emit_op(chunk, BC_OP_NIL)
         return true
 
+    if stmt.type == ast.STMT_PROC:
+        let function_index = compile_proc_function(program, stmt)
+        if function_index < 0:
+            return false
+        if not emit_define_function(chunk, stmt.name, function_index):
+            return false
+        if want_result:
+            emit_op(chunk, BC_OP_NIL)
+        return true
+
     if stmt.type == ast.STMT_EXPRESSION:
         if not compile_expr(chunk, stmt.expression):
             return false
@@ -426,7 +496,7 @@ proc compile_stmt(chunk, stmt, want_result):
         return true
 
     if stmt.type == ast.STMT_BLOCK:
-        if not compile_block(chunk, stmt):
+        if not compile_block(program, chunk, stmt, allow_return):
             return false
         if want_result:
             emit_op(chunk, BC_OP_NIL)
@@ -437,14 +507,14 @@ proc compile_stmt(chunk, stmt, want_result):
             return false
         let else_jump = emit_jump(chunk, BC_OP_JUMP_IF_FALSE)
         emit_op(chunk, BC_OP_POP)
-        if not compile_stmt(chunk, stmt.then_branch, false):
+        if not compile_stmt(program, chunk, stmt.then_branch, false, allow_return):
             return false
         let end_jump = emit_jump(chunk, BC_OP_JUMP)
         if not patch_jump(chunk, else_jump, current_offset(chunk)):
             return false
         emit_op(chunk, BC_OP_POP)
         if stmt.else_branch != nil:
-            if not compile_stmt(chunk, stmt.else_branch, false):
+            if not compile_stmt(program, chunk, stmt.else_branch, false, allow_return):
                 return false
         if not patch_jump(chunk, end_jump, current_offset(chunk)):
             return false
@@ -458,7 +528,7 @@ proc compile_stmt(chunk, stmt, want_result):
             return false
         let exit_jump = emit_jump(chunk, BC_OP_JUMP_IF_FALSE)
         emit_op(chunk, BC_OP_POP)
-        if not compile_stmt(chunk, stmt.body, false):
+        if not compile_stmt(program, chunk, stmt.body, false, allow_return):
             return false
         emit_op(chunk, BC_OP_JUMP)
         emit_u16(chunk, loop_start)
@@ -469,17 +539,26 @@ proc compile_stmt(chunk, stmt, want_result):
             emit_op(chunk, BC_OP_NIL)
         return true
 
+    if stmt.type == ast.STMT_RETURN:
+        if stmt.value != nil:
+            if not compile_expr(chunk, stmt.value):
+                return false
+        else:
+            emit_op(chunk, BC_OP_NIL)
+        emit_op(chunk, BC_OP_RETURN)
+        return true
+
     return unsupported_stmt()
 
 proc compile_to_program(stmts):
     last_error = ""
-    let program = []
+    let program = new_program()
     for stmt in stmts:
         let chunk = new_chunk()
-        if not compile_stmt(chunk, stmt, true):
+        if not compile_stmt(program, chunk, stmt, true, false):
             return nil
         emit_op(chunk, BC_OP_RETURN)
-        push(program, chunk)
+        push(program["chunks"], chunk)
     return program
 
 proc hex_encode_bytes(values):
@@ -496,21 +575,65 @@ proc string_to_bytes(text):
         push(values, ord(text[i]))
     return values
 
-proc chunk_to_artifact_text(chunk):
-    let out = "chunk" + NL
+proc format_int_constant(value):
+    if value == 0:
+        return "0"
+
+    let sign = ""
+    let current = value
+    if current < 0:
+        sign = "-"
+        current = -current
+
+    let digits = []
+    while current > 0:
+        push(digits, HEX_DIGITS[current % 10])
+        current = stdlib.math_floor(current / 10)
+
+    let out = sign
+    let i = len(digits) - 1
+    while i >= 0:
+        out = out + digits[i]
+        i = i - 1
+    return out
+
+proc format_number_constant(value):
+    if value == stdlib.math_floor(value):
+        return format_int_constant(value)
+    return str(value)
+
+proc chunk_payload_to_artifact_text(chunk, end_marker):
+    let out = ""
     out = out + "constants " + str(len(chunk["constants"])) + NL
     for i in range(len(chunk["constants"])):
         let value = chunk["constants"][i]
-        if type(value) == "number":
-            out = out + "number " + str(value) + NL
+        if type(value) == "dict" and dict_has(value, "kind") and value["kind"] == "number":
+            out = out + "number " + value["text"] + NL
         else:
-            let bytes = string_to_bytes(value)
-            out = out + "string " + str(len(value)) + NL
-            out = out + hex_encode_bytes(bytes) + NL
+            if type(value) == "number":
+                out = out + "number " + format_number_constant(value) + NL
+            else:
+                let bytes = string_to_bytes(value)
+                out = out + "string " + str(len(value)) + NL
+                out = out + hex_encode_bytes(bytes) + NL
     out = out + "code " + str(len(chunk["code"])) + NL
     out = out + hex_encode_bytes(chunk["code"]) + NL
-    out = out + "endchunk" + NL
+    out = out + end_marker + NL
     return out
+
+proc function_to_artifact_text(function):
+    let out = "function" + NL
+    out = out + "params " + str(len(function["params"])) + NL
+    for i in range(len(function["params"])):
+        let param = function["params"][i]
+        let bytes = string_to_bytes(param)
+        out = out + "param " + str(len(param)) + NL
+        out = out + hex_encode_bytes(bytes) + NL
+    out = out + chunk_payload_to_artifact_text(function["chunk"], "endfunction")
+    return out
+
+proc chunk_to_artifact_text(chunk):
+    return "chunk" + NL + chunk_payload_to_artifact_text(chunk, "endchunk")
 
 proc compile_to_vm_artifact(stmts):
     let program = compile_to_program(stmts)
@@ -518,7 +641,10 @@ proc compile_to_vm_artifact(stmts):
         return nil
 
     let out = "SAGEBC1" + NL
-    out = out + "chunks " + str(len(program)) + NL
-    for i in range(len(program)):
-        out = out + chunk_to_artifact_text(program[i])
+    out = out + "functions " + str(len(program["functions"])) + NL
+    for i in range(len(program["functions"])):
+        out = out + function_to_artifact_text(program["functions"][i])
+    out = out + "chunks " + str(len(program["chunks"])) + NL
+    for i in range(len(program["chunks"])):
+        out = out + chunk_to_artifact_text(program["chunks"][i])
     return out

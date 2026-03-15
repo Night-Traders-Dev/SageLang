@@ -5,10 +5,20 @@
 
 #include "bytecode.h"
 
-typedef struct {
+typedef struct BytecodeFunction {
+    char** params;
+    int param_count;
+    BytecodeChunk chunk;
+} BytecodeFunction;
+
+typedef struct BytecodeProgram {
     BytecodeChunk* chunks;
     int chunk_count;
     int chunk_capacity;
+
+    BytecodeFunction* functions;
+    int function_count;
+    int function_capacity;
 } BytecodeProgram;
 
 void bytecode_program_init(BytecodeProgram* program);

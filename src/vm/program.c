@@ -16,6 +16,16 @@ static void set_program_error(char* error, size_t error_size, const char* messag
     }
 }
 
+static char* dup_text(const char* text, size_t length) {
+    char* copy = malloc(length + 1);
+    if (copy == NULL) {
+        return NULL;
+    }
+    memcpy(copy, text, length);
+    copy[length] = '\0';
+    return copy;
+}
+
 static int ensure_chunk_capacity(BytecodeProgram* program) {
     if (program->chunk_count < program->chunk_capacity) {
         return 1;
@@ -29,6 +39,23 @@ static int ensure_chunk_capacity(BytecodeProgram* program) {
 
     program->chunks = new_chunks;
     program->chunk_capacity = new_capacity;
+    return 1;
+}
+
+static int ensure_function_capacity(BytecodeProgram* program) {
+    if (program->function_count < program->function_capacity) {
+        return 1;
+    }
+
+    int new_capacity = program->function_capacity == 0 ? 8 : program->function_capacity * 2;
+    BytecodeFunction* new_functions =
+        realloc(program->functions, sizeof(BytecodeFunction) * (size_t)new_capacity);
+    if (new_functions == NULL) {
+        return 0;
+    }
+
+    program->functions = new_functions;
+    program->function_capacity = new_capacity;
     return 1;
 }
 
@@ -103,9 +130,75 @@ static int append_chunk(BytecodeProgram* program, BytecodeChunk* chunk, char* er
         return 0;
     }
 
+    chunk->program = program;
     program->chunks[program->chunk_count++] = *chunk;
     memset(chunk, 0, sizeof(*chunk));
     return 1;
+}
+
+static int compile_program_function(void* data, ProcStmt* proc, char* error, size_t error_size,
+                                    int* function_index_out);
+
+static int append_function(BytecodeProgram* program, BytecodeFunction* function, char* error,
+                           size_t error_size, int* function_index_out) {
+    if (!ensure_function_capacity(program)) {
+        set_program_error(error, error_size, "Out of memory while storing compiled VM functions.");
+        return 0;
+    }
+
+    function->chunk.program = program;
+    program->functions[program->function_count] = *function;
+    if (function_index_out != NULL) {
+        *function_index_out = program->function_count;
+    }
+    program->function_count++;
+    memset(function, 0, sizeof(*function));
+    return 1;
+}
+
+static int compile_program_function(void* data, ProcStmt* proc, char* error, size_t error_size,
+                                    int* function_index_out) {
+    BytecodeProgram* program = data;
+    BytecodeFunction function;
+
+    memset(&function, 0, sizeof(function));
+    bytecode_chunk_init(&function.chunk);
+
+    function.param_count = proc->param_count;
+    if (function.param_count > 0) {
+        function.params = calloc((size_t)function.param_count, sizeof(char*));
+        if (function.params == NULL) {
+            bytecode_chunk_free(&function.chunk);
+            set_program_error(error, error_size, "Out of memory while storing function parameters.");
+            return 0;
+        }
+
+        for (int i = 0; i < function.param_count; i++) {
+            function.params[i] = dup_text(proc->params[i].start, (size_t)proc->params[i].length);
+            if (function.params[i] == NULL) {
+                for (int j = 0; j < i; j++) {
+                    free(function.params[j]);
+                }
+                free(function.params);
+                bytecode_chunk_free(&function.chunk);
+                set_program_error(error, error_size, "Out of memory while copying function parameter name.");
+                return 0;
+            }
+        }
+    }
+
+    if (!bytecode_compile_function_body(&function.chunk, proc->body,
+                                        compile_program_function, program,
+                                        error, error_size)) {
+        for (int i = 0; i < function.param_count; i++) {
+            free(function.params[i]);
+        }
+        free(function.params);
+        bytecode_chunk_free(&function.chunk);
+        return 0;
+    }
+
+    return append_function(program, &function, error, error_size, function_index_out);
 }
 
 static Stmt* parse_program(const char* source, const char* input_path) {
@@ -203,6 +296,149 @@ static int read_trimmed_line(FILE* file, char** line, size_t* capacity) {
     return 1;
 }
 
+static int write_chunk_constants(FILE* out, const BytecodeChunk* chunk, char* error, size_t error_size) {
+    if (fprintf(out, "constants %d\n", chunk->constant_count) < 0) {
+        return 0;
+    }
+
+    for (int i = 0; i < chunk->constant_count; i++) {
+        Value constant = chunk->constants[i];
+        if (IS_NUMBER(constant)) {
+            if (fprintf(out, "number %.17g\n", AS_NUMBER(constant)) < 0) {
+                return 0;
+            }
+        } else if (IS_STRING(constant)) {
+            size_t string_len = strlen(AS_STRING(constant));
+            if (fprintf(out, "string %zu\n", string_len) < 0 ||
+                !write_hex_line(out, (const uint8_t*)AS_STRING(constant), string_len)) {
+                return 0;
+            }
+        } else {
+            set_program_error(error, error_size,
+                              "Compiled VM artifacts only support number/string constants.");
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int write_chunk_payload(FILE* out, const BytecodeChunk* chunk, const char* end_marker,
+                               char* error, size_t error_size) {
+    if (!write_chunk_constants(out, chunk, error, error_size)) {
+        return 0;
+    }
+
+    return fprintf(out, "code %d\n", chunk->code_count) >= 0 &&
+           write_hex_line(out, chunk->code, (size_t)chunk->code_count) &&
+           fprintf(out, "%s\n", end_marker) >= 0;
+}
+
+static int read_chunk_constants(FILE* file, BytecodeChunk* chunk, char** line, size_t* line_capacity,
+                                char* error, size_t error_size) {
+    if (!read_trimmed_line(file, line, line_capacity) || strncmp(*line, "constants ", 10) != 0) {
+        set_program_error(error, error_size, "Missing constant table in VM artifact.");
+        return 0;
+    }
+
+    int constant_count = 0;
+    if (!parse_nonnegative_int(*line + 10, &constant_count)) {
+        set_program_error(error, error_size, "Invalid constant count in VM artifact.");
+        return 0;
+    }
+
+    for (int i = 0; i < constant_count; i++) {
+        if (!read_trimmed_line(file, line, line_capacity)) {
+            set_program_error(error, error_size, "Unexpected EOF while reading constants.");
+            return 0;
+        }
+
+        if (strncmp(*line, "number ", 7) == 0) {
+            double value = 0.0;
+            if (!parse_double_value(*line + 7, &value) ||
+                !append_constant(chunk, val_number(value))) {
+                set_program_error(error, error_size, "Invalid number constant in VM artifact.");
+                return 0;
+            }
+            continue;
+        }
+
+        if (strncmp(*line, "string ", 7) == 0) {
+            int string_len = 0;
+            if (!parse_nonnegative_int(*line + 7, &string_len)) {
+                set_program_error(error, error_size, "Invalid string length in VM artifact.");
+                return 0;
+            }
+
+            if (!read_trimmed_line(file, line, line_capacity)) {
+                set_program_error(error, error_size, "Unexpected EOF while reading string constant.");
+                return 0;
+            }
+
+            char* decoded = malloc((size_t)string_len + 1);
+            if (decoded == NULL) {
+                set_program_error(error, error_size, "Out of memory while decoding string constant.");
+                return 0;
+            }
+
+            if (!decode_hex_line(*line, (size_t)string_len, (uint8_t*)decoded)) {
+                free(decoded);
+                set_program_error(error, error_size, "Invalid string constant payload in VM artifact.");
+                return 0;
+            }
+            decoded[string_len] = '\0';
+
+            if (!append_constant(chunk, val_string_take(decoded))) {
+                set_program_error(error, error_size, "Out of memory while storing string constant.");
+                return 0;
+            }
+            continue;
+        }
+
+        set_program_error(error, error_size, "Unknown constant entry in VM artifact.");
+        return 0;
+    }
+
+    return 1;
+}
+
+static int read_code_payload(FILE* file, BytecodeChunk* chunk, char** line, size_t* line_capacity,
+                             const char* end_marker, char* error, size_t error_size) {
+    if (!read_trimmed_line(file, line, line_capacity) || strncmp(*line, "code ", 5) != 0) {
+        set_program_error(error, error_size, "Missing bytecode payload in VM artifact.");
+        return 0;
+    }
+
+    int code_count = 0;
+    if (!parse_nonnegative_int(*line + 5, &code_count) || !ensure_code_capacity(chunk, code_count)) {
+        set_program_error(error, error_size, "Invalid code size in VM artifact.");
+        return 0;
+    }
+
+    if (!read_trimmed_line(file, line, line_capacity)) {
+        set_program_error(error, error_size, "Unexpected EOF while reading bytecode payload.");
+        return 0;
+    }
+
+    if (!decode_hex_line(*line, (size_t)code_count, chunk->code)) {
+        set_program_error(error, error_size, "Invalid bytecode payload in VM artifact.");
+        return 0;
+    }
+
+    chunk->code_count = code_count;
+    for (int i = 0; i < code_count; i++) {
+        chunk->lines[i] = 0;
+        chunk->columns[i] = 0;
+    }
+
+    if (!read_trimmed_line(file, line, line_capacity) || strcmp(*line, end_marker) != 0) {
+        set_program_error(error, error_size, "Missing VM artifact end marker.");
+        return 0;
+    }
+
+    return 1;
+}
+
 void bytecode_program_init(BytecodeProgram* program) {
     memset(program, 0, sizeof(*program));
 }
@@ -212,6 +448,16 @@ void bytecode_program_free(BytecodeProgram* program) {
         bytecode_chunk_free(&program->chunks[i]);
     }
     free(program->chunks);
+
+    for (int i = 0; i < program->function_count; i++) {
+        for (int j = 0; j < program->functions[i].param_count; j++) {
+            free(program->functions[i].params[j]);
+        }
+        free(program->functions[i].params);
+        bytecode_chunk_free(&program->functions[i].chunk);
+    }
+    free(program->functions);
+
     memset(program, 0, sizeof(*program));
 }
 
@@ -225,7 +471,10 @@ int bytecode_compile_program(BytecodeProgram* program, Stmt* statements, Bytecod
         BytecodeChunk chunk;
         bytecode_chunk_init(&chunk);
 
-        if (!bytecode_compile_statement_mode(&chunk, stmt, mode, error, error_size)) {
+        if (!bytecode_compile_statement_with_functions(&chunk, stmt, mode,
+                                                      mode == BYTECODE_COMPILE_STRICT ? compile_program_function : NULL,
+                                                      program,
+                                                      error, error_size)) {
             bytecode_chunk_free(&chunk);
             return 0;
         }
@@ -249,30 +498,26 @@ int bytecode_program_write_file(const BytecodeProgram* program, const char* outp
         return 0;
     }
 
-    int ok = fprintf(out, "SAGEBC1\nchunks %d\n", program->chunk_count) >= 0;
-    for (int i = 0; ok && i < program->chunk_count; i++) {
-        const BytecodeChunk* chunk = &program->chunks[i];
-        ok = fprintf(out, "chunk\nconstants %d\n", chunk->constant_count) >= 0;
-
-        for (int j = 0; ok && j < chunk->constant_count; j++) {
-            Value constant = chunk->constants[j];
-            if (IS_NUMBER(constant)) {
-                ok = fprintf(out, "number %.17g\n", AS_NUMBER(constant)) >= 0;
-            } else if (IS_STRING(constant)) {
-                size_t string_len = strlen(AS_STRING(constant));
-                ok = fprintf(out, "string %zu\n", string_len) >= 0 &&
-                     write_hex_line(out, (const uint8_t*)AS_STRING(constant), string_len);
-            } else {
-                set_program_error(error, error_size, "Compiled VM artifacts only support number/string constants.");
-                ok = 0;
-            }
+    int ok = fprintf(out, "SAGEBC1\nfunctions %d\n", program->function_count) >= 0;
+    for (int i = 0; ok && i < program->function_count; i++) {
+        const BytecodeFunction* function = &program->functions[i];
+        ok = fprintf(out, "function\nparams %d\n", function->param_count) >= 0;
+        for (int j = 0; ok && j < function->param_count; j++) {
+            size_t param_len = strlen(function->params[j]);
+            ok = fprintf(out, "param %zu\n", param_len) >= 0 &&
+                 write_hex_line(out, (const uint8_t*)function->params[j], param_len);
         }
-
         if (ok) {
-            ok = fprintf(out, "code %d\n", chunk->code_count) >= 0 &&
-                 write_hex_line(out, chunk->code, (size_t)chunk->code_count) &&
-                 fprintf(out, "endchunk\n") >= 0;
+            ok = write_chunk_payload(out, &function->chunk, "endfunction", error, error_size);
         }
+    }
+
+    if (ok) {
+        ok = fprintf(out, "chunks %d\n", program->chunk_count) >= 0;
+    }
+    for (int i = 0; ok && i < program->chunk_count; i++) {
+        ok = fprintf(out, "chunk\n") >= 0 &&
+             write_chunk_payload(out, &program->chunks[i], "endchunk", error, error_size);
     }
 
     if (fclose(out) != 0) {
@@ -305,7 +550,106 @@ int bytecode_program_read_file(BytecodeProgram* program, const char* input_path,
         goto cleanup;
     }
 
-    if (!read_trimmed_line(file, &line, &line_capacity) || strncmp(line, "chunks ", 7) != 0) {
+    if (!read_trimmed_line(file, &line, &line_capacity)) {
+        set_program_error(error, error_size, "Unexpected EOF while reading VM artifact.");
+        goto cleanup;
+    }
+
+    if (strncmp(line, "functions ", 10) == 0) {
+        int function_count = 0;
+        if (!parse_nonnegative_int(line + 10, &function_count)) {
+            set_program_error(error, error_size, "Invalid function count in VM artifact.");
+            goto cleanup;
+        }
+
+        for (int i = 0; i < function_count; i++) {
+            BytecodeFunction function;
+            memset(&function, 0, sizeof(function));
+            bytecode_chunk_init(&function.chunk);
+
+            if (!read_trimmed_line(file, &line, &line_capacity) || strcmp(line, "function") != 0) {
+                bytecode_chunk_free(&function.chunk);
+                set_program_error(error, error_size, "Invalid function marker in VM artifact.");
+                goto cleanup;
+            }
+
+            if (!read_trimmed_line(file, &line, &line_capacity) || strncmp(line, "params ", 7) != 0) {
+                bytecode_chunk_free(&function.chunk);
+                set_program_error(error, error_size, "Missing function parameter table in VM artifact.");
+                goto cleanup;
+            }
+
+            if (!parse_nonnegative_int(line + 7, &function.param_count)) {
+                bytecode_chunk_free(&function.chunk);
+                set_program_error(error, error_size, "Invalid function parameter count in VM artifact.");
+                goto cleanup;
+            }
+
+            if (function.param_count > 0) {
+                function.params = calloc((size_t)function.param_count, sizeof(char*));
+                if (function.params == NULL) {
+                    bytecode_chunk_free(&function.chunk);
+                    set_program_error(error, error_size, "Out of memory while reading function parameters.");
+                    goto cleanup;
+                }
+            }
+
+            for (int j = 0; j < function.param_count; j++) {
+                int param_len = 0;
+                if (!read_trimmed_line(file, &line, &line_capacity) || strncmp(line, "param ", 6) != 0 ||
+                    !parse_nonnegative_int(line + 6, &param_len)) {
+                    for (int k = 0; k < j; k++) free(function.params[k]);
+                    free(function.params);
+                    bytecode_chunk_free(&function.chunk);
+                    set_program_error(error, error_size, "Invalid function parameter entry in VM artifact.");
+                    goto cleanup;
+                }
+
+                if (!read_trimmed_line(file, &line, &line_capacity)) {
+                    for (int k = 0; k < j; k++) free(function.params[k]);
+                    free(function.params);
+                    bytecode_chunk_free(&function.chunk);
+                    set_program_error(error, error_size, "Unexpected EOF while reading function parameter.");
+                    goto cleanup;
+                }
+
+                function.params[j] = malloc((size_t)param_len + 1);
+                if (function.params[j] == NULL) {
+                    for (int k = 0; k < j; k++) free(function.params[k]);
+                    free(function.params);
+                    bytecode_chunk_free(&function.chunk);
+                    set_program_error(error, error_size, "Out of memory while decoding function parameter.");
+                    goto cleanup;
+                }
+
+                if (!decode_hex_line(line, (size_t)param_len, (uint8_t*)function.params[j])) {
+                    for (int k = 0; k <= j; k++) free(function.params[k]);
+                    free(function.params);
+                    bytecode_chunk_free(&function.chunk);
+                    set_program_error(error, error_size, "Invalid function parameter payload in VM artifact.");
+                    goto cleanup;
+                }
+                function.params[j][param_len] = '\0';
+            }
+
+            if (!read_chunk_constants(file, &function.chunk, &line, &line_capacity, error, error_size) ||
+                !read_code_payload(file, &function.chunk, &line, &line_capacity, "endfunction",
+                                   error, error_size) ||
+                !append_function(program, &function, error, error_size, NULL)) {
+                for (int j = 0; j < function.param_count; j++) free(function.params[j]);
+                free(function.params);
+                bytecode_chunk_free(&function.chunk);
+                goto cleanup;
+            }
+        }
+
+        if (!read_trimmed_line(file, &line, &line_capacity)) {
+            set_program_error(error, error_size, "Unexpected EOF while reading chunk table.");
+            goto cleanup;
+        }
+    }
+
+    if (strncmp(line, "chunks ", 7) != 0) {
         set_program_error(error, error_size, "Missing chunk table in VM artifact.");
         goto cleanup;
     }
@@ -326,116 +670,9 @@ int bytecode_program_read_file(BytecodeProgram* program, const char* input_path,
             goto cleanup;
         }
 
-        if (!read_trimmed_line(file, &line, &line_capacity) || strncmp(line, "constants ", 10) != 0) {
-            bytecode_chunk_free(&chunk);
-            set_program_error(error, error_size, "Missing constant table in VM artifact.");
-            goto cleanup;
-        }
-
-        int constant_count = 0;
-        if (!parse_nonnegative_int(line + 10, &constant_count)) {
-            bytecode_chunk_free(&chunk);
-            set_program_error(error, error_size, "Invalid constant count in VM artifact.");
-            goto cleanup;
-        }
-
-        for (int j = 0; j < constant_count; j++) {
-            if (!read_trimmed_line(file, &line, &line_capacity)) {
-                bytecode_chunk_free(&chunk);
-                set_program_error(error, error_size, "Unexpected EOF while reading constants.");
-                goto cleanup;
-            }
-
-            if (strncmp(line, "number ", 7) == 0) {
-                double value = 0.0;
-                if (!parse_double_value(line + 7, &value) || !append_constant(&chunk, val_number(value))) {
-                    bytecode_chunk_free(&chunk);
-                    set_program_error(error, error_size, "Invalid number constant in VM artifact.");
-                    goto cleanup;
-                }
-                continue;
-            }
-
-            if (strncmp(line, "string ", 7) == 0) {
-                int string_len = 0;
-                if (!parse_nonnegative_int(line + 7, &string_len)) {
-                    bytecode_chunk_free(&chunk);
-                    set_program_error(error, error_size, "Invalid string length in VM artifact.");
-                    goto cleanup;
-                }
-
-                if (!read_trimmed_line(file, &line, &line_capacity)) {
-                    bytecode_chunk_free(&chunk);
-                    set_program_error(error, error_size, "Unexpected EOF while reading string constant.");
-                    goto cleanup;
-                }
-
-                char* decoded = malloc((size_t)string_len + 1);
-                if (decoded == NULL) {
-                    bytecode_chunk_free(&chunk);
-                    set_program_error(error, error_size, "Out of memory while decoding string constant.");
-                    goto cleanup;
-                }
-
-                if (!decode_hex_line(line, (size_t)string_len, (uint8_t*)decoded)) {
-                    free(decoded);
-                    bytecode_chunk_free(&chunk);
-                    set_program_error(error, error_size, "Invalid string constant payload in VM artifact.");
-                    goto cleanup;
-                }
-                decoded[string_len] = '\0';
-
-                if (!append_constant(&chunk, val_string_take(decoded))) {
-                    bytecode_chunk_free(&chunk);
-                    set_program_error(error, error_size, "Out of memory while storing string constant.");
-                    goto cleanup;
-                }
-                continue;
-            }
-
-            bytecode_chunk_free(&chunk);
-            set_program_error(error, error_size, "Unknown constant entry in VM artifact.");
-            goto cleanup;
-        }
-
-        if (!read_trimmed_line(file, &line, &line_capacity) || strncmp(line, "code ", 5) != 0) {
-            bytecode_chunk_free(&chunk);
-            set_program_error(error, error_size, "Missing bytecode payload in VM artifact.");
-            goto cleanup;
-        }
-
-        int code_count = 0;
-        if (!parse_nonnegative_int(line + 5, &code_count) || !ensure_code_capacity(&chunk, code_count)) {
-            bytecode_chunk_free(&chunk);
-            set_program_error(error, error_size, "Invalid code size in VM artifact.");
-            goto cleanup;
-        }
-
-        if (!read_trimmed_line(file, &line, &line_capacity)) {
-            bytecode_chunk_free(&chunk);
-            set_program_error(error, error_size, "Unexpected EOF while reading bytecode payload.");
-            goto cleanup;
-        }
-
-        if (!decode_hex_line(line, (size_t)code_count, chunk.code)) {
-            bytecode_chunk_free(&chunk);
-            set_program_error(error, error_size, "Invalid bytecode payload in VM artifact.");
-            goto cleanup;
-        }
-
-        chunk.code_count = code_count;
-        for (int j = 0; j < code_count; j++) {
-            chunk.lines[j] = 0;
-            chunk.columns[j] = 0;
-        }
-
-        if (!read_trimmed_line(file, &line, &line_capacity) || strcmp(line, "endchunk") != 0) {
-            bytecode_chunk_free(&chunk);
-            set_program_error(error, error_size, "Missing endchunk marker in VM artifact.");
-            goto cleanup;
-        }
-
-        if (!append_chunk(program, &chunk, error, error_size)) {
+        if (!read_chunk_constants(file, &chunk, &line, &line_capacity, error, error_size) ||
+            !read_code_payload(file, &chunk, &line, &line_capacity, "endchunk", error, error_size) ||
+            !append_chunk(program, &chunk, error, error_size)) {
             bytecode_chunk_free(&chunk);
             goto cleanup;
         }

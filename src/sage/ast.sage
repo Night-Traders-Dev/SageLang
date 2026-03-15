@@ -139,6 +139,7 @@ proc stmt_type_name(t):
 proc number_expr(value):
     let e = Expr(EXPR_NUMBER)
     e.value = value
+    e.text = str(value)
     return e
 
 proc string_expr(value):

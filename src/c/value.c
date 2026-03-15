@@ -64,6 +64,15 @@ Value val_function(void* proc, Env* closure) {
     v.as.function->proc = proc;
     v.as.function->closure = closure;
     v.as.function->is_async = 0;
+    v.as.function->is_vm = 0;
+    v.as.function->vm_function = NULL;
+    return v;
+}
+
+Value val_bytecode_function(BytecodeFunction* function, Env* closure) {
+    Value v = val_function(NULL, closure);
+    v.as.function->is_vm = 1;
+    v.as.function->vm_function = function;
     return v;
 }
 
@@ -780,7 +789,12 @@ int values_equal(Value a, Value b) {
         case VAL_BOOL:   return AS_BOOL(a) == AS_BOOL(b);
         case VAL_NIL:    return 1;
         case VAL_STRING: return strcmp(AS_STRING(a), AS_STRING(b)) == 0;
-        case VAL_FUNCTION: return a.as.function->proc == b.as.function->proc;
+        case VAL_FUNCTION:
+            if (a.as.function->is_vm != b.as.function->is_vm) return 0;
+            if (a.as.function->is_vm) {
+                return a.as.function->vm_function == b.as.function->vm_function;
+            }
+            return a.as.function->proc == b.as.function->proc;
         case VAL_TUPLE: {
             TupleValue* ta = a.as.tuple;
             TupleValue* tb = b.as.tuple;

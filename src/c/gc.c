@@ -329,6 +329,16 @@ void gc_track_external_free(size_t size) {
 // GC Marking Phase - THE FIX FOR ALL THREE TODOS
 // ============================================================================
 
+static void gc_mark_bytecode_chunk(BytecodeChunk* chunk) {
+    if (chunk == NULL) {
+        return;
+    }
+
+    for (int i = 0; i < chunk->constant_count; i++) {
+        gc_mark_value(chunk->constants[i]);
+    }
+}
+
 void gc_mark_value(Value val) {
     // Primitive types - no marking needed
     if (val.type == VAL_NIL || val.type == VAL_NUMBER || 
@@ -381,6 +391,9 @@ void gc_mark_value(Value val) {
         if (gc_try_mark_object(val.as.function)) {
             if (val.as.function->closure != NULL) {
                 gc_mark_env(val.as.function->closure);
+            }
+            if (val.as.function->is_vm && val.as.function->vm_function != NULL) {
+                gc_mark_bytecode_chunk(&val.as.function->vm_function->chunk);
             }
         }
         return;

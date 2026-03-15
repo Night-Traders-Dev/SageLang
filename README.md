@@ -18,7 +18,7 @@ These charts are refreshed by `make charts` and also as part of the default `mak
 
 These charts are also refreshed by `make charts`. They are generated from `python3 scripts/benchmark_recipes.py --runs 5 --warmups 1` against `benchmarks/runtime_compare.sage`, so the absolute timings are machine-specific while the relative shape is the useful signal.
 
-Recipes that are currently unsupported or fail checksum validation are called out in the chart footers instead of being drawn as misleading bars.
+The compiled VM recipe is now charted as a first-class lane on the default workload. Any recipe that still fails or misses checksum validation is called out in the chart footers instead of being drawn as a misleading bar.
 
 ![SageLang recipe benchmark total median time](assets/charts/benchmark-recipes-total.svg)
 

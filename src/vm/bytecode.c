@@ -10,6 +10,9 @@
 typedef struct {
     BytecodeChunk* chunk;
     BytecodeCompileMode mode;
+    BytecodeBuildFunctionFn build_function;
+    void* build_function_data;
+    int allow_return;
     char* error;
     size_t error_size;
 } BytecodeCompiler;
@@ -146,6 +149,18 @@ static int emit_name_op(BytecodeCompiler* compiler, BytecodeOp op, Token token) 
            emit_u16(compiler, (uint16_t)index, token.line, token.column);
 }
 
+static int emit_define_function(BytecodeCompiler* compiler, Token token, int function_index) {
+    int name_index = add_name_constant(compiler, token.start, token.length);
+    if (name_index < 0) return 0;
+    if (name_index > 0xffff || function_index > 0xffff) {
+        set_error(compiler, "Bytecode function table exceeded 65535 entries.");
+        return 0;
+    }
+    return emit_op(compiler, BC_OP_DEFINE_FUNCTION, token.line, token.column) &&
+           emit_u16(compiler, (uint16_t)name_index, token.line, token.column) &&
+           emit_u16(compiler, (uint16_t)function_index, token.line, token.column);
+}
+
 static int emit_ast_stmt(BytecodeCompiler* compiler, Stmt* stmt) {
     if (compiler->mode == BYTECODE_COMPILE_STRICT) {
         (void)stmt;
@@ -185,45 +200,47 @@ static int patch_jump(BytecodeCompiler* compiler, int patch_location, int target
     return 1;
 }
 
-static int stmt_has_nonlocal_control(Stmt* stmt);
+static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt);
 static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result);
 static int compile_expr(BytecodeCompiler* compiler, Expr* expr);
 
-static int stmt_has_nonlocal_control(Stmt* stmt) {
+static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
     if (stmt == NULL) return 0;
 
     switch (stmt->type) {
         case STMT_BREAK:
         case STMT_CONTINUE:
-        case STMT_RETURN:
         case STMT_YIELD:
             return 1;
+        case STMT_RETURN:
+            return !compiler->allow_return;
         case STMT_BLOCK: {
             for (Stmt* current = stmt->as.block.statements; current != NULL; current = current->next) {
-                if (stmt_has_nonlocal_control(current)) return 1;
+                if (stmt_requires_ast_fallback(compiler, current)) return 1;
             }
             return 0;
         }
         case STMT_IF:
-            return stmt_has_nonlocal_control(stmt->as.if_stmt.then_branch) ||
-                   stmt_has_nonlocal_control(stmt->as.if_stmt.else_branch);
+            return stmt_requires_ast_fallback(compiler, stmt->as.if_stmt.then_branch) ||
+                   stmt_requires_ast_fallback(compiler, stmt->as.if_stmt.else_branch);
         case STMT_WHILE:
-            return stmt_has_nonlocal_control(stmt->as.while_stmt.body);
+            return stmt_requires_ast_fallback(compiler, stmt->as.while_stmt.body);
         case STMT_FOR:
-            return stmt_has_nonlocal_control(stmt->as.for_stmt.body);
+            return stmt_requires_ast_fallback(compiler, stmt->as.for_stmt.body);
         case STMT_TRY:
-            if (stmt_has_nonlocal_control(stmt->as.try_stmt.try_block) ||
-                stmt_has_nonlocal_control(stmt->as.try_stmt.finally_block)) {
+            if (stmt_requires_ast_fallback(compiler, stmt->as.try_stmt.try_block) ||
+                stmt_requires_ast_fallback(compiler, stmt->as.try_stmt.finally_block)) {
                 return 1;
             }
             for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
-                if (stmt_has_nonlocal_control(stmt->as.try_stmt.catches[i]->body)) return 1;
+                if (stmt_requires_ast_fallback(compiler, stmt->as.try_stmt.catches[i]->body)) return 1;
             }
             return 0;
         case STMT_PROC:
-        case STMT_ASYNC_PROC:
         case STMT_CLASS:
             return 0;
+        case STMT_ASYNC_PROC:
+            return 1;
         default:
             return 0;
     }
@@ -424,7 +441,7 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
         return 1;
     }
 
-    if (stmt_has_nonlocal_control(stmt)) {
+    if (stmt_requires_ast_fallback(compiler, stmt)) {
         if (!emit_ast_stmt(compiler, stmt)) return 0;
         if (!want_result) {
             return emit_op(compiler, BC_OP_POP, 0, 0);
@@ -447,6 +464,17 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, stmt->as.let.name)) return 0;
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
             return 1;
+        case STMT_PROC: {
+            int function_index = -1;
+            if (compiler->build_function == NULL) break;
+            if (!compiler->build_function(compiler->build_function_data, &stmt->as.proc,
+                                          compiler->error, compiler->error_size, &function_index)) {
+                return 0;
+            }
+            if (!emit_define_function(compiler, stmt->as.proc.name, function_index)) return 0;
+            if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+            return 1;
+        }
         case STMT_EXPRESSION:
             if (!compile_expr(compiler, stmt->as.expression)) break;
             if (!want_result) return emit_op(compiler, BC_OP_POP, 0, 0);
@@ -486,6 +514,14 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
             return 1;
         }
+        case STMT_RETURN:
+            if (!compiler->allow_return) break;
+            if (stmt->as.ret.value != NULL) {
+                if (!compile_expr(compiler, stmt->as.ret.value)) return 0;
+            } else if (!emit_op(compiler, BC_OP_NIL, 0, 0)) {
+                return 0;
+            }
+            return emit_op(compiler, BC_OP_RETURN, 0, 0);
         default:
             break;
     }
@@ -503,9 +539,19 @@ int bytecode_compile_statement(BytecodeChunk* chunk, Stmt* stmt, char* error, si
 
 int bytecode_compile_statement_mode(BytecodeChunk* chunk, Stmt* stmt, BytecodeCompileMode mode,
                                     char* error, size_t error_size) {
+    return bytecode_compile_statement_with_functions(chunk, stmt, mode, NULL, NULL, error, error_size);
+}
+
+int bytecode_compile_statement_with_functions(BytecodeChunk* chunk, Stmt* stmt, BytecodeCompileMode mode,
+                                              BytecodeBuildFunctionFn build_function,
+                                              void* build_function_data,
+                                              char* error, size_t error_size) {
     BytecodeCompiler compiler;
     compiler.chunk = chunk;
     compiler.mode = mode;
+    compiler.build_function = build_function;
+    compiler.build_function_data = build_function_data;
+    compiler.allow_return = 0;
     compiler.error = error;
     compiler.error_size = error_size;
     if (error != NULL && error_size > 0) {
@@ -520,6 +566,36 @@ int bytecode_compile_statement_mode(BytecodeChunk* chunk, Stmt* stmt, BytecodeCo
     }
 
     if (!emit_op(&compiler, BC_OP_RETURN, 0, 0)) {
+        return 0;
+    }
+    return 1;
+}
+
+int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
+                                   BytecodeBuildFunctionFn build_function,
+                                   void* build_function_data,
+                                   char* error, size_t error_size) {
+    BytecodeCompiler compiler;
+    compiler.chunk = chunk;
+    compiler.mode = BYTECODE_COMPILE_STRICT;
+    compiler.build_function = build_function;
+    compiler.build_function_data = build_function_data;
+    compiler.allow_return = 1;
+    compiler.error = error;
+    compiler.error_size = error_size;
+    if (error != NULL && error_size > 0) {
+        error[0] = '\0';
+    }
+
+    if (!compile_stmt(&compiler, body, 0)) {
+        if (error != NULL && error_size > 0 && error[0] == '\0') {
+            snprintf(error, error_size, "failed to compile function body");
+        }
+        return 0;
+    }
+
+    if (!emit_op(&compiler, BC_OP_NIL, 0, 0) ||
+        !emit_op(&compiler, BC_OP_RETURN, 0, 0)) {
         return 0;
     }
     return 1;

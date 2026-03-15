@@ -350,7 +350,9 @@ class Parser:
         # Number literal
         if self.match_tok(token.TOKEN_NUMBER):
             let tok = self.previous()
-            return number_expr(parse_number_literal(tok.text))
+            let expr = number_expr(parse_number_literal(tok.text))
+            expr.text = tok.text
+            return expr
 
         # String literal
         if self.match_tok(token.TOKEN_STRING):
