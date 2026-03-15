@@ -18,6 +18,7 @@ endif
 
 # Directories
 SRC_DIR = src/c
+VM_DIR = src/vm
 INC_DIR = include
 OBJ_DIR = obj
 BIN_DIR = .
@@ -60,6 +61,11 @@ CORE_SOURCES = \
     $(SRC_DIR)/typecheck.c \
     $(SRC_DIR)/value.c
 
+VM_SOURCES = \
+    $(VM_DIR)/bytecode.c \
+    $(VM_DIR)/runtime.c \
+    $(VM_DIR)/vm.c
+
 MAIN_SOURCE = $(SRC_DIR)/main.c
 
 # Optional heartbeat source
@@ -96,8 +102,9 @@ endif
 
 # Object files
 CORE_OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CORE_SOURCES))
+VM_OBJECTS = $(patsubst $(VM_DIR)/%.c,$(OBJ_DIR)/vm/%.o,$(VM_SOURCES))
 MAIN_OBJECT = $(OBJ_DIR)/main.o
-ALL_OBJECTS = $(CORE_OBJECTS) $(MAIN_OBJECT)
+ALL_OBJECTS = $(CORE_OBJECTS) $(VM_OBJECTS) $(MAIN_OBJECT)
 
 # Binaries
 TARGET = sage
@@ -121,20 +128,25 @@ $(TARGET): $(ALL_OBJECTS)
 	@echo "   Run with: ./$(TARGET) examples/hello.sage"
 
 # LSP server binary (standalone)
-$(LSP_TARGET): $(LSP_MAIN_OBJECT) $(CORE_OBJECTS)
+$(LSP_TARGET): $(LSP_MAIN_OBJECT) $(CORE_OBJECTS) $(VM_OBJECTS)
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 	@echo "Built: $(LSP_TARGET)"
 
 $(LSP_MAIN_OBJECT): $(LSP_MAIN_SOURCE) $(HEADERS)
 	@mkdir -p $(OBJ_DIR)
-	$(CC) $(CFLAGS) -I$(INC_DIR) -c $< -o $@
+	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
 	@echo "Compiled: $<"
 
 # Compile source files
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(HEADERS)
 	@mkdir -p $(OBJ_DIR)
-	$(CC) $(CFLAGS) -I$(INC_DIR) -c $< -o $@
+	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
+	@echo "Compiled: $<"
+
+$(OBJ_DIR)/vm/%.o: $(VM_DIR)/%.c $(HEADERS)
+	@mkdir -p $(OBJ_DIR)/vm
+	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
 	@echo "Compiled: $<"
 
 # ============================================================================

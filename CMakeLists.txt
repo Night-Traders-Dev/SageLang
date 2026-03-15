@@ -103,6 +103,12 @@ set(SAGE_CORE_SOURCES
     src/c/value.c
 )
 
+set(SAGE_VM_SOURCES
+    src/vm/bytecode.c
+    src/vm/runtime.c
+    src/vm/vm.c
+)
+
 set(SAGE_MAIN_SOURCE
     src/c/main.c
 )
@@ -161,6 +167,7 @@ endif()
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src/c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/vm
 )
 
 # ============================================================================
@@ -172,6 +179,7 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     add_executable(sage
         ${SAGE_MAIN_SOURCE}
         ${SAGE_CORE_SOURCES}
+        ${SAGE_VM_SOURCES}
     )
 
     # Link math, pthread, and dl libraries
@@ -182,6 +190,7 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
         add_executable(sage-lsp
             src/c/lsp_main.c
             ${SAGE_CORE_SOURCES}
+            ${SAGE_VM_SOURCES}
         )
         target_link_libraries(sage-lsp m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
         message(STATUS "Building LSP server: sage-lsp")
@@ -199,6 +208,7 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
     add_executable(sage
         ${SAGE_MAIN_SOURCE}
         ${SAGE_CORE_SOURCES}
+        ${SAGE_VM_SOURCES}
     )
     target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
 

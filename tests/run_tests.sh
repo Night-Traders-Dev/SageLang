@@ -64,6 +64,13 @@ capture_test_output() {
             fi
             rm -f "$tmp_path"
             ;;
+        "bytecode-run")
+            if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
+                TEST_OUTPUT=$(cd "$SCRIPT_DIR" && "$SAGE" --runtime bytecode "$test_file" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
+            else
+                TEST_OUTPUT=$(cd "$test_dir" && "$SAGE" --runtime bytecode "$test_base" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
+            fi
+            ;;
         *)
             TEST_OUTPUT="Unknown # RUN mode '$run_mode' in $test_file"
             TEST_EXIT_CODE=2
