@@ -1440,6 +1440,38 @@ print stats  # {"bytes_allocated": ..., "num_objects": ..., ...}
 - Add `printf()` statements to interpreter.c before/after statement/expression evaluation.
 - Mark garbage objects: Modify `gc_sweep()` to not free unmarked objects, inspect them.
 
+### 7.5 Interpreter Safety Limits
+
+SageLang enforces several compile-time and runtime limits to prevent crashes from malicious or malformed input:
+
+| Limit | Constant | Value | Location | Behavior on Violation |
+|-------|----------|-------|----------|----------------------|
+| Recursion depth | `MAX_RECURSION_DEPTH` | 1000 | interpreter.c | Catchable exception |
+| Parser nesting | `MAX_PARSER_DEPTH` | 500 | parser.c | Parse error |
+| Loop iterations | `MAX_LOOP_ITERATIONS` | 1,000,000 | interpreter.c | Catchable exception |
+| String literal length | `MAX_STRING_LENGTH` | 4096 | lexer.c | Parse error |
+| Function arguments | Stack array | 255 | interpreter.c | Runtime error |
+
+**Null function guards**: The interpreter checks for null pointers in both `VAL_FUNCTION` and `VAL_NATIVE` call paths before dispatch. A null callee produces a runtime error and returns `nil`.
+
+**Type-safe accessor macros** (`value.h`):
+
+| Macro | Returns on type mismatch |
+|-------|-------------------------|
+| `SAGE_AS_STRING(v)` | `""` (empty string) |
+| `SAGE_AS_NUMBER(v)` | `0.0` |
+| `SAGE_AS_BOOL(v)` | `0` (false) |
+
+These are intended for native function implementations that want defensive coercion. The standard `IS_*/AS_*` pattern (check type, then access) remains the recommended approach for most code:
+
+```c
+static Value my_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    const char* s = AS_STRING(args[0]);  // safe — guarded by IS_STRING above
+    // ...
+}
+```
+
 ---
 
 ## Part 8: Future Directions and Design Notes

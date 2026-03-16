@@ -245,11 +245,15 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 A cross-cutting audit and hardening pass across the entire codebase.
 
-#### Recursion Safety ✅
+#### Recursion & Execution Safety ✅
 
 - [x] **Interpreter depth limit** - `MAX_RECURSION_DEPTH 1000` with graceful exception on overflow
 - [x] **Parser depth limit** - `MAX_PARSER_DEPTH 500` prevents stack overflow from malicious input
 - [x] **Iterative lexer** - `scan_token()` converted from recursive to iterative (`for(;;)` loop)
+- [x] **Loop iteration limit** - `MAX_LOOP_ITERATIONS 1000000` prevents runaway `while` loops from exhausting the C stack; throws a catchable exception
+- [x] **String literal length limit** - `MAX_STRING_LENGTH 4096` in lexer rejects oversized string literals at parse time, preventing buffer-related crashes
+- [x] **Null function guards** - Both `VAL_FUNCTION` and `VAL_NATIVE` call paths check for null function pointers before dispatch, returning nil with an error instead of crashing
+- [x] **Type-safe accessor macros** - `SAGE_AS_STRING(v)`, `SAGE_AS_NUMBER(v)`, `SAGE_AS_BOOL(v)` return safe defaults (`""`, `0.0`, `0`) for type mismatches instead of undefined behavior
 
 #### Memory Safety ✅
 

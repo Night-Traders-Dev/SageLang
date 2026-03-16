@@ -28,6 +28,8 @@ static Stmt* g_generator_resume_target = NULL;
 
 // Recursion depth tracking to prevent stack overflow
 #define MAX_RECURSION_DEPTH 1000
+// Maximum loop iterations to prevent hangs and stack exhaustion
+#define MAX_LOOP_ITERATIONS 1000000
 #if SAGE_PLATFORM_PICO
 static int g_recursion_depth = 0;  // No TLS on Cortex-M0+
 #else
@@ -1896,6 +1898,10 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
             Value callee_value = callee_result.value;
 
             if (callee_value.type == VAL_NATIVE) {
+                if (callee_value.as.native == NULL) {
+                    fprintf(stderr, "Runtime Error: Attempted to call a null native function.\n");
+                    return EVAL_RESULT(val_nil());
+                }
                 int count = expr->as.call.arg_count;
                 if (count > 255) {
                     fprintf(stderr, "Runtime Error: Too many arguments (%d, max 255).\n", count);
@@ -1911,6 +1917,10 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
             }
 
             if (callee_value.type == VAL_FUNCTION) {
+                if (callee_value.as.function == NULL || callee_value.as.function->proc == NULL) {
+                    fprintf(stderr, "Runtime Error: Attempted to call a null function.\n");
+                    return EVAL_RESULT(val_nil());
+                }
                 ProcStmt* func = AS_FUNCTION(callee_value);
                 if (expr->as.call.arg_count != func->param_count) {
                     fprintf(stderr, "Runtime Error: Arity mismatch.\n");
@@ -2104,21 +2114,26 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
         }
 
         case STMT_WHILE: {
+            int iterations = 0;
             while (1) {
+                if (++iterations > MAX_LOOP_ITERATIONS) {
+                    fprintf(stderr, "Runtime Error: While loop exceeded maximum iterations (%d).\n", MAX_LOOP_ITERATIONS);
+                    return EVAL_EXCEPTION(val_exception("While loop exceeded maximum iterations"));
+                }
                 ExecResult cond_result = eval_expr(stmt->as.while_stmt.condition, env);
                 if (cond_result.is_throwing) return cond_result;
                 if (!is_truthy(cond_result.value)) break;
-                
+
                 ExecResult res = interpret(stmt->as.while_stmt.body, env);
                 if (res.is_returning || res.is_throwing) return res;
-                
+
                 if (res.is_yielding) {
                     if (res.next_stmt == NULL) {
                         res.next_stmt = stmt;
                     }
                     return res;
                 }
-                
+
                 if (res.is_breaking) break;
                 if (res.is_continuing) continue;
             }

@@ -566,7 +566,7 @@ gc_enable()
 - [x] **Phase 6: Object-Oriented Programming** (Classes, Inheritance, Methods) ✅
 - [x] **Phase 7: Control Flow** (for, break, continue, exceptions, generators) ✅ **100% COMPLETE**
 - [x] **Phase 8: Modules & Packages** (import, from-import, import-as, module caching, path security) ✅
-- [x] **Phase 8.5: Security & Performance Hardening** (recursion limits, OOM safety, hash table dicts, GC env integration, test suite) ✅
+- [x] **Phase 8.5: Security & Performance Hardening** (recursion limits, loop iteration limits, string length limits, null-call guards, type-safe accessors, OOM safety, hash table dicts, GC env integration, test suite) ✅
 - [x] **Phase 9: Low-Level Programming** ✅
   - [x] Bit manipulation (`&`, `|`, `^`, `~`, `<<`, `>>`)
   - [x] FFI (`ffi_open`, `ffi_call`, `ffi_close`, `ffi_sym`)

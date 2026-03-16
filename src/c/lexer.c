@@ -278,7 +278,10 @@ static Token number() {
     return make_token(TOKEN_NUMBER);
 }
 
+#define MAX_STRING_LENGTH 4096
+
 static Token string() {
+    const char* string_start = current;
     while (peek() != '"' && !is_at_end()) {
         if (peek() == '\n') {
             line++;
@@ -286,6 +289,9 @@ static Token string() {
         advance();
         if (current[-1] == '\n') {
             line_start = current;
+        }
+        if (current - string_start > MAX_STRING_LENGTH) {
+            return error_token("String literal exceeds maximum length (4096).");
         }
     }
 

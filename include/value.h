@@ -184,7 +184,7 @@ struct Value {
 #define IS_THREAD(v) ((v).type == VAL_THREAD)
 #define IS_MUTEX(v) ((v).type == VAL_MUTEX)
 
-// Macros for accessing values
+// Macros for accessing values (unchecked — caller must verify type first)
 #define AS_NUMBER(v) ((v).as.number)
 #define AS_BOOL(v) ((v).as.boolean)
 #define AS_STRING(v) ((v).as.string)
@@ -201,6 +201,11 @@ struct Value {
 #define AS_POINTER(v) ((v).as.pointer)
 #define AS_THREAD(v) ((v).as.thread)
 #define AS_MUTEX(v) ((v).as.mutex)
+
+// Type-safe accessor macros — return safe defaults for wrong types instead of UB
+#define SAGE_AS_STRING(v) (IS_STRING(v) ? (v).as.string : "")
+#define SAGE_AS_NUMBER(v) (IS_NUMBER(v) ? (v).as.number : 0.0)
+#define SAGE_AS_BOOL(v)   (IS_BOOL(v) ? (v).as.boolean : 0)
 
 // Constructors
 Value val_number(double value);

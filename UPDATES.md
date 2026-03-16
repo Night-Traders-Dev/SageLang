@@ -1,5 +1,34 @@
 # SageLang Updates
 
+## March 16, 2026 - Interpreter Safety Hardening (Fuzz-Driven)
+
+Addressed crash vectors discovered by fuzz testing. All changes are backward-compatible and all existing tests continue to pass (144 interpreter + 28 compiler + 1168 self-hosted).
+
+### String Literal Length Limit
+
+- Lexer now enforces `MAX_STRING_LENGTH 4096` — string literals exceeding this limit produce a parse-time error instead of a potential buffer overflow (SIGSEGV on strings > ~500 chars).
+
+### Loop Iteration Guard
+
+- `while` loops are now capped at `MAX_LOOP_ITERATIONS 1000000` iterations. Exceeding the limit throws a catchable exception (`"While loop exceeded maximum iterations"`) instead of hanging or exhausting the C stack.
+
+### Null Function Pointer Guards
+
+- Both `VAL_FUNCTION` and `VAL_NATIVE` call paths now check for null function pointers before dispatch. A null callee produces a runtime error and returns `nil` instead of crashing.
+
+### Type-Safe Accessor Macros
+
+- New macros in `value.h`: `SAGE_AS_STRING(v)`, `SAGE_AS_NUMBER(v)`, `SAGE_AS_BOOL(v)` — return safe defaults (`""`, `0.0`, `0`) when the value type doesn't match, preventing undefined behavior from incorrect `args[].as.string` access on non-string values.
+- Existing `AS_*` macros remain unchanged for callers that validate types with `IS_*` first.
+
+### Files Changed
+
+- `include/value.h` — Added `SAGE_AS_STRING`, `SAGE_AS_NUMBER`, `SAGE_AS_BOOL`
+- `src/c/lexer.c` — Added `MAX_STRING_LENGTH` check in `string()`
+- `src/c/interpreter.c` — Added `MAX_LOOP_ITERATIONS`, null guards on function dispatch
+
+---
+
 ## March 10, 2026 - Documentation Refresh, CLI Reference, and REPL Commands
 
 ### Documentation Refresh
