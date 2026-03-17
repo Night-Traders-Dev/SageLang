@@ -4,7 +4,7 @@
 
 ![SageLang Logo](assets/SageLang.jpg)
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR, native assembly), and a **self-hosted interpreter** written in Sage itself.
+Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR with runtime library, native assembly), and a **self-hosted interpreter** written in Sage itself.
 
 ## Codebase Metrics
 
@@ -612,7 +612,7 @@ Sage aims to be a **systems programming language** that:
 - Has robust exception handling for error management
 - Enables lazy evaluation with generators
 - Enables inline assembly for performance-critical code
-- Compiles to native code via C or LLVM
+- Compiles to native code via C, LLVM (with runtime library), or direct assembly
 - Is self-hosted (Sage interpreter written in Sage)
 
 ### Future Capabilities
@@ -641,8 +641,8 @@ proc write_memory(ptr: *mut u8, value: u8):
 
 - **Language**: C
 - **Phases Completed**: 14/14 (100%)
-- **Test Suite**: 144 interpreter + 28 compiler + 88 JSON + 1165 self-hosted tests across parsing, execution, tooling, optimization, codegen, compiler, LSP, and CLI
-- **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
+- **Test Suite**: 144 interpreter + 28 compiler + 88 JSON + 1165 self-hosted tests (1425+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, and CLI
+- **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64)
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
 - **Status**: Active development with a working self-hosted interpreter
 - **License**: MIT
@@ -675,6 +675,7 @@ sage/
 │   ├── interpreter.c # Evaluator (exceptions, yield, imports, async/await)
 │   ├── compiler.c    # C code generation backend
 │   ├── llvm_backend.c # LLVM IR generation backend
+│   ├── llvm_runtime.c # LLVM standalone runtime library (40+ sage_rt_* functions)
 │   ├── codegen.c     # Native assembly backend (x86-64, aarch64, rv64)
 │   ├── pass.c        # Optimization pass infrastructure
 │   ├── typecheck.c   # Type checking pass
@@ -712,6 +713,7 @@ sage/
 │   │   ├── interpreter.c  # Tree-walking interpreter
 │   │   ├── compiler.c     # C code generation backend
 │   │   ├── llvm_backend.c # LLVM IR backend
+│   │   ├── llvm_runtime.c # LLVM runtime library (40+ sage_rt_* functions)
 │   │   ├── codegen.c      # Native assembly backend
 │   │   └── ...            # 24 C source files total
 │   └── sage/         # Self-hosted Sage compiler (Phase 13+)
@@ -781,6 +783,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
+- March 17, 2026: LLVM Backend - Standalone runtime library (40+ sage_rt_* functions), ABI fix, local variable allocation, block termination tracking; --compile-llvm now produces working executables
 - March 17, 2026: Phase 14 Complete - Security & performance audit (30 fixes across 14 files, all 1425 tests passing)
 - March 9, 2026: Networking modules (socket, tcp, http, ssl) + cJSON port (88 tests)
 - March 9, 2026: Phase 13 Complete - Self-hosted lexer, parser, interpreter with full bootstrap

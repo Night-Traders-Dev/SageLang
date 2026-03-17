@@ -573,3 +573,72 @@ SageValue sage_rt_range(SageValue n) {
     }
     return arr;
 }
+
+// ============================================================================
+// Dict query operations
+// ============================================================================
+
+SageValue sage_rt_dict_keys(SageValue dict) {
+    if (dict.type != SAGE_DICT) return sage_rt_array_new(0);
+    SageDict* d = dict.as.dict;
+    SageValue arr = sage_rt_array_new(d->count);
+    for (int i = 0; i < d->count; i++) {
+        sage_rt_array_push(arr, sage_rt_string(d->keys[i]));
+    }
+    return arr;
+}
+
+SageValue sage_rt_dict_values(SageValue dict) {
+    if (dict.type != SAGE_DICT) return sage_rt_array_new(0);
+    SageDict* d = dict.as.dict;
+    SageValue arr = sage_rt_array_new(d->count);
+    for (int i = 0; i < d->count; i++) {
+        sage_rt_array_push(arr, d->values[i]);
+    }
+    return arr;
+}
+
+SageValue sage_rt_dict_has(SageValue dict, SageValue key) {
+    if (dict.type != SAGE_DICT || key.type != SAGE_STRING) return sage_rt_bool(0);
+    SageDict* d = dict.as.dict;
+    for (int i = 0; i < d->count; i++) {
+        if (strcmp(d->keys[i], key.as.string) == 0) return sage_rt_bool(1);
+    }
+    return sage_rt_bool(0);
+}
+
+// ============================================================================
+// Type introspection
+// ============================================================================
+
+SageValue sage_rt_type(SageValue v) {
+    switch (v.type) {
+        case SAGE_NUMBER: return sage_rt_string("number");
+        case SAGE_BOOL: return sage_rt_string("bool");
+        case SAGE_NIL: return sage_rt_string("nil");
+        case SAGE_STRING: return sage_rt_string("string");
+        case SAGE_ARRAY: return sage_rt_string("array");
+        case SAGE_DICT: return sage_rt_string("dict");
+        case SAGE_TUPLE: return sage_rt_string("tuple");
+        case SAGE_INSTANCE: return sage_rt_string("instance");
+        default: return sage_rt_string("unknown");
+    }
+}
+
+// ============================================================================
+// Input (stdin)
+// ============================================================================
+
+SageValue sage_rt_input(SageValue prompt) {
+    if (prompt.type == SAGE_STRING) {
+        printf("%s", prompt.as.string);
+        fflush(stdout);
+    }
+    char buf[4096];
+    if (fgets(buf, sizeof(buf), stdin) != NULL) {
+        size_t len = strlen(buf);
+        if (len > 0 && buf[len - 1] == '\n') buf[len - 1] = '\0';
+        return sage_rt_string(buf);
+    }
+    return sage_rt_nil();
+}

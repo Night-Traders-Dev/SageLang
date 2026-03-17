@@ -1,5 +1,39 @@
 # SageLang Updates
 
+## March 17, 2026 - LLVM Backend: Runtime Library & Compile-to-Executable
+
+The LLVM backend now produces fully working executables via `--compile-llvm`. A new standalone C runtime library implements all sage_rt_* functions, and numerous backend fixes bring LLVM IR generation to parity with the C backend for core language features.
+
+### New: Runtime Library (src/c/llvm_runtime.c)
+
+- Standalone C runtime implementing all 40+ `sage_rt_*` functions used by LLVM-generated IR
+- Value constructors: `sage_rt_number`, `sage_rt_string`, `sage_rt_bool`, `sage_rt_nil`, `sage_rt_array`, `sage_rt_dict`, `sage_rt_tuple`
+- Arithmetic: `sage_rt_add`, `sage_rt_sub`, `sage_rt_mul`, `sage_rt_div`, `sage_rt_mod`, `sage_rt_neg`
+- Comparison: `sage_rt_eq`, `sage_rt_neq`, `sage_rt_lt`, `sage_rt_le`, `sage_rt_gt`, `sage_rt_ge`
+- Logical: `sage_rt_and`, `sage_rt_or`, `sage_rt_not`
+- Bitwise: `sage_rt_band`, `sage_rt_bor`, `sage_rt_bxor`, `sage_rt_bnot`, `sage_rt_shl`, `sage_rt_shr`
+- Collections: array push/index/len, dict set/get, tuple index, range, slice
+- Property access, conversion (tonumber, tostring), I/O (print, input)
+
+### LLVM Backend Fixes (src/c/llvm_backend.c)
+
+- **ABI fix**: `%SageValue = type { i32, i64 }` now matches clang's SysV x86-64 lowering, eliminating struct-return ABI mismatches
+- **Variable assignments**: `EXPR_SET(NULL, name, value)` now emits a store instruction instead of calling `set_attr` on nil
+- **Global/local distinction**: Variables correctly resolve to `@name` (global) or `%name` (local) depending on scope
+- **Local variable allocation**: New `collect_local_names()` pass pre-allocates all `let` bindings with `alloca` at function entry, preventing use-before-definition in control flow
+- **Block termination tracking**: `block_terminated` flag prevents invalid IR after `ret`/`br` instructions
+- **Bitwise operators**: `&`, `|`, `^`, `~`, `<<`, `>>` now emit proper runtime calls
+- **Class support**: Methods emitted as `sage_fn_ClassName_methodName` functions
+- **Exception handling**: `try` executes the try block; `raise` prints the message and aborts
+- **Import**: Silently skipped (not applicable in compiled mode)
+- **Linker integration**: `--compile-llvm` auto-discovers `obj/llvm_runtime.o` for linking
+
+### Build & Test
+
+- New Makefile target builds `obj/llvm_runtime.o` as part of `make`
+- New Test 22b: LLVM compile + run validates end-to-end executable generation
+- All 1425+ tests passing
+
 ## March 16, 2026 - Interpreter Safety Hardening (Fuzz-Driven)
 
 Addressed crash vectors discovered by fuzz testing. All changes are backward-compatible and all existing tests continue to pass (144 interpreter + 28 compiler + 1168 self-hosted).
