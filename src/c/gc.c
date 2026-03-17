@@ -255,42 +255,49 @@ void gc_unpin(void) {
 }
 
 void* gc_alloc(int type, size_t size) {
+    sage_mutex_lock(&gc_mutex);
+
     // Check if GC should run (suppressed when pinned)
     if (gc_should_collect(size)) {
         Env* root = gc_root_env();
         if (root != NULL) {
+            // Unlock during collection (collect takes its own lock path)
+            sage_mutex_unlock(&gc_mutex);
             gc_collect_with_root(root);
+            sage_mutex_lock(&gc_mutex);
         }
     }
-    
+
     // Allocate memory with GC header
     size_t total_size = sizeof(GCHeader) + size;
     GCHeader* header = (GCHeader*)malloc(total_size);
-    
+
     if (header == NULL) {
+        sage_mutex_unlock(&gc_mutex);
         fprintf(stderr, "Fatal: GC allocation failed (%zu bytes)\n", total_size);
         abort();
     }
-    
+
     // Initialize header
     header->marked = 0;
     header->type = type;
     header->size = size;
-    
+
     // Add to object list
     header->next = gc.objects;
     gc.objects = header;
-    
+
     // Update stats
     gc.object_count++;
     gc.objects_since_gc++;
     gc.bytes_allocated += total_size;
-    
+
     if (gc_debug) {
         fprintf(stderr, "[GC] Allocated %zu bytes (type=%d, total objects=%d)\n",
                 total_size, type, gc.object_count);
     }
-    
+
+    sage_mutex_unlock(&gc_mutex);
     // Return pointer after header
     return (void*)(header + 1);
 }
@@ -600,61 +607,73 @@ void gc_sweep(void) {
 
 void gc_collect(void) {
     if (!gc.enabled) return;  // Skip if GC is disabled
-    
+
+    sage_mutex_lock(&gc_mutex);
+
     if (gc_debug) {
-        fprintf(stderr, "\n[GC] ========== GC Collection #%d ==========\n", 
+        fprintf(stderr, "\n[GC] ========== GC Collection #%d ==========\n",
                 gc.collections + 1);
     }
-    
+
     unsigned long before_bytes = gc_live_bytes();
     int before_objects = gc.object_count;
 
     // Mark phase: find all reachable objects
     gc_mark();
-    
+
     // Sweep phase: free unmarked objects
     gc_sweep();
-    
+
     // Reset counter
     gc.objects_since_gc = 0;
     gc.collections++;
-    gc_recompute_thresholds(before_bytes - gc_live_bytes(),
-                            before_objects - gc.object_count);
-    
+    unsigned long live = gc_live_bytes();
+    unsigned long reclaimed_bytes = (before_bytes >= live) ? before_bytes - live : 0;
+    int reclaimed_objects = before_objects - gc.object_count;
+    gc_recompute_thresholds(reclaimed_bytes, reclaimed_objects);
+
     if (gc_debug) {
-        fprintf(stderr, "[GC] Collection complete: %d objects remaining\n\n", 
+        fprintf(stderr, "[GC] Collection complete: %d objects remaining\n\n",
                 gc.object_count);
     }
+
+    sage_mutex_unlock(&gc_mutex);
 }
 
 // Wrapper to collect with root environment
 void gc_collect_with_root(Env* root_env) {
     if (!gc.enabled) return;  // Skip if GC is disabled
-    
+
+    sage_mutex_lock(&gc_mutex);
+
     if (gc_debug) {
-        fprintf(stderr, "\n[GC] ========== GC Collection #%d ==========\n", 
+        fprintf(stderr, "\n[GC] ========== GC Collection #%d ==========\n",
                 gc.collections + 1);
     }
-    
+
     unsigned long before_bytes = gc_live_bytes();
     int before_objects = gc.object_count;
 
     // Mark phase with root environment
     gc_mark_from_root(root_env);
-    
+
     // Sweep phase: free unmarked objects
     gc_sweep();
-    
+
     // Reset counter
     gc.objects_since_gc = 0;
     gc.collections++;
-    gc_recompute_thresholds(before_bytes - gc_live_bytes(),
-                            before_objects - gc.object_count);
-    
+    unsigned long live = gc_live_bytes();
+    unsigned long reclaimed_bytes = (before_bytes >= live) ? before_bytes - live : 0;
+    int reclaimed_objects = before_objects - gc.object_count;
+    gc_recompute_thresholds(reclaimed_bytes, reclaimed_objects);
+
     if (gc_debug) {
-        fprintf(stderr, "[GC] Collection complete: %d objects remaining\n\n", 
+        fprintf(stderr, "[GC] Collection complete: %d objects remaining\n\n",
                 gc.object_count);
     }
+
+    sage_mutex_unlock(&gc_mutex);
 }
 
 // ============================================================================

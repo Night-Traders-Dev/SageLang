@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "gc.h"
 
 // ============================================================================
 // TypeMap Implementation
@@ -107,12 +108,12 @@ static SageType infer_expr(TypeMap* map, const Expr* expr) {
             result = make_type(SAGE_TYPE_TUPLE);
             break;
         case EXPR_VARIABLE: {
-            char name[256];
             int len = expr->as.variable.name.length;
-            if (len > 255) len = 255;
+            char* name = SAGE_ALLOC((size_t)len + 1);
             memcpy(name, expr->as.variable.name.start, (size_t)len);
             name[len] = '\0';
             result = typeenv_get(map, name);
+            free(name);
             break;
         }
         case EXPR_BINARY: {
@@ -197,12 +198,12 @@ static void infer_stmt(TypeMap* map, Stmt* stmt) {
             break;
         case STMT_LET: {
             SageType t = infer_expr(map, stmt->as.let.initializer);
-            char name[256];
             int len = stmt->as.let.name.length;
-            if (len > 255) len = 255;
+            char* name = SAGE_ALLOC((size_t)len + 1);
             memcpy(name, stmt->as.let.name.start, (size_t)len);
             name[len] = '\0';
             typeenv_set(map, name, t);
+            free(name);
             break;
         }
         case STMT_IF:

@@ -520,7 +520,9 @@ char* string_replace(const char* str, const char* old, const char* new_str) {
         return result;
     }
 
-    size_t result_len = str_len + count * (new_len - old_len);
+    // Use signed arithmetic to avoid underflow when new_len < old_len
+    long long delta = (long long)new_len - (long long)old_len;
+    size_t result_len = (size_t)((long long)str_len + (long long)count * delta);
     char* result = SAGE_ALLOC(result_len + 1);
     char* wp = result;  // Write pointer (O(n) instead of O(n²) strcat)
 
@@ -544,21 +546,23 @@ char* string_replace(const char* str, const char* old, const char* new_str) {
 
 char* string_upper(const char* str) {
     if (!str) return NULL;
-    char* result = SAGE_ALLOC(strlen(str) + 1);
-    for (int i = 0; str[i]; i++) {
-        result[i] = toupper(str[i]);
+    size_t len = strlen(str);
+    char* result = SAGE_ALLOC(len + 1);
+    for (size_t i = 0; i < len; i++) {
+        result[i] = toupper((unsigned char)str[i]);
     }
-    result[strlen(str)] = '\0';
+    result[len] = '\0';
     return result;
 }
 
 char* string_lower(const char* str) {
     if (!str) return NULL;
-    char* result = SAGE_ALLOC(strlen(str) + 1);
-    for (int i = 0; str[i]; i++) {
-        result[i] = tolower(str[i]);
+    size_t len = strlen(str);
+    char* result = SAGE_ALLOC(len + 1);
+    for (size_t i = 0; i < len; i++) {
+        result[i] = tolower((unsigned char)str[i]);
     }
-    result[strlen(str)] = '\0';
+    result[len] = '\0';
     return result;
 }
 
@@ -668,7 +672,15 @@ Value instance_get_field(InstanceValue* instance, const char* name) {
 
 // ========== HELPERS ==========
 
+static int print_depth = 0;
+#define MAX_PRINT_DEPTH 32
+
 void print_value(Value v) {
+    if (++print_depth > MAX_PRINT_DEPTH) {
+        printf("<...>");
+        print_depth--;
+        return;
+    }
     switch (v.type) {
         case VAL_NUMBER: 
             printf("%g", AS_NUMBER(v)); 
@@ -708,10 +720,14 @@ void print_value(Value v) {
         case VAL_DICT: {
             printf("{");
             DictValue* d = v.as.dict;
-            for (int i = 0; i < d->count; i++) {
-                if (i > 0) printf(", ");
-                printf("\"%s\": ", d->entries[i].key);
-                print_value(*(d->entries[i].value));
+            int printed = 0;
+            for (int i = 0; i < d->capacity; i++) {
+                if (d->entries[i].key != NULL) {
+                    if (printed > 0) printf(", ");
+                    printf("\"%s\": ", d->entries[i].key);
+                    print_value(*(d->entries[i].value));
+                    printed++;
+                }
             }
             printf("}");
             break;
@@ -780,6 +796,7 @@ void print_value(Value v) {
             break;
         }
     }
+    print_depth--;
 }
 
 int values_equal(Value a, Value b) {

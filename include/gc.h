@@ -22,8 +22,9 @@
 #define SAGE_REALLOC(ptr, size) sage_safe_realloc(ptr, size, __FILE__, __LINE__)
 
 static inline void* sage_safe_malloc(size_t size, const char* file, int line) {
+    if (size == 0) size = 1;  // Guarantee non-NULL return for zero-size allocs
     void* ptr = malloc(size);
-    if (ptr == NULL && size > 0) {
+    if (ptr == NULL) {
         fprintf(stderr, "Fatal: Out of memory allocating %zu bytes at %s:%d\n", size, file, line);
         abort();
     }

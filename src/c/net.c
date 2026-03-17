@@ -185,6 +185,7 @@ static Value socket_recv_native(int argc, Value* args) {
     if (argc < 1 || !IS_NUMBER(args[0])) return val_nil();
     int fd = (int)AS_NUMBER(args[0]);
     int maxlen = (argc >= 2 && IS_NUMBER(args[1])) ? (int)AS_NUMBER(args[1]) : 4096;
+    if (maxlen <= 0 || maxlen > 10 * 1024 * 1024) maxlen = 4096;
 
     char* buf = SAGE_ALLOC(maxlen + 1);
     ssize_t n = recv(fd, buf, maxlen, 0);
@@ -223,6 +224,7 @@ static Value socket_recvfrom_native(int argc, Value* args) {
     if (argc < 1 || !IS_NUMBER(args[0])) return val_nil();
     int fd = (int)AS_NUMBER(args[0]);
     int maxlen = (argc >= 2 && IS_NUMBER(args[1])) ? (int)AS_NUMBER(args[1]) : 4096;
+    if (maxlen <= 0 || maxlen > 10 * 1024 * 1024) maxlen = 4096;
 
     char* buf = SAGE_ALLOC(maxlen + 1);
     struct sockaddr_in from_addr;
@@ -531,6 +533,7 @@ static Value tcp_recvline_native(int argc, Value* args) {
     if (argc < 1 || !IS_NUMBER(args[0])) return val_nil();
     int fd = (int)AS_NUMBER(args[0]);
     int maxlen = (argc >= 2 && IS_NUMBER(args[1])) ? (int)AS_NUMBER(args[1]) : 4096;
+    if (maxlen <= 0 || maxlen > 10 * 1024 * 1024) maxlen = 4096;
 
     char* buf = SAGE_ALLOC(maxlen + 1);
     int pos = 0;
@@ -587,12 +590,14 @@ typedef struct {
 
 static size_t curl_write_cb(void* ptr, size_t size, size_t nmemb, void* userp) {
     CurlBuffer* buf = (CurlBuffer*)userp;
+    if (nmemb != 0 && size > SIZE_MAX / nmemb) return 0;  // overflow check
     size_t total = size * nmemb;
 
     if (buf->size + total >= buf->capacity) {
         buf->capacity = (buf->size + total) * 2 + 1;
-        buf->data = realloc(buf->data, buf->capacity);
-        if (!buf->data) return 0;
+        char* tmp = realloc(buf->data, buf->capacity);
+        if (!tmp) return 0;
+        buf->data = tmp;
     }
 
     memcpy(buf->data + buf->size, ptr, total);
@@ -604,12 +609,14 @@ static size_t curl_write_cb(void* ptr, size_t size, size_t nmemb, void* userp) {
 // Header callback for libcurl
 static size_t curl_header_cb(void* ptr, size_t size, size_t nmemb, void* userp) {
     CurlBuffer* buf = (CurlBuffer*)userp;
+    if (nmemb != 0 && size > SIZE_MAX / nmemb) return 0;
     size_t total = size * nmemb;
 
     if (buf->size + total >= buf->capacity) {
         buf->capacity = (buf->size + total) * 2 + 1;
-        buf->data = realloc(buf->data, buf->capacity);
-        if (!buf->data) return 0;
+        char* tmp = realloc(buf->data, buf->capacity);
+        if (!tmp) return 0;
+        buf->data = tmp;
     }
 
     memcpy(buf->data + buf->size, ptr, total);
@@ -946,8 +953,15 @@ static void ensure_ssl_init(void) {
     }
 }
 
-// We store SSL context as opaque handles (cast pointer to double for storage)
-// This is safe because we only use these as opaque handles, never as real doubles.
+// SSL handles stored as VAL_POINTER to avoid 64-bit pointer truncation in double.
+
+// Helper to extract a pointer from a VAL_POINTER arg, returns NULL on type mismatch.
+static void* ssl_get_handle(Value v) {
+    if (v.type == VAL_POINTER) return v.as.pointer->ptr;
+    // Legacy fallback: accept number for backwards compatibility
+    if (IS_NUMBER(v)) return (void*)(uintptr_t)AS_NUMBER(v);
+    return NULL;
+}
 
 // ssl.context(method?) -> handle
 // method: "tls" (default), "tls_client", "tls_server"
@@ -964,15 +978,16 @@ static Value ssl_context_native(int argc, Value* args) {
     SSL_CTX* ctx = SSL_CTX_new(method);
     if (!ctx) return val_nil();
 
-    return val_number((double)(uintptr_t)ctx);
+    return val_pointer(ctx, 0, 0);
 }
 
 // ssl.load_cert(ctx_handle, certfile, keyfile) -> bool
 static Value ssl_load_cert_native(int argc, Value* args) {
-    if (argc < 3 || !IS_NUMBER(args[0]) || !IS_STRING(args[1]) || !IS_STRING(args[2]))
+    if (argc < 3 || !IS_STRING(args[1]) || !IS_STRING(args[2]))
         return val_bool(false);
 
-    SSL_CTX* ctx = (SSL_CTX*)(uintptr_t)AS_NUMBER(args[0]);
+    SSL_CTX* ctx = (SSL_CTX*)ssl_get_handle(args[0]);
+    if (!ctx) return val_bool(false);
     const char* certfile = AS_STRING(args[1]);
     const char* keyfile = AS_STRING(args[2]);
 
@@ -988,23 +1003,25 @@ static Value ssl_load_cert_native(int argc, Value* args) {
 
 // ssl.wrap(ctx_handle, fd) -> ssl_handle or nil
 static Value ssl_wrap_native(int argc, Value* args) {
-    if (argc < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1]))
+    if (argc < 2 || !IS_NUMBER(args[1]))
         return val_nil();
 
-    SSL_CTX* ctx = (SSL_CTX*)(uintptr_t)AS_NUMBER(args[0]);
+    SSL_CTX* ctx = (SSL_CTX*)ssl_get_handle(args[0]);
+    if (!ctx) return val_nil();
     int fd = (int)AS_NUMBER(args[1]);
 
     SSL* ssl = SSL_new(ctx);
     if (!ssl) return val_nil();
 
     SSL_set_fd(ssl, fd);
-    return val_number((double)(uintptr_t)ssl);
+    return val_pointer(ssl, 0, 0);
 }
 
 // ssl.connect(ssl_handle) -> bool (client handshake)
 static Value ssl_connect_native(int argc, Value* args) {
-    if (argc < 1 || !IS_NUMBER(args[0])) return val_bool(false);
-    SSL* ssl = (SSL*)(uintptr_t)AS_NUMBER(args[0]);
+    if (argc < 1) return val_bool(false);
+    SSL* ssl = (SSL*)ssl_get_handle(args[0]);
+    if (!ssl) return val_bool(false);
 
     // Set SNI hostname if provided
     if (argc >= 2 && IS_STRING(args[1]))
@@ -1016,16 +1033,18 @@ static Value ssl_connect_native(int argc, Value* args) {
 
 // ssl.accept(ssl_handle) -> bool (server handshake)
 static Value ssl_accept_native(int argc, Value* args) {
-    if (argc < 1 || !IS_NUMBER(args[0])) return val_bool(false);
-    SSL* ssl = (SSL*)(uintptr_t)AS_NUMBER(args[0]);
+    if (argc < 1) return val_bool(false);
+    SSL* ssl = (SSL*)ssl_get_handle(args[0]);
+    if (!ssl) return val_bool(false);
     return val_bool(SSL_accept(ssl) == 1);
 }
 
 // ssl.send(ssl_handle, data) -> bytes_sent
 static Value ssl_send_native(int argc, Value* args) {
-    if (argc < 2 || !IS_NUMBER(args[0]) || !IS_STRING(args[1]))
+    if (argc < 2 || !IS_STRING(args[1]))
         return val_number(-1);
-    SSL* ssl = (SSL*)(uintptr_t)AS_NUMBER(args[0]);
+    SSL* ssl = (SSL*)ssl_get_handle(args[0]);
+    if (!ssl) return val_number(-1);
     const char* data = AS_STRING(args[1]);
     int n = SSL_write(ssl, data, strlen(data));
     return val_number((double)n);
@@ -1033,9 +1052,11 @@ static Value ssl_send_native(int argc, Value* args) {
 
 // ssl.recv(ssl_handle, maxlen?) -> string or nil
 static Value ssl_recv_native(int argc, Value* args) {
-    if (argc < 1 || !IS_NUMBER(args[0])) return val_nil();
-    SSL* ssl = (SSL*)(uintptr_t)AS_NUMBER(args[0]);
+    if (argc < 1) return val_nil();
+    SSL* ssl = (SSL*)ssl_get_handle(args[0]);
+    if (!ssl) return val_nil();
     int maxlen = (argc >= 2 && IS_NUMBER(args[1])) ? (int)AS_NUMBER(args[1]) : 4096;
+    if (maxlen <= 0 || maxlen > 10 * 1024 * 1024) maxlen = 4096;
 
     char* buf = SAGE_ALLOC(maxlen + 1);
     int n = SSL_read(ssl, buf, maxlen);
@@ -1046,25 +1067,30 @@ static Value ssl_recv_native(int argc, Value* args) {
 
 // ssl.shutdown(ssl_handle) -> bool
 static Value ssl_shutdown_native(int argc, Value* args) {
-    if (argc < 1 || !IS_NUMBER(args[0])) return val_bool(false);
-    SSL* ssl = (SSL*)(uintptr_t)AS_NUMBER(args[0]);
+    if (argc < 1) return val_bool(false);
+    SSL* ssl = (SSL*)ssl_get_handle(args[0]);
+    if (!ssl) return val_bool(false);
     SSL_shutdown(ssl);
     return val_bool(true);
 }
 
-// ssl.free(ssl_handle)
+// ssl.free(ssl_handle) — nullifies the pointer to prevent double-free
 static Value ssl_free_native(int argc, Value* args) {
-    if (argc < 1 || !IS_NUMBER(args[0])) return val_nil();
-    SSL* ssl = (SSL*)(uintptr_t)AS_NUMBER(args[0]);
-    SSL_free(ssl);
+    if (argc < 1) return val_nil();
+    if (args[0].type == VAL_POINTER && args[0].as.pointer->ptr != NULL) {
+        SSL_free((SSL*)args[0].as.pointer->ptr);
+        args[0].as.pointer->ptr = NULL;  // Prevent double-free
+    }
     return val_nil();
 }
 
-// ssl.free_context(ctx_handle)
+// ssl.free_context(ctx_handle) — nullifies the pointer to prevent double-free
 static Value ssl_free_context_native(int argc, Value* args) {
-    if (argc < 1 || !IS_NUMBER(args[0])) return val_nil();
-    SSL_CTX* ctx = (SSL_CTX*)(uintptr_t)AS_NUMBER(args[0]);
-    SSL_CTX_free(ctx);
+    if (argc < 1) return val_nil();
+    if (args[0].type == VAL_POINTER && args[0].as.pointer->ptr != NULL) {
+        SSL_CTX_free((SSL_CTX*)args[0].as.pointer->ptr);
+        args[0].as.pointer->ptr = NULL;  // Prevent double-free
+    }
     return val_nil();
 }
 
@@ -1080,8 +1106,9 @@ static Value ssl_error_native(int argc, Value* args) {
 
 // ssl.peer_cert(ssl_handle) -> dict {subject, issuer} or nil
 static Value ssl_peer_cert_native(int argc, Value* args) {
-    if (argc < 1 || !IS_NUMBER(args[0])) return val_nil();
-    SSL* ssl = (SSL*)(uintptr_t)AS_NUMBER(args[0]);
+    if (argc < 1) return val_nil();
+    SSL* ssl = (SSL*)ssl_get_handle(args[0]);
+    if (!ssl) return val_nil();
 
     X509* cert = SSL_get_peer_certificate(ssl);
     if (!cert) return val_nil();
@@ -1100,10 +1127,11 @@ static Value ssl_peer_cert_native(int argc, Value* args) {
 // ssl.set_verify(ctx_handle, mode) -> nil
 // mode: "none", "peer", "fail_if_no_cert"
 static Value ssl_set_verify_native(int argc, Value* args) {
-    if (argc < 2 || !IS_NUMBER(args[0]) || !IS_STRING(args[1]))
+    if (argc < 2 || !IS_STRING(args[1]))
         return val_nil();
 
-    SSL_CTX* ctx = (SSL_CTX*)(uintptr_t)AS_NUMBER(args[0]);
+    SSL_CTX* ctx = (SSL_CTX*)ssl_get_handle(args[0]);
+    if (!ctx) return val_nil();
     const char* mode = AS_STRING(args[1]);
 
     int verify_mode = SSL_VERIFY_NONE;

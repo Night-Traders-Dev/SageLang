@@ -248,8 +248,15 @@ static TokenType identifier_type(void) {
     return TOKEN_IDENTIFIER;
 }
 
+#define MAX_IDENTIFIER_LENGTH 1024
+
 static Token identifier() {
-    while (isalnum(peek()) || peek() == '_') advance();
+    while (isalnum(peek()) || peek() == '_') {
+        if (current - start > MAX_IDENTIFIER_LENGTH) {
+            return error_token("Identifier exceeds maximum length (1024).");
+        }
+        advance();
+    }
     return make_token(identifier_type());
 }
 

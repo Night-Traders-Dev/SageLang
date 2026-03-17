@@ -22,7 +22,7 @@
 // ============================================================================
 
 typedef struct InlineCandidate {
-    char name[256];
+    char* name;
     int param_count;
     Token* params;
     Expr* return_expr;     // non-NULL if body is single `return expr`
@@ -33,6 +33,7 @@ typedef struct InlineCandidate {
 static void free_candidates(InlineCandidate* list) {
     while (list != NULL) {
         InlineCandidate* next = list->next;
+        free(list->name);
         free(list);
         list = next;
     }
@@ -126,17 +127,16 @@ static InlineCandidate* collect_candidates(Stmt* program) {
         Expr* ret_expr = get_single_return_expr(s->as.proc.body);
         if (ret_expr == NULL) continue;
 
-        char name[256];
         int len = s->as.proc.name.length;
-        if (len > 255) len = 255;
+        char* name = SAGE_ALLOC((size_t)len + 1);
         memcpy(name, s->as.proc.name.start, (size_t)len);
         name[len] = '\0';
 
         // Check for recursion
-        if (expr_references_name(ret_expr, name)) continue;
+        if (expr_references_name(ret_expr, name)) { free(name); continue; }
 
         InlineCandidate* c = SAGE_ALLOC(sizeof(InlineCandidate));
-        memcpy(c->name, name, (size_t)(len + 1));
+        c->name = name;  // takes ownership of dynamically allocated name
         c->param_count = s->as.proc.param_count;
         c->params = s->as.proc.params;
         c->return_expr = ret_expr;
@@ -252,13 +252,13 @@ static Expr* inline_expr(Expr* expr, InlineCandidate* candidates) {
 
             // Check if callee is a simple variable name matching a candidate
             if (expr->as.call.callee->type == EXPR_VARIABLE) {
-                char name[256];
                 int len = expr->as.call.callee->as.variable.name.length;
-                if (len > 255) len = 255;
+                char* name = SAGE_ALLOC((size_t)len + 1);
                 memcpy(name, expr->as.call.callee->as.variable.name.start, (size_t)len);
                 name[len] = '\0';
 
                 InlineCandidate* c = find_candidate(candidates, name);
+                free(name);
                 if (c != NULL && expr->as.call.arg_count == c->param_count) {
                     // Perform inlining: substitute params with args in return expr
                     Expr* inlined = substitute_expr(c->return_expr, c->params,

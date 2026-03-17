@@ -79,6 +79,9 @@ static Expr* fold_binary(Expr* expr) {
             return expr;
         }
 
+        // Skip folding if result is infinite or NaN (let runtime handle consistently)
+        if (!is_bool_result && (isinf(result) || isnan(result))) return expr;
+
         // Replace with folded constant
         free_expr(bin->left);
         free_expr(bin->right);
@@ -92,13 +95,14 @@ static Expr* fold_binary(Expr* expr) {
         return expr;
     }
 
-    // String + String concatenation
+    // String + String concatenation (limit to 64KB to prevent compile-time memory explosion)
     if (is_string_literal(bin->left) && is_string_literal(bin->right)) {
         if (op_len == 1 && *op == '+') {
             const char* ls = bin->left->as.string.value;
             const char* rs = bin->right->as.string.value;
             size_t llen = strlen(ls);
             size_t rlen = strlen(rs);
+            if (llen + rlen > 65536) return expr;  // too large to fold at compile time
             char* concat = SAGE_ALLOC(llen + rlen + 1);
             memcpy(concat, ls, llen);
             memcpy(concat + llen, rs, rlen + 1);

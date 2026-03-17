@@ -700,6 +700,8 @@ static Expr* expression() {
                  "maximum nesting depth exceeded (%d)", MAX_PARSER_DEPTH);
         parser_report(current_token, 1, message,
                       "reduce the depth of nested expressions");
+        parser_depth--;
+        return NULL;
     }
     Expr* result = assignment();
     parser_depth--;

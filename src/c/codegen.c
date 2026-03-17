@@ -1,4 +1,5 @@
 #define _DEFAULT_SOURCE
+#define _GNU_SOURCE
 #include "codegen.h"
 
 #include <errno.h>
@@ -405,6 +406,10 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             break;
         }
         case STMT_WHILE: {
+            if (ctx->loop_depth >= 64) {
+                fprintf(stderr, "codegen: loop nesting too deep (max 64)\n");
+                return;
+            }
             char* cond_label = isel_label(ctx);
             char* body_label = isel_label(ctx);
             char* end_label = isel_label(ctx);
@@ -482,6 +487,10 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             init_store->imm_string = SAGE_STRDUP("__for_idx__");
             isel_append(ctx, init_store);
 
+            if (ctx->loop_depth >= 64) {
+                fprintf(stderr, "codegen: loop nesting too deep (max 64)\n");
+                return;
+            }
             char* cond_label = isel_label(ctx);
             char* body_label = isel_label(ctx);
             char* end_label = isel_label(ctx);
@@ -898,12 +907,22 @@ static int write_asm_output(const char* source, const char* input_path, const ch
 
     emit_asm_function_epilogue(out, target);
 
-    // Emit string data section
+    // Emit string data section with proper escaping
     if (ctx.string_pool_count > 0) {
         fprintf(out, "\n.section .rodata\n");
         for (int i = 0; i < ctx.string_pool_count; i++) {
             fprintf(out, ".LC%d:\n", i);
-            fprintf(out, "  .asciz \"%s\"\n", ctx.string_pool[i]);
+            fprintf(out, "  .asciz \"");
+            for (const char* p = ctx.string_pool[i]; *p; p++) {
+                if (*p == '"') fprintf(out, "\\\"");
+                else if (*p == '\\') fprintf(out, "\\\\");
+                else if (*p == '\n') fprintf(out, "\\n");
+                else if (*p == '\t') fprintf(out, "\\t");
+                else if (*p == '\r') fprintf(out, "\\r");
+                else if ((unsigned char)*p < 0x20) fprintf(out, "\\%03o", (unsigned char)*p);
+                else fputc(*p, out);
+            }
+            fprintf(out, "\"\n");
         }
     }
 
@@ -992,9 +1011,10 @@ int compile_source_to_asm(const char* source, const char* input_path,
 int compile_source_to_native(const char* source, const char* input_path,
                              const char* output_path, CodegenTarget target,
                              int opt_level, int debug_info) {
-    // Generate assembly, then assemble + link
-    char asm_path[256];
-    snprintf(asm_path, sizeof(asm_path), "/tmp/sage_asm_%d.s", (int)getpid());
+    // Generate assembly, then assemble + link (secure temp file)
+    char asm_path[] = "/tmp/sage_asm_XXXXXX.s";
+    int asm_fd = mkstemps(asm_path, 2);
+    if (asm_fd >= 0) close(asm_fd);
 
     if (!write_asm_output(source, input_path, asm_path, target, opt_level, debug_info)) {
         return 0;

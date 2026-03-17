@@ -437,7 +437,7 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                     ptr, slen, slen, str_id);
             ll_line(lc, "call void @sage_rt_set_attr(%%SageValue %%%d, i8* %%%d, %%SageValue %%%d)", obj, ptr, val);
             free(prop);
-            return llvm_emit_expr(lc, expr->as.set.value);
+            return val;
         }
         case EXPR_AWAIT: {
             // Await not supported in LLVM backend
@@ -517,6 +517,11 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             break;
         }
         case STMT_WHILE: {
+            if (lc->loop_depth >= 64) {
+                fprintf(stderr, "LLVM backend: loop nesting too deep (max 64)\n");
+                lc->failed = 1;
+                return;
+            }
             int cond_label = llc_new_label(lc);
             int body_label = llc_new_label(lc);
             int end_label = llc_new_label(lc);
@@ -563,6 +568,11 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             break;
         case STMT_FOR: {
             // for variable in iterable: body
+            if (lc->loop_depth >= 64) {
+                fprintf(stderr, "LLVM backend: loop nesting too deep (max 64)\n");
+                lc->failed = 1;
+                return;
+            }
             // Emit iterable (must be array)
             int iter = llvm_emit_expr(lc, stmt->as.for_stmt.iterable);
             int len_reg = llc_new_reg(lc);

@@ -281,8 +281,10 @@ Stmt* clone_stmt(const Stmt* stmt) {
             Stmt* body = clone_stmt_list(stmt->as.async_proc.body);
             Token* params = NULL;
             if (stmt->as.async_proc.param_count > 0) {
-                params = malloc(sizeof(Token) * stmt->as.async_proc.param_count);
-                memcpy(params, stmt->as.async_proc.params, sizeof(Token) * stmt->as.async_proc.param_count);
+                params = SAGE_ALLOC(sizeof(Token) * (size_t)stmt->as.async_proc.param_count);
+                for (int i = 0; i < stmt->as.async_proc.param_count; i++) {
+                    params[i] = clone_token(stmt->as.async_proc.params[i]);
+                }
             }
             return new_async_proc_stmt(stmt->as.async_proc.name, params, stmt->as.async_proc.param_count, body);
         }

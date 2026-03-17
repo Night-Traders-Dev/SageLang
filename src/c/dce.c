@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "gc.h"
 
 // ============================================================================
 // Dead Code Elimination Pass
@@ -59,12 +60,12 @@ static void collect_used_names_expr(NameSet** used, const Expr* expr) {
 
     switch (expr->type) {
         case EXPR_VARIABLE: {
-            char name[256];
             int len = expr->as.variable.name.length;
-            if (len > 255) len = 255;
+            char* name = SAGE_ALLOC((size_t)len + 1);
             memcpy(name, expr->as.variable.name.start, (size_t)len);
             name[len] = '\0';
             nameset_add(used, name);
+            free(name);
             break;
         }
         case EXPR_BINARY:
@@ -310,28 +311,28 @@ static Stmt* dce_stmt_list(Stmt* head, NameSet* used) {
 
         // Check if this is an unused let binding
         if (cur->type == STMT_LET) {
-            char name[256];
             int len = cur->as.let.name.length;
-            if (len > 255) len = 255;
+            char* name = SAGE_ALLOC((size_t)len + 1);
             memcpy(name, cur->as.let.name.start, (size_t)len);
             name[len] = '\0';
 
             if (!nameset_has(used, name) && !has_side_effects(cur->as.let.initializer)) {
                 keep = 0;
             }
+            free(name);
         }
 
         // Check if this is an unused proc
         if (cur->type == STMT_PROC) {
-            char name[256];
             int len = cur->as.proc.name.length;
-            if (len > 255) len = 255;
+            char* name = SAGE_ALLOC((size_t)len + 1);
             memcpy(name, cur->as.proc.name.start, (size_t)len);
             name[len] = '\0';
 
             if (!nameset_has(used, name)) {
                 keep = 0;
             }
+            free(name);
         }
 
         if (keep) {

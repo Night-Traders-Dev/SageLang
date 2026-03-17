@@ -383,6 +383,7 @@ static Value str_repeat_native(int argCount, Value* args) {
     int count = (int)AS_NUMBER(args[1]);
     if (count <= 0) return val_string("");
     size_t slen = strlen(s);
+    if (slen > 0 && (size_t)count > (64 * 1024 * 1024) / slen) return val_nil();  // overflow guard
     size_t total = slen * (size_t)count;
     char* buf = SAGE_ALLOC(total + 1);
     for (int i = 0; i < count; i++) {
@@ -470,10 +471,12 @@ void sage_set_args(int argc, const char** argv) {
 
 static Value sys_args_native(int argCount, Value* args) {
     (void)argCount; (void)args;
+    gc_pin();
     Value arr = val_array();
     for (int i = 0; i < s_argc; i++) {
         array_push(&arr, val_string(s_argv[i]));
     }
+    gc_unpin();
     return arr;
 }
 
@@ -586,6 +589,10 @@ Value thread_spawn_native(int argCount, Value* args) {
     }
 
     FunctionValue* func = args[0].as.function;
+    if (func->proc == NULL || func->is_vm) {
+        fprintf(stderr, "Runtime Error: thread.spawn requires a non-bytecode function.\n");
+        return val_nil();
+    }
     int nargs = argCount - 1;
 
     // Allocate thread data
@@ -639,7 +646,14 @@ static Value thread_join_native(int argCount, Value* args) {
     tv->joined = 1;
 
     SageThreadData* td = (SageThreadData*)tv->data;
-    return td->result;
+    Value result = td->result;
+    // Free thread resources
+    free(td->args);
+    free(td);
+    free(handle);
+    tv->data = NULL;
+    tv->handle = NULL;
+    return result;
 }
 
 // thread.mutex() -> mutex handle

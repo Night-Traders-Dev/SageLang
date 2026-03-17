@@ -1,8 +1,11 @@
+#define _GNU_SOURCE   // for mkstemps
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>    // isalnum
 #include <stdint.h>   // uintptr_t
+#include <math.h>     // isinf, isnan
 #include <unistd.h>   // getpid, unlink
 #include "sage_thread.h"  // Phase 11: async/await thread joining
 #ifndef SAGE_NO_FFI
@@ -1061,12 +1064,29 @@ static const char* asm_detect_arch(void) {
 #endif
 }
 
+// Validate a path contains no shell metacharacters (prevents injection via system())
+static int is_safe_path(const char* path) {
+    for (const char* p = path; *p; p++) {
+        // Allow only alphanumeric, /, ., -, _, ~
+        if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
+            *p != '-' && *p != '_' && *p != '~') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 // Helper: get assembler command for architecture
 // For native arch, uses system `as`. For cross, tries arch-specific cross-assembler.
 static int asm_get_commands(const char* arch, const char* asm_path,
                             const char* obj_path, const char* so_path,
                             char* as_cmd, size_t as_sz,
                             char* ld_cmd, size_t ld_sz) {
+    // Validate all paths to prevent shell injection
+    if (!is_safe_path(asm_path) || !is_safe_path(obj_path) || !is_safe_path(so_path)) {
+        fprintf(stderr, "asm: path contains unsafe characters.\n");
+        return -1;
+    }
     const char* host_arch = asm_detect_arch();
     int cross = (strcmp(arch, host_arch) != 0);
 
@@ -1163,11 +1183,16 @@ static Value asm_exec_native(int argCount, Value* args) {
         }
     }
 
-    // Generate temp file names
-    char asm_path[256], obj_path[256], so_path[256];
-    snprintf(asm_path, sizeof(asm_path), "/tmp/sage_asm_%d.s", getpid());
-    snprintf(obj_path, sizeof(obj_path), "/tmp/sage_asm_%d.o", getpid());
-    snprintf(so_path, sizeof(so_path), "/tmp/sage_asm_%d.so", getpid());
+    // Generate secure temp file names using mkstemp
+    char asm_path[] = "/tmp/sage_asm_XXXXXX.s";
+    char obj_path[] = "/tmp/sage_asm_XXXXXX.o";
+    char so_path[]  = "/tmp/sage_asm_XXXXXX.so";
+    int asm_fd = mkstemps(asm_path, 2);
+    int obj_fd = mkstemps(obj_path, 2);
+    int so_fd  = mkstemps(so_path, 3);
+    if (asm_fd >= 0) close(asm_fd);
+    if (obj_fd >= 0) close(obj_fd);
+    if (so_fd >= 0)  close(so_fd);
 
     // Write assembly source
     if (asm_write_source(asm_path, code, arch) != 0) {
@@ -1303,9 +1328,10 @@ static Value asm_compile_native(int argCount, Value* args) {
     const char* arch = AS_STRING(args[1]);
     const char* output_path = AS_STRING(args[2]);
 
-    // Write assembly source
-    char asm_path[256];
-    snprintf(asm_path, sizeof(asm_path), "/tmp/sage_xasm_%d.s", getpid());
+    // Write assembly source with secure temp file
+    char asm_path[] = "/tmp/sage_xasm_XXXXXX.s";
+    int asm_fd = mkstemps(asm_path, 2);
+    if (asm_fd >= 0) close(asm_fd);
 
     if (asm_write_source(asm_path, code, arch) != 0) {
         fprintf(stderr, "asm_compile(): failed to create temp file.\n");
@@ -2031,10 +2057,16 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
 }
 
 ExecResult interpret(Stmt* stmt, Env* env) {
+    if (++g_recursion_depth > MAX_RECURSION_DEPTH) {
+        g_recursion_depth--;
+        fprintf(stderr, "Runtime Error: Maximum recursion depth exceeded (%d).\n", MAX_RECURSION_DEPTH);
+        return EVAL_EXCEPTION(val_exception("Maximum recursion depth exceeded"));
+    }
     Env* previous_gc_root = g_gc_root_env;
     g_gc_root_env = env;
     ExecResult result = interpret_inner(stmt, env);
     g_gc_root_env = previous_gc_root;
+    g_recursion_depth--;
     return result;
 }
 
