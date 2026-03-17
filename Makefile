@@ -344,6 +344,15 @@ test: $(TARGET)
 		echo "⏭ Skip (clang not found)"; \
 	fi
 	@echo ""
+	@echo "Test 22c: LLVM Features (arrays, dicts, for, string, recursion)"
+	@if command -v clang >/dev/null 2>&1; then \
+		./$(TARGET) --compile-llvm testing/llvm_features.sage -o .tmp/llvm_features && \
+		./.tmp/llvm_features > .tmp/llvm_features.out && \
+		diff -u testing/llvm_features.expected .tmp/llvm_features.out && echo "✅ Pass" || echo "❌ Fail"; \
+	else \
+		echo "⏭ Skip (clang not found)"; \
+	fi
+	@echo ""
 	@echo "Test 23: Assembly Generation (host target)"
 	@./$(TARGET) --emit-asm testing/compiler_smoke.sage -o .tmp/compiler_smoke.s && echo "✅ Pass (ASM emitted)" || echo "❌ Fail"
 	@echo ""

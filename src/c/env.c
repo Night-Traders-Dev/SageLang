@@ -3,8 +3,10 @@
 #include <stdio.h>
 #include "env.h"
 #include "gc.h"
+#include "sage_thread.h"
 
 static Env* allocated_envs = NULL;
+static sage_mutex_t env_mutex = SAGE_MUTEX_INITIALIZER;
 
 // Helper function to duplicate a string with a max length (similar to strndup)
 static char* my_strndup(const char* s, size_t n) {
@@ -29,8 +31,10 @@ Env* env_create(Env* parent) {
     env->head = NULL;
     env->parent = parent;
     env->marked = 0;
+    sage_mutex_lock(&env_mutex);
     env->alloc_next = allocated_envs;
     allocated_envs = env;
+    sage_mutex_unlock(&env_mutex);
     return env;
 }
 
@@ -93,6 +97,7 @@ int env_assign(Env* env, const char* name, int length, Value value) {
 }
 
 void env_cleanup_all(void) {
+    sage_mutex_lock(&env_mutex);
     while (allocated_envs != NULL) {
         Env* env = allocated_envs;
         allocated_envs = allocated_envs->alloc_next;
@@ -107,10 +112,12 @@ void env_cleanup_all(void) {
 
         free(env);
     }
+    sage_mutex_unlock(&env_mutex);
 }
 
 // Free environments not marked as reachable during GC
 void env_sweep_unmarked(void) {
+    sage_mutex_lock(&env_mutex);
     Env** ptr = &allocated_envs;
     while (*ptr != NULL) {
         Env* env = *ptr;
@@ -132,6 +139,7 @@ void env_sweep_unmarked(void) {
             ptr = &env->alloc_next;
         }
     }
+    sage_mutex_unlock(&env_mutex);
 }
 
 // Clear all env marks (used if sweep is skipped)

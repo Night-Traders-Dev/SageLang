@@ -715,6 +715,7 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             // Store element in loop variable
             ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", elem, var_name);
 
+            lc->block_terminated = 0;
             llvm_emit_stmt_list(lc, stmt->as.for_stmt.body);
 
             // Increment counter

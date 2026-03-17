@@ -10,9 +10,11 @@
 #include <limits.h>
 #include <string.h>
 #include "gc.h"
+#include "sage_thread.h"
 
-// Global module cache
+// Global module cache (mutex-protected for thread safety)
 ModuleCache* global_module_cache = NULL;
+static sage_mutex_t module_mutex = SAGE_MUTEX_INITIALIZER;
 
 // Create a new module cache
 ModuleCache* create_module_cache() {
@@ -149,15 +151,18 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
     return NULL;
 }
 
-// Find a module in the cache
+// Find a module in the cache (thread-safe)
 Module* find_module(ModuleCache* cache, const char* name) {
+    sage_mutex_lock(&module_mutex);
     Module* current = cache->modules;
     while (current) {
         if (strcmp(current->name, name) == 0) {
+            sage_mutex_unlock(&module_mutex);
             return current;
         }
         current = current->next;
     }
+    sage_mutex_unlock(&module_mutex);
     return NULL;
 }
 
@@ -296,11 +301,12 @@ Module* load_module(ModuleCache* cache, const char* name) {
     module->env = NULL;
     module->is_loaded = false;
     module->is_loading = false;
+    // Add to cache (thread-safe)
+    sage_mutex_lock(&module_mutex);
     module->next = cache->modules;
-    
-    // Add to cache
     cache->modules = module;
-    
+    sage_mutex_unlock(&module_mutex);
+
     return module;
 }
 

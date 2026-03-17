@@ -365,13 +365,15 @@ void dict_delete(Value* dict, const char* key) {
     d->count--;
 
     // Rehash subsequent entries to fix probe chain (backward-shift deletion)
+    // Use modular distance to correctly handle wraparound
     int mask = d->capacity - 1;
     int idx = (slot + 1) & mask;
     while (d->entries[idx].key != NULL) {
         int natural = (int)(d->entries[idx].hash & (unsigned int)mask);
-        // Check if this entry is displaced past the deleted slot
-        if ((idx > slot && (natural <= slot || natural > idx)) ||
-            (idx < slot && (natural <= slot && natural > idx))) {
+        // Entry needs to move if its natural slot is not between (slot, idx] circularly
+        int dist_natural = (idx - natural + d->capacity) & mask;
+        int dist_slot = (idx - slot + d->capacity) & mask;
+        if (dist_natural >= dist_slot) {
             d->entries[slot] = d->entries[idx];
             d->entries[idx].key = NULL;
             d->entries[idx].value = NULL;

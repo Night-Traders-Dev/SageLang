@@ -22,6 +22,7 @@
 #include "lsp.h"
 #include "linter.h"
 #include "formatter.h"
+#include "gc.h"
 
 /* ========================================================================
  * Logging (stderr only -- stdout is the LSP channel)
@@ -51,7 +52,7 @@ static char* json_get_string(const char* json, const char* key) {
 
     /* Build search pattern: "key" */
     size_t klen = strlen(key);
-    char* pattern = malloc(klen + 4);
+    char* pattern = SAGE_ALLOC(klen + 4);
     snprintf(pattern, klen + 4, "\"%s\"", key);
 
     const char* p = strstr(json, pattern);
@@ -70,7 +71,7 @@ static char* json_get_string(const char* json, const char* key) {
     /* Collect characters, handling escapes */
     size_t cap = 256;
     size_t len = 0;
-    char* result = malloc(cap);
+    char* result = SAGE_ALLOC(cap);
 
     while (*p && !(*p == '"' && (len == 0 || result[len-1] != '\\'))) {
         if (*p == '\\' && *(p+1)) {
@@ -90,7 +91,7 @@ static char* json_get_string(const char* json, const char* key) {
         p++;
         if (len + 2 >= cap) {
             cap *= 2;
-            result = realloc(result, cap);
+            result = SAGE_REALLOC(result, cap);
         }
     }
 
@@ -106,7 +107,7 @@ static int json_get_int(const char* json, const char* key, int default_val) {
     if (!json || !key) return default_val;
 
     size_t klen = strlen(key);
-    char* pattern = malloc(klen + 4);
+    char* pattern = SAGE_ALLOC(klen + 4);
     snprintf(pattern, klen + 4, "\"%s\"", key);
 
     const char* p = strstr(json, pattern);
@@ -127,7 +128,7 @@ static char* json_get_object(const char* json, const char* key) {
     if (!json || !key) return NULL;
 
     size_t klen = strlen(key);
-    char* pattern = malloc(klen + 4);
+    char* pattern = SAGE_ALLOC(klen + 4);
     snprintf(pattern, klen + 4, "\"%s\"", key);
 
     const char* p = strstr(json, pattern);
@@ -155,7 +156,7 @@ static char* json_get_object(const char* json, const char* key) {
                 if (depth == 0) {
                     p++;
                     size_t len = (size_t)(p - start);
-                    char* result = malloc(len + 1);
+                    char* result = SAGE_ALLOC(len + 1);
                     memcpy(result, start, len);
                     result[len] = '\0';
                     return result;
@@ -176,7 +177,7 @@ static int json_get_bool(const char* json, const char* key, int default_val) {
     if (!json || !key) return default_val;
 
     size_t klen = strlen(key);
-    char* pattern = malloc(klen + 4);
+    char* pattern = SAGE_ALLOC(klen + 4);
     snprintf(pattern, klen + 4, "\"%s\"", key);
 
     const char* p = strstr(json, pattern);
@@ -197,19 +198,19 @@ static int json_get_bool(const char* json, const char* key, int default_val) {
 
 static char* json_escape(const char* raw) {
     if (!raw) {
-        char* empty = malloc(1);
+        char* empty = SAGE_ALLOC(1);
         empty[0] = '\0';
         return empty;
     }
 
     size_t cap = strlen(raw) * 2 + 1;
-    char* out = malloc(cap);
+    char* out = SAGE_ALLOC(cap);
     size_t j = 0;
 
     for (size_t i = 0; raw[i]; i++) {
         if (j + 8 >= cap) {
             cap *= 2;
-            out = realloc(out, cap);
+            out = SAGE_REALLOC(out, cap);
         }
         switch (raw[i]) {
             case '"':  out[j++] = '\\'; out[j++] = '"'; break;
@@ -261,7 +262,7 @@ static char* lsp_read_message(void) {
         return NULL;
     }
 
-    char* body = malloc((size_t)content_length + 1);
+    char* body = SAGE_ALLOC((size_t)content_length + 1);
     size_t total_read = 0;
     while ((int)total_read < content_length) {
         size_t n = fread(body + total_read, 1, (size_t)(content_length - (int)total_read), stdin);
@@ -286,7 +287,7 @@ static void lsp_send(const char* json) {
 /* Send a JSON-RPC response with a given id and result body. */
 static void lsp_send_response(const char* id_str, int id_is_string, const char* result_json) {
     size_t cap = strlen(result_json) + 256;
-    char* msg = malloc(cap);
+    char* msg = SAGE_ALLOC(cap);
 
     if (id_is_string) {
         snprintf(msg, cap,
@@ -305,7 +306,7 @@ static void lsp_send_response(const char* id_str, int id_is_string, const char* 
 /* Send a JSON-RPC notification (no id). */
 static void lsp_send_notification(const char* method, const char* params_json) {
     size_t cap = strlen(method) + strlen(params_json) + 128;
-    char* msg = malloc(cap);
+    char* msg = SAGE_ALLOC(cap);
     snprintf(msg, cap,
         "{\"jsonrpc\":\"2.0\",\"method\":\"%s\",\"params\":%s}",
         method, params_json);
@@ -431,7 +432,7 @@ static void publish_diagnostics(const char* uri, const char* content) {
 
     /* Build diagnostics JSON array */
     size_t cap = 4096;
-    char* diags = malloc(cap);
+    char* diags = SAGE_ALLOC(cap);
     size_t len = 0;
 
     diags[len++] = '[';
@@ -470,7 +471,7 @@ static void publish_diagnostics(const char* uri, const char* content) {
 
         while (len + (size_t)diag_len + 2 >= cap) {
             cap *= 2;
-            diags = realloc(diags, cap);
+            diags = SAGE_REALLOC(diags, cap);
         }
         memcpy(diags + len, diag_buf, (size_t)diag_len);
         len += (size_t)diag_len;
@@ -485,7 +486,7 @@ static void publish_diagnostics(const char* uri, const char* content) {
     /* Build notification params */
     char* esc_uri = json_escape(uri);
     size_t params_cap = len + strlen(esc_uri) + 64;
-    char* params = malloc(params_cap);
+    char* params = SAGE_ALLOC(params_cap);
     snprintf(params, params_cap,
         "{\"uri\":\"%s\",\"diagnostics\":%s}",
         esc_uri, diags);
@@ -582,7 +583,7 @@ static void handle_completion(const char* json, RequestId rid) {
 
     /* Build items array */
     size_t cap = 8192;
-    char* items = malloc(cap);
+    char* items = SAGE_ALLOC(cap);
     size_t len = 0;
     items[len++] = '[';
 
@@ -600,7 +601,7 @@ static void handle_completion(const char* json, RequestId rid) {
 
         while (len + (size_t)item_len + 2 >= cap) {
             cap *= 2;
-            items = realloc(items, cap);
+            items = SAGE_REALLOC(items, cap);
         }
         memcpy(items + len, item_buf, (size_t)item_len);
         len += (size_t)item_len;
@@ -711,7 +712,7 @@ static char* get_word_at(const char* content, int line, int character) {
     if (start == end) return NULL;
 
     int wlen = end - start;
-    char* word = malloc((size_t)wlen + 1);
+    char* word = SAGE_ALLOC((size_t)wlen + 1);
     memcpy(word, line_start + start, (size_t)wlen);
     word[wlen] = '\0';
     return word;
@@ -773,7 +774,7 @@ static void handle_hover(const char* json, RequestId rid) {
 
     char* esc_doc = json_escape(hover_doc);
     size_t cap = strlen(esc_doc) + 128;
-    char* result = malloc(cap);
+    char* result = SAGE_ALLOC(cap);
     snprintf(result, cap,
         "{\"contents\":{\"kind\":\"markdown\",\"value\":\"%s\"}}",
         esc_doc);
@@ -833,7 +834,7 @@ static void handle_formatting(const char* json, RequestId rid) {
     free(formatted);
 
     size_t cap = strlen(esc_text) + 256;
-    char* result = malloc(cap);
+    char* result = SAGE_ALLOC(cap);
     snprintf(result, cap,
         "[{\"range\":{\"start\":{\"line\":0,\"character\":0},"
         "\"end\":{\"line\":%d,\"character\":0}},"
@@ -961,7 +962,7 @@ void lsp_run(void) {
                             text_key++;
                             size_t cap = 4096;
                             size_t len = 0;
-                            text = malloc(cap);
+                            text = SAGE_ALLOC(cap);
                             while (*text_key && !(*text_key == '"' &&
                                    (len == 0 || text[len-1] != '\\'))) {
                                 if (*text_key == '\\' && *(text_key+1)) {
@@ -980,7 +981,7 @@ void lsp_run(void) {
                                 text_key++;
                                 if (len + 2 >= cap) {
                                     cap *= 2;
-                                    text = realloc(text, cap);
+                                    text = SAGE_REALLOC(text, cap);
                                 }
                             }
                             text[len] = '\0';
@@ -1011,7 +1012,7 @@ void lsp_run(void) {
                 /* Publish empty diagnostics to clear them */
                 char* esc_uri = json_escape(uri);
                 size_t cap2 = strlen(esc_uri) + 64;
-                char* clear_params = malloc(cap2);
+                char* clear_params = SAGE_ALLOC(cap2);
                 snprintf(clear_params, cap2,
                     "{\"uri\":\"%s\",\"diagnostics\":[]}", esc_uri);
                 lsp_send_notification("textDocument/publishDiagnostics", clear_params);
@@ -1040,7 +1041,7 @@ void lsp_run(void) {
             /* If it has an id, respond with MethodNotFound */
             if (rid.str[0] != '\0') {
                 size_t errcap = 256 + strlen(method);
-                char* errmsg = malloc(errcap);
+                char* errmsg = SAGE_ALLOC(errcap);
                 char* esc_method = json_escape(method);
                 snprintf(errmsg, errcap,
                     "{\"jsonrpc\":\"2.0\",\"id\":%s%s%s,\"error\":"

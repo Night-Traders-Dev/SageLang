@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "linter.h"
+#include "gc.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -43,13 +44,13 @@ static void append_msg(LintMessage** head, LintMessage** tail, LintMessage* m) {
 static char** split_lines(const char* src, int* count) {
     int cap = 256;
     int n = 0;
-    char** lines = malloc(sizeof(char*) * (size_t)cap);
+    char** lines = SAGE_ALLOC(sizeof(char*) * (size_t)cap);
 
     const char* p = src;
     while (*p) {
         if (n >= cap) {
             cap *= 2;
-            lines = realloc(lines, sizeof(char*) * (size_t)cap);
+            lines = SAGE_REALLOC(lines, sizeof(char*) * (size_t)cap);
         }
         lines[n++] = (char*)p;
         const char* eol = strchr(p, '\n');
@@ -173,7 +174,7 @@ static char* extract_ident_after(const char* buf, int start) {
     int begin = i;
     while (isalnum(buf[i]) || buf[i] == '_') i++;
     int len = i - begin;
-    char* name = malloc((size_t)len + 1);
+    char* name = SAGE_ALLOC((size_t)len + 1);
     memcpy(name, buf + begin, (size_t)len);
     name[len] = '\0';
     return name;
@@ -566,7 +567,7 @@ int lint_file(const char* path, LintOptions opts) {
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
     rewind(f);
-    char* source = malloc((size_t)sz + 1);
+    char* source = SAGE_ALLOC((size_t)sz + 1);
     size_t nread = fread(source, 1, (size_t)sz, f);
     source[nread] = '\0';
     fclose(f);

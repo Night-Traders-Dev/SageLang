@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include "formatter.h"
+#include "gc.h"  // SAGE_ALLOC/SAGE_REALLOC for safe allocation
 
 /* ========================================================================
  * SageLang Code Formatter (sage fmt)
@@ -38,7 +39,7 @@ typedef struct {
 
 static void sb_init(StrBuf* sb) {
     sb->cap = 4096;
-    sb->data = malloc(sb->cap);
+    sb->data = SAGE_ALLOC(sb->cap);
     sb->len = 0;
     sb->data[0] = '\0';
 }
@@ -46,7 +47,7 @@ static void sb_init(StrBuf* sb) {
 static void sb_ensure(StrBuf* sb, size_t extra) {
     while (sb->len + extra + 1 > sb->cap) {
         sb->cap *= 2;
-        sb->data = realloc(sb->data, sb->cap);
+        sb->data = SAGE_REALLOC(sb->data, sb->cap);
     }
 }
 
@@ -144,13 +145,13 @@ static char* normalize_operators(const char* content) {
     size_t len = strlen(content);
     /* Worst case: every char becomes " x ", so 3x + 1 */
     size_t cap = len * 3 + 64;
-    char* out = malloc(cap);
+    char* out = SAGE_ALLOC(cap);
     size_t oi = 0;
 
     char in_string = 0;  /* 0, '\'', or '"' */
     size_t i = 0;
 
-#define OUT(c) do { if (oi + 4 >= cap) { cap *= 2; out = realloc(out, cap); } out[oi++] = (c); } while(0)
+#define OUT(c) do { if (oi + 4 >= cap) { cap *= 2; out = SAGE_REALLOC(out, cap); } out[oi++] = (c); } while(0)
 
     while (i < len) {
         char c = content[i];
@@ -400,7 +401,7 @@ static char* strip_colon_space(const char* line) {
     }
 
     /* Rebuild without the spaces before the colon */
-    char* result = malloc(space_start + 2);
+    char* result = SAGE_ALLOC(space_start + 2);
     memcpy(result, line, space_start);
     result[space_start] = ':';
     result[space_start + 1] = '\0';
@@ -418,7 +419,7 @@ static LineArray split_lines(const char* source) {
     LineArray la;
     la.count = 0;
     int cap = 256;
-    la.lines = malloc(sizeof(char*) * (size_t)cap);
+    la.lines = SAGE_ALLOC(sizeof(char*) * (size_t)cap);
 
     const char* p = source;
     while (*p) {
@@ -430,7 +431,7 @@ static LineArray split_lines(const char* source) {
             line_len = strlen(p);
         }
 
-        char* line = malloc(line_len + 1);
+        char* line = SAGE_ALLOC(line_len + 1);
         memcpy(line, p, line_len);
         line[line_len] = '\0';
 
@@ -441,7 +442,7 @@ static LineArray split_lines(const char* source) {
 
         if (la.count >= cap) {
             cap *= 2;
-            la.lines = realloc(la.lines, sizeof(char*) * (size_t)cap);
+            la.lines = SAGE_REALLOC(la.lines, sizeof(char*) * (size_t)cap);
         }
         la.lines[la.count++] = line;
 
@@ -491,7 +492,7 @@ char* format_source(const char* source, FormatOptions opts) {
 
         /* Trim trailing whitespace from content */
         size_t content_len = strlen(p);
-        char* content = malloc(content_len + 1);
+        char* content = SAGE_ALLOC(content_len + 1);
         memcpy(content, p, content_len + 1);
         while (content_len > 0 && (content[content_len - 1] == ' ' ||
                content[content_len - 1] == '\t' || content[content_len - 1] == '\r')) {
@@ -602,7 +603,7 @@ int format_file(const char* input_path, const char* output_path, FormatOptions o
         return 0;
     }
 
-    char* source = malloc((size_t)sz + 1);
+    char* source = SAGE_ALLOC((size_t)sz + 1);
     size_t nread = fread(source, 1, (size_t)sz, f);
     source[nread] = '\0';
     fclose(f);
