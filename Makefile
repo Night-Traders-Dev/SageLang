@@ -107,6 +107,10 @@ VM_OBJECTS = $(patsubst $(VM_DIR)/%.c,$(OBJ_DIR)/vm/%.o,$(VM_SOURCES))
 MAIN_OBJECT = $(OBJ_DIR)/main.o
 ALL_OBJECTS = $(CORE_OBJECTS) $(VM_OBJECTS) $(MAIN_OBJECT)
 
+# LLVM runtime (compiled separately, linked with --compile-llvm output)
+LLVM_RT_SOURCE = $(SRC_DIR)/llvm_runtime.c
+LLVM_RT_OBJECT = $(OBJ_DIR)/llvm_runtime.o
+
 # Binaries
 TARGET = sage
 LSP_TARGET = sage-lsp
@@ -119,7 +123,7 @@ LSP_MAIN_OBJECT = $(OBJ_DIR)/lsp_main.o
 
 .PHONY: all clean run install uninstall help test examples charts
 
-all: $(TARGET) $(LSP_TARGET) charts
+all: $(TARGET) $(LSP_TARGET) $(LLVM_RT_OBJECT) charts
 
 # Link executable
 $(TARGET): $(ALL_OBJECTS)
@@ -330,6 +334,15 @@ test: $(TARGET)
 	@echo ""
 	@echo "Test 22: LLVM IR Generation"
 	@./$(TARGET) --emit-llvm testing/compiler_smoke.sage -o .tmp/compiler_smoke.ll && echo "✅ Pass (LLVM IR emitted)" || echo "❌ Fail"
+	@echo ""
+	@echo "Test 22b: LLVM Compile + Run"
+	@if command -v clang >/dev/null 2>&1; then \
+		./$(TARGET) --compile-llvm testing/compiler_smoke.sage -o .tmp/compiler_smoke_llvm && \
+		./.tmp/compiler_smoke_llvm > .tmp/compiler_smoke_llvm.out && \
+		diff -u testing/compiler_smoke.expected .tmp/compiler_smoke_llvm.out && echo "✅ Pass (LLVM compiled + ran)" || echo "❌ Fail"; \
+	else \
+		echo "⏭ Skip (clang not found)"; \
+	fi
 	@echo ""
 	@echo "Test 23: Assembly Generation (host target)"
 	@./$(TARGET) --emit-asm testing/compiler_smoke.sage -o .tmp/compiler_smoke.s && echo "✅ Pass (ASM emitted)" || echo "❌ Fail"
