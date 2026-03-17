@@ -64,10 +64,20 @@ The compiled VM recipe is now charted as a first-class lane on the default workl
 - **Array Slicing**: Pythonic slice syntax for arrays
 
 ### Memory Management
-- **Garbage Collection**: Automatic mark-and-sweep GC
+- **Garbage Collection**: Automatic mark-and-sweep GC with thread-safe allocation
 - **GC Control**: `gc_collect()`, `gc_enable()`, `gc_disable()`
 - **Statistics**: `gc_stats()` for memory monitoring
 - **Safe**: Prevents use-after-free and memory leaks
+
+### Security Hardening
+- **Type-safe value access**: All native functions validate argument types before accessing union members
+- **Recursion depth limits**: Both expression evaluator and statement interpreter guard against stack overflow (max 1000)
+- **Loop iteration limits**: While loops capped at 1M iterations; loop nesting capped at 64 levels
+- **Buffer safety**: String literals capped at 4096 chars, identifiers at 1024 chars; all allocation via abort-on-OOM wrappers
+- **Shell injection prevention**: Assembly exec/compile paths validate paths and use secure temp files (`mkstemps`)
+- **SSL handle safety**: Opaque pointers stored as `VAL_POINTER` (not truncated doubles); double-free prevention via handle nullification
+- **Thread safety**: GC mutex protects allocation and collection; thread-local recursion depth tracking
+- **Signed arithmetic**: String replace and repeat operations use signed math to prevent unsigned underflow/overflow
 
 ### String Operations
 - **Methods**: `split()`, `join()`, `replace()`, `upper()`, `lower()`, `strip()`
@@ -577,6 +587,19 @@ gc_enable()
 - [x] **Phase 11: Concurrency & Stdlib** (Native modules, threads, async/await, backend expansion) ✅
 - [x] **Phase 12: Tooling** (REPL, Formatter, Linter, Syntax Highlighting, LSP) ✅
 - [x] **Phase 13: Self-Hosting** (Lexer, parser, interpreter ported to Sage, full bootstrap) ✅
+- [x] **Phase 14: Security & Performance Audit** ✅
+  - [x] Thread-safe GC (mutex around allocation and collection)
+  - [x] SSL handles as `VAL_POINTER` (64-bit safe, double-free prevention)
+  - [x] Shell injection prevention in `asm_exec`/`asm_compile` (path validation, `mkstemps`)
+  - [x] Recursion guards on both `eval_expr` and `interpret`
+  - [x] Loop depth bounds checking in LLVM and native codegen backends
+  - [x] Assembly injection prevention (escaped `.asciz` string emission)
+  - [x] Signed arithmetic for `string_replace`/`string_repeat` (no unsigned underflow)
+  - [x] Bounded recv/alloc sizes across socket, TCP, and SSL modules
+  - [x] Dynamic name buffers in DCE, inlining, and type-checking passes (no 256-byte truncation)
+  - [x] Constant folding guards (infinity/NaN skip, 64KB string limit)
+  - [x] Print depth limit (circular reference protection)
+  - [x] Correct dict iteration in `print_value` (iterate by capacity, not count)
 
 **📝 For a detailed breakdown of all planned features, see [ROADMAP.md](ROADMAP.md)**
 
@@ -617,13 +640,13 @@ proc write_memory(ptr: *mut u8, value: u8):
 ## 📊 Project Stats
 
 - **Language**: C
-- **Phases Completed**: 13/13 (100%)
-- **Test Suite**: C interpreter/compiler tests, JSON coverage, and broad self-hosted suites for parsing, execution, tooling, optimization, codegen, compiler, LSP, and CLI behavior
+- **Phases Completed**: 14/14 (100%)
+- **Test Suite**: 144 interpreter + 28 compiler + 88 JSON + 1165 self-hosted tests across parsing, execution, tooling, optimization, codegen, compiler, LSP, and CLI
 - **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
 - **Status**: Active development with a working self-hosted interpreter
 - **License**: MIT
-- **Current Version**: v0.13.0-dev
+- **Current Version**: v0.14.0-dev
 
 ## 💾 Project Structure
 
@@ -702,7 +725,7 @@ sage/
 │       ├── test_parser.sage      # Parser tests (130)
 │       ├── test_interpreter.sage # Interpreter tests (18)
 │       └── test_bootstrap.sage   # Bootstrap tests (18)
-├── tests/            # Automated test suite (112 interpreter + 28 compiler + 88 JSON)
+├── tests/            # Automated test suite (144 interpreter + 28 compiler + 88 JSON)
 │   ├── run_tests.sh  # Test runner script
 │   ├── test_json.sage # cJSON port test suite (88 tests)
 │   ├── 01_variables/ # Variable declaration tests
@@ -758,6 +781,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
+- March 17, 2026: Phase 14 Complete - Security & performance audit (30 fixes across 14 files, all 1425 tests passing)
 - March 9, 2026: Networking modules (socket, tcp, http, ssl) + cJSON port (88 tests)
 - March 9, 2026: Phase 13 Complete - Self-hosted lexer, parser, interpreter with full bootstrap
 - March 9, 2026: Phase 12 Complete - REPL, formatter, linter, syntax highlighting, LSP server
