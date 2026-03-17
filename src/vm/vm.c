@@ -99,12 +99,21 @@ static Value vm_peek(ActiveVm* vm, int distance) {
 }
 
 static uint16_t read_u16(BytecodeChunk* chunk, int* ip) {
+    if (*ip + 2 > chunk->code_count) {
+        fprintf(stderr, "VM Error: bytecode read_u16 out of bounds (ip=%d, size=%d)\n", *ip, chunk->code_count);
+        *ip = chunk->code_count;  // halt
+        return 0;
+    }
     uint16_t high = chunk->code[(*ip)++];
     uint16_t low = chunk->code[(*ip)++];
     return (uint16_t)((high << 8) | low);
 }
 
 static uint8_t read_u8(BytecodeChunk* chunk, int* ip) {
+    if (*ip >= chunk->code_count) {
+        fprintf(stderr, "VM Error: bytecode read_u8 out of bounds (ip=%d, size=%d)\n", *ip, chunk->code_count);
+        return 0;
+    }
     return chunk->code[(*ip)++];
 }
 
