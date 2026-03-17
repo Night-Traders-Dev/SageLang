@@ -358,14 +358,25 @@ make cmake-pico            # Setup a Pico CMake build
 | Command | Meaning |
 | ------- | ------- |
 | `:help` | Print REPL help |
-| `:quit` / `:exit` | Leave the session |
+| `:quit` / `:exit` | Leave the session (also Ctrl-D) |
+| `:reset` | Reset the session, global bindings, and module cache |
+| `:clear` | Clear the terminal screen |
+| `:history [n]` | Show last n history entries (default: 20) |
+| `:save <file>` | Save session history to a Sage source file |
 | `:vars [prefix]` | List current REPL bindings, optionally filtered by prefix |
 | `:type <expr>` | Evaluate an expression and print its runtime type and value |
+| `:ast <code>` | Show parsed AST for an expression or statement |
+| `:env` | Show the full scope chain with parent environments |
+| `:modules` | List loaded modules and search paths |
+| `:emit-c <code>` | Show C backend output for a statement |
+| `:emit-llvm <code>` | Show LLVM IR output for a statement |
+| `:time <expr>` | Time a single expression evaluation |
+| `:bench <n> <expr>` | Run expression n times, show min/avg/max |
 | `:load <file>` | Execute a Sage file inside the current session |
-| `:reset` | Reset the session, global bindings, and module cache |
 | `:pwd` | Print the current working directory |
 | `:cd <dir>` | Change the working directory |
 | `:gc` | Run garbage collection and print GC statistics |
+| `:runtime [mode]` | Show or switch runtime (ast, bytecode, auto) |
 
 ## 📝 Example Code
 

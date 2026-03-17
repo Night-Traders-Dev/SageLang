@@ -1,9 +1,11 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <setjmp.h>
 #include <ctype.h>
+#include <time.h>
 #include "lexer.h"
 #include "token.h"
 #include "ast.h"
@@ -390,18 +392,36 @@ static void repl_free_buffers(void) {
 
 static void repl_print_help(void) {
     printf("Sage REPL Commands:\n");
-    printf("  :help              Show this help message\n");
-    printf("  :quit              Exit the REPL (also :exit or Ctrl-D)\n");
-    printf("  :exit              Exit the REPL\n");
-    printf("  :vars [prefix]     List current REPL bindings, optionally filtered by prefix\n");
-    printf("  :type <expr>       Evaluate an expression and print its type and value\n");
-    printf("  :load <file>       Load and execute a Sage file in the current session\n");
-    printf("  :reset             Reset the REPL session, globals, and module cache\n");
-    printf("  :pwd               Print the current working directory\n");
-    printf("  :cd <dir>          Change the current working directory\n");
-    printf("  :gc                Run garbage collection and print GC stats\n");
     printf("\n");
-    printf("Enter Sage expressions and statements.\n");
+    printf("  Session:\n");
+    printf("    :help              Show this help message\n");
+    printf("    :quit / :exit      Exit the REPL (also Ctrl-D)\n");
+    printf("    :reset             Reset session, globals, and module cache\n");
+    printf("    :clear             Clear the screen\n");
+    printf("    :history [n]       Show last n entries (default: 20)\n");
+    printf("    :save <file>       Save session history to a Sage file\n");
+    printf("\n");
+    printf("  Inspection:\n");
+    printf("    :vars [prefix]     List bindings, optionally filtered by prefix\n");
+    printf("    :type <expr>       Evaluate expression and show its type\n");
+    printf("    :ast <code>        Show parsed AST for an expression or statement\n");
+    printf("    :env               Show the full scope chain\n");
+    printf("    :modules           List loaded modules and search paths\n");
+    printf("\n");
+    printf("  Compilation:\n");
+    printf("    :emit-c <code>     Show C backend output for a statement\n");
+    printf("    :emit-llvm <code>  Show LLVM IR output for a statement\n");
+    printf("\n");
+    printf("  Performance:\n");
+    printf("    :time <expr>       Time a single expression evaluation\n");
+    printf("    :bench <n> <expr>  Run expression n times and show stats\n");
+    printf("\n");
+    printf("  System:\n");
+    printf("    :pwd               Print the current working directory\n");
+    printf("    :cd <dir>          Change the current working directory\n");
+    printf("    :gc                Run garbage collection and print stats\n");
+    printf("    :runtime [mode]    Show or set runtime (ast, bytecode, auto)\n");
+    printf("\n");
     printf("Multi-line blocks (if, for, while, proc, class) are\n");
     printf("detected automatically when a line ends with ':'.\n");
     printf("End a block with an empty line.\n");
@@ -497,9 +517,215 @@ static void repl_execute_source(char* buffer, Env* env, SageRuntimeMode runtime_
     }
 }
 
+// ============================================================================
+// REPL: History tracking
+// ============================================================================
+
+#define REPL_HISTORY_MAX 500
+
+static char* g_repl_history[REPL_HISTORY_MAX];
+static int g_repl_history_count = 0;
+
+static void repl_history_add(const char* line) {
+    if (line == NULL || line[0] == '\0') return;
+    // Don't add duplicates of the last entry
+    if (g_repl_history_count > 0 &&
+        strcmp(g_repl_history[g_repl_history_count - 1], line) == 0) return;
+    if (g_repl_history_count >= REPL_HISTORY_MAX) {
+        // Drop oldest entry
+        free(g_repl_history[0]);
+        memmove(g_repl_history, g_repl_history + 1, sizeof(char*) * (REPL_HISTORY_MAX - 1));
+        g_repl_history_count--;
+    }
+    g_repl_history[g_repl_history_count++] = strdup(line);
+}
+
+static void repl_history_free(void) {
+    for (int i = 0; i < g_repl_history_count; i++) free(g_repl_history[i]);
+    g_repl_history_count = 0;
+}
+
+// ============================================================================
+// REPL: AST printer (compact, for :ast command)
+// ============================================================================
+
+static void repl_print_ast_expr(Expr* expr, int depth) {
+    if (expr == NULL) { printf("nil"); return; }
+    for (int i = 0; i < depth; i++) printf("  ");
+    switch (expr->type) {
+        case EXPR_NUMBER: printf("(number %g)", expr->as.number.value); break;
+        case EXPR_STRING: printf("(string \"%s\")", expr->as.string.value); break;
+        case EXPR_BOOL: printf("(bool %s)", expr->as.boolean.value ? "true" : "false"); break;
+        case EXPR_NIL: printf("(nil)"); break;
+        case EXPR_VARIABLE: printf("(var %.*s)", expr->as.variable.name.length, expr->as.variable.name.start); break;
+        case EXPR_BINARY:
+            printf("(binary %.*s\n", expr->as.binary.op.length, expr->as.binary.op.start);
+            repl_print_ast_expr(expr->as.binary.left, depth + 1); printf("\n");
+            repl_print_ast_expr(expr->as.binary.right, depth + 1); printf(")");
+            break;
+        case EXPR_CALL: {
+            printf("(call\n");
+            repl_print_ast_expr(expr->as.call.callee, depth + 1);
+            for (int i = 0; i < expr->as.call.arg_count; i++) {
+                printf("\n");
+                repl_print_ast_expr(expr->as.call.args[i], depth + 1);
+            }
+            printf(")");
+            break;
+        }
+        case EXPR_ARRAY: printf("(array count=%d)", expr->as.array.count); break;
+        case EXPR_DICT: printf("(dict count=%d)", expr->as.dict.count); break;
+        case EXPR_TUPLE: printf("(tuple count=%d)", expr->as.tuple.count); break;
+        case EXPR_INDEX:
+            printf("(index\n");
+            repl_print_ast_expr(expr->as.index.array, depth + 1); printf("\n");
+            repl_print_ast_expr(expr->as.index.index, depth + 1); printf(")");
+            break;
+        case EXPR_GET:
+            printf("(get .%.*s\n", expr->as.get.property.length, expr->as.get.property.start);
+            repl_print_ast_expr(expr->as.get.object, depth + 1); printf(")");
+            break;
+        case EXPR_SET:
+            if (expr->as.set.object == NULL) {
+                printf("(assign %.*s\n", expr->as.set.property.length, expr->as.set.property.start);
+                repl_print_ast_expr(expr->as.set.value, depth + 1); printf(")");
+            } else {
+                printf("(set .%.*s\n", expr->as.set.property.length, expr->as.set.property.start);
+                repl_print_ast_expr(expr->as.set.object, depth + 1); printf("\n");
+                repl_print_ast_expr(expr->as.set.value, depth + 1); printf(")");
+            }
+            break;
+        case EXPR_SLICE: printf("(slice ...)"); break;
+        case EXPR_INDEX_SET: printf("(index-set ...)"); break;
+        case EXPR_AWAIT: printf("(await ...)"); break;
+        default: printf("(expr type=%d)", expr->type); break;
+    }
+}
+
+static void repl_print_ast_stmt(Stmt* stmt, int depth) {
+    if (stmt == NULL) return;
+    for (int i = 0; i < depth; i++) printf("  ");
+    switch (stmt->type) {
+        case STMT_PRINT:
+            printf("(print\n");
+            repl_print_ast_expr(stmt->as.print.expression, depth + 1);
+            printf(")\n");
+            break;
+        case STMT_EXPRESSION:
+            printf("(expr\n");
+            repl_print_ast_expr(stmt->as.expression, depth + 1);
+            printf(")\n");
+            break;
+        case STMT_LET:
+            printf("(let %.*s\n", stmt->as.let.name.length, stmt->as.let.name.start);
+            repl_print_ast_expr(stmt->as.let.initializer, depth + 1);
+            printf(")\n");
+            break;
+        case STMT_IF:
+            printf("(if\n");
+            repl_print_ast_expr(stmt->as.if_stmt.condition, depth + 1);
+            printf(")\n");
+            break;
+        case STMT_WHILE:
+            printf("(while\n");
+            repl_print_ast_expr(stmt->as.while_stmt.condition, depth + 1);
+            printf(")\n");
+            break;
+        case STMT_FOR:
+            printf("(for %.*s in ...)\n", stmt->as.for_stmt.variable.length, stmt->as.for_stmt.variable.start);
+            break;
+        case STMT_PROC:
+            printf("(proc %.*s params=%d)\n", stmt->as.proc.name.length, stmt->as.proc.name.start, stmt->as.proc.param_count);
+            break;
+        case STMT_CLASS:
+            printf("(class %.*s)\n", stmt->as.class_stmt.name.length, stmt->as.class_stmt.name.start);
+            break;
+        case STMT_RETURN:
+            printf("(return\n");
+            repl_print_ast_expr(stmt->as.ret.value, depth + 1);
+            printf(")\n");
+            break;
+        case STMT_BLOCK: printf("(block ...)\n"); break;
+        case STMT_BREAK: printf("(break)\n"); break;
+        case STMT_CONTINUE: printf("(continue)\n"); break;
+        case STMT_IMPORT: printf("(import %s)\n", stmt->as.import.module_name ? stmt->as.import.module_name : "?"); break;
+        case STMT_RAISE: printf("(raise ...)\n"); break;
+        case STMT_TRY: printf("(try ...)\n"); break;
+        case STMT_YIELD: printf("(yield ...)\n"); break;
+        default: printf("(stmt type=%d)\n", stmt->type); break;
+    }
+}
+
+// ============================================================================
+// REPL: Scope chain printer (for :env command)
+// ============================================================================
+
+static void repl_print_env_chain(Env* env) {
+    int level = 0;
+    while (env != NULL) {
+        int count = 0;
+        for (EnvNode* n = env->head; n != NULL; n = n->next) count++;
+        printf("Scope %d (%d binding%s)%s:\n", level, count, count == 1 ? "" : "s",
+               env->parent == NULL ? " [global]" : "");
+        for (EnvNode* n = env->head; n != NULL; n = n->next) {
+            printf("  %-20s %s\n", n->name, value_type_name(n->value));
+        }
+        env = env->parent;
+        level++;
+    }
+}
+
+// ============================================================================
+// REPL: Module listing (for :modules command)
+// ============================================================================
+
+static void repl_list_modules(void) {
+    if (global_module_cache == NULL || global_module_cache->modules == NULL) {
+        printf("No modules loaded.\n");
+        return;
+    }
+    int count = 0;
+    for (Module* m = global_module_cache->modules; m != NULL; m = m->next) {
+        printf("  %-16s %s%s\n", m->name,
+               m->path ? m->path : "(native)",
+               m->is_loaded ? "" : " [not loaded]");
+        count++;
+    }
+    printf("%d module%s in cache.\n", count, count == 1 ? "" : "s");
+
+    if (global_module_cache->search_path_count > 0) {
+        printf("Search paths:\n");
+        for (int i = 0; i < global_module_cache->search_path_count; i++) {
+            printf("  %s\n", global_module_cache->search_paths[i]);
+        }
+    }
+}
+
+// ============================================================================
+// REPL: Session save (for :save command)
+// ============================================================================
+
+static void repl_save_session(const char* path) {
+    FILE* f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "sage repl: could not open \"%s\" for writing\n", path);
+        return;
+    }
+    int written = 0;
+    for (int i = 0; i < g_repl_history_count; i++) {
+        const char* line = g_repl_history[i];
+        // Skip REPL commands
+        if (line[0] == ':') continue;
+        fprintf(f, "%s\n", line);
+        written++;
+    }
+    fclose(f);
+    printf("Saved %d line%s to %s\n", written, written == 1 ? "" : "s", path);
+}
+
 // Phase 12: Interactive REPL
 static void run_repl(SageRuntimeMode runtime_mode) {
-    printf("Sage REPL v0.12.0\n");
+    printf("Sage REPL v0.14.0\n");
     printf("Type :help for help, :quit to exit.\n");
 
     Env* env = env_create(NULL);
@@ -520,6 +746,9 @@ static void run_repl(SageRuntimeMode runtime_mode) {
             free(line);
             continue;
         }
+
+        // Record in history
+        repl_history_add(line);
 
         // Handle REPL commands
         if (strcmp(line, ":quit") == 0 || strcmp(line, ":exit") == 0) {
@@ -637,6 +866,243 @@ static void run_repl(SageRuntimeMode runtime_mode) {
                 continue;
             }
 
+            // :clear — clear screen
+            if (command_matches(line, ":clear", NULL)) {
+                printf("\033[2J\033[H");
+                fflush(stdout);
+                free(line);
+                continue;
+            }
+
+            // :history [n] — show recent history
+            if (command_matches(line, ":history", &arg)) {
+                int n = 20;
+                if (*arg != '\0') n = atoi(arg);
+                if (n <= 0) n = 20;
+                int start = g_repl_history_count - n;
+                if (start < 0) start = 0;
+                for (int i = start; i < g_repl_history_count; i++) {
+                    printf("  %3d  %s\n", i + 1, g_repl_history[i]);
+                }
+                if (g_repl_history_count == 0) printf("No history.\n");
+                free(line);
+                continue;
+            }
+
+            // :save <file> — save session to file
+            if (command_matches(line, ":save", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :save <file>\n");
+                } else {
+                    repl_save_session(arg);
+                }
+                free(line);
+                continue;
+            }
+
+            // :env — show scope chain
+            if (command_matches(line, ":env", NULL)) {
+                repl_print_env_chain(env);
+                free(line);
+                continue;
+            }
+
+            // :modules — list loaded modules
+            if (command_matches(line, ":modules", NULL)) {
+                repl_list_modules();
+                free(line);
+                continue;
+            }
+
+            // :ast <code> — show parsed AST
+            if (command_matches(line, ":ast", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :ast <code>\n");
+                    free(line);
+                    continue;
+                }
+                size_t arg_len = strlen(arg);
+                char* buffer = SAGE_ALLOC(arg_len + 2);
+                memcpy(buffer, arg, arg_len);
+                buffer[arg_len] = '\n';
+                buffer[arg_len + 1] = '\0';
+
+                if (setjmp(g_repl_error_jmp) == 0) {
+                    init_lexer(buffer, "<repl-ast>");
+                    parser_init();
+                    Stmt* stmt = parse();
+                    while (stmt != NULL) {
+                        repl_print_ast_stmt(stmt, 0);
+                        free_stmt(stmt);
+                        stmt = parse();
+                    }
+                }
+                free(buffer);
+                free(line);
+                continue;
+            }
+
+            // :emit-c <code> — show C backend output
+            if (command_matches(line, ":emit-c", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :emit-c <code>\n");
+                    free(line);
+                    continue;
+                }
+                size_t arg_len = strlen(arg);
+                char* buffer = SAGE_ALLOC(arg_len + 2);
+                memcpy(buffer, arg, arg_len);
+                buffer[arg_len] = '\n';
+                buffer[arg_len + 1] = '\0';
+
+                char tmp_path[] = "/tmp/sage_repl_XXXXXX.c";
+                int fd = mkstemps(tmp_path, 2);
+                if (fd >= 0) close(fd);
+
+                if (compile_source_to_c_opt(buffer, "<repl>", tmp_path, 0, 0)) {
+                    char* content = try_read_file(tmp_path);
+                    if (content) {
+                        printf("%s", content);
+                        free(content);
+                    }
+                }
+                unlink(tmp_path);
+                free(buffer);
+                free(line);
+                continue;
+            }
+
+            // :emit-llvm <code> — show LLVM IR output
+            if (command_matches(line, ":emit-llvm", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :emit-llvm <code>\n");
+                    free(line);
+                    continue;
+                }
+                size_t arg_len = strlen(arg);
+                char* buffer = SAGE_ALLOC(arg_len + 2);
+                memcpy(buffer, arg, arg_len);
+                buffer[arg_len] = '\n';
+                buffer[arg_len + 1] = '\0';
+
+                char tmp_path[] = "/tmp/sage_repl_XXXXXX.ll";
+                int fd = mkstemps(tmp_path, 3);
+                if (fd >= 0) close(fd);
+
+                if (compile_source_to_llvm_ir(buffer, "<repl>", tmp_path, 0, 0)) {
+                    char* content = try_read_file(tmp_path);
+                    if (content) {
+                        printf("%s", content);
+                        free(content);
+                    }
+                }
+                unlink(tmp_path);
+                free(buffer);
+                free(line);
+                continue;
+            }
+
+            // :time <expr> — time a single evaluation
+            if (command_matches(line, ":time", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :time <expr>\n");
+                    free(line);
+                    continue;
+                }
+                size_t arg_len = strlen(arg);
+                char* buffer = SAGE_ALLOC(arg_len + 2);
+                memcpy(buffer, arg, arg_len);
+                buffer[arg_len] = '\n';
+                buffer[arg_len + 1] = '\0';
+
+                if (setjmp(g_repl_error_jmp) == 0) {
+                    struct timespec t0, t1;
+                    clock_gettime(CLOCK_MONOTONIC, &t0);
+                    Value last_value = val_nil();
+                    int last_is_expr = 0;
+                    repl_execute_source(buffer, env, runtime_mode, 0, &last_value, &last_is_expr);
+                    clock_gettime(CLOCK_MONOTONIC, &t1);
+                    double elapsed = (double)(t1.tv_sec - t0.tv_sec) +
+                                     (double)(t1.tv_nsec - t0.tv_nsec) / 1e9;
+                    if (last_is_expr && !IS_NIL(last_value)) {
+                        repl_print_value(last_value);
+                    }
+                    if (elapsed < 0.001)
+                        printf("  %.1f us\n", elapsed * 1e6);
+                    else if (elapsed < 1.0)
+                        printf("  %.3f ms\n", elapsed * 1e3);
+                    else
+                        printf("  %.3f s\n", elapsed);
+                }
+                repl_keep_buffer(buffer);
+                free(line);
+                continue;
+            }
+
+            // :bench <n> <expr> — benchmark expression n times
+            if (command_matches(line, ":bench", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :bench <n> <expr>\n");
+                    free(line);
+                    continue;
+                }
+                // Parse count and expression
+                int count = atoi(arg);
+                const char* expr_start = arg;
+                while (*expr_start && !isspace((unsigned char)*expr_start)) expr_start++;
+                while (*expr_start && isspace((unsigned char)*expr_start)) expr_start++;
+                if (count <= 0 || *expr_start == '\0') {
+                    printf("Usage: :bench <n> <expr>\n");
+                    free(line);
+                    continue;
+                }
+                if (count > 1000000) count = 1000000;
+
+                size_t expr_len = strlen(expr_start);
+                char* buffer = SAGE_ALLOC(expr_len + 2);
+                memcpy(buffer, expr_start, expr_len);
+                buffer[expr_len] = '\n';
+                buffer[expr_len + 1] = '\0';
+
+                if (setjmp(g_repl_error_jmp) == 0) {
+                    struct timespec t0, t1;
+                    double total = 0, min_t = 1e30, max_t = 0;
+                    for (int i = 0; i < count; i++) {
+                        clock_gettime(CLOCK_MONOTONIC, &t0);
+                        repl_execute_source(buffer, env, runtime_mode, 0, NULL, NULL);
+                        clock_gettime(CLOCK_MONOTONIC, &t1);
+                        double elapsed = (double)(t1.tv_sec - t0.tv_sec) +
+                                         (double)(t1.tv_nsec - t0.tv_nsec) / 1e9;
+                        total += elapsed;
+                        if (elapsed < min_t) min_t = elapsed;
+                        if (elapsed > max_t) max_t = elapsed;
+                    }
+                    double avg = total / count;
+                    printf("%d iterations: total=%.3f ms, avg=%.1f us, min=%.1f us, max=%.1f us\n",
+                           count, total * 1e3, avg * 1e6, min_t * 1e6, max_t * 1e6);
+                }
+                repl_keep_buffer(buffer);
+                free(line);
+                continue;
+            }
+
+            // :runtime [mode] — show or switch runtime mode
+            if (command_matches(line, ":runtime", &arg)) {
+                if (*arg == '\0') {
+                    printf("Current runtime: %s\n", sage_runtime_mode_name(runtime_mode));
+                } else {
+                    SageRuntimeMode new_mode;
+                    if (sage_runtime_parse_mode(arg, &new_mode)) {
+                        runtime_mode = new_mode;
+                        printf("Runtime set to: %s\n", sage_runtime_mode_name(runtime_mode));
+                    } else {
+                        printf("Unknown runtime mode: %s (use ast, bytecode, or auto)\n", arg);
+                    }
+                }
+                free(line);
+                continue;
+            }
+
             printf("Unknown REPL command: %s\n", line);
             printf("Type :help for available commands.\n");
             free(line);
@@ -708,6 +1174,7 @@ static void run_repl(SageRuntimeMode runtime_mode) {
 
     g_repl_mode = 0;
     repl_free_buffers();
+    repl_history_free();
 }
 
 static void run(const char* source, const char* filename, SageRuntimeMode runtime_mode) {
