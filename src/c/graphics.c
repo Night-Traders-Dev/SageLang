@@ -3332,6 +3332,159 @@ static GLFWwindow* g_window = NULL;
 // Forward declarations for callbacks
 static void framebuffer_resize_cb(GLFWwindow* window, int w, int h);
 static void scroll_callback(GLFWwindow* window, double xoff, double yoff);
+static void glfw_error_callback(int error, const char* description);
+
+// ============================================================================
+// Platform detection and selection
+// ============================================================================
+// Platform constants
+#define SAGE_PLATFORM_AUTO    0
+#define SAGE_PLATFORM_X11     1
+#define SAGE_PLATFORM_WAYLAND 2
+#define SAGE_PLATFORM_ANY     3  // Let GLFW decide (no hint)
+
+static int g_platform_preference = SAGE_PLATFORM_AUTO;
+static int g_active_platform = SAGE_PLATFORM_AUTO;
+
+static int detect_display_server(void) {
+    const char* wayland = getenv("WAYLAND_DISPLAY");
+    const char* x11 = getenv("DISPLAY");
+    const char* session = getenv("XDG_SESSION_TYPE");
+    const char* sage_platform = getenv("SAGE_GPU_PLATFORM");
+
+    // Honor environment override first
+    if (sage_platform) {
+        if (strcmp(sage_platform, "x11") == 0) return SAGE_PLATFORM_X11;
+        if (strcmp(sage_platform, "wayland") == 0) return SAGE_PLATFORM_WAYLAND;
+    }
+
+    // On Wayland compositors: DISPLAY is usually set too (XWayland).
+    // Prefer X11/XWayland for stability (avoids libdecor crashes).
+    // Pure Wayland only when DISPLAY is absent.
+    if (x11 && x11[0] != '\0') return SAGE_PLATFORM_X11;  // X11 or XWayland
+    if (wayland && wayland[0] != '\0') return SAGE_PLATFORM_WAYLAND;  // Pure Wayland
+
+    // Explicit session type as last resort
+    if (session) {
+        if (strcmp(session, "wayland") == 0) return SAGE_PLATFORM_WAYLAND;
+        if (strcmp(session, "x11") == 0) return SAGE_PLATFORM_X11;
+    }
+
+    return SAGE_PLATFORM_X11; // Default fallback
+}
+
+static void apply_platform_hint(void) {
+    int target = g_platform_preference;
+    if (target == SAGE_PLATFORM_AUTO) {
+        target = detect_display_server();
+    }
+
+#if defined(GLFW_PLATFORM_WAYLAND) && defined(GLFW_PLATFORM_X11)
+    if (target == SAGE_PLATFORM_WAYLAND) {
+        glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_WAYLAND);
+#ifdef GLFW_WAYLAND_LIBDECOR
+        // Disable libdecor completely to avoid GTK plugin crashes.
+        // Server-side decorations work without it. Users with working
+        // libdecor can set SAGE_WAYLAND_LIBDECOR=1 to re-enable.
+        const char* use_libdecor = getenv("SAGE_WAYLAND_LIBDECOR");
+        if (use_libdecor && strcmp(use_libdecor, "1") == 0) {
+            glfwInitHint(GLFW_WAYLAND_LIBDECOR, GLFW_WAYLAND_PREFER_LIBDECOR);
+        } else {
+            glfwInitHint(GLFW_WAYLAND_LIBDECOR, GLFW_WAYLAND_DISABLE_LIBDECOR);
+        }
+#endif
+        g_active_platform = SAGE_PLATFORM_WAYLAND;
+    } else if (target == SAGE_PLATFORM_X11) {
+        glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+        g_active_platform = SAGE_PLATFORM_X11;
+    } else {
+        // SAGE_PLATFORM_ANY: no hint, let GLFW decide
+        g_active_platform = detect_display_server();
+    }
+#elif defined(GLFW_PLATFORM_X11)
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+    g_active_platform = SAGE_PLATFORM_X11;
+#elif defined(GLFW_PLATFORM_WAYLAND)
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_WAYLAND);
+    g_active_platform = SAGE_PLATFORM_WAYLAND;
+#else
+    // GLFW < 3.4: no platform hints available
+    g_active_platform = SAGE_PLATFORM_X11;
+#endif
+}
+
+static int try_init_glfw_with_fallback(void) {
+    glfwSetErrorCallback(glfw_error_callback);
+    apply_platform_hint();
+
+    if (glfwInit()) {
+        return 1;
+    }
+
+    // If Wayland failed, try X11 fallback (XWayland)
+    if (g_active_platform == SAGE_PLATFORM_WAYLAND) {
+        fprintf(stderr, "gpu: Wayland init failed, trying X11/XWayland fallback\n");
+#ifdef GLFW_PLATFORM_X11
+        glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+        g_active_platform = SAGE_PLATFORM_X11;
+        if (glfwInit()) {
+            return 1;
+        }
+#endif
+    }
+
+    // If X11 failed, try Wayland fallback
+    if (g_active_platform == SAGE_PLATFORM_X11) {
+        fprintf(stderr, "gpu: X11 init failed, trying Wayland fallback\n");
+#ifdef GLFW_PLATFORM_WAYLAND
+        glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_WAYLAND);
+#ifdef GLFW_WAYLAND_LIBDECOR
+        glfwInitHint(GLFW_WAYLAND_LIBDECOR, GLFW_WAYLAND_DISABLE_LIBDECOR);
+#endif
+        g_active_platform = SAGE_PLATFORM_WAYLAND;
+        if (glfwInit()) {
+            return 1;
+        }
+#endif
+    }
+
+    fprintf(stderr, "gpu: all platform init attempts failed\n");
+    return 0;
+}
+
+// gpu.set_platform(platform_str) -> nil
+// Call BEFORE init_windowed. "auto", "x11", "wayland", "any"
+static Value gpu_set_platform(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    const char* p = AS_STRING(args[0]);
+    if (strcmp(p, "x11") == 0 || strcmp(p, "X11") == 0 || strcmp(p, "xorg") == 0) {
+        g_platform_preference = SAGE_PLATFORM_X11;
+    } else if (strcmp(p, "wayland") == 0 || strcmp(p, "Wayland") == 0) {
+        g_platform_preference = SAGE_PLATFORM_WAYLAND;
+    } else if (strcmp(p, "any") == 0) {
+        g_platform_preference = SAGE_PLATFORM_ANY;
+    } else {
+        g_platform_preference = SAGE_PLATFORM_AUTO;
+    }
+    return val_nil();
+}
+
+// gpu.get_platform() -> string
+static Value gpu_get_platform(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (g_active_platform == SAGE_PLATFORM_WAYLAND) return val_string("wayland");
+    if (g_active_platform == SAGE_PLATFORM_X11) return val_string("x11");
+    return val_string("unknown");
+}
+
+// gpu.detected_platform() -> string  (what the OS is running)
+static Value gpu_detected_platform(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    int detected = detect_display_server();
+    if (detected == SAGE_PLATFORM_WAYLAND) return val_string("wayland");
+    if (detected == SAGE_PLATFORM_X11) return val_string("x11");
+    return val_string("unknown");
+}
 static VkSurfaceKHR g_surface = VK_NULL_HANDLE;
 static VkSwapchainKHR g_swapchain = VK_NULL_HANDLE;
 static VkImage* g_swapchain_images = NULL;
@@ -3352,12 +3505,7 @@ static Value gpu_create_window(int argCount, Value* args) {
     int h = IS_NUMBER(args[1]) ? (int)AS_NUMBER(args[1]) : 600;
     const char* title = IS_STRING(args[2]) ? AS_STRING(args[2]) : "Sage GPU";
 
-    glfwSetErrorCallback(glfw_error_callback);
-#ifdef GLFW_PLATFORM_X11
-    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
-#endif
-    if (!glfwInit()) {
-        fprintf(stderr, "gpu: glfwInit failed\n");
+    if (!try_init_glfw_with_fallback()) {
         return val_bool(0);
     }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -3408,22 +3556,29 @@ static Value gpu_init_windowed(int argCount, Value* args) {
 
     if (g_gpu_ctx.initialized) return val_bool(1);
 
-    // Init GLFW
-    glfwSetErrorCallback(glfw_error_callback);
-#ifdef GLFW_PLATFORM_X11
-    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
-#endif
-    if (!glfwInit()) {
-        fprintf(stderr, "gpu: glfwInit failed\n");
+    // Init GLFW with platform auto-detection and fallback
+    if (!try_init_glfw_with_fallback()) {
         return val_bool(0);
     }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     g_window = glfwCreateWindow(w, h, title, NULL, NULL);
     if (!g_window) {
-        fprintf(stderr, "gpu: window creation failed\n");
+        // Window creation failed on chosen platform — try fallback
         glfwTerminate();
-        return val_bool(0);
+        if (g_active_platform == SAGE_PLATFORM_WAYLAND) {
+            fprintf(stderr, "gpu: Wayland window failed, falling back to X11/XWayland\n");
+            g_platform_preference = SAGE_PLATFORM_X11;
+            if (!try_init_glfw_with_fallback()) return val_bool(0);
+            glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+            glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+            g_window = glfwCreateWindow(w, h, title, NULL, NULL);
+        }
+        if (!g_window) {
+            fprintf(stderr, "gpu: window creation failed on all platforms\n");
+            glfwTerminate();
+            return val_bool(0);
+        }
     }
 
     // Set up callbacks
@@ -4490,6 +4645,15 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "window_size", 11, val_native(gpu_window_size));
     env_define(e, "set_title", 9, val_native(gpu_set_title));
     env_define(e, "window_resized", 14, val_native(gpu_window_resized));
+
+    // Platform selection
+    env_define(e, "set_platform", 12, val_native(gpu_set_platform));
+    env_define(e, "get_platform", 12, val_native(gpu_get_platform));
+    env_define(e, "detected_platform", 17, val_native(gpu_detected_platform));
+    env_define(e, "PLATFORM_AUTO", 13, val_number(SAGE_PLATFORM_AUTO));
+    env_define(e, "PLATFORM_X11", 12, val_number(SAGE_PLATFORM_X11));
+    env_define(e, "PLATFORM_WAYLAND", 16, val_number(SAGE_PLATFORM_WAYLAND));
+    env_define(e, "PLATFORM_ANY", 12, val_number(SAGE_PLATFORM_ANY));
 
     // Feature 1: Swapchain recreation
     env_define(e, "recreate_swapchain", 18, val_native(gpu_recreate_swapchain));
