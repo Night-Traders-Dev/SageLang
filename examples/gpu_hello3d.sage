@@ -31,7 +31,7 @@ proc add_line(x1, y1, x2, y2):
     push(verts, y2)
 
 proc draw_char(ch, ox, oy):
-    let s = 0.12
+    let s = 0.7
     if ch == "H":
         add_line(ox, oy, ox, oy + s)
         add_line(ox + s * 0.6, oy, ox + s * 0.6, oy + s)
@@ -69,7 +69,7 @@ proc draw_char(ch, ox, oy):
 
 # Build the text "HELLO WORLD" centered
 let text = "HELLOWORLD"
-let spacing = 0.10
+let spacing = 0.55
 let total_w = len(text) * spacing
 let start_x = 0 - total_w / 2
 let cy = -0.06

@@ -219,8 +219,30 @@ proc sphere_mesh(rings, segments):
 # ============================================================================
 proc upload_mesh(mesh_dict):
     let vbuf = gpu.upload_device_local(mesh_dict["vertices"], gpu.BUFFER_VERTEX)
-    # Index data needs to be uploaded as uint32 - convert float indices
-    let ibuf = gpu.upload_device_local(mesh_dict["indices"], gpu.BUFFER_INDEX)
+
+    # Index data: pack as uint32 little-endian bytes
+    let indices = mesh_dict["indices"]
+    let byte_arr = []
+    let ii = 0
+    while ii < len(indices):
+        let val = indices[ii]
+        if val < 0:
+            val = 0
+        # Pack uint32 as 4 little-endian bytes using math.floor for integer division
+        let b0 = val - math.floor(val / 256) * 256
+        let r1 = math.floor(val / 256)
+        let b1_val = r1 - math.floor(r1 / 256) * 256
+        let r2 = math.floor(val / 65536)
+        let b2 = r2 - math.floor(r2 / 256) * 256
+        let r3 = math.floor(val / 16777216)
+        let b3 = r3 - math.floor(r3 / 256) * 256
+        push(byte_arr, b0)
+        push(byte_arr, b1_val)
+        push(byte_arr, b2)
+        push(byte_arr, b3)
+        ii = ii + 1
+    let ibuf = gpu.upload_bytes(byte_arr, gpu.BUFFER_INDEX)
+
     let result = {}
     result["vbuf"] = vbuf
     result["ibuf"] = ibuf

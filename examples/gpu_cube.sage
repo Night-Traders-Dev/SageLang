@@ -64,8 +64,8 @@ while frame_data != nil:
     # Model: rotate around Y and X
     let model = mat4_mul(mat4_rotate_y(t * 1.2), mat4_rotate_x(t * 0.7))
 
-    # View: camera at (0, 1.5, 3) looking at origin
-    let view = mat4_translate(0.0, -1.0, -3.0)
+    # View: camera slightly above, looking at cube
+    let view = mat4_translate(0.0, -0.3, -3.0)
 
     # MVP
     let mvp = pack_mvp(model, view, proj)
