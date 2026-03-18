@@ -2649,6 +2649,224 @@ static Value gpu_texture_dims(int argCount, Value* args) {
 }
 
 // ============================================================================
+// Error propagation
+// ============================================================================
+
+static const char* g_last_error = NULL;
+
+// gpu.last_error() -> string or nil
+static Value gpu_last_error(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (g_last_error) {
+        Value s = val_string(g_last_error);
+        g_last_error = NULL;
+        return s;
+    }
+    return val_nil();
+}
+
+// ============================================================================
+// Descriptor sub-buffer binding (offset + range)
+// ============================================================================
+
+// gpu.update_descriptor_buffer_range(set, binding, type, buffer, offset, range) -> nil
+static Value gpu_update_descriptor_range(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 6) return val_nil();
+    int set_idx = (int)AS_NUMBER(args[0]);
+    int binding = (int)AS_NUMBER(args[1]);
+    int desc_type = (int)AS_NUMBER(args[2]);
+    int buf_idx = (int)AS_NUMBER(args[3]);
+    VkDeviceSize offset = (VkDeviceSize)AS_NUMBER(args[4]);
+    VkDeviceSize range = (VkDeviceSize)AS_NUMBER(args[5]);
+
+    if (set_idx < 0 || set_idx >= g_gpu_ctx.desc_set_count || !g_gpu_ctx.desc_sets[set_idx].alive) return val_nil();
+    if (buf_idx < 0 || buf_idx >= g_gpu_ctx.buffer_count || !g_gpu_ctx.buffers[buf_idx].alive) return val_nil();
+
+    VkDescriptorBufferInfo buf_info = {0};
+    buf_info.buffer = g_gpu_ctx.buffers[buf_idx].buffer;
+    buf_info.offset = offset;
+    buf_info.range = range;
+
+    VkWriteDescriptorSet write = {0};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = g_gpu_ctx.desc_sets[set_idx].set;
+    write.dstBinding = (uint32_t)binding;
+    write.descriptorCount = 1;
+    write.descriptorType = sage_gpu_translate_desc_type(desc_type);
+    write.pBufferInfo = &buf_info;
+
+    vkUpdateDescriptorSets(g_gpu_ctx.device, 1, &write, 0, NULL);
+    return val_nil();
+}
+
+// ============================================================================
+// Pipeline cache
+// ============================================================================
+
+static VkPipelineCache g_pipeline_cache = VK_NULL_HANDLE;
+
+// gpu.create_pipeline_cache() -> bool
+static Value gpu_create_pipeline_cache(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (!g_gpu_ctx.initialized) return val_bool(0);
+    VkPipelineCacheCreateInfo ci = {0};
+    ci.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+    if (vkCreatePipelineCache(g_gpu_ctx.device, &ci, NULL, &g_pipeline_cache) != VK_SUCCESS)
+        return val_bool(0);
+    return val_bool(1);
+}
+
+// ============================================================================
+// Secondary command buffers
+// ============================================================================
+
+// gpu.create_secondary_command_buffer(pool) -> handle
+static Value gpu_create_secondary_cmd(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 1 || !IS_NUMBER(args[0]))
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    int pool_idx = (int)AS_NUMBER(args[0]);
+    if (pool_idx < 0 || pool_idx >= g_gpu_ctx.cmd_pool_count || !g_gpu_ctx.cmd_pools[pool_idx].alive)
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    int idx = alloc_cmd_buffers();
+    if (idx < 0) return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkCommandBufferAllocateInfo ai = {0};
+    ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    ai.commandPool = g_gpu_ctx.cmd_pools[pool_idx].pool;
+    ai.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+    ai.commandBufferCount = 1;
+    if (vkAllocateCommandBuffers(g_gpu_ctx.device, &ai, &g_gpu_ctx.cmd_buffers[idx].cmd) != VK_SUCCESS)
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    g_gpu_ctx.cmd_buffers[idx].alive = 1;
+    return val_number(idx);
+}
+
+// gpu.begin_secondary(cmd, render_pass, subpass, framebuffer) -> nil
+static Value gpu_begin_secondary(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 4) return val_nil();
+    int ci = (int)AS_NUMBER(args[0]);
+    int rp = (int)AS_NUMBER(args[1]);
+    int subpass = (int)AS_NUMBER(args[2]);
+    int fb = (int)AS_NUMBER(args[3]);
+    if (ci < 0 || ci >= g_gpu_ctx.cmd_buffer_count || !g_gpu_ctx.cmd_buffers[ci].alive) return val_nil();
+
+    VkCommandBufferInheritanceInfo inherit = {0};
+    inherit.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+    if (rp >= 0 && rp < g_gpu_ctx.render_pass_count && g_gpu_ctx.render_passes[rp].alive)
+        inherit.renderPass = g_gpu_ctx.render_passes[rp].render_pass;
+    inherit.subpass = (uint32_t)subpass;
+    if (fb >= 0 && fb < g_gpu_ctx.framebuffer_count && g_gpu_ctx.framebuffers[fb].alive)
+        inherit.framebuffer = g_gpu_ctx.framebuffers[fb].framebuffer;
+
+    VkCommandBufferBeginInfo bi = {0};
+    bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    bi.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+    bi.pInheritanceInfo = &inherit;
+    vkBeginCommandBuffer(g_gpu_ctx.cmd_buffers[ci].cmd, &bi);
+    return val_nil();
+}
+
+// gpu.cmd_execute_commands(primary, secondary_array) -> nil
+static Value gpu_cmd_execute_commands(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 2) return val_nil();
+    int pi = (int)AS_NUMBER(args[0]);
+    if (pi < 0 || pi >= g_gpu_ctx.cmd_buffer_count || !g_gpu_ctx.cmd_buffers[pi].alive) return val_nil();
+    if (!IS_ARRAY(args[1])) return val_nil();
+
+    ArrayValue* arr = args[1].as.array;
+    VkCommandBuffer cmds[16] = {0};
+    int count = arr->count > 16 ? 16 : arr->count;
+    for (int i = 0; i < count; i++) {
+        int si = (int)AS_NUMBER(arr->elements[i]);
+        if (si >= 0 && si < g_gpu_ctx.cmd_buffer_count && g_gpu_ctx.cmd_buffers[si].alive)
+            cmds[i] = g_gpu_ctx.cmd_buffers[si].cmd;
+    }
+    vkCmdExecuteCommands(g_gpu_ctx.cmd_buffers[pi].cmd, (uint32_t)count, cmds);
+    return val_nil();
+}
+
+// ============================================================================
+// Queue ownership transfer barrier
+// ============================================================================
+
+// gpu.cmd_queue_transfer_barrier(cmd, image, src_family, dst_family, old_layout, new_layout) -> nil
+static Value gpu_cmd_queue_transfer(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 6) return val_nil();
+    int ci = (int)AS_NUMBER(args[0]);
+    int img_i = (int)AS_NUMBER(args[1]);
+    if (ci < 0 || ci >= g_gpu_ctx.cmd_buffer_count || !g_gpu_ctx.cmd_buffers[ci].alive) return val_nil();
+    if (img_i < 0 || img_i >= g_gpu_ctx.image_count || !g_gpu_ctx.images[img_i].alive) return val_nil();
+
+    VkImageMemoryBarrier barrier = {0};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.srcQueueFamilyIndex = (uint32_t)AS_NUMBER(args[2]);
+    barrier.dstQueueFamilyIndex = (uint32_t)AS_NUMBER(args[3]);
+    barrier.oldLayout = translate_layout((int)AS_NUMBER(args[4]));
+    barrier.newLayout = translate_layout((int)AS_NUMBER(args[5]));
+    barrier.image = g_gpu_ctx.images[img_i].image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+
+    vkCmdPipelineBarrier(g_gpu_ctx.cmd_buffers[ci].cmd,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0, 0, NULL, 0, NULL, 1, &barrier);
+    return val_nil();
+}
+
+// gpu.graphics_family() -> number
+static Value gpu_graphics_family_fn(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number(g_gpu_ctx.graphics_family);
+}
+
+// gpu.compute_family() -> number
+static Value gpu_compute_family_fn(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number(g_gpu_ctx.compute_family);
+}
+
+// ============================================================================
+// Allocate multiple descriptor sets at once
+// ============================================================================
+
+// gpu.allocate_descriptor_sets(pool, layout, count) -> array of handles
+static Value gpu_allocate_descriptor_sets(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 3) return val_array();
+    int pool_idx = (int)AS_NUMBER(args[0]);
+    int layout_idx = (int)AS_NUMBER(args[1]);
+    int count = (int)AS_NUMBER(args[2]);
+    if (count > 64) count = 64;
+
+    if (pool_idx < 0 || pool_idx >= g_gpu_ctx.desc_pool_count || !g_gpu_ctx.desc_pools[pool_idx].alive) return val_array();
+    if (layout_idx < 0 || layout_idx >= g_gpu_ctx.desc_layout_count || !g_gpu_ctx.desc_layouts[layout_idx].alive) return val_array();
+
+    VkDescriptorSetLayout layouts[64];
+    for (int i = 0; i < count; i++) layouts[i] = g_gpu_ctx.desc_layouts[layout_idx].layout;
+
+    VkDescriptorSet sets[64];
+    VkDescriptorSetAllocateInfo ai = {0};
+    ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    ai.descriptorPool = g_gpu_ctx.desc_pools[pool_idx].pool;
+    ai.descriptorSetCount = (uint32_t)count;
+    ai.pSetLayouts = layouts;
+
+    if (vkAllocateDescriptorSets(g_gpu_ctx.device, &ai, sets) != VK_SUCCESS) return val_array();
+
+    Value result = val_array();
+    for (int i = 0; i < count; i++) {
+        int idx = alloc_desc_sets();
+        if (idx >= 0) {
+            g_gpu_ctx.desc_sets[idx].set = sets[i];
+            g_gpu_ctx.desc_sets[idx].alive = 1;
+            array_push(&result, val_number(idx));
+        }
+    }
+    return result;
+}
+
+// ============================================================================
 // P2: Uniform Buffer Objects
 // ============================================================================
 
@@ -4024,6 +4242,28 @@ static Value gpu_window_size(int argCount, Value* args) {
     return d;
 }
 
+// gpu.mouse_delta() -> dict {dx, dy} (frame-to-frame movement)
+static double g_mouse_last_x = 0, g_mouse_last_y = 0;
+static int g_mouse_delta_initialized = 0;
+static Value gpu_mouse_delta(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (!g_window) return val_nil();
+    double mx, my;
+    glfwGetCursorPos(g_window, &mx, &my);
+    double dx = 0, dy = 0;
+    if (g_mouse_delta_initialized) {
+        dx = mx - g_mouse_last_x;
+        dy = my - g_mouse_last_y;
+    }
+    g_mouse_last_x = mx;
+    g_mouse_last_y = my;
+    g_mouse_delta_initialized = 1;
+    Value d = val_dict();
+    dict_set(&d, "dx", val_number(dx));
+    dict_set(&d, "dy", val_number(dy));
+    return d;
+}
+
 // gpu.set_title(title) -> nil
 static Value gpu_set_title(int argCount, Value* args) {
     if (!g_window || argCount < 1 || !IS_STRING(args[0])) return val_nil();
@@ -4581,6 +4821,28 @@ Module* create_graphics_module(ModuleCache* cache) {
     // --- P11: MRT render pass ---
     env_define(e, "create_render_pass_mrt", 22, val_native(gpu_create_render_pass_mrt));
 
+    // Error propagation
+    env_define(e, "last_error", 10, val_native(gpu_last_error));
+
+    // Descriptor sub-buffer binding
+    env_define(e, "update_descriptor_range", 23, val_native(gpu_update_descriptor_range));
+
+    // Pipeline cache
+    env_define(e, "create_pipeline_cache", 21, val_native(gpu_create_pipeline_cache));
+
+    // Secondary command buffers
+    env_define(e, "create_secondary_command_buffer", 31, val_native(gpu_create_secondary_cmd));
+    env_define(e, "begin_secondary", 15, val_native(gpu_begin_secondary));
+    env_define(e, "cmd_execute_commands", 20, val_native(gpu_cmd_execute_commands));
+
+    // Queue ownership
+    env_define(e, "cmd_queue_transfer_barrier", 26, val_native(gpu_cmd_queue_transfer));
+    env_define(e, "graphics_family", 15, val_native(gpu_graphics_family_fn));
+    env_define(e, "compute_family", 14, val_native(gpu_compute_family_fn));
+
+    // Batch descriptor allocation
+    env_define(e, "allocate_descriptor_sets", 24, val_native(gpu_allocate_descriptor_sets));
+
     // --- Commands ---
     env_define(e, "create_command_pool", 19, val_native(gpu_create_command_pool));
     env_define(e, "create_command_buffer", 21, val_native(gpu_create_command_buffer));
@@ -4644,6 +4906,7 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "get_time", 8, val_native(gpu_get_time));
     env_define(e, "window_size", 11, val_native(gpu_window_size));
     env_define(e, "set_title", 9, val_native(gpu_set_title));
+    env_define(e, "mouse_delta", 11, val_native(gpu_mouse_delta));
     env_define(e, "window_resized", 14, val_native(gpu_window_resized));
 
     // Platform selection

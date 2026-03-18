@@ -509,6 +509,9 @@ test-selfhost: $(TARGET)
 	@echo "=== Self-Hosted GPU Features 1-18 Tests ==="
 	@./$(TARGET) src/sage/test/test_gpu_features.sage 2>&1 | tail -3
 	@echo ""
+	@echo "=== Self-Hosted GPU Engine Tests ==="
+	@./$(TARGET) src/sage/test/test_gpu_engine.sage 2>&1 | tail -3
+	@echo ""
 	@echo "✅ All self-hosted tests complete"
 
 # Run individual self-hosted test suites
