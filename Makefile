@@ -600,6 +600,10 @@ test-all: test test-selfhost
 # Cleanup
 # ============================================================================
 
+# Interactive build configuration
+menuconfig:
+	@bash scripts/menuconfig.sh
+
 # Compile all GLSL shaders to SPIR-V
 shaders:
 	@echo "Compiling shaders..."
@@ -732,4 +736,4 @@ help:
         test-selfhost-llvm-backend test-selfhost-codegen test-selfhost-compiler \
         test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
         test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
-        test-all stats help shaders
+        test-all stats help shaders menuconfig
