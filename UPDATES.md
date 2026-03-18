@@ -1,5 +1,59 @@
 # SageLang Updates
 
+## March 18, 2026 - Phase 15: Vulkan Graphics Library + Self-Hosted Ports
+
+### GPU Graphics Library (Phase 15)
+
+The Sage GPU graphics library provides professional-grade Vulkan compute and graphics capabilities through a 3-layer architecture: a C native module (`import gpu`), ergonomic Sage builders (`lib/vulkan.sage`), and high-level helpers (`lib/gpu.sage`).
+
+#### C Native Module (`src/c/graphics.c`, ~2600 lines)
+
+- **Handle-table design**: All Vulkan objects stored internally, exposed to Sage via integer handles
+- **Conditional compilation**: `SAGE_HAS_VULKAN` auto-detected via pkg-config (or `VULKAN=1`); compiles as stubs without Vulkan SDK
+- **Context lifecycle**: Instance creation with validation layers, physical device selection (prefers discrete GPU), queue family detection (dedicated compute/transfer)
+- **Buffers**: Create/destroy, upload/download float arrays, auto-map host-visible memory
+- **Images**: 1D/2D/3D with auto image view creation, 13 formats (RGBA8, RGBA16F, RGBA32F, R32F, depth, etc.)
+- **Samplers**: Nearest/linear filter, repeat/clamp/mirror address modes
+- **Shaders**: SPIR-V file loading
+- **Descriptors**: Layout from dict arrays, pool allocation, buffer/image/sampler binding
+- **Compute pipelines**: Shader + layout creation, cmd_dispatch
+- **Graphics pipelines**: Full config dict (vertex input, rasterization state, blend, depth test, topology)
+- **Render passes & framebuffers**: Attachment config with auto depth detection
+- **Commands**: Pool/buffer creation, recording, bind/dispatch/draw, barriers, copy operations
+- **Synchronization**: Fences (signaled/unsignaled), semaphores, wait/reset
+- **Submission**: Graphics queue and dedicated compute queue support
+- **Constants**: 100+ Vulkan enum constants (buffer usage, memory properties, formats, shader stages, topology, blend factors, pipeline stages, access flags, layouts, etc.)
+
+#### Sage-Level Libraries
+
+- **`lib/vulkan.sage`**: Builder-pattern API
+  - String-based resource creation: `buffer("storage")`, `shader("compute.spv", "compute")`
+  - Descriptor helpers: `binding_desc()`, `bind_buffer()`, `bind_storage_image()`
+  - One-liner compute pipeline creation: `compute_pipeline_simple()`
+  - Barrier helpers: `compute_barrier()`, `compute_to_host()`, `image_to_general()`
+- **`lib/gpu.sage`**: High-level helpers
+  - `run_compute(shader, input, output_size, wg_x, wg_y, wg_z)` — fire-and-forget GPU compute
+  - `create_ping_pong()` / `ping_pong_swap()` — double-buffered compute management
+  - `print_info()` — formatted device capabilities output
+
+### New Self-Hosted Ports
+
+Three additional C modules ported to Sage:
+
+| C Source | Sage Port | Tests |
+|----------|-----------|-------|
+| `diagnostic.c` (213 lines) | `diagnostic.sage` — Token display names, Rust/Elm-style diagnostic formatting | 53 |
+| `gc.c` (738 lines) | `gc.sage` — GC stats/control API, threshold computation | 45 |
+| `heartbeat.c` (210 lines) | `heartbeat.sage` — Cooperative heartbeat system, health check aggregator | 44 |
+
+### Build & Test
+
+- `VULKAN` Make variable: `auto` (default, pkg-config detection), `1` (force), `0` (disable)
+- `-lvulkan` added to LDFLAGS when Vulkan SDK detected
+- New Makefile targets: `test-selfhost-diagnostic`, `test-selfhost-gc`, `test-selfhost-heartbeat`, `test-selfhost-gpu`
+- **1411+ self-hosted tests passing** (104 GPU + 53 diagnostic + 45 GC + 44 heartbeat new)
+- All existing tests unaffected
+
 ## March 17, 2026 - LLVM Backend: Runtime Library & Compile-to-Executable
 
 The LLVM backend now produces fully working executables via `--compile-llvm`. A new standalone C runtime library implements all sage_rt_* functions, and numerous backend fixes bring LLVM IR generation to parity with the C backend for core language features.

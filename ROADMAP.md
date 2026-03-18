@@ -553,6 +553,47 @@ Note: `-DBUILD_SAGE=ON` and the default C build are mutually exclusive. With `BU
 
 ---
 
+### Phase 15: Vulkan Graphics Library
+**Status**: ✅ **COMPLETE** (March 18, 2026)
+
+Professional GPU compute and graphics library for SageLang.
+
+#### Architecture
+- [x] 3-layer design: C native module (`gpu`) → `lib/vulkan.sage` (builders) → `lib/gpu.sage` (high-level)
+- [x] Handle-table resource management (all Vulkan objects stored internally, exposed via integer handles)
+- [x] Conditional compilation: `SAGE_HAS_VULKAN` auto-detected via pkg-config
+- [x] Graceful stub mode without Vulkan SDK (constants available, functions return errors)
+
+#### C Native Module (`import gpu`)
+- [x] Instance creation with validation layer support and debug callback
+- [x] Physical device selection (prefers discrete GPU) and logical device creation
+- [x] Queue family detection (dedicated compute/transfer queues when available)
+- [x] Buffer lifecycle: create, destroy, upload (float arrays), download, auto-map host-visible
+- [x] Image support: 1D/2D/3D, 13 formats (RGBA8/16F/32F, depth, etc.), auto image view creation
+- [x] Sampler creation with configurable filter and address modes
+- [x] SPIR-V shader module loading from file
+- [x] Descriptor set layouts, pools, and sets with buffer/image/sampler binding
+- [x] Compute pipeline creation (shader + layout → dispatch)
+- [x] Graphics pipeline creation (full config: vertex input, rasterization, blend, depth, topology)
+- [x] Render pass and framebuffer creation with auto depth detection
+- [x] Command pool/buffer lifecycle, recording, and all command types
+- [x] Synchronization: fences (signaled/unsignaled), semaphores, wait/reset
+- [x] Queue submission: graphics queue and dedicated compute queue
+- [x] 100+ Vulkan enum constants exported (buffer usage, memory, formats, stages, topology, blend, etc.)
+
+#### Sage-Level Libraries
+- [x] `lib/vulkan.sage`: String-based builder API (`buffer("storage")`, `shader("path", "compute")`)
+- [x] One-liner compute pipeline creation, barrier helpers (compute→host, image layout transitions)
+- [x] `lib/gpu.sage`: High-level `run_compute()` for fire-and-forget GPU compute
+- [x] Ping-pong buffer management for double-buffered compute
+- [x] Device info printer
+
+#### Testing
+- [x] 104 GPU tests (constants, API availability, flag composition, init/shutdown, buffer CRUD, sync)
+- [x] All 1411+ self-hosted tests passing
+
+---
+
 ## 🔮 Future Directions
 
 ### Package Manager
@@ -576,15 +617,27 @@ Note: `-DBUILD_SAGE=ON` and the default C build are mutually exclusive. With `BU
 
 ## 📊 Progress Metrics
 
-- **Phases Completed**: 14/14 (100%)
-- **Test Suite**: 112 interpreter tests + 28 compiler tests + 178 self-host tests + 88 JSON tests, 100% pass rate
-- **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64)
+- **Phases Completed**: 15/15 (100%)
+- **Test Suite**: 144 interpreter tests + 28 compiler tests + 1411 self-host tests + 88 JSON tests, 100% pass rate
+- **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics
 - **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
 - **Self-Hosting**: Lexer, parser, and interpreter ported to Sage with full bootstrap
+- **GPU**: Vulkan graphics library with compute and graphics pipeline support
 
 ---
 
 ## 📝 Recent Updates
+
+### March 18, 2026
+
+- **Phase 15 Complete: Vulkan Graphics Library**
+- 3-layer GPU library: C native `gpu` module + `lib/vulkan.sage` builders + `lib/gpu.sage` high-level
+- Handle-table Vulkan backend (~2600 lines C) with conditional compilation
+- Full resource lifecycle: buffers, images, samplers, shaders, descriptors, pipelines, commands, sync
+- Compute and graphics pipeline support with 100+ constants
+- Sage-level ergonomic API: string-based builders, one-liner compute dispatch, ping-pong buffers
+- 104 new GPU tests; 1411+ self-hosted tests passing
+- Also ported: diagnostic.sage (53 tests), gc.sage (45 tests), heartbeat.sage (44 tests)
 
 ### March 9, 2026
 
@@ -706,10 +759,11 @@ We welcome contributions at all phases! Here's how you can help:
 
 ### Current Priorities
 
-1. **Backend Coverage** - Expand LLVM and native backends for class/module/async support
-2. **Package Manager** - CLI for dependency management
-3. **Self-Hosted Compiler** - Extend self-hosted interpreter to emit C/LLVM/assembly
-4. **Ecosystem Growth** - Standard library expansion, community building
+1. **GPU/Graphics** - Windowing (GLFW integration), swapchain support, shader hot-reload
+2. **Backend Coverage** - Expand LLVM and native backends for class/module/async support
+3. **Package Manager** - CLI for dependency management
+4. **Self-Hosted Compiler** - Extend self-hosted interpreter to emit C/LLVM/assembly
+5. **Ecosystem Growth** - Standard library expansion, community building
 
 ### Getting Started
 1. Check the current phase status above

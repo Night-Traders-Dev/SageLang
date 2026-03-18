@@ -4,7 +4,7 @@
 
 ![SageLang Logo](assets/SageLang.jpg)
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR with runtime library, native assembly), and a **self-hosted interpreter** written in Sage itself.
+Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR with runtime library, native assembly), and a **self-hosted interpreter** written in Sage itself, and a **Vulkan graphics library** for GPU compute and rendering.
 
 ## Codebase Metrics
 
@@ -119,6 +119,25 @@ The compiled VM recipe is now charted as a first-class lane on the default workl
 - **`http`**: HTTP/HTTPS client via libcurl (get, post, put, delete, patch, head, download, escape, unescape) — returns `{status, body, headers}` dicts with options for timeout, redirects, SSL verification, custom headers
 - **`ssl`**: OpenSSL bindings (context, load_cert, wrap, connect, accept, send, recv, shutdown, free, free_context, error, peer_cert, set_verify)
 
+### GPU Graphics Library (Vulkan)
+
+- **`gpu`**: Full Vulkan backend with handle-based resource management
+  - Context: `gpu.initialize(name, validation?)`, `gpu.shutdown()`, `gpu.device_name()`, `gpu.device_limits()`
+  - Buffers: `gpu.create_buffer()`, `gpu.buffer_upload()`, `gpu.buffer_download()`, `gpu.destroy_buffer()`
+  - Images: `gpu.create_image()` (1D/2D/3D, 13 formats), auto image view creation
+  - Samplers: `gpu.create_sampler()` with filter and address mode control
+  - Shaders: `gpu.load_shader()` for SPIR-V modules
+  - Descriptors: layout creation, pool allocation, buffer/image/sampler binding
+  - Compute pipelines: `gpu.create_compute_pipeline()`, `gpu.cmd_dispatch()`
+  - Graphics pipelines: full config (vertex input, rasterization, blend, depth, topology)
+  - Render passes & framebuffers: attachment config with auto depth detection
+  - Commands: record, bind, dispatch, draw, barriers, copy operations
+  - Synchronization: fences, semaphores, queue submission (graphics + compute)
+  - 100+ Vulkan enum constants exported
+  - Auto-detected via pkg-config; compiles as stubs without Vulkan SDK
+- **`lib/vulkan.sage`**: Ergonomic builder API — `vulkan.buffer("storage")`, `vulkan.shader("compute.spv", "compute")`
+- **`lib/gpu.sage`**: High-level helpers — `run_compute()` for one-shot GPU compute, ping-pong buffers, device info
+
 ### JSON Library (cJSON Port)
 
 - **`lib/json.sage`**: Complete 1:1 port of Dave Gamble's [cJSON](https://github.com/DaveGamble/cJSON) library (~1,050 lines)
@@ -146,6 +165,13 @@ async proc compute(x):
 
 let future = compute(42)
 print await future     # 1764
+
+import gpu
+gpu.initialize("My App", true)
+print gpu.device_name()
+let buf = gpu.create_buffer(1024, gpu.BUFFER_STORAGE, gpu.MEMORY_HOST_VISIBLE | gpu.MEMORY_HOST_COHERENT)
+gpu.buffer_upload(buf, [1.0, 2.0, 3.0, 4.0])
+gpu.shutdown()
 ```
 
 ### Developer Tooling
@@ -181,6 +207,8 @@ cd src/sage && ../../sage sage.sage program.sage
 - **`assert`**: assertion helpers for writing Sage test scripts
 - **`utils`**: general helpers like `default_if_nil`, `swap`, `head`, `last`, and `repeat_value`
 - **`json`**: Complete 1:1 cJSON port — parse, print, create, query, modify JSON trees (88 tests)
+- **`vulkan`**: Ergonomic Vulkan builder API (string-based buffer/shader/pipeline creation, barrier helpers)
+- **`gpu`**: High-level GPU compute helpers (one-shot compute dispatch, ping-pong buffers, device info)
 
 Example:
 ```sage
@@ -290,7 +318,8 @@ make cmake-pico            # Setup a Pico CMake build
 | -------- | ------- | ------ |
 | `CC` | `gcc` | C compiler used for `make` builds |
 | `CFLAGS` | `-std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L` | Base compile flags for the desktop build |
-| `LDFLAGS` | `-lm -lpthread -ldl -lcurl -lssl -lcrypto` | Desktop link flags; switches to `-lm` when `PICO_BUILD` is set |
+| `LDFLAGS` | `-lm -lpthread -ldl -lcurl -lssl -lcrypto` | Desktop link flags; `-lvulkan` added when Vulkan SDK detected; switches to `-lm` when `PICO_BUILD` is set |
+| `VULKAN` | `auto` | `auto` detects via pkg-config, `1` forces Vulkan, `0` disables |
 | `DEBUG` | `0` | `DEBUG=1` adds `-g -O0 -DDEBUG` |
 | `PREFIX` | `/usr/local` | Install prefix for `make install` |
 | `FILE` | unset | Required by `make sage-boot FILE=<path>` |
@@ -598,6 +627,7 @@ gc_enable()
 - [x] **Phase 11: Concurrency & Stdlib** (Native modules, threads, async/await, backend expansion) ✅
 - [x] **Phase 12: Tooling** (REPL, Formatter, Linter, Syntax Highlighting, LSP) ✅
 - [x] **Phase 13: Self-Hosting** (Lexer, parser, interpreter ported to Sage, full bootstrap) ✅
+- [x] **Phase 15: Vulkan Graphics Library** (GPU module, compute/graphics pipelines, resource management, Sage-level builders) ✅
 - [x] **Phase 14: Security & Performance Audit** ✅
   - [x] Thread-safe GC (mutex around allocation and collection)
   - [x] SSL handles as `VAL_POINTER` (64-bit safe, double-free prevention)
@@ -651,13 +681,13 @@ proc write_memory(ptr: *mut u8, value: u8):
 ## 📊 Project Stats
 
 - **Language**: C
-- **Phases Completed**: 14/14 (100%)
-- **Test Suite**: 144 interpreter + 28 compiler + 88 JSON + 1165 self-hosted tests (1425+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, and CLI
-- **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64)
+- **Phases Completed**: 15/15 (100%)
+- **Test Suite**: 144 interpreter + 28 compiler + 88 JSON + 1411 self-hosted tests (1671+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, and GPU
+- **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
-- **Status**: Active development with a working self-hosted interpreter
+- **Status**: Active development with a working self-hosted interpreter and GPU graphics library
 - **License**: MIT
-- **Current Version**: v0.14.0-dev
+- **Current Version**: v0.15.0-dev
 
 ## 💾 Project Structure
 
@@ -671,7 +701,8 @@ sage/
 │   ├── value.h       # Type system (FunctionValue with closures)
 │   ├── gc.h          # Garbage collection
 │   ├── module.h      # Module system (Phase 8)
-│   └── interpreter.h # Evaluator (ExecResult with exceptions & yield)
+│   ├── interpreter.h # Evaluator (ExecResult with exceptions & yield)
+│   └── graphics.h    # Vulkan GPU module (handle system + API)
 ├── src/              # C implementation
 │   ├── main.c        # Entry point
 │   ├── lexer.c       # Tokenizer (keywords including async/await)
@@ -709,7 +740,9 @@ sage/
 │   ├── stats.sage    # Statistics helpers
 │   ├── assert.sage   # Test assertion helpers
 │   ├── utils.sage    # General utilities
-│   └── json.sage     # cJSON port (1:1 API, 88 tests)
+│   ├── json.sage     # cJSON port (1:1 API, 88 tests)
+│   ├── vulkan.sage   # Ergonomic Vulkan builder API
+│   └── gpu.sage      # High-level GPU compute helpers
 ├── examples/         # Example programs
 │   ├── generators.sage      # Generator demo ✨
 │   ├── exceptions.sage      # Exception handling demo
@@ -724,9 +757,10 @@ sage/
 │   │   ├── interpreter.c  # Tree-walking interpreter
 │   │   ├── compiler.c     # C code generation backend
 │   │   ├── llvm_backend.c # LLVM IR backend
-│   │   ├── llvm_runtime.c # LLVM runtime library (40+ sage_rt_* functions)
+│   │   │   ├── llvm_runtime.c # LLVM runtime library (40+ sage_rt_* functions)
 │   │   ├── codegen.c      # Native assembly backend
-│   │   └── ...            # 24 C source files total
+│   │   ├── graphics.c     # Vulkan GPU module (compute + graphics pipelines)
+│   │   └── ...            # 25 C source files total
 │   └── sage/         # Self-hosted Sage compiler (Phase 13+)
 │       ├── sage.sage     # Bootstrap entry point
 │       ├── token.sage    # Token type definitions
@@ -794,6 +828,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
+- March 18, 2026: Phase 15 Complete - Vulkan graphics library (GPU module with compute/graphics pipelines, 100+ constants, Sage builder APIs, 104 tests)
 - March 17, 2026: LLVM Backend - Standalone runtime library (40+ sage_rt_* functions), ABI fix, local variable allocation, block termination tracking; --compile-llvm now produces working executables
 - March 17, 2026: Phase 14 Complete - Security & performance audit (30 fixes across 14 files, all 1425 tests passing)
 - March 9, 2026: Networking modules (socket, tcp, http, ssl) + cJSON port (88 tests)
