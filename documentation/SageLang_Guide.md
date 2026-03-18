@@ -2383,6 +2383,266 @@ SageLang offers a practical balance between ease of use and systems-level contro
 
 ---
 
+## GPU Graphics (Vulkan)
+
+SageLang includes a professional-grade Vulkan graphics library for GPU compute and rendering. The library is built in three layers:
+
+1. **C native module** (`import gpu`) -- Low-level Vulkan operations, handle-based API
+2. **`lib/vulkan.sage`** -- Ergonomic builder API with string-based helpers
+3. **`lib/gpu.sage`** -- High-level one-liner helpers (fire-and-forget compute, ping-pong buffers)
+
+### Build Requirements
+
+Vulkan support is auto-detected at build time via `pkg-config`. GLFW is required for windowed rendering:
+
+```bash
+# Auto-detect (default)
+make
+
+# Force enable/disable
+make VULKAN=1    # Force Vulkan
+make VULKAN=0    # Disable Vulkan
+```
+
+Without the Vulkan SDK, the `gpu` module still loads in stub mode -- all constants are available, functions return errors gracefully.
+
+### Quick Start: Empty Window
+
+```sage
+import gpu
+
+gpu.init_windowed("My App", 800, 600, "Window Title", false)
+print gpu.device_name()
+
+let attach = {}
+attach["format"] = gpu.FORMAT_SWAPCHAIN
+attach["load_op"] = gpu.LOAD_CLEAR
+attach["store_op"] = gpu.STORE_STORE
+attach["initial_layout"] = gpu.LAYOUT_UNDEFINED
+attach["final_layout"] = gpu.LAYOUT_PRESENT
+let rp = gpu.create_render_pass([attach])
+let framebuffers = gpu.create_swapchain_framebuffers(rp)
+
+let cmd_pool = gpu.create_command_pool()
+let cmd = gpu.create_command_buffer(cmd_pool)
+let img_sem = gpu.create_semaphore()
+let rdr_sem = gpu.create_semaphore()
+let fence = gpu.create_fence(true)
+
+while gpu.window_should_close() == false:
+    gpu.poll_events()
+    gpu.wait_fence(fence)
+    gpu.reset_fence(fence)
+    let idx = gpu.acquire_next_image(img_sem)
+    gpu.begin_commands(cmd)
+    gpu.cmd_begin_render_pass(cmd, rp, framebuffers[idx], [[0.1, 0.1, 0.2, 1.0]])
+    gpu.cmd_end_render_pass(cmd)
+    gpu.end_commands(cmd)
+    gpu.submit_with_sync(cmd, img_sem, rdr_sem, fence)
+    gpu.present(idx, rdr_sem)
+
+gpu.device_wait_idle()
+gpu.shutdown_windowed()
+```
+
+### Quick Start: Triangle
+
+```sage
+import gpu
+
+gpu.init_windowed("Triangle", 800, 600, "Sage Triangle", false)
+
+# Load compiled SPIR-V shaders
+let vert = gpu.load_shader("triangle.vert.spv", gpu.STAGE_VERTEX)
+let frag = gpu.load_shader("triangle.frag.spv", gpu.STAGE_FRAGMENT)
+
+# Render pass with swapchain format
+let attach = {}
+attach["format"] = gpu.FORMAT_SWAPCHAIN
+attach["load_op"] = gpu.LOAD_CLEAR
+attach["store_op"] = gpu.STORE_STORE
+attach["initial_layout"] = gpu.LAYOUT_UNDEFINED
+attach["final_layout"] = gpu.LAYOUT_PRESENT
+let rp = gpu.create_render_pass([attach])
+
+# Graphics pipeline
+let layout = gpu.create_pipeline_layout([], 0)
+let cfg = {}
+cfg["layout"] = layout
+cfg["render_pass"] = rp
+cfg["vertex_shader"] = vert
+cfg["fragment_shader"] = frag
+cfg["topology"] = gpu.TOPO_TRIANGLE_LIST
+cfg["cull_mode"] = gpu.CULL_NONE
+let pipeline = gpu.create_graphics_pipeline(cfg)
+
+# Render loop draws 3 hardcoded vertices
+# gpu.cmd_bind_graphics_pipeline(cmd, pipeline)
+# gpu.cmd_draw(cmd, 3, 1, 0, 0)
+```
+
+### GPU Module API Reference
+
+#### Context Lifecycle
+
+| Function | Description |
+|----------|-------------|
+| `gpu.has_vulkan()` | Returns `true` if Vulkan is available |
+| `gpu.has_window` | `true` if GLFW windowed mode is available |
+| `gpu.initialize(name, validation?)` | Initialize headless Vulkan context |
+| `gpu.init_windowed(name, w, h, title, validation?)` | Initialize windowed Vulkan + GLFW + swapchain |
+| `gpu.shutdown()` | Destroy headless context |
+| `gpu.shutdown_windowed()` | Destroy window + context |
+| `gpu.device_name()` | GPU device name string |
+| `gpu.device_limits()` | Dict of device limits |
+
+#### Windowing
+
+| Function | Description |
+|----------|-------------|
+| `gpu.window_should_close()` | Check if window close requested |
+| `gpu.poll_events()` | Process window events |
+| `gpu.swapchain_extent()` | Dict `{width, height}` |
+| `gpu.swapchain_image_count()` | Number of swapchain images |
+| `gpu.acquire_next_image(semaphore)` | Get next image index (-1 on error) |
+| `gpu.present(image_index, wait_semaphore)` | Present rendered image |
+| `gpu.create_swapchain_framebuffers(render_pass)` | Array of framebuffer handles |
+
+#### Resources
+
+| Function | Description |
+|----------|-------------|
+| `gpu.create_buffer(size, usage, memory)` | Create GPU buffer, returns handle |
+| `gpu.buffer_upload(handle, float_array)` | Upload data to buffer |
+| `gpu.buffer_download(handle)` | Download data from buffer |
+| `gpu.create_image(w, h, d, format, usage)` | Create GPU image with auto view |
+| `gpu.create_sampler(mag, min, address)` | Create texture sampler |
+| `gpu.load_shader(path, stage)` | Load SPIR-V shader module |
+
+#### Descriptors
+
+| Function | Description |
+|----------|-------------|
+| `gpu.create_descriptor_layout(bindings)` | Create from array of binding dicts |
+| `gpu.create_descriptor_pool(max_sets, sizes)` | Create descriptor pool |
+| `gpu.allocate_descriptor_set(pool, layout)` | Allocate a descriptor set |
+| `gpu.update_descriptor(set, binding, type, resource)` | Bind buffer/image to descriptor |
+| `gpu.update_descriptor_image(set, binding, image, sampler)` | Bind combined image sampler |
+
+#### Pipelines
+
+| Function | Description |
+|----------|-------------|
+| `gpu.create_pipeline_layout(layouts, push_size?, stages?)` | Create pipeline layout |
+| `gpu.create_compute_pipeline(layout, shader)` | Create compute pipeline |
+| `gpu.create_graphics_pipeline(config_dict)` | Create graphics pipeline (see below) |
+| `gpu.create_render_pass(attachments)` | Create render pass |
+| `gpu.create_framebuffer(render_pass, images, w, h)` | Create framebuffer |
+
+Graphics pipeline config dict keys:
+- `layout`, `render_pass`, `vertex_shader`, `fragment_shader` (required)
+- `topology` (default: `TOPO_TRIANGLE_LIST`)
+- `cull_mode`, `front_face`, `polygon_mode`
+- `depth_test`, `depth_write` (booleans)
+- `blend` (boolean, enables alpha blending)
+- `vertex_bindings`, `vertex_attribs` (arrays of dicts)
+
+#### Commands
+
+| Function | Description |
+|----------|-------------|
+| `gpu.create_command_pool()` | Create command pool |
+| `gpu.create_command_buffer(pool)` | Allocate command buffer |
+| `gpu.begin_commands(cmd)` | Begin recording |
+| `gpu.end_commands(cmd)` | End recording |
+| `gpu.cmd_bind_compute_pipeline(cmd, pipe)` | Bind compute pipeline |
+| `gpu.cmd_bind_graphics_pipeline(cmd, pipe)` | Bind graphics pipeline |
+| `gpu.cmd_bind_descriptor_set(cmd, layout, index, set)` | Bind descriptor set |
+| `gpu.cmd_dispatch(cmd, x, y, z)` | Dispatch compute workgroups |
+| `gpu.cmd_push_constants(cmd, layout, stage, data)` | Push constants (float array) |
+| `gpu.cmd_begin_render_pass(cmd, rp, fb, clear)` | Begin render pass |
+| `gpu.cmd_end_render_pass(cmd)` | End render pass |
+| `gpu.cmd_draw(cmd, verts, instances, first_v, first_i)` | Draw call |
+| `gpu.cmd_draw_indexed(cmd, indices, instances, first, offset, first_i)` | Indexed draw |
+| `gpu.cmd_bind_vertex_buffer(cmd, buffer)` | Bind vertex buffer |
+| `gpu.cmd_set_viewport(cmd, x, y, w, h, min_d, max_d)` | Set viewport |
+| `gpu.cmd_set_scissor(cmd, x, y, w, h)` | Set scissor rect |
+| `gpu.cmd_pipeline_barrier(cmd, src, dst, src_acc, dst_acc)` | Memory barrier |
+| `gpu.cmd_image_barrier(cmd, img, old, new, src, dst, s_acc, d_acc)` | Image barrier |
+
+#### Synchronization
+
+| Function | Description |
+|----------|-------------|
+| `gpu.create_fence(signaled?)` | Create fence |
+| `gpu.wait_fence(fence, timeout?)` | Wait for fence |
+| `gpu.reset_fence(fence)` | Reset fence |
+| `gpu.create_semaphore()` | Create semaphore |
+| `gpu.submit(cmd, wait?, signal?, fence?)` | Submit to graphics queue |
+| `gpu.submit_compute(cmd, wait?, signal?, fence?)` | Submit to compute queue |
+| `gpu.submit_with_sync(cmd, wait_sem, signal_sem, fence)` | Full sync submit |
+| `gpu.device_wait_idle()` | Wait for GPU idle |
+
+### Key Constants
+
+```
+# Buffer usage (bitwise OR)
+gpu.BUFFER_STORAGE  gpu.BUFFER_UNIFORM  gpu.BUFFER_VERTEX
+gpu.BUFFER_INDEX    gpu.BUFFER_STAGING  gpu.BUFFER_TRANSFER_SRC
+
+# Memory
+gpu.MEMORY_DEVICE_LOCAL  gpu.MEMORY_HOST_VISIBLE  gpu.MEMORY_HOST_COHERENT
+
+# Formats
+gpu.FORMAT_RGBA8  gpu.FORMAT_RGBA16F  gpu.FORMAT_RGBA32F
+gpu.FORMAT_R32F   gpu.FORMAT_DEPTH32F gpu.FORMAT_SWAPCHAIN
+
+# Shader stages
+gpu.STAGE_VERTEX  gpu.STAGE_FRAGMENT  gpu.STAGE_COMPUTE  gpu.STAGE_ALL
+
+# Descriptor types
+gpu.DESC_STORAGE_BUFFER  gpu.DESC_UNIFORM_BUFFER
+gpu.DESC_SAMPLED_IMAGE   gpu.DESC_STORAGE_IMAGE  gpu.DESC_COMBINED_SAMPLER
+
+# Topology
+gpu.TOPO_TRIANGLE_LIST  gpu.TOPO_LINE_LIST  gpu.TOPO_POINT_LIST
+
+# Pipeline stages (barriers)
+gpu.PIPE_TOP  gpu.PIPE_COMPUTE  gpu.PIPE_TRANSFER  gpu.PIPE_FRAGMENT
+
+# Access flags (barriers)
+gpu.ACCESS_SHADER_READ  gpu.ACCESS_SHADER_WRITE
+gpu.ACCESS_TRANSFER_READ  gpu.ACCESS_HOST_READ
+```
+
+### Demos
+
+Three demo programs are included in `examples/`:
+
+| Demo | File | Description |
+|------|------|-------------|
+| Empty Window | `examples/gpu_window.sage` | Creates a window with cycling clear color |
+| Triangle | `examples/gpu_triangle.sage` | Classic colored triangle via vertex/fragment shaders |
+| 3D Hello World | `examples/gpu_hello3d.sage` | Rotating "HELLO WORLD" text rendered as 3D line segments |
+
+Run them with:
+```bash
+./sage examples/gpu_window.sage
+./sage examples/gpu_triangle.sage
+./sage examples/gpu_hello3d.sage
+```
+
+Shaders are pre-compiled SPIR-V files in `examples/shaders/`. Recompile with:
+```bash
+cd examples/shaders
+glslc triangle.vert -o triangle.vert.spv
+glslc triangle.frag -o triangle.frag.spv
+glslc text3d.vert -o text3d.vert.spv
+glslc text3d.frag -o text3d.frag.spv
+```
+
+---
+
 ## Appendix: Quick Reference
 
 ### Keywords

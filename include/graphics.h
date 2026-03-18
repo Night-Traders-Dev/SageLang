@@ -73,6 +73,7 @@
 #define SAGE_FORMAT_R32U        10
 #define SAGE_FORMAT_RG16F       11
 #define SAGE_FORMAT_R16F        12
+#define SAGE_FORMAT_SWAPCHAIN   99   // Resolves to actual swapchain format at runtime
 
 // Image usage flags
 #define SAGE_IMAGE_SAMPLED      0x01

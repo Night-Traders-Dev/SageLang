@@ -25,6 +25,13 @@ ifeq ($(VULKAN_CHECK),yes)
     CFLAGS += -DSAGE_HAS_VULKAN
     LDFLAGS += -lvulkan
     $(info Vulkan support enabled)
+    # GLFW detection for windowed mode
+    GLFW_CHECK := $(shell pkg-config --exists glfw3 2>/dev/null && echo yes || echo no)
+    ifeq ($(GLFW_CHECK),yes)
+        CFLAGS += -DSAGE_HAS_GLFW $(shell pkg-config --cflags glfw3)
+        LDFLAGS += $(shell pkg-config --libs glfw3)
+        $(info GLFW windowed mode enabled)
+    endif
 else
     $(info Vulkan support disabled (stub mode))
 endif

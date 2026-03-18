@@ -13,6 +13,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef SAGE_HAS_GLFW
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+#endif
+
 // ============================================================================
 // Stub mode: when Vulkan SDK is not available
 // ============================================================================
@@ -208,6 +213,9 @@ Module* create_graphics_module(ModuleCache* cache) {
 
 SageGPUContext g_gpu_ctx = {0};
 
+// Swapchain format (set by init_windowed, used by FORMAT_SWAPCHAIN)
+static VkFormat g_active_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
+
 // ============================================================================
 // Handle Table Helpers
 // ============================================================================
@@ -311,6 +319,7 @@ VkFormat sage_gpu_translate_format(int sage_format) {
         case SAGE_FORMAT_R32U:       return VK_FORMAT_R32_UINT;
         case SAGE_FORMAT_RG16F:      return VK_FORMAT_R16G16_SFLOAT;
         case SAGE_FORMAT_R16F:       return VK_FORMAT_R16_SFLOAT;
+        case SAGE_FORMAT_SWAPCHAIN:  return g_active_swapchain_format;
         default: return VK_FORMAT_R8G8B8A8_UNORM;
     }
 }
@@ -2365,6 +2374,475 @@ static Value gpu_device_wait_idle(int argCount, Value* args) {
 }
 
 // ============================================================================
+// Window & Swapchain (requires GLFW)
+// ============================================================================
+
+#ifdef SAGE_HAS_GLFW
+
+static GLFWwindow* g_window = NULL;
+static VkSurfaceKHR g_surface = VK_NULL_HANDLE;
+static VkSwapchainKHR g_swapchain = VK_NULL_HANDLE;
+static VkImage* g_swapchain_images = NULL;
+static VkImageView* g_swapchain_views = NULL;
+static uint32_t g_swapchain_image_count = 0;
+static VkFormat g_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
+static uint32_t g_swapchain_width = 0;
+static uint32_t g_swapchain_height = 0;
+
+static void glfw_error_callback(int error, const char* description) {
+    fprintf(stderr, "GLFW error %d: %s\n", error, description);
+}
+
+// gpu.create_window(width, height, title) -> bool
+static Value gpu_create_window(int argCount, Value* args) {
+    if (argCount < 3) return val_bool(0);
+    int w = IS_NUMBER(args[0]) ? (int)AS_NUMBER(args[0]) : 800;
+    int h = IS_NUMBER(args[1]) ? (int)AS_NUMBER(args[1]) : 600;
+    const char* title = IS_STRING(args[2]) ? AS_STRING(args[2]) : "Sage GPU";
+
+    glfwSetErrorCallback(glfw_error_callback);
+#ifdef GLFW_PLATFORM_X11
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+#endif
+    if (!glfwInit()) {
+        fprintf(stderr, "gpu: glfwInit failed\n");
+        return val_bool(0);
+    }
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    g_window = glfwCreateWindow(w, h, title, NULL, NULL);
+    if (!g_window) {
+        fprintf(stderr, "gpu: window creation failed\n");
+        glfwTerminate();
+        return val_bool(0);
+    }
+    return val_bool(1);
+}
+
+// gpu.destroy_window() -> nil
+static Value gpu_destroy_window(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (g_window) {
+        glfwDestroyWindow(g_window);
+        g_window = NULL;
+    }
+    glfwTerminate();
+    return val_nil();
+}
+
+// gpu.window_should_close() -> bool
+static Value gpu_window_should_close(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (!g_window) return val_bool(1);
+    return val_bool(glfwWindowShouldClose(g_window));
+}
+
+// gpu.poll_events() -> nil
+static Value gpu_poll_events(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    glfwPollEvents();
+    return val_nil();
+}
+
+// gpu.init_windowed(app_name, width, height, title, validation?) -> bool
+// Combines window creation + Vulkan init with surface support
+static Value gpu_init_windowed(int argCount, Value* args) {
+    if (argCount < 4) return val_bool(0);
+    const char* app_name = IS_STRING(args[0]) ? AS_STRING(args[0]) : "SageLang GPU";
+    int w = IS_NUMBER(args[1]) ? (int)AS_NUMBER(args[1]) : 800;
+    int h = IS_NUMBER(args[2]) ? (int)AS_NUMBER(args[2]) : 600;
+    const char* title = IS_STRING(args[3]) ? AS_STRING(args[3]) : "Sage GPU";
+    int validation = (argCount >= 5 && IS_BOOL(args[4])) ? AS_BOOL(args[4]) : 0;
+
+    if (g_gpu_ctx.initialized) return val_bool(1);
+
+    // Init GLFW
+    glfwSetErrorCallback(glfw_error_callback);
+#ifdef GLFW_PLATFORM_X11
+    glfwInitHint(GLFW_PLATFORM, GLFW_PLATFORM_X11);
+#endif
+    if (!glfwInit()) {
+        fprintf(stderr, "gpu: glfwInit failed\n");
+        return val_bool(0);
+    }
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    g_window = glfwCreateWindow(w, h, title, NULL, NULL);
+    if (!g_window) {
+        fprintf(stderr, "gpu: window creation failed\n");
+        glfwTerminate();
+        return val_bool(0);
+    }
+
+    // Get required extensions from GLFW
+    uint32_t glfw_ext_count = 0;
+    const char** glfw_exts = glfwGetRequiredInstanceExtensions(&glfw_ext_count);
+
+    // Build extension list (GLFW + debug if validation)
+    uint32_t total_ext_count = glfw_ext_count + (validation ? 1 : 0);
+    const char** all_exts = calloc(total_ext_count, sizeof(const char*));
+    for (uint32_t i = 0; i < glfw_ext_count; i++) all_exts[i] = glfw_exts[i];
+    if (validation) all_exts[glfw_ext_count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+
+    // Create instance
+    VkApplicationInfo app_info = {0};
+    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app_info.pApplicationName = app_name;
+    app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    app_info.pEngineName = "SageLang";
+    app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    app_info.apiVersion = VK_API_VERSION_1_2;
+
+    VkInstanceCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    create_info.pApplicationInfo = &app_info;
+    create_info.enabledExtensionCount = total_ext_count;
+    create_info.ppEnabledExtensionNames = all_exts;
+
+    const char* validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
+    if (validation) {
+        create_info.enabledLayerCount = 1;
+        create_info.ppEnabledLayerNames = validation_layers;
+        g_gpu_ctx.validation_enabled = 1;
+    }
+
+    VkResult res = vkCreateInstance(&create_info, NULL, &g_gpu_ctx.instance);
+    free(all_exts);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "gpu: vkCreateInstance failed (%d)\n", res);
+        return val_bool(0);
+    }
+
+    // Create surface
+    res = glfwCreateWindowSurface(g_gpu_ctx.instance, g_window, NULL, &g_surface);
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "gpu: surface creation failed (%d)\n", res);
+        return val_bool(0);
+    }
+
+    // Pick physical device (prefer discrete, must support present)
+    uint32_t dev_count = 0;
+    vkEnumeratePhysicalDevices(g_gpu_ctx.instance, &dev_count, NULL);
+    if (dev_count == 0) { fprintf(stderr, "gpu: no GPU found\n"); return val_bool(0); }
+    VkPhysicalDevice* devices = calloc(dev_count, sizeof(VkPhysicalDevice));
+    vkEnumeratePhysicalDevices(g_gpu_ctx.instance, &dev_count, devices);
+    g_gpu_ctx.physical_device = devices[0];
+    for (uint32_t i = 0; i < dev_count; i++) {
+        VkPhysicalDeviceProperties props;
+        vkGetPhysicalDeviceProperties(devices[i], &props);
+        if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            g_gpu_ctx.physical_device = devices[i];
+            break;
+        }
+    }
+    free(devices);
+    vkGetPhysicalDeviceProperties(g_gpu_ctx.physical_device, &g_gpu_ctx.device_props);
+    vkGetPhysicalDeviceMemoryProperties(g_gpu_ctx.physical_device, &g_gpu_ctx.mem_props);
+
+    // Find queue families (graphics + present)
+    uint32_t qf_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(g_gpu_ctx.physical_device, &qf_count, NULL);
+    VkQueueFamilyProperties* qf_props = calloc(qf_count, sizeof(VkQueueFamilyProperties));
+    vkGetPhysicalDeviceQueueFamilyProperties(g_gpu_ctx.physical_device, &qf_count, qf_props);
+
+    g_gpu_ctx.graphics_family = UINT32_MAX;
+    uint32_t present_family = UINT32_MAX;
+    for (uint32_t i = 0; i < qf_count; i++) {
+        if (qf_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) g_gpu_ctx.graphics_family = i;
+        VkBool32 present_support = VK_FALSE;
+        vkGetPhysicalDeviceSurfaceSupportKHR(g_gpu_ctx.physical_device, i, g_surface, &present_support);
+        if (present_support) present_family = i;
+    }
+    free(qf_props);
+    g_gpu_ctx.compute_family = g_gpu_ctx.graphics_family;
+    g_gpu_ctx.transfer_family = g_gpu_ctx.graphics_family;
+
+    if (g_gpu_ctx.graphics_family == UINT32_MAX || present_family == UINT32_MAX) {
+        fprintf(stderr, "gpu: no suitable queue families\n");
+        return val_bool(0);
+    }
+
+    // Create logical device with swapchain extension
+    float priority = 1.0f;
+    uint32_t unique_families[2] = {g_gpu_ctx.graphics_family, present_family};
+    int unique_count = (g_gpu_ctx.graphics_family == present_family) ? 1 : 2;
+    VkDeviceQueueCreateInfo queue_infos[2] = {0};
+    for (int i = 0; i < unique_count; i++) {
+        queue_infos[i].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_infos[i].queueFamilyIndex = unique_families[i];
+        queue_infos[i].queueCount = 1;
+        queue_infos[i].pQueuePriorities = &priority;
+    }
+
+    const char* dev_exts[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    VkPhysicalDeviceFeatures features = {0};
+    features.fillModeNonSolid = VK_TRUE;
+
+    VkDeviceCreateInfo dev_info = {0};
+    dev_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    dev_info.queueCreateInfoCount = (uint32_t)unique_count;
+    dev_info.pQueueCreateInfos = queue_infos;
+    dev_info.enabledExtensionCount = 1;
+    dev_info.ppEnabledExtensionNames = dev_exts;
+    dev_info.pEnabledFeatures = &features;
+
+    res = vkCreateDevice(g_gpu_ctx.physical_device, &dev_info, NULL, &g_gpu_ctx.device);
+    if (res != VK_SUCCESS) { fprintf(stderr, "gpu: device creation failed\n"); return val_bool(0); }
+
+    vkGetDeviceQueue(g_gpu_ctx.device, g_gpu_ctx.graphics_family, 0, &g_gpu_ctx.graphics_queue);
+    g_gpu_ctx.compute_queue = g_gpu_ctx.graphics_queue;
+    g_gpu_ctx.transfer_queue = g_gpu_ctx.graphics_queue;
+
+    // Create swapchain
+    VkSurfaceCapabilitiesKHR surf_caps;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_gpu_ctx.physical_device, g_surface, &surf_caps);
+
+    VkExtent2D extent = surf_caps.currentExtent;
+    if (extent.width == UINT32_MAX) {
+        extent.width = (uint32_t)w;
+        extent.height = (uint32_t)h;
+    }
+    g_swapchain_width = extent.width;
+    g_swapchain_height = extent.height;
+
+    uint32_t img_count = surf_caps.minImageCount + 1;
+    if (surf_caps.maxImageCount > 0 && img_count > surf_caps.maxImageCount)
+        img_count = surf_caps.maxImageCount;
+
+    // Pick format (prefer B8G8R8A8_SRGB)
+    uint32_t fmt_count = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(g_gpu_ctx.physical_device, g_surface, &fmt_count, NULL);
+    VkSurfaceFormatKHR* formats = calloc(fmt_count, sizeof(VkSurfaceFormatKHR));
+    vkGetPhysicalDeviceSurfaceFormatsKHR(g_gpu_ctx.physical_device, g_surface, &fmt_count, formats);
+    g_swapchain_format = formats[0].format;
+    g_active_swapchain_format = formats[0].format;
+    VkColorSpaceKHR color_space = formats[0].colorSpace;
+    for (uint32_t i = 0; i < fmt_count; i++) {
+        if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
+            formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            g_swapchain_format = formats[i].format;
+            g_active_swapchain_format = formats[i].format;
+            color_space = formats[i].colorSpace;
+            break;
+        }
+    }
+    free(formats);
+
+    // Pick present mode (prefer mailbox, fallback FIFO)
+    uint32_t pm_count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(g_gpu_ctx.physical_device, g_surface, &pm_count, NULL);
+    VkPresentModeKHR* present_modes = calloc(pm_count, sizeof(VkPresentModeKHR));
+    vkGetPhysicalDeviceSurfacePresentModesKHR(g_gpu_ctx.physical_device, g_surface, &pm_count, present_modes);
+    VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    for (uint32_t i = 0; i < pm_count; i++) {
+        if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+            present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+            break;
+        }
+    }
+    free(present_modes);
+
+    VkSwapchainCreateInfoKHR sc_info = {0};
+    sc_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    sc_info.surface = g_surface;
+    sc_info.minImageCount = img_count;
+    sc_info.imageFormat = g_swapchain_format;
+    sc_info.imageColorSpace = color_space;
+    sc_info.imageExtent = extent;
+    sc_info.imageArrayLayers = 1;
+    sc_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    sc_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    sc_info.preTransform = surf_caps.currentTransform;
+    sc_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    sc_info.presentMode = present_mode;
+    sc_info.clipped = VK_TRUE;
+
+    res = vkCreateSwapchainKHR(g_gpu_ctx.device, &sc_info, NULL, &g_swapchain);
+    if (res != VK_SUCCESS) { fprintf(stderr, "gpu: swapchain creation failed\n"); return val_bool(0); }
+
+    // Get swapchain images and create views
+    vkGetSwapchainImagesKHR(g_gpu_ctx.device, g_swapchain, &g_swapchain_image_count, NULL);
+    g_swapchain_images = calloc(g_swapchain_image_count, sizeof(VkImage));
+    g_swapchain_views = calloc(g_swapchain_image_count, sizeof(VkImageView));
+    vkGetSwapchainImagesKHR(g_gpu_ctx.device, g_swapchain, &g_swapchain_image_count, g_swapchain_images);
+
+    for (uint32_t i = 0; i < g_swapchain_image_count; i++) {
+        VkImageViewCreateInfo view_info = {0};
+        view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_info.image = g_swapchain_images[i];
+        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view_info.format = g_swapchain_format;
+        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        view_info.subresourceRange.levelCount = 1;
+        view_info.subresourceRange.layerCount = 1;
+        vkCreateImageView(g_gpu_ctx.device, &view_info, NULL, &g_swapchain_views[i]);
+    }
+
+    g_gpu_ctx.initialized = 1;
+    return val_bool(1);
+}
+
+// gpu.swapchain_image_count() -> number
+static Value gpu_swapchain_image_count(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number(g_swapchain_image_count);
+}
+
+// gpu.swapchain_format() -> number
+static Value gpu_swapchain_format_fn(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number(SAGE_FORMAT_BGRA8); // Approximation for Sage constants
+}
+
+// gpu.swapchain_extent() -> dict {width, height}
+static Value gpu_swapchain_extent(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    Value d = val_dict();
+    dict_set(&d, "width", val_number(g_swapchain_width));
+    dict_set(&d, "height", val_number(g_swapchain_height));
+    return d;
+}
+
+// gpu.acquire_next_image(semaphore) -> number (image index, -1 on error)
+static Value gpu_acquire_next_image(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || !g_swapchain) return val_number(-1);
+    VkSemaphore sem = VK_NULL_HANDLE;
+    if (argCount >= 1 && IS_NUMBER(args[0])) {
+        int si = (int)AS_NUMBER(args[0]);
+        if (si >= 0 && si < g_gpu_ctx.semaphore_count && g_gpu_ctx.semaphores[si].alive)
+            sem = g_gpu_ctx.semaphores[si].semaphore;
+    }
+    uint32_t image_index = 0;
+    VkResult res = vkAcquireNextImageKHR(g_gpu_ctx.device, g_swapchain, UINT64_MAX, sem, VK_NULL_HANDLE, &image_index);
+    if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) return val_number(-1);
+    return val_number(image_index);
+}
+
+// gpu.present(image_index, wait_semaphore?) -> bool
+static Value gpu_present(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 1 || !g_swapchain) return val_bool(0);
+    uint32_t image_index = (uint32_t)AS_NUMBER(args[0]);
+
+    VkSemaphore wait_sem = VK_NULL_HANDLE;
+    uint32_t wait_count = 0;
+    if (argCount >= 2 && IS_NUMBER(args[1])) {
+        int si = (int)AS_NUMBER(args[1]);
+        if (si >= 0 && si < g_gpu_ctx.semaphore_count && g_gpu_ctx.semaphores[si].alive) {
+            wait_sem = g_gpu_ctx.semaphores[si].semaphore;
+            wait_count = 1;
+        }
+    }
+
+    VkPresentInfoKHR present_info = {0};
+    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.waitSemaphoreCount = wait_count;
+    present_info.pWaitSemaphores = &wait_sem;
+    present_info.swapchainCount = 1;
+    present_info.pSwapchains = &g_swapchain;
+    present_info.pImageIndices = &image_index;
+
+    VkResult res = vkQueuePresentKHR(g_gpu_ctx.graphics_queue, &present_info);
+    return val_bool(res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR);
+}
+
+// gpu.submit_with_sync(cmd, wait_sem, signal_sem, fence) -> nil
+// Full synchronization submit for render loops
+static Value gpu_submit_with_sync(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 4) return val_nil();
+    int ci = (int)AS_NUMBER(args[0]);
+    if (ci < 0 || ci >= g_gpu_ctx.cmd_buffer_count || !g_gpu_ctx.cmd_buffers[ci].alive) return val_nil();
+
+    VkSemaphore wait_sem = VK_NULL_HANDLE;
+    VkSemaphore signal_sem = VK_NULL_HANDLE;
+    VkFence fence = VK_NULL_HANDLE;
+
+    int wi = (int)AS_NUMBER(args[1]);
+    if (wi >= 0 && wi < g_gpu_ctx.semaphore_count && g_gpu_ctx.semaphores[wi].alive)
+        wait_sem = g_gpu_ctx.semaphores[wi].semaphore;
+    int si = (int)AS_NUMBER(args[2]);
+    if (si >= 0 && si < g_gpu_ctx.semaphore_count && g_gpu_ctx.semaphores[si].alive)
+        signal_sem = g_gpu_ctx.semaphores[si].semaphore;
+    int fi = (int)AS_NUMBER(args[3]);
+    if (fi >= 0 && fi < g_gpu_ctx.fence_count && g_gpu_ctx.fences[fi].alive)
+        fence = g_gpu_ctx.fences[fi].fence;
+
+    VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submit = {0};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.waitSemaphoreCount = (wait_sem != VK_NULL_HANDLE) ? 1 : 0;
+    submit.pWaitSemaphores = &wait_sem;
+    submit.pWaitDstStageMask = &wait_stage;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &g_gpu_ctx.cmd_buffers[ci].cmd;
+    submit.signalSemaphoreCount = (signal_sem != VK_NULL_HANDLE) ? 1 : 0;
+    submit.pSignalSemaphores = &signal_sem;
+
+    vkQueueSubmit(g_gpu_ctx.graphics_queue, 1, &submit, fence);
+    return val_nil();
+}
+
+// gpu.create_swapchain_framebuffers(render_pass) -> array of handles
+static Value gpu_create_swapchain_framebuffers(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 1 || !g_swapchain) return val_array();
+    int rp_idx = (int)AS_NUMBER(args[0]);
+    if (rp_idx < 0 || rp_idx >= g_gpu_ctx.render_pass_count || !g_gpu_ctx.render_passes[rp_idx].alive)
+        return val_array();
+
+    Value result = val_array();
+    for (uint32_t i = 0; i < g_swapchain_image_count; i++) {
+        int idx = alloc_framebuffers();
+        if (idx < 0) break;
+
+        VkFramebufferCreateInfo fb_info = {0};
+        fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fb_info.renderPass = g_gpu_ctx.render_passes[rp_idx].render_pass;
+        fb_info.attachmentCount = 1;
+        fb_info.pAttachments = &g_swapchain_views[i];
+        fb_info.width = g_swapchain_width;
+        fb_info.height = g_swapchain_height;
+        fb_info.layers = 1;
+
+        if (vkCreateFramebuffer(g_gpu_ctx.device, &fb_info, NULL,
+                                 &g_gpu_ctx.framebuffers[idx].framebuffer) == VK_SUCCESS) {
+            g_gpu_ctx.framebuffers[idx].width = (int)g_swapchain_width;
+            g_gpu_ctx.framebuffers[idx].height = (int)g_swapchain_height;
+            g_gpu_ctx.framebuffers[idx].alive = 1;
+            array_push(&result, val_number(idx));
+        }
+    }
+    return result;
+}
+
+// gpu.shutdown_windowed() -> nil  (cleanup window + vulkan)
+static Value gpu_shutdown_windowed(int argCount, Value* args) {
+    // First do normal gpu shutdown
+    gpu_shutdown(argCount, args);
+
+    // Destroy swapchain resources
+    if (g_swapchain_views) {
+        // Already freed by gpu_shutdown's device destruction
+        free(g_swapchain_views);
+        g_swapchain_views = NULL;
+    }
+    if (g_swapchain_images) {
+        free(g_swapchain_images);
+        g_swapchain_images = NULL;
+    }
+    g_swapchain = VK_NULL_HANDLE;
+    g_surface = VK_NULL_HANDLE;
+    g_swapchain_image_count = 0;
+
+    if (g_window) {
+        glfwDestroyWindow(g_window);
+        g_window = NULL;
+    }
+    glfwTerminate();
+    return val_nil();
+}
+
+#endif // SAGE_HAS_GLFW
+
+// ============================================================================
 // Module Registration
 // ============================================================================
 
@@ -2463,6 +2941,26 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "queue_wait_idle", 15, val_native(gpu_queue_wait_idle));
     env_define(e, "device_wait_idle", 16, val_native(gpu_device_wait_idle));
 
+#ifdef SAGE_HAS_GLFW
+    // --- Window & Swapchain ---
+    env_define(e, "create_window", 13, val_native(gpu_create_window));
+    env_define(e, "destroy_window", 14, val_native(gpu_destroy_window));
+    env_define(e, "window_should_close", 19, val_native(gpu_window_should_close));
+    env_define(e, "poll_events", 11, val_native(gpu_poll_events));
+    env_define(e, "init_windowed", 13, val_native(gpu_init_windowed));
+    env_define(e, "shutdown_windowed", 17, val_native(gpu_shutdown_windowed));
+    env_define(e, "swapchain_image_count", 21, val_native(gpu_swapchain_image_count));
+    env_define(e, "swapchain_format", 16, val_native(gpu_swapchain_format_fn));
+    env_define(e, "swapchain_extent", 16, val_native(gpu_swapchain_extent));
+    env_define(e, "acquire_next_image", 18, val_native(gpu_acquire_next_image));
+    env_define(e, "present", 7, val_native(gpu_present));
+    env_define(e, "submit_with_sync", 16, val_native(gpu_submit_with_sync));
+    env_define(e, "create_swapchain_framebuffers", 29, val_native(gpu_create_swapchain_framebuffers));
+    env_define(e, "has_window", 10, val_bool(1));
+#else
+    env_define(e, "has_window", 10, val_bool(0));
+#endif
+
     // --- Constants (same as stub) ---
     env_define(e, "INVALID_HANDLE", 14, val_number(SAGE_GPU_INVALID_HANDLE));
 
@@ -2488,6 +2986,7 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "FORMAT_R8",        9,  val_number(SAGE_FORMAT_R8));
     env_define(e, "FORMAT_BGRA8",     12, val_number(SAGE_FORMAT_BGRA8));
     env_define(e, "FORMAT_R32U", 11, val_number(SAGE_FORMAT_R32U));
+    env_define(e, "FORMAT_SWAPCHAIN",  16, val_number(SAGE_FORMAT_SWAPCHAIN));
     env_define(e, "IMAGE_SAMPLED",      13, val_number(SAGE_IMAGE_SAMPLED));
     env_define(e, "IMAGE_STORAGE",      13, val_number(SAGE_IMAGE_STORAGE));
     env_define(e, "IMAGE_COLOR_ATTACH", 18, val_number(SAGE_IMAGE_COLOR_ATTACH));
