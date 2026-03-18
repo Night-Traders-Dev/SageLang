@@ -3328,6 +3328,10 @@ static Value gpu_device_wait_idle(int argCount, Value* args) {
 #ifdef SAGE_HAS_GLFW
 
 static GLFWwindow* g_window = NULL;
+
+// Forward declarations for callbacks
+static void framebuffer_resize_cb(GLFWwindow* window, int w, int h);
+static void scroll_callback(GLFWwindow* window, double xoff, double yoff);
 static VkSurfaceKHR g_surface = VK_NULL_HANDLE;
 static VkSwapchainKHR g_swapchain = VK_NULL_HANDLE;
 static VkImage* g_swapchain_images = NULL;
@@ -3421,6 +3425,10 @@ static Value gpu_init_windowed(int argCount, Value* args) {
         glfwTerminate();
         return val_bool(0);
     }
+
+    // Set up callbacks
+    glfwSetFramebufferSizeCallback(g_window, framebuffer_resize_cb);
+    glfwSetScrollCallback(g_window, scroll_callback);
 
     // Get required extensions from GLFW
     uint32_t glfw_ext_count = 0;
@@ -3887,6 +3895,323 @@ static Value gpu_window_resized(int argCount, Value* args) {
     return val_bool(r);
 }
 
+// ============================================================================
+// Feature 1: Swapchain Recreation (window resize)
+// ============================================================================
+
+static int recreate_swapchain_internal(void) {
+    int w = 0, h = 0;
+    glfwGetFramebufferSize(g_window, &w, &h);
+    while (w == 0 || h == 0) {
+        glfwGetFramebufferSize(g_window, &w, &h);
+        glfwWaitEvents();
+    }
+    vkDeviceWaitIdle(g_gpu_ctx.device);
+
+    // Destroy old views
+    for (uint32_t i = 0; i < g_swapchain_image_count; i++) {
+        if (g_swapchain_views[i]) vkDestroyImageView(g_gpu_ctx.device, g_swapchain_views[i], NULL);
+    }
+
+    // Get new surface caps
+    VkSurfaceCapabilitiesKHR surf_caps;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_gpu_ctx.physical_device, g_surface, &surf_caps);
+    VkExtent2D extent = surf_caps.currentExtent;
+    if (extent.width == UINT32_MAX) { extent.width = (uint32_t)w; extent.height = (uint32_t)h; }
+
+    uint32_t img_count = surf_caps.minImageCount + 1;
+    if (surf_caps.maxImageCount > 0 && img_count > surf_caps.maxImageCount) img_count = surf_caps.maxImageCount;
+
+    VkSwapchainKHR old_swapchain = g_swapchain;
+    VkSwapchainCreateInfoKHR sc_info = {0};
+    sc_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    sc_info.surface = g_surface;
+    sc_info.minImageCount = img_count;
+    sc_info.imageFormat = g_swapchain_format;
+    sc_info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    sc_info.imageExtent = extent;
+    sc_info.imageArrayLayers = 1;
+    sc_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    sc_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    sc_info.preTransform = surf_caps.currentTransform;
+    sc_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    sc_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+    sc_info.clipped = VK_TRUE;
+    sc_info.oldSwapchain = old_swapchain;
+
+    if (vkCreateSwapchainKHR(g_gpu_ctx.device, &sc_info, NULL, &g_swapchain) != VK_SUCCESS) return 0;
+    vkDestroySwapchainKHR(g_gpu_ctx.device, old_swapchain, NULL);
+
+    vkGetSwapchainImagesKHR(g_gpu_ctx.device, g_swapchain, &g_swapchain_image_count, NULL);
+    free(g_swapchain_images); free(g_swapchain_views);
+    g_swapchain_images = calloc(g_swapchain_image_count, sizeof(VkImage));
+    g_swapchain_views = calloc(g_swapchain_image_count, sizeof(VkImageView));
+    vkGetSwapchainImagesKHR(g_gpu_ctx.device, g_swapchain, &g_swapchain_image_count, g_swapchain_images);
+
+    for (uint32_t i = 0; i < g_swapchain_image_count; i++) {
+        VkImageViewCreateInfo vi = {0};
+        vi.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        vi.image = g_swapchain_images[i];
+        vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        vi.format = g_swapchain_format;
+        vi.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        vi.subresourceRange.levelCount = 1;
+        vi.subresourceRange.layerCount = 1;
+        vkCreateImageView(g_gpu_ctx.device, &vi, NULL, &g_swapchain_views[i]);
+    }
+    g_swapchain_width = extent.width;
+    g_swapchain_height = extent.height;
+    return 1;
+}
+
+// gpu.recreate_swapchain() -> bool
+static Value gpu_recreate_swapchain(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (!g_gpu_ctx.initialized || !g_window) return val_bool(0);
+    return val_bool(recreate_swapchain_internal());
+}
+
+// ============================================================================
+// Feature 2: Scroll wheel input
+// ============================================================================
+
+static double g_scroll_x = 0.0, g_scroll_y = 0.0;
+static void scroll_callback(GLFWwindow* window, double xoff, double yoff) {
+    (void)window;
+    g_scroll_x += xoff;
+    g_scroll_y += yoff;
+}
+
+// gpu.scroll_delta() -> dict {x, y} (consumed on read)
+static Value gpu_scroll_delta(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    Value d = val_dict();
+    dict_set(&d, "x", val_number(g_scroll_x));
+    dict_set(&d, "y", val_number(g_scroll_y));
+    g_scroll_x = 0.0;
+    g_scroll_y = 0.0;
+    return d;
+}
+
+// ============================================================================
+// Feature 3: Key state tracking (just pressed / just released)
+// ============================================================================
+
+static int g_key_states[512] = {0};
+static int g_key_prev[512] = {0};
+
+// gpu.update_input() -> nil  (call once per frame before key queries)
+static Value gpu_update_input(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (!g_window) return val_nil();
+    for (int i = 0; i < 512; i++) {
+        g_key_prev[i] = g_key_states[i];
+        g_key_states[i] = (glfwGetKey(g_window, i) == GLFW_PRESS) ? 1 : 0;
+    }
+    return val_nil();
+}
+
+// gpu.key_just_pressed(key) -> bool (true on frame key first goes down)
+static Value gpu_key_just_pressed(int argCount, Value* args) {
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_bool(0);
+    int k = (int)AS_NUMBER(args[0]);
+    if (k < 0 || k >= 512) return val_bool(0);
+    return val_bool(g_key_states[k] && !g_key_prev[k]);
+}
+
+// gpu.key_just_released(key) -> bool
+static Value gpu_key_just_released(int argCount, Value* args) {
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_bool(0);
+    int k = (int)AS_NUMBER(args[0]);
+    if (k < 0 || k >= 512) return val_bool(0);
+    return val_bool(!g_key_states[k] && g_key_prev[k]);
+}
+
+// ============================================================================
+// Feature 7: Cubemap / Skybox
+// ============================================================================
+
+// gpu.create_cubemap(size, format, usage) -> handle
+static Value gpu_create_cubemap(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 3) return val_number(SAGE_GPU_INVALID_HANDLE);
+    int size = (int)AS_NUMBER(args[0]);
+    int fmt = (int)AS_NUMBER(args[1]);
+    int usage = (int)AS_NUMBER(args[2]);
+
+    int idx = alloc_images();
+    if (idx < 0) return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkImageCreateInfo img_info = {0};
+    img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    img_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    img_info.imageType = VK_IMAGE_TYPE_2D;
+    img_info.format = sage_gpu_translate_format(fmt);
+    img_info.extent = (VkExtent3D){(uint32_t)size, (uint32_t)size, 1};
+    img_info.mipLevels = 1;
+    img_info.arrayLayers = 6;
+    img_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    img_info.usage = translate_image_usage(usage);
+
+    if (vkCreateImage(g_gpu_ctx.device, &img_info, NULL, &g_gpu_ctx.images[idx].image) != VK_SUCCESS)
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkMemoryRequirements req;
+    vkGetImageMemoryRequirements(g_gpu_ctx.device, g_gpu_ctx.images[idx].image, &req);
+    VkMemoryAllocateInfo a = {0};
+    a.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    a.allocationSize = req.size;
+    a.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vkAllocateMemory(g_gpu_ctx.device, &a, NULL, &g_gpu_ctx.images[idx].memory);
+    vkBindImageMemory(g_gpu_ctx.device, g_gpu_ctx.images[idx].image, g_gpu_ctx.images[idx].memory, 0);
+
+    VkImageViewCreateInfo vi = {0};
+    vi.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    vi.image = g_gpu_ctx.images[idx].image;
+    vi.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    vi.format = img_info.format;
+    vi.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    vi.subresourceRange.levelCount = 1;
+    vi.subresourceRange.layerCount = 6;
+    vkCreateImageView(g_gpu_ctx.device, &vi, NULL, &g_gpu_ctx.images[idx].view);
+
+    g_gpu_ctx.images[idx].format = fmt;
+    g_gpu_ctx.images[idx].img_type = SAGE_IMAGE_CUBE;
+    g_gpu_ctx.images[idx].width = size;
+    g_gpu_ctx.images[idx].height = size;
+    g_gpu_ctx.images[idx].depth = 1;
+    g_gpu_ctx.images[idx].array_layers = 6;
+    g_gpu_ctx.images[idx].mip_levels = 1;
+    g_gpu_ctx.images[idx].alive = 1;
+    return val_number(idx);
+}
+
+// ============================================================================
+// Feature 17: Shader hot-reload
+// ============================================================================
+
+// gpu.reload_shader(handle, path) -> bool
+static Value gpu_reload_shader(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 2) return val_bool(0);
+    if (!IS_NUMBER(args[0]) || !IS_STRING(args[1])) return val_bool(0);
+    int idx = (int)AS_NUMBER(args[0]);
+    if (idx < 0 || idx >= g_gpu_ctx.shader_count || !g_gpu_ctx.shaders[idx].alive) return val_bool(0);
+
+    const char* path = AS_STRING(args[1]);
+    FILE* f = fopen(path, "rb");
+    if (!f) return val_bool(0);
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint32_t* code = malloc((size_t)sz);
+    if (!code) { fclose(f); return val_bool(0); }
+    fread(code, 1, (size_t)sz, f);
+    fclose(f);
+
+    VkShaderModuleCreateInfo mi = {0};
+    mi.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    mi.codeSize = (size_t)sz;
+    mi.pCode = code;
+
+    VkShaderModule new_mod;
+    VkResult res = vkCreateShaderModule(g_gpu_ctx.device, &mi, NULL, &new_mod);
+    free(code);
+    if (res != VK_SUCCESS) return val_bool(0);
+
+    // Destroy old, replace
+    vkDestroyShaderModule(g_gpu_ctx.device, g_gpu_ctx.shaders[idx].module, NULL);
+    g_gpu_ctx.shaders[idx].module = new_mod;
+    return val_bool(1);
+}
+
+// ============================================================================
+// Feature 18: Screenshot capture (readback swapchain to pixel array)
+// ============================================================================
+
+// gpu.screenshot() -> dict {width, height, pixels} (RGBA8 byte array)
+static Value gpu_screenshot(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (!g_gpu_ctx.initialized || !g_swapchain) return val_nil();
+
+    uint32_t w = g_swapchain_width, h = g_swapchain_height;
+    VkDeviceSize size = (VkDeviceSize)w * h * 4;
+
+    // Create staging buffer for readback
+    VkBuffer staging; VkDeviceMemory staging_mem;
+    VkBufferCreateInfo bi = {0};
+    bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bi.size = size;
+    bi.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    vkCreateBuffer(g_gpu_ctx.device, &bi, NULL, &staging);
+
+    VkMemoryRequirements req;
+    vkGetBufferMemoryRequirements(g_gpu_ctx.device, staging, &req);
+    VkMemoryAllocateInfo ai = {0};
+    ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    ai.allocationSize = req.size;
+    ai.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    vkAllocateMemory(g_gpu_ctx.device, &ai, NULL, &staging_mem);
+    vkBindBufferMemory(g_gpu_ctx.device, staging, staging_mem, 0);
+
+    // Copy current swapchain image 0 to staging
+    VkCommandBuffer cmd = sage_gpu_begin_one_shot_v2();
+    if (cmd && g_swapchain_images) {
+        VkImage src = g_swapchain_images[0];
+
+        // Transition to TRANSFER_SRC
+        VkImageMemoryBarrier barrier = {0};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.image = src;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, NULL, 0, NULL, 1, &barrier);
+
+        VkBufferImageCopy region = {0};
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageExtent = (VkExtent3D){w, h, 1};
+        vkCmdCopyImageToBuffer(cmd, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging, 1, &region);
+
+        // Transition back
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, NULL, 0, NULL, 1, &barrier);
+
+        sage_gpu_end_one_shot(cmd);
+    }
+
+    // Read pixels
+    void* mapped;
+    vkMapMemory(g_gpu_ctx.device, staging_mem, 0, size, 0, &mapped);
+    Value pixels = val_array();
+    unsigned char* src = (unsigned char*)mapped;
+    // Only return first 64K pixels max to avoid huge arrays
+    int pixel_count = (int)(w * h);
+    if (pixel_count > 65536) pixel_count = 65536;
+    for (int i = 0; i < pixel_count * 4; i++) {
+        array_push(&pixels, val_number(src[i]));
+    }
+    vkUnmapMemory(g_gpu_ctx.device, staging_mem);
+    vkDestroyBuffer(g_gpu_ctx.device, staging, NULL);
+    vkFreeMemory(g_gpu_ctx.device, staging_mem, NULL);
+
+    Value result = val_dict();
+    dict_set(&result, "width", val_number(w));
+    dict_set(&result, "height", val_number(h));
+    dict_set(&result, "pixels", pixels);
+    return result;
+}
+
 // gpu.shutdown_windowed() -> nil  (cleanup window + vulkan)
 static Value gpu_shutdown_windowed(int argCount, Value* args) {
     // First do normal gpu shutdown
@@ -4078,6 +4403,26 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "window_size", 11, val_native(gpu_window_size));
     env_define(e, "set_title", 9, val_native(gpu_set_title));
     env_define(e, "window_resized", 14, val_native(gpu_window_resized));
+
+    // Feature 1: Swapchain recreation
+    env_define(e, "recreate_swapchain", 18, val_native(gpu_recreate_swapchain));
+
+    // Feature 2: Scroll wheel
+    env_define(e, "scroll_delta", 12, val_native(gpu_scroll_delta));
+
+    // Feature 3: Key state tracking
+    env_define(e, "update_input", 12, val_native(gpu_update_input));
+    env_define(e, "key_just_pressed", 16, val_native(gpu_key_just_pressed));
+    env_define(e, "key_just_released", 17, val_native(gpu_key_just_released));
+
+    // Feature 7: Cubemap
+    env_define(e, "create_cubemap", 14, val_native(gpu_create_cubemap));
+
+    // Feature 17: Shader hot-reload
+    env_define(e, "reload_shader", 13, val_native(gpu_reload_shader));
+
+    // Feature 18: Screenshot
+    env_define(e, "screenshot", 10, val_native(gpu_screenshot));
 
     // Key constants (GLFW key codes)
     env_define(e, "KEY_W", 5, val_number(GLFW_KEY_W));

@@ -1,0 +1,72 @@
+#version 450
+
+layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+layout(binding = 0, rgba16f) writeonly uniform image3D outVolume;
+
+layout(push_constant) uniform PushConstants {
+    float time;
+    float density;
+    float scale;
+    uint resolution;
+} pc;
+
+// Simplex noise hash
+vec3 hash3(vec3 p) {
+    p = vec3(dot(p, vec3(127.1, 311.7, 74.7)),
+             dot(p, vec3(269.5, 183.3, 246.1)),
+             dot(p, vec3(113.5, 271.9, 124.6)));
+    return fract(sin(p) * 43758.5453123) * 2.0 - 1.0;
+}
+
+// 3D Value noise
+float noise3D(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);  // Hermite interpolation
+
+    float n = mix(
+        mix(mix(dot(hash3(i), f), dot(hash3(i + vec3(1,0,0)), f - vec3(1,0,0)), f.x),
+            mix(dot(hash3(i + vec3(0,1,0)), f - vec3(0,1,0)), dot(hash3(i + vec3(1,1,0)), f - vec3(1,1,0)), f.x), f.y),
+        mix(mix(dot(hash3(i + vec3(0,0,1)), f - vec3(0,0,1)), dot(hash3(i + vec3(1,0,1)), f - vec3(1,0,1)), f.x),
+            mix(dot(hash3(i + vec3(0,1,1)), f - vec3(0,1,1)), dot(hash3(i + vec3(1,1,1)), f - vec3(1,1,1)), f.x), f.y),
+        f.z);
+    return n * 0.5 + 0.5;
+}
+
+// FBM (fractal Brownian motion)
+float fbm(vec3 p, int octaves) {
+    float value = 0.0;
+    float amplitude = 0.5;
+    float frequency = 1.0;
+    for (int i = 0; i < octaves; i++) {
+        value += amplitude * noise3D(p * frequency);
+        amplitude *= 0.5;
+        frequency *= 2.0;
+    }
+    return value;
+}
+
+void main() {
+    uvec3 gid = gl_GlobalInvocationID;
+    if (gid.x >= pc.resolution || gid.y >= pc.resolution || gid.z >= pc.resolution) return;
+
+    vec3 uv = vec3(gid) / float(pc.resolution);
+    vec3 p = (uv - 0.5) * pc.scale;
+
+    // Animate
+    p.x += pc.time * 0.02;
+    p.z += sin(pc.time * 0.1) * 0.5;
+
+    // Multi-octave noise for density
+    float d = fbm(p, 6);
+    d = d * d * pc.density;
+
+    // Color from position
+    float r = fbm(p + vec3(1.7, 9.2, 0.0), 4) * 0.8;
+    float g = fbm(p + vec3(5.2, 1.3, 0.0), 4) * 0.5;
+    float b = fbm(p + vec3(2.1, 3.7, 0.0), 4) * 1.0;
+
+    vec4 color = vec4(r, g, b, d);
+    imageStore(outVolume, ivec3(gid), color);
+}
