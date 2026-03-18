@@ -2232,6 +2232,423 @@ static Value gpu_cmd_copy_buffer_to_image(int argCount, Value* args) {
 }
 
 // ============================================================================
+// One-shot command helper (internal)
+// ============================================================================
+
+static VkCommandBuffer sage_gpu_begin_one_shot(void) {
+    VkCommandPoolCreateInfo pool_info = {0};
+    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    pool_info.queueFamilyIndex = g_gpu_ctx.graphics_family;
+
+    VkCommandPool tmp_pool;
+    if (vkCreateCommandPool(g_gpu_ctx.device, &pool_info, NULL, &tmp_pool) != VK_SUCCESS)
+        return VK_NULL_HANDLE;
+
+    VkCommandBufferAllocateInfo alloc_info = {0};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.commandPool = tmp_pool;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    alloc_info.commandBufferCount = 1;
+
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(g_gpu_ctx.device, &alloc_info, &cmd);
+
+    VkCommandBufferBeginInfo begin = {0};
+    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &begin);
+
+    // Store pool handle in a thread-local-ish way (we only support one at a time)
+    return cmd;
+}
+
+static VkCommandPool g_oneshot_pool = VK_NULL_HANDLE;
+
+static VkCommandBuffer sage_gpu_begin_one_shot_v2(void) {
+    VkCommandPoolCreateInfo pool_info = {0};
+    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    pool_info.queueFamilyIndex = g_gpu_ctx.graphics_family;
+    if (vkCreateCommandPool(g_gpu_ctx.device, &pool_info, NULL, &g_oneshot_pool) != VK_SUCCESS)
+        return VK_NULL_HANDLE;
+
+    VkCommandBufferAllocateInfo a = {0};
+    a.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    a.commandPool = g_oneshot_pool;
+    a.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    a.commandBufferCount = 1;
+
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(g_gpu_ctx.device, &a, &cmd);
+
+    VkCommandBufferBeginInfo b = {0};
+    b.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    b.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &b);
+    return cmd;
+}
+
+static void sage_gpu_end_one_shot(VkCommandBuffer cmd) {
+    vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo submit = {0};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &cmd;
+
+    vkQueueSubmit(g_gpu_ctx.graphics_queue, 1, &submit, VK_NULL_HANDLE);
+    vkQueueWaitIdle(g_gpu_ctx.graphics_queue);
+
+    vkDestroyCommandPool(g_gpu_ctx.device, g_oneshot_pool, NULL);
+    g_oneshot_pool = VK_NULL_HANDLE;
+}
+
+// ============================================================================
+// Depth Buffer Helper
+// ============================================================================
+
+static VkFormat sage_gpu_find_depth_format(void) {
+    VkFormat candidates[] = {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
+    for (int i = 0; i < 3; i++) {
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(g_gpu_ctx.physical_device, candidates[i], &props);
+        if (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+            return candidates[i];
+        }
+    }
+    return VK_FORMAT_D32_SFLOAT;
+}
+
+// gpu.create_depth_buffer(width, height) -> image handle
+static Value gpu_create_depth_buffer(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 2) return val_number(SAGE_GPU_INVALID_HANDLE);
+    int w = (int)AS_NUMBER(args[0]);
+    int h = (int)AS_NUMBER(args[1]);
+
+    VkFormat depth_fmt = sage_gpu_find_depth_format();
+
+    int idx = alloc_images();
+    if (idx < 0) return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkImageCreateInfo img_info = {0};
+    img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    img_info.imageType = VK_IMAGE_TYPE_2D;
+    img_info.format = depth_fmt;
+    img_info.extent.width = (uint32_t)w;
+    img_info.extent.height = (uint32_t)h;
+    img_info.extent.depth = 1;
+    img_info.mipLevels = 1;
+    img_info.arrayLayers = 1;
+    img_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    img_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    if (vkCreateImage(g_gpu_ctx.device, &img_info, NULL, &g_gpu_ctx.images[idx].image) != VK_SUCCESS)
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkMemoryRequirements mem_req;
+    vkGetImageMemoryRequirements(g_gpu_ctx.device, g_gpu_ctx.images[idx].image, &mem_req);
+    VkMemoryAllocateInfo alloc = {0};
+    alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc.allocationSize = mem_req.size;
+    alloc.memoryTypeIndex = sage_gpu_find_memory_type(mem_req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (vkAllocateMemory(g_gpu_ctx.device, &alloc, NULL, &g_gpu_ctx.images[idx].memory) != VK_SUCCESS) {
+        vkDestroyImage(g_gpu_ctx.device, g_gpu_ctx.images[idx].image, NULL);
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    }
+    vkBindImageMemory(g_gpu_ctx.device, g_gpu_ctx.images[idx].image, g_gpu_ctx.images[idx].memory, 0);
+
+    VkImageViewCreateInfo view_info = {0};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.image = g_gpu_ctx.images[idx].image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = depth_fmt;
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.layerCount = 1;
+    vkCreateImageView(g_gpu_ctx.device, &view_info, NULL, &g_gpu_ctx.images[idx].view);
+
+    // Transition to depth attachment layout
+    VkCommandBuffer cmd = sage_gpu_begin_one_shot_v2();
+    if (cmd) {
+        VkImageMemoryBarrier barrier = {0};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = g_gpu_ctx.images[idx].image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            0, 0, NULL, 0, NULL, 1, &barrier);
+        sage_gpu_end_one_shot(cmd);
+    }
+
+    g_gpu_ctx.images[idx].format = SAGE_FORMAT_DEPTH32F;
+    g_gpu_ctx.images[idx].width = w;
+    g_gpu_ctx.images[idx].height = h;
+    g_gpu_ctx.images[idx].depth = 1;
+    g_gpu_ctx.images[idx].mip_levels = 1;
+    g_gpu_ctx.images[idx].array_layers = 1;
+    g_gpu_ctx.images[idx].alive = 1;
+    return val_number(idx);
+}
+
+// gpu.create_swapchain_framebuffers_depth: defined in Window & Swapchain section below
+
+// ============================================================================
+// Staging Upload (device-local buffer via staging)
+// ============================================================================
+
+// gpu.upload_device_local(data_array, usage_flags) -> device-local buffer handle
+static Value gpu_upload_device_local(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 2) return val_number(SAGE_GPU_INVALID_HANDLE);
+    if (!IS_ARRAY(args[0]) || !IS_NUMBER(args[1])) return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    ArrayValue* arr = args[0].as.array;
+    VkDeviceSize size = sizeof(float) * (size_t)arr->count;
+    int usage = (int)AS_NUMBER(args[1]);
+
+    // Create staging buffer
+    VkBuffer staging_buf;
+    VkDeviceMemory staging_mem;
+    {
+        VkBufferCreateInfo buf_info = {0};
+        buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buf_info.size = size;
+        buf_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        if (vkCreateBuffer(g_gpu_ctx.device, &buf_info, NULL, &staging_buf) != VK_SUCCESS)
+            return val_number(SAGE_GPU_INVALID_HANDLE);
+
+        VkMemoryRequirements req;
+        vkGetBufferMemoryRequirements(g_gpu_ctx.device, staging_buf, &req);
+        VkMemoryAllocateInfo a = {0};
+        a.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        a.allocationSize = req.size;
+        a.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        if (vkAllocateMemory(g_gpu_ctx.device, &a, NULL, &staging_mem) != VK_SUCCESS) {
+            vkDestroyBuffer(g_gpu_ctx.device, staging_buf, NULL);
+            return val_number(SAGE_GPU_INVALID_HANDLE);
+        }
+        vkBindBufferMemory(g_gpu_ctx.device, staging_buf, staging_mem, 0);
+
+        void* mapped;
+        vkMapMemory(g_gpu_ctx.device, staging_mem, 0, size, 0, &mapped);
+        float* dst = (float*)mapped;
+        for (int i = 0; i < arr->count; i++) {
+            dst[i] = IS_NUMBER(arr->elements[i]) ? (float)AS_NUMBER(arr->elements[i]) : 0.0f;
+        }
+        vkUnmapMemory(g_gpu_ctx.device, staging_mem);
+    }
+
+    // Create device-local buffer
+    int idx = alloc_buffers();
+    if (idx < 0) {
+        vkDestroyBuffer(g_gpu_ctx.device, staging_buf, NULL);
+        vkFreeMemory(g_gpu_ctx.device, staging_mem, NULL);
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    }
+
+    VkBufferCreateInfo buf_info = {0};
+    buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buf_info.size = size;
+    buf_info.usage = translate_buffer_usage(usage) | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    if (vkCreateBuffer(g_gpu_ctx.device, &buf_info, NULL, &g_gpu_ctx.buffers[idx].buffer) != VK_SUCCESS) {
+        vkDestroyBuffer(g_gpu_ctx.device, staging_buf, NULL);
+        vkFreeMemory(g_gpu_ctx.device, staging_mem, NULL);
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    }
+
+    VkMemoryRequirements req;
+    vkGetBufferMemoryRequirements(g_gpu_ctx.device, g_gpu_ctx.buffers[idx].buffer, &req);
+    VkMemoryAllocateInfo a = {0};
+    a.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    a.allocationSize = req.size;
+    a.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (vkAllocateMemory(g_gpu_ctx.device, &a, NULL, &g_gpu_ctx.buffers[idx].memory) != VK_SUCCESS) {
+        vkDestroyBuffer(g_gpu_ctx.device, g_gpu_ctx.buffers[idx].buffer, NULL);
+        vkDestroyBuffer(g_gpu_ctx.device, staging_buf, NULL);
+        vkFreeMemory(g_gpu_ctx.device, staging_mem, NULL);
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    }
+    vkBindBufferMemory(g_gpu_ctx.device, g_gpu_ctx.buffers[idx].buffer, g_gpu_ctx.buffers[idx].memory, 0);
+
+    // Copy staging -> device-local
+    VkCommandBuffer cmd = sage_gpu_begin_one_shot_v2();
+    if (cmd) {
+        VkBufferCopy region = {0};
+        region.size = size;
+        vkCmdCopyBuffer(cmd, staging_buf, g_gpu_ctx.buffers[idx].buffer, 1, &region);
+        sage_gpu_end_one_shot(cmd);
+    }
+
+    vkDestroyBuffer(g_gpu_ctx.device, staging_buf, NULL);
+    vkFreeMemory(g_gpu_ctx.device, staging_mem, NULL);
+
+    g_gpu_ctx.buffers[idx].size = size;
+    g_gpu_ctx.buffers[idx].usage = usage;
+    g_gpu_ctx.buffers[idx].mem_props = SAGE_MEMORY_DEVICE_LOCAL;
+    g_gpu_ctx.buffers[idx].alive = 1;
+    return val_number(idx);
+}
+
+// ============================================================================
+// Texture Loading (stb_image)
+// ============================================================================
+
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_NO_THREAD_LOCALS
+#include "stb_image.h"
+
+// gpu.load_texture(path) -> image handle
+static Value gpu_load_texture(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 1 || !IS_STRING(args[0]))
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    int w, h, channels;
+    unsigned char* pixels = stbi_load(AS_STRING(args[0]), &w, &h, &channels, 4); // Force RGBA
+    if (!pixels) {
+        fprintf(stderr, "gpu: failed to load texture '%s': %s\n", AS_STRING(args[0]), stbi_failure_reason());
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    }
+
+    VkDeviceSize img_size = (VkDeviceSize)w * (VkDeviceSize)h * 4;
+
+    // Create staging buffer
+    VkBuffer staging_buf;
+    VkDeviceMemory staging_mem;
+    {
+        VkBufferCreateInfo buf_info = {0};
+        buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buf_info.size = img_size;
+        buf_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        vkCreateBuffer(g_gpu_ctx.device, &buf_info, NULL, &staging_buf);
+
+        VkMemoryRequirements req;
+        vkGetBufferMemoryRequirements(g_gpu_ctx.device, staging_buf, &req);
+        VkMemoryAllocateInfo a = {0};
+        a.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        a.allocationSize = req.size;
+        a.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        vkAllocateMemory(g_gpu_ctx.device, &a, NULL, &staging_mem);
+        vkBindBufferMemory(g_gpu_ctx.device, staging_buf, staging_mem, 0);
+
+        void* mapped;
+        vkMapMemory(g_gpu_ctx.device, staging_mem, 0, img_size, 0, &mapped);
+        memcpy(mapped, pixels, (size_t)img_size);
+        vkUnmapMemory(g_gpu_ctx.device, staging_mem);
+    }
+    stbi_image_free(pixels);
+
+    // Create device-local image
+    int idx = alloc_images();
+    if (idx < 0) {
+        vkDestroyBuffer(g_gpu_ctx.device, staging_buf, NULL);
+        vkFreeMemory(g_gpu_ctx.device, staging_mem, NULL);
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    }
+
+    VkImageCreateInfo img_info = {0};
+    img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    img_info.imageType = VK_IMAGE_TYPE_2D;
+    img_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    img_info.extent.width = (uint32_t)w;
+    img_info.extent.height = (uint32_t)h;
+    img_info.extent.depth = 1;
+    img_info.mipLevels = 1;
+    img_info.arrayLayers = 1;
+    img_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    img_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    img_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    vkCreateImage(g_gpu_ctx.device, &img_info, NULL, &g_gpu_ctx.images[idx].image);
+
+    VkMemoryRequirements req;
+    vkGetImageMemoryRequirements(g_gpu_ctx.device, g_gpu_ctx.images[idx].image, &req);
+    VkMemoryAllocateInfo alloc_i = {0};
+    alloc_i.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_i.allocationSize = req.size;
+    alloc_i.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vkAllocateMemory(g_gpu_ctx.device, &alloc_i, NULL, &g_gpu_ctx.images[idx].memory);
+    vkBindImageMemory(g_gpu_ctx.device, g_gpu_ctx.images[idx].image, g_gpu_ctx.images[idx].memory, 0);
+
+    // Transition + copy + transition
+    VkCommandBuffer cmd = sage_gpu_begin_one_shot_v2();
+    if (cmd) {
+        // Transition to TRANSFER_DST
+        VkImageMemoryBarrier barrier = {0};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = g_gpu_ctx.images[idx].image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, NULL, 0, NULL, 1, &barrier);
+
+        // Copy
+        VkBufferImageCopy region = {0};
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageExtent.width = (uint32_t)w;
+        region.imageExtent.height = (uint32_t)h;
+        region.imageExtent.depth = 1;
+        vkCmdCopyBufferToImage(cmd, staging_buf, g_gpu_ctx.images[idx].image,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+        // Transition to SHADER_READ
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0, 0, NULL, 0, NULL, 1, &barrier);
+
+        sage_gpu_end_one_shot(cmd);
+    }
+
+    vkDestroyBuffer(g_gpu_ctx.device, staging_buf, NULL);
+    vkFreeMemory(g_gpu_ctx.device, staging_mem, NULL);
+
+    // Create image view
+    VkImageViewCreateInfo view_info = {0};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.image = g_gpu_ctx.images[idx].image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.layerCount = 1;
+    vkCreateImageView(g_gpu_ctx.device, &view_info, NULL, &g_gpu_ctx.images[idx].view);
+
+    g_gpu_ctx.images[idx].format = SAGE_FORMAT_RGBA8;
+    g_gpu_ctx.images[idx].width = w;
+    g_gpu_ctx.images[idx].height = h;
+    g_gpu_ctx.images[idx].depth = 1;
+    g_gpu_ctx.images[idx].mip_levels = 1;
+    g_gpu_ctx.images[idx].array_layers = 1;
+    g_gpu_ctx.images[idx].alive = 1;
+    return val_number(idx);
+}
+
+// gpu.texture_dims(handle) -> dict {width, height}
+static Value gpu_texture_dims(int argCount, Value* args) {
+    return gpu_image_dims(argCount, args); // Reuse existing image_dims
+}
+
+// ============================================================================
 // Synchronization
 // ============================================================================
 
@@ -2813,6 +3230,42 @@ static Value gpu_create_swapchain_framebuffers(int argCount, Value* args) {
     return result;
 }
 
+// gpu.create_swapchain_framebuffers_depth(render_pass, depth_image) -> array of handles
+static Value gpu_create_swapchain_fbs_depth(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 2 || !g_swapchain) return val_array();
+    int rp_idx = (int)AS_NUMBER(args[0]);
+    int depth_idx = (int)AS_NUMBER(args[1]);
+    if (rp_idx < 0 || rp_idx >= g_gpu_ctx.render_pass_count || !g_gpu_ctx.render_passes[rp_idx].alive)
+        return val_array();
+    if (depth_idx < 0 || depth_idx >= g_gpu_ctx.image_count || !g_gpu_ctx.images[depth_idx].alive)
+        return val_array();
+
+    Value result = val_array();
+    for (uint32_t i = 0; i < g_swapchain_image_count; i++) {
+        int idx = alloc_framebuffers();
+        if (idx < 0) break;
+
+        VkImageView views[2] = {g_swapchain_views[i], g_gpu_ctx.images[depth_idx].view};
+        VkFramebufferCreateInfo fb_info = {0};
+        fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fb_info.renderPass = g_gpu_ctx.render_passes[rp_idx].render_pass;
+        fb_info.attachmentCount = 2;
+        fb_info.pAttachments = views;
+        fb_info.width = g_swapchain_width;
+        fb_info.height = g_swapchain_height;
+        fb_info.layers = 1;
+
+        if (vkCreateFramebuffer(g_gpu_ctx.device, &fb_info, NULL,
+                                 &g_gpu_ctx.framebuffers[idx].framebuffer) == VK_SUCCESS) {
+            g_gpu_ctx.framebuffers[idx].width = (int)g_swapchain_width;
+            g_gpu_ctx.framebuffers[idx].height = (int)g_swapchain_height;
+            g_gpu_ctx.framebuffers[idx].alive = 1;
+            array_push(&result, val_number(idx));
+        }
+    }
+    return result;
+}
+
 // gpu.shutdown_windowed() -> nil  (cleanup window + vulkan)
 static Value gpu_shutdown_windowed(int argCount, Value* args) {
     // First do normal gpu shutdown
@@ -2904,6 +3357,16 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "create_framebuffer", 18, val_native(gpu_create_framebuffer));
     env_define(e, "destroy_framebuffer", 19, val_native(gpu_destroy_framebuffer));
 
+    // --- Depth buffer ---
+    env_define(e, "create_depth_buffer", 19, val_native(gpu_create_depth_buffer));
+
+    // --- Staging upload ---
+    env_define(e, "upload_device_local", 19, val_native(gpu_upload_device_local));
+
+    // --- Texture loading ---
+    env_define(e, "load_texture", 12, val_native(gpu_load_texture));
+    env_define(e, "texture_dims", 12, val_native(gpu_texture_dims));
+
     // --- Commands ---
     env_define(e, "create_command_pool", 19, val_native(gpu_create_command_pool));
     env_define(e, "create_command_buffer", 21, val_native(gpu_create_command_buffer));
@@ -2956,6 +3419,7 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "present", 7, val_native(gpu_present));
     env_define(e, "submit_with_sync", 16, val_native(gpu_submit_with_sync));
     env_define(e, "create_swapchain_framebuffers", 29, val_native(gpu_create_swapchain_framebuffers));
+    env_define(e, "create_swapchain_framebuffers_depth", 35, val_native(gpu_create_swapchain_fbs_depth));
     env_define(e, "has_window", 10, val_bool(1));
 #else
     env_define(e, "has_window", 10, val_bool(0));
@@ -3042,6 +3506,8 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "PIPE_COMPUTE",      12, val_number(SAGE_PIPE_COMPUTE));
     env_define(e, "PIPE_TRANSFER",     13, val_number(SAGE_PIPE_TRANSFER));
     env_define(e, "PIPE_BOTTOM",       11, val_number(SAGE_PIPE_BOTTOM));
+    env_define(e, "PIPE_VERTEX_SHADER",18, val_number(SAGE_PIPE_VERTEX_SHADER));
+    env_define(e, "PIPE_VERTEX_INPUT", 17, val_number(SAGE_PIPE_VERTEX_INPUT));
     env_define(e, "PIPE_FRAGMENT",     13, val_number(SAGE_PIPE_FRAGMENT));
     env_define(e, "PIPE_COLOR_OUTPUT", 17, val_number(SAGE_PIPE_COLOR_OUTPUT));
     env_define(e, "PIPE_ALL_COMMANDS", 17, val_number(SAGE_PIPE_ALL_COMMANDS));
