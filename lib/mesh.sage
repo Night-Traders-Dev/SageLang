@@ -256,3 +256,139 @@ proc mesh_vertex_attribs():
     a2["format"] = gpu.ATTR_VEC2
     a2["offset"] = 24
     return [a0, a1, a2]
+
+# ============================================================================
+# OBJ File Loading
+# Parses Wavefront .obj files (v, vn, vt, f lines)
+# Returns mesh dict compatible with upload_mesh()
+# ============================================================================
+proc load_obj(path):
+    import io
+    let content = io.readfile(path)
+    if content == nil:
+        print "mesh: failed to read " + path
+        return nil
+
+    let positions = []
+    let normals = []
+    let uvs = []
+    let vertices = []
+    let indices = []
+    let vert_map = {}
+    let vert_count = 0
+
+    # Parse line by line
+    let line_start = 0
+    let ci = 0
+    let clen = len(content)
+    while ci <= clen:
+        let at_end = ci == clen
+        let is_nl = false
+        if at_end == false:
+            if content[ci] == chr(10):
+                is_nl = true
+        if is_nl:
+            let line = ""
+            let li = line_start
+            while li < ci:
+                line = line + content[li]
+                li = li + 1
+            line_start = ci + 1
+
+            # Process line
+            if startswith(line, "v "):
+                # Vertex position
+                let parts = split(line, " ")
+                if len(parts) >= 4:
+                    push(positions, [tonumber(parts[1]), tonumber(parts[2]), tonumber(parts[3])])
+            if startswith(line, "vn "):
+                let parts = split(line, " ")
+                if len(parts) >= 4:
+                    push(normals, [tonumber(parts[1]), tonumber(parts[2]), tonumber(parts[3])])
+            if startswith(line, "vt "):
+                let parts = split(line, " ")
+                if len(parts) >= 3:
+                    push(uvs, [tonumber(parts[1]), tonumber(parts[2])])
+            if startswith(line, "f "):
+                let parts = split(line, " ")
+                # Triangulate face (fan from first vertex)
+                let face_indices = []
+                let fi = 1
+                while fi < len(parts):
+                    let vert_str = parts[fi]
+                    if dict_has(vert_map, vert_str):
+                        push(face_indices, vert_map[vert_str])
+                    else:
+                        # Parse v/vt/vn or v//vn or v
+                        let slash_parts = split(vert_str, "/")
+                        let vi = tonumber(slash_parts[0]) - 1
+                        let ti = -1
+                        let ni = -1
+                        if len(slash_parts) >= 2:
+                            if len(slash_parts[1]) > 0:
+                                ti = tonumber(slash_parts[1]) - 1
+                        if len(slash_parts) >= 3:
+                            ni = tonumber(slash_parts[2]) - 1
+
+                        # Emit vertex: pos, normal, uv
+                        if vi >= 0:
+                            if vi < len(positions):
+                                let p = positions[vi]
+                                push(vertices, p[0])
+                                push(vertices, p[1])
+                                push(vertices, p[2])
+                            else:
+                                push(vertices, 0.0)
+                                push(vertices, 0.0)
+                                push(vertices, 0.0)
+                        if ni >= 0:
+                            if ni < len(normals):
+                                let n = normals[ni]
+                                push(vertices, n[0])
+                                push(vertices, n[1])
+                                push(vertices, n[2])
+                            else:
+                                push(vertices, 0.0)
+                                push(vertices, 1.0)
+                                push(vertices, 0.0)
+                        else:
+                            push(vertices, 0.0)
+                            push(vertices, 1.0)
+                            push(vertices, 0.0)
+                        if ti >= 0:
+                            if ti < len(uvs):
+                                let u = uvs[ti]
+                                push(vertices, u[0])
+                                push(vertices, u[1])
+                            else:
+                                push(vertices, 0.0)
+                                push(vertices, 0.0)
+                        else:
+                            push(vertices, 0.0)
+                            push(vertices, 0.0)
+
+                        vert_map[vert_str] = vert_count
+                        push(face_indices, vert_count)
+                        vert_count = vert_count + 1
+                    fi = fi + 1
+
+                # Fan triangulation
+                let ti2 = 1
+                while ti2 < len(face_indices) - 1:
+                    push(indices, face_indices[0])
+                    push(indices, face_indices[ti2])
+                    push(indices, face_indices[ti2 + 1])
+                    ti2 = ti2 + 1
+        if at_end:
+            ci = ci + 1
+            continue
+        ci = ci + 1
+
+    let result = {}
+    result["vertices"] = vertices
+    result["indices"] = indices
+    result["vertex_count"] = vert_count
+    result["index_count"] = len(indices)
+    result["has_normals"] = len(normals) > 0
+    result["has_uvs"] = len(uvs) > 0
+    return result

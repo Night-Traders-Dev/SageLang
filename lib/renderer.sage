@@ -143,3 +143,36 @@ proc shutdown_renderer(r):
 # ============================================================================
 proc aspect_ratio(r):
     return r["width"] / r["height"]
+
+# ============================================================================
+# Feature 12: Resize handling
+# ============================================================================
+proc check_resize(r):
+    if gpu.window_resized():
+        gpu.device_wait_idle()
+        gpu.recreate_swapchain()
+        let ext = gpu.swapchain_extent()
+        r["width"] = ext["width"]
+        r["height"] = ext["height"]
+        # Recreate depth buffer + framebuffers
+        r["depth_image"] = gpu.create_depth_buffer(r["width"], r["height"])
+        r["framebuffers"] = gpu.create_swapchain_framebuffers_depth(r["render_pass"], r["depth_image"])
+        # Resize command buffers if needed
+        let new_count = len(r["framebuffers"])
+        while len(r["cmd_bufs"]) < new_count:
+            push(r["cmd_bufs"], gpu.create_command_buffer(r["cmd_pool"]))
+        return true
+    return false
+
+# ============================================================================
+# Feature 13: FPS in window title
+# ============================================================================
+proc update_title_fps(r, base_title):
+    let frames = r["frame"]
+    let elapsed = clock() - r["start_time"]
+    if elapsed > 0:
+        let fps = frames / elapsed
+        # Update every 30 frames
+        let m = frames - (frames / 30) * 30
+        if m == 0:
+            gpu.set_title(base_title + " | " + str(fps) + " FPS")

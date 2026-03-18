@@ -597,6 +597,14 @@ test-all: test test-selfhost
 # Cleanup
 # ============================================================================
 
+# Compile all GLSL shaders to SPIR-V
+shaders:
+	@echo "Compiling shaders..."
+	@cd examples/shaders && for f in *.vert *.frag *.comp; do \
+		glslc "$$f" -o "$$f.spv" 2>&1 || echo "FAIL: $$f"; \
+	done
+	@echo "✅ Shaders compiled ($$(ls examples/shaders/*.spv | wc -l) modules)"
+
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET) $(LSP_TARGET)
 	@echo "✅ Cleaned build artifacts"
@@ -721,4 +729,4 @@ help:
         test-selfhost-llvm-backend test-selfhost-codegen test-selfhost-compiler \
         test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
         test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
-        test-all stats help
+        test-all stats help shaders

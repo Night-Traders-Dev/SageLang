@@ -4004,7 +4004,7 @@ static int g_key_prev[512] = {0};
 static Value gpu_update_input(int argCount, Value* args) {
     (void)argCount; (void)args;
     if (!g_window) return val_nil();
-    for (int i = 0; i < 512; i++) {
+    for (int i = 32; i < 349; i++) {  // GLFW valid key range
         g_key_prev[i] = g_key_states[i];
         g_key_states[i] = (glfwGetKey(g_window, i) == GLFW_PRESS) ? 1 : 0;
     }
@@ -4210,6 +4210,93 @@ static Value gpu_screenshot(int argCount, Value* args) {
     dict_set(&result, "height", val_number(h));
     dict_set(&result, "pixels", pixels);
     return result;
+}
+
+// ============================================================================
+// Feature 14: Save screenshot to PNG
+// ============================================================================
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
+// gpu.save_screenshot(path) -> bool
+static Value gpu_save_screenshot(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || !g_swapchain || argCount < 1 || !IS_STRING(args[0]))
+        return val_bool(0);
+
+    const char* path = AS_STRING(args[0]);
+    uint32_t w = g_swapchain_width, h = g_swapchain_height;
+    VkDeviceSize size = (VkDeviceSize)w * h * 4;
+
+    VkBuffer staging; VkDeviceMemory staging_mem;
+    VkBufferCreateInfo bi = {0};
+    bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bi.size = size;
+    bi.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    vkCreateBuffer(g_gpu_ctx.device, &bi, NULL, &staging);
+
+    VkMemoryRequirements req;
+    vkGetBufferMemoryRequirements(g_gpu_ctx.device, staging, &req);
+    VkMemoryAllocateInfo ai = {0};
+    ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    ai.allocationSize = req.size;
+    ai.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    vkAllocateMemory(g_gpu_ctx.device, &ai, NULL, &staging_mem);
+    vkBindBufferMemory(g_gpu_ctx.device, staging, staging_mem, 0);
+
+    VkCommandBuffer cmd = sage_gpu_begin_one_shot_v2();
+    if (cmd && g_swapchain_images) {
+        VkImage src_img = g_swapchain_images[0];
+        VkImageMemoryBarrier barrier = {0};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = src_img;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, NULL, 0, NULL, 1, &barrier);
+
+        VkBufferImageCopy region = {0};
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageExtent = (VkExtent3D){w, h, 1};
+        vkCmdCopyImageToBuffer(cmd, src_img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging, 1, &region);
+
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, NULL, 0, NULL, 1, &barrier);
+        sage_gpu_end_one_shot(cmd);
+    }
+
+    void* mapped;
+    vkMapMemory(g_gpu_ctx.device, staging_mem, 0, size, 0, &mapped);
+
+    // Swapchain is BGRA, PNG expects RGBA — swap R and B
+    unsigned char* pixels = (unsigned char*)mapped;
+    for (uint32_t i = 0; i < w * h; i++) {
+        unsigned char tmp = pixels[i * 4 + 0];
+        pixels[i * 4 + 0] = pixels[i * 4 + 2];
+        pixels[i * 4 + 2] = tmp;
+        pixels[i * 4 + 3] = 255; // force opaque
+    }
+
+    int ok = stbi_write_png(path, (int)w, (int)h, 4, pixels, (int)(w * 4));
+    vkUnmapMemory(g_gpu_ctx.device, staging_mem);
+    vkDestroyBuffer(g_gpu_ctx.device, staging, NULL);
+    vkFreeMemory(g_gpu_ctx.device, staging_mem, NULL);
+
+    if (ok) fprintf(stderr, "Screenshot saved: %s (%dx%d)\n", path, w, h);
+    return val_bool(ok != 0);
 }
 
 // gpu.shutdown_windowed() -> nil  (cleanup window + vulkan)
@@ -4423,6 +4510,7 @@ Module* create_graphics_module(ModuleCache* cache) {
 
     // Feature 18: Screenshot
     env_define(e, "screenshot", 10, val_native(gpu_screenshot));
+    env_define(e, "save_screenshot", 15, val_native(gpu_save_screenshot));
 
     // Key constants (GLFW key codes)
     env_define(e, "KEY_W", 5, val_number(GLFW_KEY_W));
