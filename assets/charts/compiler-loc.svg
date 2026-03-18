@@ -43,5 +43,5 @@
 <text x="1556" y="230.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">76.8% · src/c/*.c plus include/*.h</text>
 <text x="44" y="303" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Native C leads by 23.7K non-empty lines.</text>
 <text x="44" y="327" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Self-hosted Sage is 30.2% of the native C core today.</text>
-<text x="44" y="351" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-03-18 18:16 UTC</text>
+<text x="44" y="351" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-03-18 18:18 UTC</text>
 </svg>

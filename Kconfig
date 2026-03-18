@@ -43,6 +43,167 @@ config BUILD_CMAKE
 
 endchoice
 
+menu "Self-Hosted Sage Compiler"
+
+config SELFHOST
+	bool "Enable self-hosted Sage compiler"
+	default n
+	help
+	  Build and enable the self-hosted Sage compiler pipeline.
+	  The Sage interpreter (C) runs src/sage/sage.sage which
+	  implements a full Sage compiler/interpreter in Sage itself.
+
+	  This enables: make sage-boot FILE=<file>
+	  Bootstrap: sage sage.sage <your_program.sage>
+
+config SELFHOST_EMIT_C
+	bool "Self-hosted C code generation"
+	default y
+	depends on SELFHOST
+	help
+	  Enable 'sage --emit-c' and 'sage --compile' in self-hosted mode.
+	  Generates C source from Sage programs, then compiles via cc.
+
+	  The self-hosted compiler.sage emits standalone C with a
+	  runtime prelude — no external dependencies needed.
+
+config SELFHOST_EMIT_LLVM
+	bool "Self-hosted LLVM IR generation"
+	default y
+	depends on SELFHOST
+	help
+	  Enable 'sage --emit-llvm' and 'sage --compile-llvm' in self-hosted mode.
+	  Generates LLVM IR text (.ll files) from Sage programs.
+
+	  Compile with: clang output.ll obj/llvm_runtime.o -o binary
+
+	  The self-hosted llvm_backend.sage generates SSA registers,
+	  runtime declarations, and proper ABI-matching value types.
+
+config SELFHOST_EMIT_ASM
+	bool "Self-hosted native assembly generation"
+	default y
+	depends on SELFHOST
+	help
+	  Enable 'sage --emit-asm' and 'sage --compile-native' in self-hosted mode.
+	  Generates native assembly for x86-64, aarch64, or rv64.
+
+	  The self-hosted codegen.sage implements VInst IR instruction
+	  selection and register allocation for all three architectures.
+
+config SELFHOST_TOOLS
+	bool "Self-hosted developer tools"
+	default y
+	depends on SELFHOST
+	help
+	  Enable self-hosted formatter, linter, and LSP server.
+
+	  These are Sage-language reimplementations of the C tools:
+	  - sage fmt <file>     (formatter.sage)
+	  - sage lint <file>    (linter.sage)
+	  - sage --lsp          (lsp.sage)
+
+config SELFHOST_RUN_TESTS
+	bool "Run self-hosted test suite during build"
+	default y
+	depends on SELFHOST
+	help
+	  After building, run the self-hosted test suite.
+	  Currently 1567+ tests across 25+ test suites covering
+	  lexer, parser, interpreter, bootstrap, formatter, linter,
+	  optimization passes, type checker, code generation,
+	  LLVM backend, LSP, and GPU modules.
+
+endmenu
+
+menu "LLVM Backend"
+
+config LLVM_BACKEND
+	bool "LLVM IR code generation backend"
+	default y
+	help
+	  Enable the LLVM IR text generation backend in the C compiler.
+	  This allows: sage --emit-llvm <file.sage>
+	               sage --compile-llvm <file.sage>
+
+	  The backend generates LLVM IR text (.ll files) that can be
+	  compiled with clang. A standalone runtime library (llvm_runtime.c)
+	  provides 40+ sage_rt_* functions for the generated code.
+
+config LLVM_RUNTIME
+	bool "Build LLVM runtime library (llvm_runtime.o)"
+	default y
+	depends on LLVM_BACKEND
+	help
+	  Build obj/llvm_runtime.o from src/c/llvm_runtime.c.
+	  This object file is automatically linked when using
+	  --compile-llvm to produce standalone executables.
+
+	  Contains: value constructors, arithmetic, comparison,
+	  logical ops, bitwise ops, collections, property access,
+	  type conversion, I/O, and control flow primitives.
+
+config LLVM_COMPILE
+	bool "Auto-compile LLVM output (requires clang)"
+	default y
+	depends on LLVM_BACKEND && LLVM_RUNTIME
+	help
+	  When using --compile-llvm, automatically invoke clang
+	  to compile the generated .ll file into a native executable.
+
+	  Requires: clang installed and in PATH.
+
+	  Without this, --compile-llvm will fail but --emit-llvm
+	  still works (you compile manually with clang).
+
+endmenu
+
+menu "Native Code Generation"
+
+config NATIVE_CODEGEN
+	bool "Direct native assembly backend"
+	default y
+	help
+	  Enable direct assembly generation without LLVM.
+	  Generates .s assembly files via VInst IR.
+
+	  sage --emit-asm <file.sage>
+	  sage --compile-native <file.sage>
+
+choice
+	prompt "Default target architecture"
+	default NATIVE_TARGET_HOST
+	depends on NATIVE_CODEGEN
+
+config NATIVE_TARGET_HOST
+	bool "Host architecture (auto-detect)"
+	help
+	  Detect at runtime from the host system.
+	  On x86_64 Linux: generates x86-64 assembly.
+	  On aarch64: generates AArch64 assembly.
+
+config NATIVE_TARGET_X86_64
+	bool "x86-64"
+	help
+	  Generate x86-64 (AMD64) assembly.
+	  System V ABI calling convention.
+
+config NATIVE_TARGET_AARCH64
+	bool "AArch64 (ARM64)"
+	help
+	  Generate AArch64 assembly.
+	  AAPCS64 calling convention.
+
+config NATIVE_TARGET_RV64
+	bool "RISC-V 64-bit"
+	help
+	  Generate RV64GC assembly.
+	  LP64D ABI.
+
+endchoice
+
+endmenu
+
 choice
 	prompt "Optimization Level"
 	default OPT_O2

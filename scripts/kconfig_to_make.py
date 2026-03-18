@@ -64,6 +64,27 @@ prefix = config.get("CONFIG_INSTALL_PREFIX", "/usr/local")
 if prefix != "/usr/local":
     lines.append(f"PREFIX = {prefix}")
 
+# Self-hosted
+if config.get("CONFIG_SELFHOST") == "y":
+    lines.append("BUILD_SAGE = ON")
+    if config.get("CONFIG_SELFHOST_RUN_TESTS") == "y":
+        lines.append("SELFHOST_TESTS = 1")
+
+# LLVM Backend
+if config.get("CONFIG_LLVM_BACKEND") != "y":
+    lines.append("LLVM_BACKEND = 0")
+if config.get("CONFIG_LLVM_RUNTIME") != "y":
+    lines.append("LLVM_RUNTIME = 0")
+
+# Native codegen
+if config.get("CONFIG_NATIVE_CODEGEN") != "y":
+    lines.append("NATIVE_CODEGEN = 0")
+else:
+    for arch in ["X86_64", "AARCH64", "RV64"]:
+        if config.get(f"CONFIG_NATIVE_TARGET_{arch}") == "y":
+            lines.append(f"DEFAULT_TARGET = {arch.lower()}")
+            break
+
 # Verbose
 if config.get("CONFIG_VERBOSE_BUILD") == "y":
     lines.append("V = 1")
