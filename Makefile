@@ -466,6 +466,15 @@ test-selfhost: $(TARGET)
 	@echo "=== Self-Hosted Sage CLI Tests ==="
 	@cd src/sage && ../../$(TARGET) test/test_sage_cli.sage 2>&1 | tail -3
 	@echo ""
+	@echo "=== Self-Hosted Diagnostic Tests ==="
+	@cd src/sage && ../../$(TARGET) test/test_diagnostic.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Self-Hosted GC Tests ==="
+	@cd src/sage && ../../$(TARGET) test/test_gc.sage 2>&1 | tail -3
+	@echo ""
+	@echo "=== Self-Hosted Heartbeat Tests ==="
+	@cd src/sage && ../../$(TARGET) test/test_heartbeat.sage 2>&1 | tail -3
+	@echo ""
 	@echo "✅ All self-hosted tests complete"
 
 # Run individual self-hosted test suites
@@ -529,6 +538,15 @@ test-selfhost-lsp: $(TARGET)
 
 test-selfhost-sage-cli: $(TARGET)
 	cd src/sage && ../../$(TARGET) test/test_sage_cli.sage
+
+test-selfhost-diagnostic: $(TARGET)
+	cd src/sage && ../../$(TARGET) test/test_diagnostic.sage
+
+test-selfhost-gc: $(TARGET)
+	cd src/sage && ../../$(TARGET) test/test_gc.sage
+
+test-selfhost-heartbeat: $(TARGET)
+	cd src/sage && ../../$(TARGET) test/test_heartbeat.sage
 
 # Run ALL tests (C + self-hosted)
 test-all: test test-selfhost
@@ -662,4 +680,5 @@ help:
         test-selfhost-typecheck test-selfhost-stdlib test-selfhost-module \
         test-selfhost-llvm-backend test-selfhost-codegen test-selfhost-compiler \
         test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
+        test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat \
         test-all stats help
