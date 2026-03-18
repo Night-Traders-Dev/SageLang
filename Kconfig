@@ -1,0 +1,318 @@
+mainmenu "SageLang Configuration"
+
+menu "Compiler & Build"
+
+choice
+	prompt "C Compiler"
+	default CC_GCC
+
+config CC_GCC
+	bool "GCC"
+	help
+	  Use the GNU C Compiler (gcc).
+	  This is the default and most tested compiler.
+
+config CC_CLANG
+	bool "Clang"
+	help
+	  Use the LLVM Clang compiler.
+	  May produce smaller binaries.
+
+config CC_SYSTEM
+	bool "System default (cc)"
+	help
+	  Use whatever 'cc' points to on your system.
+
+endchoice
+
+choice
+	prompt "Build System"
+	default BUILD_MAKE
+
+config BUILD_MAKE
+	bool "Make (default)"
+	help
+	  Build using the Makefile directly.
+	  Fastest and simplest build path.
+
+config BUILD_CMAKE
+	bool "CMake"
+	help
+	  Build using CMake.
+	  Required for Pico/RP2040 builds and self-hosted mode.
+
+endchoice
+
+choice
+	prompt "Optimization Level"
+	default OPT_O2
+
+config OPT_O0
+	bool "-O0 (no optimization, fastest compile)"
+	help
+	  No optimization. Best for debugging.
+	  Combined with DEBUG for development.
+
+config OPT_O1
+	bool "-O1 (basic optimization)"
+
+config OPT_O2
+	bool "-O2 (recommended)"
+	help
+	  Good balance of performance and compile time.
+	  This is the default for release builds.
+
+config OPT_O3
+	bool "-O3 (aggressive optimization)"
+	help
+	  Maximum optimization. May increase binary size.
+	  Useful for performance-critical deployments.
+
+endchoice
+
+config DEBUG
+	bool "Debug symbols (-g -DDEBUG)"
+	default n
+	help
+	  Add debug symbols and enable DEBUG macro.
+	  Use with -O0 for best debugging experience.
+
+	  Increases binary size significantly.
+
+endmenu
+
+menu "GPU & Graphics"
+
+config VULKAN
+	bool "Vulkan GPU support"
+	default y
+	help
+	  Enable the Vulkan graphics backend.
+	  Provides GPU compute and rendering via 'import gpu'.
+
+	  Requires: Vulkan SDK (libvulkan-dev)
+	  Auto-detected via pkg-config if available.
+
+	  If disabled, the gpu module loads in stub mode
+	  with all constants available but functions returning errors.
+
+config GLFW
+	bool "GLFW windowed mode"
+	default y
+	depends on VULKAN
+	help
+	  Enable GLFW for window creation and input handling.
+	  Required for all GPU demos that open a window.
+
+	  Requires: libglfw3-dev
+	  Auto-detected via pkg-config if available.
+
+	  Without GLFW, only headless compute is available.
+
+choice
+	prompt "Default GPU platform"
+	default GPU_PLATFORM_AUTO
+	depends on GLFW
+
+config GPU_PLATFORM_AUTO
+	bool "Auto-detect"
+	help
+	  Automatically detect the display server.
+	  Prefers XWayland when both X11 and Wayland are available.
+
+config GPU_PLATFORM_X11
+	bool "Force X11"
+	help
+	  Always use X11/Xorg for window creation.
+	  Most compatible option.
+
+config GPU_PLATFORM_WAYLAND
+	bool "Force Wayland"
+	help
+	  Use native Wayland protocol.
+	  May require working libdecor installation.
+
+endchoice
+
+config COMPILE_SHADERS
+	bool "Compile GLSL shaders to SPIR-V"
+	default y
+	depends on VULKAN
+	help
+	  Compile all .vert/.frag/.comp shaders in examples/shaders/
+	  to SPIR-V (.spv) format during build.
+
+	  Requires: glslc (from Vulkan SDK or shaderc)
+
+endmenu
+
+menu "Networking"
+
+config CURL
+	bool "HTTP support (libcurl)"
+	default y
+	help
+	  Enable the HTTP/HTTPS client module.
+	  Provides 'import http' with get/post/put/delete/download.
+
+	  Requires: libcurl4-openssl-dev
+
+config OPENSSL
+	bool "SSL/TLS support (OpenSSL)"
+	default y
+	help
+	  Enable the SSL/TLS module for encrypted connections.
+	  Provides 'import ssl' with context/wrap/connect/accept.
+
+	  Requires: libssl-dev
+
+endmenu
+
+menu "Platform & Cross-compilation"
+
+config PICO_BUILD
+	bool "Raspberry Pi Pico (RP2040) build"
+	default n
+	help
+	  Build for the Raspberry Pi Pico microcontroller.
+	  Disables: pthreads, networking, Vulkan, GLFW.
+	  Requires: Pico SDK (PICO_SDK_PATH).
+
+	  Uses CMake build system automatically.
+
+config PICO_BOARD
+	string "Pico board name"
+	default "pico"
+	depends on PICO_BUILD
+	help
+	  Board name for the Pico SDK.
+	  Common values: pico, pico_w, pico2
+
+config PICO_SDK_PATH
+	string "Pico SDK path"
+	default ""
+	depends on PICO_BUILD
+	help
+	  Path to the Raspberry Pi Pico SDK.
+	  Can also be set via PICO_SDK_PATH environment variable.
+
+choice
+	prompt "Target architecture (native codegen)"
+	default TARGET_HOST
+
+config TARGET_HOST
+	bool "Host architecture (auto-detect)"
+
+config TARGET_X86_64
+	bool "x86-64"
+
+config TARGET_AARCH64
+	bool "AArch64 (ARM64)"
+
+config TARGET_RV64
+	bool "RISC-V 64-bit"
+
+endchoice
+
+endmenu
+
+menu "Testing"
+
+config RUN_TESTS
+	bool "Run test suite after build"
+	default y
+	help
+	  Run the full test suite (interpreter + self-hosted) after building.
+	  Currently 1623+ tests across 25+ test suites.
+
+config TEST_INTERPRETER
+	bool "C interpreter tests (144 tests)"
+	default y
+	depends on RUN_TESTS
+
+config TEST_SELFHOST
+	bool "Self-hosted tests (1400+ tests)"
+	default y
+	depends on RUN_TESTS
+	help
+	  Run all self-hosted test suites:
+	  Lexer, Parser, Interpreter, Bootstrap, Formatter, Linter,
+	  Value, Pass, Constfold, DCE, Inline, Typecheck, Stdlib,
+	  Module, LLVM Backend, Codegen, C Compiler, Errors, LSP,
+	  Sage CLI, Diagnostic, GC, Heartbeat, GPU, GPU Advanced,
+	  GPU Features, GPU Engine.
+
+config TEST_GPU
+	bool "GPU/Vulkan tests (285 tests)"
+	default y
+	depends on RUN_TESTS && VULKAN
+	help
+	  Run GPU-specific test suites that verify Vulkan functionality.
+	  Requires Vulkan to be available at runtime.
+
+config TEST_SCREENSHOTS
+	bool "Visual screenshot tests"
+	default n
+	depends on RUN_TESTS && VULKAN && GLFW
+	help
+	  Render each GPU demo for a few frames and save screenshots
+	  to tests/screenshots/ for visual inspection.
+
+	  Requires a display server (X11 or Wayland).
+
+endmenu
+
+menu "Installation"
+
+config INSTALL_PREFIX
+	string "Install prefix"
+	default "/usr/local"
+	help
+	  Destination for 'make install'.
+	  Binary goes to PREFIX/bin/sage
+
+config INSTALL_LIBS
+	bool "Install standard library modules"
+	default y
+	help
+	  Install lib/*.sage modules to PREFIX/share/sage/lib/
+
+config INSTALL_LSP
+	bool "Install LSP server (sage-lsp)"
+	default y
+	help
+	  Install the Language Server Protocol binary.
+
+endmenu
+
+menu "Advanced"
+
+config THREADING
+	bool "Thread support (pthreads)"
+	default y
+	depends on !PICO_BUILD
+	help
+	  Enable threading support via pthreads.
+	  Required for: async/await, thread module, GC thread safety.
+
+config GC_ENABLED
+	bool "Garbage collection"
+	default y
+	help
+	  Enable the mark-and-sweep garbage collector.
+	  Self-hosted Sage code uses gc_disable() at startup.
+
+config LLVM_RUNTIME
+	bool "Build LLVM runtime library"
+	default y
+	help
+	  Build obj/llvm_runtime.o which is linked with
+	  --compile-llvm output for standalone executables.
+
+config VERBOSE_BUILD
+	bool "Verbose build output"
+	default n
+	help
+	  Show full compiler commands during build.
+
+endmenu

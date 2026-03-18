@@ -600,9 +600,20 @@ test-all: test test-selfhost
 # Cleanup
 # ============================================================================
 
-# Interactive build configuration
+# Kernel-style build configuration (uses kconfiglib)
 menuconfig:
-	@bash scripts/menuconfig.sh
+	@KCONFIG_CONFIG=.config menuconfig Kconfig
+	@$(PYTHON) scripts/kconfig_to_make.py .config sage_config.mk
+	@echo ""
+	@echo "Configuration saved. Run 'make' to build."
+
+# GUI config (if available)
+guiconfig:
+	@KCONFIG_CONFIG=.config guiconfig Kconfig
+	@$(PYTHON) scripts/kconfig_to_make.py .config sage_config.mk
+
+# Load saved config if it exists
+-include sage_config.mk
 
 # Compile all GLSL shaders to SPIR-V
 shaders:
@@ -736,4 +747,4 @@ help:
         test-selfhost-llvm-backend test-selfhost-codegen test-selfhost-compiler \
         test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
         test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
-        test-all stats help shaders menuconfig
+        test-all stats help shaders menuconfig guiconfig
