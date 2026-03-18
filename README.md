@@ -137,6 +137,7 @@ The compiled VM recipe is now charted as a first-class lane on the default workl
   - Auto-detected via pkg-config; compiles as stubs without Vulkan SDK
 - **`lib/vulkan.sage`**: Ergonomic builder API — `vulkan.buffer("storage")`, `vulkan.shader("compute.spv", "compute")`
 - **`lib/gpu.sage`**: High-level helpers — `run_compute()` for one-shot GPU compute, ping-pong buffers, device info
+- **Rendering Libraries**: `math3d` (vectors/matrices/camera), `mesh` (procedural cube/plane/sphere, OBJ), `renderer` (frame loop), `material` (shader+texture binding), `scene` (scene graph), `pbr` (Cook-Torrance materials), `postprocess` (HDR/bloom/tonemapping), `shadows` (cascade shadow maps), `deferred` (G-buffer, SSAO, SSR), `taa` (temporal anti-aliasing), `gltf` (glTF 2.0 loading), `asset_cache`, `frame_graph`, `debug_ui`
 
 ### JSON Library (cJSON Port)
 
@@ -682,7 +683,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 
 - **Language**: C
 - **Phases Completed**: 15/15 (100%)
-- **Test Suite**: 144 interpreter + 28 compiler + 88 JSON + 1411 self-hosted tests (1671+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, and GPU
+- **Test Suite**: 144 interpreter + 28 compiler + 88 JSON + 1567 self-hosted tests (1827+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, and GPU
 - **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
 - **Status**: Active development with a working self-hosted interpreter and GPU graphics library
@@ -828,7 +829,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
-- March 18, 2026: Phase 15 Complete - Vulkan graphics library (GPU module with compute/graphics pipelines, 100+ constants, Sage builder APIs, 104 tests)
+- March 18, 2026: Phase 15 Complete - Vulkan graphics engine (4600-line C backend, 16 Sage libraries, 27 shaders, 6 demos, PBR/bloom/shadows/deferred/SSAO/particles/N-body, 285 GPU tests)
 - March 17, 2026: LLVM Backend - Standalone runtime library (40+ sage_rt_* functions), ABI fix, local variable allocation, block termination tracking; --compile-llvm now produces working executables
 - March 17, 2026: Phase 14 Complete - Security & performance audit (30 fixes across 14 files, all 1425 tests passing)
 - March 9, 2026: Networking modules (socket, tcp, http, ssl) + cJSON port (88 tests)

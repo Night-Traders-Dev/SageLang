@@ -618,11 +618,11 @@ Professional GPU compute and graphics library for SageLang.
 ## 📊 Progress Metrics
 
 - **Phases Completed**: 15/15 (100%)
-- **Test Suite**: 144 interpreter tests + 28 compiler tests + 1411 self-host tests + 88 JSON tests, 100% pass rate
+- **Test Suite**: 144 interpreter + 28 compiler + 1567 self-host + 88 JSON tests (1827+ total), 100% pass rate
 - **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics
 - **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
 - **Self-Hosting**: Lexer, parser, and interpreter ported to Sage with full bootstrap
-- **GPU**: Vulkan graphics library with compute and graphics pipeline support
+- **GPU**: Vulkan graphics engine (4600-line C, 16 Sage libraries, 27 shaders, 6 demos, PBR/bloom/shadows/deferred/particles)
 
 ---
 

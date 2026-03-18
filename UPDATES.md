@@ -46,12 +46,66 @@ Three additional C modules ported to Sage:
 | `gc.c` (738 lines) | `gc.sage` — GC stats/control API, threshold computation | 45 |
 | `heartbeat.c` (210 lines) | `heartbeat.sage` — Cooperative heartbeat system, health check aggregator | 44 |
 
+### Professional Rendering Features (same day expansion)
+
+#### C Native Additions (~2000 lines)
+- **Input handling**: `key_pressed`, `key_just_pressed`, `key_just_released`, `mouse_pos`, `mouse_button`, `scroll_delta`, `set_cursor_mode`, 27 GLFW key/mouse constants
+- **Swapchain recreation**: `recreate_swapchain()` for window resize handling
+- **Uniform buffers**: `create_uniform_buffer`, `update_uniform` (persistent mapped write)
+- **Offscreen rendering**: `create_offscreen_target` (color + depth, auto render pass + framebuffer)
+- **Texture loading**: `load_texture` via stb_image (PNG/JPG/BMP/TGA), staging buffer copy, layout transitions
+- **Mipmaps**: `generate_mipmaps` (blit chain), `create_sampler_advanced` (anisotropy, mip LOD)
+- **Indirect draw/dispatch**: `cmd_draw_indirect`, `cmd_draw_indexed_indirect`, `cmd_dispatch_indirect`
+- **3D textures**: `create_image_3d` with VK_IMAGE_VIEW_TYPE_3D
+- **Cubemaps**: `create_cubemap` (6-layer cube-compatible image)
+- **Multi-vertex binding**: `cmd_bind_vertex_buffers` (up to 8 bindings for instanced data)
+- **MRT render pass**: `create_render_pass_mrt` (multiple color attachments for deferred G-buffer)
+- **Byte upload**: `upload_bytes` for raw binary data (glTF buffers)
+- **Shader hot-reload**: `reload_shader` (destroy old, load new SPIR-V)
+- **Screenshot**: `screenshot` (readback swapchain to pixel array)
+
+#### New Sage Libraries (16 files, ~2300 lines)
+- `math3d.sage`: vec2/3/4, mat4 (column-major), perspective/ortho, look_at, orbit/FPS camera
+- `mesh.sage`: procedural cube/plane/sphere, OBJ loading, GPU upload, vertex descriptors
+- `renderer.sage`: high-level frame loop (depth buffer + render pass + per-frame sync)
+- `postprocess.sage`: HDR render targets, bloom chain (4 levels), tone mapping (ACES/Reinhard)
+- `pbr.sage`: Cook-Torrance metallic-roughness materials, lights, IBL context, 8 presets
+- `shadows.sage`: shadow maps, depth-only passes, cascade shadow maps (4 cascades)
+- `deferred.sage`: G-buffer (4 MRT: position/normal/albedo/emission), SSAO (32 samples), SSR (64-step)
+- `gltf.sage`: glTF 2.0 JSON loading, mesh/material/scene extraction
+- `taa.sage`: Halton jitter sequence, history/velocity buffers, temporal blend
+- `scene.sage`: scene graph (node hierarchy, transforms, traversal, find_by_name)
+- `material.sage`: shader+texture+descriptor binding, presets (unlit/textured/PBR)
+- `asset_cache.sage`: shader/texture/mesh dedup caching
+- `frame_graph.sage`: pass dependency ordering (topological sort), resource tracking
+- `debug_ui.sage`: FPS tracking, frame timing, custom values, toggle overlay
+
+#### GLSL Shaders (27 SPIR-V modules)
+- PBR: Cook-Torrance BRDF (GGX NDF + Smith geometry + Schlick Fresnel)
+- Bloom: brightness extract, 5-tap Gaussian blur, ACES/Reinhard tonemapping composite
+- Shadows: depth-only pass from light perspective
+- Skybox: cubemap sampling with depth=1.0 (always behind scene)
+- N-body: compute shader with shared-memory tiling (65K+ bodies)
+- Stars: SSBO-driven instanced point sprites with temperature coloring
+- Nebula: FBM 3D noise volumetric compute shader
+- Planet: ray-sphere intersection, noise terrain, biome coloring, atmosphere rim glow
+
+#### Demos (6 GPU examples)
+- `gpu_window.sage`: empty window with cycling clear color
+- `gpu_triangle.sage`: classic RGB triangle via SPIR-V shaders
+- `gpu_hello3d.sage`: rotating 3D "HELLO WORLD" line text with push constants
+- `gpu_cube.sage`: spinning textured cube with depth buffer and perspective camera
+- `gpu_phong.sage`: multi-object Phong-lit scene with orbit camera
+- `gpu_particles.sage`: 65536 GPU compute particles with ping-pong SSBOs
+
 ### Build & Test
 
 - `VULKAN` Make variable: `auto` (default, pkg-config detection), `1` (force), `0` (disable)
-- `-lvulkan` added to LDFLAGS when Vulkan SDK detected
-- New Makefile targets: `test-selfhost-diagnostic`, `test-selfhost-gc`, `test-selfhost-heartbeat`, `test-selfhost-gpu`
-- **1411+ self-hosted tests passing** (104 GPU + 53 diagnostic + 45 GC + 44 heartbeat new)
+- GLFW auto-detected for windowed mode
+- `-lvulkan -lglfw` added to LDFLAGS when detected
+- stb_image.h vendored into include/ for texture loading
+- 27 SPIR-V shader modules pre-compiled in examples/shaders/
+- **1567+ self-hosted tests passing** (285 GPU tests across 3 test suites)
 - All existing tests unaffected
 
 ## March 17, 2026 - LLVM Backend: Runtime Library & Compile-to-Executable
