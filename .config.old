@@ -1,0 +1,70 @@
+
+#
+# Compiler & Build
+#
+CONFIG_CC_GCC=y
+# CONFIG_CC_CLANG is not set
+# CONFIG_CC_SYSTEM is not set
+CONFIG_BUILD_MAKE=y
+# CONFIG_BUILD_CMAKE is not set
+# CONFIG_OPT_O0 is not set
+# CONFIG_OPT_O1 is not set
+CONFIG_OPT_O2=y
+# CONFIG_OPT_O3 is not set
+# CONFIG_DEBUG is not set
+# end of Compiler & Build
+
+#
+# GPU & Graphics
+#
+CONFIG_VULKAN=y
+CONFIG_GLFW=y
+CONFIG_GPU_PLATFORM_AUTO=y
+# CONFIG_GPU_PLATFORM_X11 is not set
+# CONFIG_GPU_PLATFORM_WAYLAND is not set
+CONFIG_COMPILE_SHADERS=y
+# end of GPU & Graphics
+
+#
+# Networking
+#
+CONFIG_CURL=y
+CONFIG_OPENSSL=y
+# end of Networking
+
+#
+# Platform & Cross-compilation
+#
+# CONFIG_PICO_BUILD is not set
+CONFIG_TARGET_HOST=y
+# CONFIG_TARGET_X86_64 is not set
+# CONFIG_TARGET_AARCH64 is not set
+# CONFIG_TARGET_RV64 is not set
+# end of Platform & Cross-compilation
+
+#
+# Testing
+#
+CONFIG_RUN_TESTS=y
+CONFIG_TEST_INTERPRETER=y
+CONFIG_TEST_SELFHOST=y
+CONFIG_TEST_GPU=y
+# CONFIG_TEST_SCREENSHOTS is not set
+# end of Testing
+
+#
+# Installation
+#
+CONFIG_INSTALL_PREFIX="/usr/local"
+CONFIG_INSTALL_LIBS=y
+CONFIG_INSTALL_LSP=y
+# end of Installation
+
+#
+# Advanced
+#
+CONFIG_THREADING=y
+CONFIG_GC_ENABLED=y
+CONFIG_LLVM_RUNTIME=y
+# CONFIG_VERBOSE_BUILD is not set
+# end of Advanced
