@@ -334,34 +334,270 @@ static int line_starts_block(const char* line) {
     return (len > 0 && line[len - 1] == ':');
 }
 
-// Phase 12: Read a line from stdin with a prompt
+// Phase 12: Terminal line editor with arrow keys, history, and ctrl shortcuts
+// Requires POSIX termios for raw mode
+#include <termios.h>
+#include <sys/ioctl.h>
+
+static struct termios g_orig_termios;
+static int g_raw_mode = 0;
+
+static void disable_raw_mode(void) {
+    if (g_raw_mode) {
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_orig_termios);
+        g_raw_mode = 0;
+    }
+}
+
+static int enable_raw_mode(void) {
+    if (!isatty(STDIN_FILENO)) return -1;
+    if (g_raw_mode) return 0;
+    tcgetattr(STDIN_FILENO, &g_orig_termios);
+    atexit(disable_raw_mode);
+
+    struct termios raw = g_orig_termios;
+    raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+    raw.c_oflag |= OPOST;  // Keep output processing for \n -> \r\n
+    raw.c_cflag |= CS8;
+    raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+    g_raw_mode = 1;
+    return 0;
+}
+
+// Forward declaration of history for arrow key navigation (defined later)
+#define REPL_HISTORY_MAX 500
+static char* g_repl_history[REPL_HISTORY_MAX];
+static int g_repl_history_count = 0;
+
+static void repl_refresh_line(const char* prompt, const char* buf, size_t len, size_t pos) {
+    // Move cursor to start of line, clear, rewrite
+    printf("\r\x1b[K%s%.*s", prompt, (int)len, buf);
+    // Position cursor
+    int prompt_len = (int)strlen(prompt);
+    if ((int)pos < (int)len) {
+        printf("\r\x1b[%dC", prompt_len + (int)pos);
+    }
+    fflush(stdout);
+}
+
 static char* repl_readline(const char* prompt) {
+    // If not a terminal, fall back to simple fgets
+    if (!isatty(STDIN_FILENO)) {
+        printf("%s", prompt);
+        fflush(stdout);
+        size_t cap = 256;
+        char* line = malloc(cap);
+        if (!line) return NULL;
+        size_t len = 0;
+        int c;
+        while ((c = fgetc(stdin)) != EOF && c != '\n') {
+            if (len + 1 >= cap) { cap *= 2; line = realloc(line, cap); }
+            line[len++] = (char)c;
+        }
+        if (c == EOF && len == 0) { free(line); return NULL; }
+        line[len] = '\0';
+        return line;
+    }
+
+    enable_raw_mode();
     printf("%s", prompt);
     fflush(stdout);
 
     size_t capacity = 256;
-    char* line = malloc(capacity);
-    if (!line) return NULL;
-
+    char* buf = malloc(capacity);
+    if (!buf) { disable_raw_mode(); return NULL; }
     size_t len = 0;
-    int c;
-    while ((c = fgetc(stdin)) != EOF && c != '\n') {
-        if (len + 1 >= capacity) {
-            capacity *= 2;
-            char* new_line = realloc(line, capacity);
-            if (!new_line) { free(line); return NULL; }
-            line = new_line;
+    size_t pos = 0;  // Cursor position
+    int history_idx = g_repl_history_count; // Points past end = current input
+
+    // Save original input for history navigation
+    char* saved_line = NULL;
+
+    for (;;) {
+        char c;
+        int nread = (int)read(STDIN_FILENO, &c, 1);
+        if (nread <= 0) {
+            // EOF (Ctrl+D with empty line)
+            if (len == 0) {
+                free(buf);
+                if (saved_line) free(saved_line);
+                disable_raw_mode();
+                return NULL;
+            }
+            continue;
         }
-        line[len++] = (char)c;
+
+        if (c == '\r' || c == '\n') {
+            // Enter
+            printf("\r\n");
+            break;
+        } else if (c == 4) {
+            // Ctrl+D
+            if (len == 0) {
+                free(buf);
+                if (saved_line) free(saved_line);
+                disable_raw_mode();
+                return NULL;
+            }
+            // Delete char at cursor
+            if (pos < len) {
+                memmove(buf + pos, buf + pos + 1, len - pos - 1);
+                len--;
+                repl_refresh_line(prompt, buf, len, pos);
+            }
+        } else if (c == 3) {
+            // Ctrl+C — clear line
+            len = 0;
+            pos = 0;
+            printf("\r\n");
+            repl_refresh_line(prompt, buf, len, pos);
+        } else if (c == 12) {
+            // Ctrl+L — clear screen
+            printf("\x1b[2J\x1b[H");
+            repl_refresh_line(prompt, buf, len, pos);
+        } else if (c == 1) {
+            // Ctrl+A — beginning of line
+            pos = 0;
+            repl_refresh_line(prompt, buf, len, pos);
+        } else if (c == 5) {
+            // Ctrl+E — end of line
+            pos = len;
+            repl_refresh_line(prompt, buf, len, pos);
+        } else if (c == 11) {
+            // Ctrl+K — kill to end of line
+            len = pos;
+            repl_refresh_line(prompt, buf, len, pos);
+        } else if (c == 21) {
+            // Ctrl+U — kill to beginning of line
+            memmove(buf, buf + pos, len - pos);
+            len -= pos;
+            pos = 0;
+            repl_refresh_line(prompt, buf, len, pos);
+        } else if (c == 23) {
+            // Ctrl+W — delete word backward
+            while (pos > 0 && buf[pos - 1] == ' ') { pos--; len--; memmove(buf + pos, buf + pos + 1, len - pos); }
+            while (pos > 0 && buf[pos - 1] != ' ') { pos--; len--; memmove(buf + pos, buf + pos + 1, len - pos); }
+            repl_refresh_line(prompt, buf, len, pos);
+        } else if (c == 127 || c == 8) {
+            // Backspace
+            if (pos > 0) {
+                memmove(buf + pos - 1, buf + pos, len - pos);
+                pos--;
+                len--;
+                repl_refresh_line(prompt, buf, len, pos);
+            }
+        } else if (c == 27) {
+            // Escape sequence (arrow keys, etc.)
+            char seq[3];
+            if (read(STDIN_FILENO, &seq[0], 1) != 1) continue;
+            if (read(STDIN_FILENO, &seq[1], 1) != 1) continue;
+
+            if (seq[0] == '[') {
+                if (seq[1] == 'A') {
+                    // Up arrow — previous history
+                    if (history_idx > 0) {
+                        if (history_idx == g_repl_history_count) {
+                            // Save current input
+                            if (saved_line) free(saved_line);
+                            buf[len] = '\0';
+                            saved_line = strdup(buf);
+                        }
+                        history_idx--;
+                        strncpy(buf, g_repl_history[history_idx], capacity - 1);
+                        len = strlen(buf);
+                        pos = len;
+                        repl_refresh_line(prompt, buf, len, pos);
+                    }
+                } else if (seq[1] == 'B') {
+                    // Down arrow — next history
+                    if (history_idx < g_repl_history_count) {
+                        history_idx++;
+                        if (history_idx == g_repl_history_count) {
+                            // Restore saved input
+                            if (saved_line) {
+                                strncpy(buf, saved_line, capacity - 1);
+                                len = strlen(buf);
+                            } else {
+                                len = 0;
+                            }
+                        } else {
+                            strncpy(buf, g_repl_history[history_idx], capacity - 1);
+                            len = strlen(buf);
+                        }
+                        pos = len;
+                        repl_refresh_line(prompt, buf, len, pos);
+                    }
+                } else if (seq[1] == 'C') {
+                    // Right arrow
+                    if (pos < len) {
+                        pos++;
+                        repl_refresh_line(prompt, buf, len, pos);
+                    }
+                } else if (seq[1] == 'D') {
+                    // Left arrow
+                    if (pos > 0) {
+                        pos--;
+                        repl_refresh_line(prompt, buf, len, pos);
+                    }
+                } else if (seq[1] == 'H') {
+                    // Home
+                    pos = 0;
+                    repl_refresh_line(prompt, buf, len, pos);
+                } else if (seq[1] == 'F') {
+                    // End
+                    pos = len;
+                    repl_refresh_line(prompt, buf, len, pos);
+                } else if (seq[1] == '3') {
+                    // Delete key (ESC [ 3 ~)
+                    char tilde;
+                    read(STDIN_FILENO, &tilde, 1);
+                    if (pos < len) {
+                        memmove(buf + pos, buf + pos + 1, len - pos - 1);
+                        len--;
+                        repl_refresh_line(prompt, buf, len, pos);
+                    }
+                } else if (seq[1] == '1' || seq[1] == '7') {
+                    // Home (alternate)
+                    char tilde;
+                    read(STDIN_FILENO, &tilde, 1);
+                    pos = 0;
+                    repl_refresh_line(prompt, buf, len, pos);
+                } else if (seq[1] == '4' || seq[1] == '8') {
+                    // End (alternate)
+                    char tilde;
+                    read(STDIN_FILENO, &tilde, 1);
+                    pos = len;
+                    repl_refresh_line(prompt, buf, len, pos);
+                }
+            } else if (seq[0] == 'O') {
+                if (seq[1] == 'H') { pos = 0; repl_refresh_line(prompt, buf, len, pos); }
+                if (seq[1] == 'F') { pos = len; repl_refresh_line(prompt, buf, len, pos); }
+            }
+        } else if (c >= 32) {
+            // Printable character — insert at cursor position
+            if (len + 1 >= capacity) {
+                capacity *= 2;
+                char* new_buf = realloc(buf, capacity);
+                if (!new_buf) continue;
+                buf = new_buf;
+            }
+            if (pos < len) {
+                memmove(buf + pos + 1, buf + pos, len - pos);
+            }
+            buf[pos] = c;
+            len++;
+            pos++;
+            repl_refresh_line(prompt, buf, len, pos);
+        }
     }
 
-    if (c == EOF && len == 0) {
-        free(line);
-        return NULL;  // EOF with no input
-    }
-
-    line[len] = '\0';
-    return line;
+    if (saved_line) free(saved_line);
+    disable_raw_mode();
+    buf[len] = '\0';
+    return buf;
 }
 
 // Phase 12: Track REPL source buffers (tokens point into these)
@@ -518,13 +754,8 @@ static void repl_execute_source(char* buffer, Env* env, SageRuntimeMode runtime_
 }
 
 // ============================================================================
-// REPL: History tracking
+// REPL: History tracking (arrays defined above repl_readline)
 // ============================================================================
-
-#define REPL_HISTORY_MAX 500
-
-static char* g_repl_history[REPL_HISTORY_MAX];
-static int g_repl_history_count = 0;
 
 static void repl_history_add(const char* line) {
     if (line == NULL || line[0] == '\0') return;

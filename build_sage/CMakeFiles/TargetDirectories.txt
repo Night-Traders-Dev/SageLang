@@ -1,9 +1,0 @@
-/home/kraken/Devel/sagelang/build_sage/CMakeFiles/sage.dir
-/home/kraken/Devel/sagelang/build_sage/CMakeFiles/sage_boot.dir
-/home/kraken/Devel/sagelang/build_sage/CMakeFiles/test_selfhost_lexer.dir
-/home/kraken/Devel/sagelang/build_sage/CMakeFiles/test_selfhost_parser.dir
-/home/kraken/Devel/sagelang/build_sage/CMakeFiles/test_selfhost_interpreter.dir
-/home/kraken/Devel/sagelang/build_sage/CMakeFiles/test_selfhost_bootstrap.dir
-/home/kraken/Devel/sagelang/build_sage/CMakeFiles/test_selfhost.dir
-/home/kraken/Devel/sagelang/build_sage/CMakeFiles/edit_cache.dir
-/home/kraken/Devel/sagelang/build_sage/CMakeFiles/rebuild_cache.dir
