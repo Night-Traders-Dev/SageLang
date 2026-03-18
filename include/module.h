@@ -91,6 +91,7 @@ Module* create_socket_module(ModuleCache* cache);
 Module* create_tcp_module(ModuleCache* cache);
 Module* create_http_module(ModuleCache* cache);
 Module* create_ssl_module(ModuleCache* cache);
+Module* create_graphics_module(ModuleCache* cache);
 
 // Sys module argc/argv (set from main before module init)
 void sage_set_args(int argc, const char** argv);

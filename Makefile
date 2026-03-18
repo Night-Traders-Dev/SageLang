@@ -12,6 +12,22 @@ CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L
 # Platform-conditional linking: pthread only on desktop (not RP2040)
 ifndef PICO_BUILD
 LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto
+# Vulkan support: auto-detect or set VULKAN=1
+VULKAN ?= auto
+ifeq ($(VULKAN),auto)
+    VULKAN_CHECK := $(shell pkg-config --exists vulkan 2>/dev/null && echo yes || echo no)
+else ifeq ($(VULKAN),1)
+    VULKAN_CHECK := yes
+else
+    VULKAN_CHECK := no
+endif
+ifeq ($(VULKAN_CHECK),yes)
+    CFLAGS += -DSAGE_HAS_VULKAN
+    LDFLAGS += -lvulkan
+    $(info Vulkan support enabled)
+else
+    $(info Vulkan support disabled (stub mode))
+endif
 else
 LDFLAGS = -lm
 endif
@@ -59,7 +75,8 @@ CORE_SOURCES = \
     $(SRC_DIR)/sage_thread.c \
     $(SRC_DIR)/stdlib.c \
     $(SRC_DIR)/typecheck.c \
-    $(SRC_DIR)/value.c
+    $(SRC_DIR)/value.c \
+    $(SRC_DIR)/graphics.c
 
 VM_SOURCES = \
     $(VM_DIR)/bytecode.c \
@@ -94,7 +111,8 @@ HEADERS = \
     $(INC_DIR)/token.h \
     $(INC_DIR)/sage_thread.h \
     $(INC_DIR)/typecheck.h \
-    $(INC_DIR)/value.h
+    $(INC_DIR)/value.h \
+    $(INC_DIR)/graphics.h
 
 # Optional heartbeat header
 ifneq (,$(wildcard $(INC_DIR)/heartbeat.h))

@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-03-17 20:40 UTC",
+  "generated_at": "2026-03-18 12:16 UTC",
   "repo_languages": [
     {
       "language": "C",
-      "lines": 22441
+      "lines": 22443
     },
     {
       "language": "Sage",
-      "lines": 18869
+      "lines": 19827
     },
     {
       "language": "JSON",
@@ -15,7 +15,7 @@
     },
     {
       "language": "Makefile",
-      "lines": 592
+      "lines": 626
     },
     {
       "language": "Shell",
@@ -33,11 +33,11 @@
   "compiler_comparison": [
     {
       "label": "Self-Hosted Sage Core",
-      "lines": 9753
+      "lines": 10258
     },
     {
       "label": "Native C Core",
-      "lines": 20240
+      "lines": 20242
     }
   ],
   "recipe_benchmark": {
@@ -53,11 +53,11 @@
         "reason": "",
         "output": "11520",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.007186080008978024,
-        "total_median_seconds": 0.007186080008978024,
+        "run_median_seconds": 0.007498740975279361,
+        "total_median_seconds": 0.007498740975279361,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.007638198998756706,
-        "total_mean_seconds": 0.007638198998756706
+        "run_mean_seconds": 0.007787070190533996,
+        "total_mean_seconds": 0.007787070190533996
       },
       {
         "name": "sage-interpreted-vm",
@@ -66,11 +66,11 @@
         "reason": "",
         "output": "11520",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.007200040010502562,
-        "total_median_seconds": 0.007200040010502562,
+        "run_median_seconds": 0.00669750600354746,
+        "total_median_seconds": 0.00669750600354746,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.00761171019403264,
-        "total_mean_seconds": 0.00761171019403264
+        "run_mean_seconds": 0.006619243999011815,
+        "total_mean_seconds": 0.006619243999011815
       },
       {
         "name": "sage-compiled-c",
@@ -78,12 +78,12 @@
         "status": "ok",
         "reason": "",
         "output": "11520",
-        "build_median_seconds": 0.10300281600211747,
-        "run_median_seconds": 0.0016116100014187396,
-        "total_median_seconds": 0.1046692710078787,
-        "build_mean_seconds": 0.10758970840252005,
-        "run_mean_seconds": 0.0016077962005510925,
-        "total_mean_seconds": 0.10919750460307114
+        "build_median_seconds": 0.10702976700849831,
+        "run_median_seconds": 0.0016640989924781024,
+        "total_median_seconds": 0.108600240026135,
+        "build_mean_seconds": 0.10853500299854205,
+        "run_mean_seconds": 0.0015900465892627834,
+        "total_mean_seconds": 0.11012504958780482
       },
       {
         "name": "sage-compiled-vm",
@@ -91,12 +91,12 @@
         "status": "ok",
         "reason": "",
         "output": "11520",
-        "build_median_seconds": 0.003942098002880812,
-        "run_median_seconds": 0.006197891983902082,
-        "total_median_seconds": 0.009798142971703783,
-        "build_mean_seconds": 0.003849289397476241,
-        "run_mean_seconds": 0.006207331392215565,
-        "total_mean_seconds": 0.010056620789691805
+        "build_median_seconds": 0.003644044976681471,
+        "run_median_seconds": 0.007763691945001483,
+        "total_median_seconds": 0.011407736921682954,
+        "build_mean_seconds": 0.0035889615886844695,
+        "run_mean_seconds": 0.007754967000801116,
+        "total_mean_seconds": 0.011343928589485585
       },
       {
         "name": "sage-compiled-sage",
@@ -104,12 +104,12 @@
         "status": "failed",
         "reason": "checksum mismatch: expected '11520', got ''",
         "output": "",
-        "build_median_seconds": 0.09084659998188727,
-        "run_median_seconds": 0.0008155260002240539,
-        "total_median_seconds": 0.09157382400007918,
-        "build_mean_seconds": 0.09130970859550872,
-        "run_mean_seconds": 0.0008667448011692614,
-        "total_mean_seconds": 0.09217645339667797
+        "build_median_seconds": 0.09673814702546224,
+        "run_median_seconds": 0.0007593479822389781,
+        "total_median_seconds": 0.09749891102546826,
+        "build_mean_seconds": 0.09907855378696695,
+        "run_mean_seconds": 0.0007342389901168645,
+        "total_mean_seconds": 0.09981279277708381
       }
     ]
   }

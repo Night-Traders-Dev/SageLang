@@ -450,4 +450,5 @@ void register_stdlib_modules(ModuleCache* cache) {
     create_tcp_module(cache);
     create_http_module(cache);
     create_ssl_module(cache);
+    create_graphics_module(cache);
 }
