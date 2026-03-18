@@ -2649,6 +2649,537 @@ static Value gpu_texture_dims(int argCount, Value* args) {
 }
 
 // ============================================================================
+// P2: Uniform Buffer Objects
+// ============================================================================
+
+// gpu.create_uniform_buffer(size) -> handle (host-visible, coherent)
+static Value gpu_create_uniform_buffer(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 1 || !IS_NUMBER(args[0]))
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    VkDeviceSize size = (VkDeviceSize)AS_NUMBER(args[0]);
+
+    int idx = alloc_buffers();
+    if (idx < 0) return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkBufferCreateInfo buf_info = {0};
+    buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buf_info.size = size;
+    buf_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    if (vkCreateBuffer(g_gpu_ctx.device, &buf_info, NULL, &g_gpu_ctx.buffers[idx].buffer) != VK_SUCCESS)
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkMemoryRequirements req;
+    vkGetBufferMemoryRequirements(g_gpu_ctx.device, g_gpu_ctx.buffers[idx].buffer, &req);
+    VkMemoryAllocateInfo a = {0};
+    a.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    a.allocationSize = req.size;
+    a.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (vkAllocateMemory(g_gpu_ctx.device, &a, NULL, &g_gpu_ctx.buffers[idx].memory) != VK_SUCCESS) {
+        vkDestroyBuffer(g_gpu_ctx.device, g_gpu_ctx.buffers[idx].buffer, NULL);
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    }
+    vkBindBufferMemory(g_gpu_ctx.device, g_gpu_ctx.buffers[idx].buffer, g_gpu_ctx.buffers[idx].memory, 0);
+    vkMapMemory(g_gpu_ctx.device, g_gpu_ctx.buffers[idx].memory, 0, size, 0, &g_gpu_ctx.buffers[idx].mapped);
+
+    g_gpu_ctx.buffers[idx].size = size;
+    g_gpu_ctx.buffers[idx].usage = SAGE_BUFFER_UNIFORM;
+    g_gpu_ctx.buffers[idx].mem_props = SAGE_MEMORY_HOST_VISIBLE | SAGE_MEMORY_HOST_COHERENT;
+    g_gpu_ctx.buffers[idx].alive = 1;
+    return val_number(idx);
+}
+
+// gpu.update_uniform(handle, data_array) -> nil  (fast mapped write)
+static Value gpu_update_uniform(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 2) return val_nil();
+    int idx = (int)AS_NUMBER(args[0]);
+    if (idx < 0 || idx >= g_gpu_ctx.buffer_count || !g_gpu_ctx.buffers[idx].alive) return val_nil();
+    if (!g_gpu_ctx.buffers[idx].mapped || !IS_ARRAY(args[1])) return val_nil();
+
+    ArrayValue* arr = args[1].as.array;
+    float* dst = (float*)g_gpu_ctx.buffers[idx].mapped;
+    int count = arr->count;
+    if ((size_t)count * sizeof(float) > (size_t)g_gpu_ctx.buffers[idx].size)
+        count = (int)(g_gpu_ctx.buffers[idx].size / sizeof(float));
+    for (int i = 0; i < count; i++) {
+        dst[i] = IS_NUMBER(arr->elements[i]) ? (float)AS_NUMBER(arr->elements[i]) : 0.0f;
+    }
+    return val_nil();
+}
+
+// ============================================================================
+// P3: Render-to-texture (offscreen pass)
+// ============================================================================
+
+// gpu.create_offscreen_target(width, height, format, depth?) -> dict {image, framebuffer, render_pass}
+static Value gpu_create_offscreen_target(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 3) return val_nil();
+    int w = (int)AS_NUMBER(args[0]);
+    int h = (int)AS_NUMBER(args[1]);
+    int fmt = (int)AS_NUMBER(args[2]);
+    int with_depth = (argCount >= 4 && IS_BOOL(args[3])) ? AS_BOOL(args[3]) : 0;
+
+    // Create color image
+    Value color_args[5];
+    color_args[0] = val_number(w); color_args[1] = val_number(h); color_args[2] = val_number(1);
+    color_args[3] = val_number(fmt);
+    color_args[4] = val_number(SAGE_IMAGE_COLOR_ATTACH | SAGE_IMAGE_SAMPLED);
+    Value color_h = gpu_create_image(5, color_args);
+    if ((int)AS_NUMBER(color_h) < 0) return val_nil();
+
+    // Create depth if requested
+    Value depth_h = val_number(-1);
+    if (with_depth) {
+        Value depth_args[2] = {val_number(w), val_number(h)};
+        depth_h = gpu_create_depth_buffer(2, depth_args);
+    }
+
+    // Create render pass
+    int attach_count = with_depth ? 2 : 1;
+    Value attach_arr = val_array();
+
+    Value ca = val_dict();
+    dict_set(&ca, "format", val_number(fmt));
+    dict_set(&ca, "load_op", val_number(SAGE_LOAD_CLEAR));
+    dict_set(&ca, "store_op", val_number(SAGE_STORE_STORE));
+    dict_set(&ca, "initial_layout", val_number(SAGE_LAYOUT_UNDEFINED));
+    dict_set(&ca, "final_layout", val_number(SAGE_LAYOUT_SHADER_READ));
+    array_push(&attach_arr, ca);
+
+    if (with_depth) {
+        Value da = val_dict();
+        dict_set(&da, "format", val_number(SAGE_FORMAT_DEPTH32F));
+        dict_set(&da, "load_op", val_number(SAGE_LOAD_CLEAR));
+        dict_set(&da, "store_op", val_number(SAGE_STORE_DONTCARE));
+        dict_set(&da, "initial_layout", val_number(SAGE_LAYOUT_UNDEFINED));
+        dict_set(&da, "final_layout", val_number(SAGE_LAYOUT_DEPTH_ATTACH));
+        array_push(&attach_arr, da);
+    }
+
+    Value rp_args[1] = {attach_arr};
+    Value rp_h = gpu_create_render_pass(1, rp_args);
+
+    // Create framebuffer
+    int rp_idx = (int)AS_NUMBER(rp_h);
+    int color_idx = (int)AS_NUMBER(color_h);
+    int fb_idx = alloc_framebuffers();
+    if (fb_idx >= 0 && rp_idx >= 0) {
+        VkImageView views[2];
+        views[0] = g_gpu_ctx.images[color_idx].view;
+        int view_count = 1;
+        if (with_depth && (int)AS_NUMBER(depth_h) >= 0) {
+            views[1] = g_gpu_ctx.images[(int)AS_NUMBER(depth_h)].view;
+            view_count = 2;
+        }
+
+        VkFramebufferCreateInfo fb_info = {0};
+        fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fb_info.renderPass = g_gpu_ctx.render_passes[rp_idx].render_pass;
+        fb_info.attachmentCount = (uint32_t)view_count;
+        fb_info.pAttachments = views;
+        fb_info.width = (uint32_t)w;
+        fb_info.height = (uint32_t)h;
+        fb_info.layers = 1;
+        vkCreateFramebuffer(g_gpu_ctx.device, &fb_info, NULL, &g_gpu_ctx.framebuffers[fb_idx].framebuffer);
+        g_gpu_ctx.framebuffers[fb_idx].width = w;
+        g_gpu_ctx.framebuffers[fb_idx].height = h;
+        g_gpu_ctx.framebuffers[fb_idx].alive = 1;
+    }
+
+    Value result = val_dict();
+    dict_set(&result, "image", color_h);
+    dict_set(&result, "depth", depth_h);
+    dict_set(&result, "render_pass", rp_h);
+    dict_set(&result, "framebuffer", val_number(fb_idx));
+    dict_set(&result, "width", val_number(w));
+    dict_set(&result, "height", val_number(h));
+    return result;
+}
+
+// ============================================================================
+// P6: Mipmaps + Anisotropic filtering
+// ============================================================================
+
+// gpu.generate_mipmaps(image, width, height) -> nil
+static Value gpu_generate_mipmaps(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 3) return val_nil();
+    int img_idx = (int)AS_NUMBER(args[0]);
+    int w = (int)AS_NUMBER(args[1]);
+    int h = (int)AS_NUMBER(args[2]);
+    if (img_idx < 0 || img_idx >= g_gpu_ctx.image_count || !g_gpu_ctx.images[img_idx].alive) return val_nil();
+
+    int mip_levels = 1;
+    int tw = w, th = h;
+    while (tw > 1 || th > 1) { mip_levels++; tw /= 2; th /= 2; }
+
+    VkCommandBuffer cmd = sage_gpu_begin_one_shot_v2();
+    if (!cmd) return val_nil();
+
+    int mip_w = w, mip_h = h;
+    for (int i = 1; i < mip_levels; i++) {
+        // Transition src level to TRANSFER_SRC
+        VkImageMemoryBarrier barrier = {0};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.image = g_gpu_ctx.images[img_idx].image;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = (uint32_t)(i - 1);
+        barrier.subresourceRange.levelCount = 1;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        if (i == 1) {
+            barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        }
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, NULL, 0, NULL, 1, &barrier);
+
+        // Transition dst level to TRANSFER_DST
+        barrier.subresourceRange.baseMipLevel = (uint32_t)i;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, NULL, 0, NULL, 1, &barrier);
+
+        // Blit
+        int dst_w = mip_w > 1 ? mip_w / 2 : 1;
+        int dst_h = mip_h > 1 ? mip_h / 2 : 1;
+        VkImageBlit blit = {0};
+        blit.srcOffsets[1].x = mip_w; blit.srcOffsets[1].y = mip_h; blit.srcOffsets[1].z = 1;
+        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.srcSubresource.mipLevel = (uint32_t)(i - 1);
+        blit.srcSubresource.layerCount = 1;
+        blit.dstOffsets[1].x = dst_w; blit.dstOffsets[1].y = dst_h; blit.dstOffsets[1].z = 1;
+        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.dstSubresource.mipLevel = (uint32_t)i;
+        blit.dstSubresource.layerCount = 1;
+        vkCmdBlitImage(cmd, g_gpu_ctx.images[img_idx].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            g_gpu_ctx.images[img_idx].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+
+        mip_w = dst_w; mip_h = dst_h;
+    }
+
+    // Transition all levels to SHADER_READ
+    VkImageMemoryBarrier final_barrier = {0};
+    final_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    final_barrier.image = g_gpu_ctx.images[img_idx].image;
+    final_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    final_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    final_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    final_barrier.subresourceRange.levelCount = (uint32_t)mip_levels;
+    final_barrier.subresourceRange.layerCount = 1;
+    final_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    final_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    final_barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    final_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0, 0, NULL, 0, NULL, 1, &final_barrier);
+
+    sage_gpu_end_one_shot(cmd);
+    g_gpu_ctx.images[img_idx].mip_levels = mip_levels;
+    return val_nil();
+}
+
+// gpu.create_sampler_advanced(mag, min, address, anisotropy, mip_levels) -> handle
+static Value gpu_create_sampler_advanced(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 5) return val_number(SAGE_GPU_INVALID_HANDLE);
+    int idx = alloc_samplers();
+    if (idx < 0) return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkSamplerCreateInfo info = {0};
+    info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    info.magFilter = translate_filter((int)AS_NUMBER(args[0]));
+    info.minFilter = translate_filter((int)AS_NUMBER(args[1]));
+    info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    info.addressModeU = translate_address_mode((int)AS_NUMBER(args[2]));
+    info.addressModeV = info.addressModeU;
+    info.addressModeW = info.addressModeU;
+    float aniso = (float)AS_NUMBER(args[3]);
+    if (aniso > 1.0f) {
+        info.anisotropyEnable = VK_TRUE;
+        info.maxAnisotropy = aniso;
+        if (info.maxAnisotropy > g_gpu_ctx.device_props.limits.maxSamplerAnisotropy)
+            info.maxAnisotropy = g_gpu_ctx.device_props.limits.maxSamplerAnisotropy;
+    }
+    info.maxLod = (float)AS_NUMBER(args[4]);
+
+    if (vkCreateSampler(g_gpu_ctx.device, &info, NULL, &g_gpu_ctx.samplers[idx].sampler) != VK_SUCCESS)
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    g_gpu_ctx.samplers[idx].alive = 1;
+    return val_number(idx);
+}
+
+// ============================================================================
+// P8: Indirect draw/dispatch
+// ============================================================================
+
+// gpu.cmd_draw_indirect(cmd, buffer, offset, draw_count, stride) -> nil
+static Value gpu_cmd_draw_indirect(int argCount, Value* args) {
+    if (argCount < 5) return val_nil();
+    int ci = (int)AS_NUMBER(args[0]);
+    int bi = (int)AS_NUMBER(args[1]);
+    if (ci < 0 || ci >= g_gpu_ctx.cmd_buffer_count || !g_gpu_ctx.cmd_buffers[ci].alive) return val_nil();
+    if (bi < 0 || bi >= g_gpu_ctx.buffer_count || !g_gpu_ctx.buffers[bi].alive) return val_nil();
+    VkDeviceSize offset = (VkDeviceSize)AS_NUMBER(args[2]);
+    uint32_t draw_count = (uint32_t)AS_NUMBER(args[3]);
+    uint32_t stride = (uint32_t)AS_NUMBER(args[4]);
+    vkCmdDrawIndirect(g_gpu_ctx.cmd_buffers[ci].cmd, g_gpu_ctx.buffers[bi].buffer, offset, draw_count, stride);
+    return val_nil();
+}
+
+// gpu.cmd_draw_indexed_indirect(cmd, buffer, offset, draw_count, stride) -> nil
+static Value gpu_cmd_draw_indexed_indirect(int argCount, Value* args) {
+    if (argCount < 5) return val_nil();
+    int ci = (int)AS_NUMBER(args[0]);
+    int bi = (int)AS_NUMBER(args[1]);
+    if (ci < 0 || ci >= g_gpu_ctx.cmd_buffer_count || !g_gpu_ctx.cmd_buffers[ci].alive) return val_nil();
+    if (bi < 0 || bi >= g_gpu_ctx.buffer_count || !g_gpu_ctx.buffers[bi].alive) return val_nil();
+    VkDeviceSize offset = (VkDeviceSize)AS_NUMBER(args[2]);
+    uint32_t draw_count = (uint32_t)AS_NUMBER(args[3]);
+    uint32_t stride = (uint32_t)AS_NUMBER(args[4]);
+    vkCmdDrawIndexedIndirect(g_gpu_ctx.cmd_buffers[ci].cmd, g_gpu_ctx.buffers[bi].buffer, offset, draw_count, stride);
+    return val_nil();
+}
+
+// gpu.cmd_dispatch_indirect(cmd, buffer, offset) -> nil
+static Value gpu_cmd_dispatch_indirect(int argCount, Value* args) {
+    if (argCount < 3) return val_nil();
+    int ci = (int)AS_NUMBER(args[0]);
+    int bi = (int)AS_NUMBER(args[1]);
+    if (ci < 0 || ci >= g_gpu_ctx.cmd_buffer_count || !g_gpu_ctx.cmd_buffers[ci].alive) return val_nil();
+    if (bi < 0 || bi >= g_gpu_ctx.buffer_count || !g_gpu_ctx.buffers[bi].alive) return val_nil();
+    VkDeviceSize offset = (VkDeviceSize)AS_NUMBER(args[2]);
+    vkCmdDispatchIndirect(g_gpu_ctx.cmd_buffers[ci].cmd, g_gpu_ctx.buffers[bi].buffer, offset);
+    return val_nil();
+}
+
+// ============================================================================
+// P9: 3D Textures
+// ============================================================================
+
+// gpu.create_image_3d(w, h, d, format, usage) -> handle  (with 3D view)
+static Value gpu_create_image_3d(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 5) return val_number(SAGE_GPU_INVALID_HANDLE);
+    int w = (int)AS_NUMBER(args[0]), h = (int)AS_NUMBER(args[1]), d = (int)AS_NUMBER(args[2]);
+    int fmt = (int)AS_NUMBER(args[3]), usage = (int)AS_NUMBER(args[4]);
+
+    int idx = alloc_images();
+    if (idx < 0) return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkImageCreateInfo img_info = {0};
+    img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    img_info.imageType = VK_IMAGE_TYPE_3D;
+    img_info.format = sage_gpu_translate_format(fmt);
+    img_info.extent = (VkExtent3D){(uint32_t)w, (uint32_t)h, (uint32_t)d};
+    img_info.mipLevels = 1;
+    img_info.arrayLayers = 1;
+    img_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    img_info.usage = translate_image_usage(usage);
+
+    if (vkCreateImage(g_gpu_ctx.device, &img_info, NULL, &g_gpu_ctx.images[idx].image) != VK_SUCCESS)
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkMemoryRequirements req;
+    vkGetImageMemoryRequirements(g_gpu_ctx.device, g_gpu_ctx.images[idx].image, &req);
+    VkMemoryAllocateInfo a = {0};
+    a.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    a.allocationSize = req.size;
+    a.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vkAllocateMemory(g_gpu_ctx.device, &a, NULL, &g_gpu_ctx.images[idx].memory);
+    vkBindImageMemory(g_gpu_ctx.device, g_gpu_ctx.images[idx].image, g_gpu_ctx.images[idx].memory, 0);
+
+    VkImageViewCreateInfo view_info = {0};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.image = g_gpu_ctx.images[idx].image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_3D;
+    view_info.format = img_info.format;
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.layerCount = 1;
+    vkCreateImageView(g_gpu_ctx.device, &view_info, NULL, &g_gpu_ctx.images[idx].view);
+
+    g_gpu_ctx.images[idx].format = fmt;
+    g_gpu_ctx.images[idx].img_type = SAGE_IMAGE_3D;
+    g_gpu_ctx.images[idx].width = w; g_gpu_ctx.images[idx].height = h; g_gpu_ctx.images[idx].depth = d;
+    g_gpu_ctx.images[idx].mip_levels = 1; g_gpu_ctx.images[idx].array_layers = 1;
+    g_gpu_ctx.images[idx].usage = usage; g_gpu_ctx.images[idx].alive = 1;
+    return val_number(idx);
+}
+
+// ============================================================================
+// P10: Multi-binding vertex buffers for instanced rendering
+// ============================================================================
+
+// gpu.cmd_bind_vertex_buffers(cmd, buffer_handles_array) -> nil
+static Value gpu_cmd_bind_vertex_buffers(int argCount, Value* args) {
+    if (argCount < 2) return val_nil();
+    int ci = (int)AS_NUMBER(args[0]);
+    if (ci < 0 || ci >= g_gpu_ctx.cmd_buffer_count || !g_gpu_ctx.cmd_buffers[ci].alive) return val_nil();
+    if (!IS_ARRAY(args[1])) return val_nil();
+
+    ArrayValue* arr = args[1].as.array;
+    int count = arr->count;
+    if (count > 8) count = 8;
+
+    VkBuffer bufs[8] = {0};
+    VkDeviceSize offsets[8] = {0};
+    for (int i = 0; i < count; i++) {
+        int bi = (int)AS_NUMBER(arr->elements[i]);
+        if (bi >= 0 && bi < g_gpu_ctx.buffer_count && g_gpu_ctx.buffers[bi].alive)
+            bufs[i] = g_gpu_ctx.buffers[bi].buffer;
+    }
+
+    vkCmdBindVertexBuffers(g_gpu_ctx.cmd_buffers[ci].cmd, 0, (uint32_t)count, bufs, offsets);
+    return val_nil();
+}
+
+// ============================================================================
+// P11: Multiple render targets (MRT) for deferred rendering
+// ============================================================================
+
+// gpu.create_render_pass_mrt(color_formats_array, has_depth?) -> handle
+static Value gpu_create_render_pass_mrt(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 1 || !IS_ARRAY(args[0]))
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    ArrayValue* fmt_arr = args[0].as.array;
+    int color_count = fmt_arr->count;
+    if (color_count > SAGE_GPU_MAX_COLOR_ATTACHMENTS) color_count = SAGE_GPU_MAX_COLOR_ATTACHMENTS;
+    int with_depth = (argCount >= 2 && IS_BOOL(args[1])) ? AS_BOOL(args[1]) : 0;
+    int total = color_count + (with_depth ? 1 : 0);
+
+    VkAttachmentDescription attachments[SAGE_GPU_MAX_COLOR_ATTACHMENTS + 1] = {0};
+    VkAttachmentReference color_refs[SAGE_GPU_MAX_COLOR_ATTACHMENTS] = {0};
+    VkAttachmentReference depth_ref = {0};
+
+    for (int i = 0; i < color_count; i++) {
+        int fmt = IS_NUMBER(fmt_arr->elements[i]) ? (int)AS_NUMBER(fmt_arr->elements[i]) : SAGE_FORMAT_RGBA16F;
+        attachments[i].format = sage_gpu_translate_format(fmt);
+        attachments[i].samples = VK_SAMPLE_COUNT_1_BIT;
+        attachments[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachments[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachments[i].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachments[i].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachments[i].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachments[i].finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        color_refs[i].attachment = (uint32_t)i;
+        color_refs[i].layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+
+    if (with_depth) {
+        VkFormat depth_fmt = sage_gpu_find_depth_format();
+        attachments[color_count].format = depth_fmt;
+        attachments[color_count].samples = VK_SAMPLE_COUNT_1_BIT;
+        attachments[color_count].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachments[color_count].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachments[color_count].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachments[color_count].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachments[color_count].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachments[color_count].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depth_ref.attachment = (uint32_t)color_count;
+        depth_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+
+    VkSubpassDescription subpass = {0};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = (uint32_t)color_count;
+    subpass.pColorAttachments = color_refs;
+    if (with_depth) subpass.pDepthStencilAttachment = &depth_ref;
+
+    int idx = alloc_render_passes();
+    if (idx < 0) return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkRenderPassCreateInfo rp_info = {0};
+    rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    rp_info.attachmentCount = (uint32_t)total;
+    rp_info.pAttachments = attachments;
+    rp_info.subpassCount = 1;
+    rp_info.pSubpasses = &subpass;
+
+    if (vkCreateRenderPass(g_gpu_ctx.device, &rp_info, NULL,
+                            &g_gpu_ctx.render_passes[idx].render_pass) != VK_SUCCESS)
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+    g_gpu_ctx.render_passes[idx].alive = 1;
+    return val_number(idx);
+}
+
+// ============================================================================
+// P13: glTF loading helpers (binary buffer upload)
+// ============================================================================
+
+// gpu.upload_bytes(byte_array, usage) -> buffer handle
+// Like upload_device_local but treats array values as raw uint8 bytes packed into 4-byte words
+static Value gpu_upload_bytes(int argCount, Value* args) {
+    if (!g_gpu_ctx.initialized || argCount < 2) return val_number(SAGE_GPU_INVALID_HANDLE);
+    if (!IS_ARRAY(args[0]) || !IS_NUMBER(args[1])) return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    ArrayValue* arr = args[0].as.array;
+    VkDeviceSize size = (VkDeviceSize)arr->count;
+    int usage = (int)AS_NUMBER(args[1]);
+
+    // Create staging
+    VkBuffer staging_buf; VkDeviceMemory staging_mem;
+    VkBufferCreateInfo buf_info = {0};
+    buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buf_info.size = size;
+    buf_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    if (vkCreateBuffer(g_gpu_ctx.device, &buf_info, NULL, &staging_buf) != VK_SUCCESS)
+        return val_number(SAGE_GPU_INVALID_HANDLE);
+
+    VkMemoryRequirements req;
+    vkGetBufferMemoryRequirements(g_gpu_ctx.device, staging_buf, &req);
+    VkMemoryAllocateInfo a = {0};
+    a.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    a.allocationSize = req.size;
+    a.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    vkAllocateMemory(g_gpu_ctx.device, &a, NULL, &staging_mem);
+    vkBindBufferMemory(g_gpu_ctx.device, staging_buf, staging_mem, 0);
+
+    void* mapped;
+    vkMapMemory(g_gpu_ctx.device, staging_mem, 0, size, 0, &mapped);
+    unsigned char* dst = (unsigned char*)mapped;
+    for (int i = 0; i < arr->count; i++) {
+        dst[i] = IS_NUMBER(arr->elements[i]) ? (unsigned char)(int)AS_NUMBER(arr->elements[i]) : 0;
+    }
+    vkUnmapMemory(g_gpu_ctx.device, staging_mem);
+
+    // Device-local
+    int idx = alloc_buffers();
+    if (idx < 0) { vkDestroyBuffer(g_gpu_ctx.device, staging_buf, NULL); vkFreeMemory(g_gpu_ctx.device, staging_mem, NULL); return val_number(SAGE_GPU_INVALID_HANDLE); }
+
+    buf_info.size = size;
+    buf_info.usage = translate_buffer_usage(usage) | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    vkCreateBuffer(g_gpu_ctx.device, &buf_info, NULL, &g_gpu_ctx.buffers[idx].buffer);
+    vkGetBufferMemoryRequirements(g_gpu_ctx.device, g_gpu_ctx.buffers[idx].buffer, &req);
+    a.allocationSize = req.size;
+    a.memoryTypeIndex = sage_gpu_find_memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    vkAllocateMemory(g_gpu_ctx.device, &a, NULL, &g_gpu_ctx.buffers[idx].memory);
+    vkBindBufferMemory(g_gpu_ctx.device, g_gpu_ctx.buffers[idx].buffer, g_gpu_ctx.buffers[idx].memory, 0);
+
+    VkCommandBuffer cmd = sage_gpu_begin_one_shot_v2();
+    if (cmd) {
+        VkBufferCopy region = {0}; region.size = size;
+        vkCmdCopyBuffer(cmd, staging_buf, g_gpu_ctx.buffers[idx].buffer, 1, &region);
+        sage_gpu_end_one_shot(cmd);
+    }
+
+    vkDestroyBuffer(g_gpu_ctx.device, staging_buf, NULL);
+    vkFreeMemory(g_gpu_ctx.device, staging_mem, NULL);
+    g_gpu_ctx.buffers[idx].size = size;
+    g_gpu_ctx.buffers[idx].usage = usage;
+    g_gpu_ctx.buffers[idx].alive = 1;
+    return val_number(idx);
+}
+
+// ============================================================================
 // Synchronization
 // ============================================================================
 
@@ -3266,6 +3797,96 @@ static Value gpu_create_swapchain_fbs_depth(int argCount, Value* args) {
     return result;
 }
 
+// ============================================================================
+// P1: Input Handling (keyboard + mouse)
+// ============================================================================
+
+// gpu.key_pressed(key_code) -> bool
+static Value gpu_key_pressed(int argCount, Value* args) {
+    if (!g_window || argCount < 1 || !IS_NUMBER(args[0])) return val_bool(0);
+    int key = (int)AS_NUMBER(args[0]);
+    return val_bool(glfwGetKey(g_window, key) == GLFW_PRESS);
+}
+
+// gpu.key_down(key_code) -> bool (alias)
+static Value gpu_key_down(int argCount, Value* args) {
+    return gpu_key_pressed(argCount, args);
+}
+
+// gpu.mouse_pos() -> dict {x, y}
+static Value gpu_mouse_pos(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (!g_window) return val_nil();
+    double mx, my;
+    glfwGetCursorPos(g_window, &mx, &my);
+    Value d = val_dict();
+    dict_set(&d, "x", val_number(mx));
+    dict_set(&d, "y", val_number(my));
+    return d;
+}
+
+// gpu.mouse_button(button) -> bool
+static Value gpu_mouse_button(int argCount, Value* args) {
+    if (!g_window || argCount < 1 || !IS_NUMBER(args[0])) return val_bool(0);
+    int btn = (int)AS_NUMBER(args[0]);
+    return val_bool(glfwGetMouseButton(g_window, btn) == GLFW_PRESS);
+}
+
+// gpu.set_cursor_mode(mode) -> nil  (0=normal, 1=hidden, 2=disabled/captured)
+static Value gpu_set_cursor_mode(int argCount, Value* args) {
+    if (!g_window || argCount < 1 || !IS_NUMBER(args[0])) return val_nil();
+    int mode = (int)AS_NUMBER(args[0]);
+    int glfw_mode = GLFW_CURSOR_NORMAL;
+    if (mode == 1) glfw_mode = GLFW_CURSOR_HIDDEN;
+    if (mode == 2) glfw_mode = GLFW_CURSOR_DISABLED;
+    glfwSetInputMode(g_window, GLFW_CURSOR, glfw_mode);
+    return val_nil();
+}
+
+// gpu.get_time() -> number (GLFW high-resolution timer)
+static Value gpu_get_time(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number(glfwGetTime());
+}
+
+// gpu.window_size() -> dict {width, height} (framebuffer size)
+static Value gpu_window_size(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (!g_window) return val_nil();
+    int w, h;
+    glfwGetFramebufferSize(g_window, &w, &h);
+    Value d = val_dict();
+    dict_set(&d, "width", val_number(w));
+    dict_set(&d, "height", val_number(h));
+    return d;
+}
+
+// gpu.set_title(title) -> nil
+static Value gpu_set_title(int argCount, Value* args) {
+    if (!g_window || argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    glfwSetWindowTitle(g_window, AS_STRING(args[0]));
+    return val_nil();
+}
+
+// ============================================================================
+// P5/P10: Swapchain recreation for resize
+// ============================================================================
+
+static int g_framebuffer_resized = 0;
+
+static void framebuffer_resize_cb(GLFWwindow* window, int w, int h) {
+    (void)window; (void)w; (void)h;
+    g_framebuffer_resized = 1;
+}
+
+// gpu.window_resized() -> bool (check and clear flag)
+static Value gpu_window_resized(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    int r = g_framebuffer_resized;
+    g_framebuffer_resized = 0;
+    return val_bool(r);
+}
+
 // gpu.shutdown_windowed() -> nil  (cleanup window + vulkan)
 static Value gpu_shutdown_windowed(int argCount, Value* args) {
     // First do normal gpu shutdown
@@ -3362,10 +3983,36 @@ Module* create_graphics_module(ModuleCache* cache) {
 
     // --- Staging upload ---
     env_define(e, "upload_device_local", 19, val_native(gpu_upload_device_local));
+    env_define(e, "upload_bytes", 12, val_native(gpu_upload_bytes));
 
     // --- Texture loading ---
     env_define(e, "load_texture", 12, val_native(gpu_load_texture));
     env_define(e, "texture_dims", 12, val_native(gpu_texture_dims));
+
+    // --- P2: Uniform buffers ---
+    env_define(e, "create_uniform_buffer", 21, val_native(gpu_create_uniform_buffer));
+    env_define(e, "update_uniform", 14, val_native(gpu_update_uniform));
+
+    // --- P3: Offscreen rendering ---
+    env_define(e, "create_offscreen_target", 23, val_native(gpu_create_offscreen_target));
+
+    // --- P6: Mipmaps + anisotropic ---
+    env_define(e, "generate_mipmaps", 16, val_native(gpu_generate_mipmaps));
+    env_define(e, "create_sampler_advanced", 23, val_native(gpu_create_sampler_advanced));
+
+    // --- P8: Indirect draw/dispatch ---
+    env_define(e, "cmd_draw_indirect", 17, val_native(gpu_cmd_draw_indirect));
+    env_define(e, "cmd_draw_indexed_indirect", 25, val_native(gpu_cmd_draw_indexed_indirect));
+    env_define(e, "cmd_dispatch_indirect", 21, val_native(gpu_cmd_dispatch_indirect));
+
+    // --- P9: 3D textures ---
+    env_define(e, "create_image_3d", 15, val_native(gpu_create_image_3d));
+
+    // --- P10: Multi-buffer vertex binding ---
+    env_define(e, "cmd_bind_vertex_buffers", 23, val_native(gpu_cmd_bind_vertex_buffers));
+
+    // --- P11: MRT render pass ---
+    env_define(e, "create_render_pass_mrt", 22, val_native(gpu_create_render_pass_mrt));
 
     // --- Commands ---
     env_define(e, "create_command_pool", 19, val_native(gpu_create_command_pool));
@@ -3420,6 +4067,49 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "submit_with_sync", 16, val_native(gpu_submit_with_sync));
     env_define(e, "create_swapchain_framebuffers", 29, val_native(gpu_create_swapchain_framebuffers));
     env_define(e, "create_swapchain_framebuffers_depth", 35, val_native(gpu_create_swapchain_fbs_depth));
+
+    // --- P1: Input handling ---
+    env_define(e, "key_pressed", 11, val_native(gpu_key_pressed));
+    env_define(e, "key_down", 8, val_native(gpu_key_down));
+    env_define(e, "mouse_pos", 9, val_native(gpu_mouse_pos));
+    env_define(e, "mouse_button", 12, val_native(gpu_mouse_button));
+    env_define(e, "set_cursor_mode", 15, val_native(gpu_set_cursor_mode));
+    env_define(e, "get_time", 8, val_native(gpu_get_time));
+    env_define(e, "window_size", 11, val_native(gpu_window_size));
+    env_define(e, "set_title", 9, val_native(gpu_set_title));
+    env_define(e, "window_resized", 14, val_native(gpu_window_resized));
+
+    // Key constants (GLFW key codes)
+    env_define(e, "KEY_W", 5, val_number(GLFW_KEY_W));
+    env_define(e, "KEY_A", 5, val_number(GLFW_KEY_A));
+    env_define(e, "KEY_S", 5, val_number(GLFW_KEY_S));
+    env_define(e, "KEY_D", 5, val_number(GLFW_KEY_D));
+    env_define(e, "KEY_Q", 5, val_number(GLFW_KEY_Q));
+    env_define(e, "KEY_E", 5, val_number(GLFW_KEY_E));
+    env_define(e, "KEY_R", 5, val_number(GLFW_KEY_R));
+    env_define(e, "KEY_F", 5, val_number(GLFW_KEY_F));
+    env_define(e, "KEY_SPACE", 9, val_number(GLFW_KEY_SPACE));
+    env_define(e, "KEY_ESCAPE", 10, val_number(GLFW_KEY_ESCAPE));
+    env_define(e, "KEY_ENTER", 9, val_number(GLFW_KEY_ENTER));
+    env_define(e, "KEY_TAB", 7, val_number(GLFW_KEY_TAB));
+    env_define(e, "KEY_SHIFT", 9, val_number(GLFW_KEY_LEFT_SHIFT));
+    env_define(e, "KEY_CTRL", 8, val_number(GLFW_KEY_LEFT_CONTROL));
+    env_define(e, "KEY_UP", 6, val_number(GLFW_KEY_UP));
+    env_define(e, "KEY_DOWN", 8, val_number(GLFW_KEY_DOWN));
+    env_define(e, "KEY_LEFT", 8, val_number(GLFW_KEY_LEFT));
+    env_define(e, "KEY_RIGHT", 9, val_number(GLFW_KEY_RIGHT));
+    env_define(e, "KEY_1", 5, val_number(GLFW_KEY_1));
+    env_define(e, "KEY_2", 5, val_number(GLFW_KEY_2));
+    env_define(e, "KEY_3", 5, val_number(GLFW_KEY_3));
+    env_define(e, "KEY_4", 5, val_number(GLFW_KEY_4));
+    env_define(e, "KEY_5", 5, val_number(GLFW_KEY_5));
+    env_define(e, "MOUSE_LEFT", 10, val_number(GLFW_MOUSE_BUTTON_LEFT));
+    env_define(e, "MOUSE_RIGHT", 11, val_number(GLFW_MOUSE_BUTTON_RIGHT));
+    env_define(e, "MOUSE_MIDDLE", 12, val_number(GLFW_MOUSE_BUTTON_MIDDLE));
+    env_define(e, "CURSOR_NORMAL", 13, val_number(0));
+    env_define(e, "CURSOR_HIDDEN", 13, val_number(1));
+    env_define(e, "CURSOR_DISABLED", 15, val_number(2));
+
     env_define(e, "has_window", 10, val_bool(1));
 #else
     env_define(e, "has_window", 10, val_bool(0));

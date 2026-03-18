@@ -503,6 +503,9 @@ test-selfhost: $(TARGET)
 	@echo "=== Self-Hosted GPU Module Tests ==="
 	@cd src/sage && ../../$(TARGET) test/test_gpu.sage 2>&1 | tail -3
 	@echo ""
+	@echo "=== Self-Hosted GPU Advanced Tests ==="
+	@./$(TARGET) src/sage/test/test_gpu_advanced.sage 2>&1 | tail -3
+	@echo ""
 	@echo "✅ All self-hosted tests complete"
 
 # Run individual self-hosted test suites
@@ -578,6 +581,9 @@ test-selfhost-heartbeat: $(TARGET)
 
 test-selfhost-gpu: $(TARGET)
 	cd src/sage && ../../$(TARGET) test/test_gpu.sage
+
+test-selfhost-gpu-advanced: $(TARGET)
+	./$(TARGET) src/sage/test/test_gpu_advanced.sage
 
 # Run ALL tests (C + self-hosted)
 test-all: test test-selfhost
@@ -711,5 +717,5 @@ help:
         test-selfhost-typecheck test-selfhost-stdlib test-selfhost-module \
         test-selfhost-llvm-backend test-selfhost-codegen test-selfhost-compiler \
         test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
-        test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu \
+        test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
         test-all stats help
