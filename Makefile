@@ -602,14 +602,14 @@ test-all: test test-selfhost
 
 # Kernel-style build configuration (uses kconfiglib)
 menuconfig:
-	@KCONFIG_CONFIG=.config menuconfig Kconfig
+	@KCONFIG_CONFIG=.config $(PYTHON) scripts/kconfig_frontend.py menuconfig Kconfig
 	@$(PYTHON) scripts/kconfig_to_make.py .config sage_config.mk
 	@echo ""
 	@echo "Configuration saved. Run 'make' to build."
 
 # GUI config (if available)
 guiconfig:
-	@KCONFIG_CONFIG=.config guiconfig Kconfig
+	@KCONFIG_CONFIG=.config $(PYTHON) scripts/kconfig_frontend.py guiconfig Kconfig
 	@$(PYTHON) scripts/kconfig_to_make.py .config sage_config.mk
 
 # Load saved config if it exists
@@ -714,6 +714,8 @@ help:
 	@echo "  make run-<name>   - Run specific example (e.g., make run-fibonacci)"
 	@echo "  make charts       - Refresh README LOC charts"
 	@echo "  make stats        - Show code statistics"
+	@echo "  make menuconfig   - Configure build options (requires kconfiglib)"
+	@echo "  make guiconfig    - GUI config editor (requires kconfiglib; Ubuntu may need python3-tk)"
 	@echo ""
 	@echo "Installation:"
 	@echo "  make install      - Install to /usr/local (use sudo)"
