@@ -156,7 +156,7 @@ assert_eq(gpu.INVALID_HANDLE, -1, "INVALID_HANDLE = -1")
 print nl + "--- API availability ---"
 
 assert_neq(gpu.has_vulkan, nil, "has_vulkan exists")
-assert_neq(gpu.init, nil, "init exists")
+assert_neq(gpu.initialize, nil, "initialize exists")
 assert_neq(gpu.shutdown, nil, "shutdown exists")
 assert_neq(gpu.create_buffer, nil, "create_buffer exists")
 assert_neq(gpu.create_image, nil, "create_image exists")
@@ -199,7 +199,7 @@ assert_eq(vert_frag, 3, "STAGE_VERTEX | STAGE_FRAGMENT = 3")
 print nl + "--- Init/Shutdown ---"
 
 if gpu.has_vulkan():
-    let ok = gpu.init("test", false)
+    let ok = gpu.initialize("test", false)
     if ok:
         assert_true(ok, "gpu.init returns true")
 

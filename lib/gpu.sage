@@ -113,7 +113,7 @@ proc print_info():
     print "GPU: " + gpu.device_name()
     let lim = gpu.device_limits()
     if lim == nil:
-        print "  (no limits available - call gpu.init first)"
+        print "  (no limits available - call gpu.initialize first)"
         return nil
     print "  Max compute workgroup size: " + str(lim["maxComputeWorkGroupSize_x"]) + " x " + str(lim["maxComputeWorkGroupSize_y"]) + " x " + str(lim["maxComputeWorkGroupSize_z"])
     print "  Max compute invocations: " + str(lim["maxComputeWorkGroupInvocations"])

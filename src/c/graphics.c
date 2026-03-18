@@ -34,7 +34,7 @@ Module* create_graphics_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "gpu");
     Environment* e = m->env;
     env_define(e, "has_vulkan", 10, val_native(gpu_has_vulkan));
-    env_define(e, "init", 4, val_native(gpu_init_stub));
+    env_define(e, "initialize", 10, val_native(gpu_init_stub));
 
     // Export all constants so Sage code can reference them without runtime errors
     // Buffer usage
@@ -53,19 +53,19 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "MEMORY_HOST_COHERENT", 20, val_number(SAGE_MEMORY_HOST_COHERENT));
 
     // Formats
-    env_define(e, "FORMAT_RGBA8",     11, val_number(SAGE_FORMAT_RGBA8));
-    env_define(e, "FORMAT_RGBA16F",   13, val_number(SAGE_FORMAT_RGBA16F));
-    env_define(e, "FORMAT_RGBA32F",   13, val_number(SAGE_FORMAT_RGBA32F));
-    env_define(e, "FORMAT_R32F",      10, val_number(SAGE_FORMAT_R32F));
-    env_define(e, "FORMAT_RG32F",     11, val_number(SAGE_FORMAT_RG32F));
-    env_define(e, "FORMAT_DEPTH32F",  14, val_number(SAGE_FORMAT_DEPTH32F));
-    env_define(e, "FORMAT_DEPTH24_S8",16, val_number(SAGE_FORMAT_DEPTH24_S8));
+    env_define(e, "FORMAT_RGBA8", 12, val_number(SAGE_FORMAT_RGBA8));
+    env_define(e, "FORMAT_RGBA16F", 14, val_number(SAGE_FORMAT_RGBA16F));
+    env_define(e, "FORMAT_RGBA32F", 14, val_number(SAGE_FORMAT_RGBA32F));
+    env_define(e, "FORMAT_R32F", 11, val_number(SAGE_FORMAT_R32F));
+    env_define(e, "FORMAT_RG32F", 12, val_number(SAGE_FORMAT_RG32F));
+    env_define(e, "FORMAT_DEPTH32F", 15, val_number(SAGE_FORMAT_DEPTH32F));
+    env_define(e, "FORMAT_DEPTH24_S8",17, val_number(SAGE_FORMAT_DEPTH24_S8));
     env_define(e, "FORMAT_R8",        9,  val_number(SAGE_FORMAT_R8));
     env_define(e, "FORMAT_RG8",       10, val_number(SAGE_FORMAT_RG8));
     env_define(e, "FORMAT_BGRA8",     12, val_number(SAGE_FORMAT_BGRA8));
-    env_define(e, "FORMAT_R32U",      10, val_number(SAGE_FORMAT_R32U));
-    env_define(e, "FORMAT_RG16F",     11, val_number(SAGE_FORMAT_RG16F));
-    env_define(e, "FORMAT_R16F",      10, val_number(SAGE_FORMAT_R16F));
+    env_define(e, "FORMAT_R32U", 11, val_number(SAGE_FORMAT_R32U));
+    env_define(e, "FORMAT_RG16F", 12, val_number(SAGE_FORMAT_RG16F));
+    env_define(e, "FORMAT_R16F", 11, val_number(SAGE_FORMAT_R16F));
 
     // Image usage
     env_define(e, "IMAGE_SAMPLED",      13, val_number(SAGE_IMAGE_SAMPLED));
@@ -79,7 +79,7 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "IMAGE_1D",  8, val_number(SAGE_IMAGE_1D));
     env_define(e, "IMAGE_2D",  8, val_number(SAGE_IMAGE_2D));
     env_define(e, "IMAGE_3D",  8, val_number(SAGE_IMAGE_3D));
-    env_define(e, "IMAGE_CUBE",9, val_number(SAGE_IMAGE_CUBE));
+    env_define(e, "IMAGE_CUBE",10, val_number(SAGE_IMAGE_CUBE));
 
     // Filter
     env_define(e, "FILTER_NEAREST", 14, val_number(SAGE_FILTER_NEAREST));
@@ -129,14 +129,14 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "FRONT_CW",  8, val_number(SAGE_FRONT_CW));
 
     // Blend factors
-    env_define(e, "BLEND_ZERO",               9,  val_number(SAGE_BLEND_ZERO));
-    env_define(e, "BLEND_ONE",                8,  val_number(SAGE_BLEND_ONE));
+    env_define(e, "BLEND_ZERO", 10,  val_number(SAGE_BLEND_ZERO));
+    env_define(e, "BLEND_ONE", 9,  val_number(SAGE_BLEND_ONE));
     env_define(e, "BLEND_SRC_ALPHA",          15, val_number(SAGE_BLEND_SRC_ALPHA));
     env_define(e, "BLEND_ONE_MINUS_SRC_ALPHA",25, val_number(SAGE_BLEND_ONE_MINUS_SRC_ALPHA));
 
     // Blend ops
     env_define(e, "BLEND_OP_ADD",      12, val_number(SAGE_BLEND_OP_ADD));
-    env_define(e, "BLEND_OP_SUBTRACT", 16, val_number(SAGE_BLEND_OP_SUBTRACT));
+    env_define(e, "BLEND_OP_SUBTRACT", 17, val_number(SAGE_BLEND_OP_SUBTRACT));
     env_define(e, "BLEND_OP_MIN",      12, val_number(SAGE_BLEND_OP_MIN));
     env_define(e, "BLEND_OP_MAX",      12, val_number(SAGE_BLEND_OP_MAX));
 
@@ -153,8 +153,8 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "LAYOUT_COLOR_ATTACH", 19, val_number(SAGE_LAYOUT_COLOR_ATTACH));
     env_define(e, "LAYOUT_DEPTH_ATTACH", 19, val_number(SAGE_LAYOUT_DEPTH_ATTACH));
     env_define(e, "LAYOUT_SHADER_READ",  18, val_number(SAGE_LAYOUT_SHADER_READ));
-    env_define(e, "LAYOUT_TRANSFER_SRC", 18, val_number(SAGE_LAYOUT_TRANSFER_SRC));
-    env_define(e, "LAYOUT_TRANSFER_DST", 18, val_number(SAGE_LAYOUT_TRANSFER_DST));
+    env_define(e, "LAYOUT_TRANSFER_SRC", 19, val_number(SAGE_LAYOUT_TRANSFER_SRC));
+    env_define(e, "LAYOUT_TRANSFER_DST", 19, val_number(SAGE_LAYOUT_TRANSFER_DST));
     env_define(e, "LAYOUT_PRESENT",      14, val_number(SAGE_LAYOUT_PRESENT));
 
     // Pipeline stages
@@ -164,8 +164,8 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "PIPE_BOTTOM",       11, val_number(SAGE_PIPE_BOTTOM));
     env_define(e, "PIPE_VERTEX_SHADER",18, val_number(SAGE_PIPE_VERTEX_SHADER));
     env_define(e, "PIPE_FRAGMENT",     13, val_number(SAGE_PIPE_FRAGMENT));
-    env_define(e, "PIPE_COLOR_OUTPUT", 16, val_number(SAGE_PIPE_COLOR_OUTPUT));
-    env_define(e, "PIPE_ALL_COMMANDS", 16, val_number(SAGE_PIPE_ALL_COMMANDS));
+    env_define(e, "PIPE_COLOR_OUTPUT", 17, val_number(SAGE_PIPE_COLOR_OUTPUT));
+    env_define(e, "PIPE_ALL_COMMANDS", 17, val_number(SAGE_PIPE_ALL_COMMANDS));
 
     // Access flags
     env_define(e, "ACCESS_NONE",          11, val_number(SAGE_ACCESS_NONE));
@@ -181,7 +181,7 @@ Module* create_graphics_module(ModuleCache* cache) {
     // Load/store ops
     env_define(e, "LOAD_CLEAR",    10, val_number(SAGE_LOAD_CLEAR));
     env_define(e, "LOAD_LOAD",     9,  val_number(SAGE_LOAD_LOAD));
-    env_define(e, "LOAD_DONTCARE", 12, val_number(SAGE_LOAD_DONTCARE));
+    env_define(e, "LOAD_DONTCARE", 13, val_number(SAGE_LOAD_DONTCARE));
     env_define(e, "STORE_STORE",   11, val_number(SAGE_STORE_STORE));
     env_define(e, "STORE_DONTCARE",14, val_number(SAGE_STORE_DONTCARE));
 
@@ -2376,7 +2376,7 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "has_vulkan", 10, val_native(gpu_has_vulkan));
 
     // --- Context ---
-    env_define(e, "init", 4, val_native(gpu_init));
+    env_define(e, "initialize", 10, val_native(gpu_init));
     env_define(e, "shutdown", 8, val_native(gpu_shutdown));
     env_define(e, "device_name", 11, val_native(gpu_device_name));
     env_define(e, "device_limits", 13, val_native(gpu_device_limits));
@@ -2478,16 +2478,16 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "MEMORY_DEVICE_LOCAL",  19, val_number(SAGE_MEMORY_DEVICE_LOCAL));
     env_define(e, "MEMORY_HOST_VISIBLE",  19, val_number(SAGE_MEMORY_HOST_VISIBLE));
     env_define(e, "MEMORY_HOST_COHERENT", 20, val_number(SAGE_MEMORY_HOST_COHERENT));
-    env_define(e, "FORMAT_RGBA8",     11, val_number(SAGE_FORMAT_RGBA8));
-    env_define(e, "FORMAT_RGBA16F",   13, val_number(SAGE_FORMAT_RGBA16F));
-    env_define(e, "FORMAT_RGBA32F",   13, val_number(SAGE_FORMAT_RGBA32F));
-    env_define(e, "FORMAT_R32F",      10, val_number(SAGE_FORMAT_R32F));
-    env_define(e, "FORMAT_RG32F",     11, val_number(SAGE_FORMAT_RG32F));
-    env_define(e, "FORMAT_DEPTH32F",  14, val_number(SAGE_FORMAT_DEPTH32F));
-    env_define(e, "FORMAT_DEPTH24_S8",16, val_number(SAGE_FORMAT_DEPTH24_S8));
+    env_define(e, "FORMAT_RGBA8", 12, val_number(SAGE_FORMAT_RGBA8));
+    env_define(e, "FORMAT_RGBA16F", 14, val_number(SAGE_FORMAT_RGBA16F));
+    env_define(e, "FORMAT_RGBA32F", 14, val_number(SAGE_FORMAT_RGBA32F));
+    env_define(e, "FORMAT_R32F", 11, val_number(SAGE_FORMAT_R32F));
+    env_define(e, "FORMAT_RG32F", 12, val_number(SAGE_FORMAT_RG32F));
+    env_define(e, "FORMAT_DEPTH32F", 15, val_number(SAGE_FORMAT_DEPTH32F));
+    env_define(e, "FORMAT_DEPTH24_S8",17, val_number(SAGE_FORMAT_DEPTH24_S8));
     env_define(e, "FORMAT_R8",        9,  val_number(SAGE_FORMAT_R8));
     env_define(e, "FORMAT_BGRA8",     12, val_number(SAGE_FORMAT_BGRA8));
-    env_define(e, "FORMAT_R32U",      10, val_number(SAGE_FORMAT_R32U));
+    env_define(e, "FORMAT_R32U", 11, val_number(SAGE_FORMAT_R32U));
     env_define(e, "IMAGE_SAMPLED",      13, val_number(SAGE_IMAGE_SAMPLED));
     env_define(e, "IMAGE_STORAGE",      13, val_number(SAGE_IMAGE_STORAGE));
     env_define(e, "IMAGE_COLOR_ATTACH", 18, val_number(SAGE_IMAGE_COLOR_ATTACH));
@@ -2508,6 +2508,7 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "STAGE_VERTEX",   12, val_number(SAGE_STAGE_VERTEX));
     env_define(e, "STAGE_FRAGMENT", 14, val_number(SAGE_STAGE_FRAGMENT));
     env_define(e, "STAGE_COMPUTE",  13, val_number(SAGE_STAGE_COMPUTE));
+    env_define(e, "STAGE_GEOMETRY", 14, val_number(SAGE_STAGE_GEOMETRY));
     env_define(e, "STAGE_ALL",      9,  val_number(SAGE_STAGE_ALL));
     env_define(e, "TOPO_TRIANGLE_LIST",  18, val_number(SAGE_TOPO_TRIANGLE_LIST));
     env_define(e, "TOPO_TRIANGLE_STRIP", 19, val_number(SAGE_TOPO_TRIANGLE_STRIP));
@@ -2521,6 +2522,12 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "FRONT_CW",   8,  val_number(SAGE_FRONT_CW));
     env_define(e, "BLEND_SRC_ALPHA",          15, val_number(SAGE_BLEND_SRC_ALPHA));
     env_define(e, "BLEND_ONE_MINUS_SRC_ALPHA",25, val_number(SAGE_BLEND_ONE_MINUS_SRC_ALPHA));
+    env_define(e, "BLEND_ZERO",              10, val_number(SAGE_BLEND_ZERO));
+    env_define(e, "BLEND_ONE",               9,  val_number(SAGE_BLEND_ONE));
+    env_define(e, "BLEND_OP_ADD",            12, val_number(SAGE_BLEND_OP_ADD));
+    env_define(e, "BLEND_OP_SUBTRACT",       17, val_number(SAGE_BLEND_OP_SUBTRACT));
+    env_define(e, "BLEND_OP_MIN",            12, val_number(SAGE_BLEND_OP_MIN));
+    env_define(e, "BLEND_OP_MAX",            12, val_number(SAGE_BLEND_OP_MAX));
     env_define(e, "COMPARE_LESS",    12, val_number(SAGE_COMPARE_LESS));
     env_define(e, "COMPARE_LEQUAL",  14, val_number(SAGE_COMPARE_LEQUAL));
     env_define(e, "COMPARE_ALWAYS",  14, val_number(SAGE_COMPARE_ALWAYS));
@@ -2529,16 +2536,16 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "LAYOUT_COLOR_ATTACH", 19, val_number(SAGE_LAYOUT_COLOR_ATTACH));
     env_define(e, "LAYOUT_DEPTH_ATTACH", 19, val_number(SAGE_LAYOUT_DEPTH_ATTACH));
     env_define(e, "LAYOUT_SHADER_READ",  18, val_number(SAGE_LAYOUT_SHADER_READ));
-    env_define(e, "LAYOUT_TRANSFER_SRC", 18, val_number(SAGE_LAYOUT_TRANSFER_SRC));
-    env_define(e, "LAYOUT_TRANSFER_DST", 18, val_number(SAGE_LAYOUT_TRANSFER_DST));
+    env_define(e, "LAYOUT_TRANSFER_SRC", 19, val_number(SAGE_LAYOUT_TRANSFER_SRC));
+    env_define(e, "LAYOUT_TRANSFER_DST", 19, val_number(SAGE_LAYOUT_TRANSFER_DST));
     env_define(e, "LAYOUT_PRESENT",      14, val_number(SAGE_LAYOUT_PRESENT));
     env_define(e, "PIPE_TOP",          8,  val_number(SAGE_PIPE_TOP));
     env_define(e, "PIPE_COMPUTE",      12, val_number(SAGE_PIPE_COMPUTE));
     env_define(e, "PIPE_TRANSFER",     13, val_number(SAGE_PIPE_TRANSFER));
     env_define(e, "PIPE_BOTTOM",       11, val_number(SAGE_PIPE_BOTTOM));
     env_define(e, "PIPE_FRAGMENT",     13, val_number(SAGE_PIPE_FRAGMENT));
-    env_define(e, "PIPE_COLOR_OUTPUT", 16, val_number(SAGE_PIPE_COLOR_OUTPUT));
-    env_define(e, "PIPE_ALL_COMMANDS", 16, val_number(SAGE_PIPE_ALL_COMMANDS));
+    env_define(e, "PIPE_COLOR_OUTPUT", 17, val_number(SAGE_PIPE_COLOR_OUTPUT));
+    env_define(e, "PIPE_ALL_COMMANDS", 17, val_number(SAGE_PIPE_ALL_COMMANDS));
     env_define(e, "ACCESS_NONE",          11, val_number(SAGE_ACCESS_NONE));
     env_define(e, "ACCESS_SHADER_READ",   18, val_number(SAGE_ACCESS_SHADER_READ));
     env_define(e, "ACCESS_SHADER_WRITE",  19, val_number(SAGE_ACCESS_SHADER_WRITE));
@@ -2548,7 +2555,7 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "ACCESS_HOST_WRITE",    17, val_number(SAGE_ACCESS_HOST_WRITE));
     env_define(e, "LOAD_CLEAR",    10, val_number(SAGE_LOAD_CLEAR));
     env_define(e, "LOAD_LOAD",     9,  val_number(SAGE_LOAD_LOAD));
-    env_define(e, "LOAD_DONTCARE", 12, val_number(SAGE_LOAD_DONTCARE));
+    env_define(e, "LOAD_DONTCARE", 13, val_number(SAGE_LOAD_DONTCARE));
     env_define(e, "STORE_STORE",   11, val_number(SAGE_STORE_STORE));
     env_define(e, "STORE_DONTCARE",14, val_number(SAGE_STORE_DONTCARE));
     env_define(e, "INPUT_RATE_VERTEX",   17, val_number(SAGE_INPUT_RATE_VERTEX));

@@ -19,7 +19,7 @@ import gpu
 # Initialization
 # -----------------------------------------
 proc init(app_name, validation):
-    return gpu.init(app_name, validation)
+    return gpu.initialize(app_name, validation)
 
 proc shutdown():
     return gpu.shutdown()
