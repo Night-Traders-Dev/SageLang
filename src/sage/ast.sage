@@ -347,6 +347,14 @@ proc defer_stmt(statement):
     s.statement = statement
     return s
 
+proc match_stmt(value, cases, case_count, default_case):
+    let s = Stmt(STMT_MATCH)
+    s.value = value
+    s.cases = cases
+    s.case_count = case_count
+    s.default_case = default_case
+    return s
+
 # --- CatchClause helper ---
 class CatchClause:
     proc init(exception_var, body):
