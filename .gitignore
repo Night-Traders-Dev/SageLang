@@ -30,3 +30,5 @@ obj_asan/
 .config
 sage_config.mk
 .sage_config
+build_sage/
+*.o
