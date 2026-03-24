@@ -1349,14 +1349,18 @@ The C-hosted `sage` binary now supports three runtime selections:
 - Arithmetic, comparison, logical, and bitwise operators
 - Arrays, tuples, dicts, indexing, slicing, and property access
 - `print`, expression statements, `if`, `while`, and array `for`
+- `break` and `continue` inside while/for loops (compiled natively with loop context stack)
 - Ahead-of-time proc definitions, proc calls, nested proc calls, explicit `return`, and implicit `nil` returns
 - Calls to native functions, Sage functions, classes, and instance methods
+- 30 GPU hot-path opcodes for frame-loop performance (poll_events, key_pressed, cmd_draw, etc.)
 
 **What still bridges or stays unsupported**:
 
-- In hybrid `--runtime bytecode` mode: top-level statements the VM does not yet lower directly, including proc/class definitions that are still easier to execute through the AST path.
-- In strict `--emit-vm` mode: constructs such as `break`, `continue`, `yield`, `async proc`, exception-heavy paths, imports that need AST execution, and class/method lowering still fail compilation instead of bridging.
-- Complex features where parity is more important than forcing incomplete bytecode support
+- In hybrid `--runtime bytecode` mode: class definitions, module imports, exception handling (try/catch/raise), defer, match, yield, and async procs fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. Opcodes are defined for future native support (`BC_OP_CLASS`, `BC_OP_IMPORT`, `BC_OP_SETUP_TRY`, `BC_OP_RAISE`, etc.).
+- In strict `--emit-vm` mode: these constructs fail compilation instead of bridging.
+- `EXPR_AWAIT` is not supported in either mode.
+
+**Security**: The VM validates all constant pool accesses (`VM_CHECK_CONST`) and AST statement indices (`VM_CHECK_AST`) to prevent buffer overflow from malformed bytecode. Stack depth is bounded at 1024 entries. All memory allocation uses OOM-safe wrappers.
 
 The practical result is that `bytecode` mode is already useful for long-running scripts and engine-style workloads, `--emit-vm` is now a real ahead-of-time path for a meaningful strict subset of Sage, and `ast` mode remains the reference path for maximum behavioral confidence.
 
@@ -1429,6 +1433,38 @@ Interpretation:
 - `sage-interpreted-vm` is the direct runtime-backend comparison against `sage-interpreted-c-ast`.
 - `sage-compiled-c` has the lowest execution-only runtime on the default workload, but its total wall time includes code generation and host compilation.
 - The total-time chart answers "time to result"; the execution-only chart answers "steady-state runtime after the binary already exists."
+
+### 7.2.2 Sage vs Python 3 Benchmarks
+
+A separate benchmark suite compares all Sage execution paths against CPython 3.x:
+
+```bash
+make benchmark-python        # Console table output
+make benchmark-python-md     # Markdown table output
+```
+
+10 paired workloads (`benchmarks/01_fibonacci.sage` + `.py` through `benchmarks/10_primes_sieve`):
+
+| Benchmark | What it tests |
+|-----------|--------------|
+| fibonacci | Recursive function call overhead |
+| loop_sum | Raw loop + arithmetic throughput |
+| string_concat | String allocation + GC pressure |
+| array_ops | Dynamic array growth + iteration |
+| dict_ops | Hash table insert + lookup |
+| class_method | OOP method dispatch |
+| nested_loops | Control flow with break/continue |
+| exception_handling | Try/catch overhead |
+| recursion_closures | Closure creation + higher-order calls |
+| primes_sieve | Array access + conditional logic |
+
+Five recipes tested: Python 3, Sage AST, Sage VM, Sage C (compiled), Sage LLVM (compiled).
+
+Typical performance characteristics:
+- **LLVM compiled**: 2-8x faster than CPython (fibonacci 3.9x, loop sum 7.7x)
+- **C compiled**: 2-4x faster than CPython on most workloads
+- **AST interpreter**: On par with CPython (faster on string/array ops, slower on deep recursion)
+- **Bytecode VM**: Similar to AST, with measurable speedups on tight loops
 
 ### 7.3 Extending SageLang with Native Functions
 
@@ -1774,6 +1810,75 @@ Pure-Sage math helpers (shadowed by native `math` module — use when native mod
 | `sqrt(n)` | Newton's method approximation |
 | `distance(x1, y1, x2, y2)` | Euclidean distance |
 | `normalize(val, lo, hi)` | Scale to [0, 1] |
+
+### 9.9 GPU Libraries
+
+SageLang ships with 18 GPU/rendering library modules in `lib/`:
+
+| Module | Lines | Purpose |
+|--------|-------|---------|
+| `vulkan.sage` | ~425 | Ergonomic Vulkan builder API (string-based buffer/shader/pipeline creation) |
+| `gpu.sage` | ~150 | High-level compute helpers (one-shot dispatch, ping-pong buffers) |
+| `opengl.sage` | ~400 | Drop-in OpenGL backend (same API as gpu module, OpenGL 4.5 init) |
+| `ui.sage` | ~400 | Immediate-mode GUI widgets (windows, buttons, sliders, menus, text inputs) |
+| `math3d.sage` | ~250 | vec2/3/4, mat4, perspective/ortho projections, camera utilities |
+| `mesh.sage` | ~300 | Procedural geometry (cube, plane, sphere), OBJ loading, GPU upload |
+| `renderer.sage` | ~200 | Frame loop management (depth buffer, render pass, sync) |
+| `material.sage` | ~150 | Shader+texture+descriptor binding, material presets |
+| `scene.sage` | ~200 | Node hierarchy, transforms, traversal, find_by_name |
+| `pbr.sage` | ~300 | Cook-Torrance PBR materials, point/directional lights, IBL |
+| `postprocess.sage` | ~250 | HDR targets, bloom chain, tone mapping (ACES/Reinhard) |
+| `shadows.sage` | ~200 | Shadow maps, depth-only passes, cascade shadow maps |
+| `deferred.sage` | ~300 | G-buffer (4 MRT), SSAO (32 samples), SSR (64-step raymarch) |
+| `taa.sage` | ~150 | Temporal anti-aliasing (Halton jitter, history blend) |
+| `gltf.sage` | ~200 | glTF 2.0 JSON loading, mesh/material extraction |
+| `asset_cache.sage` | ~100 | Shader/texture/mesh caching and deduplication |
+| `frame_graph.sage` | ~150 | Pass dependency ordering (topological sort) |
+| `debug_ui.sage` | ~150 | FPS tracking, custom debug values, toggle overlay |
+
+### 9.10 UI Widget Library (`lib/ui.sage`)
+
+Immediate-mode GPU UI system for building application interfaces:
+
+```sage
+import gpu
+import ui
+
+gpu.init_windowed("App", 800, 600, "My App", false)
+let ctx = ui.ui_create()
+
+while not gpu.window_should_close():
+    gpu.poll_events()
+    ui.ui_begin_frame(ctx)
+
+    ui.ui_panel(ctx, 10, 10, 300, 400, "Settings")
+    if ui.ui_button(ctx, 20, 50, 120, 30, "Apply"):
+        print "Applied!"
+
+    let volume = ui.ui_slider(ctx, 20, 100, 260, "Volume", 0.75)
+    let dark = ui.ui_checkbox(ctx, 20, 140, "Dark Mode", true)
+
+    ui.ui_end_frame(ctx)
+```
+
+Available widgets:
+
+| Widget | Function | Returns |
+|--------|----------|---------|
+| Label | `ui_label(ctx, x, y, text)` | nil |
+| Button | `ui_button(ctx, x, y, w, h, label)` | bool (clicked) |
+| Panel | `ui_panel(ctx, x, y, w, h, title)` | nil |
+| Window | `ui_window(ctx, x, y, w, h, title)` | dict (content area) |
+| Checkbox | `ui_checkbox(ctx, x, y, label, checked)` | bool (new state) |
+| Slider | `ui_slider(ctx, x, y, w, label, value)` | number (0.0-1.0) |
+| Scrollbar | `ui_scrollbar_v(ctx, x, y, h, content_h, scroll)` | number (0.0-1.0) |
+| Menu | `ui_menu_button(ctx, x, y, w, h, label, items)` | int (item index or -1) |
+| Text Input | `ui_text_input(ctx, x, y, w, label, text)` | string |
+| Progress | `ui_progress(ctx, x, y, w, h, value, label)` | nil |
+| Separator | `ui_separator(ctx, x, y, w)` | nil |
+| Tooltip | `ui_tooltip(ctx, text)` | nil |
+
+Theming: `ctx["theme"]` is a dict with 20+ configurable colors (`bg`, `accent`, `text`, `border`, etc.) and sizes (`padding`, `font_size`, `title_height`, etc.). Call `ui.ui_default_theme()` for defaults.
 
 ---
 
@@ -2411,28 +2516,37 @@ SageLang offers a practical balance between ease of use and systems-level contro
 
 ---
 
-## GPU Graphics (Vulkan)
+## GPU Graphics (Vulkan + OpenGL)
 
-SageLang includes a professional-grade Vulkan graphics library for GPU compute and rendering. The library is built in three layers:
+SageLang includes a professional-grade graphics engine supporting both Vulkan and OpenGL 4.5 backends. The library is built in four layers:
 
-1. **C native module** (`import gpu`) -- Low-level Vulkan operations, handle-based API
-2. **`lib/vulkan.sage`** -- Ergonomic builder API with string-based helpers
-3. **`lib/gpu.sage`** -- High-level one-liner helpers (fire-and-forget compute, ping-pong buffers)
+1. **Pure C GPU API** (`gpu_api.h/gpu_api.c`) -- Backend-agnostic ~100 functions, no interpreter dependency
+2. **C native module** (`import gpu`) -- Interpreter wrappers for Value-based argument handling
+3. **Sage builder libraries** (`lib/vulkan.sage`, `lib/opengl.sage`, `lib/gpu.sage`) -- Ergonomic helpers
+4. **Engine + UI libraries** (`lib/renderer.sage`, `lib/pbr.sage`, `lib/ui.sage`, etc.) -- Application-level systems
+
+Three execution paths share the same GPU API:
+
+- **Interpreter**: `graphics.c` wraps `sgpu_*` with Value extraction
+- **LLVM compiled**: `llvm_runtime.c` provides 103 `sage_rt_gpu_*` bridge functions
+- **Bytecode VM**: 30 dedicated `BC_OP_GPU_*` opcodes for frame-loop hot paths
 
 ### Build Requirements
 
-Vulkan support is auto-detected at build time via `pkg-config`. GLFW is required for windowed rendering:
+Vulkan and OpenGL support are auto-detected at build time via `pkg-config`. GLFW is required for windowed rendering:
 
 ```bash
-# Auto-detect (default)
+# Auto-detect Vulkan + OpenGL (default)
 make
 
 # Force enable/disable
 make VULKAN=1    # Force Vulkan
 make VULKAN=0    # Disable Vulkan
+make OPENGL=1    # Force OpenGL
+make OPENGL=0    # Disable OpenGL
 ```
 
-Without the Vulkan SDK, the `gpu` module still loads in stub mode -- all constants are available, functions return errors gracefully.
+Without the Vulkan SDK, the `gpu` module loads in stub mode -- all constants are available, functions return errors gracefully. Use `import opengl` instead of `import gpu` for the OpenGL 4.5 backend (same API, different initialization).
 
 ### Quick Start: Empty Window
 
