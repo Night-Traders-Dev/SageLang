@@ -1,0 +1,76 @@
+# Import Semantics
+
+This document describes how `import` and `from ... import ...` behave across Sage execution paths, with focus on LLVM compile-time constant import resolution.
+
+## Supported Forms
+
+```sage
+import math
+import math as m
+from math import sin, cos
+from math import PI as CIRCLE_PI
+```
+
+## Runtime vs Compile-Time Resolution
+
+- Interpreter paths resolve imports at runtime by loading module environments.
+- LLVM codegen now performs an additional compile-time pass for `from module import NAME` when `NAME` is a foldable module constant.
+
+## LLVM Compile-Time Constant Imports
+
+The following LLVM backends resolve cross-module constants during code generation:
+
+- `src/c/llvm_backend.c` (C host LLVM backend)
+- `src/sage/llvm_backend.sage` (self-hosted LLVM backend)
+
+### What Gets Resolved
+
+`from module import NAME` and `from module import NAME as ALIAS` can be resolved at compile time when:
+
+1. `NAME` is defined by a top-level `let` in the imported module.
+2. The initializer is compile-time foldable.
+3. The fold result is a scalar constant (`number`, `string`, `bool`, or `nil`).
+
+Common foldable patterns include literal constants, references to earlier constants in the same module, and simple constant expressions.
+
+### Module Search Paths
+
+Both LLVM backends search for module source in these locations:
+
+- `<base>/<module>.sage`
+- `<base>/lib/<module>.sage`
+- `<base>/modules/<module>.sage`
+
+Where `<base>` is the source resolution base for the backend (source file directory in C LLVM backend; working directory in self-hosted LLVM backend).
+
+### GPU Constant Special Case
+
+In the C LLVM backend, `from gpu import CONST` resolves from the built-in GPU constant table at compile time.
+
+Example:
+
+```sage
+from gpu import BUFFER_STORAGE, MEMORY_HOST_VISIBLE as HOST_VISIBLE
+```
+
+## Behavior on Failure
+
+If a requested `from module import NAME` constant cannot be resolved during LLVM codegen, compilation fails with an unresolved imported constant error instead of emitting an unresolved `%NAME` LLVM variable load.
+
+## Example: Cross-Module Constant Import
+
+`mathlib.sage`:
+
+```sage
+let PI = 3.14159
+let TAU = PI * 2
+```
+
+`main.sage`:
+
+```sage
+from mathlib import TAU as CIRCLE
+print CIRCLE
+```
+
+When compiled with `--compile-llvm`, `CIRCLE` is emitted as a constant value in generated IR.

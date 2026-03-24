@@ -149,7 +149,7 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
   - Direct GLSL shader support alongside SPIR-V
 - **LLVM-Compiled GPU Support**: `sage --compile-llvm` produces native executables with full GPU access
   - 103 `sage_rt_gpu_*` bridge functions in the LLVM runtime
-  - GPU constants resolved at compile time (no runtime lookup overhead)
+  - GPU constants (for example `from gpu import BUFFER_STORAGE`) resolved at compile time (no runtime lookup overhead)
   - Automatic linking against Vulkan, GLFW, and OpenGL libraries
   - Pure C GPU API layer (`gpu_api.h/gpu_api.c`) shared between interpreter and compiled paths
 - **Bytecode VM GPU Opcodes**: 30 dedicated opcodes for frame-loop hot paths
@@ -216,6 +216,7 @@ cd src/sage && ../../sage sage.sage program.sage
 - **Interpreter** (`interpreter.sage`, ~1050 lines) - Tree-walking evaluator with dict-based values
 - **Bootstrap coverage**: arithmetic, variables, control flow, functions, recursion, closures, classes, inheritance, arrays, dicts, strings, try/catch, break/continue, bitwise operators (~), module imports, loop iteration limits
 - **Module imports**: `import X`, `import X as Y`, `from X import a, b` with module caching and multi-path search (`./`, `lib/`)
+- **LLVM constant imports (C backend + self-hosted LLVM backend)**: `from X import Y` now resolves foldable top-level `let` constants across modules at compile time (with alias support via `from X import Y as Z`)
 - **Self-hosted test suites**: lexer, parser, interpreter, bootstrap, formatter, linter, value, optimization passes, stdlib, module loading, codegen, compiler, LSP, and CLI coverage
 - GC must be disabled for self-hosted code (`gc_disable()`)
 
@@ -843,6 +844,7 @@ Sage is an educational project aimed at understanding compiler construction and 
 
 - **Repository**: [github.com/Night-Traders-Dev/SageLang](https://github.com/Night-Traders-Dev/SageLang)
 - **Detailed Roadmap**: [ROADMAP.md](ROADMAP.md)
+- **Import Semantics**: [documentation/Import_Semantics.md](documentation/Import_Semantics.md)
 - **Issues**: [GitHub Issues](https://github.com/Night-Traders-Dev/SageLang/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Night-Traders-Dev/SageLang/discussions)
 
@@ -856,6 +858,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
+- March 24, 2026: LLVM + self-hosted LLVM fix - resolved cross-module `from X import Y` constant imports (including aliases) at compile time
 - March 18, 2026: Phase 15 Complete - Vulkan graphics engine (4600-line C backend, 16 Sage libraries, 27 shaders, 6 demos, PBR/bloom/shadows/deferred/SSAO/particles/N-body, 285 GPU tests)
 - March 17, 2026: LLVM Backend - Standalone runtime library (40+ sage_rt_* functions), ABI fix, local variable allocation, block termination tracking; --compile-llvm now produces working executables
 - March 17, 2026: Phase 14 Complete - Security & performance audit (30 fixes across 14 files, all 1425 tests passing)

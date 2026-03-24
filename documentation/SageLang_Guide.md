@@ -48,6 +48,8 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **UI Widgets** | Immediate-mode GUI: windows, panels, buttons, sliders, menus, text inputs |
 | **Compilation** | C backend, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64) |
 
+LLVM codegen has an additional import optimization path: both the C LLVM backend and the self-hosted LLVM backend resolve `from module import CONST` for foldable top-level constants during code generation (including `as` aliases).
+
 ### 1.3 Execution Model
 
 SageLang uses a shared front-end with multiple execution backends:
@@ -64,7 +66,7 @@ SageLang uses a shared front-end with multiple execution backends:
 
 All execution modes share the same object model: a **global environment**, nested **child environments** for scopes, and **tagged `Value` objects** that are either immediate (numbers, bools) or GC-managed heap values (arrays, dicts, strings, classes, instances, functions, generators).
 
-For GPU/graphics workloads, the LLVM compiled path resolves GPU module constants at compile time and emits direct calls to the pure C GPU API (`sgpu_*` functions in `gpu_api.h`), supporting both Vulkan and OpenGL backends. The bytecode VM provides 30 dedicated GPU opcodes for frame-loop hot paths.
+For LLVM-compiled workloads, `from module import CONST` is resolved at compile time for foldable top-level module constants (numbers/strings/bools/nil plus simple constant expressions). In the C LLVM backend, GPU module constants are also resolved at compile time and GPU calls emit direct bridges to the pure C GPU API (`sgpu_*` in `gpu_api.h`), supporting both Vulkan and OpenGL backends. The bytecode VM provides 30 dedicated GPU opcodes for frame-loop hot paths.
 
 The bytecode VM operates in hybrid mode by default: expressions, variables, loops (including break/continue), and function calls compile to stack bytecode, while unsupported constructs (classes, imports, exceptions, generators) fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. This gives measurable speedups on loop-heavy workloads while maintaining full language coverage. Use `sage --runtime bytecode` or `sage --runtime auto` to enable.
 
@@ -511,6 +513,14 @@ from math import *
 - `import_all(env, "math")`: Load module, define module name in env.
 - `import_from(env, "math", items[], count)`: Load module, look up items, define in env.
 - `import_as(env, "math", "m")`: Load module, define alias in env.
+
+**Compiled LLVM Constant Imports**:
+- Applies to both LLVM pipelines: the C backend (`src/c/llvm_backend.c`) and the self-hosted backend (`src/sage/llvm_backend.sage`).
+- `from module import NAME` (and `from module import NAME as ALIAS`) is pre-resolved from module top-level `let` constants when they are compile-time foldable.
+- Supported imported value shapes are scalar constants (`number`, `string`, `bool`, `nil`) and expressions composed from previously resolved constants.
+- Search paths for this compile-time resolution match module lookup defaults: `./`, `./lib`, and `./modules`.
+- In the C LLVM backend, `from gpu import CONST` is also resolved from the built-in GPU constant table.
+- Unresolved imported constants are treated as compile errors in LLVM codegen rather than generating unresolved `%NAME` loads.
 
 **Circular Dependency Detection**: `is_loading` flag prevents infinite loops during module execution.
 
@@ -2024,6 +2034,8 @@ fn["body"] = body_ast
 The self-hosted interpreter supports (~70% feature parity with C):
 
 **Fully implemented**: arithmetic, variables, control flow (if/elif/else, while, for), functions with closures, recursion, classes with inheritance, arrays, dicts, tuples, strings, slicing, indexing, try/catch/finally, break/continue, raise, module imports (`import X`, `import X as Y`, `from X import a, b`), property access/set, all bitwise operators (& | ^ ~ << >>), `match`/`case`/`default` pattern matching, `defer` statements (LIFO cleanup on scope exit), generators/yield (eager collection via `next()`), 35+ builtins.
+
+For self-hosted LLVM codegen specifically (`src/sage/llvm_backend.sage`), `from X import Y` constant imports are resolved during code generation for foldable top-level `let` values (including `as` aliases), matching the C LLVM backend behavior for cross-module constants.
 
 **Delegated to host runtime**: GC control (`gc_collect`, `gc_enable`, `gc_disable`, `gc_stats`), FFI (`ffi_open`, `ffi_close`, `ffi_call`, `ffi_sym`), memory access (`mem_alloc`, `mem_free`, `mem_read`, `mem_write`, `mem_size`, `addressof`), networking (via host `import` of native modules).
 

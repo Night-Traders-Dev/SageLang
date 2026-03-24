@@ -123,7 +123,7 @@ sage --compile-llvm my_game.sage -o my_game
 ./my_game
 ```
 
-The LLVM backend resolves GPU constants at compile time and emits direct calls to `sage_rt_gpu_*` functions, which are linked from `obj/gpu_api.o`.
+The C LLVM backend resolves GPU constants at compile time (including `from gpu import CONST`) and emits direct calls to `sage_rt_gpu_*` functions, which are linked from `obj/gpu_api.o`.
 
 ---
 
@@ -1255,6 +1255,8 @@ LLVM-compiled programs automatically link against both backends:
 sage --compile-llvm game.sage -o game
 # Links: -lvulkan -lglfw -lGL
 ```
+
+Compile-time import note: in the C LLVM backend, `from gpu import SOME_CONSTANT` resolves directly from the built-in GPU constant table, eliminating runtime constant lookups.
 
 ---
 
