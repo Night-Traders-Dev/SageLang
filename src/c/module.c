@@ -106,6 +106,17 @@ static bool path_is_within(const char* resolved, const char* search_dir) {
 }
 #endif
 
+// Convert dotted module name to path form (dots become slashes)
+static char* module_name_to_path(const char* name) {
+    size_t len = strlen(name);
+    char* path_name = SAGE_ALLOC(len + 1);
+    for (size_t i = 0; i < len; i++) {
+        path_name[i] = (name[i] == '.') ? '/' : name[i];
+    }
+    path_name[len] = '\0';
+    return path_name;
+}
+
 // Resolve module path by searching in search paths
 char* resolve_module_path(ModuleCache* cache, const char* name) {
     // Reject module names with path traversal attempts
@@ -114,12 +125,14 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
         return NULL;
     }
 
+    // Convert dots to slashes for filesystem lookup
+    char* path_name = module_name_to_path(name);
     char path[MAX_MODULE_PATH];
 
     // Try each search path
     for (int i = 0; i < cache->search_path_count; i++) {
         // Try .sage extension
-        int written = snprintf(path, MAX_MODULE_PATH, "%s/%s.sage", cache->search_paths[i], name);
+        int written = snprintf(path, MAX_MODULE_PATH, "%s/%s.sage", cache->search_paths[i], path_name);
         if (written >= MAX_MODULE_PATH) {
             fprintf(stderr, "Error: Module path too long for '%s'\n", name);
             continue;
@@ -131,11 +144,12 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
                 continue;
             }
 #endif
+            free(path_name);
             return SAGE_STRDUP(path);
         }
 
         // Try without extension (for directories with __init__.sage)
-        written = snprintf(path, MAX_MODULE_PATH, "%s/%s/__init__.sage", cache->search_paths[i], name);
+        written = snprintf(path, MAX_MODULE_PATH, "%s/%s/__init__.sage", cache->search_paths[i], path_name);
         if (written >= MAX_MODULE_PATH) continue;
         if (file_exists(path)) {
 #ifndef PICO_BUILD
@@ -144,10 +158,12 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
                 continue;
             }
 #endif
+            free(path_name);
             return SAGE_STRDUP(path);
         }
     }
 
+    free(path_name);
     return NULL;
 }
 
@@ -310,27 +326,34 @@ Module* load_module(ModuleCache* cache, const char* name) {
     return module;
 }
 
+// Get the last component of a dotted module name (e.g., "graphics.vulkan" -> "vulkan")
+static const char* module_binding_name(const char* module_name) {
+    const char* last_dot = strrchr(module_name, '.');
+    return last_dot ? last_dot + 1 : module_name;
+}
+
 // Import entire module: import math
 bool import_all(Environment* env, const char* module_name) {
     if (!global_module_cache) {
         fprintf(stderr, "Error: Module system not initialized\n");
         return false;
     }
-    
+
     // Load the module
     Module* module = load_module(global_module_cache, module_name);
     if (!module) {
         return false;
     }
-    
+
     // Execute module if not already loaded
     if (!execute_module(module, module_parent_env(env))) {
         return false;
     }
-    
-    // Define module in current environment (with name length)
-    env_define(env, module_name, strlen(module_name), val_module(module));
-    
+
+    // Bind using the last component of the dotted name (e.g., graphics.vulkan -> vulkan)
+    const char* bind_name = module_binding_name(module_name);
+    env_define(env, bind_name, strlen(bind_name), val_module(module));
+
     return true;
 }
 

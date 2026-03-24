@@ -4,7 +4,7 @@ gc_disable()
 # Dict-based node hierarchy with transforms
 # -----------------------------------------
 
-from math3d import mat4_identity, mat4_mul
+from graphics.math3d import mat4_identity, mat4_mul
 
 # Create a scene node
 proc create_node(name):

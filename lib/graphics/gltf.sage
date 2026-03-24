@@ -6,7 +6,7 @@ gc_disable()
 # -----------------------------------------
 
 import gpu
-from mesh import VERTEX_STRIDE
+from graphics.mesh import VERTEX_STRIDE
 
 # ============================================================================
 # glTF file loading (JSON portion)

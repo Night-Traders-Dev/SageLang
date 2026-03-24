@@ -60,7 +60,7 @@ assert_neq(gpu.create_cubemap, nil, "create_cubemap exists")
 # F12: Scene graph
 # ============================================================================
 print nl + "--- F12: Scene graph ---"
-import scene
+import graphics.scene
 
 let root = scene.create_node("root")
 assert_eq(root["name"], "root", "root node name")
@@ -84,7 +84,7 @@ scene.remove_child(root, child1)
 assert_eq(len(root["children"]), 1, "after remove, 1 child")
 
 # World transform
-from math3d import mat4_translate, mat4_mul, mat4_identity
+from graphics.math3d import mat4_translate, mat4_mul, mat4_identity
 root["transform"] = mat4_translate(1.0, 0.0, 0.0)
 child2["transform"] = mat4_translate(0.0, 2.0, 0.0)
 let wt = scene.world_transform(child2)
@@ -104,7 +104,7 @@ assert_eq(visit_count, 2, "traverse visits 2 visible nodes")
 # F13: Material system
 # ============================================================================
 print nl + "--- F13: Material system ---"
-import material
+import graphics.material
 
 # Just test the structure (no GPU needed)
 # material.create_material needs GPU, so test presets exist
@@ -116,7 +116,7 @@ assert_neq(material.pbr_material, nil, "pbr_material exists")
 # F14: Asset cache
 # ============================================================================
 print nl + "--- F14: Asset cache ---"
-import asset_cache
+import graphics.asset_cache
 
 assert_eq(asset_cache.shader_cache_count(), 0, "shader cache empty")
 assert_eq(asset_cache.texture_cache_count(), 0, "texture cache empty")
@@ -134,7 +134,7 @@ assert_eq(asset_cache.mesh_cache_count(), 0, "cache cleared")
 # F15: Frame graph
 # ============================================================================
 print nl + "--- F15: Frame graph ---"
-import frame_graph
+import graphics.frame_graph
 
 let fg = frame_graph.create_frame_graph()
 assert_eq(len(fg["passes"]), 0, "empty frame graph")
@@ -163,7 +163,7 @@ assert_eq(order[2], 2, "bloom third")
 # F16: Debug UI
 # ============================================================================
 print nl + "--- F16: Debug UI ---"
-import debug_ui
+import graphics.debug_ui
 
 let ui = debug_ui.create_debug_ui()
 assert_true(ui["visible"], "debug UI starts visible")

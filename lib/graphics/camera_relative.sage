@@ -3,7 +3,7 @@ gc_disable()
 # Universe-scale positions stored as 64-bit in Sage, converted to
 # float32 camera-relative offsets for GPU rendering.
 
-from math3d import vec3, v3_sub, mat4_identity
+from graphics.math3d import vec3, v3_sub, mat4_identity
 
 # Create a universe position (stored as regular Sage numbers = 64-bit floats)
 proc universe_pos(x, y, z):

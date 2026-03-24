@@ -80,20 +80,31 @@ proc is_valid_module_name(name):
 # Path Resolution
 # ============================================================================
 
+# Convert dotted module name to path form (dots become slashes)
+proc module_name_to_path(name):
+    let result = ""
+    for i in range(len(name)):
+        if name[i] == ".":
+            result = result + "/"
+        else:
+            result = result + name[i]
+    return result
+
 # Resolve module path by searching in search paths
 proc resolve_module_path(cache, name):
     if not is_valid_module_name(name):
         print "Error: Invalid module name " + chr(39) + name + chr(39) + " (path traversal not allowed)"
         return nil
+    let path_name = module_name_to_path(name)
     for i in range(len(cache.search_paths)):
         let search_dir = cache.search_paths[i]
         # Try .sage extension
-        let path = search_dir + "/" + name + ".sage"
+        let path = search_dir + "/" + path_name + ".sage"
         let content = io.readfile(path)
         if content != nil:
             return path
         # Try __init__.sage in a directory
-        let init_path = search_dir + "/" + name + "/__init__.sage"
+        let init_path = search_dir + "/" + path_name + "/__init__.sage"
         let init_content = io.readfile(init_path)
         if init_content != nil:
             return init_path

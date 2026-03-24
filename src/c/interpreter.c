@@ -107,7 +107,12 @@ static Value str_native(int argCount, Value* args) {
     
     char buffer[256];
     if (IS_NUMBER(args[0])) {
-        snprintf(buffer, sizeof(buffer), "%g", AS_NUMBER(args[0]));
+        double n = AS_NUMBER(args[0]);
+        if (n == (long long)n && n >= -9007199254740992.0 && n <= 9007199254740992.0) {
+            snprintf(buffer, sizeof(buffer), "%lld", (long long)n);
+        } else {
+            snprintf(buffer, sizeof(buffer), "%g", n);
+        }
         size_t slen = strlen(buffer);
         char* str = SAGE_ALLOC(slen + 1);
         memcpy(str, buffer, slen + 1);
@@ -134,7 +139,12 @@ static Value str_native(int argCount, Value* args) {
             if (i > 0) { buf[pos++] = ','; buf[pos++] = ' '; }
             Value elem = arr->elements[i];
             if (IS_NUMBER(elem)) {
-                pos += snprintf(buf + pos, buf_size - pos, "%g", AS_NUMBER(elem));
+                double en = AS_NUMBER(elem);
+                if (en == (long long)en && en >= -9007199254740992.0 && en <= 9007199254740992.0) {
+                    pos += snprintf(buf + pos, buf_size - pos, "%lld", (long long)en);
+                } else {
+                    pos += snprintf(buf + pos, buf_size - pos, "%g", en);
+                }
             } else if (IS_STRING(elem)) {
                 pos += snprintf(buf + pos, buf_size - pos, "%s", AS_STRING(elem));
             } else if (IS_BOOL(elem)) {

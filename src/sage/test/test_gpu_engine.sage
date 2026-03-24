@@ -53,7 +53,7 @@ assert_neq(gpu.save_screenshot, nil, "save_screenshot exists")
 # ============================================================================
 print nl + "--- Text Rendering ---"
 
-import text_render
+import graphics.text_render
 
 let char_A = text_render.get_char_lines("A")
 assert_true(len(char_A) > 0, "char A has line data")
@@ -74,8 +74,8 @@ assert_eq(len(ndc), len(text_verts), "NDC same length as screen")
 # ============================================================================
 print nl + "--- LOD System ---"
 
-import lod
-from math3d import vec3
+import graphics.lod
+from graphics.math3d import vec3
 
 let lod_cfg = lod.space_lod_config()
 assert_eq(len(lod_cfg["distances"]), 5, "space LOD has 5 thresholds")
@@ -106,7 +106,7 @@ assert_eq(stats[5], 1, "1 INVISIBLE in stats")
 # ============================================================================
 print nl + "--- Octree ---"
 
-import octree
+import graphics.octree
 
 let tree = octree.create_octree(vec3(0, 0, 0), 100.0)
 assert_eq(tree["count"], 0, "empty tree")
@@ -130,7 +130,7 @@ assert_eq(len(far_results), 0, "far query finds 0")
 # ============================================================================
 print nl + "--- Camera-Relative ---"
 
-import camera_relative
+import graphics.camera_relative
 
 let cam_pos = camera_relative.universe_pos(1000000.0, 2000000.0, 3000000.0)
 let obj_pos = camera_relative.universe_pos(1000001.0, 2000000.5, 3000000.0)
@@ -154,7 +154,7 @@ assert_true(camera_relative.LIGHT_YEAR > 9000000000000000.0, "light year > 9e15"
 # ============================================================================
 print nl + "--- Trails ---"
 
-import trails
+import graphics.trails
 
 let trail = trails.create_trail(100, 2.0)
 assert_eq(trail["count"], 0, "empty trail")
@@ -180,7 +180,7 @@ assert_eq(len(orbit), 30, "orbit = 10 steps * 3 coords")
 # ============================================================================
 print nl + "--- Camera ---"
 
-import camera
+import graphics.camera
 
 let cam = camera.create_camera(0, 5, 10)
 assert_eq(cam["pos"][0], 0, "cam X = 0")

@@ -3,7 +3,7 @@ gc_disable()
 # Stores object indices in a tree of axis-aligned bounding boxes
 
 import math
-from math3d import vec3, v3_sub, v3_length
+from graphics.math3d import vec3, v3_sub, v3_length
 
 let MAX_OBJECTS_PER_NODE = 16
 let MAX_DEPTH = 8

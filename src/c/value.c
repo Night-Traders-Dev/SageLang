@@ -684,9 +684,15 @@ void print_value(Value v) {
         return;
     }
     switch (v.type) {
-        case VAL_NUMBER: 
-            printf("%g", AS_NUMBER(v)); 
+        case VAL_NUMBER: {
+            double n = AS_NUMBER(v);
+            if (n == (long long)n && n >= -9007199254740992.0 && n <= 9007199254740992.0) {
+                printf("%lld", (long long)n);
+            } else {
+                printf("%g", n);
+            }
             break;
+        }
             
         case VAL_BOOL:   
             printf(AS_BOOL(v) ? "true" : "false"); 

@@ -590,10 +590,19 @@ static char* resolve_module_path_for_compiler(const Compiler* compiler, const ch
     } else {
         strcpy(dir, "./");
     }
+    // Convert dots to slashes in module name
+    size_t mlen = strlen(module_name);
+    char path_name[PATH_MAX];
+    if (mlen >= sizeof(path_name)) return NULL;
+    for (size_t i = 0; i < mlen; i++) {
+        path_name[i] = (module_name[i] == '.') ? '/' : module_name[i];
+    }
+    path_name[mlen] = '\0';
+
     char path[PATH_MAX];
     const char* search[] = { "", "lib/", "modules/" };
     for (int i = 0; i < 3; i++) {
-        snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], module_name);
+        snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], path_name);
         if (access(path, F_OK) == 0) return str_dup(path);
     }
     return NULL;

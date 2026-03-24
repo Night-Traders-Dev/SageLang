@@ -4,7 +4,7 @@
 # Run: ./sage examples/gpu_planet.sage
 
 import gpu
-from math3d import radians
+from graphics.math3d import radians
 
 print "=== Sage GPU Demo: Planet ==="
 

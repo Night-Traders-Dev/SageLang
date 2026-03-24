@@ -265,7 +265,9 @@ install: $(TARGET) $(LSP_TARGET)
 	install -m 755 $(LSP_TARGET) $(BINDIR)
 	install -d $(LIBDIR)/lib
 	install -d $(LIBDIR)/examples
-	cp -r lib/*.sage $(LIBDIR)/lib/
+	cp -r lib/*.sage $(LIBDIR)/lib/ 2>/dev/null || true
+	cp -r lib/graphics $(LIBDIR)/lib/
+	cp -r lib/os $(LIBDIR)/lib/
 	cp -r examples/*.sage $(LIBDIR)/examples/
 	install -d $(DOCDIR)
 	install -m 644 README.md ROADMAP.md LICENSE $(DOCDIR)/

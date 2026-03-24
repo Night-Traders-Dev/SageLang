@@ -334,11 +334,23 @@ static Stmt* import_statement() {
         // from module_name import item1 [as alias1], item2 [as alias2], ...
         consume(TOKEN_IDENTIFIER, "Expect module name after 'from'.");
         Token module_token = previous_token;
-        
-        // Copy module name
-        char* module_name = SAGE_ALLOC(module_token.length + 1);
+
+        // Build dotted module name (e.g., graphics.vulkan)
+        int name_len = module_token.length;
+        char* module_name = SAGE_ALLOC(name_len + 1);
         memcpy(module_name, module_token.start, module_token.length);
-        module_name[module_token.length] = '\0';
+        module_name[name_len] = '\0';
+
+        while (match(TOKEN_DOT)) {
+            consume(TOKEN_IDENTIFIER, "Expect identifier after '.' in module name.");
+            Token part = previous_token;
+            int new_len = name_len + 1 + part.length;
+            module_name = SAGE_REALLOC(module_name, new_len + 1);
+            module_name[name_len] = '.';
+            memcpy(module_name + name_len + 1, part.start, part.length);
+            name_len = new_len;
+            module_name[name_len] = '\0';
+        }
         
         consume(TOKEN_IMPORT, "Expect 'import' after module name.");
         
@@ -385,10 +397,23 @@ static Stmt* import_statement() {
     // import module_name [as alias]
     consume(TOKEN_IDENTIFIER, "Expect module name after 'import'.");
     Token module_token = previous_token;
-    
-    char* module_name = SAGE_ALLOC(module_token.length + 1);
+
+    // Build dotted module name (e.g., graphics.vulkan)
+    int name_len = module_token.length;
+    char* module_name = SAGE_ALLOC(name_len + 1);
     memcpy(module_name, module_token.start, module_token.length);
-    module_name[module_token.length] = '\0';
+    module_name[name_len] = '\0';
+
+    while (match(TOKEN_DOT)) {
+        consume(TOKEN_IDENTIFIER, "Expect identifier after '.' in module name.");
+        Token part = previous_token;
+        int new_len = name_len + 1 + part.length;
+        module_name = SAGE_REALLOC(module_name, new_len + 1);
+        module_name[name_len] = '.';
+        memcpy(module_name + name_len + 1, part.start, part.length);
+        name_len = new_len;
+        module_name[name_len] = '\0';
+    }
     
     char* alias = NULL;
     if (match(TOKEN_AS)) {

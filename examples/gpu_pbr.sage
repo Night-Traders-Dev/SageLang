@@ -5,10 +5,10 @@
 
 import gpu
 import math
-from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, aspect_ratio, update_title_fps
-from math3d import mat4_perspective, mat4_mul, mat4_translate, mat4_scale, mat4_identity, radians, vec3, camera_orbit
-from mesh import sphere_mesh, upload_mesh, mesh_vertex_binding, mesh_vertex_attribs
-from pbr import create_pbr_material, pack_pbr_material, create_point_light, pack_point_light
+from graphics.renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, aspect_ratio, update_title_fps
+from graphics.math3d import mat4_perspective, mat4_mul, mat4_translate, mat4_scale, mat4_identity, radians, vec3, camera_orbit
+from graphics.mesh import sphere_mesh, upload_mesh, mesh_vertex_binding, mesh_vertex_attribs
+from graphics.pbr import create_pbr_material, pack_pbr_material, create_point_light, pack_point_light
 
 print "=== Sage GPU Demo: PBR Materials ==="
 

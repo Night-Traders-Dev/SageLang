@@ -4,9 +4,9 @@
 # Run: ./sage examples/gpu_cube.sage
 
 import gpu
-from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, aspect_ratio
-from math3d import mat4_perspective, mat4_rotate_y, mat4_rotate_x, mat4_mul, mat4_translate, radians, pack_mvp
-from mesh import cube_mesh, upload_mesh, mesh_vertex_binding, mesh_vertex_attribs
+from graphics.renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, aspect_ratio
+from graphics.math3d import mat4_perspective, mat4_rotate_y, mat4_rotate_x, mat4_mul, mat4_translate, radians, pack_mvp
+from graphics.mesh import cube_mesh, upload_mesh, mesh_vertex_binding, mesh_vertex_attribs
 
 print "=== Sage GPU Demo: Spinning Cube ==="
 

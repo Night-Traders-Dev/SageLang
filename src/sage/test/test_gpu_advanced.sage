@@ -99,7 +99,7 @@ assert_neq(gpu.create_offscreen_target, nil, "create_offscreen_target exists")
 # ============================================================================
 print nl + "--- P4: Post-processing library ---"
 
-import postprocess
+import graphics.postprocess
 let pp = postprocess.create_postprocess(800, 600)
 assert_eq(pp["width"], 800, "postprocess width")
 assert_eq(pp["height"], 600, "postprocess height")
@@ -119,7 +119,7 @@ assert_eq(fq, 3, "fullscreen quad = 3 vertices")
 # ============================================================================
 print nl + "--- P5: PBR library ---"
 
-import pbr
+import graphics.pbr
 let gold = pbr.pbr_gold()
 assert_eq(gold["metallic"], 1.0, "gold is metallic")
 assert_eq(gold["roughness"], 0.3, "gold roughness 0.3")
@@ -157,8 +157,8 @@ assert_neq(gpu.create_sampler_advanced, nil, "create_sampler_advanced exists")
 # ============================================================================
 print nl + "--- P7: Shadow library ---"
 
-import shadows
-from math3d import vec3
+import graphics.shadows
+from graphics.math3d import vec3
 
 let light_mat = shadows.compute_light_matrix(vec3(0.5, -1.0, 0.3), vec3(-10, -5, -10), vec3(10, 10, 10))
 assert_eq(len(light_mat), 16, "light matrix = 16 floats")
@@ -193,7 +193,7 @@ print nl + "--- P11: Deferred library ---"
 
 assert_neq(gpu.create_render_pass_mrt, nil, "create_render_pass_mrt exists")
 
-import deferred
+import graphics.deferred
 let ssao = deferred.create_ssao_context(800, 600)
 assert_eq(ssao["width"], 800, "SSAO width")
 assert_eq(ssao["kernel_size"], 32, "SSAO kernel size")
@@ -219,7 +219,7 @@ assert_eq(len(ssr_params), 8, "SSR params = 8 floats")
 # ============================================================================
 print nl + "--- P13: glTF library ---"
 
-import gltf
+import graphics.gltf
 assert_neq(gpu.upload_bytes, nil, "upload_bytes exists")
 
 let empty_count = gltf.gltf_mesh_count(nil)
@@ -233,7 +233,7 @@ assert_eq(empty_mat, 0, "nil gltf material count = 0")
 # ============================================================================
 print nl + "--- P14: TAA library ---"
 
-import taa
+import graphics.taa
 
 # Halton sequence
 let h2 = taa.halton(1, 2)
@@ -254,10 +254,10 @@ assert_eq(len(taa_params), 8, "TAA params = 8 floats")
 # ============================================================================
 print nl + "--- Math3d library ---"
 
-from math3d import mat4_identity, mat4_mul, mat4_translate, mat4_scale, mat4_perspective
-from math3d import mat4_look_at, mat4_rotate_y, mat4_mul_vec4, mat4_transpose
-from math3d import v3_add, v3_sub, v3_dot, v3_cross, v3_normalize, v3_length, v3_scale
-from math3d import vec3, vec4, radians, camera_orbit
+from graphics.math3d import mat4_identity, mat4_mul, mat4_translate, mat4_scale, mat4_perspective
+from graphics.math3d import mat4_look_at, mat4_rotate_y, mat4_mul_vec4, mat4_transpose
+from graphics.math3d import v3_add, v3_sub, v3_dot, v3_cross, v3_normalize, v3_length, v3_scale
+from graphics.math3d import vec3, vec4, radians, camera_orbit
 
 # Vectors
 let a = vec3(1.0, 0.0, 0.0)
@@ -340,7 +340,7 @@ assert_eq(Tt[3], T[12], "transpose swaps [0,3] and [3,0]")
 # ============================================================================
 print nl + "--- Mesh library ---"
 
-from mesh import cube_mesh, plane_mesh, sphere_mesh, mesh_vertex_binding, mesh_vertex_attribs
+from graphics.mesh import cube_mesh, plane_mesh, sphere_mesh, mesh_vertex_binding, mesh_vertex_attribs
 
 let cm = cube_mesh()
 assert_eq(cm["vertex_count"], 24, "cube has 24 vertices")

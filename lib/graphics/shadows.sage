@@ -5,7 +5,7 @@ gc_disable()
 # -----------------------------------------
 
 import gpu
-from math3d import mat4_ortho, mat4_look_at, mat4_mul, vec3, v3_add, v3_scale, v3_negate
+from graphics.math3d import mat4_ortho, mat4_look_at, mat4_mul, vec3, v3_add, v3_scale, v3_negate
 
 # ============================================================================
 # Shadow map creation

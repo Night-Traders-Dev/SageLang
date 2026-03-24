@@ -6,10 +6,10 @@
 
 import gpu
 import math
-from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, aspect_ratio, update_title_fps
-from math3d import mat4_perspective, mat4_mul, mat4_translate, mat4_scale, mat4_rotate_y, radians, vec3, pack_mvp
-from mesh import sphere_mesh, upload_mesh, mesh_vertex_binding, mesh_vertex_attribs
-from camera import create_camera, update_camera
+from graphics.renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, aspect_ratio, update_title_fps
+from graphics.math3d import mat4_perspective, mat4_mul, mat4_translate, mat4_scale, mat4_rotate_y, radians, vec3, pack_mvp
+from graphics.mesh import sphere_mesh, upload_mesh, mesh_vertex_binding, mesh_vertex_attribs
+from graphics.camera import create_camera, update_camera
 
 print "=== Sage GPU: Solar System ==="
 

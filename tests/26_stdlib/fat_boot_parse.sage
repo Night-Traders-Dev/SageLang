@@ -1,3 +1,4 @@
+gc_disable()
 # EXPECT: FAT8
 # EXPECT: FAT12
 # EXPECT: FAT16
@@ -6,7 +7,7 @@
 # EXPECT: 2080
 # EXPECT: 3
 
-import fat
+import os.fat
 
 proc mk_sector():
     let bs = []

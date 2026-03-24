@@ -140,7 +140,7 @@ while fi2 < max_frames:
     fi2 = fi2 + 1
 
 # Camera orbit
-from math3d import mat4_perspective, mat4_look_at, mat4_mul, vec3, radians
+from graphics.math3d import mat4_perspective, mat4_look_at, mat4_mul, vec3, radians
 
 let proj = mat4_perspective(radians(60.0), ext["width"] / ext["height"], 0.1, 200.0)
 

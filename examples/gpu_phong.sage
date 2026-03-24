@@ -4,9 +4,9 @@
 # Run: ./sage examples/gpu_phong.sage
 
 import gpu
-from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, aspect_ratio
-from math3d import mat4_perspective, mat4_rotate_y, mat4_rotate_x, mat4_mul, mat4_translate, mat4_scale, mat4_identity, radians, pack_mvp, camera_orbit
-from mesh import cube_mesh, plane_mesh, upload_mesh, mesh_vertex_binding, mesh_vertex_attribs
+from graphics.renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, aspect_ratio
+from graphics.math3d import mat4_perspective, mat4_rotate_y, mat4_rotate_x, mat4_mul, mat4_translate, mat4_scale, mat4_identity, radians, pack_mvp, camera_orbit
+from graphics.mesh import cube_mesh, plane_mesh, upload_mesh, mesh_vertex_binding, mesh_vertex_attribs
 
 print "=== Sage GPU Demo: Phong Lighting ==="
 

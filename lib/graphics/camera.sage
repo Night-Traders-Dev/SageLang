@@ -6,7 +6,7 @@ gc_disable()
 
 import gpu
 import math
-from math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_cross, mat4_look_at
+from graphics.math3d import vec3, v3_add, v3_sub, v3_scale, v3_normalize, v3_cross, mat4_look_at
 
 # ============================================================================
 # Create an interactive camera

@@ -3,7 +3,7 @@ gc_disable()
 # Selects mesh/rendering mode based on distance from camera
 
 import math
-from math3d import v3_sub, v3_length
+from graphics.math3d import v3_sub, v3_length
 
 # LOD levels
 let LOD_FULL = 0

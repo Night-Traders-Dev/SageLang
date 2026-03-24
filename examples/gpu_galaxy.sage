@@ -6,8 +6,8 @@
 
 import gpu
 import math
-from math3d import mat4_perspective, mat4_mul, vec3, radians
-from camera import create_camera, update_camera
+from graphics.math3d import mat4_perspective, mat4_mul, vec3, radians
+from graphics.camera import create_camera, update_camera
 
 print "=== Sage GPU: Interactive Galaxy ==="
 

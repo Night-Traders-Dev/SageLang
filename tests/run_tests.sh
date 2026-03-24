@@ -28,7 +28,7 @@ capture_test_output() {
 
     case "$run_mode" in
         ""|"run")
-            if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
+            if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == *_stdlib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
                 TEST_OUTPUT=$(cd "$SCRIPT_DIR" && "$SAGE" "$test_file" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
             else
                 TEST_OUTPUT=$(cd "$test_dir" && "$SAGE" "$test_base" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
@@ -52,7 +52,7 @@ capture_test_output() {
             local compile_output run_output run_cwd
             compile_output=$(cd "$SCRIPT_DIR" && "$SAGE" --compile "$test_file" -o "$tmp_path" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
             if [ "$TEST_EXIT_CODE" -eq 0 ]; then
-                if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
+                if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == *_stdlib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
                     run_cwd="$SCRIPT_DIR"
                 else
                     run_cwd="$test_dir"
@@ -65,7 +65,7 @@ capture_test_output() {
             rm -f "$tmp_path"
             ;;
         "bytecode-run")
-            if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
+            if [[ "$test_dir" == *_lib ]] || [[ "$test_dir" == *_stdlib ]] || [[ "$test_dir" == "$TESTS_DIR" ]]; then
                 TEST_OUTPUT=$(cd "$SCRIPT_DIR" && "$SAGE" --runtime bytecode "$test_file" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
             else
                 TEST_OUTPUT=$(cd "$test_dir" && "$SAGE" --runtime bytecode "$test_base" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
