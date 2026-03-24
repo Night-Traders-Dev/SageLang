@@ -41,9 +41,9 @@ The GPU engine has five layers, with three execution paths:
 ```text
 Layer 5:  Sage Demos (examples/gpu_*.sage)
             |
-Layer 4:  Engine Libraries (lib/renderer.sage, lib/scene.sage, lib/pbr.sage, ...)
+Layer 4:  Engine Libraries (lib/graphics/renderer.sage, lib/graphics/scene.sage, ...)
             |
-Layer 3:  Builder Libraries (lib/vulkan.sage, lib/opengl.sage, lib/math3d.sage, ...)
+Layer 3:  Builder Libraries (lib/graphics/vulkan.sage, lib/graphics/opengl.sage, ...)
             |
 Layer 2:  Execution Path (one of three):
             |-- Interpreter:  src/c/graphics.c (Value-based wrappers)
@@ -94,10 +94,10 @@ Without GLFW: headless compute works, windowed rendering is disabled (`gpu.has_w
 
 ### OpenGL Backend
 
-To use OpenGL instead of Vulkan, use `lib/opengl.sage`:
+To use OpenGL instead of Vulkan, use `lib/graphics/opengl.sage`:
 
 ```sage
-import opengl
+import graphics.opengl
 
 # Initializes with OpenGL 4.5 core profile instead of Vulkan
 opengl.init_windowed("My App", 800, 600)
@@ -178,7 +178,7 @@ gpu.shutdown_windowed()
 For most applications, use `lib/renderer.sage` which handles all boilerplate:
 
 ```sage
-from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, aspect_ratio
+from graphics.renderer import create_renderer, begin_frame, end_frame, shutdown_renderer, aspect_ratio
 
 let r = create_renderer(1024, 768, "My Scene")
 
@@ -611,7 +611,7 @@ gpu.update_descriptor_image(desc_set, 1, image_handle, sampler_handle)
 ### Vectors
 
 ```sage
-from math3d import vec3, v3_add, v3_sub, v3_scale, v3_dot, v3_cross, v3_normalize, v3_length
+from graphics.math3d import vec3, v3_add, v3_sub, v3_scale, v3_dot, v3_cross, v3_normalize, v3_length
 
 let a = vec3(1.0, 0.0, 0.0)
 let b = vec3(0.0, 1.0, 0.0)
@@ -625,10 +625,10 @@ let n = v3_normalize(vec3(3, 0, 4))   # [0.6, 0, 0.8]
 Matrices are column-major flat arrays of 16 floats (matching GLSL/Vulkan):
 
 ```sage
-from math3d import mat4_identity, mat4_mul, mat4_translate, mat4_scale
-from math3d import mat4_rotate_x, mat4_rotate_y, mat4_rotate_z
-from math3d import mat4_perspective, mat4_ortho, mat4_look_at
-from math3d import radians, pack_mvp
+from graphics.math3d import mat4_identity, mat4_mul, mat4_translate, mat4_scale
+from graphics.math3d import mat4_rotate_x, mat4_rotate_y, mat4_rotate_z
+from graphics.math3d import mat4_perspective, mat4_ortho, mat4_look_at
+from graphics.math3d import radians, pack_mvp
 
 # Transform chain
 let model = mat4_mul(mat4_translate(0, 1, 0), mat4_rotate_y(radians(45)))
@@ -645,7 +645,7 @@ The perspective matrix is Vulkan-convention: Y-flipped, depth range 0-1.
 ### Cameras
 
 ```sage
-from math3d import camera_orbit, camera_fps
+from graphics.math3d import camera_orbit, camera_fps
 
 # Orbit camera (for object inspection)
 let view = camera_orbit(angle_x, angle_y, distance, target_vec3)
@@ -667,7 +667,7 @@ All meshes use: `[px, py, pz, nx, ny, nz, u, v]` per vertex (32 bytes stride).
 ### Procedural Meshes
 
 ```sage
-from mesh import cube_mesh, plane_mesh, sphere_mesh, upload_mesh
+from graphics.mesh import cube_mesh, plane_mesh, sphere_mesh, upload_mesh
 
 let cube = upload_mesh(cube_mesh())           # 24 verts, 36 indices
 let floor = upload_mesh(plane_mesh(10.0))     # 4 verts, 6 indices
@@ -679,7 +679,7 @@ let sphere = upload_mesh(sphere_mesh(24, 48)) # UV sphere
 ### OBJ File Loading
 
 ```sage
-from mesh import load_obj, upload_mesh
+from graphics.mesh import load_obj, upload_mesh
 
 let mesh = load_obj("models/teapot.obj")
 if mesh != nil:
@@ -692,7 +692,7 @@ Supports: `v` (positions), `vn` (normals), `vt` (UVs), `f` (faces with triangula
 ### Drawing Meshes
 
 ```sage
-from mesh import mesh_vertex_binding, mesh_vertex_attribs
+from graphics.mesh import mesh_vertex_binding, mesh_vertex_attribs
 
 # For pipeline creation:
 cfg["vertex_bindings"] = [mesh_vertex_binding()]
@@ -713,7 +713,7 @@ gpu.cmd_draw_indexed(cmd, gpu_mesh["index_count"], 1, 0, 0, 0)
 `lib/camera.sage` provides a ready-to-use FPS/orbit camera with WASD + mouse look.
 
 ```sage
-from camera import create_camera, update_camera, camera_position
+from graphics.camera import create_camera, update_camera, camera_position
 
 let cam = create_camera(0.0, 2.0, 5.0)   # Starting position
 
@@ -738,8 +738,8 @@ let view = update_camera(cam, delta_time)
 `lib/renderer.sage` manages the full frame lifecycle:
 
 ```sage
-from renderer import create_renderer, begin_frame, end_frame, shutdown_renderer
-from renderer import aspect_ratio, check_resize, update_title_fps
+from graphics.renderer import create_renderer, begin_frame, end_frame, shutdown_renderer
+from graphics.renderer import aspect_ratio, check_resize, update_title_fps
 
 let r = create_renderer(1024, 768, "My Scene")
 
@@ -768,7 +768,7 @@ shutdown_renderer(r)  # Prints FPS stats
 ### Material Presets
 
 ```sage
-from pbr import pbr_gold, pbr_silver, pbr_copper, pbr_plastic_red, pbr_rubber, pbr_ceramic
+from graphics.pbr import pbr_gold, pbr_silver, pbr_copper, pbr_plastic_red, pbr_rubber, pbr_ceramic
 
 let gold = pbr_gold()           # metallic=1.0, roughness=0.3
 let plastic = pbr_plastic_red() # metallic=0.0, roughness=0.5
@@ -778,7 +778,7 @@ let emissive = pbr_emissive([1.0, 0.5, 0.0], 5.0)  # Glowing orange
 ### Custom Materials
 
 ```sage
-from pbr import create_pbr_material, pack_pbr_material
+from graphics.pbr import create_pbr_material, pack_pbr_material
 
 let mat = create_pbr_material([0.9, 0.1, 0.1], 0.8, 0.2, 1.0)
 # albedo=[R,G,B], metallic, roughness, ambient_occlusion
@@ -802,7 +802,7 @@ The `pbr.frag` shader implements Cook-Torrance BRDF with:
 `lib/postprocess.sage` manages HDR rendering, bloom, and tone mapping.
 
 ```sage
-from postprocess import create_postprocess, tonemap_params
+from graphics.postprocess import create_postprocess, tonemap_params
 
 let pp = create_postprocess(1024, 768)
 pp["exposure"] = 1.5
@@ -824,7 +824,7 @@ Three shader passes in `examples/shaders/`:
 `lib/shadows.sage` provides shadow mapping utilities.
 
 ```sage
-from shadows import create_shadow_map, create_shadow_pass, create_cascade_shadows, compute_light_matrix
+from graphics.shadows import create_shadow_map, create_shadow_pass, create_cascade_shadows, compute_light_matrix
 
 # Single shadow map
 let sm = create_shadow_map(2048)
@@ -851,7 +851,7 @@ let light_mat = compute_light_matrix(light_direction, scene_min, scene_max)
 ### G-Buffer
 
 ```sage
-from deferred import create_gbuffer, create_ssao_context, create_ssr_context
+from graphics.deferred import create_gbuffer, create_ssao_context, create_ssr_context
 
 let gb = create_gbuffer(1024, 768)
 # Creates 4 color attachments + depth:
@@ -926,7 +926,7 @@ else:
 ### Temporal Anti-Aliasing (TAA)
 
 ```sage
-from taa import create_taa, taa_jitter_projection, taa_advance, pack_taa_params
+from graphics.taa import create_taa, taa_jitter_projection, taa_advance, pack_taa_params
 
 let taa = create_taa(1024, 768)
 let jittered_proj = taa_jitter_projection(projection_matrix, taa)
@@ -937,7 +937,7 @@ taa_advance(taa)  # Swap history buffers, advance frame
 ### Scene Graph
 
 ```sage
-from scene import create_node, add_child, world_transform, traverse, find_node
+from graphics.scene import create_node, add_child, world_transform, traverse, find_node
 
 let root = create_node("root")
 let cube = create_node("cube")
@@ -955,7 +955,7 @@ traverse(root, draw_node)
 ### Material System
 
 ```sage
-from material import create_material, build_pipeline, bind_material
+from graphics.material import create_material, build_pipeline, bind_material
 
 let mat = create_material("vert.spv", "frag.spv", descriptor_bindings, push_size)
 build_pipeline(mat, render_pass, vertex_bindings, vertex_attribs, config)
@@ -967,7 +967,7 @@ bind_material(cmd, mat)
 ### Asset Cache
 
 ```sage
-from asset_cache import load_shader_cached, load_texture_cached, cache_mesh
+from graphics.asset_cache import load_shader_cached, load_texture_cached, cache_mesh
 
 let shader = load_shader_cached("shader.spv", gpu.STAGE_VERTEX)  # Deduped
 let tex = load_texture_cached("texture.png")                      # Deduped
@@ -976,7 +976,7 @@ let tex = load_texture_cached("texture.png")                      # Deduped
 ### Frame Graph
 
 ```sage
-from frame_graph import create_frame_graph, create_pass, fg_add_pass, fg_compile, fg_execute
+from graphics.frame_graph import create_frame_graph, create_pass, fg_add_pass, fg_compile, fg_execute
 
 let fg = create_frame_graph()
 let shadow = create_pass("shadows", PASS_GRAPHICS)
@@ -992,7 +992,7 @@ fg_execute(fg, cmd)
 ### Debug UI
 
 ```sage
-from debug_ui import create_debug_ui, debug_frame, debug_fps, debug_set, debug_print
+from graphics.debug_ui import create_debug_ui, debug_frame, debug_fps, debug_set, debug_print
 
 let ui = create_debug_ui()
 debug_frame(ui, delta_time)
@@ -1016,26 +1016,29 @@ let shot = gpu.screenshot()   # {width, height, pixels}
 
 ## Engine Libraries Reference
 
-| Library | File | Purpose |
-|---------|------|---------|
-| `gpu` | native C module | Core Vulkan operations |
-| `vulkan` | lib/vulkan.sage | Builder pattern helpers |
-| `math3d` | lib/math3d.sage | Vectors, matrices, camera, projection |
-| `mesh` | lib/mesh.sage | Procedural meshes, OBJ loading, GPU upload |
-| `camera` | lib/camera.sage | Interactive FPS/orbit camera |
-| `renderer` | lib/renderer.sage | High-level frame loop |
-| `pbr` | lib/pbr.sage | PBR materials and lights |
-| `postprocess` | lib/postprocess.sage | HDR, bloom, tone mapping |
-| `shadows` | lib/shadows.sage | Shadow map management |
-| `deferred` | lib/deferred.sage | G-buffer, SSAO, SSR |
-| `taa` | lib/taa.sage | Temporal anti-aliasing |
-| `scene` | lib/scene.sage | Scene graph (node hierarchy) |
-| `material` | lib/material.sage | Material system |
-| `asset_cache` | lib/asset_cache.sage | Resource deduplication |
-| `frame_graph` | lib/frame_graph.sage | Pass dependency ordering |
-| `debug_ui` | lib/debug_ui.sage | FPS and debug overlay |
-| `gltf` | lib/gltf.sage | glTF 2.0 model loading |
-| `gpu` (lib) | lib/gpu.sage | High-level compute helpers |
+All graphics library modules live in `lib/graphics/` and are imported with the `graphics.` prefix (e.g., `import graphics.vulkan` binds as `vulkan`).
+
+| Import | File | Purpose |
+|--------|------|---------|
+| `import gpu` (native) | C module | Core Vulkan operations |
+| `import graphics.vulkan` | lib/graphics/vulkan.sage | Builder pattern helpers |
+| `import graphics.math3d` | lib/graphics/math3d.sage | Vectors, matrices, camera, projection |
+| `import graphics.mesh` | lib/graphics/mesh.sage | Procedural meshes, OBJ loading, GPU upload |
+| `import graphics.camera` | lib/graphics/camera.sage | Interactive FPS/orbit camera |
+| `import graphics.renderer` | lib/graphics/renderer.sage | High-level frame loop |
+| `import graphics.pbr` | lib/graphics/pbr.sage | PBR materials and lights |
+| `import graphics.postprocess` | lib/graphics/postprocess.sage | HDR, bloom, tone mapping |
+| `import graphics.shadows` | lib/graphics/shadows.sage | Shadow map management |
+| `import graphics.deferred` | lib/graphics/deferred.sage | G-buffer, SSAO, SSR |
+| `import graphics.taa` | lib/graphics/taa.sage | Temporal anti-aliasing |
+| `import graphics.scene` | lib/graphics/scene.sage | Scene graph (node hierarchy) |
+| `import graphics.material` | lib/graphics/material.sage | Material system |
+| `import graphics.asset_cache` | lib/graphics/asset_cache.sage | Resource deduplication |
+| `import graphics.frame_graph` | lib/graphics/frame_graph.sage | Pass dependency ordering |
+| `import graphics.debug_ui` | lib/graphics/debug_ui.sage | FPS and debug overlay |
+| `import graphics.gltf` | lib/graphics/gltf.sage | glTF 2.0 model loading |
+| `import graphics.gpu` | lib/graphics/gpu.sage | High-level compute helpers |
+| `import graphics.opengl` | lib/graphics/opengl.sage | OpenGL backend (drop-in replacement) |
 
 ---
 
@@ -1219,7 +1222,7 @@ SageLang supports OpenGL 4.5+ as an alternative to Vulkan via `lib/opengl.sage`.
 ### Setup
 
 ```sage
-import opengl
+import graphics.opengl
 
 # Initialize with OpenGL instead of Vulkan
 opengl.init_windowed("My App", 800, 600)
@@ -1262,13 +1265,13 @@ Compile-time import note: in the C LLVM backend, `from gpu import SOME_CONSTANT`
 
 ## UI Widget Library
 
-`lib/ui.sage` provides an immediate-mode GUI system for GPU applications, similar in philosophy to Dear ImGui.
+`lib/graphics/ui.sage` provides an immediate-mode GUI system for GPU applications, similar in philosophy to Dear ImGui.
 
 ### Quick Start
 
 ```sage
 import gpu
-import ui
+import graphics.ui
 
 gpu.init_windowed("UI Demo", 800, 600, "Sage UI", false)
 let ctx = ui.ui_create()

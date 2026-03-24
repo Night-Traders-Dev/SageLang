@@ -119,7 +119,7 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **`string`**: String utilities (find, rfind, startswith, endswith, contains, char_at, ord, chr, repeat, count, substr, reverse)
 - **`sys`**: System info (args, exit, getenv, clock, sleep, version, platform)
 - **`thread`**: Threading primitives (spawn, join, mutex, lock, unlock, sleep, id)
-- **`fat`**: FAT boot sector parsing + layout math (FAT8/FAT12/FAT16/FAT32 detection, `cluster_to_lba`, FAT entry offsets)
+- **`fat`**: FAT boot sector parsing + layout math (FAT8/FAT12/FAT16/FAT32 detection, `cluster_to_lba`, FAT entry offsets) — now in `lib/os/`, imported as `import os.fat`
 
 ### Networking Modules
 
@@ -128,25 +128,41 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **`http`**: HTTP/HTTPS client via libcurl (get, post, put, delete, patch, head, download, escape, unescape) — returns `{status, body, headers}` dicts with options for timeout, redirects, SSL verification, custom headers
 - **`ssl`**: OpenSSL bindings (context, load_cert, wrap, connect, accept, send, recv, shutdown, free, free_context, error, peer_cert, set_verify)
 
-### FAT Filesystem Support (Initial)
+### OS Development Libraries (`lib/os/`)
 
-- `import fat` provides native parsing helpers for FAT filesystem boot sectors.
-- Supported type detection: **FAT8**, **FAT12**, **FAT16**, **FAT32**
-- Exposed APIs:
-  - `fat.parse_boot_sector(bytes_array)` → metadata dict
-  - `fat.probe(path)` → read + parse from disk image / block dump
-  - `fat.cluster_to_lba(info, cluster)` → data-region sector mapping
-  - `fat.fat_entry_offset(info, cluster)` → FAT table byte offset metadata
+SageLang ships with a suite of binary format parsers and hardware abstraction modules for bare-metal, UEFI, and OS kernel development. All modules live under `lib/os/` and are imported with dotted paths:
+
+| Module | Import | Description |
+|--------|--------|-------------|
+| **FAT** | `import os.fat` | FAT8/12/16/32 boot sector parser, cluster-to-LBA, FAT entry offsets |
+| **ELF** | `import os.elf` | ELF32/64 header, program/section headers, string table, section lookup |
+| **MBR** | `import os.mbr` | MBR partition table, CHS decode, bootable partition finder |
+| **GPT** | `import os.gpt` | GPT header, GUID parsing, partition type identification |
+| **PE/COFF** | `import os.pe` | DOS/COFF/optional headers, section parsing, UEFI app detection |
+| **PCI** | `import os.pci` | PCI config space (Type 0/1), BAR decode, capability lists, BDF addressing |
+| **UEFI** | `import os.uefi` | EFI memory map, config tables, RSDP, ACPI SDT headers |
+| **ACPI** | `import os.acpi` | MADT (APIC), FADT, HPET, MCFG parsers, processor enumeration |
+| **Paging** | `import os.paging` | x86-64 page table entries, index extraction, identity/higher-half mapping |
 
 Example:
 ```sage
-import fat
+import os.fat
 import io
 
 let boot = io.readbytes("disk.img")
 let info = fat.parse_boot_sector(boot)
 print info["fat_type"]        # FAT12 / FAT16 / FAT32 / FAT8
 print info["first_data_sector"]
+
+import os.elf
+let binary = io.readbytes("kernel.elf")
+let hdr = elf.parse_header(binary)
+print hdr["machine_name"]    # x86_64
+print hdr["type_name"]       # EXEC
+
+import os.uefi
+let mmap = uefi.parse_memory_map(mem_bytes, 48, num_entries)
+print uefi.total_memory(mmap)
 ```
 
 ### GPU Graphics Engine (Vulkan + OpenGL)
@@ -179,7 +195,7 @@ print info["first_data_sector"]
   - Bypasses interpreter overhead for real-time rendering loops
 - **`lib/vulkan.sage`**: Ergonomic builder API — `vulkan.buffer("storage")`, `vulkan.shader("compute.spv", "compute")`
 - **`lib/gpu.sage`**: High-level helpers — `run_compute()` for one-shot GPU compute, ping-pong buffers, device info
-- **Rendering Libraries**: `math3d` (vectors/matrices/camera), `mesh` (procedural cube/plane/sphere, OBJ), `renderer` (frame loop), `material` (shader+texture binding), `scene` (scene graph), `pbr` (Cook-Torrance materials), `postprocess` (HDR/bloom/tonemapping), `shadows` (cascade shadow maps), `deferred` (G-buffer, SSAO, SSR), `taa` (temporal anti-aliasing), `gltf` (glTF 2.0 loading), `asset_cache`, `frame_graph`, `debug_ui`, `ui` (immediate-mode widgets)
+- **Rendering Libraries** (`lib/graphics/`): `math3d` (vectors/matrices/camera), `mesh` (procedural cube/plane/sphere, OBJ), `renderer` (frame loop), `material` (shader+texture binding), `scene` (scene graph), `pbr` (Cook-Torrance materials), `postprocess` (HDR/bloom/tonemapping), `shadows` (cascade shadow maps), `deferred` (G-buffer, SSAO, SSR), `taa` (temporal anti-aliasing), `gltf` (glTF 2.0 loading), `asset_cache`, `frame_graph`, `debug_ui`, `ui` (immediate-mode widgets) — imported with `graphics.` prefix (e.g., `from graphics.math3d import vec3`)
 
 ### JSON Library (cJSON Port)
 
@@ -243,6 +259,10 @@ cd src/sage && ../../sage sage.sage program.sage
 - GC must be disabled for self-hosted code (`gc_disable()`)
 
 ### Bundled `lib/` Modules
+
+The standard library is organized into subdirectories with dotted import paths:
+
+**General-purpose** (`lib/`, imported directly):
 - **`math`**: arithmetic helpers, `pow_int`, `factorial`, `gcd`, `lcm`, `sqrt`, distance helpers
 - **`arrays`**: `map`, `filter`, `reduce`, `unique`, `zip`, `chunk`, `flatten`, `concat`
 - **`strings`**: whitespace cleanup, `contains`, substring counting, padding, case formatting helpers
@@ -252,10 +272,16 @@ cd src/sage && ../../sage sage.sage program.sage
 - **`assert`**: assertion helpers for writing Sage test scripts
 - **`utils`**: general helpers like `default_if_nil`, `swap`, `head`, `last`, and `repeat_value`
 - **`json`**: Complete 1:1 cJSON port — parse, print, create, query, modify JSON trees (88 tests)
+
+**Graphics** (`lib/graphics/`, imported as `import graphics.<module>`):
 - **`vulkan`**: Ergonomic Vulkan builder API (string-based buffer/shader/pipeline creation, barrier helpers)
 - **`gpu`**: High-level GPU compute helpers (one-shot compute dispatch, ping-pong buffers, device info)
 - **`opengl`**: OpenGL backend wrapper (drop-in replacement for Vulkan, same API with OpenGL 4.5 init)
 - **`ui`**: Immediate-mode GPU UI widgets (windows, panels, buttons, labels, menus, scrollbars, checkboxes, sliders, text inputs, tooltips, progress bars)
+- **`math3d`**, **`mesh`**, **`renderer`**, **`camera`**, **`scene`**, **`material`**, **`pbr`**, **`postprocess`**, **`shadows`**, **`deferred`**, **`taa`**, **`gltf`**, **`asset_cache`**, **`frame_graph`**, **`debug_ui`**
+
+**OS / Bare-metal** (`lib/os/`, imported as `import os.<module>`):
+- **`fat`**, **`elf`**, **`mbr`**, **`gpt`**, **`pe`**, **`pci`**, **`uefi`**, **`acpi`**, **`paging`**
 
 Example:
 ```sage

@@ -11,6 +11,29 @@ from math import sin, cos
 from math import PI as CIRCLE_PI
 ```
 
+### Dotted Module Paths
+
+Modules organized in subdirectories use dot-separated paths. The dots map to directory separators on the filesystem:
+
+```sage
+import os.fat              # resolves to lib/os/fat.sage, binds as "fat"
+import graphics.vulkan     # resolves to lib/graphics/vulkan.sage, binds as "vulkan"
+from graphics.math3d import vec3, mat4_mul
+from os.elf import parse_header
+```
+
+When using `import a.b`, the variable is bound using the **last component** of the path (e.g., `import os.fat` lets you call `fat.parse_boot_sector()`). Use `import a.b as alias` to override the binding name.
+
+### Module Search Paths
+
+The module system searches in order:
+
+1. Current directory (`.`)
+2. `./lib/`
+3. `./modules/`
+
+For dotted names like `os.fat`, dots are converted to `/` before searching, so `import os.fat` looks for `./lib/os/fat.sage`.
+
 ## Runtime vs Compile-Time Resolution
 
 - Interpreter paths resolve imports at runtime by loading module environments.
@@ -33,7 +56,7 @@ The following LLVM backends resolve cross-module constants during code generatio
 
 Common foldable patterns include literal constants, references to earlier constants in the same module, and simple constant expressions.
 
-### Module Search Paths
+### LLVM Backend Search Paths
 
 Both LLVM backends search for module source in these locations:
 
@@ -41,7 +64,7 @@ Both LLVM backends search for module source in these locations:
 - `<base>/lib/<module>.sage`
 - `<base>/modules/<module>.sage`
 
-Where `<base>` is the source resolution base for the backend (source file directory in C LLVM backend; working directory in self-hosted LLVM backend).
+Where `<base>` is the source resolution base for the backend (source file directory in C LLVM backend; working directory in self-hosted LLVM backend). For dotted module names (e.g., `os.fat`), dots are converted to directory separators before searching.
 
 ### GPU Constant Special Case
 

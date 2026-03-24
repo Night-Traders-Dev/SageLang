@@ -1,6 +1,6 @@
 # FAT Filesystem Guide (Initial Support)
 
-This guide covers the current native `fat` module support in SageLang.
+This guide covers the `fat` module in SageLang's OS development library suite (`lib/os/`).
 
 ## Scope
 
@@ -16,8 +16,10 @@ This is foundation work for later directory traversal, cluster-chain walking, an
 ## Import
 
 ```sage
-import fat
+import os.fat
 ```
+
+The module binds as `fat` (the last component of the dotted path), so all calls use `fat.*`.
 
 ## API
 
@@ -72,7 +74,7 @@ The dict returned by `parse_boot_sector`/`probe` includes:
 ## Example
 
 ```sage
-import fat
+import os.fat
 import io
 
 let boot = io.readbytes("disk.img")

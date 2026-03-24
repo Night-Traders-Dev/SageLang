@@ -1913,36 +1913,52 @@ Pure-Sage math helpers (shadowed by native `math` module — use when native mod
 
 ### 9.9 GPU Libraries
 
-SageLang ships with 18 GPU/rendering library modules in `lib/`:
+SageLang ships with 18 GPU/rendering library modules in `lib/graphics/`. All are imported with the `graphics.` prefix (e.g., `import graphics.vulkan` binds as `vulkan`):
 
-| Module | Lines | Purpose |
-|--------|-------|---------|
-| `vulkan.sage` | ~425 | Ergonomic Vulkan builder API (string-based buffer/shader/pipeline creation) |
-| `gpu.sage` | ~150 | High-level compute helpers (one-shot dispatch, ping-pong buffers) |
-| `opengl.sage` | ~400 | Drop-in OpenGL backend (same API as gpu module, OpenGL 4.5 init) |
-| `ui.sage` | ~400 | Immediate-mode GUI widgets (windows, buttons, sliders, menus, text inputs) |
-| `math3d.sage` | ~250 | vec2/3/4, mat4, perspective/ortho projections, camera utilities |
-| `mesh.sage` | ~300 | Procedural geometry (cube, plane, sphere), OBJ loading, GPU upload |
-| `renderer.sage` | ~200 | Frame loop management (depth buffer, render pass, sync) |
-| `material.sage` | ~150 | Shader+texture+descriptor binding, material presets |
-| `scene.sage` | ~200 | Node hierarchy, transforms, traversal, find_by_name |
-| `pbr.sage` | ~300 | Cook-Torrance PBR materials, point/directional lights, IBL |
-| `postprocess.sage` | ~250 | HDR targets, bloom chain, tone mapping (ACES/Reinhard) |
-| `shadows.sage` | ~200 | Shadow maps, depth-only passes, cascade shadow maps |
-| `deferred.sage` | ~300 | G-buffer (4 MRT), SSAO (32 samples), SSR (64-step raymarch) |
-| `taa.sage` | ~150 | Temporal anti-aliasing (Halton jitter, history blend) |
-| `gltf.sage` | ~200 | glTF 2.0 JSON loading, mesh/material extraction |
-| `asset_cache.sage` | ~100 | Shader/texture/mesh caching and deduplication |
-| `frame_graph.sage` | ~150 | Pass dependency ordering (topological sort) |
-| `debug_ui.sage` | ~150 | FPS tracking, custom debug values, toggle overlay |
+| Module | Import | Lines | Purpose |
+|--------|--------|-------|---------|
+| `vulkan.sage` | `import graphics.vulkan` | ~425 | Ergonomic Vulkan builder API (string-based buffer/shader/pipeline creation) |
+| `gpu.sage` | `import graphics.gpu` | ~150 | High-level compute helpers (one-shot dispatch, ping-pong buffers) |
+| `opengl.sage` | `import graphics.opengl` | ~400 | Drop-in OpenGL backend (same API as gpu module, OpenGL 4.5 init) |
+| `ui.sage` | `import graphics.ui` | ~400 | Immediate-mode GUI widgets (windows, buttons, sliders, menus, text inputs) |
+| `math3d.sage` | `import graphics.math3d` | ~250 | vec2/3/4, mat4, perspective/ortho projections, camera utilities |
+| `mesh.sage` | `import graphics.mesh` | ~300 | Procedural geometry (cube, plane, sphere), OBJ loading, GPU upload |
+| `renderer.sage` | `import graphics.renderer` | ~200 | Frame loop management (depth buffer, render pass, sync) |
+| `material.sage` | `import graphics.material` | ~150 | Shader+texture+descriptor binding, material presets |
+| `scene.sage` | `import graphics.scene` | ~200 | Node hierarchy, transforms, traversal, find_by_name |
+| `pbr.sage` | `import graphics.pbr` | ~300 | Cook-Torrance PBR materials, point/directional lights, IBL |
+| `postprocess.sage` | `import graphics.postprocess` | ~250 | HDR targets, bloom chain, tone mapping (ACES/Reinhard) |
+| `shadows.sage` | `import graphics.shadows` | ~200 | Shadow maps, depth-only passes, cascade shadow maps |
+| `deferred.sage` | `import graphics.deferred` | ~300 | G-buffer (4 MRT), SSAO (32 samples), SSR (64-step raymarch) |
+| `taa.sage` | `import graphics.taa` | ~150 | Temporal anti-aliasing (Halton jitter, history blend) |
+| `gltf.sage` | `import graphics.gltf` | ~200 | glTF 2.0 JSON loading, mesh/material extraction |
+| `asset_cache.sage` | `import graphics.asset_cache` | ~100 | Shader/texture/mesh caching and deduplication |
+| `frame_graph.sage` | `import graphics.frame_graph` | ~150 | Pass dependency ordering (topological sort) |
+| `debug_ui.sage` | `import graphics.debug_ui` | ~150 | FPS tracking, custom debug values, toggle overlay |
 
-### 9.10 UI Widget Library (`lib/ui.sage`)
+### 9.10 OS Development Libraries
+
+SageLang ships with 9 OS/bare-metal development modules in `lib/os/`:
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `fat.sage` | `import os.fat` | FAT8/12/16/32 boot sector parser, cluster-to-LBA, FAT entry offsets |
+| `elf.sage` | `import os.elf` | ELF32/64 header, program/section headers, string table lookup |
+| `mbr.sage` | `import os.mbr` | MBR partition table, CHS decode, bootable partition finder |
+| `gpt.sage` | `import os.gpt` | GPT header, GUID parsing, partition type identification |
+| `pe.sage` | `import os.pe` | PE/COFF binary parser, DOS/COFF/optional headers, UEFI app detection |
+| `pci.sage` | `import os.pci` | PCI config space (Type 0/1), BAR decode, capability lists |
+| `uefi.sage` | `import os.uefi` | EFI memory map, config tables, RSDP, ACPI SDT headers |
+| `acpi.sage` | `import os.acpi` | MADT (APIC), FADT, HPET, MCFG parsers, processor enumeration |
+| `paging.sage` | `import os.paging` | x86-64 page tables, PTE flags, identity/higher-half mapping helpers |
+
+### 9.11 UI Widget Library (`lib/graphics/ui.sage`)
 
 Immediate-mode GPU UI system for building application interfaces:
 
 ```sage
 import gpu
-import ui
+import graphics.ui
 
 gpu.init_windowed("App", 800, 600, "My App", false)
 let ctx = ui.ui_create()
@@ -2136,7 +2152,7 @@ Available functions: `args`, `exit`, `platform`, `version`, `env`, `setenv`
 The native `fat` module provides early FAT filesystem parsing helpers for image inspection and kernel/boot tooling.
 
 ```sagelang
-import fat
+import os.fat
 import io
 
 let boot = io.readbytes("disk.img")
@@ -2689,7 +2705,7 @@ make OPENGL=1    # Force OpenGL
 make OPENGL=0    # Disable OpenGL
 ```
 
-Without the Vulkan SDK, the `gpu` module loads in stub mode -- all constants are available, functions return errors gracefully. Use `import opengl` instead of `import gpu` for the OpenGL 4.5 backend (same API, different initialization).
+Without the Vulkan SDK, the `gpu` module loads in stub mode -- all constants are available, functions return errors gracefully. Use `import graphics.opengl` instead of `import gpu` for the OpenGL 4.5 backend (same API, different initialization).
 
 ### Quick Start: Empty Window
 
