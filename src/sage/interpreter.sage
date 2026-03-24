@@ -24,6 +24,7 @@ let SIGNAL_NORMAL = 0
 let SIGNAL_RETURN = 1
 let SIGNAL_BREAK = 2
 let SIGNAL_CONTINUE = 3
+let SIGNAL_YIELD = 4
 
 # Maximum recursion depth
 let MAX_RECURSION = 500
@@ -362,6 +363,60 @@ proc call_native(name, args):
         return contains(args[0], args[1])
     if name == "indexof":
         return indexof(args[0], args[1])
+    # Generator: next(gen) advances generator and returns yielded value
+    if name == "next":
+        let gen = args[0]
+        if type(gen) == "dict":
+            if dict_has(gen, "__interp_type"):
+                if gen["__interp_type"] == "generator":
+                    let idx = gen["index"]
+                    let vals = gen["values"]
+                    if idx < len(vals):
+                        gen["index"] = idx + 1
+                        return vals[idx]
+                    return nil
+        return nil
+    # GC control: delegates to host C runtime builtins
+    if name == "gc_collect":
+        gc_collect()
+        return nil
+    if name == "gc_enable":
+        gc_enable()
+        return nil
+    if name == "gc_disable":
+        gc_disable()
+        return nil
+    if name == "gc_stats":
+        return gc_stats()
+    # FFI: delegates to host C runtime builtins
+    if name == "ffi_open":
+        return ffi_open(args[0])
+    if name == "ffi_close":
+        ffi_close(args[0])
+        return nil
+    if name == "ffi_call":
+        if len(args) == 3:
+            return ffi_call(args[0], args[1], args[2])
+        if len(args) == 4:
+            return ffi_call(args[0], args[1], args[2], args[3])
+        return nil
+    if name == "ffi_sym":
+        return ffi_sym(args[0], args[1])
+    # Memory: delegates to host C runtime builtins
+    if name == "mem_alloc":
+        return mem_alloc(args[0])
+    if name == "mem_free":
+        mem_free(args[0])
+        return nil
+    if name == "mem_read":
+        return mem_read(args[0], args[1], args[2])
+    if name == "mem_write":
+        mem_write(args[0], args[1], args[2], args[3])
+        return nil
+    if name == "mem_size":
+        return mem_size(args[0])
+    if name == "addressof":
+        return addressof(args[0])
     runtime_error(-1, "Unknown native function: " + name, nil)
 
 # -----------------------------------------
@@ -403,6 +458,25 @@ proc init_builtins(env):
     register_native(env, "endswith", 2)
     register_native(env, "contains", 2)
     register_native(env, "indexof", 2)
+    # Generator support
+    register_native(env, "next", 1)
+    # GC control (delegates to host C runtime)
+    register_native(env, "gc_collect", 0)
+    register_native(env, "gc_enable", 0)
+    register_native(env, "gc_disable", 0)
+    register_native(env, "gc_stats", 0)
+    # FFI stubs (delegates to host C runtime)
+    register_native(env, "ffi_open", 1)
+    register_native(env, "ffi_close", 1)
+    register_native(env, "ffi_call", -1)
+    register_native(env, "ffi_sym", 2)
+    # Memory stubs (delegates to host C runtime)
+    register_native(env, "mem_alloc", 1)
+    register_native(env, "mem_free", 1)
+    register_native(env, "mem_read", 3)
+    register_native(env, "mem_write", 4)
+    register_native(env, "mem_size", 1)
+    register_native(env, "addressof", 1)
 
 # -----------------------------------------
 # Expression evaluation
@@ -673,6 +747,84 @@ proc find_method(cls, name):
     return nil
 
 # -----------------------------------------
+# Check if a statement body contains yield
+# -----------------------------------------
+
+proc body_has_yield(stmt):
+    if stmt == nil:
+        return false
+    let stype = stmt.type
+    if stype == STMT_YIELD:
+        return true
+    if stype == STMT_BLOCK:
+        let current = stmt.statements
+        while current != nil:
+            if body_has_yield(current):
+                return true
+            current = current.next
+        return false
+    if stype == STMT_IF:
+        if body_has_yield(stmt.then_branch):
+            return true
+        if stmt.else_branch != nil:
+            if body_has_yield(stmt.else_branch):
+                return true
+        return false
+    if stype == STMT_WHILE:
+        return body_has_yield(stmt.body)
+    if stype == STMT_FOR:
+        return body_has_yield(stmt.body)
+    return false
+
+# -----------------------------------------
+# Generator: eagerly collect all yielded values
+# -----------------------------------------
+
+proc run_generator(body, env):
+    let values = []
+    # Execute the generator body, collecting yield values
+    # Walk the statement list, collecting yields
+    let stmts = body
+    if stmts != nil:
+        collect_yields(stmts, env, values)
+    let gen = {}
+    gen["__interp_type"] = "generator"
+    gen["values"] = values
+    gen["index"] = 0
+    return gen
+
+proc collect_yields(stmt, env, values):
+    if stmt == nil:
+        return
+    let stype = stmt.type
+    if stype == STMT_YIELD:
+        let val = nil
+        if stmt.value != nil:
+            val = eval_expr(stmt.value, env)
+        push(values, val)
+        return
+    if stype == STMT_BLOCK:
+        let current = stmt.statements
+        while current != nil:
+            collect_yields(current, env, values)
+            current = current.next
+        return
+    if stype == STMT_WHILE:
+        # For generators with while loops, execute the loop and collect yields
+        let iters = 0
+        while true:
+            let cond = eval_expr(stmt.condition, env)
+            if not is_truthy(cond):
+                break
+            iters = iters + 1
+            if iters > MAX_LOOP_ITERATIONS:
+                break
+            collect_yields(stmt.body, env, values)
+        return
+    # For other statement types, just execute them normally
+    exec_stmt(stmt, env)
+
+# -----------------------------------------
 # Call expression evaluation
 # -----------------------------------------
 
@@ -753,9 +905,20 @@ proc eval_call(expr, env):
             else:
                 env_define(func_env, params[pi].text, nil)
             pi = pi + 1
+        # Check if this is a generator function (contains yield)
+        if dict_has(callee, "is_generator"):
+            if callee["is_generator"]:
+                return run_generator(callee["body"], func_env)
         let res = exec_stmt(callee["body"], func_env)
         if res["kind"] == SIGNAL_RETURN:
             return res["value"]
+        if res["kind"] == SIGNAL_YIELD:
+            # Function yielded — create generator eagerly
+            let gen = {}
+            gen["__interp_type"] = "generator"
+            gen["values"] = [res["value"]]
+            gen["index"] = 0
+            return gen
         return nil
 
     # Class instantiation
@@ -881,6 +1044,7 @@ proc exec_stmt(stmt, env):
         func["params"] = stmt.params
         func["body"] = stmt.body
         func["closure"] = env
+        func["is_generator"] = body_has_yield(stmt.body)
         env_define(env, name, func)
         return result_normal(nil)
 
@@ -984,7 +1148,7 @@ proc exec_stmt(stmt, env):
         import_bind(stmt, mod_name, mod_env, env)
         return result_normal(nil)
 
-    # --- Async proc (treat as regular proc) ---
+    # --- Async proc (registered as function with async flag) ---
     if stype == STMT_ASYNC_PROC:
         let name = stmt.name.text
         let func = {}
@@ -993,16 +1157,40 @@ proc exec_stmt(stmt, env):
         func["params"] = stmt.params
         func["body"] = stmt.body
         func["closure"] = env
+        func["is_async"] = true
+        func["is_generator"] = false
         env_define(env, name, func)
         return result_normal(nil)
 
-    # --- Defer / Match / Yield (stubs) ---
+    # --- Defer ---
     if stype == STMT_DEFER:
-        return result_normal(nil)
+        # Defer is handled at block level; standalone just executes immediately
+        return exec_stmt(stmt.statement, env)
+
+    # --- Match ---
     if stype == STMT_MATCH:
+        let match_val = eval_expr(stmt.value, env)
+        let i = 0
+        while i < stmt.case_count:
+            let clause = stmt.cases[i]
+            let pat_val = eval_expr(clause["pattern"], env)
+            if match_val == pat_val:
+                return exec_stmt(clause["body"], env)
+            i = i + 1
+        if stmt.default_case != nil:
+            return exec_stmt(stmt.default_case, env)
         return result_normal(nil)
+
+    # --- Yield ---
     if stype == STMT_YIELD:
-        return result_normal(nil)
+        let val = nil
+        if stmt.value != nil:
+            val = eval_expr(stmt.value, env)
+        # Signal yield by returning a special result
+        let r = {}
+        r["kind"] = 4
+        r["value"] = val
+        return r
 
     runtime_error(get_stmt_line(stmt), "Unknown statement type: " + str(stype), nil)
 

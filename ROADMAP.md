@@ -770,7 +770,7 @@ Deep audit and fixes across garbage collection, exception handling, and low-leve
 ## 📊 Progress Metrics
 
 - **Phases Completed**: 16/16 + 4 audit phases (100%)
-- **Test Suite**: 144 interpreter + 28 compiler + 1623 self-host + 88 JSON tests (1883+ total), 100% pass rate
+- **Test Suite**: 151 interpreter + 28 compiler + 1623 self-host + 88 JSON tests (1890+ total), 100% pass rate
 - **Benchmarks**: 10 paired Sage/Python workloads across 5 execution recipes
 - **Backends**: C codegen, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64), Vulkan + OpenGL graphics
 - **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
@@ -784,12 +784,26 @@ Deep audit and fixes across garbage collection, exception handling, and low-leve
 
 ### March 24, 2026
 
-- **Self-Hosted Interpreter Audit & Improvements**
-- Module imports implemented: `import X`, `import X as Y`, `from X import a, b` with caching and multi-path search
-- Bitwise NOT (~) implemented via two's complement identity
-- Loop iteration limit (1M) added to prevent infinite loops
-- array_extend builtin added
-- Self-hosted interpreter now ~70% feature-complete vs C (up from ~60%)
+- **Defer & Match/Case Implemented Across Entire Codebase**
+- `defer:` statement: collects deferred statements in LIFO order, runs on scope exit (return/break/continue/throw)
+- `match`/`case`/`default` pattern matching: value-based dispatch with fall-through to default
+- C parser: `defer_statement()` + `match_statement()` parsing with full block support
+- C interpreter: STMT_BLOCK collects defers in 64-slot stack; STMT_MATCH uses `values_equal()` dispatch
+- C compiler backend: match emits if/else-if chain with `sage_equal()`; defer emits inline block
+- LLVM backend: match emits `sage_rt_eq` + `sage_rt_get_bool` branching; defer emits inline
+- Native codegen: match/defer lowered via `isel_expr`/`isel_stmt_list`
+- Self-hosted parser: `parse_defer()` + `parse_match()` with case/default clauses
+- Self-hosted interpreter: full match dispatch + defer execution
+- 7 new tests: defer_basic, defer_order, defer_with_return, match_basic, match_default, match_string, match_in_func
+- **Self-Hosted Feature Expansion (60% → 85% parity)**
+- Module imports: `import X`, `import X as Y`, `from X import a, b` with caching and multi-path search
+- Generators/yield: `body_has_yield()` detection, `run_generator()` eager collection, `next()` builtin
+- Bitwise NOT (~) via two's complement identity `~n = -(n+1)`
+- GC control: `gc_collect()`, `gc_enable()`, `gc_disable()`, `gc_stats()` delegated to host runtime
+- FFI: `ffi_open()`, `ffi_close()`, `ffi_call()`, `ffi_sym()` delegated to host runtime
+- Memory: `mem_alloc()`, `mem_free()`, `mem_read()`, `mem_write()`, `mem_size()`, `addressof()` delegated
+- Async proc: registered with `is_async` flag; await evaluates expression
+- Loop iteration limit (1M), array_extend builtin, match_stmt AST factory
 - **Phase 16d: GC, Exception & Low-Level Audit**
 - GC: cleanup for VAL_CLIB (frees name), VAL_POINTER (frees owned memory), VAL_THREAD (frees handle+data), VAL_MUTEX (destroys+frees)
 - GC: marking for all 4 missing types prevents premature collection/use-after-free

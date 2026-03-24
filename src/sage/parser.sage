@@ -556,6 +556,46 @@ class Parser:
             value = self.parse_expression()
         return yield_stmt(value)
 
+    proc parse_defer():
+        if self.match_tok(token.TOKEN_COLON):
+            self.consume(token.TOKEN_NEWLINE, "Expect newline after 'defer:'.")
+            let body = self.parse_block()
+            return defer_stmt(body)
+        let body = self.parse_statement()
+        return defer_stmt(body)
+
+    proc parse_match():
+        let value = self.parse_expression()
+        self.consume(token.TOKEN_COLON, "Expect ':' after match expression.")
+        self.consume(token.TOKEN_NEWLINE, "Expect newline after 'match:'.")
+        self.consume(token.TOKEN_INDENT, "Expect indented block after 'match:'.")
+        let cases = []
+        let default_case = nil
+        while not self.check(token.TOKEN_DEDENT) and not self.check(token.TOKEN_EOF):
+            while self.match_tok(token.TOKEN_NEWLINE):
+                pass
+            if self.check(token.TOKEN_DEDENT) or self.check(token.TOKEN_EOF):
+                break
+            if self.match_tok(token.TOKEN_DEFAULT):
+                self.consume(token.TOKEN_COLON, "Expect ':' after 'default'.")
+                self.consume(token.TOKEN_NEWLINE, "Expect newline after 'default:'.")
+                default_case = self.parse_block()
+                continue
+            if self.match_tok(token.TOKEN_CASE):
+                let pattern = self.parse_expression()
+                self.consume(token.TOKEN_COLON, "Expect ':' after case pattern.")
+                self.consume(token.TOKEN_NEWLINE, "Expect newline after case clause.")
+                let body = self.parse_block()
+                let clause = {}
+                clause["pattern"] = pattern
+                clause["body"] = body
+                push(cases, clause)
+                continue
+            raise "Expect 'case' or 'default' inside match block"
+        if self.check(token.TOKEN_DEDENT):
+            self.advance()
+        return match_stmt(value, cases, len(cases), default_case)
+
     proc parse_import():
         # Handle "from module import x, y" form
         if self.match_tok(token.TOKEN_FROM):
@@ -611,6 +651,10 @@ class Parser:
             return self.parse_raise()
         if self.match_tok(token.TOKEN_YIELD):
             return self.parse_yield()
+        if self.match_tok(token.TOKEN_DEFER):
+            return self.parse_defer()
+        if self.match_tok(token.TOKEN_MATCH):
+            return self.parse_match()
         if self.match_tok(token.TOKEN_BREAK):
             return break_stmt()
         if self.match_tok(token.TOKEN_CONTINUE):

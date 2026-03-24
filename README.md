@@ -34,7 +34,7 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **Indentation-based syntax**: No braces `{}` for blocks; just clean, consistent indentation
 - **Type System**: Support for **Integers**, **Strings**, **Booleans**, **Nil**, **Arrays**, **Dictionaries**, **Tuples**, **Classes**, **Instances**, **Exceptions**, and **Generators**
 - **Functions**: Define functions with `proc name(args):` with full recursion, closures, and first-class function support
-- **Control Flow**: `if`/`else`, `while`, `for` loops, `break`, `continue`, and **exception handling**
+- **Control Flow**: `if`/`else`, `while`, `for` loops, `break`, `continue`, **exception handling**, `match`/`case`/`default`, and `defer`
 - **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical (`and`, `or`), bitwise (`&`, `|`, `^`, `~`, `<<`, `>>`), unary (`-`)
 
 ### Exception Handling ✅

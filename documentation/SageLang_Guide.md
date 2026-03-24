@@ -1095,6 +1095,75 @@ print square(5)
 print cube(3)
 ```
 
+### 4.8 Defer Statements
+
+Defer schedules cleanup code to run when the enclosing block exits, regardless of whether exit is via normal flow, `return`, `break`, `continue`, or exception. Multiple defers execute in LIFO (last-in, first-out) order.
+
+```sagelang
+proc process_file(path):
+    let handle = open(path)
+    defer:
+        close(handle)
+        print("file closed")
+    # ... work with handle ...
+    # close() runs automatically when block exits
+
+proc multi_defer():
+    defer:
+        print("third")
+    defer:
+        print("second")
+    defer:
+        print("first")
+    print("working")
+    # Output: working, first, second, third
+```
+
+Defer works with all exit paths:
+- Normal block completion
+- `return` from a function
+- `break`/`continue` from a loop
+- Exceptions (defers run before exception propagates)
+
+Implementation: the interpreter collects deferred statements in a 64-slot stack per block. On block exit, they execute in reverse order.
+
+### 4.9 Pattern Matching (match/case/default)
+
+Match evaluates a value and compares it against case patterns using equality. The first matching case body executes. An optional `default` clause runs if no case matches.
+
+```sagelang
+let cmd = "hello"
+match cmd:
+    case "quit":
+        print("quitting")
+    case "hello":
+        print("greeting")
+    case "help":
+        print("showing help")
+    default:
+        print("unknown command")
+
+# Output: greeting
+```
+
+Match works with numbers, strings, booleans, and nil:
+
+```sagelang
+proc classify(n):
+    match n:
+        case 1:
+            return "small"
+        case 2:
+            return "medium"
+        default:
+            return "big"
+
+print(classify(1))    # small
+print(classify(100))  # big
+```
+
+Cases are checked in order using value equality (`==`). Match is supported in the interpreter, C compiler (emits if/else-if chain), LLVM backend (emits branch instructions), and native codegen.
+
 ---
 
 ## Part 5: Implementation Details and Runtime Behavior
@@ -1562,13 +1631,9 @@ static Value my_native(int argCount, Value* args) {
 
 ### 8.1 Planned Features (Incomplete Implementations)
 
-**Pattern Matching** (`match`/`case`):
-- Parsed but not evaluated.
-- Intended: `match value { case 1: ..., case 2: ..., default: ... }`.
+**Pattern Matching** (`match`/`case`): Fully implemented across all backends (see Section 4.9).
 
-**Defer Statements**:
-- Parsed but not executed.
-- Intended: Cleanup code that always runs at function exit (like `finally` but auto-triggered).
+**Defer Statements**: Fully implemented with LIFO ordering and scope-exit semantics (see Section 4.8).
 
 **Multiple Inheritance / Traits**:
 - Currently single-parent inheritance only.
@@ -1958,11 +2023,13 @@ fn["body"] = body_ast
 
 The self-hosted interpreter supports (~70% feature parity with C):
 
-**Fully implemented**: arithmetic, variables, control flow (if/elif/else, while, for), functions with closures, recursion, classes with inheritance, arrays, dicts, tuples, strings, slicing, indexing, try/catch/finally, break/continue, raise, module imports (`import X`, `import X as Y`, `from X import a, b`), property access/set, all bitwise operators (& | ^ ~ << >>), 25+ builtins.
+**Fully implemented**: arithmetic, variables, control flow (if/elif/else, while, for), functions with closures, recursion, classes with inheritance, arrays, dicts, tuples, strings, slicing, indexing, try/catch/finally, break/continue, raise, module imports (`import X`, `import X as Y`, `from X import a, b`), property access/set, all bitwise operators (& | ^ ~ << >>), `match`/`case`/`default` pattern matching, `defer` statements (LIFO cleanup on scope exit), generators/yield (eager collection via `next()`), 35+ builtins.
 
-**Stub/partial**: async proc (registered as regular proc), yield (stub), defer (stub), match (stub), await (evaluates expression, no threading).
+**Delegated to host runtime**: GC control (`gc_collect`, `gc_enable`, `gc_disable`, `gc_stats`), FFI (`ffi_open`, `ffi_close`, `ffi_call`, `ffi_sym`), memory access (`mem_alloc`, `mem_free`, `mem_read`, `mem_write`, `mem_size`, `addressof`), networking (via host `import` of native modules).
 
-**Not implemented**: generators/yield resumption, actual async threading, FFI/memory access (ffi_open, mem_alloc, etc.), GC control builtins (gc_collect, gc_enable, gc_disable).
+**Stub/partial**: async proc (registered with `is_async` flag, executes synchronously), await (evaluates expression directly).
+
+**Not implemented**: true coroutine-based generators (uses eager collection instead), actual async threading in self-hosted path, GPU module (uses host `import gpu` directly).
 
 **Safety**: while loop iteration limit (1M), recursion depth limit (500), rich error messages with source context via `errors.sage`.
 
