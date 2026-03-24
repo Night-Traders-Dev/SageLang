@@ -8,6 +8,7 @@
 #include "repl.h"
 #include "sage_thread.h"
 #include "gc.h"
+#include "gpu_api.h"
 
 extern Environment* g_gc_root_env;
 
@@ -794,6 +795,252 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 }
                 break;
             }
+            // ================================================================
+            // GPU hot-path opcodes — bypass interpreter for frame-loop perf
+            // ================================================================
+            case BC_OP_GPU_POLL_EVENTS:
+                sgpu_poll_events();
+                break;
+            case BC_OP_GPU_WINDOW_SHOULD_CLOSE:
+                if (!vm_push(&vm, val_bool(sgpu_window_should_close()))) {
+                    result = vm_error("VM stack overflow."); goto done;
+                }
+                break;
+            case BC_OP_GPU_GET_TIME:
+                if (!vm_push(&vm, val_number(sgpu_get_time()))) {
+                    result = vm_error("VM stack overflow."); goto done;
+                }
+                break;
+            case BC_OP_GPU_KEY_PRESSED: {
+                Value key = vm_pop(&vm);
+                if (!vm_push(&vm, val_bool(sgpu_key_pressed((int)AS_NUMBER(key))))) {
+                    result = vm_error("VM stack overflow."); goto done;
+                }
+                break;
+            }
+            case BC_OP_GPU_KEY_DOWN: {
+                Value key = vm_pop(&vm);
+                if (!vm_push(&vm, val_bool(sgpu_key_down((int)AS_NUMBER(key))))) {
+                    result = vm_error("VM stack overflow."); goto done;
+                }
+                break;
+            }
+            case BC_OP_GPU_MOUSE_POS: {
+                double mx, my;
+                sgpu_mouse_pos(&mx, &my);
+                Value d = val_dict();
+                dict_set(&d, "x", val_number(mx));
+                dict_set(&d, "y", val_number(my));
+                if (!vm_push(&vm, d)) {
+                    result = vm_error("VM stack overflow."); goto done;
+                }
+                break;
+            }
+            case BC_OP_GPU_MOUSE_DELTA: {
+                double dx, dy;
+                sgpu_mouse_delta(&dx, &dy);
+                Value d = val_dict();
+                dict_set(&d, "x", val_number(dx));
+                dict_set(&d, "y", val_number(dy));
+                if (!vm_push(&vm, d)) {
+                    result = vm_error("VM stack overflow."); goto done;
+                }
+                break;
+            }
+            case BC_OP_GPU_UPDATE_INPUT:
+                sgpu_update_input();
+                break;
+            case BC_OP_GPU_BEGIN_COMMANDS: {
+                Value cmd = vm_pop(&vm);
+                if (!vm_push(&vm, val_bool(sgpu_begin_commands((int)AS_NUMBER(cmd))))) {
+                    result = vm_error("VM stack overflow."); goto done;
+                }
+                break;
+            }
+            case BC_OP_GPU_END_COMMANDS: {
+                Value cmd = vm_pop(&vm);
+                if (!vm_push(&vm, val_bool(sgpu_end_commands((int)AS_NUMBER(cmd))))) {
+                    result = vm_error("VM stack overflow."); goto done;
+                }
+                break;
+            }
+            case BC_OP_GPU_CMD_END_RP: {
+                Value cmd = vm_pop(&vm);
+                sgpu_cmd_end_render_pass((int)AS_NUMBER(cmd));
+                break;
+            }
+            case BC_OP_GPU_CMD_BIND_GP: {
+                Value pipe = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                sgpu_cmd_bind_graphics_pipeline((int)AS_NUMBER(cmd), (int)AS_NUMBER(pipe));
+                break;
+            }
+            case BC_OP_GPU_CMD_BIND_VB: {
+                Value buf = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                sgpu_cmd_bind_vertex_buffer((int)AS_NUMBER(cmd), (int)AS_NUMBER(buf));
+                break;
+            }
+            case BC_OP_GPU_CMD_BIND_IB: {
+                Value buf = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                sgpu_cmd_bind_index_buffer((int)AS_NUMBER(cmd), (int)AS_NUMBER(buf));
+                break;
+            }
+            case BC_OP_GPU_CMD_DRAW: {
+                Value fi = vm_pop(&vm);
+                Value fv = vm_pop(&vm);
+                Value inst = vm_pop(&vm);
+                Value verts = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                sgpu_cmd_draw((int)AS_NUMBER(cmd), (int)AS_NUMBER(verts),
+                              (int)AS_NUMBER(inst), (int)AS_NUMBER(fv), (int)AS_NUMBER(fi));
+                break;
+            }
+            case BC_OP_GPU_CMD_DRAW_IDX: {
+                Value fi = vm_pop(&vm);
+                Value vo = vm_pop(&vm);
+                Value fidx = vm_pop(&vm);
+                Value inst = vm_pop(&vm);
+                Value idx_count = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                sgpu_cmd_draw_indexed((int)AS_NUMBER(cmd), (int)AS_NUMBER(idx_count),
+                    (int)AS_NUMBER(inst), (int)AS_NUMBER(fidx), (int)AS_NUMBER(vo), (int)AS_NUMBER(fi));
+                break;
+            }
+            case BC_OP_GPU_CMD_BEGIN_RP: {
+                Value clear = vm_pop(&vm);
+                Value h = vm_pop(&vm);
+                Value w = vm_pop(&vm);
+                Value fb = vm_pop(&vm);
+                Value rp = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                float cr = 0, cg = 0, cb = 0, ca = 1;
+                if (IS_ARRAY(clear) && clear.as.array->count >= 4) {
+                    cr = (float)AS_NUMBER(clear.as.array->elements[0]);
+                    cg = (float)AS_NUMBER(clear.as.array->elements[1]);
+                    cb = (float)AS_NUMBER(clear.as.array->elements[2]);
+                    ca = (float)AS_NUMBER(clear.as.array->elements[3]);
+                }
+                sgpu_cmd_begin_render_pass((int)AS_NUMBER(cmd), (int)AS_NUMBER(rp),
+                    (int)AS_NUMBER(fb), (int)AS_NUMBER(w), (int)AS_NUMBER(h), cr, cg, cb, ca);
+                break;
+            }
+            case BC_OP_GPU_CMD_BIND_DS: {
+                Value bp = vm_pop(&vm);
+                Value set = vm_pop(&vm);
+                Value layout = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                sgpu_cmd_bind_descriptor_set((int)AS_NUMBER(cmd), (int)AS_NUMBER(layout),
+                    (int)AS_NUMBER(set), (int)AS_NUMBER(bp));
+                break;
+            }
+            case BC_OP_GPU_CMD_SET_VP: {
+                Value maxd = vm_pop(&vm);
+                Value mind = vm_pop(&vm);
+                Value vh = vm_pop(&vm);
+                Value vw = vm_pop(&vm);
+                Value vy = vm_pop(&vm);
+                Value vx = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                sgpu_cmd_set_viewport((int)AS_NUMBER(cmd),
+                    (float)AS_NUMBER(vx), (float)AS_NUMBER(vy),
+                    (float)AS_NUMBER(vw), (float)AS_NUMBER(vh),
+                    (float)AS_NUMBER(mind), (float)AS_NUMBER(maxd));
+                break;
+            }
+            case BC_OP_GPU_CMD_SET_SC: {
+                Value sh = vm_pop(&vm);
+                Value sw = vm_pop(&vm);
+                Value sy = vm_pop(&vm);
+                Value sx = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                sgpu_cmd_set_scissor((int)AS_NUMBER(cmd),
+                    (int)AS_NUMBER(sx), (int)AS_NUMBER(sy),
+                    (int)AS_NUMBER(sw), (int)AS_NUMBER(sh));
+                break;
+            }
+            case BC_OP_GPU_SUBMIT_SYNC: {
+                Value fence = vm_pop(&vm);
+                Value signal = vm_pop(&vm);
+                Value wait = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                if (!vm_push(&vm, val_bool(sgpu_submit_with_sync(
+                    (int)AS_NUMBER(cmd), (int)AS_NUMBER(wait),
+                    (int)AS_NUMBER(signal), (int)AS_NUMBER(fence))))) {
+                    result = vm_error("VM stack overflow."); goto done;
+                }
+                break;
+            }
+            case BC_OP_GPU_ACQUIRE_IMG: {
+                Value sem = vm_pop(&vm);
+                int img_idx = 0;
+                sgpu_acquire_next_image((int)AS_NUMBER(sem), &img_idx);
+                if (!vm_push(&vm, val_number(img_idx))) {
+                    result = vm_error("VM stack overflow."); goto done;
+                }
+                break;
+            }
+            case BC_OP_GPU_PRESENT: {
+                Value idx = vm_pop(&vm);
+                Value sem = vm_pop(&vm);
+                sgpu_present((int)AS_NUMBER(sem), (int)AS_NUMBER(idx));
+                break;
+            }
+            case BC_OP_GPU_WAIT_FENCE: {
+                Value timeout = vm_pop(&vm);
+                Value fence = vm_pop(&vm);
+                sgpu_wait_fence((int)AS_NUMBER(fence), AS_NUMBER(timeout));
+                break;
+            }
+            case BC_OP_GPU_RESET_FENCE: {
+                Value fence = vm_pop(&vm);
+                sgpu_reset_fence((int)AS_NUMBER(fence));
+                break;
+            }
+            case BC_OP_GPU_UPDATE_UNIFORM: {
+                Value data = vm_pop(&vm);
+                Value handle = vm_pop(&vm);
+                if (IS_ARRAY(data)) {
+                    float* floats = malloc(sizeof(float) * (size_t)data.as.array->count);
+                    if (floats) {
+                        for (int fi = 0; fi < data.as.array->count; fi++) {
+                            floats[fi] = (float)AS_NUMBER(data.as.array->elements[fi]);
+                        }
+                        sgpu_update_uniform((int)AS_NUMBER(handle), floats, data.as.array->count);
+                        free(floats);
+                    }
+                }
+                break;
+            }
+            case BC_OP_GPU_CMD_PUSH_CONST: {
+                Value data = vm_pop(&vm);
+                Value stages = vm_pop(&vm);
+                Value layout = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                if (IS_ARRAY(data)) {
+                    float* floats = malloc(sizeof(float) * (size_t)data.as.array->count);
+                    if (floats) {
+                        for (int fi = 0; fi < data.as.array->count; fi++) {
+                            floats[fi] = (float)AS_NUMBER(data.as.array->elements[fi]);
+                        }
+                        sgpu_cmd_push_constants((int)AS_NUMBER(cmd), (int)AS_NUMBER(layout),
+                            (int)AS_NUMBER(stages), floats, data.as.array->count);
+                        free(floats);
+                    }
+                }
+                break;
+            }
+            case BC_OP_GPU_CMD_DISPATCH: {
+                Value gz = vm_pop(&vm);
+                Value gy = vm_pop(&vm);
+                Value gx = vm_pop(&vm);
+                Value cmd = vm_pop(&vm);
+                sgpu_cmd_dispatch((int)AS_NUMBER(cmd),
+                    (int)AS_NUMBER(gx), (int)AS_NUMBER(gy), (int)AS_NUMBER(gz));
+                break;
+            }
+
             case BC_OP_RETURN:
                 result = vm_normal(vm.stack_count > 0 ? vm_pop(&vm) : val_nil());
                 goto done;

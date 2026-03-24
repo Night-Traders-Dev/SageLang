@@ -35,6 +35,31 @@ ifeq ($(VULKAN_CHECK),yes)
 else
     $(info Vulkan support disabled (stub mode))
 endif
+# OpenGL detection
+OPENGL ?= auto
+ifeq ($(OPENGL),auto)
+    OPENGL_CHECK := $(shell pkg-config --exists gl 2>/dev/null && echo yes || echo no)
+else ifeq ($(OPENGL),1)
+    OPENGL_CHECK := yes
+else
+    OPENGL_CHECK := no
+endif
+ifeq ($(OPENGL_CHECK),yes)
+    CFLAGS += -DSAGE_HAS_OPENGL $(shell pkg-config --cflags gl 2>/dev/null)
+    LDFLAGS += $(shell pkg-config --libs gl 2>/dev/null || echo "-lGL")
+    $(info OpenGL support enabled)
+    # GLFW detection for OpenGL windowed mode (if not already detected for Vulkan)
+    ifneq ($(GLFW_CHECK),yes)
+        GLFW_CHECK := $(shell pkg-config --exists glfw3 2>/dev/null && echo yes || echo no)
+        ifeq ($(GLFW_CHECK),yes)
+            CFLAGS += -DSAGE_HAS_GLFW $(shell pkg-config --cflags glfw3)
+            LDFLAGS += $(shell pkg-config --libs glfw3)
+            $(info GLFW windowed mode enabled (for OpenGL))
+        endif
+    endif
+else
+    $(info OpenGL support disabled)
+endif
 else
 LDFLAGS = -lm
 endif
@@ -83,7 +108,8 @@ CORE_SOURCES = \
     $(SRC_DIR)/stdlib.c \
     $(SRC_DIR)/typecheck.c \
     $(SRC_DIR)/value.c \
-    $(SRC_DIR)/graphics.c
+    $(SRC_DIR)/graphics.c \
+    $(SRC_DIR)/gpu_api.c
 
 VM_SOURCES = \
     $(VM_DIR)/bytecode.c \
@@ -119,7 +145,8 @@ HEADERS = \
     $(INC_DIR)/sage_thread.h \
     $(INC_DIR)/typecheck.h \
     $(INC_DIR)/value.h \
-    $(INC_DIR)/graphics.h
+    $(INC_DIR)/graphics.h \
+    $(INC_DIR)/gpu_api.h
 
 # Optional heartbeat header
 ifneq (,$(wildcard $(INC_DIR)/heartbeat.h))
@@ -136,6 +163,10 @@ ALL_OBJECTS = $(CORE_OBJECTS) $(VM_OBJECTS) $(MAIN_OBJECT)
 LLVM_RT_SOURCE = $(SRC_DIR)/llvm_runtime.c
 LLVM_RT_OBJECT = $(OBJ_DIR)/llvm_runtime.o
 
+# GPU API (compiled separately, linked with --compile-llvm output for GPU support)
+GPU_API_SOURCE = $(SRC_DIR)/gpu_api.c
+GPU_API_OBJECT = $(OBJ_DIR)/gpu_api.o
+
 # Binaries
 TARGET = sage
 LSP_TARGET = sage-lsp
@@ -148,7 +179,7 @@ LSP_MAIN_OBJECT = $(OBJ_DIR)/lsp_main.o
 
 .PHONY: all clean run install uninstall help test examples charts
 
-all: $(TARGET) $(LSP_TARGET) $(LLVM_RT_OBJECT) charts
+all: $(TARGET) $(LSP_TARGET) $(LLVM_RT_OBJECT) $(GPU_API_OBJECT) charts
 
 # Link executable
 $(TARGET): $(ALL_OBJECTS)
@@ -590,6 +621,9 @@ test-selfhost-gpu: $(TARGET)
 
 test-selfhost-gpu-advanced: $(TARGET)
 	./$(TARGET) src/sage/test/test_gpu_advanced.sage
+
+test-selfhost-llvm-gpu: $(TARGET)
+	cd src/sage && ../../$(TARGET) test/test_llvm_gpu.sage
 
 # Run ALL tests (C + self-hosted)
 test-all: test test-selfhost

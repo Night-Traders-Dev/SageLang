@@ -11,6 +11,7 @@
 
 #include "ast.h"
 #include "gc.h"
+#include "graphics.h"
 #include "lexer.h"
 #include "parser.h"
 #include "pass.h"
@@ -55,7 +56,28 @@ typedef struct {
     int loop_depth;
     // Track whether the current basic block has been terminated (ret/br)
     int block_terminated;
+    // Imported module tracking (for GPU/graphics support)
+    char** imported_modules;
+    int imported_module_count;
+    int imported_module_cap;
 } LLVMCompiler;
+
+static int llc_has_module(LLVMCompiler* lc, const char* name) {
+    for (int i = 0; i < lc->imported_module_count; i++) {
+        if (strcmp(lc->imported_modules[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
+static void llc_add_module(LLVMCompiler* lc, const char* name) {
+    if (llc_has_module(lc, name)) return;
+    if (lc->imported_module_count >= lc->imported_module_cap) {
+        lc->imported_module_cap = lc->imported_module_cap ? lc->imported_module_cap * 2 : 8;
+        lc->imported_modules = SAGE_REALLOC(lc->imported_modules,
+            sizeof(char*) * (size_t)lc->imported_module_cap);
+    }
+    lc->imported_modules[lc->imported_module_count++] = SAGE_STRDUP(name);
+}
 
 static int llc_new_reg(LLVMCompiler* lc) {
     return lc->next_reg++;
@@ -97,6 +119,8 @@ static void llc_free(LLVMCompiler* lc) {
     free(lc->proc_names);
     for (int i = 0; i < lc->global_count; i++) free(lc->global_names[i]);
     free(lc->global_names);
+    for (int i = 0; i < lc->imported_module_count; i++) free(lc->imported_modules[i]);
+    free(lc->imported_modules);
 }
 
 // ============================================================================
@@ -225,6 +249,470 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_shl(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_shr(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "\n");
+
+    // GPU runtime declarations (linked from gpu_api + llvm_runtime)
+    ll_emit(lc, "; GPU runtime declarations\n");
+    // Core lifecycle
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_has_vulkan()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_has_opengl()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_init(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_init_opengl(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_shutdown()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_device_name()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_last_error()\n");
+    // Buffers
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_buffer(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_destroy_buffer(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_buffer_upload(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_buffer_download(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_buffer_size(%%SageValue)\n");
+    // Images
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_image(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_image_3d(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_destroy_image(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_image_dims(%%SageValue)\n");
+    // Samplers
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_sampler(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_sampler_advanced(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_destroy_sampler(%%SageValue)\n");
+    // Shaders
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_load_shader(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_load_shader_glsl(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_reload_shader(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_destroy_shader(%%SageValue)\n");
+    // Descriptors
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_descriptor_layout(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_descriptor_pool(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_allocate_descriptor_set(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_allocate_descriptor_sets(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_update_descriptor(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_update_descriptor_image(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_update_descriptor_range(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    // Pipelines
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_pipeline_layout(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_compute_pipeline(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_graphics_pipeline(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_destroy_pipeline(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_pipeline_cache()\n");
+    // Render pass / Framebuffer
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_render_pass(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_render_pass_mrt(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_destroy_render_pass(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_framebuffer(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_destroy_framebuffer(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_depth_buffer(%%SageValue, %%SageValue, %%SageValue)\n");
+    // Commands
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_command_pool(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_command_buffer(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_secondary_command_buffer(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_begin_commands(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_begin_secondary(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_end_commands(%%SageValue)\n");
+    // Command recording
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_bind_compute_pipeline(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_bind_graphics_pipeline(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_bind_descriptor_set(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_dispatch(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_dispatch_indirect(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_push_constants(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_begin_render_pass(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_end_render_pass(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_draw(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_draw_indexed(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_draw_indirect(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_draw_indexed_indirect(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_bind_vertex_buffer(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_bind_vertex_buffers(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_bind_index_buffer(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_set_viewport(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_set_scissor(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_pipeline_barrier(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_image_barrier(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_copy_buffer(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_copy_buffer_to_image(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_execute_commands(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_cmd_queue_transfer_barrier(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    // Sync
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_fence(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_wait_fence(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_reset_fence(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_destroy_fence(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_semaphore()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_destroy_semaphore(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_submit(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_submit_compute(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_submit_with_sync(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_queue_wait_idle()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_device_wait_idle()\n");
+    // Window / Swapchain
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_window(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_destroy_window()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_window_should_close()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_poll_events()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_init_windowed(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_init_opengl_windowed(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_shutdown_windowed()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_swapchain_image_count()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_swapchain_format()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_swapchain_extent()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_acquire_next_image(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_present(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_swapchain_framebuffers(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_swapchain_framebuffers_depth(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_recreate_swapchain()\n");
+    // Input
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_key_pressed(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_key_down(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_key_just_pressed(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_key_just_released(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_mouse_pos()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_mouse_button(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_mouse_just_pressed(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_mouse_just_released(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_mouse_delta()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_scroll_delta()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_set_cursor_mode(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_get_time()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_window_size()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_set_title(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_window_resized()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_update_input()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_text_input_available()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_text_input_read()\n");
+    // Textures / Upload
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_load_texture(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_texture_dims(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_generate_mipmaps(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_cubemap(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_upload_device_local(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_upload_bytes(%%SageValue, %%SageValue)\n");
+    // Uniform buffers
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_uniform_buffer(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_update_uniform(%%SageValue, %%SageValue)\n");
+    // Offscreen / Screenshot
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_offscreen_target(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_screenshot()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_save_screenshot(%%SageValue)\n");
+    // Font
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_load_font(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_font_atlas(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_font_set_atlas(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_font_text_verts(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_font_measure(%%SageValue, %%SageValue, %%SageValue)\n");
+    // glTF
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_load_gltf(%%SageValue)\n");
+    // Queue families
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_graphics_family()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_compute_family()\n");
+    // Platform
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_set_platform(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_get_platform()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_detected_platform()\n");
+    ll_emit(lc, "\n");
+}
+
+// ============================================================================
+// GPU Module Constant Resolution
+// ============================================================================
+
+typedef struct { const char* name; double value; } GPUConstant;
+
+static const GPUConstant g_gpu_constants[] = {
+    // Buffer usage
+    {"BUFFER_STORAGE", 0x01}, {"BUFFER_UNIFORM", 0x02}, {"BUFFER_VERTEX", 0x04},
+    {"BUFFER_INDEX", 0x08}, {"BUFFER_STAGING", 0x10}, {"BUFFER_INDIRECT", 0x20},
+    {"BUFFER_TRANSFER_SRC", 0x40}, {"BUFFER_TRANSFER_DST", 0x80},
+    // Memory
+    {"MEMORY_DEVICE_LOCAL", 0x01}, {"MEMORY_HOST_VISIBLE", 0x02}, {"MEMORY_HOST_COHERENT", 0x04},
+    // Formats
+    {"FORMAT_RGBA8", 0}, {"FORMAT_RGBA16F", 1}, {"FORMAT_RGBA32F", 2},
+    {"FORMAT_R32F", 3}, {"FORMAT_RG32F", 4}, {"FORMAT_DEPTH32F", 5},
+    {"FORMAT_DEPTH24_S8", 6}, {"FORMAT_R8", 7}, {"FORMAT_RG8", 8},
+    {"FORMAT_BGRA8", 9}, {"FORMAT_R32U", 10}, {"FORMAT_RG16F", 11},
+    {"FORMAT_R16F", 12}, {"FORMAT_SWAPCHAIN", 99},
+    // Image usage
+    {"IMAGE_SAMPLED", 0x01}, {"IMAGE_STORAGE", 0x02}, {"IMAGE_COLOR_ATTACH", 0x04},
+    {"IMAGE_DEPTH_ATTACH", 0x08}, {"IMAGE_TRANSFER_SRC", 0x10}, {"IMAGE_TRANSFER_DST", 0x20},
+    {"IMAGE_INPUT_ATTACH", 0x40},
+    // Image types
+    {"IMAGE_1D", 0}, {"IMAGE_2D", 1}, {"IMAGE_3D", 2}, {"IMAGE_CUBE", 3},
+    // Filter
+    {"FILTER_NEAREST", 0}, {"FILTER_LINEAR", 1},
+    // Address
+    {"ADDRESS_REPEAT", 0}, {"ADDRESS_MIRRORED_REPEAT", 1},
+    {"ADDRESS_CLAMP_EDGE", 2}, {"ADDRESS_CLAMP_BORDER", 3},
+    // Descriptor types
+    {"DESC_STORAGE_BUFFER", 0}, {"DESC_UNIFORM_BUFFER", 1}, {"DESC_SAMPLED_IMAGE", 2},
+    {"DESC_STORAGE_IMAGE", 3}, {"DESC_SAMPLER", 4}, {"DESC_COMBINED_SAMPLER", 5},
+    // Shader stages
+    {"STAGE_VERTEX", 0x01}, {"STAGE_FRAGMENT", 0x02}, {"STAGE_COMPUTE", 0x04},
+    {"STAGE_GEOMETRY", 0x08}, {"STAGE_ALL", 0x3F},
+    // Topology
+    {"TOPO_POINT_LIST", 0}, {"TOPO_LINE_LIST", 1}, {"TOPO_LINE_STRIP", 2},
+    {"TOPO_TRIANGLE_LIST", 3}, {"TOPO_TRIANGLE_STRIP", 4}, {"TOPO_TRIANGLE_FAN", 5},
+    // Polygon mode
+    {"POLY_FILL", 0}, {"POLY_LINE", 1}, {"POLY_POINT", 2},
+    // Cull mode
+    {"CULL_NONE", 0}, {"CULL_FRONT", 1}, {"CULL_BACK", 2},
+    // Front face
+    {"FRONT_CCW", 0}, {"FRONT_CW", 1},
+    // Blend
+    {"BLEND_ZERO", 0}, {"BLEND_ONE", 1}, {"BLEND_SRC_ALPHA", 2},
+    {"BLEND_ONE_MINUS_SRC_ALPHA", 3},
+    {"BLEND_OP_ADD", 0}, {"BLEND_OP_SUBTRACT", 1}, {"BLEND_OP_MIN", 2}, {"BLEND_OP_MAX", 3},
+    // Compare
+    {"COMPARE_NEVER", 0}, {"COMPARE_LESS", 1}, {"COMPARE_LEQUAL", 3},
+    {"COMPARE_GREATER", 4}, {"COMPARE_ALWAYS", 7},
+    // Load/Store
+    {"LOAD_CLEAR", 0}, {"LOAD_LOAD", 1}, {"LOAD_DONTCARE", 2},
+    {"STORE_STORE", 0}, {"STORE_DONTCARE", 1},
+    // Layout
+    {"LAYOUT_UNDEFINED", 0}, {"LAYOUT_GENERAL", 1}, {"LAYOUT_COLOR_ATTACH", 2},
+    {"LAYOUT_DEPTH_ATTACH", 3}, {"LAYOUT_SHADER_READ", 4},
+    {"LAYOUT_TRANSFER_SRC", 5}, {"LAYOUT_TRANSFER_DST", 6}, {"LAYOUT_PRESENT", 7},
+    // Pipeline stages
+    {"PIPE_TOP", 0x0001}, {"PIPE_VERTEX_INPUT", 0x0004}, {"PIPE_VERTEX_SHADER", 0x0008},
+    {"PIPE_FRAGMENT", 0x0010}, {"PIPE_COLOR_OUTPUT", 0x0080},
+    {"PIPE_COMPUTE", 0x0100}, {"PIPE_TRANSFER", 0x0200},
+    {"PIPE_BOTTOM", 0x0400}, {"PIPE_ALL_COMMANDS", 0x2000},
+    // Access
+    {"ACCESS_NONE", 0}, {"ACCESS_SHADER_READ", 0x0001}, {"ACCESS_SHADER_WRITE", 0x0002},
+    {"ACCESS_TRANSFER_READ", 0x0040}, {"ACCESS_TRANSFER_WRITE", 0x0080},
+    {"ACCESS_HOST_READ", 0x0100}, {"ACCESS_HOST_WRITE", 0x0200},
+    {"ACCESS_MEMORY_READ", 0x0400}, {"ACCESS_MEMORY_WRITE", 0x0800},
+    // Vertex input
+    {"INPUT_RATE_VERTEX", 0}, {"INPUT_RATE_INSTANCE", 1},
+    {"ATTR_FLOAT", 0}, {"ATTR_VEC2", 1}, {"ATTR_VEC3", 2}, {"ATTR_VEC4", 3},
+    {"ATTR_INT", 4}, {"ATTR_UINT", 8},
+    // Key constants
+    {"KEY_W", 87}, {"KEY_A", 65}, {"KEY_S", 83}, {"KEY_D", 68},
+    {"KEY_Q", 81}, {"KEY_E", 69}, {"KEY_R", 82}, {"KEY_F", 70},
+    {"KEY_SPACE", 32}, {"KEY_ESCAPE", 256}, {"KEY_ENTER", 257},
+    {"KEY_TAB", 258}, {"KEY_BACKSPACE", 259},
+    {"KEY_UP", 265}, {"KEY_DOWN", 264}, {"KEY_LEFT", 263}, {"KEY_RIGHT", 262},
+    {"KEY_LEFT_SHIFT", 340}, {"KEY_LEFT_CONTROL", 341}, {"KEY_LEFT_ALT", 342},
+    {"KEY_RIGHT_SHIFT", 344}, {"KEY_RIGHT_CONTROL", 345},
+    {"KEY_F1", 290}, {"KEY_F2", 291}, {"KEY_F3", 292}, {"KEY_F4", 293},
+    {"KEY_F5", 294}, {"KEY_F6", 295}, {"KEY_F7", 296},
+    {"KEY_1", 49}, {"KEY_2", 50}, {"KEY_3", 51}, {"KEY_4", 52},
+    {"KEY_MINUS", 45}, {"KEY_EQUAL", 61},
+    // Cursor modes
+    {"CURSOR_NORMAL", 0x00034001}, {"CURSOR_HIDDEN", 0x00034002},
+    {"CURSOR_DISABLED", 0x00034003},
+    // Sentinel
+    {NULL, 0}
+};
+
+static int llvm_resolve_gpu_constant(const char* name, double* out_value) {
+    for (int i = 0; g_gpu_constants[i].name != NULL; i++) {
+        if (strcmp(g_gpu_constants[i].name, name) == 0) {
+            *out_value = g_gpu_constants[i].value;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Try to emit a GPU module method call. Returns the result register, or -1 if not a known GPU method.
+static int llvm_try_emit_gpu_call(LLVMCompiler* lc, const char* method, int* arg_regs, int arg_count) {
+    int r = llc_new_reg(lc);
+
+    // Macro for emitting calls with variable args
+    #define GPU_CALL_0(fn) \
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_gpu_" fn "()", r); return r;
+    #define GPU_CALL_1(fn) \
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_gpu_" fn "(%%SageValue %%%d)", r, arg_regs[0]); return r;
+    #define GPU_CALL_2(fn) \
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_gpu_" fn "(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]); return r;
+    #define GPU_CALL_3(fn) \
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_gpu_" fn "(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2]); return r;
+    #define GPU_CALL_4(fn) \
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_gpu_" fn "(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3]); return r;
+    #define GPU_CALL_5(fn) \
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_gpu_" fn "(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3], arg_regs[4]); return r;
+    #define GPU_CALL_6(fn) \
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_gpu_" fn "(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3], arg_regs[4], arg_regs[5]); return r;
+
+    // For calls with 7-8 args, emit inline
+    #define GPU_CALL_7(fn) do { \
+        fprintf(lc->out, "  %%%d = call %%SageValue @sage_rt_gpu_" fn "(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)\n", \
+            r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3], arg_regs[4], arg_regs[5], arg_regs[6]); \
+        return r; } while(0)
+    #define GPU_CALL_8(fn) do { \
+        fprintf(lc->out, "  %%%d = call %%SageValue @sage_rt_gpu_" fn "(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)\n", \
+            r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3], arg_regs[4], arg_regs[5], arg_regs[6], arg_regs[7]); \
+        return r; } while(0)
+
+    // Core lifecycle
+    if (strcmp(method, "has_vulkan") == 0) { GPU_CALL_0("has_vulkan"); }
+    if (strcmp(method, "has_opengl") == 0) { GPU_CALL_0("has_opengl"); }
+    if (strcmp(method, "initialize") == 0 || strcmp(method, "init") == 0) { GPU_CALL_2("init"); }
+    if (strcmp(method, "init_opengl") == 0) { GPU_CALL_3("init_opengl"); }
+    if (strcmp(method, "shutdown") == 0) { GPU_CALL_0("shutdown"); }
+    if (strcmp(method, "device_name") == 0) { GPU_CALL_0("device_name"); }
+    if (strcmp(method, "last_error") == 0) { GPU_CALL_0("last_error"); }
+    // Buffers
+    if (strcmp(method, "create_buffer") == 0) { GPU_CALL_3("create_buffer"); }
+    if (strcmp(method, "destroy_buffer") == 0) { GPU_CALL_1("destroy_buffer"); }
+    if (strcmp(method, "buffer_upload") == 0) { GPU_CALL_2("buffer_upload"); }
+    if (strcmp(method, "buffer_download") == 0) { GPU_CALL_1("buffer_download"); }
+    if (strcmp(method, "buffer_size") == 0) { GPU_CALL_1("buffer_size"); }
+    // Images
+    if (strcmp(method, "create_image") == 0) { GPU_CALL_5("create_image"); }
+    if (strcmp(method, "create_image_3d") == 0) { GPU_CALL_5("create_image_3d"); }
+    if (strcmp(method, "destroy_image") == 0) { GPU_CALL_1("destroy_image"); }
+    if (strcmp(method, "image_dims") == 0) { GPU_CALL_1("image_dims"); }
+    // Samplers
+    if (strcmp(method, "create_sampler") == 0) { GPU_CALL_3("create_sampler"); }
+    if (strcmp(method, "create_sampler_advanced") == 0) { GPU_CALL_6("create_sampler_advanced"); }
+    if (strcmp(method, "destroy_sampler") == 0) { GPU_CALL_1("destroy_sampler"); }
+    // Shaders
+    if (strcmp(method, "load_shader") == 0) { GPU_CALL_2("load_shader"); }
+    if (strcmp(method, "load_shader_glsl") == 0) { GPU_CALL_2("load_shader_glsl"); }
+    if (strcmp(method, "reload_shader") == 0) { GPU_CALL_2("reload_shader"); }
+    if (strcmp(method, "destroy_shader") == 0) { GPU_CALL_1("destroy_shader"); }
+    // Descriptors
+    if (strcmp(method, "create_descriptor_layout") == 0) { GPU_CALL_1("create_descriptor_layout"); }
+    if (strcmp(method, "create_descriptor_pool") == 0) { GPU_CALL_2("create_descriptor_pool"); }
+    if (strcmp(method, "allocate_descriptor_set") == 0) { GPU_CALL_2("allocate_descriptor_set"); }
+    if (strcmp(method, "allocate_descriptor_sets") == 0) { GPU_CALL_3("allocate_descriptor_sets"); }
+    if (strcmp(method, "update_descriptor") == 0) { GPU_CALL_4("update_descriptor"); }
+    if (strcmp(method, "update_descriptor_image") == 0) { GPU_CALL_5("update_descriptor_image"); }
+    if (strcmp(method, "update_descriptor_range") == 0) { GPU_CALL_4("update_descriptor_range"); }
+    // Pipelines
+    if (strcmp(method, "create_pipeline_layout") == 0) { GPU_CALL_3("create_pipeline_layout"); }
+    if (strcmp(method, "create_compute_pipeline") == 0) { GPU_CALL_2("create_compute_pipeline"); }
+    if (strcmp(method, "create_graphics_pipeline") == 0) { GPU_CALL_1("create_graphics_pipeline"); }
+    if (strcmp(method, "destroy_pipeline") == 0) { GPU_CALL_1("destroy_pipeline"); }
+    if (strcmp(method, "create_pipeline_cache") == 0) { GPU_CALL_0("create_pipeline_cache"); }
+    // Render pass / Framebuffer
+    if (strcmp(method, "create_render_pass") == 0) { GPU_CALL_2("create_render_pass"); }
+    if (strcmp(method, "create_render_pass_mrt") == 0) { GPU_CALL_2("create_render_pass_mrt"); }
+    if (strcmp(method, "destroy_render_pass") == 0) { GPU_CALL_1("destroy_render_pass"); }
+    if (strcmp(method, "create_framebuffer") == 0) { GPU_CALL_4("create_framebuffer"); }
+    if (strcmp(method, "destroy_framebuffer") == 0) { GPU_CALL_1("destroy_framebuffer"); }
+    if (strcmp(method, "create_depth_buffer") == 0) { GPU_CALL_3("create_depth_buffer"); }
+    // Commands
+    if (strcmp(method, "create_command_pool") == 0) { GPU_CALL_1("create_command_pool"); }
+    if (strcmp(method, "create_command_buffer") == 0) { GPU_CALL_1("create_command_buffer"); }
+    if (strcmp(method, "create_secondary_command_buffer") == 0) { GPU_CALL_1("create_secondary_command_buffer"); }
+    if (strcmp(method, "begin_commands") == 0) { GPU_CALL_1("begin_commands"); }
+    if (strcmp(method, "begin_secondary") == 0) { GPU_CALL_4("begin_secondary"); }
+    if (strcmp(method, "end_commands") == 0) { GPU_CALL_1("end_commands"); }
+    // Command recording
+    if (strcmp(method, "cmd_bind_compute_pipeline") == 0) { GPU_CALL_2("cmd_bind_compute_pipeline"); }
+    if (strcmp(method, "cmd_bind_graphics_pipeline") == 0) { GPU_CALL_2("cmd_bind_graphics_pipeline"); }
+    if (strcmp(method, "cmd_bind_descriptor_set") == 0) { GPU_CALL_4("cmd_bind_descriptor_set"); }
+    if (strcmp(method, "cmd_dispatch") == 0) { GPU_CALL_4("cmd_dispatch"); }
+    if (strcmp(method, "cmd_dispatch_indirect") == 0) { GPU_CALL_3("cmd_dispatch_indirect"); }
+    if (strcmp(method, "cmd_push_constants") == 0) { GPU_CALL_4("cmd_push_constants"); }
+    if (strcmp(method, "cmd_begin_render_pass") == 0) { GPU_CALL_6("cmd_begin_render_pass"); }
+    if (strcmp(method, "cmd_end_render_pass") == 0) { GPU_CALL_1("cmd_end_render_pass"); }
+    if (strcmp(method, "cmd_draw") == 0) { GPU_CALL_5("cmd_draw"); }
+    if (strcmp(method, "cmd_draw_indexed") == 0) { GPU_CALL_6("cmd_draw_indexed"); }
+    if (strcmp(method, "cmd_draw_indirect") == 0) { GPU_CALL_5("cmd_draw_indirect"); }
+    if (strcmp(method, "cmd_draw_indexed_indirect") == 0) { GPU_CALL_5("cmd_draw_indexed_indirect"); }
+    if (strcmp(method, "cmd_bind_vertex_buffer") == 0) { GPU_CALL_2("cmd_bind_vertex_buffer"); }
+    if (strcmp(method, "cmd_bind_vertex_buffers") == 0) { GPU_CALL_2("cmd_bind_vertex_buffers"); }
+    if (strcmp(method, "cmd_bind_index_buffer") == 0) { GPU_CALL_2("cmd_bind_index_buffer"); }
+    if (strcmp(method, "cmd_set_viewport") == 0) { GPU_CALL_7("cmd_set_viewport"); }
+    if (strcmp(method, "cmd_set_scissor") == 0) { GPU_CALL_5("cmd_set_scissor"); }
+    if (strcmp(method, "cmd_pipeline_barrier") == 0) { GPU_CALL_5("cmd_pipeline_barrier"); }
+    if (strcmp(method, "cmd_image_barrier") == 0) { GPU_CALL_8("cmd_image_barrier"); }
+    if (strcmp(method, "cmd_copy_buffer") == 0) { GPU_CALL_4("cmd_copy_buffer"); }
+    if (strcmp(method, "cmd_copy_buffer_to_image") == 0) { GPU_CALL_5("cmd_copy_buffer_to_image"); }
+    if (strcmp(method, "cmd_execute_commands") == 0) { GPU_CALL_2("cmd_execute_commands"); }
+    if (strcmp(method, "cmd_queue_transfer_barrier") == 0) { GPU_CALL_4("cmd_queue_transfer_barrier"); }
+    // Sync
+    if (strcmp(method, "create_fence") == 0) { GPU_CALL_1("create_fence"); }
+    if (strcmp(method, "wait_fence") == 0) { GPU_CALL_2("wait_fence"); }
+    if (strcmp(method, "reset_fence") == 0) { GPU_CALL_1("reset_fence"); }
+    if (strcmp(method, "destroy_fence") == 0) { GPU_CALL_1("destroy_fence"); }
+    if (strcmp(method, "create_semaphore") == 0) { GPU_CALL_0("create_semaphore"); }
+    if (strcmp(method, "destroy_semaphore") == 0) { GPU_CALL_1("destroy_semaphore"); }
+    if (strcmp(method, "submit") == 0) { GPU_CALL_2("submit"); }
+    if (strcmp(method, "submit_compute") == 0) { GPU_CALL_2("submit_compute"); }
+    if (strcmp(method, "submit_with_sync") == 0) { GPU_CALL_4("submit_with_sync"); }
+    if (strcmp(method, "queue_wait_idle") == 0) { GPU_CALL_0("queue_wait_idle"); }
+    if (strcmp(method, "device_wait_idle") == 0) { GPU_CALL_0("device_wait_idle"); }
+    // Window / Swapchain
+    if (strcmp(method, "create_window") == 0) { GPU_CALL_3("create_window"); }
+    if (strcmp(method, "destroy_window") == 0) { GPU_CALL_0("destroy_window"); }
+    if (strcmp(method, "window_should_close") == 0) { GPU_CALL_0("window_should_close"); }
+    if (strcmp(method, "poll_events") == 0) { GPU_CALL_0("poll_events"); }
+    if (strcmp(method, "init_windowed") == 0) { GPU_CALL_4("init_windowed"); }
+    if (strcmp(method, "init_opengl_windowed") == 0) { GPU_CALL_5("init_opengl_windowed"); }
+    if (strcmp(method, "shutdown_windowed") == 0) { GPU_CALL_0("shutdown_windowed"); }
+    if (strcmp(method, "swapchain_image_count") == 0) { GPU_CALL_0("swapchain_image_count"); }
+    if (strcmp(method, "swapchain_format") == 0) { GPU_CALL_0("swapchain_format"); }
+    if (strcmp(method, "swapchain_extent") == 0) { GPU_CALL_0("swapchain_extent"); }
+    if (strcmp(method, "acquire_next_image") == 0) { GPU_CALL_1("acquire_next_image"); }
+    if (strcmp(method, "present") == 0) { GPU_CALL_2("present"); }
+    if (strcmp(method, "create_swapchain_framebuffers") == 0) { GPU_CALL_1("create_swapchain_framebuffers"); }
+    if (strcmp(method, "create_swapchain_framebuffers_depth") == 0) { GPU_CALL_2("create_swapchain_framebuffers_depth"); }
+    if (strcmp(method, "recreate_swapchain") == 0) { GPU_CALL_0("recreate_swapchain"); }
+    // Input
+    if (strcmp(method, "key_pressed") == 0) { GPU_CALL_1("key_pressed"); }
+    if (strcmp(method, "key_down") == 0) { GPU_CALL_1("key_down"); }
+    if (strcmp(method, "key_just_pressed") == 0) { GPU_CALL_1("key_just_pressed"); }
+    if (strcmp(method, "key_just_released") == 0) { GPU_CALL_1("key_just_released"); }
+    if (strcmp(method, "mouse_pos") == 0) { GPU_CALL_0("mouse_pos"); }
+    if (strcmp(method, "mouse_button") == 0) { GPU_CALL_1("mouse_button"); }
+    if (strcmp(method, "mouse_just_pressed") == 0) { GPU_CALL_1("mouse_just_pressed"); }
+    if (strcmp(method, "mouse_just_released") == 0) { GPU_CALL_1("mouse_just_released"); }
+    if (strcmp(method, "mouse_delta") == 0) { GPU_CALL_0("mouse_delta"); }
+    if (strcmp(method, "scroll_delta") == 0) { GPU_CALL_0("scroll_delta"); }
+    if (strcmp(method, "set_cursor_mode") == 0) { GPU_CALL_1("set_cursor_mode"); }
+    if (strcmp(method, "get_time") == 0) { GPU_CALL_0("get_time"); }
+    if (strcmp(method, "window_size") == 0) { GPU_CALL_0("window_size"); }
+    if (strcmp(method, "set_title") == 0) { GPU_CALL_1("set_title"); }
+    if (strcmp(method, "window_resized") == 0) { GPU_CALL_0("window_resized"); }
+    if (strcmp(method, "update_input") == 0) { GPU_CALL_0("update_input"); }
+    if (strcmp(method, "text_input_available") == 0) { GPU_CALL_0("text_input_available"); }
+    if (strcmp(method, "text_input_read") == 0) { GPU_CALL_0("text_input_read"); }
+    // Textures / Upload
+    if (strcmp(method, "load_texture") == 0) { GPU_CALL_4("load_texture"); }
+    if (strcmp(method, "texture_dims") == 0) { GPU_CALL_1("texture_dims"); }
+    if (strcmp(method, "generate_mipmaps") == 0) { GPU_CALL_1("generate_mipmaps"); }
+    if (strcmp(method, "create_cubemap") == 0) { GPU_CALL_1("create_cubemap"); }
+    if (strcmp(method, "upload_device_local") == 0) { GPU_CALL_2("upload_device_local"); }
+    if (strcmp(method, "upload_bytes") == 0) { GPU_CALL_2("upload_bytes"); }
+    // Uniform buffers
+    if (strcmp(method, "create_uniform_buffer") == 0) { GPU_CALL_1("create_uniform_buffer"); }
+    if (strcmp(method, "update_uniform") == 0) { GPU_CALL_2("update_uniform"); }
+    // Offscreen / Screenshot
+    if (strcmp(method, "create_offscreen_target") == 0) { GPU_CALL_4("create_offscreen_target"); }
+    if (strcmp(method, "screenshot") == 0) { GPU_CALL_0("screenshot"); }
+    if (strcmp(method, "save_screenshot") == 0) { GPU_CALL_1("save_screenshot"); }
+    // Font
+    if (strcmp(method, "load_font") == 0) { GPU_CALL_2("load_font"); }
+    if (strcmp(method, "font_atlas") == 0) { GPU_CALL_1("font_atlas"); }
+    if (strcmp(method, "font_set_atlas") == 0) { GPU_CALL_3("font_set_atlas"); }
+    if (strcmp(method, "font_text_verts") == 0) { GPU_CALL_5("font_text_verts"); }
+    if (strcmp(method, "font_measure") == 0) { GPU_CALL_3("font_measure"); }
+    // glTF
+    if (strcmp(method, "load_gltf") == 0) { GPU_CALL_1("load_gltf"); }
+    // Queue families
+    if (strcmp(method, "graphics_family") == 0) { GPU_CALL_0("graphics_family"); }
+    if (strcmp(method, "compute_family") == 0) { GPU_CALL_0("compute_family"); }
+    // Platform
+    if (strcmp(method, "set_platform") == 0) { GPU_CALL_1("set_platform"); }
+    if (strcmp(method, "get_platform") == 0) { GPU_CALL_0("get_platform"); }
+    if (strcmp(method, "detected_platform") == 0) { GPU_CALL_0("detected_platform"); }
+    // Device limits (takes 0 args, returns dict)
+    if (strcmp(method, "device_limits") == 0) { GPU_CALL_0("device_name"); }
+
+    #undef GPU_CALL_0
+    #undef GPU_CALL_1
+    #undef GPU_CALL_2
+    #undef GPU_CALL_3
+    #undef GPU_CALL_4
+    #undef GPU_CALL_5
+    #undef GPU_CALL_6
+    #undef GPU_CALL_7
+    #undef GPU_CALL_8
+
+    return -1;  // Not a known GPU method
 }
 
 // ============================================================================
@@ -362,6 +850,14 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
         }
         case EXPR_VARIABLE: {
             char* name = token_to_str(expr->as.variable.name);
+            // Module references (gpu, math, etc.) are handled at EXPR_GET/EXPR_CALL level;
+            // if we reach here, emit nil as a placeholder (module objects don't exist in LLVM mode)
+            if (llc_has_module(lc, name)) {
+                int r = llc_new_reg(lc);
+                ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                free(name);
+                return r;
+            }
             int r = llc_new_reg(lc);
             // Check if it's a global variable
             int is_global = 0;
@@ -423,6 +919,26 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 }
 
                 free(name);
+            } else if (expr->as.call.callee->type == EXPR_GET &&
+                       expr->as.call.callee->as.get.object->type == EXPR_VARIABLE) {
+                // Module method call: module.method(args...)
+                char* mod_name = token_to_str(expr->as.call.callee->as.get.object->as.variable.name);
+                char* method_name = token_to_str(expr->as.call.callee->as.get.property);
+
+                if (llc_has_module(lc, mod_name) && strcmp(mod_name, "gpu") == 0) {
+                    int gpu_r = llvm_try_emit_gpu_call(lc, method_name, arg_regs, expr->as.call.arg_count);
+                    if (gpu_r >= 0) {
+                        free(mod_name);
+                        free(method_name);
+                        free(arg_regs);
+                        return gpu_r;
+                    }
+                }
+
+                // Fallback: emit as generic method call via get_attr + call
+                free(mod_name);
+                free(method_name);
+                ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
             } else {
                 // Dynamic call not supported in LLVM backend yet
                 ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
@@ -486,6 +1002,23 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             return r;
         }
         case EXPR_GET: {
+            // Check for GPU module constant access: gpu.BUFFER_STORAGE etc.
+            if (expr->as.get.object->type == EXPR_VARIABLE) {
+                char* mod_name = token_to_str(expr->as.get.object->as.variable.name);
+                char* prop_name = token_to_str(expr->as.get.property);
+                if (llc_has_module(lc, mod_name) && strcmp(mod_name, "gpu") == 0) {
+                    double const_val;
+                    if (llvm_resolve_gpu_constant(prop_name, &const_val)) {
+                        int r = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %e)", r, const_val);
+                        free(mod_name);
+                        free(prop_name);
+                        return r;
+                    }
+                }
+                free(mod_name);
+                free(prop_name);
+            }
             int obj = llvm_emit_expr(lc, expr->as.get.object);
             char* prop = token_to_str(expr->as.get.property);
             int str_id = llc_add_string(lc, prop);
@@ -773,9 +1306,14 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             ll_emit(lc, "L%d:\n", unr);
             break;
         }
-        case STMT_IMPORT:
-            // Module imports are not supported in compiled mode; skip silently
+        case STMT_IMPORT: {
+            // Track imported modules for GPU/graphics support in compiled mode
+            const char* mod_name = stmt->as.import.module_name;
+            if (mod_name != NULL) {
+                llc_add_module(lc, mod_name);
+            }
             break;
+        }
         case STMT_MATCH:
         case STMT_DEFER:
         case STMT_YIELD:
@@ -1041,29 +1579,48 @@ int compile_source_to_llvm_executable(const char* source, const char* input_path
 
     if (pid == 0) {
         // Find the LLVM runtime object next to the sage executable
-        // Try several locations: obj/llvm_runtime.o, then next to the binary
-        const char* rt_paths[] = {
-            "obj/llvm_runtime.o",
-            "./llvm_runtime.o",
-            NULL
-        };
+        const char* rt_paths[] = { "obj/llvm_runtime.o", "./llvm_runtime.o", NULL };
         const char* rt_path = NULL;
         for (int i = 0; rt_paths[i] != NULL; i++) {
-            if (access(rt_paths[i], F_OK) == 0) {
-                rt_path = rt_paths[i];
-                break;
-            }
+            if (access(rt_paths[i], F_OK) == 0) { rt_path = rt_paths[i]; break; }
         }
 
-        if (rt_path) {
-            // Link with the runtime library
-            execlp("clang", "clang", "-O2", ll_output_path, rt_path, "-o", exe_output_path,
-                   "-lm", (char*)NULL);
-        } else {
-            // Fallback: try without runtime (will fail at link time if sage_rt_* used)
-            execlp("clang", "clang", "-O2", ll_output_path, "-o", exe_output_path,
-                   "-lm", (char*)NULL);
+        // Find the GPU API object for GPU support
+        const char* gpu_paths[] = { "obj/gpu_api.o", "./gpu_api.o", NULL };
+        const char* gpu_path = NULL;
+        for (int i = 0; gpu_paths[i] != NULL; i++) {
+            if (access(gpu_paths[i], F_OK) == 0) { gpu_path = gpu_paths[i]; break; }
         }
+
+        // Build clang argument list dynamically based on available libraries
+        const char* args[32];
+        int argc = 0;
+        args[argc++] = "clang";
+        args[argc++] = "-O2";
+        args[argc++] = ll_output_path;
+        if (rt_path) args[argc++] = rt_path;
+        if (gpu_path) args[argc++] = gpu_path;
+        args[argc++] = "-o";
+        args[argc++] = exe_output_path;
+        args[argc++] = "-lm";
+        args[argc++] = "-lpthread";
+        // Link GPU libraries if gpu_api.o is available
+        if (gpu_path) {
+            // Vulkan
+            #ifdef SAGE_HAS_VULKAN
+            args[argc++] = "-lvulkan";
+            #endif
+            // GLFW
+            #ifdef SAGE_HAS_GLFW
+            args[argc++] = "-lglfw";
+            #endif
+            // OpenGL (always try — linker will skip if unused)
+            args[argc++] = "-lGL";
+            args[argc++] = "-ldl";
+        }
+        args[argc] = NULL;
+
+        execvp("clang", (char* const*)args);
         // If clang not found, fall through
         fprintf(stderr, "Could not execute clang: %s\n", strerror(errno));
         _exit(127);

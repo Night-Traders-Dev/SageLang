@@ -54,7 +54,36 @@ typedef enum {
     BC_OP_PUSH_ENV,
     BC_OP_POP_ENV,
     BC_OP_DUP,
-    BC_OP_ARRAY_LEN
+    BC_OP_ARRAY_LEN,
+    // GPU hot-path opcodes (Phase 16: game engine optimization)
+    BC_OP_GPU_POLL_EVENTS,         // gpu.poll_events() — no args, no result
+    BC_OP_GPU_WINDOW_SHOULD_CLOSE, // gpu.window_should_close() -> bool
+    BC_OP_GPU_GET_TIME,            // gpu.get_time() -> number
+    BC_OP_GPU_KEY_PRESSED,         // gpu.key_pressed(key) -> bool (key on stack)
+    BC_OP_GPU_KEY_DOWN,            // gpu.key_down(key) -> bool
+    BC_OP_GPU_MOUSE_POS,           // gpu.mouse_pos() -> dict{x,y}
+    BC_OP_GPU_MOUSE_DELTA,         // gpu.mouse_delta() -> dict{x,y}
+    BC_OP_GPU_UPDATE_INPUT,        // gpu.update_input()
+    BC_OP_GPU_BEGIN_COMMANDS,      // gpu.begin_commands(cmd)
+    BC_OP_GPU_END_COMMANDS,        // gpu.end_commands(cmd)
+    BC_OP_GPU_CMD_BEGIN_RP,        // gpu.cmd_begin_render_pass(cmd, rp, fb, w, h, clear)
+    BC_OP_GPU_CMD_END_RP,          // gpu.cmd_end_render_pass(cmd)
+    BC_OP_GPU_CMD_DRAW,            // gpu.cmd_draw(cmd, verts, inst, first_v, first_i)
+    BC_OP_GPU_CMD_BIND_GP,         // gpu.cmd_bind_graphics_pipeline(cmd, pipe)
+    BC_OP_GPU_CMD_BIND_DS,         // gpu.cmd_bind_descriptor_set(cmd, layout, set, bp)
+    BC_OP_GPU_CMD_SET_VP,          // gpu.cmd_set_viewport(cmd, x, y, w, h, mind, maxd)
+    BC_OP_GPU_CMD_SET_SC,          // gpu.cmd_set_scissor(cmd, x, y, w, h)
+    BC_OP_GPU_CMD_BIND_VB,         // gpu.cmd_bind_vertex_buffer(cmd, buf)
+    BC_OP_GPU_CMD_BIND_IB,         // gpu.cmd_bind_index_buffer(cmd, buf)
+    BC_OP_GPU_CMD_DRAW_IDX,        // gpu.cmd_draw_indexed(cmd, idx_count, ...)
+    BC_OP_GPU_SUBMIT_SYNC,         // gpu.submit_with_sync(cmd, wait, signal, fence)
+    BC_OP_GPU_ACQUIRE_IMG,         // gpu.acquire_next_image(sem) -> number
+    BC_OP_GPU_PRESENT,             // gpu.present(sem, img_idx)
+    BC_OP_GPU_WAIT_FENCE,          // gpu.wait_fence(fence, timeout)
+    BC_OP_GPU_RESET_FENCE,         // gpu.reset_fence(fence)
+    BC_OP_GPU_UPDATE_UNIFORM,      // gpu.update_uniform(handle, data)
+    BC_OP_GPU_CMD_PUSH_CONST,      // gpu.cmd_push_constants(cmd, layout, stages, data)
+    BC_OP_GPU_CMD_DISPATCH         // gpu.cmd_dispatch(cmd, gx, gy, gz)
 } BytecodeOp;
 
 typedef enum {
