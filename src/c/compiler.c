@@ -648,8 +648,18 @@ static void collect_local_lets(Compiler* compiler, Stmt* stmt, NameEntry** local
                 break;
             }
             case STMT_CLASS:
-            case STMT_MATCH:
+            case STMT_MATCH: {
+                for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+                    collect_local_lets(compiler, stmt->as.match_stmt.cases[i]->body, locals);
+                }
+                if (stmt->as.match_stmt.default_case) {
+                    collect_local_lets(compiler, stmt->as.match_stmt.default_case, locals);
+                }
+                break;
+            }
             case STMT_DEFER:
+                collect_local_lets(compiler, stmt->as.defer.statement, locals);
+                break;
             case STMT_RAISE:
             case STMT_YIELD:
             case STMT_IMPORT:
@@ -1957,12 +1967,39 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             }
             break;
         }
-        case STMT_MATCH:
+        case STMT_MATCH: {
+            char* val = emit_expr(compiler, stmt->as.match_stmt.value);
+            for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+                CaseClause* clause = stmt->as.match_stmt.cases[i];
+                char* pat = emit_expr(compiler, clause->pattern);
+                emit_line(compiler, "%sif (sage_equal(%s, %s)) {",
+                          i > 0 ? "} else " : "", val, pat);
+                emit_embedded_block(compiler, clause->body);
+            }
+            if (stmt->as.match_stmt.default_case) {
+                if (stmt->as.match_stmt.case_count > 0) {
+                    emit_line(compiler, "} else {");
+                } else {
+                    emit_line(compiler, "{");
+                }
+                emit_embedded_block(compiler, stmt->as.match_stmt.default_case);
+            }
+            if (stmt->as.match_stmt.case_count > 0 || stmt->as.match_stmt.default_case) {
+                emit_line(compiler, "}");
+            }
+            break;
+        }
         case STMT_DEFER:
+            // In compiled C code, defer is best-effort: emit at current position
+            // (full defer semantics would require setjmp/cleanup stack)
+            emit_line(compiler, "/* defer */ {");
+            emit_embedded_block(compiler, stmt->as.defer.statement);
+            emit_line(compiler, "}");
+            break;
         case STMT_YIELD:
             compiler_error_at(compiler, stmt_token(stmt),
                               "try the interpreter for this program, or stay within the currently compiled subset",
-                              "this statement kind is not yet supported by the C backend");
+                              "yield is not yet supported by the C backend");
             break;
         case STMT_ASYNC_PROC:
             // TODO: async/await not supported in C backend

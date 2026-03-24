@@ -246,6 +246,69 @@ static Stmt* raise_statement() {
     return new_raise_stmt(exception);
 }
 
+// Defer statement: defer: <block>  or  defer <statement>
+static Stmt* defer_statement() {
+    if (match(TOKEN_COLON)) {
+        // defer:
+        //     <block>
+        consume(TOKEN_NEWLINE, "Expect newline after 'defer:'.");
+        Stmt* body = block();
+        return new_defer_stmt(body);
+    }
+    // defer <single-statement>
+    Stmt* body = statement();
+    return new_defer_stmt(body);
+}
+
+// Match statement: match <expr>:
+//     case <pattern>:
+//         <block>
+//     default:
+//         <block>
+static Stmt* match_statement() {
+    Expr* value = expression();
+    consume(TOKEN_COLON, "Expect ':' after match expression.");
+    consume(TOKEN_NEWLINE, "Expect newline after 'match:'.");
+    consume(TOKEN_INDENT, "Expect indented block after 'match:'.");
+
+    CaseClause** cases = NULL;
+    int case_count = 0;
+    int case_capacity = 0;
+    Stmt* default_case = NULL;
+
+    while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
+        while (match(TOKEN_NEWLINE));
+        if (check(TOKEN_DEDENT) || check(TOKEN_EOF)) break;
+
+        if (match(TOKEN_DEFAULT)) {
+            consume(TOKEN_COLON, "Expect ':' after 'default'.");
+            consume(TOKEN_NEWLINE, "Expect newline after 'default:'.");
+            default_case = block();
+        } else if (match(TOKEN_CASE)) {
+            Expr* pattern = expression();
+            consume(TOKEN_COLON, "Expect ':' after case pattern.");
+            consume(TOKEN_NEWLINE, "Expect newline after case clause.");
+            Stmt* body = block();
+
+            CaseClause* clause = new_case_clause(pattern, body);
+            if (case_count >= case_capacity) {
+                case_capacity = case_capacity == 0 ? 4 : case_capacity * 2;
+                cases = SAGE_REALLOC(cases, sizeof(CaseClause*) * case_capacity);
+            }
+            cases[case_count++] = clause;
+        } else {
+            parser_report(current_token, token_span(&current_token),
+                          "Expect 'case' or 'default' inside match block.", NULL);
+            sage_error_exit();
+            break;
+        }
+    }
+
+    if (check(TOKEN_DEDENT)) advance_parser();
+
+    return new_match_stmt(value, cases, case_count, default_case);
+}
+
 // PHASE 7: Yield statement
 static Stmt* yield_statement() {
     // yield <expression>
@@ -909,6 +972,8 @@ static Stmt* statement() {
     if (match(TOKEN_TRY)) return try_statement();
     if (match(TOKEN_RAISE)) return raise_statement();
     if (match(TOKEN_YIELD)) return yield_statement();
+    if (match(TOKEN_DEFER)) return defer_statement();
+    if (match(TOKEN_MATCH)) return match_statement();
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
 

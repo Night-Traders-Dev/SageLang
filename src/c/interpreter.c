@@ -2351,20 +2351,44 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
 
         case STMT_BLOCK: {
             Stmt* current = stmt->as.block.statements;
+            // Collect deferred statements (LIFO order)
+            Stmt* deferred[64];
+            int defer_count = 0;
+            ExecResult block_result = { val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            int exiting = 0;
+
             while (current != NULL) {
+                if (current->type == STMT_DEFER) {
+                    // Collect defer — don't execute yet
+                    if (defer_count < 64) {
+                        deferred[defer_count++] = current->as.defer.statement;
+                    }
+                    current = current->next;
+                    continue;
+                }
                 ExecResult res = interpret(current, env);
                 if (res.is_yielding) {
                     if (res.next_stmt == NULL) {
                         res.next_stmt = current->next;
                     }
+                    // Run deferred before yielding
+                    for (int di = defer_count - 1; di >= 0; di--) {
+                        interpret(deferred[di], env);
+                    }
                     return res;
                 }
                 if (res.is_returning || res.is_breaking || res.is_continuing || res.is_throwing) {
-                    return res;
+                    block_result = res;
+                    exiting = 1;
+                    break;
                 }
                 current = current->next;
             }
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            // Run deferred statements in LIFO order
+            for (int di = defer_count - 1; di >= 0; di--) {
+                interpret(deferred[di], env);
+            }
+            return block_result;
         }
 
         case STMT_IF: {
@@ -2634,9 +2658,31 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
-        case STMT_MATCH:
-        case STMT_DEFER:
+        case STMT_MATCH: {
+            ExecResult val_res = eval_expr(stmt->as.match_stmt.value, env);
+            if (val_res.is_throwing) return val_res;
+            Value match_val = val_res.value;
+
+            // Try each case clause
+            for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+                CaseClause* clause = stmt->as.match_stmt.cases[i];
+                ExecResult pat_res = eval_expr(clause->pattern, env);
+                if (pat_res.is_throwing) return pat_res;
+                if (values_equal(match_val, pat_res.value)) {
+                    return interpret(clause->body, env);
+                }
+            }
+            // No case matched — run default if present
+            if (stmt->as.match_stmt.default_case != NULL) {
+                return interpret(stmt->as.match_stmt.default_case, env);
+            }
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+        }
+
+        case STMT_DEFER:
+            // Defer is handled at the block level — collect and run on scope exit.
+            // When encountered standalone, just execute immediately (fallback).
+            return interpret(stmt->as.defer.statement, env);
     }
     return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
 }

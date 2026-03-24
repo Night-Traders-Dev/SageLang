@@ -1315,11 +1315,45 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             }
             break;
         }
-        case STMT_MATCH:
+        case STMT_MATCH: {
+            int match_val = llvm_emit_expr(lc, stmt->as.match_stmt.value);
+            int lbl_end = llc_new_label(lc);
+            for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+                CaseClause* clause = stmt->as.match_stmt.cases[i];
+                int pat_reg = llvm_emit_expr(lc, clause->pattern);
+                int cmp_reg = lc->next_reg++;
+                int bool_reg = lc->next_reg++;
+                int lbl_then = llc_new_label(lc);
+                int lbl_next = llc_new_label(lc);
+                fprintf(lc->out, "  %%%d = call %%SageValue @sage_rt_eq(%%SageValue %%%d, %%SageValue %%%d)\n", cmp_reg, match_val, pat_reg);
+                fprintf(lc->out, "  %%%d = call i1 @sage_rt_get_bool(%%SageValue %%%d)\n", bool_reg, cmp_reg);
+                fprintf(lc->out, "  br i1 %%%d, label %%L%d, label %%L%d\n", bool_reg, lbl_then, lbl_next);
+                fprintf(lc->out, "L%d:\n", lbl_then);
+                lc->block_terminated = 0;
+                llvm_emit_stmt_list(lc, clause->body);
+                if (!lc->block_terminated) {
+                    fprintf(lc->out, "  br label %%L%d\n", lbl_end);
+                }
+                fprintf(lc->out, "L%d:\n", lbl_next);
+                lc->block_terminated = 0;
+            }
+            if (stmt->as.match_stmt.default_case) {
+                llvm_emit_stmt_list(lc, stmt->as.match_stmt.default_case);
+            }
+            if (!lc->block_terminated) {
+                fprintf(lc->out, "  br label %%L%d\n", lbl_end);
+            }
+            fprintf(lc->out, "L%d:\n", lbl_end);
+            lc->block_terminated = 0;
+            break;
+        }
         case STMT_DEFER:
+            // In LLVM compiled code, emit defer body inline (best-effort)
+            llvm_emit_stmt_list(lc, stmt->as.defer.statement);
+            break;
         case STMT_YIELD:
         case STMT_ASYNC_PROC:
-            fprintf(stderr, "LLVM backend: unsupported statement type %d (match/defer/yield/async)\n", stmt->type);
+            fprintf(stderr, "LLVM backend: unsupported statement type %d (yield/async)\n", stmt->type);
             break;
     }
 }

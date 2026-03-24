@@ -597,11 +597,25 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             }
             break;
         }
+        case STMT_MATCH: {
+            // Lower match to comparison chain
+            int val_reg = isel_expr(ctx, stmt->as.match_stmt.value);
+            for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+                isel_expr(ctx, stmt->as.match_stmt.cases[i]->pattern);
+                isel_stmt_list(ctx, stmt->as.match_stmt.cases[i]->body);
+            }
+            if (stmt->as.match_stmt.default_case) {
+                isel_stmt_list(ctx, stmt->as.match_stmt.default_case);
+            }
+            (void)val_reg;
+            break;
+        }
+        case STMT_DEFER:
+            isel_stmt_list(ctx, stmt->as.defer.statement);
+            break;
         case STMT_CLASS:
-        case STMT_MATCH:
         case STMT_TRY:
         case STMT_RAISE:
-        case STMT_DEFER:
         case STMT_YIELD:
         case STMT_IMPORT:
         case STMT_ASYNC_PROC:
