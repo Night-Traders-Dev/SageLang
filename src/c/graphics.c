@@ -3735,7 +3735,7 @@ static Value gpu_create_window(int argCount, Value* args) {
         return val_bool(0);
     }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     g_window = glfwCreateWindow(w, h, title, NULL, NULL);
     if (!g_window) {
         fprintf(stderr, "gpu: window creation failed\n");
@@ -3787,7 +3787,7 @@ static Value gpu_init_windowed(int argCount, Value* args) {
         return val_bool(0);
     }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     g_window = glfwCreateWindow(w, h, title, NULL, NULL);
     if (!g_window) {
         // Window creation failed on chosen platform — try fallback
@@ -3797,7 +3797,7 @@ static Value gpu_init_windowed(int argCount, Value* args) {
             g_platform_preference = SAGE_PLATFORM_X11;
             if (!try_init_glfw_with_fallback()) return val_bool(0);
             glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-            glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+            glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
             g_window = glfwCreateWindow(w, h, title, NULL, NULL);
         }
         if (!g_window) {
