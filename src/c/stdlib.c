@@ -13,6 +13,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <dirent.h>
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
@@ -287,6 +288,58 @@ static Value io_filesize_native(int argCount, Value* args) {
     return val_number((double)st.st_size);
 }
 
+// io.readbytes(path) -> array of byte values (0-255)
+static Value io_readbytes_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    FILE* f = fopen(AS_STRING(args[0]), "rb");
+    if (!f) return val_nil();
+    fseek(f, 0, SEEK_END);
+    long length = ftell(f);
+    if (length < 0 || length > 100*1024*1024) { fclose(f); return val_nil(); } // 100MB max
+    fseek(f, 0, SEEK_SET);
+    unsigned char* buf = malloc((size_t)length);
+    size_t read = fread(buf, 1, (size_t)length, f);
+    fclose(f);
+    // Create array of byte values
+    ArrayValue* arr = SAGE_ALLOC(sizeof(ArrayValue));
+    arr->count = (int)read;
+    arr->capacity = (int)read;
+    arr->elements = SAGE_ALLOC(sizeof(Value) * read);
+    for (size_t i = 0; i < read; i++) {
+        arr->elements[i] = val_number((double)buf[i]);
+    }
+    free(buf);
+    Value result;
+    result.type = VAL_ARRAY;
+    result.as.array = arr;
+    return result;
+}
+
+// io.listdir(path) -> array of filename strings
+static Value io_listdir_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    DIR* d = opendir(AS_STRING(args[0]));
+    if (!d) return val_nil();
+    ArrayValue* arr = SAGE_ALLOC(sizeof(ArrayValue));
+    arr->count = 0;
+    arr->capacity = 32;
+    arr->elements = SAGE_ALLOC(sizeof(Value) * 32);
+    struct dirent* entry;
+    while ((entry = readdir(d)) != NULL) {
+        if (entry->d_name[0] == '.') continue; // skip hidden/. /..
+        if (arr->count >= arr->capacity) {
+            arr->capacity *= 2;
+            arr->elements = SAGE_REALLOC(arr->elements, sizeof(Value) * arr->capacity);
+        }
+        arr->elements[arr->count++] = val_string(entry->d_name);
+    }
+    closedir(d);
+    Value result;
+    result.type = VAL_ARRAY;
+    result.as.array = arr;
+    return result;
+}
+
 Module* create_io_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "io");
     Environment* e = m->env;
@@ -298,6 +351,8 @@ Module* create_io_module(ModuleCache* cache) {
     env_define(e, "remove", 6, val_native(io_remove_native));
     env_define(e, "isdir", 5, val_native(io_isdir_native));
     env_define(e, "filesize", 8, val_native(io_filesize_native));
+    env_define(e, "readbytes", 9, val_native(io_readbytes_native));
+    env_define(e, "listdir", 7, val_native(io_listdir_native));
 
     return m;
 }

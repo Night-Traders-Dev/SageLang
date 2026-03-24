@@ -123,7 +123,49 @@ static Value str_native(int argCount, Value* args) {
         memcpy(result, str, slen + 1);
         return val_string_take(result);
     }
-    return val_string("nil");
+    if (args[0].type == VAL_ARRAY) {
+        ArrayValue* arr = args[0].as.array;
+        // Estimate size: "[" + elements + "]"
+        size_t buf_size = 1024;
+        char* buf = SAGE_ALLOC(buf_size);
+        size_t pos = 0;
+        buf[pos++] = '[';
+        for (int i = 0; i < arr->count && pos < buf_size - 32; i++) {
+            if (i > 0) { buf[pos++] = ','; buf[pos++] = ' '; }
+            Value elem = arr->elements[i];
+            if (IS_NUMBER(elem)) {
+                pos += snprintf(buf + pos, buf_size - pos, "%g", AS_NUMBER(elem));
+            } else if (IS_STRING(elem)) {
+                pos += snprintf(buf + pos, buf_size - pos, "%s", AS_STRING(elem));
+            } else if (IS_BOOL(elem)) {
+                pos += snprintf(buf + pos, buf_size - pos, "%s", AS_BOOL(elem) ? "true" : "false");
+            } else if (elem.type == VAL_NIL) {
+                pos += snprintf(buf + pos, buf_size - pos, "nil");
+            } else {
+                pos += snprintf(buf + pos, buf_size - pos, "<%d>", elem.type);
+            }
+        }
+        if (arr->count > 0 && pos >= buf_size - 32) {
+            pos += snprintf(buf + pos, buf_size - pos, "...");
+        }
+        buf[pos++] = ']';
+        buf[pos] = '\0';
+        return val_string_take(buf);
+    }
+    if (args[0].type == VAL_NIL) {
+        return val_string("nil");
+    }
+    // For other types, return a type description
+    const char* type_names[] = {"number","bool","nil","string","function","native",
+                                "array","dict","tuple","class","instance","module",
+                                "exception","generator","clib","pointer","thread","mutex"};
+    int t = args[0].type;
+    if (t >= 0 && t <= 17) {
+        snprintf(buffer, sizeof(buffer), "<%s>", type_names[t]);
+    } else {
+        snprintf(buffer, sizeof(buffer), "<unknown:%d>", t);
+    }
+    return val_string(buffer);
 }
 
 static Value len_native(int argCount, Value* args) {
@@ -150,6 +192,23 @@ static Value push_native(int argCount, Value* args) {
     return val_nil();
 }
 
+// array_extend(target, source) - append all elements of source to target (native speed)
+static Value array_extend_native(int argCount, Value* args) {
+    if (argCount != 2 || args[0].type != VAL_ARRAY || args[1].type != VAL_ARRAY) return val_nil();
+    ArrayValue* target = args[0].as.array;
+    ArrayValue* source = args[1].as.array;
+    int new_count = target->count + source->count;
+    if (new_count > target->capacity) {
+        size_t old_bytes = sizeof(Value) * (size_t)target->capacity;
+        while (target->capacity < new_count) target->capacity = target->capacity == 0 ? 8 : target->capacity * 2;
+        target->elements = SAGE_REALLOC(target->elements, sizeof(Value) * target->capacity);
+        gc_track_external_resize(old_bytes, sizeof(Value) * (size_t)target->capacity);
+    }
+    memcpy(target->elements + target->count, source->elements, sizeof(Value) * source->count);
+    target->count = new_count;
+    return val_nil();
+}
+
 static Value pop_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
     if (args[0].type != VAL_ARRAY) return val_nil();
@@ -159,6 +218,144 @@ static Value pop_native(int argCount, Value* args) {
     
     Value result = a->elements[a->count - 1];
     a->count--;
+    return result;
+}
+
+// build_quad_verts(quads_array) -> flat float array of vertices
+// Each quad is a dict with x,y,w,h,color (array of 4 floats)
+// Output: 6 verts per quad, each vert = [px,py,u,v,r,g,b,a] = 8 floats
+static Value build_quad_verts_native(int argCount, Value* args) {
+    if (argCount != 1 || args[0].type != VAL_ARRAY) return val_nil();
+    ArrayValue* quads = args[0].as.array;
+    int quad_count = quads->count;
+    int vert_count = quad_count * 6;
+    int float_count = vert_count * 8;
+
+    // Pre-allocate output array
+    ArrayValue* out = SAGE_ALLOC(sizeof(ArrayValue));
+    out->count = 0;
+    out->capacity = float_count;
+    out->elements = SAGE_ALLOC(sizeof(Value) * float_count);
+
+    for (int i = 0; i < quad_count; i++) {
+        Value q = quads->elements[i];
+        if (q.type != VAL_DICT) continue;
+
+        // Extract quad properties via dict_get
+        Value vx = dict_get(&q, "x");
+        Value vy = dict_get(&q, "y");
+        Value vw = dict_get(&q, "w");
+        Value vh = dict_get(&q, "h");
+        Value vc = dict_get(&q, "color");
+        if (!IS_NUMBER(vx) || !IS_NUMBER(vy)) continue;
+
+        double x0 = AS_NUMBER(vx), y0 = AS_NUMBER(vy);
+        double w = IS_NUMBER(vw) ? AS_NUMBER(vw) : 0;
+        double h = IS_NUMBER(vh) ? AS_NUMBER(vh) : 0;
+        double x1 = x0 + w, y1 = y0 + h;
+
+        double cr = 1, cg = 1, cb = 1, ca = 1;
+        if (vc.type == VAL_ARRAY && vc.as.array->count >= 4) {
+            cr = AS_NUMBER(vc.as.array->elements[0]);
+            cg = AS_NUMBER(vc.as.array->elements[1]);
+            cb = AS_NUMBER(vc.as.array->elements[2]);
+            ca = AS_NUMBER(vc.as.array->elements[3]);
+        }
+
+        // 6 vertices per quad (2 triangles)
+        // Vertex = px,py,u,v,r,g,b,a
+        #define EMIT_VERT(px,py,u,v) do { \
+            out->elements[out->count++] = val_number(px); \
+            out->elements[out->count++] = val_number(py); \
+            out->elements[out->count++] = val_number(u);  \
+            out->elements[out->count++] = val_number(v);  \
+            out->elements[out->count++] = val_number(cr);  \
+            out->elements[out->count++] = val_number(cg);  \
+            out->elements[out->count++] = val_number(cb);  \
+            out->elements[out->count++] = val_number(ca);  \
+        } while(0)
+
+        EMIT_VERT(x0, y0, 0, 0);
+        EMIT_VERT(x1, y0, 1, 0);
+        EMIT_VERT(x1, y1, 1, 1);
+        EMIT_VERT(x0, y0, 0, 0);
+        EMIT_VERT(x1, y1, 1, 1);
+        EMIT_VERT(x0, y1, 0, 1);
+        #undef EMIT_VERT
+    }
+
+    Value result;
+    result.type = VAL_ARRAY;
+    result.as.array = out;
+    return result;
+}
+
+// build_line_quads(line_verts, thickness, color_r, color_g, color_b, color_a) -> quad array
+// Takes line segments [x1,y1,x2,y2,...] and produces quads suitable for build_quad_verts
+static Value build_line_quads_native(int argCount, Value* args) {
+    if (argCount < 2 || args[0].type != VAL_ARRAY) return val_nil();
+    ArrayValue* lines = args[0].as.array;
+    double thickness = AS_NUMBER(args[1]);
+    double cr = argCount > 2 ? AS_NUMBER(args[2]) : 1.0;
+    double cg = argCount > 3 ? AS_NUMBER(args[3]) : 1.0;
+    double cb = argCount > 4 ? AS_NUMBER(args[4]) : 1.0;
+    double ca = argCount > 5 ? AS_NUMBER(args[5]) : 1.0;
+
+    int seg_count = lines->count / 4;
+    // Output: array of dicts, each with x,y,w,h,color
+    ArrayValue* out = SAGE_ALLOC(sizeof(ArrayValue));
+    out->count = 0;
+    out->capacity = seg_count;
+    out->elements = SAGE_ALLOC(sizeof(Value) * seg_count);
+
+    // Color array (shared)
+    ArrayValue* color = SAGE_ALLOC(sizeof(ArrayValue));
+    color->count = 4;
+    color->capacity = 4;
+    color->elements = SAGE_ALLOC(sizeof(Value) * 4);
+    color->elements[0] = val_number(cr);
+    color->elements[1] = val_number(cg);
+    color->elements[2] = val_number(cb);
+    color->elements[3] = val_number(ca);
+    Value color_val;
+    color_val.type = VAL_ARRAY;
+    color_val.as.array = color;
+
+    double half = thickness * 0.5;
+
+    for (int i = 0; i + 3 < lines->count; i += 4) {
+        double x1 = AS_NUMBER(lines->elements[i]);
+        double y1 = AS_NUMBER(lines->elements[i+1]);
+        double x2 = AS_NUMBER(lines->elements[i+2]);
+        double y2 = AS_NUMBER(lines->elements[i+3]);
+
+        // For each line, create an axis-aligned bounding quad
+        double minx = x1 < x2 ? x1 : x2;
+        double miny = y1 < y2 ? y1 : y2;
+        double maxx = x1 > x2 ? x1 : x2;
+        double maxy = y1 > y2 ? y1 : y2;
+        double w = maxx - minx;
+        double h = maxy - miny;
+        if (w < thickness) { minx -= half; w = thickness; }
+        if (h < thickness) { miny -= half; h = thickness; }
+
+        Value quad_dict = val_dict();
+        dict_set(&quad_dict, "x", val_number(minx));
+        dict_set(&quad_dict, "y", val_number(miny));
+        dict_set(&quad_dict, "w", val_number(w));
+        dict_set(&quad_dict, "h", val_number(h));
+        dict_set(&quad_dict, "color", color_val);
+
+        if (out->count >= out->capacity) {
+            out->capacity = out->capacity * 2 + 1;
+            out->elements = SAGE_REALLOC(out->elements, sizeof(Value) * out->capacity);
+        }
+        out->elements[out->count++] = quad_dict;
+    }
+
+    Value result;
+    result.type = VAL_ARRAY;
+    result.as.array = out;
     return result;
 }
 
@@ -1376,6 +1573,9 @@ void init_stdlib(Env* env) {
     
     // Array functions
     env_define(env, "push", 4, val_native(push_native));
+    env_define(env, "build_quad_verts", 16, val_native(build_quad_verts_native));
+    env_define(env, "array_extend", 12, val_native(array_extend_native));
+    env_define(env, "build_line_quads", 16, val_native(build_line_quads_native));
     env_define(env, "pop", 3, val_native(pop_native));
     env_define(env, "range", 5, val_native(range_native));
     env_define(env, "slice", 5, val_native(slice_native));
@@ -2047,7 +2247,20 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                 return EVAL_RESULT(inst_val);
             }
 
-            fprintf(stderr, "Runtime Error: Value is not callable.\n");
+            // Debug: show what was attempted to be called
+            if (expr->as.call.callee && expr->as.call.callee->type == EXPR_VARIABLE) {
+                fprintf(stderr, "Runtime Error: '%.*s' is not callable (type=%d).\n",
+                        expr->as.call.callee->as.variable.name.length,
+                        expr->as.call.callee->as.variable.name.start,
+                        callee_value.type);
+            } else if (expr->as.call.callee && expr->as.call.callee->type == EXPR_GET) {
+                fprintf(stderr, "Runtime Error: '.%.*s' is not callable (type=%d).\n",
+                        expr->as.call.callee->as.get.property.length,
+                        expr->as.call.callee->as.get.property.start,
+                        callee_value.type);
+            } else {
+                fprintf(stderr, "Runtime Error: Value is not callable (type=%d).\n", callee_value.type);
+            }
             return EVAL_RESULT(val_nil());
         }
 

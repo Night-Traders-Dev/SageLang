@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 // src/c/graphics.c - SageLang Vulkan Graphics Native Module
 // Phase 15: Professional GPU compute & graphics library
 //
@@ -8,6 +9,13 @@
 #include "module.h"
 #include "value.h"
 #include "env.h"
+#include <unistd.h>
+
+// Key and mouse button state tracking (for just_pressed/just_released)
+static int g_key_states[512] = {0};
+static int g_key_prev[512] = {0};
+static int g_mouse_states[8] = {0};
+static int g_mouse_prev[8] = {0};
 #include "gc.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -4392,8 +4400,7 @@ static Value gpu_scroll_delta(int argCount, Value* args) {
 // Feature 3: Key state tracking (just pressed / just released)
 // ============================================================================
 
-static int g_key_states[512] = {0};
-static int g_key_prev[512] = {0};
+// (Key/mouse state arrays declared at file scope above gpu_poll_events)
 
 // gpu.update_input() -> nil  (call once per frame before key queries)
 static Value gpu_update_input(int argCount, Value* args) {
@@ -4402,6 +4409,11 @@ static Value gpu_update_input(int argCount, Value* args) {
     for (int i = 32; i < 349; i++) {  // GLFW valid key range
         g_key_prev[i] = g_key_states[i];
         g_key_states[i] = (glfwGetKey(g_window, i) == GLFW_PRESS) ? 1 : 0;
+    }
+    // Track mouse button states for just_pressed/just_released
+    for (int i = 0; i < 8; i++) {
+        g_mouse_prev[i] = g_mouse_states[i];
+        g_mouse_states[i] = (glfwGetMouseButton(g_window, i) == GLFW_PRESS) ? 1 : 0;
     }
     return val_nil();
 }
@@ -4420,6 +4432,22 @@ static Value gpu_key_just_released(int argCount, Value* args) {
     int k = (int)AS_NUMBER(args[0]);
     if (k < 0 || k >= 512) return val_bool(0);
     return val_bool(!g_key_states[k] && g_key_prev[k]);
+}
+
+// gpu.mouse_just_pressed(button) -> bool
+static Value gpu_mouse_just_pressed(int argCount, Value* args) {
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_bool(0);
+    int b = (int)AS_NUMBER(args[0]);
+    if (b < 0 || b >= 8) return val_bool(0);
+    return val_bool(g_mouse_states[b] && !g_mouse_prev[b]);
+}
+
+// gpu.mouse_just_released(button) -> bool
+static Value gpu_mouse_just_released(int argCount, Value* args) {
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_bool(0);
+    int b = (int)AS_NUMBER(args[0]);
+    if (b < 0 || b >= 8) return val_bool(0);
+    return val_bool(!g_mouse_states[b] && g_mouse_prev[b]);
 }
 
 // ============================================================================
@@ -4613,6 +4641,518 @@ static Value gpu_screenshot(int argCount, Value* args) {
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#define CGLTF_IMPLEMENTATION
+#include "cgltf.h"
+
+// ============================================================================
+// glTF Loader (cgltf) - loads meshes, materials, skeletons, animations
+// ============================================================================
+
+// Helper: read accessor float data
+static int cgltf_read_float_array(const cgltf_accessor* acc, float* out, int max_floats) {
+    if (!acc) return 0;
+    int count = 0;
+    for (cgltf_size i = 0; i < acc->count && count < max_floats; i++) {
+        float v[16];
+        int nc = (int)cgltf_num_components(acc->type);
+        if (cgltf_accessor_read_float(acc, i, v, nc)) {
+            for (int j = 0; j < nc && count < max_floats; j++) {
+                out[count++] = v[j];
+            }
+        }
+    }
+    return count;
+}
+
+// gpu.load_gltf(path) -> structured dict with meshes, materials, animations
+static Value gpu_load_gltf(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    const char* path = AS_STRING(args[0]);
+
+    cgltf_options options = {0};
+    cgltf_data* data = NULL;
+    cgltf_result result = cgltf_parse_file(&options, path, &data);
+    if (result != cgltf_result_success) {
+        fprintf(stderr, "gpu.load_gltf: failed to parse '%s'\n", path);
+        return val_nil();
+    }
+    result = cgltf_load_buffers(&options, data, path);
+    if (result != cgltf_result_success) {
+        fprintf(stderr, "gpu.load_gltf: failed to load buffers for '%s'\n", path);
+        cgltf_free(data);
+        return val_nil();
+    }
+
+    Value root = val_dict();
+
+    // ---- Meshes ----
+    ArrayValue* meshes_arr = SAGE_ALLOC(sizeof(ArrayValue));
+    meshes_arr->count = 0;
+    meshes_arr->capacity = (int)data->meshes_count + 1;
+    meshes_arr->elements = SAGE_ALLOC(sizeof(Value) * meshes_arr->capacity);
+
+    for (cgltf_size mi = 0; mi < data->meshes_count; mi++) {
+        cgltf_mesh* mesh = &data->meshes[mi];
+        Value mesh_dict = val_dict();
+        if (mesh->name) dict_set(&mesh_dict, "name", val_string(mesh->name));
+        else dict_set(&mesh_dict, "name", val_string("mesh"));
+
+        ArrayValue* prims_arr = SAGE_ALLOC(sizeof(ArrayValue));
+        prims_arr->count = 0;
+        prims_arr->capacity = (int)mesh->primitives_count + 1;
+        prims_arr->elements = SAGE_ALLOC(sizeof(Value) * prims_arr->capacity);
+
+        for (cgltf_size pi = 0; pi < mesh->primitives_count; pi++) {
+            cgltf_primitive* prim = &mesh->primitives[pi];
+            Value prim_dict = val_dict();
+
+            // Find accessors
+            const cgltf_accessor* pos_acc = NULL;
+            const cgltf_accessor* norm_acc = NULL;
+            const cgltf_accessor* uv_acc = NULL;
+            for (cgltf_size ai = 0; ai < prim->attributes_count; ai++) {
+                if (prim->attributes[ai].type == cgltf_attribute_type_position)
+                    pos_acc = prim->attributes[ai].data;
+                else if (prim->attributes[ai].type == cgltf_attribute_type_normal)
+                    norm_acc = prim->attributes[ai].data;
+                else if (prim->attributes[ai].type == cgltf_attribute_type_texcoord)
+                    uv_acc = prim->attributes[ai].data;
+            }
+
+            if (!pos_acc) continue;
+            int vert_count = (int)pos_acc->count;
+
+            // Read position, normal, UV data
+            float* positions = malloc(sizeof(float) * vert_count * 3);
+            float* normals = malloc(sizeof(float) * vert_count * 3);
+            float* uvs = malloc(sizeof(float) * vert_count * 2);
+            memset(normals, 0, sizeof(float) * vert_count * 3);
+            memset(uvs, 0, sizeof(float) * vert_count * 2);
+
+            cgltf_read_float_array(pos_acc, positions, vert_count * 3);
+            if (norm_acc) cgltf_read_float_array(norm_acc, normals, vert_count * 3);
+            if (uv_acc) cgltf_read_float_array(uv_acc, uvs, vert_count * 2);
+
+            // Interleave into engine vertex format: [px,py,pz, nx,ny,nz, u,v]
+            int float_count = vert_count * 8;
+            ArrayValue* verts = SAGE_ALLOC(sizeof(ArrayValue));
+            verts->count = float_count;
+            verts->capacity = float_count;
+            verts->elements = SAGE_ALLOC(sizeof(Value) * float_count);
+            for (int vi = 0; vi < vert_count; vi++) {
+                verts->elements[vi*8+0] = val_number(positions[vi*3+0]);
+                verts->elements[vi*8+1] = val_number(positions[vi*3+1]);
+                verts->elements[vi*8+2] = val_number(positions[vi*3+2]);
+                verts->elements[vi*8+3] = val_number(normals[vi*3+0]);
+                verts->elements[vi*8+4] = val_number(normals[vi*3+1]);
+                verts->elements[vi*8+5] = val_number(normals[vi*3+2]);
+                verts->elements[vi*8+6] = val_number(uvs[vi*2+0]);
+                verts->elements[vi*8+7] = val_number(uvs[vi*2+1]);
+            }
+            free(positions); free(normals); free(uvs);
+
+            Value verts_val; verts_val.type = VAL_ARRAY; verts_val.as.array = verts;
+            dict_set(&prim_dict, "vertices", verts_val);
+            dict_set(&prim_dict, "vertex_count", val_number(vert_count));
+
+            // Indices
+            if (prim->indices) {
+                int idx_count = (int)prim->indices->count;
+                ArrayValue* indices = SAGE_ALLOC(sizeof(ArrayValue));
+                indices->count = idx_count;
+                indices->capacity = idx_count;
+                indices->elements = SAGE_ALLOC(sizeof(Value) * idx_count);
+                for (cgltf_size ii = 0; ii < prim->indices->count; ii++) {
+                    indices->elements[ii] = val_number((double)cgltf_accessor_read_index(prim->indices, ii));
+                }
+                Value idx_val; idx_val.type = VAL_ARRAY; idx_val.as.array = indices;
+                dict_set(&prim_dict, "indices", idx_val);
+                dict_set(&prim_dict, "index_count", val_number(idx_count));
+            }
+
+            // Material index
+            if (prim->material) {
+                dict_set(&prim_dict, "material", val_number((double)(prim->material - data->materials)));
+            }
+
+            prims_arr->elements[prims_arr->count++] = prim_dict;
+        }
+        Value prims_val; prims_val.type = VAL_ARRAY; prims_val.as.array = prims_arr;
+        dict_set(&mesh_dict, "primitives", prims_val);
+        meshes_arr->elements[meshes_arr->count++] = mesh_dict;
+    }
+    Value meshes_val; meshes_val.type = VAL_ARRAY; meshes_val.as.array = meshes_arr;
+    dict_set(&root, "meshes", meshes_val);
+
+    // ---- Materials ----
+    ArrayValue* mats_arr = SAGE_ALLOC(sizeof(ArrayValue));
+    mats_arr->count = 0;
+    mats_arr->capacity = (int)data->materials_count + 1;
+    mats_arr->elements = SAGE_ALLOC(sizeof(Value) * mats_arr->capacity);
+
+    for (cgltf_size mi = 0; mi < data->materials_count; mi++) {
+        cgltf_material* mat = &data->materials[mi];
+        Value mat_dict = val_dict();
+        if (mat->name) dict_set(&mat_dict, "name", val_string(mat->name));
+        else dict_set(&mat_dict, "name", val_string("material"));
+
+        if (mat->has_pbr_metallic_roughness) {
+            cgltf_pbr_metallic_roughness* pbr = &mat->pbr_metallic_roughness;
+            dict_set(&mat_dict, "albedo_r", val_number(pbr->base_color_factor[0]));
+            dict_set(&mat_dict, "albedo_g", val_number(pbr->base_color_factor[1]));
+            dict_set(&mat_dict, "albedo_b", val_number(pbr->base_color_factor[2]));
+            dict_set(&mat_dict, "albedo_a", val_number(pbr->base_color_factor[3]));
+            dict_set(&mat_dict, "metallic", val_number(pbr->metallic_factor));
+            dict_set(&mat_dict, "roughness", val_number(pbr->roughness_factor));
+
+            if (pbr->base_color_texture.texture && pbr->base_color_texture.texture->image) {
+                if (pbr->base_color_texture.texture->image->uri)
+                    dict_set(&mat_dict, "albedo_texture", val_string(pbr->base_color_texture.texture->image->uri));
+            }
+            if (pbr->metallic_roughness_texture.texture && pbr->metallic_roughness_texture.texture->image) {
+                if (pbr->metallic_roughness_texture.texture->image->uri)
+                    dict_set(&mat_dict, "mr_texture", val_string(pbr->metallic_roughness_texture.texture->image->uri));
+            }
+        }
+        if (mat->normal_texture.texture && mat->normal_texture.texture->image) {
+            if (mat->normal_texture.texture->image->uri)
+                dict_set(&mat_dict, "normal_texture", val_string(mat->normal_texture.texture->image->uri));
+        }
+        mats_arr->elements[mats_arr->count++] = mat_dict;
+    }
+    Value mats_val; mats_val.type = VAL_ARRAY; mats_val.as.array = mats_arr;
+    dict_set(&root, "materials", mats_val);
+
+    // ---- Nodes ----
+    ArrayValue* nodes_arr = SAGE_ALLOC(sizeof(ArrayValue));
+    nodes_arr->count = 0;
+    nodes_arr->capacity = (int)data->nodes_count + 1;
+    nodes_arr->elements = SAGE_ALLOC(sizeof(Value) * nodes_arr->capacity);
+
+    for (cgltf_size ni = 0; ni < data->nodes_count; ni++) {
+        cgltf_node* node = &data->nodes[ni];
+        Value node_dict = val_dict();
+        if (node->name) dict_set(&node_dict, "name", val_string(node->name));
+        else dict_set(&node_dict, "name", val_string("node"));
+        if (node->mesh) dict_set(&node_dict, "mesh", val_number((double)(node->mesh - data->meshes)));
+        else dict_set(&node_dict, "mesh", val_number(-1));
+
+        // Transform
+        float m[16];
+        cgltf_node_transform_world(node, m);
+        dict_set(&node_dict, "tx", val_number(m[12]));
+        dict_set(&node_dict, "ty", val_number(m[13]));
+        dict_set(&node_dict, "tz", val_number(m[14]));
+
+        nodes_arr->elements[nodes_arr->count++] = node_dict;
+    }
+    Value nodes_val; nodes_val.type = VAL_ARRAY; nodes_val.as.array = nodes_arr;
+    dict_set(&root, "nodes", nodes_val);
+
+    // ---- Animations ----
+    ArrayValue* anims_arr = SAGE_ALLOC(sizeof(ArrayValue));
+    anims_arr->count = 0;
+    anims_arr->capacity = (int)data->animations_count + 1;
+    anims_arr->elements = SAGE_ALLOC(sizeof(Value) * anims_arr->capacity);
+
+    for (cgltf_size ai = 0; ai < data->animations_count; ai++) {
+        cgltf_animation* anim = &data->animations[ai];
+        Value anim_dict = val_dict();
+        if (anim->name) dict_set(&anim_dict, "name", val_string(anim->name));
+        else dict_set(&anim_dict, "name", val_string("animation"));
+        dict_set(&anim_dict, "channel_count", val_number((double)anim->channels_count));
+
+        ArrayValue* channels = SAGE_ALLOC(sizeof(ArrayValue));
+        channels->count = 0;
+        channels->capacity = (int)anim->channels_count + 1;
+        channels->elements = SAGE_ALLOC(sizeof(Value) * channels->capacity);
+
+        for (cgltf_size ci = 0; ci < anim->channels_count; ci++) {
+            cgltf_animation_channel* ch = &anim->channels[ci];
+            Value ch_dict = val_dict();
+
+            if (ch->target_node)
+                dict_set(&ch_dict, "node", val_number((double)(ch->target_node - data->nodes)));
+            const char* path_str = "unknown";
+            if (ch->target_path == cgltf_animation_path_type_translation) path_str = "translation";
+            else if (ch->target_path == cgltf_animation_path_type_rotation) path_str = "rotation";
+            else if (ch->target_path == cgltf_animation_path_type_scale) path_str = "scale";
+            dict_set(&ch_dict, "path", val_string(path_str));
+
+            // Sampler times + values
+            if (ch->sampler) {
+                cgltf_animation_sampler* s = ch->sampler;
+                if (s->input) {
+                    int tc = (int)s->input->count;
+                    float* times = malloc(sizeof(float) * tc);
+                    cgltf_read_float_array(s->input, times, tc);
+                    ArrayValue* times_arr = SAGE_ALLOC(sizeof(ArrayValue));
+                    times_arr->count = tc; times_arr->capacity = tc;
+                    times_arr->elements = SAGE_ALLOC(sizeof(Value) * tc);
+                    for (int ti = 0; ti < tc; ti++) times_arr->elements[ti] = val_number(times[ti]);
+                    free(times);
+                    Value tv; tv.type = VAL_ARRAY; tv.as.array = times_arr;
+                    dict_set(&ch_dict, "times", tv);
+                }
+                if (s->output) {
+                    int vc = (int)s->output->count * (int)cgltf_num_components(s->output->type);
+                    float* vals = malloc(sizeof(float) * vc);
+                    cgltf_read_float_array(s->output, vals, vc);
+                    ArrayValue* vals_arr = SAGE_ALLOC(sizeof(ArrayValue));
+                    vals_arr->count = vc; vals_arr->capacity = vc;
+                    vals_arr->elements = SAGE_ALLOC(sizeof(Value) * vc);
+                    for (int vi = 0; vi < vc; vi++) vals_arr->elements[vi] = val_number(vals[vi]);
+                    free(vals);
+                    Value vv; vv.type = VAL_ARRAY; vv.as.array = vals_arr;
+                    dict_set(&ch_dict, "values", vv);
+                }
+            }
+            channels->elements[channels->count++] = ch_dict;
+        }
+        Value ch_val; ch_val.type = VAL_ARRAY; ch_val.as.array = channels;
+        dict_set(&anim_dict, "channels", ch_val);
+        anims_arr->elements[anims_arr->count++] = anim_dict;
+    }
+    Value anims_val; anims_val.type = VAL_ARRAY; anims_val.as.array = anims_arr;
+    dict_set(&root, "animations", anims_val);
+
+    // Stats
+    dict_set(&root, "mesh_count", val_number((double)data->meshes_count));
+    dict_set(&root, "material_count", val_number((double)data->materials_count));
+    dict_set(&root, "node_count", val_number((double)data->nodes_count));
+    dict_set(&root, "animation_count", val_number((double)data->animations_count));
+
+    fprintf(stderr, "glTF loaded: %s (%zu meshes, %zu materials, %zu animations)\n",
+            path, data->meshes_count, data->materials_count, data->animations_count);
+
+    cgltf_free(data);
+    return root;
+}
+
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
+
+// ============================================================================
+// Font Rasterizer (stb_truetype)
+// ============================================================================
+
+#define MAX_FONTS 8
+#define FONT_ATLAS_SIZE 512
+#define FONT_FIRST_CHAR 32
+#define FONT_CHAR_COUNT 96
+
+typedef struct {
+    int valid;
+    int atlas_w, atlas_h;
+    float font_size;
+    stbtt_bakedchar cdata[FONT_CHAR_COUNT];
+    int texture_handle;    // GPU image handle
+    int sampler_handle;    // GPU sampler handle
+} SageFont;
+
+static SageFont g_fonts[MAX_FONTS];
+static int g_font_count = 0;
+
+// gpu.load_font(ttf_path, pixel_size) -> font_handle
+static Value gpu_load_font(int argCount, Value* args) {
+    if (argCount < 2 || !IS_STRING(args[0]) || !IS_NUMBER(args[1]))
+        return val_number(-1);
+    if (g_font_count >= MAX_FONTS) return val_number(-1);
+
+    const char* path = AS_STRING(args[0]);
+    float size = (float)AS_NUMBER(args[1]);
+
+    // Read TTF file
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "gpu.load_font: cannot open '%s'\n", path);
+        return val_number(-1);
+    }
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    unsigned char* ttf_data = malloc(fsize);
+    fread(ttf_data, 1, fsize, f);
+    fclose(f);
+
+    // Bake font atlas
+    int aw = FONT_ATLAS_SIZE, ah = FONT_ATLAS_SIZE;
+    unsigned char* atlas_gray = malloc(aw * ah);
+    int bake_result = stbtt_BakeFontBitmap(ttf_data, 0, size, atlas_gray, aw, ah,
+                                            FONT_FIRST_CHAR, FONT_CHAR_COUNT,
+                                            g_fonts[g_font_count].cdata);
+    free(ttf_data);
+    if (bake_result <= 0) {
+        fprintf(stderr, "gpu.load_font: bake failed (result=%d), try smaller size\n", bake_result);
+        // Still usable for partial atlas
+    }
+
+    // Convert grayscale to RGBA (white text with alpha from grayscale)
+    unsigned char* atlas_rgba = malloc(aw * ah * 4);
+    for (int i = 0; i < aw * ah; i++) {
+        atlas_rgba[i * 4 + 0] = atlas_gray[i];
+        atlas_rgba[i * 4 + 1] = atlas_gray[i];
+        atlas_rgba[i * 4 + 2] = atlas_gray[i];
+        atlas_rgba[i * 4 + 3] = 255;
+    }
+    free(atlas_gray);
+
+    // Save atlas to a persistent temp file for the sage layer to load
+    char atlas_path[256];
+    snprintf(atlas_path, sizeof(atlas_path), "/tmp/sage_font_atlas_%d.png", g_font_count);
+    stbi_write_png(atlas_path, aw, ah, 4, atlas_rgba, aw * 4);
+    free(atlas_rgba);
+
+    // Store the atlas path — the sage font module will call gpu.load_texture + gpu.create_sampler
+    g_fonts[g_font_count].texture_handle = -1;
+    g_fonts[g_font_count].sampler_handle = -1;
+
+    g_fonts[g_font_count].valid = 1;
+    g_fonts[g_font_count].atlas_w = aw;
+    g_fonts[g_font_count].atlas_h = ah;
+    g_fonts[g_font_count].font_size = size;
+    int handle = g_font_count;
+    g_font_count++;
+    fprintf(stderr, "Font loaded: %s (%.0fpx, atlas %dx%d)\n", path, size, aw, ah);
+    return val_number(handle);
+}
+
+// gpu.font_atlas(font_handle) -> {texture, sampler, width, height, path}
+static Value gpu_font_atlas(int argCount, Value* args) {
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_nil();
+    int fh = (int)AS_NUMBER(args[0]);
+    if (fh < 0 || fh >= g_font_count || !g_fonts[fh].valid) return val_nil();
+    Value dict = val_dict();
+    dict_set(&dict, "texture", val_number(g_fonts[fh].texture_handle));
+    dict_set(&dict, "sampler", val_number(g_fonts[fh].sampler_handle));
+    dict_set(&dict, "width", val_number(g_fonts[fh].atlas_w));
+    dict_set(&dict, "height", val_number(g_fonts[fh].atlas_h));
+    char atlas_path[256];
+    snprintf(atlas_path, sizeof(atlas_path), "/tmp/sage_font_atlas_%d.png", fh);
+    dict_set(&dict, "path", val_string(atlas_path));
+    return dict;
+}
+
+// gpu.font_set_atlas(font_handle, texture_handle, sampler_handle) -> nil
+static Value gpu_font_set_atlas(int argCount, Value* args) {
+    if (argCount < 3) return val_nil();
+    int fh = (int)AS_NUMBER(args[0]);
+    if (fh < 0 || fh >= g_font_count) return val_nil();
+    g_fonts[fh].texture_handle = (int)AS_NUMBER(args[1]);
+    g_fonts[fh].sampler_handle = (int)AS_NUMBER(args[2]);
+    return val_nil();
+}
+
+// gpu.font_text_verts(font_handle, text, x, y, r, g, b, a) -> flat float array
+// Returns vertex data: [px,py,u,v,r,g,b,a, ...] for textured quads
+// 6 vertices per character (2 triangles)
+static Value gpu_font_text_verts(int argCount, Value* args) {
+    if (argCount < 4 || !IS_NUMBER(args[0]) || !IS_STRING(args[1]))
+        return val_nil();
+    int fh = (int)AS_NUMBER(args[0]);
+    if (fh < 0 || fh >= g_font_count || !g_fonts[fh].valid) return val_nil();
+
+    const char* text = AS_STRING(args[1]);
+    float start_x = (float)AS_NUMBER(args[2]);
+    float start_y = (float)AS_NUMBER(args[3]);
+    float cr = argCount > 4 ? (float)AS_NUMBER(args[4]) : 1.0f;
+    float cg = argCount > 5 ? (float)AS_NUMBER(args[5]) : 1.0f;
+    float cb = argCount > 6 ? (float)AS_NUMBER(args[6]) : 1.0f;
+    float ca = argCount > 7 ? (float)AS_NUMBER(args[7]) : 1.0f;
+
+    int text_len = strlen(text);
+    int max_floats = text_len * 6 * 8; // 6 verts * 8 floats per char
+
+    ArrayValue* out = SAGE_ALLOC(sizeof(ArrayValue));
+    out->count = 0;
+    out->capacity = max_floats;
+    out->elements = SAGE_ALLOC(sizeof(Value) * max_floats);
+
+    float cx = start_x;
+    float cy = start_y;
+    float iw = 1.0f / g_fonts[fh].atlas_w;
+    float ih = 1.0f / g_fonts[fh].atlas_h;
+
+    for (int i = 0; i < text_len; i++) {
+        char c = text[i];
+        if (c == '\n') {
+            cx = start_x;
+            cy += g_fonts[fh].font_size * 1.2f;
+            continue;
+        }
+        if (c < FONT_FIRST_CHAR || c >= FONT_FIRST_CHAR + FONT_CHAR_COUNT) {
+            cx += g_fonts[fh].font_size * 0.5f;
+            continue;
+        }
+
+        stbtt_bakedchar bc = g_fonts[fh].cdata[c - FONT_FIRST_CHAR];
+
+        float x0 = cx + bc.xoff;
+        float y0 = cy + bc.yoff + g_fonts[fh].font_size; // baseline offset
+        float x1 = x0 + (bc.x1 - bc.x0);
+        float y1 = y0 + (bc.y1 - bc.y0);
+        float u0 = bc.x0 * iw;
+        float v0 = bc.y0 * ih;
+        float u1 = bc.x1 * iw;
+        float v1 = bc.y1 * ih;
+
+        #define EMIT(px,py,u,v) do { \
+            out->elements[out->count++] = val_number(px); \
+            out->elements[out->count++] = val_number(py); \
+            out->elements[out->count++] = val_number(u);  \
+            out->elements[out->count++] = val_number(v);  \
+            out->elements[out->count++] = val_number(cr);  \
+            out->elements[out->count++] = val_number(cg);  \
+            out->elements[out->count++] = val_number(cb);  \
+            out->elements[out->count++] = val_number(ca);  \
+        } while(0)
+
+        EMIT(x0, y0, u0, v0);
+        EMIT(x1, y0, u1, v0);
+        EMIT(x1, y1, u1, v1);
+        EMIT(x0, y0, u0, v0);
+        EMIT(x1, y1, u1, v1);
+        EMIT(x0, y1, u0, v1);
+        #undef EMIT
+
+        cx += bc.xadvance;
+    }
+
+    Value result;
+    result.type = VAL_ARRAY;
+    result.as.array = out;
+    return result;
+}
+
+// gpu.font_measure(font_handle, text) -> {width, height}
+static Value gpu_font_measure(int argCount, Value* args) {
+    if (argCount < 2 || !IS_NUMBER(args[0]) || !IS_STRING(args[1]))
+        return val_nil();
+    int fh = (int)AS_NUMBER(args[0]);
+    if (fh < 0 || fh >= g_font_count || !g_fonts[fh].valid) return val_nil();
+
+    const char* text = AS_STRING(args[1]);
+    float cx = 0, max_w = 0;
+    int lines = 1;
+    for (int i = 0; text[i]; i++) {
+        if (text[i] == '\n') {
+            if (cx > max_w) max_w = cx;
+            cx = 0;
+            lines++;
+            continue;
+        }
+        int ci = text[i] - FONT_FIRST_CHAR;
+        if (ci >= 0 && ci < FONT_CHAR_COUNT)
+            cx += g_fonts[fh].cdata[ci].xadvance;
+    }
+    if (cx > max_w) max_w = cx;
+
+    Value dict = val_dict();
+    dict_set(&dict, "width", val_number(max_w));
+    dict_set(&dict, "height", val_number(g_fonts[fh].font_size * 1.2f * lines));
+    return dict;
+}
 
 // gpu.save_screenshot(path) -> bool
 static Value gpu_save_screenshot(int argCount, Value* args) {
@@ -4928,6 +5468,8 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "update_input", 12, val_native(gpu_update_input));
     env_define(e, "key_just_pressed", 16, val_native(gpu_key_just_pressed));
     env_define(e, "key_just_released", 17, val_native(gpu_key_just_released));
+    env_define(e, "mouse_just_pressed", 18, val_native(gpu_mouse_just_pressed));
+    env_define(e, "mouse_just_released", 19, val_native(gpu_mouse_just_released));
 
     // Feature 7: Cubemap
     env_define(e, "create_cubemap", 14, val_native(gpu_create_cubemap));
@@ -4938,6 +5480,16 @@ Module* create_graphics_module(ModuleCache* cache) {
     // Feature 18: Screenshot
     env_define(e, "screenshot", 10, val_native(gpu_screenshot));
     env_define(e, "save_screenshot", 15, val_native(gpu_save_screenshot));
+
+    // Font rasterizer (stb_truetype)
+    env_define(e, "load_font", 9, val_native(gpu_load_font));
+    env_define(e, "font_atlas", 10, val_native(gpu_font_atlas));
+    env_define(e, "font_set_atlas", 14, val_native(gpu_font_set_atlas));
+    env_define(e, "font_text_verts", 15, val_native(gpu_font_text_verts));
+    env_define(e, "font_measure", 12, val_native(gpu_font_measure));
+
+    // glTF loader (cgltf)
+    env_define(e, "load_gltf", 9, val_native(gpu_load_gltf));
 
     // Key constants (GLFW key codes)
     env_define(e, "KEY_W", 5, val_number(GLFW_KEY_W));
