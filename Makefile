@@ -275,6 +275,8 @@ install: $(TARGET) $(LSP_TARGET)
 	cp -r lib/cuda $(LIBDIR)/lib/
 	cp -r lib/std $(LIBDIR)/lib/
 	cp -r lib/llm $(LIBDIR)/lib/
+	cp -r lib/agent $(LIBDIR)/lib/
+	cp -r lib/chat $(LIBDIR)/lib/
 	cp -r examples/*.sage $(LIBDIR)/examples/
 	install -d $(DOCDIR)
 	install -m 644 README.md ROADMAP.md LICENSE $(DOCDIR)/
