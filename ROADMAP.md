@@ -510,6 +510,8 @@ Sage supports two build modes via both Make and CMake:
 | `make test-selfhost-interpreter` | Interpreter tests (18) |
 | `make test-selfhost-bootstrap` | Bootstrap tests (18) |
 | `make test-all` | Run ALL tests (C + self-hosted) |
+| `make benchmark-python` | Run Sage vs Python 3 benchmarks (5 recipes, 10 workloads) |
+| `make benchmark-python-md` | Same as above but output as markdown table |
 | `make cmake-sage` | Setup CMake self-hosted build |
 | `make cmake-sage-build` | Build and run self-hosted tests via CMake |
 
@@ -644,6 +646,42 @@ LLVM-compiled GPU support for native-speed 3D game engines, plus OpenGL as a sec
 
 ---
 
+### Phase 16b: LLVM/VM/Bytecode Audit & Benchmarks
+
+**Status**: ✅ **COMPLETE** (March 24, 2026)
+
+Audit of all three execution backends, fixes for found gaps, and a Python 3 comparison benchmark suite.
+
+#### Bytecode VM Fixes ✅
+
+- [x] **Break/continue in bytecode** — loops with break/continue no longer fall to AST interpreter
+  - Loop context stack (MAX_LOOP_DEPTH 64, MAX_BREAK_PATCHES 256)
+  - Break patches list patched after loop exit; continue jumps to loop top / increment
+  - For-loop break emits stack cleanup (pop index, pop array, pop_env) before jump
+- [x] **Compiler initialization** — `memset(&compiler, 0, sizeof(compiler))` prevents uninitialized loop_depth
+- [x] **10 new opcodes** — `BC_OP_BREAK`, `BC_OP_CONTINUE`, `BC_OP_LOOP_BACK`, `BC_OP_IMPORT`, `BC_OP_CLASS`, `BC_OP_METHOD`, `BC_OP_INHERIT`, `BC_OP_SETUP_TRY`, `BC_OP_END_TRY`, `BC_OP_RAISE`
+- [x] All 10 opcodes handled in VM switch (prevents -Wswitch warnings and runtime crash)
+
+#### Memory Safety Fixes ✅
+
+- [x] **program.c**: 8 `malloc`/`realloc`/`calloc` → `SAGE_ALLOC`/`SAGE_REALLOC` (abort-on-OOM)
+- [x] **vm.c**: 2 `malloc` in GPU opcodes → `SAGE_ALLOC` + `count > 0` guard
+
+#### Sage vs Python 3 Benchmark Suite ✅
+
+- [x] 10 paired benchmarks: `benchmarks/01_fibonacci.sage` + `.py` through `benchmarks/10_primes_sieve`
+- [x] Benchmark runner: `scripts/benchmark_vs_python.py` — tests 5 recipes (Python 3, Sage AST, Sage VM, Sage C, Sage LLVM)
+- [x] Makefile targets: `make benchmark-python`, `make benchmark-python-md`
+- [x] Correctness verification: all outputs compared across implementations
+
+#### Verification ✅
+
+- [x] All 144 interpreter tests pass (was 142 before fix)
+- [x] All 28 compiler tests pass
+- [x] Break/continue verified in while + for loops under `--runtime bytecode`
+
+---
+
 ## 🔮 Future Directions
 
 ### Package Manager
@@ -669,8 +707,9 @@ LLVM-compiled GPU support for native-speed 3D game engines, plus OpenGL as a sec
 
 ## 📊 Progress Metrics
 
-- **Phases Completed**: 16/16 (100%)
+- **Phases Completed**: 16/16 + audit (100%)
 - **Test Suite**: 144 interpreter + 28 compiler + 1623 self-host + 88 JSON tests (1883+ total), 100% pass rate
+- **Benchmarks**: 10 paired Sage/Python workloads across 5 execution recipes
 - **Backends**: C codegen, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64), Vulkan + OpenGL graphics
 - **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
 - **Self-Hosting**: Lexer, parser, and interpreter ported to Sage with full bootstrap
@@ -683,6 +722,14 @@ LLVM-compiled GPU support for native-speed 3D game engines, plus OpenGL as a sec
 
 ### March 24, 2026
 
+- **Phase 16b: LLVM/VM/Bytecode Audit & Benchmarks**
+- Bytecode VM: break/continue now compile natively (loop context stack with patch lists)
+- 10 new bytecode opcodes: BREAK, CONTINUE, LOOP_BACK, IMPORT, CLASS, METHOD, INHERIT, SETUP_TRY, END_TRY, RAISE
+- Memory safety: 10 malloc/realloc/calloc → SAGE_ALLOC/SAGE_REALLOC in vm.c + program.c
+- Fixed uninitialized loop_depth causing "Loop nesting depth exceeded" errors
+- All 144 interpreter + 28 compiler tests pass (was 142 before fix)
+- Python 3 benchmark suite: 10 paired workloads (fibonacci, loops, strings, arrays, dicts, classes, nested loops, exceptions, closures, primes)
+- Benchmark runner: `scripts/benchmark_vs_python.py` tests 5 recipes; `make benchmark-python`
 - **Phase 16 Complete: LLVM GPU Support & OpenGL Backend**
 - Pure C GPU API layer (`gpu_api.h/gpu_api.c`) — backend-agnostic, no interpreter dependency
 - LLVM backend now handles `import gpu` with full module tracking, constant resolution (~120 constants), and method call dispatch (~100 GPU functions)

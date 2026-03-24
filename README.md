@@ -24,6 +24,10 @@ The compiled VM recipe is now charted as a first-class lane on the default workl
 
 ![SageLang recipe benchmark execution-only median time](assets/charts/benchmark-recipes-run.svg)
 
+### Sage vs Python 3 Benchmarks
+
+Run `make benchmark-python` to compare all Sage execution backends against CPython 3.x on 10 workloads (fibonacci, loop sum, string concat, array ops, dict ops, class methods, nested loops, exceptions, closures, prime sieve). Each benchmark has paired `.sage` and `.py` files under `benchmarks/`.
+
 ## 🚀 Features (Implemented)
 
 ### Core Language
@@ -295,6 +299,8 @@ make test-selfhost-errors
 make test-selfhost-lsp
 make test-selfhost-sage-cli
 make test-all
+make benchmark-python         # Sage vs Python 3 benchmarks (10 workloads, 5 recipes)
+make benchmark-python-md      # Same, markdown table output
 ```
 
 ### CMake Build

@@ -2,6 +2,8 @@
 
 This document sketches a bytecode execution backend for SageLang that can live beside the current AST tree-walk interpreter.
 
+> **Implementation status (March 24, 2026):** The VM is functional with hybrid AST fallback. Milestones 1-5 are implemented, Milestone 6 (advanced control flow) uses AST fallback in hybrid mode. Milestone 7 (GPU opcodes) is complete. Break/continue now compile natively. 10 new opcodes added for future native class/import/exception support.
+
 ## Goals
 
 - Keep the current front-end: lexer -> parser -> AST.
@@ -487,12 +489,16 @@ This is enough to benchmark against the tree-walk interpreter quickly.
 - methods
 - inheritance
 
-### Milestone 6: Advanced Control Flow
+### Milestone 6: Advanced Control Flow (Partial)
 
-- exceptions
-- generators
-- async/await
-- modules
+- [x] break/continue — compile natively with loop context stack and break patch lists
+- [ ] exceptions — `BC_OP_SETUP_TRY`, `BC_OP_END_TRY`, `BC_OP_RAISE` opcodes defined, handler stack needed in VM
+- [ ] generators — resumable bytecode frames needed
+- [ ] async/await — thread integration needed
+- [ ] modules — `BC_OP_IMPORT` opcode defined, module loader integration needed
+- [ ] classes — `BC_OP_CLASS`, `BC_OP_METHOD`, `BC_OP_INHERIT` opcodes defined, VM dispatch needed
+
+Note: all unimplemented features work via AST fallback in hybrid mode (`--runtime bytecode` or `--runtime auto`). Only strict compiled VM artifacts (`.sagebc` files) require native opcode support.
 
 ### Milestone 7: GPU Hot-Path Opcodes (Implemented)
 

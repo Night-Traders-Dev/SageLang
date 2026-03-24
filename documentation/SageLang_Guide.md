@@ -63,6 +63,17 @@ All execution modes share the same object model: a **global environment**, neste
 
 For GPU/graphics workloads, the LLVM compiled path resolves GPU module constants at compile time and emits direct calls to the pure C GPU API (`sgpu_*` functions in `gpu_api.h`), supporting both Vulkan and OpenGL backends. The bytecode VM provides 30 dedicated GPU opcodes for frame-loop hot paths.
 
+The bytecode VM operates in hybrid mode by default: expressions, variables, loops (including break/continue), and function calls compile to stack bytecode, while unsupported constructs (classes, imports, exceptions, generators) fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. This gives measurable speedups on loop-heavy workloads while maintaining full language coverage. Use `sage --runtime bytecode` or `sage --runtime auto` to enable.
+
+### 1.4 Performance Characteristics
+
+Sage ships with a benchmark suite (`benchmarks/01_fibonacci.sage` through `10_primes_sieve.sage`) with paired Python 3 implementations. Run `make benchmark-python` to compare. Typical results on the same workloads:
+
+- **LLVM compiled**: 2-8x faster than CPython (fibonacci 3.9x, loop sum 7.7x)
+- **C compiled**: 2-4x faster than CPython on most workloads
+- **AST interpreter**: on par with CPython (faster on string/array ops, slower on recursion)
+- **Bytecode VM**: similar to AST, faster on tight loops due to reduced dispatch overhead
+
 ---
 
 ## Part 2: Internal Architecture and Core Modules

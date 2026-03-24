@@ -242,6 +242,13 @@ charts: $(TARGET)
 	@$(PYTHON) $(CHART_SCRIPT)
 	@echo "Updated README metric and benchmark chart assets"
 
+benchmark-python: $(TARGET)
+	@echo "Running Sage vs Python 3 benchmarks..."
+	@$(PYTHON) scripts/benchmark_vs_python.py --runs 5 --warmups 1
+
+benchmark-python-md: $(TARGET)
+	@$(PYTHON) scripts/benchmark_vs_python.py --runs 5 --warmups 1 --markdown
+
 # ============================================================================
 # Installation
 # ============================================================================

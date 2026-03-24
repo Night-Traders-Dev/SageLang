@@ -1,9 +1,9 @@
 # Class and method dispatch — measures OOP overhead
 class Counter:
-    init(self, start):
+    proc init(self, start):
         self.value = start
 
-    increment(self, amount):
+    proc increment(self, amount):
         self.value = self.value + amount
         return self.value
 

@@ -1,5 +1,5 @@
 # Loop summation — measures raw loop and arithmetic throughput
-n = 1000000
+n = 100000
 total = 0
 i = 0
 while i < n:
