@@ -23,7 +23,7 @@ endif()
 # Project Configuration
 # ============================================================================
 
-project(SageLang VERSION 0.13.0 LANGUAGES C CXX ASM)
+project(SageLang VERSION 1.0.0 LANGUAGES C CXX ASM)
 
 # Initialize Pico SDK AFTER project() but before anything else
 if(BUILD_PICO)

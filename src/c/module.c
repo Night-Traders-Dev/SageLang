@@ -475,4 +475,5 @@ void register_stdlib_modules(ModuleCache* cache) {
     create_http_module(cache);
     create_ssl_module(cache);
     create_graphics_module(cache);
+    create_ml_native_module(cache);
 }

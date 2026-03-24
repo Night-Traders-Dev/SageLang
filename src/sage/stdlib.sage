@@ -322,7 +322,7 @@ proc string_reverse(s):
 
 proc create_sys_module():
     let m = {}
-    m["version"] = "0.10.0"
+    m["version"] = "1.0.0"
     m["platform"] = "sage"
     return m
 

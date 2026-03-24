@@ -109,7 +109,8 @@ CORE_SOURCES = \
     $(SRC_DIR)/typecheck.c \
     $(SRC_DIR)/value.c \
     $(SRC_DIR)/graphics.c \
-    $(SRC_DIR)/gpu_api.c
+    $(SRC_DIR)/gpu_api.c \
+    $(SRC_DIR)/ml_backend.c
 
 VM_SOURCES = \
     $(VM_DIR)/bytecode.c \
