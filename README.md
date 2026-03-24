@@ -389,6 +389,19 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`build`**: Project configuration, dependency declaration, semver parsing, build targets
 - **`interop`**: FFI helpers, C type constants, struct definition, pack/unpack, platform detection
 
+**LLM / Neural Networks** (`lib/llm/`, imported as `import llm.<module>`):
+- **`config`**: Model configurations (tiny to Llama-13B), parameter counting, memory estimation
+- **`tokenizer`**: Character, word, and BPE tokenizers with train/encode/decode
+- **`embedding`**: Token embeddings, sinusoidal/learned/RoPE positional encodings
+- **`attention`**: Multi-head self-attention, scaled dot-product, KV cache
+- **`transformer`**: Transformer blocks, LayerNorm/RMSNorm, feed-forward networks, full model assembly
+- **`generate`**: Text generation (greedy, top-k, top-p/nucleus, temperature, beam search, repetition penalty)
+- **`train`**: Training loops, LR schedules (cosine/linear/warmup), cross-entropy loss, perplexity, gradient clipping
+- **`agent`**: Agentic LLM framework (tools, chain-of-thought, memory, planning, multi-agent teams)
+- **`prompt`**: Chat formatting (ChatML, Llama, Alpaca), templates, few-shot, context truncation
+- **`lora`**: LoRA fine-tuning adapters, low-rank weight adaptation, merge-back for deployment
+- **`quantize`**: Int8/int4 weight quantization, per-group scaling, error analysis, size comparison
+
 Example:
 ```sage
 from math import factorial

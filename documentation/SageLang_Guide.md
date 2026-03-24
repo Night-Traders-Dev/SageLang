@@ -2056,7 +2056,25 @@ SageLang ships with 23 general-purpose standard library modules in `lib/std/`:
 | `build.sage` | `import std.build` | Project config, dependencies, semver, build targets |
 | `interop.sage` | `import std.interop` | FFI helpers, C types, pack/unpack, platform detection |
 
-### 9.16 UI Widget Library (`lib/graphics/ui.sage`)
+### 9.16 LLM / Neural Network Libraries
+
+SageLang ships with 11 LLM/neural network modules in `lib/llm/` for building and training language models:
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `config.sage` | `import llm.config` | Model configs (tiny to Llama-13B), param counting, memory estimation |
+| `tokenizer.sage` | `import llm.tokenizer` | Character, word, and BPE tokenizers |
+| `embedding.sage` | `import llm.embedding` | Token embeddings, sinusoidal/learned/RoPE positional encodings |
+| `attention.sage` | `import llm.attention` | Multi-head self-attention, KV cache |
+| `transformer.sage` | `import llm.transformer` | Transformer blocks, LayerNorm/RMSNorm, FFN, model assembly |
+| `generate.sage` | `import llm.generate` | Text generation (greedy, top-k, top-p, beam search) |
+| `train.sage` | `import llm.train` | Training loops, LR schedules, cross-entropy, perplexity |
+| `agent.sage` | `import llm.agent` | Agentic framework (tools, CoT, memory, planning, multi-agent) |
+| `prompt.sage` | `import llm.prompt` | Chat formatting (ChatML/Llama/Alpaca), templates, few-shot |
+| `lora.sage` | `import llm.lora` | LoRA fine-tuning adapters, merge-back |
+| `quantize.sage` | `import llm.quantize` | Int8/int4 quantization, error analysis |
+
+### 9.17 UI Widget Library (`lib/graphics/ui.sage`)
 
 Immediate-mode GPU UI system for building application interfaces:
 
