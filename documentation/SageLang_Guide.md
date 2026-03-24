@@ -663,7 +663,7 @@ print sin(0)
 print cos(0)
 ```
 
-### Phase 9: Low-Level Programming (In Progress)
+### Phase 9: Low-Level Programming
 
 **Bitwise Operators**:
 ```sagelang
@@ -689,6 +689,8 @@ let x = 7
 let bit2 = (x >> 2) & 1
 print bit2 == 1    # true
 ```
+
+**Bitwise Safety**: Shift amounts are validated at runtime — values outside 0-63 return 0 instead of causing C undefined behavior. Right-shift is arithmetic (sign-extending) on signed values. Floating-point operands are truncated to `long long` before bitwise operations.
 
 **Foreign Function Interface (FFI)**:
 ```sagelang
@@ -716,7 +718,7 @@ print n            # 5
 ffi_close(libc)
 ```
 
-FFI supports return types: `"double"`, `"int"`, `"long"`, `"string"`, `"void"`, with up to 3 arguments (numeric or string).
+FFI supports return types: `"double"`, `"int"`, `"long"`, `"string"`, `"void"`, with up to 3 arguments (numeric or string). Passing more than 3 arguments returns an error. Library handles are tracked by the GC and properly freed on collection.
 
 **Raw Memory Operations**:
 ```sagelang
@@ -742,7 +744,7 @@ print addressof(arr)   # memory address as number
 mem_free(buf)
 ```
 
-Supported types for `mem_read`/`mem_write`: `"byte"` (1 byte), `"int"` (4 bytes), `"double"` (8 bytes), `"string"` (read-only, null-terminated).
+Supported types for `mem_read`/`mem_write`: `"byte"` (1 byte), `"int"` (4 bytes), `"double"` (8 bytes), `"string"` (read-only, null-terminated). Allocations are capped at 64MB. Negative offsets are rejected. Bounds checking is enforced for owned memory (offset + type size must not exceed allocation). Double-free is prevented via handle nullification. Memory pointers are GC-tracked and freed on collection if owned.
 
 **Inline Assembly** (x86-64, aarch64, rv64):
 ```sagelang
@@ -1025,6 +1027,16 @@ finally:
 # Done
 ```
 
+**Finally Block Semantics**: The finally block always executes, and its control flow takes precedence over try/catch. If finally contains `return`, `break`, `continue`, or `raise`, that overrides the try/catch result. If finally executes normally, the try/catch result is preserved. This matches Python/Java behavior.
+
+**Raise**: You can raise any value. Strings become exception messages directly. Numbers, booleans, and nil are converted to their string representation. Non-string/non-exception values become "Unknown error".
+
+```sagelang
+raise "file not found"         # Exception with message "file not found"
+raise 404                      # Exception with message "404"
+raise nil                      # Exception with message "nil"
+```
+
 ### 4.6 Generators
 
 **Simple Generator**:
@@ -1129,12 +1141,20 @@ Global: { x: 10 }
 
 **Raise Mechanism**:
 - `raise "message"` or `raise exception_obj` → Sets `is_throwing = 1` in `ExecResult`.
+- `raise` converts non-string values: numbers become their string representation, booleans become "true"/"false", nil becomes "nil".
 - All statements/expressions check `is_throwing` and propagate up.
 - First matching `catch` clause executes; if none, exception exits function.
+- Sage uses generic catch (no type-based matching). All catches handle all exceptions.
 
 **Finally Guarantee**:
-- `finally` block always runs, even if exception or return.
-- Implemented by checking `is_throwing` / `is_returning` after try/catch, executing finally, then re-raising if needed.
+- `finally` block always runs, even if exception, return, break, or continue occurred in try/catch.
+- If `finally` raises an exception or returns, that overrides the try/catch result (matches Python/Java semantics).
+- If `finally` completes normally, the original try/catch result is preserved.
+
+**Memory Safety**:
+- Exception messages are allocated outside the GC heap but tracked via `gc_track_external_allocation()`.
+- GC properly frees exception messages with `gc_track_external_free()` during collection.
+- VAL_EXCEPTION objects are marked during GC mark phase to prevent premature collection.
 
 ### 5.4 Generator State Management
 

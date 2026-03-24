@@ -180,8 +180,40 @@ static size_t gc_release_object(GCHeader* header) {
         }
         case VAL_EXCEPTION: {
             ExceptionValue* exception = object;
-            freed += strlen(exception->message) + 1;
+            size_t msg_len = strlen(exception->message) + 1;
+            freed += msg_len;
+            gc_track_external_free(msg_len);
             free(exception->message);
+            break;
+        }
+        case VAL_CLIB: {
+            CLibValue* clib = object;
+            if (clib->name) {
+                freed += strlen(clib->name) + 1;
+                free(clib->name);
+            }
+            break;
+        }
+        case VAL_POINTER: {
+            PointerValue* pv = object;
+            if (pv->ptr && pv->owned) {
+                freed += pv->size;
+                free(pv->ptr);
+            }
+            break;
+        }
+        case VAL_THREAD: {
+            ThreadValue* tv = object;
+            free(tv->handle);
+            free(tv->data);
+            break;
+        }
+        case VAL_MUTEX: {
+            MutexValue* mv = object;
+            if (mv->handle) {
+                sage_mutex_destroy((sage_mutex_t*)mv->handle);
+                free(mv->handle);
+            }
             break;
         }
         default:
@@ -461,6 +493,26 @@ void gc_mark_value(Value val) {
                 gc_mark_env(val.as.module->module->env);
             }
         }
+        return;
+    }
+
+    if (val.type == VAL_CLIB) {
+        gc_try_mark_object(val.as.clib);
+        return;
+    }
+
+    if (val.type == VAL_POINTER) {
+        gc_try_mark_object(val.as.pointer);
+        return;
+    }
+
+    if (val.type == VAL_THREAD) {
+        gc_try_mark_object(val.as.thread);
+        return;
+    }
+
+    if (val.type == VAL_MUTEX) {
+        gc_try_mark_object(val.as.mutex);
         return;
     }
 }

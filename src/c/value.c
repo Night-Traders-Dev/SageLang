@@ -724,7 +724,7 @@ void print_value(Value v) {
             DictValue* d = v.as.dict;
             int printed = 0;
             for (int i = 0; i < d->capacity; i++) {
-                if (d->entries[i].key != NULL) {
+                if (d->entries[i].key != NULL && d->entries[i].value != NULL) {
                     if (printed > 0) printf(", ");
                     printf("\"%s\": ", d->entries[i].key);
                     print_value(*(d->entries[i].value));
@@ -753,12 +753,20 @@ void print_value(Value v) {
         }
         
         case VAL_INSTANCE: {
-            printf("<instance of %s>", v.as.instance->class_def->name);
+            if (v.as.instance && v.as.instance->class_def && v.as.instance->class_def->name) {
+                printf("<instance of %s>", v.as.instance->class_def->name);
+            } else {
+                printf("<instance>");
+            }
             break;
         }
 
         case VAL_MODULE: {
-            printf("<module %s>", v.as.module->module->name);
+            if (v.as.module && v.as.module->module && v.as.module->module->name) {
+                printf("<module %s>", v.as.module->module->name);
+            } else {
+                printf("<module>");
+            }
             break;
         }
         

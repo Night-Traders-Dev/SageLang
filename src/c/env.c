@@ -144,9 +144,11 @@ void env_sweep_unmarked(void) {
 
 // Clear all env marks (used if sweep is skipped)
 void env_clear_marks(void) {
+    sage_mutex_lock(&env_mutex);
     Env* env = allocated_envs;
     while (env != NULL) {
         env->marked = 0;
         env = env->alloc_next;
     }
+    sage_mutex_unlock(&env_mutex);
 }

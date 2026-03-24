@@ -724,6 +724,11 @@ static Value ffi_call_native(int argCount, Value* args) {
         call_argc = call_args->count;
     }
 
+    if (call_argc > 3) {
+        fprintf(stderr, "ffi_call(): maximum 3 arguments supported (got %d).\n", call_argc);
+        return val_nil();
+    }
+
     // POSIX guarantees dlsym void* converts to function pointers.
     // Suppress -Wpedantic for these necessary casts.
     #pragma GCC diagnostic push
@@ -883,7 +888,12 @@ static Value mem_read_native(int argCount, Value* args) {
         fprintf(stderr, "mem_read(): null pointer.\n");
         return val_nil();
     }
-    size_t offset = (size_t)AS_NUMBER(args[1]);
+    double offset_d = AS_NUMBER(args[1]);
+    if (offset_d < 0) {
+        fprintf(stderr, "mem_read(): offset cannot be negative.\n");
+        return val_nil();
+    }
+    size_t offset = (size_t)offset_d;
     const char* type = AS_STRING(args[2]);
 
     // Bounds checking for owned memory
@@ -931,7 +941,12 @@ static Value mem_write_native(int argCount, Value* args) {
         fprintf(stderr, "mem_write(): null pointer.\n");
         return val_nil();
     }
-    size_t offset = (size_t)AS_NUMBER(args[1]);
+    double offset_d = AS_NUMBER(args[1]);
+    if (offset_d < 0) {
+        fprintf(stderr, "mem_write(): offset cannot be negative.\n");
+        return val_nil();
+    }
+    size_t offset = (size_t)offset_d;
     const char* type = AS_STRING(args[2]);
 
     // Bounds checking for owned memory
@@ -1788,13 +1803,19 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
             return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) ^ (long long)AS_NUMBER(right))));
 
-        case TOKEN_LSHIFT:
+        case TOKEN_LSHIFT: {
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
-            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) << (long long)AS_NUMBER(right))));
+            long long shift = (long long)AS_NUMBER(right);
+            if (shift < 0 || shift >= 64) return EVAL_RESULT(val_number(0.0));
+            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) << shift)));
+        }
 
-        case TOKEN_RSHIFT:
+        case TOKEN_RSHIFT: {
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
-            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) >> (long long)AS_NUMBER(right))));
+            long long shift = (long long)AS_NUMBER(right);
+            if (shift < 0 || shift >= 64) return EVAL_RESULT(val_number(0.0));
+            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) >> shift)));
+        }
 
         default:
             return EVAL_RESULT(val_nil());
@@ -2523,9 +2544,14 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             }
             
             if (stmt->as.try_stmt.finally_block != NULL) {
-                interpret(stmt->as.try_stmt.finally_block, env);
+                ExecResult finally_result = interpret(stmt->as.try_stmt.finally_block, env);
+                // Finally control flow overrides try/catch (matches Python/Java semantics)
+                if (finally_result.is_throwing) return finally_result;
+                if (finally_result.is_returning) return finally_result;
+                if (finally_result.is_breaking) return finally_result;
+                if (finally_result.is_continuing) return finally_result;
             }
-            
+
             return try_result;
         }
 
@@ -2536,6 +2562,14 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             Value exc_val = exc_result.value;
             if (IS_STRING(exc_val)) {
                 exc_val = val_exception(AS_STRING(exc_val));
+            } else if (IS_NUMBER(exc_val)) {
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%.14g", AS_NUMBER(exc_val));
+                exc_val = val_exception(buf);
+            } else if (IS_BOOL(exc_val)) {
+                exc_val = val_exception(AS_BOOL(exc_val) ? "true" : "false");
+            } else if (IS_NIL(exc_val)) {
+                exc_val = val_exception("nil");
             } else if (!IS_EXCEPTION(exc_val)) {
                 exc_val = val_exception("Unknown error");
             }

@@ -39,11 +39,11 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 
 ### Exception Handling ✅
 - **Try/Catch/Finally**: Full exception handling with `try:`, `catch e:`, and `finally:`
-- **Raise Statements**: Throw exceptions with `raise "error message"`
+- **Raise Statements**: Throw exceptions with `raise "error message"`, `raise 404`, `raise nil` — any value type is converted to an exception message
 - **Exception Propagation**: Exceptions bubble through function calls
-- **Finally Blocks**: Cleanup code that always executes
+- **Finally Blocks**: Cleanup code that always executes; finally control flow (return/break/continue/raise) overrides try/catch result (Python/Java semantics)
 - **Nested Exceptions**: Catch and re-raise in nested try blocks
-- **Type Safety**: Exception type with message field
+- **Type Safety**: Exception type with message field; GC-tracked message allocation
 
 ### Generators & Lazy Evaluation ✅
 - **`yield` statements**: Create generator functions for lazy evaluation
@@ -69,9 +69,10 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 
 ### Memory Management
 - **Garbage Collection**: Automatic mark-and-sweep GC with thread-safe allocation
+- **Full type coverage**: GC properly marks and frees all 16 value types including FFI handles (`VAL_CLIB`), raw pointers (`VAL_POINTER`), threads (`VAL_THREAD`), and mutexes (`VAL_MUTEX`)
 - **GC Control**: `gc_collect()`, `gc_enable()`, `gc_disable()`
 - **Statistics**: `gc_stats()` for memory monitoring
-- **Safe**: Prevents use-after-free and memory leaks
+- **Safe**: Prevents use-after-free and memory leaks; external allocations tracked for accurate accounting
 
 ### Security Hardening
 - **Type-safe value access**: All native functions validate argument types before accessing union members
@@ -80,8 +81,11 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **Buffer safety**: String literals capped at 4096 chars, identifiers at 1024 chars; all allocation via abort-on-OOM wrappers
 - **Shell injection prevention**: Assembly exec/compile paths validate paths and use secure temp files (`mkstemps`)
 - **SSL handle safety**: Opaque pointers stored as `VAL_POINTER` (not truncated doubles); double-free prevention via handle nullification
-- **Thread safety**: GC mutex protects allocation and collection; thread-local recursion depth tracking
+- **Thread safety**: GC mutex protects allocation and collection; environment list operations mutex-protected
 - **Signed arithmetic**: String replace and repeat operations use signed math to prevent unsigned underflow/overflow
+- **Bitwise safety**: Shift amounts validated 0-63; out-of-range returns 0 instead of C undefined behavior
+- **FFI bounds**: ffi_call() validates max 3 arguments; clear error message on excess
+- **Memory safety**: mem_read()/mem_write() reject negative offsets; pointer double-free prevention via handle nullification
 
 ### String Operations
 - **Methods**: `split()`, `join()`, `replace()`, `upper()`, `lower()`, `strip()`

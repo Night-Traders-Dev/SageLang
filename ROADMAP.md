@@ -709,6 +709,37 @@ Native codegen audit and immediate-mode GPU UI widget library.
 
 ---
 
+### Phase 16d: GC, Exception & Low-Level Audit
+
+**Status**: ✅ **COMPLETE** (March 24, 2026)
+
+Deep audit and fixes across garbage collection, exception handling, and low-level systems.
+
+#### GC Audit Fixes ✅
+
+- [x] **VAL_CLIB cleanup** — gc_release_object() now frees CLibValue name string (was leaked)
+- [x] **VAL_POINTER cleanup** — gc_release_object() frees owned memory when PointerValue.owned=1
+- [x] **VAL_THREAD cleanup** — gc_release_object() frees thread handle and data allocations
+- [x] **VAL_MUTEX cleanup** — gc_release_object() destroys and frees mutex handle via sage_mutex_destroy()
+- [x] **GC marking** — gc_mark_value() now marks VAL_CLIB, VAL_POINTER, VAL_THREAD, VAL_MUTEX (prevents premature collection)
+- [x] **env_clear_marks() race** — now holds env_mutex during iteration (was unprotected)
+- [x] **print_value() NULL safety** — VAL_INSTANCE and VAL_MODULE check chain for NULL before dereference
+- [x] **print_value() dict safety** — VAL_DICT checks entries[i].value != NULL before dereference
+
+#### Exception Handling Fixes ✅
+
+- [x] **finally control flow** — finally block return/break/continue/raise now overrides try/catch result (Python/Java semantics)
+- [x] **raise value conversion** — numbers, booleans, nil converted to string messages instead of "Unknown error"
+- [x] **Exception GC tracking** — gc_release_object() calls gc_track_external_free() for exception messages (was leaking external tracking)
+
+#### Bitwise, FFI, Raw Memory & Struct Audit Fixes ✅
+
+- [x] **Shift bounds checking** — left/right shift amounts validated 0-63; out-of-range returns 0 instead of UB
+- [x] **FFI max argument validation** — ffi_call() now rejects >3 arguments with clear error message (was silent)
+- [x] **Negative offset prevention** — mem_read() and mem_write() now reject negative offsets (was casting to huge size_t)
+
+---
+
 ## 🔮 Future Directions
 
 ### Package Manager
@@ -734,7 +765,7 @@ Native codegen audit and immediate-mode GPU UI widget library.
 
 ## 📊 Progress Metrics
 
-- **Phases Completed**: 16/16 + audit (100%)
+- **Phases Completed**: 16/16 + 4 audit phases (100%)
 - **Test Suite**: 144 interpreter + 28 compiler + 1623 self-host + 88 JSON tests (1883+ total), 100% pass rate
 - **Benchmarks**: 10 paired Sage/Python workloads across 5 execution recipes
 - **Backends**: C codegen, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64), Vulkan + OpenGL graphics
@@ -749,6 +780,15 @@ Native codegen audit and immediate-mode GPU UI widget library.
 
 ### March 24, 2026
 
+- **Phase 16d: GC, Exception & Low-Level Audit**
+- GC: cleanup for VAL_CLIB (frees name), VAL_POINTER (frees owned memory), VAL_THREAD (frees handle+data), VAL_MUTEX (destroys+frees)
+- GC: marking for all 4 missing types prevents premature collection/use-after-free
+- GC: env_clear_marks() now mutex-protected; print_value() NULL-safe for instance/module/dict
+- Exceptions: finally block control flow overrides try/catch (return/break/continue/raise propagated)
+- Exceptions: raise with non-string values (numbers, booleans, nil) now converts to message string
+- Exceptions: gc_track_external_free() on exception message deallocation (was leaking tracking)
+- **Phase 16c: ASM Backend Audit & UI Library**
+- VINST_BRANCH for all 3 architectures; 15+ VInst operations; VM bounds checks; lib/ui.sage
 - **Phase 16b: LLVM/VM/Bytecode Audit & Benchmarks**
 - Bytecode VM: break/continue now compile natively (loop context stack with patch lists)
 - 10 new bytecode opcodes: BREAK, CONTINUE, LOOP_BACK, IMPORT, CLASS, METHOD, INHERIT, SETUP_TRY, END_TRY, RAISE
