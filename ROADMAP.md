@@ -462,8 +462,12 @@ A cross-cutting audit and hardening pass across the entire codebase.
 - [x] **AST definitions** - `src/sage/ast.sage` with dict-based node constructors
 - [x] **Lexer** - `src/sage/lexer.sage` (~300 lines), dict-based keyword lookup, indentation-aware tokenization
 - [x] **Parser** - `src/sage/parser.sage` (~700 lines), recursive descent with 12 precedence levels
-- [x] **Interpreter** - `src/sage/interpreter.sage` (~920 lines), dict-based value representation, tree-walking evaluation
+- [x] **Interpreter** - `src/sage/interpreter.sage` (~1050 lines), dict-based value representation, tree-walking evaluation
 - [x] **Bootstrap entry point** - `src/sage/sage.sage` runs target `.sage` files through the self-hosted pipeline
+- [x] **Module imports** - `import X`, `import X as Y`, `from X import a, b` with module caching and multi-path search
+- [x] **Bitwise NOT (~)** - Implemented via two's complement identity `~n = -(n+1)`
+- [x] **Loop iteration limits** - While loops capped at 1M iterations (matches C interpreter)
+- [x] **array_extend builtin** - Append all elements of one array to another
 
 #### Native Builtins Added ✅
 
@@ -780,6 +784,12 @@ Deep audit and fixes across garbage collection, exception handling, and low-leve
 
 ### March 24, 2026
 
+- **Self-Hosted Interpreter Audit & Improvements**
+- Module imports implemented: `import X`, `import X as Y`, `from X import a, b` with caching and multi-path search
+- Bitwise NOT (~) implemented via two's complement identity
+- Loop iteration limit (1M) added to prevent infinite loops
+- array_extend builtin added
+- Self-hosted interpreter now ~70% feature-complete vs C (up from ~60%)
 - **Phase 16d: GC, Exception & Low-Level Audit**
 - GC: cleanup for VAL_CLIB (frees name), VAL_POINTER (frees owned memory), VAL_THREAD (frees handle+data), VAL_MUTEX (destroys+frees)
 - GC: marking for all 4 missing types prevents premature collection/use-after-free

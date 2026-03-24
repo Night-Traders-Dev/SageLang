@@ -28,11 +28,20 @@ let SIGNAL_CONTINUE = 3
 # Maximum recursion depth
 let MAX_RECURSION = 500
 
+# Maximum loop iterations (prevents infinite loops)
+let MAX_LOOP_ITERATIONS = 1000000
+
 # Recursion depth counter (module-level)
 let g_depth = 0
 
 # Error context for rich error messages (module-level)
 let g_error_ctx = nil
+
+# Module cache to prevent double-loading
+let g_module_cache = {}
+
+# Module search paths (set by the host before running)
+let g_module_paths = [".", "lib"]
 
 proc set_error_context(source, filename):
     g_error_ctx = errors.make_error_context(source, filename)
@@ -121,6 +130,39 @@ proc env_set(env, name, value):
     if env["parent"] != nil:
         return env_set(env["parent"], name, value)
     raise "Undefined variable '" + name + "'"
+
+# -----------------------------------------
+# Import binding helper
+# -----------------------------------------
+
+proc import_bind(stmt, mod_name, mod_env, target_env):
+    let mod_vals = mod_env["vals"]
+    if stmt.item_count > 0:
+        # from X import a, b, c
+        let i = 0
+        while i < stmt.item_count:
+            let item_name = stmt.items[i].text
+            if dict_has(mod_vals, item_name):
+                let bind_name = item_name
+                if stmt.item_aliases[i] != nil:
+                    bind_name = stmt.item_aliases[i].text
+                env_define(target_env, bind_name, mod_vals[item_name])
+            i = i + 1
+    if stmt.item_count == 0:
+        # import X  or  import X as Y
+        let bind_name = mod_name
+        if stmt.alias != nil:
+            bind_name = stmt.alias.text
+        # Wrap module env as a dict-like module object
+        let mod_obj = {}
+        mod_obj["__interp_type"] = "module"
+        mod_obj["name"] = mod_name
+        let keys = dict_keys(mod_vals)
+        let ki = 0
+        while ki < len(keys):
+            mod_obj[keys[ki]] = mod_vals[keys[ki]]
+            ki = ki + 1
+        env_define(target_env, bind_name, mod_obj)
 
 # -----------------------------------------
 # Helper: create control flow result dicts
@@ -241,6 +283,14 @@ proc call_native(name, args):
         return nil
     if name == "pop":
         return pop(args[0])
+    if name == "array_extend":
+        let arr = args[0]
+        let other = args[1]
+        let i = 0
+        while i < len(other):
+            push(arr, other[i])
+            i = i + 1
+        return nil
     if name == "range":
         let argc = len(args)
         if argc == 1:
@@ -331,6 +381,7 @@ proc init_builtins(env):
     register_native(env, "tonumber", 1)
     register_native(env, "push", 2)
     register_native(env, "pop", 1)
+    register_native(env, "array_extend", 2)
     register_native(env, "range", -1)
     register_native(env, "type", 1)
     register_native(env, "input", 0)
@@ -529,7 +580,11 @@ proc eval_binary(expr, env):
     # Unary bitwise not (~)
     if op_type == TOKEN_TILDE:
         let left = eval_expr(expr.left, env)
-        raise "Bitwise NOT not supported in self-hosted interpreter"
+        if type(left) == "number":
+            # ~n == -(n + 1) for two's complement integers
+            let n = tonumber(str(left))
+            return 0 - n - 1
+        raise "Bitwise NOT requires a number operand"
 
     # Short-circuit: or
     if op_type == TOKEN_OR:
@@ -779,10 +834,14 @@ proc exec_stmt(stmt, env):
 
     # --- While ---
     if stype == STMT_WHILE:
+        let loop_iters = 0
         while true:
             let cond = eval_expr(stmt.condition, env)
             if not is_truthy(cond):
                 break
+            loop_iters = loop_iters + 1
+            if loop_iters > MAX_LOOP_ITERATIONS:
+                raise "While loop exceeded maximum iterations (1000000)"
             let res = exec_stmt(stmt.body, env)
             if res["kind"] == SIGNAL_RETURN:
                 return res
@@ -895,8 +954,34 @@ proc exec_stmt(stmt, env):
             raise val
         raise value_to_string(val)
 
-    # --- Import (stub) ---
+    # --- Import ---
     if stype == STMT_IMPORT:
+        let mod_name = stmt.module_name.text
+        # Check module cache first
+        if dict_has(g_module_cache, mod_name):
+            let mod_env = g_module_cache[mod_name]
+            import_bind(stmt, mod_name, mod_env, env)
+            return result_normal(nil)
+        # Try to find and load the module file
+        let mod_source = nil
+        let mod_path = nil
+        let si = 0
+        while si < len(g_module_paths):
+            let try_path = g_module_paths[si] + "/" + mod_name + ".sage"
+            if io.exists(try_path):
+                mod_source = io.readfile(try_path)
+                mod_path = try_path
+                break
+            si = si + 1
+        if mod_source == nil:
+            raise "ImportError: module '" + mod_name + "' not found"
+        # Parse and execute the module in a fresh env
+        from parser import parse_source_file
+        let mod_stmts = parse_source_file(mod_source, mod_path)
+        let mod_env = new_interpreter()
+        g_module_cache[mod_name] = mod_env
+        exec_program(mod_stmts, mod_env)
+        import_bind(stmt, mod_name, mod_env, env)
         return result_normal(nil)
 
     # --- Async proc (treat as regular proc) ---

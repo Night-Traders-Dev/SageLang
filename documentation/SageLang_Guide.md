@@ -1916,8 +1916,10 @@ The self-hosted interpreter lives in `src/sage/` and consists of:
 | `lexer.sage` | Tokenizer with indentation tracking | ~300 lines |
 | `ast.sage` | AST node constructors (dict-based) | ~100 lines |
 | `parser.sage` | Recursive descent parser | ~700 lines |
-| `interpreter.sage` | Tree-walking evaluator | ~920 lines |
-| `sage.sage` | Bootstrap entry point | ~30 lines |
+| `interpreter.sage` | Tree-walking evaluator with module imports | ~1050 lines |
+| `errors.sage` | Rich error reporting (Rust/Elm-style) | ~200 lines |
+| `environment.sage` | Dict-based scope/environment | ~35 lines |
+| `sage.sage` | Full CLI entry point | ~200 lines |
 
 ### 13.2 Running Self-Hosted Code
 
@@ -1954,7 +1956,15 @@ fn["body"] = body_ast
 
 ### 13.4 Feature Coverage
 
-The self-hosted interpreter supports: arithmetic, variables, control flow (if/elif/else, while, for), functions with closures, recursion, classes with inheritance, arrays, dicts, strings, try/catch, break/continue, and module imports.
+The self-hosted interpreter supports (~70% feature parity with C):
+
+**Fully implemented**: arithmetic, variables, control flow (if/elif/else, while, for), functions with closures, recursion, classes with inheritance, arrays, dicts, tuples, strings, slicing, indexing, try/catch/finally, break/continue, raise, module imports (`import X`, `import X as Y`, `from X import a, b`), property access/set, all bitwise operators (& | ^ ~ << >>), 25+ builtins.
+
+**Stub/partial**: async proc (registered as regular proc), yield (stub), defer (stub), match (stub), await (evaluates expression, no threading).
+
+**Not implemented**: generators/yield resumption, actual async threading, FFI/memory access (ffi_open, mem_alloc, etc.), GC control builtins (gc_collect, gc_enable, gc_disable).
+
+**Safety**: while loop iteration limit (1M), recursion depth limit (500), rich error messages with source context via `errors.sage`.
 
 ### 13.5 Test Suite
 

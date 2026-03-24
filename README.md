@@ -205,7 +205,7 @@ gpu.shutdown()
 
 ### Self-Hosting / Bootstrap
 
-Sage can run Sage programs through a self-hosted interpreter written entirely in SageLang. The lexer, parser, and interpreter have been ported from C to Sage (~1,920 lines total).
+Sage can run Sage programs through a self-hosted interpreter written entirely in SageLang. The lexer, parser, interpreter, and full compiler toolchain have been ported from C to Sage.
 
 ```bash
 cd src/sage && ../../sage sage.sage program.sage
@@ -213,8 +213,9 @@ cd src/sage && ../../sage sage.sage program.sage
 
 - **Lexer** (`lexer.sage`, ~300 lines) - Indentation-aware tokenizer with dict-based keyword lookup
 - **Parser** (`parser.sage`, ~700 lines) - Recursive descent with 12 precedence levels
-- **Interpreter** (`interpreter.sage`, ~920 lines) - Tree-walking evaluator with dict-based values
-- **Bootstrap coverage**: arithmetic, variables, control flow, functions, recursion, closures, classes, inheritance, arrays, dicts, strings, try/catch, break/continue
+- **Interpreter** (`interpreter.sage`, ~1050 lines) - Tree-walking evaluator with dict-based values
+- **Bootstrap coverage**: arithmetic, variables, control flow, functions, recursion, closures, classes, inheritance, arrays, dicts, strings, try/catch, break/continue, bitwise operators (~), module imports, loop iteration limits
+- **Module imports**: `import X`, `import X as Y`, `from X import a, b` with module caching and multi-path search (`./`, `lib/`)
 - **Self-hosted test suites**: lexer, parser, interpreter, bootstrap, formatter, linter, value, optimization passes, stdlib, module loading, codegen, compiler, LSP, and CLI coverage
 - GC must be disabled for self-hosted code (`gc_disable()`)
 
