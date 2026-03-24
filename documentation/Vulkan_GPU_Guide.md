@@ -29,6 +29,8 @@ A comprehensive guide to the SageLang GPU graphics engine — from opening a win
 23. [Demo Catalog](#demo-catalog)
 24. [Troubleshooting](#troubleshooting)
 25. [API Reference](#api-reference)
+26. [OpenGL 4.5 Backend](#opengl-45-backend)
+27. [UI Widget Library](#ui-widget-library)
 
 ---
 
@@ -1207,3 +1209,124 @@ Run any demo:
 | `gpu.get_time()` | number | Seconds since init |
 | `gpu.set_title(title)` | nil | Window title |
 | `gpu.save_screenshot(path)` | bool | Save to PNG |
+
+---
+
+## OpenGL 4.5 Backend
+
+SageLang supports OpenGL 4.5+ as an alternative to Vulkan via `lib/opengl.sage`.
+
+### Setup
+
+```sage
+import opengl
+
+# Initialize with OpenGL instead of Vulkan
+opengl.init_windowed("My App", 800, 600)
+print opengl.device_name()
+```
+
+### Differences from Vulkan
+
+| Feature | Vulkan (`import gpu`) | OpenGL (`import opengl`) |
+|---------|----------------------|-------------------------|
+| Shader format | SPIR-V (`.spv` files) | GLSL via `gpu.load_shader_glsl()` |
+| Initialization | `gpu.init_windowed()` | `opengl.init_windowed()` |
+| API surface | Identical after init | Identical after init |
+| Backend flag | `SAGE_HAS_VULKAN` | `SAGE_HAS_OPENGL` |
+
+### Build Detection
+
+OpenGL is auto-detected via pkg-config:
+
+```bash
+make                 # Auto-detect both Vulkan and OpenGL
+make OPENGL=1        # Force OpenGL
+make OPENGL=0        # Disable OpenGL
+```
+
+When `SAGE_HAS_OPENGL` is set, the GPU API layer (`gpu_api.c`) initializes an OpenGL 4.5 core profile context via GLFW. All `sgpu_*` functions route to OpenGL calls instead of Vulkan.
+
+### LLVM Compiled Path
+
+LLVM-compiled programs automatically link against both backends:
+
+```bash
+sage --compile-llvm game.sage -o game
+# Links: -lvulkan -lglfw -lGL
+```
+
+---
+
+## UI Widget Library
+
+`lib/ui.sage` provides an immediate-mode GUI system for GPU applications, similar in philosophy to Dear ImGui.
+
+### Quick Start
+
+```sage
+import gpu
+import ui
+
+gpu.init_windowed("UI Demo", 800, 600, "Sage UI", false)
+let ctx = ui.ui_create()
+
+while not gpu.window_should_close():
+    gpu.poll_events()
+    ui.ui_begin_frame(ctx)
+
+    # Draw widgets
+    ui.ui_panel(ctx, 10, 10, 300, 400, "My Panel")
+    if ui.ui_button(ctx, 20, 50, 120, 30, "Click Me"):
+        print "Button clicked!"
+
+    ui.ui_label(ctx, 20, 90, "Hello from Sage UI")
+
+    ui.ui_end_frame(ctx)
+    # ui.ui_render(ctx, cmd_buf, font)  # Issue GPU draw commands
+```
+
+### Widget Reference
+
+| Widget | Function | Returns |
+|--------|----------|---------|
+| Label | `ui_label(ctx, x, y, text)` | nil |
+| Button | `ui_button(ctx, x, y, w, h, label)` | bool (clicked) |
+| Panel | `ui_panel(ctx, x, y, w, h, title)` | nil |
+| Window | `ui_window(ctx, x, y, w, h, title)` | dict (content area) |
+| Checkbox | `ui_checkbox(ctx, x, y, label, checked)` | bool (new state) |
+| Slider | `ui_slider(ctx, x, y, w, label, value)` | number (0.0-1.0) |
+| Scrollbar | `ui_scrollbar_v(ctx, x, y, h, content_h, scroll)` | number (0.0-1.0) |
+| Menu | `ui_menu_button(ctx, x, y, w, h, label, items)` | int (item index or -1) |
+| Text Input | `ui_text_input(ctx, x, y, w, label, text)` | string (current text) |
+| Progress | `ui_progress(ctx, x, y, w, h, value, label)` | nil |
+| Separator | `ui_separator(ctx, x, y, w)` | nil |
+| Tooltip | `ui_tooltip(ctx, text)` | nil |
+
+### Theming
+
+```sage
+let ctx = ui.ui_create()
+let theme = ctx["theme"]
+
+# Customize colors (RGBA arrays)
+theme["accent"] = [0.9, 0.3, 0.1, 1.0]     # Orange accent
+theme["bg"] = [0.05, 0.05, 0.08, 0.95]      # Darker background
+theme["text"] = [1.0, 1.0, 1.0, 1.0]        # White text
+
+# Customize sizes
+theme["font_size"] = 14
+theme["padding"] = 8
+theme["title_height"] = 28
+```
+
+### Architecture
+
+The UI library uses an immediate-mode pattern:
+
+1. **`ui_begin_frame(ctx)`** — reads mouse input from `gpu.mouse_pos()` / `gpu.mouse_button()`
+2. **Widget calls** — each widget checks hit-testing, updates state, and appends draw commands to `ctx["draw_list"]`
+3. **`ui_end_frame(ctx)`** — resets active state when mouse released
+4. **`ui_render(ctx, cmd_buf, font)`** — issues GPU draw commands for all accumulated quads and text
+
+Draw commands are dicts with `type` ("rect" or "text"), position, size, and color. Custom renderers can read `ui_get_draw_list(ctx)` directly.

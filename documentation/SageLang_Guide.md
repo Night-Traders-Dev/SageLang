@@ -44,6 +44,9 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **Standard Library** | Native modules: `math`, `io`, `string`, `sys`, `thread`, `socket`, `tcp`, `http`, `ssl` |
 | **Networking** | POSIX sockets, TCP, HTTP/HTTPS (libcurl), SSL/TLS (OpenSSL) |
 | **Concurrency** | `thread.spawn`/`thread.join`, mutexes, `async proc`/`await` |
+| **GPU Graphics** | Vulkan + OpenGL 4.5 backends, handle-based API, 100+ functions |
+| **UI Widgets** | Immediate-mode GUI: windows, panels, buttons, sliders, menus, text inputs |
+| **Compilation** | C backend, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64) |
 
 ### 1.3 Execution Model
 
@@ -90,7 +93,14 @@ main.c
   ├─ gc.c / gc.h             [Mark-and-sweep garbage collection]
   ├─ ast.c / ast.h           [AST node factory functions]
   ├─ token.h                 [Token type enumeration]
-  └─ module.c / module.h     [Module loading, caching, imports]
+  ├─ module.c / module.h     [Module loading, caching, imports]
+  ├─ compiler.c              [C code generation backend]
+  ├─ llvm_backend.c          [LLVM IR generation (with GPU support)]
+  ├─ llvm_runtime.c          [Standalone runtime for LLVM-compiled programs]
+  ├─ codegen.c / codegen.h   [Native assembly (x86-64, aarch64, rv64)]
+  ├─ graphics.c / graphics.h [Vulkan GPU module for interpreter]
+  ├─ gpu_api.c / gpu_api.h   [Pure C GPU API (Vulkan + OpenGL)]
+  └─ src/vm/                 [Bytecode VM: bytecode.c, vm.c, program.c, runtime.c]
 ```
 
 ### 2.2 Lexer (lexer.c / lexer.h)

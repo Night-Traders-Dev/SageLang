@@ -682,6 +682,33 @@ Audit of all three execution backends, fixes for found gaps, and a Python 3 comp
 
 ---
 
+### Phase 16c: ASM Backend Audit & UI Library
+
+**Status**: ✅ **COMPLETE** (March 24, 2026)
+
+Native codegen audit and immediate-mode GPU UI widget library.
+
+#### Native Codegen (ASM) Fixes ✅
+
+- [x] **VINST_BRANCH implemented** for all 3 architectures (x86-64, aarch64, rv64) — was completely missing, blocking all if/while/for
+- [x] **Comparison operators** — EQ, NEQ, LT, GT, LTE, GTE emitted for x86-64, aarch64, rv64
+- [x] **Arithmetic operators** — MOD, ADD, SUB, MUL, DIV emitted for aarch64 and rv64 (were x86-64 only)
+- [x] **Logic operators** — AND, OR, NOT, NEG emitted for x86-64
+- [x] **Load/store** — LOAD_STRING, LOAD_BOOL, LOAD_NIL, LOAD_GLOBAL, STORE_GLOBAL, CALL_BUILTIN for x86-64
+- [x] Uses `sage_rt_get_bool()` for truthy checks in branch conditions (int return, not SageValue)
+- [x] **VM constant pool bounds checks** — `VM_CHECK_CONST` and `VM_CHECK_AST` macros prevent buffer overflow on malformed bytecode
+
+#### GPU UI Widget Library ✅
+
+- [x] **`lib/ui.sage`** — Immediate-mode GPU UI library (~400 lines)
+- [x] Widgets: Window (draggable), Panel, Button, Label, Checkbox, Slider, Scrollbar, Menu (dropdown), Text Input, Progress Bar, Separator, Tooltip
+- [x] Theming: 20+ configurable colors (bg, hover, active, accent, text, etc.) + sizes (padding, border, font)
+- [x] Input: mouse position, click/release tracking, hover/active state per widget
+- [x] Draw list accumulation for batched GPU rendering
+- [x] Works with both Vulkan and OpenGL via `import gpu`
+
+---
+
 ## 🔮 Future Directions
 
 ### Package Manager
