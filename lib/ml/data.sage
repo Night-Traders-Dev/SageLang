@@ -1,3 +1,4 @@
+gc_disable()
 # Data loading and batching utilities for ML training
 
 # ============================================================================

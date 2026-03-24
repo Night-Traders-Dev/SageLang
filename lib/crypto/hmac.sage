@@ -1,3 +1,4 @@
+gc_disable()
 # HMAC (Hash-based Message Authentication Code)
 # RFC 2104 implementation using pluggable hash functions
 

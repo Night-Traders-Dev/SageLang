@@ -1,3 +1,4 @@
+gc_disable()
 # Tensor library - PyTorch-style tensor operations
 # Supports N-dimensional tensors with shape tracking and broadcasting
 

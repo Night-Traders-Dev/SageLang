@@ -68,10 +68,13 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **Array Slicing**: Pythonic slice syntax for arrays
 
 ### Memory Management
-- **Garbage Collection**: Automatic mark-and-sweep GC with thread-safe allocation
+- **Garbage Collection**: Concurrent tri-color mark-sweep GC with SATB write barriers for sub-millisecond STW pauses
+- **Tri-color marking**: white (unreachable), gray (pending scan), black (fully scanned) — objects allocated during marking are born black
+- **SATB write barrier**: Snapshot-At-The-Beginning — before overwriting a reference, the old value is shaded gray to prevent the concurrent marker from missing live objects
+- **4-phase collection**: Root scan (STW, ~50-200us) -> Concurrent mark -> Remark (STW, ~20-50us) -> Concurrent sweep
 - **Full type coverage**: GC properly marks and frees all 16 value types including FFI handles (`VAL_CLIB`), raw pointers (`VAL_POINTER`), threads (`VAL_THREAD`), and mutexes (`VAL_MUTEX`)
 - **GC Control**: `gc_collect()`, `gc_enable()`, `gc_disable()`
-- **Statistics**: `gc_stats()` for memory monitoring
+- **Statistics**: `gc_stats()` for memory monitoring including STW pause timing
 - **Safe**: Prevents use-after-free and memory leaks; external allocations tracked for accurate accounting
 
 ### Security Hardening

@@ -1,3 +1,4 @@
+gc_disable()
 # Optimizers for neural network training
 # SGD (with momentum), Adam, and learning rate schedulers
 

@@ -224,6 +224,7 @@ void array_set(Value* arr, int index, Value val) {
     if (arr->type != VAL_ARRAY) return;
     ArrayValue* a = arr->as.array;
     if (index < 0 || index >= a->count) return;
+    GC_WRITE_BARRIER(a->elements[index]);  // SATB: shade old element
     a->elements[index] = val;
 }
 
@@ -306,6 +307,7 @@ void dict_set(Value* dict, const char* key, Value value) {
 
     if (d->entries[slot].key != NULL) {
         // Key exists, update value
+        GC_WRITE_BARRIER(*(d->entries[slot].value));  // SATB: shade old value
         *(d->entries[slot].value) = value;
         return;
     }

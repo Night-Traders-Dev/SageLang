@@ -1,3 +1,4 @@
+gc_disable()
 # Password hashing and verification utilities
 # PBKDF2-HMAC-SHA256 key derivation
 

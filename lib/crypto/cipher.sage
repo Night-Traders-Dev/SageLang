@@ -1,3 +1,4 @@
+gc_disable()
 # Symmetric cipher utilities
 # XOR cipher, RC4 stream cipher, and block cipher mode helpers
 

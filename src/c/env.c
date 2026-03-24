@@ -44,6 +44,7 @@ void env_define(Env* env, const char* name, int length, Value value) {
     EnvNode* current = env->head;
     while (current != NULL) {
         if (strncmp(current->name, name, length) == 0 && current->name[length] == '\0') {
+            GC_WRITE_BARRIER(current->value);  // SATB: shade old value before overwrite
             current->value = value;
             return;
         }
@@ -86,6 +87,7 @@ int env_assign(Env* env, const char* name, int length, Value value) {
         EnvNode* current = current_env->head;
         while (current != NULL) {
             if (strncmp(current->name, name, length) == 0 && current->name[length] == '\0') {
+                GC_WRITE_BARRIER(current->value);  // SATB: shade old value before overwrite
                 current->value = value;
                 return 1; // Found and updated
             }

@@ -1,3 +1,4 @@
+gc_disable()
 # Neural network layers and model building blocks
 # PyTorch-style API: Linear, Conv (1D), ReLU, Sigmoid, Sequential, Dropout
 

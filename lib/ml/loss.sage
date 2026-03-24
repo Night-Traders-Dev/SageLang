@@ -1,3 +1,4 @@
+gc_disable()
 # Loss functions for neural network training
 
 import math

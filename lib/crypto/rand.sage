@@ -1,3 +1,4 @@
+gc_disable()
 # Pseudorandom number generators for cryptographic and general use
 # Implements xoshiro256** (fast, high-quality PRNG) and utilities
 
