@@ -26,46 +26,46 @@
 <line x1="240.0" y1="115" x2="240.0" y2="383" stroke="#182231" stroke-width="1"/>
 <text x="240.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">0.00ms</text>
 <line x1="476.0" y1="115" x2="476.0" y2="383" stroke="#182231" stroke-width="1"/>
-<text x="476.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">22.2ms</text>
+<text x="476.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">22.8ms</text>
 <line x1="712.0" y1="115" x2="712.0" y2="383" stroke="#182231" stroke-width="1"/>
-<text x="712.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">44.5ms</text>
+<text x="712.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">45.6ms</text>
 <line x1="948.0" y1="115" x2="948.0" y2="383" stroke="#182231" stroke-width="1"/>
-<text x="948.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">66.7ms</text>
+<text x="948.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">68.4ms</text>
 <line x1="1184.0" y1="115" x2="1184.0" y2="383" stroke="#182231" stroke-width="1"/>
-<text x="1184.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">88.9ms</text>
+<text x="1184.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">91.2ms</text>
 <line x1="1420.0" y1="115" x2="1420.0" y2="383" stroke="#182231" stroke-width="1"/>
-<text x="1420.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">111ms</text>
+<text x="1420.0" y="409" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">114ms</text>
 <rect x="30" y="141.0" width="92" height="32" rx="10" fill="#3479E6" opacity="0.95"/>
 <text x="76.0" y="163.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">AST</text>
 <rect x="240" y="135" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="135" width="92.6" height="44" rx="12" fill="url(#bar-gradient-0)"/>
-<line x1="242.0" y1="137.0" x2="330.6" y2="137.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="346.6" y="164.0" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">8.73ms</text>
-<text x="1556" y="164.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">6.3% · Interpreted (C + AST) · build + run · 1.00x vs AST</text>
+<rect x="240" y="135" width="82.3" height="44" rx="12" fill="url(#bar-gradient-0)"/>
+<line x1="242.0" y1="137.0" x2="320.3" y2="137.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="336.3" y="164.0" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">7.95ms</text>
+<text x="1556" y="164.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">5.6% · Interpreted (C + AST) · build + run · 1.00x vs AST</text>
 <rect x="30" y="207.0" width="92" height="32" rx="10" fill="#12A695" opacity="0.95"/>
 <text x="76.0" y="229.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">VM</text>
 <rect x="240" y="201" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="201" width="81.9" height="44" rx="12" fill="url(#bar-gradient-1)"/>
-<line x1="242.0" y1="203.0" x2="319.9" y2="203.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="335.9" y="230.0" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">7.71ms</text>
-<text x="1556" y="230.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">5.5% · Interpreted (VM) · build + run · 0.88x vs AST</text>
+<rect x="240" y="201" width="76.9" height="44" rx="12" fill="url(#bar-gradient-1)"/>
+<line x1="242.0" y1="203.0" x2="314.9" y2="203.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="330.9" y="230.0" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">7.43ms</text>
+<text x="1556" y="230.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">5.2% · Interpreted (VM) · build + run · 0.93x vs AST</text>
 <rect x="30" y="273.0" width="92" height="32" rx="10" fill="#E06814" opacity="0.95"/>
 <text x="76.0" y="295.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">C BIN</text>
 <rect x="240" y="267" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="240" y="267" width="1180.0" height="44" rx="12" fill="url(#bar-gradient-2)"/>
 <line x1="242.0" y1="269.0" x2="1418.0" y2="269.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="1434.0" y="296.0" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">111ms</text>
-<text x="1556" y="296.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">80.0% · Compiled (C) · build + run · 12.74x vs AST</text>
+<text x="1434.0" y="296.0" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">114ms</text>
+<text x="1556" y="296.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">80.4% · Compiled (C) · build + run · 14.34x vs AST</text>
 <rect x="30" y="339.0" width="94" height="32" rx="10" fill="#8593A6" opacity="0.95"/>
 <text x="77.0" y="361.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">VM BIN</text>
 <rect x="240" y="333" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="333" width="120.6" height="44" rx="12" fill="url(#bar-gradient-3)"/>
-<line x1="242.0" y1="335.0" x2="358.6" y2="335.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="374.6" y="362.0" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">11.4ms</text>
-<text x="1556" y="362.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">8.2% · Compiled (VM) · build + run · 1.30x vs AST</text>
+<rect x="240" y="333" width="128.5" height="44" rx="12" fill="url(#bar-gradient-3)"/>
+<line x1="242.0" y1="335.0" x2="366.5" y2="335.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="382.5" y="362.0" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">12.4ms</text>
+<text x="1556" y="362.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">8.8% · Compiled (VM) · build + run · 1.56x vs AST</text>
 <text x="44" y="435" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Settings: 5 timed runs, 1 warmup on benchmarks/runtime_compare.sage.</text>
 <text x="44" y="459" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Totals include compile + link + execution; the run chart isolates execution-only cost.</text>
 <text x="44" y="483" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Checksum target: 11520.</text>
 <text x="44" y="507" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Compiled (Sage): checksum validation failed against 11520.</text>
-<text x="44" y="531" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-03-24 11:03 UTC</text>
+<text x="44" y="531" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-03-24 11:07 UTC</text>
 </svg>

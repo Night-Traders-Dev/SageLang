@@ -259,6 +259,7 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_gpu_init_opengl(%%SageValue, %%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_gpu_shutdown()\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_gpu_device_name()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_device_limits()\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_gpu_last_error()\n");
     // Buffers
     ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_buffer(%%SageValue, %%SageValue, %%SageValue)\n");
@@ -391,7 +392,7 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_gpu_update_uniform(%%SageValue, %%SageValue)\n");
     // Offscreen / Screenshot
     ll_emit(lc, "declare %%SageValue @sage_rt_gpu_create_offscreen_target(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
-    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_screenshot()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_gpu_screenshot(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_gpu_save_screenshot(%%SageValue)\n");
     // Font
     ll_emit(lc, "declare %%SageValue @sage_rt_gpu_load_font(%%SageValue, %%SageValue)\n");
@@ -682,7 +683,7 @@ static int llvm_try_emit_gpu_call(LLVMCompiler* lc, const char* method, int* arg
     if (strcmp(method, "update_uniform") == 0) { GPU_CALL_2("update_uniform"); }
     // Offscreen / Screenshot
     if (strcmp(method, "create_offscreen_target") == 0) { GPU_CALL_4("create_offscreen_target"); }
-    if (strcmp(method, "screenshot") == 0) { GPU_CALL_0("screenshot"); }
+    if (strcmp(method, "screenshot") == 0) { GPU_CALL_1("screenshot"); }
     if (strcmp(method, "save_screenshot") == 0) { GPU_CALL_1("save_screenshot"); }
     // Font
     if (strcmp(method, "load_font") == 0) { GPU_CALL_2("load_font"); }
@@ -700,7 +701,7 @@ static int llvm_try_emit_gpu_call(LLVMCompiler* lc, const char* method, int* arg
     if (strcmp(method, "get_platform") == 0) { GPU_CALL_0("get_platform"); }
     if (strcmp(method, "detected_platform") == 0) { GPU_CALL_0("detected_platform"); }
     // Device limits (takes 0 args, returns dict)
-    if (strcmp(method, "device_limits") == 0) { GPU_CALL_0("device_name"); }
+    if (strcmp(method, "device_limits") == 0) { GPU_CALL_0("device_limits"); }
 
     #undef GPU_CALL_0
     #undef GPU_CALL_1

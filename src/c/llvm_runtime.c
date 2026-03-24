@@ -15,6 +15,25 @@
 
 #include "gpu_api.h"
 
+// Safe allocation wrappers — abort on OOM instead of returning NULL
+static void* safe_realloc(void* ptr, size_t size) {
+    void* result = realloc(ptr, size);
+    if (result == NULL && size > 0) {
+        fprintf(stderr, "sage_rt: out of memory (realloc %zu bytes)\n", size);
+        abort();
+    }
+    return result;
+}
+
+static void* safe_calloc(size_t count, size_t size) {
+    void* result = calloc(count, size);
+    if (result == NULL && count > 0 && size > 0) {
+        fprintf(stderr, "sage_rt: out of memory (calloc %zu * %zu bytes)\n", count, size);
+        abort();
+    }
+    return result;
+}
+
 // ============================================================================
 // SageValue — matches LLVM IR %SageValue = type { i32, [8 x i8] }
 // ============================================================================
@@ -338,7 +357,7 @@ SageValue sage_rt_array_new(int32_t count) {
     if (!sv.as.array) { fprintf(stderr, "OOM\n"); abort(); }
     sv.as.array->count = 0;
     sv.as.array->capacity = count > 0 ? count : 4;
-    sv.as.array->elements = calloc((size_t)sv.as.array->capacity, sizeof(SageValue));
+    sv.as.array->elements = safe_calloc((size_t)sv.as.array->capacity, sizeof(SageValue));
     if (!sv.as.array->elements) { fprintf(stderr, "OOM\n"); abort(); }
     return sv;
 }
@@ -348,7 +367,7 @@ void sage_rt_array_set(SageValue arr, int32_t idx, SageValue val) {
     SageArray* a = arr.as.array;
     while (idx >= a->capacity) {
         a->capacity *= 2;
-        a->elements = realloc(a->elements, sizeof(SageValue) * (size_t)a->capacity);
+        a->elements = safe_realloc(a->elements, sizeof(SageValue) * (size_t)a->capacity);
         if (!a->elements) { fprintf(stderr, "OOM\n"); abort(); }
     }
     a->elements[idx] = val;
@@ -360,7 +379,7 @@ SageValue sage_rt_array_push(SageValue arr, SageValue val) {
     SageArray* a = arr.as.array;
     if (a->count >= a->capacity) {
         a->capacity = a->capacity ? a->capacity * 2 : 4;
-        a->elements = realloc(a->elements, sizeof(SageValue) * (size_t)a->capacity);
+        a->elements = safe_realloc(a->elements, sizeof(SageValue) * (size_t)a->capacity);
         if (!a->elements) { fprintf(stderr, "OOM\n"); abort(); }
     }
     a->elements[a->count++] = val;
@@ -428,8 +447,8 @@ void sage_rt_index_set(SageValue obj, SageValue idx, SageValue val) {
         // New key
         if (d->count >= d->capacity) {
             d->capacity = d->capacity ? d->capacity * 2 : 8;
-            d->keys = realloc(d->keys, sizeof(char*) * (size_t)d->capacity);
-            d->values = realloc(d->values, sizeof(SageValue) * (size_t)d->capacity);
+            d->keys = safe_realloc(d->keys, sizeof(char*) * (size_t)d->capacity);
+            d->values = safe_realloc(d->values, sizeof(SageValue) * (size_t)d->capacity);
         }
         d->keys[d->count] = strdup(idx.as.string);
         d->values[d->count] = val;
@@ -444,7 +463,7 @@ void sage_rt_index_set(SageValue obj, SageValue idx, SageValue val) {
 SageValue sage_rt_dict_new(void) {
     SageValue sv;
     sv.type = SAGE_DICT;
-    sv.as.dict = calloc(1, sizeof(SageDict));
+    sv.as.dict = safe_calloc(1, sizeof(SageDict));
     if (!sv.as.dict) { fprintf(stderr, "OOM\n"); abort(); }
     return sv;
 }
@@ -460,9 +479,8 @@ void sage_rt_dict_set(SageValue dict, const char* key, SageValue val) {
     }
     if (d->count >= d->capacity) {
         d->capacity = d->capacity ? d->capacity * 2 : 8;
-        d->keys = realloc(d->keys, sizeof(char*) * (size_t)d->capacity);
-        d->values = realloc(d->values, sizeof(SageValue) * (size_t)d->capacity);
-        if (!d->keys || !d->values) { fprintf(stderr, "OOM\n"); abort(); }
+        d->keys = safe_realloc(d->keys, sizeof(char*) * (size_t)d->capacity);
+        d->values = safe_realloc(d->values, sizeof(SageValue) * (size_t)d->capacity);
     }
     d->keys[d->count] = strdup(key);
     d->values[d->count] = val;
@@ -488,7 +506,7 @@ SageValue sage_rt_tuple_new(int32_t count) {
     sv.as.tuple = malloc(sizeof(SageTuple));
     if (!sv.as.tuple) { fprintf(stderr, "OOM\n"); abort(); }
     sv.as.tuple->count = count;
-    sv.as.tuple->elements = calloc(count > 0 ? (size_t)count : 1, sizeof(SageValue));
+    sv.as.tuple->elements = safe_calloc(count > 0 ? (size_t)count : 1, sizeof(SageValue));
     return sv;
 }
 
@@ -553,8 +571,8 @@ void sage_rt_set_attr(SageValue obj, const char* name, SageValue val) {
         // Add new field
         if (fields->count >= fields->capacity) {
             fields->capacity = fields->capacity ? fields->capacity * 2 : 8;
-            fields->keys = realloc(fields->keys, sizeof(char*) * (size_t)fields->capacity);
-            fields->values = realloc(fields->values, sizeof(SageValue) * (size_t)fields->capacity);
+            fields->keys = safe_realloc(fields->keys, sizeof(char*) * (size_t)fields->capacity);
+            fields->values = safe_realloc(fields->values, sizeof(SageValue) * (size_t)fields->capacity);
         }
         fields->keys[fields->count] = strdup(name);
         fields->values[fields->count] = val;
@@ -725,6 +743,14 @@ SageValue sage_rt_gpu_shutdown(void) {
 SageValue sage_rt_gpu_device_name(void) {
     const char* n = sgpu_device_name();
     return n ? sage_rt_string(n) : sage_rt_nil();
+}
+
+SageValue sage_rt_gpu_device_limits(void) {
+    // Return basic device info dict in compiled mode
+    const char* name = sgpu_device_name();
+    SageValue d = sage_rt_dict_new();
+    sage_rt_dict_set(d, "device_name", name ? sage_rt_string(name) : sage_rt_nil());
+    return d;
 }
 
 SageValue sage_rt_gpu_last_error(void) {
