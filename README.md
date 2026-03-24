@@ -340,6 +340,14 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`dns`**: DNS wire-format message parsing/building, record types, name compression
 - **`ip`**: IPv4 parsing/validation, CIDR subnets, private/loopback/multicast detection
 
+**Cryptography** (`lib/crypto/`, imported as `import crypto.<module>`):
+- **`hash`**: SHA-256, SHA-1, CRC-32 pure Sage implementations with hex output
+- **`hmac`**: HMAC (RFC 2104) with pluggable hash functions, constant-time comparison
+- **`encoding`**: Base64 (standard + URL-safe), hex encoding/decoding
+- **`cipher`**: XOR cipher, RC4 stream cipher, PKCS#7 padding, CBC/CTR mode helpers
+- **`rand`**: xoshiro256** PRNG, UUID v4, random bytes/strings/hex, Fisher-Yates shuffle
+- **`password`**: PBKDF2-HMAC key derivation, password hashing/verification
+
 Example:
 ```sage
 from math import factorial

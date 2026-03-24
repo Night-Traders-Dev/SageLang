@@ -1973,7 +1973,20 @@ SageLang ships with 8 high-level networking modules in `lib/net/`, built on top 
 | `dns.sage` | `import net.dns` | DNS wire-format message parsing/building, name compression |
 | `ip.sage` | `import net.ip` | IPv4 parsing/validation, CIDR subnets, private/loopback/multicast checks |
 
-### 9.12 UI Widget Library (`lib/graphics/ui.sage`)
+### 9.12 Cryptography Libraries
+
+SageLang ships with 6 cryptography modules in `lib/crypto/`:
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `hash.sage` | `import crypto.hash` | SHA-256, SHA-1, CRC-32 hash functions with hex output |
+| `hmac.sage` | `import crypto.hmac` | HMAC (RFC 2104) with pluggable hash, constant-time comparison |
+| `encoding.sage` | `import crypto.encoding` | Base64 (standard + URL-safe), hex encoding/decoding |
+| `cipher.sage` | `import crypto.cipher` | XOR cipher, RC4 stream cipher, PKCS#7 padding, CBC/CTR mode helpers |
+| `rand.sage` | `import crypto.rand` | xoshiro256** PRNG, UUID v4, random bytes/strings/hex, shuffle |
+| `password.sage` | `import crypto.password` | PBKDF2-HMAC key derivation, password hashing/verification |
+
+### 9.13 UI Widget Library (`lib/graphics/ui.sage`)
 
 Immediate-mode GPU UI system for building application interfaces:
 
