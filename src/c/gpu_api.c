@@ -845,7 +845,7 @@ int sgpu_end_commands(int cmd) {
 // Command recording
 void sgpu_cmd_bind_compute_pipeline(int cmd, int pipe) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0 || pipe < 0) return;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count || pipe < 0 || pipe >= g_vk.pipeline_count) return;
     vkCmdBindPipeline(g_vk.cmd_buffers[cmd].cmd, VK_PIPELINE_BIND_POINT_COMPUTE, g_vk.pipelines[pipe].pipeline);
 #else
     (void)cmd; (void)pipe;
@@ -854,7 +854,7 @@ void sgpu_cmd_bind_compute_pipeline(int cmd, int pipe) {
 
 void sgpu_cmd_bind_graphics_pipeline(int cmd, int pipe) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0 || pipe < 0) return;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count || pipe < 0 || pipe >= g_vk.pipeline_count) return;
     vkCmdBindPipeline(g_vk.cmd_buffers[cmd].cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_vk.pipelines[pipe].pipeline);
 #else
     (void)cmd; (void)pipe;
@@ -867,7 +867,7 @@ void sgpu_cmd_bind_descriptor_set(int cmd, int pl, int set, int bp) {
 
 void sgpu_cmd_dispatch(int cmd, int gx, int gy, int gz) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0) return;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count) return;
     vkCmdDispatch(g_vk.cmd_buffers[cmd].cmd, (uint32_t)gx, (uint32_t)gy, (uint32_t)gz);
 #else
     (void)cmd; (void)gx; (void)gy; (void)gz;
@@ -895,7 +895,7 @@ void sgpu_cmd_end_render_pass(int cmd) {
 
 void sgpu_cmd_draw(int cmd, int vc, int ic, int fv, int fi) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0) return;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count) return;
     vkCmdDraw(g_vk.cmd_buffers[cmd].cmd, (uint32_t)vc, (uint32_t)ic, (uint32_t)fv, (uint32_t)fi);
 #else
     (void)cmd; (void)vc; (void)ic; (void)fv; (void)fi;
@@ -904,7 +904,7 @@ void sgpu_cmd_draw(int cmd, int vc, int ic, int fv, int fi) {
 
 void sgpu_cmd_draw_indexed(int cmd, int idx_count, int ic, int fi, int vo, int fii) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0) return;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count) return;
     vkCmdDrawIndexed(g_vk.cmd_buffers[cmd].cmd, (uint32_t)idx_count, (uint32_t)ic, (uint32_t)fi, vo, (uint32_t)fii);
 #else
     (void)cmd; (void)idx_count; (void)ic; (void)fi; (void)vo; (void)fii;
@@ -920,7 +920,7 @@ void sgpu_cmd_draw_indexed_indirect(int cmd, int buf, int off, int dc, int strid
 
 void sgpu_cmd_bind_vertex_buffer(int cmd, int buf) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0 || buf < 0 || buf >= g_vk.buffer_count) return;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count || buf < 0 || buf >= g_vk.buffer_count) return;
     VkDeviceSize offset = 0;
     vkCmdBindVertexBuffers(g_vk.cmd_buffers[cmd].cmd, 0, 1, &g_vk.buffers[buf].buffer, &offset);
 #else
@@ -934,7 +934,7 @@ void sgpu_cmd_bind_vertex_buffers(int cmd, const int* bufs, int count) {
 
 void sgpu_cmd_bind_index_buffer(int cmd, int buf) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0 || buf < 0 || buf >= g_vk.buffer_count) return;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count || buf < 0 || buf >= g_vk.buffer_count) return;
     vkCmdBindIndexBuffer(g_vk.cmd_buffers[cmd].cmd, g_vk.buffers[buf].buffer, 0, VK_INDEX_TYPE_UINT32);
 #else
     (void)cmd; (void)buf;
@@ -943,7 +943,7 @@ void sgpu_cmd_bind_index_buffer(int cmd, int buf) {
 
 void sgpu_cmd_set_viewport(int cmd, float x, float y, float w, float h, float mind, float maxd) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0) return;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count) return;
     VkViewport vp = { x, y, w, h, mind, maxd };
     vkCmdSetViewport(g_vk.cmd_buffers[cmd].cmd, 0, 1, &vp);
 #else
@@ -953,7 +953,7 @@ void sgpu_cmd_set_viewport(int cmd, float x, float y, float w, float h, float mi
 
 void sgpu_cmd_set_scissor(int cmd, int x, int y, int w, int h) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0) return;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count) return;
     VkRect2D sc = { {x, y}, {(uint32_t)w, (uint32_t)h} };
     vkCmdSetScissor(g_vk.cmd_buffers[cmd].cmd, 0, 1, &sc);
 #else
@@ -1072,7 +1072,7 @@ int sgpu_submit(int cmd, int fence) {
 
 int sgpu_submit_compute(int cmd, int fence) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0) return 0;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count) return 0;
     VkSubmitInfo si = {0};
     si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     si.commandBufferCount = 1;
@@ -1087,7 +1087,7 @@ int sgpu_submit_compute(int cmd, int fence) {
 
 int sgpu_submit_with_sync(int cmd, int wait_sem, int signal_sem, int fence) {
 #ifdef SAGE_HAS_VULKAN
-    if (!g_vk.initialized || cmd < 0) return 0;
+    if (!g_vk.initialized || cmd < 0 || cmd >= g_vk.cmd_buffer_count) return 0;
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSubmitInfo si = {0};
     si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

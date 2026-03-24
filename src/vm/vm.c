@@ -99,6 +99,16 @@ static Value vm_peek(ActiveVm* vm, int distance) {
     return vm->stack[vm->stack_count - 1 - distance];
 }
 
+#define VM_CHECK_CONST(chunk, idx) \
+    do { if ((int)(idx) < 0 || (int)(idx) >= (chunk)->constant_count) { \
+        result = vm_error("VM constant pool index out of bounds."); goto done; \
+    } } while(0)
+
+#define VM_CHECK_AST(chunk, idx) \
+    do { if ((int)(idx) < 0 || (int)(idx) >= (chunk)->ast_stmt_count) { \
+        result = vm_error("VM AST statement index out of bounds."); goto done; \
+    } } while(0)
+
 static uint16_t read_u16(BytecodeChunk* chunk, int* ip) {
     if (*ip + 2 > chunk->code_count) {
         fprintf(stderr, "VM Error: bytecode read_u16 out of bounds (ip=%d, size=%d)\n", *ip, chunk->code_count);
@@ -272,6 +282,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
         switch (op) {
             case BC_OP_CONSTANT: {
                 uint16_t index = read_u16(chunk, &ip);
+                VM_CHECK_CONST(chunk, index);
                 if (!vm_push(&vm, chunk->constants[index])) {
                     result = vm_error("VM stack overflow.");
                     goto done;
@@ -301,6 +312,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 break;
             case BC_OP_GET_GLOBAL: {
                 uint16_t name_index = read_u16(chunk, &ip);
+                VM_CHECK_CONST(chunk, name_index);
                 Value name = chunk->constants[name_index];
                 Value resolved = val_nil();
                 if (!env_get(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), &resolved)) {
@@ -315,6 +327,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             case BC_OP_DEFINE_GLOBAL: {
                 uint16_t name_index = read_u16(chunk, &ip);
+                VM_CHECK_CONST(chunk, name_index);
                 Value name = chunk->constants[name_index];
                 Value value = vm_pop(&vm);
                 env_define(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), value);
@@ -322,6 +335,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             case BC_OP_SET_GLOBAL: {
                 uint16_t name_index = read_u16(chunk, &ip);
+                VM_CHECK_CONST(chunk, name_index);
                 Value name = chunk->constants[name_index];
                 Value value = vm_peek(&vm, 0);
                 if (!env_assign(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), value)) {
@@ -333,6 +347,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             case BC_OP_DEFINE_FUNCTION: {
                 uint16_t name_index = read_u16(chunk, &ip);
                 uint16_t function_index = read_u16(chunk, &ip);
+                VM_CHECK_CONST(chunk, name_index);
 
                 if (chunk->program == NULL || function_index >= chunk->program->function_count) {
                     result = vm_error("Invalid compiled VM function reference.");
@@ -346,6 +361,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             case BC_OP_GET_PROPERTY: {
                 uint16_t name_index = read_u16(chunk, &ip);
+                VM_CHECK_CONST(chunk, name_index);
                 Value object = vm_pop(&vm);
                 const char* property = AS_STRING(chunk->constants[name_index]);
 
@@ -374,6 +390,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             case BC_OP_SET_PROPERTY: {
                 uint16_t name_index = read_u16(chunk, &ip);
+                VM_CHECK_CONST(chunk, name_index);
                 Value value = vm_pop(&vm);
                 Value object = vm_pop(&vm);
                 const char* property = AS_STRING(chunk->constants[name_index]);
@@ -670,6 +687,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             case BC_OP_CALL_METHOD: {
                 uint16_t name_index = read_u16(chunk, &ip);
+                VM_CHECK_CONST(chunk, name_index);
                 int arg_count = (int)read_u8(chunk, &ip);
                 Value args[255];
                 for (int i = arg_count - 1; i >= 0; i--) {
@@ -784,6 +802,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             case BC_OP_EXEC_AST_STMT: {
                 uint16_t stmt_index = read_u16(chunk, &ip);
+                VM_CHECK_AST(chunk, stmt_index);
                 ExecResult ast_result = interpret(chunk->ast_stmts[stmt_index], vm.current_env);
                 if (ast_result.is_throwing) {
                     result = ast_result;
