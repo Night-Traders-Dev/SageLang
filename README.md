@@ -135,6 +135,7 @@ SageLang ships with a suite of binary format parsers and hardware abstraction mo
 | Module | Import | Description |
 |--------|--------|-------------|
 | **FAT** | `import os.fat` | FAT8/12/16/32 boot sector parser, cluster-to-LBA, FAT entry offsets |
+| **FAT Dir** | `import os.fat_dir` | FAT directory traversal, file reading, path resolution, cluster chain walking |
 | **ELF** | `import os.elf` | ELF32/64 header, program/section headers, string table, section lookup |
 | **MBR** | `import os.mbr` | MBR partition table, CHS decode, bootable partition finder |
 | **GPT** | `import os.gpt` | GPT header, GUID parsing, partition type identification |
@@ -143,6 +144,11 @@ SageLang ships with a suite of binary format parsers and hardware abstraction mo
 | **UEFI** | `import os.uefi` | EFI memory map, config tables, RSDP, ACPI SDT headers |
 | **ACPI** | `import os.acpi` | MADT (APIC), FADT, HPET, MCFG parsers, processor enumeration |
 | **Paging** | `import os.paging` | x86-64 page table entries, index extraction, identity/higher-half mapping |
+| **IDT** | `import os.idt` | x86-64 interrupt descriptor table, gate construction, PIC remapping |
+| **Serial** | `import os.serial` | UART/COM port configuration, initialization sequences, debug output |
+| **DTB** | `import os.dtb` | Flattened Device Tree parser for ARM64/RISC-V platforms |
+| **Alloc** | `import os.alloc` | Bump, free-list, and bitmap page allocators for kernel heaps |
+| **VFS** | `import os.vfs` | Virtual filesystem abstraction layer with pluggable backends |
 
 Example:
 ```sage
@@ -281,7 +287,7 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`math3d`**, **`mesh`**, **`renderer`**, **`camera`**, **`scene`**, **`material`**, **`pbr`**, **`postprocess`**, **`shadows`**, **`deferred`**, **`taa`**, **`gltf`**, **`asset_cache`**, **`frame_graph`**, **`debug_ui`**
 
 **OS / Bare-metal** (`lib/os/`, imported as `import os.<module>`):
-- **`fat`**, **`elf`**, **`mbr`**, **`gpt`**, **`pe`**, **`pci`**, **`uefi`**, **`acpi`**, **`paging`**
+- **`fat`**, **`fat_dir`**, **`elf`**, **`mbr`**, **`gpt`**, **`pe`**, **`pci`**, **`uefi`**, **`acpi`**, **`paging`**, **`idt`**, **`serial`**, **`dtb`**, **`alloc`**, **`vfs`**
 
 Example:
 ```sage

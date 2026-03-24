@@ -66,6 +66,7 @@ SageLang ships with a comprehensive set of binary format parsers and hardware ab
 import os.elf     # ELF32/64 headers, program/section headers, string tables
 import os.pe      # PE/COFF: DOS header, COFF header, optional header, sections
 import os.fat     # FAT8/12/16/32 boot sector parser, cluster math
+import os.fat_dir # FAT directory traversal, file reading, path resolution
 import os.mbr     # MBR partition table, CHS decode, bootable partition finder
 import os.gpt     # GPT header, GUID parsing, partition type identification
 ```
@@ -77,6 +78,16 @@ import os.pci     # PCI config space (Type 0/1), BAR decode, capability lists
 import os.acpi    # MADT (APIC), FADT, HPET, MCFG table parsers
 import os.uefi    # EFI memory map, config tables, RSDP, ACPI SDT headers
 import os.paging  # x86-64 page table entries, PTE flags, address decomposition
+import os.idt     # x86-64 IDT gate construction, exception vectors, PIC remap
+import os.serial  # UART/COM port config, init sequences, debug output
+import os.dtb     # Flattened Device Tree parser (ARM64/RISC-V)
+```
+
+### Kernel Infrastructure
+
+```sage
+import os.alloc   # Bump, free-list, and bitmap page allocators
+import os.vfs     # Virtual filesystem abstraction with pluggable backends
 ```
 
 ### Example: Inspect an ELF kernel
@@ -151,6 +162,93 @@ print decoded["present"]    # true
 print decoded["writable"]   # true
 ```
 
+### Example: Set up IDT and serial debug output
+
+```sage
+import os.idt
+import os.serial
+
+# Configure COM1 for debug output
+let com1 = serial.default_config()
+let init_seq = serial.init_sequence(com1)
+# init_seq is a list of {port, value} pairs for port I/O
+
+# Build IDT with handlers
+let handlers = {}
+handlers[0] = 4096       # Divide error handler at 0x1000
+handlers[14] = 8192      # Page fault handler at 0x2000
+handlers[32] = 12288     # Timer IRQ handler at 0x3000
+let idt_table = idt.build_idt(handlers, 8)
+let idt_bytes = idt.idt_to_bytes(idt_table)
+print len(idt_bytes)     # 4096
+
+# Remap PIC to vector 32
+let pic_seq = idt.pic_remap_sequence(32)
+```
+
+### Example: Kernel page allocator
+
+```sage
+import os.alloc
+
+# Create a bitmap allocator for 256 MB of physical memory
+let pages = alloc.bitmap_create(1048576, 65536, 4096)
+
+# Reserve first 1 MB for kernel
+alloc.bitmap_mark_used(pages, 1048576, 1048576)
+
+# Allocate pages for user process
+let stack = alloc.bitmap_alloc_pages(pages, 4)   # 16 KB stack
+let heap = alloc.bitmap_alloc_pages(pages, 16)    # 64 KB heap
+
+let stats = alloc.bitmap_stats(pages)
+print stats["free_pages"]
+```
+
+### Example: Read files from FAT disk image
+
+```sage
+import os.fat
+import os.fat_dir
+import io
+
+let disk = io.readbytes("boot.img")
+let info = fat.parse_boot_sector(disk)
+
+# List root directory
+let entries = fat_dir.list_root(disk, info)
+for i in range(len(entries)):
+    let e = entries[i]
+    if e["is_dir"]:
+        print "[DIR] " + e["name"]
+    else:
+        print e["name"] + " (" + str(e["size"]) + " bytes)"
+
+# Read a file by path
+let data = fat_dir.read_file_by_path(disk, info, "/config.txt")
+```
+
+### Example: Parse Device Tree (ARM64/RISC-V)
+
+```sage
+import os.dtb
+
+let blob = io.readbytes("board.dtb")
+let hdr = dtb.parse_header(blob)
+let tree = dtb.parse_tree(blob, hdr)
+
+print dtb.get_model(tree)
+print dtb.count_cpus(tree)
+
+# Find all UART devices
+let uarts = dtb.find_compatible(tree, "ns16550a")
+for i in range(len(uarts)):
+    let reg = dtb.get_prop(uarts[i], "reg")
+    if reg != nil:
+        let addrs = dtb.parse_reg(reg, 2, 2)
+        print "UART at " + str(addrs[0]["address"])
+```
+
 ## Current Limitations
 
 - Non-hosted targets are currently object-oriented output only (no final bootable image linker flow yet).
@@ -162,6 +260,6 @@ print decoded["writable"]   # true
 1. Add profile-aware linker script integration for bare-metal and OSdev targets.
 2. Add PE/COFF image emission/link path for UEFI (`.efi` output).
 3. Expand native backend construct coverage and runtime surface for non-hosted use cases.
-4. Add directory traversal and FAT chain walking to `os.fat`.
-5. Add SMBIOS table parsing to `os.uefi`.
-6. Add interrupt descriptor table (IDT) helpers to `os.paging`.
+4. Add SMBIOS table parsing to `os.uefi`.
+5. Add ext2/ext4 filesystem backend for `os.vfs`.
+6. Add kernel ELF loader (load segments into page-allocated memory).

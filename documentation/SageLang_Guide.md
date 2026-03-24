@@ -1943,6 +1943,7 @@ SageLang ships with 9 OS/bare-metal development modules in `lib/os/`:
 | Module | Import | Purpose |
 |--------|--------|---------|
 | `fat.sage` | `import os.fat` | FAT8/12/16/32 boot sector parser, cluster-to-LBA, FAT entry offsets |
+| `fat_dir.sage` | `import os.fat_dir` | FAT directory traversal, file reading, path resolution, cluster chains |
 | `elf.sage` | `import os.elf` | ELF32/64 header, program/section headers, string table lookup |
 | `mbr.sage` | `import os.mbr` | MBR partition table, CHS decode, bootable partition finder |
 | `gpt.sage` | `import os.gpt` | GPT header, GUID parsing, partition type identification |
@@ -1951,6 +1952,11 @@ SageLang ships with 9 OS/bare-metal development modules in `lib/os/`:
 | `uefi.sage` | `import os.uefi` | EFI memory map, config tables, RSDP, ACPI SDT headers |
 | `acpi.sage` | `import os.acpi` | MADT (APIC), FADT, HPET, MCFG parsers, processor enumeration |
 | `paging.sage` | `import os.paging` | x86-64 page tables, PTE flags, identity/higher-half mapping helpers |
+| `idt.sage` | `import os.idt` | x86-64 IDT gate construction, exception vectors, PIC remapping |
+| `serial.sage` | `import os.serial` | UART/COM port configuration, init sequences, debug output encoding |
+| `dtb.sage` | `import os.dtb` | Flattened Device Tree parser for ARM64/RISC-V (nodes, properties, search) |
+| `alloc.sage` | `import os.alloc` | Bump, free-list, and bitmap page allocators for kernel memory |
+| `vfs.sage` | `import os.vfs` | Virtual filesystem layer with mount table, path utilities, memfs backend |
 
 ### 9.11 UI Widget Library (`lib/graphics/ui.sage`)
 
