@@ -81,6 +81,10 @@ if(NOT BUILD_PICO)
         include_directories(${GLFW_INCLUDE_DIRS})
         add_compile_definitions(SAGE_HAS_GLFW=1)
     endif()
+    find_package(OpenGL QUIET)
+    if(OpenGL_FOUND)
+        add_compile_definitions(SAGE_HAS_OPENGL=1)
+    endif()
 endif()
 
 # ============================================================================
@@ -112,6 +116,9 @@ set(SAGE_CORE_SOURCES
     src/c/typecheck.c
     src/c/value.c
     src/c/graphics.c
+    src/c/gpu_api.c
+    src/c/ml_backend.c
+    src/c/heartbeat.c
 )
 
 set(SAGE_VM_SOURCES
@@ -197,6 +204,9 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
 
     # Link math, pthread, dl, and optional GPU libraries
     target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
+    if(OpenGL_FOUND)
+        target_link_libraries(sage OpenGL::GL)
+    endif()
 
     # LSP server binary (standalone)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/c/lsp_main.c")

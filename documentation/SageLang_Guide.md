@@ -2073,8 +2073,26 @@ SageLang ships with 11 LLM/neural network modules in `lib/llm/` for building and
 | `prompt.sage` | `import llm.prompt` | Chat formatting (ChatML/Llama/Alpaca), templates, few-shot |
 | `lora.sage` | `import llm.lora` | LoRA fine-tuning adapters, merge-back |
 | `quantize.sage` | `import llm.quantize` | Int8/int4 quantization, error analysis |
+| `engram.sage` | `import llm.engram` | Persistent neural memory (working/episodic/semantic/procedural) |
 
-### 9.17 UI Widget Library (`lib/graphics/ui.sage`)
+### 9.17 Agent Framework (`lib/agent/`)
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `core.sage` | `import agent.core` | ReAct agent loop, tool dispatch, scratchpad, prompt building |
+| `tools.sage` | `import agent.tools` | Pre-built tools (file I/O, code analysis, search, system) |
+| `planner.sage` | `import agent.planner` | Task decomposition with dependency DAG, auto-execution |
+| `router.sage` | `import agent.router` | Multi-agent orchestrator, capability routing, pipelines |
+
+### 9.18 Chatbot Framework (`lib/chat/`)
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `bot.sage` | `import chat.bot` | Conversation management, intents, middleware, LLM responses |
+| `session.sage` | `import chat.session` | Multi-session store, history, export (text/JSON) |
+| `persona.sage` | `import chat.persona` | Pre-built personas (SageDev, Teacher, Debugger, etc.) |
+
+### 9.19 UI Widget Library (`lib/graphics/ui.sage`)
 
 Immediate-mode GPU UI system for building application interfaces:
 

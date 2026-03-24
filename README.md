@@ -401,6 +401,18 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`prompt`**: Chat formatting (ChatML, Llama, Alpaca), templates, few-shot, context truncation
 - **`lora`**: LoRA fine-tuning adapters, low-rank weight adaptation, merge-back for deployment
 - **`quantize`**: Int8/int4 weight quantization, per-group scaling, error analysis, size comparison
+- **`engram`**: Persistent neural memory (working/episodic/semantic/procedural), consolidation, decay, LLM context generation
+
+**Agent Framework** (`lib/agent/`, imported as `import agent.<module>`):
+- **`core`**: ReAct agent loop (observe/think/act/reflect), tool dispatch, scratchpad, prompt building, LLM call tracking
+- **`tools`**: Pre-built tools (file read/write, code analysis, code search, system info), bulk registration
+- **`planner`**: Task decomposition with dependency DAG, auto-execution via agent tools, progress tracking
+- **`router`**: Multi-agent orchestrator, capability-based routing, message passing, sequential pipelines
+
+**Chatbot Framework** (`lib/chat/`, imported as `import chat.<module>`):
+- **`bot`**: Conversation management, intent recognition, middleware pipeline, LLM-backed responses, context variables
+- **`session`**: Multi-session store, turn tracking, history retrieval, text/JSON export, file persistence
+- **`persona`**: 6 pre-built personas (SageDev, CodeReviewer, Teacher, Debugger, Architect, Assistant), custom builder
 
 Example:
 ```sage

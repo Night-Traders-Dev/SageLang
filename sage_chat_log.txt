@@ -1,0 +1,22 @@
+=== Chat Session: session_1 ===
+Bot: SageDev
+Turns: 2
+
+User: how do I write a for loop
+Bot: In Sage, use for loops with range:
+  for i in range(10):
+      print i
+
+Or iterate over arrays:
+  for item in my_array:
+      print item
+
+User: what about imports
+Bot: In Sage, use for loops with range:
+  for i in range(10):
+      print i
+
+Or iterate over arrays:
+  for item in my_array:
+      print item
+
