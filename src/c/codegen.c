@@ -735,6 +735,117 @@ static void emit_asm_vinst_x86_64(FILE* out, VInst* v) {
             fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
             break;
         }
+        case VINST_LOAD_STRING:
+            fprintf(out, "  # v%d = string\n", v->dest);
+            fprintf(out, "  leaq .LS%d(%%rip), %%rdi\n", v->src1);
+            fprintf(out, "  call sage_rt_string\n");
+            fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
+            fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
+            break;
+        case VINST_LOAD_BOOL:
+            fprintf(out, "  # v%d = bool %d\n", v->dest, v->imm_bool);
+            fprintf(out, "  movl $%d, %%edi\n", v->imm_bool);
+            fprintf(out, "  call sage_rt_bool\n");
+            fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
+            fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
+            break;
+        case VINST_LOAD_NIL:
+            fprintf(out, "  # v%d = nil\n", v->dest);
+            fprintf(out, "  call sage_rt_nil\n");
+            fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
+            fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
+            break;
+        case VINST_MOD:
+        case VINST_EQ:
+        case VINST_NEQ:
+        case VINST_LT:
+        case VINST_GT:
+        case VINST_LTE:
+        case VINST_GTE: {
+            const char* fn = "sage_rt_mod";
+            if (v->kind == VINST_EQ) fn = "sage_rt_eq";
+            else if (v->kind == VINST_NEQ) fn = "sage_rt_neq";
+            else if (v->kind == VINST_LT) fn = "sage_rt_lt";
+            else if (v->kind == VINST_GT) fn = "sage_rt_gt";
+            else if (v->kind == VINST_LTE) fn = "sage_rt_lte";
+            else if (v->kind == VINST_GTE) fn = "sage_rt_gte";
+            fprintf(out, "  # v%d = v%d cmp v%d\n", v->dest, v->src1, v->src2);
+            fprintf(out, "  movq %d(%%rbp), %%rdi\n", -(v->src1 + 1) * 16);
+            fprintf(out, "  movq %d(%%rbp), %%rsi\n", -(v->src1 + 1) * 16 + 8);
+            fprintf(out, "  movq %d(%%rbp), %%rdx\n", -(v->src2 + 1) * 16);
+            fprintf(out, "  movq %d(%%rbp), %%rcx\n", -(v->src2 + 1) * 16 + 8);
+            fprintf(out, "  call %s\n", fn);
+            fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
+            fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
+            break;
+        }
+        case VINST_NEG:
+            fprintf(out, "  # v%d = -v%d\n", v->dest, v->src1);
+            fprintf(out, "  movq %d(%%rbp), %%rdi\n", -(v->src1 + 1) * 16);
+            fprintf(out, "  movq %d(%%rbp), %%rsi\n", -(v->src1 + 1) * 16 + 8);
+            fprintf(out, "  call sage_rt_neg\n");
+            fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
+            fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
+            break;
+        case VINST_NOT:
+            fprintf(out, "  # v%d = !v%d\n", v->dest, v->src1);
+            fprintf(out, "  movq %d(%%rbp), %%rdi\n", -(v->src1 + 1) * 16);
+            fprintf(out, "  movq %d(%%rbp), %%rsi\n", -(v->src1 + 1) * 16 + 8);
+            fprintf(out, "  call sage_rt_not\n");
+            fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
+            fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
+            break;
+        case VINST_AND:
+        case VINST_OR: {
+            const char* fn = v->kind == VINST_AND ? "sage_rt_and" : "sage_rt_or";
+            fprintf(out, "  movq %d(%%rbp), %%rdi\n", -(v->src1 + 1) * 16);
+            fprintf(out, "  movq %d(%%rbp), %%rsi\n", -(v->src1 + 1) * 16 + 8);
+            fprintf(out, "  movq %d(%%rbp), %%rdx\n", -(v->src2 + 1) * 16);
+            fprintf(out, "  movq %d(%%rbp), %%rcx\n", -(v->src2 + 1) * 16 + 8);
+            fprintf(out, "  call %s\n", fn);
+            fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
+            fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
+            break;
+        }
+        case VINST_LOAD_GLOBAL:
+            fprintf(out, "  # v%d = load global '%s'\n", v->dest, v->imm_string ? v->imm_string : "?");
+            fprintf(out, "  leaq sage_globals(%%rip), %%rdi\n");
+            fprintf(out, "  leaq .LS%d(%%rip), %%rsi\n", v->src1);
+            fprintf(out, "  call sage_rt_get_global\n");
+            fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
+            fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
+            break;
+        case VINST_STORE_GLOBAL:
+            fprintf(out, "  # store global '%s' = v%d\n", v->imm_string ? v->imm_string : "?", v->src1);
+            fprintf(out, "  leaq sage_globals(%%rip), %%rdi\n");
+            fprintf(out, "  leaq .LS%d(%%rip), %%rsi\n", v->src2);
+            fprintf(out, "  movq %d(%%rbp), %%rdx\n", -(v->src1 + 1) * 16);
+            fprintf(out, "  movq %d(%%rbp), %%rcx\n", -(v->src1 + 1) * 16 + 8);
+            fprintf(out, "  call sage_rt_set_global\n");
+            break;
+        case VINST_CALL_BUILTIN:
+            fprintf(out, "  # call builtin %s\n", v->func_name);
+            if (v->call_arg_count >= 1) {
+                fprintf(out, "  movq %d(%%rbp), %%rdi\n", -(v->call_args[0] + 1) * 16);
+                fprintf(out, "  movq %d(%%rbp), %%rsi\n", -(v->call_args[0] + 1) * 16 + 8);
+            }
+            fprintf(out, "  call %s\n", v->func_name);
+            fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
+            fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
+            break;
+        case VINST_BRANCH:
+            fprintf(out, "  # branch v%d ? %s : %s\n", v->src1, v->label, v->label_false);
+            // Load the condition value's type field (first 4 bytes)
+            fprintf(out, "  movl %d(%%rbp), %%eax\n", -(v->src1 + 1) * 16);
+            // Check if it's a bool (type == 3) with value true, or any non-nil/non-false
+            // Simple: load value, call sage_rt_truthy, branch on result
+            fprintf(out, "  movq %d(%%rbp), %%rdi\n", -(v->src1 + 1) * 16);
+            fprintf(out, "  movq %d(%%rbp), %%rsi\n", -(v->src1 + 1) * 16 + 8);
+            fprintf(out, "  call sage_rt_get_bool\n");
+            fprintf(out, "  testl %%eax, %%eax\n");
+            fprintf(out, "  jne %s\n", v->label);
+            fprintf(out, "  jmp %s\n", v->label_false);
+            break;
         case VINST_CALL:
             fprintf(out, "  # call %s\n", v->func_name);
             fprintf(out, "  call sage_fn_%s\n", v->func_name);
@@ -773,6 +884,52 @@ static void emit_asm_vinst_aarch64(FILE* out, VInst* v) {
             fprintf(out, "  ldr x1, [sp, #%d]\n", v->src1 * 16 + 8);
             fprintf(out, "  bl sage_rt_print\n");
             break;
+        case VINST_ADD:
+        case VINST_SUB:
+        case VINST_MUL:
+        case VINST_DIV: {
+            const char* fn = "sage_rt_add";
+            if (v->kind == VINST_SUB) fn = "sage_rt_sub";
+            else if (v->kind == VINST_MUL) fn = "sage_rt_mul";
+            else if (v->kind == VINST_DIV) fn = "sage_rt_div";
+            fprintf(out, "  ldr x0, [sp, #%d]\n", v->src1 * 16);
+            fprintf(out, "  ldr x1, [sp, #%d]\n", v->src1 * 16 + 8);
+            fprintf(out, "  ldr x2, [sp, #%d]\n", v->src2 * 16);
+            fprintf(out, "  ldr x3, [sp, #%d]\n", v->src2 * 16 + 8);
+            fprintf(out, "  bl %s\n", fn);
+            fprintf(out, "  str x0, [sp, #%d]\n", v->dest * 16);
+            fprintf(out, "  str x1, [sp, #%d]\n", v->dest * 16 + 8);
+            break;
+        }
+        case VINST_EQ:
+        case VINST_NEQ:
+        case VINST_LT:
+        case VINST_GT:
+        case VINST_LTE:
+        case VINST_GTE: {
+            const char* fn = "sage_rt_eq";
+            if (v->kind == VINST_NEQ) fn = "sage_rt_neq";
+            else if (v->kind == VINST_LT) fn = "sage_rt_lt";
+            else if (v->kind == VINST_GT) fn = "sage_rt_gt";
+            else if (v->kind == VINST_LTE) fn = "sage_rt_lte";
+            else if (v->kind == VINST_GTE) fn = "sage_rt_gte";
+            fprintf(out, "  ldr x0, [sp, #%d]\n", v->src1 * 16);
+            fprintf(out, "  ldr x1, [sp, #%d]\n", v->src1 * 16 + 8);
+            fprintf(out, "  ldr x2, [sp, #%d]\n", v->src2 * 16);
+            fprintf(out, "  ldr x3, [sp, #%d]\n", v->src2 * 16 + 8);
+            fprintf(out, "  bl %s\n", fn);
+            fprintf(out, "  str x0, [sp, #%d]\n", v->dest * 16);
+            fprintf(out, "  str x1, [sp, #%d]\n", v->dest * 16 + 8);
+            break;
+        }
+        case VINST_BRANCH:
+            fprintf(out, "  // branch v%d ? %s : %s\n", v->src1, v->label, v->label_false);
+            fprintf(out, "  ldr x0, [sp, #%d]\n", v->src1 * 16);
+            fprintf(out, "  ldr x1, [sp, #%d]\n", v->src1 * 16 + 8);
+            fprintf(out, "  bl sage_rt_is_truthy\n");
+            fprintf(out, "  cbnz w0, %s\n", v->label);
+            fprintf(out, "  b %s\n", v->label_false);
+            break;
         case VINST_LABEL:
             fprintf(out, "%s:\n", v->label);
             break;
@@ -804,6 +961,52 @@ static void emit_asm_vinst_rv64(FILE* out, VInst* v) {
             fprintf(out, "  ld a0, %d(sp)\n", v->src1 * 16);
             fprintf(out, "  ld a1, %d(sp)\n", v->src1 * 16 + 8);
             fprintf(out, "  call sage_rt_print\n");
+            break;
+        case VINST_ADD:
+        case VINST_SUB:
+        case VINST_MUL:
+        case VINST_DIV: {
+            const char* fn = "sage_rt_add";
+            if (v->kind == VINST_SUB) fn = "sage_rt_sub";
+            else if (v->kind == VINST_MUL) fn = "sage_rt_mul";
+            else if (v->kind == VINST_DIV) fn = "sage_rt_div";
+            fprintf(out, "  ld a0, %d(sp)\n", v->src1 * 16);
+            fprintf(out, "  ld a1, %d(sp)\n", v->src1 * 16 + 8);
+            fprintf(out, "  ld a2, %d(sp)\n", v->src2 * 16);
+            fprintf(out, "  ld a3, %d(sp)\n", v->src2 * 16 + 8);
+            fprintf(out, "  call %s\n", fn);
+            fprintf(out, "  sd a0, %d(sp)\n", v->dest * 16);
+            fprintf(out, "  sd a1, %d(sp)\n", v->dest * 16 + 8);
+            break;
+        }
+        case VINST_EQ:
+        case VINST_NEQ:
+        case VINST_LT:
+        case VINST_GT:
+        case VINST_LTE:
+        case VINST_GTE: {
+            const char* fn = "sage_rt_eq";
+            if (v->kind == VINST_NEQ) fn = "sage_rt_neq";
+            else if (v->kind == VINST_LT) fn = "sage_rt_lt";
+            else if (v->kind == VINST_GT) fn = "sage_rt_gt";
+            else if (v->kind == VINST_LTE) fn = "sage_rt_lte";
+            else if (v->kind == VINST_GTE) fn = "sage_rt_gte";
+            fprintf(out, "  ld a0, %d(sp)\n", v->src1 * 16);
+            fprintf(out, "  ld a1, %d(sp)\n", v->src1 * 16 + 8);
+            fprintf(out, "  ld a2, %d(sp)\n", v->src2 * 16);
+            fprintf(out, "  ld a3, %d(sp)\n", v->src2 * 16 + 8);
+            fprintf(out, "  call %s\n", fn);
+            fprintf(out, "  sd a0, %d(sp)\n", v->dest * 16);
+            fprintf(out, "  sd a1, %d(sp)\n", v->dest * 16 + 8);
+            break;
+        }
+        case VINST_BRANCH:
+            fprintf(out, "  # branch v%d ? %s : %s\n", v->src1, v->label, v->label_false);
+            fprintf(out, "  ld a0, %d(sp)\n", v->src1 * 16);
+            fprintf(out, "  ld a1, %d(sp)\n", v->src1 * 16 + 8);
+            fprintf(out, "  call sage_rt_get_bool\n");
+            fprintf(out, "  bnez a0, %s\n", v->label);
+            fprintf(out, "  j %s\n", v->label_false);
             break;
         case VINST_LABEL:
             fprintf(out, "%s:\n", v->label);
