@@ -1,0 +1,7 @@
+# Hashes of file build rules.
+bccbaa9a34b304524d62f04a25054c84 CMakeFiles/sage_boot
+4f1fd60bdd913763dfb41fd0bda4324b CMakeFiles/test_selfhost
+7b39573d86de91ee02bff7f38e6ad8bd CMakeFiles/test_selfhost_bootstrap
+fa79acb18a86fe6ef2b37e0a100ce7a8 CMakeFiles/test_selfhost_interpreter
+8a53c3569e3297d4a6df677f5806ab82 CMakeFiles/test_selfhost_lexer
+337e6cf0042ba7b9e2cbf860eb87f4ed CMakeFiles/test_selfhost_parser

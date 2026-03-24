@@ -3558,6 +3558,7 @@ static GLFWwindow* g_window = NULL;
 // Forward declarations for callbacks
 static void framebuffer_resize_cb(GLFWwindow* window, int w, int h);
 static void scroll_callback(GLFWwindow* window, double xoff, double yoff);
+static void char_callback(GLFWwindow* window, unsigned int codepoint);
 static void glfw_error_callback(int error, const char* description);
 
 // ============================================================================
@@ -3810,6 +3811,7 @@ static Value gpu_init_windowed(int argCount, Value* args) {
     // Set up callbacks
     glfwSetFramebufferSizeCallback(g_window, framebuffer_resize_cb);
     glfwSetScrollCallback(g_window, scroll_callback);
+    glfwSetCharCallback(g_window, char_callback);
 
     // Get required extensions from GLFW
     uint32_t glfw_ext_count = 0;
@@ -4383,6 +4385,47 @@ static void scroll_callback(GLFWwindow* window, double xoff, double yoff) {
     (void)window;
     g_scroll_x += xoff;
     g_scroll_y += yoff;
+}
+
+// ============================================================================
+// Feature: Text input via char callback
+// ============================================================================
+static uint32_t g_char_buffer[256];
+static int g_char_head = 0, g_char_tail = 0;
+
+static void char_callback(GLFWwindow* window, unsigned int codepoint) {
+    (void)window;
+    g_char_buffer[g_char_head & 255] = codepoint;
+    g_char_head++;
+}
+
+static Value gpu_text_input_available(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_bool(g_char_head != g_char_tail);
+}
+
+static Value gpu_text_input_read(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    if (g_char_head == g_char_tail) return val_string("");
+    uint32_t cp = g_char_buffer[g_char_tail & 255];
+    g_char_tail++;
+    char buf[5] = {0};
+    if (cp < 0x80) {
+        buf[0] = (char)cp;
+    } else if (cp < 0x800) {
+        buf[0] = 0xC0 | (cp >> 6);
+        buf[1] = 0x80 | (cp & 0x3F);
+    } else if (cp < 0x10000) {
+        buf[0] = 0xE0 | (cp >> 12);
+        buf[1] = 0x80 | ((cp >> 6) & 0x3F);
+        buf[2] = 0x80 | (cp & 0x3F);
+    } else {
+        buf[0] = 0xF0 | (cp >> 18);
+        buf[1] = 0x80 | ((cp >> 12) & 0x3F);
+        buf[2] = 0x80 | ((cp >> 6) & 0x3F);
+        buf[3] = 0x80 | (cp & 0x3F);
+    }
+    return val_string(buf);
 }
 
 // gpu.scroll_delta() -> dict {x, y} (consumed on read)
@@ -5471,6 +5514,10 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "mouse_just_pressed", 18, val_native(gpu_mouse_just_pressed));
     env_define(e, "mouse_just_released", 19, val_native(gpu_mouse_just_released));
 
+    // Text input (char callback)
+    env_define(e, "text_input_available", 20, val_native(gpu_text_input_available));
+    env_define(e, "text_input_read", 15, val_native(gpu_text_input_read));
+
     // Feature 7: Cubemap
     env_define(e, "create_cubemap", 14, val_native(gpu_create_cubemap));
 
@@ -5515,6 +5562,18 @@ Module* create_graphics_module(ModuleCache* cache) {
     env_define(e, "KEY_3", 5, val_number(GLFW_KEY_3));
     env_define(e, "KEY_4", 5, val_number(GLFW_KEY_4));
     env_define(e, "KEY_5", 5, val_number(GLFW_KEY_5));
+    env_define(e, "KEY_Z", 5, val_number(GLFW_KEY_Z));
+    env_define(e, "KEY_Y", 5, val_number(GLFW_KEY_Y));
+    env_define(e, "KEY_X", 5, val_number(GLFW_KEY_X));
+    env_define(e, "KEY_C", 5, val_number(GLFW_KEY_C));
+    env_define(e, "KEY_V", 5, val_number(GLFW_KEY_V));
+    env_define(e, "KEY_N", 5, val_number(GLFW_KEY_N));
+    env_define(e, "KEY_O", 5, val_number(GLFW_KEY_O));
+    env_define(e, "KEY_BACKSPACE", 13, val_number(GLFW_KEY_BACKSPACE));
+    env_define(e, "KEY_DELETE", 10, val_number(GLFW_KEY_DELETE));
+    env_define(e, "KEY_HOME", 8, val_number(GLFW_KEY_HOME));
+    env_define(e, "KEY_END", 7, val_number(GLFW_KEY_END));
+    env_define(e, "KEY_F1", 6, val_number(GLFW_KEY_F1));
     env_define(e, "MOUSE_LEFT", 10, val_number(GLFW_MOUSE_BUTTON_LEFT));
     env_define(e, "MOUSE_RIGHT", 11, val_number(GLFW_MOUSE_BUTTON_RIGHT));
     env_define(e, "MOUSE_MIDDLE", 12, val_number(GLFW_MOUSE_BUTTON_MIDDLE));

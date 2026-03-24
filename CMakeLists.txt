@@ -70,7 +70,17 @@ if(NOT BUILD_PICO)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(CURL REQUIRED libcurl)
     pkg_check_modules(OPENSSL REQUIRED openssl)
+    pkg_check_modules(VULKAN vulkan)
+    pkg_check_modules(GLFW glfw3)
     include_directories(${CURL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIRS})
+    if(VULKAN_FOUND)
+        include_directories(${VULKAN_INCLUDE_DIRS})
+        add_compile_definitions(SAGE_HAS_VULKAN=1)
+    endif()
+    if(GLFW_FOUND)
+        include_directories(${GLFW_INCLUDE_DIRS})
+        add_compile_definitions(SAGE_HAS_GLFW=1)
+    endif()
 endif()
 
 # ============================================================================
@@ -101,6 +111,7 @@ set(SAGE_CORE_SOURCES
     src/c/stdlib.c
     src/c/typecheck.c
     src/c/value.c
+    src/c/graphics.c
 )
 
 set(SAGE_VM_SOURCES
@@ -184,8 +195,8 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
         ${SAGE_VM_SOURCES}
     )
 
-    # Link math, pthread, and dl libraries
-    target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
+    # Link math, pthread, dl, and optional GPU libraries
+    target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
 
     # LSP server binary (standalone)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/c/lsp_main.c")
@@ -194,7 +205,7 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
             ${SAGE_CORE_SOURCES}
             ${SAGE_VM_SOURCES}
         )
-        target_link_libraries(sage-lsp m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
+        target_link_libraries(sage-lsp m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
         message(STATUS "Building LSP server: sage-lsp")
     endif()
 
@@ -212,7 +223,7 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
         ${SAGE_CORE_SOURCES}
         ${SAGE_VM_SOURCES}
     )
-    target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
+    target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
 
     # Custom target: run a .sage file through the self-hosted interpreter
     # Usage: cmake --build build -- sage_boot SAGE_FILE=path/to/file.sage
