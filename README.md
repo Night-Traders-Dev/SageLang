@@ -364,6 +364,31 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`kernel`**: Kernel definition, 1D/2D/3D launch parameters, occupancy analysis, common kernel patterns
 - **`stream`**: CUDA streams, events, timing, multi-stream execution plans, double-buffered pipeline
 
+**Standard Library** (`lib/std/`, imported as `import std.<module>`):
+- **`regex`**: Regular expression engine (`.`, `*`, `+`, `?`, `[]`, `^`, `$`, `\d`, `\w`, `\s`), search/match/replace/split
+- **`datetime`**: Date/time creation, ISO 8601 formatting/parsing, arithmetic, comparison, weekday
+- **`log`**: Structured logging (TRACE-FATAL), handlers, child loggers, field context
+- **`argparse`**: CLI argument parser (flags, options, positionals), help text generation
+- **`compress`**: RLE, LZ77, delta encoding/decoding with round-trip support
+- **`process`**: Process/environment utilities, path manipulation, exit codes, timers
+- **`unicode`**: UTF-8 encoding/decoding, character classification, case conversion, string trim/center/reverse
+- **`fmt`**: String formatting (hex, binary, octal, comma-separated integers, percentages, byte sizes, duration), template engine, table formatting
+- **`testing`**: Test suite runner with assertions (equal, contains, raises, close), benchmarking
+- **`enum`**: Enumerations, tagged unions (ADT), Result (Ok/Err), Option (Some/None) with map/unwrap
+- **`trait`**: Interface/trait system, behavioral contracts, type checking, sort/filter/map utilities
+- **`signal`**: Event bus (publish-subscribe), on/once/emit/off, atexit handlers
+- **`db`**: In-memory database (tables, CRUD, select/update/delete, joins, group_by, aggregation, pagination)
+- **`channel`**: Go-style buffered channels, send/recv/select, fan-out/fan-in, drain
+- **`threadpool`**: Work queue, task submission, parallel map, futures/promises
+- **`atomic`**: Atomic integers (load/store/CAS/exchange), atomic flags, spin locks, counters
+- **`rwlock`**: Read-write locks (multiple readers OR one writer), scoped lock helpers
+- **`condvar`**: Condition variables, barriers, latches, semaphores
+- **`debug`**: Value inspection, trace logging, watch expressions, memory snapshots
+- **`profiler`**: Hierarchical timing, call counting, hotspot detection, benchmark runner
+- **`docgen`**: Documentation extraction from source comments, markdown generation
+- **`build`**: Project configuration, dependency declaration, semver parsing, build targets
+- **`interop`**: FFI helpers, C type constants, struct definition, pack/unpack, platform detection
+
 Example:
 ```sage
 from math import factorial

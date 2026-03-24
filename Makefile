@@ -272,6 +272,7 @@ install: $(TARGET) $(LSP_TARGET)
 	cp -r lib/crypto $(LIBDIR)/lib/
 	cp -r lib/ml $(LIBDIR)/lib/
 	cp -r lib/cuda $(LIBDIR)/lib/
+	cp -r lib/std $(LIBDIR)/lib/
 	cp -r examples/*.sage $(LIBDIR)/examples/
 	install -d $(DOCDIR)
 	install -m 644 README.md ROADMAP.md LICENSE $(DOCDIR)/

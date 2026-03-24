@@ -2009,7 +2009,54 @@ SageLang ships with 4 CUDA abstraction modules in `lib/cuda/`:
 | `kernel.sage` | `import cuda.kernel` | Kernel definition, launch parameters, occupancy analysis |
 | `stream.sage` | `import cuda.stream` | CUDA streams, events, multi-stream execution plans |
 
-### 9.15 UI Widget Library (`lib/graphics/ui.sage`)
+### 9.15 Standard Library (`lib/std/`)
+
+SageLang ships with 23 general-purpose standard library modules in `lib/std/`:
+
+**Core utilities:**
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `regex.sage` | `import std.regex` | Regular expression engine (., *, +, ?, [], \d, \w, \s) |
+| `datetime.sage` | `import std.datetime` | Date/time creation, ISO 8601, arithmetic, comparison |
+| `log.sage` | `import std.log` | Structured logging (TRACE-FATAL), handlers, child loggers |
+| `argparse.sage` | `import std.argparse` | CLI argument parser (flags, options, positionals) |
+| `compress.sage` | `import std.compress` | RLE, LZ77, delta encoding/decoding |
+| `process.sage` | `import std.process` | Environment, path manipulation, exit codes, timers |
+| `unicode.sage` | `import std.unicode` | UTF-8, character classification, case conversion, trim |
+| `fmt.sage` | `import std.fmt` | Number/string formatting, templates, table output |
+| `testing.sage` | `import std.testing` | Test runner, assertions, benchmarks |
+| `db.sage` | `import std.db` | In-memory DB (CRUD, joins, aggregation, pagination) |
+| `signal.sage` | `import std.signal` | Event bus (pub/sub), atexit handlers |
+
+**Type system extensions:**
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `enum.sage` | `import std.enum` | Enums, tagged unions, Result (Ok/Err), Option (Some/None) |
+| `trait.sage` | `import std.trait` | Interface/trait system, behavioral contracts |
+
+**Concurrency primitives:**
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `channel.sage` | `import std.channel` | Go-style channels, send/recv/select, fan-in/out |
+| `threadpool.sage` | `import std.threadpool` | Work queue, parallel map, futures/promises |
+| `atomic.sage` | `import std.atomic` | Atomic integers, CAS, spin locks, counters |
+| `rwlock.sage` | `import std.rwlock` | Read-write locks, scoped lock helpers |
+| `condvar.sage` | `import std.condvar` | Condition variables, barriers, latches, semaphores |
+
+**Developer tooling:**
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `debug.sage` | `import std.debug` | Value inspection, trace logging, watch expressions |
+| `profiler.sage` | `import std.profiler` | Hierarchical timing, hotspots, benchmark runner |
+| `docgen.sage` | `import std.docgen` | Doc extraction from comments, markdown generation |
+| `build.sage` | `import std.build` | Project config, dependencies, semver, build targets |
+| `interop.sage` | `import std.interop` | FFI helpers, C types, pack/unpack, platform detection |
+
+### 9.16 UI Widget Library (`lib/graphics/ui.sage`)
 
 Immediate-mode GPU UI system for building application interfaces:
 
