@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/types.h>
 
+#include "gc.h"
 #include "lexer.h"
 #include "parser.h"
 #include "pass.h"
@@ -17,10 +18,7 @@ static void set_program_error(char* error, size_t error_size, const char* messag
 }
 
 static char* dup_text(const char* text, size_t length) {
-    char* copy = malloc(length + 1);
-    if (copy == NULL) {
-        return NULL;
-    }
+    char* copy = SAGE_ALLOC(length + 1);
     memcpy(copy, text, length);
     copy[length] = '\0';
     return copy;
@@ -32,12 +30,7 @@ static int ensure_chunk_capacity(BytecodeProgram* program) {
     }
 
     int new_capacity = program->chunk_capacity == 0 ? 8 : program->chunk_capacity * 2;
-    BytecodeChunk* new_chunks = realloc(program->chunks, sizeof(BytecodeChunk) * (size_t)new_capacity);
-    if (new_chunks == NULL) {
-        return 0;
-    }
-
-    program->chunks = new_chunks;
+    program->chunks = SAGE_REALLOC(program->chunks, sizeof(BytecodeChunk) * (size_t)new_capacity);
     program->chunk_capacity = new_capacity;
     return 1;
 }
@@ -48,13 +41,7 @@ static int ensure_function_capacity(BytecodeProgram* program) {
     }
 
     int new_capacity = program->function_capacity == 0 ? 8 : program->function_capacity * 2;
-    BytecodeFunction* new_functions =
-        realloc(program->functions, sizeof(BytecodeFunction) * (size_t)new_capacity);
-    if (new_functions == NULL) {
-        return 0;
-    }
-
-    program->functions = new_functions;
+    program->functions = SAGE_REALLOC(program->functions, sizeof(BytecodeFunction) * (size_t)new_capacity);
     program->function_capacity = new_capacity;
     return 1;
 }
@@ -69,12 +56,7 @@ static int ensure_constant_capacity(BytecodeChunk* chunk, int needed) {
         new_capacity *= 2;
     }
 
-    Value* new_constants = realloc(chunk->constants, sizeof(Value) * (size_t)new_capacity);
-    if (new_constants == NULL) {
-        return 0;
-    }
-
-    chunk->constants = new_constants;
+    chunk->constants = SAGE_REALLOC(chunk->constants, sizeof(Value) * (size_t)new_capacity);
     chunk->constant_capacity = new_capacity;
     return 1;
 }
@@ -89,15 +71,9 @@ static int ensure_code_capacity(BytecodeChunk* chunk, int needed) {
         new_capacity *= 2;
     }
 
-    uint8_t* new_code = malloc((size_t)new_capacity);
-    int* new_lines = malloc(sizeof(int) * (size_t)new_capacity);
-    int* new_columns = malloc(sizeof(int) * (size_t)new_capacity);
-    if (new_code == NULL || new_lines == NULL || new_columns == NULL) {
-        free(new_code);
-        free(new_lines);
-        free(new_columns);
-        return 0;
-    }
+    uint8_t* new_code = SAGE_ALLOC((size_t)new_capacity);
+    int* new_lines = SAGE_ALLOC(sizeof(int) * (size_t)new_capacity);
+    int* new_columns = SAGE_ALLOC(sizeof(int) * (size_t)new_capacity);
 
     if (chunk->code_count > 0) {
         memcpy(new_code, chunk->code, (size_t)chunk->code_count);
@@ -166,12 +142,8 @@ static int compile_program_function(void* data, ProcStmt* proc, char* error, siz
 
     function.param_count = proc->param_count;
     if (function.param_count > 0) {
-        function.params = calloc((size_t)function.param_count, sizeof(char*));
-        if (function.params == NULL) {
-            bytecode_chunk_free(&function.chunk);
-            set_program_error(error, error_size, "Out of memory while storing function parameters.");
-            return 0;
-        }
+        function.params = SAGE_ALLOC((size_t)function.param_count * sizeof(char*));
+        memset(function.params, 0, (size_t)function.param_count * sizeof(char*));
 
         for (int i = 0; i < function.param_count; i++) {
             function.params[i] = dup_text(proc->params[i].start, (size_t)proc->params[i].length);
@@ -375,11 +347,7 @@ static int read_chunk_constants(FILE* file, BytecodeChunk* chunk, char** line, s
                 return 0;
             }
 
-            char* decoded = malloc((size_t)string_len + 1);
-            if (decoded == NULL) {
-                set_program_error(error, error_size, "Out of memory while decoding string constant.");
-                return 0;
-            }
+            char* decoded = SAGE_ALLOC((size_t)string_len + 1);
 
             if (!decode_hex_line(*line, (size_t)string_len, (uint8_t*)decoded)) {
                 free(decoded);
@@ -586,12 +554,8 @@ int bytecode_program_read_file(BytecodeProgram* program, const char* input_path,
             }
 
             if (function.param_count > 0) {
-                function.params = calloc((size_t)function.param_count, sizeof(char*));
-                if (function.params == NULL) {
-                    bytecode_chunk_free(&function.chunk);
-                    set_program_error(error, error_size, "Out of memory while reading function parameters.");
-                    goto cleanup;
-                }
+                function.params = SAGE_ALLOC((size_t)function.param_count * sizeof(char*));
+                memset(function.params, 0, (size_t)function.param_count * sizeof(char*));
             }
 
             for (int j = 0; j < function.param_count; j++) {
@@ -613,14 +577,7 @@ int bytecode_program_read_file(BytecodeProgram* program, const char* input_path,
                     goto cleanup;
                 }
 
-                function.params[j] = malloc((size_t)param_len + 1);
-                if (function.params[j] == NULL) {
-                    for (int k = 0; k < j; k++) free(function.params[k]);
-                    free(function.params);
-                    bytecode_chunk_free(&function.chunk);
-                    set_program_error(error, error_size, "Out of memory while decoding function parameter.");
-                    goto cleanup;
-                }
+                function.params[j] = SAGE_ALLOC((size_t)param_len + 1);
 
                 if (!decode_hex_line(line, (size_t)param_len, (uint8_t*)function.params[j])) {
                     for (int k = 0; k <= j; k++) free(function.params[k]);

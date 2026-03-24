@@ -7,6 +7,17 @@
 #include "gc.h"
 #include "token.h"
 
+#define MAX_LOOP_DEPTH 64
+#define MAX_BREAK_PATCHES 256
+
+typedef struct {
+    int break_patches[MAX_BREAK_PATCHES];
+    int break_count;
+    int continue_target;
+    int has_for_cleanup;  // for-loops need extra stack cleanup before break
+    int for_pop_count;    // number of extra pops needed for for-loop break
+} LoopContext;
+
 typedef struct {
     BytecodeChunk* chunk;
     BytecodeCompileMode mode;
@@ -15,6 +26,8 @@ typedef struct {
     int allow_return;
     char* error;
     size_t error_size;
+    LoopContext loops[MAX_LOOP_DEPTH];
+    int loop_depth;
 } BytecodeCompiler;
 
 static void set_error(BytecodeCompiler* compiler, const char* message) {
@@ -215,6 +228,7 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
     switch (stmt->type) {
         case STMT_BREAK:
         case STMT_CONTINUE:
+            return compiler->loop_depth <= 0;  // only fallback if not inside a compiled loop
         case STMT_YIELD:
             return 1;
         case STMT_RETURN:
@@ -431,6 +445,33 @@ static int compile_expr(BytecodeCompiler* compiler, Expr* expr) {
     return 0;
 }
 
+static int push_loop(BytecodeCompiler* compiler, int continue_target, int is_for, int for_pop_count) {
+    if (compiler->loop_depth >= MAX_LOOP_DEPTH) {
+        set_error(compiler, "Loop nesting depth exceeded.");
+        return 0;
+    }
+    LoopContext* loop = &compiler->loops[compiler->loop_depth++];
+    loop->break_count = 0;
+    loop->continue_target = continue_target;
+    loop->has_for_cleanup = is_for;
+    loop->for_pop_count = for_pop_count;
+    return 1;
+}
+
+static int pop_loop_and_patch_breaks(BytecodeCompiler* compiler) {
+    if (compiler->loop_depth <= 0) {
+        set_error(compiler, "No loop to pop.");
+        return 0;
+    }
+    compiler->loop_depth--;
+    LoopContext* loop = &compiler->loops[compiler->loop_depth];
+    int target = current_offset(compiler);
+    for (int i = 0; i < loop->break_count; i++) {
+        if (!patch_jump(compiler, loop->break_patches[i], target)) return 0;
+    }
+    return 1;
+}
+
 static int compile_block(BytecodeCompiler* compiler, Stmt* stmt) {
     for (Stmt* current = stmt->as.block.statements; current != NULL; current = current->next) {
         if (!compile_stmt(compiler, current, 0)) return 0;
@@ -511,9 +552,14 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             int exit_jump = emit_jump(compiler, BC_OP_JUMP_IF_FALSE, 0, 0);
             if (exit_jump < 0) return 0;
             if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
-            if (!compile_stmt(compiler, stmt->as.while_stmt.body, 0)) return 0;
+            if (!push_loop(compiler, loop_start, 0, 0)) return 0;
+            if (!compile_stmt(compiler, stmt->as.while_stmt.body, 0)) {
+                compiler->loop_depth--;
+                return 0;
+            }
             if (!emit_op(compiler, BC_OP_JUMP, 0, 0)) return 0;
             if (!emit_u16(compiler, (uint16_t)loop_start, 0, 0)) return 0;
+            if (!pop_loop_and_patch_breaks(compiler)) return 0;
             if (!patch_jump(compiler, exit_jump, current_offset(compiler))) return 0;
             if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
@@ -546,14 +592,28 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 return 0;
             }
 
-            if (!compile_stmt(compiler, stmt->as.for_stmt.body, 0)) return 0;
+            // continue_target points to the increment section
+            int continue_target_placeholder = current_offset(compiler);
+            // for-loop break needs: pop comparison result, pop index, pop array, pop_env
+            if (!push_loop(compiler, continue_target_placeholder, 1, 3)) return 0;
+
+            if (!compile_stmt(compiler, stmt->as.for_stmt.body, 0)) {
+                compiler->loop_depth--;
+                return 0;
+            }
+
+            // Patch continue target to the increment section (right here)
+            compiler->loops[compiler->loop_depth - 1].continue_target = current_offset(compiler);
 
             if (!emit_constant(compiler, val_number(1), loop_var.line, loop_var.column) ||
                 !emit_op(compiler, BC_OP_ADD, loop_var.line, loop_var.column) ||
                 !emit_op(compiler, BC_OP_JUMP, loop_var.line, loop_var.column) ||
                 !emit_u16(compiler, (uint16_t)loop_start, loop_var.line, loop_var.column)) {
+                compiler->loop_depth--;
                 return 0;
             }
+
+            if (!pop_loop_and_patch_breaks(compiler)) return 0;
 
             if (!patch_jump(compiler, exit_jump, current_offset(compiler)) ||
                 !emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column) ||
@@ -565,6 +625,50 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
 
             if (want_result) return emit_op(compiler, BC_OP_NIL, loop_var.line, loop_var.column);
             return 1;
+        }
+        case STMT_BREAK: {
+            if (compiler->loop_depth <= 0) break;  // fall to AST fallback
+            LoopContext* loop = &compiler->loops[compiler->loop_depth - 1];
+            // For-loops need to clean up stack: pop index, pop array, and pop env
+            if (loop->has_for_cleanup) {
+                for (int i = 0; i < loop->for_pop_count; i++) {
+                    if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
+                }
+                if (!emit_op(compiler, BC_OP_POP_ENV, 0, 0)) return 0;
+            }
+            if (loop->break_count >= MAX_BREAK_PATCHES) {
+                set_error(compiler, "Too many break statements in loop.");
+                return 0;
+            }
+            int jump_loc = emit_jump(compiler, BC_OP_JUMP, 0, 0);
+            if (jump_loc < 0) return 0;
+            loop->break_patches[loop->break_count++] = jump_loc;
+            if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+            return 1;
+        }
+        case STMT_CONTINUE: {
+            if (compiler->loop_depth <= 0) break;  // fall to AST fallback
+            LoopContext* loop = &compiler->loops[compiler->loop_depth - 1];
+            if (!emit_op(compiler, BC_OP_JUMP, 0, 0)) return 0;
+            if (!emit_u16(compiler, (uint16_t)loop->continue_target, 0, 0)) return 0;
+            if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+            return 1;
+        }
+        case STMT_IMPORT: {
+            // Fall through to AST fallback for now — module loading requires interpreter
+            break;
+        }
+        case STMT_TRY: {
+            // Fall through to AST fallback — exception handling requires handler stack
+            break;
+        }
+        case STMT_RAISE: {
+            // Fall through to AST fallback
+            break;
+        }
+        case STMT_CLASS: {
+            // Fall through to AST fallback — class definitions require interpreter
+            break;
         }
         case STMT_RETURN:
             if (!compiler->allow_return) break;
@@ -599,6 +703,7 @@ int bytecode_compile_statement_with_functions(BytecodeChunk* chunk, Stmt* stmt, 
                                               void* build_function_data,
                                               char* error, size_t error_size) {
     BytecodeCompiler compiler;
+    memset(&compiler, 0, sizeof(compiler));
     compiler.chunk = chunk;
     compiler.mode = mode;
     compiler.build_function = build_function;
@@ -628,6 +733,7 @@ int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
                                    void* build_function_data,
                                    char* error, size_t error_size) {
     BytecodeCompiler compiler;
+    memset(&compiler, 0, sizeof(compiler));
     compiler.chunk = chunk;
     compiler.mode = BYTECODE_COMPILE_STRICT;
     compiler.build_function = build_function;

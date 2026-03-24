@@ -1001,15 +1001,13 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             case BC_OP_GPU_UPDATE_UNIFORM: {
                 Value data = vm_pop(&vm);
                 Value handle = vm_pop(&vm);
-                if (IS_ARRAY(data)) {
-                    float* floats = malloc(sizeof(float) * (size_t)data.as.array->count);
-                    if (floats) {
-                        for (int fi = 0; fi < data.as.array->count; fi++) {
-                            floats[fi] = (float)AS_NUMBER(data.as.array->elements[fi]);
-                        }
-                        sgpu_update_uniform((int)AS_NUMBER(handle), floats, data.as.array->count);
-                        free(floats);
+                if (IS_ARRAY(data) && data.as.array->count > 0) {
+                    float* floats = SAGE_ALLOC(sizeof(float) * (size_t)data.as.array->count);
+                    for (int fi = 0; fi < data.as.array->count; fi++) {
+                        floats[fi] = (float)AS_NUMBER(data.as.array->elements[fi]);
                     }
+                    sgpu_update_uniform((int)AS_NUMBER(handle), floats, data.as.array->count);
+                    free(floats);
                 }
                 break;
             }
@@ -1018,16 +1016,14 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 Value stages = vm_pop(&vm);
                 Value layout = vm_pop(&vm);
                 Value cmd = vm_pop(&vm);
-                if (IS_ARRAY(data)) {
-                    float* floats = malloc(sizeof(float) * (size_t)data.as.array->count);
-                    if (floats) {
-                        for (int fi = 0; fi < data.as.array->count; fi++) {
-                            floats[fi] = (float)AS_NUMBER(data.as.array->elements[fi]);
-                        }
-                        sgpu_cmd_push_constants((int)AS_NUMBER(cmd), (int)AS_NUMBER(layout),
-                            (int)AS_NUMBER(stages), floats, data.as.array->count);
-                        free(floats);
+                if (IS_ARRAY(data) && data.as.array->count > 0) {
+                    float* floats = SAGE_ALLOC(sizeof(float) * (size_t)data.as.array->count);
+                    for (int fi = 0; fi < data.as.array->count; fi++) {
+                        floats[fi] = (float)AS_NUMBER(data.as.array->elements[fi]);
                     }
+                    sgpu_cmd_push_constants((int)AS_NUMBER(cmd), (int)AS_NUMBER(layout),
+                        (int)AS_NUMBER(stages), floats, data.as.array->count);
+                    free(floats);
                 }
                 break;
             }
@@ -1040,6 +1036,26 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     (int)AS_NUMBER(gx), (int)AS_NUMBER(gy), (int)AS_NUMBER(gz));
                 break;
             }
+
+            // Break/continue/loop_back are resolved by the bytecode compiler
+            // into JUMP instructions. These should never appear at runtime.
+            case BC_OP_BREAK:
+            case BC_OP_CONTINUE:
+            case BC_OP_LOOP_BACK:
+                result = vm_error("Unexpected break/continue/loop opcode at runtime.");
+                goto done;
+
+            // Import, class, try/raise — these are handled via AST fallback
+            // in hybrid mode. If they appear as raw opcodes, it's an error.
+            case BC_OP_IMPORT:
+            case BC_OP_CLASS:
+            case BC_OP_METHOD:
+            case BC_OP_INHERIT:
+            case BC_OP_SETUP_TRY:
+            case BC_OP_END_TRY:
+            case BC_OP_RAISE:
+                result = vm_error("Unimplemented bytecode opcode.");
+                goto done;
 
             case BC_OP_RETURN:
                 result = vm_normal(vm.stack_count > 0 ? vm_pop(&vm) : val_nil());

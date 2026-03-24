@@ -55,6 +55,16 @@ typedef enum {
     BC_OP_POP_ENV,
     BC_OP_DUP,
     BC_OP_ARRAY_LEN,
+    BC_OP_BREAK,             // Jump to loop exit (patched after loop)
+    BC_OP_CONTINUE,          // Jump to loop continue target
+    BC_OP_LOOP_BACK,         // Unconditional backward jump (loop iteration)
+    BC_OP_IMPORT,            // import module (name on constant pool)
+    BC_OP_CLASS,             // define class (name, method_count, parent_name)
+    BC_OP_METHOD,            // define method on class (name on constant pool)
+    BC_OP_INHERIT,           // inherit from parent class
+    BC_OP_SETUP_TRY,         // push exception handler (catch_target, finally_target)
+    BC_OP_END_TRY,           // pop exception handler
+    BC_OP_RAISE,             // raise exception (value on stack)
     // GPU hot-path opcodes (Phase 16: game engine optimization)
     BC_OP_GPU_POLL_EVENTS,         // gpu.poll_events() — no args, no result
     BC_OP_GPU_WINDOW_SHOULD_CLOSE, // gpu.window_should_close() -> bool
