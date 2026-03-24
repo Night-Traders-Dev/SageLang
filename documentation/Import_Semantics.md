@@ -20,6 +20,8 @@ import os.fat              # resolves to lib/os/fat.sage, binds as "fat"
 import graphics.vulkan     # resolves to lib/graphics/vulkan.sage, binds as "vulkan"
 import net.url             # resolves to lib/net/url.sage, binds as "url"
 import crypto.hash         # resolves to lib/crypto/hash.sage, binds as "hash"
+import ml.tensor           # resolves to lib/ml/tensor.sage, binds as "tensor"
+import cuda.device         # resolves to lib/cuda/device.sage, binds as "device"
 from graphics.math3d import vec3, mat4_mul
 from os.elf import parse_header
 from net.ip import parse_v4, is_private

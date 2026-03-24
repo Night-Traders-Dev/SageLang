@@ -1986,7 +1986,30 @@ SageLang ships with 6 cryptography modules in `lib/crypto/`:
 | `rand.sage` | `import crypto.rand` | xoshiro256** PRNG, UUID v4, random bytes/strings/hex, shuffle |
 | `password.sage` | `import crypto.password` | PBKDF2-HMAC key derivation, password hashing/verification |
 
-### 9.13 UI Widget Library (`lib/graphics/ui.sage`)
+### 9.13 Machine Learning Libraries
+
+SageLang ships with 5 PyTorch-style machine learning modules in `lib/ml/`:
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `tensor.sage` | `import ml.tensor` | N-dimensional tensors, element-wise ops, matmul, reductions, activations |
+| `nn.sage` | `import ml.nn` | Neural network layers (Linear, ReLU, Sigmoid, Dropout), Sequential model |
+| `optim.sage` | `import ml.optim` | SGD (momentum), Adam optimizer, learning rate schedulers |
+| `loss.sage` | `import ml.loss` | MSE, cross-entropy, Huber, L1, hinge, KL divergence |
+| `data.sage` | `import ml.data` | Dataset/DataLoader, batching, normalization, train/test split |
+
+### 9.14 CUDA Libraries
+
+SageLang ships with 4 CUDA abstraction modules in `lib/cuda/`:
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `device.sage` | `import cuda.device` | GPU device descriptors, compute capability, feature detection |
+| `memory.sage` | `import cuda.memory` | GPU memory allocation, typed tensors, memory pools |
+| `kernel.sage` | `import cuda.kernel` | Kernel definition, launch parameters, occupancy analysis |
+| `stream.sage` | `import cuda.stream` | CUDA streams, events, multi-stream execution plans |
+
+### 9.15 UI Widget Library (`lib/graphics/ui.sage`)
 
 Immediate-mode GPU UI system for building application interfaces:
 

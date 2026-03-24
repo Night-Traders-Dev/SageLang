@@ -348,6 +348,19 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`rand`**: xoshiro256** PRNG, UUID v4, random bytes/strings/hex, Fisher-Yates shuffle
 - **`password`**: PBKDF2-HMAC key derivation, password hashing/verification
 
+**Machine Learning** (`lib/ml/`, imported as `import ml.<module>`):
+- **`tensor`**: N-dimensional tensors with shape tracking, element-wise ops, matmul, reductions, activations (ReLU, sigmoid, softmax), broadcasting
+- **`nn`**: Neural network layers (Linear, ReLU, Sigmoid, Tanh, Dropout, BatchNorm), Sequential model, parameter collection
+- **`optim`**: SGD (with momentum), Adam optimizer, learning rate schedulers (step, exponential, cosine, warmup)
+- **`loss`**: MSE, cross-entropy, binary cross-entropy, Huber, L1, hinge, KL divergence with gradient functions
+- **`data`**: Dataset/DataLoader, batching, shuffling, normalization, min-max scaling, one-hot encoding, train/test split
+
+**CUDA** (`lib/cuda/`, imported as `import cuda.<module>`):
+- **`device`**: GPU device descriptors, compute capability, architecture detection, feature checks, launch configuration
+- **`memory`**: GPU memory allocation, typed tensors, host/device transfers, memory pools, bandwidth estimation
+- **`kernel`**: Kernel definition, 1D/2D/3D launch parameters, occupancy analysis, common kernel patterns
+- **`stream`**: CUDA streams, events, timing, multi-stream execution plans, double-buffered pipeline
+
 Example:
 ```sage
 from math import factorial
