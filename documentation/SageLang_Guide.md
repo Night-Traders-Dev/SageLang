@@ -1958,7 +1958,22 @@ SageLang ships with 9 OS/bare-metal development modules in `lib/os/`:
 | `alloc.sage` | `import os.alloc` | Bump, free-list, and bitmap page allocators for kernel memory |
 | `vfs.sage` | `import os.vfs` | Virtual filesystem layer with mount table, path utilities, memfs backend |
 
-### 9.11 UI Widget Library (`lib/graphics/ui.sage`)
+### 9.11 Networking Libraries
+
+SageLang ships with 8 high-level networking modules in `lib/net/`, built on top of the native `socket`, `tcp`, `http`, and `ssl` modules:
+
+| Module | Import | Purpose |
+|--------|--------|---------|
+| `url.sage` | `import net.url` | URL parsing/building, percent-encoding/decoding, query strings |
+| `headers.sage` | `import net.headers` | HTTP header parsing/building, content-type inspection, constants |
+| `request.sage` | `import net.request` | HTTP request builder with fluent API, auth helpers, status utilities |
+| `server.sage` | `import net.server` | TCP/HTTP server framework with routing, request parsing, response builders |
+| `websocket.sage` | `import net.websocket` | WebSocket frame building/parsing (RFC 6455), upgrade handshake |
+| `mime.sage` | `import net.mime` | MIME type lookup from file extensions (80+ types) |
+| `dns.sage` | `import net.dns` | DNS wire-format message parsing/building, name compression |
+| `ip.sage` | `import net.ip` | IPv4 parsing/validation, CIDR subnets, private/loopback/multicast checks |
+
+### 9.12 UI Widget Library (`lib/graphics/ui.sage`)
 
 Immediate-mode GPU UI system for building application interfaces:
 

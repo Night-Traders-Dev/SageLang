@@ -171,6 +171,47 @@ let mmap = uefi.parse_memory_map(mem_bytes, 48, num_entries)
 print uefi.total_memory(mmap)
 ```
 
+### Networking Libraries (`lib/net/`)
+
+High-level networking utilities built on top of the native `socket`, `tcp`, `http`, and `ssl` modules. All imported with `net.` prefix:
+
+| Module | Import | Description |
+|--------|--------|-------------|
+| **URL** | `import net.url` | URL parsing/building, percent-encoding/decoding, query string handling |
+| **Headers** | `import net.headers` | HTTP header parsing/building, content-type inspection, constants |
+| **Request** | `import net.request` | HTTP request builder with fluent API, auth helpers, response status utilities |
+| **Server** | `import net.server` | TCP/HTTP server framework with routing, request parsing, response builders |
+| **WebSocket** | `import net.websocket` | WebSocket frame building/parsing (RFC 6455), upgrade handshake |
+| **MIME** | `import net.mime` | MIME type lookup from file extensions (80+ types), category classification |
+| **DNS** | `import net.dns` | DNS wire-format message parsing/building, query construction, name compression |
+| **IP** | `import net.ip` | IPv4 parsing/validation, CIDR subnets, private/loopback/multicast checks |
+
+Example:
+```sage
+import net.url
+import net.ip
+
+let u = url.parse("https://api.example.com:8443/v1/users?page=2")
+print u["host"]      # api.example.com
+print u["port"]      # 8443
+print u["path"]      # /v1/users
+
+let params = url.parse_query(u["query"])
+print params["page"] # 2
+
+print ip.is_private("192.168.1.1")  # true
+let cidr = ip.parse_cidr("10.0.0.0/8")
+print cidr["host_count"]            # 16777214
+
+import net.server
+proc hello_handler(req):
+    return server.response_json("{" + chr(34) + "msg" + chr(34) + ": " + chr(34) + "hello" + chr(34) + "}")
+
+let srv = server.create_server("0.0.0.0", 8080)
+server.get_route(srv["router"], "/", hello_handler)
+# server.listen_and_serve(srv)  # blocking
+```
+
 ### GPU Graphics Engine (Vulkan + OpenGL)
 
 - **`gpu`**: Full Vulkan backend with handle-based resource management
@@ -288,6 +329,16 @@ The standard library is organized into subdirectories with dotted import paths:
 
 **OS / Bare-metal** (`lib/os/`, imported as `import os.<module>`):
 - **`fat`**, **`fat_dir`**, **`elf`**, **`mbr`**, **`gpt`**, **`pe`**, **`pci`**, **`uefi`**, **`acpi`**, **`paging`**, **`idt`**, **`serial`**, **`dtb`**, **`alloc`**, **`vfs`**
+
+**Networking** (`lib/net/`, imported as `import net.<module>`):
+- **`url`**: URL parsing, building, percent-encoding/decoding, query string handling
+- **`headers`**: HTTP header parsing/building, content-type inspection, header constants
+- **`request`**: HTTP request builder with fluent API, auth helpers, response classification
+- **`server`**: TCP/HTTP server framework with request parsing, router, response builders
+- **`websocket`**: WebSocket frame building/parsing (RFC 6455), upgrade handshake helpers
+- **`mime`**: MIME type lookup from file extensions (80+ types), category classification
+- **`dns`**: DNS wire-format message parsing/building, record types, name compression
+- **`ip`**: IPv4 parsing/validation, CIDR subnets, private/loopback/multicast detection
 
 Example:
 ```sage

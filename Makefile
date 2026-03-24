@@ -268,6 +268,7 @@ install: $(TARGET) $(LSP_TARGET)
 	cp -r lib/*.sage $(LIBDIR)/lib/ 2>/dev/null || true
 	cp -r lib/graphics $(LIBDIR)/lib/
 	cp -r lib/os $(LIBDIR)/lib/
+	cp -r lib/net $(LIBDIR)/lib/
 	cp -r examples/*.sage $(LIBDIR)/examples/
 	install -d $(DOCDIR)
 	install -m 644 README.md ROADMAP.md LICENSE $(DOCDIR)/

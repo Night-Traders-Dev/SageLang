@@ -18,8 +18,10 @@ Modules organized in subdirectories use dot-separated paths. The dots map to dir
 ```sage
 import os.fat              # resolves to lib/os/fat.sage, binds as "fat"
 import graphics.vulkan     # resolves to lib/graphics/vulkan.sage, binds as "vulkan"
+import net.url             # resolves to lib/net/url.sage, binds as "url"
 from graphics.math3d import vec3, mat4_mul
 from os.elf import parse_header
+from net.ip import parse_v4, is_private
 ```
 
 When using `import a.b`, the variable is bound using the **last component** of the path (e.g., `import os.fat` lets you call `fat.parse_boot_sector()`). Use `import a.b as alias` to override the binding name.
