@@ -1,5 +1,9 @@
 # LLVM backend feature test: arrays, dicts, for loops, string ops, conditionals
 
+# Cross-module constant import
+from mathlib import PI
+print PI
+
 # Arrays
 let arr = [10, 20, 30]
 push(arr, 40)

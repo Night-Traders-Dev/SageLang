@@ -8,6 +8,7 @@ gc_disable()
 # ============================================================================
 import token
 import ast
+import io
 
 # ============================================================================
 # LLVM Compiler State
@@ -21,6 +22,8 @@ class LLVMCompiler:
         self.string_count = 0
         self.proc_names = []
         self.global_names = []
+        self.imported_modules = []
+        self.imported_consts = {}
         self.loop_cond_labels = []
         self.loop_end_labels = []
         self.loop_depth = 0
@@ -48,6 +51,16 @@ proc llc_add_proc(lc, name):
 
 proc llc_add_global(lc, name):
     push(lc.global_names, name)
+
+proc has_module(lc, name):
+    for i in range(len(lc.imported_modules)):
+        if lc.imported_modules[i] == name:
+            return true
+    return false
+
+proc add_module(lc, name):
+    if not has_module(lc, name):
+        push(lc.imported_modules, name)
 
 # ============================================================================
 # Output Helpers
@@ -148,7 +161,157 @@ proc llvm_collect_symbols(lc, program):
             llc_add_proc(lc, s.name.text)
         if s.type == ast.STMT_LET:
             llc_add_global(lc, s.name.text)
+        if s.type == ast.STMT_IMPORT:
+            if s.module_name != nil:
+                add_module(lc, s.module_name)
+            if s.item_count > 0:
+                process_import_constants(lc, s)
         s = s.next
+
+proc resolve_module_path(module_name):
+    if module_name == nil or module_name == "":
+        return nil
+    if contains(module_name, ".."):
+        return nil
+    let paths = []
+    push(paths, module_name + ".sage")
+    push(paths, "./lib/" + module_name + ".sage")
+    push(paths, "./modules/" + module_name + ".sage")
+    for i in range(len(paths)):
+        if io.exists(paths[i]):
+            return paths[i]
+    return nil
+
+proc const_truthy(val):
+    if val == nil:
+        return false
+    if val == false:
+        return false
+    if type(val) == "number" and val == 0:
+        return false
+    if type(val) == "string" and val == "":
+        return false
+    return true
+
+proc eval_const_expr(expr, consts):
+    if expr == nil:
+        return [false, nil]
+    let t = expr.type
+    if t == ast.EXPR_NUMBER:
+        return [true, expr.value]
+    if t == ast.EXPR_STRING:
+        return [true, expr.value]
+    if t == ast.EXPR_BOOL:
+        return [true, expr.value]
+    if t == ast.EXPR_NIL:
+        return [true, nil]
+    if t == ast.EXPR_VARIABLE:
+        let name = expr.name.text
+        if dict_has(consts, name):
+            return [true, consts[name]]
+        return [false, nil]
+    if t == ast.EXPR_BINARY:
+        let op_t = expr.op.type
+        if op_t == token.TOKEN_NOT:
+            let lv = eval_const_expr(expr.left, consts)
+            if lv[0]:
+                return [true, not const_truthy(lv[1])]
+            return [false, nil]
+        let lv = eval_const_expr(expr.left, consts)
+        let rv = eval_const_expr(expr.right, consts)
+        if not lv[0] or not rv[0]:
+            return [false, nil]
+        let left = lv[1]
+        let right = rv[1]
+        if op_t == token.TOKEN_PLUS:
+            if type(left) == "number" and type(right) == "number":
+                return [true, left + right]
+            if type(left) == "string" and type(right) == "string":
+                return [true, left + right]
+            return [false, nil]
+        if op_t == token.TOKEN_MINUS:
+            if type(left) == "number" and type(right) == "number":
+                return [true, left - right]
+            return [false, nil]
+        if op_t == token.TOKEN_STAR:
+            if type(left) == "number" and type(right) == "number":
+                return [true, left * right]
+            return [false, nil]
+        if op_t == token.TOKEN_SLASH:
+            if type(left) == "number" and type(right) == "number" and right != 0:
+                return [true, left / right]
+            return [false, nil]
+        if op_t == token.TOKEN_PERCENT:
+            if type(left) == "number" and type(right) == "number" and right != 0:
+                return [true, left % right]
+            return [false, nil]
+        if op_t == token.TOKEN_EQ:
+            return [true, left == right]
+        if op_t == token.TOKEN_NEQ:
+            return [true, left != right]
+        if op_t == token.TOKEN_LT:
+            if type(left) == "number" and type(right) == "number":
+                return [true, left < right]
+            return [false, nil]
+        if op_t == token.TOKEN_GT:
+            if type(left) == "number" and type(right) == "number":
+                return [true, left > right]
+            return [false, nil]
+        if op_t == token.TOKEN_LTE:
+            if type(left) == "number" and type(right) == "number":
+                return [true, left <= right]
+            return [false, nil]
+        if op_t == token.TOKEN_GTE:
+            if type(left) == "number" and type(right) == "number":
+                return [true, left >= right]
+            return [false, nil]
+        if op_t == token.TOKEN_AND:
+            return [true, const_truthy(left) and const_truthy(right)]
+        if op_t == token.TOKEN_OR:
+            return [true, const_truthy(left) or const_truthy(right)]
+        return [false, nil]
+    return [false, nil]
+
+proc collect_module_constants(module_stmts):
+    let consts = {}
+    if type(module_stmts) == "array":
+        for i in range(len(module_stmts)):
+            let s = module_stmts[i]
+            if s != nil and s.type == ast.STMT_LET:
+                let res = eval_const_expr(s.initializer, consts)
+                if res[0]:
+                    consts[s.name.text] = res[1]
+        return consts
+    let s = module_stmts
+    while s != nil:
+        if s.type == ast.STMT_LET:
+            let res = eval_const_expr(s.initializer, consts)
+            if res[0]:
+                consts[s.name.text] = res[1]
+        s = s.next
+    return consts
+
+proc process_import_constants(lc, stmt):
+    if stmt == nil:
+        return
+    if stmt.item_count == 0:
+        return
+    let module_path = resolve_module_path(stmt.module_name)
+    if module_path == nil:
+        return
+    let source = io.readfile(module_path)
+    if source == nil:
+        return
+    from parser import parse_source_file
+    let module_stmts = parse_source_file(source, module_path)
+    let consts = collect_module_constants(module_stmts)
+    for i in range(stmt.item_count):
+        let item_name = stmt.items[i]
+        let bind_name = item_name
+        if stmt.item_aliases != nil and i < len(stmt.item_aliases) and stmt.item_aliases[i] != nil:
+            bind_name = stmt.item_aliases[i]
+        if dict_has(consts, item_name):
+            lc.imported_consts[bind_name] = consts[item_name]
 
 # ============================================================================
 # Expression Emission - returns SSA register number
@@ -228,6 +391,34 @@ proc llvm_emit_expr(lc, expr):
         return r
     if t == ast.EXPR_VARIABLE:
         let name = expr.name.text
+        if has_module(lc, name):
+            let r_mod = llc_new_reg(lc)
+            ll_line(lc, pct + str(r_mod) + " = call " + sv + " @sage_rt_nil()")
+            return r_mod
+        if dict_has(lc.imported_consts, name):
+            let cval = lc.imported_consts[name]
+            let r_const = llc_new_reg(lc)
+            if cval == nil:
+                ll_line(lc, pct + str(r_const) + " = call " + sv + " @sage_rt_nil()")
+                return r_const
+            if type(cval) == "number":
+                ll_line(lc, pct + str(r_const) + " = call " + sv + " @sage_rt_number(double " + str(cval) + ")")
+                return r_const
+            if type(cval) == "bool":
+                let bval = 0
+                if cval:
+                    bval = 1
+                ll_line(lc, pct + str(r_const) + " = call " + sv + " @sage_rt_bool(i32 " + str(bval) + ")")
+                return r_const
+            if type(cval) == "string":
+                let str_id = llc_add_string(lc, cval)
+                let slen = len(cval) + 1
+                let ptr_reg = llc_new_reg(lc)
+                ll_line(lc, pct + str(ptr_reg) + " = getelementptr [" + str(slen) + " x i8], [" + str(slen) + " x i8]* @.str." + str(str_id) + ", i64 0, i64 0")
+                ll_line(lc, pct + str(r_const) + " = call " + sv + " @sage_rt_string(i8* " + pct + str(ptr_reg) + ")")
+                return r_const
+            ll_line(lc, pct + str(r_const) + " = call " + sv + " @sage_rt_nil()")
+            return r_const
         let r = llc_new_reg(lc)
         ll_line(lc, pct + str(r) + " = load " + sv + ", " + sv + "* " + pct + name)
         return r

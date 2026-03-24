@@ -2,6 +2,8 @@
 #include "llvm_backend.h"
 
 #include <errno.h>
+#include <limits.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,10 +28,31 @@
 
 // Forward declaration
 extern Stmt* parse_program(const char* source);
+static int llvm_resolve_gpu_constant(const char* name, double* out_value);
 
 // ============================================================================
 // LLVM Compiler State
 // ============================================================================
+
+typedef enum {
+    IMPORT_CONST_INVALID = 0,
+    IMPORT_CONST_NUMBER,
+    IMPORT_CONST_BOOL,
+    IMPORT_CONST_STRING,
+    IMPORT_CONST_NIL
+} ImportConstType;
+
+typedef struct {
+    ImportConstType type;
+    double number_value;
+    int bool_value;
+    char* string_value;
+} ImportConstValue;
+
+typedef struct {
+    char* name;
+    ImportConstValue value;
+} ImportedConst;
 
 typedef struct {
     FILE* out;
@@ -60,6 +83,10 @@ typedef struct {
     char** imported_modules;
     int imported_module_count;
     int imported_module_cap;
+    // Imported constants from "from module import CONST [as alias]"
+    ImportedConst* imported_consts;
+    int imported_const_count;
+    int imported_const_cap;
 } LLVMCompiler;
 
 static int llc_has_module(LLVMCompiler* lc, const char* name) {
@@ -77,6 +104,96 @@ static void llc_add_module(LLVMCompiler* lc, const char* name) {
             sizeof(char*) * (size_t)lc->imported_module_cap);
     }
     lc->imported_modules[lc->imported_module_count++] = SAGE_STRDUP(name);
+}
+
+static ImportConstValue import_const_invalid(void) {
+    ImportConstValue v;
+    memset(&v, 0, sizeof(v));
+    v.type = IMPORT_CONST_INVALID;
+    return v;
+}
+
+static ImportConstValue import_const_number(double value) {
+    ImportConstValue v = import_const_invalid();
+    v.type = IMPORT_CONST_NUMBER;
+    v.number_value = value;
+    return v;
+}
+
+static ImportConstValue import_const_bool(int value) {
+    ImportConstValue v = import_const_invalid();
+    v.type = IMPORT_CONST_BOOL;
+    v.bool_value = value ? 1 : 0;
+    return v;
+}
+
+static ImportConstValue import_const_string(const char* value) {
+    ImportConstValue v = import_const_invalid();
+    v.type = IMPORT_CONST_STRING;
+    v.string_value = SAGE_STRDUP(value);
+    return v;
+}
+
+static ImportConstValue import_const_nil(void) {
+    ImportConstValue v = import_const_invalid();
+    v.type = IMPORT_CONST_NIL;
+    return v;
+}
+
+static void import_const_value_free(ImportConstValue* value) {
+    if (value == NULL) return;
+    if (value->type == IMPORT_CONST_STRING) {
+        free(value->string_value);
+    }
+    value->string_value = NULL;
+    value->type = IMPORT_CONST_INVALID;
+}
+
+static ImportConstValue import_const_value_clone(const ImportConstValue* value) {
+    if (value == NULL) return import_const_invalid();
+    switch (value->type) {
+        case IMPORT_CONST_NUMBER:
+            return import_const_number(value->number_value);
+        case IMPORT_CONST_BOOL:
+            return import_const_bool(value->bool_value);
+        case IMPORT_CONST_STRING:
+            return import_const_string(value->string_value ? value->string_value : "");
+        case IMPORT_CONST_NIL:
+            return import_const_nil();
+        default:
+            return import_const_invalid();
+    }
+}
+
+static ImportedConst* llc_find_imported_const(LLVMCompiler* lc, const char* name) {
+    for (int i = 0; i < lc->imported_const_count; i++) {
+        if (strcmp(lc->imported_consts[i].name, name) == 0) {
+            return &lc->imported_consts[i];
+        }
+    }
+    return NULL;
+}
+
+static void llc_set_imported_const(LLVMCompiler* lc, const char* name, const ImportConstValue* value) {
+    if (name == NULL || value == NULL || value->type == IMPORT_CONST_INVALID) return;
+
+    ImportedConst* existing = llc_find_imported_const(lc, name);
+    if (existing != NULL) {
+        import_const_value_free(&existing->value);
+        existing->value = import_const_value_clone(value);
+        return;
+    }
+
+    if (lc->imported_const_count >= lc->imported_const_cap) {
+        lc->imported_const_cap = lc->imported_const_cap ? lc->imported_const_cap * 2 : 16;
+        lc->imported_consts = SAGE_REALLOC(
+            lc->imported_consts,
+            sizeof(ImportedConst) * (size_t)lc->imported_const_cap
+        );
+    }
+    lc->imported_consts[lc->imported_const_count].name = SAGE_STRDUP(name);
+    lc->imported_consts[lc->imported_const_count].value = import_const_value_clone(value);
+    lc->imported_const_count++;
 }
 
 static int llc_new_reg(LLVMCompiler* lc) {
@@ -121,6 +238,11 @@ static void llc_free(LLVMCompiler* lc) {
     free(lc->global_names);
     for (int i = 0; i < lc->imported_module_count; i++) free(lc->imported_modules[i]);
     free(lc->imported_modules);
+    for (int i = 0; i < lc->imported_const_count; i++) {
+        free(lc->imported_consts[i].name);
+        import_const_value_free(&lc->imported_consts[i].value);
+    }
+    free(lc->imported_consts);
 }
 
 // ============================================================================
@@ -152,6 +274,358 @@ static char* token_to_str(Token tok) {
     memcpy(s, tok.start, (size_t)tok.length);
     s[tok.length] = '\0';
     return s;
+}
+
+typedef struct {
+    char* name;
+    ImportConstValue value;
+} ModuleConst;
+
+static int import_const_truthy(const ImportConstValue* value) {
+    if (value == NULL) return 0;
+    switch (value->type) {
+        case IMPORT_CONST_NIL:
+            return 0;
+        case IMPORT_CONST_BOOL:
+            return value->bool_value ? 1 : 0;
+        case IMPORT_CONST_NUMBER:
+            return value->number_value != 0.0;
+        case IMPORT_CONST_STRING:
+            return value->string_value != NULL && value->string_value[0] != '\0';
+        default:
+            return 0;
+    }
+}
+
+static int import_const_number_to_i64(const ImportConstValue* value, long long* out) {
+    if (value == NULL || out == NULL) return 0;
+    if (value->type != IMPORT_CONST_NUMBER) return 0;
+    *out = (long long)value->number_value;
+    return 1;
+}
+
+static int module_const_find_index(ModuleConst* consts, int count, const char* name) {
+    for (int i = 0; i < count; i++) {
+        if (strcmp(consts[i].name, name) == 0) return i;
+    }
+    return -1;
+}
+
+static ModuleConst* module_const_find(ModuleConst* consts, int count, const char* name) {
+    int idx = module_const_find_index(consts, count, name);
+    if (idx >= 0) return &consts[idx];
+    return NULL;
+}
+
+static void module_const_set(ModuleConst** consts, int* count, int* cap,
+                             const char* name, const ImportConstValue* value) {
+    if (consts == NULL || count == NULL || cap == NULL || name == NULL || value == NULL) return;
+    if (value->type == IMPORT_CONST_INVALID) return;
+
+    int idx = module_const_find_index(*consts, *count, name);
+    if (idx >= 0) {
+        import_const_value_free(&(*consts)[idx].value);
+        (*consts)[idx].value = import_const_value_clone(value);
+        return;
+    }
+
+    if (*count >= *cap) {
+        *cap = *cap ? *cap * 2 : 16;
+        *consts = SAGE_REALLOC(*consts, sizeof(ModuleConst) * (size_t)*cap);
+    }
+    (*consts)[*count].name = SAGE_STRDUP(name);
+    (*consts)[*count].value = import_const_value_clone(value);
+    (*count)++;
+}
+
+static void module_const_free_all(ModuleConst* consts, int count) {
+    for (int i = 0; i < count; i++) {
+        free(consts[i].name);
+        import_const_value_free(&consts[i].value);
+    }
+    free(consts);
+}
+
+static char* llvm_read_file_contents(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return NULL;
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return NULL;
+    }
+    long size = ftell(f);
+    if (size < 0) {
+        fclose(f);
+        return NULL;
+    }
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return NULL;
+    }
+    char* buf = SAGE_ALLOC((size_t)size + 1);
+    size_t nread = fread(buf, 1, (size_t)size, f);
+    buf[nread] = '\0';
+    fclose(f);
+    return buf;
+}
+
+static char* resolve_module_path_for_llvm(const LLVMCompiler* lc, const char* module_name) {
+    if (module_name == NULL || module_name[0] == '\0') return NULL;
+
+    // Keep module-name validation aligned with the runtime resolver.
+    for (const char* p = module_name; *p != '\0'; p++) {
+        if (!((*p >= 'a' && *p <= 'z') ||
+              (*p >= 'A' && *p <= 'Z') ||
+              (*p >= '0' && *p <= '9') ||
+              *p == '_' || *p == '.')) {
+            return NULL;
+        }
+    }
+    if (strstr(module_name, "..") != NULL) return NULL;
+
+    char dir[PATH_MAX];
+    if (lc->input_path != NULL) {
+        strncpy(dir, lc->input_path, sizeof(dir) - 1);
+        dir[sizeof(dir) - 1] = '\0';
+        char* slash = strrchr(dir, '/');
+        if (slash) *(slash + 1) = '\0';
+        else strcpy(dir, "./");
+    } else {
+        strcpy(dir, "./");
+    }
+
+    char path[PATH_MAX];
+    const char* search[] = { "", "lib/", "modules/" };
+    for (int i = 0; i < 3; i++) {
+        snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], module_name);
+        if (access(path, F_OK) == 0) {
+            return SAGE_STRDUP(path);
+        }
+    }
+    return NULL;
+}
+
+static Stmt* llvm_parse_program_with_path(const char* source, const char* input_path) {
+    init_lexer(source, input_path);
+    parser_init();
+
+    Stmt* head = NULL;
+    Stmt* tail = NULL;
+    while (1) {
+        Stmt* stmt = parse();
+        if (stmt == NULL) break;
+        if (head == NULL) {
+            head = stmt;
+        } else {
+            tail->next = stmt;
+        }
+        tail = stmt;
+    }
+    return head;
+}
+
+static ImportConstValue llvm_eval_const_expr(Expr* expr, ModuleConst* consts, int const_count) {
+    if (expr == NULL) return import_const_invalid();
+
+    switch (expr->type) {
+        case EXPR_NUMBER:
+            return import_const_number(expr->as.number.value);
+        case EXPR_STRING:
+            return import_const_string(expr->as.string.value);
+        case EXPR_BOOL:
+            return import_const_bool(expr->as.boolean.value);
+        case EXPR_NIL:
+            return import_const_nil();
+        case EXPR_VARIABLE: {
+            char* name = token_to_str(expr->as.variable.name);
+            ModuleConst* hit = module_const_find(consts, const_count, name);
+            free(name);
+            if (hit == NULL) return import_const_invalid();
+            return import_const_value_clone(&hit->value);
+        }
+        case EXPR_BINARY: {
+            Token op = expr->as.binary.op;
+            ImportConstValue left = llvm_eval_const_expr(expr->as.binary.left, consts, const_count);
+            ImportConstValue right = llvm_eval_const_expr(expr->as.binary.right, consts, const_count);
+            ImportConstValue result = import_const_invalid();
+
+            if (op.type == TOKEN_NOT) {
+                if (left.type != IMPORT_CONST_INVALID) {
+                    result = import_const_bool(!import_const_truthy(&left));
+                }
+                import_const_value_free(&left);
+                import_const_value_free(&right);
+                return result;
+            }
+
+            if (op.type == TOKEN_PLUS) {
+                if (left.type == IMPORT_CONST_NUMBER && right.type == IMPORT_CONST_NUMBER) {
+                    result = import_const_number(left.number_value + right.number_value);
+                } else if (left.type == IMPORT_CONST_STRING && right.type == IMPORT_CONST_STRING) {
+                    size_t llen = strlen(left.string_value);
+                    size_t rlen = strlen(right.string_value);
+                    char* joined = SAGE_ALLOC(llen + rlen + 1);
+                    memcpy(joined, left.string_value, llen);
+                    memcpy(joined + llen, right.string_value, rlen + 1);
+                    result = import_const_string(joined);
+                    free(joined);
+                }
+            } else if (op.type == TOKEN_MINUS &&
+                       left.type == IMPORT_CONST_NUMBER &&
+                       right.type == IMPORT_CONST_NUMBER) {
+                result = import_const_number(left.number_value - right.number_value);
+            } else if (op.type == TOKEN_STAR &&
+                       left.type == IMPORT_CONST_NUMBER &&
+                       right.type == IMPORT_CONST_NUMBER) {
+                result = import_const_number(left.number_value * right.number_value);
+            } else if (op.type == TOKEN_SLASH &&
+                       left.type == IMPORT_CONST_NUMBER &&
+                       right.type == IMPORT_CONST_NUMBER &&
+                       right.number_value != 0.0) {
+                result = import_const_number(left.number_value / right.number_value);
+            } else if (op.type == TOKEN_PERCENT &&
+                       left.type == IMPORT_CONST_NUMBER &&
+                       right.type == IMPORT_CONST_NUMBER &&
+                       right.number_value != 0.0) {
+                result = import_const_number(fmod(left.number_value, right.number_value));
+            } else if (op.type == TOKEN_EQ) {
+                int equal = 0;
+                if (left.type == right.type) {
+                    if (left.type == IMPORT_CONST_NUMBER) equal = left.number_value == right.number_value;
+                    else if (left.type == IMPORT_CONST_BOOL) equal = left.bool_value == right.bool_value;
+                    else if (left.type == IMPORT_CONST_STRING) equal = strcmp(left.string_value, right.string_value) == 0;
+                    else if (left.type == IMPORT_CONST_NIL) equal = 1;
+                }
+                result = import_const_bool(equal);
+            } else if (op.type == TOKEN_NEQ) {
+                int equal = 0;
+                if (left.type == right.type) {
+                    if (left.type == IMPORT_CONST_NUMBER) equal = left.number_value == right.number_value;
+                    else if (left.type == IMPORT_CONST_BOOL) equal = left.bool_value == right.bool_value;
+                    else if (left.type == IMPORT_CONST_STRING) equal = strcmp(left.string_value, right.string_value) == 0;
+                    else if (left.type == IMPORT_CONST_NIL) equal = 1;
+                }
+                result = import_const_bool(!equal);
+            } else if (op.type == TOKEN_LT &&
+                       left.type == IMPORT_CONST_NUMBER &&
+                       right.type == IMPORT_CONST_NUMBER) {
+                result = import_const_bool(left.number_value < right.number_value);
+            } else if (op.type == TOKEN_GT &&
+                       left.type == IMPORT_CONST_NUMBER &&
+                       right.type == IMPORT_CONST_NUMBER) {
+                result = import_const_bool(left.number_value > right.number_value);
+            } else if (op.type == TOKEN_LTE &&
+                       left.type == IMPORT_CONST_NUMBER &&
+                       right.type == IMPORT_CONST_NUMBER) {
+                result = import_const_bool(left.number_value <= right.number_value);
+            } else if (op.type == TOKEN_GTE &&
+                       left.type == IMPORT_CONST_NUMBER &&
+                       right.type == IMPORT_CONST_NUMBER) {
+                result = import_const_bool(left.number_value >= right.number_value);
+            } else if (op.type == TOKEN_AND) {
+                result = import_const_bool(import_const_truthy(&left) && import_const_truthy(&right));
+            } else if (op.type == TOKEN_OR) {
+                result = import_const_bool(import_const_truthy(&left) || import_const_truthy(&right));
+            } else if (op.type == TOKEN_AMP || op.type == TOKEN_PIPE ||
+                       op.type == TOKEN_CARET || op.type == TOKEN_LSHIFT ||
+                       op.type == TOKEN_RSHIFT) {
+                long long li = 0;
+                long long ri = 0;
+                if (import_const_number_to_i64(&left, &li) && import_const_number_to_i64(&right, &ri)) {
+                    if (op.type == TOKEN_AMP) result = import_const_number((double)(li & ri));
+                    if (op.type == TOKEN_PIPE) result = import_const_number((double)(li | ri));
+                    if (op.type == TOKEN_CARET) result = import_const_number((double)(li ^ ri));
+                    if (op.type == TOKEN_LSHIFT) result = import_const_number((double)(li << ri));
+                    if (op.type == TOKEN_RSHIFT) result = import_const_number((double)(li >> ri));
+                }
+            }
+
+            import_const_value_free(&left);
+            import_const_value_free(&right);
+            return result;
+        }
+        default:
+            return import_const_invalid();
+    }
+}
+
+static void llvm_process_import_constants(LLVMCompiler* lc, ImportStmt* import_stmt) {
+    if (import_stmt == NULL || import_stmt->item_count <= 0) return;
+    if (import_stmt->module_name == NULL) return;
+
+    // Native GPU constants are resolved from the static table.
+    if (strcmp(import_stmt->module_name, "gpu") == 0) {
+        for (int i = 0; i < import_stmt->item_count; i++) {
+            const char* item_name = import_stmt->items[i];
+            const char* bind_name = item_name;
+            if (import_stmt->item_aliases != NULL && import_stmt->item_aliases[i] != NULL) {
+                bind_name = import_stmt->item_aliases[i];
+            }
+            double value = 0.0;
+            if (llvm_resolve_gpu_constant(item_name, &value)) {
+                ImportConstValue const_value = import_const_number(value);
+                llc_set_imported_const(lc, bind_name, &const_value);
+                import_const_value_free(&const_value);
+            } else {
+                fprintf(stderr,
+                        "LLVM backend: unresolved imported constant '%s' from module '%s'\n",
+                        item_name, import_stmt->module_name);
+                lc->failed = 1;
+            }
+        }
+        return;
+    }
+
+    char* module_path = resolve_module_path_for_llvm(lc, import_stmt->module_name);
+    if (module_path == NULL) {
+        return;
+    }
+
+    char* source = llvm_read_file_contents(module_path);
+    if (source == NULL) {
+        free(module_path);
+        return;
+    }
+
+    Stmt* module_ast = llvm_parse_program_with_path(source, module_path);
+
+    ModuleConst* consts = NULL;
+    int const_count = 0;
+    int const_cap = 0;
+
+    for (Stmt* s = module_ast; s != NULL; s = s->next) {
+        if (s->type == STMT_LET) {
+            char* name = token_to_str(s->as.let.name);
+            ImportConstValue value = llvm_eval_const_expr(s->as.let.initializer, consts, const_count);
+            if (value.type != IMPORT_CONST_INVALID) {
+                module_const_set(&consts, &const_count, &const_cap, name, &value);
+            }
+            import_const_value_free(&value);
+            free(name);
+        }
+    }
+
+    for (int i = 0; i < import_stmt->item_count; i++) {
+        const char* item_name = import_stmt->items[i];
+        const char* bind_name = item_name;
+        if (import_stmt->item_aliases != NULL && import_stmt->item_aliases[i] != NULL) {
+            bind_name = import_stmt->item_aliases[i];
+        }
+        ModuleConst* hit = module_const_find(consts, const_count, item_name);
+        if (hit != NULL) {
+            llc_set_imported_const(lc, bind_name, &hit->value);
+        } else {
+            fprintf(stderr,
+                    "LLVM backend: unresolved imported constant '%s' from module '%s'\n",
+                    item_name, import_stmt->module_name);
+            lc->failed = 1;
+        }
+    }
+
+    module_const_free_all(consts, const_count);
+    free_stmt(module_ast);
+    free(source);
+    free(module_path);
 }
 
 // ============================================================================
@@ -743,6 +1217,13 @@ static void llvm_collect_symbols(LLVMCompiler* lc, Stmt* program) {
             char* name = token_to_str(s->as.let.name);
             llc_add_global(lc, name);
             free(name);
+        } else if (s->type == STMT_IMPORT) {
+            if (s->as.import.module_name != NULL) {
+                llc_add_module(lc, s->as.import.module_name);
+            }
+            if (s->as.import.item_count > 0) {
+                llvm_process_import_constants(lc, &s->as.import);
+            }
         } else if (s->type == STMT_CLASS) {
             char* cname = token_to_str(s->as.class_stmt.name);
             // Each method becomes a function sage_fn_ClassName_methodName
@@ -859,6 +1340,37 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 free(name);
                 return r;
             }
+
+            ImportedConst* imported = llc_find_imported_const(lc, name);
+            if (imported != NULL) {
+                int r = llc_new_reg(lc);
+                switch (imported->value.type) {
+                    case IMPORT_CONST_NUMBER:
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %e)",
+                                r, imported->value.number_value);
+                        break;
+                    case IMPORT_CONST_BOOL:
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_bool(i32 %d)",
+                                r, imported->value.bool_value ? 1 : 0);
+                        break;
+                    case IMPORT_CONST_STRING: {
+                        int str_id = llc_add_string(lc, imported->value.string_value);
+                        size_t slen = strlen(imported->value.string_value) + 1;
+                        int ptr_reg = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = getelementptr [%zu x i8], [%zu x i8]* @.str.%d, i64 0, i64 0",
+                                ptr_reg, slen, slen, str_id);
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_string(i8* %%%d)", r, ptr_reg);
+                        break;
+                    }
+                    case IMPORT_CONST_NIL:
+                    default:
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                        break;
+                }
+                free(name);
+                return r;
+            }
+
             int r = llc_new_reg(lc);
             // Check if it's a global variable
             int is_global = 0;
@@ -1505,6 +2017,12 @@ static int write_llvm_output(const char* source, const char* input_path, const c
 
     // Collect symbols
     llvm_collect_symbols(&lc, program);
+    if (lc.failed) {
+        fclose(out);
+        free_stmt(program);
+        llc_free(&lc);
+        return 0;
+    }
 
     // Emit type definitions and runtime declarations
     emit_type_definitions(&lc);

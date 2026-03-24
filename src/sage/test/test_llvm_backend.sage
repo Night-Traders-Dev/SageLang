@@ -21,6 +21,13 @@ proc assert_eq(a, b, msg):
         failed = failed + 1
         print "FAIL: " + msg + " (got " + str(a) + ", expected " + str(b) + ")"
 
+proc assert_not_contains(haystack, needle, msg):
+    if contains(haystack, needle):
+        failed = failed + 1
+        print "FAIL: " + msg + " (unexpected: " + needle + ")"
+    else:
+        passed = passed + 1
+
 # ============================================================================
 # LLVMCompiler State
 # ============================================================================
@@ -324,6 +331,14 @@ fn_s2.next = call_s
 let ir2 = llvm_backend.compile_to_llvm_ir(fn_s2)
 assert_true(contains(ir2, "sage_fn_identity"), "full IR with proc has function")
 assert_true(contains(ir2, "define"), "full IR with proc has define")
+
+# --- Full compilation with from-import constant ---
+let import_stmt = ast.import_stmt("value", ["TYPE_NUMBER"], [nil], nil, 0)
+let import_print = ast.print_stmt(ast.variable_expr(token.Token(token.TOKEN_IDENTIFIER, "TYPE_NUMBER", 1)))
+import_stmt.next = import_print
+let ir3 = llvm_backend.compile_to_llvm_ir(import_stmt)
+assert_true(contains(ir3, "sage_rt_string"), "from-import constant emits string constructor")
+assert_not_contains(ir3, "%TYPE_NUMBER", "from-import constant avoids unresolved local load")
 
 # ============================================================================
 # Type Definitions
