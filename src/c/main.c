@@ -67,8 +67,8 @@ static void print_usage(FILE* stream) {
             "       sage --compile <input.sage> [-o output] [--cc compiler] [-O0..3] [-g]\n"
             "       sage --emit-llvm <input.sage> [-o output.ll] [-O0..3] [-g]\n"
             "       sage --compile-llvm <input.sage> [-o output] [-O0..3] [-g]\n"
-            "       sage --emit-asm <input.sage> [-o output.s] [--target arch] [-O0..3] [-g]\n"
-            "       sage --compile-native <input.sage> [-o output] [--target arch] [-O0..3] [-g]\n"
+            "       sage --emit-asm <input.sage> [-o output.s] [--target arch[-baremetal|-osdev|-uefi]] [-O0..3] [-g]\n"
+            "       sage --compile-native <input.sage> [-o output] [--target arch[-baremetal|-osdev|-uefi]] [-O0..3] [-g]\n"
             "       sage --emit-pico-c <input.sage> [-o output.c]\n"
             "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n"
             "       sage fmt <file>          Format a Sage source file in-place\n"
@@ -235,13 +235,75 @@ static int command_matches(const char* line, const char* command, const char** a
     return 1;
 }
 
-static CodegenTarget parse_target_arch(const char* arch) {
-    if (arch == NULL) return codegen_detect_host_target();
-    if (strcmp(arch, "x86-64") == 0 || strcmp(arch, "x86_64") == 0) return CODEGEN_TARGET_X86_64;
-    if (strcmp(arch, "aarch64") == 0 || strcmp(arch, "arm64") == 0) return CODEGEN_TARGET_AARCH64;
-    if (strcmp(arch, "rv64") == 0 || strcmp(arch, "riscv64") == 0) return CODEGEN_TARGET_RV64;
-    fprintf(stderr, "Unknown target architecture: %s (supported: x86-64, aarch64, rv64)\n", arch);
-    exit(64);
+static int has_suffix(const char* str, const char* suffix) {
+    size_t slen = strlen(str);
+    size_t suflen = strlen(suffix);
+    if (slen < suflen) return 0;
+    return strcmp(str + slen - suflen, suffix) == 0;
+}
+
+static void trim_suffix(char* str, const char* suffix) {
+    size_t slen = strlen(str);
+    size_t suflen = strlen(suffix);
+    if (slen >= suflen && strcmp(str + slen - suflen, suffix) == 0) {
+        str[slen - suflen] = '\0';
+    }
+}
+
+static CodegenTargetSpec parse_target_spec(const char* arch) {
+    CodegenTargetSpec spec;
+    spec.target = codegen_detect_host_target();
+    spec.profile = CODEGEN_PROFILE_HOSTED;
+
+    if (arch == NULL) return spec;
+
+    char normalized[128];
+    size_t n = strlen(arch);
+    if (n >= sizeof(normalized)) {
+        fprintf(stderr, "Target specification is too long: %s\n", arch);
+        exit(64);
+    }
+    for (size_t i = 0; i <= n; i++) {
+        char c = arch[i];
+        if (c == '_') c = '-';
+        if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+        normalized[i] = c;
+    }
+
+    if (has_suffix(normalized, "-baremetal") || has_suffix(normalized, "-freestanding")) {
+        spec.profile = CODEGEN_PROFILE_BARE_METAL;
+        trim_suffix(normalized, "-baremetal");
+        trim_suffix(normalized, "-freestanding");
+    } else if (has_suffix(normalized, "-osdev")) {
+        spec.profile = CODEGEN_PROFILE_OSDEV;
+        trim_suffix(normalized, "-osdev");
+    } else if (has_suffix(normalized, "-uefi")) {
+        spec.profile = CODEGEN_PROFILE_UEFI;
+        trim_suffix(normalized, "-uefi");
+    }
+
+    if (strcmp(normalized, "x86-64") == 0 || strcmp(normalized, "x86") == 0 ||
+        strcmp(normalized, "x64") == 0) {
+        spec.target = CODEGEN_TARGET_X86_64;
+    } else if (strcmp(normalized, "aarch64") == 0 || strcmp(normalized, "arm64") == 0) {
+        spec.target = CODEGEN_TARGET_AARCH64;
+    } else if (strcmp(normalized, "rv64") == 0 || strcmp(normalized, "riscv64") == 0) {
+        spec.target = CODEGEN_TARGET_RV64;
+    } else {
+        fprintf(stderr,
+                "Unknown target architecture/profile: %s\n"
+                "Supported base targets: x86-64, aarch64, rv64\n"
+                "Supported profile suffixes: -baremetal, -osdev, -uefi\n",
+                arch);
+        exit(64);
+    }
+
+    if (spec.profile == CODEGEN_PROFILE_UEFI && spec.target == CODEGEN_TARGET_RV64) {
+        fprintf(stderr, "UEFI profile is currently supported for x86-64/aarch64 targets only.\n");
+        exit(64);
+    }
+
+    return spec;
 }
 
 
@@ -1638,7 +1700,7 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(64);
         }
 
-        CodegenTarget target = parse_target_arch(target_arch_str);
+        CodegenTargetSpec spec = parse_target_spec(target_arch_str);
 
         char* source = read_file(cmd_argv[2]);
         char* derived_output = NULL;
@@ -1648,7 +1710,7 @@ int main(int argc, const char* argv[]) {
             output_path = derived_output;
         }
 
-        if (!compile_source_to_asm(source, cmd_argv[2], output_path, target, opt_level, debug_info)) {
+        if (!compile_source_to_asm(source, cmd_argv[2], output_path, spec, opt_level, debug_info)) {
             free(source);
             free(derived_output);
             CLEANUP_AND_EXIT(1);
@@ -1667,17 +1729,18 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(64);
         }
 
-        CodegenTarget target = parse_target_arch(target_arch_str);
+        CodegenTargetSpec spec = parse_target_spec(target_arch_str);
 
         char* source = read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* exe_output = explicit_output;
         if (exe_output == NULL) {
-            derived_output = derive_output_path(cmd_argv[2], "", 1);
+            const char* suffix = (spec.profile == CODEGEN_PROFILE_HOSTED) ? "" : ".o";
+            derived_output = derive_output_path(cmd_argv[2], suffix, 1);
             exe_output = derived_output;
         }
 
-        if (!compile_source_to_native(source, cmd_argv[2], exe_output, target, opt_level, debug_info)) {
+        if (!compile_source_to_native(source, cmd_argv[2], exe_output, spec, opt_level, debug_info)) {
             free(source);
             free(derived_output);
             CLEANUP_AND_EXIT(1);

@@ -605,6 +605,274 @@ Module* create_sys_module(ModuleCache* cache) {
 }
 
 // ============================================================================
+// FAT MODULE
+// ============================================================================
+
+typedef struct {
+    int valid;
+    int fat_bits;
+    uint32_t bytes_per_sector;
+    uint32_t sectors_per_cluster;
+    uint32_t reserved_sector_count;
+    uint32_t fat_count;
+    uint32_t root_entry_count;
+    uint32_t total_sectors;
+    uint32_t sectors_per_fat;
+    uint32_t root_dir_sectors;
+    uint32_t first_data_sector;
+    uint32_t data_sector_count;
+    uint32_t cluster_count;
+    uint32_t root_cluster;
+    uint32_t media_descriptor;
+    char fs_type_label[16];
+    char volume_label[16];
+} FatBootInfo;
+
+static uint16_t fat_le16(const uint8_t* p) {
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+}
+
+static uint32_t fat_le32(const uint8_t* p) {
+    return (uint32_t)p[0] |
+           ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
+}
+
+static int fat_is_pow2(uint32_t x) {
+    return x != 0 && (x & (x - 1)) == 0;
+}
+
+static void fat_copy_trimmed(char* dst, size_t dst_cap, const uint8_t* src, size_t src_len) {
+    if (dst_cap == 0) return;
+    size_t n = src_len;
+    while (n > 0 && (src[n - 1] == ' ' || src[n - 1] == '\0')) {
+        n--;
+    }
+    if (n >= dst_cap) n = dst_cap - 1;
+    for (size_t i = 0; i < n; i++) {
+        dst[i] = (char)src[i];
+    }
+    dst[n] = '\0';
+}
+
+static int fat_prefix_eq(const char* s, const char* prefix) {
+    size_t n = strlen(prefix);
+    return strncmp(s, prefix, n) == 0;
+}
+
+static void fat_parse_boot_info(const uint8_t* bytes, size_t len, FatBootInfo* info) {
+    memset(info, 0, sizeof(*info));
+    if (bytes == NULL || len < 64) {
+        return;
+    }
+
+    info->bytes_per_sector = fat_le16(bytes + 11);
+    info->sectors_per_cluster = bytes[13];
+    info->reserved_sector_count = fat_le16(bytes + 14);
+    info->fat_count = bytes[16];
+    info->root_entry_count = fat_le16(bytes + 17);
+    uint32_t total16 = fat_le16(bytes + 19);
+    info->media_descriptor = bytes[21];
+    uint32_t fat16 = fat_le16(bytes + 22);
+    uint32_t total32 = fat_le32(bytes + 32);
+    uint32_t fat32 = fat_le32(bytes + 36);
+    info->root_cluster = fat_le32(bytes + 44);
+
+    info->total_sectors = (total16 != 0) ? total16 : total32;
+    info->sectors_per_fat = (fat16 != 0) ? fat16 : fat32;
+
+    if (len >= 90) {
+        if (info->root_entry_count == 0) {
+            fat_copy_trimmed(info->volume_label, sizeof(info->volume_label), bytes + 71, 11);
+            fat_copy_trimmed(info->fs_type_label, sizeof(info->fs_type_label), bytes + 82, 8);
+        } else {
+            fat_copy_trimmed(info->volume_label, sizeof(info->volume_label), bytes + 43, 11);
+            fat_copy_trimmed(info->fs_type_label, sizeof(info->fs_type_label), bytes + 54, 8);
+        }
+    }
+
+    if (!fat_is_pow2(info->bytes_per_sector) || info->bytes_per_sector < 128 || info->bytes_per_sector > 4096) {
+        return;
+    }
+    if (!fat_is_pow2(info->sectors_per_cluster) || info->sectors_per_cluster == 0 || info->sectors_per_cluster > 128) {
+        return;
+    }
+    if (info->reserved_sector_count == 0 || info->fat_count == 0 || info->sectors_per_fat == 0 || info->total_sectors == 0) {
+        return;
+    }
+
+    uint32_t root_dir_sectors = (uint32_t)(((uint64_t)info->root_entry_count * 32u + (info->bytes_per_sector - 1u)) / info->bytes_per_sector);
+    uint64_t first_data = (uint64_t)info->reserved_sector_count + ((uint64_t)info->fat_count * info->sectors_per_fat) + root_dir_sectors;
+    if (first_data >= info->total_sectors) {
+        return;
+    }
+    uint32_t data_sectors = (uint32_t)(info->total_sectors - first_data);
+    uint32_t cluster_count = data_sectors / info->sectors_per_cluster;
+
+    info->root_dir_sectors = root_dir_sectors;
+    info->first_data_sector = (uint32_t)first_data;
+    info->data_sector_count = data_sectors;
+    info->cluster_count = cluster_count;
+
+    // Include FAT8 for very small data regions as requested.
+    if (cluster_count < 16) info->fat_bits = 8;
+    else if (cluster_count < 4085) info->fat_bits = 12;
+    else if (cluster_count < 65525) info->fat_bits = 16;
+    else info->fat_bits = 32;
+
+    // Let explicit filesystem labels refine the guess.
+    if (fat_prefix_eq(info->fs_type_label, "FAT8")) info->fat_bits = 8;
+    else if (fat_prefix_eq(info->fs_type_label, "FAT12")) info->fat_bits = 12;
+    else if (fat_prefix_eq(info->fs_type_label, "FAT16")) info->fat_bits = 16;
+    else if (fat_prefix_eq(info->fs_type_label, "FAT32")) info->fat_bits = 32;
+
+    if (info->fat_bits == 32 && info->root_cluster == 0) {
+        info->root_cluster = 2;
+    }
+
+    info->valid = 1;
+}
+
+static const char* fat_type_name_bits(int bits) {
+    switch (bits) {
+        case 8: return "FAT8";
+        case 12: return "FAT12";
+        case 16: return "FAT16";
+        case 32: return "FAT32";
+        default: return "UNKNOWN";
+    }
+}
+
+static Value fat_boot_info_to_value(const FatBootInfo* info) {
+    Value out = val_dict();
+    dict_set(&out, "valid", val_bool(info->valid));
+    dict_set(&out, "fat_bits", val_number((double)info->fat_bits));
+    dict_set(&out, "fat_type", val_string(fat_type_name_bits(info->fat_bits)));
+    dict_set(&out, "bytes_per_sector", val_number((double)info->bytes_per_sector));
+    dict_set(&out, "sectors_per_cluster", val_number((double)info->sectors_per_cluster));
+    dict_set(&out, "reserved_sector_count", val_number((double)info->reserved_sector_count));
+    dict_set(&out, "fat_count", val_number((double)info->fat_count));
+    dict_set(&out, "root_entry_count", val_number((double)info->root_entry_count));
+    dict_set(&out, "total_sectors", val_number((double)info->total_sectors));
+    dict_set(&out, "sectors_per_fat", val_number((double)info->sectors_per_fat));
+    dict_set(&out, "root_dir_sectors", val_number((double)info->root_dir_sectors));
+    dict_set(&out, "first_data_sector", val_number((double)info->first_data_sector));
+    dict_set(&out, "data_sector_count", val_number((double)info->data_sector_count));
+    dict_set(&out, "cluster_count", val_number((double)info->cluster_count));
+    dict_set(&out, "root_cluster", val_number((double)info->root_cluster));
+    dict_set(&out, "media_descriptor", val_number((double)info->media_descriptor));
+    dict_set(&out, "fs_type_label", val_string(info->fs_type_label));
+    dict_set(&out, "volume_label", val_string(info->volume_label));
+    return out;
+}
+
+static Value fat_parse_boot_sector_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_ARRAY(args[0])) return val_nil();
+    ArrayValue* arr = AS_ARRAY(args[0]);
+    if (arr == NULL || arr->count <= 0 || arr->count > 1024 * 1024) return val_nil();
+
+    uint8_t* bytes = SAGE_ALLOC((size_t)arr->count);
+    for (int i = 0; i < arr->count; i++) {
+        Value v = arr->elements[i];
+        if (!IS_NUMBER(v)) {
+            free(bytes);
+            return val_nil();
+        }
+        double d = AS_NUMBER(v);
+        if (d < 0.0 || d > 255.0) {
+            free(bytes);
+            return val_nil();
+        }
+        bytes[i] = (uint8_t)((unsigned int)d & 0xffu);
+    }
+
+    FatBootInfo info;
+    fat_parse_boot_info(bytes, (size_t)arr->count, &info);
+    free(bytes);
+    return fat_boot_info_to_value(&info);
+}
+
+static Value fat_probe_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    const char* path = AS_STRING(args[0]);
+    FILE* f = fopen(path, "rb");
+    if (!f) return val_nil();
+
+    uint8_t sector[4096];
+    size_t nread = fread(sector, 1, sizeof(sector), f);
+    fclose(f);
+
+    FatBootInfo info;
+    fat_parse_boot_info(sector, nread, &info);
+    Value out = fat_boot_info_to_value(&info);
+    dict_set(&out, "source_path", val_string(path));
+    return out;
+}
+
+static int fat_dict_number(Value* dict, const char* key, double* out) {
+    if (dict == NULL || out == NULL || !IS_DICT(*dict)) return 0;
+    Value v = dict_get(dict, key);
+    if (!IS_NUMBER(v)) return 0;
+    *out = AS_NUMBER(v);
+    return 1;
+}
+
+static Value fat_cluster_to_lba_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_DICT(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    double first_data = 0.0;
+    double spc = 0.0;
+    if (!fat_dict_number(&args[0], "first_data_sector", &first_data) ||
+        !fat_dict_number(&args[0], "sectors_per_cluster", &spc)) {
+        return val_nil();
+    }
+    double cluster = AS_NUMBER(args[1]);
+    if (cluster < 2.0 || spc <= 0.0) return val_nil();
+    double lba = first_data + (cluster - 2.0) * spc;
+    return val_number(lba);
+}
+
+static Value fat_fat_entry_offset_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_DICT(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    double fat_bits = 0.0;
+    if (!fat_dict_number(&args[0], "fat_bits", &fat_bits)) return val_nil();
+    double cluster = AS_NUMBER(args[1]);
+    if (cluster < 0.0) return val_nil();
+
+    uint32_t bits = (uint32_t)fat_bits;
+    uint32_t cl = (uint32_t)cluster;
+    uint32_t offset = 0;
+    if (bits == 12) {
+        offset = (cl * 3u) / 2u;
+    } else {
+        offset = (uint32_t)(((uint64_t)cl * (uint64_t)bits) / 8u);
+    }
+
+    Value out = val_dict();
+    dict_set(&out, "byte_offset", val_number((double)offset));
+    dict_set(&out, "is_odd", val_bool((bits == 12) ? (cl & 1u) : 0));
+    dict_set(&out, "fat_bits", val_number((double)bits));
+    return out;
+}
+
+Module* create_fat_module(ModuleCache* cache) {
+    Module* m = create_native_module(cache, "fat");
+    Environment* e = m->env;
+
+    env_define(e, "parse_boot_sector", 17, val_native(fat_parse_boot_sector_native));
+    env_define(e, "probe", 5, val_native(fat_probe_native));
+    env_define(e, "cluster_to_lba", 14, val_native(fat_cluster_to_lba_native));
+    env_define(e, "fat_entry_offset", 16, val_native(fat_fat_entry_offset_native));
+
+    env_define(e, "FAT8", 4, val_number(8));
+    env_define(e, "FAT12", 5, val_number(12));
+    env_define(e, "FAT16", 5, val_number(16));
+    env_define(e, "FAT32", 5, val_number(32));
+
+    return m;
+}
+
+// ============================================================================
 // THREAD MODULE
 // ============================================================================
 

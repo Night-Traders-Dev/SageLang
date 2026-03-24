@@ -87,6 +87,7 @@ Module* create_io_module(ModuleCache* cache);
 Module* create_string_module(ModuleCache* cache);
 Module* create_sys_module(ModuleCache* cache);
 Module* create_thread_module(ModuleCache* cache);
+Module* create_fat_module(ModuleCache* cache);
 Module* create_socket_module(ModuleCache* cache);
 Module* create_tcp_module(ModuleCache* cache);
 Module* create_http_module(ModuleCache* cache);

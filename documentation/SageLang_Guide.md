@@ -41,12 +41,12 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **Generators** | Full `yield` support with resumable state; `next()` function to iterate |
 | **Exceptions** | `try/catch/finally/raise` with explicit exception objects and message strings |
 | **Modules** | `import module`, `import module as alias`, `from module import x, y`, `from module import x as y` |
-| **Standard Library** | Native modules: `math`, `io`, `string`, `sys`, `thread`, `socket`, `tcp`, `http`, `ssl` |
+| **Standard Library** | Native modules: `math`, `io`, `string`, `sys`, `thread`, `fat`, `socket`, `tcp`, `http`, `ssl` |
 | **Networking** | POSIX sockets, TCP, HTTP/HTTPS (libcurl), SSL/TLS (OpenSSL) |
 | **Concurrency** | `thread.spawn`/`thread.join`, mutexes, `async proc`/`await` |
 | **GPU Graphics** | Vulkan + OpenGL 4.5 backends, handle-based API, 100+ functions |
 | **UI Widgets** | Immediate-mode GUI: windows, panels, buttons, sliders, menus, text inputs |
-| **Compilation** | C backend, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64) |
+| **Compilation** | C backend, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64), plus initial profile suffixes for bare-metal / OSdev / UEFI targets |
 
 LLVM codegen has an additional import optimization path: both the C LLVM backend and the self-hosted LLVM backend resolve `from module import CONST` for foldable top-level constants during code generation (including `as` aliases).
 
@@ -1395,8 +1395,8 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | `sage --compile <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--cc <compiler>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-llvm <input.sage>` | `<input>.ll` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-llvm <input.sage>` | `<input-without-.sage>` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
-| `sage --emit-asm <input.sage>` | `<input>.s` | `-o <path>`, `--target <arch>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
-| `sage --compile-native <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--target <arch>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --emit-asm <input.sage>` | `<input>.s` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --compile-native <input.sage>` | hosted: `<input-without-.sage>`; non-hosted profiles: `<input-without-.sage>.o` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-pico-c <input.sage>` | `<input>.pico.c` | `-o <path>` |
 | `sage --compile-pico <input.sage>` | `.tmp/<program-name>` plus `<program-name>.uf2` | `-o <dir>`, `--board <name>`, `--name <program>`, `--sdk <path>` |
 
@@ -1404,12 +1404,17 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | ------ | ---------- | ------- |
 | `-o <path>` | All emit/compile commands, including `--compile-pico` | Output file or build directory |
 | `--cc <compiler>` | `--compile` | Overrides the host C compiler; defaults to `cc` |
-| `--target <arch>` | `--emit-asm`, `--compile-native` | Target architecture; accepted values include `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64` |
+| `--target <arch[-profile]>` | `--emit-asm`, `--compile-native` | Base targets: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64`; profile suffixes: `-baremetal`, `-osdev`, `-uefi` |
 | `-O0` / `-O1` / `-O2` / `-O3` | C, LLVM, and native codegen commands | Selects the optimization pass level |
 | `-g` | C, LLVM, asm, and native codegen commands | Enables debug information in generated output |
 | `--board <name>` | `--compile-pico` | Pico board name; defaults to `pico` |
 | `--name <program>` | `--compile-pico` | Overrides the generated program name derived from the input file |
 | `--sdk <path>` | `--compile-pico` | Pico SDK path; falls back to `PICO_SDK_PATH` |
+
+Profile notes for native backend:
+- `hosted` (no suffix): default behavior.
+- `-baremetal` / `-osdev`: emits `sage_entry` and freestanding object-oriented output.
+- `-uefi`: emits `efi_main`; current stage emits a freestanding object, with full PE/COFF image linking planned as follow-up work.
 
 ### 6.3 Program Execution Flow
 
@@ -2125,6 +2130,35 @@ print path
 ```
 
 Available functions: `args`, `exit`, `platform`, `version`, `env`, `setenv`
+
+### 10.5 FAT Module
+
+The native `fat` module provides early FAT filesystem parsing helpers for image inspection and kernel/boot tooling.
+
+```sagelang
+import fat
+import io
+
+let boot = io.readbytes("disk.img")
+let info = fat.parse_boot_sector(boot)
+
+print info["fat_type"]           # FAT8 / FAT12 / FAT16 / FAT32
+print info["cluster_count"]
+print fat.cluster_to_lba(info, 2)  # First data cluster -> LBA/sector index
+```
+
+Available functions:
+- `parse_boot_sector(bytes_array)`
+- `probe(path)`
+- `cluster_to_lba(info, cluster)`
+- `fat_entry_offset(info, cluster)`
+
+Constants:
+- `FAT8`, `FAT12`, `FAT16`, `FAT32`
+
+Current scope:
+- Boot sector parsing, FAT type detection, and layout math for FAT8/12/16/32.
+- Intended as a foundation for follow-up directory walking, FAT chain traversal, and read/write support.
 
 ---
 

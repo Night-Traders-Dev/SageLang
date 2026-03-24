@@ -119,6 +119,7 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **`string`**: String utilities (find, rfind, startswith, endswith, contains, char_at, ord, chr, repeat, count, substr, reverse)
 - **`sys`**: System info (args, exit, getenv, clock, sleep, version, platform)
 - **`thread`**: Threading primitives (spawn, join, mutex, lock, unlock, sleep, id)
+- **`fat`**: FAT boot sector parsing + layout math (FAT8/FAT12/FAT16/FAT32 detection, `cluster_to_lba`, FAT entry offsets)
 
 ### Networking Modules
 
@@ -126,6 +127,27 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **`tcp`**: High-level TCP (connect, listen, accept, send, recv, sendall, recvall, recvline, close)
 - **`http`**: HTTP/HTTPS client via libcurl (get, post, put, delete, patch, head, download, escape, unescape) — returns `{status, body, headers}` dicts with options for timeout, redirects, SSL verification, custom headers
 - **`ssl`**: OpenSSL bindings (context, load_cert, wrap, connect, accept, send, recv, shutdown, free, free_context, error, peer_cert, set_verify)
+
+### FAT Filesystem Support (Initial)
+
+- `import fat` provides native parsing helpers for FAT filesystem boot sectors.
+- Supported type detection: **FAT8**, **FAT12**, **FAT16**, **FAT32**
+- Exposed APIs:
+  - `fat.parse_boot_sector(bytes_array)` → metadata dict
+  - `fat.probe(path)` → read + parse from disk image / block dump
+  - `fat.cluster_to_lba(info, cluster)` → data-region sector mapping
+  - `fat.fat_entry_offset(info, cluster)` → FAT table byte offset metadata
+
+Example:
+```sage
+import fat
+import io
+
+let boot = io.readbytes("disk.img")
+let info = fat.parse_boot_sector(boot)
+print info["fat_type"]        # FAT12 / FAT16 / FAT32 / FAT8
+print info["first_data_sector"]
+```
 
 ### GPU Graphics Engine (Vulkan + OpenGL)
 
@@ -393,8 +415,8 @@ make cmake-pico            # Setup a Pico CMake build
 | `sage --compile <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--cc <compiler>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-llvm <input.sage>` | `<input>.ll` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-llvm <input.sage>` | `<input-without-.sage>` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
-| `sage --emit-asm <input.sage>` | `<input>.s` | `-o <path>`, `--target <arch>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
-| `sage --compile-native <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--target <arch>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --emit-asm <input.sage>` | `<input>.s` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --compile-native <input.sage>` | hosted: `<input-without-.sage>`; non-hosted profiles: `<input-without-.sage>.o` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-pico-c <input.sage>` | `<input>.pico.c` | `-o <path>` |
 | `sage --compile-pico <input.sage>` | `.tmp/<program-name>` build dir and `<program-name>.uf2` | `-o <dir>`, `--board <name>`, `--name <program>`, `--sdk <path>` |
 
@@ -404,7 +426,12 @@ make cmake-pico            # Setup a Pico CMake build
 | ------ | ---------- | ------- |
 | `-o <path>` | All emit/compile commands, plus `--compile-pico` | Output file or output directory depending on command |
 | `--cc <compiler>` | `--compile` | Overrides the host C compiler; defaults to `cc` |
-| `--target <arch>` | `--emit-asm`, `--compile-native` | Target architecture. Accepted values: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64` |
+| `--target <arch[-profile]>` | `--emit-asm`, `--compile-native` | Target architecture/profile. Base arch values: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64`. Profile suffixes: `-baremetal`, `-osdev`, `-uefi` |
+
+Profile notes:
+- `hosted` (default, no suffix): current behavior, executable-oriented flow.
+- `-baremetal` / `-osdev`: emits freestanding entry symbol (`sage_entry`) and object-oriented native output.
+- `-uefi`: emits `efi_main` entry symbol and currently outputs a freestanding object as the first implementation step (full PE/COFF image linking is planned).
 | `-O0` / `-O1` / `-O2` / `-O3` | C, LLVM, and native codegen commands | Optimization pass level selected in `src/c/main.c` |
 | `-g` | C, LLVM, asm, and native compile/emit commands | Enables debug information in the generated output path |
 | `--board <name>` | `--compile-pico` | Pico board name; defaults to `pico` |
@@ -712,7 +739,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Language**: C
 - **Phases Completed**: 15/15 (100%)
 - **Test Suite**: 144 interpreter + 28 compiler + 88 JSON + 1567 self-hosted tests (1827+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, and GPU
-- **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics
+- **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics, and initial bare-metal/OSdev/UEFI target profiles
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
 - **Status**: Active development with a working self-hosted interpreter and GPU graphics library
 - **License**: MIT
@@ -845,6 +872,8 @@ Sage is an educational project aimed at understanding compiler construction and 
 - **Repository**: [github.com/Night-Traders-Dev/SageLang](https://github.com/Night-Traders-Dev/SageLang)
 - **Detailed Roadmap**: [ROADMAP.md](ROADMAP.md)
 - **Import Semantics**: [documentation/Import_Semantics.md](documentation/Import_Semantics.md)
+- **FAT Filesystem Guide**: [documentation/FAT_Filesystem_Guide.md](documentation/FAT_Filesystem_Guide.md)
+- **Bare-Metal / OSdev / UEFI Guide**: [documentation/Baremetal_OSDev_UEFI_Guide.md](documentation/Baremetal_OSDev_UEFI_Guide.md)
 - **Issues**: [GitHub Issues](https://github.com/Night-Traders-Dev/SageLang/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Night-Traders-Dev/SageLang/discussions)
 
@@ -858,6 +887,7 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
+- March 24, 2026: Added native `fat` module with FAT8/12/16/32 boot-sector parsing + initial bare-metal/OSdev/UEFI native target profiles
 - March 24, 2026: LLVM + self-hosted LLVM fix - resolved cross-module `from X import Y` constant imports (including aliases) at compile time
 - March 18, 2026: Phase 15 Complete - Vulkan graphics engine (4600-line C backend, 16 Sage libraries, 27 shaders, 6 demos, PBR/bloom/shadows/deferred/SSAO/particles/N-body, 285 GPU tests)
 - March 17, 2026: LLVM Backend - Standalone runtime library (40+ sage_rt_* functions), ABI fix, local variable allocation, block termination tracking; --compile-llvm now produces working executables

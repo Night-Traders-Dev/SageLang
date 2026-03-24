@@ -14,6 +14,18 @@ typedef enum {
     CODEGEN_TARGET_RV64,
 } CodegenTarget;
 
+typedef enum {
+    CODEGEN_PROFILE_HOSTED,
+    CODEGEN_PROFILE_BARE_METAL,
+    CODEGEN_PROFILE_OSDEV,
+    CODEGEN_PROFILE_UEFI,
+} CodegenProfile;
+
+typedef struct {
+    CodegenTarget target;
+    CodegenProfile profile;
+} CodegenTargetSpec;
+
 // ============================================================================
 // Virtual Instruction IR (target-independent)
 // ============================================================================
@@ -142,14 +154,15 @@ int elf_write_object(const char* output_path, CodeBuffer* buf, CodegenTarget tar
 // ============================================================================
 
 int compile_source_to_asm(const char* source, const char* input_path,
-                          const char* output_path, CodegenTarget target,
+                          const char* output_path, CodegenTargetSpec spec,
                           int opt_level, int debug_info);
 
 int compile_source_to_native(const char* source, const char* input_path,
-                             const char* output_path, CodegenTarget target,
+                             const char* output_path, CodegenTargetSpec spec,
                              int opt_level, int debug_info);
 
 // Detect host target
 CodegenTarget codegen_detect_host_target(void);
+const char* codegen_profile_name(CodegenProfile profile);
 
 #endif
