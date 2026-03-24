@@ -4,7 +4,7 @@
 
 ![SageLang Logo](assets/SageLang.jpg)
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR with runtime library, native assembly), and a **self-hosted interpreter** written in Sage itself, and a **Vulkan graphics library** for GPU compute and rendering.
+Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR with runtime library, native assembly), a **self-hosted interpreter** written in Sage itself, a **Vulkan + OpenGL graphics engine** for GPU compute and rendering, and **LLVM-compiled GPU support** for native-speed 3D game engines.
 
 ## Codebase Metrics
 
@@ -119,14 +119,14 @@ The compiled VM recipe is now charted as a first-class lane on the default workl
 - **`http`**: HTTP/HTTPS client via libcurl (get, post, put, delete, patch, head, download, escape, unescape) — returns `{status, body, headers}` dicts with options for timeout, redirects, SSL verification, custom headers
 - **`ssl`**: OpenSSL bindings (context, load_cert, wrap, connect, accept, send, recv, shutdown, free, free_context, error, peer_cert, set_verify)
 
-### GPU Graphics Library (Vulkan)
+### GPU Graphics Engine (Vulkan + OpenGL)
 
 - **`gpu`**: Full Vulkan backend with handle-based resource management
   - Context: `gpu.initialize(name, validation?)`, `gpu.shutdown()`, `gpu.device_name()`, `gpu.device_limits()`
   - Buffers: `gpu.create_buffer()`, `gpu.buffer_upload()`, `gpu.buffer_download()`, `gpu.destroy_buffer()`
   - Images: `gpu.create_image()` (1D/2D/3D, 13 formats), auto image view creation
   - Samplers: `gpu.create_sampler()` with filter and address mode control
-  - Shaders: `gpu.load_shader()` for SPIR-V modules
+  - Shaders: `gpu.load_shader()` for SPIR-V modules, `gpu.load_shader_glsl()` for OpenGL GLSL
   - Descriptors: layout creation, pool allocation, buffer/image/sampler binding
   - Compute pipelines: `gpu.create_compute_pipeline()`, `gpu.cmd_dispatch()`
   - Graphics pipelines: full config (vertex input, rasterization, blend, depth, topology)
@@ -135,6 +135,18 @@ The compiled VM recipe is now charted as a first-class lane on the default workl
   - Synchronization: fences, semaphores, queue submission (graphics + compute)
   - 100+ Vulkan enum constants exported
   - Auto-detected via pkg-config; compiles as stubs without Vulkan SDK
+- **OpenGL Backend**: `SAGE_HAS_OPENGL` auto-detected, OpenGL 4.5+ core profile via GLFW
+  - `lib/opengl.sage`: Drop-in replacement for Vulkan path (`import opengl` instead of `import gpu`)
+  - Same handle-based API — games can switch backends by changing one import
+  - Direct GLSL shader support alongside SPIR-V
+- **LLVM-Compiled GPU Support**: `sage --compile-llvm` produces native executables with full GPU access
+  - 103 `sage_rt_gpu_*` bridge functions in the LLVM runtime
+  - GPU constants resolved at compile time (no runtime lookup overhead)
+  - Automatic linking against Vulkan, GLFW, and OpenGL libraries
+  - Pure C GPU API layer (`gpu_api.h/gpu_api.c`) shared between interpreter and compiled paths
+- **Bytecode VM GPU Opcodes**: 30 dedicated opcodes for frame-loop hot paths
+  - Direct C calls for `poll_events`, `key_pressed`, `cmd_draw`, `submit_with_sync`, etc.
+  - Bypasses interpreter overhead for real-time rendering loops
 - **`lib/vulkan.sage`**: Ergonomic builder API — `vulkan.buffer("storage")`, `vulkan.shader("compute.spv", "compute")`
 - **`lib/gpu.sage`**: High-level helpers — `run_compute()` for one-shot GPU compute, ping-pong buffers, device info
 - **Rendering Libraries**: `math3d` (vectors/matrices/camera), `mesh` (procedural cube/plane/sphere, OBJ), `renderer` (frame loop), `material` (shader+texture binding), `scene` (scene graph), `pbr` (Cook-Torrance materials), `postprocess` (HDR/bloom/tonemapping), `shadows` (cascade shadow maps), `deferred` (G-buffer, SSAO, SSR), `taa` (temporal anti-aliasing), `gltf` (glTF 2.0 loading), `asset_cache`, `frame_graph`, `debug_ui`
@@ -210,6 +222,7 @@ cd src/sage && ../../sage sage.sage program.sage
 - **`json`**: Complete 1:1 cJSON port — parse, print, create, query, modify JSON trees (88 tests)
 - **`vulkan`**: Ergonomic Vulkan builder API (string-based buffer/shader/pipeline creation, barrier helpers)
 - **`gpu`**: High-level GPU compute helpers (one-shot compute dispatch, ping-pong buffers, device info)
+- **`opengl`**: OpenGL backend wrapper (drop-in replacement for Vulkan, same API with OpenGL 4.5 init)
 
 Example:
 ```sage
@@ -275,6 +288,7 @@ make test-selfhost-typecheck
 make test-selfhost-stdlib
 make test-selfhost-module
 make test-selfhost-llvm-backend
+make test-selfhost-llvm-gpu
 make test-selfhost-codegen
 make test-selfhost-compiler
 make test-selfhost-errors
@@ -319,8 +333,9 @@ make cmake-pico            # Setup a Pico CMake build
 | -------- | ------- | ------ |
 | `CC` | `gcc` | C compiler used for `make` builds |
 | `CFLAGS` | `-std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L` | Base compile flags for the desktop build |
-| `LDFLAGS` | `-lm -lpthread -ldl -lcurl -lssl -lcrypto` | Desktop link flags; `-lvulkan` added when Vulkan SDK detected; switches to `-lm` when `PICO_BUILD` is set |
+| `LDFLAGS` | `-lm -lpthread -ldl -lcurl -lssl -lcrypto` | Desktop link flags; `-lvulkan` added when Vulkan SDK detected; `-lGL` added when OpenGL detected; switches to `-lm` when `PICO_BUILD` is set |
 | `VULKAN` | `auto` | `auto` detects via pkg-config, `1` forces Vulkan, `0` disables |
+| `OPENGL` | `auto` | `auto` detects via pkg-config, `1` forces OpenGL, `0` disables |
 | `DEBUG` | `0` | `DEBUG=1` adds `-g -O0 -DDEBUG` |
 | `PREFIX` | `/usr/local` | Install prefix for `make install` |
 | `FILE` | unset | Required by `make sage-boot FILE=<path>` |

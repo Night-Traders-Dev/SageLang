@@ -494,6 +494,16 @@ This is enough to benchmark against the tree-walk interpreter quickly.
 - async/await
 - modules
 
+### Milestone 7: GPU Hot-Path Opcodes (Implemented)
+
+30 dedicated GPU opcodes have been added to `src/vm/bytecode.h` and handled in `src/vm/vm.c`. These bypass the interpreter's native function dispatch for frame-loop performance:
+
+- **Window/Input**: `BC_OP_GPU_POLL_EVENTS`, `BC_OP_GPU_WINDOW_SHOULD_CLOSE`, `BC_OP_GPU_GET_TIME`, `BC_OP_GPU_KEY_PRESSED`, `BC_OP_GPU_KEY_DOWN`, `BC_OP_GPU_MOUSE_POS`, `BC_OP_GPU_MOUSE_DELTA`, `BC_OP_GPU_UPDATE_INPUT`
+- **Commands**: `BC_OP_GPU_BEGIN_COMMANDS`, `BC_OP_GPU_END_COMMANDS`, `BC_OP_GPU_CMD_BEGIN_RP`, `BC_OP_GPU_CMD_END_RP`, `BC_OP_GPU_CMD_DRAW`, `BC_OP_GPU_CMD_DRAW_IDX`, `BC_OP_GPU_CMD_BIND_GP`, `BC_OP_GPU_CMD_BIND_DS`, `BC_OP_GPU_CMD_SET_VP`, `BC_OP_GPU_CMD_SET_SC`, `BC_OP_GPU_CMD_BIND_VB`, `BC_OP_GPU_CMD_BIND_IB`, `BC_OP_GPU_CMD_DISPATCH`, `BC_OP_GPU_CMD_PUSH_CONST`
+- **Sync/Present**: `BC_OP_GPU_SUBMIT_SYNC`, `BC_OP_GPU_ACQUIRE_IMG`, `BC_OP_GPU_PRESENT`, `BC_OP_GPU_WAIT_FENCE`, `BC_OP_GPU_RESET_FENCE`, `BC_OP_GPU_UPDATE_UNIFORM`
+
+All opcodes call the `sgpu_*` functions from `gpu_api.h` directly, avoiding `Value` marshaling overhead. Stack operands are popped, converted to C types inline, and results pushed back as `Value`.
+
 ## Compatibility Strategy
 
 Do not force full parity on the first bytecode commit.

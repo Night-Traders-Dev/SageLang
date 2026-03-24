@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: March 9, 2026
-> **Current Phase**: Phase 13 Complete (Self-Hosting)
+> **Last Updated**: March 24, 2026
+> **Current Phase**: Phase 16 Complete (LLVM GPU + OpenGL)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
@@ -594,6 +594,56 @@ Professional GPU compute and graphics library for SageLang.
 
 ---
 
+### Phase 16: LLVM GPU Support & OpenGL Backend
+
+**Status**: ✅ **COMPLETE** (March 24, 2026)
+
+LLVM-compiled GPU support for native-speed 3D game engines, plus OpenGL as a second graphics backend.
+
+#### GPU API Layer ✅
+
+- [x] **`include/gpu_api.h`** — Pure C GPU API (~100 functions), no Value/interpreter dependency
+- [x] **`src/c/gpu_api.c`** — Vulkan backend implementation with handle-table design
+- [x] Backend selection: `SAGE_GPU_BACKEND_VULKAN`, `SAGE_GPU_BACKEND_OPENGL`, `SAGE_GPU_BACKEND_NONE`
+- [x] Shared between interpreter (graphics.c), LLVM compiled path (llvm_runtime.c), and bytecode VM (vm.c)
+
+#### LLVM Backend GPU Support ✅
+
+- [x] **Module import tracking** — `import gpu` now tracked instead of silently skipped
+- [x] **GPU constant resolution** — ~120 constants (buffer/image/shader/pipeline/input flags) resolved at compile time
+- [x] **GPU method call emission** — `llvm_try_emit_gpu_call()` dispatches ~100 `gpu.method()` calls to `sage_rt_gpu_*`
+- [x] **IR prologue declarations** — All `sage_rt_gpu_*` functions declared in LLVM IR output
+- [x] **LLVM linking** — `clang` links `gpu_api.o` + `-lvulkan -lglfw -lGL` automatically
+- [x] **Module variable handling** — `EXPR_VARIABLE("gpu")` returns nil sentinel (no dangling load)
+
+#### LLVM Runtime GPU Bridge ✅
+
+- [x] **103 `sage_rt_gpu_*` wrapper functions** — Bridge SageValue types to sgpu_* C API
+- [x] Dict helper functions for complex type conversions (pipeline configs, attachment arrays)
+- [x] Array/float marshaling for buffer upload/download, push constants, uniform updates
+- [x] `llvm_runtime.c` expanded from 644 to 1808 lines
+
+#### Bytecode VM GPU Opcodes ✅
+
+- [x] **30 hot-path opcodes** — `BC_OP_GPU_POLL_EVENTS` through `BC_OP_GPU_CMD_DISPATCH`
+- [x] Direct `sgpu_*` calls bypassing interpreter for frame-loop performance
+- [x] Covers: window events, input, command recording, draw calls, sync, compute dispatch
+
+#### OpenGL Backend ✅
+
+- [x] **Makefile auto-detection** — `OPENGL=auto` via pkg-config, `SAGE_HAS_OPENGL` flag
+- [x] **`lib/opengl.sage`** — Drop-in Sage-level wrapper (same API, OpenGL init)
+- [x] **`sgpu_init_opengl_windowed()`** — GLFW + OpenGL 4.5 core profile context
+- [x] **`sgpu_load_shader_glsl()`** — Direct GLSL shader compilation for OpenGL path
+
+#### Testing ✅
+
+- [x] `test_llvm_gpu.sage` — LLVM GPU constant resolution, module tracking, IR emission
+- [x] All 1623+ existing tests pass (341 GPU tests unchanged)
+- [x] Build compiles clean with Vulkan + GLFW + OpenGL simultaneously
+
+---
+
 ## 🔮 Future Directions
 
 ### Package Manager
@@ -604,8 +654,10 @@ Professional GPU compute and graphics library for SageLang.
 
 ### Backend Expansion
 
-- [ ] LLVM and native backends for class/module/async support
+- [x] ~~LLVM backend for module/GPU support~~ (Phase 16)
+- [ ] Native codegen for module/class/GPU support
 - [ ] WebAssembly backend
+- [ ] JIT compilation via LLVM ORC
 
 ### Ecosystem Growth
 
@@ -617,16 +669,28 @@ Professional GPU compute and graphics library for SageLang.
 
 ## 📊 Progress Metrics
 
-- **Phases Completed**: 15/15 (100%)
-- **Test Suite**: 144 interpreter + 28 compiler + 1567 self-host + 88 JSON tests (1827+ total), 100% pass rate
-- **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics
+- **Phases Completed**: 16/16 (100%)
+- **Test Suite**: 144 interpreter + 28 compiler + 1623 self-host + 88 JSON tests (1883+ total), 100% pass rate
+- **Backends**: C codegen, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64), Vulkan + OpenGL graphics
 - **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
 - **Self-Hosting**: Lexer, parser, and interpreter ported to Sage with full bootstrap
-- **GPU**: Vulkan graphics engine (4600-line C, 16 Sage libraries, 27 shaders, 6 demos, PBR/bloom/shadows/deferred/particles)
+- **GPU**: Vulkan + OpenGL graphics engine (5700-line C + 900-line gpu_api, 17 Sage libraries, 27 shaders, 6 demos, PBR/bloom/shadows/deferred/particles)
+- **LLVM GPU**: 103 runtime bridge functions, 30 bytecode VM hot-path opcodes, ~120 compile-time GPU constants
 
 ---
 
 ## 📝 Recent Updates
+
+### March 24, 2026
+
+- **Phase 16 Complete: LLVM GPU Support & OpenGL Backend**
+- Pure C GPU API layer (`gpu_api.h/gpu_api.c`) — backend-agnostic, no interpreter dependency
+- LLVM backend now handles `import gpu` with full module tracking, constant resolution (~120 constants), and method call dispatch (~100 GPU functions)
+- 103 `sage_rt_gpu_*` bridge functions added to LLVM runtime (644 → 1808 lines)
+- 30 bytecode VM GPU hot-path opcodes for frame-loop performance (poll_events, key_pressed, cmd_draw, submit, etc.)
+- OpenGL 4.5 backend: `SAGE_HAS_OPENGL` auto-detected, `lib/opengl.sage` drop-in wrapper, GLSL shader support
+- LLVM compilation links Vulkan + GLFW + OpenGL automatically via clang
+- `test_llvm_gpu.sage` test suite added; all 1623+ self-hosted tests passing
 
 ### March 18, 2026
 

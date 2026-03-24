@@ -51,10 +51,17 @@ SageLang uses a shared front-end with multiple execution backends:
 
 1. **Source Code** → **Lexer** (tokenization with indentation tracking)
 2. **Tokens** → **Parser** (recursive descent, builds AST)
-3. **AST** → either the **AST interpreter** or the **bytecode compiler + VM**
+3. **AST** → one of five backends:
+   - **AST interpreter** (tree-walking, default)
+   - **Bytecode compiler + VM** (stack-based, faster for hot loops)
+   - **C codegen** (`--emit-c` / `--compile`)
+   - **LLVM IR** (`--emit-llvm` / `--compile-llvm`, with GPU support)
+   - **Native assembly** (`--emit-asm` / `--compile-native`, x86-64/aarch64/rv64)
 4. **Runtime Values** stored in the shared **heap** managed by **GC**
 
 All execution modes share the same object model: a **global environment**, nested **child environments** for scopes, and **tagged `Value` objects** that are either immediate (numbers, bools) or GC-managed heap values (arrays, dicts, strings, classes, instances, functions, generators).
+
+For GPU/graphics workloads, the LLVM compiled path resolves GPU module constants at compile time and emits direct calls to the pure C GPU API (`sgpu_*` functions in `gpu_api.h`), supporting both Vulkan and OpenGL backends. The bytecode VM provides 30 dedicated GPU opcodes for frame-loop hot paths.
 
 ---
 

@@ -34,45 +34,94 @@ A comprehensive guide to the SageLang GPU graphics engine — from opening a win
 
 ## Architecture Overview
 
-The GPU engine has four layers:
+The GPU engine has five layers, with three execution paths:
 
+```text
+Layer 5:  Sage Demos (examples/gpu_*.sage)
+            |
+Layer 4:  Engine Libraries (lib/renderer.sage, lib/scene.sage, lib/pbr.sage, ...)
+            |
+Layer 3:  Builder Libraries (lib/vulkan.sage, lib/opengl.sage, lib/math3d.sage, ...)
+            |
+Layer 2:  Execution Path (one of three):
+            |-- Interpreter:  src/c/graphics.c (Value-based wrappers)
+            |-- LLVM Compiled: src/c/llvm_runtime.c -> sage_rt_gpu_* -> sgpu_*
+            |-- Bytecode VM:   src/vm/vm.c -> BC_OP_GPU_* -> sgpu_*
+            |
+Layer 1:  Pure C GPU API (include/gpu_api.h, src/c/gpu_api.c)
+            |
+          Vulkan SDK / OpenGL 4.5 + GLFW
 ```
-Layer 4:  Sage Demos (examples/gpu_*.sage)
-            |
-Layer 3:  Engine Libraries (lib/renderer.sage, lib/scene.sage, lib/pbr.sage, ...)
-            |
-Layer 2:  Builder Libraries (lib/vulkan.sage, lib/math3d.sage, lib/mesh.sage, ...)
-            |
-Layer 1:  C Native Module (src/c/graphics.c -> "import gpu")
-            |
-          Vulkan SDK + GLFW
-```
 
-**Layer 1 (C)**: ~4600 lines wrapping Vulkan via integer handle tables. All GPU objects (buffers, images, pipelines, etc.) are stored internally and exposed to Sage as integer handles. Compiles as stubs without Vulkan.
+**Layer 1 (C GPU API)**: Backend-agnostic pure C API (`sgpu_*` functions) with ~100 functions. No interpreter dependency (no Value types). Supports Vulkan and OpenGL backends via `SAGE_HAS_VULKAN`/`SAGE_HAS_OPENGL` compile flags.
 
-**Layer 2 (Sage builders)**: String-based helpers that wrap the verbose `gpu.*` calls. `vulkan.buffer("storage")` instead of `gpu.create_buffer(1024, gpu.BUFFER_STORAGE, gpu.MEMORY_DEVICE_LOCAL)`.
+**Layer 2 (Execution Paths)**:
 
-**Layer 3 (Engine)**: Application-level systems — scene graph, materials, PBR, shadows, post-processing, deferred rendering, TAA.
+- **Interpreter path**: `graphics.c` (~5700 lines) wraps `sgpu_*` with Value-based argument extraction. Used when running `sage game.sage`.
+- **LLVM compiled path**: `llvm_runtime.c` provides 103 `sage_rt_gpu_*` bridge functions. Used when compiling with `sage --compile-llvm game.sage`.
+- **Bytecode VM path**: 30 dedicated `BC_OP_GPU_*` opcodes call `sgpu_*` directly. Used for frame-loop hot paths in the VM runtime.
 
-**Layer 4 (Demos)**: Complete examples from "hello triangle" to N-body galaxy simulations.
+**Layer 3 (Sage builders)**: String-based helpers that wrap the verbose `gpu.*` calls. `vulkan.buffer("storage")` instead of `gpu.create_buffer(1024, gpu.BUFFER_STORAGE, gpu.MEMORY_DEVICE_LOCAL)`. Also includes `opengl.sage` as a drop-in backend replacement.
+
+**Layer 4 (Engine)**: Application-level systems — scene graph, materials, PBR, shadows, post-processing, deferred rendering, TAA.
+
+**Layer 5 (Demos)**: Complete examples from "hello triangle" to N-body galaxy simulations.
 
 ### Build Requirements
 
 ```bash
-# Auto-detect Vulkan + GLFW (default)
+# Auto-detect Vulkan + GLFW + OpenGL (default)
 make
 
 # Force enable/disable
 make VULKAN=1    # Force Vulkan
-make VULKAN=0    # Disable (stub mode)
+make VULKAN=0    # Disable Vulkan (stub mode)
+make OPENGL=1    # Force OpenGL
+make OPENGL=0    # Disable OpenGL
 
 # Compile shaders
 make shaders     # Compiles all .vert/.frag/.comp to .spv
+
+# Compile a game to native executable with GPU support
+sage --compile-llvm game.sage -o game
 ```
 
 Without Vulkan SDK: the `gpu` module loads in stub mode — all constants are available, functions return error values gracefully.
 
 Without GLFW: headless compute works, windowed rendering is disabled (`gpu.has_window` is `false`).
+
+### OpenGL Backend
+
+To use OpenGL instead of Vulkan, use `lib/opengl.sage`:
+
+```sage
+import opengl
+
+# Initializes with OpenGL 4.5 core profile instead of Vulkan
+opengl.init_windowed("My App", 800, 600)
+
+# Rest of the API is identical to gpu module
+print opengl.device_name()
+let buf = opengl.create_buffer(1024, gpu.BUFFER_VERTEX, gpu.MEMORY_HOST_VISIBLE)
+# ...
+opengl.shutdown_windowed()
+```
+
+For GLSL shaders (OpenGL path), use `gpu.load_shader_glsl(source, stage)` instead of `gpu.load_shader(path, stage)` which loads SPIR-V.
+
+### LLVM-Compiled GPU Programs
+
+Games compiled via `--compile-llvm` get native-speed GPU access:
+
+```bash
+# Compile a game to a standalone executable
+sage --compile-llvm my_game.sage -o my_game
+
+# The executable links against Vulkan/GLFW/OpenGL automatically
+./my_game
+```
+
+The LLVM backend resolves GPU constants at compile time and emits direct calls to `sage_rt_gpu_*` functions, which are linked from `obj/gpu_api.o`.
 
 ---
 
