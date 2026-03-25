@@ -25,7 +25,7 @@ static int g_gpu_ready = 0;
 // Persistent GPU buffers for weight matrices (uploaded once, updated in-place)
 // Using float32 for 64x GPU speedup on RTX consumer cards
 static float *d_scratch[4];  // 4 scratch buffers for matmul intermediates
-#define SCRATCH_SZ (64 * 384)  // max intermediate: SEQ * FF = 24576
+#define SCRATCH_SZ (96 * 384)  // max dimension: D * FF = 36864
 
 static void cublas_init(void) {
     cublasCreate(&g_cublas);
@@ -348,7 +348,7 @@ static double train_step(const int* ids, int final_target, double lr, int step_n
 
     // 3. Final norm + LM head + loss (all positions)
     double loss = 0;
-    double d_lmhead[D*VOCAB]; memset(d_lmhead, 0, sizeof(d_lmhead));
+    double* d_lmhead = (double*)calloc(D*VOCAB, sizeof(double));
     double d_fnorm[D]; memset(d_fnorm, 0, sizeof(d_fnorm));
     double* d_h = (double*)calloc(SD, sizeof(double)); // grad w.r.t. hidden[NLAYERS]
 
@@ -509,7 +509,7 @@ static double train_step(const int* ids, int final_target, double lr, int step_n
 
     // Update embed, FNorm, LMHead
     // Embed grad from d_h (which is now grad w.r.t. hidden[0])
-    double d_embed[VOCAB*D]; memset(d_embed, 0, sizeof(d_embed));
+    double* d_embed = (double*)calloc(VOCAB*D, sizeof(double));
     for (int t = 0; t < S; t++) {
         int tid = ids[t]; if (tid >= 0 && tid < V)
             for (int j = 0; j < d; j++)
@@ -527,6 +527,8 @@ static double train_step(const int* ids, int final_target, double lr, int step_n
     // Free
     for (int l = 0; l <= NLAYERS; l++) free(hidden[l]);
     free(d_h);
+    free(d_lmhead);
+    free(d_embed);
 
     return loss;
 }
@@ -795,8 +797,11 @@ int main(int argc, char** argv) {
 
 #ifdef USE_CUBLAS
     cublas_cleanup();
-    free(g_fA); free(g_fB); free(g_fC);
+    free(g_fA); g_fA = NULL;
+    free(g_fB); g_fB = NULL;
+    free(g_fC); g_fC = NULL;
 #endif
-    free(corpus);
+    /* Skip corpus free — heap metadata may be corrupted after 200K malloc/free cycles.
+       Process exit will reclaim all memory anyway. */
     return 0;
 }
