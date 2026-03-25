@@ -839,6 +839,14 @@ sl-tq-chat: $(TARGET)
 	./$(TARGET) --compile-llvm models/chatbots/sl_tq_llm_chat.sage -o sl_tq_chat
 	@echo "Built: sl_tq_chat (LLVM backend)"
 
+# Self-evolving training (progressive growth)
+evolve:
+	bash models/training/evolve_train.sh
+
+# Download training datasets
+datasets:
+	bash models/data/download_datasets.sh all
+
 # Build everything: sage + trainer + chatbot
 all-models: $(TARGET) train-c chatbot-llvm sl-tq-chat
 	@echo "All models built."
@@ -858,4 +866,4 @@ all-models: $(TARGET) train-c chatbot-llvm sl-tq-chat
         test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
         test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
         test-all stats help shaders menuconfig guiconfig \
-        train-c train-sage chatbot-c chatbot-llvm chatbot-native sl-tq-chat all-models
+        train-c train-sage chatbot-c chatbot-llvm chatbot-native sl-tq-chat all-models evolve datasets

@@ -355,6 +355,7 @@ for arg in "$@"; do
     case "$arg" in
         build)      CMD="build" ;;
         train)      CMD="train" ;;
+        evolve)     CMD="evolve" ;;
         chatbot)    CMD="chatbot" ;;
         install)    CMD="install" ;;
         test)       CMD="test" ;;
@@ -383,6 +384,7 @@ Usage: ./sagemake [command] [options]
 Commands:
   build          Build sage interpreter (default)
   train [N] [LR] Build trainer + train model (default: 50000 steps)
+  evolve         Self-evolving training (progressive growth through phases)
   chatbot        Build sage + compile chatbot
   install        Build + install to /usr/local
   test           Build + run all tests
@@ -483,6 +485,13 @@ case "$CMD" in
         ;;
     clean)
         do_clean
+        ;;
+    evolve)
+        show_env
+        header "Self-Evolving Training Pipeline"
+        info "Progressive growth: d=64 → d=96 → d=128"
+        info "Each phase trains to convergence, then grows"
+        bash models/training/evolve_train.sh
         ;;
     all)
         show_env

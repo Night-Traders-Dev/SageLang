@@ -35,6 +35,7 @@ import llm.quantize
 import llm.dpo
 import llm.rag
 import llm.turboquant
+import llm.evolve
 
 let NL = chr(10)
 let DQ = chr(34)
@@ -604,10 +605,50 @@ log("AUTORESEARCH", "Final config: lr=" + str(research_cfg["learning_rate"]) + "
 print ""
 
 # ============================================================================
-# Phase 9: Save trained weights to disk
+# Phase 9: Self-Evolution Analysis
 # ============================================================================
 
-log("WEIGHTS", "Phase 9: Saving trained weights...")
+log("EVOLVE", "Phase 9: Self-evolution analysis...")
+divider()
+
+# Create evolution model from our trained weights
+let evo_model = evolve.create_seed(d_model, n_layers)
+evo_model["total_steps"] = state1["steps"] + state2["steps"]
+
+# Create evolver and feed it our loss history
+let evolver = evolve.create_evolver(evo_model)
+for i in range(len(all_losses)):
+    evolve.record_loss(evolver, all_losses[i])
+
+# Check if the model should grow
+let should = evolve.should_grow(evolver)
+log("EVOLVE", "Current: d=" + str(d_model) + " layers=" + str(n_layers) + " params=" + str(param_count))
+log("EVOLVE", "Total training steps: " + str(evo_model["total_steps"]))
+log("EVOLVE", "Loss plateau detected: " + str(should))
+
+if should:
+    log("EVOLVE", "RECOMMENDATION: Model should grow!")
+    if d_model < 128:
+        log("EVOLVE", "  -> Grow width to d=" + str(d_model + 32))
+    else:
+        log("EVOLVE", "  -> Grow depth: add layer (n_layers=" + str(n_layers + 1) + ")")
+    log("EVOLVE", "  Run: bash models/training/evolve_train.sh")
+else:
+    log("EVOLVE", "Model still learning — no growth needed yet")
+
+# Show growth schedule
+log("EVOLVE", evolve.growth_schedule())
+
+# Show recommended datasets
+log("EVOLVE", evolve.format_datasets())
+
+print ""
+
+# ============================================================================
+# Phase 10: Save trained weights to disk
+# ============================================================================
+
+log("WEIGHTS", "Phase 10: Saving trained weights...")
 divider()
 
 # Serialize all weight arrays as comma-separated floats
@@ -659,7 +700,7 @@ log("WEIGHTS", "Total params serialized: " + str(param_count))
 print ""
 
 # ============================================================================
-# Phase 10: Generate SL-TQ-LLM Chatbot (generative + retrieval hybrid)
+# Phase 11: Generate SL-TQ-LLM Chatbot (generative + retrieval hybrid)
 # ============================================================================
 
 log("CHATBOT", "Phase 10: Generating generative SL-TQ-LLM chatbot...")
@@ -1129,7 +1170,7 @@ ce("            print " + DQ + DQ)
 # (Old retrieval chatbot superseded by generative chatbot above)
 
 # ============================================================================
-# Phase 11: Model Summary
+# Phase 12: Model Summary
 # ============================================================================
 
 separator()
