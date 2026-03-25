@@ -62,6 +62,8 @@ SageLang uses a shared front-end with multiple execution backends:
    - **C codegen** (`--emit-c` / `--compile`)
    - **LLVM IR** (`--emit-llvm` / `--compile-llvm`, with GPU support)
    - **Native assembly** (`--emit-asm` / `--compile-native`, x86-64/aarch64/rv64)
+   - **Freestanding ELF** (`--compile-bare`, bare-metal kernel output)
+   - **UEFI PE** (`--compile-uefi`, EFI application output)
 4. **Runtime Values** stored in the shared **heap** managed by **GC**
 
 All execution modes share the same object model: a **global environment**, nested **child environments** for scopes, and **tagged `Value` objects** that are either immediate (numbers, bools) or GC-managed heap values (arrays, dicts, strings, classes, instances, functions, generators).
@@ -1461,6 +1463,8 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | `sage --compile-native <input.sage>` | hosted: `<input-without-.sage>`; non-hosted profiles: `<input-without-.sage>.o` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-pico-c <input.sage>` | `<input>.pico.c` | `-o <path>` |
 | `sage --compile-pico <input.sage>` | `.tmp/<program-name>` plus `<program-name>.uf2` | `-o <dir>`, `--board <name>`, `--name <program>`, `--sdk <path>` |
+| `sage --compile-bare <input.sage>` | `<input-without-.sage>.elf` | `-o <path>`, `--target <arch>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --compile-uefi <input.sage>` | `<input-without-.sage>.efi` | `-o <path>`, `--target x86_64\|aarch64`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 
 | Option | Applies To | Meaning |
 | ------ | ---------- | ------- |
@@ -2010,7 +2014,7 @@ SageLang ships with 18 GPU/rendering library modules in `lib/graphics/`. All are
 
 ### 9.10 OS Development Libraries
 
-SageLang ships with 9 OS/bare-metal development modules in `lib/os/`:
+SageLang ships with 31 OS/bare-metal development modules across `lib/os/`, `lib/os/boot/`, `lib/os/kernel/`, and `lib/os/image/`:
 
 | Module | Import | Purpose |
 |--------|--------|---------|
@@ -2029,6 +2033,22 @@ SageLang ships with 9 OS/bare-metal development modules in `lib/os/`:
 | `dtb.sage` | `import os.dtb` | Flattened Device Tree parser for ARM64/RISC-V (nodes, properties, search) |
 | `alloc.sage` | `import os.alloc` | Bump, free-list, and bitmap page allocators for kernel memory |
 | `vfs.sage` | `import os.vfs` | Virtual filesystem layer with mount table, path utilities, memfs backend |
+| `ext.sage` | `import os.ext` | ext2/3/4 superblock, inode table, directory entries, extent tree |
+| `btrfs.sage` | `import os.btrfs` | Btrfs superblock, chunk tree, root tree, subvolumes, checksums |
+| `f2fs.sage` | `import os.f2fs` | F2FS superblock, checkpoint, segment info, node/data addressing |
+| `boot/multiboot.sage` | `import os.boot.multiboot` | Multiboot2 header generation, tag building, boot info parsing |
+| `boot/gdt.sage` | `import os.boot.gdt` | x86_64 GDT descriptor construction, TSS entries, LGDT sequence |
+| `boot/start.sage` | `import os.boot.start` | x86_64 startup assembly generation (long mode entry, stack setup) |
+| `boot/linker.sage` | `import os.boot.linker` | Linker script generation for bare-metal ELF kernels |
+| `kernel/kmain.sage` | `import os.kernel.kmain` | Kernel entry point scaffolding, boot info handoff |
+| `kernel/console.sage` | `import os.kernel.console` | VGA text-mode console (80×25, color attributes, scrolling) |
+| `kernel/keyboard.sage` | `import os.kernel.keyboard` | PS/2 keyboard driver (scancode set 2, key event dispatch) |
+| `kernel/timer.sage` | `import os.kernel.timer` | PIT channel 0 timer, IRQ0 handler, millisecond tick counter |
+| `kernel/syscall.sage` | `import os.kernel.syscall` | SYSCALL/SYSRET dispatch table, argument marshalling |
+| `kernel/pmm.sage` | `import os.kernel.pmm` | Physical memory manager (bitmap allocator, multiboot2 memory map) |
+| `kernel/vmm.sage` | `import os.kernel.vmm` | Virtual memory manager (4-level paging, map/unmap, page fault handler) |
+| `image/diskimg.sage` | `import os.image.diskimg` | Bootable disk image builder (.img: MBR + FAT partition + kernel) |
+| `image/iso.sage` | `import os.image.iso` | ISO 9660 image creation (El Torito bootable CD/DVD) |
 
 ### 9.11 Networking Libraries
 

@@ -69,6 +69,8 @@ static void print_usage(FILE* stream) {
             "       sage --compile-llvm <input.sage> [-o output] [-O0..3] [-g]\n"
             "       sage --emit-asm <input.sage> [-o output.s] [--target arch[-baremetal|-osdev|-uefi]] [-O0..3] [-g]\n"
             "       sage --compile-native <input.sage> [-o output] [--target arch[-baremetal|-osdev|-uefi]] [-O0..3] [-g]\n"
+            "       sage --compile-bare <input.sage> [-o output.elf] [--target arch] [-O0..3] [-g]\n"
+            "       sage --compile-uefi <input.sage> [-o output.efi] [--target arch] [-O0..3] [-g]\n"
             "       sage --emit-pico-c <input.sage> [-o output.c]\n"
             "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n"
             "       sage fmt <file>          Format a Sage source file in-place\n"
@@ -1753,6 +1755,69 @@ int main(int argc, const char* argv[]) {
 
         free(source);
         free(derived_output);
+    // --compile-bare: compile for bare metal (freestanding, no libc)
+    // Equivalent to: --compile-native --target x86-64-baremetal
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile-bare") == 0) {
+        const char* explicit_output = NULL;
+        const char* ignored_cc = NULL;
+        const char* target_arch_str = "x86-64-baremetal";  // default bare metal target
+        int opt_level = 2, debug_info = 0;
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
+                                   &opt_level, &debug_info, &target_arch_str)) {
+            print_usage(stderr);
+            CLEANUP_AND_EXIT(64);
+        }
+        // Force baremetal profile if not already set
+        if (target_arch_str && !strstr(target_arch_str, "baremetal") && !strstr(target_arch_str, "osdev")) {
+            static char bare_target[64];
+            snprintf(bare_target, sizeof(bare_target), "%s-baremetal", target_arch_str);
+            target_arch_str = bare_target;
+        }
+        CodegenTargetSpec spec = parse_target_spec(target_arch_str);
+        char* source = read_file(cmd_argv[2]);
+        char* derived_output = NULL;
+        const char* exe_output = explicit_output;
+        if (exe_output == NULL) {
+            derived_output = derive_output_path(cmd_argv[2], ".elf", 1);
+            exe_output = derived_output;
+        }
+        if (!compile_source_to_native(source, cmd_argv[2], exe_output, spec, opt_level, debug_info)) {
+            free(source); free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+        free(source); free(derived_output);
+
+    // --compile-uefi: compile as UEFI application (PE format)
+    // Equivalent to: --compile-native --target x86-64-uefi
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile-uefi") == 0) {
+        const char* explicit_output = NULL;
+        const char* ignored_cc = NULL;
+        const char* target_arch_str = "x86-64-uefi";
+        int opt_level = 2, debug_info = 0;
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
+                                   &opt_level, &debug_info, &target_arch_str)) {
+            print_usage(stderr);
+            CLEANUP_AND_EXIT(64);
+        }
+        if (target_arch_str && !strstr(target_arch_str, "uefi")) {
+            static char uefi_target[64];
+            snprintf(uefi_target, sizeof(uefi_target), "%s-uefi", target_arch_str);
+            target_arch_str = uefi_target;
+        }
+        CodegenTargetSpec spec = parse_target_spec(target_arch_str);
+        char* source = read_file(cmd_argv[2]);
+        char* derived_output = NULL;
+        const char* exe_output = explicit_output;
+        if (exe_output == NULL) {
+            derived_output = derive_output_path(cmd_argv[2], ".efi", 1);
+            exe_output = derived_output;
+        }
+        if (!compile_source_to_native(source, cmd_argv[2], exe_output, spec, opt_level, debug_info)) {
+            free(source); free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+        free(source); free(derived_output);
+
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--emit-pico-c") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;

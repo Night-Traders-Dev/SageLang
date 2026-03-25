@@ -135,7 +135,7 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 
 ### OS Development Libraries (`lib/os/`)
 
-SageLang ships with a suite of binary format parsers and hardware abstraction modules for bare-metal, UEFI, and OS kernel development. All modules live under `lib/os/` and are imported with dotted paths:
+SageLang ships with 31 binary format parsers, hardware abstraction, boot, kernel, filesystem, and image modules for bare-metal, UEFI, and OS kernel development. All modules live under `lib/os/` and are imported with dotted paths:
 
 | Module | Import | Description |
 |--------|--------|-------------|
@@ -154,6 +154,24 @@ SageLang ships with a suite of binary format parsers and hardware abstraction mo
 | **DTB** | `import os.dtb` | Flattened Device Tree parser for ARM64/RISC-V platforms |
 | **Alloc** | `import os.alloc` | Bump, free-list, and bitmap page allocators for kernel heaps |
 | **VFS** | `import os.vfs` | Virtual filesystem abstraction layer with pluggable backends |
+| **ext** | `import os.ext` | ext2/3/4 filesystem: superblock, inode table, directory entries, extent tree |
+| **btrfs** | `import os.btrfs` | Btrfs superblock, chunk tree, root tree, subvolumes, checksums |
+| **f2fs** | `import os.f2fs` | F2FS superblock, checkpoint, segment info, node/data addressing |
+| **multiboot** | `import os.boot.multiboot` | Multiboot2 header generation, tag building, boot info parsing |
+| **gdt** | `import os.boot.gdt` | x86_64 GDT descriptor construction, TSS entries, LGDT sequence |
+| **start** | `import os.boot.start` | x86_64 startup assembly generation (long mode entry, stack setup) |
+| **linker** | `import os.boot.linker` | Linker script generation for bare-metal ELF kernels |
+| **kmain** | `import os.kernel.kmain` | Kernel entry point scaffolding, boot info handoff |
+| **console** | `import os.kernel.console` | VGA text-mode console (80×25, color attributes, scrolling) |
+| **keyboard** | `import os.kernel.keyboard` | PS/2 keyboard driver (scancode set 2, key event dispatch) |
+| **timer** | `import os.kernel.timer` | PIT channel 0 timer, IRQ0 handler, millisecond tick counter |
+| **syscall** | `import os.kernel.syscall` | SYSCALL/SYSRET dispatch table, argument marshalling |
+| **pmm** | `import os.kernel.pmm` | Physical memory manager (bitmap allocator, multiboot2 memory map) |
+| **vmm** | `import os.kernel.vmm` | Virtual memory manager (4-level paging, map/unmap, page fault handler) |
+| **diskimg** | `import os.image.diskimg` | Bootable disk image builder (.img: MBR + FAT partition + kernel) |
+| **iso** | `import os.image.iso` | ISO 9660 image creation (El Torito bootable CD/DVD) |
+
+**Bare-metal C runtime**: `src/c/bare_metal.c` provides a freestanding runtime (no libc) used by `--compile-bare` and `--compile-uefi` — supplies `memcpy`, `memset`, `memcmp`, basic integer formatting, and panic handler.
 
 Example:
 ```sage
@@ -332,8 +350,13 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`ui`**: Immediate-mode GPU UI widgets (windows, panels, buttons, labels, menus, scrollbars, checkboxes, sliders, text inputs, tooltips, progress bars)
 - **`math3d`**, **`mesh`**, **`renderer`**, **`camera`**, **`scene`**, **`material`**, **`pbr`**, **`postprocess`**, **`shadows`**, **`deferred`**, **`taa`**, **`gltf`**, **`asset_cache`**, **`frame_graph`**, **`debug_ui`**
 
-**OS / Bare-metal** (`lib/os/`, imported as `import os.<module>`):
-- **`fat`**, **`fat_dir`**, **`elf`**, **`mbr`**, **`gpt`**, **`pe`**, **`pci`**, **`uefi`**, **`acpi`**, **`paging`**, **`idt`**, **`serial`**, **`dtb`**, **`alloc`**, **`vfs`**
+**OS / Bare-metal** (`lib/os/`, imported as `import os.<module>`) — 31 modules:
+
+- **`fat`**, **`fat_dir`**, **`elf`**, **`mbr`**, **`gpt`**, **`pe`**, **`pci`**, **`uefi`**, **`acpi`**, **`paging`**, **`idt`**, **`serial`**, **`dtb`**, **`alloc`**, **`vfs`** (15 core)
+- **Filesystems**: **`ext`** (ext2/3/4), **`btrfs`**, **`f2fs`** (3)
+- **Boot** (`lib/os/boot/`): **`multiboot`**, **`gdt`**, **`start`** (x86_64 asm gen), **`linker`** (4)
+- **Kernel** (`lib/os/kernel/`): **`kmain`**, **`console`** (VGA), **`keyboard`** (PS/2), **`timer`** (PIT), **`syscall`**, **`pmm`**, **`vmm`** (7)
+- **Image** (`lib/os/image/`): **`diskimg`** (bootable .img builder), **`iso`** (ISO 9660) (2)
 
 **Networking** (`lib/net/`, imported as `import net.<module>`):
 - **`url`**: URL parsing, building, percent-encoding/decoding, query string handling
@@ -659,6 +682,8 @@ SageMake is the unified build system that auto-detects your platform, GPU, NPU, 
 | `sage --compile-native <input.sage>` | hosted: `<input-without-.sage>`; non-hosted profiles: `<input-without-.sage>.o` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-pico-c <input.sage>` | `<input>.pico.c` | `-o <path>` |
 | `sage --compile-pico <input.sage>` | `.tmp/<program-name>` build dir and `<program-name>.uf2` | `-o <dir>`, `--board <name>`, `--name <program>`, `--sdk <path>` |
+| `sage --compile-bare <input.sage>` | `<input-without-.sage>.elf` | `-o <path>`, `--target <arch>`, `-O0`–`-O3`, `-g` |
+| `sage --compile-uefi <input.sage>` | `<input-without-.sage>.efi` | `-o <path>`, `--target x86_64\|aarch64`, `-O0`–`-O3`, `-g` |
 
 #### Option Semantics
 

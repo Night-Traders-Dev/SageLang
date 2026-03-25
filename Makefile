@@ -839,6 +839,16 @@ sl-tq-chat: $(TARGET)
 	./$(TARGET) --compile-llvm models/chatbots/sl_tq_llm_chat.sage -o sl_tq_chat
 	@echo "Built: sl_tq_chat (LLVM backend)"
 
+# Compile kernel for bare metal
+kernel-bare: $(TARGET)
+	./$(TARGET) --compile-bare models/chatbots/sagellm_chatbot.sage -o kernel.elf
+	@echo "Built: kernel.elf (bare metal)"
+
+# Compile UEFI application
+kernel-uefi: $(TARGET)
+	./$(TARGET) --compile-uefi models/chatbots/sagellm_chatbot.sage -o boot.efi
+	@echo "Built: boot.efi (UEFI)"
+
 # Self-evolving training (progressive growth)
 evolve:
 	bash models/training/evolve_train.sh
