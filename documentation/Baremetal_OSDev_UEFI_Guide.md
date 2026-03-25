@@ -333,7 +333,7 @@ print str(page)   # physical address of allocated page
 Two modules produce bootable media artifacts:
 
 | Module | Import | Description |
-|--------|--------|-------------|
+| ------ | ------ | ----------- |
 | `diskimg.sage` | `import os.image.diskimg` | Bootable .img builder — MBR partition table, FAT12/16 boot partition, kernel file |
 | `iso.sage` | `import os.image.iso` | ISO 9660 image with El Torito boot record for CD/DVD/USB emulation |
 
@@ -355,7 +355,7 @@ iso.write(iso_img, "os.iso")
 Three new filesystem parsers extend the `lib/os/` suite for reading Linux-style filesystems:
 
 | Module | Import | Description |
-|--------|--------|-------------|
+| ------ | ------ | ----------- |
 | `ext.sage` | `import os.ext` | ext2/3/4 superblock, inode table, directory entries, extent tree traversal |
 | `btrfs.sage` | `import os.btrfs` | Btrfs superblock, chunk/root tree walking, subvolume listing, checksums |
 | `f2fs.sage` | `import os.f2fs` | F2FS superblock, checkpoint, segment info table, node/data block addressing |
