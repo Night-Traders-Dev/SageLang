@@ -5,15 +5,15 @@ gc_disable()
 
 # --- Constants ---
 let KERNEL_STACK_SIZE = 16384
-let KERNEL_BASE = 0x100000
-let PAGE_PRESENT = 0x01
-let PAGE_WRITABLE = 0x02
-let PAGE_LARGE = 0x80
-let CR0_PE = 0x01
-let CR0_PG = 0x80000000
-let CR4_PAE = 0x20
-let EFER_MSR = 0xC0000080
-let EFER_LME = 0x100
+let KERNEL_BASE = 1048576
+let PAGE_PRESENT = 1
+let PAGE_WRITABLE = 2
+let PAGE_LARGE = 128
+let CR0_PE = 1
+let CR0_PG = 2147483648
+let CR4_PAE = 32
+let EFER_MSR = 3221225600
+let EFER_LME = 256
 let NL = chr(10)
 let TAB = chr(9)
 

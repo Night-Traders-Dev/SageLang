@@ -5,7 +5,7 @@ gc_disable()
 
 # Constants
 let BTRFS_MAGIC_STR = "_BHRfS_M"
-let BTRFS_SUPERBLOCK_OFFSET = 0x10000
+let BTRFS_SUPERBLOCK_OFFSET = 65536
 let BTRFS_SUPER_INFO_SIZE = 4096
 let BTRFS_NODE_SIZE = 16384
 let BTRFS_LEAF_SIZE = 16384
@@ -51,7 +51,7 @@ proc _init_crc32c():
         let j = 0
         while j < 8:
             if crc % 2 == 1:
-                crc = (crc / 2) ^ 0x82F63B78
+                crc = (crc / 2) ^ 2197175160
             else:
                 crc = crc / 2
             j = j + 1
@@ -61,14 +61,14 @@ proc _init_crc32c():
 
 proc crc32c(data, start, length):
     _init_crc32c()
-    let crc = 0xFFFFFFFF
+    let crc = 4294967295
     let i = 0
     while i < length:
         let byte = data[start + i]
         let idx = (crc ^ byte) % 256
         crc = (crc / 256) ^ _crc_table[idx]
         i = i + 1
-    return crc ^ 0xFFFFFFFF
+    return crc ^ 4294967295
 
 proc _read_u8(bytes, off):
     return bytes[off]

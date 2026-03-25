@@ -4,7 +4,7 @@ gc_disable()
 # Provides parsing, reading, writing, and formatting for ext family filesystems
 
 # Constants
-let EXT_MAGIC = 0xEF53
+let EXT_MAGIC = 61267
 let INODE_SIZE_EXT2 = 128
 let INODE_SIZE_EXT4 = 256
 let BLOCK_SIZE = 4096
@@ -12,17 +12,17 @@ let SUPERBLOCK_OFFSET = 1024
 let SUPERBLOCK_SIZE = 1024
 let GROUP_DESC_SIZE = 32
 let DIR_ENTRY_HEADER = 8
-let EXTENT_MAGIC = 0xF30A
+let EXTENT_MAGIC = 62218
 let ROOT_INODE = 2
 
 # Inode type flags
-let S_IFREG = 0x8000
-let S_IFDIR = 0x4000
-let S_IFLNK = 0xA000
-let S_IFIFO = 0x1000
-let S_IFSOCK = 0xC000
-let S_IFBLK = 0x6000
-let S_IFCHR = 0x2000
+let S_IFREG = 32768
+let S_IFDIR = 16384
+let S_IFLNK = 40960
+let S_IFIFO = 4096
+let S_IFSOCK = 49152
+let S_IFBLK = 24576
+let S_IFCHR = 8192
 
 # Directory entry file types
 let FT_UNKNOWN = 0
@@ -405,7 +405,7 @@ proc write_file(fs, parent_inode, name, data):
     let descs = _get_group_descs(fs)
     let table_block = descs[group]["inode_table"]
     let ino_off = table_block * bs + index * inode_size
-    _write_u16(fs["data"], ino_off + 0, S_IFREG + 0x1B6)
+    _write_u16(fs["data"], ino_off + 0, S_IFREG + 438)
     _write_u32(fs["data"], ino_off + 4, size)
     _write_u32(fs["data"], ino_off + 28, num_blocks * (bs / 512))
     let pi = 0
@@ -475,7 +475,7 @@ proc mkdir(fs, parent_inode, name):
     let descs = _get_group_descs(fs)
     let table_block = descs[group]["inode_table"]
     let ino_off = table_block * bs + index * inode_size
-    _write_u16(fs["data"], ino_off + 0, S_IFDIR + 0x1ED)
+    _write_u16(fs["data"], ino_off + 0, S_IFDIR + 493)
     _write_u32(fs["data"], ino_off + 4, bs)
     _write_u32(fs["data"], ino_off + 28, bs / 512)
     _write_u32(fs["data"], ino_off + 40, blk)

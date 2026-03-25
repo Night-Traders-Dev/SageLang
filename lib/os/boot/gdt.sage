@@ -4,23 +4,23 @@ gc_disable()
 # Defines segment descriptors for protected/long mode transitions
 
 # --- Access byte bit constants ---
-let PRESENT = 0x80
-let DPL0 = 0x00
-let DPL1 = 0x20
-let DPL2 = 0x40
-let DPL3 = 0x60
-let CODE = 0x18
-let DATA = 0x10
-let EXECUTABLE = 0x08
-let RW = 0x02
-let ACCESSED = 0x01
-let LONG_MODE = 0x20
-let SIZE_32 = 0x40
-let GRANULARITY = 0x80
+let PRESENT = 128
+let DPL0 = 0
+let DPL1 = 32
+let DPL2 = 64
+let DPL3 = 96
+let CODE = 24
+let DATA = 16
+let EXECUTABLE = 8
+let RW = 2
+let ACCESSED = 1
+let LONG_MODE = 32
+let SIZE_32 = 64
+let GRANULARITY = 128
 
 # --- TSS type ---
-let TSS_AVAILABLE = 0x09
-let TSS_BUSY = 0x0B
+let TSS_AVAILABLE = 9
+let TSS_BUSY = 11
 
 # --- Helper: push a single byte ---
 proc push_byte(arr, val):
@@ -83,7 +83,7 @@ proc kernel_code_entry():
     # access: Present + DPL0 + Code + Executable + RW = 0x9A
     # flags: Long mode = 0x20 -> upper nibble = 0x2
     let access = PRESENT + DPL0 + CODE + EXECUTABLE + RW
-    return create_entry(0, 0xFFFFF, access, 0x02)
+    return create_entry(0, 1048575, access, 2)
 end
 
 # --- Kernel data segment (ring 0) ---
@@ -91,7 +91,7 @@ proc kernel_data_entry():
     # access: Present + DPL0 + Data + RW = 0x92
     # flags: 0x00
     let access = PRESENT + DPL0 + DATA + RW
-    return create_entry(0, 0xFFFFF, access, 0x00)
+    return create_entry(0, 1048575, access, 0)
 end
 
 # --- User code segment (ring 3, 64-bit) ---
@@ -99,7 +99,7 @@ proc user_code_entry():
     # access: Present + DPL3 + Code + Executable + RW = 0xFA
     # flags: Long mode = 0x2
     let access = PRESENT + DPL3 + CODE + EXECUTABLE + RW
-    return create_entry(0, 0xFFFFF, access, 0x02)
+    return create_entry(0, 1048575, access, 2)
 end
 
 # --- User data segment (ring 3) ---
@@ -107,7 +107,7 @@ proc user_data_entry():
     # access: Present + DPL3 + Data + RW = 0xF2
     # flags: 0x00
     let access = PRESENT + DPL3 + DATA + RW
-    return create_entry(0, 0xFFFFF, access, 0x00)
+    return create_entry(0, 1048575, access, 0)
 end
 
 # --- TSS descriptor (16 bytes in long mode) ---
@@ -115,7 +115,7 @@ proc tss_entry(base, limit):
     let entry = []
     # First 8 bytes: standard descriptor with TSS type
     let access = PRESENT + DPL0 + TSS_AVAILABLE
-    let first = create_entry(base, limit, access, 0x00)
+    let first = create_entry(base, limit, access, 0)
     let i = 0
     for i in range(len(first)):
         push(entry, first[i])
@@ -142,10 +142,10 @@ proc create_gdt():
     push(gdt["entries"], user_code_entry())
     # 4: User data (selector 0x20 | 3 = 0x23)
     push(gdt["entries"], user_data_entry())
-    gdt["kernel_code_sel"] = 0x08
-    gdt["kernel_data_sel"] = 0x10
-    gdt["user_code_sel"] = 0x1B
-    gdt["user_data_sel"] = 0x23
+    gdt["kernel_code_sel"] = 8
+    gdt["kernel_data_sel"] = 16
+    gdt["user_code_sel"] = 27
+    gdt["user_data_sel"] = 35
     return gdt
 end
 

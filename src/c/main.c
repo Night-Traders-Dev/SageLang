@@ -1020,7 +1020,7 @@ static void repl_save_session(const char* path) {
 
 // Phase 12: Interactive REPL
 static void run_repl(SageRuntimeMode runtime_mode) {
-    printf("Sage REPL v1.1.0\n");
+    printf("Sage REPL v" SAGE_VERSION_STR "\n");
     printf("Type :help for help, :quit to exit.\n");
 
     Env* env = env_create(NULL);

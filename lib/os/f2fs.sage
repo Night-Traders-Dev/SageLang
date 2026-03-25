@@ -4,7 +4,7 @@ gc_disable()
 # Provides parsing and reading for F2FS filesystem structures
 
 # Constants
-let F2FS_MAGIC = 0xF2F52010
+let F2FS_MAGIC = 4076986384
 let BLOCK_SIZE = 4096
 let F2FS_SUPER_OFFSET = 1024
 let LOG_BLOCKS_PER_SEG = 9
@@ -28,8 +28,8 @@ let F2FS_FT_DIR = 2
 let F2FS_FT_SYMLINK = 7
 
 # Inline flags
-let F2FS_INLINE_DATA = 0x02
-let F2FS_INLINE_DENTRY = 0x04
+let F2FS_INLINE_DATA = 2
+let F2FS_INLINE_DENTRY = 4
 
 proc _read_u8(bytes, off):
     return bytes[off]

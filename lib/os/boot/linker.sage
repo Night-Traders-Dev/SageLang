@@ -5,7 +5,7 @@ gc_disable()
 
 let NL = chr(10)
 let TAB = chr(9)
-let DEFAULT_BASE = 0x100000
+let DEFAULT_BASE = 1048576
 let DEFAULT_STACK_SIZE = 16384
 
 # --- Create a default config ---

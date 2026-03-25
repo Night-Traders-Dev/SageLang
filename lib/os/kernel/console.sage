@@ -22,7 +22,7 @@ let YELLOW = 14
 let WHITE = 15
 
 # ----- VGA state -----
-let VGA_BASE = 0xB8000
+let VGA_BASE = 753664
 let VGA_WIDTH = 80
 let VGA_HEIGHT = 25
 

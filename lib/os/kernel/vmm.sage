@@ -59,10 +59,10 @@ proc init():
         addr = addr + pmm.PAGE_SIZE
     end
 
-    # Map VGA text buffer region (0xB8000)
-    let vga_page = page_number(0xB8000)
+    # Map VGA text buffer region (753664)
+    let vga_page = page_number(753664)
     let vga_entry = {}
-    vga_entry["phys"] = 0xB8000
+    vga_entry["phys"] = 753664
     vga_entry["flags"] = PAGE_PRESENT + PAGE_WRITABLE
     let k_entries = kernel_pml4["entries"]
     k_entries[str(vga_page)] = vga_entry

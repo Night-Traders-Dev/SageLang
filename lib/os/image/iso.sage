@@ -12,54 +12,54 @@ let EL_TORITO_SPEC = "EL TORITO SPECIFICATION"
 let BOOT_CATALOG_SECTOR = 20
 let BOOT_IMAGE_SECTOR = 21
 
-fun write_byte_iso(data, offset, val):
+proc write_byte_iso(data, offset, val):
     data[offset] = val % 256
     return data
 
-fun write_word_le_iso(data, offset, val):
+proc write_word_le_iso(data, offset, val):
     data[offset] = val % 256
     data[offset + 1] = (val / 256) % 256
     return data
 
-fun write_word_be_iso(data, offset, val):
+proc write_word_be_iso(data, offset, val):
     data[offset] = (val / 256) % 256
     data[offset + 1] = val % 256
     return data
 
-fun write_word_both(data, offset, val):
+proc write_word_both(data, offset, val):
     write_word_le_iso(data, offset, val)
     write_word_be_iso(data, offset + 2, val)
     return data
 
-fun write_dword_le_iso(data, offset, val):
+proc write_dword_le_iso(data, offset, val):
     data[offset] = val % 256
     data[offset + 1] = (val / 256) % 256
     data[offset + 2] = (val / 65536) % 256
     data[offset + 3] = (val / 16777216) % 256
     return data
 
-fun write_dword_be_iso(data, offset, val):
+proc write_dword_be_iso(data, offset, val):
     data[offset] = (val / 16777216) % 256
     data[offset + 1] = (val / 65536) % 256
     data[offset + 2] = (val / 256) % 256
     data[offset + 3] = val % 256
     return data
 
-fun write_dword_both(data, offset, val):
+proc write_dword_both(data, offset, val):
     write_dword_le_iso(data, offset, val)
     write_dword_be_iso(data, offset + 4, val)
     return data
 
-fun write_string_pad(data, offset, s, pad_len):
+proc write_string_pad(data, offset, s, pad_len):
     let i = 0
     for i in range(pad_len):
         if i < len(s):
             data[offset + i] = ord(s[i])
         if i >= len(s):
-            data[offset + i] = 0x20
+            data[offset + i] = 32
     return data
 
-fun create_iso(label):
+proc create_iso(label):
     let iso = {}
     iso["label"] = label
     iso["files"] = []
@@ -67,7 +67,7 @@ fun create_iso(label):
     iso["volume_id"] = label
     return iso
 
-fun add_file(iso, path, data):
+proc add_file(iso, path, data):
     let entry = {}
     entry["path"] = path
     entry["data"] = data
@@ -76,15 +76,15 @@ fun add_file(iso, path, data):
     iso["files"] = files
     return iso
 
-fun add_boot_record(iso, boot_binary):
+proc add_boot_record(iso, boot_binary):
     iso["boot_binary"] = boot_binary
     return iso
 
-fun set_volume_id(iso, name):
+proc set_volume_id(iso, name):
     iso["volume_id"] = name
     return iso
 
-fun serialize(iso):
+proc serialize(iso):
     let file_list = iso["files"]
     let num_files = len(file_list)
     let data_start_sector = 22 + num_files
@@ -134,12 +134,12 @@ fun serialize(iso):
         let cat_off = BOOT_CATALOG_SECTOR * ISO_SECTOR
         img[cat_off] = 1
         img[cat_off + 1] = 0
-        img[cat_off + 28] = 0xAA
-        img[cat_off + 29] = 0x55
-        img[cat_off + 30] = 0x55
-        img[cat_off + 31] = 0xAA
+        img[cat_off + 28] = 170
+        img[cat_off + 29] = 85
+        img[cat_off + 30] = 85
+        img[cat_off + 31] = 170
         let init_entry = cat_off + 32
-        img[init_entry] = 0x88
+        img[init_entry] = 136
         img[init_entry + 1] = 0
         write_word_le_iso(img, init_entry + 2, 1)
         write_word_le_iso(img, init_entry + 6, 4)
@@ -187,7 +187,7 @@ fun serialize(iso):
         cur_sector = cur_sector + fsectors
     return img
 
-fun save(iso_img, path):
+proc save(iso_img, path):
     let data = ""
     let i = 0
     for i in range(len(iso_img)):
@@ -195,7 +195,7 @@ fun save(iso_img, path):
     writefile(path, data)
     return true
 
-fun create_bootable_iso(kernel_path, output_path, label):
+proc create_bootable_iso(kernel_path, output_path, label):
     let kernel_str = readfile(kernel_path)
     let kernel_bytes = []
     let i = 0

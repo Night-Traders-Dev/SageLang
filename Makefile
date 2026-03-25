@@ -6,9 +6,12 @@
 # Configuration
 # ============================================================================
 
+# Single-source version from VERSION file
+SAGE_VERSION := $(shell cat VERSION 2>/dev/null || echo "0.0.0")
+
 CC = gcc
 PYTHON ?= python3
-CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"'
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"'
 # Platform-conditional linking: pthread only on desktop (not RP2040)
 ifndef PICO_BUILD
 LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto
@@ -876,4 +879,5 @@ all-models: $(TARGET) train-c chatbot-llvm sl-tq-chat
         test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
         test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
         test-all stats help shaders menuconfig guiconfig \
-        train-c train-sage chatbot-c chatbot-llvm chatbot-native sl-tq-chat all-models evolve datasets
+        train-c train-sage chatbot-c chatbot-llvm chatbot-native sl-tq-chat all-models evolve datasets \
+        kernel-bare kernel-uefi

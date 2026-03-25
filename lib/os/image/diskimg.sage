@@ -4,10 +4,10 @@ gc_disable()
 # Supports MBR, GPT, FAT16 formatting, and file/kernel writing.
 
 let SECTOR_SIZE = 512
-let MBR_SIGNATURE = 0xAA55
-let PARTITION_FAT16 = 0x06
-let PARTITION_FAT32 = 0x0C
-let PARTITION_EFI = 0xEF
+let MBR_SIGNATURE = 43605
+let PARTITION_FAT16 = 6
+let PARTITION_FAT32 = 12
+let PARTITION_EFI = 239
 let GPT_HEADER_LBA = 1
 let GPT_ENTRY_SIZE = 128
 let GPT_ENTRIES_PER_SECTOR = 4
@@ -16,43 +16,43 @@ let FAT16_ROOT_ENTRIES = 512
 let FAT16_SECTORS_PER_CLUSTER = 4
 let FAT16_NUM_FATS = 2
 
-fun byte_to_int(b):
+proc byte_to_int(b):
     if b < 0:
         return b + 256
     return b
 
-fun write_byte(image, offset, val):
+proc write_byte(image, offset, val):
     image[offset] = val % 256
     return image
 
-fun write_word_le(image, offset, val):
+proc write_word_le(image, offset, val):
     image[offset] = val % 256
     image[offset + 1] = (val / 256) % 256
     return image
 
-fun write_dword_le(image, offset, val):
+proc write_dword_le(image, offset, val):
     image[offset] = val % 256
     image[offset + 1] = (val / 256) % 256
     image[offset + 2] = (val / 65536) % 256
     image[offset + 3] = (val / 16777216) % 256
     return image
 
-fun read_byte(image, offset):
+proc read_byte(image, offset):
     return byte_to_int(image[offset])
 
-fun read_word_le(image, offset):
+proc read_word_le(image, offset):
     let lo = byte_to_int(image[offset])
     let hi = byte_to_int(image[offset + 1])
     return lo + hi * 256
 
-fun read_dword_le(image, offset):
+proc read_dword_le(image, offset):
     let b0 = byte_to_int(image[offset])
     let b1 = byte_to_int(image[offset + 1])
     let b2 = byte_to_int(image[offset + 2])
     let b3 = byte_to_int(image[offset + 3])
     return b0 + b1 * 256 + b2 * 65536 + b3 * 16777216
 
-fun create_image(size_mb):
+proc create_image(size_mb):
     let total_bytes = size_mb * 1024 * 1024
     let image = []
     let i = 0
@@ -60,18 +60,18 @@ fun create_image(size_mb):
         image = image + [0]
     return image
 
-fun write_mbr(image, bootloader_bytes):
+proc write_mbr(image, bootloader_bytes):
     let i = 0
     let boot_len = len(bootloader_bytes)
     if boot_len > 446:
         boot_len = 446
     for i in range(boot_len):
         image[i] = bootloader_bytes[i]
-    image[510] = 0x55
-    image[511] = 0xAA
+    image[510] = 85
+    image[511] = 170
     return image
 
-fun lba_to_chs(lba):
+proc lba_to_chs(lba):
     let heads = 16
     let sectors_per_track = 63
     let c = lba / (heads * sectors_per_track)
@@ -86,7 +86,7 @@ fun lba_to_chs(lba):
     result = result + [c % 256]
     return result
 
-fun create_partition(image, start_lba, size_lba, type_id, bootable):
+proc create_partition(image, start_lba, size_lba, type_id, bootable):
     let slot = -1
     let i = 0
     for i in range(4):
@@ -99,9 +99,9 @@ fun create_partition(image, start_lba, size_lba, type_id, bootable):
         return image
     let base = 446 + slot * 16
     if bootable:
-        image[base] = 0x80
+        image[base] = 128
     if bootable == false:
-        image[base] = 0x00
+        image[base] = 0
     let start_chs = lba_to_chs(start_lba)
     image[base + 1] = start_chs[0]
     image[base + 2] = start_chs[1]
@@ -114,15 +114,15 @@ fun create_partition(image, start_lba, size_lba, type_id, bootable):
     image[base + 7] = end_chs[2]
     write_dword_le(image, base + 8, start_lba)
     write_dword_le(image, base + 12, size_lba)
-    image[510] = 0x55
-    image[511] = 0xAA
+    image[510] = 85
+    image[511] = 170
     return image
 
-fun format_fat16(image, partition_start, partition_size):
+proc format_fat16(image, partition_start, partition_size):
     let base = partition_start * SECTOR_SIZE
-    image[base + 0] = 0xEB
-    image[base + 1] = 0x3C
-    image[base + 2] = 0x90
+    image[base + 0] = 235
+    image[base + 1] = 60
+    image[base + 2] = 144
     let oem = "SAGEOS  "
     let i = 0
     for i in range(8):
@@ -137,27 +137,27 @@ fun format_fat16(image, partition_start, partition_size):
     if partition_size >= 65536:
         write_word_le(image, base + 19, 0)
         write_dword_le(image, base + 32, partition_size)
-    image[base + 21] = 0xF8
+    image[base + 21] = 248
     let fat_size = (partition_size / FAT16_SECTORS_PER_CLUSTER + 2) / 256 + 1
     write_word_le(image, base + 22, fat_size)
     write_word_le(image, base + 24, 63)
     write_word_le(image, base + 26, 16)
     write_dword_le(image, base + 28, partition_start)
-    image[base + 510] = 0x55
-    image[base + 511] = 0xAA
+    image[base + 510] = 85
+    image[base + 511] = 170
     let fat_off = base + FAT16_RESERVED_SECTORS * SECTOR_SIZE
-    image[fat_off + 0] = 0xF8
-    image[fat_off + 1] = 0xFF
-    image[fat_off + 2] = 0xFF
-    image[fat_off + 3] = 0xFF
+    image[fat_off + 0] = 248
+    image[fat_off + 1] = 255
+    image[fat_off + 2] = 255
+    image[fat_off + 3] = 255
     let fat2_off = fat_off + fat_size * SECTOR_SIZE
-    image[fat2_off + 0] = 0xF8
-    image[fat2_off + 1] = 0xFF
-    image[fat2_off + 2] = 0xFF
-    image[fat2_off + 3] = 0xFF
+    image[fat2_off + 0] = 248
+    image[fat2_off + 1] = 255
+    image[fat2_off + 2] = 255
+    image[fat2_off + 3] = 255
     return image
 
-fun fat16_layout(partition_start, partition_size):
+proc fat16_layout(partition_start, partition_size):
     let base = partition_start * SECTOR_SIZE
     let fat_size = (partition_size / FAT16_SECTORS_PER_CLUSTER + 2) / 256 + 1
     let root_dir_offset = base + (FAT16_RESERVED_SECTORS + FAT16_NUM_FATS * fat_size) * SECTOR_SIZE
@@ -170,7 +170,7 @@ fun fat16_layout(partition_start, partition_size):
     info["data_offset"] = data_offset
     return info
 
-fun pad_filename_83(filename):
+proc pad_filename_83(filename):
     let name = ""
     let ext = ""
     let dot_pos = -1
@@ -196,7 +196,7 @@ fun pad_filename_83(filename):
             result = result + " "
     return result
 
-fun write_file(image, partition_start, partition_size, filename, data):
+proc write_file(image, partition_start, partition_size, filename, data):
     let layout = fat16_layout(partition_start, partition_size)
     let root_off = layout["root_dir_offset"]
     let data_off = layout["data_offset"]
@@ -215,7 +215,7 @@ fun write_file(image, partition_start, partition_size, filename, data):
     let name83 = pad_filename_83(filename)
     for i in range(11):
         image[entry_base + i] = ord(name83[i])
-    image[entry_base + 11] = 0x20
+    image[entry_base + 11] = 32
     let data_len = len(data)
     let clusters_needed = data_len / (FAT16_SECTORS_PER_CLUSTER * SECTOR_SIZE) + 1
     let first_cluster = 2
@@ -244,13 +244,13 @@ fun write_file(image, partition_start, partition_size, filename, data):
             write_word_le(image, fat_off + cluster * 2, next_cluster)
             cluster = next_cluster
         if c == clusters_needed - 1:
-            write_word_le(image, fat_off + cluster * 2, 0xFFFF)
+            write_word_le(image, fat_off + cluster * 2, 65535)
     return image
 
-fun write_kernel(image, partition_start, partition_size, kernel_bytes):
+proc write_kernel(image, partition_start, partition_size, kernel_bytes):
     return write_file(image, partition_start, partition_size, "KERNEL  BIN", kernel_bytes)
 
-fun save_image(image, path):
+proc save_image(image, path):
     let data = ""
     let i = 0
     for i in range(len(image)):
@@ -258,7 +258,7 @@ fun save_image(image, path):
     writefile(path, data)
     return true
 
-fun create_bootable(kernel_path, output_path, size_mb):
+proc create_bootable(kernel_path, output_path, size_mb):
     let kernel_data_str = readfile(kernel_path)
     let kernel_bytes = []
     let i = 0
@@ -278,15 +278,15 @@ fun create_bootable(kernel_path, output_path, size_mb):
     save_image(image, output_path)
     return true
 
-fun create_gpt_image(size_mb):
+proc create_gpt_image(size_mb):
     let image = create_image(size_mb)
     let i = 0
-    image[0] = 0xEE
-    image[510] = 0x55
-    image[511] = 0xAA
+    image[0] = 238
+    image[510] = 85
+    image[511] = 170
     let pmbr_base = 446
-    image[pmbr_base] = 0x00
-    image[pmbr_base + 4] = 0xEE
+    image[pmbr_base] = 0
+    image[pmbr_base + 4] = 238
     write_dword_le(image, pmbr_base + 8, 1)
     let total_sectors = size_mb * 1024 * 1024 / SECTOR_SIZE
     write_dword_le(image, pmbr_base + 12, total_sectors - 1)
@@ -294,7 +294,7 @@ fun create_gpt_image(size_mb):
     let sig = "EFI PART"
     for i in range(8):
         image[hdr + i] = ord(sig[i])
-    write_dword_le(image, hdr + 8, 0x00010000)
+    write_dword_le(image, hdr + 8, 65536)
     write_dword_le(image, hdr + 12, 92)
     write_dword_le(image, hdr + 24, 1)
     write_dword_le(image, hdr + 32, total_sectors - 1)
@@ -305,11 +305,11 @@ fun create_gpt_image(size_mb):
     write_dword_le(image, hdr + 84, 128)
     return image
 
-fun add_efi_partition(image, efi_binary):
+proc add_efi_partition(image, efi_binary):
     let hdr = GPT_HEADER_LBA * SECTOR_SIZE
     let entry_lba = 2
     let entry_base = entry_lba * SECTOR_SIZE
-    let efi_type_guid = [0x28, 0x73, 0x2A, 0xC1, 0x1F, 0xF8, 0xD2, 0x11, 0xBA, 0x4B, 0x00, 0xA0, 0xC9, 0x3E, 0xC9, 0x3B]
+    let efi_type_guid = [40, 115, 42, 193, 31, 248, 210, 17, 186, 75, 0, 160, 201, 62, 201, 59]
     let i = 0
     for i in range(16):
         image[entry_base + i] = efi_type_guid[i]

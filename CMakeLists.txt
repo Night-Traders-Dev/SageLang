@@ -23,7 +23,11 @@ endif()
 # Project Configuration
 # ============================================================================
 
-project(SageLang VERSION 1.1.0 LANGUAGES C CXX ASM)
+# Read version from single-source VERSION file
+file(READ "${CMAKE_SOURCE_DIR}/VERSION" SAGE_VER_RAW)
+string(STRIP "${SAGE_VER_RAW}" SAGE_VER)
+
+project(SageLang VERSION ${SAGE_VER} LANGUAGES C CXX ASM)
 
 # Initialize Pico SDK AFTER project() but before anything else
 if(BUILD_PICO)
@@ -63,6 +67,7 @@ add_compile_options(
 # Add POSIX source for strdup (desktop only)
 if(NOT BUILD_PICO)
     add_compile_definitions(_POSIX_C_SOURCE=200809L)
+    add_compile_definitions(SAGE_VERSION_STR="${PROJECT_VERSION}")
 endif()
 
 # Find networking dependencies (desktop only)

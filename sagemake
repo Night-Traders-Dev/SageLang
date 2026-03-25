@@ -37,6 +37,9 @@ SAGE_REPO_DIR="$(cd "$(dirname "$0")" && pwd)"  # where sagemake lives = repo ro
 SAGE_BUILD_DIR="${SAGE_BUILD_DIR:-$SAGE_REPO_DIR}"
 SAGE_DATA_DIR="${SAGE_DATA_DIR:-$SAGE_REPO_DIR/models/data}"
 SAGE_WEIGHT_DIR="${SAGE_WEIGHT_DIR:-$SAGE_REPO_DIR/models/weights}"
+
+# Single-source version
+SAGE_VERSION=$(cat "$SAGE_REPO_DIR/VERSION" 2>/dev/null || echo "0.0.0")
 SAGE_INSTALL_PREFIX="${SAGE_INSTALL_PREFIX:-/usr/local}"
 SAGE_GITHUB_URL="https://github.com/Night-Traders-Dev/sagelang.git"
 
@@ -605,7 +608,7 @@ printf "  ___) | (_| | (_| |  | |  | | (_| |   |  __/\n"
 printf " |____/ \\__,_|\\__, |\\_|_|  |_|\\__,_|_|\\_\\___|\n"
 printf "              |___/\n"
 printf "${N}\n"
-printf "  ${D}v1.1.0 — Unified Build System for SageLang${N}\n\n"
+printf "  ${D}v${SAGE_VERSION} — Unified Build System for SageLang${N}\n\n"
 
 case "$CMD" in
     info)

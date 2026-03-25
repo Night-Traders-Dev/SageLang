@@ -5,8 +5,8 @@ gc_disable()
 
 # ----- PIT constants -----
 let PIT_FREQ = 1193182
-let PIT_CHANNEL0 = 0x40
-let PIT_CMD = 0x43
+let PIT_CHANNEL0 = 64
+let PIT_CMD = 67
 
 # ----- Timer state -----
 let tick_count = 0

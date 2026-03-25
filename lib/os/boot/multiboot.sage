@@ -4,7 +4,7 @@ gc_disable()
 # Specification: https://www.gnu.org/software/grub/manual/multiboot2/
 
 # --- Constants ---
-let MAGIC = 0xE85250D6
+let MAGIC = 3900595414
 let ARCH_I386 = 0
 let ARCH_MIPS = 4
 
@@ -16,7 +16,7 @@ let TAG_FLAGS = 4
 let TAG_FRAMEBUFFER = 5
 let TAG_MODULE_ALIGN = 6
 
-let BOOTLOADER_MAGIC = 0x36D76289
+let BOOTLOADER_MAGIC = 920712841
 
 let BOOT_INFO_TAG_END = 0
 let BOOT_INFO_TAG_CMDLINE = 1

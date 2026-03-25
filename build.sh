@@ -24,6 +24,9 @@ ARROW="${CYAN}→${RESET}"
 GEAR="${YELLOW}⚙${RESET}"
 SAGE="${GREEN}🌿${RESET}"
 
+# Single-source version
+SAGE_VERSION=$(cat VERSION 2>/dev/null || echo "0.0.0")
+
 cols=$(tput cols 2>/dev/null || echo 60)
 
 banner() {
