@@ -347,14 +347,16 @@ log("MODEL", "Initializing SageGPT-Medium model...")
 separator2()
 
 # Medium model configuration
-let d_model = 256
-let n_layers = 4
-let n_heads = 8
-let d_ff = 1024
+# d_model=128 with 2 layers — practical for interpreter training
+# context_len=4096 for high-context inference (seq_len=128 for training batches)
+let d_model = 128
+let n_layers = 2
+let n_heads = 4
+let d_ff = 512
 let d_head = (d_model / n_heads) | 0
 let vocab = 256
 let context_len = 4096
-let seq_len = 256
+let seq_len = 128
 let model_name = "SageGPT-Medium"
 
 log("MODEL", "Architecture: SwiGLU + RoPE + RMSNorm")
