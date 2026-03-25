@@ -600,10 +600,44 @@ static char* resolve_module_path_for_compiler(const Compiler* compiler, const ch
     path_name[mlen] = '\0';
 
     char path[PATH_MAX];
+    // Search relative to source file directory
     const char* search[] = { "", "lib/", "modules/" };
     for (int i = 0; i < 3; i++) {
         snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], path_name);
         if (access(path, F_OK) == 0) return str_dup(path);
+    }
+    // Search relative to CWD
+    for (int i = 0; i < 3; i++) {
+        snprintf(path, sizeof(path), "./%s%s.sage", search[i], path_name);
+        if (access(path, F_OK) == 0) return str_dup(path);
+    }
+    // Search installed library path
+#ifndef SAGE_LIB_DIR
+#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
+#endif
+    snprintf(path, sizeof(path), "%s/%s.sage", SAGE_LIB_DIR, path_name);
+    if (access(path, F_OK) == 0) return str_dup(path);
+    // Search SAGE_PATH environment variable
+    const char* sage_path = getenv("SAGE_PATH");
+    if (sage_path != NULL) {
+        char env_buf[4096];
+        size_t elen = strlen(sage_path);
+        if (elen < sizeof(env_buf)) {
+            memcpy(env_buf, sage_path, elen + 1);
+            char* start = env_buf;
+            for (char* p = env_buf; ; p++) {
+                if (*p == ':' || *p == '\0') {
+                    char ec = *p;
+                    *p = '\0';
+                    if (p > start) {
+                        snprintf(path, sizeof(path), "%s/%s.sage", start, path_name);
+                        if (access(path, F_OK) == 0) return str_dup(path);
+                    }
+                    if (ec == '\0') break;
+                    start = p + 1;
+                }
+            }
+        }
     }
     return NULL;
 }

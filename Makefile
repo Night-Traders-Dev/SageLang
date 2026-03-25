@@ -8,7 +8,7 @@
 
 CC = gcc
 PYTHON ?= python3
-CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"'
 # Platform-conditional linking: pthread only on desktop (not RP2040)
 ifndef PICO_BUILD
 LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto

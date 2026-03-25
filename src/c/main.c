@@ -1504,6 +1504,11 @@ int main(int argc, const char* argv[]) {
     sage_set_args(argc, argv);
     init_module_system();
 
+    // Add source file's directory to module search paths for compiler commands
+    if (cmd_argc >= 3 && cmd_argv[2][0] != '-') {
+        module_add_source_dir(cmd_argv[2]);
+    }
+
     if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--runtime") == 0) {
         if (!sage_runtime_parse_mode(cmd_argv[2], &runtime_mode)) {
             fprintf(stderr, "Unknown runtime mode: %s (expected ast, bytecode, or auto)\n", cmd_argv[2]);
@@ -1862,6 +1867,7 @@ int main(int argc, const char* argv[]) {
         lsp_run();
     } else if (cmd_argc >= 2) {
         // File mode (extra args accessible via sys.args())
+        module_add_source_dir(cmd_argv[1]);  // Add source file's dir to search paths
         char* source = read_file(cmd_argv[1]);
         run(source, cmd_argv[1], runtime_mode);
         free(source);

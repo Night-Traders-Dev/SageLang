@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
+#include <unistd.h>
 #include "gc.h"
 #include "sage_thread.h"
 
@@ -446,10 +447,81 @@ bool import_module(Environment* env, ImportData* import_data) {
     }
 }
 
+// Add the install-prefix library path and SAGE_PATH env var
+static void add_system_search_paths(ModuleCache* cache) {
+    // 1. Installed library path (compile-time default)
+#ifndef SAGE_LIB_DIR
+#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
+#endif
+    add_search_path(cache, SAGE_LIB_DIR);
+
+    // 2. SAGE_PATH environment variable (colon-separated list of directories)
+    const char* sage_path = getenv("SAGE_PATH");
+    if (sage_path != NULL && sage_path[0] != '\0') {
+        char buf[4096];
+        size_t len = strlen(sage_path);
+        if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+        memcpy(buf, sage_path, len);
+        buf[len] = '\0';
+        char* start = buf;
+        for (char* p = buf; ; p++) {
+            if (*p == ':' || *p == '\0') {
+                char end_ch = *p;
+                *p = '\0';
+                if (p > start) {
+                    add_search_path(cache, start);
+                }
+                if (end_ch == '\0') break;
+                start = p + 1;
+            }
+        }
+    }
+
+    // 3. Executable's own directory + /../share/sage/lib (for relocatable installs)
+#ifdef __linux__
+    {
+        char exe_path[4096];
+        ssize_t n = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+        if (n > 0) {
+            exe_path[n] = '\0';
+            char* slash = strrchr(exe_path, '/');
+            if (slash) {
+                *slash = '\0';
+                char rel_lib[4096];
+                snprintf(rel_lib, sizeof(rel_lib), "%s/../share/sage/lib", exe_path);
+                add_search_path(cache, rel_lib);
+                // Also add exe_dir/lib for portable installs
+                snprintf(rel_lib, sizeof(rel_lib), "%s/lib", exe_path);
+                add_search_path(cache, rel_lib);
+            }
+        }
+    }
+#endif
+}
+
+// Add source file's directory as a search path
+void module_add_source_dir(const char* source_path) {
+    if (global_module_cache == NULL || source_path == NULL) return;
+    char dir[4096];
+    size_t len = strlen(source_path);
+    if (len >= sizeof(dir)) return;
+    memcpy(dir, source_path, len + 1);
+    char* last_slash = strrchr(dir, '/');
+    if (last_slash != NULL) {
+        *(last_slash + 1) = '\0';
+        add_search_path(global_module_cache, dir);
+        // Also add dir/lib/ for project-relative libs
+        char lib_dir[4096];
+        snprintf(lib_dir, sizeof(lib_dir), "%slib", dir);
+        add_search_path(global_module_cache, lib_dir);
+    }
+}
+
 // Initialize the module system
 void init_module_system() {
     if (!global_module_cache) {
         global_module_cache = create_module_cache();
+        add_system_search_paths(global_module_cache);
         register_stdlib_modules(global_module_cache);
     }
 }

@@ -102,6 +102,9 @@ void sage_set_args(int argc, const char** argv);
 void init_module_system();
 void cleanup_module_system();
 
+// Add source file's directory to search paths (call after init, before loading)
+void module_add_source_dir(const char* source_path);
+
 extern Environment* g_global_env;  // Global environment for module loading
 
 
