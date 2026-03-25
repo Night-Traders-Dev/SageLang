@@ -655,6 +655,39 @@ case "$CMD" in
         info "Each phase trains to convergence, then grows"
         bash models/training/evolve_train.sh
         ;;
+    qemu)
+        show_env
+        build_sage
+        header "QEMU Bare-Metal Runner"
+        local QEMU_ARCH="${2:-x86_64}"
+        local QEMU_KERNEL="${3:-kernel.elf}"
+        if [ ! -f "$QEMU_KERNEL" ]; then
+            info "Building kernel for $QEMU_ARCH..."
+            ./sage --compile-bare models/chatbots/sagellm_chatbot.sage -o "$QEMU_KERNEL" --target "$QEMU_ARCH" 2>/dev/null || true
+        fi
+        if [ "$QEMU_ARCH" = "aarch64" ]; then
+            info "Running: qemu-system-aarch64 -machine virt"
+            qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 64M -display none -serial stdio -no-reboot -kernel "$QEMU_KERNEL"
+        elif [ "$QEMU_ARCH" = "riscv64" ]; then
+            info "Running: qemu-system-riscv64 -machine virt"
+            qemu-system-riscv64 -machine virt -m 64M -display none -serial stdio -no-reboot -kernel "$QEMU_KERNEL"
+        else
+            info "Running: qemu-system-x86_64 -machine q35"
+            qemu-system-x86_64 -machine q35 -m 64M -display none -serial stdio -no-reboot -kernel "$QEMU_KERNEL"
+        fi
+        ;;
+    qemu-debug)
+        show_env
+        build_sage
+        header "QEMU Debug (GDB on port 1234)"
+        local DBG_KERNEL="${2:-kernel.elf}"
+        if [ ! -f "$DBG_KERNEL" ]; then
+            info "Building kernel..."
+            ./sage --compile-bare models/chatbots/sagellm_chatbot.sage -o "$DBG_KERNEL" 2>/dev/null || true
+        fi
+        info "Waiting for GDB: gdb -ex 'target remote :1234' $DBG_KERNEL"
+        qemu-system-x86_64 -machine q35 -m 64M -display none -serial stdio -no-reboot -kernel "$DBG_KERNEL" -gdb tcp::1234 -S
+        ;;
     all)
         show_env
         build_sage

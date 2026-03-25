@@ -852,6 +852,20 @@ kernel-uefi: $(TARGET)
 	./$(TARGET) --compile-uefi models/chatbots/sagellm_chatbot.sage -o boot.efi
 	@echo "Built: boot.efi (UEFI)"
 
+# Run bare-metal kernel in QEMU (x86_64)
+qemu-bare: kernel-bare
+	qemu-system-x86_64 -machine q35 -m 64M -display none -serial stdio -no-reboot -kernel kernel.elf
+
+# Run bare-metal kernel in QEMU (aarch64)
+qemu-bare-arm64: $(TARGET)
+	./$(TARGET) --compile-bare models/chatbots/sagellm_chatbot.sage -o kernel-arm64.elf --target aarch64
+	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 64M -display none -serial stdio -no-reboot -kernel kernel-arm64.elf
+
+# Run bare-metal kernel in QEMU with GDB (port 1234)
+qemu-debug: kernel-bare
+	@echo "Waiting for GDB on port 1234... (gdb -ex 'target remote :1234' kernel.elf)"
+	qemu-system-x86_64 -machine q35 -m 64M -display none -serial stdio -no-reboot -kernel kernel.elf -gdb tcp::1234 -S
+
 # Self-evolving training (progressive growth)
 evolve:
 	bash models/training/evolve_train.sh
@@ -880,4 +894,4 @@ all-models: $(TARGET) train-c chatbot-llvm sl-tq-chat
         test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
         test-all stats help shaders menuconfig guiconfig \
         train-c train-sage chatbot-c chatbot-llvm chatbot-native sl-tq-chat all-models evolve datasets \
-        kernel-bare kernel-uefi
+        kernel-bare kernel-uefi qemu-bare qemu-bare-arm64 qemu-debug

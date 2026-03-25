@@ -1,9 +1,20 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: March 25, 2026
-> **Current Phase**: Phase 18 Complete (Linux Kernel Support Libraries)
+> **Current Phase**: Phase 18 Complete (Linux Kernel Support Libraries + QEMU)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+
+---
+
+## v1.3.0: QEMU Support (March 2026)
+
+### Completed
+
+- QEMU VM launcher library (`lib/os/qemu.sage`): machine presets (baremetal_x86, baremetal_arm64, baremetal_riscv, linux_vm, dev_vm, test_kernel), drives (IDE/virtio/qcow2), networking (user/tap/bridge), devices (virtio-rng/balloon/gpu/serial, USB, 9p shares), GDB debug, qemu-img tools
+- QEMU kernel test runner (`lib/os/linux/qemu_run.sage`): automated kernel module testing, init script generation, result parsing, shell script generation, quick_module_test and quick_baremetal_test presets
+- Build system: `make qemu-bare`, `make qemu-bare-arm64`, `make qemu-debug`, `sagemake qemu [arch]`, `sagemake qemu-debug`
+- 269 interpreter tests passing (was 267, 2 new QEMU tests)
 
 ---
 
@@ -19,7 +30,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - Netlink socket message builder/parser
 - Device Tree overlay builder (DTS codegen)
 - Control Groups v2 interface, epoll event loop builder, ioctl command builder, Linux namespaces
-- Version now sourced from a single `VERSION` file (v1.2.0)
+- Version now sourced from a single `VERSION` file
 - Parser fix: keywords like `init` now allowed as property names after `.` and `->`
 - All hex literals in OS libraries converted to decimal (Sage has no hex literal support)
 - 267 interpreter tests passing (was 257)

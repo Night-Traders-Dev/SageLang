@@ -1,5 +1,15 @@
 # SageLang Updates
 
+## v1.3.0 — QEMU Support (March 2026)
+
+- QEMU VM launcher library (`lib/os/qemu.sage`): machine presets (baremetal_x86, baremetal_arm64, baremetal_riscv, linux_vm, dev_vm, test_kernel), drives (IDE/virtio/qcow2), networking (user/tap/bridge), devices (virtio-rng/balloon/gpu/serial, USB, 9p shares), GDB debug, qemu-img tools
+- QEMU kernel test runner (`lib/os/linux/qemu_run.sage`): automated kernel module testing, init script generation, result parsing, shell script generation, quick_module_test and quick_baremetal_test presets
+- Build system: `make qemu-bare`, `make qemu-bare-arm64`, `make qemu-debug`, `sagemake qemu [arch]`, `sagemake qemu-debug`
+- 269 interpreter tests passing (2 new QEMU tests)
+- Version 1.3.0
+
+---
+
 ## v1.2.0 — Phase 18: Linux Kernel Support (March 2026)
 
 - 11 new Linux kernel support libraries under `lib/os/linux/`: syscalls, driver, kmodule, procfs, netlink, sysfs, devicetree, cgroups, epoll, ioctl, namespace

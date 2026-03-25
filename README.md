@@ -135,7 +135,7 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 
 ### OS Development Libraries (`lib/os/`)
 
-SageLang ships with 42 binary format parsers, hardware abstraction, boot, kernel, filesystem, image, and Linux kernel support modules for bare-metal, UEFI, and OS kernel development. All modules live under `lib/os/` and are imported with dotted paths:
+SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel, filesystem, image, Linux kernel support, and QEMU virtualization modules for bare-metal, UEFI, and OS kernel development. All modules live under `lib/os/` and are imported with dotted paths:
 
 | Module | Import | Description |
 |--------|--------|-------------|
@@ -181,6 +181,8 @@ SageLang ships with 42 binary format parsers, hardware abstraction, boot, kernel
 | **epoll** | `import os.linux.epoll` | epoll event loop builder (C codegen) |
 | **ioctl** | `import os.linux.ioctl` | ioctl command builder (_IO/_IOR/_IOW/_IOWR) |
 | **namespace** | `import os.linux.namespace` | Linux namespaces for containerization |
+| **qemu** | `import os.qemu` | QEMU VM launcher (x86_64/aarch64/riscv64, KVM, drives, networking, GDB, presets) |
+| **qemu_run** | `import os.linux.qemu_run` | Kernel module test runner (automated QEMU test pipelines, init script gen, result parsing) |
 
 **Bare-metal C runtime**: `src/c/bare_metal.c` provides a freestanding runtime (no libc) used by `--compile-bare` and `--compile-uefi` — supplies `memcpy`, `memset`, `memcmp`, basic integer formatting, and panic handler.
 
@@ -361,14 +363,15 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`ui`**: Immediate-mode GPU UI widgets (windows, panels, buttons, labels, menus, scrollbars, checkboxes, sliders, text inputs, tooltips, progress bars)
 - **`math3d`**, **`mesh`**, **`renderer`**, **`camera`**, **`scene`**, **`material`**, **`pbr`**, **`postprocess`**, **`shadows`**, **`deferred`**, **`taa`**, **`gltf`**, **`asset_cache`**, **`frame_graph`**, **`debug_ui`**
 
-**OS / Bare-metal** (`lib/os/`, imported as `import os.<module>`) — 42 modules:
+**OS / Bare-metal** (`lib/os/`, imported as `import os.<module>`) — 44 modules:
 
 - **`fat`**, **`fat_dir`**, **`elf`**, **`mbr`**, **`gpt`**, **`pe`**, **`pci`**, **`uefi`**, **`acpi`**, **`paging`**, **`idt`**, **`serial`**, **`dtb`**, **`alloc`**, **`vfs`** (15 core)
 - **Filesystems**: **`ext`** (ext2/3/4), **`btrfs`**, **`f2fs`** (3)
 - **Boot** (`lib/os/boot/`): **`multiboot`**, **`gdt`**, **`start`** (x86_64 asm gen), **`linker`** (4)
 - **Kernel** (`lib/os/kernel/`): **`kmain`**, **`console`** (VGA), **`keyboard`** (PS/2), **`timer`** (PIT), **`syscall`**, **`pmm`**, **`vmm`** (7)
 - **Image** (`lib/os/image/`): **`diskimg`** (bootable .img builder), **`iso`** (ISO 9660) (2)
-- **Linux** (`lib/os/linux/`): **`syscalls`**, **`driver`**, **`kmodule`**, **`procfs`**, **`netlink`**, **`sysfs`**, **`devicetree`**, **`cgroups`**, **`epoll`**, **`ioctl`**, **`namespace`** (11)
+- **Linux** (`lib/os/linux/`): **`syscalls`**, **`driver`**, **`kmodule`**, **`procfs`**, **`netlink`**, **`sysfs`**, **`devicetree`**, **`cgroups`**, **`epoll`**, **`ioctl`**, **`namespace`**, **`qemu_run`** (12)
+- **QEMU** (`lib/os/`): **`qemu`** (VM launcher with machine presets, drives, networking, GDB) (1)
 
 **Networking** (`lib/net/`, imported as `import net.<module>`):
 - **`url`**: URL parsing, building, percent-encoding/decoding, query string handling
@@ -1015,12 +1018,12 @@ proc write_memory(ptr: *mut u8, value: u8):
 
 - **Language**: C
 - **Phases Completed**: 15/15 (100%)
-- **Test Suite**: 267 interpreter + 28 compiler + 88 JSON + 1567 self-hosted tests (1950+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, and GPU
+- **Test Suite**: 269 interpreter + 28 compiler + 88 JSON + 1567 self-hosted tests (1950+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, and GPU
 - **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics, and initial bare-metal/OSdev/UEFI target profiles
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
 - **Status**: Active development with a working self-hosted interpreter and GPU graphics library
 - **License**: MIT
-- **Current Version**: v1.2.0
+- **Current Version**: v1.3.0
 
 ## 💾 Project Structure
 
@@ -1105,7 +1108,7 @@ sage/
 │       ├── test_parser.sage      # Parser tests (130)
 │       ├── test_interpreter.sage # Interpreter tests (18)
 │       └── test_bootstrap.sage   # Bootstrap tests (18)
-├── tests/            # Automated test suite (267 interpreter + 28 compiler + 88 JSON)
+├── tests/            # Automated test suite (269 interpreter + 28 compiler + 88 JSON)
 │   ├── run_tests.sh  # Test runner script
 │   ├── test_json.sage # cJSON port test suite (88 tests)
 │   ├── 01_variables/ # Variable declaration tests
