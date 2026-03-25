@@ -21,7 +21,7 @@ Tokenizer:          lib/llm/tokenizer (char, word, BPE)
         |
 Training:           lib/llm/train (loops, LR schedules, loss)
 Fine-tuning:        lib/llm/lora (low-rank adapters)
-Compression:        lib/llm/quantize (int8, int4)
+Compression:        lib/llm/quantize (int8, int4), lib/llm/turboquant (PolarQuant+QJL, 1-4 bit)
 Config:             lib/llm/config (GPT-2, Llama, Mistral presets)
 ```
 
@@ -286,6 +286,51 @@ print "Int4: " + sizes["int4"]   # ~3 GB
 
 ---
 
+## TurboQuant (`llm.turboquant`)
+
+Near-optimal vector quantization based on Google Research's ICLR 2026 paper. Two-stage compression:
+
+1. **Stage 1 — PolarQuant**: Random rotation (Walsh-Hadamard) + MSE-optimal scalar quantization per coordinate. Uses pre-computed codebooks for 1-4 bit widths.
+2. **Stage 2 — QJL**: Quantized Johnson-Lindenstrauss 1-bit sign projection on the residual. Provides unbiased inner product estimation.
+
+Key features:
+
+- Data-oblivious (no training/calibration needed)
+- Post-training quantization (no fine-tuning required)
+- 3-bit achieves 6x KV cache memory reduction with zero accuracy loss
+- Up to 8x speedup on attention scoring
+- Near information-theoretic optimal distortion
+
+```sage
+import llm.turboquant
+
+# Full quantization (MSE + QJL, unbiased inner products)
+let q = turboquant.quantize(vector, 3)       # 3-bit
+let r = turboquant.dequantize(q)
+
+# MSE-only (for value vectors)
+let q_mse = turboquant.quantize_mse(vector, 2)
+let r_mse = turboquant.dequantize_mse(q_mse)
+
+# KV Cache compression
+let cache = turboquant.create_kv_cache(1024, 128, 3)
+turboquant.cache_push(cache, key_vec, value_vec)
+let key = turboquant.cache_get_key(cache, 0)
+let val = turboquant.cache_get_value(cache, 0)
+let stats = turboquant.cache_stats(cache)  # compression_ratio ~6x
+
+# Analysis
+let mse = turboquant.mse_distortion(original, reconstructed)
+let ip_err = turboquant.inner_product_error(x, y, x_hat)
+let bound = turboquant.theoretical_mse_bound(3)  # 0.0425
+
+# Benchmark
+let bench = turboquant.benchmark(128, 3, 100)
+print turboquant.summary(bench)
+```
+
+---
+
 ## Module Reference
 
 | Module | Import | Key Functions |
@@ -306,6 +351,7 @@ print "Int4: " + sizes["int4"]   # ~3 GB
 | `dpo` | `import llm.dpo` | `simple_dpo_loss`, `batch_dpo_loss`, `orpo_loss`, `sage_code_preferences`, `create_reward_model` (lambda config field, preferences returned as list, reward model uses array storage) |
 | `gguf` | `import llm.gguf` | `export_metadata`, `create_modelfile`, `build_tensor_list`, `sage_to_gguf_config`, `quant_types`, `estimate_size` |
 | `gguf_import` | `import llm.gguf_import` | `import_gguf`, `parse_header`, `read_metadata`, `extract_config`, `load_weights`, `dequantize_q4_0`, `dequantize_q8_0`, `convert_to_sagegpt`, `supported_architectures` |
+| `turboquant` | `import llm.turboquant` | `quantize`, `dequantize`, `quantize_mse`, `dequantize_mse`, `create_kv_cache`, `cache_push`, `cache_get_key`, `cache_get_value`, `cache_stats`, `mse_distortion`, `inner_product_error`, `theoretical_mse_bound`, `benchmark`, `summary` |
 | `gpu_accel` | `import ml.gpu_accel` | `create_context`, `matmul`, `add`, `rms_norm`, `silu`, `softmax`, `transformer_layer_forward`, `model_forward`, `train_step` |
 
 ## Ollama / llama.cpp Export

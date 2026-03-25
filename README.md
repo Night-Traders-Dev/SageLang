@@ -412,12 +412,14 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`dpo`**: Direct Preference Optimization (DPO/ORPO alignment, preference pairs, reward models, Sage code preferences)
 - **`gguf`**: GGUF v3 export for Ollama and llama.cpp (metadata, Modelfile, quantization, conversion scripts)
 - **`gguf_import`**: Import GGUF models from Ollama/llama.cpp into SageGPT format (Q4_0/Q8_0 dequantization, llama/gpt2/mistral/phi/gemma/qwen2 architectures) — `lib/llm/gguf_import.sage`
+- **`turboquant`**: TurboQuant near-optimal vector quantization (ICLR 2026, Google Research) — two-stage PolarQuant + QJL pipeline for 3-bit KV cache compression with 6x memory reduction and zero accuracy loss — `lib/llm/turboquant.sage`
 
 ### SageGPT / LLM Build Pipeline
 
 `models/build_sagellm.sage` implements a 12-phase training pipeline (v2.0) that trains SageGPT-Medium on the entire Sage codebase:
 
 - **GGUF import** (`lib/llm/gguf_import.sage`): Convert Ollama/llama.cpp GGUF models into SageGPT format, with support for Q4_0/Q8_0 dequantization and llama/gpt2/mistral/phi/gemma/qwen2 architectures.
+- **TurboQuant** (`lib/llm/turboquant.sage`): TurboQuant (ICLR 2026) — 3-bit KV cache quantization with 6x compression and zero accuracy loss.
 - **GPU acceleration** (`lib/ml/gpu_accel.sage`): Auto-detects GPU/CPU/NPU/TPU backends; offloads matmul, RMSNorm, SiLU, and softmax to compute shaders with transparent CPU fallback.
 - **Build pipeline v2.0** (`models/build_sagellm.sage`): 12-phase pipeline — data collection, model init, pre-training, LoRA fine-tuning, DPO alignment, RAG, Engram memory, quantization, chatbot generation, GGUF export, visualization, and summary. SageGPT-Medium: d_model=128, 4 layers, 4 heads, d_ff=512, vocab=256, 16K context.
 
