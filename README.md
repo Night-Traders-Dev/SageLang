@@ -59,6 +59,8 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **Methods**: Functions with automatic `self` binding
 - **Properties**: Dynamic instance variables via `self.property`
 - **Inheritance**: `class Child(Parent):` with method overriding
+- **Super calls**: `super.init(self, ...)` / `super.method(self, ...)` — call parent constructors and methods; works with deep inheritance chains
+- **Arrow operator**: `->` — systems-language style property access, alias for `.`
 - **Property Access**: `obj.property` and `obj.property = value`
 
 ### Advanced Data Structures
@@ -803,7 +805,7 @@ class Animal:
 # Derived class with method overriding
 class Dog(Animal):
     proc init(self, name, breed):
-        self.name = name
+        super.init(self, name)  # call parent constructor
         self.breed = breed
 
     proc speak(self):
@@ -933,7 +935,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 
 - **Language**: C
 - **Phases Completed**: 15/15 (100%)
-- **Test Suite**: 144 interpreter + 28 compiler + 88 JSON + 1567 self-hosted tests (1827+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, and GPU
+- **Test Suite**: 241 interpreter + 28 compiler + 88 JSON + 1567 self-hosted tests (1924+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, and GPU
 - **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics, and initial bare-metal/OSdev/UEFI target profiles
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
 - **Status**: Active development with a working self-hosted interpreter and GPU graphics library
@@ -1023,7 +1025,7 @@ sage/
 │       ├── test_parser.sage      # Parser tests (130)
 │       ├── test_interpreter.sage # Interpreter tests (18)
 │       └── test_bootstrap.sage   # Bootstrap tests (18)
-├── tests/            # Automated test suite (144 interpreter + 28 compiler + 88 JSON)
+├── tests/            # Automated test suite (241 interpreter + 28 compiler + 88 JSON)
 │   ├── run_tests.sh  # Test runner script
 │   ├── test_json.sage # cJSON port test suite (88 tests)
 │   ├── 01_variables/ # Variable declaration tests
@@ -1050,6 +1052,7 @@ sage/
 - **Class methods cannot see module-level `let` vars** — hardcode values or pass them as arguments.
 - **`%` operator casts to int** — `3.7 % 1` returns `0`, not `0.7`; use string-based `trunc()` for floor/ceil.
 - **LLVM backend: do NOT use the fake-break pattern** (`j = len(arr)` to exit loops) — the LLVM backend cannot modify loop variables at runtime. Use `break` instead.
+- **`super` requires explicit `self`** — always pass `self` as the first argument: `super.init(self, args)`, not `super.init(args)`.
 
 ## 🤝 Contributing
 

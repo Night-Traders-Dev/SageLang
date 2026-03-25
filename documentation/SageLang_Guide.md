@@ -1016,6 +1016,46 @@ let car = Car(4, 4)
 car.describe()                 # "Car with 4 wheels and 4 doors"
 ```
 
+**Calling Parent Methods with `super`**:
+
+Use `super.init(self, args)` to call the parent class constructor, and `super.method(self, args)` to call any parent method. This works with chained inheritance (3+ levels, e.g., A → B → C).
+
+```sagelang
+class Animal:
+    proc init(self, name):
+        self.name = name
+    proc speak(self):
+        print self.name + " speaks"
+
+class Dog(Animal):
+    proc init(self, name, breed):
+        super.init(self, name)
+        self.breed = breed
+    proc speak(self):
+        super.speak(self)
+        print self.name + " barks"
+
+let d = Dog("Rex", "Labrador")
+d.speak()
+# Rex speaks
+# Rex barks
+```
+
+The `->` arrow operator can also be used with super: `super->init(self, args)`.
+
+**Arrow Operator (`->`)**:
+
+The `->` operator is a syntactic alias for `.` (dot), providing systems-language style pointer/member access. It works identically for field reads, field writes, and method calls.
+
+```sagelang
+let p = Point(3, 7)
+print p->x          # same as p.x
+p->x = 10           # same as p.x = 10
+print p->to_string()  # same as p.to_string()
+```
+
+`->` is interchangeable with `.` everywhere: attribute access, method calls, and `super` calls (`super->init(self, args)`).
+
 ### 4.5 Exception Handling
 
 **Try-Catch-Finally**:
@@ -2238,10 +2278,12 @@ The self-hosted tree includes core parser/interpreter suites plus additional too
 
 | Category | Tests | Coverage |
 |----------|-------|---------|
-| `test_lexer.sage` | 12 | Token types, indentation, keywords |
+| `test_lexer.sage` | 13 | Token types, indentation, keywords |
 | `test_parser.sage` | 130 | All AST node types, operator precedence |
 | `test_interpreter.sage` | 18 | Evaluation, scoping, closures, classes |
 | `test_bootstrap.sage` | 18 | End-to-end: source → tokens → AST → result |
+
+The full test suite (interpreter + compiler + self-hosted tooling) totals **241 tests**.
 
 ---
 
@@ -3154,6 +3196,6 @@ Bitwise:       & | ^ ~ << >>
 Assignment:    =
 Indexing:      arr[i]
 Slicing:       arr[a:b]
-Property:      obj.field
+Property:      obj.field  or  obj->field
 Call:          func(args)
 ```
