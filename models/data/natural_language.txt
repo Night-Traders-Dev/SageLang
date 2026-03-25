@@ -1,0 +1,214 @@
+<|nlp|>
+# Natural Language Understanding for Code Assistants
+
+## English Grammar for Technical Communication
+
+### Sentence Structure
+Subject + Verb + Object (SVO) is the basic English pattern:
+  "The function returns a value"
+  Subject: "The function", Verb: "returns", Object: "a value"
+
+### Technical Vocabulary
+- Verb forms for actions: create, initialize, allocate, compute, parse, compile, emit, resolve, traverse
+- Adjectives for properties: mutable, immutable, concurrent, static, dynamic, recursive, iterative
+- Nouns for concepts: variable, function, class, module, scope, type, expression, statement, block
+
+### Question Patterns Users Ask
+- "How do I..." (seeking procedure/steps)
+- "What is..." (seeking definition/explanation)
+- "Why does..." (seeking reasoning/cause)
+- "Can I..." (seeking capability/permission)
+- "What's the difference between..." (seeking comparison)
+- "Is there a way to..." (seeking alternatives)
+- "Why am I getting..." (seeking debugging help)
+- "What's wrong with..." (seeking error diagnosis)
+
+### Answer Patterns for Code Assistants
+- Start with a direct answer, then explain
+- Show code examples inline
+- Use "because" to explain why, not just what
+- Anticipate follow-up questions
+- Offer alternatives when appropriate
+
+## Semantics and Meaning
+
+### Intent Recognition
+Map user utterances to intents:
+  "How do I loop?" -> intent: LOOP_HELP
+  "My code crashes" -> intent: DEBUG_HELP
+  "What modules are there?" -> intent: MODULE_LIST
+  "Show me an example" -> intent: EXAMPLE_REQUEST
+  "That doesn't work" -> intent: ERROR_REPORT
+  "Thanks" -> intent: GRATITUDE
+  "Can you explain more?" -> intent: ELABORATION_REQUEST
+
+### Entity Extraction
+Identify key entities in user messages:
+  "How do I import the crypto hash module?"
+    -> entities: {action: "import", module: "crypto.hash"}
+  "Write a function that sorts an array"
+    -> entities: {action: "write", type: "function", operation: "sort", target: "array"}
+  "Fix the bug in parser.c on line 42"
+    -> entities: {action: "fix", target: "parser.c", location: "line 42"}
+
+### Coreference Resolution
+Track what pronouns refer to:
+  User: "What does the GC do?"
+  Bot: "The GC manages memory automatically."
+  User: "How fast is it?"  -> "it" refers to "the GC"
+  User: "Can I disable it?" -> "it" still refers to "the GC"
+
+### Context Tracking
+Maintain conversation topic across turns:
+  Turn 1: "How do arrays work?" -> topic: arrays
+  Turn 2: "Can I slice them?" -> topic: arrays (continued)
+  Turn 3: "What about dicts?" -> topic: dicts (shifted)
+  Turn 4: "Do they support keys?" -> topic: dicts (continued)
+
+## Pragmatics and Conversation
+
+### Conversational Maxims (Grice)
+1. Quantity: Give enough information, but not too much
+2. Quality: Be truthful and accurate
+3. Relation: Be relevant to the topic
+4. Manner: Be clear and orderly
+
+### Politeness Strategies
+- Use hedging: "You might want to try..." instead of "Do this"
+- Acknowledge effort: "Good question" before answering
+- Offer options: "You could either X or Y"
+- Validate frustration: "That error can be tricky"
+
+### Error Communication
+Bad: "Wrong"
+Good: "That approach won't work because X. Try Y instead."
+
+Bad: "Syntax error"
+Good: "There's a missing colon after the proc declaration on line 5. Add ':' after the parameter list."
+
+## Discourse Structure
+
+### Explanation Patterns
+1. Definition: "X is a Y that Z"
+2. Example: "For instance, ..."
+3. Contrast: "Unlike X, Y does Z"
+4. Analogy: "Think of X like Y"
+5. Enumeration: "There are three ways: first..., second..., third..."
+
+### Code Explanation Template
+1. State what the code does (one sentence)
+2. Walk through the key parts
+3. Explain any non-obvious design choices
+4. Mention edge cases or caveats
+
+Example:
+"This function sorts an array using quicksort. It picks a pivot element from the middle, partitions the array into elements less than and greater than the pivot, then recursively sorts each partition. Note that this is an in-place sort, so it modifies the original array."
+
+## Syntactic Patterns in Technical English
+
+### Imperative (instructions)
+"Create a new file", "Import the module", "Run the tests"
+
+### Declarative (statements)
+"Sage uses indentation for blocks", "The GC runs concurrently"
+
+### Interrogative (questions)
+"How does the parser work?", "What types are supported?"
+
+### Conditional (if-then)
+"If you need X, use Y", "When the GC runs, it..."
+
+### Causal (because/therefore)
+"Because Sage is dynamically typed, variables don't need type annotations"
+"The GC uses write barriers, therefore concurrent marking is safe"
+
+## Word Sense Disambiguation
+
+Technical terms with multiple meanings:
+- "class": OOP class vs. classification vs. category
+- "type": data type vs. typing (keyboard) vs. type checking
+- "run": execute code vs. run tests vs. runtime
+- "scope": variable scope vs. project scope
+- "block": code block vs. blocking (threads) vs. block device
+- "match": pattern matching vs. regex match vs. comparison
+- "pass": optimization pass vs. function pass (no-op) vs. password
+- "key": dict key vs. API key vs. encryption key
+- "object": OOP object vs. compiled object file
+- "port": network port vs. language port vs. I/O port
+
+Context resolves ambiguity:
+"Add a new class to the parser" -> OOP class
+"What class of error is this?" -> category
+"Run the parser on this file" -> execute
+"The runtime is too slow" -> execution environment
+
+<|end|>
+
+<|conversation_examples|>
+# Example Conversations for Training
+
+## Explaining a concept
+User: What is a closure in Sage?
+Bot: A closure is a function that captures variables from its surrounding scope. When you define a function inside another function, the inner function can access and modify the outer function's variables even after the outer function has returned.
+
+Here's an example:
+  proc make_counter():
+      let count = 0
+      proc increment():
+          count = count + 1
+          return count
+      return increment
+
+  let c = make_counter()
+  print c()  # 1
+  print c()  # 2
+
+The inner `increment` function "closes over" the `count` variable, keeping it alive.
+
+## Debugging help
+User: My code crashes with a segfault when I import crypto.hash
+Bot: This is likely a GC issue. The crypto modules do heavy allocation (SHA-256 creates 64-entry arrays per block), which can trigger garbage collection during deeply-nested interpreter state.
+
+The fix: add `gc_disable()` at the top of your script, or the crypto modules already include it internally in v1.0.0. If you're on an older version, update or add `gc_disable()` before the import.
+
+## Step-by-step guidance
+User: How do I add a new module to Sage?
+Bot: Here's the step-by-step process:
+
+1. Create the file in the appropriate lib/ subdirectory:
+   - lib/std/ for general utilities
+   - lib/os/ for OS/hardware
+   - lib/net/ for networking
+
+2. Start the file with `gc_disable()` if it does heavy allocation
+
+3. Write your module's functions using `proc name(args):`
+
+4. Add a test file in tests/26_stdlib/ with EXPECT comments:
+   # EXPECT: expected_output
+   import your.module
+   print module.function()
+
+5. Update the Makefile install section to copy your subdirectory
+
+6. Run tests: bash tests/run_tests.sh
+
+## Comparison question
+User: What's the difference between arrays and tuples in Sage?
+Bot: Arrays are mutable and dynamic, tuples are immutable and fixed:
+
+Arrays:
+  let arr = [1, 2, 3]
+  push(arr, 4)      # can grow
+  arr[0] = 10       # can modify
+  print len(arr)     # 4
+
+Tuples:
+  let t = (1, 2, 3)
+  print t[0]         # can read (1)
+  # t[0] = 10        # ERROR: tuples are immutable
+  # push(t, 4)       # ERROR: can't grow
+
+Use arrays for collections that change, tuples for fixed groupings like coordinates or return values.
+
+<|end|>
