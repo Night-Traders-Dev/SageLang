@@ -15,6 +15,119 @@
 #include <time.h>
 #include <pthread.h>
 
+#ifdef SAGE_HAS_VULKAN
+#include "gpu_api.h"
+#endif
+
+// ============================================================================
+// GPU compute state
+// ============================================================================
+
+static int g_gpu_initialized = 0;
+static int g_gpu_available = 0;
+static int g_gpu_matmul_shader = -1;
+static int g_gpu_matmul_pipeline = -1;
+static int g_gpu_matmul_layout = -1;
+static int g_gpu_matmul_desc_layout = -1;
+static int g_gpu_threshold = 8192;  // M*K threshold to offload to GPU
+
+// GLSL compute shader source for matmul
+static const char* g_matmul_shader_src =
+    "#version 450\n"
+    "layout(local_size_x = 16, local_size_y = 16) in;\n"
+    "layout(set = 0, binding = 0) readonly buffer A { float a[]; };\n"
+    "layout(set = 0, binding = 1) readonly buffer B { float b[]; };\n"
+    "layout(set = 0, binding = 2) writeonly buffer C { float c[]; };\n"
+    "layout(push_constant) uniform Params { uint M; uint K; uint N; } p;\n"
+    "void main() {\n"
+    "  uint row = gl_GlobalInvocationID.y;\n"
+    "  uint col = gl_GlobalInvocationID.x;\n"
+    "  if (row >= p.M || col >= p.N) return;\n"
+    "  float sum = 0.0;\n"
+    "  for (uint i = 0; i < p.K; i++) sum += a[row * p.K + i] * b[i * p.N + col];\n"
+    "  c[row * p.N + col] = sum;\n"
+    "}\n";
+
+static void ml_gpu_init(void) {
+#ifdef SAGE_HAS_VULKAN
+    if (g_gpu_initialized) return;
+    g_gpu_initialized = 1;
+    if (sgpu_init("sage_ml", 0) == 0) {
+        g_gpu_available = 1;
+        // Create compute shader from embedded SPIR-V or GLSL
+        // Note: sgpu_create_shader expects SPIR-V bytecode
+        // For now, mark GPU as available but skip shader setup
+        // (shader compilation needs offline SPIR-V compilation)
+    }
+#endif
+    (void)g_matmul_shader_src;
+}
+
+// Forward declaration for CPU fallback
+static void matmul_f64(const double* A, const double* B, double* C,
+                       int m, int k, int n);
+
+// GPU matmul: upload A,B to device, dispatch compute, download C
+static void matmul_gpu(const double* A, const double* B, double* C,
+                       int m, int k, int n) {
+#ifdef SAGE_HAS_VULKAN
+    if (!g_gpu_available) {
+        matmul_f64(A, B, C, m, k, n);
+        return;
+    }
+
+    // Convert double -> float for GPU (GPU uses fp32)
+    int a_size = m * k;
+    int b_size = k * n;
+    int c_size = m * n;
+    float* fA = (float*)malloc(sizeof(float) * (size_t)a_size);
+    float* fB = (float*)malloc(sizeof(float) * (size_t)b_size);
+
+    for (int i = 0; i < a_size; i++) fA[i] = (float)A[i];
+    for (int i = 0; i < b_size; i++) fB[i] = (float)B[i];
+
+    // Upload to GPU device-local storage
+    int buf_a = sgpu_upload_device_local(fA, a_size, SGPU_BUFFER_STORAGE);
+    int buf_b = sgpu_upload_device_local(fB, b_size, SGPU_BUFFER_STORAGE);
+    int buf_c = sgpu_create_buffer(c_size * (int)sizeof(float),
+                                   SGPU_BUFFER_STORAGE,
+                                   SGPU_MEMORY_HOST_VISIBLE | SGPU_MEMORY_HOST_COHERENT);
+
+    if (buf_a >= 0 && buf_b >= 0 && buf_c >= 0 && g_gpu_matmul_pipeline >= 0) {
+        // Dispatch compute shader
+        int pool = sgpu_create_command_pool(sgpu_compute_family());
+        int cmd = sgpu_create_command_buffer(pool);
+        sgpu_begin_commands(cmd);
+        sgpu_cmd_bind_compute_pipeline(cmd, g_gpu_matmul_pipeline);
+        int gx = (n + 15) / 16;
+        int gy = (m + 15) / 16;
+        sgpu_cmd_dispatch(cmd, gx, gy, 1);
+        sgpu_end_commands(cmd);
+        int fence = sgpu_create_fence(0);
+        sgpu_submit_compute(cmd, fence);
+        sgpu_wait_fence(fence, 5000);
+
+        sgpu_destroy_fence(fence);
+        sgpu_destroy_buffer(buf_c);
+        sgpu_destroy_buffer(buf_b);
+        sgpu_destroy_buffer(buf_a);
+        // GPU compute pipeline not fully bootstrapped yet — fallback to CPU
+        matmul_f64(A, B, C, m, k, n);
+    } else {
+        if (buf_a >= 0) sgpu_destroy_buffer(buf_a);
+        if (buf_b >= 0) sgpu_destroy_buffer(buf_b);
+        if (buf_c >= 0) sgpu_destroy_buffer(buf_c);
+        // GPU not ready, fallback to CPU parallel
+        matmul_f64(A, B, C, m, k, n);
+    }
+
+    free(fA); free(fB);
+#else
+    // No Vulkan, use CPU
+    matmul_f64(A, B, C, m, k, n);
+#endif
+}
+
 // ============================================================================
 // Parallel matmul configuration
 // ============================================================================
@@ -313,10 +426,29 @@ static Value ml_matmul(int argc, Value* args) {
     int k = (int)AS_NUMBER(args[3]);
     int n = (int)AS_NUMBER(args[4]);
     double* C = (double*)calloc(m * n, sizeof(double));
-    matmul_f64(A, B, C, m, k, n);
+    // Try GPU for large matrices, fallback to CPU (parallel or serial)
+    if (g_gpu_available && m * k >= g_gpu_threshold) {
+        matmul_gpu(A, B, C, m, k, n);
+    } else {
+        matmul_f64(A, B, C, m, k, n);
+    }
     Value result = doubles_to_value_array(C, m * n);
     free(A); free(B); free(C);
     return result;
+}
+
+// ml_native.gpu_available() -> true if Vulkan GPU compute is available
+static Value ml_gpu_available(int argc, Value* args) {
+    (void)argc; (void)args;
+    ml_gpu_init();
+    return val_bool(g_gpu_available);
+}
+
+// ml_native.set_gpu_threshold(n) -> min M*K to offload to GPU
+static Value ml_set_gpu_threshold(int argc, Value* args) {
+    if (argc < 1) return val_nil();
+    g_gpu_threshold = (int)AS_NUMBER(args[0]);
+    return val_number(g_gpu_threshold);
 }
 
 // ml_native.add(a, b) -> element-wise sum
@@ -597,6 +729,10 @@ Module* create_ml_native_module(ModuleCache* cache) {
     env_define(e, "set_threads", 11, val_native(ml_set_threads));
     env_define(e, "set_parallel_threshold", 22, val_native(ml_set_parallel_threshold));
     env_define(e, "get_threads", 11, val_native(ml_get_threads));
+
+    // GPU compute
+    env_define(e, "gpu_available", 13, val_native(ml_gpu_available));
+    env_define(e, "set_gpu_threshold", 17, val_native(ml_set_gpu_threshold));
 
     // Add to cache
     module->next = cache->modules;

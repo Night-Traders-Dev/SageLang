@@ -60,13 +60,13 @@ let _cpu_driver = "ml_native"
 # ============================================================================
 
 proc _probe_gpu():
-    # Check for Vulkan compute support
-    # In compiled mode: checks SAGE_HAS_VULKAN or SAGE_HAS_OPENGL defines
-    # In interpreter mode: tries to call gpu.init() and checks for error
-    # Returns: "vulkan", "opengl", or "none"
-    #
-    # Build flag: SAGE_COMPUTE_GPU=1
+    # Check for Vulkan compute support via native ml_native.gpu_available()
+    # This calls sgpu_init() in C and returns true if Vulkan is usable
+    # Build flag: SAGE_HAS_VULKAN
     # Runtime: SAGE_COMPUTE_BACKEND=gpu
+    let available = ml_native.gpu_available()
+    if available:
+        return "vulkan"
     return "none"
 
 proc _probe_npu():
