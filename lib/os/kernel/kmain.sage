@@ -13,11 +13,11 @@ import vmm
 let KERNEL_NAME = "SageOS"
 let KERNEL_VERSION = "0.1.0"
 
-proc kernel_version()
+proc kernel_version():
     return KERNEL_NAME + " " + KERNEL_VERSION
 end
 
-proc create_kernel(name, version)
+proc create_kernel(name, version):
     let cfg = {}
     cfg["name"] = name
     cfg["version"] = version
@@ -31,7 +31,7 @@ proc create_kernel(name, version)
     return cfg
 end
 
-proc panic(msg)
+proc panic(msg):
     let nl = chr(10)
     let line = "==============================="
     console.set_color(console.WHITE, console.RED)
@@ -46,24 +46,24 @@ proc panic(msg)
     halt()
 end
 
-proc halt()
+proc halt():
     # In a real kernel this would be a HLT instruction loop.
     # Here we simulate it by spinning forever.
     let running = true
-    while running
+    while running:
         # busy wait — CPU halted
         let dummy = 0
     end
 end
 
-proc init_console(boot_info)
+proc init_console(boot_info):
     console.init_vga()
     console.set_color(console.LIGHT_GREEN, console.BLACK)
     console.clear_screen(console.BLACK)
     console.print_line(kernel_version() + " booting...")
     console.print_line("")
-    if boot_info != nil
-        if dict_has(boot_info, "framebuffer")
+    if boot_info != nil:
+        if dict_has(boot_info, "framebuffer"):
             let fb = boot_info["framebuffer"]
             console.init_framebuffer(fb["addr"], fb["width"], fb["height"], fb["pitch"], fb["bpp"])
         end
@@ -71,14 +71,14 @@ proc init_console(boot_info)
     return true
 end
 
-proc init_memory(boot_info)
+proc init_memory(boot_info):
     let mem_map = nil
-    if boot_info != nil
-        if dict_has(boot_info, "memory_map")
+    if boot_info != nil:
+        if dict_has(boot_info, "memory_map"):
             mem_map = boot_info["memory_map"]
         end
     end
-    if mem_map == nil
+    if mem_map == nil:
         mem_map = []
     end
     pmm.init(mem_map)
@@ -88,25 +88,25 @@ proc init_memory(boot_info)
     return true
 end
 
-proc init_interrupts()
+proc init_interrupts():
     syscall.init()
     console.print_line("  Interrupts: IDT installed")
     return true
 end
 
-proc init_keyboard()
+proc init_keyboard():
     keyboard.init()
     console.print_line("  Keyboard: PS/2 driver ready")
     return true
 end
 
-proc init_timer(freq_hz)
+proc init_timer(freq_hz):
     timer.init(freq_hz)
     console.print_line("  Timer: PIT at " + str(freq_hz) + " Hz")
     return true
 end
 
-proc kmain(boot_info)
+proc kmain(boot_info):
     let kernel = create_kernel(KERNEL_NAME, KERNEL_VERSION)
 
     # Phase 1: Console (needed for all output)

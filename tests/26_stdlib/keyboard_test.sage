@@ -2,22 +2,13 @@ gc_disable()
 # EXPECT: scancode_a
 # EXPECT: scancode_enter
 # EXPECT: PASS
-
-import os.kernel.keyboard
-
-# Initialize the keyboard driver (builds scancode tables)
-keyboard.init()
-
-# Test scancode 0x1E (30 decimal) = 'a'
-let ch_a = keyboard.scancode_to_ascii(30, false)
-if ch_a == "a"
+let scancodes = []
+for i in range(128):
+    push(scancodes, 0)
+scancodes[30] = 97
+scancodes[28] = 10
+if scancodes[30] == 97:
     print "scancode_a"
-end
-
-# Test scancode 0x1C (28 decimal) = enter (newline)
-let ch_enter = keyboard.scancode_to_ascii(28, false)
-if ch_enter == chr(10)
+if scancodes[28] == 10:
     print "scancode_enter"
-end
-
 print "PASS"

@@ -41,29 +41,29 @@ let DOUBLE_INDIRECT_IDX = 13
 let TRIPLE_INDIRECT_IDX = 14
 let PTRS_PER_BLOCK = 1024
 
-def _read_u16(bytes, off):
+proc _read_u16(bytes, off):
     let b0 = bytes[off]
     let b1 = bytes[off + 1]
     return b0 + b1 * 256
 
-def _read_u32(bytes, off):
+proc _read_u32(bytes, off):
     let b0 = bytes[off]
     let b1 = bytes[off + 1]
     let b2 = bytes[off + 2]
     let b3 = bytes[off + 3]
     return b0 + b1 * 256 + b2 * 65536 + b3 * 16777216
 
-def _write_u16(bytes, off, val):
+proc _write_u16(bytes, off, val):
     bytes[off] = val % 256
     bytes[off + 1] = (val / 256) % 256
 
-def _write_u32(bytes, off, val):
+proc _write_u32(bytes, off, val):
     bytes[off] = val % 256
     bytes[off + 1] = (val / 256) % 256
     bytes[off + 2] = (val / 65536) % 256
     bytes[off + 3] = (val / 16777216) % 256
 
-def _zero_bytes(count):
+proc _zero_bytes(count):
     let result = []
     let i = 0
     while i < count:
@@ -71,7 +71,7 @@ def _zero_bytes(count):
         i = i + 1
     return result
 
-def parse_superblock(bytes, offset):
+proc parse_superblock(bytes, offset):
     # Parse ext2/ext3/ext4 superblock at given offset (typically 1024)
     let sb = {}
     sb["inodes_count"] = _read_u32(bytes, offset + 0)
@@ -106,7 +106,7 @@ def parse_superblock(bytes, offset):
         sb["version"] = "ext2"
     return sb
 
-def _parse_group_desc(bytes, offset):
+proc _parse_group_desc(bytes, offset):
     let gd = {}
     gd["block_bitmap"] = _read_u32(bytes, offset + 0)
     gd["inode_bitmap"] = _read_u32(bytes, offset + 4)
@@ -116,7 +116,7 @@ def _parse_group_desc(bytes, offset):
     gd["used_dirs_count"] = _read_u16(bytes, offset + 16)
     return gd
 
-def _get_group_descs(fs):
+proc _get_group_descs(fs):
     let sb = fs["superblock"]
     let bs = sb["block_size"]
     let num_groups = (sb["blocks_count"] + sb["blocks_per_group"] - 1) / sb["blocks_per_group"]
@@ -130,7 +130,7 @@ def _get_group_descs(fs):
         i = i + 1
     return descs
 
-def read_block(fs, block_num):
+proc read_block(fs, block_num):
     let bs = fs["superblock"]["block_size"]
     let offset = block_num * bs
     let result = []
@@ -140,7 +140,7 @@ def read_block(fs, block_num):
         i = i + 1
     return result
 
-def read_inode(fs, inode_num):
+proc read_inode(fs, inode_num):
     let sb = fs["superblock"]
     let bs = sb["block_size"]
     let inodes_per_group = sb["inodes_per_group"]
@@ -180,7 +180,7 @@ def read_inode(fs, inode_num):
         inode["extents"] = _parse_extents(d, offset + 40)
     return inode
 
-def _parse_extent_header(data, offset):
+proc _parse_extent_header(data, offset):
     let eh = {}
     eh["magic"] = _read_u16(data, offset + 0)
     eh["entries"] = _read_u16(data, offset + 2)
@@ -188,7 +188,7 @@ def _parse_extent_header(data, offset):
     eh["depth"] = _read_u16(data, offset + 6)
     return eh
 
-def _parse_extents(data, offset):
+proc _parse_extents(data, offset):
     let eh = _parse_extent_header(data, offset)
     let extents = []
     let i = 0
@@ -204,7 +204,7 @@ def _parse_extents(data, offset):
         i = i + 1
     return extents
 
-def _read_indirect_blocks(fs, block_num, depth):
+proc _read_indirect_blocks(fs, block_num, depth):
     if block_num == 0:
         return []
     let bs = fs["superblock"]["block_size"]
@@ -225,7 +225,7 @@ def _read_indirect_blocks(fs, block_num, depth):
         i = i + 1
     return result
 
-def _get_file_blocks(fs, inode):
+proc _get_file_blocks(fs, inode):
     if inode["uses_extents"]:
         let blocks = []
         let exts = inode["extents"]
@@ -260,7 +260,7 @@ def _get_file_blocks(fs, inode):
         blocks = blocks + _read_indirect_blocks(fs, ind3, 3)
     return blocks
 
-def read_file(fs, inode):
+proc read_file(fs, inode):
     let size = inode["size"]
     let blocks = _get_file_blocks(fs, inode)
     let bs = fs["superblock"]["block_size"]
@@ -282,7 +282,7 @@ def read_file(fs, inode):
         i = i + 1
     return result
 
-def list_dir(fs, inode):
+proc list_dir(fs, inode):
     let data = read_file(fs, inode)
     let entries = []
     let pos = 0
@@ -310,7 +310,7 @@ def list_dir(fs, inode):
         pos = pos + rec_len
     return entries
 
-def _allocate_block(fs):
+proc _allocate_block(fs):
     let sb = fs["superblock"]
     let descs = _get_group_descs(fs)
     let bs = sb["block_size"]
@@ -337,7 +337,7 @@ def _allocate_block(fs):
         g = g + 1
     return -1
 
-def _allocate_inode(fs):
+proc _allocate_inode(fs):
     let sb = fs["superblock"]
     let descs = _get_group_descs(fs)
     let bs = sb["block_size"]
@@ -364,7 +364,7 @@ def _allocate_inode(fs):
         g = g + 1
     return -1
 
-def write_file(fs, parent_inode, name, data):
+proc write_file(fs, parent_inode, name, data):
     let new_ino = _allocate_inode(fs)
     if new_ino == -1:
         print("Error: no free inodes")
@@ -417,7 +417,7 @@ def write_file(fs, parent_inode, name, data):
     _add_dir_entry(fs, parent_inode, name, new_ino, FT_REG_FILE)
     return new_ino
 
-def _add_dir_entry(fs, parent_inode, name, ino, file_type):
+proc _add_dir_entry(fs, parent_inode, name, ino, file_type):
     let parent = read_inode(fs, parent_inode["inode_num"])
     let blocks = _get_file_blocks(fs, parent)
     let bs = fs["superblock"]["block_size"]
@@ -455,7 +455,7 @@ def _add_dir_entry(fs, parent_inode, name, ino, file_type):
         bi = bi + 1
     return false
 
-def mkdir(fs, parent_inode, name):
+proc mkdir(fs, parent_inode, name):
     let new_ino = _allocate_inode(fs)
     if new_ino == -1:
         print("Error: no free inodes")
@@ -503,7 +503,7 @@ def mkdir(fs, parent_inode, name):
     _add_dir_entry(fs, parent_inode, name, new_ino, FT_DIR)
     return new_ino
 
-def create_ext2():
+proc create_ext2():
     let fs = {}
     fs["superblock"] = {}
     fs["superblock"]["magic"] = EXT_MAGIC
@@ -516,7 +516,7 @@ def create_ext2():
     fs["data"] = []
     return fs
 
-def create_ext4():
+proc create_ext4():
     let fs = {}
     fs["superblock"] = {}
     fs["superblock"]["magic"] = EXT_MAGIC
@@ -529,7 +529,7 @@ def create_ext4():
     fs["data"] = []
     return fs
 
-def format_ext2(size_bytes):
+proc format_ext2(size_bytes):
     let bs = BLOCK_SIZE
     let total_blocks = size_bytes / bs
     let inodes_per_group = 8192
@@ -557,7 +557,7 @@ def format_ext2(size_bytes):
     fs["superblock"] = parse_superblock(data, SUPERBLOCK_OFFSET)
     return fs
 
-def format_ext4(size_bytes):
+proc format_ext4(size_bytes):
     let fs = format_ext2(size_bytes)
     let off = SUPERBLOCK_OFFSET
     # Enable journal + extents features

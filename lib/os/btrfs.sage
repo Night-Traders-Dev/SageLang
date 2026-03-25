@@ -42,7 +42,7 @@ let FIRST_FREE_OBJECTID = 256
 let _crc_table = []
 let _crc_initialized = false
 
-def _init_crc32c():
+proc _init_crc32c():
     if _crc_initialized:
         return
     let i = 0
@@ -59,7 +59,7 @@ def _init_crc32c():
         i = i + 1
     _crc_initialized = true
 
-def crc32c(data, start, length):
+proc crc32c(data, start, length):
     _init_crc32c()
     let crc = 0xFFFFFFFF
     let i = 0
@@ -70,21 +70,21 @@ def crc32c(data, start, length):
         i = i + 1
     return crc ^ 0xFFFFFFFF
 
-def _read_u8(bytes, off):
+proc _read_u8(bytes, off):
     return bytes[off]
 
-def _read_u16(bytes, off):
+proc _read_u16(bytes, off):
     return bytes[off] + bytes[off + 1] * 256
 
-def _read_u32(bytes, off):
+proc _read_u32(bytes, off):
     return bytes[off] + bytes[off + 1] * 256 + bytes[off + 2] * 65536 + bytes[off + 3] * 16777216
 
-def _read_u64(bytes, off):
+proc _read_u64(bytes, off):
     let lo = _read_u32(bytes, off)
     let hi = _read_u32(bytes, off + 4)
     return lo + hi * 4294967296
 
-def _read_bytes_as_str(bytes, off, length):
+proc _read_bytes_as_str(bytes, off, length):
     let s = ""
     let i = 0
     while i < length:
@@ -95,17 +95,17 @@ def _read_bytes_as_str(bytes, off, length):
         i = i + 1
     return s
 
-def _write_u32(bytes, off, val):
+proc _write_u32(bytes, off, val):
     bytes[off] = val % 256
     bytes[off + 1] = (val / 256) % 256
     bytes[off + 2] = (val / 65536) % 256
     bytes[off + 3] = (val / 16777216) % 256
 
-def _write_u64(bytes, off, val):
+proc _write_u64(bytes, off, val):
     _write_u32(bytes, off, val % 4294967296)
     _write_u32(bytes, off + 4, val / 4294967296)
 
-def _zero_bytes(count):
+proc _zero_bytes(count):
     let result = []
     let i = 0
     while i < count:
@@ -113,7 +113,7 @@ def _zero_bytes(count):
         i = i + 1
     return result
 
-def parse_superblock(bytes):
+proc parse_superblock(bytes):
     # Btrfs superblock at offset 0x10000 (65536)
     let off = BTRFS_SUPERBLOCK_OFFSET
     let sb = {}
@@ -145,14 +145,14 @@ def parse_superblock(bytes):
     sb["csum_valid"] = (expected_csum == sb["csum"])
     return sb
 
-def _parse_key(bytes, off):
+proc _parse_key(bytes, off):
     let key = {}
     key["objectid"] = _read_u64(bytes, off)
     key["type"] = _read_u8(bytes, off + 8)
     key["offset"] = _read_u64(bytes, off + 9)
     return key
 
-def _parse_header(bytes, addr):
+proc _parse_header(bytes, addr):
     let hdr = {}
     hdr["csum"] = _read_u32(bytes, addr + 0)
     hdr["fsid"] = _read_bytes_as_str(bytes, addr + 32, 16)
@@ -164,7 +164,7 @@ def _parse_header(bytes, addr):
     hdr["level"] = _read_u8(bytes, addr + 92)
     return hdr
 
-def read_tree(fs, root_addr):
+proc read_tree(fs, root_addr):
     let data = fs["data"]
     let hdr = _parse_header(data, root_addr)
     let node = {}
@@ -178,7 +178,7 @@ def read_tree(fs, root_addr):
         node["children"] = parse_internal(fs, root_addr)
     return node
 
-def parse_leaf(fs, addr):
+proc parse_leaf(fs, addr):
     let data = fs["data"]
     let hdr = _parse_header(data, addr)
     let items = []
@@ -196,7 +196,7 @@ def parse_leaf(fs, addr):
         i = i + 1
     return items
 
-def parse_internal(fs, addr):
+proc parse_internal(fs, addr):
     let data = fs["data"]
     let hdr = _parse_header(data, addr)
     let children = []
@@ -211,7 +211,7 @@ def parse_internal(fs, addr):
         i = i + 1
     return children
 
-def _search_tree(fs, root_addr, objectid, item_type):
+proc _search_tree(fs, root_addr, objectid, item_type):
     let data = fs["data"]
     let hdr = _parse_header(data, root_addr)
     if hdr["level"] == 0:
@@ -237,7 +237,7 @@ def _search_tree(fs, root_addr, objectid, item_type):
         i = i + 1
     return _search_tree(fs, target_child, objectid, item_type)
 
-def list_dir(fs, tree_root, dir_objectid):
+proc list_dir(fs, tree_root, dir_objectid):
     let items = _search_tree(fs, tree_root, dir_objectid, DIR_ITEM)
     let entries = []
     let i = 0
@@ -259,7 +259,7 @@ def list_dir(fs, tree_root, dir_objectid):
         i = i + 1
     return entries
 
-def read_file(fs, tree_root, objectid):
+proc read_file(fs, tree_root, objectid):
     let items = _search_tree(fs, tree_root, objectid, EXTENT_DATA)
     let result = []
     let i = 0
@@ -291,7 +291,7 @@ def read_file(fs, tree_root, objectid):
         i = i + 1
     return result
 
-def subvolume_list(fs):
+proc subvolume_list(fs):
     let sb = parse_superblock(fs["data"])
     let root_tree = sb["root"]
     let items = parse_leaf(fs, root_tree)
@@ -309,7 +309,7 @@ def subvolume_list(fs):
         i = i + 1
     return subvols
 
-def snapshot_info(fs, subvol_id):
+proc snapshot_info(fs, subvol_id):
     let sb = parse_superblock(fs["data"])
     let root_tree = sb["root"]
     let items = _search_tree(fs, root_tree, subvol_id, ROOT_ITEM)
@@ -326,7 +326,7 @@ def snapshot_info(fs, subvol_id):
     info["flags"] = _read_u64(data, doff + 40)
     return info
 
-def _chunk_logical_to_physical(fs, logical):
+proc _chunk_logical_to_physical(fs, logical):
     # Simple chunk mapping: parse sys_chunk_array from superblock
     let sb_off = BTRFS_SUPERBLOCK_OFFSET
     let data = fs["data"]
@@ -353,7 +353,7 @@ def _chunk_logical_to_physical(fs, logical):
     # Fallback: identity mapping
     return logical
 
-def create_btrfs(size_bytes):
+proc create_btrfs(size_bytes):
     let data = _zero_bytes(size_bytes)
     let off = BTRFS_SUPERBLOCK_OFFSET
     # Write magic

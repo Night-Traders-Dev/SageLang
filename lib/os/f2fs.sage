@@ -31,35 +31,35 @@ let F2FS_FT_SYMLINK = 7
 let F2FS_INLINE_DATA = 0x02
 let F2FS_INLINE_DENTRY = 0x04
 
-def _read_u8(bytes, off):
+proc _read_u8(bytes, off):
     return bytes[off]
 
-def _read_u16(bytes, off):
+proc _read_u16(bytes, off):
     return bytes[off] + bytes[off + 1] * 256
 
-def _read_u32(bytes, off):
+proc _read_u32(bytes, off):
     return bytes[off] + bytes[off + 1] * 256 + bytes[off + 2] * 65536 + bytes[off + 3] * 16777216
 
-def _read_u64(bytes, off):
+proc _read_u64(bytes, off):
     let lo = _read_u32(bytes, off)
     let hi = _read_u32(bytes, off + 4)
     return lo + hi * 4294967296
 
-def _write_u16(bytes, off, val):
+proc _write_u16(bytes, off, val):
     bytes[off] = val % 256
     bytes[off + 1] = (val / 256) % 256
 
-def _write_u32(bytes, off, val):
+proc _write_u32(bytes, off, val):
     bytes[off] = val % 256
     bytes[off + 1] = (val / 256) % 256
     bytes[off + 2] = (val / 65536) % 256
     bytes[off + 3] = (val / 16777216) % 256
 
-def _write_u64(bytes, off, val):
+proc _write_u64(bytes, off, val):
     _write_u32(bytes, off, val % 4294967296)
     _write_u32(bytes, off + 4, val / 4294967296)
 
-def _read_bytes_as_str(bytes, off, length):
+proc _read_bytes_as_str(bytes, off, length):
     let s = ""
     let i = 0
     while i < length:
@@ -70,7 +70,7 @@ def _read_bytes_as_str(bytes, off, length):
         i = i + 1
     return s
 
-def _zero_bytes(count):
+proc _zero_bytes(count):
     let result = []
     let i = 0
     while i < count:
@@ -78,7 +78,7 @@ def _zero_bytes(count):
         i = i + 1
     return result
 
-def _read_block(fs, blkaddr):
+proc _read_block(fs, blkaddr):
     let offset = blkaddr * BLOCK_SIZE
     let result = []
     let i = 0
@@ -87,7 +87,7 @@ def _read_block(fs, blkaddr):
         i = i + 1
     return result
 
-def parse_superblock(bytes):
+proc parse_superblock(bytes):
     let off = F2FS_SUPER_OFFSET
     let sb = {}
     sb["magic"] = _read_u32(bytes, off + 0)
@@ -121,14 +121,14 @@ def parse_superblock(bytes):
         print("Warning: invalid F2FS magic " + str(sb["magic"]))
     return sb
 
-def _get_nat_block_addr(fs, nid):
+proc _get_nat_block_addr(fs, nid):
     let sb = fs["superblock"]
     let nat_blkaddr = sb["nat_blkaddr"]
     let entries_per_block = BLOCK_SIZE / NAT_ENTRY_SIZE
     let block_off = nid / entries_per_block
     return nat_blkaddr + block_off
 
-def read_nat(fs, nid):
+proc read_nat(fs, nid):
     let sb = fs["superblock"]
     let nat_blkaddr = sb["nat_blkaddr"]
     let entries_per_block = BLOCK_SIZE / NAT_ENTRY_SIZE
@@ -142,14 +142,14 @@ def read_nat(fs, nid):
     entry["version"] = _read_u8(blk, eoff + 8)
     return entry
 
-def _get_sit_block_addr(fs, segno):
+proc _get_sit_block_addr(fs, segno):
     let sb = fs["superblock"]
     let sit_blkaddr = sb["sit_blkaddr"]
     let entries_per_block = BLOCK_SIZE / SIT_ENTRY_SIZE
     let block_off = segno / entries_per_block
     return sit_blkaddr + block_off
 
-def read_sit(fs, segno):
+proc read_sit(fs, segno):
     let sb = fs["superblock"]
     let sit_blkaddr = sb["sit_blkaddr"]
     let entries_per_block = BLOCK_SIZE / SIT_ENTRY_SIZE
@@ -170,7 +170,7 @@ def read_sit(fs, segno):
     entry["seg_type"] = _get_seg_type(entry["vblocks"])
     return entry
 
-def _get_seg_type(vblocks):
+proc _get_seg_type(vblocks):
     # Upper bits may encode type
     let t = (vblocks / 1024) % 8
     if t == HOT_DATA:
@@ -187,7 +187,7 @@ def _get_seg_type(vblocks):
         return "cold_node"
     return "unknown"
 
-def read_inode(fs, nid):
+proc read_inode(fs, nid):
     let nat_entry = read_nat(fs, nid)
     let blkaddr = nat_entry["block_addr"]
     if blkaddr == 0:
@@ -220,7 +220,7 @@ def read_inode(fs, nid):
     inode["has_inline_dentry"] = (inode["inline_flags"] / 4) % 2 == 1
     return inode
 
-def list_dir(fs, inode):
+proc list_dir(fs, inode):
     let entries = []
     if inode["has_inline_dentry"]:
         # Inline dentry stored in inode block
@@ -284,7 +284,7 @@ def list_dir(fs, inode):
         bi = bi + 1
     return entries
 
-def read_file(fs, inode):
+proc read_file(fs, inode):
     let size = inode["size"]
     let result = []
     let remaining = size
@@ -308,7 +308,7 @@ def read_file(fs, inode):
         bi = bi + 1
     return result
 
-def gc_info(fs):
+proc gc_info(fs):
     let sb = fs["superblock"]
     let info = {}
     info["segment_count_main"] = sb["segment_count_main"]
@@ -337,7 +337,7 @@ def gc_info(fs):
         info["utilization"] = (total_valid * 100) / (total_segments * BLOCKS_PER_SEG)
     return info
 
-def _parse_checkpoint(fs):
+proc _parse_checkpoint(fs):
     let sb = fs["superblock"]
     let cp_blkaddr = sb["cp_blkaddr"]
     let blk = _read_block(fs, cp_blkaddr)
@@ -354,7 +354,7 @@ def _parse_checkpoint(fs):
     cp["elapsed_time"] = _read_u64(blk, 48)
     return cp
 
-def create_f2fs(size_bytes):
+proc create_f2fs(size_bytes):
     let total_blocks = size_bytes / BLOCK_SIZE
     let total_segments = total_blocks / BLOCKS_PER_SEG
     let data = _zero_bytes(size_bytes)

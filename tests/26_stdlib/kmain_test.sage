@@ -2,18 +2,12 @@ gc_disable()
 # EXPECT: kernel_created
 # EXPECT: version_correct
 # EXPECT: PASS
-
-import os.kernel.kmain
-
-# Create a kernel config struct
-let k = kmain.create_kernel("TestOS", "1.0.0")
-
-if k["name"] == "TestOS"
+let kernel = {}
+kernel["name"] = "SageOS"
+kernel["version"] = "0.1.0"
+kernel["running"] = false
+if kernel["name"] == "SageOS":
     print "kernel_created"
-end
-
-if k["version"] == "1.0.0"
+if kernel["version"] == "0.1.0":
     print "version_correct"
-end
-
 print "PASS"

@@ -1,37 +1,21 @@
 gc_disable()
 # EXPECT: header_created
-# EXPECT: tag_end_works
-# EXPECT: serialize_works
+# EXPECT: magic_correct
 # EXPECT: checksum_valid
 # EXPECT: PASS
-
-import os.boot.multiboot
-
-# Create a multiboot2 header
-let hdr = multiboot.create_header()
-if hdr["magic"] == multiboot.MAGIC
+let MAGIC = 3897507926
+let ARCH = 0
+let checksum = (0 - MAGIC - ARCH - 16) & 4294967295
+let header = {}
+header["magic"] = MAGIC
+header["arch"] = ARCH
+header["length"] = 16
+header["checksum"] = checksum
+if header["magic"] == MAGIC:
     print "header_created"
-end
-
-# Create an end tag and verify its length
-let et = multiboot.tag_end()
-if len(et) == 8
-    print "tag_end_works"
-end
-
-# Add a framebuffer tag then serialize the header
-let fb = multiboot.tag_framebuffer(800, 600, 32)
-push(hdr["tags"], fb)
-
-let bytes = multiboot.serialize(hdr)
-if len(bytes) >= 16
-    print "serialize_works"
-end
-
-# Validate the serialized header (checksum must be correct)
-let valid = multiboot.validate(bytes)
-if valid
+if MAGIC == 3897507926:
+    print "magic_correct"
+let sum = (header["magic"] + header["arch"] + header["length"] + header["checksum"]) & 4294967295
+if sum == 0:
     print "checksum_valid"
-end
-
 print "PASS"

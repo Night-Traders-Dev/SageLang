@@ -25,12 +25,12 @@ let max_syscalls = 256
 let next_pid = 1
 let syscall_ready = false
 
-proc init()
+proc init():
     syscall_handlers = []
     syscall_names = []
     syscall_counts = []
     let i = 0
-    while i < max_syscalls
+    while i < max_syscalls:
         append(syscall_handlers, nil)
         append(syscall_names, "")
         append(syscall_counts, 0)
@@ -50,11 +50,11 @@ proc init()
     syscall_ready = true
 end
 
-proc register(number, name, handler)
-    if number < 0
+proc register(number, name, handler):
+    if number < 0:
         return false
     end
-    if number >= max_syscalls
+    if number >= max_syscalls:
         return false
     end
     syscall_handlers[number] = handler
@@ -63,15 +63,15 @@ proc register(number, name, handler)
     return true
 end
 
-proc dispatch(syscall_num, args)
-    if syscall_num < 0
+proc dispatch(syscall_num, args):
+    if syscall_num < 0:
         return -1
     end
-    if syscall_num >= max_syscalls
+    if syscall_num >= max_syscalls:
         return -1
     end
     let handler = syscall_handlers[syscall_num]
-    if handler == nil
+    if handler == nil:
         return -1
     end
     syscall_counts[syscall_num] = syscall_counts[syscall_num] + 1
@@ -80,7 +80,7 @@ end
 
 # ----- Built-in syscall implementations -----
 
-proc sys_write(fd, buf, length)
+proc sys_write(fd, buf, length):
     let args = {}
     args["fd"] = fd
     args["buf"] = buf
@@ -88,7 +88,7 @@ proc sys_write(fd, buf, length)
     return dispatch(SYS_WRITE, args)
 end
 
-proc sys_read(fd, buf, length)
+proc sys_read(fd, buf, length):
     let args = {}
     args["fd"] = fd
     args["buf"] = buf
@@ -96,7 +96,7 @@ proc sys_read(fd, buf, length)
     return dispatch(SYS_READ, args)
 end
 
-proc sys_exit(code)
+proc sys_exit(code):
     let args = {}
     args["code"] = code
     return dispatch(SYS_EXIT, args)
@@ -104,10 +104,10 @@ end
 
 # ----- Built-in handlers -----
 
-proc builtin_exit(args)
+proc builtin_exit(args):
     let code = 0
-    if args != nil
-        if dict_has(args, "code")
+    if args != nil:
+        if dict_has(args, "code"):
             code = args["code"]
         end
     end
@@ -115,19 +115,19 @@ proc builtin_exit(args)
     return code
 end
 
-proc builtin_write(args)
-    if args == nil
+proc builtin_write(args):
+    if args == nil:
         return -1
     end
     let fd = args["fd"]
     let buf = args["buf"]
     let length = args["len"]
     # fd 1 = stdout, fd 2 = stderr
-    if fd == 1
+    if fd == 1:
         console.print_str(buf)
         return length
     end
-    if fd == 2
+    if fd == 2:
         let old_fg = console.current_fg
         console.set_color(console.RED, console.BLACK)
         console.print_str(buf)
@@ -137,62 +137,62 @@ proc builtin_write(args)
     return -1
 end
 
-proc builtin_read(args)
-    if args == nil
+proc builtin_read(args):
+    if args == nil:
         return -1
     end
     let fd = args["fd"]
     # fd 0 = stdin — not yet wired to keyboard
-    if fd == 0
+    if fd == 0:
         return 0
     end
     return -1
 end
 
-proc builtin_open(args)
+proc builtin_open(args):
     # Stub: no filesystem yet
     return -1
 end
 
-proc builtin_close(args)
+proc builtin_close(args):
     # Stub: no filesystem yet
     return -1
 end
 
-proc builtin_mmap(args)
+proc builtin_mmap(args):
     # Stub: returns nil (not implemented)
     return -1
 end
 
-proc builtin_fork(args)
+proc builtin_fork(args):
     # Stub: assign a new PID
     let pid = next_pid
     next_pid = next_pid + 1
     return pid
 end
 
-proc builtin_exec(args)
+proc builtin_exec(args):
     # Stub: not implemented
     return -1
 end
 
-proc builtin_getpid(args)
+proc builtin_getpid(args):
     # Return current PID (always 1 for the kernel)
     return 1
 end
 
-proc builtin_yield(args)
+proc builtin_yield(args):
     # Stub: no scheduler yet
     return 0
 end
 
 # ----- Introspection -----
 
-proc syscall_table()
+proc syscall_table():
     let entries = []
     let i = 0
-    while i < max_syscalls
-        if syscall_names[i] != ""
+    while i < max_syscalls:
+        if syscall_names[i] != "":
             let entry = {}
             entry["number"] = i
             entry["name"] = syscall_names[i]
@@ -203,13 +203,13 @@ proc syscall_table()
     return entries
 end
 
-proc stats()
+proc stats():
     let s = {}
     s["total_calls"] = 0
     let entries = []
     let i = 0
-    while i < max_syscalls
-        if syscall_names[i] != ""
+    while i < max_syscalls:
+        if syscall_names[i] != "":
             let entry = {}
             entry["number"] = i
             entry["name"] = syscall_names[i]

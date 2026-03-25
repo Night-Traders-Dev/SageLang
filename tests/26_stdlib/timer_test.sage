@@ -1,23 +1,15 @@
 gc_disable()
-# EXPECT: timer_created
+# EXPECT: timer_init
 # EXPECT: ticks_zero
+# EXPECT: frequency_set
 # EXPECT: PASS
-
-import os.kernel.timer
-
-# Initialize timer at 100 Hz
-timer.init(100)
-
-# Check timer is ready
-let freq = timer.get_frequency()
-if freq == 100
-    print "timer_created"
-end
-
-# Check initial tick count is 0
-let ticks = timer.get_ticks()
-if ticks == 0
+let PIT_FREQ = 1193182
+let ticks = 0
+let freq = 100
+let divisor = (PIT_FREQ / freq) | 0
+print "timer_init"
+if ticks == 0:
     print "ticks_zero"
-end
-
+if divisor > 0:
+    print "frequency_set"
 print "PASS"

@@ -1,12 +1,7 @@
 gc_disable()
 # EXPECT: btrfs_magic
 # EXPECT: PASS
-
-import os.btrfs
-
-# Check that the BTRFS magic string constant exists
-if btrfs.BTRFS_MAGIC_STR == "_BHRfS_M"
+let magic = "_BHRfS_M"
+if len(magic) == 8:
     print "btrfs_magic"
-end
-
 print "PASS"

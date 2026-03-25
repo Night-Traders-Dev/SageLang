@@ -48,10 +48,10 @@ let BUFFER_SIZE = 256
 let scan_normal = []
 let scan_shifted = []
 
-proc build_scancode_tables()
+proc build_scancode_tables():
     # Initialize with empty strings up to index 128
     let i = 0
-    while i < 128
+    while i < 128:
         append(scan_normal, "")
         append(scan_shifted, "")
         i = i + 1
@@ -161,14 +161,14 @@ proc build_scancode_tables()
     scan_shifted[57] = " "
 end
 
-proc init()
+proc init():
     build_scancode_tables()
     shift_pressed = false
     ctrl_pressed = false
     alt_pressed = false
     scan_buffer = []
     let i = 0
-    while i < BUFFER_SIZE
+    while i < BUFFER_SIZE:
         append(scan_buffer, 0)
         i = i + 1
     end
@@ -177,10 +177,10 @@ proc init()
     kbd_ready = true
 end
 
-proc read_scancode()
+proc read_scancode():
     # In a real kernel this reads port 0x60 via inb().
     # Here we return from the simulated buffer.
-    if scan_head == scan_tail
+    if scan_head == scan_tail:
         return nil
     end
     let code = scan_buffer[scan_head]
@@ -188,65 +188,65 @@ proc read_scancode()
     return code
 end
 
-proc push_scancode(code)
+proc push_scancode(code):
     let next_tail = (scan_tail + 1) % BUFFER_SIZE
-    if next_tail == scan_head
+    if next_tail == scan_head:
         return
     end
     scan_buffer[scan_tail] = code
     scan_tail = next_tail
 end
 
-proc scancode_to_ascii(code, shift)
-    if code < 0
+proc scancode_to_ascii(code, shift):
+    if code < 0:
         return ""
     end
-    if code >= 128
+    if code >= 128:
         return ""
     end
-    if shift
+    if shift:
         return scan_shifted[code]
     end
     return scan_normal[code]
 end
 
-proc update_modifiers(code, pressed)
-    if code == KEY_LSHIFT
+proc update_modifiers(code, pressed):
+    if code == KEY_LSHIFT:
         shift_pressed = pressed
         return
     end
-    if code == KEY_RSHIFT
+    if code == KEY_RSHIFT:
         shift_pressed = pressed
         return
     end
-    if code == KEY_LCTRL
+    if code == KEY_LCTRL:
         ctrl_pressed = pressed
         return
     end
-    if code == KEY_LALT
+    if code == KEY_LALT:
         alt_pressed = pressed
     end
 end
 
-proc is_shift_pressed()
+proc is_shift_pressed():
     return shift_pressed
 end
 
-proc is_ctrl_pressed()
+proc is_ctrl_pressed():
     return ctrl_pressed
 end
 
-proc is_alt_pressed()
+proc is_alt_pressed():
     return alt_pressed
 end
 
-proc poll_key()
+proc poll_key():
     let code = read_scancode()
-    if code == nil
+    if code == nil:
         return nil
     end
     # Key release (bit 7 set) — scancode >= 128
-    if code >= 128
+    if code >= 128:
         let release_code = code - 128
         update_modifiers(release_code, false)
         return nil
@@ -254,7 +254,7 @@ proc poll_key()
     # Key press
     update_modifiers(code, true)
     let ch = scancode_to_ascii(code, shift_pressed)
-    if ch == ""
+    if ch == "":
         let result = {}
         result["scancode"] = code
         result["char"] = nil
@@ -266,34 +266,34 @@ proc poll_key()
     return result
 end
 
-proc wait_key()
+proc wait_key():
     let key = nil
-    while key == nil
+    while key == nil:
         key = poll_key()
     end
     return key
 end
 
-proc read_line()
+proc read_line():
     let line = ""
     let done = false
-    while done == false
+    while done == false:
         let key = wait_key()
-        if key["char"] == nil
+        if key["char"] == nil:
             continue
         end
         let ch = key["char"]
-        if ch == chr(10)
+        if ch == chr(10):
             console.print_line("")
             done = true
             continue
         end
-        if key["scancode"] == KEY_BACKSPACE
-            if len(line) > 0
+        if key["scancode"] == KEY_BACKSPACE:
+            if len(line) > 0:
                 line = line[0:len(line) - 1]
                 let pos = console.get_cursor()
                 let nx = pos["x"] - 1
-                if nx < 0
+                if nx < 0:
                     nx = 0
                 end
                 console.set_cursor(nx, pos["y"])

@@ -27,17 +27,17 @@ let vmm_ready = false
 
 # ----- Helpers -----
 
-proc page_number(addr)
+proc page_number(addr):
     return addr / pmm.PAGE_SIZE
 end
 
-proc page_addr(page_num)
+proc page_addr(page_num):
     return page_num * pmm.PAGE_SIZE
 end
 
 # ----- Initialize kernel address space -----
 
-proc init()
+proc init():
     page_tables = {}
     kernel_pml4 = {}
     kernel_pml4["entries"] = {}
@@ -48,7 +48,7 @@ proc init()
     let addr = 0
     let end_addr = 4 * 1024 * 1024
     let flags = PAGE_PRESENT + PAGE_WRITABLE
-    while addr < end_addr
+    while addr < end_addr:
         let pn = page_number(addr)
         let entry = {}
         entry["phys"] = addr
@@ -72,7 +72,7 @@ end
 
 # ----- Map a virtual page to a physical page -----
 
-proc map_page(virt, phys, flags)
+proc map_page(virt, phys, flags):
     let pn = page_number(virt)
     let entry = {}
     entry["phys"] = phys
@@ -84,20 +84,20 @@ end
 
 # ----- Unmap a virtual page -----
 
-proc unmap_page(virt)
+proc unmap_page(virt):
     let pn = page_number(virt)
     let key = str(pn)
     let entries = current_pml4["entries"]
-    if dict_has(entries, key)
+    if dict_has(entries, key):
         del entries[key]
     end
 end
 
 # ----- Map a contiguous region -----
 
-proc map_region(virt, phys, size, flags)
+proc map_region(virt, phys, size, flags):
     let offset = 0
-    while offset < size
+    while offset < size:
         map_page(virt + offset, phys + offset, flags)
         offset = offset + pmm.PAGE_SIZE
     end
@@ -105,7 +105,7 @@ end
 
 # ----- Check if a virtual address is mapped -----
 
-proc is_mapped(virt)
+proc is_mapped(virt):
     let pn = page_number(virt)
     let key = str(pn)
     let entries = current_pml4["entries"]
@@ -114,11 +114,11 @@ end
 
 # ----- Translate virtual to physical -----
 
-proc get_physical(virt)
+proc get_physical(virt):
     let pn = page_number(virt)
     let key = str(pn)
     let entries = current_pml4["entries"]
-    if dict_has(entries, key) == false
+    if dict_has(entries, key) == false:
         return nil
     end
     let entry = entries[key]
@@ -128,15 +128,15 @@ end
 
 # ----- Create a new address space -----
 
-proc create_address_space()
+proc create_address_space():
     let pml4 = {}
     pml4["entries"] = {}
     # Allocate a physical page for the PML4 table
     let phys_page = pmm.alloc_page()
-    if phys_page == nil
+    if phys_page == nil:
         pml4["addr"] = 0
     end
-    if phys_page != nil
+    if phys_page != nil:
         pml4["addr"] = phys_page
     end
     # Copy kernel mappings (upper half) into the new space
@@ -144,7 +144,7 @@ proc create_address_space()
     let new_entries = pml4["entries"]
     let keys = dict_keys(k_entries)
     let i = 0
-    while i < len(keys)
+    while i < len(keys):
         let k = keys[i]
         let src = k_entries[k]
         let dst = {}
@@ -158,26 +158,26 @@ end
 
 # ----- Switch address space (set CR3) -----
 
-proc switch_address_space(pml4)
+proc switch_address_space(pml4):
     # In a real kernel: mov cr3, pml4["addr"]
     current_pml4 = pml4
 end
 
 # ----- Get kernel address space -----
 
-proc kernel_address_space()
+proc kernel_address_space():
     return kernel_pml4
 end
 
 # ----- Get current address space -----
 
-proc current_address_space()
+proc current_address_space():
     return current_pml4
 end
 
 # ----- Statistics -----
 
-proc stats()
+proc stats():
     let entries = current_pml4["entries"]
     let keys = dict_keys(entries)
     let s = {}
