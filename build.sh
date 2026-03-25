@@ -428,7 +428,7 @@ if [ "$BUILD_CHATBOT" -eq 1 ]; then
 
     # SageLLM chatbot via C backend
     printf "    ${ARROW} Compiling sagellm_chatbot via C backend...\n"
-    if $SAGE_CMD --compile models/sagellm_chatbot.sage -o sagellm_chat_c 2>&1 | sed 's/^/      /'; then
+    if $SAGE_CMD --compile models/chatbots/sagellm_chatbot.sage -o sagellm_chat_c 2>&1 | sed 's/^/      /'; then
         printf "    ${PASS} sagellm_chat_c (C backend)\n"
     else
         printf "    ${FAIL} C backend compilation failed\n"
@@ -436,16 +436,16 @@ if [ "$BUILD_CHATBOT" -eq 1 ]; then
 
     # SageLLM chatbot via LLVM backend
     printf "    ${ARROW} Compiling sagellm_chatbot via LLVM backend...\n"
-    if $SAGE_CMD --compile-llvm models/sagellm_chatbot.sage -o sagellm_chat 2>&1 | sed 's/^/      /'; then
+    if $SAGE_CMD --compile-llvm models/chatbots/sagellm_chatbot.sage -o sagellm_chat 2>&1 | sed 's/^/      /'; then
         printf "    ${PASS} sagellm_chat (LLVM backend)\n"
     else
         printf "    ${FAIL} LLVM backend compilation failed\n"
     fi
 
     # SL-TQ-LLM generative chatbot via LLVM
-    if [ -f models/sl_tq_llm_chat.sage ]; then
+    if [ -f models/chatbots/sl_tq_llm_chat.sage ]; then
         printf "    ${ARROW} Compiling sl_tq_llm_chat via LLVM backend...\n"
-        if $SAGE_CMD --compile-llvm models/sl_tq_llm_chat.sage -o sl_tq_chat 2>&1 | sed 's/^/      /'; then
+        if $SAGE_CMD --compile-llvm models/chatbots/sl_tq_llm_chat.sage -o sl_tq_chat 2>&1 | sed 's/^/      /'; then
             printf "    ${PASS} sl_tq_chat (LLVM generative)\n"
         else
             printf "    ${FAIL} SL-TQ-LLM compilation failed\n"

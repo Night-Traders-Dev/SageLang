@@ -1,15 +1,15 @@
 gc_disable()
 # SL-TQ-LLM Generative Chatbot
 # Loads trained weights, runs real transformer forward pass
-# Compile: sage --compile-llvm models/sl_tq_llm_chat.sage -o sl_tq_chat
+# Compile: sage --compile-llvm models/chatbots/sl_tq_llm_chat.sage -o sl_tq_chat
 
 import ml_native
 
 # === Load weights via native C parser ===
 print "Loading SL-TQ-LLM weights..."
-let W = ml_native.load_weights("models/sl_tq_llm.weights")
+let W = ml_native.load_weights("models/weights/sl_tq_llm.weights")
 if W == nil:
-    print "ERROR: models/sl_tq_llm.weights not found."
+    print "ERROR: models/weights/sl_tq_llm.weights not found."
 
 let cfg_parts = W[0]
 let d_model = cfg_parts[0] | 0

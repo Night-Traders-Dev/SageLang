@@ -765,9 +765,9 @@ int main(int argc, char** argv) {
 
     free(loss_window);
 
-    save_weights("models/sl_tq_llm.weights");
-    printf("Weights saved to models/sl_tq_llm.weights\n");
-    printf("Run: ./sage --compile-llvm models/sl_tq_llm_chat.sage -o sl_tq_chat && ./sl_tq_chat\n");
+    save_weights("models/weights/sl_tq_llm.weights");
+    printf("Weights saved to models/weights/sl_tq_llm.weights\n");
+    printf("Run: ./sage --compile-llvm models/chatbots/sl_tq_llm_chat.sage -o sl_tq_chat && ./sl_tq_chat\n");
 
 #ifdef USE_CUBLAS
     cublas_cleanup();
