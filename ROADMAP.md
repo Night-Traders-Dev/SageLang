@@ -1,9 +1,28 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: March 25, 2026
-> **Current Phase**: Phase 17 Complete (Backpropagation, cuBLAS GPU Training, NPU Support)
+> **Current Phase**: Phase 18 Complete (Linux Kernel Support Libraries)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+
+---
+
+## Phase 18: Linux Kernel Support Libraries (March 2026)
+
+### Completed
+
+- 11 new Linux kernel support modules under `lib/os/linux/`: syscalls, driver, kmodule, procfs, netlink, sysfs, devicetree, cgroups, epoll, ioctl, namespace
+- Multi-arch syscall interface (x86_64, aarch64, rv64)
+- Kernel driver framework with char/block/net device C codegen
+- Kernel module builder with DKMS, Kbuild, and procfs support
+- /proc and /sys filesystem readers for system introspection
+- Netlink socket message builder/parser
+- Device Tree overlay builder (DTS codegen)
+- Control Groups v2 interface, epoll event loop builder, ioctl command builder, Linux namespaces
+- Version now sourced from a single `VERSION` file (v1.2.0)
+- Parser fix: keywords like `init` now allowed as property names after `.` and `->`
+- All hex literals in OS libraries converted to decimal (Sage has no hex literal support)
+- 267 interpreter tests passing (was 257)
 
 ---
 

@@ -1,5 +1,18 @@
 # SageLang Updates
 
+## v1.2.0 — Phase 18: Linux Kernel Support (March 2026)
+
+- 11 new Linux kernel support libraries under `lib/os/linux/`: syscalls, driver, kmodule, procfs, netlink, sysfs, devicetree, cgroups, epoll, ioctl, namespace
+- Multi-arch Linux syscall interface (x86_64, aarch64, rv64)
+- Kernel driver framework (char/block/net device C codegen) and module builder (DKMS, Kbuild, procfs)
+- /proc and /sys readers, Netlink sockets, Device Tree overlay builder, cgroups v2, epoll, ioctl, namespaces
+- Version now sourced from a single `VERSION` file
+- Parser fix: keywords like `init` allowed as property names after `.` and `->`
+- All hex literals in OS libraries converted to decimal (Sage has no hex literal support)
+- 267 interpreter tests passing (was 257)
+
+---
+
 ## v1.1.0 — Phase 17 (March 2026)
 
 - Backpropagation with Adam optimizer for transformer training
