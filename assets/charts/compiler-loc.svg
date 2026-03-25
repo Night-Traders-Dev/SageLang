@@ -20,7 +20,7 @@
 <line x1="476.0" y1="115" x2="476.0" y2="251" stroke="#182231" stroke-width="1"/>
 <text x="476.0" y="277" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">10.6K</text>
 <line x1="712.0" y1="115" x2="712.0" y2="251" stroke="#182231" stroke-width="1"/>
-<text x="712.0" y="277" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">21.1K</text>
+<text x="712.0" y="277" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">21.2K</text>
 <line x1="948.0" y1="115" x2="948.0" y2="251" stroke="#182231" stroke-width="1"/>
 <text x="948.0" y="277" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">31.7K</text>
 <line x1="1184.0" y1="115" x2="1184.0" y2="251" stroke="#182231" stroke-width="1"/>
@@ -43,5 +43,5 @@
 <text x="1556" y="230.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">83.0% · src/c/*.c plus include/*.h</text>
 <text x="44" y="303" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Native C leads by 42.1K non-empty lines.</text>
 <text x="44" y="327" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Self-hosted Sage is 20.4% of the native C core today.</text>
-<text x="44" y="351" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-03-25 16:16 UTC</text>
+<text x="44" y="351" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-03-25 16:29 UTC</text>
 </svg>

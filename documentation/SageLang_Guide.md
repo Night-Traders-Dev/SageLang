@@ -2149,7 +2149,7 @@ SageLang ships with 23 general-purpose standard library modules in `lib/std/`:
 
 ### 9.16 LLM / Neural Network Libraries
 
-SageLang ships with 18 LLM/neural network modules in `lib/llm/` for building and training language models:
+SageLang ships with 19 LLM/neural network modules in `lib/llm/` for building and training language models:
 
 > **Backpropagation note**: For performance-critical training loops, use `ml_native.train_step()` (C-level forward+backward+SGD), `ml_native.forward_pass()` (inference, same computation graph), and `ml_native.load_weights(path)` (native weight loading) instead of the pure-Sage `llm.train` module. See [Section 9.13 Native ML Backend](#native-ml-backend-ml_native).
 
@@ -2173,6 +2173,7 @@ SageLang ships with 18 LLM/neural network modules in `lib/llm/` for building and
 | `gguf_import.sage` | `import llm.gguf_import` | Import GGUF models from Ollama into Sage; converts weights to native tensor format |
 | `turboquant.sage` | `import llm.turboquant` | TurboQuant near-optimal vector quantization (ICLR 2026): two-stage PolarQuant (random rotation + MSE-optimal scalar quantization) + QJL (1-bit residual correction); KV cache compression at 3-bit with 6x memory reduction |
 | `autoresearch.sage` | `import llm.autoresearch` | Karpathy-style autonomous research agent; ratchet loop (propose → train → evaluate → accept/reject); built-in scale/choice/perturb strategies; research journal; multi-agent session merging |
+| `evolve.sage` | `import llm.evolve` | Self-evolving neural architecture; progressive growth from seed (64d/1L/98K params) to ancient (512d/8L/67M params); auto-plateau detection; weight padding for width growth; identity-init for depth growth |
 
 ### 9.17 Agent Framework (`lib/agent/`)
 

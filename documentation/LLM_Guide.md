@@ -492,6 +492,7 @@ gcc -O3 -march=native -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
 | `gguf_import` | `import llm.gguf_import` | `import_gguf`, `parse_header`, `read_metadata`, `extract_config`, `load_weights`, `dequantize_q4_0`, `dequantize_q8_0`, `convert_to_sagegpt`, `supported_architectures` |
 | `turboquant` | `import llm.turboquant` | `quantize`, `dequantize`, `quantize_mse`, `dequantize_mse`, `create_kv_cache`, `cache_push`, `cache_get_key`, `cache_get_value`, `cache_stats`, `mse_distortion`, `inner_product_error`, `theoretical_mse_bound`, `benchmark`, `summary` |
 | `autoresearch` | `import llm.autoresearch` | `create`, `set_program`, `add_strategy`, `run`, `summary`, `export_journal`, `import_journal`, `merge_sessions`, `make_scale_strategy`, `make_choice_strategy`, `make_perturb_strategy`, `llm_default_strategies`, `architecture_strategies` |
+| `evolve` | `import llm.evolve` | `create_seed`, `create_evolver`, `should_grow`, `grow`, `grow_width`, `grow_depth`, `summary` |
 | `gpu_accel` | `import ml.gpu_accel` | `create_context`, `matmul`, `add`, `rms_norm`, `silu`, `softmax`, `transformer_layer_forward`, `model_forward`, `train_step` |
 | `ml_native` | (built-in C module) | `train_step`, `forward_pass`, `load_weights` |
 
@@ -648,6 +649,84 @@ sage --compile models/chatbots/sagellm_chatbot.sage -o sagellm_chatbot
 # LLVM IR backend (manual)
 sage --compile-llvm models/chatbots/sagellm_chatbot.sage -o sagellm_chatbot
 ```
+
+---
+
+## Self-Evolution (`llm.evolve`)
+
+Progressive neural architecture growth — start with a tiny seed model and expand width or depth automatically when training plateaus, without restarting from scratch.
+
+### Growth Schedule
+
+| Stage | d_model | Layers | Approx Params |
+| ----- | ------- | ------ | ------------- |
+| Seed | 64 | 1 | ~98K |
+| Sprout | 96 | 1 | ~197K |
+| Grow | 96 | 2 | ~400K |
+| Branch | 128 | 2 | ~1M |
+| Mature | 128 | 4 | ~2M |
+| Canopy | 256 | 4 | ~8M |
+| Ancient | 512 | 8 | ~67M |
+
+### API
+
+```sage
+import llm.evolve
+
+# Start with a tiny seed model
+let model = evolve.create_seed(64, 1)   # d_model=64, 1 layer
+
+# Attach an evolution controller
+let evo = evolve.create_evolver(model)
+
+# Training loop
+for step in range(10000):
+    # ... train step ...
+    if evolve.should_grow(evo):          # auto-detect loss plateau
+        evolve.grow(evo)                 # auto-select width or depth growth
+        print evolve.summary(evo)
+
+# Manual growth controls
+evolve.grow_width(evo, 128)             # pad weights to wider model (new d_model)
+evolve.grow_depth(evo)                  # add a layer with identity init
+
+# Show growth history
+print evolve.summary(evo)
+```
+
+### Key Functions
+
+| Function | Description |
+| -------- | ----------- |
+| `evolve.create_seed(d, layers)` | Create a tiny seed model with given d_model and layer count |
+| `evolve.create_evolver(model)` | Attach an evolution controller to a model |
+| `evolve.should_grow(evo)` | Return true when loss has plateaued and growth is warranted |
+| `evolve.grow(evo)` | Auto-select and apply width or depth growth |
+| `evolve.grow_width(evo, new_d)` | Pad all weight matrices to a wider d_model |
+| `evolve.grow_depth(evo)` | Insert a new transformer layer with identity-init weights |
+| `evolve.summary(evo)` | Return a string showing the full growth history and current stage |
+
+---
+
+## Dataset Pipeline
+
+Pre-training datasets can be downloaded in tiers using the bundled script:
+
+```bash
+bash models/data/download_datasets.sh 1      # TinyStories only (~500 MB)
+bash models/data/download_datasets.sh 2      # + FineWeb-Edu (~5 GB)
+bash models/data/download_datasets.sh 3      # + SlimPajama (~50 GB)
+bash models/data/download_datasets.sh all    # + The Stack (~200 GB)
+```
+
+| Tier | Dataset | Size | Best For |
+| ---- | ------- | ---- | -------- |
+| 1 | TinyStories | ~500 MB | Quick experiments, seed/sprout models |
+| 2 | FineWeb-Edu | ~5 GB | General-purpose small model pre-training |
+| 3 | SlimPajama | ~50 GB | Mid-scale model pre-training |
+| all | The Stack | ~200 GB | Code-heavy large model pre-training |
+
+Downloaded data lands in `models/data/` and is automatically picked up by `train_sl_tq` and `build_sagellm.sage`.
 
 ---
 

@@ -622,9 +622,17 @@ int main(int argc, char** argv) {
     // Load data
     printf("Loading training data...\n");
     const char* files[] = {
+        // Core training data
         "models/data/programming_languages.txt",
         "models/data/multilang_examples.txt",
         "models/data/natural_language.txt",
+        // TinyStories (download with: bash models/data/download_datasets.sh 1)
+        "models/data/tinystories/train.txt",
+        // FineWeb-Edu sample (download with: bash models/data/download_datasets.sh 2)
+        "models/data/fineweb/sample.txt",
+        // Combined dataset
+        "models/data/combined_train.txt",
+        // Sage source code
         "src/sage/lexer.sage", "src/sage/parser.sage", "src/sage/interpreter.sage",
         "src/sage/compiler.sage", "src/sage/sage.sage", "src/sage/value.sage",
         "src/sage/errors.sage", "src/sage/formatter.sage", "src/sage/linter.sage",

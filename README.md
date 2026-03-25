@@ -415,6 +415,18 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`gguf_import`**: Import GGUF models from Ollama/llama.cpp into SageGPT format (Q4_0/Q8_0 dequantization, llama/gpt2/mistral/phi/gemma/qwen2 architectures) — `lib/llm/gguf_import.sage`
 - **`turboquant`**: TurboQuant near-optimal vector quantization (ICLR 2026, Google Research) — two-stage PolarQuant + QJL pipeline for 3-bit KV cache compression with 6x memory reduction and zero accuracy loss — `lib/llm/turboquant.sage`
 - **`autoresearch`**: Karpathy-style autonomous research agent. Ratchet loop: propose → train → evaluate → accept/reject. Runs 100+ experiments overnight. Research journal, multi-agent collaboration, built-in mutation strategies.
+- **`evolve`**: Self-evolving neural architecture — progressive growth from seed (98K params) to canopy (67M params), auto-plateau detection, weight padding for width growth, identity-init for depth growth — `lib/llm/evolve.sage`
+
+### Dataset Pipeline
+
+Pre-training datasets (TinyStories, FineWeb-Edu, SlimPajama, The Stack) can be downloaded in tiers:
+
+```bash
+bash models/data/download_datasets.sh 1      # TinyStories only (~500 MB)
+bash models/data/download_datasets.sh 2      # + FineWeb-Edu (~5 GB)
+bash models/data/download_datasets.sh 3      # + SlimPajama (~50 GB)
+bash models/data/download_datasets.sh all    # + The Stack (~200 GB)
+```
 
 ### SageGPT / LLM Build Pipeline
 
