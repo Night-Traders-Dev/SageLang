@@ -788,6 +788,16 @@ help:
 	@echo "  make DEBUG=1                          # Debug build"
 
 # ============================================================================
+# C-Only Model Trainer (SL-TQ-LLM)
+# ============================================================================
+
+train-c: src/c/train_sl_tq.c
+	$(CC) -O3 -march=native -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
+	@echo "Built: train_sl_tq"
+	@echo "Usage: ./train_sl_tq [steps] [lr]"
+	@echo "Default: 50000 steps, lr=0.002"
+
+# ============================================================================
 # Phony Targets Declaration
 # ============================================================================
 
@@ -801,4 +811,4 @@ help:
         test-selfhost-llvm-backend test-selfhost-codegen test-selfhost-compiler \
         test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
         test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
-        test-all stats help shaders menuconfig guiconfig
+        test-all stats help shaders menuconfig guiconfig train-c

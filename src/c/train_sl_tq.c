@@ -17,6 +17,8 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <pthread.h>
+#include <unistd.h>
 
 // ============================================================================
 // Model Configuration
@@ -86,14 +88,47 @@ static void init_weights(void) {
 // Matrix operations
 // ============================================================================
 
-static void matmul(const double* A, const double* B, double* C, int m, int k, int n) {
-    for (int i = 0; i < m; i++) {
-        for (int j = 0; j < n; j++) {
+// Parallel matmul using pthreads
+typedef struct {
+    const double* A; const double* B; double* C;
+    int m, k, n, row_start, row_end;
+} MatmulArgs;
+
+static void* matmul_worker(void* arg) {
+    MatmulArgs* a = (MatmulArgs*)arg;
+    for (int i = a->row_start; i < a->row_end; i++) {
+        for (int j = 0; j < a->n; j++) {
             double sum = 0;
-            for (int p = 0; p < k; p++) sum += A[i*k+p] * B[p*n+j];
-            C[i*n+j] = sum;
+            for (int p = 0; p < a->k; p++) sum += a->A[i*a->k+p] * a->B[p*a->n+j];
+            a->C[i*a->n+j] = sum;
         }
     }
+    return NULL;
+}
+
+static int g_num_threads = 1;
+
+static void matmul(const double* A, const double* B, double* C, int m, int k, int n) {
+    if (m < 4 || g_num_threads <= 1) {
+        // Serial for small matrices
+        for (int i = 0; i < m; i++)
+            for (int j = 0; j < n; j++) {
+                double sum = 0;
+                for (int p = 0; p < k; p++) sum += A[i*k+p] * B[p*n+j];
+                C[i*n+j] = sum;
+            }
+        return;
+    }
+    int nt = g_num_threads;
+    if (nt > m) nt = m;
+    pthread_t threads[64];
+    MatmulArgs args[64];
+    int rows_per = m / nt;
+    for (int t = 0; t < nt; t++) {
+        args[t] = (MatmulArgs){A, B, C, m, k, n, t*rows_per, (t==nt-1)?m:(t+1)*rows_per};
+        pthread_create(&threads[t], NULL, matmul_worker, &args[t]);
+    }
+    for (int t = 0; t < nt; t++) pthread_join(threads[t], NULL);
 }
 
 static void softmax(double* x, int n) {
@@ -401,11 +436,17 @@ int main(int argc, char** argv) {
     if (argc > 1) total_steps = atoi(argv[1]);
     if (argc > 2) lr = atof(argv[2]);
 
+    // Auto-detect CPU cores
+    g_num_threads = (int)sysconf(_SC_NPROCESSORS_ONLN);
+    if (g_num_threads < 1) g_num_threads = 1;
+    if (g_num_threads > 64) g_num_threads = 64;
+
     printf("================================================================\n");
     printf("  SL-TQ-LLM C-Only Trainer\n");
     printf("  No black box. Every gradient is explicit.\n");
     printf("================================================================\n\n");
 
+    printf("CPU cores: %d (parallel matmul)\n", g_num_threads);
     printf("Model: d=%d heads=%d ff=%d vocab=%d seq=%d\n", D_MODEL, N_HEADS, D_FF, VOCAB, SEQ_LEN);
     printf("Params: %d\n", TOTAL_PARAMS);
     printf("Steps: %d  LR: %.6f\n\n", total_steps, lr);
