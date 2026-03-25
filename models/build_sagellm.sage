@@ -20,7 +20,7 @@ gc_disable()
 #   Phase 12: Summary + compile instructions
 #
 # Usage: sage models/build_sagellm.sage
-# Context: 16384 tokens (high context window)
+# Context: 32768 tokens (high context window)
 # ============================================================================
 
 import io
@@ -50,6 +50,7 @@ import agent.tot
 import agent.trace
 import agent.schema
 import agent.supervisor
+import ml.gpu_accel
 
 let NL = chr(10)
 let DQ = chr(34)
@@ -65,7 +66,7 @@ proc divider():
 
 separator()
 print "  SageLLM Build Pipeline v2.0.0"
-print "  Medium Model | 16K Context | All Features"
+print "  Medium Model | 32K Context | All Features"
 print "  SwiGLU + RoPE + RMSNorm + LoRA + DPO + RAG + Engram"
 separator()
 print ""
@@ -141,13 +142,13 @@ print ""
 log("MODEL", "Phase 2: SageGPT-Medium model...")
 divider()
 
-let d_model = 768         # "Standard" small-model width
-let n_heads = 12          # 768 / 12 = 64 (standard head dimension)
-let n_layers = 12
-let d_ff = 3072           # Typically 4x d_model
-let vocab = 16384         # High-density code tokenization
-let context_length = 32768
-let seq_len = 2048        # Increase this for better training stability
+let d_model = 768         # Balanced width for 8GB VRAM limits
+let n_heads = 12          # 768 / 12 = 64 (ideal for FlashAttention-2 speed)
+let n_layers = 16         # Increased depth over width to improve logic within 8GB
+let d_ff = 2304           # 3x d_model (slight reduction from 4x to save VRAM)
+let vocab = 12288         # Optimized for SageLang/C keywords + common hex/symbols
+let context_length = 32768  # High context window for code understanding and RAG, balanced with model size
+let seq_len = 1024        # Reduced from 2048 to ensure 32k context stability on 8GB
 
 log("MODEL", "d=" + str(d_model) + " heads=" + str(n_heads) + " layers=" + str(n_layers) + " ff=" + str(d_ff) + " vocab=" + str(vocab) + " ctx=" + str(context_length))
 
@@ -218,6 +219,10 @@ let param_count = vocab * d_model + n_layers * (2 * d_model + 4 * d_model * d_mo
 log("MODEL", "Parameters: " + str(param_count))
 log("MODEL", "FP32: " + quantize.format_size(quantize.model_size_fp32(param_count)) + " | INT8: " + quantize.format_size(quantize.model_size_int8(param_count)))
 log("MODEL", "Embed stats: " + debug.format_stats(debug.weight_stats(embed_w)))
+
+# Initialize GPU acceleration context (falls back to CPU if no GPU)
+let gpu = gpu_accel.create(true)
+log("MODEL", "Compute backend: " + gpu["backend"])
 print ""
 
 # ============================================================================
@@ -254,28 +259,28 @@ proc forward_pass(input_ids, cur_seq_len):
         for j in range(d_model):
             push(hidden, embed_w[tid * d_model + j])
     for layer in range(n_layers):
-        hidden = ml_native.rms_norm(hidden, layer_norm1[layer], cur_seq_len, d_model, 0.00001)
-        let q = ml_native.matmul(hidden, layer_qw[layer], cur_seq_len, d_model, d_model)
-        let k = ml_native.matmul(hidden, layer_kw[layer], cur_seq_len, d_model, d_model)
-        let v = ml_native.matmul(hidden, layer_vw[layer], cur_seq_len, d_model, d_model)
+        hidden = gpu_accel.rms_norm(gpu, hidden, layer_norm1[layer], cur_seq_len, d_model, 0.00001)
+        let q = gpu_accel.matmul(gpu, hidden, layer_qw[layer], cur_seq_len, d_model, d_model)
+        let k = gpu_accel.matmul(gpu, hidden, layer_kw[layer], cur_seq_len, d_model, d_model)
+        let v = gpu_accel.matmul(gpu, hidden, layer_vw[layer], cur_seq_len, d_model, d_model)
         let attn_out = attention.scaled_dot_product(q, k, v, cur_seq_len, d_model, true)
-        let proj = ml_native.matmul(attn_out, layer_ow[layer], cur_seq_len, d_model, d_model)
-        hidden = ml_native.add(hidden, proj)
-        let normed2 = ml_native.rms_norm(hidden, layer_norm2[layer], cur_seq_len, d_model, 0.00001)
-        let gate_out = ml_native.matmul(normed2, layer_gate[layer], cur_seq_len, d_model, d_ff)
-        let up_out = ml_native.matmul(normed2, layer_up[layer], cur_seq_len, d_model, d_ff)
-        let gate_act = ml_native.silu(gate_out)
+        let proj = gpu_accel.matmul(gpu, attn_out, layer_ow[layer], cur_seq_len, d_model, d_model)
+        hidden = gpu_accel.add(gpu, hidden, proj)
+        let normed2 = gpu_accel.rms_norm(gpu, hidden, layer_norm2[layer], cur_seq_len, d_model, 0.00001)
+        let gate_out = gpu_accel.matmul(gpu, normed2, layer_gate[layer], cur_seq_len, d_model, d_ff)
+        let up_out = gpu_accel.matmul(gpu, normed2, layer_up[layer], cur_seq_len, d_model, d_ff)
+        let gate_act = gpu_accel.silu(gpu, gate_out)
         let gated = []
         for i in range(len(gate_act)):
             push(gated, gate_act[i] * up_out[i])
-        let ffn_out = ml_native.matmul(gated, layer_down[layer], cur_seq_len, d_ff, d_model)
-        hidden = ml_native.add(hidden, ffn_out)
-    hidden = ml_native.rms_norm(hidden, final_norm, cur_seq_len, d_model, 0.00001)
+        let ffn_out = gpu_accel.matmul(gpu, gated, layer_down[layer], cur_seq_len, d_ff, d_model)
+        hidden = gpu_accel.add(gpu, hidden, ffn_out)
+    hidden = gpu_accel.rms_norm(gpu, hidden, final_norm, cur_seq_len, d_model, 0.00001)
     let last_h = []
     let off = (cur_seq_len - 1) * d_model
     for j in range(d_model):
         push(last_h, hidden[off + j])
-    return ml_native.matmul(last_h, lm_head, 1, d_model, vocab)
+    return gpu_accel.matmul(gpu, last_h, lm_head, 1, d_model, vocab)
 
 for step in range(theory_steps):
     let ids = theory_examples[step]["input_ids"]
@@ -285,7 +290,7 @@ for step in range(theory_steps):
     let target = [tgt[seq_len - 1]]
     if target[0] >= vocab:
         target[0] = 0
-    let loss = ml_native.cross_entropy(logits, target, 1, vocab)
+    let loss = gpu_accel.cross_entropy(gpu, logits, target, 1, vocab)
     push(all_losses, loss)
     train.log_step(state1, loss, lr, 0)
     monitor.log_step(mon, loss, lr, 0, seq_len)
@@ -326,33 +331,33 @@ for step in range(lora_steps):
             tid = 0
         for j in range(d_model):
             push(hidden, embed_w[tid * d_model + j])
-    hidden = ml_native.rms_norm(hidden, layer_norm1[0], seq_len, d_model, 0.00001)
-    let q_base = ml_native.matmul(hidden, layer_qw[0], seq_len, d_model, d_model)
+    hidden = gpu_accel.rms_norm(gpu, hidden, layer_norm1[0], seq_len, d_model, 0.00001)
+    let q_base = gpu_accel.matmul(gpu, hidden, layer_qw[0], seq_len, d_model, d_model)
     let q_lora = lora.lora_forward(adapter, hidden, seq_len)
-    let q = ml_native.add(q_base, q_lora)
-    let k = ml_native.matmul(hidden, layer_kw[0], seq_len, d_model, d_model)
-    let v = ml_native.matmul(hidden, layer_vw[0], seq_len, d_model, d_model)
+    let q = gpu_accel.add(gpu, q_base, q_lora)
+    let k = gpu_accel.matmul(gpu, hidden, layer_kw[0], seq_len, d_model, d_model)
+    let v = gpu_accel.matmul(gpu, hidden, layer_vw[0], seq_len, d_model, d_model)
     let attn = attention.scaled_dot_product(q, k, v, seq_len, d_model, true)
-    let proj = ml_native.matmul(attn, layer_ow[0], seq_len, d_model, d_model)
-    hidden = ml_native.add(hidden, proj)
-    hidden = ml_native.rms_norm(hidden, layer_norm2[0], seq_len, d_model, 0.00001)
-    let gate_out = ml_native.matmul(hidden, layer_gate[0], seq_len, d_model, d_ff)
-    let up_out = ml_native.matmul(hidden, layer_up[0], seq_len, d_model, d_ff)
-    let gate_act = ml_native.silu(gate_out)
+    let proj = gpu_accel.matmul(gpu, attn, layer_ow[0], seq_len, d_model, d_model)
+    hidden = gpu_accel.add(gpu, hidden, proj)
+    hidden = gpu_accel.rms_norm(gpu, hidden, layer_norm2[0], seq_len, d_model, 0.00001)
+    let gate_out = gpu_accel.matmul(gpu, hidden, layer_gate[0], seq_len, d_model, d_ff)
+    let up_out = gpu_accel.matmul(gpu, hidden, layer_up[0], seq_len, d_model, d_ff)
+    let gate_act = gpu_accel.silu(gpu, gate_out)
     let gated = []
     for i in range(len(gate_act)):
         push(gated, gate_act[i] * up_out[i])
-    let ffn_out = ml_native.matmul(gated, layer_down[0], seq_len, d_ff, d_model)
-    hidden = ml_native.add(hidden, ffn_out)
-    hidden = ml_native.rms_norm(hidden, final_norm, seq_len, d_model, 0.00001)
+    let ffn_out = gpu_accel.matmul(gpu, gated, layer_down[0], seq_len, d_ff, d_model)
+    hidden = gpu_accel.add(gpu, hidden, ffn_out)
+    hidden = gpu_accel.rms_norm(gpu, hidden, final_norm, seq_len, d_model, 0.00001)
     let last_h = []
     for j in range(d_model):
         push(last_h, hidden[(seq_len - 1) * d_model + j])
-    let logits = ml_native.matmul(last_h, lm_head, 1, d_model, vocab)
+    let logits = gpu_accel.matmul(gpu, last_h, lm_head, 1, d_model, vocab)
     let target = [tgt[seq_len - 1]]
     if target[0] >= vocab:
         target[0] = 0
-    let loss = ml_native.cross_entropy(logits, target, 1, vocab)
+    let loss = gpu_accel.cross_entropy(gpu, logits, target, 1, vocab)
     push(all_losses, loss)
     train.log_step(state2, loss, train_cfg["learning_rate"], 0)
     if (step + 1) - (((step + 1) / 25) | 0) * 25 == 0:
@@ -826,12 +831,14 @@ print "  RAG: " + str(rag_stats["total_docs"]) + " docs (" + str(rag_stats["tota
 print ""
 print "Features: SwiGLU, RoPE, RMSNorm, LoRA, DPO, RAG, Engram, Semantic Routing,"
 print "  Grammar Validation, Critic, SFT Traces, Planning, 6 Personas, Sessions,"
-print "  GGUF Export/Import, INT8 Quantization, SVG Visualization"
+print "  GGUF Export/Import, INT8 Quantization, SVG Visualization, GPU Acceleration"
 print ""
 print "Output: models/sagellm_chatbot.sage | models/Modelfile | models/viz/"
 print "Run:     ./sage models/sagellm_chatbot.sage"
 print "Compile: ./sage --compile models/sagellm_chatbot.sage -o sagellm_chat"
 print ""
-let bench = ml_native.benchmark(d_model, 10)
-print "Native: " + str(bench["gflops"]) + " GFLOPS (" + str(bench["ms_per_matmul"]) + " ms @ " + str(d_model) + "x" + str(d_model) + ")"
+let bench = gpu_accel.benchmark(gpu, d_model, 10)
+print "Compute: " + str(bench["gflops"]) + " GFLOPS (" + str(bench["ms_per_matmul"]) + " ms @ " + str(d_model) + "x" + str(d_model) + ")"
+print gpu_accel.stats(gpu)
+gpu_accel.destroy(gpu)
 separator()
