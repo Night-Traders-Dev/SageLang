@@ -291,10 +291,13 @@ proc enable_parallel(num_threads):
     _num_workers = num_threads
     if _num_workers < 1:
         _num_workers = 1
+    # Set C-level pthread parallelism in ml_native
+    ml_native.set_threads(num_threads)
 
 proc disable_parallel():
     _parallel_enabled = false
     _num_workers = 1
+    ml_native.set_threads(1)
 
 proc get_parallel_config():
     let cfg = {}
@@ -305,6 +308,7 @@ proc get_parallel_config():
 
 proc set_parallel_threshold(threshold):
     _parallel_threshold = threshold
+    ml_native.set_parallel_threshold(threshold)
 
 # Parallel matmul: split M rows across threads
 # Each worker computes a slice of rows: C[start:end, :] = A[start:end, :] @ B

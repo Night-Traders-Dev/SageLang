@@ -13,6 +13,35 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <pthread.h>
+
+// ============================================================================
+// Parallel matmul configuration
+// ============================================================================
+
+static int g_ml_num_threads = 1;
+static int g_ml_parallel_threshold = 4096; // M*K threshold to trigger parallel
+
+typedef struct {
+    const double* A;
+    const double* B;
+    double* C;
+    int m_start, m_end;
+    int k, n;
+} MatmulWorker;
+
+static void* matmul_worker_fn(void* arg) {
+    MatmulWorker* w = (MatmulWorker*)arg;
+    for (int i = w->m_start; i < w->m_end; i++) {
+        for (int p = 0; p < w->k; p++) {
+            double a_ip = w->A[i * w->k + p];
+            for (int j = 0; j < w->n; j++) {
+                w->C[i * w->n + j] += a_ip * w->B[p * w->n + j];
+            }
+        }
+    }
+    return NULL;
+}
 
 // ============================================================================
 // Internal tensor representation (flat float array)
@@ -51,11 +80,37 @@ static void tensor_free(NativeTensor* t) {
 // ============================================================================
 
 // C = A @ B  (m x k) @ (k x n) -> (m x n)
+// Uses pthread parallelism when m*k > threshold and g_ml_num_threads > 1
 static void matmul_f64(const double* A, const double* B, double* C,
                        int m, int k, int n) {
-    // Zero output
-    memset(C, 0, sizeof(double) * m * n);
-    // Standard triple-loop (row-major, k-loop inner for cache locality)
+    memset(C, 0, sizeof(double) * (size_t)m * (size_t)n);
+
+    // Parallel path: split rows across threads
+    if (g_ml_num_threads > 1 && m > 1 && m * k >= g_ml_parallel_threshold) {
+        int nt = g_ml_num_threads;
+        if (nt > m) nt = m;
+        pthread_t* threads = (pthread_t*)malloc(sizeof(pthread_t) * (size_t)nt);
+        MatmulWorker* workers = (MatmulWorker*)malloc(sizeof(MatmulWorker) * (size_t)nt);
+        int rows_per = m / nt;
+        for (int t = 0; t < nt; t++) {
+            workers[t].A = A;
+            workers[t].B = B;
+            workers[t].C = C;
+            workers[t].k = k;
+            workers[t].n = n;
+            workers[t].m_start = t * rows_per;
+            workers[t].m_end = (t == nt - 1) ? m : (t + 1) * rows_per;
+            pthread_create(&threads[t], NULL, matmul_worker_fn, &workers[t]);
+        }
+        for (int t = 0; t < nt; t++) {
+            pthread_join(threads[t], NULL);
+        }
+        free(threads);
+        free(workers);
+        return;
+    }
+
+    // Serial path
     for (int i = 0; i < m; i++) {
         for (int p = 0; p < k; p++) {
             double a_ip = A[i * k + p];
@@ -472,6 +527,31 @@ static Value ml_benchmark(int argc, Value* args) {
     return result;
 }
 
+// ml_native.set_threads(n) -> set number of parallel threads for matmul
+static Value ml_set_threads(int argc, Value* args) {
+    if (argc < 1) return val_nil();
+    int n = (int)AS_NUMBER(args[0]);
+    if (n < 1) n = 1;
+    if (n > 256) n = 256;
+    g_ml_num_threads = n;
+    return val_number(n);
+}
+
+// ml_native.set_parallel_threshold(n) -> min M*K to trigger parallel matmul
+static Value ml_set_parallel_threshold(int argc, Value* args) {
+    if (argc < 1) return val_nil();
+    int n = (int)AS_NUMBER(args[0]);
+    if (n < 1) n = 1;
+    g_ml_parallel_threshold = n;
+    return val_number(n);
+}
+
+// ml_native.get_threads() -> current thread count
+static Value ml_get_threads(int argc, Value* args) {
+    (void)argc; (void)args;
+    return val_number(g_ml_num_threads);
+}
+
 // ============================================================================
 // Module registration
 // ============================================================================
@@ -512,6 +592,11 @@ Module* create_ml_native_module(ModuleCache* cache) {
 
     // Benchmark
     env_define(e, "benchmark", 9, val_native(ml_benchmark));
+
+    // Parallel configuration
+    env_define(e, "set_threads", 11, val_native(ml_set_threads));
+    env_define(e, "set_parallel_threshold", 22, val_native(ml_set_parallel_threshold));
+    env_define(e, "get_threads", 11, val_native(ml_get_threads));
 
     // Add to cache
     module->next = cache->modules;
