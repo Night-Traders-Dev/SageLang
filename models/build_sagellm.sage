@@ -890,16 +890,17 @@ let quant_q0 = quantize.quantize_int8(layer_qw[0])
 # Measure quantization error
 let deq_embed = quantize.dequantize_int8(quant_embed)
 let embed_err = quantize.quantization_error(embed_w, deq_embed)
-log("QUANT", "Embedding quantization error: " + str(embed_err["mean_error"]))
-log("QUANT", "Max error: " + str(embed_err["max_error"]))
+log("QUANT", "Embedding MSE: " + str(embed_err["mse"]))
+log("QUANT", "Embedding RMSE: " + str(embed_err["rmse"]))
+log("QUANT", "SNR (dB): " + str(embed_err["snr_db"]))
 
-# Size comparison
+# Size comparison (returns pre-formatted strings)
 let sizes = quantize.size_comparison(total_params)
-log("QUANT", "FP32: " + quantize.format_size(sizes["fp32"]))
-log("QUANT", "FP16: " + quantize.format_size(sizes["fp16"]))
-log("QUANT", "INT8: " + quantize.format_size(sizes["int8"]))
-log("QUANT", "INT4: " + quantize.format_size(sizes["int4"]))
-log("QUANT", "Compression ratio (fp32->int8): " + str(((sizes["fp32"] / sizes["int8"]) * 10) | 0) + "x / 10")
+log("QUANT", "FP32: " + sizes["fp32"])
+log("QUANT", "FP16: " + sizes["fp16"])
+log("QUANT", "INT8: " + sizes["int8"])
+log("QUANT", "INT4: " + sizes["int4"])
+log("QUANT", "Compression: fp32->int8 = 4x, fp32->int4 = 8x")
 print ""
 
 # ============================================================================
@@ -1046,62 +1047,69 @@ emit("")
 emit("    # Step 3: Classify topic")
 emit("    let topic = " + DQ + "general" + DQ)
 
-# Domain-specific topics (highest priority)
-topics = [
-    ["llm", ["llm", "language model", "transformer", "tokeniz", "attention", "lora", "engram", "neural", "embedding", "gguf", "dpo", "rag"]],
-    ["agent_framework", ["agent", "react", "tool use", "autonomous", "scratchpad", "supervisor", "worker", "critic"]],
-    ["chatbot", ["chatbot", "chat bot", "persona", "conversation", "intent", "session"]],
-    ["crypto", ["crypto", "sha", "hash", "encrypt", "base64", "hmac", "cipher", "password"]],
-    ["networking", ["network", "http", "socket", "url", "dns", "websocket", "tcp", "server"]],
-    ["osdev", ["baremetal", "uefi", "kernel", "elf", "pci", "acpi", "osdev", "fat", "paging", "interrupt"]],
-    ["ml", ["tensor", "machine learn", "training", "neural net", "optimizer", "gradient", "matmul", "loss"]],
-    ["regex", ["regex", "regular exp", "pattern match"]],
-    ["graphics", ["gpu", "vulkan", "opengl", "shader", "render", "pbr", "mesh", "texture"]],
-]
-
-for ti in range(len(topics)):
-    let tname = topics[ti][0]
-    let keywords = topics[ti][1]
-    let cond_parts = []
-    for ki in range(len(keywords)):
-        push(cond_parts, "contains(lp, " + DQ + keywords[ki] + DQ + ")")
-    # Build condition — limited to 4 per line to avoid long lines
-    let cond = cond_parts[0]
-    for ki in range(len(cond_parts) - 1):
-        cond = cond + " or " + cond_parts[ki + 1]
-    emit("    if " + cond + ":")
-    emit("        topic = " + DQ + tname + DQ)
+# Domain-specific topics (highest priority) — direct emit
+emit("    if contains(lp, " + DQ + "llm" + DQ + ") or contains(lp, " + DQ + "language model" + DQ + ") or contains(lp, " + DQ + "transformer" + DQ + ") or contains(lp, " + DQ + "tokeniz" + DQ + ") or contains(lp, " + DQ + "attention" + DQ + ") or contains(lp, " + DQ + "lora" + DQ + ") or contains(lp, " + DQ + "engram" + DQ + ") or contains(lp, " + DQ + "neural" + DQ + ") or contains(lp, " + DQ + "gguf" + DQ + ") or contains(lp, " + DQ + "dpo" + DQ + ") or contains(lp, " + DQ + "rag" + DQ + "):")
+emit("        topic = " + DQ + "llm" + DQ)
+emit("    if contains(lp, " + DQ + "agent" + DQ + ") or contains(lp, " + DQ + "react" + DQ + ") or contains(lp, " + DQ + "tool use" + DQ + ") or contains(lp, " + DQ + "autonomous" + DQ + ") or contains(lp, " + DQ + "supervisor" + DQ + ") or contains(lp, " + DQ + "worker" + DQ + ") or contains(lp, " + DQ + "critic" + DQ + "):")
+emit("        topic = " + DQ + "agent_framework" + DQ)
+emit("    if contains(lp, " + DQ + "chatbot" + DQ + ") or contains(lp, " + DQ + "chat bot" + DQ + ") or contains(lp, " + DQ + "persona" + DQ + ") or contains(lp, " + DQ + "conversation" + DQ + ") or contains(lp, " + DQ + "intent" + DQ + "):")
+emit("        topic = " + DQ + "chatbot" + DQ)
+emit("    if contains(lp, " + DQ + "crypto" + DQ + ") or contains(lp, " + DQ + "sha" + DQ + ") or contains(lp, " + DQ + "hash" + DQ + ") or contains(lp, " + DQ + "encrypt" + DQ + ") or contains(lp, " + DQ + "base64" + DQ + ") or contains(lp, " + DQ + "hmac" + DQ + ") or contains(lp, " + DQ + "cipher" + DQ + "):")
+emit("        topic = " + DQ + "crypto" + DQ)
+emit("    if contains(lp, " + DQ + "network" + DQ + ") or contains(lp, " + DQ + "http" + DQ + ") or contains(lp, " + DQ + "socket" + DQ + ") or contains(lp, " + DQ + "url" + DQ + ") or contains(lp, " + DQ + "dns" + DQ + ") or contains(lp, " + DQ + "websocket" + DQ + ") or contains(lp, " + DQ + "tcp" + DQ + "):")
+emit("        topic = " + DQ + "networking" + DQ)
+emit("    if contains(lp, " + DQ + "baremetal" + DQ + ") or contains(lp, " + DQ + "uefi" + DQ + ") or contains(lp, " + DQ + "kernel" + DQ + ") or contains(lp, " + DQ + "elf" + DQ + ") or contains(lp, " + DQ + "pci" + DQ + ") or contains(lp, " + DQ + "acpi" + DQ + ") or contains(lp, " + DQ + "osdev" + DQ + ") or contains(lp, " + DQ + "fat" + DQ + ") or contains(lp, " + DQ + "paging" + DQ + "):")
+emit("        topic = " + DQ + "osdev" + DQ)
+emit("    if contains(lp, " + DQ + "tensor" + DQ + ") or contains(lp, " + DQ + "machine learn" + DQ + ") or contains(lp, " + DQ + "neural net" + DQ + ") or contains(lp, " + DQ + "optimizer" + DQ + ") or contains(lp, " + DQ + "gradient" + DQ + ") or contains(lp, " + DQ + "matmul" + DQ + "):")
+emit("        topic = " + DQ + "ml" + DQ)
+emit("    if contains(lp, " + DQ + "regex" + DQ + ") or contains(lp, " + DQ + "regular exp" + DQ + ") or contains(lp, " + DQ + "pattern match" + DQ + "):")
+emit("        topic = " + DQ + "regex" + DQ)
+emit("    if contains(lp, " + DQ + "gpu" + DQ + ") or contains(lp, " + DQ + "vulkan" + DQ + ") or contains(lp, " + DQ + "opengl" + DQ + ") or contains(lp, " + DQ + "shader" + DQ + ") or contains(lp, " + DQ + "render" + DQ + ") or contains(lp, " + DQ + "pbr" + DQ + ") or contains(lp, " + DQ + "mesh" + DQ + "):")
+emit("        topic = " + DQ + "graphics" + DQ)
 
 # General language topics (lower priority, only if no domain match)
-gen_topics = [
-    ["loops", ["for", "loop", "while", "iteration", "range"]],
-    ["modules", ["import", "module", "library", "package"]],
-    ["oop", ["class", "object", "inherit", "method", "self"]],
-    ["gc", ["gc", "garbage", "collector", "memory leak"]],
-    ["compiler", ["compile", "backend", "emit", "llvm", "codegen"]],
-    ["data", ["array", "dict", "list", "data struct", "tuple"]],
-    ["functions", ["function", "proc", "closure", "lambda", "return"]],
-    ["errors", ["error", "exception", "try", "catch", "raise"]],
-    ["testing", ["test", "debug", "fix", "bug", "assert"]],
-    ["concurrency", ["thread", "async", "channel", "concurrent", "atomic", "mutex"]],
-    ["planning", ["plan", "how to build", "steps", "roadmap", "project"]],
-    ["syntax", ["syntax", "indent", "semicolon", "bracket", "keyword"]],
-    ["string", ["string", "text", "concat", "split", "join", "format"]],
-    ["io", ["file", "read", "write", "print", "input", "stdin"]],
-]
-
-for ti in range(len(gen_topics)):
-    let tname = gen_topics[ti][0]
-    let keywords = gen_topics[ti][1]
-    emit("    if topic == " + DQ + "general" + DQ + ":")
-    let cond_parts = []
-    for ki in range(len(keywords)):
-        push(cond_parts, "contains(lp, " + DQ + keywords[ki] + DQ + ")")
-    let cond = cond_parts[0]
-    for ki in range(len(cond_parts) - 1):
-        cond = cond + " or " + cond_parts[ki + 1]
-    emit("        if " + cond + ":")
-    emit("            topic = " + DQ + tname + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "for" + DQ + ") or contains(lp, " + DQ + "loop" + DQ + ") or contains(lp, " + DQ + "while" + DQ + ") or contains(lp, " + DQ + "iteration" + DQ + ") or contains(lp, " + DQ + "range" + DQ + "):")
+emit("            topic = " + DQ + "loops" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "import" + DQ + ") or contains(lp, " + DQ + "module" + DQ + ") or contains(lp, " + DQ + "library" + DQ + ") or contains(lp, " + DQ + "package" + DQ + "):")
+emit("            topic = " + DQ + "modules" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "class" + DQ + ") or contains(lp, " + DQ + "object" + DQ + ") or contains(lp, " + DQ + "inherit" + DQ + ") or contains(lp, " + DQ + "method" + DQ + "):")
+emit("            topic = " + DQ + "oop" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "gc" + DQ + ") or contains(lp, " + DQ + "garbage" + DQ + ") or contains(lp, " + DQ + "collector" + DQ + ") or contains(lp, " + DQ + "memory leak" + DQ + "):")
+emit("            topic = " + DQ + "gc" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "compile" + DQ + ") or contains(lp, " + DQ + "backend" + DQ + ") or contains(lp, " + DQ + "emit" + DQ + ") or contains(lp, " + DQ + "codegen" + DQ + "):")
+emit("            topic = " + DQ + "compiler" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "array" + DQ + ") or contains(lp, " + DQ + "dict" + DQ + ") or contains(lp, " + DQ + "list" + DQ + ") or contains(lp, " + DQ + "data struct" + DQ + ") or contains(lp, " + DQ + "tuple" + DQ + "):")
+emit("            topic = " + DQ + "data" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "function" + DQ + ") or contains(lp, " + DQ + "proc" + DQ + ") or contains(lp, " + DQ + "closure" + DQ + ") or contains(lp, " + DQ + "return" + DQ + "):")
+emit("            topic = " + DQ + "functions" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "error" + DQ + ") or contains(lp, " + DQ + "exception" + DQ + ") or contains(lp, " + DQ + "try" + DQ + ") or contains(lp, " + DQ + "catch" + DQ + ") or contains(lp, " + DQ + "raise" + DQ + "):")
+emit("            topic = " + DQ + "errors" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "test" + DQ + ") or contains(lp, " + DQ + "debug" + DQ + ") or contains(lp, " + DQ + "fix" + DQ + ") or contains(lp, " + DQ + "bug" + DQ + ") or contains(lp, " + DQ + "assert" + DQ + "):")
+emit("            topic = " + DQ + "testing" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "thread" + DQ + ") or contains(lp, " + DQ + "async" + DQ + ") or contains(lp, " + DQ + "channel" + DQ + ") or contains(lp, " + DQ + "concurrent" + DQ + ") or contains(lp, " + DQ + "atomic" + DQ + ") or contains(lp, " + DQ + "mutex" + DQ + "):")
+emit("            topic = " + DQ + "concurrency" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "plan" + DQ + ") or contains(lp, " + DQ + "how to build" + DQ + ") or contains(lp, " + DQ + "steps" + DQ + ") or contains(lp, " + DQ + "roadmap" + DQ + "):")
+emit("            topic = " + DQ + "planning" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "syntax" + DQ + ") or contains(lp, " + DQ + "indent" + DQ + ") or contains(lp, " + DQ + "keyword" + DQ + "):")
+emit("            topic = " + DQ + "syntax" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "string" + DQ + ") or contains(lp, " + DQ + "text" + DQ + ") or contains(lp, " + DQ + "concat" + DQ + ") or contains(lp, " + DQ + "split" + DQ + ") or contains(lp, " + DQ + "format" + DQ + "):")
+emit("            topic = " + DQ + "string" + DQ)
+emit("    if topic == " + DQ + "general" + DQ + ":")
+emit("        if contains(lp, " + DQ + "file" + DQ + ") or contains(lp, " + DQ + "read" + DQ + ") or contains(lp, " + DQ + "write" + DQ + ") or contains(lp, " + DQ + "print" + DQ + ") or contains(lp, " + DQ + "input" + DQ + ") or contains(lp, " + DQ + "stdin" + DQ + "):")
+emit("            topic = " + DQ + "io" + DQ)
 
 emit("    push(chain[" + DQ + "steps" + DQ + "], {" + DQ + "type" + DQ + ": " + DQ + "classify" + DQ + ", " + DQ + "content" + DQ + ": " + DQ + "Topic: " + DQ + " + topic})")
 emit("")
@@ -1319,6 +1327,7 @@ separator2()
 
 let gguf_cfg = {}
 gguf_cfg["name"] = model_name
+gguf_cfg["architecture"] = "sagegpt"
 gguf_cfg["d_model"] = d_model
 gguf_cfg["n_layers"] = n_layers
 gguf_cfg["n_heads"] = n_heads
@@ -1327,15 +1336,17 @@ gguf_cfg["vocab_size"] = vocab
 gguf_cfg["context_length"] = context_len
 gguf_cfg["total_params"] = total_params
 
-let header = gguf.create_header(model_name, n_layers)
-log("GGUF", "Header: magic=" + header["magic"] + " version=" + str(header["version"]))
+let gguf_meta = gguf.build_metadata(gguf_cfg)
+log("GGUF", "Metadata entries: " + str(len(gguf_meta)))
 
-let metadata = gguf.model_metadata(gguf_cfg)
-log("GGUF", "Metadata keys: " + str(len(metadata)))
+let gguf_header = gguf.generate_header(gguf_meta, 0)
+log("GGUF", "Header generated (" + str(len(gguf_header)) + " bytes)")
 
-let modelfile = gguf.ollama_modelfile(model_name, "sagegpt-medium.gguf")
-io.writefile("models/Modelfile", modelfile)
+gguf.create_modelfile(gguf_cfg, "sagegpt-medium.gguf", "models/Modelfile")
 log("GGUF", "Generated models/Modelfile for Ollama")
+
+let gguf_summary = gguf.export_summary(gguf_cfg, "sagegpt-medium.gguf")
+log("GGUF", gguf_summary)
 print ""
 
 # ============================================================================
@@ -1381,7 +1392,7 @@ print ""
 print "Features:"
 print "  Engram: " + str(len(facts)) + " semantic facts, 7 procedural skills"
 print "  RAG: " + str(rag_st["documents"]) + " docs, " + str(rag_st["chunks"]) + " chunks indexed"
-print "  Quantization: int8 (embedding error=" + str(embed_err["mean_error"]) + ")"
+print "  Quantization: int8 (RMSE=" + str(embed_err["rmse"]) + ", SNR=" + str(embed_err["snr_db"]) + "dB)"
 print "  GGUF: Ollama Modelfile generated"
 print "  Router: semantic fast-dispatch for common queries"
 print "  CoT: multi-step reasoning with memory recall"
