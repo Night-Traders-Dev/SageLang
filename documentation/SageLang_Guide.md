@@ -1354,6 +1354,12 @@ make clean && make -j$(nproc)
 ./sage examples/hello.sage
 ```
 
+**ML Trainer Build**:
+
+```bash
+make train-c      # Builds standalone C training binary (no Sage runtime); uses src/c/ml_backend.c directly
+```
+
 **Desktop Build (CMake)**:
 
 ```bash
@@ -2052,6 +2058,20 @@ SageLang ships with 6 PyTorch-style machine learning modules in `lib/ml/`:
 | `monitor.sage` | `import ml.monitor` | Live training monitor, progress bars, memory snapshots, throughput, checkpoints |
 | `gpu_accel.sage` | `import ml.gpu_accel` | GPU offload for tensor ops and training; bridges ML workloads to the Vulkan/OpenGL GPU backend |
 
+#### Native ML Backend (`ml_native`)
+
+`ml_native` is a built-in native C module (not a `lib/ml/` Sage file) that exposes 24 high-performance functions directly from `src/c/ml_backend.c`:
+
+`matmul`, `add`, `scale`, `relu`, `gelu`, `silu`, `sigmoid`, `softmax`, `layer_norm`, `rms_norm`, `cross_entropy`, `adam_update`, `clip_grad`, `benchmark`, `train_step`, `forward_pass`, `load_weights`, `gpu_available`, `set_gpu_threshold`, `cpu_count`, `auto_parallel`, `set_threads`, `set_parallel_threshold`, `get_threads`
+
+**Backpropagation and training**:
+
+- `ml_native.train_step()` — C-level combined forward pass + backward pass + SGD weight update for transformer training. Avoids Python/Sage overhead in the hot loop.
+- `ml_native.forward_pass()` — Runs inference using the same computation graph as `train_step`, ensuring numerical consistency between training and evaluation.
+- `ml_native.load_weights(path)` — Loads trained weights from a binary file via native C parser; no Sage I/O overhead.
+
+**Standalone C trainer**: `make train-c` builds a standalone C training binary (no Sage runtime required) that uses `ml_backend.c` directly. Useful for benchmarking and headless server training.
+
 ### 9.14 CUDA Libraries
 
 SageLang ships with 4 CUDA abstraction modules in `lib/cuda/`:
@@ -2113,6 +2133,8 @@ SageLang ships with 23 general-purpose standard library modules in `lib/std/`:
 ### 9.16 LLM / Neural Network Libraries
 
 SageLang ships with 18 LLM/neural network modules in `lib/llm/` for building and training language models:
+
+> **Backpropagation note**: For performance-critical training loops, use `ml_native.train_step()` (C-level forward+backward+SGD), `ml_native.forward_pass()` (inference, same computation graph), and `ml_native.load_weights(path)` (native weight loading) instead of the pure-Sage `llm.train` module. See [Section 9.13 Native ML Backend](#native-ml-backend-ml_native).
 
 | Module | Import | Purpose |
 |--------|--------|---------|

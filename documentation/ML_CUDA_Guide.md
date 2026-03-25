@@ -425,6 +425,61 @@ for epoch in range(100):
 
 ---
 
+## Backpropagation (Native Transformer Training)
+
+SageLang implements explicit backpropagation for a 1-layer SwiGLU transformer, exposed through the `ml_native` C module.
+
+### Forward Pass Architecture
+
+The forward pass follows a standard transformer decoder pipeline:
+
+```text
+embed → RMSNorm → Q/K/V projections → causal attention (softmax + mask)
+      → O projection → residual → RMSNorm → SwiGLU FFN → residual
+      → final norm → LM head
+```
+
+- Causal masking ensures each token only attends to prior positions.
+- SwiGLU FFN: `gate = silu(x @ gate_w)`, `up = x @ up_w`, `output = (gate * up) @ down_w`.
+
+### Backward Pass
+
+Gradients flow in reverse through each component:
+
+```text
+cross-entropy grad → LM head → final norm → FFN (SwiGLU chain rule)
+                  → attention O projection → embedding
+```
+
+The loss is computed over **all positions** (full-position loss): every token predicts the next, giving denser gradient signal than single-token loss.
+
+### Optimization
+
+- **SGD with gradient clipping**: `max_norm=1.0`; gradients are globally clipped before the weight update step.
+- No momentum or adaptive rates in the base implementation — use `optim.adam` from `ml.optim` for adaptive training.
+
+### Training Modes
+
+| Mode             | Entry Point              | Description                                       |
+|------------------|--------------------------|---------------------------------------------------|
+| Sage interpreter | `ml_native.train_step()` | Full forward + backward + SGD in one native call  |
+| C-only binary    | `train_sl_tq`            | Standalone binary; no Sage runtime required       |
+
+```sage
+import ml_native
+
+# Single training step (interpreter mode)
+let loss = ml_native.train_step(
+    embed_w, q_w, k_w, v_w, o_w,
+    gate_w, up_w, down_w,
+    norm1_w, norm2_w, final_norm_w, lm_head_w,
+    input_ids, target_ids,
+    seq_len, d_model, d_ff, vocab, lr
+)
+```
+
+---
+
 ## Module Reference
 
 ### ML Modules
@@ -445,6 +500,20 @@ for epoch in range(100):
 | `memory` | `import cuda.memory` | `alloc`, `alloc_typed`, `alloc_tensor`, `copy_h2d`, `copy_d2h`, `create_pool`, `pool_alloc`, `format_bytes` |
 | `kernel` | `import cuda.kernel` | `define`, `launch_1d`, `launch_2d`, `occupancy`, `vector_add_kernel`, `matmul_kernel`, `format_launch` |
 | `stream` | `import cuda.stream` | `create_stream`, `record_launch`, `record_copy`, `create_event`, `record_event`, `create_plan`, `double_buffer_plan` |
+
+### Native Backend Functions (`ml_native`)
+
+These are C-native functions exposed directly to the Sage runtime via the `ml_native` module. They bypass the interpreter for performance-critical operations.
+
+| Function                | Signature                     | Description                                                            |
+|-------------------------|-------------------------------|------------------------------------------------------------------------|
+| `train_step`            | 19 args (weights, ids, hypers)| Forward pass + backward pass + SGD weight update in a single call      |
+| `forward_pass`          | 17 args (weights, ids, hypers)| Inference-only forward pass; output matches training forward exactly   |
+| `load_weights`          | `load_weights(path)`          | Native CSV weight parser; loads weights from a file into native arrays |
+| `cpu_count`             | `cpu_count()`                 | Returns the number of available logical CPU cores                      |
+| `auto_parallel`         | `auto_parallel()`             | Enables all-core parallelism for native matrix operations              |
+
+`train_step` and `forward_pass` share the same weight layout and hyperparameter convention so checkpoints saved during training load directly into inference without conversion.
 
 ---
 

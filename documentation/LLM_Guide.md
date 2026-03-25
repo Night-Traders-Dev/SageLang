@@ -392,6 +392,73 @@ let merged = autoresearch.merge_sessions(session_a, session_b)
 
 ---
 
+## Backpropagation & Training (`ml_native`)
+
+SageLang now has real backpropagation for transformer training — no black box, every gradient is computed explicitly.
+
+### Two Training Modes
+
+| Mode | Command | Speed | Notes |
+|------|---------|-------|-------|
+| Sage interpreter | `sage models/train_sl_tq_llm.sage` | ~10 steps/sec | Full pipeline visible in Sage source |
+| C-only binary | `make train-c` then `./train_sl_tq [steps] [lr]` | ~180 steps/sec (1000+ with parallel CPU) | Every gradient explicit in C source |
+
+### `ml_native` Training API
+
+```sage
+# Single-step forward + backward + SGD update
+ml_native.train_step(embed, qw, kw, vw, ow, gate, up, down,
+                     norm1, norm2, fnorm, lmhead,
+                     ids, target, d, ff, vocab, seq, lr)
+
+# Matching forward pass for inference (same computation graph as training)
+ml_native.forward_pass(embed, qw, kw, vw, ow, gate, up, down,
+                       norm1, norm2, fnorm, lmhead,
+                       ids, d, ff, vocab, seq)
+
+# Load weights from CSV file via native C parser (no OOM)
+ml_native.load_weights(path)
+```
+
+### Training Features
+
+- **Full-position loss**: every sequence position predicts the next token, not just the last position
+- **Gradient clipping**: max_norm=1.0 applied before each SGD update
+- **Cosine LR schedule** with linear warmup
+- **No black box**: every gradient is computed explicitly in C
+
+---
+
+## C-Only Trainer (`src/c/train_sl_tq.c`)
+
+A standalone training binary with no interpreter overhead.
+
+### Build
+
+```bash
+# Via Makefile (recommended)
+make train-c
+
+# Or directly
+gcc -O3 -march=native -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
+```
+
+### Usage
+
+```bash
+./train_sl_tq [steps] [lr]
+# Example: ./train_sl_tq 200000 0.001
+```
+
+### Features
+
+- Auto-detects CPU cores for parallel matrix multiply
+- Reads training data from `models/data/*.txt` and Sage source files
+- Saves weights to `models/sl_tq_llm.weights` (CSV format, compatible with `ml_native.load_weights()`)
+- **Results**: 200K steps in ~18 min, perplexity 17.5
+
+---
+
 ## Module Reference
 
 | Module | Import | Key Functions |
@@ -415,6 +482,7 @@ let merged = autoresearch.merge_sessions(session_a, session_b)
 | `turboquant` | `import llm.turboquant` | `quantize`, `dequantize`, `quantize_mse`, `dequantize_mse`, `create_kv_cache`, `cache_push`, `cache_get_key`, `cache_get_value`, `cache_stats`, `mse_distortion`, `inner_product_error`, `theoretical_mse_bound`, `benchmark`, `summary` |
 | `autoresearch` | `import llm.autoresearch` | `create`, `set_program`, `add_strategy`, `run`, `summary`, `export_journal`, `import_journal`, `merge_sessions`, `make_scale_strategy`, `make_choice_strategy`, `make_perturb_strategy`, `llm_default_strategies`, `architecture_strategies` |
 | `gpu_accel` | `import ml.gpu_accel` | `create_context`, `matmul`, `add`, `rms_norm`, `silu`, `softmax`, `transformer_layer_forward`, `model_forward`, `train_step` |
+| `ml_native` | (built-in C module) | `train_step`, `forward_pass`, `load_weights` |
 
 ## Ollama / llama.cpp Export
 
