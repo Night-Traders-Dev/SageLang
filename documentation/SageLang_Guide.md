@@ -1997,6 +1997,9 @@ SageLang ships with 5 PyTorch-style machine learning modules in `lib/ml/`:
 | `optim.sage` | `import ml.optim` | SGD (momentum), Adam optimizer, learning rate schedulers |
 | `loss.sage` | `import ml.loss` | MSE, cross-entropy, Huber, L1, hinge, KL divergence |
 | `data.sage` | `import ml.data` | Dataset/DataLoader, batching, normalization, train/test split |
+| `debug.sage` | `import ml.debug` | Weight stats, histograms, activation analysis, gradient checking, training diagnostics |
+| `viz.sage` | `import ml.viz` | SVG chart generation (loss curves, weight distributions, attention heatmaps, architecture diagrams) |
+| `monitor.sage` | `import ml.monitor` | Live training monitor, progress bars, memory snapshots, throughput, checkpoints |
 
 ### 9.14 CUDA Libraries
 

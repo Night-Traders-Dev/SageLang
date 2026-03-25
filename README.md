@@ -357,6 +357,9 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`optim`**: SGD (with momentum), Adam optimizer, learning rate schedulers (step, exponential, cosine, warmup)
 - **`loss`**: MSE, cross-entropy, binary cross-entropy, Huber, L1, hinge, KL divergence with gradient functions
 - **`data`**: Dataset/DataLoader, batching, shuffling, normalization, min-max scaling, one-hot encoding, train/test split
+- **`debug`**: Weight stats, histograms, activation analysis, gradient checking, training diagnostics, attention patterns
+- **`viz`**: SVG chart generation (loss curves, weight distributions, attention heatmaps, architecture diagrams, LR schedules, HTML dashboard)
+- **`monitor`**: Live training monitor with progress bars, memory snapshots, throughput tracking, checkpoint management
 
 **CUDA** (`lib/cuda/`, imported as `import cuda.<module>`):
 - **`device`**: GPU device descriptors, compute capability, architecture detection, feature checks, launch configuration
