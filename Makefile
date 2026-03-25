@@ -792,10 +792,15 @@ help:
 # ============================================================================
 
 train-c: src/c/train_sl_tq.c
-	$(CC) -O3 -march=native -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
+	@if pkg-config --exists cublas 2>/dev/null || [ -f /usr/include/cublas_v2.h ]; then \
+		echo "Building with cuBLAS GPU acceleration..."; \
+		$(CC) -O3 -march=native -DUSE_CUBLAS -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread -lcublas -lcudart; \
+	else \
+		echo "Building CPU-only (install CUDA for GPU)..."; \
+		$(CC) -O3 -march=native -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread; \
+	fi
 	@echo "Built: train_sl_tq"
 	@echo "Usage: ./train_sl_tq [steps] [lr]"
-	@echo "Default: 50000 steps, lr=0.002"
 
 # ============================================================================
 # Phony Targets Declaration
