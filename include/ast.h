@@ -89,6 +89,11 @@ typedef struct {
     Expr* expression;
 } AwaitExpr;
 
+// Super expression: super.method(args)
+typedef struct {
+    Token method;   // The method name after super.
+} SuperExpr;
+
 struct Expr {
     enum {
         EXPR_NUMBER,
@@ -106,7 +111,8 @@ struct Expr {
         EXPR_GET,
         EXPR_SET,
         EXPR_INDEX_SET,
-        EXPR_AWAIT
+        EXPR_AWAIT,
+        EXPR_SUPER
     } type;
     union {
         NumberExpr number;
@@ -124,6 +130,7 @@ struct Expr {
         GetExpr get;
         SetExpr set;
         AwaitExpr await;
+        SuperExpr super_expr;
     } as;
 };
 
@@ -289,6 +296,7 @@ Expr* new_slice_expr(Expr* array, Expr* start, Expr* end);
 Expr* new_get_expr(Expr* object, Token property);
 Expr* new_set_expr(Expr* object, Token property, Expr* value);
 Expr* new_await_expr(Expr* expression);
+Expr* new_super_expr(Token method);
 
 // Statement Constructors
 Stmt* new_print_stmt(Expr* expression);

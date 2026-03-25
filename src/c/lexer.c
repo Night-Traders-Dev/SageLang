@@ -226,7 +226,10 @@ static TokenType identifier_type(void) {
             }
             break;
         
-        case 's': return check_keyword(1, 3, "elf", TOKEN_SELF);
+        case 's':
+            if (current - start > 1 && start[1] == 'e') return check_keyword(2, 2, "lf", TOKEN_SELF);
+            if (current - start > 1 && start[1] == 'u') return check_keyword(2, 3, "per", TOKEN_SUPER);
+            return TOKEN_IDENTIFIER;
         
         case 't':
             if (current - start > 1) {
@@ -412,7 +415,7 @@ Token scan_token(void) {
         case '{': return make_token(TOKEN_LBRACE);
         case '}': return make_token(TOKEN_RBRACE);
         case '+': return make_token(TOKEN_PLUS);
-        case '-': return make_token(TOKEN_MINUS);
+        case '-': return make_token(match_char('>') ? TOKEN_ARROW : TOKEN_MINUS);
         case '*': return make_token(TOKEN_STAR);
         case '/': return make_token(TOKEN_SLASH);
         case '%': return make_token(TOKEN_PERCENT);

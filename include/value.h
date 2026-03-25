@@ -262,6 +262,7 @@ char* string_strip(const char* str);
 ClassValue* class_create(const char* name, int name_len, ClassValue* parent);
 void class_add_method(ClassValue* class_val, const char* name, int name_len, void* method_stmt);
 Method* class_find_method(ClassValue* class_val, const char* name, int name_len);
+ClassValue* class_find_method_owner(ClassValue* class_val, const char* name, int name_len);
 
 // Instance operations
 InstanceValue* instance_create(ClassValue* class_def);

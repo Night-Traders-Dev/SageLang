@@ -2127,6 +2127,9 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                     ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
                     Env* method_env = env_create(env);
                     env_define(method_env, "self", 4, object);
+                    // Track which class owns this method (for super resolution)
+                    ClassValue* owner = class_find_method_owner(object.as.instance->class_def, method_name, method_token.length);
+                    if (owner) env_define(method_env, "__class__", 9, val_class(owner));
 
                     int param_start = (method_stmt->param_count > 0 &&
                                       strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
@@ -2148,6 +2151,64 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                     if (res.is_throwing) return res;
                     return EVAL_RESULT(res.value);
                 }
+            }
+
+            // super.method(args) — call parent class method
+            if (callee_expr->type == EXPR_SUPER) {
+                Token method_token = callee_expr->as.super_expr.method;
+                // Get 'self' from environment to find the instance
+                Value self_val;
+                if (!env_get(env, "self", 4, &self_val) || !IS_INSTANCE(self_val)) {
+                    fprintf(stderr, "Runtime Error: 'super' can only be used inside a method.\n");
+                    return EVAL_RESULT(val_nil());
+                }
+                // Get __class__ from env (the class owning the current method)
+                // If not set, fall back to instance's class
+                Value class_ctx;
+                ClassValue* current_class;
+                if (env_get(env, "__class__", 9, &class_ctx) && class_ctx.type == VAL_CLASS) {
+                    current_class = class_ctx.as.class_val;
+                } else {
+                    current_class = self_val.as.instance->class_def;
+                }
+                ClassValue* parent_class = current_class->parent;
+                if (!parent_class) {
+                    fprintf(stderr, "Runtime Error: Class has no parent class for 'super'.\n");
+                    return EVAL_RESULT(val_nil());
+                }
+                char* method_name = SAGE_ALLOC(method_token.length + 1);
+                strncpy(method_name, method_token.start, method_token.length);
+                method_name[method_token.length] = '\0';
+
+                Method* method = class_find_method(parent_class, method_name, method_token.length);
+                if (!method) {
+                    fprintf(stderr, "Runtime Error: Parent class has no method '%s'.\n", method_name);
+                    free(method_name);
+                    return EVAL_RESULT(val_nil());
+                }
+
+                ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
+                Env* method_env = env_create(env);
+                // Set __class__ to the parent class so nested super calls resolve correctly
+                env_define(method_env, "__class__", 9, val_class(parent_class));
+
+                // super calls: bind all params from explicit args (self is passed explicitly)
+                for (int i = 0; i < method_stmt->param_count; i++) {
+                    if (i < expr->as.call.arg_count) {
+                        ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                        if (arg_result.is_throwing) {
+                            free(method_name);
+                            return arg_result;
+                        }
+                        env_define(method_env, method_stmt->params[i].start,
+                                   method_stmt->params[i].length, arg_result.value);
+                    }
+                }
+
+                ExecResult res = interpret(method_stmt->body, method_env);
+                free(method_name);
+                if (res.is_throwing) return res;
+                return EVAL_RESULT(res.value);
             }
 
             ExecResult callee_result = eval_expr(callee_expr, env);
@@ -2258,6 +2319,9 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                     ProcStmt* init_stmt = (ProcStmt*)init_method->method_stmt;
                     Env* method_env = env_create(env);
                     env_define(method_env, "self", 4, inst_val);
+                    // Track class owning init for super resolution
+                    ClassValue* init_owner = class_find_method_owner(class_def, "init", 4);
+                    if (init_owner) env_define(method_env, "__class__", 9, val_class(init_owner));
 
                     int param_start = (init_stmt->param_count > 0 &&
                                       strncmp(init_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;

@@ -132,6 +132,13 @@ Expr* new_await_expr(Expr* expression) {
     return e;
 }
 
+Expr* new_super_expr(Token method) {
+    Expr* e = SAGE_ALLOC(sizeof(Expr));
+    e->type = EXPR_SUPER;
+    e->as.super_expr.method = method;
+    return e;
+}
+
 // ========== STATEMENT CONSTRUCTORS ==========
 
 Stmt* new_print_stmt(Expr* expression) {

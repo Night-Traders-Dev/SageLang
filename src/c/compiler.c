@@ -1873,6 +1873,9 @@ static char* emit_expr(Compiler* compiler, Expr* expr) {
                               "async code currently runs only in the interpreter",
                               "await expressions are not yet supported in the C backend");
             return str_dup("sage_nil()");
+        case EXPR_SUPER:
+            // super.method() in C backend: not yet supported (classes are interpreter-only)
+            return str_dup("sage_nil()");
         case EXPR_DICT:
             return emit_dict_expr(compiler, &expr->as.dict);
         case EXPR_TUPLE:

@@ -443,6 +443,23 @@ static Expr* primary() {
         return new_variable_expr(self_token);
     }
 
+    // Super keyword: super.method(args) calls parent class method
+    if (match(TOKEN_SUPER)) {
+        if (match(TOKEN_DOT) || match(TOKEN_ARROW)) {
+            // Accept both identifiers and 'init' keyword as method names
+            if (!match(TOKEN_IDENTIFIER) && !match(TOKEN_INIT)) {
+                parser_report(current_token, token_span(&current_token),
+                              "expect method name after 'super.'",
+                              "use 'super.init(self, args)' or 'super.method(self, args)'");
+            }
+            Token method = previous_token;
+            return new_super_expr(method);
+        }
+        parser_report(current_token, token_span(&current_token),
+                      "expect '.' or '->' after 'super'",
+                      "use 'super.init(self, args)' to call parent method");
+    }
+
     // Parentheses: ( expr ) or tuple (a, b, c)
     if (match(TOKEN_LPAREN)) {
         if (match(TOKEN_RPAREN)) {
@@ -634,8 +651,8 @@ static Expr* postfix() {
                 consume(TOKEN_RBRACKET, "Expect ']' after index.");
                 expr = new_index_expr(expr, start_or_index);
             }
-        } else if (match(TOKEN_DOT)) {
-            consume(TOKEN_IDENTIFIER, "Expect property name after '.'.");
+        } else if (match(TOKEN_DOT) || match(TOKEN_ARROW)) {
+            consume(TOKEN_IDENTIFIER, "Expect property name after '.' or '->'.");
             Token property = previous_token;
             expr = new_get_expr(expr, property);
         } else {

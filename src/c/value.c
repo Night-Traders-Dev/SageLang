@@ -632,11 +632,24 @@ Method* class_find_method(ClassValue* class_val, const char* name, int name_len)
             return &class_val->methods[i];
         }
     }
-    
+
     if (class_val->parent) {
         return class_find_method(class_val->parent, name, name_len);
     }
-    
+
+    return NULL;
+}
+
+ClassValue* class_find_method_owner(ClassValue* class_val, const char* name, int name_len) {
+    for (int i = 0; i < class_val->method_count; i++) {
+        if (class_val->methods[i].name_len == name_len &&
+            strncmp(class_val->methods[i].name, name, name_len) == 0) {
+            return class_val;
+        }
+    }
+    if (class_val->parent) {
+        return class_find_method_owner(class_val->parent, name, name_len);
+    }
     return NULL;
 }
 

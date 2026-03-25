@@ -1686,6 +1686,13 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
             return r;
         }
+        case EXPR_SUPER: {
+            // super.method() in LLVM: emits nil (classes are interpreter-only for now)
+            // The LLVM backend doesn't support full class dispatch yet
+            int r = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+            return r;
+        }
         default: {
             int r = llc_new_reg(lc);
             ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
