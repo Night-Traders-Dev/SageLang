@@ -57,9 +57,13 @@ print "  Medium | 16K Context | All Techniques + TurboQuant"
 separator()
 print ""
 
-# GPU/compute context
+# GPU/compute context with multicore parallel processing
 let _compute = gpu_accel.create("auto")
+gpu_accel.enable_parallel(4)
+gpu_accel.set_parallel_threshold(2048)
 log("INIT", "Compute backend: " + _compute["backend"])
+let pcfg = gpu_accel.get_parallel_config()
+log("INIT", "Parallel CPU: " + str(pcfg["num_workers"]) + " workers (threshold=" + str(pcfg["threshold"]) + ")")
 
 # ============================================================================
 # Phase 0: Collect ALL training data

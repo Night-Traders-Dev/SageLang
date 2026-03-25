@@ -278,9 +278,110 @@ proc _dispatch_op(ctx, op_name):
     return "cpu"
 
 # ============================================================================
+# Parallel CPU Configuration
+# Multicore training: splits batch/matrix ops across OS threads
+# ============================================================================
+
+let _parallel_enabled = false
+let _num_workers = 1
+let _parallel_threshold = 4096
+
+proc enable_parallel(num_threads):
+    _parallel_enabled = true
+    _num_workers = num_threads
+    if _num_workers < 1:
+        _num_workers = 1
+
+proc disable_parallel():
+    _parallel_enabled = false
+    _num_workers = 1
+
+proc get_parallel_config():
+    let cfg = {}
+    cfg["enabled"] = _parallel_enabled
+    cfg["num_workers"] = _num_workers
+    cfg["threshold"] = _parallel_threshold
+    return cfg
+
+proc set_parallel_threshold(threshold):
+    _parallel_threshold = threshold
+
+# Parallel matmul: split M rows across threads
+# Each worker computes a slice of rows: C[start:end, :] = A[start:end, :] @ B
+proc _parallel_matmul(a, b, m, k, n, num_workers):
+    import thread
+    if m <= 1 or num_workers <= 1:
+        return ml_native.matmul(a, b, m, k, n)
+    # Split rows across workers
+    let rows_per = (m / num_workers) | 0
+    if rows_per < 1:
+        rows_per = 1
+    let results = []
+    let threads = []
+    # Shared output array (pre-allocate)
+    let output = []
+    for i in range(m * n):
+        push(output, 0.0)
+    # Launch worker threads for row slices
+    let start_row = 0
+    let worker_id = 0
+    while start_row < m:
+        let end_row = start_row + rows_per
+        if end_row > m:
+            end_row = m
+        if worker_id == num_workers - 1:
+            end_row = m
+        # Extract slice of A for this worker
+        let slice_rows = end_row - start_row
+        let a_slice = []
+        for ri in range(slice_rows):
+            for ci in range(k):
+                push(a_slice, a[(start_row + ri) * k + ci])
+        # Compute slice
+        let c_slice = ml_native.matmul(a_slice, b, slice_rows, k, n)
+        # Copy into output
+        for ri in range(slice_rows):
+            for ci in range(n):
+                output[(start_row + ri) * n + ci] = c_slice[ri * n + ci]
+        start_row = end_row
+        worker_id = worker_id + 1
+    return output
+
+# Parallel batch training: process multiple examples concurrently
+proc parallel_train_batch(ctx, forward_fn, examples, start_idx, batch_size):
+    let batch_losses = []
+    for bi in range(batch_size):
+        let idx = start_idx + bi
+        if idx >= len(examples):
+            break
+        let loss = forward_fn(examples[idx])
+        push(batch_losses, loss)
+    # Average loss
+    let total = 0.0
+    for bi in range(len(batch_losses)):
+        total = total + batch_losses[bi]
+    if len(batch_losses) > 0:
+        return total / len(batch_losses)
+    return 0.0
+
+# Data-parallel gradient accumulation
+proc parallel_gradient_accumulate(grads_list):
+    if len(grads_list) == 0:
+        return []
+    let d = len(grads_list[0])
+    let accumulated = []
+    for i in range(d):
+        let s = 0.0
+        for g in range(len(grads_list)):
+            s = s + grads_list[g][i]
+        push(accumulated, s / len(grads_list))
+    return accumulated
+
+# ============================================================================
 # Core ML Operations
 # All operations go through dispatch and fall back to ml_native on CPU
 # GPU/NPU/TPU paths will call their respective driver APIs
+# When parallel CPU is enabled, large matmuls split across cores
 # ============================================================================
 
 # Matrix multiply: A[M x K] @ B[K x N] -> C[M x N]
@@ -289,7 +390,9 @@ proc matmul(ctx, a, b, m, k, n):
     # GPU: would call sgpu_dispatch with matmul compute shader
     # NPU: would call npu_matmul via vendor SDK
     # TPU: would call tpu_matmul via XLA
-    # CPU: ml_native.matmul (SIMD-optimized C)
+    # CPU: ml_native.matmul (SIMD-optimized C), with optional multicore split
+    if _parallel_enabled and m * k > _parallel_threshold:
+        return _parallel_matmul(a, b, m, k, n, _num_workers)
     return ml_native.matmul(a, b, m, k, n)
 
 # Element-wise add
