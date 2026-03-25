@@ -59,17 +59,23 @@ section() {
 DO_INSTALL=0
 SKIP_TESTS=0
 MAKE_ONLY=0
+BUILD_TRAINER=0
+BUILD_CHATBOT=0
 
 for arg in "$@"; do
     case "$arg" in
         --install)    DO_INSTALL=1 ;;
         --skip-tests) SKIP_TESTS=1 ;;
         --make-only)  MAKE_ONLY=1 ;;
+        --train)      BUILD_TRAINER=1 ;;
+        --chatbot)    BUILD_CHATBOT=1 ;;
         --help|-h)
             echo "Usage: ./build.sh [options]"
             echo "  --install      Install to /usr/local after building"
             echo "  --skip-tests   Skip test suite"
             echo "  --make-only    Use Make instead of CMake"
+            echo "  --train        Build the SL-TQ-LLM C trainer"
+            echo "  --chatbot      Compile chatbots (C + LLVM backends)"
             echo "  --help         Show this help"
             exit 0
             ;;
@@ -379,5 +385,75 @@ printf "    ${DIM}\$ ${RESET}%s                        ${DIM}# REPL${RESET}\n" "
 printf "    ${DIM}\$ ${RESET}%s examples/gpu_planet.sage  ${DIM}# GPU demo${RESET}\n" "$SAGE_BIN"
 if [ "$DO_INSTALL" -eq 0 ]; then
     printf "\n  ${DIM}To install: ./build.sh --install${RESET}\n"
+fi
+
+# --- Build SL-TQ-LLM Trainer (optional) ---
+if [ "$BUILD_TRAINER" -eq 1 ]; then
+    section "Building SL-TQ-LLM C Trainer"
+    TRAIN_FLAGS=""
+    TRAIN_LIBS="-lm -lpthread"
+
+    # Auto-detect cuBLAS
+    if [ -f /usr/include/cublas_v2.h ] || pkg-config --exists cublas 2>/dev/null; then
+        TRAIN_FLAGS="$TRAIN_FLAGS -DUSE_CUBLAS"
+        TRAIN_LIBS="$TRAIN_LIBS -lcublas -lcudart"
+        printf "    ${PASS} cuBLAS GPU acceleration\n"
+    else
+        printf "    ${DIM}  cuBLAS not found (CPU only)${RESET}\n"
+    fi
+
+    # Auto-detect ARM64 NEON
+    if [ "$(uname -m)" = "aarch64" ]; then
+        TRAIN_FLAGS="$TRAIN_FLAGS -DUSE_NEON"
+        printf "    ${PASS} ARM NEON SIMD\n"
+    fi
+
+    if gcc -O3 -march=native $TRAIN_FLAGS -o train_sl_tq src/c/train_sl_tq.c $TRAIN_LIBS 2>&1 | sed 's/^/    /'; then
+        printf "    ${PASS} Built: train_sl_tq\n"
+        printf "\n  ${BOLD}Train:${RESET}\n"
+        printf "    ${DIM}\$ ${RESET}./train_sl_tq 200000 0.001\n"
+    else
+        printf "    ${FAIL} Trainer build failed\n"
+    fi
+fi
+
+# --- Build Chatbots (optional) ---
+if [ "$BUILD_CHATBOT" -eq 1 ]; then
+    section "Compiling Chatbots"
+
+    SAGE_CMD="./sage"
+    if [ ! -x "$SAGE_CMD" ]; then
+        SAGE_CMD="./build/sage"
+    fi
+
+    # SageLLM chatbot via C backend
+    printf "    ${ARROW} Compiling sagellm_chatbot via C backend...\n"
+    if $SAGE_CMD --compile models/sagellm_chatbot.sage -o sagellm_chat_c 2>&1 | sed 's/^/      /'; then
+        printf "    ${PASS} sagellm_chat_c (C backend)\n"
+    else
+        printf "    ${FAIL} C backend compilation failed\n"
+    fi
+
+    # SageLLM chatbot via LLVM backend
+    printf "    ${ARROW} Compiling sagellm_chatbot via LLVM backend...\n"
+    if $SAGE_CMD --compile-llvm models/sagellm_chatbot.sage -o sagellm_chat 2>&1 | sed 's/^/      /'; then
+        printf "    ${PASS} sagellm_chat (LLVM backend)\n"
+    else
+        printf "    ${FAIL} LLVM backend compilation failed\n"
+    fi
+
+    # SL-TQ-LLM generative chatbot via LLVM
+    if [ -f models/sl_tq_llm_chat.sage ]; then
+        printf "    ${ARROW} Compiling sl_tq_llm_chat via LLVM backend...\n"
+        if $SAGE_CMD --compile-llvm models/sl_tq_llm_chat.sage -o sl_tq_chat 2>&1 | sed 's/^/      /'; then
+            printf "    ${PASS} sl_tq_chat (LLVM generative)\n"
+        else
+            printf "    ${FAIL} SL-TQ-LLM compilation failed\n"
+        fi
+    fi
+
+    printf "\n  ${BOLD}Run:${RESET}\n"
+    printf "    ${DIM}\$ ${RESET}./sagellm_chat        ${DIM}# Retrieval chatbot${RESET}\n"
+    printf "    ${DIM}\$ ${RESET}./sl_tq_chat          ${DIM}# Generative (needs weights)${RESET}\n"
 fi
 printf "\n"

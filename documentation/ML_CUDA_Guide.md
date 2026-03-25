@@ -617,3 +617,86 @@ let norm_shader = gpu_accel.rmsnorm_shader_source()
 | `adam_update(ctx, params, grads, m, v, lr, b1, b2, eps, t)` | Adam optimizer step |
 | `clip_grad(ctx, grads, max_norm)` | Gradient clipping |
 | `benchmark(ctx, size, iters)` | Performance benchmark |
+
+---
+
+## NPU Backend (`ml.npu`)
+
+The `npu` module provides a unified interface to on-device Neural Processing Units, with automatic fallback to ARM NEON SIMD when no dedicated NPU is available.
+
+### Supported Backends
+
+| Backend | Provider | Notes |
+| ------- | -------- | ----- |
+| NNAPI | Android / generic ARM | System-level API; not available in Termux + proot |
+| SNPE | Qualcomm Hexagon NPU | Snapdragon 8 Gen 3 (Galaxy S24 Ultra) |
+| Samsung ONE | Samsung Exynos NPU | Exynos-based Galaxy devices |
+| ARM NEON SIMD | Any ARM64 CPU | Software fallback; always available on ARM64 |
+
+### NPU Quick Start
+
+```sage
+import ml.npu
+
+# Auto-detect best available NPU/SIMD backend
+let ctx = npu.create("auto")
+print ctx["backend"]    # "snpe", "nnapi", "one", or "neon"
+print ctx["arch"]       # "arm64", "x86_64", or "rv64"
+
+# Check NEON availability
+if ml_native.has_neon:
+    print "ARM NEON SIMD available"
+
+# Run a model on the NPU
+let result = npu.run(ctx, model_weights, input_ids)
+npu.destroy(ctx)
+```
+
+### Architecture Detection
+
+```sage
+import ml_native
+
+print ml_native.arch          # "arm64" / "x86_64" / "rv64"
+print ml_native.has_neon      # true on ARM64 devices with NEON
+```
+
+### Model Format Conversion
+
+Convert trained weights to the format expected by each NPU runtime:
+
+```sage
+import ml.npu
+
+let nnapi_model = npu.to_nnapi_format(weights, cfg)   # Android NNAPI
+let snpe_model  = npu.to_snpe_format(weights, cfg)    # Qualcomm SNPE/Hexagon
+let one_model   = npu.to_one_format(weights, cfg)     # Samsung ONE (Exynos)
+```
+
+### Termux + proot (Mobile Training)
+
+On Galaxy S24 Ultra (Snapdragon 8 Gen 3) via Termux + proot:
+
+- NNAPI is **not** available (requires Android system services outside proot)
+- SNPE / Hexagon NPU is **not** directly accessible from proot
+- ARM NEON SIMD fallback is **always available** and used automatically
+- Training runs at full NEON speed; use `make train-c` which compiles with `-DUSE_NEON`
+
+```bash
+# On Termux ARM64 — NEON build (auto-detected by make train-c)
+gcc -O3 -DUSE_NEON -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
+```
+
+---
+
+## Build Targets
+
+```bash
+make train-c        # Build C trainer (auto-detects cuBLAS GPU + ARM NEON)
+make train-sage     # Train via Sage interpreter
+make chatbot-c      # Compile chatbot via C backend
+make chatbot-llvm   # Compile chatbot via LLVM backend
+make sl-tq-chat     # Compile SL-TQ-LLM generative chatbot
+```
+
+`build.sh` flags: `--train` (build C trainer), `--chatbot` (compile chatbots).

@@ -363,6 +363,7 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`viz`**: SVG chart generation (loss curves, weight distributions, attention heatmaps, architecture diagrams, LR schedules, HTML dashboard)
 - **`monitor`**: Live training monitor with progress bars, memory snapshots, throughput tracking, checkpoint management
 - **`gpu_accel`**: GPU-accelerated ML ops with CPU fallback (matmul, RMSNorm, SiLU, softmax via compute shaders), transformer layer/model forward helpers, GLSL shader templates
+- **`npu`**: NPU backend for Qualcomm Hexagon (Snapdragon SNPE), Samsung Exynos (ONE), NNAPI, and ARM NEON SIMD fallback; model format conversion (`to_nnapi_format`, `to_one_format`, `to_snpe_format`)
 
 **CUDA** (`lib/cuda/`, imported as `import cuda.<module>`):
 - **`device`**: GPU device descriptors, compute capability, architecture detection, feature checks, launch configuration
@@ -423,7 +424,9 @@ The standard library is organized into subdirectories with dotted import paths:
 - **TurboQuant** (`lib/llm/turboquant.sage`): TurboQuant (ICLR 2026) — 3-bit KV cache quantization with 6x compression and zero accuracy loss.
 - **GPU acceleration** (`lib/ml/gpu_accel.sage`): Auto-detects GPU/CPU/NPU/TPU backends; offloads matmul, RMSNorm, SiLU, and softmax to compute shaders with transparent CPU fallback.
 - **Build pipeline v2.0** (`models/build_sagellm.sage`): 12-phase pipeline — data collection, model init, pre-training, LoRA fine-tuning, DPO alignment, RAG, Engram memory, quantization, chatbot generation, GGUF export, visualization, and summary. SageGPT-Medium: d_model=128, 4 layers, 4 heads, d_ff=512, vocab=256, 16K context.
-- **C-Only Trainer**: `make train-c` builds a standalone training binary (`train_sl_tq`) with pure C backpropagation — no frameworks, no autograd, every gradient explicit. Usage: `./train_sl_tq 50000 0.002` (steps, learning rate). Auto-detects CPU cores for parallel matmul; 1000+ steps/sec on modern hardware. Saves weights compatible with the chatbot: `models/sl_tq_llm.weights`.
+- **C-Only Trainer**: `make train-c` builds a standalone training binary (`train_sl_tq`) with pure C backpropagation — no frameworks, no autograd, every gradient explicit. Usage: `./train_sl_tq 50000 0.002` (steps, learning rate). Auto-detects cuBLAS GPU acceleration and ARM NEON SIMD; 1000+ steps/sec on modern hardware. Saves weights compatible with the chatbot: `models/sl_tq_llm.weights`. Also works on mobile via Termux + proot ARM64 (falls back to NEON SIMD when cuBLAS is unavailable).
+- **Additional build targets**: `make train-sage` (Sage interpreter training), `make chatbot-c` (compile chatbot via C backend), `make chatbot-llvm` (compile chatbot via LLVM backend), `make sl-tq-chat` (compile SL-TQ-LLM generative chatbot).
+- **`build.sh` flags**: `--train` (build C trainer), `--chatbot` (compile chatbots).
 
 **Agent Framework** (`lib/agent/`, imported as `import agent.<module>`):
 - **`core`**: ReAct agent loop (observe/think/act/reflect), tool dispatch, scratchpad, prompt building, LLM call tracking
@@ -529,7 +532,11 @@ make test-selfhost-errors
 make test-selfhost-lsp
 make test-selfhost-sage-cli
 make test-all
-make train-c                  # Build standalone C trainer binary (train_sl_tq)
+make train-c                  # Build C trainer (auto-detects cuBLAS GPU + ARM NEON)
+make train-sage               # Train via Sage interpreter
+make chatbot-c                # Compile chatbot via C backend
+make chatbot-llvm             # Compile chatbot via LLVM backend
+make sl-tq-chat               # Compile SL-TQ-LLM generative chatbot
 make benchmark-python         # Sage vs Python 3 benchmarks (10 workloads, 5 recipes)
 make benchmark-python-md      # Same, markdown table output
 ```

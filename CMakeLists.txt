@@ -406,6 +406,67 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}
         COMMENT "Cleaning all build artifacts"
     )
+
+    # SL-TQ-LLM C-Only Trainer
+    set(TRAIN_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/c/train_sl_tq.c)
+    set(TRAIN_LIBS m pthread)
+    set(TRAIN_DEFS "")
+
+    # Auto-detect cuBLAS for GPU acceleration
+    find_library(CUBLAS_LIB cublas)
+    find_library(CUDART_LIB cudart)
+    if(CUBLAS_LIB AND CUDART_LIB)
+        list(APPEND TRAIN_DEFS USE_CUBLAS)
+        list(APPEND TRAIN_LIBS ${CUBLAS_LIB} ${CUDART_LIB})
+        message(STATUS "SL-TQ Trainer: cuBLAS GPU acceleration enabled")
+    endif()
+
+    # Auto-detect ARM64 for NEON SIMD
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+        list(APPEND TRAIN_DEFS USE_NEON)
+        message(STATUS "SL-TQ Trainer: ARM NEON SIMD enabled")
+    endif()
+
+    add_executable(train_sl_tq ${TRAIN_SOURCES})
+    target_link_libraries(train_sl_tq ${TRAIN_LIBS})
+    target_compile_definitions(train_sl_tq PRIVATE ${TRAIN_DEFS})
+    target_compile_options(train_sl_tq PRIVATE -O3)
+    message(STATUS "SL-TQ-LLM trainer target: train_sl_tq")
+
+    # Compile chatbot via C backend
+    add_custom_target(chatbot-c
+        COMMAND $<TARGET_FILE:sage> --compile
+            ${CMAKE_CURRENT_SOURCE_DIR}/models/chatbots/sagellm_chatbot.sage
+            -o ${CMAKE_BINARY_DIR}/sagellm_chat
+        DEPENDS sage
+        COMMENT "Compiling SageLLM chatbot via C backend"
+    )
+
+    # Compile chatbot via LLVM backend
+    add_custom_target(chatbot-llvm
+        COMMAND $<TARGET_FILE:sage> --compile-llvm
+            ${CMAKE_CURRENT_SOURCE_DIR}/models/chatbots/sagellm_chatbot.sage
+            -o ${CMAKE_BINARY_DIR}/sagellm_chat
+        DEPENDS sage
+        COMMENT "Compiling SageLLM chatbot via LLVM backend"
+    )
+
+    # Compile SL-TQ-LLM chat via LLVM backend
+    add_custom_target(sl-tq-chat
+        COMMAND $<TARGET_FILE:sage> --compile-llvm
+            ${CMAKE_CURRENT_SOURCE_DIR}/models/chatbots/sl_tq_llm_chat.sage
+            -o ${CMAKE_BINARY_DIR}/sl_tq_chat
+        DEPENDS sage
+        COMMENT "Compiling SL-TQ-LLM generative chatbot via LLVM"
+    )
+
+    # Train model via Sage interpreter
+    add_custom_target(train-sage
+        COMMAND $<TARGET_FILE:sage>
+            ${CMAKE_CURRENT_SOURCE_DIR}/models/training/train_sl_tq_llm.sage
+        DEPENDS sage
+        COMMENT "Training SL-TQ-LLM via Sage interpreter"
+    )
 endif()
 
 # ============================================================================

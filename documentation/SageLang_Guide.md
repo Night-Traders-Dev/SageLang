@@ -2044,7 +2044,7 @@ SageLang ships with 6 cryptography modules in `lib/crypto/`:
 
 ### 9.13 Machine Learning Libraries
 
-SageLang ships with 6 PyTorch-style machine learning modules in `lib/ml/`:
+SageLang ships with 10 PyTorch-style machine learning modules in `lib/ml/`:
 
 | Module | Import | Purpose |
 |--------|--------|---------|
@@ -2057,6 +2057,7 @@ SageLang ships with 6 PyTorch-style machine learning modules in `lib/ml/`:
 | `viz.sage` | `import ml.viz` | SVG chart generation (loss curves, weight distributions, attention heatmaps, architecture diagrams) |
 | `monitor.sage` | `import ml.monitor` | Live training monitor, progress bars, memory snapshots, throughput, checkpoints |
 | `gpu_accel.sage` | `import ml.gpu_accel` | GPU offload for tensor ops and training; bridges ML workloads to the Vulkan/OpenGL GPU backend |
+| `npu.sage` | `import ml.npu` | NPU backend for Qualcomm Hexagon (SNPE), Samsung Exynos (ONE), NNAPI, and ARM NEON SIMD fallback |
 
 #### Native ML Backend (`ml_native`)
 
@@ -2070,7 +2071,7 @@ SageLang ships with 6 PyTorch-style machine learning modules in `lib/ml/`:
 - `ml_native.forward_pass()` — Runs inference using the same computation graph as `train_step`, ensuring numerical consistency between training and evaluation.
 - `ml_native.load_weights(path)` — Loads trained weights from a binary file via native C parser; no Sage I/O overhead.
 
-**Standalone C trainer**: `make train-c` builds a standalone C training binary (no Sage runtime required) that uses `ml_backend.c` directly. Useful for benchmarking and headless server training.
+**Standalone C trainer**: `make train-c` builds a standalone C training binary (no Sage runtime required) that uses `ml_backend.c` directly. Auto-detects cuBLAS GPU acceleration and ARM NEON SIMD; also works on mobile via Termux + proot ARM64. Additional targets: `make train-sage` (Sage interpreter), `make chatbot-c` / `make chatbot-llvm` (compile chatbots), `make sl-tq-chat` (SL-TQ-LLM generative chatbot).
 
 ### 9.14 CUDA Libraries
 

@@ -792,15 +792,43 @@ help:
 # ============================================================================
 
 train-c: src/c/train_sl_tq.c
-	@if pkg-config --exists cublas 2>/dev/null || [ -f /usr/include/cublas_v2.h ]; then \
-		echo "Building with cuBLAS GPU acceleration..."; \
-		$(CC) -O3 -march=native -DUSE_CUBLAS -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread -lcublas -lcudart; \
-	else \
-		echo "Building CPU-only (install CUDA for GPU)..."; \
-		$(CC) -O3 -march=native -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread; \
-	fi
-	@echo "Built: train_sl_tq"
+	@TRAIN_FLAGS=""; \
+	TRAIN_LIBS="-lm -lpthread"; \
+	if pkg-config --exists cublas 2>/dev/null || [ -f /usr/include/cublas_v2.h ]; then \
+		echo "  [cuBLAS] GPU acceleration enabled"; \
+		TRAIN_FLAGS="$$TRAIN_FLAGS -DUSE_CUBLAS"; \
+		TRAIN_LIBS="$$TRAIN_LIBS -lcublas -lcudart"; \
+	fi; \
+	if [ "$$(uname -m)" = "aarch64" ]; then \
+		echo "  [NEON]   ARM64 SIMD enabled"; \
+		TRAIN_FLAGS="$$TRAIN_FLAGS -DUSE_NEON"; \
+	fi; \
+	echo "  Building train_sl_tq..."; \
+	$(CC) -O3 -march=native $$TRAIN_FLAGS -o train_sl_tq src/c/train_sl_tq.c $$TRAIN_LIBS; \
+	echo "Built: train_sl_tq"
 	@echo "Usage: ./train_sl_tq [steps] [lr]"
+	@echo "  Default: 50000 steps, lr=0.0003"
+	@echo "  Desktop: ./train_sl_tq 200000 0.001  (cuBLAS GPU if available)"
+	@echo "  Mobile:  ./train_sl_tq 50000 0.001   (ARM NEON on Termux/proot)"
+
+# Train model via Sage interpreter (uses ml_native.train_step with backprop)
+train-sage: $(TARGET)
+	./$(TARGET) models/training/train_sl_tq_llm.sage
+
+# Compile SageLLM chatbot via C backend
+chatbot-c: $(TARGET)
+	./$(TARGET) --compile models/chatbots/sagellm_chatbot.sage -o sagellm_chat
+	@echo "Built: sagellm_chat (C backend)"
+
+# Compile SageLLM chatbot via LLVM backend
+chatbot-llvm: $(TARGET)
+	./$(TARGET) --compile-llvm models/chatbots/sagellm_chatbot.sage -o sagellm_chat
+	@echo "Built: sagellm_chat (LLVM backend)"
+
+# Compile SL-TQ-LLM generative chatbot via LLVM
+sl-tq-chat: $(TARGET)
+	./$(TARGET) --compile-llvm models/chatbots/sl_tq_llm_chat.sage -o sl_tq_chat
+	@echo "Built: sl_tq_chat (LLVM backend)"
 
 # ============================================================================
 # Phony Targets Declaration
@@ -816,4 +844,5 @@ train-c: src/c/train_sl_tq.c
         test-selfhost-llvm-backend test-selfhost-codegen test-selfhost-compiler \
         test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
         test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
-        test-all stats help shaders menuconfig guiconfig train-c
+        test-all stats help shaders menuconfig guiconfig \
+        train-c train-sage chatbot-c chatbot-llvm sl-tq-chat

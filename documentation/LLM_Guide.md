@@ -436,12 +436,20 @@ A standalone training binary with no interpreter overhead.
 ### Build
 
 ```bash
-# Via Makefile (recommended)
+# Via Makefile (recommended — auto-detects cuBLAS GPU + ARM NEON)
 make train-c
 
-# Or directly
+# ARM NEON build (Termux + proot ARM64 / mobile)
+gcc -O3 -DUSE_NEON -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
+
+# cuBLAS GPU build (desktop with CUDA)
+gcc -O3 -DUSE_CUBLAS -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread -lcublas -lcudart
+
+# Or plain CPU build
 gcc -O3 -march=native -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
 ```
+
+> **Mobile support**: Training runs on Android (Galaxy S24 Ultra) via Termux + proot. NNAPI and SNPE are not accessible from proot; the build falls back to ARM NEON SIMD automatically when `USE_NEON` is set or when `make train-c` detects an ARM64 host.
 
 ### Usage
 
