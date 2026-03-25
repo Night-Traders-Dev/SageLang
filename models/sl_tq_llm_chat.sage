@@ -1,18 +1,46 @@
 gc_disable()
 # SL-TQ-LLM Generative Chatbot
-# Loads trained weights via native C parser (no Sage string OOM)
+# Loads trained weights, runs real transformer forward pass
 # Compile: sage --compile-llvm models/sl_tq_llm_chat.sage -o sl_tq_chat
 
+import io
 import ml_native
 
-# === Load trained weights via native C parser ===
-print "Loading SL-TQ-LLM weights..."
-let W = ml_native.load_weights("models/sl_tq_llm.weights")
-if W == nil:
-    print "ERROR: models/sl_tq_llm.weights not found."
-    print "Run: sage models/train_sl_tq_llm.sage"
+# === Load trained weights ===
+proc parse_floats(s):
+    let result = []
+    let current = ""
+    for i in range(len(s)):
+        if s[i] == ",":
+            if len(current) > 0:
+                push(result, tonumber(current))
+            current = ""
+        else:
+            current = current + s[i]
+    if len(current) > 0:
+        push(result, tonumber(current))
+    return result
 
-let cfg_parts = W[0]
+proc split_lines(s):
+    let lines = []
+    let current = ""
+    for i in range(len(s)):
+        if s[i] == chr(10):
+            push(lines, current)
+            current = ""
+        else:
+            current = current + s[i]
+    if len(current) > 0:
+        push(lines, current)
+    return lines
+
+print "Loading SL-TQ-LLM weights..."
+let raw = io.readfile("models/sl_tq_llm.weights")
+if raw == nil:
+    print "ERROR: models/sl_tq_llm.weights not found. Run training first."
+
+let lines = split_lines(raw)
+let cfg_parts = parse_floats(lines[0])
 let d_model = cfg_parts[0] | 0
 let n_heads = cfg_parts[1] | 0
 let n_layers = cfg_parts[2] | 0
@@ -20,21 +48,20 @@ let d_ff = cfg_parts[3] | 0
 let vocab = cfg_parts[4] | 0
 let max_seq = cfg_parts[5] | 0
 
-let embed_w = W[1]
-let qw = W[2]
-let kw = W[3]
-let vw = W[4]
-let ow = W[5]
-let gate_w = W[6]
-let up_w = W[7]
-let down_w = W[8]
-let norm1_w = W[9]
-let norm2_w = W[10]
-let final_norm_w = W[11]
-let lm_head_w = W[12]
+let embed_w = parse_floats(lines[1])
+let qw = parse_floats(lines[2])
+let kw = parse_floats(lines[3])
+let vw = parse_floats(lines[4])
+let ow = parse_floats(lines[5])
+let gate_w = parse_floats(lines[6])
+let up_w = parse_floats(lines[7])
+let down_w = parse_floats(lines[8])
+let norm1_w = parse_floats(lines[9])
+let norm2_w = parse_floats(lines[10])
+let final_norm_w = parse_floats(lines[11])
+let lm_head_w = parse_floats(lines[12])
 
-let total_p = len(embed_w) + len(qw) + len(kw) + len(vw) + len(ow) + len(gate_w) + len(up_w) + len(down_w) + len(lm_head_w)
-print "Loaded: d=" + str(d_model) + " ff=" + str(d_ff) + " vocab=" + str(vocab) + " params=" + str(total_p)
+print "Loaded: d=" + str(d_model) + " ff=" + str(d_ff) + " vocab=" + str(vocab) + " params=" + str(len(embed_w) + len(qw) + len(kw) + len(vw) + len(ow) + len(gate_w) + len(up_w) + len(down_w) + len(lm_head_w))
 
 # === Transformer forward pass ===
 proc forward(token_ids):

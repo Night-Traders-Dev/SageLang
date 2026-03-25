@@ -301,17 +301,18 @@ train_cfg["log_interval"] = 100
 let state1 = train.create_train_state(train_cfg)
 let all_losses = []
 
-log("TRAIN", "Pre-training: " + str(theory_steps) + " steps (cosine LR, warmup=20)")
+log("TRAIN", "Pre-training WITH BACKPROPAGATION: " + str(theory_steps) + " steps")
+log("TRAIN", "Using ml_native.train_step() for C-level forward+backward+SGD")
 
 for step in range(theory_steps):
     let ids = theory_examples[step]["input_ids"]
     let tgt = theory_examples[step]["target_ids"]
     let lr = train.get_lr(train_cfg, step, theory_steps)
-    let logits = forward_pass(ids, seq_len)
-    let target = [tgt[seq_len - 1]]
-    if target[0] >= vocab:
-        target[0] = 0
-    let loss = gpu_accel.cross_entropy(_compute, logits, target, 1, vocab)
+    let target_id = tgt[seq_len - 1]
+    if target_id >= vocab:
+        target_id = 0
+    # Native C train step: forward + backward + weight update
+    let loss = ml_native.train_step(embed_w, layer_qw[0], layer_kw[0], layer_vw[0], layer_ow[0], layer_gate[0], layer_up[0], layer_down[0], layer_norm1[0], layer_norm2[0], final_norm, lm_head, ids, target_id, d_model, d_ff, vocab, seq_len, lr)
     push(all_losses, loss)
     train.log_step(state1, loss, lr, 0)
     if (step + 1) - (((step + 1) / train_cfg["log_interval"]) | 0) * train_cfg["log_interval"] == 0:
@@ -343,51 +344,16 @@ if lora_steps > 200:
 train_cfg["learning_rate"] = 0.001
 let state2 = train.create_train_state(train_cfg)
 
-log("LORA", "LoRA training: " + str(lora_steps) + " steps")
+log("LORA", "LoRA fine-tuning WITH BACKPROP: " + str(lora_steps) + " steps on Sage codebase")
 
 for step in range(lora_steps):
     let ids = sage_examples[step]["input_ids"]
     let tgt = sage_examples[step]["target_ids"]
-
-    # Forward with LoRA-augmented Q on first layer
-    let hidden = []
-    for tok_idx in range(seq_len):
-        let tid = ids[tok_idx]
-        if tid >= vocab:
-            tid = 0
-        for j in range(d_model):
-            push(hidden, embed_w[tid * d_model + j])
-
-    hidden = gpu_accel.rms_norm(_compute, hidden, layer_norm1[0], seq_len, d_model, 0.00001)
-    let q_base = gpu_accel.matmul(_compute, hidden, layer_qw[0], seq_len, d_model, d_model)
-    let q_lora = lora.lora_forward(adapter, hidden, seq_len)
-    let q = gpu_accel.add(_compute, q_base, q_lora)
-    let k = gpu_accel.matmul(_compute, hidden, layer_kw[0], seq_len, d_model, d_model)
-    let v = gpu_accel.matmul(_compute, hidden, layer_vw[0], seq_len, d_model, d_model)
-    let attn = attention.scaled_dot_product(q, k, v, seq_len, d_model, true)
-    let proj = gpu_accel.matmul(_compute, attn, layer_ow[0], seq_len, d_model, d_model)
-    hidden = gpu_accel.add(_compute, hidden, proj)
-
-    let normed2 = gpu_accel.rms_norm(_compute, hidden, layer_norm2[0], seq_len, d_model, 0.00001)
-    let gate_out = gpu_accel.matmul(_compute, normed2, layer_gate[0], seq_len, d_model, d_ff)
-    let up_out = gpu_accel.matmul(_compute, normed2, layer_up[0], seq_len, d_model, d_ff)
-    let gate_act = gpu_accel.silu(_compute, gate_out)
-    let gated = []
-    for i in range(len(gate_act)):
-        push(gated, gate_act[i] * up_out[i])
-    let ffn_out = gpu_accel.matmul(_compute, gated, layer_down[0], seq_len, d_ff, d_model)
-    hidden = gpu_accel.add(_compute, hidden, ffn_out)
-    hidden = gpu_accel.rms_norm(_compute, hidden, final_norm, seq_len, d_model, 0.00001)
-
-    let last_h = []
-    for j in range(d_model):
-        push(last_h, hidden[(seq_len - 1) * d_model + j])
-    let logits = gpu_accel.matmul(_compute, last_h, lm_head, 1, d_model, vocab)
-
-    let target = [tgt[seq_len - 1]]
-    if target[0] >= vocab:
-        target[0] = 0
-    let loss = gpu_accel.cross_entropy(_compute, logits, target, 1, vocab)
+    let target_id = tgt[seq_len - 1]
+    if target_id >= vocab:
+        target_id = 0
+    # Native C train step with backprop on Sage code
+    let loss = ml_native.train_step(embed_w, layer_qw[0], layer_kw[0], layer_vw[0], layer_ow[0], layer_gate[0], layer_up[0], layer_down[0], layer_norm1[0], layer_norm2[0], final_norm, lm_head, ids, target_id, d_model, d_ff, vocab, seq_len, train_cfg["learning_rate"])
     push(all_losses, loss)
     train.log_step(state2, loss, train_cfg["learning_rate"], 0)
 
