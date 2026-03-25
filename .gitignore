@@ -32,3 +32,7 @@ sage_config.mk
 .sage_config
 build_sage/
 *.o
+models/build_sagellm
+sagellm_build
+sage-lsp
+sage

@@ -757,6 +757,8 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_chr(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_ord(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_input(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_readfile(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_writefile(%%SageValue, %%SageValue)\n");
     // Abort (for raise)
     ll_emit(lc, "declare void @abort() noreturn\n");
     // Bitwise operations
@@ -1504,10 +1506,31 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                     }
                 }
 
-                // Fallback: emit as generic method call via get_attr + call
+                // io module: readfile, writefile
+                int handled = 0;
+                if (strcmp(mod_name, "io") == 0) {
+                    if (strcmp(method_name, "readfile") == 0 && expr->as.call.arg_count == 1) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_readfile(%%SageValue %%%d)", r, arg_regs[0]);
+                        handled = 1;
+                    } else if (strcmp(method_name, "writefile") == 0 && expr->as.call.arg_count == 2) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_writefile(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                        handled = 1;
+                    }
+                }
+                // ml_native module: matmul, rms_norm, silu, etc.
+                if (!handled && strcmp(mod_name, "ml_native") == 0) {
+                    if (strcmp(method_name, "benchmark") == 0 && expr->as.call.arg_count == 2) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                        handled = 1;
+                    }
+                }
+
+                // Fallback: emit as nil for unrecognized module calls
+                if (!handled) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                }
                 free(mod_name);
                 free(method_name);
-                ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
             } else {
                 // Dynamic call not supported in LLVM backend yet
                 ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);

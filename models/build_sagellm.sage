@@ -142,13 +142,13 @@ print ""
 log("MODEL", "Phase 2: SageGPT-Medium model...")
 divider()
 
-let d_model = 768         # Balanced width for 8GB VRAM limits
-let n_heads = 12          # 768 / 12 = 64 (ideal for FlashAttention-2 speed)
-let n_layers = 16         # Increased depth over width to improve logic within 8GB
-let d_ff = 2304           # 3x d_model (slight reduction from 4x to save VRAM)
-let vocab = 12288         # Optimized for SageLang/C keywords + common hex/symbols
-let context_length = 32768  # High context window for code understanding and RAG, balanced with model size
-let seq_len = 1024        # Reduced from 2048 to ensure 32k context stability on 8GB
+let d_model = 128         # Medium width (balances speed vs quality)
+let n_heads = 4           # 128 / 4 = 32 per head
+let n_layers = 4          # 4 transformer layers
+let d_ff = 512            # 4x d_model
+let vocab = 256           # Byte-level (extended ASCII)
+let context_length = 16384  # High context window
+let seq_len = 256         # Training window size
 
 log("MODEL", "d=" + str(d_model) + " heads=" + str(n_heads) + " layers=" + str(n_layers) + " ff=" + str(d_ff) + " vocab=" + str(vocab) + " ctx=" + str(context_length))
 

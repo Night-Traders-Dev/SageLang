@@ -663,6 +663,35 @@ SageValue sage_rt_input(SageValue prompt) {
     return sage_rt_nil();
 }
 
+// File I/O for compiled binaries
+SageValue sage_rt_readfile(SageValue path) {
+    if (path.type != SAGE_STRING) return sage_rt_nil();
+    FILE* f = fopen(path.as.string, "rb");
+    if (!f) return sage_rt_nil();
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (sz <= 0 || sz > 100 * 1024 * 1024) { fclose(f); return sage_rt_nil(); }
+    char* buf = (char*)malloc((size_t)sz + 1);
+    if (!buf) { fclose(f); return sage_rt_nil(); }
+    size_t rd = fread(buf, 1, (size_t)sz, f);
+    fclose(f);
+    buf[rd] = '\0';
+    SageValue result = sage_rt_string(buf);
+    free(buf);
+    return result;
+}
+
+SageValue sage_rt_writefile(SageValue path, SageValue content) {
+    if (path.type != SAGE_STRING || content.type != SAGE_STRING) return sage_rt_nil();
+    FILE* f = fopen(path.as.string, "wb");
+    if (!f) return sage_rt_nil();
+    size_t len = strlen(content.as.string);
+    fwrite(content.as.string, 1, len, f);
+    fclose(f);
+    return sage_rt_number((double)len);
+}
+
 SageValue sage_rt_chr(SageValue val) {
     if (val.type != SAGE_NUMBER) return sage_rt_nil();
     int code = (int)val.as.number;
