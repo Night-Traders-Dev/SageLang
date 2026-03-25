@@ -284,7 +284,8 @@ proc step_pretrain():
     if len(build["corpus_text"]) == 0:
         print "  No training data loaded. Skipping pre-training."
         return
-    build["training_steps"] = prompt_num("Training steps", 50)
+    if build["training_steps"] <= 0:
+        build["training_steps"] = prompt_num("Training steps", 50)
     let lr = 0.0003
     print "  Initializing weights..."
     let d = build["d_model"]
@@ -605,16 +606,70 @@ while running:
     print_option(10, "Chatbot", "conversational persona")
     print_option(11, "Export", "summary and output")
     print_option(0, "Quick Build", "run all steps with defaults")
+    print_option(99, "Quit", "exit the builder")
     print ""
-    let step = prompt_num("Select step (0-11, or 'q' to quit)", 0)
+    let raw_input = input("Select step [1-11, 0=quick, q=quit]: ")
+    let step = -1
+    if raw_input == "q" or raw_input == "quit" or raw_input == "99":
+        running = false
+        print "Builder exited."
+    if running and raw_input == "0":
+        step = 0
+    if running and raw_input == "1":
+        step = 1
+    if running and raw_input == "2":
+        step = 2
+    if running and raw_input == "3":
+        step = 3
+    if running and raw_input == "4":
+        step = 4
+    if running and raw_input == "5":
+        step = 5
+    if running and raw_input == "6":
+        step = 6
+    if running and raw_input == "7":
+        step = 7
+    if running and raw_input == "8":
+        step = 8
+    if running and raw_input == "9":
+        step = 9
+    if running and raw_input == "10":
+        step = 10
+    if running and raw_input == "11":
+        step = 11
     if step == 0:
-        # Quick build: run all steps with minimal prompts
-        step_model_config()
-        step_tokenizer()
-        step_training_data()
+        # Quick build: auto-configure everything with sensible defaults
+        print_header("Quick Build: Auto-configuring all steps")
+        build["model_name"] = "sagellm-quick"
+        build["model_size"] = "nano"
+        build["d_model"] = 64
+        build["n_layers"] = 2
+        build["n_heads"] = 2
+        build["d_ff"] = 256
+        build["context_length"] = 256
+        build["vocab_size"] = 128
+        build["seq_len"] = 64
+        build["tokenizer_type"] = "char"
+        build["tok"] = tokenizer.char_tokenizer()
+        print "  Model: sagellm-quick (nano 64d/2L)"
+        print "  Tokenizer: character-level"
+        # Load theory corpus
+        let qcorpus = io.readfile("models/data/programming_languages.txt")
+        if qcorpus == nil:
+            qcorpus = "proc hello(): print 42"
+        build["corpus_text"] = qcorpus
+        print "  Corpus: " + str(len(qcorpus)) + " chars"
+        # Pre-train
+        build["training_steps"] = 20
         step_pretrain()
-        step_lora()
-        step_engram()
+        # Engram with defaults
+        build["use_engram"] = true
+        build["memory"] = engram.create(nil)
+        let qfacts = ["Sage is an indentation-based systems programming language", "118 library modules across 11 subdirectories", "Concurrent tri-color mark-sweep GC", "3 compiler backends: C LLVM native assembly"]
+        for qi in range(len(qfacts)):
+            engram.store_semantic(build["memory"], qfacts[qi], 1.0)
+        print "  Engram: 4 facts loaded"
+        # Export
         step_export()
         running = false
     if step == 1:
@@ -640,3 +695,6 @@ while running:
     if step == 11:
         step_export()
         running = false
+    if step == 99:
+        running = false
+        print "Builder exited."
