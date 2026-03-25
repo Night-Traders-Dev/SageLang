@@ -331,6 +331,67 @@ print turboquant.summary(bench)
 
 ---
 
+## AutoResearch (`llm.autoresearch`)
+
+Karpathy-style autonomous research loop (March 2026). Core concept: a **ratchet loop** that accumulates improvements — each accepted experiment becomes the new baseline, and rejected ones are discarded. Runs 100+ experiments overnight without human supervision.
+
+```sage
+import llm.autoresearch
+
+# Create a research session
+let ar = autoresearch.create(config, train_fn, eval_fn)
+
+# Set the program (hyperparameter space to search)
+autoresearch.set_program(ar, my_program)
+
+# Add mutation strategies
+autoresearch.add_strategy(ar, autoresearch.make_scale_strategy("lr", 0.5, 2.0))
+autoresearch.add_strategy(ar, autoresearch.make_choice_strategy("optimizer", ["adam", "sgd", "adamw"]))
+autoresearch.add_strategy(ar, autoresearch.make_perturb_strategy("dropout", 0.01))
+
+# Run N experiments
+let session = autoresearch.run(ar, session, 100)
+print autoresearch.summary(session)
+```
+
+### Built-in Strategies
+
+| Strategy | Factory | Description |
+|----------|---------|-------------|
+| Scale | `make_scale_strategy(key, lo, hi)` | Multiplicatively perturbs a numeric hyperparameter within [lo, hi] |
+| Choice | `make_choice_strategy(key, options)` | Randomly samples from a discrete set of values |
+| Perturb | `make_perturb_strategy(key, sigma)` | Adds Gaussian noise with standard deviation sigma |
+
+### Convenience Bundles
+
+```sage
+# Default LLM hyperparameter strategies (lr, batch_size, dropout, warmup)
+let strategies = autoresearch.llm_default_strategies()
+
+# Architecture search strategies (layers, d_model, heads, d_ff)
+let arch = autoresearch.architecture_strategies()
+```
+
+### Multi-Agent Collaboration
+
+```sage
+# Export research journal for sharing
+let journal = autoresearch.export_journal(session)
+
+# Import journal from another agent
+autoresearch.import_journal(ar, journal)
+
+# Merge results from multiple parallel sessions
+let merged = autoresearch.merge_sessions(session_a, session_b)
+```
+
+### Safety Features
+
+- **max_revert_streak**: Auto-resets the baseline after N consecutive rejections, preventing the ratchet from locking on a local optimum.
+- **Secondary metrics** (Goodhart protection): Tracks auxiliary metrics alongside the primary objective so that optimizing one metric does not degrade others.
+
+---
+
 ## Module Reference
 
 | Module | Import | Key Functions |

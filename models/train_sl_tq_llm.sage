@@ -110,8 +110,8 @@ for i in range(len(root_libs)):
         corpus_sage = corpus_sage + "<|file:" + root_libs[i] + "|>" + NL + content + NL + "<|end|>" + NL
         sage_file_count = sage_file_count + 1
 
-# --- All library subdirectories ---
-let all_sub_libs = ["lib/os/fat.sage", "lib/os/fat_dir.sage", "lib/os/elf.sage", "lib/os/mbr.sage", "lib/os/gpt.sage", "lib/os/pe.sage", "lib/os/pci.sage", "lib/os/uefi.sage", "lib/os/acpi.sage", "lib/os/paging.sage", "lib/os/idt.sage", "lib/os/serial.sage", "lib/os/dtb.sage", "lib/os/alloc.sage", "lib/os/vfs.sage", "lib/net/url.sage", "lib/net/headers.sage", "lib/net/request.sage", "lib/net/server.sage", "lib/net/websocket.sage", "lib/net/mime.sage", "lib/net/dns.sage", "lib/net/ip.sage", "lib/crypto/hash.sage", "lib/crypto/hmac.sage", "lib/crypto/encoding.sage", "lib/crypto/cipher.sage", "lib/crypto/rand.sage", "lib/crypto/password.sage", "lib/ml/tensor.sage", "lib/ml/nn.sage", "lib/ml/optim.sage", "lib/ml/loss.sage", "lib/ml/data.sage", "lib/ml/debug.sage", "lib/ml/viz.sage", "lib/ml/monitor.sage", "lib/ml/gpu_accel.sage", "lib/cuda/device.sage", "lib/cuda/memory.sage", "lib/cuda/kernel.sage", "lib/cuda/stream.sage", "lib/std/regex.sage", "lib/std/datetime.sage", "lib/std/log.sage", "lib/std/argparse.sage", "lib/std/compress.sage", "lib/std/process.sage", "lib/std/unicode.sage", "lib/std/fmt.sage", "lib/std/testing.sage", "lib/std/enum.sage", "lib/std/trait.sage", "lib/std/signal.sage", "lib/std/db.sage", "lib/std/channel.sage", "lib/std/threadpool.sage", "lib/std/atomic.sage", "lib/std/rwlock.sage", "lib/std/condvar.sage", "lib/std/debug.sage", "lib/std/profiler.sage", "lib/std/docgen.sage", "lib/std/build.sage", "lib/std/interop.sage", "lib/llm/config.sage", "lib/llm/tokenizer.sage", "lib/llm/embedding.sage", "lib/llm/attention.sage", "lib/llm/transformer.sage", "lib/llm/generate.sage", "lib/llm/train.sage", "lib/llm/agent.sage", "lib/llm/prompt.sage", "lib/llm/lora.sage", "lib/llm/quantize.sage", "lib/llm/engram.sage", "lib/llm/rag.sage", "lib/llm/dpo.sage", "lib/llm/gguf.sage", "lib/llm/gguf_import.sage", "lib/llm/turboquant.sage", "lib/agent/core.sage", "lib/agent/tools.sage", "lib/agent/planner.sage", "lib/agent/router.sage", "lib/agent/supervisor.sage", "lib/agent/critic.sage", "lib/agent/schema.sage", "lib/agent/trace.sage", "lib/agent/grammar.sage", "lib/agent/sandbox.sage", "lib/agent/tot.sage", "lib/agent/semantic_router.sage", "lib/chat/bot.sage", "lib/chat/persona.sage", "lib/chat/session.sage", "lib/graphics/vulkan.sage", "lib/graphics/gpu.sage", "lib/graphics/math3d.sage", "lib/graphics/mesh.sage", "lib/graphics/renderer.sage", "lib/graphics/postprocess.sage", "lib/graphics/pbr.sage", "lib/graphics/shadows.sage", "lib/graphics/deferred.sage", "lib/graphics/gltf.sage", "lib/graphics/taa.sage", "lib/graphics/scene.sage", "lib/graphics/material.sage", "lib/graphics/asset_cache.sage", "lib/graphics/frame_graph.sage", "lib/graphics/debug_ui.sage", "lib/graphics/opengl.sage", "lib/graphics/camera.sage", "lib/graphics/text_render.sage", "lib/graphics/ui.sage", "lib/graphics/trails.sage", "lib/graphics/lod.sage", "lib/graphics/octree.sage", "lib/graphics/camera_relative.sage"]
+# --- Key library modules (representative subset to keep memory < 2GB) ---
+let all_sub_libs = ["lib/os/fat.sage", "lib/os/elf.sage", "lib/os/paging.sage", "lib/os/alloc.sage", "lib/os/vfs.sage", "lib/net/url.sage", "lib/net/ip.sage", "lib/net/server.sage", "lib/crypto/hash.sage", "lib/crypto/encoding.sage", "lib/crypto/rand.sage", "lib/ml/tensor.sage", "lib/ml/nn.sage", "lib/ml/optim.sage", "lib/ml/gpu_accel.sage", "lib/std/regex.sage", "lib/std/datetime.sage", "lib/std/fmt.sage", "lib/std/testing.sage", "lib/std/channel.sage", "lib/std/db.sage", "lib/llm/config.sage", "lib/llm/tokenizer.sage", "lib/llm/attention.sage", "lib/llm/train.sage", "lib/llm/lora.sage", "lib/llm/engram.sage", "lib/llm/rag.sage", "lib/llm/turboquant.sage", "lib/agent/core.sage", "lib/agent/tools.sage", "lib/agent/planner.sage", "lib/agent/supervisor.sage", "lib/chat/bot.sage", "lib/chat/persona.sage", "lib/chat/session.sage"]
 
 for i in range(len(all_sub_libs)):
     let content = io.readfile(all_sub_libs[i])
@@ -123,7 +123,7 @@ log("DATA", "Sage source files: " + str(sage_file_count))
 
 # --- Documentation ---
 let corpus_docs = ""
-let doc_files = ["documentation/SageLang_Guide.md", "documentation/GC_Guide.md", "documentation/LLM_Guide.md", "documentation/Agent_Chat_Guide.md", "documentation/StdLib_Guide.md", "documentation/Networking_Guide.md", "documentation/Cryptography_Guide.md", "documentation/Baremetal_OSDev_UEFI_Guide.md", "documentation/Vulkan_GPU_Guide.md", "documentation/ML_CUDA_Guide.md", "documentation/Import_Semantics.md", "documentation/FAT_Filesystem_Guide.md", "documentation/Bytecode_VM_Sketch.md"]
+let doc_files = ["documentation/SageLang_Guide.md", "documentation/GC_Guide.md", "documentation/LLM_Guide.md", "documentation/Agent_Chat_Guide.md", "documentation/StdLib_Guide.md"]
 let doc_count = 0
 for i in range(len(doc_files)):
     let content = io.readfile(doc_files[i])
@@ -149,16 +149,17 @@ print ""
 log("MODEL", "Initializing SL-TQ-LLM...")
 divider()
 
-let d_model = 128
+let d_model = 64
 let n_heads = 4
-let n_layers = 4
-let d_ff = 512
+let n_layers = 1
+let d_ff = 256
 let vocab = 256
 let context_length = 16384
-let seq_len = 256
+let seq_len = 64
 
 log("MODEL", "SL-TQ-LLM (SwiGLU + RoPE + RMSNorm + TurboQuant)")
 log("MODEL", "  d=" + str(d_model) + " heads=" + str(n_heads) + " layers=" + str(n_layers) + " ff=" + str(d_ff))
+log("MODEL", "  Memory-optimized: gc_disable + small footprint for interpreter training")
 log("MODEL", "  vocab=" + str(vocab) + " context=" + str(context_length) + " train_seq=" + str(seq_len))
 
 # Initialize weights
@@ -287,8 +288,8 @@ log("TRAIN", "Theory+NLP tokens: " + str(len(theory_tokens)))
 
 let theory_examples = train.create_lm_examples(theory_tokens, seq_len)
 let theory_steps = len(theory_examples)
-if theory_steps > 200:
-    theory_steps = 200
+if theory_steps > 50:
+    theory_steps = 50
 
 let train_cfg = train.create_train_config()
 train_cfg["learning_rate"] = 0.0003
@@ -335,8 +336,8 @@ log("LORA", "Sage corpus tokens: " + str(len(sage_tokens)))
 
 let sage_examples = train.create_lm_examples(sage_tokens, seq_len)
 let lora_steps = len(sage_examples)
-if lora_steps > 100:
-    lora_steps = 100
+if lora_steps > 30:
+    lora_steps = 30
 
 train_cfg["learning_rate"] = 0.001
 let state2 = train.create_train_state(train_cfg)
@@ -389,7 +390,7 @@ for step in range(lora_steps):
     push(all_losses, loss)
     train.log_step(state2, loss, train_cfg["learning_rate"], 0)
 
-    if (step + 1) - (((step + 1) / 25) | 0) * 25 == 0:
+    if (step + 1) - (((step + 1) / 10) | 0) * 10 == 0:
         log("LORA", "  step " + str(step + 1) + "/" + str(lora_steps) + " loss=" + str(loss) + " ppl=" + str(train.perplexity(loss)))
 
 log("LORA", "LoRA done. avg_loss=" + str(train.avg_loss(state2)))
