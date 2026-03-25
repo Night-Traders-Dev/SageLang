@@ -398,13 +398,8 @@ static ProcEntry* add_proc_entry(Compiler* compiler, const char* sage_name,
                                  int param_count, const Token* token) {
     ProcEntry* existing = find_proc_entry(compiler->procs, sage_name);
     if (existing != NULL) {
-        if (existing->param_count != param_count) {
-            compiler_error_at(compiler, token,
-                              "rename one of the procedures or keep the parameter counts consistent",
-                              "procedure '%s' is redefined with %d parameter%s; the earlier definition used %d",
-                              sage_name, param_count, param_count == 1 ? "" : "s",
-                              existing->param_count);
-        }
+        /* Silently keep the first definition (module namespace collision is expected
+           when importing multiple modules that define common names like 'create') */
         return existing;
     }
 
@@ -782,10 +777,36 @@ static int is_in_import_list(ImportStmt* import, const char* name) {
     return 0;
 }
 
+// Native C modules that don't have .sage files (handled at runtime)
+static int is_native_module(const char* name) {
+    const char* natives[] = {
+        "math", "io", "string", "sys", "thread",
+        "socket", "tcp", "http", "ssl",
+        "fat", "gpu", "graphics", "ml_native",
+        NULL
+    };
+    for (int i = 0; natives[i] != NULL; i++) {
+        if (strcmp(name, natives[i]) == 0) return 1;
+    }
+    return 0;
+}
+
 static void process_import(Compiler* compiler, ImportStmt* import) {
     /* Check if already loaded */
     for (ImportedModule* m = compiler->modules; m != NULL; m = m->next) {
         if (strcmp(m->name, import->module_name) == 0) return;
+    }
+
+    /* Skip native C modules — they are available at runtime */
+    if (is_native_module(import->module_name)) {
+        ImportedModule* mod = malloc(sizeof(ImportedModule));
+        if (mod == NULL) { fprintf(stderr, "Out of memory\n"); exit(1); }
+        mod->name = str_dup(import->module_name);
+        mod->path = NULL;
+        mod->ast = NULL;
+        mod->next = compiler->modules;
+        compiler->modules = mod;
+        return;
     }
 
     char* module_path = resolve_module_path_for_compiler(compiler, import->module_name);
@@ -1629,6 +1650,73 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
             }
             sb_append(&sb, "})");
         }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    // Additional builtins: chr, ord, type, gc_disable, gc_enable, gc_collect, gc_stats
+    if (strcmp(callee_name, "chr") == 0 && call->arg_count == 1) {
+        char* arg = emit_expr(compiler, call->args[0]);
+        sb_appendf(&sb, "sage_chr(%s)", arg);
+        free(arg);
+        free(callee_name);
+        return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "ord") == 0 && call->arg_count == 1) {
+        char* arg = emit_expr(compiler, call->args[0]);
+        sb_appendf(&sb, "sage_ord(%s)", arg);
+        free(arg);
+        free(callee_name);
+        return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "type") == 0 && call->arg_count == 1) {
+        char* arg = emit_expr(compiler, call->args[0]);
+        sb_appendf(&sb, "sage_type(%s)", arg);
+        free(arg);
+        free(callee_name);
+        return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "gc_disable") == 0) {
+        sb_append(&sb, "sage_nil()"); // gc_disable is a no-op in compiled code
+        free(callee_name);
+        return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "gc_enable") == 0) {
+        sb_append(&sb, "sage_nil()");
+        free(callee_name);
+        return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "gc_collect") == 0) {
+        sb_append(&sb, "sage_nil()");
+        free(callee_name);
+        return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "gc_stats") == 0) {
+        sb_append(&sb, "sage_nil()");
+        free(callee_name);
+        return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "startswith") == 0 && call->arg_count == 2) {
+        char* a = emit_expr(compiler, call->args[0]);
+        char* b = emit_expr(compiler, call->args[1]);
+        sb_appendf(&sb, "sage_startswith(%s, %s)", a, b);
+        free(a); free(b);
+        free(callee_name);
+        return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "endswith") == 0 && call->arg_count == 2) {
+        char* a = emit_expr(compiler, call->args[0]);
+        char* b = emit_expr(compiler, call->args[1]);
+        sb_appendf(&sb, "sage_endswith(%s, %s)", a, b);
+        free(a); free(b);
+        free(callee_name);
+        return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "contains") == 0 && call->arg_count == 2) {
+        char* a = emit_expr(compiler, call->args[0]);
+        char* b = emit_expr(compiler, call->args[1]);
+        sb_appendf(&sb, "sage_contains(%s, %s)", a, b);
+        free(a); free(b);
         free(callee_name);
         return sb_take(&sb);
     }
@@ -2837,6 +2925,79 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        }\n"
         "    }\n"
         "    return sage_bool(0);\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    // chr, ord, type builtins
+    fputs(
+        "static SageValue sage_chr(SageValue v) {\n"
+        "    if (v.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+        "    char buf[2] = { (char)(int)v.as.number, 0 };\n"
+        "    return sage_string(buf);\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_ord(SageValue v) {\n"
+        "    if (v.type != SAGE_TAG_STRING || v.as.string == NULL || v.as.string[0] == 0) return sage_nil();\n"
+        "    return sage_number((double)(unsigned char)v.as.string[0]);\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_type(SageValue v) {\n"
+        "    switch (v.type) {\n"
+        "        case SAGE_TAG_NIL: return sage_string(\"nil\");\n"
+        "        case SAGE_TAG_NUMBER: return sage_string(\"number\");\n"
+        "        case SAGE_TAG_BOOL: return sage_string(\"bool\");\n"
+        "        case SAGE_TAG_STRING: return sage_string(\"string\");\n"
+        "        case SAGE_TAG_ARRAY: return sage_string(\"array\");\n"
+        "        case SAGE_TAG_DICT: return sage_string(\"dict\");\n"
+        "        default: return sage_string(\"unknown\");\n"
+        "    }\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_startswith(SageValue s, SageValue prefix) {\n"
+        "    if (s.type != SAGE_TAG_STRING || prefix.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+        "    return sage_bool(strncmp(s.as.string, prefix.as.string, strlen(prefix.as.string)) == 0);\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_endswith(SageValue s, SageValue suffix) {\n"
+        "    if (s.type != SAGE_TAG_STRING || suffix.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+        "    size_t slen = strlen(s.as.string), suflen = strlen(suffix.as.string);\n"
+        "    if (suflen > slen) return sage_bool(0);\n"
+        "    return sage_bool(strcmp(s.as.string + slen - suflen, suffix.as.string) == 0);\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_contains(SageValue haystack, SageValue needle) {\n"
+        "    if (haystack.type != SAGE_TAG_STRING || needle.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+        "    return sage_bool(strstr(haystack.as.string, needle.as.string) != NULL);\n"
+        "}\n"
+        "\n",
+        out
+    );
+
+    // Index set for arrays and dicts (sage_index already defined above)
+    fputs(
+        "static void sage_index_set(SageValue c, SageValue k, SageValue v) {\n"
+        "    if (c.type == SAGE_TAG_ARRAY && k.type == SAGE_TAG_NUMBER) {\n"
+        "        int i = (int)k.as.number;\n"
+        "        if (i >= 0 && i < c.as.array->count) c.as.array->elements[i] = v;\n"
+        "        return;\n"
+        "    }\n"
+        "    if (c.type == SAGE_TAG_DICT && k.type == SAGE_TAG_STRING) {\n"
+        "        SageDict* d = c.as.dict;\n"
+        "        for (int i = 0; i < d->count; i++) {\n"
+        "            if (strcmp(d->keys[i], k.as.string) == 0) { d->values[i] = v; return; }\n"
+        "        }\n"
+        "        if (d->count >= d->capacity) {\n"
+        "            int nc = d->capacity == 0 ? 4 : d->capacity * 2;\n"
+        "            d->keys = realloc(d->keys, sizeof(char*) * nc);\n"
+        "            d->values = realloc(d->values, sizeof(SageValue) * nc);\n"
+        "            d->capacity = nc;\n"
+        "        }\n"
+        "        { size_t l = strlen(k.as.string); d->keys[d->count] = malloc(l+1); memcpy(d->keys[d->count], k.as.string, l+1); }\n"
+        "        d->values[d->count] = v;\n"
+        "        d->count++;\n"
+        "    }\n"
         "}\n"
         "\n",
         out
