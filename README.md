@@ -414,6 +414,10 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`tools`**: Pre-built tools (file read/write, code analysis, code search, system info), bulk registration
 - **`planner`**: Task decomposition with dependency DAG, auto-execution via agent tools, progress tracking
 - **`router`**: Multi-agent orchestrator, capability-based routing, message passing, sequential pipelines
+- **`supervisor`**: Supervisor-Worker control plane, workflow engine, global state, retry with self-healing
+- **`critic`**: Verification loops, rule-based validators, LLM critics, composite checks, iterative self-correction
+- **`schema`**: Typed tool interfaces, parameter validation, bounded execution, schema registry
+- **`trace`**: SFT trace recording, training data generation (SFT/chat/DPO formats), execution logging
 
 **Chatbot Framework** (`lib/chat/`, imported as `import chat.<module>`):
 - **`bot`**: Conversation management, intent recognition, middleware pipeline, LLM-backed responses, context variables

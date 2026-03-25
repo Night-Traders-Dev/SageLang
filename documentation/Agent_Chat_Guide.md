@@ -100,6 +100,92 @@ print session.export_text(s)
 session.save_session(s, "chat_log.txt")
 ```
 
+## Production Agent Architecture
+
+### Supervisor-Worker Pattern
+
+```sage
+import agent.supervisor
+
+# Create specialist workers
+proc code_llm(task): return "proc hello(): print 42"
+proc test_llm(task): return "# EXPECT: 42"
+
+let coder = supervisor.create_worker("coder", "Write Sage code", code_llm, [])
+let tester = supervisor.create_worker("tester", "Write tests", test_llm, [])
+
+# Create supervisor (control plane)
+let sup = supervisor.create_supervisor("lead", code_llm)
+supervisor.add_worker(sup, coder)
+supervisor.add_worker(sup, tester)
+
+# Define workflow with steps
+supervisor.add_step(sup, "Write the function", "coder", nil, nil)
+supervisor.add_step(sup, "Write tests for it", "tester", nil, nil)
+
+# Execute (retries on failure, self-healing with error context)
+let status = supervisor.run_workflow(sup)
+print supervisor.workflow_status(sup)
+```
+
+### Verification Loops (Critic)
+
+```sage
+import agent.critic
+
+# Rule-based validator
+let v = critic.create_validator()
+critic.add_rule(v, "not_empty", critic.rule_not_empty)
+critic.add_rule(v, "length", critic.make_length_rule(10, 5000))
+critic.add_rule(v, "has_proc", critic.make_contains_rule(["proc"]))
+
+let result = critic.validate(v, output, {})
+if not result["valid"]:
+    print result["error_summary"]  # bounces back to worker
+
+# LLM critic for semantic review
+let c = critic.create_critic("reviewer", review_llm, "code quality and correctness")
+let review = critic.review(c, task, output)
+if not review["approved"]:
+    # Append feedback for self-correction
+    task = task + " Feedback: " + review["feedback"]
+```
+
+### Typed Tool Interfaces (Schema)
+
+```sage
+import agent.schema
+
+# Define strict tool schemas
+let read_schema = schema.tool_schema("read_file", "Read a file",
+    [schema.param("path", "string", true, "File path")], "string")
+
+# Registry validates all calls before execution
+let reg = schema.create_registry()
+schema.register(reg, read_schema, my_read_fn)
+
+# Execute with validation (rejects bad args automatically)
+let result = schema.execute(reg, "read_file", {"path": "/tmp/test.sage"})
+```
+
+### SFT Trace Collection
+
+```sage
+import agent.trace
+
+let rec = trace.create_recorder()
+trace.begin_trace(rec, "Write a sorting function")
+trace.record_thought(rec, "I need quicksort")
+trace.record_tool_call(rec, "write_file", "sort.sage", "written")
+trace.record_output(rec, "proc quicksort(arr): ...")
+trace.end_trace(rec, true)
+
+# Generate training data
+let sft_data = trace.to_sft_examples(rec)      # prompt -> completion
+let chat_data = trace.to_chat_examples(rec)      # messages format
+let dpo_data = trace.to_preference_pairs(rec)    # chosen vs rejected
+```
+
 ## Module Reference
 
 | Module | Import | Key Functions |
@@ -108,6 +194,10 @@ session.save_session(s, "chat_log.txt")
 | `tools` | `import agent.tools` | `register_all`, `file_read`, `file_write`, `code_analyze`, `code_search` |
 | `planner` | `import agent.planner` | `create_plan`, `add_step`, `execute_plan`, `format_plan`, `progress` |
 | `router` | `import agent.router` | `create_router`, `register`, `route`, `send_to`, `create_pipeline` |
+| `supervisor` | `import agent.supervisor` | `create_supervisor`, `add_worker`, `add_step`, `run_workflow`, `dispatch`, `set_state` |
+| `critic` | `import agent.critic` | `create_validator`, `add_rule`, `validate`, `create_critic`, `review`, `verify_loop` |
+| `schema` | `import agent.schema` | `tool_schema`, `param`, `validate_args`, `create_registry`, `register`, `execute` |
+| `trace` | `import agent.trace` | `create_recorder`, `begin_trace`, `record_step`, `end_trace`, `to_sft_examples`, `to_chat_examples` |
 | `bot` | `import chat.bot` | `create`, `respond`, `add_intent`, `set_context`, `greet`, `farewell` |
 | `session` | `import chat.session` | `create_store`, `new_session`, `add_turn`, `export_text`, `save_session` |
 | `persona` | `import chat.persona` | `sage_developer`, `code_reviewer`, `teacher`, `debugger`, `architect`, `custom` |
