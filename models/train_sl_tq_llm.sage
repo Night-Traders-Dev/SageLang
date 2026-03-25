@@ -59,11 +59,10 @@ print ""
 
 # GPU/compute context with multicore parallel processing
 let _compute = gpu_accel.create("auto")
-gpu_accel.enable_parallel(16)
-gpu_accel.set_parallel_threshold(1024)
+let n_cores = gpu_accel.auto_parallel()
 log("INIT", "Compute backend: " + _compute["backend"])
-let pcfg = gpu_accel.get_parallel_config()
-log("INIT", "Parallel CPU: " + str(pcfg["num_workers"]) + " workers (threshold=" + str(pcfg["threshold"]) + ")")
+log("INIT", "CPU cores detected: " + str(n_cores) + " (all active)")
+log("INIT", "GPU available: " + str(ml_native.gpu_available()))
 
 # ============================================================================
 # Phase 0: Collect ALL training data

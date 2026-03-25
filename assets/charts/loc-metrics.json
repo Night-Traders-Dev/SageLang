@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-03-25 11:23 UTC",
+  "generated_at": "2026-03-25 11:26 UTC",
   "repo_languages": [
     {
       "language": "C",
-      "lines": 53940
+      "lines": 53960
     },
     {
       "language": "Sage",
-      "lines": 53616
+      "lines": 53623
     },
     {
       "language": "JSON",
@@ -37,7 +37,7 @@
     },
     {
       "label": "Native C Core",
-      "lines": 51364
+      "lines": 51384
     }
   ],
   "recipe_benchmark": {
@@ -53,11 +53,11 @@
         "reason": "",
         "output": "11520",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.006847078999271616,
-        "total_median_seconds": 0.006847078999271616,
+        "run_median_seconds": 0.006062772998120636,
+        "total_median_seconds": 0.006062772998120636,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.0067512787994928655,
-        "total_mean_seconds": 0.0067512787994928655
+        "run_mean_seconds": 0.0060354105997248554,
+        "total_mean_seconds": 0.0060354105997248554
       },
       {
         "name": "sage-interpreted-vm",
@@ -66,11 +66,11 @@
         "reason": "",
         "output": "11520",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.005555178999202326,
-        "total_median_seconds": 0.005555178999202326,
+        "run_median_seconds": 0.007633377001184272,
+        "total_median_seconds": 0.007633377001184272,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.0060029949992895125,
-        "total_mean_seconds": 0.0060029949992895125
+        "run_mean_seconds": 0.008270201599952998,
+        "total_mean_seconds": 0.008270201599952998
       },
       {
         "name": "sage-compiled-c",
@@ -78,12 +78,12 @@
         "status": "ok",
         "reason": "",
         "output": "11520",
-        "build_median_seconds": 0.10147487100039143,
-        "run_median_seconds": 0.001414010999724269,
-        "total_median_seconds": 0.1028888820001157,
-        "build_mean_seconds": 0.10280839360057144,
-        "run_mean_seconds": 0.00136516579950694,
-        "total_mean_seconds": 0.10417355940007837
+        "build_median_seconds": 0.10588814099901356,
+        "run_median_seconds": 0.0014902049988450017,
+        "total_median_seconds": 0.10711712299962528,
+        "build_mean_seconds": 0.10497653459970024,
+        "run_mean_seconds": 0.001487228000041796,
+        "total_mean_seconds": 0.10646376259974204
       },
       {
         "name": "sage-compiled-vm",
@@ -91,12 +91,12 @@
         "status": "ok",
         "reason": "",
         "output": "11520",
-        "build_median_seconds": 0.0043789240007754415,
-        "run_median_seconds": 0.006060252999304794,
-        "total_median_seconds": 0.010439177000080235,
-        "build_mean_seconds": 0.0043800015999295285,
-        "run_mean_seconds": 0.006414585400489159,
-        "total_mean_seconds": 0.010794587000418687
+        "build_median_seconds": 0.003207702000509016,
+        "run_median_seconds": 0.006045789999916451,
+        "total_median_seconds": 0.009722345999762183,
+        "build_mean_seconds": 0.003662232199712889,
+        "run_mean_seconds": 0.006078311400051462,
+        "total_mean_seconds": 0.00974054359976435
       },
       {
         "name": "sage-compiled-sage",
@@ -104,12 +104,12 @@
         "status": "failed",
         "reason": "checksum mismatch: expected '11520', got ''",
         "output": "",
-        "build_median_seconds": 0.08312840700091328,
-        "run_median_seconds": 0.0007489800009352621,
-        "total_median_seconds": 0.08397720400171238,
-        "build_mean_seconds": 0.08396814779916895,
-        "run_mean_seconds": 0.0007741578010609373,
-        "total_mean_seconds": 0.08474230560022988
+        "build_median_seconds": 0.09113120500114746,
+        "run_median_seconds": 0.0008614869984739926,
+        "total_median_seconds": 0.09206022700163885,
+        "build_mean_seconds": 0.09097106459885254,
+        "run_mean_seconds": 0.0008274478001112584,
+        "total_mean_seconds": 0.09179851239896379
       }
     ]
   }

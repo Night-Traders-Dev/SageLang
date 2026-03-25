@@ -299,6 +299,16 @@ proc disable_parallel():
     _num_workers = 1
     ml_native.set_threads(1)
 
+proc auto_parallel():
+    # Detect all available CPU cores and use them all
+    let cores = ml_native.auto_parallel()
+    _parallel_enabled = true
+    _num_workers = cores
+    return cores
+
+proc cpu_count():
+    return ml_native.cpu_count()
+
 proc get_parallel_config():
     let cfg = {}
     cfg["enabled"] = _parallel_enabled

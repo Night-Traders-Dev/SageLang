@@ -14,6 +14,7 @@
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
+#include <unistd.h>
 
 #ifdef SAGE_HAS_VULKAN
 #include "gpu_api.h"
@@ -684,6 +685,24 @@ static Value ml_get_threads(int argc, Value* args) {
     return val_number(g_ml_num_threads);
 }
 
+// ml_native.cpu_count() -> number of available CPU cores/threads
+static Value ml_cpu_count(int argc, Value* args) {
+    (void)argc; (void)args;
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    if (n < 1) n = 1;
+    return val_number((double)n);
+}
+
+// ml_native.auto_parallel() -> set threads to all available cores
+static Value ml_auto_parallel(int argc, Value* args) {
+    (void)argc; (void)args;
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    if (n < 1) n = 1;
+    g_ml_num_threads = (int)n;
+    g_ml_parallel_threshold = 1024;
+    return val_number((double)n);
+}
+
 // ============================================================================
 // Module registration
 // ============================================================================
@@ -733,6 +752,10 @@ Module* create_ml_native_module(ModuleCache* cache) {
     // GPU compute
     env_define(e, "gpu_available", 13, val_native(ml_gpu_available));
     env_define(e, "set_gpu_threshold", 17, val_native(ml_set_gpu_threshold));
+
+    // CPU info
+    env_define(e, "cpu_count", 9, val_native(ml_cpu_count));
+    env_define(e, "auto_parallel", 13, val_native(ml_auto_parallel));
 
     // Add to cache
     module->next = cache->modules;
