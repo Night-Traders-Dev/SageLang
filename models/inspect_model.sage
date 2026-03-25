@@ -192,11 +192,16 @@ viz.weight_histogram(qw, model_name + " Q-Projection Weights", viz_dir + "/weigh
 print "  Generated: " + viz_dir + "/weight_dist.svg"
 
 # Attention heatmap (use a small portion)
+let attn_size = 16
+let small_attn = []
+for i in range(attn_size * attn_size):
+    push(small_attn, 0)
+
 if last_attn != nil:
-    let attn_size = 16
     if attn_size > seq_len:
         attn_size = seq_len
-    let small_attn = []
+    # Reset small_attn for actual size
+    small_attn = []
     for i in range(attn_size * attn_size):
         push(small_attn, 0)
     # Build attention weights from Q*K^T
