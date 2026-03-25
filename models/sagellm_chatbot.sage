@@ -74,33 +74,84 @@ proc reason(question):
         agent.add_thought(chain, "I recall: " + mem_text)
     else:
         agent.add_thought(chain, "No specific memory found, using general knowledge")
-    # Step 2: Classify the question
+    # Step 2: Classify the question (specific topics first, then general)
     let topic = "general"
-    if contains(lp, "for") or contains(lp, "loop") or contains(lp, "while") or contains(lp, "iteration"):
-        topic = "loops"
-    if contains(lp, "import") or contains(lp, "module") or contains(lp, "library"):
-        topic = "modules"
-    if contains(lp, "class") or contains(lp, "object") or contains(lp, "inherit"):
-        topic = "oop"
-    if contains(lp, "gc") or contains(lp, "garbage") or contains(lp, "memory"):
-        topic = "gc"
-    if contains(lp, "compile") or contains(lp, "backend") or contains(lp, "llvm") or contains(lp, "emit"):
-        topic = "compiler"
-    if contains(lp, "array") or contains(lp, "dict") or contains(lp, "list") or contains(lp, "data struct"):
-        topic = "data"
-    if contains(lp, "function") or contains(lp, "proc") or contains(lp, "closure"):
-        topic = "functions"
-    if contains(lp, "error") or contains(lp, "exception") or contains(lp, "try") or contains(lp, "catch"):
-        topic = "errors"
-    if contains(lp, "test") or contains(lp, "debug") or contains(lp, "fix") or contains(lp, "bug"):
-        topic = "testing"
-    if contains(lp, "thread") or contains(lp, "async") or contains(lp, "channel") or contains(lp, "concurrent"):
-        topic = "concurrency"
-    if contains(lp, "plan") or contains(lp, "how to build") or contains(lp, "steps") or contains(lp, "roadmap"):
-        topic = "planning"
+    # --- Specific domain topics (check FIRST) ---
+    if contains(lp, "llm") or contains(lp, "language model") or contains(lp, "transformer") or contains(lp, "tokeniz") or contains(lp, "attention") or contains(lp, "lora") or contains(lp, "engram") or contains(lp, "neural"):
+        topic = "llm"
+    if contains(lp, "agent") or contains(lp, "react") or contains(lp, "tool use") or contains(lp, "autonomous") or contains(lp, "scratchpad"):
+        topic = "agent_framework"
+    if contains(lp, "chatbot") or contains(lp, "chat bot") or contains(lp, "persona") or contains(lp, "conversation") or contains(lp, "intent"):
+        topic = "chatbot"
+    if contains(lp, "crypto") or contains(lp, "sha") or contains(lp, "hash") or contains(lp, "encrypt") or contains(lp, "base64") or contains(lp, "hmac"):
+        topic = "crypto"
+    if contains(lp, "network") or contains(lp, "http") or contains(lp, "socket") or contains(lp, "url") or contains(lp, "dns") or contains(lp, "websocket") or contains(lp, "tcp"):
+        topic = "networking"
+    if contains(lp, "baremetal") or contains(lp, "uefi") or contains(lp, "kernel") or contains(lp, "elf") or contains(lp, "pci") or contains(lp, "acpi") or contains(lp, "osdev"):
+        topic = "osdev"
+    if contains(lp, "tensor") or contains(lp, "machine learn") or contains(lp, "training") or contains(lp, "neural net") or contains(lp, "optimizer") or contains(lp, "gradient"):
+        topic = "ml"
+    if contains(lp, "regex") or contains(lp, "regular exp") or contains(lp, "pattern match"):
+        topic = "regex"
+    if contains(lp, "gpu") or contains(lp, "vulkan") or contains(lp, "opengl") or contains(lp, "shader") or contains(lp, "render"):
+        topic = "graphics"
+    # --- General language topics ---
+    if topic == "general":
+        if contains(lp, "for") or contains(lp, "loop") or contains(lp, "while") or contains(lp, "iteration"):
+            topic = "loops"
+    if topic == "general":
+        if contains(lp, "import") or contains(lp, "module") or contains(lp, "library"):
+            topic = "modules"
+    if topic == "general":
+        if contains(lp, "class") or contains(lp, "object") or contains(lp, "inherit"):
+            topic = "oop"
+    if topic == "general":
+        if contains(lp, "gc") or contains(lp, "garbage"):
+            topic = "gc"
+    if topic == "general":
+        if contains(lp, "compile") or contains(lp, "backend") or contains(lp, "emit"):
+            topic = "compiler"
+    if topic == "general":
+        if contains(lp, "array") or contains(lp, "dict") or contains(lp, "list") or contains(lp, "data struct"):
+            topic = "data"
+    if topic == "general":
+        if contains(lp, "function") or contains(lp, "proc") or contains(lp, "closure"):
+            topic = "functions"
+    if topic == "general":
+        if contains(lp, "error") or contains(lp, "exception") or contains(lp, "try") or contains(lp, "catch"):
+            topic = "errors"
+    if topic == "general":
+        if contains(lp, "test") or contains(lp, "debug") or contains(lp, "fix") or contains(lp, "bug"):
+            topic = "testing"
+    if topic == "general":
+        if contains(lp, "thread") or contains(lp, "async") or contains(lp, "channel") or contains(lp, "concurrent"):
+            topic = "concurrency"
+    if topic == "general":
+        if contains(lp, "plan") or contains(lp, "how to build") or contains(lp, "steps") or contains(lp, "roadmap"):
+            topic = "planning"
     agent.add_thought(chain, "Topic classified as: " + topic)
     # Step 3: Generate answer based on topic
     let answer = ""
+    # --- Domain-specific answers ---
+    if topic == "llm":
+        answer = "The Sage LLM library (lib/llm/) has 12 modules for building language models:" + chr(10) + chr(10) + "  import llm.config      # Model configs: tiny (1M) to Llama-13B" + chr(10) + "  import llm.tokenizer    # BPE, character, and word tokenizers" + chr(10) + "  import llm.embedding    # Token + positional (sinusoidal, learned, RoPE)" + chr(10) + "  import llm.attention    # Multi-head self-attention, KV cache" + chr(10) + "  import llm.transformer  # Full transformer: LayerNorm, RMSNorm, FFN, SwiGLU" + chr(10) + "  import llm.generate     # Greedy, top-k, top-p, beam search, repetition penalty" + chr(10) + "  import llm.train        # Training loops, cosine LR, cross-entropy, perplexity" + chr(10) + "  import llm.agent        # Tool use, CoT reasoning, memory, multi-agent teams" + chr(10) + "  import llm.prompt       # ChatML, Llama, Alpaca formats, templates, few-shot" + chr(10) + "  import llm.lora         # Low-rank adapters for efficient fine-tuning" + chr(10) + "  import llm.quantize     # Int8/int4 compression with error analysis" + chr(10) + "  import llm.engram       # 4-tier persistent memory (working/episodic/semantic/procedural)" + chr(10) + chr(10) + "Plus ml_native (C backend) for fast matmul, softmax, cross_entropy, adam."
+    if topic == "agent_framework":
+        answer = "The Sage agent framework (lib/agent/) provides autonomous AI agents:" + chr(10) + chr(10) + "  import agent.core      # ReAct loop: observe -> think -> act -> reflect" + chr(10) + "  import agent.tools     # File I/O, code analysis, search, system tools" + chr(10) + "  import agent.planner   # Task decomposition with dependency DAG" + chr(10) + "  import agent.router    # Multi-agent orchestrator, capability routing" + chr(10) + chr(10) + "Agents parse LLM responses for TOOL: and ANSWER: commands." + chr(10) + "Chain-of-thought reasoning via scratchpad (think/observe/act/reflect)." + chr(10) + "Planning breaks goals into steps with tool assignments and dependencies."
+    if topic == "chatbot":
+        answer = "The Sage chatbot framework (lib/chat/) provides:" + chr(10) + chr(10) + "  import chat.bot        # Conversation, intents, middleware, LLM responses" + chr(10) + "  import chat.session    # Multi-session store, history, text/JSON export" + chr(10) + "  import chat.persona    # 6 built-in: SageDev, CodeReviewer, Teacher, Debugger, Architect, Assistant" + chr(10) + chr(10) + "Intents: keyword-based matching with scoring." + chr(10) + "Middleware: pre/post processing pipeline for messages." + chr(10) + "Personas: apply_persona(bot, persona.sage_developer())"
+    if topic == "crypto":
+        answer = "The crypto library (lib/crypto/) provides:" + chr(10) + chr(10) + "  import crypto.hash     # SHA-256, SHA-1, CRC-32" + chr(10) + "  import crypto.hmac     # HMAC with pluggable hash, constant-time compare" + chr(10) + "  import crypto.encoding # Base64 (standard + URL-safe), hex" + chr(10) + "  import crypto.cipher   # XOR, RC4, PKCS7 padding, CBC/CTR modes" + chr(10) + "  import crypto.rand     # xoshiro256** PRNG, UUID v4, shuffle" + chr(10) + "  import crypto.password # PBKDF2-HMAC, password hash/verify"
+    if topic == "networking":
+        answer = "Sage networking: native modules + lib/net/ high-level suite:" + chr(10) + chr(10) + "  Native: import socket, tcp, http, ssl" + chr(10) + chr(10) + "  import net.url         # URL parse/build, percent encoding, query strings" + chr(10) + "  import net.headers     # HTTP header parse/build, content-type" + chr(10) + "  import net.request     # HTTP client builder, auth, response helpers" + chr(10) + "  import net.server      # TCP/HTTP server, routing, response builders" + chr(10) + "  import net.websocket   # WebSocket frames (RFC 6455), upgrade" + chr(10) + "  import net.mime        # 80+ MIME types from file extensions" + chr(10) + "  import net.dns         # DNS wire-format parse/build" + chr(10) + "  import net.ip          # IPv4, CIDR, private/loopback/multicast"
+    if topic == "osdev":
+        answer = "The OS dev library (lib/os/, 15 modules) for baremetal/kernel/UEFI:" + chr(10) + chr(10) + "  import os.fat / os.fat_dir   # FAT filesystem + directory traversal" + chr(10) + "  import os.elf / os.pe        # ELF + PE/COFF binary parsers" + chr(10) + "  import os.mbr / os.gpt       # Partition table parsers" + chr(10) + "  import os.pci / os.acpi      # Hardware enumeration" + chr(10) + "  import os.uefi               # EFI memory map, RSDP, config tables" + chr(10) + "  import os.paging / os.idt    # Page tables, interrupt descriptors" + chr(10) + "  import os.serial             # UART/COM port for debug output" + chr(10) + "  import os.dtb                # Device tree for ARM64/RISC-V" + chr(10) + "  import os.alloc / os.vfs     # Kernel allocators, virtual filesystem"
+    if topic == "ml":
+        answer = "Sage ML libraries (lib/ml/ + lib/cuda/ + ml_native):" + chr(10) + chr(10) + "  import ml.tensor    # N-dim tensors, matmul, activations, softmax" + chr(10) + "  import ml.nn         # Linear, ReLU, Sigmoid, Dropout, Sequential" + chr(10) + "  import ml.optim      # SGD (momentum), Adam, LR schedulers" + chr(10) + "  import ml.loss       # MSE, cross-entropy, Huber, L1, KL divergence" + chr(10) + "  import ml.data       # Dataset, DataLoader, normalization, train/test split" + chr(10) + chr(10) + "Native backend (ml_native): C-optimized matmul, softmax, RMSNorm, Adam." + chr(10) + "12+ GFLOPS on 64x64 matmul without BLAS."
+    if topic == "regex":
+        answer = "Sage regex engine (import std.regex):" + chr(10) + chr(10) + "  regex.test(pattern, text)           # boolean match" + chr(10) + "  regex.search(pattern, text)         # first match {start, end, text}" + chr(10) + "  regex.find_all(pattern, text)       # all matches" + chr(10) + "  regex.replace_all(pattern, text, r) # replace" + chr(10) + "  regex.split_by(pattern, text)       # split" + chr(10) + chr(10) + "Supports: . * + ? [] [^] ^ $ | " + chr(92) + "d " + chr(92) + "w " + chr(92) + "s and negations"
+    if topic == "graphics":
+        answer = "Sage GPU engine (lib/graphics/, 24 modules):" + chr(10) + chr(10) + "  import gpu               # Native Vulkan backend (100+ functions)" + chr(10) + "  import graphics.opengl   # OpenGL 4.5 drop-in replacement" + chr(10) + "  import graphics.vulkan   # Builder API helpers" + chr(10) + "  import graphics.math3d   # vec2/3/4, mat4, camera, projection" + chr(10) + "  import graphics.mesh     # Procedural geometry, OBJ loading" + chr(10) + "  import graphics.renderer # Frame loop, depth buffer, sync" + chr(10) + "  import graphics.pbr      # Cook-Torrance PBR materials" + chr(10) + "  + shadows, deferred, taa, scene, material, ui, etc."
+    # --- General language answers ---
     if topic == "loops":
         answer = "In Sage, use for loops with range:" + chr(10) + "  for i in range(10):" + chr(10) + "      print i" + chr(10) + chr(10) + "Or iterate arrays:" + chr(10) + "  for item in my_array:" + chr(10) + "      print item" + chr(10) + chr(10) + "While loops: while condition: body"
     if topic == "modules":

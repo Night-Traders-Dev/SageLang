@@ -301,3 +301,27 @@ print "Int4: " + sizes["int4"]   # ~3 GB
 | `prompt` | `import llm.prompt` | `format_chatml`, `format_llama`, `few_shot`, `cot_prompt`, `truncate_history`, `render_template` |
 | `lora` | `import llm.lora` | `create_adapter`, `lora_forward`, `apply_lora`, `merge_weights`, `trainable_params` |
 | `quantize` | `import llm.quantize` | `quantize_int8`, `quantize_int4`, `dequantize_int8`, `quantization_error`, `size_comparison` |
+| `engram` | `import llm.engram` | `create`, `store_working`, `store_semantic`, `recall`, `consolidate`, `build_context`, `summary` |
+| `rag` | `import llm.rag` | `create_store`, `add_document`, `retrieve`, `build_context`, `rag_prompt`, `summarize_extractive` |
+| `dpo` | `import llm.dpo` | `simple_dpo_loss`, `batch_dpo_loss`, `orpo_loss`, `sage_code_preferences`, `create_reward_model` |
+
+## AI Builder
+
+The interactive AI builder (`models/ai_builder.sage`) guides you through the full pipeline:
+
+```bash
+sage models/ai_builder.sage
+```
+
+11-step wizard:
+1. Model configuration (nano to large, custom dimensions)
+2. Tokenizer selection (char, BPE, word-level)
+3. Training data (theory, multi-language, NLP, code, custom)
+4. Pre-training with native C backend
+5. LoRA fine-tuning on domain data
+6. DPO alignment with preference pairs
+7. Engram persistent memory setup
+8. RAG document store indexing
+9. Agent configuration (tools, planning)
+10. Chatbot persona selection
+11. Export and compilation
