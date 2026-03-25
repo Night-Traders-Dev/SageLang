@@ -761,6 +761,7 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_writefile(%%SageValue, %%SageValue)\n");
     // ML native runtime
     ll_emit(lc, "declare %%SageValue @sage_rt_load_weights(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_forward_pass(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_matmul(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_rms_norm(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_silu(%%SageValue)\n");
@@ -1553,6 +1554,20 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 if (!handled && strcmp(mod_name, "ml_native") == 0) {
                     if (strcmp(method_name, "load_weights") == 0 && expr->as.call.arg_count == 1) {
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_load_weights(%%SageValue %%%d)", r, arg_regs[0]);
+                        handled = 1;
+                    }
+                    if (!handled && strcmp(method_name, "forward_pass") == 0 && expr->as.call.arg_count == 17) {
+                        // 17 args: embed,qw,kw,vw,ow,gate,up,down,norm1,norm2,fnorm,lmhead,ids,d,ff,V,S
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_forward_pass("
+                            "%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, "
+                            "%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, "
+                            "%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, "
+                            "%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, "
+                            "%%SageValue %%%d)",
+                            r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3],
+                            arg_regs[4], arg_regs[5], arg_regs[6], arg_regs[7],
+                            arg_regs[8], arg_regs[9], arg_regs[10], arg_regs[11],
+                            arg_regs[12], arg_regs[13], arg_regs[14], arg_regs[15], arg_regs[16]);
                         handled = 1;
                     }
                     if (!handled && strcmp(method_name, "matmul") == 0 && expr->as.call.arg_count == 5) {

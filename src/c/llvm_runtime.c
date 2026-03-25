@@ -808,6 +808,12 @@ static SageValue sage_make_dict_wh(int w, int h) {
 // ML Native Runtime (matmul, rms_norm, silu, etc.)
 // ===========================================================================
 
+// Forward pass: exact same computation as ml_backend.c train_step (without backprop)
+SageValue sage_rt_forward_pass(SageValue e, SageValue qw, SageValue kw, SageValue vw,
+    SageValue ow, SageValue gw, SageValue uw, SageValue dw,
+    SageValue n1, SageValue n2, SageValue fn, SageValue lh,
+    SageValue ids_v, SageValue d_v, SageValue ff_v, SageValue V_v, SageValue S_v);
+
 // Helper: extract flat double array from SageValue array
 static double* sv_to_doubles(SageValue arr, int* out_count) {
     if (arr.type != SAGE_ARRAY) { *out_count = 0; return NULL; }
@@ -931,6 +937,98 @@ SageValue sage_rt_cross_entropy(SageValue logits, SageValue targets, SageValue b
     }
     free(L); free(T);
     return sage_rt_number(loss / (batch > 0 ? batch : 1));
+}
+
+// Forward pass implementation for LLVM runtime
+static void rt_softmax(double* x, int n) {
+    double mx = x[0];
+    for (int i = 1; i < n; i++) if (x[i] > mx) mx = x[i];
+    double s = 0;
+    for (int i = 0; i < n; i++) { x[i] = exp(x[i] - mx); s += x[i]; }
+    for (int i = 0; i < n; i++) x[i] /= s;
+}
+static void rt_matmul(const double* A, const double* B, double* C, int m, int k, int n) {
+    for (int i = 0; i < m; i++)
+        for (int j = 0; j < n; j++) {
+            double sum = 0;
+            for (int p = 0; p < k; p++) sum += A[i*k+p] * B[p*n+j];
+            C[i*n+j] = sum;
+        }
+}
+
+SageValue sage_rt_forward_pass(SageValue e, SageValue qw_v, SageValue kw_v, SageValue vw_v,
+    SageValue ow_v, SageValue gw_v, SageValue uw_v, SageValue dw_v,
+    SageValue n1_v, SageValue n2_v, SageValue fn_v, SageValue lh_v,
+    SageValue ids_v, SageValue d_v, SageValue ff_v, SageValue V_v, SageValue S_v) {
+    int ec,qc,kc,vc,oc,gc2,uc,dc2,n1c,n2c,fnc,lhc,ic;
+    double* embed=sv_to_doubles(e,&ec); double* Qw=sv_to_doubles(qw_v,&qc);
+    double* Kw=sv_to_doubles(kw_v,&kc); double* Vw=sv_to_doubles(vw_v,&vc);
+    double* Ow=sv_to_doubles(ow_v,&oc); double* Gate=sv_to_doubles(gw_v,&gc2);
+    double* Up=sv_to_doubles(uw_v,&uc); double* Down=sv_to_doubles(dw_v,&dc2);
+    double* N1=sv_to_doubles(n1_v,&n1c); double* N2=sv_to_doubles(n2_v,&n2c);
+    double* FN=sv_to_doubles(fn_v,&fnc); double* LH=sv_to_doubles(lh_v,&lhc);
+    double* ids=sv_to_doubles(ids_v,&ic);
+    int d=(int)(d_v.type==SAGE_NUMBER?d_v.as.number:0);
+    int ff=(int)(ff_v.type==SAGE_NUMBER?ff_v.as.number:0);
+    int V=(int)(V_v.type==SAGE_NUMBER?V_v.as.number:0);
+    int S=(int)(S_v.type==SAGE_NUMBER?S_v.as.number:0);
+    if(!embed||d<=0||ff<=0||V<=0||S<=0){
+        free(embed);free(Qw);free(Kw);free(Vw);free(Ow);free(Gate);free(Up);free(Down);
+        free(N1);free(N2);free(FN);free(LH);free(ids);return sage_rt_nil();
+    }
+    int SD=S*d, SF=S*ff;
+    double* hidden=(double*)calloc(SD,sizeof(double));
+    for(int t=0;t<S;t++){int tid=(int)ids[t];if(tid<0||tid>=V)tid=0;
+        for(int j=0;j<d;j++)hidden[t*d+j]=embed[tid*d+j];}
+    double* nm1=(double*)calloc(SD,sizeof(double));
+    for(int t=0;t<S;t++){double ss=0;
+        for(int j=0;j<d;j++){double v=hidden[t*d+j];ss+=v*v;}
+        double rms=sqrt(ss/d+1e-5);
+        for(int j=0;j<d;j++)nm1[t*d+j]=hidden[t*d+j]/rms*N1[j];}
+    double* Q=(double*)calloc(SD,sizeof(double));
+    double* K=(double*)calloc(SD,sizeof(double));
+    double* Vm=(double*)calloc(SD,sizeof(double));
+    rt_matmul(nm1,Qw,Q,S,d,d);rt_matmul(nm1,Kw,K,S,d,d);rt_matmul(nm1,Vw,Vm,S,d,d);
+    double sc=1.0/sqrt((double)d);
+    double* ap=(double*)calloc(S*S,sizeof(double));
+    for(int i=0;i<S;i++){
+        for(int j=0;j<S;j++){double dot=0;
+            for(int k=0;k<d;k++)dot+=Q[i*d+k]*K[j*d+k];
+            ap[i*S+j]=(j<=i)?dot*sc:-1e9;}
+        rt_softmax(ap+i*S,S);}
+    double* ao=(double*)calloc(SD,sizeof(double));
+    rt_matmul(ap,Vm,ao,S,S,d);
+    double* proj=(double*)calloc(SD,sizeof(double));
+    rt_matmul(ao,Ow,proj,S,d,d);
+    double* h2=(double*)calloc(SD,sizeof(double));
+    for(int i=0;i<SD;i++)h2[i]=hidden[i]+proj[i];
+    double* nm2=(double*)calloc(SD,sizeof(double));
+    for(int t=0;t<S;t++){double ss=0;
+        for(int j=0;j<d;j++){double v=h2[t*d+j];ss+=v*v;}
+        double rms=sqrt(ss/d+1e-5);
+        for(int j=0;j<d;j++)nm2[t*d+j]=h2[t*d+j]/rms*N2[j];}
+    double* go=(double*)calloc(SF,sizeof(double));
+    double* uo=(double*)calloc(SF,sizeof(double));
+    rt_matmul(nm2,Gate,go,S,d,ff);rt_matmul(nm2,Up,uo,S,d,ff);
+    double* gated=(double*)calloc(SF,sizeof(double));
+    for(int i=0;i<SF;i++){double s=1.0/(1.0+exp(-go[i]));gated[i]=go[i]*s*uo[i];}
+    double* fo=(double*)calloc(SD,sizeof(double));
+    rt_matmul(gated,Down,fo,S,ff,d);
+    double* h3=(double*)calloc(SD,sizeof(double));
+    for(int i=0;i<SD;i++)h3[i]=h2[i]+fo[i];
+    double* ln=(double*)calloc(d,sizeof(double));
+    {int t=S-1;double ss=0;
+     for(int j=0;j<d;j++){double v=h3[t*d+j];ss+=v*v;}
+     double rms=sqrt(ss/d+1e-5);
+     for(int j=0;j<d;j++)ln[j]=h3[t*d+j]/rms*FN[j];}
+    double* logits=(double*)calloc(V,sizeof(double));
+    for(int j=0;j<V;j++){double dot=0;for(int k=0;k<d;k++)dot+=ln[k]*LH[k*V+j];logits[j]=dot;}
+    SageValue result=doubles_to_sv(logits,V);
+    free(embed);free(Qw);free(Kw);free(Vw);free(Ow);free(Gate);free(Up);free(Down);
+    free(N1);free(N2);free(FN);free(LH);free(ids);
+    free(hidden);free(nm1);free(Q);free(K);free(Vm);free(ap);free(ao);free(proj);
+    free(h2);free(nm2);free(go);free(uo);free(gated);free(fo);free(h3);free(ln);free(logits);
+    return result;
 }
 
 // ---------------------------------------------------------------------------

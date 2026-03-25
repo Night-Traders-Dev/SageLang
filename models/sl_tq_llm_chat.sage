@@ -3,44 +3,15 @@ gc_disable()
 # Loads trained weights, runs real transformer forward pass
 # Compile: sage --compile-llvm models/sl_tq_llm_chat.sage -o sl_tq_chat
 
-import io
 import ml_native
 
-# === Load trained weights ===
-proc parse_floats(s):
-    let result = []
-    let current = ""
-    for i in range(len(s)):
-        if s[i] == ",":
-            if len(current) > 0:
-                push(result, tonumber(current))
-            current = ""
-        else:
-            current = current + s[i]
-    if len(current) > 0:
-        push(result, tonumber(current))
-    return result
-
-proc split_lines(s):
-    let lines = []
-    let current = ""
-    for i in range(len(s)):
-        if s[i] == chr(10):
-            push(lines, current)
-            current = ""
-        else:
-            current = current + s[i]
-    if len(current) > 0:
-        push(lines, current)
-    return lines
-
+# === Load weights via C parser (avoids OOM) ===
 print "Loading SL-TQ-LLM weights..."
-let raw = io.readfile("models/sl_tq_llm.weights")
-if raw == nil:
-    print "ERROR: models/sl_tq_llm.weights not found. Run training first."
+let W = ml_native.load_weights("models/sl_tq_llm.weights")
+if W == nil:
+    print "ERROR: models/sl_tq_llm.weights not found."
 
-let lines = split_lines(raw)
-let cfg_parts = parse_floats(lines[0])
+let cfg_parts = W[0]
 let d_model = cfg_parts[0] | 0
 let n_heads = cfg_parts[1] | 0
 let n_layers = cfg_parts[2] | 0
@@ -48,57 +19,26 @@ let d_ff = cfg_parts[3] | 0
 let vocab = cfg_parts[4] | 0
 let max_seq = cfg_parts[5] | 0
 
-let embed_w = parse_floats(lines[1])
-let qw = parse_floats(lines[2])
-let kw = parse_floats(lines[3])
-let vw = parse_floats(lines[4])
-let ow = parse_floats(lines[5])
-let gate_w = parse_floats(lines[6])
-let up_w = parse_floats(lines[7])
-let down_w = parse_floats(lines[8])
-let norm1_w = parse_floats(lines[9])
-let norm2_w = parse_floats(lines[10])
-let final_norm_w = parse_floats(lines[11])
-let lm_head_w = parse_floats(lines[12])
+let embed_w = W[1]
+let qw = W[2]
+let kw = W[3]
+let vw = W[4]
+let ow = W[5]
+let gate_w = W[6]
+let up_w = W[7]
+let down_w = W[8]
+let norm1_w = W[9]
+let norm2_w = W[10]
+let final_norm_w = W[11]
+let lm_head_w = W[12]
 
-print "Loaded: d=" + str(d_model) + " ff=" + str(d_ff) + " vocab=" + str(vocab) + " params=" + str(len(embed_w) + len(qw) + len(kw) + len(vw) + len(ow) + len(gate_w) + len(up_w) + len(down_w) + len(lm_head_w))
+let total_p = len(embed_w) + len(qw) + len(kw) + len(vw) + len(ow) + len(gate_w) + len(up_w) + len(down_w) + len(lm_head_w)
+print "Loaded: d=" + str(d_model) + " ff=" + str(d_ff) + " vocab=" + str(vocab) + " params=" + str(total_p)
 
 # === Transformer forward pass ===
 proc forward(token_ids):
-    let sl = len(token_ids)
-    let hidden = []
-    for t in range(sl):
-        let tid = token_ids[t]
-        if tid >= vocab:
-            tid = 0
-        for j in range(d_model):
-            push(hidden, embed_w[tid * d_model + j])
-    hidden = ml_native.rms_norm(hidden, norm1_w, sl, d_model, 0.00001)
-    let q = ml_native.matmul(hidden, qw, sl, d_model, d_model)
-    let k = ml_native.matmul(hidden, kw, sl, d_model, d_model)
-    let v = ml_native.matmul(hidden, vw, sl, d_model, d_model)
-    # Scaled dot-product attention (simplified)
-    let scale = 1.0 / 8.0
-    let attn = ml_native.matmul(q, k, sl, d_model, d_model)
-    attn = ml_native.scale(attn, scale)
-    let attn_out = ml_native.matmul(attn, v, sl, d_model, d_model)
-    let proj = ml_native.matmul(attn_out, ow, sl, d_model, d_model)
-    hidden = ml_native.add(hidden, proj)
-    let normed2 = ml_native.rms_norm(hidden, norm2_w, sl, d_model, 0.00001)
-    let gate_out = ml_native.matmul(normed2, gate_w, sl, d_model, d_ff)
-    let up_out = ml_native.matmul(normed2, up_w, sl, d_model, d_ff)
-    let gate_act = ml_native.silu(gate_out)
-    let gated = []
-    for gi in range(len(gate_act)):
-        push(gated, gate_act[gi] * up_out[gi])
-    let ffn_out = ml_native.matmul(gated, down_w, sl, d_ff, d_model)
-    hidden = ml_native.add(hidden, ffn_out)
-    hidden = ml_native.rms_norm(hidden, final_norm_w, sl, d_model, 0.00001)
-    let last_h = []
-    let off = (sl - 1) * d_model
-    for j in range(d_model):
-        push(last_h, hidden[off + j])
-    return ml_native.matmul(last_h, lm_head_w, 1, d_model, vocab)
+    # Use native C forward pass (matches train_step exactly: causal mask + softmax)
+    return ml_native.forward_pass(embed_w, qw, kw, vw, ow, gate_w, up_w, down_w, norm1_w, norm2_w, final_norm_w, lm_head_w, token_ids, d_model, d_ff, vocab, len(token_ids))
 
 # === Token sampling with temperature ===
 let rng = 12345

@@ -702,6 +702,119 @@ static Value ml_train_step(int argc, Value* args) {
     return val_number(loss);
 }
 
+// ml_native.forward_pass(embed, qw, kw, vw, ow, gate, up, down,
+//                        norm1, norm2, final_norm, lm_head,
+//                        input_ids, d_model, d_ff, vocab, seq_len)
+// Returns: array of logits (vocab-sized) — matches train_step's forward pass exactly
+static Value ml_forward_pass(int argc, Value* args) {
+    if (argc < 17) return val_nil();
+    int ec, qc, kc, vc, oc, gc_sz, uc, dc, n1c, n2c, fnc, lhc, idc;
+    double* embed  = value_array_to_doubles(args[0], &ec);
+    double* Qw     = value_array_to_doubles(args[1], &qc);
+    double* Kw     = value_array_to_doubles(args[2], &kc);
+    double* Vw     = value_array_to_doubles(args[3], &vc);
+    double* Ow     = value_array_to_doubles(args[4], &oc);
+    double* Gate   = value_array_to_doubles(args[5], &gc_sz);
+    double* Up     = value_array_to_doubles(args[6], &uc);
+    double* Down   = value_array_to_doubles(args[7], &dc);
+    double* Norm1  = value_array_to_doubles(args[8], &n1c);
+    double* Norm2  = value_array_to_doubles(args[9], &n2c);
+    double* FNorm  = value_array_to_doubles(args[10], &fnc);
+    double* LMHead = value_array_to_doubles(args[11], &lhc);
+    double* ids    = value_array_to_doubles(args[12], &idc);
+    int d = (int)AS_NUMBER(args[13]);
+    int ff = (int)AS_NUMBER(args[14]);
+    int V = (int)AS_NUMBER(args[15]);
+    int S = (int)AS_NUMBER(args[16]);
+    if (!embed || d <= 0 || ff <= 0 || V <= 0 || S <= 0) {
+        free(embed); free(Qw); free(Kw); free(Vw); free(Ow);
+        free(Gate); free(Up); free(Down);
+        free(Norm1); free(Norm2); free(FNorm); free(LMHead); free(ids);
+        return val_nil();
+    }
+    int SD = S * d, SF = S * ff;
+    // Embedding
+    double* hidden = (double*)calloc(SD, sizeof(double));
+    for (int t = 0; t < S; t++) {
+        int tid = (int)ids[t]; if (tid < 0 || tid >= V) tid = 0;
+        for (int j = 0; j < d; j++) hidden[t*d+j] = embed[tid*d+j];
+    }
+    // RMSNorm 1
+    double* normed1 = (double*)calloc(SD, sizeof(double));
+    for (int t = 0; t < S; t++) {
+        double ss = 0;
+        for (int j = 0; j < d; j++) { double v = hidden[t*d+j]; ss += v*v; }
+        double rms = sqrt(ss / d + 1e-5);
+        for (int j = 0; j < d; j++) normed1[t*d+j] = hidden[t*d+j] / rms * Norm1[j];
+    }
+    // Q,K,V projections
+    double* Q = (double*)calloc(SD, sizeof(double));
+    double* K = (double*)calloc(SD, sizeof(double));
+    double* Vmat = (double*)calloc(SD, sizeof(double));
+    matmul_f64(normed1, Qw, Q, S, d, d);
+    matmul_f64(normed1, Kw, K, S, d, d);
+    matmul_f64(normed1, Vw, Vmat, S, d, d);
+    // Causal attention + softmax (matches train_step exactly)
+    double scale = 1.0 / sqrt((double)d);
+    double* attn_probs = (double*)calloc(S * S, sizeof(double));
+    for (int i = 0; i < S; i++) {
+        for (int j = 0; j < S; j++) {
+            double dot = 0;
+            for (int k = 0; k < d; k++) dot += Q[i*d+k] * K[j*d+k];
+            attn_probs[i*S+j] = (j <= i) ? dot * scale : -1e9;
+        }
+        bp_softmax(attn_probs + i*S, S);
+    }
+    double* attn_out = (double*)calloc(SD, sizeof(double));
+    matmul_f64(attn_probs, Vmat, attn_out, S, S, d);
+    // O proj + residual
+    double* proj = (double*)calloc(SD, sizeof(double));
+    matmul_f64(attn_out, Ow, proj, S, d, d);
+    double* h2 = (double*)calloc(SD, sizeof(double));
+    for (int i = 0; i < SD; i++) h2[i] = hidden[i] + proj[i];
+    // RMSNorm 2
+    double* normed2 = (double*)calloc(SD, sizeof(double));
+    for (int t = 0; t < S; t++) {
+        double ss = 0;
+        for (int j = 0; j < d; j++) { double v = h2[t*d+j]; ss += v*v; }
+        double rms = sqrt(ss / d + 1e-5);
+        for (int j = 0; j < d; j++) normed2[t*d+j] = h2[t*d+j] / rms * Norm2[j];
+    }
+    // SwiGLU FFN
+    double* gate_out = (double*)calloc(SF, sizeof(double));
+    double* up_out = (double*)calloc(SF, sizeof(double));
+    matmul_f64(normed2, Gate, gate_out, S, d, ff);
+    matmul_f64(normed2, Up, up_out, S, d, ff);
+    double* gated = (double*)calloc(SF, sizeof(double));
+    for (int i = 0; i < SF; i++) gated[i] = silu_scalar(gate_out[i]) * up_out[i];
+    double* ffn_out = (double*)calloc(SD, sizeof(double));
+    matmul_f64(gated, Down, ffn_out, S, ff, d);
+    double* h3 = (double*)calloc(SD, sizeof(double));
+    for (int i = 0; i < SD; i++) h3[i] = h2[i] + ffn_out[i];
+    // Final norm + LM head on last token
+    double* last_normed = (double*)calloc(d, sizeof(double));
+    { int t = S-1; double ss = 0;
+      for (int j = 0; j < d; j++) { double v = h3[t*d+j]; ss += v*v; }
+      double rms = sqrt(ss / d + 1e-5);
+      for (int j = 0; j < d; j++) last_normed[j] = h3[t*d+j] / rms * FNorm[j];
+    }
+    double* logits = (double*)calloc(V, sizeof(double));
+    for (int j = 0; j < V; j++) {
+        double dot = 0;
+        for (int k = 0; k < d; k++) dot += last_normed[k] * LMHead[k*V+j];
+        logits[j] = dot;
+    }
+    Value result = doubles_to_value_array(logits, V);
+    free(embed); free(Qw); free(Kw); free(Vw); free(Ow);
+    free(Gate); free(Up); free(Down);
+    free(Norm1); free(Norm2); free(FNorm); free(LMHead); free(ids);
+    free(hidden); free(normed1); free(Q); free(K); free(Vmat);
+    free(attn_probs); free(attn_out); free(proj); free(h2);
+    free(normed2); free(gate_out); free(up_out); free(gated);
+    free(ffn_out); free(h3); free(last_normed); free(logits);
+    return result;
+}
+
 // ============================================================================
 // Helper: extract double array from Sage Value array
 // ============================================================================
@@ -1148,8 +1261,9 @@ Module* create_ml_native_module(ModuleCache* cache) {
     env_define(e, "set_parallel_threshold", 22, val_native(ml_set_parallel_threshold));
     env_define(e, "get_threads", 11, val_native(ml_get_threads));
 
-    // Training with backprop
+    // Training with backprop + inference
     env_define(e, "train_step", 10, val_native(ml_train_step));
+    env_define(e, "forward_pass", 12, val_native(ml_forward_pass));
 
     // Weight I/O
     env_define(e, "load_weights", 12, val_native(ml_load_weights));

@@ -289,14 +289,14 @@ log("TRAIN", "Theory+NLP tokens: " + str(len(theory_tokens)))
 
 let theory_examples = train.create_lm_examples(theory_tokens, seq_len)
 let theory_steps = len(theory_examples)
-if theory_steps > 500:
-    theory_steps = 500
+if theory_steps > 5000:
+    theory_steps = 5000
 
 let train_cfg = train.create_train_config()
-train_cfg["learning_rate"] = 0.001
+train_cfg["learning_rate"] = 0.003
 train_cfg["lr_schedule"] = "cosine"
-train_cfg["warmup_steps"] = 30
-train_cfg["log_interval"] = 100
+train_cfg["warmup_steps"] = 100
+train_cfg["log_interval"] = 500
 
 let state1 = train.create_train_state(train_cfg)
 let all_losses = []
@@ -338,10 +338,10 @@ log("LORA", "Sage corpus tokens: " + str(len(sage_tokens)))
 
 let sage_examples = train.create_lm_examples(sage_tokens, seq_len)
 let lora_steps = len(sage_examples)
-if lora_steps > 200:
-    lora_steps = 200
+if lora_steps > 2000:
+    lora_steps = 2000
 
-train_cfg["learning_rate"] = 0.001
+train_cfg["learning_rate"] = 0.002
 let state2 = train.create_train_state(train_cfg)
 
 log("LORA", "LoRA fine-tuning WITH BACKPROP: " + str(lora_steps) + " steps on Sage codebase")
@@ -357,7 +357,7 @@ for step in range(lora_steps):
     push(all_losses, loss)
     train.log_step(state2, loss, train_cfg["learning_rate"], 0)
 
-    if (step + 1) - (((step + 1) / 50) | 0) * 50 == 0:
+    if (step + 1) - (((step + 1) / 500) | 0) * 500 == 0:
         log("LORA", "  step " + str(step + 1) + "/" + str(lora_steps) + " loss=" + str(loss) + " ppl=" + str(train.perplexity(loss)))
 
 log("LORA", "LoRA done. avg_loss=" + str(train.avg_loss(state2)))
