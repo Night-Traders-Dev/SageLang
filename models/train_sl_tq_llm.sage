@@ -442,7 +442,7 @@ for i in range(len(doc_files)):
         rag.add_document(rag_store, content, meta)
 
 let rag_stats = rag.store_stats(rag_store)
-log("RAG", "Indexed: " + str(rag_stats["total_docs"]) + " docs, " + str(rag_stats["total_chunks"]) + " chunks")
+log("RAG", "Indexed: " + str(rag_stats["documents"]) + " docs, " + str(rag_stats["chunks"]) + " chunks")
 
 # Test retrieval
 let test_ctx = rag.build_context(rag_store, "turboquant quantization", 3)
@@ -492,7 +492,7 @@ log("TQ", "--- Weight Quantization Comparison ---")
 let q_int8 = quantize.quantize_int8(embed_w)
 let deq_int8 = quantize.dequantize_int8(q_int8)
 let err_int8 = quantize.quantization_error(embed_w, deq_int8)
-log("TQ", "INT8 embed error: max=" + str(err_int8["max_error"]) + " mean=" + str(err_int8["mean_error"]))
+log("TQ", "INT8 embed error: mse=" + str(err_int8["mse"]) + " rmse=" + str(err_int8["rmse"]) + " snr=" + str(err_int8["snr_db"]) + "dB")
 
 # TurboQuant MSE 3-bit on a sample
 let sample_size = 64
@@ -577,7 +577,7 @@ print "  DPO: " + str(len(dpo_ds["pairs"])) + " pairs, loss=" + str(dpo_avg)
 print ""
 print "Knowledge:"
 print "  Engram: " + str(len(memory["semantic"])) + " semantic + " + str(len(memory["procedural"])) + " procedural"
-print "  RAG: " + str(rag_stats["total_docs"]) + " docs (" + str(rag_stats["total_chunks"]) + " chunks)"
+print "  RAG: " + str(rag_stats["documents"]) + " docs (" + str(rag_stats["chunks"]) + " chunks)"
 print ""
 print "TurboQuant:"
 print "  KV cache: " + str(kv_stats["compression_ratio"]) + "x compression at 3-bit"
