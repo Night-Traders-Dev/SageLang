@@ -754,6 +754,9 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_dict_has(%%SageValue, %%SageValue)\n");
     // Type query
     ll_emit(lc, "declare %%SageValue @sage_rt_type(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_chr(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_ord(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_input(%%SageValue)\n");
     // Abort (for raise)
     ll_emit(lc, "declare void @abort() noreturn\n");
     // Bitwise operations
@@ -1462,6 +1465,18 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_dict_has(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
                 } else if (strcmp(name, "type") == 0 && expr->as.call.arg_count == 1) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_type(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "chr") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_chr(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "ord") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_ord(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "input") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_input(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "gc_disable") == 0) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                } else if (strcmp(name, "gc_enable") == 0) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                } else if (strcmp(name, "gc_collect") == 0) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
                 } else {
                     // User function call
                     fprintf(lc->out, "  %%%d = call %%SageValue @sage_fn_%s(", r, name);
@@ -1763,9 +1778,8 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             int len_reg = llc_new_reg(lc);
             ll_line(lc, "%%%d = call i32 @sage_rt_array_len(%%SageValue %%%d)", len_reg, iter);
 
-            // Allocate loop variable and counter
+            // Loop variable (alloca already emitted by collect_local_names at function entry)
             char* var_name = token_to_str(stmt->as.for_stmt.variable);
-            ll_line(lc, "%%%s = alloca %%SageValue", var_name);
             int idx_ptr = llc_new_reg(lc);
             ll_line(lc, "%%%d = alloca i32", idx_ptr);
             ll_line(lc, "store i32 0, i32* %%%d", idx_ptr);
@@ -2111,9 +2125,32 @@ static int write_llvm_output(const char* source, const char* input_path, const c
     fprintf(out, "define i32 @main() {\n");
     fprintf(out, "entry:\n");
 
-    // Allocate all local variables used in main
-    for (int i = 0; i < lc.global_count; i++) {
-        // Globals are module-level, already declared above
+    // Pre-allocate all local variables used in main (for/let inside loops/blocks)
+    {
+        char** main_locals = NULL;
+        int main_local_count = 0, main_local_cap = 0;
+        // Collect locals from non-proc, non-class top-level statements
+        for (Stmt* ms = program; ms != NULL; ms = ms->next) {
+            if (ms->type != STMT_PROC && ms->type != STMT_CLASS) {
+                // Wrap single stmt in a temporary chain for collect
+                Stmt* saved_next = ms->next;
+                ms->next = NULL;
+                collect_local_names(ms, &main_locals, &main_local_count, &main_local_cap);
+                ms->next = saved_next;
+            }
+        }
+        for (int ml = 0; ml < main_local_count; ml++) {
+            // Skip globals (they use @name, not %name)
+            int is_global = 0;
+            for (int gi = 0; gi < lc.global_count; gi++) {
+                if (strcmp(lc.global_names[gi], main_locals[ml]) == 0) { is_global = 1; break; }
+            }
+            if (!is_global) {
+                ll_line(&lc, "%%%s = alloca %%SageValue", main_locals[ml]);
+            }
+            free(main_locals[ml]);
+        }
+        free(main_locals);
     }
 
     // Emit top-level statements

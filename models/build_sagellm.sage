@@ -252,35 +252,35 @@ let all_losses = []
 
 proc forward_pass(input_ids, cur_seq_len):
     let hidden = []
-    for t in range(cur_seq_len):
-        let tid = input_ids[t]
-        if tid >= vocab:
-            tid = 0
-        for j in range(d_model):
-            push(hidden, embed_w[tid * d_model + j])
-    for layer in range(n_layers):
-        hidden = gpu_accel.rms_norm(gpu, hidden, layer_norm1[layer], cur_seq_len, d_model, 0.00001)
-        let q = gpu_accel.matmul(gpu, hidden, layer_qw[layer], cur_seq_len, d_model, d_model)
-        let k = gpu_accel.matmul(gpu, hidden, layer_kw[layer], cur_seq_len, d_model, d_model)
-        let v = gpu_accel.matmul(gpu, hidden, layer_vw[layer], cur_seq_len, d_model, d_model)
-        let attn_out = attention.scaled_dot_product(q, k, v, cur_seq_len, d_model, true)
-        let proj = gpu_accel.matmul(gpu, attn_out, layer_ow[layer], cur_seq_len, d_model, d_model)
-        hidden = gpu_accel.add(gpu, hidden, proj)
-        let normed2 = gpu_accel.rms_norm(gpu, hidden, layer_norm2[layer], cur_seq_len, d_model, 0.00001)
-        let gate_out = gpu_accel.matmul(gpu, normed2, layer_gate[layer], cur_seq_len, d_model, d_ff)
-        let up_out = gpu_accel.matmul(gpu, normed2, layer_up[layer], cur_seq_len, d_model, d_ff)
-        let gate_act = gpu_accel.silu(gpu, gate_out)
-        let gated = []
-        for i in range(len(gate_act)):
-            push(gated, gate_act[i] * up_out[i])
-        let ffn_out = gpu_accel.matmul(gpu, gated, layer_down[layer], cur_seq_len, d_ff, d_model)
-        hidden = gpu_accel.add(gpu, hidden, ffn_out)
+    for fp_t in range(cur_seq_len):
+        let fp_tid = input_ids[fp_t]
+        if fp_tid >= vocab:
+            fp_tid = 0
+        for fp_j in range(d_model):
+            push(hidden, embed_w[fp_tid * d_model + fp_j])
+    for fp_layer in range(n_layers):
+        hidden = gpu_accel.rms_norm(gpu, hidden, layer_norm1[fp_layer], cur_seq_len, d_model, 0.00001)
+        let fp_q = gpu_accel.matmul(gpu, hidden, layer_qw[fp_layer], cur_seq_len, d_model, d_model)
+        let fp_k = gpu_accel.matmul(gpu, hidden, layer_kw[fp_layer], cur_seq_len, d_model, d_model)
+        let fp_v = gpu_accel.matmul(gpu, hidden, layer_vw[fp_layer], cur_seq_len, d_model, d_model)
+        let fp_attn = attention.scaled_dot_product(fp_q, fp_k, fp_v, cur_seq_len, d_model, true)
+        let fp_proj = gpu_accel.matmul(gpu, fp_attn, layer_ow[fp_layer], cur_seq_len, d_model, d_model)
+        hidden = gpu_accel.add(gpu, hidden, fp_proj)
+        let fp_normed = gpu_accel.rms_norm(gpu, hidden, layer_norm2[fp_layer], cur_seq_len, d_model, 0.00001)
+        let fp_gate = gpu_accel.matmul(gpu, fp_normed, layer_gate[fp_layer], cur_seq_len, d_model, d_ff)
+        let fp_up = gpu_accel.matmul(gpu, fp_normed, layer_up[fp_layer], cur_seq_len, d_model, d_ff)
+        let fp_act = gpu_accel.silu(gpu, fp_gate)
+        let fp_gated = []
+        for fp_i in range(len(fp_act)):
+            push(fp_gated, fp_act[fp_i] * fp_up[fp_i])
+        let fp_ffn = gpu_accel.matmul(gpu, fp_gated, layer_down[fp_layer], cur_seq_len, d_ff, d_model)
+        hidden = gpu_accel.add(gpu, hidden, fp_ffn)
     hidden = gpu_accel.rms_norm(gpu, hidden, final_norm, cur_seq_len, d_model, 0.00001)
-    let last_h = []
-    let off = (cur_seq_len - 1) * d_model
-    for j in range(d_model):
-        push(last_h, hidden[off + j])
-    return gpu_accel.matmul(gpu, last_h, lm_head, 1, d_model, vocab)
+    let fp_last = []
+    let fp_off = (cur_seq_len - 1) * d_model
+    for fp_j in range(d_model):
+        push(fp_last, hidden[fp_off + fp_j])
+    return gpu_accel.matmul(gpu, fp_last, lm_head, 1, d_model, vocab)
 
 for step in range(theory_steps):
     let ids = theory_examples[step]["input_ids"]
@@ -321,47 +321,47 @@ if lora_steps > 100:
 let state2 = train.create_train_state(train_cfg)
 train_cfg["learning_rate"] = 0.001
 
-for step in range(lora_steps):
-    let ids = sage_examples[step]["input_ids"]
-    let tgt = sage_examples[step]["target_ids"]
-    let hidden = []
-    for t in range(seq_len):
-        let tid = ids[t]
-        if tid >= vocab:
-            tid = 0
-        for j in range(d_model):
-            push(hidden, embed_w[tid * d_model + j])
-    hidden = gpu_accel.rms_norm(gpu, hidden, layer_norm1[0], seq_len, d_model, 0.00001)
-    let q_base = gpu_accel.matmul(gpu, hidden, layer_qw[0], seq_len, d_model, d_model)
-    let q_lora = lora.lora_forward(adapter, hidden, seq_len)
-    let q = gpu_accel.add(gpu, q_base, q_lora)
-    let k = gpu_accel.matmul(gpu, hidden, layer_kw[0], seq_len, d_model, d_model)
-    let v = gpu_accel.matmul(gpu, hidden, layer_vw[0], seq_len, d_model, d_model)
-    let attn = attention.scaled_dot_product(q, k, v, seq_len, d_model, true)
-    let proj = gpu_accel.matmul(gpu, attn, layer_ow[0], seq_len, d_model, d_model)
-    hidden = gpu_accel.add(gpu, hidden, proj)
-    hidden = gpu_accel.rms_norm(gpu, hidden, layer_norm2[0], seq_len, d_model, 0.00001)
-    let gate_out = gpu_accel.matmul(gpu, hidden, layer_gate[0], seq_len, d_model, d_ff)
-    let up_out = gpu_accel.matmul(gpu, hidden, layer_up[0], seq_len, d_model, d_ff)
-    let gate_act = gpu_accel.silu(gpu, gate_out)
-    let gated = []
-    for i in range(len(gate_act)):
-        push(gated, gate_act[i] * up_out[i])
-    let ffn_out = gpu_accel.matmul(gpu, gated, layer_down[0], seq_len, d_ff, d_model)
-    hidden = gpu_accel.add(gpu, hidden, ffn_out)
-    hidden = gpu_accel.rms_norm(gpu, hidden, final_norm, seq_len, d_model, 0.00001)
-    let last_h = []
-    for j in range(d_model):
-        push(last_h, hidden[(seq_len - 1) * d_model + j])
-    let logits = gpu_accel.matmul(gpu, last_h, lm_head, 1, d_model, vocab)
-    let target = [tgt[seq_len - 1]]
-    if target[0] >= vocab:
-        target[0] = 0
-    let loss = gpu_accel.cross_entropy(gpu, logits, target, 1, vocab)
-    push(all_losses, loss)
-    train.log_step(state2, loss, train_cfg["learning_rate"], 0)
-    if (step + 1) - (((step + 1) / 25) | 0) * 25 == 0:
-        log("LORA", "  step " + str(step + 1) + "/" + str(lora_steps) + " loss=" + str(loss))
+for lora_step in range(lora_steps):
+    let lora_ids = sage_examples[lora_step]["input_ids"]
+    let lora_tgt = sage_examples[lora_step]["target_ids"]
+    let lora_hidden = []
+    for lt in range(seq_len):
+        let ltid = lora_ids[lt]
+        if ltid >= vocab:
+            ltid = 0
+        for lj in range(d_model):
+            push(lora_hidden, embed_w[ltid * d_model + lj])
+    lora_hidden = gpu_accel.rms_norm(gpu, lora_hidden, layer_norm1[0], seq_len, d_model, 0.00001)
+    let lq_base = gpu_accel.matmul(gpu, lora_hidden, layer_qw[0], seq_len, d_model, d_model)
+    let lq_lora = lora.lora_forward(adapter, lora_hidden, seq_len)
+    let lq = gpu_accel.add(gpu, lq_base, lq_lora)
+    let lk = gpu_accel.matmul(gpu, lora_hidden, layer_kw[0], seq_len, d_model, d_model)
+    let lv = gpu_accel.matmul(gpu, lora_hidden, layer_vw[0], seq_len, d_model, d_model)
+    let lora_attn = attention.scaled_dot_product(lq, lk, lv, seq_len, d_model, true)
+    let lora_proj = gpu_accel.matmul(gpu, lora_attn, layer_ow[0], seq_len, d_model, d_model)
+    lora_hidden = gpu_accel.add(gpu, lora_hidden, lora_proj)
+    lora_hidden = gpu_accel.rms_norm(gpu, lora_hidden, layer_norm2[0], seq_len, d_model, 0.00001)
+    let lora_gate = gpu_accel.matmul(gpu, lora_hidden, layer_gate[0], seq_len, d_model, d_ff)
+    let lora_up = gpu_accel.matmul(gpu, lora_hidden, layer_up[0], seq_len, d_model, d_ff)
+    let lora_act = gpu_accel.silu(gpu, lora_gate)
+    let lora_gated = []
+    for li in range(len(lora_act)):
+        push(lora_gated, lora_act[li] * lora_up[li])
+    let lora_ffn = gpu_accel.matmul(gpu, lora_gated, layer_down[0], seq_len, d_ff, d_model)
+    lora_hidden = gpu_accel.add(gpu, lora_hidden, lora_ffn)
+    lora_hidden = gpu_accel.rms_norm(gpu, lora_hidden, final_norm, seq_len, d_model, 0.00001)
+    let lora_last = []
+    for lj2 in range(d_model):
+        push(lora_last, lora_hidden[(seq_len - 1) * d_model + lj2])
+    let lora_logits = gpu_accel.matmul(gpu, lora_last, lm_head, 1, d_model, vocab)
+    let lora_target = [lora_tgt[seq_len - 1]]
+    if lora_target[0] >= vocab:
+        lora_target[0] = 0
+    let lora_loss = gpu_accel.cross_entropy(gpu, lora_logits, lora_target, 1, vocab)
+    push(all_losses, lora_loss)
+    train.log_step(state2, lora_loss, train_cfg["learning_rate"], 0)
+    if (lora_step + 1) - (((lora_step + 1) / 25) | 0) * 25 == 0:
+        log("LORA", "  step " + str(lora_step + 1) + "/" + str(lora_steps) + " loss=" + str(lora_loss))
 
 log("LORA", "Done. avg=" + str(train.avg_loss(state2)))
 print ""

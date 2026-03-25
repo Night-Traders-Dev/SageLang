@@ -663,6 +663,22 @@ SageValue sage_rt_input(SageValue prompt) {
     return sage_rt_nil();
 }
 
+SageValue sage_rt_chr(SageValue val) {
+    if (val.type != SAGE_NUMBER) return sage_rt_nil();
+    int code = (int)val.as.number;
+    if (code < 0 || code > 127) return sage_rt_nil();
+    char buf[2];
+    buf[0] = (char)code;
+    buf[1] = '\0';
+    return sage_rt_string(buf);
+}
+
+SageValue sage_rt_ord(SageValue val) {
+    if (val.type != SAGE_STRING || val.as.string == NULL || val.as.string[0] == '\0')
+        return sage_rt_nil();
+    return sage_rt_number((double)(unsigned char)val.as.string[0]);
+}
+
 // ============================================================================
 // GPU Runtime Bridge — SageValue wrappers for sgpu_* API
 // ============================================================================
