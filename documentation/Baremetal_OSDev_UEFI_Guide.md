@@ -249,17 +249,176 @@ for i in range(len(uarts)):
         print "UART at " + str(addrs[0]["address"])
 ```
 
+## Compiler Flags for Bare-Metal and UEFI Output
+
+Two dedicated compiler commands produce final linked artifacts without requiring external toolchain steps:
+
+```bash
+# Produce a freestanding ELF kernel binary (x86_64 or aarch64)
+sage --compile-bare kernel.sage -o kernel.elf --target x86_64
+
+# Produce a UEFI PE application (x86_64 or aarch64 only)
+sage --compile-uefi boot.sage -o boot.efi --target x86_64
+```
+
+Both flags link against `src/c/bare_metal.c`, a freestanding C runtime that supplies `memcpy`, `memset`, `memcmp`, basic integer formatting, and a panic handler — no libc dependency.
+
+## Boot Modules (`lib/os/boot/`)
+
+Four modules generate the low-level structures needed before a kernel's main entry point:
+
+| Module | Import | Description |
+|--------|--------|-------------|
+| `multiboot.sage` | `import os.boot.multiboot` | Multiboot2 header and tag generation, boot info struct parsing |
+| `gdt.sage` | `import os.boot.gdt` | x86_64 GDT descriptor construction, TSS entries, LGDT sequence builder |
+| `start.sage` | `import os.boot.start` | x86_64 startup assembly generation (long mode switch, stack setup, jump to kmain) |
+| `linker.sage` | `import os.boot.linker` | Linker script generation (`.text`, `.rodata`, `.data`, `.bss` sections, load/VMA addresses) |
+
+```sage
+import os.boot.multiboot
+import os.boot.gdt
+import os.boot.start
+import os.boot.linker
+
+# Generate a Multiboot2 header
+let mb_header = multiboot.make_header({"flags": 0, "load_addr": 0x100000})
+let mb_bytes = multiboot.header_to_bytes(mb_header)
+
+# Build a minimal GDT (null + 64-bit code + data)
+let gdt = gdt.make_gdt64()
+let lgdt_seq = gdt.lgdt_sequence(gdt)
+
+# Emit startup assembly
+let asm_src = start.emit_start64("kmain", 0x90000)
+
+# Emit a linker script
+let lds = linker.emit_script({"load_addr": 0x100000, "sections": ["text", "rodata", "data", "bss"]})
+```
+
+## Kernel Modules (`lib/os/kernel/`)
+
+Seven modules provide the core drivers and subsystems for a minimal x86_64 kernel:
+
+| Module | Import | Description |
+|--------|--------|-------------|
+| `kmain.sage` | `import os.kernel.kmain` | Kernel entry scaffolding; handoff from Multiboot2 boot info |
+| `console.sage` | `import os.kernel.console` | VGA text-mode console, 80×25, 16 color attributes, scrolling |
+| `keyboard.sage` | `import os.kernel.keyboard` | PS/2 keyboard driver, scancode set 2, key event dispatch |
+| `timer.sage` | `import os.kernel.timer` | PIT channel 0 configuration, IRQ0 handler, millisecond tick counter |
+| `syscall.sage` | `import os.kernel.syscall` | SYSCALL/SYSRET dispatch table, argument register marshalling |
+| `pmm.sage` | `import os.kernel.pmm` | Physical memory manager — bitmap allocator seeded from Multiboot2 memory map |
+| `vmm.sage` | `import os.kernel.vmm` | Virtual memory manager — 4-level page tables, map/unmap, page fault handler |
+
+```sage
+import os.kernel.console
+import os.kernel.timer
+import os.kernel.pmm
+
+# Initialize VGA console
+let con = console.init()
+console.puts(con, "Sage kernel booting...")
+
+# Set PIT to 1000 Hz
+let timer_cfg = timer.configure(1000)
+let irq0_handler = timer.make_handler(timer_cfg)
+
+# Seed physical memory manager from Multiboot2 map
+let pmm_state = pmm.init_from_mmap(mmap_bytes, mmap_count, 4096)
+let page = pmm.alloc_page(pmm_state)
+print str(page)   # physical address of allocated page
+```
+
+## Image Builders (`lib/os/image/`)
+
+Two modules produce bootable media artifacts:
+
+| Module | Import | Description |
+|--------|--------|-------------|
+| `diskimg.sage` | `import os.image.diskimg` | Bootable .img builder — MBR partition table, FAT12/16 boot partition, kernel file |
+| `iso.sage` | `import os.image.iso` | ISO 9660 image with El Torito boot record for CD/DVD/USB emulation |
+
+```sage
+import os.image.diskimg
+import os.image.iso
+
+# Build a 64 MB bootable disk image
+let img = diskimg.create({"size_mb": 64, "kernel": "kernel.elf", "bootloader": "boot/mbr.bin"})
+diskimg.write(img, "os.img")
+
+# Build an ISO 9660 image
+let iso_img = iso.create({"boot_image": "boot.bin", "files": ["kernel.elf", "initrd.img"]})
+iso.write(iso_img, "os.iso")
+```
+
+## Filesystem Modules (ext, btrfs, f2fs)
+
+Three new filesystem parsers extend the `lib/os/` suite for reading Linux-style filesystems:
+
+| Module | Import | Description |
+|--------|--------|-------------|
+| `ext.sage` | `import os.ext` | ext2/3/4 superblock, inode table, directory entries, extent tree traversal |
+| `btrfs.sage` | `import os.btrfs` | Btrfs superblock, chunk/root tree walking, subvolume listing, checksums |
+| `f2fs.sage` | `import os.f2fs` | F2FS superblock, checkpoint, segment info table, node/data block addressing |
+
+```sage
+import os.ext
+import io
+
+let disk = io.readbytes("linux.img")
+let sb = ext.parse_superblock(disk, 1024)
+print sb["rev_level"]        # 1 (ext2/3/4 dynamic)
+print sb["feature_compat"]
+
+let inode = ext.read_inode(disk, sb, 2)   # root inode
+let entries = ext.list_dir(disk, sb, inode)
+for i in range(len(entries)):
+    print entries[i]["name"]
+```
+
+## Quick-Start: Minimal Sage Kernel
+
+The following steps build a bootable x86_64 kernel from a single Sage source file:
+
+```bash
+# 1. Write kernel.sage (import os.kernel.* modules, define kmain)
+# 2. Compile to freestanding ELF
+sage --compile-bare kernel.sage -o kernel.elf --target x86_64
+
+# 3. Build a bootable disk image
+sage -c "import os.image.diskimg; let img = diskimg.create({\"kernel\": \"kernel.elf\", \"size_mb\": 32}); diskimg.write(img, \"os.img\")"
+
+# 4. Run in QEMU
+qemu-system-x86_64 -drive format=raw,file=os.img -m 128M
+```
+
+For UEFI targets:
+
+```bash
+# Compile to UEFI PE application
+sage --compile-uefi efi_main.sage -o BOOTX64.EFI --target x86_64
+
+# Place on FAT ESP and boot via OVMF
+qemu-system-x86_64 -bios /usr/share/ovmf/OVMF.fd -drive format=raw,file=esp.img
+```
+
+## Bare-Metal C Runtime (`src/c/bare_metal.c`)
+
+`src/c/bare_metal.c` is a freestanding C runtime automatically linked by `--compile-bare` and `--compile-uefi`. It has no libc dependency and provides:
+
+- `memcpy`, `memset`, `memcmp`, `memmove` — standard memory primitives
+- `sage_rt_itoa`, `sage_rt_utoa` — integer-to-string conversion for kernel debug output
+- `sage_rt_panic` — prints a message to the VGA console and halts the CPU (`cli; hlt`)
+- Minimal `__stack_chk_fail` stub to satisfy compiler SSP requirements in freestanding mode
+
 ## Current Limitations
 
-- Non-hosted targets are currently object-oriented output only (no final bootable image linker flow yet).
-- UEFI output is not yet a finalized `.efi` artifact in this stage.
+- UEFI `.efi` PE output requires `lld-link` or `llvm-objcopy` available in `PATH` for final image packaging.
 - Native backend coverage is still evolving; some language constructs remain unsupported in this backend path.
+- `rv64-uefi` is not supported (x86_64 and aarch64 only for UEFI targets).
 
 ## Recommended Next Steps
 
-1. Add profile-aware linker script integration for bare-metal and OSdev targets.
-2. Add PE/COFF image emission/link path for UEFI (`.efi` output).
-3. Expand native backend construct coverage and runtime surface for non-hosted use cases.
-4. Add SMBIOS table parsing to `os.uefi`.
-5. Add ext2/ext4 filesystem backend for `os.vfs`.
-6. Add kernel ELF loader (load segments into page-allocated memory).
+1. Add SMBIOS table parsing to `os.uefi`.
+2. Add kernel ELF loader (load segments into page-allocated memory).
+3. Expand native backend construct coverage for non-hosted use cases.
+4. Add NVMe and AHCI driver modules to `lib/os/kernel/`.
