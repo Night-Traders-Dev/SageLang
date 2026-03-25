@@ -61,6 +61,11 @@ SKIP_TESTS=0
 MAKE_ONLY=0
 BUILD_TRAINER=0
 BUILD_CHATBOT=0
+NO_VULKAN=0
+NO_GLFW=0
+NO_CURL=0
+NO_SSL=0
+NO_GPU=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -69,13 +74,30 @@ for arg in "$@"; do
         --make-only)  MAKE_ONLY=1 ;;
         --train)      BUILD_TRAINER=1 ;;
         --chatbot)    BUILD_CHATBOT=1 ;;
+        --no-vulkan)  NO_VULKAN=1 ;;
+        --no-glfw)    NO_GLFW=1 ;;
+        --no-curl)    NO_CURL=1 ;;
+        --no-ssl)     NO_SSL=1 ;;
+        --no-gpu)     NO_GPU=1 ;;
+        --minimal)    NO_VULKAN=1; NO_GLFW=1; NO_CURL=1; NO_SSL=1; NO_GPU=1 ;;
         --help|-h)
             echo "Usage: ./build.sh [options]"
+            echo ""
+            echo "Build options:"
             echo "  --install      Install to /usr/local after building"
             echo "  --skip-tests   Skip test suite"
             echo "  --make-only    Use Make instead of CMake"
             echo "  --train        Build the SL-TQ-LLM C trainer"
             echo "  --chatbot      Compile chatbots (C + LLVM backends)"
+            echo ""
+            echo "Feature toggles:"
+            echo "  --no-vulkan    Disable Vulkan GPU support"
+            echo "  --no-glfw      Disable GLFW windowed mode"
+            echo "  --no-curl      Disable HTTP/libcurl support"
+            echo "  --no-ssl       Disable OpenSSL support"
+            echo "  --no-gpu       Disable all GPU features (Vulkan + GLFW)"
+            echo "  --minimal      Disable all optional features (core only)"
+            echo ""
             echo "  --help         Show this help"
             exit 0
             ;;
@@ -91,6 +113,33 @@ done
 # ============================================================
 
 banner "SageLang Build Pipeline"
+
+# --- Detect environment ---
+IS_PROOT=0
+IS_TERMUX=0
+IS_ARM64=0
+IS_RISCV=0
+
+if [ -f /proc/self/status ] && grep -q "TracerPid:[[:space:]]*[1-9]" /proc/self/status 2>/dev/null; then
+    IS_PROOT=1
+fi
+if [ -n "${TERMUX_VERSION:-}" ] || [ -d /data/data/com.termux ]; then
+    IS_TERMUX=1
+fi
+if [ "$(uname -m)" = "aarch64" ]; then
+    IS_ARM64=1
+fi
+if [ "$(uname -m)" = "riscv64" ]; then
+    IS_RISCV=1
+fi
+
+if [ "$IS_PROOT" -eq 1 ] || [ "$IS_TERMUX" -eq 1 ]; then
+    printf "  ${WARN} ${YELLOW}Detected proot/Termux environment${RESET}\n"
+    printf "  ${DIM}  Auto-enabling --minimal (no Vulkan/GLFW/curl/SSL)${RESET}\n"
+    printf "  ${DIM}  Use --train for mobile C trainer with ARM NEON${RESET}\n\n"
+    NO_VULKAN=1; NO_GLFW=1; NO_GPU=1
+    # curl and ssl might work in proot, leave them
+fi
 
 section "Checking dependencies"
 
@@ -119,34 +168,55 @@ check_dep "CMake" "cmake" && HAS_CMAKE=1 || true
 HAS_GLSLC=0
 check_dep "GLSL compiler (glslc)" "glslc" && HAS_GLSLC=1 || true
 HAS_VULKAN=0
-step "Checking Vulkan SDK"
-if pkg-config --exists vulkan 2>/dev/null; then
-    step_ok "$(pkg-config --modversion vulkan)"
-    HAS_VULKAN=1
+if [ "$NO_VULKAN" -eq 1 ] || [ "$NO_GPU" -eq 1 ]; then
+    step "Vulkan SDK"
+    step_warn "disabled (--no-vulkan)"
 else
-    step_warn "not found (GPU features disabled)"
+    step "Checking Vulkan SDK"
+    if pkg-config --exists vulkan 2>/dev/null; then
+        step_ok "$(pkg-config --modversion vulkan)"
+        HAS_VULKAN=1
+    else
+        step_warn "not found (GPU features disabled)"
+    fi
 fi
+
 HAS_GLFW=0
-step "Checking GLFW"
-if pkg-config --exists glfw3 2>/dev/null; then
-    step_ok "$(pkg-config --modversion glfw3)"
-    HAS_GLFW=1
+if [ "$NO_GLFW" -eq 1 ] || [ "$NO_GPU" -eq 1 ]; then
+    step "GLFW"
+    step_warn "disabled (--no-glfw)"
 else
-    step_warn "not found (windowed mode disabled)"
+    step "Checking GLFW"
+    if pkg-config --exists glfw3 2>/dev/null; then
+        step_ok "$(pkg-config --modversion glfw3)"
+        HAS_GLFW=1
+    else
+        step_warn "not found (windowed mode disabled)"
+    fi
 fi
 
-step "Checking libcurl"
-if pkg-config --exists libcurl 2>/dev/null; then
-    step_ok "$(pkg-config --modversion libcurl)"
+if [ "$NO_CURL" -eq 1 ]; then
+    step "libcurl"
+    step_warn "disabled (--no-curl)"
 else
-    step_warn "not found (HTTP module disabled)"
+    step "Checking libcurl"
+    if pkg-config --exists libcurl 2>/dev/null; then
+        step_ok "$(pkg-config --modversion libcurl)"
+    else
+        step_warn "not found (HTTP module disabled)"
+    fi
 fi
 
-step "Checking OpenSSL"
-if pkg-config --exists openssl 2>/dev/null; then
-    step_ok "$(pkg-config --modversion openssl)"
+if [ "$NO_SSL" -eq 1 ]; then
+    step "OpenSSL"
+    step_warn "disabled (--no-ssl)"
 else
-    step_warn "not found (SSL module disabled)"
+    step "Checking OpenSSL"
+    if pkg-config --exists openssl 2>/dev/null; then
+        step_ok "$(pkg-config --modversion openssl)"
+    else
+        step_warn "not found (SSL module disabled)"
+    fi
 fi
 
 if [ "$MISSING" -eq 1 ]; then
@@ -202,7 +272,7 @@ if [ "$MAKE_ONLY" -eq 1 ] || [ "$HAS_CMAKE" -eq 0 ]; then
 
     step "Compiling sage (C sources)"
     start_time=$SECONDS
-    if ! build_output=$(make -j"$(nproc)" 2>&1); then
+    if ! build_output=$(make -j"$(nproc 2>/dev/null || echo 2)" 2>&1); then
         printf "\n"
         echo "$build_output" | tail -20
         step_fail "compilation failed"
@@ -235,7 +305,7 @@ else
 
     step "Compiling sage (C sources)"
     start_time=$SECONDS
-    if ! build_output=$(cd build_sage && make -j"$(nproc)" sage 2>&1); then
+    if ! build_output=$(cd build_sage && make -j"$(nproc 2>/dev/null || echo 2)" sage 2>&1); then
         printf "\n"
         echo "$build_output" | tail -20
         step_fail "compilation failed"
@@ -302,11 +372,22 @@ if [ "$SKIP_TESTS" -eq 0 ]; then
     }
 
     section "C Interpreter Tests"
-    run_test "Interpreter tests (144)" "make test 2>&1" "(All \d+ tests passed|PASS)" || total_fail=$((total_fail + 1))
+    if [ "$IS_PROOT" -eq 1 ]; then
+        step "Interpreter tests"
+        step_warn "skipped (proot — run manually: bash tests/run_tests.sh)"
+    else
+        run_test "Interpreter tests (241)" "bash tests/run_tests.sh 2>&1" "(All \d+ tests passed|passed.*0 failed)" || total_fail=$((total_fail + 1))
+    fi
 
     section "Self-Hosted Tests"
 
+    if [ "$IS_PROOT" -eq 1 ]; then
+        step "Self-hosted tests"
+        step_warn "skipped (proot — run manually: make test-selfhost)"
+    fi
+
     # Run the full make test-selfhost which covers ALL suites
+    if [ "$IS_PROOT" -eq 0 ]; then
     step "Full self-hosted suite"
     if output=$(make test-selfhost 2>&1); then
         if echo "$output" | grep -q "All self-hosted tests complete"; then
@@ -324,6 +405,7 @@ if [ "$SKIP_TESTS" -eq 0 ]; then
         echo "$output" | grep "FAIL" | head -5 | sed 's/^/    /'
         total_fail=$((total_fail + 1))
     fi
+    fi  # end IS_PROOT check
 
     # --- Summary ---
     printf "\n"
@@ -346,7 +428,7 @@ if [ "$DO_INSTALL" -eq 1 ]; then
 
     section "Building release binary for installation"
     step "Compiling sage via Make (release)"
-    if ! make_output=$(make -j"$(nproc)" 2>&1); then
+    if ! make_output=$(make -j"$(nproc 2>/dev/null || echo 2)" 2>&1); then
         step_fail "Make build failed"
     fi
     step_ok "sage + sage-lsp"
