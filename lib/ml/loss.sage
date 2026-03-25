@@ -1,5 +1,9 @@
 gc_disable()
 # Loss functions for neural network training
+#
+# GPU acceleration: use cross_entropy_accel(ctx, logits, targets, batch, vocab)
+# to route cross-entropy through gpu_accel backend.
+# Standard functions run on CPU (pure Sage).
 
 import math
 
@@ -147,3 +151,17 @@ proc kl_divergence(p_dist, q_dist):
         if p > 0.0000001 and q > 0.0000001:
             s = s + p * math.log(p / q)
     return s
+
+# ============================================================================
+# GPU-accelerated variants
+# ============================================================================
+
+# Accelerated cross-entropy via gpu_accel (uses native C backend)
+proc cross_entropy_accel(ctx, logits, targets, batch, vocab):
+    import ml.gpu_accel
+    return gpu_accel.cross_entropy(ctx, logits, targets, batch, vocab)
+
+# Accelerated softmax via gpu_accel
+proc softmax_accel(ctx, x, n):
+    import ml.gpu_accel
+    return gpu_accel.softmax(ctx, x, n)

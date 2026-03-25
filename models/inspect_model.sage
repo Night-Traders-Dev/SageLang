@@ -12,6 +12,7 @@ gc_disable()
 
 import io
 import ml_native
+import ml.gpu_accel
 import ml.debug
 import ml.viz
 import ml.monitor
@@ -19,6 +20,8 @@ import llm.config
 import llm.tokenizer
 import llm.train
 import llm.attention
+
+let _compute = gpu_accel.create("auto")
 
 print "============================================"
 print "  SageLLM Model Inspector v1.0.0"
@@ -135,24 +138,24 @@ for step in range(num_steps):
         for j in range(d_model):
             push(hidden, embed_w[tid * d_model + j])
 
-    hidden = ml_native.rms_norm(hidden, norm_w, seq_len, d_model, 0.00001)
-    let q = ml_native.matmul(hidden, qw, seq_len, d_model, d_model)
-    let k = ml_native.matmul(hidden, kw, seq_len, d_model, d_model)
-    let v = ml_native.matmul(hidden, vw, seq_len, d_model, d_model)
+    hidden = gpu_accel.rms_norm(_compute,hidden, norm_w, seq_len, d_model, 0.00001)
+    let q = gpu_accel.matmul(_compute,hidden, qw, seq_len, d_model, d_model)
+    let k = gpu_accel.matmul(_compute,hidden, kw, seq_len, d_model, d_model)
+    let v = gpu_accel.matmul(_compute,hidden, vw, seq_len, d_model, d_model)
     let attn_out = attention.scaled_dot_product(q, k, v, seq_len, d_model, true)
     last_attn = attn_out
-    hidden = ml_native.add(hidden, attn_out)
-    hidden = ml_native.rms_norm(hidden, norm_w, seq_len, d_model, 0.00001)
+    hidden = gpu_accel.add(_compute,hidden, attn_out)
+    hidden = gpu_accel.rms_norm(_compute,hidden, norm_w, seq_len, d_model, 0.00001)
 
     let last_h = []
     for j in range(d_model):
         push(last_h, hidden[(seq_len - 1) * d_model + j])
-    let logits = ml_native.matmul(last_h, lm_head, 1, d_model, vocab)
+    let logits = gpu_accel.matmul(_compute,last_h, lm_head, 1, d_model, vocab)
 
     let target = [tgt[seq_len - 1]]
     if target[0] >= vocab:
         target[0] = 0
-    let loss = ml_native.cross_entropy(logits, target, 1, vocab)
+    let loss = gpu_accel.cross_entropy(_compute,logits, target, 1, vocab)
 
     push(all_losses, loss)
     monitor.log_step(mon, loss, lr, 0, seq_len)
@@ -250,7 +253,7 @@ print "  Generated: " + viz_dir + "/dashboard.html"
 
 print ""
 print "[BENCH] Native backend performance:"
-let bench = ml_native.benchmark(d_model, 10)
+let bench = gpu_accel.benchmark(_compute,d_model, 10)
 print "  " + str(d_model) + "x" + str(d_model) + " matmul: " + str(bench["ms_per_matmul"]) + " ms/op, " + str(bench["gflops"]) + " GFLOPS"
 
 print ""

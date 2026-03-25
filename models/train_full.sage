@@ -17,6 +17,9 @@ import llm.engram
 import llm.attention
 import llm.generate
 import llm.agent
+import ml.gpu_accel
+
+let _compute = gpu_accel.create("auto")
 
 print "================================================================"
 print "  SageLLM Full Training Pipeline v1.0.0"
@@ -129,24 +132,24 @@ else:
             for j in range(d_model):
                 push(hidden, embed_w[tid * d_model + j])
 
-        hidden = ml_native.rms_norm(hidden, norm_w, seq_len, d_model, 0.00001)
-        let q = ml_native.matmul(hidden, qw, seq_len, d_model, d_model)
-        let k = ml_native.matmul(hidden, kw, seq_len, d_model, d_model)
-        let v = ml_native.matmul(hidden, vw, seq_len, d_model, d_model)
+        hidden = gpu_accel.rms_norm(_compute, hidden, norm_w, seq_len, d_model, 0.00001)
+        let q = gpu_accel.matmul(_compute, hidden, qw, seq_len, d_model, d_model)
+        let k = gpu_accel.matmul(_compute, hidden, kw, seq_len, d_model, d_model)
+        let v = gpu_accel.matmul(_compute, hidden, vw, seq_len, d_model, d_model)
         let attn_out = attention.scaled_dot_product(q, k, v, seq_len, d_model, true)
-        hidden = ml_native.add(hidden, attn_out)
-        hidden = ml_native.rms_norm(hidden, norm_w, seq_len, d_model, 0.00001)
+        hidden = gpu_accel.add(_compute, hidden, attn_out)
+        hidden = gpu_accel.rms_norm(_compute, hidden, norm_w, seq_len, d_model, 0.00001)
 
         let last_hidden = []
         let last_off = (seq_len - 1) * d_model
         for j in range(d_model):
             push(last_hidden, hidden[last_off + j])
-        let logits = ml_native.matmul(last_hidden, lm_head, 1, d_model, 128)
+        let logits = gpu_accel.matmul(_compute, last_hidden, lm_head, 1, d_model, 128)
 
         let last_target = [target_ids[seq_len - 1]]
         if last_target[0] >= 128:
             last_target[0] = 0
-        let loss = ml_native.cross_entropy(logits, last_target, 1, 128)
+        let loss = gpu_accel.cross_entropy(_compute, logits, last_target, 1, 128)
         train.log_step(state, loss, current_lr, 0)
 
         if (step + 1) - (((step + 1) / train_cfg["log_interval"]) | 0) * train_cfg["log_interval"] == 0:
@@ -223,29 +226,29 @@ for step in range(sage_steps):
         for j in range(d_model):
             push(hidden, embed_w[tid * d_model + j])
 
-    hidden = ml_native.rms_norm(hidden, norm_w, seq_len, d_model, 0.00001)
+    hidden = gpu_accel.rms_norm(_compute, hidden, norm_w, seq_len, d_model, 0.00001)
 
     # Apply LoRA: base Q projection + LoRA delta
-    let q_base = ml_native.matmul(hidden, qw, seq_len, d_model, d_model)
+    let q_base = gpu_accel.matmul(_compute, hidden, qw, seq_len, d_model, d_model)
     let q_lora = lora.lora_forward(adapter, hidden, seq_len)
-    let q = ml_native.add(q_base, q_lora)
+    let q = gpu_accel.add(_compute, q_base, q_lora)
 
-    let k = ml_native.matmul(hidden, kw, seq_len, d_model, d_model)
-    let v = ml_native.matmul(hidden, vw, seq_len, d_model, d_model)
+    let k = gpu_accel.matmul(_compute, hidden, kw, seq_len, d_model, d_model)
+    let v = gpu_accel.matmul(_compute, hidden, vw, seq_len, d_model, d_model)
     let attn_out = attention.scaled_dot_product(q, k, v, seq_len, d_model, true)
-    hidden = ml_native.add(hidden, attn_out)
-    hidden = ml_native.rms_norm(hidden, norm_w, seq_len, d_model, 0.00001)
+    hidden = gpu_accel.add(_compute, hidden, attn_out)
+    hidden = gpu_accel.rms_norm(_compute, hidden, norm_w, seq_len, d_model, 0.00001)
 
     let last_hidden = []
     let last_off = (seq_len - 1) * d_model
     for j in range(d_model):
         push(last_hidden, hidden[last_off + j])
-    let logits = ml_native.matmul(last_hidden, lm_head, 1, d_model, 128)
+    let logits = gpu_accel.matmul(_compute, last_hidden, lm_head, 1, d_model, 128)
 
     let last_target = [target_ids[seq_len - 1]]
     if last_target[0] >= 128:
         last_target[0] = 0
-    let loss = ml_native.cross_entropy(logits, last_target, 1, 128)
+    let loss = gpu_accel.cross_entropy(_compute, logits, last_target, 1, 128)
     train.log_step(lora_state, loss, train_cfg["learning_rate"], 0)
 
     if (step + 1) - (((step + 1) / 10) | 0) * 10 == 0:
@@ -301,14 +304,15 @@ print ""
 
 # Benchmark
 print "=== Native Backend Benchmark ==="
-let bench = ml_native.benchmark(64, 10)
+let bench = gpu_accel.benchmark(_compute, 64, 10)
 print "  64x64 matmul: " + str(bench["ms_per_matmul"]) + " ms/op"
 print "  GFLOPS: " + str(bench["gflops"])
-let bench2 = ml_native.benchmark(128, 5)
+let bench2 = gpu_accel.benchmark(_compute, 128, 5)
 print "  128x128 matmul: " + str(bench2["ms_per_matmul"]) + " ms/op"
 print "  GFLOPS: " + str(bench2["gflops"])
 print ""
 
+print gpu_accel.stats(_compute)
 print "================================================================"
 print "  Training Complete"
 print "  Model ready for inference via sage_chatbot.sage or sage_agent.sage"

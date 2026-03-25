@@ -1,6 +1,10 @@
 gc_disable()
 # Transformer blocks and full model assembly
 # Supports GPT-style decoder-only architecture
+#
+# GPU acceleration: use apply_rms_norm_accel() and ffn_forward_accel()
+# with a gpu_accel context for GPU/NPU/TPU offload.
+# Standard functions always run on CPU (pure Sage).
 
 import math
 
@@ -214,3 +218,36 @@ proc residual_add(x, residual, length):
     for i in range(length):
         push(result, x[i] + residual[i])
     return result
+
+# ============================================================================
+# GPU-accelerated variants
+# These route compute through a gpu_accel context for GPU/NPU/TPU offload
+# ============================================================================
+
+# Accelerated RMSNorm via gpu_accel backend
+proc apply_rms_norm_accel(ctx, rn, x, seq_len):
+    import ml.gpu_accel
+    return gpu_accel.rms_norm(ctx, x, rn["weight"], seq_len, rn["d_model"], rn["eps"])
+
+# Accelerated FFN forward via gpu_accel backend
+proc ffn_forward_accel(ctx, ffn, x, seq_len):
+    import ml.gpu_accel
+    let d = ffn["d_model"]
+    let ff = ffn["d_ff"]
+    # x @ W1: [seq_len x d] @ [d x ff] -> [seq_len x ff]
+    let h = gpu_accel.matmul(ctx, x, ffn["w1"], seq_len, d, ff)
+    # Activation
+    let act = ffn["activation"]
+    if act == "silu":
+        h = gpu_accel.silu(ctx, h)
+    if act == "gelu":
+        h = gpu_accel.gelu(ctx, h)
+    if act == "relu":
+        h = gpu_accel.relu(ctx, h)
+    # h @ W2: [seq_len x ff] @ [ff x d] -> [seq_len x d]
+    return gpu_accel.matmul(ctx, h, ffn["w2"], seq_len, ff, d)
+
+# Accelerated residual add
+proc residual_add_accel(ctx, x, residual):
+    import ml.gpu_accel
+    return gpu_accel.add(ctx, x, residual)

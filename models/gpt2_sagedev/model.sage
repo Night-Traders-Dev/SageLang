@@ -14,7 +14,10 @@ import llm.lora
 import llm.prompt
 import llm.agent
 import ml_native
+import ml.gpu_accel
 import io
+
+let _compute = gpu_accel.create("auto")
 
 # ============================================================================
 # Model Definition
@@ -111,7 +114,7 @@ proc train_model(model, examples, num_epochs, lr):
                 # Boost the target token
                 fake_logits[t * vocab_size + target_ids[t]] = 2.0
 
-            let loss = ml_native.cross_entropy(fake_logits, target_ids, len(target_ids), vocab_size)
+            let loss = gpu_accel.cross_entropy(_compute, fake_logits, target_ids, len(target_ids), vocab_size)
             epoch_loss = epoch_loss + loss
 
             train.log_step(state, loss, current_lr, 0)

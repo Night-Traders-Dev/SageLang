@@ -4,6 +4,7 @@ gc_disable()
 
 import io
 import ml_native
+import ml.gpu_accel
 import llm.tokenizer
 import llm.train
 import llm.config
@@ -11,6 +12,8 @@ import llm.generate
 import llm.agent
 import llm.embedding
 import llm.attention
+
+let _compute = gpu_accel.create("auto")
 
 print "=== SageGPT Training (Custom Architecture) ==="
 print ""
@@ -118,34 +121,34 @@ for step in range(num_examples):
             push(hidden, embed_w[tid * d_model + j])
 
     # RMSNorm (native)
-    hidden = ml_native.rms_norm(hidden, norm_w, seq_len, d_model, 0.00001)
+    hidden = gpu_accel.rms_norm(_compute,hidden, norm_w, seq_len, d_model, 0.00001)
 
     # Q, K, V projections (native matmul)
-    let q = ml_native.matmul(hidden, layer_qw, seq_len, d_model, d_model)
-    let k = ml_native.matmul(hidden, layer_kw, seq_len, d_model, d_model)
-    let v = ml_native.matmul(hidden, layer_vw, seq_len, d_model, d_model)
+    let q = gpu_accel.matmul(_compute,hidden, layer_qw, seq_len, d_model, d_model)
+    let k = gpu_accel.matmul(_compute,hidden, layer_kw, seq_len, d_model, d_model)
+    let v = gpu_accel.matmul(_compute,hidden, layer_vw, seq_len, d_model, d_model)
 
     # Self-attention (causal)
     let attn_out = attention.scaled_dot_product(q, k, v, seq_len, d_model, true)
 
     # Residual
-    hidden = ml_native.add(hidden, attn_out)
+    hidden = gpu_accel.add(_compute,hidden, attn_out)
 
     # Final norm
-    hidden = ml_native.rms_norm(hidden, norm_w, seq_len, d_model, 0.00001)
+    hidden = gpu_accel.rms_norm(_compute,hidden, norm_w, seq_len, d_model, 0.00001)
 
     # LM head: last token -> logits
     let last_hidden = []
     let last_off = (seq_len - 1) * d_model
     for j in range(d_model):
         push(last_hidden, hidden[last_off + j])
-    let logits = ml_native.matmul(last_hidden, lm_head, 1, d_model, 128)
+    let logits = gpu_accel.matmul(_compute,last_hidden, lm_head, 1, d_model, 128)
 
     # Loss
     let last_target = [target_ids[seq_len - 1]]
     if last_target[0] >= 128:
         last_target[0] = 0
-    let loss = ml_native.cross_entropy(logits, last_target, 1, 128)
+    let loss = gpu_accel.cross_entropy(_compute,logits, last_target, 1, 128)
     let ppl = train.perplexity(loss)
 
     print "Step " + str(step + 1) + "/" + str(num_examples) + " loss=" + str(loss) + " ppl=" + str(ppl)
@@ -156,7 +159,7 @@ print ""
 
 # 7. Benchmark native backend
 print "Native backend benchmark:"
-let bench = ml_native.benchmark(64, 10)
+let bench = gpu_accel.benchmark(_compute,64, 10)
 print "  64x64 matmul: " + str(bench["ms_per_matmul"]) + " ms/op"
 print "  GFLOPS: " + str(bench["gflops"])
 

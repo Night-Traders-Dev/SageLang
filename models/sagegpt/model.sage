@@ -18,7 +18,12 @@ import llm.lora
 import llm.agent
 import llm.prompt
 import ml_native
+import ml.gpu_accel
 import io
+
+# Global compute context — auto-detects best backend (GPU > CPU)
+# Override with SAGE_COMPUTE_BACKEND env var
+let _compute = gpu_accel.create("auto")
 
 # ============================================================================
 # SageGPT Architecture Config
@@ -215,51 +220,49 @@ proc forward(model, token_ids):
     for layer_idx in range(len(model["layers"])):
         let layer = model["layers"][layer_idx]
 
-        # Pre-attention RMSNorm (native)
-        let normed = ml_native.rms_norm(hidden, layer["norm1"], seq_len, d, cfg["layer_norm_eps"])
+        # Pre-attention RMSNorm
+        let normed = gpu_accel.rms_norm(_compute, hidden, layer["norm1"], seq_len, d, cfg["layer_norm_eps"])
 
-        # Q, K, V projections (native matmul)
-        let q = ml_native.matmul(normed, layer["q_proj"], seq_len, d, d)
-        let k = ml_native.matmul(normed, layer["k_proj"], seq_len, d, d)
-        let v = ml_native.matmul(normed, layer["v_proj"], seq_len, d, d)
+        # Q, K, V projections
+        let q = gpu_accel.matmul(_compute, normed, layer["q_proj"], seq_len, d, d)
+        let k = gpu_accel.matmul(_compute, normed, layer["k_proj"], seq_len, d, d)
+        let v = gpu_accel.matmul(_compute, normed, layer["v_proj"], seq_len, d, d)
 
-        # Scaled dot-product attention (native)
+        # Scaled dot-product attention
         let attn_out = attention.scaled_dot_product(q, k, v, seq_len, d, true)
 
         # Output projection
-        let projected = ml_native.matmul(attn_out, layer["o_proj"], seq_len, d, d)
+        let projected = gpu_accel.matmul(_compute, attn_out, layer["o_proj"], seq_len, d, d)
 
         # Residual connection
-        hidden = ml_native.add(hidden, projected)
+        hidden = gpu_accel.add(_compute, hidden, projected)
 
         # Pre-FFN RMSNorm
-        let normed2 = ml_native.rms_norm(hidden, layer["norm2"], seq_len, d, cfg["layer_norm_eps"])
+        let normed2 = gpu_accel.rms_norm(_compute, hidden, layer["norm2"], seq_len, d, cfg["layer_norm_eps"])
 
         # SwiGLU FFN: silu(x @ gate) * (x @ up) then @ down
         let ff = cfg["d_ff"]
-        let gate_out = ml_native.matmul(normed2, layer["gate_proj"], seq_len, d, ff)
-        let up_out = ml_native.matmul(normed2, layer["up_proj"], seq_len, d, ff)
-        let gate_activated = ml_native.silu(gate_out)
+        let gate_out = gpu_accel.matmul(_compute, normed2, layer["gate_proj"], seq_len, d, ff)
+        let up_out = gpu_accel.matmul(_compute, normed2, layer["up_proj"], seq_len, d, ff)
+        let gate_activated = gpu_accel.silu(_compute, gate_out)
         let gated = []
         for i in range(len(gate_activated)):
             push(gated, gate_activated[i] * up_out[i])
-        let ffn_out = ml_native.matmul(gated, layer["down_proj"], seq_len, ff, d)
+        let ffn_out = gpu_accel.matmul(_compute, gated, layer["down_proj"], seq_len, ff, d)
 
         # Residual
-        hidden = ml_native.add(hidden, ffn_out)
+        hidden = gpu_accel.add(_compute, hidden, ffn_out)
 
     # 3. Final RMSNorm
-    hidden = ml_native.rms_norm(hidden, model["final_norm"], seq_len, d, cfg["layer_norm_eps"])
+    hidden = gpu_accel.rms_norm(_compute, hidden, model["final_norm"], seq_len, d, cfg["layer_norm_eps"])
 
     # 4. LM head: project last token to vocab logits
-    # Only take the last token's hidden state
     let last_hidden = []
     let last_off = (seq_len - 1) * d
     for i in range(d):
         push(last_hidden, hidden[last_off + i])
 
-    # Logits = last_hidden @ lm_head  (1 x d) @ (d x V) -> (1 x V)
-    let logits = ml_native.matmul(last_hidden, model["lm_head"], 1, d, V)
+    let logits = gpu_accel.matmul(_compute, last_hidden, model["lm_head"], 1, d, V)
 
     return logits
 
@@ -294,7 +297,7 @@ proc train_model(model, tok, corpus, num_epochs, lr, seq_len):
             let logits = forward(model, examples[i]["input_ids"])
             let targets = examples[i]["target_ids"]
             let last_target = [targets[len(targets) - 1]]
-            let loss = ml_native.cross_entropy(logits, last_target, 1, cfg["vocab_size"])
+            let loss = gpu_accel.cross_entropy(_compute, logits, last_target, 1, cfg["vocab_size"])
 
             epoch_loss = epoch_loss + loss
             train.log_step(state, loss, current_lr, 0)

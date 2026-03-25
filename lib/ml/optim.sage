@@ -1,6 +1,9 @@
 gc_disable()
 # Optimizers for neural network training
 # SGD (with momentum), Adam, and learning rate schedulers
+#
+# GPU acceleration: use adam_step_accel(ctx, opt, params, grads)
+# to route Adam update through gpu_accel backend.
 
 import math
 
@@ -155,3 +158,22 @@ proc warmup_lr(opt, step_num, warmup_steps, target_lr):
         opt["lr"] = target_lr * step_num / warmup_steps
     else:
         opt["lr"] = target_lr
+
+# ============================================================================
+# GPU-accelerated variants
+# ============================================================================
+
+# Accelerated Adam update via gpu_accel
+proc adam_step_accel(ctx, opt, params, grads):
+    import ml.gpu_accel
+    let lr = opt["lr"]
+    let beta1 = opt["beta1"]
+    let beta2 = opt["beta2"]
+    let eps = opt["eps"]
+    opt["t"] = opt["t"] + 1
+    return gpu_accel.adam_update(ctx, params, grads, opt["m"], opt["v"], lr, beta1, beta2, eps, opt["t"])
+
+# Accelerated gradient clipping
+proc clip_grad_accel(ctx, grads, max_norm):
+    import ml.gpu_accel
+    return gpu_accel.clip_grad(ctx, grads, max_norm)

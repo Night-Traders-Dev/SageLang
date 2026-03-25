@@ -1,6 +1,10 @@
 gc_disable()
 # Neural network layers and model building blocks
 # PyTorch-style API: Linear, Conv (1D), ReLU, Sigmoid, Sequential, Dropout
+#
+# GPU acceleration: use linear_forward_accel(ctx, layer, x) with a
+# gpu_accel context to offload matmul to GPU/NPU/TPU.
+# Standard functions always run on CPU (pure Sage).
 
 # ============================================================================
 # Layer: Linear (fully connected)
@@ -275,3 +279,48 @@ proc eval_mode(model):
         for i in range(len(layers)):
             if dict_has(layers[i], "training"):
                 layers[i]["training"] = false
+
+# ============================================================================
+# GPU-accelerated variants
+# ============================================================================
+
+# Accelerated linear forward: x @ W^T + b via gpu_accel matmul
+proc linear_forward_accel(ctx, layer, x):
+    import ml.gpu_accel
+    let in_f = layer["in_features"]
+    let out_f = layer["out_features"]
+    let batch = (len(x) / in_f) | 0
+    # x @ W^T: [batch x in_f] @ [in_f x out_f] -> [batch x out_f]
+    let result = gpu_accel.matmul(ctx, x, layer["weight"], batch, in_f, out_f)
+    # Add bias
+    let bias = layer["bias"]
+    for b in range(batch):
+        for j in range(out_f):
+            result[b * out_f + j] = result[b * out_f + j] + bias[j]
+    return result
+
+# Accelerated ReLU via gpu_accel
+proc relu_forward_accel(ctx, x):
+    import ml.gpu_accel
+    return gpu_accel.relu(ctx, x)
+
+# Accelerated sigmoid via gpu_accel
+proc sigmoid_forward_accel(ctx, x):
+    import ml.gpu_accel
+    return gpu_accel.sigmoid(ctx, x)
+
+# Accelerated sequential forward
+proc forward_accel(ctx, model, x):
+    import ml.gpu_accel
+    let current = x
+    if model["type"] == "sequential":
+        let layers = model["layers"]
+        for i in range(len(layers)):
+            let l = layers[i]
+            if l["type"] == "linear":
+                current = linear_forward_accel(ctx, l, current)
+            if l["type"] == "relu":
+                current = gpu_accel.relu(ctx, current)
+            if l["type"] == "sigmoid":
+                current = gpu_accel.sigmoid(ctx, current)
+    return current

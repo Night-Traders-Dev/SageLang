@@ -1,6 +1,10 @@
 gc_disable()
 # Multi-head self-attention mechanisms
 # Supports causal (autoregressive), cross-attention, and grouped-query attention
+#
+# GPU acceleration: use scaled_dot_product_accel() with a gpu_accel context
+# for GPU/NPU/TPU offload of Q@K^T matmul and softmax.
+# The standard scaled_dot_product() always runs on CPU (pure Sage).
 
 import math
 
@@ -49,6 +53,41 @@ proc scaled_dot_product(q, k, v, seq_len, d_head, causal):
                 s = s + attn_weights[i * seq_len + j] * v[j * d_head + d]
             push(output, s)
     return output
+
+# GPU-accelerated scaled dot-product attention
+# Routes matmul and softmax through gpu_accel context
+# ctx: gpu_accel context (from gpu_accel.create())
+# Falls back to CPU ml_native when GPU unavailable
+proc scaled_dot_product_accel(ctx, q, k, v, seq_len, d_head, causal):
+    # Q@K^T via accelerated matmul: [seq_len x d_head] @ [d_head x seq_len]
+    # We need K transposed, so build it
+    let kt = []
+    for j in range(d_head):
+        for i in range(seq_len):
+            push(kt, k[i * d_head + j])
+    # Import here to avoid circular dependency at module level
+    import ml.gpu_accel
+    let scores_raw = gpu_accel.matmul(ctx, q, kt, seq_len, d_head, seq_len)
+    # Scale
+    let scale = 1.0 / math.sqrt(d_head)
+    scores_raw = gpu_accel.scale(ctx, scores_raw, scale)
+    # Causal mask
+    if causal:
+        for i in range(seq_len):
+            for j in range(seq_len):
+                if j > i:
+                    scores_raw[i * seq_len + j] = -10000
+    # Softmax per row
+    let attn_weights = []
+    for i in range(seq_len):
+        let row = []
+        for j in range(seq_len):
+            push(row, scores_raw[i * seq_len + j])
+        let soft = gpu_accel.softmax(ctx, row, seq_len)
+        for j in range(seq_len):
+            push(attn_weights, soft[j])
+    # Attn @ V via accelerated matmul: [seq_len x seq_len] @ [seq_len x d_head]
+    return gpu_accel.matmul(ctx, attn_weights, v, seq_len, seq_len, d_head)
 
 # ============================================================================
 # Linear projections

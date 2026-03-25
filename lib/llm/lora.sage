@@ -142,3 +142,21 @@ proc merge_weights(base_weight, adapter):
     for i in range(len(base_weight)):
         push(merged, base_weight[i] + delta[i])
     return merged
+
+# ============================================================================
+# GPU-accelerated LoRA forward
+# ============================================================================
+
+# Accelerated LoRA: x @ A @ B * scaling via gpu_accel matmul
+proc lora_forward_accel(ctx, adapter, x, seq_len):
+    import ml.gpu_accel
+    let d_in = adapter["d_in"]
+    let d_out = adapter["d_out"]
+    let rank = adapter["rank"]
+    let scaling = adapter["scaling"]
+    # x @ A: [seq_len x d_in] @ [d_in x rank] -> [seq_len x rank]
+    let hidden = gpu_accel.matmul(ctx, x, adapter["A"], seq_len, d_in, rank)
+    # hidden @ B: [seq_len x rank] @ [rank x d_out] -> [seq_len x d_out]
+    let delta = gpu_accel.matmul(ctx, hidden, adapter["B"], seq_len, rank, d_out)
+    # Apply scaling
+    return gpu_accel.scale(ctx, delta, scaling)

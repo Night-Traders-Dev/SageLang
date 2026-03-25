@@ -39,6 +39,9 @@ import agent.planner
 import chat.bot
 import chat.persona
 import chat.session
+import ml.gpu_accel
+
+let _compute = gpu_accel.create("auto")
 
 let NL = chr(10)
 let DQ = chr(34)
@@ -345,21 +348,21 @@ proc step_pretrain():
                 tid = 0
             for j in range(d):
                 push(hidden, build["embed_w"][tid * d + j])
-        hidden = ml_native.rms_norm(hidden, build["norm_w"], sl, d, 0.00001)
-        let qr = ml_native.matmul(hidden, build["qw"], sl, d, d)
-        let kr = ml_native.matmul(hidden, build["kw"], sl, d, d)
-        let vr = ml_native.matmul(hidden, build["vw"], sl, d, d)
+        hidden = gpu_accel.rms_norm(_compute,hidden, build["norm_w"], sl, d, 0.00001)
+        let qr = gpu_accel.matmul(_compute,hidden, build["qw"], sl, d, d)
+        let kr = gpu_accel.matmul(_compute,hidden, build["kw"], sl, d, d)
+        let vr = gpu_accel.matmul(_compute,hidden, build["vw"], sl, d, d)
         let attn = attention.scaled_dot_product(qr, kr, vr, sl, d, true)
-        hidden = ml_native.add(hidden, attn)
-        hidden = ml_native.rms_norm(hidden, build["norm_w"], sl, d, 0.00001)
+        hidden = gpu_accel.add(_compute,hidden, attn)
+        hidden = gpu_accel.rms_norm(_compute,hidden, build["norm_w"], sl, d, 0.00001)
         let lh2 = []
         for j in range(d):
             push(lh2, hidden[(sl - 1) * d + j])
-        let logits = ml_native.matmul(lh2, build["lm_head"], 1, d, v)
+        let logits = gpu_accel.matmul(_compute,lh2, build["lm_head"], 1, d, v)
         let target = [tgt[sl - 1]]
         if target[0] >= v:
             target[0] = 0
-        let loss = ml_native.cross_entropy(logits, target, 1, v)
+        let loss = gpu_accel.cross_entropy(_compute,logits, target, 1, v)
         train.log_step(state, loss, clr, 0)
         if (step + 1) - (((step + 1) / 10) | 0) * 10 == 0:
             print "    step " + str(step + 1) + "/" + str(steps) + " loss=" + str(loss) + " ppl=" + str(train.perplexity(loss))
@@ -410,23 +413,23 @@ proc step_lora():
                 tid = 0
             for j in range(d):
                 push(hidden, build["embed_w"][tid * d + j])
-        hidden = ml_native.rms_norm(hidden, build["norm_w"], sl, d, 0.00001)
-        let q_base = ml_native.matmul(hidden, build["qw"], sl, d, d)
+        hidden = gpu_accel.rms_norm(_compute,hidden, build["norm_w"], sl, d, 0.00001)
+        let q_base = gpu_accel.matmul(_compute,hidden, build["qw"], sl, d, d)
         let q_lora = lora.lora_forward(build["adapter"], hidden, sl)
-        let q = ml_native.add(q_base, q_lora)
-        let k = ml_native.matmul(hidden, build["kw"], sl, d, d)
-        let vr = ml_native.matmul(hidden, build["vw"], sl, d, d)
+        let q = gpu_accel.add(_compute,q_base, q_lora)
+        let k = gpu_accel.matmul(_compute,hidden, build["kw"], sl, d, d)
+        let vr = gpu_accel.matmul(_compute,hidden, build["vw"], sl, d, d)
         let attn = attention.scaled_dot_product(q, k, vr, sl, d, true)
-        hidden = ml_native.add(hidden, attn)
-        hidden = ml_native.rms_norm(hidden, build["norm_w"], sl, d, 0.00001)
+        hidden = gpu_accel.add(_compute,hidden, attn)
+        hidden = gpu_accel.rms_norm(_compute,hidden, build["norm_w"], sl, d, 0.00001)
         let lh = []
         for j in range(d):
             push(lh, hidden[(sl - 1) * d + j])
-        let logits = ml_native.matmul(lh, build["lm_head"], 1, d, v)
+        let logits = gpu_accel.matmul(_compute,lh, build["lm_head"], 1, d, v)
         let target = [tgt[sl - 1]]
         if target[0] >= v:
             target[0] = 0
-        let loss = ml_native.cross_entropy(logits, target, 1, v)
+        let loss = gpu_accel.cross_entropy(_compute,logits, target, 1, v)
         train.log_step(lstate, loss, 0.001, 0)
     build["lora_loss"] = train.avg_loss(lstate)
     print "  LoRA done. Avg loss: " + str(build["lora_loss"])
@@ -577,7 +580,7 @@ proc step_export():
         print "  Exported to " + build["output_path"]
     print ""
     # Benchmark
-    let bench = ml_native.benchmark(build["d_model"], 5)
+    let bench = gpu_accel.benchmark(_compute,build["d_model"], 5)
     print "  Native backend: " + str(bench["gflops"]) + " GFLOPS"
     build["complete"] = true
 
