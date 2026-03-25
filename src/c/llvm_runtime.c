@@ -692,6 +692,58 @@ SageValue sage_rt_writefile(SageValue path, SageValue content) {
     return sage_rt_number((double)len);
 }
 
+// Load weight file: returns array of float arrays (one per CSV line)
+// Used by compiled chatbot to load trained model weights
+SageValue sage_rt_load_weights(SageValue path) {
+    if (path.type != SAGE_STRING) return sage_rt_nil();
+    FILE* f = fopen(path.as.string, "r");
+    if (!f) return sage_rt_nil();
+
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char* buf = (char*)malloc(fsize + 1);
+    if (!buf) { fclose(f); return sage_rt_nil(); }
+    size_t rd = fread(buf, 1, fsize, f);
+    fclose(f);
+    buf[rd] = '\0';
+
+    SageValue result = sage_rt_array_new(0);
+
+    char* pos = buf;
+    while (pos < buf + rd) {
+        char* eol = pos;
+        while (*eol && *eol != '\n') eol++;
+
+        int nvals = 0;
+        if (eol > pos) {
+            nvals = 1;
+            for (char* p = pos; p < eol; p++) {
+                if (*p == ',') nvals++;
+            }
+        }
+
+        SageValue line_arr = sage_rt_array_new(nvals);
+        char* tok = pos;
+        for (char* p = pos; p <= eol; p++) {
+            if (*p == ',' || p == eol) {
+                char saved = *p;
+                *p = '\0';
+                sage_rt_array_push(line_arr, sage_rt_number(atof(tok)));
+                *p = saved;
+                tok = p + 1;
+            }
+        }
+
+        sage_rt_array_push(result, line_arr);
+        pos = eol;
+        if (*pos == '\n') pos++;
+    }
+
+    free(buf);
+    return result;
+}
+
 SageValue sage_rt_chr(SageValue val) {
     if (val.type != SAGE_NUMBER) return sage_rt_nil();
     int code = (int)val.as.number;
@@ -749,6 +801,136 @@ static SageValue sage_make_dict_wh(int w, int h) {
     sage_rt_dict_set(d, "width", sage_rt_number((double)w));
     sage_rt_dict_set(d, "height", sage_rt_number((double)h));
     return d;
+}
+
+// ---------------------------------------------------------------------------
+// ===========================================================================
+// ML Native Runtime (matmul, rms_norm, silu, etc.)
+// ===========================================================================
+
+// Helper: extract flat double array from SageValue array
+static double* sv_to_doubles(SageValue arr, int* out_count) {
+    if (arr.type != SAGE_ARRAY) { *out_count = 0; return NULL; }
+    int n = arr.as.array->count;
+    double* data = (double*)malloc(sizeof(double) * (n > 0 ? n : 1));
+    for (int i = 0; i < n; i++) {
+        SageValue v = arr.as.array->elements[i];
+        data[i] = (v.type == SAGE_NUMBER) ? v.as.number : 0.0;
+    }
+    *out_count = n;
+    return data;
+}
+
+static SageValue doubles_to_sv(const double* data, int n) {
+    SageValue arr = sage_rt_array_new(n);
+    for (int i = 0; i < n; i++) {
+        sage_rt_array_push(arr, sage_rt_number(data[i]));
+    }
+    return arr;
+}
+
+SageValue sage_rt_matmul(SageValue a, SageValue b, SageValue m_v, SageValue k_v, SageValue n_v) {
+    int ac, bc;
+    double* A = sv_to_doubles(a, &ac);
+    double* B = sv_to_doubles(b, &bc);
+    int m = (int)(m_v.type == SAGE_NUMBER ? m_v.as.number : 0);
+    int k = (int)(k_v.type == SAGE_NUMBER ? k_v.as.number : 0);
+    int n = (int)(n_v.type == SAGE_NUMBER ? n_v.as.number : 0);
+    if (!A || !B || m <= 0 || k <= 0 || n <= 0) {
+        free(A); free(B);
+        return sage_rt_nil();
+    }
+    double* C = (double*)calloc(m * n, sizeof(double));
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < n; j++) {
+            double sum = 0;
+            for (int p = 0; p < k; p++) {
+                sum += A[i * k + p] * B[p * n + j];
+            }
+            C[i * n + j] = sum;
+        }
+    }
+    SageValue result = doubles_to_sv(C, m * n);
+    free(A); free(B); free(C);
+    return result;
+}
+
+SageValue sage_rt_rms_norm(SageValue x, SageValue w, SageValue rows_v, SageValue cols_v, SageValue eps_v) {
+    int xc, wc;
+    double* X = sv_to_doubles(x, &xc);
+    double* W = sv_to_doubles(w, &wc);
+    int rows = (int)(rows_v.type == SAGE_NUMBER ? rows_v.as.number : 0);
+    int cols = (int)(cols_v.type == SAGE_NUMBER ? cols_v.as.number : 0);
+    double eps = eps_v.type == SAGE_NUMBER ? eps_v.as.number : 1e-5;
+    if (!X || !W || rows <= 0 || cols <= 0) {
+        free(X); free(W);
+        return sage_rt_nil();
+    }
+    double* out = (double*)malloc(sizeof(double) * rows * cols);
+    for (int i = 0; i < rows; i++) {
+        double ss = 0;
+        for (int j = 0; j < cols; j++) {
+            double v = X[i * cols + j];
+            ss += v * v;
+        }
+        double rms = sqrt(ss / cols + eps);
+        for (int j = 0; j < cols; j++) {
+            out[i * cols + j] = X[i * cols + j] / rms * W[j];
+        }
+    }
+    SageValue result = doubles_to_sv(out, rows * cols);
+    free(X); free(W); free(out);
+    return result;
+}
+
+SageValue sage_rt_silu(SageValue x) {
+    int n;
+    double* X = sv_to_doubles(x, &n);
+    if (!X) return sage_rt_nil();
+    double* out = (double*)malloc(sizeof(double) * n);
+    for (int i = 0; i < n; i++) {
+        double s = 1.0 / (1.0 + exp(-X[i]));
+        out[i] = X[i] * s;
+    }
+    SageValue result = doubles_to_sv(out, n);
+    free(X); free(out);
+    return result;
+}
+
+SageValue sage_rt_scale(SageValue x, SageValue s) {
+    int n;
+    double* X = sv_to_doubles(x, &n);
+    double scale = s.type == SAGE_NUMBER ? s.as.number : 1.0;
+    if (!X) return sage_rt_nil();
+    for (int i = 0; i < n; i++) X[i] *= scale;
+    SageValue result = doubles_to_sv(X, n);
+    free(X);
+    return result;
+}
+
+SageValue sage_rt_cross_entropy(SageValue logits, SageValue targets, SageValue batch_v, SageValue vocab_v) {
+    int lc, tc;
+    double* L = sv_to_doubles(logits, &lc);
+    double* T = sv_to_doubles(targets, &tc);
+    int batch = (int)(batch_v.type == SAGE_NUMBER ? batch_v.as.number : 1);
+    int voc = (int)(vocab_v.type == SAGE_NUMBER ? vocab_v.as.number : lc);
+    if (!L || !T || voc <= 0) { free(L); free(T); return sage_rt_number(0); }
+    double loss = 0;
+    for (int i = 0; i < batch; i++) {
+        int target = (int)T[i];
+        if (target < 0 || target >= voc) target = 0;
+        double max_val = L[i * voc];
+        for (int j = 1; j < voc; j++) {
+            if (L[i * voc + j] > max_val) max_val = L[i * voc + j];
+        }
+        double sum = 0;
+        for (int j = 0; j < voc; j++) {
+            sum += exp(L[i * voc + j] - max_val);
+        }
+        loss += max_val + log(sum) - L[i * voc + target];
+    }
+    free(L); free(T);
+    return sage_rt_number(loss / (batch > 0 ? batch : 1));
 }
 
 // ---------------------------------------------------------------------------

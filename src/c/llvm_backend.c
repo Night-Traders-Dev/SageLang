@@ -759,6 +759,13 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_input(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_readfile(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_writefile(%%SageValue, %%SageValue)\n");
+    // ML native runtime
+    ll_emit(lc, "declare %%SageValue @sage_rt_load_weights(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_matmul(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_rms_norm(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_silu(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_scale(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_cross_entropy(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
     // Abort (for raise)
     ll_emit(lc, "declare void @abort() noreturn\n");
     // Bitwise operations
@@ -1542,10 +1549,46 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                         handled = 1;
                     }
                 }
-                // ml_native module: matmul, rms_norm, silu, etc.
+                // ml_native module: dispatch to sage_rt_* runtime functions
                 if (!handled && strcmp(mod_name, "ml_native") == 0) {
-                    if (strcmp(method_name, "benchmark") == 0 && expr->as.call.arg_count == 2) {
+                    if (strcmp(method_name, "load_weights") == 0 && expr->as.call.arg_count == 1) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_load_weights(%%SageValue %%%d)", r, arg_regs[0]);
+                        handled = 1;
+                    }
+                    if (!handled && strcmp(method_name, "matmul") == 0 && expr->as.call.arg_count == 5) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_matmul(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3], arg_regs[4]);
+                        handled = 1;
+                    }
+                    if (!handled && strcmp(method_name, "rms_norm") == 0 && expr->as.call.arg_count == 5) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_rms_norm(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3], arg_regs[4]);
+                        handled = 1;
+                    }
+                    if (!handled && strcmp(method_name, "silu") == 0 && expr->as.call.arg_count == 1) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_silu(%%SageValue %%%d)", r, arg_regs[0]);
+                        handled = 1;
+                    }
+                    if (!handled && strcmp(method_name, "add") == 0 && expr->as.call.arg_count == 2) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_add(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                        handled = 1;
+                    }
+                    if (!handled && strcmp(method_name, "scale") == 0 && expr->as.call.arg_count == 2) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_scale(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                        handled = 1;
+                    }
+                    if (!handled && strcmp(method_name, "cross_entropy") == 0 && expr->as.call.arg_count == 4) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_cross_entropy(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3]);
+                        handled = 1;
+                    }
+                    if (!handled && strcmp(method_name, "benchmark") == 0) {
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                        handled = 1;
+                    }
+                    if (!handled && strcmp(method_name, "gpu_available") == 0) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_bool(i32 0)", r);
+                        handled = 1;
+                    }
+                    if (!handled && strcmp(method_name, "auto_parallel") == 0) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double 1.0)", r);
                         handled = 1;
                     }
                 }

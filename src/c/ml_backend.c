@@ -438,6 +438,80 @@ static Value ml_matmul(int argc, Value* args) {
     return result;
 }
 
+// ml_native.load_weights(path) -> array of arrays (one per line in CSV file)
+// Parses a CSV weight file entirely in C to avoid OOM from Sage string parsing
+static Value ml_load_weights(int argc, Value* args) {
+    if (argc < 1 || args[0].type != VAL_STRING) return val_nil();
+    const char* path = args[0].as.string;
+
+    FILE* f = fopen(path, "r");
+    if (!f) {
+        fprintf(stderr, "ml_native.load_weights: cannot open %s\n", path);
+        return val_nil();
+    }
+
+    // Read entire file
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char* buf = (char*)malloc(fsize + 1);
+    if (!buf) { fclose(f); return val_nil(); }
+    size_t read_sz = fread(buf, 1, fsize, f);
+    fclose(f);
+    buf[read_sz] = '\0';
+
+    // Count lines
+    int line_count = 0;
+    for (long i = 0; i < (long)read_sz; i++) {
+        if (buf[i] == '\n') line_count++;
+    }
+    if (read_sz > 0 && buf[read_sz - 1] != '\n') line_count++;
+
+    // Parse each line as CSV floats
+    Value result = val_array();
+    char* pos = buf;
+    for (int line = 0; line < line_count; line++) {
+        // Find end of line
+        char* eol = pos;
+        while (*eol && *eol != '\n') eol++;
+
+        // Count commas to pre-allocate
+        int num_vals = 0;
+        if (eol > pos) {
+            num_vals = 1;
+            for (char* p = pos; p < eol; p++) {
+                if (*p == ',') num_vals++;
+            }
+        }
+
+        // Parse floats
+        double* vals = (double*)malloc(sizeof(double) * (num_vals > 0 ? num_vals : 1));
+        int vi = 0;
+        char* tok_start = pos;
+        for (char* p = pos; p <= eol; p++) {
+            if (*p == ',' || p == eol) {
+                char saved = *p;
+                *p = '\0';
+                if (vi < num_vals) {
+                    vals[vi++] = atof(tok_start);
+                }
+                *p = saved;
+                tok_start = p + 1;
+            }
+        }
+
+        Value arr = doubles_to_value_array(vals, vi);
+        array_push(&result, arr);
+        free(vals);
+
+        pos = eol;
+        if (*pos == '\n') pos++;
+    }
+
+    free(buf);
+    return result;
+}
+
 // ml_native.gpu_available() -> true if Vulkan GPU compute is available
 static Value ml_gpu_available(int argc, Value* args) {
     (void)argc; (void)args;
@@ -748,6 +822,9 @@ Module* create_ml_native_module(ModuleCache* cache) {
     env_define(e, "set_threads", 11, val_native(ml_set_threads));
     env_define(e, "set_parallel_threshold", 22, val_native(ml_set_parallel_threshold));
     env_define(e, "get_threads", 11, val_native(ml_get_threads));
+
+    // Weight I/O
+    env_define(e, "load_weights", 12, val_native(ml_load_weights));
 
     // GPU compute
     env_define(e, "gpu_available", 13, val_native(ml_gpu_available));
