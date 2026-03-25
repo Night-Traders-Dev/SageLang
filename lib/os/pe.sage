@@ -1,3 +1,4 @@
+gc_disable()
 # PE/COFF (Portable Executable) binary parser
 # Parses DOS header, PE signature, COFF header, optional header, and section headers
 # Used for Windows executables, DLLs, and UEFI applications

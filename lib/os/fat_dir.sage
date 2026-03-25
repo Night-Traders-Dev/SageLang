@@ -1,3 +1,4 @@
+gc_disable()
 # FAT directory traversal and file reading
 # Works on raw byte arrays (disk images) using parsed boot sector info from os.fat
 

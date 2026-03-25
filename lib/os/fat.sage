@@ -1,3 +1,4 @@
+gc_disable()
 # FAT filesystem boot sector parser and utilities
 
 proc read_u16(bs, off):

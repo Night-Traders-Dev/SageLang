@@ -1,3 +1,4 @@
+gc_disable()
 # GPT (GUID Partition Table) parser
 # Parses GPT header and partition entries per UEFI specification
 
@@ -113,12 +114,15 @@ proc parse_entry(bs, off, entry_size):
     let name = ""
     let i = 0
     while i < 72:
-        let ch = read_u16_le(bs, off + 56 + i)
-        if ch == 0:
+        if off + 56 + i + 1 >= len(bs):
             i = 72
         else:
-            name = name + chr(ch)
-            i = i + 2
+            let ch = read_u16_le(bs, off + 56 + i)
+            if ch == 0:
+                i = 72
+            else:
+                name = name + chr(ch)
+                i = i + 2
     entry["name"] = name
     # Size in sectors
     if entry["first_lba"] > 0:

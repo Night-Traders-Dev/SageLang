@@ -1,3 +1,4 @@
+gc_disable()
 # MBR (Master Boot Record) partition table parser
 # Parses the 512-byte MBR structure including partition entries and boot signature
 

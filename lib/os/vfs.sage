@@ -1,3 +1,4 @@
+gc_disable()
 # Virtual Filesystem (VFS) abstraction layer
 # Provides a uniform file/directory API that filesystem backends plug into.
 # Each backend implements: open, read, readdir, stat, close
@@ -128,9 +129,8 @@ proc normalize_path(path):
     # Resolve . and ..
     let resolved = []
     for i in range(len(parts)):
-        if parts[i] == ".":
-            let skip = true
         if parts[i] == "..":
+
             if len(resolved) > 0:
                 pop(resolved)
         if parts[i] != "." and parts[i] != "..":

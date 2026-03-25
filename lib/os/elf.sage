@@ -1,3 +1,4 @@
+gc_disable()
 # ELF (Executable and Linkable Format) binary parser
 # Supports ELF32 and ELF64 headers, program headers, and section headers
 
