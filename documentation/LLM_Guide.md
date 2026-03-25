@@ -413,6 +413,7 @@ let merged = autoresearch.merge_sessions(session_a, session_b)
 | `gguf` | `import llm.gguf` | `export_metadata`, `create_modelfile`, `build_tensor_list`, `sage_to_gguf_config`, `quant_types`, `estimate_size` |
 | `gguf_import` | `import llm.gguf_import` | `import_gguf`, `parse_header`, `read_metadata`, `extract_config`, `load_weights`, `dequantize_q4_0`, `dequantize_q8_0`, `convert_to_sagegpt`, `supported_architectures` |
 | `turboquant` | `import llm.turboquant` | `quantize`, `dequantize`, `quantize_mse`, `dequantize_mse`, `create_kv_cache`, `cache_push`, `cache_get_key`, `cache_get_value`, `cache_stats`, `mse_distortion`, `inner_product_error`, `theoretical_mse_bound`, `benchmark`, `summary` |
+| `autoresearch` | `import llm.autoresearch` | `create`, `set_program`, `add_strategy`, `run`, `summary`, `export_journal`, `import_journal`, `merge_sessions`, `make_scale_strategy`, `make_choice_strategy`, `make_perturb_strategy`, `llm_default_strategies`, `architecture_strategies` |
 | `gpu_accel` | `import ml.gpu_accel` | `create_context`, `matmul`, `add`, `rms_norm`, `silu`, `softmax`, `transformer_layer_forward`, `model_forward`, `train_step` |
 
 ## Ollama / llama.cpp Export

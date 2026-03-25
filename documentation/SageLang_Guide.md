@@ -2112,7 +2112,7 @@ SageLang ships with 23 general-purpose standard library modules in `lib/std/`:
 
 ### 9.16 LLM / Neural Network Libraries
 
-SageLang ships with 17 LLM/neural network modules in `lib/llm/` for building and training language models:
+SageLang ships with 18 LLM/neural network modules in `lib/llm/` for building and training language models:
 
 | Module | Import | Purpose |
 |--------|--------|---------|
@@ -2133,6 +2133,7 @@ SageLang ships with 17 LLM/neural network modules in `lib/llm/` for building and
 | `gguf.sage` | `import llm.gguf` | GGUF v3 export for Ollama/llama.cpp, Modelfile gen, quantization |
 | `gguf_import.sage` | `import llm.gguf_import` | Import GGUF models from Ollama into Sage; converts weights to native tensor format |
 | `turboquant.sage` | `import llm.turboquant` | TurboQuant near-optimal vector quantization (ICLR 2026): two-stage PolarQuant (random rotation + MSE-optimal scalar quantization) + QJL (1-bit residual correction); KV cache compression at 3-bit with 6x memory reduction |
+| `autoresearch.sage` | `import llm.autoresearch` | Karpathy-style autonomous research agent; ratchet loop (propose → train → evaluate → accept/reject); built-in scale/choice/perturb strategies; research journal; multi-agent session merging |
 
 ### 9.17 Agent Framework (`lib/agent/`)
 
