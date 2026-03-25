@@ -652,7 +652,15 @@ static Expr* postfix() {
                 expr = new_index_expr(expr, start_or_index);
             }
         } else if (match(TOKEN_DOT) || match(TOKEN_ARROW)) {
-            consume(TOKEN_IDENTIFIER, "Expect property name after '.' or '->'.");
+            // Accept identifiers and keywords as property/method names
+            if (!match(TOKEN_IDENTIFIER) && !match(TOKEN_INIT) &&
+                !match(TOKEN_CLASS) && !match(TOKEN_SELF) &&
+                !match(TOKEN_SUPER) && !match(TOKEN_IN) &&
+                !match(TOKEN_IMPORT)) {
+                parser_report(current_token, token_span(&current_token),
+                              "expected property name after '.' or '->'",
+                              "identifiers start with a letter or '_'");
+            }
             Token property = previous_token;
             expr = new_get_expr(expr, property);
         } else {
