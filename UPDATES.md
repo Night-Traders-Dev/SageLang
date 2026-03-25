@@ -1,5 +1,18 @@
 # SageLang Updates
 
+## v1.0.0 — Phase 17 (March 2026)
+
+- Backpropagation with Adam optimizer for transformer training
+- cuBLAS GPU acceleration (RTX 4060: cublasSgemm FP32)
+- NPU support: Qualcomm Hexagon, Samsung Exynos, ARM NEON, RISC-V Vector
+- C-only trainer: `make train-c` (auto-detects GPU/NEON/RVV)
+- TurboQuant, AutoResearch, GGUF import modules
+- super.init() and -> arrow operator
+- Models directory reorganized
+- 241 tests passing
+
+---
+
 ## March 18, 2026 - Phase 15: Vulkan Graphics Library + Self-Hosted Ports
 
 ### GPU Graphics Library (Phase 15)

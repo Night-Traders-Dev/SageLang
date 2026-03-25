@@ -418,13 +418,13 @@ The standard library is organized into subdirectories with dotted import paths:
 
 ### SageGPT / LLM Build Pipeline
 
-`models/build_sagellm.sage` implements a 12-phase training pipeline (v2.0) that trains SageGPT-Medium on the entire Sage codebase:
+`models/tools/build_sagellm.sage` implements a 12-phase training pipeline (v2.0) that trains SageGPT-Medium on the entire Sage codebase:
 
 - **GGUF import** (`lib/llm/gguf_import.sage`): Convert Ollama/llama.cpp GGUF models into SageGPT format, with support for Q4_0/Q8_0 dequantization and llama/gpt2/mistral/phi/gemma/qwen2 architectures.
 - **TurboQuant** (`lib/llm/turboquant.sage`): TurboQuant (ICLR 2026) — 3-bit KV cache quantization with 6x compression and zero accuracy loss.
 - **GPU acceleration** (`lib/ml/gpu_accel.sage`): Auto-detects GPU/CPU/NPU/TPU backends; offloads matmul, RMSNorm, SiLU, and softmax to compute shaders with transparent CPU fallback.
-- **Build pipeline v2.0** (`models/build_sagellm.sage`): 12-phase pipeline — data collection, model init, pre-training, LoRA fine-tuning, DPO alignment, RAG, Engram memory, quantization, chatbot generation, GGUF export, visualization, and summary. SageGPT-Medium: d_model=128, 4 layers, 4 heads, d_ff=512, vocab=256, 16K context.
-- **C-Only Trainer**: `make train-c` builds a standalone training binary (`train_sl_tq`) with pure C backpropagation — no frameworks, no autograd, every gradient explicit. Usage: `./train_sl_tq 50000 0.002` (steps, learning rate). Auto-detects cuBLAS GPU acceleration and ARM NEON SIMD; 1000+ steps/sec on modern hardware. Saves weights compatible with the chatbot: `models/sl_tq_llm.weights`. Also works on mobile via Termux + proot ARM64 (falls back to NEON SIMD when cuBLAS is unavailable).
+- **Build pipeline v2.0** (`models/tools/build_sagellm.sage`): 12-phase pipeline — data collection, model init, pre-training, LoRA fine-tuning, DPO alignment, RAG, Engram memory, quantization, chatbot generation, GGUF export, visualization, and summary. SageGPT-Medium: d_model=128, 4 layers, 4 heads, d_ff=512, vocab=256, 16K context.
+- **C-Only Trainer**: `make train-c` builds a standalone training binary (`train_sl_tq`) with pure C backpropagation — no frameworks, no autograd, every gradient explicit. Usage: `./train_sl_tq 50000 0.002` (steps, learning rate). Auto-detects cuBLAS GPU acceleration and ARM NEON SIMD; 1000+ steps/sec on modern hardware. Saves weights compatible with the chatbot: `models/weights/sl_tq_llm.weights`. Also works on mobile via Termux + proot ARM64 (falls back to NEON SIMD when cuBLAS is unavailable).
 - **Additional build targets**: `make train-sage` (Sage interpreter training), `make chatbot-c` (compile chatbot via C backend), `make chatbot-llvm` (compile chatbot via LLVM backend), `make sl-tq-chat` (compile SL-TQ-LLM generative chatbot).
 - **`build.sh` flags**: `--train` (build C trainer), `--chatbot` (compile chatbots).
 
@@ -491,15 +491,15 @@ Run examples:
 
 ### Compiling the SageGPT Chatbot to a Native Binary
 
-The SageGPT chatbot (`models/sagellm_chatbot.sage`) can be compiled to a standalone native binary using either backend:
+The SageGPT chatbot (`models/chatbots/sagellm_chatbot.sage`) can be compiled to a standalone native binary using either backend:
 
 ```bash
 # LLVM backend (recommended — links GPU/runtime support)
-sage --compile-llvm models/sagellm_chatbot.sage -o sagellm_chat
+sage --compile-llvm models/chatbots/sagellm_chatbot.sage -o sagellm_chat
 ./sagellm_chat
 
 # C backend (also works)
-sage --compile models/sagellm_chatbot.sage -o sagellm_chat
+sage --compile models/chatbots/sagellm_chatbot.sage -o sagellm_chat
 ./sagellm_chat
 ```
 

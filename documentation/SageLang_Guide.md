@@ -1460,7 +1460,7 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 LLVM backend notes:
 
 - `--compile-llvm` produces a fully native binary by emitting LLVM IR and invoking `clang` to compile and link it. The result is a standalone executable with no Sage runtime dependency.
-- As a real-world data point, the SageLLM chatbot (`models/sagellm_chatbot.sage`) compiles to a **124 KB standalone binary** via `--compile-llvm`, including the full inference loop and tokenizer.
+- As a real-world data point, the SageLLM chatbot (`models/chatbots/sagellm_chatbot.sage`) compiles to a **124 KB standalone binary** via `--compile-llvm`, including the full inference loop and tokenizer.
 
 Profile notes for native backend:
 

@@ -1,9 +1,36 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: March 24, 2026
-> **Current Phase**: Phase 16 Complete (LLVM GPU + OpenGL)
+> **Last Updated**: March 25, 2026
+> **Current Phase**: Phase 17 Complete (Backpropagation, cuBLAS GPU Training, NPU Support)
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+
+---
+
+## Phase 17: Backpropagation, cuBLAS GPU Training, NPU Support (March 2026)
+
+### Completed
+
+- Backpropagation: explicit forward+backward through 1-layer SwiGLU transformer
+- `ml_native.train_step()` — C-level forward+backward+SGD in one call (19 args)
+- `ml_native.forward_pass()` — inference matching training computation graph exactly
+- `ml_native.load_weights(path)` — native C CSV weight parser (no OOM)
+- C-only trainer (`src/c/train_sl_tq.c`) — standalone binary, 19+ steps/sec
+- cuBLAS FP32 GPU acceleration on NVIDIA RTX GPUs (auto-detected)
+- ARM NEON SIMD for mobile training (Galaxy S24 Ultra via Termux+proot)
+- RISC-V Vector extension for OrangePi RV2
+- Adam optimizer with cosine LR schedule and gradient clipping
+- Full-position loss (every position predicts next token)
+- SL-TQ-LLM model: d=96, 197K params, trained on 50+ Sage source files
+- NPU backend module (lib/ml/npu.sage): NNAPI, SNPE, Samsung ONE, NEON, RVV, ONNX
+- TurboQuant (lib/llm/turboquant.sage): 3-bit KV cache compression, 8.5x ratio
+- AutoResearch (lib/llm/autoresearch.sage): Karpathy ratchet loop
+- GGUF import (lib/llm/gguf_import.sage): convert Ollama models to SageGPT
+- Models directory reorganized: architectures/, chatbots/, training/, data/, weights/, tools/, viz/, export/
+- Build targets: make train-c, train-sage, chatbot-c, chatbot-llvm, sl-tq-chat
+- build.sh --train and --chatbot flags
+- 241 interpreter tests, all passing
+- super.init() and -> arrow operator
 
 ---
 

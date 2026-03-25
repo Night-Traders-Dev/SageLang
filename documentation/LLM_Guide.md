@@ -400,7 +400,7 @@ SageLang now has real backpropagation for transformer training — no black box,
 
 | Mode | Command | Speed | Notes |
 |------|---------|-------|-------|
-| Sage interpreter | `sage models/train_sl_tq_llm.sage` | ~10 steps/sec | Full pipeline visible in Sage source |
+| Sage interpreter | `sage models/training/train_sl_tq_llm.sage` | ~10 steps/sec | Full pipeline visible in Sage source |
 | C-only binary | `make train-c` then `./train_sl_tq [steps] [lr]` | ~180 steps/sec (1000+ with parallel CPU) | Every gradient explicit in C source |
 
 ### `ml_native` Training API
@@ -462,7 +462,7 @@ gcc -O3 -march=native -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
 
 - Auto-detects CPU cores for parallel matrix multiply
 - Reads training data from `models/data/*.txt` and Sage source files
-- Saves weights to `models/sl_tq_llm.weights` (CSV format, compatible with `ml_native.load_weights()`)
+- Saves weights to `models/weights/sl_tq_llm.weights` (CSV format, compatible with `ml_native.load_weights()`)
 - **Results**: 200K steps in ~18 min, perplexity 17.5
 
 ---
@@ -497,7 +497,7 @@ gcc -O3 -march=native -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
 Export trained models to GGUF format for use with Ollama and llama.cpp:
 
 ```bash
-sage models/export_ollama.sage
+sage models/tools/export_ollama.sage
 ```
 
 Generates:
@@ -611,10 +611,10 @@ All operations detect GPU availability at context creation and fall back to CPU 
 
 ## AI Builder
 
-The interactive AI builder (`models/ai_builder.sage`) guides you through the full pipeline:
+The interactive AI builder (`models/tools/ai_builder.sage`) guides you through the full pipeline:
 
 ```bash
-sage models/ai_builder.sage
+sage models/tools/ai_builder.sage
 ```
 
 12-phase pipeline (v2.0):
@@ -632,14 +632,14 @@ sage models/ai_builder.sage
 11. GGUF export (Ollama/llama.cpp compatible)
 12. SVG visualization of model architecture
 
-The generated chatbot (`models/sagellm_chatbot.sage`) is self-contained (no module imports) and compiles to a native binary with either backend:
+The generated chatbot (`models/chatbots/sagellm_chatbot.sage`) is self-contained (no module imports) and compiles to a native binary with either backend:
 
 ```bash
 # C backend
-sage --compile models/sagellm_chatbot.sage -o sagellm_chatbot
+sage --compile models/chatbots/sagellm_chatbot.sage -o sagellm_chatbot
 
 # LLVM IR backend
-sage --compile-llvm models/sagellm_chatbot.sage -o sagellm_chatbot
+sage --compile-llvm models/chatbots/sagellm_chatbot.sage -o sagellm_chatbot
 ```
 
 ---

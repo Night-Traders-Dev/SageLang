@@ -631,6 +631,7 @@ The `npu` module provides a unified interface to on-device Neural Processing Uni
 | NNAPI | Android / generic ARM | System-level API; not available in Termux + proot |
 | SNPE | Qualcomm Hexagon NPU | Snapdragon 8 Gen 3 (Galaxy S24 Ultra) |
 | Samsung ONE | Samsung Exynos NPU | Exynos-based Galaxy devices |
+| OrangePi RV2 | RISC-V Vector extension | 2 TOPS INT8 (CPU-fused), ONNX Runtime; build with `-DUSE_RVV -march=rv64gcv` |
 | ARM NEON SIMD | Any ARM64 CPU | Software fallback; always available on ARM64 |
 
 ### NPU Quick Start
