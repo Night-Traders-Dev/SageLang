@@ -347,16 +347,16 @@ log("MODEL", "Initializing SageGPT-Medium model...")
 separator2()
 
 # Medium model configuration
-# d_model=128 with 2 layers — practical for interpreter training
-# context_len=4096 for high-context inference (seq_len=128 for training batches)
-let d_model = 128
+# d_model=96 with 2 layers — tuned for interpreter memory limits
+# context_len=4096 for high-context inference (seq_len=64 for training batches)
+let d_model = 96
 let n_layers = 2
 let n_heads = 4
-let d_ff = 512
+let d_ff = 384
 let d_head = (d_model / n_heads) | 0
 let vocab = 256
 let context_len = 4096
-let seq_len = 128
+let seq_len = 64
 let model_name = "SageGPT-Medium"
 
 log("MODEL", "Architecture: SwiGLU + RoPE + RMSNorm")
@@ -519,8 +519,8 @@ let tok = tokenizer.char_tokenizer()
 let theory_tokens = tokenizer.encode(tok, theory)
 let theory_examples = train.create_lm_examples(theory_tokens, seq_len)
 let theory_steps = len(theory_examples)
-if theory_steps > 100:
-    theory_steps = 100
+if theory_steps > 50:
+    theory_steps = 50
 
 log("TRAIN", "Theory: " + str(len(theory_tokens)) + " tokens -> " + str(len(theory_examples)) + " examples")
 log("TRAIN", "Training " + str(theory_steps) + " steps (seq_len=" + str(seq_len) + ")")
@@ -585,8 +585,8 @@ log("LORA", "Savings vs full: " + str(((1.0 - (adapter_q["trainable_params"] + a
 let sage_tokens = tokenizer.encode(tok, sage_corpus)
 let sage_examples = train.create_lm_examples(sage_tokens, seq_len)
 let lora_steps = len(sage_examples)
-if lora_steps > 80:
-    lora_steps = 80
+if lora_steps > 30:
+    lora_steps = 30
 
 log("LORA", "Sage corpus: " + str(len(sage_tokens)) + " tokens -> " + str(lora_steps) + " training steps")
 
