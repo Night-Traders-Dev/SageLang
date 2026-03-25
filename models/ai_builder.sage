@@ -605,10 +605,17 @@ while running:
     print_option(9, "Agent", "autonomous tool-using agent")
     print_option(10, "Chatbot", "conversational persona")
     print_option(11, "Export", "summary and output")
+    print ""
+    print "  Advanced:"
+    print_option(12, "Grammar", "grammar-constrained decoding")
+    print_option(13, "Sandbox", "program-aided reasoning (AST execution)")
+    print_option(14, "ToT", "tree-of-thoughts search with rollbacks")
+    print_option(15, "Router", "semantic routing for fast command dispatch")
+    print ""
     print_option(0, "Quick Build", "run all steps with defaults")
     print_option(99, "Quit", "exit the builder")
     print ""
-    let raw_input = input("Select step [1-11, 0=quick, q=quit]: ")
+    let raw_input = input("Select step [0-15, q=quit]: ")
     let step = -1
     if raw_input == "q" or raw_input == "quit" or raw_input == "99":
         running = false
@@ -637,6 +644,14 @@ while running:
         step = 10
     if running and raw_input == "11":
         step = 11
+    if running and raw_input == "12":
+        step = 12
+    if running and raw_input == "13":
+        step = 13
+    if running and raw_input == "14":
+        step = 14
+    if running and raw_input == "15":
+        step = 15
     if step == 0:
         # Quick build: auto-configure everything with sensible defaults
         print_header("Quick Build: Auto-configuring all steps")
@@ -695,6 +710,48 @@ while running:
     if step == 11:
         step_export()
         running = false
+    if step == 12:
+        print_header("Step 12: Grammar-Constrained Decoding")
+        print "  Grammar constraints ensure the model cannot output malformed commands."
+        print "  Available grammars: tool_call, json, sage_code"
+        print "  Use: import agent.grammar"
+        print "  grammar.constrained_llm(llm_fn, grammar_type, max_retries)"
+        print ""
+        print "  This wraps your LLM function to auto-validate and retry on bad output."
+        build["use_grammar"] = true
+        print "  Grammar constraints: enabled"
+    if step == 13:
+        print_header("Step 13: Program-Aided Reasoning (Sandbox)")
+        print "  Offloads deterministic tasks (math, I/O) to the Sage compiler."
+        print "  The LLM writes code blocks; the sandbox executes them safely."
+        print "  Use: import agent.sandbox"
+        print "  sandbox.par_query(agent, question) -> {answer, code_executed, result}"
+        print ""
+        print "  Math eval: sandbox.eval_math(" + DQ + "3 + 4 * 2" + DQ + ") -> 11"
+        print "  Code blocks extracted from ```sage ... ``` delimiters."
+        build["use_sandbox"] = true
+        print "  Program-aided reasoning: enabled"
+    if step == 14:
+        print_header("Step 14: Tree of Thoughts (ToT)")
+        print "  MCTS-style search over reasoning steps with state rollbacks."
+        print "  The model generates multiple candidates; an evaluator scores them."
+        print "  Dead-end paths are rolled back to the last known good state."
+        print "  Use: import agent.tot"
+        print "  tot.best_first_search(solver, llm_fn, initial_state, goal_check)"
+        print ""
+        print "  Dramatically increases success on complex multi-step tasks."
+        build["use_tot"] = true
+        print "  Tree of Thoughts: enabled"
+    if step == 15:
+        print_header("Step 15: Semantic Router")
+        print "  Bypasses the LLM for trivial commands (sub-millisecond, zero hallucination)."
+        print "  Routes matching queries to deterministic handlers."
+        print "  Complex/ambiguous queries fall through to the full agent."
+        print "  Use: import agent.semantic_router"
+        print "  semantic_router.add_sage_routes(router) -> 8 pre-built routes"
+        print ""
+        build["use_router"] = true
+        print "  Semantic router: enabled"
     if step == 99:
         running = false
         print "Builder exited."

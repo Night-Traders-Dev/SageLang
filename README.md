@@ -418,6 +418,10 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`critic`**: Verification loops, rule-based validators, LLM critics, composite checks, iterative self-correction
 - **`schema`**: Typed tool interfaces, parameter validation, bounded execution, schema registry
 - **`trace`**: SFT trace recording, training data generation (SFT/chat/DPO formats), execution logging
+- **`grammar`**: Grammar-constrained decoding, tool call/JSON/Sage code validation, constrained LLM wrapper
+- **`sandbox`**: Program-aided reasoning, code block extraction, sandboxed execution, deterministic math eval
+- **`tot`**: Tree of Thoughts with MCTS search, BFS/best-first, state rollbacks, path scoring
+- **`semantic_router`**: Fast command dispatch bypassing LLM, keyword matching, sub-millisecond routing
 
 **Chatbot Framework** (`lib/chat/`, imported as `import chat.<module>`):
 - **`bot`**: Conversation management, intent recognition, middleware pipeline, LLM-backed responses, context variables

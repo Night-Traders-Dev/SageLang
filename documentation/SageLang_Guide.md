@@ -2093,6 +2093,10 @@ SageLang ships with 11 LLM/neural network modules in `lib/llm/` for building and
 | `critic.sage` | `import agent.critic` | Verification loops, rule/LLM validators, composite checks |
 | `schema.sage` | `import agent.schema` | Typed tool interfaces, parameter validation, bounded execution |
 | `trace.sage` | `import agent.trace` | SFT trace recording, training data generation |
+| `grammar.sage` | `import agent.grammar` | Grammar-constrained decoding, tool call/JSON/Sage validation |
+| `sandbox.sage` | `import agent.sandbox` | Program-aided reasoning, code execution, math eval |
+| `tot.sage` | `import agent.tot` | Tree of Thoughts, BFS/best-first search, state rollbacks |
+| `semantic_router.sage` | `import agent.semantic_router` | Fast command dispatch, keyword routing, LLM bypass |
 
 ### 9.18 Chatbot Framework (`lib/chat/`)
 
