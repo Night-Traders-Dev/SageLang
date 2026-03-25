@@ -692,6 +692,14 @@ gcc -O3 -DUSE_NEON -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
 
 ## Build Targets
 
+The recommended way to build the C trainer is via **SageMake**, which auto-detects cuBLAS, NEON, and RVV automatically:
+
+```bash
+./sagemake train    # Auto-detects cuBLAS/NEON/RVV, builds and runs trainer
+```
+
+Alternatively, use the Makefile targets directly:
+
 ```bash
 make train-c        # Build C trainer (auto-detects cuBLAS GPU + ARM NEON)
 make train-sage     # Train via Sage interpreter

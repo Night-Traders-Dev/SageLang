@@ -1,0 +1,503 @@
+#!/bin/bash
+# ============================================================================
+# SageMake — Unified Build System for SageLang
+#
+# Auto-detects platform, GPU, NPU, compiler backends, and builds everything
+# with the right flags. One command to rule them all.
+#
+# Usage:
+#   ./sagemake                    # Auto-detect everything, build sage
+#   ./sagemake build              # Same as above
+#   ./sagemake train [steps] [lr] # Build + train SL-TQ-LLM
+#   ./sagemake chatbot            # Build + compile chatbot
+#   ./sagemake install            # Build + install to system
+#   ./sagemake test               # Build + run all tests
+#   ./sagemake clean              # Clean all artifacts
+#   ./sagemake info               # Show detected environment
+#
+# Compilation modes:
+#   ./sagemake chatbot --c        # Compile chatbot via C backend
+#   ./sagemake chatbot --llvm     # Compile chatbot via LLVM backend
+#   ./sagemake chatbot --native   # Compile chatbot via native asm backend
+#
+# Feature flags:
+#   --no-vulkan --no-glfw --no-curl --no-ssl --no-gpu --no-npu
+#   --minimal                     # Disable all optional features
+#   --npu                         # Force NPU backend detection
+#   --skip-tests                  # Skip test suite
+#
+# ============================================================================
+
+set -euo pipefail
+
+# === Colors ===
+R='\033[0;31m'; G='\033[0;32m'; Y='\033[1;33m'; B='\033[0;34m'
+C='\033[0;36m'; W='\033[1m'; D='\033[2m'; N='\033[0m'
+
+ok() { printf "  ${G}*${N} %s\n" "$1"; }
+warn() { printf "  ${Y}!${N} %s\n" "$1"; }
+fail() { printf "  ${R}x${N} %s\n" "$1"; }
+info() { printf "  ${C}>${N} %s\n" "$1"; }
+header() { printf "\n${W}${C}=== %s ===${N}\n\n" "$1"; }
+
+# === Auto-detect environment ===
+
+detect_env() {
+    # Platform
+    ARCH=$(uname -m)
+    OS=$(uname -s)
+    HOSTNAME=$(hostname 2>/dev/null || echo "unknown")
+
+    # Proot/Termux
+    IS_PROOT=0
+    IS_TERMUX=0
+    if [ -f /proc/self/status ] && grep -q "TracerPid:[[:space:]]*[1-9]" /proc/self/status 2>/dev/null; then
+        IS_PROOT=1
+    fi
+    if [ -n "${TERMUX_VERSION:-}" ] || [ -d /data/data/com.termux ]; then
+        IS_TERMUX=1
+    fi
+
+    # CPU cores
+    NCPU=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
+
+    # Compiler
+    CC_BIN="gcc"
+    if command -v gcc > /dev/null 2>&1; then
+        CC_BIN="gcc"
+        CC_VER=$(gcc --version 2>&1 | head -1)
+    elif command -v clang > /dev/null 2>&1; then
+        CC_BIN="clang"
+        CC_VER=$(clang --version 2>&1 | head -1)
+    else
+        CC_VER="not found"
+    fi
+
+    # LLVM / clang (for --compile-llvm)
+    HAS_CLANG=0
+    if command -v clang > /dev/null 2>&1; then
+        HAS_CLANG=1
+        CLANG_VER=$(clang --version 2>&1 | head -1)
+    fi
+
+    # GPU: Vulkan
+    HAS_VULKAN=0
+    if [ "$NO_VULKAN" -eq 0 ] && [ "$NO_GPU" -eq 0 ]; then
+        if pkg-config --exists vulkan 2>/dev/null; then
+            HAS_VULKAN=1
+            VULKAN_VER=$(pkg-config --modversion vulkan 2>/dev/null || echo "?")
+        fi
+    fi
+
+    # GPU: GLFW
+    HAS_GLFW=0
+    if [ "$NO_GLFW" -eq 0 ] && [ "$NO_GPU" -eq 0 ]; then
+        if pkg-config --exists glfw3 2>/dev/null; then
+            HAS_GLFW=1
+        fi
+    fi
+
+    # GPU: cuBLAS (NVIDIA)
+    HAS_CUBLAS=0
+    if [ "$NO_GPU" -eq 0 ]; then
+        if [ -f /usr/include/cublas_v2.h ] || pkg-config --exists cublas 2>/dev/null; then
+            HAS_CUBLAS=1
+            GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null || echo "NVIDIA GPU")
+            GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader 2>/dev/null || echo "? MiB")
+        fi
+    fi
+
+    # GPU: OpenGL
+    HAS_OPENGL=0
+    if [ "$NO_GPU" -eq 0 ]; then
+        if pkg-config --exists gl 2>/dev/null || [ -f /usr/include/GL/gl.h ]; then
+            HAS_OPENGL=1
+        fi
+    fi
+
+    # NPU detection
+    HAS_NPU=0
+    NPU_TYPE="none"
+    if [ "$FORCE_NPU" -eq 1 ] || [ "$NO_NPU" -eq 0 ]; then
+        # Qualcomm Hexagon (Android)
+        if [ -f /vendor/lib64/libSNPE.so ] 2>/dev/null; then
+            HAS_NPU=1; NPU_TYPE="snpe"
+        fi
+        # NNAPI (Android)
+        if [ -f /system/lib64/libneuralnetworks.so ] 2>/dev/null; then
+            HAS_NPU=1; NPU_TYPE="nnapi"
+        fi
+        # Samsung ONE
+        if [ -f /usr/lib/libonert.so ] 2>/dev/null; then
+            HAS_NPU=1; NPU_TYPE="samsung_one"
+        fi
+    fi
+
+    # ARM NEON
+    HAS_NEON=0
+    if [ "$ARCH" = "aarch64" ]; then
+        HAS_NEON=1
+    fi
+
+    # RISC-V Vector
+    HAS_RVV=0
+    if [ "$ARCH" = "riscv64" ]; then
+        HAS_RVV=1
+    fi
+
+    # Networking
+    HAS_CURL=0
+    if [ "$NO_CURL" -eq 0 ] && pkg-config --exists libcurl 2>/dev/null; then
+        HAS_CURL=1
+    fi
+    HAS_SSL=0
+    if [ "$NO_SSL" -eq 0 ] && pkg-config --exists openssl 2>/dev/null; then
+        HAS_SSL=1
+    fi
+
+    # Make / CMake
+    HAS_MAKE=0; command -v make > /dev/null 2>&1 && HAS_MAKE=1
+    HAS_CMAKE=0; command -v cmake > /dev/null 2>&1 && HAS_CMAKE=1
+}
+
+show_env() {
+    header "SageMake Environment"
+
+    printf "  ${W}Platform${N}\n"
+    info "OS: $OS | Arch: $ARCH | Cores: $NCPU | Host: $HOSTNAME"
+    [ "$IS_PROOT" -eq 1 ] && warn "Running in proot (some features limited)"
+    [ "$IS_TERMUX" -eq 1 ] && warn "Running in Termux"
+
+    printf "\n  ${W}Compiler${N}\n"
+    info "CC: $CC_BIN"
+    [ "$HAS_CLANG" -eq 1 ] && ok "clang available (LLVM backend)" || warn "clang not found (LLVM backend unavailable)"
+
+    printf "\n  ${W}GPU${N}\n"
+    [ "$HAS_CUBLAS" -eq 1 ] && ok "cuBLAS: $GPU_NAME ($GPU_MEM)" || info "cuBLAS: not available"
+    [ "$HAS_VULKAN" -eq 1 ] && ok "Vulkan: $VULKAN_VER" || info "Vulkan: not available"
+    [ "$HAS_OPENGL" -eq 1 ] && ok "OpenGL: available" || info "OpenGL: not available"
+    [ "$HAS_GLFW" -eq 1 ] && ok "GLFW: available" || info "GLFW: not available"
+
+    printf "\n  ${W}NPU / SIMD${N}\n"
+    [ "$HAS_NPU" -eq 1 ] && ok "NPU: $NPU_TYPE" || info "NPU: not detected"
+    [ "$HAS_NEON" -eq 1 ] && ok "ARM NEON: available" || info "ARM NEON: N/A (not ARM64)"
+    [ "$HAS_RVV" -eq 1 ] && ok "RISC-V Vector: available" || info "RVV: N/A (not riscv64)"
+
+    printf "\n  ${W}Networking${N}\n"
+    [ "$HAS_CURL" -eq 1 ] && ok "libcurl: available" || info "libcurl: not found"
+    [ "$HAS_SSL" -eq 1 ] && ok "OpenSSL: available" || info "OpenSSL: not found"
+
+    printf "\n  ${W}Build Tools${N}\n"
+    [ "$HAS_MAKE" -eq 1 ] && ok "Make: available" || warn "Make: not found"
+    [ "$HAS_CMAKE" -eq 1 ] && ok "CMake: available" || info "CMake: not found"
+
+    printf "\n  ${W}Compilation Backends${N}\n"
+    ok "C backend: always available (--c)"
+    [ "$HAS_CLANG" -eq 1 ] && ok "LLVM backend: available (--llvm)" || warn "LLVM backend: needs clang"
+    ok "Native backend: available (--native, x86-64/aarch64/rv64)"
+    ok "Interpreter: always available"
+
+    printf "\n"
+}
+
+# === Build functions ===
+
+build_sage() {
+    header "Building Sage"
+
+    if [ "$HAS_MAKE" -eq 0 ]; then
+        fail "Make not found. Install build-essential."
+        exit 1
+    fi
+
+    info "Compiling with $NCPU cores..."
+    if make -j"$NCPU" 2>&1 | tail -3; then
+        ok "Built: ./sage"
+    else
+        fail "Build failed"
+        exit 1
+    fi
+}
+
+build_trainer() {
+    header "Building SL-TQ-LLM Trainer"
+
+    TRAIN_FLAGS=""
+    TRAIN_LIBS="-lm -lpthread"
+
+    if [ "$HAS_CUBLAS" -eq 1 ]; then
+        TRAIN_FLAGS="$TRAIN_FLAGS -DUSE_CUBLAS"
+        TRAIN_LIBS="$TRAIN_LIBS -lcublas -lcudart"
+        ok "cuBLAS FP32 GPU acceleration"
+    fi
+    if [ "$HAS_NEON" -eq 1 ]; then
+        TRAIN_FLAGS="$TRAIN_FLAGS -DUSE_NEON"
+        ok "ARM NEON SIMD"
+    fi
+    if [ "$HAS_RVV" -eq 1 ]; then
+        TRAIN_FLAGS="$TRAIN_FLAGS -DUSE_RVV -march=rv64gcv"
+        ok "RISC-V Vector extension"
+    fi
+
+    info "Compiling train_sl_tq..."
+    if $CC_BIN -O3 -march=native $TRAIN_FLAGS -o train_sl_tq src/c/train_sl_tq.c $TRAIN_LIBS 2>&1; then
+        ok "Built: ./train_sl_tq"
+    else
+        fail "Trainer build failed"
+        return 1
+    fi
+}
+
+run_training() {
+    local steps="${1:-50000}"
+    local lr="${2:-0.0003}"
+
+    if [ ! -x ./train_sl_tq ]; then
+        build_trainer
+    fi
+
+    header "Training SL-TQ-LLM ($steps steps, lr=$lr)"
+    ./train_sl_tq "$steps" "$lr"
+}
+
+compile_chatbot() {
+    local mode="${COMPILE_MODE:-llvm}"
+    local sage_bin="./sage"
+    [ ! -x "$sage_bin" ] && sage_bin="./build/sage"
+
+    if [ ! -x "$sage_bin" ]; then
+        build_sage
+        sage_bin="./sage"
+    fi
+
+    header "Compiling Chatbot ($mode backend)"
+
+    case "$mode" in
+        c)
+            info "Compiling via C backend..."
+            $sage_bin --compile models/chatbots/sagellm_chatbot.sage -o sagellm_chat
+            ok "Built: ./sagellm_chat (C backend)"
+            ;;
+        llvm)
+            if [ "$HAS_CLANG" -eq 0 ]; then
+                warn "clang not found, falling back to C backend"
+                $sage_bin --compile models/chatbots/sagellm_chatbot.sage -o sagellm_chat
+                ok "Built: ./sagellm_chat (C backend fallback)"
+            else
+                info "Compiling via LLVM backend..."
+                $sage_bin --compile-llvm models/chatbots/sagellm_chatbot.sage -o sagellm_chat
+                ok "Built: ./sagellm_chat (LLVM backend)"
+            fi
+            ;;
+        native)
+            info "Compiling via native assembly backend..."
+            $sage_bin --compile-native models/chatbots/sagellm_chatbot.sage -o sagellm_chat
+            ok "Built: ./sagellm_chat (native backend)"
+            ;;
+        *)
+            fail "Unknown compile mode: $mode"
+            exit 1
+            ;;
+    esac
+
+    # Also compile SL-TQ-LLM generative chatbot
+    if [ -f models/chatbots/sl_tq_llm_chat.sage ]; then
+        info "Compiling SL-TQ-LLM generative chatbot..."
+        case "$mode" in
+            c)      $sage_bin --compile models/chatbots/sl_tq_llm_chat.sage -o sl_tq_chat 2>/dev/null && ok "Built: ./sl_tq_chat" || warn "SL-TQ-LLM compile failed" ;;
+            llvm)   $sage_bin --compile-llvm models/chatbots/sl_tq_llm_chat.sage -o sl_tq_chat 2>/dev/null && ok "Built: ./sl_tq_chat" || warn "SL-TQ-LLM compile failed" ;;
+            native) $sage_bin --compile-native models/chatbots/sl_tq_llm_chat.sage -o sl_tq_chat 2>/dev/null && ok "Built: ./sl_tq_chat" || warn "SL-TQ-LLM compile failed" ;;
+        esac
+    fi
+}
+
+run_tests() {
+    header "Running Tests"
+
+    if [ "$IS_PROOT" -eq 1 ]; then
+        warn "proot detected — skipping tests (run manually: bash tests/run_tests.sh)"
+        return 0
+    fi
+
+    info "Interpreter tests..."
+    bash tests/run_tests.sh 2>&1 | tail -3
+
+    if [ -x ./sage ]; then
+        info "Self-hosted tests..."
+        make test-selfhost 2>&1 | tail -5 || warn "Some self-hosted tests failed"
+    fi
+}
+
+do_install() {
+    header "Installing to /usr/local"
+    sudo make install
+    ok "Installed to /usr/local/bin/sage"
+}
+
+do_clean() {
+    header "Cleaning"
+    make clean 2>/dev/null || true
+    rm -f train_sl_tq sagellm_chat sl_tq_chat sagellm_chat_c 2>/dev/null || true
+    rm -rf build_sage build 2>/dev/null || true
+    ok "Cleaned all build artifacts"
+}
+
+# === Parse arguments ===
+
+CMD="build"
+COMPILE_MODE="llvm"  # default: auto-select best backend
+NO_VULKAN=0; NO_GLFW=0; NO_CURL=0; NO_SSL=0; NO_GPU=0; NO_NPU=0
+FORCE_NPU=0; SKIP_TESTS=0
+TRAIN_STEPS="50000"
+TRAIN_LR="0.0003"
+
+for arg in "$@"; do
+    case "$arg" in
+        build)      CMD="build" ;;
+        train)      CMD="train" ;;
+        chatbot)    CMD="chatbot" ;;
+        install)    CMD="install" ;;
+        test)       CMD="test" ;;
+        clean)      CMD="clean" ;;
+        info)       CMD="info" ;;
+        all)        CMD="all" ;;
+        --c)        COMPILE_MODE="c" ;;
+        --llvm)     COMPILE_MODE="llvm" ;;
+        --native)   COMPILE_MODE="native" ;;
+        --self-host) COMPILE_MODE="llvm" ;;  # self-host uses LLVM
+        --npu)      FORCE_NPU=1 ;;
+        --no-vulkan)  NO_VULKAN=1 ;;
+        --no-glfw)    NO_GLFW=1 ;;
+        --no-curl)    NO_CURL=1 ;;
+        --no-ssl)     NO_SSL=1 ;;
+        --no-gpu)     NO_GPU=1 ;;
+        --no-npu)     NO_NPU=1 ;;
+        --minimal)    NO_VULKAN=1; NO_GLFW=1; NO_CURL=1; NO_SSL=1; NO_GPU=1; NO_NPU=1 ;;
+        --skip-tests) SKIP_TESTS=1 ;;
+        --help|-h)
+            cat << 'HELP'
+SageMake — Unified Build System for SageLang
+
+Usage: ./sagemake [command] [options]
+
+Commands:
+  build          Build sage interpreter (default)
+  train [N] [LR] Build trainer + train model (default: 50000 steps)
+  chatbot        Build sage + compile chatbot
+  install        Build + install to /usr/local
+  test           Build + run all tests
+  clean          Clean all build artifacts
+  info           Show detected build environment
+  all            Build everything (sage + trainer + chatbot + tests)
+
+Compilation backends:
+  --c            Use C backend for chatbot compilation
+  --llvm         Use LLVM IR backend (default, needs clang)
+  --native       Use native assembly backend (x86-64/aarch64/rv64)
+
+Feature flags:
+  --npu          Force NPU backend detection
+  --no-vulkan    Disable Vulkan GPU support
+  --no-glfw      Disable GLFW windowed mode
+  --no-curl      Disable HTTP/libcurl
+  --no-ssl       Disable OpenSSL
+  --no-gpu       Disable all GPU features
+  --no-npu       Disable NPU detection
+  --minimal      Disable all optional features
+  --skip-tests   Skip test suite
+
+Examples:
+  ./sagemake                          # Auto-detect, build sage
+  ./sagemake all                      # Build everything
+  ./sagemake chatbot --llvm           # Compile chatbot via LLVM
+  ./sagemake chatbot --c              # Compile chatbot via C
+  ./sagemake train 200000 0.001       # Train for 200K steps
+  ./sagemake info                     # Show environment
+  ./sagemake --minimal build          # Build without optional deps
+  ./sagemake chatbot --native --npu   # Native compile + NPU
+HELP
+            exit 0
+            ;;
+        *)
+            # Check if it's a number (training steps or lr)
+            if echo "$arg" | grep -qE '^[0-9]+$'; then
+                TRAIN_STEPS="$arg"
+            elif echo "$arg" | grep -qE '^[0-9]*\.[0-9]+$'; then
+                TRAIN_LR="$arg"
+            else
+                echo "Unknown: $arg (use --help)" >&2
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+# === Auto-detect ===
+detect_env
+
+# Auto-select compile mode if not specified
+if [ "$COMPILE_MODE" = "llvm" ] && [ "$HAS_CLANG" -eq 0 ]; then
+    COMPILE_MODE="c"
+fi
+
+# === Execute command ===
+
+printf "${W}${C}"
+printf "  ____                  __  __       _\n"
+printf " / ___|  __ _  __ _  _|  \\/  | __ _| | _____\n"
+printf " \\___ \\ / _\` |/ _\` |/ | |\\/| |/ _\` | |/ / _ \\\\\n"
+printf "  ___) | (_| | (_| |  | |  | | (_| |   |  __/\n"
+printf " |____/ \\__,_|\\__, |\\_|_|  |_|\\__,_|_|\\_\\___|\n"
+printf "              |___/\n"
+printf "${N}\n"
+printf "  ${D}v1.1.0 — Unified Build System for SageLang${N}\n\n"
+
+case "$CMD" in
+    info)
+        show_env
+        ;;
+    build)
+        show_env
+        build_sage
+        ;;
+    train)
+        detect_env
+        build_trainer
+        run_training "$TRAIN_STEPS" "$TRAIN_LR"
+        ;;
+    chatbot)
+        show_env
+        build_sage
+        compile_chatbot
+        ;;
+    test)
+        show_env
+        build_sage
+        run_tests
+        ;;
+    install)
+        show_env
+        build_sage
+        [ "$SKIP_TESTS" -eq 0 ] && run_tests
+        do_install
+        ;;
+    clean)
+        do_clean
+        ;;
+    all)
+        show_env
+        build_sage
+        build_trainer
+        compile_chatbot
+        [ "$SKIP_TESTS" -eq 0 ] && run_tests
+        header "All Done"
+        ok "sage interpreter: ./sage"
+        ok "C trainer: ./train_sl_tq"
+        ok "chatbot: ./sagellm_chat ($COMPILE_MODE)"
+        [ -x ./sl_tq_chat ] && ok "generative: ./sl_tq_chat"
+        ;;
+    *)
+        echo "Unknown command: $CMD (use --help)" >&2
+        exit 1
+        ;;
+esac

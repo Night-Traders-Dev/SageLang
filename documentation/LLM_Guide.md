@@ -436,7 +436,10 @@ A standalone training binary with no interpreter overhead.
 ### Build
 
 ```bash
-# Via Makefile (recommended — auto-detects cuBLAS GPU + ARM NEON)
+# Via SageMake (recommended — auto-detects platform, GPU, NPU, SIMD)
+./sagemake train 200000 0.001
+
+# Via Makefile (also auto-detects cuBLAS GPU + ARM NEON)
 make train-c
 
 # ARM NEON build (Termux + proot ARM64 / mobile)
@@ -635,10 +638,14 @@ sage models/tools/ai_builder.sage
 The generated chatbot (`models/chatbots/sagellm_chatbot.sage`) is self-contained (no module imports) and compiles to a native binary with either backend:
 
 ```bash
-# C backend
+# Via SageMake (auto-detects optimal backend)
+./sagemake chatbot --c       # Compile via C backend
+./sagemake chatbot --llvm    # Compile via LLVM backend
+
+# C backend (manual)
 sage --compile models/chatbots/sagellm_chatbot.sage -o sagellm_chatbot
 
-# LLVM IR backend
+# LLVM IR backend (manual)
 sage --compile-llvm models/chatbots/sagellm_chatbot.sage -o sagellm_chatbot
 ```
 

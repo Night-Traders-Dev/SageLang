@@ -829,10 +829,19 @@ chatbot-llvm: $(TARGET)
 	./$(TARGET) --compile-llvm models/chatbots/sagellm_chatbot.sage -o sagellm_chat
 	@echo "Built: sagellm_chat (LLVM backend)"
 
+# Compile SageLLM chatbot via native assembly backend
+chatbot-native: $(TARGET)
+	./$(TARGET) --compile-native models/chatbots/sagellm_chatbot.sage -o sagellm_chat
+	@echo "Built: sagellm_chat (native backend)"
+
 # Compile SL-TQ-LLM generative chatbot via LLVM
 sl-tq-chat: $(TARGET)
 	./$(TARGET) --compile-llvm models/chatbots/sl_tq_llm_chat.sage -o sl_tq_chat
 	@echo "Built: sl_tq_chat (LLVM backend)"
+
+# Build everything: sage + trainer + chatbot
+all-models: $(TARGET) train-c chatbot-llvm sl-tq-chat
+	@echo "All models built."
 
 # ============================================================================
 # Phony Targets Declaration
@@ -849,4 +858,4 @@ sl-tq-chat: $(TARGET)
         test-selfhost-errors test-selfhost-lsp test-selfhost-sage-cli \
         test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
         test-all stats help shaders menuconfig guiconfig \
-        train-c train-sage chatbot-c chatbot-llvm sl-tq-chat
+        train-c train-sage chatbot-c chatbot-llvm chatbot-native sl-tq-chat all-models

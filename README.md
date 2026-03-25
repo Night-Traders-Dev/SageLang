@@ -425,8 +425,9 @@ The standard library is organized into subdirectories with dotted import paths:
 - **GPU acceleration** (`lib/ml/gpu_accel.sage`): Auto-detects GPU/CPU/NPU/TPU backends; offloads matmul, RMSNorm, SiLU, and softmax to compute shaders with transparent CPU fallback.
 - **Build pipeline v2.0** (`models/tools/build_sagellm.sage`): 12-phase pipeline — data collection, model init, pre-training, LoRA fine-tuning, DPO alignment, RAG, Engram memory, quantization, chatbot generation, GGUF export, visualization, and summary. SageGPT-Medium: d_model=128, 4 layers, 4 heads, d_ff=512, vocab=256, 16K context.
 - **C-Only Trainer**: `make train-c` builds a standalone training binary (`train_sl_tq`) with pure C backpropagation — no frameworks, no autograd, every gradient explicit. Usage: `./train_sl_tq 50000 0.002` (steps, learning rate). Auto-detects cuBLAS GPU acceleration and ARM NEON SIMD; 1000+ steps/sec on modern hardware. Saves weights compatible with the chatbot: `models/weights/sl_tq_llm.weights`. Also works on mobile via Termux + proot ARM64 (falls back to NEON SIMD when cuBLAS is unavailable).
-- **Additional build targets**: `make train-sage` (Sage interpreter training), `make chatbot-c` (compile chatbot via C backend), `make chatbot-llvm` (compile chatbot via LLVM backend), `make sl-tq-chat` (compile SL-TQ-LLM generative chatbot).
+- **Additional build targets**: `make train-sage` (Sage interpreter training), `make chatbot-c` (compile chatbot via C backend), `make chatbot-llvm` (compile chatbot via LLVM backend), `make chatbot-native` (compile chatbot via native asm), `make sl-tq-chat` (compile SL-TQ-LLM generative chatbot), `make all-models` (build all model variants).
 - **`build.sh` flags**: `--train` (build C trainer), `--chatbot` (compile chatbots).
+- **SageMake**: Unified build system with platform, GPU, NPU, and compiler auto-detection (`./sagemake build`, `./sagemake train`, `./sagemake all`).
 
 **Agent Framework** (`lib/agent/`, imported as `import agent.<module>`):
 - **`core`**: ReAct agent loop (observe/think/act/reflect), tool dispatch, scratchpad, prompt building, LLM call tracking
@@ -461,11 +462,12 @@ print arr.map([1, 2, 3], double)
 
 ## 🛠 Building Sage
 
-Sage’s desktop build links against `libm`, `pthread`, `dl`, `libcurl`, and OpenSSL. The project supports three build paths:
+Sage’s desktop build links against `libm`, `pthread`, `dl`, `libcurl`, and OpenSSL. The project supports four build paths:
 
 - Desktop C build: produces `sage` and `sage-lsp`
 - Self-hosted bootstrap flow: uses the C interpreter to run `src/sage/sage.sage`
 - Pico/RP2040 build: via CMake and the Pico SDK
+- SageMake: unified build system with auto-detection of platform, GPU, NPU, and compiler backends (`./sagemake build`)
 
 ### Prerequisites
 - A C compiler such as `gcc`, `clang`, or `cc`
@@ -536,7 +538,9 @@ make train-c                  # Build C trainer (auto-detects cuBLAS GPU + ARM N
 make train-sage               # Train via Sage interpreter
 make chatbot-c                # Compile chatbot via C backend
 make chatbot-llvm             # Compile chatbot via LLVM backend
+make chatbot-native           # Compile chatbot via native asm backend
 make sl-tq-chat               # Compile SL-TQ-LLM generative chatbot
+make all-models               # Build all model variants
 make benchmark-python         # Sage vs Python 3 benchmarks (10 workloads, 5 recipes)
 make benchmark-python-md      # Same, markdown table output
 ```
@@ -567,6 +571,21 @@ make cmake-build           # Build the desktop CMake tree
 make cmake-sage            # Setup CMake self-hosted build
 make cmake-sage-build      # Build and run self-hosted tests via CMake
 make cmake-pico            # Setup a Pico CMake build
+```
+
+### SageMake Build
+
+SageMake is the unified build system that auto-detects your platform, GPU, NPU, and compiler backends.
+
+```bash
+./sagemake info              # Show detected environment
+./sagemake build             # Build sage interpreter
+./sagemake chatbot --llvm    # Compile chatbot via LLVM
+./sagemake chatbot --c       # Compile via C backend
+./sagemake chatbot --native  # Compile via native asm
+./sagemake train 200000 0.001  # Build trainer + train
+./sagemake all               # Build everything
+./sagemake --minimal build   # Core only (no optional deps)
 ```
 
 ### Build Parameters
@@ -952,7 +971,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
 - **Status**: Active development with a working self-hosted interpreter and GPU graphics library
 - **License**: MIT
-- **Current Version**: v1.0.0
+- **Current Version**: v1.1.0
 
 ## 💾 Project Structure
 

@@ -1,6 +1,6 @@
 # SageLang Updates
 
-## v1.0.0 — Phase 17 (March 2026)
+## v1.1.0 — Phase 17 (March 2026)
 
 - Backpropagation with Adam optimizer for transformer training
 - cuBLAS GPU acceleration (RTX 4060: cublasSgemm FP32)
@@ -9,6 +9,8 @@
 - TurboQuant, AutoResearch, GGUF import modules
 - super.init() and -> arrow operator
 - Models directory reorganized
+- SageMake: unified build system (`./sagemake build`, `./sagemake train`, `./sagemake chatbot --llvm|--c|--native`, `./sagemake all`)
+- New Makefile targets: `chatbot-native`, `all-models`
 - 241 tests passing
 
 ---

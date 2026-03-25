@@ -1341,11 +1341,12 @@ next(gen)                          # Resume, reach end, is_exhausted=1
 
 ### 6.1 Building the Interpreter
 
-The repository exposes three build paths from source:
+The repository exposes four build paths from source:
 
 - Desktop build from C sources, which produces `sage` and `sage-lsp`
 - Self-hosted bootstrap mode, which still builds `sage` first and then uses it to execute `src/sage/sage.sage`
 - Pico/RP2040 builds through CMake and the Pico SDK
+- SageMake: unified build system with auto-detection of platform, GPU (cuBLAS), NPU (NNAPI/SNPE/ONE), SIMD (NEON/RVV), and compiler backends
 
 **Desktop Build (Make)**:
 
@@ -1366,6 +1367,21 @@ make train-c      # Builds standalone C training binary (no Sage runtime); uses 
 cmake -B build
 cmake --build build
 ```
+
+**SageMake Build**:
+
+```bash
+./sagemake info              # Show detected environment (GPU, NPU, SIMD, compiler)
+./sagemake build             # Build sage interpreter
+./sagemake chatbot --llvm    # Compile chatbot via LLVM
+./sagemake chatbot --c       # Compile via C backend
+./sagemake chatbot --native  # Compile via native asm
+./sagemake train 200000 0.001  # Build trainer + train
+./sagemake all               # Build everything
+./sagemake --minimal build   # Core only (no optional deps)
+```
+
+`./sagemake info` auto-detects GPU (cuBLAS), NPU (NNAPI/SNPE/ONE), SIMD (NEON/RVV), and selects optimal compilation flags.
 
 **Self-Hosted Build / Bootstrap**:
 
