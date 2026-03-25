@@ -376,13 +376,13 @@ let archs = gguf_import.supported_architectures()
 
 ## GPU-Accelerated ML (`ml.gpu_accel`)
 
-Offload training and inference operations to the GPU with automatic CPU fallback:
+Offload training and inference operations to the GPU with automatic CPU fallback. Supports backend targets: `"gpu"`, `"cpu"`, `"npu"`, `"tpu"`, and `"auto"` (auto-selects best available: GPU > CPU). When no GPU is present, all operations fall back transparently to `ml_native` (CPU) implementations.
 
 ```sage
 import ml.gpu_accel
 
-# Create a GPU acceleration context
-let ctx = gpu_accel.create_context()
+# Create a GPU acceleration context ("auto" selects best available backend)
+let ctx = gpu_accel.create("auto")
 print ctx["backend"]   # "vulkan", "opengl", or "cpu"
 
 # GPU-aware matrix operations (automatic CPU fallback)
@@ -400,8 +400,14 @@ let output = gpu_accel.transformer_layer_forward(ctx, input, layer_weights)
 # Full model forward pass
 let logits = gpu_accel.model_forward(ctx, token_ids, model_weights)
 
+# Loss computation
+let loss = gpu_accel.cross_entropy(ctx, logits, targets)
+
 # GPU-accelerated training step
-let loss = gpu_accel.train_step(ctx, model, batch, learning_rate)
+let train_loss = gpu_accel.train_step(ctx, model, batch, learning_rate)
+
+# Benchmark backends
+gpu_accel.benchmark(ctx, 512)
 ```
 
 ### GLSL Compute Shaders
@@ -428,7 +434,8 @@ sage models/ai_builder.sage
 ```
 
 12-phase pipeline (v2.0):
-1. Data collection (entire codebase, 127+ source files)
+
+1. Data collection (entire codebase, 153+ source files, ~1.6M chars)
 2. Model configuration (medium: d=128, 4 layers, 4 heads, d_ff=512, vocab=256, 16K context)
 3. Tokenizer selection (char, BPE, word-level)
 4. Pre-training (200 steps with native C backend)
@@ -440,3 +447,32 @@ sage models/ai_builder.sage
 10. Chatbot generation with persona selection
 11. GGUF export (Ollama/llama.cpp compatible)
 12. SVG visualization of model architecture
+
+The generated chatbot (`models/sagellm_chatbot.sage`) is self-contained (no module imports) and compiles to a native binary with either backend:
+
+```bash
+# C backend
+sage --compile models/sagellm_chatbot.sage -o sagellm_chatbot
+
+# LLVM IR backend
+sage --compile-llvm models/sagellm_chatbot.sage -o sagellm_chatbot
+```
+
+---
+
+## Known Issues
+
+**LLVM backend: do not modify for-loop variables to fake a break.**
+The LLVM backend does not support mutating the loop variable to exit early. Use `break` instead:
+
+```sage
+# WRONG — does not work under --compile-llvm
+for j in range(len(arr)):
+    if arr[j] == target:
+        j = len(arr)   # attempting to force loop exit
+
+# CORRECT
+for j in range(len(arr)):
+    if arr[j] == target:
+        break
+```

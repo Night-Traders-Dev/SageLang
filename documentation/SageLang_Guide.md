@@ -1411,7 +1411,13 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | `--name <program>` | `--compile-pico` | Overrides the generated program name derived from the input file |
 | `--sdk <path>` | `--compile-pico` | Pico SDK path; falls back to `PICO_SDK_PATH` |
 
+LLVM backend notes:
+
+- `--compile-llvm` produces a fully native binary by emitting LLVM IR and invoking `clang` to compile and link it. The result is a standalone executable with no Sage runtime dependency.
+- As a real-world data point, the SageLLM chatbot (`models/sagellm_chatbot.sage`) compiles to a **124 KB standalone binary** via `--compile-llvm`, including the full inference loop and tokenizer.
+
 Profile notes for native backend:
+
 - `hosted` (no suffix): default behavior.
 - `-baremetal` / `-osdev`: emits `sage_entry` and freestanding object-oriented output.
 - `-uefi`: emits `efi_main`; current stage emits a freestanding object, with full PE/COFF image linking planned as follow-up work.
@@ -1483,6 +1489,10 @@ The practical result is that `bytecode` mode is already useful for long-running 
 
 - The GC is now a tracing mark-and-sweep collector that can reclaim **circular references** among GC-managed Sage values such as arrays, dicts, tuples, classes, instances, functions, and generators.
 - Cycles are only collectable when every object in the cycle is represented in the managed `Value` graph. Raw pointers, external allocations, and ad hoc native-side ownership still sit outside that guarantee.
+
+**LLVM Backend Loop Variable Limitation**:
+
+- **For-loop iteration variables cannot be modified to simulate a break in LLVM-compiled binaries.** Code like `j = len(arr)` inside a for loop has no effect on the loop control variable in `--compile-llvm` output. Always use `break` to exit loops early. This works correctly in the interpreter and all other compiler backends (C, native).
 
 **Practical Tips**:
 - Call `gc_collect()` periodically in long-running loops to prevent heap explosion.
@@ -1988,7 +1998,7 @@ SageLang ships with 6 cryptography modules in `lib/crypto/`:
 
 ### 9.13 Machine Learning Libraries
 
-SageLang ships with 5 PyTorch-style machine learning modules in `lib/ml/`:
+SageLang ships with 6 PyTorch-style machine learning modules in `lib/ml/`:
 
 | Module | Import | Purpose |
 |--------|--------|---------|
@@ -2000,6 +2010,7 @@ SageLang ships with 5 PyTorch-style machine learning modules in `lib/ml/`:
 | `debug.sage` | `import ml.debug` | Weight stats, histograms, activation analysis, gradient checking, training diagnostics |
 | `viz.sage` | `import ml.viz` | SVG chart generation (loss curves, weight distributions, attention heatmaps, architecture diagrams) |
 | `monitor.sage` | `import ml.monitor` | Live training monitor, progress bars, memory snapshots, throughput, checkpoints |
+| `gpu_accel.sage` | `import ml.gpu_accel` | GPU offload for tensor ops and training; bridges ML workloads to the Vulkan/OpenGL GPU backend |
 
 ### 9.14 CUDA Libraries
 
@@ -2061,7 +2072,7 @@ SageLang ships with 23 general-purpose standard library modules in `lib/std/`:
 
 ### 9.16 LLM / Neural Network Libraries
 
-SageLang ships with 11 LLM/neural network modules in `lib/llm/` for building and training language models:
+SageLang ships with 12 LLM/neural network modules in `lib/llm/` for building and training language models:
 
 | Module | Import | Purpose |
 |--------|--------|---------|
@@ -2080,6 +2091,7 @@ SageLang ships with 11 LLM/neural network modules in `lib/llm/` for building and
 | `rag.sage` | `import llm.rag` | Document chunking, keyword retrieval, context assembly, summarization |
 | `dpo.sage` | `import llm.dpo` | Direct Preference Optimization, ORPO, preference pairs, reward models |
 | `gguf.sage` | `import llm.gguf` | GGUF v3 export for Ollama/llama.cpp, Modelfile gen, quantization |
+| `gguf_import.sage` | `import llm.gguf_import` | Import GGUF models from Ollama into Sage; converts weights to native tensor format |
 
 ### 9.17 Agent Framework (`lib/agent/`)
 

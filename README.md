@@ -409,7 +409,15 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`rag`**: Retrieval-augmented generation (document chunking, keyword retrieval, context assembly, extractive summarization)
 - **`dpo`**: Direct Preference Optimization (DPO/ORPO alignment, preference pairs, reward models, Sage code preferences)
 - **`gguf`**: GGUF v3 export for Ollama and llama.cpp (metadata, Modelfile, quantization, conversion scripts)
-- **`gguf_import`**: Import GGUF models from Ollama/llama.cpp into SageGPT format (Q4_0/Q8_0 dequantization, llama/gpt2/mistral/phi/gemma/qwen2 architectures)
+- **`gguf_import`**: Import GGUF models from Ollama/llama.cpp into SageGPT format (Q4_0/Q8_0 dequantization, llama/gpt2/mistral/phi/gemma/qwen2 architectures) — `lib/llm/gguf_import.sage`
+
+### SageGPT / LLM Build Pipeline
+
+`models/build_sagellm.sage` implements a 12-phase training pipeline (v2.0) that trains SageGPT-Medium on the entire Sage codebase:
+
+- **GGUF import** (`lib/llm/gguf_import.sage`): Convert Ollama/llama.cpp GGUF models into SageGPT format, with support for Q4_0/Q8_0 dequantization and llama/gpt2/mistral/phi/gemma/qwen2 architectures.
+- **GPU acceleration** (`lib/ml/gpu_accel.sage`): Auto-detects GPU/CPU/NPU/TPU backends; offloads matmul, RMSNorm, SiLU, and softmax to compute shaders with transparent CPU fallback.
+- **Build pipeline v2.0** (`models/build_sagellm.sage`): 12-phase pipeline — data collection, model init, pre-training, LoRA fine-tuning, DPO alignment, RAG, Engram memory, quantization, chatbot generation, GGUF export, visualization, and summary. SageGPT-Medium: d_model=128, 4 layers, 4 heads, d_ff=512, vocab=256, 16K context.
 
 **Agent Framework** (`lib/agent/`, imported as `import agent.<module>`):
 - **`core`**: ReAct agent loop (observe/think/act/reflect), tool dispatch, scratchpad, prompt building, LLM call tracking
@@ -470,6 +478,20 @@ Run examples:
 ./sage examples/exceptions.sage
 ./sage examples/generators.sage
 ./sage examples/phase6_classes.sage
+```
+
+### Compiling the SageGPT Chatbot to a Native Binary
+
+The SageGPT chatbot (`models/sagellm_chatbot.sage`) can be compiled to a standalone native binary using either backend:
+
+```bash
+# LLVM backend (recommended — links GPU/runtime support)
+sage --compile-llvm models/sagellm_chatbot.sage -o sagellm_chat
+./sagellm_chat
+
+# C backend (also works)
+sage --compile models/sagellm_chatbot.sage -o sagellm_chat
+./sagellm_chat
 ```
 
 ### Self-Hosted Build (Sage-on-Sage)
@@ -916,7 +938,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
 - **Status**: Active development with a working self-hosted interpreter and GPU graphics library
 - **License**: MIT
-- **Current Version**: v0.15.0-dev
+- **Current Version**: v1.0.0
 
 ## 💾 Project Structure
 
@@ -1014,6 +1036,20 @@ sage/
 ├── Makefile          # Build script
 └── README.md         # This file
 ```
+
+## Known Issues / Gotchas
+
+- **0 is truthy in Sage** — only `false` and `nil` are falsy. Guard conditions on zero must use explicit comparison (`if x == 0:`).
+- **No escape sequences in strings** — use `chr(10)` for newline, `chr(34)` for double-quote.
+- **`elif` chains with 5+ branches malfunction** — use sequential `if`/`continue` instead.
+- **`elif` in `for` loops with `break` can malfunction** — use the `if`/`continue` pattern.
+- **Instance `==` always returns false** — use structural/field checks instead.
+- **No wildcard imports** (`from X import *`) — use `import X` then `X.field`.
+- **No multiline dict/array literals** — build them incrementally.
+- **`match` is a reserved keyword** — do not use it as a variable name.
+- **Class methods cannot see module-level `let` vars** — hardcode values or pass them as arguments.
+- **`%` operator casts to int** — `3.7 % 1` returns `0`, not `0.7`; use string-based `trunc()` for floor/ceil.
+- **LLVM backend: do NOT use the fake-break pattern** (`j = len(arr)` to exit loops) — the LLVM backend cannot modify loop variables at runtime. Use `break` instead.
 
 ## 🤝 Contributing
 

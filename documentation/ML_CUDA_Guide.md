@@ -450,15 +450,35 @@ for epoch in range(100):
 
 ## GPU-Accelerated ML (`ml.gpu_accel`)
 
-The `gpu_accel` module provides GPU-accelerated ML operations with automatic CPU fallback. All operations route through a context that tracks which backend is active.
+The `gpu_accel` module is a unified compute abstraction layer over `ml_native`. It provides GPU-accelerated ML operations with automatic CPU fallback. All operations route through a context that tracks which backend is active.
+
+### Backends
+
+| Backend | Description |
+| ------- | ----------- |
+| `"gpu"` | Vulkan compute (via Sage graphics engine) |
+| `"cpu"` | `ml_native` CPU fallback |
+| `"npu"` | NPU (when available) |
+| `"tpu"` | TPU (when available) |
+| `"auto"` | Auto-detects best available backend |
+
+Override the backend at runtime with the `SAGE_COMPUTE_BACKEND` environment variable:
+
+```sh
+SAGE_COMPUTE_BACKEND=cpu ./mymodel
+```
+
+> **Note:** Currently GPU dispatch requires the native C module bridge (`ml_gpu`), which is not yet wired. The `gpu_accel` layer routes all operations to `ml_native` (CPU) until the `ml_gpu` native module is built. When compiled with `--compile-llvm`, GPU ops link against `gpu_api.o` + Vulkan/GL libs.
+
+All model files that use GPU acceleration (`build_sagellm`, `train_full`, `sagegpt/model`, `ai_builder`, `inspect_model`) now route through `gpu_accel`.
 
 ### Quick Start
 
 ```sage
 import ml.gpu_accel
 
-# Create GPU context (falls back to CPU if no GPU)
-let ctx = gpu_accel.create(true)  # true = prefer GPU
+# Auto-detect best backend (GPU if available, falls back to CPU)
+let ctx = gpu_accel.create("auto")
 
 # All standard ML ops, GPU-aware
 let c = gpu_accel.matmul(ctx, a, b, M, K, N)

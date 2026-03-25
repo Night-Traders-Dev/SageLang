@@ -50,6 +50,11 @@ declare %SageValue @sage_rt_dict_keys(%SageValue)
 declare %SageValue @sage_rt_dict_values(%SageValue)
 declare %SageValue @sage_rt_dict_has(%SageValue, %SageValue)
 declare %SageValue @sage_rt_type(%SageValue)
+declare %SageValue @sage_rt_chr(%SageValue)
+declare %SageValue @sage_rt_ord(%SageValue)
+declare %SageValue @sage_rt_input(%SageValue)
+declare %SageValue @sage_rt_readfile(%SageValue)
+declare %SageValue @sage_rt_writefile(%SageValue, %SageValue)
 declare void @abort() noreturn
 declare %SageValue @sage_rt_bit_and(%SageValue, %SageValue)
 declare %SageValue @sage_rt_bit_or(%SageValue, %SageValue)
@@ -197,6 +202,34 @@ declare %SageValue @sage_rt_gpu_set_platform(%SageValue)
 declare %SageValue @sage_rt_gpu_get_platform()
 declare %SageValue @sage_rt_gpu_detected_platform()
 
+@io = internal global %SageValue zeroinitializer
+@ml_native = internal global %SageValue zeroinitializer
+@config = internal global %SageValue zeroinitializer
+@tokenizer = internal global %SageValue zeroinitializer
+@train = internal global %SageValue zeroinitializer
+@lora = internal global %SageValue zeroinitializer
+@engram = internal global %SageValue zeroinitializer
+@attention = internal global %SageValue zeroinitializer
+@generate = internal global %SageValue zeroinitializer
+@quantize = internal global %SageValue zeroinitializer
+@dpo = internal global %SageValue zeroinitializer
+@rag = internal global %SageValue zeroinitializer
+@prompt = internal global %SageValue zeroinitializer
+@gguf = internal global %SageValue zeroinitializer
+@debug = internal global %SageValue zeroinitializer
+@viz = internal global %SageValue zeroinitializer
+@monitor = internal global %SageValue zeroinitializer
+@core = internal global %SageValue zeroinitializer
+@tools = internal global %SageValue zeroinitializer
+@planner = internal global %SageValue zeroinitializer
+@critic = internal global %SageValue zeroinitializer
+@grammar = internal global %SageValue zeroinitializer
+@semantic_router = internal global %SageValue zeroinitializer
+@tot = internal global %SageValue zeroinitializer
+@trace = internal global %SageValue zeroinitializer
+@schema = internal global %SageValue zeroinitializer
+@supervisor = internal global %SageValue zeroinitializer
+@gpu_accel = internal global %SageValue zeroinitializer
 @NL = internal global %SageValue zeroinitializer
 @DQ = internal global %SageValue zeroinitializer
 @theory = internal global %SageValue zeroinitializer
@@ -342,30 +375,29 @@ entry:
   %cur_seq_len = alloca %SageValue
   store %SageValue %arg_cur_seq_len, %SageValue* %cur_seq_len
   %hidden = alloca %SageValue
-  %t = alloca %SageValue
-  %tid = alloca %SageValue
-  %j = alloca %SageValue
-  %layer = alloca %SageValue
-  %q = alloca %SageValue
-  %k = alloca %SageValue
-  %v = alloca %SageValue
-  %attn_out = alloca %SageValue
-  %proj = alloca %SageValue
-  %normed2 = alloca %SageValue
-  %gate_out = alloca %SageValue
-  %up_out = alloca %SageValue
-  %gate_act = alloca %SageValue
-  %gated = alloca %SageValue
-  %i = alloca %SageValue
-  %ffn_out = alloca %SageValue
-  %last_h = alloca %SageValue
-  %off = alloca %SageValue
+  %fp_t = alloca %SageValue
+  %fp_tid = alloca %SageValue
+  %fp_j = alloca %SageValue
+  %fp_layer = alloca %SageValue
+  %fp_q = alloca %SageValue
+  %fp_k = alloca %SageValue
+  %fp_v = alloca %SageValue
+  %fp_attn = alloca %SageValue
+  %fp_proj = alloca %SageValue
+  %fp_normed = alloca %SageValue
+  %fp_gate = alloca %SageValue
+  %fp_up = alloca %SageValue
+  %fp_act = alloca %SageValue
+  %fp_gated = alloca %SageValue
+  %fp_i = alloca %SageValue
+  %fp_ffn = alloca %SageValue
+  %fp_last = alloca %SageValue
+  %fp_off = alloca %SageValue
   %0 = call %SageValue @sage_rt_array_new(i32 0)
   store %SageValue %0, %SageValue* %hidden
   %1 = load %SageValue, %SageValue* %cur_seq_len
   %2 = call %SageValue @sage_rt_range(%SageValue %1)
   %3 = call i32 @sage_rt_array_len(%SageValue %2)
-  %t = alloca %SageValue
   %4 = alloca i32
   store i32 0, i32* %4
   br label %L0
@@ -377,12 +409,12 @@ L1:
   %7 = sitofp i32 %5 to double
   %8 = call %SageValue @sage_rt_number(double %7)
   %9 = call %SageValue @sage_rt_index(%SageValue %2, %SageValue %8)
-  store %SageValue %9, %SageValue* %t
+  store %SageValue %9, %SageValue* %fp_t
   %10 = load %SageValue, %SageValue* %input_ids
-  %11 = load %SageValue, %SageValue* %t
+  %11 = load %SageValue, %SageValue* %fp_t
   %12 = call %SageValue @sage_rt_index(%SageValue %10, %SageValue %11)
-  store %SageValue %12, %SageValue* %tid
-  %13 = load %SageValue, %SageValue* %tid
+  store %SageValue %12, %SageValue* %fp_tid
+  %13 = load %SageValue, %SageValue* %fp_tid
   %14 = load %SageValue, %SageValue* @vocab
   %15 = call %SageValue @sage_rt_gte(%SageValue %13, %SageValue %14)
   %16 = call i32 @sage_rt_get_bool(%SageValue %15)
@@ -390,13 +422,12 @@ L1:
   br i1 %17, label %L3, label %L5
 L3:
   %18 = call %SageValue @sage_rt_number(double 0.000000e+00)
-  store %SageValue %18, %SageValue* %tid
+  store %SageValue %18, %SageValue* %fp_tid
   br label %L5
 L5:
   %19 = load %SageValue, %SageValue* @d_model
   %20 = call %SageValue @sage_rt_range(%SageValue %19)
   %21 = call i32 @sage_rt_array_len(%SageValue %20)
-  %j = alloca %SageValue
   %22 = alloca i32
   store i32 0, i32* %22
   br label %L6
@@ -408,13 +439,13 @@ L7:
   %25 = sitofp i32 %23 to double
   %26 = call %SageValue @sage_rt_number(double %25)
   %27 = call %SageValue @sage_rt_index(%SageValue %20, %SageValue %26)
-  store %SageValue %27, %SageValue* %j
+  store %SageValue %27, %SageValue* %fp_j
   %28 = load %SageValue, %SageValue* %hidden
   %29 = load %SageValue, %SageValue* @embed_w
-  %30 = load %SageValue, %SageValue* %tid
+  %30 = load %SageValue, %SageValue* %fp_tid
   %31 = load %SageValue, %SageValue* @d_model
   %32 = call %SageValue @sage_rt_mul(%SageValue %30, %SageValue %31)
-  %33 = load %SageValue, %SageValue* %j
+  %33 = load %SageValue, %SageValue* %fp_j
   %34 = call %SageValue @sage_rt_add(%SageValue %32, %SageValue %33)
   %35 = call %SageValue @sage_rt_index(%SageValue %29, %SageValue %34)
   %36 = call %SageValue @sage_rt_array_push(%SageValue %28, %SageValue %35)
@@ -429,7 +460,6 @@ L2:
   %39 = load %SageValue, %SageValue* @n_layers
   %40 = call %SageValue @sage_rt_range(%SageValue %39)
   %41 = call i32 @sage_rt_array_len(%SageValue %40)
-  %layer = alloca %SageValue
   %42 = alloca i32
   store i32 0, i32* %42
   br label %L9
@@ -441,11 +471,11 @@ L10:
   %45 = sitofp i32 %43 to double
   %46 = call %SageValue @sage_rt_number(double %45)
   %47 = call %SageValue @sage_rt_index(%SageValue %40, %SageValue %46)
-  store %SageValue %47, %SageValue* %layer
+  store %SageValue %47, %SageValue* %fp_layer
   %48 = load %SageValue, %SageValue* @gpu
   %49 = load %SageValue, %SageValue* %hidden
   %50 = load %SageValue, %SageValue* @layer_norm1
-  %51 = load %SageValue, %SageValue* %layer
+  %51 = load %SageValue, %SageValue* %fp_layer
   %52 = call %SageValue @sage_rt_index(%SageValue %50, %SageValue %51)
   %53 = load %SageValue, %SageValue* %cur_seq_len
   %54 = load %SageValue, %SageValue* @d_model
@@ -455,97 +485,96 @@ L10:
   %57 = load %SageValue, %SageValue* @gpu
   %58 = load %SageValue, %SageValue* %hidden
   %59 = load %SageValue, %SageValue* @layer_qw
-  %60 = load %SageValue, %SageValue* %layer
+  %60 = load %SageValue, %SageValue* %fp_layer
   %61 = call %SageValue @sage_rt_index(%SageValue %59, %SageValue %60)
   %62 = load %SageValue, %SageValue* %cur_seq_len
   %63 = load %SageValue, %SageValue* @d_model
   %64 = load %SageValue, %SageValue* @d_model
   %65 = call %SageValue @sage_rt_nil()
-  store %SageValue %65, %SageValue* %q
+  store %SageValue %65, %SageValue* %fp_q
   %66 = load %SageValue, %SageValue* @gpu
   %67 = load %SageValue, %SageValue* %hidden
   %68 = load %SageValue, %SageValue* @layer_kw
-  %69 = load %SageValue, %SageValue* %layer
+  %69 = load %SageValue, %SageValue* %fp_layer
   %70 = call %SageValue @sage_rt_index(%SageValue %68, %SageValue %69)
   %71 = load %SageValue, %SageValue* %cur_seq_len
   %72 = load %SageValue, %SageValue* @d_model
   %73 = load %SageValue, %SageValue* @d_model
   %74 = call %SageValue @sage_rt_nil()
-  store %SageValue %74, %SageValue* %k
+  store %SageValue %74, %SageValue* %fp_k
   %75 = load %SageValue, %SageValue* @gpu
   %76 = load %SageValue, %SageValue* %hidden
   %77 = load %SageValue, %SageValue* @layer_vw
-  %78 = load %SageValue, %SageValue* %layer
+  %78 = load %SageValue, %SageValue* %fp_layer
   %79 = call %SageValue @sage_rt_index(%SageValue %77, %SageValue %78)
   %80 = load %SageValue, %SageValue* %cur_seq_len
   %81 = load %SageValue, %SageValue* @d_model
   %82 = load %SageValue, %SageValue* @d_model
   %83 = call %SageValue @sage_rt_nil()
-  store %SageValue %83, %SageValue* %v
-  %84 = load %SageValue, %SageValue* %q
-  %85 = load %SageValue, %SageValue* %k
-  %86 = load %SageValue, %SageValue* %v
+  store %SageValue %83, %SageValue* %fp_v
+  %84 = load %SageValue, %SageValue* %fp_q
+  %85 = load %SageValue, %SageValue* %fp_k
+  %86 = load %SageValue, %SageValue* %fp_v
   %87 = load %SageValue, %SageValue* %cur_seq_len
   %88 = load %SageValue, %SageValue* @d_model
   %89 = call %SageValue @sage_rt_bool(i32 1)
   %90 = call %SageValue @sage_rt_nil()
-  store %SageValue %90, %SageValue* %attn_out
+  store %SageValue %90, %SageValue* %fp_attn
   %91 = load %SageValue, %SageValue* @gpu
-  %92 = load %SageValue, %SageValue* %attn_out
+  %92 = load %SageValue, %SageValue* %fp_attn
   %93 = load %SageValue, %SageValue* @layer_ow
-  %94 = load %SageValue, %SageValue* %layer
+  %94 = load %SageValue, %SageValue* %fp_layer
   %95 = call %SageValue @sage_rt_index(%SageValue %93, %SageValue %94)
   %96 = load %SageValue, %SageValue* %cur_seq_len
   %97 = load %SageValue, %SageValue* @d_model
   %98 = load %SageValue, %SageValue* @d_model
   %99 = call %SageValue @sage_rt_nil()
-  store %SageValue %99, %SageValue* %proj
+  store %SageValue %99, %SageValue* %fp_proj
   %100 = load %SageValue, %SageValue* @gpu
   %101 = load %SageValue, %SageValue* %hidden
-  %102 = load %SageValue, %SageValue* %proj
+  %102 = load %SageValue, %SageValue* %fp_proj
   %103 = call %SageValue @sage_rt_nil()
   store %SageValue %103, %SageValue* %hidden
   %104 = load %SageValue, %SageValue* @gpu
   %105 = load %SageValue, %SageValue* %hidden
   %106 = load %SageValue, %SageValue* @layer_norm2
-  %107 = load %SageValue, %SageValue* %layer
+  %107 = load %SageValue, %SageValue* %fp_layer
   %108 = call %SageValue @sage_rt_index(%SageValue %106, %SageValue %107)
   %109 = load %SageValue, %SageValue* %cur_seq_len
   %110 = load %SageValue, %SageValue* @d_model
   %111 = call %SageValue @sage_rt_number(double 1.000000e-05)
   %112 = call %SageValue @sage_rt_nil()
-  store %SageValue %112, %SageValue* %normed2
+  store %SageValue %112, %SageValue* %fp_normed
   %113 = load %SageValue, %SageValue* @gpu
-  %114 = load %SageValue, %SageValue* %normed2
+  %114 = load %SageValue, %SageValue* %fp_normed
   %115 = load %SageValue, %SageValue* @layer_gate
-  %116 = load %SageValue, %SageValue* %layer
+  %116 = load %SageValue, %SageValue* %fp_layer
   %117 = call %SageValue @sage_rt_index(%SageValue %115, %SageValue %116)
   %118 = load %SageValue, %SageValue* %cur_seq_len
   %119 = load %SageValue, %SageValue* @d_model
   %120 = load %SageValue, %SageValue* @d_ff
   %121 = call %SageValue @sage_rt_nil()
-  store %SageValue %121, %SageValue* %gate_out
+  store %SageValue %121, %SageValue* %fp_gate
   %122 = load %SageValue, %SageValue* @gpu
-  %123 = load %SageValue, %SageValue* %normed2
+  %123 = load %SageValue, %SageValue* %fp_normed
   %124 = load %SageValue, %SageValue* @layer_up
-  %125 = load %SageValue, %SageValue* %layer
+  %125 = load %SageValue, %SageValue* %fp_layer
   %126 = call %SageValue @sage_rt_index(%SageValue %124, %SageValue %125)
   %127 = load %SageValue, %SageValue* %cur_seq_len
   %128 = load %SageValue, %SageValue* @d_model
   %129 = load %SageValue, %SageValue* @d_ff
   %130 = call %SageValue @sage_rt_nil()
-  store %SageValue %130, %SageValue* %up_out
+  store %SageValue %130, %SageValue* %fp_up
   %131 = load %SageValue, %SageValue* @gpu
-  %132 = load %SageValue, %SageValue* %gate_out
+  %132 = load %SageValue, %SageValue* %fp_gate
   %133 = call %SageValue @sage_rt_nil()
-  store %SageValue %133, %SageValue* %gate_act
+  store %SageValue %133, %SageValue* %fp_act
   %134 = call %SageValue @sage_rt_array_new(i32 0)
-  store %SageValue %134, %SageValue* %gated
-  %135 = load %SageValue, %SageValue* %gate_act
+  store %SageValue %134, %SageValue* %fp_gated
+  %135 = load %SageValue, %SageValue* %fp_act
   %136 = call %SageValue @sage_rt_len(%SageValue %135)
   %137 = call %SageValue @sage_rt_range(%SageValue %136)
   %138 = call i32 @sage_rt_array_len(%SageValue %137)
-  %i = alloca %SageValue
   %139 = alloca i32
   store i32 0, i32* %139
   br label %L12
@@ -557,13 +586,13 @@ L13:
   %142 = sitofp i32 %140 to double
   %143 = call %SageValue @sage_rt_number(double %142)
   %144 = call %SageValue @sage_rt_index(%SageValue %137, %SageValue %143)
-  store %SageValue %144, %SageValue* %i
-  %145 = load %SageValue, %SageValue* %gated
-  %146 = load %SageValue, %SageValue* %gate_act
-  %147 = load %SageValue, %SageValue* %i
+  store %SageValue %144, %SageValue* %fp_i
+  %145 = load %SageValue, %SageValue* %fp_gated
+  %146 = load %SageValue, %SageValue* %fp_act
+  %147 = load %SageValue, %SageValue* %fp_i
   %148 = call %SageValue @sage_rt_index(%SageValue %146, %SageValue %147)
-  %149 = load %SageValue, %SageValue* %up_out
-  %150 = load %SageValue, %SageValue* %i
+  %149 = load %SageValue, %SageValue* %fp_up
+  %150 = load %SageValue, %SageValue* %fp_i
   %151 = call %SageValue @sage_rt_index(%SageValue %149, %SageValue %150)
   %152 = call %SageValue @sage_rt_mul(%SageValue %148, %SageValue %151)
   %153 = call %SageValue @sage_rt_array_push(%SageValue %145, %SageValue %152)
@@ -572,18 +601,18 @@ L13:
   br label %L12
 L14:
   %155 = load %SageValue, %SageValue* @gpu
-  %156 = load %SageValue, %SageValue* %gated
+  %156 = load %SageValue, %SageValue* %fp_gated
   %157 = load %SageValue, %SageValue* @layer_down
-  %158 = load %SageValue, %SageValue* %layer
+  %158 = load %SageValue, %SageValue* %fp_layer
   %159 = call %SageValue @sage_rt_index(%SageValue %157, %SageValue %158)
   %160 = load %SageValue, %SageValue* %cur_seq_len
   %161 = load %SageValue, %SageValue* @d_ff
   %162 = load %SageValue, %SageValue* @d_model
   %163 = call %SageValue @sage_rt_nil()
-  store %SageValue %163, %SageValue* %ffn_out
+  store %SageValue %163, %SageValue* %fp_ffn
   %164 = load %SageValue, %SageValue* @gpu
   %165 = load %SageValue, %SageValue* %hidden
-  %166 = load %SageValue, %SageValue* %ffn_out
+  %166 = load %SageValue, %SageValue* %fp_ffn
   %167 = call %SageValue @sage_rt_nil()
   store %SageValue %167, %SageValue* %hidden
   %168 = add i32 %43, 1
@@ -599,17 +628,16 @@ L11:
   %175 = call %SageValue @sage_rt_nil()
   store %SageValue %175, %SageValue* %hidden
   %176 = call %SageValue @sage_rt_array_new(i32 0)
-  store %SageValue %176, %SageValue* %last_h
+  store %SageValue %176, %SageValue* %fp_last
   %177 = load %SageValue, %SageValue* %cur_seq_len
   %178 = call %SageValue @sage_rt_number(double 1.000000e+00)
   %179 = call %SageValue @sage_rt_sub(%SageValue %177, %SageValue %178)
   %180 = load %SageValue, %SageValue* @d_model
   %181 = call %SageValue @sage_rt_mul(%SageValue %179, %SageValue %180)
-  store %SageValue %181, %SageValue* %off
+  store %SageValue %181, %SageValue* %fp_off
   %182 = load %SageValue, %SageValue* @d_model
   %183 = call %SageValue @sage_rt_range(%SageValue %182)
   %184 = call i32 @sage_rt_array_len(%SageValue %183)
-  %j = alloca %SageValue
   %185 = alloca i32
   store i32 0, i32* %185
   br label %L15
@@ -621,11 +649,11 @@ L16:
   %188 = sitofp i32 %186 to double
   %189 = call %SageValue @sage_rt_number(double %188)
   %190 = call %SageValue @sage_rt_index(%SageValue %183, %SageValue %189)
-  store %SageValue %190, %SageValue* %j
-  %191 = load %SageValue, %SageValue* %last_h
+  store %SageValue %190, %SageValue* %fp_j
+  %191 = load %SageValue, %SageValue* %fp_last
   %192 = load %SageValue, %SageValue* %hidden
-  %193 = load %SageValue, %SageValue* %off
-  %194 = load %SageValue, %SageValue* %j
+  %193 = load %SageValue, %SageValue* %fp_off
+  %194 = load %SageValue, %SageValue* %fp_j
   %195 = call %SageValue @sage_rt_add(%SageValue %193, %SageValue %194)
   %196 = call %SageValue @sage_rt_index(%SageValue %192, %SageValue %195)
   %197 = call %SageValue @sage_rt_array_push(%SageValue %191, %SageValue %196)
@@ -634,7 +662,7 @@ L16:
   br label %L15
 L17:
   %199 = load %SageValue, %SageValue* @gpu
-  %200 = load %SageValue, %SageValue* %last_h
+  %200 = load %SageValue, %SageValue* %fp_last
   %201 = load %SageValue, %SageValue* @lm_head
   %202 = call %SageValue @sage_rt_number(double 1.000000e+00)
   %203 = load %SageValue, %SageValue* @d_model
@@ -665,7 +693,6 @@ entry:
   %3 = call %SageValue @sage_rt_len(%SageValue %2)
   %4 = call %SageValue @sage_rt_range(%SageValue %3)
   %5 = call i32 @sage_rt_array_len(%SageValue %4)
-  %i = alloca %SageValue
   %6 = alloca i32
   store i32 0, i32* %6
   br label %L18
@@ -692,7 +719,7 @@ L19:
 L20:
   %20 = load %SageValue, %SageValue* @out_path
   %21 = load %SageValue, %SageValue* %result
-  %22 = call %SageValue @sage_rt_nil()
+  %22 = call %SageValue @sage_rt_writefile(%SageValue %20, %SageValue %21)
   %23 = getelementptr [6 x i8], [6 x i8]* @.str.5, i64 0, i64 0
   %24 = call %SageValue @sage_rt_string(i8* %23)
   %25 = getelementptr [11 x i8], [11 x i8]* @.str.6, i64 0, i64 0
@@ -716,12 +743,65 @@ L20:
 
 define i32 @main() {
 entry:
-  %0 = call %SageValue @sage_fn_gc_disable()
+  %i = alloca %SageValue
+  %content = alloca %SageValue
+  %layer = alloca %SageValue
+  %qw = alloca %SageValue
+  %kw = alloca %SageValue
+  %vw = alloca %SageValue
+  %ow = alloca %SageValue
+  %gw = alloca %SageValue
+  %uw = alloca %SageValue
+  %dw = alloca %SageValue
+  %n1 = alloca %SageValue
+  %n2 = alloca %SageValue
+  %step = alloca %SageValue
+  %ids = alloca %SageValue
+  %tgt = alloca %SageValue
+  %lr = alloca %SageValue
+  %logits = alloca %SageValue
+  %target = alloca %SageValue
+  %loss = alloca %SageValue
+  %lora_step = alloca %SageValue
+  %lora_ids = alloca %SageValue
+  %lora_tgt = alloca %SageValue
+  %lora_hidden = alloca %SageValue
+  %lt = alloca %SageValue
+  %ltid = alloca %SageValue
+  %lj = alloca %SageValue
+  %lq_base = alloca %SageValue
+  %lq_lora = alloca %SageValue
+  %lq = alloca %SageValue
+  %lk = alloca %SageValue
+  %lv = alloca %SageValue
+  %lora_attn = alloca %SageValue
+  %lora_proj = alloca %SageValue
+  %lora_gate = alloca %SageValue
+  %lora_up = alloca %SageValue
+  %lora_act = alloca %SageValue
+  %lora_gated = alloca %SageValue
+  %li = alloca %SageValue
+  %lora_ffn = alloca %SageValue
+  %lora_last = alloca %SageValue
+  %lj2 = alloca %SageValue
+  %lora_logits = alloca %SageValue
+  %lora_target = alloca %SageValue
+  %lora_loss = alloca %SageValue
+  %meta = alloca %SageValue
+  %ti = alloca %SageValue
+  %tname = alloca %SageValue
+  %kw_str = alloca %SageValue
+  %kw_parts = alloca %SageValue
+  %current = alloca %SageValue
+  %c = alloca %SageValue
+  %check = alloca %SageValue
+  %k = alloca %SageValue
+  %0 = call %SageValue @sage_rt_nil()
   %1 = call %SageValue @sage_rt_number(double 1.000000e+01)
-  %2 = call %SageValue @sage_fn_chr(%SageValue %1)
+  %2 = call %SageValue @sage_rt_chr(%SageValue %1)
   store %SageValue %2, %SageValue* @NL
   %3 = call %SageValue @sage_rt_number(double 3.400000e+01)
-  %4 = call %SageValue @sage_fn_chr(%SageValue %3)
+  %4 = call %SageValue @sage_rt_chr(%SageValue %3)
   store %SageValue %4, %SageValue* @DQ
   %5 = call %SageValue @sage_fn_separator()
   %6 = getelementptr [32 x i8], [32 x i8]* @.str.9, i64 0, i64 0
@@ -745,7 +825,7 @@ entry:
   %20 = call %SageValue @sage_fn_divider()
   %21 = getelementptr [38 x i8], [38 x i8]* @.str.15, i64 0, i64 0
   %22 = call %SageValue @sage_rt_string(i8* %21)
-  %23 = call %SageValue @sage_rt_nil()
+  %23 = call %SageValue @sage_rt_readfile(%SageValue %22)
   store %SageValue %23, %SageValue* @theory
   %24 = load %SageValue, %SageValue* @theory
   %25 = call %SageValue @sage_rt_nil()
@@ -763,7 +843,7 @@ L21:
 L23:
   %34 = getelementptr [35 x i8], [35 x i8]* @.str.18, i64 0, i64 0
   %35 = call %SageValue @sage_rt_string(i8* %34)
-  %36 = call %SageValue @sage_rt_nil()
+  %36 = call %SageValue @sage_rt_readfile(%SageValue %35)
   store %SageValue %36, %SageValue* @multilang
   %37 = load %SageValue, %SageValue* @multilang
   %38 = call %SageValue @sage_rt_nil()
@@ -794,7 +874,7 @@ L24:
 L26:
   %59 = getelementptr [33 x i8], [33 x i8]* @.str.22, i64 0, i64 0
   %60 = call %SageValue @sage_rt_string(i8* %59)
-  %61 = call %SageValue @sage_rt_nil()
+  %61 = call %SageValue @sage_rt_readfile(%SageValue %60)
   store %SageValue %61, %SageValue* @nlp_data
   %62 = load %SageValue, %SageValue* @nlp_data
   %63 = call %SageValue @sage_rt_nil()
@@ -924,7 +1004,6 @@ L29:
   %153 = call %SageValue @sage_rt_len(%SageValue %152)
   %154 = call %SageValue @sage_rt_range(%SageValue %153)
   %155 = call i32 @sage_rt_array_len(%SageValue %154)
-  %i = alloca %SageValue
   %156 = alloca i32
   store i32 0, i32* %156
   br label %L30
@@ -940,7 +1019,7 @@ L31:
   %162 = load %SageValue, %SageValue* @self_host_files
   %163 = load %SageValue, %SageValue* %i
   %164 = call %SageValue @sage_rt_index(%SageValue %162, %SageValue %163)
-  %165 = call %SageValue @sage_rt_nil()
+  %165 = call %SageValue @sage_rt_readfile(%SageValue %164)
   store %SageValue %165, %SageValue* %content
   %166 = load %SageValue, %SageValue* %content
   %167 = call %SageValue @sage_rt_nil()
@@ -1380,7 +1459,6 @@ L32:
   %464 = call %SageValue @sage_rt_len(%SageValue %463)
   %465 = call %SageValue @sage_rt_range(%SageValue %464)
   %466 = call i32 @sage_rt_array_len(%SageValue %465)
-  %i = alloca %SageValue
   %467 = alloca i32
   store i32 0, i32* %467
   br label %L36
@@ -1396,7 +1474,7 @@ L37:
   %473 = load %SageValue, %SageValue* @all_lib_files
   %474 = load %SageValue, %SageValue* %i
   %475 = call %SageValue @sage_rt_index(%SageValue %473, %SageValue %474)
-  %476 = call %SageValue @sage_rt_nil()
+  %476 = call %SageValue @sage_rt_readfile(%SageValue %475)
   store %SageValue %476, %SageValue* %content
   %477 = load %SageValue, %SageValue* %content
   %478 = call %SageValue @sage_rt_nil()
@@ -1499,7 +1577,6 @@ L38:
   %550 = call %SageValue @sage_rt_len(%SageValue %549)
   %551 = call %SageValue @sage_rt_range(%SageValue %550)
   %552 = call i32 @sage_rt_array_len(%SageValue %551)
-  %i = alloca %SageValue
   %553 = alloca i32
   store i32 0, i32* %553
   br label %L42
@@ -1515,7 +1592,7 @@ L43:
   %559 = load %SageValue, %SageValue* @doc_files
   %560 = load %SageValue, %SageValue* %i
   %561 = call %SageValue @sage_rt_index(%SageValue %559, %SageValue %560)
-  %562 = call %SageValue @sage_rt_nil()
+  %562 = call %SageValue @sage_rt_readfile(%SageValue %561)
   store %SageValue %562, %SageValue* %content
   %563 = load %SageValue, %SageValue* %content
   %564 = call %SageValue @sage_rt_nil()
@@ -1556,7 +1633,7 @@ L44:
   store %SageValue %589, %SageValue* @build_corpus
   %590 = getelementptr [10 x i8], [10 x i8]* @.str.213, i64 0, i64 0
   %591 = call %SageValue @sage_rt_string(i8* %590)
-  %592 = call %SageValue @sage_rt_nil()
+  %592 = call %SageValue @sage_rt_readfile(%SageValue %591)
   store %SageValue %592, %SageValue* @readme
   %593 = load %SageValue, %SageValue* @readme
   %594 = call %SageValue @sage_rt_nil()
@@ -1575,7 +1652,7 @@ L48:
 L50:
   %603 = getelementptr [9 x i8], [9 x i8]* @.str.214, i64 0, i64 0
   %604 = call %SageValue @sage_rt_string(i8* %603)
-  %605 = call %SageValue @sage_rt_nil()
+  %605 = call %SageValue @sage_rt_readfile(%SageValue %604)
   store %SageValue %605, %SageValue* @mf
   %606 = load %SageValue, %SageValue* @mf
   %607 = call %SageValue @sage_rt_nil()
@@ -1644,19 +1721,19 @@ L53:
   %663 = call %SageValue @sage_rt_string(i8* %662)
   %664 = call %SageValue @sage_fn_log(%SageValue %661, %SageValue %663)
   %665 = call %SageValue @sage_fn_divider()
-  %666 = call %SageValue @sage_rt_number(double 7.680000e+02)
+  %666 = call %SageValue @sage_rt_number(double 1.280000e+02)
   store %SageValue %666, %SageValue* @d_model
-  %667 = call %SageValue @sage_rt_number(double 1.200000e+01)
+  %667 = call %SageValue @sage_rt_number(double 4.000000e+00)
   store %SageValue %667, %SageValue* @n_heads
-  %668 = call %SageValue @sage_rt_number(double 1.600000e+01)
+  %668 = call %SageValue @sage_rt_number(double 4.000000e+00)
   store %SageValue %668, %SageValue* @n_layers
-  %669 = call %SageValue @sage_rt_number(double 2.304000e+03)
+  %669 = call %SageValue @sage_rt_number(double 5.120000e+02)
   store %SageValue %669, %SageValue* @d_ff
-  %670 = call %SageValue @sage_rt_number(double 1.228800e+04)
+  %670 = call %SageValue @sage_rt_number(double 2.560000e+02)
   store %SageValue %670, %SageValue* @vocab
-  %671 = call %SageValue @sage_rt_number(double 3.276800e+04)
+  %671 = call %SageValue @sage_rt_number(double 1.638400e+04)
   store %SageValue %671, %SageValue* @context_length
-  %672 = call %SageValue @sage_rt_number(double 1.024000e+03)
+  %672 = call %SageValue @sage_rt_number(double 2.560000e+02)
   store %SageValue %672, %SageValue* @seq_len
   %673 = getelementptr [6 x i8], [6 x i8]* @.str.223, i64 0, i64 0
   %674 = call %SageValue @sage_rt_string(i8* %673)
@@ -1715,7 +1792,6 @@ L53:
   %722 = call %SageValue @sage_rt_mul(%SageValue %720, %SageValue %721)
   %723 = call %SageValue @sage_rt_range(%SageValue %722)
   %724 = call i32 @sage_rt_array_len(%SageValue %723)
-  %i = alloca %SageValue
   %725 = alloca i32
   store i32 0, i32* %725
   br label %L54
@@ -1758,7 +1834,6 @@ L56:
   %746 = load %SageValue, %SageValue* @n_layers
   %747 = call %SageValue @sage_rt_range(%SageValue %746)
   %748 = call i32 @sage_rt_array_len(%SageValue %747)
-  %layer = alloca %SageValue
   %749 = alloca i32
   store i32 0, i32* %749
   br label %L57
@@ -1784,7 +1859,6 @@ L58:
   %761 = call %SageValue @sage_rt_mul(%SageValue %759, %SageValue %760)
   %762 = call %SageValue @sage_rt_range(%SageValue %761)
   %763 = call i32 @sage_rt_array_len(%SageValue %762)
-  %i = alloca %SageValue
   %764 = alloca i32
   store i32 0, i32* %764
   br label %L60
@@ -1842,7 +1916,6 @@ L62:
   %807 = call %SageValue @sage_rt_mul(%SageValue %805, %SageValue %806)
   %808 = call %SageValue @sage_rt_range(%SageValue %807)
   %809 = call i32 @sage_rt_array_len(%SageValue %808)
-  %i = alloca %SageValue
   %810 = alloca i32
   store i32 0, i32* %810
   br label %L63
@@ -1876,7 +1949,6 @@ L65:
   %830 = call %SageValue @sage_rt_mul(%SageValue %828, %SageValue %829)
   %831 = call %SageValue @sage_rt_range(%SageValue %830)
   %832 = call i32 @sage_rt_array_len(%SageValue %831)
-  %i = alloca %SageValue
   %833 = alloca i32
   store i32 0, i32* %833
   br label %L66
@@ -1914,7 +1986,6 @@ L68:
   %856 = load %SageValue, %SageValue* @d_model
   %857 = call %SageValue @sage_rt_range(%SageValue %856)
   %858 = call i32 @sage_rt_array_len(%SageValue %857)
-  %i = alloca %SageValue
   %859 = alloca i32
   store i32 0, i32* %859
   br label %L69
@@ -1952,7 +2023,6 @@ L59:
   %880 = load %SageValue, %SageValue* @d_model
   %881 = call %SageValue @sage_rt_range(%SageValue %880)
   %882 = call i32 @sage_rt_array_len(%SageValue %881)
-  %i = alloca %SageValue
   %883 = alloca i32
   store i32 0, i32* %883
   br label %L72
@@ -1979,7 +2049,6 @@ L74:
   %896 = call %SageValue @sage_rt_mul(%SageValue %894, %SageValue %895)
   %897 = call %SageValue @sage_rt_range(%SageValue %896)
   %898 = call i32 @sage_rt_array_len(%SageValue %897)
-  %i = alloca %SageValue
   %899 = alloca i32
   store i32 0, i32* %899
   br label %L75
@@ -2160,7 +2229,6 @@ L80:
   %1047 = load %SageValue, %SageValue* @theory_steps
   %1048 = call %SageValue @sage_rt_range(%SageValue %1047)
   %1049 = call i32 @sage_rt_array_len(%SageValue %1048)
-  %step = alloca %SageValue
   %1050 = alloca i32
   store i32 0, i32* %1050
   br label %L81
@@ -2399,7 +2467,6 @@ L92:
   %1246 = load %SageValue, %SageValue* @lora_steps
   %1247 = call %SageValue @sage_rt_range(%SageValue %1246)
   %1248 = call i32 @sage_rt_array_len(%SageValue %1247)
-  %lora_step = alloca %SageValue
   %1249 = alloca i32
   store i32 0, i32* %1249
   br label %L93
@@ -2431,7 +2498,6 @@ L94:
   %1268 = load %SageValue, %SageValue* @seq_len
   %1269 = call %SageValue @sage_rt_range(%SageValue %1268)
   %1270 = call i32 @sage_rt_array_len(%SageValue %1269)
-  %lt = alloca %SageValue
   %1271 = alloca i32
   store i32 0, i32* %1271
   br label %L96
@@ -2462,7 +2528,6 @@ L101:
   %1286 = load %SageValue, %SageValue* @d_model
   %1287 = call %SageValue @sage_rt_range(%SageValue %1286)
   %1288 = call i32 @sage_rt_array_len(%SageValue %1287)
-  %lj = alloca %SageValue
   %1289 = alloca i32
   store i32 0, i32* %1289
   br label %L102
@@ -2605,7 +2670,6 @@ L98:
   %1402 = call %SageValue @sage_rt_len(%SageValue %1401)
   %1403 = call %SageValue @sage_rt_range(%SageValue %1402)
   %1404 = call i32 @sage_rt_array_len(%SageValue %1403)
-  %li = alloca %SageValue
   %1405 = alloca i32
   store i32 0, i32* %1405
   br label %L105
@@ -2659,7 +2723,6 @@ L107:
   %1442 = load %SageValue, %SageValue* @d_model
   %1443 = call %SageValue @sage_rt_range(%SageValue %1442)
   %1444 = call i32 @sage_rt_array_len(%SageValue %1443)
-  %lj2 = alloca %SageValue
   %1445 = alloca i32
   store i32 0, i32* %1445
   br label %L108
@@ -2811,7 +2874,6 @@ L95:
   %1564 = call %SageValue @sage_rt_len(%SageValue %1563)
   %1565 = call %SageValue @sage_rt_range(%SageValue %1564)
   %1566 = call i32 @sage_rt_array_len(%SageValue %1565)
-  %i = alloca %SageValue
   %1567 = alloca i32
   store i32 0, i32* %1567
   br label %L117
@@ -2869,7 +2931,6 @@ L119:
   %1611 = call %SageValue @sage_rt_len(%SageValue %1610)
   %1612 = call %SageValue @sage_rt_range(%SageValue %1611)
   %1613 = call i32 @sage_rt_array_len(%SageValue %1612)
-  %i = alloca %SageValue
   %1614 = alloca i32
   store i32 0, i32* %1614
   br label %L120
@@ -2939,7 +3000,6 @@ L122:
   %1667 = call %SageValue @sage_rt_len(%SageValue %1666)
   %1668 = call %SageValue @sage_rt_range(%SageValue %1667)
   %1669 = call i32 @sage_rt_array_len(%SageValue %1668)
-  %i = alloca %SageValue
   %1670 = alloca i32
   store i32 0, i32* %1670
   br label %L123
@@ -2955,7 +3015,7 @@ L124:
   %1676 = load %SageValue, %SageValue* @self_host_files
   %1677 = load %SageValue, %SageValue* %i
   %1678 = call %SageValue @sage_rt_index(%SageValue %1676, %SageValue %1677)
-  %1679 = call %SageValue @sage_rt_nil()
+  %1679 = call %SageValue @sage_rt_readfile(%SageValue %1678)
   store %SageValue %1679, %SageValue* %content
   %1680 = load %SageValue, %SageValue* %content
   %1681 = call %SageValue @sage_rt_nil()
@@ -2987,7 +3047,6 @@ L125:
   %1698 = call %SageValue @sage_rt_len(%SageValue %1697)
   %1699 = call %SageValue @sage_rt_range(%SageValue %1698)
   %1700 = call i32 @sage_rt_array_len(%SageValue %1699)
-  %i = alloca %SageValue
   %1701 = alloca i32
   store i32 0, i32* %1701
   br label %L129
@@ -3003,7 +3062,7 @@ L130:
   %1707 = load %SageValue, %SageValue* @doc_files
   %1708 = load %SageValue, %SageValue* %i
   %1709 = call %SageValue @sage_rt_index(%SageValue %1707, %SageValue %1708)
-  %1710 = call %SageValue @sage_rt_nil()
+  %1710 = call %SageValue @sage_rt_readfile(%SageValue %1709)
   store %SageValue %1710, %SageValue* %content
   %1711 = load %SageValue, %SageValue* %content
   %1712 = call %SageValue @sage_rt_nil()
@@ -3237,7 +3296,6 @@ L131:
   %1874 = call %SageValue @sage_rt_len(%SageValue %1873)
   %1875 = call %SageValue @sage_rt_range(%SageValue %1874)
   %1876 = call i32 @sage_rt_array_len(%SageValue %1875)
-  %i = alloca %SageValue
   %1877 = alloca i32
   store i32 0, i32* %1877
   br label %L135
@@ -3532,7 +3590,7 @@ L137:
   %2113 = getelementptr [13 x i8], [13 x i8]* @.str.433, i64 0, i64 0
   %2114 = call %SageValue @sage_rt_string(i8* %2113)
   %2115 = call %SageValue @sage_fn_emit(%SageValue %2114)
-  %2116 = getelementptr [67 x i8], [67 x i8]* @.str.434, i64 0, i64 0
+  %2116 = getelementptr [73 x i8], [73 x i8]* @.str.434, i64 0, i64 0
   %2117 = call %SageValue @sage_rt_string(i8* %2116)
   %2118 = call %SageValue @sage_fn_emit(%SageValue %2117)
   %2119 = getelementptr [39 x i8], [39 x i8]* @.str.435, i64 0, i64 0
@@ -3541,1608 +3599,1603 @@ L137:
   %2122 = getelementptr [40 x i8], [40 x i8]* @.str.436, i64 0, i64 0
   %2123 = call %SageValue @sage_rt_string(i8* %2122)
   %2124 = call %SageValue @sage_fn_emit(%SageValue %2123)
-  %2125 = getelementptr [1 x i8], [1 x i8]* @.str.437, i64 0, i64 0
+  %2125 = getelementptr [75 x i8], [75 x i8]* @.str.437, i64 0, i64 0
   %2126 = call %SageValue @sage_rt_string(i8* %2125)
   %2127 = call %SageValue @sage_fn_emit(%SageValue %2126)
-  %2128 = getelementptr [10 x i8], [10 x i8]* @.str.438, i64 0, i64 0
+  %2128 = getelementptr [1 x i8], [1 x i8]* @.str.438, i64 0, i64 0
   %2129 = call %SageValue @sage_rt_string(i8* %2128)
   %2130 = call %SageValue @sage_fn_emit(%SageValue %2129)
-  %2131 = getelementptr [16 x i8], [16 x i8]* @.str.439, i64 0, i64 0
+  %2131 = getelementptr [20 x i8], [20 x i8]* @.str.439, i64 0, i64 0
   %2132 = call %SageValue @sage_rt_string(i8* %2131)
   %2133 = call %SageValue @sage_fn_emit(%SageValue %2132)
-  %2134 = getelementptr [20 x i8], [20 x i8]* @.str.440, i64 0, i64 0
+  %2134 = getelementptr [21 x i8], [21 x i8]* @.str.440, i64 0, i64 0
   %2135 = call %SageValue @sage_rt_string(i8* %2134)
   %2136 = call %SageValue @sage_fn_emit(%SageValue %2135)
-  %2137 = getelementptr [20 x i8], [20 x i8]* @.str.441, i64 0, i64 0
+  %2137 = getelementptr [24 x i8], [24 x i8]* @.str.441, i64 0, i64 0
   %2138 = call %SageValue @sage_rt_string(i8* %2137)
   %2139 = call %SageValue @sage_fn_emit(%SageValue %2138)
-  %2140 = getelementptr [18 x i8], [18 x i8]* @.str.442, i64 0, i64 0
+  %2140 = getelementptr [21 x i8], [21 x i8]* @.str.442, i64 0, i64 0
   %2141 = call %SageValue @sage_rt_string(i8* %2140)
   %2142 = call %SageValue @sage_fn_emit(%SageValue %2141)
-  %2143 = getelementptr [15 x i8], [15 x i8]* @.str.443, i64 0, i64 0
+  %2143 = getelementptr [41 x i8], [41 x i8]* @.str.443, i64 0, i64 0
   %2144 = call %SageValue @sage_rt_string(i8* %2143)
   %2145 = call %SageValue @sage_fn_emit(%SageValue %2144)
-  %2146 = getelementptr [18 x i8], [18 x i8]* @.str.444, i64 0, i64 0
+  %2146 = getelementptr [21 x i8], [21 x i8]* @.str.444, i64 0, i64 0
   %2147 = call %SageValue @sage_rt_string(i8* %2146)
   %2148 = call %SageValue @sage_fn_emit(%SageValue %2147)
-  %2149 = getelementptr [21 x i8], [21 x i8]* @.str.445, i64 0, i64 0
+  %2149 = getelementptr [32 x i8], [32 x i8]* @.str.445, i64 0, i64 0
   %2150 = call %SageValue @sage_rt_string(i8* %2149)
   %2151 = call %SageValue @sage_fn_emit(%SageValue %2150)
-  %2152 = getelementptr [20 x i8], [20 x i8]* @.str.446, i64 0, i64 0
+  %2152 = getelementptr [22 x i8], [22 x i8]* @.str.446, i64 0, i64 0
   %2153 = call %SageValue @sage_rt_string(i8* %2152)
   %2154 = call %SageValue @sage_fn_emit(%SageValue %2153)
-  %2155 = getelementptr [21 x i8], [21 x i8]* @.str.447, i64 0, i64 0
+  %2155 = getelementptr [27 x i8], [27 x i8]* @.str.447, i64 0, i64 0
   %2156 = call %SageValue @sage_rt_string(i8* %2155)
   %2157 = call %SageValue @sage_fn_emit(%SageValue %2156)
-  %2158 = getelementptr [29 x i8], [29 x i8]* @.str.448, i64 0, i64 0
+  %2158 = getelementptr [39 x i8], [39 x i8]* @.str.448, i64 0, i64 0
   %2159 = call %SageValue @sage_rt_string(i8* %2158)
   %2160 = call %SageValue @sage_fn_emit(%SageValue %2159)
-  %2161 = getelementptr [19 x i8], [19 x i8]* @.str.449, i64 0, i64 0
+  %2161 = getelementptr [26 x i8], [26 x i8]* @.str.449, i64 0, i64 0
   %2162 = call %SageValue @sage_rt_string(i8* %2161)
   %2163 = call %SageValue @sage_fn_emit(%SageValue %2162)
-  %2164 = getelementptr [17 x i8], [17 x i8]* @.str.450, i64 0, i64 0
+  %2164 = getelementptr [14 x i8], [14 x i8]* @.str.450, i64 0, i64 0
   %2165 = call %SageValue @sage_rt_string(i8* %2164)
   %2166 = call %SageValue @sage_fn_emit(%SageValue %2165)
-  %2167 = getelementptr [20 x i8], [20 x i8]* @.str.451, i64 0, i64 0
+  %2167 = getelementptr [24 x i8], [24 x i8]* @.str.451, i64 0, i64 0
   %2168 = call %SageValue @sage_rt_string(i8* %2167)
   %2169 = call %SageValue @sage_fn_emit(%SageValue %2168)
-  %2170 = getelementptr [1 x i8], [1 x i8]* @.str.452, i64 0, i64 0
+  %2170 = getelementptr [17 x i8], [17 x i8]* @.str.452, i64 0, i64 0
   %2171 = call %SageValue @sage_rt_string(i8* %2170)
   %2172 = call %SageValue @sage_fn_emit(%SageValue %2171)
-  %2173 = getelementptr [21 x i8], [21 x i8]* @.str.453, i64 0, i64 0
+  %2173 = getelementptr [1 x i8], [1 x i8]* @.str.453, i64 0, i64 0
   %2174 = call %SageValue @sage_rt_string(i8* %2173)
   %2175 = call %SageValue @sage_fn_emit(%SageValue %2174)
-  %2176 = getelementptr [24 x i8], [24 x i8]* @.str.454, i64 0, i64 0
+  %2176 = getelementptr [18 x i8], [18 x i8]* @.str.454, i64 0, i64 0
   %2177 = call %SageValue @sage_rt_string(i8* %2176)
   %2178 = call %SageValue @sage_fn_emit(%SageValue %2177)
-  %2179 = getelementptr [21 x i8], [21 x i8]* @.str.455, i64 0, i64 0
+  %2179 = getelementptr [13 x i8], [13 x i8]* @.str.455, i64 0, i64 0
   %2180 = call %SageValue @sage_rt_string(i8* %2179)
-  %2181 = call %SageValue @sage_fn_emit(%SageValue %2180)
-  %2182 = getelementptr [41 x i8], [41 x i8]* @.str.456, i64 0, i64 0
-  %2183 = call %SageValue @sage_rt_string(i8* %2182)
-  %2184 = call %SageValue @sage_fn_emit(%SageValue %2183)
-  %2185 = getelementptr [21 x i8], [21 x i8]* @.str.457, i64 0, i64 0
-  %2186 = call %SageValue @sage_rt_string(i8* %2185)
-  %2187 = call %SageValue @sage_fn_emit(%SageValue %2186)
-  %2188 = getelementptr [32 x i8], [32 x i8]* @.str.458, i64 0, i64 0
-  %2189 = call %SageValue @sage_rt_string(i8* %2188)
-  %2190 = call %SageValue @sage_fn_emit(%SageValue %2189)
-  %2191 = getelementptr [22 x i8], [22 x i8]* @.str.459, i64 0, i64 0
-  %2192 = call %SageValue @sage_rt_string(i8* %2191)
-  %2193 = call %SageValue @sage_fn_emit(%SageValue %2192)
-  %2194 = getelementptr [27 x i8], [27 x i8]* @.str.460, i64 0, i64 0
-  %2195 = call %SageValue @sage_rt_string(i8* %2194)
-  %2196 = call %SageValue @sage_fn_emit(%SageValue %2195)
-  %2197 = getelementptr [39 x i8], [39 x i8]* @.str.461, i64 0, i64 0
-  %2198 = call %SageValue @sage_rt_string(i8* %2197)
-  %2199 = call %SageValue @sage_fn_emit(%SageValue %2198)
-  %2200 = getelementptr [26 x i8], [26 x i8]* @.str.462, i64 0, i64 0
-  %2201 = call %SageValue @sage_rt_string(i8* %2200)
-  %2202 = call %SageValue @sage_fn_emit(%SageValue %2201)
-  %2203 = getelementptr [14 x i8], [14 x i8]* @.str.463, i64 0, i64 0
-  %2204 = call %SageValue @sage_rt_string(i8* %2203)
-  %2205 = call %SageValue @sage_fn_emit(%SageValue %2204)
-  %2206 = getelementptr [24 x i8], [24 x i8]* @.str.464, i64 0, i64 0
-  %2207 = call %SageValue @sage_rt_string(i8* %2206)
-  %2208 = call %SageValue @sage_fn_emit(%SageValue %2207)
-  %2209 = getelementptr [17 x i8], [17 x i8]* @.str.465, i64 0, i64 0
-  %2210 = call %SageValue @sage_rt_string(i8* %2209)
-  %2211 = call %SageValue @sage_fn_emit(%SageValue %2210)
-  %2212 = getelementptr [1 x i8], [1 x i8]* @.str.466, i64 0, i64 0
-  %2213 = call %SageValue @sage_rt_string(i8* %2212)
-  %2214 = call %SageValue @sage_fn_emit(%SageValue %2213)
-  %2215 = getelementptr [18 x i8], [18 x i8]* @.str.467, i64 0, i64 0
-  %2216 = call %SageValue @sage_rt_string(i8* %2215)
-  %2217 = call %SageValue @sage_fn_emit(%SageValue %2216)
-  %2218 = getelementptr [13 x i8], [13 x i8]* @.str.468, i64 0, i64 0
-  %2219 = call %SageValue @sage_rt_string(i8* %2218)
-  %2220 = load %SageValue, %SageValue* @DQ
-  %2221 = call %SageValue @sage_rt_add(%SageValue %2219, %SageValue %2220)
-  %2222 = load %SageValue, %SageValue* @DQ
-  %2223 = call %SageValue @sage_rt_add(%SageValue %2221, %SageValue %2222)
+  %2181 = load %SageValue, %SageValue* @DQ
+  %2182 = call %SageValue @sage_rt_add(%SageValue %2180, %SageValue %2181)
+  %2183 = load %SageValue, %SageValue* @DQ
+  %2184 = call %SageValue @sage_rt_add(%SageValue %2182, %SageValue %2183)
+  %2185 = call %SageValue @sage_fn_emit(%SageValue %2184)
+  %2186 = getelementptr [28 x i8], [28 x i8]* @.str.456, i64 0, i64 0
+  %2187 = call %SageValue @sage_rt_string(i8* %2186)
+  %2188 = call %SageValue @sage_fn_emit(%SageValue %2187)
+  %2189 = getelementptr [26 x i8], [26 x i8]* @.str.457, i64 0, i64 0
+  %2190 = call %SageValue @sage_rt_string(i8* %2189)
+  %2191 = call %SageValue @sage_fn_emit(%SageValue %2190)
+  %2192 = getelementptr [32 x i8], [32 x i8]* @.str.458, i64 0, i64 0
+  %2193 = call %SageValue @sage_rt_string(i8* %2192)
+  %2194 = call %SageValue @sage_fn_emit(%SageValue %2193)
+  %2195 = getelementptr [32 x i8], [32 x i8]* @.str.459, i64 0, i64 0
+  %2196 = call %SageValue @sage_rt_string(i8* %2195)
+  %2197 = call %SageValue @sage_fn_emit(%SageValue %2196)
+  %2198 = getelementptr [14 x i8], [14 x i8]* @.str.460, i64 0, i64 0
+  %2199 = call %SageValue @sage_rt_string(i8* %2198)
+  %2200 = call %SageValue @sage_fn_emit(%SageValue %2199)
+  %2201 = getelementptr [25 x i8], [25 x i8]* @.str.461, i64 0, i64 0
+  %2202 = call %SageValue @sage_rt_string(i8* %2201)
+  %2203 = call %SageValue @sage_fn_emit(%SageValue %2202)
+  %2204 = getelementptr [13 x i8], [13 x i8]* @.str.462, i64 0, i64 0
+  %2205 = call %SageValue @sage_rt_string(i8* %2204)
+  %2206 = call %SageValue @sage_fn_emit(%SageValue %2205)
+  %2207 = getelementptr [1 x i8], [1 x i8]* @.str.463, i64 0, i64 0
+  %2208 = call %SageValue @sage_rt_string(i8* %2207)
+  %2209 = call %SageValue @sage_fn_emit(%SageValue %2208)
+  %2210 = getelementptr [29 x i8], [29 x i8]* @.str.464, i64 0, i64 0
+  %2211 = call %SageValue @sage_rt_string(i8* %2210)
+  %2212 = call %SageValue @sage_fn_emit(%SageValue %2211)
+  %2213 = getelementptr [29 x i8], [29 x i8]* @.str.465, i64 0, i64 0
+  %2214 = call %SageValue @sage_rt_string(i8* %2213)
+  %2215 = call %SageValue @sage_fn_emit(%SageValue %2214)
+  %2216 = getelementptr [21 x i8], [21 x i8]* @.str.466, i64 0, i64 0
+  %2217 = call %SageValue @sage_rt_string(i8* %2216)
+  %2218 = call %SageValue @sage_fn_emit(%SageValue %2217)
+  %2219 = getelementptr [33 x i8], [33 x i8]* @.str.467, i64 0, i64 0
+  %2220 = call %SageValue @sage_rt_string(i8* %2219)
+  %2221 = call %SageValue @sage_fn_emit(%SageValue %2220)
+  %2222 = getelementptr [30 x i8], [30 x i8]* @.str.468, i64 0, i64 0
+  %2223 = call %SageValue @sage_rt_string(i8* %2222)
   %2224 = call %SageValue @sage_fn_emit(%SageValue %2223)
-  %2225 = getelementptr [28 x i8], [28 x i8]* @.str.469, i64 0, i64 0
+  %2225 = getelementptr [25 x i8], [25 x i8]* @.str.469, i64 0, i64 0
   %2226 = call %SageValue @sage_rt_string(i8* %2225)
   %2227 = call %SageValue @sage_fn_emit(%SageValue %2226)
-  %2228 = getelementptr [26 x i8], [26 x i8]* @.str.470, i64 0, i64 0
+  %2228 = getelementptr [16 x i8], [16 x i8]* @.str.470, i64 0, i64 0
   %2229 = call %SageValue @sage_rt_string(i8* %2228)
   %2230 = call %SageValue @sage_fn_emit(%SageValue %2229)
-  %2231 = getelementptr [32 x i8], [32 x i8]* @.str.471, i64 0, i64 0
+  %2231 = getelementptr [1 x i8], [1 x i8]* @.str.471, i64 0, i64 0
   %2232 = call %SageValue @sage_rt_string(i8* %2231)
   %2233 = call %SageValue @sage_fn_emit(%SageValue %2232)
-  %2234 = getelementptr [32 x i8], [32 x i8]* @.str.472, i64 0, i64 0
+  %2234 = getelementptr [30 x i8], [30 x i8]* @.str.472, i64 0, i64 0
   %2235 = call %SageValue @sage_rt_string(i8* %2234)
   %2236 = call %SageValue @sage_fn_emit(%SageValue %2235)
-  %2237 = getelementptr [14 x i8], [14 x i8]* @.str.473, i64 0, i64 0
+  %2237 = getelementptr [13 x i8], [13 x i8]* @.str.473, i64 0, i64 0
   %2238 = call %SageValue @sage_rt_string(i8* %2237)
-  %2239 = call %SageValue @sage_fn_emit(%SageValue %2238)
-  %2240 = getelementptr [25 x i8], [25 x i8]* @.str.474, i64 0, i64 0
-  %2241 = call %SageValue @sage_rt_string(i8* %2240)
-  %2242 = call %SageValue @sage_fn_emit(%SageValue %2241)
-  %2243 = getelementptr [13 x i8], [13 x i8]* @.str.475, i64 0, i64 0
-  %2244 = call %SageValue @sage_rt_string(i8* %2243)
-  %2245 = call %SageValue @sage_fn_emit(%SageValue %2244)
-  %2246 = getelementptr [1 x i8], [1 x i8]* @.str.476, i64 0, i64 0
-  %2247 = call %SageValue @sage_rt_string(i8* %2246)
-  %2248 = call %SageValue @sage_fn_emit(%SageValue %2247)
-  %2249 = getelementptr [29 x i8], [29 x i8]* @.str.477, i64 0, i64 0
-  %2250 = call %SageValue @sage_rt_string(i8* %2249)
-  %2251 = call %SageValue @sage_fn_emit(%SageValue %2250)
-  %2252 = getelementptr [29 x i8], [29 x i8]* @.str.478, i64 0, i64 0
-  %2253 = call %SageValue @sage_rt_string(i8* %2252)
-  %2254 = call %SageValue @sage_fn_emit(%SageValue %2253)
-  %2255 = getelementptr [21 x i8], [21 x i8]* @.str.479, i64 0, i64 0
-  %2256 = call %SageValue @sage_rt_string(i8* %2255)
-  %2257 = call %SageValue @sage_fn_emit(%SageValue %2256)
-  %2258 = getelementptr [33 x i8], [33 x i8]* @.str.480, i64 0, i64 0
-  %2259 = call %SageValue @sage_rt_string(i8* %2258)
-  %2260 = call %SageValue @sage_fn_emit(%SageValue %2259)
-  %2261 = getelementptr [30 x i8], [30 x i8]* @.str.481, i64 0, i64 0
-  %2262 = call %SageValue @sage_rt_string(i8* %2261)
-  %2263 = call %SageValue @sage_fn_emit(%SageValue %2262)
-  %2264 = getelementptr [25 x i8], [25 x i8]* @.str.482, i64 0, i64 0
-  %2265 = call %SageValue @sage_rt_string(i8* %2264)
-  %2266 = call %SageValue @sage_fn_emit(%SageValue %2265)
-  %2267 = getelementptr [16 x i8], [16 x i8]* @.str.483, i64 0, i64 0
-  %2268 = call %SageValue @sage_rt_string(i8* %2267)
-  %2269 = call %SageValue @sage_fn_emit(%SageValue %2268)
-  %2270 = getelementptr [1 x i8], [1 x i8]* @.str.484, i64 0, i64 0
-  %2271 = call %SageValue @sage_rt_string(i8* %2270)
-  %2272 = call %SageValue @sage_fn_emit(%SageValue %2271)
-  %2273 = getelementptr [30 x i8], [30 x i8]* @.str.485, i64 0, i64 0
-  %2274 = call %SageValue @sage_rt_string(i8* %2273)
-  %2275 = call %SageValue @sage_fn_emit(%SageValue %2274)
-  %2276 = getelementptr [13 x i8], [13 x i8]* @.str.486, i64 0, i64 0
-  %2277 = call %SageValue @sage_rt_string(i8* %2276)
-  %2278 = load %SageValue, %SageValue* @DQ
-  %2279 = call %SageValue @sage_rt_add(%SageValue %2277, %SageValue %2278)
-  %2280 = load %SageValue, %SageValue* @DQ
-  %2281 = call %SageValue @sage_rt_add(%SageValue %2279, %SageValue %2280)
-  %2282 = call %SageValue @sage_fn_emit(%SageValue %2281)
-  %2283 = getelementptr [28 x i8], [28 x i8]* @.str.487, i64 0, i64 0
-  %2284 = call %SageValue @sage_rt_string(i8* %2283)
-  %2285 = call %SageValue @sage_fn_emit(%SageValue %2284)
-  %2286 = getelementptr [21 x i8], [21 x i8]* @.str.488, i64 0, i64 0
-  %2287 = call %SageValue @sage_rt_string(i8* %2286)
-  %2288 = call %SageValue @sage_fn_emit(%SageValue %2287)
-  %2289 = getelementptr [21 x i8], [21 x i8]* @.str.489, i64 0, i64 0
-  %2290 = call %SageValue @sage_rt_string(i8* %2289)
-  %2291 = call %SageValue @sage_fn_emit(%SageValue %2290)
-  %2292 = getelementptr [33 x i8], [33 x i8]* @.str.490, i64 0, i64 0
-  %2293 = call %SageValue @sage_rt_string(i8* %2292)
-  %2294 = call %SageValue @sage_fn_emit(%SageValue %2293)
-  %2295 = getelementptr [29 x i8], [29 x i8]* @.str.491, i64 0, i64 0
-  %2296 = call %SageValue @sage_rt_string(i8* %2295)
-  %2297 = call %SageValue @sage_fn_emit(%SageValue %2296)
-  %2298 = getelementptr [13 x i8], [13 x i8]* @.str.492, i64 0, i64 0
-  %2299 = call %SageValue @sage_rt_string(i8* %2298)
-  %2300 = call %SageValue @sage_fn_emit(%SageValue %2299)
-  %2301 = getelementptr [1 x i8], [1 x i8]* @.str.493, i64 0, i64 0
-  %2302 = call %SageValue @sage_rt_string(i8* %2301)
-  %2303 = call %SageValue @sage_fn_emit(%SageValue %2302)
-  %2304 = getelementptr [32 x i8], [32 x i8]* @.str.494, i64 0, i64 0
-  %2305 = call %SageValue @sage_rt_string(i8* %2304)
-  %2306 = call %SageValue @sage_fn_emit(%SageValue %2305)
-  %2307 = getelementptr [8 x i8], [8 x i8]* @.str.495, i64 0, i64 0
-  %2308 = call %SageValue @sage_rt_string(i8* %2307)
-  %2309 = load %SageValue, %SageValue* @DQ
-  %2310 = call %SageValue @sage_rt_add(%SageValue %2308, %SageValue %2309)
-  %2311 = getelementptr [17 x i8], [17 x i8]* @.str.496, i64 0, i64 0
-  %2312 = call %SageValue @sage_rt_string(i8* %2311)
-  %2313 = call %SageValue @sage_rt_add(%SageValue %2310, %SageValue %2312)
-  %2314 = load %SageValue, %SageValue* @DQ
-  %2315 = call %SageValue @sage_rt_add(%SageValue %2313, %SageValue %2314)
-  %2316 = getelementptr [7 x i8], [7 x i8]* @.str.497, i64 0, i64 0
-  %2317 = call %SageValue @sage_rt_string(i8* %2316)
-  %2318 = call %SageValue @sage_rt_add(%SageValue %2315, %SageValue %2317)
-  %2319 = call %SageValue @sage_fn_emit(%SageValue %2318)
-  %2320 = getelementptr [8 x i8], [8 x i8]* @.str.498, i64 0, i64 0
-  %2321 = call %SageValue @sage_rt_string(i8* %2320)
-  %2322 = load %SageValue, %SageValue* @DQ
-  %2323 = call %SageValue @sage_rt_add(%SageValue %2321, %SageValue %2322)
-  %2324 = getelementptr [13 x i8], [13 x i8]* @.str.499, i64 0, i64 0
-  %2325 = call %SageValue @sage_rt_string(i8* %2324)
-  %2326 = call %SageValue @sage_rt_add(%SageValue %2323, %SageValue %2325)
-  %2327 = load %SageValue, %SageValue* @DQ
-  %2328 = call %SageValue @sage_rt_add(%SageValue %2326, %SageValue %2327)
-  %2329 = getelementptr [10 x i8], [10 x i8]* @.str.500, i64 0, i64 0
-  %2330 = call %SageValue @sage_rt_string(i8* %2329)
-  %2331 = call %SageValue @sage_rt_add(%SageValue %2328, %SageValue %2330)
-  %2332 = call %SageValue @sage_fn_emit(%SageValue %2331)
-  %2333 = getelementptr [8 x i8], [8 x i8]* @.str.501, i64 0, i64 0
-  %2334 = call %SageValue @sage_rt_string(i8* %2333)
-  %2335 = load %SageValue, %SageValue* @DQ
-  %2336 = call %SageValue @sage_rt_add(%SageValue %2334, %SageValue %2335)
-  %2337 = getelementptr [13 x i8], [13 x i8]* @.str.502, i64 0, i64 0
-  %2338 = call %SageValue @sage_rt_string(i8* %2337)
-  %2339 = call %SageValue @sage_rt_add(%SageValue %2336, %SageValue %2338)
-  %2340 = load %SageValue, %SageValue* @DQ
-  %2341 = call %SageValue @sage_rt_add(%SageValue %2339, %SageValue %2340)
-  %2342 = getelementptr [9 x i8], [9 x i8]* @.str.503, i64 0, i64 0
-  %2343 = call %SageValue @sage_rt_string(i8* %2342)
-  %2344 = call %SageValue @sage_rt_add(%SageValue %2341, %SageValue %2343)
-  %2345 = call %SageValue @sage_fn_emit(%SageValue %2344)
-  %2346 = load %SageValue, %SageValue* @all_facts
-  %2347 = call %SageValue @sage_rt_len(%SageValue %2346)
-  %2348 = call %SageValue @sage_rt_range(%SageValue %2347)
-  %2349 = call i32 @sage_rt_array_len(%SageValue %2348)
-  %i = alloca %SageValue
-  %2350 = alloca i32
-  store i32 0, i32* %2350
+  %2239 = load %SageValue, %SageValue* @DQ
+  %2240 = call %SageValue @sage_rt_add(%SageValue %2238, %SageValue %2239)
+  %2241 = load %SageValue, %SageValue* @DQ
+  %2242 = call %SageValue @sage_rt_add(%SageValue %2240, %SageValue %2241)
+  %2243 = call %SageValue @sage_fn_emit(%SageValue %2242)
+  %2244 = getelementptr [28 x i8], [28 x i8]* @.str.474, i64 0, i64 0
+  %2245 = call %SageValue @sage_rt_string(i8* %2244)
+  %2246 = call %SageValue @sage_fn_emit(%SageValue %2245)
+  %2247 = getelementptr [21 x i8], [21 x i8]* @.str.475, i64 0, i64 0
+  %2248 = call %SageValue @sage_rt_string(i8* %2247)
+  %2249 = call %SageValue @sage_fn_emit(%SageValue %2248)
+  %2250 = getelementptr [21 x i8], [21 x i8]* @.str.476, i64 0, i64 0
+  %2251 = call %SageValue @sage_rt_string(i8* %2250)
+  %2252 = call %SageValue @sage_fn_emit(%SageValue %2251)
+  %2253 = getelementptr [33 x i8], [33 x i8]* @.str.477, i64 0, i64 0
+  %2254 = call %SageValue @sage_rt_string(i8* %2253)
+  %2255 = call %SageValue @sage_fn_emit(%SageValue %2254)
+  %2256 = getelementptr [29 x i8], [29 x i8]* @.str.478, i64 0, i64 0
+  %2257 = call %SageValue @sage_rt_string(i8* %2256)
+  %2258 = call %SageValue @sage_fn_emit(%SageValue %2257)
+  %2259 = getelementptr [13 x i8], [13 x i8]* @.str.479, i64 0, i64 0
+  %2260 = call %SageValue @sage_rt_string(i8* %2259)
+  %2261 = call %SageValue @sage_fn_emit(%SageValue %2260)
+  %2262 = getelementptr [1 x i8], [1 x i8]* @.str.480, i64 0, i64 0
+  %2263 = call %SageValue @sage_rt_string(i8* %2262)
+  %2264 = call %SageValue @sage_fn_emit(%SageValue %2263)
+  %2265 = getelementptr [55 x i8], [55 x i8]* @.str.481, i64 0, i64 0
+  %2266 = call %SageValue @sage_rt_string(i8* %2265)
+  %2267 = call %SageValue @sage_fn_emit(%SageValue %2266)
+  %2268 = getelementptr [15 x i8], [15 x i8]* @.str.482, i64 0, i64 0
+  %2269 = call %SageValue @sage_rt_string(i8* %2268)
+  %2270 = call %SageValue @sage_fn_emit(%SageValue %2269)
+  %2271 = load %SageValue, %SageValue* @all_facts
+  %2272 = call %SageValue @sage_rt_len(%SageValue %2271)
+  %2273 = call %SageValue @sage_rt_range(%SageValue %2272)
+  %2274 = call i32 @sage_rt_array_len(%SageValue %2273)
+  %2275 = alloca i32
+  store i32 0, i32* %2275
   br label %L138
 L138:
-  %2351 = load i32, i32* %2350
-  %2352 = icmp slt i32 %2351, %2349
-  br i1 %2352, label %L139, label %L140
+  %2276 = load i32, i32* %2275
+  %2277 = icmp slt i32 %2276, %2274
+  br i1 %2277, label %L139, label %L140
 L139:
-  %2353 = sitofp i32 %2351 to double
-  %2354 = call %SageValue @sage_rt_number(double %2353)
-  %2355 = call %SageValue @sage_rt_index(%SageValue %2348, %SageValue %2354)
-  store %SageValue %2355, %SageValue* %i
-  %2356 = getelementptr [31 x i8], [31 x i8]* @.str.504, i64 0, i64 0
-  %2357 = call %SageValue @sage_rt_string(i8* %2356)
-  %2358 = load %SageValue, %SageValue* @DQ
-  %2359 = call %SageValue @sage_rt_add(%SageValue %2357, %SageValue %2358)
-  %2360 = load %SageValue, %SageValue* @all_facts
-  %2361 = load %SageValue, %SageValue* %i
-  %2362 = call %SageValue @sage_rt_index(%SageValue %2360, %SageValue %2361)
-  %2363 = call %SageValue @sage_rt_add(%SageValue %2359, %SageValue %2362)
-  %2364 = load %SageValue, %SageValue* @DQ
-  %2365 = call %SageValue @sage_rt_add(%SageValue %2363, %SageValue %2364)
-  %2366 = getelementptr [7 x i8], [7 x i8]* @.str.505, i64 0, i64 0
-  %2367 = call %SageValue @sage_rt_string(i8* %2366)
-  %2368 = call %SageValue @sage_rt_add(%SageValue %2365, %SageValue %2367)
-  %2369 = call %SageValue @sage_fn_emit(%SageValue %2368)
-  %2370 = add i32 %2351, 1
-  store i32 %2370, i32* %2350
+  %2278 = sitofp i32 %2276 to double
+  %2279 = call %SageValue @sage_rt_number(double %2278)
+  %2280 = call %SageValue @sage_rt_index(%SageValue %2273, %SageValue %2279)
+  store %SageValue %2280, %SageValue* %i
+  %2281 = getelementptr [13 x i8], [13 x i8]* @.str.483, i64 0, i64 0
+  %2282 = call %SageValue @sage_rt_string(i8* %2281)
+  %2283 = load %SageValue, %SageValue* @DQ
+  %2284 = call %SageValue @sage_rt_add(%SageValue %2282, %SageValue %2283)
+  %2285 = load %SageValue, %SageValue* @all_facts
+  %2286 = load %SageValue, %SageValue* %i
+  %2287 = call %SageValue @sage_rt_index(%SageValue %2285, %SageValue %2286)
+  %2288 = call %SageValue @sage_rt_add(%SageValue %2284, %SageValue %2287)
+  %2289 = load %SageValue, %SageValue* @DQ
+  %2290 = call %SageValue @sage_rt_add(%SageValue %2288, %SageValue %2289)
+  %2291 = getelementptr [2 x i8], [2 x i8]* @.str.484, i64 0, i64 0
+  %2292 = call %SageValue @sage_rt_string(i8* %2291)
+  %2293 = call %SageValue @sage_rt_add(%SageValue %2290, %SageValue %2292)
+  %2294 = call %SageValue @sage_fn_emit(%SageValue %2293)
+  %2295 = add i32 %2276, 1
+  store i32 %2295, i32* %2275
   br label %L138
 L140:
-  %2371 = getelementptr [33 x i8], [33 x i8]* @.str.506, i64 0, i64 0
+  %2296 = getelementptr [1 x i8], [1 x i8]* @.str.485, i64 0, i64 0
+  %2297 = call %SageValue @sage_rt_string(i8* %2296)
+  %2298 = call %SageValue @sage_fn_emit(%SageValue %2297)
+  %2299 = getelementptr [17 x i8], [17 x i8]* @.str.486, i64 0, i64 0
+  %2300 = call %SageValue @sage_rt_string(i8* %2299)
+  %2301 = call %SageValue @sage_fn_emit(%SageValue %2300)
+  %2302 = getelementptr [20 x i8], [20 x i8]* @.str.487, i64 0, i64 0
+  %2303 = call %SageValue @sage_rt_string(i8* %2302)
+  %2304 = call %SageValue @sage_fn_emit(%SageValue %2303)
+  %2305 = getelementptr [1 x i8], [1 x i8]* @.str.488, i64 0, i64 0
+  %2306 = call %SageValue @sage_rt_string(i8* %2305)
+  %2307 = call %SageValue @sage_fn_emit(%SageValue %2306)
+  %2308 = getelementptr [20 x i8], [20 x i8]* @.str.489, i64 0, i64 0
+  %2309 = call %SageValue @sage_rt_string(i8* %2308)
+  %2310 = call %SageValue @sage_fn_emit(%SageValue %2309)
+  %2311 = getelementptr [29 x i8], [29 x i8]* @.str.490, i64 0, i64 0
+  %2312 = call %SageValue @sage_rt_string(i8* %2311)
+  %2313 = call %SageValue @sage_fn_emit(%SageValue %2312)
+  %2314 = getelementptr [21 x i8], [21 x i8]* @.str.491, i64 0, i64 0
+  %2315 = call %SageValue @sage_rt_string(i8* %2314)
+  %2316 = call %SageValue @sage_fn_emit(%SageValue %2315)
+  %2317 = getelementptr [32 x i8], [32 x i8]* @.str.492, i64 0, i64 0
+  %2318 = call %SageValue @sage_rt_string(i8* %2317)
+  %2319 = call %SageValue @sage_fn_emit(%SageValue %2318)
+  %2320 = getelementptr [45 x i8], [45 x i8]* @.str.493, i64 0, i64 0
+  %2321 = call %SageValue @sage_rt_string(i8* %2320)
+  %2322 = call %SageValue @sage_fn_emit(%SageValue %2321)
+  %2323 = getelementptr [36 x i8], [36 x i8]* @.str.494, i64 0, i64 0
+  %2324 = call %SageValue @sage_rt_string(i8* %2323)
+  %2325 = call %SageValue @sage_fn_emit(%SageValue %2324)
+  %2326 = getelementptr [37 x i8], [37 x i8]* @.str.495, i64 0, i64 0
+  %2327 = call %SageValue @sage_rt_string(i8* %2326)
+  %2328 = call %SageValue @sage_fn_emit(%SageValue %2327)
+  %2329 = getelementptr [50 x i8], [50 x i8]* @.str.496, i64 0, i64 0
+  %2330 = call %SageValue @sage_rt_string(i8* %2329)
+  %2331 = call %SageValue @sage_fn_emit(%SageValue %2330)
+  %2332 = getelementptr [41 x i8], [41 x i8]* @.str.497, i64 0, i64 0
+  %2333 = call %SageValue @sage_rt_string(i8* %2332)
+  %2334 = call %SageValue @sage_fn_emit(%SageValue %2333)
+  %2335 = getelementptr [19 x i8], [19 x i8]* @.str.498, i64 0, i64 0
+  %2336 = call %SageValue @sage_rt_string(i8* %2335)
+  %2337 = call %SageValue @sage_fn_emit(%SageValue %2336)
+  %2338 = getelementptr [1 x i8], [1 x i8]* @.str.499, i64 0, i64 0
+  %2339 = call %SageValue @sage_rt_string(i8* %2338)
+  %2340 = call %SageValue @sage_fn_emit(%SageValue %2339)
+  %2341 = getelementptr [55 x i8], [55 x i8]* @.str.500, i64 0, i64 0
+  %2342 = call %SageValue @sage_rt_string(i8* %2341)
+  %2343 = call %SageValue @sage_fn_emit(%SageValue %2342)
+  %2344 = getelementptr [23 x i8], [23 x i8]* @.str.501, i64 0, i64 0
+  %2345 = call %SageValue @sage_rt_string(i8* %2344)
+  %2346 = call %SageValue @sage_fn_emit(%SageValue %2345)
+  %2347 = getelementptr [19 x i8], [19 x i8]* @.str.502, i64 0, i64 0
+  %2348 = call %SageValue @sage_rt_string(i8* %2347)
+  %2349 = call %SageValue @sage_fn_emit(%SageValue %2348)
+  %2350 = getelementptr [32 x i8], [32 x i8]* @.str.503, i64 0, i64 0
+  %2351 = call %SageValue @sage_rt_string(i8* %2350)
+  %2352 = call %SageValue @sage_fn_emit(%SageValue %2351)
+  %2353 = getelementptr [20 x i8], [20 x i8]* @.str.504, i64 0, i64 0
+  %2354 = call %SageValue @sage_rt_string(i8* %2353)
+  %2355 = call %SageValue @sage_fn_emit(%SageValue %2354)
+  %2356 = getelementptr [25 x i8], [25 x i8]* @.str.505, i64 0, i64 0
+  %2357 = call %SageValue @sage_rt_string(i8* %2356)
+  %2358 = call %SageValue @sage_fn_emit(%SageValue %2357)
+  %2359 = getelementptr [21 x i8], [21 x i8]* @.str.506, i64 0, i64 0
+  %2360 = call %SageValue @sage_rt_string(i8* %2359)
+  %2361 = call %SageValue @sage_fn_emit(%SageValue %2360)
+  %2362 = getelementptr [21 x i8], [21 x i8]* @.str.507, i64 0, i64 0
+  %2363 = call %SageValue @sage_rt_string(i8* %2362)
+  %2364 = load %SageValue, %SageValue* @DQ
+  %2365 = call %SageValue @sage_rt_add(%SageValue %2363, %SageValue %2364)
+  %2366 = getelementptr [10 x i8], [10 x i8]* @.str.508, i64 0, i64 0
+  %2367 = call %SageValue @sage_rt_string(i8* %2366)
+  %2368 = call %SageValue @sage_rt_add(%SageValue %2365, %SageValue %2367)
+  %2369 = load %SageValue, %SageValue* @DQ
+  %2370 = call %SageValue @sage_rt_add(%SageValue %2368, %SageValue %2369)
+  %2371 = getelementptr [20 x i8], [20 x i8]* @.str.509, i64 0, i64 0
   %2372 = call %SageValue @sage_rt_string(i8* %2371)
-  %2373 = load %SageValue, %SageValue* @DQ
-  %2374 = call %SageValue @sage_rt_add(%SageValue %2372, %SageValue %2373)
-  %2375 = getelementptr [16 x i8], [16 x i8]* @.str.507, i64 0, i64 0
-  %2376 = call %SageValue @sage_rt_string(i8* %2375)
-  %2377 = call %SageValue @sage_rt_add(%SageValue %2374, %SageValue %2376)
-  %2378 = load %SageValue, %SageValue* @DQ
-  %2379 = call %SageValue @sage_rt_add(%SageValue %2377, %SageValue %2378)
-  %2380 = getelementptr [4 x i8], [4 x i8]* @.str.508, i64 0, i64 0
-  %2381 = call %SageValue @sage_rt_string(i8* %2380)
-  %2382 = call %SageValue @sage_rt_add(%SageValue %2379, %SageValue %2381)
-  %2383 = load %SageValue, %SageValue* @DQ
-  %2384 = call %SageValue @sage_rt_add(%SageValue %2382, %SageValue %2383)
-  %2385 = getelementptr [19 x i8], [19 x i8]* @.str.509, i64 0, i64 0
+  %2373 = call %SageValue @sage_rt_add(%SageValue %2370, %SageValue %2372)
+  %2374 = load %SageValue, %SageValue* @DQ
+  %2375 = call %SageValue @sage_rt_add(%SageValue %2373, %SageValue %2374)
+  %2376 = getelementptr [7 x i8], [7 x i8]* @.str.510, i64 0, i64 0
+  %2377 = call %SageValue @sage_rt_string(i8* %2376)
+  %2378 = call %SageValue @sage_rt_add(%SageValue %2375, %SageValue %2377)
+  %2379 = load %SageValue, %SageValue* @DQ
+  %2380 = call %SageValue @sage_rt_add(%SageValue %2378, %SageValue %2379)
+  %2381 = getelementptr [2 x i8], [2 x i8]* @.str.511, i64 0, i64 0
+  %2382 = call %SageValue @sage_rt_string(i8* %2381)
+  %2383 = call %SageValue @sage_rt_add(%SageValue %2380, %SageValue %2382)
+  %2384 = call %SageValue @sage_fn_emit(%SageValue %2383)
+  %2385 = getelementptr [27 x i8], [27 x i8]* @.str.512, i64 0, i64 0
   %2386 = call %SageValue @sage_rt_string(i8* %2385)
-  %2387 = call %SageValue @sage_rt_add(%SageValue %2384, %SageValue %2386)
-  %2388 = load %SageValue, %SageValue* @DQ
-  %2389 = call %SageValue @sage_rt_add(%SageValue %2387, %SageValue %2388)
-  %2390 = getelementptr [3 x i8], [3 x i8]* @.str.510, i64 0, i64 0
-  %2391 = call %SageValue @sage_rt_string(i8* %2390)
-  %2392 = call %SageValue @sage_rt_add(%SageValue %2389, %SageValue %2391)
-  %2393 = load %SageValue, %SageValue* @DQ
-  %2394 = call %SageValue @sage_rt_add(%SageValue %2392, %SageValue %2393)
-  %2395 = getelementptr [18 x i8], [18 x i8]* @.str.511, i64 0, i64 0
-  %2396 = call %SageValue @sage_rt_string(i8* %2395)
-  %2397 = call %SageValue @sage_rt_add(%SageValue %2394, %SageValue %2396)
-  %2398 = load %SageValue, %SageValue* @DQ
-  %2399 = call %SageValue @sage_rt_add(%SageValue %2397, %SageValue %2398)
-  %2400 = getelementptr [3 x i8], [3 x i8]* @.str.512, i64 0, i64 0
+  %2387 = call %SageValue @sage_fn_emit(%SageValue %2386)
+  %2388 = getelementptr [17 x i8], [17 x i8]* @.str.513, i64 0, i64 0
+  %2389 = call %SageValue @sage_rt_string(i8* %2388)
+  %2390 = load %SageValue, %SageValue* @DQ
+  %2391 = call %SageValue @sage_rt_add(%SageValue %2389, %SageValue %2390)
+  %2392 = getelementptr [8 x i8], [8 x i8]* @.str.514, i64 0, i64 0
+  %2393 = call %SageValue @sage_rt_string(i8* %2392)
+  %2394 = call %SageValue @sage_rt_add(%SageValue %2391, %SageValue %2393)
+  %2395 = load %SageValue, %SageValue* @DQ
+  %2396 = call %SageValue @sage_rt_add(%SageValue %2394, %SageValue %2395)
+  %2397 = call %SageValue @sage_fn_emit(%SageValue %2396)
+  %2398 = call %SageValue @sage_rt_array_new(i32 20)
+  %2399 = call %SageValue @sage_rt_array_new(i32 2)
+  %2400 = getelementptr [4 x i8], [4 x i8]* @.str.515, i64 0, i64 0
   %2401 = call %SageValue @sage_rt_string(i8* %2400)
-  %2402 = call %SageValue @sage_rt_add(%SageValue %2399, %SageValue %2401)
-  %2403 = load %SageValue, %SageValue* @DQ
-  %2404 = call %SageValue @sage_rt_add(%SageValue %2402, %SageValue %2403)
-  %2405 = getelementptr [14 x i8], [14 x i8]* @.str.513, i64 0, i64 0
+  call void @sage_rt_array_set(%SageValue %2399, i32 0, %SageValue %2401)
+  %2402 = getelementptr [58 x i8], [58 x i8]* @.str.516, i64 0, i64 0
+  %2403 = call %SageValue @sage_rt_string(i8* %2402)
+  call void @sage_rt_array_set(%SageValue %2399, i32 1, %SageValue %2403)
+  call void @sage_rt_array_set(%SageValue %2398, i32 0, %SageValue %2399)
+  %2404 = call %SageValue @sage_rt_array_new(i32 2)
+  %2405 = getelementptr [6 x i8], [6 x i8]* @.str.517, i64 0, i64 0
   %2406 = call %SageValue @sage_rt_string(i8* %2405)
-  %2407 = call %SageValue @sage_rt_add(%SageValue %2404, %SageValue %2406)
-  %2408 = load %SageValue, %SageValue* @DQ
-  %2409 = call %SageValue @sage_rt_add(%SageValue %2407, %SageValue %2408)
-  %2410 = getelementptr [3 x i8], [3 x i8]* @.str.514, i64 0, i64 0
+  call void @sage_rt_array_set(%SageValue %2404, i32 0, %SageValue %2406)
+  %2407 = getelementptr [32 x i8], [32 x i8]* @.str.518, i64 0, i64 0
+  %2408 = call %SageValue @sage_rt_string(i8* %2407)
+  call void @sage_rt_array_set(%SageValue %2404, i32 1, %SageValue %2408)
+  call void @sage_rt_array_set(%SageValue %2398, i32 1, %SageValue %2404)
+  %2409 = call %SageValue @sage_rt_array_new(i32 2)
+  %2410 = getelementptr [8 x i8], [8 x i8]* @.str.519, i64 0, i64 0
   %2411 = call %SageValue @sage_rt_string(i8* %2410)
-  %2412 = call %SageValue @sage_rt_add(%SageValue %2409, %SageValue %2411)
-  %2413 = load %SageValue, %SageValue* @DQ
-  %2414 = call %SageValue @sage_rt_add(%SageValue %2412, %SageValue %2413)
-  %2415 = getelementptr [13 x i8], [13 x i8]* @.str.515, i64 0, i64 0
+  call void @sage_rt_array_set(%SageValue %2409, i32 0, %SageValue %2411)
+  %2412 = getelementptr [36 x i8], [36 x i8]* @.str.520, i64 0, i64 0
+  %2413 = call %SageValue @sage_rt_string(i8* %2412)
+  call void @sage_rt_array_set(%SageValue %2409, i32 1, %SageValue %2413)
+  call void @sage_rt_array_set(%SageValue %2398, i32 2, %SageValue %2409)
+  %2414 = call %SageValue @sage_rt_array_new(i32 2)
+  %2415 = getelementptr [7 x i8], [7 x i8]* @.str.521, i64 0, i64 0
   %2416 = call %SageValue @sage_rt_string(i8* %2415)
-  %2417 = call %SageValue @sage_rt_add(%SageValue %2414, %SageValue %2416)
-  %2418 = load %SageValue, %SageValue* @DQ
-  %2419 = call %SageValue @sage_rt_add(%SageValue %2417, %SageValue %2418)
-  %2420 = getelementptr [3 x i8], [3 x i8]* @.str.516, i64 0, i64 0
+  call void @sage_rt_array_set(%SageValue %2414, i32 0, %SageValue %2416)
+  %2417 = getelementptr [24 x i8], [24 x i8]* @.str.522, i64 0, i64 0
+  %2418 = call %SageValue @sage_rt_string(i8* %2417)
+  call void @sage_rt_array_set(%SageValue %2414, i32 1, %SageValue %2418)
+  call void @sage_rt_array_set(%SageValue %2398, i32 3, %SageValue %2414)
+  %2419 = call %SageValue @sage_rt_array_new(i32 2)
+  %2420 = getelementptr [11 x i8], [11 x i8]* @.str.523, i64 0, i64 0
   %2421 = call %SageValue @sage_rt_string(i8* %2420)
-  %2422 = call %SageValue @sage_rt_add(%SageValue %2419, %SageValue %2421)
-  %2423 = load %SageValue, %SageValue* @DQ
-  %2424 = call %SageValue @sage_rt_add(%SageValue %2422, %SageValue %2423)
-  %2425 = getelementptr [20 x i8], [20 x i8]* @.str.517, i64 0, i64 0
+  call void @sage_rt_array_set(%SageValue %2419, i32 0, %SageValue %2421)
+  %2422 = getelementptr [28 x i8], [28 x i8]* @.str.524, i64 0, i64 0
+  %2423 = call %SageValue @sage_rt_string(i8* %2422)
+  call void @sage_rt_array_set(%SageValue %2419, i32 1, %SageValue %2423)
+  call void @sage_rt_array_set(%SageValue %2398, i32 4, %SageValue %2419)
+  %2424 = call %SageValue @sage_rt_array_new(i32 2)
+  %2425 = getelementptr [6 x i8], [6 x i8]* @.str.525, i64 0, i64 0
   %2426 = call %SageValue @sage_rt_string(i8* %2425)
-  %2427 = call %SageValue @sage_rt_add(%SageValue %2424, %SageValue %2426)
-  %2428 = load %SageValue, %SageValue* @DQ
-  %2429 = call %SageValue @sage_rt_add(%SageValue %2427, %SageValue %2428)
-  %2430 = getelementptr [8 x i8], [8 x i8]* @.str.518, i64 0, i64 0
+  call void @sage_rt_array_set(%SageValue %2424, i32 0, %SageValue %2426)
+  %2427 = getelementptr [36 x i8], [36 x i8]* @.str.526, i64 0, i64 0
+  %2428 = call %SageValue @sage_rt_string(i8* %2427)
+  call void @sage_rt_array_set(%SageValue %2424, i32 1, %SageValue %2428)
+  call void @sage_rt_array_set(%SageValue %2398, i32 5, %SageValue %2424)
+  %2429 = call %SageValue @sage_rt_array_new(i32 2)
+  %2430 = getelementptr [3 x i8], [3 x i8]* @.str.527, i64 0, i64 0
   %2431 = call %SageValue @sage_rt_string(i8* %2430)
-  %2432 = call %SageValue @sage_rt_add(%SageValue %2429, %SageValue %2431)
-  %2433 = call %SageValue @sage_fn_emit(%SageValue %2432)
-  %2434 = getelementptr [33 x i8], [33 x i8]* @.str.519, i64 0, i64 0
-  %2435 = call %SageValue @sage_rt_string(i8* %2434)
-  %2436 = load %SageValue, %SageValue* @DQ
-  %2437 = call %SageValue @sage_rt_add(%SageValue %2435, %SageValue %2436)
-  %2438 = getelementptr [11 x i8], [11 x i8]* @.str.520, i64 0, i64 0
-  %2439 = call %SageValue @sage_rt_string(i8* %2438)
-  %2440 = call %SageValue @sage_rt_add(%SageValue %2437, %SageValue %2439)
-  %2441 = load %SageValue, %SageValue* @DQ
-  %2442 = call %SageValue @sage_rt_add(%SageValue %2440, %SageValue %2441)
-  %2443 = getelementptr [4 x i8], [4 x i8]* @.str.521, i64 0, i64 0
-  %2444 = call %SageValue @sage_rt_string(i8* %2443)
-  %2445 = call %SageValue @sage_rt_add(%SageValue %2442, %SageValue %2444)
-  %2446 = load %SageValue, %SageValue* @DQ
-  %2447 = call %SageValue @sage_rt_add(%SageValue %2445, %SageValue %2446)
-  %2448 = getelementptr [13 x i8], [13 x i8]* @.str.522, i64 0, i64 0
-  %2449 = call %SageValue @sage_rt_string(i8* %2448)
-  %2450 = call %SageValue @sage_rt_add(%SageValue %2447, %SageValue %2449)
-  %2451 = load %SageValue, %SageValue* @DQ
-  %2452 = call %SageValue @sage_rt_add(%SageValue %2450, %SageValue %2451)
-  %2453 = getelementptr [3 x i8], [3 x i8]* @.str.523, i64 0, i64 0
-  %2454 = call %SageValue @sage_rt_string(i8* %2453)
-  %2455 = call %SageValue @sage_rt_add(%SageValue %2452, %SageValue %2454)
-  %2456 = load %SageValue, %SageValue* @DQ
-  %2457 = call %SageValue @sage_rt_add(%SageValue %2455, %SageValue %2456)
-  %2458 = getelementptr [12 x i8], [12 x i8]* @.str.524, i64 0, i64 0
-  %2459 = call %SageValue @sage_rt_string(i8* %2458)
-  %2460 = call %SageValue @sage_rt_add(%SageValue %2457, %SageValue %2459)
-  %2461 = load %SageValue, %SageValue* @DQ
-  %2462 = call %SageValue @sage_rt_add(%SageValue %2460, %SageValue %2461)
-  %2463 = getelementptr [3 x i8], [3 x i8]* @.str.525, i64 0, i64 0
-  %2464 = call %SageValue @sage_rt_string(i8* %2463)
-  %2465 = call %SageValue @sage_rt_add(%SageValue %2462, %SageValue %2464)
-  %2466 = load %SageValue, %SageValue* @DQ
-  %2467 = call %SageValue @sage_rt_add(%SageValue %2465, %SageValue %2466)
-  %2468 = getelementptr [18 x i8], [18 x i8]* @.str.526, i64 0, i64 0
-  %2469 = call %SageValue @sage_rt_string(i8* %2468)
-  %2470 = call %SageValue @sage_rt_add(%SageValue %2467, %SageValue %2469)
-  %2471 = load %SageValue, %SageValue* @DQ
-  %2472 = call %SageValue @sage_rt_add(%SageValue %2470, %SageValue %2471)
-  %2473 = getelementptr [8 x i8], [8 x i8]* @.str.527, i64 0, i64 0
-  %2474 = call %SageValue @sage_rt_string(i8* %2473)
-  %2475 = call %SageValue @sage_rt_add(%SageValue %2472, %SageValue %2474)
-  %2476 = call %SageValue @sage_fn_emit(%SageValue %2475)
-  %2477 = getelementptr [33 x i8], [33 x i8]* @.str.528, i64 0, i64 0
+  call void @sage_rt_array_set(%SageValue %2429, i32 0, %SageValue %2431)
+  %2432 = getelementptr [39 x i8], [39 x i8]* @.str.528, i64 0, i64 0
+  %2433 = call %SageValue @sage_rt_string(i8* %2432)
+  call void @sage_rt_array_set(%SageValue %2429, i32 1, %SageValue %2433)
+  call void @sage_rt_array_set(%SageValue %2398, i32 6, %SageValue %2429)
+  %2434 = call %SageValue @sage_rt_array_new(i32 2)
+  %2435 = getelementptr [9 x i8], [9 x i8]* @.str.529, i64 0, i64 0
+  %2436 = call %SageValue @sage_rt_string(i8* %2435)
+  call void @sage_rt_array_set(%SageValue %2434, i32 0, %SageValue %2436)
+  %2437 = getelementptr [32 x i8], [32 x i8]* @.str.530, i64 0, i64 0
+  %2438 = call %SageValue @sage_rt_string(i8* %2437)
+  call void @sage_rt_array_set(%SageValue %2434, i32 1, %SageValue %2438)
+  call void @sage_rt_array_set(%SageValue %2398, i32 7, %SageValue %2434)
+  %2439 = call %SageValue @sage_rt_array_new(i32 2)
+  %2440 = getelementptr [6 x i8], [6 x i8]* @.str.531, i64 0, i64 0
+  %2441 = call %SageValue @sage_rt_string(i8* %2440)
+  call void @sage_rt_array_set(%SageValue %2439, i32 0, %SageValue %2441)
+  %2442 = getelementptr [18 x i8], [18 x i8]* @.str.532, i64 0, i64 0
+  %2443 = call %SageValue @sage_rt_string(i8* %2442)
+  call void @sage_rt_array_set(%SageValue %2439, i32 1, %SageValue %2443)
+  call void @sage_rt_array_set(%SageValue %2398, i32 8, %SageValue %2439)
+  %2444 = call %SageValue @sage_rt_array_new(i32 2)
+  %2445 = getelementptr [3 x i8], [3 x i8]* @.str.533, i64 0, i64 0
+  %2446 = call %SageValue @sage_rt_string(i8* %2445)
+  call void @sage_rt_array_set(%SageValue %2444, i32 0, %SageValue %2446)
+  %2447 = getelementptr [12 x i8], [12 x i8]* @.str.534, i64 0, i64 0
+  %2448 = call %SageValue @sage_rt_string(i8* %2447)
+  call void @sage_rt_array_set(%SageValue %2444, i32 1, %SageValue %2448)
+  call void @sage_rt_array_set(%SageValue %2398, i32 9, %SageValue %2444)
+  %2449 = call %SageValue @sage_rt_array_new(i32 2)
+  %2450 = getelementptr [9 x i8], [9 x i8]* @.str.535, i64 0, i64 0
+  %2451 = call %SageValue @sage_rt_string(i8* %2450)
+  call void @sage_rt_array_set(%SageValue %2449, i32 0, %SageValue %2451)
+  %2452 = getelementptr [21 x i8], [21 x i8]* @.str.536, i64 0, i64 0
+  %2453 = call %SageValue @sage_rt_string(i8* %2452)
+  call void @sage_rt_array_set(%SageValue %2449, i32 1, %SageValue %2453)
+  call void @sage_rt_array_set(%SageValue %2398, i32 10, %SageValue %2449)
+  %2454 = call %SageValue @sage_rt_array_new(i32 2)
+  %2455 = getelementptr [6 x i8], [6 x i8]* @.str.537, i64 0, i64 0
+  %2456 = call %SageValue @sage_rt_string(i8* %2455)
+  call void @sage_rt_array_set(%SageValue %2454, i32 0, %SageValue %2456)
+  %2457 = getelementptr [16 x i8], [16 x i8]* @.str.538, i64 0, i64 0
+  %2458 = call %SageValue @sage_rt_string(i8* %2457)
+  call void @sage_rt_array_set(%SageValue %2454, i32 1, %SageValue %2458)
+  call void @sage_rt_array_set(%SageValue %2398, i32 11, %SageValue %2454)
+  %2459 = call %SageValue @sage_rt_array_new(i32 2)
+  %2460 = getelementptr [8 x i8], [8 x i8]* @.str.539, i64 0, i64 0
+  %2461 = call %SageValue @sage_rt_string(i8* %2460)
+  call void @sage_rt_array_set(%SageValue %2459, i32 0, %SageValue %2461)
+  %2462 = getelementptr [22 x i8], [22 x i8]* @.str.540, i64 0, i64 0
+  %2463 = call %SageValue @sage_rt_string(i8* %2462)
+  call void @sage_rt_array_set(%SageValue %2459, i32 1, %SageValue %2463)
+  call void @sage_rt_array_set(%SageValue %2398, i32 12, %SageValue %2459)
+  %2464 = call %SageValue @sage_rt_array_new(i32 2)
+  %2465 = getelementptr [4 x i8], [4 x i8]* @.str.541, i64 0, i64 0
+  %2466 = call %SageValue @sage_rt_string(i8* %2465)
+  call void @sage_rt_array_set(%SageValue %2464, i32 0, %SageValue %2466)
+  %2467 = getelementptr [22 x i8], [22 x i8]* @.str.542, i64 0, i64 0
+  %2468 = call %SageValue @sage_rt_string(i8* %2467)
+  call void @sage_rt_array_set(%SageValue %2464, i32 1, %SageValue %2468)
+  call void @sage_rt_array_set(%SageValue %2398, i32 13, %SageValue %2464)
+  %2469 = call %SageValue @sage_rt_array_new(i32 2)
+  %2470 = getelementptr [5 x i8], [5 x i8]* @.str.543, i64 0, i64 0
+  %2471 = call %SageValue @sage_rt_string(i8* %2470)
+  call void @sage_rt_array_set(%SageValue %2469, i32 0, %SageValue %2471)
+  %2472 = getelementptr [23 x i8], [23 x i8]* @.str.544, i64 0, i64 0
+  %2473 = call %SageValue @sage_rt_string(i8* %2472)
+  call void @sage_rt_array_set(%SageValue %2469, i32 1, %SageValue %2473)
+  call void @sage_rt_array_set(%SageValue %2398, i32 14, %SageValue %2469)
+  %2474 = call %SageValue @sage_rt_array_new(i32 2)
+  %2475 = getelementptr [10 x i8], [10 x i8]* @.str.545, i64 0, i64 0
+  %2476 = call %SageValue @sage_rt_string(i8* %2475)
+  call void @sage_rt_array_set(%SageValue %2474, i32 0, %SageValue %2476)
+  %2477 = getelementptr [23 x i8], [23 x i8]* @.str.546, i64 0, i64 0
   %2478 = call %SageValue @sage_rt_string(i8* %2477)
-  %2479 = load %SageValue, %SageValue* @DQ
-  %2480 = call %SageValue @sage_rt_add(%SageValue %2478, %SageValue %2479)
-  %2481 = getelementptr [13 x i8], [13 x i8]* @.str.529, i64 0, i64 0
-  %2482 = call %SageValue @sage_rt_string(i8* %2481)
-  %2483 = call %SageValue @sage_rt_add(%SageValue %2480, %SageValue %2482)
-  %2484 = load %SageValue, %SageValue* @DQ
-  %2485 = call %SageValue @sage_rt_add(%SageValue %2483, %SageValue %2484)
-  %2486 = getelementptr [4 x i8], [4 x i8]* @.str.530, i64 0, i64 0
-  %2487 = call %SageValue @sage_rt_string(i8* %2486)
-  %2488 = call %SageValue @sage_rt_add(%SageValue %2485, %SageValue %2487)
-  %2489 = load %SageValue, %SageValue* @DQ
-  %2490 = call %SageValue @sage_rt_add(%SageValue %2488, %SageValue %2489)
-  %2491 = getelementptr [10 x i8], [10 x i8]* @.str.531, i64 0, i64 0
-  %2492 = call %SageValue @sage_rt_string(i8* %2491)
-  %2493 = call %SageValue @sage_rt_add(%SageValue %2490, %SageValue %2492)
-  %2494 = load %SageValue, %SageValue* @DQ
-  %2495 = call %SageValue @sage_rt_add(%SageValue %2493, %SageValue %2494)
-  %2496 = getelementptr [3 x i8], [3 x i8]* @.str.532, i64 0, i64 0
-  %2497 = call %SageValue @sage_rt_string(i8* %2496)
-  %2498 = call %SageValue @sage_rt_add(%SageValue %2495, %SageValue %2497)
-  %2499 = load %SageValue, %SageValue* @DQ
-  %2500 = call %SageValue @sage_rt_add(%SageValue %2498, %SageValue %2499)
-  %2501 = getelementptr [15 x i8], [15 x i8]* @.str.533, i64 0, i64 0
-  %2502 = call %SageValue @sage_rt_string(i8* %2501)
-  %2503 = call %SageValue @sage_rt_add(%SageValue %2500, %SageValue %2502)
-  %2504 = load %SageValue, %SageValue* @DQ
-  %2505 = call %SageValue @sage_rt_add(%SageValue %2503, %SageValue %2504)
-  %2506 = getelementptr [3 x i8], [3 x i8]* @.str.534, i64 0, i64 0
-  %2507 = call %SageValue @sage_rt_string(i8* %2506)
-  %2508 = call %SageValue @sage_rt_add(%SageValue %2505, %SageValue %2507)
-  %2509 = load %SageValue, %SageValue* @DQ
-  %2510 = call %SageValue @sage_rt_add(%SageValue %2508, %SageValue %2509)
-  %2511 = getelementptr [17 x i8], [17 x i8]* @.str.535, i64 0, i64 0
-  %2512 = call %SageValue @sage_rt_string(i8* %2511)
-  %2513 = call %SageValue @sage_rt_add(%SageValue %2510, %SageValue %2512)
-  %2514 = load %SageValue, %SageValue* @DQ
-  %2515 = call %SageValue @sage_rt_add(%SageValue %2513, %SageValue %2514)
-  %2516 = getelementptr [8 x i8], [8 x i8]* @.str.536, i64 0, i64 0
-  %2517 = call %SageValue @sage_rt_string(i8* %2516)
-  %2518 = call %SageValue @sage_rt_add(%SageValue %2515, %SageValue %2517)
-  %2519 = call %SageValue @sage_fn_emit(%SageValue %2518)
-  %2520 = getelementptr [1 x i8], [1 x i8]* @.str.537, i64 0, i64 0
+  call void @sage_rt_array_set(%SageValue %2474, i32 1, %SageValue %2478)
+  call void @sage_rt_array_set(%SageValue %2398, i32 15, %SageValue %2474)
+  %2479 = call %SageValue @sage_rt_array_new(i32 2)
+  %2480 = getelementptr [7 x i8], [7 x i8]* @.str.547, i64 0, i64 0
+  %2481 = call %SageValue @sage_rt_string(i8* %2480)
+  call void @sage_rt_array_set(%SageValue %2479, i32 0, %SageValue %2481)
+  %2482 = getelementptr [21 x i8], [21 x i8]* @.str.548, i64 0, i64 0
+  %2483 = call %SageValue @sage_rt_string(i8* %2482)
+  call void @sage_rt_array_set(%SageValue %2479, i32 1, %SageValue %2483)
+  call void @sage_rt_array_set(%SageValue %2398, i32 16, %SageValue %2479)
+  %2484 = call %SageValue @sage_rt_array_new(i32 2)
+  %2485 = getelementptr [8 x i8], [8 x i8]* @.str.549, i64 0, i64 0
+  %2486 = call %SageValue @sage_rt_string(i8* %2485)
+  call void @sage_rt_array_set(%SageValue %2484, i32 0, %SageValue %2486)
+  %2487 = getelementptr [15 x i8], [15 x i8]* @.str.550, i64 0, i64 0
+  %2488 = call %SageValue @sage_rt_string(i8* %2487)
+  call void @sage_rt_array_set(%SageValue %2484, i32 1, %SageValue %2488)
+  call void @sage_rt_array_set(%SageValue %2398, i32 17, %SageValue %2484)
+  %2489 = call %SageValue @sage_rt_array_new(i32 2)
+  %2490 = getelementptr [12 x i8], [12 x i8]* @.str.551, i64 0, i64 0
+  %2491 = call %SageValue @sage_rt_string(i8* %2490)
+  call void @sage_rt_array_set(%SageValue %2489, i32 0, %SageValue %2491)
+  %2492 = getelementptr [32 x i8], [32 x i8]* @.str.552, i64 0, i64 0
+  %2493 = call %SageValue @sage_rt_string(i8* %2492)
+  call void @sage_rt_array_set(%SageValue %2489, i32 1, %SageValue %2493)
+  call void @sage_rt_array_set(%SageValue %2398, i32 18, %SageValue %2489)
+  %2494 = call %SageValue @sage_rt_array_new(i32 2)
+  %2495 = getelementptr [9 x i8], [9 x i8]* @.str.553, i64 0, i64 0
+  %2496 = call %SageValue @sage_rt_string(i8* %2495)
+  call void @sage_rt_array_set(%SageValue %2494, i32 0, %SageValue %2496)
+  %2497 = getelementptr [25 x i8], [25 x i8]* @.str.554, i64 0, i64 0
+  %2498 = call %SageValue @sage_rt_string(i8* %2497)
+  call void @sage_rt_array_set(%SageValue %2494, i32 1, %SageValue %2498)
+  call void @sage_rt_array_set(%SageValue %2398, i32 19, %SageValue %2494)
+  store %SageValue %2398, %SageValue* @topics_kw
+  %2499 = load %SageValue, %SageValue* @topics_kw
+  %2500 = call %SageValue @sage_rt_len(%SageValue %2499)
+  %2501 = call %SageValue @sage_rt_range(%SageValue %2500)
+  %2502 = call i32 @sage_rt_array_len(%SageValue %2501)
+  %2503 = alloca i32
+  store i32 0, i32* %2503
+  br label %L141
+L141:
+  %2504 = load i32, i32* %2503
+  %2505 = icmp slt i32 %2504, %2502
+  br i1 %2505, label %L142, label %L143
+L142:
+  %2506 = sitofp i32 %2504 to double
+  %2507 = call %SageValue @sage_rt_number(double %2506)
+  %2508 = call %SageValue @sage_rt_index(%SageValue %2501, %SageValue %2507)
+  store %SageValue %2508, %SageValue* %ti
+  %2509 = load %SageValue, %SageValue* @topics_kw
+  %2510 = load %SageValue, %SageValue* %ti
+  %2511 = call %SageValue @sage_rt_index(%SageValue %2509, %SageValue %2510)
+  %2512 = call %SageValue @sage_rt_number(double 0.000000e+00)
+  %2513 = call %SageValue @sage_rt_index(%SageValue %2511, %SageValue %2512)
+  store %SageValue %2513, %SageValue* %tname
+  %2514 = load %SageValue, %SageValue* @topics_kw
+  %2515 = load %SageValue, %SageValue* %ti
+  %2516 = call %SageValue @sage_rt_index(%SageValue %2514, %SageValue %2515)
+  %2517 = call %SageValue @sage_rt_number(double 1.000000e+00)
+  %2518 = call %SageValue @sage_rt_index(%SageValue %2516, %SageValue %2517)
+  store %SageValue %2518, %SageValue* %kw_str
+  %2519 = call %SageValue @sage_rt_array_new(i32 0)
+  store %SageValue %2519, %SageValue* %kw_parts
+  %2520 = getelementptr [1 x i8], [1 x i8]* @.str.555, i64 0, i64 0
   %2521 = call %SageValue @sage_rt_string(i8* %2520)
-  %2522 = call %SageValue @sage_fn_emit(%SageValue %2521)
-  %2523 = getelementptr [35 x i8], [35 x i8]* @.str.538, i64 0, i64 0
-  %2524 = call %SageValue @sage_rt_string(i8* %2523)
-  %2525 = call %SageValue @sage_fn_emit(%SageValue %2524)
-  %2526 = getelementptr [18 x i8], [18 x i8]* @.str.539, i64 0, i64 0
-  %2527 = call %SageValue @sage_rt_string(i8* %2526)
-  %2528 = load %SageValue, %SageValue* @DQ
-  %2529 = call %SageValue @sage_rt_add(%SageValue %2527, %SageValue %2528)
-  %2530 = getelementptr [32 x i8], [32 x i8]* @.str.540, i64 0, i64 0
-  %2531 = call %SageValue @sage_rt_string(i8* %2530)
-  %2532 = call %SageValue @sage_rt_add(%SageValue %2529, %SageValue %2531)
-  %2533 = load %SageValue, %SageValue* @DQ
-  %2534 = call %SageValue @sage_rt_add(%SageValue %2532, %SageValue %2533)
-  %2535 = getelementptr [3 x i8], [3 x i8]* @.str.541, i64 0, i64 0
+  store %SageValue %2521, %SageValue* %current
+  %2522 = load %SageValue, %SageValue* %kw_str
+  %2523 = call %SageValue @sage_rt_len(%SageValue %2522)
+  %2524 = call %SageValue @sage_rt_range(%SageValue %2523)
+  %2525 = call i32 @sage_rt_array_len(%SageValue %2524)
+  %2526 = alloca i32
+  store i32 0, i32* %2526
+  br label %L144
+L144:
+  %2527 = load i32, i32* %2526
+  %2528 = icmp slt i32 %2527, %2525
+  br i1 %2528, label %L145, label %L146
+L145:
+  %2529 = sitofp i32 %2527 to double
+  %2530 = call %SageValue @sage_rt_number(double %2529)
+  %2531 = call %SageValue @sage_rt_index(%SageValue %2524, %SageValue %2530)
+  store %SageValue %2531, %SageValue* %c
+  %2532 = load %SageValue, %SageValue* %kw_str
+  %2533 = load %SageValue, %SageValue* %c
+  %2534 = call %SageValue @sage_rt_index(%SageValue %2532, %SageValue %2533)
+  %2535 = getelementptr [2 x i8], [2 x i8]* @.str.556, i64 0, i64 0
   %2536 = call %SageValue @sage_rt_string(i8* %2535)
-  %2537 = call %SageValue @sage_rt_add(%SageValue %2534, %SageValue %2536)
-  %2538 = load %SageValue, %SageValue* @DQ
-  %2539 = call %SageValue @sage_rt_add(%SageValue %2537, %SageValue %2538)
-  %2540 = getelementptr [26 x i8], [26 x i8]* @.str.542, i64 0, i64 0
-  %2541 = call %SageValue @sage_rt_string(i8* %2540)
-  %2542 = call %SageValue @sage_rt_add(%SageValue %2539, %SageValue %2541)
-  %2543 = load %SageValue, %SageValue* @DQ
-  %2544 = call %SageValue @sage_rt_add(%SageValue %2542, %SageValue %2543)
-  %2545 = getelementptr [3 x i8], [3 x i8]* @.str.543, i64 0, i64 0
-  %2546 = call %SageValue @sage_rt_string(i8* %2545)
-  %2547 = call %SageValue @sage_rt_add(%SageValue %2544, %SageValue %2546)
-  %2548 = load %SageValue, %SageValue* @DQ
-  %2549 = call %SageValue @sage_rt_add(%SageValue %2547, %SageValue %2548)
-  %2550 = getelementptr [27 x i8], [27 x i8]* @.str.544, i64 0, i64 0
-  %2551 = call %SageValue @sage_rt_string(i8* %2550)
-  %2552 = call %SageValue @sage_rt_add(%SageValue %2549, %SageValue %2551)
-  %2553 = load %SageValue, %SageValue* @DQ
-  %2554 = call %SageValue @sage_rt_add(%SageValue %2552, %SageValue %2553)
-  %2555 = getelementptr [3 x i8], [3 x i8]* @.str.545, i64 0, i64 0
-  %2556 = call %SageValue @sage_rt_string(i8* %2555)
-  %2557 = call %SageValue @sage_rt_add(%SageValue %2554, %SageValue %2556)
-  %2558 = load %SageValue, %SageValue* @DQ
-  %2559 = call %SageValue @sage_rt_add(%SageValue %2557, %SageValue %2558)
-  %2560 = getelementptr [34 x i8], [34 x i8]* @.str.546, i64 0, i64 0
-  %2561 = call %SageValue @sage_rt_string(i8* %2560)
-  %2562 = call %SageValue @sage_rt_add(%SageValue %2559, %SageValue %2561)
-  %2563 = load %SageValue, %SageValue* @DQ
-  %2564 = call %SageValue @sage_rt_add(%SageValue %2562, %SageValue %2563)
-  %2565 = getelementptr [3 x i8], [3 x i8]* @.str.547, i64 0, i64 0
-  %2566 = call %SageValue @sage_rt_string(i8* %2565)
-  %2567 = call %SageValue @sage_rt_add(%SageValue %2564, %SageValue %2566)
-  %2568 = load %SageValue, %SageValue* @DQ
-  %2569 = call %SageValue @sage_rt_add(%SageValue %2567, %SageValue %2568)
-  %2570 = getelementptr [30 x i8], [30 x i8]* @.str.548, i64 0, i64 0
-  %2571 = call %SageValue @sage_rt_string(i8* %2570)
-  %2572 = call %SageValue @sage_rt_add(%SageValue %2569, %SageValue %2571)
-  %2573 = load %SageValue, %SageValue* @DQ
-  %2574 = call %SageValue @sage_rt_add(%SageValue %2572, %SageValue %2573)
-  %2575 = getelementptr [2 x i8], [2 x i8]* @.str.549, i64 0, i64 0
-  %2576 = call %SageValue @sage_rt_string(i8* %2575)
-  %2577 = call %SageValue @sage_rt_add(%SageValue %2574, %SageValue %2576)
-  %2578 = call %SageValue @sage_fn_emit(%SageValue %2577)
-  %2579 = getelementptr [32 x i8], [32 x i8]* @.str.550, i64 0, i64 0
-  %2580 = call %SageValue @sage_rt_string(i8* %2579)
-  %2581 = call %SageValue @sage_fn_emit(%SageValue %2580)
-  %2582 = getelementptr [44 x i8], [44 x i8]* @.str.551, i64 0, i64 0
-  %2583 = call %SageValue @sage_rt_string(i8* %2582)
-  %2584 = call %SageValue @sage_fn_emit(%SageValue %2583)
-  %2585 = getelementptr [23 x i8], [23 x i8]* @.str.552, i64 0, i64 0
+  %2537 = call %SageValue @sage_rt_eq(%SageValue %2534, %SageValue %2536)
+  %2538 = call i32 @sage_rt_get_bool(%SageValue %2537)
+  %2539 = icmp ne i32 %2538, 0
+  br i1 %2539, label %L147, label %L148
+L147:
+  %2540 = load %SageValue, %SageValue* %kw_parts
+  %2541 = load %SageValue, %SageValue* %current
+  %2542 = call %SageValue @sage_rt_array_push(%SageValue %2540, %SageValue %2541)
+  %2543 = getelementptr [1 x i8], [1 x i8]* @.str.557, i64 0, i64 0
+  %2544 = call %SageValue @sage_rt_string(i8* %2543)
+  store %SageValue %2544, %SageValue* %current
+  br label %L149
+L148:
+  %2545 = load %SageValue, %SageValue* %current
+  %2546 = load %SageValue, %SageValue* %kw_str
+  %2547 = load %SageValue, %SageValue* %c
+  %2548 = call %SageValue @sage_rt_index(%SageValue %2546, %SageValue %2547)
+  %2549 = call %SageValue @sage_rt_add(%SageValue %2545, %SageValue %2548)
+  store %SageValue %2549, %SageValue* %current
+  br label %L149
+L149:
+  %2550 = add i32 %2527, 1
+  store i32 %2550, i32* %2526
+  br label %L144
+L146:
+  %2551 = load %SageValue, %SageValue* %kw_parts
+  %2552 = load %SageValue, %SageValue* %current
+  %2553 = call %SageValue @sage_rt_array_push(%SageValue %2551, %SageValue %2552)
+  %2554 = getelementptr [17 x i8], [17 x i8]* @.str.558, i64 0, i64 0
+  %2555 = call %SageValue @sage_rt_string(i8* %2554)
+  %2556 = load %SageValue, %SageValue* @DQ
+  %2557 = call %SageValue @sage_rt_add(%SageValue %2555, %SageValue %2556)
+  %2558 = getelementptr [8 x i8], [8 x i8]* @.str.559, i64 0, i64 0
+  %2559 = call %SageValue @sage_rt_string(i8* %2558)
+  %2560 = call %SageValue @sage_rt_add(%SageValue %2557, %SageValue %2559)
+  %2561 = load %SageValue, %SageValue* @DQ
+  %2562 = call %SageValue @sage_rt_add(%SageValue %2560, %SageValue %2561)
+  %2563 = getelementptr [2 x i8], [2 x i8]* @.str.560, i64 0, i64 0
+  %2564 = call %SageValue @sage_rt_string(i8* %2563)
+  %2565 = call %SageValue @sage_rt_add(%SageValue %2562, %SageValue %2564)
+  %2566 = call %SageValue @sage_fn_emit(%SageValue %2565)
+  %2567 = getelementptr [12 x i8], [12 x i8]* @.str.561, i64 0, i64 0
+  %2568 = call %SageValue @sage_rt_string(i8* %2567)
+  store %SageValue %2568, %SageValue* %check
+  %2569 = load %SageValue, %SageValue* %kw_parts
+  %2570 = call %SageValue @sage_rt_len(%SageValue %2569)
+  %2571 = call %SageValue @sage_rt_range(%SageValue %2570)
+  %2572 = call i32 @sage_rt_array_len(%SageValue %2571)
+  %2573 = alloca i32
+  store i32 0, i32* %2573
+  br label %L150
+L150:
+  %2574 = load i32, i32* %2573
+  %2575 = icmp slt i32 %2574, %2572
+  br i1 %2575, label %L151, label %L152
+L151:
+  %2576 = sitofp i32 %2574 to double
+  %2577 = call %SageValue @sage_rt_number(double %2576)
+  %2578 = call %SageValue @sage_rt_index(%SageValue %2571, %SageValue %2577)
+  store %SageValue %2578, %SageValue* %k
+  %2579 = load %SageValue, %SageValue* %k
+  %2580 = call %SageValue @sage_rt_number(double 0.000000e+00)
+  %2581 = call %SageValue @sage_rt_gt(%SageValue %2579, %SageValue %2580)
+  %2582 = call i32 @sage_rt_get_bool(%SageValue %2581)
+  %2583 = icmp ne i32 %2582, 0
+  br i1 %2583, label %L153, label %L155
+L153:
+  %2584 = load %SageValue, %SageValue* %check
+  %2585 = getelementptr [5 x i8], [5 x i8]* @.str.562, i64 0, i64 0
   %2586 = call %SageValue @sage_rt_string(i8* %2585)
-  %2587 = call %SageValue @sage_fn_emit(%SageValue %2586)
-  %2588 = getelementptr [22 x i8], [22 x i8]* @.str.553, i64 0, i64 0
-  %2589 = call %SageValue @sage_rt_string(i8* %2588)
-  %2590 = call %SageValue @sage_fn_emit(%SageValue %2589)
-  %2591 = getelementptr [14 x i8], [14 x i8]* @.str.554, i64 0, i64 0
-  %2592 = call %SageValue @sage_rt_string(i8* %2591)
-  %2593 = load %SageValue, %SageValue* @DQ
-  %2594 = call %SageValue @sage_rt_add(%SageValue %2592, %SageValue %2593)
-  %2595 = getelementptr [7 x i8], [7 x i8]* @.str.555, i64 0, i64 0
-  %2596 = call %SageValue @sage_rt_string(i8* %2595)
-  %2597 = call %SageValue @sage_rt_add(%SageValue %2594, %SageValue %2596)
+  %2587 = call %SageValue @sage_rt_add(%SageValue %2584, %SageValue %2586)
+  store %SageValue %2587, %SageValue* %check
+  br label %L155
+L155:
+  %2588 = load %SageValue, %SageValue* %check
+  %2589 = getelementptr [14 x i8], [14 x i8]* @.str.563, i64 0, i64 0
+  %2590 = call %SageValue @sage_rt_string(i8* %2589)
+  %2591 = call %SageValue @sage_rt_add(%SageValue %2588, %SageValue %2590)
+  %2592 = load %SageValue, %SageValue* @DQ
+  %2593 = call %SageValue @sage_rt_add(%SageValue %2591, %SageValue %2592)
+  %2594 = load %SageValue, %SageValue* %kw_parts
+  %2595 = load %SageValue, %SageValue* %k
+  %2596 = call %SageValue @sage_rt_index(%SageValue %2594, %SageValue %2595)
+  %2597 = call %SageValue @sage_rt_add(%SageValue %2593, %SageValue %2596)
   %2598 = load %SageValue, %SageValue* @DQ
   %2599 = call %SageValue @sage_rt_add(%SageValue %2597, %SageValue %2598)
-  %2600 = getelementptr [17 x i8], [17 x i8]* @.str.556, i64 0, i64 0
+  %2600 = getelementptr [2 x i8], [2 x i8]* @.str.564, i64 0, i64 0
   %2601 = call %SageValue @sage_rt_string(i8* %2600)
   %2602 = call %SageValue @sage_rt_add(%SageValue %2599, %SageValue %2601)
-  %2603 = call %SageValue @sage_fn_emit(%SageValue %2602)
-  %2604 = getelementptr [51 x i8], [51 x i8]* @.str.557, i64 0, i64 0
-  %2605 = call %SageValue @sage_rt_string(i8* %2604)
-  %2606 = call %SageValue @sage_fn_emit(%SageValue %2605)
-  %2607 = getelementptr [1 x i8], [1 x i8]* @.str.558, i64 0, i64 0
-  %2608 = call %SageValue @sage_rt_string(i8* %2607)
-  %2609 = call %SageValue @sage_fn_emit(%SageValue %2608)
-  %2610 = getelementptr [46 x i8], [46 x i8]* @.str.559, i64 0, i64 0
-  %2611 = call %SageValue @sage_rt_string(i8* %2610)
-  %2612 = call %SageValue @sage_fn_emit(%SageValue %2611)
-  %2613 = getelementptr [40 x i8], [40 x i8]* @.str.560, i64 0, i64 0
-  %2614 = call %SageValue @sage_rt_string(i8* %2613)
-  %2615 = call %SageValue @sage_fn_emit(%SageValue %2614)
-  %2616 = getelementptr [39 x i8], [39 x i8]* @.str.561, i64 0, i64 0
-  %2617 = call %SageValue @sage_rt_string(i8* %2616)
-  %2618 = call %SageValue @sage_fn_emit(%SageValue %2617)
-  %2619 = getelementptr [42 x i8], [42 x i8]* @.str.562, i64 0, i64 0
+  store %SageValue %2602, %SageValue* %check
+  %2603 = add i32 %2574, 1
+  store i32 %2603, i32* %2573
+  br label %L150
+L152:
+  %2604 = load %SageValue, %SageValue* %check
+  %2605 = getelementptr [2 x i8], [2 x i8]* @.str.565, i64 0, i64 0
+  %2606 = call %SageValue @sage_rt_string(i8* %2605)
+  %2607 = call %SageValue @sage_rt_add(%SageValue %2604, %SageValue %2606)
+  %2608 = call %SageValue @sage_fn_emit(%SageValue %2607)
+  %2609 = getelementptr [21 x i8], [21 x i8]* @.str.566, i64 0, i64 0
+  %2610 = call %SageValue @sage_rt_string(i8* %2609)
+  %2611 = load %SageValue, %SageValue* @DQ
+  %2612 = call %SageValue @sage_rt_add(%SageValue %2610, %SageValue %2611)
+  %2613 = load %SageValue, %SageValue* %tname
+  %2614 = call %SageValue @sage_rt_add(%SageValue %2612, %SageValue %2613)
+  %2615 = load %SageValue, %SageValue* @DQ
+  %2616 = call %SageValue @sage_rt_add(%SageValue %2614, %SageValue %2615)
+  %2617 = call %SageValue @sage_fn_emit(%SageValue %2616)
+  %2618 = add i32 %2504, 1
+  store i32 %2618, i32* %2503
+  br label %L141
+L143:
+  %2619 = getelementptr [17 x i8], [17 x i8]* @.str.567, i64 0, i64 0
   %2620 = call %SageValue @sage_rt_string(i8* %2619)
-  %2621 = call %SageValue @sage_fn_emit(%SageValue %2620)
-  %2622 = getelementptr [28 x i8], [28 x i8]* @.str.563, i64 0, i64 0
-  %2623 = call %SageValue @sage_rt_string(i8* %2622)
-  %2624 = load %SageValue, %SageValue* @DQ
-  %2625 = call %SageValue @sage_rt_add(%SageValue %2623, %SageValue %2624)
-  %2626 = getelementptr [10 x i8], [10 x i8]* @.str.564, i64 0, i64 0
-  %2627 = call %SageValue @sage_rt_string(i8* %2626)
-  %2628 = call %SageValue @sage_rt_add(%SageValue %2625, %SageValue %2627)
-  %2629 = load %SageValue, %SageValue* @DQ
-  %2630 = call %SageValue @sage_rt_add(%SageValue %2628, %SageValue %2629)
-  %2631 = getelementptr [25 x i8], [25 x i8]* @.str.565, i64 0, i64 0
-  %2632 = call %SageValue @sage_rt_string(i8* %2631)
-  %2633 = call %SageValue @sage_rt_add(%SageValue %2630, %SageValue %2632)
-  %2634 = call %SageValue @sage_fn_emit(%SageValue %2633)
-  %2635 = getelementptr [1 x i8], [1 x i8]* @.str.566, i64 0, i64 0
-  %2636 = call %SageValue @sage_rt_string(i8* %2635)
-  %2637 = call %SageValue @sage_fn_emit(%SageValue %2636)
-  %2638 = getelementptr [23 x i8], [23 x i8]* @.str.567, i64 0, i64 0
-  %2639 = call %SageValue @sage_rt_string(i8* %2638)
-  %2640 = call %SageValue @sage_fn_emit(%SageValue %2639)
-  %2641 = getelementptr [19 x i8], [19 x i8]* @.str.568, i64 0, i64 0
+  %2621 = load %SageValue, %SageValue* @DQ
+  %2622 = call %SageValue @sage_rt_add(%SageValue %2620, %SageValue %2621)
+  %2623 = getelementptr [8 x i8], [8 x i8]* @.str.568, i64 0, i64 0
+  %2624 = call %SageValue @sage_rt_string(i8* %2623)
+  %2625 = call %SageValue @sage_rt_add(%SageValue %2622, %SageValue %2624)
+  %2626 = load %SageValue, %SageValue* @DQ
+  %2627 = call %SageValue @sage_rt_add(%SageValue %2625, %SageValue %2626)
+  %2628 = getelementptr [10 x i8], [10 x i8]* @.str.569, i64 0, i64 0
+  %2629 = call %SageValue @sage_rt_string(i8* %2628)
+  %2630 = call %SageValue @sage_rt_add(%SageValue %2627, %SageValue %2629)
+  %2631 = call %SageValue @sage_fn_emit(%SageValue %2630)
+  %2632 = getelementptr [18 x i8], [18 x i8]* @.str.570, i64 0, i64 0
+  %2633 = call %SageValue @sage_rt_string(i8* %2632)
+  %2634 = load %SageValue, %SageValue* @DQ
+  %2635 = call %SageValue @sage_rt_add(%SageValue %2633, %SageValue %2634)
+  %2636 = load %SageValue, %SageValue* @DQ
+  %2637 = call %SageValue @sage_rt_add(%SageValue %2635, %SageValue %2636)
+  %2638 = call %SageValue @sage_fn_emit(%SageValue %2637)
+  %2639 = call %SageValue @sage_rt_dict_new()
+  store %SageValue %2639, %SageValue* @ans
+  %2640 = load %SageValue, %SageValue* @ans
+  %2641 = getelementptr [4 x i8], [4 x i8]* @.str.571, i64 0, i64 0
   %2642 = call %SageValue @sage_rt_string(i8* %2641)
-  %2643 = call %SageValue @sage_fn_emit(%SageValue %2642)
-  %2644 = getelementptr [11 x i8], [11 x i8]* @.str.569, i64 0, i64 0
-  %2645 = call %SageValue @sage_rt_string(i8* %2644)
-  %2646 = load %SageValue, %SageValue* @DQ
-  %2647 = call %SageValue @sage_rt_add(%SageValue %2645, %SageValue %2646)
-  %2648 = getelementptr [6 x i8], [6 x i8]* @.str.570, i64 0, i64 0
+  %2643 = getelementptr [214 x i8], [214 x i8]* @.str.572, i64 0, i64 0
+  %2644 = call %SageValue @sage_rt_string(i8* %2643)
+  call void @sage_rt_index_set(%SageValue %2640, %SageValue %2642, %SageValue %2644)
+  %2645 = load %SageValue, %SageValue* @ans
+  %2646 = getelementptr [6 x i8], [6 x i8]* @.str.573, i64 0, i64 0
+  %2647 = call %SageValue @sage_rt_string(i8* %2646)
+  %2648 = getelementptr [207 x i8], [207 x i8]* @.str.574, i64 0, i64 0
   %2649 = call %SageValue @sage_rt_string(i8* %2648)
-  %2650 = call %SageValue @sage_rt_add(%SageValue %2647, %SageValue %2649)
-  %2651 = load %SageValue, %SageValue* @DQ
-  %2652 = call %SageValue @sage_rt_add(%SageValue %2650, %SageValue %2651)
-  %2653 = getelementptr [7 x i8], [7 x i8]* @.str.571, i64 0, i64 0
+  call void @sage_rt_index_set(%SageValue %2645, %SageValue %2647, %SageValue %2649)
+  %2650 = load %SageValue, %SageValue* @ans
+  %2651 = getelementptr [8 x i8], [8 x i8]* @.str.575, i64 0, i64 0
+  %2652 = call %SageValue @sage_rt_string(i8* %2651)
+  %2653 = getelementptr [147 x i8], [147 x i8]* @.str.576, i64 0, i64 0
   %2654 = call %SageValue @sage_rt_string(i8* %2653)
-  %2655 = call %SageValue @sage_rt_add(%SageValue %2652, %SageValue %2654)
-  %2656 = call %SageValue @sage_fn_emit(%SageValue %2655)
-  %2657 = getelementptr [11 x i8], [11 x i8]* @.str.572, i64 0, i64 0
-  %2658 = call %SageValue @sage_rt_string(i8* %2657)
-  %2659 = load %SageValue, %SageValue* @DQ
-  %2660 = call %SageValue @sage_rt_add(%SageValue %2658, %SageValue %2659)
-  %2661 = getelementptr [11 x i8], [11 x i8]* @.str.573, i64 0, i64 0
+  call void @sage_rt_index_set(%SageValue %2650, %SageValue %2652, %SageValue %2654)
+  %2655 = load %SageValue, %SageValue* @ans
+  %2656 = getelementptr [7 x i8], [7 x i8]* @.str.577, i64 0, i64 0
+  %2657 = call %SageValue @sage_rt_string(i8* %2656)
+  %2658 = getelementptr [158 x i8], [158 x i8]* @.str.578, i64 0, i64 0
+  %2659 = call %SageValue @sage_rt_string(i8* %2658)
+  call void @sage_rt_index_set(%SageValue %2655, %SageValue %2657, %SageValue %2659)
+  %2660 = load %SageValue, %SageValue* @ans
+  %2661 = getelementptr [11 x i8], [11 x i8]* @.str.579, i64 0, i64 0
   %2662 = call %SageValue @sage_rt_string(i8* %2661)
-  %2663 = call %SageValue @sage_rt_add(%SageValue %2660, %SageValue %2662)
-  %2664 = load %SageValue, %SageValue* @DQ
-  %2665 = call %SageValue @sage_rt_add(%SageValue %2663, %SageValue %2664)
-  %2666 = getelementptr [5 x i8], [5 x i8]* @.str.574, i64 0, i64 0
+  %2663 = getelementptr [117 x i8], [117 x i8]* @.str.580, i64 0, i64 0
+  %2664 = call %SageValue @sage_rt_string(i8* %2663)
+  call void @sage_rt_index_set(%SageValue %2660, %SageValue %2662, %SageValue %2664)
+  %2665 = load %SageValue, %SageValue* @ans
+  %2666 = getelementptr [6 x i8], [6 x i8]* @.str.581, i64 0, i64 0
   %2667 = call %SageValue @sage_rt_string(i8* %2666)
-  %2668 = call %SageValue @sage_rt_add(%SageValue %2665, %SageValue %2667)
-  %2669 = load %SageValue, %SageValue* @DQ
-  %2670 = call %SageValue @sage_rt_add(%SageValue %2668, %SageValue %2669)
-  %2671 = load %SageValue, %SageValue* @DQ
-  %2672 = call %SageValue @sage_rt_add(%SageValue %2670, %SageValue %2671)
-  %2673 = call %SageValue @sage_fn_emit(%SageValue %2672)
-  %2674 = getelementptr [32 x i8], [32 x i8]* @.str.575, i64 0, i64 0
-  %2675 = call %SageValue @sage_rt_string(i8* %2674)
-  %2676 = call %SageValue @sage_fn_emit(%SageValue %2675)
-  %2677 = getelementptr [49 x i8], [49 x i8]* @.str.576, i64 0, i64 0
-  %2678 = call %SageValue @sage_rt_string(i8* %2677)
-  %2679 = call %SageValue @sage_fn_emit(%SageValue %2678)
-  %2680 = getelementptr [13 x i8], [13 x i8]* @.str.577, i64 0, i64 0
-  %2681 = call %SageValue @sage_rt_string(i8* %2680)
-  %2682 = load %SageValue, %SageValue* @DQ
-  %2683 = call %SageValue @sage_rt_add(%SageValue %2681, %SageValue %2682)
-  %2684 = getelementptr [7 x i8], [7 x i8]* @.str.578, i64 0, i64 0
-  %2685 = call %SageValue @sage_rt_string(i8* %2684)
-  %2686 = call %SageValue @sage_rt_add(%SageValue %2683, %SageValue %2685)
-  %2687 = load %SageValue, %SageValue* @DQ
-  %2688 = call %SageValue @sage_rt_add(%SageValue %2686, %SageValue %2687)
-  %2689 = getelementptr [3 x i8], [3 x i8]* @.str.579, i64 0, i64 0
-  %2690 = call %SageValue @sage_rt_string(i8* %2689)
-  %2691 = call %SageValue @sage_rt_add(%SageValue %2688, %SageValue %2690)
-  %2692 = call %SageValue @sage_fn_emit(%SageValue %2691)
-  %2693 = getelementptr [20 x i8], [20 x i8]* @.str.580, i64 0, i64 0
+  %2668 = getelementptr [100 x i8], [100 x i8]* @.str.582, i64 0, i64 0
+  %2669 = call %SageValue @sage_rt_string(i8* %2668)
+  call void @sage_rt_index_set(%SageValue %2665, %SageValue %2667, %SageValue %2669)
+  %2670 = load %SageValue, %SageValue* @ans
+  %2671 = getelementptr [3 x i8], [3 x i8]* @.str.583, i64 0, i64 0
+  %2672 = call %SageValue @sage_rt_string(i8* %2671)
+  %2673 = getelementptr [117 x i8], [117 x i8]* @.str.584, i64 0, i64 0
+  %2674 = call %SageValue @sage_rt_string(i8* %2673)
+  call void @sage_rt_index_set(%SageValue %2670, %SageValue %2672, %SageValue %2674)
+  %2675 = load %SageValue, %SageValue* @ans
+  %2676 = getelementptr [9 x i8], [9 x i8]* @.str.585, i64 0, i64 0
+  %2677 = call %SageValue @sage_rt_string(i8* %2676)
+  %2678 = getelementptr [160 x i8], [160 x i8]* @.str.586, i64 0, i64 0
+  %2679 = call %SageValue @sage_rt_string(i8* %2678)
+  call void @sage_rt_index_set(%SageValue %2675, %SageValue %2677, %SageValue %2679)
+  %2680 = load %SageValue, %SageValue* @ans
+  %2681 = getelementptr [6 x i8], [6 x i8]* @.str.587, i64 0, i64 0
+  %2682 = call %SageValue @sage_rt_string(i8* %2681)
+  %2683 = getelementptr [107 x i8], [107 x i8]* @.str.588, i64 0, i64 0
+  %2684 = call %SageValue @sage_rt_string(i8* %2683)
+  call void @sage_rt_index_set(%SageValue %2680, %SageValue %2682, %SageValue %2684)
+  %2685 = load %SageValue, %SageValue* @ans
+  %2686 = getelementptr [3 x i8], [3 x i8]* @.str.589, i64 0, i64 0
+  %2687 = call %SageValue @sage_rt_string(i8* %2686)
+  %2688 = getelementptr [141 x i8], [141 x i8]* @.str.590, i64 0, i64 0
+  %2689 = call %SageValue @sage_rt_string(i8* %2688)
+  call void @sage_rt_index_set(%SageValue %2685, %SageValue %2687, %SageValue %2689)
+  %2690 = load %SageValue, %SageValue* @ans
+  %2691 = getelementptr [9 x i8], [9 x i8]* @.str.591, i64 0, i64 0
+  %2692 = call %SageValue @sage_rt_string(i8* %2691)
+  %2693 = getelementptr [105 x i8], [105 x i8]* @.str.592, i64 0, i64 0
   %2694 = call %SageValue @sage_rt_string(i8* %2693)
-  %2695 = load %SageValue, %SageValue* @DQ
-  %2696 = call %SageValue @sage_rt_add(%SageValue %2694, %SageValue %2695)
-  %2697 = getelementptr [6 x i8], [6 x i8]* @.str.581, i64 0, i64 0
-  %2698 = call %SageValue @sage_rt_string(i8* %2697)
-  %2699 = call %SageValue @sage_rt_add(%SageValue %2696, %SageValue %2698)
-  %2700 = load %SageValue, %SageValue* @DQ
-  %2701 = call %SageValue @sage_rt_add(%SageValue %2699, %SageValue %2700)
-  %2702 = getelementptr [4 x i8], [4 x i8]* @.str.582, i64 0, i64 0
-  %2703 = call %SageValue @sage_rt_string(i8* %2702)
-  %2704 = call %SageValue @sage_rt_add(%SageValue %2701, %SageValue %2703)
-  %2705 = load %SageValue, %SageValue* @DQ
-  %2706 = call %SageValue @sage_rt_add(%SageValue %2704, %SageValue %2705)
-  %2707 = getelementptr [12 x i8], [12 x i8]* @.str.583, i64 0, i64 0
-  %2708 = call %SageValue @sage_rt_string(i8* %2707)
-  %2709 = call %SageValue @sage_rt_add(%SageValue %2706, %SageValue %2708)
-  %2710 = load %SageValue, %SageValue* @DQ
-  %2711 = call %SageValue @sage_rt_add(%SageValue %2709, %SageValue %2710)
-  %2712 = getelementptr [2 x i8], [2 x i8]* @.str.584, i64 0, i64 0
-  %2713 = call %SageValue @sage_rt_string(i8* %2712)
-  %2714 = call %SageValue @sage_rt_add(%SageValue %2711, %SageValue %2713)
-  %2715 = call %SageValue @sage_fn_emit(%SageValue %2714)
-  %2716 = getelementptr [15 x i8], [15 x i8]* @.str.585, i64 0, i64 0
+  call void @sage_rt_index_set(%SageValue %2690, %SageValue %2692, %SageValue %2694)
+  %2695 = load %SageValue, %SageValue* @ans
+  %2696 = getelementptr [6 x i8], [6 x i8]* @.str.593, i64 0, i64 0
+  %2697 = call %SageValue @sage_rt_string(i8* %2696)
+  %2698 = getelementptr [92 x i8], [92 x i8]* @.str.594, i64 0, i64 0
+  %2699 = call %SageValue @sage_rt_string(i8* %2698)
+  call void @sage_rt_index_set(%SageValue %2695, %SageValue %2697, %SageValue %2699)
+  %2700 = load %SageValue, %SageValue* @ans
+  %2701 = getelementptr [8 x i8], [8 x i8]* @.str.595, i64 0, i64 0
+  %2702 = call %SageValue @sage_rt_string(i8* %2701)
+  %2703 = getelementptr [131 x i8], [131 x i8]* @.str.596, i64 0, i64 0
+  %2704 = call %SageValue @sage_rt_string(i8* %2703)
+  call void @sage_rt_index_set(%SageValue %2700, %SageValue %2702, %SageValue %2704)
+  %2705 = load %SageValue, %SageValue* @ans
+  %2706 = getelementptr [4 x i8], [4 x i8]* @.str.597, i64 0, i64 0
+  %2707 = call %SageValue @sage_rt_string(i8* %2706)
+  %2708 = getelementptr [85 x i8], [85 x i8]* @.str.598, i64 0, i64 0
+  %2709 = call %SageValue @sage_rt_string(i8* %2708)
+  call void @sage_rt_index_set(%SageValue %2705, %SageValue %2707, %SageValue %2709)
+  %2710 = load %SageValue, %SageValue* @ans
+  %2711 = getelementptr [5 x i8], [5 x i8]* @.str.599, i64 0, i64 0
+  %2712 = call %SageValue @sage_rt_string(i8* %2711)
+  %2713 = getelementptr [109 x i8], [109 x i8]* @.str.600, i64 0, i64 0
+  %2714 = call %SageValue @sage_rt_string(i8* %2713)
+  call void @sage_rt_index_set(%SageValue %2710, %SageValue %2712, %SageValue %2714)
+  %2715 = load %SageValue, %SageValue* @ans
+  %2716 = getelementptr [10 x i8], [10 x i8]* @.str.601, i64 0, i64 0
   %2717 = call %SageValue @sage_rt_string(i8* %2716)
-  %2718 = load %SageValue, %SageValue* @DQ
-  %2719 = call %SageValue @sage_rt_add(%SageValue %2717, %SageValue %2718)
-  %2720 = getelementptr [11 x i8], [11 x i8]* @.str.586, i64 0, i64 0
-  %2721 = call %SageValue @sage_rt_string(i8* %2720)
-  %2722 = call %SageValue @sage_rt_add(%SageValue %2719, %SageValue %2721)
-  %2723 = load %SageValue, %SageValue* @DQ
-  %2724 = call %SageValue @sage_rt_add(%SageValue %2722, %SageValue %2723)
-  %2725 = getelementptr [10 x i8], [10 x i8]* @.str.587, i64 0, i64 0
-  %2726 = call %SageValue @sage_rt_string(i8* %2725)
-  %2727 = call %SageValue @sage_rt_add(%SageValue %2724, %SageValue %2726)
-  %2728 = load %SageValue, %SageValue* @DQ
-  %2729 = call %SageValue @sage_rt_add(%SageValue %2727, %SageValue %2728)
-  %2730 = getelementptr [7 x i8], [7 x i8]* @.str.588, i64 0, i64 0
-  %2731 = call %SageValue @sage_rt_string(i8* %2730)
-  %2732 = call %SageValue @sage_rt_add(%SageValue %2729, %SageValue %2731)
-  %2733 = load %SageValue, %SageValue* @DQ
-  %2734 = call %SageValue @sage_rt_add(%SageValue %2732, %SageValue %2733)
-  %2735 = getelementptr [2 x i8], [2 x i8]* @.str.589, i64 0, i64 0
-  %2736 = call %SageValue @sage_rt_string(i8* %2735)
-  %2737 = call %SageValue @sage_rt_add(%SageValue %2734, %SageValue %2736)
-  %2738 = call %SageValue @sage_fn_emit(%SageValue %2737)
-  %2739 = getelementptr [21 x i8], [21 x i8]* @.str.590, i64 0, i64 0
-  %2740 = call %SageValue @sage_rt_string(i8* %2739)
-  %2741 = call %SageValue @sage_fn_emit(%SageValue %2740)
-  %2742 = getelementptr [51 x i8], [51 x i8]* @.str.591, i64 0, i64 0
-  %2743 = call %SageValue @sage_rt_string(i8* %2742)
-  %2744 = call %SageValue @sage_fn_emit(%SageValue %2743)
-  %2745 = getelementptr [29 x i8], [29 x i8]* @.str.592, i64 0, i64 0
-  %2746 = call %SageValue @sage_rt_string(i8* %2745)
-  %2747 = call %SageValue @sage_fn_emit(%SageValue %2746)
-  %2748 = getelementptr [18 x i8], [18 x i8]* @.str.593, i64 0, i64 0
-  %2749 = call %SageValue @sage_rt_string(i8* %2748)
-  %2750 = load %SageValue, %SageValue* @DQ
-  %2751 = call %SageValue @sage_rt_add(%SageValue %2749, %SageValue %2750)
-  %2752 = load %SageValue, %SageValue* @DQ
-  %2753 = call %SageValue @sage_rt_add(%SageValue %2751, %SageValue %2752)
-  %2754 = call %SageValue @sage_fn_emit(%SageValue %2753)
-  %2755 = getelementptr [42 x i8], [42 x i8]* @.str.594, i64 0, i64 0
-  %2756 = call %SageValue @sage_rt_string(i8* %2755)
-  %2757 = call %SageValue @sage_fn_emit(%SageValue %2756)
-  %2758 = getelementptr [38 x i8], [38 x i8]* @.str.595, i64 0, i64 0
-  %2759 = call %SageValue @sage_rt_string(i8* %2758)
+  %2718 = getelementptr [90 x i8], [90 x i8]* @.str.602, i64 0, i64 0
+  %2719 = call %SageValue @sage_rt_string(i8* %2718)
+  call void @sage_rt_index_set(%SageValue %2715, %SageValue %2717, %SageValue %2719)
+  %2720 = load %SageValue, %SageValue* @ans
+  %2721 = getelementptr [7 x i8], [7 x i8]* @.str.603, i64 0, i64 0
+  %2722 = call %SageValue @sage_rt_string(i8* %2721)
+  %2723 = getelementptr [63 x i8], [63 x i8]* @.str.604, i64 0, i64 0
+  %2724 = call %SageValue @sage_rt_string(i8* %2723)
+  call void @sage_rt_index_set(%SageValue %2720, %SageValue %2722, %SageValue %2724)
+  %2725 = load %SageValue, %SageValue* @ans
+  %2726 = getelementptr [8 x i8], [8 x i8]* @.str.605, i64 0, i64 0
+  %2727 = call %SageValue @sage_rt_string(i8* %2726)
+  %2728 = getelementptr [99 x i8], [99 x i8]* @.str.606, i64 0, i64 0
+  %2729 = call %SageValue @sage_rt_string(i8* %2728)
+  call void @sage_rt_index_set(%SageValue %2725, %SageValue %2727, %SageValue %2729)
+  %2730 = load %SageValue, %SageValue* @ans
+  %2731 = getelementptr [12 x i8], [12 x i8]* @.str.607, i64 0, i64 0
+  %2732 = call %SageValue @sage_rt_string(i8* %2731)
+  %2733 = getelementptr [100 x i8], [100 x i8]* @.str.608, i64 0, i64 0
+  %2734 = call %SageValue @sage_rt_string(i8* %2733)
+  call void @sage_rt_index_set(%SageValue %2730, %SageValue %2732, %SageValue %2734)
+  %2735 = load %SageValue, %SageValue* @ans
+  %2736 = getelementptr [9 x i8], [9 x i8]* @.str.609, i64 0, i64 0
+  %2737 = call %SageValue @sage_rt_string(i8* %2736)
+  %2738 = getelementptr [90 x i8], [90 x i8]* @.str.610, i64 0, i64 0
+  %2739 = call %SageValue @sage_rt_string(i8* %2738)
+  call void @sage_rt_index_set(%SageValue %2735, %SageValue %2737, %SageValue %2739)
+  %2740 = load %SageValue, %SageValue* @ans
+  %2741 = call %SageValue @sage_rt_dict_keys(%SageValue %2740)
+  store %SageValue %2741, %SageValue* @ans_keys
+  %2742 = load %SageValue, %SageValue* @ans_keys
+  %2743 = call %SageValue @sage_rt_len(%SageValue %2742)
+  %2744 = call %SageValue @sage_rt_range(%SageValue %2743)
+  %2745 = call i32 @sage_rt_array_len(%SageValue %2744)
+  %2746 = alloca i32
+  store i32 0, i32* %2746
+  br label %L156
+L156:
+  %2747 = load i32, i32* %2746
+  %2748 = icmp slt i32 %2747, %2745
+  br i1 %2748, label %L157, label %L158
+L157:
+  %2749 = sitofp i32 %2747 to double
+  %2750 = call %SageValue @sage_rt_number(double %2749)
+  %2751 = call %SageValue @sage_rt_index(%SageValue %2744, %SageValue %2750)
+  store %SageValue %2751, %SageValue* %i
+  %2752 = getelementptr [17 x i8], [17 x i8]* @.str.611, i64 0, i64 0
+  %2753 = call %SageValue @sage_rt_string(i8* %2752)
+  %2754 = load %SageValue, %SageValue* @DQ
+  %2755 = call %SageValue @sage_rt_add(%SageValue %2753, %SageValue %2754)
+  %2756 = load %SageValue, %SageValue* @ans_keys
+  %2757 = load %SageValue, %SageValue* %i
+  %2758 = call %SageValue @sage_rt_index(%SageValue %2756, %SageValue %2757)
+  %2759 = call %SageValue @sage_rt_add(%SageValue %2755, %SageValue %2758)
   %2760 = load %SageValue, %SageValue* @DQ
   %2761 = call %SageValue @sage_rt_add(%SageValue %2759, %SageValue %2760)
-  %2762 = getelementptr [6 x i8], [6 x i8]* @.str.596, i64 0, i64 0
+  %2762 = getelementptr [2 x i8], [2 x i8]* @.str.612, i64 0, i64 0
   %2763 = call %SageValue @sage_rt_string(i8* %2762)
   %2764 = call %SageValue @sage_rt_add(%SageValue %2761, %SageValue %2763)
-  %2765 = load %SageValue, %SageValue* @DQ
-  %2766 = call %SageValue @sage_rt_add(%SageValue %2764, %SageValue %2765)
-  %2767 = getelementptr [3 x i8], [3 x i8]* @.str.597, i64 0, i64 0
-  %2768 = call %SageValue @sage_rt_string(i8* %2767)
-  %2769 = call %SageValue @sage_rt_add(%SageValue %2766, %SageValue %2768)
-  %2770 = load %SageValue, %SageValue* @DQ
-  %2771 = call %SageValue @sage_rt_add(%SageValue %2769, %SageValue %2770)
-  %2772 = getelementptr [8 x i8], [8 x i8]* @.str.598, i64 0, i64 0
-  %2773 = call %SageValue @sage_rt_string(i8* %2772)
-  %2774 = call %SageValue @sage_rt_add(%SageValue %2771, %SageValue %2773)
-  %2775 = load %SageValue, %SageValue* @DQ
-  %2776 = call %SageValue @sage_rt_add(%SageValue %2774, %SageValue %2775)
-  %2777 = getelementptr [2 x i8], [2 x i8]* @.str.599, i64 0, i64 0
-  %2778 = call %SageValue @sage_rt_string(i8* %2777)
-  %2779 = call %SageValue @sage_rt_add(%SageValue %2776, %SageValue %2778)
-  %2780 = call %SageValue @sage_fn_emit(%SageValue %2779)
-  %2781 = getelementptr [41 x i8], [41 x i8]* @.str.600, i64 0, i64 0
-  %2782 = call %SageValue @sage_rt_string(i8* %2781)
-  %2783 = call %SageValue @sage_fn_emit(%SageValue %2782)
-  %2784 = getelementptr [27 x i8], [27 x i8]* @.str.601, i64 0, i64 0
-  %2785 = call %SageValue @sage_rt_string(i8* %2784)
-  %2786 = load %SageValue, %SageValue* @DQ
-  %2787 = call %SageValue @sage_rt_add(%SageValue %2785, %SageValue %2786)
-  %2788 = getelementptr [3 x i8], [3 x i8]* @.str.602, i64 0, i64 0
-  %2789 = call %SageValue @sage_rt_string(i8* %2788)
-  %2790 = call %SageValue @sage_rt_add(%SageValue %2787, %SageValue %2789)
-  %2791 = load %SageValue, %SageValue* @DQ
-  %2792 = call %SageValue @sage_rt_add(%SageValue %2790, %SageValue %2791)
-  %2793 = call %SageValue @sage_fn_emit(%SageValue %2792)
-  %2794 = getelementptr [20 x i8], [20 x i8]* @.str.603, i64 0, i64 0
-  %2795 = call %SageValue @sage_rt_string(i8* %2794)
-  %2796 = load %SageValue, %SageValue* @DQ
-  %2797 = call %SageValue @sage_rt_add(%SageValue %2795, %SageValue %2796)
-  %2798 = getelementptr [6 x i8], [6 x i8]* @.str.604, i64 0, i64 0
-  %2799 = call %SageValue @sage_rt_string(i8* %2798)
-  %2800 = call %SageValue @sage_rt_add(%SageValue %2797, %SageValue %2799)
-  %2801 = load %SageValue, %SageValue* @DQ
-  %2802 = call %SageValue @sage_rt_add(%SageValue %2800, %SageValue %2801)
-  %2803 = getelementptr [4 x i8], [4 x i8]* @.str.605, i64 0, i64 0
-  %2804 = call %SageValue @sage_rt_string(i8* %2803)
-  %2805 = call %SageValue @sage_rt_add(%SageValue %2802, %SageValue %2804)
-  %2806 = load %SageValue, %SageValue* @DQ
-  %2807 = call %SageValue @sage_rt_add(%SageValue %2805, %SageValue %2806)
-  %2808 = getelementptr [11 x i8], [11 x i8]* @.str.606, i64 0, i64 0
-  %2809 = call %SageValue @sage_rt_string(i8* %2808)
-  %2810 = call %SageValue @sage_rt_add(%SageValue %2807, %SageValue %2809)
-  %2811 = load %SageValue, %SageValue* @DQ
-  %2812 = call %SageValue @sage_rt_add(%SageValue %2810, %SageValue %2811)
-  %2813 = getelementptr [7 x i8], [7 x i8]* @.str.607, i64 0, i64 0
-  %2814 = call %SageValue @sage_rt_string(i8* %2813)
-  %2815 = call %SageValue @sage_rt_add(%SageValue %2812, %SageValue %2814)
-  %2816 = call %SageValue @sage_fn_emit(%SageValue %2815)
-  %2817 = getelementptr [54 x i8], [54 x i8]* @.str.608, i64 0, i64 0
-  %2818 = call %SageValue @sage_rt_string(i8* %2817)
-  %2819 = call %SageValue @sage_fn_emit(%SageValue %2818)
-  %2820 = getelementptr [25 x i8], [25 x i8]* @.str.609, i64 0, i64 0
-  %2821 = call %SageValue @sage_rt_string(i8* %2820)
-  %2822 = call %SageValue @sage_fn_emit(%SageValue %2821)
-  %2823 = getelementptr [20 x i8], [20 x i8]* @.str.610, i64 0, i64 0
-  %2824 = call %SageValue @sage_rt_string(i8* %2823)
-  %2825 = load %SageValue, %SageValue* @DQ
-  %2826 = call %SageValue @sage_rt_add(%SageValue %2824, %SageValue %2825)
-  %2827 = getelementptr [6 x i8], [6 x i8]* @.str.611, i64 0, i64 0
-  %2828 = call %SageValue @sage_rt_string(i8* %2827)
-  %2829 = call %SageValue @sage_rt_add(%SageValue %2826, %SageValue %2828)
-  %2830 = load %SageValue, %SageValue* @DQ
-  %2831 = call %SageValue @sage_rt_add(%SageValue %2829, %SageValue %2830)
-  %2832 = getelementptr [4 x i8], [4 x i8]* @.str.612, i64 0, i64 0
-  %2833 = call %SageValue @sage_rt_string(i8* %2832)
-  %2834 = call %SageValue @sage_rt_add(%SageValue %2831, %SageValue %2833)
-  %2835 = load %SageValue, %SageValue* @DQ
-  %2836 = call %SageValue @sage_rt_add(%SageValue %2834, %SageValue %2835)
-  %2837 = getelementptr [6 x i8], [6 x i8]* @.str.613, i64 0, i64 0
-  %2838 = call %SageValue @sage_rt_string(i8* %2837)
-  %2839 = call %SageValue @sage_rt_add(%SageValue %2836, %SageValue %2838)
+  %2765 = call %SageValue @sage_fn_emit(%SageValue %2764)
+  %2766 = getelementptr [18 x i8], [18 x i8]* @.str.613, i64 0, i64 0
+  %2767 = call %SageValue @sage_rt_string(i8* %2766)
+  %2768 = load %SageValue, %SageValue* @DQ
+  %2769 = call %SageValue @sage_rt_add(%SageValue %2767, %SageValue %2768)
+  %2770 = load %SageValue, %SageValue* @ans
+  %2771 = load %SageValue, %SageValue* @ans_keys
+  %2772 = load %SageValue, %SageValue* %i
+  %2773 = call %SageValue @sage_rt_index(%SageValue %2771, %SageValue %2772)
+  %2774 = call %SageValue @sage_rt_index(%SageValue %2770, %SageValue %2773)
+  %2775 = call %SageValue @sage_rt_add(%SageValue %2769, %SageValue %2774)
+  %2776 = load %SageValue, %SageValue* @DQ
+  %2777 = call %SageValue @sage_rt_add(%SageValue %2775, %SageValue %2776)
+  %2778 = call %SageValue @sage_fn_emit(%SageValue %2777)
+  %2779 = add i32 %2747, 1
+  store i32 %2779, i32* %2746
+  br label %L156
+L158:
+  %2780 = getelementptr [25 x i8], [25 x i8]* @.str.614, i64 0, i64 0
+  %2781 = call %SageValue @sage_rt_string(i8* %2780)
+  %2782 = call %SageValue @sage_fn_emit(%SageValue %2781)
+  %2783 = getelementptr [25 x i8], [25 x i8]* @.str.615, i64 0, i64 0
+  %2784 = call %SageValue @sage_rt_string(i8* %2783)
+  %2785 = call %SageValue @sage_fn_emit(%SageValue %2784)
+  %2786 = getelementptr [22 x i8], [22 x i8]* @.str.616, i64 0, i64 0
+  %2787 = call %SageValue @sage_rt_string(i8* %2786)
+  %2788 = load %SageValue, %SageValue* @DQ
+  %2789 = call %SageValue @sage_rt_add(%SageValue %2787, %SageValue %2788)
+  %2790 = getelementptr [24 x i8], [24 x i8]* @.str.617, i64 0, i64 0
+  %2791 = call %SageValue @sage_rt_string(i8* %2790)
+  %2792 = call %SageValue @sage_rt_add(%SageValue %2789, %SageValue %2791)
+  %2793 = load %SageValue, %SageValue* @DQ
+  %2794 = call %SageValue @sage_rt_add(%SageValue %2792, %SageValue %2793)
+  %2795 = getelementptr [10 x i8], [10 x i8]* @.str.618, i64 0, i64 0
+  %2796 = call %SageValue @sage_rt_string(i8* %2795)
+  %2797 = call %SageValue @sage_rt_add(%SageValue %2794, %SageValue %2796)
+  %2798 = call %SageValue @sage_fn_emit(%SageValue %2797)
+  %2799 = getelementptr [14 x i8], [14 x i8]* @.str.619, i64 0, i64 0
+  %2800 = call %SageValue @sage_rt_string(i8* %2799)
+  %2801 = call %SageValue @sage_fn_emit(%SageValue %2800)
+  %2802 = getelementptr [22 x i8], [22 x i8]* @.str.620, i64 0, i64 0
+  %2803 = call %SageValue @sage_rt_string(i8* %2802)
+  %2804 = load %SageValue, %SageValue* @DQ
+  %2805 = call %SageValue @sage_rt_add(%SageValue %2803, %SageValue %2804)
+  %2806 = getelementptr [184 x i8], [184 x i8]* @.str.621, i64 0, i64 0
+  %2807 = call %SageValue @sage_rt_string(i8* %2806)
+  %2808 = call %SageValue @sage_rt_add(%SageValue %2805, %SageValue %2807)
+  %2809 = load %SageValue, %SageValue* @DQ
+  %2810 = call %SageValue @sage_rt_add(%SageValue %2808, %SageValue %2809)
+  %2811 = call %SageValue @sage_fn_emit(%SageValue %2810)
+  %2812 = getelementptr [17 x i8], [17 x i8]* @.str.622, i64 0, i64 0
+  %2813 = call %SageValue @sage_rt_string(i8* %2812)
+  %2814 = load %SageValue, %SageValue* @DQ
+  %2815 = call %SageValue @sage_rt_add(%SageValue %2813, %SageValue %2814)
+  %2816 = getelementptr [17 x i8], [17 x i8]* @.str.623, i64 0, i64 0
+  %2817 = call %SageValue @sage_rt_string(i8* %2816)
+  %2818 = call %SageValue @sage_rt_add(%SageValue %2815, %SageValue %2817)
+  %2819 = load %SageValue, %SageValue* @DQ
+  %2820 = call %SageValue @sage_rt_add(%SageValue %2818, %SageValue %2819)
+  %2821 = getelementptr [10 x i8], [10 x i8]* @.str.624, i64 0, i64 0
+  %2822 = call %SageValue @sage_rt_string(i8* %2821)
+  %2823 = call %SageValue @sage_rt_add(%SageValue %2820, %SageValue %2822)
+  %2824 = call %SageValue @sage_fn_emit(%SageValue %2823)
+  %2825 = getelementptr [19 x i8], [19 x i8]* @.str.625, i64 0, i64 0
+  %2826 = call %SageValue @sage_rt_string(i8* %2825)
+  %2827 = load %SageValue, %SageValue* @DQ
+  %2828 = call %SageValue @sage_rt_add(%SageValue %2826, %SageValue %2827)
+  %2829 = getelementptr [4 x i8], [4 x i8]* @.str.626, i64 0, i64 0
+  %2830 = call %SageValue @sage_rt_string(i8* %2829)
+  %2831 = call %SageValue @sage_rt_add(%SageValue %2828, %SageValue %2830)
+  %2832 = load %SageValue, %SageValue* @DQ
+  %2833 = call %SageValue @sage_rt_add(%SageValue %2831, %SageValue %2832)
+  %2834 = getelementptr [13 x i8], [13 x i8]* @.str.627, i64 0, i64 0
+  %2835 = call %SageValue @sage_rt_string(i8* %2834)
+  %2836 = call %SageValue @sage_rt_add(%SageValue %2833, %SageValue %2835)
+  %2837 = call %SageValue @sage_fn_emit(%SageValue %2836)
+  %2838 = getelementptr [19 x i8], [19 x i8]* @.str.628, i64 0, i64 0
+  %2839 = call %SageValue @sage_rt_string(i8* %2838)
   %2840 = load %SageValue, %SageValue* @DQ
   %2841 = call %SageValue @sage_rt_add(%SageValue %2839, %SageValue %2840)
-  %2842 = getelementptr [24 x i8], [24 x i8]* @.str.614, i64 0, i64 0
+  %2842 = getelementptr [4 x i8], [4 x i8]* @.str.629, i64 0, i64 0
   %2843 = call %SageValue @sage_rt_string(i8* %2842)
   %2844 = call %SageValue @sage_rt_add(%SageValue %2841, %SageValue %2843)
   %2845 = load %SageValue, %SageValue* @DQ
   %2846 = call %SageValue @sage_rt_add(%SageValue %2844, %SageValue %2845)
-  %2847 = getelementptr [7 x i8], [7 x i8]* @.str.615, i64 0, i64 0
+  %2847 = getelementptr [11 x i8], [11 x i8]* @.str.630, i64 0, i64 0
   %2848 = call %SageValue @sage_rt_string(i8* %2847)
   %2849 = call %SageValue @sage_rt_add(%SageValue %2846, %SageValue %2848)
-  %2850 = load %SageValue, %SageValue* @DQ
-  %2851 = call %SageValue @sage_rt_add(%SageValue %2849, %SageValue %2850)
-  %2852 = getelementptr [2 x i8], [2 x i8]* @.str.616, i64 0, i64 0
-  %2853 = call %SageValue @sage_rt_string(i8* %2852)
-  %2854 = call %SageValue @sage_rt_add(%SageValue %2851, %SageValue %2853)
-  %2855 = call %SageValue @sage_fn_emit(%SageValue %2854)
-  %2856 = getelementptr [17 x i8], [17 x i8]* @.str.617, i64 0, i64 0
-  %2857 = call %SageValue @sage_rt_string(i8* %2856)
-  %2858 = load %SageValue, %SageValue* @DQ
-  %2859 = call %SageValue @sage_rt_add(%SageValue %2857, %SageValue %2858)
-  %2860 = getelementptr [8 x i8], [8 x i8]* @.str.618, i64 0, i64 0
-  %2861 = call %SageValue @sage_rt_string(i8* %2860)
-  %2862 = call %SageValue @sage_rt_add(%SageValue %2859, %SageValue %2861)
-  %2863 = load %SageValue, %SageValue* @DQ
-  %2864 = call %SageValue @sage_rt_add(%SageValue %2862, %SageValue %2863)
-  %2865 = call %SageValue @sage_fn_emit(%SageValue %2864)
-  %2866 = call %SageValue @sage_rt_array_new(i32 20)
-  %2867 = call %SageValue @sage_rt_array_new(i32 2)
-  %2868 = getelementptr [4 x i8], [4 x i8]* @.str.619, i64 0, i64 0
-  %2869 = call %SageValue @sage_rt_string(i8* %2868)
-  call void @sage_rt_array_set(%SageValue %2867, i32 0, %SageValue %2869)
-  %2870 = getelementptr [58 x i8], [58 x i8]* @.str.620, i64 0, i64 0
-  %2871 = call %SageValue @sage_rt_string(i8* %2870)
-  call void @sage_rt_array_set(%SageValue %2867, i32 1, %SageValue %2871)
-  call void @sage_rt_array_set(%SageValue %2866, i32 0, %SageValue %2867)
-  %2872 = call %SageValue @sage_rt_array_new(i32 2)
-  %2873 = getelementptr [6 x i8], [6 x i8]* @.str.621, i64 0, i64 0
-  %2874 = call %SageValue @sage_rt_string(i8* %2873)
-  call void @sage_rt_array_set(%SageValue %2872, i32 0, %SageValue %2874)
-  %2875 = getelementptr [32 x i8], [32 x i8]* @.str.622, i64 0, i64 0
-  %2876 = call %SageValue @sage_rt_string(i8* %2875)
-  call void @sage_rt_array_set(%SageValue %2872, i32 1, %SageValue %2876)
-  call void @sage_rt_array_set(%SageValue %2866, i32 1, %SageValue %2872)
-  %2877 = call %SageValue @sage_rt_array_new(i32 2)
-  %2878 = getelementptr [8 x i8], [8 x i8]* @.str.623, i64 0, i64 0
-  %2879 = call %SageValue @sage_rt_string(i8* %2878)
-  call void @sage_rt_array_set(%SageValue %2877, i32 0, %SageValue %2879)
-  %2880 = getelementptr [36 x i8], [36 x i8]* @.str.624, i64 0, i64 0
+  %2850 = call %SageValue @sage_fn_emit(%SageValue %2849)
+  %2851 = getelementptr [20 x i8], [20 x i8]* @.str.631, i64 0, i64 0
+  %2852 = call %SageValue @sage_rt_string(i8* %2851)
+  %2853 = call %SageValue @sage_fn_emit(%SageValue %2852)
+  %2854 = getelementptr [12 x i8], [12 x i8]* @.str.632, i64 0, i64 0
+  %2855 = call %SageValue @sage_rt_string(i8* %2854)
+  %2856 = load %SageValue, %SageValue* @DQ
+  %2857 = call %SageValue @sage_rt_add(%SageValue %2855, %SageValue %2856)
+  %2858 = getelementptr [6 x i8], [6 x i8]* @.str.633, i64 0, i64 0
+  %2859 = call %SageValue @sage_rt_string(i8* %2858)
+  %2860 = call %SageValue @sage_rt_add(%SageValue %2857, %SageValue %2859)
+  %2861 = load %SageValue, %SageValue* @DQ
+  %2862 = call %SageValue @sage_rt_add(%SageValue %2860, %SageValue %2861)
+  %2863 = getelementptr [10 x i8], [10 x i8]* @.str.634, i64 0, i64 0
+  %2864 = call %SageValue @sage_rt_string(i8* %2863)
+  %2865 = call %SageValue @sage_rt_add(%SageValue %2862, %SageValue %2864)
+  %2866 = call %SageValue @sage_fn_emit(%SageValue %2865)
+  %2867 = getelementptr [12 x i8], [12 x i8]* @.str.635, i64 0, i64 0
+  %2868 = call %SageValue @sage_rt_string(i8* %2867)
+  %2869 = load %SageValue, %SageValue* @DQ
+  %2870 = call %SageValue @sage_rt_add(%SageValue %2868, %SageValue %2869)
+  %2871 = getelementptr [7 x i8], [7 x i8]* @.str.636, i64 0, i64 0
+  %2872 = call %SageValue @sage_rt_string(i8* %2871)
+  %2873 = call %SageValue @sage_rt_add(%SageValue %2870, %SageValue %2872)
+  %2874 = load %SageValue, %SageValue* @DQ
+  %2875 = call %SageValue @sage_rt_add(%SageValue %2873, %SageValue %2874)
+  %2876 = getelementptr [11 x i8], [11 x i8]* @.str.637, i64 0, i64 0
+  %2877 = call %SageValue @sage_rt_string(i8* %2876)
+  %2878 = call %SageValue @sage_rt_add(%SageValue %2875, %SageValue %2877)
+  %2879 = call %SageValue @sage_fn_emit(%SageValue %2878)
+  %2880 = getelementptr [18 x i8], [18 x i8]* @.str.638, i64 0, i64 0
   %2881 = call %SageValue @sage_rt_string(i8* %2880)
-  call void @sage_rt_array_set(%SageValue %2877, i32 1, %SageValue %2881)
-  call void @sage_rt_array_set(%SageValue %2866, i32 2, %SageValue %2877)
-  %2882 = call %SageValue @sage_rt_array_new(i32 2)
-  %2883 = getelementptr [7 x i8], [7 x i8]* @.str.625, i64 0, i64 0
+  %2882 = call %SageValue @sage_fn_emit(%SageValue %2881)
+  %2883 = getelementptr [1 x i8], [1 x i8]* @.str.639, i64 0, i64 0
   %2884 = call %SageValue @sage_rt_string(i8* %2883)
-  call void @sage_rt_array_set(%SageValue %2882, i32 0, %SageValue %2884)
-  %2885 = getelementptr [24 x i8], [24 x i8]* @.str.626, i64 0, i64 0
-  %2886 = call %SageValue @sage_rt_string(i8* %2885)
-  call void @sage_rt_array_set(%SageValue %2882, i32 1, %SageValue %2886)
-  call void @sage_rt_array_set(%SageValue %2866, i32 3, %SageValue %2882)
-  %2887 = call %SageValue @sage_rt_array_new(i32 2)
-  %2888 = getelementptr [11 x i8], [11 x i8]* @.str.627, i64 0, i64 0
-  %2889 = call %SageValue @sage_rt_string(i8* %2888)
-  call void @sage_rt_array_set(%SageValue %2887, i32 0, %SageValue %2889)
-  %2890 = getelementptr [28 x i8], [28 x i8]* @.str.628, i64 0, i64 0
-  %2891 = call %SageValue @sage_rt_string(i8* %2890)
-  call void @sage_rt_array_set(%SageValue %2887, i32 1, %SageValue %2891)
-  call void @sage_rt_array_set(%SageValue %2866, i32 4, %SageValue %2887)
-  %2892 = call %SageValue @sage_rt_array_new(i32 2)
-  %2893 = getelementptr [6 x i8], [6 x i8]* @.str.629, i64 0, i64 0
+  %2885 = call %SageValue @sage_fn_emit(%SageValue %2884)
+  %2886 = getelementptr [20 x i8], [20 x i8]* @.str.640, i64 0, i64 0
+  %2887 = call %SageValue @sage_rt_string(i8* %2886)
+  %2888 = call %SageValue @sage_fn_emit(%SageValue %2887)
+  %2889 = getelementptr [16 x i8], [16 x i8]* @.str.641, i64 0, i64 0
+  %2890 = call %SageValue @sage_rt_string(i8* %2889)
+  %2891 = load %SageValue, %SageValue* @DQ
+  %2892 = call %SageValue @sage_rt_add(%SageValue %2890, %SageValue %2891)
+  %2893 = getelementptr [6 x i8], [6 x i8]* @.str.642, i64 0, i64 0
   %2894 = call %SageValue @sage_rt_string(i8* %2893)
-  call void @sage_rt_array_set(%SageValue %2892, i32 0, %SageValue %2894)
-  %2895 = getelementptr [36 x i8], [36 x i8]* @.str.630, i64 0, i64 0
-  %2896 = call %SageValue @sage_rt_string(i8* %2895)
-  call void @sage_rt_array_set(%SageValue %2892, i32 1, %SageValue %2896)
-  call void @sage_rt_array_set(%SageValue %2866, i32 5, %SageValue %2892)
-  %2897 = call %SageValue @sage_rt_array_new(i32 2)
-  %2898 = getelementptr [3 x i8], [3 x i8]* @.str.631, i64 0, i64 0
+  %2895 = call %SageValue @sage_rt_add(%SageValue %2892, %SageValue %2894)
+  %2896 = load %SageValue, %SageValue* @DQ
+  %2897 = call %SageValue @sage_rt_add(%SageValue %2895, %SageValue %2896)
+  %2898 = getelementptr [2 x i8], [2 x i8]* @.str.643, i64 0, i64 0
   %2899 = call %SageValue @sage_rt_string(i8* %2898)
-  call void @sage_rt_array_set(%SageValue %2897, i32 0, %SageValue %2899)
-  %2900 = getelementptr [39 x i8], [39 x i8]* @.str.632, i64 0, i64 0
-  %2901 = call %SageValue @sage_rt_string(i8* %2900)
-  call void @sage_rt_array_set(%SageValue %2897, i32 1, %SageValue %2901)
-  call void @sage_rt_array_set(%SageValue %2866, i32 6, %SageValue %2897)
-  %2902 = call %SageValue @sage_rt_array_new(i32 2)
-  %2903 = getelementptr [9 x i8], [9 x i8]* @.str.633, i64 0, i64 0
-  %2904 = call %SageValue @sage_rt_string(i8* %2903)
-  call void @sage_rt_array_set(%SageValue %2902, i32 0, %SageValue %2904)
-  %2905 = getelementptr [32 x i8], [32 x i8]* @.str.634, i64 0, i64 0
+  %2900 = call %SageValue @sage_rt_add(%SageValue %2897, %SageValue %2899)
+  %2901 = call %SageValue @sage_fn_emit(%SageValue %2900)
+  %2902 = getelementptr [30 x i8], [30 x i8]* @.str.644, i64 0, i64 0
+  %2903 = call %SageValue @sage_rt_string(i8* %2902)
+  %2904 = call %SageValue @sage_fn_emit(%SageValue %2903)
+  %2905 = getelementptr [15 x i8], [15 x i8]* @.str.645, i64 0, i64 0
   %2906 = call %SageValue @sage_rt_string(i8* %2905)
-  call void @sage_rt_array_set(%SageValue %2902, i32 1, %SageValue %2906)
-  call void @sage_rt_array_set(%SageValue %2866, i32 7, %SageValue %2902)
-  %2907 = call %SageValue @sage_rt_array_new(i32 2)
-  %2908 = getelementptr [6 x i8], [6 x i8]* @.str.635, i64 0, i64 0
-  %2909 = call %SageValue @sage_rt_string(i8* %2908)
-  call void @sage_rt_array_set(%SageValue %2907, i32 0, %SageValue %2909)
-  %2910 = getelementptr [18 x i8], [18 x i8]* @.str.636, i64 0, i64 0
-  %2911 = call %SageValue @sage_rt_string(i8* %2910)
-  call void @sage_rt_array_set(%SageValue %2907, i32 1, %SageValue %2911)
-  call void @sage_rt_array_set(%SageValue %2866, i32 8, %SageValue %2907)
-  %2912 = call %SageValue @sage_rt_array_new(i32 2)
-  %2913 = getelementptr [3 x i8], [3 x i8]* @.str.637, i64 0, i64 0
-  %2914 = call %SageValue @sage_rt_string(i8* %2913)
-  call void @sage_rt_array_set(%SageValue %2912, i32 0, %SageValue %2914)
-  %2915 = getelementptr [12 x i8], [12 x i8]* @.str.638, i64 0, i64 0
-  %2916 = call %SageValue @sage_rt_string(i8* %2915)
-  call void @sage_rt_array_set(%SageValue %2912, i32 1, %SageValue %2916)
-  call void @sage_rt_array_set(%SageValue %2866, i32 9, %SageValue %2912)
-  %2917 = call %SageValue @sage_rt_array_new(i32 2)
-  %2918 = getelementptr [9 x i8], [9 x i8]* @.str.639, i64 0, i64 0
-  %2919 = call %SageValue @sage_rt_string(i8* %2918)
-  call void @sage_rt_array_set(%SageValue %2917, i32 0, %SageValue %2919)
-  %2920 = getelementptr [21 x i8], [21 x i8]* @.str.640, i64 0, i64 0
-  %2921 = call %SageValue @sage_rt_string(i8* %2920)
-  call void @sage_rt_array_set(%SageValue %2917, i32 1, %SageValue %2921)
-  call void @sage_rt_array_set(%SageValue %2866, i32 10, %SageValue %2917)
-  %2922 = call %SageValue @sage_rt_array_new(i32 2)
-  %2923 = getelementptr [6 x i8], [6 x i8]* @.str.641, i64 0, i64 0
-  %2924 = call %SageValue @sage_rt_string(i8* %2923)
-  call void @sage_rt_array_set(%SageValue %2922, i32 0, %SageValue %2924)
-  %2925 = getelementptr [16 x i8], [16 x i8]* @.str.642, i64 0, i64 0
-  %2926 = call %SageValue @sage_rt_string(i8* %2925)
-  call void @sage_rt_array_set(%SageValue %2922, i32 1, %SageValue %2926)
-  call void @sage_rt_array_set(%SageValue %2866, i32 11, %SageValue %2922)
-  %2927 = call %SageValue @sage_rt_array_new(i32 2)
-  %2928 = getelementptr [8 x i8], [8 x i8]* @.str.643, i64 0, i64 0
+  %2907 = load %SageValue, %SageValue* @DQ
+  %2908 = call %SageValue @sage_rt_add(%SageValue %2906, %SageValue %2907)
+  %2909 = getelementptr [11 x i8], [11 x i8]* @.str.646, i64 0, i64 0
+  %2910 = call %SageValue @sage_rt_string(i8* %2909)
+  %2911 = call %SageValue @sage_rt_add(%SageValue %2908, %SageValue %2910)
+  %2912 = load %SageValue, %SageValue* @DQ
+  %2913 = call %SageValue @sage_rt_add(%SageValue %2911, %SageValue %2912)
+  %2914 = getelementptr [18 x i8], [18 x i8]* @.str.647, i64 0, i64 0
+  %2915 = call %SageValue @sage_rt_string(i8* %2914)
+  %2916 = call %SageValue @sage_rt_add(%SageValue %2913, %SageValue %2915)
+  %2917 = load %SageValue, %SageValue* @DQ
+  %2918 = call %SageValue @sage_rt_add(%SageValue %2916, %SageValue %2917)
+  %2919 = getelementptr [3 x i8], [3 x i8]* @.str.648, i64 0, i64 0
+  %2920 = call %SageValue @sage_rt_string(i8* %2919)
+  %2921 = call %SageValue @sage_rt_add(%SageValue %2918, %SageValue %2920)
+  %2922 = load %SageValue, %SageValue* @DQ
+  %2923 = call %SageValue @sage_rt_add(%SageValue %2921, %SageValue %2922)
+  %2924 = getelementptr [10 x i8], [10 x i8]* @.str.649, i64 0, i64 0
+  %2925 = call %SageValue @sage_rt_string(i8* %2924)
+  %2926 = call %SageValue @sage_rt_add(%SageValue %2923, %SageValue %2925)
+  %2927 = call %SageValue @sage_fn_emit(%SageValue %2926)
+  %2928 = getelementptr [11 x i8], [11 x i8]* @.str.650, i64 0, i64 0
   %2929 = call %SageValue @sage_rt_string(i8* %2928)
-  call void @sage_rt_array_set(%SageValue %2927, i32 0, %SageValue %2929)
-  %2930 = getelementptr [22 x i8], [22 x i8]* @.str.644, i64 0, i64 0
-  %2931 = call %SageValue @sage_rt_string(i8* %2930)
-  call void @sage_rt_array_set(%SageValue %2927, i32 1, %SageValue %2931)
-  call void @sage_rt_array_set(%SageValue %2866, i32 12, %SageValue %2927)
-  %2932 = call %SageValue @sage_rt_array_new(i32 2)
-  %2933 = getelementptr [4 x i8], [4 x i8]* @.str.645, i64 0, i64 0
-  %2934 = call %SageValue @sage_rt_string(i8* %2933)
-  call void @sage_rt_array_set(%SageValue %2932, i32 0, %SageValue %2934)
-  %2935 = getelementptr [22 x i8], [22 x i8]* @.str.646, i64 0, i64 0
-  %2936 = call %SageValue @sage_rt_string(i8* %2935)
-  call void @sage_rt_array_set(%SageValue %2932, i32 1, %SageValue %2936)
-  call void @sage_rt_array_set(%SageValue %2866, i32 13, %SageValue %2932)
-  %2937 = call %SageValue @sage_rt_array_new(i32 2)
-  %2938 = getelementptr [5 x i8], [5 x i8]* @.str.647, i64 0, i64 0
-  %2939 = call %SageValue @sage_rt_string(i8* %2938)
-  call void @sage_rt_array_set(%SageValue %2937, i32 0, %SageValue %2939)
-  %2940 = getelementptr [23 x i8], [23 x i8]* @.str.648, i64 0, i64 0
-  %2941 = call %SageValue @sage_rt_string(i8* %2940)
-  call void @sage_rt_array_set(%SageValue %2937, i32 1, %SageValue %2941)
-  call void @sage_rt_array_set(%SageValue %2866, i32 14, %SageValue %2937)
-  %2942 = call %SageValue @sage_rt_array_new(i32 2)
-  %2943 = getelementptr [10 x i8], [10 x i8]* @.str.649, i64 0, i64 0
-  %2944 = call %SageValue @sage_rt_string(i8* %2943)
-  call void @sage_rt_array_set(%SageValue %2942, i32 0, %SageValue %2944)
-  %2945 = getelementptr [23 x i8], [23 x i8]* @.str.650, i64 0, i64 0
-  %2946 = call %SageValue @sage_rt_string(i8* %2945)
-  call void @sage_rt_array_set(%SageValue %2942, i32 1, %SageValue %2946)
-  call void @sage_rt_array_set(%SageValue %2866, i32 15, %SageValue %2942)
-  %2947 = call %SageValue @sage_rt_array_new(i32 2)
-  %2948 = getelementptr [7 x i8], [7 x i8]* @.str.651, i64 0, i64 0
-  %2949 = call %SageValue @sage_rt_string(i8* %2948)
-  call void @sage_rt_array_set(%SageValue %2947, i32 0, %SageValue %2949)
-  %2950 = getelementptr [21 x i8], [21 x i8]* @.str.652, i64 0, i64 0
-  %2951 = call %SageValue @sage_rt_string(i8* %2950)
-  call void @sage_rt_array_set(%SageValue %2947, i32 1, %SageValue %2951)
-  call void @sage_rt_array_set(%SageValue %2866, i32 16, %SageValue %2947)
-  %2952 = call %SageValue @sage_rt_array_new(i32 2)
-  %2953 = getelementptr [8 x i8], [8 x i8]* @.str.653, i64 0, i64 0
-  %2954 = call %SageValue @sage_rt_string(i8* %2953)
-  call void @sage_rt_array_set(%SageValue %2952, i32 0, %SageValue %2954)
-  %2955 = getelementptr [15 x i8], [15 x i8]* @.str.654, i64 0, i64 0
-  %2956 = call %SageValue @sage_rt_string(i8* %2955)
-  call void @sage_rt_array_set(%SageValue %2952, i32 1, %SageValue %2956)
-  call void @sage_rt_array_set(%SageValue %2866, i32 17, %SageValue %2952)
-  %2957 = call %SageValue @sage_rt_array_new(i32 2)
-  %2958 = getelementptr [12 x i8], [12 x i8]* @.str.655, i64 0, i64 0
+  %2930 = load %SageValue, %SageValue* @DQ
+  %2931 = call %SageValue @sage_rt_add(%SageValue %2929, %SageValue %2930)
+  %2932 = getelementptr [11 x i8], [11 x i8]* @.str.651, i64 0, i64 0
+  %2933 = call %SageValue @sage_rt_string(i8* %2932)
+  %2934 = call %SageValue @sage_rt_add(%SageValue %2931, %SageValue %2933)
+  %2935 = load %SageValue, %SageValue* @DQ
+  %2936 = call %SageValue @sage_rt_add(%SageValue %2934, %SageValue %2935)
+  %2937 = getelementptr [6 x i8], [6 x i8]* @.str.652, i64 0, i64 0
+  %2938 = call %SageValue @sage_rt_string(i8* %2937)
+  %2939 = call %SageValue @sage_rt_add(%SageValue %2936, %SageValue %2938)
+  %2940 = load %SageValue, %SageValue* @DQ
+  %2941 = call %SageValue @sage_rt_add(%SageValue %2939, %SageValue %2940)
+  %2942 = getelementptr [7 x i8], [7 x i8]* @.str.653, i64 0, i64 0
+  %2943 = call %SageValue @sage_rt_string(i8* %2942)
+  %2944 = call %SageValue @sage_rt_add(%SageValue %2941, %SageValue %2943)
+  %2945 = load %SageValue, %SageValue* @DQ
+  %2946 = call %SageValue @sage_rt_add(%SageValue %2944, %SageValue %2945)
+  %2947 = getelementptr [2 x i8], [2 x i8]* @.str.654, i64 0, i64 0
+  %2948 = call %SageValue @sage_rt_string(i8* %2947)
+  %2949 = call %SageValue @sage_rt_add(%SageValue %2946, %SageValue %2948)
+  %2950 = call %SageValue @sage_fn_emit(%SageValue %2949)
+  %2951 = getelementptr [1 x i8], [1 x i8]* @.str.655, i64 0, i64 0
+  %2952 = call %SageValue @sage_rt_string(i8* %2951)
+  %2953 = call %SageValue @sage_fn_emit(%SageValue %2952)
+  %2954 = getelementptr [20 x i8], [20 x i8]* @.str.656, i64 0, i64 0
+  %2955 = call %SageValue @sage_rt_string(i8* %2954)
+  %2956 = load %SageValue, %SageValue* @DQ
+  %2957 = call %SageValue @sage_rt_add(%SageValue %2955, %SageValue %2956)
+  %2958 = getelementptr [8 x i8], [8 x i8]* @.str.657, i64 0, i64 0
   %2959 = call %SageValue @sage_rt_string(i8* %2958)
-  call void @sage_rt_array_set(%SageValue %2957, i32 0, %SageValue %2959)
-  %2960 = getelementptr [32 x i8], [32 x i8]* @.str.656, i64 0, i64 0
-  %2961 = call %SageValue @sage_rt_string(i8* %2960)
-  call void @sage_rt_array_set(%SageValue %2957, i32 1, %SageValue %2961)
-  call void @sage_rt_array_set(%SageValue %2866, i32 18, %SageValue %2957)
-  %2962 = call %SageValue @sage_rt_array_new(i32 2)
-  %2963 = getelementptr [9 x i8], [9 x i8]* @.str.657, i64 0, i64 0
-  %2964 = call %SageValue @sage_rt_string(i8* %2963)
-  call void @sage_rt_array_set(%SageValue %2962, i32 0, %SageValue %2964)
-  %2965 = getelementptr [25 x i8], [25 x i8]* @.str.658, i64 0, i64 0
-  %2966 = call %SageValue @sage_rt_string(i8* %2965)
-  call void @sage_rt_array_set(%SageValue %2962, i32 1, %SageValue %2966)
-  call void @sage_rt_array_set(%SageValue %2866, i32 19, %SageValue %2962)
-  store %SageValue %2866, %SageValue* @topics_kw
-  %2967 = load %SageValue, %SageValue* @topics_kw
-  %2968 = call %SageValue @sage_rt_len(%SageValue %2967)
-  %2969 = call %SageValue @sage_rt_range(%SageValue %2968)
-  %2970 = call i32 @sage_rt_array_len(%SageValue %2969)
-  %ti = alloca %SageValue
-  %2971 = alloca i32
-  store i32 0, i32* %2971
-  br label %L141
-L141:
-  %2972 = load i32, i32* %2971
-  %2973 = icmp slt i32 %2972, %2970
-  br i1 %2973, label %L142, label %L143
-L142:
-  %2974 = sitofp i32 %2972 to double
-  %2975 = call %SageValue @sage_rt_number(double %2974)
-  %2976 = call %SageValue @sage_rt_index(%SageValue %2969, %SageValue %2975)
-  store %SageValue %2976, %SageValue* %ti
-  %2977 = load %SageValue, %SageValue* @topics_kw
-  %2978 = load %SageValue, %SageValue* %ti
-  %2979 = call %SageValue @sage_rt_index(%SageValue %2977, %SageValue %2978)
-  %2980 = call %SageValue @sage_rt_number(double 0.000000e+00)
-  %2981 = call %SageValue @sage_rt_index(%SageValue %2979, %SageValue %2980)
-  store %SageValue %2981, %SageValue* %tname
-  %2982 = load %SageValue, %SageValue* @topics_kw
-  %2983 = load %SageValue, %SageValue* %ti
-  %2984 = call %SageValue @sage_rt_index(%SageValue %2982, %SageValue %2983)
-  %2985 = call %SageValue @sage_rt_number(double 1.000000e+00)
-  %2986 = call %SageValue @sage_rt_index(%SageValue %2984, %SageValue %2985)
-  store %SageValue %2986, %SageValue* %kw_str
-  %2987 = call %SageValue @sage_rt_array_new(i32 0)
-  store %SageValue %2987, %SageValue* %kw_parts
-  %2988 = getelementptr [1 x i8], [1 x i8]* @.str.659, i64 0, i64 0
-  %2989 = call %SageValue @sage_rt_string(i8* %2988)
-  store %SageValue %2989, %SageValue* %current
-  %2990 = load %SageValue, %SageValue* %kw_str
-  %2991 = call %SageValue @sage_rt_len(%SageValue %2990)
-  %2992 = call %SageValue @sage_rt_range(%SageValue %2991)
-  %2993 = call i32 @sage_rt_array_len(%SageValue %2992)
-  %c = alloca %SageValue
-  %2994 = alloca i32
-  store i32 0, i32* %2994
-  br label %L144
-L144:
-  %2995 = load i32, i32* %2994
-  %2996 = icmp slt i32 %2995, %2993
-  br i1 %2996, label %L145, label %L146
-L145:
-  %2997 = sitofp i32 %2995 to double
-  %2998 = call %SageValue @sage_rt_number(double %2997)
-  %2999 = call %SageValue @sage_rt_index(%SageValue %2992, %SageValue %2998)
-  store %SageValue %2999, %SageValue* %c
-  %3000 = load %SageValue, %SageValue* %kw_str
-  %3001 = load %SageValue, %SageValue* %c
-  %3002 = call %SageValue @sage_rt_index(%SageValue %3000, %SageValue %3001)
-  %3003 = getelementptr [2 x i8], [2 x i8]* @.str.660, i64 0, i64 0
-  %3004 = call %SageValue @sage_rt_string(i8* %3003)
-  %3005 = call %SageValue @sage_rt_eq(%SageValue %3002, %SageValue %3004)
-  %3006 = call i32 @sage_rt_get_bool(%SageValue %3005)
-  %3007 = icmp ne i32 %3006, 0
-  br i1 %3007, label %L147, label %L148
-L147:
-  %3008 = load %SageValue, %SageValue* %kw_parts
-  %3009 = load %SageValue, %SageValue* %current
-  %3010 = call %SageValue @sage_rt_array_push(%SageValue %3008, %SageValue %3009)
-  %3011 = getelementptr [1 x i8], [1 x i8]* @.str.661, i64 0, i64 0
+  %2960 = call %SageValue @sage_rt_add(%SageValue %2957, %SageValue %2959)
+  %2961 = load %SageValue, %SageValue* @DQ
+  %2962 = call %SageValue @sage_rt_add(%SageValue %2960, %SageValue %2961)
+  %2963 = call %SageValue @sage_fn_emit(%SageValue %2962)
+  %2964 = getelementptr [1 x i8], [1 x i8]* @.str.658, i64 0, i64 0
+  %2965 = call %SageValue @sage_rt_string(i8* %2964)
+  %2966 = call %SageValue @sage_fn_emit(%SageValue %2965)
+  %2967 = getelementptr [7 x i8], [7 x i8]* @.str.659, i64 0, i64 0
+  %2968 = call %SageValue @sage_rt_string(i8* %2967)
+  %2969 = load %SageValue, %SageValue* @DQ
+  %2970 = call %SageValue @sage_rt_add(%SageValue %2968, %SageValue %2969)
+  %2971 = getelementptr [45 x i8], [45 x i8]* @.str.660, i64 0, i64 0
+  %2972 = call %SageValue @sage_rt_string(i8* %2971)
+  %2973 = call %SageValue @sage_rt_add(%SageValue %2970, %SageValue %2972)
+  %2974 = load %SageValue, %SageValue* @DQ
+  %2975 = call %SageValue @sage_rt_add(%SageValue %2973, %SageValue %2974)
+  %2976 = call %SageValue @sage_fn_emit(%SageValue %2975)
+  %2977 = getelementptr [7 x i8], [7 x i8]* @.str.661, i64 0, i64 0
+  %2978 = call %SageValue @sage_rt_string(i8* %2977)
+  %2979 = load %SageValue, %SageValue* @DQ
+  %2980 = call %SageValue @sage_rt_add(%SageValue %2978, %SageValue %2979)
+  %2981 = getelementptr [40 x i8], [40 x i8]* @.str.662, i64 0, i64 0
+  %2982 = call %SageValue @sage_rt_string(i8* %2981)
+  %2983 = call %SageValue @sage_rt_add(%SageValue %2980, %SageValue %2982)
+  %2984 = load %SageValue, %SageValue* @DQ
+  %2985 = call %SageValue @sage_rt_add(%SageValue %2983, %SageValue %2984)
+  %2986 = call %SageValue @sage_fn_emit(%SageValue %2985)
+  %2987 = getelementptr [7 x i8], [7 x i8]* @.str.663, i64 0, i64 0
+  %2988 = call %SageValue @sage_rt_string(i8* %2987)
+  %2989 = load %SageValue, %SageValue* @DQ
+  %2990 = call %SageValue @sage_rt_add(%SageValue %2988, %SageValue %2989)
+  %2991 = getelementptr [35 x i8], [35 x i8]* @.str.664, i64 0, i64 0
+  %2992 = call %SageValue @sage_rt_string(i8* %2991)
+  %2993 = call %SageValue @sage_rt_add(%SageValue %2990, %SageValue %2992)
+  %2994 = load %SageValue, %SageValue* @DQ
+  %2995 = call %SageValue @sage_rt_add(%SageValue %2993, %SageValue %2994)
+  %2996 = call %SageValue @sage_fn_emit(%SageValue %2995)
+  %2997 = getelementptr [7 x i8], [7 x i8]* @.str.665, i64 0, i64 0
+  %2998 = call %SageValue @sage_rt_string(i8* %2997)
+  %2999 = load %SageValue, %SageValue* @DQ
+  %3000 = call %SageValue @sage_rt_add(%SageValue %2998, %SageValue %2999)
+  %3001 = getelementptr [38 x i8], [38 x i8]* @.str.666, i64 0, i64 0
+  %3002 = call %SageValue @sage_rt_string(i8* %3001)
+  %3003 = call %SageValue @sage_rt_add(%SageValue %3000, %SageValue %3002)
+  %3004 = load %SageValue, %SageValue* @DQ
+  %3005 = call %SageValue @sage_rt_add(%SageValue %3003, %SageValue %3004)
+  %3006 = call %SageValue @sage_fn_emit(%SageValue %3005)
+  %3007 = getelementptr [7 x i8], [7 x i8]* @.str.667, i64 0, i64 0
+  %3008 = call %SageValue @sage_rt_string(i8* %3007)
+  %3009 = load %SageValue, %SageValue* @DQ
+  %3010 = call %SageValue @sage_rt_add(%SageValue %3008, %SageValue %3009)
+  %3011 = getelementptr [45 x i8], [45 x i8]* @.str.668, i64 0, i64 0
   %3012 = call %SageValue @sage_rt_string(i8* %3011)
-  store %SageValue %3012, %SageValue* %current
-  br label %L149
-L148:
-  %3013 = load %SageValue, %SageValue* %current
-  %3014 = load %SageValue, %SageValue* %kw_str
-  %3015 = load %SageValue, %SageValue* %c
-  %3016 = call %SageValue @sage_rt_index(%SageValue %3014, %SageValue %3015)
-  %3017 = call %SageValue @sage_rt_add(%SageValue %3013, %SageValue %3016)
-  store %SageValue %3017, %SageValue* %current
-  br label %L149
-L149:
-  %3018 = add i32 %2995, 1
-  store i32 %3018, i32* %2994
-  br label %L144
-L146:
-  %3019 = load %SageValue, %SageValue* %kw_parts
-  %3020 = load %SageValue, %SageValue* %current
-  %3021 = call %SageValue @sage_rt_array_push(%SageValue %3019, %SageValue %3020)
-  %3022 = getelementptr [17 x i8], [17 x i8]* @.str.662, i64 0, i64 0
-  %3023 = call %SageValue @sage_rt_string(i8* %3022)
+  %3013 = call %SageValue @sage_rt_add(%SageValue %3010, %SageValue %3012)
+  %3014 = load %SageValue, %SageValue* @DQ
+  %3015 = call %SageValue @sage_rt_add(%SageValue %3013, %SageValue %3014)
+  %3016 = call %SageValue @sage_fn_emit(%SageValue %3015)
+  %3017 = getelementptr [7 x i8], [7 x i8]* @.str.669, i64 0, i64 0
+  %3018 = call %SageValue @sage_rt_string(i8* %3017)
+  %3019 = load %SageValue, %SageValue* @DQ
+  %3020 = call %SageValue @sage_rt_add(%SageValue %3018, %SageValue %3019)
+  %3021 = getelementptr [45 x i8], [45 x i8]* @.str.670, i64 0, i64 0
+  %3022 = call %SageValue @sage_rt_string(i8* %3021)
+  %3023 = call %SageValue @sage_rt_add(%SageValue %3020, %SageValue %3022)
   %3024 = load %SageValue, %SageValue* @DQ
   %3025 = call %SageValue @sage_rt_add(%SageValue %3023, %SageValue %3024)
-  %3026 = getelementptr [8 x i8], [8 x i8]* @.str.663, i64 0, i64 0
-  %3027 = call %SageValue @sage_rt_string(i8* %3026)
-  %3028 = call %SageValue @sage_rt_add(%SageValue %3025, %SageValue %3027)
+  %3026 = call %SageValue @sage_fn_emit(%SageValue %3025)
+  %3027 = getelementptr [7 x i8], [7 x i8]* @.str.671, i64 0, i64 0
+  %3028 = call %SageValue @sage_rt_string(i8* %3027)
   %3029 = load %SageValue, %SageValue* @DQ
   %3030 = call %SageValue @sage_rt_add(%SageValue %3028, %SageValue %3029)
-  %3031 = getelementptr [2 x i8], [2 x i8]* @.str.664, i64 0, i64 0
+  %3031 = getelementptr [70 x i8], [70 x i8]* @.str.672, i64 0, i64 0
   %3032 = call %SageValue @sage_rt_string(i8* %3031)
   %3033 = call %SageValue @sage_rt_add(%SageValue %3030, %SageValue %3032)
-  %3034 = call %SageValue @sage_fn_emit(%SageValue %3033)
-  %3035 = getelementptr [12 x i8], [12 x i8]* @.str.665, i64 0, i64 0
-  %3036 = call %SageValue @sage_rt_string(i8* %3035)
-  store %SageValue %3036, %SageValue* %check
-  %3037 = load %SageValue, %SageValue* %kw_parts
-  %3038 = call %SageValue @sage_rt_len(%SageValue %3037)
-  %3039 = call %SageValue @sage_rt_range(%SageValue %3038)
-  %3040 = call i32 @sage_rt_array_len(%SageValue %3039)
-  %k = alloca %SageValue
-  %3041 = alloca i32
-  store i32 0, i32* %3041
-  br label %L150
-L150:
-  %3042 = load i32, i32* %3041
-  %3043 = icmp slt i32 %3042, %3040
-  br i1 %3043, label %L151, label %L152
-L151:
-  %3044 = sitofp i32 %3042 to double
-  %3045 = call %SageValue @sage_rt_number(double %3044)
-  %3046 = call %SageValue @sage_rt_index(%SageValue %3039, %SageValue %3045)
-  store %SageValue %3046, %SageValue* %k
-  %3047 = load %SageValue, %SageValue* %k
-  %3048 = call %SageValue @sage_rt_number(double 0.000000e+00)
-  %3049 = call %SageValue @sage_rt_gt(%SageValue %3047, %SageValue %3048)
-  %3050 = call i32 @sage_rt_get_bool(%SageValue %3049)
-  %3051 = icmp ne i32 %3050, 0
-  br i1 %3051, label %L153, label %L155
-L153:
-  %3052 = load %SageValue, %SageValue* %check
-  %3053 = getelementptr [5 x i8], [5 x i8]* @.str.666, i64 0, i64 0
-  %3054 = call %SageValue @sage_rt_string(i8* %3053)
-  %3055 = call %SageValue @sage_rt_add(%SageValue %3052, %SageValue %3054)
-  store %SageValue %3055, %SageValue* %check
-  br label %L155
-L155:
-  %3056 = load %SageValue, %SageValue* %check
-  %3057 = getelementptr [14 x i8], [14 x i8]* @.str.667, i64 0, i64 0
-  %3058 = call %SageValue @sage_rt_string(i8* %3057)
-  %3059 = call %SageValue @sage_rt_add(%SageValue %3056, %SageValue %3058)
-  %3060 = load %SageValue, %SageValue* @DQ
-  %3061 = call %SageValue @sage_rt_add(%SageValue %3059, %SageValue %3060)
-  %3062 = load %SageValue, %SageValue* %kw_parts
-  %3063 = load %SageValue, %SageValue* %k
-  %3064 = call %SageValue @sage_rt_index(%SageValue %3062, %SageValue %3063)
-  %3065 = call %SageValue @sage_rt_add(%SageValue %3061, %SageValue %3064)
-  %3066 = load %SageValue, %SageValue* @DQ
-  %3067 = call %SageValue @sage_rt_add(%SageValue %3065, %SageValue %3066)
-  %3068 = getelementptr [2 x i8], [2 x i8]* @.str.668, i64 0, i64 0
-  %3069 = call %SageValue @sage_rt_string(i8* %3068)
-  %3070 = call %SageValue @sage_rt_add(%SageValue %3067, %SageValue %3069)
-  store %SageValue %3070, %SageValue* %check
-  %3071 = add i32 %3042, 1
-  store i32 %3071, i32* %3041
-  br label %L150
-L152:
-  %3072 = load %SageValue, %SageValue* %check
-  %3073 = getelementptr [2 x i8], [2 x i8]* @.str.669, i64 0, i64 0
-  %3074 = call %SageValue @sage_rt_string(i8* %3073)
-  %3075 = call %SageValue @sage_rt_add(%SageValue %3072, %SageValue %3074)
-  %3076 = call %SageValue @sage_fn_emit(%SageValue %3075)
-  %3077 = getelementptr [21 x i8], [21 x i8]* @.str.670, i64 0, i64 0
+  %3034 = load %SageValue, %SageValue* @DQ
+  %3035 = call %SageValue @sage_rt_add(%SageValue %3033, %SageValue %3034)
+  %3036 = call %SageValue @sage_fn_emit(%SageValue %3035)
+  %3037 = getelementptr [7 x i8], [7 x i8]* @.str.673, i64 0, i64 0
+  %3038 = call %SageValue @sage_rt_string(i8* %3037)
+  %3039 = load %SageValue, %SageValue* @DQ
+  %3040 = call %SageValue @sage_rt_add(%SageValue %3038, %SageValue %3039)
+  %3041 = load %SageValue, %SageValue* @DQ
+  %3042 = call %SageValue @sage_rt_add(%SageValue %3040, %SageValue %3041)
+  %3043 = call %SageValue @sage_fn_emit(%SageValue %3042)
+  %3044 = getelementptr [19 x i8], [19 x i8]* @.str.674, i64 0, i64 0
+  %3045 = call %SageValue @sage_rt_string(i8* %3044)
+  %3046 = call %SageValue @sage_fn_emit(%SageValue %3045)
+  %3047 = getelementptr [15 x i8], [15 x i8]* @.str.675, i64 0, i64 0
+  %3048 = call %SageValue @sage_rt_string(i8* %3047)
+  %3049 = call %SageValue @sage_fn_emit(%SageValue %3048)
+  %3050 = getelementptr [21 x i8], [21 x i8]* @.str.676, i64 0, i64 0
+  %3051 = call %SageValue @sage_rt_string(i8* %3050)
+  %3052 = load %SageValue, %SageValue* @DQ
+  %3053 = call %SageValue @sage_rt_add(%SageValue %3051, %SageValue %3052)
+  %3054 = getelementptr [6 x i8], [6 x i8]* @.str.677, i64 0, i64 0
+  %3055 = call %SageValue @sage_rt_string(i8* %3054)
+  %3056 = call %SageValue @sage_rt_add(%SageValue %3053, %SageValue %3055)
+  %3057 = load %SageValue, %SageValue* @DQ
+  %3058 = call %SageValue @sage_rt_add(%SageValue %3056, %SageValue %3057)
+  %3059 = getelementptr [2 x i8], [2 x i8]* @.str.678, i64 0, i64 0
+  %3060 = call %SageValue @sage_rt_string(i8* %3059)
+  %3061 = call %SageValue @sage_rt_add(%SageValue %3058, %SageValue %3060)
+  %3062 = call %SageValue @sage_fn_emit(%SageValue %3061)
+  %3063 = getelementptr [15 x i8], [15 x i8]* @.str.679, i64 0, i64 0
+  %3064 = call %SageValue @sage_rt_string(i8* %3063)
+  %3065 = load %SageValue, %SageValue* @DQ
+  %3066 = call %SageValue @sage_rt_add(%SageValue %3064, %SageValue %3065)
+  %3067 = getelementptr [5 x i8], [5 x i8]* @.str.680, i64 0, i64 0
+  %3068 = call %SageValue @sage_rt_string(i8* %3067)
+  %3069 = call %SageValue @sage_rt_add(%SageValue %3066, %SageValue %3068)
+  %3070 = load %SageValue, %SageValue* @DQ
+  %3071 = call %SageValue @sage_rt_add(%SageValue %3069, %SageValue %3070)
+  %3072 = getelementptr [12 x i8], [12 x i8]* @.str.681, i64 0, i64 0
+  %3073 = call %SageValue @sage_rt_string(i8* %3072)
+  %3074 = call %SageValue @sage_rt_add(%SageValue %3071, %SageValue %3073)
+  %3075 = load %SageValue, %SageValue* @DQ
+  %3076 = call %SageValue @sage_rt_add(%SageValue %3074, %SageValue %3075)
+  %3077 = getelementptr [5 x i8], [5 x i8]* @.str.682, i64 0, i64 0
   %3078 = call %SageValue @sage_rt_string(i8* %3077)
-  %3079 = load %SageValue, %SageValue* @DQ
-  %3080 = call %SageValue @sage_rt_add(%SageValue %3078, %SageValue %3079)
-  %3081 = load %SageValue, %SageValue* %tname
-  %3082 = call %SageValue @sage_rt_add(%SageValue %3080, %SageValue %3081)
-  %3083 = load %SageValue, %SageValue* @DQ
-  %3084 = call %SageValue @sage_rt_add(%SageValue %3082, %SageValue %3083)
+  %3079 = call %SageValue @sage_rt_add(%SageValue %3076, %SageValue %3078)
+  %3080 = load %SageValue, %SageValue* @DQ
+  %3081 = call %SageValue @sage_rt_add(%SageValue %3079, %SageValue %3080)
+  %3082 = getelementptr [2 x i8], [2 x i8]* @.str.683, i64 0, i64 0
+  %3083 = call %SageValue @sage_rt_string(i8* %3082)
+  %3084 = call %SageValue @sage_rt_add(%SageValue %3081, %SageValue %3083)
   %3085 = call %SageValue @sage_fn_emit(%SageValue %3084)
-  %3086 = add i32 %2972, 1
-  store i32 %3086, i32* %2971
-  br label %L141
-L143:
-  %3087 = getelementptr [16 x i8], [16 x i8]* @.str.671, i64 0, i64 0
-  %3088 = call %SageValue @sage_rt_string(i8* %3087)
-  %3089 = load %SageValue, %SageValue* @DQ
-  %3090 = call %SageValue @sage_rt_add(%SageValue %3088, %SageValue %3089)
-  %3091 = getelementptr [6 x i8], [6 x i8]* @.str.672, i64 0, i64 0
-  %3092 = call %SageValue @sage_rt_string(i8* %3091)
-  %3093 = call %SageValue @sage_rt_add(%SageValue %3090, %SageValue %3092)
-  %3094 = load %SageValue, %SageValue* @DQ
-  %3095 = call %SageValue @sage_rt_add(%SageValue %3093, %SageValue %3094)
-  %3096 = getelementptr [4 x i8], [4 x i8]* @.str.673, i64 0, i64 0
-  %3097 = call %SageValue @sage_rt_string(i8* %3096)
-  %3098 = call %SageValue @sage_rt_add(%SageValue %3095, %SageValue %3097)
-  %3099 = load %SageValue, %SageValue* @DQ
-  %3100 = call %SageValue @sage_rt_add(%SageValue %3098, %SageValue %3099)
-  %3101 = getelementptr [8 x i8], [8 x i8]* @.str.674, i64 0, i64 0
-  %3102 = call %SageValue @sage_rt_string(i8* %3101)
-  %3103 = call %SageValue @sage_rt_add(%SageValue %3100, %SageValue %3102)
-  %3104 = load %SageValue, %SageValue* @DQ
-  %3105 = call %SageValue @sage_rt_add(%SageValue %3103, %SageValue %3104)
-  %3106 = getelementptr [10 x i8], [10 x i8]* @.str.675, i64 0, i64 0
-  %3107 = call %SageValue @sage_rt_string(i8* %3106)
-  %3108 = call %SageValue @sage_rt_add(%SageValue %3105, %SageValue %3107)
-  %3109 = call %SageValue @sage_fn_emit(%SageValue %3108)
-  %3110 = getelementptr [18 x i8], [18 x i8]* @.str.676, i64 0, i64 0
-  %3111 = call %SageValue @sage_rt_string(i8* %3110)
-  %3112 = load %SageValue, %SageValue* @DQ
-  %3113 = call %SageValue @sage_rt_add(%SageValue %3111, %SageValue %3112)
-  %3114 = load %SageValue, %SageValue* @DQ
-  %3115 = call %SageValue @sage_rt_add(%SageValue %3113, %SageValue %3114)
-  %3116 = call %SageValue @sage_fn_emit(%SageValue %3115)
-  %3117 = call %SageValue @sage_rt_dict_new()
-  store %SageValue %3117, %SageValue* @ans
-  %3118 = load %SageValue, %SageValue* @ans
-  %3119 = getelementptr [4 x i8], [4 x i8]* @.str.677, i64 0, i64 0
-  %3120 = call %SageValue @sage_rt_string(i8* %3119)
-  %3121 = getelementptr [214 x i8], [214 x i8]* @.str.678, i64 0, i64 0
-  %3122 = call %SageValue @sage_rt_string(i8* %3121)
-  call void @sage_rt_index_set(%SageValue %3118, %SageValue %3120, %SageValue %3122)
-  %3123 = load %SageValue, %SageValue* @ans
-  %3124 = getelementptr [6 x i8], [6 x i8]* @.str.679, i64 0, i64 0
-  %3125 = call %SageValue @sage_rt_string(i8* %3124)
-  %3126 = getelementptr [207 x i8], [207 x i8]* @.str.680, i64 0, i64 0
+  %3086 = getelementptr [24 x i8], [24 x i8]* @.str.684, i64 0, i64 0
+  %3087 = call %SageValue @sage_rt_string(i8* %3086)
+  %3088 = call %SageValue @sage_fn_emit(%SageValue %3087)
+  %3089 = getelementptr [15 x i8], [15 x i8]* @.str.685, i64 0, i64 0
+  %3090 = call %SageValue @sage_rt_string(i8* %3089)
+  %3091 = load %SageValue, %SageValue* @DQ
+  %3092 = call %SageValue @sage_rt_add(%SageValue %3090, %SageValue %3091)
+  %3093 = getelementptr [19 x i8], [19 x i8]* @.str.686, i64 0, i64 0
+  %3094 = call %SageValue @sage_rt_string(i8* %3093)
+  %3095 = call %SageValue @sage_rt_add(%SageValue %3092, %SageValue %3094)
+  %3096 = load %SageValue, %SageValue* @DQ
+  %3097 = call %SageValue @sage_rt_add(%SageValue %3095, %SageValue %3096)
+  %3098 = getelementptr [24 x i8], [24 x i8]* @.str.687, i64 0, i64 0
+  %3099 = call %SageValue @sage_rt_string(i8* %3098)
+  %3100 = call %SageValue @sage_rt_add(%SageValue %3097, %SageValue %3099)
+  %3101 = load %SageValue, %SageValue* @DQ
+  %3102 = call %SageValue @sage_rt_add(%SageValue %3100, %SageValue %3101)
+  %3103 = getelementptr [21 x i8], [21 x i8]* @.str.688, i64 0, i64 0
+  %3104 = call %SageValue @sage_rt_string(i8* %3103)
+  %3105 = call %SageValue @sage_rt_add(%SageValue %3102, %SageValue %3104)
+  %3106 = load %SageValue, %SageValue* @DQ
+  %3107 = call %SageValue @sage_rt_add(%SageValue %3105, %SageValue %3106)
+  %3108 = call %SageValue @sage_fn_emit(%SageValue %3107)
+  %3109 = getelementptr [27 x i8], [27 x i8]* @.str.689, i64 0, i64 0
+  %3110 = call %SageValue @sage_rt_string(i8* %3109)
+  %3111 = load %SageValue, %SageValue* @DQ
+  %3112 = call %SageValue @sage_rt_add(%SageValue %3110, %SageValue %3111)
+  %3113 = getelementptr [5 x i8], [5 x i8]* @.str.690, i64 0, i64 0
+  %3114 = call %SageValue @sage_rt_string(i8* %3113)
+  %3115 = call %SageValue @sage_rt_add(%SageValue %3112, %SageValue %3114)
+  %3116 = load %SageValue, %SageValue* @DQ
+  %3117 = call %SageValue @sage_rt_add(%SageValue %3115, %SageValue %3116)
+  %3118 = getelementptr [2 x i8], [2 x i8]* @.str.691, i64 0, i64 0
+  %3119 = call %SageValue @sage_rt_string(i8* %3118)
+  %3120 = call %SageValue @sage_rt_add(%SageValue %3117, %SageValue %3119)
+  %3121 = call %SageValue @sage_fn_emit(%SageValue %3120)
+  %3122 = getelementptr [15 x i8], [15 x i8]* @.str.692, i64 0, i64 0
+  %3123 = call %SageValue @sage_rt_string(i8* %3122)
+  %3124 = load %SageValue, %SageValue* @DQ
+  %3125 = call %SageValue @sage_rt_add(%SageValue %3123, %SageValue %3124)
+  %3126 = getelementptr [82 x i8], [82 x i8]* @.str.693, i64 0, i64 0
   %3127 = call %SageValue @sage_rt_string(i8* %3126)
-  call void @sage_rt_index_set(%SageValue %3123, %SageValue %3125, %SageValue %3127)
-  %3128 = load %SageValue, %SageValue* @ans
-  %3129 = getelementptr [8 x i8], [8 x i8]* @.str.681, i64 0, i64 0
-  %3130 = call %SageValue @sage_rt_string(i8* %3129)
-  %3131 = getelementptr [147 x i8], [147 x i8]* @.str.682, i64 0, i64 0
-  %3132 = call %SageValue @sage_rt_string(i8* %3131)
-  call void @sage_rt_index_set(%SageValue %3128, %SageValue %3130, %SageValue %3132)
-  %3133 = load %SageValue, %SageValue* @ans
-  %3134 = getelementptr [7 x i8], [7 x i8]* @.str.683, i64 0, i64 0
-  %3135 = call %SageValue @sage_rt_string(i8* %3134)
-  %3136 = getelementptr [158 x i8], [158 x i8]* @.str.684, i64 0, i64 0
+  %3128 = call %SageValue @sage_rt_add(%SageValue %3125, %SageValue %3127)
+  %3129 = load %SageValue, %SageValue* @DQ
+  %3130 = call %SageValue @sage_rt_add(%SageValue %3128, %SageValue %3129)
+  %3131 = call %SageValue @sage_fn_emit(%SageValue %3130)
+  %3132 = getelementptr [27 x i8], [27 x i8]* @.str.694, i64 0, i64 0
+  %3133 = call %SageValue @sage_rt_string(i8* %3132)
+  %3134 = load %SageValue, %SageValue* @DQ
+  %3135 = call %SageValue @sage_rt_add(%SageValue %3133, %SageValue %3134)
+  %3136 = getelementptr [7 x i8], [7 x i8]* @.str.695, i64 0, i64 0
   %3137 = call %SageValue @sage_rt_string(i8* %3136)
-  call void @sage_rt_index_set(%SageValue %3133, %SageValue %3135, %SageValue %3137)
-  %3138 = load %SageValue, %SageValue* @ans
-  %3139 = getelementptr [11 x i8], [11 x i8]* @.str.685, i64 0, i64 0
-  %3140 = call %SageValue @sage_rt_string(i8* %3139)
-  %3141 = getelementptr [117 x i8], [117 x i8]* @.str.686, i64 0, i64 0
+  %3138 = call %SageValue @sage_rt_add(%SageValue %3135, %SageValue %3137)
+  %3139 = load %SageValue, %SageValue* @DQ
+  %3140 = call %SageValue @sage_rt_add(%SageValue %3138, %SageValue %3139)
+  %3141 = getelementptr [2 x i8], [2 x i8]* @.str.696, i64 0, i64 0
   %3142 = call %SageValue @sage_rt_string(i8* %3141)
-  call void @sage_rt_index_set(%SageValue %3138, %SageValue %3140, %SageValue %3142)
-  %3143 = load %SageValue, %SageValue* @ans
-  %3144 = getelementptr [6 x i8], [6 x i8]* @.str.687, i64 0, i64 0
-  %3145 = call %SageValue @sage_rt_string(i8* %3144)
-  %3146 = getelementptr [100 x i8], [100 x i8]* @.str.688, i64 0, i64 0
-  %3147 = call %SageValue @sage_rt_string(i8* %3146)
-  call void @sage_rt_index_set(%SageValue %3143, %SageValue %3145, %SageValue %3147)
-  %3148 = load %SageValue, %SageValue* @ans
-  %3149 = getelementptr [3 x i8], [3 x i8]* @.str.689, i64 0, i64 0
+  %3143 = call %SageValue @sage_rt_add(%SageValue %3140, %SageValue %3142)
+  %3144 = call %SageValue @sage_fn_emit(%SageValue %3143)
+  %3145 = getelementptr [15 x i8], [15 x i8]* @.str.697, i64 0, i64 0
+  %3146 = call %SageValue @sage_rt_string(i8* %3145)
+  %3147 = load %SageValue, %SageValue* @DQ
+  %3148 = call %SageValue @sage_rt_add(%SageValue %3146, %SageValue %3147)
+  %3149 = getelementptr [10 x i8], [10 x i8]* @.str.698, i64 0, i64 0
   %3150 = call %SageValue @sage_rt_string(i8* %3149)
-  %3151 = getelementptr [117 x i8], [117 x i8]* @.str.690, i64 0, i64 0
-  %3152 = call %SageValue @sage_rt_string(i8* %3151)
-  call void @sage_rt_index_set(%SageValue %3148, %SageValue %3150, %SageValue %3152)
-  %3153 = load %SageValue, %SageValue* @ans
-  %3154 = getelementptr [9 x i8], [9 x i8]* @.str.691, i64 0, i64 0
+  %3151 = call %SageValue @sage_rt_add(%SageValue %3148, %SageValue %3150)
+  %3152 = load %SageValue, %SageValue* @DQ
+  %3153 = call %SageValue @sage_rt_add(%SageValue %3151, %SageValue %3152)
+  %3154 = getelementptr [22 x i8], [22 x i8]* @.str.699, i64 0, i64 0
   %3155 = call %SageValue @sage_rt_string(i8* %3154)
-  %3156 = getelementptr [160 x i8], [160 x i8]* @.str.692, i64 0, i64 0
-  %3157 = call %SageValue @sage_rt_string(i8* %3156)
-  call void @sage_rt_index_set(%SageValue %3153, %SageValue %3155, %SageValue %3157)
-  %3158 = load %SageValue, %SageValue* @ans
-  %3159 = getelementptr [6 x i8], [6 x i8]* @.str.693, i64 0, i64 0
+  %3156 = call %SageValue @sage_rt_add(%SageValue %3153, %SageValue %3155)
+  %3157 = load %SageValue, %SageValue* @DQ
+  %3158 = call %SageValue @sage_rt_add(%SageValue %3156, %SageValue %3157)
+  %3159 = getelementptr [16 x i8], [16 x i8]* @.str.700, i64 0, i64 0
   %3160 = call %SageValue @sage_rt_string(i8* %3159)
-  %3161 = getelementptr [107 x i8], [107 x i8]* @.str.694, i64 0, i64 0
-  %3162 = call %SageValue @sage_rt_string(i8* %3161)
-  call void @sage_rt_index_set(%SageValue %3158, %SageValue %3160, %SageValue %3162)
-  %3163 = load %SageValue, %SageValue* @ans
-  %3164 = getelementptr [3 x i8], [3 x i8]* @.str.695, i64 0, i64 0
+  %3161 = call %SageValue @sage_rt_add(%SageValue %3158, %SageValue %3160)
+  %3162 = load %SageValue, %SageValue* @DQ
+  %3163 = call %SageValue @sage_rt_add(%SageValue %3161, %SageValue %3162)
+  %3164 = getelementptr [27 x i8], [27 x i8]* @.str.701, i64 0, i64 0
   %3165 = call %SageValue @sage_rt_string(i8* %3164)
-  %3166 = getelementptr [141 x i8], [141 x i8]* @.str.696, i64 0, i64 0
-  %3167 = call %SageValue @sage_rt_string(i8* %3166)
-  call void @sage_rt_index_set(%SageValue %3163, %SageValue %3165, %SageValue %3167)
-  %3168 = load %SageValue, %SageValue* @ans
-  %3169 = getelementptr [9 x i8], [9 x i8]* @.str.697, i64 0, i64 0
+  %3166 = call %SageValue @sage_rt_add(%SageValue %3163, %SageValue %3165)
+  %3167 = load %SageValue, %SageValue* @DQ
+  %3168 = call %SageValue @sage_rt_add(%SageValue %3166, %SageValue %3167)
+  %3169 = getelementptr [13 x i8], [13 x i8]* @.str.702, i64 0, i64 0
   %3170 = call %SageValue @sage_rt_string(i8* %3169)
-  %3171 = getelementptr [105 x i8], [105 x i8]* @.str.698, i64 0, i64 0
-  %3172 = call %SageValue @sage_rt_string(i8* %3171)
-  call void @sage_rt_index_set(%SageValue %3168, %SageValue %3170, %SageValue %3172)
-  %3173 = load %SageValue, %SageValue* @ans
-  %3174 = getelementptr [6 x i8], [6 x i8]* @.str.699, i64 0, i64 0
+  %3171 = call %SageValue @sage_rt_add(%SageValue %3168, %SageValue %3170)
+  %3172 = load %SageValue, %SageValue* @DQ
+  %3173 = call %SageValue @sage_rt_add(%SageValue %3171, %SageValue %3172)
+  %3174 = getelementptr [22 x i8], [22 x i8]* @.str.703, i64 0, i64 0
   %3175 = call %SageValue @sage_rt_string(i8* %3174)
-  %3176 = getelementptr [92 x i8], [92 x i8]* @.str.700, i64 0, i64 0
-  %3177 = call %SageValue @sage_rt_string(i8* %3176)
-  call void @sage_rt_index_set(%SageValue %3173, %SageValue %3175, %SageValue %3177)
-  %3178 = load %SageValue, %SageValue* @ans
-  %3179 = getelementptr [8 x i8], [8 x i8]* @.str.701, i64 0, i64 0
-  %3180 = call %SageValue @sage_rt_string(i8* %3179)
-  %3181 = getelementptr [131 x i8], [131 x i8]* @.str.702, i64 0, i64 0
-  %3182 = call %SageValue @sage_rt_string(i8* %3181)
-  call void @sage_rt_index_set(%SageValue %3178, %SageValue %3180, %SageValue %3182)
-  %3183 = load %SageValue, %SageValue* @ans
-  %3184 = getelementptr [4 x i8], [4 x i8]* @.str.703, i64 0, i64 0
-  %3185 = call %SageValue @sage_rt_string(i8* %3184)
-  %3186 = getelementptr [85 x i8], [85 x i8]* @.str.704, i64 0, i64 0
-  %3187 = call %SageValue @sage_rt_string(i8* %3186)
-  call void @sage_rt_index_set(%SageValue %3183, %SageValue %3185, %SageValue %3187)
-  %3188 = load %SageValue, %SageValue* @ans
-  %3189 = getelementptr [5 x i8], [5 x i8]* @.str.705, i64 0, i64 0
-  %3190 = call %SageValue @sage_rt_string(i8* %3189)
-  %3191 = getelementptr [109 x i8], [109 x i8]* @.str.706, i64 0, i64 0
+  %3176 = call %SageValue @sage_rt_add(%SageValue %3173, %SageValue %3175)
+  %3177 = call %SageValue @sage_fn_emit(%SageValue %3176)
+  %3178 = getelementptr [37 x i8], [37 x i8]* @.str.704, i64 0, i64 0
+  %3179 = call %SageValue @sage_rt_string(i8* %3178)
+  %3180 = load %SageValue, %SageValue* @DQ
+  %3181 = call %SageValue @sage_rt_add(%SageValue %3179, %SageValue %3180)
+  %3182 = getelementptr [10 x i8], [10 x i8]* @.str.705, i64 0, i64 0
+  %3183 = call %SageValue @sage_rt_string(i8* %3182)
+  %3184 = call %SageValue @sage_rt_add(%SageValue %3181, %SageValue %3183)
+  %3185 = load %SageValue, %SageValue* @DQ
+  %3186 = call %SageValue @sage_rt_add(%SageValue %3184, %SageValue %3185)
+  %3187 = getelementptr [3 x i8], [3 x i8]* @.str.706, i64 0, i64 0
+  %3188 = call %SageValue @sage_rt_string(i8* %3187)
+  %3189 = call %SageValue @sage_rt_add(%SageValue %3186, %SageValue %3188)
+  %3190 = call %SageValue @sage_fn_emit(%SageValue %3189)
+  %3191 = getelementptr [48 x i8], [48 x i8]* @.str.707, i64 0, i64 0
   %3192 = call %SageValue @sage_rt_string(i8* %3191)
-  call void @sage_rt_index_set(%SageValue %3188, %SageValue %3190, %SageValue %3192)
-  %3193 = load %SageValue, %SageValue* @ans
-  %3194 = getelementptr [10 x i8], [10 x i8]* @.str.707, i64 0, i64 0
+  %3193 = call %SageValue @sage_fn_emit(%SageValue %3192)
+  %3194 = getelementptr [31 x i8], [31 x i8]* @.str.708, i64 0, i64 0
   %3195 = call %SageValue @sage_rt_string(i8* %3194)
-  %3196 = getelementptr [90 x i8], [90 x i8]* @.str.708, i64 0, i64 0
-  %3197 = call %SageValue @sage_rt_string(i8* %3196)
-  call void @sage_rt_index_set(%SageValue %3193, %SageValue %3195, %SageValue %3197)
-  %3198 = load %SageValue, %SageValue* @ans
-  %3199 = getelementptr [7 x i8], [7 x i8]* @.str.709, i64 0, i64 0
-  %3200 = call %SageValue @sage_rt_string(i8* %3199)
-  %3201 = getelementptr [63 x i8], [63 x i8]* @.str.710, i64 0, i64 0
+  %3196 = call %SageValue @sage_fn_emit(%SageValue %3195)
+  %3197 = getelementptr [15 x i8], [15 x i8]* @.str.709, i64 0, i64 0
+  %3198 = call %SageValue @sage_rt_string(i8* %3197)
+  %3199 = load %SageValue, %SageValue* @DQ
+  %3200 = call %SageValue @sage_rt_add(%SageValue %3198, %SageValue %3199)
+  %3201 = getelementptr [15 x i8], [15 x i8]* @.str.710, i64 0, i64 0
   %3202 = call %SageValue @sage_rt_string(i8* %3201)
-  call void @sage_rt_index_set(%SageValue %3198, %SageValue %3200, %SageValue %3202)
-  %3203 = load %SageValue, %SageValue* @ans
-  %3204 = getelementptr [8 x i8], [8 x i8]* @.str.711, i64 0, i64 0
-  %3205 = call %SageValue @sage_rt_string(i8* %3204)
-  %3206 = getelementptr [99 x i8], [99 x i8]* @.str.712, i64 0, i64 0
+  %3203 = call %SageValue @sage_rt_add(%SageValue %3200, %SageValue %3202)
+  %3204 = load %SageValue, %SageValue* @DQ
+  %3205 = call %SageValue @sage_rt_add(%SageValue %3203, %SageValue %3204)
+  %3206 = getelementptr [8 x i8], [8 x i8]* @.str.711, i64 0, i64 0
   %3207 = call %SageValue @sage_rt_string(i8* %3206)
-  call void @sage_rt_index_set(%SageValue %3203, %SageValue %3205, %SageValue %3207)
-  %3208 = load %SageValue, %SageValue* @ans
-  %3209 = getelementptr [12 x i8], [12 x i8]* @.str.713, i64 0, i64 0
-  %3210 = call %SageValue @sage_rt_string(i8* %3209)
-  %3211 = getelementptr [100 x i8], [100 x i8]* @.str.714, i64 0, i64 0
-  %3212 = call %SageValue @sage_rt_string(i8* %3211)
-  call void @sage_rt_index_set(%SageValue %3208, %SageValue %3210, %SageValue %3212)
-  %3213 = load %SageValue, %SageValue* @ans
-  %3214 = getelementptr [9 x i8], [9 x i8]* @.str.715, i64 0, i64 0
+  %3208 = call %SageValue @sage_rt_add(%SageValue %3205, %SageValue %3207)
+  %3209 = call %SageValue @sage_fn_emit(%SageValue %3208)
+  %3210 = getelementptr [37 x i8], [37 x i8]* @.str.712, i64 0, i64 0
+  %3211 = call %SageValue @sage_rt_string(i8* %3210)
+  %3212 = load %SageValue, %SageValue* @DQ
+  %3213 = call %SageValue @sage_rt_add(%SageValue %3211, %SageValue %3212)
+  %3214 = getelementptr [8 x i8], [8 x i8]* @.str.713, i64 0, i64 0
   %3215 = call %SageValue @sage_rt_string(i8* %3214)
-  %3216 = getelementptr [90 x i8], [90 x i8]* @.str.716, i64 0, i64 0
-  %3217 = call %SageValue @sage_rt_string(i8* %3216)
-  call void @sage_rt_index_set(%SageValue %3213, %SageValue %3215, %SageValue %3217)
-  %3218 = load %SageValue, %SageValue* @ans
-  %3219 = call %SageValue @sage_rt_dict_keys(%SageValue %3218)
-  store %SageValue %3219, %SageValue* @ans_keys
-  %3220 = load %SageValue, %SageValue* @ans_keys
-  %3221 = call %SageValue @sage_rt_len(%SageValue %3220)
-  %3222 = call %SageValue @sage_rt_range(%SageValue %3221)
-  %3223 = call i32 @sage_rt_array_len(%SageValue %3222)
-  %i = alloca %SageValue
-  %3224 = alloca i32
-  store i32 0, i32* %3224
-  br label %L156
-L156:
-  %3225 = load i32, i32* %3224
-  %3226 = icmp slt i32 %3225, %3223
-  br i1 %3226, label %L157, label %L158
-L157:
-  %3227 = sitofp i32 %3225 to double
-  %3228 = call %SageValue @sage_rt_number(double %3227)
-  %3229 = call %SageValue @sage_rt_index(%SageValue %3222, %SageValue %3228)
-  store %SageValue %3229, %SageValue* %i
-  %3230 = getelementptr [17 x i8], [17 x i8]* @.str.717, i64 0, i64 0
-  %3231 = call %SageValue @sage_rt_string(i8* %3230)
-  %3232 = load %SageValue, %SageValue* @DQ
-  %3233 = call %SageValue @sage_rt_add(%SageValue %3231, %SageValue %3232)
-  %3234 = load %SageValue, %SageValue* @ans_keys
-  %3235 = load %SageValue, %SageValue* %i
-  %3236 = call %SageValue @sage_rt_index(%SageValue %3234, %SageValue %3235)
-  %3237 = call %SageValue @sage_rt_add(%SageValue %3233, %SageValue %3236)
-  %3238 = load %SageValue, %SageValue* @DQ
-  %3239 = call %SageValue @sage_rt_add(%SageValue %3237, %SageValue %3238)
-  %3240 = getelementptr [2 x i8], [2 x i8]* @.str.718, i64 0, i64 0
-  %3241 = call %SageValue @sage_rt_string(i8* %3240)
-  %3242 = call %SageValue @sage_rt_add(%SageValue %3239, %SageValue %3241)
-  %3243 = call %SageValue @sage_fn_emit(%SageValue %3242)
-  %3244 = getelementptr [18 x i8], [18 x i8]* @.str.719, i64 0, i64 0
-  %3245 = call %SageValue @sage_rt_string(i8* %3244)
-  %3246 = load %SageValue, %SageValue* @DQ
-  %3247 = call %SageValue @sage_rt_add(%SageValue %3245, %SageValue %3246)
-  %3248 = load %SageValue, %SageValue* @ans
-  %3249 = load %SageValue, %SageValue* @ans_keys
-  %3250 = load %SageValue, %SageValue* %i
-  %3251 = call %SageValue @sage_rt_index(%SageValue %3249, %SageValue %3250)
-  %3252 = call %SageValue @sage_rt_index(%SageValue %3248, %SageValue %3251)
-  %3253 = call %SageValue @sage_rt_add(%SageValue %3247, %SageValue %3252)
-  %3254 = load %SageValue, %SageValue* @DQ
-  %3255 = call %SageValue @sage_rt_add(%SageValue %3253, %SageValue %3254)
-  %3256 = call %SageValue @sage_fn_emit(%SageValue %3255)
-  %3257 = add i32 %3225, 1
-  store i32 %3257, i32* %3224
-  br label %L156
-L158:
-  %3258 = getelementptr [25 x i8], [25 x i8]* @.str.720, i64 0, i64 0
-  %3259 = call %SageValue @sage_rt_string(i8* %3258)
+  %3216 = call %SageValue @sage_rt_add(%SageValue %3213, %SageValue %3215)
+  %3217 = load %SageValue, %SageValue* @DQ
+  %3218 = call %SageValue @sage_rt_add(%SageValue %3216, %SageValue %3217)
+  %3219 = getelementptr [3 x i8], [3 x i8]* @.str.714, i64 0, i64 0
+  %3220 = call %SageValue @sage_rt_string(i8* %3219)
+  %3221 = call %SageValue @sage_rt_add(%SageValue %3218, %SageValue %3220)
+  %3222 = call %SageValue @sage_fn_emit(%SageValue %3221)
+  %3223 = getelementptr [46 x i8], [46 x i8]* @.str.715, i64 0, i64 0
+  %3224 = call %SageValue @sage_rt_string(i8* %3223)
+  %3225 = call %SageValue @sage_fn_emit(%SageValue %3224)
+  %3226 = getelementptr [33 x i8], [33 x i8]* @.str.716, i64 0, i64 0
+  %3227 = call %SageValue @sage_rt_string(i8* %3226)
+  %3228 = call %SageValue @sage_fn_emit(%SageValue %3227)
+  %3229 = getelementptr [29 x i8], [29 x i8]* @.str.717, i64 0, i64 0
+  %3230 = call %SageValue @sage_rt_string(i8* %3229)
+  %3231 = call %SageValue @sage_fn_emit(%SageValue %3230)
+  %3232 = getelementptr [43 x i8], [43 x i8]* @.str.718, i64 0, i64 0
+  %3233 = call %SageValue @sage_rt_string(i8* %3232)
+  %3234 = call %SageValue @sage_fn_emit(%SageValue %3233)
+  %3235 = getelementptr [27 x i8], [27 x i8]* @.str.719, i64 0, i64 0
+  %3236 = call %SageValue @sage_rt_string(i8* %3235)
+  %3237 = call %SageValue @sage_fn_emit(%SageValue %3236)
+  %3238 = getelementptr [27 x i8], [27 x i8]* @.str.720, i64 0, i64 0
+  %3239 = call %SageValue @sage_rt_string(i8* %3238)
+  %3240 = load %SageValue, %SageValue* @DQ
+  %3241 = call %SageValue @sage_rt_add(%SageValue %3239, %SageValue %3240)
+  %3242 = getelementptr [4 x i8], [4 x i8]* @.str.721, i64 0, i64 0
+  %3243 = call %SageValue @sage_rt_string(i8* %3242)
+  %3244 = call %SageValue @sage_rt_add(%SageValue %3241, %SageValue %3243)
+  %3245 = load %SageValue, %SageValue* @DQ
+  %3246 = call %SageValue @sage_rt_add(%SageValue %3244, %SageValue %3245)
+  %3247 = getelementptr [18 x i8], [18 x i8]* @.str.722, i64 0, i64 0
+  %3248 = call %SageValue @sage_rt_string(i8* %3247)
+  %3249 = call %SageValue @sage_rt_add(%SageValue %3246, %SageValue %3248)
+  %3250 = load %SageValue, %SageValue* @DQ
+  %3251 = call %SageValue @sage_rt_add(%SageValue %3249, %SageValue %3250)
+  %3252 = getelementptr [3 x i8], [3 x i8]* @.str.723, i64 0, i64 0
+  %3253 = call %SageValue @sage_rt_string(i8* %3252)
+  %3254 = call %SageValue @sage_rt_add(%SageValue %3251, %SageValue %3253)
+  %3255 = load %SageValue, %SageValue* @DQ
+  %3256 = call %SageValue @sage_rt_add(%SageValue %3254, %SageValue %3255)
+  %3257 = getelementptr [15 x i8], [15 x i8]* @.str.724, i64 0, i64 0
+  %3258 = call %SageValue @sage_rt_string(i8* %3257)
+  %3259 = call %SageValue @sage_rt_add(%SageValue %3256, %SageValue %3258)
   %3260 = call %SageValue @sage_fn_emit(%SageValue %3259)
-  %3261 = getelementptr [33 x i8], [33 x i8]* @.str.721, i64 0, i64 0
+  %3261 = getelementptr [14 x i8], [14 x i8]* @.str.725, i64 0, i64 0
   %3262 = call %SageValue @sage_rt_string(i8* %3261)
   %3263 = call %SageValue @sage_fn_emit(%SageValue %3262)
-  %3264 = getelementptr [22 x i8], [22 x i8]* @.str.722, i64 0, i64 0
+  %3264 = getelementptr [19 x i8], [19 x i8]* @.str.726, i64 0, i64 0
   %3265 = call %SageValue @sage_rt_string(i8* %3264)
   %3266 = load %SageValue, %SageValue* @DQ
   %3267 = call %SageValue @sage_rt_add(%SageValue %3265, %SageValue %3266)
-  %3268 = getelementptr [24 x i8], [24 x i8]* @.str.723, i64 0, i64 0
+  %3268 = getelementptr [21 x i8], [21 x i8]* @.str.727, i64 0, i64 0
   %3269 = call %SageValue @sage_rt_string(i8* %3268)
   %3270 = call %SageValue @sage_rt_add(%SageValue %3267, %SageValue %3269)
   %3271 = load %SageValue, %SageValue* @DQ
   %3272 = call %SageValue @sage_rt_add(%SageValue %3270, %SageValue %3271)
-  %3273 = getelementptr [19 x i8], [19 x i8]* @.str.724, i64 0, i64 0
-  %3274 = call %SageValue @sage_rt_string(i8* %3273)
-  %3275 = call %SageValue @sage_rt_add(%SageValue %3272, %SageValue %3274)
+  %3273 = call %SageValue @sage_fn_emit(%SageValue %3272)
+  %3274 = getelementptr [37 x i8], [37 x i8]* @.str.728, i64 0, i64 0
+  %3275 = call %SageValue @sage_rt_string(i8* %3274)
   %3276 = load %SageValue, %SageValue* @DQ
   %3277 = call %SageValue @sage_rt_add(%SageValue %3275, %SageValue %3276)
-  %3278 = getelementptr [6 x i8], [6 x i8]* @.str.725, i64 0, i64 0
+  %3278 = getelementptr [7 x i8], [7 x i8]* @.str.729, i64 0, i64 0
   %3279 = call %SageValue @sage_rt_string(i8* %3278)
   %3280 = call %SageValue @sage_rt_add(%SageValue %3277, %SageValue %3279)
   %3281 = load %SageValue, %SageValue* @DQ
   %3282 = call %SageValue @sage_rt_add(%SageValue %3280, %SageValue %3281)
-  %3283 = getelementptr [3 x i8], [3 x i8]* @.str.726, i64 0, i64 0
+  %3283 = getelementptr [3 x i8], [3 x i8]* @.str.730, i64 0, i64 0
   %3284 = call %SageValue @sage_rt_string(i8* %3283)
   %3285 = call %SageValue @sage_rt_add(%SageValue %3282, %SageValue %3284)
-  %3286 = load %SageValue, %SageValue* @DQ
-  %3287 = call %SageValue @sage_rt_add(%SageValue %3285, %SageValue %3286)
-  %3288 = getelementptr [8 x i8], [8 x i8]* @.str.727, i64 0, i64 0
-  %3289 = call %SageValue @sage_rt_string(i8* %3288)
-  %3290 = call %SageValue @sage_rt_add(%SageValue %3287, %SageValue %3289)
-  %3291 = load %SageValue, %SageValue* @DQ
-  %3292 = call %SageValue @sage_rt_add(%SageValue %3290, %SageValue %3291)
-  %3293 = getelementptr [2 x i8], [2 x i8]* @.str.728, i64 0, i64 0
+  %3286 = call %SageValue @sage_fn_emit(%SageValue %3285)
+  %3287 = getelementptr [46 x i8], [46 x i8]* @.str.731, i64 0, i64 0
+  %3288 = call %SageValue @sage_rt_string(i8* %3287)
+  %3289 = call %SageValue @sage_fn_emit(%SageValue %3288)
+  %3290 = getelementptr [31 x i8], [31 x i8]* @.str.732, i64 0, i64 0
+  %3291 = call %SageValue @sage_rt_string(i8* %3290)
+  %3292 = call %SageValue @sage_fn_emit(%SageValue %3291)
+  %3293 = getelementptr [37 x i8], [37 x i8]* @.str.733, i64 0, i64 0
   %3294 = call %SageValue @sage_rt_string(i8* %3293)
-  %3295 = call %SageValue @sage_rt_add(%SageValue %3292, %SageValue %3294)
-  %3296 = call %SageValue @sage_fn_emit(%SageValue %3295)
-  %3297 = getelementptr [14 x i8], [14 x i8]* @.str.729, i64 0, i64 0
+  %3295 = load %SageValue, %SageValue* @DQ
+  %3296 = call %SageValue @sage_rt_add(%SageValue %3294, %SageValue %3295)
+  %3297 = getelementptr [6 x i8], [6 x i8]* @.str.734, i64 0, i64 0
   %3298 = call %SageValue @sage_rt_string(i8* %3297)
-  %3299 = call %SageValue @sage_fn_emit(%SageValue %3298)
-  %3300 = getelementptr [22 x i8], [22 x i8]* @.str.730, i64 0, i64 0
-  %3301 = call %SageValue @sage_rt_string(i8* %3300)
-  %3302 = load %SageValue, %SageValue* @DQ
-  %3303 = call %SageValue @sage_rt_add(%SageValue %3301, %SageValue %3302)
-  %3304 = getelementptr [184 x i8], [184 x i8]* @.str.731, i64 0, i64 0
-  %3305 = call %SageValue @sage_rt_string(i8* %3304)
-  %3306 = call %SageValue @sage_rt_add(%SageValue %3303, %SageValue %3305)
-  %3307 = load %SageValue, %SageValue* @DQ
-  %3308 = call %SageValue @sage_rt_add(%SageValue %3306, %SageValue %3307)
-  %3309 = call %SageValue @sage_fn_emit(%SageValue %3308)
-  %3310 = getelementptr [16 x i8], [16 x i8]* @.str.732, i64 0, i64 0
-  %3311 = call %SageValue @sage_rt_string(i8* %3310)
-  %3312 = load %SageValue, %SageValue* @DQ
-  %3313 = call %SageValue @sage_rt_add(%SageValue %3311, %SageValue %3312)
-  %3314 = getelementptr [6 x i8], [6 x i8]* @.str.733, i64 0, i64 0
-  %3315 = call %SageValue @sage_rt_string(i8* %3314)
-  %3316 = call %SageValue @sage_rt_add(%SageValue %3313, %SageValue %3315)
-  %3317 = load %SageValue, %SageValue* @DQ
-  %3318 = call %SageValue @sage_rt_add(%SageValue %3316, %SageValue %3317)
-  %3319 = getelementptr [4 x i8], [4 x i8]* @.str.734, i64 0, i64 0
-  %3320 = call %SageValue @sage_rt_string(i8* %3319)
-  %3321 = call %SageValue @sage_rt_add(%SageValue %3318, %SageValue %3320)
-  %3322 = load %SageValue, %SageValue* @DQ
-  %3323 = call %SageValue @sage_rt_add(%SageValue %3321, %SageValue %3322)
-  %3324 = getelementptr [17 x i8], [17 x i8]* @.str.735, i64 0, i64 0
-  %3325 = call %SageValue @sage_rt_string(i8* %3324)
-  %3326 = call %SageValue @sage_rt_add(%SageValue %3323, %SageValue %3325)
-  %3327 = load %SageValue, %SageValue* @DQ
-  %3328 = call %SageValue @sage_rt_add(%SageValue %3326, %SageValue %3327)
-  %3329 = getelementptr [10 x i8], [10 x i8]* @.str.736, i64 0, i64 0
-  %3330 = call %SageValue @sage_rt_string(i8* %3329)
-  %3331 = call %SageValue @sage_rt_add(%SageValue %3328, %SageValue %3330)
-  %3332 = call %SageValue @sage_fn_emit(%SageValue %3331)
-  %3333 = getelementptr [11 x i8], [11 x i8]* @.str.737, i64 0, i64 0
-  %3334 = call %SageValue @sage_rt_string(i8* %3333)
-  %3335 = load %SageValue, %SageValue* @DQ
-  %3336 = call %SageValue @sage_rt_add(%SageValue %3334, %SageValue %3335)
-  %3337 = getelementptr [11 x i8], [11 x i8]* @.str.738, i64 0, i64 0
-  %3338 = call %SageValue @sage_rt_string(i8* %3337)
-  %3339 = call %SageValue @sage_rt_add(%SageValue %3336, %SageValue %3338)
-  %3340 = load %SageValue, %SageValue* @DQ
-  %3341 = call %SageValue @sage_rt_add(%SageValue %3339, %SageValue %3340)
-  %3342 = getelementptr [11 x i8], [11 x i8]* @.str.739, i64 0, i64 0
+  %3299 = call %SageValue @sage_rt_add(%SageValue %3296, %SageValue %3298)
+  %3300 = load %SageValue, %SageValue* @DQ
+  %3301 = call %SageValue @sage_rt_add(%SageValue %3299, %SageValue %3300)
+  %3302 = getelementptr [3 x i8], [3 x i8]* @.str.735, i64 0, i64 0
+  %3303 = call %SageValue @sage_rt_string(i8* %3302)
+  %3304 = call %SageValue @sage_rt_add(%SageValue %3301, %SageValue %3303)
+  %3305 = call %SageValue @sage_fn_emit(%SageValue %3304)
+  %3306 = getelementptr [48 x i8], [48 x i8]* @.str.736, i64 0, i64 0
+  %3307 = call %SageValue @sage_rt_string(i8* %3306)
+  %3308 = call %SageValue @sage_fn_emit(%SageValue %3307)
+  %3309 = getelementptr [15 x i8], [15 x i8]* @.str.737, i64 0, i64 0
+  %3310 = call %SageValue @sage_rt_string(i8* %3309)
+  %3311 = load %SageValue, %SageValue* @DQ
+  %3312 = call %SageValue @sage_rt_add(%SageValue %3310, %SageValue %3311)
+  %3313 = getelementptr [13 x i8], [13 x i8]* @.str.738, i64 0, i64 0
+  %3314 = call %SageValue @sage_rt_string(i8* %3313)
+  %3315 = call %SageValue @sage_rt_add(%SageValue %3312, %SageValue %3314)
+  %3316 = load %SageValue, %SageValue* @DQ
+  %3317 = call %SageValue @sage_rt_add(%SageValue %3315, %SageValue %3316)
+  %3318 = getelementptr [8 x i8], [8 x i8]* @.str.739, i64 0, i64 0
+  %3319 = call %SageValue @sage_rt_string(i8* %3318)
+  %3320 = call %SageValue @sage_rt_add(%SageValue %3317, %SageValue %3319)
+  %3321 = call %SageValue @sage_fn_emit(%SageValue %3320)
+  %3322 = getelementptr [15 x i8], [15 x i8]* @.str.740, i64 0, i64 0
+  %3323 = call %SageValue @sage_rt_string(i8* %3322)
+  %3324 = load %SageValue, %SageValue* @DQ
+  %3325 = call %SageValue @sage_rt_add(%SageValue %3323, %SageValue %3324)
+  %3326 = getelementptr [26 x i8], [26 x i8]* @.str.741, i64 0, i64 0
+  %3327 = call %SageValue @sage_rt_string(i8* %3326)
+  %3328 = call %SageValue @sage_rt_add(%SageValue %3325, %SageValue %3327)
+  %3329 = load %SageValue, %SageValue* @DQ
+  %3330 = call %SageValue @sage_rt_add(%SageValue %3328, %SageValue %3329)
+  %3331 = call %SageValue @sage_fn_emit(%SageValue %3330)
+  %3332 = getelementptr [15 x i8], [15 x i8]* @.str.742, i64 0, i64 0
+  %3333 = call %SageValue @sage_rt_string(i8* %3332)
+  %3334 = load %SageValue, %SageValue* @DQ
+  %3335 = call %SageValue @sage_rt_add(%SageValue %3333, %SageValue %3334)
+  %3336 = getelementptr [25 x i8], [25 x i8]* @.str.743, i64 0, i64 0
+  %3337 = call %SageValue @sage_rt_string(i8* %3336)
+  %3338 = call %SageValue @sage_rt_add(%SageValue %3335, %SageValue %3337)
+  %3339 = load %SageValue, %SageValue* @DQ
+  %3340 = call %SageValue @sage_rt_add(%SageValue %3338, %SageValue %3339)
+  %3341 = call %SageValue @sage_fn_emit(%SageValue %3340)
+  %3342 = getelementptr [15 x i8], [15 x i8]* @.str.744, i64 0, i64 0
   %3343 = call %SageValue @sage_rt_string(i8* %3342)
-  %3344 = call %SageValue @sage_rt_add(%SageValue %3341, %SageValue %3343)
-  %3345 = call %SageValue @sage_fn_emit(%SageValue %3344)
-  %3346 = getelementptr [35 x i8], [35 x i8]* @.str.740, i64 0, i64 0
+  %3344 = load %SageValue, %SageValue* @DQ
+  %3345 = call %SageValue @sage_rt_add(%SageValue %3343, %SageValue %3344)
+  %3346 = getelementptr [38 x i8], [38 x i8]* @.str.745, i64 0, i64 0
   %3347 = call %SageValue @sage_rt_string(i8* %3346)
-  %3348 = load %SageValue, %SageValue* @DQ
-  %3349 = call %SageValue @sage_rt_add(%SageValue %3347, %SageValue %3348)
-  %3350 = getelementptr [11 x i8], [11 x i8]* @.str.741, i64 0, i64 0
-  %3351 = call %SageValue @sage_rt_string(i8* %3350)
-  %3352 = call %SageValue @sage_rt_add(%SageValue %3349, %SageValue %3351)
-  %3353 = load %SageValue, %SageValue* @DQ
-  %3354 = call %SageValue @sage_rt_add(%SageValue %3352, %SageValue %3353)
-  %3355 = getelementptr [15 x i8], [15 x i8]* @.str.742, i64 0, i64 0
-  %3356 = call %SageValue @sage_rt_string(i8* %3355)
-  %3357 = call %SageValue @sage_rt_add(%SageValue %3354, %SageValue %3356)
-  %3358 = call %SageValue @sage_fn_emit(%SageValue %3357)
-  %3359 = getelementptr [36 x i8], [36 x i8]* @.str.743, i64 0, i64 0
-  %3360 = call %SageValue @sage_rt_string(i8* %3359)
-  %3361 = load %SageValue, %SageValue* @DQ
-  %3362 = call %SageValue @sage_rt_add(%SageValue %3360, %SageValue %3361)
-  %3363 = getelementptr [8 x i8], [8 x i8]* @.str.744, i64 0, i64 0
-  %3364 = call %SageValue @sage_rt_string(i8* %3363)
-  %3365 = call %SageValue @sage_rt_add(%SageValue %3362, %SageValue %3364)
-  %3366 = load %SageValue, %SageValue* @DQ
-  %3367 = call %SageValue @sage_rt_add(%SageValue %3365, %SageValue %3366)
-  %3368 = getelementptr [10 x i8], [10 x i8]* @.str.745, i64 0, i64 0
-  %3369 = call %SageValue @sage_rt_string(i8* %3368)
-  %3370 = call %SageValue @sage_rt_add(%SageValue %3367, %SageValue %3369)
+  %3348 = call %SageValue @sage_rt_add(%SageValue %3345, %SageValue %3347)
+  %3349 = load %SageValue, %SageValue* @DQ
+  %3350 = call %SageValue @sage_rt_add(%SageValue %3348, %SageValue %3349)
+  %3351 = call %SageValue @sage_fn_emit(%SageValue %3350)
+  %3352 = getelementptr [15 x i8], [15 x i8]* @.str.746, i64 0, i64 0
+  %3353 = call %SageValue @sage_rt_string(i8* %3352)
+  %3354 = load %SageValue, %SageValue* @DQ
+  %3355 = call %SageValue @sage_rt_add(%SageValue %3353, %SageValue %3354)
+  %3356 = getelementptr [43 x i8], [43 x i8]* @.str.747, i64 0, i64 0
+  %3357 = call %SageValue @sage_rt_string(i8* %3356)
+  %3358 = call %SageValue @sage_rt_add(%SageValue %3355, %SageValue %3357)
+  %3359 = load %SageValue, %SageValue* @DQ
+  %3360 = call %SageValue @sage_rt_add(%SageValue %3358, %SageValue %3359)
+  %3361 = call %SageValue @sage_fn_emit(%SageValue %3360)
+  %3362 = getelementptr [15 x i8], [15 x i8]* @.str.748, i64 0, i64 0
+  %3363 = call %SageValue @sage_rt_string(i8* %3362)
+  %3364 = load %SageValue, %SageValue* @DQ
+  %3365 = call %SageValue @sage_rt_add(%SageValue %3363, %SageValue %3364)
+  %3366 = getelementptr [27 x i8], [27 x i8]* @.str.749, i64 0, i64 0
+  %3367 = call %SageValue @sage_rt_string(i8* %3366)
+  %3368 = call %SageValue @sage_rt_add(%SageValue %3365, %SageValue %3367)
+  %3369 = load %SageValue, %SageValue* @DQ
+  %3370 = call %SageValue @sage_rt_add(%SageValue %3368, %SageValue %3369)
   %3371 = call %SageValue @sage_fn_emit(%SageValue %3370)
-  %3372 = getelementptr [42 x i8], [42 x i8]* @.str.746, i64 0, i64 0
+  %3372 = getelementptr [15 x i8], [15 x i8]* @.str.750, i64 0, i64 0
   %3373 = call %SageValue @sage_rt_string(i8* %3372)
-  %3374 = call %SageValue @sage_fn_emit(%SageValue %3373)
-  %3375 = getelementptr [17 x i8], [17 x i8]* @.str.747, i64 0, i64 0
-  %3376 = call %SageValue @sage_rt_string(i8* %3375)
-  %3377 = call %SageValue @sage_fn_emit(%SageValue %3376)
-  %3378 = getelementptr [1 x i8], [1 x i8]* @.str.748, i64 0, i64 0
-  %3379 = call %SageValue @sage_rt_string(i8* %3378)
-  %3380 = call %SageValue @sage_fn_emit(%SageValue %3379)
-  %3381 = getelementptr [29 x i8], [29 x i8]* @.str.749, i64 0, i64 0
-  %3382 = call %SageValue @sage_rt_string(i8* %3381)
-  %3383 = call %SageValue @sage_fn_emit(%SageValue %3382)
-  %3384 = getelementptr [18 x i8], [18 x i8]* @.str.750, i64 0, i64 0
-  %3385 = call %SageValue @sage_rt_string(i8* %3384)
-  %3386 = load %SageValue, %SageValue* @DQ
-  %3387 = call %SageValue @sage_rt_add(%SageValue %3385, %SageValue %3386)
-  %3388 = load %SageValue, %SageValue* @DQ
-  %3389 = call %SageValue @sage_rt_add(%SageValue %3387, %SageValue %3388)
-  %3390 = call %SageValue @sage_fn_emit(%SageValue %3389)
-  %3391 = getelementptr [23 x i8], [23 x i8]* @.str.751, i64 0, i64 0
-  %3392 = call %SageValue @sage_rt_string(i8* %3391)
-  %3393 = load %SageValue, %SageValue* @DQ
-  %3394 = call %SageValue @sage_rt_add(%SageValue %3392, %SageValue %3393)
-  %3395 = getelementptr [6 x i8], [6 x i8]* @.str.752, i64 0, i64 0
-  %3396 = call %SageValue @sage_rt_string(i8* %3395)
-  %3397 = call %SageValue @sage_rt_add(%SageValue %3394, %SageValue %3396)
-  %3398 = load %SageValue, %SageValue* @DQ
-  %3399 = call %SageValue @sage_rt_add(%SageValue %3397, %SageValue %3398)
-  %3400 = getelementptr [2 x i8], [2 x i8]* @.str.753, i64 0, i64 0
-  %3401 = call %SageValue @sage_rt_string(i8* %3400)
-  %3402 = call %SageValue @sage_rt_add(%SageValue %3399, %SageValue %3401)
-  %3403 = call %SageValue @sage_fn_emit(%SageValue %3402)
-  %3404 = getelementptr [32 x i8], [32 x i8]* @.str.754, i64 0, i64 0
-  %3405 = call %SageValue @sage_rt_string(i8* %3404)
-  %3406 = call %SageValue @sage_fn_emit(%SageValue %3405)
-  %3407 = getelementptr [27 x i8], [27 x i8]* @.str.755, i64 0, i64 0
-  %3408 = call %SageValue @sage_rt_string(i8* %3407)
-  %3409 = load %SageValue, %SageValue* @DQ
-  %3410 = call %SageValue @sage_rt_add(%SageValue %3408, %SageValue %3409)
-  %3411 = getelementptr [11 x i8], [11 x i8]* @.str.756, i64 0, i64 0
-  %3412 = call %SageValue @sage_rt_string(i8* %3411)
-  %3413 = call %SageValue @sage_rt_add(%SageValue %3410, %SageValue %3412)
-  %3414 = load %SageValue, %SageValue* @DQ
-  %3415 = call %SageValue @sage_rt_add(%SageValue %3413, %SageValue %3414)
-  %3416 = getelementptr [17 x i8], [17 x i8]* @.str.757, i64 0, i64 0
-  %3417 = call %SageValue @sage_rt_string(i8* %3416)
-  %3418 = call %SageValue @sage_rt_add(%SageValue %3415, %SageValue %3417)
-  %3419 = load %SageValue, %SageValue* @DQ
-  %3420 = call %SageValue @sage_rt_add(%SageValue %3418, %SageValue %3419)
-  %3421 = getelementptr [3 x i8], [3 x i8]* @.str.758, i64 0, i64 0
-  %3422 = call %SageValue @sage_rt_string(i8* %3421)
-  %3423 = call %SageValue @sage_rt_add(%SageValue %3420, %SageValue %3422)
-  %3424 = load %SageValue, %SageValue* @DQ
-  %3425 = call %SageValue @sage_rt_add(%SageValue %3423, %SageValue %3424)
-  %3426 = getelementptr [22 x i8], [22 x i8]* @.str.759, i64 0, i64 0
-  %3427 = call %SageValue @sage_rt_string(i8* %3426)
-  %3428 = call %SageValue @sage_rt_add(%SageValue %3425, %SageValue %3427)
-  %3429 = call %SageValue @sage_fn_emit(%SageValue %3428)
-  %3430 = getelementptr [33 x i8], [33 x i8]* @.str.760, i64 0, i64 0
-  %3431 = call %SageValue @sage_rt_string(i8* %3430)
-  %3432 = load %SageValue, %SageValue* @DQ
-  %3433 = call %SageValue @sage_rt_add(%SageValue %3431, %SageValue %3432)
-  %3434 = getelementptr [11 x i8], [11 x i8]* @.str.761, i64 0, i64 0
-  %3435 = call %SageValue @sage_rt_string(i8* %3434)
-  %3436 = call %SageValue @sage_rt_add(%SageValue %3433, %SageValue %3435)
-  %3437 = load %SageValue, %SageValue* @DQ
-  %3438 = call %SageValue @sage_rt_add(%SageValue %3436, %SageValue %3437)
-  %3439 = getelementptr [10 x i8], [10 x i8]* @.str.762, i64 0, i64 0
-  %3440 = call %SageValue @sage_rt_string(i8* %3439)
-  %3441 = call %SageValue @sage_rt_add(%SageValue %3438, %SageValue %3440)
-  %3442 = load %SageValue, %SageValue* @DQ
-  %3443 = call %SageValue @sage_rt_add(%SageValue %3441, %SageValue %3442)
-  %3444 = getelementptr [11 x i8], [11 x i8]* @.str.763, i64 0, i64 0
-  %3445 = call %SageValue @sage_rt_string(i8* %3444)
-  %3446 = call %SageValue @sage_rt_add(%SageValue %3443, %SageValue %3445)
-  %3447 = load %SageValue, %SageValue* @DQ
-  %3448 = call %SageValue @sage_rt_add(%SageValue %3446, %SageValue %3447)
-  %3449 = getelementptr [2 x i8], [2 x i8]* @.str.764, i64 0, i64 0
-  %3450 = call %SageValue @sage_rt_string(i8* %3449)
-  %3451 = call %SageValue @sage_rt_add(%SageValue %3448, %SageValue %3450)
-  %3452 = call %SageValue @sage_fn_emit(%SageValue %3451)
-  %3453 = getelementptr [18 x i8], [18 x i8]* @.str.765, i64 0, i64 0
-  %3454 = call %SageValue @sage_rt_string(i8* %3453)
-  %3455 = call %SageValue @sage_fn_emit(%SageValue %3454)
-  %3456 = getelementptr [1 x i8], [1 x i8]* @.str.766, i64 0, i64 0
-  %3457 = call %SageValue @sage_rt_string(i8* %3456)
-  %3458 = call %SageValue @sage_fn_emit(%SageValue %3457)
-  %3459 = getelementptr [18 x i8], [18 x i8]* @.str.767, i64 0, i64 0
-  %3460 = call %SageValue @sage_rt_string(i8* %3459)
-  %3461 = call %SageValue @sage_fn_emit(%SageValue %3460)
-  %3462 = getelementptr [22 x i8], [22 x i8]* @.str.768, i64 0, i64 0
-  %3463 = call %SageValue @sage_rt_string(i8* %3462)
-  %3464 = load %SageValue, %SageValue* @DQ
-  %3465 = call %SageValue @sage_rt_add(%SageValue %3463, %SageValue %3464)
-  %3466 = getelementptr [11 x i8], [11 x i8]* @.str.769, i64 0, i64 0
-  %3467 = call %SageValue @sage_rt_string(i8* %3466)
-  %3468 = call %SageValue @sage_rt_add(%SageValue %3465, %SageValue %3467)
-  %3469 = load %SageValue, %SageValue* @DQ
-  %3470 = call %SageValue @sage_rt_add(%SageValue %3468, %SageValue %3469)
-  %3471 = getelementptr [2 x i8], [2 x i8]* @.str.770, i64 0, i64 0
+  %3374 = load %SageValue, %SageValue* @DQ
+  %3375 = call %SageValue @sage_rt_add(%SageValue %3373, %SageValue %3374)
+  %3376 = getelementptr [37 x i8], [37 x i8]* @.str.751, i64 0, i64 0
+  %3377 = call %SageValue @sage_rt_string(i8* %3376)
+  %3378 = call %SageValue @sage_rt_add(%SageValue %3375, %SageValue %3377)
+  %3379 = load %SageValue, %SageValue* @DQ
+  %3380 = call %SageValue @sage_rt_add(%SageValue %3378, %SageValue %3379)
+  %3381 = call %SageValue @sage_fn_emit(%SageValue %3380)
+  %3382 = getelementptr [15 x i8], [15 x i8]* @.str.752, i64 0, i64 0
+  %3383 = call %SageValue @sage_rt_string(i8* %3382)
+  %3384 = load %SageValue, %SageValue* @DQ
+  %3385 = call %SageValue @sage_rt_add(%SageValue %3383, %SageValue %3384)
+  %3386 = getelementptr [34 x i8], [34 x i8]* @.str.753, i64 0, i64 0
+  %3387 = call %SageValue @sage_rt_string(i8* %3386)
+  %3388 = call %SageValue @sage_rt_add(%SageValue %3385, %SageValue %3387)
+  %3389 = load %SageValue, %SageValue* @DQ
+  %3390 = call %SageValue @sage_rt_add(%SageValue %3388, %SageValue %3389)
+  %3391 = call %SageValue @sage_fn_emit(%SageValue %3390)
+  %3392 = getelementptr [27 x i8], [27 x i8]* @.str.754, i64 0, i64 0
+  %3393 = call %SageValue @sage_rt_string(i8* %3392)
+  %3394 = load %SageValue, %SageValue* @DQ
+  %3395 = call %SageValue @sage_rt_add(%SageValue %3393, %SageValue %3394)
+  %3396 = getelementptr [9 x i8], [9 x i8]* @.str.755, i64 0, i64 0
+  %3397 = call %SageValue @sage_rt_string(i8* %3396)
+  %3398 = call %SageValue @sage_rt_add(%SageValue %3395, %SageValue %3397)
+  %3399 = load %SageValue, %SageValue* @DQ
+  %3400 = call %SageValue @sage_rt_add(%SageValue %3398, %SageValue %3399)
+  %3401 = getelementptr [2 x i8], [2 x i8]* @.str.756, i64 0, i64 0
+  %3402 = call %SageValue @sage_rt_string(i8* %3401)
+  %3403 = call %SageValue @sage_rt_add(%SageValue %3400, %SageValue %3402)
+  %3404 = call %SageValue @sage_fn_emit(%SageValue %3403)
+  %3405 = getelementptr [15 x i8], [15 x i8]* @.str.757, i64 0, i64 0
+  %3406 = call %SageValue @sage_rt_string(i8* %3405)
+  %3407 = load %SageValue, %SageValue* @DQ
+  %3408 = call %SageValue @sage_rt_add(%SageValue %3406, %SageValue %3407)
+  %3409 = getelementptr [40 x i8], [40 x i8]* @.str.758, i64 0, i64 0
+  %3410 = call %SageValue @sage_rt_string(i8* %3409)
+  %3411 = call %SageValue @sage_rt_add(%SageValue %3408, %SageValue %3410)
+  %3412 = load %SageValue, %SageValue* @DQ
+  %3413 = call %SageValue @sage_rt_add(%SageValue %3411, %SageValue %3412)
+  %3414 = call %SageValue @sage_fn_emit(%SageValue %3413)
+  %3415 = getelementptr [27 x i8], [27 x i8]* @.str.759, i64 0, i64 0
+  %3416 = call %SageValue @sage_rt_string(i8* %3415)
+  %3417 = load %SageValue, %SageValue* @DQ
+  %3418 = call %SageValue @sage_rt_add(%SageValue %3416, %SageValue %3417)
+  %3419 = getelementptr [8 x i8], [8 x i8]* @.str.760, i64 0, i64 0
+  %3420 = call %SageValue @sage_rt_string(i8* %3419)
+  %3421 = call %SageValue @sage_rt_add(%SageValue %3418, %SageValue %3420)
+  %3422 = load %SageValue, %SageValue* @DQ
+  %3423 = call %SageValue @sage_rt_add(%SageValue %3421, %SageValue %3422)
+  %3424 = getelementptr [2 x i8], [2 x i8]* @.str.761, i64 0, i64 0
+  %3425 = call %SageValue @sage_rt_string(i8* %3424)
+  %3426 = call %SageValue @sage_rt_add(%SageValue %3423, %SageValue %3425)
+  %3427 = call %SageValue @sage_fn_emit(%SageValue %3426)
+  %3428 = getelementptr [24 x i8], [24 x i8]* @.str.762, i64 0, i64 0
+  %3429 = call %SageValue @sage_rt_string(i8* %3428)
+  %3430 = load %SageValue, %SageValue* @DQ
+  %3431 = call %SageValue @sage_rt_add(%SageValue %3429, %SageValue %3430)
+  %3432 = getelementptr [8 x i8], [8 x i8]* @.str.763, i64 0, i64 0
+  %3433 = call %SageValue @sage_rt_string(i8* %3432)
+  %3434 = call %SageValue @sage_rt_add(%SageValue %3431, %SageValue %3433)
+  %3435 = load %SageValue, %SageValue* @DQ
+  %3436 = call %SageValue @sage_rt_add(%SageValue %3434, %SageValue %3435)
+  %3437 = call %SageValue @sage_fn_emit(%SageValue %3436)
+  %3438 = getelementptr [15 x i8], [15 x i8]* @.str.764, i64 0, i64 0
+  %3439 = call %SageValue @sage_rt_string(i8* %3438)
+  %3440 = load %SageValue, %SageValue* @DQ
+  %3441 = call %SageValue @sage_rt_add(%SageValue %3439, %SageValue %3440)
+  %3442 = getelementptr [21 x i8], [21 x i8]* @.str.765, i64 0, i64 0
+  %3443 = call %SageValue @sage_rt_string(i8* %3442)
+  %3444 = call %SageValue @sage_rt_add(%SageValue %3441, %SageValue %3443)
+  %3445 = load %SageValue, %SageValue* @DQ
+  %3446 = call %SageValue @sage_rt_add(%SageValue %3444, %SageValue %3445)
+  %3447 = call %SageValue @sage_fn_emit(%SageValue %3446)
+  %3448 = getelementptr [27 x i8], [27 x i8]* @.str.766, i64 0, i64 0
+  %3449 = call %SageValue @sage_rt_string(i8* %3448)
+  %3450 = load %SageValue, %SageValue* @DQ
+  %3451 = call %SageValue @sage_rt_add(%SageValue %3449, %SageValue %3450)
+  %3452 = getelementptr [9 x i8], [9 x i8]* @.str.767, i64 0, i64 0
+  %3453 = call %SageValue @sage_rt_string(i8* %3452)
+  %3454 = call %SageValue @sage_rt_add(%SageValue %3451, %SageValue %3453)
+  %3455 = load %SageValue, %SageValue* @DQ
+  %3456 = call %SageValue @sage_rt_add(%SageValue %3454, %SageValue %3455)
+  %3457 = getelementptr [2 x i8], [2 x i8]* @.str.768, i64 0, i64 0
+  %3458 = call %SageValue @sage_rt_string(i8* %3457)
+  %3459 = call %SageValue @sage_rt_add(%SageValue %3456, %SageValue %3458)
+  %3460 = call %SageValue @sage_fn_emit(%SageValue %3459)
+  %3461 = getelementptr [24 x i8], [24 x i8]* @.str.769, i64 0, i64 0
+  %3462 = call %SageValue @sage_rt_string(i8* %3461)
+  %3463 = load %SageValue, %SageValue* @DQ
+  %3464 = call %SageValue @sage_rt_add(%SageValue %3462, %SageValue %3463)
+  %3465 = getelementptr [9 x i8], [9 x i8]* @.str.770, i64 0, i64 0
+  %3466 = call %SageValue @sage_rt_string(i8* %3465)
+  %3467 = call %SageValue @sage_rt_add(%SageValue %3464, %SageValue %3466)
+  %3468 = load %SageValue, %SageValue* @DQ
+  %3469 = call %SageValue @sage_rt_add(%SageValue %3467, %SageValue %3468)
+  %3470 = call %SageValue @sage_fn_emit(%SageValue %3469)
+  %3471 = getelementptr [15 x i8], [15 x i8]* @.str.771, i64 0, i64 0
   %3472 = call %SageValue @sage_rt_string(i8* %3471)
-  %3473 = call %SageValue @sage_rt_add(%SageValue %3470, %SageValue %3472)
-  %3474 = call %SageValue @sage_fn_emit(%SageValue %3473)
-  %3475 = getelementptr [1 x i8], [1 x i8]* @.str.771, i64 0, i64 0
+  %3473 = load %SageValue, %SageValue* @DQ
+  %3474 = call %SageValue @sage_rt_add(%SageValue %3472, %SageValue %3473)
+  %3475 = getelementptr [22 x i8], [22 x i8]* @.str.772, i64 0, i64 0
   %3476 = call %SageValue @sage_rt_string(i8* %3475)
-  %3477 = call %SageValue @sage_fn_emit(%SageValue %3476)
-  %3478 = getelementptr [20 x i8], [20 x i8]* @.str.772, i64 0, i64 0
-  %3479 = call %SageValue @sage_rt_string(i8* %3478)
-  %3480 = load %SageValue, %SageValue* @DQ
-  %3481 = call %SageValue @sage_rt_add(%SageValue %3479, %SageValue %3480)
-  %3482 = load %SageValue, %SageValue* @DQ
-  %3483 = call %SageValue @sage_rt_add(%SageValue %3481, %SageValue %3482)
-  %3484 = getelementptr [3 x i8], [3 x i8]* @.str.773, i64 0, i64 0
-  %3485 = call %SageValue @sage_rt_string(i8* %3484)
-  %3486 = call %SageValue @sage_rt_add(%SageValue %3483, %SageValue %3485)
-  %3487 = load %SageValue, %SageValue* @DQ
-  %3488 = call %SageValue @sage_rt_add(%SageValue %3486, %SageValue %3487)
-  %3489 = load %SageValue, %SageValue* @DQ
-  %3490 = call %SageValue @sage_rt_add(%SageValue %3488, %SageValue %3489)
-  %3491 = getelementptr [12 x i8], [12 x i8]* @.str.774, i64 0, i64 0
-  %3492 = call %SageValue @sage_rt_string(i8* %3491)
-  %3493 = call %SageValue @sage_rt_add(%SageValue %3490, %SageValue %3492)
-  %3494 = call %SageValue @sage_fn_emit(%SageValue %3493)
-  %3495 = getelementptr [51 x i8], [51 x i8]* @.str.775, i64 0, i64 0
-  %3496 = call %SageValue @sage_rt_string(i8* %3495)
-  %3497 = call %SageValue @sage_fn_emit(%SageValue %3496)
-  %3498 = getelementptr [26 x i8], [26 x i8]* @.str.776, i64 0, i64 0
+  %3477 = call %SageValue @sage_rt_add(%SageValue %3474, %SageValue %3476)
+  %3478 = load %SageValue, %SageValue* @DQ
+  %3479 = call %SageValue @sage_rt_add(%SageValue %3477, %SageValue %3478)
+  %3480 = call %SageValue @sage_fn_emit(%SageValue %3479)
+  %3481 = getelementptr [27 x i8], [27 x i8]* @.str.773, i64 0, i64 0
+  %3482 = call %SageValue @sage_rt_string(i8* %3481)
+  %3483 = load %SageValue, %SageValue* @DQ
+  %3484 = call %SageValue @sage_rt_add(%SageValue %3482, %SageValue %3483)
+  %3485 = getelementptr [10 x i8], [10 x i8]* @.str.774, i64 0, i64 0
+  %3486 = call %SageValue @sage_rt_string(i8* %3485)
+  %3487 = call %SageValue @sage_rt_add(%SageValue %3484, %SageValue %3486)
+  %3488 = load %SageValue, %SageValue* @DQ
+  %3489 = call %SageValue @sage_rt_add(%SageValue %3487, %SageValue %3488)
+  %3490 = getelementptr [2 x i8], [2 x i8]* @.str.775, i64 0, i64 0
+  %3491 = call %SageValue @sage_rt_string(i8* %3490)
+  %3492 = call %SageValue @sage_rt_add(%SageValue %3489, %SageValue %3491)
+  %3493 = call %SageValue @sage_fn_emit(%SageValue %3492)
+  %3494 = getelementptr [24 x i8], [24 x i8]* @.str.776, i64 0, i64 0
+  %3495 = call %SageValue @sage_rt_string(i8* %3494)
+  %3496 = load %SageValue, %SageValue* @DQ
+  %3497 = call %SageValue @sage_rt_add(%SageValue %3495, %SageValue %3496)
+  %3498 = getelementptr [10 x i8], [10 x i8]* @.str.777, i64 0, i64 0
   %3499 = call %SageValue @sage_rt_string(i8* %3498)
-  %3500 = call %SageValue @sage_fn_emit(%SageValue %3499)
-  %3501 = getelementptr [12 x i8], [12 x i8]* @.str.777, i64 0, i64 0
-  %3502 = call %SageValue @sage_rt_string(i8* %3501)
-  %3503 = load %SageValue, %SageValue* @DQ
-  %3504 = call %SageValue @sage_rt_add(%SageValue %3502, %SageValue %3503)
-  %3505 = getelementptr [98 x i8], [98 x i8]* @.str.778, i64 0, i64 0
-  %3506 = call %SageValue @sage_rt_string(i8* %3505)
-  %3507 = call %SageValue @sage_rt_add(%SageValue %3504, %SageValue %3506)
-  %3508 = load %SageValue, %SageValue* @DQ
-  %3509 = call %SageValue @sage_rt_add(%SageValue %3507, %SageValue %3508)
-  %3510 = call %SageValue @sage_fn_emit(%SageValue %3509)
-  %3511 = getelementptr [24 x i8], [24 x i8]* @.str.779, i64 0, i64 0
-  %3512 = call %SageValue @sage_rt_string(i8* %3511)
+  %3500 = call %SageValue @sage_rt_add(%SageValue %3497, %SageValue %3499)
+  %3501 = load %SageValue, %SageValue* @DQ
+  %3502 = call %SageValue @sage_rt_add(%SageValue %3500, %SageValue %3501)
+  %3503 = call %SageValue @sage_fn_emit(%SageValue %3502)
+  %3504 = getelementptr [15 x i8], [15 x i8]* @.str.778, i64 0, i64 0
+  %3505 = call %SageValue @sage_rt_string(i8* %3504)
+  %3506 = load %SageValue, %SageValue* @DQ
+  %3507 = call %SageValue @sage_rt_add(%SageValue %3505, %SageValue %3506)
+  %3508 = getelementptr [23 x i8], [23 x i8]* @.str.779, i64 0, i64 0
+  %3509 = call %SageValue @sage_rt_string(i8* %3508)
+  %3510 = call %SageValue @sage_rt_add(%SageValue %3507, %SageValue %3509)
+  %3511 = load %SageValue, %SageValue* @DQ
+  %3512 = call %SageValue @sage_rt_add(%SageValue %3510, %SageValue %3511)
   %3513 = call %SageValue @sage_fn_emit(%SageValue %3512)
-  %3514 = getelementptr [31 x i8], [31 x i8]* @.str.780, i64 0, i64 0
+  %3514 = getelementptr [27 x i8], [27 x i8]* @.str.780, i64 0, i64 0
   %3515 = call %SageValue @sage_rt_string(i8* %3514)
-  %3516 = call %SageValue @sage_fn_emit(%SageValue %3515)
-  %3517 = getelementptr [12 x i8], [12 x i8]* @.str.781, i64 0, i64 0
-  %3518 = call %SageValue @sage_rt_string(i8* %3517)
-  %3519 = load %SageValue, %SageValue* @DQ
-  %3520 = call %SageValue @sage_rt_add(%SageValue %3518, %SageValue %3519)
-  %3521 = getelementptr [30 x i8], [30 x i8]* @.str.782, i64 0, i64 0
-  %3522 = call %SageValue @sage_rt_string(i8* %3521)
-  %3523 = call %SageValue @sage_rt_add(%SageValue %3520, %SageValue %3522)
-  %3524 = load %SageValue, %SageValue* @DQ
-  %3525 = call %SageValue @sage_rt_add(%SageValue %3523, %SageValue %3524)
+  %3516 = load %SageValue, %SageValue* @DQ
+  %3517 = call %SageValue @sage_rt_add(%SageValue %3515, %SageValue %3516)
+  %3518 = getelementptr [8 x i8], [8 x i8]* @.str.781, i64 0, i64 0
+  %3519 = call %SageValue @sage_rt_string(i8* %3518)
+  %3520 = call %SageValue @sage_rt_add(%SageValue %3517, %SageValue %3519)
+  %3521 = load %SageValue, %SageValue* @DQ
+  %3522 = call %SageValue @sage_rt_add(%SageValue %3520, %SageValue %3521)
+  %3523 = getelementptr [2 x i8], [2 x i8]* @.str.782, i64 0, i64 0
+  %3524 = call %SageValue @sage_rt_string(i8* %3523)
+  %3525 = call %SageValue @sage_rt_add(%SageValue %3522, %SageValue %3524)
   %3526 = call %SageValue @sage_fn_emit(%SageValue %3525)
-  %3527 = getelementptr [25 x i8], [25 x i8]* @.str.783, i64 0, i64 0
+  %3527 = getelementptr [24 x i8], [24 x i8]* @.str.783, i64 0, i64 0
   %3528 = call %SageValue @sage_rt_string(i8* %3527)
-  %3529 = call %SageValue @sage_fn_emit(%SageValue %3528)
-  %3530 = getelementptr [12 x i8], [12 x i8]* @.str.784, i64 0, i64 0
-  %3531 = call %SageValue @sage_rt_string(i8* %3530)
-  %3532 = load %SageValue, %SageValue* @DQ
-  %3533 = call %SageValue @sage_rt_add(%SageValue %3531, %SageValue %3532)
-  %3534 = getelementptr [118 x i8], [118 x i8]* @.str.785, i64 0, i64 0
-  %3535 = call %SageValue @sage_rt_string(i8* %3534)
-  %3536 = call %SageValue @sage_rt_add(%SageValue %3533, %SageValue %3535)
-  %3537 = load %SageValue, %SageValue* @DQ
-  %3538 = call %SageValue @sage_rt_add(%SageValue %3536, %SageValue %3537)
-  %3539 = call %SageValue @sage_fn_emit(%SageValue %3538)
-  %3540 = getelementptr [19 x i8], [19 x i8]* @.str.786, i64 0, i64 0
-  %3541 = call %SageValue @sage_rt_string(i8* %3540)
-  %3542 = load %SageValue, %SageValue* @DQ
-  %3543 = call %SageValue @sage_rt_add(%SageValue %3541, %SageValue %3542)
-  %3544 = getelementptr [6 x i8], [6 x i8]* @.str.787, i64 0, i64 0
-  %3545 = call %SageValue @sage_rt_string(i8* %3544)
-  %3546 = call %SageValue @sage_rt_add(%SageValue %3543, %SageValue %3545)
-  %3547 = load %SageValue, %SageValue* @DQ
-  %3548 = call %SageValue @sage_rt_add(%SageValue %3546, %SageValue %3547)
-  %3549 = getelementptr [4 x i8], [4 x i8]* @.str.788, i64 0, i64 0
-  %3550 = call %SageValue @sage_rt_string(i8* %3549)
-  %3551 = call %SageValue @sage_rt_add(%SageValue %3548, %SageValue %3550)
+  %3529 = load %SageValue, %SageValue* @DQ
+  %3530 = call %SageValue @sage_rt_add(%SageValue %3528, %SageValue %3529)
+  %3531 = getelementptr [8 x i8], [8 x i8]* @.str.784, i64 0, i64 0
+  %3532 = call %SageValue @sage_rt_string(i8* %3531)
+  %3533 = call %SageValue @sage_rt_add(%SageValue %3530, %SageValue %3532)
+  %3534 = load %SageValue, %SageValue* @DQ
+  %3535 = call %SageValue @sage_rt_add(%SageValue %3533, %SageValue %3534)
+  %3536 = call %SageValue @sage_fn_emit(%SageValue %3535)
+  %3537 = getelementptr [15 x i8], [15 x i8]* @.str.785, i64 0, i64 0
+  %3538 = call %SageValue @sage_rt_string(i8* %3537)
+  %3539 = load %SageValue, %SageValue* @DQ
+  %3540 = call %SageValue @sage_rt_add(%SageValue %3538, %SageValue %3539)
+  %3541 = getelementptr [21 x i8], [21 x i8]* @.str.786, i64 0, i64 0
+  %3542 = call %SageValue @sage_rt_string(i8* %3541)
+  %3543 = call %SageValue @sage_rt_add(%SageValue %3540, %SageValue %3542)
+  %3544 = load %SageValue, %SageValue* @DQ
+  %3545 = call %SageValue @sage_rt_add(%SageValue %3543, %SageValue %3544)
+  %3546 = call %SageValue @sage_fn_emit(%SageValue %3545)
+  %3547 = getelementptr [35 x i8], [35 x i8]* @.str.787, i64 0, i64 0
+  %3548 = call %SageValue @sage_rt_string(i8* %3547)
+  %3549 = call %SageValue @sage_fn_emit(%SageValue %3548)
+  %3550 = getelementptr [27 x i8], [27 x i8]* @.str.788, i64 0, i64 0
+  %3551 = call %SageValue @sage_rt_string(i8* %3550)
   %3552 = load %SageValue, %SageValue* @DQ
   %3553 = call %SageValue @sage_rt_add(%SageValue %3551, %SageValue %3552)
-  %3554 = getelementptr [6 x i8], [6 x i8]* @.str.789, i64 0, i64 0
+  %3554 = getelementptr [5 x i8], [5 x i8]* @.str.789, i64 0, i64 0
   %3555 = call %SageValue @sage_rt_string(i8* %3554)
   %3556 = call %SageValue @sage_rt_add(%SageValue %3553, %SageValue %3555)
   %3557 = load %SageValue, %SageValue* @DQ
   %3558 = call %SageValue @sage_rt_add(%SageValue %3556, %SageValue %3557)
-  %3559 = getelementptr [3 x i8], [3 x i8]* @.str.790, i64 0, i64 0
+  %3559 = getelementptr [13 x i8], [13 x i8]* @.str.790, i64 0, i64 0
   %3560 = call %SageValue @sage_rt_string(i8* %3559)
   %3561 = call %SageValue @sage_rt_add(%SageValue %3558, %SageValue %3560)
   %3562 = load %SageValue, %SageValue* @DQ
   %3563 = call %SageValue @sage_rt_add(%SageValue %3561, %SageValue %3562)
-  %3564 = getelementptr [3 x i8], [3 x i8]* @.str.791, i64 0, i64 0
+  %3564 = getelementptr [5 x i8], [5 x i8]* @.str.791, i64 0, i64 0
   %3565 = call %SageValue @sage_rt_string(i8* %3564)
   %3566 = call %SageValue @sage_rt_add(%SageValue %3563, %SageValue %3565)
   %3567 = load %SageValue, %SageValue* @DQ
   %3568 = call %SageValue @sage_rt_add(%SageValue %3566, %SageValue %3567)
-  %3569 = getelementptr [3 x i8], [3 x i8]* @.str.792, i64 0, i64 0
+  %3569 = getelementptr [13 x i8], [13 x i8]* @.str.792, i64 0, i64 0
   %3570 = call %SageValue @sage_rt_string(i8* %3569)
   %3571 = call %SageValue @sage_rt_add(%SageValue %3568, %SageValue %3570)
   %3572 = load %SageValue, %SageValue* @DQ
   %3573 = call %SageValue @sage_rt_add(%SageValue %3571, %SageValue %3572)
-  %3574 = getelementptr [4 x i8], [4 x i8]* @.str.793, i64 0, i64 0
+  %3574 = getelementptr [7 x i8], [7 x i8]* @.str.793, i64 0, i64 0
   %3575 = call %SageValue @sage_rt_string(i8* %3574)
   %3576 = call %SageValue @sage_rt_add(%SageValue %3573, %SageValue %3575)
   %3577 = load %SageValue, %SageValue* @DQ
@@ -5150,75 +5203,75 @@ L158:
   %3579 = getelementptr [13 x i8], [13 x i8]* @.str.794, i64 0, i64 0
   %3580 = call %SageValue @sage_rt_string(i8* %3579)
   %3581 = call %SageValue @sage_rt_add(%SageValue %3578, %SageValue %3580)
-  %3582 = call %SageValue @sage_fn_emit(%SageValue %3581)
-  %3583 = getelementptr [19 x i8], [19 x i8]* @.str.795, i64 0, i64 0
-  %3584 = call %SageValue @sage_rt_string(i8* %3583)
-  %3585 = load %SageValue, %SageValue* @DQ
-  %3586 = call %SageValue @sage_rt_add(%SageValue %3584, %SageValue %3585)
-  %3587 = getelementptr [4 x i8], [4 x i8]* @.str.796, i64 0, i64 0
-  %3588 = call %SageValue @sage_rt_string(i8* %3587)
-  %3589 = call %SageValue @sage_rt_add(%SageValue %3586, %SageValue %3588)
-  %3590 = load %SageValue, %SageValue* @DQ
-  %3591 = call %SageValue @sage_rt_add(%SageValue %3589, %SageValue %3590)
-  %3592 = getelementptr [4 x i8], [4 x i8]* @.str.797, i64 0, i64 0
-  %3593 = call %SageValue @sage_rt_string(i8* %3592)
-  %3594 = call %SageValue @sage_rt_add(%SageValue %3591, %SageValue %3593)
-  %3595 = load %SageValue, %SageValue* @DQ
-  %3596 = call %SageValue @sage_rt_add(%SageValue %3594, %SageValue %3595)
-  %3597 = getelementptr [4 x i8], [4 x i8]* @.str.798, i64 0, i64 0
-  %3598 = call %SageValue @sage_rt_string(i8* %3597)
-  %3599 = call %SageValue @sage_rt_add(%SageValue %3596, %SageValue %3598)
-  %3600 = load %SageValue, %SageValue* @DQ
-  %3601 = call %SageValue @sage_rt_add(%SageValue %3599, %SageValue %3600)
-  %3602 = getelementptr [3 x i8], [3 x i8]* @.str.799, i64 0, i64 0
-  %3603 = call %SageValue @sage_rt_string(i8* %3602)
-  %3604 = call %SageValue @sage_rt_add(%SageValue %3601, %SageValue %3603)
-  %3605 = load %SageValue, %SageValue* @DQ
-  %3606 = call %SageValue @sage_rt_add(%SageValue %3604, %SageValue %3605)
-  %3607 = getelementptr [5 x i8], [5 x i8]* @.str.800, i64 0, i64 0
-  %3608 = call %SageValue @sage_rt_string(i8* %3607)
-  %3609 = call %SageValue @sage_rt_add(%SageValue %3606, %SageValue %3608)
-  %3610 = load %SageValue, %SageValue* @DQ
-  %3611 = call %SageValue @sage_rt_add(%SageValue %3609, %SageValue %3610)
-  %3612 = getelementptr [3 x i8], [3 x i8]* @.str.801, i64 0, i64 0
-  %3613 = call %SageValue @sage_rt_string(i8* %3612)
-  %3614 = call %SageValue @sage_rt_add(%SageValue %3611, %SageValue %3613)
-  %3615 = load %SageValue, %SageValue* @DQ
-  %3616 = call %SageValue @sage_rt_add(%SageValue %3614, %SageValue %3615)
-  %3617 = getelementptr [5 x i8], [5 x i8]* @.str.802, i64 0, i64 0
-  %3618 = call %SageValue @sage_rt_string(i8* %3617)
-  %3619 = call %SageValue @sage_rt_add(%SageValue %3616, %SageValue %3618)
-  %3620 = load %SageValue, %SageValue* @DQ
-  %3621 = call %SageValue @sage_rt_add(%SageValue %3619, %SageValue %3620)
-  %3622 = getelementptr [11 x i8], [11 x i8]* @.str.803, i64 0, i64 0
-  %3623 = call %SageValue @sage_rt_string(i8* %3622)
-  %3624 = call %SageValue @sage_rt_add(%SageValue %3621, %SageValue %3623)
-  %3625 = call %SageValue @sage_fn_emit(%SageValue %3624)
-  %3626 = getelementptr [19 x i8], [19 x i8]* @.str.804, i64 0, i64 0
-  %3627 = call %SageValue @sage_rt_string(i8* %3626)
-  %3628 = load %SageValue, %SageValue* @DQ
-  %3629 = call %SageValue @sage_rt_add(%SageValue %3627, %SageValue %3628)
-  %3630 = getelementptr [5 x i8], [5 x i8]* @.str.805, i64 0, i64 0
-  %3631 = call %SageValue @sage_rt_string(i8* %3630)
-  %3632 = call %SageValue @sage_rt_add(%SageValue %3629, %SageValue %3631)
-  %3633 = load %SageValue, %SageValue* @DQ
-  %3634 = call %SageValue @sage_rt_add(%SageValue %3632, %SageValue %3633)
-  %3635 = getelementptr [4 x i8], [4 x i8]* @.str.806, i64 0, i64 0
-  %3636 = call %SageValue @sage_rt_string(i8* %3635)
-  %3637 = call %SageValue @sage_rt_add(%SageValue %3634, %SageValue %3636)
-  %3638 = load %SageValue, %SageValue* @DQ
-  %3639 = call %SageValue @sage_rt_add(%SageValue %3637, %SageValue %3638)
-  %3640 = getelementptr [5 x i8], [5 x i8]* @.str.807, i64 0, i64 0
-  %3641 = call %SageValue @sage_rt_string(i8* %3640)
-  %3642 = call %SageValue @sage_rt_add(%SageValue %3639, %SageValue %3641)
-  %3643 = load %SageValue, %SageValue* @DQ
-  %3644 = call %SageValue @sage_rt_add(%SageValue %3642, %SageValue %3643)
-  %3645 = getelementptr [3 x i8], [3 x i8]* @.str.808, i64 0, i64 0
-  %3646 = call %SageValue @sage_rt_string(i8* %3645)
-  %3647 = call %SageValue @sage_rt_add(%SageValue %3644, %SageValue %3646)
+  %3582 = load %SageValue, %SageValue* @DQ
+  %3583 = call %SageValue @sage_rt_add(%SageValue %3581, %SageValue %3582)
+  %3584 = getelementptr [5 x i8], [5 x i8]* @.str.795, i64 0, i64 0
+  %3585 = call %SageValue @sage_rt_string(i8* %3584)
+  %3586 = call %SageValue @sage_rt_add(%SageValue %3583, %SageValue %3585)
+  %3587 = load %SageValue, %SageValue* @DQ
+  %3588 = call %SageValue @sage_rt_add(%SageValue %3586, %SageValue %3587)
+  %3589 = getelementptr [13 x i8], [13 x i8]* @.str.796, i64 0, i64 0
+  %3590 = call %SageValue @sage_rt_string(i8* %3589)
+  %3591 = call %SageValue @sage_rt_add(%SageValue %3588, %SageValue %3590)
+  %3592 = load %SageValue, %SageValue* @DQ
+  %3593 = call %SageValue @sage_rt_add(%SageValue %3591, %SageValue %3592)
+  %3594 = getelementptr [9 x i8], [9 x i8]* @.str.797, i64 0, i64 0
+  %3595 = call %SageValue @sage_rt_string(i8* %3594)
+  %3596 = call %SageValue @sage_rt_add(%SageValue %3593, %SageValue %3595)
+  %3597 = load %SageValue, %SageValue* @DQ
+  %3598 = call %SageValue @sage_rt_add(%SageValue %3596, %SageValue %3597)
+  %3599 = getelementptr [13 x i8], [13 x i8]* @.str.798, i64 0, i64 0
+  %3600 = call %SageValue @sage_rt_string(i8* %3599)
+  %3601 = call %SageValue @sage_rt_add(%SageValue %3598, %SageValue %3600)
+  %3602 = load %SageValue, %SageValue* @DQ
+  %3603 = call %SageValue @sage_rt_add(%SageValue %3601, %SageValue %3602)
+  %3604 = getelementptr [8 x i8], [8 x i8]* @.str.799, i64 0, i64 0
+  %3605 = call %SageValue @sage_rt_string(i8* %3604)
+  %3606 = call %SageValue @sage_rt_add(%SageValue %3603, %SageValue %3605)
+  %3607 = load %SageValue, %SageValue* @DQ
+  %3608 = call %SageValue @sage_rt_add(%SageValue %3606, %SageValue %3607)
+  %3609 = getelementptr [13 x i8], [13 x i8]* @.str.800, i64 0, i64 0
+  %3610 = call %SageValue @sage_rt_string(i8* %3609)
+  %3611 = call %SageValue @sage_rt_add(%SageValue %3608, %SageValue %3610)
+  %3612 = load %SageValue, %SageValue* @DQ
+  %3613 = call %SageValue @sage_rt_add(%SageValue %3611, %SageValue %3612)
+  %3614 = getelementptr [9 x i8], [9 x i8]* @.str.801, i64 0, i64 0
+  %3615 = call %SageValue @sage_rt_string(i8* %3614)
+  %3616 = call %SageValue @sage_rt_add(%SageValue %3613, %SageValue %3615)
+  %3617 = load %SageValue, %SageValue* @DQ
+  %3618 = call %SageValue @sage_rt_add(%SageValue %3616, %SageValue %3617)
+  %3619 = getelementptr [13 x i8], [13 x i8]* @.str.802, i64 0, i64 0
+  %3620 = call %SageValue @sage_rt_string(i8* %3619)
+  %3621 = call %SageValue @sage_rt_add(%SageValue %3618, %SageValue %3620)
+  %3622 = load %SageValue, %SageValue* @DQ
+  %3623 = call %SageValue @sage_rt_add(%SageValue %3621, %SageValue %3622)
+  %3624 = getelementptr [10 x i8], [10 x i8]* @.str.803, i64 0, i64 0
+  %3625 = call %SageValue @sage_rt_string(i8* %3624)
+  %3626 = call %SageValue @sage_rt_add(%SageValue %3623, %SageValue %3625)
+  %3627 = load %SageValue, %SageValue* @DQ
+  %3628 = call %SageValue @sage_rt_add(%SageValue %3626, %SageValue %3627)
+  %3629 = getelementptr [13 x i8], [13 x i8]* @.str.804, i64 0, i64 0
+  %3630 = call %SageValue @sage_rt_string(i8* %3629)
+  %3631 = call %SageValue @sage_rt_add(%SageValue %3628, %SageValue %3630)
+  %3632 = load %SageValue, %SageValue* @DQ
+  %3633 = call %SageValue @sage_rt_add(%SageValue %3631, %SageValue %3632)
+  %3634 = getelementptr [8 x i8], [8 x i8]* @.str.805, i64 0, i64 0
+  %3635 = call %SageValue @sage_rt_string(i8* %3634)
+  %3636 = call %SageValue @sage_rt_add(%SageValue %3633, %SageValue %3635)
+  %3637 = load %SageValue, %SageValue* @DQ
+  %3638 = call %SageValue @sage_rt_add(%SageValue %3636, %SageValue %3637)
+  %3639 = getelementptr [2 x i8], [2 x i8]* @.str.806, i64 0, i64 0
+  %3640 = call %SageValue @sage_rt_string(i8* %3639)
+  %3641 = call %SageValue @sage_rt_add(%SageValue %3638, %SageValue %3640)
+  %3642 = call %SageValue @sage_fn_emit(%SageValue %3641)
+  %3643 = getelementptr [27 x i8], [27 x i8]* @.str.807, i64 0, i64 0
+  %3644 = call %SageValue @sage_rt_string(i8* %3643)
+  %3645 = call %SageValue @sage_fn_emit(%SageValue %3644)
+  %3646 = getelementptr [29 x i8], [29 x i8]* @.str.808, i64 0, i64 0
+  %3647 = call %SageValue @sage_rt_string(i8* %3646)
   %3648 = load %SageValue, %SageValue* @DQ
   %3649 = call %SageValue @sage_rt_add(%SageValue %3647, %SageValue %3648)
-  %3650 = getelementptr [9 x i8], [9 x i8]* @.str.809, i64 0, i64 0
+  %3650 = getelementptr [7 x i8], [7 x i8]* @.str.809, i64 0, i64 0
   %3651 = call %SageValue @sage_rt_string(i8* %3650)
   %3652 = call %SageValue @sage_rt_add(%SageValue %3649, %SageValue %3651)
   %3653 = load %SageValue, %SageValue* @DQ
@@ -5226,1394 +5279,449 @@ L158:
   %3655 = getelementptr [3 x i8], [3 x i8]* @.str.810, i64 0, i64 0
   %3656 = call %SageValue @sage_rt_string(i8* %3655)
   %3657 = call %SageValue @sage_rt_add(%SageValue %3654, %SageValue %3656)
-  %3658 = load %SageValue, %SageValue* @DQ
-  %3659 = call %SageValue @sage_rt_add(%SageValue %3657, %SageValue %3658)
-  %3660 = getelementptr [2 x i8], [2 x i8]* @.str.811, i64 0, i64 0
-  %3661 = call %SageValue @sage_rt_string(i8* %3660)
-  %3662 = call %SageValue @sage_rt_add(%SageValue %3659, %SageValue %3661)
-  %3663 = load %SageValue, %SageValue* @DQ
-  %3664 = call %SageValue @sage_rt_add(%SageValue %3662, %SageValue %3663)
-  %3665 = getelementptr [12 x i8], [12 x i8]* @.str.812, i64 0, i64 0
-  %3666 = call %SageValue @sage_rt_string(i8* %3665)
-  %3667 = call %SageValue @sage_rt_add(%SageValue %3664, %SageValue %3666)
-  %3668 = call %SageValue @sage_fn_emit(%SageValue %3667)
-  %3669 = getelementptr [35 x i8], [35 x i8]* @.str.813, i64 0, i64 0
-  %3670 = call %SageValue @sage_rt_string(i8* %3669)
-  %3671 = call %SageValue @sage_fn_emit(%SageValue %3670)
-  %3672 = getelementptr [39 x i8], [39 x i8]* @.str.814, i64 0, i64 0
-  %3673 = call %SageValue @sage_rt_string(i8* %3672)
-  %3674 = load %SageValue, %SageValue* @DQ
-  %3675 = call %SageValue @sage_rt_add(%SageValue %3673, %SageValue %3674)
-  %3676 = getelementptr [8 x i8], [8 x i8]* @.str.815, i64 0, i64 0
-  %3677 = call %SageValue @sage_rt_string(i8* %3676)
-  %3678 = call %SageValue @sage_rt_add(%SageValue %3675, %SageValue %3677)
-  %3679 = load %SageValue, %SageValue* @DQ
-  %3680 = call %SageValue @sage_rt_add(%SageValue %3678, %SageValue %3679)
-  %3681 = getelementptr [2 x i8], [2 x i8]* @.str.816, i64 0, i64 0
-  %3682 = call %SageValue @sage_rt_string(i8* %3681)
-  %3683 = call %SageValue @sage_rt_add(%SageValue %3680, %SageValue %3682)
-  %3684 = call %SageValue @sage_fn_emit(%SageValue %3683)
-  %3685 = getelementptr [23 x i8], [23 x i8]* @.str.817, i64 0, i64 0
-  %3686 = call %SageValue @sage_rt_string(i8* %3685)
-  %3687 = load %SageValue, %SageValue* @DQ
-  %3688 = call %SageValue @sage_rt_add(%SageValue %3686, %SageValue %3687)
-  %3689 = getelementptr [8 x i8], [8 x i8]* @.str.818, i64 0, i64 0
-  %3690 = call %SageValue @sage_rt_string(i8* %3689)
-  %3691 = call %SageValue @sage_rt_add(%SageValue %3688, %SageValue %3690)
-  %3692 = load %SageValue, %SageValue* @DQ
-  %3693 = call %SageValue @sage_rt_add(%SageValue %3691, %SageValue %3692)
-  %3694 = call %SageValue @sage_fn_emit(%SageValue %3693)
-  %3695 = getelementptr [1 x i8], [1 x i8]* @.str.819, i64 0, i64 0
-  %3696 = call %SageValue @sage_rt_string(i8* %3695)
-  %3697 = call %SageValue @sage_fn_emit(%SageValue %3696)
-  %3698 = getelementptr [7 x i8], [7 x i8]* @.str.820, i64 0, i64 0
+  %3658 = call %SageValue @sage_fn_emit(%SageValue %3657)
+  %3659 = getelementptr [26 x i8], [26 x i8]* @.str.811, i64 0, i64 0
+  %3660 = call %SageValue @sage_rt_string(i8* %3659)
+  %3661 = call %SageValue @sage_fn_emit(%SageValue %3660)
+  %3662 = getelementptr [29 x i8], [29 x i8]* @.str.812, i64 0, i64 0
+  %3663 = call %SageValue @sage_rt_string(i8* %3662)
+  %3664 = load %SageValue, %SageValue* @DQ
+  %3665 = call %SageValue @sage_rt_add(%SageValue %3663, %SageValue %3664)
+  %3666 = getelementptr [6 x i8], [6 x i8]* @.str.813, i64 0, i64 0
+  %3667 = call %SageValue @sage_rt_string(i8* %3666)
+  %3668 = call %SageValue @sage_rt_add(%SageValue %3665, %SageValue %3667)
+  %3669 = load %SageValue, %SageValue* @DQ
+  %3670 = call %SageValue @sage_rt_add(%SageValue %3668, %SageValue %3669)
+  %3671 = getelementptr [3 x i8], [3 x i8]* @.str.814, i64 0, i64 0
+  %3672 = call %SageValue @sage_rt_string(i8* %3671)
+  %3673 = call %SageValue @sage_rt_add(%SageValue %3670, %SageValue %3672)
+  %3674 = call %SageValue @sage_fn_emit(%SageValue %3673)
+  %3675 = getelementptr [26 x i8], [26 x i8]* @.str.815, i64 0, i64 0
+  %3676 = call %SageValue @sage_rt_string(i8* %3675)
+  %3677 = call %SageValue @sage_fn_emit(%SageValue %3676)
+  %3678 = getelementptr [29 x i8], [29 x i8]* @.str.816, i64 0, i64 0
+  %3679 = call %SageValue @sage_rt_string(i8* %3678)
+  %3680 = load %SageValue, %SageValue* @DQ
+  %3681 = call %SageValue @sage_rt_add(%SageValue %3679, %SageValue %3680)
+  %3682 = getelementptr [10 x i8], [10 x i8]* @.str.817, i64 0, i64 0
+  %3683 = call %SageValue @sage_rt_string(i8* %3682)
+  %3684 = call %SageValue @sage_rt_add(%SageValue %3681, %SageValue %3683)
+  %3685 = load %SageValue, %SageValue* @DQ
+  %3686 = call %SageValue @sage_rt_add(%SageValue %3684, %SageValue %3685)
+  %3687 = getelementptr [3 x i8], [3 x i8]* @.str.818, i64 0, i64 0
+  %3688 = call %SageValue @sage_rt_string(i8* %3687)
+  %3689 = call %SageValue @sage_rt_add(%SageValue %3686, %SageValue %3688)
+  %3690 = call %SageValue @sage_fn_emit(%SageValue %3689)
+  %3691 = getelementptr [26 x i8], [26 x i8]* @.str.819, i64 0, i64 0
+  %3692 = call %SageValue @sage_rt_string(i8* %3691)
+  %3693 = call %SageValue @sage_fn_emit(%SageValue %3692)
+  %3694 = getelementptr [29 x i8], [29 x i8]* @.str.820, i64 0, i64 0
+  %3695 = call %SageValue @sage_rt_string(i8* %3694)
+  %3696 = load %SageValue, %SageValue* @DQ
+  %3697 = call %SageValue @sage_rt_add(%SageValue %3695, %SageValue %3696)
+  %3698 = getelementptr [8 x i8], [8 x i8]* @.str.821, i64 0, i64 0
   %3699 = call %SageValue @sage_rt_string(i8* %3698)
-  %3700 = load %SageValue, %SageValue* @DQ
-  %3701 = call %SageValue @sage_rt_add(%SageValue %3699, %SageValue %3700)
-  %3702 = getelementptr [45 x i8], [45 x i8]* @.str.821, i64 0, i64 0
-  %3703 = call %SageValue @sage_rt_string(i8* %3702)
-  %3704 = call %SageValue @sage_rt_add(%SageValue %3701, %SageValue %3703)
-  %3705 = load %SageValue, %SageValue* @DQ
-  %3706 = call %SageValue @sage_rt_add(%SageValue %3704, %SageValue %3705)
-  %3707 = call %SageValue @sage_fn_emit(%SageValue %3706)
-  %3708 = getelementptr [7 x i8], [7 x i8]* @.str.822, i64 0, i64 0
-  %3709 = call %SageValue @sage_rt_string(i8* %3708)
-  %3710 = load %SageValue, %SageValue* @DQ
-  %3711 = call %SageValue @sage_rt_add(%SageValue %3709, %SageValue %3710)
-  %3712 = getelementptr [40 x i8], [40 x i8]* @.str.823, i64 0, i64 0
-  %3713 = call %SageValue @sage_rt_string(i8* %3712)
-  %3714 = call %SageValue @sage_rt_add(%SageValue %3711, %SageValue %3713)
-  %3715 = load %SageValue, %SageValue* @DQ
-  %3716 = call %SageValue @sage_rt_add(%SageValue %3714, %SageValue %3715)
-  %3717 = call %SageValue @sage_fn_emit(%SageValue %3716)
-  %3718 = getelementptr [7 x i8], [7 x i8]* @.str.824, i64 0, i64 0
-  %3719 = call %SageValue @sage_rt_string(i8* %3718)
+  %3700 = call %SageValue @sage_rt_add(%SageValue %3697, %SageValue %3699)
+  %3701 = load %SageValue, %SageValue* @DQ
+  %3702 = call %SageValue @sage_rt_add(%SageValue %3700, %SageValue %3701)
+  %3703 = getelementptr [3 x i8], [3 x i8]* @.str.822, i64 0, i64 0
+  %3704 = call %SageValue @sage_rt_string(i8* %3703)
+  %3705 = call %SageValue @sage_rt_add(%SageValue %3702, %SageValue %3704)
+  %3706 = call %SageValue @sage_fn_emit(%SageValue %3705)
+  %3707 = getelementptr [26 x i8], [26 x i8]* @.str.823, i64 0, i64 0
+  %3708 = call %SageValue @sage_rt_string(i8* %3707)
+  %3709 = call %SageValue @sage_fn_emit(%SageValue %3708)
+  %3710 = getelementptr [23 x i8], [23 x i8]* @.str.824, i64 0, i64 0
+  %3711 = call %SageValue @sage_rt_string(i8* %3710)
+  %3712 = call %SageValue @sage_fn_emit(%SageValue %3711)
+  %3713 = getelementptr [32 x i8], [32 x i8]* @.str.825, i64 0, i64 0
+  %3714 = call %SageValue @sage_rt_string(i8* %3713)
+  %3715 = call %SageValue @sage_fn_emit(%SageValue %3714)
+  %3716 = getelementptr [19 x i8], [19 x i8]* @.str.826, i64 0, i64 0
+  %3717 = call %SageValue @sage_rt_string(i8* %3716)
+  %3718 = load %SageValue, %SageValue* @DQ
+  %3719 = call %SageValue @sage_rt_add(%SageValue %3717, %SageValue %3718)
   %3720 = load %SageValue, %SageValue* @DQ
   %3721 = call %SageValue @sage_rt_add(%SageValue %3719, %SageValue %3720)
-  %3722 = getelementptr [35 x i8], [35 x i8]* @.str.825, i64 0, i64 0
-  %3723 = call %SageValue @sage_rt_string(i8* %3722)
-  %3724 = call %SageValue @sage_rt_add(%SageValue %3721, %SageValue %3723)
+  %3722 = call %SageValue @sage_fn_emit(%SageValue %3721)
+  %3723 = getelementptr [34 x i8], [34 x i8]* @.str.827, i64 0, i64 0
+  %3724 = call %SageValue @sage_rt_string(i8* %3723)
   %3725 = load %SageValue, %SageValue* @DQ
   %3726 = call %SageValue @sage_rt_add(%SageValue %3724, %SageValue %3725)
-  %3727 = call %SageValue @sage_fn_emit(%SageValue %3726)
-  %3728 = getelementptr [7 x i8], [7 x i8]* @.str.826, i64 0, i64 0
-  %3729 = call %SageValue @sage_rt_string(i8* %3728)
+  %3727 = getelementptr [3 x i8], [3 x i8]* @.str.828, i64 0, i64 0
+  %3728 = call %SageValue @sage_rt_string(i8* %3727)
+  %3729 = call %SageValue @sage_rt_add(%SageValue %3726, %SageValue %3728)
   %3730 = load %SageValue, %SageValue* @DQ
   %3731 = call %SageValue @sage_rt_add(%SageValue %3729, %SageValue %3730)
-  %3732 = getelementptr [41 x i8], [41 x i8]* @.str.827, i64 0, i64 0
+  %3732 = getelementptr [6 x i8], [6 x i8]* @.str.829, i64 0, i64 0
   %3733 = call %SageValue @sage_rt_string(i8* %3732)
   %3734 = call %SageValue @sage_rt_add(%SageValue %3731, %SageValue %3733)
   %3735 = load %SageValue, %SageValue* @DQ
   %3736 = call %SageValue @sage_rt_add(%SageValue %3734, %SageValue %3735)
-  %3737 = call %SageValue @sage_fn_emit(%SageValue %3736)
-  %3738 = getelementptr [7 x i8], [7 x i8]* @.str.828, i64 0, i64 0
-  %3739 = call %SageValue @sage_rt_string(i8* %3738)
+  %3737 = getelementptr [7 x i8], [7 x i8]* @.str.830, i64 0, i64 0
+  %3738 = call %SageValue @sage_rt_string(i8* %3737)
+  %3739 = call %SageValue @sage_rt_add(%SageValue %3736, %SageValue %3738)
   %3740 = load %SageValue, %SageValue* @DQ
   %3741 = call %SageValue @sage_rt_add(%SageValue %3739, %SageValue %3740)
-  %3742 = getelementptr [45 x i8], [45 x i8]* @.str.829, i64 0, i64 0
+  %3742 = getelementptr [2 x i8], [2 x i8]* @.str.831, i64 0, i64 0
   %3743 = call %SageValue @sage_rt_string(i8* %3742)
   %3744 = call %SageValue @sage_rt_add(%SageValue %3741, %SageValue %3743)
-  %3745 = load %SageValue, %SageValue* @DQ
-  %3746 = call %SageValue @sage_rt_add(%SageValue %3744, %SageValue %3745)
-  %3747 = call %SageValue @sage_fn_emit(%SageValue %3746)
-  %3748 = getelementptr [19 x i8], [19 x i8]* @.str.830, i64 0, i64 0
-  %3749 = call %SageValue @sage_rt_string(i8* %3748)
-  %3750 = call %SageValue @sage_fn_emit(%SageValue %3749)
-  %3751 = getelementptr [7 x i8], [7 x i8]* @.str.831, i64 0, i64 0
-  %3752 = call %SageValue @sage_rt_string(i8* %3751)
-  %3753 = load %SageValue, %SageValue* @DQ
-  %3754 = call %SageValue @sage_rt_add(%SageValue %3752, %SageValue %3753)
-  %3755 = getelementptr [85 x i8], [85 x i8]* @.str.832, i64 0, i64 0
-  %3756 = call %SageValue @sage_rt_string(i8* %3755)
-  %3757 = call %SageValue @sage_rt_add(%SageValue %3754, %SageValue %3756)
-  %3758 = load %SageValue, %SageValue* @DQ
-  %3759 = call %SageValue @sage_rt_add(%SageValue %3757, %SageValue %3758)
-  %3760 = call %SageValue @sage_fn_emit(%SageValue %3759)
-  %3761 = getelementptr [7 x i8], [7 x i8]* @.str.833, i64 0, i64 0
-  %3762 = call %SageValue @sage_rt_string(i8* %3761)
-  %3763 = load %SageValue, %SageValue* @DQ
-  %3764 = call %SageValue @sage_rt_add(%SageValue %3762, %SageValue %3763)
-  %3765 = load %SageValue, %SageValue* @DQ
-  %3766 = call %SageValue @sage_rt_add(%SageValue %3764, %SageValue %3765)
-  %3767 = call %SageValue @sage_fn_emit(%SageValue %3766)
-  %3768 = getelementptr [19 x i8], [19 x i8]* @.str.834, i64 0, i64 0
-  %3769 = call %SageValue @sage_rt_string(i8* %3768)
-  %3770 = call %SageValue @sage_fn_emit(%SageValue %3769)
-  %3771 = getelementptr [15 x i8], [15 x i8]* @.str.835, i64 0, i64 0
-  %3772 = call %SageValue @sage_rt_string(i8* %3771)
-  %3773 = call %SageValue @sage_fn_emit(%SageValue %3772)
-  %3774 = getelementptr [21 x i8], [21 x i8]* @.str.836, i64 0, i64 0
-  %3775 = call %SageValue @sage_rt_string(i8* %3774)
-  %3776 = load %SageValue, %SageValue* @DQ
-  %3777 = call %SageValue @sage_rt_add(%SageValue %3775, %SageValue %3776)
-  %3778 = getelementptr [6 x i8], [6 x i8]* @.str.837, i64 0, i64 0
-  %3779 = call %SageValue @sage_rt_string(i8* %3778)
-  %3780 = call %SageValue @sage_rt_add(%SageValue %3777, %SageValue %3779)
-  %3781 = load %SageValue, %SageValue* @DQ
-  %3782 = call %SageValue @sage_rt_add(%SageValue %3780, %SageValue %3781)
-  %3783 = getelementptr [2 x i8], [2 x i8]* @.str.838, i64 0, i64 0
-  %3784 = call %SageValue @sage_rt_string(i8* %3783)
-  %3785 = call %SageValue @sage_rt_add(%SageValue %3782, %SageValue %3784)
-  %3786 = call %SageValue @sage_fn_emit(%SageValue %3785)
-  %3787 = getelementptr [15 x i8], [15 x i8]* @.str.839, i64 0, i64 0
-  %3788 = call %SageValue @sage_rt_string(i8* %3787)
-  %3789 = load %SageValue, %SageValue* @DQ
-  %3790 = call %SageValue @sage_rt_add(%SageValue %3788, %SageValue %3789)
-  %3791 = getelementptr [5 x i8], [5 x i8]* @.str.840, i64 0, i64 0
-  %3792 = call %SageValue @sage_rt_string(i8* %3791)
-  %3793 = call %SageValue @sage_rt_add(%SageValue %3790, %SageValue %3792)
-  %3794 = load %SageValue, %SageValue* @DQ
-  %3795 = call %SageValue @sage_rt_add(%SageValue %3793, %SageValue %3794)
-  %3796 = getelementptr [12 x i8], [12 x i8]* @.str.841, i64 0, i64 0
-  %3797 = call %SageValue @sage_rt_string(i8* %3796)
-  %3798 = call %SageValue @sage_rt_add(%SageValue %3795, %SageValue %3797)
-  %3799 = load %SageValue, %SageValue* @DQ
-  %3800 = call %SageValue @sage_rt_add(%SageValue %3798, %SageValue %3799)
-  %3801 = getelementptr [5 x i8], [5 x i8]* @.str.842, i64 0, i64 0
-  %3802 = call %SageValue @sage_rt_string(i8* %3801)
-  %3803 = call %SageValue @sage_rt_add(%SageValue %3800, %SageValue %3802)
-  %3804 = load %SageValue, %SageValue* @DQ
-  %3805 = call %SageValue @sage_rt_add(%SageValue %3803, %SageValue %3804)
-  %3806 = getelementptr [2 x i8], [2 x i8]* @.str.843, i64 0, i64 0
-  %3807 = call %SageValue @sage_rt_string(i8* %3806)
-  %3808 = call %SageValue @sage_rt_add(%SageValue %3805, %SageValue %3807)
-  %3809 = call %SageValue @sage_fn_emit(%SageValue %3808)
-  %3810 = getelementptr [24 x i8], [24 x i8]* @.str.844, i64 0, i64 0
-  %3811 = call %SageValue @sage_rt_string(i8* %3810)
-  %3812 = call %SageValue @sage_fn_emit(%SageValue %3811)
-  %3813 = getelementptr [35 x i8], [35 x i8]* @.str.845, i64 0, i64 0
-  %3814 = call %SageValue @sage_rt_string(i8* %3813)
-  %3815 = call %SageValue @sage_fn_emit(%SageValue %3814)
-  %3816 = getelementptr [15 x i8], [15 x i8]* @.str.846, i64 0, i64 0
-  %3817 = call %SageValue @sage_rt_string(i8* %3816)
-  %3818 = load %SageValue, %SageValue* @DQ
-  %3819 = call %SageValue @sage_rt_add(%SageValue %3817, %SageValue %3818)
-  %3820 = getelementptr [39 x i8], [39 x i8]* @.str.847, i64 0, i64 0
-  %3821 = call %SageValue @sage_rt_string(i8* %3820)
-  %3822 = call %SageValue @sage_rt_add(%SageValue %3819, %SageValue %3821)
-  %3823 = load %SageValue, %SageValue* @DQ
-  %3824 = call %SageValue @sage_rt_add(%SageValue %3822, %SageValue %3823)
-  %3825 = call %SageValue @sage_fn_emit(%SageValue %3824)
-  %3826 = getelementptr [27 x i8], [27 x i8]* @.str.848, i64 0, i64 0
-  %3827 = call %SageValue @sage_rt_string(i8* %3826)
-  %3828 = load %SageValue, %SageValue* @DQ
-  %3829 = call %SageValue @sage_rt_add(%SageValue %3827, %SageValue %3828)
-  %3830 = getelementptr [7 x i8], [7 x i8]* @.str.849, i64 0, i64 0
-  %3831 = call %SageValue @sage_rt_string(i8* %3830)
-  %3832 = call %SageValue @sage_rt_add(%SageValue %3829, %SageValue %3831)
-  %3833 = load %SageValue, %SageValue* @DQ
-  %3834 = call %SageValue @sage_rt_add(%SageValue %3832, %SageValue %3833)
-  %3835 = getelementptr [2 x i8], [2 x i8]* @.str.850, i64 0, i64 0
-  %3836 = call %SageValue @sage_rt_string(i8* %3835)
-  %3837 = call %SageValue @sage_rt_add(%SageValue %3834, %SageValue %3836)
-  %3838 = call %SageValue @sage_fn_emit(%SageValue %3837)
-  %3839 = getelementptr [37 x i8], [37 x i8]* @.str.851, i64 0, i64 0
-  %3840 = call %SageValue @sage_rt_string(i8* %3839)
-  %3841 = call %SageValue @sage_fn_emit(%SageValue %3840)
-  %3842 = getelementptr [37 x i8], [37 x i8]* @.str.852, i64 0, i64 0
-  %3843 = call %SageValue @sage_rt_string(i8* %3842)
-  %3844 = load %SageValue, %SageValue* @DQ
-  %3845 = call %SageValue @sage_rt_add(%SageValue %3843, %SageValue %3844)
-  %3846 = getelementptr [10 x i8], [10 x i8]* @.str.853, i64 0, i64 0
-  %3847 = call %SageValue @sage_rt_string(i8* %3846)
-  %3848 = call %SageValue @sage_rt_add(%SageValue %3845, %SageValue %3847)
-  %3849 = load %SageValue, %SageValue* @DQ
-  %3850 = call %SageValue @sage_rt_add(%SageValue %3848, %SageValue %3849)
-  %3851 = getelementptr [3 x i8], [3 x i8]* @.str.854, i64 0, i64 0
-  %3852 = call %SageValue @sage_rt_string(i8* %3851)
-  %3853 = call %SageValue @sage_rt_add(%SageValue %3850, %SageValue %3852)
-  %3854 = call %SageValue @sage_fn_emit(%SageValue %3853)
-  %3855 = getelementptr [73 x i8], [73 x i8]* @.str.855, i64 0, i64 0
-  %3856 = call %SageValue @sage_rt_string(i8* %3855)
-  %3857 = call %SageValue @sage_fn_emit(%SageValue %3856)
-  %3858 = getelementptr [15 x i8], [15 x i8]* @.str.856, i64 0, i64 0
-  %3859 = call %SageValue @sage_rt_string(i8* %3858)
-  %3860 = load %SageValue, %SageValue* @DQ
-  %3861 = call %SageValue @sage_rt_add(%SageValue %3859, %SageValue %3860)
-  %3862 = getelementptr [12 x i8], [12 x i8]* @.str.857, i64 0, i64 0
+  %3745 = call %SageValue @sage_fn_emit(%SageValue %3744)
+  %3746 = getelementptr [19 x i8], [19 x i8]* @.str.832, i64 0, i64 0
+  %3747 = call %SageValue @sage_rt_string(i8* %3746)
+  %3748 = load %SageValue, %SageValue* @DQ
+  %3749 = call %SageValue @sage_rt_add(%SageValue %3747, %SageValue %3748)
+  %3750 = load %SageValue, %SageValue* @DQ
+  %3751 = call %SageValue @sage_rt_add(%SageValue %3749, %SageValue %3750)
+  %3752 = call %SageValue @sage_fn_emit(%SageValue %3751)
+  %3753 = call %SageValue @sage_fn_emit_all()
+  %3754 = getelementptr [1 x i8], [1 x i8]* @.str.833, i64 0, i64 0
+  %3755 = call %SageValue @sage_rt_string(i8* %3754)
+  call void @sage_rt_print(%SageValue %3755)
+  %3756 = getelementptr [5 x i8], [5 x i8]* @.str.834, i64 0, i64 0
+  %3757 = call %SageValue @sage_rt_string(i8* %3756)
+  %3758 = getelementptr [25 x i8], [25 x i8]* @.str.835, i64 0, i64 0
+  %3759 = call %SageValue @sage_rt_string(i8* %3758)
+  %3760 = call %SageValue @sage_fn_log(%SageValue %3757, %SageValue %3759)
+  %3761 = call %SageValue @sage_fn_divider()
+  %3762 = getelementptr [18 x i8], [18 x i8]* @.str.836, i64 0, i64 0
+  %3763 = call %SageValue @sage_rt_string(i8* %3762)
+  %3764 = getelementptr [6 x i8], [6 x i8]* @.str.837, i64 0, i64 0
+  %3765 = call %SageValue @sage_rt_string(i8* %3764)
+  %3766 = call %SageValue @sage_rt_nil()
+  store %SageValue %3766, %SageValue* @gguf_meta
+  %3767 = load %SageValue, %SageValue* @gguf_meta
+  %3768 = load %SageValue, %SageValue* @d_model
+  %3769 = load %SageValue, %SageValue* @n_layers
+  %3770 = load %SageValue, %SageValue* @n_heads
+  %3771 = load %SageValue, %SageValue* @d_ff
+  %3772 = load %SageValue, %SageValue* @vocab
+  %3773 = load %SageValue, %SageValue* @context_length
+  %3774 = call %SageValue @sage_rt_nil()
+  %3775 = load %SageValue, %SageValue* @gguf_meta
+  %3776 = getelementptr [5 x i8], [5 x i8]* @.str.838, i64 0, i64 0
+  %3777 = call %SageValue @sage_rt_string(i8* %3776)
+  %3778 = call %SageValue @sage_rt_nil()
+  %3779 = getelementptr [23 x i8], [23 x i8]* @.str.839, i64 0, i64 0
+  %3780 = call %SageValue @sage_rt_string(i8* %3779)
+  %3781 = getelementptr [55 x i8], [55 x i8]* @.str.840, i64 0, i64 0
+  %3782 = call %SageValue @sage_rt_string(i8* %3781)
+  %3783 = call %SageValue @sage_rt_number(double 7.000000e-01)
+  %3784 = load %SageValue, %SageValue* @context_length
+  %3785 = call %SageValue @sage_rt_nil()
+  store %SageValue %3785, %SageValue* @modelfile
+  %3786 = getelementptr [17 x i8], [17 x i8]* @.str.841, i64 0, i64 0
+  %3787 = call %SageValue @sage_rt_string(i8* %3786)
+  %3788 = load %SageValue, %SageValue* @modelfile
+  %3789 = call %SageValue @sage_rt_writefile(%SageValue %3787, %SageValue %3788)
+  %3790 = getelementptr [23 x i8], [23 x i8]* @.str.842, i64 0, i64 0
+  %3791 = call %SageValue @sage_rt_string(i8* %3790)
+  %3792 = call %SageValue @sage_rt_nil()
+  store %SageValue %3792, %SageValue* @quant_script
+  %3793 = getelementptr [19 x i8], [19 x i8]* @.str.843, i64 0, i64 0
+  %3794 = call %SageValue @sage_rt_string(i8* %3793)
+  %3795 = load %SageValue, %SageValue* @quant_script
+  %3796 = call %SageValue @sage_rt_writefile(%SageValue %3794, %SageValue %3795)
+  %3797 = getelementptr [5 x i8], [5 x i8]* @.str.844, i64 0, i64 0
+  %3798 = call %SageValue @sage_rt_string(i8* %3797)
+  %3799 = getelementptr [34 x i8], [34 x i8]* @.str.845, i64 0, i64 0
+  %3800 = call %SageValue @sage_rt_string(i8* %3799)
+  %3801 = call %SageValue @sage_fn_log(%SageValue %3798, %SageValue %3800)
+  %3802 = getelementptr [5 x i8], [5 x i8]* @.str.846, i64 0, i64 0
+  %3803 = call %SageValue @sage_rt_string(i8* %3802)
+  %3804 = getelementptr [43 x i8], [43 x i8]* @.str.847, i64 0, i64 0
+  %3805 = call %SageValue @sage_rt_string(i8* %3804)
+  %3806 = call %SageValue @sage_fn_log(%SageValue %3803, %SageValue %3805)
+  %3807 = getelementptr [1 x i8], [1 x i8]* @.str.848, i64 0, i64 0
+  %3808 = call %SageValue @sage_rt_string(i8* %3807)
+  call void @sage_rt_print(%SageValue %3808)
+  %3809 = getelementptr [4 x i8], [4 x i8]* @.str.849, i64 0, i64 0
+  %3810 = call %SageValue @sage_rt_string(i8* %3809)
+  %3811 = getelementptr [28 x i8], [28 x i8]* @.str.850, i64 0, i64 0
+  %3812 = call %SageValue @sage_rt_string(i8* %3811)
+  %3813 = call %SageValue @sage_fn_log(%SageValue %3810, %SageValue %3812)
+  %3814 = call %SageValue @sage_fn_divider()
+  %3815 = getelementptr [17 x i8], [17 x i8]* @.str.851, i64 0, i64 0
+  %3816 = call %SageValue @sage_rt_string(i8* %3815)
+  %3817 = getelementptr [1 x i8], [1 x i8]* @.str.852, i64 0, i64 0
+  %3818 = call %SageValue @sage_rt_string(i8* %3817)
+  %3819 = call %SageValue @sage_rt_writefile(%SageValue %3816, %SageValue %3818)
+  %3820 = load %SageValue, %SageValue* @all_losses
+  %3821 = getelementptr [20 x i8], [20 x i8]* @.str.853, i64 0, i64 0
+  %3822 = call %SageValue @sage_rt_string(i8* %3821)
+  %3823 = getelementptr [26 x i8], [26 x i8]* @.str.854, i64 0, i64 0
+  %3824 = call %SageValue @sage_rt_string(i8* %3823)
+  %3825 = call %SageValue @sage_rt_nil()
+  %3826 = load %SageValue, %SageValue* @layer_qw
+  %3827 = call %SageValue @sage_rt_number(double 0.000000e+00)
+  %3828 = call %SageValue @sage_rt_index(%SageValue %3826, %SageValue %3827)
+  %3829 = getelementptr [15 x i8], [15 x i8]* @.str.855, i64 0, i64 0
+  %3830 = call %SageValue @sage_rt_string(i8* %3829)
+  %3831 = getelementptr [27 x i8], [27 x i8]* @.str.856, i64 0, i64 0
+  %3832 = call %SageValue @sage_rt_string(i8* %3831)
+  %3833 = call %SageValue @sage_rt_nil()
+  %3834 = getelementptr [15 x i8], [15 x i8]* @.str.857, i64 0, i64 0
+  %3835 = call %SageValue @sage_rt_string(i8* %3834)
+  %3836 = load %SageValue, %SageValue* @n_layers
+  %3837 = load %SageValue, %SageValue* @d_model
+  %3838 = load %SageValue, %SageValue* @d_ff
+  %3839 = load %SageValue, %SageValue* @n_heads
+  %3840 = getelementptr [28 x i8], [28 x i8]* @.str.858, i64 0, i64 0
+  %3841 = call %SageValue @sage_rt_string(i8* %3840)
+  %3842 = call %SageValue @sage_rt_nil()
+  %3843 = load %SageValue, %SageValue* @theory_steps
+  %3844 = call %SageValue @sage_rt_number(double 2.000000e+01)
+  %3845 = call %SageValue @sage_rt_number(double 3.000000e-04)
+  %3846 = call %SageValue @sage_rt_number(double 1.000000e-05)
+  %3847 = getelementptr [7 x i8], [7 x i8]* @.str.859, i64 0, i64 0
+  %3848 = call %SageValue @sage_rt_string(i8* %3847)
+  %3849 = getelementptr [27 x i8], [27 x i8]* @.str.860, i64 0, i64 0
+  %3850 = call %SageValue @sage_rt_string(i8* %3849)
+  %3851 = call %SageValue @sage_rt_nil()
+  %3852 = getelementptr [4 x i8], [4 x i8]* @.str.861, i64 0, i64 0
+  %3853 = call %SageValue @sage_rt_string(i8* %3852)
+  %3854 = getelementptr [48 x i8], [48 x i8]* @.str.862, i64 0, i64 0
+  %3855 = call %SageValue @sage_rt_string(i8* %3854)
+  %3856 = call %SageValue @sage_fn_log(%SageValue %3853, %SageValue %3855)
+  %3857 = getelementptr [4 x i8], [4 x i8]* @.str.863, i64 0, i64 0
+  %3858 = call %SageValue @sage_rt_string(i8* %3857)
+  %3859 = load %SageValue, %SageValue* @mon
+  %3860 = call %SageValue @sage_rt_nil()
+  %3861 = call %SageValue @sage_fn_log(%SageValue %3858, %SageValue %3860)
+  %3862 = getelementptr [1 x i8], [1 x i8]* @.str.864, i64 0, i64 0
   %3863 = call %SageValue @sage_rt_string(i8* %3862)
-  %3864 = call %SageValue @sage_rt_add(%SageValue %3861, %SageValue %3863)
-  %3865 = load %SageValue, %SageValue* @DQ
-  %3866 = call %SageValue @sage_rt_add(%SageValue %3864, %SageValue %3865)
-  %3867 = call %SageValue @sage_fn_emit(%SageValue %3866)
-  %3868 = getelementptr [37 x i8], [37 x i8]* @.str.858, i64 0, i64 0
+  call void @sage_rt_print(%SageValue %3863)
+  %3864 = call %SageValue @sage_fn_separator()
+  %3865 = getelementptr [25 x i8], [25 x i8]* @.str.865, i64 0, i64 0
+  %3866 = call %SageValue @sage_rt_string(i8* %3865)
+  call void @sage_rt_print(%SageValue %3866)
+  %3867 = call %SageValue @sage_fn_separator()
+  %3868 = getelementptr [1 x i8], [1 x i8]* @.str.866, i64 0, i64 0
   %3869 = call %SageValue @sage_rt_string(i8* %3868)
-  %3870 = load %SageValue, %SageValue* @DQ
-  %3871 = call %SageValue @sage_rt_add(%SageValue %3869, %SageValue %3870)
-  %3872 = getelementptr [8 x i8], [8 x i8]* @.str.859, i64 0, i64 0
+  call void @sage_rt_print(%SageValue %3869)
+  %3870 = getelementptr [48 x i8], [48 x i8]* @.str.867, i64 0, i64 0
+  %3871 = call %SageValue @sage_rt_string(i8* %3870)
+  call void @sage_rt_print(%SageValue %3871)
+  %3872 = getelementptr [5 x i8], [5 x i8]* @.str.868, i64 0, i64 0
   %3873 = call %SageValue @sage_rt_string(i8* %3872)
-  %3874 = call %SageValue @sage_rt_add(%SageValue %3871, %SageValue %3873)
-  %3875 = load %SageValue, %SageValue* @DQ
-  %3876 = call %SageValue @sage_rt_add(%SageValue %3874, %SageValue %3875)
-  %3877 = getelementptr [3 x i8], [3 x i8]* @.str.860, i64 0, i64 0
+  %3874 = load %SageValue, %SageValue* @d_model
+  %3875 = call %SageValue @sage_rt_str(%SageValue %3874)
+  %3876 = call %SageValue @sage_rt_add(%SageValue %3873, %SageValue %3875)
+  %3877 = getelementptr [8 x i8], [8 x i8]* @.str.869, i64 0, i64 0
   %3878 = call %SageValue @sage_rt_string(i8* %3877)
   %3879 = call %SageValue @sage_rt_add(%SageValue %3876, %SageValue %3878)
-  %3880 = call %SageValue @sage_fn_emit(%SageValue %3879)
-  %3881 = getelementptr [77 x i8], [77 x i8]* @.str.861, i64 0, i64 0
-  %3882 = call %SageValue @sage_rt_string(i8* %3881)
-  %3883 = call %SageValue @sage_fn_emit(%SageValue %3882)
-  %3884 = getelementptr [29 x i8], [29 x i8]* @.str.862, i64 0, i64 0
-  %3885 = call %SageValue @sage_rt_string(i8* %3884)
-  %3886 = call %SageValue @sage_fn_emit(%SageValue %3885)
-  %3887 = getelementptr [42 x i8], [42 x i8]* @.str.863, i64 0, i64 0
-  %3888 = call %SageValue @sage_rt_string(i8* %3887)
-  %3889 = call %SageValue @sage_fn_emit(%SageValue %3888)
-  %3890 = getelementptr [23 x i8], [23 x i8]* @.str.864, i64 0, i64 0
-  %3891 = call %SageValue @sage_rt_string(i8* %3890)
-  %3892 = load %SageValue, %SageValue* @DQ
-  %3893 = call %SageValue @sage_rt_add(%SageValue %3891, %SageValue %3892)
-  %3894 = getelementptr [4 x i8], [4 x i8]* @.str.865, i64 0, i64 0
-  %3895 = call %SageValue @sage_rt_string(i8* %3894)
-  %3896 = call %SageValue @sage_rt_add(%SageValue %3893, %SageValue %3895)
-  %3897 = load %SageValue, %SageValue* @DQ
-  %3898 = call %SageValue @sage_rt_add(%SageValue %3896, %SageValue %3897)
-  %3899 = getelementptr [17 x i8], [17 x i8]* @.str.866, i64 0, i64 0
-  %3900 = call %SageValue @sage_rt_string(i8* %3899)
-  %3901 = call %SageValue @sage_rt_add(%SageValue %3898, %SageValue %3900)
-  %3902 = load %SageValue, %SageValue* @DQ
-  %3903 = call %SageValue @sage_rt_add(%SageValue %3901, %SageValue %3902)
-  %3904 = getelementptr [3 x i8], [3 x i8]* @.str.867, i64 0, i64 0
-  %3905 = call %SageValue @sage_rt_string(i8* %3904)
+  %3880 = load %SageValue, %SageValue* @n_heads
+  %3881 = call %SageValue @sage_rt_str(%SageValue %3880)
+  %3882 = call %SageValue @sage_rt_add(%SageValue %3879, %SageValue %3881)
+  %3883 = getelementptr [9 x i8], [9 x i8]* @.str.870, i64 0, i64 0
+  %3884 = call %SageValue @sage_rt_string(i8* %3883)
+  %3885 = call %SageValue @sage_rt_add(%SageValue %3882, %SageValue %3884)
+  %3886 = load %SageValue, %SageValue* @n_layers
+  %3887 = call %SageValue @sage_rt_str(%SageValue %3886)
+  %3888 = call %SageValue @sage_rt_add(%SageValue %3885, %SageValue %3887)
+  %3889 = getelementptr [5 x i8], [5 x i8]* @.str.871, i64 0, i64 0
+  %3890 = call %SageValue @sage_rt_string(i8* %3889)
+  %3891 = call %SageValue @sage_rt_add(%SageValue %3888, %SageValue %3890)
+  %3892 = load %SageValue, %SageValue* @d_ff
+  %3893 = call %SageValue @sage_rt_str(%SageValue %3892)
+  %3894 = call %SageValue @sage_rt_add(%SageValue %3891, %SageValue %3893)
+  %3895 = getelementptr [8 x i8], [8 x i8]* @.str.872, i64 0, i64 0
+  %3896 = call %SageValue @sage_rt_string(i8* %3895)
+  %3897 = call %SageValue @sage_rt_add(%SageValue %3894, %SageValue %3896)
+  %3898 = load %SageValue, %SageValue* @vocab
+  %3899 = call %SageValue @sage_rt_str(%SageValue %3898)
+  %3900 = call %SageValue @sage_rt_add(%SageValue %3897, %SageValue %3899)
+  %3901 = getelementptr [6 x i8], [6 x i8]* @.str.873, i64 0, i64 0
+  %3902 = call %SageValue @sage_rt_string(i8* %3901)
+  %3903 = call %SageValue @sage_rt_add(%SageValue %3900, %SageValue %3902)
+  %3904 = load %SageValue, %SageValue* @context_length
+  %3905 = call %SageValue @sage_rt_str(%SageValue %3904)
   %3906 = call %SageValue @sage_rt_add(%SageValue %3903, %SageValue %3905)
-  %3907 = load %SageValue, %SageValue* @DQ
-  %3908 = call %SageValue @sage_rt_add(%SageValue %3906, %SageValue %3907)
-  %3909 = getelementptr [15 x i8], [15 x i8]* @.str.868, i64 0, i64 0
-  %3910 = call %SageValue @sage_rt_string(i8* %3909)
+  call void @sage_rt_print(%SageValue %3906)
+  %3907 = getelementptr [15 x i8], [15 x i8]* @.str.874, i64 0, i64 0
+  %3908 = call %SageValue @sage_rt_string(i8* %3907)
+  %3909 = load %SageValue, %SageValue* @param_count
+  %3910 = call %SageValue @sage_rt_str(%SageValue %3909)
   %3911 = call %SageValue @sage_rt_add(%SageValue %3908, %SageValue %3910)
-  %3912 = load %SageValue, %SageValue* @DQ
-  %3913 = call %SageValue @sage_rt_add(%SageValue %3911, %SageValue %3912)
-  %3914 = getelementptr [6 x i8], [6 x i8]* @.str.869, i64 0, i64 0
+  call void @sage_rt_print(%SageValue %3911)
+  %3912 = getelementptr [1 x i8], [1 x i8]* @.str.875, i64 0, i64 0
+  %3913 = call %SageValue @sage_rt_string(i8* %3912)
+  call void @sage_rt_print(%SageValue %3913)
+  %3914 = getelementptr [10 x i8], [10 x i8]* @.str.876, i64 0, i64 0
   %3915 = call %SageValue @sage_rt_string(i8* %3914)
-  %3916 = call %SageValue @sage_rt_add(%SageValue %3913, %SageValue %3915)
-  %3917 = load %SageValue, %SageValue* @DQ
-  %3918 = call %SageValue @sage_rt_add(%SageValue %3916, %SageValue %3917)
-  %3919 = getelementptr [3 x i8], [3 x i8]* @.str.870, i64 0, i64 0
-  %3920 = call %SageValue @sage_rt_string(i8* %3919)
-  %3921 = call %SageValue @sage_rt_add(%SageValue %3918, %SageValue %3920)
-  %3922 = load %SageValue, %SageValue* @DQ
-  %3923 = call %SageValue @sage_rt_add(%SageValue %3921, %SageValue %3922)
-  %3924 = getelementptr [8 x i8], [8 x i8]* @.str.871, i64 0, i64 0
-  %3925 = call %SageValue @sage_rt_string(i8* %3924)
-  %3926 = call %SageValue @sage_rt_add(%SageValue %3923, %SageValue %3925)
-  %3927 = load %SageValue, %SageValue* @DQ
-  %3928 = call %SageValue @sage_rt_add(%SageValue %3926, %SageValue %3927)
-  %3929 = getelementptr [2 x i8], [2 x i8]* @.str.872, i64 0, i64 0
-  %3930 = call %SageValue @sage_rt_string(i8* %3929)
-  %3931 = call %SageValue @sage_rt_add(%SageValue %3928, %SageValue %3930)
-  %3932 = call %SageValue @sage_fn_emit(%SageValue %3931)
-  %3933 = getelementptr [14 x i8], [14 x i8]* @.str.873, i64 0, i64 0
+  call void @sage_rt_print(%SageValue %3915)
+  %3916 = getelementptr [14 x i8], [14 x i8]* @.str.877, i64 0, i64 0
+  %3917 = call %SageValue @sage_rt_string(i8* %3916)
+  %3918 = load %SageValue, %SageValue* @theory_steps
+  %3919 = call %SageValue @sage_rt_str(%SageValue %3918)
+  %3920 = call %SageValue @sage_rt_add(%SageValue %3917, %SageValue %3919)
+  %3921 = getelementptr [14 x i8], [14 x i8]* @.str.878, i64 0, i64 0
+  %3922 = call %SageValue @sage_rt_string(i8* %3921)
+  %3923 = call %SageValue @sage_rt_add(%SageValue %3920, %SageValue %3922)
+  %3924 = load %SageValue, %SageValue* @state1
+  %3925 = call %SageValue @sage_rt_nil()
+  %3926 = call %SageValue @sage_rt_str(%SageValue %3925)
+  %3927 = call %SageValue @sage_rt_add(%SageValue %3923, %SageValue %3926)
+  call void @sage_rt_print(%SageValue %3927)
+  %3928 = getelementptr [9 x i8], [9 x i8]* @.str.879, i64 0, i64 0
+  %3929 = call %SageValue @sage_rt_string(i8* %3928)
+  %3930 = load %SageValue, %SageValue* @lora_steps
+  %3931 = call %SageValue @sage_rt_str(%SageValue %3930)
+  %3932 = call %SageValue @sage_rt_add(%SageValue %3929, %SageValue %3931)
+  %3933 = getelementptr [11 x i8], [11 x i8]* @.str.880, i64 0, i64 0
   %3934 = call %SageValue @sage_rt_string(i8* %3933)
-  %3935 = call %SageValue @sage_fn_emit(%SageValue %3934)
-  %3936 = getelementptr [19 x i8], [19 x i8]* @.str.874, i64 0, i64 0
-  %3937 = call %SageValue @sage_rt_string(i8* %3936)
-  %3938 = load %SageValue, %SageValue* @DQ
-  %3939 = call %SageValue @sage_rt_add(%SageValue %3937, %SageValue %3938)
-  %3940 = getelementptr [21 x i8], [21 x i8]* @.str.875, i64 0, i64 0
-  %3941 = call %SageValue @sage_rt_string(i8* %3940)
-  %3942 = call %SageValue @sage_rt_add(%SageValue %3939, %SageValue %3941)
-  %3943 = load %SageValue, %SageValue* @DQ
-  %3944 = call %SageValue @sage_rt_add(%SageValue %3942, %SageValue %3943)
-  %3945 = call %SageValue @sage_fn_emit(%SageValue %3944)
-  %3946 = getelementptr [37 x i8], [37 x i8]* @.str.876, i64 0, i64 0
-  %3947 = call %SageValue @sage_rt_string(i8* %3946)
-  %3948 = load %SageValue, %SageValue* @DQ
-  %3949 = call %SageValue @sage_rt_add(%SageValue %3947, %SageValue %3948)
-  %3950 = getelementptr [7 x i8], [7 x i8]* @.str.877, i64 0, i64 0
-  %3951 = call %SageValue @sage_rt_string(i8* %3950)
-  %3952 = call %SageValue @sage_rt_add(%SageValue %3949, %SageValue %3951)
-  %3953 = load %SageValue, %SageValue* @DQ
-  %3954 = call %SageValue @sage_rt_add(%SageValue %3952, %SageValue %3953)
-  %3955 = getelementptr [3 x i8], [3 x i8]* @.str.878, i64 0, i64 0
+  %3935 = call %SageValue @sage_rt_add(%SageValue %3932, %SageValue %3934)
+  %3936 = load %SageValue, %SageValue* @file_count
+  %3937 = call %SageValue @sage_rt_str(%SageValue %3936)
+  %3938 = call %SageValue @sage_rt_add(%SageValue %3935, %SageValue %3937)
+  %3939 = getelementptr [14 x i8], [14 x i8]* @.str.881, i64 0, i64 0
+  %3940 = call %SageValue @sage_rt_string(i8* %3939)
+  %3941 = call %SageValue @sage_rt_add(%SageValue %3938, %SageValue %3940)
+  %3942 = load %SageValue, %SageValue* @lora_rank
+  %3943 = call %SageValue @sage_rt_str(%SageValue %3942)
+  %3944 = call %SageValue @sage_rt_add(%SageValue %3941, %SageValue %3943)
+  %3945 = getelementptr [7 x i8], [7 x i8]* @.str.882, i64 0, i64 0
+  %3946 = call %SageValue @sage_rt_string(i8* %3945)
+  %3947 = call %SageValue @sage_rt_add(%SageValue %3944, %SageValue %3946)
+  %3948 = load %SageValue, %SageValue* @state2
+  %3949 = call %SageValue @sage_rt_nil()
+  %3950 = call %SageValue @sage_rt_str(%SageValue %3949)
+  %3951 = call %SageValue @sage_rt_add(%SageValue %3947, %SageValue %3950)
+  call void @sage_rt_print(%SageValue %3951)
+  %3952 = getelementptr [8 x i8], [8 x i8]* @.str.883, i64 0, i64 0
+  %3953 = call %SageValue @sage_rt_string(i8* %3952)
+  %3954 = load %SageValue, %SageValue* @dpo_ds
+  %3955 = getelementptr [6 x i8], [6 x i8]* @.str.884, i64 0, i64 0
   %3956 = call %SageValue @sage_rt_string(i8* %3955)
-  %3957 = call %SageValue @sage_rt_add(%SageValue %3954, %SageValue %3956)
-  %3958 = call %SageValue @sage_fn_emit(%SageValue %3957)
-  %3959 = getelementptr [66 x i8], [66 x i8]* @.str.879, i64 0, i64 0
-  %3960 = call %SageValue @sage_rt_string(i8* %3959)
-  %3961 = call %SageValue @sage_fn_emit(%SageValue %3960)
-  %3962 = getelementptr [68 x i8], [68 x i8]* @.str.880, i64 0, i64 0
-  %3963 = call %SageValue @sage_rt_string(i8* %3962)
-  %3964 = call %SageValue @sage_fn_emit(%SageValue %3963)
-  %3965 = getelementptr [40 x i8], [40 x i8]* @.str.881, i64 0, i64 0
-  %3966 = call %SageValue @sage_rt_string(i8* %3965)
-  %3967 = call %SageValue @sage_fn_emit(%SageValue %3966)
-  %3968 = getelementptr [37 x i8], [37 x i8]* @.str.882, i64 0, i64 0
+  %3957 = call %SageValue @sage_rt_index(%SageValue %3954, %SageValue %3956)
+  %3958 = call %SageValue @sage_rt_len(%SageValue %3957)
+  %3959 = call %SageValue @sage_rt_str(%SageValue %3958)
+  %3960 = call %SageValue @sage_rt_add(%SageValue %3953, %SageValue %3959)
+  %3961 = getelementptr [18 x i8], [18 x i8]* @.str.885, i64 0, i64 0
+  %3962 = call %SageValue @sage_rt_string(i8* %3961)
+  %3963 = call %SageValue @sage_rt_add(%SageValue %3960, %SageValue %3962)
+  call void @sage_rt_print(%SageValue %3963)
+  %3964 = getelementptr [1 x i8], [1 x i8]* @.str.886, i64 0, i64 0
+  %3965 = call %SageValue @sage_rt_string(i8* %3964)
+  call void @sage_rt_print(%SageValue %3965)
+  %3966 = getelementptr [11 x i8], [11 x i8]* @.str.887, i64 0, i64 0
+  %3967 = call %SageValue @sage_rt_string(i8* %3966)
+  call void @sage_rt_print(%SageValue %3967)
+  %3968 = getelementptr [11 x i8], [11 x i8]* @.str.888, i64 0, i64 0
   %3969 = call %SageValue @sage_rt_string(i8* %3968)
-  %3970 = load %SageValue, %SageValue* @DQ
-  %3971 = call %SageValue @sage_rt_add(%SageValue %3969, %SageValue %3970)
-  %3972 = getelementptr [6 x i8], [6 x i8]* @.str.883, i64 0, i64 0
-  %3973 = call %SageValue @sage_rt_string(i8* %3972)
-  %3974 = call %SageValue @sage_rt_add(%SageValue %3971, %SageValue %3973)
-  %3975 = load %SageValue, %SageValue* @DQ
-  %3976 = call %SageValue @sage_rt_add(%SageValue %3974, %SageValue %3975)
-  %3977 = getelementptr [3 x i8], [3 x i8]* @.str.884, i64 0, i64 0
+  %3970 = load %SageValue, %SageValue* @memory
+  %3971 = getelementptr [9 x i8], [9 x i8]* @.str.889, i64 0, i64 0
+  %3972 = call %SageValue @sage_rt_string(i8* %3971)
+  %3973 = call %SageValue @sage_rt_index(%SageValue %3970, %SageValue %3972)
+  %3974 = call %SageValue @sage_rt_len(%SageValue %3973)
+  %3975 = call %SageValue @sage_rt_str(%SageValue %3974)
+  %3976 = call %SageValue @sage_rt_add(%SageValue %3969, %SageValue %3975)
+  %3977 = getelementptr [13 x i8], [13 x i8]* @.str.890, i64 0, i64 0
   %3978 = call %SageValue @sage_rt_string(i8* %3977)
   %3979 = call %SageValue @sage_rt_add(%SageValue %3976, %SageValue %3978)
-  %3980 = call %SageValue @sage_fn_emit(%SageValue %3979)
-  %3981 = getelementptr [48 x i8], [48 x i8]* @.str.885, i64 0, i64 0
+  %3980 = load %SageValue, %SageValue* @memory
+  %3981 = getelementptr [11 x i8], [11 x i8]* @.str.891, i64 0, i64 0
   %3982 = call %SageValue @sage_rt_string(i8* %3981)
-  %3983 = call %SageValue @sage_fn_emit(%SageValue %3982)
-  %3984 = getelementptr [45 x i8], [45 x i8]* @.str.886, i64 0, i64 0
-  %3985 = call %SageValue @sage_rt_string(i8* %3984)
-  %3986 = call %SageValue @sage_fn_emit(%SageValue %3985)
-  %3987 = getelementptr [32 x i8], [32 x i8]* @.str.887, i64 0, i64 0
+  %3983 = call %SageValue @sage_rt_index(%SageValue %3980, %SageValue %3982)
+  %3984 = call %SageValue @sage_rt_len(%SageValue %3983)
+  %3985 = call %SageValue @sage_rt_str(%SageValue %3984)
+  %3986 = call %SageValue @sage_rt_add(%SageValue %3979, %SageValue %3985)
+  %3987 = getelementptr [12 x i8], [12 x i8]* @.str.892, i64 0, i64 0
   %3988 = call %SageValue @sage_rt_string(i8* %3987)
-  %3989 = load %SageValue, %SageValue* @DQ
-  %3990 = call %SageValue @sage_rt_add(%SageValue %3988, %SageValue %3989)
-  %3991 = getelementptr [8 x i8], [8 x i8]* @.str.888, i64 0, i64 0
-  %3992 = call %SageValue @sage_rt_string(i8* %3991)
-  %3993 = call %SageValue @sage_rt_add(%SageValue %3990, %SageValue %3992)
-  %3994 = load %SageValue, %SageValue* @DQ
-  %3995 = call %SageValue @sage_rt_add(%SageValue %3993, %SageValue %3994)
-  %3996 = getelementptr [3 x i8], [3 x i8]* @.str.889, i64 0, i64 0
-  %3997 = call %SageValue @sage_rt_string(i8* %3996)
-  %3998 = call %SageValue @sage_rt_add(%SageValue %3995, %SageValue %3997)
-  %3999 = load %SageValue, %SageValue* @DQ
-  %4000 = call %SageValue @sage_rt_add(%SageValue %3998, %SageValue %3999)
-  %4001 = load %SageValue, %SageValue* @DQ
-  %4002 = call %SageValue @sage_rt_add(%SageValue %4000, %SageValue %4001)
-  %4003 = getelementptr [3 x i8], [3 x i8]* @.str.890, i64 0, i64 0
-  %4004 = call %SageValue @sage_rt_string(i8* %4003)
-  %4005 = call %SageValue @sage_rt_add(%SageValue %4002, %SageValue %4004)
-  %4006 = load %SageValue, %SageValue* @DQ
-  %4007 = call %SageValue @sage_rt_add(%SageValue %4005, %SageValue %4006)
-  %4008 = load %SageValue, %SageValue* @DQ
-  %4009 = call %SageValue @sage_rt_add(%SageValue %4007, %SageValue %4008)
-  %4010 = getelementptr [7 x i8], [7 x i8]* @.str.891, i64 0, i64 0
+  %3989 = call %SageValue @sage_rt_add(%SageValue %3986, %SageValue %3988)
+  call void @sage_rt_print(%SageValue %3989)
+  %3990 = getelementptr [8 x i8], [8 x i8]* @.str.893, i64 0, i64 0
+  %3991 = call %SageValue @sage_rt_string(i8* %3990)
+  %3992 = load %SageValue, %SageValue* @rag_stats
+  %3993 = getelementptr [11 x i8], [11 x i8]* @.str.894, i64 0, i64 0
+  %3994 = call %SageValue @sage_rt_string(i8* %3993)
+  %3995 = call %SageValue @sage_rt_index(%SageValue %3992, %SageValue %3994)
+  %3996 = call %SageValue @sage_rt_str(%SageValue %3995)
+  %3997 = call %SageValue @sage_rt_add(%SageValue %3991, %SageValue %3996)
+  %3998 = getelementptr [8 x i8], [8 x i8]* @.str.895, i64 0, i64 0
+  %3999 = call %SageValue @sage_rt_string(i8* %3998)
+  %4000 = call %SageValue @sage_rt_add(%SageValue %3997, %SageValue %3999)
+  %4001 = load %SageValue, %SageValue* @rag_stats
+  %4002 = getelementptr [13 x i8], [13 x i8]* @.str.896, i64 0, i64 0
+  %4003 = call %SageValue @sage_rt_string(i8* %4002)
+  %4004 = call %SageValue @sage_rt_index(%SageValue %4001, %SageValue %4003)
+  %4005 = call %SageValue @sage_rt_str(%SageValue %4004)
+  %4006 = call %SageValue @sage_rt_add(%SageValue %4000, %SageValue %4005)
+  %4007 = getelementptr [9 x i8], [9 x i8]* @.str.897, i64 0, i64 0
+  %4008 = call %SageValue @sage_rt_string(i8* %4007)
+  %4009 = call %SageValue @sage_rt_add(%SageValue %4006, %SageValue %4008)
+  call void @sage_rt_print(%SageValue %4009)
+  %4010 = getelementptr [1 x i8], [1 x i8]* @.str.898, i64 0, i64 0
   %4011 = call %SageValue @sage_rt_string(i8* %4010)
-  %4012 = call %SageValue @sage_rt_add(%SageValue %4009, %SageValue %4011)
-  %4013 = call %SageValue @sage_fn_emit(%SageValue %4012)
-  %4014 = getelementptr [32 x i8], [32 x i8]* @.str.892, i64 0, i64 0
+  call void @sage_rt_print(%SageValue %4011)
+  %4012 = getelementptr [75 x i8], [75 x i8]* @.str.899, i64 0, i64 0
+  %4013 = call %SageValue @sage_rt_string(i8* %4012)
+  call void @sage_rt_print(%SageValue %4013)
+  %4014 = getelementptr [74 x i8], [74 x i8]* @.str.900, i64 0, i64 0
   %4015 = call %SageValue @sage_rt_string(i8* %4014)
-  %4016 = load %SageValue, %SageValue* @DQ
-  %4017 = call %SageValue @sage_rt_add(%SageValue %4015, %SageValue %4016)
-  %4018 = getelementptr [7 x i8], [7 x i8]* @.str.893, i64 0, i64 0
+  call void @sage_rt_print(%SageValue %4015)
+  %4016 = getelementptr [77 x i8], [77 x i8]* @.str.901, i64 0, i64 0
+  %4017 = call %SageValue @sage_rt_string(i8* %4016)
+  call void @sage_rt_print(%SageValue %4017)
+  %4018 = getelementptr [1 x i8], [1 x i8]* @.str.902, i64 0, i64 0
   %4019 = call %SageValue @sage_rt_string(i8* %4018)
-  %4020 = call %SageValue @sage_rt_add(%SageValue %4017, %SageValue %4019)
-  %4021 = load %SageValue, %SageValue* @DQ
-  %4022 = call %SageValue @sage_rt_add(%SageValue %4020, %SageValue %4021)
-  %4023 = getelementptr [3 x i8], [3 x i8]* @.str.894, i64 0, i64 0
-  %4024 = call %SageValue @sage_rt_string(i8* %4023)
-  %4025 = call %SageValue @sage_rt_add(%SageValue %4022, %SageValue %4024)
-  %4026 = load %SageValue, %SageValue* @DQ
-  %4027 = call %SageValue @sage_rt_add(%SageValue %4025, %SageValue %4026)
-  %4028 = load %SageValue, %SageValue* @DQ
-  %4029 = call %SageValue @sage_rt_add(%SageValue %4027, %SageValue %4028)
-  %4030 = getelementptr [3 x i8], [3 x i8]* @.str.895, i64 0, i64 0
-  %4031 = call %SageValue @sage_rt_string(i8* %4030)
-  %4032 = call %SageValue @sage_rt_add(%SageValue %4029, %SageValue %4031)
-  %4033 = load %SageValue, %SageValue* @DQ
-  %4034 = call %SageValue @sage_rt_add(%SageValue %4032, %SageValue %4033)
-  %4035 = load %SageValue, %SageValue* @DQ
-  %4036 = call %SageValue @sage_rt_add(%SageValue %4034, %SageValue %4035)
-  %4037 = getelementptr [7 x i8], [7 x i8]* @.str.896, i64 0, i64 0
-  %4038 = call %SageValue @sage_rt_string(i8* %4037)
-  %4039 = call %SageValue @sage_rt_add(%SageValue %4036, %SageValue %4038)
-  %4040 = call %SageValue @sage_fn_emit(%SageValue %4039)
-  %4041 = getelementptr [32 x i8], [32 x i8]* @.str.897, i64 0, i64 0
-  %4042 = call %SageValue @sage_rt_string(i8* %4041)
-  %4043 = load %SageValue, %SageValue* @DQ
-  %4044 = call %SageValue @sage_rt_add(%SageValue %4042, %SageValue %4043)
-  %4045 = getelementptr [10 x i8], [10 x i8]* @.str.898, i64 0, i64 0
-  %4046 = call %SageValue @sage_rt_string(i8* %4045)
-  %4047 = call %SageValue @sage_rt_add(%SageValue %4044, %SageValue %4046)
-  %4048 = load %SageValue, %SageValue* @DQ
-  %4049 = call %SageValue @sage_rt_add(%SageValue %4047, %SageValue %4048)
-  %4050 = getelementptr [3 x i8], [3 x i8]* @.str.899, i64 0, i64 0
-  %4051 = call %SageValue @sage_rt_string(i8* %4050)
-  %4052 = call %SageValue @sage_rt_add(%SageValue %4049, %SageValue %4051)
-  %4053 = load %SageValue, %SageValue* @DQ
-  %4054 = call %SageValue @sage_rt_add(%SageValue %4052, %SageValue %4053)
-  %4055 = load %SageValue, %SageValue* @DQ
-  %4056 = call %SageValue @sage_rt_add(%SageValue %4054, %SageValue %4055)
-  %4057 = getelementptr [3 x i8], [3 x i8]* @.str.900, i64 0, i64 0
-  %4058 = call %SageValue @sage_rt_string(i8* %4057)
-  %4059 = call %SageValue @sage_rt_add(%SageValue %4056, %SageValue %4058)
-  %4060 = load %SageValue, %SageValue* @DQ
-  %4061 = call %SageValue @sage_rt_add(%SageValue %4059, %SageValue %4060)
-  %4062 = load %SageValue, %SageValue* @DQ
-  %4063 = call %SageValue @sage_rt_add(%SageValue %4061, %SageValue %4062)
-  %4064 = getelementptr [7 x i8], [7 x i8]* @.str.901, i64 0, i64 0
-  %4065 = call %SageValue @sage_rt_string(i8* %4064)
-  %4066 = call %SageValue @sage_rt_add(%SageValue %4063, %SageValue %4065)
-  %4067 = call %SageValue @sage_fn_emit(%SageValue %4066)
-  %4068 = getelementptr [32 x i8], [32 x i8]* @.str.902, i64 0, i64 0
-  %4069 = call %SageValue @sage_rt_string(i8* %4068)
-  %4070 = load %SageValue, %SageValue* @DQ
-  %4071 = call %SageValue @sage_rt_add(%SageValue %4069, %SageValue %4070)
-  %4072 = getelementptr [5 x i8], [5 x i8]* @.str.903, i64 0, i64 0
-  %4073 = call %SageValue @sage_rt_string(i8* %4072)
-  %4074 = call %SageValue @sage_rt_add(%SageValue %4071, %SageValue %4073)
-  %4075 = load %SageValue, %SageValue* @DQ
-  %4076 = call %SageValue @sage_rt_add(%SageValue %4074, %SageValue %4075)
-  %4077 = getelementptr [3 x i8], [3 x i8]* @.str.904, i64 0, i64 0
-  %4078 = call %SageValue @sage_rt_string(i8* %4077)
-  %4079 = call %SageValue @sage_rt_add(%SageValue %4076, %SageValue %4078)
-  %4080 = load %SageValue, %SageValue* @DQ
-  %4081 = call %SageValue @sage_rt_add(%SageValue %4079, %SageValue %4080)
-  %4082 = load %SageValue, %SageValue* @DQ
-  %4083 = call %SageValue @sage_rt_add(%SageValue %4081, %SageValue %4082)
-  %4084 = getelementptr [3 x i8], [3 x i8]* @.str.905, i64 0, i64 0
-  %4085 = call %SageValue @sage_rt_string(i8* %4084)
-  %4086 = call %SageValue @sage_rt_add(%SageValue %4083, %SageValue %4085)
-  %4087 = load %SageValue, %SageValue* @DQ
-  %4088 = call %SageValue @sage_rt_add(%SageValue %4086, %SageValue %4087)
-  %4089 = load %SageValue, %SageValue* @DQ
-  %4090 = call %SageValue @sage_rt_add(%SageValue %4088, %SageValue %4089)
-  %4091 = getelementptr [7 x i8], [7 x i8]* @.str.906, i64 0, i64 0
-  %4092 = call %SageValue @sage_rt_string(i8* %4091)
-  %4093 = call %SageValue @sage_rt_add(%SageValue %4090, %SageValue %4092)
-  %4094 = call %SageValue @sage_fn_emit(%SageValue %4093)
-  %4095 = getelementptr [32 x i8], [32 x i8]* @.str.907, i64 0, i64 0
-  %4096 = call %SageValue @sage_rt_string(i8* %4095)
-  %4097 = load %SageValue, %SageValue* @DQ
-  %4098 = call %SageValue @sage_rt_add(%SageValue %4096, %SageValue %4097)
-  %4099 = getelementptr [9 x i8], [9 x i8]* @.str.908, i64 0, i64 0
-  %4100 = call %SageValue @sage_rt_string(i8* %4099)
-  %4101 = call %SageValue @sage_rt_add(%SageValue %4098, %SageValue %4100)
-  %4102 = load %SageValue, %SageValue* @DQ
-  %4103 = call %SageValue @sage_rt_add(%SageValue %4101, %SageValue %4102)
-  %4104 = getelementptr [3 x i8], [3 x i8]* @.str.909, i64 0, i64 0
-  %4105 = call %SageValue @sage_rt_string(i8* %4104)
-  %4106 = call %SageValue @sage_rt_add(%SageValue %4103, %SageValue %4105)
-  %4107 = load %SageValue, %SageValue* @DQ
-  %4108 = call %SageValue @sage_rt_add(%SageValue %4106, %SageValue %4107)
-  %4109 = load %SageValue, %SageValue* @DQ
-  %4110 = call %SageValue @sage_rt_add(%SageValue %4108, %SageValue %4109)
-  %4111 = getelementptr [3 x i8], [3 x i8]* @.str.910, i64 0, i64 0
-  %4112 = call %SageValue @sage_rt_string(i8* %4111)
-  %4113 = call %SageValue @sage_rt_add(%SageValue %4110, %SageValue %4112)
-  %4114 = load %SageValue, %SageValue* @DQ
-  %4115 = call %SageValue @sage_rt_add(%SageValue %4113, %SageValue %4114)
-  %4116 = load %SageValue, %SageValue* @DQ
-  %4117 = call %SageValue @sage_rt_add(%SageValue %4115, %SageValue %4116)
-  %4118 = getelementptr [7 x i8], [7 x i8]* @.str.911, i64 0, i64 0
-  %4119 = call %SageValue @sage_rt_string(i8* %4118)
-  %4120 = call %SageValue @sage_rt_add(%SageValue %4117, %SageValue %4119)
-  %4121 = call %SageValue @sage_fn_emit(%SageValue %4120)
-  %4122 = getelementptr [40 x i8], [40 x i8]* @.str.912, i64 0, i64 0
-  %4123 = call %SageValue @sage_rt_string(i8* %4122)
-  %4124 = call %SageValue @sage_fn_emit(%SageValue %4123)
-  %4125 = getelementptr [39 x i8], [39 x i8]* @.str.913, i64 0, i64 0
-  %4126 = call %SageValue @sage_rt_string(i8* %4125)
-  %4127 = load %SageValue, %SageValue* @DQ
-  %4128 = call %SageValue @sage_rt_add(%SageValue %4126, %SageValue %4127)
-  %4129 = getelementptr [7 x i8], [7 x i8]* @.str.914, i64 0, i64 0
-  %4130 = call %SageValue @sage_rt_string(i8* %4129)
-  %4131 = call %SageValue @sage_rt_add(%SageValue %4128, %SageValue %4130)
-  %4132 = load %SageValue, %SageValue* @DQ
-  %4133 = call %SageValue @sage_rt_add(%SageValue %4131, %SageValue %4132)
-  %4134 = getelementptr [14 x i8], [14 x i8]* @.str.915, i64 0, i64 0
-  %4135 = call %SageValue @sage_rt_string(i8* %4134)
-  %4136 = call %SageValue @sage_rt_add(%SageValue %4133, %SageValue %4135)
-  %4137 = call %SageValue @sage_fn_emit(%SageValue %4136)
-  %4138 = getelementptr [37 x i8], [37 x i8]* @.str.916, i64 0, i64 0
-  %4139 = call %SageValue @sage_rt_string(i8* %4138)
-  %4140 = load %SageValue, %SageValue* @DQ
-  %4141 = call %SageValue @sage_rt_add(%SageValue %4139, %SageValue %4140)
-  %4142 = getelementptr [8 x i8], [8 x i8]* @.str.917, i64 0, i64 0
-  %4143 = call %SageValue @sage_rt_string(i8* %4142)
-  %4144 = call %SageValue @sage_rt_add(%SageValue %4141, %SageValue %4143)
-  %4145 = load %SageValue, %SageValue* @DQ
-  %4146 = call %SageValue @sage_rt_add(%SageValue %4144, %SageValue %4145)
-  %4147 = getelementptr [3 x i8], [3 x i8]* @.str.918, i64 0, i64 0
-  %4148 = call %SageValue @sage_rt_string(i8* %4147)
-  %4149 = call %SageValue @sage_rt_add(%SageValue %4146, %SageValue %4148)
-  %4150 = call %SageValue @sage_fn_emit(%SageValue %4149)
-  %4151 = getelementptr [73 x i8], [73 x i8]* @.str.919, i64 0, i64 0
-  %4152 = call %SageValue @sage_rt_string(i8* %4151)
-  %4153 = call %SageValue @sage_fn_emit(%SageValue %4152)
-  %4154 = getelementptr [14 x i8], [14 x i8]* @.str.920, i64 0, i64 0
-  %4155 = call %SageValue @sage_rt_string(i8* %4154)
-  %4156 = load %SageValue, %SageValue* @DQ
-  %4157 = call %SageValue @sage_rt_add(%SageValue %4155, %SageValue %4156)
-  %4158 = getelementptr [6 x i8], [6 x i8]* @.str.921, i64 0, i64 0
-  %4159 = call %SageValue @sage_rt_string(i8* %4158)
-  %4160 = call %SageValue @sage_rt_add(%SageValue %4157, %SageValue %4159)
-  %4161 = load %SageValue, %SageValue* @DQ
-  %4162 = call %SageValue @sage_rt_add(%SageValue %4160, %SageValue %4161)
-  %4163 = getelementptr [3 x i8], [3 x i8]* @.str.922, i64 0, i64 0
-  %4164 = call %SageValue @sage_rt_string(i8* %4163)
-  %4165 = call %SageValue @sage_rt_add(%SageValue %4162, %SageValue %4164)
-  %4166 = call %SageValue @sage_fn_emit(%SageValue %4165)
-  %4167 = getelementptr [19 x i8], [19 x i8]* @.str.923, i64 0, i64 0
-  %4168 = call %SageValue @sage_rt_string(i8* %4167)
-  %4169 = load %SageValue, %SageValue* @DQ
-  %4170 = call %SageValue @sage_rt_add(%SageValue %4168, %SageValue %4169)
-  %4171 = getelementptr [14 x i8], [14 x i8]* @.str.924, i64 0, i64 0
-  %4172 = call %SageValue @sage_rt_string(i8* %4171)
-  %4173 = call %SageValue @sage_rt_add(%SageValue %4170, %SageValue %4172)
-  %4174 = load %SageValue, %SageValue* @DQ
-  %4175 = call %SageValue @sage_rt_add(%SageValue %4173, %SageValue %4174)
-  %4176 = call %SageValue @sage_fn_emit(%SageValue %4175)
-  %4177 = getelementptr [14 x i8], [14 x i8]* @.str.925, i64 0, i64 0
-  %4178 = call %SageValue @sage_rt_string(i8* %4177)
-  %4179 = call %SageValue @sage_fn_emit(%SageValue %4178)
-  %4180 = getelementptr [26 x i8], [26 x i8]* @.str.926, i64 0, i64 0
-  %4181 = call %SageValue @sage_rt_string(i8* %4180)
-  %4182 = load %SageValue, %SageValue* @DQ
-  %4183 = call %SageValue @sage_rt_add(%SageValue %4181, %SageValue %4182)
-  %4184 = getelementptr [7 x i8], [7 x i8]* @.str.927, i64 0, i64 0
-  %4185 = call %SageValue @sage_rt_string(i8* %4184)
-  %4186 = call %SageValue @sage_rt_add(%SageValue %4183, %SageValue %4185)
-  %4187 = load %SageValue, %SageValue* @DQ
-  %4188 = call %SageValue @sage_rt_add(%SageValue %4186, %SageValue %4187)
-  %4189 = getelementptr [2 x i8], [2 x i8]* @.str.928, i64 0, i64 0
-  %4190 = call %SageValue @sage_rt_string(i8* %4189)
-  %4191 = call %SageValue @sage_rt_add(%SageValue %4188, %SageValue %4190)
-  %4192 = call %SageValue @sage_fn_emit(%SageValue %4191)
-  %4193 = getelementptr [39 x i8], [39 x i8]* @.str.929, i64 0, i64 0
-  %4194 = call %SageValue @sage_rt_string(i8* %4193)
-  %4195 = call %SageValue @sage_fn_emit(%SageValue %4194)
-  %4196 = getelementptr [23 x i8], [23 x i8]* @.str.930, i64 0, i64 0
-  %4197 = call %SageValue @sage_rt_string(i8* %4196)
-  %4198 = load %SageValue, %SageValue* @DQ
-  %4199 = call %SageValue @sage_rt_add(%SageValue %4197, %SageValue %4198)
-  %4200 = getelementptr [5 x i8], [5 x i8]* @.str.931, i64 0, i64 0
-  %4201 = call %SageValue @sage_rt_string(i8* %4200)
-  %4202 = call %SageValue @sage_rt_add(%SageValue %4199, %SageValue %4201)
-  %4203 = load %SageValue, %SageValue* @DQ
-  %4204 = call %SageValue @sage_rt_add(%SageValue %4202, %SageValue %4203)
-  %4205 = getelementptr [11 x i8], [11 x i8]* @.str.932, i64 0, i64 0
-  %4206 = call %SageValue @sage_rt_string(i8* %4205)
-  %4207 = call %SageValue @sage_rt_add(%SageValue %4204, %SageValue %4206)
-  %4208 = call %SageValue @sage_fn_emit(%SageValue %4207)
-  %4209 = getelementptr [27 x i8], [27 x i8]* @.str.933, i64 0, i64 0
-  %4210 = call %SageValue @sage_rt_string(i8* %4209)
-  %4211 = load %SageValue, %SageValue* @DQ
-  %4212 = call %SageValue @sage_rt_add(%SageValue %4210, %SageValue %4211)
-  %4213 = getelementptr [6 x i8], [6 x i8]* @.str.934, i64 0, i64 0
-  %4214 = call %SageValue @sage_rt_string(i8* %4213)
-  %4215 = call %SageValue @sage_rt_add(%SageValue %4212, %SageValue %4214)
-  %4216 = load %SageValue, %SageValue* @DQ
-  %4217 = call %SageValue @sage_rt_add(%SageValue %4215, %SageValue %4216)
-  %4218 = getelementptr [2 x i8], [2 x i8]* @.str.935, i64 0, i64 0
-  %4219 = call %SageValue @sage_rt_string(i8* %4218)
-  %4220 = call %SageValue @sage_rt_add(%SageValue %4217, %SageValue %4219)
-  %4221 = call %SageValue @sage_fn_emit(%SageValue %4220)
-  %4222 = getelementptr [39 x i8], [39 x i8]* @.str.936, i64 0, i64 0
-  %4223 = call %SageValue @sage_rt_string(i8* %4222)
-  %4224 = call %SageValue @sage_fn_emit(%SageValue %4223)
-  %4225 = getelementptr [15 x i8], [15 x i8]* @.str.937, i64 0, i64 0
-  %4226 = call %SageValue @sage_rt_string(i8* %4225)
-  %4227 = load %SageValue, %SageValue* @DQ
-  %4228 = call %SageValue @sage_rt_add(%SageValue %4226, %SageValue %4227)
-  %4229 = getelementptr [11 x i8], [11 x i8]* @.str.938, i64 0, i64 0
-  %4230 = call %SageValue @sage_rt_string(i8* %4229)
-  %4231 = call %SageValue @sage_rt_add(%SageValue %4228, %SageValue %4230)
-  %4232 = load %SageValue, %SageValue* @DQ
-  %4233 = call %SageValue @sage_rt_add(%SageValue %4231, %SageValue %4232)
-  %4234 = getelementptr [11 x i8], [11 x i8]* @.str.939, i64 0, i64 0
-  %4235 = call %SageValue @sage_rt_string(i8* %4234)
-  %4236 = call %SageValue @sage_rt_add(%SageValue %4233, %SageValue %4235)
-  %4237 = load %SageValue, %SageValue* @DQ
-  %4238 = call %SageValue @sage_rt_add(%SageValue %4236, %SageValue %4237)
-  %4239 = getelementptr [13 x i8], [13 x i8]* @.str.940, i64 0, i64 0
-  %4240 = call %SageValue @sage_rt_string(i8* %4239)
-  %4241 = call %SageValue @sage_rt_add(%SageValue %4238, %SageValue %4240)
-  %4242 = load %SageValue, %SageValue* @DQ
-  %4243 = call %SageValue @sage_rt_add(%SageValue %4241, %SageValue %4242)
-  %4244 = getelementptr [6 x i8], [6 x i8]* @.str.941, i64 0, i64 0
-  %4245 = call %SageValue @sage_rt_string(i8* %4244)
-  %4246 = call %SageValue @sage_rt_add(%SageValue %4243, %SageValue %4245)
-  %4247 = load %SageValue, %SageValue* @DQ
-  %4248 = call %SageValue @sage_rt_add(%SageValue %4246, %SageValue %4247)
-  %4249 = getelementptr [9 x i8], [9 x i8]* @.str.942, i64 0, i64 0
-  %4250 = call %SageValue @sage_rt_string(i8* %4249)
-  %4251 = call %SageValue @sage_rt_add(%SageValue %4248, %SageValue %4250)
-  %4252 = load %SageValue, %SageValue* @DQ
-  %4253 = call %SageValue @sage_rt_add(%SageValue %4251, %SageValue %4252)
-  %4254 = getelementptr [11 x i8], [11 x i8]* @.str.943, i64 0, i64 0
-  %4255 = call %SageValue @sage_rt_string(i8* %4254)
-  %4256 = call %SageValue @sage_rt_add(%SageValue %4253, %SageValue %4255)
-  %4257 = load %SageValue, %SageValue* @DQ
-  %4258 = call %SageValue @sage_rt_add(%SageValue %4256, %SageValue %4257)
-  %4259 = getelementptr [12 x i8], [12 x i8]* @.str.944, i64 0, i64 0
-  %4260 = call %SageValue @sage_rt_string(i8* %4259)
-  %4261 = call %SageValue @sage_rt_add(%SageValue %4258, %SageValue %4260)
-  %4262 = load %SageValue, %SageValue* @DQ
-  %4263 = call %SageValue @sage_rt_add(%SageValue %4261, %SageValue %4262)
-  %4264 = getelementptr [4 x i8], [4 x i8]* @.str.945, i64 0, i64 0
-  %4265 = call %SageValue @sage_rt_string(i8* %4264)
-  %4266 = call %SageValue @sage_rt_add(%SageValue %4263, %SageValue %4265)
-  %4267 = call %SageValue @sage_fn_emit(%SageValue %4266)
-  %4268 = getelementptr [27 x i8], [27 x i8]* @.str.946, i64 0, i64 0
-  %4269 = call %SageValue @sage_rt_string(i8* %4268)
-  %4270 = load %SageValue, %SageValue* @DQ
-  %4271 = call %SageValue @sage_rt_add(%SageValue %4269, %SageValue %4270)
-  %4272 = getelementptr [9 x i8], [9 x i8]* @.str.947, i64 0, i64 0
-  %4273 = call %SageValue @sage_rt_string(i8* %4272)
-  %4274 = call %SageValue @sage_rt_add(%SageValue %4271, %SageValue %4273)
-  %4275 = load %SageValue, %SageValue* @DQ
-  %4276 = call %SageValue @sage_rt_add(%SageValue %4274, %SageValue %4275)
-  %4277 = getelementptr [2 x i8], [2 x i8]* @.str.948, i64 0, i64 0
-  %4278 = call %SageValue @sage_rt_string(i8* %4277)
-  %4279 = call %SageValue @sage_rt_add(%SageValue %4276, %SageValue %4278)
-  %4280 = call %SageValue @sage_fn_emit(%SageValue %4279)
-  %4281 = getelementptr [15 x i8], [15 x i8]* @.str.949, i64 0, i64 0
-  %4282 = call %SageValue @sage_rt_string(i8* %4281)
-  %4283 = load %SageValue, %SageValue* @DQ
-  %4284 = call %SageValue @sage_rt_add(%SageValue %4282, %SageValue %4283)
-  %4285 = getelementptr [40 x i8], [40 x i8]* @.str.950, i64 0, i64 0
-  %4286 = call %SageValue @sage_rt_string(i8* %4285)
-  %4287 = call %SageValue @sage_rt_add(%SageValue %4284, %SageValue %4286)
-  %4288 = load %SageValue, %SageValue* @DQ
-  %4289 = call %SageValue @sage_rt_add(%SageValue %4287, %SageValue %4288)
-  %4290 = call %SageValue @sage_fn_emit(%SageValue %4289)
-  %4291 = getelementptr [27 x i8], [27 x i8]* @.str.951, i64 0, i64 0
-  %4292 = call %SageValue @sage_rt_string(i8* %4291)
-  %4293 = load %SageValue, %SageValue* @DQ
-  %4294 = call %SageValue @sage_rt_add(%SageValue %4292, %SageValue %4293)
-  %4295 = getelementptr [8 x i8], [8 x i8]* @.str.952, i64 0, i64 0
-  %4296 = call %SageValue @sage_rt_string(i8* %4295)
-  %4297 = call %SageValue @sage_rt_add(%SageValue %4294, %SageValue %4296)
-  %4298 = load %SageValue, %SageValue* @DQ
-  %4299 = call %SageValue @sage_rt_add(%SageValue %4297, %SageValue %4298)
-  %4300 = getelementptr [2 x i8], [2 x i8]* @.str.953, i64 0, i64 0
-  %4301 = call %SageValue @sage_rt_string(i8* %4300)
-  %4302 = call %SageValue @sage_rt_add(%SageValue %4299, %SageValue %4301)
-  %4303 = call %SageValue @sage_fn_emit(%SageValue %4302)
-  %4304 = getelementptr [52 x i8], [52 x i8]* @.str.954, i64 0, i64 0
-  %4305 = call %SageValue @sage_rt_string(i8* %4304)
-  %4306 = call %SageValue @sage_fn_emit(%SageValue %4305)
-  %4307 = getelementptr [27 x i8], [27 x i8]* @.str.955, i64 0, i64 0
-  %4308 = call %SageValue @sage_rt_string(i8* %4307)
-  %4309 = load %SageValue, %SageValue* @DQ
-  %4310 = call %SageValue @sage_rt_add(%SageValue %4308, %SageValue %4309)
-  %4311 = getelementptr [8 x i8], [8 x i8]* @.str.956, i64 0, i64 0
-  %4312 = call %SageValue @sage_rt_string(i8* %4311)
-  %4313 = call %SageValue @sage_rt_add(%SageValue %4310, %SageValue %4312)
-  %4314 = load %SageValue, %SageValue* @DQ
-  %4315 = call %SageValue @sage_rt_add(%SageValue %4313, %SageValue %4314)
-  %4316 = call %SageValue @sage_fn_emit(%SageValue %4315)
-  %4317 = getelementptr [15 x i8], [15 x i8]* @.str.957, i64 0, i64 0
-  %4318 = call %SageValue @sage_rt_string(i8* %4317)
-  %4319 = load %SageValue, %SageValue* @DQ
-  %4320 = call %SageValue @sage_rt_add(%SageValue %4318, %SageValue %4319)
-  %4321 = getelementptr [21 x i8], [21 x i8]* @.str.958, i64 0, i64 0
-  %4322 = call %SageValue @sage_rt_string(i8* %4321)
-  %4323 = call %SageValue @sage_rt_add(%SageValue %4320, %SageValue %4322)
-  %4324 = load %SageValue, %SageValue* @DQ
-  %4325 = call %SageValue @sage_rt_add(%SageValue %4323, %SageValue %4324)
-  %4326 = call %SageValue @sage_fn_emit(%SageValue %4325)
-  %4327 = getelementptr [27 x i8], [27 x i8]* @.str.959, i64 0, i64 0
-  %4328 = call %SageValue @sage_rt_string(i8* %4327)
-  %4329 = load %SageValue, %SageValue* @DQ
-  %4330 = call %SageValue @sage_rt_add(%SageValue %4328, %SageValue %4329)
-  %4331 = getelementptr [9 x i8], [9 x i8]* @.str.960, i64 0, i64 0
-  %4332 = call %SageValue @sage_rt_string(i8* %4331)
-  %4333 = call %SageValue @sage_rt_add(%SageValue %4330, %SageValue %4332)
-  %4334 = load %SageValue, %SageValue* @DQ
-  %4335 = call %SageValue @sage_rt_add(%SageValue %4333, %SageValue %4334)
-  %4336 = getelementptr [2 x i8], [2 x i8]* @.str.961, i64 0, i64 0
-  %4337 = call %SageValue @sage_rt_string(i8* %4336)
-  %4338 = call %SageValue @sage_rt_add(%SageValue %4335, %SageValue %4337)
-  %4339 = call %SageValue @sage_fn_emit(%SageValue %4338)
-  %4340 = getelementptr [53 x i8], [53 x i8]* @.str.962, i64 0, i64 0
-  %4341 = call %SageValue @sage_rt_string(i8* %4340)
-  %4342 = call %SageValue @sage_fn_emit(%SageValue %4341)
-  %4343 = getelementptr [27 x i8], [27 x i8]* @.str.963, i64 0, i64 0
-  %4344 = call %SageValue @sage_rt_string(i8* %4343)
-  %4345 = load %SageValue, %SageValue* @DQ
-  %4346 = call %SageValue @sage_rt_add(%SageValue %4344, %SageValue %4345)
-  %4347 = getelementptr [9 x i8], [9 x i8]* @.str.964, i64 0, i64 0
-  %4348 = call %SageValue @sage_rt_string(i8* %4347)
-  %4349 = call %SageValue @sage_rt_add(%SageValue %4346, %SageValue %4348)
-  %4350 = load %SageValue, %SageValue* @DQ
-  %4351 = call %SageValue @sage_rt_add(%SageValue %4349, %SageValue %4350)
-  %4352 = call %SageValue @sage_fn_emit(%SageValue %4351)
-  %4353 = getelementptr [15 x i8], [15 x i8]* @.str.965, i64 0, i64 0
-  %4354 = call %SageValue @sage_rt_string(i8* %4353)
-  %4355 = load %SageValue, %SageValue* @DQ
-  %4356 = call %SageValue @sage_rt_add(%SageValue %4354, %SageValue %4355)
-  %4357 = getelementptr [22 x i8], [22 x i8]* @.str.966, i64 0, i64 0
-  %4358 = call %SageValue @sage_rt_string(i8* %4357)
-  %4359 = call %SageValue @sage_rt_add(%SageValue %4356, %SageValue %4358)
-  %4360 = load %SageValue, %SageValue* @DQ
-  %4361 = call %SageValue @sage_rt_add(%SageValue %4359, %SageValue %4360)
-  %4362 = call %SageValue @sage_fn_emit(%SageValue %4361)
-  %4363 = getelementptr [27 x i8], [27 x i8]* @.str.967, i64 0, i64 0
-  %4364 = call %SageValue @sage_rt_string(i8* %4363)
-  %4365 = load %SageValue, %SageValue* @DQ
-  %4366 = call %SageValue @sage_rt_add(%SageValue %4364, %SageValue %4365)
-  %4367 = getelementptr [10 x i8], [10 x i8]* @.str.968, i64 0, i64 0
-  %4368 = call %SageValue @sage_rt_string(i8* %4367)
-  %4369 = call %SageValue @sage_rt_add(%SageValue %4366, %SageValue %4368)
-  %4370 = load %SageValue, %SageValue* @DQ
-  %4371 = call %SageValue @sage_rt_add(%SageValue %4369, %SageValue %4370)
-  %4372 = getelementptr [2 x i8], [2 x i8]* @.str.969, i64 0, i64 0
-  %4373 = call %SageValue @sage_rt_string(i8* %4372)
-  %4374 = call %SageValue @sage_rt_add(%SageValue %4371, %SageValue %4373)
-  %4375 = call %SageValue @sage_fn_emit(%SageValue %4374)
-  %4376 = getelementptr [54 x i8], [54 x i8]* @.str.970, i64 0, i64 0
-  %4377 = call %SageValue @sage_rt_string(i8* %4376)
-  %4378 = call %SageValue @sage_fn_emit(%SageValue %4377)
-  %4379 = getelementptr [27 x i8], [27 x i8]* @.str.971, i64 0, i64 0
-  %4380 = call %SageValue @sage_rt_string(i8* %4379)
-  %4381 = load %SageValue, %SageValue* @DQ
-  %4382 = call %SageValue @sage_rt_add(%SageValue %4380, %SageValue %4381)
-  %4383 = getelementptr [10 x i8], [10 x i8]* @.str.972, i64 0, i64 0
-  %4384 = call %SageValue @sage_rt_string(i8* %4383)
-  %4385 = call %SageValue @sage_rt_add(%SageValue %4382, %SageValue %4384)
-  %4386 = load %SageValue, %SageValue* @DQ
-  %4387 = call %SageValue @sage_rt_add(%SageValue %4385, %SageValue %4386)
-  %4388 = call %SageValue @sage_fn_emit(%SageValue %4387)
-  %4389 = getelementptr [15 x i8], [15 x i8]* @.str.973, i64 0, i64 0
-  %4390 = call %SageValue @sage_rt_string(i8* %4389)
-  %4391 = load %SageValue, %SageValue* @DQ
-  %4392 = call %SageValue @sage_rt_add(%SageValue %4390, %SageValue %4391)
-  %4393 = getelementptr [23 x i8], [23 x i8]* @.str.974, i64 0, i64 0
-  %4394 = call %SageValue @sage_rt_string(i8* %4393)
-  %4395 = call %SageValue @sage_rt_add(%SageValue %4392, %SageValue %4394)
-  %4396 = load %SageValue, %SageValue* @DQ
-  %4397 = call %SageValue @sage_rt_add(%SageValue %4395, %SageValue %4396)
-  %4398 = call %SageValue @sage_fn_emit(%SageValue %4397)
-  %4399 = getelementptr [27 x i8], [27 x i8]* @.str.975, i64 0, i64 0
-  %4400 = call %SageValue @sage_rt_string(i8* %4399)
-  %4401 = load %SageValue, %SageValue* @DQ
-  %4402 = call %SageValue @sage_rt_add(%SageValue %4400, %SageValue %4401)
-  %4403 = getelementptr [8 x i8], [8 x i8]* @.str.976, i64 0, i64 0
-  %4404 = call %SageValue @sage_rt_string(i8* %4403)
-  %4405 = call %SageValue @sage_rt_add(%SageValue %4402, %SageValue %4404)
-  %4406 = load %SageValue, %SageValue* @DQ
-  %4407 = call %SageValue @sage_rt_add(%SageValue %4405, %SageValue %4406)
-  %4408 = getelementptr [2 x i8], [2 x i8]* @.str.977, i64 0, i64 0
-  %4409 = call %SageValue @sage_rt_string(i8* %4408)
-  %4410 = call %SageValue @sage_rt_add(%SageValue %4407, %SageValue %4409)
-  %4411 = call %SageValue @sage_fn_emit(%SageValue %4410)
-  %4412 = getelementptr [59 x i8], [59 x i8]* @.str.978, i64 0, i64 0
-  %4413 = call %SageValue @sage_rt_string(i8* %4412)
-  %4414 = call %SageValue @sage_fn_emit(%SageValue %4413)
-  %4415 = getelementptr [27 x i8], [27 x i8]* @.str.979, i64 0, i64 0
-  %4416 = call %SageValue @sage_rt_string(i8* %4415)
-  %4417 = load %SageValue, %SageValue* @DQ
-  %4418 = call %SageValue @sage_rt_add(%SageValue %4416, %SageValue %4417)
-  %4419 = getelementptr [8 x i8], [8 x i8]* @.str.980, i64 0, i64 0
-  %4420 = call %SageValue @sage_rt_string(i8* %4419)
-  %4421 = call %SageValue @sage_rt_add(%SageValue %4418, %SageValue %4420)
-  %4422 = load %SageValue, %SageValue* @DQ
-  %4423 = call %SageValue @sage_rt_add(%SageValue %4421, %SageValue %4422)
-  %4424 = call %SageValue @sage_fn_emit(%SageValue %4423)
-  %4425 = getelementptr [15 x i8], [15 x i8]* @.str.981, i64 0, i64 0
-  %4426 = call %SageValue @sage_rt_string(i8* %4425)
-  %4427 = load %SageValue, %SageValue* @DQ
-  %4428 = call %SageValue @sage_rt_add(%SageValue %4426, %SageValue %4427)
-  %4429 = getelementptr [21 x i8], [21 x i8]* @.str.982, i64 0, i64 0
-  %4430 = call %SageValue @sage_rt_string(i8* %4429)
-  %4431 = call %SageValue @sage_rt_add(%SageValue %4428, %SageValue %4430)
-  %4432 = load %SageValue, %SageValue* @DQ
-  %4433 = call %SageValue @sage_rt_add(%SageValue %4431, %SageValue %4432)
-  %4434 = call %SageValue @sage_fn_emit(%SageValue %4433)
-  %4435 = getelementptr [27 x i8], [27 x i8]* @.str.983, i64 0, i64 0
-  %4436 = call %SageValue @sage_rt_string(i8* %4435)
-  %4437 = load %SageValue, %SageValue* @DQ
-  %4438 = call %SageValue @sage_rt_add(%SageValue %4436, %SageValue %4437)
-  %4439 = getelementptr [5 x i8], [5 x i8]* @.str.984, i64 0, i64 0
-  %4440 = call %SageValue @sage_rt_string(i8* %4439)
-  %4441 = call %SageValue @sage_rt_add(%SageValue %4438, %SageValue %4440)
-  %4442 = load %SageValue, %SageValue* @DQ
-  %4443 = call %SageValue @sage_rt_add(%SageValue %4441, %SageValue %4442)
-  %4444 = getelementptr [13 x i8], [13 x i8]* @.str.985, i64 0, i64 0
-  %4445 = call %SageValue @sage_rt_string(i8* %4444)
-  %4446 = call %SageValue @sage_rt_add(%SageValue %4443, %SageValue %4445)
-  %4447 = load %SageValue, %SageValue* @DQ
-  %4448 = call %SageValue @sage_rt_add(%SageValue %4446, %SageValue %4447)
-  %4449 = getelementptr [5 x i8], [5 x i8]* @.str.986, i64 0, i64 0
-  %4450 = call %SageValue @sage_rt_string(i8* %4449)
-  %4451 = call %SageValue @sage_rt_add(%SageValue %4448, %SageValue %4450)
-  %4452 = load %SageValue, %SageValue* @DQ
-  %4453 = call %SageValue @sage_rt_add(%SageValue %4451, %SageValue %4452)
-  %4454 = getelementptr [13 x i8], [13 x i8]* @.str.987, i64 0, i64 0
-  %4455 = call %SageValue @sage_rt_string(i8* %4454)
-  %4456 = call %SageValue @sage_rt_add(%SageValue %4453, %SageValue %4455)
-  %4457 = load %SageValue, %SageValue* @DQ
-  %4458 = call %SageValue @sage_rt_add(%SageValue %4456, %SageValue %4457)
-  %4459 = getelementptr [7 x i8], [7 x i8]* @.str.988, i64 0, i64 0
-  %4460 = call %SageValue @sage_rt_string(i8* %4459)
-  %4461 = call %SageValue @sage_rt_add(%SageValue %4458, %SageValue %4460)
-  %4462 = load %SageValue, %SageValue* @DQ
-  %4463 = call %SageValue @sage_rt_add(%SageValue %4461, %SageValue %4462)
-  %4464 = getelementptr [13 x i8], [13 x i8]* @.str.989, i64 0, i64 0
-  %4465 = call %SageValue @sage_rt_string(i8* %4464)
-  %4466 = call %SageValue @sage_rt_add(%SageValue %4463, %SageValue %4465)
-  %4467 = load %SageValue, %SageValue* @DQ
-  %4468 = call %SageValue @sage_rt_add(%SageValue %4466, %SageValue %4467)
-  %4469 = getelementptr [6 x i8], [6 x i8]* @.str.990, i64 0, i64 0
-  %4470 = call %SageValue @sage_rt_string(i8* %4469)
-  %4471 = call %SageValue @sage_rt_add(%SageValue %4468, %SageValue %4470)
-  %4472 = load %SageValue, %SageValue* @DQ
-  %4473 = call %SageValue @sage_rt_add(%SageValue %4471, %SageValue %4472)
-  %4474 = getelementptr [13 x i8], [13 x i8]* @.str.991, i64 0, i64 0
-  %4475 = call %SageValue @sage_rt_string(i8* %4474)
-  %4476 = call %SageValue @sage_rt_add(%SageValue %4473, %SageValue %4475)
-  %4477 = load %SageValue, %SageValue* @DQ
-  %4478 = call %SageValue @sage_rt_add(%SageValue %4476, %SageValue %4477)
-  %4479 = getelementptr [9 x i8], [9 x i8]* @.str.992, i64 0, i64 0
-  %4480 = call %SageValue @sage_rt_string(i8* %4479)
-  %4481 = call %SageValue @sage_rt_add(%SageValue %4478, %SageValue %4480)
-  %4482 = load %SageValue, %SageValue* @DQ
-  %4483 = call %SageValue @sage_rt_add(%SageValue %4481, %SageValue %4482)
-  %4484 = getelementptr [13 x i8], [13 x i8]* @.str.993, i64 0, i64 0
-  %4485 = call %SageValue @sage_rt_string(i8* %4484)
-  %4486 = call %SageValue @sage_rt_add(%SageValue %4483, %SageValue %4485)
-  %4487 = load %SageValue, %SageValue* @DQ
-  %4488 = call %SageValue @sage_rt_add(%SageValue %4486, %SageValue %4487)
-  %4489 = getelementptr [5 x i8], [5 x i8]* @.str.994, i64 0, i64 0
-  %4490 = call %SageValue @sage_rt_string(i8* %4489)
-  %4491 = call %SageValue @sage_rt_add(%SageValue %4488, %SageValue %4490)
-  %4492 = load %SageValue, %SageValue* @DQ
-  %4493 = call %SageValue @sage_rt_add(%SageValue %4491, %SageValue %4492)
-  %4494 = getelementptr [13 x i8], [13 x i8]* @.str.995, i64 0, i64 0
-  %4495 = call %SageValue @sage_rt_string(i8* %4494)
-  %4496 = call %SageValue @sage_rt_add(%SageValue %4493, %SageValue %4495)
-  %4497 = load %SageValue, %SageValue* @DQ
-  %4498 = call %SageValue @sage_rt_add(%SageValue %4496, %SageValue %4497)
-  %4499 = getelementptr [2 x i8], [2 x i8]* @.str.996, i64 0, i64 0
-  %4500 = call %SageValue @sage_rt_string(i8* %4499)
-  %4501 = call %SageValue @sage_rt_add(%SageValue %4498, %SageValue %4500)
-  %4502 = load %SageValue, %SageValue* @DQ
-  %4503 = call %SageValue @sage_rt_add(%SageValue %4501, %SageValue %4502)
-  %4504 = getelementptr [13 x i8], [13 x i8]* @.str.997, i64 0, i64 0
-  %4505 = call %SageValue @sage_rt_string(i8* %4504)
-  %4506 = call %SageValue @sage_rt_add(%SageValue %4503, %SageValue %4505)
-  %4507 = load %SageValue, %SageValue* @DQ
-  %4508 = call %SageValue @sage_rt_add(%SageValue %4506, %SageValue %4507)
-  %4509 = getelementptr [8 x i8], [8 x i8]* @.str.998, i64 0, i64 0
-  %4510 = call %SageValue @sage_rt_string(i8* %4509)
-  %4511 = call %SageValue @sage_rt_add(%SageValue %4508, %SageValue %4510)
-  %4512 = load %SageValue, %SageValue* @DQ
-  %4513 = call %SageValue @sage_rt_add(%SageValue %4511, %SageValue %4512)
-  %4514 = getelementptr [13 x i8], [13 x i8]* @.str.999, i64 0, i64 0
-  %4515 = call %SageValue @sage_rt_string(i8* %4514)
-  %4516 = call %SageValue @sage_rt_add(%SageValue %4513, %SageValue %4515)
-  %4517 = load %SageValue, %SageValue* @DQ
-  %4518 = call %SageValue @sage_rt_add(%SageValue %4516, %SageValue %4517)
-  %4519 = getelementptr [9 x i8], [9 x i8]* @.str.1000, i64 0, i64 0
-  %4520 = call %SageValue @sage_rt_string(i8* %4519)
-  %4521 = call %SageValue @sage_rt_add(%SageValue %4518, %SageValue %4520)
-  %4522 = load %SageValue, %SageValue* @DQ
-  %4523 = call %SageValue @sage_rt_add(%SageValue %4521, %SageValue %4522)
-  %4524 = getelementptr [13 x i8], [13 x i8]* @.str.1001, i64 0, i64 0
-  %4525 = call %SageValue @sage_rt_string(i8* %4524)
-  %4526 = call %SageValue @sage_rt_add(%SageValue %4523, %SageValue %4525)
-  %4527 = load %SageValue, %SageValue* @DQ
-  %4528 = call %SageValue @sage_rt_add(%SageValue %4526, %SageValue %4527)
-  %4529 = getelementptr [10 x i8], [10 x i8]* @.str.1002, i64 0, i64 0
-  %4530 = call %SageValue @sage_rt_string(i8* %4529)
-  %4531 = call %SageValue @sage_rt_add(%SageValue %4528, %SageValue %4530)
-  %4532 = load %SageValue, %SageValue* @DQ
-  %4533 = call %SageValue @sage_rt_add(%SageValue %4531, %SageValue %4532)
-  %4534 = getelementptr [13 x i8], [13 x i8]* @.str.1003, i64 0, i64 0
-  %4535 = call %SageValue @sage_rt_string(i8* %4534)
-  %4536 = call %SageValue @sage_rt_add(%SageValue %4533, %SageValue %4535)
-  %4537 = load %SageValue, %SageValue* @DQ
-  %4538 = call %SageValue @sage_rt_add(%SageValue %4536, %SageValue %4537)
-  %4539 = getelementptr [8 x i8], [8 x i8]* @.str.1004, i64 0, i64 0
-  %4540 = call %SageValue @sage_rt_string(i8* %4539)
-  %4541 = call %SageValue @sage_rt_add(%SageValue %4538, %SageValue %4540)
-  %4542 = load %SageValue, %SageValue* @DQ
-  %4543 = call %SageValue @sage_rt_add(%SageValue %4541, %SageValue %4542)
-  %4544 = getelementptr [2 x i8], [2 x i8]* @.str.1005, i64 0, i64 0
-  %4545 = call %SageValue @sage_rt_string(i8* %4544)
-  %4546 = call %SageValue @sage_rt_add(%SageValue %4543, %SageValue %4545)
-  %4547 = call %SageValue @sage_fn_emit(%SageValue %4546)
-  %4548 = getelementptr [27 x i8], [27 x i8]* @.str.1006, i64 0, i64 0
-  %4549 = call %SageValue @sage_rt_string(i8* %4548)
-  %4550 = call %SageValue @sage_fn_emit(%SageValue %4549)
-  %4551 = getelementptr [29 x i8], [29 x i8]* @.str.1007, i64 0, i64 0
-  %4552 = call %SageValue @sage_rt_string(i8* %4551)
-  %4553 = load %SageValue, %SageValue* @DQ
-  %4554 = call %SageValue @sage_rt_add(%SageValue %4552, %SageValue %4553)
-  %4555 = getelementptr [7 x i8], [7 x i8]* @.str.1008, i64 0, i64 0
-  %4556 = call %SageValue @sage_rt_string(i8* %4555)
-  %4557 = call %SageValue @sage_rt_add(%SageValue %4554, %SageValue %4556)
-  %4558 = load %SageValue, %SageValue* @DQ
-  %4559 = call %SageValue @sage_rt_add(%SageValue %4557, %SageValue %4558)
-  %4560 = getelementptr [3 x i8], [3 x i8]* @.str.1009, i64 0, i64 0
-  %4561 = call %SageValue @sage_rt_string(i8* %4560)
-  %4562 = call %SageValue @sage_rt_add(%SageValue %4559, %SageValue %4561)
-  %4563 = call %SageValue @sage_fn_emit(%SageValue %4562)
-  %4564 = getelementptr [26 x i8], [26 x i8]* @.str.1010, i64 0, i64 0
-  %4565 = call %SageValue @sage_rt_string(i8* %4564)
-  %4566 = call %SageValue @sage_fn_emit(%SageValue %4565)
-  %4567 = getelementptr [29 x i8], [29 x i8]* @.str.1011, i64 0, i64 0
-  %4568 = call %SageValue @sage_rt_string(i8* %4567)
-  %4569 = load %SageValue, %SageValue* @DQ
-  %4570 = call %SageValue @sage_rt_add(%SageValue %4568, %SageValue %4569)
-  %4571 = getelementptr [6 x i8], [6 x i8]* @.str.1012, i64 0, i64 0
-  %4572 = call %SageValue @sage_rt_string(i8* %4571)
-  %4573 = call %SageValue @sage_rt_add(%SageValue %4570, %SageValue %4572)
-  %4574 = load %SageValue, %SageValue* @DQ
-  %4575 = call %SageValue @sage_rt_add(%SageValue %4573, %SageValue %4574)
-  %4576 = getelementptr [3 x i8], [3 x i8]* @.str.1013, i64 0, i64 0
-  %4577 = call %SageValue @sage_rt_string(i8* %4576)
-  %4578 = call %SageValue @sage_rt_add(%SageValue %4575, %SageValue %4577)
-  %4579 = call %SageValue @sage_fn_emit(%SageValue %4578)
-  %4580 = getelementptr [26 x i8], [26 x i8]* @.str.1014, i64 0, i64 0
-  %4581 = call %SageValue @sage_rt_string(i8* %4580)
-  %4582 = call %SageValue @sage_fn_emit(%SageValue %4581)
-  %4583 = getelementptr [29 x i8], [29 x i8]* @.str.1015, i64 0, i64 0
-  %4584 = call %SageValue @sage_rt_string(i8* %4583)
-  %4585 = load %SageValue, %SageValue* @DQ
-  %4586 = call %SageValue @sage_rt_add(%SageValue %4584, %SageValue %4585)
-  %4587 = getelementptr [8 x i8], [8 x i8]* @.str.1016, i64 0, i64 0
-  %4588 = call %SageValue @sage_rt_string(i8* %4587)
-  %4589 = call %SageValue @sage_rt_add(%SageValue %4586, %SageValue %4588)
-  %4590 = load %SageValue, %SageValue* @DQ
-  %4591 = call %SageValue @sage_rt_add(%SageValue %4589, %SageValue %4590)
-  %4592 = getelementptr [3 x i8], [3 x i8]* @.str.1017, i64 0, i64 0
-  %4593 = call %SageValue @sage_rt_string(i8* %4592)
-  %4594 = call %SageValue @sage_rt_add(%SageValue %4591, %SageValue %4593)
-  %4595 = call %SageValue @sage_fn_emit(%SageValue %4594)
-  %4596 = getelementptr [26 x i8], [26 x i8]* @.str.1018, i64 0, i64 0
-  %4597 = call %SageValue @sage_rt_string(i8* %4596)
-  %4598 = call %SageValue @sage_fn_emit(%SageValue %4597)
-  %4599 = getelementptr [29 x i8], [29 x i8]* @.str.1019, i64 0, i64 0
-  %4600 = call %SageValue @sage_rt_string(i8* %4599)
-  %4601 = load %SageValue, %SageValue* @DQ
-  %4602 = call %SageValue @sage_rt_add(%SageValue %4600, %SageValue %4601)
-  %4603 = getelementptr [10 x i8], [10 x i8]* @.str.1020, i64 0, i64 0
-  %4604 = call %SageValue @sage_rt_string(i8* %4603)
-  %4605 = call %SageValue @sage_rt_add(%SageValue %4602, %SageValue %4604)
-  %4606 = load %SageValue, %SageValue* @DQ
-  %4607 = call %SageValue @sage_rt_add(%SageValue %4605, %SageValue %4606)
-  %4608 = getelementptr [3 x i8], [3 x i8]* @.str.1021, i64 0, i64 0
-  %4609 = call %SageValue @sage_rt_string(i8* %4608)
-  %4610 = call %SageValue @sage_rt_add(%SageValue %4607, %SageValue %4609)
-  %4611 = call %SageValue @sage_fn_emit(%SageValue %4610)
-  %4612 = getelementptr [26 x i8], [26 x i8]* @.str.1022, i64 0, i64 0
-  %4613 = call %SageValue @sage_rt_string(i8* %4612)
-  %4614 = call %SageValue @sage_fn_emit(%SageValue %4613)
-  %4615 = getelementptr [29 x i8], [29 x i8]* @.str.1023, i64 0, i64 0
-  %4616 = call %SageValue @sage_rt_string(i8* %4615)
-  %4617 = load %SageValue, %SageValue* @DQ
-  %4618 = call %SageValue @sage_rt_add(%SageValue %4616, %SageValue %4617)
-  %4619 = getelementptr [8 x i8], [8 x i8]* @.str.1024, i64 0, i64 0
-  %4620 = call %SageValue @sage_rt_string(i8* %4619)
-  %4621 = call %SageValue @sage_rt_add(%SageValue %4618, %SageValue %4620)
-  %4622 = load %SageValue, %SageValue* @DQ
-  %4623 = call %SageValue @sage_rt_add(%SageValue %4621, %SageValue %4622)
-  %4624 = getelementptr [3 x i8], [3 x i8]* @.str.1025, i64 0, i64 0
-  %4625 = call %SageValue @sage_rt_string(i8* %4624)
-  %4626 = call %SageValue @sage_rt_add(%SageValue %4623, %SageValue %4625)
-  %4627 = call %SageValue @sage_fn_emit(%SageValue %4626)
-  %4628 = getelementptr [26 x i8], [26 x i8]* @.str.1026, i64 0, i64 0
-  %4629 = call %SageValue @sage_rt_string(i8* %4628)
-  %4630 = call %SageValue @sage_fn_emit(%SageValue %4629)
-  %4631 = getelementptr [23 x i8], [23 x i8]* @.str.1027, i64 0, i64 0
-  %4632 = call %SageValue @sage_rt_string(i8* %4631)
-  %4633 = call %SageValue @sage_fn_emit(%SageValue %4632)
-  %4634 = getelementptr [51 x i8], [51 x i8]* @.str.1028, i64 0, i64 0
-  %4635 = call %SageValue @sage_rt_string(i8* %4634)
-  %4636 = call %SageValue @sage_fn_emit(%SageValue %4635)
-  %4637 = getelementptr [45 x i8], [45 x i8]* @.str.1029, i64 0, i64 0
-  %4638 = call %SageValue @sage_rt_string(i8* %4637)
-  %4639 = call %SageValue @sage_fn_emit(%SageValue %4638)
-  %4640 = getelementptr [43 x i8], [43 x i8]* @.str.1030, i64 0, i64 0
-  %4641 = call %SageValue @sage_rt_string(i8* %4640)
-  %4642 = call %SageValue @sage_fn_emit(%SageValue %4641)
-  %4643 = getelementptr [48 x i8], [48 x i8]* @.str.1031, i64 0, i64 0
-  %4644 = call %SageValue @sage_rt_string(i8* %4643)
-  %4645 = call %SageValue @sage_fn_emit(%SageValue %4644)
-  %4646 = getelementptr [44 x i8], [44 x i8]* @.str.1032, i64 0, i64 0
-  %4647 = call %SageValue @sage_rt_string(i8* %4646)
-  %4648 = call %SageValue @sage_fn_emit(%SageValue %4647)
-  %4649 = getelementptr [25 x i8], [25 x i8]* @.str.1033, i64 0, i64 0
-  %4650 = call %SageValue @sage_rt_string(i8* %4649)
-  %4651 = call %SageValue @sage_fn_emit(%SageValue %4650)
-  %4652 = getelementptr [17 x i8], [17 x i8]* @.str.1034, i64 0, i64 0
-  %4653 = call %SageValue @sage_rt_string(i8* %4652)
-  %4654 = load %SageValue, %SageValue* @DQ
-  %4655 = call %SageValue @sage_rt_add(%SageValue %4653, %SageValue %4654)
-  %4656 = getelementptr [5 x i8], [5 x i8]* @.str.1035, i64 0, i64 0
-  %4657 = call %SageValue @sage_rt_string(i8* %4656)
-  %4658 = call %SageValue @sage_rt_add(%SageValue %4655, %SageValue %4657)
-  %4659 = load %SageValue, %SageValue* @DQ
-  %4660 = call %SageValue @sage_rt_add(%SageValue %4658, %SageValue %4659)
-  %4661 = getelementptr [8 x i8], [8 x i8]* @.str.1036, i64 0, i64 0
-  %4662 = call %SageValue @sage_rt_string(i8* %4661)
-  %4663 = call %SageValue @sage_rt_add(%SageValue %4660, %SageValue %4662)
-  %4664 = call %SageValue @sage_fn_emit(%SageValue %4663)
-  %4665 = getelementptr [50 x i8], [50 x i8]* @.str.1037, i64 0, i64 0
-  %4666 = call %SageValue @sage_rt_string(i8* %4665)
-  %4667 = call %SageValue @sage_fn_emit(%SageValue %4666)
-  %4668 = getelementptr [19 x i8], [19 x i8]* @.str.1038, i64 0, i64 0
-  %4669 = call %SageValue @sage_rt_string(i8* %4668)
-  %4670 = load %SageValue, %SageValue* @DQ
-  %4671 = call %SageValue @sage_rt_add(%SageValue %4669, %SageValue %4670)
-  %4672 = load %SageValue, %SageValue* @DQ
-  %4673 = call %SageValue @sage_rt_add(%SageValue %4671, %SageValue %4672)
-  %4674 = call %SageValue @sage_fn_emit(%SageValue %4673)
-  %4675 = getelementptr [37 x i8], [37 x i8]* @.str.1039, i64 0, i64 0
-  %4676 = call %SageValue @sage_rt_string(i8* %4675)
-  %4677 = load %SageValue, %SageValue* @DQ
-  %4678 = call %SageValue @sage_rt_add(%SageValue %4676, %SageValue %4677)
-  %4679 = getelementptr [3 x i8], [3 x i8]* @.str.1040, i64 0, i64 0
-  %4680 = call %SageValue @sage_rt_string(i8* %4679)
-  %4681 = call %SageValue @sage_rt_add(%SageValue %4678, %SageValue %4680)
-  %4682 = load %SageValue, %SageValue* @DQ
-  %4683 = call %SageValue @sage_rt_add(%SageValue %4681, %SageValue %4682)
-  %4684 = getelementptr [8 x i8], [8 x i8]* @.str.1041, i64 0, i64 0
-  %4685 = call %SageValue @sage_rt_string(i8* %4684)
-  %4686 = call %SageValue @sage_rt_add(%SageValue %4683, %SageValue %4685)
-  %4687 = call %SageValue @sage_fn_emit(%SageValue %4686)
-  %4688 = getelementptr [19 x i8], [19 x i8]* @.str.1042, i64 0, i64 0
-  %4689 = call %SageValue @sage_rt_string(i8* %4688)
-  %4690 = load %SageValue, %SageValue* @DQ
-  %4691 = call %SageValue @sage_rt_add(%SageValue %4689, %SageValue %4690)
-  %4692 = load %SageValue, %SageValue* @DQ
-  %4693 = call %SageValue @sage_rt_add(%SageValue %4691, %SageValue %4692)
-  %4694 = call %SageValue @sage_fn_emit(%SageValue %4693)
-  %4695 = getelementptr [46 x i8], [46 x i8]* @.str.1043, i64 0, i64 0
-  %4696 = call %SageValue @sage_rt_string(i8* %4695)
-  %4697 = call %SageValue @sage_fn_emit(%SageValue %4696)
-  %4698 = call %SageValue @sage_fn_emit_all()
-  %4699 = getelementptr [1 x i8], [1 x i8]* @.str.1044, i64 0, i64 0
-  %4700 = call %SageValue @sage_rt_string(i8* %4699)
-  call void @sage_rt_print(%SageValue %4700)
-  %4701 = getelementptr [5 x i8], [5 x i8]* @.str.1045, i64 0, i64 0
-  %4702 = call %SageValue @sage_rt_string(i8* %4701)
-  %4703 = getelementptr [25 x i8], [25 x i8]* @.str.1046, i64 0, i64 0
-  %4704 = call %SageValue @sage_rt_string(i8* %4703)
-  %4705 = call %SageValue @sage_fn_log(%SageValue %4702, %SageValue %4704)
-  %4706 = call %SageValue @sage_fn_divider()
-  %4707 = getelementptr [18 x i8], [18 x i8]* @.str.1047, i64 0, i64 0
-  %4708 = call %SageValue @sage_rt_string(i8* %4707)
-  %4709 = getelementptr [6 x i8], [6 x i8]* @.str.1048, i64 0, i64 0
-  %4710 = call %SageValue @sage_rt_string(i8* %4709)
-  %4711 = call %SageValue @sage_rt_nil()
-  store %SageValue %4711, %SageValue* @gguf_meta
-  %4712 = load %SageValue, %SageValue* @gguf_meta
-  %4713 = load %SageValue, %SageValue* @d_model
-  %4714 = load %SageValue, %SageValue* @n_layers
-  %4715 = load %SageValue, %SageValue* @n_heads
-  %4716 = load %SageValue, %SageValue* @d_ff
-  %4717 = load %SageValue, %SageValue* @vocab
-  %4718 = load %SageValue, %SageValue* @context_length
-  %4719 = call %SageValue @sage_rt_nil()
-  %4720 = load %SageValue, %SageValue* @gguf_meta
-  %4721 = getelementptr [5 x i8], [5 x i8]* @.str.1049, i64 0, i64 0
-  %4722 = call %SageValue @sage_rt_string(i8* %4721)
-  %4723 = call %SageValue @sage_rt_nil()
-  %4724 = getelementptr [23 x i8], [23 x i8]* @.str.1050, i64 0, i64 0
-  %4725 = call %SageValue @sage_rt_string(i8* %4724)
-  %4726 = getelementptr [55 x i8], [55 x i8]* @.str.1051, i64 0, i64 0
-  %4727 = call %SageValue @sage_rt_string(i8* %4726)
-  %4728 = call %SageValue @sage_rt_number(double 7.000000e-01)
-  %4729 = load %SageValue, %SageValue* @context_length
-  %4730 = call %SageValue @sage_rt_nil()
-  store %SageValue %4730, %SageValue* @modelfile
-  %4731 = getelementptr [17 x i8], [17 x i8]* @.str.1052, i64 0, i64 0
-  %4732 = call %SageValue @sage_rt_string(i8* %4731)
-  %4733 = load %SageValue, %SageValue* @modelfile
-  %4734 = call %SageValue @sage_rt_nil()
-  %4735 = getelementptr [23 x i8], [23 x i8]* @.str.1053, i64 0, i64 0
-  %4736 = call %SageValue @sage_rt_string(i8* %4735)
-  %4737 = call %SageValue @sage_rt_nil()
-  store %SageValue %4737, %SageValue* @quant_script
-  %4738 = getelementptr [19 x i8], [19 x i8]* @.str.1054, i64 0, i64 0
-  %4739 = call %SageValue @sage_rt_string(i8* %4738)
-  %4740 = load %SageValue, %SageValue* @quant_script
-  %4741 = call %SageValue @sage_rt_nil()
-  %4742 = getelementptr [5 x i8], [5 x i8]* @.str.1055, i64 0, i64 0
-  %4743 = call %SageValue @sage_rt_string(i8* %4742)
-  %4744 = getelementptr [34 x i8], [34 x i8]* @.str.1056, i64 0, i64 0
-  %4745 = call %SageValue @sage_rt_string(i8* %4744)
-  %4746 = call %SageValue @sage_fn_log(%SageValue %4743, %SageValue %4745)
-  %4747 = getelementptr [5 x i8], [5 x i8]* @.str.1057, i64 0, i64 0
-  %4748 = call %SageValue @sage_rt_string(i8* %4747)
-  %4749 = getelementptr [43 x i8], [43 x i8]* @.str.1058, i64 0, i64 0
-  %4750 = call %SageValue @sage_rt_string(i8* %4749)
-  %4751 = call %SageValue @sage_fn_log(%SageValue %4748, %SageValue %4750)
-  %4752 = getelementptr [1 x i8], [1 x i8]* @.str.1059, i64 0, i64 0
-  %4753 = call %SageValue @sage_rt_string(i8* %4752)
-  call void @sage_rt_print(%SageValue %4753)
-  %4754 = getelementptr [4 x i8], [4 x i8]* @.str.1060, i64 0, i64 0
-  %4755 = call %SageValue @sage_rt_string(i8* %4754)
-  %4756 = getelementptr [28 x i8], [28 x i8]* @.str.1061, i64 0, i64 0
-  %4757 = call %SageValue @sage_rt_string(i8* %4756)
-  %4758 = call %SageValue @sage_fn_log(%SageValue %4755, %SageValue %4757)
-  %4759 = call %SageValue @sage_fn_divider()
-  %4760 = getelementptr [17 x i8], [17 x i8]* @.str.1062, i64 0, i64 0
-  %4761 = call %SageValue @sage_rt_string(i8* %4760)
-  %4762 = getelementptr [1 x i8], [1 x i8]* @.str.1063, i64 0, i64 0
-  %4763 = call %SageValue @sage_rt_string(i8* %4762)
-  %4764 = call %SageValue @sage_rt_nil()
-  %4765 = load %SageValue, %SageValue* @all_losses
-  %4766 = getelementptr [20 x i8], [20 x i8]* @.str.1064, i64 0, i64 0
-  %4767 = call %SageValue @sage_rt_string(i8* %4766)
-  %4768 = getelementptr [26 x i8], [26 x i8]* @.str.1065, i64 0, i64 0
-  %4769 = call %SageValue @sage_rt_string(i8* %4768)
-  %4770 = call %SageValue @sage_rt_nil()
-  %4771 = load %SageValue, %SageValue* @layer_qw
-  %4772 = call %SageValue @sage_rt_number(double 0.000000e+00)
-  %4773 = call %SageValue @sage_rt_index(%SageValue %4771, %SageValue %4772)
-  %4774 = getelementptr [15 x i8], [15 x i8]* @.str.1066, i64 0, i64 0
-  %4775 = call %SageValue @sage_rt_string(i8* %4774)
-  %4776 = getelementptr [27 x i8], [27 x i8]* @.str.1067, i64 0, i64 0
-  %4777 = call %SageValue @sage_rt_string(i8* %4776)
-  %4778 = call %SageValue @sage_rt_nil()
-  %4779 = getelementptr [15 x i8], [15 x i8]* @.str.1068, i64 0, i64 0
-  %4780 = call %SageValue @sage_rt_string(i8* %4779)
-  %4781 = load %SageValue, %SageValue* @n_layers
-  %4782 = load %SageValue, %SageValue* @d_model
-  %4783 = load %SageValue, %SageValue* @d_ff
-  %4784 = load %SageValue, %SageValue* @n_heads
-  %4785 = getelementptr [28 x i8], [28 x i8]* @.str.1069, i64 0, i64 0
-  %4786 = call %SageValue @sage_rt_string(i8* %4785)
-  %4787 = call %SageValue @sage_rt_nil()
-  %4788 = load %SageValue, %SageValue* @theory_steps
-  %4789 = call %SageValue @sage_rt_number(double 2.000000e+01)
-  %4790 = call %SageValue @sage_rt_number(double 3.000000e-04)
-  %4791 = call %SageValue @sage_rt_number(double 1.000000e-05)
-  %4792 = getelementptr [7 x i8], [7 x i8]* @.str.1070, i64 0, i64 0
-  %4793 = call %SageValue @sage_rt_string(i8* %4792)
-  %4794 = getelementptr [27 x i8], [27 x i8]* @.str.1071, i64 0, i64 0
-  %4795 = call %SageValue @sage_rt_string(i8* %4794)
-  %4796 = call %SageValue @sage_rt_nil()
-  %4797 = getelementptr [4 x i8], [4 x i8]* @.str.1072, i64 0, i64 0
-  %4798 = call %SageValue @sage_rt_string(i8* %4797)
-  %4799 = getelementptr [48 x i8], [48 x i8]* @.str.1073, i64 0, i64 0
-  %4800 = call %SageValue @sage_rt_string(i8* %4799)
-  %4801 = call %SageValue @sage_fn_log(%SageValue %4798, %SageValue %4800)
-  %4802 = getelementptr [4 x i8], [4 x i8]* @.str.1074, i64 0, i64 0
-  %4803 = call %SageValue @sage_rt_string(i8* %4802)
-  %4804 = load %SageValue, %SageValue* @mon
-  %4805 = call %SageValue @sage_rt_nil()
-  %4806 = call %SageValue @sage_fn_log(%SageValue %4803, %SageValue %4805)
-  %4807 = getelementptr [1 x i8], [1 x i8]* @.str.1075, i64 0, i64 0
-  %4808 = call %SageValue @sage_rt_string(i8* %4807)
-  call void @sage_rt_print(%SageValue %4808)
-  %4809 = call %SageValue @sage_fn_separator()
-  %4810 = getelementptr [25 x i8], [25 x i8]* @.str.1076, i64 0, i64 0
-  %4811 = call %SageValue @sage_rt_string(i8* %4810)
-  call void @sage_rt_print(%SageValue %4811)
-  %4812 = call %SageValue @sage_fn_separator()
-  %4813 = getelementptr [1 x i8], [1 x i8]* @.str.1077, i64 0, i64 0
-  %4814 = call %SageValue @sage_rt_string(i8* %4813)
-  call void @sage_rt_print(%SageValue %4814)
-  %4815 = getelementptr [48 x i8], [48 x i8]* @.str.1078, i64 0, i64 0
-  %4816 = call %SageValue @sage_rt_string(i8* %4815)
-  call void @sage_rt_print(%SageValue %4816)
-  %4817 = getelementptr [5 x i8], [5 x i8]* @.str.1079, i64 0, i64 0
-  %4818 = call %SageValue @sage_rt_string(i8* %4817)
-  %4819 = load %SageValue, %SageValue* @d_model
-  %4820 = call %SageValue @sage_rt_str(%SageValue %4819)
-  %4821 = call %SageValue @sage_rt_add(%SageValue %4818, %SageValue %4820)
-  %4822 = getelementptr [8 x i8], [8 x i8]* @.str.1080, i64 0, i64 0
-  %4823 = call %SageValue @sage_rt_string(i8* %4822)
-  %4824 = call %SageValue @sage_rt_add(%SageValue %4821, %SageValue %4823)
-  %4825 = load %SageValue, %SageValue* @n_heads
-  %4826 = call %SageValue @sage_rt_str(%SageValue %4825)
-  %4827 = call %SageValue @sage_rt_add(%SageValue %4824, %SageValue %4826)
-  %4828 = getelementptr [9 x i8], [9 x i8]* @.str.1081, i64 0, i64 0
-  %4829 = call %SageValue @sage_rt_string(i8* %4828)
-  %4830 = call %SageValue @sage_rt_add(%SageValue %4827, %SageValue %4829)
-  %4831 = load %SageValue, %SageValue* @n_layers
-  %4832 = call %SageValue @sage_rt_str(%SageValue %4831)
-  %4833 = call %SageValue @sage_rt_add(%SageValue %4830, %SageValue %4832)
-  %4834 = getelementptr [5 x i8], [5 x i8]* @.str.1082, i64 0, i64 0
-  %4835 = call %SageValue @sage_rt_string(i8* %4834)
-  %4836 = call %SageValue @sage_rt_add(%SageValue %4833, %SageValue %4835)
-  %4837 = load %SageValue, %SageValue* @d_ff
-  %4838 = call %SageValue @sage_rt_str(%SageValue %4837)
-  %4839 = call %SageValue @sage_rt_add(%SageValue %4836, %SageValue %4838)
-  %4840 = getelementptr [8 x i8], [8 x i8]* @.str.1083, i64 0, i64 0
-  %4841 = call %SageValue @sage_rt_string(i8* %4840)
-  %4842 = call %SageValue @sage_rt_add(%SageValue %4839, %SageValue %4841)
-  %4843 = load %SageValue, %SageValue* @vocab
-  %4844 = call %SageValue @sage_rt_str(%SageValue %4843)
-  %4845 = call %SageValue @sage_rt_add(%SageValue %4842, %SageValue %4844)
-  %4846 = getelementptr [6 x i8], [6 x i8]* @.str.1084, i64 0, i64 0
-  %4847 = call %SageValue @sage_rt_string(i8* %4846)
-  %4848 = call %SageValue @sage_rt_add(%SageValue %4845, %SageValue %4847)
-  %4849 = load %SageValue, %SageValue* @context_length
-  %4850 = call %SageValue @sage_rt_str(%SageValue %4849)
-  %4851 = call %SageValue @sage_rt_add(%SageValue %4848, %SageValue %4850)
-  call void @sage_rt_print(%SageValue %4851)
-  %4852 = getelementptr [15 x i8], [15 x i8]* @.str.1085, i64 0, i64 0
-  %4853 = call %SageValue @sage_rt_string(i8* %4852)
-  %4854 = load %SageValue, %SageValue* @param_count
-  %4855 = call %SageValue @sage_rt_str(%SageValue %4854)
-  %4856 = call %SageValue @sage_rt_add(%SageValue %4853, %SageValue %4855)
-  call void @sage_rt_print(%SageValue %4856)
-  %4857 = getelementptr [1 x i8], [1 x i8]* @.str.1086, i64 0, i64 0
-  %4858 = call %SageValue @sage_rt_string(i8* %4857)
-  call void @sage_rt_print(%SageValue %4858)
-  %4859 = getelementptr [10 x i8], [10 x i8]* @.str.1087, i64 0, i64 0
-  %4860 = call %SageValue @sage_rt_string(i8* %4859)
-  call void @sage_rt_print(%SageValue %4860)
-  %4861 = getelementptr [14 x i8], [14 x i8]* @.str.1088, i64 0, i64 0
-  %4862 = call %SageValue @sage_rt_string(i8* %4861)
-  %4863 = load %SageValue, %SageValue* @theory_steps
-  %4864 = call %SageValue @sage_rt_str(%SageValue %4863)
-  %4865 = call %SageValue @sage_rt_add(%SageValue %4862, %SageValue %4864)
-  %4866 = getelementptr [14 x i8], [14 x i8]* @.str.1089, i64 0, i64 0
-  %4867 = call %SageValue @sage_rt_string(i8* %4866)
-  %4868 = call %SageValue @sage_rt_add(%SageValue %4865, %SageValue %4867)
-  %4869 = load %SageValue, %SageValue* @state1
-  %4870 = call %SageValue @sage_rt_nil()
-  %4871 = call %SageValue @sage_rt_str(%SageValue %4870)
-  %4872 = call %SageValue @sage_rt_add(%SageValue %4868, %SageValue %4871)
-  call void @sage_rt_print(%SageValue %4872)
-  %4873 = getelementptr [9 x i8], [9 x i8]* @.str.1090, i64 0, i64 0
-  %4874 = call %SageValue @sage_rt_string(i8* %4873)
-  %4875 = load %SageValue, %SageValue* @lora_steps
-  %4876 = call %SageValue @sage_rt_str(%SageValue %4875)
-  %4877 = call %SageValue @sage_rt_add(%SageValue %4874, %SageValue %4876)
-  %4878 = getelementptr [11 x i8], [11 x i8]* @.str.1091, i64 0, i64 0
-  %4879 = call %SageValue @sage_rt_string(i8* %4878)
-  %4880 = call %SageValue @sage_rt_add(%SageValue %4877, %SageValue %4879)
-  %4881 = load %SageValue, %SageValue* @file_count
-  %4882 = call %SageValue @sage_rt_str(%SageValue %4881)
-  %4883 = call %SageValue @sage_rt_add(%SageValue %4880, %SageValue %4882)
-  %4884 = getelementptr [14 x i8], [14 x i8]* @.str.1092, i64 0, i64 0
-  %4885 = call %SageValue @sage_rt_string(i8* %4884)
-  %4886 = call %SageValue @sage_rt_add(%SageValue %4883, %SageValue %4885)
-  %4887 = load %SageValue, %SageValue* @lora_rank
-  %4888 = call %SageValue @sage_rt_str(%SageValue %4887)
-  %4889 = call %SageValue @sage_rt_add(%SageValue %4886, %SageValue %4888)
-  %4890 = getelementptr [7 x i8], [7 x i8]* @.str.1093, i64 0, i64 0
-  %4891 = call %SageValue @sage_rt_string(i8* %4890)
-  %4892 = call %SageValue @sage_rt_add(%SageValue %4889, %SageValue %4891)
-  %4893 = load %SageValue, %SageValue* @state2
-  %4894 = call %SageValue @sage_rt_nil()
-  %4895 = call %SageValue @sage_rt_str(%SageValue %4894)
-  %4896 = call %SageValue @sage_rt_add(%SageValue %4892, %SageValue %4895)
-  call void @sage_rt_print(%SageValue %4896)
-  %4897 = getelementptr [8 x i8], [8 x i8]* @.str.1094, i64 0, i64 0
-  %4898 = call %SageValue @sage_rt_string(i8* %4897)
-  %4899 = load %SageValue, %SageValue* @dpo_ds
-  %4900 = getelementptr [6 x i8], [6 x i8]* @.str.1095, i64 0, i64 0
-  %4901 = call %SageValue @sage_rt_string(i8* %4900)
-  %4902 = call %SageValue @sage_rt_index(%SageValue %4899, %SageValue %4901)
-  %4903 = call %SageValue @sage_rt_len(%SageValue %4902)
-  %4904 = call %SageValue @sage_rt_str(%SageValue %4903)
-  %4905 = call %SageValue @sage_rt_add(%SageValue %4898, %SageValue %4904)
-  %4906 = getelementptr [18 x i8], [18 x i8]* @.str.1096, i64 0, i64 0
-  %4907 = call %SageValue @sage_rt_string(i8* %4906)
-  %4908 = call %SageValue @sage_rt_add(%SageValue %4905, %SageValue %4907)
-  call void @sage_rt_print(%SageValue %4908)
-  %4909 = getelementptr [1 x i8], [1 x i8]* @.str.1097, i64 0, i64 0
-  %4910 = call %SageValue @sage_rt_string(i8* %4909)
-  call void @sage_rt_print(%SageValue %4910)
-  %4911 = getelementptr [11 x i8], [11 x i8]* @.str.1098, i64 0, i64 0
-  %4912 = call %SageValue @sage_rt_string(i8* %4911)
-  call void @sage_rt_print(%SageValue %4912)
-  %4913 = getelementptr [11 x i8], [11 x i8]* @.str.1099, i64 0, i64 0
-  %4914 = call %SageValue @sage_rt_string(i8* %4913)
-  %4915 = load %SageValue, %SageValue* @memory
-  %4916 = getelementptr [9 x i8], [9 x i8]* @.str.1100, i64 0, i64 0
-  %4917 = call %SageValue @sage_rt_string(i8* %4916)
-  %4918 = call %SageValue @sage_rt_index(%SageValue %4915, %SageValue %4917)
-  %4919 = call %SageValue @sage_rt_len(%SageValue %4918)
-  %4920 = call %SageValue @sage_rt_str(%SageValue %4919)
-  %4921 = call %SageValue @sage_rt_add(%SageValue %4914, %SageValue %4920)
-  %4922 = getelementptr [13 x i8], [13 x i8]* @.str.1101, i64 0, i64 0
-  %4923 = call %SageValue @sage_rt_string(i8* %4922)
-  %4924 = call %SageValue @sage_rt_add(%SageValue %4921, %SageValue %4923)
-  %4925 = load %SageValue, %SageValue* @memory
-  %4926 = getelementptr [11 x i8], [11 x i8]* @.str.1102, i64 0, i64 0
-  %4927 = call %SageValue @sage_rt_string(i8* %4926)
-  %4928 = call %SageValue @sage_rt_index(%SageValue %4925, %SageValue %4927)
-  %4929 = call %SageValue @sage_rt_len(%SageValue %4928)
-  %4930 = call %SageValue @sage_rt_str(%SageValue %4929)
-  %4931 = call %SageValue @sage_rt_add(%SageValue %4924, %SageValue %4930)
-  %4932 = getelementptr [12 x i8], [12 x i8]* @.str.1103, i64 0, i64 0
-  %4933 = call %SageValue @sage_rt_string(i8* %4932)
-  %4934 = call %SageValue @sage_rt_add(%SageValue %4931, %SageValue %4933)
-  call void @sage_rt_print(%SageValue %4934)
-  %4935 = getelementptr [8 x i8], [8 x i8]* @.str.1104, i64 0, i64 0
-  %4936 = call %SageValue @sage_rt_string(i8* %4935)
-  %4937 = load %SageValue, %SageValue* @rag_stats
-  %4938 = getelementptr [11 x i8], [11 x i8]* @.str.1105, i64 0, i64 0
-  %4939 = call %SageValue @sage_rt_string(i8* %4938)
-  %4940 = call %SageValue @sage_rt_index(%SageValue %4937, %SageValue %4939)
-  %4941 = call %SageValue @sage_rt_str(%SageValue %4940)
-  %4942 = call %SageValue @sage_rt_add(%SageValue %4936, %SageValue %4941)
-  %4943 = getelementptr [8 x i8], [8 x i8]* @.str.1106, i64 0, i64 0
-  %4944 = call %SageValue @sage_rt_string(i8* %4943)
-  %4945 = call %SageValue @sage_rt_add(%SageValue %4942, %SageValue %4944)
-  %4946 = load %SageValue, %SageValue* @rag_stats
-  %4947 = getelementptr [13 x i8], [13 x i8]* @.str.1107, i64 0, i64 0
-  %4948 = call %SageValue @sage_rt_string(i8* %4947)
-  %4949 = call %SageValue @sage_rt_index(%SageValue %4946, %SageValue %4948)
-  %4950 = call %SageValue @sage_rt_str(%SageValue %4949)
-  %4951 = call %SageValue @sage_rt_add(%SageValue %4945, %SageValue %4950)
-  %4952 = getelementptr [9 x i8], [9 x i8]* @.str.1108, i64 0, i64 0
-  %4953 = call %SageValue @sage_rt_string(i8* %4952)
-  %4954 = call %SageValue @sage_rt_add(%SageValue %4951, %SageValue %4953)
-  call void @sage_rt_print(%SageValue %4954)
-  %4955 = getelementptr [1 x i8], [1 x i8]* @.str.1109, i64 0, i64 0
-  %4956 = call %SageValue @sage_rt_string(i8* %4955)
-  call void @sage_rt_print(%SageValue %4956)
-  %4957 = getelementptr [75 x i8], [75 x i8]* @.str.1110, i64 0, i64 0
-  %4958 = call %SageValue @sage_rt_string(i8* %4957)
-  call void @sage_rt_print(%SageValue %4958)
-  %4959 = getelementptr [74 x i8], [74 x i8]* @.str.1111, i64 0, i64 0
-  %4960 = call %SageValue @sage_rt_string(i8* %4959)
-  call void @sage_rt_print(%SageValue %4960)
-  %4961 = getelementptr [77 x i8], [77 x i8]* @.str.1112, i64 0, i64 0
-  %4962 = call %SageValue @sage_rt_string(i8* %4961)
-  call void @sage_rt_print(%SageValue %4962)
-  %4963 = getelementptr [1 x i8], [1 x i8]* @.str.1113, i64 0, i64 0
-  %4964 = call %SageValue @sage_rt_string(i8* %4963)
-  call void @sage_rt_print(%SageValue %4964)
-  %4965 = getelementptr [69 x i8], [69 x i8]* @.str.1114, i64 0, i64 0
-  %4966 = call %SageValue @sage_rt_string(i8* %4965)
-  call void @sage_rt_print(%SageValue %4966)
-  %4967 = getelementptr [44 x i8], [44 x i8]* @.str.1115, i64 0, i64 0
-  %4968 = call %SageValue @sage_rt_string(i8* %4967)
-  call void @sage_rt_print(%SageValue %4968)
-  %4969 = getelementptr [70 x i8], [70 x i8]* @.str.1116, i64 0, i64 0
-  %4970 = call %SageValue @sage_rt_string(i8* %4969)
-  call void @sage_rt_print(%SageValue %4970)
-  %4971 = getelementptr [1 x i8], [1 x i8]* @.str.1117, i64 0, i64 0
-  %4972 = call %SageValue @sage_rt_string(i8* %4971)
-  call void @sage_rt_print(%SageValue %4972)
-  %4973 = load %SageValue, %SageValue* @gpu
-  %4974 = load %SageValue, %SageValue* @d_model
-  %4975 = call %SageValue @sage_rt_number(double 1.000000e+01)
-  %4976 = call %SageValue @sage_rt_nil()
-  store %SageValue %4976, %SageValue* @bench
-  %4977 = getelementptr [10 x i8], [10 x i8]* @.str.1118, i64 0, i64 0
-  %4978 = call %SageValue @sage_rt_string(i8* %4977)
-  %4979 = load %SageValue, %SageValue* @bench
-  %4980 = getelementptr [7 x i8], [7 x i8]* @.str.1119, i64 0, i64 0
-  %4981 = call %SageValue @sage_rt_string(i8* %4980)
-  %4982 = call %SageValue @sage_rt_index(%SageValue %4979, %SageValue %4981)
-  %4983 = call %SageValue @sage_rt_str(%SageValue %4982)
-  %4984 = call %SageValue @sage_rt_add(%SageValue %4978, %SageValue %4983)
-  %4985 = getelementptr [10 x i8], [10 x i8]* @.str.1120, i64 0, i64 0
-  %4986 = call %SageValue @sage_rt_string(i8* %4985)
-  %4987 = call %SageValue @sage_rt_add(%SageValue %4984, %SageValue %4986)
-  %4988 = load %SageValue, %SageValue* @bench
-  %4989 = getelementptr [14 x i8], [14 x i8]* @.str.1121, i64 0, i64 0
-  %4990 = call %SageValue @sage_rt_string(i8* %4989)
-  %4991 = call %SageValue @sage_rt_index(%SageValue %4988, %SageValue %4990)
-  %4992 = call %SageValue @sage_rt_str(%SageValue %4991)
-  %4993 = call %SageValue @sage_rt_add(%SageValue %4987, %SageValue %4992)
-  %4994 = getelementptr [7 x i8], [7 x i8]* @.str.1122, i64 0, i64 0
-  %4995 = call %SageValue @sage_rt_string(i8* %4994)
-  %4996 = call %SageValue @sage_rt_add(%SageValue %4993, %SageValue %4995)
-  %4997 = load %SageValue, %SageValue* @d_model
-  %4998 = call %SageValue @sage_rt_str(%SageValue %4997)
-  %4999 = call %SageValue @sage_rt_add(%SageValue %4996, %SageValue %4998)
-  %5000 = getelementptr [2 x i8], [2 x i8]* @.str.1123, i64 0, i64 0
-  %5001 = call %SageValue @sage_rt_string(i8* %5000)
-  %5002 = call %SageValue @sage_rt_add(%SageValue %4999, %SageValue %5001)
-  %5003 = load %SageValue, %SageValue* @d_model
-  %5004 = call %SageValue @sage_rt_str(%SageValue %5003)
-  %5005 = call %SageValue @sage_rt_add(%SageValue %5002, %SageValue %5004)
-  %5006 = getelementptr [2 x i8], [2 x i8]* @.str.1124, i64 0, i64 0
-  %5007 = call %SageValue @sage_rt_string(i8* %5006)
-  %5008 = call %SageValue @sage_rt_add(%SageValue %5005, %SageValue %5007)
-  call void @sage_rt_print(%SageValue %5008)
-  %5009 = load %SageValue, %SageValue* @gpu
-  %5010 = call %SageValue @sage_rt_nil()
-  call void @sage_rt_print(%SageValue %5010)
-  %5011 = load %SageValue, %SageValue* @gpu
-  %5012 = call %SageValue @sage_rt_nil()
-  %5013 = call %SageValue @sage_fn_separator()
+  call void @sage_rt_print(%SageValue %4019)
+  %4020 = getelementptr [69 x i8], [69 x i8]* @.str.903, i64 0, i64 0
+  %4021 = call %SageValue @sage_rt_string(i8* %4020)
+  call void @sage_rt_print(%SageValue %4021)
+  %4022 = getelementptr [44 x i8], [44 x i8]* @.str.904, i64 0, i64 0
+  %4023 = call %SageValue @sage_rt_string(i8* %4022)
+  call void @sage_rt_print(%SageValue %4023)
+  %4024 = getelementptr [70 x i8], [70 x i8]* @.str.905, i64 0, i64 0
+  %4025 = call %SageValue @sage_rt_string(i8* %4024)
+  call void @sage_rt_print(%SageValue %4025)
+  %4026 = getelementptr [1 x i8], [1 x i8]* @.str.906, i64 0, i64 0
+  %4027 = call %SageValue @sage_rt_string(i8* %4026)
+  call void @sage_rt_print(%SageValue %4027)
+  %4028 = load %SageValue, %SageValue* @gpu
+  %4029 = load %SageValue, %SageValue* @d_model
+  %4030 = call %SageValue @sage_rt_number(double 1.000000e+01)
+  %4031 = call %SageValue @sage_rt_nil()
+  store %SageValue %4031, %SageValue* @bench
+  %4032 = getelementptr [10 x i8], [10 x i8]* @.str.907, i64 0, i64 0
+  %4033 = call %SageValue @sage_rt_string(i8* %4032)
+  %4034 = load %SageValue, %SageValue* @bench
+  %4035 = getelementptr [7 x i8], [7 x i8]* @.str.908, i64 0, i64 0
+  %4036 = call %SageValue @sage_rt_string(i8* %4035)
+  %4037 = call %SageValue @sage_rt_index(%SageValue %4034, %SageValue %4036)
+  %4038 = call %SageValue @sage_rt_str(%SageValue %4037)
+  %4039 = call %SageValue @sage_rt_add(%SageValue %4033, %SageValue %4038)
+  %4040 = getelementptr [10 x i8], [10 x i8]* @.str.909, i64 0, i64 0
+  %4041 = call %SageValue @sage_rt_string(i8* %4040)
+  %4042 = call %SageValue @sage_rt_add(%SageValue %4039, %SageValue %4041)
+  %4043 = load %SageValue, %SageValue* @bench
+  %4044 = getelementptr [14 x i8], [14 x i8]* @.str.910, i64 0, i64 0
+  %4045 = call %SageValue @sage_rt_string(i8* %4044)
+  %4046 = call %SageValue @sage_rt_index(%SageValue %4043, %SageValue %4045)
+  %4047 = call %SageValue @sage_rt_str(%SageValue %4046)
+  %4048 = call %SageValue @sage_rt_add(%SageValue %4042, %SageValue %4047)
+  %4049 = getelementptr [7 x i8], [7 x i8]* @.str.911, i64 0, i64 0
+  %4050 = call %SageValue @sage_rt_string(i8* %4049)
+  %4051 = call %SageValue @sage_rt_add(%SageValue %4048, %SageValue %4050)
+  %4052 = load %SageValue, %SageValue* @d_model
+  %4053 = call %SageValue @sage_rt_str(%SageValue %4052)
+  %4054 = call %SageValue @sage_rt_add(%SageValue %4051, %SageValue %4053)
+  %4055 = getelementptr [2 x i8], [2 x i8]* @.str.912, i64 0, i64 0
+  %4056 = call %SageValue @sage_rt_string(i8* %4055)
+  %4057 = call %SageValue @sage_rt_add(%SageValue %4054, %SageValue %4056)
+  %4058 = load %SageValue, %SageValue* @d_model
+  %4059 = call %SageValue @sage_rt_str(%SageValue %4058)
+  %4060 = call %SageValue @sage_rt_add(%SageValue %4057, %SageValue %4059)
+  %4061 = getelementptr [2 x i8], [2 x i8]* @.str.913, i64 0, i64 0
+  %4062 = call %SageValue @sage_rt_string(i8* %4061)
+  %4063 = call %SageValue @sage_rt_add(%SageValue %4060, %SageValue %4062)
+  call void @sage_rt_print(%SageValue %4063)
+  %4064 = load %SageValue, %SageValue* @gpu
+  %4065 = call %SageValue @sage_rt_nil()
+  call void @sage_rt_print(%SageValue %4065)
+  %4066 = load %SageValue, %SageValue* @gpu
+  %4067 = call %SageValue @sage_rt_nil()
+  %4068 = call %SageValue @sage_fn_separator()
   ret i32 0
 }
 
@@ -7051,694 +6159,483 @@ L158:
 @.str.431 = private unnamed_addr constant [31 x i8] c"Phase 9: Generating chatbot...\00"
 @.str.432 = private unnamed_addr constant [28 x i8] c"models/sagellm_chatbot.sage\00"
 @.str.433 = private unnamed_addr constant [13 x i8] c"gc_disable()\00"
-@.str.434 = private unnamed_addr constant [67 x i8] c"# SageLLM Chatbot v2.0.0 - Medium Model, 16K Context, All Features\00"
+@.str.434 = private unnamed_addr constant [73 x i8] c"# SageLLM Chatbot v2.0.0 - Self-contained (compiles with --compile-llvm)\00"
 @.str.435 = private unnamed_addr constant [39 x i8] c"# Auto-generated by build_sagellm.sage\00"
 @.str.436 = private unnamed_addr constant [40 x i8] c"# Run: sage models/sagellm_chatbot.sage\00"
-@.str.437 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.438 = private unnamed_addr constant [10 x i8] c"import io\00"
-@.str.439 = private unnamed_addr constant [16 x i8] c"import chat.bot\00"
-@.str.440 = private unnamed_addr constant [20 x i8] c"import chat.persona\00"
-@.str.441 = private unnamed_addr constant [20 x i8] c"import chat.session\00"
-@.str.442 = private unnamed_addr constant [18 x i8] c"import llm.engram\00"
-@.str.443 = private unnamed_addr constant [15 x i8] c"import llm.rag\00"
-@.str.444 = private unnamed_addr constant [18 x i8] c"import llm.prompt\00"
-@.str.445 = private unnamed_addr constant [21 x i8] c"import agent.planner\00"
-@.str.446 = private unnamed_addr constant [20 x i8] c"import agent.critic\00"
-@.str.447 = private unnamed_addr constant [21 x i8] c"import agent.grammar\00"
-@.str.448 = private unnamed_addr constant [29 x i8] c"import agent.semantic_router\00"
-@.str.449 = private unnamed_addr constant [19 x i8] c"import agent.trace\00"
-@.str.450 = private unnamed_addr constant [17 x i8] c"import agent.tot\00"
-@.str.451 = private unnamed_addr constant [20 x i8] c"import agent.schema\00"
-@.str.452 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.453 = private unnamed_addr constant [21 x i8] c"proc contains(h, n):\00"
-@.str.454 = private unnamed_addr constant [24 x i8] c"    if len(n) > len(h):\00"
-@.str.455 = private unnamed_addr constant [21 x i8] c"        return false\00"
-@.str.456 = private unnamed_addr constant [41 x i8] c"    for i in range(len(h) - len(n) + 1):\00"
-@.str.457 = private unnamed_addr constant [21 x i8] c"        let f = true\00"
-@.str.458 = private unnamed_addr constant [32 x i8] c"        for j in range(len(n)):\00"
-@.str.459 = private unnamed_addr constant [22 x i8] c"            if not f:\00"
-@.str.460 = private unnamed_addr constant [27 x i8] c"                j = len(n)\00"
-@.str.461 = private unnamed_addr constant [39 x i8] c"            if f and h[i + j] != n[j]:\00"
-@.str.462 = private unnamed_addr constant [26 x i8] c"                f = false\00"
-@.str.463 = private unnamed_addr constant [14 x i8] c"        if f:\00"
-@.str.464 = private unnamed_addr constant [24 x i8] c"            return true\00"
-@.str.465 = private unnamed_addr constant [17 x i8] c"    return false\00"
-@.str.466 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.467 = private unnamed_addr constant [18 x i8] c"proc to_lower(s):\00"
-@.str.468 = private unnamed_addr constant [13 x i8] c"    let r = \00"
-@.str.469 = private unnamed_addr constant [28 x i8] c"    for i in range(len(s)):\00"
-@.str.470 = private unnamed_addr constant [26 x i8] c"        let c = ord(s[i])\00"
-@.str.471 = private unnamed_addr constant [32 x i8] c"        if c >= 65 and c <= 90:\00"
-@.str.472 = private unnamed_addr constant [32 x i8] c"            r = r + chr(c + 32)\00"
-@.str.473 = private unnamed_addr constant [14 x i8] c"        else:\00"
-@.str.474 = private unnamed_addr constant [25 x i8] c"            r = r + s[i]\00"
-@.str.475 = private unnamed_addr constant [13 x i8] c"    return r\00"
-@.str.476 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.477 = private unnamed_addr constant [29 x i8] c"proc starts_with(s, prefix):\00"
-@.str.478 = private unnamed_addr constant [29 x i8] c"    if len(prefix) > len(s):\00"
-@.str.479 = private unnamed_addr constant [21 x i8] c"        return false\00"
-@.str.480 = private unnamed_addr constant [33 x i8] c"    for i in range(len(prefix)):\00"
-@.str.481 = private unnamed_addr constant [30 x i8] c"        if s[i] != prefix[i]:\00"
-@.str.482 = private unnamed_addr constant [25 x i8] c"            return false\00"
-@.str.483 = private unnamed_addr constant [16 x i8] c"    return true\00"
-@.str.484 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.485 = private unnamed_addr constant [30 x i8] c"proc substr(s, start, count):\00"
-@.str.486 = private unnamed_addr constant [13 x i8] c"    let r = \00"
-@.str.487 = private unnamed_addr constant [28 x i8] c"    let end = start + count\00"
-@.str.488 = private unnamed_addr constant [21 x i8] c"    if end > len(s):\00"
-@.str.489 = private unnamed_addr constant [21 x i8] c"        end = len(s)\00"
-@.str.490 = private unnamed_addr constant [33 x i8] c"    for i in range(end - start):\00"
-@.str.491 = private unnamed_addr constant [29 x i8] c"        r = r + s[start + i]\00"
-@.str.492 = private unnamed_addr constant [13 x i8] c"    return r\00"
-@.str.493 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.494 = private unnamed_addr constant [32 x i8] c"let memory = engram.create(nil)\00"
-@.str.495 = private unnamed_addr constant [8 x i8] c"memory[\00"
-@.str.496 = private unnamed_addr constant [17 x i8] c"working_capacity\00"
-@.str.497 = private unnamed_addr constant [7 x i8] c"] = 30\00"
-@.str.498 = private unnamed_addr constant [8 x i8] c"memory[\00"
-@.str.499 = private unnamed_addr constant [13 x i8] c"max_episodic\00"
-@.str.500 = private unnamed_addr constant [10 x i8] c"] = 10000\00"
-@.str.501 = private unnamed_addr constant [8 x i8] c"memory[\00"
-@.str.502 = private unnamed_addr constant [13 x i8] c"max_semantic\00"
-@.str.503 = private unnamed_addr constant [9 x i8] c"] = 5000\00"
-@.str.504 = private unnamed_addr constant [31 x i8] c"engram.store_semantic(memory, \00"
-@.str.505 = private unnamed_addr constant [7 x i8] c", 1.0)\00"
-@.str.506 = private unnamed_addr constant [33 x i8] c"engram.store_procedural(memory, \00"
-@.str.507 = private unnamed_addr constant [16 x i8] c"write_sage_code\00"
-@.str.508 = private unnamed_addr constant [4 x i8] c", [\00"
-@.str.509 = private unnamed_addr constant [19 x i8] c"proc for functions\00"
-@.str.510 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.511 = private unnamed_addr constant [18 x i8] c"let for variables\00"
-@.str.512 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.513 = private unnamed_addr constant [14 x i8] c"import os.fat\00"
-@.str.514 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.515 = private unnamed_addr constant [13 x i8] c"gc_disable()\00"
-@.str.516 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.517 = private unnamed_addr constant [20 x i8] c"chr(10) for newline\00"
-@.str.518 = private unnamed_addr constant [8 x i8] c"], 1.0)\00"
-@.str.519 = private unnamed_addr constant [33 x i8] c"engram.store_procedural(memory, \00"
-@.str.520 = private unnamed_addr constant [11 x i8] c"debug_sage\00"
-@.str.521 = private unnamed_addr constant [4 x i8] c", [\00"
-@.str.522 = private unnamed_addr constant [13 x i8] c"gc_disable()\00"
-@.str.523 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.524 = private unnamed_addr constant [12 x i8] c"avoid match\00"
-@.str.525 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.526 = private unnamed_addr constant [18 x i8] c"chr() not escapes\00"
-@.str.527 = private unnamed_addr constant [8 x i8] c"], 1.0)\00"
-@.str.528 = private unnamed_addr constant [33 x i8] c"engram.store_procedural(memory, \00"
-@.str.529 = private unnamed_addr constant [13 x i8] c"compile_sage\00"
-@.str.530 = private unnamed_addr constant [4 x i8] c", [\00"
-@.str.531 = private unnamed_addr constant [10 x i8] c"--compile\00"
-@.str.532 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.533 = private unnamed_addr constant [15 x i8] c"--compile-llvm\00"
-@.str.534 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.535 = private unnamed_addr constant [17 x i8] c"--compile-native\00"
-@.str.536 = private unnamed_addr constant [8 x i8] c"], 1.0)\00"
-@.str.537 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.538 = private unnamed_addr constant [35 x i8] c"let rag_store = rag.create_store()\00"
-@.str.539 = private unnamed_addr constant [18 x i8] c"let rag_files = [\00"
-@.str.540 = private unnamed_addr constant [32 x i8] c"documentation/SageLang_Guide.md\00"
-@.str.541 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.542 = private unnamed_addr constant [26 x i8] c"documentation/GC_Guide.md\00"
-@.str.543 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.544 = private unnamed_addr constant [27 x i8] c"documentation/LLM_Guide.md\00"
-@.str.545 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.546 = private unnamed_addr constant [34 x i8] c"documentation/Agent_Chat_Guide.md\00"
-@.str.547 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.548 = private unnamed_addr constant [30 x i8] c"documentation/StdLib_Guide.md\00"
-@.str.549 = private unnamed_addr constant [2 x i8] c"]\00"
-@.str.550 = private unnamed_addr constant [32 x i8] c"for i in range(len(rag_files)):\00"
-@.str.551 = private unnamed_addr constant [44 x i8] c"    let content = io.readfile(rag_files[i])\00"
-@.str.552 = private unnamed_addr constant [23 x i8] c"    if content != nil:\00"
-@.str.553 = private unnamed_addr constant [22 x i8] c"        let meta = {}\00"
-@.str.554 = private unnamed_addr constant [14 x i8] c"        meta[\00"
-@.str.555 = private unnamed_addr constant [7 x i8] c"source\00"
-@.str.556 = private unnamed_addr constant [17 x i8] c"] = rag_files[i]\00"
-@.str.557 = private unnamed_addr constant [51 x i8] c"        rag.add_document(rag_store, content, meta)\00"
-@.str.558 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.559 = private unnamed_addr constant [46 x i8] c"let router = semantic_router.create_router(2)\00"
-@.str.560 = private unnamed_addr constant [40 x i8] c"semantic_router.add_sage_routes(router)\00"
-@.str.561 = private unnamed_addr constant [39 x i8] c"let recorder = trace.create_recorder()\00"
-@.str.562 = private unnamed_addr constant [42 x i8] c"let validator = critic.create_validator()\00"
-@.str.563 = private unnamed_addr constant [28 x i8] c"critic.add_rule(validator, \00"
-@.str.564 = private unnamed_addr constant [10 x i8] c"not_empty\00"
-@.str.565 = private unnamed_addr constant [25 x i8] c", critic.rule_not_empty)\00"
-@.str.566 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.567 = private unnamed_addr constant [23 x i8] c"proc reason(question):\00"
-@.str.568 = private unnamed_addr constant [19 x i8] c"    let chain = {}\00"
-@.str.569 = private unnamed_addr constant [11 x i8] c"    chain[\00"
-@.str.570 = private unnamed_addr constant [6 x i8] c"steps\00"
-@.str.571 = private unnamed_addr constant [7 x i8] c"] = []\00"
-@.str.572 = private unnamed_addr constant [11 x i8] c"    chain[\00"
-@.str.573 = private unnamed_addr constant [11 x i8] c"conclusion\00"
-@.str.574 = private unnamed_addr constant [5 x i8] c"] = \00"
-@.str.575 = private unnamed_addr constant [32 x i8] c"    let lp = to_lower(question)\00"
-@.str.576 = private unnamed_addr constant [49 x i8] c"    let fast = semantic_router.route(router, lp)\00"
-@.str.577 = private unnamed_addr constant [13 x i8] c"    if fast[\00"
-@.str.578 = private unnamed_addr constant [7 x i8] c"routed\00"
-@.str.579 = private unnamed_addr constant [3 x i8] c"]:\00"
-@.str.580 = private unnamed_addr constant [20 x i8] c"        push(chain[\00"
-@.str.581 = private unnamed_addr constant [6 x i8] c"steps\00"
-@.str.582 = private unnamed_addr constant [4 x i8] c"], \00"
-@.str.583 = private unnamed_addr constant [12 x i8] c"Fast-routed\00"
-@.str.584 = private unnamed_addr constant [2 x i8] c")\00"
-@.str.585 = private unnamed_addr constant [15 x i8] c"        chain[\00"
-@.str.586 = private unnamed_addr constant [11 x i8] c"conclusion\00"
-@.str.587 = private unnamed_addr constant [10 x i8] c"] = fast[\00"
-@.str.588 = private unnamed_addr constant [7 x i8] c"result\00"
-@.str.589 = private unnamed_addr constant [2 x i8] c"]\00"
-@.str.590 = private unnamed_addr constant [21 x i8] c"        return chain\00"
-@.str.591 = private unnamed_addr constant [51 x i8] c"    let mem_results = engram.recall(memory, lp, 5)\00"
-@.str.592 = private unnamed_addr constant [29 x i8] c"    if len(mem_results) > 0:\00"
-@.str.593 = private unnamed_addr constant [18 x i8] c"        let mt = \00"
-@.str.594 = private unnamed_addr constant [42 x i8] c"        for i in range(len(mem_results)):\00"
-@.str.595 = private unnamed_addr constant [38 x i8] c"            mt = mt + mem_results[i][\00"
-@.str.596 = private unnamed_addr constant [6 x i8] c"entry\00"
-@.str.597 = private unnamed_addr constant [3 x i8] c"][\00"
-@.str.598 = private unnamed_addr constant [8 x i8] c"content\00"
-@.str.599 = private unnamed_addr constant [2 x i8] c"]\00"
-@.str.600 = private unnamed_addr constant [41 x i8] c"            if i < len(mem_results) - 1:\00"
-@.str.601 = private unnamed_addr constant [27 x i8] c"                mt = mt + \00"
-@.str.602 = private unnamed_addr constant [3 x i8] c"; \00"
-@.str.603 = private unnamed_addr constant [20 x i8] c"        push(chain[\00"
-@.str.604 = private unnamed_addr constant [6 x i8] c"steps\00"
-@.str.605 = private unnamed_addr constant [4 x i8] c"], \00"
-@.str.606 = private unnamed_addr constant [11 x i8] c"Recalled: \00"
-@.str.607 = private unnamed_addr constant [7 x i8] c" + mt)\00"
-@.str.608 = private unnamed_addr constant [54 x i8] c"    let rag_ctx = rag.build_context(rag_store, lp, 3)\00"
-@.str.609 = private unnamed_addr constant [25 x i8] c"    if len(rag_ctx) > 0:\00"
-@.str.610 = private unnamed_addr constant [20 x i8] c"        push(chain[\00"
-@.str.611 = private unnamed_addr constant [6 x i8] c"steps\00"
-@.str.612 = private unnamed_addr constant [4 x i8] c"], \00"
-@.str.613 = private unnamed_addr constant [6 x i8] c"RAG: \00"
-@.str.614 = private unnamed_addr constant [24 x i8] c" + str(len(rag_ctx)) + \00"
-@.str.615 = private unnamed_addr constant [7 x i8] c" chars\00"
-@.str.616 = private unnamed_addr constant [2 x i8] c")\00"
-@.str.617 = private unnamed_addr constant [17 x i8] c"    let topic = \00"
-@.str.618 = private unnamed_addr constant [8 x i8] c"general\00"
-@.str.619 = private unnamed_addr constant [4 x i8] c"llm\00"
-@.str.620 = private unnamed_addr constant [58 x i8] c"llm|language model|transformer|lora|engram|neural|tokeniz\00"
-@.str.621 = private unnamed_addr constant [6 x i8] c"agent\00"
-@.str.622 = private unnamed_addr constant [32 x i8] c"agent|react|supervisor|tool use\00"
-@.str.623 = private unnamed_addr constant [8 x i8] c"chatbot\00"
-@.str.624 = private unnamed_addr constant [36 x i8] c"chatbot|persona|conversation|intent\00"
-@.str.625 = private unnamed_addr constant [7 x i8] c"crypto\00"
-@.str.626 = private unnamed_addr constant [24 x i8] c"crypto|sha|hash|encrypt\00"
-@.str.627 = private unnamed_addr constant [11 x i8] c"networking\00"
-@.str.628 = private unnamed_addr constant [28 x i8] c"network|http|socket|url|dns\00"
-@.str.629 = private unnamed_addr constant [6 x i8] c"osdev\00"
-@.str.630 = private unnamed_addr constant [36 x i8] c"baremetal|uefi|kernel|elf|pci|osdev\00"
-@.str.631 = private unnamed_addr constant [3 x i8] c"ml\00"
-@.str.632 = private unnamed_addr constant [39 x i8] c"tensor|machine learn|training|gradient\00"
-@.str.633 = private unnamed_addr constant [9 x i8] c"graphics\00"
-@.str.634 = private unnamed_addr constant [32 x i8] c"gpu|vulkan|opengl|shader|render\00"
-@.str.635 = private unnamed_addr constant [6 x i8] c"regex\00"
-@.str.636 = private unnamed_addr constant [18 x i8] c"regex|regular exp\00"
-@.str.637 = private unnamed_addr constant [3 x i8] c"gc\00"
-@.str.638 = private unnamed_addr constant [12 x i8] c"gc |garbage\00"
-@.str.639 = private unnamed_addr constant [9 x i8] c"compiler\00"
-@.str.640 = private unnamed_addr constant [21 x i8] c"compile|backend|emit\00"
-@.str.641 = private unnamed_addr constant [6 x i8] c"loops\00"
-@.str.642 = private unnamed_addr constant [16 x i8] c"for |loop|while\00"
-@.str.643 = private unnamed_addr constant [8 x i8] c"modules\00"
-@.str.644 = private unnamed_addr constant [22 x i8] c"import|module|library\00"
-@.str.645 = private unnamed_addr constant [4 x i8] c"oop\00"
-@.str.646 = private unnamed_addr constant [22 x i8] c"class |object|inherit\00"
-@.str.647 = private unnamed_addr constant [5 x i8] c"data\00"
-@.str.648 = private unnamed_addr constant [23 x i8] c"array|dict|data struct\00"
-@.str.649 = private unnamed_addr constant [10 x i8] c"functions\00"
-@.str.650 = private unnamed_addr constant [23 x i8] c"function|proc |closure\00"
-@.str.651 = private unnamed_addr constant [7 x i8] c"errors\00"
-@.str.652 = private unnamed_addr constant [21 x i8] c"error|exception|try \00"
-@.str.653 = private unnamed_addr constant [8 x i8] c"testing\00"
-@.str.654 = private unnamed_addr constant [15 x i8] c"test|debug|bug\00"
-@.str.655 = private unnamed_addr constant [12 x i8] c"concurrency\00"
-@.str.656 = private unnamed_addr constant [32 x i8] c"thread|async|channel|concurrent\00"
-@.str.657 = private unnamed_addr constant [9 x i8] c"planning\00"
-@.str.658 = private unnamed_addr constant [25 x i8] c"plan |how to build|steps\00"
-@.str.659 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.660 = private unnamed_addr constant [2 x i8] c"|\00"
-@.str.661 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.662 = private unnamed_addr constant [17 x i8] c"    if topic == \00"
-@.str.663 = private unnamed_addr constant [8 x i8] c"general\00"
-@.str.664 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.665 = private unnamed_addr constant [12 x i8] c"        if \00"
-@.str.666 = private unnamed_addr constant [5 x i8] c" or \00"
-@.str.667 = private unnamed_addr constant [14 x i8] c"contains(lp, \00"
-@.str.668 = private unnamed_addr constant [2 x i8] c")\00"
-@.str.669 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.670 = private unnamed_addr constant [21 x i8] c"            topic = \00"
-@.str.671 = private unnamed_addr constant [16 x i8] c"    push(chain[\00"
-@.str.672 = private unnamed_addr constant [6 x i8] c"steps\00"
-@.str.673 = private unnamed_addr constant [4 x i8] c"], \00"
-@.str.674 = private unnamed_addr constant [8 x i8] c"Topic: \00"
-@.str.675 = private unnamed_addr constant [10 x i8] c" + topic)\00"
-@.str.676 = private unnamed_addr constant [18 x i8] c"    let answer = \00"
-@.str.677 = private unnamed_addr constant [4 x i8] c"llm\00"
-@.str.678 = private unnamed_addr constant [214 x i8] c"LLM library (15 modules): config, tokenizer, embedding, attention, transformer, generate, train, agent, prompt, lora, quantize, engram, rag, dpo, gguf. SageGPT: SwiGLU+RoPE+RMSNorm. Native C backend at 12+ GFLOPS.\00"
-@.str.679 = private unnamed_addr constant [6 x i8] c"agent\00"
-@.str.680 = private unnamed_addr constant [207 x i8] c"Agent framework (12 modules): core (ReAct), tools, planner (DAG), router, supervisor (workers), critic, schema, trace (SFT), grammar (constrained decoding), sandbox, tot (Tree of Thoughts), semantic_router.\00"
-@.str.681 = private unnamed_addr constant [8 x i8] c"chatbot\00"
-@.str.682 = private unnamed_addr constant [147 x i8] c"Chat framework: bot (intents, middleware), persona (6: SageDev, CodeReviewer, Teacher, Debugger, Architect, Assistant), session (history, export).\00"
-@.str.683 = private unnamed_addr constant [7 x i8] c"crypto\00"
-@.str.684 = private unnamed_addr constant [158 x i8] c"Crypto (6 modules): hash (SHA-256, SHA-1, CRC-32), hmac, encoding (Base64, hex), cipher (XOR, RC4, CBC/CTR), rand (xoshiro256**, UUID v4), password (PBKDF2).\00"
-@.str.685 = private unnamed_addr constant [11 x i8] c"networking\00"
-@.str.686 = private unnamed_addr constant [117 x i8] c"Networking: native (socket, tcp, http, ssl) + lib/net/ (8): url, headers, request, server, websocket, mime, dns, ip.\00"
-@.str.687 = private unnamed_addr constant [6 x i8] c"osdev\00"
-@.str.688 = private unnamed_addr constant [100 x i8] c"OS dev (15 modules): fat, elf, pe, mbr, gpt, pci, acpi, uefi, paging, idt, serial, dtb, alloc, vfs.\00"
-@.str.689 = private unnamed_addr constant [3 x i8] c"ml\00"
-@.str.690 = private unnamed_addr constant [117 x i8] c"ML: tensor, nn, optim, loss, data, debug, viz, monitor + cuda. Native: matmul, softmax, RMSNorm, Adam at 12+ GFLOPS.\00"
-@.str.691 = private unnamed_addr constant [9 x i8] c"graphics\00"
-@.str.692 = private unnamed_addr constant [160 x i8] c"GPU engine (24 modules): Vulkan + OpenGL 4.5. vulkan, gpu, math3d, mesh, renderer, pbr, shadows, deferred (SSAO, SSR), taa, postprocess, scene, gltf, material.\00"
-@.str.693 = private unnamed_addr constant [6 x i8] c"regex\00"
-@.str.694 = private unnamed_addr constant [107 x i8] c"Regex (std.regex): test(), search(), find_all(), replace_all(), split_by(). Supports . * + ? [] [^] ^ $ |.\00"
-@.str.695 = private unnamed_addr constant [3 x i8] c"gc\00"
-@.str.696 = private unnamed_addr constant [141 x i8] c"Tri-color GC: root scan (STW), concurrent mark, remark (STW), concurrent sweep. SATB write barrier. gc_collect(), gc_enable(), gc_disable().\00"
-@.str.697 = private unnamed_addr constant [9 x i8] c"compiler\00"
-@.str.698 = private unnamed_addr constant [105 x i8] c"3 backends: --compile (C), --compile-llvm, --compile-native (x86-64/aarch64/rv64). Optimize: -O0 to -O3.\00"
-@.str.699 = private unnamed_addr constant [6 x i8] c"loops\00"
-@.str.700 = private unnamed_addr constant [92 x i8] c"Loops: for i in range(10): body. for item in array: body. while cond: body. break/continue.\00"
-@.str.701 = private unnamed_addr constant [8 x i8] c"modules\00"
-@.str.702 = private unnamed_addr constant [131 x i8] c"11 categories: os(15), net(8), crypto(6), ml(8), cuda(4), std(23), llm(15), agent(12), chat(3), graphics(24), root(9). 127+ total.\00"
-@.str.703 = private unnamed_addr constant [4 x i8] c"oop\00"
-@.str.704 = private unnamed_addr constant [85 x i8] c"OOP: class Name: with proc init(self): and methods. Inheritance: class Dog(Animal):.\00"
-@.str.705 = private unnamed_addr constant [5 x i8] c"data\00"
-@.str.706 = private unnamed_addr constant [109 x i8] c"Arrays: [1,2,3], push(), pop(), slicing. Dicts: {}, d[key]=val, dict_keys(), dict_values(). Tuples: (1,2,3).\00"
-@.str.707 = private unnamed_addr constant [10 x i8] c"functions\00"
-@.str.708 = private unnamed_addr constant [90 x i8] c"proc name(args): body. Return values. Closures capture outer vars. First-class functions.\00"
-@.str.709 = private unnamed_addr constant [7 x i8] c"errors\00"
-@.str.710 = private unnamed_addr constant [63 x i8] c"try: risky. catch e: handle. finally: cleanup. raise to throw.\00"
-@.str.711 = private unnamed_addr constant [8 x i8] c"testing\00"
-@.str.712 = private unnamed_addr constant [99 x i8] c"Tests: run_tests.sh (144), make test (28), make test-selfhost (1567+). Debug: gc_disable(), chr().\00"
-@.str.713 = private unnamed_addr constant [12 x i8] c"concurrency\00"
-@.str.714 = private unnamed_addr constant [100 x i8] c"Concurrency: thread, async/await, std.channel, std.atomic, std.rwlock, std.condvar, std.threadpool.\00"
-@.str.715 = private unnamed_addr constant [9 x i8] c"planning\00"
-@.str.716 = private unnamed_addr constant [90 x i8] c"Plan: 1) Define goal, 2) Create module, 3) Implement, 4) Test, 5) Document, 6) Run tests.\00"
-@.str.717 = private unnamed_addr constant [17 x i8] c"    if topic == \00"
-@.str.718 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.719 = private unnamed_addr constant [18 x i8] c"        answer = \00"
-@.str.720 = private unnamed_addr constant [25 x i8] c"    if len(answer) == 0:\00"
-@.str.721 = private unnamed_addr constant [33 x i8] c"        if len(mem_results) > 0:\00"
-@.str.722 = private unnamed_addr constant [22 x i8] c"            answer = \00"
-@.str.723 = private unnamed_addr constant [24 x i8] c"Based on my knowledge: \00"
-@.str.724 = private unnamed_addr constant [19 x i8] c" + mem_results[0][\00"
-@.str.725 = private unnamed_addr constant [6 x i8] c"entry\00"
-@.str.726 = private unnamed_addr constant [3 x i8] c"][\00"
-@.str.727 = private unnamed_addr constant [8 x i8] c"content\00"
-@.str.728 = private unnamed_addr constant [2 x i8] c"]\00"
-@.str.729 = private unnamed_addr constant [14 x i8] c"        else:\00"
-@.str.730 = private unnamed_addr constant [22 x i8] c"            answer = \00"
-@.str.731 = private unnamed_addr constant [184 x i8] c"I can help with: loops, imports, classes, GC, compiler, data, functions, errors, testing, concurrency, planning, LLM, agents, chatbot, crypto, networking, OS dev, ML, graphics, regex.\00"
-@.str.732 = private unnamed_addr constant [16 x i8] c"    push(chain[\00"
-@.str.733 = private unnamed_addr constant [6 x i8] c"steps\00"
-@.str.734 = private unnamed_addr constant [4 x i8] c"], \00"
-@.str.735 = private unnamed_addr constant [17 x i8] c"Answering about \00"
-@.str.736 = private unnamed_addr constant [10 x i8] c" + topic)\00"
-@.str.737 = private unnamed_addr constant [11 x i8] c"    chain[\00"
-@.str.738 = private unnamed_addr constant [11 x i8] c"conclusion\00"
-@.str.739 = private unnamed_addr constant [11 x i8] c"] = answer\00"
-@.str.740 = private unnamed_addr constant [35 x i8] c"    engram.store_episodic(memory, \00"
-@.str.741 = private unnamed_addr constant [11 x i8] c"Answered: \00"
-@.str.742 = private unnamed_addr constant [15 x i8] c" + topic, 0.6)\00"
-@.str.743 = private unnamed_addr constant [36 x i8] c"    trace.record_thought(recorder, \00"
-@.str.744 = private unnamed_addr constant [8 x i8] c"Topic: \00"
-@.str.745 = private unnamed_addr constant [10 x i8] c" + topic)\00"
-@.str.746 = private unnamed_addr constant [42 x i8] c"    trace.record_output(recorder, answer)\00"
-@.str.747 = private unnamed_addr constant [17 x i8] c"    return chain\00"
-@.str.748 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.749 = private unnamed_addr constant [29 x i8] c"proc chain_to_string(chain):\00"
-@.str.750 = private unnamed_addr constant [18 x i8] c"    let result = \00"
-@.str.751 = private unnamed_addr constant [23 x i8] c"    let steps = chain[\00"
-@.str.752 = private unnamed_addr constant [6 x i8] c"steps\00"
-@.str.753 = private unnamed_addr constant [2 x i8] c"]\00"
-@.str.754 = private unnamed_addr constant [32 x i8] c"    for i in range(len(steps)):\00"
-@.str.755 = private unnamed_addr constant [27 x i8] c"        result = result + \00"
-@.str.756 = private unnamed_addr constant [11 x i8] c"  Thought \00"
-@.str.757 = private unnamed_addr constant [17 x i8] c" + str(i + 1) + \00"
-@.str.758 = private unnamed_addr constant [3 x i8] c": \00"
-@.str.759 = private unnamed_addr constant [22 x i8] c" + steps[i] + chr(10)\00"
-@.str.760 = private unnamed_addr constant [33 x i8] c"    result = result + chr(10) + \00"
-@.str.761 = private unnamed_addr constant [11 x i8] c"  Answer: \00"
-@.str.762 = private unnamed_addr constant [10 x i8] c" + chain[\00"
-@.str.763 = private unnamed_addr constant [11 x i8] c"conclusion\00"
-@.str.764 = private unnamed_addr constant [2 x i8] c"]\00"
-@.str.765 = private unnamed_addr constant [18 x i8] c"    return result\00"
-@.str.766 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.767 = private unnamed_addr constant [18 x i8] c"proc sage_llm(p):\00"
-@.str.768 = private unnamed_addr constant [22 x i8] c"    return reason(p)[\00"
-@.str.769 = private unnamed_addr constant [11 x i8] c"conclusion\00"
-@.str.770 = private unnamed_addr constant [2 x i8] c"]\00"
-@.str.771 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.772 = private unnamed_addr constant [20 x i8] c"let b = bot.create(\00"
-@.str.773 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.774 = private unnamed_addr constant [12 x i8] c", sage_llm)\00"
-@.str.775 = private unnamed_addr constant [51 x i8] c"persona.apply_persona(b, persona.sage_developer())\00"
-@.str.776 = private unnamed_addr constant [26 x i8] c"proc on_greet(msg, conv):\00"
-@.str.777 = private unnamed_addr constant [12 x i8] c"    return \00"
-@.str.778 = private unnamed_addr constant [98 x i8] c"Hello! SageDev v2.0 with CoT, 4-tier memory, RAG, semantic routing, grammar validation, planning.\00"
-@.str.779 = private unnamed_addr constant [24 x i8] c"proc on_bye(msg, conv):\00"
-@.str.780 = private unnamed_addr constant [31 x i8] c"    engram.consolidate(memory)\00"
-@.str.781 = private unnamed_addr constant [12 x i8] c"    return \00"
-@.str.782 = private unnamed_addr constant [30 x i8] c"Goodbye. Memory consolidated.\00"
-@.str.783 = private unnamed_addr constant [25 x i8] c"proc on_help(msg, conv):\00"
-@.str.784 = private unnamed_addr constant [12 x i8] c"    return \00"
-@.str.785 = private unnamed_addr constant [118 x i8] c"Commands: quit, memory, remember <fact>, recall <query>, think <q>, plan <goal>, review <code>, trace, personas, help\00"
-@.str.786 = private unnamed_addr constant [19 x i8] c"bot.add_intent(b, \00"
-@.str.787 = private unnamed_addr constant [6 x i8] c"greet\00"
-@.str.788 = private unnamed_addr constant [4 x i8] c", [\00"
-@.str.789 = private unnamed_addr constant [6 x i8] c"hello\00"
-@.str.790 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.791 = private unnamed_addr constant [3 x i8] c"hi\00"
-@.str.792 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.793 = private unnamed_addr constant [4 x i8] c"hey\00"
-@.str.794 = private unnamed_addr constant [13 x i8] c"], on_greet)\00"
-@.str.795 = private unnamed_addr constant [19 x i8] c"bot.add_intent(b, \00"
-@.str.796 = private unnamed_addr constant [4 x i8] c"bye\00"
-@.str.797 = private unnamed_addr constant [4 x i8] c", [\00"
-@.str.798 = private unnamed_addr constant [4 x i8] c"bye\00"
-@.str.799 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.800 = private unnamed_addr constant [5 x i8] c"quit\00"
-@.str.801 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.802 = private unnamed_addr constant [5 x i8] c"exit\00"
-@.str.803 = private unnamed_addr constant [11 x i8] c"], on_bye)\00"
-@.str.804 = private unnamed_addr constant [19 x i8] c"bot.add_intent(b, \00"
-@.str.805 = private unnamed_addr constant [5 x i8] c"help\00"
-@.str.806 = private unnamed_addr constant [4 x i8] c", [\00"
-@.str.807 = private unnamed_addr constant [5 x i8] c"help\00"
-@.str.808 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.809 = private unnamed_addr constant [9 x i8] c"commands\00"
-@.str.810 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.811 = private unnamed_addr constant [2 x i8] c"?\00"
-@.str.812 = private unnamed_addr constant [12 x i8] c"], on_help)\00"
-@.str.813 = private unnamed_addr constant [35 x i8] c"let store = session.create_store()\00"
-@.str.814 = private unnamed_addr constant [39 x i8] c"let sess = session.new_session(store, \00"
-@.str.815 = private unnamed_addr constant [8 x i8] c"SageDev\00"
-@.str.816 = private unnamed_addr constant [2 x i8] c")\00"
-@.str.817 = private unnamed_addr constant [23 x i8] c"let current_persona = \00"
-@.str.818 = private unnamed_addr constant [8 x i8] c"SageDev\00"
-@.str.819 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.820 = private unnamed_addr constant [7 x i8] c"print \00"
-@.str.821 = private unnamed_addr constant [45 x i8] c"============================================\00"
-@.str.822 = private unnamed_addr constant [7 x i8] c"print \00"
-@.str.823 = private unnamed_addr constant [40 x i8] c"  SageLLM Chatbot v2.0.0 (Medium | 16K)\00"
-@.str.824 = private unnamed_addr constant [7 x i8] c"print \00"
-@.str.825 = private unnamed_addr constant [35 x i8] c"  SageGPT: SwiGLU + RoPE + RMSNorm\00"
-@.str.826 = private unnamed_addr constant [7 x i8] c"print \00"
-@.str.827 = private unnamed_addr constant [41 x i8] c"  CoT + Engram + RAG + Routing + Grammar\00"
-@.str.828 = private unnamed_addr constant [7 x i8] c"print \00"
-@.str.829 = private unnamed_addr constant [45 x i8] c"============================================\00"
-@.str.830 = private unnamed_addr constant [19 x i8] c"print bot.greet(b)\00"
-@.str.831 = private unnamed_addr constant [7 x i8] c"print \00"
-@.str.832 = private unnamed_addr constant [85 x i8] c"Commands: quit, memory, remember, recall, think, plan, review, trace, personas, help\00"
-@.str.833 = private unnamed_addr constant [7 x i8] c"print \00"
-@.str.834 = private unnamed_addr constant [19 x i8] c"let running = true\00"
-@.str.835 = private unnamed_addr constant [15 x i8] c"while running:\00"
-@.str.836 = private unnamed_addr constant [21 x i8] c"    let msg = input(\00"
-@.str.837 = private unnamed_addr constant [6 x i8] c"You> \00"
-@.str.838 = private unnamed_addr constant [2 x i8] c")\00"
-@.str.839 = private unnamed_addr constant [15 x i8] c"    if msg == \00"
-@.str.840 = private unnamed_addr constant [5 x i8] c"quit\00"
-@.str.841 = private unnamed_addr constant [12 x i8] c" or msg == \00"
-@.str.842 = private unnamed_addr constant [5 x i8] c"exit\00"
-@.str.843 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.844 = private unnamed_addr constant [24 x i8] c"        running = false\00"
-@.str.845 = private unnamed_addr constant [35 x i8] c"        engram.consolidate(memory)\00"
-@.str.846 = private unnamed_addr constant [15 x i8] c"        print \00"
-@.str.847 = private unnamed_addr constant [39 x i8] c"SageDev> Goodbye. Memory consolidated.\00"
-@.str.848 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
-@.str.849 = private unnamed_addr constant [7 x i8] c"memory\00"
-@.str.850 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.851 = private unnamed_addr constant [37 x i8] c"        print engram.summary(memory)\00"
-@.str.852 = private unnamed_addr constant [37 x i8] c"    if running and starts_with(msg, \00"
-@.str.853 = private unnamed_addr constant [10 x i8] c"remember \00"
-@.str.854 = private unnamed_addr constant [3 x i8] c"):\00"
-@.str.855 = private unnamed_addr constant [73 x i8] c"        engram.store_semantic(memory, substr(msg, 9, len(msg) - 9), 0.8)\00"
-@.str.856 = private unnamed_addr constant [15 x i8] c"        print \00"
-@.str.857 = private unnamed_addr constant [12 x i8] c"Remembered.\00"
-@.str.858 = private unnamed_addr constant [37 x i8] c"    if running and starts_with(msg, \00"
-@.str.859 = private unnamed_addr constant [8 x i8] c"recall \00"
-@.str.860 = private unnamed_addr constant [3 x i8] c"):\00"
-@.str.861 = private unnamed_addr constant [77 x i8] c"        let results = engram.recall(memory, substr(msg, 7, len(msg) - 7), 5)\00"
-@.str.862 = private unnamed_addr constant [29 x i8] c"        if len(results) > 0:\00"
-@.str.863 = private unnamed_addr constant [42 x i8] c"            for i in range(len(results)):\00"
-@.str.864 = private unnamed_addr constant [23 x i8] c"                print \00"
-@.str.865 = private unnamed_addr constant [4 x i8] c"  [\00"
-@.str.866 = private unnamed_addr constant [17 x i8] c" + str(i + 1) + \00"
-@.str.867 = private unnamed_addr constant [3 x i8] c"] \00"
-@.str.868 = private unnamed_addr constant [15 x i8] c" + results[i][\00"
-@.str.869 = private unnamed_addr constant [6 x i8] c"entry\00"
-@.str.870 = private unnamed_addr constant [3 x i8] c"][\00"
-@.str.871 = private unnamed_addr constant [8 x i8] c"content\00"
-@.str.872 = private unnamed_addr constant [2 x i8] c"]\00"
-@.str.873 = private unnamed_addr constant [14 x i8] c"        else:\00"
-@.str.874 = private unnamed_addr constant [19 x i8] c"            print \00"
-@.str.875 = private unnamed_addr constant [21 x i8] c"  No memories found.\00"
-@.str.876 = private unnamed_addr constant [37 x i8] c"    if running and starts_with(msg, \00"
-@.str.877 = private unnamed_addr constant [7 x i8] c"think \00"
-@.str.878 = private unnamed_addr constant [3 x i8] c"):\00"
-@.str.879 = private unnamed_addr constant [66 x i8] c"        trace.begin_trace(recorder, substr(msg, 6, len(msg) - 6))\00"
-@.str.880 = private unnamed_addr constant [68 x i8] c"        print chain_to_string(reason(substr(msg, 6, len(msg) - 6)))\00"
-@.str.881 = private unnamed_addr constant [40 x i8] c"        trace.end_trace(recorder, true)\00"
-@.str.882 = private unnamed_addr constant [37 x i8] c"    if running and starts_with(msg, \00"
-@.str.883 = private unnamed_addr constant [6 x i8] c"plan \00"
-@.str.884 = private unnamed_addr constant [3 x i8] c"):\00"
-@.str.885 = private unnamed_addr constant [48 x i8] c"        let goal = substr(msg, 5, len(msg) - 5)\00"
-@.str.886 = private unnamed_addr constant [45 x i8] c"        let plan = planner.create_plan(goal)\00"
-@.str.887 = private unnamed_addr constant [32 x i8] c"        planner.add_step(plan, \00"
-@.str.888 = private unnamed_addr constant [8 x i8] c"Analyze\00"
-@.str.889 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.890 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.891 = private unnamed_addr constant [7 x i8] c", nil)\00"
-@.str.892 = private unnamed_addr constant [32 x i8] c"        planner.add_step(plan, \00"
-@.str.893 = private unnamed_addr constant [7 x i8] c"Design\00"
-@.str.894 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.895 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.896 = private unnamed_addr constant [7 x i8] c", [0])\00"
-@.str.897 = private unnamed_addr constant [32 x i8] c"        planner.add_step(plan, \00"
-@.str.898 = private unnamed_addr constant [10 x i8] c"Implement\00"
-@.str.899 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.900 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.901 = private unnamed_addr constant [7 x i8] c", [1])\00"
-@.str.902 = private unnamed_addr constant [32 x i8] c"        planner.add_step(plan, \00"
-@.str.903 = private unnamed_addr constant [5 x i8] c"Test\00"
-@.str.904 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.905 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.906 = private unnamed_addr constant [7 x i8] c", [2])\00"
-@.str.907 = private unnamed_addr constant [32 x i8] c"        planner.add_step(plan, \00"
-@.str.908 = private unnamed_addr constant [9 x i8] c"Document\00"
-@.str.909 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.910 = private unnamed_addr constant [3 x i8] c", \00"
-@.str.911 = private unnamed_addr constant [7 x i8] c", [3])\00"
-@.str.912 = private unnamed_addr constant [40 x i8] c"        print planner.format_plan(plan)\00"
-@.str.913 = private unnamed_addr constant [39 x i8] c"        engram.store_episodic(memory, \00"
-@.str.914 = private unnamed_addr constant [7 x i8] c"Plan: \00"
-@.str.915 = private unnamed_addr constant [14 x i8] c" + goal, 0.8)\00"
-@.str.916 = private unnamed_addr constant [37 x i8] c"    if running and starts_with(msg, \00"
-@.str.917 = private unnamed_addr constant [8 x i8] c"review \00"
-@.str.918 = private unnamed_addr constant [3 x i8] c"):\00"
-@.str.919 = private unnamed_addr constant [73 x i8] c"        let v = grammar.validate_sage_code(substr(msg, 7, len(msg) - 7))\00"
-@.str.920 = private unnamed_addr constant [14 x i8] c"        if v[\00"
-@.str.921 = private unnamed_addr constant [6 x i8] c"valid\00"
-@.str.922 = private unnamed_addr constant [3 x i8] c"]:\00"
-@.str.923 = private unnamed_addr constant [19 x i8] c"            print \00"
-@.str.924 = private unnamed_addr constant [14 x i8] c"  Code valid!\00"
-@.str.925 = private unnamed_addr constant [14 x i8] c"        else:\00"
-@.str.926 = private unnamed_addr constant [26 x i8] c"            let errs = v[\00"
-@.str.927 = private unnamed_addr constant [7 x i8] c"errors\00"
-@.str.928 = private unnamed_addr constant [2 x i8] c"]\00"
-@.str.929 = private unnamed_addr constant [39 x i8] c"            for i in range(len(errs)):\00"
-@.str.930 = private unnamed_addr constant [23 x i8] c"                print \00"
-@.str.931 = private unnamed_addr constant [5 x i8] c"  - \00"
-@.str.932 = private unnamed_addr constant [11 x i8] c" + errs[i]\00"
-@.str.933 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
-@.str.934 = private unnamed_addr constant [6 x i8] c"trace\00"
-@.str.935 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.936 = private unnamed_addr constant [39 x i8] c"        let ts = trace.stats(recorder)\00"
-@.str.937 = private unnamed_addr constant [15 x i8] c"        print \00"
-@.str.938 = private unnamed_addr constant [11 x i8] c"  Traces: \00"
-@.str.939 = private unnamed_addr constant [11 x i8] c" + str(ts[\00"
-@.str.940 = private unnamed_addr constant [13 x i8] c"total_traces\00"
-@.str.941 = private unnamed_addr constant [6 x i8] c"]) + \00"
-@.str.942 = private unnamed_addr constant [9 x i8] c" Steps: \00"
-@.str.943 = private unnamed_addr constant [11 x i8] c" + str(ts[\00"
-@.str.944 = private unnamed_addr constant [12 x i8] c"total_steps\00"
-@.str.945 = private unnamed_addr constant [4 x i8] c"]))\00"
-@.str.946 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
-@.str.947 = private unnamed_addr constant [9 x i8] c"personas\00"
-@.str.948 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.949 = private unnamed_addr constant [15 x i8] c"        print \00"
-@.str.950 = private unnamed_addr constant [40 x i8] c"  sagedev, teacher, debugger, architect\00"
-@.str.951 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
-@.str.952 = private unnamed_addr constant [8 x i8] c"teacher\00"
-@.str.953 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.954 = private unnamed_addr constant [52 x i8] c"        persona.apply_persona(b, persona.teacher())\00"
-@.str.955 = private unnamed_addr constant [27 x i8] c"        current_persona = \00"
-@.str.956 = private unnamed_addr constant [8 x i8] c"Teacher\00"
-@.str.957 = private unnamed_addr constant [15 x i8] c"        print \00"
-@.str.958 = private unnamed_addr constant [21 x i8] c"Switched to Teacher.\00"
-@.str.959 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
-@.str.960 = private unnamed_addr constant [9 x i8] c"debugger\00"
-@.str.961 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.962 = private unnamed_addr constant [53 x i8] c"        persona.apply_persona(b, persona.debugger())\00"
-@.str.963 = private unnamed_addr constant [27 x i8] c"        current_persona = \00"
-@.str.964 = private unnamed_addr constant [9 x i8] c"Debugger\00"
-@.str.965 = private unnamed_addr constant [15 x i8] c"        print \00"
-@.str.966 = private unnamed_addr constant [22 x i8] c"Switched to Debugger.\00"
-@.str.967 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
-@.str.968 = private unnamed_addr constant [10 x i8] c"architect\00"
-@.str.969 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.970 = private unnamed_addr constant [54 x i8] c"        persona.apply_persona(b, persona.architect())\00"
-@.str.971 = private unnamed_addr constant [27 x i8] c"        current_persona = \00"
-@.str.972 = private unnamed_addr constant [10 x i8] c"Architect\00"
-@.str.973 = private unnamed_addr constant [15 x i8] c"        print \00"
-@.str.974 = private unnamed_addr constant [23 x i8] c"Switched to Architect.\00"
-@.str.975 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
-@.str.976 = private unnamed_addr constant [8 x i8] c"sagedev\00"
-@.str.977 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.978 = private unnamed_addr constant [59 x i8] c"        persona.apply_persona(b, persona.sage_developer())\00"
-@.str.979 = private unnamed_addr constant [27 x i8] c"        current_persona = \00"
-@.str.980 = private unnamed_addr constant [8 x i8] c"SageDev\00"
-@.str.981 = private unnamed_addr constant [15 x i8] c"        print \00"
-@.str.982 = private unnamed_addr constant [21 x i8] c"Switched to SageDev.\00"
-@.str.983 = private unnamed_addr constant [27 x i8] c"    if running and msg != \00"
-@.str.984 = private unnamed_addr constant [5 x i8] c"quit\00"
-@.str.985 = private unnamed_addr constant [13 x i8] c" and msg != \00"
-@.str.986 = private unnamed_addr constant [5 x i8] c"exit\00"
-@.str.987 = private unnamed_addr constant [13 x i8] c" and msg != \00"
-@.str.988 = private unnamed_addr constant [7 x i8] c"memory\00"
-@.str.989 = private unnamed_addr constant [13 x i8] c" and msg != \00"
-@.str.990 = private unnamed_addr constant [6 x i8] c"trace\00"
-@.str.991 = private unnamed_addr constant [13 x i8] c" and msg != \00"
-@.str.992 = private unnamed_addr constant [9 x i8] c"personas\00"
-@.str.993 = private unnamed_addr constant [13 x i8] c" and msg != \00"
-@.str.994 = private unnamed_addr constant [5 x i8] c"help\00"
-@.str.995 = private unnamed_addr constant [13 x i8] c" and msg != \00"
-@.str.996 = private unnamed_addr constant [2 x i8] c"?\00"
-@.str.997 = private unnamed_addr constant [13 x i8] c" and msg != \00"
-@.str.998 = private unnamed_addr constant [8 x i8] c"teacher\00"
-@.str.999 = private unnamed_addr constant [13 x i8] c" and msg != \00"
-@.str.1000 = private unnamed_addr constant [9 x i8] c"debugger\00"
-@.str.1001 = private unnamed_addr constant [13 x i8] c" and msg != \00"
-@.str.1002 = private unnamed_addr constant [10 x i8] c"architect\00"
-@.str.1003 = private unnamed_addr constant [13 x i8] c" and msg != \00"
-@.str.1004 = private unnamed_addr constant [8 x i8] c"sagedev\00"
-@.str.1005 = private unnamed_addr constant [2 x i8] c":\00"
-@.str.1006 = private unnamed_addr constant [27 x i8] c"        let is_cmd = false\00"
-@.str.1007 = private unnamed_addr constant [29 x i8] c"        if starts_with(msg, \00"
-@.str.1008 = private unnamed_addr constant [7 x i8] c"think \00"
-@.str.1009 = private unnamed_addr constant [3 x i8] c"):\00"
-@.str.1010 = private unnamed_addr constant [26 x i8] c"            is_cmd = true\00"
-@.str.1011 = private unnamed_addr constant [29 x i8] c"        if starts_with(msg, \00"
-@.str.1012 = private unnamed_addr constant [6 x i8] c"plan \00"
-@.str.1013 = private unnamed_addr constant [3 x i8] c"):\00"
-@.str.1014 = private unnamed_addr constant [26 x i8] c"            is_cmd = true\00"
-@.str.1015 = private unnamed_addr constant [29 x i8] c"        if starts_with(msg, \00"
-@.str.1016 = private unnamed_addr constant [8 x i8] c"review \00"
-@.str.1017 = private unnamed_addr constant [3 x i8] c"):\00"
-@.str.1018 = private unnamed_addr constant [26 x i8] c"            is_cmd = true\00"
-@.str.1019 = private unnamed_addr constant [29 x i8] c"        if starts_with(msg, \00"
-@.str.1020 = private unnamed_addr constant [10 x i8] c"remember \00"
-@.str.1021 = private unnamed_addr constant [3 x i8] c"):\00"
-@.str.1022 = private unnamed_addr constant [26 x i8] c"            is_cmd = true\00"
-@.str.1023 = private unnamed_addr constant [29 x i8] c"        if starts_with(msg, \00"
-@.str.1024 = private unnamed_addr constant [8 x i8] c"recall \00"
-@.str.1025 = private unnamed_addr constant [3 x i8] c"):\00"
-@.str.1026 = private unnamed_addr constant [26 x i8] c"            is_cmd = true\00"
-@.str.1027 = private unnamed_addr constant [23 x i8] c"        if not is_cmd:\00"
-@.str.1028 = private unnamed_addr constant [51 x i8] c"            engram.store_working(memory, msg, 0.7)\00"
-@.str.1029 = private unnamed_addr constant [45 x i8] c"            trace.begin_trace(recorder, msg)\00"
-@.str.1030 = private unnamed_addr constant [43 x i8] c"            let resp = bot.respond(b, msg)\00"
-@.str.1031 = private unnamed_addr constant [48 x i8] c"            trace.record_output(recorder, resp)\00"
-@.str.1032 = private unnamed_addr constant [44 x i8] c"            trace.end_trace(recorder, true)\00"
-@.str.1033 = private unnamed_addr constant [25 x i8] c"            let ctx = {}\00"
-@.str.1034 = private unnamed_addr constant [17 x i8] c"            ctx[\00"
-@.str.1035 = private unnamed_addr constant [5 x i8] c"task\00"
-@.str.1036 = private unnamed_addr constant [8 x i8] c"] = msg\00"
-@.str.1037 = private unnamed_addr constant [50 x i8] c"            critic.validate(validator, resp, ctx)\00"
-@.str.1038 = private unnamed_addr constant [19 x i8] c"            print \00"
-@.str.1039 = private unnamed_addr constant [37 x i8] c"            print current_persona + \00"
-@.str.1040 = private unnamed_addr constant [3 x i8] c"> \00"
-@.str.1041 = private unnamed_addr constant [8 x i8] c" + resp\00"
-@.str.1042 = private unnamed_addr constant [19 x i8] c"            print \00"
-@.str.1043 = private unnamed_addr constant [46 x i8] c"            session.add_turn(sess, msg, resp)\00"
-@.str.1044 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.1045 = private unnamed_addr constant [5 x i8] c"GGUF\00"
-@.str.1046 = private unnamed_addr constant [25 x i8] c"Phase 10: GGUF export...\00"
-@.str.1047 = private unnamed_addr constant [18 x i8] c"sagellm-medium-v2\00"
-@.str.1048 = private unnamed_addr constant [6 x i8] c"llama\00"
-@.str.1049 = private unnamed_addr constant [5 x i8] c"Q8_0\00"
-@.str.1050 = private unnamed_addr constant [23 x i8] c"sagellm-medium-v2.gguf\00"
-@.str.1051 = private unnamed_addr constant [55 x i8] c"You are SageDev, an expert Sage programming assistant.\00"
-@.str.1052 = private unnamed_addr constant [17 x i8] c"models/Modelfile\00"
-@.str.1053 = private unnamed_addr constant [23 x i8] c"sagellm-medium-v2.gguf\00"
-@.str.1054 = private unnamed_addr constant [19 x i8] c"models/quantize.sh\00"
-@.str.1055 = private unnamed_addr constant [5 x i8] c"GGUF\00"
-@.str.1056 = private unnamed_addr constant [34 x i8] c"Generated Modelfile + quantize.sh\00"
-@.str.1057 = private unnamed_addr constant [5 x i8] c"GGUF\00"
-@.str.1058 = private unnamed_addr constant [43 x i8] c"Import from Ollama: import llm.gguf_import\00"
-@.str.1059 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.1060 = private unnamed_addr constant [4 x i8] c"VIZ\00"
-@.str.1061 = private unnamed_addr constant [28 x i8] c"Phase 11: Visualizations...\00"
-@.str.1062 = private unnamed_addr constant [17 x i8] c"models/viz/.keep\00"
-@.str.1063 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.1064 = private unnamed_addr constant [20 x i8] c"SageLLM-Medium Loss\00"
-@.str.1065 = private unnamed_addr constant [26 x i8] c"models/viz/loss_curve.svg\00"
-@.str.1066 = private unnamed_addr constant [15 x i8] c"Q-Proj Weights\00"
-@.str.1067 = private unnamed_addr constant [27 x i8] c"models/viz/weight_dist.svg\00"
-@.str.1068 = private unnamed_addr constant [15 x i8] c"SageLLM-Medium\00"
-@.str.1069 = private unnamed_addr constant [28 x i8] c"models/viz/architecture.svg\00"
-@.str.1070 = private unnamed_addr constant [7 x i8] c"cosine\00"
-@.str.1071 = private unnamed_addr constant [27 x i8] c"models/viz/lr_schedule.svg\00"
-@.str.1072 = private unnamed_addr constant [4 x i8] c"VIZ\00"
-@.str.1073 = private unnamed_addr constant [48 x i8] c"Generated: loss, weights, architecture, LR SVGs\00"
-@.str.1074 = private unnamed_addr constant [4 x i8] c"VIZ\00"
-@.str.1075 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.1076 = private unnamed_addr constant [25 x i8] c"  SageLLM Build Complete\00"
-@.str.1077 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.1078 = private unnamed_addr constant [48 x i8] c"Model: SageGPT-Medium (SwiGLU + RoPE + RMSNorm)\00"
-@.str.1079 = private unnamed_addr constant [5 x i8] c"  d=\00"
-@.str.1080 = private unnamed_addr constant [8 x i8] c" heads=\00"
-@.str.1081 = private unnamed_addr constant [9 x i8] c" layers=\00"
-@.str.1082 = private unnamed_addr constant [5 x i8] c" ff=\00"
-@.str.1083 = private unnamed_addr constant [8 x i8] c" vocab=\00"
-@.str.1084 = private unnamed_addr constant [6 x i8] c" ctx=\00"
-@.str.1085 = private unnamed_addr constant [15 x i8] c"  Parameters: \00"
-@.str.1086 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.1087 = private unnamed_addr constant [10 x i8] c"Training:\00"
-@.str.1088 = private unnamed_addr constant [14 x i8] c"  Pre-train: \00"
-@.str.1089 = private unnamed_addr constant [14 x i8] c" steps, loss=\00"
-@.str.1090 = private unnamed_addr constant [9 x i8] c"  LoRA: \00"
-@.str.1091 = private unnamed_addr constant [11 x i8] c" steps on \00"
-@.str.1092 = private unnamed_addr constant [14 x i8] c" files, rank=\00"
-@.str.1093 = private unnamed_addr constant [7 x i8] c" loss=\00"
-@.str.1094 = private unnamed_addr constant [8 x i8] c"  DPO: \00"
-@.str.1095 = private unnamed_addr constant [6 x i8] c"pairs\00"
-@.str.1096 = private unnamed_addr constant [18 x i8] c" preference pairs\00"
-@.str.1097 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.1098 = private unnamed_addr constant [11 x i8] c"Knowledge:\00"
-@.str.1099 = private unnamed_addr constant [11 x i8] c"  Engram: \00"
-@.str.1100 = private unnamed_addr constant [9 x i8] c"semantic\00"
-@.str.1101 = private unnamed_addr constant [13 x i8] c" semantic + \00"
-@.str.1102 = private unnamed_addr constant [11 x i8] c"procedural\00"
-@.str.1103 = private unnamed_addr constant [12 x i8] c" procedural\00"
-@.str.1104 = private unnamed_addr constant [8 x i8] c"  RAG: \00"
-@.str.1105 = private unnamed_addr constant [11 x i8] c"total_docs\00"
-@.str.1106 = private unnamed_addr constant [8 x i8] c" docs (\00"
-@.str.1107 = private unnamed_addr constant [13 x i8] c"total_chunks\00"
-@.str.1108 = private unnamed_addr constant [9 x i8] c" chunks)\00"
-@.str.1109 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.1110 = private unnamed_addr constant [75 x i8] c"Features: SwiGLU, RoPE, RMSNorm, LoRA, DPO, RAG, Engram, Semantic Routing,\00"
-@.str.1111 = private unnamed_addr constant [74 x i8] c"  Grammar Validation, Critic, SFT Traces, Planning, 6 Personas, Sessions,\00"
-@.str.1112 = private unnamed_addr constant [77 x i8] c"  GGUF Export/Import, INT8 Quantization, SVG Visualization, GPU Acceleration\00"
-@.str.1113 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.1114 = private unnamed_addr constant [69 x i8] c"Output: models/sagellm_chatbot.sage | models/Modelfile | models/viz/\00"
-@.str.1115 = private unnamed_addr constant [44 x i8] c"Run:     ./sage models/sagellm_chatbot.sage\00"
-@.str.1116 = private unnamed_addr constant [70 x i8] c"Compile: ./sage --compile models/sagellm_chatbot.sage -o sagellm_chat\00"
-@.str.1117 = private unnamed_addr constant [1 x i8] c"\00"
-@.str.1118 = private unnamed_addr constant [10 x i8] c"Compute: \00"
-@.str.1119 = private unnamed_addr constant [7 x i8] c"gflops\00"
-@.str.1120 = private unnamed_addr constant [10 x i8] c" GFLOPS (\00"
-@.str.1121 = private unnamed_addr constant [14 x i8] c"ms_per_matmul\00"
-@.str.1122 = private unnamed_addr constant [7 x i8] c" ms @ \00"
-@.str.1123 = private unnamed_addr constant [2 x i8] c"x\00"
-@.str.1124 = private unnamed_addr constant [2 x i8] c")\00"
+@.str.437 = private unnamed_addr constant [75 x i8] c"# Compile: sage --compile-llvm models/sagellm_chatbot.sage -o sagellm_chat\00"
+@.str.438 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.439 = private unnamed_addr constant [20 x i8] c"# --- Utilities ---\00"
+@.str.440 = private unnamed_addr constant [21 x i8] c"proc contains(h, n):\00"
+@.str.441 = private unnamed_addr constant [24 x i8] c"    if len(n) > len(h):\00"
+@.str.442 = private unnamed_addr constant [21 x i8] c"        return false\00"
+@.str.443 = private unnamed_addr constant [41 x i8] c"    for i in range(len(h) - len(n) + 1):\00"
+@.str.444 = private unnamed_addr constant [21 x i8] c"        let f = true\00"
+@.str.445 = private unnamed_addr constant [32 x i8] c"        for j in range(len(n)):\00"
+@.str.446 = private unnamed_addr constant [22 x i8] c"            if not f:\00"
+@.str.447 = private unnamed_addr constant [27 x i8] c"                j = len(n)\00"
+@.str.448 = private unnamed_addr constant [39 x i8] c"            if f and h[i + j] != n[j]:\00"
+@.str.449 = private unnamed_addr constant [26 x i8] c"                f = false\00"
+@.str.450 = private unnamed_addr constant [14 x i8] c"        if f:\00"
+@.str.451 = private unnamed_addr constant [24 x i8] c"            return true\00"
+@.str.452 = private unnamed_addr constant [17 x i8] c"    return false\00"
+@.str.453 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.454 = private unnamed_addr constant [18 x i8] c"proc to_lower(s):\00"
+@.str.455 = private unnamed_addr constant [13 x i8] c"    let r = \00"
+@.str.456 = private unnamed_addr constant [28 x i8] c"    for i in range(len(s)):\00"
+@.str.457 = private unnamed_addr constant [26 x i8] c"        let c = ord(s[i])\00"
+@.str.458 = private unnamed_addr constant [32 x i8] c"        if c >= 65 and c <= 90:\00"
+@.str.459 = private unnamed_addr constant [32 x i8] c"            r = r + chr(c + 32)\00"
+@.str.460 = private unnamed_addr constant [14 x i8] c"        else:\00"
+@.str.461 = private unnamed_addr constant [25 x i8] c"            r = r + s[i]\00"
+@.str.462 = private unnamed_addr constant [13 x i8] c"    return r\00"
+@.str.463 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.464 = private unnamed_addr constant [29 x i8] c"proc starts_with(s, prefix):\00"
+@.str.465 = private unnamed_addr constant [29 x i8] c"    if len(prefix) > len(s):\00"
+@.str.466 = private unnamed_addr constant [21 x i8] c"        return false\00"
+@.str.467 = private unnamed_addr constant [33 x i8] c"    for i in range(len(prefix)):\00"
+@.str.468 = private unnamed_addr constant [30 x i8] c"        if s[i] != prefix[i]:\00"
+@.str.469 = private unnamed_addr constant [25 x i8] c"            return false\00"
+@.str.470 = private unnamed_addr constant [16 x i8] c"    return true\00"
+@.str.471 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.472 = private unnamed_addr constant [30 x i8] c"proc substr(s, start, count):\00"
+@.str.473 = private unnamed_addr constant [13 x i8] c"    let r = \00"
+@.str.474 = private unnamed_addr constant [28 x i8] c"    let end = start + count\00"
+@.str.475 = private unnamed_addr constant [21 x i8] c"    if end > len(s):\00"
+@.str.476 = private unnamed_addr constant [21 x i8] c"        end = len(s)\00"
+@.str.477 = private unnamed_addr constant [33 x i8] c"    for i in range(end - start):\00"
+@.str.478 = private unnamed_addr constant [29 x i8] c"        r = r + s[start + i]\00"
+@.str.479 = private unnamed_addr constant [13 x i8] c"    return r\00"
+@.str.480 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.481 = private unnamed_addr constant [55 x i8] c"# --- Inline memory (works compiled + interpreted) ---\00"
+@.str.482 = private unnamed_addr constant [15 x i8] c"let facts = []\00"
+@.str.483 = private unnamed_addr constant [13 x i8] c"push(facts, \00"
+@.str.484 = private unnamed_addr constant [2 x i8] c")\00"
+@.str.485 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.486 = private unnamed_addr constant [17 x i8] c"let history = []\00"
+@.str.487 = private unnamed_addr constant [20 x i8] c"let remembered = []\00"
+@.str.488 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.489 = private unnamed_addr constant [20 x i8] c"proc recall(query):\00"
+@.str.490 = private unnamed_addr constant [29 x i8] c"    let lq = to_lower(query)\00"
+@.str.491 = private unnamed_addr constant [21 x i8] c"    let results = []\00"
+@.str.492 = private unnamed_addr constant [32 x i8] c"    for i in range(len(facts)):\00"
+@.str.493 = private unnamed_addr constant [45 x i8] c"        if contains(to_lower(facts[i]), lq):\00"
+@.str.494 = private unnamed_addr constant [36 x i8] c"            push(results, facts[i])\00"
+@.str.495 = private unnamed_addr constant [37 x i8] c"    for i in range(len(remembered)):\00"
+@.str.496 = private unnamed_addr constant [50 x i8] c"        if contains(to_lower(remembered[i]), lq):\00"
+@.str.497 = private unnamed_addr constant [41 x i8] c"            push(results, remembered[i])\00"
+@.str.498 = private unnamed_addr constant [19 x i8] c"    return results\00"
+@.str.499 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.500 = private unnamed_addr constant [55 x i8] c"# --- Reasoning engine (20 topics, self-contained) ---\00"
+@.str.501 = private unnamed_addr constant [23 x i8] c"proc reason(question):\00"
+@.str.502 = private unnamed_addr constant [19 x i8] c"    let chain = []\00"
+@.str.503 = private unnamed_addr constant [32 x i8] c"    let lp = to_lower(question)\00"
+@.str.504 = private unnamed_addr constant [20 x i8] c"    # Memory recall\00"
+@.str.505 = private unnamed_addr constant [25 x i8] c"    let mem = recall(lp)\00"
+@.str.506 = private unnamed_addr constant [21 x i8] c"    if len(mem) > 0:\00"
+@.str.507 = private unnamed_addr constant [21 x i8] c"        push(chain, \00"
+@.str.508 = private unnamed_addr constant [10 x i8] c"Recalled \00"
+@.str.509 = private unnamed_addr constant [20 x i8] c" + str(len(mem)) + \00"
+@.str.510 = private unnamed_addr constant [7 x i8] c" facts\00"
+@.str.511 = private unnamed_addr constant [2 x i8] c")\00"
+@.str.512 = private unnamed_addr constant [27 x i8] c"    # Topic classification\00"
+@.str.513 = private unnamed_addr constant [17 x i8] c"    let topic = \00"
+@.str.514 = private unnamed_addr constant [8 x i8] c"general\00"
+@.str.515 = private unnamed_addr constant [4 x i8] c"llm\00"
+@.str.516 = private unnamed_addr constant [58 x i8] c"llm|language model|transformer|lora|engram|neural|tokeniz\00"
+@.str.517 = private unnamed_addr constant [6 x i8] c"agent\00"
+@.str.518 = private unnamed_addr constant [32 x i8] c"agent|react|supervisor|tool use\00"
+@.str.519 = private unnamed_addr constant [8 x i8] c"chatbot\00"
+@.str.520 = private unnamed_addr constant [36 x i8] c"chatbot|persona|conversation|intent\00"
+@.str.521 = private unnamed_addr constant [7 x i8] c"crypto\00"
+@.str.522 = private unnamed_addr constant [24 x i8] c"crypto|sha|hash|encrypt\00"
+@.str.523 = private unnamed_addr constant [11 x i8] c"networking\00"
+@.str.524 = private unnamed_addr constant [28 x i8] c"network|http|socket|url|dns\00"
+@.str.525 = private unnamed_addr constant [6 x i8] c"osdev\00"
+@.str.526 = private unnamed_addr constant [36 x i8] c"baremetal|uefi|kernel|elf|pci|osdev\00"
+@.str.527 = private unnamed_addr constant [3 x i8] c"ml\00"
+@.str.528 = private unnamed_addr constant [39 x i8] c"tensor|machine learn|training|gradient\00"
+@.str.529 = private unnamed_addr constant [9 x i8] c"graphics\00"
+@.str.530 = private unnamed_addr constant [32 x i8] c"gpu|vulkan|opengl|shader|render\00"
+@.str.531 = private unnamed_addr constant [6 x i8] c"regex\00"
+@.str.532 = private unnamed_addr constant [18 x i8] c"regex|regular exp\00"
+@.str.533 = private unnamed_addr constant [3 x i8] c"gc\00"
+@.str.534 = private unnamed_addr constant [12 x i8] c"gc |garbage\00"
+@.str.535 = private unnamed_addr constant [9 x i8] c"compiler\00"
+@.str.536 = private unnamed_addr constant [21 x i8] c"compile|backend|emit\00"
+@.str.537 = private unnamed_addr constant [6 x i8] c"loops\00"
+@.str.538 = private unnamed_addr constant [16 x i8] c"for |loop|while\00"
+@.str.539 = private unnamed_addr constant [8 x i8] c"modules\00"
+@.str.540 = private unnamed_addr constant [22 x i8] c"import|module|library\00"
+@.str.541 = private unnamed_addr constant [4 x i8] c"oop\00"
+@.str.542 = private unnamed_addr constant [22 x i8] c"class |object|inherit\00"
+@.str.543 = private unnamed_addr constant [5 x i8] c"data\00"
+@.str.544 = private unnamed_addr constant [23 x i8] c"array|dict|data struct\00"
+@.str.545 = private unnamed_addr constant [10 x i8] c"functions\00"
+@.str.546 = private unnamed_addr constant [23 x i8] c"function|proc |closure\00"
+@.str.547 = private unnamed_addr constant [7 x i8] c"errors\00"
+@.str.548 = private unnamed_addr constant [21 x i8] c"error|exception|try \00"
+@.str.549 = private unnamed_addr constant [8 x i8] c"testing\00"
+@.str.550 = private unnamed_addr constant [15 x i8] c"test|debug|bug\00"
+@.str.551 = private unnamed_addr constant [12 x i8] c"concurrency\00"
+@.str.552 = private unnamed_addr constant [32 x i8] c"thread|async|channel|concurrent\00"
+@.str.553 = private unnamed_addr constant [9 x i8] c"planning\00"
+@.str.554 = private unnamed_addr constant [25 x i8] c"plan |how to build|steps\00"
+@.str.555 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.556 = private unnamed_addr constant [2 x i8] c"|\00"
+@.str.557 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.558 = private unnamed_addr constant [17 x i8] c"    if topic == \00"
+@.str.559 = private unnamed_addr constant [8 x i8] c"general\00"
+@.str.560 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.561 = private unnamed_addr constant [12 x i8] c"        if \00"
+@.str.562 = private unnamed_addr constant [5 x i8] c" or \00"
+@.str.563 = private unnamed_addr constant [14 x i8] c"contains(lp, \00"
+@.str.564 = private unnamed_addr constant [2 x i8] c")\00"
+@.str.565 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.566 = private unnamed_addr constant [21 x i8] c"            topic = \00"
+@.str.567 = private unnamed_addr constant [17 x i8] c"    push(chain, \00"
+@.str.568 = private unnamed_addr constant [8 x i8] c"Topic: \00"
+@.str.569 = private unnamed_addr constant [10 x i8] c" + topic)\00"
+@.str.570 = private unnamed_addr constant [18 x i8] c"    let answer = \00"
+@.str.571 = private unnamed_addr constant [4 x i8] c"llm\00"
+@.str.572 = private unnamed_addr constant [214 x i8] c"LLM library (15 modules): config, tokenizer, embedding, attention, transformer, generate, train, agent, prompt, lora, quantize, engram, rag, dpo, gguf. SageGPT: SwiGLU+RoPE+RMSNorm. Native C backend at 12+ GFLOPS.\00"
+@.str.573 = private unnamed_addr constant [6 x i8] c"agent\00"
+@.str.574 = private unnamed_addr constant [207 x i8] c"Agent framework (12 modules): core (ReAct), tools, planner (DAG), router, supervisor (workers), critic, schema, trace (SFT), grammar (constrained decoding), sandbox, tot (Tree of Thoughts), semantic_router.\00"
+@.str.575 = private unnamed_addr constant [8 x i8] c"chatbot\00"
+@.str.576 = private unnamed_addr constant [147 x i8] c"Chat framework: bot (intents, middleware), persona (6: SageDev, CodeReviewer, Teacher, Debugger, Architect, Assistant), session (history, export).\00"
+@.str.577 = private unnamed_addr constant [7 x i8] c"crypto\00"
+@.str.578 = private unnamed_addr constant [158 x i8] c"Crypto (6 modules): hash (SHA-256, SHA-1, CRC-32), hmac, encoding (Base64, hex), cipher (XOR, RC4, CBC/CTR), rand (xoshiro256**, UUID v4), password (PBKDF2).\00"
+@.str.579 = private unnamed_addr constant [11 x i8] c"networking\00"
+@.str.580 = private unnamed_addr constant [117 x i8] c"Networking: native (socket, tcp, http, ssl) + lib/net/ (8): url, headers, request, server, websocket, mime, dns, ip.\00"
+@.str.581 = private unnamed_addr constant [6 x i8] c"osdev\00"
+@.str.582 = private unnamed_addr constant [100 x i8] c"OS dev (15 modules): fat, elf, pe, mbr, gpt, pci, acpi, uefi, paging, idt, serial, dtb, alloc, vfs.\00"
+@.str.583 = private unnamed_addr constant [3 x i8] c"ml\00"
+@.str.584 = private unnamed_addr constant [117 x i8] c"ML: tensor, nn, optim, loss, data, debug, viz, monitor + cuda. Native: matmul, softmax, RMSNorm, Adam at 12+ GFLOPS.\00"
+@.str.585 = private unnamed_addr constant [9 x i8] c"graphics\00"
+@.str.586 = private unnamed_addr constant [160 x i8] c"GPU engine (24 modules): Vulkan + OpenGL 4.5. vulkan, gpu, math3d, mesh, renderer, pbr, shadows, deferred (SSAO, SSR), taa, postprocess, scene, gltf, material.\00"
+@.str.587 = private unnamed_addr constant [6 x i8] c"regex\00"
+@.str.588 = private unnamed_addr constant [107 x i8] c"Regex (std.regex): test(), search(), find_all(), replace_all(), split_by(). Supports . * + ? [] [^] ^ $ |.\00"
+@.str.589 = private unnamed_addr constant [3 x i8] c"gc\00"
+@.str.590 = private unnamed_addr constant [141 x i8] c"Tri-color GC: root scan (STW), concurrent mark, remark (STW), concurrent sweep. SATB write barrier. gc_collect(), gc_enable(), gc_disable().\00"
+@.str.591 = private unnamed_addr constant [9 x i8] c"compiler\00"
+@.str.592 = private unnamed_addr constant [105 x i8] c"3 backends: --compile (C), --compile-llvm, --compile-native (x86-64/aarch64/rv64). Optimize: -O0 to -O3.\00"
+@.str.593 = private unnamed_addr constant [6 x i8] c"loops\00"
+@.str.594 = private unnamed_addr constant [92 x i8] c"Loops: for i in range(10): body. for item in array: body. while cond: body. break/continue.\00"
+@.str.595 = private unnamed_addr constant [8 x i8] c"modules\00"
+@.str.596 = private unnamed_addr constant [131 x i8] c"11 categories: os(15), net(8), crypto(6), ml(8), cuda(4), std(23), llm(15), agent(12), chat(3), graphics(24), root(9). 127+ total.\00"
+@.str.597 = private unnamed_addr constant [4 x i8] c"oop\00"
+@.str.598 = private unnamed_addr constant [85 x i8] c"OOP: class Name: with proc init(self): and methods. Inheritance: class Dog(Animal):.\00"
+@.str.599 = private unnamed_addr constant [5 x i8] c"data\00"
+@.str.600 = private unnamed_addr constant [109 x i8] c"Arrays: [1,2,3], push(), pop(), slicing. Dicts: {}, d[key]=val, dict_keys(), dict_values(). Tuples: (1,2,3).\00"
+@.str.601 = private unnamed_addr constant [10 x i8] c"functions\00"
+@.str.602 = private unnamed_addr constant [90 x i8] c"proc name(args): body. Return values. Closures capture outer vars. First-class functions.\00"
+@.str.603 = private unnamed_addr constant [7 x i8] c"errors\00"
+@.str.604 = private unnamed_addr constant [63 x i8] c"try: risky. catch e: handle. finally: cleanup. raise to throw.\00"
+@.str.605 = private unnamed_addr constant [8 x i8] c"testing\00"
+@.str.606 = private unnamed_addr constant [99 x i8] c"Tests: run_tests.sh (144), make test (28), make test-selfhost (1567+). Debug: gc_disable(), chr().\00"
+@.str.607 = private unnamed_addr constant [12 x i8] c"concurrency\00"
+@.str.608 = private unnamed_addr constant [100 x i8] c"Concurrency: thread, async/await, std.channel, std.atomic, std.rwlock, std.condvar, std.threadpool.\00"
+@.str.609 = private unnamed_addr constant [9 x i8] c"planning\00"
+@.str.610 = private unnamed_addr constant [90 x i8] c"Plan: 1) Define goal, 2) Create module, 3) Implement, 4) Test, 5) Document, 6) Run tests.\00"
+@.str.611 = private unnamed_addr constant [17 x i8] c"    if topic == \00"
+@.str.612 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.613 = private unnamed_addr constant [18 x i8] c"        answer = \00"
+@.str.614 = private unnamed_addr constant [25 x i8] c"    if len(answer) == 0:\00"
+@.str.615 = private unnamed_addr constant [25 x i8] c"        if len(mem) > 0:\00"
+@.str.616 = private unnamed_addr constant [22 x i8] c"            answer = \00"
+@.str.617 = private unnamed_addr constant [24 x i8] c"Based on my knowledge: \00"
+@.str.618 = private unnamed_addr constant [10 x i8] c" + mem[0]\00"
+@.str.619 = private unnamed_addr constant [14 x i8] c"        else:\00"
+@.str.620 = private unnamed_addr constant [22 x i8] c"            answer = \00"
+@.str.621 = private unnamed_addr constant [184 x i8] c"I can help with: loops, imports, classes, GC, compiler, data, functions, errors, testing, concurrency, planning, LLM, agents, chatbot, crypto, networking, OS dev, ML, graphics, regex.\00"
+@.str.622 = private unnamed_addr constant [17 x i8] c"    push(chain, \00"
+@.str.623 = private unnamed_addr constant [17 x i8] c"Answering about \00"
+@.str.624 = private unnamed_addr constant [10 x i8] c" + topic)\00"
+@.str.625 = private unnamed_addr constant [19 x i8] c"    push(history, \00"
+@.str.626 = private unnamed_addr constant [4 x i8] c"Q: \00"
+@.str.627 = private unnamed_addr constant [13 x i8] c" + question)\00"
+@.str.628 = private unnamed_addr constant [19 x i8] c"    push(history, \00"
+@.str.629 = private unnamed_addr constant [4 x i8] c"A: \00"
+@.str.630 = private unnamed_addr constant [11 x i8] c" + answer)\00"
+@.str.631 = private unnamed_addr constant [20 x i8] c"    let result = {}\00"
+@.str.632 = private unnamed_addr constant [12 x i8] c"    result[\00"
+@.str.633 = private unnamed_addr constant [6 x i8] c"chain\00"
+@.str.634 = private unnamed_addr constant [10 x i8] c"] = chain\00"
+@.str.635 = private unnamed_addr constant [12 x i8] c"    result[\00"
+@.str.636 = private unnamed_addr constant [7 x i8] c"answer\00"
+@.str.637 = private unnamed_addr constant [11 x i8] c"] = answer\00"
+@.str.638 = private unnamed_addr constant [18 x i8] c"    return result\00"
+@.str.639 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.640 = private unnamed_addr constant [20 x i8] c"proc show_chain(r):\00"
+@.str.641 = private unnamed_addr constant [16 x i8] c"    let ch = r[\00"
+@.str.642 = private unnamed_addr constant [6 x i8] c"chain\00"
+@.str.643 = private unnamed_addr constant [2 x i8] c"]\00"
+@.str.644 = private unnamed_addr constant [30 x i8] c"    for ci in range(len(ch)):\00"
+@.str.645 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.646 = private unnamed_addr constant [11 x i8] c"  Thought \00"
+@.str.647 = private unnamed_addr constant [18 x i8] c" + str(ci + 1) + \00"
+@.str.648 = private unnamed_addr constant [3 x i8] c": \00"
+@.str.649 = private unnamed_addr constant [10 x i8] c" + ch[ci]\00"
+@.str.650 = private unnamed_addr constant [11 x i8] c"    print \00"
+@.str.651 = private unnamed_addr constant [11 x i8] c"  Answer: \00"
+@.str.652 = private unnamed_addr constant [6 x i8] c" + r[\00"
+@.str.653 = private unnamed_addr constant [7 x i8] c"answer\00"
+@.str.654 = private unnamed_addr constant [2 x i8] c"]\00"
+@.str.655 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.656 = private unnamed_addr constant [20 x i8] c"let persona_name = \00"
+@.str.657 = private unnamed_addr constant [8 x i8] c"SageDev\00"
+@.str.658 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.659 = private unnamed_addr constant [7 x i8] c"print \00"
+@.str.660 = private unnamed_addr constant [45 x i8] c"============================================\00"
+@.str.661 = private unnamed_addr constant [7 x i8] c"print \00"
+@.str.662 = private unnamed_addr constant [40 x i8] c"  SageLLM Chatbot v2.0.0 (Medium | 16K)\00"
+@.str.663 = private unnamed_addr constant [7 x i8] c"print \00"
+@.str.664 = private unnamed_addr constant [35 x i8] c"  SageGPT: SwiGLU + RoPE + RMSNorm\00"
+@.str.665 = private unnamed_addr constant [7 x i8] c"print \00"
+@.str.666 = private unnamed_addr constant [38 x i8] c"  CoT + Memory + 20 Knowledge Domains\00"
+@.str.667 = private unnamed_addr constant [7 x i8] c"print \00"
+@.str.668 = private unnamed_addr constant [45 x i8] c"============================================\00"
+@.str.669 = private unnamed_addr constant [7 x i8] c"print \00"
+@.str.670 = private unnamed_addr constant [45 x i8] c"Hello! I am SageDev v2.0. Ask me about Sage.\00"
+@.str.671 = private unnamed_addr constant [7 x i8] c"print \00"
+@.str.672 = private unnamed_addr constant [70 x i8] c"Commands: quit, memory, remember, recall, think, plan, personas, help\00"
+@.str.673 = private unnamed_addr constant [7 x i8] c"print \00"
+@.str.674 = private unnamed_addr constant [19 x i8] c"let running = true\00"
+@.str.675 = private unnamed_addr constant [15 x i8] c"while running:\00"
+@.str.676 = private unnamed_addr constant [21 x i8] c"    let msg = input(\00"
+@.str.677 = private unnamed_addr constant [6 x i8] c"You> \00"
+@.str.678 = private unnamed_addr constant [2 x i8] c")\00"
+@.str.679 = private unnamed_addr constant [15 x i8] c"    if msg == \00"
+@.str.680 = private unnamed_addr constant [5 x i8] c"quit\00"
+@.str.681 = private unnamed_addr constant [12 x i8] c" or msg == \00"
+@.str.682 = private unnamed_addr constant [5 x i8] c"exit\00"
+@.str.683 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.684 = private unnamed_addr constant [24 x i8] c"        running = false\00"
+@.str.685 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.686 = private unnamed_addr constant [19 x i8] c"SageDev> Goodbye. \00"
+@.str.687 = private unnamed_addr constant [24 x i8] c" + str(len(history)) + \00"
+@.str.688 = private unnamed_addr constant [21 x i8] c" exchanges recorded.\00"
+@.str.689 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
+@.str.690 = private unnamed_addr constant [5 x i8] c"help\00"
+@.str.691 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.692 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.693 = private unnamed_addr constant [82 x i8] c"  quit, memory, remember <fact>, recall <query>, think <q>, plan <goal>, personas\00"
+@.str.694 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
+@.str.695 = private unnamed_addr constant [7 x i8] c"memory\00"
+@.str.696 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.697 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.698 = private unnamed_addr constant [10 x i8] c"  Facts: \00"
+@.str.699 = private unnamed_addr constant [22 x i8] c" + str(len(facts)) + \00"
+@.str.700 = private unnamed_addr constant [16 x i8] c" | Remembered: \00"
+@.str.701 = private unnamed_addr constant [27 x i8] c" + str(len(remembered)) + \00"
+@.str.702 = private unnamed_addr constant [13 x i8] c" | History: \00"
+@.str.703 = private unnamed_addr constant [22 x i8] c" + str(len(history)))\00"
+@.str.704 = private unnamed_addr constant [37 x i8] c"    if running and starts_with(msg, \00"
+@.str.705 = private unnamed_addr constant [10 x i8] c"remember \00"
+@.str.706 = private unnamed_addr constant [3 x i8] c"):\00"
+@.str.707 = private unnamed_addr constant [48 x i8] c"        let fact = substr(msg, 9, len(msg) - 9)\00"
+@.str.708 = private unnamed_addr constant [31 x i8] c"        push(remembered, fact)\00"
+@.str.709 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.710 = private unnamed_addr constant [15 x i8] c"  Remembered: \00"
+@.str.711 = private unnamed_addr constant [8 x i8] c" + fact\00"
+@.str.712 = private unnamed_addr constant [37 x i8] c"    if running and starts_with(msg, \00"
+@.str.713 = private unnamed_addr constant [8 x i8] c"recall \00"
+@.str.714 = private unnamed_addr constant [3 x i8] c"):\00"
+@.str.715 = private unnamed_addr constant [46 x i8] c"        let rq = substr(msg, 7, len(msg) - 7)\00"
+@.str.716 = private unnamed_addr constant [33 x i8] c"        let results = recall(rq)\00"
+@.str.717 = private unnamed_addr constant [29 x i8] c"        if len(results) > 0:\00"
+@.str.718 = private unnamed_addr constant [43 x i8] c"            for ri in range(len(results)):\00"
+@.str.719 = private unnamed_addr constant [27 x i8] c"                if ri < 5:\00"
+@.str.720 = private unnamed_addr constant [27 x i8] c"                    print \00"
+@.str.721 = private unnamed_addr constant [4 x i8] c"  [\00"
+@.str.722 = private unnamed_addr constant [18 x i8] c" + str(ri + 1) + \00"
+@.str.723 = private unnamed_addr constant [3 x i8] c"] \00"
+@.str.724 = private unnamed_addr constant [15 x i8] c" + results[ri]\00"
+@.str.725 = private unnamed_addr constant [14 x i8] c"        else:\00"
+@.str.726 = private unnamed_addr constant [19 x i8] c"            print \00"
+@.str.727 = private unnamed_addr constant [21 x i8] c"  No memories found.\00"
+@.str.728 = private unnamed_addr constant [37 x i8] c"    if running and starts_with(msg, \00"
+@.str.729 = private unnamed_addr constant [7 x i8] c"think \00"
+@.str.730 = private unnamed_addr constant [3 x i8] c"):\00"
+@.str.731 = private unnamed_addr constant [46 x i8] c"        let tq = substr(msg, 6, len(msg) - 6)\00"
+@.str.732 = private unnamed_addr constant [31 x i8] c"        show_chain(reason(tq))\00"
+@.str.733 = private unnamed_addr constant [37 x i8] c"    if running and starts_with(msg, \00"
+@.str.734 = private unnamed_addr constant [6 x i8] c"plan \00"
+@.str.735 = private unnamed_addr constant [3 x i8] c"):\00"
+@.str.736 = private unnamed_addr constant [48 x i8] c"        let goal = substr(msg, 5, len(msg) - 5)\00"
+@.str.737 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.738 = private unnamed_addr constant [13 x i8] c"  Plan for: \00"
+@.str.739 = private unnamed_addr constant [8 x i8] c" + goal\00"
+@.str.740 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.741 = private unnamed_addr constant [26 x i8] c"  1. Analyze requirements\00"
+@.str.742 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.743 = private unnamed_addr constant [25 x i8] c"  2. Design architecture\00"
+@.str.744 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.745 = private unnamed_addr constant [38 x i8] c"  3. Create module in lib/<category>/\00"
+@.str.746 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.747 = private unnamed_addr constant [43 x i8] c"  4. Implement with gc_disable() if needed\00"
+@.str.748 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.749 = private unnamed_addr constant [27 x i8] c"  5. Write tests in tests/\00"
+@.str.750 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.751 = private unnamed_addr constant [37 x i8] c"  6. Update Makefile + documentation\00"
+@.str.752 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.753 = private unnamed_addr constant [34 x i8] c"  7. Run: bash tests/run_tests.sh\00"
+@.str.754 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
+@.str.755 = private unnamed_addr constant [9 x i8] c"personas\00"
+@.str.756 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.757 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.758 = private unnamed_addr constant [40 x i8] c"  sagedev, teacher, debugger, architect\00"
+@.str.759 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
+@.str.760 = private unnamed_addr constant [8 x i8] c"teacher\00"
+@.str.761 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.762 = private unnamed_addr constant [24 x i8] c"        persona_name = \00"
+@.str.763 = private unnamed_addr constant [8 x i8] c"Teacher\00"
+@.str.764 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.765 = private unnamed_addr constant [21 x i8] c"Switched to Teacher.\00"
+@.str.766 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
+@.str.767 = private unnamed_addr constant [9 x i8] c"debugger\00"
+@.str.768 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.769 = private unnamed_addr constant [24 x i8] c"        persona_name = \00"
+@.str.770 = private unnamed_addr constant [9 x i8] c"Debugger\00"
+@.str.771 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.772 = private unnamed_addr constant [22 x i8] c"Switched to Debugger.\00"
+@.str.773 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
+@.str.774 = private unnamed_addr constant [10 x i8] c"architect\00"
+@.str.775 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.776 = private unnamed_addr constant [24 x i8] c"        persona_name = \00"
+@.str.777 = private unnamed_addr constant [10 x i8] c"Architect\00"
+@.str.778 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.779 = private unnamed_addr constant [23 x i8] c"Switched to Architect.\00"
+@.str.780 = private unnamed_addr constant [27 x i8] c"    if running and msg == \00"
+@.str.781 = private unnamed_addr constant [8 x i8] c"sagedev\00"
+@.str.782 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.783 = private unnamed_addr constant [24 x i8] c"        persona_name = \00"
+@.str.784 = private unnamed_addr constant [8 x i8] c"SageDev\00"
+@.str.785 = private unnamed_addr constant [15 x i8] c"        print \00"
+@.str.786 = private unnamed_addr constant [21 x i8] c"Switched to SageDev.\00"
+@.str.787 = private unnamed_addr constant [35 x i8] c"    # Default: answer the question\00"
+@.str.788 = private unnamed_addr constant [27 x i8] c"    if running and msg != \00"
+@.str.789 = private unnamed_addr constant [5 x i8] c"quit\00"
+@.str.790 = private unnamed_addr constant [13 x i8] c" and msg != \00"
+@.str.791 = private unnamed_addr constant [5 x i8] c"exit\00"
+@.str.792 = private unnamed_addr constant [13 x i8] c" and msg != \00"
+@.str.793 = private unnamed_addr constant [7 x i8] c"memory\00"
+@.str.794 = private unnamed_addr constant [13 x i8] c" and msg != \00"
+@.str.795 = private unnamed_addr constant [5 x i8] c"help\00"
+@.str.796 = private unnamed_addr constant [13 x i8] c" and msg != \00"
+@.str.797 = private unnamed_addr constant [9 x i8] c"personas\00"
+@.str.798 = private unnamed_addr constant [13 x i8] c" and msg != \00"
+@.str.799 = private unnamed_addr constant [8 x i8] c"teacher\00"
+@.str.800 = private unnamed_addr constant [13 x i8] c" and msg != \00"
+@.str.801 = private unnamed_addr constant [9 x i8] c"debugger\00"
+@.str.802 = private unnamed_addr constant [13 x i8] c" and msg != \00"
+@.str.803 = private unnamed_addr constant [10 x i8] c"architect\00"
+@.str.804 = private unnamed_addr constant [13 x i8] c" and msg != \00"
+@.str.805 = private unnamed_addr constant [8 x i8] c"sagedev\00"
+@.str.806 = private unnamed_addr constant [2 x i8] c":\00"
+@.str.807 = private unnamed_addr constant [27 x i8] c"        let is_cmd = false\00"
+@.str.808 = private unnamed_addr constant [29 x i8] c"        if starts_with(msg, \00"
+@.str.809 = private unnamed_addr constant [7 x i8] c"think \00"
+@.str.810 = private unnamed_addr constant [3 x i8] c"):\00"
+@.str.811 = private unnamed_addr constant [26 x i8] c"            is_cmd = true\00"
+@.str.812 = private unnamed_addr constant [29 x i8] c"        if starts_with(msg, \00"
+@.str.813 = private unnamed_addr constant [6 x i8] c"plan \00"
+@.str.814 = private unnamed_addr constant [3 x i8] c"):\00"
+@.str.815 = private unnamed_addr constant [26 x i8] c"            is_cmd = true\00"
+@.str.816 = private unnamed_addr constant [29 x i8] c"        if starts_with(msg, \00"
+@.str.817 = private unnamed_addr constant [10 x i8] c"remember \00"
+@.str.818 = private unnamed_addr constant [3 x i8] c"):\00"
+@.str.819 = private unnamed_addr constant [26 x i8] c"            is_cmd = true\00"
+@.str.820 = private unnamed_addr constant [29 x i8] c"        if starts_with(msg, \00"
+@.str.821 = private unnamed_addr constant [8 x i8] c"recall \00"
+@.str.822 = private unnamed_addr constant [3 x i8] c"):\00"
+@.str.823 = private unnamed_addr constant [26 x i8] c"            is_cmd = true\00"
+@.str.824 = private unnamed_addr constant [23 x i8] c"        if not is_cmd:\00"
+@.str.825 = private unnamed_addr constant [32 x i8] c"            let r = reason(msg)\00"
+@.str.826 = private unnamed_addr constant [19 x i8] c"            print \00"
+@.str.827 = private unnamed_addr constant [34 x i8] c"            print persona_name + \00"
+@.str.828 = private unnamed_addr constant [3 x i8] c"> \00"
+@.str.829 = private unnamed_addr constant [6 x i8] c" + r[\00"
+@.str.830 = private unnamed_addr constant [7 x i8] c"answer\00"
+@.str.831 = private unnamed_addr constant [2 x i8] c"]\00"
+@.str.832 = private unnamed_addr constant [19 x i8] c"            print \00"
+@.str.833 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.834 = private unnamed_addr constant [5 x i8] c"GGUF\00"
+@.str.835 = private unnamed_addr constant [25 x i8] c"Phase 10: GGUF export...\00"
+@.str.836 = private unnamed_addr constant [18 x i8] c"sagellm-medium-v2\00"
+@.str.837 = private unnamed_addr constant [6 x i8] c"llama\00"
+@.str.838 = private unnamed_addr constant [5 x i8] c"Q8_0\00"
+@.str.839 = private unnamed_addr constant [23 x i8] c"sagellm-medium-v2.gguf\00"
+@.str.840 = private unnamed_addr constant [55 x i8] c"You are SageDev, an expert Sage programming assistant.\00"
+@.str.841 = private unnamed_addr constant [17 x i8] c"models/Modelfile\00"
+@.str.842 = private unnamed_addr constant [23 x i8] c"sagellm-medium-v2.gguf\00"
+@.str.843 = private unnamed_addr constant [19 x i8] c"models/quantize.sh\00"
+@.str.844 = private unnamed_addr constant [5 x i8] c"GGUF\00"
+@.str.845 = private unnamed_addr constant [34 x i8] c"Generated Modelfile + quantize.sh\00"
+@.str.846 = private unnamed_addr constant [5 x i8] c"GGUF\00"
+@.str.847 = private unnamed_addr constant [43 x i8] c"Import from Ollama: import llm.gguf_import\00"
+@.str.848 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.849 = private unnamed_addr constant [4 x i8] c"VIZ\00"
+@.str.850 = private unnamed_addr constant [28 x i8] c"Phase 11: Visualizations...\00"
+@.str.851 = private unnamed_addr constant [17 x i8] c"models/viz/.keep\00"
+@.str.852 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.853 = private unnamed_addr constant [20 x i8] c"SageLLM-Medium Loss\00"
+@.str.854 = private unnamed_addr constant [26 x i8] c"models/viz/loss_curve.svg\00"
+@.str.855 = private unnamed_addr constant [15 x i8] c"Q-Proj Weights\00"
+@.str.856 = private unnamed_addr constant [27 x i8] c"models/viz/weight_dist.svg\00"
+@.str.857 = private unnamed_addr constant [15 x i8] c"SageLLM-Medium\00"
+@.str.858 = private unnamed_addr constant [28 x i8] c"models/viz/architecture.svg\00"
+@.str.859 = private unnamed_addr constant [7 x i8] c"cosine\00"
+@.str.860 = private unnamed_addr constant [27 x i8] c"models/viz/lr_schedule.svg\00"
+@.str.861 = private unnamed_addr constant [4 x i8] c"VIZ\00"
+@.str.862 = private unnamed_addr constant [48 x i8] c"Generated: loss, weights, architecture, LR SVGs\00"
+@.str.863 = private unnamed_addr constant [4 x i8] c"VIZ\00"
+@.str.864 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.865 = private unnamed_addr constant [25 x i8] c"  SageLLM Build Complete\00"
+@.str.866 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.867 = private unnamed_addr constant [48 x i8] c"Model: SageGPT-Medium (SwiGLU + RoPE + RMSNorm)\00"
+@.str.868 = private unnamed_addr constant [5 x i8] c"  d=\00"
+@.str.869 = private unnamed_addr constant [8 x i8] c" heads=\00"
+@.str.870 = private unnamed_addr constant [9 x i8] c" layers=\00"
+@.str.871 = private unnamed_addr constant [5 x i8] c" ff=\00"
+@.str.872 = private unnamed_addr constant [8 x i8] c" vocab=\00"
+@.str.873 = private unnamed_addr constant [6 x i8] c" ctx=\00"
+@.str.874 = private unnamed_addr constant [15 x i8] c"  Parameters: \00"
+@.str.875 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.876 = private unnamed_addr constant [10 x i8] c"Training:\00"
+@.str.877 = private unnamed_addr constant [14 x i8] c"  Pre-train: \00"
+@.str.878 = private unnamed_addr constant [14 x i8] c" steps, loss=\00"
+@.str.879 = private unnamed_addr constant [9 x i8] c"  LoRA: \00"
+@.str.880 = private unnamed_addr constant [11 x i8] c" steps on \00"
+@.str.881 = private unnamed_addr constant [14 x i8] c" files, rank=\00"
+@.str.882 = private unnamed_addr constant [7 x i8] c" loss=\00"
+@.str.883 = private unnamed_addr constant [8 x i8] c"  DPO: \00"
+@.str.884 = private unnamed_addr constant [6 x i8] c"pairs\00"
+@.str.885 = private unnamed_addr constant [18 x i8] c" preference pairs\00"
+@.str.886 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.887 = private unnamed_addr constant [11 x i8] c"Knowledge:\00"
+@.str.888 = private unnamed_addr constant [11 x i8] c"  Engram: \00"
+@.str.889 = private unnamed_addr constant [9 x i8] c"semantic\00"
+@.str.890 = private unnamed_addr constant [13 x i8] c" semantic + \00"
+@.str.891 = private unnamed_addr constant [11 x i8] c"procedural\00"
+@.str.892 = private unnamed_addr constant [12 x i8] c" procedural\00"
+@.str.893 = private unnamed_addr constant [8 x i8] c"  RAG: \00"
+@.str.894 = private unnamed_addr constant [11 x i8] c"total_docs\00"
+@.str.895 = private unnamed_addr constant [8 x i8] c" docs (\00"
+@.str.896 = private unnamed_addr constant [13 x i8] c"total_chunks\00"
+@.str.897 = private unnamed_addr constant [9 x i8] c" chunks)\00"
+@.str.898 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.899 = private unnamed_addr constant [75 x i8] c"Features: SwiGLU, RoPE, RMSNorm, LoRA, DPO, RAG, Engram, Semantic Routing,\00"
+@.str.900 = private unnamed_addr constant [74 x i8] c"  Grammar Validation, Critic, SFT Traces, Planning, 6 Personas, Sessions,\00"
+@.str.901 = private unnamed_addr constant [77 x i8] c"  GGUF Export/Import, INT8 Quantization, SVG Visualization, GPU Acceleration\00"
+@.str.902 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.903 = private unnamed_addr constant [69 x i8] c"Output: models/sagellm_chatbot.sage | models/Modelfile | models/viz/\00"
+@.str.904 = private unnamed_addr constant [44 x i8] c"Run:     ./sage models/sagellm_chatbot.sage\00"
+@.str.905 = private unnamed_addr constant [70 x i8] c"Compile: ./sage --compile models/sagellm_chatbot.sage -o sagellm_chat\00"
+@.str.906 = private unnamed_addr constant [1 x i8] c"\00"
+@.str.907 = private unnamed_addr constant [10 x i8] c"Compute: \00"
+@.str.908 = private unnamed_addr constant [7 x i8] c"gflops\00"
+@.str.909 = private unnamed_addr constant [10 x i8] c" GFLOPS (\00"
+@.str.910 = private unnamed_addr constant [14 x i8] c"ms_per_matmul\00"
+@.str.911 = private unnamed_addr constant [7 x i8] c" ms @ \00"
+@.str.912 = private unnamed_addr constant [2 x i8] c"x\00"
+@.str.913 = private unnamed_addr constant [2 x i8] c")\00"
