@@ -5,7 +5,7 @@ gc_disable()
 
 import ml_native
 
-# === Load weights via C parser (avoids OOM) ===
+# === Load weights via native C parser ===
 print "Loading SL-TQ-LLM weights..."
 let W = ml_native.load_weights("models/sl_tq_llm.weights")
 if W == nil:
@@ -18,7 +18,6 @@ let n_layers = cfg_parts[2] | 0
 let d_ff = cfg_parts[3] | 0
 let vocab = cfg_parts[4] | 0
 let max_seq = cfg_parts[5] | 0
-
 let embed_w = W[1]
 let qw = W[2]
 let kw = W[3]
@@ -31,13 +30,11 @@ let norm1_w = W[9]
 let norm2_w = W[10]
 let final_norm_w = W[11]
 let lm_head_w = W[12]
-
 let total_p = len(embed_w) + len(qw) + len(kw) + len(vw) + len(ow) + len(gate_w) + len(up_w) + len(down_w) + len(lm_head_w)
 print "Loaded: d=" + str(d_model) + " ff=" + str(d_ff) + " vocab=" + str(vocab) + " params=" + str(total_p)
 
-# === Transformer forward pass ===
+# === Transformer forward pass (native C — matches training exactly) ===
 proc forward(token_ids):
-    # Use native C forward pass (matches train_step exactly: causal mask + softmax)
     return ml_native.forward_pass(embed_w, qw, kw, vw, ow, gate_w, up_w, down_w, norm1_w, norm2_w, final_norm_w, lm_head_w, token_ids, d_model, d_ff, vocab, len(token_ids))
 
 # === Token sampling with temperature ===

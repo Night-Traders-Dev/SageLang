@@ -289,11 +289,11 @@ log("TRAIN", "Theory+NLP tokens: " + str(len(theory_tokens)))
 
 let theory_examples = train.create_lm_examples(theory_tokens, seq_len)
 let theory_steps = len(theory_examples)
-if theory_steps > 5000:
-    theory_steps = 5000
+if theory_steps > 10000:
+    theory_steps = 10000
 
 let train_cfg = train.create_train_config()
-train_cfg["learning_rate"] = 0.003
+train_cfg["learning_rate"] = 0.002
 train_cfg["lr_schedule"] = "cosine"
 train_cfg["warmup_steps"] = 100
 train_cfg["log_interval"] = 500
@@ -338,10 +338,10 @@ log("LORA", "Sage corpus tokens: " + str(len(sage_tokens)))
 
 let sage_examples = train.create_lm_examples(sage_tokens, seq_len)
 let lora_steps = len(sage_examples)
-if lora_steps > 2000:
-    lora_steps = 2000
+if lora_steps > 5000:
+    lora_steps = 5000
 
-train_cfg["learning_rate"] = 0.002
+train_cfg["learning_rate"] = 0.001
 let state2 = train.create_train_state(train_cfg)
 
 log("LORA", "LoRA fine-tuning WITH BACKPROP: " + str(lora_steps) + " steps on Sage codebase")
