@@ -156,6 +156,30 @@ static void init_weights(void) {
 // Math helpers
 // ============================================================================
 
+// ARM NEON SIMD support for mobile (Termux/proot on Snapdragon)
+#if defined(__aarch64__) && defined(USE_NEON)
+#include <arm_neon.h>
+
+static void matmul_cpu(const double* A, const double* B, double* C, int m, int k, int n) {
+    // ARM64 NEON: process 2 doubles at a time with vfmaq_f64
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < n; j++) {
+            float64x2_t sum_vec = vdupq_n_f64(0.0);
+            int p = 0;
+            for (; p + 1 < k; p += 2) {
+                float64x2_t a_vec = vld1q_f64(&A[i*k+p]);
+                float64x2_t b_vec = {B[p*n+j], B[(p+1)*n+j]};
+                sum_vec = vfmaq_f64(sum_vec, a_vec, b_vec);
+            }
+            double s = vgetq_lane_f64(sum_vec, 0) + vgetq_lane_f64(sum_vec, 1);
+            for (; p < k; p++) s += A[i*k+p] * B[p*n+j];
+            C[i*n+j] = s;
+        }
+    }
+}
+
+#else
+
 static void matmul_cpu(const double* A, const double* B, double* C, int m, int k, int n) {
     for (int i = 0; i < m; i++)
         for (int j = 0; j < n; j++) {
@@ -164,6 +188,8 @@ static void matmul_cpu(const double* A, const double* B, double* C, int m, int k
             C[i*n+j] = s;
         }
 }
+
+#endif
 
 static void matmul(const double* A, const double* B, double* C, int m, int k, int n) {
 #ifdef USE_CUBLAS

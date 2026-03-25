@@ -1276,6 +1276,26 @@ Module* create_ml_native_module(ModuleCache* cache) {
     env_define(e, "cpu_count", 9, val_native(ml_cpu_count));
     env_define(e, "auto_parallel", 13, val_native(ml_auto_parallel));
 
+    // Architecture detection
+#if defined(__aarch64__)
+    env_define(e, "arch", 4, val_string("arm64"));
+    env_define(e, "has_neon", 8, val_bool(1));
+#elif defined(__x86_64__)
+    env_define(e, "arch", 4, val_string("x86_64"));
+    env_define(e, "has_neon", 8, val_bool(0));
+#elif defined(__riscv)
+    env_define(e, "arch", 4, val_string("rv64"));
+    env_define(e, "has_neon", 8, val_bool(0));
+#else
+    env_define(e, "arch", 4, val_string("unknown"));
+    env_define(e, "has_neon", 8, val_bool(0));
+#endif
+#ifdef SAGE_HAS_VULKAN
+    env_define(e, "has_cuda", 8, val_bool(1));
+#else
+    env_define(e, "has_cuda", 8, val_bool(0));
+#endif
+
     // Add to cache
     module->next = cache->modules;
     cache->modules = module;
