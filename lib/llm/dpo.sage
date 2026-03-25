@@ -62,6 +62,7 @@ proc batch_dpo_loss(chosen_logprobs, rejected_logprobs, beta):
 proc create_dpo_config():
     let cfg = {}
     cfg["beta"] = 0.1
+    cfg["lambda"] = 0.1
     cfg["learning_rate"] = 0.00001
     cfg["epochs"] = 1
     cfg["batch_size"] = 4
@@ -107,7 +108,7 @@ proc sage_code_preferences():
     # Prefer if/continue over deep elif chains
     add_pair(ds, "Handle 6 different cases", "for c in cases:" + chr(10) + "    if c == 1:" + chr(10) + "        handle1()" + chr(10) + "        continue" + chr(10) + "    if c == 2:" + chr(10) + "        handle2()" + chr(10) + "        continue", "if c == 1:" + chr(10) + "    handle1()" + chr(10) + "elif c == 2:" + chr(10) + "    handle2()" + chr(10) + "elif c == 3:" + chr(10) + "    handle3()" + chr(10) + "elif c == 4:" + chr(10) + "    handle4()" + chr(10) + "elif c == 5:" + chr(10) + "    handle5()" + chr(10) + "elif c == 6:" + chr(10) + "    handle6()")
 
-    return ds
+    return ds["pairs"]
 
 # ============================================================================
 # Reward model (simplified)
@@ -115,12 +116,15 @@ proc sage_code_preferences():
 
 proc create_reward_model():
     let rm = {}
-    rm["preferences"] = {}
+    rm["preferences"] = []
     return rm
 
 # Record a human preference
 proc record_preference(rm, prompt, chosen_response):
-    rm["preferences"][prompt] = chosen_response
+    let entry = {}
+    entry["prompt"] = prompt
+    entry["chosen"] = chosen_response
+    push(rm["preferences"], entry)
 
 # Score a response based on recorded preferences
 proc score_response(rm, prompt, response):

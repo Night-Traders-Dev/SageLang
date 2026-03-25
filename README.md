@@ -360,6 +360,7 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`debug`**: Weight stats, histograms, activation analysis, gradient checking, training diagnostics, attention patterns
 - **`viz`**: SVG chart generation (loss curves, weight distributions, attention heatmaps, architecture diagrams, LR schedules, HTML dashboard)
 - **`monitor`**: Live training monitor with progress bars, memory snapshots, throughput tracking, checkpoint management
+- **`gpu_accel`**: GPU-accelerated ML ops with CPU fallback (matmul, RMSNorm, SiLU, softmax via compute shaders), transformer layer/model forward helpers, GLSL shader templates
 
 **CUDA** (`lib/cuda/`, imported as `import cuda.<module>`):
 - **`device`**: GPU device descriptors, compute capability, architecture detection, feature checks, launch configuration
@@ -408,6 +409,7 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`rag`**: Retrieval-augmented generation (document chunking, keyword retrieval, context assembly, extractive summarization)
 - **`dpo`**: Direct Preference Optimization (DPO/ORPO alignment, preference pairs, reward models, Sage code preferences)
 - **`gguf`**: GGUF v3 export for Ollama and llama.cpp (metadata, Modelfile, quantization, conversion scripts)
+- **`gguf_import`**: Import GGUF models from Ollama/llama.cpp into SageGPT format (Q4_0/Q8_0 dequantization, llama/gpt2/mistral/phi/gemma/qwen2 architectures)
 
 **Agent Framework** (`lib/agent/`, imported as `import agent.<module>`):
 - **`core`**: ReAct agent loop (observe/think/act/reflect), tool dispatch, scratchpad, prompt building, LLM call tracking

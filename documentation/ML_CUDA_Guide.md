@@ -445,3 +445,86 @@ for epoch in range(100):
 | `memory` | `import cuda.memory` | `alloc`, `alloc_typed`, `alloc_tensor`, `copy_h2d`, `copy_d2h`, `create_pool`, `pool_alloc`, `format_bytes` |
 | `kernel` | `import cuda.kernel` | `define`, `launch_1d`, `launch_2d`, `occupancy`, `vector_add_kernel`, `matmul_kernel`, `format_launch` |
 | `stream` | `import cuda.stream` | `create_stream`, `record_launch`, `record_copy`, `create_event`, `record_event`, `create_plan`, `double_buffer_plan` |
+
+---
+
+## GPU-Accelerated ML (`ml.gpu_accel`)
+
+The `gpu_accel` module provides GPU-accelerated ML operations with automatic CPU fallback. All operations route through a context that tracks which backend is active.
+
+### Quick Start
+
+```sage
+import ml.gpu_accel
+
+# Create GPU context (falls back to CPU if no GPU)
+let ctx = gpu_accel.create(true)  # true = prefer GPU
+
+# All standard ML ops, GPU-aware
+let c = gpu_accel.matmul(ctx, a, b, M, K, N)
+let normed = gpu_accel.rms_norm(ctx, x, w, seq_len, d_model, 0.00001)
+let activated = gpu_accel.silu(ctx, x)
+let probs = gpu_accel.softmax(ctx, logits, vocab_size)
+let loss = gpu_accel.cross_entropy(ctx, logits, targets, batch, vocab)
+
+print gpu_accel.stats(ctx)  # Shows GPU vs CPU op counts
+gpu_accel.destroy(ctx)
+```
+
+### High-Level Training Helpers
+
+```sage
+import ml.gpu_accel
+import llm.attention
+
+let ctx = gpu_accel.create(true)
+
+# Single transformer layer forward pass
+let hidden = gpu_accel.transformer_layer_forward(ctx, hidden,
+    qw, kw, vw, ow, gate_w, up_w, down_w,
+    norm1_w, norm2_w, seq_len, d_model, d_ff,
+    attention.scaled_dot_product)
+
+# Full model forward pass (embedding + N layers + LM head)
+let logits = gpu_accel.model_forward(ctx, embed_w, layers,
+    final_norm_w, lm_head_w, input_ids,
+    seq_len, d_model, d_ff, vocab, n_layers,
+    attention.scaled_dot_product)
+
+# Training step (forward + cross-entropy loss)
+let loss = gpu_accel.train_step(ctx, embed_w, layers,
+    final_norm_w, lm_head_w, input_ids, target_ids,
+    seq_len, d_model, d_ff, vocab, n_layers,
+    attention.scaled_dot_product)
+```
+
+### GLSL Compute Shader Templates
+
+The module includes ready-to-use GLSL compute shader source for GPU dispatch:
+
+```sage
+# Get GLSL source for GPU matmul
+let shader = gpu_accel.matmul_shader_source(M, K, N)
+
+# Other shaders
+let soft_shader = gpu_accel.softmax_shader_source()
+let silu_shader = gpu_accel.silu_shader_source()
+let norm_shader = gpu_accel.rmsnorm_shader_source()
+```
+
+### Available Operations
+
+| Function | Description |
+|----------|-------------|
+| `matmul(ctx, a, b, m, k, n)` | Matrix multiply A[MxK] @ B[KxN] |
+| `add(ctx, a, b)` | Element-wise add |
+| `scale(ctx, a, s)` | Element-wise scale |
+| `rms_norm(ctx, x, w, seq, d, eps)` | RMSNorm |
+| `silu(ctx, x)` | SiLU activation |
+| `gelu(ctx, x)` | GELU activation |
+| `relu(ctx, x)` | ReLU activation |
+| `softmax(ctx, x, n)` | Softmax |
+| `cross_entropy(ctx, logits, targets, batch, vocab)` | Cross-entropy loss |
+| `adam_update(ctx, params, grads, m, v, lr, b1, b2, eps, t)` | Adam optimizer step |
+| `clip_grad(ctx, grads, max_norm)` | Gradient clipping |
+| `benchmark(ctx, size, iters)` | Performance benchmark |

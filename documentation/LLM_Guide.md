@@ -303,8 +303,10 @@ print "Int4: " + sizes["int4"]   # ~3 GB
 | `quantize` | `import llm.quantize` | `quantize_int8`, `quantize_int4`, `dequantize_int8`, `quantization_error`, `size_comparison` |
 | `engram` | `import llm.engram` | `create`, `store_working`, `store_semantic`, `recall`, `consolidate`, `build_context`, `summary` |
 | `rag` | `import llm.rag` | `create_store`, `add_document`, `retrieve`, `build_context`, `rag_prompt`, `summarize_extractive` |
-| `dpo` | `import llm.dpo` | `simple_dpo_loss`, `batch_dpo_loss`, `orpo_loss`, `sage_code_preferences`, `create_reward_model` |
+| `dpo` | `import llm.dpo` | `simple_dpo_loss`, `batch_dpo_loss`, `orpo_loss`, `sage_code_preferences`, `create_reward_model` (lambda config field, preferences returned as list, reward model uses array storage) |
 | `gguf` | `import llm.gguf` | `export_metadata`, `create_modelfile`, `build_tensor_list`, `sage_to_gguf_config`, `quant_types`, `estimate_size` |
+| `gguf_import` | `import llm.gguf_import` | `import_gguf`, `parse_header`, `read_metadata`, `extract_config`, `load_weights`, `dequantize_q4_0`, `dequantize_q8_0`, `convert_to_sagegpt`, `supported_architectures` |
+| `gpu_accel` | `import ml.gpu_accel` | `create_context`, `matmul`, `add`, `rms_norm`, `silu`, `softmax`, `transformer_layer_forward`, `model_forward`, `train_step` |
 
 ## Ollama / llama.cpp Export
 
@@ -329,6 +331,94 @@ llama-cli -m model.gguf -p "Write a Sage function"
 llama-server -m model.gguf --port 8080
 ```
 
+## GGUF Import (`llm.gguf_import`)
+
+Import models from Ollama and llama.cpp into SageGPT format for native inference and fine-tuning:
+
+```sage
+import llm.gguf_import
+
+# Import a GGUF model file
+let model = gguf_import.import_gguf("path/to/model.gguf")
+print model["config"]      # extracted model configuration
+print model["weights"]     # converted weight tensors
+
+# Step-by-step import
+let header = gguf_import.parse_header("model.gguf")
+let meta = gguf_import.read_metadata("model.gguf")
+let cfg = gguf_import.extract_config(meta)
+let weights = gguf_import.load_weights("model.gguf", header)
+
+# Dequantize quantized weights
+let fp32_weights = gguf_import.dequantize_q4_0(weights["layer.0.attn"])
+let fp32_w2 = gguf_import.dequantize_q8_0(weights["layer.0.ffn"])
+
+# Convert to SageGPT native format
+let sage_model = gguf_import.convert_to_sagegpt(weights, cfg)
+
+# Check supported architectures
+let archs = gguf_import.supported_architectures()
+# ["llama", "gpt2", "gemma", "phi", "qwen2", "mistral"]
+```
+
+### Supported Architectures
+
+| Architecture | GGUF Key | Notes |
+|-------------|----------|-------|
+| Llama | `llama` | Llama 2/3, Code Llama, Vicuna |
+| GPT-2 | `gpt2` | GPT-2 family |
+| Gemma | `gemma` | Google Gemma models |
+| Phi | `phi` | Microsoft Phi-2/3 |
+| Qwen2 | `qwen2` | Alibaba Qwen2 family |
+| Mistral | `mistral` | Mistral 7B, Mixtral |
+
+---
+
+## GPU-Accelerated ML (`ml.gpu_accel`)
+
+Offload training and inference operations to the GPU with automatic CPU fallback:
+
+```sage
+import ml.gpu_accel
+
+# Create a GPU acceleration context
+let ctx = gpu_accel.create_context()
+print ctx["backend"]   # "vulkan", "opengl", or "cpu"
+
+# GPU-aware matrix operations (automatic CPU fallback)
+let C = gpu_accel.matmul(ctx, A, B)
+let sum = gpu_accel.add(ctx, X, Y)
+
+# GPU-aware normalization and activations
+let normed = gpu_accel.rms_norm(ctx, hidden, weights, 1e-6)
+let activated = gpu_accel.silu(ctx, normed)
+let probs = gpu_accel.softmax(ctx, logits)
+
+# Transformer layer forward pass (fully GPU-accelerated)
+let output = gpu_accel.transformer_layer_forward(ctx, input, layer_weights)
+
+# Full model forward pass
+let logits = gpu_accel.model_forward(ctx, token_ids, model_weights)
+
+# GPU-accelerated training step
+let loss = gpu_accel.train_step(ctx, model, batch, learning_rate)
+```
+
+### GLSL Compute Shaders
+
+The GPU backend uses specialized GLSL compute shaders for each operation:
+
+| Operation | Shader | Notes |
+|-----------|--------|-------|
+| Matrix multiply | `matmul.comp` | Tiled workgroups, shared memory |
+| Softmax | `softmax.comp` | Numerically stable (max subtraction) |
+| SiLU | `silu.comp` | Fused multiply-sigmoid |
+| RMS Norm | `rmsnorm.comp` | Parallel reduction |
+
+All operations detect GPU availability at context creation and fall back to CPU implementations transparently. No code changes needed between GPU and CPU execution paths.
+
+---
+
 ## AI Builder
 
 The interactive AI builder (`models/ai_builder.sage`) guides you through the full pipeline:
@@ -337,15 +427,16 @@ The interactive AI builder (`models/ai_builder.sage`) guides you through the ful
 sage models/ai_builder.sage
 ```
 
-11-step wizard:
-1. Model configuration (nano to large, custom dimensions)
-2. Tokenizer selection (char, BPE, word-level)
-3. Training data (theory, multi-language, NLP, code, custom)
-4. Pre-training with native C backend
-5. LoRA fine-tuning on domain data
+12-phase pipeline (v2.0):
+1. Data collection (entire codebase, 127+ source files)
+2. Model configuration (medium: d=128, 4 layers, 4 heads, d_ff=512, vocab=256, 16K context)
+3. Tokenizer selection (char, BPE, word-level)
+4. Pre-training (200 steps with native C backend)
+5. LoRA fine-tuning (rank-16, 100 steps on domain data)
 6. DPO alignment with preference pairs
-7. Engram persistent memory setup
-8. RAG document store indexing
-9. Agent configuration (tools, planning)
-10. Chatbot persona selection
-11. Export and compilation
+7. RAG document store indexing
+8. Engram persistent memory (50+ facts)
+9. INT8 quantization
+10. Chatbot generation with persona selection
+11. GGUF export (Ollama/llama.cpp compatible)
+12. SVG visualization of model architecture
