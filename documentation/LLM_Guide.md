@@ -304,6 +304,30 @@ print "Int4: " + sizes["int4"]   # ~3 GB
 | `engram` | `import llm.engram` | `create`, `store_working`, `store_semantic`, `recall`, `consolidate`, `build_context`, `summary` |
 | `rag` | `import llm.rag` | `create_store`, `add_document`, `retrieve`, `build_context`, `rag_prompt`, `summarize_extractive` |
 | `dpo` | `import llm.dpo` | `simple_dpo_loss`, `batch_dpo_loss`, `orpo_loss`, `sage_code_preferences`, `create_reward_model` |
+| `gguf` | `import llm.gguf` | `export_metadata`, `create_modelfile`, `build_tensor_list`, `sage_to_gguf_config`, `quant_types`, `estimate_size` |
+
+## Ollama / llama.cpp Export
+
+Export trained models to GGUF format for use with Ollama and llama.cpp:
+
+```bash
+sage models/export_ollama.sage
+```
+
+Generates:
+- `model.gguf` — GGUF v3 metadata (llama-compatible architecture)
+- `Modelfile` — Ollama config with system prompt, parameters, ChatML template
+- `convert.sh` — Quantization script (F32/F16/Q8_0/Q4_K_M/Q2_K)
+
+```bash
+# Load into Ollama
+cd models/export && ollama create sagellm -f Modelfile
+ollama run sagellm
+
+# Use with llama.cpp directly
+llama-cli -m model.gguf -p "Write a Sage function"
+llama-server -m model.gguf --port 8080
+```
 
 ## AI Builder
 

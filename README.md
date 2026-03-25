@@ -407,6 +407,7 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`engram`**: Persistent neural memory (working/episodic/semantic/procedural), consolidation, decay, LLM context generation
 - **`rag`**: Retrieval-augmented generation (document chunking, keyword retrieval, context assembly, extractive summarization)
 - **`dpo`**: Direct Preference Optimization (DPO/ORPO alignment, preference pairs, reward models, Sage code preferences)
+- **`gguf`**: GGUF v3 export for Ollama and llama.cpp (metadata, Modelfile, quantization, conversion scripts)
 
 **Agent Framework** (`lib/agent/`, imported as `import agent.<module>`):
 - **`core`**: ReAct agent loop (observe/think/act/reflect), tool dispatch, scratchpad, prompt building, LLM call tracking

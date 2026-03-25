@@ -2079,6 +2079,7 @@ SageLang ships with 11 LLM/neural network modules in `lib/llm/` for building and
 | `engram.sage` | `import llm.engram` | Persistent neural memory (working/episodic/semantic/procedural) |
 | `rag.sage` | `import llm.rag` | Document chunking, keyword retrieval, context assembly, summarization |
 | `dpo.sage` | `import llm.dpo` | Direct Preference Optimization, ORPO, preference pairs, reward models |
+| `gguf.sage` | `import llm.gguf` | GGUF v3 export for Ollama/llama.cpp, Modelfile gen, quantization |
 
 ### 9.17 Agent Framework (`lib/agent/`)
 
