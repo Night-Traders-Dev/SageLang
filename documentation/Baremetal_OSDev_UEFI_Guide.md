@@ -268,7 +268,7 @@ Both flags link against `src/c/bare_metal.c`, a freestanding C runtime that supp
 Four modules generate the low-level structures needed before a kernel's main entry point:
 
 | Module | Import | Description |
-|--------|--------|-------------|
+| ------ | ------ | ----------- |
 | `multiboot.sage` | `import os.boot.multiboot` | Multiboot2 header and tag generation, boot info struct parsing |
 | `gdt.sage` | `import os.boot.gdt` | x86_64 GDT descriptor construction, TSS entries, LGDT sequence builder |
 | `start.sage` | `import os.boot.start` | x86_64 startup assembly generation (long mode switch, stack setup, jump to kmain) |
@@ -300,7 +300,7 @@ let lds = linker.emit_script({"load_addr": 0x100000, "sections": ["text", "rodat
 Seven modules provide the core drivers and subsystems for a minimal x86_64 kernel:
 
 | Module | Import | Description |
-|--------|--------|-------------|
+| ------ | ------ | ----------- |
 | `kmain.sage` | `import os.kernel.kmain` | Kernel entry scaffolding; handoff from Multiboot2 boot info |
 | `console.sage` | `import os.kernel.console` | VGA text-mode console, 80×25, 16 color attributes, scrolling |
 | `keyboard.sage` | `import os.kernel.keyboard` | PS/2 keyboard driver, scancode set 2, key event dispatch |
