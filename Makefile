@@ -803,6 +803,10 @@ train-c: src/c/train_sl_tq.c
 		echo "  [NEON]   ARM64 SIMD enabled"; \
 		TRAIN_FLAGS="$$TRAIN_FLAGS -DUSE_NEON"; \
 	fi; \
+	if [ "$$(uname -m)" = "riscv64" ]; then \
+		echo "  [RVV]    RISC-V Vector enabled"; \
+		TRAIN_FLAGS="$$TRAIN_FLAGS -DUSE_RVV -march=rv64gcv"; \
+	fi; \
 	echo "  Building train_sl_tq..."; \
 	$(CC) -O3 -march=native $$TRAIN_FLAGS -o train_sl_tq src/c/train_sl_tq.c $$TRAIN_LIBS; \
 	echo "Built: train_sl_tq"

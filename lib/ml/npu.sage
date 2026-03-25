@@ -268,11 +268,49 @@ proc supported_backends():
     let backends = []
     push(backends, "cpu")
     push(backends, "neon")
+    push(backends, "rvv")
     push(backends, "nnapi")
     push(backends, "snpe")
     push(backends, "samsung_one")
+    push(backends, "onnx")
     push(backends, "auto")
     return backends
+
+# ============================================================================
+# RISC-V Vector (RVV) support — OrangePi RV2
+# ============================================================================
+
+# The OrangePi RV2 has no dedicated NPU but achieves 2 TOPS INT8 via
+# RISC-V Vector extensions on the Ky X1 octa-core CPU.
+# Uses ONNX Runtime GenAI with custom RISC-V tweaks.
+#
+# Build for RV2: gcc -O3 -march=rv64gcv -o train_sl_tq src/c/train_sl_tq.c -lm -lpthread
+# The -march=rv64gcv enables the V (vector) extension.
+
+proc to_onnx_format(weights, config):
+    # Convert SageGPT weights to ONNX-compatible metadata
+    # OrangePi RV2 uses ONNX Runtime GenAI for inference
+    let onnx_model = {}
+    onnx_model["format"] = "onnx"
+    onnx_model["opset"] = 17
+    onnx_model["config"] = config
+    onnx_model["quantization"] = "int8"
+    onnx_model["target"] = "riscv64"
+    onnx_model["vector_ext"] = "rvv1.0"
+    onnx_model["ops"] = ["MatMul", "Softmax", "Add", "Mul", "Sigmoid", "Reshape", "LayerNormalization"]
+    return onnx_model
+
+proc rv2_info():
+    let info = {}
+    info["board"] = "OrangePi RV2"
+    info["cpu"] = "Ky X1 Octa-Core RISC-V 64-bit"
+    info["tops"] = "2 TOPS INT8 (CPU-fused, no dedicated NPU)"
+    info["ram"] = "8GB"
+    info["vector"] = "RISC-V Vector Extension (RVV 1.0)"
+    info["runtime"] = "ONNX Runtime GenAI"
+    info["build_flags"] = "-march=rv64gcv -O3"
+    info["storage"] = "supports m.2 NVMe"
+    return info
 
 proc contains(h, n):
     if len(n) > len(h):

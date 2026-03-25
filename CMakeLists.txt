@@ -427,6 +427,13 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
         message(STATUS "SL-TQ Trainer: ARM NEON SIMD enabled")
     endif()
 
+    # Auto-detect RISC-V for Vector extension
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "riscv64")
+        list(APPEND TRAIN_DEFS USE_RVV)
+        target_compile_options(train_sl_tq PRIVATE -march=rv64gcv)
+        message(STATUS "SL-TQ Trainer: RISC-V Vector (RVV) enabled")
+    endif()
+
     add_executable(train_sl_tq ${TRAIN_SOURCES})
     target_link_libraries(train_sl_tq ${TRAIN_LIBS})
     target_compile_definitions(train_sl_tq PRIVATE ${TRAIN_DEFS})
