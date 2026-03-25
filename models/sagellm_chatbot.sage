@@ -346,7 +346,7 @@ while running:
                 print "  - " + errs[i]
     if running and msg == "trace":
         let ts = trace.stats(recorder)
-        print "  Traces: " + str(ts["total_traces"]) + " Steps: " + str(ts["total_steps"]))
+        print "  Traces: " + str(ts["total_traces"]) + " Steps: " + str(ts["total_steps"])
     if running and msg == "personas":
         print "  sagedev, teacher, debugger, architect"
     if running and msg == "teacher":

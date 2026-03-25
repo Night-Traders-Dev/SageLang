@@ -36,3 +36,6 @@ models/build_sagellm
 sagellm_build
 sage-lsp
 sage
+sagellm_build
+sagellm_chat
+models/build_sagellm

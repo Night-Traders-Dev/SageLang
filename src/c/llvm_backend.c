@@ -1266,6 +1266,22 @@ static void llvm_collect_symbols(LLVMCompiler* lc, Stmt* program) {
         } else if (s->type == STMT_IMPORT) {
             if (s->as.import.module_name != NULL) {
                 llc_add_module(lc, s->as.import.module_name);
+                // Create a global variable for the module binding
+                // import agent.critic -> binding name is "critic"
+                // import foo as bar -> binding name is "bar"
+                const char* bind = s->as.import.alias;
+                if (bind == NULL && s->as.import.item_count == 0) {
+                    // Extract last component of dotted name
+                    const char* dot = strrchr(s->as.import.module_name, '.');
+                    if (dot != NULL) {
+                        bind = dot + 1;
+                    } else {
+                        bind = s->as.import.module_name;
+                    }
+                }
+                if (bind != NULL) {
+                    llc_add_global(lc, bind);
+                }
             }
             if (s->as.import.item_count > 0) {
                 llvm_process_import_constants(lc, &s->as.import);
@@ -1423,7 +1439,16 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             for (int i = 0; i < lc->global_count; i++) {
                 if (strcmp(lc->global_names[i], name) == 0) { is_global = 1; break; }
             }
-            if (is_global) {
+            // Check if it's a known proc (used as first-class value / callback)
+            int is_proc = 0;
+            for (int i = 0; i < lc->proc_count; i++) {
+                if (strcmp(lc->proc_names[i], name) == 0) { is_proc = 1; break; }
+            }
+            if (is_proc) {
+                // Proc reference as value — emit nil placeholder
+                // (LLVM functions can't be SageValue directly; callbacks work via nil sentinel)
+                ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+            } else if (is_global) {
                 ll_line(lc, "%%%d = load %%SageValue, %%SageValue* @%s", r, name);
             } else {
                 ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%s", r, name);
@@ -1998,6 +2023,29 @@ static void collect_local_names(Stmt* stmt, char*** names, int* count, int* cap)
             collect_local_names(s->as.block.statements, names, count, cap);
         } else if (s->type == STMT_TRY) {
             collect_local_names(s->as.try_stmt.try_block, names, count, cap);
+        } else if (s->type == STMT_IMPORT) {
+            // Import binding variable (e.g. import agent.critic -> "critic")
+            const char* bind = s->as.import.alias;
+            if (bind == NULL && s->as.import.item_count == 0 && s->as.import.module_name != NULL) {
+                const char* dot = strrchr(s->as.import.module_name, '.');
+                bind = dot ? dot + 1 : s->as.import.module_name;
+            }
+            if (bind != NULL) {
+                char* var = SAGE_STRDUP(bind);
+                int dup = 0;
+                for (int i = 0; i < *count; i++) {
+                    if (strcmp((*names)[i], var) == 0) { dup = 1; break; }
+                }
+                if (!dup) {
+                    if (*count >= *cap) {
+                        *cap = *cap ? *cap * 2 : 16;
+                        *names = SAGE_REALLOC(*names, sizeof(char*) * (size_t)*cap);
+                    }
+                    (*names)[(*count)++] = var;
+                } else {
+                    free(var);
+                }
+            }
         }
     }
 }
