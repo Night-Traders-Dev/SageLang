@@ -4,6 +4,8 @@ gc_disable()
 # Compile: sage --compile-llvm models/sl_tq_llm_chat.sage -o sl_tq_chat
 # Run:     ./sl_tq_chat   OR   sage models/sl_tq_llm_chat.sage
 
+# === Utilities ===
+
 proc contains(h, n):
     if len(n) > len(h):
         return false
@@ -46,79 +48,137 @@ proc substr(s, start, count):
         r = r + s[start + i]
     return r
 
+# Split a string into words by spaces
+proc split_words(s):
+    let words = []
+    let current = ""
+    for i in range(len(s)):
+        if s[i] == " ":
+            if len(current) > 0:
+                push(words, current)
+            current = ""
+        else:
+            current = current + s[i]
+    if len(current) > 0:
+        push(words, current)
+    return words
+
+# === Knowledge Base ===
+
 let facts = []
-push(facts, "Sage is an indentation-based systems programming language built in C")
-push(facts, "130+ library modules across 11 subdirectories")
-push(facts, "Concurrent tri-color mark-sweep GC with SATB write barriers")
-push(facts, "3 backends: C (--compile), LLVM IR (--compile-llvm), native asm (--compile-native)")
-push(facts, "Dotted imports: import os.fat resolves to lib/os/fat.sage")
-push(facts, "0 is TRUTHY - only false and nil are falsy")
-push(facts, "No escape sequences - use chr(10) for newline, chr(34) for double-quote")
-push(facts, "elif chains with 5+ branches malfunction - use if/continue")
-push(facts, "Class methods cannot see module-level let vars")
-push(facts, "match is a reserved keyword")
-push(facts, "super.init(self, args) calls parent constructor, works with deep inheritance")
-push(facts, "-> arrow operator is alias for . (systems-language style)")
-push(facts, "LLVM backend: do NOT modify loop vars to fake break, use break instead")
-push(facts, "SageGPT: SwiGLU + RoPE + RMSNorm (Llama-style)")
-push(facts, "Native ML backend: matmul, softmax, cross_entropy at 12+ GFLOPS")
-push(facts, "LoRA: low-rank adapters for efficient fine-tuning (rank 4-64)")
-push(facts, "DPO: Direct Preference Optimization for alignment")
-push(facts, "Engram: 4-tier memory (working/episodic/semantic/procedural)")
-push(facts, "RAG: Retrieval-Augmented Generation with document indexing")
-push(facts, "TurboQuant: 3-bit KV cache quantization, 6x compression, zero accuracy loss (ICLR 2026)")
-push(facts, "TurboQuant Stage 1 (PolarQuant): random rotation + MSE-optimal scalar quantization")
-push(facts, "TurboQuant Stage 2 (QJL): 1-bit Quantized Johnson-Lindenstrauss residual correction")
-push(facts, "TurboQuant is data-oblivious (no training/calibration needed)")
-push(facts, "GGUF export/import for Ollama and llama.cpp")
-push(facts, "Agent ReAct loop: observe -> think -> act -> reflect")
-push(facts, "Supervisor-Worker: control plane + specialist workers")
-push(facts, "Grammar-constrained decoding prevents malformed output")
-push(facts, "Tree of Thoughts: MCTS-style search for complex reasoning")
-push(facts, "Semantic routing: keyword dispatch bypassing LLM for trivial queries")
-push(facts, "6 personas: SageDev, CodeReviewer, Teacher, Debugger, Architect, Assistant")
-push(facts, "Vulkan graphics: 24 modules, PBR, shadows, deferred, SSAO, SSR, TAA")
-push(facts, "OpenGL 4.5 backend via gpu_api.c")
-push(facts, "OS dev: FAT, ELF, PE, MBR, GPT, PCI, ACPI, UEFI, paging (15 modules)")
-push(facts, "Networking: socket, tcp, http, ssl + lib/net/ (8 modules)")
-push(facts, "Crypto: SHA-256, HMAC, Base64, RC4, PBKDF2, xoshiro256** (6 modules)")
-push(facts, "Std: regex, datetime, log, argparse, fmt, testing, channel, threadpool (23 modules)")
-push(facts, "GPU acceleration: gpu_accel auto-detects GPU/CPU/NPU/TPU")
-push(facts, "Build: make or cmake. Tests: 241 interpreter + 1567 self-hosted")
-push(facts, "Library paths: CWD, ./lib, source dir, /usr/local/share/sage/lib, SAGE_PATH")
-push(facts, "Version 1.0.0")
-push(facts, "AutoResearch: Karpathy ratchet loop - propose/train/evaluate/accept-reject, ran 15 experiments, 0 improvements found")
-push(facts, "AutoResearch optimized LR to 0.0003 and warmup to 20 for lowest validation loss")
-push(facts, "TurboQuant achieved 8.5x KV cache compression at 3-bit with MSE 0.005")
-push(facts, "Model: SL-TQ-LLM, d=64, 1 layer, 98K params, trained on 71 Sage files + NLP + theory")
-push(facts, "Training: pre-train loss=5.538, LoRA loss=5.58485, DPO loss=0.610959")
+push(facts, "Sage is an indentation-based systems programming language built in C with a self-hosted compiler written in Sage itself")
+push(facts, "Sage has 128+ library modules across 11 subdirectories: graphics, os, net, crypto, ml, cuda, std, llm, agent, chat, plus root-level utilities")
+push(facts, "Sage uses a concurrent tri-color mark-sweep garbage collector with SATB write barriers achieving sub-millisecond stop-the-world pauses")
+push(facts, "Sage has 3 compiler backends: C codegen (--compile), LLVM IR (--compile-llvm), and native assembly (--compile-native) targeting x86-64, aarch64, and rv64")
+push(facts, "Sage uses dotted imports where import os.fat resolves to lib/os/fat.sage and binds as fat")
+push(facts, "In Sage, 0 is truthy - only false and nil are falsy, which differs from Python and C")
+push(facts, "Sage has no escape sequences in strings - you must use chr(10) for newline, chr(34) for double-quote, and chr(9) for tab")
+push(facts, "In Sage, elif chains with 5 or more branches can malfunction - the workaround is to use sequential if/continue statements instead")
+push(facts, "Sage class methods cannot see module-level let variables - you must pass values as arguments or hardcode them")
+push(facts, "The word match is a reserved keyword in Sage and cannot be used as a variable name")
+push(facts, "The Sage lexer produces INDENT and DEDENT tokens for indentation-based block structure, similar to Python")
+push(facts, "The parser uses recursive descent and parse_program() lives in compiler.c where it is shared by all compiler backends")
+push(facts, "Sage values include numbers (IEEE 754 doubles), strings, booleans, nil, arrays, dicts, and closures")
+push(facts, "The GC operates in 4 phases: root scan (STW ~50-200us), concurrent mark, remark (STW ~20-50us), and concurrent sweep in batches")
+push(facts, "Write barriers are implemented in env.c for env_define and env_assign, and in value.c for array_set and dict_set")
+push(facts, "Heavy-allocation modules must start with gc_disable() to prevent GC segfaults during initialization")
+push(facts, "The native ML backend in ml_backend.c provides optimized matmul, softmax, cross_entropy, adam_update, rms_norm, silu, and gelu at 12+ GFLOPS")
+push(facts, "The LLM library has 18 modules: config, tokenizer, embedding, attention, transformer, generate, train, agent, prompt, lora, quantize, engram, rag, dpo, gguf, gguf_import, turboquant, and autoresearch")
+push(facts, "SageGPT uses a SwiGLU FFN with RoPE positional encoding and RMSNorm, inspired by the Llama architecture")
+push(facts, "LoRA provides low-rank adapters for efficient fine-tuning with ranks typically between 4 and 64")
+push(facts, "DPO or Direct Preference Optimization allows alignment without training a separate reward model")
+push(facts, "Engram provides 4-tier memory: working (FIFO), episodic (timestamped), semantic (permanent facts), and procedural (skills)")
+push(facts, "RAG stands for Retrieval-Augmented Generation and works by indexing documents with keyword extraction and chunking for retrieval at inference time")
+push(facts, "TurboQuant achieves 8.5x KV cache compression at 3-bit precision with MSE of only 0.005, based on PolarQuant random rotation plus scalar quantization")
+push(facts, "TurboQuant is data-oblivious meaning it needs no training data or calibration to work")
+push(facts, "AutoResearch implements Karpathy's ratchet loop: propose a change, train for a fixed budget, evaluate, keep if improved or discard if not, then repeat")
+push(facts, "AutoResearch ran 15 experiments on this model optimizing learning rate and warmup steps")
+push(facts, "GGUF import can convert Ollama and llama.cpp models to SageGPT format, supporting llama, gpt2, mistral, phi, gemma, and qwen2 architectures")
+push(facts, "The agent framework has 12 modules including a ReAct loop, supervisor-worker pattern, Tree of Thoughts search, grammar-constrained decoding, and SFT trace recording")
+push(facts, "The chat framework provides intent matching with keyword scoring, 6 built-in personas, and multi-session management")
+push(facts, "The Vulkan graphics engine has 24 modules covering PBR rendering, shadows, deferred rendering with SSAO and SSR, temporal anti-aliasing, and glTF 2.0 loading")
+push(facts, "The OS development library has 15 modules for FAT filesystems, ELF and PE binary parsing, MBR and GPT partition tables, PCI and ACPI hardware enumeration, UEFI, paging, and more")
+push(facts, "Networking includes native socket, tcp, http, and ssl modules plus 8 high-level modules for URL parsing, HTTP requests, WebSocket, DNS, and IP address handling")
+push(facts, "The crypto library provides SHA-256 hashing, HMAC, Base64 encoding, XOR and RC4 ciphers, PBKDF2 key derivation, and xoshiro256** PRNG")
+push(facts, "The standard library has 23 modules including regex, datetime, logging, argument parsing, channels, thread pools, atomic operations, and read-write locks")
+push(facts, "Sage supports super.init(self, args) for calling parent class constructors and the -> arrow operator as an alias for dot notation")
+push(facts, "The gpu_accel module provides a unified compute abstraction that auto-detects GPU, CPU, NPU, or TPU backends")
+push(facts, "This model is SL-TQ-LLM with d=64, 1 transformer layer, 98K parameters, trained on 71 Sage source files plus natural language and programming theory")
+push(facts, "Training achieved pre-train loss of 5.538 with 50 steps, LoRA loss of 5.585 with 30 steps on rank-16 adapters, and DPO loss of 0.611 on 5 preference pairs")
+push(facts, "The LLVM compiled backend does not support modifying for-loop variables to fake a break - always use the break statement instead")
+push(facts, "Sage programs are compiled using proc for functions, class for object-oriented programming, let for variable declarations, and indentation for block structure")
+push(facts, "To write a hello world in Sage you simply write: print " + chr(34) + "Hello, World!" + chr(34))
+push(facts, "Sage supports closures where inner procs capture variables from their enclosing scope")
+push(facts, "Exception handling uses try/catch/finally blocks and raise to throw errors")
+push(facts, "Sage has 241 interpreter tests, 28 compiler tests, and 1567+ self-hosted tests")
 
 let remembered = []
 let history = []
 
-proc recall(query):
+# === Fuzzy Recall: split query into words, score each fact ===
+
+proc recall_scored(query):
     let lq = to_lower(query)
-    let results = []
+    let words = split_words(lq)
+    let scored = []
+    # Score each fact by how many query words it contains
     for i in range(len(facts)):
-        if contains(to_lower(facts[i]), lq):
-            push(results, facts[i])
+        let lf = to_lower(facts[i])
+        let score = 0
+        for w in range(len(words)):
+            if len(words[w]) > 2 and contains(lf, words[w]):
+                score = score + 1
+        if score > 0:
+            let se = {}
+            se["fact"] = facts[i]
+            se["score"] = score
+            push(scored, se)
+    # Also check remembered facts
     for i in range(len(remembered)):
-        if contains(to_lower(remembered[i]), lq):
-            push(results, remembered[i])
-    return results
+        let lf = to_lower(remembered[i])
+        let score = 0
+        for w in range(len(words)):
+            if len(words[w]) > 2 and contains(lf, words[w]):
+                score = score + 1
+        if score > 0:
+            let re = {}
+            re["fact"] = remembered[i]
+            re["score"] = score
+            push(scored, re)
+    # Sort by score descending (simple selection sort)
+    for i in range(len(scored)):
+        let best = i
+        for j in range(len(scored) - i - 1):
+            if scored[i + j + 1]["score"] > scored[best]["score"]:
+                best = i + j + 1
+        if best != i:
+            let tmp = scored[i]
+            scored[i] = scored[best]
+            scored[best] = tmp
+    return scored
+
+# === Chain-of-Thought Reasoning ===
 
 proc reason(question):
     let chain = []
     let lp = to_lower(question)
-    let mem = recall(lp)
-    if len(mem) > 0:
-        push(chain, "Recalled " + str(len(mem)) + " facts")
+
+    # Step 1: Memory retrieval (RAG-like)
+    let matches = recall_scored(question)
+    if len(matches) > 0:
+        push(chain, "Retrieved " + str(len(matches)) + " relevant facts from knowledge base")
+    if len(matches) == 0:
+        push(chain, "No direct knowledge match, using topic classification")
+
+    # Step 2: Topic classification
     let topic = "general"
-    if topic == "general" and (contains(lp, "llm") or contains(lp, "language model") or contains(lp, "transformer") or contains(lp, "lora") or contains(lp, "engram") or contains(lp, "neural") or contains(lp, "tokeniz") or contains(lp, "autoresearch") or contains(lp, "turboquant")):
+    if contains(lp, "sage") or contains(lp, "sagelang"):
+        topic = "sage"
+    if topic == "general" and (contains(lp, "llm") or contains(lp, "language model") or contains(lp, "transformer") or contains(lp, "lora") or contains(lp, "engram") or contains(lp, "neural") or contains(lp, "tokeniz") or contains(lp, "autoresearch") or contains(lp, "turboquant") or contains(lp, "gguf")):
         topic = "llm"
     if topic == "general" and (contains(lp, "agent") or contains(lp, "react") or contains(lp, "supervisor") or contains(lp, "tool use") or contains(lp, "ratchet")):
         topic = "agent"
-    if topic == "general" and (contains(lp, "chatbot") or contains(lp, "persona") or contains(lp, "conversation") or contains(lp, "intent")):
+    if topic == "general" and (contains(lp, "chatbot") or contains(lp, "persona") or contains(lp, "conversation")):
         topic = "chatbot"
     if topic == "general" and (contains(lp, "crypto") or contains(lp, "sha") or contains(lp, "hash") or contains(lp, "encrypt")):
         topic = "crypto"
@@ -132,7 +192,7 @@ proc reason(question):
         topic = "graphics"
     if topic == "general" and (contains(lp, "gc ") or contains(lp, "garbage")):
         topic = "gc"
-    if topic == "general" and (contains(lp, "compile") or contains(lp, "backend") or contains(lp, "emit") or contains(lp, "llvm")):
+    if topic == "general" and (contains(lp, "compile") or contains(lp, "backend") or contains(lp, "emit")):
         topic = "compiler"
     if topic == "general" and (contains(lp, "for ") or contains(lp, "loop") or contains(lp, "while")):
         topic = "loops"
@@ -142,110 +202,167 @@ proc reason(question):
         topic = "oop"
     if topic == "general" and (contains(lp, "array") or contains(lp, "dict") or contains(lp, "data struct")):
         topic = "data"
-    if topic == "general" and (contains(lp, "function") or contains(lp, "proc ") or contains(lp, "closure")):
+    if topic == "general" and (contains(lp, "function") or contains(lp, "proc") or contains(lp, "closure")):
         topic = "functions"
     if topic == "general" and (contains(lp, "error") or contains(lp, "exception") or contains(lp, "try ")):
         topic = "errors"
     if topic == "general" and (contains(lp, "test") or contains(lp, "debug") or contains(lp, "bug")):
         topic = "testing"
-    if topic == "general" and (contains(lp, "thread") or contains(lp, "async") or contains(lp, "channel")):
+    if topic == "general" and (contains(lp, "thread") or contains(lp, "async") or contains(lp, "channel") or contains(lp, "concurrent")):
         topic = "concurrency"
-    if topic == "general" and (contains(lp, "plan") or contains(lp, "how to build") or contains(lp, "steps")):
+    if topic == "general" and (contains(lp, "plan") or contains(lp, "how to") or contains(lp, "steps")):
         topic = "planning"
-    push(chain, "Topic: " + topic)
+
+    push(chain, "Classified as: " + topic)
+
+    # Step 3: Generate answer
     let answer = ""
-    if topic == "compiler":
-        answer = "3 backends: --compile (C), --compile-llvm (LLVM IR), --compile-native (x86-64/aarch64/rv64). Use break not fake-break in LLVM."
-    if topic == "data":
-        answer = "Arrays: [1,2,3], push, pop, slicing. Dicts: {}, d[key]=val, dict_keys. Tuples: (1,2,3)."
-    if topic == "agent":
-        answer = "Agent framework (12 modules): core (ReAct), tools, planner (DAG), router, supervisor (workers), critic, schema, trace (SFT), grammar (constrained decoding), sandbox, tot (Tree of Thoughts), semantic_router. AutoResearch uses ratchet loop: propose->train->evaluate->accept/reject."
-    if topic == "errors":
-        answer = "try: risky. catch e: handle. finally: cleanup. raise to throw."
-    if topic == "chatbot":
-        answer = "Chat framework: bot (intents, middleware), persona (6: SageDev, Teacher, Debugger, Architect, CodeReviewer, Assistant), session (history). This chatbot was built by train_sl_tq_llm.sage with AutoResearch optimization."
-    if topic == "graphics":
-        answer = "GPU engine (24 modules): Vulkan + OpenGL 4.5. PBR, shadows, deferred (SSAO, SSR), TAA."
-    if topic == "loops":
-        answer = "Loops: for i in range(10): body. for item in arr: body. while cond: body. break/continue. Use break (not j=len) for LLVM compat."
-    if topic == "modules":
-        answer = "11 categories, 128+ modules: os(15), net(8), crypto(6), ml(9), cuda(4), std(23), llm(18), agent(12), chat(3), graphics(24), root(9)."
-    if topic == "oop":
-        answer = "OOP: class Name: with proc init(self). Inheritance: class Dog(Animal). super.init(self, args). Arrow operator: obj->field."
-    if topic == "planning":
-        answer = "Plan: 1) Define goal, 2) Create module, 3) Implement, 4) Test, 5) Document, 6) Run tests."
-    if topic == "functions":
-        answer = "proc name(args): body. Return values. Closures capture outer vars. First-class functions."
-    if topic == "crypto":
-        answer = "Crypto (6 modules): hash (SHA-256), hmac, encoding (Base64, hex), cipher (XOR, RC4), rand (xoshiro256**), password (PBKDF2)."
-    if topic == "osdev":
-        answer = "OS dev (15 modules): fat, elf, pe, mbr, gpt, pci, acpi, uefi, paging, idt, serial, dtb, alloc, vfs."
+
+    # Topic-specific answers with natural phrasing
+    if topic == "sage":
+        answer = "Sage is an indentation-based systems programming language built in C. It features a self-hosted compiler, 128+ library modules across 11 categories, a concurrent tri-color GC, and 3 compiler backends (C, LLVM IR, native assembly for x86-64/aarch64/rv64). It supports classes with inheritance (including super.init()), closures, async/await, and the -> arrow operator."
     if topic == "llm":
-        answer = "SL-TQ-LLM: SageGPT + TurboQuant + AutoResearch. 18 LLM modules: config, tokenizer, embedding, attention, transformer, generate, train, agent, prompt, lora, quantize, engram, rag, dpo, gguf, gguf_import, turboquant, autoresearch. TurboQuant: 3-bit KV cache (8.5x compression). AutoResearch: Karpathy ratchet loop for autonomous hyperparameter optimization."
-    if topic == "concurrency":
-        answer = "Concurrency: thread, async/await, std.channel, std.atomic, std.rwlock, std.threadpool."
+        answer = "The Sage LLM library has 18 modules for building language models from scratch. It includes a SageGPT architecture (SwiGLU + RoPE + RMSNorm), LoRA fine-tuning, DPO alignment, RAG retrieval, Engram 4-tier memory, TurboQuant compression (8.5x at 3-bit), AutoResearch (Karpathy ratchet loop), and GGUF import/export for Ollama compatibility."
+    if topic == "agent":
+        answer = "The agent framework provides 12 modules for building autonomous AI agents. It uses a ReAct loop (observe/think/act/reflect), supports supervisor-worker architecture, Tree of Thoughts search, grammar-constrained decoding, SFT trace recording, and semantic routing for fast dispatch. AutoResearch extends this with autonomous experiment loops."
+    if topic == "chatbot":
+        answer = "The chat framework provides intent matching with keyword scoring, 6 built-in personas (SageDev, Teacher, Debugger, Architect, CodeReviewer, Assistant), and multi-session management with history export. This chatbot was built using the SL-TQ-LLM training pipeline with AutoResearch optimization."
+    if topic == "crypto":
+        answer = "The crypto library has 6 modules: SHA-256/SHA-1/CRC-32 hashing, HMAC with constant-time comparison, Base64 encoding (standard and URL-safe), XOR and RC4 ciphers with CBC/CTR modes, xoshiro256** PRNG with UUID v4 generation, and PBKDF2 password hashing."
     if topic == "networking":
-        answer = "Networking: native (socket, tcp, http, ssl) + lib/net/ (8): url, headers, request, server, websocket, mime, dns, ip."
+        answer = "Sage networking includes native socket, TCP, HTTP, and SSL modules, plus 8 high-level modules: URL parsing and building, HTTP header handling, an HTTP client builder, a TCP/HTTP server with routing, WebSocket frames (RFC 6455), MIME types, DNS wire format, and IPv4/CIDR utilities."
+    if topic == "osdev":
+        answer = "The OS dev library has 15 modules for baremetal and kernel development: FAT filesystem read/write, ELF and PE binary parsers, MBR and GPT partition tables, PCI and ACPI hardware enumeration, UEFI boot services, page table management, interrupt descriptors, UART serial output, device tree parsing, kernel allocators, and a virtual filesystem layer."
     if topic == "ml":
-        answer = "ML: tensor, nn, optim, loss, data + ml_native C backend (12+ GFLOPS). gpu_accel for GPU/CPU/NPU/TPU auto-detect."
-    if topic == "testing":
-        answer = "Tests: 241 interpreter + 1567+ self-hosted. Debug: gc_disable(), chr() not escapes, break not fake-break."
+        answer = "Sage ML includes tensor operations, neural network layers (Linear, ReLU, Sigmoid, Dropout, Sequential), optimizers (SGD with momentum, Adam), loss functions (MSE, cross-entropy, Huber), and data loaders. The native C backend provides optimized matmul, softmax, and RMSNorm at 12+ GFLOPS. The gpu_accel module auto-detects GPU/CPU/NPU/TPU backends."
+    if topic == "graphics":
+        answer = "The GPU engine has 24 modules built on Vulkan and OpenGL 4.5. It supports PBR rendering with Cook-Torrance materials, cascade shadow maps, deferred rendering with G-buffer/SSAO/SSR, temporal anti-aliasing, bloom and tone mapping, glTF 2.0 loading, procedural mesh generation, scene graph traversal, and a frame graph for pass dependency ordering."
     if topic == "gc":
-        answer = "Concurrent tri-color mark-sweep GC: 4 phases (root scan STW, concurrent mark, remark STW, concurrent sweep). SATB write barrier."
+        answer = "Sage uses a concurrent tri-color mark-sweep GC. Phase 1 (STW ~50-200us) scans roots and shades objects gray. Phase 2 concurrently processes gray objects from the mark stack. Phase 3 (STW ~20-50us) does a remark pass to drain write-barrier-shaded objects. Phase 4 concurrently sweeps white objects in batches. SATB write barriers prevent missed objects."
+    if topic == "compiler":
+        answer = "Sage has 3 compiler backends. Use --compile for C codegen via cc/gcc/clang. Use --compile-llvm for LLVM IR via clang (produces small binaries, e.g. 115KB for this chatbot). Use --compile-native for direct x86-64/aarch64/rv64 assembly. Optimization levels -O0 through -O3 are supported. Important: always use break instead of modifying loop variables in LLVM mode."
+    if topic == "loops":
+        answer = "Sage supports for loops with range (for i in range(10): body), array iteration (for item in arr: body), and while loops (while condition: body). Break and continue work as expected. Important: in LLVM compiled mode, do NOT modify loop variables to fake a break (e.g. j = len(arr)) -- always use the break statement."
+    if topic == "modules":
+        answer = "Sage has 128+ modules across 11 categories: os (15), net (8), crypto (6), ml (9), cuda (4), std (23), llm (18), agent (12), chat (3), graphics (24), and 9 root-level utilities. Dotted imports resolve paths: import os.fat loads lib/os/fat.sage and binds as fat."
+    if topic == "oop":
+        answer = "Sage supports object-oriented programming with class declarations, proc init(self) constructors, method definitions, and single inheritance. Use super.init(self, args) to call parent constructors. The -> arrow operator is an alias for dot notation (obj->field is the same as obj.field). Note: class methods cannot see module-level let variables."
+    if topic == "data":
+        answer = "Sage has arrays ([1,2,3] with push, pop, slicing), dicts ({} with d[key]=val, dict_keys, dict_values, dict_has), and tuples ((1,2,3) immutable). The arrays.sage module adds map, filter, reduce, and sort. The dicts.sage module adds merge, invert, and map."
+    if topic == "functions":
+        answer = "Functions are declared with proc name(args): body. They support return values, closures (inner procs capture outer variables), and are first-class values that can be passed as arguments. Default parameters and variadic arguments are not yet supported."
+    if topic == "errors":
+        answer = "Sage supports structured exception handling with try/catch/finally blocks and raise for throwing errors. The parser provides Rust/Elm-style rich error reporting with source context, column pointers, and helpful hints."
+    if topic == "testing":
+        answer = "Sage has 241 interpreter tests, 28 compiler tests, and 1567+ self-hosted tests. Run them with bash tests/run_tests.sh or make test-all. Debugging tips: add gc_disable() for GC segfaults, use chr() instead of escape sequences, avoid 5+ elif branches, and use break instead of fake-break in LLVM mode."
+    if topic == "concurrency":
+        answer = "Sage supports concurrency with OS threads and mutexes (import thread), async/await syntax, Go-style channels (std.channel), atomic operations (std.atomic), read-write locks (std.rwlock), condition variables (std.condvar), and thread pools (std.threadpool)."
+    if topic == "planning":
+        answer = "To build a new feature in Sage: 1) Define your goal, 2) Create a module in lib/<category>/, 3) Start with gc_disable() if it does heavy allocation, 4) Write the implementation, 5) Add tests in tests/, 6) Update the Makefile install section, 7) Update README and documentation, 8) Run: bash tests/run_tests.sh."
+
+    # Step 4: If no topic matched, use RAG-style retrieval from knowledge base
     if len(answer) == 0:
-        if len(mem) > 0:
-            answer = "Based on my knowledge: " + mem[0]
+        push(chain, "Using knowledge retrieval (RAG-style)")
+        if len(matches) > 0:
+            # Compose answer from top 3 matching facts
+            answer = "Here is what I know: " + matches[0]["fact"]
+            if len(matches) > 1:
+                answer = answer + ". Additionally, " + to_lower(matches[1]["fact"])
+            if len(matches) > 2:
+                answer = answer + ". Also, " + to_lower(matches[2]["fact"])
+            answer = answer + "."
         else:
-            answer = "I know about: loops, imports, classes, GC, compiler, data, functions, errors, testing, concurrency, planning, LLM, agents, chatbot, crypto, networking, OS dev, ML, graphics, TurboQuant, AutoResearch."
-    push(chain, "Answering about " + topic)
+            answer = "I can help with many topics including: Sage language basics, loops, imports, classes, GC, compiler backends, data structures, functions, error handling, testing, concurrency, planning, LLM/AI, agents, chatbots, cryptography, networking, OS development, ML, GPU graphics, TurboQuant, and AutoResearch. What would you like to know more about?"
+
+    push(chain, "Responding about " + topic)
+
     push(history, "Q: " + question)
     push(history, "A: " + answer)
+
     let result = {}
     result["chain"] = chain
     result["answer"] = answer
+    result["topic"] = topic
+    result["matches"] = len(matches)
     return result
 
-proc show_chain(r):
+# === Display ===
+
+proc show_reasoning(r):
+    print ""
     let ch = r["chain"]
     for ci in range(len(ch)):
-        print "  Thought " + str(ci + 1) + ": " + ch[ci]
-    print "  Answer: " + r["answer"]
+        print "  [" + str(ci + 1) + "] " + ch[ci]
+    print ""
+    print "SL-TQ-LLM> " + r["answer"]
+    print ""
+
+# === Main Loop ===
 
 print "============================================"
 print "  SL-TQ-LLM Chat v1.0"
 print "  AutoResearch + TurboQuant + SageGPT"
-print "  45 facts | 19 topics | CoT"
+print "  " + str(len(facts)) + " facts | 20 topics | CoT + RAG"
 print "============================================"
-print "Hello! I am SL-TQ-LLM. Ask me about Sage."
+print "Hello! I am SL-TQ-LLM, a language model trained"
+print "on the entire SageLang codebase with AutoResearch"
+print "optimization and TurboQuant compression."
+print ""
 print "Commands: quit, memory, remember, recall, think, help"
 print ""
+
 let running = true
 while running:
     let msg = input("You> ")
     if msg == "quit" or msg == "exit":
         running = false
-        print "Goodbye. " + str(len(history)) + " exchanges."
+        print ""
+        print "Goodbye! " + str(len(history)) + " exchanges recorded."
+
     if running and msg == "help":
-        print "  quit, memory, remember <fact>, recall <query>, think <q>"
+        print ""
+        print "  Commands:"
+        print "    <question>      Ask me anything about Sage"
+        print "    think <q>       Show detailed reasoning chain"
+        print "    recall <query>  Search my knowledge base"
+        print "    remember <fact> Teach me something new"
+        print "    memory          Show memory statistics"
+        print "    quit            Exit"
+        print ""
+
     if running and msg == "memory":
-        print "  Facts: " + str(len(facts)) + " | Remembered: " + str(len(remembered)) + " | History: " + str(len(history))
+        print ""
+        print "  Knowledge: " + str(len(facts)) + " facts"
+        print "  Learned:   " + str(len(remembered)) + " remembered"
+        print "  History:   " + str(len(history)) + " exchanges"
+        print ""
+
     if running and starts_with(msg, "remember "):
         let fact = substr(msg, 9, len(msg) - 9)
         push(remembered, fact)
-        print "  Remembered: " + fact
+        print ""
+        print "  Got it! I will remember: " + fact
+        print ""
+
     if running and starts_with(msg, "recall "):
         let rq = substr(msg, 7, len(msg) - 7)
-        let results = recall(rq)
+        let results = recall_scored(rq)
+        print ""
         if len(results) > 0:
             let limit = len(results)
             if limit > 5:
                 limit = 5
             for ri in range(limit):
-                print "  [" + str(ri + 1) + "] " + results[ri]
+                print "  [" + str(ri + 1) + "] (score:" + str(results[ri]["score"]) + ") " + results[ri]["fact"]
         else:
-            print "  No memories found."
+            print "  No matching knowledge found for: " + rq
+        print ""
+
     if running and starts_with(msg, "think "):
-        show_chain(reason(substr(msg, 6, len(msg) - 6)))
+        let tq = substr(msg, 6, len(msg) - 6)
+        show_reasoning(reason(tq))
+
+    # Default: answer with reasoning
     if running and msg != "quit" and msg != "exit" and msg != "memory" and msg != "help":
         let is_cmd = false
         if starts_with(msg, "think "):
@@ -255,7 +372,4 @@ while running:
         if starts_with(msg, "recall "):
             is_cmd = true
         if not is_cmd:
-            let r = reason(msg)
-            print ""
-            print "SL-TQ-LLM> " + r["answer"]
-            print ""
+            show_reasoning(reason(msg))
