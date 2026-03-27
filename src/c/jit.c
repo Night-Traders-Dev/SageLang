@@ -318,7 +318,8 @@ void jit_emit_jmp(JitEmitter* em, int label) {
 // Strategy: Generate a wrapper that calls the C interpreter for the body
 // but with optimized dispatch for type-specialized arithmetic.
 JitNativeFn jit_compile_function(JitState* jit, void* proc_stmt, void* env) {
-#if !JIT_SUPPORTED
+#if !JIT_SUPPORTED || !(defined(__x86_64__) || defined(_M_X64))
+    // JIT code emission currently only supports x86-64
     (void)jit; (void)proc_stmt; (void)env;
     return NULL;
 #else

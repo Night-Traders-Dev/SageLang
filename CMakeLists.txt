@@ -108,6 +108,8 @@ set(SAGE_CORE_SOURCES
     src/c/gc.c
     src/c/inline.c
     src/c/interpreter.c
+    src/c/jit.c
+    src/c/aot.c
     src/c/linter.c
     src/c/lexer.c
     src/c/llvm_backend.c
@@ -146,6 +148,8 @@ set(SAGE_HEADERS
     include/formatter.h
     include/gc.h
     include/interpreter.h
+    include/jit.h
+    include/aot.h
     include/lexer.h
     include/linter.h
     include/llvm_backend.h
