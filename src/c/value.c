@@ -605,6 +605,7 @@ ClassValue* class_create(const char* name, int name_len, ClassValue* parent) {
     class_val->parent = parent;
     class_val->methods = NULL;
     class_val->method_count = 0;
+    class_val->defining_env = NULL;
     gc_unpin();
     return class_val;
 }
@@ -866,6 +867,40 @@ int values_equal(Value a, Value b) {
             return a.as.thread == b.as.thread;
         case VAL_MUTEX:
             return a.as.mutex == b.as.mutex;
+        case VAL_ARRAY: {
+            ArrayValue* aa = a.as.array;
+            ArrayValue* ab = b.as.array;
+            if (aa == ab) return 1;
+            if (aa->count != ab->count) return 0;
+            for (int i = 0; i < aa->count; i++) {
+                if (!values_equal(aa->elements[i], ab->elements[i])) return 0;
+            }
+            return 1;
+        }
+        case VAL_DICT: {
+            DictValue* da = a.as.dict;
+            DictValue* db = b.as.dict;
+            if (da == db) return 1;
+            if (da->count != db->count) return 0;
+            for (int i = 0; i < da->capacity; i++) {
+                if (da->entries[i].key == NULL) continue;
+                if (!dict_has(&b, da->entries[i].key)) return 0;
+                Value vb = dict_get(&b, da->entries[i].key);
+                if (!values_equal(*da->entries[i].value, vb)) return 0;
+            }
+            return 1;
+        }
+        case VAL_INSTANCE: {
+            InstanceValue* ia = a.as.instance;
+            InstanceValue* ib = b.as.instance;
+            if (ia == ib) return 1;
+            if (ia->class_def != ib->class_def) return 0;
+            Value da = (Value){ .type = VAL_DICT, .as.dict = ia->fields };
+            Value db = (Value){ .type = VAL_DICT, .as.dict = ib->fields };
+            return values_equal(da, db);
+        }
+        case VAL_CLASS:
+            return a.as.class_val == b.as.class_val;
         default: return 0;
     }
 }

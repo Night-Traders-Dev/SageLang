@@ -1598,6 +1598,7 @@ void init_stdlib(Env* env) {
     
     // Array functions
     env_define(env, "push", 4, val_native(push_native));
+    env_define(env, "append", 6, val_native(push_native));
     env_define(env, "build_quad_verts", 16, val_native(build_quad_verts_native));
     env_define(env, "array_extend", 12, val_native(array_extend_native));
     env_define(env, "build_line_quads", 16, val_native(build_line_quads_native));
@@ -1797,8 +1798,8 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
 
         case TOKEN_PERCENT:
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
-            if ((int)AS_NUMBER(right) == 0) return EVAL_RESULT(val_nil());
-            return EVAL_RESULT(val_number((int)AS_NUMBER(left) % (int)AS_NUMBER(right)));
+            if (AS_NUMBER(right) == 0) return EVAL_RESULT(val_nil());
+            return EVAL_RESULT(val_number(fmod(AS_NUMBER(left), AS_NUMBER(right))));
 
         // Phase 9: Bitwise operators
         case TOKEN_AMP:
@@ -2125,7 +2126,8 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                     }
 
                     ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
-                    Env* method_env = env_create(env);
+                    Env* defining = object.as.instance->class_def->defining_env;
+                    Env* method_env = env_create(defining ? defining : env);
                     env_define(method_env, "self", 4, object);
                     // Track which class owns this method (for super resolution)
                     ClassValue* owner = class_find_method_owner(object.as.instance->class_def, method_name, method_token.length);
@@ -2188,7 +2190,8 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                 }
 
                 ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
-                Env* method_env = env_create(env);
+                Env* parent_defining = parent_class->defining_env;
+                Env* method_env = env_create(parent_defining ? parent_defining : env);
                 // Set __class__ to the parent class so nested super calls resolve correctly
                 env_define(method_env, "__class__", 9, val_class(parent_class));
 
@@ -2317,7 +2320,8 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                 Method* init_method = class_find_method(class_def, "init", 4);
                 if (init_method) {
                     ProcStmt* init_stmt = (ProcStmt*)init_method->method_stmt;
-                    Env* method_env = env_create(env);
+                    Env* def_env = class_def->defining_env;
+                    Env* method_env = env_create(def_env ? def_env : env);
                     env_define(method_env, "self", 4, inst_val);
                     // Track class owning init for super resolution
                     ClassValue* init_owner = class_find_method_owner(class_def, "init", 4);
@@ -2589,7 +2593,8 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             
             Token name = stmt->as.class_stmt.name;
             ClassValue* class_val = class_create(name.start, name.length, parent);
-            
+            class_val->defining_env = env; // Capture defining environment for method scoping
+
             Stmt* method = stmt->as.class_stmt.methods;
             while (method != NULL) {
                 if (method->type == STMT_PROC) {

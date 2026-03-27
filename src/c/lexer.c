@@ -267,6 +267,14 @@ static int is_binary_digit(char c) {
     return c == '0' || c == '1';
 }
 
+static int is_hex_digit(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+static int is_octal_digit(char c) {
+    return c >= '0' && c <= '7';
+}
+
 static Token number() {
     if (start[0] == '0' && (peek() == 'b' || peek() == 'B')) {
         advance();
@@ -280,9 +288,41 @@ static Token number() {
         return make_token(TOKEN_NUMBER);
     }
 
+    if (start[0] == '0' && (peek() == 'x' || peek() == 'X')) {
+        advance();
+        if (!is_hex_digit(peek())) {
+            return error_token("Invalid hex literal: expected at least one hex digit after '0x'.");
+        }
+        while (is_hex_digit(peek())) advance();
+        if (isalnum((unsigned char)peek()) || peek() == '_') {
+            return error_token("Invalid hex literal: use only 0-9, a-f after '0x'.");
+        }
+        return make_token(TOKEN_NUMBER);
+    }
+
+    if (start[0] == '0' && (peek() == 'o' || peek() == 'O')) {
+        advance();
+        if (!is_octal_digit(peek())) {
+            return error_token("Invalid octal literal: expected at least one octal digit after '0o'.");
+        }
+        while (is_octal_digit(peek())) advance();
+        if (isalnum((unsigned char)peek()) || peek() == '_') {
+            return error_token("Invalid octal literal: use only 0-7 after '0o'.");
+        }
+        return make_token(TOKEN_NUMBER);
+    }
+
     while (isdigit(peek())) advance();
     if (peek() == '.' && isdigit(peek_next())) {
         advance();
+        while (isdigit(peek())) advance();
+    }
+    if ((peek() == 'e' || peek() == 'E')) {
+        advance();
+        if (peek() == '+' || peek() == '-') advance();
+        if (!isdigit(peek())) {
+            return error_token("Invalid float literal: expected digit after exponent.");
+        }
         while (isdigit(peek())) advance();
     }
     return make_token(TOKEN_NUMBER);
@@ -296,7 +336,16 @@ static Token string() {
         if (peek() == '\n') {
             line++;
         }
-        advance();
+        if (peek() == '\\' && !is_at_end()) {
+            advance();
+            if (!is_at_end()) advance();
+            if (current[-1] == '\n') {
+                line++;
+                line_start = current;
+            }
+        } else {
+            advance();
+        }
         if (current[-1] == '\n') {
             line_start = current;
         }

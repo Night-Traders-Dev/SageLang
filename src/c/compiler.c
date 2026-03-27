@@ -2625,9 +2625,23 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "        case SAGE_TAG_NUMBER: return left.as.number == right.as.number;\n"
         "        case SAGE_TAG_BOOL: return left.as.boolean == right.as.boolean;\n"
         "        case SAGE_TAG_STRING: return strcmp(left.as.string, right.as.string) == 0;\n"
-        "        case SAGE_TAG_ARRAY: return left.as.array == right.as.array;\n"
+        "        case SAGE_TAG_ARRAY: {\n"
+        "            if (left.as.array == right.as.array) return 1;\n"
+        "            if (left.as.array->count != right.as.array->count) return 0;\n"
+        "            for (int i = 0; i < left.as.array->count; i++) {\n"
+        "                if (!sage_values_equal(left.as.array->elements[i], right.as.array->elements[i])) return 0;\n"
+        "            }\n"
+        "            return 1;\n"
+        "        }\n"
         "        case SAGE_TAG_DICT: return left.as.dict == right.as.dict;\n"
-        "        case SAGE_TAG_TUPLE: return left.as.tuple == right.as.tuple;\n"
+        "        case SAGE_TAG_TUPLE: {\n"
+        "            if (left.as.tuple == right.as.tuple) return 1;\n"
+        "            if (left.as.tuple->count != right.as.tuple->count) return 0;\n"
+        "            for (int i = 0; i < left.as.tuple->count; i++) {\n"
+        "                if (!sage_values_equal(left.as.tuple->elements[i], right.as.tuple->elements[i])) return 0;\n"
+        "            }\n"
+        "            return 1;\n"
+        "        }\n"
         "    }\n"
         "    return 0;\n"
         "}\n"
@@ -2817,10 +2831,11 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    if (right.as.number == 0) return sage_nil();\n"
         "    return sage_number(left.as.number / right.as.number);\n"
         "}\n"
+        "#include <math.h>\n"
         "static SageValue sage_mod(SageValue left, SageValue right) {\n"
         "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) sage_fail(\"Runtime Error: Operands must be numbers.\");\n"
-        "    if ((int)right.as.number == 0) return sage_nil();\n"
-        "    return sage_number((double)((int)left.as.number % (int)right.as.number));\n"
+        "    if (right.as.number == 0) return sage_nil();\n"
+        "    return sage_number(fmod(left.as.number, right.as.number));\n"
         "}\n"
         "static SageValue sage_eq(SageValue left, SageValue right) { return sage_bool(sage_values_equal(left, right)); }\n"
         "static SageValue sage_neq(SageValue left, SageValue right) { return sage_bool(!sage_values_equal(left, right)); }\n"
@@ -4103,7 +4118,7 @@ int compile_source_to_executable(const char* source, const char* input_path,
     }
 
     if (pid == 0) {
-        execlp(cc, cc, "-std=c11", c_output_path, "-o", exe_output_path, (char*)NULL);
+        execlp(cc, cc, "-std=c11", c_output_path, "-o", exe_output_path, "-lm", (char*)NULL);
         fprintf(stderr, "Could not execute C compiler \"%s\": %s\n", cc, strerror(errno));
         _exit(127);
     }
@@ -4138,9 +4153,9 @@ int compile_source_to_executable_opt(const char* source, const char* input_path,
 
     if (pid == 0) {
         if (debug_info) {
-            execlp(cc, cc, "-std=c11", "-g", c_output_path, "-o", exe_output_path, (char*)NULL);
+            execlp(cc, cc, "-std=c11", "-g", c_output_path, "-o", exe_output_path, "-lm", (char*)NULL);
         } else {
-            execlp(cc, cc, "-std=c11", c_output_path, "-o", exe_output_path, (char*)NULL);
+            execlp(cc, cc, "-std=c11", c_output_path, "-o", exe_output_path, "-lm", (char*)NULL);
         }
         fprintf(stderr, "Could not execute C compiler \"%s\": %s\n", cc, strerror(errno));
         _exit(127);

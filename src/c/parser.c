@@ -142,12 +142,85 @@ static void consume(TokenType type, const char* message) {
     parser_expected_error(current_token, type, message);
 }
 
+static char* process_string_escapes(const char* src, int src_len, int* out_len) {
+    char* buf = SAGE_ALLOC(src_len + 1);
+    int j = 0;
+    for (int i = 0; i < src_len; i++) {
+        if (src[i] == '\\' && i + 1 < src_len) {
+            i++;
+            switch (src[i]) {
+                case 'n':  buf[j++] = '\n'; break;
+                case 't':  buf[j++] = '\t'; break;
+                case 'r':  buf[j++] = '\r'; break;
+                case '\\': buf[j++] = '\\'; break;
+                case '"':  buf[j++] = '"';  break;
+                case '\'': buf[j++] = '\''; break;
+                case '0':  buf[j++] = '\0'; break;
+                case 'a':  buf[j++] = '\a'; break;
+                case 'b':  buf[j++] = '\b'; break;
+                case 'f':  buf[j++] = '\f'; break;
+                case 'v':  buf[j++] = '\v'; break;
+                case 'x': {
+                    if (i + 2 < src_len) {
+                        char hex[3] = { src[i+1], src[i+2], '\0' };
+                        char* end;
+                        long val = strtol(hex, &end, 16);
+                        if (end == hex + 2) {
+                            buf[j++] = (char)val;
+                            i += 2;
+                        } else {
+                            buf[j++] = '\\';
+                            buf[j++] = 'x';
+                        }
+                    } else {
+                        buf[j++] = '\\';
+                        buf[j++] = 'x';
+                    }
+                    break;
+                }
+                default:
+                    buf[j++] = '\\';
+                    buf[j++] = src[i];
+                    break;
+            }
+        } else {
+            buf[j++] = src[i];
+        }
+    }
+    buf[j] = '\0';
+    if (out_len) *out_len = j;
+    return buf;
+}
+
 static double parse_number_literal(Token token) {
     if (token.length >= 2 && token.start[0] == '0' &&
         (token.start[1] == 'b' || token.start[1] == 'B')) {
         double value = 0;
         for (int i = 2; i < token.length; i++) {
             value = (value * 2) + (token.start[i] - '0');
+        }
+        return value;
+    }
+
+    if (token.length >= 2 && token.start[0] == '0' &&
+        (token.start[1] == 'x' || token.start[1] == 'X')) {
+        double value = 0;
+        for (int i = 2; i < token.length; i++) {
+            char c = token.start[i];
+            int digit;
+            if (c >= '0' && c <= '9') digit = c - '0';
+            else if (c >= 'a' && c <= 'f') digit = 10 + (c - 'a');
+            else digit = 10 + (c - 'A');
+            value = (value * 16) + digit;
+        }
+        return value;
+    }
+
+    if (token.length >= 2 && token.start[0] == '0' &&
+        (token.start[1] == 'o' || token.start[1] == 'O')) {
+        double value = 0;
+        for (int i = 2; i < token.length; i++) {
+            value = (value * 8) + (token.start[i] - '0');
         }
         return value;
     }
@@ -504,11 +577,9 @@ static Expr* primary() {
             do {
                 consume(TOKEN_STRING, "Expect string key in dictionary.");
                 Token key_token = previous_token;
-                
+
                 int len = key_token.length - 2;
-                char* key = SAGE_ALLOC(len + 1);
-                memcpy(key, key_token.start + 1, len);
-                key[len] = '\0';
+                char* key = process_string_escapes(key_token.start + 1, len, NULL);
                 
                 consume(TOKEN_COLON, "Expect ':' after dictionary key.");
                 Expr* value = expression();
@@ -558,9 +629,7 @@ static Expr* primary() {
     if (match(TOKEN_STRING)) {
         Token t = previous_token;
         int len = t.length - 2;
-        char* str = SAGE_ALLOC(len + 1);
-        memcpy(str, t.start + 1, len);
-        str[len] = '\0';
+        char* str = process_string_escapes(t.start + 1, len, NULL);
         return new_string_expr(str);
     }
 
@@ -867,12 +936,20 @@ static Stmt* if_statement() {
     Stmt* then_branch = block();
 
     Stmt* else_branch = NULL;
-    if (match(TOKEN_ELSE)) {
+    if (check(TOKEN_IF) && previous_token.type == TOKEN_DEDENT) {
+        // elif: check if the current TOKEN_IF was originally 'elif' in source
+        // by looking at the token text (elif starts with 'e')
+        if (current_token.length == 4 && current_token.start[0] == 'e') {
+            advance_parser(); // consume the elif (TOKEN_IF)
+            else_branch = if_statement(); // recursively parse as nested if
+        }
+    }
+    if (else_branch == NULL && match(TOKEN_ELSE)) {
         consume(TOKEN_COLON, "Expect ':' after else.");
         consume(TOKEN_NEWLINE, "Expect newline after else.");
         else_branch = block();
     }
-    
+
     return new_if_stmt(condition, then_branch, else_branch);
 }
 

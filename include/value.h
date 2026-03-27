@@ -57,6 +57,7 @@ struct ClassValue {
     ClassValue* parent; // For inheritance
     Method* methods;
     int method_count;
+    Env* defining_env; // Environment where class was defined (for method scoping)
 };
 
 // Instance structure
