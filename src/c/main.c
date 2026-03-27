@@ -62,9 +62,9 @@ static void cleanup_runtime_state(void) {
 static void print_usage(FILE* stream) {
     fprintf(stream,
             "Usage: sage                    Start interactive REPL\n"
-            "       sage [--runtime ast|bytecode|auto] [path]\n"
+            "       sage [--runtime ast|bytecode|jit|aot|auto] [path]\n"
             "       sage --repl             Start interactive REPL\n"
-            "       sage [--runtime ast|bytecode|auto] -c \"source\"\n"
+            "       sage [--runtime ast|bytecode|jit|aot|auto] -c \"source\"\n"
             "       sage --emit-c <input.sage> [-o output.c] [-O0..3] [-g]\n"
             "       sage --emit-vm <input.sage> [-o output.svm] [-O0..3] [-g]\n"
             "       sage --run-vm <input.svm>\n"
@@ -77,9 +77,13 @@ static void print_usage(FILE* stream) {
             "       sage --compile-uefi <input.sage> [-o output.efi] [--target arch] [-O0..3] [-g]\n"
             "       sage --emit-pico-c <input.sage> [-o output.c]\n"
             "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n"
+            "       sage --jit <input.sage>   Run with JIT profiling and compilation\n"
+            "       sage --aot <input.sage> [-o output]  AOT compile to native binary\n"
+            "       sage --aot --jit <input.sage> [-o output]  Profile-guided AOT compilation\n"
             "       sage fmt <file>          Format a Sage source file in-place\n"
             "       sage fmt --check <file>  Check if file is already formatted\n"
             "       sage lint <file>         Lint a Sage source file\n"
+            "       sage check <file>        Type check a Sage source file\n"
             "       sage --lsp              Start LSP server (stdin/stdout)\n");
 }
 
@@ -724,7 +728,7 @@ static void repl_print_help(void) {
     printf("    :pwd               Print the current working directory\n");
     printf("    :cd <dir>          Change the current working directory\n");
     printf("    :gc                Run garbage collection and print stats\n");
-    printf("    :runtime [mode]    Show or set runtime (ast, bytecode, auto)\n");
+    printf("    :runtime [mode]    Show or set runtime (ast, bytecode, jit, aot, auto)\n");
     printf("\n");
     printf("Multi-line blocks (if, for, while, proc, class) are\n");
     printf("detected automatically when a line ends with ':'.\n");
@@ -1395,7 +1399,7 @@ static void run_repl(SageRuntimeMode runtime_mode) {
                         runtime_mode = new_mode;
                         printf("Runtime set to: %s\n", sage_runtime_mode_name(runtime_mode));
                     } else {
-                        printf("Unknown runtime mode: %s (use ast, bytecode, or auto)\n", arg);
+                        printf("Unknown runtime mode: %s (use ast, bytecode, jit, aot, or auto)\n", arg);
                     }
                 }
                 free(line);
@@ -1517,7 +1521,7 @@ int main(int argc, const char* argv[]) {
 
     if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--runtime") == 0) {
         if (!sage_runtime_parse_mode(cmd_argv[2], &runtime_mode)) {
-            fprintf(stderr, "Unknown runtime mode: %s (expected ast, bytecode, or auto)\n", cmd_argv[2]);
+            fprintf(stderr, "Unknown runtime mode: %s (expected ast, bytecode, jit, aot, or auto)\n", cmd_argv[2]);
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
         }

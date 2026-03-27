@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: March 25, 2026
-> **Current Phase**: Phase 18 Complete (Linux Kernel Support Libraries + QEMU)
+> **Last Updated**: March 27, 2026
+> **Current Phase**: v2.0.0 — Specification locked, all 18 phases complete
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 

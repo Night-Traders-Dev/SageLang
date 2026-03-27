@@ -721,7 +721,7 @@ static Value http_get_native(int argc, Value* args) {
 
     curl_easy_setopt(curl, CURLOPT_URL, AS_STRING(args[0]));
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/0.13.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/" SAGE_VERSION_STR);
 
     if (argc >= 2) curl_apply_options(curl, &args[1]);
 
@@ -748,7 +748,7 @@ static Value http_post_native(int argc, Value* args) {
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, AS_STRING(args[1]));
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/0.13.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/" SAGE_VERSION_STR);
 
     if (argc >= 3) curl_apply_options(curl, &args[2]);
 
@@ -775,7 +775,7 @@ static Value http_put_native(int argc, Value* args) {
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT");
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, AS_STRING(args[1]));
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/0.13.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/" SAGE_VERSION_STR);
 
     if (argc >= 3) curl_apply_options(curl, &args[2]);
 
@@ -801,7 +801,7 @@ static Value http_delete_native(int argc, Value* args) {
     curl_easy_setopt(curl, CURLOPT_URL, AS_STRING(args[0]));
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/0.13.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/" SAGE_VERSION_STR);
 
     if (argc >= 2) curl_apply_options(curl, &args[1]);
 
@@ -828,7 +828,7 @@ static Value http_patch_native(int argc, Value* args) {
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PATCH");
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, AS_STRING(args[1]));
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/0.13.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/" SAGE_VERSION_STR);
 
     if (argc >= 3) curl_apply_options(curl, &args[2]);
 
@@ -854,7 +854,7 @@ static Value http_head_native(int argc, Value* args) {
     curl_easy_setopt(curl, CURLOPT_URL, AS_STRING(args[0]));
     curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/0.13.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/" SAGE_VERSION_STR);
 
     if (argc >= 2) curl_apply_options(curl, &args[1]);
 
@@ -879,7 +879,7 @@ static Value http_download_native(int argc, Value* args) {
     curl_easy_setopt(curl, CURLOPT_URL, AS_STRING(args[0]));
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/0.13.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "SageLang/" SAGE_VERSION_STR);
 
     if (argc >= 3) curl_apply_options(curl, &args[2]);
 

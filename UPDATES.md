@@ -1,5 +1,21 @@
 # SageLang Updates
 
+## v2.0.0 — Specification Lock + REPL JIT/AOT (March 2026)
+
+- Specification locked: core language semantics frozen (see `STABILITY.md`)
+- REPL now supports `:runtime jit` and `:runtime aot` modes for interactive JIT profiling and AOT compilation
+- JIT runtime mode: interpreter with profiling counters, hot function compilation to x86-64 native code
+- AOT runtime mode: type-specialized ahead-of-time compilation via optimized C codegen
+- Version unified across all components: `VERSION` file is single source of truth
+  - net.c User-Agent now uses `SAGE_VERSION_STR` macro (was hardcoded 0.13.0)
+  - Makefile help target uses `$(SAGE_VERSION)` (was hardcoded 0.13.0)
+- Usage string updated with `--jit`, `--aot`, `--aot --jit`, and `check` commands
+- README updated: 18 phases complete, 304 interpreter tests, 34 C source files, 8 backends (C, LLVM, native asm, bytecode VM, JIT, AOT, Vulkan, OpenGL)
+- Project structure section updated with vm/ directory, gpu_api.c, jit.c, aot.c, 41 test categories
+- All 1987+ tests passing
+
+---
+
 ## v1.3.0 — QEMU Support (March 2026)
 
 - QEMU VM launcher library (`lib/os/qemu.sage`): machine presets (baremetal_x86, baremetal_arm64, baremetal_riscv, linux_vm, dev_vm, test_kernel), drives (IDE/virtio/qcow2), networking (user/tap/bridge), devices (virtio-rng/balloon/gpu/serial, USB, 9p shares), GDB debug, qemu-img tools

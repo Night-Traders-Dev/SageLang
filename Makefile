@@ -743,7 +743,7 @@ stats:
 # ============================================================================
 
 help:
-	@echo "SageLang Makefile - v0.13.0"
+	@echo "SageLang Makefile - v$(SAGE_VERSION)"
 	@echo "==========================="
 	@echo ""
 	@echo "Build Targets (C):"
@@ -754,7 +754,7 @@ help:
 	@echo ""
 	@echo "Self-Hosted (Sage):"
 	@echo "  make sage-boot FILE=<f>  - Run a .sage file via self-hosted interpreter"
-	@echo "  make test-selfhost       - Run all self-hosted tests (178 tests)"
+	@echo "  make test-selfhost       - Run all self-hosted tests (1567+ tests)"
 	@echo "  make test-selfhost-lexer      - Run lexer tests only"
 	@echo "  make test-selfhost-parser     - Run parser tests only"
 	@echo "  make test-selfhost-interpreter - Run interpreter tests only"

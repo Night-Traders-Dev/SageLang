@@ -1060,11 +1060,11 @@ proc write_memory(ptr: *mut u8, value: u8):
 ## 📊 Project Stats
 
 - **Language**: C
-- **Phases Completed**: 15/15 (100%)
-- **Test Suite**: 269 interpreter + 28 compiler + 88 JSON + 1567 self-hosted tests (1950+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, and GPU
-- **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics, and initial bare-metal/OSdev/UEFI target profiles
-- **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
-- **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native backends, and GPU graphics engine
+- **Phases Completed**: 18/18 (100%)
+- **Test Suite**: 304 interpreter + 28 compiler + 88 JSON + 1567 self-hosted tests (1987+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, GPU, JIT, and AOT
+- **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64), bytecode VM, JIT (x86-64), AOT (type-specialized), Vulkan/OpenGL graphics, and bare-metal/OSdev/UEFI target profiles
+- **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
+- **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
 - **Current Version**: v2.0.0
 - **Spec Version**: 2.0 (see `STABILITY.md` for guarantees)
@@ -1144,7 +1144,10 @@ sage/
 │   │   │   ├── llvm_runtime.c # LLVM runtime library (40+ sage_rt_* functions)
 │   │   ├── codegen.c      # Native assembly backend
 │   │   ├── graphics.c     # Vulkan GPU module (compute + graphics pipelines)
-│   │   └── ...            # 25 C source files total
+│   │   ├── gpu_api.c      # Pure C GPU API layer (Vulkan + OpenGL backends)
+│   │   ├── jit.c          # JIT compiler (profiling, x86-64 code emission)
+│   │   ├── aot.c          # AOT compiler (type-specialized C codegen)
+│   │   └── ...            # 34 C source files total
 │   └── sage/         # Self-hosted Sage compiler (Phase 13+)
 │       ├── sage.sage     # Bootstrap entry point
 │       ├── token.sage    # Token type definitions
@@ -1156,14 +1159,18 @@ sage/
 │       ├── test_parser.sage      # Parser tests (130)
 │       ├── test_interpreter.sage # Interpreter tests (18)
 │       └── test_bootstrap.sage   # Bootstrap tests (18)
-├── tests/            # Automated test suite (269 interpreter + 28 compiler + 88 JSON)
+├── src/vm/           # Bytecode virtual machine
+│   ├── bytecode.c/h  # Bytecode compiler
+│   ├── vm.c/h        # Stack-based VM executor
+│   ├── program.c/h   # Bytecode program format
+│   └── runtime.c/h   # Runtime mode dispatch (AST/bytecode/JIT/AOT)
+├── tests/            # Automated test suite (304 interpreter + 28 compiler + 88 JSON)
 │   ├── run_tests.sh  # Test runner script
 │   ├── test_json.sage # cJSON port test suite (88 tests)
 │   ├── 01_variables/ # Variable declaration tests
-│   ├── ...           # 28 test categories
-│   ├── 26_stdlib/    # Standard library module tests
-│   ├── 27_threads/   # Thread concurrency tests
-│   └── 28_async/     # Async/await tests
+│   ├── ...           # 41 test categories
+│   ├── 40_conformance/ # Backend conformance tests
+│   └── 41_jit_aot/  # JIT and AOT compiler tests
 ├── ROADMAP.md        # Detailed development roadmap
 ├── UPDATES.md        # Changelog
 ├── Makefile          # Build script

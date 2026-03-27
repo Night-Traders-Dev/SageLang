@@ -6,6 +6,8 @@
 typedef enum {
     SAGE_RUNTIME_AST,
     SAGE_RUNTIME_BYTECODE,
+    SAGE_RUNTIME_JIT,
+    SAGE_RUNTIME_AOT,
     SAGE_RUNTIME_AUTO
 } SageRuntimeMode;
 
