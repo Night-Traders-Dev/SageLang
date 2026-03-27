@@ -1740,7 +1740,29 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
     Value right = right_result.value;
 
     if (b->op.type == TOKEN_EQ || b->op.type == TOKEN_NEQ) {
-        int equal = values_equal(left, right);
+        int equal;
+        // __eq__ hook: check if left operand has custom equality method
+        if (left.type == VAL_INSTANCE && left.as.instance->class_def) {
+            Method* eq_method = class_find_method(left.as.instance->class_def, "__eq__", 6);
+            if (eq_method) {
+                ProcStmt* eq_stmt = (ProcStmt*)eq_method->method_stmt;
+                Env* def_env = left.as.instance->class_def->defining_env;
+                Env* eq_env = env_create(def_env ? def_env : env);
+                env_define(eq_env, "self", 4, left);
+                int p_start = (eq_stmt->param_count > 0 &&
+                              strncmp(eq_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
+                if (p_start < eq_stmt->param_count) {
+                    env_define(eq_env, eq_stmt->params[p_start].start,
+                               eq_stmt->params[p_start].length, right);
+                }
+                ExecResult eq_res = interpret(eq_stmt->body, eq_env);
+                equal = !eq_res.is_throwing && is_truthy(eq_res.value);
+            } else {
+                equal = values_equal(left, right);
+            }
+        } else {
+            equal = values_equal(left, right);
+        }
         if (b->op.type == TOKEN_EQ) return EVAL_RESULT(val_bool(equal));
         if (b->op.type == TOKEN_NEQ) return EVAL_RESULT(val_bool(!equal));
     }
@@ -2195,10 +2217,13 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                 // Set __class__ to the parent class so nested super calls resolve correctly
                 env_define(method_env, "__class__", 9, val_class(parent_class));
 
-                // super calls: bind all params from explicit args (self is passed explicitly)
-                for (int i = 0; i < method_stmt->param_count; i++) {
-                    if (i < expr->as.call.arg_count) {
-                        ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                // super calls: auto-inject self, skip self param like regular methods
+                env_define(method_env, "self", 4, self_val);
+                int param_start = (method_stmt->param_count > 0 &&
+                                  strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
+                for (int i = param_start; i < method_stmt->param_count; i++) {
+                    if (i - param_start < expr->as.call.arg_count) {
+                        ExecResult arg_result = eval_expr(expr->as.call.args[i - param_start], env);
                         if (arg_result.is_throwing) {
                             free(method_name);
                             return arg_result;
@@ -2415,6 +2440,24 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
         case STMT_PRINT: {
             ExecResult result = eval_expr(stmt->as.print.expression, env);
             if (result.is_throwing) return result;
+            // __str__ hook: if instance has __str__ method, call it for printing
+            if (result.value.type == VAL_INSTANCE && result.value.as.instance->class_def) {
+                Method* str_method = class_find_method(result.value.as.instance->class_def, "__str__", 7);
+                if (str_method) {
+                    ProcStmt* str_stmt = (ProcStmt*)str_method->method_stmt;
+                    Env* def_env = result.value.as.instance->class_def->defining_env;
+                    Env* str_env = env_create(def_env ? def_env : env);
+                    env_define(str_env, "self", 4, result.value);
+                    ExecResult str_res = interpret(str_stmt->body, str_env);
+                    if (!str_res.is_throwing && str_res.value.type == VAL_STRING) {
+                        printf("%s\n", AS_STRING(str_res.value));
+                    } else {
+                        print_value(result.value);
+                        printf("\n");
+                    }
+                    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+                }
+            }
             print_value(result.value);
             printf("\n");
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
@@ -2642,7 +2685,10 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     Token var = catch_clause->exception_var;
                     
                     Value exc_msg;
-                    if (IS_EXCEPTION(try_result.exception_value)) {
+                    if (try_result.exception_value.type == VAL_INSTANCE) {
+                        // Instance exceptions: pass the instance directly
+                        exc_msg = try_result.exception_value;
+                    } else if (IS_EXCEPTION(try_result.exception_value)) {
                         exc_msg = val_string(try_result.exception_value.as.exception->message);
                     } else {
                         exc_msg = try_result.exception_value;
@@ -2685,6 +2731,9 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 exc_val = val_exception(AS_BOOL(exc_val) ? "true" : "false");
             } else if (IS_NIL(exc_val)) {
                 exc_val = val_exception("nil");
+            } else if (exc_val.type == VAL_INSTANCE) {
+                // Allow raising class instances as exception values
+                // The instance is preserved as-is for the catch clause
             } else if (!IS_EXCEPTION(exc_val)) {
                 exc_val = val_exception("Unknown error");
             }
