@@ -80,6 +80,48 @@ static SageType make_type(SageTypeKind kind) {
     return t;
 }
 
+static const char* type_kind_name(SageTypeKind kind) {
+    switch (kind) {
+        case SAGE_TYPE_NIL:     return "Nil";
+        case SAGE_TYPE_NUMBER:  return "Number";
+        case SAGE_TYPE_BOOL:    return "Bool";
+        case SAGE_TYPE_STRING:  return "String";
+        case SAGE_TYPE_ARRAY:   return "Array";
+        case SAGE_TYPE_DICT:    return "Dict";
+        case SAGE_TYPE_TUPLE:   return "Tuple";
+        case SAGE_TYPE_PROC:    return "Function";
+        default:                return "Unknown";
+    }
+}
+
+static SageTypeKind annotation_to_kind(const TypeAnnotation* ann) {
+    if (!ann) return SAGE_TYPE_UNKNOWN;
+    const char* n = ann->name.start;
+    int len = ann->name.length;
+    if (len == 3 && strncmp(n, "Int", 3) == 0) return SAGE_TYPE_NUMBER;
+    if (len == 5 && strncmp(n, "Float", 5) == 0) return SAGE_TYPE_NUMBER;
+    if (len == 6 && strncmp(n, "Number", 6) == 0) return SAGE_TYPE_NUMBER;
+    if (len == 4 && strncmp(n, "Bool", 4) == 0) return SAGE_TYPE_BOOL;
+    if (len == 6 && strncmp(n, "String", 6) == 0) return SAGE_TYPE_STRING;
+    if (len == 3 && strncmp(n, "Str", 3) == 0) return SAGE_TYPE_STRING;
+    if (len == 5 && strncmp(n, "Array", 5) == 0) return SAGE_TYPE_ARRAY;
+    if (len == 4 && strncmp(n, "Dict", 4) == 0) return SAGE_TYPE_DICT;
+    if (len == 5 && strncmp(n, "Tuple", 5) == 0) return SAGE_TYPE_TUPLE;
+    if (len == 3 && strncmp(n, "Nil", 3) == 0) return SAGE_TYPE_NIL;
+    if (len == 8 && strncmp(n, "Function", 8) == 0) return SAGE_TYPE_PROC;
+    if (len == 4 && strncmp(n, "Proc", 4) == 0) return SAGE_TYPE_PROC;
+    return SAGE_TYPE_UNKNOWN;
+}
+
+static void type_warning(const char* msg, const Token* tok, const char* expected, const char* got) {
+    if (tok && tok->start) {
+        fprintf(stderr, "Type Warning [line %d]: %s (expected %s, got %s)\n",
+                tok->line > 0 ? tok->line : 0, msg, expected, got);
+    } else {
+        fprintf(stderr, "Type Warning: %s (expected %s, got %s)\n", msg, expected, got);
+    }
+}
+
 static SageType infer_expr(TypeMap* map, const Expr* expr) {
     if (expr == NULL) return make_type(SAGE_TYPE_UNKNOWN);
 
@@ -198,6 +240,19 @@ static void infer_stmt(TypeMap* map, Stmt* stmt) {
             break;
         case STMT_LET: {
             SageType t = infer_expr(map, stmt->as.let.initializer);
+            // If type annotation present, use it and validate
+            if (stmt->as.let.type_ann) {
+                SageTypeKind declared = annotation_to_kind(stmt->as.let.type_ann);
+                if (declared != SAGE_TYPE_UNKNOWN && t.kind != SAGE_TYPE_UNKNOWN && t.kind != declared) {
+                    type_warning("type mismatch in let binding",
+                                 &stmt->as.let.name,
+                                 type_kind_name(declared),
+                                 type_kind_name(t.kind));
+                }
+                if (declared != SAGE_TYPE_UNKNOWN) {
+                    t = make_type(declared);
+                }
+            }
             int len = stmt->as.let.name.length;
             char* name = SAGE_ALLOC((size_t)len + 1);
             memcpy(name, stmt->as.let.name.start, (size_t)len);
@@ -218,9 +273,31 @@ static void infer_stmt(TypeMap* map, Stmt* stmt) {
             infer_expr(map, stmt->as.while_stmt.condition);
             infer_stmt_list(map, stmt->as.while_stmt.body);
             break;
-        case STMT_PROC:
+        case STMT_PROC: {
+            // Register parameter types in scope
+            for (int i = 0; i < stmt->as.proc.param_count; i++) {
+                Token param = stmt->as.proc.params[i];
+                char* pname = SAGE_ALLOC((size_t)param.length + 1);
+                memcpy(pname, param.start, (size_t)param.length);
+                pname[param.length] = '\0';
+                SageType pt = make_type(SAGE_TYPE_UNKNOWN);
+                if (stmt->as.proc.param_types && stmt->as.proc.param_types[i]) {
+                    SageTypeKind k = annotation_to_kind(stmt->as.proc.param_types[i]);
+                    if (k != SAGE_TYPE_UNKNOWN) pt = make_type(k);
+                }
+                typeenv_set(map, pname, pt);
+                free(pname);
+            }
+            // Register proc name as function type
+            int nlen = stmt->as.proc.name.length;
+            char* fname = SAGE_ALLOC((size_t)nlen + 1);
+            memcpy(fname, stmt->as.proc.name.start, (size_t)nlen);
+            fname[nlen] = '\0';
+            typeenv_set(map, fname, make_type(SAGE_TYPE_PROC));
+            free(fname);
             infer_stmt_list(map, stmt->as.proc.body);
             break;
+        }
         case STMT_FOR:
             infer_expr(map, stmt->as.for_stmt.iterable);
             infer_stmt_list(map, stmt->as.for_stmt.body);

@@ -963,6 +963,38 @@ static Stmt* while_statement() {
     return new_while_stmt(condition, body);
 }
 
+// Parse a type annotation: Int, String, Array[Int], Dict[String, Int], T?
+static TypeAnnotation* parse_type_annotation(void) {
+    if (current_token.type != TOKEN_IDENTIFIER) return NULL;
+    Token name = current_token;
+    advance_parser();
+
+    TypeAnnotation** params = NULL;
+    int param_count = 0;
+    int is_optional = 0;
+
+    // Generic parameters: Array[Int], Dict[K, V]
+    if (match(TOKEN_LBRACKET)) {
+        int capacity = 0;
+        do {
+            TypeAnnotation* param = parse_type_annotation();
+            if (param) {
+                if (param_count >= capacity) {
+                    capacity = capacity == 0 ? 2 : capacity * 2;
+                    params = SAGE_REALLOC(params, sizeof(TypeAnnotation*) * capacity);
+                }
+                params[param_count++] = param;
+            }
+        } while (match(TOKEN_COMMA));
+        consume(TOKEN_RBRACKET, "Expect ']' after type parameters.");
+    }
+
+    // Optional: T?
+    // Check if next char is '?' — but we don't have TOKEN_QUESTION, so skip for now
+
+    return new_type_annotation(name, params, param_count, is_optional);
+}
+
 static Stmt* proc_declaration() {
     if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_INIT) {
         Token name = current_token;
@@ -971,6 +1003,7 @@ static Stmt* proc_declaration() {
         consume(TOKEN_LPAREN, "Expect '(' after procedure name.");
 
         Token* params = NULL;
+        TypeAnnotation** param_types = NULL;
         Expr** defaults = NULL;
         int count = 0;
         int capacity = 0;
@@ -984,11 +1017,17 @@ static Stmt* proc_declaration() {
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
                         params = SAGE_REALLOC(params, sizeof(Token) * capacity);
+                        param_types = SAGE_REALLOC(param_types, sizeof(TypeAnnotation*) * capacity);
                         defaults = SAGE_REALLOC(defaults, sizeof(Expr*) * capacity);
                     }
                     params[count] = current_token;
+                    param_types[count] = NULL;
                     defaults[count] = NULL;
                     advance_parser();
+                    // Optional type annotation: param: Type
+                    if (match(TOKEN_COLON)) {
+                        param_types[count] = parse_type_annotation();
+                    }
                     if (match(TOKEN_ASSIGN)) {
                         defaults[count] = expression();
                         seen_default = 1;
@@ -1010,13 +1049,22 @@ static Stmt* proc_declaration() {
             } while (match(TOKEN_COMMA));
         }
         consume(TOKEN_RPAREN, "Expect ')' after parameters.");
+
+        // Optional return type: -> Type
+        TypeAnnotation* return_type = NULL;
+        if (match(TOKEN_ARROW)) {
+            return_type = parse_type_annotation();
+        }
+
         consume(TOKEN_COLON, "Expect ':' after procedure signature.");
         consume(TOKEN_NEWLINE, "Expect newline before procedure body.");
         Stmt* body = block();
 
         Stmt* s = new_proc_stmt(name, params, count, body);
+        s->as.proc.param_types = param_types;
         s->as.proc.defaults = defaults;
         s->as.proc.required_count = required;
+        s->as.proc.return_type = return_type;
         return s;
     }
     
@@ -1172,12 +1220,31 @@ static Stmt* declaration() {
         consume(TOKEN_IDENTIFIER, "Expect variable name.");
         Token name = previous_token;
 
+        // Optional type annotation: let x: Int = ...
+        TypeAnnotation* type_ann = NULL;
+        if (check(TOKEN_COLON)) {
+            // Save state to peek ahead
+            LexerState saved = lexer_get_state();
+            Token saved_current = current_token;
+            Token saved_prev = previous_token;
+            advance_parser(); // consume ':'
+            if (current_token.type == TOKEN_IDENTIFIER) {
+                type_ann = parse_type_annotation();
+            } else {
+                // Not a type annotation, restore
+                lexer_set_state(saved);
+                current_token = saved_current;
+                previous_token = saved_prev;
+            }
+        }
+
         Expr* initializer = NULL;
         if (match(TOKEN_ASSIGN)) {
             initializer = expression();
         }
 
         Stmt* stmt = new_let_stmt(name, initializer);
+        stmt->as.let.type_ann = type_ann;
         match(TOKEN_NEWLINE);
         return stmt;
     }

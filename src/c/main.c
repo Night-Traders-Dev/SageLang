@@ -21,11 +21,13 @@
 #include "formatter.h"
 #include "linter.h"
 #include "lsp.h"
+#include "typecheck.h"
 #include "program.h"
 #include "runtime.h"
 #include "vm.h"
 
 extern Environment* g_global_env;
+extern Stmt* parse_program(const char* source, const char* input_path);
 
 // Phase 12: REPL error recovery globals
 int g_repl_mode = 0;
@@ -1914,6 +1916,19 @@ int main(int argc, const char* argv[]) {
             }
             printf("Formatted: %s\n", fmt_file);
         }
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "check") == 0) {
+        // Phase 1.6: Type checker
+        const char* check_file_path = cmd_argv[2];
+        char* check_source = read_file(check_file_path);
+        if (!check_source) { CLEANUP_AND_EXIT(74); }
+        init_lexer(check_source, check_file_path);
+        Stmt* check_ast = parse_program(check_source, check_file_path);
+        if (check_ast) {
+            PassContext check_ctx = { .opt_level = 0 };
+            pass_typecheck(check_ast, &check_ctx);
+            printf("Type check complete.\n");
+        }
+        free(check_source);
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "lint") == 0) {
         // Phase 12: Code linter
         const char* lint_file_path = cmd_argv[2];

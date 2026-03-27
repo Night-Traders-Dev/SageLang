@@ -141,8 +141,17 @@ typedef struct {
     Expr* expression;
 } PrintStmt;
 
+// Type annotation (e.g., Int, String, Array[Int], Dict[String, Int])
+typedef struct TypeAnnotation {
+    Token name;                     // Base type name (e.g., "Int", "Array")
+    struct TypeAnnotation** params; // Generic type parameters (e.g., [Int] in Array[Int])
+    int param_count;
+    int is_optional;                // T? syntax
+} TypeAnnotation;
+
 typedef struct {
     Token name;
+    TypeAnnotation* type_ann;   // Optional type annotation (NULL if none)
     Expr* initializer;
 } LetStmt;
 
@@ -164,9 +173,11 @@ typedef struct {
 typedef struct {
     Token name;
     Token* params;
-    Expr** defaults;     // Default value expressions (NULL if no default)
+    TypeAnnotation** param_types;  // Per-parameter type annotations (NULL entries if untyped)
+    Expr** defaults;               // Default value expressions (NULL if no default)
     int param_count;
-    int required_count;  // Number of params without defaults
+    int required_count;            // Number of params without defaults
+    TypeAnnotation* return_type;   // Return type annotation (NULL if none)
     Stmt* body;
 } ProcStmt;
 
@@ -303,6 +314,7 @@ Expr* new_super_expr(Token method);
 // Statement Constructors
 Stmt* new_print_stmt(Expr* expression);
 Stmt* new_expr_stmt(Expr* expression);
+TypeAnnotation* new_type_annotation(Token name, TypeAnnotation** params, int param_count, int is_optional);
 Stmt* new_let_stmt(Token name, Expr* initializer);
 Stmt* new_if_stmt(Expr* condition, Stmt* then_branch, Stmt* else_branch);
 Stmt* new_block_stmt(Stmt* statements);

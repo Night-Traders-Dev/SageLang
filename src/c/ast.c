@@ -161,6 +161,7 @@ Stmt* new_let_stmt(Token name, Expr* initializer) {
     Stmt* s = SAGE_ALLOC(sizeof(Stmt));
     s->type = STMT_LET;
     s->as.let.name = name;
+    s->as.let.type_ann = NULL;
     s->as.let.initializer = initializer;
     s->next = NULL;
     return s;
@@ -203,14 +204,25 @@ Stmt* new_while_stmt(Expr* condition, Stmt* body) {
     return s;
 }
 
+TypeAnnotation* new_type_annotation(Token name, TypeAnnotation** params, int param_count, int is_optional) {
+    TypeAnnotation* t = SAGE_ALLOC(sizeof(TypeAnnotation));
+    t->name = name;
+    t->params = params;
+    t->param_count = param_count;
+    t->is_optional = is_optional;
+    return t;
+}
+
 Stmt* new_proc_stmt(Token name, Token* params, int param_count, Stmt* body) {
     Stmt* s = SAGE_ALLOC(sizeof(Stmt));
     s->type = STMT_PROC;
     s->as.proc.name = name;
     s->as.proc.params = params;
+    s->as.proc.param_types = NULL;
     s->as.proc.defaults = NULL;
     s->as.proc.param_count = param_count;
     s->as.proc.required_count = param_count;
+    s->as.proc.return_type = NULL;
     s->as.proc.body = body;
     s->next = NULL;
     return s;
@@ -337,9 +349,11 @@ Stmt* new_async_proc_stmt(Token name, Token* params, int param_count, Stmt* body
     s->type = STMT_ASYNC_PROC;
     s->as.async_proc.name = name;
     s->as.async_proc.params = params;
+    s->as.async_proc.param_types = NULL;
     s->as.async_proc.defaults = NULL;
     s->as.async_proc.param_count = param_count;
     s->as.async_proc.required_count = param_count;
+    s->as.async_proc.return_type = NULL;
     s->as.async_proc.body = body;
     s->next = NULL;
     return s;
