@@ -47,6 +47,18 @@ must produce identical observable behavior for the conformance test suite
 
 are permitted, provided they do not alter language-visible behavior.
 
+## JIT and AOT Compilers
+
+The JIT and AOT compilers are additional execution backends that must also
+conform to the same observable behavior guarantees:
+
+- `sage --jit file.sage` — Interpreter with profiling; output must match interpreter
+- `sage --aot file.sage -o bin` — AOT-compiled binary; output must match interpreter
+- `sage --aot --jit file.sage -o bin` — Profile-guided AOT; output must match interpreter
+
+JIT compilation of hot functions and AOT type specialization are optimization
+strategies that must not alter language-visible behavior.
+
 ## Conformance Testing
 
 Run the conformance suite:

@@ -101,6 +101,11 @@ def main() -> int:
             "cwd": repo_root / "src" / "sage",
             "command": [str(sage_bin), "sage.sage", str(bench_file)],
         },
+        {
+            "name": "sage-jit",
+            "cwd": repo_root,
+            "command": [str(sage_bin), "--jit", str(bench_file)],
+        },
     ]
 
     results = [

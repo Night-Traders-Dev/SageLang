@@ -398,7 +398,7 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "static SageValue sage_neq(SageValue a, SageValue b) { return sage_bool(!sage_eq(a,b).as.boolean); }");
     aot_emit(aot, "static SageValue sage_gt(SageValue a, SageValue b) { return sage_bool(a.as.number>b.as.number); }");
     aot_emit(aot, "static SageValue sage_lt(SageValue a, SageValue b) { return sage_bool(a.as.number<b.as.number); }");
-    aot_emit(aot, "static void sage_print_value(SageValue v) { switch(v.type) { case SAGE_NUM: printf(\"%%g\",v.as.number); break; case SAGE_BOOL: fputs(v.as.boolean?\"true\":\"false\",stdout); break; case SAGE_STR: fputs(v.as.string,stdout); break; default: fputs(\"nil\",stdout); } }");
+    aot_emit(aot, "static void sage_print_value(SageValue v) { switch(v.type) { case SAGE_NUM: { double d=v.as.number; if(d==(double)(long long)d && d>=-1e15 && d<=1e15) printf(\"%%lld\",(long long)d); else printf(\"%%g\",d); break; } case SAGE_BOOL: fputs(v.as.boolean?\"true\":\"false\",stdout); break; case SAGE_STR: fputs(v.as.string,stdout); break; default: fputs(\"nil\",stdout); } }");
     aot_emit(aot, "static SageValue sage_strcat(SageValue a, SageValue b) { if(a.type!=SAGE_STR||b.type!=SAGE_STR) return sage_nil(); size_t la=strlen(a.as.string),lb=strlen(b.as.string); char* r=malloc(la+lb+1); memcpy(r,a.as.string,la); memcpy(r+la,b.as.string,lb); r[la+lb]=0; SageValue v; v.type=SAGE_STR; v.as.string=r; return v; }");
     aot_emit(aot, "");
 

@@ -26,7 +26,20 @@ The compiled VM recipe is now charted as a first-class lane on the default workl
 
 ### Sage vs Python 3 Benchmarks
 
-Run `make benchmark-python` to compare all Sage execution backends against CPython 3.x on 10 workloads (fibonacci, loop sum, string concat, array ops, dict ops, class methods, nested loops, exceptions, closures, prime sieve). Each benchmark has paired `.sage` and `.py` files under `benchmarks/`.
+Run `make benchmark-python` to compare all 7 Sage execution backends against CPython 3.x on 10 workloads (fibonacci, loop sum, string concat, array ops, dict ops, class methods, nested loops, exceptions, closures, prime sieve). Each benchmark has paired `.sage` and `.py` files under `benchmarks/`.
+
+**Execution backends benchmarked:**
+| Backend | Command | Description |
+|---------|---------|-------------|
+| Python 3 | `python3 file.py` | CPython baseline |
+| Sage AST | `sage --runtime ast file.sage` | Tree-walking interpreter |
+| Sage VM | `sage --runtime bytecode file.sage` | Bytecode virtual machine |
+| Sage C | `sage --compile file.sage -o bin` | C backend compilation |
+| Sage LLVM | `sage --compile-llvm file.sage -o bin` | LLVM IR backend |
+| Sage JIT | `sage --jit file.sage` | Interpreter + profiling + native compilation |
+| Sage AOT | `sage --aot file.sage -o bin` | Type-specialized ahead-of-time compilation |
+
+The JIT and AOT backends can also be combined: `sage --aot --jit file.sage -o bin` runs a profiling pass first, then feeds type feedback to the AOT compiler for better specialization.
 
 ## 🚀 Features (Implemented)
 
@@ -59,6 +72,13 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **Hash Builtin**: FNV-1a `hash()` for strings, numbers, bytes
 - **Conformance Suite**: Cross-backend testing (interpreter, C, LLVM)
 - **Stability Policy**: Semantic versioning with formal guarantees (`STABILITY.md`)
+
+### JIT + AOT Compilers
+
+- **JIT Compiler** (`sage --jit file.sage`): Interpreter with profiling counters and type feedback — hot functions (100+ calls) are detected and compiled to native x86-64 machine code. Reports per-function call counts, argument types, and return types.
+- **AOT Compiler** (`sage --aot file.sage -o binary`): Ahead-of-time compilation with type inference and specialization. Generates self-contained C with optimized fast paths for `Int+Int`, `String+String`, and known-type comparisons. Compiles to standalone native binary via `cc -O2`.
+- **Combined Mode** (`sage --aot --jit file.sage -o binary`): Profile-guided AOT — runs the program once to collect JIT type feedback, then feeds that data to the AOT compiler for better specialization decisions.
+- **Performance**: ~46x speedup on recursive fibonacci (0.46s interpreter vs 0.01s AOT)
 
 ### Exception Handling ✅
 - **Try/Catch/Finally**: Full exception handling with `try:`, `catch e:`, and `finally:`
@@ -1062,6 +1082,8 @@ sage/
 │   ├── gc.h          # Garbage collection
 │   ├── module.h      # Module system (Phase 8)
 │   ├── interpreter.h # Evaluator (ExecResult with exceptions & yield)
+│   ├── jit.h         # JIT compiler (profiling, x86-64 emitter, type feedback)
+│   ├── aot.h         # AOT compiler (type inference, specialized codegen)
 │   └── graphics.h    # Vulkan GPU module (handle system + API)
 ├── src/              # C implementation
 │   ├── main.c        # Entry point
@@ -1079,6 +1101,8 @@ sage/
 │   ├── llvm_backend.c # LLVM IR generation backend
 │   ├── llvm_runtime.c # LLVM standalone runtime library (40+ sage_rt_* functions)
 │   ├── codegen.c     # Native assembly backend (x86-64, aarch64, rv64)
+│   ├── jit.c         # JIT compiler (profiling, x86-64 code emission, type feedback)
+│   ├── aot.c         # AOT compiler (type-specialized C codegen, native binary output)
 │   ├── pass.c        # Optimization pass infrastructure
 │   ├── typecheck.c   # Type checking pass
 │   ├── constfold.c   # Constant folding pass

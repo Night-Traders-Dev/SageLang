@@ -329,6 +329,33 @@ def collect_recipe_results(
             runs=runs,
             warmups=warmups,
         ),
+        benchmark_interpreted_recipe(
+            name="sage-jit",
+            command=[str(sage_bin), "--jit", str(workload)],
+            cwd=repo_root,
+            runs=runs,
+            warmups=warmups,
+        ),
+        benchmark_compiled_recipe(
+            name="sage-aot",
+            repo_root=repo_root,
+            build_steps=[
+                (
+                    [
+                        str(sage_bin),
+                        "--aot",
+                        str(workload),
+                        "-o",
+                        "{tmpdir}/recipe-aot",
+                    ],
+                    repo_root,
+                ),
+            ],
+            run_command=["{tmpdir}/recipe-aot"],
+            run_cwd=repo_root,
+            runs=runs,
+            warmups=warmups,
+        ),
     ]
 
 

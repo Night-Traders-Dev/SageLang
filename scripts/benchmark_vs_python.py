@@ -8,6 +8,8 @@ Runs each benchmark across:
   3. Sage bytecode VM
   4. Sage compiled (C backend)
   5. Sage compiled (LLVM backend)
+  6. Sage JIT (interpreter + profiling + native compilation)
+  7. Sage AOT (type-specialized ahead-of-time compilation)
 
 Produces a markdown table and optional SVG chart.
 """
@@ -34,6 +36,8 @@ RECIPES = [
     ("Sage VM", "sage-vm"),
     ("Sage C", "sage-c"),
     ("Sage LLVM", "sage-llvm"),
+    ("Sage JIT", "sage-jit"),
+    ("Sage AOT", "sage-aot"),
 ]
 
 
@@ -67,6 +71,8 @@ def run_timed(cmd: list[str], cwd: Path, timeout: int = 60) -> tuple[float, str,
         return timeout, "", -1
     except FileNotFoundError:
         return 0.0, "", -2
+    except OSError:
+        return 0.0, "", -3
 
 
 def detect_python() -> str:
@@ -140,6 +146,32 @@ def run_benchmark(
         except (subprocess.TimeoutExpired, FileNotFoundError):
             result.status = "fail"
             result.error = "LLVM compile timeout or sage not found"
+            return result
+    elif recipe == "sage-jit":
+        cmd = [str(SAGE), "--jit", str(bench_sage)]
+    elif recipe == "sage-aot":
+        with tempfile.NamedTemporaryFile(suffix="", delete=False) as f:
+            out_path = f.name
+        try:
+            build = subprocess.run(
+                [str(SAGE), "--aot", str(bench_sage), "-o", out_path],
+                capture_output=True, text=True, timeout=30,
+            )
+            if build.returncode != 0:
+                result.status = "fail"
+                result.error = f"AOT compile failed: {build.stderr.strip()[:200]}"
+                return result
+            os.chmod(out_path, 0o755)
+            # Verify the binary is valid (not an empty/broken file)
+            if os.path.getsize(out_path) < 100:
+                result.status = "fail"
+                result.error = "AOT produced invalid binary"
+                os.unlink(out_path)
+                return result
+            cmd = [out_path]
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            result.status = "fail"
+            result.error = "AOT compile timeout or sage not found"
             return result
     else:
         result.status = "skip"
