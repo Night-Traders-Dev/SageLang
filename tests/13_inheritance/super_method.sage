@@ -14,17 +14,17 @@ class Animal:
 
 class Dog(Animal):
     proc init(self, name):
-        super.init(self, name)
+        super.init(name)
     proc speak(self):
         print "Dog barks"
-        super.speak(self)
+        super.speak()
 
 class Puppy(Dog):
     proc init(self, name):
-        super.init(self, name)
+        super.init(name)
     proc speak(self):
         print "Puppy yaps"
-        super.speak(self)
+        super.speak()
 
 let a = Animal("A")
 a.speak()

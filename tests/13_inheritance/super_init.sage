@@ -14,7 +14,7 @@ class Animal:
 
 class Dog(Animal):
     proc init(self, name, breed):
-        super.init(self, name)
+        super.init(name)
         self.breed = breed
 
 let d = Dog("Rex", "German Shepherd")
@@ -24,7 +24,7 @@ print d.breed
 # Chained: 3-level inheritance
 class Puppy(Dog):
     proc init(self, name, breed, age):
-        super.init(self, name, breed)
+        super.init(name, breed)
         self.age = age
 
 let p = Puppy("Max", "Labrador", 6)
@@ -39,12 +39,12 @@ class A:
 
 class B(A):
     proc init(self, x, y):
-        super.init(self, x)
+        super.init(x)
         self.y = y
 
 class C(B):
     proc init(self, x, y, z):
-        super.init(self, x, y)
+        super.init(x, y)
         self.z = z
 
 let c = C(1, 2, 3)
