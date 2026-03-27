@@ -7,6 +7,7 @@
 #include <stdint.h>   // uintptr_t
 #include <math.h>     // isinf, isnan
 #include <unistd.h>   // getpid, unlink
+#include <sys/stat.h> // stat, S_ISDIR, S_ISREG
 #include "sage_thread.h"  // Phase 11: async/await thread joining
 #ifndef SAGE_NO_FFI
 #include <dlfcn.h>    // Phase 9: FFI (dlopen, dlsym, dlclose)
@@ -1712,6 +1713,114 @@ static Value asm_arch_native(int argCount, Value* args) {
     return val_string(asm_detect_arch());
 }
 
+// Phase 1.9: doc() builtin — retrieve documentation from a function
+static Value doc_native(int argCount, Value* args) {
+    if (argCount != 1) return val_nil();
+    if (args[0].type == VAL_FUNCTION && args[0].as.function->proc) {
+        ProcStmt* proc = (ProcStmt*)args[0].as.function->proc;
+        if (proc->doc) return val_string(proc->doc);
+    }
+    return val_nil();
+}
+
+// Phase 1.9: hash() builtin — FNV-1a hash for any value
+static unsigned int fnv1a_str(const char* str) {
+    unsigned int h = 2166136261u;
+    while (*str) { h ^= (unsigned char)*str++; h *= 16777619u; }
+    return h;
+}
+
+static Value hash_native(int argCount, Value* args) {
+    if (argCount != 1) return val_number(0);
+    Value v = args[0];
+    switch (v.type) {
+        case VAL_NUMBER: {
+            double d = AS_NUMBER(v);
+            unsigned int h = 2166136261u;
+            unsigned char* p = (unsigned char*)&d;
+            for (int i = 0; i < (int)sizeof(double); i++) { h ^= p[i]; h *= 16777619u; }
+            return val_number(h);
+        }
+        case VAL_STRING: return val_number(fnv1a_str(AS_STRING(v)));
+        case VAL_BOOL: return val_number(AS_BOOL(v) ? 1231 : 1237);
+        case VAL_NIL: return val_number(0);
+        case VAL_BYTES: {
+            unsigned int h = 2166136261u;
+            for (int i = 0; i < v.as.bytes->length; i++) { h ^= v.as.bytes->data[i]; h *= 16777619u; }
+            return val_number(h);
+        }
+        default: return val_number((double)(uintptr_t)&v);
+    }
+}
+
+// Phase 1.9: Path utility builtins
+static Value path_join_native(int argCount, Value* args) {
+    if (argCount < 2) return val_nil();
+    int total_len = 0;
+    for (int i = 0; i < argCount; i++) {
+        if (!IS_STRING(args[i])) return val_nil();
+        total_len += (int)strlen(AS_STRING(args[i])) + 1;
+    }
+    char* result = SAGE_ALLOC(total_len + 1);
+    result[0] = '\0';
+    for (int i = 0; i < argCount; i++) {
+        if (i > 0 && result[0] != '\0') {
+            int len = (int)strlen(result);
+            if (len > 0 && result[len - 1] != '/') strcat(result, "/");
+        }
+        strcat(result, AS_STRING(args[i]));
+    }
+    return val_string_take(result);
+}
+
+static Value path_dirname_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) return val_string(".");
+    const char* path = AS_STRING(args[0]);
+    const char* last_slash = strrchr(path, '/');
+    if (!last_slash) return val_string(".");
+    int len = (int)(last_slash - path);
+    if (len == 0) return val_string("/");
+    char* dir = SAGE_ALLOC(len + 1);
+    memcpy(dir, path, len);
+    dir[len] = '\0';
+    return val_string_take(dir);
+}
+
+static Value path_basename_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) return val_string("");
+    const char* path = AS_STRING(args[0]);
+    const char* last_slash = strrchr(path, '/');
+    return val_string(last_slash ? last_slash + 1 : path);
+}
+
+static Value path_ext_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) return val_string("");
+    const char* path = AS_STRING(args[0]);
+    const char* base = strrchr(path, '/');
+    const char* dot = strrchr(base ? base : path, '.');
+    if (!dot || dot == path) return val_string("");
+    return val_string(dot);
+}
+
+static Value path_exists_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) return val_bool(0);
+    return val_bool(access(AS_STRING(args[0]), F_OK) == 0);
+}
+
+static Value path_is_dir_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) return val_bool(0);
+    struct stat st;
+    if (stat(AS_STRING(args[0]), &st) != 0) return val_bool(0);
+    return val_bool(S_ISDIR(st.st_mode));
+}
+
+static Value path_is_file_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) return val_bool(0);
+    struct stat st;
+    if (stat(AS_STRING(args[0]), &st) != 0) return val_bool(0);
+    return val_bool(S_ISREG(st.st_mode));
+}
+
 void init_stdlib(Env* env) {
     // Core functions
     env_define(env, "clock", 5, val_native(clock_native));
@@ -1782,6 +1891,17 @@ void init_stdlib(Env* env) {
     env_define(env, "sizeof", 6, val_native(sizeof_native));
     env_define(env, "ptr_add", 7, val_native(ptr_add_native));
     env_define(env, "ptr_to_int", 10, val_native(ptr_to_int_native));
+
+    // Phase 1.9: Hash, doc, and path utilities
+    env_define(env, "hash", 4, val_native(hash_native));
+    env_define(env, "doc", 3, val_native(doc_native));
+    env_define(env, "path_join", 9, val_native(path_join_native));
+    env_define(env, "path_dirname", 12, val_native(path_dirname_native));
+    env_define(env, "path_basename", 13, val_native(path_basename_native));
+    env_define(env, "path_ext", 8, val_native(path_ext_native));
+    env_define(env, "path_exists", 11, val_native(path_exists_native));
+    env_define(env, "path_is_dir", 11, val_native(path_is_dir_native));
+    env_define(env, "path_is_file", 12, val_native(path_is_file_native));
 
     // Phase 9: Memory operations
     env_define(env, "mem_alloc", 9, val_native(mem_alloc_native));

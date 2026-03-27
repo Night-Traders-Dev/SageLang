@@ -178,6 +178,7 @@ typedef struct {
     int param_count;
     int required_count;            // Number of params without defaults
     TypeAnnotation* return_type;   // Return type annotation (NULL if none)
+    char* doc;                     // Doc comment (NULL if none)
     Stmt* body;
 } ProcStmt;
 

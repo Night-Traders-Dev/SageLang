@@ -467,8 +467,25 @@ Token scan_token(void) {
     }
 
     if (c == '#') {
+        if (peek() == '#') {
+            // Doc comment: ## text
+            advance(); // skip second #
+            while (peek() == ' ') advance(); // skip leading space
+            const char* doc_start = current;
+            while (peek() != '\n' && !is_at_end()) advance();
+            // Store doc comment as a special token
+            Token doc_token;
+            doc_token.type = TOKEN_DOC_COMMENT;
+            doc_token.start = doc_start;
+            doc_token.length = (int)(current - doc_start);
+            doc_token.line = line;
+            doc_token.column = (int)(doc_start - line_start);
+            doc_token.line_start = line_start;
+            doc_token.filename = current_filename;
+            return doc_token;
+        }
         while (peek() != '\n' && !is_at_end()) advance();
-        continue;  // Was: return scan_token();
+        continue;
     }
 
     if (c == '"') return string();

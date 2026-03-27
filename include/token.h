@@ -41,6 +41,7 @@ typedef enum {
 
     // Structural
     TOKEN_INDENT, TOKEN_DEDENT, TOKEN_NEWLINE,
+    TOKEN_DOC_COMMENT, // Phase 1.9: ## doc comments
     TOKEN_EOF, TOKEN_ERROR
 } TokenType;
 

@@ -249,6 +249,8 @@ static Expr* postfix(void);
 static Stmt* declaration(void);
 static Stmt* statement(void);
 static Stmt* block(void);
+static char* take_pending_doc(void);
+static TypeAnnotation* parse_type_annotation(void);
 
 static Stmt* for_statement() {
     if (!check(TOKEN_IDENTIFIER)) {
@@ -1093,6 +1095,7 @@ static Stmt* proc_declaration() {
         s->as.proc.defaults = defaults;
         s->as.proc.required_count = required;
         s->as.proc.return_type = return_type;
+        s->as.proc.doc = take_pending_doc();
         return s;
     }
     
@@ -1324,8 +1327,46 @@ static Stmt* statement() {
     return new_expr_stmt(expr);
 }
 
+static char* pending_doc = NULL;
+
+static void collect_doc_comment(void) {
+    // Collect consecutive ## lines into one doc string
+    if (pending_doc) { free(pending_doc); pending_doc = NULL; }
+    int total_len = 0;
+    int capacity = 256;
+    char* buf = SAGE_ALLOC(capacity);
+    buf[0] = '\0';
+    while (check(TOKEN_DOC_COMMENT)) {
+        Token doc = current_token;
+        advance_parser();
+        if (total_len > 0) { buf[total_len++] = '\n'; }
+        int needed = total_len + doc.length + 2;
+        if (needed > capacity) { capacity = needed * 2; buf = SAGE_REALLOC(buf, capacity); }
+        memcpy(buf + total_len, doc.start, doc.length);
+        total_len += doc.length;
+        buf[total_len] = '\0';
+        match(TOKEN_NEWLINE);
+    }
+    if (total_len > 0) {
+        pending_doc = buf;
+    } else {
+        free(buf);
+    }
+}
+
+static char* take_pending_doc(void) {
+    char* doc = pending_doc;
+    pending_doc = NULL;
+    return doc;
+}
+
 static Stmt* declaration() {
     while (match(TOKEN_NEWLINE));
+
+    // Collect doc comments before declarations
+    if (check(TOKEN_DOC_COMMENT)) {
+        collect_doc_comment();
+    }
 
     if (check(TOKEN_DEDENT) || check(TOKEN_EOF)) {
         return NULL;

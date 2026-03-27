@@ -223,6 +223,7 @@ Stmt* new_proc_stmt(Token name, Token* params, int param_count, Stmt* body) {
     s->as.proc.param_count = param_count;
     s->as.proc.required_count = param_count;
     s->as.proc.return_type = NULL;
+    s->as.proc.doc = NULL;
     s->as.proc.body = body;
     s->next = NULL;
     return s;
@@ -385,6 +386,7 @@ Stmt* new_async_proc_stmt(Token name, Token* params, int param_count, Stmt* body
     s->as.async_proc.param_count = param_count;
     s->as.async_proc.required_count = param_count;
     s->as.async_proc.return_type = NULL;
+    s->as.async_proc.doc = NULL;
     s->as.async_proc.body = body;
     s->next = NULL;
     return s;
