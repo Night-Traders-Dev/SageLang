@@ -17,6 +17,7 @@ static const char* current_filename;
 static int indent_stack[MAX_INDENT_LEVELS];
 static int indent_stack_top = 0;
 static int pending_dedents = 0;
+static int bracket_depth = 0;
 
 void init_lexer(const char* source, const char* filename) {
     start = source;
@@ -31,6 +32,7 @@ void init_lexer(const char* source, const char* filename) {
     indent_stack_top = 0;
     indent_stack[0] = 0;
     pending_dedents = 0;
+    bracket_depth = 0;
 }
 
 LexerState lexer_get_state(void) {
@@ -46,6 +48,7 @@ LexerState lexer_get_state(void) {
     memcpy(state.indent_stack, indent_stack, sizeof(indent_stack));
     state.indent_stack_top = indent_stack_top;
     state.pending_dedents = pending_dedents;
+    state.bracket_depth = bracket_depth;
     return state;
 }
 
@@ -61,6 +64,7 @@ void lexer_set_state(LexerState state) {
     memcpy(indent_stack, state.indent_stack, sizeof(indent_stack));
     indent_stack_top = state.indent_stack_top;
     pending_dedents = state.pending_dedents;
+    bracket_depth = state.bracket_depth;
 }
 
 static int is_at_end(void) {
@@ -371,7 +375,7 @@ static int match_char(char expected) {
 Token scan_token(void) {
     // Outer loop replaces recursive calls for blank lines and comments
     for (;;) {
-    if (pending_dedents > 0) {
+    if (pending_dedents > 0 && bracket_depth == 0) {
         start = current;
         token_line = line;
         token_line_start = line_start;
@@ -401,22 +405,27 @@ Token scan_token(void) {
             continue;  // Was: return scan_token();
         }
 
-        int current_indent = indent_stack[indent_stack_top];
-        if (spaces > current_indent) {
-            if (indent_stack_top >= MAX_INDENT_LEVELS - 1) return error_token("Too much nesting.");
-            indent_stack[++indent_stack_top] = spaces;
-            return make_token(TOKEN_INDENT);
-        }
-        else if (spaces < current_indent) {
-            while (indent_stack_top > 0 && indent_stack[indent_stack_top] > spaces) {
-                indent_stack_top--;
-                pending_dedents++;
+        // Inside brackets/parens/braces: skip indentation handling
+        if (bracket_depth > 0) {
+            // Don't emit INDENT/DEDENT inside brackets
+        } else {
+            int current_indent = indent_stack[indent_stack_top];
+            if (spaces > current_indent) {
+                if (indent_stack_top >= MAX_INDENT_LEVELS - 1) return error_token("Too much nesting.");
+                indent_stack[++indent_stack_top] = spaces;
+                return make_token(TOKEN_INDENT);
             }
-            if (indent_stack[indent_stack_top] != spaces) {
-                return error_token("Indentation error.");
+            else if (spaces < current_indent) {
+                while (indent_stack_top > 0 && indent_stack[indent_stack_top] > spaces) {
+                    indent_stack_top--;
+                    pending_dedents++;
+                }
+                if (indent_stack[indent_stack_top] != spaces) {
+                    return error_token("Indentation error.");
+                }
+                pending_dedents--;
+                return make_token(TOKEN_DEDENT);
             }
-            pending_dedents--;
-            return make_token(TOKEN_DEDENT);
         }
     }
 
@@ -439,11 +448,13 @@ Token scan_token(void) {
     char c = advance();
 
     if (c == '\n') {
-        Token token = make_token(TOKEN_NEWLINE);
         line++;
         line_start = current;
         at_beginning_of_line = 1;
-        return token;
+        if (bracket_depth > 0) {
+            continue; // Skip newlines inside brackets
+        }
+        return make_token(TOKEN_NEWLINE);
     }
 
     if (c == '#') {
@@ -457,12 +468,12 @@ Token scan_token(void) {
     if (isdigit(c)) return number();
 
     switch (c) {
-        case '(': return make_token(TOKEN_LPAREN);
-        case ')': return make_token(TOKEN_RPAREN);
-        case '[': return make_token(TOKEN_LBRACKET);
-        case ']': return make_token(TOKEN_RBRACKET);
-        case '{': return make_token(TOKEN_LBRACE);
-        case '}': return make_token(TOKEN_RBRACE);
+        case '(': bracket_depth++; return make_token(TOKEN_LPAREN);
+        case ')': if (bracket_depth > 0) bracket_depth--; return make_token(TOKEN_RPAREN);
+        case '[': bracket_depth++; return make_token(TOKEN_LBRACKET);
+        case ']': if (bracket_depth > 0) bracket_depth--; return make_token(TOKEN_RBRACKET);
+        case '{': bracket_depth++; return make_token(TOKEN_LBRACE);
+        case '}': if (bracket_depth > 0) bracket_depth--; return make_token(TOKEN_RBRACE);
         case '+': return make_token(TOKEN_PLUS);
         case '-': return make_token(match_char('>') ? TOKEN_ARROW : TOKEN_MINUS);
         case '*': return make_token(TOKEN_STAR);

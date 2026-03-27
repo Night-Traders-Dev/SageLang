@@ -2243,19 +2243,31 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                     return EVAL_RESULT(val_nil());
                 }
                 ProcStmt* func = AS_FUNCTION(callee_value);
-                if (expr->as.call.arg_count != func->param_count) {
-                    fprintf(stderr, "Runtime Error: Arity mismatch.\n");
+                int required = func->required_count;
+                if (expr->as.call.arg_count < required || expr->as.call.arg_count > func->param_count) {
+                    fprintf(stderr, "Runtime Error: Expected %d to %d arguments but got %d.\n",
+                            required, func->param_count, expr->as.call.arg_count);
                     return EVAL_RESULT(val_nil());
                 }
 
-                // Pre-evaluate all arguments
+                // Pre-evaluate all provided arguments
                 Value* eval_args = NULL;
                 if (func->param_count > 0) {
                     eval_args = SAGE_ALLOC(sizeof(Value) * func->param_count);
-                    for (int i = 0; i < func->param_count; i++) {
+                    for (int i = 0; i < expr->as.call.arg_count; i++) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
                         if (arg_result.is_throwing) { free(eval_args); return arg_result; }
                         eval_args[i] = arg_result.value;
+                    }
+                    // Fill in defaults for missing arguments
+                    for (int i = expr->as.call.arg_count; i < func->param_count; i++) {
+                        if (func->defaults && func->defaults[i]) {
+                            ExecResult def_result = eval_expr(func->defaults[i], env);
+                            if (def_result.is_throwing) { free(eval_args); return def_result; }
+                            eval_args[i] = def_result.value;
+                        } else {
+                            eval_args[i] = val_nil();
+                        }
                     }
                 }
 

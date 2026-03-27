@@ -18,6 +18,7 @@ typedef struct {
     int indent_stack[MAX_INDENT_LEVELS];
     int indent_stack_top;
     int pending_dedents;
+    int bracket_depth;   // Tracks nesting of (), [], {} — suppresses INDENT/DEDENT/NEWLINE
 } LexerState;
 
 void init_lexer(const char* source, const char* filename);

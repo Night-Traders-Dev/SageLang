@@ -599,7 +599,7 @@ static Expr* primary() {
         return new_dict_expr(keys, values, count);
     }
 
-    // Array Literals
+    // Array Literals (supports multiline and trailing commas)
     if (match(TOKEN_LBRACKET)) {
         Expr** elements = NULL;
         int count = 0;
@@ -607,6 +607,7 @@ static Expr* primary() {
 
         if (!check(TOKEN_RBRACKET)) {
             do {
+                if (check(TOKEN_RBRACKET)) break; // trailing comma
                 Expr* elem = expression();
                 if (count >= capacity) {
                     capacity = capacity == 0 ? 4 : capacity * 2;
@@ -689,6 +690,7 @@ static Expr* postfix() {
 
             if (!check(TOKEN_RPAREN)) {
                 do {
+                    if (check(TOKEN_RPAREN)) break; // trailing comma
                     Expr* arg = expression();
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
@@ -965,26 +967,45 @@ static Stmt* proc_declaration() {
     if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_INIT) {
         Token name = current_token;
         advance_parser();
-        
+
         consume(TOKEN_LPAREN, "Expect '(' after procedure name.");
 
         Token* params = NULL;
+        Expr** defaults = NULL;
         int count = 0;
         int capacity = 0;
+        int required = 0;
+        int seen_default = 0;
 
         if (!check(TOKEN_RPAREN)) {
             do {
+                if (check(TOKEN_RPAREN)) break; // trailing comma
                 if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER) {
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
                         params = SAGE_REALLOC(params, sizeof(Token) * capacity);
+                        defaults = SAGE_REALLOC(defaults, sizeof(Expr*) * capacity);
                     }
-                    params[count++] = current_token;
+                    params[count] = current_token;
+                    defaults[count] = NULL;
                     advance_parser();
+                    if (match(TOKEN_ASSIGN)) {
+                        defaults[count] = expression();
+                        seen_default = 1;
+                    } else {
+                        if (seen_default) {
+                            parser_report(current_token, token_span(&current_token),
+                                          "non-default parameter follows default parameter",
+                                          "parameters with defaults must come after required parameters");
+                        }
+                        required++;
+                    }
+                    count++;
                 } else {
                     parser_report(current_token, token_span(&current_token),
                                   "expected parameter name",
                                   "parameters must be identifiers");
+                    break;
                 }
             } while (match(TOKEN_COMMA));
         }
@@ -993,7 +1014,10 @@ static Stmt* proc_declaration() {
         consume(TOKEN_NEWLINE, "Expect newline before procedure body.");
         Stmt* body = block();
 
-        return new_proc_stmt(name, params, count, body);
+        Stmt* s = new_proc_stmt(name, params, count, body);
+        s->as.proc.defaults = defaults;
+        s->as.proc.required_count = required;
+        return s;
     }
     
     parser_report(current_token, token_span(&current_token),
@@ -1016,6 +1040,7 @@ static Stmt* async_proc_declaration() {
 
         if (!check(TOKEN_RPAREN)) {
             do {
+                if (check(TOKEN_RPAREN)) break; // trailing comma
                 if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER) {
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
@@ -1027,6 +1052,7 @@ static Stmt* async_proc_declaration() {
                     parser_report(current_token, token_span(&current_token),
                                   "expected parameter name",
                                   "parameters must be identifiers");
+                    break;
                 }
             } while (match(TOKEN_COMMA));
         }

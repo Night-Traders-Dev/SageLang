@@ -164,7 +164,9 @@ typedef struct {
 typedef struct {
     Token name;
     Token* params;
+    Expr** defaults;     // Default value expressions (NULL if no default)
     int param_count;
+    int required_count;  // Number of params without defaults
     Stmt* body;
 } ProcStmt;
 
