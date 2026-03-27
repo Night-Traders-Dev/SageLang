@@ -1956,14 +1956,111 @@ int main(int argc, const char* argv[]) {
 
         JitState jit;
         jit_init(&jit);
+
+        // Wire JIT into interpreter
+        extern void interpreter_set_jit(JitState* jit_state);
+        interpreter_set_jit(&jit);
+
         fprintf(stderr, "JIT: Enabled (threshold=%d calls, pool=%zuKB)\n",
                 JIT_HOT_THRESHOLD, jit.pool.capacity / 1024);
 
         // Run with interpreter (JIT profiling active)
         run(source, jit_file, runtime_mode);
 
-        fprintf(stderr, "JIT: %d functions compiled, %d bailouts\n",
-                jit.total_compiled, jit.total_bailouts);
+        // Report JIT statistics
+        int profiled = 0;
+        for (int i = 0; i < jit.profile_count; i++) {
+            if (jit.profiles[i] && jit.profiles[i]->call_count > 0) profiled++;
+        }
+        fprintf(stderr, "JIT: %d functions profiled, %d compiled, %d bailouts\n",
+                profiled, jit.total_compiled, jit.total_bailouts);
+
+        // Print type feedback for hot functions
+        for (int i = 0; i < jit.profile_count; i++) {
+            JitProfile* p = jit.profiles[i];
+            if (p && p->call_count >= 5) {
+                fprintf(stderr, "  func#%d: %d calls, return=%s",
+                        i, p->call_count, jit_type_name(p->return_type));
+                if (p->param_count > 0 && p->arg_types) {
+                    fprintf(stderr, ", args=[");
+                    for (int j = 0; j < p->param_count; j++) {
+                        if (j > 0) fprintf(stderr, ", ");
+                        fprintf(stderr, "%s", jit_type_name(p->arg_types[j]));
+                    }
+                    fprintf(stderr, "]");
+                }
+                if (p->jit_compiled) fprintf(stderr, " [COMPILED]");
+                fprintf(stderr, "\n");
+            }
+        }
+
+        interpreter_set_jit(NULL);
+        jit_shutdown(&jit);
+        free(source);
+    } else if (cmd_argc >= 4 && strcmp(cmd_argv[1], "--aot") == 0 && strcmp(cmd_argv[2], "--jit") == 0) {
+        // Combined AOT+JIT mode: profile first, then compile with type feedback
+        const char* combo_file = cmd_argv[3];
+        module_add_source_dir(combo_file);
+        char* source = read_file(combo_file);
+        if (!source) { CLEANUP_AND_EXIT(74); }
+
+        // Phase 1: JIT profiling run
+        JitState jit;
+        jit_init(&jit);
+        extern void interpreter_set_jit(JitState* jit_state);
+        interpreter_set_jit(&jit);
+        fprintf(stderr, "AOT+JIT: Phase 1 — profiling run...\n");
+        run(source, combo_file, runtime_mode);
+        interpreter_set_jit(NULL);
+
+        // Phase 2: Feed profile data to AOT compiler
+        fprintf(stderr, "AOT+JIT: Phase 2 — type-specialized AOT compilation...\n");
+        init_lexer(source, combo_file);
+        Stmt* ast = parse_program(source, combo_file);
+
+        // Determine output path
+        const char* out_path = NULL;
+        for (int i = 4; i < cmd_argc - 1; i++) {
+            if (strcmp(cmd_argv[i], "-o") == 0) out_path = cmd_argv[i + 1];
+        }
+
+        AotCompiler aot;
+        aot_init(&aot, 2);
+        aot.emit_guards = 1; // Enable type guards from JIT data
+
+        // Transfer JIT type feedback to AOT type environment
+        for (int i = 0; i < jit.profile_count; i++) {
+            JitProfile* p = jit.profiles[i];
+            if (p && p->call_count > 0 && p->return_type != JIT_TYPE_UNKNOWN) {
+                char name[32];
+                snprintf(name, sizeof(name), "__func_%d", i);
+                aot_set_var_type(&aot, name, p->return_type);
+            }
+        }
+
+        char* c_code = aot_compile_program(&aot, ast);
+
+        if (out_path) {
+            char c_path[512];
+            snprintf(c_path, sizeof(c_path), "%s.c", out_path);
+            FILE* f = fopen(c_path, "w");
+            if (f) { fputs(c_code, f); fclose(f); }
+            if (aot_compile_to_binary(&aot, c_path, out_path)) {
+                int profiled = 0;
+                for (int i = 0; i < jit.profile_count; i++)
+                    if (jit.profiles[i] && jit.profiles[i]->call_count > 0) profiled++;
+                fprintf(stderr, "AOT+JIT: Compiled %s → %s (%d functions profiled, %d compiled)\n",
+                        combo_file, out_path, profiled, jit.total_compiled);
+                unlink(c_path);
+            } else {
+                fprintf(stderr, "AOT+JIT: Compilation failed\n");
+            }
+        } else {
+            fputs(c_code, stdout);
+        }
+
+        free(c_code);
+        aot_free(&aot);
         jit_shutdown(&jit);
         free(source);
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--aot") == 0) {

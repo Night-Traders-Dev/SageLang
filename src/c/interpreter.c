@@ -30,6 +30,14 @@ Environment* g_global_env = NULL;
 Environment* g_gc_root_env = NULL;
 static Stmt* g_generator_resume_target = NULL;
 
+// JIT state — global, initialized by --jit mode
+#include "jit.h"
+static JitState* g_jit = NULL;
+static int g_next_func_id = 0;
+
+void interpreter_set_jit(JitState* jit) { g_jit = jit; }
+JitState* interpreter_get_jit(void) { return g_jit; }
+
 // Recursion depth tracking to prevent stack overflow
 #define MAX_RECURSION_DEPTH 1000
 // Maximum loop iterations to prevent hangs and stack exhaustion
@@ -2579,9 +2587,34 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
                     Token paramName = func->params[i];
                     env_define(scope, paramName.start, paramName.length, eval_args[i]);
                 }
+
+                // JIT: Profile this call and check if we should compile
+                int func_id = -1;
+                if (g_jit && g_jit->enabled) {
+                    // Use proc pointer as stable function ID
+                    func_id = (int)((uintptr_t)func % 100000);
+                    jit_record_call(g_jit, func_id, func->param_count, eval_args);
+
+                    // Check if function is hot and should be JIT compiled
+                    JitProfile* profile = jit_get_profile(g_jit, func_id);
+                    if (profile && jit_should_compile(g_jit, func_id)) {
+                        JitNativeFn native = jit_compile_function(g_jit, func, scope);
+                        if (native) {
+                            profile->jit_compiled = 1;
+                            profile->native_code = (void*)native;
+                        }
+                    }
+                }
+
                 free(eval_args);
 
                 ExecResult res = interpret(func->body, scope);
+
+                // JIT: Record return type for specialization
+                if (g_jit && func_id >= 0 && !res.is_throwing) {
+                    jit_record_return(g_jit, func_id, res.value);
+                }
+
                 if (res.is_throwing) return res;
                 return EVAL_RESULT(res.value);
             }
