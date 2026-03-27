@@ -274,6 +274,19 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
             free(callee);
             return buf;
         }
+        case EXPR_SET: {
+            // Variable assignment: name = value
+            if (expr->as.set.object == NULL && expr->as.set.property.start) {
+                char* name = sanitize_name(expr->as.set.property.start, expr->as.set.property.length);
+                char* val = aot_compile_expr(aot, expr->as.set.value);
+                char* buf = malloc(strlen(name) + strlen(val) + 16);
+                sprintf(buf, "(%s = %s)", name, val);
+                free(name);
+                free(val);
+                return buf;
+            }
+            return strdup("sage_nil()");
+        }
         default: return strdup("sage_nil()");
     }
 }
