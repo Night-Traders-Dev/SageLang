@@ -160,13 +160,14 @@ static TokenType identifier_type(void) {
             }
             break;
 
-        case 'e': 
+        case 'e':
             if (current - start > 1) {
                 switch (start[1]) {
                     case 'l':
                         if (current - start > 2 && start[2] == 's') return check_keyword(3, 1, "e", TOKEN_ELSE);
                         if (current - start > 2 && start[2] == 'i') return check_keyword(3, 1, "f", TOKEN_IF); // elif
                         break;
+                    case 'n': return check_keyword(2, 2, "um", TOKEN_ENUM);
                 }
             }
             break;
@@ -231,8 +232,13 @@ static TokenType identifier_type(void) {
             break;
         
         case 's':
-            if (current - start > 1 && start[1] == 'e') return check_keyword(2, 2, "lf", TOKEN_SELF);
-            if (current - start > 1 && start[1] == 'u') return check_keyword(2, 3, "per", TOKEN_SUPER);
+            if (current - start > 1) {
+                switch (start[1]) {
+                    case 'e': return check_keyword(2, 2, "lf", TOKEN_SELF);
+                    case 'u': return check_keyword(2, 3, "per", TOKEN_SUPER);
+                    case 't': return check_keyword(2, 4, "ruct", TOKEN_STRUCT);
+                }
+            }
             return TOKEN_IDENTIFIER;
         
         case 't':
@@ -241,6 +247,7 @@ static TokenType identifier_type(void) {
                     case 'r':
                         if (current - start > 2 && start[2] == 'u') return check_keyword(3, 1, "e", TOKEN_TRUE);
                         if (current - start > 2 && start[2] == 'y') return check_keyword(3, 0, "", TOKEN_TRY);
+                        if (current - start > 2 && start[2] == 'a') return check_keyword(3, 2, "it", TOKEN_TRAIT);
                         break;
                 }
             }

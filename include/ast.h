@@ -199,9 +199,31 @@ typedef struct {
     Stmt* methods;  // Linked list of method definitions (ProcStmt)
 } ClassStmt;
 
+// Struct declaration: struct Point: x: Int, y: Int
+typedef struct {
+    Token name;
+    Token* field_names;
+    TypeAnnotation** field_types;
+    int field_count;
+} StructStmt;
+
+// Enum declaration: enum Color: Red, Green, Blue
+typedef struct {
+    Token name;
+    Token* variant_names;
+    int variant_count;
+} EnumStmt;
+
+// Trait declaration: trait Printable: proc to_string(self) -> String
+typedef struct {
+    Token name;
+    Stmt* methods;  // Linked list of proc signatures (ProcStmt with no body or empty body)
+} TraitStmt;
+
 // Match expression: match value: case pattern: ...
 typedef struct {
     Expr* pattern;  // Pattern to match against
+    Expr* guard;    // Optional guard: case X if cond (NULL if no guard)
     Stmt* body;     // Code to execute if matched
 } CaseClause;
 
@@ -268,7 +290,10 @@ struct Stmt {
         STMT_RAISE,
         STMT_YIELD,     // Phase 7: Generator yield
         STMT_IMPORT,    // Phase 8: Module import
-        STMT_ASYNC_PROC // Phase 11: Async procedure
+        STMT_ASYNC_PROC, // Phase 11: Async procedure
+        STMT_STRUCT,    // Phase 1.7: Struct declaration
+        STMT_ENUM,      // Phase 1.7: Enum declaration
+        STMT_TRAIT      // Phase 1.7: Trait declaration
     } type;
     union {
         PrintStmt print;
@@ -287,6 +312,9 @@ struct Stmt {
         YieldStmt yield_stmt;   // Phase 7: Generator yield
         ImportStmt import;      // Phase 8: Module import
         ProcStmt async_proc;    // Phase 11: Async procedure (same layout as proc)
+        StructStmt struct_stmt; // Phase 1.7: Struct declaration
+        EnumStmt enum_stmt;     // Phase 1.7: Enum declaration
+        TraitStmt trait_stmt;   // Phase 1.7: Trait declaration
         Expr* expression;
     } as;
     Stmt* next;
@@ -325,6 +353,9 @@ Stmt* new_return_stmt(Expr* value);
 Stmt* new_break_stmt();
 Stmt* new_continue_stmt();
 Stmt* new_class_stmt(Token name, Token parent, int has_parent, Stmt* methods);
+Stmt* new_struct_stmt(Token name, Token* field_names, TypeAnnotation** field_types, int field_count);
+Stmt* new_enum_stmt(Token name, Token* variant_names, int variant_count);
+Stmt* new_trait_stmt(Token name, Stmt* methods);
 Stmt* new_match_stmt(Expr* value, CaseClause** cases, int case_count, Stmt* default_case);
 CaseClause* new_case_clause(Expr* pattern, Stmt* body);
 Stmt* new_defer_stmt(Stmt* statement);

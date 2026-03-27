@@ -2378,6 +2378,23 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
 
                     ExecResult init_res = interpret(init_stmt->body, method_env);
                     if (init_res.is_throwing) return init_res;
+                } else {
+                    // Auto-init for structs: look for __StructName_fields__ metadata
+                    char meta_key[256];
+                    snprintf(meta_key, sizeof(meta_key), "__%.*s_fields__",
+                             class_def->name_len, class_def->name);
+                    Value fields_val;
+                    if (env_get(env, meta_key, (int)strlen(meta_key), &fields_val) &&
+                        fields_val.type == VAL_ARRAY) {
+                        ArrayValue* fields = fields_val.as.array;
+                        for (int i = 0; i < fields->count && i < expr->as.call.arg_count; i++) {
+                            ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                            if (arg_result.is_throwing) return arg_result;
+                            if (fields->elements[i].type == VAL_STRING) {
+                                instance_set_field(instance, AS_STRING(fields->elements[i]), arg_result.value);
+                            }
+                        }
+                    }
                 }
 
                 return EVAL_RESULT(inst_val);
@@ -2665,6 +2682,91 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
+        // Phase 1.7: Struct — lightweight value type, auto init/eq/str
+        case STMT_STRUCT: {
+            Token name = stmt->as.struct_stmt.name;
+            ClassValue* class_val = class_create(name.start, name.length, NULL);
+            class_val->defining_env = env;
+
+            // Store field metadata on the class for auto-init/eq/str
+            // We use a special dict stored in the env under __struct_fields__
+            Value fields_arr = val_array();
+            for (int i = 0; i < stmt->as.struct_stmt.field_count; i++) {
+                Token fn = stmt->as.struct_stmt.field_names[i];
+                char* fname = SAGE_ALLOC((size_t)fn.length + 1);
+                memcpy(fname, fn.start, (size_t)fn.length);
+                fname[fn.length] = '\0';
+                array_push(&fields_arr, val_string(fname));
+                free(fname);
+            }
+
+            Value class_value = val_class(class_val);
+            env_define(env, name.start, name.length, class_value);
+
+            // Store field names for auto-init
+            char meta_key[256];
+            snprintf(meta_key, sizeof(meta_key), "__%.*s_fields__", name.length, name.start);
+            env_define(env, meta_key, (int)strlen(meta_key), fields_arr);
+
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+        }
+
+        // Phase 1.7: Enum — tagged variant type
+        case STMT_ENUM: {
+            Token name = stmt->as.enum_stmt.name;
+            // Create a dict mapping variant names to integer values
+            Value enum_dict = val_dict();
+            for (int i = 0; i < stmt->as.enum_stmt.variant_count; i++) {
+                Token vn = stmt->as.enum_stmt.variant_names[i];
+                char* vname = SAGE_ALLOC((size_t)vn.length + 1);
+                memcpy(vname, vn.start, (size_t)vn.length);
+                vname[vn.length] = '\0';
+                dict_set(&enum_dict, vname, val_number((double)i));
+                free(vname);
+            }
+
+            // Store the enum name as __name__ field
+            char* ename = SAGE_ALLOC((size_t)name.length + 1);
+            memcpy(ename, name.start, (size_t)name.length);
+            ename[name.length] = '\0';
+            dict_set(&enum_dict, "__name__", val_string(ename));
+            free(ename);
+
+            env_define(env, name.start, name.length, enum_dict);
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+        }
+
+        // Phase 1.7: Trait — method signature contract (stored as metadata)
+        case STMT_TRAIT: {
+            Token name = stmt->as.trait_stmt.name;
+            Value trait_dict = val_dict();
+
+            // Store required method names
+            Value method_names = val_array();
+            Stmt* method = stmt->as.trait_stmt.methods;
+            while (method != NULL) {
+                if (method->type == STMT_PROC) {
+                    Token mn = method->as.proc.name;
+                    char* mname = SAGE_ALLOC((size_t)mn.length + 1);
+                    memcpy(mname, mn.start, (size_t)mn.length);
+                    mname[mn.length] = '\0';
+                    array_push(&method_names, val_string(mname));
+                    free(mname);
+                }
+                method = method->next;
+            }
+            dict_set(&trait_dict, "__methods__", method_names);
+
+            char* tname = SAGE_ALLOC((size_t)name.length + 1);
+            memcpy(tname, name.start, (size_t)name.length);
+            tname[name.length] = '\0';
+            dict_set(&trait_dict, "__name__", val_string(tname));
+            free(tname);
+
+            env_define(env, name.start, name.length, trait_dict);
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+        }
+
         case STMT_RETURN: {
             Value val = val_nil();
             if (stmt->as.ret.value) {
@@ -2809,6 +2911,12 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 ExecResult pat_res = eval_expr(clause->pattern, env);
                 if (pat_res.is_throwing) return pat_res;
                 if (values_equal(match_val, pat_res.value)) {
+                    // Check guard if present
+                    if (clause->guard) {
+                        ExecResult guard_res = eval_expr(clause->guard, env);
+                        if (guard_res.is_throwing) return guard_res;
+                        if (!is_truthy(guard_res.value)) continue;
+                    }
                     return interpret(clause->body, env);
                 }
             }

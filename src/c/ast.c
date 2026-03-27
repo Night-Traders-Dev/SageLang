@@ -261,11 +261,42 @@ Stmt* new_class_stmt(Token name, Token parent, int has_parent, Stmt* methods) {
     return s;
 }
 
+Stmt* new_struct_stmt(Token name, Token* field_names, TypeAnnotation** field_types, int field_count) {
+    Stmt* s = SAGE_ALLOC(sizeof(Stmt));
+    s->type = STMT_STRUCT;
+    s->as.struct_stmt.name = name;
+    s->as.struct_stmt.field_names = field_names;
+    s->as.struct_stmt.field_types = field_types;
+    s->as.struct_stmt.field_count = field_count;
+    s->next = NULL;
+    return s;
+}
+
+Stmt* new_enum_stmt(Token name, Token* variant_names, int variant_count) {
+    Stmt* s = SAGE_ALLOC(sizeof(Stmt));
+    s->type = STMT_ENUM;
+    s->as.enum_stmt.name = name;
+    s->as.enum_stmt.variant_names = variant_names;
+    s->as.enum_stmt.variant_count = variant_count;
+    s->next = NULL;
+    return s;
+}
+
+Stmt* new_trait_stmt(Token name, Stmt* methods) {
+    Stmt* s = SAGE_ALLOC(sizeof(Stmt));
+    s->type = STMT_TRAIT;
+    s->as.trait_stmt.name = name;
+    s->as.trait_stmt.methods = methods;
+    s->next = NULL;
+    return s;
+}
+
 // ========== PHASE 7: MATCH EXPRESSION ==========
 
 CaseClause* new_case_clause(Expr* pattern, Stmt* body) {
     CaseClause* c = SAGE_ALLOC(sizeof(CaseClause));
     c->pattern = pattern;
+    c->guard = NULL;
     c->body = body;
     return c;
 }

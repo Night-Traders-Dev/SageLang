@@ -359,11 +359,17 @@ static Stmt* match_statement() {
             default_case = block();
         } else if (match(TOKEN_CASE)) {
             Expr* pattern = expression();
+            // Optional guard: case X if condition:
+            Expr* guard = NULL;
+            if (match(TOKEN_IF)) {
+                guard = expression();
+            }
             consume(TOKEN_COLON, "Expect ':' after case pattern.");
             consume(TOKEN_NEWLINE, "Expect newline after case clause.");
             Stmt* body = block();
 
             CaseClause* clause = new_case_clause(pattern, body);
+            clause->guard = guard;
             if (case_count >= case_capacity) {
                 case_capacity = case_capacity == 0 ? 4 : case_capacity * 2;
                 cases = SAGE_REALLOC(cases, sizeof(CaseClause*) * case_capacity);
@@ -396,6 +402,20 @@ static Stmt* yield_statement() {
 }
 
 // PHASE 8: Import statement - WITH ALIASING SUPPORT
+// Accept any identifier-like token (including keywords) for module paths
+static int match_identifier_like(void) {
+    if (current_token.type == TOKEN_IDENTIFIER ||
+        current_token.type == TOKEN_ENUM ||
+        current_token.type == TOKEN_STRUCT ||
+        current_token.type == TOKEN_TRAIT ||
+        current_token.type == TOKEN_MATCH ||
+        current_token.type == TOKEN_INIT) {
+        advance_parser();
+        return 1;
+    }
+    return 0;
+}
+
 static Stmt* import_statement() {
     // Three forms:
     // 1. import module_name
@@ -415,7 +435,11 @@ static Stmt* import_statement() {
         module_name[name_len] = '\0';
 
         while (match(TOKEN_DOT)) {
-            consume(TOKEN_IDENTIFIER, "Expect identifier after '.' in module name.");
+            if (!match_identifier_like()) {
+                parser_report(current_token, token_span(&current_token),
+                              "expected identifier after '.' in module name", NULL);
+                break;
+            }
             Token part = previous_token;
             int new_len = name_len + 1 + part.length;
             module_name = SAGE_REALLOC(module_name, new_len + 1);
@@ -424,7 +448,7 @@ static Stmt* import_statement() {
             name_len = new_len;
             module_name[name_len] = '\0';
         }
-        
+
         consume(TOKEN_IMPORT, "Expect 'import' after module name.");
         
         // Parse imported items and their aliases
@@ -478,7 +502,11 @@ static Stmt* import_statement() {
     module_name[name_len] = '\0';
 
     while (match(TOKEN_DOT)) {
-        consume(TOKEN_IDENTIFIER, "Expect identifier after '.' in module name.");
+        if (!match_identifier_like()) {
+            parser_report(current_token, token_span(&current_token),
+                          "expected identifier after '.' in module name", NULL);
+            break;
+        }
         Token part = previous_token;
         int new_len = name_len + 1 + part.length;
         module_name = SAGE_REALLOC(module_name, new_len + 1);
@@ -634,8 +662,8 @@ static Expr* primary() {
         return new_string_expr(str);
     }
 
-    // Identifiers
-    if (match(TOKEN_IDENTIFIER)) {
+    // Identifiers (including keywords that can be used as variable names in expression context)
+    if (match(TOKEN_IDENTIFIER) || match(TOKEN_ENUM) || match(TOKEN_STRUCT) || match(TOKEN_TRAIT)) {
         Token name = previous_token;
         return new_variable_expr(name);
     }
@@ -1165,6 +1193,107 @@ static Stmt* class_declaration() {
     return new_class_stmt(name, parent, has_parent, method_head);
 }
 
+// struct Point:
+//     x: Int
+//     y: Int
+static Stmt* struct_declaration() {
+    consume(TOKEN_IDENTIFIER, "Expect struct name.");
+    Token name = previous_token;
+    consume(TOKEN_COLON, "Expect ':' after struct name.");
+    consume(TOKEN_NEWLINE, "Expect newline after struct header.");
+    consume(TOKEN_INDENT, "Expect indentation in struct body.");
+
+    Token* field_names = NULL;
+    TypeAnnotation** field_types = NULL;
+    int count = 0;
+    int capacity = 0;
+
+    while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
+        if (match(TOKEN_NEWLINE)) continue;
+        consume(TOKEN_IDENTIFIER, "Expect field name in struct.");
+        Token fname = previous_token;
+        TypeAnnotation* ftype = NULL;
+        if (match(TOKEN_COLON)) {
+            ftype = parse_type_annotation();
+        }
+        if (count >= capacity) {
+            capacity = capacity == 0 ? 4 : capacity * 2;
+            field_names = SAGE_REALLOC(field_names, sizeof(Token) * capacity);
+            field_types = SAGE_REALLOC(field_types, sizeof(TypeAnnotation*) * capacity);
+        }
+        field_names[count] = fname;
+        field_types[count] = ftype;
+        count++;
+        match(TOKEN_NEWLINE);
+    }
+    consume(TOKEN_DEDENT, "Expect dedent after struct body.");
+    return new_struct_stmt(name, field_names, field_types, count);
+}
+
+// enum Color:
+//     Red
+//     Green
+//     Blue
+static Stmt* enum_declaration() {
+    consume(TOKEN_IDENTIFIER, "Expect enum name.");
+    Token name = previous_token;
+    consume(TOKEN_COLON, "Expect ':' after enum name.");
+    consume(TOKEN_NEWLINE, "Expect newline after enum header.");
+    consume(TOKEN_INDENT, "Expect indentation in enum body.");
+
+    Token* variants = NULL;
+    int count = 0;
+    int capacity = 0;
+
+    while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
+        if (match(TOKEN_NEWLINE)) continue;
+        consume(TOKEN_IDENTIFIER, "Expect variant name in enum.");
+        Token vname = previous_token;
+        if (count >= capacity) {
+            capacity = capacity == 0 ? 4 : capacity * 2;
+            variants = SAGE_REALLOC(variants, sizeof(Token) * capacity);
+        }
+        variants[count++] = vname;
+        match(TOKEN_NEWLINE);
+    }
+    consume(TOKEN_DEDENT, "Expect dedent after enum body.");
+    return new_enum_stmt(name, variants, count);
+}
+
+// trait Printable:
+//     proc to_string(self) -> String
+static Stmt* trait_declaration() {
+    consume(TOKEN_IDENTIFIER, "Expect trait name.");
+    Token name = previous_token;
+    consume(TOKEN_COLON, "Expect ':' after trait name.");
+    consume(TOKEN_NEWLINE, "Expect newline after trait header.");
+    consume(TOKEN_INDENT, "Expect indentation in trait body.");
+
+    Stmt* method_head = NULL;
+    Stmt* method_current = NULL;
+
+    while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
+        if (match(TOKEN_NEWLINE)) continue;
+        if (match(TOKEN_PROC)) {
+            Stmt* method = proc_declaration();
+            if (method_head == NULL) {
+                method_head = method;
+                method_current = method;
+            } else {
+                method_current->next = method;
+                method_current = method;
+            }
+        } else {
+            parser_report(current_token, token_span(&current_token),
+                          "only method signatures allowed in trait body",
+                          "use 'proc' to define method signatures");
+            break;
+        }
+    }
+    consume(TOKEN_DEDENT, "Expect dedent after trait body.");
+    return new_trait_stmt(name, method_head);
+}
+
 static Stmt* statement() {
     if (match(TOKEN_PRINT)) return print_statement();
     if (match(TOKEN_IF)) return if_statement();
@@ -1197,6 +1326,26 @@ static Stmt* declaration() {
     }
 
     if (match(TOKEN_CLASS)) return class_declaration();
+    // struct/enum/trait: only treat as declaration if followed by identifier (name)
+    // Otherwise allow as variable reference (e.g., enum.enum_def from stdlib)
+    if (check(TOKEN_STRUCT) || check(TOKEN_ENUM) || check(TOKEN_TRAIT)) {
+        // Peek ahead: save state, consume keyword, check if next is identifier
+        LexerState saved_ls = lexer_get_state();
+        Token saved_ct = current_token;
+        Token saved_pt = previous_token;
+        TokenType kw = current_token.type;
+        advance_parser();
+        if (current_token.type == TOKEN_IDENTIFIER) {
+            // It's a declaration
+            if (kw == TOKEN_STRUCT) return struct_declaration();
+            if (kw == TOKEN_ENUM) return enum_declaration();
+            if (kw == TOKEN_TRAIT) return trait_declaration();
+        }
+        // Not a declaration — restore and fall through to expression
+        lexer_set_state(saved_ls);
+        current_token = saved_ct;
+        previous_token = saved_pt;
+    }
     if (match(TOKEN_ASYNC)) return async_proc_declaration();
     if (match(TOKEN_PROC)) return proc_declaration();
     
