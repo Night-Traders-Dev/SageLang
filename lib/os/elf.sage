@@ -341,3 +341,280 @@ proc section_data(bs, shdr):
     for i in range(sz):
         push(data, bs[off + i])
     return data
+
+# ========== Symbol Table ==========
+
+proc parse_symbol_32(bs, off):
+    let sym = {}
+    sym["name_offset"] = read_u32_le(bs, off)
+    sym["value"] = read_u32_le(bs, off + 4)
+    sym["size"] = read_u32_le(bs, off + 8)
+    sym["info"] = bs[off + 12]
+    sym["other"] = bs[off + 13]
+    sym["shndx"] = read_u16_le(bs, off + 14)
+    sym["bind"] = (sym["info"] >> 4) & 15
+    sym["type"] = sym["info"] & 15
+    sym["visibility"] = sym["other"] & 3
+    return sym
+
+proc parse_symbol_64(bs, off):
+    let sym = {}
+    sym["name_offset"] = read_u32_le(bs, off)
+    sym["info"] = bs[off + 4]
+    sym["other"] = bs[off + 5]
+    sym["shndx"] = read_u16_le(bs, off + 6)
+    sym["value"] = read_u64_le(bs, off + 8)
+    sym["size"] = read_u64_le(bs, off + 16)
+    sym["bind"] = (sym["info"] >> 4) & 15
+    sym["type"] = sym["info"] & 15
+    sym["visibility"] = sym["other"] & 3
+    return sym
+
+proc sym_bind_name(b):
+    if b == 0:
+        return "LOCAL"
+    if b == 1:
+        return "GLOBAL"
+    if b == 2:
+        return "WEAK"
+    return "UNKNOWN"
+
+proc sym_type_name(t):
+    if t == 0:
+        return "NOTYPE"
+    if t == 1:
+        return "OBJECT"
+    if t == 2:
+        return "FUNC"
+    if t == 3:
+        return "SECTION"
+    if t == 4:
+        return "FILE"
+    if t == 10:
+        return "IFUNC"
+    return "UNKNOWN"
+
+# Parse all symbols from .symtab or .dynsym
+proc parse_symbols(bs, hdr, section_name_str):
+    let shdr = find_section(bs, hdr, section_name_str)
+    if shdr == nil:
+        return []
+    let syms = []
+    let entry_size = shdr["entsize"]
+    if entry_size == 0:
+        if hdr["class"] == 1:
+            entry_size = 16
+        else:
+            entry_size = 24
+    let count = shdr["size"] / entry_size
+    # Find associated string table
+    let strtab_shdr = parse_shdr(bs, hdr, shdr["link"])
+    for i in range(count):
+        let off = shdr["offset"] + i * entry_size
+        let sym = nil
+        if hdr["class"] == 1:
+            sym = parse_symbol_32(bs, off)
+        else:
+            sym = parse_symbol_64(bs, off)
+        # Resolve name
+        sym["name"] = read_string(bs, strtab_shdr["offset"] + sym["name_offset"])
+        sym["bind_name"] = sym_bind_name(sym["bind"])
+        sym["type_name"] = sym_type_name(sym["type"])
+        push(syms, sym)
+    return syms
+
+proc get_symtab(bs, hdr):
+    return parse_symbols(bs, hdr, ".symtab")
+
+proc get_dynsym(bs, hdr):
+    return parse_symbols(bs, hdr, ".dynsym")
+
+# Find a symbol by name
+proc find_symbol(symbols, name):
+    for i in range(len(symbols)):
+        if symbols[i]["name"] == name:
+            return symbols[i]
+    return nil
+
+# ========== Relocations ==========
+
+proc parse_rela_64(bs, off):
+    let rel = {}
+    rel["offset"] = read_u64_le(bs, off)
+    let info = read_u64_le(bs, off + 8)
+    rel["sym_idx"] = (info >> 32) & 4294967295
+    rel["type"] = info & 4294967295
+    rel["addend"] = read_u64_le(bs, off + 16)
+    return rel
+
+proc parse_rel_64(bs, off):
+    let rel = {}
+    rel["offset"] = read_u64_le(bs, off)
+    let info = read_u64_le(bs, off + 8)
+    rel["sym_idx"] = (info >> 32) & 4294967295
+    rel["type"] = info & 4294967295
+    rel["addend"] = 0
+    return rel
+
+proc rela_type_name_x64(t):
+    if t == 0:
+        return "R_X86_64_NONE"
+    if t == 1:
+        return "R_X86_64_64"
+    if t == 2:
+        return "R_X86_64_PC32"
+    if t == 4:
+        return "R_X86_64_PLT32"
+    if t == 7:
+        return "R_X86_64_JUMP_SLOT"
+    if t == 8:
+        return "R_X86_64_RELATIVE"
+    if t == 10:
+        return "R_X86_64_32"
+    if t == 11:
+        return "R_X86_64_32S"
+    return "R_X86_64_" + str(t)
+
+proc parse_relocations(bs, hdr, rela_section):
+    let rels = []
+    if rela_section == nil:
+        return rels
+    let entry_size = rela_section["entsize"]
+    if entry_size == 0:
+        entry_size = 24
+    let is_rela = (rela_section["type_id"] == 4)
+    let count = rela_section["size"] / entry_size
+    for i in range(count):
+        let off = rela_section["offset"] + i * entry_size
+        let rel = nil
+        if is_rela:
+            rel = parse_rela_64(bs, off)
+        else:
+            rel = parse_rel_64(bs, off)
+        rel["type_name"] = rela_type_name_x64(rel["type"])
+        push(rels, rel)
+    return rels
+
+# Get all relocations from .rela.text, .rela.plt, etc.
+proc get_all_relocations(bs, hdr):
+    let all_rels = []
+    let shdrs = parse_shdrs(bs, hdr)
+    for i in range(len(shdrs)):
+        if shdrs[i]["type_id"] == 4 or shdrs[i]["type_id"] == 9:
+            let rels = parse_relocations(bs, hdr, shdrs[i])
+            let sec_name = section_name(bs, hdr, shdrs[i])
+            for j in range(len(rels)):
+                rels[j]["section"] = sec_name
+                push(all_rels, rels[j])
+    return all_rels
+
+# ========== Dynamic Linking ==========
+
+proc parse_dynamic(bs, hdr):
+    let entries = []
+    let shdr = find_section(bs, hdr, ".dynamic")
+    if shdr == nil:
+        return entries
+    let off = shdr["offset"]
+    let end_off = off + shdr["size"]
+    while off + 16 <= end_off:
+        let tag = read_u64_le(bs, off)
+        let val = read_u64_le(bs, off + 8)
+        if tag == 0:
+            break
+        let entry = {}
+        entry["tag"] = tag
+        entry["value"] = val
+        if tag == 1:
+            entry["tag_name"] = "DT_NEEDED"
+        if tag == 5:
+            entry["tag_name"] = "DT_STRTAB"
+        if tag == 6:
+            entry["tag_name"] = "DT_SYMTAB"
+        if tag == 7:
+            entry["tag_name"] = "DT_RELA"
+        if tag == 10:
+            entry["tag_name"] = "DT_STRSZ"
+        if tag == 14:
+            entry["tag_name"] = "DT_SONAME"
+        if tag == 15:
+            entry["tag_name"] = "DT_RPATH"
+        if tag == 23:
+            entry["tag_name"] = "DT_JMPREL"
+        if not dict_has(entry, "tag_name"):
+            entry["tag_name"] = "DT_" + str(tag)
+        push(entries, entry)
+        off = off + 16
+    return entries
+
+# Get shared library dependencies (DT_NEEDED)
+proc get_needed_libs(bs, hdr):
+    let libs = []
+    let dyn = parse_dynamic(bs, hdr)
+    let strtab = find_section(bs, hdr, ".dynstr")
+    if strtab == nil:
+        return libs
+    for i in range(len(dyn)):
+        if dyn[i]["tag"] == 1:
+            let name = read_string(bs, strtab["offset"] + dyn[i]["value"])
+            push(libs, name)
+    return libs
+
+# ========== ELF Writer (minimal) ==========
+
+proc create_elf64_header(entry, phnum, shnum):
+    let hdr = []
+    # ELF magic
+    push(hdr, 127)
+    push(hdr, 69)
+    push(hdr, 76)
+    push(hdr, 70)
+    push(hdr, 2)
+    push(hdr, 1)
+    push(hdr, 1)
+    push(hdr, 0)
+    for i in range(8):
+        push(hdr, 0)
+    # e_type = ET_EXEC (2)
+    push(hdr, 2)
+    push(hdr, 0)
+    # e_machine = x86_64 (62)
+    push(hdr, 62)
+    push(hdr, 0)
+    # e_version
+    push(hdr, 1)
+    push(hdr, 0)
+    push(hdr, 0)
+    push(hdr, 0)
+    # e_entry (8 bytes)
+    for i in range(8):
+        push(hdr, (entry >> (i * 8)) & 255)
+    # e_phoff = 64
+    push(hdr, 64)
+    for i in range(7):
+        push(hdr, 0)
+    # e_shoff = 0 (no sections)
+    for i in range(8):
+        push(hdr, 0)
+    # e_flags
+    for i in range(4):
+        push(hdr, 0)
+    # e_ehsize = 64
+    push(hdr, 64)
+    push(hdr, 0)
+    # e_phentsize = 56
+    push(hdr, 56)
+    push(hdr, 0)
+    # e_phnum
+    push(hdr, phnum & 255)
+    push(hdr, (phnum >> 8) & 255)
+    # e_shentsize = 64
+    push(hdr, 64)
+    push(hdr, 0)
+    # e_shnum
+    push(hdr, shnum & 255)
+    push(hdr, (shnum >> 8) & 255)
+    # e_shstrndx
+    push(hdr, 0)
+    push(hdr, 0)
+    return hdr

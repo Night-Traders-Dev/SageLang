@@ -566,3 +566,260 @@ proc format_ext4(size_bytes):
     _write_u16(fs["data"], off + 88, INODE_SIZE_EXT4)
     fs["superblock"] = parse_superblock(fs["data"], SUPERBLOCK_OFFSET)
     return fs
+
+# ========== Delete / Rename / Symlink / Journal ==========
+
+# Delete a file (unlink from parent directory, free inode+blocks)
+proc delete_file(fs, parent_inode_num, name):
+    let parent = read_inode(fs, parent_inode_num)
+    let blocks = _get_file_blocks(fs, parent)
+    let bs = BLOCK_SIZE
+    for bi in range(len(blocks)):
+        let bdata = read_block(fs, blocks[bi])
+        let off = 0
+        let prev_off = -1
+        while off < bs:
+            let rec_len = _read_u16(bdata, off + 4)
+            if rec_len == 0:
+                break
+            let name_len = bdata[off + 6]
+            let entry_name = ""
+            for ni in range(name_len):
+                entry_name = entry_name + chr(bdata[off + 8 + ni])
+            if entry_name == name:
+                let target_ino = _read_u32(bdata, off)
+                # Zero out inode reference
+                _write_u32(bdata, off, 0)
+                # If previous entry, extend its rec_len to absorb this one
+                if prev_off >= 0:
+                    let prev_rec = _read_u16(bdata, prev_off + 4)
+                    _write_u16(bdata, prev_off + 4, prev_rec + rec_len)
+                # Write block back
+                let blk_off = blocks[bi] * bs
+                for wi in range(bs):
+                    fs["data"][blk_off + wi] = bdata[wi]
+                # Free the target inode blocks
+                let target = read_inode(fs, target_ino)
+                let tblocks = _get_file_blocks(fs, target)
+                for ti in range(len(tblocks)):
+                    _free_block(fs, tblocks[ti])
+                _free_inode(fs, target_ino)
+                return true
+            prev_off = off
+            off = off + rec_len
+    return false
+
+# Free a block (clear bitmap bit)
+proc _free_block(fs, block_num):
+    let sb = fs["superblock"]
+    let bsize = sb["block_size"]
+    let bpg = sb["blocks_per_group"]
+    let group = block_num / bpg
+    let idx = block_num % bpg
+    let gd = _parse_group_desc(fs["data"], SUPERBLOCK_OFFSET + SUPERBLOCK_SIZE + group * 32)
+    let bmp_off = gd["block_bitmap"] * bsize + (idx / 8)
+    let bit = idx % 8
+    fs["data"][bmp_off] = fs["data"][bmp_off] & (255 - (1 << bit))
+
+# Free an inode (clear bitmap bit)
+proc _free_inode(fs, inode_num):
+    let sb = fs["superblock"]
+    let bsize = sb["block_size"]
+    let ipg = sb["inodes_per_group"]
+    let group = (inode_num - 1) / ipg
+    let idx = (inode_num - 1) % ipg
+    let gd = _parse_group_desc(fs["data"], SUPERBLOCK_OFFSET + SUPERBLOCK_SIZE + group * 32)
+    let bmp_off = gd["inode_bitmap"] * bsize + (idx / 8)
+    let bit = idx % 8
+    fs["data"][bmp_off] = fs["data"][bmp_off] & (255 - (1 << bit))
+
+# Rename a file (remove old dir entry, add new one)
+proc rename_file(fs, parent_ino, old_name, new_name):
+    # Find the inode of the old entry
+    let parent = read_inode(fs, parent_ino)
+    let entries = list_dir(fs, parent)
+    let target_ino = 0
+    let target_type = 1
+    for i in range(len(entries)):
+        if entries[i]["name"] == old_name:
+            target_ino = entries[i]["inode"]
+            target_type = entries[i]["file_type"]
+            break
+    if target_ino == 0:
+        return false
+    delete_file(fs, parent_ino, old_name)
+    _add_dir_entry(fs, parent_ino, new_name, target_ino, target_type)
+    return true
+
+# Create a symbolic link
+proc create_symlink(fs, parent_ino, name, target_path):
+    let ino = _allocate_inode(fs)
+    if ino == 0:
+        return 0
+    let sb = fs["superblock"]
+    let bsize = sb["block_size"]
+    let ipg = sb["inodes_per_group"]
+    let group = (ino - 1) / ipg
+    let idx = (ino - 1) % ipg
+    let gd = _parse_group_desc(fs["data"], SUPERBLOCK_OFFSET + SUPERBLOCK_SIZE + group * 32)
+    let ino_off = gd["inode_table"] * bsize + idx * sb["inode_size"]
+    # Set mode: symlink + rwxrwxrwx (40960 + 511 = 41471)
+    _write_u16(fs["data"], ino_off + 0, S_IFLNK + 511)
+    _write_u32(fs["data"], ino_off + 4, len(target_path))
+    # Short symlinks: store target in block pointers (up to 60 bytes)
+    if len(target_path) <= 60:
+        for si in range(len(target_path)):
+            fs["data"][ino_off + 40 + si] = ord(target_path[si])
+    else:
+        let blk = _allocate_block(fs)
+        if blk > 0:
+            _write_u32(fs["data"], ino_off + 40, blk)
+            let blk_off = blk * bsize
+            for si in range(len(target_path)):
+                fs["data"][blk_off + si] = ord(target_path[si])
+    _add_dir_entry(fs, parent_ino, name, ino, FT_SYMLINK)
+    return ino
+
+# Read a symbolic link target
+proc read_symlink(fs, inode):
+    let size = inode["size"]
+    if size <= 60:
+        # Fast symlink: target stored in block pointers
+        let target = ""
+        let sb = fs["superblock"]
+        let bsize = sb["block_size"]
+        let ipg = sb["inodes_per_group"]
+        # Re-read raw inode data for block pointer area
+        let blocks = inode["blocks_array"]
+        if blocks != nil:
+            for si in range(size):
+                if si < len(blocks):
+                    target = target + chr(blocks[si])
+        return target
+    # Regular symlink: read from data block
+    return read_file(fs, inode)
+
+# Extended attributes (xattr) support
+proc read_xattrs(fs, inode_num):
+    let attrs = {}
+    let sb = fs["superblock"]
+    let bsize = sb["block_size"]
+    let ipg = sb["inodes_per_group"]
+    let group = (inode_num - 1) / ipg
+    let idx = (inode_num - 1) % ipg
+    let gd = _parse_group_desc(fs["data"], SUPERBLOCK_OFFSET + SUPERBLOCK_SIZE + group * 32)
+    let ino_off = gd["inode_table"] * bsize + idx * sb["inode_size"]
+    # Inline xattrs: after inode base (128 bytes) up to inode_size
+    let extra_start = ino_off + 128
+    let extra_end = ino_off + sb["inode_size"]
+    if extra_end > extra_start + 4:
+        let magic = _read_u32(fs["data"], extra_start)
+        if magic == 3925999414:
+            let off = extra_start + 4
+            while off + 4 < extra_end:
+                let name_len = fs["data"][off]
+                let name_idx = fs["data"][off + 1]
+                let val_off = _read_u16(fs["data"], off + 2)
+                let val_sz = _read_u32(fs["data"], off + 4)
+                if name_len == 0:
+                    break
+                let aname = ""
+                for ni in range(name_len):
+                    aname = aname + chr(fs["data"][off + 8 + ni])
+                let aval = ""
+                for vi in range(val_sz):
+                    if extra_start + val_off + vi < extra_end:
+                        aval = aval + chr(fs["data"][extra_start + val_off + vi])
+                attrs[aname] = aval
+                off = off + 8 + name_len
+                # Align to 4
+                while off % 4 != 0:
+                    off = off + 1
+    return attrs
+
+# Simple journal info (ext3/4 journal superblock)
+proc read_journal_info(fs):
+    let info = {}
+    let sb = fs["superblock"]
+    if not dict_has(sb, "journal_inum"):
+        info["has_journal"] = false
+        return info
+    info["has_journal"] = true
+    info["journal_inum"] = sb["journal_inum"]
+    # Read journal inode
+    let jinode = read_inode(fs, sb["journal_inum"])
+    info["journal_size"] = jinode["size"]
+    info["journal_blocks"] = len(_get_file_blocks(fs, jinode))
+    return info
+
+# Basic fsck: check superblock, bitmaps, inode counts
+proc fsck(fs):
+    let result = {}
+    result["errors"] = []
+    let sb = fs["superblock"]
+    # Check magic
+    if sb["magic"] != EXT_MAGIC:
+        push(result["errors"], "bad superblock magic")
+    # Check block size
+    if sb["block_size"] != 1024 and sb["block_size"] != 2048 and sb["block_size"] != 4096:
+        push(result["errors"], "invalid block size: " + str(sb["block_size"]))
+    # Check root inode
+    let root = read_inode(fs, ROOT_INODE)
+    if root == nil:
+        push(result["errors"], "cannot read root inode")
+    else:
+        if (root["mode"] & 61440) != S_IFDIR:
+            push(result["errors"], "root inode is not a directory")
+    # Check free counts
+    let groups = _get_group_descs(fs)
+    let total_free_blocks = 0
+    let total_free_inodes = 0
+    for gi in range(len(groups)):
+        total_free_blocks = total_free_blocks + groups[gi]["free_blocks"]
+        total_free_inodes = total_free_inodes + groups[gi]["free_inodes"]
+    result["free_blocks"] = total_free_blocks
+    result["free_inodes"] = total_free_inodes
+    result["total_blocks"] = sb["total_blocks"]
+    result["total_inodes"] = sb["total_inodes"]
+    result["clean"] = len(result["errors"]) == 0
+    return result
+
+# Stat a file (return metadata dict)
+proc stat_file(fs, inode):
+    let info = {}
+    let mode = inode["mode"]
+    info["mode"] = mode
+    info["size"] = inode["size"]
+    info["uid"] = inode["uid"]
+    info["gid"] = inode["gid"]
+    info["atime"] = inode["atime"]
+    info["mtime"] = inode["mtime"]
+    info["ctime"] = inode["ctime"]
+    info["links"] = inode["links_count"]
+    info["blocks"] = len(_get_file_blocks(fs, inode))
+    let ft = mode & 61440
+    if ft == S_IFREG:
+        info["type"] = "file"
+    if ft == S_IFDIR:
+        info["type"] = "directory"
+    if ft == S_IFLNK:
+        info["type"] = "symlink"
+    if ft == S_IFIFO:
+        info["type"] = "fifo"
+    if ft == S_IFSOCK:
+        info["type"] = "socket"
+    if ft == S_IFBLK:
+        info["type"] = "block_device"
+    if ft == S_IFCHR:
+        info["type"] = "char_device"
+    # Permissions
+    info["owner_read"] = (mode & 256) != 0
+    info["owner_write"] = (mode & 128) != 0
+    info["owner_exec"] = (mode & 64) != 0
+    info["group_read"] = (mode & 32) != 0
+    info["group_write"] = (mode & 16) != 0
+    info["group_exec"] = (mode & 8) != 0
+    info["other_read"] = (mode & 4) != 0
+    info["other_write"] = (mode & 2) != 0
+    info["other_exec"] = (mode & 1) != 0
+    return info

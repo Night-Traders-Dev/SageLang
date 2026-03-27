@@ -131,3 +131,100 @@ proc lba_to_chs(lba, heads_per_cylinder, sectors_per_track):
 # Convert CHS to LBA (given disk geometry)
 proc chs_to_lba(chs, heads_per_cylinder, sectors_per_track):
     return (chs["cylinder"] * heads_per_cylinder + chs["head"]) * sectors_per_track + chs["sector"] - 1
+
+# ========== Extended Partitions ==========
+
+proc is_extended(partition):
+    let t = partition["type"]
+    return t == 5 or t == 15 or t == 133
+
+proc parse_extended_partitions(bs, ext_partition):
+    let logicals = []
+    let ext_start = ext_partition["lba_start"]
+    let ebr_lba = ext_start
+    let max_iter = 128
+    let iter = 0
+    while ebr_lba > 0 and iter < max_iter:
+        let off = ebr_lba * 512
+        if off + 512 > len(bs):
+            break
+        # EBR has same structure as MBR: 2 partition entries at offset 446
+        let p1 = parse_partition(bs, off + 446)
+        let p2 = parse_partition(bs, off + 462)
+        # First entry: logical partition (relative to EBR)
+        if p1["type"] != 0:
+            let logical = {}
+            logical["type"] = p1["type"]
+            logical["type_name"] = partition_type_name(p1["type"])
+            logical["bootable"] = p1["bootable"]
+            logical["lba_start"] = ebr_lba + p1["lba_start"]
+            logical["sector_count"] = p1["sector_count"]
+            push(logicals, logical)
+        # Second entry: next EBR (relative to extended partition start)
+        if p2["type"] != 0 and p2["lba_start"] > 0:
+            ebr_lba = ext_start + p2["lba_start"]
+        else:
+            ebr_lba = 0
+        iter = iter + 1
+    return logicals
+
+# Get all partitions including logical partitions in extended
+proc get_all_partitions(bs):
+    let mbr = parse_mbr(bs)
+    let all_parts = []
+    for i in range(len(mbr["partitions"])):
+        let p = mbr["partitions"][i]
+        if p["type"] == 0:
+            continue
+        if is_extended(p):
+            let logicals = parse_extended_partitions(bs, p)
+            for j in range(len(logicals)):
+                push(all_parts, logicals[j])
+        else:
+            push(all_parts, p)
+    return all_parts
+
+# ========== MBR Writer ==========
+
+proc _write_u16_le(bs, off, val):
+    bs[off] = val & 255
+    bs[off + 1] = (val >> 8) & 255
+
+proc _write_u32_le(bs, off, val):
+    bs[off] = val & 255
+    bs[off + 1] = (val >> 8) & 255
+    bs[off + 2] = (val >> 16) & 255
+    bs[off + 3] = (val >> 24) & 255
+
+proc create_mbr():
+    let mbr = []
+    for i in range(512):
+        push(mbr, 0)
+    # Boot signature
+    mbr[510] = 85
+    mbr[511] = 170
+    return mbr
+
+proc write_partition(mbr, index, bootable, ptype, lba_start, sector_count):
+    let off = 446 + index * 16
+    if bootable:
+        mbr[off] = 128
+    else:
+        mbr[off] = 0
+    # CHS start/end (use LBA mode: FE FF FF)
+    mbr[off + 1] = 254
+    mbr[off + 2] = 255
+    mbr[off + 3] = 255
+    mbr[off + 4] = ptype
+    mbr[off + 5] = 254
+    mbr[off + 6] = 255
+    mbr[off + 7] = 255
+    _write_u32_le(mbr, off + 8, lba_start)
+    _write_u32_le(mbr, off + 12, sector_count)
+
+proc write_boot_code(mbr, code):
+    let max_len = 440
+    if len(code) < max_len:
+        max_len = len(code)
+    for i in range(max_len):
+        mbr[i] = code[i]

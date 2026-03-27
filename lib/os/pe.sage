@@ -240,3 +240,165 @@ proc section_data(bs, section):
     for i in range(sz):
         push(data, bs[off + i])
     return data
+
+# ========== Import Table ==========
+
+proc parse_imports(bs, pe):
+    let imports = []
+    if pe["optional"] == nil:
+        return imports
+    if not dict_has(pe["optional"], "import_table_rva"):
+        return imports
+    let import_rva = pe["optional"]["import_table_rva"]
+    if import_rva == 0:
+        return imports
+    # Find section containing import RVA
+    let import_off = rva_to_offset(bs, pe, import_rva)
+    if import_off < 0:
+        return imports
+    # Parse Import Directory Table (20-byte entries)
+    let off = import_off
+    while off + 20 <= len(bs):
+        let ilt_rva = read_u32_le(bs, off)
+        let timestamp = read_u32_le(bs, off + 4)
+        let forwarder = read_u32_le(bs, off + 8)
+        let name_rva = read_u32_le(bs, off + 12)
+        let iat_rva = read_u32_le(bs, off + 16)
+        if ilt_rva == 0 and name_rva == 0:
+            break
+        let entry = {}
+        let name_off = rva_to_offset(bs, pe, name_rva)
+        if name_off >= 0:
+            entry["dll_name"] = read_string_pe(bs, name_off)
+        else:
+            entry["dll_name"] = ""
+        entry["ilt_rva"] = ilt_rva
+        entry["iat_rva"] = iat_rva
+        entry["timestamp"] = timestamp
+        entry["functions"] = []
+        # Parse ILT entries (import lookup table)
+        let ilt_off = rva_to_offset(bs, pe, ilt_rva)
+        if ilt_off >= 0:
+            let is_64 = pe["optional"]["magic"] == 523
+            let entry_size = 4
+            if is_64:
+                entry_size = 8
+            let foff = ilt_off
+            while foff + entry_size <= len(bs):
+                let fval = 0
+                if is_64:
+                    fval = read_u64_le(bs, foff)
+                else:
+                    fval = read_u32_le(bs, foff)
+                if fval == 0:
+                    break
+                let func = {}
+                # Check ordinal bit
+                let ordinal_flag = false
+                if is_64:
+                    ordinal_flag = (fval >> 63) != 0
+                else:
+                    ordinal_flag = (fval >> 31) != 0
+                if ordinal_flag:
+                    func["ordinal"] = fval & 65535
+                    func["name"] = ""
+                else:
+                    let hint_off = rva_to_offset(bs, pe, fval & 2147483647)
+                    if hint_off >= 0:
+                        func["hint"] = read_u16_le(bs, hint_off)
+                        func["name"] = read_string_pe(bs, hint_off + 2)
+                    else:
+                        func["name"] = ""
+                push(entry["functions"], func)
+                foff = foff + entry_size
+        push(imports, entry)
+        off = off + 20
+    return imports
+
+# ========== Export Table ==========
+
+proc parse_exports(bs, pe):
+    let result = {}
+    result["functions"] = []
+    if pe["optional"] == nil:
+        return result
+    if not dict_has(pe["optional"], "export_table_rva"):
+        return result
+    let export_rva = pe["optional"]["export_table_rva"]
+    if export_rva == 0:
+        return result
+    let off = rva_to_offset(bs, pe, export_rva)
+    if off < 0:
+        return result
+    result["characteristics"] = read_u32_le(bs, off)
+    result["timestamp"] = read_u32_le(bs, off + 4)
+    let name_rva = read_u32_le(bs, off + 12)
+    result["ordinal_base"] = read_u32_le(bs, off + 16)
+    result["num_functions"] = read_u32_le(bs, off + 20)
+    result["num_names"] = read_u32_le(bs, off + 24)
+    let func_rva = read_u32_le(bs, off + 28)
+    let name_ptr_rva = read_u32_le(bs, off + 32)
+    let ordinal_rva = read_u32_le(bs, off + 36)
+    let name_off = rva_to_offset(bs, pe, name_rva)
+    if name_off >= 0:
+        result["dll_name"] = read_string_pe(bs, name_off)
+    # Parse exported names
+    let name_ptr_off = rva_to_offset(bs, pe, name_ptr_rva)
+    let ordinal_off = rva_to_offset(bs, pe, ordinal_rva)
+    if name_ptr_off >= 0 and ordinal_off >= 0:
+        for i in range(result["num_names"]):
+            let fn = {}
+            let fn_name_rva = read_u32_le(bs, name_ptr_off + i * 4)
+            let fn_name_off = rva_to_offset(bs, pe, fn_name_rva)
+            if fn_name_off >= 0:
+                fn["name"] = read_string_pe(bs, fn_name_off)
+            else:
+                fn["name"] = ""
+            fn["ordinal"] = read_u16_le(bs, ordinal_off + i * 2) + result["ordinal_base"]
+            push(result["functions"], fn)
+    return result
+
+# ========== Helper functions ==========
+
+proc rva_to_offset(bs, pe, rva):
+    for i in range(len(pe["sections"])):
+        let sec = pe["sections"][i]
+        if rva >= sec["virtual_address"] and rva < sec["virtual_address"] + sec["virtual_size"]:
+            return sec["raw_data_offset"] + (rva - sec["virtual_address"])
+    return -1
+
+proc read_string_pe(bs, off):
+    let s = ""
+    while off < len(bs):
+        if bs[off] == 0:
+            break
+        s = s + chr(bs[off])
+        off = off + 1
+    return s
+
+# ========== Resource Directory ==========
+
+proc parse_resource_dir(bs, pe, rva, level):
+    let off = rva_to_offset(bs, pe, rva)
+    if off < 0:
+        return nil
+    let dir = {}
+    dir["characteristics"] = read_u32_le(bs, off)
+    dir["timestamp"] = read_u32_le(bs, off + 4)
+    dir["major_version"] = read_u16_le(bs, off + 8)
+    dir["minor_version"] = read_u16_le(bs, off + 10)
+    let num_named = read_u16_le(bs, off + 12)
+    let num_id = read_u16_le(bs, off + 14)
+    dir["entries"] = []
+    let entry_off = off + 16
+    for i in range(num_named + num_id):
+        let e = {}
+        e["name_or_id"] = read_u32_le(bs, entry_off)
+        e["data_or_subdir"] = read_u32_le(bs, entry_off + 4)
+        e["is_name"] = (e["name_or_id"] >> 31) != 0
+        e["is_subdir"] = (e["data_or_subdir"] >> 31) != 0
+        if not e["is_name"]:
+            e["id"] = e["name_or_id"]
+        push(dir["entries"], e)
+        entry_off = entry_off + 8
+    return dir

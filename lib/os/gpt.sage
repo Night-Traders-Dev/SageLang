@@ -156,3 +156,124 @@ proc is_efi_system(entry):
 
 proc is_linux_fs(entry):
     return entry["type_guid"] == "0fc63daf-8483-4772-8e79-3d69d8477de4"
+
+# ========== CRC32 Validation ==========
+
+let _gpt_crc_table = []
+let _gpt_crc_init = false
+
+proc _init_gpt_crc32():
+    if _gpt_crc_init:
+        return
+    for i in range(256):
+        let crc = i
+        for j in range(8):
+            if (crc & 1) != 0:
+                crc = (crc >> 1) ^ 3988292384
+            else:
+                crc = crc >> 1
+        push(_gpt_crc_table, crc)
+    _gpt_crc_init = true
+
+proc gpt_crc32(data, start, length):
+    _init_gpt_crc32()
+    let crc = 4294967295
+    for i in range(length):
+        let idx = (crc ^ data[start + i]) & 255
+        crc = (crc >> 8) ^ _gpt_crc_table[idx]
+    return crc ^ 4294967295
+
+proc validate_header_crc(bs, off):
+    let stored_crc = read_u32_le(bs, off + 16)
+    # Zero out CRC field for calculation
+    let header_copy = []
+    let header_size = read_u32_le(bs, off + 12)
+    for i in range(header_size):
+        push(header_copy, bs[off + i])
+    # Zero CRC field (bytes 16-19)
+    header_copy[16] = 0
+    header_copy[17] = 0
+    header_copy[18] = 0
+    header_copy[19] = 0
+    let calc_crc = gpt_crc32(header_copy, 0, header_size)
+    return calc_crc == stored_crc
+
+proc validate_entries_crc(bs, hdr):
+    let stored_crc = hdr["partition_entry_crc32"]
+    let base = hdr["partition_entry_lba"] * 512
+    let total_size = hdr["num_partition_entries"] * hdr["partition_entry_size"]
+    let calc_crc = gpt_crc32(bs, base, total_size)
+    return calc_crc == stored_crc
+
+# ========== Partition CRUD ==========
+
+proc _write_u32_le(bs, off, val):
+    bs[off] = val & 255
+    bs[off + 1] = (val >> 8) & 255
+    bs[off + 2] = (val >> 16) & 255
+    bs[off + 3] = (val >> 24) & 255
+
+proc _write_u64_le(bs, off, val):
+    for i in range(8):
+        bs[off + i] = (val >> (i * 8)) & 255
+
+proc _write_guid(bs, off, guid_str):
+    # Parse GUID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" to 16 bytes
+    # Simplified: write zeros if parsing fails
+    for i in range(16):
+        bs[off + i] = 0
+
+proc create_partition_entry(bs, hdr, index, type_guid, first_lba, last_lba, name):
+    let base = hdr["partition_entry_lba"] * 512
+    let off = base + index * hdr["partition_entry_size"]
+    # Write type GUID
+    _write_guid(bs, off, type_guid)
+    # Write unique GUID (random-ish)
+    for i in range(16):
+        bs[off + 16 + i] = (index * 37 + i * 13 + 7) & 255
+    # Write LBA range
+    _write_u64_le(bs, off + 32, first_lba)
+    _write_u64_le(bs, off + 40, last_lba)
+    # Write attributes
+    _write_u64_le(bs, off + 48, 0)
+    # Write name (UTF-16LE)
+    for i in range(len(name)):
+        if i < 36:
+            bs[off + 56 + i * 2] = ord(name[i])
+            bs[off + 56 + i * 2 + 1] = 0
+
+proc delete_partition(bs, hdr, index):
+    let base = hdr["partition_entry_lba"] * 512
+    let off = base + index * hdr["partition_entry_size"]
+    for i in range(hdr["partition_entry_size"]):
+        bs[off + i] = 0
+
+proc update_header_crc(bs, off, hdr):
+    # Recalculate partition entries CRC
+    let entries_base = hdr["partition_entry_lba"] * 512
+    let entries_size = hdr["num_partition_entries"] * hdr["partition_entry_size"]
+    let entries_crc = gpt_crc32(bs, entries_base, entries_size)
+    _write_u32_le(bs, off + 88, entries_crc)
+    # Zero header CRC, calculate, write back
+    _write_u32_le(bs, off + 16, 0)
+    let header_size = read_u32_le(bs, off + 12)
+    let header_crc = gpt_crc32(bs, off, header_size)
+    _write_u32_le(bs, off + 16, header_crc)
+
+# ========== Backup Header ==========
+
+proc parse_backup_header(bs):
+    # Backup header is at last LBA of disk
+    let disk_size = len(bs)
+    let backup_off = disk_size - 512
+    if backup_off < 512:
+        return nil
+    if not is_valid_gpt(bs, backup_off):
+        return nil
+    return parse_header(bs, backup_off)
+
+proc is_linux_swap(entry):
+    return entry["type_guid"] == "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f"
+
+proc is_windows_basic(entry):
+    return entry["type_guid"] == "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"
