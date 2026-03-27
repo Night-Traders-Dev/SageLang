@@ -4,7 +4,7 @@
 
 ![SageLang Logo](assets/SageLang.jpg)
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR with runtime library, native assembly), a **self-hosted interpreter** written in Sage itself, a **Vulkan + OpenGL graphics engine** for GPU compute and rendering, and **LLVM-compiled GPU support** for native-speed 3D game engines.
+Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR with runtime library, native assembly), a **self-hosted interpreter** written in Sage itself, a **Vulkan + OpenGL graphics engine** for GPU compute and rendering, and **LLVM-compiled GPU support** for native-speed 3D game engines. As of v2.0, Sage has **optional type annotations**, **structs/enums/traits**, **pattern matching with guards**, a **formal specification**, and a **backend conformance suite**.
 
 ## Codebase Metrics
 
@@ -36,6 +36,29 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **Functions**: Define functions with `proc name(args):` with full recursion, closures, and first-class function support
 - **Control Flow**: `if`/`else`, `while`, `for` loops, `break`, `continue`, **exception handling**, `match`/`case`/`default`, and `defer`
 - **Operators**: Arithmetic (`+`, `-`, `*`, `/`), comparison (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical (`and`, `or`), bitwise (`&`, `|`, `^`, `~`, `<<`, `>>`), unary (`-`)
+
+### v2.0 Language Enhancements
+
+- **Type Annotations**: `let x: Int = 42`, `proc add(a: Int, b: Int) -> Int:`, generic types `Array[Int]`, `Dict[String, Int]`
+- **Type Checker**: `sage check file.sage` validates annotations against inferred types
+- **Struct Declarations**: `struct Point: x: Int, y: Int` with auto-init from constructor args
+- **Enum Declarations**: `enum Color: Red, Green, Blue` as tagged variant types
+- **Trait Declarations**: `trait Drawable: proc draw(self)` for interface contracts
+- **Match Guards**: `case X if condition:` for conditional pattern matching
+- **Default Parameters**: `proc connect(host, port=8080):` with flexible arity
+- **Multiline Literals**: Arrays, dicts, calls, and proc params across multiple lines with trailing commas
+- **String Escape Sequences**: `\n`, `\t`, `\r`, `\\`, `\"`, `\xHH`
+- **Hex/Octal Literals**: `0xFF`, `0o755`, `0b1010`
+- **Super Auto-Self**: `super.init(name)` instead of `super.init(self, name)`
+- **Dunder Hooks**: `__str__` for custom printing, `__eq__` for custom equality
+- **Instance Exceptions**: `raise MyError("msg")` with class instances
+- **Bytes Type**: Binary-safe `bytes()` with slice, get, set, push operations
+- **Unsafe Blocks**: `unsafe:` lexical marker for low-level code
+- **Doc Comments**: `## text` stored on functions, retrievable via `doc(fn)`
+- **Path Builtins**: `path_join`, `path_dirname`, `path_basename`, `path_ext`, `path_exists`
+- **Hash Builtin**: FNV-1a `hash()` for strings, numbers, bytes
+- **Conformance Suite**: Cross-backend testing (interpreter, C, LLVM)
+- **Stability Policy**: Semantic versioning with formal guarantees (`STABILITY.md`)
 
 ### Exception Handling ✅
 - **Try/Catch/Finally**: Full exception handling with `try:`, `catch e:`, and `finally:`
@@ -1021,9 +1044,10 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Test Suite**: 269 interpreter + 28 compiler + 88 JSON + 1567 self-hosted tests (1950+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, and GPU
 - **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64), Vulkan compute/graphics, and initial bare-metal/OSdev/UEFI target profiles
 - **Self-Hosting**: Lexer, parser, interpreter ported to Sage with full bootstrap
-- **Status**: Active development with a working self-hosted interpreter and GPU graphics library
+- **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native backends, and GPU graphics engine
 - **License**: MIT
-- **Current Version**: v1.3.0
+- **Current Version**: v2.0.0
+- **Spec Version**: 2.0 (see `STABILITY.md` for guarantees)
 
 ## 💾 Project Structure
 
