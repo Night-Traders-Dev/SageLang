@@ -57,6 +57,39 @@ Value val_string_take(char* value) {
     return v;
 }
 
+Value val_bytes(const unsigned char* data, int length) {
+    Value v;
+    v.type = VAL_BYTES;
+    v.as.bytes = gc_alloc(VAL_BYTES, sizeof(BytesValue));
+    v.as.bytes->length = length;
+    v.as.bytes->capacity = length > 0 ? length : 8;
+    v.as.bytes->data = SAGE_ALLOC(v.as.bytes->capacity);
+    if (data && length > 0) {
+        memcpy(v.as.bytes->data, data, length);
+    }
+    return v;
+}
+
+Value val_bytes_empty(int capacity) {
+    Value v;
+    v.type = VAL_BYTES;
+    v.as.bytes = gc_alloc(VAL_BYTES, sizeof(BytesValue));
+    v.as.bytes->length = 0;
+    v.as.bytes->capacity = capacity > 0 ? capacity : 8;
+    v.as.bytes->data = SAGE_ALLOC(v.as.bytes->capacity);
+    return v;
+}
+
+void bytes_push(Value* bytes_val, unsigned char byte) {
+    if (bytes_val->type != VAL_BYTES) return;
+    BytesValue* b = bytes_val->as.bytes;
+    if (b->length >= b->capacity) {
+        b->capacity = b->capacity * 2;
+        b->data = SAGE_REALLOC(b->data, b->capacity);
+    }
+    b->data[b->length++] = byte;
+}
+
 Value val_function(void* proc, Env* closure) {
     Value v;
     v.type = VAL_FUNCTION;
@@ -827,6 +860,20 @@ void print_value(Value v) {
             printf("<mutex %p>", v.as.mutex->handle);
             break;
         }
+
+        case VAL_BYTES: {
+            printf("b\"");
+            for (int i = 0; i < v.as.bytes->length; i++) {
+                unsigned char c = v.as.bytes->data[i];
+                if (c >= 32 && c < 127 && c != '"' && c != '\\') {
+                    putchar(c);
+                } else {
+                    printf("\\x%02x", c);
+                }
+            }
+            printf("\"");
+            break;
+        }
     }
     print_depth--;
 }
@@ -901,6 +948,13 @@ int values_equal(Value a, Value b) {
         }
         case VAL_CLASS:
             return a.as.class_val == b.as.class_val;
+        case VAL_BYTES: {
+            BytesValue* ba = a.as.bytes;
+            BytesValue* bb = b.as.bytes;
+            if (ba == bb) return 1;
+            if (ba->length != bb->length) return 0;
+            return memcmp(ba->data, bb->data, ba->length) == 0;
+        }
         default: return 0;
     }
 }

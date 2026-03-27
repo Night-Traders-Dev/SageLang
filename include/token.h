@@ -18,6 +18,9 @@ typedef enum {
     // Phase 1.7: Data Modeling
     TOKEN_STRUCT, TOKEN_ENUM, TOKEN_TRAIT,
 
+    // Phase 1.8: Systems Layer
+    TOKEN_UNSAFE,
+
     // Phase 8: Module System
     TOKEN_IMPORT, TOKEN_FROM, TOKEN_AS,
 

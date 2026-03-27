@@ -1304,6 +1304,12 @@ static Stmt* statement() {
     if (match(TOKEN_YIELD)) return yield_statement();
     if (match(TOKEN_DEFER)) return defer_statement();
     if (match(TOKEN_MATCH)) return match_statement();
+    // Phase 1.8: unsafe block — executes as normal block (semantic marker)
+    if (match(TOKEN_UNSAFE)) {
+        consume(TOKEN_COLON, "Expect ':' after 'unsafe'.");
+        consume(TOKEN_NEWLINE, "Expect newline after 'unsafe:'.");
+        return block();
+    }
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
 

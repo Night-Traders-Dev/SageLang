@@ -852,6 +852,130 @@ static Value ffi_sym_native(int argCount, Value* args) {
 // ========== Phase 9: Raw Memory Operations ==========
 
 // mem_alloc(size) -> pointer
+// Phase 1.8: Bytes operations
+static Value bytes_new_native(int argCount, Value* args) {
+    if (argCount == 0) return val_bytes(NULL, 0);
+    if (argCount == 1 && IS_NUMBER(args[0])) {
+        return val_bytes_empty((int)AS_NUMBER(args[0]));
+    }
+    if (argCount == 1 && args[0].type == VAL_STRING) {
+        const char* s = AS_STRING(args[0]);
+        return val_bytes((const unsigned char*)s, (int)strlen(s));
+    }
+    if (argCount == 1 && args[0].type == VAL_ARRAY) {
+        ArrayValue* arr = args[0].as.array;
+        Value b = val_bytes_empty(arr->count);
+        for (int i = 0; i < arr->count; i++) {
+            if (IS_NUMBER(arr->elements[i])) {
+                bytes_push(&b, (unsigned char)(int)AS_NUMBER(arr->elements[i]));
+            }
+        }
+        return b;
+    }
+    return val_bytes(NULL, 0);
+}
+
+static Value bytes_len_native(int argCount, Value* args) {
+    if (argCount == 1 && args[0].type == VAL_BYTES) {
+        return val_number(args[0].as.bytes->length);
+    }
+    return val_number(0);
+}
+
+static Value bytes_get_native(int argCount, Value* args) {
+    if (argCount == 2 && args[0].type == VAL_BYTES && IS_NUMBER(args[1])) {
+        int idx = (int)AS_NUMBER(args[1]);
+        BytesValue* b = args[0].as.bytes;
+        if (idx < 0) idx += b->length;
+        if (idx >= 0 && idx < b->length) {
+            return val_number(b->data[idx]);
+        }
+    }
+    return val_nil();
+}
+
+static Value bytes_set_native(int argCount, Value* args) {
+    if (argCount == 3 && args[0].type == VAL_BYTES && IS_NUMBER(args[1]) && IS_NUMBER(args[2])) {
+        int idx = (int)AS_NUMBER(args[1]);
+        BytesValue* b = args[0].as.bytes;
+        if (idx >= 0 && idx < b->length) {
+            b->data[idx] = (unsigned char)(int)AS_NUMBER(args[2]);
+        }
+    }
+    return val_nil();
+}
+
+static Value bytes_to_string_native(int argCount, Value* args) {
+    if (argCount == 1 && args[0].type == VAL_BYTES) {
+        BytesValue* b = args[0].as.bytes;
+        char* s = SAGE_ALLOC(b->length + 1);
+        memcpy(s, b->data, b->length);
+        s[b->length] = '\0';
+        return val_string_take(s);
+    }
+    return val_string("");
+}
+
+static Value bytes_slice_native(int argCount, Value* args) {
+    if (argCount >= 2 && args[0].type == VAL_BYTES && IS_NUMBER(args[1])) {
+        BytesValue* b = args[0].as.bytes;
+        int start = (int)AS_NUMBER(args[1]);
+        int end = (argCount >= 3 && IS_NUMBER(args[2])) ? (int)AS_NUMBER(args[2]) : b->length;
+        if (start < 0) start += b->length;
+        if (end < 0) end += b->length;
+        if (start < 0) start = 0;
+        if (end > b->length) end = b->length;
+        if (start >= end) return val_bytes(NULL, 0);
+        return val_bytes(b->data + start, end - start);
+    }
+    return val_bytes(NULL, 0);
+}
+
+static Value bytes_push_native(int argCount, Value* args) {
+    if (argCount == 2 && args[0].type == VAL_BYTES && IS_NUMBER(args[1])) {
+        bytes_push(&args[0], (unsigned char)(int)AS_NUMBER(args[1]));
+    }
+    return val_nil();
+}
+
+// Phase 1.8: sizeof builtin
+static Value sizeof_native(int argCount, Value* args) {
+    if (argCount != 1) return val_nil();
+    switch (args[0].type) {
+        case VAL_NUMBER: return val_number(sizeof(double));
+        case VAL_BOOL: return val_number(sizeof(int));
+        case VAL_STRING: return val_number(strlen(AS_STRING(args[0])));
+        case VAL_BYTES: return val_number(args[0].as.bytes->length);
+        case VAL_ARRAY: return val_number(args[0].as.array->count);
+        case VAL_DICT: return val_number(args[0].as.dict->count);
+        case VAL_POINTER: return val_number(args[0].as.pointer->size);
+        default: return val_number(sizeof(Value));
+    }
+}
+
+// Phase 1.8: Pointer arithmetic
+static Value ptr_add_native(int argCount, Value* args) {
+    if (argCount == 2 && args[0].type == VAL_POINTER && IS_NUMBER(args[1])) {
+        PointerValue* p = args[0].as.pointer;
+        int offset = (int)AS_NUMBER(args[1]);
+        Value v;
+        v.type = VAL_POINTER;
+        v.as.pointer = gc_alloc(VAL_POINTER, sizeof(PointerValue));
+        v.as.pointer->ptr = (char*)p->ptr + offset;
+        v.as.pointer->size = (p->size > (size_t)offset) ? p->size - offset : 0;
+        v.as.pointer->owned = 0;
+        return v;
+    }
+    return val_nil();
+}
+
+static Value ptr_to_int_native(int argCount, Value* args) {
+    if (argCount == 1 && args[0].type == VAL_POINTER) {
+        return val_number((double)(uintptr_t)args[0].as.pointer->ptr);
+    }
+    return val_nil();
+}
+
 static Value mem_alloc_native(int argCount, Value* args) {
     if (argCount != 1 || !IS_NUMBER(args[0])) {
         fprintf(stderr, "mem_alloc() expects (number).\n");
@@ -1644,6 +1768,20 @@ void init_stdlib(Env* env) {
     env_define(env, "ffi_call", 8, val_native(ffi_call_native));
     env_define(env, "ffi_sym", 7, val_native(ffi_sym_native));
 #endif
+
+    // Phase 1.8: Bytes operations
+    env_define(env, "bytes", 5, val_native(bytes_new_native));
+    env_define(env, "bytes_len", 9, val_native(bytes_len_native));
+    env_define(env, "bytes_get", 9, val_native(bytes_get_native));
+    env_define(env, "bytes_set", 9, val_native(bytes_set_native));
+    env_define(env, "bytes_to_string", 15, val_native(bytes_to_string_native));
+    env_define(env, "bytes_slice", 11, val_native(bytes_slice_native));
+    env_define(env, "bytes_push", 10, val_native(bytes_push_native));
+
+    // Phase 1.8: sizeof and pointer arithmetic
+    env_define(env, "sizeof", 6, val_native(sizeof_native));
+    env_define(env, "ptr_add", 7, val_native(ptr_add_native));
+    env_define(env, "ptr_to_int", 10, val_native(ptr_to_int_native));
 
     // Phase 9: Memory operations
     env_define(env, "mem_alloc", 9, val_native(mem_alloc_native));

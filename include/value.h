@@ -122,6 +122,13 @@ typedef struct {
     void* handle;       // pthread_mutex_t* (opaque)
 } MutexValue;
 
+// Phase 1.8: Binary-safe byte buffer
+typedef struct {
+    unsigned char* data;
+    int length;
+    int capacity;
+} BytesValue;
+
 typedef enum {
     VAL_NUMBER,
     VAL_BOOL,
@@ -140,7 +147,8 @@ typedef enum {
     VAL_CLIB,      // Phase 9: FFI library handle
     VAL_POINTER,   // Phase 9: Raw memory pointer
     VAL_THREAD,    // Phase 11: Thread handle
-    VAL_MUTEX      // Phase 11: Mutex handle
+    VAL_MUTEX,     // Phase 11: Mutex handle
+    VAL_BYTES      // Phase 1.8: Binary-safe byte buffer
 } ValueType;
 
 struct Value {
@@ -163,6 +171,7 @@ struct Value {
         PointerValue* pointer;  // Phase 9: Raw memory pointer
         ThreadValue* thread;    // Phase 11: Thread handle
         MutexValue* mutex;      // Phase 11: Mutex handle
+        BytesValue* bytes;      // Phase 1.8: Binary-safe byte buffer
     } as;
 };
 
@@ -214,6 +223,9 @@ Value val_bool(int value);
 Value val_nil();
 Value val_string(const char* value);
 Value val_string_take(char* value);
+Value val_bytes(const unsigned char* data, int length);
+Value val_bytes_empty(int capacity);
+void bytes_push(Value* bytes_val, unsigned char byte);
 Value val_native(NativeFn fn);
 Value val_function(void* proc, Env* closure); // ✅ CHANGED: Added closure parameter
 Value val_bytecode_function(BytecodeFunction* function, Env* closure);

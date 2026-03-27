@@ -19,5 +19,5 @@ print safe["safe"]
 print sandbox.eval_math("3 + 4")
 
 # Unsafe code
-let unsafe = sandbox.is_safe("ffi_open(lib)")
-print unsafe["safe"]
+let unsafe_result = sandbox.is_safe("ffi_open(lib)")
+print unsafe_result["safe"]
