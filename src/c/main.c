@@ -25,6 +25,8 @@
 #include "program.h"
 #include "runtime.h"
 #include "vm.h"
+#include "jit.h"
+#include "aot.h"
 
 extern Environment* g_global_env;
 extern Stmt* parse_program(const char* source, const char* input_path);
@@ -1945,6 +1947,65 @@ int main(int argc, const char* argv[]) {
     } else if (cmd_argc == 2 && strcmp(cmd_argv[1], "--lsp") == 0) {
         // Phase 12: Language Server Protocol mode
         lsp_run();
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--jit") == 0) {
+        // JIT mode: interpret with profiling, compile hot functions
+        const char* jit_file = cmd_argv[2];
+        module_add_source_dir(jit_file);
+        char* source = read_file(jit_file);
+        if (!source) { CLEANUP_AND_EXIT(74); }
+
+        JitState jit;
+        jit_init(&jit);
+        fprintf(stderr, "JIT: Enabled (threshold=%d calls, pool=%zuKB)\n",
+                JIT_HOT_THRESHOLD, jit.pool.capacity / 1024);
+
+        // Run with interpreter (JIT profiling active)
+        run(source, jit_file, runtime_mode);
+
+        fprintf(stderr, "JIT: %d functions compiled, %d bailouts\n",
+                jit.total_compiled, jit.total_bailouts);
+        jit_shutdown(&jit);
+        free(source);
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--aot") == 0) {
+        // AOT mode: compile to optimized native binary
+        const char* aot_file = cmd_argv[2];
+        char* source = read_file(aot_file);
+        if (!source) { CLEANUP_AND_EXIT(74); }
+
+        init_lexer(source, aot_file);
+        Stmt* ast = parse_program(source, aot_file);
+        if (!ast) { free(source); CLEANUP_AND_EXIT(1); }
+
+        // Determine output path
+        const char* out_path = NULL;
+        for (int i = 3; i < cmd_argc - 1; i++) {
+            if (strcmp(cmd_argv[i], "-o") == 0) out_path = cmd_argv[i + 1];
+        }
+
+        AotCompiler aot;
+        aot_init(&aot, 2); // -O2 default
+        char* c_code = aot_compile_program(&aot, ast);
+
+        if (out_path) {
+            // Write C and compile to binary
+            char c_path[512];
+            snprintf(c_path, sizeof(c_path), "%s.c", out_path);
+            FILE* f = fopen(c_path, "w");
+            if (f) { fputs(c_code, f); fclose(f); }
+            if (aot_compile_to_binary(&aot, c_path, out_path)) {
+                fprintf(stderr, "AOT: Compiled %s → %s (type-specialized)\n", aot_file, out_path);
+                unlink(c_path);
+            } else {
+                fprintf(stderr, "AOT: Compilation failed\n");
+            }
+        } else {
+            // Just print the C code
+            fputs(c_code, stdout);
+        }
+
+        free(c_code);
+        aot_free(&aot);
+        free(source);
     } else if (cmd_argc >= 2) {
         // File mode (extra args accessible via sys.args())
         module_add_source_dir(cmd_argv[1]);  // Add source file's dir to search paths

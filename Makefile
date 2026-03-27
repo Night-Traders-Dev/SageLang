@@ -113,7 +113,9 @@ CORE_SOURCES = \
     $(SRC_DIR)/value.c \
     $(SRC_DIR)/graphics.c \
     $(SRC_DIR)/gpu_api.c \
-    $(SRC_DIR)/ml_backend.c
+    $(SRC_DIR)/ml_backend.c \
+    $(SRC_DIR)/jit.c \
+    $(SRC_DIR)/aot.c
 
 VM_SOURCES = \
     $(VM_DIR)/bytecode.c \
