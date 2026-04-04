@@ -110,6 +110,18 @@ static Value tonumber_native(int argCount, Value* args) {
     return val_nil();
 }
 
+// PHASE 7: int() function for number-to-int conversion
+static Value int_native(int argCount, Value* args) {
+    if (argCount != 1) return val_nil();
+    if (IS_NUMBER(args[0])) {
+        return val_number((double)(long long)AS_NUMBER(args[0]));
+    }
+    if (IS_STRING(args[0])) {
+        return val_number((double)(long long)strtod(AS_STRING(args[0]), NULL));
+    }
+    return val_nil();
+}
+
 // PHASE 7: str() function for number-to-string conversion
 static Value str_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
@@ -1834,6 +1846,7 @@ void init_stdlib(Env* env) {
     env_define(env, "clock", 5, val_native(clock_native));
     env_define(env, "input", 5, val_native(input_native));
     env_define(env, "tonumber", 8, val_native(tonumber_native));
+    env_define(env, "int", 3, val_native(int_native));
     env_define(env, "str", 3, val_native(str_native));
     env_define(env, "len", 3, val_native(len_native));
     

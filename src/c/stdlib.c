@@ -80,6 +80,10 @@ static Value math_atan2_native(int argCount, Value* args) {
     return val_number(atan2(AS_NUMBER(args[0]), AS_NUMBER(args[1])));
 }
 
+static Value math_random_native(int argCount, Value* args) {
+    return val_number((double)rand() / (double)RAND_MAX);
+}
+
 static Value math_sqrt_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_NUMBER(args[0])) return val_nil();
     return val_number(sqrt(AS_NUMBER(args[0])));
@@ -201,10 +205,14 @@ Module* create_math_module(ModuleCache* cache) {
 
     // Constants
     env_define(e, "pi", 2, val_number(3.14159265358979323846));
+    env_define(e, "PI", 2, val_number(3.14159265358979323846));  // Uppercase alias
     env_define(e, "e", 1, val_number(2.71828182845904523536));
     env_define(e, "inf", 3, val_number(INFINITY));
     env_define(e, "nan", 3, val_number(NAN));
     env_define(e, "tau", 3, val_number(6.28318530717958647692));
+
+    // Random
+    env_define(e, "random", 6, val_native(math_random_native));
 
     return m;
 }
