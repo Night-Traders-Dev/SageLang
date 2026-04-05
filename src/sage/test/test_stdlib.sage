@@ -177,7 +177,7 @@ assert_eq(stdlib.io_exists("/tmp/sage_test_nonexistent_file_xyz.txt"), false, "i
 # ============================================================================
 
 let sys = stdlib.create_sys_module()
-assert_eq(sys["version"], "0.10.0", "sys.version")
+assert_eq(sys["version"], "2.1.0", "sys.version")
 assert_eq(sys["platform"], "sage", "sys.platform")
 
 # ============================================================================

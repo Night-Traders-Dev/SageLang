@@ -511,7 +511,7 @@ proc get_initialize_result():
     result = result + "},"
     result = result + dq + "serverInfo" + dq + ":{"
     result = result + dq + "name" + dq + ":" + dq + "sage-lsp" + dq + ","
-    result = result + dq + "version" + dq + ":" + dq + "0.1.0" + dq
+    result = result + dq + "version" + dq + ":" + dq + "2.1.0" + dq
     result = result + "}"
     result = result + "}"
     return result

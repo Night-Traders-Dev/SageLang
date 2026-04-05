@@ -867,7 +867,7 @@ static void handle_initialize(const char* json, RequestId rid) {
         "},"
         "\"serverInfo\":{"
             "\"name\":\"sage-lsp\","
-            "\"version\":\"0.1.0\""
+            "\"version\":\"" SAGE_VERSION_STR "\""
         "}"
         "}";
 

@@ -121,6 +121,7 @@ set(SAGE_CORE_SOURCES
     src/c/sage_thread.c
     src/c/stdlib.c
     src/c/typecheck.c
+    src/c/safety.c
     src/c/value.c
     src/c/graphics.c
     src/c/gpu_api.c
