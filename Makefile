@@ -110,6 +110,7 @@ CORE_SOURCES = \
     $(SRC_DIR)/sage_thread.c \
     $(SRC_DIR)/stdlib.c \
     $(SRC_DIR)/typecheck.c \
+    $(SRC_DIR)/safety.c \
     $(SRC_DIR)/value.c \
     $(SRC_DIR)/graphics.c \
     $(SRC_DIR)/gpu_api.c \
@@ -150,6 +151,7 @@ HEADERS = \
     $(INC_DIR)/token.h \
     $(INC_DIR)/sage_thread.h \
     $(INC_DIR)/typecheck.h \
+    $(INC_DIR)/safety.h \
     $(INC_DIR)/value.h \
     $(INC_DIR)/graphics.h \
     $(INC_DIR)/gpu_api.h

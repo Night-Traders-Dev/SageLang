@@ -321,9 +321,11 @@ extern Stmt* pass_typecheck(Stmt* program, PassContext* ctx);
 extern Stmt* pass_constfold(Stmt* program, PassContext* ctx);
 extern Stmt* pass_dce(Stmt* program, PassContext* ctx);
 extern Stmt* pass_inline(Stmt* program, PassContext* ctx);
+extern Stmt* pass_safety(Stmt* program, PassContext* ctx);
 
 static PassEntry g_passes[] = {
     { "typecheck",  pass_typecheck, 0 },  // always run type inference
+    { "safety",     pass_safety,    0 },  // always run safety analysis
     { "constfold",  pass_constfold, 1 },  // -O1+
     { "dce",        pass_dce,       2 },  // -O2+
     { "inline",     pass_inline,    3 },  // -O3 only

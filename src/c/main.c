@@ -22,6 +22,7 @@
 #include "linter.h"
 #include "lsp.h"
 #include "typecheck.h"
+#include "safety.h"
 #include "program.h"
 #include "runtime.h"
 #include "vm.h"
@@ -84,6 +85,8 @@ static void print_usage(FILE* stream) {
             "       sage fmt --check <file>  Check if file is already formatted\n"
             "       sage lint <file>         Lint a Sage source file\n"
             "       sage check <file>        Type check a Sage source file\n"
+            "       sage safety <file>       Run safety analysis (ownership, borrows, lifetimes)\n"
+            "       sage --strict-safety <file>  Run with strict safety enforcement\n"
             "       sage --lsp              Start LSP server (stdin/stdout)\n");
 }
 
@@ -1935,6 +1938,40 @@ int main(int argc, const char* argv[]) {
             printf("Type check complete.\n");
         }
         free(check_source);
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "safety") == 0) {
+        // Safety analysis: ownership, borrow checking, lifetimes
+        const char* safety_file_path = cmd_argv[2];
+        char* safety_source = read_file(safety_file_path);
+        if (!safety_source) { CLEANUP_AND_EXIT(74); }
+        init_lexer(safety_source, safety_file_path);
+        Stmt* safety_ast = parse_program(safety_source, safety_file_path);
+        if (safety_ast) {
+            int mode = SAFETY_MODE_STRICT; // safety subcommand always strict
+            if (!safety_analyze(safety_ast, mode, safety_file_path)) {
+                free(safety_source);
+                CLEANUP_AND_EXIT(1);
+            }
+            printf("Safety analysis complete: no issues found.\n");
+        }
+        free(safety_source);
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--strict-safety") == 0) {
+        // Run file with strict safety enforcement
+        const char* ss_file_path = cmd_argv[2];
+        module_add_source_dir(ss_file_path);
+        char* ss_source = read_file(ss_file_path);
+        if (!ss_source) { CLEANUP_AND_EXIT(74); }
+        init_lexer(ss_source, ss_file_path);
+        Stmt* ss_ast = parse_program(ss_source, ss_file_path);
+        if (ss_ast) {
+            if (!safety_analyze(ss_ast, SAFETY_MODE_STRICT, ss_file_path)) {
+                fprintf(stderr, "Aborting due to safety errors.\n");
+                free(ss_source);
+                CLEANUP_AND_EXIT(1);
+            }
+        }
+        // Safety passed — run the file normally
+        run(ss_source, ss_file_path, runtime_mode);
+        free(ss_source);
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "lint") == 0) {
         // Phase 12: Code linter
         const char* lint_file_path = cmd_argv[2];
