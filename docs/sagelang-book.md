@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "April 2026"
-version: "v3.1.0"
+version: "v3.1.1"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v3.1.0}
+  - \fancyfoot[C]{v3.1.1}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -1289,7 +1289,7 @@ system but are not enforced at runtime by the interpreter.
 
 # The Safety System
 
-Sage v3.1.0 includes a compile-time safety system inspired by Rust. It provides
+Sage v3.1.1 includes a compile-time safety system inspired by Rust. It provides
 ownership tracking, borrow checking, lifetime analysis, Option type enforcement,
 and fearless concurrency checks.
 
@@ -2181,7 +2181,7 @@ make kernel-uefi      # Compile UEFI application
 
 The version is stored in a single `VERSION` file at the repository root.
 All build systems (Makefile, CMakeLists.txt, build.sh, sagemake) read from
-this file automatically. Current version: **3.1.0**.
+this file automatically. Current version: **3.1.1**.
 
 \newpage
 

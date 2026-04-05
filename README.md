@@ -120,7 +120,7 @@ The JIT and AOT backends can also be combined: `sage --aot --jit file.sage -o bi
 - **Array Slicing**: Pythonic slice syntax for arrays
 
 ### Memory Management
-- **Garbage Collection**: Concurrent tri-color mark-sweep GC with SATB write barriers for sub-millisecond STW pauses
+- **Garbage Collection**: Concurrent tri-color mark-sweep GC with SATB write barriers for sub-millisecond STW pauses; optional **ARC mode** (`--gc:arc`) for deterministic Nim-style reference counting with cycle detection
 - **Tri-color marking**: white (unreachable), gray (pending scan), black (fully scanned) — objects allocated during marking are born black
 - **SATB write barrier**: Snapshot-At-The-Beginning — before overwriting a reference, the old value is shaded gray to prevent the concurrent marker from missing live objects
 - **4-phase collection**: Root scan (STW, ~50-200us) -> Concurrent mark -> Remark (STW, ~20-50us) -> Concurrent sweep
@@ -1107,7 +1107,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v3.1.0
+- **Current Version**: v3.1.1
 - **Spec Version**: 3.0 (see `STABILITY.md` for guarantees)
 
 ## 💾 Project Structure

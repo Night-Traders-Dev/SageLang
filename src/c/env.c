@@ -44,8 +44,12 @@ void env_define(Env* env, const char* name, int length, Value value) {
     EnvNode* current = env->head;
     while (current != NULL) {
         if (strncmp(current->name, name, length) == 0 && current->name[length] == '\0') {
-            GC_WRITE_BARRIER(current->value);  // SATB: shade old value before overwrite
-            current->value = value;
+            if (gc.mode == GC_MODE_ARC) {
+                arc_assign_value(&current->value, value);
+            } else {
+                GC_WRITE_BARRIER(current->value);
+                current->value = value;
+            }
             return;
         }
         current = current->next;
@@ -87,8 +91,12 @@ int env_assign(Env* env, const char* name, int length, Value value) {
         EnvNode* current = current_env->head;
         while (current != NULL) {
             if (strncmp(current->name, name, length) == 0 && current->name[length] == '\0') {
-                GC_WRITE_BARRIER(current->value);  // SATB: shade old value before overwrite
-                current->value = value;
+                if (gc.mode == GC_MODE_ARC) {
+                    arc_assign_value(&current->value, value);
+                } else {
+                    GC_WRITE_BARRIER(current->value);
+                    current->value = value;
+                }
                 return 1; // Found and updated
             }
             current = current->next;

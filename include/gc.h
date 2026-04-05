@@ -24,7 +24,7 @@
 
 static inline void* sage_safe_malloc(size_t size, const char* file, int line) {
     if (size == 0) size = 1;
-    void* ptr = malloc(size);
+    void* ptr = calloc(1, size);
     if (ptr == NULL) {
         fprintf(stderr, "Fatal: Out of memory allocating %zu bytes at %s:%d\n", size, file, line);
         abort();
@@ -68,13 +68,24 @@ static inline char* sage_safe_strdup(const char* str, const char* file, int line
 #define GC_PHASE_REMARK         3  // STW: process barrier-shaded objects (brief)
 #define GC_PHASE_SWEEP          4  // Concurrent: free white objects
 
+// GC modes
+#define GC_MODE_TRACING  0   // Default: concurrent tri-color mark-sweep
+#define GC_MODE_ARC      1   // Nim-style ARC: reference counting + cycle collector
+
 // GC object header (prepended to all allocated objects)
+// IMPORTANT: Do not change this struct layout — it affects heap alignment for all allocations.
 typedef struct {
     int color;            // Tri-color: GC_WHITE, GC_GRAY, GC_BLACK
     int type;             // Object type (VAL_STRING, VAL_ARRAY, etc.)
     size_t size;          // Bytes owned directly by this object payload
     void* next;           // Next object in linked list
 } GCHeader;
+
+// ARC metadata stored in a separate side-table (avoids changing GCHeader size)
+typedef struct ARCMeta {
+    int ref_count;        // Reference count
+    int buffered;         // In cycle candidate buffer
+} ARCMeta;
 
 // Backward compat: "marked" maps to color != WHITE
 #define gc_header_marked(h) ((h)->color != GC_WHITE)
@@ -131,6 +142,16 @@ typedef struct {
     // Sweep cursor for incremental sweep
     void* sweep_cursor;         // Current position in object list during sweep
     void** sweep_prev;          // Pointer to previous node's next field
+
+    // ARC mode state
+    int mode;                   // GC_MODE_TRACING or GC_MODE_ARC
+    void** cycle_buffer;        // Trial deletion candidates for cycle collection
+    int cycle_buffer_count;
+    int cycle_buffer_capacity;
+    int arc_decrements;         // Decrements since last cycle collection
+    int arc_cycle_threshold;    // Trigger cycle collection after N decrements
+    // ARC side-table: maps GCHeader* → ARCMeta (simple linked list for now)
+    void* arc_table;            // Hash table of ARCMeta entries
 } GC;
 
 // Global GC instance
@@ -214,5 +235,36 @@ void gc_disable_debug(void);
 GCStats gc_get_stats(void);
 void gc_enable(void);
 void gc_disable(void);
+
+// ============================================================================
+// ARC Mode (Nim-style Automatic Reference Counting)
+// ============================================================================
+// When gc.mode == GC_MODE_ARC, objects are freed deterministically when
+// their reference count drops to zero. A cycle collector runs periodically
+// to handle reference cycles (like Nim's --gc:arc with --cycleCollector:markAndSweep).
+
+// Set GC mode (call before any allocations, typically from --gc:arc flag)
+void gc_set_mode(int mode);
+
+// ARC reference counting operations
+void arc_register(void* obj);         // Register object in ARC side-table (ref_count=1)
+void arc_retain(void* obj);           // Increment ref count
+void arc_release(void* obj);          // Decrement ref count, free if zero
+void arc_assign(void** slot, void* new_obj);  // Atomic assign: retain new, release old
+
+// ARC-aware value assignment: handles retain/release for heap-allocated values
+void arc_assign_value(Value* slot, Value new_val);
+
+// ARC cycle collector (trial deletion / mark-and-sweep hybrid)
+void arc_collect_cycles(void);        // Run cycle detection on buffered suspects
+void arc_add_candidate(void* obj);    // Add potential cycle root to buffer
+void arc_force_cycle_collection(void); // Force immediate cycle collection
+
+// ARC convenience macros
+#define ARC_RETAIN(obj) do { if (gc.mode == GC_MODE_ARC && (obj) != NULL) arc_retain(obj); } while(0)
+#define ARC_RELEASE(obj) do { if (gc.mode == GC_MODE_ARC && (obj) != NULL) arc_release(obj); } while(0)
+#define ARC_ASSIGN(slot, new_obj) \
+    do { if (gc.mode == GC_MODE_ARC) arc_assign((void**)(slot), (void*)(new_obj)); \
+         else *(slot) = (new_obj); } while(0)
 
 #endif // SAGELANG_GC_H
