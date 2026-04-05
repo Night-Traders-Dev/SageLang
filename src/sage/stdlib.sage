@@ -13,12 +13,55 @@ import io
 # Math Module
 # ============================================================================
 
+# Random number generation (Linear Congruential Generator)
+let _random_seed = 123456789
+
+proc _random_next():
+    # LCG parameters: a=1664525, c=1013904223, m=2^32
+    _random_seed = (_random_seed * 1664525 + 1013904223) % 4294967296
+    return _random_seed
+
+proc math_random():
+    return _random_next() / 4294967296.0
+
+proc math_random_range(min_val, max_val):
+    return min_val + math_random() * (max_val - min_val)
+
+proc math_random_int(min_val, max_val):
+    return math_floor(math_random_range(min_val, max_val + 1))
+
 proc create_math_module():
     let m = {}
+    # Constants
     m["pi"] = 3.14159265358979323846
+    m["PI"] = 3.14159265358979323846  # Uppercase alias
     m["e"] = 2.71828182845904523536
     m["tau"] = 6.28318530717958647692
     m["inf"] = 1.0 / 0.0
+    
+    # Functions
+    m["abs"] = math_abs
+    m["min"] = math_min
+    m["max"] = math_max
+    m["clamp"] = math_clamp
+    m["floor"] = math_floor
+    m["ceil"] = math_ceil
+    m["round"] = math_round
+    m["fmod"] = math_fmod
+    m["pow"] = math_pow
+    m["sqrt"] = math_sqrt
+    m["log"] = math_log
+    m["log10"] = math_log10
+    m["exp"] = math_exp
+    m["sin"] = math_sin
+    m["cos"] = math_cos
+    m["tan"] = math_tan
+    
+    # Random number generation
+    m["random"] = math_random
+    m["random_range"] = math_random_range
+    m["random_int"] = math_random_int
+    
     return m
 
 # Helper: extract integer part from a float via string truncation

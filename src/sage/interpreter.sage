@@ -417,6 +417,30 @@ proc call_native(name, args):
         return mem_size(args[0])
     if name == "addressof":
         return addressof(args[0])
+    if name == "int":
+        let x = args[0]
+        if type(x) == "number":
+            let s = str(x)
+            let dot_pos = -1
+            let i = 0
+            while i < len(s):
+                if s[i] == ".":
+                    dot_pos = i
+                    break
+                i = i + 1
+            if dot_pos == -1:
+                return x
+            let int_part = ""
+            i = 0
+            while i < dot_pos:
+                int_part = int_part + s[i]
+                i = i + 1
+            if int_part == "" or int_part == "-":
+                return 0
+            return tonumber(int_part)
+        if type(x) == "string":
+            return tonumber(x)
+        return 0
     runtime_error(-1, "Unknown native function: " + name, nil)
 
 # -----------------------------------------
@@ -477,6 +501,8 @@ proc init_builtins(env):
     register_native(env, "mem_write", 4)
     register_native(env, "mem_size", 1)
     register_native(env, "addressof", 1)
+    # Math functions
+    register_native(env, "int", 1)
 
 # -----------------------------------------
 # Expression evaluation
@@ -1121,6 +1147,12 @@ proc exec_stmt(stmt, env):
     # --- Import ---
     if stype == STMT_IMPORT:
         let mod_name = stmt.module_name.text
+        # Check stdlib modules first
+        from stdlib import get_stdlib_module, is_stdlib_module
+        if is_stdlib_module(mod_name):
+            let mod_env = get_stdlib_module(mod_name)
+            import_bind(stmt, mod_name, {"vals": mod_env}, env)
+            return result_normal(nil)
         # Check module cache first
         if dict_has(g_module_cache, mod_name):
             let mod_env = g_module_cache[mod_name]
@@ -1249,6 +1281,9 @@ proc exec_program(global_env, stmts):
 proc new_interpreter():
     let genv = env_new(nil)
     init_builtins(genv)
+    # Initialize stdlib registry
+    from stdlib import init_stdlib
+    init_stdlib()
     return genv
 
 # -----------------------------------------
