@@ -935,8 +935,15 @@ static Stmt* block() {
         parser_report(current_token, 1, message,
                       "reduce the depth of nested blocks");
     }
+    // Allow 'end' to immediately close an empty block (no indented body)
+    while (check(TOKEN_NEWLINE)) match(TOKEN_NEWLINE);
+    if (check(TOKEN_END)) {
+        match(TOKEN_END);
+        parser_depth--;
+        return new_block_stmt(NULL);
+    }
     consume(TOKEN_INDENT, "Expect indentation after block start.");
-    
+
     Stmt* head = NULL;
     Stmt* current = NULL;
 
@@ -946,7 +953,7 @@ static Stmt* block() {
         }
 
         Stmt* stmt = declaration();
-        
+
         if (head == NULL) {
             head = stmt;
             current = head;

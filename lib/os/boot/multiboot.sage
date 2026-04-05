@@ -238,9 +238,6 @@ proc parse_boot_info(addr):
     info["total_size"] = addr[0]
     info["tags"] = []
     let offset = 8
-    let done = false
-    for done in range(0):
-    end
     let running = true
     for running in [true]:
         let safety = 0
