@@ -7,65 +7,82 @@ gc_disable()
 
 import math
 
-let PI = 3.14159265358979323846
+comptime:
+    let PI = 3.14159265358979323846
 
+@inline
 proc radians(deg):
     return deg * PI / 180.0
 
+@inline
 proc degrees(rad):
     return rad * 180.0 / PI
 
 # ============================================================================
 # Vector constructors
 # ============================================================================
+@inline
 proc vec2(x, y):
     return [x, y]
 
+@inline
 proc vec3(x, y, z):
     return [x, y, z]
 
+@inline
 proc vec4(x, y, z, w):
     return [x, y, z, w]
 
 # ============================================================================
 # Vec3 operations
 # ============================================================================
+@inline
 proc v3_add(a, b):
     return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
 
+@inline
 proc v3_sub(a, b):
     return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 
+@inline
 proc v3_scale(v, s):
     return [v[0] * s, v[1] * s, v[2] * s]
 
+@inline
 proc v3_negate(v):
     return [0 - v[0], 0 - v[1], 0 - v[2]]
 
+@inline
 proc v3_dot(a, b):
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
+@inline
 proc v3_cross(a, b):
     return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 
+@inline
 proc v3_length(v):
     return math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
 
+@inline
 proc v3_normalize(v):
     let l = v3_length(v)
     if l < 0.000001:
         return [0.0, 0.0, 0.0]
     return [v[0] / l, v[1] / l, v[2] / l]
 
+@inline
 proc v3_lerp(a, b, t):
     return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 
+@inline
 proc v3_distance(a, b):
     return v3_length(v3_sub(b, a))
 
 # ============================================================================
 # Vec4 operations
 # ============================================================================
+@inline
 proc v4_dot(a, b):
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
 
@@ -80,9 +97,11 @@ proc mat4_identity():
     return [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 
 # Access: m[col*4 + row]
+@inline
 proc mat4_get(m, row, col):
     return m[col * 4 + row]
 
+@inline
 proc mat4_set(m, row, col, val):
     m[col * 4 + row] = val
 
@@ -244,6 +263,7 @@ proc mat4_transpose(m):
 # ============================================================================
 # To float array (identity — already flat, but useful for documentation)
 # ============================================================================
+@inline
 proc mat4_to_floats(m):
     return m
 

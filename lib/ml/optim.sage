@@ -28,6 +28,7 @@ proc sgd(params, lr):
     opt["velocities"] = velocities
     return opt
 
+@inline
 proc sgd_with_momentum(params, lr, momentum):
     let opt = sgd(params, lr)
     opt["momentum"] = momentum
@@ -65,10 +66,15 @@ proc adam(params, lr):
     opt["type"] = "adam"
     opt["params"] = params
     opt["lr"] = lr
-    opt["beta1"] = 0.9
-    opt["beta2"] = 0.999
-    opt["eps"] = 0.00000001
-    opt["weight_decay"] = 0
+    comptime:
+        let ADAM_BETA1 = 0.9
+        let ADAM_BETA2 = 0.999
+        let ADAM_EPS = 0.00000001
+        let ADAM_WEIGHT_DECAY = 0
+    opt["beta1"] = ADAM_BETA1
+    opt["beta2"] = ADAM_BETA2
+    opt["eps"] = ADAM_EPS
+    opt["weight_decay"] = ADAM_WEIGHT_DECAY
     opt["step_count"] = 0
     # First and second moment buffers
     let m_bufs = []
@@ -119,6 +125,7 @@ proc adam_step(opt):
 # General step dispatch
 # ============================================================================
 
+@inline
 proc step(opt):
     if opt["type"] == "sgd":
         sgd_step(opt)

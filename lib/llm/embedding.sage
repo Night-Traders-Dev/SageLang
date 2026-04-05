@@ -118,6 +118,7 @@ proc add_position(token_embs, pos_enc, seq_len):
     return result
 
 # Get position IDs for a sequence
+@inline
 proc position_ids(seq_len, offset):
     let ids = []
     for i in range(seq_len):

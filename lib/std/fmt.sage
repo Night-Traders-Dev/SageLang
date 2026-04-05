@@ -19,6 +19,7 @@ proc pad_right(s, width, ch):
     return result
 
 # Format integer with comma separators: 1000000 -> "1,000,000"
+@inline
 proc format_int(n):
     let s = str(n)
     let neg = false
@@ -46,6 +47,7 @@ proc format_int(n):
     return result
 
 # Format float with fixed decimal places
+@inline
 proc format_float(n, decimals):
     let int_part = n | 0
     let frac = n - int_part
@@ -59,6 +61,7 @@ proc format_float(n, decimals):
     return result
 
 # Format as percentage
+@inline
 proc format_pct(n, decimals):
     return format_float(n * 100, decimals) + "%"
 
@@ -92,6 +95,7 @@ proc format_duration(secs):
 # Hex formatting
 # ============================================================================
 
+@inline
 proc to_hex(n, width):
     let digits = "0123456789abcdef"
     let result = ""
@@ -103,6 +107,7 @@ proc to_hex(n, width):
         val = val >> 4
     return "0x" + pad_left(result, width, "0")
 
+@inline
 proc to_bin(n, width):
     let result = ""
     let val = n
@@ -116,6 +121,7 @@ proc to_bin(n, width):
         val = val >> 1
     return "0b" + pad_left(result, width, "0")
 
+@inline
 proc to_oct(n):
     let result = ""
     let val = n

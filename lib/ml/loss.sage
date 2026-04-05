@@ -157,11 +157,13 @@ proc kl_divergence(p_dist, q_dist):
 # ============================================================================
 
 # Accelerated cross-entropy via gpu_accel (uses native C backend)
+@inline
 proc cross_entropy_accel(ctx, logits, targets, batch, vocab):
     import ml.gpu_accel
     return gpu_accel.cross_entropy(ctx, logits, targets, batch, vocab)
 
 # Accelerated softmax via gpu_accel
+@inline
 proc softmax_accel(ctx, x, n):
     import ml.gpu_accel
     return gpu_accel.softmax(ctx, x, n)

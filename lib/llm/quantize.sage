@@ -18,16 +18,19 @@ proc quantize_int8(weights):
             abs_val = 0 - abs_val
         if abs_val > max_abs:
             max_abs = abs_val
-    let scale = max_abs / 127
-    if scale < 0.0000001:
-        scale = 0.0000001
+    comptime:
+        let INT8_MAX = 127
+        let SCALE_EPS = 0.0000001
+    let scale = max_abs / INT8_MAX
+    if scale < SCALE_EPS:
+        scale = SCALE_EPS
     let quantized = []
     for i in range(len(weights)):
         let q = (weights[i] / scale + 0.5) | 0
-        if q > 127:
-            q = 127
-        if q < -127:
-            q = -127
+        if q > INT8_MAX:
+            q = INT8_MAX
+        if q < -INT8_MAX:
+            q = -INT8_MAX
         push(quantized, q)
     let result = {}
     result["values"] = quantized
@@ -68,16 +71,19 @@ proc quantize_int4(weights, group_size):
                 abs_val = 0 - abs_val
             if abs_val > max_abs:
                 max_abs = abs_val
-        let scale = max_abs / 7
-        if scale < 0.0000001:
-            scale = 0.0000001
+        comptime:
+            let INT4_MAX = 7
+            let SCALE_EPS = 0.0000001
+        let scale = max_abs / INT4_MAX
+        if scale < SCALE_EPS:
+            scale = SCALE_EPS
         push(scales, scale)
         for i in range(end_idx - start):
             let q = (weights[start + i] / scale + 0.5) | 0
-            if q > 7:
-                q = 7
-            if q < -7:
-                q = -7
+            if q > INT4_MAX:
+                q = INT4_MAX
+            if q < -INT4_MAX:
+                q = -INT4_MAX
             push(quantized, q)
     let result = {}
     result["values"] = quantized
@@ -129,15 +135,19 @@ proc quantization_error(original, reconstructed):
 # Model size estimation
 # ============================================================================
 
+@inline
 proc model_size_fp32(param_count):
     return param_count * 4
 
+@inline
 proc model_size_fp16(param_count):
     return param_count * 2
 
+@inline
 proc model_size_int8(param_count):
     return param_count + (param_count / 128) * 4
 
+@inline
 proc model_size_int4(param_count):
     return (param_count / 2) | 0 + (param_count / 32) * 4
 

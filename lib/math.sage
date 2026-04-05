@@ -1,32 +1,47 @@
+# math.sage — Core math library for SageLang
+# Uses comptime for constants and @inline for hot-path arithmetic.
+
+# ============================================================================
+# Inline arithmetic primitives
+# ============================================================================
+
+@inline
 proc add(x, y):
     return x + y
 
+@inline
 proc sub(x, y):
     return x - y
 
+@inline
 proc mul(x, y):
     return x * y
 
+@inline
 proc div(x, y):
     if y == 0:
         return 0
     return x / y
 
+@inline
 proc min(a, b):
     if a < b:
         return a
     return b
 
+@inline
 proc max(a, b):
     if a > b:
         return a
     return b
 
+@inline
 proc abs(x):
     if x < 0:
         return 0 - x
     return x
 
+@inline
 proc sign(x):
     if x > 0:
         return 1
@@ -34,6 +49,7 @@ proc sign(x):
         return 0 - 1
     return 0
 
+@inline
 proc clamp(value, min_val, max_val):
     if value < min_val:
         return min_val
@@ -41,12 +57,15 @@ proc clamp(value, min_val, max_val):
         return max_val
     return value
 
+@inline
 proc square(x):
     return x * x
 
+@inline
 proc cube(x):
     return x * x * x
 
+@inline
 proc lerp(a, b, t):
     return a + (b - a) * t
 
@@ -85,6 +104,7 @@ proc gcd(a, b):
 
     return a
 
+@inline
 proc lcm(a, b):
     if a == 0 or b == 0:
         return 0
@@ -102,11 +122,13 @@ proc product(values):
         total = total * item
     return total
 
+@inline
 proc mean(values):
     if len(values) == 0:
         return 0
     return sum(values) / len(values)
 
+@inline
 proc sqrt(n):
     if n <= 0:
         return 0
@@ -119,43 +141,53 @@ proc sqrt(n):
 
     return guess
 
+@inline
 proc distance_sq(x1, y1, x2, y2):
     let dx = x2 - x1
     let dy = y2 - y1
     return dx * dx + dy * dy
 
+@inline
 proc distance(x1, y1, x2, y2):
     return sqrt(distance_sq(x1, y1, x2, y2))
 
+@inline
 proc normalize(value, min_val, max_val):
     if max_val == min_val:
         return 0
     return (value - min_val) / (max_val - min_val)
 
 # ============================================================================
-# Constants
+# Constants — evaluated at compile time
 # ============================================================================
 
-let PI = 3.14159265358979323846
-let E = 2.71828182845904523536
+comptime:
+    let PI = 3.14159265358979323846
+    let E = 2.71828182845904523536
 
 # ============================================================================
 # Random number generation (Linear Congruential Generator)
 # ============================================================================
 
-let _random_seed = 123456789
+comptime:
+    let _random_seed = 123456789
+    let _LCG_A = 1664525
+    let _LCG_C = 1013904223
+    let _LCG_M = 4294967296
 
 proc _random_next():
-    # LCG parameters: a=1664525, c=1013904223, m=2^32
-    _random_seed = (_random_seed * 1664525 + 1013904223) % 4294967296
+    _random_seed = (_random_seed * _LCG_A + _LCG_C) % _LCG_M
     return _random_seed
 
+@inline
 proc random():
     return _random_next() / 4294967296.0
 
+@inline
 proc random_range(min_val, max_val):
     return min_val + random() * (max_val - min_val)
 
+@inline
 proc random_int(min_val, max_val):
     return int(random_range(min_val, max_val + 1))
 
@@ -187,6 +219,7 @@ proc ceil(value):
         return int_part + 1
     return int_part
 
+@inline
 proc round(value):
     if value >= 0:
         return floor(value + 0.5)

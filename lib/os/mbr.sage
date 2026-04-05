@@ -2,33 +2,37 @@ gc_disable()
 # MBR (Master Boot Record) partition table parser
 # Parses the 512-byte MBR structure including partition entries and boot signature
 
+@inline
 proc read_u16_le(bs, off):
     return bs[off] + bs[off + 1] * 256
 end
 
+@inline
 proc read_u32_le(bs, off):
     return bs[off] + bs[off + 1] * 256 + bs[off + 2] * 65536 + bs[off + 3] * 16777216
 end
 
-# MBR boot signature
-let MBR_SIGNATURE = 43605
+comptime:
+    # MBR boot signature
+    let MBR_SIGNATURE = 43605
 
-# Partition type constants
-let PART_EMPTY = 0
-let PART_FAT12 = 1
-let PART_FAT16_SMALL = 4
-let PART_EXTENDED = 5
-let PART_FAT16_LARGE = 6
-let PART_NTFS = 7
-let PART_FAT32 = 11
-let PART_FAT32_LBA = 12
-let PART_FAT16_LBA = 14
-let PART_EXTENDED_LBA = 15
-let PART_LINUX_SWAP = 130
-let PART_LINUX = 131
-let PART_LINUX_LVM = 142
-let PART_EFI_GPT = 238
-let PART_EFI_SYSTEM = 239
+    # Partition type constants
+    let PART_EMPTY = 0
+    let PART_FAT12 = 1
+    let PART_FAT16_SMALL = 4
+    let PART_EXTENDED = 5
+    let PART_FAT16_LARGE = 6
+    let PART_NTFS = 7
+    let PART_FAT32 = 11
+    let PART_FAT32_LBA = 12
+    let PART_FAT16_LBA = 14
+    let PART_EXTENDED_LBA = 15
+    let PART_LINUX_SWAP = 130
+    let PART_LINUX = 131
+    let PART_LINUX_LVM = 142
+    let PART_EFI_GPT = 238
+    let PART_EFI_SYSTEM = 239
+end
 
 proc partition_type_name(t):
     if t == 0:
@@ -165,6 +169,7 @@ end
 
 # ========== Extended Partitions ==========
 
+@inline
 proc is_extended(partition):
     let t = partition["type"]
     return t == 5 or t == 15 or t == 133

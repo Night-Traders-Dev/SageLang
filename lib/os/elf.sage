@@ -2,10 +2,12 @@ gc_disable()
 # ELF (Executable and Linkable Format) binary parser
 # Supports ELF32 and ELF64 headers, program headers, and section headers
 
+@inline
 proc read_u16_le(bs, off):
     return bs[off] + bs[off + 1] * 256
 end
 
+@inline
 proc read_u32_le(bs, off):
     return bs[off] + bs[off + 1] * 256 + bs[off + 2] * 65536 + bs[off + 3] * 16777216
 end
@@ -16,10 +18,12 @@ proc read_u64_le(bs, off):
     return lo + hi * 4294967296
 end
 
+@inline
 proc read_u16_be(bs, off):
     return bs[off] * 256 + bs[off + 1]
 end
 
+@inline
 proc read_u32_be(bs, off):
     return bs[off] * 16777216 + bs[off + 1] * 65536 + bs[off + 2] * 256 + bs[off + 3]
 end
@@ -50,55 +54,57 @@ proc is_elf(bs):
     return true
 end
 
-# ELF class constants
-let ELFCLASS32 = 1
-let ELFCLASS64 = 2
+comptime:
+    # ELF class constants
+    let ELFCLASS32 = 1
+    let ELFCLASS64 = 2
 
-# ELF data encoding
-let ELFDATA2LSB = 1
-let ELFDATA2MSB = 2
+    # ELF data encoding
+    let ELFDATA2LSB = 1
+    let ELFDATA2MSB = 2
 
-# ELF type constants
-let ET_NONE = 0
-let ET_REL = 1
-let ET_EXEC = 2
-let ET_DYN = 3
-let ET_CORE = 4
+    # ELF type constants
+    let ET_NONE = 0
+    let ET_REL = 1
+    let ET_EXEC = 2
+    let ET_DYN = 3
+    let ET_CORE = 4
 
-# ELF machine constants
-let EM_NONE = 0
-let EM_386 = 3
-let EM_ARM = 40
-let EM_X86_64 = 62
-let EM_AARCH64 = 183
-let EM_RISCV = 243
+    # ELF machine constants
+    let EM_NONE = 0
+    let EM_386 = 3
+    let EM_ARM = 40
+    let EM_X86_64 = 62
+    let EM_AARCH64 = 183
+    let EM_RISCV = 243
 
-# Program header type constants
-let PT_NULL = 0
-let PT_LOAD = 1
-let PT_DYNAMIC = 2
-let PT_INTERP = 3
-let PT_NOTE = 4
-let PT_PHDR = 6
-let PT_TLS = 7
+    # Program header type constants
+    let PT_NULL = 0
+    let PT_LOAD = 1
+    let PT_DYNAMIC = 2
+    let PT_INTERP = 3
+    let PT_NOTE = 4
+    let PT_PHDR = 6
+    let PT_TLS = 7
 
-# Section header type constants
-let SHT_NULL = 0
-let SHT_PROGBITS = 1
-let SHT_SYMTAB = 2
-let SHT_STRTAB = 3
-let SHT_RELA = 4
-let SHT_HASH = 5
-let SHT_DYNAMIC = 6
-let SHT_NOTE = 7
-let SHT_NOBITS = 8
-let SHT_REL = 9
-let SHT_DYNSYM = 11
+    # Section header type constants
+    let SHT_NULL = 0
+    let SHT_PROGBITS = 1
+    let SHT_SYMTAB = 2
+    let SHT_STRTAB = 3
+    let SHT_RELA = 4
+    let SHT_HASH = 5
+    let SHT_DYNAMIC = 6
+    let SHT_NOTE = 7
+    let SHT_NOBITS = 8
+    let SHT_REL = 9
+    let SHT_DYNSYM = 11
 
-# Section header flag constants
-let SHF_WRITE = 1
-let SHF_ALLOC = 2
-let SHF_EXECINSTR = 4
+    # Section header flag constants
+    let SHF_WRITE = 1
+    let SHF_ALLOC = 2
+    let SHF_EXECINSTR = 4
+end
 
 proc elf_type_name(t):
     if t == 0:
@@ -524,10 +530,12 @@ proc parse_symbols(bs, hdr, section_name_str):
     return syms
 end
 
+@inline
 proc get_symtab(bs, hdr):
     return parse_symbols(bs, hdr, ".symtab")
 end
 
+@inline
 proc get_dynsym(bs, hdr):
     return parse_symbols(bs, hdr, ".dynsym")
 end

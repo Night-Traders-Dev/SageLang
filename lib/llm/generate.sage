@@ -139,14 +139,15 @@ proc apply_repetition_penalty(logits, generated_ids, penalty):
 
 proc create_gen_config():
     let cfg = {}
-    cfg["max_new_tokens"] = 100
-    cfg["temperature"] = 1.0
-    cfg["top_k"] = 50
-    cfg["top_p"] = 0.9
-    cfg["repetition_penalty"] = 1.0
-    cfg["do_sample"] = true
-    cfg["eos_token_id"] = 2
-    cfg["pad_token_id"] = 0
+    comptime:
+        cfg["max_new_tokens"] = 100
+        cfg["temperature"] = 1.0
+        cfg["top_k"] = 50
+        cfg["top_p"] = 0.9
+        cfg["repetition_penalty"] = 1.0
+        cfg["do_sample"] = true
+        cfg["eos_token_id"] = 2
+        cfg["pad_token_id"] = 0
     return cfg
 
 proc greedy_config():

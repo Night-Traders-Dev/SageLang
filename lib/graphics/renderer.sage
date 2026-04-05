@@ -6,7 +6,8 @@ gc_disable()
 
 import gpu
 
-let MAX_FRAMES = 2
+comptime:
+    let MAX_FRAMES = 2
 
 # ============================================================================
 # Create a renderer context dict
@@ -141,6 +142,7 @@ proc shutdown_renderer(r):
 # ============================================================================
 # Convenience: aspect ratio
 # ============================================================================
+@inline
 proc aspect_ratio(r):
     return r["width"] / r["height"]
 

@@ -1,3 +1,6 @@
+# iter.sage — Generator/iterator utilities
+# Generators cannot be @inline (they use yield), but non-yield helpers are.
+
 proc count(start, step):
     let current = start
     while true:
@@ -45,6 +48,7 @@ proc cycle(values):
         if i >= len(values):
             i = 0
 
+@inline
 proc take(gen, count):
     let result = []
     let i = 0
@@ -53,6 +57,7 @@ proc take(gen, count):
         i = i + 1
     return result
 
+@inline
 proc nth(gen, index):
     let value = nil
     let i = 0

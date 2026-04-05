@@ -1,30 +1,41 @@
 gc_disable()
-# safety.sage - Safety library for SageLang
+# safety.sage — Safety library for SageLang
 # Provides Option[T] type, ownership markers, and thread-safety traits.
+# Uses comptime for type tag constants and @inline for hot accessors.
+
+# ============================================================================
+# Option type tag constants — evaluated at compile time
+# ============================================================================
+
+comptime:
+    let _OPTION_TYPE = "Option"
 
 # ============================================================================
 # Option Type — replacement for nil in safe contexts
 # ============================================================================
 
 # Create a Some value (wraps a non-nil value)
+@inline
 proc Some(value):
     let opt = {}
-    opt["__type"] = "Option"
+    opt["__type"] = _OPTION_TYPE
     opt["__has_value"] = true
     opt["__value"] = value
     return opt
 end
 
 # Create a None value (represents absence)
+@inline
 proc None():
     let opt = {}
-    opt["__type"] = "Option"
+    opt["__type"] = _OPTION_TYPE
     opt["__has_value"] = false
     opt["__value"] = nil
     return opt
 end
 
 # Check if an Option contains a value
+@inline
 proc is_some(opt):
     if type(opt) == "dict":
         if dict_has(opt, "__type"):
@@ -35,11 +46,13 @@ proc is_some(opt):
 end
 
 # Check if an Option is None
+@inline
 proc is_none(opt):
     return not is_some(opt)
 end
 
 # Unwrap an Option — panics if None
+@inline
 proc unwrap(opt):
     if is_some(opt):
         return opt["__value"]
@@ -49,6 +62,7 @@ proc unwrap(opt):
 end
 
 # Unwrap with a default value if None
+@inline
 proc unwrap_or(opt, default_val):
     if is_some(opt):
         return opt["__value"]
@@ -57,6 +71,7 @@ proc unwrap_or(opt, default_val):
 end
 
 # Unwrap with a function to compute default if None
+@inline
 proc unwrap_or_else(opt, default_fn):
     if is_some(opt):
         return opt["__value"]
@@ -110,17 +125,17 @@ end
 # Ownership Markers — semantic annotations for safety analysis
 # ============================================================================
 
-# Mark a value as explicitly owned (consumed by receiver)
+@inline
 proc own(value):
     return value
 end
 
-# Mark a value as a borrowed reference (caller retains ownership)
+@inline
 proc ref(value):
     return value
 end
 
-# Mark a value as a mutable borrowed reference
+@inline
 proc mut_ref(value):
     return value
 end
@@ -129,7 +144,7 @@ end
 # Thread-Safety Markers
 # ============================================================================
 
-# Mark a value as safe to send between threads
+@inline
 proc mark_send(value):
     if type(value) == "dict":
         value["__send"] = true
@@ -137,7 +152,7 @@ proc mark_send(value):
     return value
 end
 
-# Mark a value as safe to share between threads
+@inline
 proc mark_sync(value):
     if type(value) == "dict":
         value["__sync"] = true
@@ -145,7 +160,7 @@ proc mark_sync(value):
     return value
 end
 
-# Check if a value is Send
+@inline
 proc is_send(value):
     if type(value) == "dict":
         if dict_has(value, "__send"):
@@ -166,7 +181,7 @@ proc is_send(value):
     return false
 end
 
-# Check if a value is Sync
+@inline
 proc is_sync(value):
     if type(value) == "dict":
         if dict_has(value, "__sync"):
@@ -180,7 +195,6 @@ end
 # Copy Trait
 # ============================================================================
 
-# Deep copy a value (for types that implement Copy)
 proc copy(value):
     let t = type(value)
     if t == "number" or t == "string" or t == "bool":

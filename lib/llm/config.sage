@@ -9,29 +9,31 @@ gc_disable()
 proc create(name):
     let cfg = {}
     cfg["name"] = name
-    cfg["vocab_size"] = 50257
-    cfg["context_length"] = 1024
-    cfg["n_layers"] = 12
-    cfg["n_heads"] = 12
-    cfg["d_model"] = 768
-    cfg["d_ff"] = 3072
-    cfg["dropout"] = 0.1
-    cfg["bias"] = true
-    cfg["layer_norm_eps"] = 0.00001
-    cfg["tie_weights"] = true
-    cfg["activation"] = "gelu"
-    cfg["pos_encoding"] = "learned"
-    cfg["norm_type"] = "layer_norm"
-    cfg["attn_type"] = "causal"
-    cfg["rope"] = false
-    cfg["rope_theta"] = 10000
-    cfg["gqa_groups"] = 0
-    cfg["sliding_window"] = 0
-    cfg["flash_attention"] = false
-    cfg["dtype"] = "float32"
+    comptime:
+        cfg["vocab_size"] = 50257
+        cfg["context_length"] = 1024
+        cfg["n_layers"] = 12
+        cfg["n_heads"] = 12
+        cfg["d_model"] = 768
+        cfg["d_ff"] = 3072
+        cfg["dropout"] = 0.1
+        cfg["bias"] = true
+        cfg["layer_norm_eps"] = 0.00001
+        cfg["tie_weights"] = true
+        cfg["activation"] = "gelu"
+        cfg["pos_encoding"] = "learned"
+        cfg["norm_type"] = "layer_norm"
+        cfg["attn_type"] = "causal"
+        cfg["rope"] = false
+        cfg["rope_theta"] = 10000
+        cfg["gqa_groups"] = 0
+        cfg["sliding_window"] = 0
+        cfg["flash_attention"] = false
+        cfg["dtype"] = "float32"
     return cfg
 
 # Head dimension
+@inline
 proc d_head(cfg):
     return (cfg["d_model"] / cfg["n_heads"]) | 0
 
@@ -66,6 +68,7 @@ proc param_count_str(cfg):
     return str(count)
 
 # Memory estimate in bytes (fp32)
+@inline
 proc memory_estimate(cfg):
     return param_count(cfg) * 4
 

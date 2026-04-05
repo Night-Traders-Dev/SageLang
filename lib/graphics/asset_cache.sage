@@ -23,6 +23,7 @@ proc load_shader_cached(path, stage):
         shader_cache[key] = handle
     return handle
 
+@inline
 proc shader_cache_count():
     return len(dict_keys(shader_cache))
 
@@ -37,6 +38,7 @@ proc load_texture_cached(path):
         texture_cache[path] = handle
     return handle
 
+@inline
 proc texture_cache_count():
     return len(dict_keys(texture_cache))
 
@@ -46,11 +48,13 @@ proc texture_cache_count():
 proc cache_mesh(name, mesh_data):
     mesh_cache[name] = mesh_data
 
+@inline
 proc get_cached_mesh(name):
     if dict_has(mesh_cache, name):
         return mesh_cache[name]
     return nil
 
+@inline
 proc mesh_cache_count():
     return len(dict_keys(mesh_cache))
 

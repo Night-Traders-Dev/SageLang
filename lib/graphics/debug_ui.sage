@@ -39,6 +39,7 @@ proc debug_frame(ui, dt):
 # ============================================================================
 # Set custom debug value
 # ============================================================================
+@inline
 proc debug_set(ui, key, value):
     ui["custom_values"][key] = value
 
@@ -59,6 +60,7 @@ proc debug_fps(ui):
         return 0
     return 1.0 / avg
 
+@inline
 proc debug_frame_time_ms(ui):
     let times = ui["frame_times"]
     if len(times) == 0:
@@ -89,6 +91,7 @@ proc debug_print(ui):
 # ============================================================================
 # Toggle visibility
 # ============================================================================
+@inline
 proc debug_toggle(ui):
     if ui["visible"]:
         ui["visible"] = false

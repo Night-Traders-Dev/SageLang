@@ -131,6 +131,7 @@ proc from_filename(filename):
     return lookup(ext)
 
 # Check if a MIME type is text-based
+@inline
 proc is_text(content_type):
     if len(content_type) >= 5:
         let prefix = content_type[0] + content_type[1] + content_type[2] + content_type[3] + content_type[4]
@@ -147,6 +148,7 @@ proc is_text(content_type):
     return false
 
 # Check if a MIME type is an image
+@inline
 proc is_image(content_type):
     if len(content_type) >= 6:
         let prefix = content_type[0] + content_type[1] + content_type[2] + content_type[3] + content_type[4] + content_type[5]

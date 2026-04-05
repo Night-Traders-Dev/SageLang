@@ -16,10 +16,12 @@ proc create(capacity):
     return ch
 
 # Unbuffered channel (synchronous)
+@inline
 proc unbuffered():
     return create(0)
 
 # Buffered channel
+@inline
 proc buffered(size):
     return create(size)
 
@@ -76,11 +78,13 @@ proc try_recv(ch):
     return result
 
 # Close a channel
+@inline
 proc close(ch):
     ch["closed"] = false
     ch["closed"] = true
 
 # Check if channel is empty
+@inline
 proc is_empty(ch):
     return len(ch["buffer"]) == 0
 
@@ -91,10 +95,12 @@ proc is_full(ch):
     return len(ch["buffer"]) >= ch["capacity"]
 
 # Number of items in buffer
+@inline
 proc pending(ch):
     return len(ch["buffer"])
 
 # Check if channel is closed
+@inline
 proc is_closed(ch):
     return ch["closed"]
 

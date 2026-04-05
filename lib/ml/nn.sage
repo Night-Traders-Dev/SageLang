@@ -84,16 +84,19 @@ proc linear_forward(layer, x):
 # Activation layers
 # ============================================================================
 
+@inline
 proc relu_layer():
     let layer = {}
     layer["type"] = "relu"
     return layer
 
+@inline
 proc sigmoid_layer():
     let layer = {}
     layer["type"] = "sigmoid"
     return layer
 
+@inline
 proc tanh_layer():
     let layer = {}
     layer["type"] = "tanh"
@@ -191,8 +194,11 @@ proc batch_norm(num_features):
     let layer = {}
     layer["type"] = "batch_norm"
     layer["num_features"] = num_features
-    layer["eps"] = 0.00001
-    layer["momentum"] = 0.1
+    comptime:
+        let BN_EPS = 0.00001
+        let BN_MOMENTUM = 0.1
+    layer["eps"] = BN_EPS
+    layer["momentum"] = BN_MOMENTUM
     layer["training"] = true
     # Learnable parameters
     let gamma = []
@@ -216,6 +222,7 @@ proc batch_norm(num_features):
 # Sequential model
 # ============================================================================
 
+@inline
 proc sequential(layers):
     let model = {}
     model["type"] = "sequential"
@@ -300,11 +307,13 @@ proc linear_forward_accel(ctx, layer, x):
     return result
 
 # Accelerated ReLU via gpu_accel
+@inline
 proc relu_forward_accel(ctx, x):
     import ml.gpu_accel
     return gpu_accel.relu(ctx, x)
 
 # Accelerated sigmoid via gpu_accel
+@inline
 proc sigmoid_forward_accel(ctx, x):
     import ml.gpu_accel
     return gpu_accel.sigmoid(ctx, x)

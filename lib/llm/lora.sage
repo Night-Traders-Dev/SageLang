@@ -72,18 +72,22 @@ proc create_lora_config(rank, alpha, target_modules):
     cfg["rank"] = rank
     cfg["alpha"] = alpha
     cfg["target_modules"] = target_modules
-    cfg["dropout"] = 0.0
+    comptime:
+        cfg["dropout"] = 0.0
     return cfg
 
 # Default targets: Q and V projections (most common)
+@inline
 proc default_targets():
     return ["q_proj", "v_proj"]
 
 # All attention targets
+@inline
 proc all_attention_targets():
     return ["q_proj", "k_proj", "v_proj", "o_proj"]
 
 # All linear targets (attention + FFN)
+@inline
 proc all_linear_targets():
     return ["q_proj", "k_proj", "v_proj", "o_proj", "w1", "w2"]
 
@@ -116,10 +120,12 @@ proc apply_lora(model, lora_cfg):
     return result
 
 # Get total trainable parameters
+@inline
 proc trainable_params(lora_result):
     return lora_result["total_trainable_params"]
 
 # Parameter savings ratio
+@inline
 proc savings_ratio(lora_result, total_model_params):
     return 1.0 - lora_result["total_trainable_params"] / total_model_params
 

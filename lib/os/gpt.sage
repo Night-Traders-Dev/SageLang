@@ -2,10 +2,12 @@ gc_disable()
 # GPT (GUID Partition Table) parser
 # Parses GPT header and partition entries per UEFI specification
 
+@inline
 proc read_u16_le(bs, off):
     return bs[off] + bs[off + 1] * 256
 end
 
+@inline
 proc read_u32_le(bs, off):
     return bs[off] + bs[off + 1] * 256 + bs[off + 2] * 65536 + bs[off + 3] * 16777216
 end
@@ -19,6 +21,7 @@ end
 # Read a GUID (16 bytes) as a formatted string
 # GUID format: DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD
 # First 3 fields are little-endian, last 2 are big-endian
+@inline
 proc hex_byte(b):
     let hi = (b >> 4) & 15
     let lo = b & 15
@@ -45,20 +48,22 @@ proc read_guid(bs, off):
     return g
 end
 
-# Well-known partition type GUIDs
-let GPT_TYPE_UNUSED = "00000000-0000-0000-0000-000000000000"
-let GPT_TYPE_EFI_SYSTEM = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
-let GPT_TYPE_BIOS_BOOT = "21686148-6449-6e6f-744e-656564454649"
-let GPT_TYPE_LINUX_FS = "0fc63daf-8483-4772-8e79-3d69d8477de4"
-let GPT_TYPE_LINUX_SWAP = "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f"
-let GPT_TYPE_LINUX_ROOT_X86_64 = "4f68bce3-e8cd-4db1-96e7-fbcaf984b709"
-let GPT_TYPE_MS_BASIC_DATA = "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"
-let GPT_TYPE_MS_RESERVED = "e3c9e316-0b5c-4db8-817d-f92df00215ae"
+comptime:
+    # Well-known partition type GUIDs
+    let GPT_TYPE_UNUSED = "00000000-0000-0000-0000-000000000000"
+    let GPT_TYPE_EFI_SYSTEM = "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+    let GPT_TYPE_BIOS_BOOT = "21686148-6449-6e6f-744e-656564454649"
+    let GPT_TYPE_LINUX_FS = "0fc63daf-8483-4772-8e79-3d69d8477de4"
+    let GPT_TYPE_LINUX_SWAP = "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f"
+    let GPT_TYPE_LINUX_ROOT_X86_64 = "4f68bce3-e8cd-4db1-96e7-fbcaf984b709"
+    let GPT_TYPE_MS_BASIC_DATA = "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"
+    let GPT_TYPE_MS_RESERVED = "e3c9e316-0b5c-4db8-817d-f92df00215ae"
 
-# GPT signature: "EFI PART" = 0x5452415020494645
-# "EFI PART" as two LE u32s: 0x20494645, 0x54524150
-let GPT_SIGNATURE_LO = 541673029
-let GPT_SIGNATURE_HI = 1414676816
+    # GPT signature: "EFI PART" = 0x5452415020494645
+    # "EFI PART" as two LE u32s: 0x20494645, 0x54524150
+    let GPT_SIGNATURE_LO = 541673029
+    let GPT_SIGNATURE_HI = 1414676816
+end
 
 proc gpt_type_name(guid):
     if guid == "00000000-0000-0000-0000-000000000000":
@@ -174,15 +179,18 @@ proc parse_entries(bs, hdr):
 end
 
 # Check if an entry has the system partition attribute
+@inline
 proc is_system_partition(entry):
     return (entry["attributes"] & 1) != 0
 end
 
 # Check if entry is a specific well-known type
+@inline
 proc is_efi_system(entry):
     return entry["type_guid"] == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
 end
 
+@inline
 proc is_linux_fs(entry):
     return entry["type_guid"] == "0fc63daf-8483-4772-8e79-3d69d8477de4"
 end
@@ -457,10 +465,12 @@ proc parse_backup_header(bs):
     return parse_header(bs, backup_off)
 end
 
+@inline
 proc is_linux_swap(entry):
     return entry["type_guid"] == "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f"
 end
 
+@inline
 proc is_windows_basic(entry):
     return entry["type_guid"] == "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7"
 end

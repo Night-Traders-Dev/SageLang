@@ -9,23 +9,23 @@
 #   cJSON_Delete(root)
 
 # ============================================================================
-# Type constants (matching cJSON exactly)
+# Type constants (matching cJSON exactly) — evaluated at compile time
 # ============================================================================
 
-let cJSON_Invalid = 0
-let cJSON_False   = 1
-let cJSON_True    = 2
-let cJSON_NULL    = 4
-let cJSON_Number  = 8
-let cJSON_String  = 16
-let cJSON_Array   = 32
-let cJSON_Object  = 64
-let cJSON_Raw     = 128
+comptime:
+    let cJSON_Invalid = 0
+    let cJSON_False   = 1
+    let cJSON_True    = 2
+    let cJSON_NULL    = 4
+    let cJSON_Number  = 8
+    let cJSON_String  = 16
+    let cJSON_Array   = 32
+    let cJSON_Object  = 64
+    let cJSON_Raw     = 128
+    let CJSON_NESTING_LIMIT = 1000
 
-let CJSON_NESTING_LIMIT = 1000
-
-# Workaround: Sage interpreter has a bug with 5+ branch elif chains,
-# so escape handling is extracted to a separate function with early returns.
+# Escape handling — hot path, inlined for parser performance.
+@inline
 proc _handle_escape(esc):
     if esc == chr(34):
         return chr(34)
@@ -439,6 +439,7 @@ proc cJSON_ParseWithLength(value, buffer_length):
     return cJSON_Parse(value)
 
 # cJSON_GetErrorPtr() -> string
+@inline
 proc cJSON_GetErrorPtr():
     return g_error_ptr
 
@@ -601,10 +602,12 @@ proc cJSON_GetObjectItemCaseSensitive(object, name):
     return nil
 
 # cJSON_HasObjectItem(object, string) -> bool
+@inline
 proc cJSON_HasObjectItem(object, name):
     return cJSON_GetObjectItem(object, name) != nil
 
 # cJSON_GetStringValue(item) -> string or nil
+@inline
 proc cJSON_GetStringValue(item):
     if item == nil:
         return nil
@@ -613,6 +616,7 @@ proc cJSON_GetStringValue(item):
     return item.valuestring
 
 # cJSON_GetNumberValue(item) -> number
+@inline
 proc cJSON_GetNumberValue(item):
     if item == nil:
         return 0
@@ -624,51 +628,61 @@ proc cJSON_GetNumberValue(item):
 # Type Checking API
 # ============================================================================
 
+@inline
 proc cJSON_IsInvalid(item):
     if item == nil:
         return false
     return item.type == cJSON_Invalid
 
+@inline
 proc cJSON_IsFalse(item):
     if item == nil:
         return false
     return item.type == cJSON_False
 
+@inline
 proc cJSON_IsTrue(item):
     if item == nil:
         return false
     return item.type == cJSON_True
 
+@inline
 proc cJSON_IsBool(item):
     if item == nil:
         return false
     return item.type == cJSON_True or item.type == cJSON_False
 
+@inline
 proc cJSON_IsNull(item):
     if item == nil:
         return false
     return item.type == cJSON_NULL
 
+@inline
 proc cJSON_IsNumber(item):
     if item == nil:
         return false
     return item.type == cJSON_Number
 
+@inline
 proc cJSON_IsString(item):
     if item == nil:
         return false
     return item.type == cJSON_String
 
+@inline
 proc cJSON_IsArray(item):
     if item == nil:
         return false
     return item.type == cJSON_Array
 
+@inline
 proc cJSON_IsObject(item):
     if item == nil:
         return false
     return item.type == cJSON_Object
 
+@inline
 proc cJSON_IsRaw(item):
     if item == nil:
         return false

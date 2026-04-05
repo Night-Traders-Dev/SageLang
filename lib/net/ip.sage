@@ -28,6 +28,7 @@ proc to_string_v4(ip):
     return str(a) + "." + str(b) + "." + str(c) + "." + str(d)
 
 # Validate an IPv4 address string
+@inline
 proc is_valid_v4(addr):
     return parse_v4(addr) >= 0
 
@@ -80,6 +81,7 @@ proc in_subnet(ip_str, cidr_str):
     return (ip & cidr["mask"]) == cidr["network"]
 
 # Check if an address is a private/RFC1918 address
+@inline
 proc is_private(addr):
     let ip = parse_v4(addr)
     if ip < 0:
@@ -96,6 +98,7 @@ proc is_private(addr):
     return false
 
 # Check if an address is loopback (127.0.0.0/8)
+@inline
 proc is_loopback(addr):
     let ip = parse_v4(addr)
     if ip < 0:
@@ -103,6 +106,7 @@ proc is_loopback(addr):
     return (ip & 4278190080) == 2130706432
 
 # Check if an address is link-local (169.254.0.0/16)
+@inline
 proc is_link_local(addr):
     let ip = parse_v4(addr)
     if ip < 0:
@@ -110,6 +114,7 @@ proc is_link_local(addr):
     return (ip & 4294901760) == 2851995648
 
 # Check if an address is multicast (224.0.0.0/4)
+@inline
 proc is_multicast(addr):
     let ip = parse_v4(addr)
     if ip < 0:
@@ -117,6 +122,7 @@ proc is_multicast(addr):
     return (ip & 4026531840) == 3758096384
 
 # Check if an address is broadcast
+@inline
 proc is_broadcast(addr):
     let ip = parse_v4(addr)
     return ip == 4294967295
@@ -162,8 +168,9 @@ proc prefix_to_mask(prefix_len):
     return to_string_v4(mask)
 
 # Well-known addresses
-let LOCALHOST = "127.0.0.1"
-let ANY = "0.0.0.0"
-let BROADCAST = "255.255.255.255"
-let DNS_GOOGLE = "8.8.8.8"
-let DNS_CLOUDFLARE = "1.1.1.1"
+comptime:
+    let LOCALHOST = "127.0.0.1"
+    let ANY = "0.0.0.0"
+    let BROADCAST = "255.255.255.255"
+    let DNS_GOOGLE = "8.8.8.8"
+    let DNS_CLOUDFLARE = "1.1.1.1"

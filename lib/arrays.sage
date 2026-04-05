@@ -1,3 +1,6 @@
+# arrays.sage — Array manipulation utilities
+# Hot-path search and iteration procs marked @inline for compiled backends.
+
 proc copy(values):
     let result = []
     for item in values:
@@ -41,12 +44,14 @@ proc reduce(values, initial, fn):
         result = fn(result, item)
     return result
 
+@inline
 proc contains(values, needle):
     for item in values:
         if item == needle:
             return true
     return false
 
+@inline
 proc index_of(values, needle):
     let i = 0
     while i < len(values):

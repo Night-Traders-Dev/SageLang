@@ -12,10 +12,11 @@ let DAY_NAMES = ["Thursday", "Friday", "Saturday", "Sunday", "Monday", "Tuesday"
 let DAY_SHORT = ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"]
 
 # Seconds constants
-let MINUTE = 60
-let HOUR = 3600
-let DAY = 86400
-let WEEK = 604800
+comptime:
+    let MINUTE = 60
+    let HOUR = 3600
+    let DAY = 86400
+    let WEEK = 604800
 
 proc is_leap_year(year):
     if (year & 3) != 0:
@@ -26,11 +27,13 @@ proc is_leap_year(year):
         return false
     return true
 
+@inline
 proc days_in_month(year, month):
     if month == 2 and is_leap_year(year):
         return 29
     return MONTH_DAYS[month]
 
+@inline
 proc days_in_year(year):
     if is_leap_year(year):
         return 366
@@ -48,10 +51,12 @@ proc create(year, month, day, hour, minute, second):
     return dt
 
 # Create date only
+@inline
 proc date(year, month, day):
     return create(year, month, day, 0, 0, 0)
 
 # Create time only
+@inline
 proc time(hour, minute, second):
     return create(1970, 1, 1, hour, minute, second)
 
@@ -104,11 +109,13 @@ proc weekday_name(dt):
     return names[wd]
 
 # Pad number with leading zero
+@inline
 proc pad2(n):
     if n < 10:
         return "0" + str(n)
     return str(n)
 
+@inline
 proc pad4(n):
     if n < 10:
         return "000" + str(n)
@@ -135,32 +142,41 @@ proc to_string(dt):
     return MONTH_SHORT[dt["month"]] + " " + str(dt["day"]) + ", " + str(dt["year"]) + " " + to_time_string(dt)
 
 # Add duration to datetime
+@inline
 proc add_seconds(dt, secs):
     return from_timestamp(to_timestamp(dt) + secs)
 
+@inline
 proc add_minutes(dt, mins):
     return add_seconds(dt, mins * 60)
 
+@inline
 proc add_hours(dt, hrs):
     return add_seconds(dt, hrs * 3600)
 
+@inline
 proc add_days(dt, d):
     return add_seconds(dt, d * 86400)
 
 # Difference in seconds between two datetimes
+@inline
 proc diff_seconds(a, b):
     return to_timestamp(a) - to_timestamp(b)
 
+@inline
 proc diff_days(a, b):
     return (diff_seconds(a, b) / 86400) | 0
 
 # Compare datetimes
+@inline
 proc before(a, b):
     return to_timestamp(a) < to_timestamp(b)
 
+@inline
 proc after(a, b):
     return to_timestamp(a) > to_timestamp(b)
 
+@inline
 proc equal(a, b):
     return to_timestamp(a) == to_timestamp(b)
 

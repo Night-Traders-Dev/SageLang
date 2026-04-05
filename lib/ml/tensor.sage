@@ -151,12 +151,15 @@ proc flatten(data):
             push(result, data[i])
     return result
 
+@inline
 proc numel(t):
     return t["size"]
 
+@inline
 proc shape(t):
     return t["shape"]
 
+@inline
 proc ndim(t):
     return t["ndim"]
 
@@ -224,6 +227,7 @@ proc mul_scalar(t, s):
         push(data, t["data"][i] * s)
     return from_flat(data, t["shape"])
 
+@inline
 proc neg(t):
     return mul_scalar(t, -1)
 
@@ -284,6 +288,7 @@ proc sum_all(t):
         s = s + t["data"][i]
     return s
 
+@inline
 proc mean_all(t):
     return sum_all(t) / t["size"]
 
@@ -403,6 +408,7 @@ proc softmax(t):
 # ============================================================================
 
 # Get element at flat index
+@inline
 proc item(t, idx):
     return t["data"][idx]
 
@@ -417,6 +423,7 @@ proc get_row(t, row):
     return from_flat(data, [cols])
 
 # Set element at flat index
+@inline
 proc set_item(t, idx, val):
     t["data"][idx] = val
 
@@ -447,10 +454,12 @@ proc allclose(a, b, tol):
 # Autograd support
 # ============================================================================
 
+@inline
 proc requires_grad_(t):
     t["requires_grad"] = true
     return t
 
+@inline
 proc detach(t):
     let result = from_flat(t["data"], t["shape"])
     result["requires_grad"] = false

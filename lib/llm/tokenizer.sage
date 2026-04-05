@@ -17,10 +17,11 @@ proc char_tokenizer():
         tok["vocab"][ch] = i
         tok["id_to_token"][str(i)] = ch
     tok["vocab_size"] = 128
-    tok["pad_id"] = 0
-    tok["bos_id"] = 1
-    tok["eos_id"] = 2
-    tok["unk_id"] = 3
+    comptime:
+        tok["pad_id"] = 0
+        tok["bos_id"] = 1
+        tok["eos_id"] = 2
+        tok["unk_id"] = 3
     return tok
 
 proc char_encode(tok, text):
@@ -60,10 +61,11 @@ proc word_tokenizer():
     tok["id_to_token"]["1"] = "<bos>"
     tok["id_to_token"]["2"] = "<eos>"
     tok["id_to_token"]["3"] = "<unk>"
-    tok["pad_id"] = 0
-    tok["bos_id"] = 1
-    tok["eos_id"] = 2
-    tok["unk_id"] = 3
+    comptime:
+        tok["pad_id"] = 0
+        tok["bos_id"] = 1
+        tok["eos_id"] = 2
+        tok["unk_id"] = 3
     return tok
 
 # Build vocabulary from text corpus
@@ -120,10 +122,6 @@ proc bpe_tokenizer(vocab_size):
     tok["merges"] = []
     tok["vocab"] = {}
     tok["id_to_token"] = {}
-    tok["pad_id"] = 0
-    tok["bos_id"] = 1
-    tok["eos_id"] = 2
-    tok["unk_id"] = 3
     # Initialize with byte-level tokens (256) + special tokens (4)
     tok["vocab"]["<pad>"] = 0
     tok["vocab"]["<bos>"] = 1
@@ -133,6 +131,11 @@ proc bpe_tokenizer(vocab_size):
     tok["id_to_token"]["1"] = "<bos>"
     tok["id_to_token"]["2"] = "<eos>"
     tok["id_to_token"]["3"] = "<unk>"
+    comptime:
+        tok["pad_id"] = 0
+        tok["bos_id"] = 1
+        tok["eos_id"] = 2
+        tok["unk_id"] = 3
     let next_id = 4
     for i in range(256):
         let ch = chr(i)

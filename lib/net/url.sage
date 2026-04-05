@@ -190,6 +190,7 @@ proc decode(text):
             i = i + 1
     return result
 
+@inline
 proc hex_val(c):
     let code = ord(c)
     if code >= 48 and code <= 57:

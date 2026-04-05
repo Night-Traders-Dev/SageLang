@@ -211,9 +211,11 @@ proc cache_append(cache, layer, new_k, new_v):
     for i in range(len(new_v)):
         push(layer_vals, new_v[i])
 
+@inline
 proc cache_get_keys(cache, layer):
     return cache["keys"][layer]
 
+@inline
 proc cache_get_values(cache, layer):
     return cache["values"][layer]
 

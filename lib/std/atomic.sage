@@ -11,23 +11,29 @@ proc atomic_int(initial):
     a["value"] = initial
     return a
 
+@inline
 proc load(atom):
     return atom["value"]
 
+@inline
 proc store(atom, value):
     atom["value"] = value
 
+@inline
 proc add(atom, delta):
     atom["value"] = atom["value"] + delta
     return atom["value"]
 
+@inline
 proc sub(atom, delta):
     atom["value"] = atom["value"] - delta
     return atom["value"]
 
+@inline
 proc increment(atom):
     return add(atom, 1)
 
+@inline
 proc decrement(atom):
     return sub(atom, 1)
 
@@ -53,11 +59,13 @@ proc atomic_flag():
     f["value"] = false
     return f
 
+@inline
 proc test_and_set(flag):
     let old = flag["value"]
     flag["value"] = true
     return old
 
+@inline
 proc clear_flag(flag):
     flag["value"] = false
 
@@ -84,6 +92,7 @@ proc spin_try_lock(lock):
     lock["locked"] = true
     return true
 
+@inline
 proc is_locked(lock):
     return lock["locked"]
 
@@ -126,8 +135,9 @@ proc counter_stats(c):
 # Memory ordering constants (documentation only — Sage is single-threaded)
 # ============================================================================
 
-let RELAXED = 0
-let ACQUIRE = 1
-let RELEASE = 2
-let ACQ_REL = 3
-let SEQ_CST = 4
+comptime:
+    let RELAXED = 0
+    let ACQUIRE = 1
+    let RELEASE = 2
+    let ACQ_REL = 3
+    let SEQ_CST = 4

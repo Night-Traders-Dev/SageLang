@@ -3,10 +3,12 @@ gc_disable()
 # Parses DOS header, PE signature, COFF header, optional header, and section headers
 # Used for Windows executables, DLLs, and UEFI applications
 
+@inline
 proc read_u16_le(bs, off):
     return bs[off] + bs[off + 1] * 256
 end
 
+@inline
 proc read_u32_le(bs, off):
     return bs[off] + bs[off + 1] * 256 + bs[off + 2] * 65536 + bs[off + 3] * 16777216
 end
@@ -17,40 +19,42 @@ proc read_u64_le(bs, off):
     return lo + hi * 4294967296
 end
 
-# DOS header magic: 'MZ' = 0x5A4D
-let MZ_MAGIC = 23117
+comptime:
+    # DOS header magic: 'MZ' = 0x5A4D
+    let MZ_MAGIC = 23117
 
-# PE signature: 'PE\0\0' = 0x00004550
-let PE_SIGNATURE = 17744
+    # PE signature: 'PE\0\0' = 0x00004550
+    let PE_SIGNATURE = 17744
 
-# Machine type constants
-let IMAGE_FILE_MACHINE_I386 = 332
-let IMAGE_FILE_MACHINE_AMD64 = 34404
-let IMAGE_FILE_MACHINE_ARM = 448
-let IMAGE_FILE_MACHINE_ARM64 = 43620
-let IMAGE_FILE_MACHINE_RISCV64 = 20580
-let IMAGE_FILE_MACHINE_EBC = 3772
+    # Machine type constants
+    let IMAGE_FILE_MACHINE_I386 = 332
+    let IMAGE_FILE_MACHINE_AMD64 = 34404
+    let IMAGE_FILE_MACHINE_ARM = 448
+    let IMAGE_FILE_MACHINE_ARM64 = 43620
+    let IMAGE_FILE_MACHINE_RISCV64 = 20580
+    let IMAGE_FILE_MACHINE_EBC = 3772
 
-# Optional header magic
-let PE32_MAGIC = 267
-let PE32PLUS_MAGIC = 523
+    # Optional header magic
+    let PE32_MAGIC = 267
+    let PE32PLUS_MAGIC = 523
 
-# Subsystem constants
-let IMAGE_SUBSYSTEM_UNKNOWN = 0
-let IMAGE_SUBSYSTEM_NATIVE = 1
-let IMAGE_SUBSYSTEM_WINDOWS_GUI = 2
-let IMAGE_SUBSYSTEM_WINDOWS_CUI = 3
-let IMAGE_SUBSYSTEM_EFI_APPLICATION = 10
-let IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER = 11
-let IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER = 12
+    # Subsystem constants
+    let IMAGE_SUBSYSTEM_UNKNOWN = 0
+    let IMAGE_SUBSYSTEM_NATIVE = 1
+    let IMAGE_SUBSYSTEM_WINDOWS_GUI = 2
+    let IMAGE_SUBSYSTEM_WINDOWS_CUI = 3
+    let IMAGE_SUBSYSTEM_EFI_APPLICATION = 10
+    let IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER = 11
+    let IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER = 12
 
-# Section characteristic flags
-let IMAGE_SCN_CNT_CODE = 32
-let IMAGE_SCN_CNT_INITIALIZED_DATA = 64
-let IMAGE_SCN_CNT_UNINITIALIZED_DATA = 128
-let IMAGE_SCN_MEM_EXECUTE = 536870912
-let IMAGE_SCN_MEM_READ = 1073741824
-let IMAGE_SCN_MEM_WRITE = 2147483648
+    # Section characteristic flags
+    let IMAGE_SCN_CNT_CODE = 32
+    let IMAGE_SCN_CNT_INITIALIZED_DATA = 64
+    let IMAGE_SCN_CNT_UNINITIALIZED_DATA = 128
+    let IMAGE_SCN_MEM_EXECUTE = 536870912
+    let IMAGE_SCN_MEM_READ = 1073741824
+    let IMAGE_SCN_MEM_WRITE = 2147483648
+end
 
 proc machine_name(m):
     if m == 332:
@@ -100,6 +104,7 @@ proc subsystem_name(s):
 end
 
 # Check for valid MZ header
+@inline
 proc is_pe(bs):
     if len(bs) < 64:
         return false
@@ -284,6 +289,7 @@ proc find_section(pe, name):
 end
 
 # Check if PE is a UEFI application
+@inline
 proc is_uefi_app(pe):
     if pe["optional"] == nil:
         return false

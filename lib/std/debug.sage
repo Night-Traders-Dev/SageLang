@@ -6,6 +6,7 @@ gc_disable()
 # Value inspection
 # ============================================================================
 
+@inline
 proc type_name(val):
     return type(val)
 
@@ -29,6 +30,7 @@ proc inspect(val):
         result = result + " {" + str(len(dict_keys(val))) + " keys}"
     return result
 
+@inline
 proc dump(label, val):
     print "[DEBUG] " + label + " = " + inspect(val)
 
@@ -39,9 +41,11 @@ proc dump(label, val):
 let _trace_enabled = false
 let _trace_depth = 0
 
+@inline
 proc trace_enable():
     _trace_enabled = true
 
+@inline
 proc trace_disable():
     _trace_enabled = false
 
@@ -71,12 +75,15 @@ proc assert_msg(condition, message):
         print "[ASSERT FAILED] " + message
         raise "Assertion failed: " + message
 
+@inline
 proc unreachable(message):
     raise "Unreachable code reached: " + message
 
+@inline
 proc todo(message):
     raise "TODO: " + message
 
+@inline
 proc deprecated(message):
     print "[DEPRECATED] " + message
 

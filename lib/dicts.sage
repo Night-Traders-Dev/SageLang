@@ -1,15 +1,23 @@
+# dicts.sage — Dictionary utilities
+# Thin wrappers over native dict ops marked @inline.
+
+@inline
 proc keys(dict):
     return dict_keys(dict)
 
+@inline
 proc values(dict):
     return dict_values(dict)
 
+@inline
 proc size(dict):
     return len(dict_keys(dict))
 
+@inline
 proc has(dict, key):
     return dict_has(dict, key)
 
+@inline
 proc get_or(dict, key, fallback):
     if dict_has(dict, key):
         return dict[key]

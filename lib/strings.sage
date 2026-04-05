@@ -1,3 +1,6 @@
+# strings.sage — String manipulation utilities
+# @inline on simple wrappers and hot string ops.
+
 proc words(text):
     let raw = split(strip(text), " ")
     let result = []
@@ -6,14 +9,17 @@ proc words(text):
             push(result, part)
     return result
 
+@inline
 proc compact(text):
     return join(words(text), " ")
 
+@inline
 proc contains(text, part):
     if part == "":
         return true
     return len(split(text, part)) > 1
 
+@inline
 proc count_substring(text, part):
     if part == "":
         return 0
@@ -37,15 +43,19 @@ proc pad_right(text, width, pad):
         return text
     return text + repeat(pad, width - len(text))
 
+@inline
 proc surround(text, left, right):
     return left + text + right
 
+@inline
 proc csv(values):
     return join(values, ",")
 
+@inline
 proc dash_case(text):
     return lower(join(words(replace(text, "_", " ")), "-"))
 
+@inline
 proc snake_case(text):
     return lower(join(words(replace(text, "-", " ")), "_"))
 
@@ -71,4 +81,3 @@ proc from_bin(bits):
             result = result + 1
         i = i + 1
     return result
-

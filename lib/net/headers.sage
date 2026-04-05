@@ -70,6 +70,7 @@ proc get(headers, name):
     return nil
 
 # Check if a header exists
+@inline
 proc has(headers, name):
     return get(headers, name) != nil
 
@@ -87,6 +88,7 @@ proc content_type(headers):
     return result
 
 # Get content length as number
+@inline
 proc content_length(headers):
     let cl = get(headers, "Content-Length")
     if cl == nil:
@@ -94,44 +96,48 @@ proc content_length(headers):
     return tonumber(cl)
 
 # Check if response is JSON
+@inline
 proc is_json(headers):
     let ct = content_type(headers)
     return ct == "application/json"
 
 # Check if response is HTML
+@inline
 proc is_html(headers):
     let ct = content_type(headers)
     return ct == "text/html"
 
 # Common header constants
-let CONTENT_TYPE = "Content-Type"
-let CONTENT_LENGTH = "Content-Length"
-let AUTHORIZATION = "Authorization"
-let ACCEPT = "Accept"
-let USER_AGENT = "User-Agent"
-let HOST = "Host"
-let CONNECTION = "Connection"
-let CACHE_CONTROL = "Cache-Control"
-let COOKIE = "Cookie"
-let SET_COOKIE = "Set-Cookie"
-let LOCATION = "Location"
-let CONTENT_ENCODING = "Content-Encoding"
-let TRANSFER_ENCODING = "Transfer-Encoding"
-let ORIGIN = "Origin"
-let REFERER = "Referer"
+comptime:
+    let CONTENT_TYPE = "Content-Type"
+    let CONTENT_LENGTH = "Content-Length"
+    let AUTHORIZATION = "Authorization"
+    let ACCEPT = "Accept"
+    let USER_AGENT = "User-Agent"
+    let HOST = "Host"
+    let CONNECTION = "Connection"
+    let CACHE_CONTROL = "Cache-Control"
+    let COOKIE = "Cookie"
+    let SET_COOKIE = "Set-Cookie"
+    let LOCATION = "Location"
+    let CONTENT_ENCODING = "Content-Encoding"
+    let TRANSFER_ENCODING = "Transfer-Encoding"
+    let ORIGIN = "Origin"
+    let REFERER = "Referer"
 
 # Common content types
-let TYPE_JSON = "application/json"
-let TYPE_HTML = "text/html"
-let TYPE_TEXT = "text/plain"
-let TYPE_XML = "application/xml"
-let TYPE_FORM = "application/x-www-form-urlencoded"
-let TYPE_MULTIPART = "multipart/form-data"
-let TYPE_OCTET = "application/octet-stream"
-let TYPE_CSS = "text/css"
-let TYPE_JS = "application/javascript"
-let TYPE_PNG = "image/png"
-let TYPE_JPEG = "image/jpeg"
-let TYPE_GIF = "image/gif"
-let TYPE_SVG = "image/svg+xml"
-let TYPE_PDF = "application/pdf"
+comptime:
+    let TYPE_JSON = "application/json"
+    let TYPE_HTML = "text/html"
+    let TYPE_TEXT = "text/plain"
+    let TYPE_XML = "application/xml"
+    let TYPE_FORM = "application/x-www-form-urlencoded"
+    let TYPE_MULTIPART = "multipart/form-data"
+    let TYPE_OCTET = "application/octet-stream"
+    let TYPE_CSS = "text/css"
+    let TYPE_JS = "application/javascript"
+    let TYPE_PNG = "image/png"
+    let TYPE_JPEG = "image/jpeg"
+    let TYPE_GIF = "image/gif"
+    let TYPE_SVG = "image/svg+xml"
+    let TYPE_PDF = "application/pdf"

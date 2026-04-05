@@ -116,9 +116,11 @@ proc create_ffn(d_model, d_ff, activation):
     return ffn
 
 # Activation functions
+@inline
 proc gelu(x):
     return 0.5 * x * (1.0 + math.tanh(math.sqrt(2.0 / math.pi) * (x + 0.044715 * x * x * x)))
 
+@inline
 proc silu(x):
     return x / (1.0 + math.exp(0 - x))
 

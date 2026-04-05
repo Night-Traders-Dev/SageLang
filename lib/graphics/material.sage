@@ -65,6 +65,7 @@ proc build_pipeline(mat, render_pass, vertex_bindings, vertex_attribs, config):
     return mat["pipeline"]
 
 # Bind material for drawing
+@inline
 proc bind_material(cmd, mat):
     gpu.cmd_bind_graphics_pipeline(cmd, mat["pipeline"])
 

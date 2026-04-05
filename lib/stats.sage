@@ -1,3 +1,6 @@
+# stats.sage — Statistical functions
+# @inline on aggregation helpers; hot two-pass algorithms left as regular procs.
+
 from math import sqrt
 
 proc sum(values):
@@ -36,11 +39,13 @@ proc max_value(values):
         i = i + 1
     return current
 
+@inline
 proc mean(values):
     if len(values) == 0:
         return 0
     return sum(values) / len(values)
 
+@inline
 proc range_span(values):
     if len(values) == 0:
         return 0
@@ -65,6 +70,7 @@ proc variance(values):
         total = total + diff * diff
     return total / len(values)
 
+@inline
 proc stddev(values):
     return sqrt(variance(values))
 

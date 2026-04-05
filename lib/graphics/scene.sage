@@ -20,6 +20,7 @@ proc create_node(name):
     return n
 
 # Add child to parent
+@inline
 proc add_child(parent, child):
     push(parent["children"], child)
     child["parent"] = parent

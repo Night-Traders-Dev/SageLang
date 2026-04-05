@@ -8,7 +8,8 @@ gc_disable()
 import gpu
 import math
 
-let VERTEX_STRIDE = 8
+comptime:
+    let VERTEX_STRIDE = 8
 
 # ============================================================================
 # Procedural: Unit Cube (-0.5 to 0.5)
