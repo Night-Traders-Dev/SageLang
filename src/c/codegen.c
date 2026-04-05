@@ -311,16 +311,120 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             isel_append(ctx, v);
             return r;
         }
-        case EXPR_INDEX_SET:
-        case EXPR_DICT:
-        case EXPR_TUPLE:
-        case EXPR_SLICE:
-        case EXPR_GET:
-        case EXPR_SET:
-        case EXPR_AWAIT:
-            // TODO: not yet supported in codegen backend
-            fprintf(stderr, "Codegen backend: unsupported expression type %d (index_set/dict/tuple/slice/get/set/await not yet implemented)\n", expr->type);
-            /* fallthrough */
+        case EXPR_INDEX_SET: {
+            // array[index] = value -> call builtin "sage_rt_index_set" with 3 args
+            int arr = isel_expr(ctx, expr->as.index_set.array);
+            int idx = isel_expr(ctx, expr->as.index_set.index);
+            int val = isel_expr(ctx, expr->as.index_set.value);
+            int r = isel_vreg(ctx);
+            VInst* v = vinst_new(VINST_CALL_BUILTIN);
+            v->dest = r;
+            v->func_name = SAGE_STRDUP("sage_rt_index_set");
+            v->call_args = SAGE_ALLOC(sizeof(int) * 3);
+            v->call_args[0] = arr;
+            v->call_args[1] = idx;
+            v->call_args[2] = val;
+            v->call_arg_count = 3;
+            isel_append(ctx, v);
+            return r;
+        }
+        case EXPR_DICT: {
+            // Dict literals are complex (key-value pairs with string keys).
+            // The native codegen IR lacks a VINST_DICT_NEW instruction.
+            if (expr->as.dict.count > 0) {
+                fprintf(stderr, "codegen warning: dict literal with %d entries emitted as nil (native dict codegen not yet available)\n", expr->as.dict.count);
+            }
+            int r = isel_vreg(ctx);
+            VInst* v = vinst_new(VINST_LOAD_NIL);
+            v->dest = r;
+            isel_append(ctx, v);
+            return r;
+        }
+        case EXPR_TUPLE: {
+            // Tuples are arrays in Sage's runtime
+            int r = isel_vreg(ctx);
+            VInst* v = vinst_new(VINST_ARRAY_NEW);
+            v->dest = r;
+            v->src1 = expr->as.tuple.count;
+            isel_append(ctx, v);
+
+            for (int i = 0; i < expr->as.tuple.count; i++) {
+                int elem = isel_expr(ctx, expr->as.tuple.elements[i]);
+                VInst* set = vinst_new(VINST_ARRAY_SET);
+                set->src1 = r;
+                set->src2 = elem;
+                set->imm_number = (double)i;
+                isel_append(ctx, set);
+            }
+            return r;
+        }
+        case EXPR_SLICE: {
+            // array[start:end] -> call builtin "slice" with 3 args
+            int arr = isel_expr(ctx, expr->as.slice.array);
+            int start = isel_expr(ctx, expr->as.slice.start);
+            int end = isel_expr(ctx, expr->as.slice.end);
+            int r = isel_vreg(ctx);
+            VInst* v = vinst_new(VINST_CALL_BUILTIN);
+            v->dest = r;
+            v->func_name = SAGE_STRDUP("slice");
+            v->call_args = SAGE_ALLOC(sizeof(int) * 3);
+            v->call_args[0] = arr;
+            v->call_args[1] = start;
+            v->call_args[2] = end;
+            v->call_arg_count = 3;
+            isel_append(ctx, v);
+            return r;
+        }
+        case EXPR_GET: {
+            // object.property -> call builtin "dict_get" with object and key
+            int obj = isel_expr(ctx, expr->as.get.object);
+            int r_key = isel_vreg(ctx);
+            char* prop_name = tok_str(expr->as.get.property);
+            VInst* key_v = vinst_new(VINST_LOAD_STRING);
+            key_v->dest = r_key;
+            key_v->imm_string = prop_name;
+            isel_append(ctx, key_v);
+            isel_add_string(ctx, prop_name);
+
+            int r = isel_vreg(ctx);
+            VInst* v = vinst_new(VINST_CALL_BUILTIN);
+            v->dest = r;
+            v->func_name = SAGE_STRDUP("dict_get");
+            v->call_args = SAGE_ALLOC(sizeof(int) * 2);
+            v->call_args[0] = obj;
+            v->call_args[1] = r_key;
+            v->call_arg_count = 2;
+            isel_append(ctx, v);
+            return r;
+        }
+        case EXPR_SET: {
+            // object.property = value -> call builtin "dict_set" with object, key, value
+            int obj = isel_expr(ctx, expr->as.set.object);
+            int val = isel_expr(ctx, expr->as.set.value);
+            int r_key = isel_vreg(ctx);
+            char* prop_name = tok_str(expr->as.set.property);
+            VInst* key_v = vinst_new(VINST_LOAD_STRING);
+            key_v->dest = r_key;
+            key_v->imm_string = prop_name;
+            isel_append(ctx, key_v);
+            isel_add_string(ctx, prop_name);
+
+            int r = isel_vreg(ctx);
+            VInst* v = vinst_new(VINST_CALL_BUILTIN);
+            v->dest = r;
+            v->func_name = SAGE_STRDUP("dict_set");
+            v->call_args = SAGE_ALLOC(sizeof(int) * 3);
+            v->call_args[0] = obj;
+            v->call_args[1] = r_key;
+            v->call_args[2] = val;
+            v->call_arg_count = 3;
+            isel_append(ctx, v);
+            return r;
+        }
+        case EXPR_AWAIT: {
+            // In native codegen, await is synchronous evaluation
+            return isel_expr(ctx, expr->as.await.expression);
+        }
         default: {
             int r = isel_vreg(ctx);
             VInst* v = vinst_new(VINST_LOAD_NIL);
@@ -1223,20 +1327,19 @@ int elf_write_object(const char* output_path, CodeBuffer* buf, CodegenTarget tar
 void codegen_x86_64_emit(VInst* program, CodeBuffer* buf) {
     (void)program;
     (void)buf;
-    // TODO: Full x86-64 machine code emission
-    // For now, assembly text output is the primary path
+    fprintf(stderr, "codegen: direct x86-64 machine code emission not available; use --emit-asm\n");
 }
 
 void codegen_aarch64_emit(VInst* program, CodeBuffer* buf) {
     (void)program;
     (void)buf;
-    // TODO: Full AArch64 machine code emission
+    fprintf(stderr, "codegen: direct AArch64 machine code emission not available; use --emit-asm\n");
 }
 
 void codegen_rv64_emit(VInst* program, CodeBuffer* buf) {
     (void)program;
     (void)buf;
-    // TODO: Full RISC-V 64 machine code emission
+    fprintf(stderr, "codegen: direct RISC-V 64 machine code emission not available; use --emit-asm\n");
 }
 
 // ============================================================================

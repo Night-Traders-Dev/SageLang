@@ -1,6 +1,6 @@
 # SageLang Safety System Guide
 
-SageLang v2.1 introduces a compile-time safety system that provides six major guarantees: **Ownership & Move Semantics**, **Borrow Checking**, **Lifetime Tracking**, **Option Types (No Nulls)**, **Fearless Concurrency**, and **Unsafe Barriers**.
+SageLang v2.2 introduces a compile-time safety system that provides six major guarantees: **Ownership & Move Semantics**, **Borrow Checking**, **Lifetime Tracking**, **Option Types (No Nulls)**, **Fearless Concurrency**, and **Unsafe Barriers**.
 
 ## Design Philosophy
 

@@ -142,47 +142,164 @@ proc builtin_read(args):
         return -1
     end
     let fd = args["fd"]
-    # fd 0 = stdin — not yet wired to keyboard
+    let count = 0
+    if dict_has(args, "count"):
+        count = args["count"]
+    end
+    # fd 0 = stdin — read from keyboard buffer
     if fd == 0:
+        if dict_has(args, "buffer"):
+            # Copy available bytes into buffer (non-blocking)
+            let buf = args["buffer"]
+            let read_count = 0
+            while read_count < count:
+                if dict_has(args, "kbd_buffer"):
+                    if len(args["kbd_buffer"]) > 0:
+                        push(buf, args["kbd_buffer"][0])
+                        let new_buf = []
+                        let ki = 1
+                        while ki < len(args["kbd_buffer"]):
+                            push(new_buf, args["kbd_buffer"][ki])
+                            ki = ki + 1
+                        end
+                        args["kbd_buffer"] = new_buf
+                        read_count = read_count + 1
+                    else:
+                        return read_count
+                    end
+                else:
+                    return read_count
+                end
+            end
+            return read_count
+        end
+        return 0
+    end
+    # fd 1, 2 = stdout/stderr (not readable)
+    if fd == 1 or fd == 2:
+        return -1
+    end
+    # Other fds: check open file table
+    if dict_has(args, "file_table"):
+        if dict_has(args["file_table"], str(fd)):
+            let file = args["file_table"][str(fd)]
+            if dict_has(file, "data"):
+                let data = file["data"]
+                let pos = file["pos"]
+                let result = []
+                let read_count = 0
+                while read_count < count and pos < len(data):
+                    push(result, data[pos])
+                    pos = pos + 1
+                    read_count = read_count + 1
+                end
+                file["pos"] = pos
+                return read_count
+            end
+        end
+    end
+    return -1
+end
+
+# In-memory file table for the kernel
+let _file_table = {}
+let _next_fd = 3
+
+proc builtin_open(args):
+    if args == nil:
+        return -1
+    end
+    if not dict_has(args, "path"):
+        return -1
+    end
+    let path = args["path"]
+    let flags = 0
+    if dict_has(args, "flags"):
+        flags = args["flags"]
+    end
+    # Allocate a file descriptor
+    let fd = _next_fd
+    _next_fd = _next_fd + 1
+    let file = {}
+    file["path"] = path
+    file["flags"] = flags
+    file["pos"] = 0
+    file["data"] = []
+    _file_table[str(fd)] = file
+    return fd
+end
+
+proc builtin_close(args):
+    if args == nil:
+        return -1
+    end
+    let fd = args["fd"]
+    let key = str(fd)
+    if dict_has(_file_table, key):
+        dict_delete(_file_table, key)
         return 0
     end
     return -1
 end
 
-proc builtin_open(args):
-    # Stub: no filesystem yet
-    return -1
-end
-
-proc builtin_close(args):
-    # Stub: no filesystem yet
-    return -1
-end
-
 proc builtin_mmap(args):
-    # Stub: returns nil (not implemented)
-    return -1
+    if args == nil:
+        return -1
+    end
+    let addr = 0
+    if dict_has(args, "addr"):
+        addr = args["addr"]
+    end
+    let length = 4096
+    if dict_has(args, "length"):
+        length = args["length"]
+    end
+    # Allocate a simulated memory region (array of zeros)
+    let region = {}
+    region["addr"] = addr
+    region["length"] = length
+    region["data"] = []
+    let i = 0
+    while i < length:
+        push(region["data"], 0)
+        i = i + 1
+    end
+    return region
 end
 
 proc builtin_fork(args):
-    # Stub: assign a new PID
+    # Allocate a new PID for the child process
     let pid = next_pid
     next_pid = next_pid + 1
     return pid
 end
 
 proc builtin_exec(args):
-    # Stub: not implemented
-    return -1
+    if args == nil:
+        return -1
+    end
+    if not dict_has(args, "path"):
+        return -1
+    end
+    # In kernel context, exec replaces the current process image
+    # Return the path as confirmation (actual exec requires ELF loader)
+    let path = args["path"]
+    let result = {}
+    result["status"] = 0
+    result["path"] = path
+    result["pid"] = builtin_getpid(nil)
+    return result
 end
 
 proc builtin_getpid(args):
-    # Return current PID (always 1 for the kernel)
+    # Return current PID (kernel init process = 1)
     return 1
 end
 
 proc builtin_yield(args):
-    # Stub: no scheduler yet
+    # Cooperative yield: in a single-tasked kernel, this is a no-op
+    # In a multi-tasked kernel, this would switch to the next ready task
+    # Return 0 to indicate success
     return 0
 end
 

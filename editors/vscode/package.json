@@ -2,7 +2,7 @@
   "name": "sage-lang",
   "displayName": "Sage Language",
   "description": "Syntax highlighting and language configuration support for SageLang",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "publisher": "sagelang",
   "license": "MIT",
   "engines": {

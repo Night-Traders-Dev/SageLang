@@ -25,7 +25,7 @@ from interpreter import new_interpreter, exec_program, set_error_context
 
 let NL = chr(10)
 let SQ = chr(39)
-let VERSION = "2.1.0"
+let VERSION = "2.2.0"
 
 # ============================================================================
 # Usage / Help

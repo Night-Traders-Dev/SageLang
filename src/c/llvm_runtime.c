@@ -2157,3 +2157,66 @@ SageValue sage_rt_gpu_detected_platform(void) {
     const char* p = sgpu_detected_platform();
     return p ? sage_rt_string(p) : sage_rt_nil();
 }
+
+// ---------------------------------------------------------------------------
+// Dynamic Function Calls
+// ---------------------------------------------------------------------------
+
+// Construct a SAGE_FUNCTION SageValue from a raw function pointer.
+SageValue sage_rt_make_function(void* ptr) {
+    SageValue sv;
+    sv.type = SAGE_FUNCTION;
+    sv.as.pointer = ptr;
+    return sv;
+}
+
+// Call a SageValue that holds a function pointer with the given argument array.
+// All sage-compiled functions have the signature:
+//   SageValue fn(SageValue, SageValue, ...) — N positional SageValue args.
+// We dispatch via a switch on argc for arities 0..16.
+SageValue sage_rt_call_dynamic(SageValue callee, SageValue* args, int32_t argc) {
+    if (callee.type != SAGE_FUNCTION || callee.as.pointer == NULL) {
+        fprintf(stderr, "sage_rt: call_dynamic: callee is not a function\n");
+        return sage_rt_nil();
+    }
+    void* fp = callee.as.pointer;
+    typedef SageValue (*Fn0)(void);
+    typedef SageValue (*Fn1)(SageValue);
+    typedef SageValue (*Fn2)(SageValue, SageValue);
+    typedef SageValue (*Fn3)(SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn4)(SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn5)(SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn6)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn7)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn8)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn9)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn10)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn11)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn12)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn13)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn14)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn15)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    typedef SageValue (*Fn16)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
+    switch (argc) {
+        case 0:  return ((Fn0)fp)();
+        case 1:  return ((Fn1)fp)(args[0]);
+        case 2:  return ((Fn2)fp)(args[0], args[1]);
+        case 3:  return ((Fn3)fp)(args[0], args[1], args[2]);
+        case 4:  return ((Fn4)fp)(args[0], args[1], args[2], args[3]);
+        case 5:  return ((Fn5)fp)(args[0], args[1], args[2], args[3], args[4]);
+        case 6:  return ((Fn6)fp)(args[0], args[1], args[2], args[3], args[4], args[5]);
+        case 7:  return ((Fn7)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6]);
+        case 8:  return ((Fn8)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7]);
+        case 9:  return ((Fn9)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8]);
+        case 10: return ((Fn10)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9]);
+        case 11: return ((Fn11)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10]);
+        case 12: return ((Fn12)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11]);
+        case 13: return ((Fn13)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12]);
+        case 14: return ((Fn14)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13]);
+        case 15: return ((Fn15)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13], args[14]);
+        case 16: return ((Fn16)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13], args[14], args[15]);
+        default:
+            fprintf(stderr, "sage_rt: call_dynamic: unsupported arity %d (max 16)\n", argc);
+            return sage_rt_nil();
+    }
+}

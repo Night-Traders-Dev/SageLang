@@ -767,6 +767,9 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_silu(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_scale(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_cross_entropy(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    // Dynamic function calls
+    ll_emit(lc, "declare %%SageValue @sage_rt_make_function(i8*)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_call_dynamic(%%SageValue, %%SageValue*, i32)\n");
     // Abort (for raise)
     ll_emit(lc, "declare void @abort() noreturn\n");
     // Bitwise operations
@@ -1453,9 +1456,11 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 if (strcmp(lc->proc_names[i], name) == 0) { is_proc = 1; break; }
             }
             if (is_proc) {
-                // Proc reference as value — emit nil placeholder
-                // (LLVM functions can't be SageValue directly; callbacks work via nil sentinel)
-                ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                // Proc reference as first-class value: bitcast function pointer
+                // to i8* and wrap it in a SAGE_FUNCTION SageValue via the runtime.
+                int ptr_reg = llc_new_reg(lc);
+                ll_line(lc, "%%%d = bitcast %%SageValue (...)* @sage_fn_%s to i8*", ptr_reg, name);
+                ll_line(lc, "%%%d = call %%SageValue @sage_rt_make_function(i8* %%%d)", r, ptr_reg);
             } else if (is_global) {
                 ll_line(lc, "%%%d = load %%SageValue, %%SageValue* @%s", r, name);
             } else {
@@ -1615,8 +1620,25 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 free(mod_name);
                 free(method_name);
             } else {
-                // Dynamic call not supported in LLVM backend yet
-                ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                // Dynamic/indirect call: evaluate callee expression to get a
+                // SageValue holding a function pointer, pack arguments into a
+                // stack-allocated array, and dispatch via sage_rt_call_dynamic.
+                int callee_reg = llvm_emit_expr(lc, expr->as.call.callee);
+                int argc = expr->as.call.arg_count;
+                if (argc > 0) {
+                    int arr_reg = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = alloca %%SageValue, i32 %d", arr_reg, argc);
+                    for (int i = 0; i < argc; i++) {
+                        int slot = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = getelementptr %%SageValue, %%SageValue* %%%d, i32 %d", slot, arr_reg, i);
+                        ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", arg_regs[i], slot);
+                    }
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_call_dynamic(%%SageValue %%%d, %%SageValue* %%%d, i32 %d)",
+                            r, callee_reg, arr_reg, argc);
+                } else {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_call_dynamic(%%SageValue %%%d, %%SageValue* null, i32 0)",
+                            r, callee_reg);
+                }
             }
 
             free(arg_regs);

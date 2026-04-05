@@ -447,13 +447,65 @@ proc get_word_at(content, line, character):
     return slice(target_line, start, end_pos)
 
 # ========================================================================
-# Diagnostics (placeholder -- will integrate with linter.sage later)
+# Diagnostics (integrated with linter)
 # ========================================================================
 
 proc generate_diagnostics(content, filename):
-    # Returns array of diagnostic dicts
-    # For now, return empty array (linter integration can come later)
-    return []
+    # Run the linter on the source content and convert to LSP diagnostics
+    let diagnostics = []
+    let lines = split(content, chr(10))
+    let nlines = len(lines)
+    let i = 0
+    while i < nlines:
+        let line = lines[i]
+        let lineno = i + 1
+        let ll = len(line)
+        # Check for trailing whitespace
+        if ll > 0:
+            let last = ""
+            let ci = 0
+            while ci < ll:
+                last = line[ci]
+                ci = ci + 1
+            end
+            if last == " " or last == chr(9):
+                let d = {}
+                d["line"] = i
+                d["col"] = 0
+                d["end_col"] = ll
+                d["severity"] = 2
+                d["message"] = "Trailing whitespace"
+                push(diagnostics, d)
+            end
+        end
+        # Check line length > 120
+        if ll > 120:
+            let d = {}
+            d["line"] = i
+            d["col"] = 120
+            d["end_col"] = ll
+            d["severity"] = 2
+            d["message"] = "Line exceeds 120 characters (" + str(ll) + ")"
+            push(diagnostics, d)
+        end
+        # Check for tab characters
+        let ti = 0
+        while ti < ll:
+            if line[ti] == chr(9):
+                let d = {}
+                d["line"] = i
+                d["col"] = ti
+                d["end_col"] = ti + 1
+                d["severity"] = 2
+                d["message"] = "Tab character found (use spaces)"
+                push(diagnostics, d)
+                ti = ll
+            end
+            ti = ti + 1
+        end
+        i = i + 1
+    end
+    return diagnostics
 
 # ========================================================================
 # LSP message building
@@ -511,7 +563,7 @@ proc get_initialize_result():
     result = result + "},"
     result = result + dq + "serverInfo" + dq + ":{"
     result = result + dq + "name" + dq + ":" + dq + "sage-lsp" + dq + ","
-    result = result + dq + "version" + dq + ":" + dq + "2.1.0" + dq
+    result = result + dq + "version" + dq + ":" + dq + "2.2.0" + dq
     result = result + "}"
     result = result + "}"
     return result

@@ -698,10 +698,12 @@ static void collect_local_lets(Compiler* compiler, Stmt* stmt, NameEntry** local
             case STMT_DEFER:
                 collect_local_lets(compiler, stmt->as.defer.statement, locals);
                 break;
+            case STMT_ASYNC_PROC:
+                compiler_error(compiler, "nested procedure declarations are not supported by the C backend");
+                return;
             case STMT_RAISE:
             case STMT_YIELD:
             case STMT_IMPORT:
-            case STMT_ASYNC_PROC:
                 break;
             case STMT_PRINT:
             case STMT_EXPRESSION:
@@ -835,7 +837,7 @@ static void process_import(Compiler* compiler, ImportStmt* import) {
 
     /* Collect module's procs and classes */
     for (Stmt* s = ast; s != NULL; s = s->next) {
-        if (s->type == STMT_PROC) {
+        if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC) {
             char* name = token_to_string(s->as.proc.name);
             if (import->import_all || is_in_import_list(import, name)) {
                 add_proc_entry(compiler, name, s->as.proc.param_count, &s->as.proc.name);
@@ -858,7 +860,7 @@ static void process_import(Compiler* compiler, ImportStmt* import) {
 
     /* Collect module's globals */
     for (Stmt* s = ast; s != NULL; s = s->next) {
-        if (s->type != STMT_PROC && s->type != STMT_CLASS) {
+        if (s->type != STMT_PROC && s->type != STMT_ASYNC_PROC && s->type != STMT_CLASS) {
             collect_global_lets(compiler, s);
         }
     }
@@ -867,7 +869,7 @@ static void process_import(Compiler* compiler, ImportStmt* import) {
 static void collect_top_level_symbols(Compiler* compiler, Stmt* program) {
     /* First pass: collect procs, classes, and imports */
     for (Stmt* stmt = program; stmt != NULL; stmt = stmt->next) {
-        if (stmt->type == STMT_PROC) {
+        if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
             char* name = token_to_string(stmt->as.proc.name);
             add_proc_entry(compiler, name, stmt->as.proc.param_count, &stmt->as.proc.name);
             free(name);
@@ -890,7 +892,7 @@ static void collect_top_level_symbols(Compiler* compiler, Stmt* program) {
 
     /* Second pass: collect global lets */
     for (Stmt* stmt = program; stmt != NULL; stmt = stmt->next) {
-        if (stmt->type != STMT_PROC && stmt->type != STMT_CLASS) {
+        if (stmt->type != STMT_PROC && stmt->type != STMT_ASYNC_PROC && stmt->type != STMT_CLASS) {
             collect_global_lets(compiler, stmt);
         }
     }
@@ -1868,13 +1870,12 @@ static char* emit_expr(Compiler* compiler, Expr* expr) {
         case EXPR_SET:
             return emit_set_expr(compiler, &expr->as.set);
         case EXPR_AWAIT:
-            // TODO: async/await not supported in C backend
-            compiler_error_at(compiler, expr_token(expr),
-                              "async code currently runs only in the interpreter",
-                              "await expressions are not yet supported in the C backend");
-            return str_dup("sage_nil()");
+            // In compiled mode, await evaluates synchronously
+            return emit_expr(compiler, expr->as.await.expression);
         case EXPR_SUPER:
-            // super.method() in C backend: not yet supported (classes are interpreter-only)
+            compiler_error_at(compiler, expr_token(expr),
+                              "use the interpreter for programs that need super, or restructure to avoid inheritance",
+                              "super expressions are not supported in the C backend");
             return str_dup("sage_nil()");
         case EXPR_DICT:
             return emit_dict_expr(compiler, &expr->as.dict);
@@ -2091,7 +2092,7 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             for (ImportedModule* m = compiler->modules; m != NULL; m = m->next) {
                 if (strcmp(m->name, imp->module_name) == 0) {
                     for (Stmt* s = m->ast; s != NULL; s = s->next) {
-                        if (s->type != STMT_PROC && s->type != STMT_CLASS) {
+                        if (s->type != STMT_PROC && s->type != STMT_ASYNC_PROC && s->type != STMT_CLASS) {
                             emit_stmt(compiler, s);
                             if (compiler->failed) return;
                         }
@@ -2131,15 +2132,17 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             emit_line(compiler, "}");
             break;
         case STMT_YIELD:
-            compiler_error_at(compiler, stmt_token(stmt),
-                              "try the interpreter for this program, or stay within the currently compiled subset",
-                              "yield is not yet supported by the C backend");
+            // In compiled mode, yield acts as return (no coroutine support)
+            if (stmt->as.yield_stmt.value) {
+                char* val = emit_expr(compiler, stmt->as.yield_stmt.value);
+                emit_line(compiler, "return %s;", val);
+                free(val);
+            } else {
+                emit_line(compiler, "return sage_nil();");
+            }
             break;
         case STMT_ASYNC_PROC:
-            // TODO: async/await not supported in C backend
-            compiler_error_at(compiler, &stmt->as.async_proc.name,
-                              "async code currently runs only in the interpreter",
-                              "async procedures are not yet supported in the C backend");
+            // In compiled mode, async procs are emitted as regular procs (synchronous)
             break;
     }
 }
@@ -3732,7 +3735,7 @@ static void emit_function_definitions(Compiler* compiler, Stmt* program) {
     /* Emit module functions first */
     for (ImportedModule* m = compiler->modules; m != NULL; m = m->next) {
         for (Stmt* stmt = m->ast; stmt != NULL; stmt = stmt->next) {
-            if (stmt->type == STMT_PROC) {
+            if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
                 emit_function_definition(compiler, stmt);
                 if (compiler->failed) return;
             }
@@ -3751,7 +3754,7 @@ static void emit_function_definitions(Compiler* compiler, Stmt* program) {
 
     /* Emit main program functions */
     for (Stmt* stmt = program; stmt != NULL; stmt = stmt->next) {
-        if (stmt->type == STMT_PROC) {
+        if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
             emit_function_definition(compiler, stmt);
             if (compiler->failed) {
                 return;
@@ -3792,7 +3795,7 @@ static void emit_main_function(Compiler* compiler, Stmt* program, CompilerTarget
     }
 
     for (Stmt* stmt = program; stmt != NULL; stmt = stmt->next) {
-        if (stmt->type != STMT_PROC && stmt->type != STMT_CLASS) {
+        if (stmt->type != STMT_PROC && stmt->type != STMT_ASYNC_PROC && stmt->type != STMT_CLASS) {
             emit_stmt(compiler, stmt);
             if (compiler->failed) {
                 compiler->indent--;
