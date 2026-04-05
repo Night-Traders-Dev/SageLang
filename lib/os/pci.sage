@@ -268,7 +268,8 @@ end
 proc enumerate_bus(config_blocks):
     let devices = []
     for dev in range(32):
-        for func in range(8):
+        let func = 0
+        while func < 8:
             let idx = dev * 8 + func
             if idx < len(config_blocks):
                 let cfg = parse_config(config_blocks[idx])
@@ -282,6 +283,7 @@ proc enumerate_bus(config_blocks):
                     end
                 end
             end
+            func = func + 1
         end
     end
     return devices

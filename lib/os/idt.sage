@@ -399,3 +399,408 @@ proc pic_remap_sequence(vector_base):
     push(seq, s10)
     return seq
 end
+
+# ============================================================================
+# aarch64 GIC (Generic Interrupt Controller) support
+# ============================================================================
+
+# Default GIC base addresses (GICv2, platform-dependent)
+let GICD_BASE = 0x08000000
+let GICC_BASE = 0x08010000
+
+# GIC Distributor register offsets
+let GICD_CTLR       = 0x000
+let GICD_TYPER      = 0x004
+let GICD_IIDR       = 0x008
+let GICD_IGROUPR    = 0x080
+let GICD_ISENABLER  = 0x100
+let GICD_ICENABLER  = 0x180
+let GICD_ISPENDR    = 0x200
+let GICD_ICPENDR    = 0x280
+let GICD_ISACTIVER  = 0x300
+let GICD_ICACTIVER  = 0x380
+let GICD_IPRIORITYR = 0x400
+let GICD_ITARGETSR  = 0x800
+let GICD_ICFGR      = 0xC00
+
+# GIC CPU Interface register offsets
+let GICC_CTLR  = 0x000
+let GICC_PMR   = 0x004
+let GICC_BPR   = 0x008
+let GICC_IAR   = 0x00C
+let GICC_EOIR  = 0x010
+let GICC_RPR   = 0x014
+let GICC_HPPIR = 0x018
+
+# GIC interrupt type constants
+let GIC_SPI_START = 32
+let GIC_PPI_START = 16
+let GIC_SGI_START = 0
+let GIC_MAX_IRQS  = 1020
+
+# Returns a dict describing the GIC Distributor register layout
+# base_addr: physical base address of the GICD
+proc gic_dist_config(base_addr):
+    let cfg = {}
+    cfg["base"] = base_addr
+    cfg["ctlr"] = base_addr + GICD_CTLR
+    cfg["typer"] = base_addr + GICD_TYPER
+    cfg["iidr"] = base_addr + GICD_IIDR
+    cfg["igroupr"] = base_addr + GICD_IGROUPR
+    cfg["isenabler"] = base_addr + GICD_ISENABLER
+    cfg["icenabler"] = base_addr + GICD_ICENABLER
+    cfg["ispendr"] = base_addr + GICD_ISPENDR
+    cfg["icpendr"] = base_addr + GICD_ICPENDR
+    cfg["isactiver"] = base_addr + GICD_ISACTIVER
+    cfg["icactiver"] = base_addr + GICD_ICACTIVER
+    cfg["ipriorityr"] = base_addr + GICD_IPRIORITYR
+    cfg["itargetsr"] = base_addr + GICD_ITARGETSR
+    cfg["icfgr"] = base_addr + GICD_ICFGR
+    return cfg
+end
+
+# Returns a dict describing the GIC CPU Interface register layout
+# base_addr: physical base address of the GICC
+proc gic_cpu_config(base_addr):
+    let cfg = {}
+    cfg["base"] = base_addr
+    cfg["ctlr"] = base_addr + GICC_CTLR
+    cfg["pmr"] = base_addr + GICC_PMR
+    cfg["bpr"] = base_addr + GICC_BPR
+    cfg["iar"] = base_addr + GICC_IAR
+    cfg["eoir"] = base_addr + GICC_EOIR
+    cfg["rpr"] = base_addr + GICC_RPR
+    cfg["hppir"] = base_addr + GICC_HPPIR
+    return cfg
+end
+
+# Returns a dict with the register offset and bit position to enable an IRQ
+# gic: a dist config dict (from gic_dist_config)
+# irq_num: the interrupt number (0-1019)
+proc gic_enable_irq(gic, irq_num):
+    let result = {}
+    # Each ISENABLER register covers 32 IRQs
+    let reg_index = irq_num / 32
+    let bit_pos = irq_num % 32
+    result["reg_addr"] = gic["isenabler"] + reg_index * 4
+    result["bit"] = bit_pos
+    result["value"] = 1 << bit_pos
+    result["irq"] = irq_num
+    return result
+end
+
+# Returns a list of {addr, value} pairs for GICv2 initialization
+# gicd_base: physical base address of the GIC Distributor
+# gicc_base: physical base address of the GIC CPU Interface
+proc gic_init_sequence(gicd_base, gicc_base):
+    let seq = []
+
+    # Step 1: Disable distributor while configuring
+    let s1 = {}
+    s1["addr"] = gicd_base + GICD_CTLR
+    s1["value"] = 0
+    push(seq, s1)
+
+    # Step 2: Set all SPIs to Group 0 (secure/FIQ)
+    # IGROUPR registers: 32 IRQs per register, start at SPI range
+    # Covers IRQs 32..1023 => registers 1..31
+    let reg = 1
+    while reg < 32:
+        let s = {}
+        s["addr"] = gicd_base + GICD_IGROUPR + reg * 4
+        s["value"] = 0
+        push(seq, s)
+        reg = reg + 1
+    end
+
+    # Step 3: Disable all SPIs (clear enable bits)
+    reg = 1
+    while reg < 32:
+        let s = {}
+        s["addr"] = gicd_base + GICD_ICENABLER + reg * 4
+        s["value"] = 0xFFFFFFFF
+        push(seq, s)
+        reg = reg + 1
+    end
+
+    # Step 4: Set all SPI priorities to default (0xA0)
+    # IPRIORITYR: 4 IRQs per register (1 byte each)
+    # SPIs start at IRQ 32 => byte offset 32 => register index 8
+    let preg = 8
+    while preg < 256:
+        let s = {}
+        s["addr"] = gicd_base + GICD_IPRIORITYR + preg * 4
+        s["value"] = 0xA0A0A0A0
+        push(seq, s)
+        preg = preg + 1
+    end
+
+    # Step 5: Set all SPI targets to CPU 0
+    # ITARGETSR: 4 IRQs per register (1 byte each)
+    let treg = 8
+    while treg < 256:
+        let s = {}
+        s["addr"] = gicd_base + GICD_ITARGETSR + treg * 4
+        s["value"] = 0x01010101
+        push(seq, s)
+        treg = treg + 1
+    end
+
+    # Step 6: Set all SPIs to level-triggered
+    # ICFGR: 16 IRQs per register (2 bits each), SPIs start at reg 2
+    let creg = 2
+    while creg < 64:
+        let s = {}
+        s["addr"] = gicd_base + GICD_ICFGR + creg * 4
+        s["value"] = 0
+        push(seq, s)
+        creg = creg + 1
+    end
+
+    # Step 7: Enable distributor (Group 0 forwarding)
+    let s_en = {}
+    s_en["addr"] = gicd_base + GICD_CTLR
+    s_en["value"] = 1
+    push(seq, s_en)
+
+    # Step 8: Configure CPU Interface — set priority mask to allow all
+    let s_pmr = {}
+    s_pmr["addr"] = gicc_base + GICC_PMR
+    s_pmr["value"] = 0xFF
+    push(seq, s_pmr)
+
+    # Step 9: Enable CPU Interface (Group 0)
+    let s_cpu = {}
+    s_cpu["addr"] = gicc_base + GICC_CTLR
+    s_cpu["value"] = 1
+    push(seq, s_cpu)
+
+    return seq
+end
+
+# Acknowledge an interrupt (read IAR) — returns dict with addr to read
+proc gic_ack_irq(gicc_base):
+    let result = {}
+    result["addr"] = gicc_base + GICC_IAR
+    return result
+end
+
+# End-of-interrupt (write EOIR) — returns dict with addr and value to write
+proc gic_eoi(gicc_base, irq_num):
+    let result = {}
+    result["addr"] = gicc_base + GICC_EOIR
+    result["value"] = irq_num
+    return result
+end
+
+# ============================================================================
+# riscv64 PLIC (Platform-Level Interrupt Controller) support
+# ============================================================================
+
+# Default PLIC base address (QEMU virt platform)
+let PLIC_BASE = 0x0C000000
+
+# PLIC register offsets (relative to base)
+let PLIC_PRIORITY  = 0x000000
+let PLIC_PENDING   = 0x001000
+let PLIC_ENABLE    = 0x002000
+let PLIC_THRESHOLD = 0x200000
+let PLIC_CLAIM     = 0x200004
+
+# PLIC layout constants
+let PLIC_MAX_SOURCES  = 1024
+let PLIC_MAX_CONTEXTS = 15872
+
+# Per-context stride in the enable region
+let PLIC_ENABLE_STRIDE = 0x80
+
+# Per-context stride in the threshold/claim region
+let PLIC_CONTEXT_STRIDE = 0x1000
+
+# Returns a dict describing the PLIC register layout
+# base_addr: physical base address of the PLIC
+proc plic_config(base_addr):
+    let cfg = {}
+    cfg["base"] = base_addr
+    cfg["priority"] = base_addr + PLIC_PRIORITY
+    cfg["pending"] = base_addr + PLIC_PENDING
+    cfg["enable"] = base_addr + PLIC_ENABLE
+    cfg["threshold"] = base_addr + PLIC_THRESHOLD
+    cfg["claim"] = base_addr + PLIC_CLAIM
+    cfg["max_sources"] = PLIC_MAX_SOURCES
+    cfg["enable_stride"] = PLIC_ENABLE_STRIDE
+    cfg["context_stride"] = PLIC_CONTEXT_STRIDE
+    return cfg
+end
+
+# Returns a dict with the register offset and bit to enable an IRQ
+# plic: a PLIC config dict (from plic_config)
+# irq_num: the interrupt source number (1-1023, source 0 is reserved)
+# context: the hart context (0 = M-mode hart 0, 1 = S-mode hart 0, etc.)
+proc plic_enable_irq(plic, irq_num, context):
+    let result = {}
+    # Enable registers: each context has PLIC_ENABLE_STRIDE bytes
+    # Each 32-bit register covers 32 sources
+    let context_base = plic["enable"] + context * PLIC_ENABLE_STRIDE
+    let reg_index = irq_num / 32
+    let bit_pos = irq_num % 32
+    result["reg_addr"] = context_base + reg_index * 4
+    result["bit"] = bit_pos
+    result["value"] = 1 << bit_pos
+    result["irq"] = irq_num
+    result["context"] = context
+    return result
+end
+
+# Returns a dict for disabling an IRQ on a given context
+proc plic_disable_irq(plic, irq_num, context):
+    let result = {}
+    let context_base = plic["enable"] + context * PLIC_ENABLE_STRIDE
+    let reg_index = irq_num / 32
+    let bit_pos = irq_num % 32
+    result["reg_addr"] = context_base + reg_index * 4
+    result["bit"] = bit_pos
+    # Caller must read-modify-write: clear this bit
+    result["clear_mask"] = (1 << bit_pos)
+    result["irq"] = irq_num
+    result["context"] = context
+    return result
+end
+
+# Set priority for an interrupt source
+# Returns {addr, value} for the priority register write
+proc plic_set_priority(plic, irq_num, priority):
+    let result = {}
+    # Each source has a 4-byte priority register at offset source*4
+    result["addr"] = plic["priority"] + irq_num * 4
+    result["value"] = priority
+    result["irq"] = irq_num
+    return result
+end
+
+# Set threshold for a context
+# Returns {addr, value} for the threshold register write
+proc plic_set_threshold(plic, context, threshold):
+    let result = {}
+    result["addr"] = plic["threshold"] + context * PLIC_CONTEXT_STRIDE
+    result["value"] = threshold
+    result["context"] = context
+    return result
+end
+
+# Claim an interrupt (read the claim register for a context)
+# Returns dict with the address to read
+proc plic_claim_irq(plic, context):
+    let result = {}
+    result["addr"] = plic["claim"] + context * PLIC_CONTEXT_STRIDE
+    result["context"] = context
+    return result
+end
+
+# Complete an interrupt (write the IRQ number to the claim register)
+# Returns {addr, value} to write
+proc plic_complete_irq(plic, context, irq_num):
+    let result = {}
+    result["addr"] = plic["claim"] + context * PLIC_CONTEXT_STRIDE
+    result["value"] = irq_num
+    result["context"] = context
+    return result
+end
+
+# Returns a list of {addr, value} pairs for PLIC initialization
+# base_addr: physical base address of the PLIC
+# num_sources: number of interrupt sources to configure (1..1023)
+proc plic_init_sequence(base_addr, num_sources):
+    let seq = []
+
+    # Clamp num_sources to valid range
+    if num_sources > 1023:
+        num_sources = 1023
+    end
+    if num_sources < 1:
+        num_sources = 1
+    end
+
+    # Step 1: Set all source priorities to 0 (disabled)
+    let src = 1
+    while src <= num_sources:
+        let s = {}
+        s["addr"] = base_addr + PLIC_PRIORITY + src * 4
+        s["value"] = 0
+        push(seq, s)
+        src = src + 1
+    end
+
+    # Step 2: Disable all sources for context 0 (S-mode hart 0 = context 1)
+    # Clear all enable registers for context 0 and context 1
+    let ctx = 0
+    while ctx < 2:
+        let reg = 0
+        let num_regs = (num_sources + 31) / 32
+        while reg <= num_regs:
+            let s = {}
+            s["addr"] = base_addr + PLIC_ENABLE + ctx * PLIC_ENABLE_STRIDE + reg * 4
+            s["value"] = 0
+            push(seq, s)
+            reg = reg + 1
+        end
+        ctx = ctx + 1
+    end
+
+    # Step 3: Set threshold to 0 for context 0 and context 1
+    # (accept all priority levels > 0)
+    let s_t0 = {}
+    s_t0["addr"] = base_addr + PLIC_THRESHOLD
+    s_t0["value"] = 0
+    push(seq, s_t0)
+
+    let s_t1 = {}
+    s_t1["addr"] = base_addr + PLIC_THRESHOLD + PLIC_CONTEXT_STRIDE
+    s_t1["value"] = 0
+    push(seq, s_t1)
+
+    return seq
+end
+
+# ============================================================================
+# Architecture dispatcher
+# ============================================================================
+
+# Initialize the appropriate interrupt controller for the given architecture
+# arch: "x86_64", "aarch64", or "riscv64"
+# base_addr: base address (used as vector_base for x86_64 PIC,
+#            GICD base for aarch64, PLIC base for riscv64)
+# Returns a dict with controller info and initialization sequence
+proc interrupt_init(arch, base_addr):
+    let result = {}
+    result["arch"] = arch
+
+    if arch == "x86_64":
+        result["type"] = "PIC"
+        result["sequence"] = pic_remap_sequence(base_addr)
+        result["vector_base"] = base_addr
+        return result
+    end
+
+    if arch == "aarch64":
+        result["type"] = "GIC"
+        let gicd_base = base_addr
+        let gicc_base = base_addr + 0x10000
+        result["gicd"] = gic_dist_config(gicd_base)
+        result["gicc"] = gic_cpu_config(gicc_base)
+        result["sequence"] = gic_init_sequence(gicd_base, gicc_base)
+        return result
+    end
+
+    if arch == "riscv64":
+        result["type"] = "PLIC"
+        result["plic"] = plic_config(base_addr)
+        result["sequence"] = plic_init_sequence(base_addr, 127)
+        return result
+    end
+
+    result["type"] = "unknown"
+    result["error"] = "Unsupported architecture: " + arch
+    result["sequence"] = []
+    return result
+end

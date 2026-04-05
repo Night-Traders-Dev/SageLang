@@ -269,3 +269,292 @@ proc fb_fill_rect(x, y, w, h, color):
         row = row + 1
     end
 end
+
+# ================================================================
+# Architecture-neutral framebuffer text console
+# ================================================================
+# Works on ALL architectures (x86_64, aarch64, riscv64) since it
+# operates on a generic memory-mapped framebuffer. Uses a simple
+# built-in 8x8 bitmap font.
+
+# Simple 8x8 bitmap font for printable ASCII (32-126)
+# Each character is 8 bytes, one byte per row, MSB = leftmost pixel.
+proc _font_get_glyph(ch):
+    let code = ord(ch)
+    if code < 32 or code > 126:
+        code = 32
+    end
+    # Minimal built-in bitmaps for printable ASCII
+    # We define a small subset inline; everything else gets a filled block
+    let glyph = [0, 0, 0, 0, 0, 0, 0, 0]
+    if code == 32:
+        # space
+        return glyph
+    end
+    if code == 33:
+        # !
+        glyph = [24, 24, 24, 24, 24, 0, 24, 0]
+        return glyph
+    end
+    if code == 48:
+        # 0
+        glyph = [60, 102, 110, 126, 118, 102, 60, 0]
+        return glyph
+    end
+    if code == 49:
+        # 1
+        glyph = [24, 56, 24, 24, 24, 24, 126, 0]
+        return glyph
+    end
+    if code == 50:
+        # 2
+        glyph = [60, 102, 6, 12, 24, 48, 126, 0]
+        return glyph
+    end
+    if code == 51:
+        # 3
+        glyph = [60, 102, 6, 28, 6, 102, 60, 0]
+        return glyph
+    end
+    if code == 52:
+        # 4
+        glyph = [12, 28, 44, 76, 126, 12, 12, 0]
+        return glyph
+    end
+    if code == 53:
+        # 5
+        glyph = [126, 96, 124, 6, 6, 102, 60, 0]
+        return glyph
+    end
+    if code == 54:
+        # 6
+        glyph = [60, 102, 96, 124, 102, 102, 60, 0]
+        return glyph
+    end
+    if code == 55:
+        # 7
+        glyph = [126, 6, 12, 24, 48, 48, 48, 0]
+        return glyph
+    end
+    if code == 56:
+        # 8
+        glyph = [60, 102, 102, 60, 102, 102, 60, 0]
+        return glyph
+    end
+    if code == 57:
+        # 9
+        glyph = [60, 102, 102, 62, 6, 102, 60, 0]
+        return glyph
+    end
+    if code >= 65 and code <= 90:
+        # Uppercase A-Z: simple block representation
+        glyph = [126, 102, 102, 126, 102, 102, 102, 0]
+        return glyph
+    end
+    if code >= 97 and code <= 122:
+        # Lowercase a-z: smaller block
+        glyph = [0, 0, 60, 6, 62, 102, 62, 0]
+        return glyph
+    end
+    if code == 46:
+        # .
+        glyph = [0, 0, 0, 0, 0, 24, 24, 0]
+        return glyph
+    end
+    if code == 44:
+        # ,
+        glyph = [0, 0, 0, 0, 0, 24, 24, 48]
+        return glyph
+    end
+    if code == 58:
+        # :
+        glyph = [0, 24, 24, 0, 24, 24, 0, 0]
+        return glyph
+    end
+    if code == 45:
+        # -
+        glyph = [0, 0, 0, 126, 0, 0, 0, 0]
+        return glyph
+    end
+    if code == 95:
+        # _
+        glyph = [0, 0, 0, 0, 0, 0, 0, 255]
+        return glyph
+    end
+    if code == 61:
+        # =
+        glyph = [0, 0, 126, 0, 126, 0, 0, 0]
+        return glyph
+    end
+    if code == 47:
+        # /
+        glyph = [2, 4, 8, 16, 32, 64, 128, 0]
+        return glyph
+    end
+    if code == 42:
+        # *
+        glyph = [0, 102, 60, 255, 60, 102, 0, 0]
+        return glyph
+    end
+    if code == 40:
+        # (
+        glyph = [12, 24, 48, 48, 48, 24, 12, 0]
+        return glyph
+    end
+    if code == 41:
+        # )
+        glyph = [48, 24, 12, 12, 12, 24, 48, 0]
+        return glyph
+    end
+    # Default: filled block for unrecognized characters
+    glyph = [255, 129, 129, 129, 129, 129, 255, 0]
+    return glyph
+end
+
+# Initialize a framebuffer text console (architecture-neutral)
+# Returns a console state dict used by fb_putchar / fb_puts
+proc framebuffer_console_init(fb_address, width, height, pitch):
+    let con = {}
+    con["fb_addr"] = fb_address
+    con["width"] = width
+    con["height"] = height
+    con["pitch"] = pitch
+    con["char_w"] = 8
+    con["char_h"] = 8
+    con["cols"] = width / 8
+    con["rows"] = height / 8
+    con["cx"] = 0
+    con["cy"] = 0
+    con["fg_color"] = 16777215
+    con["bg_color"] = 0
+    # Pixel buffer (simulated as flat array for codegen)
+    let total_pixels = width * height
+    let pixels = []
+    let i = 0
+    while i < total_pixels:
+        push(pixels, 0)
+        i = i + 1
+    end
+    con["pixels"] = pixels
+    return con
+end
+
+# Set the text colors for the framebuffer console
+proc fb_console_set_color(con, fg, bg):
+    con["fg_color"] = fg
+    con["bg_color"] = bg
+end
+
+# Scroll the framebuffer console up by one text row (8 pixels)
+proc _fb_scroll_up(con):
+    let w = con["width"]
+    let h = con["height"]
+    let pixels = con["pixels"]
+    let char_h = con["char_h"]
+    # Move all rows up by char_h pixels
+    let y = char_h
+    while y < h:
+        let x = 0
+        while x < w:
+            let src_idx = y * w + x
+            let dst_idx = (y - char_h) * w + x
+            pixels[dst_idx] = pixels[src_idx]
+            x = x + 1
+        end
+        y = y + 1
+    end
+    # Clear the bottom char_h rows
+    let clear_y = h - char_h
+    while clear_y < h:
+        let x = 0
+        while x < w:
+            let idx = clear_y * w + x
+            pixels[idx] = con["bg_color"]
+            x = x + 1
+        end
+        clear_y = clear_y + 1
+    end
+end
+
+# Render a single character at the current cursor position
+proc fb_putchar(con, ch):
+    let cols = con["cols"]
+    let rows = con["rows"]
+    let char_w = con["char_w"]
+    let char_h = con["char_h"]
+    let w = con["width"]
+    let pixels = con["pixels"]
+    let fg = con["fg_color"]
+    let bg = con["bg_color"]
+    # Handle newline
+    if ch == chr(10):
+        con["cx"] = 0
+        con["cy"] = con["cy"] + 1
+        if con["cy"] >= rows:
+            _fb_scroll_up(con)
+            con["cy"] = rows - 1
+        end
+        return
+    end
+    # Handle carriage return
+    if ch == chr(13):
+        con["cx"] = 0
+        return
+    end
+    # Handle tab
+    if ch == chr(9):
+        let spaces = 8 - (con["cx"] % 8)
+        let s = 0
+        while s < spaces:
+            fb_putchar(con, " ")
+            s = s + 1
+        end
+        return
+    end
+    # Get the 8x8 glyph bitmap
+    let glyph = _font_get_glyph(ch)
+    # Draw the glyph pixel by pixel
+    let px = con["cx"] * char_w
+    let py = con["cy"] * char_h
+    let row = 0
+    while row < 8:
+        let bits = glyph[row]
+        let col = 0
+        while col < 8:
+            let screen_x = px + col
+            let screen_y = py + row
+            if screen_x < w and screen_y < con["height"]:
+                let idx = screen_y * w + screen_x
+                # Check bit (MSB first): bit 7-col
+                let mask = 128 >> col
+                if (bits & mask) != 0:
+                    pixels[idx] = fg
+                else:
+                    pixels[idx] = bg
+                end
+            end
+            col = col + 1
+        end
+        row = row + 1
+    end
+    # Advance cursor
+    con["cx"] = con["cx"] + 1
+    if con["cx"] >= cols:
+        con["cx"] = 0
+        con["cy"] = con["cy"] + 1
+        if con["cy"] >= rows:
+            _fb_scroll_up(con)
+            con["cy"] = rows - 1
+        end
+    end
+end
+
+# Render a string on the framebuffer console
+proc fb_puts(con, text):
+    let i = 0
+    let tlen = len(text)
+    while i < tlen:
+        fb_putchar(con, text[i])
+        i = i + 1
+    end
+end

@@ -56,15 +56,15 @@ proc _read_u32(bytes, off):
 end
 
 proc _write_u16(bytes, off, val):
-    bytes[off] = val % 256
-    bytes[off + 1] = (val / 256) % 256
+    bytes[off] = val & 255
+    bytes[off + 1] = (val >> 8) & 255
 end
 
 proc _write_u32(bytes, off, val):
-    bytes[off] = val % 256
-    bytes[off + 1] = (val / 256) % 256
-    bytes[off + 2] = (val / 65536) % 256
-    bytes[off + 3] = (val / 16777216) % 256
+    bytes[off] = val & 255
+    bytes[off + 1] = (val >> 8) & 255
+    bytes[off + 2] = (val >> 16) & 255
+    bytes[off + 3] = (val >> 24) & 255
 end
 
 proc _zero_bytes(count):
@@ -103,8 +103,8 @@ proc parse_superblock(bytes, offset):
         print("Warning: invalid ext magic " + str(sb["magic"]))
     end
     # Detect ext version
-    let has_journal = (sb["feature_compat"] / 4) % 2
-    let has_extents = (sb["feature_incompat"] / 64) % 2
+    let has_journal = (sb["feature_compat"] >> 2) & 1
+    let has_extents = (sb["feature_incompat"] >> 6) & 1
     if has_extents:
         sb["version"] = "ext4"
     elif has_journal:
@@ -129,7 +129,7 @@ end
 proc _get_group_descs(fs):
     let sb = fs["superblock"]
     let bs = sb["block_size"]
-    let num_groups = (sb["blocks_count"] + sb["blocks_per_group"] - 1) / sb["blocks_per_group"]
+    let num_groups = ((sb["blocks_count"] + sb["blocks_per_group"] - 1) / sb["blocks_per_group"]) | 0
     let gdt_block = sb["first_data_block"] + 1
     let gdt_offset = gdt_block * bs
     let descs = []
@@ -162,7 +162,7 @@ proc read_inode(fs, inode_num):
     if inode_size < 128:
         inode_size = 128
     end
-    let group = (inode_num - 1) / inodes_per_group
+    let group = ((inode_num - 1) / inodes_per_group) | 0
     let index = (inode_num - 1) % inodes_per_group
     let descs = _get_group_descs(fs)
     let table_block = descs[group]["inode_table"]
@@ -171,6 +171,7 @@ proc read_inode(fs, inode_num):
     let inode = {}
     inode["mode"] = _read_u16(d, offset + 0)
     inode["uid"] = _read_u16(d, offset + 2)
+    inode["gid"] = _read_u16(d, offset + 24)
     inode["size"] = _read_u32(d, offset + 4)
     inode["atime"] = _read_u32(d, offset + 8)
     inode["ctime"] = _read_u32(d, offset + 12)
@@ -231,7 +232,7 @@ proc _read_indirect_blocks(fs, block_num, depth):
     end
     let bs = fs["superblock"]["block_size"]
     let blk = read_block(fs, block_num)
-    let ptrs_per = bs / 4
+    let ptrs_per = (bs / 4) | 0
     let result = []
     let i = 0
     while i < ptrs_per:
@@ -368,9 +369,9 @@ proc _allocate_block(fs):
             let bmp = read_block(fs, bmp_block)
             let bit = 0
             while bit < sb["blocks_per_group"]:
-                let byte_idx = bit / 8
+                let byte_idx = (bit / 8) | 0
                 let bit_idx = bit % 8
-                if (bmp[byte_idx] / (2 ** bit_idx)) % 2 == 0:
+                if (bmp[byte_idx] >> bit_idx) & 1 == 0:
                     bmp[byte_idx] = bmp[byte_idx] + (2 ** bit_idx)
                     let bmp_off = bmp_block * bs
                     let w = 0
@@ -401,9 +402,9 @@ proc _allocate_inode(fs):
             let bmp = read_block(fs, bmp_block)
             let bit = 0
             while bit < sb["inodes_per_group"]:
-                let byte_idx = bit / 8
+                let byte_idx = (bit / 8) | 0
                 let bit_idx = bit % 8
-                if (bmp[byte_idx] / (2 ** bit_idx)) % 2 == 0:
+                if (bmp[byte_idx] >> bit_idx) & 1 == 0:
                     bmp[byte_idx] = bmp[byte_idx] + (2 ** bit_idx)
                     let bmp_off = bmp_block * bs
                     let w = 0
@@ -431,7 +432,7 @@ proc write_file(fs, parent_inode, name, data):
     let sb = fs["superblock"]
     let bs = sb["block_size"]
     let size = len(data)
-    let num_blocks = (size + bs - 1) / bs
+    let num_blocks = ((size + bs - 1) / bs) | 0
     let allocated = []
     let i = 0
     while i < num_blocks:
@@ -465,14 +466,14 @@ proc write_file(fs, parent_inode, name, data):
     if inode_size < 128:
         inode_size = 128
     end
-    let group = (new_ino - 1) / sb["inodes_per_group"]
+    let group = ((new_ino - 1) / sb["inodes_per_group"]) | 0
     let index = (new_ino - 1) % sb["inodes_per_group"]
     let descs = _get_group_descs(fs)
     let table_block = descs[group]["inode_table"]
     let ino_off = table_block * bs + index * inode_size
     _write_u16(fs["data"], ino_off + 0, S_IFREG + 438)
     _write_u32(fs["data"], ino_off + 4, size)
-    _write_u32(fs["data"], ino_off + 28, num_blocks * (bs / 512))
+    _write_u32(fs["data"], ino_off + 28, num_blocks * ((bs / 512) | 0))
     let pi = 0
     while pi < len(allocated):
         if pi < DIRECT_BLOCKS:
@@ -490,7 +491,7 @@ proc _add_dir_entry(fs, parent_inode, name, ino, file_type):
     let blocks = _get_file_blocks(fs, parent)
     let bs = fs["superblock"]["block_size"]
     let name_len = len(name)
-    let needed = ((8 + name_len + 3) / 4) * 4
+    let needed = (((8 + name_len + 3) / 4) | 0) * 4
     let bi = 0
     while bi < len(blocks):
         let blk_data = read_block(fs, blocks[bi])
@@ -501,7 +502,7 @@ proc _add_dir_entry(fs, parent_inode, name, ino, file_type):
                 break
             end
             let existing_name_len = blk_data[pos + 6]
-            let actual_size = ((8 + existing_name_len + 3) / 4) * 4
+            let actual_size = (((8 + existing_name_len + 3) / 4) | 0) * 4
             if rec_len - actual_size >= needed:
                 let new_rec_start = pos + actual_size
                 _write_u16(blk_data, pos + 4, actual_size)
@@ -548,14 +549,14 @@ proc mkdir(fs, parent_inode, name):
     if inode_size < 128:
         inode_size = 128
     end
-    let group = (new_ino - 1) / sb["inodes_per_group"]
+    let group = ((new_ino - 1) / sb["inodes_per_group"]) | 0
     let index = (new_ino - 1) % sb["inodes_per_group"]
     let descs = _get_group_descs(fs)
     let table_block = descs[group]["inode_table"]
     let ino_off = table_block * bs + index * inode_size
     _write_u16(fs["data"], ino_off + 0, S_IFDIR + 493)
     _write_u32(fs["data"], ino_off + 4, bs)
-    _write_u32(fs["data"], ino_off + 28, bs / 512)
+    _write_u32(fs["data"], ino_off + 28, (bs / 512) | 0)
     _write_u32(fs["data"], ino_off + 40, blk)
     _write_u16(fs["data"], ino_off + 26, 2)
     # Initialize directory block with . and ..
@@ -613,10 +614,10 @@ end
 
 proc format_ext2(size_bytes):
     let bs = BLOCK_SIZE
-    let total_blocks = size_bytes / bs
+    let total_blocks = (size_bytes / bs) | 0
     let inodes_per_group = 8192
     let blocks_per_group = 32768
-    let num_groups = (total_blocks + blocks_per_group - 1) / blocks_per_group
+    let num_groups = ((total_blocks + blocks_per_group - 1) / blocks_per_group) | 0
     let total_inodes = num_groups * inodes_per_group
     let data = _zero_bytes(size_bytes)
     # Write superblock at offset 1024
@@ -707,10 +708,11 @@ proc _free_block(fs, block_num):
     let sb = fs["superblock"]
     let bsize = sb["block_size"]
     let bpg = sb["blocks_per_group"]
-    let group = block_num / bpg
+    let group = (block_num / bpg) | 0
     let idx = block_num % bpg
-    let gd = _parse_group_desc(fs["data"], SUPERBLOCK_OFFSET + SUPERBLOCK_SIZE + group * 32)
-    let bmp_off = gd["block_bitmap"] * bsize + (idx / 8)
+    let gdt_offset = (sb["first_data_block"] + 1) * bsize + group * 32
+    let gd = _parse_group_desc(fs["data"], gdt_offset)
+    let bmp_off = gd["block_bitmap"] * bsize + ((idx / 8) | 0)
     let bit = idx % 8
     fs["data"][bmp_off] = fs["data"][bmp_off] & (255 - (1 << bit))
 end
@@ -720,10 +722,11 @@ proc _free_inode(fs, inode_num):
     let sb = fs["superblock"]
     let bsize = sb["block_size"]
     let ipg = sb["inodes_per_group"]
-    let group = (inode_num - 1) / ipg
+    let group = ((inode_num - 1) / ipg) | 0
     let idx = (inode_num - 1) % ipg
-    let gd = _parse_group_desc(fs["data"], SUPERBLOCK_OFFSET + SUPERBLOCK_SIZE + group * 32)
-    let bmp_off = gd["inode_bitmap"] * bsize + (idx / 8)
+    let gdt_offset = (sb["first_data_block"] + 1) * bsize + group * 32
+    let gd = _parse_group_desc(fs["data"], gdt_offset)
+    let bmp_off = gd["inode_bitmap"] * bsize + ((idx / 8) | 0)
     let bit = idx % 8
     fs["data"][bmp_off] = fs["data"][bmp_off] & (255 - (1 << bit))
 end
@@ -738,16 +741,55 @@ proc rename_file(fs, parent_ino, old_name, new_name):
     for i in range(len(entries)):
         if entries[i]["name"] == old_name:
             target_ino = entries[i]["inode"]
-            target_type = entries[i]["file_type"]
+            target_type = entries[i]["type"]
             break
         end
     end
     if target_ino == 0:
         return false
     end
-    delete_file(fs, parent_ino, old_name)
-    _add_dir_entry(fs, parent_ino, new_name, target_ino, target_type)
+    _remove_dir_entry(fs, parent_ino, old_name)
+    let parent_inode = read_inode(fs, parent_ino)
+    _add_dir_entry(fs, parent_inode, new_name, target_ino, target_type)
     return true
+end
+
+# Remove a directory entry without freeing the inode or its blocks
+proc _remove_dir_entry(fs, parent_inode_num, name):
+    let parent = read_inode(fs, parent_inode_num)
+    let blocks = _get_file_blocks(fs, parent)
+    let bs = BLOCK_SIZE
+    for bi in range(len(blocks)):
+        let bdata = read_block(fs, blocks[bi])
+        let off = 0
+        let prev_off = -1
+        while off < bs:
+            let rec_len = _read_u16(bdata, off + 4)
+            if rec_len == 0:
+                break
+            end
+            let name_len = bdata[off + 6]
+            let entry_name = ""
+            for ni in range(name_len):
+                entry_name = entry_name + chr(bdata[off + 8 + ni])
+            end
+            if entry_name == name:
+                _write_u32(bdata, off, 0)
+                if prev_off >= 0:
+                    let prev_rec = _read_u16(bdata, prev_off + 4)
+                    _write_u16(bdata, prev_off + 4, prev_rec + rec_len)
+                end
+                let blk_off = blocks[bi] * bs
+                for wi in range(bs):
+                    fs["data"][blk_off + wi] = bdata[wi]
+                end
+                return true
+            end
+            prev_off = off
+            off = off + rec_len
+        end
+    end
+    return false
 end
 
 # Create a symbolic link
@@ -759,9 +801,10 @@ proc create_symlink(fs, parent_ino, name, target_path):
     let sb = fs["superblock"]
     let bsize = sb["block_size"]
     let ipg = sb["inodes_per_group"]
-    let group = (ino - 1) / ipg
+    let group = ((ino - 1) / ipg) | 0
     let idx = (ino - 1) % ipg
-    let gd = _parse_group_desc(fs["data"], SUPERBLOCK_OFFSET + SUPERBLOCK_SIZE + group * 32)
+    let gdt_offset = (sb["first_data_block"] + 1) * bsize + group * 32
+    let gd = _parse_group_desc(fs["data"], gdt_offset)
     let ino_off = gd["inode_table"] * bsize + idx * sb["inode_size"]
     # Set mode: symlink + rwxrwxrwx (40960 + 511 = 41471)
     _write_u16(fs["data"], ino_off + 0, S_IFLNK + 511)
@@ -781,7 +824,8 @@ proc create_symlink(fs, parent_ino, name, target_path):
             end
         end
     end
-    _add_dir_entry(fs, parent_ino, name, ino, FT_SYMLINK)
+    let parent_inode = read_inode(fs, parent_ino)
+    _add_dir_entry(fs, parent_inode, name, ino, FT_SYMLINK)
     return ino
 end
 
@@ -795,7 +839,7 @@ proc read_symlink(fs, inode):
         let bsize = sb["block_size"]
         let ipg = sb["inodes_per_group"]
         # Re-read raw inode data for block pointer area
-        let blocks = inode["blocks_array"]
+        let blocks = inode["block_ptrs"]
         if blocks != nil:
             for si in range(size):
                 if si < len(blocks):
@@ -815,9 +859,10 @@ proc read_xattrs(fs, inode_num):
     let sb = fs["superblock"]
     let bsize = sb["block_size"]
     let ipg = sb["inodes_per_group"]
-    let group = (inode_num - 1) / ipg
+    let group = ((inode_num - 1) / ipg) | 0
     let idx = (inode_num - 1) % ipg
-    let gd = _parse_group_desc(fs["data"], SUPERBLOCK_OFFSET + SUPERBLOCK_SIZE + group * 32)
+    let gdt_offset = (sb["first_data_block"] + 1) * bsize + group * 32
+    let gd = _parse_group_desc(fs["data"], gdt_offset)
     let ino_off = gd["inode_table"] * bsize + idx * sb["inode_size"]
     # Inline xattrs: after inode base (128 bytes) up to inode_size
     let extra_start = ino_off + 128
@@ -900,13 +945,13 @@ proc fsck(fs):
     let total_free_blocks = 0
     let total_free_inodes = 0
     for gi in range(len(groups)):
-        total_free_blocks = total_free_blocks + groups[gi]["free_blocks"]
-        total_free_inodes = total_free_inodes + groups[gi]["free_inodes"]
+        total_free_blocks = total_free_blocks + groups[gi]["free_blocks_count"]
+        total_free_inodes = total_free_inodes + groups[gi]["free_inodes_count"]
     end
     result["free_blocks"] = total_free_blocks
     result["free_inodes"] = total_free_inodes
-    result["total_blocks"] = sb["total_blocks"]
-    result["total_inodes"] = sb["total_inodes"]
+    result["total_blocks"] = sb["blocks_count"]
+    result["total_inodes"] = sb["inodes_count"]
     result["clean"] = len(result["errors"]) == 0
     return result
 end

@@ -24,6 +24,12 @@ proc read_u32_be(bs, off):
     return bs[off] * 16777216 + bs[off + 1] * 65536 + bs[off + 2] * 256 + bs[off + 3]
 end
 
+proc read_u64_be(bs, off):
+    let hi = read_u32_be(bs, off)
+    let lo = read_u32_be(bs, off + 4)
+    return lo + hi * 4294967296
+end
+
 # ELF magic: 0x7f 'E' 'L' 'F'
 proc is_elf(bs):
     if len(bs) < 16:
@@ -237,6 +243,7 @@ proc parse_header(bs):
     if not is_le:
         r16 = read_u16_be
         r32 = read_u32_be
+        r64 = read_u64_be
     end
 
     let hdr = {}
@@ -287,6 +294,7 @@ proc parse_phdr(bs, hdr, index):
     if not is_le:
         r16 = read_u16_be
         r32 = read_u32_be
+        r64 = read_u64_be
     end
 
     let ph = {}
@@ -332,6 +340,7 @@ proc parse_shdr(bs, hdr, index):
     let r64 = read_u64_le
     if not is_le:
         r32 = read_u32_be
+        r64 = read_u64_be
     end
 
     let sh = {}
@@ -489,19 +498,19 @@ proc parse_symbols(bs, hdr, section_name_str):
     let syms = []
     let entry_size = shdr["entsize"]
     if entry_size == 0:
-        if hdr["class"] == 1:
+        if hdr["ident"]["ei_class"] == 1:
             entry_size = 16
         else:
             entry_size = 24
         end
     end
-    let count = shdr["size"] / entry_size
+    let count = (shdr["size"] / entry_size) | 0
     # Find associated string table
     let strtab_shdr = parse_shdr(bs, hdr, shdr["link"])
     for i in range(count):
         let off = shdr["offset"] + i * entry_size
         let sym = nil
-        if hdr["class"] == 1:
+        if hdr["ident"]["ei_class"] == 1:
             sym = parse_symbol_32(bs, off)
         else:
             sym = parse_symbol_64(bs, off)
@@ -592,8 +601,8 @@ proc parse_relocations(bs, hdr, rela_section):
     if entry_size == 0:
         entry_size = 24
     end
-    let is_rela = (rela_section["type_id"] == 4)
-    let count = rela_section["size"] / entry_size
+    let is_rela = (rela_section["type"] == 4)
+    let count = (rela_section["size"] / entry_size) | 0
     for i in range(count):
         let off = rela_section["offset"] + i * entry_size
         let rel = nil
@@ -613,7 +622,7 @@ proc get_all_relocations(bs, hdr):
     let all_rels = []
     let shdrs = parse_shdrs(bs, hdr)
     for i in range(len(shdrs)):
-        if shdrs[i]["type_id"] == 4 or shdrs[i]["type_id"] == 9:
+        if shdrs[i]["type"] == 4 or shdrs[i]["type"] == 9:
             let rels = parse_relocations(bs, hdr, shdrs[i])
             let sec_name = section_name(bs, hdr, shdrs[i])
             for j in range(len(rels)):

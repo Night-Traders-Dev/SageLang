@@ -257,3 +257,178 @@ proc port_name(base):
     end
     return "COM?"
 end
+
+# ================================================================
+# aarch64 PL011 UART support
+# ================================================================
+# PL011 is the standard ARM UART (used by QEMU virt, Raspberry Pi, etc.)
+# All registers are memory-mapped at base_addr + offset.
+
+let PL011_DR   = 0
+let PL011_FR   = 24
+let PL011_IBRD = 36
+let PL011_FBRD = 40
+let PL011_LCRH = 44
+let PL011_CR   = 48
+
+proc pl011_config(base_addr, baud):
+    let cfg = {}
+    cfg["type"] = "pl011"
+    cfg["base"] = base_addr
+    cfg["baud"] = baud
+    # PL011 uses a reference clock; 48 MHz is common (RPi, QEMU)
+    let ref_clock = 48000000
+    cfg["ref_clock"] = ref_clock
+    # Integer baud rate divisor: IBRD = ref_clock / (16 * baud)
+    cfg["ibrd"] = ref_clock / (16 * baud)
+    # Fractional baud rate divisor: FBRD = ((remainder * 64) + 0.5)
+    let remainder = ref_clock - (cfg["ibrd"] * 16 * baud)
+    cfg["fbrd"] = ((remainder * 64 * 2) / (16 * baud) + 1) / 2
+    # Line control: 8-bit word length (bits 5-6 = 0b11), FIFO enable (bit 4)
+    cfg["lcrh"] = 112
+    # Control register: UART enable (bit 0), TX enable (bit 8), RX enable (bit 9)
+    cfg["cr"] = 769
+    cfg["dr_addr"] = base_addr + PL011_DR
+    cfg["fr_addr"] = base_addr + PL011_FR
+    cfg["ibrd_addr"] = base_addr + PL011_IBRD
+    cfg["fbrd_addr"] = base_addr + PL011_FBRD
+    cfg["lcrh_addr"] = base_addr + PL011_LCRH
+    cfg["cr_addr"] = base_addr + PL011_CR
+    return cfg
+end
+
+proc pl011_init_sequence(base_addr, baud):
+    let cfg = pl011_config(base_addr, baud)
+    let seq = []
+    # Step 1: Disable UART (CR = 0)
+    let s1 = {}
+    s1["addr"] = cfg["cr_addr"]
+    s1["value"] = 0
+    push(seq, s1)
+    # Step 2: Set integer baud rate divisor
+    let s2 = {}
+    s2["addr"] = cfg["ibrd_addr"]
+    s2["value"] = cfg["ibrd"]
+    push(seq, s2)
+    # Step 3: Set fractional baud rate divisor
+    let s3 = {}
+    s3["addr"] = cfg["fbrd_addr"]
+    s3["value"] = cfg["fbrd"]
+    push(seq, s3)
+    # Step 4: Set line control (8N1, FIFO enabled)
+    let s4 = {}
+    s4["addr"] = cfg["lcrh_addr"]
+    s4["value"] = cfg["lcrh"]
+    push(seq, s4)
+    # Step 5: Enable UART, TX, and RX
+    let s5 = {}
+    s5["addr"] = cfg["cr_addr"]
+    s5["value"] = cfg["cr"]
+    push(seq, s5)
+    return seq
+end
+
+# ================================================================
+# riscv64 16550-compatible UART (MMIO)
+# ================================================================
+# RISC-V platforms typically use a 16550-compatible UART
+# mapped to MMIO addresses rather than x86 I/O ports.
+# The register layout is the same as the x86 16550, but
+# accessed via memory-mapped reads/writes.
+
+proc riscv64_uart_config(base_addr, baud):
+    let cfg = {}
+    cfg["type"] = "ns16550_mmio"
+    cfg["base"] = base_addr
+    cfg["baud"] = baud
+    # RISC-V UART reference clock varies; 1.8432 MHz is standard 16550
+    let ref_clock = 1843200
+    cfg["ref_clock"] = ref_clock
+    cfg["divisor"] = ref_clock / (16 * baud)
+    # Register addresses (same offsets as x86 16550, but MMIO)
+    cfg["data_addr"] = base_addr + 0
+    cfg["ier_addr"] = base_addr + 1
+    cfg["fcr_addr"] = base_addr + 2
+    cfg["lcr_addr"] = base_addr + 3
+    cfg["mcr_addr"] = base_addr + 4
+    cfg["lsr_addr"] = base_addr + 5
+    cfg["dll_addr"] = base_addr + 0
+    cfg["dlm_addr"] = base_addr + 1
+    # 8N1 config
+    cfg["lcr"] = 3
+    return cfg
+end
+
+proc riscv64_uart_init_sequence(base_addr, baud):
+    let cfg = riscv64_uart_config(base_addr, baud)
+    let seq = []
+    # Step 1: Disable interrupts
+    let s1 = {}
+    s1["addr"] = cfg["ier_addr"]
+    s1["value"] = 0
+    push(seq, s1)
+    # Step 2: Enable DLAB (set bit 7 of LCR)
+    let s2 = {}
+    s2["addr"] = cfg["lcr_addr"]
+    s2["value"] = 128
+    push(seq, s2)
+    # Step 3: Set divisor low byte
+    let s3 = {}
+    s3["addr"] = cfg["dll_addr"]
+    s3["value"] = cfg["divisor"] & 255
+    push(seq, s3)
+    # Step 4: Set divisor high byte
+    let s4 = {}
+    s4["addr"] = cfg["dlm_addr"]
+    s4["value"] = (cfg["divisor"] >> 8) & 255
+    push(seq, s4)
+    # Step 5: Set line control (8N1, clear DLAB)
+    let s5 = {}
+    s5["addr"] = cfg["lcr_addr"]
+    s5["value"] = cfg["lcr"]
+    push(seq, s5)
+    # Step 6: Enable FIFO, clear, 14-byte threshold
+    let s6 = {}
+    s6["addr"] = cfg["fcr_addr"]
+    s6["value"] = 199
+    push(seq, s6)
+    # Step 7: Set modem control: DTR + RTS + OUT2
+    let s7 = {}
+    s7["addr"] = cfg["mcr_addr"]
+    s7["value"] = 11
+    push(seq, s7)
+    return seq
+end
+
+# ================================================================
+# Multi-architecture UART dispatcher
+# ================================================================
+
+proc uart_init(arch, base_addr, baud):
+    if arch == "x86" or arch == "x86_64":
+        let cfg = create_config(base_addr, baud, 8, 1, 0)
+        let result = {}
+        result["arch"] = "x86"
+        result["type"] = "ns16550_pio"
+        result["config"] = cfg
+        result["init_sequence"] = init_sequence(cfg)
+        return result
+    end
+    if arch == "aarch64":
+        let result = {}
+        result["arch"] = "aarch64"
+        result["type"] = "pl011"
+        result["config"] = pl011_config(base_addr, baud)
+        result["init_sequence"] = pl011_init_sequence(base_addr, baud)
+        return result
+    end
+    if arch == "riscv64":
+        let result = {}
+        result["arch"] = "riscv64"
+        result["type"] = "ns16550_mmio"
+        result["config"] = riscv64_uart_config(base_addr, baud)
+        result["init_sequence"] = riscv64_uart_init_sequence(base_addr, baud)
+        return result
+    end
+    return nil
+end

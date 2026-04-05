@@ -186,3 +186,140 @@ proc stats():
     s["pml4_addr"] = current_pml4["addr"]
     return s
 end
+
+# =========================================================================
+# Architecture-Aware VMM Interface
+# =========================================================================
+# Supports "x86_64", "aarch64", and "riscv64".
+# The existing x86_64 functions above remain untouched; these new
+# functions dispatch per-architecture using a state dict.
+
+# ----- AArch64 page flags -----
+let AARCH64_PAGE_VALID = 1
+let AARCH64_PAGE_TABLE = 2
+let AARCH64_PAGE_AF    = 1024
+let AARCH64_PAGE_AP_RW = 64
+
+# ----- RISC-V 64 page flags -----
+let RV64_PAGE_V = 1
+let RV64_PAGE_R = 2
+let RV64_PAGE_W = 4
+let RV64_PAGE_X = 8
+let RV64_PAGE_U = 16
+
+# ----- Create an arch-specific VMM state -----
+
+proc vmm_init(arch):
+    let state = {}
+    state["arch"] = arch
+    state["entries"] = {}
+    state["ready"] = false
+
+    if arch == "x86_64":
+        # Identity-map first 4 MB (1024 pages)
+        let addr = 0
+        let end_addr = 4 * 1024 * 1024
+        let flags = PAGE_PRESENT + PAGE_WRITABLE
+        let entries = state["entries"]
+        while addr < end_addr:
+            let pn = page_number(addr)
+            let entry = {}
+            entry["phys"] = addr
+            entry["flags"] = flags
+            entries[str(pn)] = entry
+            addr = addr + pmm.PAGE_SIZE
+        end
+        # Map VGA text buffer
+        let vga_pn = page_number(753664)
+        let vga_entry = {}
+        vga_entry["phys"] = 753664
+        vga_entry["flags"] = PAGE_PRESENT + PAGE_WRITABLE
+        entries[str(vga_pn)] = vga_entry
+    end
+
+    if arch == "aarch64":
+        # Identity-map first 4 MB with valid + table + AF + AP_RW
+        let addr = 0
+        let end_addr = 4 * 1024 * 1024
+        let flags = AARCH64_PAGE_VALID + AARCH64_PAGE_TABLE + AARCH64_PAGE_AF + AARCH64_PAGE_AP_RW
+        let entries = state["entries"]
+        while addr < end_addr:
+            let pn = page_number(addr)
+            let entry = {}
+            entry["phys"] = addr
+            entry["flags"] = flags
+            entries[str(pn)] = entry
+            addr = addr + pmm.PAGE_SIZE
+        end
+    end
+
+    if arch == "riscv64":
+        # Identity-map first 4 MB with V + R + W
+        let addr = 0
+        let end_addr = 4 * 1024 * 1024
+        let flags = RV64_PAGE_V + RV64_PAGE_R + RV64_PAGE_W
+        let entries = state["entries"]
+        while addr < end_addr:
+            let pn = page_number(addr)
+            let entry = {}
+            entry["phys"] = addr
+            entry["flags"] = flags
+            entries[str(pn)] = entry
+            addr = addr + pmm.PAGE_SIZE
+        end
+    end
+
+    state["ready"] = true
+    return state
+end
+
+# ----- Map a virtual page in an arch-aware VMM state -----
+
+proc vmm_map(state, vaddr, paddr, flags):
+    let arch = state["arch"]
+    let pn = page_number(vaddr)
+    let key = str(pn)
+    let entry = {}
+    entry["phys"] = paddr
+    entry["flags"] = flags
+
+    if arch == "x86_64":
+        let entries = state["entries"]
+        entries[key] = entry
+    end
+    if arch == "aarch64":
+        let entries = state["entries"]
+        entries[key] = entry
+    end
+    if arch == "riscv64":
+        let entries = state["entries"]
+        entries[key] = entry
+    end
+end
+
+# ----- Unmap a virtual page in an arch-aware VMM state -----
+
+proc vmm_unmap(state, vaddr):
+    let arch = state["arch"]
+    let pn = page_number(vaddr)
+    let key = str(pn)
+
+    if arch == "x86_64":
+        let entries = state["entries"]
+        if dict_has(entries, key):
+            del entries[key]
+        end
+    end
+    if arch == "aarch64":
+        let entries = state["entries"]
+        if dict_has(entries, key):
+            del entries[key]
+        end
+    end
+    if arch == "riscv64":
+        let entries = state["entries"]
+        if dict_has(entries, key):
+            del entries[key]
+        end
+    end
+end

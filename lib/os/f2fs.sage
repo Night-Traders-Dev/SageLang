@@ -50,20 +50,20 @@ proc _read_u64(bytes, off):
 end
 
 proc _write_u16(bytes, off, val):
-    bytes[off] = val % 256
-    bytes[off + 1] = (val / 256) % 256
+    bytes[off] = val & 255
+    bytes[off + 1] = (val >> 8) & 255
 end
 
 proc _write_u32(bytes, off, val):
-    bytes[off] = val % 256
-    bytes[off + 1] = (val / 256) % 256
-    bytes[off + 2] = (val / 65536) % 256
-    bytes[off + 3] = (val / 16777216) % 256
+    bytes[off] = val & 255
+    bytes[off + 1] = (val >> 8) & 255
+    bytes[off + 2] = (val >> 16) & 255
+    bytes[off + 3] = (val >> 24) & 255
 end
 
 proc _write_u64(bytes, off, val):
-    _write_u32(bytes, off, val % 4294967296)
-    _write_u32(bytes, off + 4, val / 4294967296)
+    _write_u32(bytes, off, val & 4294967295)
+    _write_u32(bytes, off + 4, (val >> 32) & 4294967295)
 end
 
 proc _read_bytes_as_str(bytes, off, length):
@@ -140,16 +140,16 @@ end
 proc _get_nat_block_addr(fs, nid):
     let sb = fs["superblock"]
     let nat_blkaddr = sb["nat_blkaddr"]
-    let entries_per_block = BLOCK_SIZE / NAT_ENTRY_SIZE
-    let block_off = nid / entries_per_block
+    let entries_per_block = (BLOCK_SIZE / NAT_ENTRY_SIZE) | 0
+    let block_off = (nid / entries_per_block) | 0
     return nat_blkaddr + block_off
 end
 
 proc read_nat(fs, nid):
     let sb = fs["superblock"]
     let nat_blkaddr = sb["nat_blkaddr"]
-    let entries_per_block = BLOCK_SIZE / NAT_ENTRY_SIZE
-    let block_off = nid / entries_per_block
+    let entries_per_block = (BLOCK_SIZE / NAT_ENTRY_SIZE) | 0
+    let block_off = (nid / entries_per_block) | 0
     let entry_off = nid % entries_per_block
     let blk = _read_block(fs, nat_blkaddr + block_off)
     let eoff = entry_off * NAT_ENTRY_SIZE
@@ -163,16 +163,16 @@ end
 proc _get_sit_block_addr(fs, segno):
     let sb = fs["superblock"]
     let sit_blkaddr = sb["sit_blkaddr"]
-    let entries_per_block = BLOCK_SIZE / SIT_ENTRY_SIZE
-    let block_off = segno / entries_per_block
+    let entries_per_block = (BLOCK_SIZE / SIT_ENTRY_SIZE) | 0
+    let block_off = (segno / entries_per_block) | 0
     return sit_blkaddr + block_off
 end
 
 proc read_sit(fs, segno):
     let sb = fs["superblock"]
     let sit_blkaddr = sb["sit_blkaddr"]
-    let entries_per_block = BLOCK_SIZE / SIT_ENTRY_SIZE
-    let block_off = segno / entries_per_block
+    let entries_per_block = (BLOCK_SIZE / SIT_ENTRY_SIZE) | 0
+    let block_off = (segno / entries_per_block) | 0
     let entry_off = segno % entries_per_block
     let blk = _read_block(fs, sit_blkaddr + block_off)
     let eoff = entry_off * SIT_ENTRY_SIZE
@@ -193,7 +193,7 @@ end
 
 proc _get_seg_type(vblocks):
     # Upper bits may encode type
-    let t = (vblocks / 1024) % 8
+    let t = (vblocks >> 10) & 7
     if t == HOT_DATA:
         return "hot_data"
     end
@@ -246,8 +246,8 @@ proc read_inode(fs, nid):
         i = i + 1
     end
     inode["addrs"] = addrs
-    inode["has_inline_data"] = (inode["inline_flags"] / 2) % 2 == 1
-    inode["has_inline_dentry"] = (inode["inline_flags"] / 4) % 2 == 1
+    inode["has_inline_data"] = (inode["inline_flags"] >> 1) & 1 == 1
+    inode["has_inline_dentry"] = (inode["inline_flags"] >> 2) & 1 == 1
     return inode
 end
 
@@ -298,9 +298,9 @@ proc list_dir(fs, inode):
         let bitmap_size = 27
         let i = 0
         while i < max_entries:
-            let byte_idx = i / 8
+            let byte_idx = (i / 8) | 0
             let bit_idx = i % 8
-            let valid = (blk[byte_idx] / (2 ** bit_idx)) % 2
+            let valid = (blk[byte_idx] >> bit_idx) & 1
             if valid == 0:
                 i = i + 1
                 continue
@@ -408,8 +408,8 @@ proc _parse_checkpoint(fs):
 end
 
 proc create_f2fs(size_bytes):
-    let total_blocks = size_bytes / BLOCK_SIZE
-    let total_segments = total_blocks / BLOCKS_PER_SEG
+    let total_blocks = (size_bytes / BLOCK_SIZE) | 0
+    let total_segments = (total_blocks / BLOCKS_PER_SEG) | 0
     let data = _zero_bytes(size_bytes)
     # Write superblock at offset 1024
     let off = F2FS_SUPER_OFFSET

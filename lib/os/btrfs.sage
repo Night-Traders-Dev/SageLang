@@ -52,9 +52,9 @@ proc _init_crc32c():
         let j = 0
         while j < 8:
             if crc % 2 == 1:
-                crc = (crc / 2) ^ 2197175160
+                crc = (crc >> 1) ^ 2197175160
             else:
-                crc = crc / 2
+                crc = crc >> 1
             end
             j = j + 1
         end
@@ -71,7 +71,7 @@ proc crc32c(data, start, length):
     while i < length:
         let byte = data[start + i]
         let idx = (crc ^ byte) % 256
-        crc = (crc / 256) ^ _crc_table[idx]
+        crc = (crc >> 8) ^ _crc_table[idx]
         i = i + 1
     end
     return crc ^ 4294967295
@@ -110,15 +110,15 @@ proc _read_bytes_as_str(bytes, off, length):
 end
 
 proc _write_u32(bytes, off, val):
-    bytes[off] = val % 256
-    bytes[off + 1] = (val / 256) % 256
-    bytes[off + 2] = (val / 65536) % 256
-    bytes[off + 3] = (val / 16777216) % 256
+    bytes[off] = val & 255
+    bytes[off + 1] = (val >> 8) & 255
+    bytes[off + 2] = (val >> 16) & 255
+    bytes[off + 3] = (val >> 24) & 255
 end
 
 proc _write_u64(bytes, off, val):
-    _write_u32(bytes, off, val % 4294967296)
-    _write_u32(bytes, off + 4, val / 4294967296)
+    _write_u32(bytes, off, val & 4294967295)
+    _write_u32(bytes, off + 4, (val >> 32) & 4294967295)
 end
 
 proc _zero_bytes(count):

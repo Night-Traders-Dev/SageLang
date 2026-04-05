@@ -173,6 +173,16 @@ proc parse_optional_header(bs, pe_off, opt_size):
         opt["subsystem_name"] = subsystem_name(read_u16_le(bs, off + 68))
         opt["dll_characteristics"] = read_u16_le(bs, off + 70)
         opt["num_data_directories"] = read_u32_le(bs, off + 108)
+        # Parse data directories (PE32+: start at offset 112)
+        let dd_off = off + 112
+        if opt["num_data_directories"] > 0:
+            opt["export_table_rva"] = read_u32_le(bs, dd_off)
+            opt["export_table_size"] = read_u32_le(bs, dd_off + 4)
+        end
+        if opt["num_data_directories"] > 1:
+            opt["import_table_rva"] = read_u32_le(bs, dd_off + 8)
+            opt["import_table_size"] = read_u32_le(bs, dd_off + 12)
+        end
     else:
         opt["base_of_data"] = read_u32_le(bs, off + 24)
         opt["image_base"] = read_u32_le(bs, off + 28)
@@ -185,6 +195,16 @@ proc parse_optional_header(bs, pe_off, opt_size):
         opt["subsystem_name"] = subsystem_name(read_u16_le(bs, off + 68))
         opt["dll_characteristics"] = read_u16_le(bs, off + 70)
         opt["num_data_directories"] = read_u32_le(bs, off + 92)
+        # Parse data directories (PE32: start at offset 96)
+        let dd_off = off + 96
+        if opt["num_data_directories"] > 0:
+            opt["export_table_rva"] = read_u32_le(bs, dd_off)
+            opt["export_table_size"] = read_u32_le(bs, dd_off + 4)
+        end
+        if opt["num_data_directories"] > 1:
+            opt["import_table_rva"] = read_u32_le(bs, dd_off + 8)
+            opt["import_table_size"] = read_u32_le(bs, dd_off + 12)
+        end
     end
 
     return opt

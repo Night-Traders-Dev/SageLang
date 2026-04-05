@@ -260,11 +260,141 @@ proc _write_u64_le(bs, off, val):
     end
 end
 
+proc _hex_val(c):
+    if c == "0":
+        return 0
+    end
+    if c == "1":
+        return 1
+    end
+    if c == "2":
+        return 2
+    end
+    if c == "3":
+        return 3
+    end
+    if c == "4":
+        return 4
+    end
+    if c == "5":
+        return 5
+    end
+    if c == "6":
+        return 6
+    end
+    if c == "7":
+        return 7
+    end
+    if c == "8":
+        return 8
+    end
+    if c == "9":
+        return 9
+    end
+    if c == "a" or c == "A":
+        return 10
+    end
+    if c == "b" or c == "B":
+        return 11
+    end
+    if c == "c" or c == "C":
+        return 12
+    end
+    if c == "d" or c == "D":
+        return 13
+    end
+    if c == "e" or c == "E":
+        return 14
+    end
+    if c == "f" or c == "F":
+        return 15
+    end
+    return -1
+end
+
+proc _hex_byte(s, idx):
+    let hi = _hex_val(s[idx])
+    let lo = _hex_val(s[idx + 1])
+    if hi < 0 or lo < 0:
+        return -1
+    end
+    return hi * 16 + lo
+end
+
 proc _write_guid(bs, off, guid_str):
     # Parse GUID "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" to 16 bytes
-    # Simplified: write zeros if parsing fails
-    for i in range(16):
-        bs[off + i] = 0
+    # Mixed-endian: first 3 fields LE, last 2 fields BE
+    # Expected format: 8-4-4-4-12 hex digits with dashes = 36 chars
+    if guid_str == nil or len(guid_str) != 36:
+        for i in range(16):
+            bs[off + i] = 0
+        end
+        return
+    end
+    # Strip dashes to get 32 hex chars
+    let hex = ""
+    let i = 0
+    while i < 36:
+        if guid_str[i] != "-":
+            hex = hex + guid_str[i]
+        end
+        i = i + 1
+    end
+    if len(hex) != 32:
+        for i in range(16):
+            bs[off + i] = 0
+        end
+        return
+    end
+    # First 4 bytes (from first 8 hex chars) - little-endian
+    let b0 = _hex_byte(hex, 0)
+    let b1 = _hex_byte(hex, 2)
+    let b2 = _hex_byte(hex, 4)
+    let b3 = _hex_byte(hex, 6)
+    if b0 < 0 or b1 < 0 or b2 < 0 or b3 < 0:
+        for i in range(16):
+            bs[off + i] = 0
+        end
+        return
+    end
+    bs[off + 0] = b3
+    bs[off + 1] = b2
+    bs[off + 2] = b1
+    bs[off + 3] = b0
+    # Next 2 bytes (from next 4 hex chars) - little-endian
+    let b4 = _hex_byte(hex, 8)
+    let b5 = _hex_byte(hex, 10)
+    if b4 < 0 or b5 < 0:
+        for i in range(16):
+            bs[off + i] = 0
+        end
+        return
+    end
+    bs[off + 4] = b5
+    bs[off + 5] = b4
+    # Next 2 bytes (from next 4 hex chars) - little-endian
+    let b6 = _hex_byte(hex, 12)
+    let b7 = _hex_byte(hex, 14)
+    if b6 < 0 or b7 < 0:
+        for i in range(16):
+            bs[off + i] = 0
+        end
+        return
+    end
+    bs[off + 6] = b7
+    bs[off + 7] = b6
+    # Last 8 bytes (from last 16 hex chars) - big-endian
+    let j = 0
+    while j < 8:
+        let bv = _hex_byte(hex, 16 + j * 2)
+        if bv < 0:
+            for i in range(16):
+                bs[off + i] = 0
+            end
+            return
+        end
+        bs[off + 8 + j] = bv
+        j = j + 1
     end
 end
 
