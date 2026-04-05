@@ -401,6 +401,239 @@ proc riscv64_uart_init_sequence(base_addr, baud):
 end
 
 # ================================================================
+# Assembly emission helpers
+# ================================================================
+
+let NL = chr(10)
+let TAB = chr(9)
+
+@inline
+proc _asm(inst, ops):
+    if ops == "":
+        return TAB + inst + NL
+    end
+    return TAB + inst + " " + ops + NL
+end
+
+@inline
+proc _lbl(name):
+    return name + ":" + NL
+end
+
+# ================================================================
+# x86_64 serial assembly emission (port I/O)
+# ================================================================
+
+@inline
+proc emit_serial_init_x86(base_port):
+    let p = str(base_port)
+    let a = ""
+    a = a + _lbl("serial_init")
+    a = a + _asm("movw", "$" + str(base_port + 1) + ", %dx")
+    a = a + _asm("xorb", "%al, %al")
+    a = a + _asm("outb", "%al, %dx")
+    a = a + _asm("movw", "$" + str(base_port + 3) + ", %dx")
+    a = a + _asm("movb", "$0x80, %al")
+    a = a + _asm("outb", "%al, %dx")
+    a = a + _asm("movw", "$" + str(base_port) + ", %dx")
+    a = a + _asm("movb", "$0x01, %al")
+    a = a + _asm("outb", "%al, %dx")
+    a = a + _asm("movw", "$" + str(base_port + 1) + ", %dx")
+    a = a + _asm("xorb", "%al, %al")
+    a = a + _asm("outb", "%al, %dx")
+    a = a + _asm("movw", "$" + str(base_port + 3) + ", %dx")
+    a = a + _asm("movb", "$0x03, %al")
+    a = a + _asm("outb", "%al, %dx")
+    a = a + _asm("movw", "$" + str(base_port + 2) + ", %dx")
+    a = a + _asm("movb", "$0xC7, %al")
+    a = a + _asm("outb", "%al, %dx")
+    a = a + _asm("movw", "$" + str(base_port + 4) + ", %dx")
+    a = a + _asm("movb", "$0x0B, %al")
+    a = a + _asm("outb", "%al, %dx")
+    a = a + _asm("ret", "")
+    return a
+end
+
+@inline
+proc emit_serial_tx_x86(base_port):
+    let a = ""
+    a = a + _lbl(".Lwait_tx_x86")
+    a = a + _asm("movw", "$" + str(base_port + 5) + ", %dx")
+    a = a + _asm("inb", "%dx, %al")
+    a = a + _asm("testb", "$0x20, %al")
+    a = a + _asm("jz", ".Lwait_tx_x86")
+    a = a + _asm("movw", "$" + str(base_port) + ", %dx")
+    a = a + _asm("movb", "%dil, %al")
+    a = a + _asm("outb", "%al, %dx")
+    return a
+end
+
+@inline
+proc emit_serial_putchar_x86(base_port):
+    let a = ""
+    a = a + _lbl("serial_putchar")
+    a = a + _asm("pushq", "%rdx")
+    a = a + _asm("pushq", "%rax")
+    a = a + emit_serial_tx_x86(base_port)
+    a = a + _asm("popq", "%rax")
+    a = a + _asm("popq", "%rdx")
+    a = a + _asm("ret", "")
+    return a
+end
+
+@inline
+proc emit_serial_puts_x86(base_port):
+    let a = ""
+    a = a + _lbl("serial_puts")
+    a = a + _asm("pushq", "%rsi")
+    a = a + _asm("pushq", "%rdi")
+    a = a + _lbl(".Lputs_loop_x86")
+    a = a + _asm("lodsb", "")
+    a = a + _asm("testb", "%al, %al")
+    a = a + _asm("jz", ".Lputs_done_x86")
+    a = a + _asm("movb", "%al, %dil")
+    a = a + _asm("call", "serial_putchar")
+    a = a + _asm("jmp", ".Lputs_loop_x86")
+    a = a + _lbl(".Lputs_done_x86")
+    a = a + _asm("popq", "%rdi")
+    a = a + _asm("popq", "%rsi")
+    a = a + _asm("ret", "")
+    return a
+end
+
+# ================================================================
+# aarch64 serial assembly emission (PL011 MMIO)
+# ================================================================
+
+@inline
+proc emit_serial_init_aarch64(base_addr):
+    let base = "0x" + str(base_addr)
+    let a = ""
+    a = a + _lbl("serial_init")
+    a = a + _asm("ldr", "x1, =" + base)
+    a = a + _asm("str", "wzr, [x1, #48]")
+    a = a + _asm("mov", "w2, #26")
+    a = a + _asm("str", "w2, [x1, #36]")
+    a = a + _asm("mov", "w2, #3")
+    a = a + _asm("str", "w2, [x1, #40]")
+    a = a + _asm("mov", "w2, #0x70")
+    a = a + _asm("str", "w2, [x1, #44]")
+    a = a + _asm("mov", "w2, #0x301")
+    a = a + _asm("str", "w2, [x1, #48]")
+    a = a + _asm("ret", "")
+    return a
+end
+
+@inline
+proc emit_serial_tx_aarch64(base_addr):
+    let base = "0x" + str(base_addr)
+    let a = ""
+    a = a + _asm("ldr", "x1, =" + base)
+    a = a + _lbl(".Lwait_tx_a64")
+    a = a + _asm("ldr", "w2, [x1, #24]")
+    a = a + _asm("tst", "w2, #0x20")
+    a = a + _asm("b.ne", ".Lwait_tx_a64")
+    a = a + _asm("str", "w0, [x1]")
+    return a
+end
+
+@inline
+proc emit_serial_putchar_aarch64(base_addr):
+    let a = ""
+    a = a + _lbl("serial_putchar")
+    a = a + emit_serial_tx_aarch64(base_addr)
+    a = a + _asm("ret", "")
+    return a
+end
+
+@inline
+proc emit_serial_puts_aarch64(base_addr):
+    let a = ""
+    a = a + _lbl("serial_puts")
+    a = a + _asm("stp", "x29, x30, [sp, #-16]!")
+    a = a + _asm("mov", "x19, x0")
+    a = a + _lbl(".Lputs_loop_a64")
+    a = a + _asm("ldrb", "w0, [x19], #1")
+    a = a + _asm("cbz", "w0, .Lputs_done_a64")
+    a = a + _asm("bl", "serial_putchar")
+    a = a + _asm("b", ".Lputs_loop_a64")
+    a = a + _lbl(".Lputs_done_a64")
+    a = a + _asm("ldp", "x29, x30, [sp], #16")
+    a = a + _asm("ret", "")
+    return a
+end
+
+# ================================================================
+# riscv64 serial assembly emission (16550 MMIO)
+# ================================================================
+
+@inline
+proc emit_serial_init_riscv64(base_addr):
+    let base = "0x" + str(base_addr)
+    let a = ""
+    a = a + _lbl("serial_init")
+    a = a + _asm("li", "t0, " + base)
+    a = a + _asm("sb", "zero, 1(t0)")
+    a = a + _asm("li", "t1, 0x80")
+    a = a + _asm("sb", "t1, 3(t0)")
+    a = a + _asm("li", "t1, 1")
+    a = a + _asm("sb", "t1, 0(t0)")
+    a = a + _asm("sb", "zero, 1(t0)")
+    a = a + _asm("li", "t1, 3")
+    a = a + _asm("sb", "t1, 3(t0)")
+    a = a + _asm("li", "t1, 0xC7")
+    a = a + _asm("sb", "t1, 2(t0)")
+    a = a + _asm("li", "t1, 0x0B")
+    a = a + _asm("sb", "t1, 4(t0)")
+    a = a + _asm("ret", "")
+    return a
+end
+
+@inline
+proc emit_serial_tx_riscv64(base_addr):
+    let base = "0x" + str(base_addr)
+    let a = ""
+    a = a + _asm("li", "t0, " + base)
+    a = a + _lbl(".Lwait_tx_rv64")
+    a = a + _asm("lb", "t1, 5(t0)")
+    a = a + _asm("andi", "t1, t1, 0x20")
+    a = a + _asm("beqz", "t1, .Lwait_tx_rv64")
+    a = a + _asm("sb", "a0, 0(t0)")
+    return a
+end
+
+@inline
+proc emit_serial_putchar_riscv64(base_addr):
+    let a = ""
+    a = a + _lbl("serial_putchar")
+    a = a + emit_serial_tx_riscv64(base_addr)
+    a = a + _asm("ret", "")
+    return a
+end
+
+@inline
+proc emit_serial_puts_riscv64(base_addr):
+    let a = ""
+    a = a + _lbl("serial_puts")
+    a = a + _asm("addi", "sp, sp, -16")
+    a = a + _asm("sd", "ra, 8(sp)")
+    a = a + _asm("sd", "s0, 0(sp)")
+    a = a + _asm("mv", "s0, a0")
+    a = a + _lbl(".Lputs_loop_rv64")
+    a = a + _asm("lb", "a0, 0(s0)")
+    a = a + _asm("beqz", "a0, .Lputs_done_rv64")
+    a = a + _asm("call", "serial_putchar")
+    a = a + _asm("addi", "s0, s0, 1")
+    a = a + _asm("j", ".Lputs_loop_rv64")
+    a = a + _lbl(".Lputs_done_rv64")
+    a = a + _asm("ld", "ra, 8(sp)")
+    a = a + _asm("ld", "s0, 0(sp)")
+    a = a + _asm("addi", "sp, sp, 16")
+    a = a + _asm("ret", "")
+    return a
+end
+
+# ================================================================
 # Multi-architecture UART dispatcher
 # ================================================================
 
