@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "April 2026"
-version: "v3.0.1"
+version: "v3.0.3"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v3.0.1}
+  - \fancyfoot[C]{v3.0.3}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -1289,7 +1289,7 @@ system but are not enforced at runtime by the interpreter.
 
 # The Safety System
 
-Sage v3.0.1 includes a compile-time safety system inspired by Rust. It provides
+Sage v3.0.3 includes a compile-time safety system inspired by Rust. It provides
 ownership tracking, borrow checking, lifetime analysis, Option type enforcement,
 and fearless concurrency checks.
 
@@ -1844,60 +1844,217 @@ The optimization passes operate on the AST before code generation:
 
 # Bare-Metal and OS Development
 
-Sage can compile to bare-metal targets for OS and embedded development.
+Sage includes a complete pipeline for building bare-metal kernels that
+boot and run on QEMU for x86_64, aarch64, and RISC-V 64. The boot
+libraries generate assembly, linker scripts, and QEMU commands from
+pure Sage code.
 
-## Bare-Metal Compilation
+## Supported Architectures
 
-```bash
-# Compile to bare-metal ELF (no libc, no OS dependencies)
-./sage --compile-bare kernel.sage -o kernel.elf --target x86-64
+| Architecture | Boot Method | Serial UART | QEMU Machine |
+|-------------|-------------|-------------|--------------|
+| x86_64 | Multiboot1 (ELF32) | COM1 port I/O (0x3F8) | default PC |
+| aarch64 | Direct ELF load | PL011 MMIO (0x09000000) | virt + cortex-a57 |
+| riscv64 | Direct ELF load | NS16550 MMIO (0x10000000) | virt (-bios none) |
 
-# Compile to UEFI PE application
-./sage --compile-uefi boot.sage -o boot.efi
-```
+## Quick Start: Build a Kernel with Sage
 
-## Target Architectures
-
-| Target    | Flag              | Description          |
-|-----------|-------------------|----------------------|
-| x86-64    | `--target x86-64` | AMD64 / Intel 64     |
-| aarch64   | `--target aarch64` | ARM 64-bit          |
-| rv64      | `--target rv64`   | RISC-V 64-bit        |
-
-## Boot and Kernel Libraries
-
-Sage includes libraries for OS development:
+The `os.boot.build` module generates all files needed for a bootable
+kernel. Here is a complete example that builds and runs on all three
+architectures:
 
 ```python
-import os.boot.multiboot as mb
-import os.boot.gdt as gdt
+# build_kernel.sage — Generate a bootable kernel for any architecture
+gc_disable()
+import io
+import os.boot.start as start
+import os.boot.build as build
 
-# Generate Multiboot2 header
-let header = mb.create_header()
+# Pick your architecture: "x86_64", "aarch64", or "riscv64"
+let arch = "x86_64"
 
-# Generate GDT (Global Descriptor Table)
-let gdt_table = gdt.build_gdt64()
+# Generate boot assembly with serial output
+let boot_asm = start.generate_boot_asm_mb1("Hello from SageOS!")
+
+# Generate linker script
+let linker = build.generate_linker_x86_mb1()
+
+# Write files
+io.writefile("boot.S", boot_asm)
+io.writefile("linker.ld", linker)
+
+# Print build commands
+print "Build:"
+print "  as --32 -o boot.o boot.S"
+print "  ld -m elf_i386 -T linker.ld -o kernel.elf boot.o"
+print "Run:"
+print "  " + build.qemu_command("x86_64", "kernel.elf")
 ```
 
-## QEMU Integration
+## Example: x86_64 Kernel
+
+Generate boot assembly, compile, and run:
+
+```python
+gc_disable()
+import io
+import os.boot.start as start
+import os.boot.build as build
+
+# Generate self-contained 32-bit multiboot1 kernel with serial
+let asm = start.generate_boot_asm_mb1("Hello from SageOS on x86_64!")
+let ld = build.generate_linker_x86_mb1()
+
+io.writefile("boot.S", asm)
+io.writefile("linker.ld", ld)
+```
+
+Build and run:
 
 ```bash
-# Run kernel in QEMU (x86_64)
-make qemu-bare
+# Assemble (32-bit ELF for multiboot1 compatibility)
+as --32 -o boot.o boot.S
 
-# Run kernel in QEMU (aarch64)
-make qemu-bare-arm64
+# Link
+ld -m elf_i386 -T linker.ld -o kernel.elf boot.o
 
-# Debug with GDB
-make qemu-debug
-# In another terminal:
-gdb -ex 'target remote :1234' kernel.elf
+# Run in QEMU
+qemu-system-x86_64 -m 128M -display none -serial mon:stdio -kernel kernel.elf
+# Output: Hello from SageOS on x86_64!
 ```
 
-Sage includes QEMU VM configuration libraries for creating and managing
-virtual machines for testing bare-metal and kernel code. Kernel console,
-physical/virtual memory management, filesystem (ext2/4, FAT, Btrfs), and
-device tree libraries are available for full OS development.
+The generated boot stub initializes COM1 at 115200 baud (8N1), prints
+the message over serial, and halts with `cli; hlt`.
+
+## Example: aarch64 Kernel
+
+```python
+gc_disable()
+import io
+import os.boot.start as start
+import os.boot.build as build
+
+# Generate aarch64 boot assembly + serial (PL011 at 0x09000000)
+let asm = start.emit_start_aarch64("kmain", "stack_top")
+asm = asm + build.generate_serial_boot_aarch64()
+
+# Generate C kernel
+let kernel_c = build.generate_kernel_c("aarch64", "Hello from SageOS on aarch64!")
+
+io.writefile("boot.S", asm)
+io.writefile("kernel.c", kernel_c)
+```
+
+Build and run:
+
+```bash
+# Assemble
+aarch64-linux-gnu-as -o boot.o boot.S
+
+# Compile kernel C
+aarch64-linux-gnu-gcc -ffreestanding -nostdlib -c -o kernel.o kernel.c
+
+# Link (base address 0x40000000 for QEMU virt)
+aarch64-linux-gnu-ld -T linker.ld -o kernel.elf boot.o kernel.o
+
+# Run in QEMU
+qemu-system-aarch64 -machine virt -cpu cortex-a57 -m 128M \
+    -display none -serial mon:stdio -kernel kernel.elf
+# Output: Hello from SageOS on aarch64!
+```
+
+The boot stub disables interrupts (DAIF), sets up the stack, zeroes BSS,
+then jumps to `kmain`. The serial driver uses the PL011 UART with FIFO
+enabled.
+
+## Example: RISC-V 64 Kernel
+
+```python
+gc_disable()
+import io
+import os.boot.start as start
+import os.boot.build as build
+
+# Generate riscv64 boot assembly + serial (NS16550 at 0x10000000)
+let asm = start.emit_start_riscv64("kmain", "stack_top")
+asm = asm + build.generate_serial_boot_riscv64()
+
+# Generate C kernel
+let kernel_c = build.generate_kernel_c("riscv64", "Hello from SageOS on riscv64!")
+
+io.writefile("boot.S", asm)
+io.writefile("kernel.c", kernel_c)
+```
+
+Build and run:
+
+```bash
+# Assemble
+riscv64-linux-gnu-as -march=rv64gc -mabi=lp64d -o boot.o boot.S
+
+# Compile kernel C
+riscv64-linux-gnu-gcc -ffreestanding -nostdlib -march=rv64gc \
+    -mabi=lp64d -c -o kernel.o kernel.c
+
+# Link (base address 0x80000000 for QEMU virt)
+riscv64-linux-gnu-ld -T linker.ld -o kernel.elf boot.o kernel.o
+
+# Run in QEMU (must use -bios none to skip OpenSBI)
+qemu-system-riscv64 -machine virt -m 128M \
+    -display none -serial mon:stdio -bios none -kernel kernel.elf
+# Output: Hello from SageOS on riscv64!
+```
+
+The boot stub disables machine-mode interrupts (mstatus.MIE), sets up
+the stack, zeroes BSS, and calls `kmain`. The serial driver uses a
+16550-compatible UART in MMIO mode.
+
+## Boot Library Reference
+
+| Module | Purpose |
+|--------|---------|
+| `os.boot.start` | Boot assembly generation (multiboot, long mode, BSS init) |
+| `os.boot.build` | Build pipeline (serial drivers, kernel templates, QEMU commands) |
+| `os.boot.linker` | Linker script generation (x86_64, aarch64, riscv64) |
+| `os.boot.multiboot` | Multiboot2 header construction and parsing |
+| `os.boot.gdt` | GDT descriptor tables (x86_64 long mode) |
+| `os.serial` | UART configuration and assembly emission (3 architectures) |
+| `os.qemu` | QEMU VM configuration and command generation |
+
+## Kernel Libraries
+
+| Module | Purpose |
+|--------|---------|
+| `os.kernel.kmain` | Kernel initialization pipeline (6 phases) |
+| `os.kernel.console` | VGA text mode + framebuffer console |
+| `os.kernel.pmm` | Physical memory manager (bitmap allocator) |
+| `os.kernel.vmm` | Virtual memory manager (4-level paging) |
+| `os.idt` | Interrupt descriptor tables (x86/aarch64/riscv64) |
+| `os.uefi` | UEFI memory map and ACPI table parsing |
+| `os.acpi` | MADT, FADT, HPET, MCFG parsers |
+
+## Debugging with GDB
+
+All architectures support GDB debugging via QEMU's `-s -S` flags:
+
+```bash
+# Start QEMU paused, waiting for GDB on port 1234
+qemu-system-x86_64 -m 128M -display none -serial mon:stdio \
+    -kernel kernel.elf -s -S &
+
+# Connect GDB
+gdb kernel.elf -ex 'target remote :1234' -ex 'break _start' -ex 'continue'
+```
+
+For cross-architecture debugging, use the appropriate GDB:
+
+```bash
+# aarch64
+aarch64-linux-gnu-gdb kernel.elf -ex 'target remote :1234'
+
+# riscv64
+riscv64-linux-gnu-gdb kernel.elf -ex 'target remote :1234'
+```
 
 \newpage
 
@@ -2024,7 +2181,7 @@ make kernel-uefi      # Compile UEFI application
 
 The version is stored in a single `VERSION` file at the repository root.
 All build systems (Makefile, CMakeLists.txt, build.sh, sagemake) read from
-this file automatically. Current version: **3.0.1**.
+this file automatically. Current version: **3.0.3**.
 
 \newpage
 

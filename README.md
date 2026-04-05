@@ -209,8 +209,9 @@ SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel
 | **f2fs** | `import os.f2fs` | F2FS superblock, checkpoint, segment info, node/data addressing |
 | **multiboot** | `import os.boot.multiboot` | Multiboot2 header generation, tag building, boot info parsing |
 | **gdt** | `import os.boot.gdt` | x86_64 GDT descriptor construction, TSS entries, LGDT sequence |
-| **start** | `import os.boot.start` | x86_64 startup assembly generation (long mode entry, stack setup) |
-| **linker** | `import os.boot.linker` | Linker script generation for bare-metal ELF kernels |
+| **start** | `import os.boot.start` | Boot assembly generation (x86_64 multiboot + long mode, aarch64, riscv64) |
+| **build** | `import os.boot.build` | Build pipeline: serial drivers, kernel templates, QEMU commands (all 3 archs) |
+| **linker** | `import os.boot.linker` | Linker script generation for bare-metal ELF kernels (all 3 archs) |
 | **kmain** | `import os.kernel.kmain` | Kernel entry point scaffolding, boot info handoff |
 | **console** | `import os.kernel.console` | VGA text-mode console (80×25, color attributes, scrolling) |
 | **keyboard** | `import os.kernel.keyboard` | PS/2 keyboard driver (scancode set 2, key event dispatch) |
@@ -236,7 +237,46 @@ SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel
 
 **Bare-metal C runtime**: `src/c/bare_metal.c` provides a freestanding runtime (no libc) used by `--compile-bare` and `--compile-uefi` — supplies `memcpy`, `memset`, `memcmp`, basic integer formatting, and panic handler.
 
-Example:
+**Boot → Kernel → QEMU** example (builds and runs on all three architectures):
+
+```sage
+# Generate a bootable x86_64 kernel that prints to serial
+gc_disable()
+import io
+import os.boot.start as start
+import os.boot.build as build
+
+let asm = start.generate_boot_asm_mb1("Hello from SageOS!")
+let ld = build.generate_linker_x86_mb1()
+io.writefile("boot.S", asm)
+io.writefile("linker.ld", ld)
+# as --32 -o boot.o boot.S && ld -m elf_i386 -T linker.ld -o kernel.elf boot.o
+# qemu-system-x86_64 -m 128M -display none -serial mon:stdio -kernel kernel.elf
+```
+
+```sage
+# Generate an aarch64 kernel (PL011 UART on QEMU virt)
+let asm = start.emit_start_aarch64("kmain", "stack_top")
+asm = asm + build.generate_serial_boot_aarch64()
+let kernel_c = build.generate_kernel_c("aarch64", "Hello from SageOS!")
+# aarch64-linux-gnu-as -o boot.o boot.S
+# aarch64-linux-gnu-gcc -ffreestanding -nostdlib -c -o kernel.o kernel.c
+# aarch64-linux-gnu-ld -T linker.ld -o kernel.elf boot.o kernel.o
+# qemu-system-aarch64 -machine virt -cpu cortex-a57 -m 128M -display none -serial mon:stdio -kernel kernel.elf
+```
+
+```sage
+# Generate a riscv64 kernel (NS16550 UART on QEMU virt)
+let asm = start.emit_start_riscv64("kmain", "stack_top")
+asm = asm + build.generate_serial_boot_riscv64()
+let kernel_c = build.generate_kernel_c("riscv64", "Hello from SageOS!")
+# riscv64-linux-gnu-as -march=rv64gc -mabi=lp64d -o boot.o boot.S
+# riscv64-linux-gnu-gcc -ffreestanding -nostdlib -march=rv64gc -mabi=lp64d -c -o kernel.o kernel.c
+# riscv64-linux-gnu-ld -T linker.ld -o kernel.elf boot.o kernel.o
+# qemu-system-riscv64 -machine virt -m 128M -display none -serial mon:stdio -bios none -kernel kernel.elf
+```
+
+Binary format parsing example:
 ```sage
 import os.fat
 import io
@@ -244,17 +284,11 @@ import io
 let boot = io.readbytes("disk.img")
 let info = fat.parse_boot_sector(boot)
 print info["fat_type"]        # FAT12 / FAT16 / FAT32 / FAT8
-print info["first_data_sector"]
 
 import os.elf
 let binary = io.readbytes("kernel.elf")
 let hdr = elf.parse_header(binary)
 print hdr["machine_name"]    # x86_64
-print hdr["type_name"]       # EXEC
-
-import os.uefi
-let mmap = uefi.parse_memory_map(mem_bytes, 48, num_entries)
-print uefi.total_memory(mmap)
 ```
 
 ### Networking Libraries (`lib/net/`)
@@ -1073,7 +1107,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v3.0.1
+- **Current Version**: v3.0.3
 - **Spec Version**: 3.0 (see `STABILITY.md` for guarantees)
 
 ## 💾 Project Structure
