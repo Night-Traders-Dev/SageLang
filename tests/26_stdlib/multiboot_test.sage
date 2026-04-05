@@ -13,9 +13,12 @@ header["length"] = 16
 header["checksum"] = checksum
 if header["magic"] == MAGIC:
     print "header_created"
+end
 if MAGIC == 3897507926:
     print "magic_correct"
+end
 let sum = (header["magic"] + header["arch"] + header["length"] + header["checksum"]) & 4294967295
 if sum == 0:
     print "checksum_valid"
+end
 print "PASS"

@@ -21,6 +21,9 @@ if EPOLLIN == 1:
     if EPOLLOUT == 4:
         if EPOLLET == 2147483648:
             print "epoll_constants"
+        end
+    end
+end
 
 # Test event loop creation
 proc create_event_loop(name, max_events):
@@ -30,12 +33,16 @@ proc create_event_loop(name, max_events):
     ev["fds"] = []
     ev["timeout_ms"] = -1
     return ev
+end
 
 let ev = create_event_loop("main_loop", 64)
 if ev["name"] == "main_loop":
     if ev["max_events"] == 64:
         if ev["timeout_ms"] == -1:
             print "event_loop_created"
+        end
+    end
+end
 
 # Test adding file descriptors
 proc evloop_add_fd(ev_in, fd, events, handler):
@@ -45,6 +52,7 @@ proc evloop_add_fd(ev_in, fd, events, handler):
     entry["handler"] = handler
     push(ev_in["fds"], entry)
     return ev_in
+end
 
 ev = evloop_add_fd(ev, 3, EPOLLIN, "handle_stdin")
 ev = evloop_add_fd(ev, 4, EPOLLIN + EPOLLOUT, "handle_socket")
@@ -52,28 +60,37 @@ if len(ev["fds"]) == 2:
     if ev["fds"][0]["fd"] == 3:
         if ev["fds"][1]["handler"] == "handle_socket":
             print "fd_added"
+        end
+    end
+end
 
 # Test event descriptor
 proc create_event(fd, event_mask):
     let e = {}
     e["fd"] = fd
     e["events"] = event_mask
-    e["readable"] = (event_mask % 2) == 1
+    e["readable"] = (event_mask & 1) == 1
     e["writable"] = false
-    if (event_mask / 4) % 2 == 1:
+    if (event_mask & 4) == 4:
         e["writable"] = true
+    end
     e["error"] = false
-    if (event_mask / 8) % 2 == 1:
+    if (event_mask & 8) == 8:
         e["error"] = true
+    end
     e["hangup"] = false
-    if (event_mask / 16) % 2 == 1:
+    if (event_mask & 16) == 16:
         e["hangup"] = true
+    end
     return e
+end
 
 let e1 = create_event(3, EPOLLIN)
 if e1["readable"]:
     if e1["writable"] == false:
         print "event_create"
+    end
+end
 
 # Test combined event flags
 let e2 = create_event(4, EPOLLIN + EPOLLOUT + EPOLLERR)
@@ -82,6 +99,10 @@ if e2["readable"]:
         if e2["error"]:
             if e2["hangup"] == false:
                 print "event_flags"
+            end
+        end
+    end
+end
 
 # Test C codegen output
 let nl = chr(10)
@@ -101,12 +122,16 @@ if contains(code, "epoll_create1"):
     if contains(code, "epoll_wait"):
         if contains(code, "close(epfd)"):
             print "codegen_output"
+        end
+    end
+end
 
 # Test TCP server loop convenience
 proc tcp_server_loop(name, listen_fd, max_clients):
     let tcp_ev = create_event_loop(name, max_clients + 1)
     tcp_ev = evloop_add_fd(tcp_ev, listen_fd, EPOLLIN, "handle_accept")
     return tcp_ev
+end
 
 let srv = tcp_server_loop("http_server", 5, 128)
 if srv["name"] == "http_server":
@@ -114,5 +139,9 @@ if srv["name"] == "http_server":
         if len(srv["fds"]) == 1:
             if srv["fds"][0]["handler"] == "handle_accept":
                 print "tcp_server"
+            end
+        end
+    end
+end
 
 print "PASS"

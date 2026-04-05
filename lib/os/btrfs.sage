@@ -45,6 +45,7 @@ let _crc_initialized = false
 proc _init_crc32c():
     if _crc_initialized:
         return
+    end
     let i = 0
     while i < 256:
         let crc = i
@@ -54,10 +55,14 @@ proc _init_crc32c():
                 crc = (crc / 2) ^ 2197175160
             else:
                 crc = crc / 2
+            end
             j = j + 1
+        end
         _crc_table = _crc_table + [crc]
         i = i + 1
+    end
     _crc_initialized = true
+end
 
 proc crc32c(data, start, length):
     _init_crc32c()
@@ -68,21 +73,27 @@ proc crc32c(data, start, length):
         let idx = (crc ^ byte) % 256
         crc = (crc / 256) ^ _crc_table[idx]
         i = i + 1
+    end
     return crc ^ 4294967295
+end
 
 proc _read_u8(bytes, off):
     return bytes[off]
+end
 
 proc _read_u16(bytes, off):
     return bytes[off] + bytes[off + 1] * 256
+end
 
 proc _read_u32(bytes, off):
     return bytes[off] + bytes[off + 1] * 256 + bytes[off + 2] * 65536 + bytes[off + 3] * 16777216
+end
 
 proc _read_u64(bytes, off):
     let lo = _read_u32(bytes, off)
     let hi = _read_u32(bytes, off + 4)
     return lo + hi * 4294967296
+end
 
 proc _read_bytes_as_str(bytes, off, length):
     let s = ""
@@ -91,19 +102,24 @@ proc _read_bytes_as_str(bytes, off, length):
         let b = bytes[off + i]
         if b == 0:
             return s
+        end
         s = s + chr(b)
         i = i + 1
+    end
     return s
+end
 
 proc _write_u32(bytes, off, val):
     bytes[off] = val % 256
     bytes[off + 1] = (val / 256) % 256
     bytes[off + 2] = (val / 65536) % 256
     bytes[off + 3] = (val / 16777216) % 256
+end
 
 proc _write_u64(bytes, off, val):
     _write_u32(bytes, off, val % 4294967296)
     _write_u32(bytes, off + 4, val / 4294967296)
+end
 
 proc _zero_bytes(count):
     let result = []
@@ -111,7 +127,9 @@ proc _zero_bytes(count):
     while i < count:
         result = result + [0]
         i = i + 1
+    end
     return result
+end
 
 proc parse_superblock(bytes):
     # Btrfs superblock at offset 0x10000 (65536)
@@ -140,10 +158,12 @@ proc parse_superblock(bytes):
     sb["incompat_flags"] = _read_u64(bytes, off + 168)
     if sb["magic"] != BTRFS_MAGIC_STR:
         print("Warning: invalid btrfs magic: " + sb["magic"])
+    end
     # Verify checksum
     let expected_csum = crc32c(bytes, off + 32, BTRFS_SUPER_INFO_SIZE - 32)
     sb["csum_valid"] = (expected_csum == sb["csum"])
     return sb
+end
 
 proc _parse_key(bytes, off):
     let key = {}
@@ -151,6 +171,7 @@ proc _parse_key(bytes, off):
     key["type"] = _read_u8(bytes, off + 8)
     key["offset"] = _read_u64(bytes, off + 9)
     return key
+end
 
 proc _parse_header(bytes, addr):
     let hdr = {}
@@ -163,6 +184,7 @@ proc _parse_header(bytes, addr):
     hdr["nritems"] = _read_u32(bytes, addr + 88)
     hdr["level"] = _read_u8(bytes, addr + 92)
     return hdr
+end
 
 proc read_tree(fs, root_addr):
     let data = fs["data"]
@@ -176,7 +198,9 @@ proc read_tree(fs, root_addr):
     else:
         node["type"] = "internal"
         node["children"] = parse_internal(fs, root_addr)
+    end
     return node
+end
 
 proc parse_leaf(fs, addr):
     let data = fs["data"]
@@ -194,7 +218,9 @@ proc parse_leaf(fs, addr):
         item["data_offset"] = data_off
         items = items + [item]
         i = i + 1
+    end
     return items
+end
 
 proc parse_internal(fs, addr):
     let data = fs["data"]
@@ -209,7 +235,9 @@ proc parse_internal(fs, addr):
         child["generation"] = _read_u64(data, kp_off + 25)
         children = children + [child]
         i = i + 1
+    end
     return children
+end
 
 proc _search_tree(fs, root_addr, objectid, item_type):
     let data = fs["data"]
@@ -224,8 +252,12 @@ proc _search_tree(fs, root_addr, objectid, item_type):
             if k["objectid"] == objectid:
                 if k["type"] == item_type:
                     results = results + [items[i]]
+                end
+            end
             i = i + 1
+        end
         return results
+    end
     # Internal: find child
     let children = parse_internal(fs, root_addr)
     let target_child = children[0]["blockptr"]
@@ -234,8 +266,11 @@ proc _search_tree(fs, root_addr, objectid, item_type):
         let k = children[i]["key"]
         if k["objectid"] <= objectid:
             target_child = children[i]["blockptr"]
+        end
         i = i + 1
+    end
     return _search_tree(fs, target_child, objectid, item_type)
+end
 
 proc list_dir(fs, tree_root, dir_objectid):
     let items = _search_tree(fs, tree_root, dir_objectid, DIR_ITEM)
@@ -257,7 +292,9 @@ proc list_dir(fs, tree_root, dir_objectid):
         entry["type"] = entry_type
         entries = entries + [entry]
         i = i + 1
+    end
     return entries
+end
 
 proc read_file(fs, tree_root, objectid):
     let items = _search_tree(fs, tree_root, objectid, EXTENT_DATA)
@@ -277,6 +314,8 @@ proc read_file(fs, tree_root, objectid):
             while j < item["size"] - 21:
                 result = result + [data[doff + 21 + j]]
                 j = j + 1
+            end
+        end
         if extent_type == 1:
             # Regular extent
             let disk_bytenr = _read_u64(data, doff + 21)
@@ -288,8 +327,12 @@ proc read_file(fs, tree_root, objectid):
             while j < num_bytes:
                 result = result + [data[start + j]]
                 j = j + 1
+            end
+        end
         i = i + 1
+    end
     return result
+end
 
 proc subvolume_list(fs):
     let sb = parse_superblock(fs["data"])
@@ -306,8 +349,12 @@ proc subvolume_list(fs):
                 sv["generation"] = _read_u64(fs["data"], items[i]["data_offset"] + 0)
                 sv["root_dirid"] = _read_u64(fs["data"], items[i]["data_offset"] + 8)
                 subvols = subvols + [sv]
+            end
+        end
         i = i + 1
+    end
     return subvols
+end
 
 proc snapshot_info(fs, subvol_id):
     let sb = parse_superblock(fs["data"])
@@ -315,6 +362,7 @@ proc snapshot_info(fs, subvol_id):
     let items = _search_tree(fs, root_tree, subvol_id, ROOT_ITEM)
     if len(items) == 0:
         return nil
+    end
     let item = items[0]
     let data = fs["data"]
     let doff = item["data_offset"]
@@ -325,6 +373,7 @@ proc snapshot_info(fs, subvol_id):
     info["bytenr"] = _read_u64(data, doff + 16)
     info["flags"] = _read_u64(data, doff + 40)
     return info
+end
 
 proc _chunk_logical_to_physical(fs, logical):
     # Simple chunk mapping: parse sys_chunk_array from superblock
@@ -347,11 +396,16 @@ proc _chunk_logical_to_physical(fs, logical):
                 if logical < key["offset"] + chunk_size:
                     let phys = stripe_offset + (logical - key["offset"])
                     return phys
+                end
+            end
             pos = pos + 48 + 8 + num_stripes * 32
         else:
             break
+        end
+    end
     # Fallback: identity mapping
     return logical
+end
 
 proc create_btrfs(size_bytes):
     let data = _zero_bytes(size_bytes)
@@ -362,6 +416,7 @@ proc create_btrfs(size_bytes):
     while i < len(magic):
         data[off + 64 + i] = ord(magic[i])
         i = i + 1
+    end
     # Basic fields
     _write_u64(data, off + 48, off)
     _write_u64(data, off + 72, 1)
@@ -376,3 +431,4 @@ proc create_btrfs(size_bytes):
     let fs = {}
     fs["data"] = data
     return fs
+end

@@ -32,16 +32,16 @@ proc is_block_header(stripped):
     if slen == 0:
         return false
     # Find trailing colon (skipping trailing spaces)
-    let end = slen - 1
+    let tail = slen - 1
     let found_colon = false
-    while end >= 0:
-        let ch = stripped[end]
+    while tail >= 0:
+        let ch = stripped[tail]
         if ch == ":":
             found_colon = true
             break
         if ch != " ":
             break
-        end = end - 1
+        tail = tail - 1
     if not found_colon:
         return false
     # Check block keywords
@@ -358,16 +358,16 @@ proc split_lines(source):
 # Strip trailing whitespace from a string
 proc rstrip(s):
     let slen = len(s)
-    let end = slen
-    while end > 0:
-        let ch = s[end - 1]
+    let stop = slen
+    while stop > 0:
+        let ch = s[stop - 1]
         if ch != " " and ch != chr(9) and ch != chr(13):
             break
-        end = end - 1
-    if end == slen:
+        stop = stop - 1
+    if stop == slen:
         return s
     let result = []
-    for i in range(end):
+    for i in range(stop):
         push(result, s[i])
     return join(result, "")
 

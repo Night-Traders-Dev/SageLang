@@ -318,7 +318,7 @@ proc command_buffer(pool):
 proc begin(cmd):
     return gpu.begin_commands(cmd)
 
-proc end(cmd):
+proc end_commands(cmd):
     return gpu.end_commands(cmd)
 
 # -----------------------------------------

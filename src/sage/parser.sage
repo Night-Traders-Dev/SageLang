@@ -659,6 +659,9 @@ class Parser:
             return break_stmt()
         if self.match_tok(token.TOKEN_CONTINUE):
             return continue_stmt()
+        # 'end' keyword: optional block terminator (blocks use INDENT/DEDENT)
+        if self.match_tok(token.TOKEN_END):
+            return expr_stmt(literal_expr(0))
         let expr = self.parse_expression()
         return expr_stmt(expr)
 

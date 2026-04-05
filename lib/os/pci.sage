@@ -4,9 +4,11 @@
 
 proc read_u16_le(bs, off):
     return bs[off] + bs[off + 1] * 256
+end
 
 proc read_u32_le(bs, off):
     return bs[off] + bs[off + 1] * 256 + bs[off + 2] * 65536 + bs[off + 3] * 16777216
+end
 
 # PCI class code constants
 let PCI_CLASS_UNCLASSIFIED = 0
@@ -47,46 +49,67 @@ let PCI_VENDOR_REALTEK = 4332
 proc class_name(cls):
     if cls == 0:
         return "Unclassified"
+    end
     if cls == 1:
         return "Mass Storage"
+    end
     if cls == 2:
         return "Network"
+    end
     if cls == 3:
         return "Display"
+    end
     if cls == 4:
         return "Multimedia"
+    end
     if cls == 5:
         return "Memory"
+    end
     if cls == 6:
         return "Bridge"
+    end
     if cls == 7:
         return "Simple Communication"
+    end
     if cls == 8:
         return "Base System Peripheral"
+    end
     if cls == 9:
         return "Input Device"
+    end
     if cls == 12:
         return "Serial Bus"
+    end
     if cls == 13:
         return "Wireless"
+    end
     return "Unknown"
+end
 
 proc vendor_name(vid):
     if vid == 32902:
         return "Intel"
+    end
     if vid == 4098:
         return "AMD"
+    end
     if vid == 4318:
         return "NVIDIA"
+    end
     if vid == 6900:
         return "QEMU/VirtIO"
+    end
     if vid == 5348:
         return "Broadcom"
+    end
     if vid == 4332:
         return "Realtek"
+    end
     if vid == 65535:
         return "Invalid"
+    end
     return "Unknown"
+end
 
 # Build a BDF (Bus/Device/Function) address
 proc bdf(bus, device, function):
@@ -96,15 +119,18 @@ proc bdf(bus, device, function):
     addr["function"] = function
     addr["value"] = (bus << 8) + (device << 3) + function
     return addr
+end
 
 # Calculate config space address for ECAM (PCIe extended config)
 proc ecam_offset(bdf_addr, register):
     return (bdf_addr["bus"] << 20) + (bdf_addr["device"] << 15) + (bdf_addr["function"] << 12) + register
+end
 
 # Parse PCI configuration space header (first 64 bytes)
 proc parse_config(bs):
     if len(bs) < 64:
         return nil
+    end
     let cfg = {}
     cfg["vendor_id"] = read_u16_le(bs, 0)
     cfg["device_id"] = read_u16_le(bs, 2)
@@ -114,6 +140,7 @@ proc parse_config(bs):
     if cfg["vendor_id"] == 65535:
         cfg["present"] = false
         return cfg
+    end
     cfg["present"] = true
 
     cfg["command"] = read_u16_le(bs, 4)
@@ -155,6 +182,7 @@ proc parse_config(bs):
         cfg["interrupt_pin"] = bs[61]
         cfg["min_grant"] = bs[62]
         cfg["max_latency"] = bs[63]
+    end
 
     if cfg["header_type"] == 1:
         # Type 1: PCI-to-PCI bridge
@@ -175,8 +203,10 @@ proc parse_config(bs):
         cfg["interrupt_line"] = bs[60]
         cfg["interrupt_pin"] = bs[61]
         cfg["bridge_control"] = read_u16_le(bs, 62)
+    end
 
     return cfg
+end
 
 # Decode a BAR (Base Address Register)
 proc decode_bar(bar_value):
@@ -192,7 +222,9 @@ proc decode_bar(bar_value):
         let mem_type = (bar_value >> 1) & 3
         bar["is_64bit"] = mem_type == 2
         bar["address"] = bar_value & 4294967280
+    end
     return bar
+end
 
 # Parse capability list from config space
 proc parse_capabilities(bs, start_offset):
@@ -202,26 +234,35 @@ proc parse_capabilities(bs, start_offset):
     while off != 0 and seen < 48:
         if off + 2 > len(bs):
             return caps
+        end
         let cap = {}
         cap["id"] = bs[off]
         cap["next"] = bs[off + 1]
         cap["offset"] = off
         if bs[off] == 1:
             cap["name"] = "Power Management"
+        end
         if bs[off] == 5:
             cap["name"] = "MSI"
+        end
         if bs[off] == 16:
             cap["name"] = "PCIe"
+        end
         if bs[off] == 17:
             cap["name"] = "MSI-X"
+        end
         if bs[off] == 9:
             cap["name"] = "Vendor Specific"
+        end
         if not dict_has(cap, "name"):
             cap["name"] = "Unknown"
+        end
         push(caps, cap)
         off = bs[off + 1]
         seen = seen + 1
+    end
     return caps
+end
 
 # Enumerate all devices on a bus (given an array of 256 config space blocks)
 proc enumerate_bus(config_blocks):
@@ -238,4 +279,10 @@ proc enumerate_bus(config_blocks):
                     # If not multifunction, skip remaining functions
                     if func == 0 and not cfg["multifunction"]:
                         func = 8
+                    end
+                end
+            end
+        end
+    end
     return devices
+end

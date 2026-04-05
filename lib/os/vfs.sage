@@ -33,23 +33,33 @@ let VFS_EROFS = 30
 proc error_name(code):
     if code == 0:
         return "OK"
+    end
     if code == 2:
         return "ENOENT"
+    end
     if code == 5:
         return "EIO"
+    end
     if code == 13:
         return "EACCES"
+    end
     if code == 17:
         return "EEXIST"
+    end
     if code == 20:
         return "ENOTDIR"
+    end
     if code == 21:
         return "EISDIR"
+    end
     if code == 28:
         return "ENOSPC"
+    end
     if code == 30:
         return "EROFS"
+    end
     return "EUNKNOWN"
+end
 
 # Create a VFS mount table
 proc create_vfs():
@@ -57,6 +67,7 @@ proc create_vfs():
     vfs["mounts"] = []
     vfs["cwd"] = "/"
     return vfs
+end
 
 # Register a filesystem backend at a mount point
 # backend is a dict with: open, read, readdir, stat, close procs
@@ -66,6 +77,7 @@ proc mount(vfs, path, backend):
     entry["backend"] = backend
     push(vfs["mounts"], entry)
     return 0
+end
 
 # Unmount a filesystem
 proc umount(vfs, path):
@@ -74,8 +86,11 @@ proc umount(vfs, path):
     for i in range(len(mounts)):
         if mounts[i]["path"] != path:
             push(new_mounts, mounts[i])
+        end
+    end
     vfs["mounts"] = new_mounts
     return 0
+end
 
 # Find the backend for a given path (longest prefix match)
 proc resolve_mount(vfs, path):
@@ -91,29 +106,41 @@ proc resolve_mount(vfs, path):
                 if path[j] != mp[j]:
                     is_match = false
                     j = mp_len
+                end
+            end
             if is_match and mp_len > best_len:
                 best = mounts[i]
                 best_len = mp_len
+            end
+        end
+    end
     return best
+end
 
 # Get the path relative to the mount point
 proc relative_path(mount_path, full_path):
     let mp_len = len(mount_path)
     if mp_len >= len(full_path):
         return "/"
+    end
     let rel = ""
     for i in range(len(full_path) - mp_len):
         rel = rel + full_path[mp_len + i]
+    end
     if len(rel) == 0:
         return "/"
+    end
     if rel[0] != "/":
         rel = "/" + rel
+    end
     return rel
+end
 
 # Normalize a path (remove double slashes, resolve . and ..)
 proc normalize_path(path):
     if len(path) == 0:
         return "/"
+    end
     # Split by /
     let parts = []
     let current = ""
@@ -121,11 +148,15 @@ proc normalize_path(path):
         if path[i] == "/":
             if len(current) > 0:
                 push(parts, current)
+            end
             current = ""
         else:
             current = current + path[i]
+        end
+    end
     if len(current) > 0:
         push(parts, current)
+    end
     # Resolve . and ..
     let resolved = []
     for i in range(len(parts)):
@@ -133,53 +164,74 @@ proc normalize_path(path):
 
             if len(resolved) > 0:
                 pop(resolved)
+            end
+        end
         if parts[i] != "." and parts[i] != "..":
             push(resolved, parts[i])
+        end
+    end
     # Rebuild
     if len(resolved) == 0:
         return "/"
+    end
     let result = ""
     for i in range(len(resolved)):
         result = result + "/" + resolved[i]
+    end
     return result
+end
 
 # Join two paths
 proc join_path(base, rel):
     if len(rel) > 0 and rel[0] == "/":
         return normalize_path(rel)
+    end
     if base == "/":
         return normalize_path("/" + rel)
+    end
     return normalize_path(base + "/" + rel)
+end
 
 # Get parent directory path
 proc dirname(path):
     let norm = normalize_path(path)
     if norm == "/":
         return "/"
+    end
     let last_slash = 0
     for i in range(len(norm)):
         if norm[i] == "/":
             last_slash = i
+        end
+    end
     if last_slash == 0:
         return "/"
+    end
     let result = ""
     for i in range(last_slash):
         result = result + norm[i]
+    end
     return result
+end
 
 # Get filename component
 proc basename(path):
     let norm = normalize_path(path)
     if norm == "/":
         return "/"
+    end
     let last_slash = 0
     for i in range(len(norm)):
         if norm[i] == "/":
             last_slash = i
+        end
+    end
     let result = ""
     for i in range(len(norm) - last_slash - 1):
         result = result + norm[last_slash + 1 + i]
+    end
     return result
+end
 
 # Split path into directory and filename
 proc split_path(path):
@@ -187,6 +239,7 @@ proc split_path(path):
     result["dir"] = dirname(path)
     result["name"] = basename(path)
     return result
+end
 
 # Get file extension
 proc extension(path):
@@ -195,12 +248,17 @@ proc extension(path):
     for i in range(len(name)):
         if name[i] == ".":
             last_dot = i
+        end
+    end
     if last_dot < 1:
         return ""
+    end
     let ext = ""
     for i in range(len(name) - last_dot - 1):
         ext = ext + name[last_dot + 1 + i]
+    end
     return ext
+end
 
 # Create a stat result
 proc make_stat(file_type, size, name):
@@ -211,6 +269,7 @@ proc make_stat(file_type, size, name):
     st["is_file"] = file_type == 1
     st["is_dir"] = file_type == 2
     return st
+end
 
 # Create a directory entry
 proc make_dirent(name, file_type, size):
@@ -219,6 +278,7 @@ proc make_dirent(name, file_type, size):
     de["type"] = file_type
     de["size"] = size
     return de
+end
 
 # Create a file handle
 proc make_handle(backend, internal, path, mode):
@@ -230,6 +290,7 @@ proc make_handle(backend, internal, path, mode):
     fh["position"] = 0
     fh["closed"] = false
     return fh
+end
 
 # VFS open
 proc vfs_open(vfs, path, mode):
@@ -237,42 +298,56 @@ proc vfs_open(vfs, path, mode):
     let m = resolve_mount(vfs, norm)
     if m == nil:
         return nil
+    end
     let rel = relative_path(m["path"], norm)
     let backend = m["backend"]
     if not dict_has(backend, "open"):
         return nil
+    end
     let internal = backend["open"](rel, mode)
     if internal == nil:
         return nil
+    end
     return make_handle(backend, internal, norm, mode)
+end
 
 # VFS read
 proc vfs_read(handle, size):
     if handle["closed"]:
         return nil
+    end
     let backend = handle["backend"]
     if not dict_has(backend, "read"):
         return nil
+    end
     let data = backend["read"](handle["internal"], handle["position"], size)
     if data != nil:
         handle["position"] = handle["position"] + len(data)
+    end
     return data
+end
 
 # VFS seek
 proc vfs_seek(handle, offset, whence):
     if whence == 0:
         handle["position"] = offset
+    end
     if whence == 1:
         handle["position"] = handle["position"] + offset
+    end
     if whence == 2:
         let st = handle["backend"]["stat"](handle["internal"])
         if st != nil:
             handle["position"] = st["size"] + offset
+        end
+    end
     return handle["position"]
+end
 
 # VFS tell
 proc vfs_tell(handle):
     return handle["position"]
+end
 
 # VFS close
 proc vfs_close(handle):
@@ -280,7 +355,9 @@ proc vfs_close(handle):
     let backend = handle["backend"]
     if dict_has(backend, "close"):
         backend["close"](handle["internal"])
+    end
     return 0
+end
 
 # VFS stat
 proc vfs_stat(vfs, path):
@@ -288,11 +365,14 @@ proc vfs_stat(vfs, path):
     let m = resolve_mount(vfs, norm)
     if m == nil:
         return nil
+    end
     let rel = relative_path(m["path"], norm)
     let backend = m["backend"]
     if not dict_has(backend, "stat"):
         return nil
+    end
     return backend["stat"](rel)
+end
 
 # VFS readdir
 proc vfs_readdir(vfs, path):
@@ -300,11 +380,14 @@ proc vfs_readdir(vfs, path):
     let m = resolve_mount(vfs, norm)
     if m == nil:
         return nil
+    end
     let rel = relative_path(m["path"], norm)
     let backend = m["backend"]
     if not dict_has(backend, "readdir"):
         return nil
+    end
     return backend["readdir"](rel)
+end
 
 # Create a simple in-memory filesystem backend for testing
 proc create_memfs():
@@ -316,21 +399,27 @@ proc create_memfs():
     proc memfs_open(path, mode):
         if dict_has(fs["files"], path):
             return path
+        end
         if (mode & 8) != 0:
             fs["files"][path] = []
             return path
+        end
         return nil
+    end
 
     proc memfs_read(handle, pos, size):
         if not dict_has(fs["files"], handle):
             return nil
+        end
         let data = fs["files"][handle]
         let result = []
         let i = pos
         while i < pos + size and i < len(data):
             push(result, data[i])
             i = i + 1
+        end
         return result
+    end
 
     proc memfs_stat(path):
         if dict_has(fs["files"], path):
@@ -341,6 +430,7 @@ proc create_memfs():
             st["is_file"] = true
             st["is_dir"] = false
             return st
+        end
         if dict_has(fs["dirs"], path):
             let st = {}
             st["type"] = 2
@@ -349,15 +439,20 @@ proc create_memfs():
             st["is_file"] = false
             st["is_dir"] = true
             return st
+        end
         return nil
+    end
 
     proc memfs_readdir(path):
         if not dict_has(fs["dirs"], path):
             return nil
+        end
         return fs["dirs"][path]
+    end
 
     proc memfs_close(handle):
         return 0
+    end
 
     let backend = {}
     backend["open"] = memfs_open
@@ -367,6 +462,7 @@ proc create_memfs():
     backend["close"] = memfs_close
     backend["_fs"] = fs
     return backend
+end
 
 # Helper: write bytes to a memfs file
 proc memfs_write(backend, path, data):
@@ -375,8 +471,11 @@ proc memfs_write(backend, path, data):
     let dirs = backend["_fs"]["dirs"]
     if not dict_has(dirs, "/"):
         dirs["/"] = []
+    end
+end
 
 # Helper: create a directory in memfs
 proc memfs_mkdir(backend, path):
     let dirs = backend["_fs"]["dirs"]
     dirs[path] = []
+end

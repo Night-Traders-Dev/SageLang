@@ -50,8 +50,8 @@ proc snake_case(text):
     return lower(join(words(replace(text, "-", " ")), "_"))
 
 proc endswith(a, b):
-    let end = split(a, "")
-    if end[len(end) - 1] == b:
+    let tail = split(a, "")
+    if tail[len(tail) - 1] == b:
         return true
     else:
         return false

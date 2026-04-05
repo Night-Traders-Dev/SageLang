@@ -4,17 +4,17 @@ proc count(start, step):
         yield current
         current = current + step
 
-proc range_step(start, end, step):
+proc range_step(start, stop, step):
     if step == 0:
         return nil
 
     let current = start
     if step > 0:
-        while current < end:
+        while current < stop:
             yield current
             current = current + step
     else:
-        while current > end:
+        while current > stop:
             yield current
             current = current + step
 

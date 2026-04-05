@@ -31,52 +31,69 @@ let PAGE_MMIO = 19
 proc level_name(level):
     if level == 4:
         return "PML4"
+    end
     if level == 3:
         return "PDPT"
+    end
     if level == 2:
         return "PD"
+    end
     if level == 1:
         return "PT"
+    end
     return "Unknown"
+end
 
 # Extract page table index from virtual address at a given level
 proc page_index(vaddr, level):
     if level == 4:
         return (vaddr >> 39) & 511
+    end
     if level == 3:
         return (vaddr >> 30) & 511
+    end
     if level == 2:
         return (vaddr >> 21) & 511
+    end
     if level == 1:
         return (vaddr >> 12) & 511
+    end
     return 0
+end
 
 # Extract page offset from virtual address
 proc page_offset_4k(vaddr):
     return vaddr & 4095
+end
 
 proc page_offset_2m(vaddr):
     return vaddr & 2097151
+end
 
 proc page_offset_1g(vaddr):
     return vaddr & 1073741823
+end
 
 # Align address down to page boundary
 proc align_down(addr, alignment):
     return addr - (addr & (alignment - 1))
+end
 
 # Align address up to page boundary
 proc align_up(addr, alignment):
     let mask = alignment - 1
     return (addr + mask) - ((addr + mask) & mask)
+end
 
 # Calculate number of pages needed for a given size
 proc pages_needed(size, page_size):
     return ((size + page_size - 1) / page_size) | 0
+end
 
 # Create a page table entry
 proc make_pte(phys_addr, flags):
     return (phys_addr & 4503599627366400) + (flags & 4095)
+end
 
 # Decode a page table entry
 proc decode_pte(entry):
@@ -93,6 +110,7 @@ proc decode_pte(entry):
     pte["global"] = (entry & 256) != 0
     pte["address"] = entry & 4503599627366400
     return pte
+end
 
 # Create an identity-mapped page table layout (for bootloader/early kernel)
 # Returns a list of mapping descriptors, not actual tables
@@ -108,7 +126,9 @@ proc identity_map_range(phys_start, phys_end, flags):
         m["size"] = 4096
         push(mappings, m)
         addr = addr + 4096
+    end
     return mappings
+end
 
 # Create a higher-half kernel mapping layout
 # Maps phys_start..phys_end to virt_base + (phys_start..phys_end)
@@ -124,7 +144,9 @@ proc higher_half_map(phys_start, phys_end, virt_base, flags):
         m["size"] = 4096
         push(mappings, m)
         addr = addr + 4096
+    end
     return mappings
+end
 
 # Describe a virtual address in terms of page table indices
 proc describe_vaddr(vaddr):
@@ -135,17 +157,21 @@ proc describe_vaddr(vaddr):
     desc["pt_index"] = page_index(vaddr, 1)
     desc["offset"] = page_offset_4k(vaddr)
     return desc
+end
 
 # Check if an address is canonical (x86-64)
 proc is_canonical(vaddr):
     let top_bits = (vaddr >> 47) & 131071
     return top_bits == 0 or top_bits == 131071
+end
 
 # Get the higher-half kernel base address (conventional -2GB)
 proc kernel_base():
     # 0xFFFFFFFF80000000 = 18446744071562067968
     return 18446744071562067968
+end
 
 # Get the higher-half direct map base (Linux convention at 0xFFFF888000000000)
 proc direct_map_base():
     return 18446612682702848000
+end

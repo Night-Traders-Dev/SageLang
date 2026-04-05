@@ -126,11 +126,11 @@ proc trim_line(line):
     let start = 0
     while start < llen and (line[start] == " " or line[start] == chr(9)):
         start = start + 1
-    let end = llen
-    while end > start and (line[end - 1] == " " or line[end - 1] == chr(9) or line[end - 1] == chr(13) or line[end - 1] == chr(10)):
-        end = end - 1
+    let stop = llen
+    while stop > start and (line[stop - 1] == " " or line[stop - 1] == chr(9) or line[stop - 1] == chr(13) or line[stop - 1] == chr(10)):
+        stop = stop - 1
     let chars = []
-    for i in range(start, end):
+    for i in range(start, stop):
         push(chars, line[i])
     return join(chars, "")
 

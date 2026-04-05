@@ -43,6 +43,7 @@ KEYWORDS["from"] = token.TOKEN_FROM
 KEYWORDS["as"] = token.TOKEN_AS
 KEYWORDS["case"] = token.TOKEN_CASE
 KEYWORDS["default"] = token.TOKEN_DEFAULT
+KEYWORDS["end"] = token.TOKEN_END
 
 # Character classification helpers
 proc is_alpha(c):

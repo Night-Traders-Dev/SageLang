@@ -1315,6 +1315,8 @@ static Stmt* statement() {
     }
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
+    // 'end' keyword: optional block terminator (blocks use INDENT/DEDENT)
+    if (match(TOKEN_END)) return new_expr_stmt(new_nil_expr());
 
     Expr* expr = expression();
     

@@ -167,7 +167,10 @@ static TokenType identifier_type(void) {
                         if (current - start > 2 && start[2] == 's') return check_keyword(3, 1, "e", TOKEN_ELSE);
                         if (current - start > 2 && start[2] == 'i') return check_keyword(3, 1, "f", TOKEN_IF); // elif
                         break;
-                    case 'n': return check_keyword(2, 2, "um", TOKEN_ENUM);
+                    case 'n':
+                        if (current - start > 2 && start[2] == 'd') return check_keyword(3, 0, "", TOKEN_END);
+                        if (current - start > 2 && start[2] == 'u') return check_keyword(3, 1, "m", TOKEN_ENUM);
+                        break;
                 }
             }
             break;

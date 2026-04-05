@@ -4,20 +4,24 @@
 
 proc read_u16_le(bs, off):
     return bs[off] + bs[off + 1] * 256
+end
 
 proc read_u32_le(bs, off):
     return bs[off] + bs[off + 1] * 256 + bs[off + 2] * 65536 + bs[off + 3] * 16777216
+end
 
 proc read_u64_le(bs, off):
     let lo = read_u32_le(bs, off)
     let hi = read_u32_le(bs, off + 4)
     return lo + hi * 4294967296
+end
 
 proc hex_byte(b):
     let hi = (b >> 4) & 15
     let lo = b & 15
     let digits = "0123456789abcdef"
     return digits[hi] + digits[lo]
+end
 
 proc read_guid(bs, off):
     let g = hex_byte(bs[off + 3]) + hex_byte(bs[off + 2]) + hex_byte(bs[off + 1]) + hex_byte(bs[off])
@@ -31,6 +35,7 @@ proc read_guid(bs, off):
     g = g + hex_byte(bs[off + 10]) + hex_byte(bs[off + 11]) + hex_byte(bs[off + 12])
     g = g + hex_byte(bs[off + 13]) + hex_byte(bs[off + 14]) + hex_byte(bs[off + 15])
     return g
+end
 
 # EFI System Table signature: "IBI SYST" (0x5453595320494249)
 let EFI_SYSTEM_TABLE_SIGNATURE_LO = 541936457
@@ -75,46 +80,67 @@ let EFI_DT_FIXUP_GUID = "e617d64c-fe08-46da-f4dc-bbd5873e23c"
 proc memory_type_name(t):
     if t == 0:
         return "Reserved"
+    end
     if t == 1:
         return "LoaderCode"
+    end
     if t == 2:
         return "LoaderData"
+    end
     if t == 3:
         return "BootServicesCode"
+    end
     if t == 4:
         return "BootServicesData"
+    end
     if t == 5:
         return "RuntimeServicesCode"
+    end
     if t == 6:
         return "RuntimeServicesData"
+    end
     if t == 7:
         return "Conventional"
+    end
     if t == 8:
         return "Unusable"
+    end
     if t == 9:
         return "ACPIReclaim"
+    end
     if t == 10:
         return "ACPINVS"
+    end
     if t == 11:
         return "MMIO"
+    end
     if t == 12:
         return "MMIOPort"
+    end
     if t == 13:
         return "PALCode"
+    end
     if t == 14:
         return "Persistent"
+    end
     return "Unknown"
+end
 
 proc config_table_name(guid):
     if guid == "8868e871-e4f1-11d3-bc22-0080c73c8881":
         return "ACPI 2.0"
+    end
     if guid == "eb9d2d30-2d88-11d3-9a16-0090273fc14d":
         return "ACPI 1.0"
+    end
     if guid == "eb9d2d31-2d88-11d3-9a16-0090273fc14d":
         return "SMBIOS"
+    end
     if guid == "f2fd1544-9794-4a2c-992e-e5bbcf20e394":
         return "SMBIOS 3.0"
+    end
     return "Unknown"
+end
 
 # Parse a single EFI memory descriptor (variable size, typically 48 bytes)
 proc parse_memory_descriptor(bs, off, desc_size):
@@ -127,6 +153,7 @@ proc parse_memory_descriptor(bs, off, desc_size):
     desc["attribute"] = read_u64_le(bs, off + 32)
     desc["size_bytes"] = desc["num_pages"] * 4096
     return desc
+end
 
 # Parse EFI memory map from raw bytes
 proc parse_memory_map(bs, desc_size, num_entries):
@@ -135,8 +162,11 @@ proc parse_memory_map(bs, desc_size, num_entries):
         let off = i * desc_size
         if off + 40 > len(bs):
             return entries
+        end
         push(entries, parse_memory_descriptor(bs, off, desc_size))
+    end
     return entries
+end
 
 # Sum total memory from a parsed memory map
 proc total_memory(mem_map):
@@ -146,7 +176,10 @@ proc total_memory(mem_map):
         # Count conventional + loader + boot services memory
         if t == 1 or t == 2 or t == 3 or t == 4 or t == 7:
             total = total + mem_map[i]["size_bytes"]
+        end
+    end
     return total
+end
 
 # Count usable (conventional) memory pages
 proc usable_pages(mem_map):
@@ -154,7 +187,10 @@ proc usable_pages(mem_map):
     for i in range(len(mem_map)):
         if mem_map[i]["type"] == 7:
             pages = pages + mem_map[i]["num_pages"]
+        end
+    end
     return pages
+end
 
 # Find memory regions that will survive ExitBootServices
 proc runtime_regions(mem_map):
@@ -163,7 +199,10 @@ proc runtime_regions(mem_map):
         let t = mem_map[i]["type"]
         if t == 5 or t == 6 or t == 9 or t == 10:
             push(regions, mem_map[i])
+        end
+    end
     return regions
+end
 
 # Parse EFI configuration table entry (GUID + pointer)
 proc parse_config_table(bs, off):
@@ -172,6 +211,7 @@ proc parse_config_table(bs, off):
     entry["table_name"] = config_table_name(entry["guid"])
     entry["address"] = read_u64_le(bs, off + 16)
     return entry
+end
 
 # Parse array of configuration table entries
 proc parse_config_tables(bs, off, count):
@@ -180,15 +220,21 @@ proc parse_config_tables(bs, off, count):
         let entry_off = off + i * 24
         if entry_off + 24 > len(bs):
             return tables
+        end
         push(tables, parse_config_table(bs, entry_off))
+    end
     return tables
+end
 
 # Find a configuration table by GUID
 proc find_config_table(tables, guid):
     for i in range(len(tables)):
         if tables[i]["guid"] == guid:
             return tables[i]
+        end
+    end
     return nil
+end
 
 # ACPI RSDP (Root System Description Pointer) parser
 # RSDP v1 = 20 bytes, v2 = 36 bytes
@@ -197,8 +243,10 @@ proc parse_rsdp(bs, off):
     let sig = ""
     for i in range(8):
         sig = sig + chr(bs[off + i])
+    end
     if sig != "RSD PTR ":
         return nil
+    end
     let rsdp = {}
     rsdp["signature"] = sig
     rsdp["checksum"] = bs[off + 8]
@@ -206,6 +254,8 @@ proc parse_rsdp(bs, off):
     for i in range(6):
         if bs[off + 9 + i] != 0:
             oem = oem + chr(bs[off + 9 + i])
+        end
+    end
     rsdp["oem_id"] = oem
     rsdp["revision"] = bs[off + 15]
     rsdp["rsdt_address"] = read_u32_le(bs, off + 16)
@@ -213,7 +263,9 @@ proc parse_rsdp(bs, off):
         rsdp["length"] = read_u32_le(bs, off + 20)
         rsdp["xsdt_address"] = read_u64_le(bs, off + 24)
         rsdp["extended_checksum"] = bs[off + 32]
+    end
     return rsdp
+end
 
 # Parse ACPI SDT header (common to RSDT, XSDT, DSDT, etc.)
 proc parse_sdt_header(bs, off):
@@ -221,6 +273,7 @@ proc parse_sdt_header(bs, off):
     let sig = ""
     for i in range(4):
         sig = sig + chr(bs[off + i])
+    end
     hdr["signature"] = sig
     hdr["length"] = read_u32_le(bs, off + 4)
     hdr["revision"] = bs[off + 8]
@@ -229,16 +282,21 @@ proc parse_sdt_header(bs, off):
     for i in range(6):
         if bs[off + 10 + i] != 0:
             oem = oem + chr(bs[off + 10 + i])
+        end
+    end
     hdr["oem_id"] = oem
     let oem_table = ""
     for i in range(8):
         if bs[off + 16 + i] != 0:
             oem_table = oem_table + chr(bs[off + 16 + i])
+        end
+    end
     hdr["oem_table_id"] = oem_table
     hdr["oem_revision"] = read_u32_le(bs, off + 24)
     hdr["creator_id"] = read_u32_le(bs, off + 28)
     hdr["creator_revision"] = read_u32_le(bs, off + 32)
     return hdr
+end
 
 # Build a minimal EFI memory map for testing
 proc make_test_memory_map():
@@ -253,3 +311,4 @@ proc make_test_memory_map():
     e1["size_bytes"] = 1048576
     push(entries, e1)
     return entries
+end

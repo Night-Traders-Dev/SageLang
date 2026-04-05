@@ -102,48 +102,61 @@ proc create_vm(name):
     vm["no_reboot"] = false
     vm["no_shutdown"] = false
     return vm
+end
 
 proc vm_set_arch(vm, arch):
     vm["arch"] = arch
     if arch == ARCH_AARCH64:
         vm["machine"] = MACH_VIRT
+    end
     if arch == ARCH_RISCV64:
         vm["machine"] = MACH_VIRT
+    end
     if arch == ARCH_ARM:
         vm["machine"] = MACH_VIRT
+    end
     return vm
+end
 
 proc vm_set_machine(vm, machine):
     vm["machine"] = machine
     return vm
+end
 
 proc vm_set_cpu(vm, cpu):
     vm["cpu"] = cpu
     return vm
+end
 
 proc vm_set_smp(vm, cores):
     vm["smp"] = cores
     return vm
+end
 
 proc vm_set_memory(vm, mem):
     vm["memory"] = mem
     return vm
+end
 
 proc vm_set_accel(vm, accel):
     vm["accel"] = accel
     return vm
+end
 
 proc vm_set_display(vm, display):
     vm["display"] = display
     return vm
+end
 
 proc vm_set_serial(vm, serial):
     vm["serial"] = serial
     return vm
+end
 
 proc vm_set_gdb(vm, port):
     vm["gdb_port"] = port
     return vm
+end
 
 # ========== Boot configuration ==========
 
@@ -152,10 +165,12 @@ proc vm_boot_kernel(vm, kernel_path, cmdline):
     vm["kernel"] = kernel_path
     vm["append"] = cmdline
     return vm
+end
 
 proc vm_set_initrd(vm, initrd_path):
     vm["initrd"] = initrd_path
     return vm
+end
 
 proc vm_boot_disk(vm, disk_path):
     vm["boot_mode"] = BOOT_DISK
@@ -168,6 +183,7 @@ proc vm_boot_disk(vm, disk_path):
     drv["boot"] = true
     push(vm["drives"], drv)
     return vm
+end
 
 proc vm_boot_cdrom(vm, iso_path):
     vm["boot_mode"] = BOOT_CDROM
@@ -180,11 +196,13 @@ proc vm_boot_cdrom(vm, iso_path):
     drv["boot"] = true
     push(vm["drives"], drv)
     return vm
+end
 
 proc vm_boot_uefi(vm, firmware_path):
     vm["boot_mode"] = BOOT_UEFI
     vm["bios"] = firmware_path
     return vm
+end
 
 # ========== Drive configuration ==========
 
@@ -198,6 +216,7 @@ proc vm_add_drive(vm, file, fmt, iface):
     drv["boot"] = false
     push(vm["drives"], drv)
     return vm
+end
 
 proc vm_add_virtio_disk(vm, file, fmt):
     let drv = {}
@@ -209,6 +228,7 @@ proc vm_add_virtio_disk(vm, file, fmt):
     drv["boot"] = false
     push(vm["drives"], drv)
     return vm
+end
 
 # ========== Network configuration ==========
 
@@ -219,6 +239,7 @@ proc vm_add_net_user(vm, hostfwd):
     net["model"] = "virtio-net-pci"
     push(vm["net"], net)
     return vm
+end
 
 proc vm_add_net_tap(vm, ifname, bridge):
     let net = {}
@@ -228,40 +249,48 @@ proc vm_add_net_tap(vm, ifname, bridge):
     net["model"] = "virtio-net-pci"
     push(vm["net"], net)
     return vm
+end
 
 proc vm_add_net_none(vm):
     let net = {}
     net["type"] = NET_NONE
     push(vm["net"], net)
     return vm
+end
 
 # ========== Device configuration ==========
 
 proc vm_add_device(vm, device_str):
     push(vm["devices"], device_str)
     return vm
+end
 
 proc vm_add_virtio_serial(vm):
     push(vm["devices"], "virtio-serial-pci")
     return vm
+end
 
 proc vm_add_virtio_rng(vm):
     push(vm["devices"], "virtio-rng-pci")
     return vm
+end
 
 proc vm_add_virtio_balloon(vm):
     push(vm["devices"], "virtio-balloon-pci")
     return vm
+end
 
 proc vm_add_virtio_gpu(vm):
     push(vm["devices"], "virtio-gpu-pci")
     return vm
+end
 
 proc vm_add_usb(vm):
     push(vm["devices"], "qemu-xhci")
     push(vm["devices"], "usb-kbd")
     push(vm["devices"], "usb-mouse")
     return vm
+end
 
 proc vm_add_fw_cfg(vm, name, file):
     let cfg = {}
@@ -269,6 +298,7 @@ proc vm_add_fw_cfg(vm, name, file):
     cfg["file"] = file
     push(vm["fw_cfg"], cfg)
     return vm
+end
 
 proc vm_add_9p_share(vm, tag, path, security):
     let share = "virtio-9p-pci,fsdev=fs_" + tag + ",mount_tag=" + tag
@@ -276,15 +306,18 @@ proc vm_add_9p_share(vm, tag, path, security):
     let chardev = "local,id=fs_" + tag + ",path=" + path + ",security_model=" + security
     push(vm["chardevs"], chardev)
     return vm
+end
 
 proc vm_add_extra(vm, arg):
     push(vm["extra_args"], arg)
     return vm
+end
 
 # ========== Command generation ==========
 
 proc qemu_binary(arch):
     return "qemu-system-" + arch
+end
 
 proc vm_build_command(vm):
     let parts = []
@@ -294,6 +327,7 @@ proc vm_build_command(vm):
     let machine_str = vm["machine"]
     if vm["accel"] != "":
         machine_str = machine_str + ",accel=" + vm["accel"]
+    end
     push(parts, "-machine")
     push(parts, machine_str)
 
@@ -301,11 +335,13 @@ proc vm_build_command(vm):
     if vm["cpu"] != "":
         push(parts, "-cpu")
         push(parts, vm["cpu"])
+    end
 
     # SMP
     if vm["smp"] > 1:
         push(parts, "-smp")
         push(parts, str(vm["smp"]))
+    end
 
     # Memory
     push(parts, "-m")
@@ -319,27 +355,33 @@ proc vm_build_command(vm):
     if vm["serial"] != "":
         push(parts, "-serial")
         push(parts, vm["serial"])
+    end
 
     # Monitor
     if vm["monitor"] != "":
         push(parts, "-monitor")
         push(parts, vm["monitor"])
+    end
 
     # Kernel boot
     if vm["kernel"] != "":
         push(parts, "-kernel")
         push(parts, vm["kernel"])
+    end
     if vm["initrd"] != "":
         push(parts, "-initrd")
         push(parts, vm["initrd"])
+    end
     if vm["append"] != "":
         push(parts, "-append")
         push(parts, chr(34) + vm["append"] + chr(34))
+    end
 
     # BIOS/firmware
     if vm["bios"] != "":
         push(parts, "-bios")
         push(parts, vm["bios"])
+    end
 
     # Drives
     let di = 0
@@ -352,10 +394,12 @@ proc vm_build_command(vm):
         else:
             dstr = dstr + ",if=" + drv["interface"]
             dstr = dstr + ",index=" + str(drv["index"])
+        end
         dstr = dstr + ",media=" + drv["media"]
         push(parts, "-drive")
         push(parts, dstr)
         di = di + 1
+    end
 
     # Network
     let ni = 0
@@ -365,19 +409,24 @@ proc vm_build_command(vm):
             let nstr = "user"
             if net["hostfwd"] != "":
                 nstr = nstr + ",hostfwd=" + net["hostfwd"]
+            end
             push(parts, "-netdev")
             push(parts, nstr + ",id=net" + str(ni))
             push(parts, "-device")
             push(parts, net["model"] + ",netdev=net" + str(ni))
+        end
         if net["type"] == NET_TAP:
             push(parts, "-netdev")
             push(parts, "tap,id=net" + str(ni) + ",ifname=" + net["ifname"])
             push(parts, "-device")
             push(parts, net["model"] + ",netdev=net" + str(ni))
+        end
         if net["type"] == NET_NONE:
             push(parts, "-nic")
             push(parts, "none")
+        end
         ni = ni + 1
+    end
 
     # Chardevs (for 9p shares etc)
     let ci = 0
@@ -385,6 +434,7 @@ proc vm_build_command(vm):
         push(parts, "-fsdev")
         push(parts, vm["chardevs"][ci])
         ci = ci + 1
+    end
 
     # Devices
     let dvi = 0
@@ -392,6 +442,7 @@ proc vm_build_command(vm):
         push(parts, "-device")
         push(parts, vm["devices"][dvi])
         dvi = dvi + 1
+    end
 
     # Firmware config
     let fi = 0
@@ -399,28 +450,35 @@ proc vm_build_command(vm):
         push(parts, "-fw_cfg")
         push(parts, "name=" + vm["fw_cfg"][fi]["name"] + ",file=" + vm["fw_cfg"][fi]["file"])
         fi = fi + 1
+    end
 
     # GDB
     if vm["gdb_port"] > 0:
         push(parts, "-gdb")
         push(parts, "tcp::" + str(vm["gdb_port"]))
         push(parts, "-S")
+    end
 
     # Flags
     if vm["daemonize"]:
         push(parts, "-daemonize")
+    end
     if vm["snapshot"]:
         push(parts, "-snapshot")
+    end
     if vm["no_reboot"]:
         push(parts, "-no-reboot")
+    end
     if vm["no_shutdown"]:
         push(parts, "-no-shutdown")
+    end
 
     # Extra args
     let ei = 0
     while ei < len(vm["extra_args"]):
         push(parts, vm["extra_args"][ei])
         ei = ei + 1
+    end
 
     # Join into command string
     let cmd = ""
@@ -428,33 +486,43 @@ proc vm_build_command(vm):
     while pi < len(parts):
         if pi > 0:
             cmd = cmd + " "
+        end
         cmd = cmd + parts[pi]
         pi = pi + 1
+    end
 
     return cmd
+end
 
 # ========== QEMU disk image tools ==========
 
 proc qemu_img_create(path, fmt, size):
     return "qemu-img create -f " + fmt + " " + path + " " + size
+end
 
 proc qemu_img_convert(src, src_fmt, dst, dst_fmt):
     return "qemu-img convert -f " + src_fmt + " -O " + dst_fmt + " " + src + " " + dst
+end
 
 proc qemu_img_resize(path, size):
     return "qemu-img resize " + path + " " + size
+end
 
 proc qemu_img_info(path):
     return "qemu-img info " + path
+end
 
 proc qemu_img_snapshot_create(path, snap_name):
     return "qemu-img snapshot -c " + snap_name + " " + path
+end
 
 proc qemu_img_snapshot_apply(path, snap_name):
     return "qemu-img snapshot -a " + snap_name + " " + path
+end
 
 proc qemu_img_snapshot_list(path):
     return "qemu-img snapshot -l " + path
+end
 
 # ========== Convenience VM presets ==========
 
@@ -466,6 +534,7 @@ proc baremetal_x86(name, kernel_elf):
     vm = vm_boot_kernel(vm, kernel_elf, "")
     vm["no_reboot"] = true
     return vm
+end
 
 proc baremetal_arm64(name, kernel_elf):
     let vm = create_vm(name)
@@ -476,6 +545,7 @@ proc baremetal_arm64(name, kernel_elf):
     vm = vm_boot_kernel(vm, kernel_elf, "")
     vm["no_reboot"] = true
     return vm
+end
 
 proc baremetal_riscv(name, kernel_elf):
     let vm = create_vm(name)
@@ -485,6 +555,7 @@ proc baremetal_riscv(name, kernel_elf):
     vm = vm_boot_kernel(vm, kernel_elf, "")
     vm["no_reboot"] = true
     return vm
+end
 
 proc linux_vm(name, kernel, rootfs, cmdline):
     let vm = create_vm(name)
@@ -499,12 +570,14 @@ proc linux_vm(name, kernel, rootfs, cmdline):
     vm = vm_add_net_user(vm, "tcp::2222-:22")
     vm = vm_add_virtio_rng(vm)
     return vm
+end
 
 proc dev_vm(name, kernel, rootfs, share_path):
     let vm = linux_vm(name, kernel, rootfs, "console=ttyS0 root=/dev/vda rw")
     vm = vm_add_9p_share(vm, "host_share", share_path, "mapped-xattr")
     vm = vm_add_virtio_serial(vm)
     return vm
+end
 
 proc test_kernel(kernel_elf, arch):
     let vm = create_vm("test")
@@ -516,11 +589,13 @@ proc test_kernel(kernel_elf, arch):
     vm["no_reboot"] = true
     vm["no_shutdown"] = true
     return vm
+end
 
 # ========== GDB integration ==========
 
 proc gdb_connect_cmd(port):
     return "target remote :" + str(port)
+end
 
 proc gdb_script(kernel_elf, port):
     let nl = chr(10)
@@ -530,7 +605,9 @@ proc gdb_script(kernel_elf, port):
     script = script + "break kmain" + nl
     script = script + "continue" + nl
     return script
+end
 
 proc vm_debug(vm, port):
     vm = vm_set_gdb(vm, port)
     return vm
+end

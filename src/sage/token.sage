@@ -81,12 +81,15 @@ let TOKEN_TRUE = 62
 let TOKEN_FALSE = 63
 let TOKEN_NIL = 64
 
+# Block terminator
+let TOKEN_END = 65
+
 # Structural
-let TOKEN_INDENT = 65
-let TOKEN_DEDENT = 66
-let TOKEN_NEWLINE = 67
-let TOKEN_EOF = 68
-let TOKEN_ERROR = 69
+let TOKEN_INDENT = 66
+let TOKEN_DEDENT = 67
+let TOKEN_NEWLINE = 68
+let TOKEN_EOF = 69
+let TOKEN_ERROR = 70
 
 # Token type name lookup for debugging
 proc token_type_name(t):
@@ -220,6 +223,8 @@ proc token_type_name(t):
         return "FALSE"
     if t == TOKEN_NIL:
         return "NIL"
+    if t == TOKEN_END:
+        return "END"
     if t == TOKEN_INDENT:
         return "INDENT"
     if t == TOKEN_DEDENT:

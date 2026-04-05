@@ -4,9 +4,11 @@ gc_disable()
 
 proc read_u16(bs, off):
     return bs[off] + bs[off + 1] * 256
+end
 
 proc read_u32(bs, off):
     return bs[off] + bs[off + 1] * 256 + bs[off + 2] * 65536 + bs[off + 3] * 16777216
+end
 
 # Directory entry attribute flags
 let ATTR_READ_ONLY = 1
@@ -32,7 +34,10 @@ proc read_sector(disk, info, lba):
             push(data, disk[off + i])
         else:
             push(data, 0)
+        end
+    end
     return data
+end
 
 # Read an entire cluster from the disk image
 proc read_cluster(disk, info, cluster):
@@ -47,7 +52,11 @@ proc read_cluster(disk, info, cluster):
                 push(data, disk[off + i])
             else:
                 push(data, 0)
+            end
+        end
+    end
     return data
+end
 
 # Read a FAT entry for a given cluster
 proc read_fat_entry(disk, info, cluster):
@@ -58,41 +67,54 @@ proc read_fat_entry(disk, info, cluster):
         let off = fat_start + cluster + (cluster >> 1)
         if off + 1 >= len(disk):
             return 4095
+        end
         let val = disk[off] + disk[off + 1] * 256
         if (cluster & 1) != 0:
             val = (val >> 4) & 4095
         else:
             val = val & 4095
+        end
         return val
+    end
 
     if ft == "FAT16":
         let off = fat_start + cluster * 2
         if off + 1 >= len(disk):
             return 65535
+        end
         return read_u16(disk, off)
+    end
 
     if ft == "FAT32":
         let off = fat_start + cluster * 4
         if off + 3 >= len(disk):
             return 268435455
+        end
         return read_u32(disk, off) & 268435455
+    end
 
     # FAT8
     let off = fat_start + cluster
     if off >= len(disk):
         return 255
+    end
     return disk[off]
+end
 
 # Check if a FAT entry marks end of chain
 proc is_end_of_chain(info, entry):
     let ft = info["fat_type"]
     if ft == "FAT12":
         return entry >= 4088
+    end
     if ft == "FAT16":
         return entry >= 65528
+    end
     if ft == "FAT32":
         return entry >= 268435448
+    end
     return entry >= 248
+end
 
 # Walk the FAT chain starting from a cluster, returns list of clusters
 proc follow_chain(disk, info, start_cluster):
@@ -104,7 +126,9 @@ proc follow_chain(disk, info, start_cluster):
         push(chain, cluster)
         cluster = read_fat_entry(disk, info, cluster)
         count = count + 1
+    end
     return chain
+end
 
 # Read all data for a file given its starting cluster and size
 proc read_file_data(disk, info, start_cluster, file_size):
@@ -117,12 +141,17 @@ proc read_file_data(disk, info, start_cluster, file_size):
         let to_copy = remaining
         if to_copy > cluster_size:
             to_copy = cluster_size
+        end
         for j in range(to_copy):
             push(data, cdata[j])
+        end
         remaining = remaining - to_copy
         if remaining <= 0:
             return data
+        end
+    end
     return data
+end
 
 # Extract 8.3 filename from a directory entry (11 bytes at offset)
 proc read_83_name(bs, off):
@@ -132,14 +161,20 @@ proc read_83_name(bs, off):
         let c = bs[off + i]
         if c != 32:
             name = name + chr(c)
+        end
+    end
     let ext = ""
     for i in range(3):
         let c = bs[off + 8 + i]
         if c != 32:
             ext = ext + chr(c)
+        end
+    end
     if len(ext) > 0:
         return name + "." + ext
+    end
     return name
+end
 
 # Convert 8.3 name to lowercase
 proc name_to_lower(name):
@@ -152,17 +187,23 @@ proc name_to_lower(name):
             result = result + chr(code + 32)
         else:
             result = result + c
+        end
+    end
     return result
+end
 
 # Parse a single 32-byte directory entry
 proc parse_dir_entry(bs, off):
     if bs[off] == 0:
         return nil
+    end
     if bs[off] == 229:
         return nil
+    end
     let attrs = bs[off + 11]
     if attrs == 15:
         return nil
+    end
     let entry = {}
     entry["raw_name"] = read_83_name(bs, off)
     entry["name"] = name_to_lower(read_83_name(bs, off))
@@ -188,6 +229,7 @@ proc parse_dir_entry(bs, off):
     entry["month"] = (raw_date >> 5) & 15
     entry["day"] = raw_date & 31
     return entry
+end
 
 # Read root directory entries (FAT12/FAT16 fixed root)
 proc read_root_dir_fixed(disk, info):
@@ -198,12 +240,17 @@ proc read_root_dir_fixed(disk, info):
         let off = root_start + i * 32
         if off + 32 > len(disk):
             return entries
+        end
         if disk[off] == 0:
             return entries
+        end
         let entry = parse_dir_entry(disk, off)
         if entry != nil and not entry["is_volume"]:
             push(entries, entry)
+        end
+    end
     return entries
+end
 
 # Read directory entries from a cluster chain (FAT32 or subdirectory)
 proc read_dir_from_chain(disk, info, start_cluster):
@@ -217,27 +264,38 @@ proc read_dir_from_chain(disk, info, start_cluster):
             let off = i * 32
             if cdata[off] == 0:
                 return entries
+            end
             let entry = parse_dir_entry(cdata, off)
             if entry != nil and not entry["is_volume"]:
                 if entry["name"] != "." and entry["name"] != "..":
                     push(entries, entry)
+                end
+            end
+        end
+    end
     return entries
+end
 
 # List the root directory
 proc list_root(disk, info):
     if info["fat_type"] == "FAT32":
         return read_dir_from_chain(disk, info, info["root_cluster"])
+    end
     return read_root_dir_fixed(disk, info)
+end
 
 # List a subdirectory given its starting cluster
 proc list_dir(disk, info, cluster):
     return read_dir_from_chain(disk, info, cluster)
+end
 
 # Read a file by directory entry
 proc read_file(disk, info, entry):
     if entry["is_dir"]:
         return nil
+    end
     return read_file_data(disk, info, entry["cluster"], entry["size"])
+end
 
 # Find an entry by name in a directory listing
 proc find_entry(entries, name):
@@ -245,7 +303,10 @@ proc find_entry(entries, name):
     for i in range(len(entries)):
         if entries[i]["name"] == lower:
             return entries[i]
+        end
+    end
     return nil
+end
 
 # Resolve a path like "/subdir/file.txt" to a directory entry
 proc resolve_path(disk, info, path):
@@ -256,38 +317,53 @@ proc resolve_path(disk, info, path):
         if path[i] == "/":
             if len(current) > 0:
                 push(parts, current)
+            end
             current = ""
         else:
             current = current + path[i]
+        end
+    end
     if len(current) > 0:
         push(parts, current)
+    end
     if len(parts) == 0:
         return nil
+    end
     # Walk from root
     let entries = list_root(disk, info)
     for i in range(len(parts) - 1):
         let entry = find_entry(entries, parts[i])
         if entry == nil:
             return nil
+        end
         if not entry["is_dir"]:
             return nil
+        end
         entries = list_dir(disk, info, entry["cluster"])
+    end
     return find_entry(entries, parts[len(parts) - 1])
+end
 
 # Read a file by path
 proc read_file_by_path(disk, info, path):
     let entry = resolve_path(disk, info, path)
     if entry == nil:
         return nil
+    end
     return read_file(disk, info, entry)
+end
 
 # List a directory by path (returns entries or nil)
 proc list_dir_by_path(disk, info, path):
     if path == "/" or path == "":
         return list_root(disk, info)
+    end
     let entry = resolve_path(disk, info, path)
     if entry == nil:
         return nil
+    end
     if not entry["is_dir"]:
         return nil
+    end
     return list_dir(disk, info, entry["cluster"])
+end

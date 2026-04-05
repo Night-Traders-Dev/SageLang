@@ -4,9 +4,11 @@ gc_disable()
 
 proc read_u16_le(bs, off):
     return bs[off] + bs[off + 1] * 256
+end
 
 proc read_u32_le(bs, off):
     return bs[off] + bs[off + 1] * 256 + bs[off + 2] * 65536 + bs[off + 3] * 16777216
+end
 
 # MBR boot signature
 let MBR_SIGNATURE = 43605
@@ -31,35 +33,51 @@ let PART_EFI_SYSTEM = 239
 proc partition_type_name(t):
     if t == 0:
         return "Empty"
+    end
     if t == 1:
         return "FAT12"
+    end
     if t == 4:
         return "FAT16 (<32MB)"
+    end
     if t == 5:
         return "Extended"
+    end
     if t == 6:
         return "FAT16 (>32MB)"
+    end
     if t == 7:
         return "NTFS/exFAT"
+    end
     if t == 11:
         return "FAT32"
+    end
     if t == 12:
         return "FAT32 (LBA)"
+    end
     if t == 14:
         return "FAT16 (LBA)"
+    end
     if t == 15:
         return "Extended (LBA)"
+    end
     if t == 130:
         return "Linux swap"
+    end
     if t == 131:
         return "Linux"
+    end
     if t == 142:
         return "Linux LVM"
+    end
     if t == 238:
         return "EFI GPT protective"
+    end
     if t == 239:
         return "EFI System"
+    end
     return "Unknown"
+end
 
 # Decode CHS (Cylinder-Head-Sector) address from 3 bytes
 proc decode_chs(bs, off):
@@ -68,6 +86,7 @@ proc decode_chs(bs, off):
     chs["sector"] = bs[off + 1] & 63
     chs["cylinder"] = ((bs[off + 1] & 192) << 2) + bs[off + 2]
     return chs
+end
 
 # Parse a single MBR partition entry (16 bytes starting at offset)
 proc parse_partition(bs, off):
@@ -82,18 +101,22 @@ proc parse_partition(bs, off):
     part["sector_count"] = read_u32_le(bs, off + 12)
     part["size_bytes"] = read_u32_le(bs, off + 12) * 512
     return part
+end
 
 # Check if MBR has valid boot signature
 proc is_valid_mbr(bs):
     if len(bs) < 512:
         return false
+    end
     let sig = read_u16_le(bs, 510)
     return sig == 43605
+end
 
 # Parse all 4 MBR partition entries
 proc parse_mbr(bs):
     if not is_valid_mbr(bs):
         return nil
+    end
     let mbr = {}
     mbr["boot_code"] = 446
     mbr["signature"] = read_u16_le(bs, 510)
@@ -108,8 +131,11 @@ proc parse_mbr(bs):
     for i in range(4):
         if partitions[i]["type"] != 0:
             active = active + 1
+        end
+    end
     mbr["active_count"] = active
     return mbr
+end
 
 # Find the bootable (active) partition
 proc find_bootable(mbr):
@@ -117,7 +143,10 @@ proc find_bootable(mbr):
     for i in range(4):
         if parts[i]["bootable"]:
             return parts[i]
+        end
+    end
     return nil
+end
 
 # Convert LBA to CHS (given disk geometry)
 proc lba_to_chs(lba, heads_per_cylinder, sectors_per_track):
@@ -127,16 +156,19 @@ proc lba_to_chs(lba, heads_per_cylinder, sectors_per_track):
     chs["head"] = (temp / sectors_per_track) | 0
     chs["sector"] = (temp - chs["head"] * sectors_per_track) + 1
     return chs
+end
 
 # Convert CHS to LBA (given disk geometry)
 proc chs_to_lba(chs, heads_per_cylinder, sectors_per_track):
     return (chs["cylinder"] * heads_per_cylinder + chs["head"]) * sectors_per_track + chs["sector"] - 1
+end
 
 # ========== Extended Partitions ==========
 
 proc is_extended(partition):
     let t = partition["type"]
     return t == 5 or t == 15 or t == 133
+end
 
 proc parse_extended_partitions(bs, ext_partition):
     let logicals = []
@@ -148,6 +180,7 @@ proc parse_extended_partitions(bs, ext_partition):
         let off = ebr_lba * 512
         if off + 512 > len(bs):
             break
+        end
         # EBR has same structure as MBR: 2 partition entries at offset 446
         let p1 = parse_partition(bs, off + 446)
         let p2 = parse_partition(bs, off + 462)
@@ -160,13 +193,17 @@ proc parse_extended_partitions(bs, ext_partition):
             logical["lba_start"] = ebr_lba + p1["lba_start"]
             logical["sector_count"] = p1["sector_count"]
             push(logicals, logical)
+        end
         # Second entry: next EBR (relative to extended partition start)
         if p2["type"] != 0 and p2["lba_start"] > 0:
             ebr_lba = ext_start + p2["lba_start"]
         else:
             ebr_lba = 0
+        end
         iter = iter + 1
+    end
     return logicals
+end
 
 # Get all partitions including logical partitions in extended
 proc get_all_partitions(bs):
@@ -176,34 +213,43 @@ proc get_all_partitions(bs):
         let p = mbr["partitions"][i]
         if p["type"] == 0:
             continue
+        end
         if is_extended(p):
             let logicals = parse_extended_partitions(bs, p)
             for j in range(len(logicals)):
                 push(all_parts, logicals[j])
+            end
         else:
             push(all_parts, p)
+        end
+    end
     return all_parts
+end
 
 # ========== MBR Writer ==========
 
 proc _write_u16_le(bs, off, val):
     bs[off] = val & 255
     bs[off + 1] = (val >> 8) & 255
+end
 
 proc _write_u32_le(bs, off, val):
     bs[off] = val & 255
     bs[off + 1] = (val >> 8) & 255
     bs[off + 2] = (val >> 16) & 255
     bs[off + 3] = (val >> 24) & 255
+end
 
 proc create_mbr():
     let mbr = []
     for i in range(512):
         push(mbr, 0)
+    end
     # Boot signature
     mbr[510] = 85
     mbr[511] = 170
     return mbr
+end
 
 proc write_partition(mbr, index, bootable, ptype, lba_start, sector_count):
     let off = 446 + index * 16
@@ -211,6 +257,7 @@ proc write_partition(mbr, index, bootable, ptype, lba_start, sector_count):
         mbr[off] = 128
     else:
         mbr[off] = 0
+    end
     # CHS start/end (use LBA mode: FE FF FF)
     mbr[off + 1] = 254
     mbr[off + 2] = 255
@@ -221,10 +268,14 @@ proc write_partition(mbr, index, bootable, ptype, lba_start, sector_count):
     mbr[off + 7] = 255
     _write_u32_le(mbr, off + 8, lba_start)
     _write_u32_le(mbr, off + 12, sector_count)
+end
 
 proc write_boot_code(mbr, code):
     let max_len = 440
     if len(code) < max_len:
         max_len = len(code)
+    end
     for i in range(max_len):
         mbr[i] = code[i]
+    end
+end

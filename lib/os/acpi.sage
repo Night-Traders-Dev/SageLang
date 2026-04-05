@@ -3,14 +3,17 @@
 
 proc read_u16_le(bs, off):
     return bs[off] + bs[off + 1] * 256
+end
 
 proc read_u32_le(bs, off):
     return bs[off] + bs[off + 1] * 256 + bs[off + 2] * 65536 + bs[off + 3] * 16777216
+end
 
 proc read_u64_le(bs, off):
     let lo = read_u32_le(bs, off)
     let hi = read_u32_le(bs, off + 4)
     return lo + hi * 4294967296
+end
 
 # MADT (Multiple APIC Description Table) entry types
 let MADT_LOCAL_APIC = 0
@@ -24,19 +27,27 @@ let MADT_LOCAL_X2APIC = 9
 proc madt_entry_type_name(t):
     if t == 0:
         return "Local APIC"
+    end
     if t == 1:
         return "I/O APIC"
+    end
     if t == 2:
         return "Interrupt Override"
+    end
     if t == 3:
         return "NMI Source"
+    end
     if t == 4:
         return "Local APIC NMI"
+    end
     if t == 5:
         return "Local APIC Address Override"
+    end
     if t == 9:
         return "Local x2APIC"
+    end
     return "Unknown"
+end
 
 # Parse SDT header (shared with uefi module but standalone here)
 proc parse_sdt_header(bs, off):
@@ -44,17 +55,20 @@ proc parse_sdt_header(bs, off):
     let sig = ""
     for i in range(4):
         sig = sig + chr(bs[off + i])
+    end
     hdr["signature"] = sig
     hdr["length"] = read_u32_le(bs, off + 4)
     hdr["revision"] = bs[off + 8]
     hdr["checksum"] = bs[off + 9]
     return hdr
+end
 
 # Parse MADT (APIC table, signature "APIC")
 proc parse_madt(bs, off):
     let hdr = parse_sdt_header(bs, off)
     if hdr["signature"] != "APIC":
         return nil
+    end
     let madt = {}
     madt["header"] = hdr
     madt["local_apic_address"] = read_u32_le(bs, off + 36)
@@ -81,35 +95,44 @@ proc parse_madt(bs, off):
                 entry["apic_id"] = bs[pos + 3]
                 entry["flags"] = read_u32_le(bs, pos + 4)
                 entry["enabled"] = (read_u32_le(bs, pos + 4) & 1) != 0
+            end
 
             if entry_type == 1:
                 entry["io_apic_id"] = bs[pos + 2]
                 entry["io_apic_address"] = read_u32_le(bs, pos + 4)
                 entry["gsi_base"] = read_u32_le(bs, pos + 8)
+            end
 
             if entry_type == 2:
                 entry["bus"] = bs[pos + 2]
                 entry["source"] = bs[pos + 3]
                 entry["gsi"] = read_u32_le(bs, pos + 4)
                 entry["flags"] = read_u16_le(bs, pos + 8)
+            end
 
             if entry_type == 4:
                 entry["acpi_processor_id"] = bs[pos + 2]
                 entry["flags"] = read_u16_le(bs, pos + 3)
                 entry["lint"] = bs[pos + 5]
+            end
 
             if entry_type == 5:
                 entry["address"] = read_u64_le(bs, pos + 4)
+            end
 
             if entry_type == 9:
                 entry["x2apic_id"] = read_u32_le(bs, pos + 4)
                 entry["flags"] = read_u32_le(bs, pos + 8)
                 entry["acpi_uid"] = read_u32_le(bs, pos + 12)
+            end
 
             push(entries, entry)
             pos = pos + entry_len
+        end
+    end
     madt["entries"] = entries
     return madt
+end
 
 # Count enabled processors in MADT
 proc count_processors(madt):
@@ -119,10 +142,15 @@ proc count_processors(madt):
         let e = entries[i]
         if e["type"] == 0 and e["enabled"]:
             count = count + 1
+        end
         if e["type"] == 9:
             if (e["flags"] & 1) != 0:
                 count = count + 1
+            end
+        end
+    end
     return count
+end
 
 # Get I/O APIC entries from MADT
 proc get_io_apics(madt):
@@ -131,13 +159,17 @@ proc get_io_apics(madt):
     for i in range(len(entries)):
         if entries[i]["type"] == 1:
             push(result, entries[i])
+        end
+    end
     return result
+end
 
 # Parse MCFG (PCI Express memory-mapped configuration)
 proc parse_mcfg(bs, off):
     let hdr = parse_sdt_header(bs, off)
     if hdr["signature"] != "MCFG":
         return nil
+    end
     let mcfg = {}
     mcfg["header"] = hdr
     # Entries start at offset 44 (after 36-byte SDT header + 8 reserved bytes)
@@ -152,14 +184,17 @@ proc parse_mcfg(bs, off):
         entry["end_bus"] = bs[pos + 11]
         push(entries, entry)
         pos = pos + 16
+    end
     mcfg["entries"] = entries
     return mcfg
+end
 
 # Parse HPET (High Precision Event Timer)
 proc parse_hpet(bs, off):
     let hdr = parse_sdt_header(bs, off)
     if hdr["signature"] != "HPET":
         return nil
+    end
     let hpet = {}
     hpet["header"] = hdr
     hpet["hardware_rev_id"] = bs[off + 36]
@@ -177,12 +212,14 @@ proc parse_hpet(bs, off):
     hpet["min_tick"] = read_u16_le(bs, off + 53)
     hpet["page_protection"] = bs[off + 55]
     return hpet
+end
 
 # Parse FADT (Fixed ACPI Description Table) - key fields
 proc parse_fadt(bs, off):
     let hdr = parse_sdt_header(bs, off)
     if hdr["signature"] != "FACP":
         return nil
+    end
     let fadt = {}
     fadt["header"] = hdr
     fadt["firmware_ctrl"] = read_u32_le(bs, off + 36)
@@ -209,11 +246,15 @@ proc parse_fadt(bs, off):
     if hdr["length"] >= 244:
         fadt["x_firmware_ctrl"] = read_u64_le(bs, off + 132)
         fadt["x_dsdt"] = read_u64_le(bs, off + 140)
+    end
     return fadt
+end
 
 # Verify ACPI table checksum
 proc verify_checksum(bs, off, length):
     let sum = 0
     for i in range(length):
         sum = sum + bs[off + i]
+    end
     return (sum & 255) == 0
+end

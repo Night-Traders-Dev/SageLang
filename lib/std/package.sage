@@ -11,8 +11,8 @@ proc parse_toml_line(line):
     if trimmed[0] == "#":
         return nil
     if trimmed[0] == "[":
-        let end = len(trimmed) - 1
-        if end > 0:
+        let last_idx = len(trimmed) - 1
+        if last_idx > 0:
             let section = ""
             let i = 1
             while i < len(trimmed):

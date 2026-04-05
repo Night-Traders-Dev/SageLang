@@ -77,69 +77,101 @@ let SYSCALL_VECTOR = 128
 proc exception_name(vec):
     if vec == 0:
         return "Divide Error"
+    end
     if vec == 1:
         return "Debug"
+    end
     if vec == 2:
         return "NMI"
+    end
     if vec == 3:
         return "Breakpoint"
+    end
     if vec == 4:
         return "Overflow"
+    end
     if vec == 5:
         return "Bound Range"
+    end
     if vec == 6:
         return "Invalid Opcode"
+    end
     if vec == 7:
         return "Device Not Available"
+    end
     if vec == 8:
         return "Double Fault"
+    end
     if vec == 10:
         return "Invalid TSS"
+    end
     if vec == 11:
         return "Segment Not Present"
+    end
     if vec == 12:
         return "Stack Fault"
+    end
     if vec == 13:
         return "General Protection"
+    end
     if vec == 14:
         return "Page Fault"
+    end
     if vec == 16:
         return "x87 FP Error"
+    end
     if vec == 17:
         return "Alignment Check"
+    end
     if vec == 18:
         return "Machine Check"
+    end
     if vec == 19:
         return "SIMD FP Error"
+    end
     if vec == 20:
         return "Virtualization"
+    end
     if vec == 21:
         return "Control Protection"
+    end
     return "Unknown"
+end
 
 # Returns true if the exception pushes an error code
 proc has_error_code(vec):
     if vec == 8:
         return true
+    end
     if vec == 10:
         return true
+    end
     if vec == 11:
         return true
+    end
     if vec == 12:
         return true
+    end
     if vec == 13:
         return true
+    end
     if vec == 14:
         return true
+    end
     if vec == 17:
         return true
+    end
     if vec == 21:
         return true
+    end
     if vec == 29:
         return true
+    end
     if vec == 30:
         return true
+    end
     return false
+end
 
 # Create an IDT gate descriptor (returns dict with raw field values)
 # handler_addr: 64-bit address of the ISR
@@ -158,8 +190,10 @@ proc make_gate(handler_addr, selector, ist, gate_type, dpl):
     gate["type_name"] = "Unknown"
     if gate_type == 14:
         gate["type_name"] = "Interrupt"
+    end
     if gate_type == 15:
         gate["type_name"] = "Trap"
+    end
 
     # Build the 16 raw bytes of the IDT entry
     let offset_lo = handler_addr & 65535
@@ -201,22 +235,27 @@ proc make_gate(handler_addr, selector, ist, gate_type, dpl):
     push(bytes, 0)
     gate["bytes"] = bytes
     return gate
+end
 
 # Convenience: create a kernel interrupt gate
 proc interrupt_gate(handler_addr, selector):
     return make_gate(handler_addr, selector, 0, 14, 0)
+end
 
 # Convenience: create a kernel trap gate
 proc trap_gate(handler_addr, selector):
     return make_gate(handler_addr, selector, 0, 15, 0)
+end
 
 # Convenience: create a user-callable interrupt gate (for syscalls)
 proc user_interrupt_gate(handler_addr, selector):
     return make_gate(handler_addr, selector, 0, 14, 3)
+end
 
 # Convenience: create an interrupt gate with IST
 proc ist_interrupt_gate(handler_addr, selector, ist):
     return make_gate(handler_addr, selector, ist, 14, 0)
+end
 
 # Create an IDT descriptor table (256 entries)
 # handler_table: dict mapping vector number -> handler address
@@ -235,9 +274,13 @@ proc build_idt(handler_table, selector):
             let bytes = []
             for j in range(16):
                 push(bytes, 0)
+            end
             empty["bytes"] = bytes
             push(idt, empty)
+        end
+    end
     return idt
+end
 
 # Flatten IDT to raw byte array (256 * 16 = 4096 bytes)
 proc idt_to_bytes(idt):
@@ -246,7 +289,10 @@ proc idt_to_bytes(idt):
         let entry_bytes = idt[i]["bytes"]
         for j in range(16):
             push(bytes, entry_bytes[j])
+        end
+    end
     return bytes
+end
 
 # Build IDTR descriptor (6 bytes: 2 limit + 4/8 base)
 proc make_idtr(base_addr):
@@ -268,6 +314,7 @@ proc make_idtr(base_addr):
     push(bytes, (base_addr >> 56) & 255)
     idtr["bytes"] = bytes
     return idtr
+end
 
 # Parse an IDT entry from 16 raw bytes
 proc parse_gate(bs, off):
@@ -286,11 +333,15 @@ proc parse_gate(bs, off):
     gate["gate_type"] = type_attr & 15
     if (type_attr & 15) == 14:
         gate["type_name"] = "Interrupt"
+    end
     if (type_attr & 15) == 15:
         gate["type_name"] = "Trap"
+    end
     if not dict_has(gate, "type_name"):
         gate["type_name"] = "Unknown"
+    end
     return gate
+end
 
 # PIC (8259) initialization command words
 let PIC1_CMD = 32
@@ -347,3 +398,4 @@ proc pic_remap_sequence(vector_base):
     s10["value"] = 255
     push(seq, s10)
     return seq
+end

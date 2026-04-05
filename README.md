@@ -1186,7 +1186,7 @@ sage/
 - **Instance `==` always returns false** — use structural/field checks instead.
 - **No wildcard imports** (`from X import *`) — use `import X` then `X.field`.
 - **No multiline dict/array literals** — build them incrementally.
-- **`match` is a reserved keyword** — do not use it as a variable name.
+- **`match` and `end` are reserved keywords** — do not use them as variable names.
 - **Class methods cannot see module-level `let` vars** — hardcode values or pass them as arguments.
 - **`%` operator casts to int** — `3.7 % 1` returns `0`, not `0.7`; use string-based `trunc()` for floor/ceil.
 - **LLVM backend: do NOT use the fake-break pattern** (`j = len(arr)` to exit loops) — the LLVM backend cannot modify loop variables at runtime. Use `break` instead.

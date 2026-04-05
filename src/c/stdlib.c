@@ -603,7 +603,7 @@ Module* create_sys_module(ModuleCache* cache) {
     env_define(e, "sleep", 5, val_native(sys_sleep_native));
 
     // Constants
-    env_define(e, "version", 7, val_string("1.1.0"));
+    env_define(e, "version", 7, val_string("2.1.0"));
     {
         Value plat = sys_platform_native(0, NULL);
         env_define(e, "platform", 8, plat);

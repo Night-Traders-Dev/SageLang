@@ -20,6 +20,7 @@ typedef enum {
 
     // Phase 1.8: Systems Layer
     TOKEN_UNSAFE,
+    TOKEN_END,
 
     // Phase 8: Module System
     TOKEN_IMPORT, TOKEN_FROM, TOKEN_AS,

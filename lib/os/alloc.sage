@@ -21,6 +21,7 @@ proc bump_create(base, size):
     alloc["end"] = base + size
     alloc["count"] = 0
     return alloc
+end
 
 # Allocate n bytes from bump allocator (returns address or -1)
 proc bump_alloc(alloc, size, alignment):
@@ -30,22 +31,27 @@ proc bump_alloc(alloc, size, alignment):
     let aligned = (addr + mask) & (0 - alignment)
     if aligned + size > alloc["end"]:
         return -1
+    end
     alloc["next"] = aligned + size
     alloc["count"] = alloc["count"] + 1
     return aligned
+end
 
 # Reset bump allocator (free everything at once)
 proc bump_reset(alloc):
     alloc["next"] = alloc["base"]
     alloc["count"] = 0
+end
 
 # Get remaining space
 proc bump_remaining(alloc):
     return alloc["end"] - alloc["next"]
+end
 
 # Get total allocated
 proc bump_used(alloc):
     return alloc["next"] - alloc["base"]
+end
 
 # ============================================================================
 # Free-List Allocator (supports individual free)
@@ -66,6 +72,7 @@ proc freelist_create(base, size):
     alloc["free_count"] = 1
     alloc["used"] = 0
     return alloc
+end
 
 # Find first fit block in free list
 proc freelist_alloc(alloc, size, alignment):
@@ -85,16 +92,22 @@ proc freelist_alloc(alloc, size, alignment):
                 for j in range(len(flist)):
                     if j != i:
                         push(new_list, flist[j])
+                    end
+                end
                 alloc["free_list"] = new_list
                 alloc["free_count"] = alloc["free_count"] - 1
             else:
                 # Split block
                 block["addr"] = aligned + size
                 block["size"] = block["size"] - size - waste
+            end
             alloc["alloc_count"] = alloc["alloc_count"] + 1
             alloc["used"] = alloc["used"] + size
             return result
+        end
+    end
     return -1
+end
 
 # Free a block back to the free list
 proc freelist_free(alloc, addr, size):
@@ -109,9 +122,12 @@ proc freelist_free(alloc, addr, size):
         if not inserted and flist[i]["addr"] > addr:
             push(new_list, new_block)
             inserted = true
+        end
         push(new_list, flist[i])
+    end
     if not inserted:
         push(new_list, new_block)
+    end
     # Coalesce adjacent blocks
     let coalesced = []
     let current = new_list[0]
@@ -122,11 +138,14 @@ proc freelist_free(alloc, addr, size):
         else:
             push(coalesced, current)
             current = next
+        end
+    end
     push(coalesced, current)
     alloc["free_list"] = coalesced
     alloc["free_count"] = len(coalesced)
     alloc["alloc_count"] = alloc["alloc_count"] - 1
     alloc["used"] = alloc["used"] - size
+end
 
 # Get fragmentation info
 proc freelist_stats(alloc):
@@ -142,8 +161,11 @@ proc freelist_stats(alloc):
     for i in range(len(flist)):
         if flist[i]["size"] > largest:
             largest = flist[i]["size"]
+        end
+    end
     stats["largest_free"] = largest
     return stats
+end
 
 # ============================================================================
 # Bitmap Page Allocator (for physical page frames)
@@ -163,9 +185,11 @@ proc bitmap_create(base, num_pages, page_size):
     let bitmap = []
     for i in range(num_pages):
         push(bitmap, 0)
+    end
     alloc["bitmap"] = bitmap
     alloc["used_count"] = 0
     return alloc
+end
 
 # Allocate a single page (returns page address or -1)
 proc bitmap_alloc_page(alloc):
@@ -176,7 +200,10 @@ proc bitmap_alloc_page(alloc):
             bitmap[i] = 1
             alloc["used_count"] = alloc["used_count"] + 1
             return alloc["base"] + i * alloc["page_size"]
+        end
+    end
     return -1
+end
 
 # Free a single page
 proc bitmap_free_page(alloc, addr):
@@ -186,7 +213,10 @@ proc bitmap_free_page(alloc, addr):
             alloc["bitmap"][idx] = 0
             alloc["used_count"] = alloc["used_count"] - 1
             return true
+        end
+    end
     return false
+end
 
 # Allocate n contiguous pages (returns base address or -1)
 proc bitmap_alloc_pages(alloc, count):
@@ -200,14 +230,21 @@ proc bitmap_alloc_pages(alloc, count):
                 found = false
                 i = i + j + 1
                 j = count
+            end
+        end
         if found:
             for j in range(count):
                 bitmap[i + j] = 1
+            end
             alloc["used_count"] = alloc["used_count"] + count
             return alloc["base"] + i * alloc["page_size"]
+        end
         if found:
             i = num
+        end
+    end
     return -1
+end
 
 # Free n contiguous pages
 proc bitmap_free_pages(alloc, addr, count):
@@ -217,6 +254,10 @@ proc bitmap_free_pages(alloc, addr, count):
             if alloc["bitmap"][idx + i] == 1:
                 alloc["bitmap"][idx + i] = 0
                 alloc["used_count"] = alloc["used_count"] - 1
+            end
+        end
+    end
+end
 
 # Mark a range of pages as used (e.g., kernel image, reserved regions)
 proc bitmap_mark_used(alloc, addr, size):
@@ -229,6 +270,10 @@ proc bitmap_mark_used(alloc, addr, size):
             if alloc["bitmap"][idx] == 0:
                 alloc["bitmap"][idx] = 1
                 alloc["used_count"] = alloc["used_count"] + 1
+            end
+        end
+    end
+end
 
 # Get allocator statistics
 proc bitmap_stats(alloc):
@@ -240,15 +285,19 @@ proc bitmap_stats(alloc):
     stats["used_bytes"] = alloc["used_count"] * alloc["page_size"]
     stats["free_bytes"] = (alloc["num_pages"] - alloc["used_count"]) * alloc["page_size"]
     return stats
+end
 
 # Check if an address is within the allocator's range
 proc bitmap_contains(alloc, addr):
     let end_addr = alloc["base"] + alloc["num_pages"] * alloc["page_size"]
     return addr >= alloc["base"] and addr < end_addr
+end
 
 # Check if a specific page is allocated
 proc bitmap_is_used(alloc, addr):
     let idx = ((addr - alloc["base"]) / alloc["page_size"]) | 0
     if idx < 0 or idx >= alloc["num_pages"]:
         return false
+    end
     return alloc["bitmap"][idx] == 1
+end

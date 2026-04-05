@@ -410,6 +410,57 @@ qemu-system-x86_64 -bios /usr/share/ovmf/OVMF.fd -drive format=raw,file=esp.img
 - `sage_rt_panic` — prints a message to the VGA console and halts the CPU (`cli; hlt`)
 - Minimal `__stack_chk_fail` stub to satisfy compiler SSP requirements in freestanding mode
 
+## QEMU Integration (`lib/os/qemu.sage`)
+
+A complete QEMU command-line builder for launching and testing kernels across architectures:
+
+```sage
+import os.qemu
+
+# Create a baremetal x86_64 VM
+let vm = qemu.create_vm("sage_kernel")
+vm = qemu.vm_set_arch(vm, "x86_64")
+vm = qemu.vm_set_memory(vm, "64M")
+vm = qemu.vm_set_kernel(vm, "kernel.elf")
+vm = qemu.vm_set_no_reboot(vm, true)
+let cmd = qemu.vm_build_command(vm)
+print cmd
+
+# Convenience presets
+let bm = qemu.baremetal_x86("test", "kernel.elf")
+let lv = qemu.linux_vm("dev", "bzImage", "rootfs.qcow2", "console=ttyS0")
+let dv = qemu.dev_vm("debug", "kernel.elf")
+```
+
+Supports x86_64, i386, aarch64, arm, riscv64, riscv32 with KVM/TCG acceleration, GDB debugging, drive/network/device configuration, and `qemu-img` disk management.
+
+## VFS and Filesystem Layers
+
+| Module | Import | Description |
+| ------ | ------ | ----------- |
+| `vfs.sage` | `import os.vfs` | Virtual filesystem abstraction with pluggable backends, mount points |
+| `tmpfs.sage` | `import os.tmpfs` | RAM-based filesystem (files, directories, memory-backed storage) |
+| `cpio.sage` | `import os.cpio` | CPIO newc archive parser for initramfs extraction |
+
+## Linux Kernel Development (`lib/os/linux/`)
+
+Twelve modules for Linux kernel module development, driver infrastructure, and system interfaces:
+
+| Module | Import | Description |
+| ------ | ------ | ----------- |
+| `driver.sage` | `import os.linux.driver` | Device model, bus/driver registration, device attributes |
+| `kmodule.sage` | `import os.linux.kmodule` | Kernel module init/exit, symbol export/import |
+| `syscalls.sage` | `import os.linux.syscalls` | System call definitions and argument marshalling |
+| `namespace.sage` | `import os.linux.namespace` | Process, network, mount, IPC, UTS namespaces |
+| `cgroups.sage` | `import os.linux.cgroups` | Resource control groups (CPU, memory, I/O limits) |
+| `procfs.sage` | `import os.linux.procfs` | /proc filesystem parsing and process info |
+| `sysfs.sage` | `import os.linux.sysfs` | /sys filesystem navigation and device attributes |
+| `devicetree.sage` | `import os.linux.devicetree` | Device tree parsing for ARM/RISC-V targets |
+| `netlink.sage` | `import os.linux.netlink` | Netlink socket messages and attribute parsing |
+| `ioctl.sage` | `import os.linux.ioctl` | I/O control command structures |
+| `epoll.sage` | `import os.linux.epoll` | Event polling interface |
+| `qemu_run.sage` | `import os.linux.qemu_run` | Kernel test runner framework with QEMU |
+
 ## Current Limitations
 
 - UEFI `.efi` PE output requires `lld-link` or `llvm-objcopy` available in `PATH` for final image packaging.
