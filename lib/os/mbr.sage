@@ -233,11 +233,13 @@ end
 
 # ========== MBR Writer ==========
 
+@inline
 proc _write_u16_le(bs, off, val):
     bs[off] = val & 255
     bs[off + 1] = (val >> 8) & 255
 end
 
+@inline
 proc _write_u32_le(bs, off, val):
     bs[off] = val & 255
     bs[off + 1] = (val >> 8) & 255

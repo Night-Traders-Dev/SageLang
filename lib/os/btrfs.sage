@@ -3,40 +3,42 @@ gc_disable()
 # btrfs.sage - Btrfs filesystem support
 # Provides parsing and reading for Btrfs B-tree filesystem structures
 
-# Constants
-let BTRFS_MAGIC_STR = "_BHRfS_M"
-let BTRFS_SUPERBLOCK_OFFSET = 65536
-let BTRFS_SUPER_INFO_SIZE = 4096
-let BTRFS_NODE_SIZE = 16384
-let BTRFS_LEAF_SIZE = 16384
+comptime:
+    # Constants
+    let BTRFS_MAGIC_STR = "_BHRfS_M"
+    let BTRFS_SUPERBLOCK_OFFSET = 65536
+    let BTRFS_SUPER_INFO_SIZE = 4096
+    let BTRFS_NODE_SIZE = 16384
+    let BTRFS_LEAF_SIZE = 16384
 
-# Item types
-let INODE_ITEM = 1
-let INODE_REF = 12
-let XATTR_ITEM = 24
-let ORPHAN_ITEM = 48
-let DIR_LOG_ITEM = 60
-let DIR_LOG_INDEX = 72
-let DIR_ITEM = 84
-let DIR_INDEX = 96
-let EXTENT_DATA = 108
-let EXTENT_CSUM = 128
-let ROOT_ITEM = 132
-let ROOT_BACKREF = 144
-let ROOT_REF = 156
-let EXTENT_ITEM = 168
-let CHUNK_ITEM = 228
-let DEV_ITEM = 216
-let BLOCK_GROUP_ITEM = 192
+    # Item types
+    let INODE_ITEM = 1
+    let INODE_REF = 12
+    let XATTR_ITEM = 24
+    let ORPHAN_ITEM = 48
+    let DIR_LOG_ITEM = 60
+    let DIR_LOG_INDEX = 72
+    let DIR_ITEM = 84
+    let DIR_INDEX = 96
+    let EXTENT_DATA = 108
+    let EXTENT_CSUM = 128
+    let ROOT_ITEM = 132
+    let ROOT_BACKREF = 144
+    let ROOT_REF = 156
+    let EXTENT_ITEM = 168
+    let CHUNK_ITEM = 228
+    let DEV_ITEM = 216
+    let BLOCK_GROUP_ITEM = 192
 
-# Well-known tree objectids
-let ROOT_TREE_OBJECTID = 1
-let EXTENT_TREE_OBJECTID = 2
-let CHUNK_TREE_OBJECTID = 3
-let DEV_TREE_OBJECTID = 4
-let FS_TREE_OBJECTID = 5
-let CSUM_TREE_OBJECTID = 7
-let FIRST_FREE_OBJECTID = 256
+    # Well-known tree objectids
+    let ROOT_TREE_OBJECTID = 1
+    let EXTENT_TREE_OBJECTID = 2
+    let CHUNK_TREE_OBJECTID = 3
+    let DEV_TREE_OBJECTID = 4
+    let FS_TREE_OBJECTID = 5
+    let CSUM_TREE_OBJECTID = 7
+    let FIRST_FREE_OBJECTID = 256
+end
 
 # CRC32C table for btrfs checksums
 let _crc_table = []
@@ -77,14 +79,17 @@ proc crc32c(data, start, length):
     return crc ^ 4294967295
 end
 
+@inline
 proc _read_u8(bytes, off):
     return bytes[off]
 end
 
+@inline
 proc _read_u16(bytes, off):
     return bytes[off] + bytes[off + 1] * 256
 end
 
+@inline
 proc _read_u32(bytes, off):
     return bytes[off] + bytes[off + 1] * 256 + bytes[off + 2] * 65536 + bytes[off + 3] * 16777216
 end
@@ -109,6 +114,7 @@ proc _read_bytes_as_str(bytes, off, length):
     return s
 end
 
+@inline
 proc _write_u32(bytes, off, val):
     bytes[off] = val & 255
     bytes[off + 1] = (val >> 8) & 255

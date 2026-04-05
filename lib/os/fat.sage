@@ -1,10 +1,12 @@
 gc_disable()
 # FAT filesystem boot sector parser and utilities
 
+@inline
 proc read_u16(bs, off):
     return bs[off] + bs[off + 1] * 256
 end
 
+@inline
 proc read_u32(bs, off):
     return bs[off] + bs[off + 1] * 256 + bs[off + 2] * 65536 + bs[off + 3] * 16777216
 end
@@ -80,6 +82,7 @@ proc parse_boot_sector(bs):
     return info
 end
 
+@inline
 proc cluster_to_lba(info, cluster):
     return info["first_data_sector"] + (cluster - 2) * info["sectors_per_cluster"]
 end

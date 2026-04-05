@@ -3,50 +3,54 @@ gc_disable()
 # ext.sage - ext2/ext3/ext4 filesystem support
 # Provides parsing, reading, writing, and formatting for ext family filesystems
 
-# Constants
-let EXT_MAGIC = 61267
-let INODE_SIZE_EXT2 = 128
-let INODE_SIZE_EXT4 = 256
-let BLOCK_SIZE = 4096
-let SUPERBLOCK_OFFSET = 1024
-let SUPERBLOCK_SIZE = 1024
-let GROUP_DESC_SIZE = 32
-let DIR_ENTRY_HEADER = 8
-let EXTENT_MAGIC = 62218
-let ROOT_INODE = 2
+comptime:
+    # Constants
+    let EXT_MAGIC = 61267
+    let INODE_SIZE_EXT2 = 128
+    let INODE_SIZE_EXT4 = 256
+    let BLOCK_SIZE = 4096
+    let SUPERBLOCK_OFFSET = 1024
+    let SUPERBLOCK_SIZE = 1024
+    let GROUP_DESC_SIZE = 32
+    let DIR_ENTRY_HEADER = 8
+    let EXTENT_MAGIC = 62218
+    let ROOT_INODE = 2
 
-# Inode type flags
-let S_IFREG = 32768
-let S_IFDIR = 16384
-let S_IFLNK = 40960
-let S_IFIFO = 4096
-let S_IFSOCK = 49152
-let S_IFBLK = 24576
-let S_IFCHR = 8192
+    # Inode type flags
+    let S_IFREG = 32768
+    let S_IFDIR = 16384
+    let S_IFLNK = 40960
+    let S_IFIFO = 4096
+    let S_IFSOCK = 49152
+    let S_IFBLK = 24576
+    let S_IFCHR = 8192
 
-# Directory entry file types
-let FT_UNKNOWN = 0
-let FT_REG_FILE = 1
-let FT_DIR = 2
-let FT_CHRDEV = 3
-let FT_BLKDEV = 4
-let FT_FIFO = 5
-let FT_SOCK = 6
-let FT_SYMLINK = 7
+    # Directory entry file types
+    let FT_UNKNOWN = 0
+    let FT_REG_FILE = 1
+    let FT_DIR = 2
+    let FT_CHRDEV = 3
+    let FT_BLKDEV = 4
+    let FT_FIFO = 5
+    let FT_SOCK = 6
+    let FT_SYMLINK = 7
 
-# Number of direct block pointers in inode
-let DIRECT_BLOCKS = 12
-let INDIRECT_BLOCK_IDX = 12
-let DOUBLE_INDIRECT_IDX = 13
-let TRIPLE_INDIRECT_IDX = 14
-let PTRS_PER_BLOCK = 1024
+    # Number of direct block pointers in inode
+    let DIRECT_BLOCKS = 12
+    let INDIRECT_BLOCK_IDX = 12
+    let DOUBLE_INDIRECT_IDX = 13
+    let TRIPLE_INDIRECT_IDX = 14
+    let PTRS_PER_BLOCK = 1024
+end
 
+@inline
 proc _read_u16(bytes, off):
     let b0 = bytes[off]
     let b1 = bytes[off + 1]
     return b0 + b1 * 256
 end
 
+@inline
 proc _read_u32(bytes, off):
     let b0 = bytes[off]
     let b1 = bytes[off + 1]
@@ -55,11 +59,13 @@ proc _read_u32(bytes, off):
     return b0 + b1 * 256 + b2 * 65536 + b3 * 16777216
 end
 
+@inline
 proc _write_u16(bytes, off, val):
     bytes[off] = val & 255
     bytes[off + 1] = (val >> 8) & 255
 end
 
+@inline
 proc _write_u32(bytes, off, val):
     bytes[off] = val & 255
     bytes[off + 1] = (val >> 8) & 255
