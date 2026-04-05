@@ -339,3 +339,267 @@ proc stats():
     s["syscalls"] = entries
     return s
 end
+
+# ================================================================
+# Hardware I/O Assembly Emission
+# ================================================================
+
+comptime:
+    let MSR_STAR = 3221225601
+    let MSR_LSTAR = 3221225602
+    let MSR_SFMASK = 3221225604
+    let KERNEL_CS = 8
+    let KERNEL_SS = 16
+    let USER_CS = 24
+    let USER_SS = 32
+    let IF_FLAG_BIT = 512
+end
+
+proc emit_syscall_entry_asm():
+    # x86_64 assembly for SYSCALL instruction entry point
+    let nl = chr(10)
+    let tab = chr(9)
+    let asm = ""
+    asm = asm + ".global syscall_entry" + nl
+    asm = asm + ".type syscall_entry, @function" + nl
+    asm = asm + "syscall_entry:" + nl
+    # Swap to kernel GS base (per-cpu data)
+    asm = asm + tab + "swapgs" + nl
+    # Save user RSP to per-cpu area, load kernel RSP
+    asm = asm + tab + "movq %rsp, %gs:8" + nl
+    asm = asm + tab + "movq %gs:0, %rsp" + nl
+    # Push all general-purpose registers
+    asm = asm + tab + "push %r15" + nl
+    asm = asm + tab + "push %r14" + nl
+    asm = asm + tab + "push %r13" + nl
+    asm = asm + tab + "push %r12" + nl
+    asm = asm + tab + "push %r11" + nl
+    asm = asm + tab + "push %r10" + nl
+    asm = asm + tab + "push %r9" + nl
+    asm = asm + tab + "push %r8" + nl
+    asm = asm + tab + "push %rbp" + nl
+    asm = asm + tab + "push %rdi" + nl
+    asm = asm + tab + "push %rsi" + nl
+    asm = asm + tab + "push %rdx" + nl
+    asm = asm + tab + "push %rcx" + nl
+    asm = asm + tab + "push %rbx" + nl
+    asm = asm + tab + "push %rax" + nl
+    # Syscall number in rax -> first arg (rdi) for syscall_dispatch
+    asm = asm + tab + "movq %rax, %rdi" + nl
+    asm = asm + tab + "call syscall_dispatch" + nl
+    # Pop all general-purpose registers
+    asm = asm + tab + "pop %rax" + nl
+    asm = asm + tab + "pop %rbx" + nl
+    asm = asm + tab + "pop %rcx" + nl
+    asm = asm + tab + "pop %rdx" + nl
+    asm = asm + tab + "pop %rsi" + nl
+    asm = asm + tab + "pop %rdi" + nl
+    asm = asm + tab + "pop %rbp" + nl
+    asm = asm + tab + "pop %r8" + nl
+    asm = asm + tab + "pop %r9" + nl
+    asm = asm + tab + "pop %r10" + nl
+    asm = asm + tab + "pop %r11" + nl
+    asm = asm + tab + "pop %r12" + nl
+    asm = asm + tab + "pop %r13" + nl
+    asm = asm + tab + "pop %r14" + nl
+    asm = asm + tab + "pop %r15" + nl
+    # Restore user RSP, swap back to user GS
+    asm = asm + tab + "movq %gs:8, %rsp" + nl
+    asm = asm + tab + "swapgs" + nl
+    asm = asm + tab + "sysretq" + nl
+    return asm
+end
+
+proc emit_syscall_init_asm():
+    # x86_64 assembly to configure SYSCALL/SYSRET via MSRs
+    let nl = chr(10)
+    let tab = chr(9)
+    let asm = ""
+    asm = asm + ".global syscall_msr_init" + nl
+    asm = asm + ".type syscall_msr_init, @function" + nl
+    asm = asm + "syscall_msr_init:" + nl
+    # Write STAR MSR (0xC0000081): kernel CS/SS in bits 47:32, user CS/SS in bits 63:48
+    # Kernel CS=0x08, SS=0x10 -> bits 47:32 = 0x0008
+    # User CS=0x18|3=0x1B, SS=0x20|3=0x23 -> bits 63:48 = 0x0018 (base, CPU adds 16+3)
+    asm = asm + tab + "movl $0xC0000081, %ecx" + nl
+    asm = asm + tab + "xorl %edx, %edx" + nl
+    asm = asm + tab + "movl $0x00180008, %edx" + nl
+    asm = asm + tab + "xorl %eax, %eax" + nl
+    asm = asm + tab + "wrmsr" + nl
+    # Write LSTAR MSR (0xC0000082): address of syscall_entry
+    asm = asm + tab + "movl $0xC0000082, %ecx" + nl
+    asm = asm + tab + "leaq syscall_entry(%rip), %rax" + nl
+    asm = asm + tab + "movq %rax, %rdx" + nl
+    asm = asm + tab + "shrq $32, %rdx" + nl
+    asm = asm + tab + "wrmsr" + nl
+    # Write SFMASK MSR (0xC0000084): mask IF flag (bit 9 = 0x200)
+    asm = asm + tab + "movl $0xC0000084, %ecx" + nl
+    asm = asm + tab + "xorl %edx, %edx" + nl
+    asm = asm + tab + "movl $0x200, %eax" + nl
+    asm = asm + tab + "wrmsr" + nl
+    asm = asm + tab + "ret" + nl
+    return asm
+end
+
+proc emit_svc_entry_aarch64():
+    # aarch64 assembly for SVC (supervisor call) exception entry
+    let nl = chr(10)
+    let tab = chr(9)
+    let asm = ""
+    asm = asm + ".global svc_entry" + nl
+    asm = asm + ".type svc_entry, @function" + nl
+    asm = asm + "svc_entry:" + nl
+    # Save general-purpose registers x0-x30 and ELR_EL1 to stack
+    asm = asm + tab + "sub sp, sp, #264" + nl
+    asm = asm + tab + "stp x0, x1, [sp, #0]" + nl
+    asm = asm + tab + "stp x2, x3, [sp, #16]" + nl
+    asm = asm + tab + "stp x4, x5, [sp, #32]" + nl
+    asm = asm + tab + "stp x6, x7, [sp, #48]" + nl
+    asm = asm + tab + "stp x8, x9, [sp, #64]" + nl
+    asm = asm + tab + "stp x10, x11, [sp, #80]" + nl
+    asm = asm + tab + "stp x12, x13, [sp, #96]" + nl
+    asm = asm + tab + "stp x14, x15, [sp, #112]" + nl
+    asm = asm + tab + "stp x16, x17, [sp, #128]" + nl
+    asm = asm + tab + "stp x18, x19, [sp, #144]" + nl
+    asm = asm + tab + "stp x20, x21, [sp, #160]" + nl
+    asm = asm + tab + "stp x22, x23, [sp, #176]" + nl
+    asm = asm + tab + "stp x24, x25, [sp, #192]" + nl
+    asm = asm + tab + "stp x26, x27, [sp, #208]" + nl
+    asm = asm + tab + "stp x28, x29, [sp, #224]" + nl
+    asm = asm + tab + "str x30, [sp, #240]" + nl
+    asm = asm + tab + "mrs x0, ELR_EL1" + nl
+    asm = asm + tab + "str x0, [sp, #248]" + nl
+    # Read ESR_EL1 to get exception syndrome
+    asm = asm + tab + "mrs x0, ESR_EL1" + nl
+    # Extract EC field (bits 31:26) to verify SVC
+    asm = asm + tab + "lsr x1, x0, #26" + nl
+    asm = asm + tab + "cmp x1, #0x15" + nl
+    asm = asm + tab + "b.ne .Lsvc_not_svc" + nl
+    # x8 holds syscall number (AArch64 calling convention)
+    asm = asm + tab + "ldr x0, [sp, #64]" + nl
+    asm = asm + tab + "bl syscall_dispatch" + nl
+    # Store return value
+    asm = asm + tab + "str x0, [sp, #0]" + nl
+    asm = asm + ".Lsvc_not_svc:" + nl
+    # Restore registers
+    asm = asm + tab + "ldr x0, [sp, #248]" + nl
+    asm = asm + tab + "msr ELR_EL1, x0" + nl
+    asm = asm + tab + "ldp x0, x1, [sp, #0]" + nl
+    asm = asm + tab + "ldp x2, x3, [sp, #16]" + nl
+    asm = asm + tab + "ldp x4, x5, [sp, #32]" + nl
+    asm = asm + tab + "ldp x6, x7, [sp, #48]" + nl
+    asm = asm + tab + "ldp x8, x9, [sp, #64]" + nl
+    asm = asm + tab + "ldp x10, x11, [sp, #80]" + nl
+    asm = asm + tab + "ldp x12, x13, [sp, #96]" + nl
+    asm = asm + tab + "ldp x14, x15, [sp, #112]" + nl
+    asm = asm + tab + "ldp x16, x17, [sp, #128]" + nl
+    asm = asm + tab + "ldp x18, x19, [sp, #144]" + nl
+    asm = asm + tab + "ldp x20, x21, [sp, #160]" + nl
+    asm = asm + tab + "ldp x22, x23, [sp, #176]" + nl
+    asm = asm + tab + "ldp x24, x25, [sp, #192]" + nl
+    asm = asm + tab + "ldp x26, x27, [sp, #208]" + nl
+    asm = asm + tab + "ldp x28, x29, [sp, #224]" + nl
+    asm = asm + tab + "ldr x30, [sp, #240]" + nl
+    asm = asm + tab + "add sp, sp, #264" + nl
+    asm = asm + tab + "eret" + nl
+    return asm
+end
+
+proc emit_ecall_entry_riscv64():
+    # riscv64 assembly for ECALL trap entry (M-mode trap handler)
+    let nl = chr(10)
+    let tab = chr(9)
+    let asm = ""
+    asm = asm + ".global ecall_entry" + nl
+    asm = asm + ".type ecall_entry, @function" + nl
+    asm = asm + "ecall_entry:" + nl
+    # Save registers to trap frame (allocate 256 bytes on stack)
+    asm = asm + tab + "addi sp, sp, -256" + nl
+    asm = asm + tab + "sd ra, 0(sp)" + nl
+    asm = asm + tab + "sd t0, 8(sp)" + nl
+    asm = asm + tab + "sd t1, 16(sp)" + nl
+    asm = asm + tab + "sd t2, 24(sp)" + nl
+    asm = asm + tab + "sd a0, 32(sp)" + nl
+    asm = asm + tab + "sd a1, 40(sp)" + nl
+    asm = asm + tab + "sd a2, 48(sp)" + nl
+    asm = asm + tab + "sd a3, 56(sp)" + nl
+    asm = asm + tab + "sd a4, 64(sp)" + nl
+    asm = asm + tab + "sd a5, 72(sp)" + nl
+    asm = asm + tab + "sd a6, 80(sp)" + nl
+    asm = asm + tab + "sd a7, 88(sp)" + nl
+    asm = asm + tab + "sd t3, 96(sp)" + nl
+    asm = asm + tab + "sd t4, 104(sp)" + nl
+    asm = asm + tab + "sd t5, 112(sp)" + nl
+    asm = asm + tab + "sd t6, 120(sp)" + nl
+    asm = asm + tab + "sd s0, 128(sp)" + nl
+    asm = asm + tab + "sd s1, 136(sp)" + nl
+    asm = asm + tab + "sd s2, 144(sp)" + nl
+    asm = asm + tab + "sd s3, 152(sp)" + nl
+    asm = asm + tab + "sd s4, 160(sp)" + nl
+    asm = asm + tab + "sd s5, 168(sp)" + nl
+    asm = asm + tab + "sd s6, 176(sp)" + nl
+    asm = asm + tab + "sd s7, 184(sp)" + nl
+    asm = asm + tab + "sd s8, 192(sp)" + nl
+    asm = asm + tab + "sd s9, 200(sp)" + nl
+    asm = asm + tab + "sd s10, 208(sp)" + nl
+    asm = asm + tab + "sd s11, 216(sp)" + nl
+    # Save MEPC
+    asm = asm + tab + "csrr t0, mepc" + nl
+    asm = asm + tab + "sd t0, 224(sp)" + nl
+    # Read mcause to determine trap type
+    asm = asm + tab + "csrr t0, mcause" + nl
+    # Check for environment call from U-mode (cause=8)
+    asm = asm + tab + "li t1, 8" + nl
+    asm = asm + tab + "beq t0, t1, .Lecall_dispatch" + nl
+    # Check for environment call from M-mode (cause=11)
+    asm = asm + tab + "li t1, 11" + nl
+    asm = asm + tab + "beq t0, t1, .Lecall_dispatch" + nl
+    # Not an ecall, jump to restore
+    asm = asm + tab + "j .Lecall_restore" + nl
+    asm = asm + ".Lecall_dispatch:" + nl
+    # a7 holds syscall number (RISC-V convention), pass as first arg (a0)
+    asm = asm + tab + "mv a0, a7" + nl
+    asm = asm + tab + "call syscall_dispatch" + nl
+    # Store return value back to a0 slot in trap frame
+    asm = asm + tab + "sd a0, 32(sp)" + nl
+    # Advance MEPC past ecall instruction (+4 bytes)
+    asm = asm + tab + "ld t0, 224(sp)" + nl
+    asm = asm + tab + "addi t0, t0, 4" + nl
+    asm = asm + tab + "sd t0, 224(sp)" + nl
+    asm = asm + ".Lecall_restore:" + nl
+    # Restore MEPC
+    asm = asm + tab + "ld t0, 224(sp)" + nl
+    asm = asm + tab + "csrw mepc, t0" + nl
+    # Restore registers
+    asm = asm + tab + "ld ra, 0(sp)" + nl
+    asm = asm + tab + "ld t0, 8(sp)" + nl
+    asm = asm + tab + "ld t1, 16(sp)" + nl
+    asm = asm + tab + "ld t2, 24(sp)" + nl
+    asm = asm + tab + "ld a0, 32(sp)" + nl
+    asm = asm + tab + "ld a1, 40(sp)" + nl
+    asm = asm + tab + "ld a2, 48(sp)" + nl
+    asm = asm + tab + "ld a3, 56(sp)" + nl
+    asm = asm + tab + "ld a4, 64(sp)" + nl
+    asm = asm + tab + "ld a5, 72(sp)" + nl
+    asm = asm + tab + "ld a6, 80(sp)" + nl
+    asm = asm + tab + "ld a7, 88(sp)" + nl
+    asm = asm + tab + "ld t3, 96(sp)" + nl
+    asm = asm + tab + "ld t4, 104(sp)" + nl
+    asm = asm + tab + "ld t5, 112(sp)" + nl
+    asm = asm + tab + "ld t6, 120(sp)" + nl
+    asm = asm + tab + "ld s0, 128(sp)" + nl
+    asm = asm + tab + "ld s1, 136(sp)" + nl
+    asm = asm + tab + "ld s2, 144(sp)" + nl
+    asm = asm + tab + "ld s3, 152(sp)" + nl
+    asm = asm + tab + "ld s4, 160(sp)" + nl
+    asm = asm + tab + "ld s5, 168(sp)" + nl
+    asm = asm + tab + "ld s6, 176(sp)" + nl
+    asm = asm + tab + "ld s7, 184(sp)" + nl
+    asm = asm + tab + "ld s8, 192(sp)" + nl
+    asm = asm + tab + "ld s9, 200(sp)" + nl
+    asm = asm + tab + "ld s10, 208(sp)" + nl
+    asm = asm + tab + "ld s11, 216(sp)" + nl
+    asm = asm + tab + "addi sp, sp, 256" + nl
+    asm = asm + tab + "mret" + nl
+    return asm
+end

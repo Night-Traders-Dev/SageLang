@@ -307,3 +307,102 @@ proc read_line():
     end
     return line
 end
+
+# ================================================================
+# Hardware I/O Assembly Emission
+# ================================================================
+
+comptime:
+    let PS2_DATA_PORT = 96
+    let PS2_STATUS_PORT = 100
+    let PIC_CMD_PORT = 32
+    let PIC_DATA_PORT = 33
+    let EOI_BYTE = 32
+    let KBD_ENABLE_CMD = 174
+end
+
+proc emit_keyboard_isr_asm():
+    # x86_64 assembly for IRQ1 (keyboard) interrupt handler
+    let nl = chr(10)
+    let tab = chr(9)
+    let asm = ""
+    asm = asm + ".global keyboard_isr" + nl
+    asm = asm + ".type keyboard_isr, @function" + nl
+    asm = asm + "keyboard_isr:" + nl
+    # Save registers
+    asm = asm + tab + "push %rax" + nl
+    asm = asm + tab + "push %rcx" + nl
+    asm = asm + tab + "push %rdx" + nl
+    # Read scancode from PS/2 data port 0x60
+    asm = asm + tab + "inb $0x60, %al" + nl
+    # Store scancode to global buffer
+    asm = asm + tab + "movzbq %al, %rax" + nl
+    asm = asm + tab + "movq %rax, scancode_buffer(%rip)" + nl
+    # Send EOI to PIC
+    asm = asm + tab + "movb $0x20, %al" + nl
+    asm = asm + tab + "outb %al, $0x20" + nl
+    # Restore registers
+    asm = asm + tab + "pop %rdx" + nl
+    asm = asm + tab + "pop %rcx" + nl
+    asm = asm + tab + "pop %rax" + nl
+    asm = asm + tab + "iretq" + nl
+    asm = asm + nl
+    # Global scancode buffer variable
+    asm = asm + ".section .bss" + nl
+    asm = asm + ".global scancode_buffer" + nl
+    asm = asm + "scancode_buffer:" + nl
+    asm = asm + tab + ".quad 0" + nl
+    return asm
+end
+
+proc emit_keyboard_init_asm():
+    # x86_64 assembly to initialize PS/2 keyboard controller
+    let nl = chr(10)
+    let tab = chr(9)
+    let asm = ""
+    asm = asm + ".global keyboard_init" + nl
+    asm = asm + ".type keyboard_init, @function" + nl
+    asm = asm + "keyboard_init:" + nl
+    # Wait for controller ready (poll port 0x64 bit 1 clear)
+    asm = asm + ".Lkbd_wait_input:" + nl
+    asm = asm + tab + "inb $0x64, %al" + nl
+    asm = asm + tab + "testb $0x02, %al" + nl
+    asm = asm + tab + "jnz .Lkbd_wait_input" + nl
+    # Send 0xAE to port 0x64 (enable keyboard interface)
+    asm = asm + tab + "movb $0xAE, %al" + nl
+    asm = asm + tab + "outb %al, $0x64" + nl
+    # Wait for data ready (poll port 0x64 bit 0 set)
+    asm = asm + ".Lkbd_wait_data:" + nl
+    asm = asm + tab + "inb $0x64, %al" + nl
+    asm = asm + tab + "testb $0x01, %al" + nl
+    asm = asm + tab + "jz .Lkbd_wait_data" + nl
+    # Read and discard ACK from port 0x60
+    asm = asm + tab + "inb $0x60, %al" + nl
+    # Enable IRQ1 in PIC: read mask, clear bit 1, write back
+    asm = asm + tab + "inb $0x21, %al" + nl
+    asm = asm + tab + "andb $0xFD, %al" + nl
+    asm = asm + tab + "outb %al, $0x21" + nl
+    asm = asm + tab + "ret" + nl
+    return asm
+end
+
+@inline
+proc emit_keyboard_read_asm():
+    # x86_64 assembly for blocking keyboard_read function
+    let nl = chr(10)
+    let tab = chr(9)
+    let asm = ""
+    asm = asm + ".global keyboard_read" + nl
+    asm = asm + ".type keyboard_read, @function" + nl
+    asm = asm + "keyboard_read:" + nl
+    # Poll scancode_buffer until non-zero
+    asm = asm + ".Lkbd_poll:" + nl
+    asm = asm + tab + "movq scancode_buffer(%rip), %rax" + nl
+    asm = asm + tab + "testq %rax, %rax" + nl
+    asm = asm + tab + "jz .Lkbd_poll" + nl
+    # Clear buffer
+    asm = asm + tab + "movq $0, scancode_buffer(%rip)" + nl
+    # Value already in rax (return register)
+    asm = asm + tab + "ret" + nl
+    return asm
+end

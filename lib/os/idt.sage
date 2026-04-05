@@ -763,6 +763,270 @@ proc plic_init_sequence(base_addr, num_sources):
 end
 
 # ============================================================================
+# x86_64 Local APIC / IO-APIC support
+# ============================================================================
+
+# Local APIC register offsets
+comptime:
+    let LAPIC_ID = 0x20
+    let LAPIC_VER = 0x30
+    let LAPIC_TPR = 0x80
+    let LAPIC_EOI = 0xB0
+    let LAPIC_SVR = 0xF0
+    let LAPIC_ICR_LO = 0x300
+    let LAPIC_ICR_HI = 0x310
+    let LAPIC_LVT_TIMER = 0x320
+    let LAPIC_LVT_LINT0 = 0x350
+    let LAPIC_LVT_LINT1 = 0x360
+    let LAPIC_LVT_ERROR = 0x370
+    let LAPIC_TIMER_INIT = 0x380
+    let LAPIC_TIMER_CURRENT = 0x390
+    let LAPIC_TIMER_DIVIDE = 0x3E0
+    let IOAPIC_REGSEL = 0x00
+    let IOAPIC_REGWIN = 0x10
+
+# Returns a list of {addr, value} dicts for Local APIC initialization
+# base_addr: MMIO base address of the Local APIC (typically 0xFEE00000)
+proc lapic_init_sequence(base_addr):
+    let seq = []
+
+    # Step 1: Write 0xFF to TPR to mask all interrupts initially
+    let s1 = {}
+    s1["addr"] = base_addr + comptime(LAPIC_TPR)
+    s1["value"] = 0xFF
+    push(seq, s1)
+
+    # Step 2: Write 0x1FF to SVR — enable APIC + spurious vector 0xFF
+    let s2 = {}
+    s2["addr"] = base_addr + comptime(LAPIC_SVR)
+    s2["value"] = 0x1FF
+    push(seq, s2)
+
+    # Step 3: Mask LVT Timer
+    let s3 = {}
+    s3["addr"] = base_addr + comptime(LAPIC_LVT_TIMER)
+    s3["value"] = 0
+    push(seq, s3)
+
+    # Step 4: Mask LVT LINT0
+    let s4 = {}
+    s4["addr"] = base_addr + comptime(LAPIC_LVT_LINT0)
+    s4["value"] = 0
+    push(seq, s4)
+
+    # Step 5: Mask LVT LINT1
+    let s5 = {}
+    s5["addr"] = base_addr + comptime(LAPIC_LVT_LINT1)
+    s5["value"] = 0
+    push(seq, s5)
+
+    # Step 6: Mask LVT Error
+    let s6 = {}
+    s6["addr"] = base_addr + comptime(LAPIC_LVT_ERROR)
+    s6["value"] = 0
+    push(seq, s6)
+
+    return seq
+end
+
+# Returns a list of dicts for IO-APIC initialization
+# base_addr: MMIO base address of the IO-APIC (typically 0xFEC00000)
+# Configures timer (IRQ 0 -> vector 32) and keyboard (IRQ 1 -> vector 33)
+proc ioapic_init_sequence(base_addr):
+    let seq = []
+
+    # Read IOAPICVER (register 1) to get max redirection entries
+    # The caller should read REGSEL=1, then read REGWIN to get version/max entries
+    let s_ver_sel = {}
+    s_ver_sel["addr"] = base_addr + comptime(IOAPIC_REGSEL)
+    s_ver_sel["value"] = 1
+    s_ver_sel["comment"] = "select IOAPICVER register"
+    push(seq, s_ver_sel)
+
+    let s_ver_read = {}
+    s_ver_read["addr"] = base_addr + comptime(IOAPIC_REGWIN)
+    s_ver_read["action"] = "read"
+    s_ver_read["comment"] = "read IOAPICVER for max redirection entries"
+    push(seq, s_ver_read)
+
+    # Configure IRQ 1 (keyboard) -> vector 33, fixed delivery, physical dest, CPU 0
+    # Redirection table entry for IRQ 1: registers 0x12 (low) and 0x13 (high)
+    # Low 32 bits: vector=33, delivery=fixed(000), dest_mode=physical(0), active_high, edge
+    let s_kbd_lo_sel = {}
+    s_kbd_lo_sel["addr"] = base_addr + comptime(IOAPIC_REGSEL)
+    s_kbd_lo_sel["value"] = 0x12
+    s_kbd_lo_sel["comment"] = "select IRQ 1 redirection low"
+    push(seq, s_kbd_lo_sel)
+
+    let s_kbd_lo = {}
+    s_kbd_lo["addr"] = base_addr + comptime(IOAPIC_REGWIN)
+    s_kbd_lo["value"] = 33
+    s_kbd_lo["comment"] = "IRQ 1 -> vector 33, fixed delivery"
+    push(seq, s_kbd_lo)
+
+    # High 32 bits: destination CPU 0 (bits 24-27 = APIC ID 0)
+    let s_kbd_hi_sel = {}
+    s_kbd_hi_sel["addr"] = base_addr + comptime(IOAPIC_REGSEL)
+    s_kbd_hi_sel["value"] = 0x13
+    s_kbd_hi_sel["comment"] = "select IRQ 1 redirection high"
+    push(seq, s_kbd_hi_sel)
+
+    let s_kbd_hi = {}
+    s_kbd_hi["addr"] = base_addr + comptime(IOAPIC_REGWIN)
+    s_kbd_hi["value"] = 0x00000000
+    s_kbd_hi["comment"] = "destination CPU 0"
+    push(seq, s_kbd_hi)
+
+    # Configure IRQ 0 (timer) -> vector 32, fixed delivery, physical dest, CPU 0
+    # Redirection table entry for IRQ 0: registers 0x10 (low) and 0x11 (high)
+    let s_tmr_lo_sel = {}
+    s_tmr_lo_sel["addr"] = base_addr + comptime(IOAPIC_REGSEL)
+    s_tmr_lo_sel["value"] = 0x10
+    s_tmr_lo_sel["comment"] = "select IRQ 0 redirection low"
+    push(seq, s_tmr_lo_sel)
+
+    let s_tmr_lo = {}
+    s_tmr_lo["addr"] = base_addr + comptime(IOAPIC_REGWIN)
+    s_tmr_lo["value"] = 32
+    s_tmr_lo["comment"] = "IRQ 0 -> vector 32, fixed delivery"
+    push(seq, s_tmr_lo)
+
+    let s_tmr_hi_sel = {}
+    s_tmr_hi_sel["addr"] = base_addr + comptime(IOAPIC_REGSEL)
+    s_tmr_hi_sel["value"] = 0x11
+    s_tmr_hi_sel["comment"] = "select IRQ 0 redirection high"
+    push(seq, s_tmr_hi_sel)
+
+    let s_tmr_hi = {}
+    s_tmr_hi["addr"] = base_addr + comptime(IOAPIC_REGWIN)
+    s_tmr_hi["value"] = 0x00000000
+    s_tmr_hi["comment"] = "destination CPU 0"
+    push(seq, s_tmr_hi)
+
+    return seq
+end
+
+# Returns a dict for APIC End-Of-Interrupt write
+# base_addr: MMIO base address of the Local APIC
+@inline
+proc apic_eoi(base_addr):
+    let result = {}
+    result["addr"] = base_addr + comptime(LAPIC_EOI)
+    result["value"] = 0
+    return result
+end
+
+# ============================================================================
+# aarch64 GICv3 (Generic Interrupt Controller v3) support
+# ============================================================================
+
+# GICv3 register offsets
+comptime:
+    let GICD_CTLR_V3 = 0x0000
+    let GICD_TYPER_V3 = 0x0004
+    let GICD_ISENABLER_V3 = 0x0100
+    let GICD_ICENABLER_V3 = 0x0180
+    let GICD_IPRIORITYR_V3 = 0x0400
+    let GICD_ITARGETSR_V3 = 0x0800
+    let GICR_WAKER_V3 = 0x0014
+    let GICR_ISENABLER0_V3 = 0x0100
+
+# GICD_CTLR bit definitions for GICv3
+let GICD_CTLR_ARE_S = 0x10
+let GICD_CTLR_ARE_NS = 0x20
+let GICD_CTLR_ENABLE_G1NS = 0x02
+let GICD_CTLR_ENABLE_G1S = 0x04
+let GICD_CTLR_ENABLE_G0 = 0x01
+
+# GICR_WAKER bit definitions
+let GICR_WAKER_PROCESSOR_SLEEP = 0x02
+let GICR_WAKER_CHILDREN_ASLEEP = 0x04
+
+# Returns a list of dicts for GICv3 Redistributor initialization
+# rdist_base: physical base address of the GICv3 Redistributor
+proc gicv3_rdist_init_sequence(rdist_base):
+    let seq = []
+
+    # Step 1: Read GICR_WAKER to get current value
+    let s_read = {}
+    s_read["addr"] = rdist_base + comptime(GICR_WAKER_V3)
+    s_read["action"] = "read"
+    s_read["comment"] = "read GICR_WAKER current value"
+    push(seq, s_read)
+
+    # Step 2: Clear ProcessorSleep bit (bit 1) to wake the redistributor
+    # Caller should read current value, clear bit 1, then write back
+    let s_wake = {}
+    s_wake["addr"] = rdist_base + comptime(GICR_WAKER_V3)
+    s_wake["clear_bits"] = GICR_WAKER_PROCESSOR_SLEEP
+    s_wake["comment"] = "clear ProcessorSleep (bit 1) to wake redistributor"
+    push(seq, s_wake)
+
+    # Step 3: Poll until ChildrenAsleep (bit 2) clears
+    let s_poll = {}
+    s_poll["addr"] = rdist_base + comptime(GICR_WAKER_V3)
+    s_poll["action"] = "poll"
+    s_poll["poll_mask"] = GICR_WAKER_CHILDREN_ASLEEP
+    s_poll["poll_value"] = 0
+    s_poll["comment"] = "wait for ChildrenAsleep (bit 2) to clear"
+    push(seq, s_poll)
+
+    return seq
+end
+
+# Returns a list of dicts for GICv3 Distributor initialization
+# dist_base: physical base address of the GICv3 Distributor
+proc gicv3_dist_init_sequence(dist_base):
+    let seq = []
+
+    # Step 1: Enable ARE_NS and ARE_S in GICD_CTLR
+    # This enables affinity routing (required for GICv3)
+    let s_are = {}
+    s_are["addr"] = dist_base + comptime(GICD_CTLR_V3)
+    s_are["value"] = GICD_CTLR_ARE_S + GICD_CTLR_ARE_NS
+    s_are["comment"] = "enable ARE_S and ARE_NS for affinity routing"
+    push(seq, s_are)
+
+    # Step 2: Enable Group 1 Non-Secure interrupts
+    let s_grp = {}
+    s_grp["addr"] = dist_base + comptime(GICD_CTLR_V3)
+    s_grp["value"] = GICD_CTLR_ARE_S + GICD_CTLR_ARE_NS + GICD_CTLR_ENABLE_G1NS
+    s_grp["comment"] = "enable Group 1 Non-Secure + affinity routing"
+    push(seq, s_grp)
+
+    return seq
+end
+
+# Returns a list of register/value dicts for GICv3 CPU interface init
+# GICv3 uses system registers instead of memory-mapped CPU interface
+proc gicv3_cpu_init_sequence():
+    let seq = []
+
+    # Step 1: Set ICC_SRE_EL1 to enable system register access
+    let s_sre = {}
+    s_sre["register"] = "ICC_SRE_EL1"
+    s_sre["value"] = 0x07
+    s_sre["comment"] = "enable system register access (SRE=1, DFB=1, DIB=1)"
+    push(seq, s_sre)
+
+    # Step 2: Set ICC_PMR_EL1 = 0xFF (lowest priority mask, accept all)
+    let s_pmr = {}
+    s_pmr["register"] = "ICC_PMR_EL1"
+    s_pmr["value"] = 0xFF
+    s_pmr["comment"] = "set priority mask to accept all priorities"
+    push(seq, s_pmr)
+
+    # Step 3: Set ICC_IGRPEN1_EL1 = 1 (enable Group 1 interrupts)
+    let s_grp = {}
+    s_grp["register"] = "ICC_IGRPEN1_EL1"
+    s_grp["value"] = 1
+    s_grp["comment"] = "enable Group 1 interrupts"
+    push(seq, s_grp)
+
+    return seq
+end
+
+# ============================================================================
 # Architecture dispatcher
 # ============================================================================
 

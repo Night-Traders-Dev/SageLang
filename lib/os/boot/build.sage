@@ -367,6 +367,9 @@ end
 # Full build command generation
 # ============================================================================
 
+comptime:
+    let BARE_METAL_C = "src/c/bare_metal.c"
+
 proc build_commands(arch, boot_asm_path, kernel_c_path, linker_script_path, output_elf):
     let as_cmd = get_assembler(arch)
     let cc = get_cc(arch)
@@ -400,6 +403,49 @@ proc build_commands(arch, boot_asm_path, kernel_c_path, linker_script_path, outp
 
     # Step 3: Link into ELF
     push(cmds, ld + " -T " + linker_script_path + " -o " + output_elf + " " + boot_obj + " " + kernel_obj)
+
+    return cmds
+end
+
+# Build commands with bare_metal.c runtime linked in (provides memset, memcpy,
+# inb/outb, cli/sti/hlt, rdmsr/wrmsr, invlpg, read_cr3/write_cr3)
+proc build_commands_with_runtime(arch, boot_asm_path, kernel_c_path, linker_script_path, output_elf, sage_root):
+    let as_cmd = get_assembler(arch)
+    let cc = get_cc(arch)
+    let ld = get_linker(arch)
+    let cmds = []
+
+    let boot_obj = "boot.o"
+    let kernel_obj = "kernel.o"
+    let runtime_obj = "bare_metal.o"
+    let runtime_src = sage_root + "/" + BARE_METAL_C
+
+    # Step 1: Assemble boot stub
+    if arch == "x86_64":
+        push(cmds, as_cmd + " --64 -o " + boot_obj + " " + boot_asm_path)
+    end
+    if arch == "aarch64":
+        push(cmds, as_cmd + " -o " + boot_obj + " " + boot_asm_path)
+    end
+    if arch == "riscv64":
+        push(cmds, as_cmd + " -march=rv64gc -mabi=lp64d -o " + boot_obj + " " + boot_asm_path)
+    end
+
+    # Step 2: Compile kernel C code
+    let cflags = " -ffreestanding -nostdlib -DSAGE_BARE_METAL"
+    if arch == "x86_64":
+        cflags = cflags + " -mno-red-zone"
+    end
+    if arch == "riscv64":
+        cflags = cflags + " -march=rv64gc -mabi=lp64d"
+    end
+    push(cmds, cc + cflags + " -c -o " + kernel_obj + " " + kernel_c_path)
+
+    # Step 3: Compile bare_metal.c runtime
+    push(cmds, cc + cflags + " -c -o " + runtime_obj + " " + runtime_src)
+
+    # Step 4: Link all objects
+    push(cmds, ld + " -T " + linker_script_path + " -o " + output_elf + " " + boot_obj + " " + kernel_obj + " " + runtime_obj)
 
     return cmds
 end
