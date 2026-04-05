@@ -1,5 +1,5 @@
 # EXPECT: linux
-# EXPECT: 3.0.3
+# EXPECT: 3.1.0
 # Test sys module info
 import sys
 print sys.platform
