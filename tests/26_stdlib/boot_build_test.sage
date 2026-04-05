@@ -58,7 +58,7 @@ if contains(riscv64_c, "kmain") and contains(riscv64_c, "wfi"):
 
 # Test QEMU command generation
 let x86_qemu = qemu_command("x86_64", "kernel.elf")
-if contains(x86_qemu, "qemu-system-x86_64") and contains(x86_qemu, "-serial stdio"):
+if contains(x86_qemu, "qemu-system-x86_64") and contains(x86_qemu, "-serial"):
     print "x86_64 QEMU command generated"
 
 let aarch64_qemu = qemu_command("aarch64", "kernel.elf")

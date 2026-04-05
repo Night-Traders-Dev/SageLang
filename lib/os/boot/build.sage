@@ -127,6 +127,7 @@ proc generate_serial_boot_x86():
     let asm = ""
     # Serial init for COM1 (0x3F8) at 115200 baud
     asm = asm + ".section .text" + NL
+    asm = asm + ".global serial_init, serial_putchar, serial_puts" + NL
     asm = asm + "serial_init:" + NL
     asm = asm + "    # Disable interrupts on COM1" + NL
     asm = asm + "    movw $0x3F9, %dx" + NL
@@ -196,6 +197,7 @@ proc generate_serial_boot_aarch64():
     let base = "0x09000000"
     let asm = ""
     asm = asm + ".section .text" + NL
+    asm = asm + ".global serial_init, serial_putchar, serial_puts" + NL
     # PL011 init
     asm = asm + "serial_init:" + NL
     asm = asm + "    ldr x1, =" + base + NL
@@ -245,6 +247,7 @@ proc generate_serial_boot_riscv64():
     let base = "0x10000000"
     let asm = ""
     asm = asm + ".section .text" + NL
+    asm = asm + ".global serial_init, serial_putchar, serial_puts" + NL
     # 16550 MMIO init
     asm = asm + "serial_init:" + NL
     asm = asm + "    li t0, " + base + NL
@@ -302,6 +305,35 @@ end
 # ============================================================================
 # Minimal C kernel template generation
 # ============================================================================
+
+# Generate a 32-bit linker script for x86 multiboot1 QEMU-direct loading
+proc generate_linker_x86_mb1():
+    let s = ""
+    s = s + "ENTRY(_start)" + NL
+    s = s + "OUTPUT_FORMAT(" + chr(34) + "elf32-i386" + chr(34) + ")" + NL
+    s = s + "SECTIONS {" + NL
+    s = s + "    . = 1048576;" + NL
+    s = s + "    .multiboot ALIGN(4) : SUBALIGN(4) {" + NL
+    s = s + "        *(.multiboot)" + NL
+    s = s + "    }" + NL
+    s = s + "    .text ALIGN(16) : {" + NL
+    s = s + "        *(.text .text.*)" + NL
+    s = s + "    }" + NL
+    s = s + "    .rodata ALIGN(16) : {" + NL
+    s = s + "        *(.rodata .rodata.*)" + NL
+    s = s + "    }" + NL
+    s = s + "    .data ALIGN(16) : {" + NL
+    s = s + "        *(.data .data.*)" + NL
+    s = s + "    }" + NL
+    s = s + "    .bss ALIGN(16) : {" + NL
+    s = s + "        __bss_start = .;" + NL
+    s = s + "        *(.bss .bss.*)" + NL
+    s = s + "        *(COMMON)" + NL
+    s = s + "        __bss_end = .;" + NL
+    s = s + "    }" + NL
+    s = s + "}" + NL
+    return s
+end
 
 proc generate_kernel_c(arch, message):
     let c = ""
@@ -375,13 +407,13 @@ end
 
 proc qemu_command(arch, kernel_path):
     if arch == "x86_64":
-        return "qemu-system-x86_64 -machine q35 -cpu qemu64 -m 128M -nographic -serial stdio -kernel " + kernel_path
+        return "qemu-system-x86_64 -m 128M -display none -serial mon:stdio -kernel " + kernel_path
     end
     if arch == "aarch64":
-        return "qemu-system-aarch64 -machine virt -cpu cortex-a57 -m 128M -nographic -serial stdio -kernel " + kernel_path
+        return "qemu-system-aarch64 -machine virt -cpu cortex-a57 -m 128M -display none -serial mon:stdio -kernel " + kernel_path
     end
     if arch == "riscv64":
-        return "qemu-system-riscv64 -machine virt -m 128M -nographic -serial stdio -bios none -kernel " + kernel_path
+        return "qemu-system-riscv64 -machine virt -m 128M -display none -serial mon:stdio -bios none -kernel " + kernel_path
     end
     return ""
 end
