@@ -90,6 +90,28 @@ let ARM64_SYS_ACCEPT = 202
 let ARM64_SYS_CONNECT = 203
 let ARM64_SYS_GETRANDOM = 278
 
+# ----- riscv64 syscall numbers (Linux) -----
+let RV64_SYS_READ = 63
+let RV64_SYS_WRITE = 64
+let RV64_SYS_OPENAT = 56
+let RV64_SYS_CLOSE = 57
+let RV64_SYS_LSEEK = 62
+let RV64_SYS_MMAP = 222
+let RV64_SYS_MUNMAP = 215
+let RV64_SYS_BRK = 214
+let RV64_SYS_IOCTL = 29
+let RV64_SYS_CLONE = 220
+let RV64_SYS_EXECVE = 221
+let RV64_SYS_EXIT = 93
+let RV64_SYS_KILL = 129
+let RV64_SYS_GETPID = 172
+let RV64_SYS_SOCKET = 198
+let RV64_SYS_BIND = 200
+let RV64_SYS_LISTEN = 201
+let RV64_SYS_ACCEPT = 202
+let RV64_SYS_CONNECT = 203
+let RV64_SYS_GETRANDOM = 278
+
 # ----- File open flags -----
 let O_RDONLY = 0
 let O_WRONLY = 1
@@ -278,6 +300,59 @@ end
 
 proc sys_socket_desc(domain, sock_type, protocol):
     return make_syscall(ARCH_X86_64, SYS_SOCKET, [domain, sock_type, protocol])
+end
+
+# ========== riscv64 syscall helpers ==========
+
+# Generate a riscv64 syscall invocation dict (ecall convention)
+proc riscv64_syscall(num, args):
+    let sc = {}
+    sc["arch"] = ARCH_RV64
+    sc["instruction"] = "ecall"
+    sc["nr"] = num
+    sc["a7"] = num
+    let i = 0
+    while i < len(args):
+        if i == 0:
+            sc["a0"] = args[i]
+        end
+        if i == 1:
+            sc["a1"] = args[i]
+        end
+        if i == 2:
+            sc["a2"] = args[i]
+        end
+        if i == 3:
+            sc["a3"] = args[i]
+        end
+        if i == 4:
+            sc["a4"] = args[i]
+        end
+        if i == 5:
+            sc["a5"] = args[i]
+        end
+        i = i + 1
+    end
+    sc["args"] = args
+    return sc
+end
+
+# Generate inline assembly for a syscall (riscv64)
+proc emit_syscall_asm_rv64(nr, arg_count):
+    let nl = chr(10)
+    let asm = ""
+    asm = asm + "    li a7, " + str(nr) + nl
+    if arg_count >= 1:
+        asm = asm + "    # arg1 already in a0" + nl
+    end
+    if arg_count >= 2:
+        asm = asm + "    # arg2 already in a1" + nl
+    end
+    if arg_count >= 3:
+        asm = asm + "    # arg3 already in a2" + nl
+    end
+    asm = asm + "    ecall" + nl
+    return asm
 end
 
 # ========== Syscall table (for kernel-side dispatch) ==========
