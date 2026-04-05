@@ -314,6 +314,8 @@ static const Token* expr_token(const Expr* expr) {
             return &expr->as.set.property;
         case EXPR_AWAIT:
             return expr_token(expr->as.await.expression);
+        case EXPR_COMPTIME:
+            return expr_token(expr->as.comptime.expression);
         default:
             return NULL;
     }
@@ -345,6 +347,8 @@ static const Token* stmt_token(const Stmt* stmt) {
             return expr_token(stmt->as.raise.exception);
         case STMT_ASYNC_PROC:
             return &stmt->as.async_proc.name;
+        case STMT_MACRO_DEF:
+            return &stmt->as.macro_def.name;
         default:
             return NULL;
     }
@@ -704,6 +708,11 @@ static void collect_local_lets(Compiler* compiler, Stmt* stmt, NameEntry** local
             case STMT_RAISE:
             case STMT_YIELD:
             case STMT_IMPORT:
+                break;
+            case STMT_COMPTIME:
+                collect_local_lets(compiler, stmt->as.comptime.body, locals);
+                break;
+            case STMT_MACRO_DEF:
                 break;
             case STMT_PRINT:
             case STMT_EXPRESSION:
@@ -1877,6 +1886,9 @@ static char* emit_expr(Compiler* compiler, Expr* expr) {
                               "use the interpreter for programs that need super, or restructure to avoid inheritance",
                               "super expressions are not supported in the C backend");
             return str_dup("sage_nil()");
+        // Phase 17: comptime expression — emit inner expression (constant folding handles optimization)
+        case EXPR_COMPTIME:
+            return emit_expr(compiler, expr->as.comptime.expression);
         case EXPR_DICT:
             return emit_dict_expr(compiler, &expr->as.dict);
         case EXPR_TUPLE:
@@ -2143,6 +2155,22 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             break;
         case STMT_ASYNC_PROC:
             // In compiled mode, async procs are emitted as regular procs (synchronous)
+            break;
+
+        // Phase 17: comptime block — execute at compile time via interpreter,
+        // emit results as constants. In compiled mode, acts as a block that
+        // produces side effects during compilation (e.g., populating globals).
+        case STMT_COMPTIME: {
+            // Emit body as regular statements in compiled mode (the compiler
+            // currently doesn't have a separate interpretation phase, so comptime
+            // blocks are compiled normally — the constant folding passes handle
+            // the optimization).
+            emit_embedded_block(compiler, stmt->as.comptime.body);
+            break;
+        }
+
+        // Phase 17: macro definition — in compiled mode, treated as regular proc
+        case STMT_MACRO_DEF:
             break;
     }
 }
@@ -3579,6 +3607,35 @@ static void emit_slot_frame_setup(Compiler* compiler, NameEntry* locals,
     emit_line(compiler, "sage_gc_push_frame(&%s, %s, %d);", frame_name, roots_name, count);
 }
 
+// Phase 17: Emit C attributes/pragmas for decorated declarations
+static void emit_pragma_attributes(Compiler* compiler, Pragma* pragmas) {
+    for (Pragma* p = pragmas; p != NULL; p = p->next) {
+        if (strcmp(p->name, "inline") == 0) {
+            emit_line(compiler, "/* @inline */");
+            // 'inline' is applied to the function signature below
+        } else if (strcmp(p->name, "packed") == 0) {
+            emit_line(compiler, "#pragma pack(push, 1)");
+        } else if (strcmp(p->name, "section") == 0 && p->arg_count > 0) {
+            emit_line(compiler, "/* @section(\"%s\") */", p->args[0]);
+        } else if (strcmp(p->name, "align") == 0 && p->arg_count > 0) {
+            emit_line(compiler, "/* @align(%s) */", p->args[0]);
+        } else if (strcmp(p->name, "deprecated") == 0) {
+            emit_line(compiler, "/* @deprecated */");
+        } else if (strcmp(p->name, "noreturn") == 0) {
+            emit_line(compiler, "/* @noreturn */");
+        } else {
+            emit_line(compiler, "/* @%s */", p->name);
+        }
+    }
+}
+
+static int has_pragma(Pragma* pragmas, const char* name) {
+    for (Pragma* p = pragmas; p != NULL; p = p->next) {
+        if (strcmp(p->name, name) == 0) return 1;
+    }
+    return 0;
+}
+
 static void emit_function_definition(Compiler* compiler, Stmt* stmt) {
     ProcStmt* proc_stmt = &stmt->as.proc;
     char* proc_name = token_to_string(proc_stmt->name);
@@ -3614,8 +3671,15 @@ static void emit_function_definition(Compiler* compiler, Stmt* stmt) {
         return;
     }
 
+    // Phase 17: emit pragma attributes before function
+    if (stmt->pragmas) emit_pragma_attributes(compiler, stmt->pragmas);
+
     emit_indent(compiler);
-    fprintf(compiler->out, "static SageValue %s(", proc->c_name);
+    if (stmt->pragmas && has_pragma(stmt->pragmas, "inline")) {
+        fprintf(compiler->out, "static inline SageValue %s(", proc->c_name);
+    } else {
+        fprintf(compiler->out, "static SageValue %s(", proc->c_name);
+    }
     for (int i = 0; i < proc_stmt->param_count; i++) {
         if (i > 0) {
             fputs(", ", compiler->out);

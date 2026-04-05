@@ -25,6 +25,13 @@ typedef enum {
     // Phase 8: Module System
     TOKEN_IMPORT, TOKEN_FROM, TOKEN_AS,
 
+    // Phase 17: Metaprogramming
+    TOKEN_COMPTIME,     // comptime keyword
+    TOKEN_MACRO,        // macro keyword
+    TOKEN_QUOTE,        // quote keyword
+    TOKEN_UNQUOTE,      // unquote keyword
+    TOKEN_AT,           // @ symbol for pragmas/decorators
+
     // Symbols & Operators
     TOKEN_LPAREN, TOKEN_RPAREN, TOKEN_PLUS, TOKEN_MINUS,
     TOKEN_STAR, TOKEN_SLASH, TOKEN_PERCENT, TOKEN_ASSIGN, TOKEN_EQ, TOKEN_NEQ,

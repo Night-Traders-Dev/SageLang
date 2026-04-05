@@ -165,6 +165,7 @@ Stmt* clone_stmt(const Stmt* stmt) {
     if (stmt == NULL) return NULL;
 
     Stmt* s = SAGE_ALLOC(sizeof(Stmt));
+    memset(s, 0, sizeof(Stmt));
     s->type = stmt->type;
     s->next = NULL;
 

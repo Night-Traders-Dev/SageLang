@@ -1773,6 +1773,9 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
             return r;
         }
+        // Phase 17: comptime expression — emit inner expression
+        case EXPR_COMPTIME:
+            return llvm_emit_expr(lc, expr->as.comptime.expression);
         default: {
             int r = llc_new_reg(lc);
             ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
@@ -2057,6 +2060,15 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
         case STMT_ASYNC_PROC:
             fprintf(stderr, "LLVM backend: unsupported statement type %d (yield/async)\n", stmt->type);
             break;
+
+        // Phase 17: comptime block — emit body as regular code (constant folding optimizes)
+        case STMT_COMPTIME:
+            llvm_emit_stmt_list(lc, stmt->as.comptime.body);
+            break;
+
+        // Phase 17: macro definition — skipped in LLVM compiled mode
+        case STMT_MACRO_DEF:
+            break;
     }
 }
 
@@ -2110,6 +2122,8 @@ static void collect_local_names(Stmt* stmt, char*** names, int* count, int* cap)
             collect_local_names(s->as.block.statements, names, count, cap);
         } else if (s->type == STMT_TRY) {
             collect_local_names(s->as.try_stmt.try_block, names, count, cap);
+        } else if (s->type == STMT_COMPTIME) {
+            collect_local_names(s->as.comptime.body, names, count, cap);
         } else if (s->type == STMT_IMPORT) {
             // Import binding variable (e.g. import agent.critic -> "critic")
             const char* bind = s->as.import.alias;

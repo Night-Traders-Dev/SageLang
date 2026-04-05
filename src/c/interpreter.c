@@ -2721,6 +2721,10 @@ static ExecResult eval_expr_impl(Expr* expr, Env* env) {
             return EVAL_RESULT(val_nil());
         }
 
+        // Phase 17: comptime expression — in interpreter, just evaluate normally
+        case EXPR_COMPTIME:
+            return eval_expr(expr->as.comptime.expression, env);
+
         default:
             return EVAL_RESULT(val_nil());
     }
@@ -3235,6 +3239,39 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             // Defer is handled at the block level — collect and run on scope exit.
             // When encountered standalone, just execute immediately (fallback).
             return interpret(stmt->as.defer.statement, env);
+
+        // Phase 17: comptime block — in interpreter, just execute the body normally
+        case STMT_COMPTIME:
+            return interpret(stmt->as.comptime.body, env);
+
+        // Phase 17: macro definition — register macro as a function in environment
+        case STMT_MACRO_DEF: {
+            // In interpreter mode, macros are treated as regular functions
+            Token name = stmt->as.macro_def.name;
+            ProcStmt* proc = SAGE_ALLOC(sizeof(ProcStmt));
+            proc->name = name;
+            proc->params = stmt->as.macro_def.params;
+            proc->param_types = NULL;
+            proc->defaults = NULL;
+            proc->param_count = stmt->as.macro_def.param_count;
+            proc->required_count = stmt->as.macro_def.param_count;
+            proc->return_type = NULL;
+            proc->type_params = NULL;
+            proc->type_param_count = 0;
+            proc->doc = NULL;
+            proc->body = stmt->as.macro_def.body;
+            FunctionValue* fn = SAGE_ALLOC(sizeof(FunctionValue));
+            fn->proc = proc;
+            fn->closure = env;
+            fn->is_async = 0;
+            fn->is_vm = 0;
+            fn->vm_function = NULL;
+            Value func_val;
+            func_val.type = VAL_FUNCTION;
+            func_val.as.function = fn;
+            env_define(env, name.start, name.length, func_val);
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+        }
     }
     return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
 }

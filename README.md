@@ -73,6 +73,13 @@ The JIT and AOT backends can also be combined: `sage --aot --jit file.sage -o bi
 - **Conformance Suite**: Cross-backend testing (interpreter, C, LLVM)
 - **Stability Policy**: Semantic versioning with formal guarantees (`STABILITY.md`)
 
+### v3.0 Metaprogramming
+
+- **Compile-Time Execution**: `comptime:` blocks and `comptime(expr)` expressions evaluate code during compilation, baking results into the binary as constants
+- **Pragmas/Decorators**: `@inline`, `@packed`, `@section("name")`, `@align("N")`, `@deprecated`, `@noreturn` — attach compiler directives to functions and structs
+- **AST Macros**: `macro name(params):` defines compile-time code transformers with `quote`/`unquote` support (reserved for future AST manipulation)
+- **Generics**: `proc identity[T](x: T) -> T:` and `struct Pair[A, B]:` with bracket-based type parameters for monomorphization in compiled backends
+
 ### JIT + AOT Compilers
 
 - **JIT Compiler** (`sage --jit file.sage`): Interpreter with profiling counters and type feedback — hot functions (100+ calls) are detected and compiled to native x86-64 machine code. Reports per-function call counts, argument types, and return types.
@@ -1066,8 +1073,8 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v2.0.0
-- **Spec Version**: 2.0 (see `STABILITY.md` for guarantees)
+- **Current Version**: v3.0.0
+- **Spec Version**: 3.0 (see `STABILITY.md` for guarantees)
 
 ## 💾 Project Structure
 

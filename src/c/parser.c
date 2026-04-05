@@ -563,6 +563,14 @@ static Expr* primary() {
                       "use 'super.init(self, args)' to call parent method");
     }
 
+    // Phase 17: comptime expression — comptime(expr) evaluates at compile time
+    if (match(TOKEN_COMPTIME)) {
+        consume(TOKEN_LPAREN, "Expect '(' after 'comptime' in expression context.");
+        Expr* inner = expression();
+        consume(TOKEN_RPAREN, "Expect ')' after comptime expression.");
+        return new_comptime_expr(inner);
+    }
+
     // Parentheses: ( expr ) or tuple (a, b, c)
     if (match(TOKEN_LPAREN)) {
         if (match(TOKEN_RPAREN)) {
@@ -922,6 +930,113 @@ static Expr* expression() {
     return result;
 }
 
+// Phase 17: comptime block — executes code at compile time
+static Stmt* comptime_statement() {
+    consume(TOKEN_COLON, "Expect ':' after 'comptime'.");
+    consume(TOKEN_NEWLINE, "Expect newline after 'comptime:'.");
+    Stmt* body = block();
+    return new_comptime_stmt(body);
+}
+
+// Phase 17: macro definition — macro name(params): body
+static Stmt* macro_declaration() {
+    consume(TOKEN_IDENTIFIER, "Expect macro name.");
+    Token name = previous_token;
+
+    consume(TOKEN_LPAREN, "Expect '(' after macro name.");
+    Token* params = NULL;
+    int count = 0;
+    int capacity = 0;
+
+    if (!check(TOKEN_RPAREN)) {
+        do {
+            if (check(TOKEN_RPAREN)) break;
+            consume(TOKEN_IDENTIFIER, "Expect parameter name.");
+            if (count >= capacity) {
+                capacity = capacity == 0 ? 4 : capacity * 2;
+                params = SAGE_REALLOC(params, sizeof(Token) * capacity);
+            }
+            params[count++] = previous_token;
+        } while (match(TOKEN_COMMA));
+    }
+    consume(TOKEN_RPAREN, "Expect ')' after macro parameters.");
+
+    consume(TOKEN_COLON, "Expect ':' after macro signature.");
+    consume(TOKEN_NEWLINE, "Expect newline before macro body.");
+    Stmt* body = block();
+
+    return new_macro_def_stmt(name, params, count, body);
+}
+
+// Phase 17: parse @pragma decorators and attach to next declaration
+static Pragma* parse_pragma(void) {
+    consume(TOKEN_IDENTIFIER, "Expect pragma name after '@'.");
+    Token name_tok = previous_token;
+    char* name = SAGE_ALLOC(name_tok.length + 1);
+    memcpy(name, name_tok.start, name_tok.length);
+    name[name_tok.length] = '\0';
+
+    char** args = NULL;
+    int arg_count = 0;
+    int arg_capacity = 0;
+
+    // Optional arguments: @section(".multiboot_header")
+    if (match(TOKEN_LPAREN)) {
+        if (!check(TOKEN_RPAREN)) {
+            do {
+                if (check(TOKEN_RPAREN)) break;
+                if (match(TOKEN_STRING)) {
+                    Token arg_tok = previous_token;
+                    int len = arg_tok.length - 2;
+                    char* arg = SAGE_ALLOC(len + 1);
+                    memcpy(arg, arg_tok.start + 1, len);
+                    arg[len] = '\0';
+                    if (arg_count >= arg_capacity) {
+                        arg_capacity = arg_capacity == 0 ? 4 : arg_capacity * 2;
+                        args = SAGE_REALLOC(args, sizeof(char*) * arg_capacity);
+                    }
+                    args[arg_count++] = arg;
+                } else if (match(TOKEN_IDENTIFIER) || match(TOKEN_NUMBER)) {
+                    Token arg_tok = previous_token;
+                    char* arg = SAGE_ALLOC(arg_tok.length + 1);
+                    memcpy(arg, arg_tok.start, arg_tok.length);
+                    arg[arg_tok.length] = '\0';
+                    if (arg_count >= arg_capacity) {
+                        arg_capacity = arg_capacity == 0 ? 4 : arg_capacity * 2;
+                        args = SAGE_REALLOC(args, sizeof(char*) * arg_capacity);
+                    }
+                    args[arg_count++] = arg;
+                } else {
+                    parser_report(current_token, token_span(&current_token),
+                                  "expected string or identifier argument in pragma",
+                                  "pragma arguments should be strings or identifiers");
+                }
+            } while (match(TOKEN_COMMA));
+        }
+        consume(TOKEN_RPAREN, "Expect ')' after pragma arguments.");
+    }
+
+    return new_pragma(name, args, arg_count);
+}
+
+// Phase 17: parse generic type parameters [T, U, V]
+static void parse_generic_type_params(Token** out_params, int* out_count) {
+    *out_params = NULL;
+    *out_count = 0;
+    if (!match(TOKEN_LBRACKET)) return;
+
+    int capacity = 0;
+    do {
+        consume(TOKEN_IDENTIFIER, "Expect type parameter name.");
+        if (*out_count >= capacity) {
+            capacity = capacity == 0 ? 4 : capacity * 2;
+            *out_params = SAGE_REALLOC(*out_params, sizeof(Token) * capacity);
+        }
+        (*out_params)[(*out_count)++] = previous_token;
+    } while (match(TOKEN_COMMA));
+    consume(TOKEN_RBRACKET, "Expect ']' after type parameters.");
+}
+
 static Stmt* print_statement() {
     Expr* value = expression();
     return new_print_stmt(value);
@@ -1037,6 +1152,11 @@ static Stmt* proc_declaration() {
         Token name = current_token;
         advance_parser();
 
+        // Phase 17: optional generic type parameters [T, U]
+        Token* type_params = NULL;
+        int type_param_count = 0;
+        parse_generic_type_params(&type_params, &type_param_count);
+
         consume(TOKEN_LPAREN, "Expect '(' after procedure name.");
 
         Token* params = NULL;
@@ -1102,6 +1222,8 @@ static Stmt* proc_declaration() {
         s->as.proc.defaults = defaults;
         s->as.proc.required_count = required;
         s->as.proc.return_type = return_type;
+        s->as.proc.type_params = type_params;
+        s->as.proc.type_param_count = type_param_count;
         s->as.proc.doc = take_pending_doc();
         return s;
     }
@@ -1209,6 +1331,12 @@ static Stmt* class_declaration() {
 static Stmt* struct_declaration() {
     consume(TOKEN_IDENTIFIER, "Expect struct name.");
     Token name = previous_token;
+
+    // Phase 17: optional generic type parameters [T, U]
+    Token* type_params = NULL;
+    int type_param_count = 0;
+    parse_generic_type_params(&type_params, &type_param_count);
+
     consume(TOKEN_COLON, "Expect ':' after struct name.");
     consume(TOKEN_NEWLINE, "Expect newline after struct header.");
     consume(TOKEN_INDENT, "Expect indentation in struct body.");
@@ -1237,7 +1365,10 @@ static Stmt* struct_declaration() {
         match(TOKEN_NEWLINE);
     }
     consume(TOKEN_DEDENT, "Expect dedent after struct body.");
-    return new_struct_stmt(name, field_names, field_types, count);
+    Stmt* s = new_struct_stmt(name, field_names, field_types, count);
+    s->as.struct_stmt.type_params = type_params;
+    s->as.struct_stmt.type_param_count = type_param_count;
+    return s;
 }
 
 // enum Color:
@@ -1314,6 +1445,8 @@ static Stmt* statement() {
     if (match(TOKEN_YIELD)) return yield_statement();
     if (match(TOKEN_DEFER)) return defer_statement();
     if (match(TOKEN_MATCH)) return match_statement();
+    // Phase 17: comptime block
+    if (match(TOKEN_COMPTIME)) return comptime_statement();
     // Phase 1.8: unsafe block — executes as normal block (semantic marker)
     if (match(TOKEN_UNSAFE)) {
         consume(TOKEN_COLON, "Expect ':' after 'unsafe'.");
@@ -1381,7 +1514,29 @@ static Stmt* declaration() {
         return NULL;
     }
 
-    if (match(TOKEN_CLASS)) return class_declaration();
+    // Phase 17: @pragma decorators — collect and attach to next declaration
+    Pragma* pragma_list = NULL;
+    while (check(TOKEN_AT)) {
+        advance_parser(); // consume '@'
+        Pragma* p = parse_pragma();
+        p->next = pragma_list;
+        pragma_list = p;
+        match(TOKEN_NEWLINE);
+        while (match(TOKEN_NEWLINE));
+    }
+
+    // Phase 17: macro definition
+    if (match(TOKEN_MACRO)) {
+        Stmt* s = macro_declaration();
+        if (pragma_list) { s->pragmas = pragma_list; }
+        return s;
+    }
+
+    if (match(TOKEN_CLASS)) {
+        Stmt* s = class_declaration();
+        if (pragma_list) { s->pragmas = pragma_list; }
+        return s;
+    }
     // struct/enum/trait: only treat as declaration if followed by identifier (name)
     // Otherwise allow as variable reference (e.g., enum.enum_def from stdlib)
     if (check(TOKEN_STRUCT) || check(TOKEN_ENUM) || check(TOKEN_TRAIT)) {
@@ -1393,17 +1548,28 @@ static Stmt* declaration() {
         advance_parser();
         if (current_token.type == TOKEN_IDENTIFIER) {
             // It's a declaration
-            if (kw == TOKEN_STRUCT) return struct_declaration();
-            if (kw == TOKEN_ENUM) return enum_declaration();
-            if (kw == TOKEN_TRAIT) return trait_declaration();
+            Stmt* s = NULL;
+            if (kw == TOKEN_STRUCT) s = struct_declaration();
+            else if (kw == TOKEN_ENUM) s = enum_declaration();
+            else if (kw == TOKEN_TRAIT) s = trait_declaration();
+            if (s && pragma_list) { s->pragmas = pragma_list; }
+            if (s) return s;
         }
         // Not a declaration — restore and fall through to expression
         lexer_set_state(saved_ls);
         current_token = saved_ct;
         previous_token = saved_pt;
     }
-    if (match(TOKEN_ASYNC)) return async_proc_declaration();
-    if (match(TOKEN_PROC)) return proc_declaration();
+    if (match(TOKEN_ASYNC)) {
+        Stmt* s = async_proc_declaration();
+        if (pragma_list) { s->pragmas = pragma_list; }
+        return s;
+    }
+    if (match(TOKEN_PROC)) {
+        Stmt* s = proc_declaration();
+        if (pragma_list) { s->pragmas = pragma_list; }
+        return s;
+    }
     
     // PHASE 8: Import statements
     if (match(TOKEN_IMPORT) || check(TOKEN_FROM)) {
@@ -1450,11 +1616,13 @@ static Stmt* declaration() {
 
         Stmt* stmt = new_let_stmt(name, initializer);
         stmt->as.let.type_ann = type_ann;
+        if (pragma_list) { stmt->pragmas = pragma_list; }
         match(TOKEN_NEWLINE);
         return stmt;
     }
 
     Stmt* stmt = statement();
+    if (pragma_list) { stmt->pragmas = pragma_list; }
     match(TOKEN_NEWLINE);
     return stmt;
 }

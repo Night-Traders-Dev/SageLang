@@ -94,6 +94,11 @@ typedef struct {
     Token method;   // The method name after super.
 } SuperExpr;
 
+// Comptime expression: comptime value evaluated at compile time
+typedef struct {
+    Expr* expression;   // Expression to evaluate at compile time (single-expression form)
+} ComptimeExpr;
+
 struct Expr {
     enum {
         EXPR_NUMBER,
@@ -112,7 +117,8 @@ struct Expr {
         EXPR_SET,
         EXPR_INDEX_SET,
         EXPR_AWAIT,
-        EXPR_SUPER
+        EXPR_SUPER,
+        EXPR_COMPTIME       // Phase 17: compile-time expression
     } type;
     union {
         NumberExpr number;
@@ -131,6 +137,7 @@ struct Expr {
         SetExpr set;
         AwaitExpr await;
         SuperExpr super_expr;
+        ComptimeExpr comptime;
     } as;
 };
 
@@ -179,6 +186,8 @@ typedef struct {
     int required_count;            // Number of params without defaults
     TypeAnnotation* return_type;   // Return type annotation (NULL if none)
     char* doc;                     // Doc comment (NULL if none)
+    Token* type_params;            // Phase 17: Generic type parameters [T, U] (NULL if none)
+    int type_param_count;          // Phase 17: Number of generic type parameters
     Stmt* body;
 } ProcStmt;
 
@@ -206,6 +215,8 @@ typedef struct {
     Token* field_names;
     TypeAnnotation** field_types;
     int field_count;
+    Token* type_params;            // Phase 17: Generic type parameters [T, U] (NULL if none)
+    int type_param_count;          // Phase 17: Number of generic type parameters
 } StructStmt;
 
 // Enum declaration: enum Color: Red, Green, Blue
@@ -262,6 +273,27 @@ typedef struct {
     Expr* value;  // Expression to yield (can be NULL for yield without value)
 } YieldStmt;
 
+// Phase 17: Pragma/decorator annotation
+typedef struct Pragma {
+    char* name;             // Pragma name (e.g., "packed", "inline", "section")
+    char** args;            // Optional arguments (e.g., ".multiboot_header")
+    int arg_count;
+    struct Pragma* next;    // Linked list
+} Pragma;
+
+// Phase 17: Comptime block statement
+typedef struct {
+    Stmt* body;             // Block of code to execute at compile time
+} ComptimeStmt;
+
+// Phase 17: Macro definition
+typedef struct {
+    Token name;
+    Token* params;          // Parameter names (AST node params)
+    int param_count;
+    Stmt* body;             // Macro body (contains quote blocks)
+} MacroDefStmt;
+
 typedef struct {
     char* module_name;      // Name of module to import
     char** items;           // Items to import (NULL for "import module")
@@ -294,7 +326,9 @@ struct Stmt {
         STMT_ASYNC_PROC, // Phase 11: Async procedure
         STMT_STRUCT,    // Phase 1.7: Struct declaration
         STMT_ENUM,      // Phase 1.7: Enum declaration
-        STMT_TRAIT      // Phase 1.7: Trait declaration
+        STMT_TRAIT,     // Phase 1.7: Trait declaration
+        STMT_COMPTIME,  // Phase 17: Compile-time block
+        STMT_MACRO_DEF  // Phase 17: Macro definition
     } type;
     union {
         PrintStmt print;
@@ -316,8 +350,11 @@ struct Stmt {
         StructStmt struct_stmt; // Phase 1.7: Struct declaration
         EnumStmt enum_stmt;     // Phase 1.7: Enum declaration
         TraitStmt trait_stmt;   // Phase 1.7: Trait declaration
+        ComptimeStmt comptime;  // Phase 17: Compile-time block
+        MacroDefStmt macro_def; // Phase 17: Macro definition
         Expr* expression;
     } as;
+    Pragma* pragmas;            // Phase 17: Pragma/decorator list (NULL if none)
     Stmt* next;
 };
 
@@ -339,6 +376,7 @@ Expr* new_get_expr(Expr* object, Token property);
 Expr* new_set_expr(Expr* object, Token property, Expr* value);
 Expr* new_await_expr(Expr* expression);
 Expr* new_super_expr(Token method);
+Expr* new_comptime_expr(Expr* expression);  // Phase 17
 
 // Statement Constructors
 Stmt* new_print_stmt(Expr* expression);
@@ -366,6 +404,10 @@ Stmt* new_raise_stmt(Expr* exception);
 Stmt* new_yield_stmt(Expr* value);  // Phase 7: Generator yield constructor
 Stmt* new_import_stmt(char* module_name, char** items, char** item_aliases, int item_count, char* alias, int import_all);  // Phase 8: Import constructor
 Stmt* new_async_proc_stmt(Token name, Token* params, int param_count, Stmt* body);  // Phase 11: Async proc
+Stmt* new_comptime_stmt(Stmt* body);  // Phase 17: Compile-time block
+Stmt* new_macro_def_stmt(Token name, Token* params, int param_count, Stmt* body);  // Phase 17: Macro definition
+Pragma* new_pragma(char* name, char** args, int arg_count);  // Phase 17: Pragma constructor
+void free_pragma(Pragma* pragma);  // Phase 17: Pragma cleanup
 
 // AST cleanup
 void free_expr(Expr* expr);

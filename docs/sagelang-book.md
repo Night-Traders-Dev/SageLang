@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "April 2026"
-version: "v2.2.0"
+version: "v3.0.0"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v2.2.0}
+  - \fancyfoot[C]{v3.0.0}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -1289,7 +1289,7 @@ system but are not enforced at runtime by the interpreter.
 
 # The Safety System
 
-Sage v2.2.0 includes a compile-time safety system inspired by Rust. It provides
+Sage v3.0.0 includes a compile-time safety system inspired by Rust. It provides
 ownership tracking, borrow checking, lifetime analysis, Option type enforcement,
 and fearless concurrency checks.
 
@@ -2024,7 +2024,188 @@ make kernel-uefi      # Compile UEFI application
 
 The version is stored in a single `VERSION` file at the repository root.
 All build systems (Makefile, CMakeLists.txt, build.sh, sagemake) read from
-this file automatically. Current version: **2.1.0**.
+this file automatically. Current version: **3.0.0**.
+
+\newpage
+
+# Part VIb: Metaprogramming
+
+\newpage
+
+# Compile-Time Execution
+
+Sage supports compile-time code execution through the `comptime` keyword.
+Because Sage has a built-in interpreter, any Sage code can run during
+compilation to produce constants, lookup tables, or configuration data
+that is baked directly into the binary.
+
+## Comptime Blocks
+
+A `comptime:` block executes its body at compile time. Variables defined
+inside a comptime block are available to subsequent code.
+
+```python
+# Pre-compute a lookup table
+comptime:
+    let SINE_TABLE = []
+    for i in range(256):
+        push(SINE_TABLE, math.sin(i * math.pi / 128.0))
+    end
+end
+
+proc get_sine(angle):
+    return SINE_TABLE[angle % 256]
+end
+```
+
+## Comptime Expressions
+
+The `comptime(expr)` form evaluates a single expression at compile time:
+
+```python
+proc factorial(n):
+    if n <= 1:
+        return 1
+    return n * factorial(n - 1)
+
+# Computed at compile time, baked as a constant
+let FACT_10 = comptime(factorial(10))
+```
+
+\newpage
+
+# Pragmas and Decorators
+
+Pragmas attach metadata to declarations using the `@` symbol. They inform
+the compiler backends how to handle specific functions, structs, or blocks.
+
+## Syntax
+
+```python
+@pragma_name
+@pragma_name("argument")
+```
+
+## Built-in Pragmas
+
+| Pragma | Target | Effect |
+|--------|--------|--------|
+| `@inline` | `proc` | Hints the C backend to emit `static inline` |
+| `@packed` | `struct` | Emits `#pragma pack(push, 1)` for no padding |
+| `@section("name")` | `proc` | Places function in a specific ELF section |
+| `@align("N")` | `struct` | Alignment hint for struct layout |
+| `@deprecated` | `proc` | Marks a function as deprecated |
+| `@noreturn` | `proc` | Marks a function that never returns |
+
+## Examples
+
+```python
+@packed
+struct Ipv4Header:
+    version_ihl: u8
+    tos: u8
+    total_length: u16
+
+@inline
+proc fast_math(x, y):
+    return x * y
+
+@section(".multiboot_header")
+proc boot_header():
+    pass
+```
+
+## Multiple Pragmas
+
+Multiple pragmas can be stacked on a single declaration:
+
+```python
+@inline
+@deprecated
+proc old_multiply(a, b):
+    return a * b
+```
+
+\newpage
+
+# AST Macros
+
+Macros are functions that execute at compile time and operate on code
+structure. In the current implementation, macros are defined with the
+`macro` keyword and behave as compile-time procedures.
+
+## Macro Definition
+
+```python
+macro log_call(label):
+    print "entering " + label
+    # ... macro body ...
+    print "exiting " + label
+
+log_call("main")
+```
+
+In interpreter mode, macros are treated as regular functions. In compiled
+mode, macro bodies are expanded at the call site during compilation.
+
+## Future: Quote and Unquote
+
+The `quote` and `unquote` keywords are reserved for future AST macro
+support, enabling macros that manipulate Abstract Syntax Tree nodes
+directly:
+
+```python
+macro safe_zone(body):
+    return quote:
+        sys.enable_strict_safety()
+        defer sys.restore_safety()
+        unquote(body)
+    end
+```
+
+\newpage
+
+# Generics
+
+Sage supports generic type parameters on procedures and structs using
+bracket syntax `[T, U, ...]`. In the current implementation, Sage uses
+dynamic typing, so generic parameters serve as documentation and enable
+future monomorphization in compiled backends.
+
+## Generic Procedures
+
+```python
+proc identity[T](x: T) -> T:
+    return x
+
+proc swap[T](a: T, b: T):
+    let tmp = a
+    a = b
+    b = tmp
+```
+
+## Generic Structs
+
+```python
+struct Pair[A, B]:
+    first: A
+    second: B
+
+struct Stack[T]:
+    items: Array[T]
+    size: Int
+```
+
+## Monomorphization (Planned)
+
+When compiled with the C or LLVM backend, the compiler will generate
+specialized versions for each concrete type used:
+
+```python
+# At compile time, generates Stack_Int and Stack_String
+let int_stack = Stack[Int]()
+let str_stack = Stack[String]()
+```
 
 \newpage
 

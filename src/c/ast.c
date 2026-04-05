@@ -139,6 +139,13 @@ Expr* new_super_expr(Token method) {
     return e;
 }
 
+Expr* new_comptime_expr(Expr* expression) {
+    Expr* e = SAGE_ALLOC(sizeof(Expr));
+    e->type = EXPR_COMPTIME;
+    e->as.comptime.expression = expression;
+    return e;
+}
+
 // ========== STATEMENT CONSTRUCTORS ==========
 
 Stmt* new_print_stmt(Expr* expression) {
@@ -146,6 +153,7 @@ Stmt* new_print_stmt(Expr* expression) {
     s->type = STMT_PRINT;
     s->as.print.expression = expression;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -154,6 +162,7 @@ Stmt* new_expr_stmt(Expr* expression) {
     s->type = STMT_EXPRESSION;
     s->as.expression = expression;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -164,6 +173,7 @@ Stmt* new_let_stmt(Token name, Expr* initializer) {
     s->as.let.type_ann = NULL;
     s->as.let.initializer = initializer;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -174,6 +184,7 @@ Stmt* new_if_stmt(Expr* condition, Stmt* then_branch, Stmt* else_branch) {
     s->as.if_stmt.then_branch = then_branch;
     s->as.if_stmt.else_branch = else_branch;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -184,6 +195,7 @@ Stmt* new_for_stmt(Token variable, Expr* iterable, Stmt* body) {
     s->as.for_stmt.iterable = iterable;
     s->as.for_stmt.body = body;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -192,6 +204,7 @@ Stmt* new_block_stmt(Stmt* statements) {
     s->type = STMT_BLOCK;
     s->as.block.statements = statements;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -201,6 +214,7 @@ Stmt* new_while_stmt(Expr* condition, Stmt* body) {
     s->as.while_stmt.condition = condition;
     s->as.while_stmt.body = body;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -224,8 +238,11 @@ Stmt* new_proc_stmt(Token name, Token* params, int param_count, Stmt* body) {
     s->as.proc.required_count = param_count;
     s->as.proc.return_type = NULL;
     s->as.proc.doc = NULL;
+    s->as.proc.type_params = NULL;
+    s->as.proc.type_param_count = 0;
     s->as.proc.body = body;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -234,6 +251,7 @@ Stmt* new_return_stmt(Expr* value) {
     s->type = STMT_RETURN;
     s->as.ret.value = value;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -241,6 +259,7 @@ Stmt* new_break_stmt() {
     Stmt* s = SAGE_ALLOC(sizeof(Stmt));
     s->type = STMT_BREAK;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -248,6 +267,7 @@ Stmt* new_continue_stmt() {
     Stmt* s = SAGE_ALLOC(sizeof(Stmt));
     s->type = STMT_CONTINUE;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -259,6 +279,7 @@ Stmt* new_class_stmt(Token name, Token parent, int has_parent, Stmt* methods) {
     s->as.class_stmt.has_parent = has_parent;
     s->as.class_stmt.methods = methods;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -269,7 +290,10 @@ Stmt* new_struct_stmt(Token name, Token* field_names, TypeAnnotation** field_typ
     s->as.struct_stmt.field_names = field_names;
     s->as.struct_stmt.field_types = field_types;
     s->as.struct_stmt.field_count = field_count;
+    s->as.struct_stmt.type_params = NULL;
+    s->as.struct_stmt.type_param_count = 0;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -280,6 +304,7 @@ Stmt* new_enum_stmt(Token name, Token* variant_names, int variant_count) {
     s->as.enum_stmt.variant_names = variant_names;
     s->as.enum_stmt.variant_count = variant_count;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -289,6 +314,7 @@ Stmt* new_trait_stmt(Token name, Stmt* methods) {
     s->as.trait_stmt.name = name;
     s->as.trait_stmt.methods = methods;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -310,6 +336,7 @@ Stmt* new_match_stmt(Expr* value, CaseClause** cases, int case_count, Stmt* defa
     s->as.match_stmt.case_count = case_count;
     s->as.match_stmt.default_case = default_case;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -320,6 +347,7 @@ Stmt* new_defer_stmt(Stmt* statement) {
     s->type = STMT_DEFER;
     s->as.defer.statement = statement;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -340,6 +368,7 @@ Stmt* new_try_stmt(Stmt* try_block, CatchClause** catches, int catch_count, Stmt
     s->as.try_stmt.catch_count = catch_count;
     s->as.try_stmt.finally_block = finally_block;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -348,6 +377,7 @@ Stmt* new_raise_stmt(Expr* exception) {
     s->type = STMT_RAISE;
     s->as.raise.exception = exception;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -358,6 +388,7 @@ Stmt* new_yield_stmt(Expr* value) {
     s->type = STMT_YIELD;
     s->as.yield_stmt.value = value;
     s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -373,6 +404,7 @@ Stmt* new_import_stmt(char* module_name, char** items, char** item_aliases, int 
     stmt->as.import.alias = alias;
     stmt->as.import.import_all = import_all;
     stmt->next = NULL;
+    stmt->pragmas = NULL;
     return stmt;
 }
 
@@ -387,8 +419,56 @@ Stmt* new_async_proc_stmt(Token name, Token* params, int param_count, Stmt* body
     s->as.async_proc.required_count = param_count;
     s->as.async_proc.return_type = NULL;
     s->as.async_proc.doc = NULL;
+    s->as.async_proc.type_params = NULL;
+    s->as.async_proc.type_param_count = 0;
     s->as.async_proc.body = body;
     s->next = NULL;
+    s->pragmas = NULL;
+    return s;
+}
+
+// ========== PHASE 17: METAPROGRAMMING ==========
+
+Pragma* new_pragma(char* name, char** args, int arg_count) {
+    Pragma* p = SAGE_ALLOC(sizeof(Pragma));
+    p->name = name;
+    p->args = args;
+    p->arg_count = arg_count;
+    p->next = NULL;
+    return p;
+}
+
+void free_pragma(Pragma* pragma) {
+    while (pragma != NULL) {
+        Pragma* next = pragma->next;
+        free(pragma->name);
+        for (int i = 0; i < pragma->arg_count; i++) {
+            free(pragma->args[i]);
+        }
+        free(pragma->args);
+        free(pragma);
+        pragma = next;
+    }
+}
+
+Stmt* new_comptime_stmt(Stmt* body) {
+    Stmt* s = SAGE_ALLOC(sizeof(Stmt));
+    s->type = STMT_COMPTIME;
+    s->as.comptime.body = body;
+    s->next = NULL;
+    s->pragmas = NULL;
+    return s;
+}
+
+Stmt* new_macro_def_stmt(Token name, Token* params, int param_count, Stmt* body) {
+    Stmt* s = SAGE_ALLOC(sizeof(Stmt));
+    s->type = STMT_MACRO_DEF;
+    s->as.macro_def.name = name;
+    s->as.macro_def.params = params;
+    s->as.macro_def.param_count = param_count;
+    s->as.macro_def.body = body;
+    s->next = NULL;
+    s->pragmas = NULL;
     return s;
 }
 
@@ -474,6 +554,9 @@ void free_expr(Expr* expr) {
             break;
         case EXPR_AWAIT:
             free_expr(expr->as.await.expression);
+            break;
+        case EXPR_COMPTIME:
+            free_expr(expr->as.comptime.expression);
             break;
         case EXPR_NUMBER:
         case EXPR_BOOL:
@@ -564,11 +647,19 @@ void free_stmt(Stmt* stmt) {
                 free(stmt->as.async_proc.params);
                 free_stmt(stmt->as.async_proc.body);
                 break;
+            case STMT_COMPTIME:
+                free_stmt(stmt->as.comptime.body);
+                break;
+            case STMT_MACRO_DEF:
+                free(stmt->as.macro_def.params);
+                free_stmt(stmt->as.macro_def.body);
+                break;
             case STMT_BREAK:
             case STMT_CONTINUE:
                 break;
         }
 
+        free_pragma(stmt->pragmas);
         free(stmt);
         stmt = next;
     }

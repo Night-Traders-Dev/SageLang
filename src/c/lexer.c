@@ -142,7 +142,10 @@ static TokenType identifier_type(void) {
                         if (current - start > 2 && start[2] == 't') return check_keyword(3, 2, "ch", TOKEN_CATCH);
                         break;
                     case 'l': return check_keyword(2, 3, "ass", TOKEN_CLASS);
-                    case 'o': return check_keyword(2, 6, "ntinue", TOKEN_CONTINUE);
+                    case 'o':
+                        if (current - start > 2 && start[2] == 'n') return check_keyword(2, 6, "ntinue", TOKEN_CONTINUE);
+                        if (current - start > 2 && start[2] == 'm') return check_keyword(2, 6, "mptime", TOKEN_COMPTIME);
+                        break;
                 }
             }
             break;
@@ -201,7 +204,16 @@ static TokenType identifier_type(void) {
             
         case 'l': return check_keyword(1, 2, "et", TOKEN_LET);
         
-        case 'm': return check_keyword(1, 4, "atch", TOKEN_MATCH);
+        case 'm':
+            if (current - start > 1) {
+                switch (start[1]) {
+                    case 'a':
+                        if (current - start > 2 && start[2] == 't') return check_keyword(2, 3, "tch", TOKEN_MATCH);
+                        if (current - start > 2 && start[2] == 'c') return check_keyword(2, 3, "cro", TOKEN_MACRO);
+                        break;
+                }
+            }
+            break;
         
         case 'n':
             if (current - start > 1) {
@@ -214,16 +226,18 @@ static TokenType identifier_type(void) {
 
         case 'o': return check_keyword(1, 1, "r", TOKEN_OR);
 
-        case 'p': 
+        case 'p':
             if (current - start > 1) {
                 switch(start[1]) {
-                    case 'r': 
-                        if (current - start > 2 && start[2] == 'i') return check_keyword(3, 2, "nt", TOKEN_PRINT); 
+                    case 'r':
+                        if (current - start > 2 && start[2] == 'i') return check_keyword(3, 2, "nt", TOKEN_PRINT);
                         if (current - start > 2 && start[2] == 'o') return check_keyword(3, 1, "c", TOKEN_PROC);
                         break;
                 }
             }
             break;
+
+        case 'q': return check_keyword(1, 4, "uote", TOKEN_QUOTE);
 
         case 'r':
             if (current - start > 1) {
@@ -256,7 +270,16 @@ static TokenType identifier_type(void) {
             }
             break;
             
-        case 'u': return check_keyword(1, 5, "nsafe", TOKEN_UNSAFE);
+        case 'u':
+            if (current - start > 1) {
+                switch (start[1]) {
+                    case 'n':
+                        if (current - start > 2 && start[2] == 's') return check_keyword(2, 4, "safe", TOKEN_UNSAFE);
+                        if (current - start > 2 && start[2] == 'q') return check_keyword(2, 5, "quote", TOKEN_UNQUOTE);
+                        break;
+                }
+            }
+            break;
 
         case 'v': return check_keyword(1, 2, "ar", TOKEN_VAR);
         
@@ -519,6 +542,7 @@ Token scan_token(void) {
         case '|': return make_token(TOKEN_PIPE);
         case '^': return make_token(TOKEN_CARET);
         case '~': return make_token(TOKEN_TILDE);
+        case '@': return make_token(TOKEN_AT);
     }
 
     return error_token("Unexpected character.");

@@ -81,6 +81,11 @@ const char* sage_token_type_name(TokenType type) {
         case TOKEN_TILDE: return "TILDE";
         case TOKEN_LSHIFT: return "LSHIFT";
         case TOKEN_RSHIFT: return "RSHIFT";
+        case TOKEN_COMPTIME: return "COMPTIME";
+        case TOKEN_MACRO: return "MACRO";
+        case TOKEN_QUOTE: return "QUOTE";
+        case TOKEN_UNQUOTE: return "UNQUOTE";
+        case TOKEN_AT: return "AT";
         case TOKEN_IDENTIFIER: return "IDENTIFIER";
         case TOKEN_NUMBER: return "NUMBER";
         case TOKEN_STRING: return "STRING";
@@ -132,6 +137,7 @@ const char* sage_token_display_name(TokenType type) {
         case TOKEN_TILDE: return "'~'";
         case TOKEN_LSHIFT: return "'<<'";
         case TOKEN_RSHIFT: return "'>>'";
+        case TOKEN_AT: return "'@'";
         default: {
             static char lowered[32];
             const char* raw = sage_token_type_name(type);
