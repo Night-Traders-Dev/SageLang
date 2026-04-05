@@ -47,13 +47,18 @@ proc panic(msg):
 end
 
 proc halt():
-    # In a real kernel this would be a HLT instruction loop.
-    # Here we simulate it by spinning forever.
-    let running = true
-    while running:
-        # busy wait — CPU halted
+    # Halt the CPU. In compiled bare-metal mode, this emits a HLT loop.
+    # In interpreter mode, it busy-waits as a simulation fallback.
+    while true:
+        # On real hardware, the compiler emits: cli; hlt; jmp halt
+        # In interpreted mode, this is a safe infinite loop.
         let dummy = 0
     end
+end
+
+# Generate x86_64 assembly for a proper hardware halt loop
+proc emit_halt_asm():
+    return ".Lhalt:" + chr(10) + "    cli" + chr(10) + "    hlt" + chr(10) + "    jmp .Lhalt" + chr(10)
 end
 
 proc init_console(boot_info):
@@ -73,16 +78,20 @@ end
 
 proc init_memory(boot_info):
     let mem_map = nil
+    let arch = "x86_64"
     if boot_info != nil:
         if dict_has(boot_info, "memory_map"):
             mem_map = boot_info["memory_map"]
+        end
+        if dict_has(boot_info, "arch"):
+            arch = boot_info["arch"]
         end
     end
     if mem_map == nil:
         mem_map = []
     end
     pmm.init(mem_map)
-    vmm.init()
+    vmm.vmm_init(arch)
     let total_mb = pmm.total_memory() / 1048576
     console.print_line("  Memory: " + str(total_mb) + " MB total")
     return true
@@ -107,6 +116,9 @@ proc init_timer(freq_hz):
 end
 
 proc kmain(boot_info):
+    if boot_info == nil:
+        boot_info = {}
+    end
     let kernel = create_kernel(KERNEL_NAME, KERNEL_VERSION)
 
     # Phase 1: Console (needed for all output)

@@ -38,35 +38,12 @@ end
 # ----- Initialize kernel address space -----
 
 proc init():
-    page_tables = {}
+    let state = vmm_init("x86_64")
+    page_tables = state["entries"]
     kernel_pml4 = {}
-    kernel_pml4["entries"] = {}
+    kernel_pml4["entries"] = state["entries"]
     kernel_pml4["addr"] = 0
     current_pml4 = kernel_pml4
-
-    # Identity-map the first 4 MB for kernel use (1024 pages)
-    let addr = 0
-    let end_addr = 4 * 1024 * 1024
-    let flags = PAGE_PRESENT + PAGE_WRITABLE
-    while addr < end_addr:
-        let pn = page_number(addr)
-        let entry = {}
-        entry["phys"] = addr
-        entry["flags"] = flags
-        let key = str(pn)
-        let entries = kernel_pml4["entries"]
-        entries[key] = entry
-        addr = addr + pmm.PAGE_SIZE
-    end
-
-    # Map VGA text buffer region (753664)
-    let vga_page = page_number(753664)
-    let vga_entry = {}
-    vga_entry["phys"] = 753664
-    vga_entry["flags"] = PAGE_PRESENT + PAGE_WRITABLE
-    let k_entries = kernel_pml4["entries"]
-    k_entries[str(vga_page)] = vga_entry
-
     vmm_ready = true
 end
 
@@ -248,7 +225,9 @@ proc vmm_init(arch):
             let entry = {}
             entry["phys"] = addr
             entry["flags"] = flags
-            entries[str(pn)] = entry
+            let key = str(pn)
+            entries[key] = entry
+            page_tables[key] = entry
             addr = addr + pmm.PAGE_SIZE
         end
     end
@@ -264,7 +243,9 @@ proc vmm_init(arch):
             let entry = {}
             entry["phys"] = addr
             entry["flags"] = flags
-            entries[str(pn)] = entry
+            let key = str(pn)
+            entries[key] = entry
+            page_tables[key] = entry
             addr = addr + pmm.PAGE_SIZE
         end
     end

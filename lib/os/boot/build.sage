@@ -12,8 +12,11 @@ gc_disable()
 #   let img = build_kernel("x86_64", "kernel.c", "kernel.elf")
 #   let cmd = qemu_command("x86_64", "kernel.elf")
 
+import io
 import os.serial
 import os.qemu
+import os.boot.start as start
+import os.boot.linker as linker
 
 let NL = chr(10)
 
@@ -432,20 +435,15 @@ proc write_build_files(arch, output_dir, message):
     # Generate boot assembly with serial support
     let boot_asm = ""
     if arch == "x86_64":
-        # Import full x86_64 boot stub (multiboot2 + long mode transition)
-        from os.boot.start import generate_boot_asm
-        boot_asm = generate_boot_asm(nil)
-        # Append serial functions
+        boot_asm = start.generate_boot_asm(nil)
         boot_asm = boot_asm + generate_serial_boot_x86()
     end
     if arch == "aarch64":
-        from os.boot.start import emit_start_aarch64
-        boot_asm = emit_start_aarch64("kmain", "stack_top")
+        boot_asm = start.emit_start_aarch64("kmain", "stack_top")
         boot_asm = boot_asm + generate_serial_boot_aarch64()
     end
     if arch == "riscv64":
-        from os.boot.start import emit_start_riscv64
-        boot_asm = emit_start_riscv64("kmain", "stack_top")
+        boot_asm = start.emit_start_riscv64("kmain", "stack_top")
         boot_asm = boot_asm + generate_serial_boot_riscv64()
     end
 
@@ -453,15 +451,14 @@ proc write_build_files(arch, output_dir, message):
     let kernel_c = generate_kernel_c(arch, message)
 
     # Generate linker script
-    from os.boot.linker import default_config, generate_script
-    let ld_config = default_config()
+    let ld_config = linker.default_config()
     if arch == "aarch64":
         ld_config["base_address"] = 1073741824
     end
     if arch == "riscv64":
         ld_config["base_address"] = 2147483648
     end
-    let linker_script = generate_script(ld_config)
+    let linker_script = linker.generate_script(ld_config)
 
     # Write files
     let boot_path = output_dir + "/boot.S"
@@ -469,9 +466,9 @@ proc write_build_files(arch, output_dir, message):
     let linker_path = output_dir + "/linker.ld"
     let elf_path = output_dir + "/kernel.elf"
 
-    writefile(boot_path, boot_asm)
-    writefile(kernel_path, kernel_c)
-    writefile(linker_path, linker_script)
+    io.writefile(boot_path, boot_asm)
+    io.writefile(kernel_path, kernel_c)
+    io.writefile(linker_path, linker_script)
 
     result["boot_asm"] = boot_path
     result["kernel_c"] = kernel_path

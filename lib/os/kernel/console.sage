@@ -558,3 +558,167 @@ proc fb_puts(con, text):
         i = i + 1
     end
 end
+
+# ================================================================
+# Hardware mode flag and bare-metal code generation
+# ================================================================
+# Controls whether console operations target the simulated buffer
+# or generate hardware-targeted assembly for bare-metal execution.
+
+let hardware_mode = "simulated"
+
+# ----- Set hardware mode ("simulated" or "hardware") -----
+proc set_hardware_mode(mode):
+    if mode == "simulated" or mode == "hardware":
+        hardware_mode = mode
+    end
+end
+
+# ----- Write a character+color to the simulated VGA buffer -----
+# Sage-callable proc that computes the VGA buffer offset and stores
+# the character+color entry at the correct position in vga_buffer.
+proc vga_write_char(x, y, ch, color):
+    if vga_ready == false:
+        return
+    end
+    if x < 0 or x >= VGA_WIDTH:
+        return
+    end
+    if y < 0 or y >= VGA_HEIGHT:
+        return
+    end
+    let offset = y * VGA_WIDTH + x
+    vga_buffer[offset]["char"] = ch
+    vga_buffer[offset]["color"] = color
+end
+
+# ----- Generate x86_64 assembly: clear VGA screen -----
+# Emits assembly that fills VGA memory at 0xB8000 through 0xB8FA0
+# with space characters (0x20) and light-gray-on-black attribute (0x07).
+# Total bytes: 80 * 25 * 2 = 4000 (0xFA0).
+proc emit_console_init_asm():
+    let lines = []
+    append(lines, "# emit_console_init_asm: clear VGA text screen")
+    append(lines, ".globl console_init")
+    append(lines, "console_init:")
+    append(lines, "    movq $0xB8000, %rdi")
+    append(lines, "    movl $2000, %ecx          # 80*25 = 2000 cells")
+    append(lines, "    movw $0x0720, %ax          # space (0x20) + light gray attr (0x07)")
+    append(lines, ".Lclear_loop:")
+    append(lines, "    movw %ax, (%rdi)")
+    append(lines, "    addq $2, %rdi")
+    append(lines, "    decl %ecx")
+    append(lines, "    jnz .Lclear_loop")
+    append(lines, "    # Reset cursor position to (0, 0)")
+    append(lines, "    movl $0, cursor_x_hw(%rip)")
+    append(lines, "    movl $0, cursor_y_hw(%rip)")
+    append(lines, "    ret")
+    append(lines, "")
+    append(lines, ".section .bss")
+    append(lines, "cursor_x_hw: .long 0")
+    append(lines, "cursor_y_hw: .long 0")
+    append(lines, ".section .text")
+    return lines
+end
+
+# ----- Generate x86_64 assembly: write char+attr to VGA memory -----
+# Emits assembly for a procedure that takes:
+#   %dil  = ASCII character
+#   %sil  = color attribute byte
+# Writes the 16-bit value (attr << 8 | char) to VGA memory at
+# 0xB8000 + (cursor_y_hw * 80 + cursor_x_hw) * 2, then advances
+# the cursor. Handles newline (0x0A) and line wrapping/scrolling.
+proc emit_vga_putchar_asm():
+    let lines = []
+    append(lines, "# emit_vga_putchar_asm: write char to VGA memory")
+    append(lines, ".globl vga_putchar_hw")
+    append(lines, "vga_putchar_hw:")
+    append(lines, "    pushq %rbx")
+    append(lines, "    pushq %r12")
+    append(lines, "    pushq %r13")
+    append(lines, "    movzbl %dil, %r12d         # r12 = character")
+    append(lines, "    movzbl %sil, %r13d         # r13 = color attribute")
+    append(lines, "")
+    append(lines, "    # Handle newline (0x0A)")
+    append(lines, "    cmpl $0x0A, %r12d")
+    append(lines, "    jne .Lvga_not_newline")
+    append(lines, "    movl $0, cursor_x_hw(%rip)")
+    append(lines, "    movl cursor_y_hw(%rip), %eax")
+    append(lines, "    incl %eax")
+    append(lines, "    cmpl $25, %eax")
+    append(lines, "    jl .Lvga_newline_ok")
+    append(lines, "    movl $24, %eax             # clamp to last row (scroll not impl here)")
+    append(lines, ".Lvga_newline_ok:")
+    append(lines, "    movl %eax, cursor_y_hw(%rip)")
+    append(lines, "    jmp .Lvga_done")
+    append(lines, "")
+    append(lines, ".Lvga_not_newline:")
+    append(lines, "    # Compute offset: (cursor_y * 80 + cursor_x) * 2")
+    append(lines, "    movl cursor_y_hw(%rip), %eax")
+    append(lines, "    imull $80, %eax, %eax")
+    append(lines, "    addl cursor_x_hw(%rip), %eax")
+    append(lines, "    shll $1, %eax              # * 2 for 16-bit cells")
+    append(lines, "    movl %eax, %ebx")
+    append(lines, "")
+    append(lines, "    # Build 16-bit value: attr << 8 | char")
+    append(lines, "    movl %r13d, %eax")
+    append(lines, "    shll $8, %eax")
+    append(lines, "    orl %r12d, %eax")
+    append(lines, "")
+    append(lines, "    # Write to VGA memory")
+    append(lines, "    movq $0xB8000, %rdi")
+    append(lines, "    movslq %ebx, %rbx")
+    append(lines, "    movw %ax, (%rdi, %rbx)")
+    append(lines, "")
+    append(lines, "    # Advance cursor_x, wrap at 80")
+    append(lines, "    movl cursor_x_hw(%rip), %eax")
+    append(lines, "    incl %eax")
+    append(lines, "    cmpl $80, %eax")
+    append(lines, "    jl .Lvga_no_wrap")
+    append(lines, "    movl $0, %eax")
+    append(lines, "    movl cursor_y_hw(%rip), %ecx")
+    append(lines, "    incl %ecx")
+    append(lines, "    cmpl $25, %ecx")
+    append(lines, "    jl .Lvga_wrap_ok")
+    append(lines, "    movl $24, %ecx             # clamp to bottom row")
+    append(lines, ".Lvga_wrap_ok:")
+    append(lines, "    movl %ecx, cursor_y_hw(%rip)")
+    append(lines, ".Lvga_no_wrap:")
+    append(lines, "    movl %eax, cursor_x_hw(%rip)")
+    append(lines, "")
+    append(lines, ".Lvga_done:")
+    append(lines, "    popq %r13")
+    append(lines, "    popq %r12")
+    append(lines, "    popq %rbx")
+    append(lines, "    ret")
+    return lines
+end
+
+# ----- Generate x86_64 assembly: output char to COM1 serial port -----
+# Emits assembly for a serial console fallback. Takes character in %dil.
+# Writes to I/O port 0x3F8 (COM1) after waiting for the transmit
+# holding register to be empty (status port 0x3FD, bit 5).
+proc emit_serial_console_asm():
+    let lines = []
+    append(lines, "# emit_serial_console_asm: write char to COM1 (0x3F8)")
+    append(lines, ".globl serial_putchar")
+    append(lines, "serial_putchar:")
+    append(lines, "    pushq %rbx")
+    append(lines, "    movzbl %dil, %ebx          # save character in ebx")
+    append(lines, "")
+    append(lines, "    # Wait for transmit holding register empty (bit 5 of LSR)")
+    append(lines, ".Lserial_wait:")
+    append(lines, "    movw $0x3FD, %dx           # Line Status Register")
+    append(lines, "    inb %dx, %al")
+    append(lines, "    testb $0x20, %al            # bit 5 = THRE")
+    append(lines, "    jz .Lserial_wait")
+    append(lines, "")
+    append(lines, "    # Send character")
+    append(lines, "    movw $0x3F8, %dx           # COM1 data port")
+    append(lines, "    movb %bl, %al")
+    append(lines, "    outb %al, %dx")
+    append(lines, "")
+    append(lines, "    popq %rbx")
+    append(lines, "    ret")
+    return lines
+end

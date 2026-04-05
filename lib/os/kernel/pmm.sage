@@ -105,34 +105,28 @@ proc init(memory_map):
     end
 
     total_pages = memory_total / PAGE_SIZE
-    used_pages = total_pages
+    used_pages = 0
     bitmap_size = (total_pages / 32) + 1
 
-    # Initialize bitmap — all pages marked used
+    # Initialize bitmap — all pages marked free (no bits set)
     bitmap = []
     let i = 0
     while i < bitmap_size:
         let entry = {}
         let flags = {}
-        # Mark all 32 bits as used
-        let b = 0
-        while b < 32:
-            flags[str(b)] = true
-            b = b + 1
-        end
         entry["flags"] = flags
         append(bitmap, entry)
         i = i + 1
     end
 
-    # Free usable regions from the memory map
+    # Mark non-usable regions from the memory map as used
     if memory_map != nil:
         let m = 0
         while m < len(memory_map):
             let region = memory_map[m]
             if dict_has(region, "type"):
-                if region["type"] == "available":
-                    mark_region(region["base"], region["base"] + region["length"], false)
+                if region["type"] != "available":
+                    mark_region(region["base"], region["base"] + region["length"], true)
                 end
             end
             m = m + 1
