@@ -1,5 +1,26 @@
 # SageLang Updates
 
+## v3.2.7 — Native Speed + Book Update (April 2026)
+
+- **Native C interpreter optimizations**:
+  - `EnvNode.name_length` cached — avoids `strlen` on every variable lookup
+  - `env_get`/`env_define`/`env_assign` use `memcmp` with length pre-check instead of `strncmp`+null-check
+  - `eval_expr` inlined — recursion depth checked only at `interpret()` boundaries, not per-expression
+  - For-loop slot caching: loop variable node pointer cached after first `env_define`, direct slot write on subsequent iterations
+  - `values_equal` string fast path: pointer equality check before `strcmp`
+- **Self-hosted interpreter optimizations**:
+  - Binary op dispatch table: `eval_binary` uses O(1) dict lookup for all 15 operators
+  - `eval_call` depth check: recursion counter moved to call boundary via `eval_call_impl` wrapper
+  - `eval_expr` inlined: removed per-expression `g_depth` increment/decrement
+- **Book update** (`docs/sagelang-book.md`):
+  - Added Part VIc: Garbage Collection (tracing, ARC, ORC modes, API)
+  - Added Part VId: Kotlin/Android Backend (transpiler, Android project gen, type specialization, generators, async, memory, Compose)
+  - Added Part VIe: Performance Optimization (perf.sage library, dispatch tables, signal singletons, flat cache, native C optimizations, benchmarks)
+  - Updated CLI Reference with `--emit-kotlin`, `--compile-android`, GC flags, runtime modes, REPL commands
+  - Updated version to v3.2.7
+
+---
+
 ## v3.2.6 — Performance Optimizations + Kotlin Fixes (April 2026)
 
 - **Self-hosted interpreter optimizations** (metaprogramming-driven):

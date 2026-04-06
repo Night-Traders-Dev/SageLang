@@ -884,7 +884,10 @@ int values_equal(Value a, Value b) {
         case VAL_NUMBER: return AS_NUMBER(a) == AS_NUMBER(b);
         case VAL_BOOL:   return AS_BOOL(a) == AS_BOOL(b);
         case VAL_NIL:    return 1;
-        case VAL_STRING: return strcmp(AS_STRING(a), AS_STRING(b)) == 0;
+        case VAL_STRING:
+            // Fast path: pointer equality (interned or same allocation)
+            if (AS_STRING(a) == AS_STRING(b)) return 1;
+            return strcmp(AS_STRING(a), AS_STRING(b)) == 0;
         case VAL_FUNCTION:
             if (a.as.function->is_vm != b.as.function->is_vm) return 0;
             if (a.as.function->is_vm) {

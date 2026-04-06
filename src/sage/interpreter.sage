@@ -593,16 +593,12 @@ proc init_builtins(env):
 # Expression evaluation
 # -----------------------------------------
 
+# eval_expr: recursion depth checked at call boundaries (eval_call),
+# not per-expression. Eliminates 2 increments per expression eval.
 proc eval_expr(expr, env):
     if expr == nil:
         return nil
-    g_depth = g_depth + 1
-    if g_depth > MAX_RECURSION:
-        g_depth = g_depth - 1
-        runtime_error(get_expr_line(expr), "Maximum recursion depth exceeded", "limit is " + str(MAX_RECURSION) + " frames")
-    let result = eval_expr_impl(expr, env)
-    g_depth = g_depth - 1
-    return result
+    return eval_expr_impl(expr, env)
 
 proc eval_expr_impl(expr, env):
     let etype = expr.type
@@ -754,10 +750,74 @@ proc eval_expr_impl(expr, env):
 # Binary expression evaluation
 # -----------------------------------------
 
+# ---- Performance: binary op dispatch table ----
+# Each binary operator maps to a handler proc that takes (left, right).
+# Short-circuit ops (and, or, not) are handled inline before dispatch.
+
+let _binop_dispatch = {}
+
+proc _bop_eq(l, r):
+    return l == r
+proc _bop_neq(l, r):
+    return l != r
+proc _bop_gt(l, r):
+    return l > r
+proc _bop_lt(l, r):
+    return l < r
+proc _bop_gte(l, r):
+    return l >= r
+proc _bop_lte(l, r):
+    return l <= r
+proc _bop_plus(l, r):
+    if type(l) == "number" and type(r) == "number":
+        return l + r
+    if type(l) == "string" and type(r) == "string":
+        return l + r
+    if type(l) == "string":
+        return l + value_to_string(r)
+    if type(r) == "string":
+        return value_to_string(l) + r
+    return l + r
+proc _bop_minus(l, r):
+    return l - r
+proc _bop_star(l, r):
+    return l * r
+proc _bop_slash(l, r):
+    return l / r
+proc _bop_percent(l, r):
+    return l % r
+proc _bop_amp(l, r):
+    return l & r
+proc _bop_pipe(l, r):
+    return l | r
+proc _bop_caret(l, r):
+    return l ^ r
+proc _bop_lshift(l, r):
+    return l << r
+proc _bop_rshift(l, r):
+    return l >> r
+
+_binop_dispatch[TOKEN_EQ] = _bop_eq
+_binop_dispatch[TOKEN_NEQ] = _bop_neq
+_binop_dispatch[TOKEN_GT] = _bop_gt
+_binop_dispatch[TOKEN_LT] = _bop_lt
+_binop_dispatch[TOKEN_GTE] = _bop_gte
+_binop_dispatch[TOKEN_LTE] = _bop_lte
+_binop_dispatch[TOKEN_PLUS] = _bop_plus
+_binop_dispatch[TOKEN_MINUS] = _bop_minus
+_binop_dispatch[TOKEN_STAR] = _bop_star
+_binop_dispatch[TOKEN_SLASH] = _bop_slash
+_binop_dispatch[TOKEN_PERCENT] = _bop_percent
+_binop_dispatch[TOKEN_AMP] = _bop_amp
+_binop_dispatch[TOKEN_PIPE] = _bop_pipe
+_binop_dispatch[TOKEN_CARET] = _bop_caret
+_binop_dispatch[TOKEN_LSHIFT] = _bop_lshift
+_binop_dispatch[TOKEN_RSHIFT] = _bop_rshift
+
 proc eval_binary(expr, env):
     let op_type = expr.op.type
 
-    # Unary not
+    # Unary not (short-circuit)
     if op_type == TOKEN_NOT:
         let left = eval_expr(expr.left, env)
         return not is_truthy(left)
@@ -765,82 +825,36 @@ proc eval_binary(expr, env):
     # Unary bitwise not (~)
     if op_type == TOKEN_TILDE:
         let left = eval_expr(expr.left, env)
-        if type(left) == "number":
-            # ~n == -(n + 1) for two's complement integers
-            let n = tonumber(str(left))
-            return 0 - n - 1
-        raise "Bitwise NOT requires a number operand"
+        return 0 - left - 1
 
     # Short-circuit: or
     if op_type == TOKEN_OR:
         let left = eval_expr(expr.left, env)
         if is_truthy(left):
             return true
-        let right = eval_expr(expr.right, env)
-        return is_truthy(right)
+        return is_truthy(eval_expr(expr.right, env))
 
     # Short-circuit: and
     if op_type == TOKEN_AND:
         let left = eval_expr(expr.left, env)
         if not is_truthy(left):
             return false
-        let right = eval_expr(expr.right, env)
-        return is_truthy(right)
+        return is_truthy(eval_expr(expr.right, env))
 
+    # Evaluate both operands then dispatch via table
     let left = eval_expr(expr.left, env)
     let right = eval_expr(expr.right, env)
 
-    # Equality
-    if op_type == TOKEN_EQ:
-        return left == right
-    if op_type == TOKEN_NEQ:
-        return left != right
+    # Division/modulo by zero guard
+    if op_type == TOKEN_SLASH and right == 0:
+        runtime_error(expr.op.line, "Division by zero", nil)
+    if op_type == TOKEN_PERCENT and right == 0:
+        runtime_error(expr.op.line, "Modulo by zero", nil)
 
-    # Comparison
-    if op_type == TOKEN_GT:
-        return left > right
-    if op_type == TOKEN_LT:
-        return left < right
-    if op_type == TOKEN_GTE:
-        return left >= right
-    if op_type == TOKEN_LTE:
-        return left <= right
-
-    # Arithmetic
-    if op_type == TOKEN_PLUS:
-        if type(left) == "number" and type(right) == "number":
-            return left + right
-        if type(left) == "string" and type(right) == "string":
-            return left + right
-        if type(left) == "string":
-            return left + value_to_string(right)
-        if type(right) == "string":
-            return value_to_string(left) + right
-        return left + right
-    if op_type == TOKEN_MINUS:
-        return left - right
-    if op_type == TOKEN_STAR:
-        return left * right
-    if op_type == TOKEN_SLASH:
-        if right == 0:
-            runtime_error(expr.op.line, "Division by zero", nil)
-        return left / right
-    if op_type == TOKEN_PERCENT:
-        if right == 0:
-            runtime_error(expr.op.line, "Modulo by zero", nil)
-        return left % right
-
-    # Bitwise operators
-    if op_type == TOKEN_AMP:
-        return left & right
-    if op_type == TOKEN_PIPE:
-        return left | right
-    if op_type == TOKEN_CARET:
-        return left ^ right
-    if op_type == TOKEN_LSHIFT:
-        return left << right
-    if op_type == TOKEN_RSHIFT:
-        return left >> right
+    # O(1) dispatch table lookup
+    if dict_has(_binop_dispatch, op_type):
+        let handler = _binop_dispatch[op_type]
+        return handler(left, right)
 
     runtime_error(expr.op.line, "Unknown binary operator type: " + str(op_type), nil)
 
@@ -940,6 +954,16 @@ proc collect_yields(stmt, env, values):
 # -----------------------------------------
 
 proc eval_call(expr, env):
+    # Recursion depth check at call boundary only
+    g_depth = g_depth + 1
+    if g_depth > MAX_RECURSION:
+        g_depth = g_depth - 1
+        runtime_error(get_expr_line(expr.callee), "Maximum recursion depth exceeded", "limit is " + str(MAX_RECURSION) + " frames")
+    let _call_result = eval_call_impl(expr, env)
+    g_depth = g_depth - 1
+    return _call_result
+
+proc eval_call_impl(expr, env):
     let callee_expr = expr.callee
 
     # Method call: obj.method(args)

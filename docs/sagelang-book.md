@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "April 2026"
-version: "v3.1.3"
+version: "v3.2.7"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v3.1.3}
+  - \fancyfoot[C]{v3.2.7}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -42,17 +42,20 @@ by Rust, and a self-hosted compiler written in Sage itself.
 ## Key Features
 
 - **Python-like syntax** with indentation-based blocks and explicit `end` keywords
-- **Multiple backends**: C codegen, LLVM IR, native x86-64/aarch64/rv64 assembly
+- **9 execution backends**: C codegen, LLVM IR, native x86-64/aarch64/rv64 assembly, bytecode VM, JIT, AOT, Kotlin/Android
 - **Compile-time safety**: ownership tracking, borrow checker, lifetimes, Option types
-- **Self-hosted compiler** written in Sage (lexer, parser, interpreter, codegen)
-- **Rich standard library**: math, io, string, sys, thread, JSON, collections
+- **Self-hosted compiler** written in Sage (lexer, parser, interpreter, codegen) with dispatch-table optimizations
+- **Rich standard library**: 23+ modules including math, io, string, sys, thread, JSON, collections
 - **Object-oriented programming** with classes, inheritance, structs, enums, and traits
 - **Generators and async**: yield-based generators, async/await concurrency
+- **Three GC modes**: tracing (concurrent mark-sweep), ARC (reference counting), ORC (optimized RC with cycle detection)
+- **Kotlin/Android transpiler**: `--emit-kotlin` and `--compile-android` generate complete Gradle projects from a single `.sage` file
 - **Developer tooling**: formatter, linter, type checker, LSP server, REPL
 - **Bare-metal and OS development**: Multiboot2, UEFI, QEMU integration
 - **GPU programming**: Vulkan and OpenGL backends (covered in separate guides)
 - **Machine learning**: neural networks, model training (covered in separate guides)
-- **269+ interpreter tests**, 1567+ self-hosted tests
+- **Performance library** (`lib/perf.sage`): dispatch tables, signal singletons, flat env cache, shape constructors
+- **304+ interpreter tests**, 1987+ self-hosted tests
 
 ## Quick Start
 
@@ -2366,6 +2369,280 @@ let str_stack = Stack[String]()
 
 \newpage
 
+# Part VIc: Garbage Collection
+
+## GC Modes
+
+Sage provides three garbage collection strategies, selectable at startup:
+
+```bash
+sage --gc:tracing file.sage   # Default: concurrent mark-sweep
+sage --gc:arc file.sage       # Automatic Reference Counting
+sage --gc:orc file.sage       # Optimized RC with cycle detection
+```
+
+### Tracing GC (Default)
+
+Concurrent tri-color mark-sweep with SATB write barriers:
+
+- Sub-millisecond stop-the-world pauses (root scan ~50-200us)
+- Adaptive threshold triggering based on allocation pressure
+- New objects born BLACK (allocated-black invariant)
+- Sweeping in 256-object batches to bound pause times
+
+### ARC (Automatic Reference Counting)
+
+Deterministic memory reclamation via reference counts:
+
+- Objects freed immediately when reference count reaches zero
+- Predictable memory usage (no deferred collection)
+- Convenience macros: `ARC_RETAIN`, `ARC_RELEASE`, `ARC_ASSIGN`
+- Cannot collect reference cycles — use ORC for cyclic structures
+
+### ORC (Optimized Reference Counting)
+
+Nim-inspired ORC combining ARC with Lins' trial deletion cycle collector:
+
+- Three-phase cycle detection: mark PURPLE candidates, trial-decrement scan, collect WHITE garbage
+- Triggers cycle collection every 500 decrements (more aggressive than ARC's 1000)
+- Recommended for programs with complex object graphs (linked lists, trees, circular references)
+
+## GC API
+
+```python
+gc_collect()          # Force a collection cycle
+gc_stats()            # Print GC statistics
+gc_enable()           # Enable automatic collection
+gc_disable()          # Disable automatic collection (manual only)
+gc_set_arc()          # Switch to ARC mode at runtime
+gc_set_orc()          # Switch to ORC mode at runtime
+gc_mode()             # Returns "tracing", "arc", or "orc"
+```
+
+\newpage
+
+# Part VId: Kotlin/Android Backend
+
+Sage can transpile to Kotlin and generate complete Android projects from a single `.sage` file.
+
+## Emitting Kotlin
+
+```bash
+sage --emit-kotlin app.sage -o app.kt          # Transpile to Kotlin
+sage --emit-kotlin app.sage -o app.kt -O2      # With type specialization
+```
+
+The transpiler maps all Sage constructs to idiomatic Kotlin:
+
+| Sage | Kotlin |
+|------|--------|
+| `let x = 10` | `var x = S.num(10.0)` |
+| `proc foo(a):` | `fun foo(a: SageVal): SageVal` |
+| `class Dog(Animal):` | `open class Dog : Animal()` |
+| `for x in items:` | `for (x in S.toIterable(items))` |
+| `match x:` | `when`-chain with `S.equal()` |
+| `try: ... catch e:` | `try { } catch (_e: SageException)` |
+| `yield val` | `yield(val)` inside `sequence { }` |
+| `await expr` | `kotlinx.coroutines.runBlocking { expr }` |
+| `super.init(x)` | `super.sageInit(x)` |
+
+## Building Android Apps
+
+```bash
+sage --compile-android app.sage -o my_app \
+     --package com.example.app \
+     --app-name "My App" \
+     --min-sdk 24
+```
+
+This generates a complete Gradle project:
+
+```
+my_app/
+  build.gradle.kts
+  settings.gradle.kts
+  app/
+    build.gradle.kts
+    src/main/
+      AndroidManifest.xml
+      kotlin/<package>/Main.kt          # Transpiled Sage
+      kotlin/<package>/MainActivity.kt  # Android launcher
+      kotlin/sage/runtime/SageRuntime.kt
+      res/values/strings.xml, styles.xml
+```
+
+Build with: `cd my_app && ./gradlew assembleDebug`
+
+## Type Specialization (-O2+)
+
+At optimization level 2+, the transpiler emits native Kotlin types for variables initialized with literals:
+
+```python
+let x = 10        # emits: var x: Double = 10.0
+let name = "Sage" # emits: var name: String = "Sage"
+let flag = true   # emits: var flag: Boolean = true
+```
+
+This eliminates SageVal boxing overhead on hot paths.
+
+## Generators
+
+Generator functions transpile to Kotlin `sequence { }` blocks:
+
+```python
+proc count_up(n):
+    let i = 0
+    while i < n:
+        yield i
+        i = i + 1
+```
+
+Emits:
+
+```kotlin
+fun count_up(n: SageVal): Sequence<SageVal> = sequence {
+    var i = S.num(0.0)
+    while (S.truthy(S.lt(i, n))) {
+        yield(i)
+        i = S.add(i, S.num(1.0))
+    }
+}
+```
+
+## Async/Await (Coroutines)
+
+Async procs emit `suspend fun`; await uses `kotlinx.coroutines.runBlocking`:
+
+```python
+async proc fetch():
+    return 42
+
+let result = await fetch()
+```
+
+## Memory Operations on Android
+
+`mem_alloc`/`mem_read`/`mem_write`/`mem_free` map to `java.nio.ByteBuffer`:
+
+```python
+let buf = mem_alloc(256)
+mem_write(buf, 0, "int", 42)
+print(mem_read(buf, 0, "int"))   # 42
+mem_free(buf)
+```
+
+## Jetpack Compose
+
+When `import android.compose` is detected, the project generator uses Compose:
+
+- `@Composable` Activity with Material 3
+- Compose BOM, navigation-compose, ui-tooling dependencies
+- `ComponentActivity` + `setContent { }` instead of programmatic views
+
+\newpage
+
+# Part VIe: Performance Optimization
+
+## Performance Library (`lib/perf.sage`)
+
+The `perf` module provides reusable optimization primitives:
+
+### Signal Singletons
+
+Eliminate dict allocation on every statement return:
+
+```python
+import perf
+
+# Instead of allocating {"kind": 0, "value": nil} every time:
+let result = perf.sig_normal_nil()   # Returns pre-allocated singleton
+let brk = perf.sig_break()           # Zero allocation
+```
+
+### Dispatch Tables
+
+Replace if/elif chains with O(1) dict lookup:
+
+```python
+import perf
+
+let table = perf.make_dispatch_table()
+perf.dispatch_register(table, "add", proc(args): return args[0] + args[1])
+perf.dispatch_register(table, "sub", proc(args): return args[0] - args[1])
+
+# O(1) dispatch instead of N comparisons:
+let result = perf.dispatch_call(table, "add", [10, 20])
+```
+
+### Shape Objects
+
+Pre-shaped dict constructors for known structures:
+
+```python
+import perf
+
+let func = perf.shape_function("add", params, body, closure, false)
+let cls = perf.shape_class("Dog", parent)
+let inst = perf.shape_instance(cls)
+let env = perf.shape_env(parent_env)
+```
+
+### Fast Numeric Operations
+
+Bypass type dispatch for known-numeric paths:
+
+```python
+import perf
+
+let sum = perf.fast_sum([1, 2, 3, 4, 5])
+let total = perf.fast_add_num(a, b)
+```
+
+### Flat Environment Cache
+
+O(1) variable access bypassing scope chains in tight loops:
+
+```python
+import perf
+
+let cache = perf.flat_cache_snapshot(env)
+# ... hot loop using flat_cache_get/set ...
+perf.flat_cache_flush(cache, env)
+```
+
+## Self-Hosted Interpreter Optimizations
+
+The self-hosted interpreter (`src/sage/interpreter.sage`) applies these patterns:
+
+1. **Pre-allocated signal singletons**: `result_normal(nil)`, `result_break()`, `result_continue()` return cached dicts
+2. **Native dispatch table**: `call_native()` uses O(1) dict lookup instead of 180-line if/elif chain
+3. **Binary op dispatch table**: `eval_binary()` uses O(1) dict lookup for all operators
+4. **Recursion depth at call boundaries only**: `eval_expr()` no longer increments/decrements depth counter
+5. **Shape constructors**: functions, classes, environments built as single dict literals
+
+## Native C Interpreter Optimizations
+
+The C interpreter (`src/c/interpreter.c`, `src/c/env.c`) applies:
+
+1. **Cached name length in EnvNode**: `name_length` field avoids `strlen` during lookup
+2. **`memcmp` with length pre-check**: `env_get`/`env_define`/`env_assign` check `name_length == length` before `memcmp`
+3. **Inlined eval_expr**: recursion depth checked only at `interpret()` boundaries, not per-expression
+4. **For-loop slot caching**: loop variable node pointer cached after first `env_define`, subsequent iterations write directly
+5. **String pointer equality**: `values_equal()` checks `AS_STRING(a) == AS_STRING(b)` before `strcmp`
+
+## Cross-Backend Benchmarks
+
+Run the 8-workload benchmark across all backends:
+
+```bash
+bash benchmarks/run_backend_compare.sh
+python3 scripts/generate_backend_chart.py
+```
+
+Workloads: fibonacci, loop sum, array ops, string concat, dict ops, prime sieve, nested loops, LCG hash.
+
+\newpage
+
 # Part VII: Appendices
 
 \newpage
@@ -2442,6 +2719,9 @@ The following functions are available globally without any imports.
 | `gc_collections()`| Return number of GC cycles performed       |
 | `gc_enable()`     | Enable the garbage collector               |
 | `gc_disable()`    | Disable the garbage collector              |
+| `gc_set_arc()`    | Switch to ARC mode at runtime              |
+| `gc_set_orc()`    | Switch to ORC mode at runtime              |
+| `gc_mode()`       | Return current GC mode string              |
 
 ## Path Functions
 
@@ -2529,12 +2809,29 @@ Compilation:
   --compile-native FILE -o OUT  Compile to native binary
   --compile-bare FILE -o OUT  Bare-metal ELF (no libc)
   --compile-uefi FILE -o OUT  UEFI PE application
+  --emit-kotlin FILE -o OUT  Emit Kotlin source code
+  --compile-android FILE -o DIR  Generate Android Gradle project
   --target ARCH          Target architecture: x86-64, aarch64, rv64
+
+Android Options:
+  --package PKG          Android package name (default: com.sage.app)
+  --app-name NAME        Display name for Android app
+  --min-sdk N            Minimum Android SDK version (default: 24)
+
+Runtime:
+  --runtime MODE         Execution backend: ast, bytecode, jit, aot, auto
+  --jit FILE             JIT compile with profiling
+  --aot FILE             AOT compile to native binary
+
+Garbage Collection:
+  --gc:tracing           Tracing GC (default, concurrent mark-sweep)
+  --gc:arc               Automatic Reference Counting
+  --gc:orc               Optimized RC with cycle detection
 
 Optimization:
   -O0                    No optimization
   -O1                    Constant folding
-  -O2                    Constant folding + dead code elimination
+  -O2                    Constant folding + DCE + type specialization (Kotlin)
   -O3                    Aggressive (+ inlining)
   -g                     Include debug info
 
@@ -2559,6 +2856,17 @@ Self-Hosted Compiler:
   sage.sage fmt FILE     Format via self-hosted formatter
   sage.sage lint FILE    Lint via self-hosted linter
   sage.sage check FILE   Type check via self-hosted checker
+
+REPL Commands:
+  :help                  Show REPL help
+  :env                   Show environment
+  :ast <code>            Show parsed AST
+  :emit-c <code>         Show C backend output
+  :emit-llvm <code>      Show LLVM IR output
+  :emit-kotlin <code>    Show Kotlin backend output
+  :time <expr>           Time expression evaluation
+  :bench N <expr>        Benchmark expression N times
+  :runtime MODE          Switch runtime (ast, bytecode, jit, aot)
 ```
 
 \newpage

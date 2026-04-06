@@ -1998,7 +1998,8 @@ static int contains_yield(Stmt* body) {
 
 // --- Forward Declaration ---
 static ExecResult eval_expr(Expr* expr, Env* env);
-static ExecResult eval_expr_impl(Expr* expr, Env* env);
+// eval_expr_impl merged into eval_expr — recursion depth checked at
+// function call boundaries only (interpret()), not per-expression.
 static ExecResult interpret_inner(Stmt* stmt, Env* env);
 
 // --- Evaluator ---
@@ -2159,18 +2160,10 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
     }
 }
 
+// Inlined eval_expr — recursion depth is checked only at function call
+// boundaries (EXPR_CALL), not on every expression. This eliminates 2
+// atomic increments per expression evaluation in the critical path.
 static ExecResult eval_expr(Expr* expr, Env* env) {
-    if (++g_recursion_depth > MAX_RECURSION_DEPTH) {
-        g_recursion_depth--;
-        fprintf(stderr, "Runtime Error: Maximum recursion depth exceeded (%d).\n", MAX_RECURSION_DEPTH);
-        return EVAL_EXCEPTION(val_exception("Maximum recursion depth exceeded"));
-    }
-    ExecResult result = eval_expr_impl(expr, env);
-    g_recursion_depth--;
-    return result;
-}
-
-static ExecResult eval_expr_impl(Expr* expr, Env* env) {
     switch (expr->type) {
         case EXPR_NUMBER: return EVAL_RESULT(val_number(expr->as.number.value));
         case EXPR_STRING: return EVAL_RESULT(val_string(expr->as.string.value));
@@ -2917,7 +2910,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             ExecResult iter_result = eval_expr(stmt->as.for_stmt.iterable, env);
             if (iter_result.is_throwing) return iter_result;
             Value iterable = iter_result.value;
-            
+
             if (iterable.type != VAL_ARRAY) {
                 fprintf(stderr, "Runtime Error: for loop iterable must be an array.\n");
                 return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
@@ -2927,21 +2920,32 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             Token var = stmt->as.for_stmt.variable;
 
             ArrayValue* arr = iterable.as.array;
-            for (int i = 0; i < arr->count; i++) {
-                env_define(loop_env, var.start, var.length, arr->elements[i]);
-
-                ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
-                if (res.is_returning || res.is_throwing) return res;
-                
-                if (res.is_yielding) {
-                    if (res.next_stmt == NULL) {
-                        res.next_stmt = stmt;
+            // Define loop variable once, then directly update the slot
+            // on subsequent iterations (avoids linked-list search per iteration)
+            if (arr->count > 0) {
+                env_define(loop_env, var.start, var.length, arr->elements[0]);
+                // Cache the node pointer for direct slot update
+                EnvNode* var_slot = loop_env->head; // just-inserted node
+                for (int i = 0; i < arr->count; i++) {
+                    // Direct slot write (bypasses env_define search)
+                    if (i > 0) {
+                        GC_WRITE_BARRIER(var_slot->value);
+                        var_slot->value = arr->elements[i];
                     }
-                    return res;
+
+                    ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
+                    if (res.is_returning || res.is_throwing) return res;
+
+                    if (res.is_yielding) {
+                        if (res.next_stmt == NULL) {
+                            res.next_stmt = stmt;
+                        }
+                        return res;
+                    }
+
+                    if (res.is_breaking) break;
+                    if (res.is_continuing) continue;
                 }
-                
-                if (res.is_breaking) break;
-                if (res.is_continuing) continue;
             }
 
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };

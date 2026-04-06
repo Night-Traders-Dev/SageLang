@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-04-06 04:55 UTC",
+  "generated_at": "2026-04-06 06:31 UTC",
   "repo_languages": [
     {
       "language": "Sage",
-      "lines": 75000
+      "lines": 75354
     },
     {
       "language": "C",
-      "lines": 62953
+      "lines": 62968
     },
     {
       "language": "JSON",
@@ -15,7 +15,7 @@
     },
     {
       "language": "Shell",
-      "lines": 1406
+      "lines": 1513
     },
     {
       "language": "Makefile",
@@ -33,17 +33,17 @@
   "compiler_comparison": [
     {
       "label": "Self-Hosted Sage Core",
-      "lines": 11621
+      "lines": 11642
     },
     {
       "label": "Native C Core",
-      "lines": 60293
+      "lines": 60308
     }
   ],
   "project_breakdown": [
     {
       "area": "Documentation",
-      "lines": 55404
+      "lines": 55644
     },
     {
       "area": "OS / Kernel Libs",
@@ -59,7 +59,7 @@
     },
     {
       "area": "Standard Library",
-      "lines": 10281
+      "lines": 10509
     },
     {
       "area": "ML / LLM Libs",
@@ -75,7 +75,7 @@
     },
     {
       "area": "Build System",
-      "lines": 2462
+      "lines": 2569
     },
     {
       "area": "Android / Kotlin",
@@ -95,11 +95,11 @@
         "reason": "",
         "output": "421782618",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.007517324003856629,
-        "total_median_seconds": 0.007517324003856629,
+        "run_median_seconds": 0.0062579920049756765,
+        "total_median_seconds": 0.0062579920049756765,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.007046105404151603,
-        "total_mean_seconds": 0.007046105404151603
+        "run_mean_seconds": 0.006419128202833235,
+        "total_mean_seconds": 0.006419128202833235
       },
       {
         "name": "sage-interpreted-vm",
@@ -108,11 +108,11 @@
         "reason": "",
         "output": "421782618",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.0061013219965389,
-        "total_median_seconds": 0.0061013219965389,
+        "run_median_seconds": 0.006349878007313237,
+        "total_median_seconds": 0.006349878007313237,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.00612899279803969,
-        "total_mean_seconds": 0.00612899279803969
+        "run_mean_seconds": 0.006588805810315535,
+        "total_mean_seconds": 0.006588805810315535
       },
       {
         "name": "sage-compiled-c",
@@ -120,12 +120,12 @@
         "status": "failed",
         "reason": "checksum mismatch: expected '421782618', got '4.21783e+08'",
         "output": "4.21783e+08",
-        "build_median_seconds": 0.10978434199932963,
-        "run_median_seconds": 0.0015892209921730682,
-        "total_median_seconds": 0.11131709899927955,
-        "build_mean_seconds": 0.11077853080059867,
-        "run_mean_seconds": 0.001587323602871038,
-        "total_mean_seconds": 0.11236585440346972
+        "build_median_seconds": 0.10764566800207831,
+        "run_median_seconds": 0.001603006006916985,
+        "total_median_seconds": 0.10894237397587858,
+        "build_mean_seconds": 0.10739766680053435,
+        "run_mean_seconds": 0.0015503583941608667,
+        "total_mean_seconds": 0.10894802519469522
       },
       {
         "name": "sage-compiled-vm",
@@ -133,18 +133,18 @@
         "status": "failed",
         "reason": "checksum mismatch: expected '421782618', got '11520'",
         "output": "11520",
-        "build_median_seconds": 0.004192107997369021,
-        "run_median_seconds": 0.006550707999849692,
-        "total_median_seconds": 0.011239255996770225,
-        "build_mean_seconds": 0.004219744796864688,
-        "run_mean_seconds": 0.006173928600037471,
-        "total_mean_seconds": 0.01039367339690216
+        "build_median_seconds": 0.005039011011831462,
+        "run_median_seconds": 0.007185127993579954,
+        "total_median_seconds": 0.012154104973888025,
+        "build_mean_seconds": 0.0047540129977278415,
+        "run_mean_seconds": 0.007289638189831749,
+        "total_mean_seconds": 0.01204365118755959
       },
       {
         "name": "sage-compiled-sage",
         "label": "Compiled (Sage)",
         "status": "failed",
-        "reason": "build step failed\ncommand: /home/kraken/Devel/sagelang/sage sage.sage --emit-c /home/kraken/Devel/sagelang/benchmarks/runtime_compare.sage -o /home/kraken/Devel/sagelang/.tmp/sage-compiled-sage-dvk311yo/recipe-compiled-sage.c\ncwd: /home/kraken/Devel/sagelang/src/sage\nstderr:\nerror: expected property name after '.' or '->'\n  --> ./pass.sage:62:96\n   |\n62 |         return ast.slice_expr(clone_expr(expr.object), clone_expr(expr.start), clone_expr(expr.end))\n   |                                                                                                ~~~\n  = help: identifiers start with a letter or '_'",
+        "reason": "build step failed\ncommand: /home/kraken/Devel/sagelang/sage sage.sage --emit-c /home/kraken/Devel/sagelang/benchmarks/runtime_compare.sage -o /home/kraken/Devel/sagelang/.tmp/sage-compiled-sage-w4blx3q2/recipe-compiled-sage.c\ncwd: /home/kraken/Devel/sagelang/src/sage\nstderr:\nerror: expected property name after '.' or '->'\n  --> ./pass.sage:62:96\n   |\n62 |         return ast.slice_expr(clone_expr(expr.object), clone_expr(expr.start), clone_expr(expr.end))\n   |                                                                                                ~~~\n  = help: identifiers start with a letter or '_'",
         "output": null,
         "build_median_seconds": null,
         "run_median_seconds": null,
@@ -160,11 +160,11 @@
         "reason": "",
         "output": "421782618",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.0068042679922655225,
-        "total_median_seconds": 0.0068042679922655225,
+        "run_median_seconds": 0.007996198022738099,
+        "total_median_seconds": 0.007996198022738099,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.006781768400105648,
-        "total_mean_seconds": 0.006781768400105648
+        "run_mean_seconds": 0.007470854202983901,
+        "total_mean_seconds": 0.007470854202983901
       },
       {
         "name": "sage-aot",
@@ -172,12 +172,12 @@
         "status": "failed",
         "reason": "checksum mismatch: expected '421782618', got 'inf'",
         "output": "inf",
-        "build_median_seconds": 0.04558742699737195,
-        "run_median_seconds": 0.0007919729978311807,
-        "total_median_seconds": 0.0462608050002018,
-        "build_mean_seconds": 0.04420270300179254,
-        "run_mean_seconds": 0.0007848674023989588,
-        "total_mean_seconds": 0.044987570404191504
+        "build_median_seconds": 0.0493012799997814,
+        "run_median_seconds": 0.0006767349841538817,
+        "total_median_seconds": 0.05014536197995767,
+        "build_mean_seconds": 0.04939115479937754,
+        "run_mean_seconds": 0.0007606299943290651,
+        "total_mean_seconds": 0.05015178479370661
       }
     ]
   }

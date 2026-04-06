@@ -43,7 +43,9 @@ void env_define(Env* env, const char* name, int length, Value value) {
     // Search ONLY in current scope (head) to update
     EnvNode* current = env->head;
     while (current != NULL) {
-        if (strncmp(current->name, name, length) == 0 && current->name[length] == '\0') {
+        // Fast path: length mismatch → skip immediately (avoids strncmp)
+        if (current->name_length == length &&
+            memcmp(current->name, name, (size_t)length) == 0) {
             if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
                 arc_assign_value(&current->value, value);
             } else {
@@ -58,6 +60,7 @@ void env_define(Env* env, const char* name, int length, Value value) {
     // Create new in current scope
     EnvNode* node = SAGE_ALLOC(sizeof(EnvNode));
     node->name = my_strndup(name, length);
+    node->name_length = length;
     node->value = value;
     node->next = env->head;
     env->head = node;
@@ -71,7 +74,10 @@ int env_get(Env* env, const char* name, int length, Value* out_value) {
     while (current_env != NULL) {
         EnvNode* current = current_env->head;
         while (current != NULL) {
-            if (strncmp(current->name, name, length) == 0 && current->name[length] == '\0') {
+            // Fast path: length check first (integer compare), then memcmp
+            // This avoids expensive strncmp+null-check on every node
+            if (current->name_length == length &&
+                memcmp(current->name, name, (size_t)length) == 0) {
                 *out_value = current->value;
                 return 1;
             }
@@ -86,18 +92,18 @@ int env_get(Env* env, const char* name, int length, Value* out_value) {
 int env_assign(Env* env, const char* name, int length, Value value) {
     Env* current_env = env;
 
-    // Search current scope, then parent, then parent's parent...
     while (current_env != NULL) {
         EnvNode* current = current_env->head;
         while (current != NULL) {
-            if (strncmp(current->name, name, length) == 0 && current->name[length] == '\0') {
+            if (current->name_length == length &&
+                memcmp(current->name, name, (size_t)length) == 0) {
                 if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
                     arc_assign_value(&current->value, value);
                 } else {
                     GC_WRITE_BARRIER(current->value);
                     current->value = value;
                 }
-                return 1; // Found and updated
+                return 1;
             }
             current = current->next;
         }

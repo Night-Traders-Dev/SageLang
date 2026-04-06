@@ -5,6 +5,7 @@
 
 typedef struct EnvNode {
     char* name;
+    int name_length;        // Cached name length — avoids strlen in hot lookup path
     Value value;
     struct EnvNode* next;
 } EnvNode;
