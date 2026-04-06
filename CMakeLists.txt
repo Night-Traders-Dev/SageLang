@@ -110,6 +110,7 @@ set(SAGE_CORE_SOURCES
     src/c/interpreter.c
     src/c/jit.c
     src/c/aot.c
+    src/c/kotlin_backend.c
     src/c/linter.c
     src/c/lexer.c
     src/c/llvm_backend.c
@@ -151,6 +152,7 @@ set(SAGE_HEADERS
     include/interpreter.h
     include/jit.h
     include/aot.h
+    include/kotlin_backend.h
     include/lexer.h
     include/linter.h
     include/llvm_backend.h
