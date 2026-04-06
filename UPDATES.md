@@ -1,5 +1,24 @@
 # SageLang Updates
 
+## v3.2.8 — Vulkan/OpenGL Android + Full Concurrency (April 2026)
+
+- **Kotlin/Android GPU support**:
+  - Android graphics library (`lib/android/graphics.sage`): `GPUContext`, `GPUSurface`, `GLESContext`
+  - Vulkan-style API: create_buffer, upload, download, dispatch_compute, create_graphics_pipeline
+  - OpenGL ES 3.0 convenience layer: clear, viewport, draw_arrays, draw_elements, swap_buffers
+  - Render pass, shader, synchronization (fence, semaphore) abstractions
+  - Android Surface management for GPU rendering
+- **30+ new Kotlin transpiler mappings** (`kt_emit_call_expr`):
+  - CPU/SMP: `cpu_count()`, `cpu_physical_cores()`, `cpu_has_hyperthreading()`
+  - Atomics: `atomic_new/load/store/add/cas` → `java.util.concurrent.atomic.AtomicLong`
+  - Semaphores: `sem_new/wait/post/trywait` → `java.util.concurrent.Semaphore`
+  - Strings: `upper`, `lower`, `strip`, `split`, `join`, `replace`, `chr`, `ord`
+  - Paths: `path_join`, `path_exists`, `path_basename`, `path_dirname`, `path_ext`
+  - Misc: `hash`, `sizeof`, `clock`
+- **SageRuntime.kt expanded** with matching implementations for all new builtins
+
+---
+
 ## v3.2.8 — Full Concurrency: Atomics, Semaphores, SMP, Multicore, Hyperthreading (April 2026)
 
 - **C-level concurrency primitives** (sage_thread.h/c):

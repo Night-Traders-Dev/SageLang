@@ -2612,6 +2612,56 @@ When `import android.compose` is detected, the project generator uses Compose:
 - Compose BOM, navigation-compose, ui-tooling dependencies
 - `ComponentActivity` + `setContent { }` instead of programmatic views
 
+## GPU Graphics on Android
+
+The `lib/android/graphics.sage` module provides Vulkan-style and OpenGL ES APIs:
+
+```python
+import android.graphics
+
+let gpu = GPUContext("My App")
+gpu.initialize()
+
+# Create compute buffer and run shader
+let buf = gpu.create_buffer(1024, "storage")
+gpu.upload(buf, [1.0, 2.0, 3.0])
+gpu.dispatch_compute("shader.comp", buf, 256)
+let result = gpu.download(buf)
+
+# OpenGL ES convenience
+let gl = GLESContext()
+gl.initialize()
+gl.clear(0.1, 0.1, 0.2, 1.0)
+gl.draw_arrays("triangles", 0, 3)
+gl.swap_buffers()
+```
+
+## Concurrency on Android
+
+Kotlin transpiler maps Sage concurrency to JVM primitives:
+
+```python
+# Atomics → java.util.concurrent.atomic.AtomicLong
+let counter = atomic_new(0)
+atomic_add(counter, 1)
+
+# Semaphores → java.util.concurrent.Semaphore
+let sem = sem_new(3)
+sem_wait(sem)
+sem_post(sem)
+
+# CPU info (via Runtime.getRuntime())
+let cores = cpu_count()
+```
+
+## Additional Mapped Builtins
+
+The Kotlin transpiler now maps 60+ built-in functions:
+- **Strings**: `upper`, `lower`, `strip`, `split`, `join`, `replace`, `chr`, `ord`
+- **Paths**: `path_join`, `path_exists`, `path_basename`, `path_dirname`, `path_ext`
+- **Timing**: `clock()` (System.nanoTime)
+- **Hashing**: `hash(v)` (Object.hashCode)
+
 \newpage
 
 # Part VIe: Performance Optimization

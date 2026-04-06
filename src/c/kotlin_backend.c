@@ -942,6 +942,132 @@ static char* kt_emit_call_expr(KtCompiler* compiler, CallExpr* call) {
     else if (strcmp(callee_name, "asm_exec") == 0 || strcmp(callee_name, "asm_compile") == 0) {
         kt_sb_append(&sb, "S.nil /* assembly not available on JVM */");
     }
+    // ---- Thread operations ----
+    else if (strcmp(callee_name, "cpu_count") == 0) {
+        kt_sb_append(&sb, "S.num(Runtime.getRuntime().availableProcessors().toDouble())");
+    }
+    else if (strcmp(callee_name, "cpu_physical_cores") == 0) {
+        kt_sb_append(&sb, "S.num(Runtime.getRuntime().availableProcessors().toDouble())");
+    }
+    else if (strcmp(callee_name, "cpu_has_hyperthreading") == 0) {
+        kt_sb_append(&sb, "S.bool(false) /* JVM cannot detect HT */");
+    }
+    else if (strcmp(callee_name, "thread_get_core") == 0) {
+        kt_sb_append(&sb, "S.num(-1.0) /* JVM does not expose core ID */");
+    }
+    // ---- Atomic operations (map to java.util.concurrent.atomic) ----
+    else if (strcmp(callee_name, "atomic_new") == 0 && call->arg_count >= 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.atomicNew(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "atomic_load") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.atomicLoad(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "atomic_store") == 0 && call->arg_count == 2) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        char* v = kt_emit_expr(compiler, call->args[1]);
+        kt_sb_appendf(&sb, "S.atomicStore(%s, %s)", a, v); free(a); free(v);
+    }
+    else if (strcmp(callee_name, "atomic_add") == 0 && call->arg_count == 2) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        char* v = kt_emit_expr(compiler, call->args[1]);
+        kt_sb_appendf(&sb, "S.atomicAdd(%s, %s)", a, v); free(a); free(v);
+    }
+    else if (strcmp(callee_name, "atomic_cas") == 0 && call->arg_count == 3) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        char* e = kt_emit_expr(compiler, call->args[1]);
+        char* d = kt_emit_expr(compiler, call->args[2]);
+        kt_sb_appendf(&sb, "S.atomicCas(%s, %s, %s)", a, e, d); free(a); free(e); free(d);
+    }
+    // ---- Semaphore operations (map to java.util.concurrent.Semaphore) ----
+    else if (strcmp(callee_name, "sem_new") == 0 && call->arg_count >= 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.semNew(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "sem_wait") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.semWait(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "sem_post") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.semPost(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "sem_trywait") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.semTryWait(%s)", a); free(a);
+    }
+    // ---- Path utilities ----
+    else if (strcmp(callee_name, "path_join") == 0 && call->arg_count == 2) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        char* b = kt_emit_expr(compiler, call->args[1]);
+        kt_sb_appendf(&sb, "S.pathJoin(%s, %s)", a, b); free(a); free(b);
+    }
+    else if (strcmp(callee_name, "path_exists") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.pathExists(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "path_basename") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.pathBasename(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "path_dirname") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.pathDirname(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "path_ext") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.pathExt(%s)", a); free(a);
+    }
+    // ---- Hash/sizeof ----
+    else if (strcmp(callee_name, "hash") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.hash(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "sizeof") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.sizeOf(%s)", a); free(a);
+    }
+    // ---- String operations (missing from original) ----
+    else if (strcmp(callee_name, "upper") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.upper(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "lower") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.lower(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "strip") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.strip(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "split") == 0 && call->arg_count == 2) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        char* b = kt_emit_expr(compiler, call->args[1]);
+        kt_sb_appendf(&sb, "S.split(%s, %s)", a, b); free(a); free(b);
+    }
+    else if (strcmp(callee_name, "join") == 0 && call->arg_count == 2) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        char* b = kt_emit_expr(compiler, call->args[1]);
+        kt_sb_appendf(&sb, "S.join(%s, %s)", a, b); free(a); free(b);
+    }
+    else if (strcmp(callee_name, "replace") == 0 && call->arg_count == 3) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        char* b = kt_emit_expr(compiler, call->args[1]);
+        char* c = kt_emit_expr(compiler, call->args[2]);
+        kt_sb_appendf(&sb, "S.replace(%s, %s, %s)", a, b, c); free(a); free(b); free(c);
+    }
+    else if (strcmp(callee_name, "chr") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.chr(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "ord") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.ord(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "clock") == 0) {
+        kt_sb_append(&sb, "S.clock()");
+    }
     // ---- I/O ----
     else if (strcmp(callee_name, "input") == 0) {
         if (call->arg_count == 1) {
@@ -2238,7 +2364,43 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
     fputs("    fun input(): Value = str(readlnOrNull() ?: \"\")\n", f);
     fputs("    fun input(prompt: Value): Value { print(toKString(prompt)); return input() }\n", f);
     fputs("    fun gcCollect(): Value { System.gc(); return nil }\n", f);
-    fputs("    fun gcStats(): Value = str(\"GC: JVM managed\")\n", f);
+    fputs("    fun gcStats(): Value = str(\"GC: JVM managed\")\n\n", f);
+
+    // Atomic operations (java.util.concurrent.atomic)
+    fputs("    fun atomicNew(v: Value): Value { val a = java.util.concurrent.atomic.AtomicLong(toDouble(v).toLong()); return Value.Obj(object : SageObject(\"atomic\") { val atom = a }) }\n", f);
+    fputs("    fun atomicLoad(a: Value): Value { if(a is Value.Obj) { val f=a.v::class.java.getDeclaredField(\"atom\"); f.isAccessible=true; return num((f.get(a.v) as java.util.concurrent.atomic.AtomicLong).get().toDouble()) }; return nil }\n", f);
+    fputs("    fun atomicStore(a: Value, v: Value): Value { if(a is Value.Obj) { val f=a.v::class.java.getDeclaredField(\"atom\"); f.isAccessible=true; (f.get(a.v) as java.util.concurrent.atomic.AtomicLong).set(toDouble(v).toLong()) }; return nil }\n", f);
+    fputs("    fun atomicAdd(a: Value, v: Value): Value { if(a is Value.Obj) { val f=a.v::class.java.getDeclaredField(\"atom\"); f.isAccessible=true; return num((f.get(a.v) as java.util.concurrent.atomic.AtomicLong).addAndGet(toDouble(v).toLong()).toDouble()) }; return nil }\n", f);
+    fputs("    fun atomicCas(a: Value, exp: Value, des: Value): Value { if(a is Value.Obj) { val f=a.v::class.java.getDeclaredField(\"atom\"); f.isAccessible=true; return bool((f.get(a.v) as java.util.concurrent.atomic.AtomicLong).compareAndSet(toDouble(exp).toLong(), toDouble(des).toLong())) }; return bool(false) }\n", f);
+
+    // Semaphore operations (java.util.concurrent.Semaphore)
+    fputs("    fun semNew(v: Value): Value { val s = java.util.concurrent.Semaphore(toDouble(v).toInt()); return Value.Obj(object : SageObject(\"semaphore\") { val sem = s }) }\n", f);
+    fputs("    fun semWait(s: Value): Value { if(s is Value.Obj) { val f=s.v::class.java.getDeclaredField(\"sem\"); f.isAccessible=true; (f.get(s.v) as java.util.concurrent.Semaphore).acquire() }; return nil }\n", f);
+    fputs("    fun semPost(s: Value): Value { if(s is Value.Obj) { val f=s.v::class.java.getDeclaredField(\"sem\"); f.isAccessible=true; (f.get(s.v) as java.util.concurrent.Semaphore).release() }; return nil }\n", f);
+    fputs("    fun semTryWait(s: Value): Value { if(s is Value.Obj) { val f=s.v::class.java.getDeclaredField(\"sem\"); f.isAccessible=true; return bool((f.get(s.v) as java.util.concurrent.Semaphore).tryAcquire()) }; return bool(false) }\n\n", f);
+
+    // String operations
+    fputs("    fun upper(v: Value): Value = if(v is Value.Str) str(v.v.uppercase()) else nil\n", f);
+    fputs("    fun lower(v: Value): Value = if(v is Value.Str) str(v.v.lowercase()) else nil\n", f);
+    fputs("    fun strip(v: Value): Value = if(v is Value.Str) str(v.v.trim()) else nil\n", f);
+    fputs("    fun split(v: Value, d: Value): Value = if(v is Value.Str) Value.Arr(v.v.split(toKString(d)).map{str(it)}.toMutableList()) else nil\n", f);
+    fputs("    fun join(items: Value, sep: Value): Value = if(items is Value.Arr) str(items.v.joinToString(toKString(sep)){toKString(it)}) else nil\n", f);
+    fputs("    fun replace(v: Value, old: Value, new_: Value): Value = if(v is Value.Str) str(v.v.replace(toKString(old), toKString(new_))) else nil\n", f);
+    fputs("    fun chr(v: Value): Value = str(toDouble(v).toInt().toChar().toString())\n", f);
+    fputs("    fun ord(v: Value): Value = if(v is Value.Str && v.v.isNotEmpty()) num(v.v[0].code.toDouble()) else num(0.0)\n", f);
+    fputs("    fun clock(): Value = num(System.nanoTime().toDouble() / 1e9)\n\n", f);
+
+    // Path operations
+    fputs("    fun pathJoin(a: Value, b: Value): Value = str(toKString(a) + java.io.File.separator + toKString(b))\n", f);
+    fputs("    fun pathExists(p: Value): Value = bool(java.io.File(toKString(p)).exists())\n", f);
+    fputs("    fun pathBasename(p: Value): Value = str(java.io.File(toKString(p)).name)\n", f);
+    fputs("    fun pathDirname(p: Value): Value = str(java.io.File(toKString(p)).parent ?: \"\")\n", f);
+    fputs("    fun pathExt(p: Value): Value { val n=toKString(p); val d=n.lastIndexOf('.'); return if(d>=0) str(n.substring(d)) else str(\"\") }\n\n", f);
+
+    // Hash and sizeof
+    fputs("    fun hash(v: Value): Value = num(v.hashCode().toDouble())\n", f);
+    fputs("    fun sizeOf(v: Value): Value = num(when(v) { is Value.Str->v.v.length.toDouble()*2; is Value.Arr->v.v.size.toDouble()*24; else->8.0 })\n", f);
+
     fputs("}\n", f);
 
     fclose(f);
