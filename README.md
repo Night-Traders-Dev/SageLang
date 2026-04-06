@@ -120,12 +120,12 @@ The JIT and AOT backends can also be combined: `sage --aot --jit file.sage -o bi
 - **Array Slicing**: Pythonic slice syntax for arrays
 
 ### Memory Management
-- **Garbage Collection**: Concurrent tri-color mark-sweep GC with SATB write barriers for sub-millisecond STW pauses; optional **ARC mode** (`--gc:arc`) for deterministic Nim-style reference counting with cycle detection
+- **Garbage Collection**: Concurrent tri-color mark-sweep GC with SATB write barriers for sub-millisecond STW pauses; optional **ARC mode** (`--gc:arc`) for deterministic Nim-style reference counting with cycle detection; optional **ORC mode** (`--gc:orc`) for optimized reference counting with Lins' trial deletion cycle collector — combines ARC's deterministic cleanup with robust cycle detection for complex object graphs
 - **Tri-color marking**: white (unreachable), gray (pending scan), black (fully scanned) — objects allocated during marking are born black
 - **SATB write barrier**: Snapshot-At-The-Beginning — before overwriting a reference, the old value is shaded gray to prevent the concurrent marker from missing live objects
 - **4-phase collection**: Root scan (STW, ~50-200us) -> Concurrent mark -> Remark (STW, ~20-50us) -> Concurrent sweep
 - **Full type coverage**: GC properly marks and frees all 16 value types including FFI handles (`VAL_CLIB`), raw pointers (`VAL_POINTER`), threads (`VAL_THREAD`), and mutexes (`VAL_MUTEX`)
-- **GC Control**: `gc_collect()`, `gc_enable()`, `gc_disable()`
+- **GC Control**: `gc_collect()`, `gc_enable()`, `gc_disable()`, `gc_set_arc()`, `gc_set_orc()`, `gc_mode()`
 - **Statistics**: `gc_stats()` for memory monitoring including STW pause timing
 - **Safe**: Prevents use-after-free and memory leaks; external allocations tracked for accurate accounting
 

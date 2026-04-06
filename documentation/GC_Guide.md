@@ -149,6 +149,94 @@ With debug enabled, each collection prints:
 | `src/c/value.c` | Write barriers on `array_set` and `dict_set` |
 | `src/sage/gc.sage` | Self-hosted GC interface (phase constants, stats formatting) |
 
+## GC Modes
+
+Sage supports three garbage collection modes, selectable at startup or runtime:
+
+| Mode | Flag | Algorithm | Best For |
+|------|------|-----------|----------|
+| **Tracing** | `--gc:tracing` (default) | Concurrent tri-color mark-sweep | Throughput, large heaps |
+| **ARC** | `--gc:arc` | Reference counting + simple cycle check | Deterministic cleanup, real-time |
+| **ORC** | `--gc:orc` | Reference counting + trial deletion cycles | Complex object graphs, balanced |
+
+### Selecting a GC Mode
+
+```bash
+sage file.sage                    # Default: tracing GC
+sage --gc:arc file.sage           # ARC mode
+sage --gc:orc file.sage           # ORC mode (recommended for complex programs)
+sage --gc:tracing file.sage       # Explicit tracing mode
+```
+
+Or at runtime:
+
+```sage
+gc_set_arc()       # Switch to ARC mode
+gc_set_orc()       # Switch to ORC mode
+print gc_mode()    # Returns "tracing", "arc", or "orc"
+```
+
+## ORC Mode (Optimized Reference Counting)
+
+ORC is inspired by [Nim's ORC garbage collector](https://nim-lang.org/blog/2020/10/15/introduction-to-arc-orc-in-nim.html). It combines ARC's deterministic reference counting with a proper **trial deletion** cycle collector based on Lins' algorithm.
+
+### How ORC Works
+
+ORC shares ARC's reference counting base: objects are freed immediately when their reference count drops to zero. The key difference is cycle detection.
+
+When a reference count is decremented but **not to zero**, ORC marks the object as a **PURPLE** candidate — it might be part of a reference cycle. Periodically, ORC runs a three-phase trial deletion algorithm:
+
+```text
+Phase 1: MARK ROOTS
+    |  Collect all PURPLE objects as candidate cycle roots
+    v
+Phase 2: SCAN (Trial Deletion)
+    |  For each candidate, trial-decrement ref counts of all reachable objects
+    |  If trial count reaches 0 → mark WHITE (confirmed cycle garbage)
+    |  If trial count > 0 → mark BLACK (has external refs, restore counts)
+    v
+Phase 3: COLLECT
+    |  Free all WHITE objects (confirmed unreachable cycles)
+    v
+IDLE (wait for next trigger)
+```
+
+### ORC Colors (Lins' Algorithm)
+
+| Color | Meaning |
+|-------|---------|
+| **BLACK** | Normal: in use, not a candidate |
+| **PURPLE** | Possible cycle root (ref count decremented but > 0) |
+| **GRAY** | Being scanned (trial decrement in progress) |
+| **WHITE** | Confirmed garbage (part of an unreachable cycle) |
+
+### When to Use ORC
+
+- Programs with complex object graphs (linked lists, trees, graphs)
+- Programs that create reference cycles (e.g., parent/child back-references)
+- When you want deterministic cleanup (like ARC) but need robust cycle handling
+- When tracing GC pauses are unacceptable but ARC's simple cycle check isn't sufficient
+
+### ORC vs ARC
+
+| Feature | ARC | ORC |
+|---------|-----|-----|
+| Reference counting | Yes | Yes |
+| Deterministic free on refcount=0 | Yes | Yes |
+| Cycle detection algorithm | Simple buffer check | Lins' trial deletion |
+| Can detect complex cycles | Limited | Yes |
+| Collection trigger | Every 1000 decrements | Every 500 decrements |
+| Overhead | Lower | Slightly higher (candidate tracking) |
+
+### ORC Statistics
+
+```sage
+gc_set_orc()
+# ... run program ...
+let stats = gc_stats()
+print stats["collections"]    # Total collection cycles (including ORC)
+```
+
 ## Comparison with Previous GC
 
 | Feature | Old GC | New GC |

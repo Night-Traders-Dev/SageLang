@@ -1,5 +1,21 @@
 # SageLang Updates
 
+## v3.1.5 — ORC Garbage Collector (April 2026)
+
+- **ORC GC mode** (`--gc:orc`): Nim-inspired Optimized Reference Counting with Lins' trial deletion cycle collector
+  - Combines ARC's deterministic reference counting with a proper cycle detection algorithm
+  - Three-phase trial deletion: mark PURPLE candidates, trial-decrement to find WHITE garbage, collect confirmed cycles
+  - Recommended for programs with complex object graphs (linked lists, trees, circular references)
+  - More aggressive cycle collection than ARC (triggers every 500 decrements vs 1000)
+  - Runtime API: `gc_set_orc()` to switch mode, `gc_mode()` returns `"orc"`
+- Three GC modes now available: `--gc:tracing` (default), `--gc:arc`, `--gc:orc`
+- ARC convenience macros (`ARC_RETAIN`, `ARC_RELEASE`, `ARC_ASSIGN`) now work in both ARC and ORC modes
+- GC stats display now shows mode name and ORC-specific metrics (epoch, cycle collections, cycles freed)
+- Updated `documentation/GC_Guide.md` with full ORC documentation, mode comparison table, and usage guide
+- New test: `tests/20_gc/orc_mode.sage`
+
+---
+
 ## v2.0.0 — Specification Lock + REPL JIT/AOT (March 2026)
 
 - Specification locked: core language semantics frozen (see `STABILITY.md`)

@@ -618,6 +618,7 @@ static Value gc_disable_native(int argCount, Value* args) {
 
 static Value gc_mode_native(int argCount, Value* args) {
     (void)argCount; (void)args;
+    if (gc.mode == GC_MODE_ORC) return val_string("orc");
     if (gc.mode == GC_MODE_ARC) return val_string("arc");
     return val_string("tracing");
 }
@@ -625,6 +626,12 @@ static Value gc_mode_native(int argCount, Value* args) {
 static Value gc_set_arc_native(int argCount, Value* args) {
     (void)argCount; (void)args;
     gc_set_mode(GC_MODE_ARC);
+    return val_nil();
+}
+
+static Value gc_set_orc_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    gc_set_mode(GC_MODE_ORC);
     return val_nil();
 }
 
@@ -1902,7 +1909,8 @@ void init_stdlib(Env* env) {
     env_define(env, "gc_disable", 10, val_native(gc_disable_native));
     env_define(env, "gc_mode", 7, val_native(gc_mode_native));
     env_define(env, "gc_set_arc", 10, val_native(gc_set_arc_native));
-    
+    env_define(env, "gc_set_orc", 10, val_native(gc_set_orc_native));
+
     // PHASE 7: Generator function
     env_define(env, "next", 4, val_native(native_next));
 

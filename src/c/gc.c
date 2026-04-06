@@ -225,8 +225,14 @@ void gc_init(void) {
     if (gc_debug) fprintf(stderr, "[GC] Concurrent garbage collector initialized\n");
 }
 
+// Forward declaration: cleanup ARC side-table (defined in ARC section below)
+static void arc_table_cleanup(void);
+
 void gc_shutdown(void) {
     if (gc.enabled) gc_collect();
+    // Run final ORC/ARC cycle collection before full teardown
+    if (gc.mode == GC_MODE_ORC) orc_collect_cycles();
+    else if (gc.mode == GC_MODE_ARC) arc_collect_cycles();
     void* obj = gc.objects;
     while (obj != NULL) {
         GCHeader* header = obj;
@@ -236,6 +242,9 @@ void gc_shutdown(void) {
         obj = next;
     }
     gc_mark_stack_free(&gc.mark_stack);
+    free(gc.cycle_buffer); gc.cycle_buffer = NULL;
+    free(gc.orc_roots); gc.orc_roots = NULL;
+    arc_table_cleanup();
     if (gc_debug) { fprintf(stderr, "[GC] Garbage collector shutdown\n"); gc_print_stats(); }
 }
 
@@ -275,8 +284,8 @@ void* gc_alloc(int type, size_t size) {
     header->size = size;
     header->next = gc.objects;
     gc.objects = header;
-    // ARC: register object in side-table with initial ref_count=1
-    if (gc.mode == GC_MODE_ARC) {
+    // ARC/ORC: register object in side-table with initial ref_count=1
+    if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
         arc_register(header + 1);
     }
 
@@ -735,7 +744,9 @@ void gc_collect_with_root(Env* root_env) {
 // ============================================================================
 
 void gc_print_stats(void) {
-    printf("=== Concurrent GC Statistics ===\n");
+    const char* mode_name = gc.mode == GC_MODE_ORC ? "ORC" :
+                            gc.mode == GC_MODE_ARC ? "ARC" : "Tracing";
+    printf("=== GC Statistics (%s mode) ===\n", mode_name);
     printf("Collections run:        %d\n", gc.collections);
     printf("Objects allocated:      %d\n", gc.object_count);
     printf("Objects since GC:       %d\n", gc.objects_since_gc);
@@ -744,10 +755,16 @@ void gc_print_stats(void) {
     printf("Current memory usage:   %lu bytes\n", gc_live_bytes());
     printf("Marked in last cycle:   %d\n", gc.marked_count);
     printf("Freed in last cycle:    %d\n", gc.freed_count);
-    printf("Max STW pause:          %lu us\n", gc.max_pause_ns / 1000);
-    printf("Last root scan:         %lu us\n", gc.last_root_scan_ns / 1000);
-    printf("Last remark:            %lu us\n", gc.last_remark_ns / 1000);
-    printf("Last sweep:             %lu us\n", gc.last_sweep_ns / 1000);
+    if (gc.mode == GC_MODE_ORC) {
+        printf("ORC epoch:              %d\n", gc.orc_epoch);
+        printf("ORC cycle collections:  %lu\n", gc.orc_collections);
+        printf("ORC cycles freed:       %lu\n", gc.orc_cycles_freed);
+    } else if (gc.mode == GC_MODE_TRACING) {
+        printf("Max STW pause:          %lu us\n", gc.max_pause_ns / 1000);
+        printf("Last root scan:         %lu us\n", gc.last_root_scan_ns / 1000);
+        printf("Last remark:            %lu us\n", gc.last_remark_ns / 1000);
+        printf("Last sweep:             %lu us\n", gc.last_sweep_ns / 1000);
+    }
     printf("Current phase:          %d\n", gc.phase);
     printf("Write barrier active:   %s\n", gc.barrier_active ? "yes" : "no");
     printf("GC enabled:             %s\n", gc.enabled ? "yes" : "no");
@@ -800,7 +817,8 @@ void gc_disable(void) {
 typedef struct ARCNode {
     void* key;           // Object pointer (header + 1)
     int ref_count;
-    int buffered;
+    int buffered;        // In cycle candidate buffer (ARC) or root set (ORC)
+    int orc_color;       // ORC cycle collector color (ORC_COLOR_BLACK/PURPLE/GRAY/WHITE)
     struct ARCNode* next;
 } ARCNode;
 
@@ -827,6 +845,7 @@ void arc_register(void* obj) {
     node->key = obj;
     node->ref_count = 1;
     node->buffered = 0;
+    node->orc_color = ORC_COLOR_BLACK;
     node->next = arc_table[idx];
     arc_table[idx] = node;
 }
@@ -844,6 +863,19 @@ static void arc_unregister(void* obj) {
     }
 }
 
+// Clean up ARC side-table (called from gc_shutdown)
+static void arc_table_cleanup(void) {
+    for (int i = 0; i < ARC_TABLE_SIZE; i++) {
+        ARCNode* n = arc_table[i];
+        while (n != NULL) {
+            ARCNode* next = n->next;
+            free(n);
+            n = next;
+        }
+        arc_table[i] = NULL;
+    }
+}
+
 void gc_set_mode(int mode) {
     gc.mode = mode;
     if (mode == GC_MODE_ARC) {
@@ -856,6 +888,20 @@ void gc_set_mode(int mode) {
             gc.cycle_buffer_count = 0;
         }
         if (gc_debug) fprintf(stderr, "[GC] ARC mode enabled\n");
+    } else if (mode == GC_MODE_ORC) {
+        gc.enabled = 0; // Disable tracing GC in ORC mode
+        gc.arc_cycle_threshold = 500;  // ORC collects cycles more aggressively
+        gc.arc_decrements = 0;
+        gc.orc_epoch = 0;
+        gc.orc_collections = 0;
+        gc.orc_cycles_freed = 0;
+        if (gc.orc_roots == NULL) {
+            gc.orc_roots_capacity = 512;
+            gc.orc_roots = (void**)malloc(sizeof(void*) * (size_t)gc.orc_roots_capacity);
+            gc.orc_roots_count = 0;
+        }
+        // ORC shares ARC's side-table — no separate cycle_buffer needed
+        if (gc_debug) fprintf(stderr, "[GC] ORC mode enabled (trial deletion cycle collector)\n");
     } else {
         gc.enabled = 1;
         if (gc_debug) fprintf(stderr, "[GC] Tracing GC mode enabled\n");
@@ -863,13 +909,17 @@ void gc_set_mode(int mode) {
 }
 
 void arc_retain(void* obj) {
-    if (obj == NULL || gc.mode != GC_MODE_ARC) return;
+    if (obj == NULL || (gc.mode != GC_MODE_ARC && gc.mode != GC_MODE_ORC)) return;
     ARCNode* node = arc_find(obj);
-    if (node) node->ref_count++;
+    if (node) {
+        node->ref_count++;
+        // ORC: retaining makes object non-candidate (back to BLACK)
+        if (gc.mode == GC_MODE_ORC) node->orc_color = ORC_COLOR_BLACK;
+    }
 }
 
 void arc_release(void* obj) {
-    if (obj == NULL || gc.mode != GC_MODE_ARC) return;
+    if (obj == NULL || (gc.mode != GC_MODE_ARC && gc.mode != GC_MODE_ORC)) return;
     ARCNode* node = arc_find(obj);
     if (!node) return;
     node->ref_count--;
@@ -877,6 +927,7 @@ void arc_release(void* obj) {
 
     if (node->ref_count <= 0) {
         // Object is dead — unlink from GC list and free
+        if (gc.mode == GC_MODE_ORC) node->orc_color = ORC_COLOR_BLACK;
         GCHeader* header = (GCHeader*)obj - 1;
         sage_mutex_lock(&gc_mutex);
         void** prev = (void**)&gc.objects;
@@ -893,13 +944,20 @@ void arc_release(void* obj) {
         arc_unregister(obj);
         free(header);
         sage_mutex_unlock(&gc_mutex);
+    } else if (gc.mode == GC_MODE_ORC) {
+        // ORC: mark as PURPLE candidate for trial deletion
+        orc_mark_candidate(obj);
     } else {
-        // Possible cycle root — buffer for later detection
+        // ARC: buffer for simplified cycle collection
         arc_add_candidate(obj);
     }
 
     if (gc.arc_decrements >= gc.arc_cycle_threshold) {
-        arc_collect_cycles();
+        if (gc.mode == GC_MODE_ORC) {
+            orc_collect_cycles();
+        } else {
+            arc_collect_cycles();
+        }
         gc.arc_decrements = 0;
     }
 }
@@ -913,11 +971,11 @@ void arc_assign(void** slot, void* new_obj) {
 }
 
 void arc_assign_value(Value* slot, Value new_val) {
-    if (gc.mode != GC_MODE_ARC) {
+    if (gc.mode != GC_MODE_ARC && gc.mode != GC_MODE_ORC) {
         *slot = new_val;
         return;
     }
-    // In ARC mode, retain new and release old heap objects
+    // In ARC/ORC mode, retain new and release old heap objects
     // For simplicity, just assign — the env layer handles retain/release
     *slot = new_val;
 }
@@ -974,6 +1032,296 @@ void arc_collect_cycles(void) {
 }
 
 void arc_force_cycle_collection(void) {
-    arc_collect_cycles();
+    if (gc.mode == GC_MODE_ORC) {
+        orc_collect_cycles();
+    } else {
+        arc_collect_cycles();
+    }
+    gc.arc_decrements = 0;
+}
+
+// ============================================================================
+// ORC Mode: Optimized Reference Counting with Trial Deletion
+// ============================================================================
+// Implements Lins' trial deletion algorithm for cycle detection.
+// ORC shares ARC's reference counting base but replaces ARC's simplified
+// cycle collector with a proper three-phase trial deletion algorithm:
+//
+//   Phase 1 (Mark Roots):  Collect PURPLE objects as candidate cycle roots
+//   Phase 2 (Scan):        Trial-decrement ref counts from candidates;
+//                           objects whose trial count reaches 0 → WHITE (garbage)
+//                           objects with remaining external refs → BLACK (restore)
+//   Phase 3 (Collect):     Free all WHITE objects (confirmed unreachable cycles)
+//
+// Colors: BLACK (in use) → PURPLE (candidate) → GRAY (scanning) → WHITE (garbage)
+
+// Mark an object as a PURPLE candidate root for cycle collection
+void orc_mark_candidate(void* obj) {
+    if (obj == NULL) return;
+    ARCNode* node = arc_find(obj);
+    if (!node || node->buffered) return;
+
+    node->orc_color = ORC_COLOR_PURPLE;
+    node->buffered = 1;
+
+    if (gc.orc_roots_count >= gc.orc_roots_capacity) {
+        gc.orc_roots_capacity = gc.orc_roots_capacity ? gc.orc_roots_capacity * 2 : 512;
+        gc.orc_roots = (void**)realloc(gc.orc_roots, sizeof(void*) * (size_t)gc.orc_roots_capacity);
+    }
+    gc.orc_roots[gc.orc_roots_count++] = obj;
+}
+
+// Helper: iterate over children of an object and call a visitor function.
+// The visitor receives the child object pointer (header + 1).
+typedef void (*orc_child_visitor)(void* child);
+
+static void orc_visit_children(void* obj, orc_child_visitor visitor) {
+    GCHeader* header = (GCHeader*)obj - 1;
+    switch (header->type) {
+        case VAL_ARRAY: {
+            ArrayValue* arr = (ArrayValue*)obj;
+            for (int i = 0; i < arr->count; i++) {
+                Value v = arr->elements[i];
+                switch (v.type) {
+                    case VAL_STRING:    visitor(v.as.string); break;
+                    case VAL_ARRAY:     visitor(v.as.array); break;
+                    case VAL_DICT:      visitor(v.as.dict); break;
+                    case VAL_TUPLE:     visitor(v.as.tuple); break;
+                    case VAL_FUNCTION:  visitor(v.as.function); break;
+                    case VAL_GENERATOR: visitor(v.as.generator); break;
+                    case VAL_CLASS:     visitor(v.as.class_val); break;
+                    case VAL_INSTANCE:  visitor(v.as.instance); break;
+                    case VAL_EXCEPTION: visitor(v.as.exception); break;
+                    case VAL_MODULE:    visitor(v.as.module); break;
+                    case VAL_CLIB:      visitor(v.as.clib); break;
+                    case VAL_POINTER:   visitor(v.as.pointer); break;
+                    case VAL_THREAD:    visitor(v.as.thread); break;
+                    case VAL_MUTEX:     visitor(v.as.mutex); break;
+                    default: break;
+                }
+            }
+            break;
+        }
+        case VAL_DICT: {
+            DictValue* dict = (DictValue*)obj;
+            for (int i = 0; i < dict->capacity; i++) {
+                if (dict->entries[i].key != NULL && dict->entries[i].value != NULL) {
+                    Value v = *dict->entries[i].value;
+                    switch (v.type) {
+                        case VAL_STRING:    visitor(v.as.string); break;
+                        case VAL_ARRAY:     visitor(v.as.array); break;
+                        case VAL_DICT:      visitor(v.as.dict); break;
+                        case VAL_TUPLE:     visitor(v.as.tuple); break;
+                        case VAL_FUNCTION:  visitor(v.as.function); break;
+                        case VAL_GENERATOR: visitor(v.as.generator); break;
+                        case VAL_CLASS:     visitor(v.as.class_val); break;
+                        case VAL_INSTANCE:  visitor(v.as.instance); break;
+                        case VAL_EXCEPTION: visitor(v.as.exception); break;
+                        case VAL_MODULE:    visitor(v.as.module); break;
+                        case VAL_CLIB:      visitor(v.as.clib); break;
+                        case VAL_POINTER:   visitor(v.as.pointer); break;
+                        case VAL_THREAD:    visitor(v.as.thread); break;
+                        case VAL_MUTEX:     visitor(v.as.mutex); break;
+                        default: break;
+                    }
+                }
+            }
+            break;
+        }
+        case VAL_TUPLE: {
+            TupleValue* tuple = (TupleValue*)obj;
+            for (int i = 0; i < tuple->count; i++) {
+                Value v = tuple->elements[i];
+                switch (v.type) {
+                    case VAL_STRING:    visitor(v.as.string); break;
+                    case VAL_ARRAY:     visitor(v.as.array); break;
+                    case VAL_DICT:      visitor(v.as.dict); break;
+                    case VAL_TUPLE:     visitor(v.as.tuple); break;
+                    case VAL_FUNCTION:  visitor(v.as.function); break;
+                    case VAL_GENERATOR: visitor(v.as.generator); break;
+                    case VAL_CLASS:     visitor(v.as.class_val); break;
+                    case VAL_INSTANCE:  visitor(v.as.instance); break;
+                    case VAL_EXCEPTION: visitor(v.as.exception); break;
+                    case VAL_MODULE:    visitor(v.as.module); break;
+                    default: break;
+                }
+            }
+            break;
+        }
+        case VAL_INSTANCE: {
+            InstanceValue* inst = (InstanceValue*)obj;
+            if (inst->class_def != NULL) visitor(inst->class_def);
+            if (inst->fields != NULL) visitor(inst->fields);
+            break;
+        }
+        case VAL_CLASS: {
+            ClassValue* cls = (ClassValue*)obj;
+            if (cls->parent != NULL) visitor(cls->parent);
+            break;
+        }
+        default: break;  // String, exception, pointer, etc.: no heap children
+    }
+}
+
+// Phase 2a: Trial-decrement ref counts from a candidate (mark gray)
+static void orc_scan_decrement(void* child) {
+    if (child == NULL) return;
+    ARCNode* node = arc_find(child);
+    if (!node) return;
+    node->ref_count--;
+    if (node->orc_color != ORC_COLOR_GRAY) {
+        node->orc_color = ORC_COLOR_GRAY;
+        orc_visit_children(child, orc_scan_decrement);
+    }
+}
+
+// Phase 2b: Check if object is truly garbage or has external refs
+static void orc_scan_check(void* child);
+
+static void orc_scan_object(void* obj) {
+    ARCNode* node = arc_find(obj);
+    if (!node) return;
+    if (node->orc_color == ORC_COLOR_GRAY) {
+        if (node->ref_count <= 0) {
+            // No external references — this is cycle garbage
+            node->orc_color = ORC_COLOR_WHITE;
+            orc_visit_children(obj, orc_scan_check);
+        } else {
+            // External references exist — restore this subgraph
+            orc_scan_check(obj);
+        }
+    }
+}
+
+// Phase 2c: Restore ref counts for non-garbage subgraph (re-color BLACK)
+static void orc_restore_increment(void* child) {
+    if (child == NULL) return;
+    ARCNode* node = arc_find(child);
+    if (!node) return;
+    node->ref_count++;
+    if (node->orc_color != ORC_COLOR_BLACK) {
+        node->orc_color = ORC_COLOR_BLACK;
+        orc_visit_children(child, orc_restore_increment);
+    }
+}
+
+static void orc_scan_check(void* obj) {
+    if (obj == NULL) return;
+    ARCNode* node = arc_find(obj);
+    if (!node) return;
+    if (node->orc_color == ORC_COLOR_GRAY) {
+        if (node->ref_count > 0) {
+            // Has external refs — restore the entire subgraph
+            orc_restore_increment(obj);
+        } else {
+            node->orc_color = ORC_COLOR_WHITE;
+            orc_visit_children(obj, orc_scan_check);
+        }
+    }
+}
+
+// Phase 3: Collect all WHITE objects (confirmed cycle garbage)
+static void orc_collect_white(void* obj) {
+    if (obj == NULL) return;
+    ARCNode* node = arc_find(obj);
+    if (!node || node->orc_color != ORC_COLOR_WHITE) return;
+
+    // Mark as BLACK to prevent double-free during child traversal
+    node->orc_color = ORC_COLOR_BLACK;
+    node->buffered = 0;
+
+    // Recurse into children first (they may also be WHITE)
+    orc_visit_children(obj, orc_collect_white);
+
+    // Unlink from GC object list and free
+    GCHeader* header = (GCHeader*)obj - 1;
+    sage_mutex_lock(&gc_mutex);
+    void** prev = (void**)&gc.objects;
+    for (GCHeader* cur = gc.objects; cur != NULL; cur = cur->next) {
+        if (cur == header) {
+            *prev = header->next;
+            break;
+        }
+        prev = &cur->next;
+    }
+    gc.object_count--;
+    gc.bytes_freed += gc_release_object(header);
+    gc.freed_count++;
+    gc.orc_cycles_freed++;
+    arc_unregister(obj);
+    free(header);
+    sage_mutex_unlock(&gc_mutex);
+}
+
+// Main ORC cycle collection: three-phase trial deletion
+void orc_collect_cycles(void) {
+    if (gc.orc_roots_count == 0) return;
+
+    unsigned long t0 = now_ns();
+    if (gc_debug)
+        fprintf(stderr, "[ORC] Cycle collection epoch %d: %d candidates\n",
+                gc.orc_epoch, gc.orc_roots_count);
+
+    // Snapshot the current root set (new candidates added during collection
+    // will be picked up in the next epoch)
+    int root_count = gc.orc_roots_count;
+    void** roots = (void**)malloc(sizeof(void*) * (size_t)root_count);
+    memcpy(roots, gc.orc_roots, sizeof(void*) * (size_t)root_count);
+    gc.orc_roots_count = 0;
+
+    // Phase 1: Mark Roots — only process PURPLE candidates
+    // Filter out objects that have been freed or are no longer PURPLE
+    int candidate_count = 0;
+    for (int i = 0; i < root_count; i++) {
+        ARCNode* node = arc_find(roots[i]);
+        if (!node) continue;
+        if (node->orc_color == ORC_COLOR_PURPLE && node->ref_count > 0) {
+            roots[candidate_count++] = roots[i];
+        } else {
+            node->buffered = 0;
+            // If ref_count dropped to 0, arc_release already freed it
+        }
+    }
+
+    // Phase 2: Scan — trial decrement from each candidate root
+    for (int i = 0; i < candidate_count; i++) {
+        ARCNode* node = arc_find(roots[i]);
+        if (!node) continue;
+        node->orc_color = ORC_COLOR_GRAY;
+        orc_visit_children(roots[i], orc_scan_decrement);
+    }
+
+    // Phase 2b: Check — determine which objects are truly garbage
+    for (int i = 0; i < candidate_count; i++) {
+        orc_scan_object(roots[i]);
+    }
+
+    // Phase 3: Collect — free all WHITE objects (confirmed cycles)
+    int freed_before = gc.freed_count;
+    for (int i = 0; i < candidate_count; i++) {
+        ARCNode* node = arc_find(roots[i]);
+        if (node && node->orc_color == ORC_COLOR_WHITE) {
+            orc_collect_white(roots[i]);
+        } else if (node) {
+            // Non-garbage: clear buffered flag so it can be re-added
+            node->buffered = 0;
+        }
+    }
+    int collected = gc.freed_count - freed_before;
+
+    gc.orc_epoch++;
+    gc.orc_collections++;
+    gc.collections++;
+    free(roots);
+
+    if (gc_debug) {
+        unsigned long elapsed = now_ns() - t0;
+        fprintf(stderr, "[ORC] Epoch %d complete: %d candidates, %d cycles freed, %lu us\n",
+                gc.orc_epoch - 1, candidate_count, collected, elapsed / 1000);
+    }
+}
+
+void orc_force_cycle_collection(void) {
+    orc_collect_cycles();
     gc.arc_decrements = 0;
 }

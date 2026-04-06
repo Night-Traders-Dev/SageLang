@@ -63,7 +63,7 @@ static void cleanup_runtime_state(void) {
 static void print_usage(FILE* stream) {
     fprintf(stream,
             "Usage: sage                    Start interactive REPL\n"
-            "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:tracing] [path]\n"
+            "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [path]\n"
             "       sage --repl             Start interactive REPL\n"
             "       sage [--runtime ast|bytecode|jit|aot|auto] -c \"source\"\n"
             "       sage --emit-c <input.sage> [-o output.c] [-O0..3] [-g]\n"
@@ -1535,6 +1535,12 @@ int main(int argc, const char* argv[]) {
     // --gc:arc — switch to ARC (Automatic Reference Counting) mode
     if (cmd_argc >= 2 && strcmp(cmd_argv[1], "--gc:arc") == 0) {
         gc_set_mode(GC_MODE_ARC);
+        cmd_argv += 1;
+        cmd_argc -= 1;
+    }
+    // --gc:orc — switch to ORC (Optimized Reference Counting) mode
+    if (cmd_argc >= 2 && strcmp(cmd_argv[1], "--gc:orc") == 0) {
+        gc_set_mode(GC_MODE_ORC);
         cmd_argv += 1;
         cmd_argc -= 1;
     }

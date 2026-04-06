@@ -1,9 +1,24 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: March 27, 2026
-> **Current Phase**: v2.0.0 — Specification locked, all 18 phases complete
+> **Last Updated**: April 5, 2026
+> **Current Phase**: v3.1.5 — ORC GC, all 18 phases complete
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+
+---
+
+## v3.1.5: ORC Garbage Collector (April 2026)
+
+### Completed
+
+- ORC GC mode (`--gc:orc`): Nim-inspired Optimized Reference Counting with Lins' trial deletion cycle collector
+- Three-phase cycle detection: mark PURPLE candidates → trial-decrement scan → collect WHITE garbage
+- Runtime API: `gc_set_orc()`, `gc_mode()` returns `"orc"`
+- Three GC modes: `--gc:tracing` (default concurrent mark-sweep), `--gc:arc` (reference counting), `--gc:orc` (optimized reference counting with trial deletion)
+- ARC macros extended for ORC compatibility
+- GC stats display includes ORC-specific metrics
+- Full documentation in `documentation/GC_Guide.md`
+- Test: `tests/20_gc/orc_mode.sage`
 
 ---
 

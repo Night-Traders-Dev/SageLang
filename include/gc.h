@@ -71,6 +71,13 @@ static inline char* sage_safe_strdup(const char* str, const char* file, int line
 // GC modes
 #define GC_MODE_TRACING  0   // Default: concurrent tri-color mark-sweep
 #define GC_MODE_ARC      1   // Nim-style ARC: reference counting + cycle collector
+#define GC_MODE_ORC      2   // Nim-style ORC: ARC + trial deletion cycle collector
+
+// ORC cycle collector colors (Lins' trial deletion algorithm)
+#define ORC_COLOR_BLACK  0   // In use, not a candidate
+#define ORC_COLOR_PURPLE 1   // Possible cycle root (ref decremented but != 0)
+#define ORC_COLOR_GRAY   2   // Being trial-decremented
+#define ORC_COLOR_WHITE  3   // Confirmed garbage (part of unreachable cycle)
 
 // GC object header (prepended to all allocated objects)
 // IMPORTANT: Do not change this struct layout — it affects heap alignment for all allocations.
@@ -144,7 +151,7 @@ typedef struct {
     void** sweep_prev;          // Pointer to previous node's next field
 
     // ARC mode state
-    int mode;                   // GC_MODE_TRACING or GC_MODE_ARC
+    int mode;                   // GC_MODE_TRACING, GC_MODE_ARC, or GC_MODE_ORC
     void** cycle_buffer;        // Trial deletion candidates for cycle collection
     int cycle_buffer_count;
     int cycle_buffer_capacity;
@@ -152,6 +159,14 @@ typedef struct {
     int arc_cycle_threshold;    // Trigger cycle collection after N decrements
     // ARC side-table: maps GCHeader* → ARCMeta (simple linked list for now)
     void* arc_table;            // Hash table of ARCMeta entries
+
+    // ORC mode state (trial deletion cycle collector)
+    void** orc_roots;           // PURPLE candidate roots for trial deletion
+    int orc_roots_count;
+    int orc_roots_capacity;
+    int orc_epoch;              // Collection epoch (incremented each cycle)
+    unsigned long orc_collections;  // Number of ORC cycle collections
+    unsigned long orc_cycles_freed; // Total cycle objects freed by ORC
 } GC;
 
 // Global GC instance
@@ -260,11 +275,29 @@ void arc_collect_cycles(void);        // Run cycle detection on buffered suspect
 void arc_add_candidate(void* obj);    // Add potential cycle root to buffer
 void arc_force_cycle_collection(void); // Force immediate cycle collection
 
-// ARC convenience macros
-#define ARC_RETAIN(obj) do { if (gc.mode == GC_MODE_ARC && (obj) != NULL) arc_retain(obj); } while(0)
-#define ARC_RELEASE(obj) do { if (gc.mode == GC_MODE_ARC && (obj) != NULL) arc_release(obj); } while(0)
+// ARC convenience macros (also used by ORC — ORC shares ARC's ref counting base)
+#define ARC_RETAIN(obj) do { if ((gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) && (obj) != NULL) arc_retain(obj); } while(0)
+#define ARC_RELEASE(obj) do { if ((gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) && (obj) != NULL) arc_release(obj); } while(0)
 #define ARC_ASSIGN(slot, new_obj) \
-    do { if (gc.mode == GC_MODE_ARC) arc_assign((void**)(slot), (void*)(new_obj)); \
+    do { if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) arc_assign((void**)(slot), (void*)(new_obj)); \
          else *(slot) = (new_obj); } while(0)
+
+// ============================================================================
+// ORC Mode (Nim-style Optimized Reference Counting)
+// ============================================================================
+// ORC extends ARC with a proper cycle collector based on Lins' trial deletion
+// algorithm. When a ref count is decremented but not to zero, the object is
+// marked PURPLE (possible cycle root). Periodically, ORC runs three phases:
+//   1. Mark Roots:  collect PURPLE objects as candidates
+//   2. Scan:        trial-decrement reachable objects; WHITE = cycle garbage
+//   3. Collect:     free all WHITE objects (confirmed unreachable cycles)
+//
+// ORC is the recommended GC for Sage programs with complex object graphs.
+// It combines ARC's deterministic cleanup with robust cycle collection.
+
+// ORC cycle collector operations
+void orc_mark_candidate(void* obj);       // Mark object as PURPLE candidate
+void orc_collect_cycles(void);            // Run full trial deletion cycle collection
+void orc_force_cycle_collection(void);    // Force immediate ORC cycle collection
 
 #endif // SAGELANG_GC_H

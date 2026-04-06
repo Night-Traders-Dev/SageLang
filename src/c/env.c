@@ -44,7 +44,7 @@ void env_define(Env* env, const char* name, int length, Value value) {
     EnvNode* current = env->head;
     while (current != NULL) {
         if (strncmp(current->name, name, length) == 0 && current->name[length] == '\0') {
-            if (gc.mode == GC_MODE_ARC) {
+            if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
                 arc_assign_value(&current->value, value);
             } else {
                 GC_WRITE_BARRIER(current->value);
@@ -91,7 +91,7 @@ int env_assign(Env* env, const char* name, int length, Value value) {
         EnvNode* current = current_env->head;
         while (current != NULL) {
             if (strncmp(current->name, name, length) == 0 && current->name[length] == '\0') {
-                if (gc.mode == GC_MODE_ARC) {
+                if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
                     arc_assign_value(&current->value, value);
                 } else {
                     GC_WRITE_BARRIER(current->value);
