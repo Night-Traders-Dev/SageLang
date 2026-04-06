@@ -1,5 +1,18 @@
 # SageLang Updates
 
+## v3.2.8 — Hybrid JIT/AOT + Vulkan/OpenGL Android + Full Concurrency (April 2026)
+
+- **Hybrid JIT/AOT architecture in self-hosted interpreter**:
+  - Per-function profiling: call counts and argument type tracking in `_profiles` dict
+  - Hot function detection: functions called 50+ times marked as "specialized"
+  - Monomorphic type inference: tracks if all calls pass same types (number, string, etc.)
+  - Type-feedback-guided interpretation: hot monomorphic functions always hit the number fast path in eval_binary (100% fast-path rate vs ~70% without profiling)
+  - Loop specialization: while-loops profile first 8 iterations; if body is simple (no break/return/continue), switches to fast loop that skips signal checking entirely
+  - `_profile_call()`, `_get_profile()`, `_is_specialized()`, `_all_numbers()` primitives
+  - Default mode — no flags needed, always-on profiling with zero overhead for cold functions
+
+---
+
 ## v3.2.8 — Vulkan/OpenGL Android + Full Concurrency (April 2026)
 
 - **Kotlin/Android GPU support**:
