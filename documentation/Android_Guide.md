@@ -166,11 +166,56 @@ ui.child(Button("+1", proc():
 - Gradle 8.x or Android Studio
 - JDK 17+
 
-## Limitations
+## Advanced Features
 
-- Dynamic typing: all values go through `SageVal` (sealed class), no static type specialization yet
-- No direct Jetpack Compose codegen (UI library is a design-time abstraction; runtime uses programmatic views)
-- `super` calls use reflection-based dispatch
-- Generators (`yield`) compile as single-return functions
-- FFI (`ffi_open`/`ffi_call`) and raw memory (`mem_alloc`) are not available on Android
-- Async/await compiles synchronously (coroutine integration planned)
+### Type Specialization (-O2+)
+
+At optimization level 2 or higher, the transpiler infers native Kotlin types for variables initialized with literals. `let x = 10` emits `var x: Double = 10.0` instead of `var x = S.num(10.0)`, eliminating boxing overhead.
+
+### Generators
+
+Sage generators transpile to Kotlin `sequence { }` blocks with native `yield()`:
+
+```sage
+proc count_up(n):
+    let i = 0
+    while i < n:
+        yield i
+        i = i + 1
+
+for x in count_up(5):
+    print(x)
+```
+
+### Async/Await (Coroutines)
+
+Async procs emit as `suspend fun`, await uses `kotlinx.coroutines.runBlocking`:
+
+```sage
+async proc fetch():
+    return 42
+
+let result = await fetch()
+```
+
+### Memory Operations
+
+`mem_alloc`/`mem_read`/`mem_write`/`mem_free` map to `java.nio.ByteBuffer`:
+
+```sage
+let buf = mem_alloc(256)
+mem_write(buf, 0, "int", 42)
+print(mem_read(buf, 0, "int"))
+mem_free(buf)
+```
+
+### Jetpack Compose
+
+When `import android.compose` is detected, the project generator emits a Compose-based Activity with Material 3, `@Composable` entry point, and all Compose dependencies.
+
+## Remaining Limitations
+
+- FFI `ffi_call` logs calls but cannot invoke arbitrary native functions without pre-declared JNI bindings
+- `asm_exec`/`asm_compile` are no-ops on JVM (returns `"jvm"` for `asm_arch()`)
+- Generator functions cannot yet be passed as first-class values (must be called directly in `for` loops)
+- Type specialization is limited to simple literal assignments (no interprocedural inference)

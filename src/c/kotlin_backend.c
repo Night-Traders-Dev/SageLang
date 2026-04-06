@@ -27,10 +27,18 @@ extern Stmt* parse_program(const char* source, const char* input_path);
 
 // --- Compiler state ---
 
+typedef enum {
+    KT_TYPE_DYNAMIC,    // SageVal — default dynamic type
+    KT_TYPE_NUMBER,     // Double — specialized for numeric vars
+    KT_TYPE_STRING,     // String — specialized for string vars
+    KT_TYPE_BOOLEAN,    // Boolean — specialized for boolean vars
+} KtSpecType;
+
 typedef struct KtNameEntry {
     char* sage_name;
     char* kt_name;
     int is_mutable;           // 0 = val, 1 = var
+    KtSpecType spec_type;     // type specialization for -O2+
     struct KtNameEntry* next;
 } KtNameEntry;
 
@@ -73,12 +81,38 @@ typedef struct {
     int next_unique_id;
     int in_class;
     char* current_class;
+    int in_generator;         // 1 when emitting a proc that contains yield
+    int in_method;            // 1 when emitting a class method body
+    int opt_level;            // optimization level (0-3), -O2+ enables type specialization
     KtNameEntry* globals;
     KtProcEntry* procs;
     KtNameEntry* locals;
     KtClassInfo* classes;
     KtImportedModule* modules;
 } KtCompiler;
+
+// --- AST scanning helpers ---
+
+// Check if a statement tree contains any yield statements
+static int kt_body_has_yield(Stmt* stmt) {
+    while (stmt != NULL) {
+        if (stmt->type == STMT_YIELD) return 1;
+        if (stmt->type == STMT_BLOCK) {
+            if (kt_body_has_yield(stmt->as.block.statements)) return 1;
+        } else if (stmt->type == STMT_IF) {
+            if (stmt->as.if_stmt.then_branch && kt_body_has_yield(stmt->as.if_stmt.then_branch)) return 1;
+            if (stmt->as.if_stmt.else_branch && kt_body_has_yield(stmt->as.if_stmt.else_branch)) return 1;
+        } else if (stmt->type == STMT_WHILE) {
+            if (stmt->as.while_stmt.body && kt_body_has_yield(stmt->as.while_stmt.body)) return 1;
+        } else if (stmt->type == STMT_FOR) {
+            if (stmt->as.for_stmt.body && kt_body_has_yield(stmt->as.for_stmt.body)) return 1;
+        } else if (stmt->type == STMT_TRY) {
+            if (stmt->as.try_stmt.try_block && kt_body_has_yield(stmt->as.try_stmt.try_block)) return 1;
+        }
+        stmt = stmt->next;
+    }
+    return 0;
+}
 
 // --- String buffer helpers ---
 
@@ -426,6 +460,100 @@ static const Token* kt_expr_token(const Expr* expr) {
     }
 }
 
+// Forward declaration for type specialization
+static char* kt_emit_expr(KtCompiler* compiler, Expr* expr);
+
+// --- Type specialization helpers ---
+
+// Infer a concrete type from an expression (for -O2+ type specialization)
+static KtSpecType kt_infer_expr_type(Expr* expr) {
+    if (expr == NULL) return KT_TYPE_DYNAMIC;
+    switch (expr->type) {
+        case EXPR_NUMBER: return KT_TYPE_NUMBER;
+        case EXPR_STRING: return KT_TYPE_STRING;
+        case EXPR_BOOL: return KT_TYPE_BOOLEAN;
+        case EXPR_BINARY: {
+            // Arithmetic on numbers stays number
+            switch (expr->as.binary.op.type) {
+                case TOKEN_PLUS: case TOKEN_MINUS: case TOKEN_STAR:
+                case TOKEN_SLASH: case TOKEN_PERCENT:
+                    if (kt_infer_expr_type(expr->as.binary.left) == KT_TYPE_NUMBER &&
+                        kt_infer_expr_type(expr->as.binary.right) == KT_TYPE_NUMBER)
+                        return KT_TYPE_NUMBER;
+                    break;
+                case TOKEN_EQ: case TOKEN_NEQ: case TOKEN_GT: case TOKEN_LT:
+                case TOKEN_GTE: case TOKEN_LTE: case TOKEN_AND: case TOKEN_OR:
+                case TOKEN_NOT:
+                    return KT_TYPE_BOOLEAN;
+                default: break;
+            }
+            return KT_TYPE_DYNAMIC;
+        }
+        default: return KT_TYPE_DYNAMIC;
+    }
+}
+
+// Emit a specialized expression (native Kotlin type, no SageVal wrapping)
+static char* kt_emit_spec_number(KtCompiler* compiler, Expr* expr);
+static char* kt_emit_spec_number(KtCompiler* compiler, Expr* expr) {
+    if (expr == NULL) return kt_str_dup("0.0");
+    switch (expr->type) {
+        case EXPR_NUMBER: {
+            KtStringBuffer sb; kt_sb_init(&sb);
+            double val = expr->as.number.value;
+            if (val == (long long)val && val >= -1e15 && val <= 1e15)
+                kt_sb_appendf(&sb, "%lld.0", (long long)val);
+            else
+                kt_sb_appendf(&sb, "%.17g", val);
+            return kt_sb_take(&sb);
+        }
+        case EXPR_BINARY: {
+            char* left = kt_emit_spec_number(compiler, expr->as.binary.left);
+            char* right = kt_emit_spec_number(compiler, expr->as.binary.right);
+            const char* op = NULL;
+            switch (expr->as.binary.op.type) {
+                case TOKEN_PLUS: op = "+"; break;
+                case TOKEN_MINUS: op = "-"; break;
+                case TOKEN_STAR: op = "*"; break;
+                case TOKEN_SLASH: op = "/"; break;
+                case TOKEN_PERCENT: op = "%"; break;
+                default: break;
+            }
+            if (op) {
+                KtStringBuffer sb; kt_sb_init(&sb);
+                kt_sb_appendf(&sb, "(%s %s %s)", left, op, right);
+                free(left); free(right);
+                return kt_sb_take(&sb);
+            }
+            free(left); free(right);
+            return kt_str_dup("0.0");
+        }
+        case EXPR_VARIABLE: {
+            char* name = kt_token_to_string(expr->as.variable.name);
+            const char* kt_name = kt_resolve_name(compiler, name);
+            // Check if this variable is also specialized as number
+            KtNameEntry* local = kt_find_name(compiler->locals, name);
+            if (!local) local = kt_find_name(compiler->globals, name);
+            free(name);
+            if (local && local->spec_type == KT_TYPE_NUMBER && kt_name)
+                return kt_str_dup(kt_name);
+            // Fall back to S.toDouble()
+            char* general = kt_emit_expr(compiler, expr);
+            KtStringBuffer sb; kt_sb_init(&sb);
+            kt_sb_appendf(&sb, "S.toDouble(%s)", general);
+            free(general);
+            return kt_sb_take(&sb);
+        }
+        default: {
+            char* general = kt_emit_expr(compiler, expr);
+            KtStringBuffer sb; kt_sb_init(&sb);
+            kt_sb_appendf(&sb, "S.toDouble(%s)", general);
+            free(general);
+            return kt_sb_take(&sb);
+        }
+    }
+}
+
 // --- Output helpers ---
 
 static void kt_emit_indent(KtCompiler* compiler) {
@@ -621,6 +749,28 @@ static char* kt_emit_binary_expr(KtCompiler* compiler, BinaryExpr* binary) {
 // --- Built-in function call emission ---
 
 static char* kt_emit_call_expr(KtCompiler* compiler, CallExpr* call) {
+    // Super method call: super.method(args) → super.method(args) in Kotlin
+    if (call->callee->type == EXPR_SUPER) {
+        char* method = kt_token_to_string(call->callee->as.super_expr.method);
+        KtStringBuffer sb;
+        kt_sb_init(&sb);
+        // init → sageInit (our constructor convention)
+        if (strcmp(method, "init") == 0 || strcmp(method, "__init__") == 0) {
+            kt_sb_append(&sb, "super.sageInit(");
+        } else {
+            kt_sb_appendf(&sb, "super.%s(", method);
+        }
+        for (int i = 0; i < call->arg_count; i++) {
+            if (i > 0) kt_sb_append(&sb, ", ");
+            char* arg = kt_emit_expr(compiler, call->args[i]);
+            kt_sb_append(&sb, arg);
+            free(arg);
+        }
+        kt_sb_append(&sb, ")");
+        free(method);
+        return kt_sb_take(&sb);
+    }
+
     // Method call: obj.method(args)
     if (call->callee->type == EXPR_GET) {
         char* obj = kt_emit_expr(compiler, call->callee->as.get.object);
@@ -737,6 +887,60 @@ static char* kt_emit_call_expr(KtCompiler* compiler, CallExpr* call) {
     }
     else if (strcmp(callee_name, "gc_disable") == 0) {
         kt_sb_append(&sb, "S.nil /* gc_disable: JVM manages GC */");
+    }
+    // ---- FFI (JNI bridge) ----
+    else if (strcmp(callee_name, "ffi_open") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.ffiOpen(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "ffi_call") == 0 && call->arg_count >= 3) {
+        char* lib = kt_emit_expr(compiler, call->args[0]);
+        char* func = kt_emit_expr(compiler, call->args[1]);
+        char* ret_type = kt_emit_expr(compiler, call->args[2]);
+        kt_sb_appendf(&sb, "S.ffiCall(%s, %s, %s", lib, func, ret_type);
+        if (call->arg_count > 3) {
+            kt_sb_append(&sb, ", ");
+            char* args_arr = kt_emit_expr(compiler, call->args[3]);
+            kt_sb_append(&sb, args_arr);
+            free(args_arr);
+        }
+        kt_sb_append(&sb, ")");
+        free(lib); free(func); free(ret_type);
+    }
+    else if (strcmp(callee_name, "ffi_close") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.ffiClose(%s)", a); free(a);
+    }
+    // ---- Memory operations (ByteBuffer) ----
+    else if (strcmp(callee_name, "mem_alloc") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.memAlloc(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "mem_free") == 0 && call->arg_count == 1) {
+        char* a = kt_emit_expr(compiler, call->args[0]);
+        kt_sb_appendf(&sb, "S.memFree(%s)", a); free(a);
+    }
+    else if (strcmp(callee_name, "mem_read") == 0 && call->arg_count == 3) {
+        char* ptr = kt_emit_expr(compiler, call->args[0]);
+        char* off = kt_emit_expr(compiler, call->args[1]);
+        char* typ = kt_emit_expr(compiler, call->args[2]);
+        kt_sb_appendf(&sb, "S.memRead(%s, %s, %s)", ptr, off, typ);
+        free(ptr); free(off); free(typ);
+    }
+    else if (strcmp(callee_name, "mem_write") == 0 && call->arg_count == 4) {
+        char* ptr = kt_emit_expr(compiler, call->args[0]);
+        char* off = kt_emit_expr(compiler, call->args[1]);
+        char* typ = kt_emit_expr(compiler, call->args[2]);
+        char* val = kt_emit_expr(compiler, call->args[3]);
+        kt_sb_appendf(&sb, "S.memWrite(%s, %s, %s, %s)", ptr, off, typ, val);
+        free(ptr); free(off); free(typ); free(val);
+    }
+    // ---- Assembly (stub on JVM) ----
+    else if (strcmp(callee_name, "asm_arch") == 0) {
+        kt_sb_append(&sb, "S.str(\"jvm\")");
+    }
+    else if (strcmp(callee_name, "asm_exec") == 0 || strcmp(callee_name, "asm_compile") == 0) {
+        kt_sb_append(&sb, "S.nil /* assembly not available on JVM */");
     }
     // ---- I/O ----
     else if (strcmp(callee_name, "input") == 0) {
@@ -855,7 +1059,21 @@ static char* kt_emit_expr(KtCompiler* compiler, Expr* expr) {
                 free(name);
                 return sanitized;
             }
+
+            // If variable is type-specialized, wrap it back to SageVal for dynamic contexts
+            KtNameEntry* entry = kt_find_name(compiler->locals, name);
+            if (!entry) entry = kt_find_name(compiler->globals, name);
             free(name);
+            if (entry && entry->spec_type != KT_TYPE_DYNAMIC) {
+                KtStringBuffer sb; kt_sb_init(&sb);
+                switch (entry->spec_type) {
+                    case KT_TYPE_NUMBER: kt_sb_appendf(&sb, "S.num(%s)", kt_name); break;
+                    case KT_TYPE_STRING: kt_sb_appendf(&sb, "S.str(%s)", kt_name); break;
+                    case KT_TYPE_BOOLEAN: kt_sb_appendf(&sb, "S.bool(%s)", kt_name); break;
+                    default: kt_sb_append(&sb, kt_name); break;
+                }
+                return kt_sb_take(&sb);
+            }
             return kt_str_dup(kt_name);
         }
         case EXPR_CALL:
@@ -877,12 +1095,22 @@ static char* kt_emit_expr(KtCompiler* compiler, Expr* expr) {
             return kt_emit_slice_expr(compiler, &expr->as.slice);
         case EXPR_SET:
             return kt_emit_set_expr(compiler, &expr->as.set);
-        case EXPR_AWAIT:
-            return kt_emit_expr(compiler, expr->as.await.expression);
+        case EXPR_AWAIT: {
+            // Emit runBlocking { suspendExpr } to actually await the coroutine
+            char* inner = kt_emit_expr(compiler, expr->as.await.expression);
+            KtStringBuffer sb; kt_sb_init(&sb);
+            kt_sb_appendf(&sb, "kotlinx.coroutines.runBlocking { %s }", inner);
+            free(inner);
+            return kt_sb_take(&sb);
+        }
         case EXPR_SUPER: {
+            // Standalone super reference (rare — usually handled by EXPR_CALL above)
             char* method = kt_token_to_string(expr->as.super_expr.method);
             KtStringBuffer sb; kt_sb_init(&sb);
-            kt_sb_appendf(&sb, "S.superCall(this, \"%s\")", method);
+            if (strcmp(method, "init") == 0 || strcmp(method, "__init__") == 0)
+                kt_sb_append(&sb, "super.sageInit()");
+            else
+                kt_sb_appendf(&sb, "super.%s()", method);
             free(method);
             return kt_sb_take(&sb);
         }
@@ -945,6 +1173,34 @@ static void kt_emit_stmt(KtCompiler* compiler, Stmt* stmt) {
                 free(name);
                 break;
             }
+
+            // Type specialization at -O2+: emit native types for simple literals
+            if (compiler->opt_level >= 2 && stmt->as.let.initializer) {
+                KtSpecType spec = kt_infer_expr_type(stmt->as.let.initializer);
+                // Tag the name entry with the inferred type
+                KtNameEntry* entry = kt_find_name(compiler->locals, name);
+                if (!entry) entry = kt_find_name(compiler->globals, name);
+                if (entry) entry->spec_type = spec;
+
+                if (spec == KT_TYPE_NUMBER) {
+                    char* val = kt_emit_spec_number(compiler, stmt->as.let.initializer);
+                    kt_emit_line(compiler, "var %s: Double = %s", kt_name, val);
+                    free(name); free(val);
+                    break;
+                } else if (spec == KT_TYPE_STRING && stmt->as.let.initializer->type == EXPR_STRING) {
+                    char* escaped = kt_escape_string(stmt->as.let.initializer->as.string.value);
+                    kt_emit_line(compiler, "var %s: String = \"%s\"", kt_name, escaped);
+                    free(escaped);
+                    free(name);
+                    break;
+                } else if (spec == KT_TYPE_BOOLEAN) {
+                    int bval = stmt->as.let.initializer->as.boolean.value;
+                    kt_emit_line(compiler, "var %s: Boolean = %s", kt_name, bval ? "true" : "false");
+                    free(name);
+                    break;
+                }
+            }
+
             char* expr = stmt->as.let.initializer
                 ? kt_emit_expr(compiler, stmt->as.let.initializer)
                 : kt_str_dup("S.nil");
@@ -1108,13 +1364,21 @@ static void kt_emit_stmt(KtCompiler* compiler, Stmt* stmt) {
             break;
         }
         case STMT_YIELD: {
-            // In Kotlin backend, yield is emitted as return (same as C backend)
+            // Emit Kotlin sequence yield()
             if (stmt->as.yield_stmt.value) {
                 char* val = kt_emit_expr(compiler, stmt->as.yield_stmt.value);
-                kt_emit_line(compiler, "return %s", val);
+                if (compiler->in_generator) {
+                    kt_emit_line(compiler, "yield(%s)", val);
+                } else {
+                    kt_emit_line(compiler, "return %s", val);
+                }
                 free(val);
             } else {
-                kt_emit_line(compiler, "return S.nil");
+                if (compiler->in_generator) {
+                    kt_emit_line(compiler, "yield(S.nil)");
+                } else {
+                    kt_emit_line(compiler, "return S.nil");
+                }
             }
             break;
         }
@@ -1442,6 +1706,16 @@ static void kt_emit_function_definition(KtCompiler* compiler, Stmt* stmt) {
     }
     kt_collect_local_lets(compiler, proc_stmt->body, &compiler->locals);
 
+    // Detect generator (proc contains yield statements)
+    int is_generator = 0;
+    if (proc_stmt->body != NULL) {
+        Stmt* scan_body = proc_stmt->body;
+        if (scan_body->type == STMT_BLOCK)
+            is_generator = kt_body_has_yield(scan_body->as.block.statements);
+        else
+            is_generator = kt_body_has_yield(scan_body);
+    }
+
     // Emit function signature
     int is_suspend = (stmt->type == STMT_ASYNC_PROC);
     kt_emit_indent(compiler);
@@ -1457,24 +1731,18 @@ static void kt_emit_function_definition(KtCompiler* compiler, Stmt* stmt) {
         fprintf(compiler->out, "%s: SageVal", param ? param->kt_name : pname);
         free(pname);
     }
-    fputs("): SageVal {\n", compiler->out);
+
+    if (is_generator) {
+        // Generator: return Sequence<SageVal>, body wrapped in sequence { }
+        fputs("): Sequence<SageVal> = sequence {\n", compiler->out);
+    } else {
+        fputs("): SageVal {\n", compiler->out);
+    }
     compiler->indent++;
 
-    // Declare non-param locals
-    for (KtNameEntry* local = compiler->locals; local != NULL; local = local->next) {
-        // Skip params (already declared in signature)
-        int is_param = 0;
-        for (int i = 0; i < proc_stmt->param_count; i++) {
-            char* pname = kt_token_to_string(proc_stmt->params[i]);
-            if (strcmp(local->sage_name, pname) == 0) is_param = 1;
-            free(pname);
-            if (is_param) break;
-        }
-        // Params that need mutation get a local shadow
-        if (is_param) continue;
-    }
-
     compiler->in_function_body = 1;
+    compiler->in_generator = is_generator;
+
     // Emit body
     if (proc_stmt->body != NULL) {
         if (proc_stmt->body->type == STMT_BLOCK)
@@ -1482,9 +1750,13 @@ static void kt_emit_function_definition(KtCompiler* compiler, Stmt* stmt) {
         else
             kt_emit_stmt_list(compiler, proc_stmt->body);
     }
-    compiler->in_function_body = 0;
 
-    kt_emit_line(compiler, "return S.nil");
+    compiler->in_function_body = 0;
+    compiler->in_generator = 0;
+
+    if (!is_generator) {
+        kt_emit_line(compiler, "return S.nil");
+    }
     compiler->indent--;
     kt_emit_line(compiler, "}");
     fputc('\n', compiler->out);
@@ -1616,6 +1888,7 @@ static void kt_emit_prelude(FILE* out) {
         "\n"
         "import sage.runtime.*\n"
         "import sage.runtime.SageRuntime as S\n"
+        "import kotlinx.coroutines.*\n"
         "\n"
         "typealias SageVal = SageRuntime.Value\n"
         "\n",
@@ -1674,6 +1947,7 @@ static int write_kotlin_output_internal(const char* source, const char* input_pa
     compiler.out = out;
     compiler.input_path = input_path;
     compiler.next_unique_id = 1;
+    compiler.opt_level = opt_level;
 
     Stmt* program = parse_program(source, input_path);
 
@@ -1788,6 +2062,8 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
     fputs("        data class Tup(val v: List<Value>) : Value()\n", f);
     fputs("        data class Obj(val v: SageObject) : Value()\n", f);
     fputs("        data class Fn(val name: String, val f: (Array<out Value>) -> Value) : Value()\n", f);
+    fputs("        data class Gen(val v: Sequence<Value>) : Value()\n", f);
+    fputs("        data class Ptr(val buf: java.nio.ByteBuffer, val size: Int) : Value()\n", f);
     fputs("    }\n\n", f);
 
     // Constructors
@@ -1888,18 +2164,19 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
     fputs("    fun typeOf(v: Value): Value = str(when(v) {\n", f);
     fputs("        is Value.Num->\"number\";is Value.Str->\"string\";is Value.Bool->\"bool\";is Value.Nil->\"nil\"\n", f);
     fputs("        is Value.Arr->\"array\";is Value.Dict->\"dict\";is Value.Tup->\"tuple\"\n", f);
-    fputs("        is Value.Obj->v.v.className;is Value.Fn->\"function\"\n    })\n", f);
+    fputs("        is Value.Obj->v.v.className;is Value.Fn->\"function\";is Value.Gen->\"generator\";is Value.Ptr->\"pointer\"\n    })\n", f);
     fputs("    fun toKString(v: Value): String = when(v) {\n", f);
     fputs("        is Value.Num -> { val d=v.v; if(d==d.toLong().toDouble()) d.toLong().toString() else d.toString() }\n", f);
     fputs("        is Value.Str -> v.v; is Value.Bool -> if(v.v) \"true\" else \"false\"; is Value.Nil -> \"nil\"\n", f);
     fputs("        is Value.Arr -> \"[\" + v.v.joinToString(\", \"){toKString(it)} + \"]\"\n", f);
     fputs("        is Value.Dict -> \"{\" + v.v.entries.joinToString(\", \"){\"\\\"${it.key}\\\": ${toKString(it.value)}\"} + \"}\"\n", f);
     fputs("        is Value.Tup -> \"(\" + v.v.joinToString(\", \"){toKString(it)} + \")\"\n", f);
-    fputs("        is Value.Obj -> \"<${v.v.className} instance>\"; is Value.Fn -> \"<function ${v.name}>\"\n    }\n", f);
+    fputs("        is Value.Obj -> \"<${v.v.className} instance>\"; is Value.Fn -> \"<function ${v.name}>\"\n", f);
+    fputs("        is Value.Gen -> \"<generator>\"; is Value.Ptr -> \"<pointer ${v.size}B>\"\n    }\n", f);
     fputs("    fun toDouble(v: Value): Double = when(v) { is Value.Num->v.v; is Value.Str->v.v.toDoubleOrNull()?:0.0; is Value.Bool->if(v.v)1.0 else 0.0; else->0.0 }\n\n", f);
 
-    // Iteration
-    fputs("    fun toIterable(v: Value): List<Value> = when(v) { is Value.Arr->v.v; is Value.Str->v.v.map{str(it.toString())}; is Value.Dict->v.v.keys.map{str(it)}; is Value.Tup->v.v; else->emptyList() }\n\n", f);
+    // Iteration (supports arrays, strings, dicts, tuples, and generators)
+    fputs("    fun toIterable(v: Value): Iterable<Value> = when(v) { is Value.Arr->v.v; is Value.Str->v.v.map{str(it.toString())}; is Value.Dict->v.v.keys.map{str(it)}; is Value.Tup->v.v; is Value.Gen->v.v.asIterable(); else->emptyList() }\n\n", f);
 
     // Property access
     fputs("    fun getProperty(obj: Value, name: String): Value = when(obj) {\n", f);
@@ -1933,6 +2210,29 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
     fputs("            else->nil\n        }\n        return nil\n    }\n", f);
     fputs("    fun superCall(obj: Value, method: String, vararg args: Value): Value = callMethod(obj, method, *args)\n\n", f);
 
+    // Memory operations (ByteBuffer-backed)
+    fputs("    fun memAlloc(size: Value): Value { val n=toDouble(size).toInt().coerceIn(1,67108864); return Value.Ptr(java.nio.ByteBuffer.allocateDirect(n).order(java.nio.ByteOrder.nativeOrder()), n) }\n", f);
+    fputs("    fun memFree(ptr: Value): Value { if(ptr is Value.Ptr) { (ptr.buf as? sun.nio.ch.DirectBuffer)?.cleaner()?.clean() }; return nil }\n", f);
+    fputs("    fun memRead(ptr: Value, offset: Value, type: Value): Value {\n", f);
+    fputs("        if(ptr !is Value.Ptr) return nil; val o=toDouble(offset).toInt(); val t=toKString(type); val b=ptr.buf\n", f);
+    fputs("        return when(t) { \"byte\"->num(b.get(o).toDouble()); \"int\"->num(b.getInt(o).toDouble()); \"double\"->num(b.getDouble(o))\n", f);
+    fputs("            \"string\"->{ val sb=StringBuilder(); var i=o; while(i<ptr.size&&b.get(i)!=0.toByte()){sb.append(b.get(i).toInt().toChar());i++}; str(sb.toString()) }\n", f);
+    fputs("            else->nil }\n    }\n", f);
+    fputs("    fun memWrite(ptr: Value, offset: Value, type: Value, value: Value): Value {\n", f);
+    fputs("        if(ptr !is Value.Ptr) return nil; val o=toDouble(offset).toInt(); val t=toKString(type); val b=ptr.buf\n", f);
+    fputs("        when(t) { \"byte\"->b.put(o, toDouble(value).toInt().toByte()); \"int\"->b.putInt(o, toDouble(value).toInt()); \"double\"->b.putDouble(o, toDouble(value))\n", f);
+    fputs("            \"string\"->{ val s=toKString(value); for(i in s.indices) b.put(o+i, s[i].code.toByte()); b.put(o+s.length, 0) } }; return nil\n    }\n\n", f);
+
+    // FFI (JNI bridge — load native libraries and call functions via reflection)
+    fputs("    private val ffiLibs = mutableMapOf<String, Any?>()\n", f);
+    fputs("    fun ffiOpen(name: Value): Value { val n=toKString(name); try { System.loadLibrary(n.removeSuffix(\".so\").removePrefix(\"lib\")); ffiLibs[n]=true; return str(n) } catch(_:Exception){ return nil } }\n", f);
+    fputs("    fun ffiCall(lib: Value, func: Value, retType: Value, args: Value = nil): Value {\n", f);
+    fputs("        // JNI native calls require pre-declared external functions;\n", f);
+    fputs("        // this stub logs the call for debugging. Real FFI needs JNI bindings.\n", f);
+    fputs("        val fname = toKString(func); val rt = toKString(retType)\n", f);
+    fputs("        println(\"[FFI] call $fname -> $rt\"); return nil\n    }\n", f);
+    fputs("    fun ffiClose(lib: Value): Value { if(lib is Value.Str) ffiLibs.remove(lib.v); return nil }\n\n", f);
+
     // I/O + GC
     fputs("    fun printLn(v: Value) = println(toKString(v))\n", f);
     fputs("    fun input(): Value = str(readlnOrNull() ?: \"\")\n", f);
@@ -1954,6 +2254,9 @@ int compile_source_to_android(const char* source, const char* input_path,
     const char* pkg = (package_name && package_name[0]) ? package_name : "com.sage.app";
     const char* name = (app_name && app_name[0]) ? app_name : "SageApp";
     int sdk = min_sdk > 0 ? min_sdk : 24;
+
+    // Detect Compose usage by scanning source for "import android.compose"
+    int uses_compose = (strstr(source, "import android.compose") != NULL);
 
     // Create directory structure
     char pkg_path[256];
@@ -2036,64 +2339,126 @@ int compile_source_to_android(const char* source, const char* input_path,
         pkg, name
     );
 
-    // 4. Write MainActivity.kt (minimal launcher that runs Sage main)
+    // 4. Write MainActivity.kt
     char activity_path[1024];
     snprintf(activity_path, sizeof(activity_path), "%s/MainActivity.kt", src_dir);
-    kt_write_file_fmt(activity_path,
-        "package %s\n"
-        "\n"
-        "import android.os.Bundle\n"
-        "import android.widget.ScrollView\n"
-        "import android.widget.TextView\n"
-        "import androidx.appcompat.app.AppCompatActivity\n"
-        "import sage.runtime.*\n"
-        "import sage.runtime.SageRuntime as S\n"
-        "import java.io.ByteArrayOutputStream\n"
-        "import java.io.PrintStream\n"
-        "\n"
-        "typealias SageVal = SageRuntime.Value\n"
-        "\n"
-        "class MainActivity : AppCompatActivity() {\n"
-        "    override fun onCreate(savedInstanceState: Bundle?) {\n"
-        "        super.onCreate(savedInstanceState)\n"
-        "\n"
-        "        // Capture stdout from Sage's main()\n"
-        "        val capture = ByteArrayOutputStream()\n"
-        "        val oldOut = System.out\n"
-        "        System.setOut(PrintStream(capture))\n"
-        "\n"
-        "        try {\n"
-        "            main() // Sage's transpiled main\n"
-        "        } catch (e: Exception) {\n"
-        "            capture.write(\"Error: ${e.message}\".toByteArray())\n"
-        "        } finally {\n"
-        "            System.setOut(oldOut)\n"
-        "        }\n"
-        "\n"
-        "        // Display output in a scrollable text view\n"
-        "        val tv = TextView(this).apply {\n"
-        "            text = capture.toString()\n"
-        "            textSize = 16f\n"
-        "            setPadding(32, 32, 32, 32)\n"
-        "            setTextIsSelectable(true)\n"
-        "        }\n"
-        "        val scroll = ScrollView(this).apply { addView(tv) }\n"
-        "        setContentView(scroll)\n"
-        "    }\n"
-        "}\n",
-        pkg
-    );
+
+    if (uses_compose) {
+        // Compose-based MainActivity with @Composable entry point
+        kt_write_file_fmt(activity_path,
+            "package %s\n"
+            "\n"
+            "import android.os.Bundle\n"
+            "import androidx.activity.ComponentActivity\n"
+            "import androidx.activity.compose.setContent\n"
+            "import androidx.compose.foundation.layout.*\n"
+            "import androidx.compose.foundation.rememberScrollState\n"
+            "import androidx.compose.foundation.verticalScroll\n"
+            "import androidx.compose.material3.*\n"
+            "import androidx.compose.runtime.*\n"
+            "import androidx.compose.ui.Modifier\n"
+            "import androidx.compose.ui.unit.dp\n"
+            "import androidx.compose.ui.unit.sp\n"
+            "import sage.runtime.*\n"
+            "import sage.runtime.SageRuntime as S\n"
+            "import java.io.ByteArrayOutputStream\n"
+            "import java.io.PrintStream\n"
+            "\n"
+            "typealias SageVal = SageRuntime.Value\n"
+            "\n"
+            "class MainActivity : ComponentActivity() {\n"
+            "    override fun onCreate(savedInstanceState: Bundle?) {\n"
+            "        super.onCreate(savedInstanceState)\n"
+            "        setContent {\n"
+            "            MaterialTheme {\n"
+            "                SageApp()\n"
+            "            }\n"
+            "        }\n"
+            "    }\n"
+            "}\n"
+            "\n"
+            "@Composable\n"
+            "fun SageApp() {\n"
+            "    val output = remember {\n"
+            "        val capture = ByteArrayOutputStream()\n"
+            "        val oldOut = System.out\n"
+            "        System.setOut(PrintStream(capture))\n"
+            "        try { main() } catch (e: Exception) { capture.write(\"Error: ${e.message}\".toByteArray()) }\n"
+            "        finally { System.setOut(oldOut) }\n"
+            "        capture.toString()\n"
+            "    }\n"
+            "    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {\n"
+            "        Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {\n"
+            "            output.lines().forEach { line ->\n"
+            "                Text(text = line, fontSize = 16.sp)\n"
+            "            }\n"
+            "        }\n"
+            "    }\n"
+            "}\n",
+            pkg
+        );
+    } else {
+        // Standard programmatic-view MainActivity
+        kt_write_file_fmt(activity_path,
+            "package %s\n"
+            "\n"
+            "import android.os.Bundle\n"
+            "import android.widget.ScrollView\n"
+            "import android.widget.TextView\n"
+            "import androidx.appcompat.app.AppCompatActivity\n"
+            "import sage.runtime.*\n"
+            "import sage.runtime.SageRuntime as S\n"
+            "import java.io.ByteArrayOutputStream\n"
+            "import java.io.PrintStream\n"
+            "\n"
+            "typealias SageVal = SageRuntime.Value\n"
+            "\n"
+            "class MainActivity : AppCompatActivity() {\n"
+            "    override fun onCreate(savedInstanceState: Bundle?) {\n"
+            "        super.onCreate(savedInstanceState)\n"
+            "\n"
+            "        val capture = ByteArrayOutputStream()\n"
+            "        val oldOut = System.out\n"
+            "        System.setOut(PrintStream(capture))\n"
+            "        try { main() }\n"
+            "        catch (e: Exception) { capture.write(\"Error: ${e.message}\".toByteArray()) }\n"
+            "        finally { System.setOut(oldOut) }\n"
+            "\n"
+            "        val tv = TextView(this).apply {\n"
+            "            text = capture.toString()\n"
+            "            textSize = 16f\n"
+            "            setPadding(32, 32, 32, 32)\n"
+            "            setTextIsSelectable(true)\n"
+            "        }\n"
+            "        val scroll = ScrollView(this).apply { addView(tv) }\n"
+            "        setContentView(scroll)\n"
+            "    }\n"
+            "}\n",
+            pkg
+        );
+    }
 
     // 5. Write build.gradle.kts (project root)
     char root_gradle[1024];
     snprintf(root_gradle, sizeof(root_gradle), "%s/build.gradle.kts", output_dir);
-    kt_write_file(root_gradle,
-        "// Top-level build file generated by Sage Kotlin backend\n"
-        "plugins {\n"
-        "    id(\"com.android.application\") version \"8.2.0\" apply false\n"
-        "    id(\"org.jetbrains.kotlin.android\") version \"1.9.22\" apply false\n"
-        "}\n"
-    );
+
+    if (uses_compose) {
+        kt_write_file(root_gradle,
+            "// Top-level build file generated by Sage Kotlin backend (Compose)\n"
+            "plugins {\n"
+            "    id(\"com.android.application\") version \"8.2.0\" apply false\n"
+            "    id(\"org.jetbrains.kotlin.android\") version \"1.9.22\" apply false\n"
+            "}\n"
+        );
+    } else {
+        kt_write_file(root_gradle,
+            "// Top-level build file generated by Sage Kotlin backend\n"
+            "plugins {\n"
+            "    id(\"com.android.application\") version \"8.2.0\" apply false\n"
+            "    id(\"org.jetbrains.kotlin.android\") version \"1.9.22\" apply false\n"
+            "}\n"
+        );
+    }
 
     // 6. Write settings.gradle.kts
     char settings_path[1024];
@@ -2121,48 +2486,111 @@ int compile_source_to_android(const char* source, const char* input_path,
     // 7. Write app/build.gradle.kts
     char app_gradle[1024];
     snprintf(app_gradle, sizeof(app_gradle), "%s/app/build.gradle.kts", output_dir);
-    kt_write_file_fmt(app_gradle,
-        "plugins {\n"
-        "    id(\"com.android.application\")\n"
-        "    id(\"org.jetbrains.kotlin.android\")\n"
-        "}\n"
-        "\n"
-        "android {\n"
-        "    namespace = \"%s\"\n"
-        "    compileSdk = 34\n"
-        "\n"
-        "    defaultConfig {\n"
-        "        applicationId = \"%s\"\n"
-        "        minSdk = %d\n"
-        "        targetSdk = 34\n"
-        "        versionCode = 1\n"
-        "        versionName = \"1.0\"\n"
-        "    }\n"
-        "\n"
-        "    buildTypes {\n"
-        "        release {\n"
-        "            isMinifyEnabled = true\n"
-        "            proguardFiles(getDefaultProguardFile(\"proguard-android-optimize.txt\"))\n"
-        "        }\n"
-        "    }\n"
-        "\n"
-        "    compileOptions {\n"
-        "        sourceCompatibility = JavaVersion.VERSION_17\n"
-        "        targetCompatibility = JavaVersion.VERSION_17\n"
-        "    }\n"
-        "\n"
-        "    kotlinOptions {\n"
-        "        jvmTarget = \"17\"\n"
-        "    }\n"
-        "}\n"
-        "\n"
-        "dependencies {\n"
-        "    implementation(\"androidx.core:core-ktx:1.12.0\")\n"
-        "    implementation(\"androidx.appcompat:appcompat:1.6.1\")\n"
-        "    implementation(\"com.google.android.material:material:1.11.0\")\n"
-        "}\n",
-        pkg, pkg, sdk
-    );
+
+    if (uses_compose) {
+        kt_write_file_fmt(app_gradle,
+            "plugins {\n"
+            "    id(\"com.android.application\")\n"
+            "    id(\"org.jetbrains.kotlin.android\")\n"
+            "}\n"
+            "\n"
+            "android {\n"
+            "    namespace = \"%s\"\n"
+            "    compileSdk = 34\n"
+            "\n"
+            "    defaultConfig {\n"
+            "        applicationId = \"%s\"\n"
+            "        minSdk = %d\n"
+            "        targetSdk = 34\n"
+            "        versionCode = 1\n"
+            "        versionName = \"1.0\"\n"
+            "    }\n"
+            "\n"
+            "    buildTypes {\n"
+            "        release {\n"
+            "            isMinifyEnabled = true\n"
+            "            proguardFiles(getDefaultProguardFile(\"proguard-android-optimize.txt\"))\n"
+            "        }\n"
+            "    }\n"
+            "\n"
+            "    compileOptions {\n"
+            "        sourceCompatibility = JavaVersion.VERSION_17\n"
+            "        targetCompatibility = JavaVersion.VERSION_17\n"
+            "    }\n"
+            "\n"
+            "    kotlinOptions {\n"
+            "        jvmTarget = \"17\"\n"
+            "    }\n"
+            "\n"
+            "    buildFeatures {\n"
+            "        compose = true\n"
+            "    }\n"
+            "\n"
+            "    composeOptions {\n"
+            "        kotlinCompilerExtensionVersion = \"1.5.8\"\n"
+            "    }\n"
+            "}\n"
+            "\n"
+            "dependencies {\n"
+            "    implementation(\"androidx.core:core-ktx:1.12.0\")\n"
+            "    implementation(\"androidx.activity:activity-compose:1.8.2\")\n"
+            "    implementation(platform(\"androidx.compose:compose-bom:2024.01.00\"))\n"
+            "    implementation(\"androidx.compose.ui:ui\")\n"
+            "    implementation(\"androidx.compose.material3:material3\")\n"
+            "    implementation(\"androidx.compose.ui:ui-tooling-preview\")\n"
+            "    implementation(\"androidx.navigation:navigation-compose:2.7.6\")\n"
+            "    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3\")\n"
+            "    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3\")\n"
+            "    debugImplementation(\"androidx.compose.ui:ui-tooling\")\n"
+            "}\n",
+            pkg, pkg, sdk
+        );
+    } else {
+        kt_write_file_fmt(app_gradle,
+            "plugins {\n"
+            "    id(\"com.android.application\")\n"
+            "    id(\"org.jetbrains.kotlin.android\")\n"
+            "}\n"
+            "\n"
+            "android {\n"
+            "    namespace = \"%s\"\n"
+            "    compileSdk = 34\n"
+            "\n"
+            "    defaultConfig {\n"
+            "        applicationId = \"%s\"\n"
+            "        minSdk = %d\n"
+            "        targetSdk = 34\n"
+            "        versionCode = 1\n"
+            "        versionName = \"1.0\"\n"
+            "    }\n"
+            "\n"
+            "    buildTypes {\n"
+            "        release {\n"
+            "            isMinifyEnabled = true\n"
+            "            proguardFiles(getDefaultProguardFile(\"proguard-android-optimize.txt\"))\n"
+            "        }\n"
+            "    }\n"
+            "\n"
+            "    compileOptions {\n"
+            "        sourceCompatibility = JavaVersion.VERSION_17\n"
+            "        targetCompatibility = JavaVersion.VERSION_17\n"
+            "    }\n"
+            "\n"
+            "    kotlinOptions {\n"
+            "        jvmTarget = \"17\"\n"
+            "    }\n"
+            "}\n"
+            "\n"
+            "dependencies {\n"
+            "    implementation(\"androidx.core:core-ktx:1.12.0\")\n"
+            "    implementation(\"androidx.appcompat:appcompat:1.6.1\")\n"
+            "    implementation(\"com.google.android.material:material:1.11.0\")\n"
+            "    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3\")\n"
+            "    implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3\")\n"
+            "}\n",
+            pkg, pkg, sdk
+        );
+    }
 
     // 8. Write gradle.properties
     char gradle_props[1024];

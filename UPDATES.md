@@ -2,6 +2,13 @@
 
 ## v3.2.0 — Kotlin/Android Backend (April 2026)
 
+- **Generators**: `yield` transpiles to Kotlin `sequence { yield() }` blocks with `Sequence<SageVal>` return type; full resumable generator support in for-loops
+- **Async/Await**: `async proc` emits `suspend fun`; `await` emits `kotlinx.coroutines.runBlocking { }` with real suspension; kotlinx-coroutines dependency added to Android projects
+- **Super calls**: native Kotlin `super.method(args)` dispatch instead of reflection-based `S.superCall()`; `super.init()` maps to `super.sageInit()`
+- **FFI/Memory**: `mem_alloc`→`ByteBuffer.allocateDirect`, `mem_read`/`mem_write`→buffer typed get/put, `mem_free`→cleanup; `ffi_open`→`System.loadLibrary`, `ffi_call` JNI stub; `asm_arch()`→`"jvm"`
+- **Type specialization** (`-O2+`): variables initialized with number/string/boolean literals emit native Kotlin `Double`/`String`/`Boolean` types, eliminating SageVal boxing overhead
+- **Jetpack Compose codegen**: `import android.compose` triggers Compose-based project generation — `@Composable` Activity, Material 3, Compose BOM, navigation-compose, ui-tooling
+- **Runtime**: added `Value.Gen` (sequences), `Value.Ptr` (ByteBuffer-backed pointers); `toIterable()` handles generators; `typeOf()`/`toKString()` handle all new types
 - **Kotlin transpiler backend** (`--emit-kotlin`): Sage AST to Kotlin source code transpilation
   - Full expression, statement, and control flow transpilation (arithmetic, comparisons, logical, bitwise)
   - Classes with inheritance, method dispatch, property access (`self.x` patterns)
