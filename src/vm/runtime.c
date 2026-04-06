@@ -77,7 +77,14 @@ ExecResult sage_execute_stmt(Stmt* stmt, Env* env, SageRuntimeMode mode) {
     }
 
     if (mode == SAGE_RUNTIME_AUTO) {
-        mode = SAGE_RUNTIME_BYTECODE;
+        // Auto mode: JIT profiling + interpreter (hybrid).
+        // The JIT profiles function calls and provides type feedback.
+        // On bare-metal / Pico this falls back to AST (no fork/system).
+#if SAGE_PLATFORM_PICO
+        mode = SAGE_RUNTIME_AST;
+#else
+        mode = SAGE_RUNTIME_JIT;
+#endif
     }
 
     if (mode == SAGE_RUNTIME_JIT) {
@@ -85,8 +92,7 @@ ExecResult sage_execute_stmt(Stmt* stmt, Env* env, SageRuntimeMode mode) {
         if (!g_repl_jit_initialized) {
             jit_init(&g_repl_jit);
             g_repl_jit_initialized = 1;
-            fprintf(stderr, "JIT: Enabled (threshold=%d calls, pool=%zuKB)\n",
-                    JIT_HOT_THRESHOLD, g_repl_jit.pool.capacity / 1024);
+            // Only show JIT banner in explicit --jit mode (not auto)
         }
         interpreter_set_jit(&g_repl_jit);
         ExecResult result = interpret(stmt, env);

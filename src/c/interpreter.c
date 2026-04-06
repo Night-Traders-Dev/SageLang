@@ -40,6 +40,15 @@ JitState* interpreter_get_jit(void) { return g_jit; }
 
 // Recursion depth tracking to prevent stack overflow
 #define MAX_RECURSION_DEPTH 1000
+
+// Check if a statement has a specific pragma decorator (@nojit, @noaot, etc.)
+static int stmt_has_pragma(Stmt* stmt, const char* name) {
+    if (!stmt || !stmt->pragmas) return 0;
+    for (Pragma* p = stmt->pragmas; p; p = p->next) {
+        if (strcmp(p->name, name) == 0) return 1;
+    }
+    return 0;
+}
 // Maximum loop iterations to prevent hangs and stack exhaustion
 #define MAX_LOOP_ITERATIONS 1000000
 #if SAGE_PLATFORM_PICO
@@ -2722,14 +2731,15 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     env_define(scope, paramName.start, paramName.length, eval_args[i]);
                 }
 
-                // JIT: Profile this call and check if we should compile
+                // JIT: Profile this call and check if we should compile.
+                // Pragmas @nojit/@noaot/@noprofile checked via --runtime flag;
+                // per-function pragma control requires Stmt* which is not
+                // available at the FunctionValue call site.
                 int func_id = -1;
                 if (g_jit && g_jit->enabled) {
-                    // Use proc pointer as stable function ID
                     func_id = (int)((uintptr_t)func % 100000);
                     jit_record_call(g_jit, func_id, func->param_count, eval_args);
 
-                    // Check if function is hot and should be JIT compiled
                     JitProfile* profile = jit_get_profile(g_jit, func_id);
                     if (profile && jit_should_compile(g_jit, func_id)) {
                         JitNativeFn native = jit_compile_function(g_jit, func, scope);

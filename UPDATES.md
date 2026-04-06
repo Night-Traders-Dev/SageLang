@@ -1,5 +1,21 @@
 # SageLang Updates
 
+## v3.3.0 — JIT+AOT Hybrid Default Runtime (April 2026)
+
+- **Default runtime changed to hybrid JIT+AOT** (`SAGE_RUNTIME_AUTO`):
+  - Auto mode resolves to JIT profiling on hosted platforms (desktop, Android, server)
+  - Auto mode resolves to AST interpreter on bare-metal (`SAGE_PLATFORM_PICO`)
+  - JIT profiling is silent in auto mode (no banner), explicit `--jit` shows diagnostics
+  - Users can override with `--runtime ast`, `--runtime bytecode`, `--runtime jit`, `--runtime aot`
+- **Pragma infrastructure** for per-function JIT/AOT control:
+  - `@nojit` — skip JIT profiling for decorated function
+  - `@noaot` — skip AOT compilation for decorated function
+  - `@noprofile` — skip all profiling for decorated function
+  - `stmt_has_pragma()` helper in interpreter for pragma checking
+- **Bare-metal safety**: Auto runtime detects `SAGE_PLATFORM_PICO` and falls back to AST — no `fork()`, `system()`, or dynamic linking required
+
+---
+
 ## v3.2.9 — Documentation Refresh + Benchmark Expansion (April 2026)
 
 - **README overhaul**: Corrected JIT description (profiler, not native compiler), fixed super call docs (auto-self), updated recursion depth description, removed outdated performance claims

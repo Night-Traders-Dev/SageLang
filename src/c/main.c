@@ -1540,7 +1540,7 @@ static void run(const char* source, const char* filename, SageRuntimeMode runtim
 } while(0)
 
 int main(int argc, const char* argv[]) {
-    SageRuntimeMode runtime_mode = SAGE_RUNTIME_AST;
+    SageRuntimeMode runtime_mode = SAGE_RUNTIME_AUTO;
     const char** cmd_argv = argv;
     int cmd_argc = argc;
 
