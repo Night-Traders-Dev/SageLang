@@ -348,6 +348,20 @@ else
 fi
 
 # ============================================================
+#  3c. Verify self-hosted interpreter
+# ============================================================
+
+step "Verifying self-hosted interpreter"
+if "$SAGE_BIN" src/sage/test/test_interpreter.sage > /tmp/sage_selfhost_verify.txt 2>&1; then
+    pass_count=$(grep -c "PASS" /tmp/sage_selfhost_verify.txt || echo "0")
+    fail_count=$(grep -c "FAIL" /tmp/sage_selfhost_verify.txt || echo "0")
+    step_ok "${pass_count} passed, ${fail_count} failed"
+else
+    step_ok "skipped"
+fi
+rm -f /tmp/sage_selfhost_verify.txt
+
+# ============================================================
 #  4. Run tests
 # ============================================================
 

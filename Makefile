@@ -187,7 +187,7 @@ LSP_MAIN_OBJECT = $(OBJ_DIR)/lsp_main.o
 # Build Rules
 # ============================================================================
 
-.PHONY: all clean run install uninstall help test examples charts pdf
+.PHONY: all clean run install uninstall help test examples charts pdf sage-boot sage-bench benchmark benchmark-chart
 
 all: $(TARGET) $(LSP_TARGET) $(LLVM_RT_OBJECT) $(GPU_API_OBJECT) charts pdf
 
@@ -266,6 +266,30 @@ $(BOOK_PDF): $(BOOK_SRC)
 	else \
 		echo "Skipping PDF generation (requires pandoc + xelatex)"; \
 	fi
+
+# Run a Sage program through the self-hosted interpreter.
+# This uses the optimized self-hosted path (dispatch tables, signal singletons).
+# Usage: make sage-boot FILE=path/to/program.sage
+SELFHOST_ENTRY = src/sage/sage.sage
+
+sage-boot: $(TARGET)
+	@if [ -z "$(FILE)" ]; then echo "Usage: make sage-boot FILE=path/to/file.sage"; exit 1; fi
+	@./$(TARGET) $(SELFHOST_ENTRY) $(FILE)
+
+# Benchmark self-hosted interpreter against native C interpreter
+sage-bench: $(TARGET)
+	@echo "=== Native C Interpreter ==="
+	@time -p ./$(TARGET) benchmarks/backend_compare.sage 2>&1 | tail -1
+	@echo ""
+	@echo "=== Self-Hosted Sage Interpreter ==="
+	@time -p ./$(TARGET) $(SELFHOST_ENTRY) benchmarks/backend_compare.sage 2>&1 | tail -1
+
+# Run the cross-backend benchmark
+benchmark: $(TARGET)
+	@bash benchmarks/run_backend_compare.sh
+
+benchmark-chart: $(TARGET)
+	@$(PYTHON) scripts/generate_backend_chart.py
 
 benchmark-python: $(TARGET)
 	@echo "Running Sage vs Python 3 benchmarks..."
