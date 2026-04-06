@@ -70,26 +70,26 @@ print("dict_sum(10000) = " + str(dict_sum))
 ## --- 6. Prime sieve ---
 proc sieve(limit):
     let is_prime = []
-    i = 0
-    while i <= limit:
+    let si = 0
+    while si <= limit:
         push(is_prime, true)
-        i = i + 1
+        si = si + 1
     is_prime[0] = false
     is_prime[1] = false
-    i = 2
-    while i * i <= limit:
-        if is_prime[i]:
-            let j = i * i
+    si = 2
+    while si * si <= limit:
+        if is_prime[si]:
+            let j = si * si
             while j <= limit:
                 is_prime[j] = false
-                j = j + i
-        i = i + 1
+                j = j + si
+        si = si + 1
     let count = 0
-    i = 2
-    while i <= limit:
-        if is_prime[i]:
+    si = 2
+    while si <= limit:
+        if is_prime[si]:
             count = count + 1
-        i = i + 1
+        si = si + 1
     return count
 
 let primes = sieve(100000)
