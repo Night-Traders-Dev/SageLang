@@ -635,6 +635,88 @@ static Value gc_set_orc_native(int argCount, Value* args) {
     return val_nil();
 }
 
+// CPU topology / SMP detection natives
+static Value cpu_count_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number((double)sage_cpu_count());
+}
+
+static Value cpu_physical_cores_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number((double)sage_cpu_physical_cores());
+}
+
+static Value cpu_has_hyperthreading_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_bool(sage_cpu_has_hyperthreading());
+}
+
+static Value thread_set_affinity_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_bool(0);
+    int core_id = (int)AS_NUMBER(args[0]);
+    return val_number((double)sage_thread_set_affinity(core_id));
+}
+
+static Value thread_get_core_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number((double)sage_thread_get_core());
+}
+
+// Atomic operations (C-level, truly atomic)
+static Value atomic_new_native(int argCount, Value* args) {
+    sage_atomic_t* a = SAGE_ALLOC(sizeof(sage_atomic_t));
+    a->value = (argCount >= 1 && IS_NUMBER(args[0])) ? (long)AS_NUMBER(args[0]) : 0;
+    return val_pointer(a, sizeof(sage_atomic_t), 1);
+}
+static Value atomic_load_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_POINTER(args[0])) return val_nil();
+    sage_atomic_t* a = (sage_atomic_t*)args[0].as.pointer->ptr;
+    return val_number((double)sage_atomic_load(a));
+}
+static Value atomic_store_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    sage_atomic_t* a = (sage_atomic_t*)args[0].as.pointer->ptr;
+    sage_atomic_store(a, (long)AS_NUMBER(args[1]));
+    return val_nil();
+}
+static Value atomic_add_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    sage_atomic_t* a = (sage_atomic_t*)args[0].as.pointer->ptr;
+    return val_number((double)sage_atomic_add(a, (long)AS_NUMBER(args[1])));
+}
+static Value atomic_cas_native(int argCount, Value* args) {
+    if (argCount < 3 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) return val_bool(0);
+    sage_atomic_t* a = (sage_atomic_t*)args[0].as.pointer->ptr;
+    return val_bool(sage_atomic_cas(a, (long)AS_NUMBER(args[1]), (long)AS_NUMBER(args[2])));
+}
+static Value atomic_exchange_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    sage_atomic_t* a = (sage_atomic_t*)args[0].as.pointer->ptr;
+    return val_number((double)sage_atomic_exchange(a, (long)AS_NUMBER(args[1])));
+}
+
+// Semaphore natives
+static Value sem_new_native(int argCount, Value* args) {
+    sage_sem_t* sem = SAGE_ALLOC(sizeof(sage_sem_t));
+    int initial = (argCount >= 1 && IS_NUMBER(args[0])) ? (int)AS_NUMBER(args[0]) : 1;
+    sage_sem_init(sem, initial);
+    return val_pointer(sem, sizeof(sage_sem_t), 1);
+}
+static Value sem_wait_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_POINTER(args[0])) return val_nil();
+    sage_sem_wait((sage_sem_t*)args[0].as.pointer->ptr);
+    return val_nil();
+}
+static Value sem_post_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_POINTER(args[0])) return val_nil();
+    sage_sem_post((sage_sem_t*)args[0].as.pointer->ptr);
+    return val_nil();
+}
+static Value sem_trywait_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_POINTER(args[0])) return val_bool(0);
+    return val_bool(sage_sem_trywait((sage_sem_t*)args[0].as.pointer->ptr) == 0);
+}
+
 // PHASE 7: Generator next() function - Forward declaration (REMOVED static keyword)
 ExecResult interpret(Stmt* stmt, Env* env);
 
@@ -1968,6 +2050,27 @@ void init_stdlib(Env* env) {
 #endif
     env_define(env, "asm_compile", 11, val_native(asm_compile_native));
     env_define(env, "asm_arch", 8, val_native(asm_arch_native));
+
+    // SMP / CPU topology
+    env_define(env, "cpu_count", 9, val_native(cpu_count_native));
+    env_define(env, "cpu_physical_cores", 18, val_native(cpu_physical_cores_native));
+    env_define(env, "cpu_has_hyperthreading", 22, val_native(cpu_has_hyperthreading_native));
+    env_define(env, "thread_set_affinity", 19, val_native(thread_set_affinity_native));
+    env_define(env, "thread_get_core", 15, val_native(thread_get_core_native));
+
+    // True atomic operations (C-level __atomic builtins)
+    env_define(env, "atomic_new", 10, val_native(atomic_new_native));
+    env_define(env, "atomic_load", 11, val_native(atomic_load_native));
+    env_define(env, "atomic_store", 12, val_native(atomic_store_native));
+    env_define(env, "atomic_add", 10, val_native(atomic_add_native));
+    env_define(env, "atomic_cas", 10, val_native(atomic_cas_native));
+    env_define(env, "atomic_exchange", 15, val_native(atomic_exchange_native));
+
+    // Semaphores (C-level POSIX semaphores)
+    env_define(env, "sem_new", 7, val_native(sem_new_native));
+    env_define(env, "sem_wait", 8, val_native(sem_wait_native));
+    env_define(env, "sem_post", 8, val_native(sem_post_native));
+    env_define(env, "sem_trywait", 11, val_native(sem_trywait_native));
 }
 
 // --- Helper: Truthiness ---

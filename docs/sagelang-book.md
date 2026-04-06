@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "April 2026"
-version: "v3.2.7"
+version: "v3.2.8"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v3.2.7}
+  - \fancyfoot[C]{v3.2.8}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -1029,6 +1029,79 @@ import thread
 print "Starting..."
 thread.sleep(1.5)    # Sleep for 1.5 seconds
 print "Done!"
+```
+
+## True Atomic Operations
+
+Sage provides C-level atomic operations via `__atomic` compiler builtins. These are
+truly atomic — safe for concurrent access from multiple threads without locks.
+
+```python
+let counter = atomic_new(0)      # Create atomic integer, initial value 0
+
+# These are safe to call from multiple threads simultaneously:
+atomic_add(counter, 1)           # Atomic increment
+atomic_add(counter, 5)           # Atomic add
+let val = atomic_load(counter)   # Atomic read (returns 6)
+
+# Compare-and-swap (CAS):
+let ok = atomic_cas(counter, 6, 10)  # If counter == 6, set to 10
+# ok == true, counter is now 10
+
+# Atomic exchange:
+let old = atomic_exchange(counter, 0) # Set to 0, return old value (10)
+```
+
+## Semaphores
+
+POSIX semaphores for controlling access to a finite number of resources:
+
+```python
+let sem = sem_new(3)     # 3 permits available
+
+sem_wait(sem)            # Acquire permit (blocks if none available)
+sem_wait(sem)            # Acquire another
+# ... do work with the resource ...
+sem_post(sem)            # Release permit
+
+let ok = sem_trywait(sem) # Non-blocking acquire (returns true/false)
+```
+
+## SMP and Multicore
+
+CPU topology detection and core affinity:
+
+```python
+# Detect hardware
+let cores = cpu_count()                # Logical CPUs (includes hyperthreads)
+let physical = cpu_physical_cores()    # Physical cores only
+let ht = cpu_has_hyperthreading()      # true if SMT/HT detected
+
+# Pin thread to specific core
+thread_set_affinity(0)     # Pin to core 0
+let core = thread_get_core() # Which core am I on?
+```
+
+Multicore work distribution using `lib/os/smp.sage`:
+
+```python
+import os.smp
+
+smp.print_topology()  # Print CPU info
+
+# Run work on all cores in parallel
+let results = smp.on_all_cores(proc(core_id):
+    return core_id * core_id
+)
+
+# Distribute array work across cores
+let items = range(10000)
+let sums = smp.parallel_for_cores(items, proc(core_id, slice):
+    let total = 0
+    for x in slice:
+        total = total + x
+    return total
+)
 ```
 
 \newpage

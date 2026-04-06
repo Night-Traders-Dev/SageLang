@@ -1,5 +1,31 @@
 # SageLang Updates
 
+## v3.2.8 — Full Concurrency: Atomics, Semaphores, SMP, Multicore, Hyperthreading (April 2026)
+
+- **C-level concurrency primitives** (sage_thread.h/c):
+  - Condition variables: `sage_cond_init/destroy/wait/signal/broadcast`
+  - Read-write locks: `sage_rwlock_init/destroy/rdlock/wrlock/unlock/tryrdlock/trywrlock`
+  - POSIX semaphores: `sage_sem_init/destroy/wait/post/trywait/getvalue`
+  - Mutex trylock: `sage_mutex_trylock`
+  - True atomic operations via `__atomic` builtins: load, store, add, sub, CAS, exchange, fetch_and, fetch_or
+  - CPU topology: `sage_cpu_count`, `sage_cpu_physical_cores`, `sage_cpu_has_hyperthreading`
+  - Thread affinity: `sage_thread_set_affinity`, `sage_thread_get_core`
+  - All primitives have RP2040 stubs for cross-platform compatibility
+- **Native builtins registered** (interpreter.c):
+  - CPU: `cpu_count()`, `cpu_physical_cores()`, `cpu_has_hyperthreading()`
+  - Affinity: `thread_set_affinity(core)`, `thread_get_core()`
+  - Atomics: `atomic_new(init)`, `atomic_load(a)`, `atomic_store(a,v)`, `atomic_add(a,v)`, `atomic_cas(a,exp,des)`, `atomic_exchange(a,v)`
+  - Semaphores: `sem_new(permits)`, `sem_wait(s)`, `sem_post(s)`, `sem_trywait(s)`
+- **SMP/Multicore library** (`lib/os/smp.sage`):
+  - CPU topology detection: `topology()`, `cpu_count()`, `physical_cores()`, `has_hyperthreading()`
+  - Core affinity: `pin_to_core(id)`, `current_core()`
+  - Per-CPU data structures: `per_cpu_array()`, `per_cpu_get()`, `per_cpu_set()`
+  - Multicore work distribution: `parallel_for_cores(items, fn)`, `on_all_cores(fn)`
+  - IPI simulation: `send_to_core(core_id, fn)`
+- **Tests**: `smp_test.sage`, `atomic_native_test.sage`, `semaphore_test.sage`
+
+---
+
 ## v3.2.7 — Native Speed + Book Update (April 2026)
 
 - **Native C interpreter optimizations**:

@@ -5,12 +5,15 @@
 // RP2040:  stubs that return errors (single-threaded environment)
 
 #ifndef PICO_BUILD
+#define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE
 #endif
 
 #include "sage_thread.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // ============================================================================
 // Desktop Implementation (pthreads)
@@ -61,6 +64,87 @@ void sage_sleep_secs(double seconds) {
     nanosleep(&ts, NULL);
 }
 
+int sage_mutex_trylock(sage_mutex_t* mutex) {
+    return pthread_mutex_trylock(mutex);
+}
+
+// Condition variables
+int sage_cond_init(sage_cond_t* cond)      { return pthread_cond_init(cond, NULL); }
+int sage_cond_destroy(sage_cond_t* cond)   { return pthread_cond_destroy(cond); }
+int sage_cond_wait(sage_cond_t* cond, sage_mutex_t* mutex) { return pthread_cond_wait(cond, mutex); }
+int sage_cond_signal(sage_cond_t* cond)    { return pthread_cond_signal(cond); }
+int sage_cond_broadcast(sage_cond_t* cond) { return pthread_cond_broadcast(cond); }
+
+// Read-write locks
+int sage_rwlock_init(sage_rwlock_t* rw)       { return pthread_rwlock_init(rw, NULL); }
+int sage_rwlock_destroy(sage_rwlock_t* rw)    { return pthread_rwlock_destroy(rw); }
+int sage_rwlock_rdlock(sage_rwlock_t* rw)     { return pthread_rwlock_rdlock(rw); }
+int sage_rwlock_wrlock(sage_rwlock_t* rw)     { return pthread_rwlock_wrlock(rw); }
+int sage_rwlock_unlock(sage_rwlock_t* rw)     { return pthread_rwlock_unlock(rw); }
+int sage_rwlock_tryrdlock(sage_rwlock_t* rw)  { return pthread_rwlock_tryrdlock(rw); }
+int sage_rwlock_trywrlock(sage_rwlock_t* rw)  { return pthread_rwlock_trywrlock(rw); }
+
+// Semaphores
+int sage_sem_init(sage_sem_t* sem, int value) { return sem_init(sem, 0, (unsigned)value); }
+int sage_sem_destroy(sage_sem_t* sem)         { return sem_destroy(sem); }
+int sage_sem_wait(sage_sem_t* sem)            { return sem_wait(sem); }
+int sage_sem_post(sage_sem_t* sem)            { return sem_post(sem); }
+int sage_sem_trywait(sage_sem_t* sem)         { return sem_trywait(sem); }
+int sage_sem_getvalue(sage_sem_t* sem, int* value) { return sem_getvalue(sem, value); }
+
+// CPU topology
+#include <string.h>
+int sage_cpu_count(void) {
+    return (int)sysconf(_SC_NPROCESSORS_ONLN);
+}
+
+int sage_cpu_physical_cores(void) {
+    // Parse /proc/cpuinfo for unique physical core IDs
+    FILE* f = fopen("/proc/cpuinfo", "r");
+    if (!f) return sage_cpu_count(); // fallback
+    int physical = 0;
+    int seen_ids[4096];
+    memset(seen_ids, 0, sizeof(seen_ids));
+    char line[256];
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "core id", 7) == 0) {
+            const char* p = strchr(line, ':');
+            if (p) {
+                int id = atoi(p + 1);
+                if (id >= 0 && id < 4096 && !seen_ids[id]) {
+                    seen_ids[id] = 1;
+                    physical++;
+                }
+            }
+        }
+    }
+    fclose(f);
+    return physical > 0 ? physical : sage_cpu_count();
+}
+
+int sage_cpu_has_hyperthreading(void) {
+    int logical = sage_cpu_count();
+    int physical = sage_cpu_physical_cores();
+    return logical > physical ? 1 : 0;
+}
+
+#ifdef __linux__
+#include <sched.h>
+int sage_thread_set_affinity(int core_id) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+    return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+}
+
+int sage_thread_get_core(void) {
+    return sched_getcpu();
+}
+#else
+int sage_thread_set_affinity(int core_id) { (void)core_id; return -1; }
+int sage_thread_get_core(void) { return -1; }
+#endif
+
 // ============================================================================
 // RP2040 Stub Implementation
 // ============================================================================
@@ -103,8 +187,32 @@ int sage_mutex_lock(sage_mutex_t* mutex) {
 
 int sage_mutex_unlock(sage_mutex_t* mutex) {
     (void)mutex;
-    return 0;  // No-op (single-threaded)
+    return 0;
 }
+int sage_mutex_trylock(sage_mutex_t* m) { (void)m; return 0; }
+int sage_cond_init(sage_cond_t* c) { (void)c; return 0; }
+int sage_cond_destroy(sage_cond_t* c) { (void)c; return 0; }
+int sage_cond_wait(sage_cond_t* c, sage_mutex_t* m) { (void)c; (void)m; return 0; }
+int sage_cond_signal(sage_cond_t* c) { (void)c; return 0; }
+int sage_cond_broadcast(sage_cond_t* c) { (void)c; return 0; }
+int sage_rwlock_init(sage_rwlock_t* r) { (void)r; return 0; }
+int sage_rwlock_destroy(sage_rwlock_t* r) { (void)r; return 0; }
+int sage_rwlock_rdlock(sage_rwlock_t* r) { (void)r; return 0; }
+int sage_rwlock_wrlock(sage_rwlock_t* r) { (void)r; return 0; }
+int sage_rwlock_unlock(sage_rwlock_t* r) { (void)r; return 0; }
+int sage_rwlock_tryrdlock(sage_rwlock_t* r) { (void)r; return 0; }
+int sage_rwlock_trywrlock(sage_rwlock_t* r) { (void)r; return 0; }
+int sage_sem_init(sage_sem_t* s, int v) { (void)s; (void)v; return 0; }
+int sage_sem_destroy(sage_sem_t* s) { (void)s; return 0; }
+int sage_sem_wait(sage_sem_t* s) { (void)s; return 0; }
+int sage_sem_post(sage_sem_t* s) { (void)s; return 0; }
+int sage_sem_trywait(sage_sem_t* s) { (void)s; return 0; }
+int sage_sem_getvalue(sage_sem_t* s, int* v) { (void)s; if(v)*v=1; return 0; }
+int sage_cpu_count(void) { return 1; }
+int sage_cpu_physical_cores(void) { return 1; }
+int sage_cpu_has_hyperthreading(void) { return 0; }
+int sage_thread_set_affinity(int c) { (void)c; return -1; }
+int sage_thread_get_core(void) { return 0; }
 
 void sage_usleep(unsigned int usec) {
 #ifdef PICO_BUILD
