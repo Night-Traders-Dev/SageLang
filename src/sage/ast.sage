@@ -21,6 +21,8 @@ let EXPR_GET = 12
 let EXPR_SET = 13
 let EXPR_INDEX_SET = 14
 let EXPR_AWAIT = 15
+let EXPR_SUPER = 16
+let EXPR_COMPTIME = 17
 
 # --- Statement type constants ---
 let STMT_PRINT = 100
@@ -42,6 +44,11 @@ let STMT_RAISE = 115
 let STMT_YIELD = 116
 let STMT_IMPORT = 117
 let STMT_ASYNC_PROC = 118
+let STMT_STRUCT = 119
+let STMT_ENUM = 120
+let STMT_TRAIT = 121
+let STMT_COMPTIME = 122
+let STMT_MACRO_DEF = 123
 
 # --- Expression node class ---
 class Expr:
@@ -88,6 +95,10 @@ proc expr_type_name(t):
         return "EXPR_INDEX_SET"
     if t == EXPR_AWAIT:
         return "EXPR_AWAIT"
+    if t == EXPR_SUPER:
+        return "EXPR_SUPER"
+    if t == EXPR_COMPTIME:
+        return "EXPR_COMPTIME"
     return "UNKNOWN_EXPR"
 
 # --- Statement type name (for debugging) ---
@@ -130,6 +141,16 @@ proc stmt_type_name(t):
         return "STMT_IMPORT"
     if t == STMT_ASYNC_PROC:
         return "STMT_ASYNC_PROC"
+    if t == STMT_STRUCT:
+        return "STMT_STRUCT"
+    if t == STMT_ENUM:
+        return "STMT_ENUM"
+    if t == STMT_TRAIT:
+        return "STMT_TRAIT"
+    if t == STMT_COMPTIME:
+        return "STMT_COMPTIME"
+    if t == STMT_MACRO_DEF:
+        return "STMT_MACRO_DEF"
     return "UNKNOWN_STMT"
 
 # -----------------------------------------
@@ -354,6 +375,57 @@ proc match_stmt(value, cases, case_count, default_case):
     s.case_count = case_count
     s.default_case = default_case
     return s
+
+proc super_expr(method):
+    let e = Expr(EXPR_SUPER)
+    e.method = method
+    return e
+
+proc comptime_expr(expression):
+    let e = Expr(EXPR_COMPTIME)
+    e.expression = expression
+    return e
+
+proc struct_stmt(name, field_names, field_types, field_count):
+    let s = Stmt(STMT_STRUCT)
+    s.name = name
+    s.field_names = field_names
+    s.field_types = field_types
+    s.field_count = field_count
+    return s
+
+proc enum_stmt(name, variant_names, variant_count):
+    let s = Stmt(STMT_ENUM)
+    s.name = name
+    s.variant_names = variant_names
+    s.variant_count = variant_count
+    return s
+
+proc trait_stmt(name, methods):
+    let s = Stmt(STMT_TRAIT)
+    s.name = name
+    s.methods = methods
+    return s
+
+proc comptime_stmt(body):
+    let s = Stmt(STMT_COMPTIME)
+    s.body = body
+    return s
+
+proc macro_def_stmt(name, params, body):
+    let s = Stmt(STMT_MACRO_DEF)
+    s.name = name
+    s.params = params
+    s.param_count = len(params)
+    s.body = body
+    return s
+
+# --- CaseClause helper (with guard support) ---
+class CaseClause:
+    proc init(pattern, body):
+        self.pattern = pattern
+        self.body = body
+        self.guard = nil
 
 # --- CatchClause helper ---
 class CatchClause:

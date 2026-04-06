@@ -8,11 +8,13 @@ from ast import EXPR_NUMBER, EXPR_STRING, EXPR_BOOL, EXPR_NIL
 from ast import EXPR_BINARY, EXPR_VARIABLE, EXPR_CALL, EXPR_ARRAY
 from ast import EXPR_INDEX, EXPR_DICT, EXPR_TUPLE, EXPR_SLICE
 from ast import EXPR_GET, EXPR_SET, EXPR_INDEX_SET, EXPR_AWAIT
+from ast import EXPR_SUPER, EXPR_COMPTIME
 from ast import STMT_PRINT, STMT_EXPRESSION, STMT_LET, STMT_IF
 from ast import STMT_BLOCK, STMT_WHILE, STMT_PROC, STMT_FOR
 from ast import STMT_RETURN, STMT_BREAK, STMT_CONTINUE, STMT_CLASS
 from ast import STMT_TRY, STMT_RAISE, STMT_YIELD, STMT_IMPORT
 from ast import STMT_ASYNC_PROC, STMT_DEFER, STMT_MATCH
+from ast import STMT_STRUCT, STMT_ENUM, STMT_TRAIT, STMT_COMPTIME, STMT_MACRO_DEF
 from token import TOKEN_NOT, TOKEN_TILDE, TOKEN_OR, TOKEN_AND
 from token import TOKEN_EQ, TOKEN_NEQ, TOKEN_GT, TOKEN_LT, TOKEN_GTE, TOKEN_LTE
 from token import TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, TOKEN_SLASH, TOKEN_PERCENT
@@ -531,6 +533,71 @@ _native_dispatch["mem_size"] = _n_mem_size
 _native_dispatch["addressof"] = _n_addressof
 _native_dispatch["int"] = _n_int
 
+# ---- Missing builtins: GC modes, bytes, path, hash, doc ----
+
+proc _n_gc_mode(args):
+    return gc_mode()
+proc _n_gc_set_arc(args):
+    gc_set_arc()
+    return nil
+proc _n_gc_set_orc(args):
+    gc_set_orc()
+    return nil
+proc _n_bytes(args):
+    return bytes(args[0])
+proc _n_bytes_len(args):
+    return bytes_len(args[0])
+proc _n_bytes_get(args):
+    return bytes_get(args[0], args[1])
+proc _n_bytes_set(args):
+    bytes_set(args[0], args[1], args[2])
+    return nil
+proc _n_bytes_to_string(args):
+    return bytes_to_string(args[0])
+proc _n_bytes_slice(args):
+    return bytes_slice(args[0], args[1], args[2])
+proc _n_bytes_push(args):
+    bytes_push(args[0], args[1])
+    return nil
+proc _n_path_join(args):
+    return path_join(args[0], args[1])
+proc _n_path_dirname(args):
+    return path_dirname(args[0])
+proc _n_path_basename(args):
+    return path_basename(args[0])
+proc _n_path_ext(args):
+    return path_ext(args[0])
+proc _n_path_exists(args):
+    return path_exists(args[0])
+proc _n_path_is_dir(args):
+    return path_is_dir(args[0])
+proc _n_path_is_file(args):
+    return path_is_file(args[0])
+proc _n_hash(args):
+    return hash(args[0])
+proc _n_sizeof(args):
+    return sizeof(args[0])
+
+_native_dispatch["gc_mode"] = _n_gc_mode
+_native_dispatch["gc_set_arc"] = _n_gc_set_arc
+_native_dispatch["gc_set_orc"] = _n_gc_set_orc
+_native_dispatch["bytes"] = _n_bytes
+_native_dispatch["bytes_len"] = _n_bytes_len
+_native_dispatch["bytes_get"] = _n_bytes_get
+_native_dispatch["bytes_set"] = _n_bytes_set
+_native_dispatch["bytes_to_string"] = _n_bytes_to_string
+_native_dispatch["bytes_slice"] = _n_bytes_slice
+_native_dispatch["bytes_push"] = _n_bytes_push
+_native_dispatch["path_join"] = _n_path_join
+_native_dispatch["path_dirname"] = _n_path_dirname
+_native_dispatch["path_basename"] = _n_path_basename
+_native_dispatch["path_ext"] = _n_path_ext
+_native_dispatch["path_exists"] = _n_path_exists
+_native_dispatch["path_is_dir"] = _n_path_is_dir
+_native_dispatch["path_is_file"] = _n_path_is_file
+_native_dispatch["hash"] = _n_hash
+_native_dispatch["sizeof"] = _n_sizeof
+
 proc call_native(name, args):
     if dict_has(_native_dispatch, name):
         let handler = _native_dispatch[name]
@@ -593,6 +660,29 @@ proc init_builtins(env):
     register_native(env, "addressof", 1)
     # Math functions
     register_native(env, "int", 1)
+    # GC modes
+    register_native(env, "gc_mode", 0)
+    register_native(env, "gc_set_arc", 0)
+    register_native(env, "gc_set_orc", 0)
+    # Bytes
+    register_native(env, "bytes", 1)
+    register_native(env, "bytes_len", 1)
+    register_native(env, "bytes_get", 2)
+    register_native(env, "bytes_set", 3)
+    register_native(env, "bytes_to_string", 1)
+    register_native(env, "bytes_slice", 3)
+    register_native(env, "bytes_push", 2)
+    # Path utilities
+    register_native(env, "path_join", 2)
+    register_native(env, "path_dirname", 1)
+    register_native(env, "path_basename", 1)
+    register_native(env, "path_ext", 1)
+    register_native(env, "path_exists", 1)
+    register_native(env, "path_is_dir", 1)
+    register_native(env, "path_is_file", 1)
+    # Hash and sizeof
+    register_native(env, "hash", 1)
+    register_native(env, "sizeof", 1)
 
 # -----------------------------------------
 # Expression evaluation
@@ -745,8 +835,29 @@ proc eval_expr_impl(expr, env):
     if etype == EXPR_CALL:
         return eval_call(expr, env)
 
-    # --- Await (stub) ---
+    # --- Await ---
     if etype == EXPR_AWAIT:
+        return eval_expr(expr.expression, env)
+
+    # --- Super method call ---
+    if etype == EXPR_SUPER:
+        # super.method — find method in parent class
+        # The actual args are handled by EXPR_CALL wrapping this
+        let method_name = expr.method.text
+        # Look up 'self' in current env to find the instance's class
+        let self_val = env_get(env, "self")
+        if type(self_val) == "dict" and dict_has(self_val, "__interp_type") and self_val["__interp_type"] == "instance":
+            let cls = self_val["class"]
+            if cls["parent"] != nil:
+                let parent_method = find_method(cls["parent"], method_name)
+                if parent_method != nil:
+                    return parent_method
+                runtime_error(-1, "Undefined method '" + method_name + "' in parent class", nil)
+            runtime_error(-1, "Class has no parent for super call", nil)
+        runtime_error(-1, "super used outside of a class method", nil)
+
+    # --- Comptime expression (evaluate normally at runtime) ---
+    if etype == EXPR_COMPTIME:
         return eval_expr(expr.expression, env)
 
     runtime_error(-1, "Unknown expression type: " + str(etype), nil)
@@ -1010,6 +1121,45 @@ proc eval_call(expr, env):
 
 proc eval_call_impl(expr, env):
     let callee_expr = expr.callee
+
+    # Super method call: super.method(args)
+    if callee_expr.type == EXPR_SUPER:
+        let method_name = callee_expr.method.text
+        let self_val = env_get(env, "self")
+        if type(self_val) == "dict" and dict_has(self_val, "__interp_type") and self_val["__interp_type"] == "instance":
+            let cls = self_val["class"]
+            let parent = cls["parent"]
+            if parent != nil:
+                let method_val = find_method(parent, method_name)
+                if method_val != nil:
+                    # Evaluate arguments
+                    let args = []
+                    let ai = 0
+                    while ai < expr.arg_count:
+                        push(args, eval_expr(expr.args[ai], env))
+                        ai = ai + 1
+                    # Create method env with self bound
+                    let method_env = env_new(method_val["closure"])
+                    env_define(method_env, "self", self_val)
+                    let params = method_val["params"]
+                    let param_start = 0
+                    if len(params) > 0 and params[0].text == "self":
+                        param_start = 1
+                    let pi = param_start
+                    while pi < len(params):
+                        let arg_idx = pi - param_start
+                        if arg_idx < len(args):
+                            env_define(method_env, params[pi].text, args[arg_idx])
+                        else:
+                            env_define(method_env, params[pi].text, nil)
+                        pi = pi + 1
+                    let res = exec_stmt(method_val["body"], method_env)
+                    if res["kind"] == SIGNAL_RETURN:
+                        return res["value"]
+                    return nil
+                runtime_error(-1, "Undefined method '" + method_name + "' in parent class", nil)
+            runtime_error(-1, "Class has no parent for super call", nil)
+        runtime_error(-1, "super used outside of class method", nil)
 
     # Method call: obj.method(args)
     if callee_expr.type == EXPR_GET:
@@ -1351,7 +1501,7 @@ proc exec_stmt(stmt, env):
         # Defer is handled at block level; standalone just executes immediately
         return exec_stmt(stmt.statement, env)
 
-    # --- Match ---
+    # --- Match (with guard support) ---
     if stype == STMT_MATCH:
         let match_val = eval_expr(stmt.value, env)
         let i = 0
@@ -1359,7 +1509,14 @@ proc exec_stmt(stmt, env):
             let clause = stmt.cases[i]
             let pat_val = eval_expr(clause["pattern"], env)
             if match_val == pat_val:
-                return exec_stmt(clause["body"], env)
+                # Check guard condition if present
+                if dict_has(clause, "guard") and clause["guard"] != nil:
+                    let guard_val = eval_expr(clause["guard"], env)
+                    if is_truthy(guard_val):
+                        return exec_stmt(clause["body"], env)
+                    # Guard failed, continue to next case
+                else:
+                    return exec_stmt(clause["body"], env)
             i = i + 1
         if stmt.default_case != nil:
             return exec_stmt(stmt.default_case, env)
@@ -1370,11 +1527,79 @@ proc exec_stmt(stmt, env):
         let val = nil
         if stmt.value != nil:
             val = eval_expr(stmt.value, env)
-        # Signal yield by returning a special result
         let r = {}
-        r["kind"] = 4
+        r["kind"] = SIGNAL_YIELD
         r["value"] = val
         return r
+
+    # --- Struct declaration ---
+    if stype == STMT_STRUCT:
+        let name = stmt.name.text
+        let struct_def = {}
+        struct_def["__interp_type"] = "struct_def"
+        struct_def["name"] = name
+        struct_def["fields"] = []
+        let fi = 0
+        while fi < stmt.field_count:
+            push(struct_def["fields"], stmt.field_names[fi].text)
+            fi = fi + 1
+        # Register a constructor function for the struct
+        let struct_ctor = {}
+        struct_ctor["__interp_type"] = "native"
+        struct_ctor["name"] = name
+        struct_ctor["arity"] = -1
+        struct_ctor["struct_def"] = struct_def
+        env_define(env, name, struct_def)
+        return _SIG_NORMAL_NIL
+
+    # --- Enum declaration ---
+    if stype == STMT_ENUM:
+        let name = stmt.name.text
+        let enum_def = {}
+        enum_def["__interp_type"] = "enum"
+        enum_def["name"] = name
+        enum_def["variants"] = {}
+        let vi = 0
+        while vi < stmt.variant_count:
+            let vname = stmt.variant_names[vi].text
+            enum_def["variants"][vname] = vi
+            # Also define each variant as a global constant
+            env_define(env, vname, vi)
+            vi = vi + 1
+        env_define(env, name, enum_def)
+        return _SIG_NORMAL_NIL
+
+    # --- Trait declaration ---
+    if stype == STMT_TRAIT:
+        let name = stmt.name.text
+        let trait_def = {}
+        trait_def["__interp_type"] = "trait"
+        trait_def["name"] = name
+        trait_def["method_names"] = []
+        let method_node = stmt.methods
+        while method_node != nil:
+            if method_node.type == STMT_PROC:
+                push(trait_def["method_names"], method_node.name.text)
+            method_node = method_node.next
+        env_define(env, name, trait_def)
+        return _SIG_NORMAL_NIL
+
+    # --- Comptime block (execute normally at runtime) ---
+    if stype == STMT_COMPTIME:
+        return exec_stmt(stmt.body, env)
+
+    # --- Macro definition (treat as function) ---
+    if stype == STMT_MACRO_DEF:
+        let name = stmt.name.text
+        env_define(env, name, {
+            "__interp_type": "function",
+            "name": name,
+            "params": stmt.params,
+            "body": stmt.body,
+            "closure": env,
+            "is_generator": false
+        })
+        return _SIG_NORMAL_NIL
 
     runtime_error(get_stmt_line(stmt), "Unknown statement type: " + str(stype), nil)
 
