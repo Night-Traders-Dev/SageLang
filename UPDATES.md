@@ -1,5 +1,15 @@
 # SageLang Updates
 
+## v3.2.9 — Documentation Refresh + Benchmark Expansion (April 2026)
+
+- **README overhaul**: Corrected JIT description (profiler, not native compiler), fixed super call docs (auto-self), updated recursion depth description, removed outdated performance claims
+- **Concurrency in README**: Added atomics, semaphores, condvars, rwlocks, SMP/multicore/hyperthreading to feature list
+- **Benchmark expansion**: Added JIT Profiled, AOT Backend, and JIT+AOT Backend lanes to `run_backend_compare.sh` and `generate_backend_chart.py`
+- **Execution backends table**: Expanded from 7 to 10 backends (added JIT+AOT, Self-Hosted, Kotlin)
+- Version bump to v3.2.9
+
+---
+
 ## v3.2.8 — Hybrid JIT/AOT + Vulkan/OpenGL Android + Full Concurrency (April 2026)
 
 - **Hybrid JIT/AOT architecture in self-hosted interpreter**:

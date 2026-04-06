@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="901" viewBox="0 0 1600 901" role="img" aria-labelledby="title desc">
 <title>SageLang Project Breakdown by Area</title>
-<desc>130.2K tracked lines across 9 backends, 10 areas.</desc>
+<desc>130.3K tracked lines across 9 backends, 10 areas.</desc>
 <defs>
 <linearGradient id="bar-gradient-0" x1="0%" y1="0%" x2="100%" y2="0%">
 <stop offset="0%" stop-color="#FBD644"/>
@@ -31,12 +31,12 @@
 <stop offset="100%" stop-color="#C23B7D"/>
 </linearGradient>
 <linearGradient id="bar-gradient-7" x1="0%" y1="0%" x2="100%" y2="0%">
-<stop offset="0%" stop-color="#43C6B8"/>
-<stop offset="100%" stop-color="#109788"/>
-</linearGradient>
-<linearGradient id="bar-gradient-8" x1="0%" y1="0%" x2="100%" y2="0%">
 <stop offset="0%" stop-color="#9DD645"/>
 <stop offset="100%" stop-color="#6CA712"/>
+</linearGradient>
+<linearGradient id="bar-gradient-8" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#43C6B8"/>
+<stop offset="100%" stop-color="#109788"/>
 </linearGradient>
 <linearGradient id="bar-gradient-9" x1="0%" y1="0%" x2="100%" y2="0%">
 <stop offset="0%" stop-color="#9661F1"/>
@@ -46,7 +46,7 @@
 <rect width="100%" height="100%" fill="#0B1118"/>
 <rect x="12" y="12" width="1576" height="877" rx="18" fill="#0F1722" stroke="#1F2937"/>
 <text x="44" y="62" fill="#F8FAFC" font-size="34" font-family="Segoe UI, Arial, sans-serif" font-weight="700">SageLang Project Breakdown by Area</text>
-<text x="44" y="95" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">130.2K tracked lines across 9 backends, 10 areas.</text>
+<text x="44" y="95" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">130.3K tracked lines across 9 backends, 10 areas.</text>
 <line x1="240.0" y1="115" x2="240.0" y2="779" stroke="#182231" stroke-width="1"/>
 <text x="240.0" y="805" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">0</text>
 <line x1="476.0" y1="115" x2="476.0" y2="779" stroke="#182231" stroke-width="1"/>
@@ -65,71 +65,71 @@
 <rect x="240" y="135" width="944.0" height="44" rx="12" fill="url(#bar-gradient-0)"/>
 <line x1="242.0" y1="137.0" x2="1182.0" y2="137.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
 <text x="1198.0" y="164.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">55.8K</text>
-<text x="1556" y="164.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">42.9% · 55,816 of 130,249 lines</text>
+<text x="1556" y="164.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">42.9% · 55,830 of 130,274 lines</text>
 <rect x="30" y="207.0" width="194" height="32" rx="10" fill="#967DE1" opacity="0.95"/>
 <text x="127.0" y="229.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">OS / KERNEL LIBS</text>
 <rect x="240" y="201" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="201" width="293.7" height="44" rx="12" fill="url(#bar-gradient-1)"/>
-<line x1="242.0" y1="203.0" x2="531.7" y2="203.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="547.7" y="230.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">17.4K</text>
-<text x="1556" y="230.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">13.3% · 17,363 of 130,249 lines</text>
+<rect x="240" y="201" width="293.6" height="44" rx="12" fill="url(#bar-gradient-1)"/>
+<line x1="242.0" y1="203.0" x2="531.6" y2="203.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="547.6" y="230.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">17.4K</text>
+<text x="1556" y="230.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">13.3% · 17,363 of 130,274 lines</text>
 <rect x="30" y="273.0" width="134" height="32" rx="10" fill="#0EA674" opacity="0.95"/>
 <text x="97.0" y="295.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">TEST SUITE</text>
 <rect x="240" y="267" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="267" width="246.6" height="44" rx="12" fill="url(#bar-gradient-2)"/>
-<line x1="242.0" y1="269.0" x2="484.6" y2="269.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="500.6" y="296.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">14.6K</text>
-<text x="1556" y="296.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">11.2% · 14,581 of 130,249 lines</text>
+<rect x="240" y="267" width="246.5" height="44" rx="12" fill="url(#bar-gradient-2)"/>
+<line x1="242.0" y1="269.0" x2="484.5" y2="269.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="500.5" y="296.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">14.6K</text>
+<text x="1556" y="296.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">11.2% · 14,581 of 130,274 lines</text>
 <rect x="30" y="339.0" width="204" height="32" rx="10" fill="#3479E6" opacity="0.95"/>
 <text x="132.0" y="361.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">COMPILER BACKENDS</text>
 <rect x="240" y="333" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="333" width="223.5" height="44" rx="12" fill="url(#bar-gradient-3)"/>
-<line x1="242.0" y1="335.0" x2="461.5" y2="335.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="477.5" y="362.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">13.2K</text>
-<text x="1556" y="362.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">10.1% · 13,214 of 130,249 lines</text>
+<rect x="240" y="333" width="223.4" height="44" rx="12" fill="url(#bar-gradient-3)"/>
+<line x1="242.0" y1="335.0" x2="461.4" y2="335.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="477.4" y="362.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">13.2K</text>
+<text x="1556" y="362.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">10.1% · 13,214 of 130,274 lines</text>
 <rect x="30" y="405.0" width="194" height="32" rx="10" fill="#E06814" opacity="0.95"/>
 <text x="127.0" y="427.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">STANDARD LIBRARY</text>
 <rect x="240" y="399" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="240" y="399" width="177.7" height="44" rx="12" fill="url(#bar-gradient-4)"/>
 <line x1="242.0" y1="401.0" x2="415.7" y2="401.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
 <text x="431.7" y="428.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">10.5K</text>
-<text x="1556" y="428.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">8.1% · 10,509 of 130,249 lines</text>
+<text x="1556" y="428.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">8.1% · 10,509 of 130,274 lines</text>
 <rect x="30" y="471.0" width="164" height="32" rx="10" fill="#D73D3D" opacity="0.95"/>
 <text x="112.0" y="493.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">ML / LLM LIBS</text>
 <rect x="240" y="465" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="465" width="148.4" height="44" rx="12" fill="url(#bar-gradient-5)"/>
-<line x1="242.0" y1="467.0" x2="386.4" y2="467.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="402.4" y="494.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">8.8K</text>
-<text x="1556" y="494.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">6.7% · 8,772 of 130,249 lines</text>
+<rect x="240" y="465" width="148.3" height="44" rx="12" fill="url(#bar-gradient-5)"/>
+<line x1="242.0" y1="467.0" x2="386.3" y2="467.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="402.3" y="494.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">8.8K</text>
+<text x="1556" y="494.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">6.7% · 8,772 of 130,274 lines</text>
 <rect x="30" y="537.0" width="174" height="32" rx="10" fill="#D4418A" opacity="0.95"/>
 <text x="117.0" y="559.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">GRAPHICS / GPU</text>
 <rect x="240" y="531" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="531" width="70.6" height="44" rx="12" fill="url(#bar-gradient-6)"/>
-<line x1="242.0" y1="533.0" x2="308.6" y2="533.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="324.6" y="560.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">4.2K</text>
-<text x="1556" y="560.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">3.2% · 4,172 of 130,249 lines</text>
-<rect x="30" y="603.0" width="164" height="32" rx="10" fill="#12A695" opacity="0.95"/>
-<text x="112.0" y="625.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">VM / BYTECODE</text>
+<rect x="240" y="531" width="70.5" height="44" rx="12" fill="url(#bar-gradient-6)"/>
+<line x1="242.0" y1="533.0" x2="308.5" y2="533.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="324.5" y="560.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">4.2K</text>
+<text x="1556" y="560.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">3.2% · 4,172 of 130,274 lines</text>
+<rect x="30" y="603.0" width="154" height="32" rx="10" fill="#77B814" opacity="0.95"/>
+<text x="107.0" y="625.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">BUILD SYSTEM</text>
 <rect x="240" y="597" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="597" width="44.4" height="44" rx="12" fill="url(#bar-gradient-7)"/>
-<line x1="242.0" y1="599.0" x2="282.4" y2="599.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="298.4" y="626.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">2.6K</text>
-<text x="1556" y="626.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">2.0% · 2,627 of 130,249 lines</text>
-<rect x="30" y="669.0" width="154" height="32" rx="10" fill="#77B814" opacity="0.95"/>
-<text x="107.0" y="691.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">BUILD SYSTEM</text>
+<rect x="240" y="597" width="44.6" height="44" rx="12" fill="url(#bar-gradient-7)"/>
+<line x1="242.0" y1="599.0" x2="282.6" y2="599.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="298.6" y="626.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">2.6K</text>
+<text x="1556" y="626.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">2.0% · 2,638 of 130,274 lines</text>
+<rect x="30" y="669.0" width="164" height="32" rx="10" fill="#12A695" opacity="0.95"/>
+<text x="112.0" y="691.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">VM / BYTECODE</text>
 <rect x="240" y="663" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="240" y="663" width="44.4" height="44" rx="12" fill="url(#bar-gradient-8)"/>
 <line x1="242.0" y1="665.0" x2="282.4" y2="665.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
 <text x="298.4" y="692.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">2.6K</text>
-<text x="1556" y="692.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">2.0% · 2,627 of 130,249 lines</text>
+<text x="1556" y="692.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">2.0% · 2,627 of 130,274 lines</text>
 <rect x="30" y="735.0" width="194" height="32" rx="10" fill="#7034D5" opacity="0.95"/>
 <text x="127.0" y="757.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">ANDROID / KOTLIN</text>
 <rect x="240" y="729" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="240" y="729" width="9.6" height="44" rx="12" fill="url(#bar-gradient-9)"/>
 <line x1="242.0" y1="731.0" x2="247.6" y2="731.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
 <text x="263.6" y="758.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">568</text>
-<text x="1556" y="758.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">0.4% · 568 of 130,249 lines</text>
+<text x="1556" y="758.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">0.4% · 568 of 130,274 lines</text>
 <text x="44" y="831" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Backends: AST interpreter, bytecode VM, C, LLVM IR, native asm (x86-64/aarch64/rv64), JIT, AOT, Kotlin/Android.</text>
 <text x="44" y="855" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Test suite: 14.6K lines.  Standard library: 10.5K lines.</text>
-<text x="44" y="879" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-04-06 07:44 UTC</text>
+<text x="44" y="879" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-04-06 07:49 UTC</text>
 </svg>

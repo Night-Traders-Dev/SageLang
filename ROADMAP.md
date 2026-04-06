@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: April 5, 2026
-> **Current Phase**: v3.2.8 — Full Concurrency + SMP, all 18 phases complete
+> **Current Phase**: v3.2.9 — Documentation + Benchmarks, all 18 phases complete
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 

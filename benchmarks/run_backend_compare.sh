@@ -91,11 +91,25 @@ run_backend "C Backend -O3" \
     "$TMPDIR/bench_c_o3" \
     "$SAGE --compile $BENCH -o $TMPDIR/bench_c_o3 -O3"
 
-# 6. Self-hosted interpreter
+# 6. JIT mode (interpreter with profiling)
+run_backend "JIT Profiled" \
+    "$SAGE --jit $BENCH"
+
+# 7. AOT compiled binary
+run_backend "AOT Backend" \
+    "$TMPDIR/bench_aot" \
+    "$SAGE --aot $BENCH -o $TMPDIR/bench_aot"
+
+# 8. JIT+AOT (profile-guided AOT)
+run_backend "JIT+AOT Backend" \
+    "$TMPDIR/bench_jitaot" \
+    "$SAGE --aot --jit $BENCH -o $TMPDIR/bench_jitaot"
+
+# 9. Self-hosted interpreter (hybrid JIT/AOT)
 run_backend "Self-Hosted Sage" \
     "$SAGE src/sage/sage.sage $BENCH"
 
-# 7. Kotlin transpile (emit only, no JVM run)
+# 10. Kotlin transpile (emit only, no JVM run)
 printf "  ${CYAN}%-24s${RESET}" "Kotlin Transpile"
 kt_start=$(date +%s%N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1e9))')
 if $SAGE --emit-kotlin "$BENCH" -o "$TMPDIR/bench.kt" > /dev/null 2>&1; then

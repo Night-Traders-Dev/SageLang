@@ -65,6 +65,27 @@ def collect_results() -> list[tuple[str, float, str]]:
         if ok2:
             results.append(("C -O3 (run)", run_t, "#EF4444"))
 
+    # JIT profiled
+    t, _, ok = run_timed([str(SAGE), "--jit", str(BENCH)])
+    if ok:
+        results.append(("JIT Profiled", t, "#F59E0B"))
+
+    # AOT compiled
+    aot_bin = tmp / "bench_aot"
+    build_t, _, ok = run_timed([str(SAGE), "--aot", str(BENCH), "-o", str(aot_bin)])
+    if ok:
+        run_t, _, ok2 = run_timed([str(aot_bin)])
+        if ok2:
+            results.append(("AOT (run)", run_t, "#10B981"))
+
+    # JIT+AOT (profile-guided)
+    jitaot_bin = tmp / "bench_jitaot"
+    build_t, _, ok = run_timed([str(SAGE), "--aot", "--jit", str(BENCH), "-o", str(jitaot_bin)])
+    if ok:
+        run_t, _, ok2 = run_timed([str(jitaot_bin)])
+        if ok2:
+            results.append(("JIT+AOT (run)", run_t, "#84CC16"))
+
     # Kotlin transpile (emit only)
     kt_out = tmp / "bench.kt"
     t, _, ok = run_timed([str(SAGE), "--emit-kotlin", str(BENCH), "-o", str(kt_out)])

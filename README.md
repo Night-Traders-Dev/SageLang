@@ -4,7 +4,7 @@
 
 ![SageLang Logo](assets/SageLang.jpg)
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, nine execution backends (C, LLVM IR, native assembly, bytecode VM, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** written in Sage itself, a **Vulkan + OpenGL graphics engine** for GPU compute and rendering, and **LLVM-compiled GPU support** for native-speed 3D game engines. As of v3.2, Sage can **transpile to Kotlin and generate Android APKs** from a single `.sage` file, with **optional type annotations**, **structs/enums/traits**, **pattern matching with guards**, a **formal specification**, and a **backend conformance suite**.
+Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features nine execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.2.9, Sage transpiles to Kotlin and generates Android APKs from a single `.sage` file, with optional type annotations, structs/enums/traits, pattern matching with guards, and a formal specification.
 
 ## Codebase Metrics
 
@@ -36,20 +36,21 @@ The compiled VM recipe is now charted as a first-class lane on the default workl
 
 ### Sage vs Python 3 Benchmarks
 
-Run `make benchmark-python` to compare all 7 Sage execution backends against CPython 3.x on 10 workloads (fibonacci, loop sum, string concat, array ops, dict ops, class methods, nested loops, exceptions, closures, prime sieve). Each benchmark has paired `.sage` and `.py` files under `benchmarks/`.
+Run `make benchmark-python` to compare all Sage execution backends against CPython 3.x on 10 workloads (fibonacci, loop sum, string concat, array ops, dict ops, class methods, nested loops, exceptions, closures, prime sieve).
 
 **Execution backends benchmarked:**
 | Backend | Command | Description |
 |---------|---------|-------------|
 | Python 3 | `python3 file.py` | CPython baseline |
-| Sage AST | `sage --runtime ast file.sage` | Tree-walking interpreter |
+| Sage AST | `sage --runtime ast file.sage` | Tree-walking interpreter (optimized env lookup) |
 | Sage VM | `sage --runtime bytecode file.sage` | Bytecode virtual machine |
 | Sage C | `sage --compile file.sage -o bin` | C backend compilation |
 | Sage LLVM | `sage --compile-llvm file.sage -o bin` | LLVM IR backend |
-| Sage JIT | `sage --jit file.sage` | Interpreter + profiling + native compilation |
+| Sage JIT | `sage --jit file.sage` | Interpreter + profiling + type feedback |
 | Sage AOT | `sage --aot file.sage -o bin` | Type-specialized ahead-of-time compilation |
-
-The JIT and AOT backends can also be combined: `sage --aot --jit file.sage -o bin` runs a profiling pass first, then feeds type feedback to the AOT compiler for better specialization.
+| Sage JIT+AOT | `sage --aot --jit file.sage -o bin` | Profile-guided AOT compilation |
+| Self-Hosted | `sage src/sage/sage.sage file.sage` | Self-hosted with hybrid JIT/AOT profiling |
+| Kotlin | `sage --emit-kotlin file.sage -o file.kt` | Kotlin transpilation (emit time) |
 
 ## 🚀 Features (Implemented)
 
@@ -92,10 +93,10 @@ The JIT and AOT backends can also be combined: `sage --aot --jit file.sage -o bi
 
 ### JIT + AOT Compilers
 
-- **JIT Compiler** (`sage --jit file.sage`): Interpreter with profiling counters and type feedback — hot functions (100+ calls) are detected and compiled to native x86-64 machine code. Reports per-function call counts, argument types, and return types.
-- **AOT Compiler** (`sage --aot file.sage -o binary`): Ahead-of-time compilation with type inference and specialization. Generates self-contained C with optimized fast paths for `Int+Int`, `String+String`, and known-type comparisons. Compiles to standalone native binary via `cc -O2`.
-- **Combined Mode** (`sage --aot --jit file.sage -o binary`): Profile-guided AOT — runs the program once to collect JIT type feedback, then feeds that data to the AOT compiler for better specialization decisions.
-- **Performance**: ~46x speedup on recursive fibonacci (0.46s interpreter vs 0.01s AOT)
+- **JIT Profiler** (`sage --jit file.sage`): Interpreter with per-function profiling counters and type feedback. Hot functions (100+ calls) are detected; argument types and return types are classified (int, float, string, bool, mixed). Reports profiling data for AOT optimization.
+- **AOT Compiler** (`sage --aot file.sage -o binary`): Ahead-of-time compilation with static type inference. Generates self-contained C with type-specialized fast paths for `Int+Int`, `String+String`, and known-type comparisons. Compiles to native binary via `cc -O2`.
+- **Combined Mode** (`sage --aot --jit file.sage -o binary`): Profile-guided AOT — runs the program once to collect JIT type feedback, then feeds that data to the AOT compiler for better specialization.
+- **Self-Hosted Hybrid**: The self-hosted interpreter (`src/sage/interpreter.sage`) implements its own profile-guided specialization — per-function call counting, monomorphic type tracking, and loop specialization — always-on with no flags needed.
 
 ### Exception Handling ✅
 - **Try/Catch/Finally**: Full exception handling with `try:`, `catch e:`, and `finally:`
@@ -119,7 +120,7 @@ The JIT and AOT backends can also be combined: `sage --aot --jit file.sage -o bi
 - **Methods**: Functions with automatic `self` binding
 - **Properties**: Dynamic instance variables via `self.property`
 - **Inheritance**: `class Child(Parent):` with method overriding
-- **Super calls**: `super.init(self, ...)` / `super.method(self, ...)` — call parent constructors and methods; works with deep inheritance chains
+- **Super calls**: `super.init(...)` / `super.method(...)` — call parent constructors and methods with auto-self; works with deep inheritance chains
 - **Arrow operator**: `->` — systems-language style property access, alias for `.`
 - **Property Access**: `obj.property` and `obj.property = value`
 
@@ -141,7 +142,7 @@ The JIT and AOT backends can also be combined: `sage --aot --jit file.sage -o bi
 
 ### Security Hardening
 - **Type-safe value access**: All native functions validate argument types before accessing union members
-- **Recursion depth limits**: Both expression evaluator and statement interpreter guard against stack overflow (max 1000)
+- **Recursion depth limits**: Statement interpreter guards against stack overflow (max 1000); expression evaluator inlined for zero per-expression overhead
 - **Loop iteration limits**: While loops capped at 1M iterations; loop nesting capped at 64 levels
 - **Buffer safety**: String literals capped at 4096 chars, identifiers at 1024 chars; all allocation via abort-on-OOM wrappers
 - **Shell injection prevention**: Assembly exec/compile paths validate paths and use secure temp files (`mkstemps`)
@@ -172,9 +173,14 @@ The JIT and AOT backends can also be combined: `sage --aot --jit file.sage -o bi
 
 ### Concurrency & Async/Await
 
-- **Threads**: `thread.spawn()`, `thread.join()`, `thread.mutex()`, `thread.lock()`, `thread.unlock()`
+- **Threads**: `thread.spawn()`, `thread.join()`, `thread.mutex()`, `thread.lock()`, `thread.unlock()`, `thread.sleep()`
 - **Async Procs**: `async proc name():` spawns work on a new thread when called
 - **Await**: `await future` joins the thread and returns the result
+- **True Atomics**: `atomic_new()`, `atomic_load()`, `atomic_store()`, `atomic_add()`, `atomic_cas()`, `atomic_exchange()` — C-level `__atomic` builtins, safe for concurrent access
+- **POSIX Semaphores**: `sem_new(permits)`, `sem_wait()`, `sem_post()`, `sem_trywait()` — real blocking semaphores
+- **Condition Variables**: `sage_cond_wait()`, `sage_cond_signal()`, `sage_cond_broadcast()` — C-level pthread_cond_t
+- **Read-Write Locks**: `sage_rwlock_rdlock()`, `sage_rwlock_wrlock()` — concurrent readers, exclusive writers
+- **SMP/Multicore**: `cpu_count()`, `cpu_physical_cores()`, `cpu_has_hyperthreading()`, `thread_set_affinity()`, `thread_get_core()`
 - **Thread Safety**: GC mutex for safe concurrent memory management
 
 ### Native Standard Library Modules
