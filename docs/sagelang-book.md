@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "April 2026"
-version: "v3.2.9"
+version: "v3.3.0"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v3.2.9}
+  - \fancyfoot[C]{v3.3.0}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -55,6 +55,9 @@ by Rust, and a self-hosted compiler written in Sage itself.
 - **GPU programming**: Vulkan and OpenGL backends (covered in separate guides)
 - **Machine learning**: neural networks, model training (covered in separate guides)
 - **Performance library** (`lib/perf.sage`): dispatch tables, signal singletons, flat env cache, shape constructors
+- **SageMetal VM**: freestanding bytecode interpreter for bare-metal (no malloc, no libc, no OS)
+- **Metal stdlib** (`lib/metal/`): serial, GPIO, IRQ, timer, MMIO for kernel/embedded development
+- **Default hybrid runtime**: JIT profiling on hosted, AST on bare-metal, automatic selection
 - **304+ interpreter tests**, 1987+ self-hosted tests
 
 ## Quick Start
@@ -2808,6 +2811,218 @@ python3 scripts/generate_backend_chart.py
 ```
 
 Workloads: fibonacci, loop sum, array ops, string concat, dict ops, prime sieve, nested loops, LCG hash.
+
+\newpage
+
+# Part VIf: Default Runtime and Execution Modes
+
+## JIT+AOT Hybrid Default
+
+As of v3.3.0, Sage's default runtime is `auto` — JIT profiling mode on hosted platforms,
+AST interpreter on bare-metal:
+
+| Environment | Auto Resolves To | Why |
+|-------------|-----------------|-----|
+| Desktop/Server | JIT profiling | Full OS, type feedback collection |
+| Android | JIT profiling | JVM + coroutines available |
+| Bare-metal/Pico | AST interpreter | No fork/system, safe fallback |
+| Kernel dev | SageMetal VM | Freestanding, zero allocation |
+
+Override with `--runtime ast`, `--runtime bytecode`, `--runtime jit`, or `--runtime aot`.
+
+## Runtime Pragma Decorators
+
+Control JIT/AOT behavior per-function:
+
+```python
+@nojit
+proc low_level_driver():
+    # Skips JIT profiling for this function
+    mem_write(ptr, 0, "int", 42)
+
+@noaot
+proc dynamic_dispatch():
+    # Skips AOT compilation
+    ...
+
+@noprofile
+proc realtime_handler():
+    # Skips all profiling overhead
+    ...
+```
+
+\newpage
+
+# Part VIg: SageMetal VM — Bare-Metal Bytecode Interpreter
+
+The SageMetal VM is a freestanding bytecode interpreter that runs without an OS,
+libc, or dynamic memory allocation. It is designed for kernels, bootloaders,
+embedded systems, and OS development.
+
+## Architecture
+
+All storage is static — no malloc, no heap fragmentation:
+
+- **Value Stack**: 512 slots (configurable via `METAL_STACK_SIZE`)
+- **Constant Pool**: 1024 entries
+- **String Pool**: 32KB bump allocator (interned, deduplicated)
+- **Heap**: 64KB bump allocator for general use
+- **Scope Chain**: 64 levels deep, 32 variables per scope
+- **Array Pool**: Fixed-capacity arrays (256 elements each)
+
+## MetalValue Type
+
+Compact 16-byte tagged union:
+
+```
+MV_NIL    — null value
+MV_NUM    — IEEE 754 double
+MV_BOOL   — 0 or 1
+MV_STR    — index into string pool
+MV_ARR    — index into array pool
+MV_DICT   — index into dict pool
+MV_FN     — index into function table
+MV_PTR    — raw pointer (for MMIO, DMA)
+```
+
+## Host I/O Callbacks
+
+The kernel or bootloader sets these before running the VM:
+
+```c
+MetalVM vm;
+metal_vm_init(&vm);
+vm.write_char = serial_putchar;   // Console output
+vm.read_char = serial_getchar;    // Console input
+vm.write_port = x86_outb;        // Port I/O
+vm.read_port = x86_inb;          // Port I/O
+vm.map_mmio = identity_map;      // MMIO mapping
+
+metal_vm_load(&vm, bytecode, length);
+metal_vm_run(&vm);  // Execute until halt
+```
+
+## Single-Step Mode
+
+For cooperative multitasking in kernels:
+
+```c
+while (metal_vm_step(&vm)) {
+    // Check interrupts, handle timer ticks, etc.
+    if (timer_interrupt_pending) handle_timer();
+}
+```
+
+## Building
+
+```bash
+make metal-vm   # Produces obj/metal_vm.o (freestanding)
+```
+
+Link with your kernel:
+
+```bash
+gcc -ffreestanding -nostdlib -o kernel.elf \
+    boot.o kernel.o obj/metal_vm.o -lgcc
+```
+
+\newpage
+
+# Part VIh: Metal Standard Library
+
+The `lib/metal/` modules provide bare-metal primitives for kernel and
+embedded development.
+
+## metal.core
+
+Core primitives: serial I/O, port I/O, MMIO, CPU control, memory.
+
+```python
+import metal.core
+
+# Console
+core.puts("Hello from kernel!")
+
+# Port I/O (x86)
+core.outb(0x3F8, 65)    # Send 'A' to COM1
+let val = core.inb(0x60) # Read keyboard scancode
+
+# MMIO
+core.mmio_write32(0xB8000, 0x0F41)  # Write 'A' to VGA
+
+# CPU control
+core.cli()    # Disable interrupts
+core.sti()    # Enable interrupts
+core.hlt()    # Halt until next interrupt
+
+# Bump allocator
+core.heap_init(0x100000, 65536)
+let ptr = core.heap_alloc(256)
+```
+
+## metal.serial
+
+UART drivers for x86 (NS16550A) and ARM (PL011):
+
+```python
+import metal.serial
+
+# x86 COM1
+serial.uart_init(serial.COM1, 115200)
+serial.uart_puts(serial.COM1, "Boot complete\n")
+
+# ARM PL011
+serial.pl011_init(0x09000000)
+serial.pl011_puts(0x09000000, "Hello from ARM\n")
+```
+
+## metal.irq
+
+Interrupt management and PIC control:
+
+```python
+import metal.irq
+
+# Remap PIC to vectors 32-47
+irq.pic_remap(32, 40)
+
+# Register handler for timer interrupt
+irq.register_handler(32, proc(vector):
+    # Handle timer tick
+    irq.pic_eoi(irq.IRQ_TIMER)
+)
+
+# Enable timer IRQ
+irq.pic_unmask(irq.IRQ_TIMER)
+```
+
+## metal.timer
+
+Hardware timer with tick counting and sleep:
+
+```python
+import metal.timer
+
+timer.pit_init(1000)    # 1000 Hz (1ms resolution)
+
+let start = timer.ticks()
+# ... do work ...
+let elapsed = timer.stopwatch_elapsed_ms(start)
+
+timer.sleep_ms(500)     # Sleep 500ms
+```
+
+## metal.gpio
+
+GPIO pin control for embedded targets:
+
+```python
+import metal.gpio
+
+gpio.gpio_init(0x40000000, 32)  # Init 32 pins at MMIO base
+gpio.pin_mode(25, gpio.PIN_OUTPUT)  # LED pin
+gpio.led_blink(25, 5, 250)         # Blink 5 times, 250ms interval
+```
 
 \newpage
 
