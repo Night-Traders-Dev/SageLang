@@ -1,9 +1,21 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: April 5, 2026
-> **Current Phase**: v3.2.0 — Kotlin/Android Backend, all 18 phases complete
+> **Current Phase**: v3.2.6 — Performance Optimizations + Kotlin fixes, all 18 phases complete
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+
+---
+
+## v3.2.6: Performance Optimizations + Kotlin Fixes (April 2026)
+
+### Completed
+
+- Self-hosted interpreter performance: pre-allocated signal singletons, native dispatch table, shape constructors
+- Performance library (`lib/perf.sage`): frozen signals, dispatch tables, flat env cache, shape objects, fast numerics
+- Kotlin backend fixes: generators (sequence/yield), async/await (coroutines), super calls, FFI/memory, type specialization, Compose codegen
+- Cross-backend benchmark (`benchmarks/backend_compare.sage`): 8 workloads across AST/VM/C/LLVM/Kotlin
+- Backend comparison chart (`scripts/generate_backend_chart.py`)
 
 ---
 

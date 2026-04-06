@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="741" viewBox="0 0 1600 741" role="img">
+<title>SageLang Backend Performance Comparison</title>
+<defs>
+<linearGradient id="bg-0" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#619EFF"/>
+<stop offset="100%" stop-color="#306ED1"/>
+</linearGradient>
+<linearGradient id="bg-1" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#43C6B8"/>
+<stop offset="100%" stop-color="#109788"/>
+</linearGradient>
+<linearGradient id="bg-2" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#FA8F45"/>
+<stop offset="100%" stop-color="#CC5E12"/>
+</linearGradient>
+<linearGradient id="bg-3" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#FCA863"/>
+<stop offset="100%" stop-color="#CE7831"/>
+</linearGradient>
+<linearGradient id="bg-4" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#B977F9"/>
+<stop offset="100%" stop-color="#8A46CB"/>
+</linearGradient>
+<linearGradient id="bg-5" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#CD9DFD"/>
+<stop offset="100%" stop-color="#9D6CCF"/>
+</linearGradient>
+<linearGradient id="bg-6" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#F26969"/>
+<stop offset="100%" stop-color="#C43838"/>
+</linearGradient>
+<linearGradient id="bg-7" x1="0%" y1="0%" x2="100%" y2="0%">
+<stop offset="0%" stop-color="#9661F1"/>
+<stop offset="100%" stop-color="#6630C2"/>
+</linearGradient>
+</defs>
+<rect width="100%" height="100%" fill="#0B1118"/>
+<rect x="12" y="12" width="1576" height="717" rx="18" fill="#0F1722" stroke="#1F2937"/>
+<text x="44" y="62" fill="#F8FAFC" font-size="34" font-family="Segoe UI, Arial, sans-serif" font-weight="700">SageLang Backend Performance Comparison</text>
+<text x="44" y="95" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">benchmarks/backend_compare.sage — 8 workloads (fib, loops, arrays, strings, dicts, primes, nested, LCG)</text>
+<rect x="30" y="141.0" width="169" height="32" rx="10" fill="#3479E6" opacity="0.95"/>
+<text x="114.5" y="163.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">AST INTERPRETER</text>
+<rect x="280" y="135" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
+<rect x="280" y="135" width="799.0" height="44" rx="12" fill="url(#bg-0)"/>
+<text x="1093.0" y="164.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">351ms</text>
+<rect x="30" y="207.0" width="133" height="32" rx="10" fill="#12A695" opacity="0.95"/>
+<text x="96.5" y="229.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">BYTECODE VM</text>
+<rect x="280" y="201" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
+<rect x="280" y="201" width="765.5" height="44" rx="12" fill="url(#bg-1)"/>
+<text x="1059.5" y="230.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">337ms</text>
+<rect x="30" y="273.0" width="169" height="32" rx="10" fill="#E06814" opacity="0.95"/>
+<text x="114.5" y="295.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">C BACKEND (RUN)</text>
+<rect x="280" y="267" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
+<rect x="280" y="267" width="650.2" height="44" rx="12" fill="url(#bg-2)"/>
+<text x="944.2" y="296.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">286ms</text>
+<rect x="30" y="339.0" width="187" height="32" rx="10" fill="#E28336" opacity="0.95"/>
+<text x="123.5" y="361.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">C BACKEND (TOTAL)</text>
+<rect x="280" y="333" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
+<rect x="280" y="333" width="912.0" height="44" rx="12" fill="url(#bg-3)"/>
+<text x="1206.0" y="362.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">401ms</text>
+<rect x="30" y="405.0" width="196" height="32" rx="10" fill="#974CDE" opacity="0.95"/>
+<text x="128.0" y="427.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">LLVM BACKEND (RUN)</text>
+<rect x="280" y="399" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
+<rect x="280" y="399" width="415.3" height="44" rx="12" fill="url(#bg-4)"/>
+<text x="709.3" y="428.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">183ms</text>
+<rect x="30" y="471.0" width="214" height="32" rx="10" fill="#AD77E3" opacity="0.95"/>
+<text x="137.0" y="493.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">LLVM BACKEND (TOTAL)</text>
+<rect x="280" y="465" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
+<rect x="280" y="465" width="563.0" height="44" rx="12" fill="url(#bg-5)"/>
+<text x="857.0" y="494.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">248ms</text>
+<rect x="30" y="537.0" width="133" height="32" rx="10" fill="#D73D3D" opacity="0.95"/>
+<text x="96.5" y="559.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">C -O3 (RUN)</text>
+<rect x="280" y="531" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
+<rect x="280" y="531" width="635.6" height="44" rx="12" fill="url(#bg-6)"/>
+<text x="929.6" y="560.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">280ms</text>
+<rect x="30" y="603.0" width="178" height="32" rx="10" fill="#7034D5" opacity="0.95"/>
+<text x="119.0" y="625.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">KOTLIN TRANSPILE</text>
+<rect x="280" y="597" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
+<rect x="280" y="597" width="9.3" height="44" rx="12" fill="url(#bg-7)"/>
+<text x="303.3" y="626.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">4.08ms</text>
+<text x="44" y="681" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Lower is better. Last refreshed: 2026-04-06 04:54 UTC</text>
+</svg>

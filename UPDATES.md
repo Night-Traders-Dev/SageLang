@@ -1,5 +1,26 @@
 # SageLang Updates
 
+## v3.2.6 — Performance Optimizations + Kotlin Fixes (April 2026)
+
+- **Self-hosted interpreter optimizations** (metaprogramming-driven):
+  - Pre-allocated signal singletons: `result_normal(nil)`, `result_break()`, `result_continue()` now return cached dicts instead of allocating on every statement execution
+  - Native dispatch table: `call_native()` replaced 180-line if/elif chain with O(1) dict lookup — each builtin is a first-class function in a dispatch dict
+  - Shape constructors: function/class/instance/environment objects built as single dict literals instead of key-by-key construction
+  - `register_native()` uses single-expression dict literal
+- **Performance library** (`lib/perf.sage`): reusable optimization primitives
+  - Frozen signal singletons, dispatch table builders, flat environment cache
+  - Shape object factories (function, class, instance, native, generator, env)
+  - Fast numeric operations (bypass type dispatch), loop specialization helpers
+  - String interning pool for repeated string allocations
+- **Cross-backend benchmark** (`benchmarks/backend_compare.sage`): 8 workloads
+  - fibonacci, loop sum, array ops, string concat, dict ops, prime sieve, nested loops, LCG hash
+  - `benchmarks/run_backend_compare.sh`: shell runner with timing and checksum verification
+  - `scripts/generate_backend_chart.py`: SVG chart generator from live benchmark results
+- **Backend comparison chart** added to README
+- All Kotlin backend limitations resolved (generators, async, super, FFI, type spec, Compose)
+
+---
+
 ## v3.2.0 — Kotlin/Android Backend (April 2026)
 
 - **Generators**: `yield` transpiles to Kotlin `sequence { yield() }` blocks with `Sequence<SageVal>` return type; full resumable generator support in for-loops

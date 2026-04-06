@@ -18,6 +18,14 @@ These charts are refreshed by `make charts` and also as part of the default `mak
 
 ## Benchmark Metrics
 
+### Cross-Backend Comparison
+
+![SageLang backend performance comparison](assets/charts/backend-compare.svg)
+
+Run `python3 scripts/generate_backend_chart.py` or `bash benchmarks/run_backend_compare.sh` to regenerate. Tests 8 workloads (fibonacci, loop sum, arrays, strings, dicts, primes, nested loops, LCG hash) across all native backends.
+
+### Recipe Benchmarks
+
 These charts are also refreshed by `make charts`. They are generated from `python3 scripts/benchmark_recipes.py --runs 5 --warmups 1` against `benchmarks/runtime_compare.sage`, so the absolute timings are machine-specific while the relative shape is the useful signal.
 
 The compiled VM recipe is now charted as a first-class lane on the default workload. Any recipe that still fails or misses checksum validation is called out in the chart footers instead of being drawn as a misleading bar.

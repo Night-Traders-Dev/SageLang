@@ -44,6 +44,14 @@ let g_module_cache = {}
 # Module search paths (set by the host before running)
 let g_module_paths = [".", "lib"]
 
+# ---- Performance: pre-allocated signal singletons ----
+# These eliminate dict allocation on EVERY statement execution.
+# The hot loop (exec_stmt → result_normal(nil)) was allocating a fresh
+# dict with 2 keys per statement. Now it returns a cached reference.
+let _SIG_NORMAL_NIL = {"kind": 0, "value": nil}
+let _SIG_BREAK = {"kind": 2, "value": nil}
+let _SIG_CONTINUE = {"kind": 3, "value": nil}
+
 proc set_error_context(source, filename):
     g_error_ctx = errors.make_error_context(source, filename)
 
@@ -109,10 +117,7 @@ proc runtime_error(line, message, hint):
 # -----------------------------------------
 
 proc env_new(parent):
-    let e = {}
-    e["parent"] = parent
-    e["vals"] = {}
-    return e
+    return {"parent": parent, "vals": {}}
 
 proc env_define(env, name, value):
     env["vals"][name] = value
@@ -170,6 +175,8 @@ proc import_bind(stmt, mod_name, mod_env, target_env):
 # -----------------------------------------
 
 proc result_normal(val):
+    if val == nil:
+        return _SIG_NORMAL_NIL
     let r = {}
     r["kind"] = SIGNAL_NORMAL
     r["value"] = val
@@ -182,16 +189,10 @@ proc result_return(val):
     return r
 
 proc result_break():
-    let r = {}
-    r["kind"] = SIGNAL_BREAK
-    r["value"] = nil
-    return r
+    return _SIG_BREAK
 
 proc result_continue():
-    let r = {}
-    r["kind"] = SIGNAL_CONTINUE
-    r["value"] = nil
-    return r
+    return _SIG_CONTINUE
 
 # -----------------------------------------
 # Helper: truthiness
@@ -260,187 +261,275 @@ proc value_to_string(val):
 # Native builtin dispatch
 # -----------------------------------------
 
-proc call_native(name, args):
-    if name == "str":
-        return value_to_string(args[0])
-    if name == "len":
-        let x = args[0]
-        if type(x) == "string":
-            return len(x)
-        if type(x) == "array":
-            return len(x)
-        if type(x) == "dict":
-            return len(dict_keys(x))
-        return 0
-    if name == "tonumber":
-        let x = args[0]
-        if type(x) == "number":
-            return x
-        if type(x) == "string":
-            return tonumber(x)
-        return 0
-    if name == "push":
-        push(args[0], args[1])
-        return nil
-    if name == "pop":
-        return pop(args[0])
-    if name == "array_extend":
-        let arr = args[0]
-        let other = args[1]
+# ---- Performance: native dispatch table ----
+# Replaces the massive if/elif chain in call_native with O(1) dict lookup.
+# Each entry maps a builtin name to a handler proc.
+
+let _native_dispatch = {}
+
+proc _n_str(args):
+    return value_to_string(args[0])
+
+proc _n_len(args):
+    let x = args[0]
+    let t = type(x)
+    if t == "string":
+        return len(x)
+    if t == "array":
+        return len(x)
+    if t == "dict":
+        return len(dict_keys(x))
+    return 0
+
+proc _n_tonumber(args):
+    let x = args[0]
+    if type(x) == "number":
+        return x
+    if type(x) == "string":
+        return tonumber(x)
+    return 0
+
+proc _n_push(args):
+    push(args[0], args[1])
+    return nil
+
+proc _n_pop(args):
+    return pop(args[0])
+
+proc _n_array_extend(args):
+    let arr = args[0]
+    let other = args[1]
+    let i = 0
+    while i < len(other):
+        push(arr, other[i])
+        i = i + 1
+    return nil
+
+proc _n_range(args):
+    let argc = len(args)
+    if argc == 1:
+        return range(args[0])
+    if argc == 2:
+        return range(args[0], args[1])
+    return []
+
+proc _n_type(args):
+    let x = args[0]
+    if x == nil:
+        return "nil"
+    let t = type(x)
+    if t == "dict":
+        if dict_has(x, "__interp_type"):
+            let vt = x["__interp_type"]
+            if vt == "function":
+                return "function"
+            if vt == "native":
+                return "native"
+            if vt == "class":
+                return "class"
+            if vt == "instance":
+                return x["class"]["name"]
+            if vt == "generator":
+                return "generator"
+        return "dict"
+    return t
+
+proc _n_input(args):
+    return input()
+
+proc _n_clock(args):
+    return clock()
+
+proc _n_chr(args):
+    return chr(args[0])
+
+proc _n_ord(args):
+    return ord(args[0])
+
+proc _n_slice(args):
+    return slice(args[0], args[1], args[2])
+
+proc _n_split(args):
+    return split(args[0], args[1])
+
+proc _n_join(args):
+    return join(args[0], args[1])
+
+proc _n_replace(args):
+    return replace(args[0], args[1], args[2])
+
+proc _n_upper(args):
+    return upper(args[0])
+
+proc _n_lower(args):
+    return lower(args[0])
+
+proc _n_strip(args):
+    return strip(args[0])
+
+proc _n_dict_keys(args):
+    return dict_keys(args[0])
+
+proc _n_dict_values(args):
+    return dict_values(args[0])
+
+proc _n_dict_has(args):
+    return dict_has(args[0], args[1])
+
+proc _n_dict_delete(args):
+    dict_delete(args[0], args[1])
+    return nil
+
+proc _n_startswith(args):
+    return startswith(args[0], args[1])
+
+proc _n_endswith(args):
+    return endswith(args[0], args[1])
+
+proc _n_contains(args):
+    return contains(args[0], args[1])
+
+proc _n_indexof(args):
+    return indexof(args[0], args[1])
+
+proc _n_next(args):
+    let gen = args[0]
+    if type(gen) == "dict":
+        if dict_has(gen, "__interp_type"):
+            if gen["__interp_type"] == "generator":
+                let idx = gen["index"]
+                let vals = gen["values"]
+                if idx < len(vals):
+                    gen["index"] = idx + 1
+                    return vals[idx]
+    return nil
+
+proc _n_gc_collect(args):
+    gc_collect()
+    return nil
+
+proc _n_gc_enable(args):
+    gc_enable()
+    return nil
+
+proc _n_gc_disable(args):
+    gc_disable()
+    return nil
+
+proc _n_gc_stats(args):
+    return gc_stats()
+
+proc _n_ffi_open(args):
+    return ffi_open(args[0])
+
+proc _n_ffi_close(args):
+    ffi_close(args[0])
+    return nil
+
+proc _n_ffi_call(args):
+    if len(args) == 3:
+        return ffi_call(args[0], args[1], args[2])
+    if len(args) == 4:
+        return ffi_call(args[0], args[1], args[2], args[3])
+    return nil
+
+proc _n_ffi_sym(args):
+    return ffi_sym(args[0], args[1])
+
+proc _n_mem_alloc(args):
+    return mem_alloc(args[0])
+
+proc _n_mem_free(args):
+    mem_free(args[0])
+    return nil
+
+proc _n_mem_read(args):
+    return mem_read(args[0], args[1], args[2])
+
+proc _n_mem_write(args):
+    mem_write(args[0], args[1], args[2], args[3])
+    return nil
+
+proc _n_mem_size(args):
+    return mem_size(args[0])
+
+proc _n_addressof(args):
+    return addressof(args[0])
+
+proc _n_int(args):
+    let x = args[0]
+    if type(x) == "number":
+        let s = str(x)
+        let dot_pos = -1
         let i = 0
-        while i < len(other):
-            push(arr, other[i])
+        while i < len(s):
+            if s[i] == ".":
+                dot_pos = i
+                break
             i = i + 1
-        return nil
-    if name == "range":
-        let argc = len(args)
-        if argc == 1:
-            return range(args[0])
-        if argc == 2:
-            return range(args[0], args[1])
-        return []
-    if name == "type":
-        let x = args[0]
-        if x == nil:
-            return "nil"
-        if x == true or x == false:
-            return "bool"
-        if type(x) == "number":
-            return "number"
-        if type(x) == "string":
-            return "string"
-        if type(x) == "array":
-            return "array"
-        if type(x) == "dict":
-            if dict_has(x, "__interp_type"):
-                let vt = x["__interp_type"]
-                if vt == "function":
-                    return "function"
-                if vt == "native":
-                    return "native"
-                if vt == "class":
-                    return "class"
-                if vt == "instance":
-                    return "instance"
-            return "dict"
-        return type(x)
-    if name == "input":
-        return input()
-    if name == "clock":
-        return clock()
-    if name == "chr":
-        return chr(args[0])
-    if name == "ord":
-        return ord(args[0])
-    if name == "slice":
-        return slice(args[0], args[1], args[2])
-    if name == "split":
-        return split(args[0], args[1])
-    if name == "join":
-        return join(args[0], args[1])
-    if name == "replace":
-        return replace(args[0], args[1], args[2])
-    if name == "upper":
-        return upper(args[0])
-    if name == "lower":
-        return lower(args[0])
-    if name == "strip":
-        return strip(args[0])
-    if name == "dict_keys":
-        return dict_keys(args[0])
-    if name == "dict_values":
-        return dict_values(args[0])
-    if name == "dict_has":
-        return dict_has(args[0], args[1])
-    if name == "dict_delete":
-        dict_delete(args[0], args[1])
-        return nil
-    if name == "startswith":
-        return startswith(args[0], args[1])
-    if name == "endswith":
-        return endswith(args[0], args[1])
-    if name == "contains":
-        return contains(args[0], args[1])
-    if name == "indexof":
-        return indexof(args[0], args[1])
-    # Generator: next(gen) advances generator and returns yielded value
-    if name == "next":
-        let gen = args[0]
-        if type(gen) == "dict":
-            if dict_has(gen, "__interp_type"):
-                if gen["__interp_type"] == "generator":
-                    let idx = gen["index"]
-                    let vals = gen["values"]
-                    if idx < len(vals):
-                        gen["index"] = idx + 1
-                        return vals[idx]
-                    return nil
-        return nil
-    # GC control: delegates to host C runtime builtins
-    if name == "gc_collect":
-        gc_collect()
-        return nil
-    if name == "gc_enable":
-        gc_enable()
-        return nil
-    if name == "gc_disable":
-        gc_disable()
-        return nil
-    if name == "gc_stats":
-        return gc_stats()
-    # FFI: delegates to host C runtime builtins
-    if name == "ffi_open":
-        return ffi_open(args[0])
-    if name == "ffi_close":
-        ffi_close(args[0])
-        return nil
-    if name == "ffi_call":
-        if len(args) == 3:
-            return ffi_call(args[0], args[1], args[2])
-        if len(args) == 4:
-            return ffi_call(args[0], args[1], args[2], args[3])
-        return nil
-    if name == "ffi_sym":
-        return ffi_sym(args[0], args[1])
-    # Memory: delegates to host C runtime builtins
-    if name == "mem_alloc":
-        return mem_alloc(args[0])
-    if name == "mem_free":
-        mem_free(args[0])
-        return nil
-    if name == "mem_read":
-        return mem_read(args[0], args[1], args[2])
-    if name == "mem_write":
-        mem_write(args[0], args[1], args[2], args[3])
-        return nil
-    if name == "mem_size":
-        return mem_size(args[0])
-    if name == "addressof":
-        return addressof(args[0])
-    if name == "int":
-        let x = args[0]
-        if type(x) == "number":
-            let s = str(x)
-            let dot_pos = -1
-            let i = 0
-            while i < len(s):
-                if s[i] == ".":
-                    dot_pos = i
-                    break
-                i = i + 1
-            if dot_pos == -1:
-                return x
-            let int_part = ""
-            i = 0
-            while i < dot_pos:
-                int_part = int_part + s[i]
-                i = i + 1
-            if int_part == "" or int_part == "-":
-                return 0
-            return tonumber(int_part)
-        if type(x) == "string":
-            return tonumber(x)
-        return 0
+        if dot_pos == -1:
+            return x
+        let int_part = ""
+        i = 0
+        while i < dot_pos:
+            int_part = int_part + s[i]
+            i = i + 1
+        if int_part == "" or int_part == "-":
+            return 0
+        return tonumber(int_part)
+    if type(x) == "string":
+        return tonumber(x)
+    return 0
+
+# Build the dispatch table at module load time
+_native_dispatch["str"] = _n_str
+_native_dispatch["len"] = _n_len
+_native_dispatch["tonumber"] = _n_tonumber
+_native_dispatch["push"] = _n_push
+_native_dispatch["pop"] = _n_pop
+_native_dispatch["array_extend"] = _n_array_extend
+_native_dispatch["range"] = _n_range
+_native_dispatch["type"] = _n_type
+_native_dispatch["input"] = _n_input
+_native_dispatch["clock"] = _n_clock
+_native_dispatch["chr"] = _n_chr
+_native_dispatch["ord"] = _n_ord
+_native_dispatch["slice"] = _n_slice
+_native_dispatch["split"] = _n_split
+_native_dispatch["join"] = _n_join
+_native_dispatch["replace"] = _n_replace
+_native_dispatch["upper"] = _n_upper
+_native_dispatch["lower"] = _n_lower
+_native_dispatch["strip"] = _n_strip
+_native_dispatch["dict_keys"] = _n_dict_keys
+_native_dispatch["dict_values"] = _n_dict_values
+_native_dispatch["dict_has"] = _n_dict_has
+_native_dispatch["dict_delete"] = _n_dict_delete
+_native_dispatch["startswith"] = _n_startswith
+_native_dispatch["endswith"] = _n_endswith
+_native_dispatch["contains"] = _n_contains
+_native_dispatch["indexof"] = _n_indexof
+_native_dispatch["next"] = _n_next
+_native_dispatch["gc_collect"] = _n_gc_collect
+_native_dispatch["gc_enable"] = _n_gc_enable
+_native_dispatch["gc_disable"] = _n_gc_disable
+_native_dispatch["gc_stats"] = _n_gc_stats
+_native_dispatch["ffi_open"] = _n_ffi_open
+_native_dispatch["ffi_close"] = _n_ffi_close
+_native_dispatch["ffi_call"] = _n_ffi_call
+_native_dispatch["ffi_sym"] = _n_ffi_sym
+_native_dispatch["mem_alloc"] = _n_mem_alloc
+_native_dispatch["mem_free"] = _n_mem_free
+_native_dispatch["mem_read"] = _n_mem_read
+_native_dispatch["mem_write"] = _n_mem_write
+_native_dispatch["mem_size"] = _n_mem_size
+_native_dispatch["addressof"] = _n_addressof
+_native_dispatch["int"] = _n_int
+
+proc call_native(name, args):
+    if dict_has(_native_dispatch, name):
+        let handler = _native_dispatch[name]
+        return handler(args)
     runtime_error(-1, "Unknown native function: " + name, nil)
 
 # -----------------------------------------
@@ -448,11 +537,7 @@ proc call_native(name, args):
 # -----------------------------------------
 
 proc register_native(env, name, arity):
-    let f = {}
-    f["__interp_type"] = "native"
-    f["name"] = name
-    f["arity"] = arity
-    env_define(env, name, f)
+    env_define(env, name, {"__interp_type": "native", "name": name, "arity": arity})
 
 proc init_builtins(env):
     register_native(env, "str", 1)
@@ -1061,18 +1146,18 @@ proc exec_stmt(stmt, env):
             i = i + 1
         return result_normal(nil)
 
-    # --- Proc ---
+    # --- Proc --- (single-dict-literal construction for speed)
     if stype == STMT_PROC:
         let name = stmt.name.text
-        let func = {}
-        func["__interp_type"] = "function"
-        func["name"] = name
-        func["params"] = stmt.params
-        func["body"] = stmt.body
-        func["closure"] = env
-        func["is_generator"] = body_has_yield(stmt.body)
-        env_define(env, name, func)
-        return result_normal(nil)
+        env_define(env, name, {
+            "__interp_type": "function",
+            "name": name,
+            "params": stmt.params,
+            "body": stmt.body,
+            "closure": env,
+            "is_generator": body_has_yield(stmt.body)
+        })
+        return _SIG_NORMAL_NIL
 
     # --- Return ---
     if stype == STMT_RETURN:
