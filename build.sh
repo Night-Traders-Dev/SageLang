@@ -331,6 +331,23 @@ else
 fi
 
 # ============================================================
+#  3b. Generate PDF book
+# ============================================================
+
+if command -v pandoc >/dev/null 2>&1 && command -v xelatex >/dev/null 2>&1; then
+    step "Generating PDF book"
+    if pandoc docs/sagelang-book.md -o docs/The_Sage_Programming_Language.pdf --pdf-engine=xelatex 2>/dev/null; then
+        pdf_size=$(du -h docs/The_Sage_Programming_Language.pdf | cut -f1)
+        step_ok "docs/The_Sage_Programming_Language.pdf ($pdf_size)"
+    else
+        step_ok "skipped (pandoc error)"
+    fi
+else
+    step "Generating PDF book"
+    step_ok "skipped (requires pandoc + xelatex)"
+fi
+
+# ============================================================
 #  4. Run tests
 # ============================================================
 

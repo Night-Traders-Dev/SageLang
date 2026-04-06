@@ -187,9 +187,9 @@ LSP_MAIN_OBJECT = $(OBJ_DIR)/lsp_main.o
 # Build Rules
 # ============================================================================
 
-.PHONY: all clean run install uninstall help test examples charts
+.PHONY: all clean run install uninstall help test examples charts pdf
 
-all: $(TARGET) $(LSP_TARGET) $(LLVM_RT_OBJECT) $(GPU_API_OBJECT) charts
+all: $(TARGET) $(LSP_TARGET) $(LLVM_RT_OBJECT) $(GPU_API_OBJECT) charts pdf
 
 # Link executable
 $(TARGET): $(ALL_OBJECTS)
@@ -251,6 +251,21 @@ debug:
 charts: $(TARGET)
 	@$(PYTHON) $(CHART_SCRIPT)
 	@echo "Updated README metric and benchmark chart assets"
+
+# Generate The Sage Programming Language PDF from the book markdown
+BOOK_SRC = docs/sagelang-book.md
+BOOK_PDF = docs/The_Sage_Programming_Language.pdf
+
+pdf: $(BOOK_PDF)
+
+$(BOOK_PDF): $(BOOK_SRC)
+	@if command -v pandoc >/dev/null 2>&1 && command -v xelatex >/dev/null 2>&1; then \
+		echo "Generating $(BOOK_PDF)..."; \
+		pandoc $(BOOK_SRC) -o $(BOOK_PDF) --pdf-engine=xelatex 2>/dev/null; \
+		echo "Generated $(BOOK_PDF)"; \
+	else \
+		echo "Skipping PDF generation (requires pandoc + xelatex)"; \
+	fi
 
 benchmark-python: $(TARGET)
 	@echo "Running Sage vs Python 3 benchmarks..."
