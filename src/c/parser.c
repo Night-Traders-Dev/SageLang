@@ -452,13 +452,24 @@ static Stmt* import_statement() {
         }
 
         consume(TOKEN_IMPORT, "Expect 'import' after module name.");
-        
+
+        // Check for wildcard import: from module import *
+        if (match(TOKEN_STAR)) {
+            // Use import_all=0 with a special "*" item to distinguish
+            // from "import module" (which uses import_all=1)
+            char** star_items = SAGE_ALLOC(sizeof(char*));
+            char** star_aliases = SAGE_ALLOC(sizeof(char*));
+            star_items[0] = SAGE_STRDUP("*");
+            star_aliases[0] = NULL;
+            return new_import_stmt(module_name, star_items, star_aliases, 1, NULL, 0);
+        }
+
         // Parse imported items and their aliases
         char** items = NULL;
-        char** item_aliases = NULL;  // ✅ NEW: Store aliases
+        char** item_aliases = NULL;
         int item_count = 0;
         int capacity = 0;
-        
+
         do {
             consume(TOKEN_IDENTIFIER, "Expect identifier in import list.");
             Token item_token = previous_token;
@@ -673,7 +684,8 @@ static Expr* primary() {
     }
 
     // Identifiers (including keywords that can be used as variable names in expression context)
-    if (match(TOKEN_IDENTIFIER) || match(TOKEN_ENUM) || match(TOKEN_STRUCT) || match(TOKEN_TRAIT)) {
+    if (match(TOKEN_IDENTIFIER) || match(TOKEN_ENUM) || match(TOKEN_STRUCT) || match(TOKEN_TRAIT) ||
+        match(TOKEN_MATCH) || match(TOKEN_INIT)) {
         Token name = previous_token;
         return new_variable_expr(name);
     }
@@ -1588,7 +1600,9 @@ static Stmt* declaration() {
     }
 
     if (match(TOKEN_LET) || match(TOKEN_VAR)) {
-        consume(TOKEN_IDENTIFIER, "Expect variable name.");
+        if (!match_identifier_like()) {
+            parser_expected_error(current_token, TOKEN_IDENTIFIER, "Expect variable name.");
+        }
         Token name = previous_token;
 
         // Optional type annotation: let x: Int = ...

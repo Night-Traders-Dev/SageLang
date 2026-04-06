@@ -76,6 +76,7 @@ Value module_get_attr(Module* module, const char* name, int length, int* found);
 // Import handling
 bool import_module(Environment* env, ImportData* import_data);
 bool import_all(Environment* env, const char* module_name);
+bool import_wildcard(Environment* env, const char* module_name);
 bool import_from(Environment* env, const char* module_name, ImportItem* items, int count);
 bool import_as(Environment* env, const char* module_name, const char* alias);
 

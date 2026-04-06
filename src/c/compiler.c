@@ -2624,6 +2624,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "static int sage_truthy(SageValue value) {\n"
         "    if (value.type == SAGE_TAG_NIL) return 0;\n"
         "    if (value.type == SAGE_TAG_BOOL) return value.as.boolean;\n"
+        "    if (value.type == SAGE_TAG_NUMBER) return value.as.number != 0.0;\n"
+        "    if (value.type == SAGE_TAG_STRING) return value.as.string[0] != '\\0';\n"
         "    return 1;\n"
         "}\n"
         "\n"

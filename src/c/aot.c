@@ -388,7 +388,7 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "static SageValue sage_bool(int b) { SageValue v; v.type=SAGE_BOOL; v.as.boolean=b; return v; }");
     aot_emit(aot, "static SageValue sage_string(const char* s) { SageValue v; v.type=SAGE_STR; v.as.string=s; return v; }");
     aot_emit(aot, "static SageValue sage_nil(void) { SageValue v; v.type=SAGE_NIL; return v; }");
-    aot_emit(aot, "static int sage_truthy(SageValue v) { return !(v.type==SAGE_NIL || (v.type==SAGE_BOOL && !v.as.boolean)); }");
+    aot_emit(aot, "static int sage_truthy(SageValue v) { if(v.type==SAGE_NIL) return 0; if(v.type==SAGE_BOOL) return v.as.boolean; if(v.type==SAGE_NUM) return v.as.number!=0.0; return 1; }");
     aot_emit(aot, "static SageValue sage_add(SageValue a, SageValue b) { if(a.type==SAGE_NUM&&b.type==SAGE_NUM) return sage_number(a.as.number+b.as.number); return sage_nil(); }");
     aot_emit(aot, "static SageValue sage_sub(SageValue a, SageValue b) { return sage_number(a.as.number-b.as.number); }");
     aot_emit(aot, "static SageValue sage_mul(SageValue a, SageValue b) { return sage_number(a.as.number*b.as.number); }");

@@ -358,6 +358,29 @@ bool import_all(Environment* env, const char* module_name) {
     return true;
 }
 
+bool import_wildcard(Environment* env, const char* module_name) {
+    if (!global_module_cache) {
+        fprintf(stderr, "Error: Module system not initialized\n");
+        return false;
+    }
+
+    Module* module = load_module(global_module_cache, module_name);
+    if (!module) return false;
+
+    if (!execute_module(module, module_parent_env(env))) return false;
+
+    // Dump all names from the module's environment into the caller's scope
+    if (module->env) {
+        EnvNode* node = module->env->head;
+        while (node != NULL) {
+            env_define(env, node->name, strlen(node->name), node->value);
+            node = node->next;
+        }
+    }
+
+    return true;
+}
+
 bool import_from(Environment* env, const char* module_name, ImportItem* items, int count) {
     if (!global_module_cache) {
         fprintf(stderr, "Error: Module system not initialized\n");

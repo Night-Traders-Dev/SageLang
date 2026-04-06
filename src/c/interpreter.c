@@ -476,6 +476,7 @@ static Value chr_native(int argCount, Value* args) {
     if (argCount != 1 || !IS_NUMBER(args[0])) return val_nil();
     int code = (int)AS_NUMBER(args[0]);
     if (code < 0 || code > 127) return val_nil();
+    if (code == 0) return val_string("");  // Null byte returns empty string (C strings are null-terminated)
     char* s = SAGE_ALLOC(2);
     s[0] = (char)code;
     s[1] = '\0';
@@ -1965,7 +1966,9 @@ void init_stdlib(Env* env) {
 static int is_truthy(Value v) {
     if (IS_NIL(v)) return 0;
     if (IS_BOOL(v)) return AS_BOOL(v);
-    return 1; 
+    if (IS_NUMBER(v)) return AS_NUMBER(v) != 0.0;
+    if (IS_STRING(v)) return AS_STRING(v)[0] != '\0';
+    return 1;
 }
 
 // PHASE 7: Helper to detect if a statement block contains yield
@@ -3201,12 +3204,18 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     fprintf(stderr, "Error: Failed to import module '%s' as '%s'\n", module_name, alias);
                     return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL };
                 }
+            } else if (item_count == 1 && items[0] != NULL && strcmp(items[0], "*") == 0) {
+                // from module_name import * (wildcard — import all exports into current scope)
+                if (!import_wildcard(env, module_name)) {
+                    fprintf(stderr, "Error: Failed to wildcard-import module '%s'\n", module_name);
+                    return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL };
+                }
             } else {
                 // from module_name import item1, item2, ...
                 ImportItem* import_items = SAGE_ALLOC(sizeof(ImportItem) * item_count);
                 for (int i = 0; i < item_count; i++) {
                     import_items[i].name = items[i];
-                    import_items[i].alias = stmt->as.import.item_aliases[i];  // ✅ FIX: Use parsed alias
+                    import_items[i].alias = stmt->as.import.item_aliases[i];
                 }
 
                 if (!import_from(env, module_name, import_items, item_count)) {
