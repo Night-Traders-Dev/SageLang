@@ -537,6 +537,24 @@ void module_add_source_dir(const char* source_path) {
         char lib_dir[4096];
         snprintf(lib_dir, sizeof(lib_dir), "%slib", dir);
         add_search_path(global_module_cache, lib_dir);
+
+        // Also add PARENT directory and parent/lib/ — handles the common
+        // pattern where source is in examples/ or src/ but libs are in
+        // the project root's lib/ directory.
+        char parent[4096];
+        memcpy(parent, dir, strlen(dir) + 1);
+        // Remove trailing slash
+        size_t plen = strlen(parent);
+        if (plen > 1 && parent[plen - 1] == '/') parent[plen - 1] = '\0';
+        // Find parent directory
+        char* parent_slash = strrchr(parent, '/');
+        if (parent_slash != NULL) {
+            *(parent_slash + 1) = '\0';
+            add_search_path(global_module_cache, parent);
+            char parent_lib[4096];
+            snprintf(parent_lib, sizeof(parent_lib), "%slib", parent);
+            add_search_path(global_module_cache, parent_lib);
+        }
     }
 }
 
