@@ -267,9 +267,19 @@ $(BOOK_PDF): $(BOOK_SRC)
 		echo "Skipping PDF generation (requires pandoc + xelatex)"; \
 	fi
 
+# Compile the Metal VM object (freestanding bytecode VM for bare-metal)
+METAL_VM_SOURCE = src/c/metal_vm.c
+METAL_VM_OBJECT = obj/metal_vm.o
+
+$(METAL_VM_OBJECT): $(METAL_VM_SOURCE) include/metal_vm.h
+	@mkdir -p obj
+	$(CC) -std=c11 -ffreestanding -O2 -Wall -Wextra -Iinclude -c $(METAL_VM_SOURCE) -o $(METAL_VM_OBJECT)
+	@echo "Compiled Metal VM (freestanding)"
+
+metal-vm: $(METAL_VM_OBJECT)
+	@echo "Metal VM object ready: $(METAL_VM_OBJECT)"
+
 # Run a Sage program through the self-hosted interpreter.
-# This uses the optimized self-hosted path (dispatch tables, signal singletons).
-# Usage: make sage-boot FILE=path/to/program.sage
 SELFHOST_ENTRY = src/sage/sage.sage
 
 sage-boot: $(TARGET)
@@ -514,15 +524,7 @@ test: $(TARGET)
 # Self-Hosted Sage Build (Bootstrap)
 # ============================================================================
 
-# Build the C host, then run a file through the self-hosted interpreter
-# Usage: make sage-boot FILE=path/to/file.sage
-sage-boot: $(TARGET)
-	@if [ -z "$(FILE)" ]; then \
-		echo "Usage: make sage-boot FILE=path/to/file.sage"; \
-		exit 1; \
-	fi
-	@echo "Running via self-hosted Sage interpreter..."
-	cd src/sage && ../../$(TARGET) sage.sage $(abspath $(FILE))
+# (sage-boot defined above in build section)
 
 # Run all self-hosted tests
 test-selfhost: $(TARGET)

@@ -1,5 +1,27 @@
 # SageLang Updates
 
+## v3.3.0 — JIT+AOT Hybrid Default + SageMetal VM (April 2026)
+
+- **SageMetal VM** (`src/c/metal_vm.c`, `include/metal_vm.h`):
+  - Freestanding bytecode interpreter — no malloc, no libc, no OS required
+  - Fixed-size static pools: 512-slot value stack, 32KB string pool, 64KB heap, 1024 constants
+  - Compact MetalValue type: 16 bytes (type tag + double/int/index/pointer union)
+  - Scope chain as flat array (no linked lists, no dynamic allocation)
+  - Array and dict pools with fixed-capacity entries
+  - I/O via host callbacks: write_char, read_char, write_port, read_port, map_mmio
+  - Single-step mode (`metal_vm_step`) for cooperative multitasking in kernels
+  - FNV-1a hashed variable lookup for O(1) scope resolution
+  - Compiles freestanding: `gcc -ffreestanding -nostdlib -c metal_vm.c`
+- **Metal Standard Library** (`lib/metal/`):
+  - `metal.core`: putchar, puts, port I/O (inb/outb), MMIO read/write, CPU control (cli/sti/hlt), bump allocator, panic/assert
+  - `metal.serial`: NS16550A UART (x86 COM1-4) and PL011 (ARM) drivers with init, send, recv, puts
+  - `metal.irq`: PIC 8259A remap, EOI, mask/unmask, interrupt handler registration and dispatch, exception vector constants
+  - `metal.timer`: PIT 8254 driver with configurable Hz, tick counter, sleep_ms, stopwatch
+  - `metal.gpio`: Generic MMIO GPIO with pin modes, digital read/write, LED helpers
+- **Makefile target**: `make metal-vm` builds freestanding Metal VM object
+
+---
+
 ## v3.3.0 — JIT+AOT Hybrid Default Runtime (April 2026)
 
 - **Default runtime changed to hybrid JIT+AOT** (`SAGE_RUNTIME_AUTO`):
