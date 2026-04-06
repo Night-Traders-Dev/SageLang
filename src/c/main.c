@@ -28,6 +28,7 @@
 #include "vm.h"
 #include "jit.h"
 #include "aot.h"
+#include "kotlin_backend.h"
 
 extern Environment* g_global_env;
 extern Stmt* parse_program(const char* source, const char* input_path);
@@ -76,6 +77,8 @@ static void print_usage(FILE* stream) {
             "       sage --compile-native <input.sage> [-o output] [--target arch[-baremetal|-osdev|-uefi]] [-O0..3] [-g]\n"
             "       sage --compile-bare <input.sage> [-o output.elf] [--target arch] [-O0..3] [-g]\n"
             "       sage --compile-uefi <input.sage> [-o output.efi] [--target arch] [-O0..3] [-g]\n"
+            "       sage --emit-kotlin <input.sage> [-o output.kt] [-O0..3]\n"
+            "       sage --compile-android <input.sage> [-o output_dir] [--package com.example.app] [--app-name MyApp] [--min-sdk 24]\n"
             "       sage --emit-pico-c <input.sage> [-o output.c]\n"
             "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n"
             "       sage --jit <input.sage>   Run with JIT profiling and compilation\n"
@@ -722,6 +725,7 @@ static void repl_print_help(void) {
     printf("  Compilation:\n");
     printf("    :emit-c <code>     Show C backend output for a statement\n");
     printf("    :emit-llvm <code>  Show LLVM IR output for a statement\n");
+    printf("    :emit-kotlin <code> Show Kotlin backend output for a statement\n");
     printf("\n");
     printf("  Performance:\n");
     printf("    :time <expr>       Time a single expression evaluation\n");
@@ -1308,6 +1312,36 @@ static void run_repl(SageRuntimeMode runtime_mode) {
                 continue;
             }
 
+            // :emit-kotlin <code> — show Kotlin backend output
+            if (command_matches(line, ":emit-kotlin", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :emit-kotlin <code>\n");
+                    free(line);
+                    continue;
+                }
+                size_t arg_len = strlen(arg);
+                char* buffer = SAGE_ALLOC(arg_len + 2);
+                memcpy(buffer, arg, arg_len);
+                buffer[arg_len] = '\n';
+                buffer[arg_len + 1] = '\0';
+
+                char tmp_path[] = "/tmp/sage_repl_XXXXXX.kt";
+                int fd = mkstemps(tmp_path, 3);
+                if (fd >= 0) close(fd);
+
+                if (compile_source_to_kotlin_opt(buffer, "<repl>", tmp_path, 0, 0)) {
+                    char* content = try_read_file(tmp_path);
+                    if (content) {
+                        printf("%s", content);
+                        free(content);
+                    }
+                }
+                unlink(tmp_path);
+                free(buffer);
+                free(line);
+                continue;
+            }
+
             // :time <expr> — time a single evaluation
             if (command_matches(line, ":time", &arg)) {
                 if (*arg == '\0') {
@@ -1847,6 +1881,83 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(1);
         }
         free(source); free(derived_output);
+
+    // --emit-kotlin: transpile Sage to Kotlin source
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--emit-kotlin") == 0) {
+        const char* explicit_output = NULL;
+        const char* ignored_cc = NULL;
+        const char* ignored_target = NULL;
+        int opt_level = 0, debug_info = 0;
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
+                                   &opt_level, &debug_info, &ignored_target)) {
+            print_usage(stderr);
+            CLEANUP_AND_EXIT(64);
+        }
+
+        char* source = read_file(cmd_argv[2]);
+        char* derived_output = NULL;
+        const char* output_path = explicit_output;
+        if (output_path == NULL) {
+            derived_output = derive_output_path(cmd_argv[2], ".kt", 1);
+            output_path = derived_output;
+        }
+
+        if (!compile_source_to_kotlin_opt(source, cmd_argv[2], output_path, opt_level, debug_info)) {
+            free(source);
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+
+        free(source);
+        free(derived_output);
+
+    // --compile-android: generate full Android project from Sage source
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile-android") == 0) {
+        const char* explicit_output = NULL;
+        const char* package_name = NULL;
+        const char* app_name_opt = NULL;
+        int min_sdk = 0;
+        int opt_level = 0, debug_info = 0;
+
+        // Parse Android-specific options
+        for (int i = 3; i < cmd_argc; i++) {
+            if (strcmp(cmd_argv[i], "-o") == 0 && i + 1 < cmd_argc) {
+                explicit_output = cmd_argv[++i];
+            } else if (strcmp(cmd_argv[i], "--package") == 0 && i + 1 < cmd_argc) {
+                package_name = cmd_argv[++i];
+            } else if (strcmp(cmd_argv[i], "--app-name") == 0 && i + 1 < cmd_argc) {
+                app_name_opt = cmd_argv[++i];
+            } else if (strcmp(cmd_argv[i], "--min-sdk") == 0 && i + 1 < cmd_argc) {
+                min_sdk = atoi(cmd_argv[++i]);
+            } else if (strcmp(cmd_argv[i], "-O0") == 0) { opt_level = 0; }
+            else if (strcmp(cmd_argv[i], "-O1") == 0) { opt_level = 1; }
+            else if (strcmp(cmd_argv[i], "-O2") == 0) { opt_level = 2; }
+            else if (strcmp(cmd_argv[i], "-O3") == 0) { opt_level = 3; }
+            else if (strcmp(cmd_argv[i], "-g") == 0) { debug_info = 1; }
+        }
+
+        char* source = read_file(cmd_argv[2]);
+        const char* output_dir = explicit_output;
+        char derived_dir[512];
+        if (output_dir == NULL) {
+            // Derive from input: hello.sage → hello_android/
+            const char* base = strrchr(cmd_argv[2], '/');
+            base = base ? base + 1 : cmd_argv[2];
+            size_t base_len = strlen(base);
+            const char* dot = strrchr(base, '.');
+            if (dot) base_len = (size_t)(dot - base);
+            snprintf(derived_dir, sizeof(derived_dir), "%.*s_android", (int)base_len, base);
+            output_dir = derived_dir;
+        }
+
+        if (!compile_source_to_android(source, cmd_argv[2], output_dir,
+                                       package_name, app_name_opt, min_sdk,
+                                       opt_level, debug_info)) {
+            free(source);
+            CLEANUP_AND_EXIT(1);
+        }
+
+        free(source);
 
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--emit-pico-c") == 0) {
         const char* explicit_output = NULL;

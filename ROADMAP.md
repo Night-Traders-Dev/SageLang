@@ -1,9 +1,23 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: April 5, 2026
-> **Current Phase**: v3.1.5 — ORC GC, all 18 phases complete
+> **Current Phase**: v3.2.0 — Kotlin/Android Backend, all 18 phases complete
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+
+---
+
+## v3.2.0: Kotlin/Android Backend (April 2026)
+
+### Completed
+
+- Kotlin transpiler backend (`--emit-kotlin`): full Sage AST to Kotlin source code
+- Android project generator (`--compile-android`): Gradle project from a single .sage file
+- SageRuntime.kt: lightweight Kotlin runtime (sealed class Value, operators, collections, methods)
+- Android UI library (`lib/android/app.sage`, `lib/android/compose.sage`)
+- REPL `:emit-kotlin` command
+- Tests: `tests/42_kotlin/` (4 files), example: `examples/android_hello.sage`
+- 9 backends: AST, bytecode VM, C, LLVM IR, native asm, JIT, AOT, Kotlin/Android
 
 ---
 

@@ -116,7 +116,8 @@ CORE_SOURCES = \
     $(SRC_DIR)/gpu_api.c \
     $(SRC_DIR)/ml_backend.c \
     $(SRC_DIR)/jit.c \
-    $(SRC_DIR)/aot.c
+    $(SRC_DIR)/aot.c \
+    $(SRC_DIR)/kotlin_backend.c
 
 VM_SOURCES = \
     $(VM_DIR)/bytecode.c \
@@ -154,7 +155,8 @@ HEADERS = \
     $(INC_DIR)/safety.h \
     $(INC_DIR)/value.h \
     $(INC_DIR)/graphics.h \
-    $(INC_DIR)/gpu_api.h
+    $(INC_DIR)/gpu_api.h \
+    $(INC_DIR)/kotlin_backend.h
 
 # Optional heartbeat header
 ifneq (,$(wildcard $(INC_DIR)/heartbeat.h))

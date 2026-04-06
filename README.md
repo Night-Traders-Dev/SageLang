@@ -4,7 +4,7 @@
 
 ![SageLang Logo](assets/SageLang.jpg)
 
-Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, three compiler backends (C, LLVM IR with runtime library, native assembly), a **self-hosted interpreter** written in Sage itself, a **Vulkan + OpenGL graphics engine** for GPU compute and rendering, and **LLVM-compiled GPU support** for native-speed 3D game engines. As of v2.0, Sage has **optional type annotations**, **structs/enums/traits**, **pattern matching with guards**, a **formal specification**, and a **backend conformance suite**.
+Sage is a new programming language that combines the readability of Python (indentation blocks, clean syntax) with the low-level power of C. It features a fully working interpreter with **Object-Oriented Programming**, **Exception Handling**, **Generators**, **Garbage Collection**, **Concurrency** (threads + async/await), a **native standard library**, nine execution backends (C, LLVM IR, native assembly, bytecode VM, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** written in Sage itself, a **Vulkan + OpenGL graphics engine** for GPU compute and rendering, and **LLVM-compiled GPU support** for native-speed 3D game engines. As of v3.2, Sage can **transpile to Kotlin and generate Android APKs** from a single `.sage` file, with **optional type annotations**, **structs/enums/traits**, **pattern matching with guards**, a **formal specification**, and a **backend conformance suite**.
 
 ## Codebase Metrics
 
@@ -13,6 +13,8 @@ These charts are refreshed by `make charts` and also as part of the default `mak
 ![SageLang repository LOC by language](assets/charts/repo-loc.svg)
 
 ![SageLang self-hosted Sage LOC vs native C LOC](assets/charts/compiler-loc.svg)
+
+![SageLang project breakdown by area](assets/charts/project-breakdown.svg)
 
 ## Benchmark Metrics
 

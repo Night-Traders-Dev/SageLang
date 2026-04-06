@@ -1,5 +1,41 @@
 # SageLang Updates
 
+## v3.2.0 — Kotlin/Android Backend (April 2026)
+
+- **Kotlin transpiler backend** (`--emit-kotlin`): Sage AST to Kotlin source code transpilation
+  - Full expression, statement, and control flow transpilation (arithmetic, comparisons, logical, bitwise)
+  - Classes with inheritance, method dispatch, property access (`self.x` patterns)
+  - Pattern matching (`match`/`case`/`default` with guards) maps to Kotlin `when`
+  - Exception handling (`try`/`catch`/`finally`/`raise`) maps to Kotlin exceptions
+  - For loops, while loops, break/continue, variable reassignment
+  - Collections: arrays, dicts, tuples, slicing, range
+  - All Sage built-in functions mapped: `len`, `push`, `pop`, `range`, `str`, `tonumber`, `type`, `dict_keys`, etc.
+  - Structs emit as Kotlin `data class`, enums as `enum class`, traits as `interface`
+  - Optimization passes (-O1 through -O3) applied before transpilation
+- **Android project generator** (`--compile-android`): full Gradle project from a single `.sage` file
+  - Generates: transpiled Kotlin, SageRuntime.kt, AndroidManifest.xml, build.gradle.kts, styles, strings
+  - Options: `--package`, `--app-name`, `--min-sdk`
+  - Material 3 theming, AppCompat, Internet permission by default
+  - MainActivity captures Sage stdout and displays in a scrollable text view
+  - Build with: `cd output_dir && ./gradlew assembleDebug`
+- **SageRuntime.kt**: lightweight Kotlin runtime library for transpiled code
+  - Sealed class `Value` type with Num, Str, Bool, Nil, Arr, Dict, Tup, Obj, Fn variants
+  - Full arithmetic, comparison, logical, bitwise operators with dynamic dispatch
+  - Collection operations: index, indexSet, slice, push, pop, range
+  - String methods: upper, lower, trim, split, replace, startsWith, endsWith, contains, find, join
+  - Array methods: push, pop, sort, reverse, map, filter, join
+  - Object method dispatch via reflection
+  - JVM GC integration (gc_collect/gc_stats map to System.gc)
+- **Android UI library** (`lib/android/`): high-level Sage APIs for Android development
+  - `lib/android/app.sage`: App, UIContext, Intent, Storage, HttpClient classes
+  - `lib/android/compose.sage`: Jetpack Compose-style declarative UI (State, Component, layouts, widgets, NavController)
+- REPL: `:emit-kotlin <code>` command for interactive Kotlin output inspection
+- New test suite: `tests/42_kotlin/` with 4 test files (basic, collections, classes, functions)
+- Example: `examples/android_hello.sage` — complete Android app in ~40 lines of Sage
+- 9 backends now available: AST interpreter, bytecode VM, C, LLVM IR, native (x86-64/aarch64/rv64), JIT, AOT, Kotlin/Android
+
+---
+
 ## v3.1.5 — ORC Garbage Collector (April 2026)
 
 - **ORC GC mode** (`--gc:orc`): Nim-inspired Optimized Reference Counting with Lins' trial deletion cycle collector

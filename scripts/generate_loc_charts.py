@@ -26,6 +26,7 @@ CHART_DIR = REPO_ROOT / "assets" / "charts"
 METRICS_JSON = CHART_DIR / "loc-metrics.json"
 REPO_CHART = CHART_DIR / "repo-loc.svg"
 COMPILER_CHART = CHART_DIR / "compiler-loc.svg"
+BREAKDOWN_CHART = CHART_DIR / "project-breakdown.svg"
 BENCHMARK_TOTAL_CHART = CHART_DIR / "benchmark-recipes-total.svg"
 BENCHMARK_RUN_CHART = CHART_DIR / "benchmark-recipes-run.svg"
 
@@ -47,6 +48,7 @@ EXCLUDED_PREFIXES = (
 LANGUAGE_COLORS = {
     "C": "#3A86FF",
     "Sage": "#F97316",
+    "Kotlin": "#7C3AED",
     "JSON": "#FACC15",
     "Makefile": "#A78BFA",
     "Shell": "#84CC16",
@@ -119,6 +121,8 @@ def detect_language(path_str: str) -> str | None:
         return "Sage"
     if ext in {".c", ".h"}:
         return "C"
+    if ext in {".kt", ".kts"}:
+        return "Kotlin"
     if ext in {".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"}:
         return "C++"
     if ext == ".json":
@@ -168,6 +172,62 @@ def collect_compiler_counts() -> list[tuple[str, int]]:
         ("Self-Hosted Sage Core", self_hosted),
         ("Native C Core", native_c),
     ]
+
+
+def collect_project_breakdown() -> list[tuple[str, int, str]]:
+    """Collect LOC breakdown by project area: compiler backends, stdlib, tests, etc."""
+    categories: dict[str, tuple[int, str]] = {
+        "Compiler Backends": (0, "#3A86FF"),
+        "Standard Library": (0, "#F97316"),
+        "Test Suite": (0, "#10B981"),
+        "VM / Bytecode": (0, "#14B8A6"),
+        "Documentation": (0, "#FACC15"),
+        "OS / Kernel Libs": (0, "#A78BFA"),
+        "ML / LLM Libs": (0, "#EF4444"),
+        "Android / Kotlin": (0, "#7C3AED"),
+        "Graphics / GPU": (0, "#EC4899"),
+        "Build System": (0, "#84CC16"),
+    }
+    counts: dict[str, int] = {k: 0 for k in categories}
+
+    backend_files = {"compiler.c", "llvm_backend.c", "llvm_runtime.c", "codegen.c",
+                     "jit.c", "aot.c", "kotlin_backend.c", "bare_metal.c"}
+    vm_files = {"bytecode.c", "vm.c", "program.c", "runtime.c"}
+
+    for path_str in run_git_ls_files():
+        path = REPO_ROOT / path_str
+        if not path.is_file():
+            continue
+        try:
+            lines = count_non_empty_lines(path)
+        except (UnicodeDecodeError, OSError):
+            continue
+        name = path.name
+
+        if path_str.startswith("tests/"):
+            counts["Test Suite"] += lines
+        elif path_str.startswith("documentation/") or path.suffix == ".md":
+            counts["Documentation"] += lines
+        elif path_str.startswith("src/c/") and name in backend_files:
+            counts["Compiler Backends"] += lines
+        elif path_str.startswith("src/vm/") or (path_str.startswith("src/c/") and name in vm_files):
+            counts["VM / Bytecode"] += lines
+        elif path_str.startswith("lib/os/"):
+            counts["OS / Kernel Libs"] += lines
+        elif path_str.startswith("lib/ml/") or path_str.startswith("lib/llm/"):
+            counts["ML / LLM Libs"] += lines
+        elif path_str.startswith("lib/android/"):
+            counts["Android / Kotlin"] += lines
+        elif path_str.startswith("lib/graphics/") or path_str.startswith("lib/cuda/"):
+            counts["Graphics / GPU"] += lines
+        elif path_str.startswith("lib/"):
+            counts["Standard Library"] += lines
+        elif name in {"Makefile", "CMakeLists.txt", "build.sh", "sagemake"} or path.suffix in {".sh", ".cmake"}:
+            counts["Build System"] += lines
+
+    result = [(k, counts[k], categories[k][1]) for k in categories if counts[k] > 0]
+    result.sort(key=lambda x: x[1], reverse=True)
+    return result
 
 
 def fmt_count(value: float) -> str:
@@ -275,16 +335,34 @@ def render_horizontal_chart(
             f"{escape(value_label)}</text>"
         )
 
+    # Cap bar fill at 80% of plot_width so the count label always fits
+    max_bar_ratio = 0.80
+    # Minimum visible bar width for tiny values
+    min_bar_width = 6.0
+
     for index, bar in enumerate(bars):
         y = margin_top + index * (bar_height + bar_gap)
         badge_y = y + 6
-        bar_width = plot_width * (bar.value / max_value if max_value else 0)
+        raw_ratio = bar.value / max_value if max_value else 0
+        bar_width = max(min_bar_width, plot_width * raw_ratio * max_bar_ratio)
         badge = (bar.badge_label or bar.label).upper()
         badge_width = max(92, min(220, 34 + len(badge) * 10))
         badge_fill = adjust_color(bar.color, 0.9)
         badge_text = LANGUAGE_BADGE_TEXT.get(bar.label, "#E2E8F0")
         count_text = value_formatter(bar.value)
         share_text = f"{(bar.value / total) * 100:.1f}%" if total else "0.0%"
+
+        # Place count text after bar, but clamp so it doesn't overflow the right edge
+        count_x = margin_left + bar_width + 14
+        count_max_x = width - 240  # leave room for share/detail text
+        if count_x > count_max_x:
+            # Place inside the bar (right-aligned) when bar is very wide
+            count_x = margin_left + bar_width - 14
+            count_anchor = "end"
+            count_fill = "#0F1722"
+        else:
+            count_anchor = "start"
+            count_fill = "#E2E8F0"
 
         svg.extend(
             [
@@ -295,7 +373,7 @@ def render_horizontal_chart(
                 f'<rect x="{margin_left}" y="{y}" width="{plot_width}" height="{bar_height}" rx="12" fill="#131D2A" stroke="#233041"/>',
                 f'<rect x="{margin_left}" y="{y}" width="{bar_width:.1f}" height="{bar_height}" rx="12" fill="url(#bar-gradient-{index})"/>',
                 f'<line x1="{margin_left + 2:.1f}" y1="{y + 2:.1f}" x2="{margin_left + max(2, bar_width - 2):.1f}" y2="{y + 2:.1f}" stroke="#F8FAFC" stroke-opacity="0.18"/>',
-                f'<text x="{margin_left + bar_width + 14:.1f}" y="{y + 29:.1f}" fill="#E2E8F0" font-size="18" '
+                f'<text x="{count_x:.1f}" y="{y + 29:.1f}" text-anchor="{count_anchor}" fill="{count_fill}" font-size="18" '
                 'font-family="Segoe UI, Arial, sans-serif" font-weight="700">'
                 f"{escape(count_text)}</text>",
                 f'<text x="{width - 44}" y="{y + 29:.1f}" text-anchor="end" fill="#64748B" font-size="15" '
@@ -327,6 +405,14 @@ def build_repo_bars(language_counts: list[tuple[str, int]]) -> list[Bar]:
             detail = f"{count:,} of {total:,} lines"
         bars.append(Bar(language, count, color, detail))
     return bars
+
+
+def build_breakdown_bars(breakdown: list[tuple[str, int, str]]) -> list[Bar]:
+    total = sum(count for _, count, _ in breakdown)
+    return [
+        Bar(label, count, color, f"{count:,} of {total:,} lines")
+        for label, count, color in breakdown
+    ]
 
 
 def build_compiler_bars(compiler_counts: list[tuple[str, int]]) -> list[Bar]:
@@ -427,6 +513,7 @@ def write_metrics_json(
     generated_at: str,
     repo_counts: list[tuple[str, int]],
     compiler_counts: list[tuple[str, int]],
+    breakdown: list[tuple[str, int, str]],
     benchmark_results: list[RecipeResult],
     benchmark_checksum: str | None,
 ) -> None:
@@ -434,6 +521,7 @@ def write_metrics_json(
         "generated_at": generated_at,
         "repo_languages": [{"language": language, "lines": count} for language, count in repo_counts],
         "compiler_comparison": [{"label": label, "lines": count} for label, count in compiler_counts],
+        "project_breakdown": [{"area": label, "lines": count} for label, count, _ in breakdown],
         "recipe_benchmark": {
             "workload": str(BENCHMARK_WORKLOAD.relative_to(REPO_ROOT)),
             "runs": BENCHMARK_RUNS,
@@ -460,8 +548,10 @@ def main() -> None:
     )
     benchmark_checksum = validate_recipe_checksums(benchmark_results)
 
+    breakdown = collect_project_breakdown()
     repo_bars = build_repo_bars(repo_counts)
     compiler_bars = build_compiler_bars(compiler_counts)
+    breakdown_bars = build_breakdown_bars(breakdown)
     benchmark_total_bars = build_benchmark_bars(benchmark_results, "total")
     benchmark_run_bars = build_benchmark_bars(benchmark_results, "run")
 
@@ -500,6 +590,22 @@ def main() -> None:
         value_formatter=fmt_count,
     )
 
+    total_breakdown = sum(c for _, c, _ in breakdown)
+    test_count = next((c for l, c, _ in breakdown if l == "Test Suite"), 0)
+    stdlib_count = next((c for l, c, _ in breakdown if l == "Standard Library"), 0)
+    render_horizontal_chart(
+        title="SageLang Project Breakdown by Area",
+        subtitle=f"{fmt_count(total_breakdown)} tracked lines across 9 backends, {len(breakdown)} areas.",
+        bars=breakdown_bars,
+        output_path=BREAKDOWN_CHART,
+        footer_lines=[
+            f"Backends: AST interpreter, bytecode VM, C, LLVM IR, native asm (x86-64/aarch64/rv64), JIT, AOT, Kotlin/Android.",
+            f"Test suite: {fmt_count(test_count)} lines.  Standard library: {fmt_count(stdlib_count)} lines.",
+            f"Last refreshed: {generated_at}",
+        ],
+        value_formatter=fmt_count,
+    )
+
     render_horizontal_chart(
         title="Recipe Benchmark: Total Median Time",
         subtitle="End-to-end wall time for the default workload. Compiled recipes include code generation, host C compile, and execution.",
@@ -518,9 +624,10 @@ def main() -> None:
         value_formatter=fmt_duration,
     )
 
-    write_metrics_json(generated_at, repo_counts, compiler_counts, benchmark_results, benchmark_checksum)
+    write_metrics_json(generated_at, repo_counts, compiler_counts, breakdown, benchmark_results, benchmark_checksum)
     print(f"Wrote {REPO_CHART.relative_to(REPO_ROOT)}")
     print(f"Wrote {COMPILER_CHART.relative_to(REPO_ROOT)}")
+    print(f"Wrote {BREAKDOWN_CHART.relative_to(REPO_ROOT)}")
     print(f"Wrote {BENCHMARK_TOTAL_CHART.relative_to(REPO_ROOT)}")
     print(f"Wrote {BENCHMARK_RUN_CHART.relative_to(REPO_ROOT)}")
     print(f"Wrote {METRICS_JSON.relative_to(REPO_ROOT)}")
