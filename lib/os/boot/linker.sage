@@ -60,17 +60,10 @@ proc generate_script(config):
     s = s + TAB + "KERNEL_START = .;" + NL
     s = s + NL
     # Text section (includes multiboot header)
-    s = s + TAB + ".text ALIGN(4096) :text" + NL
-    s = s + TAB + "{" + NL
-    s = s + TAB + TAB + "*(.multiboot)" + NL
-    s = s + TAB + TAB + "*(.text .text.*)" + NL
-    s = s + TAB + "}" + NL
+    s = s + TAB + ".text ALIGN(4096) : { *(.multiboot) *(.text .text.*) } :text" + NL
     s = s + NL
     # Note section
-    s = s + TAB + ".note ALIGN(4) :note" + NL
-    s = s + TAB + "{" + NL
-    s = s + TAB + TAB + "*(.note)" + NL
-    s = s + TAB + "}" + NL
+    s = s + TAB + ".note ALIGN(4) : { *(.note) } :note" + NL
     s = s + NL
     # Read-only data
     s = s + TAB + ".rodata ALIGN(4096) :" + NL
