@@ -591,6 +591,13 @@ static Value sys_sleep_native(int argCount, Value* args) {
     return val_nil();
 }
 
+static Value sys_exec_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    const char* cmd = AS_STRING(args[0]);
+    int result = system(cmd);
+    return val_number(result);
+}
+
 Module* create_sys_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "sys");
     Environment* e = m->env;
@@ -601,6 +608,7 @@ Module* create_sys_module(ModuleCache* cache) {
     env_define(e, "getenv", 6, val_native(sys_getenv_native));
     env_define(e, "clock", 5, val_native(sys_clock_native));
     env_define(e, "sleep", 5, val_native(sys_sleep_native));
+    env_define(e, "exec", 4, val_native(sys_exec_native));
 
     // Constants
     env_define(e, "version", 7, val_string(SAGE_VERSION_STR));
