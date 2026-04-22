@@ -2186,6 +2186,7 @@ static void emit_stmt_list(Compiler* compiler, Stmt* stmt) {
 
 static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
     fputs(
+        "#include <math.h>\n"
         "#include <setjmp.h>\n"
         "#include <stdarg.h>\n"
         "#include <stdio.h>\n"
@@ -2864,7 +2865,6 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    if (right.as.number == 0) return sage_nil();\n"
         "    return sage_number(left.as.number / right.as.number);\n"
         "}\n"
-        "#include <math.h>\n"
         "static SageValue sage_mod(SageValue left, SageValue right) {\n"
         "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) sage_fail(\"Runtime Error: Operands must be numbers.\");\n"
         "    if (right.as.number == 0) return sage_nil();\n"
