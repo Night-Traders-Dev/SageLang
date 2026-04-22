@@ -131,5 +131,5 @@
 <text x="1556" y="758.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">0.4% · 568 of 131,176 lines</text>
 <text x="44" y="831" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Backends: AST interpreter, bytecode VM, C, LLVM IR, native asm (x86-64/aarch64/rv64), JIT, AOT, Kotlin/Android.</text>
 <text x="44" y="855" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Test suite: 14.6K lines.  Standard library: 10.9K lines.</text>
-<text x="44" y="879" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-04-22 16:35 UTC</text>
+<text x="44" y="879" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-04-22 16:37 UTC</text>
 </svg>
