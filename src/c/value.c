@@ -198,10 +198,11 @@ Value val_generator(void* body, void* params, int param_count, Environment* clos
 Value val_clib(void* handle, const char* name) {
     Value v;
     v.type = VAL_CLIB;
-    v.as.clib = SAGE_ALLOC(sizeof(CLibValue));
+    v.as.clib = gc_alloc(VAL_CLIB, sizeof(CLibValue));
     v.as.clib->handle = handle;
     size_t name_len = strlen(name);
     v.as.clib->name = SAGE_ALLOC(name_len + 1);
+    gc_track_external_allocation(name_len + 1);
     memcpy(v.as.clib->name, name, name_len + 1);
     return v;
 }
@@ -210,7 +211,7 @@ Value val_clib(void* handle, const char* name) {
 Value val_pointer(void* ptr, size_t size, int owned) {
     Value v;
     v.type = VAL_POINTER;
-    v.as.pointer = SAGE_ALLOC(sizeof(PointerValue));
+    v.as.pointer = gc_alloc(VAL_POINTER, sizeof(PointerValue));
     v.as.pointer->ptr = ptr;
     v.as.pointer->size = size;
     v.as.pointer->owned = owned;
@@ -606,7 +607,7 @@ char* string_lower(const char* str) {
 char* string_strip(const char* str) {
     if (!str) return NULL;
     
-    while (*str && isspace(*str)) str++;
+    while (*str && isspace((unsigned char)*str)) str++;
     
     if (*str == '\0') {
         char* result = SAGE_ALLOC(1);
@@ -615,7 +616,7 @@ char* string_strip(const char* str) {
     }
     
     const char* end = str + strlen(str) - 1;
-    while (end > str && isspace(*end)) end--;
+    while (end > str && isspace((unsigned char)*end)) end--;
     
     int len = end - str + 1;
     char* result = SAGE_ALLOC(len + 1);
@@ -723,7 +724,11 @@ Value instance_get_field(InstanceValue* instance, const char* name) {
 
 // ========== HELPERS ==========
 
+#if defined(SAGE_PLATFORM_PICO) || defined(PICO_BUILD)
 static int print_depth = 0;
+#else
+static __thread int print_depth = 0;
+#endif
 #define MAX_PRINT_DEPTH 32
 
 void print_value(Value v) {

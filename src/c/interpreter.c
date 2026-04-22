@@ -1189,6 +1189,18 @@ static Value mem_read_native(int argCount, Value* args) {
         memcpy(&val, base, sizeof(double));
         return val_number(val);
     } else if (strcmp(type, "string") == 0) {
+        // Bounds-check: scan for null terminator within allocation
+        if (p->size > 0) {
+            size_t max_len = p->size - offset;
+            int found_null = 0;
+            for (size_t i = 0; i < max_len; i++) {
+                if (base[i] == '\0') { found_null = 1; break; }
+            }
+            if (!found_null) {
+                fprintf(stderr, "mem_read(): string not null-terminated within allocation.\n");
+                return val_nil();
+            }
+        }
         return val_string((const char*)base);
     } else {
         fprintf(stderr, "mem_read(): unknown type '%s' (use byte/int/double/string).\n", type);
@@ -1880,7 +1892,27 @@ static Value hash_native(int argCount, Value* args) {
             for (int i = 0; i < v.as.bytes->length; i++) { h ^= v.as.bytes->data[i]; h *= 16777619u; }
             return val_number(h);
         }
-        default: return val_number((double)(uintptr_t)&v);
+        default: {
+            // Use heap pointer as identity hash for heap-allocated types
+            void* ptr = NULL;
+            switch (v.type) {
+                case VAL_ARRAY:     ptr = v.as.array; break;
+                case VAL_DICT:      ptr = v.as.dict; break;
+                case VAL_TUPLE:     ptr = v.as.tuple; break;
+                case VAL_FUNCTION:  ptr = v.as.function; break;
+                case VAL_CLASS:     ptr = v.as.class_val; break;
+                case VAL_INSTANCE:  ptr = v.as.instance; break;
+                case VAL_GENERATOR: ptr = v.as.generator; break;
+                case VAL_EXCEPTION: ptr = v.as.exception; break;
+                case VAL_MODULE:    ptr = v.as.module; break;
+                case VAL_CLIB:      ptr = v.as.clib; break;
+                case VAL_POINTER:   ptr = v.as.pointer; break;
+                case VAL_THREAD:    ptr = v.as.thread; break;
+                case VAL_MUTEX:     ptr = v.as.mutex; break;
+                default:            ptr = NULL; break;
+            }
+            return val_number(ptr ? (double)(uintptr_t)ptr : 0);
+        }
     }
 }
 
@@ -2232,12 +2264,18 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
 
         case TOKEN_SLASH:
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
-            if (AS_NUMBER(right) == 0) return EVAL_RESULT(val_nil());
+            if (AS_NUMBER(right) == 0) {
+                fprintf(stderr, "Runtime Error: Division by zero.\n");
+                return EVAL_EXCEPTION(val_exception("Division by zero"));
+            }
             return EVAL_RESULT(val_number(AS_NUMBER(left) / AS_NUMBER(right)));
 
         case TOKEN_PERCENT:
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
-            if (AS_NUMBER(right) == 0) return EVAL_RESULT(val_nil());
+            if (AS_NUMBER(right) == 0) {
+                fprintf(stderr, "Runtime Error: Modulo by zero.\n");
+                return EVAL_EXCEPTION(val_exception("Modulo by zero"));
+            }
             return EVAL_RESULT(val_number(fmod(AS_NUMBER(left), AS_NUMBER(right))));
 
         // Phase 9: Bitwise operators
@@ -2361,7 +2399,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 char* ch = SAGE_ALLOC(2);
                 ch[0] = str[index];
                 ch[1] = '\0';
-                return EVAL_RESULT(val_string(ch));
+                return EVAL_RESULT(val_string_take(ch));
             }
 
             if (arr.type == VAL_DICT && IS_STRING(idx)) {
@@ -2876,8 +2914,11 @@ ExecResult interpret(Stmt* stmt, Env* env) {
 }
 
 static ExecResult interpret_inner(Stmt* stmt, Env* env) {
-    static int first_call = 1;
+    // Thread-safe first-call detection: only set g_global_env once
+    static volatile int first_call = 1;
     if (first_call && stmt != NULL) {
+        // Benign race: multiple threads may set g_global_env to their env,
+        // but only the main thread's initial call matters.
         g_global_env = env;
         first_call = 0;
     }
@@ -2951,6 +2992,8 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     // Collect defer — don't execute yet
                     if (defer_count < 64) {
                         deferred[defer_count++] = current->as.defer.statement;
+                    } else {
+                        fprintf(stderr, "Warning: Maximum defer count (64) exceeded; statement dropped.\n");
                     }
                     current = current->next;
                     continue;
@@ -3394,7 +3437,9 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
 
         // Phase 17: macro definition — register macro as a function in environment
         case STMT_MACRO_DEF: {
-            // In interpreter mode, macros are treated as regular functions
+            // In interpreter mode, macros are treated as regular functions.
+            // Re-use the macro_def's ProcStmt-compatible fields directly
+            // by wrapping them in a val_function (which uses gc_alloc).
             Token name = stmt->as.macro_def.name;
             ProcStmt* proc = SAGE_ALLOC(sizeof(ProcStmt));
             proc->name = name;
@@ -3408,15 +3453,8 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             proc->type_param_count = 0;
             proc->doc = NULL;
             proc->body = stmt->as.macro_def.body;
-            FunctionValue* fn = SAGE_ALLOC(sizeof(FunctionValue));
-            fn->proc = proc;
-            fn->closure = env;
-            fn->is_async = 0;
-            fn->is_vm = 0;
-            fn->vm_function = NULL;
-            Value func_val;
-            func_val.type = VAL_FUNCTION;
-            func_val.as.function = fn;
+            // Use val_function which allocates via gc_alloc (GC-tracked)
+            Value func_val = val_function(proc, env);
             env_define(env, name.start, name.length, func_val);
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }

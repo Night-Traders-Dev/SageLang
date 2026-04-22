@@ -596,6 +596,15 @@ void free_stmt(Stmt* stmt) {
                 break;
             case STMT_PROC:
                 free(stmt->as.proc.params);
+                if (stmt->as.proc.defaults) {
+                    for (int i = 0; i < stmt->as.proc.param_count; i++) {
+                        free_expr(stmt->as.proc.defaults[i]);
+                    }
+                    free(stmt->as.proc.defaults);
+                }
+                free(stmt->as.proc.param_types);  // TypeAnnotation** (shallow)
+                free(stmt->as.proc.type_params);
+                free(stmt->as.proc.doc);
                 free_stmt(stmt->as.proc.body);
                 break;
             case STMT_FOR:
@@ -645,6 +654,15 @@ void free_stmt(Stmt* stmt) {
                 break;
             case STMT_ASYNC_PROC:
                 free(stmt->as.async_proc.params);
+                if (stmt->as.async_proc.defaults) {
+                    for (int i = 0; i < stmt->as.async_proc.param_count; i++) {
+                        free_expr(stmt->as.async_proc.defaults[i]);
+                    }
+                    free(stmt->as.async_proc.defaults);
+                }
+                free(stmt->as.async_proc.param_types);
+                free(stmt->as.async_proc.type_params);
+                free(stmt->as.async_proc.doc);
                 free_stmt(stmt->as.async_proc.body);
                 break;
             case STMT_COMPTIME:
@@ -656,6 +674,17 @@ void free_stmt(Stmt* stmt) {
                 break;
             case STMT_BREAK:
             case STMT_CONTINUE:
+                break;
+            case STMT_STRUCT:
+                free(stmt->as.struct_stmt.field_names);
+                free(stmt->as.struct_stmt.field_types);  // TypeAnnotation** (shallow)
+                free(stmt->as.struct_stmt.type_params);
+                break;
+            case STMT_ENUM:
+                free(stmt->as.enum_stmt.variant_names);
+                break;
+            case STMT_TRAIT:
+                free_stmt(stmt->as.trait_stmt.methods);
                 break;
         }
 
