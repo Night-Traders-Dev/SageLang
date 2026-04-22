@@ -406,6 +406,10 @@ if [ "$SKIP_TESTS" -eq 0 ]; then
     }
 
     section "C Interpreter Tests"
+    # tests/run_tests.sh expects ./sage — ensure it exists after CMake builds
+    if [ ! -x "./sage" ] && [ -x "$SAGE_BIN" ]; then
+        cp "$SAGE_BIN" ./sage
+    fi
     if [ "$IS_PROOT" -eq 1 ]; then
         step "Interpreter tests"
         step_warn "skipped (proot — run manually: bash tests/run_tests.sh)"
