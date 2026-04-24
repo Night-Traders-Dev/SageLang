@@ -1,0 +1,249 @@
+#include <stdint.h>
+#include <stddef.h>
+
+#define VGA_W 80
+#define VGA_H 25
+#define VGA_MEM ((volatile uint16_t*)0xB8000)
+
+#define COM1 0x3F8
+
+static size_t term_row = 0;
+static size_t term_col = 0;
+static uint8_t term_color = 0x0F;
+
+static inline void outb(uint16_t port, uint8_t val) {
+    __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
+}
+
+static inline uint8_t inb(uint16_t port) {
+    uint8_t ret;
+    __asm__ volatile ("inb %1, %0" : "=a"(ret) : "Nd"(port));
+    return ret;
+}
+
+static void serial_init(void) {
+    outb(COM1 + 1, 0x00);
+    outb(COM1 + 3, 0x80);
+    outb(COM1 + 0, 0x03);
+    outb(COM1 + 1, 0x00);
+    outb(COM1 + 3, 0x03);
+    outb(COM1 + 2, 0xC7);
+    outb(COM1 + 4, 0x0B);
+}
+
+static int serial_ready(void) {
+    return inb(COM1 + 5) & 0x20;
+}
+
+static void serial_putc(char c) {
+    while (!serial_ready()) {}
+    outb(COM1, (uint8_t)c);
+}
+
+static void vga_clear(void) {
+    for (size_t y = 0; y < VGA_H; y++) {
+        for (size_t x = 0; x < VGA_W; x++) {
+            VGA_MEM[y * VGA_W + x] = ((uint16_t)term_color << 8) | ' ';
+        }
+    }
+    term_row = 0;
+    term_col = 0;
+}
+
+static void vga_scroll(void) {
+    for (size_t y = 1; y < VGA_H; y++) {
+        for (size_t x = 0; x < VGA_W; x++) {
+            VGA_MEM[(y - 1) * VGA_W + x] = VGA_MEM[y * VGA_W + x];
+        }
+    }
+
+    for (size_t x = 0; x < VGA_W; x++) {
+        VGA_MEM[(VGA_H - 1) * VGA_W + x] = ((uint16_t)term_color << 8) | ' ';
+    }
+
+    if (term_row > 0) {
+        term_row--;
+    }
+}
+
+static void term_putc(char c) {
+    serial_putc(c);
+
+    if (c == '\r') {
+        term_col = 0;
+        return;
+    }
+
+    if (c == '\n') {
+        term_col = 0;
+        term_row++;
+        if (term_row >= VGA_H) {
+            vga_scroll();
+        }
+        return;
+    }
+
+    if (c == '\b') {
+        if (term_col > 0) {
+            term_col--;
+            VGA_MEM[term_row * VGA_W + term_col] = ((uint16_t)term_color << 8) | ' ';
+        }
+        return;
+    }
+
+    VGA_MEM[term_row * VGA_W + term_col] = ((uint16_t)term_color << 8) | (uint8_t)c;
+    term_col++;
+
+    if (term_col >= VGA_W) {
+        term_col = 0;
+        term_row++;
+        if (term_row >= VGA_H) {
+            vga_scroll();
+        }
+    }
+}
+
+static void term_write(const char *s) {
+    while (*s) {
+        term_putc(*s++);
+    }
+}
+
+static int streq(const char *a, const char *b) {
+    while (*a && *b) {
+        if (*a != *b) return 0;
+        a++;
+        b++;
+    }
+    return *a == 0 && *b == 0;
+}
+
+static void reboot(void) {
+    uint8_t good = 0x02;
+    while (good & 0x02) {
+        good = inb(0x64);
+    }
+    outb(0x64, 0xFE);
+}
+
+static char keymap[128] = {
+    0,  27, '1','2','3','4','5','6','7','8','9','0','-','=', '\b',
+    '\t','q','w','e','r','t','y','u','i','o','p','[',']','\n', 0,
+    'a','s','d','f','g','h','j','k','l',';','\'','`', 0, '\\',
+    'z','x','c','v','b','n','m',',','.','/', 0, '*', 0, ' ',
+};
+
+static char kbd_getchar(void) {
+    for (;;) {
+        if (inb(0x64) & 1) {
+            uint8_t sc = inb(0x60);
+
+            if (sc & 0x80) {
+                continue;
+            }
+
+            if (sc < sizeof(keymap)) {
+                char c = keymap[sc];
+                if (c) return c;
+            }
+        }
+    }
+}
+
+static void shell_prompt(void) {
+    term_write("\nroot@sageos:/# ");
+}
+
+static void shell_exec(const char *cmd) {
+    if (streq(cmd, "")) {
+        return;
+    }
+
+    if (streq(cmd, "help")) {
+        term_write("\nCommands:");
+        term_write("\n  help      show this help");
+        term_write("\n  clear     clear the terminal");
+        term_write("\n  version   show kernel version");
+        term_write("\n  mem       show static memory info");
+        term_write("\n  halt      stop the CPU");
+        term_write("\n  reboot    reboot through keyboard controller");
+        return;
+    }
+
+    if (streq(cmd, "clear")) {
+        vga_clear();
+        return;
+    }
+
+    if (streq(cmd, "version")) {
+        term_write("\nSageOS kernel 0.0.1 x86_64");
+        term_write("\nUEFI-loaded freestanding kernel");
+        return;
+    }
+
+    if (streq(cmd, "mem")) {
+        term_write("\nKernel loaded at physical 0x00100000");
+        term_write("\nStack size: 64 KiB");
+        term_write("\nMemory map handoff: pending");
+        return;
+    }
+
+    if (streq(cmd, "halt")) {
+        term_write("\nHalting.");
+        for (;;) {
+            __asm__ volatile ("hlt");
+        }
+    }
+
+    if (streq(cmd, "reboot")) {
+        term_write("\nRebooting.");
+        reboot();
+        return;
+    }
+
+    term_write("\nUnknown command: ");
+    term_write(cmd);
+}
+
+static void shell_run(void) {
+    char line[128];
+    size_t len = 0;
+
+    shell_prompt();
+
+    for (;;) {
+        char c = kbd_getchar();
+
+        if (c == '\n') {
+            line[len] = 0;
+            shell_exec(line);
+            len = 0;
+            shell_prompt();
+            continue;
+        }
+
+        if (c == '\b') {
+            if (len > 0) {
+                len--;
+                term_putc('\b');
+            }
+            continue;
+        }
+
+        if (len + 1 < sizeof(line)) {
+            line[len++] = c;
+            term_putc(c);
+        }
+    }
+}
+
+void kmain(void) {
+    serial_init();
+    vga_clear();
+
+    term_write("SageOS kernel entered.\n");
+    term_write("Terminal shell online.\n");
+    term_write("Type 'help'.");
+
+    shell_run();
+}

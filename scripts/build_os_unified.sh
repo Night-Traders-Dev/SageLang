@@ -2,7 +2,7 @@
 set -e
 
 # Configuration
-SAGE="./sage"
+SAGE="sage"
 ARCH="x86_64"
 BUILD_DIR="sageos_build"
 BOOT_SRC="lib/os/boot/boot.s"
@@ -12,12 +12,8 @@ DISK_IMG="sageos.img"
 
 mkdir -p $BUILD_DIR
 
-echo "--- Building SageOS Kernel (AOT) ---"
-$SAGE --compile-bare $KERNEL_SRC -o $BUILD_DIR/kernel.o --target $ARCH -O2
-# Compile minimal runtime
-clang -target x86_64-pc-linux-elf -ffreestanding -nostdlib -c lib/os/kernel/runtime.c -o $BUILD_DIR/runtime.o
-# Link kernel into a flat binary at 1MB (0x100000)
-ld.lld -o $BUILD_DIR/kernel.bin --section-start .text=0x100000 --oformat binary $BUILD_DIR/kernel.o $BUILD_DIR/runtime.o
+echo "--- Building SageOS Kernel ---"
+./sageos_build/build_kernel.sh
 
 echo "--- Building SageOS UEFI Bootloader (Native PE/COFF) ---"
 # Assemble/Compile for Windows COFF target (UEFI compatible)
