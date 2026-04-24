@@ -8,10 +8,10 @@ OBJ="$OUT/obj"
 
 mkdir -p "$OBJ"
 
-echo "--- Building SageOS Kernel (C/ASM freestanding) ---"
+echo "--- Building SageOS Kernel (C/ASM freestanding framebuffer) ---"
 
 clang \
-  -target x86_64-elf \
+  -target x86_64-unknown-elf \
   -ffreestanding \
   -fno-stack-protector \
   -fno-pic \
@@ -25,7 +25,7 @@ clang \
   -o "$OBJ/kernel.o"
 
 clang \
-  -target x86_64-elf \
+  -target x86_64-unknown-elf \
   -ffreestanding \
   -fno-stack-protector \
   -fno-pic \

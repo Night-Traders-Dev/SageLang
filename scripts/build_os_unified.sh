@@ -1,46 +1,76 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Configuration
-SAGE="sage"
-ARCH="x86_64"
-BUILD_DIR="sageos_build"
-BOOT_SRC="lib/os/boot/boot.s"
-KERNEL_SRC="lib/os/kernel/kmain.sage"
-UEFI_EFI="$BUILD_DIR/BOOTX64.EFI"
-DISK_IMG="sageos.img"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILD="$ROOT/sageos_build"
+BOOT="$BUILD/boot"
+OBJ="$BUILD/obj"
+IMG="$ROOT/sageos.img"
+ESP="$BUILD/esp.img"
 
-mkdir -p $BUILD_DIR
+IMG_SIZE_MIB=96
+ESP_SIZE_MIB=64
+ESP_START_LBA=2048
+
+mkdir -p "$BUILD" "$OBJ" "$BUILD/logs"
+
+echo "--- Cleaning stale objects/images ---"
+rm -f "$BUILD/kernel.o" "$BUILD/runtime.o"
+rm -f "$ROOT/build_os/kernel.o" "$ROOT/build_os/runtime.o" 2>/dev/null || true
+rm -f "$BUILD/BOOTX64.EFI" "$BUILD/uefi_loader.obj"
+rm -f "$BUILD/kernel.elf" "$BUILD/KERNEL.BIN"
+rm -f "$ESP" "$IMG"
+
+echo "--- Building UEFI loader (MS ABI PE/COFF + GOP handoff) ---"
+clang \
+  -target x86_64-windows-msvc \
+  -ffreestanding \
+  -fno-stack-protector \
+  -fshort-wchar \
+  -mno-red-zone \
+  -Wall \
+  -Wextra \
+  -c "$BOOT/uefi_loader.c" \
+  -o "$OBJ/uefi_loader.obj"
+
+lld-link \
+  /subsystem:efi_application \
+  /entry:EfiMain \
+  /nodefaultlib \
+  /out:"$BUILD/BOOTX64.EFI" \
+  "$OBJ/uefi_loader.obj"
 
 echo "--- Building SageOS Kernel ---"
-./sageos_build/build_kernel.sh
+"$BUILD/build_kernel.sh"
 
-echo "--- Building SageOS UEFI Bootloader (Native PE/COFF) ---"
-# Assemble/Compile for Windows COFF target (UEFI compatible)
-clang -target x86_64-pc-windows-msvc -c lib/os/boot/boot.s -o $BUILD_DIR/boot.o
-clang -target x86_64-pc-windows-msvc -ffreestanding -fno-stack-protector -fshort-wchar -mno-red-zone -c lib/os/boot/boot_main.c -o $BUILD_DIR/boot_main.o
-# Link as EFI application
-lld-link /subsystem:efi_application /entry:efi_main /out:$BUILD_DIR/BOOTX64.EFI $BUILD_DIR/boot.o $BUILD_DIR/boot_main.o
+echo "--- Creating ESP FAT image ---"
+dd if=/dev/zero of="$ESP" bs=1M count="$ESP_SIZE_MIB" status=none
+mkfs.fat -F 32 -n SAGEOS "$ESP" >/dev/null
 
-echo "--- Constructing Disk Image ---"
-# 1. Create a 64MB empty file
-dd if=/dev/zero of=$DISK_IMG bs=1M count=64 2>/dev/null
+mmd -i "$ESP" ::/EFI
+mmd -i "$ESP" ::/EFI/BOOT
+mcopy -i "$ESP" "$BUILD/BOOTX64.EFI" ::/EFI/BOOT/BOOTX64.EFI
+mcopy -i "$ESP" "$BUILD/KERNEL.BIN" ::/KERNEL.BIN
 
-# 2. Create GPT table and EFI partition using sgdisk
-sgdisk -o $DISK_IMG
-sgdisk -n 1:2048:4927 -t 1:ef00 -c 1:"EFI System Partition" $DISK_IMG
+echo "--- Creating GPT disk image ---"
+truncate -s "${IMG_SIZE_MIB}M" "$IMG"
 
-# 3. Create a temporary FAT12 image for the ESP
-ESP_IMG="$BUILD_DIR/esp.img"
-dd if=/dev/zero of=$ESP_IMG bs=512 count=2880 2>/dev/null
-mkfs.fat -F 12 $ESP_IMG
-mmd -i $ESP_IMG ::/EFI
-mmd -i $ESP_IMG ::/EFI/BOOT
-mcopy -i $ESP_IMG $UEFI_EFI ::/EFI/BOOT/BOOTX64.EFI
-mcopy -i $ESP_IMG $BUILD_DIR/kernel.bin ::/KERNEL.BIN
+sgdisk --clear "$IMG" >/dev/null
+sgdisk \
+  --new=1:${ESP_START_LBA}:+${ESP_SIZE_MIB}M \
+  --typecode=1:EF00 \
+  --change-name=1:"EFI System" \
+  "$IMG" >/dev/null
 
-# 4. Copy the ESP image into the main image at 1MB offset (LBA 2048)
-dd if=$ESP_IMG of=$DISK_IMG bs=512 seek=2048 conv=notrunc 2>/dev/null
+dd if="$ESP" of="$IMG" bs=512 seek="$ESP_START_LBA" conv=notrunc status=none
 
-echo "✅ Created $DISK_IMG"
-echo "--- Build Complete ---"
+echo "--- Verifying GPT ---"
+sgdisk -v "$IMG"
+
+echo "--- Verifying EFI image signature ---"
+file "$BUILD/BOOTX64.EFI" || true
+
+echo "--- Build complete ---"
+echo "Image:  $IMG"
+echo "UEFI:   $BUILD/BOOTX64.EFI"
+echo "Kernel: $BUILD/KERNEL.BIN"
