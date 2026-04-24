@@ -34,6 +34,7 @@ mkfs.fat -F 12 $ESP_IMG
 mmd -i $ESP_IMG ::/EFI
 mmd -i $ESP_IMG ::/EFI/BOOT
 mcopy -i $ESP_IMG $UEFI_EFI ::/EFI/BOOT/BOOTX64.EFI
+mcopy -i $ESP_IMG build_os/kernel.o ::/KERNEL.BIN
 
 # 4. Copy the ESP image into the main image at 1MB offset (LBA 2048)
 dd if=$ESP_IMG of=$DISK_IMG bs=512 seek=2048 conv=notrunc 2>/dev/null
