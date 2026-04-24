@@ -324,7 +324,7 @@ static CodegenTargetSpec parse_target_spec(const char* arch) {
 
 
 // Helper to read entire file into memory
-static char* read_file(const char* path) {
+static char* main_read_file(const char* path) {
     FILE* file = fopen(path, "rb");
     if (file == NULL) {
         fprintf(stderr, "Could not open file \"%s\".\n", path);
@@ -350,7 +350,7 @@ static char* read_file(const char* path) {
     return buffer;
 }
 
-static char* try_read_file(const char* path) {
+static char* try_main_read_file(const char* path) {
     FILE* file = fopen(path, "rb");
     if (file == NULL) {
         return NULL;
@@ -1126,7 +1126,7 @@ static void run_repl(SageRuntimeMode runtime_mode) {
                     continue;
                 }
 
-                char* buffer = try_read_file(arg);
+                char* buffer = try_main_read_file(arg);
                 if (buffer == NULL) {
                     fprintf(stderr, "sage repl: could not open \"%s\"\n", arg);
                     free(line);
@@ -1270,7 +1270,7 @@ static void run_repl(SageRuntimeMode runtime_mode) {
                 if (fd >= 0) close(fd);
 
                 if (compile_source_to_c_opt(buffer, "<repl>", tmp_path, 0, 0)) {
-                    char* content = try_read_file(tmp_path);
+                    char* content = try_main_read_file(tmp_path);
                     if (content) {
                         printf("%s", content);
                         free(content);
@@ -1300,7 +1300,7 @@ static void run_repl(SageRuntimeMode runtime_mode) {
                 if (fd >= 0) close(fd);
 
                 if (compile_source_to_llvm_ir(buffer, "<repl>", tmp_path, 0, 0)) {
-                    char* content = try_read_file(tmp_path);
+                    char* content = try_main_read_file(tmp_path);
                     if (content) {
                         printf("%s", content);
                         free(content);
@@ -1330,7 +1330,7 @@ static void run_repl(SageRuntimeMode runtime_mode) {
                 if (fd >= 0) close(fd);
 
                 if (compile_source_to_kotlin_opt(buffer, "<repl>", tmp_path, 0, 0)) {
-                    char* content = try_read_file(tmp_path);
+                    char* content = try_main_read_file(tmp_path);
                     if (content) {
                         printf("%s", content);
                         free(content);
@@ -1606,7 +1606,7 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* output_path = explicit_output;
         if (output_path == NULL) {
@@ -1634,7 +1634,7 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* output_path = explicit_output;
         if (output_path == NULL) {
@@ -1678,7 +1678,7 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* exe_output = explicit_output;
         if (exe_output == NULL) {
@@ -1711,7 +1711,7 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* output_path = explicit_output;
         if (output_path == NULL) {
@@ -1738,7 +1738,7 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* exe_output = explicit_output;
         if (exe_output == NULL) {
@@ -1773,7 +1773,7 @@ int main(int argc, const char* argv[]) {
 
         CodegenTargetSpec spec = parse_target_spec(target_arch_str);
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* output_path = explicit_output;
         if (output_path == NULL) {
@@ -1802,7 +1802,7 @@ int main(int argc, const char* argv[]) {
 
         CodegenTargetSpec spec = parse_target_spec(target_arch_str);
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* exe_output = explicit_output;
         if (exe_output == NULL) {
@@ -1838,7 +1838,7 @@ int main(int argc, const char* argv[]) {
             target_arch_str = bare_target;
         }
         CodegenTargetSpec spec = parse_target_spec(target_arch_str);
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* exe_output = explicit_output;
         if (exe_output == NULL) {
@@ -1869,7 +1869,7 @@ int main(int argc, const char* argv[]) {
             target_arch_str = uefi_target;
         }
         CodegenTargetSpec spec = parse_target_spec(target_arch_str);
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* exe_output = explicit_output;
         if (exe_output == NULL) {
@@ -1894,7 +1894,7 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* output_path = explicit_output;
         if (output_path == NULL) {
@@ -1936,7 +1936,7 @@ int main(int argc, const char* argv[]) {
             else if (strcmp(cmd_argv[i], "-g") == 0) { debug_info = 1; }
         }
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         const char* output_dir = explicit_output;
         char derived_dir[512];
         if (output_dir == NULL) {
@@ -1970,7 +1970,7 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char* derived_output = NULL;
         const char* output_path = explicit_output;
         if (output_path == NULL) {
@@ -1996,7 +1996,7 @@ int main(int argc, const char* argv[]) {
             CLEANUP_AND_EXIT(64);
         }
 
-        char* source = read_file(cmd_argv[2]);
+        char* source = main_read_file(cmd_argv[2]);
         char uf2_path[1024];
         if (!compile_source_to_pico_uf2(source, cmd_argv[2], output_dir, program_name,
                                         board, sdk_path, uf2_path, sizeof(uf2_path))) {
@@ -2058,7 +2058,7 @@ int main(int argc, const char* argv[]) {
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "check") == 0) {
         // Phase 1.6: Type checker
         const char* check_file_path = cmd_argv[2];
-        char* check_source = read_file(check_file_path);
+        char* check_source = main_read_file(check_file_path);
         if (!check_source) { CLEANUP_AND_EXIT(74); }
         init_lexer(check_source, check_file_path);
         Stmt* check_ast = parse_program(check_source, check_file_path);
@@ -2071,7 +2071,7 @@ int main(int argc, const char* argv[]) {
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "safety") == 0) {
         // Safety analysis: ownership, borrow checking, lifetimes
         const char* safety_file_path = cmd_argv[2];
-        char* safety_source = read_file(safety_file_path);
+        char* safety_source = main_read_file(safety_file_path);
         if (!safety_source) { CLEANUP_AND_EXIT(74); }
         init_lexer(safety_source, safety_file_path);
         Stmt* safety_ast = parse_program(safety_source, safety_file_path);
@@ -2088,7 +2088,7 @@ int main(int argc, const char* argv[]) {
         // Run file with strict safety enforcement
         const char* ss_file_path = cmd_argv[2];
         module_add_source_dir(ss_file_path);
-        char* ss_source = read_file(ss_file_path);
+        char* ss_source = main_read_file(ss_file_path);
         if (!ss_source) { CLEANUP_AND_EXIT(74); }
         init_lexer(ss_source, ss_file_path);
         Stmt* ss_ast = parse_program(ss_source, ss_file_path);
@@ -2122,7 +2122,7 @@ int main(int argc, const char* argv[]) {
         // JIT mode: interpret with profiling, compile hot functions
         const char* jit_file = cmd_argv[2];
         module_add_source_dir(jit_file);
-        char* source = read_file(jit_file);
+        char* source = main_read_file(jit_file);
         if (!source) { CLEANUP_AND_EXIT(74); }
 
         JitState jit;
@@ -2172,7 +2172,7 @@ int main(int argc, const char* argv[]) {
         // Combined AOT+JIT mode: profile first, then compile with type feedback
         const char* combo_file = cmd_argv[3];
         module_add_source_dir(combo_file);
-        char* source = read_file(combo_file);
+        char* source = main_read_file(combo_file);
         if (!source) { CLEANUP_AND_EXIT(74); }
 
         // Phase 1: JIT profiling run
@@ -2237,7 +2237,7 @@ int main(int argc, const char* argv[]) {
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--aot") == 0) {
         // AOT mode: compile to optimized native binary
         const char* aot_file = cmd_argv[2];
-        char* source = read_file(aot_file);
+        char* source = main_read_file(aot_file);
         if (!source) { CLEANUP_AND_EXIT(74); }
 
         init_lexer(source, aot_file);
@@ -2277,7 +2277,7 @@ int main(int argc, const char* argv[]) {
     } else if (cmd_argc >= 2) {
         // File mode (extra args accessible via sys.args())
         module_add_source_dir(cmd_argv[1]);  // Add source file's dir to search paths
-        char* source = read_file(cmd_argv[1]);
+        char* source = main_read_file(cmd_argv[1]);
         run(source, cmd_argv[1], runtime_mode);
         free(source);
     } else {

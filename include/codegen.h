@@ -130,6 +130,8 @@ typedef struct {
     char* loop_end_labels[64];
     int loop_depth;
     char* current_module;
+    char** imported_modules;
+    int imported_module_count;
 } ISelContext;
 
 void isel_init(ISelContext* ctx);

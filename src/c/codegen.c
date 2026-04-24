@@ -112,8 +112,13 @@ void isel_init(ISelContext* ctx) {
     ctx->next_vreg = 0;
     ctx->next_label = 0;
     ctx->string_pool_cap = 16;
-    ctx->string_pool = SAGE_ALLOC(sizeof(char*) * 16);
+    ctx->string_pool = SAGE_ALLOC(sizeof(char*) * (size_t)ctx->string_pool_cap);
     ctx->current_module = NULL;
+    ctx->imported_modules = NULL;
+    ctx->imported_module_count = 0;
+    ctx->number_pool_cap = 16;
+    ctx->number_pool = SAGE_ALLOC(sizeof(double) * (size_t)ctx->number_pool_cap);
+    ctx->number_pool_count = 0;
 }
 
 void isel_free(ISelContext* ctx) {
@@ -123,6 +128,11 @@ void isel_free(ISelContext* ctx) {
     }
     free(ctx->string_pool);
     if (ctx->current_module) free(ctx->current_module);
+    for (int i = 0; i < ctx->imported_module_count; i++) {
+        free(ctx->imported_modules[i]);
+    }
+    if (ctx->imported_modules) free(ctx->imported_modules);
+    if (ctx->number_pool) free(ctx->number_pool);
 }
 
 static void isel_append(ISelContext* ctx, VInst* v) {
@@ -144,13 +154,28 @@ static char* isel_label(ISelContext* ctx) {
     return SAGE_STRDUP(buf);
 }
 
-static int isel_add_string(ISelContext* ctx, const char* str) {
+static int isel_add_string(ISelContext* ctx, const char* s) {
+    for (int i = 0; i < ctx->string_pool_count; i++) {
+        if (strcmp(ctx->string_pool[i], s) == 0) return i;
+    }
     if (ctx->string_pool_count >= ctx->string_pool_cap) {
         ctx->string_pool_cap *= 2;
         ctx->string_pool = SAGE_REALLOC(ctx->string_pool, sizeof(char*) * (size_t)ctx->string_pool_cap);
     }
-    ctx->string_pool[ctx->string_pool_count] = SAGE_STRDUP(str);
-    return ctx->string_pool_count++;
+    ctx->string_pool[ctx->string_pool_count++] = SAGE_STRDUP(s);
+    return ctx->string_pool_count - 1;
+}
+
+static int isel_add_number(ISelContext* ctx, double n) {
+    for (int i = 0; i < ctx->number_pool_count; i++) {
+        if (ctx->number_pool[i] == n) return i;
+    }
+    if (ctx->number_pool_count >= ctx->number_pool_cap) {
+        ctx->number_pool_cap *= 2;
+        ctx->number_pool = SAGE_REALLOC(ctx->number_pool, sizeof(double) * (size_t)ctx->number_pool_cap);
+    }
+    ctx->number_pool[ctx->number_pool_count++] = n;
+    return ctx->number_pool_count - 1;
 }
 
 // ============================================================================
@@ -162,6 +187,18 @@ static char* tok_str(Token tok) {
     memcpy(s, tok.start, (size_t)tok.length);
     s[tok.length] = '\0';
     return s;
+}
+
+static bool isel_is_module_imported(ISelContext* ctx, const char* name) {
+    for (int i = 0; i < ctx->imported_module_count; i++) {
+        if (strcmp(ctx->imported_modules[i], name) == 0) return true;
+    }
+    return false;
+}
+
+static void isel_mark_module_imported(ISelContext* ctx, const char* name) {
+    ctx->imported_modules = SAGE_REALLOC(ctx->imported_modules, sizeof(char*) * (size_t)(ctx->imported_module_count + 1));
+    ctx->imported_modules[ctx->imported_module_count++] = SAGE_STRDUP(name);
 }
 
 static char* isel_namespaced_name(ISelContext* ctx, const char* name) {
@@ -199,6 +236,7 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             VInst* v = vinst_new(VINST_LOAD_IMM);
             v->dest = r;
             v->imm_number = expr->as.number.value;
+            v->src1 = isel_add_number(ctx, expr->as.number.value);
             isel_append(ctx, v);
             return r;
         }
@@ -285,22 +323,48 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
 
             if (expr->as.call.callee->type == EXPR_VARIABLE) {
                 char* name = tok_str(expr->as.call.callee->as.variable.name);
-                // Check for builtin names
                 int is_builtin = (strcmp(name, "str") == 0 || strcmp(name, "len") == 0 ||
                                   strcmp(name, "tonumber") == 0 || strcmp(name, "push") == 0 ||
-                                  strcmp(name, "pop") == 0 || strcmp(name, "range") == 0);
+                                  strcmp(name, "pop") == 0 || strcmp(name, "range") == 0 ||
+                                  strcmp(name, "append") == 0 || strcmp(name, "chr") == 0 ||
+                                  strcmp(name, "ord") == 0 || strcmp(name, "gc_disable") == 0 ||
+                                  strcmp(name, "gc_enable") == 0 || strcmp(name, "gc_collect") == 0);
 
+                char* final_name = is_builtin ? SAGE_STRDUP(name) : isel_namespaced_name(ctx, name);
                 VInst* v = vinst_new(is_builtin ? VINST_CALL_BUILTIN : VINST_CALL);
                 v->dest = r;
-                v->func_name = name;
+                v->func_name = final_name;
                 v->call_args = arg_regs;
                 v->call_arg_count = expr->as.call.arg_count;
                 isel_append(ctx, v);
+                free(name);
+            } else if (expr->as.call.callee->type == EXPR_GET) {
+                Expr* obj_expr = expr->as.call.callee->as.get.object;
+                if (obj_expr->type == EXPR_VARIABLE) {
+                    char* mod_name = tok_str(obj_expr->as.variable.name);
+                    char* prop_name = tok_str(expr->as.call.callee->as.get.property);
+                    for (char* p = mod_name; *p; p++) if (*p == '.') *p = '_';
+                    size_t len = strlen(mod_name) + strlen(prop_name) + 10;
+                    char* final_name = SAGE_ALLOC(len);
+                    snprintf(final_name, len, "sage_fn_%s_%s", mod_name, prop_name);
+                    VInst* v = vinst_new(VINST_CALL);
+                    v->dest = r;
+                    v->func_name = final_name;
+                    v->call_args = arg_regs;
+                    v->call_arg_count = expr->as.call.arg_count;
+                    isel_append(ctx, v);
+                    free(mod_name);
+                    free(prop_name);
+                } else {
+                    VInst* v = vinst_new(VINST_LOAD_NIL);
+                    v->dest = r;
+                    isel_append(ctx, v);
+                }
             } else {
                 VInst* v = vinst_new(VINST_LOAD_NIL);
                 v->dest = r;
                 isel_append(ctx, v);
-                free(arg_regs);
+                if (arg_regs) free(arg_regs);
             }
             return r;
         }
@@ -775,6 +839,9 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
         }
         case STMT_IMPORT: {
             if (stmt->as.import.module_name == NULL) break;
+            if (isel_is_module_imported(ctx, stmt->as.import.module_name)) break;
+            isel_mark_module_imported(ctx, stmt->as.import.module_name);
+
             char* path = resolve_module_path(global_module_cache, stmt->as.import.module_name);
             if (!path) break;
             char* source = read_file(path);
@@ -919,7 +986,7 @@ static void emit_asm_vinst_x86_64(FILE* out, VInst* v) {
     switch (v->kind) {
         case VINST_LOAD_IMM:
             fprintf(out, "  # v%d = number %f\n", v->dest, v->imm_number);
-            fprintf(out, "  movsd .LC%d(%%rip), %%xmm0\n", v->dest);
+            fprintf(out, "  movsd .LN%d(%%rip), %%xmm0\n", v->src1);
             fprintf(out, "  call sage_rt_number\n");
             fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
             fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
@@ -1061,7 +1128,7 @@ static void emit_asm_vinst_x86_64(FILE* out, VInst* v) {
             break;
         case VINST_CALL:
             fprintf(out, "  # call %s\n", v->func_name);
-            fprintf(out, "  call sage_fn_%s\n", v->func_name);
+            fprintf(out, "  call %s\n", v->func_name);
             fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
             fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
             break;
@@ -1325,7 +1392,7 @@ static int write_asm_output(const char* source, const char* input_path, const ch
     emit_asm_function_epilogue(out, spec.target);
 
     // Emit string data section with proper escaping
-    if (ctx.string_pool_count > 0) {
+    if (ctx.string_pool_count > 0 || ctx.number_pool_count > 0) {
         fprintf(out, "\n.section .rodata\n");
         for (int i = 0; i < ctx.string_pool_count; i++) {
             fprintf(out, ".LC%d:\n", i);
@@ -1340,6 +1407,10 @@ static int write_asm_output(const char* source, const char* input_path, const ch
                 else fputc(*p, out);
             }
             fprintf(out, "\"\n");
+        }
+        for (int i = 0; i < ctx.number_pool_count; i++) {
+            fprintf(out, ".LN%d:\n", i);
+            fprintf(out, "  .double %f\n", ctx.number_pool[i]);
         }
     }
 

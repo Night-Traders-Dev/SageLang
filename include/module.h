@@ -105,6 +105,7 @@ void cleanup_module_system();
 
 // Add source file's directory to search paths (call after init, before loading)
 void module_add_source_dir(const char* source_path);
+char* read_file(const char* path);
 
 extern Environment* g_global_env;  // Global environment for module loading
 

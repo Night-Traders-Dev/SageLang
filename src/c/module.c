@@ -184,7 +184,7 @@ Module* find_module(ModuleCache* cache, const char* name) {
 }
 
 // Read file contents
-static char* read_file(const char* path) {
+char* read_file(const char* path) {
     FILE* file = fopen(path, "rb");
     if (!file) {
         fprintf(stderr, "Error: Could not open file '%s'\n", path);
