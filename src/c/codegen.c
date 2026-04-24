@@ -187,8 +187,8 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             VInst* v = vinst_new(VINST_LOAD_STRING);
             v->dest = r;
             v->imm_string = SAGE_STRDUP(expr->as.string.value);
+            v->src1 = isel_add_string(ctx, expr->as.string.value);
             isel_append(ctx, v);
-            isel_add_string(ctx, expr->as.string.value);
             return r;
         }
         case EXPR_BOOL: {
@@ -249,6 +249,7 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             VInst* v = vinst_new(VINST_LOAD_GLOBAL);
             v->dest = r;
             v->imm_string = name;
+            v->src1 = isel_add_string(ctx, name);
             isel_append(ctx, v);
             return r;
         }
@@ -383,8 +384,8 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             VInst* key_v = vinst_new(VINST_LOAD_STRING);
             key_v->dest = r_key;
             key_v->imm_string = prop_name;
+            key_v->src1 = isel_add_string(ctx, prop_name);
             isel_append(ctx, key_v);
-            isel_add_string(ctx, prop_name);
 
             int r = isel_vreg(ctx);
             VInst* v = vinst_new(VINST_CALL_BUILTIN);
@@ -466,8 +467,10 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             char* name = tok_str(stmt->as.let.name);
             VInst* v = vinst_new(VINST_STORE_GLOBAL);
             v->src1 = val;
-            v->imm_string = name;
+            v->imm_string = SAGE_STRDUP(name);
+            v->src2 = isel_add_string(ctx, name);
             isel_append(ctx, v);
+            free(name);
             break;
         }
         case STMT_IF: {
@@ -589,6 +592,7 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             VInst* init_store = vinst_new(VINST_STORE_GLOBAL);
             init_store->src1 = idx_reg;
             init_store->imm_string = SAGE_STRDUP("__for_idx__");
+            init_store->src2 = isel_add_string(ctx, "__for_idx__");
             isel_append(ctx, init_store);
 
             if (ctx->loop_depth >= 64) {
@@ -616,6 +620,7 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             VInst* load_idx = vinst_new(VINST_LOAD_GLOBAL);
             load_idx->dest = cur_idx;
             load_idx->imm_string = SAGE_STRDUP("__for_idx__");
+            load_idx->src1 = isel_add_string(ctx, "__for_idx__");
             isel_append(ctx, load_idx);
 
             int cmp = isel_vreg(ctx);
@@ -647,6 +652,7 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             VInst* store_var = vinst_new(VINST_STORE_GLOBAL);
             store_var->src1 = elem;
             store_var->imm_string = SAGE_STRDUP(var_name);
+            store_var->src2 = isel_add_string(ctx, var_name);
             isel_append(ctx, store_var);
 
             isel_stmt_list(ctx, stmt->as.for_stmt.body);
@@ -668,6 +674,7 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             VInst* store_idx = vinst_new(VINST_STORE_GLOBAL);
             store_idx->src1 = next_idx;
             store_idx->imm_string = SAGE_STRDUP("__for_idx__");
+            store_idx->src2 = isel_add_string(ctx, "__for_idx__");
             isel_append(ctx, store_idx);
 
             VInst* jmp1 = vinst_new(VINST_JUMP);
@@ -878,7 +885,7 @@ static void emit_asm_vinst_x86_64(FILE* out, VInst* v) {
         }
         case VINST_LOAD_STRING:
             fprintf(out, "  # v%d = string\n", v->dest);
-            fprintf(out, "  leaq .LS%d(%%rip), %%rdi\n", v->src1);
+            fprintf(out, "  leaq .LC%d(%%rip), %%rdi\n", v->src1);
             fprintf(out, "  call sage_rt_string\n");
             fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
             fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
@@ -951,7 +958,7 @@ static void emit_asm_vinst_x86_64(FILE* out, VInst* v) {
         case VINST_LOAD_GLOBAL:
             fprintf(out, "  # v%d = load global '%s'\n", v->dest, v->imm_string ? v->imm_string : "?");
             fprintf(out, "  leaq sage_globals(%%rip), %%rdi\n");
-            fprintf(out, "  leaq .LS%d(%%rip), %%rsi\n", v->src1);
+            fprintf(out, "  leaq .LC%d(%%rip), %%rsi\n", v->src1);
             fprintf(out, "  call sage_rt_get_global\n");
             fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
             fprintf(out, "  movq %%rdx, %d(%%rbp)\n", -(v->dest + 1) * 16 + 8);
@@ -959,7 +966,7 @@ static void emit_asm_vinst_x86_64(FILE* out, VInst* v) {
         case VINST_STORE_GLOBAL:
             fprintf(out, "  # store global '%s' = v%d\n", v->imm_string ? v->imm_string : "?", v->src1);
             fprintf(out, "  leaq sage_globals(%%rip), %%rdi\n");
-            fprintf(out, "  leaq .LS%d(%%rip), %%rsi\n", v->src2);
+            fprintf(out, "  leaq .LC%d(%%rip), %%rsi\n", v->src2);
             fprintf(out, "  movq %d(%%rbp), %%rdx\n", -(v->src1 + 1) * 16);
             fprintf(out, "  movq %d(%%rbp), %%rcx\n", -(v->src1 + 1) * 16 + 8);
             fprintf(out, "  call sage_rt_set_global\n");

@@ -5,26 +5,16 @@ efi_main:
     # Shadow space for UEFI calls
     sub $40, %rsp
     
-    # Save ImageHandle and SystemTable
-    mov %rcx, %r12
-    mov %rdx, %r13
-    
-    # Get ConOut (offset 64 in SystemTable)
-    mov 64(%r13), %rcx
-    
-    # Call OutputString (offset 8 in SimpleTextOutput protocol)
-    # RCX = ConOut, RDX = pointer to UTF-16 string
-    lea msg(%rip), %rdx
-    mov 8(%rcx), %rax
-    call *%rax
-    
-    # Hang for now
-1:  jmp 1b
-    
-    add $40, %rsp
-    ret
+    # Call boot_main to load kernel
+    # rcx is ImageHandle, rdx is SystemTable
+    movq %rdx, %rcx          # Pass SystemTable as first arg
+    subq $32, %rsp
+    call load_kernel
+    addq $32, %rsp
 
-.section .data
+    # Jump to kernel at 0x100000
+    movq $0x100000, %rax
+    jmp *%rax
 .align 16
 msg:
     # "SageOS UEFI Booting..." in UTF-16LE

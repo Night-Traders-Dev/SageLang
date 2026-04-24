@@ -4,20 +4,27 @@ set -e
 # Configuration
 SAGE="./sage"
 ARCH="x86_64"
-BUILD_DIR="build_os"
+BUILD_DIR="sageos_build"
 BOOT_SRC="lib/os/boot/boot.s"
-UEFI_EFI="$BUILD_DIR/bootx64.efi"
+KERNEL_SRC="lib/os/kernel/kmain.sage"
+UEFI_EFI="$BUILD_DIR/BOOTX64.EFI"
 DISK_IMG="sageos.img"
 
 mkdir -p $BUILD_DIR
 
+echo "--- Building SageOS Kernel (AOT) ---"
+$SAGE --compile-bare $KERNEL_SRC -o $BUILD_DIR/kernel.o --target $ARCH -O2
+# Compile minimal runtime
+clang -target x86_64-pc-linux-elf -ffreestanding -nostdlib -c lib/os/kernel/runtime.c -o $BUILD_DIR/runtime.o
+# Link kernel into a flat binary at 1MB (0x100000)
+ld.lld -o $BUILD_DIR/kernel.bin --section-start .text=0x100000 --oformat binary $BUILD_DIR/kernel.o $BUILD_DIR/runtime.o
+
 echo "--- Building SageOS UEFI Bootloader (Native PE/COFF) ---"
 # Assemble/Compile for Windows COFF target (UEFI compatible)
-clang -target x86_64-pc-win32-coff -c $BOOT_SRC -o $BUILD_DIR/boot.obj
-
-# Link using lld-link (Native PE/COFF linker)
-# Subsystem for EFI Application
-lld-link /subsystem:efi_application /entry:efi_main /out:$UEFI_EFI $BUILD_DIR/boot.obj /base:0x100000 /align:4096
+clang -target x86_64-pc-windows-msvc -c lib/os/boot/boot.s -o $BUILD_DIR/boot.o
+clang -target x86_64-pc-windows-msvc -ffreestanding -fno-stack-protector -fshort-wchar -mno-red-zone -c lib/os/boot/boot_main.c -o $BUILD_DIR/boot_main.o
+# Link as EFI application
+lld-link /subsystem:efi_application /entry:efi_main /out:$BUILD_DIR/BOOTX64.EFI $BUILD_DIR/boot.o $BUILD_DIR/boot_main.o
 
 echo "--- Constructing Disk Image ---"
 # 1. Create a 64MB empty file
@@ -34,7 +41,7 @@ mkfs.fat -F 12 $ESP_IMG
 mmd -i $ESP_IMG ::/EFI
 mmd -i $ESP_IMG ::/EFI/BOOT
 mcopy -i $ESP_IMG $UEFI_EFI ::/EFI/BOOT/BOOTX64.EFI
-mcopy -i $ESP_IMG build_os/kernel.o ::/KERNEL.BIN
+mcopy -i $ESP_IMG $BUILD_DIR/kernel.bin ::/KERNEL.BIN
 
 # 4. Copy the ESP image into the main image at 1MB offset (LBA 2048)
 dd if=$ESP_IMG of=$DISK_IMG bs=512 seek=2048 conv=notrunc 2>/dev/null
