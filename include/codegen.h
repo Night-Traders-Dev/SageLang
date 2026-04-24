@@ -129,6 +129,7 @@ typedef struct {
     char* loop_cond_labels[64];
     char* loop_end_labels[64];
     int loop_depth;
+    char* current_module;
 } ISelContext;
 
 void isel_init(ISelContext* ctx);

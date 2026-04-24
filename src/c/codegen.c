@@ -14,6 +14,8 @@
 #include "lexer.h"
 #include "parser.h"
 #include "pass.h"
+#include "module.h"
+#include <limits.h>
 
 // Forward declaration
 extern Stmt* parse_program(const char* source);
@@ -111,6 +113,7 @@ void isel_init(ISelContext* ctx) {
     ctx->next_label = 0;
     ctx->string_pool_cap = 16;
     ctx->string_pool = SAGE_ALLOC(sizeof(char*) * 16);
+    ctx->current_module = NULL;
 }
 
 void isel_free(ISelContext* ctx) {
@@ -119,6 +122,7 @@ void isel_free(ISelContext* ctx) {
         free(ctx->string_pool[i]);
     }
     free(ctx->string_pool);
+    if (ctx->current_module) free(ctx->current_module);
 }
 
 static void isel_append(ISelContext* ctx, VInst* v) {
@@ -158,6 +162,22 @@ static char* tok_str(Token tok) {
     memcpy(s, tok.start, (size_t)tok.length);
     s[tok.length] = '\0';
     return s;
+}
+
+static char* isel_namespaced_name(ISelContext* ctx, const char* name) {
+    if (ctx->current_module == NULL) {
+        if (strcmp(name, "kmain") == 0) return SAGE_STRDUP("sage_fn_kmain");
+        return SAGE_STRDUP(name);
+    }
+    // Convert dots to underscores in module name for label safety
+    char* mod = SAGE_STRDUP(ctx->current_module);
+    for (char* p = mod; *p; p++) if (*p == '.') *p = '_';
+
+    size_t len = strlen(mod) + strlen(name) + 10;
+    char* buf = SAGE_ALLOC(len);
+    snprintf(buf, len, "sage_fn_%s_%s", mod, name);
+    free(mod);
+    return buf;
 }
 
 // ============================================================================
@@ -724,11 +744,56 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
         case STMT_DEFER:
             isel_stmt_list(ctx, stmt->as.defer.statement);
             break;
+        case STMT_PROC: {
+            char* name = tok_str(stmt->as.proc.name);
+            char* label = isel_namespaced_name(ctx, name);
+
+            // Jump over procedure body if we are in top-level flow
+            char* skip_label = isel_label(ctx);
+            VInst* skip_jmp = vinst_new(VINST_JUMP);
+            skip_jmp->label = SAGE_STRDUP(skip_label);
+            isel_append(ctx, skip_jmp);
+
+            VInst* l = vinst_new(VINST_LABEL);
+            l->label = SAGE_STRDUP(label);
+            isel_append(ctx, l);
+
+            isel_stmt_list(ctx, stmt->as.proc.body);
+
+            VInst* r = vinst_new(VINST_RET);
+            r->src1 = 0;
+            isel_append(ctx, r);
+
+            VInst* sl = vinst_new(VINST_LABEL);
+            sl->label = SAGE_STRDUP(skip_label);
+            isel_append(ctx, sl);
+
+            free(name);
+            free(label);
+            free(skip_label);
+            break;
+        }
+        case STMT_IMPORT: {
+            if (stmt->as.import.module_name == NULL) break;
+            char* path = resolve_module_path(global_module_cache, stmt->as.import.module_name);
+            if (!path) break;
+            char* source = read_file(path);
+            if (!source) { free(path); break; }
+            Stmt* mod_ast = parse_program(source);
+            char* old_mod = ctx->current_module;
+            ctx->current_module = SAGE_STRDUP(stmt->as.import.module_name);
+            isel_stmt_list(ctx, mod_ast);
+            if (ctx->current_module) free(ctx->current_module);
+            ctx->current_module = old_mod;
+            free_stmt(mod_ast);
+            free(source);
+            free(path);
+            break;
+        }
         case STMT_CLASS:
         case STMT_TRY:
         case STMT_RAISE:
         case STMT_YIELD:
-        case STMT_IMPORT:
         case STMT_ASYNC_PROC:
             fprintf(stderr, "Codegen backend: unsupported statement type %d\n", stmt->type);
             break;
