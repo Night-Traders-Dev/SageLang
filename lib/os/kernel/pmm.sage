@@ -60,7 +60,7 @@ proc clear_bit(page_num):
         let entry = bitmap[idx]
         let flags = entry["flags"]
         if dict_has(flags, str(off)):
-            del flags[str(off)]
+            dict_delete(flags, str(off))
             used_pages = used_pages - 1
         end
     end

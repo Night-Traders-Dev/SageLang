@@ -3,7 +3,8 @@ gc_disable()
 # vmm.sage — Virtual Memory Manager
 # x86-64 4-level paging: PML4 -> PDPT -> PD -> PT -> Page
 
-import pmm
+import os.kernel.pmm as pmm
+let PAGE_SIZE = 4096
 
 # ----- Page flags -----
 let PAGE_PRESENT = 1
@@ -28,11 +29,11 @@ let vmm_ready = false
 # ----- Helpers -----
 
 proc page_number(addr):
-    return addr / pmm.PAGE_SIZE
+    return addr / PAGE_SIZE
 end
 
 proc page_addr(page_num):
-    return page_num * pmm.PAGE_SIZE
+    return page_num * PAGE_SIZE
 end
 
 # ----- Initialize kernel address space -----
@@ -66,7 +67,7 @@ proc unmap_page(virt):
     let key = str(pn)
     let entries = current_pml4["entries"]
     if dict_has(entries, key):
-        del entries[key]
+        dict_delete(entries, key)
     end
 end
 
@@ -76,7 +77,7 @@ proc map_region(virt, phys, size, flags):
     let offset = 0
     while offset < size:
         map_page(virt + offset, phys + offset, flags)
-        offset = offset + pmm.PAGE_SIZE
+        offset = offset + PAGE_SIZE
     end
 end
 
@@ -99,7 +100,7 @@ proc get_physical(virt):
         return nil
     end
     let entry = entries[key]
-    let page_offset = virt % pmm.PAGE_SIZE
+    let page_offset = virt % PAGE_SIZE
     return entry["phys"] + page_offset
 end
 
@@ -159,7 +160,7 @@ proc stats():
     let keys = dict_keys(entries)
     let s = {}
     s["mapped_pages"] = len(keys)
-    s["mapped_bytes"] = len(keys) * pmm.PAGE_SIZE
+    s["mapped_bytes"] = len(keys) * PAGE_SIZE
     s["pml4_addr"] = current_pml4["addr"]
     return s
 end
@@ -204,7 +205,7 @@ proc vmm_init(arch):
             entry["phys"] = addr
             entry["flags"] = flags
             entries[str(pn)] = entry
-            addr = addr + pmm.PAGE_SIZE
+            addr = addr + PAGE_SIZE
         end
         # Map VGA text buffer
         let vga_pn = page_number(753664)
@@ -228,7 +229,7 @@ proc vmm_init(arch):
             let key = str(pn)
             entries[key] = entry
             page_tables[key] = entry
-            addr = addr + pmm.PAGE_SIZE
+            addr = addr + PAGE_SIZE
         end
     end
 
@@ -246,7 +247,7 @@ proc vmm_init(arch):
             let key = str(pn)
             entries[key] = entry
             page_tables[key] = entry
-            addr = addr + pmm.PAGE_SIZE
+            addr = addr + PAGE_SIZE
         end
     end
 
@@ -288,19 +289,19 @@ proc vmm_unmap(state, vaddr):
     if arch == "x86_64":
         let entries = state["entries"]
         if dict_has(entries, key):
-            del entries[key]
+            dict_delete(entries, key)
         end
     end
     if arch == "aarch64":
         let entries = state["entries"]
         if dict_has(entries, key):
-            del entries[key]
+            dict_delete(entries, key)
         end
     end
     if arch == "riscv64":
         let entries = state["entries"]
         if dict_has(entries, key):
-            del entries[key]
+            dict_delete(entries, key)
         end
     end
 end
