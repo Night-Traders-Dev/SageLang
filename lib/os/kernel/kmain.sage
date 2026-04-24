@@ -9,6 +9,7 @@ import timer
 import syscall
 import pmm
 import vmm
+import shell
 
 let KERNEL_NAME = "SageOS"
 let KERNEL_VERSION = "0.1.0"
@@ -152,7 +153,10 @@ proc kmain(boot_info):
     console.print_line("")
 
     # Launch Shell
-    sh_main()
+    shell.sh_main()
 
     return kernel
 end
+
+# Entry point call
+kmain(nil)
