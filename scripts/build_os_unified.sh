@@ -57,9 +57,9 @@ import os.image.diskimg as diskimg
 import io
 gc_disable()
 
-# Create a 8MB GPT image
+# Create a 64MB GPT image
 print("Creating GPT image...")
-let img = diskimg.create_gpt_image(8)
+let img = diskimg.create_gpt_image(64)
 
 # Read UEFI binary (Now a valid PE/COFF)
 print("Reading UEFI binary...")
