@@ -263,7 +263,7 @@ proc write_file(img, partition_start_lba, partition_size_lba, filename, data_byt
     let name83 = pad_filename_83(filename)
     let slot = -1
     let i = 0
-    for i in range(512): # FAT16_ROOT_ENTRIES
+    for i in range(512):
         let entry_base = root_start + (i * 32)
         if read_byte(img, entry_base) == 0:
             slot = i
@@ -280,33 +280,49 @@ proc write_file(img, partition_start_lba, partition_size_lba, filename, data_byt
         write_byte(img, entry + i, ord(name83[i]))
     end
     
-    # Find free cluster
-    let first_free_cluster = 2
     let clusters_needed = int((len(data_bytes) + 4095) / 4096)
-    
-    # This is a VERY simplified allocator (just picks first free clusters)
-    let cluster = 2
     let fat_base = layout["fat_start"] * 512
-    let found = false
-    for cluster in range(2, 65536):
-        let fat_entry = fat_base + (cluster * 2)
-        if read_word_le(img, fat_entry) == 0:
-            found = true
+    
+    let prev_cluster = -1
+    let first_cluster = -1
+    let data_written = 0
+    
+    let c = 2
+    for c in range(2, 65536):
+        if data_written >= len(data_bytes):
             break
+        end
+        
+        let fat_entry = fat_base + (c * 2)
+        if read_word_le(img, fat_entry) == 0:
+            if first_cluster == -1:
+                first_cluster = c
+            end
+            
+            if prev_cluster != -1:
+                write_word_le(img, fat_base + (prev_cluster * 2), c)
+            end
+            
+            # Write data to this cluster
+            let cluster_data_start = layout["data_offset"] + ((c - 2) * 4096)
+            let j = 0
+            for j in range(4096):
+                if data_written < len(data_bytes):
+                    write_byte(img, cluster_data_start + j, data_bytes[data_written])
+                    data_written = data_written + 1
+                else:
+                    break
+                end
+            end
+            
+            prev_cluster = c
+            # Mark as EOF for now, will be overwritten if there's a next cluster
+            write_word_le(img, fat_base + (c * 2), 65535)
         end
     end
     
-    write_word_le(img, entry + 26, cluster) # First cluster
-    write_dword_le(img, entry + 28, len(data_bytes)) # File size
-    
-    # Write data
-    let data_offset = layout["data_offset"] + ((cluster - 2) * 4096)
-    for i in range(len(data_bytes)):
-        write_byte(img, data_offset + i, data_bytes[i])
-    end
-    
-    # Mark as EOF in FAT
-    write_word_le(img, fat_base + (cluster * 2), 65535)
+    write_word_le(img, entry + 26, first_cluster)
+    write_dword_le(img, entry + 28, len(data_bytes))
     
     return img
 end
@@ -339,6 +355,16 @@ proc create_gpt_image(size_mb):
     return img
 end
 
+proc get_efi_partition_info(img):
+    let part_start_lba = 2048
+    let total_sectors = int(img["size_mb"] * 1024 * 1024 / 512)
+    let part_size_lba = total_sectors - part_start_lba - 34
+    let res = {}
+    res["start"] = part_start_lba
+    res["size"] = part_size_lba
+    return res
+end
+
 proc add_efi_partition(img, efi_binary_bytes):
     # GPT Entry for EFI System Partition
     let entry_lba = GPT_ENTRY_LBA
@@ -357,8 +383,9 @@ proc add_efi_partition(img, efi_binary_bytes):
         write_byte(img, entry_off + 16 + i, (i * 17) % 256)
     end
     
-    let part_start_lba = 2048
-    let part_size_lba = 32768 # 16MB
+    let info = get_efi_partition_info(img)
+    let part_start_lba = info["start"]
+    let part_size_lba = info["size"]
     
     write_dword_le(img, entry_off + 32, part_start_lba)
     write_dword_le(img, entry_off + 40, part_start_lba + part_size_lba - 1)
@@ -383,15 +410,15 @@ proc save_image(img, path):
     let total_sectors = int(img["size_mb"] * 1024 * 1024 / 512)
     print("Saving sparse image to " + path + " (" + str(total_sectors) + " sectors)...")
     
-    let zero_sector = ""
+    let zero_sector = []
     let i = 0
     for i in range(512):
-        zero_sector = zero_sector + chr(0)
+        push(zero_sector, 0)
     end
     
-    io.writefile(path, "") # Clear file
+    io.writebytes(path, []) # Create/clear file
     
-    let buf = ""
+    let buf = []
     let buf_count = 0
     let last_printed = 0
     
@@ -399,21 +426,18 @@ proc save_image(img, path):
         let s_key = str(i)
         if dict_has(img["sectors"], s_key):
             let s = img["sectors"][s_key]
-            let s_str = ""
-            let j = 0
-            for j in range(512): s_str = s_str + chr(s[j]) end
-            buf = buf + s_str
+            array_extend(buf, s)
         else:
-            buf = buf + zero_sector
+            array_extend(buf, zero_sector)
         end
         buf_count = buf_count + 1
         
         # Flush every 1024 sectors (512KB)
         if buf_count >= 1024:
-            io.appendfile(path, buf)
-            buf = ""
+            io.appendbytes(path, buf)
+            buf = []
             buf_count = 0
-            if (i * 100 / total_sectors) > last_printed:
+            if (int(i * 100 / total_sectors)) > last_printed:
                 last_printed = int(i * 100 / total_sectors)
                 print("Saving: " + str(last_printed) + "%")
             end
@@ -421,7 +445,7 @@ proc save_image(img, path):
     end
     
     if len(buf) > 0:
-        io.appendfile(path, buf)
+        io.appendbytes(path, buf)
     end
     
     print("Image saved successfully.")

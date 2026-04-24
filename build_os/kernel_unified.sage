@@ -2617,6 +2617,108 @@ proc emit_ecall_entry_riscv64():
 end
 gc_disable()
 
+# sage — Minimal SageOS Shell
+# Provides a terminal-based interface for user interaction.
+
+
+proc print_prompt():
+    set_color(LIGHT_CYAN, BLACK)
+    print_str("sage@os")
+    set_color(WHITE, BLACK)
+    print_str(":")
+    set_color(LIGHT_BLUE, BLACK)
+    print_str("~")
+    set_color(WHITE, BLACK)
+    print_str("$ ")
+end
+
+proc handle_command(cmd):
+    if cmd == "":
+        return
+    end
+    
+    if cmd == "help":
+        print_line("Available commands:")
+        print_line("  help     - Show this help message")
+        print_line("  ls       - List files (simulated)")
+        print_line("  clear    - Clear the screen")
+        print_line("  version  - Show SageOS version")
+        print_line("  exit     - Exit the shell")
+        return
+    end
+    
+    if cmd == "ls":
+        print_line("bin/  etc/  home/  kernel.bin")
+        return
+    end
+    
+    if cmd == "clear":
+        clear_screen(BLACK)
+        return
+    end
+    
+    if cmd == "version":
+        print_line("SageOS v0.1.0 (x86_64)")
+        return
+    end
+    
+    if cmd == "exit":
+        print_line("Shutting down...")
+        sys_exit(0)
+        return
+    end
+    
+    print_line("sh: command not found: " + cmd)
+end
+
+proc sh_main():
+    print_line("SageOS Shell v0.1.0")
+    print_line("Type 'help' for available commands.")
+    print_line("")
+    
+    let cmd_buffer = ""
+    while true:
+        print_prompt()
+        
+        # Read line from keyboard
+        cmd_buffer = ""
+        let reading = true
+        while reading:
+            let ch = get_char()
+            if ch != nil:
+                if ch == chr(10): # Enter
+                    newline()
+                    reading = false
+                elif ch == chr(8): # Backspace
+                    if len(cmd_buffer) > 0:
+                        # Simple backspace: move cursor back, print space, move back
+                        let pos = get_cursor()
+                        if pos["x"] > 0:
+                            set_cursor(pos["x"] - 1, pos["y"])
+                            print_str(" ")
+                            set_cursor(pos["x"] - 1, pos["y"])
+                            # Truncate cmd_buffer
+                            let new_cmd = ""
+                            for i in range(len(cmd_buffer) - 1):
+                                new_cmd = new_cmd + cmd_buffer[i]
+                            end
+                            cmd_buffer = new_cmd
+                        end
+                    end
+                else:
+                    cmd_buffer = cmd_buffer + ch
+                    print_str(ch)
+                end
+            end
+            # Yield to other tasks if multi-tasking was enabled
+            builtin_yield(nil)
+        end
+        
+        handle_command(cmd_buffer)
+    end
+end
+gc_disable()
+
 # kmain.sage — Kernel entry point for SageOS
 # Initializes all subsystems and provides panic/halt primitives.
 
@@ -2763,7 +2865,7 @@ proc kmain(boot_info):
     print_line("")
 
     # Launch Shell
-    sh.main()
+    sh_main()
 
     return kernel
 end

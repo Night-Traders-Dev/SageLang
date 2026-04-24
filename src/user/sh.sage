@@ -57,7 +57,7 @@ proc handle_command(cmd):
     console.print_line("sh: command not found: " + cmd)
 end
 
-proc main():
+proc sh_main():
     console.print_line("SageOS Shell v0.1.0")
     console.print_line("Type 'help' for available commands.")
     console.print_line("")
@@ -75,7 +75,7 @@ proc main():
                 if ch == chr(10): # Enter
                     console.newline()
                     reading = false
-                else if ch == chr(8): # Backspace
+                elif ch == chr(8): # Backspace
                     if len(cmd_buffer) > 0:
                         # Simple backspace: move cursor back, print space, move back
                         let pos = console.get_cursor()

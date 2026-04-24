@@ -256,6 +256,54 @@ static Value io_writefile_native(int argCount, Value* args) {
     return val_bool(written == len);
 }
 
+static Value io_writebytes_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_STRING(args[0]) || !IS_ARRAY(args[1])) return val_bool(0);
+    const char* path = AS_STRING(args[0]);
+    ArrayValue* arr = AS_ARRAY(args[1]);
+
+    FILE* f = fopen(path, "wb");
+    if (!f) return val_bool(0);
+
+    unsigned char* buf = malloc((size_t)arr->count);
+    for (int i = 0; i < arr->count; i++) {
+        if (IS_NUMBER(arr->elements[i])) {
+            buf[i] = (unsigned char)AS_NUMBER(arr->elements[i]);
+        } else {
+            buf[i] = 0;
+        }
+    }
+
+    size_t written = fwrite(buf, 1, (size_t)arr->count, f);
+    free(buf);
+    fclose(f);
+
+    return val_bool(written == (size_t)arr->count);
+}
+
+static Value io_appendbytes_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_STRING(args[0]) || !IS_ARRAY(args[1])) return val_bool(0);
+    const char* path = AS_STRING(args[0]);
+    ArrayValue* arr = AS_ARRAY(args[1]);
+
+    FILE* f = fopen(path, "ab");
+    if (!f) return val_bool(0);
+
+    unsigned char* buf = malloc((size_t)arr->count);
+    for (int i = 0; i < arr->count; i++) {
+        if (IS_NUMBER(arr->elements[i])) {
+            buf[i] = (unsigned char)AS_NUMBER(arr->elements[i]);
+        } else {
+            buf[i] = 0;
+        }
+    }
+
+    size_t written = fwrite(buf, 1, (size_t)arr->count, f);
+    free(buf);
+    fclose(f);
+
+    return val_bool(written == (size_t)arr->count);
+}
+
 static Value io_appendfile_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_bool(0);
     const char* path = AS_STRING(args[0]);
@@ -355,6 +403,8 @@ Module* create_io_module(ModuleCache* cache) {
     env_define(e, "readfile", 8, val_native(io_readfile_native));
     env_define(e, "writefile", 9, val_native(io_writefile_native));
     env_define(e, "appendfile", 10, val_native(io_appendfile_native));
+    env_define(e, "writebytes", 10, val_native(io_writebytes_native));
+    env_define(e, "appendbytes", 11, val_native(io_appendbytes_native));
     env_define(e, "exists", 6, val_native(io_exists_native));
     env_define(e, "remove", 6, val_native(io_remove_native));
     env_define(e, "isdir", 5, val_native(io_isdir_native));

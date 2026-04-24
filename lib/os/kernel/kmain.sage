@@ -152,8 +152,7 @@ proc kmain(boot_info):
     console.print_line("")
 
     # Launch Shell
-    import user.sh as sh
-    sh.main()
+    sh_main()
 
     return kernel
 end
