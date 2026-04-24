@@ -6,7 +6,7 @@ gc_disable()
 print("Creating GPT image...")
 let img = diskimg.create_gpt_image(8)
 
-# Read UEFI binary
+# Read UEFI binary (Now a valid PE/COFF)
 print("Reading UEFI binary...")
 let efi_bytes = io.readbytes("build_os/bootx64.efi")
 print("Read " + str(len(efi_bytes)) + " bytes.")

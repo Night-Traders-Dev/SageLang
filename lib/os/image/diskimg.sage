@@ -256,26 +256,36 @@ proc pad_filename_83(filename):
     return res
 end
 
-proc write_file(img, partition_start_lba, partition_size_lba, filename, data_bytes):
+proc write_file_to_cluster(img, partition_start_lba, partition_size_lba, dir_cluster, filename, data_bytes):
     let layout = fat16_layout(partition_start_lba, partition_size_lba)
-    let root_start = layout["root_start"] * 512
+    let dir_start = 0
+    if dir_cluster == 0:
+        dir_start = layout["root_start"] * 512
+    else:
+        dir_start = layout["data_offset"] + ((dir_cluster - 2) * 4096)
+    end
     
     let name83 = pad_filename_83(filename)
     let slot = -1
     let i = 0
-    for i in range(512):
-        let entry_base = root_start + (i * 32)
+    let max_slots = 512
+    if dir_cluster != 0:
+        max_slots = 128 # 4096 / 32
+    end
+    
+    for i in range(max_slots):
+        let entry_base = dir_start + (i * 32)
         if read_byte(img, entry_base) == 0:
             slot = i
             break
         end
     end
     if slot == -1:
-        print("Error: root directory full")
+        print("Error: directory full")
         return img
     end
     
-    let entry = root_start + (slot * 32)
+    let entry = dir_start + (slot * 32)
     for i in range(11):
         write_byte(img, entry + i, ord(name83[i]))
     end
@@ -325,6 +335,64 @@ proc write_file(img, partition_start_lba, partition_size_lba, filename, data_byt
     write_dword_le(img, entry + 28, len(data_bytes))
     
     return img
+end
+
+proc write_file(img, partition_start_lba, partition_size_lba, filename, data_bytes):
+    return write_file_to_cluster(img, partition_start_lba, partition_size_lba, 0, filename, data_bytes)
+end
+
+proc mkdir(img, partition_start_lba, partition_size_lba, parent_cluster, dirname):
+    let layout = fat16_layout(partition_start_lba, partition_size_lba)
+    let dir_start = 0
+    if parent_cluster == 0:
+        dir_start = layout["root_start"] * 512
+    else:
+        dir_start = layout["data_offset"] + ((parent_cluster - 2) * 4096)
+    end
+    
+    let name83 = pad_filename_83(dirname)
+    let slot = -1
+    let i = 0
+    let max_slots = 512
+    if parent_cluster != 0:
+        max_slots = 128
+    end
+    
+    for i in range(max_slots):
+        let entry_base = dir_start + (i * 32)
+        if read_byte(img, entry_base) == 0:
+            slot = i
+            break
+        end
+    end
+    
+    let entry = dir_start + (slot * 32)
+    for i in range(11):
+        write_byte(img, entry + i, ord(name83[i]))
+    end
+    write_byte(img, entry + 11, 16) # ATTR_DIRECTORY
+    
+    let fat_base = layout["fat_start"] * 512
+    let found_cluster = -1
+    let c = 2
+    for c in range(2, 65536):
+        if read_word_le(img, fat_base + (c * 2)) == 0:
+            found_cluster = c
+            break
+        end
+    end
+    
+    write_word_le(img, fat_base + (found_cluster * 2), 65535)
+    write_word_le(img, entry + 26, found_cluster)
+    write_word_le(img, entry + 28, 0)
+    write_word_le(img, entry + 30, 0)
+    
+    let dir_offset = layout["data_offset"] + ((found_cluster - 2) * 4096)
+    for i in range(4096):
+        write_byte(img, dir_offset + i, 0)
+    end
+    
+    return found_cluster
 end
 
 proc create_gpt_image(size_mb):
@@ -400,8 +468,12 @@ proc add_efi_partition(img, efi_binary_bytes):
     # Format the partition as FAT16
     img = format_fat16(img, part_start_lba, part_size_lba)
     
-    # Write the EFI binary
-    img = write_file(img, part_start_lba, part_size_lba, "BOOTX64.EFI", efi_binary_bytes)
+    # Create /EFI/BOOT/ directory structure
+    let efi_dir = mkdir(img, part_start_lba, part_size_lba, 0, "EFI")
+    let boot_dir = mkdir(img, part_start_lba, part_size_lba, efi_dir, "BOOT")
+    
+    # Write the EFI binary to /EFI/BOOT/BOOTX64.EFI
+    img = write_file_to_cluster(img, part_start_lba, part_size_lba, boot_dir, "BOOTX64.EFI", efi_binary_bytes)
     
     return img
 end
