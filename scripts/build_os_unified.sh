@@ -1,90 +1,42 @@
 #!/bin/bash
 set -e
 
-# build_os_unified.sh — SageOS Build Script (Unified Kernel)
-# Concatenates kernel modules and handles UEFI PE/COFF conversion.
+# Configuration
+SAGE="./sage"
+ARCH="x86_64"
+BUILD_DIR="build_os"
+BOOT_SRC="lib/os/boot/boot.s"
+UEFI_EFI="$BUILD_DIR/bootx64.efi"
+DISK_IMG="sageos.img"
 
-SAGE=./sage
-ARCH=x86_64
-OUTPUT_DIR=build_os
-KERNEL_UNIFIED=$OUTPUT_DIR/kernel_unified.sage
-KERNEL_BIN=$OUTPUT_DIR/kernel.elf
-UEFI_OBJ=$OUTPUT_DIR/bootx64.o
-UEFI_SO=$OUTPUT_DIR/bootx64.so
-UEFI_BIN=$OUTPUT_DIR/bootx64.efi
-DISK_IMG=sageos.img
+mkdir -p $BUILD_DIR
 
-mkdir -p $OUTPUT_DIR
+echo "--- Building SageOS UEFI Bootloader (Native PE/COFF) ---"
+# Assemble/Compile for Windows COFF target (UEFI compatible)
+clang -target x86_64-pc-win32-coff -c $BOOT_SRC -o $BUILD_DIR/boot.obj
 
-echo "--- Preparing Unified Kernel ---"
-# Order: dependencies first, shell before kmain
-cat lib/os/kernel/pmm.sage \
-    lib/os/kernel/vmm.sage \
-    lib/os/kernel/console.sage \
-    lib/os/kernel/keyboard.sage \
-    lib/os/kernel/timer.sage \
-    lib/os/kernel/syscall.sage \
-    src/user/sh.sage \
-    lib/os/kernel/kmain.sage > $KERNEL_UNIFIED
-
-# Strip imports and prefixes
-sed -i '/import/d' $KERNEL_UNIFIED
-sed -i 's/pmm\.//g' $KERNEL_UNIFIED
-sed -i 's/vmm\.//g' $KERNEL_UNIFIED
-sed -i 's/console\.//g' $KERNEL_UNIFIED
-sed -i 's/keyboard\.//g' $KERNEL_UNIFIED
-sed -i 's/timer\.//g' $KERNEL_UNIFIED
-sed -i 's/syscall\.//g' $KERNEL_UNIFIED
-sed -i 's/sh\.//g' $KERNEL_UNIFIED
-
-echo "--- Building SageOS Kernel (Unified ELF) ---"
-$SAGE --compile-bare $KERNEL_UNIFIED -o $KERNEL_BIN --target $ARCH -O2
-
-echo "--- Building SageOS UEFI Bootloader (PE/COFF) ---"
-# 1. Compile to object file
-$SAGE --compile-uefi lib/os/boot/uefi.sage -o $UEFI_OBJ --target $ARCH -O2
-
-# 2. Link to shared ELF with EFI entry point
-cc -shared -nostdlib -Wl,-Bsymbolic -Wl,-T,scripts/efi.lds -o $UEFI_SO $UEFI_OBJ
-
-# 3. Convert ELF to PE/COFF for UEFI
-objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym -j .rel -j .rela -j .reloc \
-        --target=efi-app-x86_64 $UEFI_SO $UEFI_BIN
+# Link using lld-link (Native PE/COFF linker)
+# Subsystem for EFI Application
+lld-link /subsystem:efi_application /entry:efi_main /out:$UEFI_EFI $BUILD_DIR/boot.obj /base:0x100000 /align:4096
 
 echo "--- Constructing Disk Image ---"
-cat > $OUTPUT_DIR/make_img.sage <<EOF
-import os.image.diskimg as diskimg
-import io
-gc_disable()
+# 1. Create a 64MB empty file
+dd if=/dev/zero of=$DISK_IMG bs=1M count=64 2>/dev/null
 
-# Create a 64MB GPT image
-print("Creating GPT image...")
-let img = diskimg.create_gpt_image(64)
+# 2. Create GPT table and EFI partition using sgdisk
+sgdisk -o $DISK_IMG
+sgdisk -n 1:2048:4927 -t 1:ef00 -c 1:"EFI System Partition" $DISK_IMG
 
-# Read UEFI binary (Now a valid PE/COFF)
-print("Reading UEFI binary...")
-let efi_bytes = io.readbytes("$UEFI_BIN")
-print("Read " + str(len(efi_bytes)) + " bytes.")
+# 3. Create a temporary FAT12 image for the ESP
+ESP_IMG="$BUILD_DIR/esp.img"
+dd if=/dev/zero of=$ESP_IMG bs=512 count=2880 2>/dev/null
+mkfs.fat -F 12 $ESP_IMG
+mmd -i $ESP_IMG ::/EFI
+mmd -i $ESP_IMG ::/EFI/BOOT
+mcopy -i $ESP_IMG $UEFI_EFI ::/EFI/BOOT/BOOTX64.EFI
 
-# Add EFI partition and binary
-img = diskimg.add_efi_partition(img, efi_bytes)
+# 4. Copy the ESP image into the main image at 1MB offset (LBA 2048)
+dd if=$ESP_IMG of=$DISK_IMG bs=512 seek=2048 conv=notrunc 2>/dev/null
 
-# Read Kernel binary
-print("Reading Kernel binary...")
-let kernel_bytes = io.readbytes("$KERNEL_BIN")
-print("Read " + str(len(kernel_bytes)) + " bytes.")
-
-# Add Kernel to the same partition (root dir)
-print("Adding KERNEL.BIN to partition...")
-let info = diskimg.get_efi_partition_info(img)
-img = diskimg.write_file(img, info["start"], info["size"], "KERNEL.BIN", kernel_bytes)
-
-# Save image
-print("Saving image...")
-diskimg.save_image(img, "$DISK_IMG")
-print("✅ Created $DISK_IMG")
-EOF
-
-$SAGE $OUTPUT_DIR/make_img.sage
-
+echo "✅ Created $DISK_IMG"
 echo "--- Build Complete ---"

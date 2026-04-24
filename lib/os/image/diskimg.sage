@@ -232,19 +232,16 @@ proc format_fat16(img, partition_start_lba, partition_size_lba):
     write_word_le(img, partition_start + 24, 63) # Sectors per track
     write_word_le(img, partition_start + 26, 16) # Heads
     
-    # FATs
-    let fat1_start = partition_start + 512
-    let fat2_start = fat1_start + (fat_size * 512)
-    
-    write_byte(img, fat1_start, 248)
-    write_byte(img, fat1_start + 1, 255)
-    write_byte(img, fat1_start + 2, 255)
-    write_byte(img, fat1_start + 3, 255)
-    
-    write_byte(img, fat2_start, 248)
-    write_byte(img, fat2_start + 1, 255)
-    write_byte(img, fat2_start + 2, 255)
-    write_byte(img, fat2_start + 3, 255)
+    # Write FATs
+    let fat_start = 1
+    let f = 0
+    for f in range(2):
+        let f_base = (partition_start_lba + fat_start + (f * fat_size)) * 512
+        write_byte(img, f_base, 248) # F8
+        write_byte(img, f_base + 1, 255) # FF
+        write_byte(img, f_base + 2, 255) # FF
+        write_byte(img, f_base + 3, 255) # FF
+    end
     
     # Boot signature
     write_word_le(img, partition_start + 510, MBR_SIGNATURE)
@@ -265,6 +262,7 @@ proc fat16_layout(partition_start_lba, partition_size_lba):
     let info = {}
     info["fat_start"] = fat_start
     info["fat_size"] = fat_size
+    info["fat_count"] = fat_count
     info["root_start"] = root_start
     info["data_start"] = data_start
     info["data_offset"] = data_start * 512
@@ -311,8 +309,20 @@ proc pad_filename_83(filename):
     return res
 end
 
+proc write_fat_entry(img, fat_start_lba, fat_size, fat_count, cluster, value):
+    let i = 0
+    for i in range(fat_count):
+        let fat_base = (fat_start_lba + (i * fat_size)) * 512
+        write_word_le(img, fat_base + (cluster * 2), value)
+    end
+end
+
 proc write_file_to_cluster(img, partition_start_lba, partition_size_lba, dir_cluster, filename, data_bytes):
     let layout = fat16_layout(partition_start_lba, partition_size_lba)
+    let fat_start_lba = layout["fat_start"]
+    let fat_size = layout["fat_size"]
+    let fat_count = layout["fat_count"]
+    
     let dir_start = 0
     if dir_cluster == 0:
         dir_start = layout["root_start"] * 512
@@ -346,8 +356,6 @@ proc write_file_to_cluster(img, partition_start_lba, partition_size_lba, dir_clu
     end
     
     let clusters_needed = int((len(data_bytes) + 4095) / 4096)
-    let fat_base = layout["fat_start"] * 512
-    
     let prev_cluster = -1
     let first_cluster = -1
     let data_written = 0
@@ -358,14 +366,14 @@ proc write_file_to_cluster(img, partition_start_lba, partition_size_lba, dir_clu
             break
         end
         
-        let fat_entry = fat_base + (c * 2)
-        if read_word_le(img, fat_entry) == 0:
+        let fat_base0 = fat_start_lba * 512
+        if read_word_le(img, fat_base0 + (c * 2)) == 0:
             if first_cluster == -1:
                 first_cluster = c
             end
             
             if prev_cluster != -1:
-                write_word_le(img, fat_base + (prev_cluster * 2), c)
+                write_fat_entry(img, fat_start_lba, fat_size, fat_count, prev_cluster, c)
             end
             
             # Write data to this cluster
@@ -382,7 +390,7 @@ proc write_file_to_cluster(img, partition_start_lba, partition_size_lba, dir_clu
             
             prev_cluster = c
             # Mark as EOF for now, will be overwritten if there's a next cluster
-            write_word_le(img, fat_base + (c * 2), 65535)
+            write_fat_entry(img, fat_start_lba, fat_size, fat_count, c, 65535)
         end
     end
     
@@ -398,6 +406,10 @@ end
 
 proc mkdir(img, partition_start_lba, partition_size_lba, parent_cluster, dirname):
     let layout = fat16_layout(partition_start_lba, partition_size_lba)
+    let fat_start_lba = layout["fat_start"]
+    let fat_size = layout["fat_size"]
+    let fat_count = layout["fat_count"]
+    
     let dir_start = 0
     if parent_cluster == 0:
         dir_start = layout["root_start"] * 512
@@ -427,17 +439,17 @@ proc mkdir(img, partition_start_lba, partition_size_lba, parent_cluster, dirname
     end
     write_byte(img, entry + 11, 16) # ATTR_DIRECTORY
     
-    let fat_base = layout["fat_start"] * 512
     let found_cluster = -1
     let c = 2
+    let fat_base0 = fat_start_lba * 512
     for c in range(2, 65536):
-        if read_word_le(img, fat_base + (c * 2)) == 0:
+        if read_word_le(img, fat_base0 + (c * 2)) == 0:
             found_cluster = c
             break
         end
     end
     
-    write_word_le(img, fat_base + (found_cluster * 2), 65535)
+    write_fat_entry(img, fat_start_lba, fat_size, fat_count, found_cluster, 65535)
     write_word_le(img, entry + 26, found_cluster)
     write_word_le(img, entry + 28, 0)
     write_word_le(img, entry + 30, 0)
