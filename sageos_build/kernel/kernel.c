@@ -20,6 +20,11 @@ typedef struct {
     uint32_t reserved;
 } SageOSBootInfo;
 
+typedef struct {
+    const char *path;
+    const char *content;
+} RamFile;
+
 static SageOSBootInfo *boot_info = 0;
 
 static uint32_t term_row = 0;
@@ -34,6 +39,29 @@ static uint32_t fb_scale = 2;
 static uint32_t fg_rgb = 0xE8E8E8;
 static uint32_t bg_rgb = 0x05070A;
 static int have_fb = 0;
+
+static const RamFile ramfs[] = {
+    {
+        "/etc/motd",
+        "Welcome to SageOS.\n"
+        "This is the Lenovo 300e Chromebook UEFI framebuffer build.\n"
+        "Type help to list commands.\n"
+    },
+    {
+        "/etc/version",
+        "SageOS 0.0.3\n"
+        "x86_64 UEFI GOP framebuffer kernel\n"
+    },
+    {
+        "/bin/sh",
+        "Built-in SageOS shell.\n"
+        "Current shell is kernel-resident and command based.\n"
+    },
+    {
+        "/dev/fb0",
+        "UEFI GOP framebuffer device.\n"
+    },
+};
 
 static inline void outb(uint16_t port, uint8_t val) {
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
@@ -64,6 +92,80 @@ static void serial_putc(char c) {
     outb(COM1, (uint8_t)c);
 }
 
+static int str_eq(const char *a, const char *b) {
+    while (*a && *b) {
+        if (*a != *b) return 0;
+        a++;
+        b++;
+    }
+
+    return *a == 0 && *b == 0;
+}
+
+static int starts_word(const char *line, const char *word) {
+    while (*word) {
+        if (*line != *word) return 0;
+        line++;
+        word++;
+    }
+
+    return *line == 0 || *line == ' ' || *line == '\t';
+}
+
+static const char *skip_spaces(const char *s) {
+    while (*s == ' ' || *s == '\t') {
+        s++;
+    }
+
+    return s;
+}
+
+static const char *arg_after(const char *line, const char *cmd) {
+    while (*cmd && *line == *cmd) {
+        line++;
+        cmd++;
+    }
+
+    return skip_spaces(line);
+}
+
+static void term_putc(char c);
+static void term_write(const char *s);
+
+static void term_write_hex64(uint64_t v) {
+    static const char *hex = "0123456789ABCDEF";
+    char out[19];
+
+    out[0] = '0';
+    out[1] = 'x';
+
+    for (int i = 0; i < 16; i++) {
+        out[2 + i] = hex[(v >> ((15 - i) * 4)) & 0xF];
+    }
+
+    out[18] = 0;
+    term_write(out);
+}
+
+static void term_write_u32(uint32_t v) {
+    char buf[16];
+    int i = 0;
+
+    if (v == 0) {
+        term_putc('0');
+        return;
+    }
+
+    while (v > 0 && i < 15) {
+        buf[i++] = (char)('0' + (v % 10));
+        v /= 10;
+    }
+
+    while (i > 0) {
+        term_putc(buf[--i]);
+    }
+}
+
 static uint32_t fb_pack(uint32_t rgb) {
     uint8_t r = (rgb >> 16) & 0xFF;
     uint8_t g = (rgb >> 8) & 0xFF;
@@ -74,9 +176,10 @@ static uint32_t fb_pack(uint32_t rgb) {
     }
 
     /*
-     * UEFI GOP pixel formats:
-     * 0 = PixelRedGreenBlueReserved8BitPerColor
-     * 1 = PixelBlueGreenRedReserved8BitPerColor
+     * GOP pixel formats:
+     * 0 = RGB reserved
+     * 1 = BGR reserved
+     * 2 = bitmask, usually still BGR on common firmware
      */
     if (boot_info->pixel_format == 0) {
         return ((uint32_t)r) | ((uint32_t)g << 8) | ((uint32_t)b << 16);
@@ -223,9 +326,9 @@ static void fb_scroll(void) {
     uint32_t w = boot_info->width;
     uint32_t rows_to_move = h - fb_char_h;
 
-    for (uint32_t y = 0; y < rows_to_move; y++) {
+    for (uint32_t y = fb_char_h; y < h; y++) {
         for (uint32_t x = 0; x < w; x++) {
-            fb[(uint64_t)y * pitch + x] = fb[(uint64_t)(y + fb_char_h) * pitch + x];
+            fb[(uint64_t)(y - fb_char_h) * pitch + x] = fb[(uint64_t)y * pitch + x];
         }
     }
 
@@ -278,11 +381,8 @@ static void term_screen_putc(char c) {
         term_row++;
 
         if (term_row >= term_rows) {
-            if (have_fb) {
-                fb_scroll();
-            } else {
-                vga_scroll();
-            }
+            if (have_fb) fb_scroll();
+            else vga_scroll();
         }
 
         return;
@@ -315,11 +415,8 @@ static void term_screen_putc(char c) {
         term_row++;
 
         if (term_row >= term_rows) {
-            if (have_fb) {
-                fb_scroll();
-            } else {
-                vga_scroll();
-            }
+            if (have_fb) fb_scroll();
+            else vga_scroll();
         }
     }
 }
@@ -332,6 +429,64 @@ static void term_putc(char c) {
 static void term_write(const char *s) {
     while (*s) {
         term_putc(*s++);
+    }
+}
+
+static void draw_status_bar(void) {
+    if (!have_fb || !boot_info) {
+        return;
+    }
+
+    uint32_t old_fg = fg_rgb;
+    uint32_t old_bg = bg_rgb;
+
+    fg_rgb = 0x05070A;
+    bg_rgb = 0x79FFB0;
+
+    uint32_t old_row = term_row;
+    uint32_t old_col = term_col;
+
+    term_row = 0;
+    term_col = 0;
+
+    for (uint32_t i = 0; i < term_cols; i++) {
+        fb_draw_char_cell(i, 0, ' ');
+    }
+
+    term_write(" SAGEOS 0.0.3  LENOVO 300E  X86_64 UEFI GOP ");
+
+    term_row = old_row;
+    term_col = old_col;
+
+    fg_rgb = old_fg;
+    bg_rgb = old_bg;
+}
+
+static void banner(void) {
+    uint32_t old = fg_rgb;
+
+    fg_rgb = 0x79FFB0;
+    term_write("  ____    _    ____ _____ ___  ____  \n");
+    term_write(" / ___|  / \\  / ___| ____/ _ \\/ ___| \n");
+    term_write(" \\___ \\ / _ \\| |  _|  _|| | | \\___ \\ \n");
+    term_write("  ___) / ___ \\ |_| | |__| |_| |___) |\n");
+    term_write(" |____/_/   \\_\\____|_____\\___/|____/ \n");
+    fg_rgb = old;
+
+    term_write("\n");
+}
+
+static void term_clear_screen(void) {
+    term_row = 0;
+    term_col = 0;
+
+    if (have_fb) {
+        fb_clear();
+        draw_status_bar();
+        term_row = 2;
+        term_col = 0;
+    } else {
+        vga_clear();
     }
 }
 
@@ -356,34 +511,12 @@ static void term_init(SageOSBootInfo *info) {
 
         if (term_cols == 0) term_cols = 1;
         if (term_rows == 0) term_rows = 1;
-
-        term_row = 0;
-        term_col = 0;
-
-        fb_clear();
-
-        fg_rgb = 0x79FFB0;
-        term_write("SAGEOS FRAMEBUFFER CONSOLE ONLINE\n");
-        fg_rgb = 0xE8E8E8;
-        return;
+    } else {
+        term_cols = VGA_W;
+        term_rows = VGA_H;
     }
 
-    term_cols = VGA_W;
-    term_rows = VGA_H;
-    vga_clear();
-}
-
-static int streq(const char *a, const char *b) {
-    while (*a && *b) {
-        if (*a != *b) {
-            return 0;
-        }
-
-        a++;
-        b++;
-    }
-
-    return *a == 0 && *b == 0;
+    term_clear_screen();
 }
 
 static void reboot(void) {
@@ -424,64 +557,241 @@ static char kbd_getchar(void) {
 }
 
 static void shell_prompt(void) {
+    uint32_t old = fg_rgb;
     fg_rgb = 0x80C8FF;
     term_write("\nroot@sageos:/# ");
-    fg_rgb = 0xE8E8E8;
+    fg_rgb = old;
+}
+
+static const char *ramfs_find(const char *path) {
+    for (size_t i = 0; i < sizeof(ramfs) / sizeof(ramfs[0]); i++) {
+        if (str_eq(path, ramfs[i].path)) {
+            return ramfs[i].content;
+        }
+    }
+
+    return 0;
+}
+
+static void cmd_help(void) {
+    term_write("\nCommands:");
+    term_write("\n  help              show this help");
+    term_write("\n  clear             clear framebuffer console");
+    term_write("\n  version           show SageOS version");
+    term_write("\n  uname             show kernel/system id");
+    term_write("\n  about             show project summary");
+    term_write("\n  mem               show memory/load info");
+    term_write("\n  fb                show framebuffer info");
+    term_write("\n  ls                list tiny RAMFS");
+    term_write("\n  cat <path>        show RAMFS or proc file");
+    term_write("\n  echo <text>       print text");
+    term_write("\n  color <name>      white green amber blue red");
+    term_write("\n  dmesg             show early kernel log");
+    term_write("\n  halt              halt CPU");
+    term_write("\n  reboot            reboot via keyboard controller");
+}
+
+static void cmd_ls(void) {
+    term_write("\n/");
+    term_write("\n/etc/motd");
+    term_write("\n/etc/version");
+    term_write("\n/bin/sh");
+    term_write("\n/dev/fb0");
+    term_write("\n/proc/fb");
+    term_write("\n/proc/meminfo");
+}
+
+static void cmd_fb(void) {
+    term_write("\nFramebuffer: ");
+
+    if (!have_fb || !boot_info) {
+        term_write("not available");
+        return;
+    }
+
+    term_write("enabled");
+    term_write("\n  base: ");
+    term_write_hex64(boot_info->framebuffer_base);
+    term_write("\n  size: ");
+    term_write_hex64(boot_info->framebuffer_size);
+    term_write("\n  resolution: ");
+    term_write_u32(boot_info->width);
+    term_write("x");
+    term_write_u32(boot_info->height);
+    term_write("\n  pixels_per_scanline: ");
+    term_write_u32(boot_info->pixels_per_scanline);
+    term_write("\n  pixel_format: ");
+    term_write_u32(boot_info->pixel_format);
+    term_write("\n  terminal: ");
+    term_write_u32(term_cols);
+    term_write("x");
+    term_write_u32(term_rows);
+}
+
+static void cmd_mem(void) {
+    term_write("\nKernel physical load: 0x00100000");
+    term_write("\nKernel stack: 64 KiB");
+    term_write("\nBoot info pointer: ");
+    term_write_hex64((uint64_t)(uintptr_t)boot_info);
+
+    if (boot_info) {
+        term_write("\nFramebuffer memory: ");
+        term_write_hex64(boot_info->framebuffer_base);
+        term_write(" - ");
+        term_write_hex64(boot_info->framebuffer_base + boot_info->framebuffer_size);
+    }
+}
+
+static void cmd_dmesg(void) {
+    term_write("\n[    0.000000] SageOS kernel entered");
+    term_write("\n[    0.000001] serial console initialized");
+    term_write("\n[    0.000002] boot info received from UEFI loader");
+    term_write("\n[    0.000003] GOP framebuffer console initialized");
+    term_write("\n[    0.000004] kernel-resident shell started");
+}
+
+static void cmd_cat(const char *path) {
+    if (!*path) {
+        term_write("\nusage: cat <path>");
+        return;
+    }
+
+    if (str_eq(path, "/proc/fb")) {
+        cmd_fb();
+        return;
+    }
+
+    if (str_eq(path, "/proc/meminfo")) {
+        cmd_mem();
+        return;
+    }
+
+    const char *content = ramfs_find(path);
+
+    if (!content) {
+        term_write("\ncat: no such file: ");
+        term_write(path);
+        return;
+    }
+
+    term_write("\n");
+    term_write(content);
+}
+
+static void cmd_color(const char *name) {
+    if (str_eq(name, "green")) {
+        fg_rgb = 0x79FFB0;
+        term_write("\ncolor set to green");
+        return;
+    }
+
+    if (str_eq(name, "white")) {
+        fg_rgb = 0xE8E8E8;
+        term_write("\ncolor set to white");
+        return;
+    }
+
+    if (str_eq(name, "amber")) {
+        fg_rgb = 0xFFBF40;
+        term_write("\ncolor set to amber");
+        return;
+    }
+
+    if (str_eq(name, "blue")) {
+        fg_rgb = 0x80C8FF;
+        term_write("\ncolor set to blue");
+        return;
+    }
+
+    if (str_eq(name, "red")) {
+        fg_rgb = 0xFF7070;
+        term_write("\ncolor set to red");
+        return;
+    }
+
+    term_write("\nusage: color <white|green|amber|blue|red>");
 }
 
 static void shell_exec(const char *cmd) {
-    if (streq(cmd, "")) {
+    cmd = skip_spaces(cmd);
+
+    if (str_eq(cmd, "")) {
         return;
     }
 
-    if (streq(cmd, "help")) {
-        term_write("\nCommands:");
-        term_write("\n  help      show this help");
-        term_write("\n  clear     clear the terminal");
-        term_write("\n  version   show kernel version");
-        term_write("\n  mem       show framebuffer and static memory info");
-        term_write("\n  halt      stop the CPU");
-        term_write("\n  reboot    reboot through keyboard controller");
+    if (starts_word(cmd, "help")) {
+        cmd_help();
         return;
     }
 
-    if (streq(cmd, "clear")) {
-        if (have_fb) {
-            fb_clear();
-        } else {
-            vga_clear();
-        }
-
+    if (starts_word(cmd, "clear")) {
+        term_clear_screen();
+        banner();
         return;
     }
 
-    if (streq(cmd, "version")) {
-        term_write("\nSageOS kernel 0.0.2 x86_64");
+    if (starts_word(cmd, "version")) {
+        term_write("\nSageOS kernel 0.0.3 x86_64");
         term_write("\nUEFI GOP framebuffer console");
         return;
     }
 
-    if (streq(cmd, "mem")) {
-        term_write("\nKernel linked and loaded at physical 0x00100000");
-        term_write("\nFramebuffer console: ");
-
-        if (have_fb) {
-            term_write("enabled");
-        } else {
-            term_write("disabled, using VGA fallback");
-        }
-
+    if (starts_word(cmd, "uname")) {
+        term_write("\nSageOS sageos 0.0.3 x86_64 lenovo_300e");
         return;
     }
 
-    if (streq(cmd, "halt")) {
+    if (starts_word(cmd, "about")) {
+        term_write("\nSageOS is a small POSIX-inspired educational OS target.");
+        term_write("\nCurrent milestone: UEFI boot, GOP framebuffer, kernel shell.");
+        term_write("\nTarget hardware: Lenovo 300e Chromebook 2nd Gen AST.");
+        return;
+    }
+
+    if (starts_word(cmd, "mem")) {
+        cmd_mem();
+        return;
+    }
+
+    if (starts_word(cmd, "fb")) {
+        cmd_fb();
+        return;
+    }
+
+    if (starts_word(cmd, "ls")) {
+        cmd_ls();
+        return;
+    }
+
+    if (starts_word(cmd, "cat")) {
+        cmd_cat(arg_after(cmd, "cat"));
+        return;
+    }
+
+    if (starts_word(cmd, "echo")) {
+        term_write("\n");
+        term_write(arg_after(cmd, "echo"));
+        return;
+    }
+
+    if (starts_word(cmd, "color")) {
+        cmd_color(arg_after(cmd, "color"));
+        return;
+    }
+
+    if (starts_word(cmd, "dmesg")) {
+        cmd_dmesg();
+        return;
+    }
+
+    if (starts_word(cmd, "halt")) {
         term_write("\nHalting.");
         for (;;) {
             __asm__ volatile ("hlt");
         }
     }
 
-    if (streq(cmd, "reboot")) {
+    if (starts_word(cmd, "reboot")) {
         term_write("\nRebooting.");
         reboot();
         return;
@@ -492,7 +802,7 @@ static void shell_exec(const char *cmd) {
 }
 
 static void shell_run(void) {
-    char line[128];
+    char line[160];
     size_t len = 0;
 
     shell_prompt();
@@ -528,15 +838,12 @@ void kmain(SageOSBootInfo *info) {
     serial_init();
     term_init(info);
 
-    term_write("SageOS kernel entered.\n");
-    term_write("Terminal shell online.\n");
-    term_write("Type 'help'.\n");
+    banner();
 
-    if (have_fb) {
-        term_write("Framebuffer: active.\n");
-    } else {
-        term_write("Framebuffer: unavailable, VGA fallback active.\n");
-    }
+    term_write("SageOS kernel entered.\n");
+    term_write("Framebuffer console online.\n");
+    term_write("Tiny RAMFS mounted.\n");
+    term_write("Type help to list commands.\n");
 
     shell_run();
 }

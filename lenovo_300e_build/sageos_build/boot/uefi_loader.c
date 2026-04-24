@@ -237,6 +237,11 @@ struct EFI_SYSTEM_TABLE {
     void *ConfigurationTable;
 };
 
+typedef struct EFI_CONFIGURATION_TABLE {
+    EFI_GUID VendorGuid;
+    void *VendorTable;
+} EFI_CONFIGURATION_TABLE;
+
 typedef struct {
     UINT32 Revision;
     EFI_HANDLE ParentHandle;
@@ -360,6 +365,22 @@ typedef struct {
     UINT32 pixels_per_scanline;
     UINT32 pixel_format;
     UINT32 reserved;
+
+    /*
+     * Firmware service handoff.
+     *
+     * v0.0.4 keeps UEFI boot services active so the early kernel can use
+     * firmware-backed keyboard input. This gives us real USB/EC keyboard
+     * input on hardware before native xHCI/HID/Chromebook-EC drivers exist.
+     */
+    UINT64 system_table;
+    UINT64 boot_services;
+    UINT64 runtime_services;
+    UINT64 con_in;
+    UINT64 con_out;
+    UINT32 boot_services_active;
+    UINT32 input_mode;
+    UINT64 acpi_rsdp;
 } SageOSBootInfo;
 
 #define SAGEOS_BOOT_MAGIC 0x534147454F534249ULL
@@ -382,6 +403,16 @@ static EFI_GUID EFI_FILE_INFO_GUID = {
 static EFI_GUID EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID = {
     0x9042A9DE, 0x23DC, 0x4A38,
     {0x96, 0xFB, 0x7A, 0xDE, 0xD0, 0x80, 0x51, 0x6A}
+};
+
+static EFI_GUID EFI_ACPI_20_TABLE_GUID = {
+    0x8868E871, 0xE4F1, 0x11D3,
+    {0xBC, 0x22, 0x00, 0x80, 0xC7, 0x3C, 0x88, 0x81}
+};
+
+static EFI_GUID ACPI_10_TABLE_GUID = {
+    0xEB9D2D30, 0x2D88, 0x11D3,
+    {0x9A, 0x16, 0x00, 0x90, 0x27, 0x3F, 0xC1, 0x4D}
 };
 
 static EFI_SYSTEM_TABLE *gST;
@@ -408,6 +439,42 @@ static void print_hex64(UINT64 v) {
     out[18] = 0;
     print(out);
 }
+
+static int guid_eq(EFI_GUID *a, EFI_GUID *b) {
+    if (a->Data1 != b->Data1) return 0;
+    if (a->Data2 != b->Data2) return 0;
+    if (a->Data3 != b->Data3) return 0;
+
+    for (int i = 0; i < 8; i++) {
+        if (a->Data4[i] != b->Data4[i]) return 0;
+    }
+
+    return 1;
+}
+
+static UINT64 find_acpi_rsdp(EFI_SYSTEM_TABLE *st) {
+    if (!st || !st->ConfigurationTable || st->NumberOfTableEntries == 0) {
+        return 0;
+    }
+
+    EFI_CONFIGURATION_TABLE *tables =
+        (EFI_CONFIGURATION_TABLE *)st->ConfigurationTable;
+
+    for (UINTN i = 0; i < st->NumberOfTableEntries; i++) {
+        if (guid_eq(&tables[i].VendorGuid, &EFI_ACPI_20_TABLE_GUID)) {
+            return (UINT64)(uintptr_t)tables[i].VendorTable;
+        }
+    }
+
+    for (UINTN i = 0; i < st->NumberOfTableEntries; i++) {
+        if (guid_eq(&tables[i].VendorGuid, &ACPI_10_TABLE_GUID)) {
+            return (UINT64)(uintptr_t)tables[i].VendorTable;
+        }
+    }
+
+    return 0;
+}
+
 
 static void collect_gop_info(void) {
     EFI_GRAPHICS_OUTPUT_PROTOCOL *gop = 0;
@@ -647,6 +714,19 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tabl
 
     collect_gop_info();
 
+    gBootInfo.system_table = (UINT64)(uintptr_t)gST;
+    gBootInfo.boot_services = (UINT64)(uintptr_t)gBS;
+    gBootInfo.runtime_services = (UINT64)(uintptr_t)system_table->RuntimeServices;
+    gBootInfo.con_in = (UINT64)(uintptr_t)system_table->ConIn;
+    gBootInfo.con_out = (UINT64)(uintptr_t)system_table->ConOut;
+    gBootInfo.boot_services_active = 1;
+    gBootInfo.input_mode = 1;
+    gBootInfo.acpi_rsdp = find_acpi_rsdp(system_table);
+
+    print(L"Firmware input handoff active.\r\n");
+    print(L"ACPI RSDP: ");
+    print_hex64(gBootInfo.acpi_rsdp);
+    print(L"\r\n");
     print(L"Loading KERNEL.BIN...\r\n");
 
     UINT64 kernel_size = 0;
@@ -657,15 +737,17 @@ EFI_STATUS EFIAPI EfiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_tabl
         for (;;) {}
     }
 
-    print(L"Exiting boot services...\r\n");
-    status = exit_boot_services_retry(image_handle);
-
-    if (status != EFI_SUCCESS) {
-        print(L"ExitBootServices failed: ");
-        print_hex64(status);
-        print(L"\r\n");
-        for (;;) {}
-    }
+    /*
+     * v0.0.4: Intentionally do not call ExitBootServices yet.
+     *
+     * The kernel now uses UEFI SimpleTextInput as a firmware-backed input
+     * bridge. This lets USB HID keyboards and Chromebook EC/internal
+     * keyboards work immediately if the firmware exposes them through ConIn.
+     *
+     * Native xHCI/HID and Chromebook EC drivers will replace this later.
+     */
+    print(L"Keeping UEFI boot services active for input.\r\n");
+    print(L"Jumping to kernel...\r\n");
 
     typedef void (EFIAPI *kernel_entry_t)(SageOSBootInfo *);
     kernel_entry_t kernel_entry = (kernel_entry_t)(uintptr_t)KERNEL_LOAD_ADDR;
