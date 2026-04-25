@@ -14,7 +14,7 @@ PYTHON ?= python3
 CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"'
 # Platform-conditional linking: pthread only on desktop (not RP2040)
 ifndef PICO_BUILD
-LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto
+LDFLAGS = -lm -lpthread -ldl
 # Vulkan support: auto-detect or set VULKAN=1
 VULKAN ?= auto
 ifeq ($(VULKAN),auto)
@@ -101,21 +101,15 @@ CORE_SOURCES = \
     $(SRC_DIR)/interpreter.c \
     $(SRC_DIR)/linter.c \
     $(SRC_DIR)/lexer.c \
-    $(SRC_DIR)/llvm_backend.c \
-    $(SRC_DIR)/lsp.c \
     $(SRC_DIR)/module.c \
     $(SRC_DIR)/parser.c \
     $(SRC_DIR)/pass.c \
-    $(SRC_DIR)/net.c \
     $(SRC_DIR)/sage_thread.c \
     $(SRC_DIR)/stdlib.c \
     $(SRC_DIR)/typecheck.c \
     $(SRC_DIR)/safety.c \
     $(SRC_DIR)/value.c \
-    $(SRC_DIR)/graphics.c \
-    $(SRC_DIR)/gpu_api.c \
-    $(SRC_DIR)/ml_backend.c \
-    $(SRC_DIR)/jit.c \
+    $(SRC_DIR)/stubs.c \
     $(SRC_DIR)/aot.c \
     $(SRC_DIR)/kotlin_backend.c
 
@@ -189,7 +183,7 @@ LSP_MAIN_OBJECT = $(OBJ_DIR)/lsp_main.o
 
 .PHONY: all clean run install uninstall help test examples charts pdf sage-boot sage-bench benchmark benchmark-chart
 
-all: $(TARGET) $(LSP_TARGET) $(LLVM_RT_OBJECT) $(GPU_API_OBJECT) charts pdf
+all: $(TARGET)
 
 # Link executable
 $(TARGET): $(ALL_OBJECTS)
