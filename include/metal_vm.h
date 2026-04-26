@@ -46,7 +46,7 @@ extern "C" {
 #endif
 
 #ifndef METAL_VARS_PER_SCOPE
-#define METAL_VARS_PER_SCOPE  32      // Variables per scope level
+#define METAL_VARS_PER_SCOPE  128     // Variables per scope level
 #endif
 
 // ============================================================================
