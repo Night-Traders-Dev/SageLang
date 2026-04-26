@@ -245,10 +245,18 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
         case STMT_IF:
             return stmt_requires_ast_fallback(compiler, stmt->as.if_stmt.then_branch) ||
                    stmt_requires_ast_fallback(compiler, stmt->as.if_stmt.else_branch);
-        case STMT_WHILE:
-            return stmt_requires_ast_fallback(compiler, stmt->as.while_stmt.body);
-        case STMT_FOR:
-            return stmt_requires_ast_fallback(compiler, stmt->as.for_stmt.body);
+        case STMT_WHILE: {
+            compiler->loop_depth++;
+            int res = stmt_requires_ast_fallback(compiler, stmt->as.while_stmt.body);
+            compiler->loop_depth--;
+            return res;
+        }
+        case STMT_FOR: {
+            compiler->loop_depth++;
+            int res = stmt_requires_ast_fallback(compiler, stmt->as.for_stmt.body);
+            compiler->loop_depth--;
+            return res;
+        }
         case STMT_TRY:
             printf("DEBUG: STMT_TRY\n");
             return 1;
