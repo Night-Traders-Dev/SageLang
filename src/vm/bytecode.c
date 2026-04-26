@@ -181,7 +181,7 @@ static int emit_dup(BytecodeCompiler* compiler, uint8_t distance, int line, int 
 
 static int emit_ast_stmt(BytecodeCompiler* compiler, Stmt* stmt) {
     if (compiler->mode == BYTECODE_COMPILE_STRICT) {
-        (void)stmt;
+        printf("DEBUG: Unsupported stmt type %d requires AST fallback\n", stmt->type);
         set_error(compiler,
                   "Statement requires AST fallback and cannot be emitted as a compiled VM artifact yet.");
         return 0;
@@ -228,11 +228,14 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
     switch (stmt->type) {
         case STMT_BREAK:
         case STMT_CONTINUE:
-            return compiler->loop_depth <= 0;  // only fallback if not inside a compiled loop
+            if (compiler->loop_depth <= 0) { printf("DEBUG: break/continue outside loop\n"); return 1; }
+            return 0;
         case STMT_YIELD:
+            printf("DEBUG: STMT_YIELD\n");
             return 1;
         case STMT_RETURN:
-            return !compiler->allow_return;
+            if (!compiler->allow_return) { printf("DEBUG: STMT_RETURN not allowed\n"); return 1; }
+            return 0;
         case STMT_BLOCK: {
             for (Stmt* current = stmt->as.block.statements; current != NULL; current = current->next) {
                 if (stmt_requires_ast_fallback(compiler, current)) return 1;
@@ -247,18 +250,16 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
         case STMT_FOR:
             return stmt_requires_ast_fallback(compiler, stmt->as.for_stmt.body);
         case STMT_TRY:
-            if (stmt_requires_ast_fallback(compiler, stmt->as.try_stmt.try_block) ||
-                stmt_requires_ast_fallback(compiler, stmt->as.try_stmt.finally_block)) {
-                return 1;
-            }
-            for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
-                if (stmt_requires_ast_fallback(compiler, stmt->as.try_stmt.catches[i]->body)) return 1;
-            }
-            return 0;
+            printf("DEBUG: STMT_TRY\n");
+            return 1;
         case STMT_PROC:
         case STMT_CLASS:
             return 0;
         case STMT_ASYNC_PROC:
+            printf("DEBUG: STMT_ASYNC_PROC\n");
+            return 1;
+        case STMT_IMPORT:
+            printf("DEBUG: STMT_IMPORT\n");
             return 1;
         default:
             return 0;
