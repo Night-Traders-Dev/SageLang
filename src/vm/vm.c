@@ -366,7 +366,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 const char* property = AS_STRING(chunk->constants[name_index]);
 
                 if (IS_INSTANCE(object)) {
-                    Value field = instance_get_field(object.as.instance, property);
+                    Value field = instance_get_field(object.as.instance, property, (int)strlen(property));
                     if (!vm_push(&vm, field)) {
                         result = vm_error("VM stack overflow.");
                         goto done;
@@ -400,7 +400,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     goto done;
                 }
 
-                instance_set_field(object.as.instance, property, value);
+                instance_set_field(object.as.instance, property, (int)strlen(property), value);
                 if (!vm_push(&vm, value)) {
                     result = vm_error("VM stack overflow.");
                     goto done;

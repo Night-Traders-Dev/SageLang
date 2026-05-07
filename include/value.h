@@ -254,7 +254,9 @@ Value array_slice(Value* arr, int start, int end);
 
 // Dictionary operations
 void dict_set(Value* dict, const char* key, Value value);
+void dict_set_len(Value* dict, const char* key, int len, Value value);
 Value dict_get(Value* dict, const char* key);
+Value dict_get_len(Value* dict, const char* key, int len);
 int dict_has(Value* dict, const char* key);
 void dict_delete(Value* dict, const char* key);
 Value dict_keys(Value* dict);
@@ -279,7 +281,7 @@ ClassValue* class_find_method_owner(ClassValue* class_val, const char* name, int
 
 // Instance operations
 InstanceValue* instance_create(ClassValue* class_def);
-void instance_set_field(InstanceValue* instance, const char* name, Value value);
-Value instance_get_field(InstanceValue* instance, const char* name);
+void instance_set_field(InstanceValue* instance, const char* name, int len, Value value);
+Value instance_get_field(InstanceValue* instance, const char* name, int len);
 
 #endif

@@ -283,26 +283,34 @@ Value array_slice(Value* arr, int start, int end) {
 // ========== DICTIONARY OPERATIONS (HASH TABLE) ==========
 
 // FNV-1a hash function
-static unsigned int dict_hash(const char* key) {
+static unsigned int dict_hash_len(const char* key, int len) {
     unsigned int hash = 2166136261u;
-    for (const char* p = key; *p; p++) {
-        hash ^= (unsigned char)*p;
+    for (int i = 0; i < len; i++) {
+        hash ^= (unsigned char)key[i];
         hash *= 16777619u;
     }
     return hash;
 }
 
+static unsigned int dict_hash(const char* key) {
+    return dict_hash_len(key, (int)strlen(key));
+}
+
 // Find the slot for a key (returns index). If key is not present,
 // returns the index of the first empty slot where it should go.
-static int dict_find_slot(DictValue* d, const char* key, unsigned int hash) {
+static int dict_find_slot_len(DictValue* d, const char* key, int len, unsigned int hash) {
     int mask = d->capacity - 1;  // capacity is always power of 2
     int idx = (int)(hash & (unsigned int)mask);
     for (;;) {
         DictEntry* e = &d->entries[idx];
         if (e->key == NULL) return idx;  // Empty slot
-        if (e->hash == hash && strcmp(e->key, key) == 0) return idx;  // Found
+        if (e->hash == hash && (int)strlen(e->key) == len && memcmp(e->key, key, (size_t)len) == 0) return idx;  // Found
         idx = (idx + 1) & mask;  // Linear probing
     }
+}
+
+static int dict_find_slot(DictValue* d, const char* key, unsigned int hash) {
+    return dict_find_slot_len(d, key, (int)strlen(key), hash);
 }
 
 // Grow the hash table and rehash all entries
@@ -327,7 +335,7 @@ static void dict_grow(DictValue* d) {
     free(old_entries);
 }
 
-void dict_set(Value* dict, const char* key, Value value) {
+void dict_set_len(Value* dict, const char* key, int len, Value value) {
     if (dict->type != VAL_DICT) return;
     DictValue* d = dict->as.dict;
 
@@ -336,8 +344,8 @@ void dict_set(Value* dict, const char* key, Value value) {
         dict_grow(d);
     }
 
-    unsigned int hash = dict_hash(key);
-    int slot = dict_find_slot(d, key, hash);
+    unsigned int hash = dict_hash_len(key, len);
+    int slot = dict_find_slot_len(d, key, len, hash);
 
     if (d->entries[slot].key != NULL) {
         // Key exists, update value
@@ -347,10 +355,10 @@ void dict_set(Value* dict, const char* key, Value value) {
     }
 
     // New entry
-    size_t klen = strlen(key);
-    d->entries[slot].key = SAGE_ALLOC(klen + 1);
-    gc_track_external_allocation(klen + 1);
-    memcpy(d->entries[slot].key, key, klen + 1);
+    d->entries[slot].key = SAGE_ALLOC((size_t)len + 1);
+    gc_track_external_allocation((size_t)len + 1);
+    memcpy(d->entries[slot].key, key, (size_t)len);
+    d->entries[slot].key[len] = '\0';
     d->entries[slot].hash = hash;
     d->entries[slot].value = SAGE_ALLOC(sizeof(Value));
     gc_track_external_allocation(sizeof(Value));
@@ -358,16 +366,24 @@ void dict_set(Value* dict, const char* key, Value value) {
     d->count++;
 }
 
-Value dict_get(Value* dict, const char* key) {
+void dict_set(Value* dict, const char* key, Value value) {
+    dict_set_len(dict, key, (int)strlen(key), value);
+}
+
+Value dict_get_len(Value* dict, const char* key, int len) {
     if (dict->type != VAL_DICT) return val_nil();
     DictValue* d = dict->as.dict;
     if (d->capacity == 0) return val_nil();
 
-    unsigned int hash = dict_hash(key);
-    int slot = dict_find_slot(d, key, hash);
+    unsigned int hash = dict_hash_len(key, len);
+    int slot = dict_find_slot_len(d, key, len, hash);
 
     if (d->entries[slot].key == NULL) return val_nil();
     return *(d->entries[slot].value);
+}
+
+Value dict_get(Value* dict, const char* key) {
+    return dict_get_len(dict, key, (int)strlen(key));
 }
 
 int dict_has(Value* dict, const char* key) {
@@ -702,24 +718,24 @@ InstanceValue* instance_create(ClassValue* class_def) {
     return instance;
 }
 
-void instance_set_field(InstanceValue* instance, const char* name, Value value) {
+void instance_set_field(InstanceValue* instance, const char* name, int len, Value value) {
     if (!instance || !instance->fields) return;
     
     Value dict_val;
     dict_val.type = VAL_DICT;
     dict_val.as.dict = instance->fields;
     
-    dict_set(&dict_val, name, value);
+    dict_set_len(&dict_val, name, len, value);
 }
 
-Value instance_get_field(InstanceValue* instance, const char* name) {
+Value instance_get_field(InstanceValue* instance, const char* name, int len) {
     if (!instance || !instance->fields) return val_nil();
     
     Value dict_val;
     dict_val.type = VAL_DICT;
     dict_val.as.dict = instance->fields;
     
-    return dict_get(&dict_val, name);
+    return dict_get_len(&dict_val, name, len);
 }
 
 // ========== HELPERS ==========
