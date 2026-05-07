@@ -2576,14 +2576,10 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 
                 if (IS_INSTANCE(object)) {
                     Token method_token = callee_expr->as.get.property;
-                    char* method_name = SAGE_ALLOC(method_token.length + 1);
-                    strncpy(method_name, method_token.start, method_token.length);
-                    method_name[method_token.length] = '\0';
 
-                    Method* method = class_find_method(object.as.instance->class_def, method_name, method_token.length);
+                    Method* method = class_find_method(object.as.instance->class_def, method_token.start, method_token.length);
                     if (!method) {
-                        fprintf(stderr, "Runtime Error: Undefined method '%s'.\n", method_name);
-                        free(method_name);
+                        fprintf(stderr, "Runtime Error: Undefined method '%.*s'.\n", method_token.length, method_token.start);
                         return EVAL_RESULT(val_nil());
                     }
 
@@ -2592,7 +2588,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     Env* method_env = env_create(defining ? defining : env);
                     env_define(method_env, "self", 4, object);
                     // Track which class owns this method (for super resolution)
-                    ClassValue* owner = class_find_method_owner(object.as.instance->class_def, method_name, method_token.length);
+                    ClassValue* owner = class_find_method_owner(object.as.instance->class_def, method_token.start, method_token.length);
                     if (owner) env_define(method_env, "__class__", 9, val_class(owner));
 
                     int param_start = (method_stmt->param_count > 0 &&
@@ -2601,17 +2597,13 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     for (int i = param_start; i < method_stmt->param_count; i++) {
                         if (i - param_start < expr->as.call.arg_count) {
                             ExecResult arg_result = eval_expr(expr->as.call.args[i - param_start], env);
-                            if (arg_result.is_throwing) {
-                                free(method_name);
-                                return arg_result;
-                            }
+                            if (arg_result.is_throwing) return arg_result;
                             env_define(method_env, method_stmt->params[i].start,
                                        method_stmt->params[i].length, arg_result.value);
                         }
                     }
 
                     ExecResult res = interpret(method_stmt->body, method_env);
-                    free(method_name);
                     if (res.is_throwing) return res;
                     return EVAL_RESULT(res.value);
                 }
@@ -2640,14 +2632,10 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     fprintf(stderr, "Runtime Error: Class has no parent class for 'super'.\n");
                     return EVAL_RESULT(val_nil());
                 }
-                char* method_name = SAGE_ALLOC(method_token.length + 1);
-                strncpy(method_name, method_token.start, method_token.length);
-                method_name[method_token.length] = '\0';
 
-                Method* method = class_find_method(parent_class, method_name, method_token.length);
+                Method* method = class_find_method(parent_class, method_token.start, method_token.length);
                 if (!method) {
-                    fprintf(stderr, "Runtime Error: Parent class has no method '%s'.\n", method_name);
-                    free(method_name);
+                    fprintf(stderr, "Runtime Error: Parent class has no method '%.*s'.\n", method_token.length, method_token.start);
                     return EVAL_RESULT(val_nil());
                 }
 
@@ -2664,17 +2652,13 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 for (int i = param_start; i < method_stmt->param_count; i++) {
                     if (i - param_start < expr->as.call.arg_count) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i - param_start], env);
-                        if (arg_result.is_throwing) {
-                            free(method_name);
-                            return arg_result;
-                        }
+                        if (arg_result.is_throwing) return arg_result;
                         env_define(method_env, method_stmt->params[i].start,
                                    method_stmt->params[i].length, arg_result.value);
                     }
                 }
 
                 ExecResult res = interpret(method_stmt->body, method_env);
-                free(method_name);
                 if (res.is_throwing) return res;
                 return EVAL_RESULT(res.value);
             }

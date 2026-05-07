@@ -144,10 +144,8 @@ static size_t gc_release_object(GCHeader* header) {
             freed += sizeof(DictEntry) * (size_t)dict->capacity;
             for (int i = 0; i < dict->capacity; i++) {
                 if (dict->entries[i].key != NULL) {
-                    freed += strlen(dict->entries[i].key) + 1;
-                    freed += sizeof(Value);
+                    freed += (size_t)dict->entries[i].key_len + 1;
                     free(dict->entries[i].key);
-                    free(dict->entries[i].value);
                 }
             }
             free(dict->entries);
@@ -437,8 +435,8 @@ static void gc_shade_children(GCHeader* header) {
         case VAL_DICT: {
             DictValue* dict = object;
             for (int i = 0; i < dict->capacity; i++) {
-                if (dict->entries[i].key != NULL && dict->entries[i].value != NULL)
-                    gc_mark_value(*dict->entries[i].value);
+                if (dict->entries[i].key != NULL)
+                    gc_mark_value(dict->entries[i].value);
             }
             break;
         }
@@ -1105,8 +1103,8 @@ static void orc_visit_children(void* obj, orc_child_visitor visitor) {
         case VAL_DICT: {
             DictValue* dict = (DictValue*)obj;
             for (int i = 0; i < dict->capacity; i++) {
-                if (dict->entries[i].key != NULL && dict->entries[i].value != NULL) {
-                    Value v = *dict->entries[i].value;
+                if (dict->entries[i].key != NULL) {
+                    Value v = dict->entries[i].value;
                     switch (v.type) {
                         case VAL_STRING:    visitor(v.as.string); break;
                         case VAL_ARRAY:     visitor(v.as.array); break;

@@ -1,5 +1,3 @@
-/* PATCHED: value.h */
-
 #ifndef SAGE_VALUE_H
 #define SAGE_VALUE_H
 
@@ -10,6 +8,7 @@ typedef struct Value Value;
 typedef struct ClassValue ClassValue;
 typedef struct InstanceValue InstanceValue;
 typedef struct Module Module;
+typedef struct DictValue DictValue;
 typedef struct Env Env; // Forward declare from env.h
 typedef Env Environment; // Alias for compatibility
 typedef struct BytecodeFunction BytecodeFunction;
@@ -22,20 +21,6 @@ typedef struct {
     int count;
     int capacity;
 } ArrayValue;
-
-// Dictionary entry (key-value pair) - used in open-addressing hash table
-typedef struct {
-    char* key;        // NULL means empty slot
-    Value* value;
-    unsigned int hash; // Cached hash of key
-} DictEntry;
-
-// Dictionary structure (open-addressing hash table)
-typedef struct {
-    DictEntry* entries;
-    int count;       // Number of active entries
-    int capacity;    // Total slots (always a power of 2)
-} DictValue;
 
 // Tuple structure (fixed-size, immutable)
 typedef struct {
@@ -63,7 +48,7 @@ struct ClassValue {
 // Instance structure
 struct InstanceValue {
     ClassValue* class_def;
-    DictValue* fields; // Instance variables
+    struct DictValue* fields; // Instance variables
 };
 
 // PHASE 7: Exception structure
@@ -160,7 +145,7 @@ struct Value {
         NativeFn native;
         FunctionValue* function; // PHASE 8: Function value
         ArrayValue* array;
-        DictValue* dict;
+        struct DictValue* dict;
         TupleValue* tuple;
         ClassValue* class_val;
         InstanceValue* instance;
@@ -174,6 +159,23 @@ struct Value {
         BytesValue* bytes;      // Phase 1.8: Binary-safe byte buffer
     } as;
 };
+
+// Dictionary entry (key-value pair) - used in open-addressing hash table
+struct DictEntry {
+    char* key;        // NULL means empty slot
+    int key_len;      // Cached key length
+    Value value;      // Flat value (one fewer allocation)
+    unsigned int hash; // Cached hash of key
+};
+
+// Dictionary structure (open-addressing hash table)
+struct DictValue {
+    struct DictEntry* entries;
+    int count;       // Number of active entries
+    int capacity;    // Total slots (always a power of 2)
+};
+
+typedef struct DictEntry DictEntry;
 
 // Macros for checking type
 #define IS_NUMBER(v) ((v).type == VAL_NUMBER)
