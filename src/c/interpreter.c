@@ -2475,12 +2475,8 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             Token prop = expr->as.get.property;
 
             if (IS_INSTANCE(object)) {
-                char* prop_name = SAGE_ALLOC(prop.length + 1);
-                strncpy(prop_name, prop.start, prop.length);
-                prop_name[prop.length] = '\0';
-
-                Value result = instance_get_field(object.as.instance, prop_name);
-                free(prop_name);
+                // Optimized property access: no string allocation/copy
+                Value result = instance_get_field(object.as.instance, prop.start, prop.length);
                 return EVAL_RESULT(result);
             }
 
@@ -2531,12 +2527,9 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             Value value = val_result.value;
             
             Token prop = expr->as.set.property;
-            char* prop_name = SAGE_ALLOC(prop.length + 1);
-            strncpy(prop_name, prop.start, prop.length);
-            prop_name[prop.length] = '\0';
             
-            instance_set_field(object.as.instance, prop_name, value);
-            free(prop_name);
+            // Optimized property assignment: no string allocation/copy
+            instance_set_field(object.as.instance, prop.start, prop.length, value);
             return EVAL_RESULT(value);
         }
 
@@ -2864,7 +2857,8 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                             ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
                             if (arg_result.is_throwing) return arg_result;
                             if (fields->elements[i].type == VAL_STRING) {
-                                instance_set_field(instance, AS_STRING(fields->elements[i]), arg_result.value);
+                                char* field_name = AS_STRING(fields->elements[i]);
+                                instance_set_field(instance, field_name, (int)strlen(field_name), arg_result.value);
                             }
                         }
                     }
