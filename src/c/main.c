@@ -1686,8 +1686,15 @@ int main(int argc, const char* argv[]) {
             exe_output = derived_output;
         }
 
-        char temp_c_path[256];
-        snprintf(temp_c_path, sizeof(temp_c_path), "/tmp/sagec_%d.c", (int)getpid());
+        char temp_c_path[] = "/tmp/sagec_XXXXXX.c";
+        int temp_fd = mkstemps(temp_c_path, 2);
+        if (temp_fd < 0) {
+            fprintf(stderr, "Could not create temporary file.\n");
+            free(source);
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+        close(temp_fd);
 
         if (!compile_source_to_executable_opt(source, cmd_argv[2], temp_c_path, exe_output,
                                               cc_command, opt_level, debug_info)) {
@@ -1746,8 +1753,15 @@ int main(int argc, const char* argv[]) {
             exe_output = derived_output;
         }
 
-        char temp_ll_path[256];
-        snprintf(temp_ll_path, sizeof(temp_ll_path), "/tmp/sagell_%d.ll", (int)getpid());
+        char temp_ll_path[] = "/tmp/sagell_XXXXXX.ll";
+        int temp_fd = mkstemps(temp_ll_path, 3);
+        if (temp_fd < 0) {
+            fprintf(stderr, "Could not create temporary file.\n");
+            free(source);
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+        close(temp_fd);
 
         if (!compile_source_to_llvm_executable(source, cmd_argv[2], temp_ll_path, exe_output,
                                                opt_level, debug_info)) {
