@@ -304,7 +304,7 @@ static int dict_find_slot_len(DictValue* d, const char* key, int len, unsigned i
     for (;;) {
         DictEntry* e = &d->entries[idx];
         if (e->key == NULL) return idx;  // Empty slot
-        if (e->hash == hash && (int)strlen(e->key) == len && memcmp(e->key, key, (size_t)len) == 0) return idx;  // Found
+        if (e->hash == hash && e->key_len == len && memcmp(e->key, key, (size_t)len) == 0) return idx;  // Found
         idx = (idx + 1) & mask;  // Linear probing
     }
 }
@@ -327,7 +327,7 @@ static void dict_grow(DictValue* d) {
 
     for (int i = 0; i < old_capacity; i++) {
         if (old_entries[i].key != NULL) {
-            int slot = dict_find_slot(d, old_entries[i].key, old_entries[i].hash);
+            int slot = dict_find_slot_len(d, old_entries[i].key, old_entries[i].key_len, old_entries[i].hash);
             d->entries[slot] = old_entries[i];
             d->count++;
         }
@@ -339,7 +339,6 @@ void dict_set_len(Value* dict, const char* key, int len, Value value) {
     if (dict->type != VAL_DICT) return;
     DictValue* d = dict->as.dict;
 
-    // Grow if load factor > 75%
     if (d->capacity == 0 || d->count * 4 >= d->capacity * 3) {
         dict_grow(d);
     }
@@ -348,21 +347,18 @@ void dict_set_len(Value* dict, const char* key, int len, Value value) {
     int slot = dict_find_slot_len(d, key, len, hash);
 
     if (d->entries[slot].key != NULL) {
-        // Key exists, update value
-        GC_WRITE_BARRIER(*(d->entries[slot].value));  // SATB: shade old value
-        *(d->entries[slot].value) = value;
+        GC_WRITE_BARRIER(d->entries[slot].value);
+        d->entries[slot].value = value;
         return;
     }
 
-    // New entry
     d->entries[slot].key = SAGE_ALLOC((size_t)len + 1);
     gc_track_external_allocation((size_t)len + 1);
     memcpy(d->entries[slot].key, key, (size_t)len);
     d->entries[slot].key[len] = '\0';
+    d->entries[slot].key_len = len;
     d->entries[slot].hash = hash;
-    d->entries[slot].value = SAGE_ALLOC(sizeof(Value));
-    gc_track_external_allocation(sizeof(Value));
-    *(d->entries[slot].value) = value;
+    d->entries[slot].value = value;
     d->count++;
 }
 
@@ -379,7 +375,7 @@ Value dict_get_len(Value* dict, const char* key, int len) {
     int slot = dict_find_slot_len(d, key, len, hash);
 
     if (d->entries[slot].key == NULL) return val_nil();
-    return *(d->entries[slot].value);
+    return d->entries[slot].value;
 }
 
 Value dict_get(Value* dict, const char* key) {
@@ -401,34 +397,26 @@ void dict_delete(Value* dict, const char* key) {
     if (dict->type != VAL_DICT) return;
     DictValue* d = dict->as.dict;
     if (d->capacity == 0) return;
-
     unsigned int hash = dict_hash(key);
     int slot = dict_find_slot(d, key, hash);
-
-    if (d->entries[slot].key == NULL) return;  // Not found
-
-    // Free the entry
-    gc_track_external_free(strlen(d->entries[slot].key) + 1);
-    gc_track_external_free(sizeof(Value));
+    if (d->entries[slot].key == NULL) return;
+    gc_track_external_free((size_t)d->entries[slot].key_len + 1);
     free(d->entries[slot].key);
-    free(d->entries[slot].value);
     d->entries[slot].key = NULL;
-    d->entries[slot].value = NULL;
+    d->entries[slot].key_len = 0;
+    d->entries[slot].value = val_nil();
     d->count--;
-
-    // Rehash subsequent entries to fix probe chain (backward-shift deletion)
-    // Use modular distance to correctly handle wraparound
     int mask = d->capacity - 1;
     int idx = (slot + 1) & mask;
     while (d->entries[idx].key != NULL) {
         int natural = (int)(d->entries[idx].hash & (unsigned int)mask);
-        // Entry needs to move if its natural slot is not between (slot, idx] circularly
         int dist_natural = (idx - natural + d->capacity) & mask;
         int dist_slot = (idx - slot + d->capacity) & mask;
         if (dist_natural >= dist_slot) {
             d->entries[slot] = d->entries[idx];
             d->entries[idx].key = NULL;
-            d->entries[idx].value = NULL;
+            d->entries[idx].key_len = 0;
+            d->entries[idx].value = val_nil();
             slot = idx;
         }
         idx = (idx + 1) & mask;
@@ -443,7 +431,7 @@ Value dict_keys(Value* dict) {
     Value result = val_array();
     for (int i = 0; i < d->capacity; i++) {
         if (d->entries[i].key != NULL) {
-            size_t klen = strlen(d->entries[i].key);
+            size_t klen = (size_t)d->entries[i].key_len;
             char* key_copy = SAGE_ALLOC(klen + 1);
             memcpy(key_copy, d->entries[i].key, klen + 1);
             array_push(&result, val_string_take(key_copy));
@@ -461,7 +449,7 @@ Value dict_values(Value* dict) {
     Value result = val_array();
     for (int i = 0; i < d->capacity; i++) {
         if (d->entries[i].key != NULL) {
-            array_push(&result, *(d->entries[i].value));
+            array_push(&result, d->entries[i].value);
         }
     }
     gc_unpin();
@@ -800,10 +788,10 @@ void print_value(Value v) {
             DictValue* d = v.as.dict;
             int printed = 0;
             for (int i = 0; i < d->capacity; i++) {
-                if (d->entries[i].key != NULL && d->entries[i].value != NULL) {
+                if (d->entries[i].key != NULL) {
                     if (printed > 0) printf(", ");
                     printf("\"%s\": ", d->entries[i].key);
-                    print_value(*(d->entries[i].value));
+                    print_value(d->entries[i].value);
                     printed++;
                 }
             }
@@ -957,7 +945,7 @@ int values_equal(Value a, Value b) {
                 if (da->entries[i].key == NULL) continue;
                 if (!dict_has(&b, da->entries[i].key)) return 0;
                 Value vb = dict_get(&b, da->entries[i].key);
-                if (!values_equal(*da->entries[i].value, vb)) return 0;
+                if (!values_equal(da->entries[i].value, vb)) return 0;
             }
             return 1;
         }
@@ -966,8 +954,8 @@ int values_equal(Value a, Value b) {
             InstanceValue* ib = b.as.instance;
             if (ia == ib) return 1;
             if (ia->class_def != ib->class_def) return 0;
-            Value da = (Value){ .type = VAL_DICT, .as.dict = ia->fields };
-            Value db = (Value){ .type = VAL_DICT, .as.dict = ib->fields };
+            Value da; da.type = VAL_DICT; da.as.dict = ia->fields;
+            Value db; db.type = VAL_DICT; db.as.dict = ib->fields;
             return values_equal(da, db);
         }
         case VAL_CLASS:
