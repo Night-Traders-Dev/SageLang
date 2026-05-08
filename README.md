@@ -4,7 +4,7 @@
 
 ![SageLang Logo](assets/SageLang.jpg)
 
-Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features nine execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.2.9, Sage transpiles to Kotlin and generates Android APKs from a single `.sage` file, with optional type annotations, structs/enums/traits, pattern matching with guards, and a formal specification.
+Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.4.1, Sage transpiles to Kotlin and generates Android APKs from a single `.sage` file, with optional type annotations, structs/enums/traits, pattern matching with guards, and a formal specification.
 
 ## Codebase Metrics
 
@@ -51,6 +51,7 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 | Sage JIT+AOT | `sage --aot --jit file.sage -o bin` | Profile-guided AOT compilation |
 | Self-Hosted | `sage src/sage/sage.sage file.sage` | Self-hosted with hybrid JIT/AOT profiling |
 | Kotlin | `sage --emit-kotlin file.sage -o file.kt` | Kotlin transpilation (emit time) |
+| SageMetal | `make metal-vm` | Freestanding bytecode VM for bare-metal kernels |
 
 ## 🚀 Features (Implemented)
 
@@ -132,6 +133,7 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 
 ### Memory Management
 - **Garbage Collection**: Concurrent tri-color mark-sweep GC with SATB write barriers for sub-millisecond STW pauses; optional **ARC mode** (`--gc:arc`) for deterministic Nim-style reference counting with cycle detection; optional **ORC mode** (`--gc:orc`) for optimized reference counting with Lins' trial deletion cycle collector — combines ARC's deterministic cleanup with robust cycle detection for complex object graphs
+- **ORC Mode** (`--gc:orc`): Nim-inspired Optimized Reference Counting with Lins' trial deletion cycle collector. Recommended for complex object graphs with circular references where sub-millisecond STW pauses are required.
 - **Tri-color marking**: white (unreachable), gray (pending scan), black (fully scanned) — objects allocated during marking are born black
 - **SATB write barrier**: Snapshot-At-The-Beginning — before overwriting a reference, the old value is shaded gray to prevent the concurrent marker from missing live objects
 - **4-phase collection**: Root scan (STW, ~50-200us) -> Concurrent mark -> Remark (STW, ~20-50us) -> Concurrent sweep
@@ -173,14 +175,15 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 
 ### Concurrency & Async/Await
 
-- **Threads**: `thread.spawn()`, `thread.join()`, `thread.mutex()`, `thread.lock()`, `thread.unlock()`, `thread.sleep()`
+- **Threads**: `thread.spawn()`, `thread.join()`, `thread.mutex()`, `thread.lock()`, `thread.unlock()`, `thread.sleep()`, `thread.id()`
 - **Async Procs**: `async proc name():` spawns work on a new thread when called
 - **Await**: `await future` joins the thread and returns the result
-- **True Atomics**: `atomic_new()`, `atomic_load()`, `atomic_store()`, `atomic_add()`, `atomic_cas()`, `atomic_exchange()` — C-level `__atomic` builtins, safe for concurrent access
-- **POSIX Semaphores**: `sem_new(permits)`, `sem_wait()`, `sem_post()`, `sem_trywait()` — real blocking semaphores
+- **True Atomics**: `atomic_new(init)`, `atomic_load(a)`, `atomic_store(a,v)`, `atomic_add(a,v)`, `atomic_cas(a,exp,des)`, `atomic_exchange(a,v)` — C-level `__atomic` builtins, safe for concurrent access
+- **POSIX Semaphores**: `sem_new(permits)`, `sem_wait(s)`, `sem_post(s)`, `sem_trywait(s)` — real blocking semaphores
 - **Condition Variables**: `sage_cond_wait()`, `sage_cond_signal()`, `sage_cond_broadcast()` — C-level pthread_cond_t
 - **Read-Write Locks**: `sage_rwlock_rdlock()`, `sage_rwlock_wrlock()` — concurrent readers, exclusive writers
-- **SMP/Multicore**: `cpu_count()`, `cpu_physical_cores()`, `cpu_has_hyperthreading()`, `thread_set_affinity()`, `thread_get_core()`
+- **SMP/Multicore Detection**: `cpu_count()`, `cpu_physical_cores()`, `cpu_has_hyperthreading()`
+- **Core Affinity**: `thread_set_affinity(core_id)`, `thread_get_core()`
 - **Thread Safety**: GC mutex for safe concurrent memory management
 
 ### Native Standard Library Modules
@@ -250,6 +253,10 @@ SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel
 | **namespace** | `import os.linux.namespace` | Linux namespaces for containerization |
 | **qemu** | `import os.qemu` | QEMU VM launcher (x86_64/aarch64/riscv64, KVM, drives, networking, GDB, presets) |
 | **qemu_run** | `import os.linux.qemu_run` | Kernel module test runner (automated QEMU test pipelines, init script gen, result parsing) |
+| **Metal Core**| `import metal.core` | Bare-metal stubs: puts, putchar, inb/outb, mmio, cli/sti/hlt, panic |
+| **Metal Serial**| `import metal.serial` | NS16550A (x86) and PL011 (ARM) UART drivers for kernels |
+
+**SageMetal VM**: A freestanding bytecode interpreter (`src/c/metal_vm.c`) that requires no libc, no malloc, and no OS. It uses static pools for stack, strings, and heap, making it ideal for the earliest stages of OS kernel development.
 
 **Bare-metal C runtime**: `src/c/bare_metal.c` provides a freestanding runtime (no libc) used by `--compile-bare` and `--compile-uefi` — supplies `memcpy`, `memset`, `memcmp`, basic integer formatting, and panic handler.
 
@@ -988,7 +995,7 @@ class Animal:
 # Derived class with method overriding
 class Dog(Animal):
     proc init(self, name, breed):
-        super.init(self, name)  # call parent constructor
+        super.init(name)  # call parent constructor
         self.breed = breed
 
     proc speak(self):
@@ -1118,12 +1125,12 @@ proc write_memory(ptr: *mut u8, value: u8):
 
 - **Language**: C
 - **Phases Completed**: 18/18 (100%)
-- **Test Suite**: 304 interpreter + 28 compiler + 88 JSON + 1567 self-hosted tests (1987+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, GPU, JIT, and AOT
-- **Backends**: C codegen, LLVM IR (with standalone runtime library), native assembly (x86-64, aarch64, rv64), bytecode VM, JIT (x86-64), AOT (type-specialized), Vulkan/OpenGL graphics, and bare-metal/OSdev/UEFI target profiles
+- **Test Suite**: 331 interpreter + 28 compiler + 88 JSON + 1623 self-hosted tests (2070+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, GPU, JIT, and AOT
+- **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64), bytecode VM, SageMetal VM, JIT (x86-64), AOT, Vulkan/OpenGL graphics, and Kotlin/Android
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v3.1.3
+- **Current Version**: v3.4.1
 - **Spec Version**: 3.0 (see `STABILITY.md` for guarantees)
 
 ## 💾 Project Structure
@@ -1247,7 +1254,7 @@ sage/
 - **Class methods cannot see module-level `let` vars** — hardcode values or pass them as arguments.
 - **`%` operator casts to int** — `3.7 % 1` returns `0`, not `0.7`; use string-based `trunc()` for floor/ceil.
 - **LLVM backend: do NOT use the fake-break pattern** (`j = len(arr)` to exit loops) — the LLVM backend cannot modify loop variables at runtime. Use `break` instead.
-- **`super` requires explicit `self`** — always pass `self` as the first argument: `super.init(self, args)`, not `super.init(args)`.
+- **`super` auto-injects `self`** — do NOT pass `self` as the first argument: `super.init(args)`, not `super.init(self, args)`.
 
 ## 🤝 Contributing
 
@@ -1294,6 +1301,10 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 **Recent Milestones:**
 
+- May 7, 2026: Optimization: implemented length-aware dictionary lookups and direct token pointers in method dispatch for 15% speedup
+- April 15, 2026: SageMetal VM — freestanding bytecode interpreter for OS kernels (no libc/malloc required)
+- April 10, 2026: Default runtime changed to hybrid JIT+AOT (Silent JIT profiling with auto fallback)
+- April 5, 2026: ORC Garbage Collector — Nim-inspired Optimized Reference Counting with Lins' cycle detection
 - March 24, 2026: Added native `fat` module with FAT8/12/16/32 boot-sector parsing + initial bare-metal/OSdev/UEFI native target profiles
 - March 24, 2026: LLVM + self-hosted LLVM fix - resolved cross-module `from X import Y` constant imports (including aliases) at compile time
 - March 18, 2026: Phase 15 Complete - Vulkan graphics engine (4600-line C backend, 16 Sage libraries, 27 shaders, 6 demos, PBR/bloom/shadows/deferred/SSAO/particles/N-body, 285 GPU tests)
