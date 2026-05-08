@@ -23,7 +23,7 @@ let UART_MCR     = 4   # Modem Control
 let UART_LSR     = 5   # Line Status
 let UART_MSR     = 6   # Modem Status
 
-## Initialize a COM port at the given baud rate
+## Initialize a COM port at the given baud rate.
 proc uart_init(port, baud):
     let divisor = 115200 / baud
     core.outb(port + UART_IER, 0)           # Disable interrupts
@@ -34,27 +34,27 @@ proc uart_init(port, baud):
     core.outb(port + UART_FCR, 199)         # Enable FIFO, clear, 14-byte threshold
     core.outb(port + UART_MCR, 11)          # IRQs enabled, RTS/DSR set
 
-## Check if transmit buffer is empty
+## Check if transmit buffer is empty.
 proc uart_tx_ready(port):
     return core.inb(port + UART_LSR) & 32
 
-## Check if receive data is available
+## Check if receive data is available.
 proc uart_rx_ready(port):
     return core.inb(port + UART_LSR) & 1
 
-## Send a single byte
+## Send a single byte.
 proc uart_send(port, byte):
     while not uart_tx_ready(port):
         core.io_wait()
     core.outb(port + UART_DATA, byte)
 
-## Receive a single byte (blocking)
+## Receive a single byte (blocking).
 proc uart_recv(port):
     while not uart_rx_ready(port):
         core.io_wait()
     return core.inb(port + UART_DATA)
 
-## Send a string
+## Send a string.
 proc uart_puts(port, s):
     let i = 0
     while i < len(s):
@@ -62,6 +62,33 @@ proc uart_puts(port, s):
         if s[i] == chr(10):
             uart_send(port, 13)
         i = i + 1
+
+## Receive a single byte with timeout (returns nil on timeout).
+proc uart_read_timeout(port, timeout_ms):
+    let elapsed_ms = 0
+    while not uart_rx_ready(port):
+        if elapsed_ms >= timeout_ms:
+            return nil
+        core.delay_ms(1)
+        elapsed_ms = elapsed_ms + 1
+    return core.inb(port + UART_DATA)
+
+## Read a line (until \n) from the UART.
+proc uart_readline(port):
+    let line_str = ""
+    while true:
+        let byte_val = uart_recv(port)
+        let char_val = chr(byte_val)
+        if char_val == "\n":
+            break
+        if char_val != "\r":
+            line_str = line_str + char_val
+    return line_str
+
+## Flush the receive buffer.
+proc uart_flush_rx(port):
+    while uart_rx_ready(port):
+        core.inb(port + UART_DATA)
 
 ## ============================================================
 ## PL011 UART (ARM/AArch64)
@@ -80,6 +107,7 @@ let PL011_IMSC   = 56     # Interrupt mask (0x38)
 let PL011_FR_TXFF = 32    # TX FIFO full (bit 5)
 let PL011_FR_RXFE = 16    # RX FIFO empty (bit 4)
 
+## Initialize PL011 UART at the given base address.
 proc pl011_init(base):
     core.mmio_write32(base + PL011_CR, 0)       # Disable UART
     core.mmio_write32(base + PL011_IBRD, 1)     # 115200 baud (for 1.8MHz clock)
@@ -87,18 +115,58 @@ proc pl011_init(base):
     core.mmio_write32(base + PL011_LCRH, 96)    # 8N1, FIFO enable (0x60)
     core.mmio_write32(base + PL011_CR, 769)     # Enable UART, TX, RX (0x301)
 
+## Send a single byte via PL011 at the given base address.
 proc pl011_send(base, byte):
     while core.mmio_read32(base + PL011_FR) & PL011_FR_TXFF:
         pass
     core.mmio_write32(base + PL011_DR, byte)
 
+## Receive a single byte via PL011 (blocking) at the given base address.
 proc pl011_recv(base):
     while core.mmio_read32(base + PL011_FR) & PL011_FR_RXFE:
         pass
     return core.mmio_read32(base + PL011_DR) & 255
 
+## Send a string via PL011 at the given base address.
 proc pl011_puts(base, s):
-    let i = 0
-    while i < len(s):
-        pl011_send(base, ord(s[i]))
-        i = i + 1
+    let j = 0
+    while j < len(s):
+        pl011_send(base, ord(s[j]))
+        j = j + 1
+
+## Receive a single byte via PL011 with timeout (returns nil on timeout).
+proc pl011_read_timeout(base, timeout_ms):
+    let elapsed_ms_pl = 0
+    while core.mmio_read32(base + PL011_FR) & PL011_FR_RXFE:
+        if elapsed_ms_pl >= timeout_ms:
+            return nil
+        core.delay_ms(1)
+        elapsed_ms_pl = elapsed_ms_pl + 1
+    return core.mmio_read32(base + PL011_DR) & 255
+
+## Read a line (until \n) from the PL011 UART at the given base address.
+proc pl011_readline(base):
+    let line_str_pl = ""
+    while true:
+        let byte_val_pl = pl011_recv(base)
+        let char_val_pl = chr(byte_val_pl)
+        if char_val_pl == "\n":
+            break
+        if char_val_pl != "\r":
+            line_str_pl = line_str_pl + char_val_pl
+    return line_str_pl
+
+## Flush the PL011 receive buffer at the given base address.
+proc pl011_flush_rx(base):
+    while not (core.mmio_read32(base + PL011_FR) & PL011_FR_RXFE):
+        core.mmio_read32(base + PL011_DR)
+
+## Check if a baud rate is valid/supported.
+proc baud_rate_valid(baud):
+    let valid_rates = [300, 600, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]
+    let idx = 0
+    while idx < len(valid_rates):
+        if baud == valid_rates[idx]:
+            return true
+        idx = idx + 1
+    return false
