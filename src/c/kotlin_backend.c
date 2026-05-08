@@ -2449,8 +2449,13 @@ int compile_source_to_android(const char* source, const char* input_path,
     fclose(out);
 
     // Append transpiled code
-    char temp_kt[256];
-    snprintf(temp_kt, sizeof(temp_kt), "/tmp/sage_kt_%d.kt", (int)getpid());
+    char temp_kt[] = "/tmp/sage_kt_XXXXXX.kt";
+    int temp_fd = mkstemps(temp_kt, 3);
+    if (temp_fd < 0) {
+        fprintf(stderr, "Could not create temp file: %s\n", strerror(errno));
+        return 0;
+    }
+    close(temp_fd);
     if (!write_kotlin_output_internal(source, input_path, temp_kt, opt_level, debug_info)) {
         unlink(temp_kt);
         return 0;
