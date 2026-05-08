@@ -60,6 +60,12 @@ proc run_all(pool):
                 result = task["fn"](args[0], args[1])
             if len(args) == 3:
                 result = task["fn"](args[0], args[1], args[2])
+            if len(args) == 4:
+                result = task["fn"](args[0], args[1], args[2], args[3])
+            if len(args) == 5:
+                result = task["fn"](args[0], args[1], args[2], args[3], args[4])
+            if len(args) > 5:
+                raise "threadpool: tasks with more than 5 arguments are not supported"
             task["result"] = result
             task["status"] = 2
             pool["results"][str(task["id"])] = result

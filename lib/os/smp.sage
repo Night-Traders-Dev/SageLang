@@ -29,11 +29,15 @@ proc topology():
     let logical = cpu_count()
     let physical = cpu_physical_cores()
     let ht = cpu_has_hyperthreading()
+    let tpc = 1
+    if physical > 0:
+        tpc = logical / physical
+    end
     return {
         "logical_cpus": logical,
         "physical_cores": physical,
         "hyperthreading": ht,
-        "threads_per_core": logical / physical,
+        "threads_per_core": tpc,
         "current_core": thread_get_core()
     }
 

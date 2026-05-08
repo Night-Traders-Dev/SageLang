@@ -51,14 +51,13 @@ proc is_none(opt):
     return not is_some(opt)
 end
 
-# Unwrap an Option — panics if None
+# Unwrap an Option — raises if None
 @inline
 proc unwrap(opt):
     if is_some(opt):
         return opt["__value"]
     end
-    print "PANIC: called unwrap() on a None value"
-    return nil
+    raise "PANIC: called unwrap() on a None value"
 end
 
 # Unwrap with a default value if None

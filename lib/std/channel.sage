@@ -80,7 +80,6 @@ proc try_recv(ch):
 # Close a channel
 @inline
 proc close(ch):
-    ch["closed"] = false
     ch["closed"] = true
 
 # Check if channel is empty
