@@ -1,23 +1,13 @@
 gc_disable()
-# =============================================================================
 # SageOS Example Test Runner
-# =============================================================================
-# Automated multi-architecture test runner for SageOS kernel examples.
-# Builds each example for x86_64, aarch64, riscv64, runs in QEMU, verifies
-# expected serial output.
-#
-# Usage:
-#   sage lib/os/examples/test_runner.sage [example] [arch]
-#   sage lib/os/examples/test_runner.sage kernel       # all arches
-#   sage lib/os/examples/test_runner.sage kernel x86_64 # single
-# =============================================================================
 
-import sys, io, os.examples.common as common
+import sys
+import io
+import os.examples.common as common
 
 let NL = chr(10)
 let PASS = "[PASS]"
 let FAIL = "[FAIL]"
-let SKIP = "[SKIP]"
 
 let args = sys.args()
 let test_example = "all"
@@ -37,32 +27,62 @@ if test_arch != "all" and not common.is_valid_arch(test_arch):
     sys.exit(1)
 end
 
-proc run_test(name, qemu_cmd, expect, timeout_sec):
-    let full_cmd = "timeout " + str(timeout_sec) + " " + qemu_cmd + " 2>&1"
-    print "  QEMU: " + full_cmd
-    let output = ""
-    let fd = io.popen(full_cmd, "r")
-    if fd:
-        while true:
-            let line = io.fgets(fd)
-            if line == nil:
+proc string_contains(haystack, needle):
+    let hlen = len(haystack)
+    let nlen = len(needle)
+    if nlen == 0:
+        return true
+    end
+    if hlen < nlen:
+        return false
+    end
+    let i = 0
+    while i <= hlen - nlen:
+        let j = 0
+        while j < nlen:
+            if haystack[i + j] != needle[j]:
                 break
             end
-            output = output + line
+            j = j + 1
         end
-        io.pclose(fd)
-    end
-    if output:
-        if output.find(expect) >= 0:
-            print "  " + PASS + " Found: " + expect
+        if j == nlen:
             return true
-        else:
-            print "  " + FAIL + " Expected '" + expect + "' not found"
-            print "  Output preview: " + output[0:200]
-            return false
         end
+        i = i + 1
+    end
+    return false
+end
+
+proc string_prefix(s, n):
+    let r = ""
+    let i = 0
+    let m = n
+    if m > len(s):
+        m = len(s)
+    end
+    while i < m:
+        r = r + s[i]
+        i = i + 1
+    end
+    return r
+end
+
+proc run_qemu_and_check(qemu_cmd, expect, timeout_sec):
+    let out_file = "/tmp/sageos_test_output.txt"
+    let full_cmd = "timeout " + str(timeout_sec) + " " + qemu_cmd + " > " + out_file + " 2>&1"
+    print "  Running QEMU..."
+    sys.exec(full_cmd)
+    let content = io.readfile(out_file)
+    if content == nil:
+        print "  " + FAIL + " No output captured"
+        return false
+    end
+    if string_contains(content, expect):
+        print "  " + PASS + " Found: " + expect
+        return true
     else:
-        print "  " + FAIL + " No output from QEMU"
+        print "  " + FAIL + " Expected '" + expect + "' not found"
+        print "  Output preview: " + string_prefix(content, 200)
         return false
     end
 end
@@ -80,7 +100,6 @@ proc test_kernel(arch):
 
     let result = common.build_kernel(arch, out_dir, features)
 
-    # Append kmain
     let km = ""
     if arch == "x86_64":
         km = km + "void kmain(uint32_t magic, mb_t *mbi) { parse_multiboot(magic, mbi);" + NL
@@ -111,7 +130,7 @@ proc test_kernel(arch):
         return false
     end
 
-    return run_test("kernel_" + arch, result["qemu"], "SageOS Kernel v0.2.0", 5)
+    return run_qemu_and_check(result["qemu"], "SageOS Kernel v0.2.0", 5)
 end
 
 proc test_shell(arch):
@@ -127,7 +146,6 @@ proc test_shell(arch):
 
     let result = common.build_kernel(arch, out_dir, features)
 
-    # Append shell_main
     let sc = ""
     if arch == "x86_64":
         sc = sc + "void shell_main(uint32_t magic, mb_t *mbi) { parse_multiboot(magic, mbi);" + NL
@@ -157,7 +175,7 @@ proc test_shell(arch):
         return false
     end
 
-    return run_test("shell_" + arch, result["qemu"], "SageOS Shell " + arch, 5)
+    return run_qemu_and_check(result["qemu"], "SageOS Shell " + arch, 5)
 end
 
 # Main

@@ -2,7 +2,9 @@ gc_disable()
 # SageOS Interactive Shell (Multi-Architecture)
 # Usage: sage shell.sage [x86_64|aarch64|riscv64]
 
-import sys, io, os.examples.common as common
+import sys
+import io
+import os.examples.common as common
 
 let NL = chr(10)
 let arch = common.arch_from_args("x86_64")
@@ -103,4 +105,3 @@ print "Build OK: " + result["elf"]
 print ""
 print "Run: " + result["qemu"]
 print "Commands: help, echo <text>, mem, regs, uptime, clear, halt"
-")
