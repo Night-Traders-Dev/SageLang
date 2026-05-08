@@ -2,7 +2,7 @@
 title: "The SageLang Programming Language"
 subtitle: "A Comprehensive Guide"
 author: "Jacob Yates"
-date: "March 2026"
+date: "May 2026"
 toc: true
 ---
 
@@ -33,8 +33,8 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **Syntax** | Python-like: indentation-based blocks, `:` terminators, keywords like `let`, `proc`, `class` |
 | **Type System** | Dynamically typed; values carry runtime type tags (numbers, strings, bools, arrays, dicts, tuples, classes, generators) |
 | **Scoping** | Lexical scoping via nested environments; each block/function/class creates a child environment |
-| **Memory** | Mark-and-sweep garbage collection with configurable thresholds and manual `gc_collect()` triggers |
-| **OOP** | Class-based inheritance with single parent, methods, instance fields, `self` parameter |
+| **Memory** | Mark-and-sweep (tracing), ARC (reference counting), and ORC (optimized reference counting with cycle detection) modes |
+| **OOP** | Class-based inheritance with single parent, methods, instance fields, `self` parameter, `super.init()` auto-self |
 | **Control Flow** | `if/else`, `while`, `for...in`, `break`, `continue`, `return`, `try/catch/finally`, `raise`, `yield`, `defer` |
 | **Data Structures** | Arrays (dynamic), dicts (string-keyed), tuples (immutable), slicing, indexing |
 | **Functions** | First-class `proc` declarations with closures; native C functions; lambdas via generators |
@@ -43,8 +43,8 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **Modules** | `import module`, `import module as alias`, `from module import x, y`, `from module import x as y` |
 | **Standard Library** | Native modules: `math`, `io`, `string`, `sys`, `thread`, `fat`, `socket`, `tcp`, `http`, `ssl` |
 | **Networking** | POSIX sockets, TCP, HTTP/HTTPS (libcurl), SSL/TLS (OpenSSL) |
-| **Concurrency** | `thread.spawn`/`thread.join`, mutexes, `async proc`/`await` |
-| **GPU Graphics** | Vulkan + OpenGL 4.5 backends, handle-based API, 100+ functions |
+| **Concurrency** | Multi-threaded `proc`, `async`/`await`, atomics, semaphores, condvars, rwlocks, SMP detection |
+| **GPU Graphics** | Vulkan + OpenGL 4.5 backends, handle-based API, 100+ functions, Android support |
 | **UI Widgets** | Immediate-mode GUI: windows, panels, buttons, sliders, menus, text inputs |
 | **Compilation** | C backend, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64), plus initial profile suffixes for bare-metal / OSdev / UEFI targets |
 
@@ -64,6 +64,7 @@ SageLang uses a shared front-end with multiple execution backends:
    - **Native assembly** (`--emit-asm` / `--compile-native`, x86-64/aarch64/rv64)
    - **Freestanding ELF** (`--compile-bare`, bare-metal kernel output)
    - **UEFI PE** (`--compile-uefi`, EFI application output)
+   - **SageMetal VM** (`make metal-vm`, freestanding bytecode object)
 4. **Runtime Values** stored in the shared **heap** managed by **GC**
 
 All execution modes share the same object model: a **global environment**, nested **child environments** for scopes, and **tagged `Value` objects** that are either immediate (numbers, bools) or GC-managed heap values (arrays, dicts, strings, classes, instances, functions, generators).
@@ -287,12 +288,18 @@ In Inner scope:
 
 ### 2.6 Garbage Collector (gc.h / gc.c)
 
-**Responsibility**: Automatically reclaim heap memory using **mark-and-sweep** collection.
+**Responsibility**: Automatically reclaim heap memory using tracing or reference counting.
 
-**GC Overview**:
-- **Mark Phase**: Starting from **root set** (global environment, function registry, call stack), mark all reachable objects.
+**GC Modes**:
+
+- **Tracing** (`--gc:tracing`, default): Concurrent tri-color mark-sweep with SATB write barriers. Best for general use with sub-millisecond pauses.
+- **ARC** (`--gc:arc`): Deterministic reference counting. High performance for linear object graphs; does not collect cycles.
+- **ORC** (`--gc:orc`): Optimized Reference Counting with Lins' trial deletion cycle collector. Combines the determinism of ARC with a robust cycle detection algorithm for complex graphs.
+
+**Tracing GC Overview**:
+- **Mark Phase**: Starting from **root set** (global environment, function registry, call stack), mark all reachable objects. Born-black objects during concurrent marking.
 - **Sweep Phase**: Free all unmarked objects and add them to a free pool.
-- **Triggering**: Automatic when object count exceeds threshold (~1000 objects), or manual via `gc_collect()`.
+- **Triggering**: Automatic based on object count and heap pressure, or manual via `gc_collect()`.
 
 **GC Configuration**:
 ```c
@@ -447,6 +454,21 @@ SageLang provides built-in functions injected into global environment via `init_
 | `struct_get(ptr, def, name)` | `(pointer, dict, string) → value` | Read struct field |
 | `struct_set(ptr, def, name, val)` | `(pointer, dict, string, value) → nil` | Write struct field |
 | `struct_size(def)` | `dict → number` | Get total struct size |
+| `cpu_count()` | `() → number` | Logical CPU core count |
+| `cpu_physical_cores()` | `() → number` | Physical CPU core count |
+| `cpu_has_hyperthreading()` | `() → bool` | HT check |
+| `thread_set_affinity(id)` | `number → number` | Pin current thread to core |
+| `thread_get_core()` | `() → number` | Current CPU core ID |
+| `atomic_new(val)` | `value → pointer` | Create atomic long |
+| `atomic_load(a)` | `pointer → number` | Atomic read |
+| `atomic_store(a, v)` | `(pointer, number) → nil` | Atomic write |
+| `atomic_add(a, v)` | `(pointer, number) → number` | Atomic fetch-and-add |
+| `atomic_cas(a, e, d)` | `(pointer, num, num) → bool` | Atomic compare-and-swap |
+| `atomic_exchange(a, v)` | `(pointer, number) → number` | Atomic fetch-and-exchange |
+| `sem_new(n)` | `number → pointer` | Create POSIX semaphore |
+| `sem_wait(s)` | `pointer → nil` | Blocking wait |
+| `sem_post(s)` | `pointer → nil` | Signal/release |
+| `sem_trywait(s)` | `pointer → bool` | Non-blocking wait |
 
 ### 2.8 Module System (module.h / module.c)
 
@@ -1020,7 +1042,7 @@ car.describe()                 # "Car with 4 wheels and 4 doors"
 
 **Calling Parent Methods with `super`**:
 
-Use `super.init(self, args)` to call the parent class constructor, and `super.method(self, args)` to call any parent method. This works with chained inheritance (3+ levels, e.g., A → B → C).
+Use `super.init(args)` to call the parent class constructor, and `super.method(args)` to call any parent method. `self` is automatically injected. This works with chained inheritance (3+ levels, e.g., A → B → C).
 
 ```sagelang
 class Animal:
@@ -1031,10 +1053,10 @@ class Animal:
 
 class Dog(Animal):
     proc init(self, name, breed):
-        super.init(self, name)
+        super.init(name)
         self.breed = breed
     proc speak(self):
-        super.speak(self)
+        super.speak()
         print self.name + " barks"
 
 let d = Dog("Rex", "Labrador")
@@ -1043,7 +1065,7 @@ d.speak()
 # Rex barks
 ```
 
-The `->` arrow operator can also be used with super: `super->init(self, args)`.
+The `->` arrow operator can also be used with super: `super->init(args)`.
 
 **Arrow Operator (`->`)**:
 
@@ -1498,15 +1520,17 @@ Profile notes for native backend:
 6. **Execute each statement** using the selected runtime backend.
 7. **Return** at EOF.
 
-### 6.4 Runtime Backends: AST vs Bytecode VM
+### 6.4 Runtime Backends
 
-The C-hosted `sage` binary now supports three runtime selections:
+The C-hosted `sage` binary now supports several runtime selections:
 
 | Mode | Command | Current Behavior |
 |------|---------|------------------|
 | `ast` | `sage --runtime ast file.sage` | Original tree-walking interpreter; highest maturity and easiest to debug |
 | `bytecode` | `sage --runtime bytecode file.sage` | Lowers each top-level statement to bytecode and executes it on the stack VM |
-| `auto` | `sage --runtime auto file.sage` | Currently routes through the same hybrid VM path as `bytecode` |
+| `auto` | `sage --runtime auto file.sage` | Default; resolves to JIT on hosted, AST on bare-metal |
+| `jit` | `sage --runtime jit file.sage` | Enables JIT profiling and type feedback |
+| `aot` | `sage --runtime aot file.sage` | Enables Ahead-of-Time type specialization |
 
 **Current VM architecture**:
 
