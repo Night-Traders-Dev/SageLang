@@ -16,7 +16,7 @@ let PAGE_ACCESSED = 32
 let PAGE_DIRTY = 64
 let PAGE_HUGE = 128
 let PAGE_GLOBAL = 256
-let PAGE_NX = 1 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2 * 2
+let PAGE_NX = 9223372036854775808  # bit 63 (No-Execute flag)
 
 # ----- Internal state -----
 # Page tables stored as nested dicts keyed by virtual page number.
@@ -29,7 +29,7 @@ let vmm_ready = false
 # ----- Helpers -----
 
 proc page_number(addr):
-    return addr / PAGE_SIZE
+    return (addr / PAGE_SIZE) | 0
 end
 
 proc page_addr(page_num):

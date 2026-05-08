@@ -301,3 +301,27 @@ proc bitmap_is_used(alloc, addr):
     end
     return alloc["bitmap"][idx] == 1
 end
+
+# ============================================================================
+# Convenience aliases (short names for common operations)
+# ============================================================================
+
+# Alias: free_page(alloc, addr) -> bitmap_free_page(alloc, addr)
+proc free_page(alloc, addr):
+    return bitmap_free_page(alloc, addr)
+end
+
+# Alias: free_pages(alloc, addr, count) -> bitmap_free_pages(alloc, addr, count)
+proc free_pages(alloc, addr, count):
+    return bitmap_free_pages(alloc, addr, count)
+end
+
+# Alias: alloc_page(alloc) -> bitmap_alloc_page(alloc)
+proc alloc_page(alloc):
+    return bitmap_alloc_page(alloc)
+end
+
+# Alias: alloc_pages(alloc, count) -> bitmap_alloc_pages(alloc, count)
+proc alloc_pages(alloc, count):
+    return bitmap_alloc_pages(alloc, count)
+end

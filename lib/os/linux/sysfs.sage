@@ -1,4 +1,5 @@
 gc_disable()
+import io
 
 # sysfs.sage — Linux /sys filesystem interface
 #
@@ -18,7 +19,7 @@ let SYSFS_KERNEL = "/sys/kernel"
 # ========== Sysfs readers ==========
 
 proc read_sysfs_attr(path):
-    let content = readfile(path)
+    let content = io.readfile(path)
     # Trim trailing newline
     let result = ""
     let i = 0

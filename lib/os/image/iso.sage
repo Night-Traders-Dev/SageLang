@@ -1,4 +1,5 @@
 gc_disable()
+import io
 
 # iso.sage — ISO 9660 image creation for CD/USB boot
 # Supports El Torito boot records for bootable media.
@@ -221,12 +222,12 @@ proc save(iso_img, path):
     for i in range(len(iso_img)):
         data = data + chr(iso_img[i])
     end
-    writefile(path, data)
+    io.writefile(path, data)
     return true
 end
 
 proc create_bootable_iso(kernel_path, output_path, label):
-    let kernel_str = readfile(kernel_path)
+    let kernel_str = io.readfile(kernel_path)
     let kernel_bytes = []
     let i = 0
     for i in range(len(kernel_str)):

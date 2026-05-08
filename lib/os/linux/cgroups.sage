@@ -1,4 +1,5 @@
 gc_disable()
+import io
 
 # cgroups.sage — Linux Control Groups (cgroups v2) interface
 #
@@ -159,7 +160,7 @@ end
 
 proc cg_read_stat(cg_path, stat_file):
     let info = {}
-    let content = readfile(cg_path + "/" + stat_file)
+    let content = io.readfile(cg_path + "/" + stat_file)
     let lines = []
     let line = ""
     let i = 0
@@ -220,7 +221,7 @@ proc cg_read_io_stat(cg_path):
 end
 
 proc cg_read_pids_current(cg_path):
-    return readfile(cg_path + "/pids.current")
+    return io.readfile(cg_path + "/pids.current")
 end
 
 # ========== Convenience builders ==========

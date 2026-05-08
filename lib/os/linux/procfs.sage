@@ -1,4 +1,5 @@
 gc_disable()
+import io
 
 # procfs.sage — /proc filesystem interface for Linux
 #
@@ -10,7 +11,7 @@ gc_disable()
 proc read_proc_file(path):
     let result = {}
     result["path"] = path
-    result["content"] = readfile(path)
+    result["content"] = io.readfile(path)
     result["lines"] = []
     # Split content into lines
     let content = result["content"]
