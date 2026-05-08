@@ -26,10 +26,10 @@
 
 static int g_gpu_initialized = 0;
 static int g_gpu_available = 0;
-static int g_gpu_matmul_shader = -1;
+static int g_gpu_matmul_shader __attribute__((unused)) = -1;
 static int g_gpu_matmul_pipeline = -1;
-static int g_gpu_matmul_layout = -1;
-static int g_gpu_matmul_desc_layout = -1;
+static int g_gpu_matmul_layout __attribute__((unused)) = -1;
+static int g_gpu_matmul_desc_layout __attribute__((unused)) = -1;
 static int g_gpu_threshold = 8192;  // M*K threshold to offload to GPU
 
 // GLSL compute shader source for matmul

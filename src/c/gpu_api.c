@@ -228,14 +228,14 @@ static struct {
     GPUSemaphore* semaphores; int semaphore_count, semaphore_cap;
 } g_vk = {0};
 
-// Swapchain state
-static VkSurfaceKHR g_surface = VK_NULL_HANDLE;
-static VkSwapchainKHR g_swapchain = VK_NULL_HANDLE;
-static VkImage* g_swapchain_images = NULL;
-static VkImageView* g_swapchain_views = NULL;
+// Swapchain state (reserved for future windowed-mode implementation)
+static VkSurfaceKHR g_surface __attribute__((unused)) = VK_NULL_HANDLE;
+static VkSwapchainKHR g_swapchain __attribute__((unused)) = VK_NULL_HANDLE;
+static VkImage* g_swapchain_images __attribute__((unused)) = NULL;
+static VkImageView* g_swapchain_views __attribute__((unused)) = NULL;
 static uint32_t g_swapchain_image_count = 0;
 static uint32_t g_swapchain_width = 0, g_swapchain_height = 0;
-static VkFormat g_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
+static VkFormat g_swapchain_format __attribute__((unused)) = VK_FORMAT_B8G8R8A8_UNORM;
 
 // Handle allocator macro
 #define ALLOC_HANDLE(arr, count, cap, type) do { \
@@ -672,7 +672,7 @@ int sgpu_load_shader(const char* path, int stage) {
     long sz = ftell(f);
     fseek(f, 0, SEEK_SET);
     uint32_t* code = GPU_ALLOC((size_t)sz);
-    fread(code, 1, (size_t)sz, f);
+    size_t _nr = fread(code, 1, (size_t)sz, f); (void)_nr;
     fclose(f);
 
     int idx = ALLOC_SHDR();
@@ -1226,7 +1226,8 @@ int sgpu_key_just_released(int key) {
     return (key >= 0 && key < 512) ? (!g_key_states[key] && g_key_prev[key]) : 0;
 }
 void sgpu_mouse_pos(double* x, double* y) {
-    if (x) *x = g_mouse_x; if (y) *y = g_mouse_y;
+    if (x) *x = g_mouse_x;
+    if (y) *y = g_mouse_y;
 }
 int sgpu_mouse_button(int b) { return (b >= 0 && b < 8) ? g_mouse_states[b] : 0; }
 int sgpu_mouse_just_pressed(int b) {
@@ -1240,7 +1241,8 @@ void sgpu_mouse_delta(double* dx, double* dy) {
     if (dy) *dy = g_mouse_y - g_prev_mouse_y;
 }
 void sgpu_scroll_delta(double* dx, double* dy) {
-    if (dx) *dx = g_scroll_dx; if (dy) *dy = g_scroll_dy;
+    if (dx) *dx = g_scroll_dx;
+    if (dy) *dy = g_scroll_dy;
 }
 void sgpu_set_cursor_mode(int mode) {
 #ifdef SAGE_HAS_GLFW

@@ -99,6 +99,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         add_compile_options(
             -Wno-format-truncation
             -Wno-clobbered
+            -Wno-unused-result
+            -Wno-unused-variable
+            -Wno-unused-but-set-variable
         )
     endif()
 endif()

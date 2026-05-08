@@ -629,24 +629,24 @@ static char* repl_readline(const char* prompt) {
                     pos = len;
                     repl_refresh_line(prompt, buf, len, pos);
                 } else if (seq[1] == '3') {
-                    // Delete key (ESC [ 3 ~)
-                    char tilde;
-                    read(STDIN_FILENO, &tilde, 1);
+                    // Delete key (ESC [ 3 ~) — consume trailing tilde byte
+                    char tilde; ssize_t _r;
+                    _r = read(STDIN_FILENO, &tilde, 1); (void)_r;
                     if (pos < len) {
                         memmove(buf + pos, buf + pos + 1, len - pos - 1);
                         len--;
                         repl_refresh_line(prompt, buf, len, pos);
                     }
                 } else if (seq[1] == '1' || seq[1] == '7') {
-                    // Home (alternate)
-                    char tilde;
-                    read(STDIN_FILENO, &tilde, 1);
+                    // Home (alternate) — consume trailing tilde byte
+                    char tilde; ssize_t _r;
+                    _r = read(STDIN_FILENO, &tilde, 1); (void)_r;
                     pos = 0;
                     repl_refresh_line(prompt, buf, len, pos);
                 } else if (seq[1] == '4' || seq[1] == '8') {
-                    // End (alternate)
-                    char tilde;
-                    read(STDIN_FILENO, &tilde, 1);
+                    // End (alternate) — consume trailing tilde byte
+                    char tilde; ssize_t _r;
+                    _r = read(STDIN_FILENO, &tilde, 1); (void)_r;
                     pos = len;
                     repl_refresh_line(prompt, buf, len, pos);
                 }

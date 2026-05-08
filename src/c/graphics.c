@@ -1216,7 +1216,7 @@ static Value gpu_load_shader(int argCount, Value* args) {
 
     uint32_t* code = malloc((size_t)file_size);
     if (!code) { fclose(f); return val_number(SAGE_GPU_INVALID_HANDLE); }
-    fread(code, 1, (size_t)file_size, f);
+    { size_t _nr = fread(code, 1, (size_t)file_size, f); (void)_nr; }
     fclose(f);
 
     int idx = alloc_shaders();
@@ -2961,7 +2961,6 @@ static Value gpu_create_offscreen_target(int argCount, Value* args) {
     }
 
     // Create render pass
-    int attach_count = with_depth ? 2 : 1;
     Value attach_arr = val_array();
 
     Value ca = val_dict();
@@ -4571,7 +4570,7 @@ static Value gpu_reload_shader(int argCount, Value* args) {
     fseek(f, 0, SEEK_SET);
     uint32_t* code = malloc((size_t)sz);
     if (!code) { fclose(f); return val_bool(0); }
-    fread(code, 1, (size_t)sz, f);
+    { size_t _nr = fread(code, 1, (size_t)sz, f); (void)_nr; }
     fclose(f);
 
     VkShaderModuleCreateInfo mi = {0};
@@ -5016,7 +5015,7 @@ static Value gpu_load_font(int argCount, Value* args) {
     long fsize = ftell(f);
     fseek(f, 0, SEEK_SET);
     unsigned char* ttf_data = malloc(fsize);
-    fread(ttf_data, 1, fsize, f);
+    { size_t _nr = fread(ttf_data, 1, fsize, f); (void)_nr; }
     fclose(f);
 
     // Bake font atlas
@@ -5124,7 +5123,7 @@ static Value gpu_font_text_verts(int argCount, Value* args) {
             cy += g_fonts[fh].font_size * 1.2f;
             continue;
         }
-        if (c < FONT_FIRST_CHAR || c >= FONT_FIRST_CHAR + FONT_CHAR_COUNT) {
+        if ((unsigned char)c < FONT_FIRST_CHAR || (unsigned char)c >= FONT_FIRST_CHAR + FONT_CHAR_COUNT) {
             cx += g_fonts[fh].font_size * 0.5f;
             continue;
         }

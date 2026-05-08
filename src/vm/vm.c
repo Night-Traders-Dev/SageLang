@@ -100,12 +100,12 @@ static Value vm_peek(ActiveVm* vm, int distance) {
 }
 
 #define VM_CHECK_CONST(chunk, idx) \
-    do { if ((int)(idx) < 0 || (int)(idx) >= (chunk)->constant_count) { \
+    do { if ((int)(idx) >= (chunk)->constant_count) { \
         result = vm_error("VM constant pool index out of bounds."); goto done; \
     } } while(0)
 
 #define VM_CHECK_AST(chunk, idx) \
-    do { if ((int)(idx) < 0 || (int)(idx) >= (chunk)->ast_stmt_count) { \
+    do { if ((int)(idx) >= (chunk)->ast_stmt_count) { \
         result = vm_error("VM AST statement index out of bounds."); goto done; \
     } } while(0)
 

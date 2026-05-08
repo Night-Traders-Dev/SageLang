@@ -33,8 +33,6 @@ static Stmt* g_generator_resume_target = NULL;
 // JIT state — global, initialized by --jit mode
 #include "jit.h"
 static JitState* g_jit = NULL;
-static int g_next_func_id = 0;
-
 void interpreter_set_jit(JitState* jit) { g_jit = jit; }
 JitState* interpreter_get_jit(void) { return g_jit; }
 
@@ -2757,7 +2755,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                         JitNativeFn native = jit_compile_function(g_jit, func, scope);
                         if (native) {
                             profile->jit_compiled = 1;
-                            profile->native_code = (void*)native;
+                            profile->native_code = (void*)(uintptr_t)native;
                         }
                     }
                 }
@@ -2960,7 +2958,6 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             Stmt* deferred[64];
             int defer_count = 0;
             ExecResult block_result = { val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
-            int exiting = 0;
 
             while (current != NULL) {
                 if (current->type == STMT_DEFER) {
@@ -2986,7 +2983,6 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 }
                 if (res.is_returning || res.is_breaking || res.is_continuing || res.is_throwing) {
                     block_result = res;
-                    exiting = 1;
                     break;
                 }
                 current = current->next;

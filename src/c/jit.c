@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>   // uintptr_t
 
 #ifdef __linux__
 #include <sys/mman.h>
@@ -383,6 +384,6 @@ JitNativeFn jit_compile_function(JitState* jit, void* proc_stmt, void* env) {
     jit->pool.used = code_start + em.pos;
     jit->total_compiled++;
 
-    return (JitNativeFn)code_buf;
+    return (JitNativeFn)(uintptr_t)code_buf;
 #endif
 }
