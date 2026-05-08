@@ -200,17 +200,18 @@ proc create_server(host, port):
 
 # Serve one request on an accepted client connection
 proc handle_client(srv, client):
-    let raw = tcp.recvall(client, srv["max_request_size"])
+    let fd = client["fd"]
+    let raw = tcp.recv(fd, srv["max_request_size"])
     if raw != nil and len(raw) > 0:
         let req = parse_request(raw)
         let resp = dispatch(srv["router"], req)
-        tcp.sendall(client, resp)
-    tcp.close(client)
+        tcp.sendall(fd, resp)
+    tcp.close(fd)
 
 # Start the server (blocking - serves one request at a time)
 proc listen_and_serve(srv):
     let listener = tcp.listen(srv["host"], srv["port"])
-    if listener == nil:
+    if listener < 0:
         return false
     srv["running"] = true
     while srv["running"]:

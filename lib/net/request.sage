@@ -72,11 +72,7 @@ proc set_user_agent(req, agent):
 proc send(req):
     let opts = {}
     if len(req["headers"]) > 0:
-        let header_list = []
-        let keys = dict_keys(req["headers"])
-        for i in range(len(keys)):
-            push(header_list, keys[i] + ": " + req["headers"][keys[i]])
-        opts["headers"] = header_list
+        opts["headers"] = req["headers"]
     opts["timeout"] = req["timeout"]
     opts["follow_redirects"] = req["follow_redirects"]
     opts["verify_ssl"] = req["verify_ssl"]

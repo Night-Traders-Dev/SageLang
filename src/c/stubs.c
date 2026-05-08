@@ -14,10 +14,20 @@ void lsp_run() { fprintf(stderr, "LSP not supported in this build\n"); }
 int compile_source_to_llvm_ir() { return -1; }
 int compile_source_to_llvm_executable() { return -1; }
 
-void create_socket_module() {}
-void create_tcp_module() {}
-void create_http_module() {}
-void create_ssl_module() {}
+#ifndef SAGE_HAS_CURL
+#include "module.h"
+Module* create_socket_module(ModuleCache* c) { (void)c; return NULL; }
+Module* create_tcp_module(ModuleCache* c) { (void)c; return NULL; }
+Module* create_http_module(ModuleCache* c) { (void)c; return NULL; }
+#endif
+#ifndef SAGE_HAS_SSL
+#ifndef SAGE_HAS_CURL
+/* module.h already included above */
+#else
+#include "module.h"
+#endif
+Module* create_ssl_module(ModuleCache* c) { (void)c; return NULL; }
+#endif
 void create_graphics_module() {}
 void create_ml_native_module() {}
 

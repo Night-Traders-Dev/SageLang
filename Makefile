@@ -63,6 +63,38 @@ ifeq ($(OPENGL_CHECK),yes)
 else
     $(info OpenGL support disabled)
 endif
+# libcurl for HTTP/HTTPS networking module
+CURL ?= auto
+ifeq ($(CURL),auto)
+    CURL_CHECK := $(shell pkg-config --exists libcurl 2>/dev/null && echo yes || echo no)
+else ifeq ($(CURL),1)
+    CURL_CHECK := yes
+else
+    CURL_CHECK := no
+endif
+ifeq ($(CURL_CHECK),yes)
+    CFLAGS += -DSAGE_HAS_CURL $(shell pkg-config --cflags libcurl 2>/dev/null)
+    LDFLAGS += $(shell pkg-config --libs libcurl)
+    $(info libcurl HTTP support enabled)
+else
+    $(info libcurl not found (HTTP module stubbed))
+endif
+# OpenSSL for SSL/TLS module
+SSL ?= auto
+ifeq ($(SSL),auto)
+    SSL_CHECK := $(shell pkg-config --exists openssl 2>/dev/null && echo yes || echo no)
+else ifeq ($(SSL),1)
+    SSL_CHECK := yes
+else
+    SSL_CHECK := no
+endif
+ifeq ($(SSL_CHECK),yes)
+    CFLAGS += -DSAGE_HAS_SSL $(shell pkg-config --cflags openssl 2>/dev/null)
+    LDFLAGS += $(shell pkg-config --libs openssl)
+    $(info OpenSSL support enabled)
+else
+    $(info OpenSSL not found (SSL module stubbed))
+endif
 else
 LDFLAGS = -lm
 endif
@@ -110,6 +142,7 @@ CORE_SOURCES = \
     $(SRC_DIR)/safety.c \
     $(SRC_DIR)/value.c \
     $(SRC_DIR)/stubs.c \
+    $(SRC_DIR)/net.c \
     $(SRC_DIR)/aot.c \
     $(SRC_DIR)/kotlin_backend.c
 

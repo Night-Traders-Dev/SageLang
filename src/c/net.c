@@ -3,6 +3,8 @@
 // Provides: socket, tcp, http, ssl
 // Dependencies: POSIX sockets, libcurl, OpenSSL
 
+#ifdef SAGE_HAS_CURL
+
 #define _DEFAULT_SOURCE
 #include "module.h"
 #include "value.h"
@@ -30,11 +32,6 @@
 
 // libcurl for HTTP/HTTPS
 #include <curl/curl.h>
-
-// OpenSSL for SSL/TLS
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/bio.h>
 
 // ============================================================================
 // SOCKET MODULE - Raw POSIX sockets
@@ -634,10 +631,14 @@ static void curl_apply_options(CURL* curl, Value* options) {
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, (long)AS_NUMBER(timeout_val));
 
     Value follow_val = dict_get(options, "follow");
+    if (!IS_BOOL(follow_val))
+        follow_val = dict_get(options, "follow_redirects");
     if (IS_BOOL(follow_val) && AS_BOOL(follow_val))
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
     Value verify_val = dict_get(options, "verify");
+    if (!IS_BOOL(verify_val))
+        verify_val = dict_get(options, "verify_ssl");
     if (IS_BOOL(verify_val) && !AS_BOOL(verify_val)) {
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
@@ -938,9 +939,30 @@ Module* create_http_module(ModuleCache* cache) {
     return m;
 }
 
+#endif // SAGE_HAS_CURL
+
 // ============================================================================
 // SSL MODULE - SSL/TLS via OpenSSL
 // ============================================================================
+
+#ifdef SAGE_HAS_SSL
+
+#ifndef SAGE_HAS_CURL
+// If CURL section was skipped, we still need core headers for the SSL module
+#define _DEFAULT_SOURCE
+#include "module.h"
+#include "value.h"
+#include "env.h"
+#include "gc.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#endif
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/bio.h>
 
 static int s_ssl_initialized = 0;
 
@@ -1163,3 +1185,5 @@ Module* create_ssl_module(ModuleCache* cache) {
 
     return m;
 }
+
+#endif // SAGE_HAS_SSL
