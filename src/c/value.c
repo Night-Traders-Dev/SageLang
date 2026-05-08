@@ -6,29 +6,9 @@
 #include "gc.h"
 #include "module.h"
 
+const Value sage_nil = {VAL_NIL, {.number = 0.0}};
 
 // ========== VALUE CONSTRUCTORS ==========
-
-Value val_number(double value) {
-    Value v;
-    v.type = VAL_NUMBER;
-    v.as.number = value;
-    return v;
-}
-
-Value val_bool(int value) {
-    Value v;
-    v.type = VAL_BOOL;
-    v.as.boolean = value;
-    return v;
-}
-
-Value val_nil() {
-    Value v;
-    v.type = VAL_NIL;
-    v.as.number = 0;
-    return v;
-}
 
 Value val_native(NativeFn fn) {
     Value v;

@@ -219,10 +219,27 @@ typedef struct DictEntry DictEntry;
 #define SAGE_AS_NUMBER(v) (IS_NUMBER(v) ? (v).as.number : 0.0)
 #define SAGE_AS_BOOL(v)   (IS_BOOL(v) ? (v).as.boolean : 0)
 
+// Global constants
+extern const Value sage_nil;
+
 // Constructors
-Value val_number(double value);
-Value val_bool(int value);
-Value val_nil();
+static inline Value val_number(double value) {
+    Value v;
+    v.type = VAL_NUMBER;
+    v.as.number = value;
+    return v;
+}
+
+static inline Value val_bool(int value) {
+    Value v;
+    v.type = VAL_BOOL;
+    v.as.boolean = value;
+    return v;
+}
+
+static inline Value val_nil() {
+    return sage_nil;
+}
 Value val_string(const char* value);
 Value val_string_take(char* value);
 Value val_bytes(const unsigned char* data, int length);
