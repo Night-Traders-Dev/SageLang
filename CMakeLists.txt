@@ -19,6 +19,34 @@ if(BUILD_PICO)
     include(pico_sdk_import.cmake)
 endif()
 
+# ── WSL Detection + Compiler Fallback ───────────────────────────────────────
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    file(READ "/proc/version" PROC_VERSION)
+    if(PROC_VERSION MATCHES "microsoft|Microsoft|WSL")
+        message(STATUS "WSL detected — applying compatibility workarounds")
+
+        # Try gcc-10 first (older, less strict warnings)
+        find_program(GCC_10_PATH gcc-10)
+        if(GCC_10_PATH AND NOT CMAKE_C_COMPILER)
+            message(STATUS "Found gcc-10 at ${GCC_10_PATH} — using as C compiler")
+            set(CMAKE_C_COMPILER "${GCC_10_PATH}" CACHE FILEPATH "C compiler" FORCE)
+
+            # Also try to match g++-10 if you ever add C++ files
+            find_program(GXX_10_PATH g++-10)
+            if(GXX_10_PATH)
+                set(CMAKE_CXX_COMPILER "${GXX_10_PATH}" CACHE FILEPATH "C++ compiler" FORCE)
+            endif()
+        else()
+            # gcc-10 not available — relax warnings for newer GCC/glibc on WSL
+            message(STATUS "gcc-10 not found — adding WSL warning suppressions")
+            add_compile_options(-Wno-error)
+            add_compile_options(-Wno-error=format-truncation)
+            add_compile_options(-Wno-error=clobbered)
+        endif()
+    endif()
+endif()
+# ────────────────────────────────────────────────────────────────────────────
+
 # ============================================================================
 # Project Configuration
 # ============================================================================
@@ -63,6 +91,17 @@ add_compile_options(
     -Wno-unused-parameter
     -Wno-unused-function
 )
+
+# WSL: suppress known false-positive warnings from newer glibc/GCC
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    file(READ "/proc/version" PROC_VERSION)
+    if(PROC_VERSION MATCHES "microsoft|Microsoft|WSL")
+        add_compile_options(
+            -Wno-format-truncation
+            -Wno-clobbered
+        )
+    endif()
+endif()
 
 # Add POSIX source for strdup (desktop only)
 if(NOT BUILD_PICO)
