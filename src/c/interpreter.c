@@ -22,9 +22,9 @@
 #include "repl.h"    // Phase 12: REPL error recovery
 
 // Helper macro for creating normal expression results
-#define EVAL_RESULT(v) ((ExecResult){ (v), 0, 0, 0, 0, val_nil(), 0, NULL })
-#define EVAL_EXCEPTION(exc) ((ExecResult){ val_nil(), 0, 0, 0, 1, (exc), 0, NULL })
-#define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, val_nil(), 0, NULL })
+#define EVAL_RESULT(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL })
+#define EVAL_EXCEPTION(exc) ((ExecResult){ sage_nil, 0, 0, 0, 1, (exc), 0, NULL })
+#define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL })
 
 Environment* g_global_env = NULL;
 Environment* g_gc_root_env = NULL;
