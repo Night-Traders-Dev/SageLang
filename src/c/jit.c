@@ -1,3 +1,8 @@
+/* MAP_ANONYMOUS is a GNU/Linux extension; ensure it's visible */
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#  define _GNU_SOURCE
+#endif
+
 #include "jit.h"
 #include "ast.h"
 #include "gc.h"
@@ -11,6 +16,10 @@
 #ifdef __linux__
 #include <sys/mman.h>
 #include <unistd.h>
+/* MAP_ANONYMOUS fallback for older or non-GNU headers */
+#ifndef MAP_ANONYMOUS
+#  define MAP_ANONYMOUS MAP_ANON
+#endif
 #define JIT_SUPPORTED 1
 #elif defined(__APPLE__)
 #include <sys/mman.h>

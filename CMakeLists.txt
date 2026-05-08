@@ -102,6 +102,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             -Wno-unused-result
             -Wno-unused-variable
             -Wno-unused-but-set-variable
+            -Wno-switch
+            -Wno-overlength-strings
         )
     endif()
 endif()
