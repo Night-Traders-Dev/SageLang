@@ -472,13 +472,8 @@ bool import_module(Environment* env, ImportData* import_data) {
 
 // Add the install-prefix library path and SAGE_PATH env var
 static void add_system_search_paths(ModuleCache* cache) {
-    // 1. Installed library path (compile-time default)
-#ifndef SAGE_LIB_DIR
-#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
-#endif
-    add_search_path(cache, SAGE_LIB_DIR);
-
-    // 2. SAGE_PATH environment variable (colon-separated list of directories)
+    // 1. SAGE_PATH environment variable (colon-separated list of directories)
+    //    Checked first so local/development trees override the installed copy.
     const char* sage_path = getenv("SAGE_PATH");
     if (sage_path != NULL && sage_path[0] != '\0') {
         char buf[4096];
@@ -499,6 +494,12 @@ static void add_system_search_paths(ModuleCache* cache) {
             }
         }
     }
+
+    // 2. Installed library path (compile-time default)
+#ifndef SAGE_LIB_DIR
+#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
+#endif
+    add_search_path(cache, SAGE_LIB_DIR);
 
     // 3. Executable's own directory + /../share/sage/lib (for relocatable installs)
 #ifdef __linux__

@@ -56,3 +56,4 @@ models/weights/*.weights
 # Build artifacts
 *.ll
 *.spv
+.blackboxcli/

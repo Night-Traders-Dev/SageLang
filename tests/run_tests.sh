@@ -7,6 +7,8 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SAGE="$SCRIPT_DIR/sage"
 TESTS_DIR="$SCRIPT_DIR/tests"
+# Prefer local lib/ over any installed system copy
+export SAGE_PATH="$SCRIPT_DIR/lib${SAGE_PATH:+:$SAGE_PATH}"
 PASS=0
 FAIL=0
 ERRORS=""

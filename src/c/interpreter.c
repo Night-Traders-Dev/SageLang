@@ -1843,9 +1843,6 @@ static Value asm_compile_native(int argCount, Value* args) {
     int ok = (system(as_cmd) == 0);
     unlink(asm_path);
 
-    if (!ok) {
-        fprintf(stderr, "asm_compile(): assembly failed for %s. Is the cross-assembler installed?\n", arch);
-    }
     return val_bool(ok);
 }
 

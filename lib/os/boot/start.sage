@@ -88,6 +88,45 @@ proc generate_boot_asm(config):
     # Multiboot2 header
     asm = asm + generate_multiboot2_from_module()
     # GDT (in rodata)
+    asm = asm + generate_gdt_load()
+    # 32-bit entry
+    asm = asm + generate_entry32()
+    # A20
+    asm = asm + generate_a20_enable()
+    # Page tables
+    asm = asm + emit_section(".bss")
+    asm = asm + ".align 4096" + NL
+    asm = asm + emit_label("pml4_table")
+    asm = asm + emit_asm(".skip", "4096")
+    asm = asm + emit_label("pdp_table")
+    asm = asm + emit_asm(".skip", "4096")
+    asm = asm + NL
+    # Page tables init
+    asm = asm + TAB + "# Clear page tables" + NL
+    asm = asm + emit_asm("movl", "$pml4_table, %edi")
+    asm = asm + emit_asm("xorl", "%eax, %eax")
+    asm = asm + emit_asm("movl", "$2048, %ecx")
+    asm = asm + emit_asm("rep stosl", "")
+    asm = asm + NL
+    asm = asm + TAB + "# PML4[0] -> PDP table" + NL
+    asm = asm + emit_asm("movl", "$pdp_table, %eax")
+    asm = asm + emit_asm("orl", "$0x03, %eax")
+    asm = asm + emit_asm("movl", "%eax, (pml4_table)")
+    asm = asm + NL
+    asm = asm + TAB + "# PDP entries: 4 x 1GB pages (identity map 0-4GB)" + NL
+    asm = asm + emit_asm("movl", "$0x00000083, (pdp_table)")
+    asm = asm + emit_asm("movl", "$0x40000083, (pdp_table + 8)")
+    asm = asm + emit_asm("movl", "$0x80000083, (pdp_table + 16)")
+    asm = asm + emit_asm("movl", "$0xC0000083, (pdp_table + 24)")
+    asm = asm + NL
+    # Long mode
+    asm = asm + generate_long_mode_enable()
+    # 64-bit entry
+    asm = asm + generate_entry64()
+    # BSS: stack
+    asm = asm + generate_stack()
+    return asm
+end
 
 # --- Generate GDT loading code ---
 proc generate_gdt_load():
@@ -225,49 +264,6 @@ proc generate_stack():
     asm = asm + emit_asm(".skip", str(KERNEL_STACK_SIZE))
     asm = asm + emit_label("stack_top")
     asm = asm + NL
-    return asm
-end
-
-    # Multiboot2 header
-    asm = asm + generate_multiboot2_from_module()
-    # GDT (in rodata)
-    asm = asm + generate_gdt_load()
-    # 32-bit entry
-    asm = asm + generate_entry32()
-    # A20
-    asm = asm + generate_a20_enable()
-    # Page tables
-    asm = asm + emit_section(".bss")
-    asm = asm + ".align 4096" + NL
-    asm = asm + emit_label("pml4_table")
-    asm = asm + emit_asm(".skip", "4096")
-    asm = asm + emit_label("pdp_table")
-    asm = asm + emit_asm(".skip", "4096")
-    asm = asm + NL
-    # Page tables init
-    asm = asm + TAB + "# Clear page tables" + NL
-    asm = asm + emit_asm("movl", "$pml4_table, %edi")
-    asm = asm + emit_asm("xorl", "%eax, %eax")
-    asm = asm + emit_asm("movl", "$2048, %ecx")
-    asm = asm + emit_asm("rep stosl", "")
-    asm = asm + NL
-    asm = asm + TAB + "# PML4[0] -> PDP table" + NL
-    asm = asm + emit_asm("movl", "$pdp_table, %eax")
-    asm = asm + emit_asm("orl", "$0x03, %eax")
-    asm = asm + emit_asm("movl", "%eax, (pml4_table)")
-    asm = asm + NL
-    asm = asm + TAB + "# PDP entries: 4 x 1GB pages (identity map 0-4GB)" + NL
-    asm = asm + emit_asm("movl", "$0x00000083, (pdp_table)")
-    asm = asm + emit_asm("movl", "$0x40000083, (pdp_table + 8)")
-    asm = asm + emit_asm("movl", "$0x80000083, (pdp_table + 16)")
-    asm = asm + emit_asm("movl", "$0xC0000083, (pdp_table + 24)")
-    asm = asm + NL
-    # Long mode
-    asm = asm + generate_long_mode_enable()
-    # 64-bit entry
-    asm = asm + generate_entry64()
-    # BSS: stack
-    asm = asm + generate_stack()
     return asm
 end
 
@@ -757,30 +753,6 @@ end
 # ===========================================================================
 # These helpers allow using the standalone multiboot/gdt library modules
 # to generate boot headers instead of the inline assembly versions above.
-
-# Generate a multiboot2 header from the multiboot.sage module as assembly.
-proc generate_multiboot2_from_module():
-    import os.boot.multiboot as mb
-    let header = mb.create_header()
-    mb.add_end_tag(header)
-    let bytes = mb.serialize_header(header)
-    let asm = ""
-    asm = asm + ".section .multiboot, " + chr(34) + "a" + chr(34) + NL
-    asm = asm + ".align 8" + NL
-    asm = asm + "multiboot_header:" + NL
-    let i = 0
-    while i + 3 < len(bytes):
-        let val = bytes[i] + bytes[i+1] * 256 + bytes[i+2] * 65536 + bytes[i+3] * 16777216
-        asm = asm + TAB + ".long " + str(val) + NL
-        i = i + 4
-    end
-    while i < len(bytes):
-        asm = asm + TAB + ".byte " + str(bytes[i]) + NL
-        i = i + 1
-    end
-    asm = asm + "multiboot_header_end:" + NL + NL
-    return asm
-end
 
 # Generate a GDT from the gdt.sage module as assembly.
 proc generate_gdt_from_module():

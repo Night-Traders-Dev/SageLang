@@ -406,8 +406,8 @@ if [ "$SKIP_TESTS" -eq 0 ]; then
     }
 
     section "C Interpreter Tests"
-    # tests/run_tests.sh expects ./sage — ensure it exists after CMake builds
-    if [ ! -x "./sage" ] && [ -x "$SAGE_BIN" ]; then
+    # tests/run_tests.sh expects ./sage — always sync from the freshly-built binary
+    if [ -x "$SAGE_BIN" ] && [ "$SAGE_BIN" != "./sage" ]; then
         cp "$SAGE_BIN" ./sage
     fi
     if [ "$IS_PROOT" -eq 1 ]; then
