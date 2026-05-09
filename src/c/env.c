@@ -18,7 +18,7 @@ static char* my_strndup(const char* s, size_t n) {
         len++;
     }
 
-    result = (char*)SAGE_ALLOC(len + 1);
+    result = (char*)malloc(len + 1);
     if (!result) return NULL;
 
     memcpy(result, s, len);
@@ -61,6 +61,35 @@ void env_define(Env* env, const char* name, int length, Value value) {
     EnvNode* node = SAGE_ALLOC(sizeof(EnvNode));
     node->name = my_strndup(name, length);
     node->name_length = length;
+    node->owns_name = 1;
+    node->value = value;
+    node->next = env->head;
+    env->head = node;
+}
+
+void env_define_const(Env* env, const char* name, int length, Value value) {
+    // Search ONLY in current scope (head) to update
+    EnvNode* current = env->head;
+    while (current != NULL) {
+        // Fast path: length mismatch → skip immediately (avoids strncmp)
+        if (current->name_length == length &&
+            memcmp(current->name, name, (size_t)length) == 0) {
+            if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
+                arc_assign_value(&current->value, value);
+            } else {
+                GC_WRITE_BARRIER(current->value);
+                current->value = value;
+            }
+            return;
+        }
+        current = current->next;
+    }
+
+    // Create new in current scope
+    EnvNode* node = SAGE_ALLOC(sizeof(EnvNode));
+    node->name = (char*)name;
+    node->name_length = length;
+    node->owns_name = 0;
     node->value = value;
     node->next = env->head;
     env->head = node;
@@ -121,7 +150,7 @@ void env_cleanup_all(void) {
         EnvNode* current = env->head;
         while (current != NULL) {
             EnvNode* next = current->next;
-            free(current->name);
+            if (current->owns_name) free(current->name);
             free(current);
             current = next;
         }
@@ -144,7 +173,7 @@ void env_sweep_unmarked(void) {
             EnvNode* node = env->head;
             while (node != NULL) {
                 EnvNode* next = node->next;
-                free(node->name);
+                if (node->owns_name) free(node->name);
                 free(node);
                 node = next;
             }
