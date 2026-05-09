@@ -92,7 +92,7 @@ static Value vm_execute_native(int argCount, Value* args) {
     
     // If a dictionary is provided, expose it as 'state' variable
     if (argCount >= 2 && IS_DICT(args[1])) {
-        env_define(env, "state", 5, args[1]);
+        env_define_const(env, "state", 5, args[1]);
     }
 
     ExecResult res = vm_execute_program(program, env);
@@ -179,10 +179,10 @@ Module* create_vm_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "vm");
     Environment* e = m->env;
 
-    env_define(e, "compile", 7, val_native(vm_compile_native));
-    env_define(e, "execute", 7, val_native(vm_execute_native));
-    env_define(e, "serialize", 9, val_native(vm_serialize_native));
-    env_define(e, "deserialize", 11, val_native(vm_deserialize_native));
+    env_define_const(e, "compile", 7, val_native(vm_compile_native));
+    env_define_const(e, "execute", 7, val_native(vm_execute_native));
+    env_define_const(e, "serialize", 9, val_native(vm_serialize_native));
+    env_define_const(e, "deserialize", 11, val_native(vm_deserialize_native));
 
     return m;
 }
@@ -318,47 +318,47 @@ Module* create_math_module(ModuleCache* cache) {
     Environment* e = m->env;
 
     // Trig
-    env_define(e, "sin", 3, val_native(math_sin_native));
-    env_define(e, "cos", 3, val_native(math_cos_native));
-    env_define(e, "tan", 3, val_native(math_tan_native));
-    env_define(e, "asin", 4, val_native(math_asin_native));
-    env_define(e, "acos", 4, val_native(math_acos_native));
-    env_define(e, "atan", 4, val_native(math_atan_native));
-    env_define(e, "atan2", 5, val_native(math_atan2_native));
+    env_define_const(e, "sin", 3, val_native(math_sin_native));
+    env_define_const(e, "cos", 3, val_native(math_cos_native));
+    env_define_const(e, "tan", 3, val_native(math_tan_native));
+    env_define_const(e, "asin", 4, val_native(math_asin_native));
+    env_define_const(e, "acos", 4, val_native(math_acos_native));
+    env_define_const(e, "atan", 4, val_native(math_atan_native));
+    env_define_const(e, "atan2", 5, val_native(math_atan2_native));
 
     // Powers & roots
-    env_define(e, "sqrt", 4, val_native(math_sqrt_native));
-    env_define(e, "pow", 3, val_native(math_pow_native));
-    env_define(e, "log", 3, val_native(math_log_native));
-    env_define(e, "log10", 5, val_native(math_log10_native));
-    env_define(e, "exp", 3, val_native(math_exp_native));
+    env_define_const(e, "sqrt", 4, val_native(math_sqrt_native));
+    env_define_const(e, "pow", 3, val_native(math_pow_native));
+    env_define_const(e, "log", 3, val_native(math_log_native));
+    env_define_const(e, "log10", 5, val_native(math_log10_native));
+    env_define_const(e, "exp", 3, val_native(math_exp_native));
 
     // Rounding
-    env_define(e, "floor", 5, val_native(math_floor_native));
-    env_define(e, "ceil", 4, val_native(math_ceil_native));
-    env_define(e, "round", 5, val_native(math_round_native));
-    env_define(e, "abs", 3, val_native(math_abs_native));
-    env_define(e, "fmod", 4, val_native(math_fmod_native));
+    env_define_const(e, "floor", 5, val_native(math_floor_native));
+    env_define_const(e, "ceil", 4, val_native(math_ceil_native));
+    env_define_const(e, "round", 5, val_native(math_round_native));
+    env_define_const(e, "abs", 3, val_native(math_abs_native));
+    env_define_const(e, "fmod", 4, val_native(math_fmod_native));
 
     // Min/max/clamp
-    env_define(e, "min", 3, val_native(math_min_native));
-    env_define(e, "max", 3, val_native(math_max_native));
-    env_define(e, "clamp", 5, val_native(math_clamp_native));
+    env_define_const(e, "min", 3, val_native(math_min_native));
+    env_define_const(e, "max", 3, val_native(math_max_native));
+    env_define_const(e, "clamp", 5, val_native(math_clamp_native));
 
     // Checks
-    env_define(e, "isnan", 5, val_native(math_isnan_native));
-    env_define(e, "isinf", 5, val_native(math_isinf_native));
+    env_define_const(e, "isnan", 5, val_native(math_isnan_native));
+    env_define_const(e, "isinf", 5, val_native(math_isinf_native));
 
     // Constants
-    env_define(e, "pi", 2, val_number(3.14159265358979323846));
-    env_define(e, "PI", 2, val_number(3.14159265358979323846));  // Uppercase alias
-    env_define(e, "e", 1, val_number(2.71828182845904523536));
-    env_define(e, "inf", 3, val_number(INFINITY));
-    env_define(e, "nan", 3, val_number(NAN));
-    env_define(e, "tau", 3, val_number(6.28318530717958647692));
+    env_define_const(e, "pi", 2, val_number(3.14159265358979323846));
+    env_define_const(e, "PI", 2, val_number(3.14159265358979323846));  // Uppercase alias
+    env_define_const(e, "e", 1, val_number(2.71828182845904523536));
+    env_define_const(e, "inf", 3, val_number(INFINITY));
+    env_define_const(e, "nan", 3, val_number(NAN));
+    env_define_const(e, "tau", 3, val_number(6.28318530717958647692));
 
     // Random
-    env_define(e, "random", 6, val_native(math_random_native));
+    env_define_const(e, "random", 6, val_native(math_random_native));
 
     return m;
 }
@@ -546,17 +546,17 @@ Module* create_io_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "io");
     Environment* e = m->env;
 
-    env_define(e, "readfile", 8, val_native(io_readfile_native));
-    env_define(e, "writefile", 9, val_native(io_writefile_native));
-    env_define(e, "appendfile", 10, val_native(io_appendfile_native));
-    env_define(e, "writebytes", 10, val_native(io_writebytes_native));
-    env_define(e, "appendbytes", 11, val_native(io_appendbytes_native));
-    env_define(e, "exists", 6, val_native(io_exists_native));
-    env_define(e, "remove", 6, val_native(io_remove_native));
-    env_define(e, "isdir", 5, val_native(io_isdir_native));
-    env_define(e, "filesize", 8, val_native(io_filesize_native));
-    env_define(e, "readbytes", 9, val_native(io_readbytes_native));
-    env_define(e, "listdir", 7, val_native(io_listdir_native));
+    env_define_const(e, "readfile", 8, val_native(io_readfile_native));
+    env_define_const(e, "writefile", 9, val_native(io_writefile_native));
+    env_define_const(e, "appendfile", 10, val_native(io_appendfile_native));
+    env_define_const(e, "writebytes", 10, val_native(io_writebytes_native));
+    env_define_const(e, "appendbytes", 11, val_native(io_appendbytes_native));
+    env_define_const(e, "exists", 6, val_native(io_exists_native));
+    env_define_const(e, "remove", 6, val_native(io_remove_native));
+    env_define_const(e, "isdir", 5, val_native(io_isdir_native));
+    env_define_const(e, "filesize", 8, val_native(io_filesize_native));
+    env_define_const(e, "readbytes", 9, val_native(io_readbytes_native));
+    env_define_const(e, "listdir", 7, val_native(io_listdir_native));
 
     return m;
 }
@@ -700,18 +700,18 @@ Module* create_string_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "string");
     Environment* e = m->env;
 
-    env_define(e, "find", 4, val_native(str_find_native));
-    env_define(e, "rfind", 5, val_native(str_rfind_native));
-    env_define(e, "startswith", 10, val_native(str_startswith_native));
-    env_define(e, "endswith", 8, val_native(str_endswith_native));
-    env_define(e, "contains", 8, val_native(str_contains_native));
-    env_define(e, "char_at", 7, val_native(str_char_at_native));
-    env_define(e, "ord", 3, val_native(str_ord_native));
-    env_define(e, "chr", 3, val_native(str_chr_native));
-    env_define(e, "repeat", 6, val_native(str_repeat_native));
-    env_define(e, "count", 5, val_native(str_count_native));
-    env_define(e, "substr", 6, val_native(str_substr_native));
-    env_define(e, "reverse", 7, val_native(str_reverse_native));
+    env_define_const(e, "find", 4, val_native(str_find_native));
+    env_define_const(e, "rfind", 5, val_native(str_rfind_native));
+    env_define_const(e, "startswith", 10, val_native(str_startswith_native));
+    env_define_const(e, "endswith", 8, val_native(str_endswith_native));
+    env_define_const(e, "contains", 8, val_native(str_contains_native));
+    env_define_const(e, "char_at", 7, val_native(str_char_at_native));
+    env_define_const(e, "ord", 3, val_native(str_ord_native));
+    env_define_const(e, "chr", 3, val_native(str_chr_native));
+    env_define_const(e, "repeat", 6, val_native(str_repeat_native));
+    env_define_const(e, "count", 5, val_native(str_count_native));
+    env_define_const(e, "substr", 6, val_native(str_substr_native));
+    env_define_const(e, "reverse", 7, val_native(str_reverse_native));
 
     return m;
 }
@@ -801,18 +801,18 @@ Module* create_sys_module(ModuleCache* cache) {
     Environment* e = m->env;
 
     // args is a function that returns the array (so it's always current)
-    env_define(e, "args", 4, val_native(sys_args_native));
-    env_define(e, "exit", 4, val_native(sys_exit_native));
-    env_define(e, "getenv", 6, val_native(sys_getenv_native));
-    env_define(e, "clock", 5, val_native(sys_clock_native));
-    env_define(e, "sleep", 5, val_native(sys_sleep_native));
-    env_define(e, "exec", 4, val_native(sys_exec_native));
+    env_define_const(e, "args", 4, val_native(sys_args_native));
+    env_define_const(e, "exit", 4, val_native(sys_exit_native));
+    env_define_const(e, "getenv", 6, val_native(sys_getenv_native));
+    env_define_const(e, "clock", 5, val_native(sys_clock_native));
+    env_define_const(e, "sleep", 5, val_native(sys_sleep_native));
+    env_define_const(e, "exec", 4, val_native(sys_exec_native));
 
     // Constants
-    env_define(e, "version", 7, val_string(SAGE_VERSION_STR));
+    env_define_const(e, "version", 7, val_string(SAGE_VERSION_STR));
     {
         Value plat = sys_platform_native(0, NULL);
-        env_define(e, "platform", 8, plat);
+        env_define_const(e, "platform", 8, plat);
     }
 
     return m;
@@ -1073,15 +1073,15 @@ Module* create_fat_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "fat");
     Environment* e = m->env;
 
-    env_define(e, "parse_boot_sector", 17, val_native(fat_parse_boot_sector_native));
-    env_define(e, "probe", 5, val_native(fat_probe_native));
-    env_define(e, "cluster_to_lba", 14, val_native(fat_cluster_to_lba_native));
-    env_define(e, "fat_entry_offset", 16, val_native(fat_fat_entry_offset_native));
+    env_define_const(e, "parse_boot_sector", 17, val_native(fat_parse_boot_sector_native));
+    env_define_const(e, "probe", 5, val_native(fat_probe_native));
+    env_define_const(e, "cluster_to_lba", 14, val_native(fat_cluster_to_lba_native));
+    env_define_const(e, "fat_entry_offset", 16, val_native(fat_fat_entry_offset_native));
 
-    env_define(e, "FAT8", 4, val_number(8));
-    env_define(e, "FAT12", 5, val_number(12));
-    env_define(e, "FAT16", 5, val_number(16));
-    env_define(e, "FAT32", 5, val_number(32));
+    env_define_const(e, "FAT8", 4, val_number(8));
+    env_define_const(e, "FAT12", 5, val_number(12));
+    env_define_const(e, "FAT16", 5, val_number(16));
+    env_define_const(e, "FAT32", 5, val_number(32));
 
     return m;
 }
@@ -1107,7 +1107,7 @@ static void* sage_thread_entry(void* data) {
     Env* scope = env_create(td->func->closure);
     for (int i = 0; i < td->arg_count && i < proc->param_count; i++) {
         Token paramName = proc->params[i];
-        env_define(scope, paramName.start, paramName.length, td->args[i]);
+        env_define_const(scope, paramName.start, paramName.length, td->args[i]);
     }
     gc_unlock();
 
@@ -1246,13 +1246,13 @@ Module* create_thread_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "thread");
     Environment* e = m->env;
 
-    env_define(e, "spawn", 5, val_native(thread_spawn_native));
-    env_define(e, "join", 4, val_native(thread_join_native));
-    env_define(e, "mutex", 5, val_native(thread_mutex_native));
-    env_define(e, "lock", 4, val_native(thread_lock_native));
-    env_define(e, "unlock", 6, val_native(thread_unlock_native));
-    env_define(e, "sleep", 5, val_native(thread_sleep_native));
-    env_define(e, "id", 2, val_native(thread_id_native));
+    env_define_const(e, "spawn", 5, val_native(thread_spawn_native));
+    env_define_const(e, "join", 4, val_native(thread_join_native));
+    env_define_const(e, "mutex", 5, val_native(thread_mutex_native));
+    env_define_const(e, "lock", 4, val_native(thread_lock_native));
+    env_define_const(e, "unlock", 6, val_native(thread_unlock_native));
+    env_define_const(e, "sleep", 5, val_native(thread_sleep_native));
+    env_define_const(e, "id", 2, val_native(thread_id_native));
 
     return m;
 }

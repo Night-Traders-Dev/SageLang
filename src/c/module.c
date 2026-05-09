@@ -353,7 +353,7 @@ bool import_all(Environment* env, const char* module_name) {
 
     // Bind using the last component of the dotted name (e.g., graphics.vulkan -> vulkan)
     const char* bind_name = module_binding_name(module_name);
-    env_define(env, bind_name, strlen(bind_name), val_module(module));
+    env_define_const(env, bind_name, strlen(bind_name), val_module(module));
 
     return true;
 }
@@ -373,7 +373,7 @@ bool import_wildcard(Environment* env, const char* module_name) {
     if (module->env) {
         EnvNode* node = module->env->head;
         while (node != NULL) {
-            env_define(env, node->name, strlen(node->name), node->value);
+            env_define_const(env, node->name, strlen(node->name), node->value);
             node = node->next;
         }
     }
@@ -403,7 +403,7 @@ bool import_from(Environment* env, const char* module_name, ImportItem* items, i
             return false;
         }
 
-        env_define(env, bind_name, strlen(bind_name), value);  // ✅ FIX: Use alias or original
+        env_define_const(env, bind_name, strlen(bind_name), value);  // ✅ FIX: Use alias or original
     }
 
     return true;
@@ -429,7 +429,7 @@ bool import_as(Environment* env, const char* module_name, const char* alias) {
     }
     
     // Define with alias (with name length)
-    env_define(env, alias, strlen(alias), val_module(module));
+    env_define_const(env, alias, strlen(alias), val_module(module));
     
     return true;
 }

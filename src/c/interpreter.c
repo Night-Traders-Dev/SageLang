@@ -49,7 +49,7 @@ static int stmt_has_pragma(Stmt* stmt, const char* name) {
     return 0;
 }
 // Maximum loop iterations to prevent hangs and stack exhaustion
-#define MAX_LOOP_ITERATIONS 1000000
+#define MAX_LOOP_ITERATIONS 10000000
 #if SAGE_PLATFORM_PICO
 static int g_recursion_depth = 0;  // No TLS on Cortex-M0+
 #else
@@ -1973,132 +1973,132 @@ static Value path_is_file_native(int argCount, Value* args) {
 
 void init_stdlib(Env* env) {
     // Core functions
-    env_define(env, "clock", 5, val_native(clock_native));
-    env_define(env, "input", 5, val_native(input_native));
-    env_define(env, "tonumber", 8, val_native(tonumber_native));
-    env_define(env, "int", 3, val_native(int_native));
-    env_define(env, "str", 3, val_native(str_native));
-    env_define(env, "len", 3, val_native(len_native));
+    env_define_const(env, "clock", 5, val_native(clock_native));
+    env_define_const(env, "input", 5, val_native(input_native));
+    env_define_const(env, "tonumber", 8, val_native(tonumber_native));
+    env_define_const(env, "int", 3, val_native(int_native));
+    env_define_const(env, "str", 3, val_native(str_native));
+    env_define_const(env, "len", 3, val_native(len_native));
     
     // Array functions
-    env_define(env, "push", 4, val_native(push_native));
-    env_define(env, "append", 6, val_native(push_native));
-    env_define(env, "build_quad_verts", 16, val_native(build_quad_verts_native));
-    env_define(env, "array_extend", 12, val_native(array_extend_native));
-    env_define(env, "build_line_quads", 16, val_native(build_line_quads_native));
-    env_define(env, "pop", 3, val_native(pop_native));
-    env_define(env, "range", 5, val_native(range_native));
-    env_define(env, "slice", 5, val_native(slice_native));
+    env_define_const(env, "push", 4, val_native(push_native));
+    env_define_const(env, "append", 6, val_native(push_native));
+    env_define_const(env, "build_quad_verts", 16, val_native(build_quad_verts_native));
+    env_define_const(env, "array_extend", 12, val_native(array_extend_native));
+    env_define_const(env, "build_line_quads", 16, val_native(build_line_quads_native));
+    env_define_const(env, "pop", 3, val_native(pop_native));
+    env_define_const(env, "range", 5, val_native(range_native));
+    env_define_const(env, "slice", 5, val_native(slice_native));
     
     // String functions
-    env_define(env, "split", 5, val_native(split_native));
-    env_define(env, "join", 4, val_native(join_native));
-    env_define(env, "replace", 7, val_native(replace_native));
-    env_define(env, "upper", 5, val_native(upper_native));
-    env_define(env, "lower", 5, val_native(lower_native));
-    env_define(env, "strip", 5, val_native(strip_native));
-    env_define(env, "type", 4, val_native(type_native));
-    env_define(env, "chr", 3, val_native(chr_native));
-    env_define(env, "ord", 3, val_native(ord_native));
-    env_define(env, "startswith", 10, val_native(startswith_native));
-    env_define(env, "endswith", 8, val_native(endswith_native));
-    env_define(env, "contains", 8, val_native(contains_native));
-    env_define(env, "indexof", 7, val_native(indexof_native));
+    env_define_const(env, "split", 5, val_native(split_native));
+    env_define_const(env, "join", 4, val_native(join_native));
+    env_define_const(env, "replace", 7, val_native(replace_native));
+    env_define_const(env, "upper", 5, val_native(upper_native));
+    env_define_const(env, "lower", 5, val_native(lower_native));
+    env_define_const(env, "strip", 5, val_native(strip_native));
+    env_define_const(env, "type", 4, val_native(type_native));
+    env_define_const(env, "chr", 3, val_native(chr_native));
+    env_define_const(env, "ord", 3, val_native(ord_native));
+    env_define_const(env, "startswith", 10, val_native(startswith_native));
+    env_define_const(env, "endswith", 8, val_native(endswith_native));
+    env_define_const(env, "contains", 8, val_native(contains_native));
+    env_define_const(env, "indexof", 7, val_native(indexof_native));
 
     // Dictionary functions
-    env_define(env, "dict_keys", 9, val_native(dict_keys_native));
-    env_define(env, "dict_values", 11, val_native(dict_values_native));
-    env_define(env, "dict_has", 8, val_native(dict_has_native));
-    env_define(env, "dict_delete", 11, val_native(dict_delete_native));
+    env_define_const(env, "dict_keys", 9, val_native(dict_keys_native));
+    env_define_const(env, "dict_values", 11, val_native(dict_values_native));
+    env_define_const(env, "dict_has", 8, val_native(dict_has_native));
+    env_define_const(env, "dict_delete", 11, val_native(dict_delete_native));
     
     // GC functions
-    env_define(env, "gc_collect", 10, val_native(gc_collect_native));
-    env_define(env, "gc_stats", 8, val_native(gc_stats_native));
-    env_define(env, "gc_collections", 14, val_native(gc_collections_native));
-    env_define(env, "gc_enable", 9, val_native(gc_enable_native));
-    env_define(env, "gc_disable", 10, val_native(gc_disable_native));
-    env_define(env, "gc_mode", 7, val_native(gc_mode_native));
-    env_define(env, "gc_set_arc", 10, val_native(gc_set_arc_native));
-    env_define(env, "gc_set_orc", 10, val_native(gc_set_orc_native));
+    env_define_const(env, "gc_collect", 10, val_native(gc_collect_native));
+    env_define_const(env, "gc_stats", 8, val_native(gc_stats_native));
+    env_define_const(env, "gc_collections", 14, val_native(gc_collections_native));
+    env_define_const(env, "gc_enable", 9, val_native(gc_enable_native));
+    env_define_const(env, "gc_disable", 10, val_native(gc_disable_native));
+    env_define_const(env, "gc_mode", 7, val_native(gc_mode_native));
+    env_define_const(env, "gc_set_arc", 10, val_native(gc_set_arc_native));
+    env_define_const(env, "gc_set_orc", 10, val_native(gc_set_orc_native));
 
     // PHASE 7: Generator function
-    env_define(env, "next", 4, val_native(native_next));
+    env_define_const(env, "next", 4, val_native(native_next));
 
 #ifndef SAGE_NO_FFI
     // Phase 9: FFI functions
-    env_define(env, "ffi_open", 8, val_native(ffi_open_native));
-    env_define(env, "ffi_close", 9, val_native(ffi_close_native));
-    env_define(env, "ffi_call", 8, val_native(ffi_call_native));
-    env_define(env, "ffi_sym", 7, val_native(ffi_sym_native));
+    env_define_const(env, "ffi_open", 8, val_native(ffi_open_native));
+    env_define_const(env, "ffi_close", 9, val_native(ffi_close_native));
+    env_define_const(env, "ffi_call", 8, val_native(ffi_call_native));
+    env_define_const(env, "ffi_sym", 7, val_native(ffi_sym_native));
 #endif
 
     // Phase 1.8: Bytes operations
-    env_define(env, "bytes", 5, val_native(bytes_new_native));
-    env_define(env, "bytes_len", 9, val_native(bytes_len_native));
-    env_define(env, "bytes_get", 9, val_native(bytes_get_native));
-    env_define(env, "bytes_set", 9, val_native(bytes_set_native));
-    env_define(env, "bytes_to_string", 15, val_native(bytes_to_string_native));
-    env_define(env, "bytes_slice", 11, val_native(bytes_slice_native));
-    env_define(env, "bytes_push", 10, val_native(bytes_push_native));
+    env_define_const(env, "bytes", 5, val_native(bytes_new_native));
+    env_define_const(env, "bytes_len", 9, val_native(bytes_len_native));
+    env_define_const(env, "bytes_get", 9, val_native(bytes_get_native));
+    env_define_const(env, "bytes_set", 9, val_native(bytes_set_native));
+    env_define_const(env, "bytes_to_string", 15, val_native(bytes_to_string_native));
+    env_define_const(env, "bytes_slice", 11, val_native(bytes_slice_native));
+    env_define_const(env, "bytes_push", 10, val_native(bytes_push_native));
 
     // Phase 1.8: sizeof and pointer arithmetic
-    env_define(env, "sizeof", 6, val_native(sizeof_native));
-    env_define(env, "ptr_add", 7, val_native(ptr_add_native));
-    env_define(env, "ptr_to_int", 10, val_native(ptr_to_int_native));
+    env_define_const(env, "sizeof", 6, val_native(sizeof_native));
+    env_define_const(env, "ptr_add", 7, val_native(ptr_add_native));
+    env_define_const(env, "ptr_to_int", 10, val_native(ptr_to_int_native));
 
     // Phase 1.9: Hash, doc, and path utilities
-    env_define(env, "hash", 4, val_native(hash_native));
-    env_define(env, "doc", 3, val_native(doc_native));
-    env_define(env, "path_join", 9, val_native(path_join_native));
-    env_define(env, "path_dirname", 12, val_native(path_dirname_native));
-    env_define(env, "path_basename", 13, val_native(path_basename_native));
-    env_define(env, "path_ext", 8, val_native(path_ext_native));
-    env_define(env, "path_exists", 11, val_native(path_exists_native));
-    env_define(env, "path_is_dir", 11, val_native(path_is_dir_native));
-    env_define(env, "path_is_file", 12, val_native(path_is_file_native));
+    env_define_const(env, "hash", 4, val_native(hash_native));
+    env_define_const(env, "doc", 3, val_native(doc_native));
+    env_define_const(env, "path_join", 9, val_native(path_join_native));
+    env_define_const(env, "path_dirname", 12, val_native(path_dirname_native));
+    env_define_const(env, "path_basename", 13, val_native(path_basename_native));
+    env_define_const(env, "path_ext", 8, val_native(path_ext_native));
+    env_define_const(env, "path_exists", 11, val_native(path_exists_native));
+    env_define_const(env, "path_is_dir", 11, val_native(path_is_dir_native));
+    env_define_const(env, "path_is_file", 12, val_native(path_is_file_native));
 
     // Phase 9: Memory operations
-    env_define(env, "mem_alloc", 9, val_native(mem_alloc_native));
-    env_define(env, "mem_free", 8, val_native(mem_free_native));
-    env_define(env, "mem_read", 8, val_native(mem_read_native));
-    env_define(env, "mem_write", 9, val_native(mem_write_native));
-    env_define(env, "mem_size", 8, val_native(mem_size_native));
-    env_define(env, "addressof", 9, val_native(addressof_native));
+    env_define_const(env, "mem_alloc", 9, val_native(mem_alloc_native));
+    env_define_const(env, "mem_free", 8, val_native(mem_free_native));
+    env_define_const(env, "mem_read", 8, val_native(mem_read_native));
+    env_define_const(env, "mem_write", 9, val_native(mem_write_native));
+    env_define_const(env, "mem_size", 8, val_native(mem_size_native));
+    env_define_const(env, "addressof", 9, val_native(addressof_native));
 
     // Phase 9: C struct interop
-    env_define(env, "struct_def", 10, val_native(struct_def_native));
-    env_define(env, "struct_new", 10, val_native(struct_new_native));
-    env_define(env, "struct_get", 10, val_native(struct_get_native));
-    env_define(env, "struct_set", 10, val_native(struct_set_native));
-    env_define(env, "struct_size", 11, val_native(struct_size_native));
+    env_define_const(env, "struct_def", 10, val_native(struct_def_native));
+    env_define_const(env, "struct_new", 10, val_native(struct_new_native));
+    env_define_const(env, "struct_get", 10, val_native(struct_get_native));
+    env_define_const(env, "struct_set", 10, val_native(struct_set_native));
+    env_define_const(env, "struct_size", 11, val_native(struct_size_native));
 
     // Phase 9: Inline assembly
 #ifndef SAGE_NO_FFI
-    env_define(env, "asm_exec", 8, val_native(asm_exec_native));
+    env_define_const(env, "asm_exec", 8, val_native(asm_exec_native));
 #endif
-    env_define(env, "asm_compile", 11, val_native(asm_compile_native));
-    env_define(env, "asm_arch", 8, val_native(asm_arch_native));
+    env_define_const(env, "asm_compile", 11, val_native(asm_compile_native));
+    env_define_const(env, "asm_arch", 8, val_native(asm_arch_native));
 
     // SMP / CPU topology
-    env_define(env, "cpu_count", 9, val_native(cpu_count_native));
-    env_define(env, "cpu_physical_cores", 18, val_native(cpu_physical_cores_native));
-    env_define(env, "cpu_has_hyperthreading", 22, val_native(cpu_has_hyperthreading_native));
-    env_define(env, "thread_set_affinity", 19, val_native(thread_set_affinity_native));
-    env_define(env, "thread_get_core", 15, val_native(thread_get_core_native));
+    env_define_const(env, "cpu_count", 9, val_native(cpu_count_native));
+    env_define_const(env, "cpu_physical_cores", 18, val_native(cpu_physical_cores_native));
+    env_define_const(env, "cpu_has_hyperthreading", 22, val_native(cpu_has_hyperthreading_native));
+    env_define_const(env, "thread_set_affinity", 19, val_native(thread_set_affinity_native));
+    env_define_const(env, "thread_get_core", 15, val_native(thread_get_core_native));
 
     // True atomic operations (C-level __atomic builtins)
-    env_define(env, "atomic_new", 10, val_native(atomic_new_native));
-    env_define(env, "atomic_load", 11, val_native(atomic_load_native));
-    env_define(env, "atomic_store", 12, val_native(atomic_store_native));
-    env_define(env, "atomic_add", 10, val_native(atomic_add_native));
-    env_define(env, "atomic_cas", 10, val_native(atomic_cas_native));
-    env_define(env, "atomic_exchange", 15, val_native(atomic_exchange_native));
+    env_define_const(env, "atomic_new", 10, val_native(atomic_new_native));
+    env_define_const(env, "atomic_load", 11, val_native(atomic_load_native));
+    env_define_const(env, "atomic_store", 12, val_native(atomic_store_native));
+    env_define_const(env, "atomic_add", 10, val_native(atomic_add_native));
+    env_define_const(env, "atomic_cas", 10, val_native(atomic_cas_native));
+    env_define_const(env, "atomic_exchange", 15, val_native(atomic_exchange_native));
 
     // Semaphores (C-level POSIX semaphores)
-    env_define(env, "sem_new", 7, val_native(sem_new_native));
-    env_define(env, "sem_wait", 8, val_native(sem_wait_native));
-    env_define(env, "sem_post", 8, val_native(sem_post_native));
-    env_define(env, "sem_trywait", 11, val_native(sem_trywait_native));
+    env_define_const(env, "sem_new", 7, val_native(sem_new_native));
+    env_define_const(env, "sem_wait", 8, val_native(sem_wait_native));
+    env_define_const(env, "sem_post", 8, val_native(sem_post_native));
+    env_define_const(env, "sem_trywait", 11, val_native(sem_trywait_native));
 }
 
 // --- Helper: Truthiness ---
@@ -2586,10 +2586,10 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     
                     Env* defining = object.as.instance->class_def->defining_env;
                     Env* method_env = env_create(defining ? defining : env);
-                    env_define(method_env, "self", 4, object);
+                    env_define_const(method_env, "self", 4, object);
                     // Track which class owns this method (for super resolution)
                     ClassValue* owner = class_find_method_owner(object.as.instance->class_def, method_token.start, method_token.length);
-                    if (owner) env_define(method_env, "__class__", 9, val_class(owner));
+                    if (owner) env_define_const(method_env, "__class__", 9, val_class(owner));
 
                     int param_start = (method_stmt->param_count > 0 &&
                                       strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
@@ -2602,13 +2602,13 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                             ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
                             if (arg_result.is_throwing) { free(eval_args); return arg_result; }
                             eval_args[i] = arg_result.value;
-                            env_define(method_env, method_stmt->params[i + param_start].start,
+                            env_define_const(method_env, method_stmt->params[i + param_start].start,
                                        method_stmt->params[i + param_start].length, arg_result.value);
                         }
                         // Missing args set to nil
                         for (int i = arg_count; i < method_stmt->param_count - param_start; i++) {
                             eval_args[i] = val_nil();
-                            env_define(method_env, method_stmt->params[i + param_start].start,
+                            env_define_const(method_env, method_stmt->params[i + param_start].start,
                                        method_stmt->params[i + param_start].length, val_nil());
                         }
                     }
@@ -2685,10 +2685,10 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 Env* parent_defining = parent_class->defining_env;
                 Env* method_env = env_create(parent_defining ? parent_defining : env);
                 // Set __class__ to the parent class so nested super calls resolve correctly
-                env_define(method_env, "__class__", 9, val_class(parent_class));
+                env_define_const(method_env, "__class__", 9, val_class(parent_class));
 
                 // super calls: auto-inject self, skip self param like regular methods
-                env_define(method_env, "self", 4, self_val);
+                env_define_const(method_env, "self", 4, self_val);
                 int param_start = (method_stmt->param_count > 0 &&
                                   strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
                 
@@ -2700,12 +2700,12 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
                         if (arg_result.is_throwing) { free(eval_args); return arg_result; }
                         eval_args[i] = arg_result.value;
-                        env_define(method_env, method_stmt->params[i + param_start].start,
+                        env_define_const(method_env, method_stmt->params[i + param_start].start,
                                    method_stmt->params[i + param_start].length, arg_result.value);
                     }
                     for (int i = arg_count; i < method_stmt->param_count - param_start; i++) {
                         eval_args[i] = val_nil();
-                        env_define(method_env, method_stmt->params[i + param_start].start,
+                        env_define_const(method_env, method_stmt->params[i + param_start].start,
                                    method_stmt->params[i + param_start].length, val_nil());
                     }
                 }
@@ -2825,7 +2825,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 Env* scope = env_create(callee_value.as.function->closure);
                 for (int i = 0; i < func->param_count; i++) {
                     Token paramName = func->params[i];
-                    env_define(scope, paramName.start, paramName.length, eval_args[i]);
+                    env_define_const(scope, paramName.start, paramName.length, eval_args[i]);
                 }
 
                 // JIT: Profile this call and check if we should compile.
@@ -2873,7 +2873,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     for (int i = 0; i < template->param_count; i++) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
                         if (arg_result.is_throwing) return arg_result;
-                        env_define(gen_closure, params[i].start, params[i].length, arg_result.value);
+                        env_define_const(gen_closure, params[i].start, params[i].length, arg_result.value);
                     }
                 }
 
@@ -2904,7 +2904,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                         if (i - param_start < expr->as.call.arg_count) {
                             ExecResult arg_result = eval_expr(expr->as.call.args[i - param_start], env);
                             if (arg_result.is_throwing) return arg_result;
-                            env_define(method_env, init_stmt->params[i].start,
+                            env_define_const(method_env, init_stmt->params[i].start,
                                        init_stmt->params[i].length, arg_result.value);
                         }
                     }
@@ -3034,7 +3034,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     ProcStmt* str_stmt = (ProcStmt*)str_method->method_stmt;
                     Env* def_env = result.value.as.instance->class_def->defining_env;
                     Env* str_env = env_create(def_env ? def_env : env);
-                    env_define(str_env, "self", 4, result.value);
+                    env_define_const(str_env, "self", 4, result.value);
                     ExecResult str_res = interpret(str_stmt->body, str_env);
                     if (!str_res.is_throwing && str_res.value.type == VAL_STRING) {
                         printf("%s\n", AS_STRING(str_res.value));
@@ -3058,7 +3058,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 val = result.value;
             }
             Token t = stmt->as.let.name;
-            env_define(env, t.start, t.length, val);
+            env_define_const(env, t.start, t.length, val);
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
@@ -3167,7 +3167,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             // Define loop variable once, then directly update the slot
             // on subsequent iterations (avoids linked-list search per iteration)
             if (arr->count > 0) {
-                env_define(loop_env, var.start, var.length, arr->elements[0]);
+                env_define_const(loop_env, var.start, var.length, arr->elements[0]);
                 // Cache the node pointer for direct slot update
                 EnvNode* var_slot = loop_env->head; // just-inserted node
                 for (int i = 0; i < arr->count; i++) {
@@ -3214,7 +3214,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 func_val = val_function(&stmt->as.proc, env);
             }
 
-            env_define(env, name.start, name.length, func_val);
+            env_define_const(env, name.start, name.length, func_val);
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
@@ -3222,7 +3222,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             Token name = stmt->as.async_proc.name;
             Value func_val = val_function(&stmt->as.async_proc, env);
             func_val.as.function->is_async = 1;
-            env_define(env, name.start, name.length, func_val);
+            env_define_const(env, name.start, name.length, func_val);
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
@@ -3264,7 +3264,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             }
             
             Value class_value = val_class(class_val);
-            env_define(env, name.start, name.length, class_value);
+            env_define_const(env, name.start, name.length, class_value);
             
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
@@ -3288,12 +3288,12 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             }
 
             Value class_value = val_class(class_val);
-            env_define(env, name.start, name.length, class_value);
+            env_define_const(env, name.start, name.length, class_value);
 
             // Store field names for auto-init
             char meta_key[256];
             snprintf(meta_key, sizeof(meta_key), "__%.*s_fields__", name.length, name.start);
-            env_define(env, meta_key, (int)strlen(meta_key), fields_arr);
+            env_define_const(env, meta_key, (int)strlen(meta_key), fields_arr);
 
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
@@ -3319,7 +3319,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             dict_set(&enum_dict, "__name__", val_string(ename));
             free(ename);
 
-            env_define(env, name.start, name.length, enum_dict);
+            env_define_const(env, name.start, name.length, enum_dict);
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
@@ -3350,7 +3350,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             dict_set(&trait_dict, "__name__", val_string(tname));
             free(tname);
 
-            env_define(env, name.start, name.length, trait_dict);
+            env_define_const(env, name.start, name.length, trait_dict);
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 
@@ -3382,7 +3382,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     } else {
                         exc_msg = try_result.exception_value;
                     }
-                    env_define(catch_env, var.start, var.length, exc_msg);
+                    env_define_const(catch_env, var.start, var.length, exc_msg);
                     
                     ExecResult catch_result = interpret(catch_clause->body, catch_env);
                     if (!catch_result.is_throwing) {
@@ -3549,7 +3549,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             proc->body = stmt->as.macro_def.body;
             // Use val_function which allocates via gc_alloc (GC-tracked)
             Value func_val = val_function(proc, env);
-            env_define(env, name.start, name.length, func_val);
+            env_define_const(env, name.start, name.length, func_val);
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
     }

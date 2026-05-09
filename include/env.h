@@ -6,6 +6,7 @@
 typedef struct EnvNode {
     char* name;
     int name_length;        // Cached name length — avoids strlen in hot lookup path
+    int owns_name;          // Whether this node owns (and must free) its name string
     Value value;
     struct EnvNode* next;
 } EnvNode;
@@ -19,6 +20,7 @@ typedef struct Env {
 
 Env* env_create(Env* parent);
 void env_define(Env* env, const char* name, int length, Value value);
+void env_define_const(Env* env, const char* name, int length, Value value);
 int env_get(Env* env, const char* name, int length, Value* value);
 int env_assign(Env* env, const char* name, int length, Value value);
 void env_cleanup_all(void);
