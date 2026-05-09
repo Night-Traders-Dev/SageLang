@@ -12,9 +12,19 @@ A pure SageLang implementation of a basic blockchain.
 - `blockchain.orbit`: Dynamic mining rate model (Orbit).
 - `blockchain.node`: Network node management and scoring.
 - `blockchain.db`: High-performance disk-backed ledger database.
+- `blockchain.staking`: Smart contract logic for ORBIT staking and rewards.
 
 ## Features
 
+- **Terminal CLI**: Fully interactive terminal interface (`examples/blockchain_cli.sage`) for:
+    - Wallet creation and management.
+    - Transaction history and balance checks.
+    - Background mining node operations.
+    - Staking interaction.
+- **Staking System**: Lock ORBIT for passive rewards:
+    - ~5% APR.
+    - Claimable in 24h intervals.
+    - Automated reward transactions.
 - **Async & Non-blocking**: Heavy operations like mining and disk I/O are performed asynchronously using `async proc` and `await`, preventing the main loop from freezing.
 - **Thread Safety**: The `Blockchain` class is thread-safe, utilizing internal mutexes to protect the ledger state during concurrent operations.
 - **Robust Persistence**: Disk-based storage for blocks, transactions, and state using `blockchain.db`.

@@ -16,6 +16,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
@@ -771,7 +772,9 @@ static Value sys_getenv_native(int argCount, Value* args) {
 
 static Value sys_clock_native(int argCount, Value* args) {
     (void)argCount; (void)args;
-    return val_number((double)clock() / CLOCKS_PER_SEC);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return val_number((double)tv.tv_sec + (double)tv.tv_usec / 1000000.0);
 }
 
 static Value sys_sleep_native(int argCount, Value* args) {

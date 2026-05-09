@@ -118,7 +118,7 @@ class Blockchain:
         
         return addr
 
-    proc call_contract(sender, addr, args):
+    proc call_contract(sender, addr, args, amount):
         thread.lock(self.mutex)
         defer thread.unlock(self.mutex)
         if not dict_has(self.contracts, addr):
@@ -139,6 +139,7 @@ class Blockchain:
         tx["type"] = "call"
         tx["contract_address"] = addr
         tx["args"] = args
+        tx["amount"] = amount # Amount of ORBIT sent to the contract
         tx["timestamp"] = clock()
         push(self.mempool, tx)
         return true
@@ -208,10 +209,43 @@ class Blockchain:
                     let contract = self.contracts[addr]
                     thread.unlock(self.mutex)
                     
-                    print "Executing contract at " + addr
-                    contract.execute(tx["args"])
-                    # Persist updated contract state
-                    await self.db.save_contract_state(addr, contract.to_dict())
+                    # Handle incoming transfer to contract
+                    let incoming_ok = true
+                    if dict_has(tx, "amount") and tx["amount"] > 0:
+                        let sender_bal = self.get_balance(tx["sender"])
+                        let contract_bal = self.get_balance(addr)
+                        if sender_bal >= tx["amount"]:
+                            await self.db.save_account_balance(tx["sender"], sender_bal - tx["amount"])
+                            await self.db.save_account_balance(addr, contract_bal + tx["amount"])
+                        else:
+                            print "Insufficient balance for contract call from " + tx["sender"]
+                            incoming_ok = false
+                    
+                    if incoming_ok:
+                        print "Executing contract at " + addr
+                        let context = {"sender": tx["sender"], "value": tx["amount"]}
+                        let results = contract.execute(tx["args"], context)
+                        
+                        # Handle contract results (outgoing transfers)
+                        if type(results) == "array":
+                            for transfer in results:
+                                if type(transfer) == "dict" and dict_has(transfer, "to") and dict_has(transfer, "amount"):
+                                    let c_bal = self.get_balance(addr)
+                                    let r_bal = self.get_balance(transfer["to"])
+                                    if c_bal >= transfer["amount"]:
+                                        await self.db.save_account_balance(addr, c_bal - transfer["amount"])
+                                        await self.db.save_account_balance(transfer["to"], r_bal + transfer["amount"])
+                                        
+                                        # Index the internal transfer
+                                        import crypto.hash as hash
+                                        let v_tx = {"sender": addr, "receiver": transfer["to"], "amount": transfer["amount"], "timestamp": clock(), "type": "contract_transfer"}
+                                        v_tx["hash"] = hash.sha256_hex(str(v_tx) + str(clock()))
+                                        await self.db.save_transaction(v_tx)
+                                        await self.db.append_tx_to_history(addr, v_tx["hash"])
+                                        await self.db.append_tx_to_history(transfer["to"], v_tx["hash"])
+
+                        # Persist updated contract state
+                        await self.db.save_contract_state(addr, contract.to_dict())
         
         # Calculate dynamic mining reward using Orbit model
         let node_score = 1.0

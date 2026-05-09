@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 #include <ctype.h>    // isalnum
 #include <stdint.h>   // uintptr_t
 #include <math.h>     // isinf, isnan
@@ -92,7 +93,10 @@ static int stmt_contains_target(Stmt* stmt, Stmt* target) {
 // --- Native Functions ---
 
 static Value clock_native(int argCount, Value* args) {
-    return val_number((double)clock() / CLOCKS_PER_SEC);
+    (void)argCount; (void)args;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return val_number((double)tv.tv_sec + (double)tv.tv_usec / 1000000.0);
 }
 
 static Value input_native(int argCount, Value* args) {
