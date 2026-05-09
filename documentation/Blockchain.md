@@ -1,45 +1,97 @@
-# Sage Blockchain Architecture Guide
+# Sage Blockchain Library Reference
 
-This document outlines the modular consensus architecture of the Sage Blockchain library.
+This guide provides a comprehensive overview of the `lib/blockchain` library, explaining its architecture, module interfaces, and practical usage examples.
 
-## Architectural Overview
+## 1. Architectural Overview
+The library is designed for modularity and high performance. It features a pluggable consensus architecture, persistent disk-backed storage, and asynchronous transaction processing.
 
-The blockchain system has been refactored to decouple the ledger management from the consensus mechanism. The `Blockchain` class now relies on a pluggable `Consensus` provider to handle block validation and block sealing.
+## 2. Core Modules
 
-## Core Components
+### 2.1 `Blockchain` (Main Ledger)
+The `Blockchain` class is the central orchestrator, managing the chain, mempool, contracts, and node network.
 
-### 1. `Consensus` Interface
-Located at `lib/blockchain/consensus/base.sage`, this is the base class that all consensus mechanisms must implement:
+- **Usage:**
+  ```sage
+  import blockchain.blockchain as bc_mod
+  import blockchain.consensus.pow as pow_mod
+  
+  let consensus = pow_mod.PowConsensus(nil, 2)
+  let coin = bc_mod.Blockchain(consensus, "data/my_chain")
+  consensus.blockchain = coin
+  ```
 
-- `init(blockchain)`: Initializes the provider with the blockchain instance.
-- `validate_block(block)`: Validates if a block adheres to the consensus rules.
-- `async seal_block(transactions, miner_address)`: Creates and seals a block given the pending transactions.
+### 2.2 `Block`
+Represents a single block in the chain. Blocks are immutable once mined.
 
-### 2. Implementations
+- **Example:**
+  ```sage
+  import blockchain.block as block_mod
+  let block = block_mod.Block(height, tx_list, prev_hash, difficulty)
+  await block.mine()
+  ```
 
-- **Proof-of-Work (PoW)**: Located at `lib/blockchain/consensus/pow.sage`. It requires miners to perform computational work (mining) to seal a block, based on a configurable difficulty level.
-- **Proof-of-Authority (PoA)**: Located at `lib/blockchain/consensus/poa.sage`. Blocks are sealed by an authorized set of nodes without computational mining requirements.
+### 2.3 `Transaction`
+Standard value transfer between addresses.
 
-## How to Add a New Consensus Mechanism
+- **Example:**
+  ```sage
+  import blockchain.transaction as tx_mod
+  let tx = tx_mod.Transaction("Alice", "Bob", 100)
+  let hash = tx.calculate_hash()
+  ```
 
-To add a new consensus mechanism (e.g., Proof-of-Stake):
+### 2.4 `Wallet`
+Handles address generation and transaction signing.
 
-1. Create a new file in `lib/blockchain/consensus/`, such as `pos.sage`.
-2. Define a class that extends `Consensus`:
-   ```sage
-   import blockchain.consensus.base as base
+- **Example:**
+  ```sage
+  import blockchain.wallet as wallet_mod
+  let wallet = wallet_mod.Wallet()
+  wallet.sign_transaction(tx)
+  ```
 
-   class PoSConsensus(base.Consensus):
-       # Implement validate_block and seal_block
-   ```
-3. Instantiate your provider when creating the `Blockchain`:
-   ```sage
-   let consensus = pos_mod.PoSConsensus(nil, validator_list)
-   let my_coin = bc_mod.Blockchain(consensus, "data/my_chain")
-   consensus.blockchain = my_coin
-   ```
+### 2.5 `Contract`
+Manages SageLang smart contract state and execution.
 
-## Best Practices
-- Keep consensus logic modular to ensure it remains testable in isolation.
-- Ensure that `validate_block` is strictly deterministic.
-- Always use `await` when calling `seal_block` to support asynchronous operations in non-blocking environments.
+- **Example:**
+  ```sage
+  import blockchain.contract as contract_mod
+  let c = contract_mod.Contract(source_code)
+  let result = c.execute(args, context)
+  ```
+
+### 2.6 `LedgerDB`
+High-performance storage for the ledger. Uses `blockchain.db`.
+
+- **Example:**
+  ```sage
+  import blockchain.db as db_mod
+  let db = db_mod.LedgerDB("data/ledger")
+  await db.save_block(block)
+  ```
+
+### 2.7 `Orbit`
+Dynamic mining rate model that adjusts based on adoption and supply.
+
+- **Example:**
+  ```sage
+  import blockchain.orbit as orbit
+  let rate = orbit.calculate_mining_rate(users, total_mined, height, score)
+  ```
+
+## 3. Consensus Mechanism (Pluggable)
+The system supports pluggable consensus via the `Consensus` base class (in `lib/blockchain/consensus/base.sage`).
+
+### Implementations:
+- **Proof-of-Work (PoW)**: `PowConsensus`
+- **Proof-of-Authority (PoA)**: `PoAConsensus`
+
+### Adding Custom Consensus:
+1. Extend `Consensus` base class.
+2. Implement `validate_block(block)` and `async seal_block(transactions, miner_address)`.
+3. Instantiate and inject at `Blockchain` initialization.
+
+## 4. Advanced Features
+- **Asynchronous Execution**: Uses `async proc` and `await` for I/O operations (mining, DB writes).
+- **Concurrency**: `Blockchain` methods are thread-safe, protected by internal mutexes.
+- **Node Scoring**: Tracks miner performance to provide reward multipliers.
