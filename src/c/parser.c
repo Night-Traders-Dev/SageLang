@@ -1325,10 +1325,20 @@ static Stmt* class_declaration() {
                 method_current->next = method;
                 method_current = method;
             }
+        } else if (match(TOKEN_ASYNC)) {
+            Stmt* method = async_proc_declaration();
+            
+            if (method_head == NULL) {
+                method_head = method;
+                method_current = method;
+            } else {
+                method_current->next = method;
+                method_current = method;
+            }
         } else {
             parser_report(current_token, token_span(&current_token),
                           "only methods are allowed in a class body",
-                          "use 'proc' to define methods inside a class");
+                          "use 'proc' or 'async proc' to define methods inside a class");
         }
     }
     

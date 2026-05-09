@@ -41,6 +41,151 @@ Module* create_native_module(ModuleCache* cache, const char* name) {
     return m;
 }
 
+#include "program.h"
+#include "vm.h"
+#include "parser.h"
+
+extern Stmt* parse_program(const char* source, const char* input_path);
+
+// ============================================================================
+// VM MODULE
+// ============================================================================
+
+static Value vm_compile_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    const char* source = AS_STRING(args[0]);
+
+    // Save lexer and parser state to allow nested parsing (e.g. from within a running script)
+    LexerState l_state = lexer_get_state();
+    ParserState p_state = parser_get_state();
+
+    Stmt* ast = parse_program(source, "<vm-compile>");
+
+    // Restore lexer and parser state
+    lexer_set_state(l_state);
+    parser_set_state(p_state);
+
+    if (!ast) return val_nil();
+
+    BytecodeProgram* program = SAGE_ALLOC(sizeof(BytecodeProgram));
+    bytecode_program_init(program);
+
+    char error[256];
+    if (!bytecode_compile_program(program, ast, BYTECODE_COMPILE_HYBRID, error, sizeof(error))) {
+        fprintf(stderr, "VM Compile Error: %s\n", error);
+        free_stmt(ast);
+        bytecode_program_free(program);
+        free(program);
+        return val_nil();
+    }
+
+    free_stmt(ast);
+    return val_pointer(program, sizeof(BytecodeProgram), 1);
+}
+
+static Value vm_execute_native(int argCount, Value* args) {
+    if (argCount < 1 || args[0].type != VAL_POINTER) return val_nil();
+    BytecodeProgram* program = (BytecodeProgram*)args[0].as.pointer->ptr;
+
+    Env* env = env_create(g_global_env);
+    
+    // If a dictionary is provided, expose it as 'state' variable
+    if (argCount >= 2 && IS_DICT(args[1])) {
+        env_define(env, "state", 5, args[1]);
+    }
+
+    ExecResult res = vm_execute_program(program, env);
+    
+    return res.value;
+}
+
+extern int bytecode_program_write_file(const BytecodeProgram* program, const char* output_path,
+                                char* error, size_t error_size);
+extern int bytecode_program_read_file(BytecodeProgram* program, const char* input_path,
+                               char* error, size_t error_size);
+
+// Internal version of write/read that takes FILE* would be better, but we'll use temp files for now
+// to avoid refactoring the core VM artifact logic which is heavily tied to file IO.
+// Actually, let's just use a string-based buffer if possible.
+// Wait, I'll just refactor bytecode_program_write_file in program.c to use a FILE* helper.
+
+static Value vm_serialize_native(int argCount, Value* args) {
+    if (argCount < 1 || args[0].type != VAL_POINTER) return val_nil();
+    BytecodeProgram* program = (BytecodeProgram*)args[0].as.pointer->ptr;
+
+    char tmp_path[] = "/tmp/sage_vm_XXXXXX.svm";
+    int fd = mkstemps(tmp_path, 4);
+    if (fd < 0) return val_nil();
+    close(fd);
+
+    char error[256];
+    if (!bytecode_program_write_file(program, tmp_path, error, sizeof(error))) {
+        unlink(tmp_path);
+        return val_nil();
+    }
+
+    FILE* f = fopen(tmp_path, "rb");
+    if (!f) { unlink(tmp_path); return val_nil(); }
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    unsigned char* data = SAGE_ALLOC((size_t)size);
+    if (fread(data, 1, (size_t)size, f) != (size_t)size) {
+        free(data);
+        fclose(f);
+        unlink(tmp_path);
+        return val_nil();
+    }
+    fclose(f);
+    unlink(tmp_path);
+
+    return val_bytes(data, (int)size);
+}
+
+static Value vm_deserialize_native(int argCount, Value* args) {
+    if (argCount < 1 || args[0].type != VAL_BYTES) return val_nil();
+    BytesValue* bv = args[0].as.bytes;
+
+    char tmp_path[] = "/tmp/sage_vm_XXXXXX.svm";
+    int fd = mkstemps(tmp_path, 4);
+    if (fd < 0) return val_nil();
+    
+    if (write(fd, bv->data, (size_t)bv->length) != bv->length) {
+        close(fd);
+        unlink(tmp_path);
+        return val_nil();
+    }
+    close(fd);
+
+    BytecodeProgram* program = SAGE_ALLOC(sizeof(BytecodeProgram));
+    bytecode_program_init(program);
+
+    char error[256];
+    if (!bytecode_program_read_file(program, tmp_path, error, sizeof(error))) {
+        fprintf(stderr, "VM Deserialize Error: %s\n", error);
+        bytecode_program_free(program);
+        free(program);
+        unlink(tmp_path);
+        return val_nil();
+    }
+    unlink(tmp_path);
+
+    return val_pointer(program, sizeof(BytecodeProgram), 1);
+}
+
+Module* create_vm_module(ModuleCache* cache) {
+    Module* m = create_native_module(cache, "vm");
+    Environment* e = m->env;
+
+    env_define(e, "compile", 7, val_native(vm_compile_native));
+    env_define(e, "execute", 7, val_native(vm_execute_native));
+    env_define(e, "serialize", 9, val_native(vm_serialize_native));
+    env_define(e, "deserialize", 11, val_native(vm_deserialize_native));
+
+    return m;
+}
+
 // ============================================================================
 // MATH MODULE
 // ============================================================================

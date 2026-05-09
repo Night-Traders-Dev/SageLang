@@ -285,6 +285,7 @@ Value dict_values(Value* dict);
 Value tuple_get(Value* tuple, int index);
 
 // String operations
+Value string_slice(Value* str, int start, int end);
 Value string_split(const char* str, const char* delimiter);
 Value string_join(Value* arr, const char* separator);
 char* string_replace(const char* str, const char* old, const char* new_str);

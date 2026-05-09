@@ -260,6 +260,25 @@ Value array_slice(Value* arr, int start, int end) {
     return result;
 }
 
+Value string_slice(Value* str, int start, int end) {
+    if (str->type != VAL_STRING) return val_nil();
+    char* s = str->as.string;
+    int slen = (int)strlen(s);
+    
+    if (start < 0) start = slen + start;
+    if (end < 0) end = slen + end;
+    
+    if (start < 0) start = 0;
+    if (end > slen) end = slen;
+    if (start >= end) return val_string("");
+    
+    int new_len = end - start;
+    char* result = SAGE_ALLOC(new_len + 1);
+    memcpy(result, s + start, new_len);
+    result[new_len] = '\0';
+    return val_string_take(result);
+}
+
 // ========== DICTIONARY OPERATIONS (HASH TABLE) ==========
 
 // FNV-1a hash function
