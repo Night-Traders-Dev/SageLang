@@ -16,21 +16,29 @@ class LedgerDB:
         self.ensure_dirs()
 
     proc ensure_dirs():
-        sys.exec("mkdir -p " + self.height_dir)
-        sys.exec("mkdir -p " + self.hash_dir)
-        sys.exec("mkdir -p " + self.account_dir)
-        sys.exec("mkdir -p " + self.contract_dir)
-        sys.exec("mkdir -p " + self.tx_history_dir)
-        sys.exec("mkdir -p " + self.tx_dir)
+        if not io.exists(self.base_dir):
+            io.mkdir(self.base_dir)
+        if not io.exists(self.height_dir):
+            io.mkdir(self.height_dir)
+        if not io.exists(self.hash_dir):
+            io.mkdir(self.hash_dir)
+        if not io.exists(self.account_dir):
+            io.mkdir(self.account_dir)
+        if not io.exists(self.contract_dir):
+            io.mkdir(self.contract_dir)
+        if not io.exists(self.tx_history_dir):
+            io.mkdir(self.tx_history_dir)
+        if not io.exists(self.tx_dir):
+            io.mkdir(self.tx_dir)
 
-    async proc save_block(block):
+    proc save_block(block):
         let height = block.index
         let hash = block.hash
         
         # Serialize block to JSON
         let block_dict = block.to_dict()
         let cjson_obj = json.cJSON_FromSage(block_dict)
-        let json_str = json.cJSON_Print(cjson_obj)
+        let json_str = json.cJSON_PrintUnformatted(cjson_obj)
         json.cJSON_Delete(cjson_obj)
         
         # Save by height
@@ -57,7 +65,7 @@ class LedgerDB:
         let height_str = io.readfile(path)
         return self.get_block_by_height(tonumber(height_str))
 
-    async proc save_account_balance(address, balance):
+    proc save_account_balance(address, balance):
         io.writefile(self.account_dir + "/" + address, str(balance))
 
     proc get_account_balance(address):
@@ -66,13 +74,14 @@ class LedgerDB:
             return 0.0
         return tonumber(io.readfile(path))
 
-    async proc save_contract_state(address, state):
+    proc save_contract_state(address, state):
         let cjson_obj = json.cJSON_FromSage(state)
-        let json_str = json.cJSON_Print(cjson_obj)
+        let json_str = json.cJSON_PrintUnformatted(cjson_obj)
         json.cJSON_Delete(cjson_obj)
         
         let dir = self.contract_dir + "/" + address
-        sys.exec("mkdir -p " + dir)
+        if not io.exists(dir):
+            io.mkdir(dir)
         io.writefile(dir + "/state.json", json_str)
 
     proc get_contract_state(address):
@@ -85,7 +94,7 @@ class LedgerDB:
         json.cJSON_Delete(cjson_obj)
         return state
 
-    async proc append_tx_to_history(address, tx_hash):
+    proc append_tx_to_history(address, tx_hash):
         let path = self.tx_history_dir + "/" + address
         io.appendfile(path, tx_hash + "\n")
 
@@ -96,10 +105,10 @@ class LedgerDB:
         let hashes_str = io.readfile(path)
         return split(strip(hashes_str), "\n")
 
-    async proc save_transaction(tx_dict):
+    proc save_transaction(tx_dict):
         let h = tx_dict["hash"]
         let cjson_obj = json.cJSON_FromSage(tx_dict)
-        let json_str = json.cJSON_Print(cjson_obj)
+        let json_str = json.cJSON_PrintUnformatted(cjson_obj)
         json.cJSON_Delete(cjson_obj)
         io.writefile(self.tx_dir + "/" + h + ".json", json_str)
 

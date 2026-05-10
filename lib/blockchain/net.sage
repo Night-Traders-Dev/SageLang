@@ -12,15 +12,15 @@ class P2PNode:
         self.peers = []
         self.mutex = thread.mutex()
         
-    async proc start():
+    proc start():
         print "Starting P2P Node on port " + str(self.port)
         # Sync with known peers on startup
-        await self.sync_with_peers()
-        await net.listen(self.port, self.handle_connection)
+        self.sync_with_peers()
+        net.listen(self.port, self.handle_connection)
 
-    async proc handle_connection(conn):
+    proc handle_connection(conn):
         while true:
-            let msg_str = await net.read(conn)
+            let msg_str = net.read(conn)
             if msg_str == nil:
                 break
             
@@ -35,22 +35,22 @@ class P2PNode:
             elif msg["type"] == "get_peers":
                 self.handle_get_peers(conn)
 
-    async proc sync_with_peers():
+    proc sync_with_peers():
         thread.lock(self.mutex)
         let p_list = self.peers
         thread.unlock(self.mutex)
         
         for peer in p_list:
             print "Syncing with peer " + peer["host"] + ":" + str(peer["port"])
-            let conn = await net.connect(peer["host"], peer["port"])
+            let conn = net.connect(peer["host"], peer["port"])
             if conn:
                 # Request blocks from our current height
                 let current_height = len(self.blockchain.chain)
                 let msg = {"type": "get_blocks", "data": {"from": current_height}}
-                await net.write(conn, json.stringify(msg))
+                net.write(conn, json.stringify(msg))
                 
                 # Read response blocks
-                let resp_str = await net.read(conn)
+                let resp_str = net.read(conn)
                 if resp_str:
                     let resp = json.parse(resp_str)
                     if resp["type"] == "blocks_delivery":
@@ -59,7 +59,7 @@ class P2PNode:
                             self.blockchain.add_block(b_dict)
                 net.close(conn)
 
-    async proc handle_get_blocks(conn, data):
+    proc handle_get_blocks(conn, data):
         let from_height = data["from"]
         let blocks = []
         let i = from_height
@@ -68,9 +68,9 @@ class P2PNode:
             i = i + 1
         
         let resp = {"type": "blocks_delivery", "data": blocks}
-        await net.write(conn, json.stringify(resp))
+        net.write(conn, json.stringify(resp))
 
-    async proc broadcast(msg_type, data):
+    proc broadcast(msg_type, data):
         thread.lock(self.mutex)
         let current_peers = self.peers
         thread.unlock(self.mutex)
@@ -79,9 +79,9 @@ class P2PNode:
         let msg_str = json.stringify(msg)
         
         for peer in current_peers:
-            let conn = await net.connect(peer["host"], peer["port"])
+            let conn = net.connect(peer["host"], peer["port"])
             if conn:
-                await net.write(conn, msg_str)
+                net.write(conn, msg_str)
                 net.close(conn)
 
     proc add_peer(host, port):

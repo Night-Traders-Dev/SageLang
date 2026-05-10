@@ -15,11 +15,11 @@ class RPCServer:
     proc setup_handlers():
         server.handle(self.server, "/rpc", self.handle_rpc)
 
-    async proc start():
+    proc start():
         print "Starting JSON-RPC Server on port " + str(self.port)
-        await server.listen_and_serve(self.server)
+        server.listen_and_serve(self.server)
 
-    async proc handle_rpc(req, res):
+    proc handle_rpc(req, res):
         if req.method != "POST":
             server.send_error(res, 405, "Method Not Allowed")
             return

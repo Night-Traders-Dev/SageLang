@@ -13,10 +13,10 @@ let miner = wallet_mod.Wallet()
 if len(my_coin.chain) <= 1:
     print "\nFirst Run: Mining some blocks..."
     my_coin.add_transaction("System", alice.address, 1000)
-    await my_coin.mine_pending_transactions(miner.address)
+    my_coin.mine_pending_transactions(miner.address)
     
     my_coin.add_transaction(alice.address, "Bob", 100)
-    await my_coin.mine_pending_transactions(miner.address)
+    my_coin.mine_pending_transactions(miner.address)
     
     print "Current Height: " + str(len(my_coin.chain))
     print "Alice Balance: " + str(my_coin.get_balance(alice.address))

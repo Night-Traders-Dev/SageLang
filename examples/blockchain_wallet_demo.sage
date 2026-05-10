@@ -30,7 +30,7 @@ else:
     print "Transaction rejected!"
 
 print "\nMining pending transactions..."
-await my_coin.mine_pending_transactions(miner_wallet.address)
+my_coin.mine_pending_transactions(miner_wallet.address)
 
 print "\nCreating an UNSIGNED transaction from B to A..."
 let tx2 = tx_mod.Transaction(wallet_b.address, wallet_a.address, 50)
@@ -43,7 +43,7 @@ else:
     print "Transaction rejected!"
 
 print "\nMining pending transactions..."
-await my_coin.mine_pending_transactions(miner_wallet.address)
+my_coin.mine_pending_transactions(miner_wallet.address)
 
 print "\nBlockchain valid? " + str(my_coin.is_chain_valid())
 

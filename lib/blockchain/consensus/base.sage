@@ -8,6 +8,6 @@ class Consensus:
         # To be implemented by subclasses
         return false
 
-    async proc seal_block(transactions, miner_address):
+    proc seal_block(transactions, miner_address):
         # To be implemented by subclasses
         return nil

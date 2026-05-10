@@ -1,6 +1,7 @@
 # lib/blockchain/consensus/pow.sage
 
 from blockchain.consensus.base import Consensus
+import blockchain.block as block_mod
 
 class PowConsensus(Consensus):
     proc init(blockchain, difficulty):
@@ -8,7 +9,6 @@ class PowConsensus(Consensus):
         self.difficulty = difficulty
 
     proc validate_block(block):
-        # Verify hash meets difficulty
         let target = ""
         let i = 0
         while i < self.difficulty:
@@ -20,16 +20,12 @@ class PowConsensus(Consensus):
             return false
         return true
 
-    async proc seal_block(transactions, miner_address):
+    proc seal_block(transactions, miner_address):
         let block_height = len(self.blockchain.chain)
         let prev_hash = "0"
         if block_height > 0:
             prev_hash = self.blockchain.chain[block_height - 1].hash
             
         let block = block_mod.Block(block_height, transactions, prev_hash, self.difficulty)
-        
-        # State root calculation should be done by the blockchain before sealing
-        # But we'll leave it as is for now or refactor it in blockchain.sage
-        
-        await block.mine()
+        block.mine()
         return block

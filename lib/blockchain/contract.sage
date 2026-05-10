@@ -8,29 +8,33 @@ class Contract:
         let ptr = vm.compile(source)
         if ptr == nil:
             print "Contract compilation failed!"
-            return
-        self.bytecode = vm.serialize(ptr)
+            self.bytecode = nil
+        else:
+            self.bytecode = vm.serialize(ptr)
         self.state = {}
 
     proc execute(args, context):
         let ptr = vm.deserialize(self.bytecode)
         if ptr == nil:
-            print "Contract deserialization failed!"
             return nil
-        
-        # Merge args into state
+            
+        # Merge args and context into state
         if type(args) == "dict":
             let keys = dict_keys(args)
             for k in keys:
                 self.state[k] = args[k]
         
-        # Add context to state
         if type(context) == "dict":
-            self.state["sender"] = context["sender"]
-            self.state["value"] = context["value"]
-            self.state["now"] = clock()
+            let keys = dict_keys(context)
+            for k in keys:
+                self.state[k] = context[k]
         
-        return vm.execute(ptr, self.state)
+        self.state["now"] = clock()
+        
+        print "VM executing..."
+        let res = vm.execute(ptr, self.state)
+        print "VM execution complete."
+        return res
 
     proc to_dict():
         let d = {}

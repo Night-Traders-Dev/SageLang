@@ -29,9 +29,9 @@ print "================================================="
 print "Adding transaction..."
 my_coin.add_transaction(auth_wallet.get_address(), "0xAlice", 100)
 
-async proc demo():
+proc demo():
     print "Sealing block as authority..."
-    let blk = await my_coin.mine_pending_transactions(auth_wallet.get_address())
+    let blk = my_coin.mine_pending_transactions(auth_wallet.get_address())
     
     if blk != nil:
         print "✅ Block Sealed successfully!"
@@ -43,10 +43,10 @@ async proc demo():
     # 4. Try to seal as non-authority
     print ""
     print "Trying to seal as unauthorized user..."
-    let fake_blk = await my_coin.mine_pending_transactions("0xEvilMiner")
+    let fake_blk = my_coin.mine_pending_transactions("0xEvilMiner")
     if fake_blk == nil:
         print "✅ Correctly rejected unauthorized miner"
     else:
         print "❌ SECURITY ERROR: Unauthorized miner was allowed to seal block!"
 
-await demo()
+demo()

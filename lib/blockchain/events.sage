@@ -8,7 +8,7 @@ class EventLog:
     proc init(db_path):
         self.path = db_path
         
-    async proc emit(contract_addr, event_name, data):
+    proc emit(contract_addr, event_name, data):
         let event = {
             "contract": contract_addr,
             "name": event_name,
@@ -16,7 +16,7 @@ class EventLog:
             "timestamp": clock()
         }
         let log_line = json.stringify(event) + "\n"
-        await io.appendfile(self.path, log_line)
+        io.appendfile(self.path, log_line)
         print "EVENT [" + event_name + "] from " + contract_addr
 
     proc query(contract_addr, event_name):

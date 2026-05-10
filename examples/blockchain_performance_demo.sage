@@ -18,9 +18,9 @@ print "Simulating 50 transactions to test indexing..."
 for i in range(50):
     my_coin.add_transaction(alice.address, bob.address, 1)
     if i % 10 == 0:
-        await my_coin.mine_pending_transactions(miner.address)
+        my_coin.mine_pending_transactions(miner.address)
 
-await my_coin.mine_pending_transactions(miner.address)
+my_coin.mine_pending_transactions(miner.address)
 
 print "\nTesting Transaction History Lookup Performance..."
 let start = clock()

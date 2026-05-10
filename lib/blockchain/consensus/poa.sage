@@ -2,7 +2,7 @@
 
 from blockchain.consensus.base import Consensus
 import blockchain.block as block_mod
-import blockchain.crypto as crypto
+import blockchain.crypto as bc_crypto
 
 class PoAConsensus(Consensus):
     proc init(blockchain, authorities):
@@ -36,7 +36,7 @@ class PoAConsensus(Consensus):
         # Verify signature of the block hash
         return crypto.verify(block.hash, block["signature"], signer)
 
-    async proc seal_block(transactions, miner_address):
+    proc seal_block(transactions, miner_address):
         # Check if miner is an authority
         if dict_has(self.slashed, miner_address):
             print "PoA Error: Miner is slashed"

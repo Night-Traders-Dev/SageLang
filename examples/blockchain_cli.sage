@@ -45,15 +45,15 @@ let running = true
 # Background Mining
 # ============================================================================
 
-async proc mining_worker(bc, miner_address):
+proc mining_worker(bc, miner_address):
     print "\n[Node] Mining worker started for " + miner_address
     while running:
         # Check if there are transactions to mine
         if len(bc.mempool) > 0:
-            await bc.mine_pending_transactions(miner_address)
+            bc.mine_pending_transactions(miner_address)
         else:
             # Still mine periodically for rewards even if no user tx
-            await bc.mine_pending_transactions(miner_address)
+            bc.mine_pending_transactions(miner_address)
             thread.sleep(10)
         thread.sleep(1)
     print "[Node] Mining worker stopped."

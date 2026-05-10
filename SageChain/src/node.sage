@@ -29,15 +29,15 @@ let p2p = net.P2PNode(chain, 8333)
 # Start JSON-RPC Server on port 8545
 let rpc_srv = rpc.RPCServer(chain, 8545)
 
-async proc run_network():
+proc run_network():
     print "P2P Network Task Initializing..."
     # RPC and P2P run concurrently in the scheduler
     # In a real environment, we'd spawn separate tasks
     # For this simulation, we'll start them sequentially
-    await rpc_srv.start()
-    await p2p.start()
+    rpc_srv.start()
+    p2p.start()
 
-async proc simulator():
+proc simulator():
     print "Starting network simulator (mining blocks every ~15 seconds)..."
     while true:
         # Simulate network delay using clock()
@@ -49,7 +49,7 @@ async proc simulator():
                 i = i + 1 # Internal loop to reduce clock() calls
             
         print "Mining new block..."
-        let blk = await chain.mine_pending_transactions(w.get_address())
+        let blk = chain.mine_pending_transactions(w.get_address())
         
         if blk != nil:
             # Create some random transactions
@@ -57,8 +57,8 @@ async proc simulator():
             w.sign_transaction(tx)
             chain.add_signed_transaction(tx)
             
-            await p2p.broadcast("new_block", blk.to_dict())
+            p2p.broadcast("new_block", blk.to_dict())
 
-# Use the scheduler to run both async tasks
-await run_network()
-await simulator()
+# Use the scheduler to run both tasks
+run_network()
+simulator()

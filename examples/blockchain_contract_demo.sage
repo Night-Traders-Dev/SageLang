@@ -17,11 +17,11 @@ print "Contract deployed at: " + contract_addr
 
 print "\nCalling contract (1st time)..."
 my_coin.call_contract("Alice", contract_addr, {})
-await my_coin.mine_pending_transactions("Miner-1")
+my_coin.mine_pending_transactions("Miner-1")
 
 print "\nCalling contract (2nd time)..."
 my_coin.call_contract("Bob", contract_addr, {})
-await my_coin.mine_pending_transactions("Miner-1")
+my_coin.mine_pending_transactions("Miner-1")
 
 print "\nContract State:"
 let contract = my_coin.contracts[contract_addr]

@@ -22,12 +22,12 @@ my_coin.register_node(miner.address)
 print "\nStep 1: Mining with low user count (1 registered node)"
 print "Active Users: " + str(my_coin.get_active_user_count())
 my_coin.add_transaction(alice.address, bob.address, 10)
-await my_coin.mine_pending_transactions(miner.address)
+my_coin.mine_pending_transactions(miner.address)
 
 print "\nStep 2: Simulating more transactions to increase user count"
 my_coin.add_transaction(bob.address, charlie.address, 5)
 my_coin.add_transaction(charlie.address, alice.address, 2)
-await my_coin.mine_pending_transactions(miner.address)
+my_coin.mine_pending_transactions(miner.address)
 
 print "\nStep 3: Checking Miner Stats"
 let node = my_coin.nodes[miner.address]

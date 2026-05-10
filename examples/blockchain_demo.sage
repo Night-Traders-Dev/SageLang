@@ -12,11 +12,11 @@ let my_coin = bc_mod.Blockchain(2, db_path) # Difficulty 2
 print "Mining block 1..."
 my_coin.add_transaction("Alice", "Bob", 100)
 my_coin.add_transaction("Bob", "Charlie", 50)
-await my_coin.mine_pending_transactions("Miner-1")
+my_coin.mine_pending_transactions("Miner-1")
 
 print "Mining block 2..."
 my_coin.add_transaction("Charlie", "Alice", 25)
-await my_coin.mine_pending_transactions("Miner-1")
+my_coin.mine_pending_transactions("Miner-1")
 
 print "Blockchain valid? " + str(my_coin.is_chain_valid())
 

@@ -29,7 +29,7 @@ let SIGNAL_CONTINUE = 3
 let SIGNAL_YIELD = 4
 
 # Maximum recursion depth
-let MAX_RECURSION = 500
+let MAX_RECURSION = 2000
 
 # Maximum loop iterations (prevents infinite loops)
 let MAX_LOOP_ITERATIONS = 1000000
@@ -415,6 +415,20 @@ proc _n_input(args):
 proc _n_clock(args):
     return clock()
 
+let g_gas_limit = -1
+let g_gas_used = 0
+
+proc _n_vm_set_gas_limit(args):
+    g_gas_limit = args[0]
+    g_gas_used = 0
+    return nil
+
+proc _n_vm_get_gas_used(args):
+    return g_gas_used
+
+proc _n_vm_get_gas_limit(args):
+    return g_gas_limit
+
 proc _n_chr(args):
     return chr(args[0])
 
@@ -567,6 +581,9 @@ _native_dispatch["range"] = _n_range
 _native_dispatch["type"] = _n_type
 _native_dispatch["input"] = _n_input
 _native_dispatch["clock"] = _n_clock
+_native_dispatch["vm_gas_limit_set"] = _n_vm_set_gas_limit
+_native_dispatch["vm_gas_used_get"] = _n_vm_get_gas_used
+_native_dispatch["vm_gas_limit_get"] = _n_vm_get_gas_limit
 _native_dispatch["chr"] = _n_chr
 _native_dispatch["ord"] = _n_ord
 _native_dispatch["slice"] = _n_slice

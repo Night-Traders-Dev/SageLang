@@ -2,7 +2,7 @@
 # Hierarchical Deterministic (HD) Wallet Simulation for SageChain
 
 import crypto.hash as hash
-import crypto
+import blockchain.crypto as bc_crypto
 
 class Wallet:
     proc init(mnemonic):
@@ -25,7 +25,8 @@ class Wallet:
             # In real Sage, we'd use a better random source
             let idx = tonumber(str(clock() * 1000)) % 12
             result = result + words[idx]
-            if i < 11: result = result + " "
+            if i < 11:
+                result = result + " "
         return result
 
     proc derive_address(index):
