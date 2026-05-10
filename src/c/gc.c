@@ -519,6 +519,8 @@ void gc_begin_cycle(void) {
 
     // Shade roots gray
     if (g_global_env != NULL) gc_mark_env(g_global_env);
+    extern void gc_mark_modules(void);
+    gc_mark_modules();
     EnvRootNode* current = g_gc_root_stack;
     while (current != NULL) {
         gc_mark_env(current->env);
@@ -566,6 +568,8 @@ void gc_remark(void) {
 
     // Re-scan roots to catch any new references created during concurrent mark
     if (g_global_env != NULL) gc_mark_env(g_global_env);
+    extern void gc_mark_modules(void);
+    gc_mark_modules();
     EnvRootNode* current = g_gc_root_stack;
     while (current != NULL) {
         gc_mark_env(current->env);
@@ -644,6 +648,8 @@ void gc_mark_from_root(Env* root_env) {
     gc.mark_stack.count = 0;
     // Shade roots
     if (g_global_env != NULL) gc_mark_env(g_global_env);
+    extern void gc_mark_modules(void);
+    gc_mark_modules();
     EnvRootNode* current = g_gc_root_stack;
     while (current != NULL) {
         gc_mark_env(current->env);

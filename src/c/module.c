@@ -586,6 +586,20 @@ void init_module_system() {
     }
 }
 
+// Mark all cached module environments to prevent garbage collection
+void gc_mark_modules(void) {
+    if (!global_module_cache) return;
+    sage_mutex_lock(&module_mutex);
+    Module* current = global_module_cache->modules;
+    while (current) {
+        if (current->env != NULL) {
+            gc_mark_env(current->env);
+        }
+        current = current->next;
+    }
+    sage_mutex_unlock(&module_mutex);
+}
+
 // Cleanup the module system
 void cleanup_module_system() {
     if (global_module_cache) {
