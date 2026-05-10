@@ -13,12 +13,21 @@ import blockchain.events as event_mod # Phase 5
 import thread
 
 class Blockchain:
-    proc init(difficulty, db_path):
+    proc init(consensus_or_diff, db_path):
         self.chain = []
         self.mempool = []
         self.contracts = {}
         self.nodes = {}
-        self.difficulty = difficulty
+        
+        # Phase 6: Support for both modular consensus and legacy difficulty
+        if type(consensus_or_diff) == "number":
+            import blockchain.consensus.pow as pow_mod
+            self.consensus = pow_mod.PowConsensus(self, consensus_or_diff)
+        else:
+            self.consensus = consensus_or_diff
+            if self.consensus != nil:
+                self.consensus.blockchain = self
+
         self.total_mined = 0.0
         self.last_block_time = clock()
         self.mutex = thread.mutex()
@@ -40,7 +49,10 @@ class Blockchain:
                 break
             
             # Reconstruct Block object
-            let block = block_mod.Block(block_dict["index"], block_dict["transactions"], block_dict["previous_hash"], block_dict["difficulty"])
+            let diff = 0
+            if dict_has(block_dict, "difficulty"):
+                diff = block_dict["difficulty"]
+            let block = block_mod.Block(block_dict["index"], block_dict["transactions"], block_dict["previous_hash"], diff)
             block.timestamp = block_dict["timestamp"]
             block.nonce = block_dict["nonce"]
             block.hash = block_dict["hash"]
@@ -61,11 +73,15 @@ class Blockchain:
         if len(self.chain) > 0:
             print "Loaded " + str(len(self.chain)) + " blocks from database."
 
-    proc create_genesis_block():
+    async proc create_genesis_block():
         # No lock needed here as it's called during init
         # Using a list for transactions
-        let genesis = block_mod.Block(0, ["Genesis Block"], "0", self.difficulty)
-        await genesis.mine()
+        let genesis = await self.consensus.seal_block(["Genesis Block"], "System")
+        if genesis == nil:
+            # Fallback if consensus fails to seal
+            genesis = block_mod.Block(0, ["Genesis Block"], "0", 0)
+            await genesis.mine()
+
         # Phase 3: Calculate initial state root
         let tree = merkle.MerkleTree(["genesis"])
         genesis.state_root = tree.get_root()
@@ -318,13 +334,15 @@ class Blockchain:
         # Include reward in block transactions
         push(pending, reward_dict)
         
-        let block = block_mod.Block(block_height, pending, prev_hash, self.difficulty)
+        # Phase 6: Use pluggable consensus to seal the block
+        let block = await self.consensus.seal_block(pending, miner_address)
+        if block == nil:
+            print "Consensus failed to seal block"
+            return nil
         
         # Phase 3: Merkle State Root
         let tree = merkle.MerkleTree(state_data)
         block.state_root = tree.get_root()
-        
-        await block.mine()
         
         # Finalize block under lock
         thread.lock(self.mutex)
@@ -369,6 +387,10 @@ class Blockchain:
             
             if current.previous_hash != previous.hash:
                 print "Invalid previous_hash for block " + str(i)
+                return false
+            
+            # Phase 6: Use pluggable consensus to validate block rules
+            if not self.consensus.validate_block(current):
                 return false
             
             # Validate transactions in block

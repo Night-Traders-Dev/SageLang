@@ -1,6 +1,7 @@
 import blockchain.blockchain as bc
 import blockchain.wallet as wallet
 import blockchain.net as net
+import blockchain.consensus.pow as pow_mod
 import sys
 import io
 
@@ -8,7 +9,11 @@ let db_path = "./sagechain_db"
 if not io.exists(db_path):
     print "Initializing new SageChain Database..."
 
-let chain = bc.Blockchain(4, db_path)
+# Phase 6: Initialize with modular PoW consensus
+let consensus = pow_mod.PowConsensus(nil, 4)
+let chain = bc.Blockchain(consensus, db_path)
+consensus.blockchain = chain
+
 let w = wallet.Wallet()
 
 print "================================================="
