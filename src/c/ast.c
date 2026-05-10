@@ -25,6 +25,8 @@ Expr* new_variable_expr(Token name) {
     Expr* e = SAGE_ALLOC(sizeof(Expr));
     e->type = EXPR_VARIABLE;
     e->as.variable.name = name;
+    e->as.variable.cached_env_id = 0;
+    e->as.variable.cached_node = NULL;
     return e;
 }
 
@@ -122,6 +124,8 @@ Expr* new_set_expr(Expr* object, Token property, Expr* value) {
     e->as.set.object = object;
     e->as.set.property = property;
     e->as.set.value = value;
+    e->as.set.cached_env_id = 0;
+    e->as.set.cached_node = NULL;
     return e;
 }
 
