@@ -5,6 +5,7 @@ class Transaction:
         self.sender = sender
         self.receiver = receiver
         self.amount = amount
+        self.gas_price = 10.0 # Default Phase 3
         self.timestamp = clock()
         self.signature = nil
         self.public_key = nil # Phase 1
@@ -14,6 +15,7 @@ class Transaction:
         d["sender"] = self.sender
         d["receiver"] = self.receiver
         d["amount"] = self.amount
+        d["gas_price"] = self.gas_price
         d["timestamp"] = self.timestamp
         d["signature"] = self.signature
         d["public_key"] = self.public_key # Phase 1

@@ -10,7 +10,7 @@ if io.exists(db_path):
     print "Cleaning old database..."
 
 # 1. Create authorities
-let auth_wallet = wallet_mod.Wallet()
+let auth_wallet = wallet_mod.Wallet(nil)
 let authorities = ["System", auth_wallet.get_address()]
 
 print "Authorities: " + str(authorities)

@@ -34,6 +34,7 @@ class Blockchain:
         
         self.db = db_mod.LedgerDB(db_path)
         self.events = event_mod.EventLog(db_path + "/events.log") # Phase 5
+        self.state_trie = merkle.StateTrie() # Phase 1: Global World State
         self.load_from_db()
         
         if len(self.chain) == 0:
@@ -62,11 +63,20 @@ class Blockchain:
             push(self.chain, block)
             self.last_block_time = block.timestamp
             
-            # Track total mined (sum of system rewards)
+            # Track total mined and populate StateTrie
             if type(block.transactions) == "array":
                 for tx in block.transactions:
-                    if type(tx) == "dict" and tx["sender"] == "System":
-                        self.total_mined = self.total_mined + tx["amount"]
+                    if type(tx) == "dict":
+                        if tx["sender"] == "System":
+                            self.total_mined = self.total_mined + tx["amount"]
+                        
+                        # Populate StateTrie with final balances
+                        if dict_has(tx, "sender"):
+                            let s_bal = self.get_balance(tx["sender"])
+                            self.state_trie.update(tx["sender"], {"balance": s_bal})
+                        if dict_has(tx, "receiver"):
+                            let r_bal = self.get_balance(tx["receiver"])
+                            self.state_trie.update(tx["receiver"], {"balance": r_bal})
                         
             height = height + 1
         
@@ -82,9 +92,8 @@ class Blockchain:
             genesis = block_mod.Block(0, ["Genesis Block"], "0", 0)
             await genesis.mine()
 
-        # Phase 3: Calculate initial state root
-        let tree = merkle.MerkleTree(["genesis"])
-        genesis.state_root = tree.get_root()
+        # Phase 1: Set initial state root using StateTrie
+        genesis.state_root = self.state_trie.get_root_hash()
 
         push(self.chain, genesis)
         self.last_block_time = genesis.timestamp
@@ -111,12 +120,45 @@ class Blockchain:
         push(self.mempool, tx_dict)
         return tx
 
-    proc add_signed_transaction(tx):
+    proc add_block(block_dict):
+        # Validate incoming block dictionary
+        if block_dict == nil: return
+        
+        thread.lock(self.mutex)
+        let current_height = len(self.chain)
+        let incoming_height = block_dict["index"]
+        
+        if incoming_height == current_height:
+            # Reconstruct and validate
+            let block = block_mod.Block(block_dict["index"], block_dict["transactions"], block_dict["previous_hash"], block_dict["difficulty"])
+            block.timestamp = block_dict["timestamp"]
+            block.nonce = block_dict["nonce"]
+            block.hash = block_dict["hash"]
+            block.state_root = block_dict["state_root"]
+            
+            # Simple validation: previous hash must match
+            if block.previous_hash == self.chain[current_height - 1].hash:
+                if self.consensus.validate_block(block):
+                    push(self.chain, block)
+                    self.last_block_time = block.timestamp
+                    # Async save to DB (caller must handle)
+                    # We'll rely on the node loop to finalize state later
+                    print "✅ Block " + str(incoming_height) + " accepted via P2P"
+            
+        elif incoming_height > current_height:
+            # Fork resolution / Sync: peer is ahead of us
+            # In a real chain, we'd request the missing blocks (IBD)
+            print "Found peer with longer chain (h=" + str(incoming_height) + "). Syncing..."
+        thread.unlock(self.mutex)
+
+    proc add_signed_transaction(tx_dict):
         thread.lock(self.mutex)
         defer thread.unlock(self.mutex)
-        let tx_dict = tx.to_dict()
-        tx_dict["hash"] = tx.calculate_hash()
         if self.is_transaction_valid(tx_dict):
+            # Check if tx already in mempool
+            for existing in self.mempool:
+                if existing["hash"] == tx_dict["hash"]:
+                    return true
             push(self.mempool, tx_dict)
             return true
         return false
@@ -133,6 +175,9 @@ class Blockchain:
         
         # Persist contract to DB
         await self.db.save_contract_state(addr, contract.to_dict())
+        
+        # Update World State Trie with contract metadata
+        self.state_trie.update(addr, {"type": "contract", "balance": 0.0, "source_len": len(source)})
         
         # Add a deployment record to mempool
         let tx = {}
@@ -206,11 +251,33 @@ class Blockchain:
         # We need to be careful with locking here because mining takes time.
         # We should capture the mempool and then unlock so new tx can be added.
         thread.lock(self.mutex)
-        let pending = self.mempool
+        
+        # Phase 3: Priority Fee Market (sort by gas_price DESC)
+        # Simple selection sort for SageLang (replace with faster sort later)
+        let sorted_mempool = []
+        let temp = self.mempool
+        while len(temp) > 0:
+            let max_idx = 0
+            let max_val = -1.0
+            for i in range(len(temp)):
+                let gp = 0.0
+                if dict_has(temp[i], "gas_price"): gp = temp[i]["gas_price"]
+                if gp > max_val:
+                    max_val = gp
+                    max_idx = i
+            push(sorted_mempool, temp[max_idx])
+            # Manual remove from array
+            let next_temp = []
+            for i in range(len(temp)):
+                if i != max_idx: push(next_temp, temp[i])
+            temp = next_temp
+            
+        let pending = sorted_mempool
         self.mempool = []
         thread.unlock(self.mutex)
 
         let state_data = []
+        let total_fees = 0.0
 
         # Process transactions in local 'pending' copy
         for tx in pending:
@@ -232,6 +299,11 @@ class Blockchain:
                 let receiver_bal = self.get_balance(tx["receiver"])
                 await self.db.save_account_balance(tx["sender"], sender_bal - tx["amount"])
                 await self.db.save_account_balance(tx["receiver"], receiver_bal + tx["amount"])
+                
+                # Update World State Trie
+                self.state_trie.update(tx["sender"], {"balance": sender_bal - tx["amount"]})
+                self.state_trie.update(tx["receiver"], {"balance": receiver_bal + tx["amount"]})
+                
                 push(state_data, tx["sender"] + ":" + str(sender_bal - tx["amount"]))
             
             if dict_has(tx, "type"):
@@ -264,6 +336,11 @@ class Blockchain:
                         let gas_used = vm_get_gas_used()
                         print "Contract gas used: " + str(gas_used)
                         
+                        # Phase 3: Fees
+                        let fee = gas_used * 0.001 # Assume 0.001 ORBIT per gas unit base
+                        if dict_has(tx, "gas_price"): fee = gas_used * tx["gas_price"]
+                        total_fees = total_fees + fee
+                        
                         # Handle contract results (outgoing transfers)
                         if type(results) == "array":
                             for transfer in results:
@@ -273,6 +350,10 @@ class Blockchain:
                                     if c_bal >= transfer["amount"]:
                                         await self.db.save_account_balance(addr, c_bal - transfer["amount"])
                                         await self.db.save_account_balance(transfer["to"], r_bal + transfer["amount"])
+                                        
+                                        # Update World State Trie
+                                        self.state_trie.update(addr, {"balance": c_bal - transfer["amount"]})
+                                        self.state_trie.update(transfer["to"], {"balance": r_bal + transfer["amount"]})
                                         
                                         # Index the internal transfer
                                         import crypto.hash as hash
@@ -287,6 +368,10 @@ class Blockchain:
 
                         # Persist updated contract state
                         await self.db.save_contract_state(addr, contract.to_dict())
+                        
+                        # Update World State Trie with latest balance and some state metadata
+                        let final_c_bal = self.get_balance(addr)
+                        self.state_trie.update(addr, {"type": "contract", "balance": final_c_bal, "state_keys": len(dict_keys(contract.state))})
         
         # Calculate dynamic mining reward using Orbit model
         let node_score = 1.0
@@ -309,8 +394,8 @@ class Blockchain:
         if time_elapsed < 1.0:
             time_elapsed = 1.0
             
-        let reward = rate * time_elapsed
-        print "Mining Reward: " + str(reward) + " ORBIT (Rate: " + str(rate) + ")"
+        let reward = (rate * time_elapsed) + total_fees
+        print "Mining Reward: " + str(reward) + " ORBIT (Rate: " + str(rate) + ", Fees: " + str(total_fees) + ")"
         
         # Add reward for miner (System tx)
         let reward_tx = tx_mod.Transaction("System", miner_address, reward)
@@ -328,6 +413,9 @@ class Blockchain:
         let miner_bal = self.db.get_account_balance(miner_address)
         await self.db.save_account_balance(miner_address, miner_bal + reward)
         
+        # Update World State Trie
+        self.state_trie.update(miner_address, {"balance": miner_bal + reward})
+        
         let prev_hash = self.chain[len(self.chain) - 1].hash
         thread.unlock(self.mutex)
 
@@ -340,9 +428,8 @@ class Blockchain:
             print "Consensus failed to seal block"
             return nil
         
-        # Phase 3: Merkle State Root
-        let tree = merkle.MerkleTree(state_data)
-        block.state_root = tree.get_root()
+        # Phase 1 Upgrade: Use StateTrie root instead of simple Merkle tree
+        block.state_root = self.state_trie.get_root_hash()
         
         # Finalize block under lock
         thread.lock(self.mutex)

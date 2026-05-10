@@ -1,6 +1,7 @@
 import blockchain.blockchain as bc
 import blockchain.wallet as wallet
 import blockchain.net as net
+import blockchain.rpc as rpc
 import blockchain.consensus.pow as pow_mod
 import sys
 import io
@@ -14,7 +15,7 @@ let consensus = pow_mod.PowConsensus(nil, 4)
 let chain = bc.Blockchain(consensus, db_path)
 consensus.blockchain = chain
 
-let w = wallet.Wallet()
+let w = wallet.Wallet(nil)
 
 print "================================================="
 print "  SageChain Node Started"
@@ -25,8 +26,15 @@ print "================================================="
 # Start a P2P Node on port 8333
 let p2p = net.P2PNode(chain, 8333)
 
+# Start JSON-RPC Server on port 8545
+let rpc_srv = rpc.RPCServer(chain, 8545)
+
 async proc run_network():
     print "P2P Network Task Initializing..."
+    # RPC and P2P run concurrently in the scheduler
+    # In a real environment, we'd spawn separate tasks
+    # For this simulation, we'll start them sequentially
+    await rpc_srv.start()
     await p2p.start()
 
 async proc simulator():
@@ -43,14 +51,14 @@ async proc simulator():
         print "Mining new block..."
         let blk = await chain.mine_pending_transactions(w.get_address())
         
-        # Create some random transactions
-        let tx = chain.add_transaction(w.get_address(), "0x" + str(clock()), 1.5)
-        w.sign_transaction(tx)
-        chain.add_signed_transaction(tx)
-        
-        await p2p.broadcast("new_block", blk.to_dict())
+        if blk != nil:
+            # Create some random transactions
+            let tx = chain.add_transaction(w.get_address(), "0x" + str(clock()), 1.5)
+            w.sign_transaction(tx)
+            chain.add_signed_transaction(tx)
+            
+            await p2p.broadcast("new_block", blk.to_dict())
 
 # Use the scheduler to run both async tasks
 await run_network()
 await simulator()
-
