@@ -15,21 +15,27 @@ class Contract:
 
     proc execute(args, context):
         let ptr = vm.deserialize(self.bytecode)
-        if ptr == nil:
+        if ptr == nil: return nil
+            
+        # Check payable status
+        if context["value"] > 0 and not dict_has(self.state, "payable"):
+            print "Contract Error: Not payable"
             return nil
             
         # Merge args and context into state
         if type(args) == "dict":
             let keys = dict_keys(args)
-            for k in keys:
-                self.state[k] = args[k]
+            for k in keys: self.state[k] = args[k]
         
         if type(context) == "dict":
             let keys = dict_keys(context)
-            for k in keys:
-                self.state[k] = context[k]
+            for k in keys: self.state[k] = context[k]
         
         self.state["now"] = clock()
+        
+        # Ensure 'storage' mapping is available
+        if not dict_has(self.state, "storage"):
+            self.state["storage"] = {}
         
         print "VM executing..."
         let res = vm.execute(ptr, self.state)
