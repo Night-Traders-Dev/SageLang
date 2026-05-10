@@ -10,7 +10,7 @@
 #include "gc.h"
 #include "gpu_api.h"
 
-extern Environment* g_gc_root_env;
+extern EnvRootNode* g_gc_root_stack;
 
 #define VM_STACK_MAX 1024
 
@@ -304,16 +304,17 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     ActiveVm vm;
     ExecResult result = vm_normal(val_nil());
     int ip = 0;
-    Env* previous_gc_root = g_gc_root_env;
+    EnvRootNode root_node;
+    root_node.env = env;
+    root_node.next = g_gc_root_stack;
+    g_gc_root_stack = &root_node;
     ActiveVm* previous_vm = g_active_vm;
+    g_active_vm = &vm;
 
     memset(&vm, 0, sizeof(vm));
     vm.chunk = chunk;
     vm.current_env = env;
     vm.parent = previous_vm;
-
-    g_gc_root_env = env;
-    g_active_vm = &vm;
 
     while (ip < chunk->code_count) {
         BytecodeOp op = (BytecodeOp)chunk->code[ip++];
@@ -1141,7 +1142,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 
 done:
     g_active_vm = previous_vm;
-    g_gc_root_env = previous_gc_root;
+    g_gc_root_stack = root_node.next;
     return result;
 }
 

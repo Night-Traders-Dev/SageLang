@@ -22,18 +22,13 @@
 #include "vm.h"
 
 extern Environment* g_global_env;
-extern Environment* g_gc_root_env;
+extern EnvRootNode* g_gc_root_stack;
 
 // Thread safety: global GC mutex
 static sage_mutex_t gc_mutex = SAGE_MUTEX_INITIALIZER;
 
 void gc_lock(void) { sage_mutex_lock(&gc_mutex); }
 void gc_unlock(void) { sage_mutex_unlock(&gc_mutex); }
-
-static Env* gc_root_env(void) {
-    if (g_gc_root_env != NULL) return g_gc_root_env;
-    return g_global_env;
-}
 
 // Global GC state
 GC gc = {0};
@@ -264,12 +259,9 @@ void* gc_alloc(int type, size_t size) {
     sage_mutex_lock(&gc_mutex);
 
     if (gc_should_collect(size)) {
-        Env* root = gc_root_env();
-        if (root != NULL) {
-            sage_mutex_unlock(&gc_mutex);
-            gc_collect_with_root(root);
-            sage_mutex_lock(&gc_mutex);
-        }
+        sage_mutex_unlock(&gc_mutex);
+        gc_collect();
+        sage_mutex_lock(&gc_mutex);
     }
 
     size_t total_size = sizeof(GCHeader) + size;
@@ -430,7 +422,18 @@ void gc_mark_env(Env* env) {
 }
 
 void gc_mark_function_registry(void) { /* Functions marked via environment traversal */ }
-void gc_mark_call_stack(void) { /* Call stack managed through environments */ }
+extern Value g_ast_gc_temps[];
+extern int g_ast_gc_temp_count;
+extern Env* g_ast_gc_env_temps[];
+extern int g_ast_gc_env_temp_count;
+void gc_mark_call_stack(void) { 
+    for (int i = 0; i < g_ast_gc_temp_count; i++) {
+        gc_mark_value(g_ast_gc_temps[i]);
+    }
+    for (int i = 0; i < g_ast_gc_env_temp_count; i++) {
+        gc_mark_env(g_ast_gc_env_temps[i]);
+    }
+}
 
 // Process children of a gray object (shade them, then turn object black)
 static void gc_shade_children(GCHeader* header) {
@@ -500,7 +503,7 @@ static void gc_shade_children(GCHeader* header) {
 // ============================================================================
 
 // Phase 1 (STW): Snapshot roots, shade them gray, enable write barrier
-void gc_begin_cycle(Env* root_env) {
+void gc_begin_cycle(void) {
     unsigned long t0 = now_ns();
 
     gc.phase = GC_PHASE_ROOT_SCAN;
@@ -515,7 +518,13 @@ void gc_begin_cycle(Env* root_env) {
     }
 
     // Shade roots gray
-    if (root_env != NULL) gc_mark_env(root_env);
+    if (g_global_env != NULL) gc_mark_env(g_global_env);
+    EnvRootNode* current = g_gc_root_stack;
+    while (current != NULL) {
+        gc_mark_env(current->env);
+        current = current->next;
+    }
+    
     gc_mark_function_registry();
     gc_mark_call_stack();
     vm_mark_roots();
@@ -550,13 +559,18 @@ int gc_mark_complete(void) {
 }
 
 // Phase 3 (STW): Remark - drain any objects shaded by write barrier during concurrent mark
-void gc_remark(Env* root_env) {
+void gc_remark(void) {
     unsigned long t0 = now_ns();
 
     gc.phase = GC_PHASE_REMARK;
 
     // Re-scan roots to catch any new references created during concurrent mark
-    if (root_env != NULL) gc_mark_env(root_env);
+    if (g_global_env != NULL) gc_mark_env(g_global_env);
+    EnvRootNode* current = g_gc_root_stack;
+    while (current != NULL) {
+        gc_mark_env(current->env);
+        current = current->next;
+    }
     vm_mark_roots();
 
     // Drain the mark stack completely (barrier-shaded objects)
@@ -616,7 +630,7 @@ int gc_sweep_complete(void) {
 // ============================================================================
 
 void gc_mark(void) {
-    gc_mark_from_root(gc_root_env());
+    gc_mark_from_root(NULL);
 }
 
 void gc_mark_from_root(Env* root_env) {
@@ -629,6 +643,12 @@ void gc_mark_from_root(Env* root_env) {
     }
     gc.mark_stack.count = 0;
     // Shade roots
+    if (g_global_env != NULL) gc_mark_env(g_global_env);
+    EnvRootNode* current = g_gc_root_stack;
+    while (current != NULL) {
+        gc_mark_env(current->env);
+        current = current->next;
+    }
     if (root_env != NULL) gc_mark_env(root_env);
     gc_mark_function_registry();
     gc_mark_call_stack();
@@ -671,10 +691,8 @@ void gc_collect(void) {
     unsigned long before_bytes = gc_live_bytes();
     int before_objects = gc.object_count;
 
-    Env* root = gc_root_env();
-
     // Phase 1: Root scan (STW)
-    gc_begin_cycle(root);
+    gc_begin_cycle();
 
     // Phase 2: Concurrent mark (in this synchronous path, we drain fully)
     // In a truly threaded implementation, the mutator would continue here.
@@ -685,7 +703,7 @@ void gc_collect(void) {
     gc.last_mark_ns = now_ns() - cycle_start - gc.last_root_scan_ns;
 
     // Phase 3: Remark (STW)
-    gc_remark(root);
+    gc_remark();
 
     // Phase 4: Sweep
     unsigned long sweep_start = now_ns();
@@ -717,33 +735,6 @@ void gc_collect(void) {
                 total_ns / 1000,
                 gc.freed_count);
     }
-
-    sage_mutex_unlock(&gc_mutex);
-}
-
-void gc_collect_with_root(Env* root_env) {
-    if (!gc.enabled) return;
-    sage_mutex_lock(&gc_mutex);
-
-    unsigned long cycle_start = now_ns();
-    unsigned long before_bytes = gc_live_bytes();
-    int before_objects = gc.object_count;
-
-    gc_begin_cycle(root_env);
-    while (!gc_mark_complete()) gc_mark_step(512);
-    gc.last_mark_ns = now_ns() - cycle_start - gc.last_root_scan_ns;
-    gc_remark(root_env);
-    unsigned long sweep_start = now_ns();
-    while (!gc_sweep_complete()) gc_sweep_step(GC_SWEEP_BATCH);
-    gc.last_sweep_ns = now_ns() - sweep_start;
-    env_sweep_unmarked();
-
-    gc.phase = GC_PHASE_IDLE;
-    gc.objects_since_gc = 0;
-    gc.collections++;
-    unsigned long live = gc_live_bytes();
-    unsigned long reclaimed_bytes = (before_bytes >= live) ? before_bytes - live : 0;
-    gc_recompute_thresholds(reclaimed_bytes, before_objects - gc.object_count);
 
     sage_mutex_unlock(&gc_mutex);
 }

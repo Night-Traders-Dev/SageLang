@@ -770,7 +770,7 @@ static void repl_list_bindings(Env* env, const char* prefix) {
 
 static void repl_print_gc_stats(Env* env) {
     g_global_env = env;
-    gc_collect_with_root(env);
+    gc_collect();
 
     GCStats stats = gc_get_stats();
     printf("collections=%d objects=%d freed_last=%d next_gc=%d bytes_allocated=%lu\n",

@@ -104,11 +104,14 @@ class Blockchain:
     proc add_transaction(sender, receiver, amount):
         thread.lock(self.mutex)
         defer thread.unlock(self.mutex)
-        let tx = tx_mod.Transaction(sender, receiver, amount)
-        let tx_dict = tx.to_dict()
-        tx_dict["hash"] = tx.calculate_hash()
+        let tx = tx_mod.Transaction(sender, receiver, amount, 0, 1)
+        return tx_dict
+
+    proc add_signed_transaction(tx_dict):
+        thread.lock(self.mutex)
+        defer thread.unlock(self.mutex)
         push(self.mempool, tx_dict)
-        return tx
+        return true
 
     proc deploy_contract(sender, source):
         thread.lock(self.mutex)

@@ -28,7 +28,21 @@
 #define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL, g_gas_used, g_gas_limit })
 
 Environment* g_global_env = NULL;
-Environment* g_gc_root_env = NULL;
+EnvRootNode* g_gc_root_stack = NULL;
+
+#define AST_GC_TEMP_MAX 1024
+Value g_ast_gc_temps[AST_GC_TEMP_MAX];
+int g_ast_gc_temp_count = 0;
+#define AST_GC_PUSH(v) do { if (g_ast_gc_temp_count < AST_GC_TEMP_MAX) g_ast_gc_temps[g_ast_gc_temp_count++] = (v); } while(0)
+#define AST_GC_POP() do { if (g_ast_gc_temp_count > 0) g_ast_gc_temp_count--; } while(0)
+#define AST_GC_POP_N(n) do { g_ast_gc_temp_count -= (n); if (g_ast_gc_temp_count < 0) g_ast_gc_temp_count = 0; } while(0)
+
+#define AST_GC_ENV_TEMP_MAX 256
+Env* g_ast_gc_env_temps[AST_GC_ENV_TEMP_MAX];
+int g_ast_gc_env_temp_count = 0;
+#define AST_GC_PUSH_ENV(e) do { if (g_ast_gc_env_temp_count < AST_GC_ENV_TEMP_MAX) g_ast_gc_env_temps[g_ast_gc_env_temp_count++] = (e); } while(0)
+#define AST_GC_POP_ENV() do { if (g_ast_gc_env_temp_count > 0) g_ast_gc_env_temp_count--; } while(0)
+
 static Stmt* g_generator_resume_target = NULL;
 
 // Phase 2: Gas tracking globals
@@ -2668,6 +2682,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     
                     Env* defining = object.as.instance->class_def->defining_env;
                     Env* method_env = env_create(defining ? defining : env);
+                    AST_GC_PUSH_ENV(method_env);
                     env_define_const(method_env, "self", 4, object);
                     // Track which class owns this method (for super resolution)
                     ClassValue* owner = class_find_method_owner(object.as.instance->class_def, method_token.start, method_token.length);
@@ -2682,7 +2697,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                         eval_args = SAGE_ALLOC(sizeof(Value) * (method_stmt->param_count - param_start));
                         for (int i = 0; i < arg_count && i < method_stmt->param_count - param_start; i++) {
                             ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                            if (arg_result.is_throwing) { free(eval_args); return arg_result; }
+                            if (arg_result.is_throwing) { free(eval_args); AST_GC_POP_ENV(); return arg_result; }
                             eval_args[i] = arg_result.value;
                             env_define_const(method_env, method_stmt->params[i + param_start].start,
                                        method_stmt->params[i + param_start].length, arg_result.value);
@@ -2727,6 +2742,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 
                     if (eval_args) free(eval_args);
                     ExecResult res = interpret(method_stmt->body, method_env);
+                    AST_GC_POP_ENV();
                     if (res.is_throwing) return res;
                     return EVAL_RESULT(res.value);
                 }
@@ -2766,6 +2782,8 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 ProcStmt* method_stmt = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
                 Env* parent_defining = parent_class->defining_env;
                 Env* method_env = env_create(parent_defining ? parent_defining : env);
+                AST_GC_PUSH_ENV(method_env);
+                
                 // Set __class__ to the parent class so nested super calls resolve correctly
                 env_define_const(method_env, "__class__", 9, val_class(parent_class));
 
@@ -2780,7 +2798,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     eval_args = SAGE_ALLOC(sizeof(Value) * (method_stmt->param_count - param_start));
                     for (int i = 0; i < arg_count && i < method_stmt->param_count - param_start; i++) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                        if (arg_result.is_throwing) { free(eval_args); return arg_result; }
+                        if (arg_result.is_throwing) { free(eval_args); AST_GC_POP_ENV(); return arg_result; }
                         eval_args[i] = arg_result.value;
                         env_define_const(method_env, method_stmt->params[i + param_start].start,
                                    method_stmt->params[i + param_start].length, arg_result.value);
@@ -2823,6 +2841,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 
                 if (eval_args) free(eval_args);
                 ExecResult res = interpret(method_stmt->body, method_env);
+                AST_GC_POP_ENV();
                 if (res.is_throwing) return res;
                 return EVAL_RESULT(res.value);
             }
@@ -2869,7 +2888,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     eval_args = SAGE_ALLOC(sizeof(Value) * func->param_count);
                     for (int i = 0; i < expr->as.call.arg_count; i++) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                        if (arg_result.is_throwing) { free(eval_args); return arg_result; }
+                        if (arg_result.is_throwing) { free(eval_args); AST_GC_POP_ENV(); return arg_result; }
                         eval_args[i] = arg_result.value;
                     }
                     // Fill in defaults for missing arguments
@@ -2905,6 +2924,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 }
 
                 Env* scope = env_create(callee_value.as.function->closure);
+                AST_GC_PUSH_ENV(scope);
                 for (int i = 0; i < func->param_count; i++) {
                     Token paramName = func->params[i];
                     env_define_const(scope, paramName.start, paramName.length, eval_args[i]);
@@ -2932,6 +2952,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 free(eval_args);
 
                 ExecResult res = interpret(func->body, scope);
+                AST_GC_POP_ENV();
 
                 // JIT: Record return type for specialization
                 if (g_jit && func_id >= 0 && !res.is_throwing) {
@@ -3077,10 +3098,16 @@ ExecResult interpret(Stmt* stmt, Env* env) {
         fprintf(stderr, "Runtime Error: Maximum recursion depth exceeded (%d).\n", MAX_RECURSION_DEPTH);
         return EVAL_EXCEPTION(val_exception("Maximum recursion depth exceeded"));
     }
-    Env* previous_gc_root = g_gc_root_env;
-    g_gc_root_env = env;
+    
+    EnvRootNode root_node;
+    root_node.env = env;
+    root_node.next = g_gc_root_stack;
+    g_gc_root_stack = &root_node;
+    
     ExecResult result = interpret_inner(stmt, env);
-    g_gc_root_env = previous_gc_root;
+    
+    g_gc_root_stack = root_node.next;
+    
     g_recursion_depth--;
     return result;
 }
@@ -3246,6 +3273,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
             }
 
+            AST_GC_PUSH(iterable);
             Env* loop_env = env_create(env);
             Token var = stmt->as.for_stmt.variable;
 
@@ -3264,12 +3292,16 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     }
 
                     ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
-                    if (res.is_returning || res.is_throwing) return res;
+                    if (res.is_returning || res.is_throwing) {
+                        AST_GC_POP();
+                        return res;
+                    }
 
                     if (res.is_yielding) {
                         if (res.next_stmt == NULL) {
                             res.next_stmt = stmt;
                         }
+                        AST_GC_POP();
                         return res;
                     }
 
@@ -3277,7 +3309,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     if (res.is_continuing) continue;
                 }
             }
-
+            AST_GC_POP();
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 

@@ -3,7 +3,6 @@
 
 import net.server as server
 import json
-import clock
 
 class RPCServer:
     proc init(blockchain, port):

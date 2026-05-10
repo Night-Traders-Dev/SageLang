@@ -1,5 +1,7 @@
 # lib/blockchain/block.sage
 
+import crypto.hash as hash
+
 class Block:
     proc init(index, transactions, previous_hash, difficulty):
         self.index = index
@@ -18,7 +20,7 @@ class Block:
         if len(self.transactions) > 0:
             data = data + ":" + str(len(self.transactions))
             
-        return sha256(data)
+        return hash.sha256_hex(data)
 
     proc mine():
         let target = ""

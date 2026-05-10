@@ -269,6 +269,7 @@ bool execute_module(Module* module, Environment* global_env) {
         }
     }
 
+    gc_pin();
     for (Stmt* current = module->ast; current != NULL; current = current->next) {
         ExecResult result = interpret(current, module->env);
         if (result.is_throwing) {
@@ -282,6 +283,7 @@ bool execute_module(Module* module, Environment* global_env) {
             break;
         }
     }
+    gc_unpin();
 
     module->is_loading = false;
     if (ok) {
@@ -353,7 +355,9 @@ bool import_all(Environment* env, const char* module_name) {
 
     // Bind using the last component of the dotted name (e.g., graphics.vulkan -> vulkan)
     const char* bind_name = module_binding_name(module_name);
+    gc_pin();
     env_define_const(env, bind_name, strlen(bind_name), val_module(module));
+    gc_unpin();
 
     return true;
 }
@@ -429,7 +433,9 @@ bool import_as(Environment* env, const char* module_name, const char* alias) {
     }
     
     // Define with alias (with name length)
+    gc_pin();
     env_define_const(env, alias, strlen(alias), val_module(module));
+    gc_unpin();
     
     return true;
 }

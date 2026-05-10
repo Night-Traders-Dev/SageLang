@@ -19,6 +19,13 @@ typedef struct Env {
     int marked;         // GC mark flag (0 = unmarked, 1 = reachable)
 } Env;
 
+typedef struct EnvRootNode {
+    Env* env;
+    struct EnvRootNode* next;
+} EnvRootNode;
+
+extern EnvRootNode* g_gc_root_stack;
+
 Env* env_create(Env* parent);
 void env_define(Env* env, const char* name, int length, Value value);
 void env_define_const(Env* env, const char* name, int length, Value value);

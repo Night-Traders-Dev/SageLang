@@ -180,13 +180,12 @@ void gc_unlock(void);
 void gc_init(void);
 void gc_shutdown(void);
 void gc_collect(void);
-void gc_collect_with_root(Env* root_env);
 
 // Concurrent GC phases (called internally or for fine-grained control)
-void gc_begin_cycle(Env* root_env);   // STW: snapshot roots -> gray
+void gc_begin_cycle(void);   // STW: snapshot roots -> gray
 void gc_mark_step(int max_objects);    // Concurrent: process N gray objects
 int  gc_mark_complete(void);           // True when mark stack is empty
-void gc_remark(Env* root_env);        // STW: drain barrier-shaded objects
+void gc_remark(void);        // STW: drain barrier-shaded objects
 void gc_sweep_step(int max_objects);   // Concurrent: sweep N objects
 int  gc_sweep_complete(void);          // True when sweep cursor is exhausted
 

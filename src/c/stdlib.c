@@ -483,6 +483,12 @@ static Value io_isdir_native(int argCount, Value* args) {
     return val_bool(S_ISDIR(st.st_mode));
 }
 
+static Value io_mkdir_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_bool(0);
+    int status = mkdir(AS_STRING(args[0]), 0777);
+    return val_bool(status == 0);
+}
+
 static Value io_filesize_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_number(-1);
     struct stat st;
@@ -554,6 +560,7 @@ Module* create_io_module(ModuleCache* cache) {
     env_define_const(e, "exists", 6, val_native(io_exists_native));
     env_define_const(e, "remove", 6, val_native(io_remove_native));
     env_define_const(e, "isdir", 5, val_native(io_isdir_native));
+    env_define_const(e, "mkdir", 5, val_native(io_mkdir_native));
     env_define_const(e, "filesize", 8, val_native(io_filesize_native));
     env_define_const(e, "readbytes", 9, val_native(io_readbytes_native));
     env_define_const(e, "listdir", 7, val_native(io_listdir_native));
