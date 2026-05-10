@@ -3026,7 +3026,24 @@ gpio.led_blink(25, 5, 250)         # Blink 5 times, 250ms interval
 
 \newpage
 
-# Part VII: Appendices
+# Part VII: Blockchain and Distributed Ledger Technology
+
+## Sage Blockchain Library (`lib/blockchain/`)
+The `lib/blockchain/` library provides a pure SageLang implementation of a modular, enterprise-grade L1 blockchain.
+
+### Architecture
+- **Blockchain Core**: Implements consensus-agnostic chain management, mempool, and block processing.
+- **World State Trie**: Persistent Merkle-Radix Trie for cryptographically proven global account and contract states.
+- **Pluggable Consensus**: Modular architecture for Proof-of-Work (PoW) and Proof-of-Authority (PoA) engines.
+- **Transaction Model**: Secure transaction lifecycle including nonce-based replay protection, chain ID binding, and priority-fee market support.
+
+### Features
+- **Smart Contracts & NFTs**: Includes the **SNFT-721 Standard** for Non-Fungible Tokens and VM-level cross-contract call support.
+- **JSON-RPC 2.0 API**: Standard Ethereum-compatible endpoints for dApp integration.
+- **P2P Synchronization**: Node discovery and Initial Block Download (IBD) mechanisms.
+- **HD Wallets**: BIP-39 mnemonic phrase and deterministic derivation.
+
+# Part VIII: Appendices
 
 \newpage
 
