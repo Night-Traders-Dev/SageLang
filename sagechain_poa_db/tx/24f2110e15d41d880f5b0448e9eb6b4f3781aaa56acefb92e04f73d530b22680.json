@@ -1,9 +1,0 @@
-{
-    "receiver": "0xAlice",
-    "hash": "24f2110e15d41d880f5b0448e9eb6b4f3781aaa56acefb92e04f73d530b22680",
-    "timestamp": 1.77838e+09,
-    "sender": "0x34f5044fcdb09e571f291df59801f2ad80a0972d",
-    "public_key": null,
-    "amount": 100,
-    "signature": null
-}
