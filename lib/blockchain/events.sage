@@ -1,5 +1,5 @@
 # lib/blockchain/events.sage
-# Event Logging System for Sage Blockchain (Phase 5)
+# Event Logging System for Sage Blockchain
 
 import io
 import json
@@ -7,6 +7,7 @@ import json
 class EventLog:
     proc init(db_path):
         self.path = db_path
+        self.events = {} # In-memory cache of events by contract
         
     proc emit(contract_addr, event_name, data):
         let event = {
@@ -15,19 +16,22 @@ class EventLog:
             "data": data,
             "timestamp": clock()
         }
+        
+        # Cache for quick access
+        if not dict_has(self.events, contract_addr):
+            self.events[contract_addr] = []
+        push(self.events[contract_addr], event)
+        
+        # Log to disk
         let log_line = json.stringify(event) + "\n"
         io.appendfile(self.path, log_line)
         print "EVENT [" + event_name + "] from " + contract_addr
 
     proc query(contract_addr, event_name):
         let logs = []
-        if not io.exists(self.path):
-            return logs
-        
-        let lines = split(io.readfile(self.path), "\n")
-        for line in lines:
-            if len(line) > 0:
-                let event = json.parse(line)
-                if event["contract"] == contract_addr and event["name"] == event_name:
-                    push(logs, event)
+        # Return from cache
+        if dict_has(self.events, contract_addr):
+            for e in self.events[contract_addr]:
+                if e["name"] == event_name:
+                    push(logs, e)
         return logs
