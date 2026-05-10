@@ -3451,3 +3451,36 @@ Note: `elif` is recognized by the lexer as a combination of `else` + `if`
 tokens but is effectively reserved. The `end` keyword is used to terminate
 all block constructs: `proc`, `if`, `while`, `for`, `match`, `case`, `try`,
 `catch`, `finally`, `class`, `struct`, `enum`, `trait`, and `unsafe`.
+
+# Discord Bot Library
+
+SageLang now includes a library for building Discord bots, designed to mirror the familiarity of Python's `discord` and `discord.ext` libraries.
+
+## Getting Started
+
+To create a Discord bot, import the `discord` module:
+
+```sage
+import discord.client
+
+proc on_ready(data):
+    print("Bot is ready!")
+
+let bot = discord.client.Client("YOUR_TOKEN", 32767)
+bot.on("READY", on_ready)
+bot.run()
+```
+
+## REST API Support
+
+The library includes an HTTP client for interacting with Discord's REST API. You can send messages directly:
+
+```sage
+bot.send_message(CHANNEL_ID, "Hello, world!")
+```
+
+## Features
+
+- Gateway API support for event handling.
+- REST API support for sending messages.
+- Easy-to-use event system.
