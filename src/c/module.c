@@ -576,6 +576,27 @@ void cleanup_module_system() {
     }
 }
 
+#ifndef SAGE_NO_FFI
+extern Value ffi_open_native(int argCount, Value* args);
+extern Value ffi_close_native(int argCount, Value* args);
+extern Value ffi_call_native(int argCount, Value* args);
+extern Value ffi_sym_native(int argCount, Value* args);
+
+Module* create_ffi_module(ModuleCache* cache) {
+    Module* m = create_native_module(cache, "ffi");
+    Environment* e = m->env;
+
+    env_define(e, "open", 4, val_native(ffi_open_native));
+    env_define(e, "close", 5, val_native(ffi_close_native));
+    env_define(e, "call", 4, val_native(ffi_call_native));
+    env_define(e, "sym", 3, val_native(ffi_sym_native));
+
+    return m;
+}
+#endif
+
+extern Module* create_net_module(ModuleCache* cache);
+
 // Register standard library modules (implemented in stdlib.c)
 void register_stdlib_modules(ModuleCache* cache) {
     create_math_module(cache);
@@ -585,10 +606,14 @@ void register_stdlib_modules(ModuleCache* cache) {
     create_vm_module(cache);
     create_thread_module(cache);
     create_fat_module(cache);
+    create_net_module(cache);
     create_socket_module(cache);
     create_tcp_module(cache);
     create_http_module(cache);
     create_ssl_module(cache);
     create_graphics_module(cache);
     create_ml_native_module(cache);
+#ifndef SAGE_NO_FFI
+    create_ffi_module(cache);
+#endif
 }

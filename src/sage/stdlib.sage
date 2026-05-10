@@ -37,7 +37,7 @@ proc create_math_module():
     m["PI"] = 3.14159265358979323846  # Uppercase alias
     m["e"] = 2.71828182845904523536
     m["tau"] = 6.28318530717958647692
-    m["inf"] = 1.0 / 0.0
+    m["inf"] = tonumber("inf")
     
     # Functions
     m["abs"] = math_abs

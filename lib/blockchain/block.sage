@@ -10,6 +10,7 @@ class Block:
         self.previous_hash = previous_hash
         self.difficulty = difficulty
         self.nonce = 0
+        self.state_root = "0" # Phase 3
         self.hash = self.calculate_hash()
 
     proc calculate_hash():
@@ -17,7 +18,7 @@ class Block:
         for tx in self.transactions:
             tx_data = tx_data + str(tx)
         
-        let data = str(self.index) + str(self.timestamp) + tx_data + str(self.previous_hash) + str(self.nonce)
+        let data = str(self.index) + str(self.timestamp) + tx_data + str(self.previous_hash) + str(self.nonce) + str(self.state_root)
         return hash.sha256_hex(data)
 
     async proc mine():
@@ -42,4 +43,5 @@ class Block:
         d["difficulty"] = self.difficulty
         d["nonce"] = self.nonce
         d["hash"] = self.hash
+        d["state_root"] = self.state_root # Phase 3
         return d

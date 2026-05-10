@@ -44,6 +44,7 @@ Value val_bytes(const unsigned char* data, int length) {
     v.as.bytes->length = length;
     v.as.bytes->capacity = length > 0 ? length : 8;
     v.as.bytes->data = SAGE_ALLOC(v.as.bytes->capacity);
+    gc_track_external_allocation((size_t)v.as.bytes->capacity);
     if (data && length > 0) {
         memcpy(v.as.bytes->data, data, length);
     }
@@ -57,6 +58,7 @@ Value val_bytes_empty(int capacity) {
     v.as.bytes->length = 0;
     v.as.bytes->capacity = capacity > 0 ? capacity : 8;
     v.as.bytes->data = SAGE_ALLOC(v.as.bytes->capacity);
+    gc_track_external_allocation((size_t)v.as.bytes->capacity);
     return v;
 }
 

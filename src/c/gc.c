@@ -173,7 +173,6 @@ static size_t gc_release_object(GCHeader* header) {
             ExceptionValue* exception = object;
             size_t msg_len = strlen(exception->message) + 1;
             freed += msg_len;
-            gc_track_external_free(msg_len);
             free(exception->message);
             break;
         }
@@ -195,6 +194,14 @@ static size_t gc_release_object(GCHeader* header) {
         case VAL_MUTEX: {
             MutexValue* mv = object;
             if (mv->handle) { sage_mutex_destroy((sage_mutex_t*)mv->handle); free(mv->handle); }
+            break;
+        }
+        case VAL_BYTES: {
+            BytesValue* b = object;
+            if (b->data) {
+                freed += (size_t)b->capacity;
+                free(b->data);
+            }
             break;
         }
         default: break;
@@ -344,6 +351,7 @@ void gc_write_barrier_value(Value old_val) {
         case VAL_POINTER:   gc_shade_gray(old_val.as.pointer, VAL_POINTER); break;
         case VAL_THREAD:    gc_shade_gray(old_val.as.thread, VAL_THREAD); break;
         case VAL_MUTEX:     gc_shade_gray(old_val.as.mutex, VAL_MUTEX); break;
+        case VAL_BYTES:     gc_shade_gray(old_val.as.bytes, VAL_BYTES); break;
         default: break; // Primitives (nil, number, bool) - no heap object
     }
 }
@@ -403,6 +411,7 @@ void gc_mark_value(Value val) {
         case VAL_POINTER:   gc_try_shade(val.as.pointer); break;
         case VAL_THREAD:    gc_try_shade(val.as.thread); break;
         case VAL_MUTEX:     gc_try_shade(val.as.mutex); break;
+        case VAL_BYTES:     gc_try_shade(val.as.bytes); break;
         default: break;
     }
 }
@@ -813,7 +822,7 @@ void gc_disable(void) {
 // heap alignment for all existing allocations.
 
 // Simple hash table for ARC metadata
-#define ARC_TABLE_SIZE 4096
+#define ARC_TABLE_SIZE 1048576
 typedef struct ARCNode {
     void* key;           // Object pointer (header + 1)
     int ref_count;
@@ -1097,6 +1106,7 @@ static void orc_visit_children(void* obj, orc_child_visitor visitor) {
                     case VAL_POINTER:   visitor(v.as.pointer); break;
                     case VAL_THREAD:    visitor(v.as.thread); break;
                     case VAL_MUTEX:     visitor(v.as.mutex); break;
+                    case VAL_BYTES:     visitor(v.as.bytes); break;
                     default: break;
                 }
             }
@@ -1122,6 +1132,7 @@ static void orc_visit_children(void* obj, orc_child_visitor visitor) {
                         case VAL_POINTER:   visitor(v.as.pointer); break;
                         case VAL_THREAD:    visitor(v.as.thread); break;
                         case VAL_MUTEX:     visitor(v.as.mutex); break;
+                        case VAL_BYTES:     visitor(v.as.bytes); break;
                         default: break;
                     }
                 }
@@ -1143,6 +1154,7 @@ static void orc_visit_children(void* obj, orc_child_visitor visitor) {
                     case VAL_INSTANCE:  visitor(v.as.instance); break;
                     case VAL_EXCEPTION: visitor(v.as.exception); break;
                     case VAL_MODULE:    visitor(v.as.module); break;
+                    case VAL_BYTES:     visitor(v.as.bytes); break;
                     default: break;
                 }
             }
@@ -1325,3 +1337,4 @@ void orc_force_cycle_collection(void) {
     orc_collect_cycles();
     gc.arc_decrements = 0;
 }
+

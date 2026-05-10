@@ -4729,10 +4729,12 @@ static Value gpu_load_gltf(int argCount, Value* args) {
     Value root = val_dict();
 
     // ---- Meshes ----
-    ArrayValue* meshes_arr = SAGE_ALLOC(sizeof(ArrayValue));
-    meshes_arr->count = 0;
+    Value meshes_val = val_array();
+    ArrayValue* meshes_arr = meshes_val.as.array;
+    dict_set(&root, "meshes", meshes_val);
     meshes_arr->capacity = (int)data->meshes_count + 1;
     meshes_arr->elements = SAGE_ALLOC(sizeof(Value) * meshes_arr->capacity);
+    gc_track_external_allocation(sizeof(Value) * (size_t)meshes_arr->capacity);
 
     for (cgltf_size mi = 0; mi < data->meshes_count; mi++) {
         cgltf_mesh* mesh = &data->meshes[mi];
@@ -4740,10 +4742,12 @@ static Value gpu_load_gltf(int argCount, Value* args) {
         if (mesh->name) dict_set(&mesh_dict, "name", val_string(mesh->name));
         else dict_set(&mesh_dict, "name", val_string("mesh"));
 
-        ArrayValue* prims_arr = SAGE_ALLOC(sizeof(ArrayValue));
-        prims_arr->count = 0;
+        Value prims_val = val_array();
+        ArrayValue* prims_arr = prims_val.as.array;
+        dict_set(&mesh_dict, "primitives", prims_val);
         prims_arr->capacity = (int)mesh->primitives_count + 1;
         prims_arr->elements = SAGE_ALLOC(sizeof(Value) * prims_arr->capacity);
+        gc_track_external_allocation(sizeof(Value) * (size_t)prims_arr->capacity);
 
         for (cgltf_size pi = 0; pi < mesh->primitives_count; pi++) {
             cgltf_primitive* prim = &mesh->primitives[pi];
@@ -4778,10 +4782,12 @@ static Value gpu_load_gltf(int argCount, Value* args) {
 
             // Interleave into engine vertex format: [px,py,pz, nx,ny,nz, u,v]
             int float_count = vert_count * 8;
-            ArrayValue* verts = SAGE_ALLOC(sizeof(ArrayValue));
+            Value verts_val = val_array();
+            ArrayValue* verts = verts_val.as.array;
             verts->count = float_count;
             verts->capacity = float_count;
             verts->elements = SAGE_ALLOC(sizeof(Value) * float_count);
+            gc_track_external_allocation(sizeof(Value) * (size_t)float_count);
             for (int vi = 0; vi < vert_count; vi++) {
                 verts->elements[vi*8+0] = val_number(positions[vi*3+0]);
                 verts->elements[vi*8+1] = val_number(positions[vi*3+1]);
@@ -4794,21 +4800,21 @@ static Value gpu_load_gltf(int argCount, Value* args) {
             }
             free(positions); free(normals); free(uvs);
 
-            Value verts_val; verts_val.type = VAL_ARRAY; verts_val.as.array = verts;
             dict_set(&prim_dict, "vertices", verts_val);
             dict_set(&prim_dict, "vertex_count", val_number(vert_count));
 
             // Indices
             if (prim->indices) {
                 int idx_count = (int)prim->indices->count;
-                ArrayValue* indices = SAGE_ALLOC(sizeof(ArrayValue));
+                Value idx_val = val_array();
+                ArrayValue* indices = idx_val.as.array;
                 indices->count = idx_count;
                 indices->capacity = idx_count;
                 indices->elements = SAGE_ALLOC(sizeof(Value) * idx_count);
+                gc_track_external_allocation(sizeof(Value) * (size_t)idx_count);
                 for (cgltf_size ii = 0; ii < prim->indices->count; ii++) {
                     indices->elements[ii] = val_number((double)cgltf_accessor_read_index(prim->indices, ii));
                 }
-                Value idx_val; idx_val.type = VAL_ARRAY; idx_val.as.array = indices;
                 dict_set(&prim_dict, "indices", idx_val);
                 dict_set(&prim_dict, "index_count", val_number(idx_count));
             }
@@ -4824,14 +4830,14 @@ static Value gpu_load_gltf(int argCount, Value* args) {
         dict_set(&mesh_dict, "primitives", prims_val);
         meshes_arr->elements[meshes_arr->count++] = mesh_dict;
     }
-    Value meshes_val; meshes_val.type = VAL_ARRAY; meshes_val.as.array = meshes_arr;
-    dict_set(&root, "meshes", meshes_val);
 
     // ---- Materials ----
-    ArrayValue* mats_arr = SAGE_ALLOC(sizeof(ArrayValue));
-    mats_arr->count = 0;
+    Value mats_val = val_array();
+    ArrayValue* mats_arr = mats_val.as.array;
+    dict_set(&root, "materials", mats_val);
     mats_arr->capacity = (int)data->materials_count + 1;
     mats_arr->elements = SAGE_ALLOC(sizeof(Value) * mats_arr->capacity);
+    gc_track_external_allocation(sizeof(Value) * (size_t)mats_arr->capacity);
 
     for (cgltf_size mi = 0; mi < data->materials_count; mi++) {
         cgltf_material* mat = &data->materials[mi];
@@ -4867,10 +4873,12 @@ static Value gpu_load_gltf(int argCount, Value* args) {
     dict_set(&root, "materials", mats_val);
 
     // ---- Nodes ----
-    ArrayValue* nodes_arr = SAGE_ALLOC(sizeof(ArrayValue));
-    nodes_arr->count = 0;
+    Value nodes_val = val_array();
+    ArrayValue* nodes_arr = nodes_val.as.array;
+    dict_set(&root, "nodes", nodes_val);
     nodes_arr->capacity = (int)data->nodes_count + 1;
     nodes_arr->elements = SAGE_ALLOC(sizeof(Value) * nodes_arr->capacity);
+    gc_track_external_allocation(sizeof(Value) * (size_t)nodes_arr->capacity);
 
     for (cgltf_size ni = 0; ni < data->nodes_count; ni++) {
         cgltf_node* node = &data->nodes[ni];
@@ -4889,14 +4897,14 @@ static Value gpu_load_gltf(int argCount, Value* args) {
 
         nodes_arr->elements[nodes_arr->count++] = node_dict;
     }
-    Value nodes_val; nodes_val.type = VAL_ARRAY; nodes_val.as.array = nodes_arr;
-    dict_set(&root, "nodes", nodes_val);
 
     // ---- Animations ----
-    ArrayValue* anims_arr = SAGE_ALLOC(sizeof(ArrayValue));
-    anims_arr->count = 0;
+    Value anims_val = val_array();
+    ArrayValue* anims_arr = anims_val.as.array;
+    dict_set(&root, "animations", anims_val);
     anims_arr->capacity = (int)data->animations_count + 1;
     anims_arr->elements = SAGE_ALLOC(sizeof(Value) * anims_arr->capacity);
+    gc_track_external_allocation(sizeof(Value) * (size_t)anims_arr->capacity);
 
     for (cgltf_size ai = 0; ai < data->animations_count; ai++) {
         cgltf_animation* anim = &data->animations[ai];
@@ -4905,10 +4913,12 @@ static Value gpu_load_gltf(int argCount, Value* args) {
         else dict_set(&anim_dict, "name", val_string("animation"));
         dict_set(&anim_dict, "channel_count", val_number((double)anim->channels_count));
 
-        ArrayValue* channels = SAGE_ALLOC(sizeof(ArrayValue));
-        channels->count = 0;
+        Value channels_val = val_array();
+        ArrayValue* channels = channels_val.as.array;
+        dict_set(&anim_dict, "channels", channels_val);
         channels->capacity = (int)anim->channels_count + 1;
         channels->elements = SAGE_ALLOC(sizeof(Value) * channels->capacity);
+        gc_track_external_allocation(sizeof(Value) * (size_t)channels->capacity);
 
         for (cgltf_size ci = 0; ci < anim->channels_count; ci++) {
             cgltf_animation_channel* ch = &anim->channels[ci];
@@ -4929,35 +4939,33 @@ static Value gpu_load_gltf(int argCount, Value* args) {
                     int tc = (int)s->input->count;
                     float* times = malloc(sizeof(float) * tc);
                     cgltf_read_float_array(s->input, times, tc);
-                    ArrayValue* times_arr = SAGE_ALLOC(sizeof(ArrayValue));
+                    Value tv = val_array();
+                    ArrayValue* times_arr = tv.as.array;
+                    dict_set(&ch_dict, "times", tv);
                     times_arr->count = tc; times_arr->capacity = tc;
                     times_arr->elements = SAGE_ALLOC(sizeof(Value) * tc);
+                    gc_track_external_allocation(sizeof(Value) * (size_t)tc);
                     for (int ti = 0; ti < tc; ti++) times_arr->elements[ti] = val_number(times[ti]);
                     free(times);
-                    Value tv; tv.type = VAL_ARRAY; tv.as.array = times_arr;
-                    dict_set(&ch_dict, "times", tv);
                 }
                 if (s->output) {
                     int vc = (int)s->output->count * (int)cgltf_num_components(s->output->type);
                     float* vals = malloc(sizeof(float) * vc);
                     cgltf_read_float_array(s->output, vals, vc);
-                    ArrayValue* vals_arr = SAGE_ALLOC(sizeof(ArrayValue));
+                    Value vv = val_array();
+                    ArrayValue* vals_arr = vv.as.array;
+                    dict_set(&ch_dict, "values", vv);
                     vals_arr->count = vc; vals_arr->capacity = vc;
                     vals_arr->elements = SAGE_ALLOC(sizeof(Value) * vc);
+                    gc_track_external_allocation(sizeof(Value) * (size_t)vc);
                     for (int vi = 0; vi < vc; vi++) vals_arr->elements[vi] = val_number(vals[vi]);
                     free(vals);
-                    Value vv; vv.type = VAL_ARRAY; vv.as.array = vals_arr;
-                    dict_set(&ch_dict, "values", vv);
                 }
             }
             channels->elements[channels->count++] = ch_dict;
         }
-        Value ch_val; ch_val.type = VAL_ARRAY; ch_val.as.array = channels;
-        dict_set(&anim_dict, "channels", ch_val);
         anims_arr->elements[anims_arr->count++] = anim_dict;
     }
-    Value anims_val; anims_val.type = VAL_ARRAY; anims_val.as.array = anims_arr;
-    dict_set(&root, "animations", anims_val);
 
     // Stats
     dict_set(&root, "mesh_count", val_number((double)data->meshes_count));

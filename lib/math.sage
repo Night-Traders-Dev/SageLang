@@ -1,6 +1,8 @@
 # math.sage — Core math library for SageLang
 # Uses comptime for constants and @inline for hot-path arithmetic.
 
+from _math import *
+
 # ============================================================================
 # Inline arithmetic primitives
 # ============================================================================

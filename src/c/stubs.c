@@ -10,14 +10,18 @@ int jit_should_compile() { return 0; }
 void jit_compile_function() {}
 void jit_record_return() {}
 
+#ifndef SAGE_HAS_LSP
 void lsp_run() { fprintf(stderr, "LSP not supported in this build\n"); }
+#endif
 int compile_source_to_llvm_ir() { return -1; }
 int compile_source_to_llvm_executable() { return -1; }
 
+#ifdef SAGE_NO_NET
 void create_socket_module() {}
 void create_tcp_module() {}
 void create_http_module() {}
 void create_ssl_module() {}
+#endif
 void create_graphics_module() {}
 void create_ml_native_module() {}
 

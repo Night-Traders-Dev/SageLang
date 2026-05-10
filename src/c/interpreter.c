@@ -23,13 +23,28 @@
 #include "repl.h"    // Phase 12: REPL error recovery
 
 // Helper macro for creating normal expression results
-#define EVAL_RESULT(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL })
-#define EVAL_EXCEPTION(exc) ((ExecResult){ sage_nil, 0, 0, 0, 1, (exc), 0, NULL })
-#define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL })
+#define EVAL_RESULT(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL, g_gas_used, g_gas_limit })
+#define EVAL_EXCEPTION(exc) ((ExecResult){ sage_nil, 0, 0, 0, 1, (exc), 0, NULL, g_gas_used, g_gas_limit })
+#define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL, g_gas_used, g_gas_limit })
 
 Environment* g_global_env = NULL;
 Environment* g_gc_root_env = NULL;
 static Stmt* g_generator_resume_target = NULL;
+
+// Phase 2: Gas tracking globals
+static long g_gas_limit = -1; // -1 means unlimited
+static long g_gas_used = 0;
+
+static ExecResult gas_error(void) {
+    return EVAL_EXCEPTION(val_exception("Out of gas"));
+}
+
+static int consume_gas(long amount) {
+    if (g_gas_limit < 0) return 1;
+    g_gas_used += amount;
+    if (g_gas_used > g_gas_limit) return 0;
+    return 1;
+}
 
 // JIT state — global, initialized by --jit mode
 #include "jit.h"
@@ -197,15 +212,39 @@ static Value str_native(int argCount, Value* args) {
     if (args[0].type == VAL_NIL) {
         return val_string("nil");
     }
+
+    if (args[0].type == VAL_INSTANCE && args[0].as.instance->class_def) {
+        Method* str_method = class_find_method(args[0].as.instance->class_def, "__str__", 7);
+        if (str_method) {
+            Stmt* method_node = (Stmt*)str_method->method_stmt;
+            ProcStmt* str_stmt = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
+            Env* def_env = args[0].as.instance->class_def->defining_env;
+            Env* str_env = env_create(def_env ? def_env : g_global_env);
+            env_define(str_env, "self", 4, args[0]);
+            ExecResult str_res = interpret(str_stmt->body, str_env);
+            if (!str_res.is_throwing && str_res.value.type == VAL_STRING) {
+                return str_res.value;
+            }
+        }
+    }
+
     // For other types, return a type description
     const char* type_names[] = {"number","bool","nil","string","function","native",
                                 "array","dict","tuple","class","instance","module",
-                                "exception","generator","clib","pointer","thread","mutex"};
-    int t = args[0].type;
-    if (t >= 0 && t <= 17) {
-        snprintf(buffer, sizeof(buffer), "<%s>", type_names[t]);
+                                "exception","generator","clib","pointer","thread","mutex", "bytes"};
+    int type = args[0].type;
+    if (type >= 0 && type <= 18) {
+        if (type == VAL_CLASS) {
+            snprintf(buffer, sizeof(buffer), "<class %s>", args[0].as.class_val->name);
+        } else if (type == VAL_INSTANCE) {
+            snprintf(buffer, sizeof(buffer), "<instance of %s>", args[0].as.instance->class_def->name);
+        } else if (type == VAL_MODULE) {
+            snprintf(buffer, sizeof(buffer), "<module %s>", args[0].as.module->module->name);
+        } else {
+            snprintf(buffer, sizeof(buffer), "<%s>", type_names[type]);
+        }
     } else {
-        snprintf(buffer, sizeof(buffer), "<unknown:%d>", t);
+        snprintf(buffer, sizeof(buffer), "<unknown:%d>", type);
     }
     return val_string(buffer);
 }
@@ -277,10 +316,12 @@ static Value build_quad_verts_native(int argCount, Value* args) {
     int float_count = vert_count * 8;
 
     // Pre-allocate output array
-    ArrayValue* out = SAGE_ALLOC(sizeof(ArrayValue));
+    Value out_val = val_array();
+    ArrayValue* out = out_val.as.array;
     out->count = 0;
     out->capacity = float_count;
     out->elements = SAGE_ALLOC(sizeof(Value) * float_count);
+    gc_track_external_allocation(sizeof(Value) * (size_t)float_count);
 
     for (int i = 0; i < quad_count; i++) {
         Value q = quads->elements[i];
@@ -348,23 +389,24 @@ static Value build_line_quads_native(int argCount, Value* args) {
 
     int seg_count = lines->count / 4;
     // Output: array of dicts, each with x,y,w,h,color
-    ArrayValue* out = SAGE_ALLOC(sizeof(ArrayValue));
+    Value out_val = val_array();
+    ArrayValue* out = out_val.as.array;
     out->count = 0;
     out->capacity = seg_count;
-    out->elements = SAGE_ALLOC(sizeof(Value) * seg_count);
+    out->elements = SAGE_ALLOC(sizeof(Value) * (size_t)seg_count);
+    gc_track_external_allocation(sizeof(Value) * (size_t)seg_count);
 
     // Color array (shared)
-    ArrayValue* color = SAGE_ALLOC(sizeof(ArrayValue));
+    Value color_val = val_array();
+    ArrayValue* color = color_val.as.array;
     color->count = 4;
     color->capacity = 4;
     color->elements = SAGE_ALLOC(sizeof(Value) * 4);
+    gc_track_external_allocation(sizeof(Value) * 4);
     color->elements[0] = val_number(cr);
     color->elements[1] = val_number(cg);
     color->elements[2] = val_number(cb);
     color->elements[3] = val_number(ca);
-    Value color_val;
-    color_val.type = VAL_ARRAY;
-    color_val.as.array = color;
 
     double half = thickness * 0.5;
 
@@ -392,16 +434,15 @@ static Value build_line_quads_native(int argCount, Value* args) {
         dict_set(&quad_dict, "color", color_val);
 
         if (out->count >= out->capacity) {
+            size_t old_cap = (size_t)out->capacity;
             out->capacity = out->capacity * 2 + 1;
-            out->elements = SAGE_REALLOC(out->elements, sizeof(Value) * out->capacity);
+            out->elements = SAGE_REALLOC(out->elements, sizeof(Value) * (size_t)out->capacity);
+            gc_track_external_resize(sizeof(Value) * old_cap, sizeof(Value) * (size_t)out->capacity);
         }
         out->elements[out->count++] = quad_dict;
     }
 
-    Value result;
-    result.type = VAL_ARRAY;
-    result.as.array = out;
-    return result;
+    return out_val;
 }
 
 static Value range_native(int argCount, Value* args) {
@@ -777,7 +818,7 @@ static Value native_next(int arg_count, Value* args) {
 #ifndef SAGE_NO_FFI
 
 // ffi_open("libname.so") -> CLib handle
-static Value ffi_open_native(int argCount, Value* args) {
+Value ffi_open_native(int argCount, Value* args) {
     if (argCount != 1 || !IS_STRING(args[0])) {
         fprintf(stderr, "ffi_open() expects 1 string argument (library path).\n");
         return val_nil();
@@ -792,7 +833,7 @@ static Value ffi_open_native(int argCount, Value* args) {
 }
 
 // ffi_close(lib) -> nil
-static Value ffi_close_native(int argCount, Value* args) {
+Value ffi_close_native(int argCount, Value* args) {
     if (argCount != 1 || !IS_CLIB(args[0])) {
         fprintf(stderr, "ffi_close() expects 1 clib argument.\n");
         return val_nil();
@@ -808,7 +849,7 @@ static Value ffi_close_native(int argCount, Value* args) {
 // ffi_call(lib, "func_name", "return_type", [args...])
 // Supported return types: "double", "int", "void", "string"
 // Args are automatically marshaled from Sage values
-static Value ffi_call_native(int argCount, Value* args) {
+Value ffi_call_native(int argCount, Value* args) {
     if (argCount < 3 || argCount > 4) {
         fprintf(stderr, "ffi_call() expects 3-4 arguments: (lib, func_name, return_type, [args]).\n");
         return val_nil();
@@ -956,7 +997,7 @@ static Value ffi_call_native(int argCount, Value* args) {
 }
 
 // ffi_sym(lib, "symbol_name") -> true/false (check if symbol exists)
-static Value ffi_sym_native(int argCount, Value* args) {
+Value ffi_sym_native(int argCount, Value* args) {
     if (argCount != 2 || !IS_CLIB(args[0]) || !IS_STRING(args[1])) {
         fprintf(stderr, "ffi_sym() expects (clib, string).\n");
         return val_bool(0);
@@ -3004,6 +3045,9 @@ ExecResult interpret(Stmt* stmt, Env* env) {
 }
 
 static ExecResult interpret_inner(Stmt* stmt, Env* env) {
+    // Phase 2: Consume gas for each statement
+    if (!consume_gas(10)) return gas_error();
+
     // Thread-safe first-call detection: only set g_global_env once
     static volatile int first_call = 1;
     if (first_call && stmt != NULL) {
@@ -3031,10 +3075,11 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             if (result.value.type == VAL_INSTANCE && result.value.as.instance->class_def) {
                 Method* str_method = class_find_method(result.value.as.instance->class_def, "__str__", 7);
                 if (str_method) {
-                    ProcStmt* str_stmt = (ProcStmt*)str_method->method_stmt;
+                    Stmt* method_node = (Stmt*)str_method->method_stmt;
+                    ProcStmt* str_stmt = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
                     Env* def_env = result.value.as.instance->class_def->defining_env;
                     Env* str_env = env_create(def_env ? def_env : env);
-                    env_define_const(str_env, "self", 4, result.value);
+                    env_define(str_env, "self", 4, result.value);
                     ExecResult str_res = interpret(str_stmt->body, str_env);
                     if (!str_res.is_throwing && str_res.value.type == VAL_STRING) {
                         printf("%s\n", AS_STRING(str_res.value));

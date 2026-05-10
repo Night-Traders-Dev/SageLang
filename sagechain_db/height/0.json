@@ -1,0 +1,12 @@
+{
+    "transactions": [
+        "Genesis Block"
+    ],
+    "previous_hash": "0",
+    "difficulty": 4,
+    "timestamp": 1.77838e+09,
+    "hash": "0000514af6e6b51b644569be1d72e09a62f5600e363b3c70613ab4c1ae8e5bd2",
+    "state_root": "7d74703842bd14a043fb12b5dd52fe5dfb2699393bfb9f50f6c86b2e9f6d56bd",
+    "nonce": 49483,
+    "index": 0
+}

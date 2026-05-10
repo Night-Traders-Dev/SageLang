@@ -11,10 +11,10 @@ SAGE_VERSION := $(shell cat VERSION 2>/dev/null || echo "0.0.0")
 
 CC = gcc
 PYTHON ?= python3
-CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"'
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"' -DSAGE_HAS_LSP
 # Platform-conditional linking: pthread only on desktop (not RP2040)
 ifndef PICO_BUILD
-LDFLAGS = -lm -lpthread -ldl
+LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto
 # Vulkan support: auto-detect or set VULKAN=1
 VULKAN ?= auto
 ifeq ($(VULKAN),auto)
@@ -109,9 +109,11 @@ CORE_SOURCES = \
     $(SRC_DIR)/typecheck.c \
     $(SRC_DIR)/safety.c \
     $(SRC_DIR)/value.c \
+    $(SRC_DIR)/lsp.c \
     $(SRC_DIR)/stubs.c \
     $(SRC_DIR)/aot.c \
-    $(SRC_DIR)/kotlin_backend.c
+    $(SRC_DIR)/kotlin_backend.c \
+    $(SRC_DIR)/net.c
 
 VM_SOURCES = \
     $(VM_DIR)/bytecode.c \

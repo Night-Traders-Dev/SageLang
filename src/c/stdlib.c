@@ -314,7 +314,7 @@ static Value math_isinf_native(int argCount, Value* args) {
 }
 
 Module* create_math_module(ModuleCache* cache) {
-    Module* m = create_native_module(cache, "math");
+    Module* m = create_native_module(cache, "_math");
     Environment* e = m->env;
 
     // Trig
@@ -503,18 +503,17 @@ static Value io_readbytes_native(int argCount, Value* args) {
     size_t read = fread(buf, 1, (size_t)length, f);
     fclose(f);
     // Create array of byte values
-    ArrayValue* arr = SAGE_ALLOC(sizeof(ArrayValue));
+    Value out_val = val_array();
+    ArrayValue* arr = out_val.as.array;
     arr->count = (int)read;
     arr->capacity = (int)read;
     arr->elements = SAGE_ALLOC(sizeof(Value) * read);
+    gc_track_external_allocation(sizeof(Value) * (size_t)read);
     for (size_t i = 0; i < read; i++) {
         arr->elements[i] = val_number((double)buf[i]);
     }
     free(buf);
-    Value result;
-    result.type = VAL_ARRAY;
-    result.as.array = arr;
-    return result;
+    return out_val;
 }
 
 // io.listdir(path) -> array of filename strings
@@ -522,24 +521,25 @@ static Value io_listdir_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     DIR* d = opendir(AS_STRING(args[0]));
     if (!d) return val_nil();
-    ArrayValue* arr = SAGE_ALLOC(sizeof(ArrayValue));
+    Value out_val = val_array();
+    ArrayValue* arr = out_val.as.array;
     arr->count = 0;
     arr->capacity = 32;
     arr->elements = SAGE_ALLOC(sizeof(Value) * 32);
+    gc_track_external_allocation(sizeof(Value) * 32);
     struct dirent* entry;
     while ((entry = readdir(d)) != NULL) {
         if (entry->d_name[0] == '.') continue; // skip hidden/. /..
         if (arr->count >= arr->capacity) {
+            size_t old_cap = (size_t)arr->capacity;
             arr->capacity *= 2;
-            arr->elements = SAGE_REALLOC(arr->elements, sizeof(Value) * arr->capacity);
+            arr->elements = SAGE_REALLOC(arr->elements, sizeof(Value) * (size_t)arr->capacity);
+            gc_track_external_resize(sizeof(Value) * old_cap, sizeof(Value) * (size_t)arr->capacity);
         }
         arr->elements[arr->count++] = val_string(entry->d_name);
     }
     closedir(d);
-    Value result;
-    result.type = VAL_ARRAY;
-    result.as.array = arr;
-    return result;
+    return out_val;
 }
 
 Module* create_io_module(ModuleCache* cache) {

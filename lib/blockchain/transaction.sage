@@ -7,6 +7,7 @@ class Transaction:
         self.amount = amount
         self.timestamp = clock()
         self.signature = nil
+        self.public_key = nil # Phase 1
 
     proc to_dict():
         let d = {}
@@ -15,6 +16,7 @@ class Transaction:
         d["amount"] = self.amount
         d["timestamp"] = self.timestamp
         d["signature"] = self.signature
+        d["public_key"] = self.public_key # Phase 1
         return d
 
     proc to_string():

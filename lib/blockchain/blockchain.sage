@@ -6,6 +6,10 @@ import blockchain.contract as contract_mod
 import blockchain.orbit as orbit
 import blockchain.node as node_mod
 import blockchain.db as db_mod
+import blockchain.crypto as crypto # Phase 1
+import blockchain.merkle as merkle # Phase 3
+import blockchain.net as p2p    # Phase 4
+import blockchain.events as event_mod # Phase 5
 import thread
 
 class Blockchain:
@@ -20,6 +24,7 @@ class Blockchain:
         self.mutex = thread.mutex()
         
         self.db = db_mod.LedgerDB(db_path)
+        self.events = event_mod.EventLog(db_path + "/events.log") # Phase 5
         self.load_from_db()
         
         if len(self.chain) == 0:
@@ -39,6 +44,8 @@ class Blockchain:
             block.timestamp = block_dict["timestamp"]
             block.nonce = block_dict["nonce"]
             block.hash = block_dict["hash"]
+            if dict_has(block_dict, "state_root"):
+                block.state_root = block_dict["state_root"] # Phase 3
             
             push(self.chain, block)
             self.last_block_time = block.timestamp
@@ -59,6 +66,10 @@ class Blockchain:
         # Using a list for transactions
         let genesis = block_mod.Block(0, ["Genesis Block"], "0", self.difficulty)
         await genesis.mine()
+        # Phase 3: Calculate initial state root
+        let tree = merkle.MerkleTree(["genesis"])
+        genesis.state_root = tree.get_root()
+
         push(self.chain, genesis)
         self.last_block_time = genesis.timestamp
         await self.db.save_block(genesis)
@@ -140,6 +151,7 @@ class Blockchain:
         tx["contract_address"] = addr
         tx["args"] = args
         tx["amount"] = amount # Amount of ORBIT sent to the contract
+        tx["gas_limit"] = 10000 # Phase 2: Default gas limit
         tx["timestamp"] = clock()
         push(self.mempool, tx)
         return true
@@ -154,8 +166,10 @@ class Blockchain:
         if tx_dict["signature"] == nil:
             print "Transaction missing signature!"
             return false
-        # Placeholder for real signature verification
-        return true
+        
+        # Phase 1: Real signature verification
+        let msg = str(tx_dict["sender"]) + str(tx_dict["receiver"]) + str(tx_dict["amount"])
+        return crypto.verify(msg, tx_dict["signature"], tx_dict["public_key"])
 
     proc get_active_user_count():
         thread.lock(self.mutex)
@@ -180,6 +194,8 @@ class Blockchain:
         self.mempool = []
         thread.unlock(self.mutex)
 
+        let state_data = []
+
         # Process transactions in local 'pending' copy
         for tx in pending:
             # Ensure transaction has a hash
@@ -200,6 +216,7 @@ class Blockchain:
                 let receiver_bal = self.get_balance(tx["receiver"])
                 await self.db.save_account_balance(tx["sender"], sender_bal - tx["amount"])
                 await self.db.save_account_balance(tx["receiver"], receiver_bal + tx["amount"])
+                push(state_data, tx["sender"] + ":" + str(sender_bal - tx["amount"]))
             
             if dict_has(tx, "type"):
                 if tx["type"] == "call":
@@ -224,7 +241,12 @@ class Blockchain:
                     if incoming_ok:
                         print "Executing contract at " + addr
                         let context = {"sender": tx["sender"], "value": tx["amount"]}
+                        
+                        # Phase 2: Gas Metering
+                        vm_set_gas_limit(tx["gas_limit"])
                         let results = contract.execute(tx["args"], context)
+                        let gas_used = vm_get_gas_used()
+                        print "Contract gas used: " + str(gas_used)
                         
                         # Handle contract results (outgoing transfers)
                         if type(results) == "array":
@@ -243,6 +265,9 @@ class Blockchain:
                                         await self.db.save_transaction(v_tx)
                                         await self.db.append_tx_to_history(addr, v_tx["hash"])
                                         await self.db.append_tx_to_history(transfer["to"], v_tx["hash"])
+                                        
+                                        # Phase 5: Emit Transfer Event
+                                        await self.events.emit(addr, "Transfer", transfer)
 
                         # Persist updated contract state
                         await self.db.save_contract_state(addr, contract.to_dict())
@@ -294,6 +319,11 @@ class Blockchain:
         push(pending, reward_dict)
         
         let block = block_mod.Block(block_height, pending, prev_hash, self.difficulty)
+        
+        # Phase 3: Merkle State Root
+        let tree = merkle.MerkleTree(state_data)
+        block.state_root = tree.get_root()
+        
         await block.mine()
         
         # Finalize block under lock

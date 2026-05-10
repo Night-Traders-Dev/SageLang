@@ -14,6 +14,10 @@ typedef struct {
     Value exception_value;
     int is_yielding;  // NEW: For generator yield support
     void* next_stmt;  // NEW: For generator resumption point
+    
+    // Phase 2: Gas metering
+    long gas_used;
+    long gas_limit;
 } ExecResult;
 
 ExecResult interpret(Stmt* stmt, Env* env);

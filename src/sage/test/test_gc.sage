@@ -38,7 +38,7 @@ print "====================="
 print nl + "--- Constants ---"
 
 assert_eq(gc.MIN_TRIGGER_BYTES, 65536, "MIN_TRIGGER_BYTES")
-assert_eq(gc.MIN_TRIGGER_OBJECTS, 256, "MIN_TRIGGER_OBJECTS")
+assert_eq(gc.MIN_TRIGGER_OBJECTS, 128, "MIN_TRIGGER_OBJECTS")
 
 # ============================================================================
 # make_stats
@@ -56,7 +56,7 @@ assert_eq(stats["pin_count"], 0, "initial pin_count")
 # stats_to_string
 let s = gc.stats_to_string(stats)
 assert_eq(type(s), "string", "stats_to_string returns string")
-assert_true(contains(s, "Garbage Collector"), "stats string has header")
+assert_true(contains(s, "GC Statistics"), "stats string has header")
 assert_true(contains(s, "yes"), "stats string shows enabled=yes")
 
 # ============================================================================
@@ -148,7 +148,7 @@ print nl + "--- compute_thresholds ---"
 # First collection (collection_num == 0)
 let t0 = gc.compute_thresholds(1000, 100, 0, 0, 0)
 assert_eq(t0["next_gc_bytes"], 1000 + 65536, "first collection byte threshold")
-assert_eq(t0["next_gc_objects"], 100 + 256, "first collection object threshold")
+assert_eq(t0["next_gc_objects"], 100 + 128, "first collection object threshold")
 
 # Normal collection, moderate reclamation
 let t1 = gc.compute_thresholds(10000, 500, 5000, 250, 1)
