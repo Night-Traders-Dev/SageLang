@@ -3028,20 +3028,59 @@ gpio.led_blink(25, 5, 250)         # Blink 5 times, 250ms interval
 
 # Part VII: Blockchain and Distributed Ledger Technology
 
-## Sage Blockchain Library (`lib/blockchain/`)
-The `lib/blockchain/` library provides a pure SageLang implementation of a modular, enterprise-grade L1 blockchain.
+The `lib/blockchain/` library provides a pure SageLang implementation of an enterprise-grade L1 blockchain.
 
-### Architecture
-- **Blockchain Core**: Implements consensus-agnostic chain management, mempool, and block processing.
-- **World State Trie**: Persistent Merkle-Radix Trie for cryptographically proven global account and contract states.
-- **Pluggable Consensus**: Modular architecture for Proof-of-Work (PoW) and Proof-of-Authority (PoA) engines.
-- **Transaction Model**: Secure transaction lifecycle including nonce-based replay protection, chain ID binding, and priority-fee market support.
+## Architecture
 
-### Features
-- **Smart Contracts & NFTs**: Includes the **SNFT-721 Standard** for Non-Fungible Tokens and VM-level cross-contract call support.
-- **JSON-RPC 2.0 API**: Standard Ethereum-compatible endpoints for dApp integration.
-- **P2P Synchronization**: Node discovery and Initial Block Download (IBD) mechanisms.
-- **HD Wallets**: BIP-39 mnemonic phrase and deterministic derivation.
+The system is highly modular, with core components separating concerns:
+
+- **Blockchain Core (`blockchain.blockchain`)**: Manages the main ledger state, mempool, and consensus coordination.
+- **Ledger Storage (`blockchain.db`)**: Provides high-performance, disk-backed storage for blocks, transactions, and world state.
+- **Consensus Engines (`blockchain.consensus.*`)**: Pluggable architecture supporting:
+  - **Proof-of-Work (PoW)**: Standard mining difficulty adjustment.
+  - **Proof-of-Authority (PoA)**: Validator-based consensus with automatic slashing for equivocation.
+- **World State Trie (`blockchain.merkle`)**: A persistent Merkle-Radix Trie for global account balances and contract state, ensuring cryptographically verifiable `state_root`s.
+- **Network Layer (`blockchain.net`, `blockchain.rpc`)**: Implements P2P node discovery, Initial Block Download (IBD), fork resolution, and a standard JSON-RPC 2.0 API for dApp integration.
+
+## Key Features
+
+- **Smart Contracts & NFTs**: Includes a native VM with gas metering and support for inter-contract calls. The **SNFT-721 standard** provides full support for non-fungible tokens.
+- **Wallet & Security**: Supports BIP-39 style deterministic HD wallets for address generation and transaction signing. If `libsage_crypto.so` (Ed25519) is available via FFI, it provides high-performance hardware-accelerated signatures.
+- **Priority Fee Market**: Mempool implementation that prioritizes transactions based on `gas_price`, dynamically incentivizing miners.
+- **Orbit Dynamic Mining**: A dynamic mining rate model that adjusts rewards based on network adoption, total supply, and node reliability.
+- **Staking System**: Logic for ORBIT token staking via system smart contracts to provide passive rewards (~5% APR).
+
+## Usage Example
+
+The following example demonstrates how to set up a blockchain with PoW, create a wallet, add and sign a transaction, and mine a block:
+
+```sage
+import blockchain.blockchain as bc_mod
+import blockchain.wallet as wallet_mod
+import blockchain.consensus.pow as pow_mod
+import blockchain.transaction as tx_mod
+
+# Initialize a blockchain with PoW consensus
+let consensus = pow_mod.PowConsensus(nil, 2)
+let coin = bc_mod.Blockchain(consensus, "./sagechain_db")
+consensus.blockchain = coin
+
+# Generate a new wallet
+let wallet = wallet_mod.Wallet(nil)
+
+# Create and sign a transaction
+let tx = coin.add_transaction(wallet.get_address(), "recipient", 100)
+wallet.sign_transaction(tx)
+coin.add_signed_transaction(tx)
+
+# Mine the pending transactions
+coin.mine_pending_transactions("miner-address")
+
+# Retrieve balance
+print coin.get_balance(wallet.get_address())
+```
+
+For advanced use cases, including P2P networking and validator configuration, refer to the examples in `examples/blockchain_*.sage`.
 
 # Part VIII: Appendices
 
