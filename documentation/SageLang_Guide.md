@@ -2369,7 +2369,7 @@ The self-hosted tree includes core parser/interpreter suites plus additional too
 | `test_interpreter.sage` | 18 | Evaluation, scoping, closures, classes |
 | `test_bootstrap.sage` | 18 | End-to-end: source → tokens → AST → result |
 
-The full test suite (interpreter + compiler + self-hosted tooling) totals **241 tests**.
+The full test suite (interpreter + compiler + self-hosted tooling) totals **2060+ tests**.
 
 ---
 

@@ -1130,7 +1130,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v3.4.1
+- **Current Version**: v3.4.2
 - **Spec Version**: 3.0 (see `STABILITY.md` for guarantees)
 
 ## 💾 Project Structure
@@ -1235,26 +1235,28 @@ sage/
 │   ├── ...           # 41 test categories
 │   ├── 40_conformance/ # Backend conformance tests
 │   └── 41_jit_aot/  # JIT and AOT compiler tests
-├── ROADMAP.md        # Detailed development roadmap
-├── UPDATES.md        # Changelog
-├── Makefile          # Build script
+├── docs/               # Documentation
+│   ├── meta/           # Project metadata (ROADMAP, STABILITY, etc.)
+│   │   ├── ROADMAP.md
+│   │   ├── SECURITY.md
+│   │   ├── STABILITY.md
+│   │   └── UPDATES.md
+│   └── sagelang-book.md # Comprehensive language book
+├── Makefile            # Build script
 └── README.md         # This file
 ```
 
 ## Known Issues / Gotchas
 
-- **0 is truthy in Sage** — only `false` and `nil` are falsy. Guard conditions on zero must use explicit comparison (`if x == 0:`).
-- **No escape sequences in strings** — use `chr(10)` for newline, `chr(34)` for double-quote.
-- **`elif` chains with 5+ branches malfunction** — use sequential `if`/`continue` instead.
-- **`elif` in `for` loops with `break` can malfunction** — use the `if`/`continue` pattern.
-- **Instance `==` always returns false** — use structural/field checks instead.
-- **No wildcard imports** (`from X import *`) — use `import X` then `X.field`.
-- **No multiline dict/array literals** — build them incrementally.
-- **`match` and `end` are reserved keywords** — do not use them as variable names.
-- **Class methods cannot see module-level `let` vars** — hardcode values or pass them as arguments.
-- **`%` operator casts to int** — `3.7 % 1` returns `0`, not `0.7`; use string-based `trunc()` for floor/ceil.
-- **LLVM backend: do NOT use the fake-break pattern** (`j = len(arr)` to exit loops) — the LLVM backend cannot modify loop variables at runtime. Use `break` instead.
-- **`super` auto-injects `self`** — do NOT pass `self` as the first argument: `super.init(args)`, not `super.init(self, args)`.
+1. **Circular Imports**: Currently handled via cycle detection, but large circular graphs may still cause resolution issues.
+2. **Limited `super`**: In some complex inheritance chains, `super` might not resolve correctly (Phase 6 known limitation).
+3. **No string interning**: All strings are separate heap objects; memory usage can be high for string-heavy code.
+4. **LLVM Loop Mutation**: In LLVM-compiled binaries, modifying a `for` loop variable inside the loop will not affect the iteration count. Use `break` instead.
+5. **AST Interpreter Performance**: Tree-walking is slower than bytecode/compiled; use `--runtime bytecode` or `--compile` for performance.
+6. **`match` and `end` are reserved keywords** — do not use them as variable names.
+7. **Class methods cannot see module-level `let` vars** — hardcode values or pass them as arguments.
+8. **`%` operator casts to int** — `3.7 % 1` returns `0`, not `0.7`.
+9. **`super` auto-injects `self`** — do NOT pass `self` as the first argument: `super.init(args)`, not `super.init(self, args)`.
 
 ## 🤝 Contributing
 
@@ -1279,12 +1281,12 @@ Sage is an educational project aimed at understanding compiler construction and 
 - Add comments for complex logic
 - Update documentation for new features
 - Write example code demonstrating new features
-- Check the [ROADMAP.md](ROADMAP.md) for planned features
+- Check the [docs/meta/ROADMAP.md](docs/meta/ROADMAP.md) for planned features
 
 ## 🔗 Resources
 
 - **Repository**: [github.com/Night-Traders-Dev/SageLang](https://github.com/Night-Traders-Dev/SageLang)
-- **Detailed Roadmap**: [ROADMAP.md](ROADMAP.md)
+- **Detailed Roadmap**: [docs/meta/ROADMAP.md](docs/meta/ROADMAP.md)
 - **Import Semantics**: [documentation/Import_Semantics.md](documentation/Import_Semantics.md)
 - **FAT Filesystem Guide**: [documentation/FAT_Filesystem_Guide.md](documentation/FAT_Filesystem_Guide.md)
 - **Bare-Metal / OSdev / UEFI Guide**: [documentation/Baremetal_OSDev_UEFI_Guide.md](documentation/Baremetal_OSDev_UEFI_Guide.md)
@@ -1293,7 +1295,7 @@ Sage is an educational project aimed at understanding compiler construction and 
 
 ## 📜 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 ---
 

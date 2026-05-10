@@ -2,8 +2,8 @@
 title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
-date: "April 2026"
-version: "v3.3.0"
+date: "May 2026"
+version: "v3.4.2"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v3.3.0}
+  - \fancyfoot[C]{v3.4.2}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -58,7 +58,7 @@ by Rust, and a self-hosted compiler written in Sage itself.
 - **SageMetal VM**: freestanding bytecode interpreter for bare-metal (no malloc, no libc, no OS)
 - **Metal stdlib** (`lib/metal/`): serial, GPIO, IRQ, timer, MMIO for kernel/embedded development
 - **Default hybrid runtime**: JIT profiling on hosted, AST on bare-metal, automatic selection
-- **304+ interpreter tests**, 1987+ self-hosted tests
+- **327 interpreter tests**, 1623 self-hosted tests (2060+ total)
 
 ## Quick Start
 

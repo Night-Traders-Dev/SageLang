@@ -331,7 +331,8 @@ install: $(TARGET) $(LSP_TARGET)
 	cp -r lib/chat $(LIBDIR)/lib/
 	cp -r examples/*.sage $(LIBDIR)/examples/
 	install -d $(DOCDIR)
-	install -m 644 README.md ROADMAP.md LICENSE $(DOCDIR)/
+	install -m 644 README.md LICENSE $(DOCDIR)/
+	install -m 644 docs/meta/*.md $(DOCDIR)/
 	@echo "✅ Installation complete"
 	@echo "   Run with: sage <script.sage>"
 
