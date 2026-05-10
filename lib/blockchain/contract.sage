@@ -41,8 +41,18 @@ class Contract:
         if not dict_has(self.state, "storage"):
             self.state["storage"] = {}
         
+        # Gas Budgeting
+        let start_gas = vm_gas_used_get()
+        
         print "VM executing..."
         let res = vm.execute(ptr, self.state)
+        
+        # Deduct gas based on execution
+        let end_gas = vm_gas_used_get()
+        if end_gas > vm_gas_limit_get():
+            print "Contract Error: Out of gas"
+            return nil
+
         print "VM execution complete."
         return res
 
