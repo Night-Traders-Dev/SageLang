@@ -5,14 +5,14 @@ import io
 
 let db_path = "./sagechain_nft_db"
 if io.exists(db_path):
-    print "Cleaning old database..."
+    println "Cleaning old database..."
 
 # 1. Create a wallet for the artist
 let artist = wallet_mod.Wallet(nil)
 let alice = wallet_mod.Wallet("alice mnemonic word list sage chain green leaf growth")
 
-print "Artist Address: " + artist.get_address()
-print "Alice Address: " + alice.get_address()
+println "Artist Address: " + artist.get_address()
+println "Alice Address: " + alice.get_address()
 
 # 2. Initialize Blockchain with PoW (Difficulty 1 for demo)
 let my_coin = bc.Blockchain(1, db_path)
@@ -20,16 +20,16 @@ let my_coin = bc.Blockchain(1, db_path)
 # 3. Load NFT Contract Source
 let nft_source = io.readfile("lib/blockchain/std/nft.sage")
 if nft_source == nil:
-    print "Error: Could not read nft.sage"
-    nft_source = "let action = state['action']; if action == 'mint': print 'MINTING...'"
+    println "Error: Could not read nft.sage"
+    nft_source = "let action = state['action']; if action == 'mint': println 'MINTING...'"
 
 proc demo():
-    print "\n--- Deploying NFT Contract ---"
+    println "\n--- Deploying NFT Contract ---"
     let nft_addr = my_coin.deploy_contract(artist.get_address(), nft_source)
-    print "NFT Contract Deployed at: " + nft_addr
+    println "NFT Contract Deployed at: " + nft_addr
 
     # 4. Mint an NFT
-    print "\n--- Minting NFT #1 ---"
+    println "\n--- Minting NFT #1 ---"
     let mint_args = {
         "action": "mint",
         "tokenId": 1,
@@ -38,20 +38,20 @@ proc demo():
     }
     my_coin.call_contract(artist.get_address(), nft_addr, mint_args, 0)
     
-    print "Mining block to process mint..."
+    println "Mining block to process mint..."
     my_coin.mine_pending_transactions(artist.get_address())
 
     # 5. Check Ownership
-    print "\n--- Verifying Ownership ---"
+    println "\n--- Verifying Ownership ---"
     let nft_state = my_coin.db.get_contract_state(nft_addr)
     let tokens = nft_state["state"]["tokens"]
     if dict_has(tokens, "1"):
-        print "Token #1 Owner: " + tokens["1"]
+        println "Token #1 Owner: " + tokens["1"]
     else:
-        print "Token #1 not found!"
+        println "Token #1 not found!"
 
     # 6. Alice transfers NFT to Bob
-    print "\n--- Alice transferring NFT to Bob ---"
+    println "\n--- Alice transferring NFT to Bob ---"
     let bob_addr = "0xBob1234567890abcdef"
     let transfer_args = {
         "action": "transfer",
@@ -60,15 +60,15 @@ proc demo():
     }
     my_coin.call_contract(alice.get_address(), nft_addr, transfer_args, 0)
     
-    print "Mining block to process transfer..."
+    println "Mining block to process transfer..."
     my_coin.mine_pending_transactions(artist.get_address())
 
     # 7. Final Check
     nft_state = my_coin.db.get_contract_state(nft_addr)
     tokens = nft_state["state"]["tokens"]
-    print "Final Token #1 Owner: " + tokens["1"]
+    println "Final Token #1 Owner: " + tokens["1"]
     
     if tokens["1"] == bob_addr:
-        print "✅ NFT Demo Successful!"
+        println "✅ NFT Demo Successful!"
 
 demo()

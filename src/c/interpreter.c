@@ -2520,11 +2520,16 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             }
 
             if (IS_MODULE(object)) {
+                Module* mod = (Module*)object.as.pointer->ptr;
+                if (mod == NULL) {
+                     fprintf(stderr, "Runtime Error: Module is NULL.\n");
+                     return EVAL_RESULT(val_nil());
+                }
                 int found = 0;
-                Value result = module_get_attr(AS_MODULE(object), prop.start, prop.length, &found);
+                Value result = module_get_attr(mod, prop.start, prop.length, &found);
                 if (!found) {
                     fprintf(stderr, "Runtime Error: Module '%s' has no attribute '%.*s'.\n",
-                            AS_MODULE(object)->name, prop.length, prop.start);
+                            mod->name, prop.length, prop.start);
                     return EVAL_RESULT(val_nil());
                 }
                 return EVAL_RESULT(result);

@@ -97,6 +97,14 @@ void env_define_const(Env* env, const char* name, int length, Value value) {
 
 
 int env_get(Env* env, const char* name, int length, Value* out_value) {
+    if (env == NULL) {
+        fprintf(stderr, "[DEBUG] env_get: env is NULL, name=%.*s\n", length, name);
+        return 0;
+    }
+    if (name == NULL) {
+        fprintf(stderr, "[DEBUG] env_get: name is NULL\n");
+        return 0;
+    }
     Env* current_env = env;
 
     // Search current scope, then parent, then parent's parent...

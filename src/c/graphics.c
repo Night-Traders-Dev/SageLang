@@ -4869,8 +4869,6 @@ static Value gpu_load_gltf(int argCount, Value* args) {
         }
         mats_arr->elements[mats_arr->count++] = mat_dict;
     }
-    Value mats_val; mats_val.type = VAL_ARRAY; mats_val.as.array = mats_arr;
-    dict_set(&root, "materials", mats_val);
 
     // ---- Nodes ----
     Value nodes_val = val_array();

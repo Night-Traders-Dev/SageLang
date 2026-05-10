@@ -437,12 +437,24 @@ bool import_as(Environment* env, const char* module_name, const char* alias) {
 Value module_get_attr(Module* module, const char* name, int length, int* found) {
     Value value = val_nil();
 
-    if (module == NULL || module->env == NULL) {
+    if (module == NULL) {
+        fprintf(stderr, "[DEBUG] module_get_attr: module is NULL\n");
+        if (found) *found = 0;
+        return value;
+    }
+    if (module->env == NULL) {
+        fprintf(stderr, "[DEBUG] module_get_attr: module '%s' env is NULL\n", module->name ? module->name : "unknown");
+        if (found) *found = 0;
+        return value;
+    }
+    if (name == NULL) {
+        fprintf(stderr, "[DEBUG] module_get_attr: name is NULL\n");
         if (found) *found = 0;
         return value;
     }
 
     if (env_get(module->env, name, length, &value)) {
+
         if (found) *found = 1;
         return value;
     }
