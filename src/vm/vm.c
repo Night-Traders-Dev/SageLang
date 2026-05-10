@@ -159,8 +159,10 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
             return vm_execute_chunk(&function->chunk, scope);
         }
 
+        gc_pin();
         ProcStmt* func = (ProcStmt*)AS_FUNCTION(callee);
         if (arg_count != func->param_count) {
+            gc_unpin();
             return vm_error("Arity mismatch.");
         }
 
@@ -171,6 +173,7 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
         }
 
         ExecResult result = interpret(func->body, scope);
+        gc_unpin();
         if (result.is_throwing) return result;
         return vm_normal(result.value);
     }
@@ -194,17 +197,23 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
     }
 
     if (callee.type == VAL_CLASS) {
+        gc_pin();
         ClassValue* class_def = callee.as.class_val;
         InstanceValue* instance = instance_create(class_def);
         Value instance_value = val_instance(instance);
 
         Method* init_method = class_find_method(class_def, "init", 4);
         if (init_method != NULL) {
-            ProcStmt* init_stmt = (ProcStmt*)init_method->method_stmt;
-            Env* method_env = env_create(env);
+            Stmt* init_node = (Stmt*)init_method->method_stmt;
+            if (init_node == NULL) { gc_unpin(); return vm_error("Invalid init method."); }
+            ProcStmt* init_stmt = (init_node->type == STMT_ASYNC_PROC) ? &init_node->as.async_proc : &init_node->as.proc;
+
+            Env* def_env = class_def->defining_env;
+            Env* method_env = env_create(def_env ? def_env : env);
             env_define(method_env, "self", 4, instance_value);
 
             int param_start = (init_stmt->param_count > 0 &&
+                              init_stmt->params != NULL &&
                               strncmp(init_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
 
             for (int i = param_start; i < init_stmt->param_count; i++) {
@@ -215,9 +224,29 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
             }
 
             ExecResult init_result = interpret(init_stmt->body, method_env);
-            if (init_result.is_throwing) return init_result;
+            if (init_result.is_throwing) {
+                gc_unpin();
+                return init_result;
+            }
+        } else {
+            // Auto-init for structs: look for __StructName_fields__ metadata
+            char meta_key[256];
+            snprintf(meta_key, sizeof(meta_key), "__%.*s_fields__",
+                     class_def->name_len, class_def->name);
+            Value fields_val;
+            if (env_get(env, meta_key, (int)strlen(meta_key), &fields_val) &&
+                fields_val.type == VAL_ARRAY) {
+                ArrayValue* fields = fields_val.as.array;
+                for (int i = 0; i < fields->count && i < arg_count; i++) {
+                    if (fields->elements[i].type == VAL_STRING) {
+                        char* field_name = AS_STRING(fields->elements[i]);
+                        instance_set_field(instance, field_name, (int)strlen(field_name), args[i]);
+                    }
+                }
+            }
         }
 
+        gc_unpin();
         return vm_normal(instance_value);
     }
 
@@ -226,14 +255,23 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
 
 static ExecResult call_method_value(Value object, const char* method_name, int arg_count, Value* args, Env* env) {
     if (IS_INSTANCE(object)) {
+        gc_pin();
         Method* method = class_find_method(object.as.instance->class_def, method_name, (int)strlen(method_name));
         if (method == NULL) {
+            gc_unpin();
             return vm_error("Undefined method.");
         }
 
-        ProcStmt* method_stmt = (ProcStmt*)method->method_stmt;
-        Env* method_env = env_create(env);
+        Stmt* method_node = (Stmt*)method->method_stmt;
+        ProcStmt* method_stmt = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
+        Env* def_env = object.as.instance->class_def->defining_env;
+        Env* method_env = env_create(def_env ? def_env : env);
         env_define(method_env, "self", 4, object);
+        
+
+        // Track class owning method for super resolution
+        ClassValue* owner = class_find_method_owner(object.as.instance->class_def, method_name, (int)strlen(method_name));
+        if (owner) env_define_const(method_env, "__class__", 9, val_class(owner));
 
         int param_start = (method_stmt->param_count > 0 &&
                           strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
@@ -245,6 +283,7 @@ static ExecResult call_method_value(Value object, const char* method_name, int a
         }
 
         ExecResult result = interpret(method_stmt->body, method_env);
+        gc_unpin();
         if (result.is_throwing) return result;
         return vm_normal(result.value);
     }
@@ -669,12 +708,20 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             case BC_OP_CALL: {
                 int arg_count = (int)read_u8(chunk, &ip);
-                Value args[255];
-                for (int i = arg_count - 1; i >= 0; i--) {
-                    args[i] = vm_pop(&vm);
+                if (vm.stack_count < arg_count + 1) {
+                    result = vm_error("VM stack underflow on call.");
+                    goto done;
                 }
-                Value callee = vm_pop(&vm);
+                
+                // Keep values on stack during call so they are marked by GC
+                Value callee = vm.stack[vm.stack_count - 1 - arg_count];
+                Value* args = &vm.stack[vm.stack_count - arg_count];
+
                 ExecResult call_result = call_function_value(callee, arg_count, args, vm.current_env);
+                
+                // Pop callee and args
+                vm.stack_count -= (arg_count + 1);
+
                 if (call_result.is_throwing) {
                     result = call_result;
                     goto done;
@@ -689,12 +736,20 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 uint16_t name_index = read_u16(chunk, &ip);
                 VM_CHECK_CONST(chunk, name_index);
                 int arg_count = (int)read_u8(chunk, &ip);
-                Value args[255];
-                for (int i = arg_count - 1; i >= 0; i--) {
-                    args[i] = vm_pop(&vm);
+                if (vm.stack_count < arg_count + 1) {
+                    result = vm_error("VM stack underflow on method call.");
+                    goto done;
                 }
-                Value object = vm_pop(&vm);
+
+                // Keep values on stack during call so they are marked by GC
+                Value object = vm.stack[vm.stack_count - 1 - arg_count];
+                Value* args = &vm.stack[vm.stack_count - arg_count];
+
                 ExecResult call_result = call_method_value(object, AS_STRING(chunk->constants[name_index]), arg_count, args, vm.current_env);
+                
+                // Pop object and args
+                vm.stack_count -= (arg_count + 1);
+
                 if (call_result.is_throwing) {
                     result = call_result;
                     goto done;
@@ -708,14 +763,16 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             case BC_OP_ARRAY: {
                 uint16_t count = read_u16(chunk, &ip);
                 Value array = val_array();
-                Value* values = SAGE_ALLOC(sizeof(Value) * (size_t)count);
-                for (int i = (int)count - 1; i >= 0; i--) {
-                    values[i] = vm_pop(&vm);
-                }
+                
+                // Add values to array without popping them first
+                // to ensure they are marked by GC if array_push triggers it.
                 for (int i = 0; i < (int)count; i++) {
-                    array_push(&array, values[i]);
+                    array_push(&array, vm.stack[vm.stack_count - (int)count + i]);
                 }
-                free(values);
+                
+                // Now pop them
+                vm.stack_count -= (int)count;
+
                 if (!vm_push(&vm, array)) {
                     result = vm_error("VM stack overflow.");
                     goto done;
@@ -724,12 +781,12 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             case BC_OP_TUPLE: {
                 uint16_t count = read_u16(chunk, &ip);
-                Value* values = SAGE_ALLOC(sizeof(Value) * (size_t)count);
-                for (int i = (int)count - 1; i >= 0; i--) {
-                    values[i] = vm_pop(&vm);
-                }
-                Value tuple = val_tuple(values, (int)count);
-                free(values);
+                // Use values directly from stack
+                Value tuple = val_tuple(&vm.stack[vm.stack_count - (int)count], (int)count);
+                
+                // Now pop them
+                vm.stack_count -= (int)count;
+
                 if (!vm_push(&vm, tuple)) {
                     result = vm_error("VM stack overflow.");
                     goto done;

@@ -465,6 +465,8 @@ static void gc_shade_children(GCHeader* header) {
             ClassValue* cls = object;
             if (cls->parent != NULL)
                 gc_try_shade(cls->parent);
+            if (cls->defining_env != NULL)
+                gc_mark_env(cls->defining_env);
             break;
         }
         case VAL_INSTANCE: {

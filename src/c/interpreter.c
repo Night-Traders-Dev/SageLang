@@ -3245,6 +3245,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             }
             
             Token name = stmt->as.class_stmt.name;
+            gc_pin();
             ClassValue* class_val = class_create(name.start, name.length, parent);
             class_val->defining_env = env; // Capture defining environment for method scoping
 
@@ -3265,6 +3266,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             
             Value class_value = val_class(class_val);
             env_define_const(env, name.start, name.length, class_value);
+            gc_unpin();
             
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
@@ -3272,6 +3274,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
         // Phase 1.7: Struct — lightweight value type, auto init/eq/str
         case STMT_STRUCT: {
             Token name = stmt->as.struct_stmt.name;
+            gc_pin();
             ClassValue* class_val = class_create(name.start, name.length, NULL);
             class_val->defining_env = env;
 
@@ -3293,7 +3296,8 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             // Store field names for auto-init
             char meta_key[256];
             snprintf(meta_key, sizeof(meta_key), "__%.*s_fields__", name.length, name.start);
-            env_define_const(env, meta_key, (int)strlen(meta_key), fields_arr);
+            env_define(env, meta_key, (int)strlen(meta_key), fields_arr);
+            gc_unpin();
 
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
