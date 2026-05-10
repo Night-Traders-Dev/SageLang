@@ -1,72 +1,63 @@
 # Sage Blockchain Library
 
-A pure SageLang implementation of a basic blockchain.
+A pure SageLang implementation of an enterprise-grade L1 blockchain.
 
 ## Modules
 
-- `blockchain.blockchain`: The main `Blockchain` class.
-- `blockchain.block`: `Block` class with Proof of Work.
-- `blockchain.transaction`: `Transaction` class for value transfers.
-- `blockchain.wallet`: `Wallet` class for generating addresses and signing transactions.
-- `blockchain.contract`: Smart contract management and execution.
+- `blockchain.blockchain`: The main `Blockchain` class managing state, memory pool, and chain consensus.
+- `blockchain.block`: `Block` class representing the ledger components.
+- `blockchain.transaction`: `Transaction` class for value transfers and smart contract calls.
+- `blockchain.wallet`: `Wallet` class for generating addresses and signing transactions, supporting HD derivation (BIP-39 style).
+- `blockchain.contract`: Smart contract management and execution via the native VM.
 - `blockchain.orbit`: Dynamic mining rate model (Orbit).
 - `blockchain.node`: Network node management and scoring.
 - `blockchain.db`: High-performance disk-backed ledger database.
 - `blockchain.staking`: Smart contract logic for ORBIT staking and rewards.
+- `blockchain.consensus.*`: Pluggable consensus mechanisms (`pow`, `poa`).
+- `blockchain.merkle`: World State Trie and Merkle tree implementations.
+- `blockchain.rpc`: JSON-RPC 2.0 API Server.
+- `blockchain.net`: P2P networking layer with IBD and block broadcasting.
+- `blockchain.events`: Contract event emission and logging.
+- `blockchain.std.nft`: SNFT-721 Standard for Non-Fungible Tokens.
 
 ## Features
 
-- **Terminal CLI**: Fully interactive terminal interface (`examples/blockchain_cli.sage`) for:
-    - Wallet creation and management.
-    - Transaction history and balance checks.
-    - Background mining node operations.
-    - Staking interaction.
-- **Staking System**: Lock ORBIT for passive rewards:
-    - ~5% APR.
-    - Claimable in 24h intervals.
-    - Automated reward transactions.
-- **Async & Non-blocking**: Heavy operations like mining and disk I/O are performed asynchronously using `async proc` and `await`, preventing the main loop from freezing.
-- **Thread Safety**: The `Blockchain` class is thread-safe, utilizing internal mutexes to protect the ledger state during concurrent operations.
+- **Modular Consensus**: Pluggable architecture supporting both **Proof-of-Work (PoW)** and **Proof-of-Authority (PoA)** with automatic validator slashing for equivocation.
+- **World State Trie**: Persistent Merkle-Radix Trie for global account balances and contract state, cryptographically proven via `state_root`.
+- **JSON-RPC 2.0 API**: Standard HTTP server exposing Ethereum-like endpoints (`eth_getBalance`, `eth_sendRawTransaction`, `eth_blockNumber`).
+- **P2P Synchronization**: Full node discovery, block broadcasting, Initial Block Download (IBD), and Longest Chain fork resolution.
+- **Priority Fee Market**: Mempool prioritization based on `gas_price`, dynamically compensating miners.
+- **Smart Contracts & NFTs**: Native VM execution with gas metering, inter-contract transfers, and a complete SNFT-721 Non-Fungible Token standard.
+- **HD Wallets**: Deterministic address generation from 12-word mnemonic phrases (BIP-39 simulation).
+- **Terminal CLI**: Fully interactive terminal interface (`examples/blockchain_cli.sage`) for wallet creation, transfers, and background mining.
+- **Staking System**: Lock ORBIT for passive rewards (~5% APR, 24h intervals) via system smart contracts.
 - **Robust Persistence**: Disk-based storage for blocks, transactions, and state using `blockchain.db`.
-- **High-Performance Indexing**:
-    - O(1) block lookup by height or hash.
-    - O(1) account balance and contract state access.
-    - Fast transaction history retrieval using per-address indexing.
-- **Orbit Dynamic Mining**: Rewards adjust based on:
-    - Early adoption multiplier (User count)
-    - Supply tapering (Circulating supply)
-    - Time decay (Block height halvings)
-    - Node reliability boost (Validator score)
-- **Node Scoring**: High-uptime nodes receive up to a 10% boost in mining rewards.
-- **Smart Contracts**: Deploy and execute SageLang scripts on-chain using the native VM.
-- **Proof of Work**: Configurable difficulty for block mining.
-- **Chain Validation**: Integrity checks for hashes and previous links.
-- **Mempool**: Transaction buffering before mining.
-- **Mining Rewards**: Automated reward transactions for miners.
-- **Wallet Support**: Simple address generation and transaction signing.
-- **History & Balances**: Query methods for account state.
+- **Orbit Dynamic Mining**: Rewards adjust dynamically based on early adoption, supply tapering, and node reliability.
 
 ## Usage Example
 
 ```sage
 import blockchain.blockchain as bc_mod
 import blockchain.wallet as wallet_mod
+import blockchain.consensus.pow as pow_mod
 import blockchain.transaction as tx_mod
 
-let coin = bc_mod.Blockchain(2)
-let wallet = wallet_mod.Wallet()
+let consensus = pow_mod.PowConsensus(nil, 2)
+let coin = bc_mod.Blockchain(consensus, "./sagechain_db")
+consensus.blockchain = coin
 
-let tx = tx_mod.Transaction(wallet.address, "recipient", 100)
+let wallet = wallet_mod.Wallet(nil)
+
+let tx = coin.add_transaction(wallet.get_address(), "recipient", 100)
 wallet.sign_transaction(tx)
 coin.add_signed_transaction(tx)
 
 coin.mine_pending_transactions("miner-address")
-print coin.get_balance(wallet.address)
+print coin.get_balance(wallet.get_address())
 ```
 
 ## Implementation Notes
 
-- **Hashing**: Uses `crypto.hash.sha256_hex`.
-- **Randomness**: Uses `crypto.rand.lcg_create` to ensure compatibility with SageLang's double-precision numbers.
-- **Signatures**: Currently uses a simulated signature (hash of transaction + private key).
-- **String Slicing**: Requires SageLang version with string slicing support (implemented in `src/c/interpreter.c`).
+- **Hashing**: Uses native high-performance `sha256`.
+- **Signatures**: Uses a simulated signature (hash of transaction + private key) unless `libsage_crypto.so` (Ed25519) is available via FFI.
+- **Execution**: The chain is fully synchronous but optimized for O(1) reads via `blockchain.db`.
