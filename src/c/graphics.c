@@ -4826,7 +4826,7 @@ static Value gpu_load_gltf(int argCount, Value* args) {
 
             prims_arr->elements[prims_arr->count++] = prim_dict;
         }
-        Value prims_val; prims_val.type = VAL_ARRAY; prims_val.as.array = prims_arr;
+        prims_val.type = VAL_ARRAY; prims_val.as.array = prims_arr;
         dict_set(&mesh_dict, "primitives", prims_val);
         meshes_arr->elements[meshes_arr->count++] = mesh_dict;
     }

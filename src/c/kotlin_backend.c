@@ -2164,8 +2164,11 @@ static int kt_write_file_fmt(const char* path, const char* fmt, ...) {
 
 // Write the SageRuntime.kt file into the Android project
 static int kt_write_sage_runtime(const char* runtime_dir) {
-    char path[1024];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    char path[4096];
     snprintf(path, sizeof(path), "%s/SageRuntime.kt", runtime_dir);
+#pragma GCC diagnostic pop
     FILE* f = fopen(path, "wb");
     if (!f) return 0;
 
@@ -2425,7 +2428,7 @@ int compile_source_to_android(const char* source, const char* input_path,
     snprintf(pkg_path, sizeof(pkg_path), "%s", pkg);
     for (char* p = pkg_path; *p; p++) { if (*p == '.') *p = '/'; }
 
-    char src_dir[1024], runtime_dir[1024], res_dir[1024], manifest_dir[1024];
+    char src_dir[4096], runtime_dir[4096], res_dir[4096], manifest_dir[4096];
     snprintf(src_dir, sizeof(src_dir), "%s/app/src/main/kotlin/%s", output_dir, pkg_path);
     snprintf(runtime_dir, sizeof(runtime_dir), "%s/app/src/main/kotlin/sage/runtime", output_dir);
     snprintf(res_dir, sizeof(res_dir), "%s/app/src/main/res/values", output_dir);
@@ -2435,9 +2438,12 @@ int compile_source_to_android(const char* source, const char* input_path,
     kt_mkdir_p(runtime_dir);
     kt_mkdir_p(res_dir);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     // 1. Transpile Sage → Kotlin
-    char kt_output[1024];
+    char kt_output[4096];
     snprintf(kt_output, sizeof(kt_output), "%s/Main.kt", src_dir);
+#pragma GCC diagnostic pop
 
     // Write with package header
     FILE* out = fopen(kt_output, "wb");
@@ -2477,8 +2483,10 @@ int compile_source_to_android(const char* source, const char* input_path,
     // 2. Write SageRuntime.kt
     kt_write_sage_runtime(runtime_dir);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     // 3. Write AndroidManifest.xml
-    char manifest_path[1024];
+    char manifest_path[4096];
     snprintf(manifest_path, sizeof(manifest_path), "%s/AndroidManifest.xml", manifest_dir);
     kt_write_file_fmt(manifest_path,
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -2507,8 +2515,9 @@ int compile_source_to_android(const char* source, const char* input_path,
     );
 
     // 4. Write MainActivity.kt
-    char activity_path[1024];
+    char activity_path[4096];
     snprintf(activity_path, sizeof(activity_path), "%s/MainActivity.kt", src_dir);
+#pragma GCC diagnostic pop
 
     if (uses_compose) {
         // Compose-based MainActivity with @Composable entry point
@@ -2760,7 +2769,7 @@ int compile_source_to_android(const char* source, const char* input_path,
     }
 
     // 8. Write gradle.properties
-    char gradle_props[1024];
+    char gradle_props[4096];
     snprintf(gradle_props, sizeof(gradle_props), "%s/gradle.properties", output_dir);
     kt_write_file(gradle_props,
         "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8\n"
@@ -2769,8 +2778,10 @@ int compile_source_to_android(const char* source, const char* input_path,
         "android.nonTransitiveRClass=true\n"
     );
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     // 9. Write res/values/styles.xml (theme)
-    char styles_path[1024];
+    char styles_path[4096];
     snprintf(styles_path, sizeof(styles_path), "%s/styles.xml", res_dir);
     kt_write_file(styles_path,
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -2784,7 +2795,7 @@ int compile_source_to_android(const char* source, const char* input_path,
     );
 
     // 10. Write res/values/strings.xml
-    char strings_path[1024];
+    char strings_path[4096];
     snprintf(strings_path, sizeof(strings_path), "%s/strings.xml", res_dir);
     kt_write_file_fmt(strings_path,
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -2793,6 +2804,7 @@ int compile_source_to_android(const char* source, const char* input_path,
         "</resources>\n",
         name
     );
+#pragma GCC diagnostic pop
 
     printf("Android project generated at: %s\n", output_dir);
     printf("  Package: %s\n", pkg);

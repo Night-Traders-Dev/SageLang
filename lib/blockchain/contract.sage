@@ -15,7 +15,8 @@ class Contract:
 
     proc execute(args, context, call_stack):
         let ptr = vm.deserialize(self.bytecode)
-        if ptr == nil: return nil
+        if ptr == nil:
+            return nil
             
         # Check payable status
         if context["value"] > 0 and not dict_has(self.state, "payable"):
@@ -25,14 +26,17 @@ class Contract:
         # Merge args and context into state
         if type(args) == "dict":
             let keys = dict_keys(args)
-            for k in keys: self.state[k] = args[k]
+            for k in keys:
+                self.state[k] = args[k]
         
         if type(context) == "dict":
             let keys = dict_keys(context)
-            for k in keys: self.state[k] = context[k]
+            for k in keys:
+                self.state[k] = context[k]
             
         # Attach call_stack to execution context
-        if call_stack == nil: call_stack = []
+        if call_stack == nil:
+            call_stack = []
         self.state["call_stack"] = call_stack
         
         self.state["now"] = clock()

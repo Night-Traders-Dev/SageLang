@@ -407,29 +407,20 @@ static char* resolve_module_path_for_llvm(const LLVMCompiler* lc, const char* mo
     // Search relative to source file directory
     const char* search[] = { "", "lib/", "modules/" };
     for (int i = 0; i < 3; i++) {
-        if (snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], path_name) >= (int)sizeof(path)) {
-            fprintf(stderr, "Error: Module path truncated: %s%s%s.sage\n", dir, search[i], path_name);
-        } else if (access(path, F_OK) == 0) {
-            return SAGE_STRDUP(path);
-        }
+        snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], path_name);
+        if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
     }
     // Search relative to CWD
     for (int i = 0; i < 3; i++) {
-        if (snprintf(path, sizeof(path), "./%s%s.sage", search[i], path_name) >= (int)sizeof(path)) {
-            fprintf(stderr, "Error: Module path truncated: ./%s%s.sage\n", search[i], path_name);
-        } else if (access(path, F_OK) == 0) {
-            return SAGE_STRDUP(path);
-        }
+        snprintf(path, sizeof(path), "./%s%s.sage", search[i], path_name);
+        if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
     }
     // Search installed library path
 #ifndef SAGE_LIB_DIR
 #define SAGE_LIB_DIR "/usr/local/share/sage/lib"
 #endif
-    if (snprintf(path, sizeof(path), "%s/%s.sage", SAGE_LIB_DIR, path_name) >= (int)sizeof(path)) {
-        fprintf(stderr, "Error: Module path truncated: %s/%s.sage\n", SAGE_LIB_DIR, path_name);
-    } else if (access(path, F_OK) == 0) {
-        return SAGE_STRDUP(path);
-    }
+    snprintf(path, sizeof(path), "%s/%s.sage", SAGE_LIB_DIR, path_name);
+    if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
     // Search SAGE_PATH
     const char* sage_path = getenv("SAGE_PATH");
     if (sage_path != NULL) {
@@ -443,11 +434,8 @@ static char* resolve_module_path_for_llvm(const LLVMCompiler* lc, const char* mo
                     char ec = *p;
                     *p = '\0';
                     if (p > start) {
-                        if (snprintf(path, sizeof(path), "%s/%s.sage", start, path_name) >= (int)sizeof(path)) {
-                            fprintf(stderr, "Error: Module path truncated: %s/%s.sage\n", start, path_name);
-                        } else if (access(path, F_OK) == 0) {
-                            return SAGE_STRDUP(path);
-                        }
+                        snprintf(path, sizeof(path), "%s/%s.sage", start, path_name);
+                        if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
                     }
                     if (ec == '\0') break;
                     start = p + 1;

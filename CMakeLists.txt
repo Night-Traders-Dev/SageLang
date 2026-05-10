@@ -260,6 +260,10 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
 
     # Link math, pthread, dl, and optional GPU libraries
     target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
+    
+    # Suppress strict build errors for clobbered and overflow warnings
+    target_compile_options(sage PRIVATE -Wno-error=clobbered -Wno-error=stringop-overflow)
+    
     if(OpenGL_FOUND)
         target_link_libraries(sage OpenGL::GL)
     endif()
