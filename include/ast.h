@@ -18,6 +18,8 @@ typedef struct {
 
 typedef struct {
     Token name;
+    unsigned long long cached_env_id; // Inline cache
+    struct EnvNode* cached_node;
 } VariableExpr;
 
 typedef struct {
@@ -82,6 +84,8 @@ typedef struct {
     Expr* object;
     Token property;
     Expr* value;
+    unsigned long long cached_env_id; // Inline cache (for variable assignment)
+    struct EnvNode* cached_node;
 } SetExpr;
 
 // Await expression: await expr

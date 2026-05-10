@@ -2547,13 +2547,37 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 ExecResult val_result = eval_expr(expr->as.set.value, env);
                 if (val_result.is_throwing) return val_result;
                 Value value = val_result.value;
+
+                // Inline caching for variable assignment
+                if (expr->as.set.cached_env_id == env->id) {
+                    EnvNode* node = expr->as.set.cached_node;
+                    if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
+                        arc_assign_value(&node->value, value);
+                    } else {
+                        GC_WRITE_BARRIER(node->value);
+                        node->value = value;
+                    }
+                    return EVAL_RESULT(value);
+                }
                 
                 // Try to update the variable in the environment
-                if (!env_assign(env, var_name.start, var_name.length, value)) {
-                    fprintf(stderr, "Runtime Error: Undefined variable '%.*s'.\n", var_name.length, var_name.start);
-                    return EVAL_RESULT(val_nil());
+                Env* found_env = NULL;
+                EnvNode* found_node = NULL;
+                if (env_get_node(env, var_name.start, var_name.length, &found_env, &found_node)) {
+                    if (found_env == env) {
+                        expr->as.set.cached_env_id = env->id;
+                        expr->as.set.cached_node = found_node;
+                    }
+                    if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
+                        arc_assign_value(&found_node->value, value);
+                    } else {
+                        GC_WRITE_BARRIER(found_node->value);
+                        found_node->value = value;
+                    }
+                    return EVAL_RESULT(value);
                 }
-                return EVAL_RESULT(value);
+                fprintf(stderr, "Runtime Error: Undefined variable '%.*s'.\n", var_name.length, var_name.start);
+                return EVAL_RESULT(val_nil());
             }
             
             // Property assignment: obj.prop = value
@@ -2601,10 +2625,22 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             return eval_binary(&expr->as.binary, env);
 
         case EXPR_VARIABLE: {
+            // Inline caching for variable lookup
+            if (expr->as.variable.cached_env_id == env->id) {
+                return EVAL_RESULT(expr->as.variable.cached_node->value);
+            }
+
             Value val;
             Token t = expr->as.variable.name;
-            if (env_get(env, t.start, t.length, &val)) {
-                return EVAL_RESULT(val);
+            Env* found_env = NULL;
+            EnvNode* found_node = NULL;
+            if (env_get_node(env, t.start, t.length, &found_env, &found_node)) {
+                // Only cache if found in the current environment (most frequent case in loops)
+                if (found_env == env) {
+                    expr->as.variable.cached_env_id = env->id;
+                    expr->as.variable.cached_node = found_node;
+                }
+                return EVAL_RESULT(found_node->value);
             }
             fprintf(stderr, "Runtime Error: Undefined variable '%.*s'.\n", t.length, t.start);
             return EVAL_RESULT(val_nil());

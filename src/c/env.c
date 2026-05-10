@@ -6,6 +6,7 @@
 #include "sage_thread.h"
 
 static Env* allocated_envs = NULL;
+static unsigned long long next_env_id = 1;
 static sage_mutex_t env_mutex = SAGE_MUTEX_INITIALIZER;
 
 // Helper function to duplicate a string with a max length (similar to strndup)
@@ -32,6 +33,7 @@ Env* env_create(Env* parent) {
     env->parent = parent;
     env->marked = 0;
     sage_mutex_lock(&env_mutex);
+    env->id = next_env_id++;
     env->alloc_next = allocated_envs;
     allocated_envs = env;
     sage_mutex_unlock(&env_mutex);
@@ -116,6 +118,26 @@ int env_get(Env* env, const char* name, int length, Value* out_value) {
             if (current->name_length == length &&
                 memcmp(current->name, name, (size_t)length) == 0) {
                 *out_value = current->value;
+                return 1;
+            }
+            current = current->next;
+        }
+        current_env = current_env->parent;
+    }
+    return 0;
+}
+
+int env_get_node(Env* env, const char* name, int length, Env** out_env, EnvNode** out_node) {
+    if (env == NULL || name == NULL) return 0;
+    Env* current_env = env;
+
+    while (current_env != NULL) {
+        EnvNode* current = current_env->head;
+        while (current != NULL) {
+            if (current->name_length == length &&
+                memcmp(current->name, name, (size_t)length) == 0) {
+                if (out_env) *out_env = current_env;
+                if (out_node) *out_node = current;
                 return 1;
             }
             current = current->next;
