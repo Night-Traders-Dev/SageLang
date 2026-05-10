@@ -4997,6 +4997,7 @@ typedef struct {
     stbtt_bakedchar cdata[FONT_CHAR_COUNT];
     int texture_handle;    // GPU image handle
     int sampler_handle;    // GPU sampler handle
+    char atlas_path[256];
 } SageFont;
 
 static SageFont g_fonts[MAX_FONTS];
@@ -5047,9 +5048,10 @@ static Value gpu_load_font(int argCount, Value* args) {
     free(atlas_gray);
 
     // Save atlas to a persistent temp file for the sage layer to load
-    char atlas_path[256];
-    snprintf(atlas_path, sizeof(atlas_path), "/tmp/sage_font_atlas_%d.png", g_font_count);
-    stbi_write_png(atlas_path, aw, ah, 4, atlas_rgba, aw * 4);
+    strncpy(g_fonts[g_font_count].atlas_path, "/tmp/sage_font_atlas_XXXXXX.png", 255);
+    int fd = mkstemps(g_fonts[g_font_count].atlas_path, 4);
+    if (fd >= 0) close(fd);
+    stbi_write_png(g_fonts[g_font_count].atlas_path, aw, ah, 4, atlas_rgba, aw * 4);
     free(atlas_rgba);
 
     // Store the atlas path — the sage font module will call gpu.load_texture + gpu.create_sampler
@@ -5076,9 +5078,7 @@ static Value gpu_font_atlas(int argCount, Value* args) {
     dict_set(&dict, "sampler", val_number(g_fonts[fh].sampler_handle));
     dict_set(&dict, "width", val_number(g_fonts[fh].atlas_w));
     dict_set(&dict, "height", val_number(g_fonts[fh].atlas_h));
-    char atlas_path[256];
-    snprintf(atlas_path, sizeof(atlas_path), "/tmp/sage_font_atlas_%d.png", fh);
-    dict_set(&dict, "path", val_string(atlas_path));
+    dict_set(&dict, "path", val_string(g_fonts[fh].atlas_path));
     return dict;
 }
 
