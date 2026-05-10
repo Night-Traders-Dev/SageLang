@@ -158,10 +158,25 @@ SageValue sage_fn_gc_disable(void) { return sage_rt_nil(); }
 SageValue sage_fn_gc_enable(void) { return sage_rt_nil(); }
 SageValue sage_fn_gc_collect(void) { return sage_rt_nil(); }
 
+/* External kernel functions */
+extern void console_init(void);
+
+/* Registration helper */
+void sage_rt_register_kernel_builtins(void) {
+    /* Define os_get_c0 as an alias for console_init to prevent runtime crash.
+     * This symbol is required by the compiled shell initialization. */
+    SageValue v;
+    v.type = SAGE_NUMBER; // Placeholder type for native pointer if needed
+    v.as.pointer = (void*)console_init;
+    sage_rt_set_global(0, "os_get_c0", v);
+}
+
 /* Entry points */
 extern void sage_fn_kmain(SageValue args);
+void sage_rt_register_kernel_builtins(void);
 
 void _start(void) {
+    sage_rt_register_kernel_builtins();
     sage_fn_kmain(sage_rt_nil());
     for (;;) { __asm__ volatile ("hlt"); }
 }
