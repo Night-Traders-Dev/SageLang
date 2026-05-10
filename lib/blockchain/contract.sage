@@ -13,7 +13,7 @@ class Contract:
             self.bytecode = vm.serialize(ptr)
         self.state = {}
 
-    proc execute(args, context):
+    proc execute(args, context, call_stack):
         let ptr = vm.deserialize(self.bytecode)
         if ptr == nil: return nil
             
@@ -30,6 +30,10 @@ class Contract:
         if type(context) == "dict":
             let keys = dict_keys(context)
             for k in keys: self.state[k] = context[k]
+            
+        # Attach call_stack to execution context
+        if call_stack == nil: call_stack = []
+        self.state["call_stack"] = call_stack
         
         self.state["now"] = clock()
         
