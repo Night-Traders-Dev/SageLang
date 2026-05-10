@@ -26,5 +26,6 @@ class Transaction:
 
     proc calculate_hash():
         import crypto.hash as hash
-        let data = str(self.sender) + str(self.receiver) + str(self.amount) + str(self.timestamp)
+        # Use a delimiter (:) to prevent collisions and include all fields
+        let data = str(self.sender) + ":" + str(self.receiver) + ":" + str(self.amount) + ":" + str(self.gas_price) + ":" + str(self.timestamp)
         return hash.sha256_hex(data)
