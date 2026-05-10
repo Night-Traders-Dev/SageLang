@@ -13,6 +13,7 @@ KEYWORDS["var"] = token.TOKEN_VAR
 KEYWORDS["proc"] = token.TOKEN_PROC
 KEYWORDS["if"] = token.TOKEN_IF
 KEYWORDS["else"] = token.TOKEN_ELSE
+KEYWORDS["end"] = token.TOKEN_END
 KEYWORDS["elif"] = token.TOKEN_IF
 KEYWORDS["while"] = token.TOKEN_WHILE
 KEYWORDS["for"] = token.TOKEN_FOR

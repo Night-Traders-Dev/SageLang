@@ -81,12 +81,12 @@ static Value vm_compile_native(int argCount, Value* args) {
     }
 
     free_stmt(ast);
-    return val_pointer(program, sizeof(BytecodeProgram), 1);
+    return val_vm_program(program);
 }
 
 static Value vm_execute_native(int argCount, Value* args) {
-    if (argCount < 1 || args[0].type != VAL_POINTER) return val_nil();
-    BytecodeProgram* program = (BytecodeProgram*)args[0].as.pointer->ptr;
+    if (argCount < 1 || !IS_VM_PROGRAM(args[0])) return val_nil();
+    BytecodeProgram* program = AS_PROGRAM(args[0]);
 
     Env* env = env_create(g_global_env);
     

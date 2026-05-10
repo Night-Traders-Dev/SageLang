@@ -181,6 +181,13 @@ static size_t gc_release_object(GCHeader* header) {
             if (pv->ptr && pv->owned) { freed += pv->size; free(pv->ptr); }
             break;
         }
+        case VAL_VM_PROGRAM: {
+            BytecodeProgram* program = object;
+            extern void bytecode_program_free(BytecodeProgram*);
+            bytecode_program_free(program);
+            freed += sizeof(BytecodeProgram);
+            break;
+        }
         case VAL_THREAD: {
             ThreadValue* tv = object;
             free(tv->handle); free(tv->data);
@@ -491,6 +498,22 @@ static void gc_shade_children(GCHeader* header) {
             ModuleValue* mod = object;
             if (mod->module != NULL && mod->module->env != NULL)
                 gc_mark_env(mod->module->env);
+            break;
+        }
+        case VAL_VM_PROGRAM: {
+            BytecodeProgram* program = object;
+            for (int i = 0; i < program->function_count; i++) {
+                BytecodeChunk* chunk = &program->functions[i].chunk;
+                for (int j = 0; j < chunk->constant_count; j++) {
+                    gc_mark_value(chunk->constants[j]);
+                }
+            }
+            for (int i = 0; i < program->chunk_count; i++) {
+                BytecodeChunk* chunk = &program->chunks[i];
+                for (int j = 0; j < chunk->constant_count; j++) {
+                    gc_mark_value(chunk->constants[j]);
+                }
+            }
             break;
         }
         default: break; // String, exception, clib, pointer, thread, mutex: no children

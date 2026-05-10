@@ -267,10 +267,13 @@ class Parser:
                     self.consume(token.TOKEN_RBRACKET, "Expect ']' after index.")
                     expr = index_expr(expr, start_or_index)
             elif self.match_tok(token.TOKEN_DOT):
-                # Property access
-                self.consume(token.TOKEN_IDENTIFIER, "Expect property name after '.'.")
-                let prop = self.previous()
-                expr = get_expr(expr, prop)
+                # Property access (allow identifiers and 'end' keyword)
+                if self.check(token.TOKEN_IDENTIFIER) or self.check(token.TOKEN_END):
+                    let prop = self.advance()
+                    expr = get_expr(expr, prop)
+                else:
+                    self.consume(token.TOKEN_IDENTIFIER, "Expect property name after '.'.")
+                end
             else:
                 break
         return expr

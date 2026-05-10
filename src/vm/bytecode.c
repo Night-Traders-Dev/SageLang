@@ -711,6 +711,7 @@ int bytecode_compile_statement_with_functions(BytecodeChunk* chunk, Stmt* stmt, 
                                               BytecodeBuildFunctionFn build_function,
                                               void* build_function_data,
                                               char* error, size_t error_size) {
+    gc_pin();
     BytecodeCompiler compiler;
     memset(&compiler, 0, sizeof(compiler));
     compiler.chunk = chunk;
@@ -724,17 +725,16 @@ int bytecode_compile_statement_with_functions(BytecodeChunk* chunk, Stmt* stmt, 
         error[0] = '\0';
     }
 
-    if (!compile_stmt(&compiler, stmt, 1)) {
+    int success = compile_stmt(&compiler, stmt, 1);
+    if (!success) {
         if (error != NULL && error[0] == '\0') {
             snprintf(error, error_size, "failed to compile statement");
         }
-        return 0;
+    } else {
+        success = emit_op(&compiler, BC_OP_RETURN, 0, 0);
     }
-
-    if (!emit_op(&compiler, BC_OP_RETURN, 0, 0)) {
-        return 0;
-    }
-    return 1;
+    gc_unpin();
+    return success;
 }
 
 int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,

@@ -111,8 +111,10 @@ static const char* value_type_name(Value v) {
         case VAL_GENERATOR: return "generator";
         case VAL_CLIB: return "clib";
         case VAL_POINTER: return "pointer";
+        case VAL_VM_PROGRAM: return "program";
         case VAL_THREAD: return "thread";
         case VAL_MUTEX: return "mutex";
+        case VAL_BYTES: return "bytes";
         default: return "unknown";
     }
 }

@@ -431,6 +431,7 @@ void bytecode_program_free(BytecodeProgram* program) {
 
 int bytecode_compile_program(BytecodeProgram* program, Stmt* statements, BytecodeCompileMode mode,
                              char* error, size_t error_size) {
+    gc_pin();
     if (error != NULL && error_size > 0) {
         error[0] = '\0';
     }
@@ -444,15 +445,18 @@ int bytecode_compile_program(BytecodeProgram* program, Stmt* statements, Bytecod
                                                       program,
                                                       error, error_size)) {
             bytecode_chunk_free(&chunk);
+            gc_unpin();
             return 0;
         }
 
         if (!append_chunk(program, &chunk, error, error_size)) {
             bytecode_chunk_free(&chunk);
+            gc_unpin();
             return 0;
         }
     }
 
+    gc_unpin();
     return 1;
 }
 
@@ -501,6 +505,7 @@ int bytecode_program_write_file(const BytecodeProgram* program, const char* outp
 
 int bytecode_program_read_file(BytecodeProgram* program, const char* input_path,
                                char* error, size_t error_size) {
+    gc_pin();
     FILE* file = fopen(input_path, "rb");
     char* line = NULL;
     size_t line_capacity = 0;
@@ -510,6 +515,7 @@ int bytecode_program_read_file(BytecodeProgram* program, const char* input_path,
         if (error != NULL && error_size > 0) {
             snprintf(error, error_size, "Could not open \"%s\": %s", input_path, strerror(errno));
         }
+        gc_unpin();
         return 0;
     }
 
@@ -643,6 +649,7 @@ cleanup:
     if (!ok) {
         bytecode_program_free(program);
     }
+    gc_unpin();
     return ok;
 }
 

@@ -91,6 +91,13 @@ Value val_bytecode_function(BytecodeFunction* function, Env* closure) {
     return v;
 }
 
+Value val_vm_program(struct BytecodeProgram* program) {
+    Value v;
+    v.type = VAL_VM_PROGRAM;
+    v.as.program = program;
+    return v;
+}
+
 
 Value val_array() {
     Value v;
@@ -856,15 +863,15 @@ void print_value(Value v) {
             break;
         }
 
-        case VAL_POINTER: {
-            printf("<pointer %p size=%zu>", v.as.pointer->ptr, v.as.pointer->size);
+        case VAL_POINTER:
+            printf("<pointer %p>", v.as.pointer->ptr);
             break;
-        }
-
-        case VAL_THREAD: {
+        case VAL_VM_PROGRAM:
+            printf("<program %p>", (void*)v.as.program);
+            break;
+        case VAL_THREAD:
             printf("<thread %p>", v.as.thread->handle);
             break;
-        }
 
         case VAL_MUTEX: {
             printf("<mutex %p>", v.as.mutex->handle);
@@ -894,6 +901,8 @@ int values_equal(Value a, Value b) {
         case VAL_NUMBER: return AS_NUMBER(a) == AS_NUMBER(b);
         case VAL_BOOL:   return AS_BOOL(a) == AS_BOOL(b);
         case VAL_NIL:    return 1;
+        case VAL_VM_PROGRAM: return AS_PROGRAM(a) == AS_PROGRAM(b);
+        case VAL_POINTER: return AS_POINTER(a) == AS_POINTER(b);
         case VAL_STRING:
             // Fast path: pointer equality (interned or same allocation)
             if (AS_STRING(a) == AS_STRING(b)) return 1;
@@ -921,8 +930,6 @@ int values_equal(Value a, Value b) {
             return a.as.generator == b.as.generator;  // Same generator object
         case VAL_CLIB:
             return a.as.clib->handle == b.as.clib->handle;
-        case VAL_POINTER:
-            return a.as.pointer->ptr == b.as.pointer->ptr;
         case VAL_THREAD:
             return a.as.thread == b.as.thread;
         case VAL_MUTEX:

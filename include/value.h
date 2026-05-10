@@ -131,6 +131,7 @@ typedef enum {
     VAL_GENERATOR,
     VAL_CLIB,      // Phase 9: FFI library handle
     VAL_POINTER,   // Phase 9: Raw memory pointer
+    VAL_VM_PROGRAM, // Compiled bytecode program
     VAL_THREAD,    // Phase 11: Thread handle
     VAL_MUTEX,     // Phase 11: Mutex handle
     VAL_BYTES      // Phase 1.8: Binary-safe byte buffer
@@ -154,11 +155,16 @@ struct Value {
         GeneratorValue* generator;
         CLibValue* clib;        // Phase 9: FFI library handle
         PointerValue* pointer;  // Phase 9: Raw memory pointer
+        struct BytecodeProgram* program; // Compiled bytecode program
         ThreadValue* thread;    // Phase 11: Thread handle
         MutexValue* mutex;      // Phase 11: Mutex handle
         BytesValue* bytes;      // Phase 1.8: Binary-safe byte buffer
     } as;
 };
+
+// ... existing macros ...
+#define IS_VM_PROGRAM(v) ((v).type == VAL_VM_PROGRAM)
+#define AS_PROGRAM(v) ((v).as.program)
 
 // Dictionary entry (key-value pair) - used in open-addressing hash table
 struct DictEntry {
@@ -247,7 +253,8 @@ Value val_bytes_empty(int capacity);
 void bytes_push(Value* bytes_val, unsigned char byte);
 Value val_native(NativeFn fn);
 Value val_function(void* proc, Env* closure); // ✅ CHANGED: Added closure parameter
-Value val_bytecode_function(BytecodeFunction* function, Env* closure);
+Value val_bytecode_function(struct BytecodeFunction* function, Env* closure);
+Value val_vm_program(struct BytecodeProgram* program);
 Value val_array();
 Value val_dict();
 Value val_tuple(Value* elements, int count);

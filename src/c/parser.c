@@ -777,7 +777,7 @@ static Expr* postfix() {
             if (!match(TOKEN_IDENTIFIER) && !match(TOKEN_INIT) &&
                 !match(TOKEN_CLASS) && !match(TOKEN_SELF) &&
                 !match(TOKEN_SUPER) && !match(TOKEN_IN) &&
-                !match(TOKEN_IMPORT)) {
+                !match(TOKEN_IMPORT) && !match(TOKEN_END)) {
                 parser_report(current_token, token_span(&current_token),
                               "expected property name after '.' or '->'",
                               "identifiers start with a letter or '_'");
