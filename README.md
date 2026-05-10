@@ -256,7 +256,8 @@ SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel
 | **Metal Core**| `import metal.core` | Bare-metal stubs: puts, putchar, inb/outb, mmio, cli/sti/hlt, panic |
 | **Metal Serial**| `import metal.serial` | NS16550A (x86) and PL011 (ARM) UART drivers for kernels |
 
-**SageMetal VM**: A freestanding bytecode interpreter (`src/c/metal_vm.c`) that requires no libc, no malloc, and no OS. It uses static pools for stack, strings, and heap, making it ideal for the earliest stages of OS kernel development.
+- **Discord Bot Library**: Gateway API and REST API support for building Discord bots, designed to mirror the familiarity of Python's `discord` and `discord.ext` libraries.
+
 
 **Bare-metal C runtime**: `src/c/bare_metal.c` provides a freestanding runtime (no libc) used by `--compile-bare` and `--compile-uefi` — supplies `memcpy`, `memset`, `memcmp`, basic integer formatting, and panic handler.
 
