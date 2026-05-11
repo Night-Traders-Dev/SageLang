@@ -48,20 +48,28 @@ proc pic_eoi(irq):
 ## Mask (disable) a specific IRQ line
 proc pic_mask(irq):
     if irq < 8:
-        let mask = core.inb(PIC1_DATA)
-        core.outb(PIC1_DATA, mask | (1 << irq))
+        let m1 = core.inb(PIC1_DATA)
+        core.outb(PIC1_DATA, m1 | (1 << irq))
     else:
-        let mask = core.inb(PIC2_DATA)
-        core.outb(PIC2_DATA, mask | (1 << (irq - 8)))
+        let m2 = core.inb(PIC2_DATA)
+        core.outb(PIC2_DATA, m2 | (1 << (irq - 8)))
 
 ## Unmask (enable) a specific IRQ line
 proc pic_unmask(irq):
     if irq < 8:
-        let mask = core.inb(PIC1_DATA)
-        core.outb(PIC1_DATA, mask & (255 - (1 << irq)))
+        let u1 = core.inb(PIC1_DATA)
+        core.outb(PIC1_DATA, u1 & (255 - (1 << irq)))
     else:
-        let mask = core.inb(PIC2_DATA)
-        core.outb(PIC2_DATA, mask & (255 - (1 << (irq - 8))))
+        let u2 = core.inb(PIC2_DATA)
+        core.outb(PIC2_DATA, u2 & (255 - (1 << (irq - 8))))
+
+## Mask (disable) an IRQ (architecture-neutral helper)
+proc mask_irq(irq):
+    pic_mask(irq)
+
+## Unmask (enable) an IRQ (architecture-neutral helper)
+proc unmask_irq(irq):
+    pic_unmask(irq)
 
 ## ============================================================
 ## Interrupt Vector Table (software-managed)
@@ -71,7 +79,23 @@ let _handlers = {}
 
 ## Register an interrupt handler
 proc register_handler(vector, handler):
+    if dict_has(_handlers, str(vector)):
+        core.panic("IRQ handler already registered for vector " + str(vector))
     _handlers[str(vector)] = handler
+
+let _irq_depth = 0
+
+## Increment interrupt nesting depth
+proc irq_enter():
+    _irq_depth = _irq_depth + 1
+
+## Decrement interrupt nesting depth
+proc irq_exit():
+    _irq_depth = _irq_depth - 1
+
+## Get current interrupt nesting depth
+proc irq_depth():
+    return _irq_depth
 
 ## Dispatch an interrupt (called from ISR stub)
 proc dispatch(vector):
