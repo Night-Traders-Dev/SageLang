@@ -23,7 +23,7 @@ proc load_wallet():
     let w_dict = json.cJSON_ToSage(cjson)
     json.cJSON_Delete(cjson)
     
-    let w = wallet_mod.Wallet()
+    let w = wallet_mod.Wallet(nil)
     w.private_key = w_dict["private_key"]
     w.address = w_dict["address"]
     return w
@@ -69,7 +69,7 @@ let my_coin = bc_mod.Blockchain(2, DB_PATH)
 let wallet = load_wallet()
 if wallet == nil:
     print "No wallet found. Creating new one..."
-    wallet = wallet_mod.Wallet()
+    wallet = wallet_mod.Wallet(nil)
     save_wallet(wallet)
     print "New wallet address: " + wallet.address
 else:
@@ -87,7 +87,7 @@ if not dict_has(my_coin.contracts, staking_addr):
     staking_addr = addr
 
 # Start mining in background
-mining_worker(my_coin, wallet.address)
+thread.spawn(mining_worker, my_coin, wallet.address)
 
 proc print_help():
     print "\nAvailable Commands:"
@@ -105,10 +105,14 @@ print_help()
 
 while true:
     let cmd_line = input("> ")
-    if cmd_line == "" or cmd_line == nil:
+    if cmd_line == nil:
+        break
+    
+    let cmd_line_stripped = strip(cmd_line)
+    if cmd_line_stripped == "":
         continue
         
-    let parts = split(cmd_line, " ")
+    let parts = split(cmd_line_stripped, " ")
     let cmd = parts[0]
     
     if cmd == "exit":

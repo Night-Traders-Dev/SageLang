@@ -105,7 +105,7 @@ class Blockchain:
         thread.lock(self.mutex)
         defer thread.unlock(self.mutex)
         let tx = tx_mod.Transaction(sender, receiver, amount, 0, 1)
-        return tx_dict
+        return tx
 
     proc add_signed_transaction(tx_dict):
         thread.lock(self.mutex)
@@ -160,9 +160,26 @@ class Blockchain:
         thread.unlock(self.mutex)
 
         let total_fees = 0.0
-        for tx in pending:
+        for tx_raw in pending:
+            let tx = tx_raw
+            if type(tx) != "dict":
+                # Convert object to dict for storage
+                tx = tx_raw.to_dict()
+                tx["hash"] = tx_raw.calculate_hash()
+            
+            if not dict_has(tx, "hash"):
+                tx["hash"] = hash.sha256_hex(str(tx) + str(clock()))
+
             self.db.save_transaction(tx)
             
+            # Record in history for all involved parties
+            if dict_has(tx, "sender"):
+                self.db.append_tx_to_history(tx["sender"], tx["hash"])
+            if dict_has(tx, "receiver") and tx["receiver"] != nil:
+                self.db.append_tx_to_history(tx["receiver"], tx["hash"])
+            if dict_has(tx, "contract_address"):
+                self.db.append_tx_to_history(tx["contract_address"], tx["hash"])
+
             # Standard transfer
             if not dict_has(tx, "type"):
                 let s_bal = self.db.get_account_balance(tx["sender"])
@@ -170,8 +187,6 @@ class Blockchain:
                 if s_bal >= tx["amount"]:
                     self.db.save_account_balance(tx["sender"], s_bal - tx["amount"])
                     self.db.save_account_balance(tx["receiver"], r_bal + tx["amount"])
-                    # self.state_trie.update(tx["sender"], {"balance": s_bal - tx["amount"]})
-                    # self.state_trie.update(tx["receiver"], {"balance": r_bal + tx["amount"]})
             
             # Contract interactions
             if dict_has(tx, "type"):
@@ -194,6 +209,8 @@ class Blockchain:
                         vm_gas_limit_set(tx["gas_limit"])
                         let res = contract.execute(tx["args"], context)
                         let used = vm_gas_used_get()
+                        if used == nil:
+                            used = 0
                         
                         let gp = 0.0
                         if dict_has(tx, "gas_price"):
@@ -209,19 +226,14 @@ class Blockchain:
                                     if cb >= t["amount"]:
                                         self.db.save_account_balance(addr, cb - t["amount"])
                                         self.db.save_account_balance(t["to"], rb + t["amount"])
-                                        # self.state_trie.update(addr, {"balance": cb - t["amount"]})
-                                        # self.state_trie.update(t["to"], {"balance": rb + t["amount"]})
 
                         self.db.save_contract_state(addr, contract.to_dict())
-                        let final_b = self.db.get_account_balance(addr)
-                        # self.state_trie.update(addr, {"type": "contract", "balance": final_b})
 
         # Miner reward
         let reward = 10.0 + total_fees
         let miner_b = self.db.get_account_balance(miner_address)
         self.db.save_account_balance(miner_address, miner_b + reward)
-        # self.state_trie.update(miner_address, {"balance": miner_b + reward})
-        
+
         let block = self.consensus.seal_block(pending, miner_address)
         if block != nil:
             block.state_root = "0x"
@@ -230,8 +242,27 @@ class Blockchain:
             self.last_block_time = block.timestamp
             self.db.save_block(block)
             thread.unlock(self.mutex)
-            
-        return block
+            return block
+        return nil
 
     proc get_balance(address):
         return self.db.get_account_balance(address)
+
+    proc register_node(address):
+        if not dict_has(self.nodes, address):
+            self.nodes[address] = node_mod.Node(address)
+            print "Node registered: " + address
+
+    proc get_active_user_count():
+        # Count unique addresses in the accounts directory
+        let accounts = io.listdir(self.db.account_dir)
+        return len(accounts)
+
+    proc get_transaction_history(address):
+        let hashes = self.db.get_tx_history(address)
+        let results = []
+        for h in hashes:
+            let tx = self.db.get_transaction(h)
+            if tx != nil:
+                push(results, tx)
+        return results

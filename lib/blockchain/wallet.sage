@@ -5,7 +5,7 @@ import crypto.hash as hash
 import blockchain.crypto as bc_crypto
 
 class Wallet:
-    proc init(mnemonic):
+    proc init(mnemonic=nil):
         if mnemonic == nil:
             self.mnemonic = self.generate_mnemonic()
         else:
@@ -16,6 +16,8 @@ class Wallet:
         self.addresses = []
         # Generate first address by default
         self.derive_address(0)
+        self.address = self.addresses[0]["address"]
+        self.private_key = self.addresses[0]["private_key"]
 
     proc generate_mnemonic():
         # Simulation: pick 12 random words from a small list
