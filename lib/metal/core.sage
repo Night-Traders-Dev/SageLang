@@ -82,19 +82,19 @@ proc mmio_write8(addr, val):
 
 ## Disable interrupts
 proc cli():
-    pass
+    return nil
 
 ## Enable interrupts
 proc sti():
-    pass
+    return nil
 
 ## Halt CPU (wait for interrupt)
 proc hlt():
-    pass
+    return nil
 
 ## I/O wait (delay one I/O cycle)
 proc io_wait():
-    pass
+    return nil
 
 ## ============================================================
 ## Timing
