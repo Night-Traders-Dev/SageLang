@@ -22,10 +22,45 @@
 #include "vm.h"
 
 extern Environment* g_global_env;
-extern EnvRootNode* g_gc_root_stack;
+extern __thread EnvRootNode* g_gc_root_stack;
+extern __thread Value g_ast_gc_temps[];
+extern __thread int g_ast_gc_temp_count;
+extern __thread Env* g_ast_gc_env_temps[];
+extern __thread int g_ast_gc_env_temp_count;
 
 // Thread safety: global GC mutex
 static sage_mutex_t gc_mutex = SAGE_MUTEX_INITIALIZER;
+
+// Multi-threading support: Thread Registry
+static sage_mutex_t thread_registry_mutex = SAGE_MUTEX_INITIALIZER;
+static ThreadState* thread_registry_head = NULL;
+static __thread ThreadState* g_current_thread_state = NULL;
+
+void gc_register_thread(ThreadState* ts) {
+    sage_mutex_lock(&thread_registry_mutex);
+    ts->next = thread_registry_head;
+    thread_registry_head = ts;
+    g_current_thread_state = ts;
+    sage_mutex_unlock(&thread_registry_mutex);
+}
+
+void gc_unregister_thread(ThreadState* ts) {
+    sage_mutex_lock(&thread_registry_mutex);
+    ThreadState** curr = &thread_registry_head;
+    while (*curr) {
+        if (*curr == ts) {
+            *curr = ts->next;
+            break;
+        }
+        curr = &(*curr)->next;
+    }
+    if (g_current_thread_state == ts) g_current_thread_state = NULL;
+    sage_mutex_unlock(&thread_registry_mutex);
+}
+
+ThreadState* gc_get_thread_state(void) {
+    return g_current_thread_state;
+}
 
 void gc_lock(void) { sage_mutex_lock(&gc_mutex); }
 void gc_unlock(void) { sage_mutex_unlock(&gc_mutex); }
@@ -429,17 +464,61 @@ void gc_mark_env(Env* env) {
 }
 
 void gc_mark_function_registry(void) { /* Functions marked via environment traversal */ }
-extern Value g_ast_gc_temps[];
-extern int g_ast_gc_temp_count;
-extern Env* g_ast_gc_env_temps[];
-extern int g_ast_gc_env_temp_count;
-void gc_mark_call_stack(void) { 
+void gc_mark_thread_roots(ThreadState* ts) {
+    if (ts == NULL) return;
+    
+    // Mark per-thread environment root stack
+    EnvRootNode* current = ts->gc_root_stack;
+    while (current != NULL) {
+        gc_mark_env(current->env);
+        current = current->next;
+    }
+    
+    // Mark per-thread VM roots
+    vm_mark_roots(ts->active_vm);
+    
+    // Mark per-thread AST temps
+    for (int i = 0; i < ts->ast_gc_temp_count; i++) {
+        gc_mark_value(ts->ast_gc_temps[i]);
+    }
+    for (int i = 0; i < ts->ast_gc_env_temp_count; i++) {
+        gc_mark_env(ts->ast_gc_env_temps[i]);
+    }
+}
+
+void gc_mark_all_roots(void) {
+    if (g_global_env != NULL) gc_mark_env(g_global_env);
+    // ...
+    extern void gc_mark_modules(void);
+    gc_mark_modules();
+    
+    // STW: Lock registry and mark all threads
+    sage_mutex_lock(&thread_registry_mutex);
+    ThreadState* ts = thread_registry_head;
+    while (ts != NULL) {
+        gc_mark_thread_roots(ts);
+        ts = ts->next;
+    }
+    
+    // Also mark the "legacy" globals for the current thread (if not registered)
+    // and for compatibility during migration.
+    EnvRootNode* current = g_gc_root_stack;
+    while (current != NULL) {
+        gc_mark_env(current->env);
+        current = current->next;
+    }
+    
+    // Current thread's AST temps (if not using registry)
     for (int i = 0; i < g_ast_gc_temp_count; i++) {
         gc_mark_value(g_ast_gc_temps[i]);
     }
     for (int i = 0; i < g_ast_gc_env_temp_count; i++) {
         gc_mark_env(g_ast_gc_env_temps[i]);
     }
+
+    sage_mutex_unlock(&thread_registry_mutex);
+    
+    gc_mark_function_registry();
 }
 
 // Process children of a gray object (shade them, then turn object black)
@@ -528,6 +607,7 @@ static void gc_shade_children(GCHeader* header) {
 // Phase 1 (STW): Snapshot roots, shade them gray, enable write barrier
 void gc_begin_cycle(void) {
     unsigned long t0 = now_ns();
+    // ...
 
     gc.phase = GC_PHASE_ROOT_SCAN;
     gc.marked_count = 0;
@@ -541,18 +621,7 @@ void gc_begin_cycle(void) {
     }
 
     // Shade roots gray
-    if (g_global_env != NULL) gc_mark_env(g_global_env);
-    extern void gc_mark_modules(void);
-    gc_mark_modules();
-    EnvRootNode* current = g_gc_root_stack;
-    while (current != NULL) {
-        gc_mark_env(current->env);
-        current = current->next;
-    }
-    
-    gc_mark_function_registry();
-    gc_mark_call_stack();
-    vm_mark_roots();
+    gc_mark_all_roots();
 
     // Enable write barrier for concurrent phase
     gc.barrier_active = 1;
@@ -590,15 +659,7 @@ void gc_remark(void) {
     gc.phase = GC_PHASE_REMARK;
 
     // Re-scan roots to catch any new references created during concurrent mark
-    if (g_global_env != NULL) gc_mark_env(g_global_env);
-    extern void gc_mark_modules(void);
-    gc_mark_modules();
-    EnvRootNode* current = g_gc_root_stack;
-    while (current != NULL) {
-        gc_mark_env(current->env);
-        current = current->next;
-    }
-    vm_mark_roots();
+    gc_mark_all_roots();
 
     // Drain the mark stack completely (barrier-shaded objects)
     while (gc.mark_stack.count > 0) {
@@ -669,19 +730,11 @@ void gc_mark_from_root(Env* root_env) {
         obj = (GCHeader*)obj->next;
     }
     gc.mark_stack.count = 0;
+    
     // Shade roots
-    if (g_global_env != NULL) gc_mark_env(g_global_env);
-    extern void gc_mark_modules(void);
-    gc_mark_modules();
-    EnvRootNode* current = g_gc_root_stack;
-    while (current != NULL) {
-        gc_mark_env(current->env);
-        current = current->next;
-    }
+    gc_mark_all_roots();
     if (root_env != NULL) gc_mark_env(root_env);
-    gc_mark_function_registry();
-    gc_mark_call_stack();
-    vm_mark_roots();
+    
     // Drain mark stack fully
     while (gc.mark_stack.count > 0) {
         GCHeader* header = (GCHeader*)gc_mark_stack_pop(&gc.mark_stack);
@@ -711,9 +764,15 @@ void gc_sweep(void) {
     env_sweep_unmarked();
 }
 
+static sage_mutex_t g_gc_cycle_mutex = SAGE_MUTEX_INITIALIZER;
+
 // Main collection entry point - runs concurrent phases inline
 void gc_collect(void) {
     if (!gc.enabled) return;
+    
+    // Prevent multiple threads from running a full cycle simultaneously
+    if (sage_mutex_trylock(&g_gc_cycle_mutex) != 0) return;
+
     sage_mutex_lock(&gc_mutex);
 
     unsigned long cycle_start = now_ns();
@@ -724,8 +783,6 @@ void gc_collect(void) {
     gc_begin_cycle();
 
     // Phase 2: Concurrent mark (in this synchronous path, we drain fully)
-    // In a truly threaded implementation, the mutator would continue here.
-    // For now we do the marking inline but in bounded steps for future threading.
     while (!gc_mark_complete()) {
         gc_mark_step(512);
     }
@@ -766,6 +823,7 @@ void gc_collect(void) {
     }
 
     sage_mutex_unlock(&gc_mutex);
+    sage_mutex_unlock(&g_gc_cycle_mutex);
 }
 
 // ============================================================================

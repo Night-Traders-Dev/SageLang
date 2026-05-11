@@ -52,6 +52,11 @@ if action == "claim":
         print "Claim Error: no stake found"
     else:
         let s = state["stakes"][sender]
+        
+        # Ensure last_claim exists and is a number
+        if not dict_has(s, "last_claim") or type(s["last_claim"]) != "number":
+            s["last_claim"] = now
+            
         let diff = now - s["last_claim"]
 
         if diff < interval:
@@ -60,13 +65,19 @@ if action == "claim":
             # Calculate intervals
             let intervals = 0
             let temp_diff = diff
+            if type(interval) != "number" or interval <= 0:
+                interval = 86400
+
             while temp_diff >= interval:
                 intervals = intervals + 1
                 temp_diff = temp_diff - interval
 
             # Reward = amount * 0.05 * (intervals / (365 * 86400 / interval))
-            # For 24h: amount * 0.05 * (intervals / 365)
-            let reward = s["amount"] * 0.05 * (intervals * interval / (365.0 * 86400.0))
+            let amount = 0.0
+            if dict_has(s, "amount") and type(s["amount"]) == "number":
+                amount = s["amount"]
+
+            let reward = amount * 0.05 * (intervals * interval / (365.0 * 86400.0))
 
             s["last_claim"] = s["last_claim"] + (intervals * interval)
             print "SUCCESS: Claimed " + str(reward) + " ORBIT for " + sender
@@ -76,17 +87,29 @@ if action == "unstake":
         print "Unstake Error: no stake found"
     else:
         let s = state["stakes"][sender]
-        let lock_end = s["lock_start"] + s["lock_duration"]
+        let lock_start = 0
+        let lock_duration = 0
+        if dict_has(s, "lock_start") and type(s["lock_start"]) == "number":
+            lock_start = s["lock_start"]
+        if dict_has(s, "lock_duration") and type(s["lock_duration"]) == "number":
+            lock_duration = s["lock_duration"]
+            
+        let lock_end = lock_start + lock_duration
         
         if now < lock_end:
             let remain = lock_end - now
             print "Unstake Error: tokens locked for " + str(remain) + " more seconds"
         else:
-            let principal = s["amount"]
+            let principal = 0.0
+            if dict_has(s, "amount") and type(s["amount"]) == "number":
+                principal = s["amount"]
             
             # Final claim logic
+            if not dict_has(s, "last_claim") or type(s["last_claim"]) != "number":
+                s["last_claim"] = now
+                
             let diff = now - s["last_claim"]
-            let reward = 0
+            let reward = 0.0
             if diff >= 86400:
                 let intervals = 0
                 while diff >= 86400:

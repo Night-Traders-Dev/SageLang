@@ -24,7 +24,7 @@ typedef struct EnvRootNode {
     struct EnvRootNode* next;
 } EnvRootNode;
 
-extern EnvRootNode* g_gc_root_stack;
+extern __thread EnvRootNode* g_gc_root_stack;
 
 Env* env_create(Env* parent);
 void env_define(Env* env, const char* name, int length, Value value);

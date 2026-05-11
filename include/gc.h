@@ -10,11 +10,12 @@
 #include <string.h>
 #include "value.h"
 #include "env.h"
+#include "sage_thread.h"
 
 // GC configuration
-#define GC_HEAP_SIZE (1024 * 1024)        // 1MB heap
-#define GC_MIN_TRIGGER_OBJECTS 128        // Minimum live objects before auto-GC
-#define GC_MIN_TRIGGER_BYTES (64 * 1024)  // Minimum managed bytes before auto-GC
+#define GC_HEAP_SIZE (16 * 1024 * 1024)        // 16MB heap
+#define GC_MIN_TRIGGER_OBJECTS 1024        // Minimum live objects before auto-GC
+#define GC_MIN_TRIGGER_BYTES (1024 * 1024)  // Minimum managed bytes before auto-GC
 #define GC_MARK_STACK_INIT 4096           // Initial mark stack capacity
 #define GC_SWEEP_BATCH 256                // Objects per incremental sweep step
 
@@ -51,6 +52,30 @@ static inline char* sage_safe_strdup(const char* str, const char* file, int line
     return ptr;
 }
 #define SAGE_STRDUP(str) sage_safe_strdup(str, __FILE__, __LINE__)
+
+// ============================================================================
+// Multi-threading GC Support
+// ============================================================================
+
+#define AST_GC_TEMP_MAX 1024
+#define AST_GC_ENV_TEMP_MAX 256
+
+typedef struct ThreadState {
+    EnvRootNode* gc_root_stack;
+    void* active_vm;
+    Value ast_gc_temps[AST_GC_TEMP_MAX];
+    int ast_gc_temp_count;
+    Env* ast_gc_env_temps[AST_GC_ENV_TEMP_MAX];
+    int ast_gc_env_temp_count;
+    
+    struct ThreadState* next;
+    sage_thread_t thread_id;
+} ThreadState;
+
+// Registry for all threads using the interpreter/VM
+void gc_register_thread(ThreadState* ts);
+void gc_unregister_thread(ThreadState* ts);
+ThreadState* gc_get_thread_state(void);
 
 // ============================================================================
 // Tri-color marking

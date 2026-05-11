@@ -28,26 +28,52 @@
 #define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL, g_gas_used, g_gas_limit })
 
 Environment* g_global_env = NULL;
-EnvRootNode* g_gc_root_stack = NULL;
+__thread EnvRootNode* g_gc_root_stack = NULL;
 
 #define AST_GC_TEMP_MAX 1024
-Value g_ast_gc_temps[AST_GC_TEMP_MAX];
-int g_ast_gc_temp_count = 0;
-#define AST_GC_PUSH(v) do { if (g_ast_gc_temp_count < AST_GC_TEMP_MAX) g_ast_gc_temps[g_ast_gc_temp_count++] = (v); } while(0)
-#define AST_GC_POP() do { if (g_ast_gc_temp_count > 0) g_ast_gc_temp_count--; } while(0)
-#define AST_GC_POP_N(n) do { g_ast_gc_temp_count -= (n); if (g_ast_gc_temp_count < 0) g_ast_gc_temp_count = 0; } while(0)
+__thread Value g_ast_gc_temps[AST_GC_TEMP_MAX];
+__thread int g_ast_gc_temp_count = 0;
+#define AST_GC_PUSH(v) do { \
+    ThreadState* ts = gc_get_thread_state(); \
+    if (ts) { \
+        if (ts->ast_gc_temp_count < AST_GC_TEMP_MAX) ts->ast_gc_temps[ts->ast_gc_temp_count++] = (v); \
+    } else { \
+        if (g_ast_gc_temp_count < AST_GC_TEMP_MAX) g_ast_gc_temps[g_ast_gc_temp_count++] = (v); \
+    } \
+} while(0)
+#define AST_GC_POP() do { \
+    ThreadState* ts = gc_get_thread_state(); \
+    if (ts) { if (ts->ast_gc_temp_count > 0) ts->ast_gc_temp_count--; } \
+    else { if (g_ast_gc_temp_count > 0) g_ast_gc_temp_count--; } \
+} while(0)
+#define AST_GC_POP_N(n) do { \
+    ThreadState* ts = gc_get_thread_state(); \
+    if (ts) { ts->ast_gc_temp_count -= (n); if (ts->ast_gc_temp_count < 0) ts->ast_gc_temp_count = 0; } \
+    else { g_ast_gc_temp_count -= (n); if (g_ast_gc_temp_count < 0) g_ast_gc_temp_count = 0; } \
+} while(0)
 
 #define AST_GC_ENV_TEMP_MAX 256
-Env* g_ast_gc_env_temps[AST_GC_ENV_TEMP_MAX];
-int g_ast_gc_env_temp_count = 0;
-#define AST_GC_PUSH_ENV(e) do { if (g_ast_gc_env_temp_count < AST_GC_ENV_TEMP_MAX) g_ast_gc_env_temps[g_ast_gc_env_temp_count++] = (e); } while(0)
-#define AST_GC_POP_ENV() do { if (g_ast_gc_env_temp_count > 0) g_ast_gc_env_temp_count--; } while(0)
+__thread Env* g_ast_gc_env_temps[AST_GC_ENV_TEMP_MAX];
+__thread int g_ast_gc_env_temp_count = 0;
+#define AST_GC_PUSH_ENV(e) do { \
+    ThreadState* ts = gc_get_thread_state(); \
+    if (ts) { \
+        if (ts->ast_gc_env_temp_count < AST_GC_ENV_TEMP_MAX) ts->ast_gc_env_temps[ts->ast_gc_env_temp_count++] = (e); \
+    } else { \
+        if (g_ast_gc_env_temp_count < AST_GC_ENV_TEMP_MAX) g_ast_gc_env_temps[g_ast_gc_env_temp_count++] = (e); \
+    } \
+} while(0)
+#define AST_GC_POP_ENV() do { \
+    ThreadState* ts = gc_get_thread_state(); \
+    if (ts) { if (ts->ast_gc_env_temp_count > 0) ts->ast_gc_env_temp_count--; } \
+    else { if (g_ast_gc_env_temp_count > 0) g_ast_gc_env_temp_count--; } \
+} while(0)
 
 static Stmt* g_generator_resume_target = NULL;
 
 // Phase 2: Gas tracking globals
-static long g_gas_limit = -1; // -1 means unlimited
-static long g_gas_used = 0;
+static __thread long g_gas_limit = -1; // -1 means unlimited
+static __thread long g_gas_used = 0;
 
 static ExecResult gas_error(void) {
     return EVAL_EXCEPTION(val_exception("Out of gas"));
@@ -58,6 +84,23 @@ static int consume_gas(long amount) {
     g_gas_used += amount;
     if (g_gas_used > g_gas_limit) return 0;
     return 1;
+}
+
+static Value vm_set_gas_limit_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_nil();
+    g_gas_limit = (long)AS_NUMBER(args[0]);
+    g_gas_used = 0;
+    return val_nil();
+}
+
+static Value vm_get_gas_used_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number((double)g_gas_used);
+}
+
+static Value vm_get_gas_limit_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number((double)g_gas_limit);
 }
 
 // JIT state — global, initialized by --jit mode
@@ -2034,6 +2077,11 @@ void init_stdlib(Env* env) {
     env_define_const(env, "int", 3, val_native(int_native));
     env_define_const(env, "str", 3, val_native(str_native));
     env_define_const(env, "len", 3, val_native(len_native));
+
+    // VM / Gas functions
+    env_define_const(env, "vm_gas_limit_set", 16, val_native(vm_set_gas_limit_native));
+    env_define_const(env, "vm_gas_used_get", 15, val_native(vm_get_gas_used_native));
+    env_define_const(env, "vm_gas_limit_get", 16, val_native(vm_get_gas_limit_native));
     
     // Array functions
     env_define_const(env, "push", 4, val_native(push_native));
@@ -2208,26 +2256,32 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
         return EVAL_RESULT(val_number((double)(~(long long)AS_NUMBER(left))));
     }
 
+    AST_GC_PUSH(left);
+
     if (b->op.type == TOKEN_OR) {
         if (is_truthy(left)) {
+            AST_GC_POP();
             return EVAL_RESULT(val_bool(1));
         }
         ExecResult right_result = eval_expr(b->right, env);
+        AST_GC_POP();
         if (right_result.is_throwing) return right_result;
         return EVAL_RESULT(val_bool(is_truthy(right_result.value)));
     }
 
     if (b->op.type == TOKEN_AND) {
         if (!is_truthy(left)) {
+            AST_GC_POP();
             return EVAL_RESULT(val_bool(0));
         }
         ExecResult right_result = eval_expr(b->right, env);
+        AST_GC_POP();
         if (right_result.is_throwing) return right_result;
         return EVAL_RESULT(val_bool(is_truthy(right_result.value)));
     }
 
     ExecResult right_result = eval_expr(b->right, env);
-    if (right_result.is_throwing) return right_result;
+    if (right_result.is_throwing) { AST_GC_POP(); return right_result; }
     Value right = right_result.value;
 
     if (b->op.type == TOKEN_EQ || b->op.type == TOKEN_NEQ) {
@@ -2236,6 +2290,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
         if (left.type == VAL_INSTANCE && left.as.instance->class_def) {
             Method* eq_method = class_find_method(left.as.instance->class_def, "__eq__", 6);
             if (eq_method) {
+                AST_GC_PUSH(right);
                 Stmt* method_node = (Stmt*)eq_method->method_stmt;
                 ProcStmt* proc = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
                 Env* defining = left.as.instance->class_def->defining_env;
@@ -2250,12 +2305,14 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 }
                 ExecResult eq_res = interpret(proc->body, method_env);
                 equal = !eq_res.is_throwing && is_truthy(eq_res.value);
+                AST_GC_POP(); // pop right
             } else {
                 equal = values_equal(left, right);
             }
         } else {
             equal = values_equal(left, right);
         }
+        AST_GC_POP(); // pop left
         if (b->op.type == TOKEN_EQ) return EVAL_RESULT(val_bool(equal));
         if (b->op.type == TOKEN_NEQ) return EVAL_RESULT(val_bool(!equal));
     }
@@ -2264,6 +2321,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
         if (IS_NUMBER(left) && IS_NUMBER(right)) {
             double l = AS_NUMBER(left);
             double r = AS_NUMBER(right);
+            AST_GC_POP();
             if (b->op.type == TOKEN_GT) return EVAL_RESULT(val_bool(l > r));
             if (b->op.type == TOKEN_LT) return EVAL_RESULT(val_bool(l < r));
             if (b->op.type == TOKEN_GTE) return EVAL_RESULT(val_bool(l >= r));
@@ -2271,11 +2329,13 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
         }
         if (IS_STRING(left) && IS_STRING(right)) {
             int cmp = strcmp(AS_STRING(left), AS_STRING(right));
+            AST_GC_POP();
             if (b->op.type == TOKEN_GT) return EVAL_RESULT(val_bool(cmp > 0));
             if (b->op.type == TOKEN_LT) return EVAL_RESULT(val_bool(cmp < 0));
             if (b->op.type == TOKEN_GTE) return EVAL_RESULT(val_bool(cmp >= 0));
             if (b->op.type == TOKEN_LTE) return EVAL_RESULT(val_bool(cmp <= 0));
         }
+        AST_GC_POP();
         fprintf(stderr, "Runtime Error: Operands must be numbers or strings.\n");
         return EVAL_RESULT(val_nil());
     }
@@ -2283,6 +2343,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
     switch (b->op.type) {
         case TOKEN_PLUS:
             if (IS_NUMBER(left) && IS_NUMBER(right)) {
+                AST_GC_POP();
                 return EVAL_RESULT(val_number(AS_NUMBER(left) + AS_NUMBER(right)));
             }
             if (IS_STRING(left) && IS_STRING(right)) {
@@ -2293,63 +2354,77 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 char* result = SAGE_ALLOC(len1 + len2 + 1);
                 memcpy(result, s1, len1);
                 memcpy(result + len1, s2, len2 + 1);
+                AST_GC_POP();
                 return EVAL_RESULT(val_string_take(result));
             }
+            AST_GC_POP();
             fprintf(stderr, "Runtime Error: Operands must be numbers or strings.\n");
             return EVAL_RESULT(val_nil());
 
         case TOKEN_MINUS:
-            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+            AST_GC_POP();
             return EVAL_RESULT(val_number(AS_NUMBER(left) - AS_NUMBER(right)));
 
         case TOKEN_STAR:
-            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+            AST_GC_POP();
             return EVAL_RESULT(val_number(AS_NUMBER(left) * AS_NUMBER(right)));
 
         case TOKEN_SLASH:
-            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
             if (AS_NUMBER(right) == 0) {
+                AST_GC_POP();
                 fprintf(stderr, "Runtime Error: Division by zero.\n");
                 return EVAL_EXCEPTION(val_exception("Division by zero"));
             }
+            AST_GC_POP();
             return EVAL_RESULT(val_number(AS_NUMBER(left) / AS_NUMBER(right)));
 
         case TOKEN_PERCENT:
-            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
             if (AS_NUMBER(right) == 0) {
+                AST_GC_POP();
                 fprintf(stderr, "Runtime Error: Modulo by zero.\n");
                 return EVAL_EXCEPTION(val_exception("Modulo by zero"));
             }
+            AST_GC_POP();
             return EVAL_RESULT(val_number(fmod(AS_NUMBER(left), AS_NUMBER(right))));
 
         // Phase 9: Bitwise operators
         case TOKEN_AMP:
-            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+            AST_GC_POP();
             return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) & (long long)AS_NUMBER(right))));
 
         case TOKEN_PIPE:
-            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+            AST_GC_POP();
             return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) | (long long)AS_NUMBER(right))));
 
         case TOKEN_CARET:
-            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+            AST_GC_POP();
             return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) ^ (long long)AS_NUMBER(right))));
 
         case TOKEN_LSHIFT: {
-            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
             long long shift = (long long)AS_NUMBER(right);
+            AST_GC_POP();
             if (shift < 0 || shift >= 64) return EVAL_RESULT(val_number(0.0));
             return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) << shift)));
         }
 
         case TOKEN_RSHIFT: {
-            if (!IS_NUMBER(left) || !IS_NUMBER(right)) return EVAL_RESULT(val_nil());
+            if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
             long long shift = (long long)AS_NUMBER(right);
+            AST_GC_POP();
             if (shift < 0 || shift >= 64) return EVAL_RESULT(val_number(0.0));
             return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) >> shift)));
         }
 
         default:
+            AST_GC_POP();
             return EVAL_RESULT(val_nil());
     }
 }
@@ -2416,79 +2491,83 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             ExecResult arr_result = eval_expr(expr->as.index.array, env);
             if (arr_result.is_throwing) return arr_result;
             Value arr = arr_result.value;
+            AST_GC_PUSH(arr);
             
             ExecResult idx_result = eval_expr(expr->as.index.index, env);
-            if (idx_result.is_throwing) return idx_result;
+            if (idx_result.is_throwing) { AST_GC_POP(); return idx_result; }
             Value idx = idx_result.value;
             
+            ExecResult result;
             if (arr.type == VAL_ARRAY && IS_NUMBER(idx)) {
                 int index = (int)AS_NUMBER(idx);
-                return EVAL_RESULT(array_get(&arr, index));
-            }
-            
-            if (arr.type == VAL_TUPLE && IS_NUMBER(idx)) {
+                result = EVAL_RESULT(array_get(&arr, index));
+            } else if (arr.type == VAL_TUPLE && IS_NUMBER(idx)) {
                 int index = (int)AS_NUMBER(idx);
-                return EVAL_RESULT(tuple_get(&arr, index));
-            }
-            
-            if (arr.type == VAL_STRING && IS_NUMBER(idx)) {
+                result = EVAL_RESULT(tuple_get(&arr, index));
+            } else if (arr.type == VAL_STRING && IS_NUMBER(idx)) {
                 int index = (int)AS_NUMBER(idx);
                 char* str = AS_STRING(arr);
                 int slen = (int)strlen(str);
                 if (index < 0) index += slen;
                 if (index < 0 || index >= slen) {
                     fprintf(stderr, "Runtime Error: String index out of bounds.\n");
+                    AST_GC_POP();
                     return EVAL_RESULT(val_nil());
                 }
                 char* ch = SAGE_ALLOC(2);
                 ch[0] = str[index];
                 ch[1] = '\0';
-                return EVAL_RESULT(val_string_take(ch));
+                result = EVAL_RESULT(val_string_take(ch));
+            } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
+                result = EVAL_RESULT(dict_get(&arr, AS_STRING(idx)));
+            } else {
+                fprintf(stderr, "Runtime Error: Invalid indexing operation.\n");
+                result = EVAL_RESULT(val_nil());
             }
-
-            if (arr.type == VAL_DICT && IS_STRING(idx)) {
-                return EVAL_RESULT(dict_get(&arr, AS_STRING(idx)));
-            }
-
-            fprintf(stderr, "Runtime Error: Invalid indexing operation.\n");
-            return EVAL_RESULT(val_nil());
+            AST_GC_POP();
+            return result;
         }
 
         case EXPR_INDEX_SET: {
             ExecResult arr_result = eval_expr(expr->as.index_set.array, env);
             if (arr_result.is_throwing) return arr_result;
             Value arr = arr_result.value;
+            AST_GC_PUSH(arr);
 
             ExecResult idx_result = eval_expr(expr->as.index_set.index, env);
-            if (idx_result.is_throwing) return idx_result;
+            if (idx_result.is_throwing) { AST_GC_POP(); return idx_result; }
             Value idx = idx_result.value;
+            AST_GC_PUSH(idx);
 
             ExecResult val_result = eval_expr(expr->as.index_set.value, env);
-            if (val_result.is_throwing) return val_result;
+            if (val_result.is_throwing) { AST_GC_POP_N(2); return val_result; }
             Value value = val_result.value;
 
+            ExecResult result;
             if (arr.type == VAL_ARRAY && IS_NUMBER(idx)) {
                 int index = (int)AS_NUMBER(idx);
                 array_set(&arr, index, value);
-                return EVAL_RESULT(value);
-            }
-
-            if (arr.type == VAL_DICT && IS_STRING(idx)) {
+                result = EVAL_RESULT(value);
+            } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
                 dict_set(&arr, AS_STRING(idx), value);
-                return EVAL_RESULT(value);
+                result = EVAL_RESULT(value);
+            } else {
+                fprintf(stderr, "Runtime Error: Invalid index assignment.\n");
+                result = EVAL_RESULT(val_nil());
             }
-
-            fprintf(stderr, "Runtime Error: Invalid index assignment.\n");
-            return EVAL_RESULT(val_nil());
+            AST_GC_POP_N(2);
+            return result;
         }
 
         case EXPR_SLICE: {
             ExecResult arr_result = eval_expr(expr->as.slice.array, env);
             if (arr_result.is_throwing) return arr_result;
             Value arr = arr_result.value;
+            AST_GC_PUSH(arr);
             
             if (arr.type != VAL_ARRAY && arr.type != VAL_STRING) {
                 fprintf(stderr, "Runtime Error: Can only slice arrays or strings.\n");
+                AST_GC_POP();
                 return EVAL_RESULT(val_nil());
             }
             
@@ -2502,23 +2581,26 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             
             if (expr->as.slice.start != NULL) {
                 ExecResult start_result = eval_expr(expr->as.slice.start, env);
-                if (start_result.is_throwing) return start_result;
-                if (!IS_NUMBER(start_result.value)) return EVAL_RESULT(val_nil());
+                if (start_result.is_throwing) { AST_GC_POP(); return start_result; }
+                if (!IS_NUMBER(start_result.value)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
                 start = (int)AS_NUMBER(start_result.value);
             }
             
             if (expr->as.slice.end != NULL) {
                 ExecResult end_result = eval_expr(expr->as.slice.end, env);
-                if (end_result.is_throwing) return end_result;
-                if (!IS_NUMBER(end_result.value)) return EVAL_RESULT(val_nil());
+                if (end_result.is_throwing) { AST_GC_POP(); return end_result; }
+                if (!IS_NUMBER(end_result.value)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
                 end = (int)AS_NUMBER(end_result.value);
             }
             
+            ExecResult result;
             if (arr.type == VAL_ARRAY) {
-                return EVAL_RESULT(array_slice(&arr, start, end));
+                result = EVAL_RESULT(array_slice(&arr, start, end));
             } else {
-                return EVAL_RESULT(string_slice(&arr, start, end));
+                result = EVAL_RESULT(string_slice(&arr, start, end));
             }
+            AST_GC_POP();
+            return result;
         }
 
         case EXPR_GET: {
@@ -2598,20 +2680,23 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             ExecResult obj_result = eval_expr(expr->as.set.object, env);
             if (obj_result.is_throwing) return obj_result;
             Value object = obj_result.value;
+            AST_GC_PUSH(object);
             
             if (!IS_INSTANCE(object)) {
                 fprintf(stderr, "Runtime Error: Only instances have properties.\n");
+                AST_GC_POP();
                 return EVAL_RESULT(val_nil());
             }
             
             ExecResult val_result = eval_expr(expr->as.set.value, env);
-            if (val_result.is_throwing) return val_result;
+            if (val_result.is_throwing) { AST_GC_POP(); return val_result; }
             Value value = val_result.value;
             
             Token prop = expr->as.set.property;
             
             // Optimized property assignment: no string allocation/copy
             instance_set_field(object.as.instance, prop.start, prop.length, value);
+            AST_GC_POP();
             return EVAL_RESULT(value);
         }
 
@@ -2667,6 +2752,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 ExecResult obj_result = eval_expr(callee_expr->as.get.object, env);
                 if (obj_result.is_throwing) return obj_result;
                 Value object = obj_result.value;
+                AST_GC_PUSH(object);
 
                 if (IS_INSTANCE(object)) {
                     Token method_token = callee_expr->as.get.property;
@@ -2674,6 +2760,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     Method* method = class_find_method(object.as.instance->class_def, method_token.start, method_token.length);
                     if (!method) {
                         fprintf(stderr, "Runtime Error: Undefined method '%.*s'.\n", method_token.length, method_token.start);
+                        AST_GC_POP();
                         return EVAL_RESULT(val_nil());
                     }
 
@@ -2693,12 +2780,20 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 
                     int arg_count = expr->as.call.arg_count;
                     Value* eval_args = NULL;
+                    int pushed_args = 0;
                     if (method_stmt->param_count > param_start) {
                         eval_args = SAGE_ALLOC(sizeof(Value) * (method_stmt->param_count - param_start));
                         for (int i = 0; i < arg_count && i < method_stmt->param_count - param_start; i++) {
                             ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                            if (arg_result.is_throwing) { free(eval_args); AST_GC_POP_ENV(); return arg_result; }
+                            if (arg_result.is_throwing) { 
+                                free(eval_args); 
+                                AST_GC_POP_ENV(); 
+                                AST_GC_POP_N(1 + pushed_args); 
+                                return arg_result; 
+                            }
                             eval_args[i] = arg_result.value;
+                            AST_GC_PUSH(eval_args[i]);
+                            pushed_args++;
                             env_define_const(method_env, method_stmt->params[i + param_start].start,
                                        method_stmt->params[i + param_start].length, arg_result.value);
                         }
@@ -2714,6 +2809,8 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 #if SAGE_PLATFORM_PICO
                         if (eval_args) free(eval_args);
                         fprintf(stderr, "Runtime Error: async/await not supported on RP2040.\n");
+                        AST_GC_POP_ENV();
+                        AST_GC_POP_N(1 + pushed_args);
                         return EVAL_RESULT(val_nil());
 #else
                         // Create a FunctionValue wrapper for this method call
@@ -2736,6 +2833,8 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 
                         extern Value thread_spawn_native(int argCount, Value* args);
                         Value handle = thread_spawn_native(1 + total_params, spawn_args);
+                        AST_GC_POP_ENV();
+                        AST_GC_POP_N(1 + pushed_args);
                         return EVAL_RESULT(handle);
 #endif
                     }
@@ -2743,9 +2842,11 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     if (eval_args) free(eval_args);
                     ExecResult res = interpret(method_stmt->body, method_env);
                     AST_GC_POP_ENV();
+                    AST_GC_POP_N(1 + pushed_args);
                     if (res.is_throwing) return res;
                     return EVAL_RESULT(res.value);
                 }
+                AST_GC_POP();
             }
 
             // super.method(args) — call parent class method
@@ -2794,12 +2895,20 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 
                 int arg_count = expr->as.call.arg_count;
                 Value* eval_args = NULL;
+                int pushed_args = 0;
                 if (method_stmt->param_count > param_start) {
                     eval_args = SAGE_ALLOC(sizeof(Value) * (method_stmt->param_count - param_start));
                     for (int i = 0; i < arg_count && i < method_stmt->param_count - param_start; i++) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                        if (arg_result.is_throwing) { free(eval_args); AST_GC_POP_ENV(); return arg_result; }
+                        if (arg_result.is_throwing) { 
+                            free(eval_args); 
+                            AST_GC_POP_ENV(); 
+                            AST_GC_POP_N(pushed_args);
+                            return arg_result; 
+                        }
                         eval_args[i] = arg_result.value;
+                        AST_GC_PUSH(eval_args[i]);
+                        pushed_args++;
                         env_define_const(method_env, method_stmt->params[i + param_start].start,
                                    method_stmt->params[i + param_start].length, arg_result.value);
                     }
@@ -2814,6 +2923,8 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 #if SAGE_PLATFORM_PICO
                     if (eval_args) free(eval_args);
                     fprintf(stderr, "Runtime Error: async/await not supported on RP2040.\n");
+                    AST_GC_POP_ENV();
+                    AST_GC_POP_N(pushed_args);
                     return EVAL_RESULT(val_nil());
 #else
                     FunctionValue* fv = SAGE_ALLOC(sizeof(FunctionValue));
@@ -2835,6 +2946,8 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 
                     extern Value thread_spawn_native(int argCount, Value* args);
                     Value handle = thread_spawn_native(1 + total_params, spawn_args);
+                    AST_GC_POP_ENV();
+                    AST_GC_POP_N(pushed_args);
                     return EVAL_RESULT(handle);
 #endif
                 }
@@ -2842,6 +2955,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 if (eval_args) free(eval_args);
                 ExecResult res = interpret(method_stmt->body, method_env);
                 AST_GC_POP_ENV();
+                AST_GC_POP_N(pushed_args);
                 if (res.is_throwing) return res;
                 return EVAL_RESULT(res.value);
             }
@@ -2849,29 +2963,38 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             ExecResult callee_result = eval_expr(callee_expr, env);
             if (callee_result.is_throwing) return callee_result;
             Value callee_value = callee_result.value;
+            AST_GC_PUSH(callee_value);
 
             if (callee_value.type == VAL_NATIVE) {
                 if (callee_value.as.native == NULL) {
                     fprintf(stderr, "Runtime Error: Attempted to call a null native function.\n");
+                    AST_GC_POP();
                     return EVAL_RESULT(val_nil());
                 }
                 int count = expr->as.call.arg_count;
                 if (count > 255) {
                     fprintf(stderr, "Runtime Error: Too many arguments (%d, max 255).\n", count);
+                    AST_GC_POP();
                     return EVAL_RESULT(val_nil());
                 }
                 Value args[255];
+                int pushed_args = 0;
                 for (int i = 0; i < count; i++) {
                     ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                    if (arg_result.is_throwing) return arg_result;
+                    if (arg_result.is_throwing) { AST_GC_POP_N(1 + pushed_args); return arg_result; }
                     args[i] = arg_result.value;
+                    AST_GC_PUSH(args[i]);
+                    pushed_args++;
                 }
-                return EVAL_RESULT(callee_value.as.native(count, args));
+                Value native_res = callee_value.as.native(count, args);
+                AST_GC_POP_N(1 + pushed_args);
+                return EVAL_RESULT(native_res);
             }
 
             if (callee_value.type == VAL_FUNCTION) {
                 if (callee_value.as.function == NULL || callee_value.as.function->proc == NULL) {
                     fprintf(stderr, "Runtime Error: Attempted to call a null function.\n");
+                    AST_GC_POP();
                     return EVAL_RESULT(val_nil());
                 }
                 ProcStmt* func = AS_FUNCTION(callee_value);
@@ -2879,26 +3002,42 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 if (expr->as.call.arg_count < required || expr->as.call.arg_count > func->param_count) {
                     fprintf(stderr, "Runtime Error: Expected %d to %d arguments but got %d.\n",
                             required, func->param_count, expr->as.call.arg_count);
+                    AST_GC_POP();
                     return EVAL_RESULT(val_nil());
                 }
 
                 // Pre-evaluate all provided arguments
                 Value* eval_args = NULL;
+                int pushed_args = 0;
                 if (func->param_count > 0) {
                     eval_args = SAGE_ALLOC(sizeof(Value) * func->param_count);
                     for (int i = 0; i < expr->as.call.arg_count; i++) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                        if (arg_result.is_throwing) { free(eval_args); AST_GC_POP_ENV(); return arg_result; }
+                        if (arg_result.is_throwing) { 
+                            free(eval_args); 
+                            AST_GC_POP_N(1 + pushed_args); 
+                            return arg_result; 
+                        }
                         eval_args[i] = arg_result.value;
+                        AST_GC_PUSH(eval_args[i]);
+                        pushed_args++;
                     }
                     // Fill in defaults for missing arguments
                     for (int i = expr->as.call.arg_count; i < func->param_count; i++) {
                         if (func->defaults && func->defaults[i]) {
                             ExecResult def_result = eval_expr(func->defaults[i], env);
-                            if (def_result.is_throwing) { free(eval_args); return def_result; }
+                            if (def_result.is_throwing) { 
+                                free(eval_args); 
+                                AST_GC_POP_N(1 + pushed_args); 
+                                return def_result; 
+                            }
                             eval_args[i] = def_result.value;
+                            AST_GC_PUSH(eval_args[i]);
+                            pushed_args++;
                         } else {
                             eval_args[i] = val_nil();
+                            AST_GC_PUSH(eval_args[i]);
+                            pushed_args++;
                         }
                     }
                 }
@@ -2907,6 +3046,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 #if SAGE_PLATFORM_PICO
                     free(eval_args);
                     fprintf(stderr, "Runtime Error: async/await not supported on RP2040.\n");
+                    AST_GC_POP_N(1 + pushed_args);
                     return EVAL_RESULT(val_nil());
 #else
                     // Async call: spawn thread, return thread handle
@@ -2919,6 +3059,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     // Use thread_spawn_native from stdlib.c (declared as extern)
                     extern Value thread_spawn_native(int argCount, Value* args);
                     Value handle = thread_spawn_native(1 + func->param_count, spawn_args);
+                    AST_GC_POP_N(1 + pushed_args);
                     return EVAL_RESULT(handle);
 #endif
                 }
@@ -2931,9 +3072,6 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 }
 
                 // JIT: Profile this call and check if we should compile.
-                // Pragmas @nojit/@noaot/@noprofile checked via --runtime flag;
-                // per-function pragma control requires Stmt* which is not
-                // available at the FunctionValue call site.
                 int func_id = -1;
                 if (g_jit && g_jit->enabled) {
                     func_id = (int)((uintptr_t)func % 100000);
@@ -2953,6 +3091,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
 
                 ExecResult res = interpret(func->body, scope);
                 AST_GC_POP_ENV();
+                AST_GC_POP_N(1 + pushed_args);
 
                 // JIT: Record return type for specialization
                 if (g_jit && func_id >= 0 && !res.is_throwing) {
@@ -2967,27 +3106,40 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 GeneratorValue* template = callee_value.as.generator;
                 if (expr->as.call.arg_count != template->param_count) {
                     fprintf(stderr, "Runtime Error: Arity mismatch.\n");
+                    AST_GC_POP();
                     return EVAL_RESULT(val_nil());
                 }
 
                 Env* gen_closure = env_create(template->closure);
+                AST_GC_PUSH_ENV(gen_closure);
+                int pushed_args = 0;
                 if (template->param_count > 0 && template->params != NULL) {
                     Token* params = (Token*)template->params;
                     for (int i = 0; i < template->param_count; i++) {
                         ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                        if (arg_result.is_throwing) return arg_result;
+                        if (arg_result.is_throwing) { 
+                            AST_GC_POP_ENV(); 
+                            AST_GC_POP_N(1 + pushed_args); 
+                            return arg_result; 
+                        }
+                        AST_GC_PUSH(arg_result.value);
+                        pushed_args++;
                         env_define_const(gen_closure, params[i].start, params[i].length, arg_result.value);
                     }
                 }
 
-                return EVAL_RESULT(val_generator(template->body, template->params,
-                                                 template->param_count, gen_closure));
+                Value gen_res = val_generator(template->body, template->params,
+                                                 template->param_count, gen_closure);
+                AST_GC_POP_ENV();
+                AST_GC_POP_N(1 + pushed_args);
+                return EVAL_RESULT(gen_res);
             }
 
             if (callee_value.type == VAL_CLASS) {
                 ClassValue* class_def = callee_value.as.class_val;
                 InstanceValue* instance = instance_create(class_def);
                 Value inst_val = val_instance(instance);
+                AST_GC_PUSH(inst_val);
 
                 Method* init_method = class_find_method(class_def, "init", 4);
                 if (init_method) {
@@ -2995,6 +3147,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     ProcStmt* init_stmt = (init_node->type == STMT_ASYNC_PROC) ? &init_node->as.async_proc : &init_node->as.proc;
                     Env* def_env = class_def->defining_env;
                     Env* method_env = env_create(def_env ? def_env : env);
+                    AST_GC_PUSH_ENV(method_env);
                     env_define(method_env, "self", 4, inst_val);
                     // Track class owning init for super resolution
                     ClassValue* init_owner = class_find_method_owner(class_def, "init", 4);
@@ -3003,46 +3156,26 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     int param_start = (init_stmt->param_count > 0 &&
                                       strncmp(init_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
 
+                    int pushed_args = 0;
                     for (int i = param_start; i < init_stmt->param_count; i++) {
                         if (i - param_start < expr->as.call.arg_count) {
                             ExecResult arg_result = eval_expr(expr->as.call.args[i - param_start], env);
-                            if (arg_result.is_throwing) return arg_result;
+                            if (arg_result.is_throwing) { 
+                                AST_GC_POP_ENV(); 
+                                AST_GC_POP_N(2 + pushed_args); 
+                                return arg_result; 
+                            }
+                            AST_GC_PUSH(arg_result.value);
+                            pushed_args++;
                             env_define_const(method_env, init_stmt->params[i].start,
                                        init_stmt->params[i].length, arg_result.value);
                         }
                     }
 
-                    if (init_node->type == STMT_ASYNC_PROC) {
-                        fprintf(stderr, "Warning: 'init' method is async. It will run in background.\n");
-                        // We could spawn a thread here, but usually init should be sync.
-                        // For now let's just support it as a thread spawn.
-#if !SAGE_PLATFORM_PICO
-                        FunctionValue* fv = SAGE_ALLOC(sizeof(FunctionValue));
-                        fv->proc = init_stmt;
-                        fv->closure = method_env;
-                        fv->is_async = 1;
-                        fv->is_vm = 0;
-                        Value callee;
-                        callee.type = VAL_FUNCTION;
-                        callee.as.function = fv;
-                        
-                        // Arguments are already in method_env, but thread_spawn_native 
-                        // expects them again to populate the thread's scope.
-                        // This is a bit redundant but safe.
-                        int total_params = init_stmt->param_count - param_start;
-                        Value spawn_args[1 + total_params];
-                        spawn_args[0] = callee;
-                        for (int i = 0; i < total_params; i++) {
-                            // Recover args from env? Or just evaluate again?
-                            // Actually it's better to evaluate once and pass.
-                            // But init_res below is sync.
-                        }
-                        // For simplicity, let's just execute sync for now if it's init.
-#endif
-                    }
-
                     ExecResult init_res = interpret(init_stmt->body, method_env);
-                    if (init_res.is_throwing) return init_res;
+                    AST_GC_POP_ENV();
+                    AST_GC_POP_N(pushed_args);
+                    if (init_res.is_throwing) { AST_GC_POP_N(2); return init_res; }
                 } else {
                     // Auto-init for structs: look for __StructName_fields__ metadata
                     char meta_key[256];
@@ -3052,17 +3185,25 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     if (env_get(env, meta_key, (int)strlen(meta_key), &fields_val) &&
                         fields_val.type == VAL_ARRAY) {
                         ArrayValue* fields = fields_val.as.array;
+                        int pushed_args = 0;
                         for (int i = 0; i < fields->count && i < expr->as.call.arg_count; i++) {
                             ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                            if (arg_result.is_throwing) return arg_result;
+                            if (arg_result.is_throwing) { 
+                                AST_GC_POP_N(2 + pushed_args); 
+                                return arg_result; 
+                            }
+                            AST_GC_PUSH(arg_result.value);
+                            pushed_args++;
                             if (fields->elements[i].type == VAL_STRING) {
                                 char* field_name = AS_STRING(fields->elements[i]);
                                 instance_set_field(instance, field_name, (int)strlen(field_name), arg_result.value);
                             }
                         }
+                        AST_GC_POP_N(pushed_args);
                     }
                 }
 
+                AST_GC_POP_N(2); // inst_val and callee_value
                 return EVAL_RESULT(inst_val);
             }
 
@@ -3080,6 +3221,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             } else {
                 fprintf(stderr, "Runtime Error: Value is not callable (type=%d).\n", callee_value.type);
             }
+            AST_GC_POP();
             return EVAL_RESULT(val_nil());
         }
 
@@ -3098,20 +3240,29 @@ ExecResult interpret(Stmt* stmt, Env* env) {
         fprintf(stderr, "Runtime Error: Maximum recursion depth exceeded (%d).\n", MAX_RECURSION_DEPTH);
         return EVAL_EXCEPTION(val_exception("Maximum recursion depth exceeded"));
     }
-    
+
+    ThreadState* ts = gc_get_thread_state();
     EnvRootNode root_node;
     root_node.env = env;
-    root_node.next = g_gc_root_stack;
-    g_gc_root_stack = &root_node;
-    
+    if (ts) {
+        root_node.next = ts->gc_root_stack;
+        ts->gc_root_stack = &root_node;
+    } else {
+        root_node.next = g_gc_root_stack;
+        g_gc_root_stack = &root_node;
+    }
+
     ExecResult result = interpret_inner(stmt, env);
-    
-    g_gc_root_stack = root_node.next;
-    
+
+    if (ts) {
+        ts->gc_root_stack = root_node.next;
+    } else {
+        g_gc_root_stack = root_node.next;
+    }
+
     g_recursion_depth--;
     return result;
 }
-
 static ExecResult interpret_inner(Stmt* stmt, Env* env) {
     // Phase 2: Consume gas for each statement
     if (!consume_gas(10)) return gas_error();
@@ -3143,18 +3294,22 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             if (result.value.type == VAL_INSTANCE && result.value.as.instance->class_def) {
                 Method* str_method = class_find_method(result.value.as.instance->class_def, "__str__", 7);
                 if (str_method) {
+                    AST_GC_PUSH(result.value);
                     Stmt* method_node = (Stmt*)str_method->method_stmt;
                     ProcStmt* str_stmt = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
                     Env* def_env = result.value.as.instance->class_def->defining_env;
                     Env* str_env = env_create(def_env ? def_env : env);
+                    AST_GC_PUSH_ENV(str_env);
                     env_define(str_env, "self", 4, result.value);
                     ExecResult str_res = interpret(str_stmt->body, str_env);
+                    AST_GC_POP_ENV();
                     if (!str_res.is_throwing && str_res.value.type == VAL_STRING) {
                         printf("%s\n", AS_STRING(str_res.value));
                     } else {
                         print_value(result.value);
                         printf("\n");
                     }
+                    AST_GC_POP();
                     return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
                 }
             }
@@ -3275,6 +3430,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
 
             AST_GC_PUSH(iterable);
             Env* loop_env = env_create(env);
+            AST_GC_PUSH_ENV(loop_env);
             Token var = stmt->as.for_stmt.variable;
 
             ArrayValue* arr = iterable.as.array;
@@ -3293,6 +3449,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
 
                     ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
                     if (res.is_returning || res.is_throwing) {
+                        AST_GC_POP_ENV();
                         AST_GC_POP();
                         return res;
                     }
@@ -3301,6 +3458,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                         if (res.next_stmt == NULL) {
                             res.next_stmt = stmt;
                         }
+                        AST_GC_POP_ENV();
                         AST_GC_POP();
                         return res;
                     }
@@ -3309,6 +3467,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     if (res.is_continuing) continue;
                 }
             }
+            AST_GC_POP_ENV();
             AST_GC_POP();
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
@@ -3490,9 +3649,11 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             ExecResult try_result = interpret(stmt->as.try_stmt.try_block, env);
             
             if (try_result.is_throwing) {
+                AST_GC_PUSH(try_result.exception_value);
                 for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
                     CatchClause* catch_clause = stmt->as.try_stmt.catches[i];
                     Env* catch_env = env_create(env);
+                    AST_GC_PUSH_ENV(catch_env);
                     Token var = catch_clause->exception_var;
                     
                     Value exc_msg;
@@ -3507,16 +3668,21 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     env_define_const(catch_env, var.start, var.length, exc_msg);
                     
                     ExecResult catch_result = interpret(catch_clause->body, catch_env);
+                    AST_GC_POP_ENV();
                     if (!catch_result.is_throwing) {
                         try_result = catch_result;
                         break;
                     }
                     try_result = catch_result;
                 }
+                AST_GC_POP();
             }
             
             if (stmt->as.try_stmt.finally_block != NULL) {
+                AST_GC_PUSH(try_result.value);
+                AST_GC_PUSH(try_result.exception_value);
                 ExecResult finally_result = interpret(stmt->as.try_stmt.finally_block, env);
+                AST_GC_POP_N(2);
                 // Finally control flow overrides try/catch (matches Python/Java semantics)
                 if (finally_result.is_throwing) return finally_result;
                 if (finally_result.is_returning) return finally_result;
@@ -3619,26 +3785,32 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             ExecResult val_res = eval_expr(stmt->as.match_stmt.value, env);
             if (val_res.is_throwing) return val_res;
             Value match_val = val_res.value;
+            AST_GC_PUSH(match_val);
 
             // Try each case clause
             for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
                 CaseClause* clause = stmt->as.match_stmt.cases[i];
                 ExecResult pat_res = eval_expr(clause->pattern, env);
-                if (pat_res.is_throwing) return pat_res;
+                if (pat_res.is_throwing) { AST_GC_POP(); return pat_res; }
                 if (values_equal(match_val, pat_res.value)) {
                     // Check guard if present
                     if (clause->guard) {
                         ExecResult guard_res = eval_expr(clause->guard, env);
-                        if (guard_res.is_throwing) return guard_res;
+                        if (guard_res.is_throwing) { AST_GC_POP(); return guard_res; }
                         if (!is_truthy(guard_res.value)) continue;
                     }
-                    return interpret(clause->body, env);
+                    ExecResult res = interpret(clause->body, env);
+                    AST_GC_POP();
+                    return res;
                 }
             }
             // No case matched — run default if present
             if (stmt->as.match_stmt.default_case != NULL) {
-                return interpret(stmt->as.match_stmt.default_case, env);
+                ExecResult res = interpret(stmt->as.match_stmt.default_case, env);
+                AST_GC_POP();
+                return res;
             }
+            AST_GC_POP();
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
         }
 

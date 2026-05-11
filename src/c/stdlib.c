@@ -1109,6 +1109,12 @@ static void* sage_thread_entry(void* data) {
     SageThreadData* td = (SageThreadData*)data;
     ProcStmt* proc = (ProcStmt*)td->func->proc;
 
+    // Register this thread for GC
+    ThreadState ts;
+    memset(&ts, 0, sizeof(ThreadState));
+    ts.thread_id = sage_thread_id();
+    gc_register_thread(&ts);
+
     // Create execution scope from function closure
     gc_lock();
     Env* scope = env_create(td->func->closure);
@@ -1121,6 +1127,8 @@ static void* sage_thread_entry(void* data) {
     // Execute the function body
     ExecResult res = interpret(proc->body, scope);
     td->result = res.value;
+
+    gc_unregister_thread(&ts);
 
     return NULL;
 }

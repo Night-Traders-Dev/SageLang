@@ -1549,6 +1549,12 @@ int main(int argc, const char* argv[]) {
     // Initialize garbage collector
     gc_init();
 
+    // Register main thread for GC
+    ThreadState main_thread_state;
+    memset(&main_thread_state, 0, sizeof(ThreadState));
+    main_thread_state.thread_id = sage_thread_id();
+    gc_register_thread(&main_thread_state);
+
     // PHASE 8: Initialize module system
     sage_set_args(argc, argv);
     init_module_system();

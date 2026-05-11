@@ -10,7 +10,7 @@
 #include "gc.h"
 #include "gpu_api.h"
 
-extern EnvRootNode* g_gc_root_stack;
+extern __thread EnvRootNode* g_gc_root_stack;
 
 #define VM_STACK_MAX 1024
 
@@ -22,9 +22,10 @@ typedef struct ActiveVm {
     struct ActiveVm* parent;
 } ActiveVm;
 
-static ActiveVm* g_active_vm = NULL;
+static __thread ActiveVm* g_active_vm = NULL;
 
 static ExecResult vm_normal(Value value) {
+// ... (omitting intermediate code for brevity in replace tool, but will provide full context in actual call)
     ExecResult result = {0};
     result.value = value;
     return result;
@@ -56,8 +57,8 @@ static void vm_mark_program_constants(BytecodeProgram* program) {
     }
 }
 
-void vm_mark_roots(void) {
-    for (ActiveVm* active = g_active_vm; active != NULL; active = active->parent) {
+void vm_mark_roots(void* active_vm_head) {
+    for (ActiveVm* active = (ActiveVm*)active_vm_head; active != NULL; active = active->parent) {
         vm_mark_chunk_constants(active->chunk);
         vm_mark_program_constants(active->chunk != NULL ? active->chunk->program : NULL);
         gc_mark_env(active->current_env);
@@ -306,15 +307,26 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     int ip = 0;
     EnvRootNode root_node;
     root_node.env = env;
-    root_node.next = g_gc_root_stack;
-    g_gc_root_stack = &root_node;
-    ActiveVm* previous_vm = g_active_vm;
-    g_active_vm = &vm;
+    
+    ThreadState* ts = gc_get_thread_state();
+    if (ts) {
+        root_node.next = ts->gc_root_stack;
+        ts->gc_root_stack = &root_node;
+    } else {
+        // Fallback for unregistered threads (less safe)
+        root_node.next = g_gc_root_stack;
+        g_gc_root_stack = &root_node;
+    }
 
+    ActiveVm* previous_vm = g_active_vm;
+    
     memset(&vm, 0, sizeof(vm));
     vm.chunk = chunk;
     vm.current_env = env;
     vm.parent = previous_vm;
+
+    g_active_vm = &vm;
+    if (ts) ts->active_vm = g_active_vm;
 
     while (ip < chunk->code_count) {
         BytecodeOp op = (BytecodeOp)chunk->code[ip++];
@@ -1142,7 +1154,12 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 
 done:
     g_active_vm = previous_vm;
-    g_gc_root_stack = root_node.next;
+    if (ts) {
+        ts->active_vm = g_active_vm;
+        ts->gc_root_stack = root_node.next;
+    } else {
+        g_gc_root_stack = root_node.next;
+    }
     return result;
 }
 

@@ -7,6 +7,6 @@
 
 ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env);
 ExecResult vm_execute_program(BytecodeProgram* program, Env* env);
-void vm_mark_roots(void);
+void vm_mark_roots(void* active_vm_head);
 
 #endif
