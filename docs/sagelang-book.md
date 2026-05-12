@@ -1231,6 +1231,94 @@ example()
 
 \newpage
 
+# Advanced Examples
+
+## High-Level: Web Server Mock
+
+This example demonstrates using dicts, classes, and strings to simulate a small
+web routing system:
+
+```python
+class Router:
+    proc init(self):
+        self.routes = {}
+    end
+
+    proc add_route(self, path, handler):
+        self.routes[path] = handler
+    end
+
+    proc handle(self, request):
+        let path = request["path"]
+        if dict_has(self.routes, path):
+            let handler = self.routes[path]
+            return handler(request)
+        else:
+            return {"status": 404, "body": "Not Found"}
+        end
+    end
+end
+
+let app = Router()
+
+app.add_route("/", proc(req):
+    return {"status": 200, "body": "Welcome home!"}
+end)
+
+app.add_route("/api/hello", proc(req):
+    let name = dict_has(req, "name") ? req["name"] : "Guest"
+    return {"status": 200, "body": "Hello, " + name}
+end)
+
+let response = app.handle({"path": "/api/hello", "name": "Sage"})
+print response["body"] # Hello, Sage
+```
+
+## Low-Level: Custom Binary Packet
+
+Demonstrates `bytes`, manual memory layout, and hashing:
+
+```python
+import crypto.hash as hash
+
+proc create_packet(payload_str):
+    let payload = hash.string_to_bytes(payload_str)
+    let size = len(payload)
+    
+    # Packet: [Header: 4][Size: 4][Payload: N][Checksum: 4]
+    let buf = bytes(4 + 4 + size + 4)
+    
+    # Header "SAGE"
+    buf[0] = 83; buf[1] = 65; buf[2] = 71; buf[3] = 69
+    
+    # Size (little-endian)
+    buf[4] = size & 255
+    buf[5] = (size >> 8) & 255
+    buf[6] = (size >> 16) & 255
+    buf[7] = (size >> 24) & 255
+    
+    # Payload
+    for i in range(size):
+        buf[8 + i] = payload[i]
+    end
+    
+    # Simple XOR checksum
+    var cs = 0
+    for i in range(8 + size):
+        cs = cs ^ buf[i]
+    end
+    buf[8 + size] = cs
+    
+    return buf
+end
+
+let p = create_packet("Hello")
+print "Packet size: " + str(len(p))
+print "Header char: " + chr(p[0]) # S
+```
+
+\newpage
+
 # Module System
 
 ## Importing Modules
@@ -3024,6 +3112,48 @@ import metal.gpio
 gpio.gpio_init(0x40000000, 32)  # Init 32 pins at MMIO base
 gpio.pin_mode(25, gpio.PIN_OUTPUT)  # LED pin
 gpio.led_blink(25, 5, 250)         # Blink 5 times, 250ms interval
+```
+
+## Bare-Metal Kernel Example
+
+Combining the Metal library into a minimal "Hello World" kernel with keyboard input:
+
+```python
+import metal.core as core
+import metal.serial as serial
+import metal.irq as irq
+import metal.timer as timer
+
+proc kernel_main():
+    # 1. Initialize hardware
+    serial.uart_init(serial.COM1, 115200)
+    timer.pit_init(100) # 100Hz
+    irq.pic_remap(32, 40)
+    
+    serial.uart_puts(serial.COM1, "SageMetal Kernel v1.0 Booting...\n")
+    
+    # 2. Setup keyboard interrupt (vector 33 for IRQ 1)
+    irq.register_handler(33, proc(vector):
+        let scancode = core.inb(0x60)
+        serial.uart_puts(serial.COM1, "Key pressed: " + str(scancode) + "\n")
+        irq.pic_eoi(1)
+    )
+    irq.pic_unmask(1) # Keyboard
+    
+    # 3. Main Loop
+    serial.uart_puts(serial.COM1, "Kernel ready. Type something...\n")
+    core.sti() # Enable interrupts
+    
+    var last_print = 0
+    while true:
+        let now = timer.ticks()
+        if now - last_print > 500: # Every 5 seconds at 100Hz
+            serial.uart_puts(serial.COM1, "[Heartbeat] Uptime: " + str(now/100) + "s\n")
+            last_print = now
+        end
+        core.hlt() # Wait for next interrupt
+    end
+end
 ```
 
 \newpage

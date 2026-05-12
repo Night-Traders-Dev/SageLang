@@ -92,6 +92,11 @@ def collect_results() -> list[tuple[str, float, str]]:
     if ok:
         results.append(("Kotlin Transpile", t, "#7C3AED"))
 
+    # Self-Hosted Sage
+    t, _, ok = run_timed([str(SAGE), str(REPO_ROOT / "src" / "sage" / "sage.sage"), str(BENCH)])
+    if ok:
+        results.append(("Self-Hosted Sage", t, "#EC4899"))
+
     # Cleanup
     import shutil
     shutil.rmtree(tmp, ignore_errors=True)
@@ -163,7 +168,7 @@ def render_chart(results: list[tuple[str, float, str]]) -> None:
         '<rect width="100%" height="100%" fill="#0B1118"/>',
         f'<rect x="12" y="12" width="1576" height="{height - 24}" rx="18" fill="#0F1722" stroke="#1F2937"/>',
         '<text x="44" y="62" fill="#F8FAFC" font-size="34" font-family="Segoe UI, Arial, sans-serif" font-weight="700">SageLang Backend Performance Comparison</text>',
-        '<text x="44" y="95" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">benchmarks/backend_compare.sage — 8 workloads (fib, loops, arrays, strings, dicts, primes, nested, LCG)</text>',
+        '<text x="44" y="95" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">benchmarks/backend_compare.sage — 12 workloads (all types: num, str, bool, nil, arr, dict, tup, bytes, asm)</text>',
     ])
 
     max_bar_ratio = 0.80

@@ -21,8 +21,8 @@ proc fib(n):
         return n
     return fib(n - 1) + fib(n - 2)
 
-let fib_result = fib(28)
-print("fib(28) = " + str(fib_result))
+let fib_result = fib(25)
+print("fib(25) = " + str(fib_result))
 
 ## --- 2. Loop sum ---
 let total = 0
@@ -35,7 +35,7 @@ print("sum(0..99999) = " + str(total))
 ## --- 3. Array operations ---
 let arr = []
 i = 0
-while i < 50000:
+while i < 10000:
     push(arr, i)
     i = i + 1
 let arr_sum = 0
@@ -43,7 +43,7 @@ i = 0
 while i < len(arr):
     arr_sum = arr_sum + arr[i]
     i = i + 1
-print("array_sum(50000) = " + str(arr_sum))
+print("array_sum(10000) = " + str(arr_sum))
 
 ## --- 4. String concatenation ---
 let s = ""
@@ -92,19 +92,19 @@ proc sieve(limit):
         si = si + 1
     return count
 
-let primes = sieve(100000)
-print("primes(100000) = " + str(primes))
+let primes_count = sieve(20000)
+print("primes(20000) = " + str(primes_count))
 
 ## --- 7. Nested loops ---
 let nested_sum = 0
 i = 0
-while i < 500:
+while i < 200:
     let j = 0
-    while j < 500:
+    while j < 200:
         nested_sum = nested_sum + 1
         j = j + 1
     i = i + 1
-print("nested(500x500) = " + str(nested_sum))
+print("nested(200x200) = " + str(nested_sum))
 
 ## --- 8. LCG hash (integer arithmetic hot path) ---
 let lcg = 12345
@@ -113,3 +113,62 @@ while i < 100000:
     lcg = (lcg * 1103515245 + 12345) % 2147483647
     i = i + 1
 print("lcg(100000) = " + str(lcg))
+
+## --- 9. Tuple operations ---
+let tuple_sum = 0
+i = 0
+while i < 100000:
+    let t = (i, i + 1, i + 2)
+    tuple_sum = tuple_sum + t[0] + t[1] + t[2]
+    i = i + 1
+print("tuple_sum(100000) = " + str(tuple_sum))
+
+## --- 10. Boolean and Nil logic ---
+let bool_count = 0
+i = 0
+while i < 100000:
+    let b = (i % 2 == 0)
+    let n = nil
+    if b or n != nil:
+        bool_count = bool_count + 1
+    end
+    i = i + 1
+print("bool_count(100000) = " + str(bool_count))
+
+## --- 11. Bytes operations ---
+let b_buf = bytes(10000)
+i = 0
+while i < 10000:
+    b_buf[i] = i % 256
+    i = i + 1
+var b_sum = 0
+i = 0
+while i < 10000:
+    b_sum = b_sum + b_buf[i]
+    i = i + 1
+print("bytes_sum(10000) = " + str(b_sum))
+
+## --- 12. Inline Assembly (if supported) ---
+let asm_val = 0
+if asm_arch() != "unknown" and asm_arch() != "jvm":
+    # Simple increment in x86/ARM/RISC-V
+    let code = ""
+    let arch = asm_arch()
+    if arch == "x86_64":
+        code = "mov %rdi, %rax; add $1, %rax; ret"
+    elif arch == "aarch64":
+        code = "add x0, x0, #1; ret"
+    elif arch == "rv64":
+        code = "addi a0, a0, 1; ret"
+    end
+    
+    if code != "":
+        i = 0
+        while i < 1000:
+            # Note: asm_exec overhead is high, we just want to prove it works
+            # but let's do fewer iterations to not dwarf the whole bench
+            asm_val = asm_exec(code, "int", i)
+            i = i + 1
+    end
+end
+print("asm_val(1000) = " + str(asm_val))
