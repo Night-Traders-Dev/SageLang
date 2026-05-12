@@ -21,6 +21,43 @@ import os.fat
 
 The module binds as `fat` (the last component of the dotted path), so all calls use `fat.*`.
 
+## Directory Traversal (`os.fat_dir`)
+
+The `fat_dir` module provides high-level directory and file operations.
+
+```sage
+import os.fat
+import os.fat_dir
+
+let disk = io.readfile("disk.img")
+let info = fat.parse_boot_sector(disk)
+
+# List root directory
+let entries = fat_dir.list_root(disk, info)
+for entry in entries:
+    print entry["name"] + (entry["is_dir"] ? "/" : "")
+
+# Find and read a file by path
+let content = fat_dir.read_file_by_path(disk, info, "/SYSTEM/BOOT.CFG")
+
+# List a specific directory
+let sub_entries = fat_dir.list_dir_by_path(disk, info, "/HOME/USER")
+```
+
+### Directory Entry Structure
+
+Each entry in a directory listing is a dictionary:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `name` | string | Filename (lowercase 8.3) |
+| `is_dir` | bool | True if it's a directory |
+| `is_file` | bool | True if it's a regular file |
+| `size` | int | File size in bytes |
+| `cluster` | int | Starting cluster index |
+| `year/month/day` | int | Creation date |
+| `hour/minute/second`| int | Creation time |
+
 ## API
 
 ### `fat.parse_boot_sector(bytes_array)`
@@ -86,10 +123,8 @@ if info["valid"]:
     print fat.cluster_to_lba(info, 2)
 ```
 
-## Current Limitations
+## Future Work
 
-- No directory tree parsing yet.
-- No FAT chain walking API yet.
-- No read/write file abstraction yet.
-
-Those are planned follow-up steps on top of this boot-sector and layout foundation.
+- Write support (currently read-only).
+- Long File Name (LFN) support.
+- File deletion and allocation.

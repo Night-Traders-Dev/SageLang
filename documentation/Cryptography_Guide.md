@@ -43,6 +43,9 @@ print len(digest)  # 20
 print len(hex)     # 40
 ```
 
+> [!WARNING]
+> `sha1`, `sha1_hex`, and `crc32_hex` are currently stubs and do not return valid cryptographic digests.
+
 ### CRC-32
 
 ```sage
@@ -55,6 +58,7 @@ let hex = hash.crc32_hex("hello")           # hex string (8 chars)
 ```sage
 let bytes = hash.string_to_bytes("hello")   # [72, 101, 108, 108, 111]
 let hex = hash.to_hex([255, 0, 171])        # "ff00ab"
+let b = hash.hex_byte(255)                  # "ff"
 ```
 
 ---
@@ -150,6 +154,13 @@ let ciphertext = cipher.rc4("my-secret-key", [1, 2, 3, 4, 5, 6, 7, 8])
 
 # RC4 decrypt (same operation)
 let plaintext = cipher.rc4("my-secret-key", ciphertext)
+
+# Incremental generation
+let state = cipher.rc4_init("secret-key")
+let byte = cipher.rc4_next(state)
+
+# Utility
+let res = cipher.xor_blocks([1, 2], [10, 20]) # [11, 22]
 ```
 
 ### PKCS#7 Padding

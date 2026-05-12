@@ -42,9 +42,16 @@ let dt = datetime.create(2024, 3, 15, 10, 30, 0)
 print datetime.to_iso(dt)          # 2024-03-15T10:30:00
 print datetime.weekday_name(dt)    # Friday
 
+# Arithmetic
 let tomorrow = datetime.add_days(dt, 1)
-let parsed = datetime.parse_iso("2024-12-25T00:00:00")
-print datetime.diff_days(parsed, dt)
+let next_hour = datetime.add_hours(dt, 1)
+let later = datetime.add_seconds(dt, 30)
+
+# Comparison
+let t2 = datetime.parse_iso("2024-12-25T00:00:00")
+print datetime.before(dt, t2)      # true
+print datetime.after(t2, dt)       # true
+print datetime.diff_days(t2, dt)
 
 print datetime.is_leap_year(2024)  # true
 ```
@@ -119,7 +126,14 @@ print fmt.to_hex(255, 4)            # 0x00ff
 print fmt.to_bin(42, 8)             # 0b00101010
 print fmt.format_int(1000000)        # 1,000,000
 print fmt.format_float(3.14159, 2)   # 3.14
-print fmt.format_pct(0.425, 1)       # 42.5%
+
+# Padding
+print fmt.pad_left("42", 5, "0")    # 00042
+print fmt.pad_right("42", 5, " ")   # "42   "
+
+# Collection helpers
+print fmt.join([1, 2, 3], ", ")     # 1, 2, 3
+
 print fmt.format_bytes(1572864)      # 1.5 MB
 print fmt.format_duration(0.003)     # 3.0ms
 
@@ -144,7 +158,10 @@ print unicode.to_title("hello world")    # Hello World
 print unicode.trim("  hello  ")          # hello
 print unicode.center("hi", 10, "-")      # ----hi----
 print unicode.reverse("hello")           # olleh
+
+# Predicates
 print unicode.starts_with("hello", "he") # true
+print unicode.ends_with("hello", "lo")   # true
 print unicode.is_alpha("A")             # true
 print unicode.is_digit("5")             # true
 
@@ -266,6 +283,55 @@ let results = threadpool.parallel_map(pool, square, [1, 2, 3, 4])
 
 ---
 
+## Read-Write Locks (`std.rwlock`)
+
+```sage
+import std.rwlock
+
+let lock = rwlock.create()
+
+# Read access (concurrent)
+rwlock.read_lock(lock)
+# ... read ...
+rwlock.read_unlock(lock)
+
+# Write access (exclusive)
+rwlock.write_lock(lock)
+# ... write ...
+rwlock.write_unlock(lock)
+
+# Scoped helpers
+let val = rwlock.with_read(lock, proc(): return data["x"] end)
+rwlock.with_write(lock, proc(): data["x"] = 100 end)
+```
+
+---
+
+## Condition Variables & Sync (`std.condvar`)
+
+```sage
+import std.condvar
+
+let cv = condvar.create()
+
+# Wait/Notify pattern
+condvar.wait(cv)
+condvar.notify(cv)
+
+# Barrier (sync N threads)
+let b = condvar.create_barrier(4)
+if condvar.barrier_wait(b):
+    print "All threads reached barrier"
+
+# Semaphore
+let sem = condvar.create_semaphore(2)
+condvar.acquire(sem)
+# ... use resource ...
+condvar.release(sem)
+```
+
+---
+
 ## Atomic Operations (`std.atomic`)
 
 ```sage
@@ -277,6 +343,31 @@ atomic.add(counter, 10)
 print atomic.load(counter)          # 11
 print atomic.cas(counter, 11, 20)   # true (swapped)
 print atomic.load(counter)          # 20
+```
+
+---
+
+## Signal & Event Bus (`std.signal`)
+
+```sage
+import std.signal
+
+let bus = signal.create_bus()
+
+# Listen for an event
+proc on_msg(data):
+    print "Received: " + data
+
+signal.on(bus, "message", on_msg)
+
+# Emit event
+signal.emit(bus, "message", "Hello World")
+
+# One-time listener
+signal.once(bus, "shutdown", proc(data): print "Shutting down" end)
+
+# Deferred cleanup (atexit)
+signal.atexit(proc(): print "Final cleanup" end)
 ```
 
 ---
@@ -316,6 +407,81 @@ print result["ops_per_second"]
 
 ---
 
+## Debugging Utilities (`std.debug`)
+
+```sage
+import std.debug
+
+# Inspect values
+print debug.inspect([1, 2, 3])   # <array> [3 elements]
+debug.dump("myvar", 42)          # [DEBUG] myvar = <number> 42
+
+# Assertions
+debug.assert_msg(x > 0, "x must be positive")
+
+# Watch variables
+let w = debug.create_watcher()
+debug.watch(w, "counter", 1)
+debug.watch(w, "counter", 2)     # Prints "[WATCH] counter changed: 1 -> 2"
+
+# Profiling
+debug.time_it("computation", proc():
+    # ... slow work ...
+end)
+
+# Memory snapshots
+let snap = debug.memory_snapshot()
+# ... do work ...
+let diff = debug.memory_diff(snap, debug.memory_snapshot())
+print diff["bytes"]  # bytes allocated since snap
+```
+
+---
+
+## Documentation Generator (`std.docgen`)
+
+```sage
+import std.docgen
+
+let source = "# A simple function\nproc hello(): print \"hi\" end"
+let entries = docgen.extract_docs(source)
+
+print entries[0]["name"]       # hello
+print entries[0]["doc"]        # ["A simple function"]
+
+# Generate Markdown
+let md = docgen.to_markdown(entries, "MyModule")
+print md
+```
+
+---
+
+## Process & Environment (`std.process`)
+
+```sage
+import std.process
+
+print process.platform()           # e.g., "linux"
+print process.args()               # CLI arguments
+
+# Environment variables
+let path = process.get_env("PATH")
+let home = process.get_env_or("HOME", "/root")
+
+# Path utilities
+let full = process.join_path(["usr", "local", "bin"])
+print process.basename("/usr/bin/sage")    # sage
+print process.dirname("/usr/bin/sage")     # /usr/bin
+print process.extension("script.sage")     # sage
+
+# Timers
+let start = process.timer_start()
+# ... do work ...
+print process.timer_elapsed_ms(start)
+```
+
+---
+
 ## Build Configuration (`std.build`)
 
 ```sage
@@ -330,6 +496,51 @@ print build.to_string(proj)
 let v = build.parse_version("1.5.3")
 let next = build.bump_minor(v)
 print next["string"]  # 1.6.0
+```
+
+---
+
+## Package Management (`std.package`)
+
+```sage
+import std.package
+
+# Parse a sage.toml file
+let manifest = package.read_manifest("sage.toml")
+if manifest != nil:
+    print manifest["package.name"]
+    print manifest["package.version"]
+
+# Create a new manifest
+let content = package.init_manifest("myapp", "1.0.0", "My awesome app")
+# io.writefile("sage.toml", content)
+```
+
+---
+
+## Native Interop (`std.interop`)
+
+```sage
+import std.interop
+
+# Load a shared library
+let lib = interop.load_library(interop.lib_path("m"))
+
+# Bind a function
+let sqrt_bind = interop.bind(lib, "sqrt", "double", ["double"])
+
+# Call it
+let res = interop.call(sqrt_bind, [144.0])
+print res  # 12.0
+
+# Struct definition
+let Point = interop.define_struct("Point", [["x", "int"], ["y", "int"]])
+let p_ptr = mem_alloc(interop.struct_size(Point))
+# ... work with raw memory ...
+
+# Constants
+print interop.SIZEOF_INT      # 4
+print interop.TYPE_DOUBLE     # double
 ```
 
 ---
@@ -360,4 +571,5 @@ print next["string"]  # 1.6.0
 | `profiler` | `import std.profiler` | `create`, `begin`, `end_section`, `profile`, `report`, `hotspots`, `bench` |
 | `docgen` | `import std.docgen` | `extract_docs`, `to_markdown`, `split_lines` |
 | `build` | `import std.build` | `create_project`, `add_dep`, `add_target`, `parse_version`, `bump_major`, `to_string` |
+| `package` | `import std.package` | `read_manifest`, `init_manifest`, `parse_toml_line` |
 | `interop` | `import std.interop` | `load_library`, `bind`, `call`, `pack_i32`, `unpack_i32`, `lib_path`, `define_struct` |

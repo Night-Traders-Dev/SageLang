@@ -137,6 +137,8 @@ a variable whose value changes over time.
 | Array   | `[1, 2, 3]`     | Ordered, mutable collection |
 | Dict    | `{"a": 1}`      | Key-value mapping        |
 | Tuple   | `(1, "x")`      | Immutable ordered pair   |
+| Bytes   | `bytes(10)`     | Binary-safe byte buffer  |
+| VM Program | (result of asm) | Compiled bytecode        |
 
 Sage numbers are IEEE 754 double-precision floating point. Integer values are
 exact up to 2^53. Hex literals (`0xFF`) and octal literals (`0o755`) are
@@ -1279,38 +1281,6 @@ print mylib.add(2, 3)      # 5
 
 ## Standard Library Modules
 
-# Discord Bot Library
-
-SageLang now includes a library for building Discord bots, designed to mirror the familiarity of Python's `discord` and `discord.ext` libraries.
-
-## Getting Started
-
-To create a Discord bot, import the `discord` module:
-
-```sage
-import discord.client
-
-proc on_ready(data):
-    print("Bot is ready!")
-
-let bot = discord.client.Client("YOUR_TOKEN", 32767)
-bot.on("READY", on_ready)
-bot.run()
-```
-
-## REST API Support
-
-The library includes an HTTP client for interacting with Discord's REST API. You can send messages directly:
-
-```sage
-bot.send_message(CHANNEL_ID, "Hello, world!")
-```
-
-## Features
-
-- Gateway API support for event handling.
-- REST API support for sending messages.
-- Easy-to-use event system.
 The following native modules are built into the interpreter:
 
 | Module   | Description                              |
@@ -3114,7 +3084,46 @@ print coin.get_balance(wallet.get_address())
 
 For advanced use cases, including P2P networking and validator configuration, refer to the examples in `examples/blockchain_*.sage`.
 
-# Part VIII: Appendices
+\newpage
+
+# Part VIII: Discord Bot Library
+
+SageLang now includes a library for building Discord bots, designed to mirror the familiarity of Python's `discord` and `discord.ext` libraries.
+
+## Getting Started
+
+To create a Discord bot, import the `discord.client` module:
+
+```sage
+import discord.client
+
+proc on_ready(data):
+    print("Bot is ready!")
+end
+
+# Intent 32767 = all intents
+let bot = discord.client.Client("YOUR_TOKEN", 32767)
+bot.on("READY", on_ready)
+bot.run()
+```
+
+## REST API Support
+
+The library includes an HTTP client for interacting with Discord's REST API. You can send messages directly:
+
+```sage
+bot.send_message(CHANNEL_ID, "Hello, world!")
+```
+
+## Features
+
+- **Gateway API**: Full support for real-time event handling via WebSockets.
+- **REST API**: Wrapper for sending messages, managing channels, and more.
+- **Event System**: Easy-to-use `on()` listener pattern.
+
+\newpage
+
+# Part IX: Appendices
 
 \newpage
 
@@ -3206,6 +3215,21 @@ The following functions are available globally without any imports.
 | `path_is_dir(path)`      | Check if path is a directory          |
 | `path_is_file(path)`     | Check if path is a regular file       |
 
+## VM & Gas Functions
+
+| Function                 | Description                           |
+|--------------------------|---------------------------------------|
+| `vm_gas_limit_set(n)`    | Set maximum gas for VM execution      |
+| `vm_gas_used_get()`      | Get amount of gas consumed            |
+| `vm_gas_limit_get()`     | Get current gas limit                 |
+
+## UI & Graphics Primitives
+
+| Function                 | Description                           |
+|--------------------------|---------------------------------------|
+| `build_quad_verts(arr)`  | Batch generate vertices for quads     |
+| `build_line_quads(arr, t, ...)` | Convert lines to thick quads   |
+
 ## Bytes Functions
 
 | Function                    | Description                        |
@@ -3258,6 +3282,27 @@ The following functions are available globally without any imports.
 | `asm_exec(code)`      | Execute inline assembly                  |
 | `asm_compile(code)`   | Compile assembly to machine code         |
 | `asm_arch()`          | Get current architecture string          |
+
+## System & SMP Functions
+
+| Function                 | Description                           |
+|--------------------------|---------------------------------------|
+| `cpu_count()`            | Number of logical CPU cores           |
+| `cpu_physical_cores()`   | Number of physical CPU cores          |
+| `cpu_has_hyperthreading()` | True if hyperthreading is enabled    |
+| `thread_set_affinity(m)` | Pin current thread to core mask       |
+| `thread_get_core()`      | Get ID of currently executing core    |
+
+## Atomic Operations
+
+| Function                 | Description                           |
+|--------------------------|---------------------------------------|
+| `atomic_new(val)`        | Create new atomic variable            |
+| `atomic_load(atom)`      | Thread-safe load                      |
+| `atomic_store(atom, v)`  | Thread-safe store                     |
+| `atomic_add(atom, v)`    | Atomic fetch-and-add                  |
+| `atomic_cas(a, e, d)`    | Atomic compare-and-swap               |
+| `atomic_exchange(a, v)`  | Atomic exchange                       |
 
 \newpage
 

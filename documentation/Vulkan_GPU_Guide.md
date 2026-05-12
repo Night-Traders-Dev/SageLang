@@ -230,7 +230,11 @@ let mem = gpu.MEMORY_HOST_VISIBLE | gpu.MEMORY_HOST_COHERENT
 gpu.FORMAT_RGBA8        # 8-bit RGBA
 gpu.FORMAT_RGBA16F      # 16-bit float RGBA (HDR)
 gpu.FORMAT_RGBA32F      # 32-bit float RGBA
+gpu.FORMAT_R32F         # 32-bit float Red
+gpu.FORMAT_RG32F        # 32-bit float RG
+gpu.FORMAT_R8           # 8-bit Red
 gpu.FORMAT_DEPTH32F     # 32-bit float depth
+gpu.FORMAT_DEPTH24_S8   # 24-bit depth, 8-bit stencil
 gpu.FORMAT_SWAPCHAIN    # Auto-resolves to actual swapchain format
 
 # Shader stages
@@ -272,12 +276,20 @@ Key constants: `KEY_W`, `KEY_A`, `KEY_S`, `KEY_D`, `KEY_Q`, `KEY_E`, `KEY_R`, `K
 
 ```sage
 gpu.mouse_pos()                     # Returns {x, y} in pixels
+gpu.mouse_delta()                   # Returns {dx, dy} since last frame
 gpu.mouse_button(gpu.MOUSE_LEFT)    # Button held?
+gpu.mouse_just_pressed(gpu.MOUSE_RIGHT) # First frame?
 gpu.scroll_delta()                   # Returns {x, y}, consumed on read
 gpu.set_cursor_mode(gpu.CURSOR_DISABLED)  # Capture mouse for FPS camera
 ```
 
-Cursor modes: `CURSOR_NORMAL` (0), `CURSOR_HIDDEN` (1), `CURSOR_DISABLED` (2, captured for FPS look).
+### Text Input
+
+```sage
+if gpu.text_input_available():
+    let cp = gpu.text_input_read()  # Returns Unicode codepoint
+    print "Typed: " + chr(cp)
+```
 
 ### Time
 
@@ -529,6 +541,47 @@ gpu.end_commands(cmd)
 gpu.cmd_draw_indirect(cmd, indirect_buffer, offset, draw_count, stride)
 gpu.cmd_draw_indexed_indirect(cmd, indirect_buffer, offset, draw_count, stride)
 gpu.cmd_dispatch_indirect(cmd, indirect_buffer, offset)
+```
+
+### Secondary Command Buffers
+
+For complex scenes, recording can be parallelized using secondary command buffers:
+
+```sage
+let pool = gpu.create_command_pool()
+let cmd_primary = gpu.create_command_buffer(pool)
+let cmd_sec = gpu.create_secondary_command_buffer(pool)
+
+# Record secondary
+gpu.begin_secondary(cmd_sec, render_pass, framebuffer, 0)
+gpu.cmd_bind_graphics_pipeline(cmd_sec, pipeline)
+gpu.cmd_draw(cmd_sec, 3, 1, 0, 0)
+gpu.end_commands(cmd_sec)
+
+# Execute from primary
+gpu.begin_commands(cmd_primary)
+gpu.cmd_begin_render_pass(cmd_primary, render_pass, framebuffer, [[0,0,0,1]])
+gpu.cmd_execute_commands(cmd_primary, [cmd_sec])
+gpu.cmd_end_render_pass(cmd_primary)
+gpu.end_commands(cmd_primary)
+```
+
+### Font Rendering
+
+The native module provides hardware-accelerated text rendering:
+
+```sage
+let font = gpu.load_font("fonts/Roboto.ttf", 32)
+let atlas = gpu.font_atlas(font)  # Image handle containing glyphs
+
+# Measure text
+let dims = gpu.font_measure(font, "Hello World", 1.0)
+print "Width: " + str(dims["width"])
+
+# Generate vertex data for a string
+# out_verts is a float array [x,y,u,v, x,y,u,v, ...]
+let out_verts = []
+let count = gpu.font_text_verts(font, "Hello World", 0.0, 0.0, 1.0, out_verts, 1024)
 ```
 
 ---
@@ -1014,6 +1067,54 @@ let shot = gpu.screenshot()   # {width, height, pixels}
 
 ---
 
+## Spatial & Optimization Utilities
+
+### Octree Culling (`graphics.octree`)
+
+The octree provides efficient spatial partitioning for frustum culling and neighbor queries:
+
+```sage
+import graphics.octree
+
+# Create octree covering 1000 unit cube
+let tree = octree.create_octree(vec3(0,0,0), 500)
+
+# Insert objects
+octree.insert(tree, object_index, position)
+
+# Query objects within radius
+let results = []
+octree.query_radius(tree, center, 100, results)
+```
+
+### Level of Detail (`graphics.lod`)
+
+```sage
+import graphics.lod
+
+# Config: [full, med, low, billboard, point] distances
+let cfg = lod.create_lod_config([50, 200, 1000, 5000, 20000])
+
+let level = lod.compute_lod(cfg, camera_pos, object_pos)
+if level == lod.LOD_FULL:
+    # render high-poly
+```
+
+### Trails & Orbit Prediction (`graphics.trails`)
+
+```sage
+import graphics.trails
+
+# Create trail with 100 points
+let t = trails.create_trail(100, 0.5)
+trails.trail_add_point(t, x, y, z)
+
+# Get vertices for line rendering
+let verts = trails.trail_get_vertices(t)
+```
+
+---
+
 ## Engine Libraries Reference
 
 All graphics library modules live in `lib/graphics/` and are imported with the `graphics.` prefix (e.g., `import graphics.vulkan` binds as `vulkan`).
@@ -1023,6 +1124,9 @@ All graphics library modules live in `lib/graphics/` and are imported with the `
 | `import gpu` (native) | C module | Core Vulkan operations |
 | `import graphics.vulkan` | lib/graphics/vulkan.sage | Builder pattern helpers |
 | `import graphics.math3d` | lib/graphics/math3d.sage | Vectors, matrices, camera, projection |
+| `import graphics.octree` | lib/graphics/octree.sage | Spatial partitioning and culling |
+| `import graphics.lod` | lib/graphics/lod.sage | Level of Detail management |
+| `import graphics.trails` | lib/graphics/trails.sage | Particle trails and orbit lines |
 | `import graphics.mesh` | lib/graphics/mesh.sage | Procedural meshes, OBJ loading, GPU upload |
 | `import graphics.camera` | lib/graphics/camera.sage | Interactive FPS/orbit camera |
 | `import graphics.renderer` | lib/graphics/renderer.sage | High-level frame loop |
@@ -1100,6 +1204,8 @@ Run any demo:
 | `gpu.has_window` | bool | GLFW available? |
 | `gpu.initialize(name, validation?)` | bool | Headless Vulkan init |
 | `gpu.init_windowed(name, w, h, title, validation?)` | bool | Windowed init |
+| `gpu.get_active_backend()` | int | 1=Vulkan, 2=OpenGL |
+| `gpu.last_error()` | string | Last error message |
 | `gpu.shutdown()` | nil | Destroy headless |
 | `gpu.shutdown_windowed()` | nil | Destroy window + Vulkan |
 | `gpu.device_name()` | string | GPU name |
@@ -1162,7 +1268,9 @@ Run any demo:
 | Function | Description |
 |----------|-------------|
 | `gpu.begin_commands(cmd)` | Begin recording |
+| `gpu.begin_secondary(cmd, rp, fb, sub?)` | Begin secondary recording |
 | `gpu.end_commands(cmd)` | End recording |
+| `gpu.cmd_execute_commands(cmd, list)` | Execute secondary cmds |
 | `gpu.cmd_bind_compute_pipeline(cmd, pipe)` | Bind compute |
 | `gpu.cmd_bind_graphics_pipeline(cmd, pipe)` | Bind graphics |
 | `gpu.cmd_bind_descriptor_set(cmd, layout, idx, set)` | Bind descriptors |
@@ -1207,7 +1315,10 @@ Run any demo:
 | `gpu.update_input()` | nil | Update key states |
 | `gpu.mouse_pos()` | dict | {x, y} in pixels |
 | `gpu.mouse_button(btn)` | bool | Button held |
+| `gpu.mouse_delta()` | dict | {dx, dy} since last frame |
 | `gpu.scroll_delta()` | dict | {x, y} consumed |
+| `gpu.text_input_available()` | bool | Character waiting? |
+| `gpu.text_input_read()` | int | Get codepoint |
 | `gpu.set_cursor_mode(mode)` | nil | Cursor capture |
 | `gpu.get_time()` | number | Seconds since init |
 | `gpu.set_title(title)` | nil | Window title |

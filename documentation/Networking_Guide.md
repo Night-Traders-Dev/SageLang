@@ -342,6 +342,7 @@ print ip.is_private("8.8.8.8")        # false
 print ip.is_loopback("127.0.0.1")     # true
 print ip.is_link_local("169.254.1.1") # true
 print ip.is_multicast("224.0.0.1")    # true
+print ip.is_broadcast("255.255.255.255") # true
 print ip.address_class("192.168.1.1") # C
 ```
 
@@ -357,8 +358,61 @@ print ip.prefix_to_mask(16)               # 255.255.0.0
 ```sage
 print ip.LOCALHOST       # 127.0.0.1
 print ip.ANY             # 0.0.0.0
+print ip.BROADCAST       # 255.255.255.255
 print ip.DNS_GOOGLE      # 8.8.8.8
 print ip.DNS_CLOUDFLARE  # 1.1.1.1
+```
+
+---
+
+## WebSockets (`net.websocket`)
+
+The WebSocket module provides frame building and parsing for the RFC 6455 protocol.
+
+```sage
+import net.websocket
+
+# Build a text frame
+let frame = websocket.text_frame("Hello World")
+
+# Parse incoming raw bytes
+let parsed = websocket.parse_frame(raw_data, 0)
+if parsed != nil:
+    print parsed["opcode_name"]
+    print websocket.payload_to_string(parsed["payload"])
+
+# Handshake helpers
+let response = websocket.upgrade_response(client_key)
+```
+
+---
+
+## DNS Utilities (`net.dns`)
+
+```sage
+import net.dns
+
+# Build a query for google.com (A record)
+let query = net.dns.build_query("google.com", net.dns.TYPE_A, 1234)
+
+# Parse response
+let msg = net.dns.parse_message(response_bytes)
+for i in range(len(msg["answers"])):
+    print msg["answers"][i]["address"]
+```
+
+---
+
+## MIME Types (`net.mime`)
+
+```sage
+import net.mime
+
+print mime.lookup("html")             # text/html
+print mime.from_filename("image.png") # image/png
+
+if mime.is_text("application/json"):
+    print "JSON is text-based"
 ```
 
 ---

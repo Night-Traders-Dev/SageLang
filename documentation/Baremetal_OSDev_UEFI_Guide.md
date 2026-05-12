@@ -249,6 +249,43 @@ for i in range(len(uarts)):
         print "UART at " + str(addrs[0]["address"])
 ```
 
+## UEFI Library Reference (`os.uefi`)
+
+The `uefi` module provides parsers for standard EFI data structures and ACPI discovery.
+
+```sage
+import os.uefi
+
+# Memory Map parsing
+let map = uefi.parse_memory_map(raw_bytes, desc_size, count)
+print uefi.total_memory(map)
+print uefi.usable_pages(map)
+
+# Configuration Table discovery
+let tables = uefi.parse_config_tables(raw_bytes, off, count)
+let rsdp_table = uefi.find_config_table(tables, uefi.EFI_ACPI_20_TABLE_GUID)
+
+if rsdp_table != nil:
+    # ACPI RSDP Parser
+    let rsdp = uefi.parse_rsdp(disk_bytes, rsdp_table["address"])
+    print rsdp["oem_id"]
+```
+
+### Memory Type Constants
+
+- `uefi.EFI_CONVENTIONAL` (Usable RAM)
+- `uefi.EFI_LOADER_CODE` / `LOADER_DATA`
+- `uefi.EFI_BOOT_SERVICES_CODE` / `DATA`
+- `uefi.EFI_RUNTIME_SERVICES_CODE` / `DATA`
+- `uefi.EFI_ACPI_RECLAIM`
+
+### Configuration GUIDs
+
+- `uefi.EFI_ACPI_20_TABLE_GUID`
+- `uefi.EFI_ACPI_TABLE_GUID` (ACPI 1.0)
+- `uefi.SMBIOS_TABLE_GUID`
+- `uefi.SMBIOS3_TABLE_GUID`
+
 ## Compiler Flags for Bare-Metal and UEFI Output
 
 Two dedicated compiler commands produce final linked artifacts without requiring external toolchain steps:

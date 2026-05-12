@@ -4,7 +4,7 @@
 
 ![SageLang Logo](assets/SageLang.png)
 
-Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.4.1, Sage transpiles to Kotlin and generates Android APKs from a single `.sage` file, with optional type annotations, structs/enums/traits, pattern matching with guards, and a formal specification.
+Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.4.2, Sage features high-severity security hardening for the AOT compiler and graphics modules, thread-safe memory management, and inline caching optimizations.
 
 ## Codebase Metrics
 
@@ -1181,17 +1181,22 @@ sage/
 │   ├── sage.tmLanguage.json  # TextMate grammar
 │   └── vscode/       # VSCode extension
 ├── lib/              # Standard library modules (Sage)
-│   ├── math.sage     # Math helpers (factorial, gcd, etc.)
-│   ├── arrays.sage   # Array utilities (map, filter, reduce, etc.)
-│   ├── strings.sage  # String utilities
-│   ├── dicts.sage    # Dictionary helpers
-│   ├── iter.sage     # Reusable generators
-│   ├── stats.sage    # Statistics helpers
-│   ├── assert.sage   # Test assertion helpers
-│   ├── utils.sage    # General utilities
+│   ├── std/          # Modern Standard Library (24 modules: regex, datetime, process, etc.)
+│   ├── graphics/     # Professional rendering (PBR, shadows, deferred, glTF)
+│   ├── ml/           # Machine learning (Tensors, NN, Optimizers, NPU)
+│   ├── cuda/         # GPU acceleration (Memory, Streams)
+│   ├── net/          # High-level networking (HTTP, WebSockets, DNS)
+│   ├── crypto/       # Cryptographic suite (SHA, AES, PBKDF2)
+│   ├── os/           # OS development (FAT, UEFI, Linux kernel, SMP)
+│   ├── agent/        # Agentic AI framework (Planner, Critic, ToT)
+│   ├── chat/         # Chatbot framework (Personas, Sessions)
+│   ├── discord/      # Discord bot library (Gateway, REST)
+│   ├── metal/        # Bare-metal / Embedded drivers
+│   ├── android/      # Android application framework
+│   ├── blockchain/   # SageChain L1 implementation
 │   ├── json.sage     # cJSON port (1:1 API, 88 tests)
-│   ├── vulkan.sage   # Ergonomic Vulkan builder API
-│   └── gpu.sage      # High-level GPU compute helpers
+│   ├── perf.sage     # Optimization primitives (Inline caching helpers)
+│   └── math.sage     # Legacy math helpers
 ├── examples/         # Example programs
 │   ├── generators.sage      # Generator demo ✨
 │   ├── exceptions.sage      # Exception handling demo

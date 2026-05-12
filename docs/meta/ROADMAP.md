@@ -1,9 +1,25 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: April 5, 2026
-> **Current Phase**: v3.3.0 — Hybrid JIT+AOT Default Runtime, all 18 phases complete
+> **Last Updated**: May 12, 2026
+> **Current Phase**: v3.4.2 — Sentinel Security & Performance Refinement, all 18 phases complete
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+
+---
+
+## v3.4.2: Sentinel Security & Performance Refinement (May 2026)
+
+### Completed
+
+- **AOT Compiler Security**: Replaced fixed buffers with dynamic allocation in `aot_emit` to prevent buffer overflows; added OOM checks.
+- **Thread-Safe GC**: Moved GC root pointers to thread-local storage (`__thread`); implemented a Thread Registry for safe concurrent root marking.
+- **Interpreter Protection**: Implemented `AST_GC_PUSH/POP` and `AST_GC_PUSH_ENV/POP_ENV` to shield intermediate values and environments from collection.
+- **Bolt Optimizations**: Inline caching for `EXPR_VARIABLE` and `EXPR_SET`, providing ~27% speedup on loop-heavy benchmarks.
+- **Graphics Security**: Secured temporary file generation in the graphics module (CWE-377 fix).
+- **IRQ Management**: Enhanced interrupt handling in `lib/metal/irq.sage` with double-registration guards and depth tracking.
+- **Gas Metering**: Native functions `vm_gas_limit_set`, `vm_gas_used_get`, and `vm_gas_limit_get` for execution resource control.
+- **Discord Bot Library**: Added core support and documentation for the new `discord` library suite.
+- **Stable Bytecode**: Added `VAL_VM_PROGRAM` type for robust bytecode distribution.
 
 ---
 

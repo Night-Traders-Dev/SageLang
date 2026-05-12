@@ -53,6 +53,60 @@ planner.add_step(plan, "Write improved version", "write_file", "", [1])
 planner.execute_plan(plan, my_agent)
 ```
 
+### Grammar-Constrained Decoding (`agent.grammar`)
+
+Enforce strict output formats to prevent malformed tool calls or invalid JSON:
+
+```sage
+import agent.grammar
+
+# Wrap an LLM to only output valid JSON
+let json_llm = grammar.constrained_llm(my_llm, "json", 3)
+
+# Wrap for strict ReAct tool call syntax
+let tool_llm = grammar.constrained_llm(my_llm, "tool_call", 3)
+```
+
+### Program-Aided Reasoning (`agent.sandbox`)
+
+Allow agents to execute Sage code blocks for deterministic calculations:
+
+```sage
+import agent.sandbox
+
+let par = sandbox.create_par_agent("MathAgent", my_llm)
+let result = sandbox.par_query(par, "What is 12345 * 6789?")
+if result["code_executed"]:
+    print "Calculated: " + result["result"]
+```
+
+### Tree of Thoughts (`agent.tot`)
+
+Solve complex problems by searching through reasoning chains with rollbacks:
+
+```sage
+import agent.tot
+
+let solver = tot.create_solver(my_evaluator, 5, 3)
+let path = tot.best_first_search(solver, my_llm, "Initial problem", is_goal)
+print tot.format_path(path)
+```
+
+### Semantic Routing (`agent.semantic_router`)
+
+Fast command dispatch that bypasses the LLM for known keywords:
+
+```sage
+import agent.semantic_router
+
+let r = semantic_router.create_router(0.7)
+semantic_router.add_sage_routes(r)
+semantic_router.set_fallback(r, my_llm)
+
+let result = semantic_router.route(r, "run the tests")
+print result["result"] # Dispatched to _rt_test
+```
+
 ## Chatbot Framework (`lib/chat/`)
 
 ### Quick Start
@@ -256,6 +310,10 @@ let dpo_data = trace.to_preference_pairs(rec)    # chosen vs rejected
 |--------|--------|---------------|
 | `core` | `import agent.core` | `create`, `add_tool`, `run`, `call_tool`, `think`, `observe`, `act`, `build_prompt` |
 | `tools` | `import agent.tools` | `register_all`, `file_read`, `file_write`, `code_analyze`, `code_search` |
+| `grammar` | `import agent.grammar` | `constrained_llm`, `create_grammar`, `tool_call_grammar`, `json_grammar`, `constrain` |
+| `sandbox` | `import agent.sandbox` | `create_par_agent`, `par_query`, `execute_block`, `is_safe`, `eval_math` |
+| `semantic_router` | `import agent.semantic_router` | `create_router`, `add_route`, `add_sage_routes`, `route`, `format_stats` |
+| `tot` | `import agent.tot` | `create_solver`, `bfs_search`, `best_first_search`, `format_path`, `stats` |
 | `planner` | `import agent.planner` | `create_plan`, `add_step`, `execute_plan`, `format_plan`, `progress` |
 | `router` | `import agent.router` | `create_router`, `register`, `route`, `send_to`, `create_pipeline` |
 | `supervisor` | `import agent.supervisor` | `create_supervisor`, `add_worker`, `add_step`, `run_workflow`, `dispatch`, `set_state` |

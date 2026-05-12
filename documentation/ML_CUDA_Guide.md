@@ -41,6 +41,11 @@ let f = tensor.full([3], 3.14)      # filled with value
 let r = tensor.arange(0, 10, 2)     # [0, 2, 4, 6, 8]
 let l = tensor.linspace(0, 1, 5)    # [0, 0.25, 0.5, 0.75, 1.0]
 let I = tensor.eye(3)               # 3x3 identity
+
+# Random tensors (requires RNG state dict)
+let rng = {"v": 42}
+let r1 = tensor.rand_tensor([3], rng)   # Uniform [0, 1)
+let n1 = tensor.randn_tensor([3], rng)  # Normal (Box-Muller)
 ```
 
 ### Element-wise Operations
@@ -50,17 +55,39 @@ let a = tensor.tensor([1, 2, 3])
 let b = tensor.tensor([4, 5, 6])
 
 let c = tensor.add(a, b)            # [5, 7, 9]
-let d = tensor.sub(a, b)            # [-3, -3, -3]
-let e = tensor.mul(a, b)            # [4, 10, 18]
-let f = tensor.add_scalar(a, 10)    # [11, 12, 13]
-let g = tensor.mul_scalar(a, 2)     # [2, 4, 6]
-let h = tensor.neg(a)               # [-1, -2, -3]
+let d = tensor.div_tensor(a, b)     # [0.25, 0.4, 0.5]
+let e = tensor.pow_tensor(a, 2.0)   # [1, 4, 9]
+let f = tensor.abs_tensor(a)
 
 # Math functions
 let ex = tensor.exp_tensor(a)
-let lg = tensor.log_tensor(a)
-let sq = tensor.sqrt_tensor(a)
-let cl = tensor.clamp(a, 0, 2)      # [1, 2, 2]
+# ...
+```
+
+### Indexing & Comparison
+
+```sage
+let t = tensor.tensor([1, 2, 3, 4, 5, 6])
+print tensor.item(t, 2)             # 3 (flat index)
+
+let m = tensor.reshape(t, [2, 3])
+let row = tensor.get_row(m, 1)      # [4, 5, 6]
+
+print tensor.equal(t, t)            # true
+print tensor.allclose(t, t, 1e-5)   # true if within tolerance
+```
+
+### Autograd State
+
+```sage
+# Mark tensor for gradient tracking
+tensor.requires_grad_(t)
+
+# Zero out gradients
+tensor.zero_grad(t)
+
+# Create a copy without gradients
+let d = tensor.detach(t)
 ```
 
 ### Reductions
@@ -511,7 +538,12 @@ These are C-native functions exposed directly to the Sage runtime via the `ml_na
 | `forward_pass`          | 17 args (weights, ids, hypers)| Inference-only forward pass; output matches training forward exactly   |
 | `load_weights`          | `load_weights(path)`          | Native CSV weight parser; loads weights from a file into native arrays |
 | `cpu_count`             | `cpu_count()`                 | Returns the number of available logical CPU cores                      |
+| `set_threads`           | `set_threads(n)`              | Set number of threads for native ops                                   |
 | `auto_parallel`         | `auto_parallel()`             | Enables all-core parallelism for native matrix operations              |
+| `set_gpu_threshold`     | `set_gpu_threshold(n)`        | Set matrix size threshold for GPU offloading                           |
+| `layer_norm`            | `layer_norm(x, w, b)`         | Native LayerNormalization implementation                               |
+| `gelu`                  | `gelu(x)`                     | Native GELU activation                                                 |
+| `silu`                  | `silu(x)`                     | Native SiLU (Swish) activation                                         |
 
 `train_step` and `forward_pass` share the same weight layout and hyperparameter convention so checkpoints saved during training load directly into inference without conversion.
 
@@ -642,15 +674,30 @@ import ml.npu
 # Auto-detect best available NPU/SIMD backend
 let ctx = npu.create("auto")
 print ctx["backend"]    # "snpe", "nnapi", "one", or "neon"
-print ctx["arch"]       # "arm64", "x86_64", or "rv64"
 
-# Check NEON availability
-if ml_native.has_neon:
-    print "ARM NEON SIMD available"
+# Prepare model for NPU
+let model = npu.prepare_model(ctx, weights, config)
 
-# Run a model on the NPU
-let result = npu.run(ctx, model_weights, input_ids)
-npu.destroy(ctx)
+# Run inference
+let result = npu.infer(ctx, model, input_ids)
+
+# Benchmark
+let stats = npu.benchmark(ctx, 512, 100)
+print npu.summary(ctx)
+```
+
+### Supported Backends
+
+```sage
+# cpu, neon, rvv, nnapi, snpe, samsung_one, onnx
+print npu.supported_backends()
+```
+
+### Device Info
+
+```sage
+# OrangePi RV2 (RISC-V Vector)
+print npu.rv2_info()
 ```
 
 ### Architecture Detection

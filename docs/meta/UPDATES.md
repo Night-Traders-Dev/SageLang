@@ -1,5 +1,29 @@
 # SageLang Updates
 
+## v3.4.2 — Sentinel Security & Performance Refinement (May 2026)
+
+- **AOT Compiler Security**:
+  - Fixed high-severity buffer overflows in `aot_emit` by replacing fixed 4096-byte buffers with dynamic allocation.
+  - Pre-calculate required string length for `CALL`, `ARRAY`, `DICT`, and `TUPLE` expressions.
+  - Added strict OOM checks for all compiler-side allocations.
+- **Interpreter Memory Protection**:
+  - Implemented `AST_GC_PUSH/POP` and `AST_GC_PUSH_ENV/POP_ENV` in the interpreter to protect intermediate values and environments from premature collection.
+  - Moved GC root pointers to thread-local storage (`__thread`) to prevent cross-thread stack corruption in multicore environments.
+  - Implemented a Thread Registry to track all active threads for safe root marking during concurrent GC.
+- **Performance Optimizations (Bolt)**:
+  - **Inline Caching**: Implemented inline caching for variable lookups (`EXPR_VARIABLE`) and assignments (`EXPR_SET`), achieving ~27% speedup on loop-heavy benchmarks.
+- **Graphics Security**:
+  - Fixed predictable temporary filename vulnerability (CWE-377) in the graphics module using `mkstemps` for secure unique filename generation.
+- **Standard Library & Built-ins**:
+  - **Gas Metering**: Added `vm_gas_limit_set`, `vm_gas_used_get`, and `vm_gas_limit_get` for execution resource control.
+  - **Discord Bot Library**: Added core support and documentation for the new `discord` library suite.
+  - **IRQ Management**: Improved interrupt handling with safe double-registration guards and nested interrupt depth tracking in `lib/metal/irq.sage`.
+- **Blockchain Improvements**:
+  - Enhanced staking smart contract robustness with better edge-case handling.
+  - Added `VAL_VM_PROGRAM` type for stable bytecode compilation and distribution.
+
+---
+
 ## v3.3.0 — JIT+AOT Hybrid Default + SageMetal VM (April 2026)
 
 - **SageMetal VM** (`src/c/metal_vm.c`, `include/metal_vm.h`):

@@ -79,12 +79,22 @@ Dynamic mining rate model that adjusts based on adoption and supply.
   let rate = orbit.calculate_mining_rate(users, total_mined, height, score)
   ```
 
+### 2.8 `Staking`
+A built-in contract for ORBIT token staking with APR rewards.
+
+- **Example:**
+  ```sage
+  import blockchain.staking
+  let state = {"action": "stake", "value": 1000, "sender": "Alice"}
+  let results = staking.execute(state)
+  ```
+
 ## 3. Consensus Mechanism (Pluggable)
 The system supports pluggable consensus via the `Consensus` base class (in `lib/blockchain/consensus/base.sage`).
 
 ### Implementations:
-- **Proof-of-Work (PoW)**: `PowConsensus`
-- **Proof-of-Authority (PoA)**: `PoAConsensus`
+- **Proof-of-Work (PoW)**: `PowConsensus` (CPU-bound mining)
+- **Proof-of-Authority (PoA)**: `PoAConsensus` (Authorized signers, slashing, rotation)
 
 ### Adding Custom Consensus:
 1. Extend `Consensus` base class.
@@ -95,3 +105,5 @@ The system supports pluggable consensus via the `Consensus` base class (in `lib/
 - **Asynchronous Execution**: Uses `async proc` and `await` for I/O operations (mining, DB writes).
 - **Concurrency**: `Blockchain` methods are thread-safe, protected by internal mutexes.
 - **Node Scoring**: Tracks miner performance to provide reward multipliers.
+- **Authority Rotation**: Dynamic updates to PoA validator sets.
+- **Slashing**: Automatic penalties for malicious validators in PoA.
