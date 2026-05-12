@@ -28,23 +28,37 @@ void aot_free(AotCompiler* aot) {
 }
 
 static void aot_emit(AotCompiler* aot, const char* fmt, ...) {
-    char buf[4096];
-    // Indent
-    int offset = 0;
-    for (int i = 0; i < aot->indent; i++) {
-        buf[offset++] = ' '; buf[offset++] = ' ';
-        buf[offset++] = ' '; buf[offset++] = ' ';
-    }
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(buf + offset, sizeof(buf) - offset, fmt, ap);
+
+    // Determine required size for message
+    va_list ap_copy;
+    va_copy(ap_copy, ap);
+    int msg_len = vsnprintf(NULL, 0, fmt, ap_copy);
+    va_end(ap_copy);
+
+    if (msg_len < 0) {
+        va_end(ap);
+        return;
+    }
+
+    int indent_len = aot->indent * 4;
+    char* full_line = malloc(indent_len + msg_len + 1);
+    if (!full_line) {
+        va_end(ap);
+        return;
+    }
+
+    // Apply indentation
+    if (indent_len > 0) memset(full_line, ' ', indent_len);
+    vsnprintf(full_line + indent_len, msg_len + 1, fmt, ap);
     va_end(ap);
 
     if (aot->line_count >= aot->line_capacity) {
         aot->line_capacity = aot->line_capacity == 0 ? 256 : aot->line_capacity * 2;
         aot->lines = realloc(aot->lines, sizeof(char*) * aot->line_capacity);
     }
-    aot->lines[aot->line_count++] = strdup(buf);
+    aot->lines[aot->line_count++] = full_line;
 }
 
 // ============================================================================
@@ -298,22 +312,41 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
 
                 // User-defined function call
                 char* fname = sanitize_name(raw, rawlen);
-                char* buf = malloc(4096);
+                char** compiled_args = argc > 0 ? malloc(sizeof(char*) * argc) : NULL;
+                if (argc > 0 && !compiled_args) {
+                    free(fname);
+                    return strdup("sage_nil()");
+                }
+                size_t total_len = strlen(fname) + 64; // preamble and postamble
+                for (int i = 0; i < argc; i++) {
+                    compiled_args[i] = aot_compile_expr(aot, expr->as.call.args[i]);
+                    total_len += strlen(compiled_args[i]) + 32; // "_args[N] = ...; "
+                }
+
+                char* buf = malloc(total_len);
+                if (!buf) {
+                    free(fname);
+                    for (int i = 0; i < argc; i++) free(compiled_args[i]);
+                    free(compiled_args);
+                    return strdup("sage_nil()");
+                }
+
                 int pos = sprintf(buf, "({ SageValue _args[%d]; ", argc > 0 ? argc : 1);
                 for (int i = 0; i < argc; i++) {
-                    char* arg = aot_compile_expr(aot, expr->as.call.args[i]);
-                    pos += sprintf(buf + pos, "_args[%d] = %s; ", i, arg);
-                    free(arg);
+                    pos += sprintf(buf + pos, "_args[%d] = %s; ", i, compiled_args[i]);
+                    free(compiled_args[i]);
                 }
+                free(compiled_args);
                 pos += sprintf(buf + pos, "%s(%d, _args); })", fname, argc);
                 free(fname);
                 return buf;
             }
             char* callee = aot_compile_expr(aot, expr->as.call.callee);
-            char* buf = malloc(256);
-            sprintf(buf, "sage_nil() /* unsupported call: %s */", callee);
+            size_t callee_len = strlen(callee);
+            char* buf = malloc(callee_len + 64);
+            if (buf) sprintf(buf, "sage_nil() /* unsupported call: %s */", callee);
             free(callee);
-            return buf;
+            return buf ? buf : strdup("sage_nil()");
         }
         case EXPR_SET: {
             // Variable assignment: name = value
@@ -330,13 +363,27 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
         }
         case EXPR_ARRAY: {
             int n = expr->as.array.count;
-            char* buf = malloc(4096);
+            char** compiled_elems = n > 0 ? malloc(sizeof(char*) * n) : NULL;
+            if (n > 0 && !compiled_elems) return strdup("sage_nil()");
+            size_t total_len = 32; // "sage_array(N" + ")"
+            for (int i = 0; i < n; i++) {
+                compiled_elems[i] = aot_compile_expr(aot, expr->as.array.elements[i]);
+                total_len += strlen(compiled_elems[i]) + 4; // ", " + elem
+            }
+
+            char* buf = malloc(total_len);
+            if (!buf) {
+                for (int i = 0; i < n; i++) free(compiled_elems[i]);
+                free(compiled_elems);
+                return strdup("sage_nil()");
+            }
+
             int pos = sprintf(buf, "sage_array(%d", n);
             for (int i = 0; i < n; i++) {
-                char* elem = aot_compile_expr(aot, expr->as.array.elements[i]);
-                pos += sprintf(buf + pos, ", %s", elem);
-                free(elem);
+                pos += sprintf(buf + pos, ", %s", compiled_elems[i]);
+                free(compiled_elems[i]);
             }
+            free(compiled_elems);
             pos += sprintf(buf + pos, ")");
             return buf;
         }
@@ -359,14 +406,32 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
         }
         case EXPR_DICT: {
             int n = expr->as.dict.count;
-            char* buf = malloc(4096);
+            char** compiled_keys = n > 0 ? malloc(sizeof(char*) * n) : NULL;
+            char** compiled_vals = n > 0 ? malloc(sizeof(char*) * n) : NULL;
+            if (n > 0 && (!compiled_keys || !compiled_vals)) {
+                free(compiled_keys); free(compiled_vals);
+                return strdup("sage_nil()");
+            }
+            size_t total_len = 32; // "sage_dict(N" + ")"
+            for (int i = 0; i < n; i++) {
+                compiled_keys[i] = escape_c_str(expr->as.dict.keys[i]);
+                compiled_vals[i] = aot_compile_expr(aot, expr->as.dict.values[i]);
+                total_len += strlen(compiled_keys[i]) + strlen(compiled_vals[i]) + 8; // ", \"...\", "
+            }
+
+            char* buf = malloc(total_len);
+            if (!buf) {
+                for (int i = 0; i < n; i++) { free(compiled_keys[i]); free(compiled_vals[i]); }
+                free(compiled_keys); free(compiled_vals);
+                return strdup("sage_nil()");
+            }
+
             int pos = sprintf(buf, "sage_dict(%d", n);
             for (int i = 0; i < n; i++) {
-                char* esc = escape_c_str(expr->as.dict.keys[i]);
-                char* val = aot_compile_expr(aot, expr->as.dict.values[i]);
-                pos += sprintf(buf + pos, ", \"%s\", %s", esc, val);
-                free(esc); free(val);
+                pos += sprintf(buf + pos, ", \"%s\", %s", compiled_keys[i], compiled_vals[i]);
+                free(compiled_keys[i]); free(compiled_vals[i]);
             }
+            free(compiled_keys); free(compiled_vals);
             pos += sprintf(buf + pos, ")");
             return buf;
         }
@@ -390,13 +455,27 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
         }
         case EXPR_TUPLE: {
             int n = expr->as.tuple.count;
-            char* buf = malloc(4096);
+            char** compiled_elems = n > 0 ? malloc(sizeof(char*) * n) : NULL;
+            if (n > 0 && !compiled_elems) return strdup("sage_nil()");
+            size_t total_len = 32; // "sage_tuple(N" + ")"
+            for (int i = 0; i < n; i++) {
+                compiled_elems[i] = aot_compile_expr(aot, expr->as.tuple.elements[i]);
+                total_len += strlen(compiled_elems[i]) + 4; // ", " + elem
+            }
+
+            char* buf = malloc(total_len);
+            if (!buf) {
+                for (int i = 0; i < n; i++) free(compiled_elems[i]);
+                free(compiled_elems);
+                return strdup("sage_nil()");
+            }
+
             int pos = sprintf(buf, "sage_tuple(%d", n);
             for (int i = 0; i < n; i++) {
-                char* elem = aot_compile_expr(aot, expr->as.tuple.elements[i]);
-                pos += sprintf(buf + pos, ", %s", elem);
-                free(elem);
+                pos += sprintf(buf + pos, ", %s", compiled_elems[i]);
+                free(compiled_elems[i]);
             }
+            free(compiled_elems);
             pos += sprintf(buf + pos, ")");
             return buf;
         }
