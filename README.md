@@ -6,6 +6,25 @@
 
 Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.4.2, Sage features high-severity security hardening for the AOT compiler and graphics modules, thread-safe memory management, and inline caching optimizations.
 
+## Install (One line installer)
+
+```bash
+git clone https://github.com/Night-Traders-Dev/SageLang.git && cd SageLang && chmod +x install.sh && ./install.sh
+```
+
+The installer walks you through everything — building, setting up updating, installing dependencies.
+
+### Supported Platforms
+
+| Platform | Package Manager | Notes |
+|----------|----------------|-------|
+| **Linux** | apt, pacman, dnf, yum, zypper, apk, emerge, xbps | Full support |
+| **macOS** | Homebrew or MacPorts | Auto-installs either if needed (pending) |
+| **FreeBSD** | pkg | Native BSD-Make support |
+| **WSL2** | (same as Linux) | No differences from Linux |
+
+---
+
 ## Codebase Metrics
 
 These charts are refreshed by `make charts` and also as part of the default `make` build. They count authored, non-empty tracked lines and exclude vendored dependencies plus generated build artifacts.
