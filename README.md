@@ -2,7 +2,7 @@
 
 **A clean, indentation-based systems programming language built in C.**
 
-![SageLang Logo](assets/SageLang.png)
+![SageLang Logo](core/assets/SageLang.png)
 
 Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.4.2, Sage features high-severity security hardening for the AOT compiler and graphics modules, thread-safe memory management, and inline caching optimizations.
 
@@ -10,17 +10,17 @@ Sage is a systems programming language that combines the readability of Python (
 
 These charts are refreshed by `make charts` and also as part of the default `make` build. They count authored, non-empty tracked lines and exclude vendored dependencies plus generated build artifacts.
 
-![SageLang repository LOC by language](assets/charts/repo-loc.svg)
+![SageLang repository LOC by language](core/assets/charts/repo-loc.svg)
 
-![SageLang self-hosted Sage LOC vs native C LOC](assets/charts/compiler-loc.svg)
+![SageLang self-hosted Sage LOC vs native C LOC](core/assets/charts/compiler-loc.svg)
 
-![SageLang project breakdown by area](assets/charts/project-breakdown.svg)
+![SageLang project breakdown by area](core/assets/charts/project-breakdown.svg)
 
 ## Benchmark Metrics
 
 ### Cross-Backend Comparison
 
-![SageLang backend performance comparison](assets/charts/backend-compare.svg)
+![SageLang backend performance comparison](core/assets/charts/backend-compare.svg)
 
 Run `python3 scripts/generate_backend_chart.py` or `bash benchmarks/run_backend_compare.sh` to regenerate. Tests 8 workloads (fibonacci, loop sum, arrays, strings, dicts, primes, nested loops, LCG hash) across all native backends.
 
@@ -30,9 +30,9 @@ These charts are also refreshed by `make charts`. They are generated from `pytho
 
 The compiled VM recipe is now charted as a first-class lane on the default workload. Any recipe that still fails or misses checksum validation is called out in the chart footers instead of being drawn as a misleading bar.
 
-![SageLang recipe benchmark total median time](assets/charts/benchmark-recipes-total.svg)
+![SageLang recipe benchmark total median time](core/assets/charts/benchmark-recipes-total.svg)
 
-![SageLang recipe benchmark execution-only median time](assets/charts/benchmark-recipes-run.svg)
+![SageLang recipe benchmark execution-only median time](core/assets/charts/benchmark-recipes-run.svg)
 
 ### Sage vs Python 3 Benchmarks
 
