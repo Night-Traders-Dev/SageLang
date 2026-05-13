@@ -9,6 +9,7 @@ let REPO_URL = "https://raw.githubusercontent.com/Night-Traders-Dev/SagePkg/main
 
 let CONFIG_DIR = ".sagepkg"
 let PKGS_DIR = CONFIG_DIR + "/pkgs"
+let BIN_DIR = CONFIG_DIR + "/bin"
 let INDEX_FILE = CONFIG_DIR + "/packages.json"
 let INSTALLED_FILE = CONFIG_DIR + "/installed.json"
 
@@ -60,6 +61,10 @@ proc get_arch():
     let arch = trim(io.readfile(tmp))
     # io.remove(tmp)
     return arch
+
+proc get_full_path(path):
+    sys.exec("readlink -f " + path + " > /tmp/sage_fullpath")
+    return trim(io.readfile("/tmp/sage_fullpath"))
 
 proc cmd_update():
     print "Updating package index..."
@@ -113,6 +118,7 @@ proc cmd_install(pkg_name):
     print "Installing " + pkg_name + " for " + arch + "..."
     ensure_dir(CONFIG_DIR)
     ensure_dir(PKGS_DIR)
+    ensure_dir(BIN_DIR)
     let pkg_dir = PKGS_DIR + "/" + pkg_name
     ensure_dir(pkg_dir)
     
@@ -138,6 +144,16 @@ proc cmd_install(pkg_name):
             print "Error: Failed to download file: " + fname
             return
     
+    # Create wrapper script in BIN_DIR
+    let main_file = meta["main"]
+    if main_file != nil:
+        let bin_path = BIN_DIR + "/" + pkg_name
+        let full_pkg_path = get_full_path(pkg_dir + "/" + main_file)
+        let wrapper = "#!/bin/sh" + chr(10) + "exec sage " + full_pkg_path + " " + chr(34) + "$@" + chr(34) + chr(10)
+        io.writefile(bin_path, wrapper)
+        sys.exec("chmod +x " + bin_path)
+        print "Created executable: " + bin_path
+
     # Record installation
     let installed = read_json(INSTALLED_FILE)
     if installed == nil:
@@ -151,6 +167,14 @@ proc cmd_install(pkg_name):
     write_json(INSTALLED_FILE, installed)
     
     print "Success: " + pkg_name + " installed."
+    
+    # PATH check
+    let full_bin_path = get_full_path(BIN_DIR)
+    let path_env = sys.getenv("PATH")
+    if string.find(path_env, full_bin_path) == -1:
+        print ""
+        print "NOTE: To run '" + pkg_name + "' by name, add this to your PATH:"
+        print "  export PATH=" + chr(34) + full_bin_path + ":$PATH" + chr(34)
 
 proc cmd_installed():
     let installed = read_json(INSTALLED_FILE)
