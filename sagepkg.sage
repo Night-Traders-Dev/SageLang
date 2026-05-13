@@ -66,7 +66,47 @@ proc get_full_path(path):
     sys.exec("readlink -f " + path + " > /tmp/sage_fullpath")
     return trim(io.readfile("/tmp/sage_fullpath"))
 
+proc cmd_init():
+    let shell = sys.getenv("SHELL")
+    if shell == nil:
+        shell = "/bin/sh"
+    
+    let home = sys.getenv("HOME")
+    if home == nil:
+        return
+        
+    ensure_dir(CONFIG_DIR)
+    ensure_dir(BIN_DIR)
+    let full_bin_path = get_full_path(BIN_DIR)
+    
+    let config_file = nil
+    let path_cmd = nil
+    
+    if string.contains(shell, "bash") or shell == "/bin/sh":
+        config_file = home + "/.bashrc"
+        path_cmd = "export PATH=" + chr(34) + full_bin_path + ":$PATH" + chr(34)
+    elif string.contains(shell, "zsh"):
+        config_file = home + "/.zshrc"
+        path_cmd = "export PATH=" + chr(34) + full_bin_path + ":$PATH" + chr(34)
+    elif string.contains(shell, "fish"):
+        config_file = home + "/.config/fish/config.fish"
+        path_cmd = "set -gx PATH " + full_bin_path + " $PATH"
+    
+    if config_file != nil:
+        if io.exists(config_file):
+            let content = io.readfile(config_file)
+            if not string.contains(content, full_bin_path):
+                print "Automatically adding " + full_bin_path + " to " + config_file + "..."
+                io.appendfile(config_file, chr(10) + "# SagePkg PATH" + chr(10) + path_cmd + chr(10))
+                print "Success: PATH initialized. Please restart your shell."
+        else:
+            # Only create for common shells if they are definitely being used
+            if shell != "/bin/sh":
+                print "Creating " + config_file + " and setting PATH..."
+                io.writefile(config_file, "# SagePkg PATH" + chr(10) + path_cmd + chr(10))
+
 proc cmd_update():
+    cmd_init()
     print "Updating package index..."
     ensure_dir(CONFIG_DIR)
     let url = REPO_URL + "/packages.json"
@@ -201,10 +241,11 @@ proc main():
     if len(args) < 3:
         print "Usage: sagepkg <command> [args]"
         print "Commands:"
-        print "  update       Sync package index"
+        print "  update       Sync package index (auto-inits PATH)"
         print "  list         List available packages"
         print "  install <p>  Install a package"
         print "  installed    List installed packages"
+        print "  init         Force initialize shell PATH"
         return
 
     let cmd = args[cmd_idx]
@@ -219,6 +260,8 @@ proc main():
             cmd_install(args[3])
     elif cmd == "installed":
         cmd_installed()
+    elif cmd == "init":
+        cmd_init()
     else:
         print "Unknown command: " + cmd
 
