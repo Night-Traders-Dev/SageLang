@@ -23,9 +23,12 @@ void create_http_module() {}
 void create_ssl_module() {}
 #endif
 void create_graphics_module() {}
+#ifndef SAGE_HAS_ML
 void create_ml_native_module() {}
+#endif
 
 /* GPU stubs */
+#ifndef SAGE_HAS_VULKAN
 void sgpu_cmd_bind_index_buffer() {}
 void sgpu_cmd_set_viewport() {}
 void sgpu_cmd_set_scissor() {}
@@ -55,3 +58,4 @@ void sgpu_reset_fence() {}
 int sgpu_key_down() { return 0; }
 void sgpu_begin_commands() {}
 void sgpu_end_commands() {}
+#endif

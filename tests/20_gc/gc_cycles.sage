@@ -5,7 +5,7 @@ let before_collections = gc_collections()
 
 proc churn():
     let i = 0
-    while i < 512:
+    while i < 2048:
         let cycle = []
         push(cycle, cycle)
         i = i + 1

@@ -11,7 +11,7 @@ SAGE_VERSION := $(shell cat VERSION 2>/dev/null || echo "0.0.0")
 
 CC = gcc
 PYTHON ?= python3
-CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"' -DSAGE_HAS_LSP
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"' -DSAGE_HAS_LSP -DSAGE_HAS_ML
 # Platform-conditional linking: pthread only on desktop (not RP2040)
 ifndef PICO_BUILD
 LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto
@@ -113,6 +113,8 @@ CORE_SOURCES = \
     $(SRC_DIR)/stubs.c \
     $(SRC_DIR)/aot.c \
     $(SRC_DIR)/kotlin_backend.c \
+    $(SRC_DIR)/gpu_api.c \
+    $(SRC_DIR)/ml_backend.c \
     $(SRC_DIR)/net.c
 
 VM_SOURCES = \
