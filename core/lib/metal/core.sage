@@ -96,6 +96,50 @@ proc hlt():
 proc io_wait():
     return nil
 
+## Data Memory Barrier (ARM)
+proc dmb():
+    return nil
+
+## Data Synchronization Barrier (ARM)
+proc dsb():
+    return nil
+
+## Instruction Synchronization Barrier (ARM)
+proc isb():
+    return nil
+
+## Memory fence (RISC-V)
+proc fence():
+    return nil
+
+## Get current CPU core ID (e.g., 0 or 1 on RP2040)
+proc cpu_id():
+    # In a real driver, this would read a hardware register (e.g., MPROCID on ARM).
+    return 0
+
+## Enter a critical section (disable interrupts + memory barrier)
+proc critical_section_enter():
+    cli()
+    dsb()
+
+## Exit a critical section (enable interrupts + memory barrier)
+proc critical_section_exit():
+    dsb()
+    sti()
+
+## Acquire a spin lock (busy-wait stub)
+proc spin_lock(lock_ptr):
+    # In a real driver, this would use atomic instructions.
+    # Note: mmio_read32/write32 are stubs in the interpreter.
+    while mmio_read32(lock_ptr) != 0:
+        pass
+    mmio_write32(lock_ptr, 1)
+
+## Release a spin lock
+proc spin_unlock(lock_ptr):
+    mmio_write32(lock_ptr, 0)
+    dsb()
+
 ## ============================================================
 ## Timing
 ## ============================================================
@@ -146,10 +190,12 @@ proc heap_stats():
 ## Panic / Halt
 ## ============================================================
 
+## Panic and halt the CPU
 proc panic(msg):
     puts("PANIC: " + msg)
     hlt()
 
+## Panic if condition is false
 proc assert_metal(condition, msg):
     if not condition:
         panic("Assertion failed: " + msg)
