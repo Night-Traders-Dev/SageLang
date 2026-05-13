@@ -81,10 +81,12 @@ class Wallet:
         return str(sender) + ":" + str(receiver) + ":" + str(amount) + ":" + str(nonce) + ":" + str(chain_id) + ":" + str(tx_type) + ":" + str(timestamp)
 
     proc sign_transaction(tx):
-        if type(tx) != "dict" and hasattr(tx, "to_dict"):
-            tx = tx.to_dict()
+        let is_dict = type(tx) == "dict"
+        let tx_dict = tx
+        if not is_dict and hasattr(tx, "to_dict"):
+            tx_dict = tx.to_dict()
 
-        let tx_sender = tx["sender"]
+        let tx_sender = tx_dict["sender"]
         let priv = nil
         let pub = nil
         for w in self.addresses:
@@ -97,6 +99,11 @@ class Wallet:
             print "Error: Wallet does not own sender address " + tx_sender
             return
 
-        let msg = self.transaction_message(tx)
-        tx["signature"] = bc_crypto.sign(msg, priv)
-        tx["public_key"] = pub
+        let msg = self.transaction_message(tx_dict)
+        let signature = bc_crypto.sign(msg, priv)
+        if is_dict:
+            tx_dict["signature"] = signature
+            tx_dict["public_key"] = pub
+        else:
+            tx["signature"] = signature
+            tx["public_key"] = pub
