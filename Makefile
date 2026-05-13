@@ -320,6 +320,7 @@ install: $(TARGET) $(LSP_TARGET)
 	install -d $(BINDIR)
 	install -m 755 $(TARGET) $(BINDIR)
 	install -m 755 $(LSP_TARGET) $(BINDIR)
+	install -m 755 sagepkg.sage $(BINDIR)/sagepkg
 	install -d $(LIBDIR)/lib
 	install -d $(LIBDIR)/examples
 	cp -r lib/*.sage $(LIBDIR)/lib/ 2>/dev/null || true
@@ -342,7 +343,7 @@ install: $(TARGET) $(LSP_TARGET)
 
 uninstall:
 	@echo "Uninstalling SageLang..."
-	rm -f $(BINDIR)/$(TARGET) $(BINDIR)/$(LSP_TARGET)
+	rm -f $(BINDIR)/$(TARGET) $(BINDIR)/$(LSP_TARGET) $(BINDIR)/sagepkg
 	rm -rf $(LIBDIR)
 	rm -rf $(DOCDIR)
 	@echo "✅ Uninstallation complete"

@@ -546,6 +546,13 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
         RUNTIME DESTINATION bin
     )
 
+    # Install package manager
+    install(FILES sagepkg.sage
+        DESTINATION bin
+        RENAME sagepkg
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+    )
+
     # Install LSP server
     if(TARGET sage-lsp)
         install(TARGETS sage-lsp RUNTIME DESTINATION bin)
