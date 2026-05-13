@@ -34,28 +34,69 @@ class Wallet:
     proc derive_address(index):
         # HD Derivation: Hash(seed + index)
         let priv_key = hash.sha256_hex(self.seed + str(index))
-        # Address is first 40 chars of hash of private key
-        let addr = "0x" + hash.sha256_hex(priv_key)[:40]
-        let w_obj = {"address": addr, "private_key": priv_key, "index": index}
+        let pub_key = hash.sha256_hex(priv_key)
+        # Address is first 40 chars of public key hash
+        let addr = "0x" + pub_key[:40]
+        let w_obj = {"address": addr, "private_key": priv_key, "public_key": pub_key, "index": index}
         push(self.addresses, w_obj)
         return addr
 
     proc get_address():
         return self.addresses[0]["address"]
 
+    proc transaction_message(tx):
+        let sender = ""
+        let receiver = ""
+        let amount = 0.0
+        let nonce = 0
+        let chain_id = 0
+        let tx_type = "transfer"
+        let timestamp = 0
+
+        if type(tx) == "dict":
+            if dict_has(tx, "sender"):
+                sender = tx["sender"]
+            if dict_has(tx, "receiver"):
+                receiver = tx["receiver"]
+            if dict_has(tx, "amount"):
+                amount = tx["amount"]
+            if dict_has(tx, "nonce"):
+                nonce = tx["nonce"]
+            if dict_has(tx, "chain_id"):
+                chain_id = tx["chain_id"]
+            if dict_has(tx, "type"):
+                tx_type = tx["type"]
+            if dict_has(tx, "timestamp"):
+                timestamp = tx["timestamp"]
+        else:
+            sender = tx.sender
+            receiver = tx.receiver
+            amount = tx.amount
+            nonce = tx.nonce
+            chain_id = tx.chain_id
+            if dict_has(tx, "type"):
+                tx_type = tx["type"]
+            timestamp = tx.timestamp
+
+        return str(sender) + ":" + str(receiver) + ":" + str(amount) + ":" + str(nonce) + ":" + str(chain_id) + ":" + str(tx_type) + ":" + str(timestamp)
+
     proc sign_transaction(tx):
-        # Phase 1: Real signature verification
-        let msg = str(tx["sender"]) + str(tx["receiver"]) + str(tx["amount"])
-        # Find which of our derived addresses is the sender
+        if type(tx) != "dict" and hasattr(tx, "to_dict"):
+            tx = tx.to_dict()
+
+        let tx_sender = tx["sender"]
         let priv = nil
+        let pub = nil
         for w in self.addresses:
-            if w["address"] == tx["sender"]:
+            if w["address"] == tx_sender:
                 priv = w["private_key"]
+                pub = w["public_key"]
                 break
-        
+
         if priv == nil:
-            print "Error: Wallet does not own sender address " + tx["sender"]
+            print "Error: Wallet does not own sender address " + tx_sender
             return
-            
-        tx["signature"] = hash.sha256_hex(msg + priv)
-        tx["public_key"] = tx["sender"] # Simplified: Address acts as public key
+
+        let msg = self.transaction_message(tx)
+        tx["signature"] = bc_crypto.sign(msg, priv)
+        tx["public_key"] = pub

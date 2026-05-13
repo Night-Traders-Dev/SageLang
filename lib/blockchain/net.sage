@@ -5,6 +5,12 @@ import net
 import thread
 import json
 
+proc json_stringify(value):
+    let cjson = json.cJSON_FromSage(value)
+    let str = json.cJSON_PrintUnformatted(cjson)
+    json.cJSON_Delete(cjson)
+    return str
+
 class P2PNode:
     proc init(blockchain, port):
         self.blockchain = blockchain
@@ -47,7 +53,7 @@ class P2PNode:
                 # Request blocks from our current height
                 let current_height = len(self.blockchain.chain)
                 let msg = {"type": "get_blocks", "data": {"from": current_height}}
-                net.write(conn, json.stringify(msg))
+                net.write(conn, json_stringify(msg))
                 
                 # Read response blocks
                 let resp_str = net.read(conn)
@@ -68,7 +74,7 @@ class P2PNode:
             i = i + 1
         
         let resp = {"type": "blocks_delivery", "data": blocks}
-        net.write(conn, json.stringify(resp))
+        net.write(conn, json_stringify(resp))
 
     proc broadcast(msg_type, data):
         thread.lock(self.mutex)
@@ -76,7 +82,7 @@ class P2PNode:
         thread.unlock(self.mutex)
         
         let msg = {"type": msg_type, "data": data}
-        let msg_str = json.stringify(msg)
+        let msg_str = json_stringify(msg)
         
         for peer in current_peers:
             let conn = net.connect(peer["host"], peer["port"])

@@ -8,32 +8,30 @@ class RPCServer:
     proc init(blockchain, port):
         self.blockchain = blockchain
         self.port = port
-        self.server = server.new_server(port)
-        self.setup_handlers()
-
-    proc setup_handlers():
-        server.handle(self.server, "/rpc", self.handle_rpc)
+        self.server = server.create_server("0.0.0.0", port)
+        server.post_route(self.server["router"], "/rpc", self.handle_rpc)
 
     proc start():
         print "Starting JSON-RPC Server on port " + str(self.port)
         server.listen_and_serve(self.server)
 
-    proc handle_rpc(req, res):
-        if req.method != "POST":
-            server.send_error(res, 405, "Method Not Allowed")
-            return
+    proc handle_rpc(req):
+        if req["method"] != "POST":
+            return server.response_error(405, "Method Not Allowed")
 
-        let body = req.body
+        let body = req["body"]
         let j_req = json.parse(body)
         
-        # Validate JSON-RPC 2.0
-        if j_req["jsonrpc"] != "2.0":
-            self.send_rpc_error(res, -32600, "Invalid Request", j_req["id"])
-            return
+        if j_req == nil or not dict_has(j_req, "jsonrpc") or j_req["jsonrpc"] != "2.0":
+            return self.send_rpc_error(-32600, "Invalid Request", nil)
 
         let method = j_req["method"]
-        let params = j_req["params"]
-        let id = j_req["id"]
+        let params = []
+        if dict_has(j_req, "params"):
+            params = j_req["params"]
+        let id = nil
+        if dict_has(j_req, "id"):
+            id = j_req["id"]
         
         let result = nil
         
@@ -42,31 +40,41 @@ class RPCServer:
         elif method == "eth_getBalance":
             result = self.blockchain.get_balance(params[0])
         elif method == "eth_getBlockByNumber":
-            result = self.blockchain.db.get_block_by_height(params[0])
+            result = self.blockchain.get_block_by_height(params[0])
+        elif method == "eth_getBlockByHash":
+            result = self.blockchain.get_block_by_hash(params[0])
+        elif method == "eth_getTransactionByHash":
+            result = self.blockchain.get_transaction_by_hash(params[0])
         elif method == "eth_sendRawTransaction":
-            # params[0] is signed tx dict
             let ok = self.blockchain.add_signed_transaction(params[0])
             result = ok
         elif method == "eth_gasPrice":
-            result = 100 # Static placeholder for now
+            result = 100
+        elif method == "eth_chainId":
+            result = 1
         else:
-            self.send_rpc_error(res, -32601, "Method not found", id)
-            return
+            return self.send_rpc_error(-32601, "Method not found", id)
 
-        self.send_rpc_result(res, result, id)
+        return self.send_rpc_result(result, id)
 
-    proc send_rpc_result(res, result, id):
+    proc send_rpc_result(result, id):
         let response = {
             "jsonrpc": "2.0",
             "result": result,
             "id": id
         }
-        server.send_json(res, response)
+        return server.response_json(json_stringify(response))
 
-    proc send_rpc_error(res, code, message, id):
+    proc send_rpc_error(code, message, id):
         let response = {
             "jsonrpc": "2.0",
             "error": {"code": code, "message": message},
             "id": id
         }
-        server.send_json(res, response)
+        return server.response_json(json_stringify(response))
+
+proc json_stringify(value):
+    let cjson = json.cJSON_FromSage(value)
+    let str = json.cJSON_PrintUnformatted(cjson)
+    json.cJSON_Delete(cjson)
+    return str

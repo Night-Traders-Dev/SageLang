@@ -21,6 +21,12 @@ proc handle_app_js(req):
 proc handle_style_css(req):
     return serve_file("SageChain/public/style.css", "text/css")
 
+proc json_stringify(value):
+    let cjson_obj = json.cJSON_FromSage(value)
+    let json_str = json.cJSON_PrintUnformatted(cjson_obj)
+    json.cJSON_Delete(cjson_obj)
+    return json_str
+
 proc api_get_blocks(req):
     # Return last 10 blocks
     let height = 0
@@ -28,7 +34,7 @@ proc api_get_blocks(req):
     
     while io.exists(db.height_dir + "/" + str(height) + ".json"):
         height = height + 1
-    
+        
     let start = 0
     if height > 10:
         start = height - 10
@@ -40,7 +46,7 @@ proc api_get_blocks(req):
             push(blocks, b)
         i = i - 1
         
-    return server.response_json(json.stringify(blocks))
+    return server.response_json(json_stringify(blocks))
 
 proc api_get_block(req):
     let h_str = ""
@@ -54,7 +60,7 @@ proc api_get_block(req):
         let h = int(tonumber(h_str))
         let b = db.get_block_by_height(h)
         if b != nil:
-            return server.response_json(json.stringify(b))
+            return server.response_json(json_stringify(b))
     return server.response_not_found("Block not found")
 
 proc api_get_tx(req):
@@ -68,7 +74,7 @@ proc api_get_tx(req):
     if len(tx_hash) > 0:
         let tx = db.get_transaction(tx_hash)
         if tx != nil:
-            return server.response_json(json.stringify(tx))
+            return server.response_json(json_stringify(tx))
     return server.response_not_found("Transaction not found")
 
 let srv = server.create_server("0.0.0.0", 8080)

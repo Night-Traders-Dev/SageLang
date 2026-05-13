@@ -23,7 +23,9 @@ class EventLog:
         push(self.events[contract_addr], event)
         
         # Log to disk
-        let log_line = json.stringify(event) + "\n"
+        let cjson = json.cJSON_FromSage(event)
+        let log_line = json.cJSON_PrintUnformatted(cjson) + "\n"
+        json.cJSON_Delete(cjson)
         io.appendfile(self.path, log_line)
         print "EVENT [" + event_name + "] from " + contract_addr
 

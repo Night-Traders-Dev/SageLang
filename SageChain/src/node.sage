@@ -4,6 +4,7 @@ proc main():
     import blockchain.net as net
     import blockchain.rpc as rpc
     import blockchain.consensus.pow as pow_mod
+    import thread
     import sys
     import io
 
@@ -32,33 +33,23 @@ proc main():
 
     proc run_network():
         print "P2P Network Task Initializing..."
-        # RPC and P2P run concurrently in the scheduler
-        # In a real environment, we'd spawn separate tasks
-        # For this simulation, we'll start them sequentially
-        rpc_srv.start()
-        p2p.start()
+        thread.spawn(rpc_srv.start)
+        thread.spawn(p2p.start)
 
     proc simulator():
         print "Starting network simulator (mining blocks every ~15 seconds)..."
         while true:
-            # Simulate network delay using clock()
             let last_check = clock()
             while clock() - last_check < 15.0:
-                # Do actual work or just wait
                 let i = 0
                 while i < 1000:
-                    i = i + 1 # Internal loop to reduce clock() calls
-                
+                    i = i + 1
             print "Mining new block..."
             let blk = chain.mine_pending_transactions(w.get_address())
-            
             if blk != nil:
-                # Create some random transactions
-                # Add dummy nonce and chain_id to fix Transaction init bug
                 let tx = chain.add_transaction(w.get_address(), "0x" + str(clock()), 1.5)
                 w.sign_transaction(tx)
                 chain.add_signed_transaction(tx)
-                
                 p2p.broadcast("new_block", blk.to_dict())
 
     # Use the scheduler to run both tasks

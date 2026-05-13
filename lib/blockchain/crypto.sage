@@ -21,7 +21,7 @@ proc generate_keypair():
         import crypto.hash as hash
         let seed = str(clock()) + str(hash.sha256_hex("entropy-source"))
         let priv = hash.sha256_hex(seed + "priv")
-        let pub = "0x" + hash.sha256_hex(priv + "pub")[:40]
+        let pub = priv
         return {"public": pub, "private": priv}
 
 proc sign(message, private_key):
@@ -36,4 +36,4 @@ proc verify(message, signature, public_key):
         return ffi.call(lib, "ed25519_verify", "int", [message, signature, public_key]) == 1
     else:
         import crypto.hash as hash
-        return hash.sha256_hex(message + "priv-simulated") == signature # Simplified fallback
+        return hash.sha256_hex(message + public_key) == signature

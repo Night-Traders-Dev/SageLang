@@ -49,7 +49,8 @@ class Contract:
         let start_gas = vm_gas_used_get()
         
         print "VM executing..."
-        let res = vm.execute(ptr, self.state)
+        let env = {"state": self.state}
+        let res = vm.execute(ptr, env)
         
         # Deduct gas based on execution
         let end_gas = vm_gas_used_get()
