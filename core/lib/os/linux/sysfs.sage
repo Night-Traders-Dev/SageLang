@@ -37,6 +37,11 @@ proc read_sysfs_int(path):
     return int(val)
 end
 
+## Returns true if the given sysfs path exists.
+proc device_exists(path):
+    return io.exists(path)
+end
+
 # ========== Device info ==========
 
 proc get_block_device_info(dev_name):
