@@ -406,21 +406,31 @@ static char* resolve_module_path_for_llvm(const LLVMCompiler* lc, const char* mo
     char path[PATH_MAX];
     // Search relative to source file directory
     const char* search[] = { "", "lib/", "modules/" };
+    size_t dir_len = strlen(dir);
+    size_t pn_len = strlen(path_name);
     for (int i = 0; i < 3; i++) {
-        snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], path_name);
-        if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+        size_t s_len = strlen(search[i]);
+        if (dir_len + s_len + pn_len + 6 < sizeof(path)) {
+            snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], path_name);
+            if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+        }
     }
     // Search relative to CWD
     for (int i = 0; i < 3; i++) {
-        snprintf(path, sizeof(path), "./%s%s.sage", search[i], path_name);
-        if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+        size_t s_len = strlen(search[i]);
+        if (s_len + pn_len + 8 < sizeof(path)) {
+            snprintf(path, sizeof(path), "./%s%s.sage", search[i], path_name);
+            if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+        }
     }
     // Search installed library path
 #ifndef SAGE_LIB_DIR
 #define SAGE_LIB_DIR "/usr/local/share/sage/lib"
 #endif
-    snprintf(path, sizeof(path), "%s/%s.sage", SAGE_LIB_DIR, path_name);
-    if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+    if (strlen(SAGE_LIB_DIR) + pn_len + 7 < sizeof(path)) {
+        snprintf(path, sizeof(path), "%s/%s.sage", SAGE_LIB_DIR, path_name);
+        if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+    }
     // Search SAGE_PATH
     const char* sage_path = getenv("SAGE_PATH");
     if (sage_path != NULL) {
@@ -434,8 +444,10 @@ static char* resolve_module_path_for_llvm(const LLVMCompiler* lc, const char* mo
                     char ec = *p;
                     *p = '\0';
                     if (p > start) {
-                        snprintf(path, sizeof(path), "%s/%s.sage", start, path_name);
-                        if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+                        if (strlen(start) + pn_len + 7 < sizeof(path)) {
+                            snprintf(path, sizeof(path), "%s/%s.sage", start, path_name);
+                            if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+                        }
                     }
                     if (ec == '\0') break;
                     start = p + 1;
@@ -1047,6 +1059,7 @@ static int llvm_resolve_gpu_constant(const char* name, double* out_value) {
 
 // Try to emit a GPU module method call. Returns the result register, or -1 if not a known GPU method.
 static int llvm_try_emit_gpu_call(LLVMCompiler* lc, const char* method, int* arg_regs, int arg_count) {
+    (void)arg_count;
     int r = llc_new_reg(lc);
 
     // Macro for emitting calls with variable args
@@ -2066,7 +2079,9 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             llvm_emit_stmt_list(lc, stmt->as.comptime.body);
             break;
 
-        // Phase 17: macro definition — skipped in LLVM compiled mode
+        case STMT_STRUCT:
+        case STMT_ENUM:
+        case STMT_TRAIT:
         case STMT_MACRO_DEF:
             break;
     }

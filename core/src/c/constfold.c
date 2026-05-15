@@ -310,6 +310,11 @@ static void fold_stmt(Stmt* stmt) {
         case STMT_BREAK:
         case STMT_CONTINUE:
         case STMT_ASYNC_PROC:
+        case STMT_STRUCT:
+        case STMT_ENUM:
+        case STMT_TRAIT:
+        case STMT_COMPTIME:
+        case STMT_MACRO_DEF:
             break;
     }
 }

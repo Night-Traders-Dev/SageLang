@@ -227,6 +227,7 @@ static Value math_atan2_native(int argCount, Value* args) {
 }
 
 static Value math_random_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
     return val_number((double)rand() / (double)RAND_MAX);
 }
 

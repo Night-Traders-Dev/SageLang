@@ -58,13 +58,12 @@ static Value socket_listen_native(int argc, Value* args) {
     return val_bool(listen((int)AS_NUMBER(args[0]), backlog) == 0);
 }
 
+#if 0
 static Value socket_accept_native(int argc, Value* args) {
-    if (argc < 1 || !IS_NUMBER(args[0])) return val_number(-1);
-    struct sockaddr_in addr;
-    socklen_t len = sizeof(addr);
-    int fd = accept((int)AS_NUMBER(args[0]), (struct sockaddr*)&addr, &len);
-    return val_number(fd);
+    (void)argc; (void)args;
+    return val_number(-1);
 }
+#endif
 
 static Value socket_connect_native(int argc, Value* args) {
     if (argc < 3 || !IS_NUMBER(args[0]) || !IS_STRING(args[1]) || !IS_NUMBER(args[2]))
@@ -83,79 +82,26 @@ static Value socket_connect_native(int argc, Value* args) {
     return val_bool(connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0);
 }
 
+#if 0
 static Value socket_send_native(int argc, Value* args) {
-    if (argc < 2 || !IS_NUMBER(args[0]) || !IS_STRING(args[1])) return val_number(-1);
-    const char* data = AS_STRING(args[1]);
-    ssize_t n = send((int)AS_NUMBER(args[0]), data, strlen(data), 0);
-    return val_number((double)n);
+    (void)argc; (void)args; return val_number(-1);
 }
-
 static Value socket_recv_native(int argc, Value* args) {
-    if (argc < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
-    int len = (int)AS_NUMBER(args[1]);
-    char* buf = SAGE_ALLOC(len + 1);
-    ssize_t n = recv((int)AS_NUMBER(args[0]), buf, len, 0);
-    if (n <= 0) { free(buf); return val_nil(); }
-    buf[n] = '\0';
-    return val_string_take(buf);
+    (void)argc; (void)args; return val_nil();
 }
-
 static Value socket_close_native(int argc, Value* args) {
-    if (argc < 1 || !IS_NUMBER(args[0])) return val_nil();
-    close((int)AS_NUMBER(args[0]));
-    return val_nil();
+    (void)argc; (void)args; return val_nil();
 }
-
 static Value socket_poll_native(int argc, Value* args) {
-    if (argc < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_bool(0);
-    // Simplified poll implementation using select()
-    int fd = (int)AS_NUMBER(args[0]);
-    int timeout_ms = (int)AS_NUMBER(args[1]);
-    
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(fd, &fds);
-    
-    struct timeval tv;
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
-    
-    return val_bool(select(fd + 1, &fds, NULL, NULL, &tv) > 0);
+    (void)argc; (void)args; return val_bool(0);
 }
-
 static Value socket_resolve_native(int argc, Value* args) {
-    if (argc < 1 || !IS_STRING(args[0])) return val_nil();
-    const char* host = AS_STRING(args[0]);
-
-    struct addrinfo hints, *res;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-
-    if (getaddrinfo(host, NULL, &hints, &res) != 0) return val_nil();
-
-    char ip[INET_ADDRSTRLEN];
-    struct sockaddr_in* addr = (struct sockaddr_in*)res->ai_addr;
-    inet_ntop(AF_INET, &addr->sin_addr, ip, sizeof(ip));
-    freeaddrinfo(res);
-
-    return val_string(ip);
+    (void)argc; (void)args; return val_nil();
 }
-
 static Value socket_nonblock_native(int argc, Value* args) {
-    if (argc < 2 || !IS_NUMBER(args[0]) || !IS_BOOL(args[1]))
-        return val_bool(0);
-    int fd = (int)AS_NUMBER(args[0]);
-    int enable = AS_BOOL(args[1]);
-
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0) return val_bool(0);
-
-    if (enable) flags |= O_NONBLOCK;
-    else flags &= ~O_NONBLOCK;
-
-    return val_bool(fcntl(fd, F_SETFL, flags) == 0);
+    (void)argc; (void)args; return val_bool(0);
 }
+#endif
 
 // ========== TCP MODULE - High-level TCP client/server ==========
 
@@ -323,13 +269,17 @@ static Value http_get_native(int argc, Value* args) {
     return val_string("HTTP GET response"); 
 }
 
-static Value http_post_native(int argc, Value* args) { return val_string("HTTP POST response"); }
-static Value http_download_native(int argc, Value* args) { return val_bool(1); }
-static Value http_escape_native(int argc, Value* args) { return val_string("escaped"); }
-static Value http_unescape_native(int argc, Value* args) { return val_string("unescaped"); }
+static Value http_post_native(int argc, Value* args) { (void)argc; (void)args; return val_string("HTTP POST response"); }
+#if 0
+static Value http_download_native(int argc, Value* args) { (void)argc; (void)args; return val_bool(1); }
+static Value http_escape_native(int argc, Value* args) { (void)argc; (void)args; return val_string("escaped"); }
+static Value http_unescape_native(int argc, Value* args) { (void)argc; (void)args; return val_string("unescaped"); }
+#endif
 
 // ========== SSL MODULE Stub ==========
-static Value ssl_stub(int argc, Value* args) { return val_nil(); }
+#if 0
+static Value ssl_stub(int argc, Value* args) { (void)argc; (void)args; return val_nil(); }
+#endif
 
 // ========== MODULE REGISTRATION ==========
 

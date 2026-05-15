@@ -602,11 +602,13 @@ static char* resolve_module_path_for_compiler(const Compiler* compiler, const ch
     // Search relative to source file directory
     const char* search[] = { "", "lib/", "modules/" };
     for (int i = 0; i < 3; i++) {
+        if (strlen(dir) + strlen(search[i]) + strlen(path_name) + 6 >= sizeof(path)) continue;
         snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], path_name);
         if (access(path, F_OK) == 0) return str_dup(path);
     }
     // Search relative to CWD
     for (int i = 0; i < 3; i++) {
+        if (strlen(search[i]) + strlen(path_name) + 8 >= sizeof(path)) continue;
         snprintf(path, sizeof(path), "./%s%s.sage", search[i], path_name);
         if (access(path, F_OK) == 0) return str_dup(path);
     }
@@ -614,8 +616,10 @@ static char* resolve_module_path_for_compiler(const Compiler* compiler, const ch
 #ifndef SAGE_LIB_DIR
 #define SAGE_LIB_DIR "/usr/local/share/sage/lib"
 #endif
-    snprintf(path, sizeof(path), "%s/%s.sage", SAGE_LIB_DIR, path_name);
-    if (access(path, F_OK) == 0) return str_dup(path);
+    if (strlen(SAGE_LIB_DIR) + strlen(path_name) + 7 < sizeof(path)) {
+        snprintf(path, sizeof(path), "%s/%s.sage", SAGE_LIB_DIR, path_name);
+        if (access(path, F_OK) == 0) return str_dup(path);
+    }
     // Search SAGE_PATH environment variable
     const char* sage_path = getenv("SAGE_PATH");
     if (sage_path != NULL) {
@@ -708,6 +712,9 @@ static void collect_local_lets(Compiler* compiler, Stmt* stmt, NameEntry** local
             case STMT_RAISE:
             case STMT_YIELD:
             case STMT_IMPORT:
+            case STMT_STRUCT:
+            case STMT_ENUM:
+            case STMT_TRAIT:
                 break;
             case STMT_COMPTIME:
                 collect_local_lets(compiler, stmt->as.comptime.body, locals);
@@ -2157,19 +2164,10 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             // In compiled mode, async procs are emitted as regular procs (synchronous)
             break;
 
-        // Phase 17: comptime block — execute at compile time via interpreter,
-        // emit results as constants. In compiled mode, acts as a block that
-        // produces side effects during compilation (e.g., populating globals).
-        case STMT_COMPTIME: {
-            // Emit body as regular statements in compiled mode (the compiler
-            // currently doesn't have a separate interpretation phase, so comptime
-            // blocks are compiled normally — the constant folding passes handle
-            // the optimization).
-            emit_embedded_block(compiler, stmt->as.comptime.body);
-            break;
-        }
-
-        // Phase 17: macro definition — in compiled mode, treated as regular proc
+        case STMT_STRUCT:
+        case STMT_ENUM:
+        case STMT_TRAIT:
+        case STMT_COMPTIME:
         case STMT_MACRO_DEF:
             break;
     }
@@ -2387,6 +2385,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    return freed;\n"
         "}\n"
         "\n"
+        , out);
+    fputs(
         "static void sage_gc_collect(void) {\n"
         "    if (!sage_gc.enabled) return;\n"
         "    unsigned long before_bytes = sage_gc_live_bytes();\n"
@@ -2680,6 +2680,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    return 0;\n"
         "}\n"
         "\n"
+        , out);
+    fputs(
         "static void sage_print_value(SageValue value) {\n"
         "    switch (value.type) {\n"
         "        case SAGE_TAG_NUMBER: printf(\"%g\", value.as.number); break;\n"

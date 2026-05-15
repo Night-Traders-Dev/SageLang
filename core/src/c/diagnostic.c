@@ -40,6 +40,7 @@ const char* sage_token_type_name(TokenType type) {
         case TOKEN_CLASS: return "CLASS";
         case TOKEN_SELF: return "SELF";
         case TOKEN_INIT: return "INIT";
+        case TOKEN_SUPER: return "SUPER";
         case TOKEN_MATCH: return "MATCH";
         case TOKEN_CASE: return "CASE";
         case TOKEN_DEFAULT: return "DEFAULT";
@@ -51,6 +52,11 @@ const char* sage_token_type_name(TokenType type) {
         case TOKEN_YIELD: return "YIELD";
         case TOKEN_ASYNC: return "ASYNC";
         case TOKEN_AWAIT: return "AWAIT";
+        case TOKEN_STRUCT: return "STRUCT";
+        case TOKEN_ENUM: return "ENUM";
+        case TOKEN_TRAIT: return "TRAIT";
+        case TOKEN_UNSAFE: return "UNSAFE";
+        case TOKEN_END: return "END";
         case TOKEN_IMPORT: return "IMPORT";
         case TOKEN_FROM: return "FROM";
         case TOKEN_AS: return "AS";
@@ -75,6 +81,7 @@ const char* sage_token_type_name(TokenType type) {
         case TOKEN_LBRACE: return "LBRACE";
         case TOKEN_RBRACE: return "RBRACE";
         case TOKEN_DOT: return "DOT";
+        case TOKEN_ARROW: return "ARROW";
         case TOKEN_AMP: return "AMP";
         case TOKEN_PIPE: return "PIPE";
         case TOKEN_CARET: return "CARET";
@@ -95,6 +102,7 @@ const char* sage_token_type_name(TokenType type) {
         case TOKEN_INDENT: return "INDENT";
         case TOKEN_DEDENT: return "DEDENT";
         case TOKEN_NEWLINE: return "NEWLINE";
+        case TOKEN_DOC_COMMENT: return "DOC_COMMENT";
         case TOKEN_EOF: return "EOF";
         case TOKEN_ERROR: return "ERROR";
     }

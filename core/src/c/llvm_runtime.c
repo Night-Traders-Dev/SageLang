@@ -784,6 +784,26 @@ static int sage_dict_get_int(SageValue dict, const char* key, int def) {
     return def;
 }
 
+#if 0
+static double sage_dict_get_num(SageValue dict, const char* key, double def) {
+    for (int i = 0; i < dict.as.dict->count; i++) {
+        if (strcmp(dict.as.dict->keys[i], key) == 0) {
+            if (dict.as.dict->values[i].type == SAGE_TAG_NUMBER) return dict.as.dict->values[i].as.number;
+        }
+    }
+    return def;
+}
+
+static const char* sage_dict_get_str(SageValue dict, const char* key, const char* def) {
+    for (int i = 0; i < dict.as.dict->count; i++) {
+        if (strcmp(dict.as.dict->keys[i], key) == 0) {
+            if (dict.as.dict->values[i].type == SAGE_TAG_STRING) return dict.as.dict->values[i].as.string;
+        }
+    }
+    return def;
+}
+#endif
+
 static double sage_dict_get_num(SageValue dict, const char* key, double def) {
     SageValue v = sage_dict_get(dict, key);
     if (v.type == SAGE_NUMBER) return v.as.number;

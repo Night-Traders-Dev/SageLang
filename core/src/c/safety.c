@@ -175,6 +175,7 @@ SafetyVar* safety_lookup(SafetyContext* ctx, const char* name, int name_len) {
 }
 
 void safety_mark_moved(SafetyContext* ctx, SafetyVar* var, int line, const char* dest) {
+    (void)ctx;
     if (!var) return;
     var->state = OWN_MOVED;
     var->moved_line = line;
@@ -585,6 +586,7 @@ static void analyze_expr(SafetyContext* ctx, Expr* expr) {
     case EXPR_STRING:
     case EXPR_BOOL:
     case EXPR_SUPER:
+    case EXPR_COMPTIME:
         break;
     }
 }
@@ -842,6 +844,8 @@ static void analyze_stmt(SafetyContext* ctx, Stmt* stmt) {
     case STMT_TRAIT:
     case STMT_BREAK:
     case STMT_CONTINUE:
+    case STMT_COMPTIME:
+    case STMT_MACRO_DEF:
         break;
     }
 }

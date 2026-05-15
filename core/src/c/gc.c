@@ -125,7 +125,8 @@ static unsigned long gc_live_bytes(void) {
     return gc.bytes_allocated - gc.bytes_freed;
 }
 
-static void gc_recompute_thresholds(unsigned long reclaimed_bytes, int reclaimed_objects) {
+static void gc_recompute_thresholds(size_t reclaimed_bytes, size_t reclaimed_objects) {
+    (void)reclaimed_objects;
     unsigned long live_bytes = gc_live_bytes();
     int live_objects = gc.object_count;
     unsigned long byte_padding = live_bytes / 2;
@@ -135,10 +136,10 @@ static void gc_recompute_thresholds(unsigned long reclaimed_bytes, int reclaimed
     if (gc.collections == 0) {
         byte_padding = GC_MIN_TRIGGER_BYTES;
         object_padding = GC_MIN_TRIGGER_OBJECTS;
-    } else if (reclaimed_bytes <= live_bytes / 8) {
+    } else if (reclaimed_bytes <= (size_t)live_bytes / 8) {
         byte_padding /= 2;
         if (byte_padding < GC_MIN_TRIGGER_BYTES / 2) byte_padding = GC_MIN_TRIGGER_BYTES / 2;
-    } else if (reclaimed_bytes >= live_bytes) {
+    } else if (reclaimed_bytes >= (size_t)live_bytes) {
         byte_padding *= 2;
     }
     gc.next_gc_bytes = live_bytes + byte_padding;
@@ -357,6 +358,7 @@ void gc_track_external_free(size_t size) { gc.bytes_freed += (unsigned long)size
 
 // Shade an object gray: set color to GRAY and push to mark stack
 void gc_shade_gray(void* object, int type) {
+    (void)type;
     if (object == NULL) return;
     GCHeader* header = (GCHeader*)object - 1;
     if (header->color == GC_WHITE) {

@@ -136,6 +136,12 @@ Expr* clone_expr(const Expr* expr) {
             break;
         case EXPR_AWAIT:
             return new_await_expr(clone_expr(expr->as.await.expression));
+        case EXPR_SUPER:
+            e->as.super_expr.method = clone_token(expr->as.super_expr.method);
+            break;
+        case EXPR_COMPTIME:
+            e->as.comptime.expression = clone_expr(expr->as.comptime.expression);
+            break;
     }
 
     return e;

@@ -113,7 +113,7 @@ JitState* interpreter_get_jit(void) { return g_jit; }
 #define MAX_RECURSION_DEPTH 1000
 
 // Check if a statement has a specific pragma decorator (@nojit, @noaot, etc.)
-static int stmt_has_pragma(Stmt* stmt, const char* name) {
+static __attribute__((unused)) int stmt_has_pragma(Stmt* stmt, const char* name) {
     if (!stmt || !stmt->pragmas) return 0;
     for (Pragma* p = stmt->pragmas; p; p = p->next) {
         if (strcmp(p->name, name) == 0) return 1;
@@ -172,6 +172,7 @@ static Value clock_native(int argCount, Value* args) {
 }
 
 static Value input_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
     char buffer[1024];
     if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
         size_t len = strlen(buffer);
@@ -677,11 +678,13 @@ static Value dict_delete_native(int argCount, Value* args) {
 
 // GC functions
 static Value gc_collect_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
     gc_collect();
     return val_nil();
 }
 
 static Value gc_stats_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
     GCStats stats = gc_get_stats();
     gc_pin();
     Value dict = val_dict();
@@ -699,16 +702,19 @@ static Value gc_stats_native(int argCount, Value* args) {
 }
 
 static Value gc_collections_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
     GCStats stats = gc_get_stats();
     return val_number(stats.collections);
 }
 
 static Value gc_enable_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
     gc_enable();
     return val_nil();
 }
 
 static Value gc_disable_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
     gc_disable();
     return val_nil();
 }
@@ -2729,7 +2735,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 return EVAL_RESULT(expr->as.variable.cached_node->value);
             }
 
-            Value val;
+            
             Token t = expr->as.variable.name;
             Env* found_env = NULL;
             EnvNode* found_node = NULL;
@@ -3275,11 +3281,11 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
         g_global_env = env;
         first_call = 0;
     }
-    if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+    if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
 
     if (g_generator_resume_target != NULL && stmt != g_generator_resume_target &&
         !stmt_contains_target(stmt, g_generator_resume_target)) {
-        return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+        return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
     }
 
     if (stmt == g_generator_resume_target) {
@@ -3310,12 +3316,12 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                         printf("\n");
                     }
                     AST_GC_POP();
-                    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+                    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
                 }
             }
             print_value(result.value);
             printf("\n");
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_LET: {
@@ -3327,14 +3333,14 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             }
             Token t = stmt->as.let.name;
             env_define_const(env, t.start, t.length, val);
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_EXPRESSION: {
             ExecResult result = eval_expr(stmt->as.expression, env);
             if (result.is_throwing) return result;
             // Return actual value (used by REPL to display expression results)
-            return (ExecResult){ result.value, 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ result.value, 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_BLOCK: {
@@ -3342,7 +3348,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             // Collect deferred statements (LIFO order)
             Stmt* deferred[64];
             int defer_count = 0;
-            ExecResult block_result = { val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            ExecResult block_result = { val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
 
             while (current != NULL) {
                 if (current->type == STMT_DEFER) {
@@ -3388,7 +3394,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             } else if (stmt->as.if_stmt.else_branch != NULL) {
                 return interpret(stmt->as.if_stmt.else_branch, env);
             }
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_WHILE: {
@@ -3415,7 +3421,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 if (res.is_breaking) break;
                 if (res.is_continuing) continue;
             }
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_FOR: {
@@ -3425,7 +3431,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
 
             if (iterable.type != VAL_ARRAY) {
                 fprintf(stderr, "Runtime Error: for loop iterable must be an array.\n");
-                return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+                return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
             }
 
             AST_GC_PUSH(iterable);
@@ -3469,14 +3475,14 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             }
             AST_GC_POP_ENV();
             AST_GC_POP();
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_BREAK:
-            return (ExecResult){ val_nil(), 0, 1, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 1, 0, 0, val_nil(), 0, NULL, 0, 0 };
 
         case STMT_CONTINUE:
-            return (ExecResult){ val_nil(), 0, 0, 1, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 1, 0, val_nil(), 0, NULL, 0, 0 };
 
         // PHASE 8: Modified STMT_PROC to add functions to environment
         case STMT_PROC: {
@@ -3492,7 +3498,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             }
 
             env_define_const(env, name.start, name.length, func_val);
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_ASYNC_PROC: {
@@ -3500,7 +3506,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             Value func_val = val_function(&stmt->as.async_proc, env);
             func_val.as.function->is_async = 1;
             env_define_const(env, name.start, name.length, func_val);
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_CLASS: {
@@ -3513,11 +3519,11 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                         parent = parent_val.as.class_val;
                     } else {
                         fprintf(stderr, "Runtime Error: Parent must be a class.\n");
-                        return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+                        return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
                     }
                 } else {
                     fprintf(stderr, "Runtime Error: Undefined parent class.\n");
-                    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+                    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
                 }
             }
             
@@ -3545,7 +3551,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             env_define_const(env, name.start, name.length, class_value);
             gc_unpin();
             
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         // Phase 1.7: Struct — lightweight value type, auto init/eq/str
@@ -3576,7 +3582,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             env_define(env, meta_key, (int)strlen(meta_key), fields_arr);
             gc_unpin();
 
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         // Phase 1.7: Enum — tagged variant type
@@ -3601,7 +3607,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             free(ename);
 
             env_define_const(env, name.start, name.length, enum_dict);
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         // Phase 1.7: Trait — method signature contract (stored as metadata)
@@ -3632,7 +3638,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             free(tname);
 
             env_define_const(env, name.start, name.length, trait_dict);
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_RETURN: {
@@ -3642,7 +3648,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 if (result.is_throwing) return result;
                 val = result.value;
             }
-            return (ExecResult){ val, 1, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val, 1, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_TRY: {
@@ -3714,7 +3720,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             } else if (!IS_EXCEPTION(exc_val)) {
                 exc_val = val_exception("Unknown error");
             }
-            return (ExecResult){ val_nil(), 0, 0, 0, 1, exc_val, 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 1, exc_val, 0, NULL, 0, 0 };
         }
 
         // PHASE 7: Yield statement execution
@@ -3746,19 +3752,19 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 // import module_name (no alias)
                 if (!import_all(env, module_name)) {
                     fprintf(stderr, "Error: Failed to import module '%s'\n", module_name);
-                    return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL };
+                    return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL, 0, 0 };
                 }
             } else if (import_all_flag && alias) {
                 // import module_name as alias
                 if (!import_as(env, module_name, alias)) {
                     fprintf(stderr, "Error: Failed to import module '%s' as '%s'\n", module_name, alias);
-                    return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL };
+                    return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL, 0, 0 };
                 }
             } else if (item_count == 1 && items[0] != NULL && strcmp(items[0], "*") == 0) {
                 // from module_name import * (wildcard — import all exports into current scope)
                 if (!import_wildcard(env, module_name)) {
                     fprintf(stderr, "Error: Failed to wildcard-import module '%s'\n", module_name);
-                    return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL };
+                    return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL, 0, 0 };
                 }
             } else {
                 // from module_name import item1, item2, ...
@@ -3771,14 +3777,14 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 if (!import_from(env, module_name, import_items, item_count)) {
                     fprintf(stderr, "Error: Failed to import from module '%s'\n", module_name);
                     free(import_items);
-                    return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL };
+                    return (ExecResult){ val_nil(), 0, 0, 0, 1, val_exception("Import error"), 0, NULL, 0, 0 };
                 }
 
                 free(import_items);
             }
 
             
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_MATCH: {
@@ -3811,7 +3817,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 return res;
             }
             AST_GC_POP();
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
 
         case STMT_DEFER:
@@ -3844,8 +3850,8 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             // Use val_function which allocates via gc_alloc (GC-tracked)
             Value func_val = val_function(proc, env);
             env_define_const(env, name.start, name.length, func_val);
-            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+            return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
         }
     }
-    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL };
+    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
 }

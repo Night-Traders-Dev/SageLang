@@ -100,6 +100,7 @@ static void print_usage(FILE* stream) {
             "       sage --install-info     Full installation details\n");
 }
 
+
 static const char* value_type_name(Value v) {
     switch (v.type) {
         case VAL_NIL: return "nil";
@@ -125,6 +126,7 @@ static const char* value_type_name(Value v) {
         default: return "unknown";
     }
 }
+
 
 static int parse_codegen_options(int argc, const char* argv[], int start_index,
                                  const char** output_path, const char** cc_command,
@@ -173,6 +175,7 @@ static int parse_codegen_options(int argc, const char* argv[], int start_index,
 
     return 1;
 }
+
 
 static int parse_pico_options(int argc, const char* argv[], int start_index,
                               const char** output_dir, const char** board,
@@ -333,6 +336,7 @@ static CodegenTargetSpec parse_target_spec(const char* arch) {
 
 
 // Helper to read entire file into memory
+
 static char* main_read_file(const char* path) {
     FILE* file = fopen(path, "rb");
     if (file == NULL) {
@@ -1043,7 +1047,7 @@ static void repl_save_session(const char* path) {
 }
 
 // Phase 12: Interactive REPL
-static void run_repl(SageRuntimeMode runtime_mode) {
+static void run_repl(volatile SageRuntimeMode runtime_mode) {
     printf("Sage REPL v" SAGE_VERSION_STR "\n");
     printf("Type :help for help, :quit to exit.\n");
 
