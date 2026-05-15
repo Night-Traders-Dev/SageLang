@@ -137,7 +137,10 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
             fprintf(stderr, "Error: Module path too long for '%s'\n", name);
             continue;
         }
-        snprintf(path, MAX_MODULE_PATH, "%s/%s.sage", cache->search_paths[i], path_name);
+        strcpy(path, cache->search_paths[i]);
+        strcat(path, "/");
+        strcat(path, path_name);
+        strcat(path, ".sage");
         if (file_exists(path)) {
 #ifndef PICO_BUILD
             if (!path_is_within(path, cache->search_paths[i])) {
@@ -151,7 +154,10 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
 
         // Try without extension (for directories with __init__.sage)
         if (strlen(cache->search_paths[i]) + strlen(path_name) + 15 >= MAX_MODULE_PATH) continue;
-        snprintf(path, MAX_MODULE_PATH, "%s/%s/__init__.sage", cache->search_paths[i], path_name);
+        strcpy(path, cache->search_paths[i]);
+        strcat(path, "/");
+        strcat(path, path_name);
+        strcat(path, "/__init__.sage");
         if (file_exists(path)) {
 #ifndef PICO_BUILD
             if (!path_is_within(path, cache->search_paths[i])) {

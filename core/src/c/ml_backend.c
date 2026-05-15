@@ -168,6 +168,7 @@ typedef struct {
     int size;
 } NativeTensor;
 
+#if 0
 static NativeTensor* tensor_create(int ndim, int* shape) {
     NativeTensor* t = (NativeTensor*)malloc(sizeof(NativeTensor));
     t->ndim = ndim;
@@ -188,6 +189,7 @@ static void tensor_free(NativeTensor* t) {
         free(t);
     }
 }
+#endif
 
 // ============================================================================
 // Core math operations (optimized C, no interpreter overhead)
@@ -241,9 +243,11 @@ static void add_f64(const double* A, const double* B, double* C, int n) {
 }
 
 // Element-wise multiply: C = A * B
+#if 0
 static void mul_f64(const double* A, const double* B, double* C, int n) {
     for (int i = 0; i < n; i++) C[i] = A[i] * B[i];
 }
+#endif
 
 // Scalar multiply: C = A * s
 static void scale_f64(const double* A, double s, double* C, int n) {

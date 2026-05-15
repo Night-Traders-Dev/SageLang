@@ -434,12 +434,14 @@ static void kt_error_at(KtCompiler* compiler, const Token* token,
     va_end(args);
 }
 
+#if 0
 static void kt_error(KtCompiler* compiler, const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
     kt_verror(compiler, NULL, NULL, fmt, args);
     va_end(args);
 }
+#endif
 
 // --- Token to AST helpers ---
 
@@ -570,12 +572,14 @@ static void kt_emit_line(KtCompiler* compiler, const char* fmt, ...) {
     fputc('\n', compiler->out);
 }
 
+#if 0
 static void kt_emit_raw(KtCompiler* compiler, const char* fmt, ...) {
     va_list args;
     va_start(args, fmt);
     vfprintf(compiler->out, fmt, args);
     va_end(args);
 }
+#endif
 
 // ============================================================================
 // Expression Emission — returns Kotlin expression strings

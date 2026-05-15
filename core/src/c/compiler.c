@@ -321,39 +321,6 @@ static const Token* expr_token(const Expr* expr) {
     }
 }
 
-static const Token* stmt_token(const Stmt* stmt) {
-    if (stmt == NULL) return NULL;
-
-    switch (stmt->type) {
-        case STMT_PRINT:
-            return expr_token(stmt->as.print.expression);
-        case STMT_EXPRESSION:
-            return expr_token(stmt->as.expression);
-        case STMT_LET:
-            return &stmt->as.let.name;
-        case STMT_IF:
-            return expr_token(stmt->as.if_stmt.condition);
-        case STMT_WHILE:
-            return expr_token(stmt->as.while_stmt.condition);
-        case STMT_PROC:
-            return &stmt->as.proc.name;
-        case STMT_FOR:
-            return &stmt->as.for_stmt.variable;
-        case STMT_RETURN:
-            return expr_token(stmt->as.ret.value);
-        case STMT_CLASS:
-            return &stmt->as.class_stmt.name;
-        case STMT_RAISE:
-            return expr_token(stmt->as.raise.exception);
-        case STMT_ASYNC_PROC:
-            return &stmt->as.async_proc.name;
-        case STMT_MACRO_DEF:
-            return &stmt->as.macro_def.name;
-        default:
-            return NULL;
-    }
-}
-
 static void emit_indent(Compiler* compiler) {
     for (int i = 0; i < compiler->indent; i++) {
         fputs("    ", compiler->out);
@@ -400,6 +367,7 @@ static NameEntry* add_name_entry(Compiler* compiler, NameEntry** list,
 
 static ProcEntry* add_proc_entry(Compiler* compiler, const char* sage_name,
                                  int param_count, const Token* token) {
+    (void)token;
     ProcEntry* existing = find_proc_entry(compiler->procs, sage_name);
     if (existing != NULL) {
         /* Silently keep the first definition (module namespace collision is expected
@@ -602,22 +570,38 @@ static char* resolve_module_path_for_compiler(const Compiler* compiler, const ch
     // Search relative to source file directory
     const char* search[] = { "", "lib/", "modules/" };
     for (int i = 0; i < 3; i++) {
-        if (strlen(dir) + strlen(search[i]) + strlen(path_name) + 6 >= sizeof(path)) continue;
-        snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], path_name);
+        size_t dlen = strlen(dir);
+        size_t slen = strlen(search[i]);
+        size_t plen = strlen(path_name);
+        if (dlen + slen + plen + 6 >= sizeof(path)) continue;
+        strcpy(path, dir);
+        strcat(path, search[i]);
+        strcat(path, path_name);
+        strcat(path, ".sage");
         if (access(path, F_OK) == 0) return str_dup(path);
     }
     // Search relative to CWD
     for (int i = 0; i < 3; i++) {
-        if (strlen(search[i]) + strlen(path_name) + 8 >= sizeof(path)) continue;
-        snprintf(path, sizeof(path), "./%s%s.sage", search[i], path_name);
+        size_t slen = strlen(search[i]);
+        size_t plen = strlen(path_name);
+        if (slen + plen + 8 >= sizeof(path)) continue;
+        strcpy(path, "./");
+        strcat(path, search[i]);
+        strcat(path, path_name);
+        strcat(path, ".sage");
         if (access(path, F_OK) == 0) return str_dup(path);
     }
     // Search installed library path
 #ifndef SAGE_LIB_DIR
 #define SAGE_LIB_DIR "/usr/local/share/sage/lib"
 #endif
-    if (strlen(SAGE_LIB_DIR) + strlen(path_name) + 7 < sizeof(path)) {
-        snprintf(path, sizeof(path), "%s/%s.sage", SAGE_LIB_DIR, path_name);
+    size_t sliblen = strlen(SAGE_LIB_DIR);
+    size_t plen = strlen(path_name);
+    if (sliblen + plen + 7 < sizeof(path)) {
+        strcpy(path, SAGE_LIB_DIR);
+        strcat(path, "/");
+        strcat(path, path_name);
+        strcat(path, ".sage");
         if (access(path, F_OK) == 0) return str_dup(path);
     }
     // Search SAGE_PATH environment variable
@@ -2409,6 +2393,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    sage_gc_recompute_thresholds(before_bytes - sage_gc_live_bytes(), before_objects - sage_gc.object_count);\n"
         "}\n"
         "\n"
+        , out);
+    fputs(
         "static int sage_gc_should_collect(size_t incoming_size) {\n"
         "    if (!sage_gc.enabled || sage_gc.pin_count > 0) return 0;\n"
         "    if ((sage_gc.object_count + 1) >= sage_gc.next_gc_objects) return 1;\n"
@@ -2461,6 +2447,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    sage_gc.object_count = 0;\n"
         "}\n"
         "\n"
+        , out);
+        fputs(
         "static void sage_gc_mark_value(SageValue value) {\n"
         "    switch (value.type) {\n"
         "        case SAGE_TAG_STRING:\n"
@@ -2551,6 +2539,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    dict->count++;\n"
         "}\n"
         "\n"
+        , out);
+    fputs(
         "static SageValue sage_make_dict_from_entries(int count, const char** keys, const SageValue* values) {\n"
         "    sage_gc_pin();\n"
         "    SageValue dict = sage_make_dict();\n"

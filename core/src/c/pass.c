@@ -167,6 +167,23 @@ static CatchClause* clone_catch_clause(const CatchClause* c) {
     return nc;
 }
 
+static TypeAnnotation* clone_type_annotation(const TypeAnnotation* ann) {
+    if (ann == NULL) return NULL;
+    TypeAnnotation* na = SAGE_ALLOC(sizeof(TypeAnnotation));
+    na->name = clone_token(ann->name);
+    na->param_count = ann->param_count;
+    na->is_optional = ann->is_optional;
+    if (ann->param_count > 0) {
+        na->params = SAGE_ALLOC(sizeof(TypeAnnotation*) * (size_t)ann->param_count);
+        for (int i = 0; i < ann->param_count; i++) {
+            na->params[i] = clone_type_annotation(ann->params[i]);
+        }
+    } else {
+        na->params = NULL;
+    }
+    return na;
+}
+
 Stmt* clone_stmt(const Stmt* stmt) {
     if (stmt == NULL) return NULL;
 
@@ -268,6 +285,8 @@ Stmt* clone_stmt(const Stmt* stmt) {
             break;
         case STMT_IMPORT: {
             s->as.import.module_name = stmt->as.import.module_name ? SAGE_STRDUP(stmt->as.import.module_name) : NULL;
+            s->as.import.import_all = stmt->as.import.import_all;
+            s->as.import.alias = stmt->as.import.alias ? SAGE_STRDUP(stmt->as.import.alias) : NULL;
             s->as.import.item_count = stmt->as.import.item_count;
             if (stmt->as.import.item_count > 0) {
                 s->as.import.items = SAGE_ALLOC(sizeof(char*) * (size_t)stmt->as.import.item_count);
@@ -280,20 +299,81 @@ Stmt* clone_stmt(const Stmt* stmt) {
                 s->as.import.items = NULL;
                 s->as.import.item_aliases = NULL;
             }
-            s->as.import.alias = stmt->as.import.alias ? SAGE_STRDUP(stmt->as.import.alias) : NULL;
-            s->as.import.import_all = stmt->as.import.import_all;
             break;
         }
         case STMT_ASYNC_PROC: {
-            Stmt* body = clone_stmt_list(stmt->as.async_proc.body);
-            Token* params = NULL;
+            s->as.async_proc.name = clone_token(stmt->as.async_proc.name);
+            s->as.async_proc.param_count = stmt->as.async_proc.param_count;
             if (stmt->as.async_proc.param_count > 0) {
-                params = SAGE_ALLOC(sizeof(Token) * (size_t)stmt->as.async_proc.param_count);
+                s->as.async_proc.params = SAGE_ALLOC(sizeof(Token) * (size_t)stmt->as.async_proc.param_count);
                 for (int i = 0; i < stmt->as.async_proc.param_count; i++) {
-                    params[i] = clone_token(stmt->as.async_proc.params[i]);
+                    s->as.async_proc.params[i] = clone_token(stmt->as.async_proc.params[i]);
                 }
+            } else {
+                s->as.async_proc.params = NULL;
             }
-            return new_async_proc_stmt(stmt->as.async_proc.name, params, stmt->as.async_proc.param_count, body);
+            s->as.async_proc.body = clone_stmt_list(stmt->as.async_proc.body);
+            break;
+        }
+        case STMT_STRUCT: {
+            s->as.struct_stmt.name = clone_token(stmt->as.struct_stmt.name);
+            s->as.struct_stmt.field_count = stmt->as.struct_stmt.field_count;
+            if (stmt->as.struct_stmt.field_count > 0) {
+                s->as.struct_stmt.field_names = SAGE_ALLOC(sizeof(Token) * (size_t)stmt->as.struct_stmt.field_count);
+                s->as.struct_stmt.field_types = SAGE_ALLOC(sizeof(TypeAnnotation*) * (size_t)stmt->as.struct_stmt.field_count);
+                for (int i = 0; i < stmt->as.struct_stmt.field_count; i++) {
+                    s->as.struct_stmt.field_names[i] = clone_token(stmt->as.struct_stmt.field_names[i]);
+                    s->as.struct_stmt.field_types[i] = clone_type_annotation(stmt->as.struct_stmt.field_types[i]);
+                }
+            } else {
+                s->as.struct_stmt.field_names = NULL;
+                s->as.struct_stmt.field_types = NULL;
+            }
+            s->as.struct_stmt.type_param_count = stmt->as.struct_stmt.type_param_count;
+            if (stmt->as.struct_stmt.type_param_count > 0) {
+                s->as.struct_stmt.type_params = SAGE_ALLOC(sizeof(Token) * (size_t)stmt->as.struct_stmt.type_param_count);
+                for (int i = 0; i < stmt->as.struct_stmt.type_param_count; i++) {
+                    s->as.struct_stmt.type_params[i] = clone_token(stmt->as.struct_stmt.type_params[i]);
+                }
+            } else {
+                s->as.struct_stmt.type_params = NULL;
+            }
+            break;
+        }
+        case STMT_ENUM: {
+            s->as.enum_stmt.name = clone_token(stmt->as.enum_stmt.name);
+            s->as.enum_stmt.variant_count = stmt->as.enum_stmt.variant_count;
+            if (stmt->as.enum_stmt.variant_count > 0) {
+                s->as.enum_stmt.variant_names = SAGE_ALLOC(sizeof(Token) * (size_t)stmt->as.enum_stmt.variant_count);
+                for (int i = 0; i < stmt->as.enum_stmt.variant_count; i++) {
+                    s->as.enum_stmt.variant_names[i] = clone_token(stmt->as.enum_stmt.variant_names[i]);
+                }
+            } else {
+                s->as.enum_stmt.variant_names = NULL;
+            }
+            break;
+        }
+        case STMT_TRAIT: {
+            s->as.trait_stmt.name = clone_token(stmt->as.trait_stmt.name);
+            s->as.trait_stmt.methods = clone_stmt_list(stmt->as.trait_stmt.methods);
+            break;
+        }
+        case STMT_COMPTIME:
+            s->as.comptime.body = clone_stmt_list(stmt->as.comptime.body);
+            break;
+        case STMT_MACRO_DEF: {
+            s->as.macro_def.name = clone_token(stmt->as.macro_def.name);
+            s->as.macro_def.param_count = stmt->as.macro_def.param_count;
+            if (stmt->as.macro_def.param_count > 0) {
+                s->as.macro_def.params = SAGE_ALLOC(sizeof(Token) * (size_t)stmt->as.macro_def.param_count);
+                for (int i = 0; i < stmt->as.macro_def.param_count; i++) {
+                    s->as.macro_def.params[i] = clone_token(stmt->as.macro_def.params[i]);
+                }
+            } else {
+                s->as.macro_def.params = NULL;
+            }
+            s->as.macro_def.body = clone_stmt_list(stmt->as.macro_def.body);
+            break;
         }
     }
 

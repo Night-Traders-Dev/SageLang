@@ -213,6 +213,17 @@ static SageType infer_expr(TypeMap* map, const Expr* expr) {
             result = make_type(SAGE_TYPE_UNKNOWN);
             break;
         case EXPR_AWAIT:
+            infer_expr(map, expr->as.await.expression);
+            result = make_type(SAGE_TYPE_UNKNOWN);
+            break;
+        case EXPR_SUPER:
+            result = make_type(SAGE_TYPE_UNKNOWN);
+            break;
+        case EXPR_COMPTIME:
+            result = infer_expr(map, expr->as.comptime.expression);
+            break;
+        default:
+            result = make_type(SAGE_TYPE_UNKNOWN);
             break;
     }
 
@@ -305,19 +316,21 @@ static void infer_stmt(TypeMap* map, Stmt* stmt) {
         case STMT_RETURN:
             infer_expr(map, stmt->as.ret.value);
             break;
+        case STMT_BREAK:
+        case STMT_CONTINUE:
+            break;
         case STMT_CLASS:
             infer_stmt_list(map, stmt->as.class_stmt.methods);
             break;
         case STMT_MATCH:
             infer_expr(map, stmt->as.match_stmt.value);
             for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
-                infer_expr(map, stmt->as.match_stmt.cases[i]->pattern);
                 infer_stmt_list(map, stmt->as.match_stmt.cases[i]->body);
             }
             infer_stmt_list(map, stmt->as.match_stmt.default_case);
             break;
         case STMT_DEFER:
-            infer_stmt(map, stmt->as.defer.statement);
+            infer_stmt_list(map, stmt->as.defer.statement);
             break;
         case STMT_TRY:
             infer_stmt_list(map, stmt->as.try_stmt.try_block);
@@ -333,9 +346,23 @@ static void infer_stmt(TypeMap* map, Stmt* stmt) {
             infer_expr(map, stmt->as.yield_stmt.value);
             break;
         case STMT_IMPORT:
-        case STMT_BREAK:
-        case STMT_CONTINUE:
+            break;
         case STMT_ASYNC_PROC:
+            infer_stmt_list(map, stmt->as.async_proc.body);
+            break;
+        case STMT_STRUCT:
+        case STMT_ENUM:
+            break;
+        case STMT_TRAIT:
+            infer_stmt_list(map, stmt->as.trait_stmt.methods);
+            break;
+        case STMT_COMPTIME:
+            infer_stmt_list(map, stmt->as.comptime.body);
+            break;
+        case STMT_MACRO_DEF:
+            infer_stmt_list(map, stmt->as.macro_def.body);
+            break;
+        default:
             break;
     }
 }
