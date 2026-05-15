@@ -2776,6 +2776,9 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         out
     );
 
+    fputs(
+        "static SageValue sage_len(SageValue value) {\n"
+        "    if (value.type == SAGE_TAG_STRING) return sage_number((double)strlen(value.as.string));\n"
         "    if (value.type == SAGE_TAG_ARRAY) return sage_number((double)value.as.array->count);\n"
         "    if (value.type == SAGE_TAG_DICT) return sage_number((double)value.as.dict->count);\n"
         "    if (value.type == SAGE_TAG_TUPLE) return sage_number((double)value.as.tuple->count);\n"
