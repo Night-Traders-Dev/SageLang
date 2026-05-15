@@ -2270,6 +2270,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "#define SAGE_GC_MIN_TRIGGER_OBJECTS 128\n"
         "static SageGcState sage_gc = {NULL, NULL, 0, 0, 0, 0, 0, SAGE_GC_MIN_TRIGGER_BYTES, SAGE_GC_MIN_TRIGGER_OBJECTS, 1};\n"
         "\n"
+        , out);
+    fputs(
         "/* Exception handling via setjmp/longjmp */\n"
         "#define SAGE_MAX_TRY_DEPTH 64\n"
         "static jmp_buf sage_try_stack[SAGE_MAX_TRY_DEPTH];\n"
@@ -2333,6 +2335,8 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    if (sage_try_depth > 0) sage_gc_mark_value(sage_exception_value);\n"
         "}\n"
         "\n"
+        , out);
+    fputs(
         "static size_t sage_gc_release_object(SageGcHeader* header) {\n"
         "    void* object = (void*)(header + 1);\n"
         "    size_t freed = sizeof(SageGcHeader) + header->size;\n"
