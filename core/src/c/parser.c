@@ -252,6 +252,14 @@ static Stmt* block(void);
 static char* take_pending_doc(void);
 static TypeAnnotation* parse_type_annotation(void);
 
+static Stmt* parse_maybe_oneline_block() {
+    if (match(TOKEN_NEWLINE)) {
+        return block();
+    }
+    Stmt* stmt = declaration();
+    return new_block_stmt(stmt);
+}
+
 static Stmt* for_statement() {
     if (!check(TOKEN_IDENTIFIER)) {
         parser_report(current_token, token_span(&current_token),
@@ -266,9 +274,8 @@ static Stmt* for_statement() {
 
     Expr* iterable = expression();
     consume(TOKEN_COLON, "Expect ':' after for clause.");
-    consume(TOKEN_NEWLINE, "Expect newline after for clause.");
 
-    Stmt* body = block();
+    Stmt* body = parse_maybe_oneline_block();
 
     return new_for_stmt(var, iterable, body);
 }
@@ -277,8 +284,7 @@ static Stmt* for_statement() {
 static Stmt* try_statement() {
     // try:
     consume(TOKEN_COLON, "Expect ':' after 'try'.");
-    consume(TOKEN_NEWLINE, "Expect newline after try.");
-    Stmt* try_block = block();
+    Stmt* try_block = parse_maybe_oneline_block();
     
     // Parse catch clauses
     CatchClause** catches = NULL;
@@ -291,8 +297,7 @@ static Stmt* try_statement() {
         Token exception_var = previous_token;
         
         consume(TOKEN_COLON, "Expect ':' after catch variable.");
-        consume(TOKEN_NEWLINE, "Expect newline after catch clause.");
-        Stmt* catch_body = block();
+        Stmt* catch_body = parse_maybe_oneline_block();
         
         CatchClause* clause = new_catch_clause(exception_var, catch_body);
         
@@ -307,8 +312,7 @@ static Stmt* try_statement() {
     Stmt* finally_block = NULL;
     if (match(TOKEN_FINALLY)) {
         consume(TOKEN_COLON, "Expect ':' after 'finally'.");
-        consume(TOKEN_NEWLINE, "Expect newline after finally.");
-        finally_block = block();
+        finally_block = parse_maybe_oneline_block();
     }
     
     return new_try_stmt(try_block, catches, catch_count, finally_block);
@@ -326,12 +330,13 @@ static Stmt* defer_statement() {
     if (match(TOKEN_COLON)) {
         // defer:
         //     <block>
-        consume(TOKEN_NEWLINE, "Expect newline after 'defer:'.");
-        Stmt* body = block();
+        // OR defer: <single-statement>
+        Stmt* body = parse_maybe_oneline_block();
         return new_defer_stmt(body);
     }
-    // defer <single-statement>
+    // defer <single-statement> (no colon)
     Stmt* body = statement();
+    match(TOKEN_NEWLINE);
     return new_defer_stmt(body);
 }
 
@@ -357,8 +362,7 @@ static Stmt* match_statement() {
 
         if (match(TOKEN_DEFAULT)) {
             consume(TOKEN_COLON, "Expect ':' after 'default'.");
-            consume(TOKEN_NEWLINE, "Expect newline after 'default:'.");
-            default_case = block();
+            default_case = parse_maybe_oneline_block();
         } else if (match(TOKEN_CASE)) {
             Expr* pattern = expression();
             // Optional guard: case X if condition:
@@ -367,8 +371,7 @@ static Stmt* match_statement() {
                 guard = expression();
             }
             consume(TOKEN_COLON, "Expect ':' after case pattern.");
-            consume(TOKEN_NEWLINE, "Expect newline after case clause.");
-            Stmt* body = block();
+            Stmt* body = parse_maybe_oneline_block();
 
             CaseClause* clause = new_case_clause(pattern, body);
             clause->guard = guard;
@@ -945,8 +948,7 @@ static Expr* expression() {
 // Phase 17: comptime block — executes code at compile time
 static Stmt* comptime_statement() {
     consume(TOKEN_COLON, "Expect ':' after 'comptime'.");
-    consume(TOKEN_NEWLINE, "Expect newline after 'comptime:'.");
-    Stmt* body = block();
+    Stmt* body = parse_maybe_oneline_block();
     return new_comptime_stmt(body);
 }
 
@@ -974,8 +976,7 @@ static Stmt* macro_declaration() {
     consume(TOKEN_RPAREN, "Expect ')' after macro parameters.");
 
     consume(TOKEN_COLON, "Expect ':' after macro signature.");
-    consume(TOKEN_NEWLINE, "Expect newline before macro body.");
-    Stmt* body = block();
+    Stmt* body = parse_maybe_oneline_block();
 
     return new_macro_def_stmt(name, params, count, body);
 }
@@ -1098,11 +1099,10 @@ static Stmt* block() {
 static Stmt* if_statement() {
     Expr* condition = expression();
     consume(TOKEN_COLON, "Expect ':' after if condition.");
-    consume(TOKEN_NEWLINE, "Expect newline after if condition.");
-    Stmt* then_branch = block();
+    Stmt* then_branch = parse_maybe_oneline_block();
 
     Stmt* else_branch = NULL;
-    if (check(TOKEN_IF) && previous_token.type == TOKEN_DEDENT) {
+    if (check(TOKEN_IF) && (previous_token.type == TOKEN_DEDENT || previous_token.type == TOKEN_NEWLINE)) {
         // elif: check if the current TOKEN_IF was originally 'elif' in source
         // by looking at the token text (elif starts with 'e')
         if (current_token.length == 4 && current_token.start[0] == 'e') {
@@ -1112,8 +1112,7 @@ static Stmt* if_statement() {
     }
     if (else_branch == NULL && match(TOKEN_ELSE)) {
         consume(TOKEN_COLON, "Expect ':' after else.");
-        consume(TOKEN_NEWLINE, "Expect newline after else.");
-        else_branch = block();
+        else_branch = parse_maybe_oneline_block();
     }
 
     return new_if_stmt(condition, then_branch, else_branch);
@@ -1122,8 +1121,7 @@ static Stmt* if_statement() {
 static Stmt* while_statement() {
     Expr* condition = expression();
     consume(TOKEN_COLON, "Expect ':' after while condition.");
-    consume(TOKEN_NEWLINE, "Expect newline after while condition.");
-    Stmt* body = block();
+    Stmt* body = parse_maybe_oneline_block();
     return new_while_stmt(condition, body);
 }
 
@@ -1226,8 +1224,7 @@ static Stmt* proc_declaration() {
         }
 
         consume(TOKEN_COLON, "Expect ':' after procedure signature.");
-        consume(TOKEN_NEWLINE, "Expect newline before procedure body.");
-        Stmt* body = block();
+        Stmt* body = parse_maybe_oneline_block();
 
         Stmt* s = new_proc_stmt(name, params, count, body);
         s->as.proc.param_types = param_types;
@@ -1278,8 +1275,7 @@ static Stmt* async_proc_declaration() {
         }
         consume(TOKEN_RPAREN, "Expect ')' after parameters.");
         consume(TOKEN_COLON, "Expect ':' after procedure signature.");
-        consume(TOKEN_NEWLINE, "Expect newline before procedure body.");
-        Stmt* body = block();
+        Stmt* body = parse_maybe_oneline_block();
 
         return new_async_proc_stmt(name, params, count, body);
     }
@@ -1472,8 +1468,7 @@ static Stmt* statement() {
     // Phase 1.8: unsafe block — executes as normal block (semantic marker)
     if (match(TOKEN_UNSAFE)) {
         consume(TOKEN_COLON, "Expect ':' after 'unsafe'.");
-        consume(TOKEN_NEWLINE, "Expect newline after 'unsafe:'.");
-        return block();
+        return parse_maybe_oneline_block();
     }
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();

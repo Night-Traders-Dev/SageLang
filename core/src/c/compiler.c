@@ -782,7 +782,7 @@ static int is_in_import_list(ImportStmt* import, const char* name) {
 // Native C modules that don't have .sage files (handled at runtime)
 static int is_native_module(const char* name) {
     const char* natives[] = {
-        "math", "io", "string", "sys", "thread",
+        "math", "thread",
         "socket", "tcp", "http", "ssl",
         "fat", "gpu", "graphics", "ml_native",
         NULL
@@ -855,6 +855,10 @@ static void process_import(Compiler* compiler, ImportStmt* import) {
                 free(parent_name);
             }
             free(class_name);
+        }
+        if (s->type == STMT_IMPORT) {
+            process_import(compiler, &s->as.import);
+            if (compiler->failed) return;
         }
     }
 
@@ -1157,6 +1161,38 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
         }
         free(callee_name);
         return sb_take(&sb);
+    }
+
+
+
+    if (strcmp(callee_name, "sys_args_builtin") == 0) {
+        if (call->arg_count != 0) return str_dup("sage_nil()");
+        sb_appendf(&sb, "sage_sys_args()"); free(callee_name); return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "sys_exec") == 0) {
+        if (call->arg_count != 1) return str_dup("sage_nil()");
+        char* arg = emit_expr(compiler, call->args[0]);
+        sb_appendf(&sb, "sage_sys_exec(%s)", arg); free(arg); free(callee_name); return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "io_readfile") == 0) {
+        if (call->arg_count != 1) return str_dup("sage_nil()");
+        char* arg = emit_expr(compiler, call->args[0]);
+        sb_appendf(&sb, "sage_io_readfile(%s)", arg); free(arg); free(callee_name); return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "io_writefile") == 0) {
+        if (call->arg_count != 2) return str_dup("sage_nil()");
+        char* a1 = emit_expr(compiler, call->args[0]); char* a2 = emit_expr(compiler, call->args[1]);
+        sb_appendf(&sb, "sage_io_writefile(%s, %s)", a1, a2); free(a1); free(a2); free(callee_name); return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "io_exists") == 0) {
+        if (call->arg_count != 1) return str_dup("sage_nil()");
+        char* arg = emit_expr(compiler, call->args[0]);
+        sb_appendf(&sb, "sage_io_exists(%s)", arg); free(arg); free(callee_name); return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "string_substr") == 0) {
+        if (call->arg_count != 3) return str_dup("sage_nil()");
+        char* a1 = emit_expr(compiler, call->args[0]); char* a2 = emit_expr(compiler, call->args[1]); char* a3 = emit_expr(compiler, call->args[2]);
+        sb_appendf(&sb, "sage_string_substr(%s, %s, %s)", a1, a2, a3); free(a1); free(a2); free(a3); free(callee_name); return sb_take(&sb);
     }
 
     if (strcmp(callee_name, "len") == 0) {
@@ -2740,9 +2776,6 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         out
     );
 
-    fputs(
-        "static SageValue sage_len(SageValue value) {\n"
-        "    if (value.type == SAGE_TAG_STRING) return sage_number((double)strlen(value.as.string));\n"
         "    if (value.type == SAGE_TAG_ARRAY) return sage_number((double)value.as.array->count);\n"
         "    if (value.type == SAGE_TAG_DICT) return sage_number((double)value.as.dict->count);\n"
         "    if (value.type == SAGE_TAG_TUPLE) return sage_number((double)value.as.tuple->count);\n"
@@ -3541,7 +3574,45 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
             "    if (len > 0 && buf[len-1] == '\\n') buf[--len] = '\\0';\n"
             "    return sage_string(buf);\n"
             "}\n"
-            "\n",
+            "static SageValue sage_sys_args(void) {\n"
+            "    extern int sage_argc; extern char** sage_argv;\n"
+            "    SageValue list = sage_array();\n"
+            "    for(int i=0; i<sage_argc; i++) sage_push(list, sage_string(sage_argv[i]));\n"
+            "    return list;\n"
+            "}\n"
+            "static SageValue sage_sys_exec(SageValue cmd) {\n"
+            "    if(cmd.type != SAGE_TAG_STRING) return sage_number(-1);\n"
+            "    return sage_number(system(cmd.as.string));\n"
+            "}\n"
+            "static SageValue sage_io_readfile(SageValue p) {\n"
+            "    if(p.type != SAGE_TAG_STRING) return sage_nil();\n"
+            "    FILE* f = fopen(p.as.string, \"rb\"); if(!f) return sage_nil();\n"
+            "    fseek(f, 0, SEEK_END); long size = ftell(f); fseek(f, 0, SEEK_SET);\n"
+            "    char* buf = malloc(size + 1); if(!buf) { fclose(f); return sage_nil(); }\n"
+            "    fread(buf, 1, size, f); buf[size] = 0; fclose(f);\n"
+            "    return sage_string_take(buf);\n"
+            "}\n"
+            "static SageValue sage_io_writefile(SageValue p, SageValue c) {\n"
+            "    if(p.type != SAGE_TAG_STRING || c.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+            "    FILE* f = fopen(p.as.string, \"wb\"); if(!f) return sage_bool(0);\n"
+            "    fwrite(c.as.string, 1, strlen(c.as.string), f); fclose(f); return sage_bool(1);\n"
+            "}\n"
+            "static SageValue sage_io_exists(SageValue p) {\n"
+            "    if(p.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+            "    FILE* f = fopen(p.as.string, \"r\"); if(f){ fclose(f); return sage_bool(1); } return sage_bool(0);\n"
+            "}\n"
+            "static SageValue sage_string_substr(SageValue s, SageValue start, SageValue len) {\n"
+            "    if(s.type != SAGE_TAG_STRING || start.type != SAGE_TAG_NUMBER || len.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+            "    int st = (int)start.as.number; int l = (int)len.as.number;\n"
+            "    int slen = strlen(s.as.string);\n"
+            "    if(st < 0 || st > slen) return sage_string(\"\");\n"
+            "    if(l < 0) l = 0; if(st + l > slen) l = slen - st;\n"
+            "    char* buf = malloc(l + 1); if(!buf) return sage_nil();\n"
+            "    memcpy(buf, s.as.string + st, l); buf[l] = 0;\n"
+            "    return sage_string_take(buf);\n"
+            "}\n"
+            "\n"
+            ,
             out
         );
     }
@@ -3826,7 +3897,9 @@ static void emit_function_definitions(Compiler* compiler, Stmt* program) {
 }
 
 static void emit_main_function(Compiler* compiler, Stmt* program, CompilerTarget target) {
-    emit_line(compiler, "int main(void) {");
+    emit_line(compiler, "int sage_argc; char** sage_argv;");
+    emit_line(compiler, "int main(int argc, char** argv) {");
+    emit_line(compiler, "    sage_argc = argc; sage_argv = argv;");
     compiler->indent++;
 
     if (target == COMPILER_TARGET_PICO) {
