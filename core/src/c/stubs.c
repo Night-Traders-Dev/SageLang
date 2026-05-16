@@ -17,6 +17,7 @@ void lsp_run() { fprintf(stderr, "LSP not supported in this build\n"); }
    are provided by llvm_backend.c — no stubs needed */
 
 #ifdef SAGE_NO_NET
+void create_net_module() {}
 void create_socket_module() {}
 void create_tcp_module() {}
 void create_http_module() {}

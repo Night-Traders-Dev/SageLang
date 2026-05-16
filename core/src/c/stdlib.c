@@ -486,7 +486,8 @@ static Value io_isdir_native(int argCount, Value* args) {
 
 static Value io_mkdir_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_bool(0);
-    int status = mkdir(AS_STRING(args[0]), 0777);
+    // Use 0755 instead of 0777 for better security (CWE-276)
+    int status = mkdir(AS_STRING(args[0]), 0755);
     return val_bool(status == 0);
 }
 
