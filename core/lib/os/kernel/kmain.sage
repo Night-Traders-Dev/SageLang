@@ -11,6 +11,15 @@ import pmm
 import vmm
 import shell
 
+## Process states for the kernel scheduler.
+enum ProcStatus:
+    Idle
+    Ready
+    Running
+    Blocked
+    Zombie
+    Terminated
+
 let KERNEL_NAME = "SageOS"
 let KERNEL_VERSION = "0.1.0"
 
