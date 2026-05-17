@@ -2520,12 +2520,9 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     AST_GC_POP();
                     return EVAL_RESULT(val_nil());
                 }
-                char* ch = SAGE_ALLOC(2);
-                ch[0] = str[index];
-                ch[1] = '\0';
-                result = EVAL_RESULT(val_string_take(ch));
+                result = EVAL_RESULT(val_string_len(str + index, 1));
             } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
-                result = EVAL_RESULT(dict_get(&arr, AS_STRING(idx)));
+                result = EVAL_RESULT(dict_get_len(&arr, AS_STRING(idx), (int)strlen(AS_STRING(idx))));
             } else {
                 fprintf(stderr, "Runtime Error: Invalid indexing operation.\n");
                 result = EVAL_RESULT(val_nil());
@@ -2555,7 +2552,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 array_set(&arr, index, value);
                 result = EVAL_RESULT(value);
             } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
-                dict_set(&arr, AS_STRING(idx), value);
+                dict_set_len(&arr, AS_STRING(idx), (int)strlen(AS_STRING(idx)), value);
                 result = EVAL_RESULT(value);
             } else {
                 fprintf(stderr, "Runtime Error: Invalid index assignment.\n");
@@ -3562,15 +3559,11 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             class_val->defining_env = env;
 
             // Store field metadata on the class for auto-init/eq/str
-            // We use a special dict stored in the env under __struct_fields__
+            // Optimized: Use val_string_len to avoid temporary allocation and strlen
             Value fields_arr = val_array();
             for (int i = 0; i < stmt->as.struct_stmt.field_count; i++) {
                 Token fn = stmt->as.struct_stmt.field_names[i];
-                char* fname = SAGE_ALLOC((size_t)fn.length + 1);
-                memcpy(fname, fn.start, (size_t)fn.length);
-                fname[fn.length] = '\0';
-                array_push(&fields_arr, val_string(fname));
-                free(fname);
+                array_push(&fields_arr, val_string_len(fn.start, fn.length));
             }
 
             Value class_value = val_class(class_val);
@@ -3578,8 +3571,9 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
 
             // Store field names for auto-init
             char meta_key[256];
-            snprintf(meta_key, sizeof(meta_key), "__%.*s_fields__", name.length, name.start);
-            env_define(env, meta_key, (int)strlen(meta_key), fields_arr);
+            int meta_len = snprintf(meta_key, sizeof(meta_key), "__%.*s_fields__", name.length, name.start);
+            if (meta_len >= (int)sizeof(meta_key)) meta_len = (int)sizeof(meta_key) - 1;
+            env_define(env, meta_key, meta_len, fields_arr);
             gc_unpin();
 
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
@@ -3592,19 +3586,11 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             Value enum_dict = val_dict();
             for (int i = 0; i < stmt->as.enum_stmt.variant_count; i++) {
                 Token vn = stmt->as.enum_stmt.variant_names[i];
-                char* vname = SAGE_ALLOC((size_t)vn.length + 1);
-                memcpy(vname, vn.start, (size_t)vn.length);
-                vname[vn.length] = '\0';
-                dict_set(&enum_dict, vname, val_number((double)i));
-                free(vname);
+                dict_set_len(&enum_dict, vn.start, vn.length, val_number((double)i));
             }
 
             // Store the enum name as __name__ field
-            char* ename = SAGE_ALLOC((size_t)name.length + 1);
-            memcpy(ename, name.start, (size_t)name.length);
-            ename[name.length] = '\0';
-            dict_set(&enum_dict, "__name__", val_string(ename));
-            free(ename);
+            dict_set_len(&enum_dict, "__name__", 8, val_string_len(name.start, name.length));
 
             env_define_const(env, name.start, name.length, enum_dict);
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
@@ -3621,21 +3607,13 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             while (method != NULL) {
                 if (method->type == STMT_PROC) {
                     Token mn = method->as.proc.name;
-                    char* mname = SAGE_ALLOC((size_t)mn.length + 1);
-                    memcpy(mname, mn.start, (size_t)mn.length);
-                    mname[mn.length] = '\0';
-                    array_push(&method_names, val_string(mname));
-                    free(mname);
+                    array_push(&method_names, val_string_len(mn.start, mn.length));
                 }
                 method = method->next;
             }
-            dict_set(&trait_dict, "__methods__", method_names);
+            dict_set_len(&trait_dict, "__methods__", 11, method_names);
 
-            char* tname = SAGE_ALLOC((size_t)name.length + 1);
-            memcpy(tname, name.start, (size_t)name.length);
-            tname[name.length] = '\0';
-            dict_set(&trait_dict, "__name__", val_string(tname));
-            free(tname);
+            dict_set_len(&trait_dict, "__name__", 8, val_string_len(name.start, name.length));
 
             env_define_const(env, name.start, name.length, trait_dict);
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
