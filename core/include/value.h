@@ -247,6 +247,7 @@ static inline Value val_nil() {
     return sage_nil;
 }
 Value val_string(const char* value);
+Value val_string_len(const char* value, int len);
 Value val_string_take(char* value);
 Value val_bytes(const unsigned char* data, int length);
 Value val_bytes_empty(int capacity);
