@@ -13,11 +13,11 @@ proc words(text):
 proc compact(text):
     return join(words(text), " ")
 
+let _builtin_contains = contains
+
 @inline
 proc contains(text, part):
-    if part == "":
-        return true
-    return len(split(text, part)) > 1
+    return _builtin_contains(text, part)
 
 @inline
 proc count_substring(text, part):
@@ -59,25 +59,22 @@ proc dash_case(text):
 proc snake_case(text):
     return lower(join(words(replace(text, "-", " ")), "_"))
 
+let _builtin_endswith = endswith
+
 proc endswith(a, b):
-    let tail = split(a, "")
-    if tail[len(tail) - 1] == b:
-        return true
-    else:
-        return false
+    return _builtin_endswith(a, b)
 
 proc from_bin(bits):
     let start = 0
-    let bitList = split(bits, "")
     if len(bits) >= 2:
-        if bitList[0] == "0":
-            if bitList[1] == "b":
+        if bits[0] == "0":
+            if bits[1] == "b":
                 start = 2
     let result = 0
     let i = start
     while i < len(bits):
         result = result * 2
-        if bitList[i] == "1":
+        if bits[i] == "1":
             result = result + 1
         i = i + 1
     return result
