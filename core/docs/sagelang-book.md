@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "May 2026"
-version: "v3.4.2"
+version: "v3.4.5"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v3.4.2}
+  - \fancyfoot[C]{v3.4.5}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -714,7 +714,7 @@ end
 
 class Dog(Animal):
     proc init(self, name, breed):
-        super.init(self, name)
+        super.init(name)
         self.breed = breed
     end
 
@@ -729,8 +729,8 @@ print d.breed      # German Shepherd
 print d.speak()    # Woof!
 ```
 
-Note that `super` requires explicit `self` as the first argument:
-`super.init(self, args)`.
+Note that `super` auto-injects `self` as the first argument:
+`super.init(args)`.
 
 ## Deep Inheritance
 
@@ -743,14 +743,14 @@ end
 
 class B(A):
     proc init(self, x, y):
-        super.init(self, x)
+        super.init(x)
         self.y = y
     end
 end
 
 class C(B):
     proc init(self, x, y, z):
-        super.init(self, x, y)
+        super.init(x, y)
         self.z = z
     end
 end
@@ -1458,7 +1458,7 @@ system but are not enforced at runtime by the interpreter.
 
 # The Safety System
 
-Sage v3.1.3 includes a compile-time safety system inspired by Rust. It provides
+Sage v3.4.5 includes a compile-time safety system inspired by Rust. It provides
 ownership tracking, borrow checking, lifetime analysis, Option type enforcement,
 and fearless concurrency checks.
 
@@ -1648,6 +1648,8 @@ io.appendfile("log.txt", "New entry\n")
 # File system queries
 print io.exists("data.txt")     # true/false
 print io.isdir("/home")         # true
+io.mkdir("new_dir")             # Creates directory with 0755 permissions
+io.mkpath("a/b/c")              # Creates recursive path
 print io.filesize("data.txt")   # file size in bytes
 
 # Binary I/O
@@ -2350,7 +2352,7 @@ make kernel-uefi      # Compile UEFI application
 
 The version is stored in a single `VERSION` file at the repository root.
 All build systems (Makefile, CMakeLists.txt, build.sh, sagemake) read from
-this file automatically. Current version: **3.1.3**.
+this file automatically. Current version: **3.4.5**.
 
 \newpage
 
@@ -3064,6 +3066,11 @@ serial.uart_puts(serial.COM1, "Boot complete\n")
 # ARM PL011
 serial.pl011_init(0x09000000)
 serial.pl011_puts(0x09000000, "Hello from ARM\n")
+
+# Utility
+if serial.baud_rate_valid(115200):
+    serial.uart_init(serial.COM1, 115200)
+end
 ```
 
 ## metal.irq
@@ -3078,13 +3085,26 @@ irq.pic_remap(32, 40)
 
 # Register handler for timer interrupt
 irq.register_handler(32, proc(vector):
+    irq.irq_enter()   # Track nesting depth
     # Handle timer tick
     irq.pic_eoi(irq.IRQ_TIMER)
+    irq.irq_exit()
 )
 
 # Enable timer IRQ
-irq.pic_unmask(irq.IRQ_TIMER)
+irq.unmask_irq(irq.IRQ_TIMER) # Arch-neutral helper
 ```
+
+### IRQ API
+
+| Function | Description |
+|----------|-------------|
+| `register_handler(v, f)` | Register function `f` for vector `v`. Panics if already registered. |
+| `irq_enter()` | Increment nesting depth. |
+| `irq_exit()` | Decrement nesting depth. |
+| `irq_depth()` | Returns current nesting depth. |
+| `mask_irq(n)` | Mask (disable) IRQ line `n`. |
+| `unmask_irq(n)` | Unmask (enable) IRQ line `n`. |
 
 ## metal.timer
 
@@ -3093,14 +3113,27 @@ Hardware timer with tick counting and sleep:
 ```python
 import metal.timer
 
-timer.pit_init(1000)    # 1000 Hz (1ms resolution)
+timer.timer_init_periodic(1000)    # 1000 Hz (1ms resolution)
 
 let start = timer.ticks()
 # ... do work ...
 let elapsed = timer.stopwatch_elapsed_ms(start)
 
 timer.sleep_ms(500)     # Sleep 500ms
+
+# Query remaining time in current cycle
+let remaining = timer.timer_remaining_ms()
 ```
+
+### Timer API
+
+| Function | Description |
+|----------|-------------|
+| `timer_init_periodic(hz)` | Initialize PIT in periodic mode. |
+| `timer_init_oneshot(hz)` | Initialize PIT in one-shot mode. |
+| `timer_remaining_ms()` | Get remaining milliseconds in current cycle via hardware latching. |
+| `timer_cancel_safe()` | Safely cancel timer via IRQ masking. |
+| `ticks()` | Get total ticks since initialization. |
 
 ## metal.gpio
 
@@ -3112,7 +3145,26 @@ import metal.gpio
 gpio.gpio_init(0x40000000, 32)  # Init 32 pins at MMIO base
 gpio.pin_mode(25, gpio.PIN_OUTPUT)  # LED pin
 gpio.led_blink(25, 5, 250)         # Blink 5 times, 250ms interval
+
+# Batch operations
+gpio.pin_set_mask(0b1011)        # Set pins 0, 1, 3 HIGH
+gpio.pin_clear_mask(0b1011)      # Set pins 0, 1, 3 LOW
+gpio.pin_write_masked(0b11, 0b10) # Set pin 1 HIGH, pin 0 LOW
 ```
+
+### GPIO API
+
+| Function | Description |
+|----------|-------------|
+| `pin_mode(p, m)` | Set mode (INPUT, OUTPUT, ALT, ANALOG). |
+| `pin_get_mode(p)` | Get current pin mode. |
+| `pin_pull(p, cfg)` | Set pull configuration (NONE, UP, DOWN). |
+| `pin_get_pull(p)` | Get current pull configuration. |
+| `pin_set_interrupt(p, m)` | Set interrupt trigger (RISING, FALLING, BOTH, etc). |
+| `pin_get_interrupt(p)` | Get current interrupt mode. |
+| `pin_set_mask(m)` | Set multiple pins HIGH. |
+| `pin_clear_mask(m)` | Set multiple pins LOW. |
+| `pin_write_masked(m, v)` | Write values to multiple pins. |
 
 ## Bare-Metal Kernel Example
 
@@ -3344,6 +3396,7 @@ The following functions are available globally without any imports.
 | `path_exists(path)`      | Check if path exists                  |
 | `path_is_dir(path)`      | Check if path is a directory          |
 | `path_is_file(path)`     | Check if path is a regular file       |
+| `path_mkpath(path)`      | Create full directory path            |
 
 ## VM & Gas Functions
 
@@ -3548,8 +3601,8 @@ This section documents known behaviors and design decisions. Items marked
    variable name. `init` is reserved but works as a property name after `.`
    and `->`.
 
-6. **`super` requires explicit `self`** -- Write `super.init(self, args)` not
-   `super.init(args)`.
+6. **`super` auto-injects `self`** -- Write `super.init(args)` not
+   `super.init(self, args)`.
 
 ## Fixed in v1.4+
 
