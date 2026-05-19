@@ -76,6 +76,18 @@ proc unmask_irq(irq):
 ## ============================================================
 
 let _handlers = {}
+let _priorities = {}
+
+## Set interrupt priority for a vector.
+proc set_priority(vector, level):
+    _priorities[str(vector)] = level
+
+## Get interrupt priority for a vector (defaults to 0).
+proc get_priority(vector):
+    let key_val = str(vector)
+    if dict_has(_priorities, key_val):
+        return _priorities[key_val]
+    return 0
 
 ## Register an interrupt handler
 proc register_handler(vector, handler):
