@@ -2323,7 +2323,10 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
     fputs("open class SageObject(val className: String) {\n", f);
     fputs("    open val props = mutableMapOf<String, SageRuntime.Value>()\n", f);
     fputs("    open fun sageInit(vararg args: SageRuntime.Value): SageRuntime.Value = SageRuntime.nil\n", f);
-    fputs("}\n\nobject SageRuntime {\n\n", f);
+    fputs("}\n\n", f);
+    fputs("class SageAtomic(val atom: java.util.concurrent.atomic.AtomicLong) : SageObject(\"atomic\")\n", f);
+    fputs("class SageSemaphore(val sem: java.util.concurrent.Semaphore) : SageObject(\"semaphore\")\n\n", f);
+    fputs("object SageRuntime {\n\n", f);
 
     // Value type
     fputs("    sealed class Value {\n", f);
@@ -2489,13 +2492,13 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
     fputs("    fun memFree(ptr: Value): Value { /* DirectByteBuffer is GC-managed on Android/JVM */ return nil }\n", f);
     fputs("    fun memRead(ptr: Value, offset: Value, type: Value): Value {\n", f);
     fputs("        if(ptr !is Value.Ptr) return nil; val o=toDouble(offset).toInt(); val t=toKString(type); val b=ptr.buf\n", f);
-    fputs("        return when(t) { \"byte\"->num(b.get(o).toDouble()); \"int\"->num(b.getInt(o).toDouble()); \"double\"->num(b.getDouble(o))\n", f);
+    fputs("        return try { when(t) { \"byte\"->num(b.get(o).toDouble()); \"int\"->num(b.getInt(o).toDouble()); \"double\"->num(b.getDouble(o))\n", f);
     fputs("            \"string\"->{ val sb=StringBuilder(); var i=o; while(i<ptr.size&&b.get(i)!=0.toByte()){sb.append(b.get(i).toInt().toChar());i++}; str(sb.toString()) }\n", f);
-    fputs("            else->nil }\n    }\n", f);
+    fputs("            else->nil } } catch(_:Exception) { nil }\n    }\n", f);
     fputs("    fun memWrite(ptr: Value, offset: Value, type: Value, value: Value): Value {\n", f);
     fputs("        if(ptr !is Value.Ptr) return nil; val o=toDouble(offset).toInt(); val t=toKString(type); val b=ptr.buf\n", f);
-    fputs("        when(t) { \"byte\"->b.put(o, toDouble(value).toInt().toByte()); \"int\"->b.putInt(o, toDouble(value).toInt()); \"double\"->b.putDouble(o, toDouble(value))\n", f);
-    fputs("            \"string\"->{ val s=toKString(value); for(i in s.indices) b.put(o+i, s[i].code.toByte()); b.put(o+s.length, 0) } }; return nil\n    }\n\n", f);
+    fputs("        try { when(t) { \"byte\"->b.put(o, toDouble(value).toInt().toByte()); \"int\"->b.putInt(o, toDouble(value).toInt()); \"double\"->b.putDouble(o, toDouble(value))\n", f);
+    fputs("            \"string\"->{ val s=toKString(value); for(i in s.indices) b.put(o+i, s[i].code.toByte()); b.put(o+s.length, 0) } } } catch(_:Exception){} ; return nil\n    }\n\n", f);
 
     // FFI (JNI bridge — load native libraries and call functions via reflection)
     fputs("    private val ffiLibs = mutableMapOf<String, Any?>()\n", f);
@@ -2515,24 +2518,24 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
     fputs("    fun gcStats(): Value = str(\"GC: JVM managed\")\n\n", f);
 
     // Atomic operations (java.util.concurrent.atomic)
-    fputs("    fun atomicNew(v: Value): Value { val a = java.util.concurrent.atomic.AtomicLong(toDouble(v).toLong()); return Value.Obj(object : SageObject(\"atomic\") { val atom = a }) }\n", f);
-    fputs("    fun atomicLoad(a: Value): Value { if(a is Value.Obj) { val f=a.v::class.java.getDeclaredField(\"atom\"); f.isAccessible=true; return num((f.get(a.v) as java.util.concurrent.atomic.AtomicLong).get().toDouble()) }; return nil }\n", f);
-    fputs("    fun atomicStore(a: Value, v: Value): Value { if(a is Value.Obj) { val f=a.v::class.java.getDeclaredField(\"atom\"); f.isAccessible=true; (f.get(a.v) as java.util.concurrent.atomic.AtomicLong).set(toDouble(v).toLong()) }; return nil }\n", f);
-    fputs("    fun atomicAdd(a: Value, v: Value): Value { if(a is Value.Obj) { val f=a.v::class.java.getDeclaredField(\"atom\"); f.isAccessible=true; return num((f.get(a.v) as java.util.concurrent.atomic.AtomicLong).addAndGet(toDouble(v).toLong()).toDouble()) }; return nil }\n", f);
-    fputs("    fun atomicCas(a: Value, exp: Value, des: Value): Value { if(a is Value.Obj) { val f=a.v::class.java.getDeclaredField(\"atom\"); f.isAccessible=true; return bool((f.get(a.v) as java.util.concurrent.atomic.AtomicLong).compareAndSet(toDouble(exp).toLong(), toDouble(des).toLong())) }; return bool(false) }\n", f);
+    fputs("    fun atomicNew(v: Value): Value = Value.Obj(SageAtomic(java.util.concurrent.atomic.AtomicLong(toDouble(v).toLong())))\n", f);
+    fputs("    fun atomicLoad(a: Value): Value = if(a is Value.Obj && a.v is SageAtomic) num(a.v.atom.get().toDouble()) else nil\n", f);
+    fputs("    fun atomicStore(a: Value, v: Value): Value { if(a is Value.Obj && a.v is SageAtomic) a.v.atom.set(toDouble(v).toLong()); return nil }\n", f);
+    fputs("    fun atomicAdd(a: Value, v: Value): Value = if(a is Value.Obj && a.v is SageAtomic) num(a.v.atom.addAndGet(toDouble(v).toLong()).toDouble()) else nil\n", f);
+    fputs("    fun atomicCas(a: Value, exp: Value, des: Value): Value = if(a is Value.Obj && a.v is SageAtomic) bool(a.v.atom.compareAndSet(toDouble(exp).toLong(), toDouble(des).toLong())) else bool(false)\n\n", f);
 
     // Semaphore operations (java.util.concurrent.Semaphore)
-    fputs("    fun semNew(v: Value): Value { val s = java.util.concurrent.Semaphore(toDouble(v).toInt()); return Value.Obj(object : SageObject(\"semaphore\") { val sem = s }) }\n", f);
-    fputs("    fun semWait(s: Value): Value { if(s is Value.Obj) { val f=s.v::class.java.getDeclaredField(\"sem\"); f.isAccessible=true; (f.get(s.v) as java.util.concurrent.Semaphore).acquire() }; return nil }\n", f);
-    fputs("    fun semPost(s: Value): Value { if(s is Value.Obj) { val f=s.v::class.java.getDeclaredField(\"sem\"); f.isAccessible=true; (f.get(s.v) as java.util.concurrent.Semaphore).release() }; return nil }\n", f);
-    fputs("    fun semTryWait(s: Value): Value { if(s is Value.Obj) { val f=s.v::class.java.getDeclaredField(\"sem\"); f.isAccessible=true; return bool((f.get(s.v) as java.util.concurrent.Semaphore).tryAcquire()) }; return bool(false) }\n\n", f);
+    fputs("    fun semNew(v: Value): Value = Value.Obj(SageSemaphore(java.util.concurrent.Semaphore(toDouble(v).toInt())))\n", f);
+    fputs("    fun semWait(s: Value): Value { if(s is Value.Obj && s.v is SageSemaphore) s.v.sem.acquire(); return nil }\n", f);
+    fputs("    fun semPost(s: Value): Value { if(s is Value.Obj && s.v is SageSemaphore) s.v.sem.release(); return nil }\n", f);
+    fputs("    fun semTryWait(s: Value): Value = if(s is Value.Obj && s.v is SageSemaphore) bool(s.v.sem.tryAcquire()) else bool(false)\n\n", f);
 
     // String operations
     fputs("    fun upper(v: Value): Value = if(v is Value.Str) str(v.v.uppercase()) else nil\n", f);
     fputs("    fun lower(v: Value): Value = if(v is Value.Str) str(v.v.lowercase()) else nil\n", f);
     fputs("    fun strip(v: Value): Value = if(v is Value.Str) str(v.v.trim()) else nil\n", f);
     fputs("    fun split(v: Value, d: Value): Value = if(v is Value.Str) Value.Arr(v.v.split(toKString(d)).map{str(it)}.toMutableList()) else nil\n", f);
-    fputs("    fun join(items: Value, sep: Value): Value = if(items is Value.Arr) str(items.v.joinToString(toKString(sep)){toKString(it)}) else nil\n", f);
+    fputs("    fun join(items: Value, sep: Value): Value = when(items) { is Value.Arr -> str(items.v.joinToString(toKString(sep)){toKString(it)}); is Value.Tup -> str(items.v.joinToString(toKString(sep)){toKString(it)}); else -> nil }\n", f);
     fputs("    fun replace(v: Value, old: Value, new_: Value): Value = if(v is Value.Str) str(v.v.replace(toKString(old), toKString(new_))) else nil\n", f);
     fputs("    fun chr(v: Value): Value = str(toDouble(v).toInt().toChar().toString())\n", f);
     fputs("    fun ord(v: Value): Value = if(v is Value.Str && v.v.isNotEmpty()) num(v.v[0].code.toDouble()) else num(0.0)\n", f);
@@ -2980,7 +2983,7 @@ int compile_source_to_android(const char* source, const char* input_path,
             "#\n"
             "APP_NAME=\"Gradle\"\n"
             "APP_BASE_NAME=$(basename \"$0\")\n"
-            "DEFAULT_JVM_OPTS='\"--add-opens\" \"java.base/java.util=ALL-UNNAMED\"'\n"
+            "DEFAULT_JVM_OPTS=\"--add-opens java.base/java.util=ALL-UNNAMED\"\n"
             "GRADLE_OPTS=\"${GRADLE_OPTS}\"\n"
             "\n"
             "# Determine JAVA_HOME\n"
