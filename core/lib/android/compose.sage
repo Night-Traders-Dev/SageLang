@@ -94,29 +94,29 @@ class Component:
 
 ## ---- Layout Composables ----
 
-proc Column(modifier: nil):
+proc Column(modifier= nil):
     let c = Component("Column")
     if modifier != nil: c.prop("modifier", modifier)
     return c
 
-proc Row(modifier: nil):
+proc Row(modifier= nil):
     let c = Component("Row")
     if modifier != nil: c.prop("modifier", modifier)
     return c
 
-proc Box(modifier: nil):
+proc Box(modifier= nil):
     let c = Component("Box")
     if modifier != nil: c.prop("modifier", modifier)
     return c
 
-proc LazyColumn(modifier: nil):
+proc LazyColumn(modifier= nil):
     let c = Component("LazyColumn")
     if modifier != nil: c.prop("modifier", modifier)
     return c
 
 ## ---- Widget Composables ----
 
-proc Text(content, modifier: nil, fontSize: nil, color: nil):
+proc Text(content, modifier= nil, fontSize= nil, color= nil):
     let c = Component("Text")
     c.prop("text", content)
     if modifier != nil: c.prop("modifier", modifier)
@@ -124,7 +124,7 @@ proc Text(content, modifier: nil, fontSize: nil, color: nil):
     if color != nil: c.prop("color", color)
     return c
 
-proc Button(label, on_click, modifier: nil, enabled: true):
+proc Button(label, on_click, modifier= nil, enabled= true):
     let c = Component("Button")
     c.prop("label", label)
     c.prop("onClick", on_click)
@@ -132,7 +132,7 @@ proc Button(label, on_click, modifier: nil, enabled: true):
     if modifier != nil: c.prop("modifier", modifier)
     return c
 
-proc TextField(value, on_change, modifier: nil, label: nil, placeholder: nil):
+proc TextField(value, on_change, modifier= nil, label= nil, placeholder= nil):
     let c = Component("TextField")
     c.prop("value", value)
     c.prop("onChange", on_change)
@@ -228,7 +228,7 @@ class NavController:
 
 ## ---- Scaffold (top-level app structure) ----
 
-proc Scaffold(title, content, drawer: nil):
+proc Scaffold(title, content, drawer= nil):
     let c = Component("Scaffold")
     c.prop("title", title)
     c.child(content)

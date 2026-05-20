@@ -10,9 +10,9 @@ OUTPUT_DIR="sage_ide_gen"
 echo "Ensuring Sage compiler is built..."
 make -C core
 
-# 2. Transpile app.sage to Kotlin and generate Android project
-echo "Transpiling app.sage to Android project..."
-./core/sage --compile-android sage_ide/app.sage -o "$OUTPUT_DIR" --package "$PACKAGE" --app-name "$APP_NAME"
+# 2. Transpile main.sage to Android project
+echo "Transpiling main.sage to Android project..."
+./core/sage -I core/lib/android --compile-android sage_ide/main.sage -o "$OUTPUT_DIR" --package "$PACKAGE" --app-name "$APP_NAME"
 
 # 3. Copy our custom NativeBridge.kt if it exists
 if [ -f sage_ide/src/NativeBridge.kt ]; then

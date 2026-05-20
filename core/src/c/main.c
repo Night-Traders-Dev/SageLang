@@ -66,21 +66,21 @@ static void cleanup_runtime_state(void) {
 static void print_usage(FILE* stream) {
     fprintf(stream,
             "Usage: sage                    Start interactive REPL\n"
-            "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [path]\n"
+            "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [-I dir] [path]\n"
             "       sage --repl             Start interactive REPL\n"
-            "       sage [--runtime ast|bytecode|jit|aot|auto] -c \"source\"\n"
-            "       sage --emit-c <input.sage> [-o output.c] [-O0..3] [-g]\n"
-            "       sage --emit-vm <input.sage> [-o output.svm] [-O0..3] [-g]\n"
+            "       sage [--runtime ast|bytecode|jit|aot|auto] [-I dir] -c \"source\"\n"
+            "       sage --emit-c <input.sage> [-o output.c] [-I dir] [-O0..3] [-g]\n"
+            "       sage --emit-vm <input.sage> [-o output.svm] [-I dir] [-O0..3] [-g]\n"
             "       sage --run-vm <input.svm>\n"
-            "       sage --compile <input.sage> [-o output] [--cc compiler] [-O0..3] [-g]\n"
-            "       sage --emit-llvm <input.sage> [-o output.ll] [-O0..3] [-g]\n"
-            "       sage --compile-llvm <input.sage> [-o output] [-O0..3] [-g]\n"
-            "       sage --emit-asm <input.sage> [-o output.s] [--target arch[-baremetal|-osdev|-uefi]] [-O0..3] [-g]\n"
-            "       sage --compile-native <input.sage> [-o output] [--target arch[-baremetal|-osdev|-uefi]] [-O0..3] [-g]\n"
-            "       sage --compile-bare <input.sage> [-o output.elf] [--target arch] [-O0..3] [-g]\n"
-            "       sage --compile-uefi <input.sage> [-o output.efi] [--target arch] [-O0..3] [-g]\n"
-            "       sage --emit-kotlin <input.sage> [-o output.kt] [-O0..3]\n"
-            "       sage --compile-android <input.sage> [-o output_dir] [--package com.example.app] [--app-name MyApp] [--min-sdk 24]\n"
+            "       sage --compile <input.sage> [-o output] [--cc compiler] [-I dir] [-O0..3] [-g]\n"
+            "       sage --emit-llvm <input.sage> [-o output.ll] [-I dir] [-O0..3] [-g]\n"
+            "       sage --compile-llvm <input.sage> [-o output] [-I dir] [-O0..3] [-g]\n"
+            "       sage --emit-asm <input.sage> [-o output.s] [--target arch[-baremetal|-osdev|-uefi]] [-I dir] [-O0..3] [-g]\n"
+            "       sage --compile-native <input.sage> [-o output] [--target arch[-baremetal|-osdev|-uefi]] [-I dir] [-O0..3] [-g]\n"
+            "       sage --compile-bare <input.sage> [-o output.elf] [--target arch] [-I dir] [-O0..3] [-g]\n"
+            "       sage --compile-uefi <input.sage> [-o output.efi] [--target arch] [-I dir] [-O0..3] [-g]\n"
+            "       sage --emit-kotlin <input.sage> [-o output.kt] [-I dir] [-O0..3]\n"
+            "       sage --compile-android <input.sage> [-o output_dir] [--package com.example.app] [--app-name MyApp] [--min-sdk 24] [-I dir]\n"
             "       sage --emit-pico-c <input.sage> [-o output.c]\n"
             "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n"
             "       sage --jit <input.sage>   Run with JIT profiling and compilation\n"
@@ -169,6 +169,12 @@ static int parse_codegen_options(int argc, const char* argv[], int start_index,
             *opt_level = 3;
         } else if (strcmp(argv[i], "-g") == 0) {
             *debug_info = 1;
+        } else if (strcmp(argv[i], "-I") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Missing directory after -I.\n");
+                return 0;
+            }
+            add_search_path(global_module_cache, argv[++i]);
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
             return 0;
@@ -1838,6 +1844,13 @@ int main(int argc, const char* argv[]) {
         cmd_argc -= 1;
     }
 
+    // -I <dir> — add module search path
+    while (cmd_argc >= 3 && strcmp(cmd_argv[1], "-I") == 0) {
+        add_search_path(global_module_cache, cmd_argv[2]);
+        cmd_argv += 2;
+        cmd_argc -= 2;
+    }
+
     if (cmd_argc == 1) {
         // No arguments: start REPL
         run_repl(runtime_mode);
@@ -2196,6 +2209,8 @@ int main(int argc, const char* argv[]) {
                 app_name_opt = cmd_argv[++i];
             } else if (strcmp(cmd_argv[i], "--min-sdk") == 0 && i + 1 < cmd_argc) {
                 min_sdk = atoi(cmd_argv[++i]);
+            } else if (strcmp(cmd_argv[i], "-I") == 0 && i + 1 < cmd_argc) {
+                add_search_path(global_module_cache, cmd_argv[++i]);
             } else if (strcmp(cmd_argv[i], "-O0") == 0) { opt_level = 0; }
             else if (strcmp(cmd_argv[i], "-O1") == 0) { opt_level = 1; }
             else if (strcmp(cmd_argv[i], "-O2") == 0) { opt_level = 2; }

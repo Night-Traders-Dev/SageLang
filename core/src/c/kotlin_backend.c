@@ -18,6 +18,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "pass.h"
+#include "module.h"
 
 extern Stmt* parse_program(const char* source, const char* input_path);
 
@@ -63,6 +64,7 @@ typedef struct KtImportedModule {
     char* path;
     char* source;
     Stmt* ast;
+    int inlined;
     struct KtImportedModule* next;
 } KtImportedModule;
 
@@ -387,12 +389,12 @@ static void kt_add_proc(KtCompiler* compiler, const char* sage_name,
 
 static void kt_add_class(KtCompiler* compiler, const char* class_name,
                           const char* parent_name, Stmt* methods) {
-    KtClassInfo* info = malloc(sizeof(KtClassInfo));
-    info->class_name = kt_str_dup(class_name);
-    info->parent_name = parent_name ? kt_str_dup(parent_name) : NULL;
-    info->methods = methods;
-    info->next = compiler->classes;
-    compiler->classes = info;
+    KtClassInfo* entry = malloc(sizeof(KtClassInfo));
+    entry->class_name = kt_str_dup(class_name);
+    entry->parent_name = parent_name ? kt_str_dup(parent_name) : NULL;
+    entry->methods = methods;
+    entry->next = compiler->classes;
+    compiler->classes = entry;
 }
 
 static char* kt_make_unique_name(KtCompiler* compiler, const char* prefix) {
@@ -1092,18 +1094,31 @@ static char* kt_emit_call_expr(KtCompiler* compiler, CallExpr* call) {
         }
         kt_sb_append(&sb, ")");
     }
-    // ---- User-defined function call ----
+    // ---- User-defined function or local variable call ----
     else {
-        KtProcEntry* proc = kt_find_proc(compiler->procs, callee_name);
-        const char* kt_name = proc ? proc->kt_name : callee_name;
-        kt_sb_appendf(&sb, "%s(", kt_name);
-        for (int i = 0; i < call->arg_count; i++) {
-            if (i > 0) kt_sb_append(&sb, ", ");
-            char* arg = kt_emit_expr(compiler, call->args[i]);
-            kt_sb_append(&sb, arg);
-            free(arg);
+        const char* kt_name = kt_resolve_name(compiler, callee_name);
+        if (kt_name != NULL) {
+            // It's a variable being called: S.call(var, args...)
+            kt_sb_appendf(&sb, "S.call(%s", kt_name);
+            for (int i = 0; i < call->arg_count; i++) {
+                char* arg = kt_emit_expr(compiler, call->args[i]);
+                kt_sb_appendf(&sb, ", %s", arg);
+                free(arg);
+            }
+            kt_sb_append(&sb, ")");
+        } else {
+            // Assume it's a global procedure
+            KtProcEntry* proc = kt_find_proc(compiler->procs, callee_name);
+            const char* final_name = proc ? proc->kt_name : callee_name;
+            kt_sb_appendf(&sb, "%s(", final_name);
+            for (int i = 0; i < call->arg_count; i++) {
+                if (i > 0) kt_sb_append(&sb, ", ");
+                char* arg = kt_emit_expr(compiler, call->args[i]);
+                kt_sb_append(&sb, arg);
+                free(arg);
+            }
+            kt_sb_append(&sb, ")");
         }
-        kt_sb_append(&sb, ")");
     }
 
     free(callee_name);
@@ -1179,7 +1194,7 @@ static char* kt_emit_expr(KtCompiler* compiler, Expr* expr) {
             // Map self → this when inside a class method
             if (compiler->in_class && strcmp(name, "self") == 0) {
                 free(name);
-                return kt_str_dup("SageRuntime.Value.Obj(this)");
+                return kt_str_dup("S.Value.Obj(this)");
             }
 
             const char* kt_name = kt_resolve_name(compiler, name);
@@ -1187,8 +1202,14 @@ static char* kt_emit_expr(KtCompiler* compiler, Expr* expr) {
                 // Could be a proc name used as a value reference
                 KtProcEntry* proc = kt_find_proc(compiler->procs, name);
                 if (proc != NULL) {
+                    KtStringBuffer sb; kt_sb_init(&sb);
+                    kt_sb_appendf(&sb, "S.fn(\"%s\") { args -> %s(", proc->sage_name, proc->kt_name);
+                    for (int i = 0; i < proc->param_count; i++) {
+                        kt_sb_appendf(&sb, "%sargs[%d]", i > 0 ? ", " : "", i);
+                    }
+                    kt_sb_append(&sb, ") }");
                     free(name);
-                    return kt_str_dup(proc->kt_name);
+                    return kt_sb_take(&sb);
                 }
                 // Unknown name — emit as-is (might be a global from imported module)
                 char* sanitized = kt_sanitize_identifier(name);
@@ -1464,8 +1485,13 @@ static void kt_emit_stmt(KtCompiler* compiler, Stmt* stmt) {
             ImportStmt* imp = &stmt->as.import;
             for (KtImportedModule* m = compiler->modules; m != NULL; m = m->next) {
                 if (strcmp(m->name, imp->module_name) == 0) {
+                    if (m->inlined) break;
+                    m->inlined = 1;
                     for (Stmt* s = m->ast; s != NULL; s = s->next) {
-                        if (s->type != STMT_PROC && s->type != STMT_ASYNC_PROC && s->type != STMT_CLASS) {
+                        // Skip declarations (procs/classes) as they are handled globally
+                        // and skip nested imports to avoid recursive/duplicate inlining.
+                        if (s->type != STMT_PROC && s->type != STMT_ASYNC_PROC && 
+                            s->type != STMT_CLASS && s->type != STMT_IMPORT) {
                             kt_emit_stmt(compiler, s);
                             if (compiler->failed) return;
                         }
@@ -1736,108 +1762,38 @@ static char* kt_module_name_to_path(const char* name) {
     return path_name;
 }
 
+
+extern ModuleCache* global_module_cache;
+
 static char* kt_find_module_path(const char* module_name, const char* input_path) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat-truncation"
-    // Convert dots to slashes: "android.app" → "android/app"
     char* path_name = kt_module_name_to_path(module_name);
     if (!path_name) return NULL;
-
-    // Collect search directories
-    char search_dirs[8][512];
+    char search_dirs[16][512];
     int dir_count = 0;
-
-    // 1. Same directory as input file
-    if (input_path != NULL) {
+    #define ADD_SEARCH_DIR(p) if (dir_count < 16) { strncpy(search_dirs[dir_count], (p), 511); search_dirs[dir_count][511] = 0; dir_count++; }
+    if (input_path) {
         const char* slash = strrchr(input_path, '/');
-        if (slash != NULL) {
-            size_t dir_len = (size_t)(slash - input_path);
-            snprintf(search_dirs[dir_count], sizeof(search_dirs[0]),
-                     "%.*s", (int)dir_len, input_path);
-            dir_count++;
-
-            // 2. input_dir/lib/
-            snprintf(search_dirs[dir_count], sizeof(search_dirs[0]),
-                     "%.*s/lib", (int)dir_len, input_path);
-            dir_count++;
-
-            // 3. Parent of input dir + /lib/ (handles examples/ or src/ subdirs)
-            // Find parent by removing the last path component from input dir
-            char parent[512];
-            snprintf(parent, sizeof(parent), "%.*s", (int)dir_len, input_path);
-            char* parent_slash = strrchr(parent, '/');
-            if (parent_slash != NULL) {
-                *parent_slash = '\0';
-                snprintf(search_dirs[dir_count], sizeof(search_dirs[0]),
-                         "%s/lib", parent);
-                dir_count++;
-            }
-        } else {
-            // Input is in current directory
-            snprintf(search_dirs[dir_count], sizeof(search_dirs[0]), ".");
-            dir_count++;
-        }
+        if (slash) {
+            size_t len = (size_t)(slash - input_path);
+            char tmp[512]; snprintf(tmp, 512, "%.*s", (int)len, input_path); ADD_SEARCH_DIR(tmp);
+            snprintf(tmp, 512, "%.*s/lib", (int)len, input_path); ADD_SEARCH_DIR(tmp);
+        } else { ADD_SEARCH_DIR("."); }
     }
-
-    // 4. CWD lib/ directory
-    snprintf(search_dirs[dir_count], sizeof(search_dirs[0]), "lib");
-    dir_count++;
-
-    // 5. Installed library path (SAGE_LIB_DIR)
-#ifndef SAGE_LIB_DIR
-#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
-#endif
-    snprintf(search_dirs[dir_count], sizeof(search_dirs[0]), "%s", SAGE_LIB_DIR);
-    dir_count++;
-
-    // 6. SAGE_PATH environment variable (colon-separated)
-    const char* sage_path = getenv("SAGE_PATH");
-    if (sage_path != NULL && sage_path[0] != '\0') {
-        char buf[512];
-        size_t sp_len = strlen(sage_path);
-        if (sp_len >= sizeof(buf)) sp_len = sizeof(buf) - 1;
-        memcpy(buf, sage_path, sp_len);
-        buf[sp_len] = '\0';
-        char* start = buf;
-        for (char* p = buf; ; p++) {
-            if (*p == ':' || *p == '\0') {
-                char end_ch = *p;
-                *p = '\0';
-                if (p > start && dir_count < 8) {
-                    snprintf(search_dirs[dir_count], sizeof(search_dirs[0]),
-                             "%s", start);
-                    dir_count++;
-                }
-                if (end_ch == '\0') break;
-                start = p + 1;
-            }
-        }
+    ADD_SEARCH_DIR("lib");
+    ADD_SEARCH_DIR("/usr/local/share/sage/lib");
+    if (global_module_cache) {
+        for (int i = 0; i < global_module_cache->search_path_count; i++)
+            ADD_SEARCH_DIR(global_module_cache->search_paths[i]);
     }
-
-    // Search each directory for path_name.sage or path_name/__init__.sage
     for (int i = 0; i < dir_count; i++) {
         char try_path[1024];
-
-        // Try dir/path_name.sage
-        snprintf(try_path, sizeof(try_path), "%s/%s.sage",
-                 search_dirs[i], path_name);
-        if (access(try_path, R_OK) == 0) {
-            free(path_name);
-            return kt_str_dup(try_path);
-        }
-
-        // Try dir/path_name/__init__.sage
-        snprintf(try_path, sizeof(try_path), "%s/%s/__init__.sage",
-                 search_dirs[i], path_name);
-        if (access(try_path, R_OK) == 0) {
-            free(path_name);
-            return kt_str_dup(try_path);
-        }
+        snprintf(try_path, 1024, "%s/%s.sage", search_dirs[i], path_name);
+        if (access(try_path, R_OK) == 0) { free(path_name); return kt_str_dup(try_path); }
     }
-
-    free(path_name);
+    free(path_name); return NULL;
 #pragma GCC diagnostic pop
-    return NULL;
 }
 
 static void kt_process_import(KtCompiler* compiler, ImportStmt* imp) {
@@ -1847,9 +1803,11 @@ static void kt_process_import(KtCompiler* compiler, ImportStmt* imp) {
     }
 
     char* path = kt_find_module_path(imp->module_name, compiler->input_path);
-    if (path == NULL) {
-        // Not a fatal error — might be a standard library module
-        // that gets mapped to Kotlin stdlib imports
+    if (path == NULL) return;
+
+    // Prevent self-import
+    if (compiler->input_path && strcmp(path, compiler->input_path) == 0) {
+        free(path);
         return;
     }
 
@@ -1874,6 +1832,7 @@ static void kt_process_import(KtCompiler* compiler, ImportStmt* imp) {
     mod->path = path;
     mod->source = source;
     mod->ast = ast;
+    mod->inlined = 0;
     mod->next = compiler->modules;
     compiler->modules = mod;
 
@@ -1969,7 +1928,7 @@ static void kt_emit_function_definition(KtCompiler* compiler, Stmt* stmt) {
         if (i > 0) fputs(", ", compiler->out);
         char* pname = kt_token_to_string(proc_stmt->params[i]);
         KtNameEntry* param = kt_find_name(compiler->locals, pname);
-        fprintf(compiler->out, "%s: SageVal", param ? param->kt_name : pname);
+        fprintf(compiler->out, "%s: SageVal = S.nil", param->kt_name);
         free(pname);
     }
 
@@ -2025,7 +1984,9 @@ static void kt_emit_class_definition(KtCompiler* compiler, KtClassInfo* cls) {
     for (Stmt* method = cls->methods; method != NULL; method = method->next) {
         if (method->type == STMT_PROC) {
             ProcStmt* proc = &method->as.proc;
-            char* mname = kt_token_to_string(proc->name);
+            char* sage_mname = kt_token_to_string(proc->name);
+            char* mname = kt_sanitize_identifier(sage_mname);
+            free(sage_mname);
 
             // Determine if first param is self
             int start_param = 0;
@@ -2073,7 +2034,7 @@ static void kt_emit_class_definition(KtCompiler* compiler, KtClassInfo* cls) {
                     if (i > start_param) fputs(", ", compiler->out);
                     char* pname = kt_token_to_string(proc->params[i]);
                     KtNameEntry* param = kt_find_name(compiler->locals, pname);
-                    fprintf(compiler->out, "%s: SageVal", param ? param->kt_name : pname);
+                    fprintf(compiler->out, "%s: SageVal = S.nil", param ? param->kt_name : pname);
                     free(pname);
                 }
 
@@ -2138,7 +2099,7 @@ static void kt_emit_function_definitions(KtCompiler* compiler, Stmt* program) {
 // ============================================================================
 
 static void kt_emit_prelude(FILE* out) {
-    fputs(
+    fprintf(out,
         "// Generated by Sage Kotlin Backend\n"
         "// https://github.com/sageLang/sage\n"
         "@file:Suppress(\"UNUSED_PARAMETER\", \"UNUSED_VARIABLE\", \"NAME_SHADOWING\")\n"
@@ -2148,8 +2109,7 @@ static void kt_emit_prelude(FILE* out) {
         "import kotlinx.coroutines.*\n"
         "\n"
         "typealias SageVal = S.Value\n"
-        "\n",
-        out
+        "\n"
     );
 }
 
@@ -2165,7 +2125,7 @@ static void kt_emit_main(KtCompiler* compiler, Stmt* program) {
 
     // Register classes
     for (KtClassInfo* cls = compiler->classes; cls != NULL; cls = cls->next) {
-        kt_emit_line(compiler, "S.registerClass(\"%s\") { args -> %s().also { it.sageInit(*args) } }",
+        kt_emit_line(compiler, "S.registerClass(\"%s\") { args -> S.Value.Obj(%s().also { it.sageInit(*args) }) }",
                      cls->class_name, cls->class_name);
     }
     if (compiler->classes) kt_emit_line(compiler, "");
@@ -2351,7 +2311,9 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
     fputs("    fun bool(v: Boolean): Value = Value.Bool(v)\n", f);
     fputs("    fun array(vararg elems: Value): Value = Value.Arr(elems.toMutableList())\n", f);
     fputs("    fun dict(vararg pairs: Pair<String, Value>): Value = Value.Dict(mutableMapOf(*pairs))\n", f);
-    fputs("    fun tuple(vararg elems: Value): Value = Value.Tup(elems.toList())\n\n", f);
+    fputs("    fun tuple(vararg elems: Value): Value = Value.Tup(elems.toList())\n", f);
+    fputs("    fun fn(name: String, f: (Array<out Value>) -> Value): Value = Value.Fn(name, f)\n", f);
+    fputs("    fun call(v: Value, vararg args: Value): Value = if(v is Value.Fn) v.f(args) else nil\n\n", f);
 
     // Class registry
     fputs("    private val classRegistry = mutableMapOf<String, (Array<out Value>) -> Value>()\n", f);
