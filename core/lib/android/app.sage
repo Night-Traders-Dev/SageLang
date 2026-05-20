@@ -53,6 +53,12 @@ class App:
             self.start_screen = name
         return self
 
+    proc compose_screen(self, name, root_component):
+        self.screens[name] = root_component
+        if len(dict_keys(self.screens)) == 1:
+            self.start_screen = name
+        return self
+
     proc start(self, screen_name):
         self.start_screen = screen_name
         return self

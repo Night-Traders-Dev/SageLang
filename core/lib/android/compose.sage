@@ -94,36 +94,73 @@ class Component:
 
 ## ---- Layout Composables ----
 
-proc Column():
-    return Component("Column")
+proc Column(modifier: nil):
+    let c = Component("Column")
+    if modifier != nil: c.prop("modifier", modifier)
+    return c
 
-proc Row():
-    return Component("Row")
+proc Row(modifier: nil):
+    let c = Component("Row")
+    if modifier != nil: c.prop("modifier", modifier)
+    return c
 
-proc Box():
-    return Component("Box")
+proc Box(modifier: nil):
+    let c = Component("Box")
+    if modifier != nil: c.prop("modifier", modifier)
+    return c
 
-proc LazyColumn():
-    return Component("LazyColumn")
+proc LazyColumn(modifier: nil):
+    let c = Component("LazyColumn")
+    if modifier != nil: c.prop("modifier", modifier)
+    return c
 
 ## ---- Widget Composables ----
 
-proc Text(content):
+proc Text(content, modifier: nil, fontSize: nil, color: nil):
     let c = Component("Text")
     c.prop("text", content)
+    if modifier != nil: c.prop("modifier", modifier)
+    if fontSize != nil: c.prop("fontSize", fontSize)
+    if color != nil: c.prop("color", color)
     return c
 
-proc Button(label, on_click):
+proc Button(label, on_click, modifier: nil, enabled: true):
     let c = Component("Button")
     c.prop("label", label)
     c.prop("onClick", on_click)
+    c.prop("enabled", enabled)
+    if modifier != nil: c.prop("modifier", modifier)
     return c
 
-proc TextField(value, on_change):
+proc TextField(value, on_change, modifier: nil, label: nil, placeholder: nil):
     let c = Component("TextField")
     c.prop("value", value)
     c.prop("onChange", on_change)
+    if modifier != nil: c.prop("modifier", modifier)
+    if label != nil: c.prop("label", label)
+    if placeholder != nil: c.prop("placeholder", placeholder)
     return c
+
+## ---- Modifiers (simple representation) ----
+
+class Modifier:
+    proc init(self):
+        self.ops = []
+    
+    proc padding(self, value):
+        push(self.ops, {"type": "padding", "value": value})
+        return self
+    
+    proc fillMaxSize(self):
+        push(self.ops, {"type": "fillMaxSize"})
+        return self
+    
+    proc weight(self, value):
+        push(self.ops, {"type": "weight", "value": value})
+        return self
+
+proc modifier():
+    return Modifier()
 
 proc Image(src):
     let c = Component("Image")
@@ -191,9 +228,17 @@ class NavController:
 
 ## ---- Scaffold (top-level app structure) ----
 
-proc Scaffold(title, content):
+proc Scaffold(title, content, drawer: nil):
     let c = Component("Scaffold")
     c.prop("title", title)
+    c.child(content)
+    if drawer != nil:
+        c.prop("drawer", drawer)
+    return c
+
+proc ModalNavigationDrawer(drawer_content, content):
+    let c = Component("ModalNavigationDrawer")
+    c.prop("drawerContent", drawer_content)
     c.child(content)
     return c
 
