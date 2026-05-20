@@ -51,11 +51,27 @@ ois_update_run() {
     _mode="$(ois_reg_get "$_app" update_mode)"
     _url="$(ois_reg_get  "$_app" version_url)"
 
-    ois_info "Checking for updates..."
-    _remote="$(ois_fetch_version "$_url")" || {
-        ois_warn "Cannot reach update server. $_cur still installed and working."
-        return 1
-    }
+    # --- Cache Check ---
+    _now="$(date +%s 2>/dev/null || printf '0')"
+    _last="$(ois_reg_get "$_app" last_update_check 2>/dev/null || printf '0')"
+    _diff=$((_now - _last))
+    _remote=""
+
+    # Only skip if within 5 minutes AND not an explicit update command with --yes
+    if [ "$_diff" -lt 300 ] && [ "$_diff" -ge 0 ] && [ "$_yes" != "yes" ]; then
+        _remote="$(ois_reg_get "$_app" last_remote_version 2>/dev/null)"
+    fi
+
+    if [ -z "$_remote" ]; then
+        ois_info "Checking for updates..."
+        _remote="$(ois_fetch_version "$_url")" || {
+            ois_warn "Cannot reach update server. $_cur still installed and working."
+            return 1
+        }
+        ois_reg_set "$_app" last_update_check "$_now"
+        ois_reg_set "$_app" last_remote_version "$_remote"
+    fi
+    # -------------------
 
     if [ "$_cur" = "$_remote" ]; then ois_ok "Already up to date  ($_cur)."; return 0; fi
     if ! ois_version_older "$_cur" "$_remote"; then

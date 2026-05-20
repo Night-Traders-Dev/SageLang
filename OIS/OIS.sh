@@ -540,7 +540,7 @@ main() {
 
     # Elevate for write-requiring commands
     case "$_cmd" in
-        install|uninstall|update|upgrade|reinstall|repair)
+        install|uninstall|reinstall|repair)
             _ois_elevate "$@" ;;
     esac
 
