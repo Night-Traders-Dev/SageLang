@@ -17,7 +17,7 @@ from ast import STMT_PRINT, STMT_EXPRESSION, STMT_LET, STMT_IF
 from ast import STMT_BLOCK, STMT_WHILE, STMT_PROC, STMT_FOR
 from ast import STMT_RETURN, STMT_BREAK, STMT_CONTINUE, STMT_CLASS
 from ast import STMT_TRY, STMT_RAISE, STMT_YIELD, STMT_IMPORT
-from ast import STMT_ASYNC_PROC, STMT_DEFER
+from ast import STMT_ASYNC_PROC, STMT_DEFER, STMT_STRUCT
 from ast import number_expr, string_expr, bool_expr, nil_expr
 from ast import binary_expr, variable_expr, call_expr, array_expr
 from ast import index_expr, index_set_expr, dict_expr, tuple_expr
@@ -26,7 +26,7 @@ from ast import print_stmt, expr_stmt, let_stmt, if_stmt
 from ast import block_stmt, while_stmt, proc_stmt, for_stmt
 from ast import return_stmt, break_stmt, continue_stmt, class_stmt
 from ast import try_stmt, raise_stmt, yield_stmt, import_stmt
-from ast import async_proc_stmt, defer_stmt
+from ast import async_proc_stmt, defer_stmt, struct_stmt
 
 # Maximum parser recursion depth
 let MAX_DEPTH = 500
@@ -497,6 +497,27 @@ class Parser:
         let body = self.parse_block()
         return async_proc_stmt(name, params, body)
 
+    proc parse_struct():
+        self.consume(token.TOKEN_IDENTIFIER, "Expect struct name.")
+        let name = self.previous()
+        self.consume(token.TOKEN_COLON, "Expect ':' after struct name.")
+        self.consume(token.TOKEN_NEWLINE, "Expect newline after struct name.")
+        self.consume(token.TOKEN_INDENT, "Expect indentation in struct body.")
+        let field_names = []
+        let field_types = []
+        while not self.check(token.TOKEN_DEDENT) and not self.check(token.TOKEN_EOF):
+            if self.match_tok(token.TOKEN_NEWLINE):
+                continue
+            self.consume(token.TOKEN_IDENTIFIER, "Expect field name.")
+            push(field_names, self.previous())
+            self.consume(token.TOKEN_COLON, "Expect ':' after field name.")
+            # Simple type parsing (identifier for now)
+            self.consume(token.TOKEN_IDENTIFIER, "Expect field type.")
+            push(field_types, self.previous())
+            self.consume(token.TOKEN_NEWLINE, "Expect newline after field.")
+        self.consume(token.TOKEN_DEDENT, "Expect dedent after struct body.")
+        return struct_stmt(name, field_names, field_types, len(field_names))
+
     proc parse_class():
         self.consume(token.TOKEN_IDENTIFIER, "Expect class name.")
         let name = self.previous()
@@ -676,6 +697,10 @@ class Parser:
         # Class declaration
         if self.match_tok(token.TOKEN_CLASS):
             return self.parse_class()
+
+        # Struct declaration
+        if self.match_tok(token.TOKEN_STRUCT):
+            return self.parse_struct()
 
         # Async proc declaration
         if self.match_tok(token.TOKEN_ASYNC):
