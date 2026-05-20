@@ -1310,6 +1310,8 @@ static void kt_emit_stmt(KtCompiler* compiler, Stmt* stmt) {
                 break;
             }
 
+            int is_global = (compiler->locals == NULL);
+
             // Type specialization at -O2+: emit native types for simple literals
             if (compiler->opt_level >= 2 && stmt->as.let.initializer) {
                 KtSpecType spec = kt_infer_expr_type(stmt->as.let.initializer);
@@ -1320,18 +1322,30 @@ static void kt_emit_stmt(KtCompiler* compiler, Stmt* stmt) {
 
                 if (spec == KT_TYPE_NUMBER) {
                     char* val = kt_emit_spec_number(compiler, stmt->as.let.initializer);
-                    kt_emit_line(compiler, "var %s: Double = %s", kt_name, val);
+                    if (is_global) {
+                        kt_emit_line(compiler, "%s = %s", kt_name, val);
+                    } else {
+                        kt_emit_line(compiler, "var %s: Double = %s", kt_name, val);
+                    }
                     free(name); free(val);
                     break;
                 } else if (spec == KT_TYPE_STRING && stmt->as.let.initializer->type == EXPR_STRING) {
                     char* escaped = kt_escape_string(stmt->as.let.initializer->as.string.value);
-                    kt_emit_line(compiler, "var %s: String = \"%s\"", kt_name, escaped);
+                    if (is_global) {
+                        kt_emit_line(compiler, "%s = \"%s\"", kt_name, escaped);
+                    } else {
+                        kt_emit_line(compiler, "var %s: String = \"%s\"", kt_name, escaped);
+                    }
                     free(escaped);
                     free(name);
                     break;
                 } else if (spec == KT_TYPE_BOOLEAN) {
                     int bval = stmt->as.let.initializer->as.boolean.value;
-                    kt_emit_line(compiler, "var %s: Boolean = %s", kt_name, bval ? "true" : "false");
+                    if (is_global) {
+                        kt_emit_line(compiler, "%s = %s", kt_name, bval ? "true" : "false");
+                    } else {
+                        kt_emit_line(compiler, "var %s: Boolean = %s", kt_name, bval ? "true" : "false");
+                    }
                     free(name);
                     break;
                 }
@@ -1340,7 +1354,11 @@ static void kt_emit_stmt(KtCompiler* compiler, Stmt* stmt) {
             char* expr = stmt->as.let.initializer
                 ? kt_emit_expr(compiler, stmt->as.let.initializer)
                 : kt_str_dup("S.nil");
-            kt_emit_line(compiler, "var %s = %s", kt_name, expr);
+            if (is_global) {
+                kt_emit_line(compiler, "%s = %s", kt_name, expr);
+            } else {
+                kt_emit_line(compiler, "var %s = %s", kt_name, expr);
+            }
             free(name); free(expr);
             break;
         }
@@ -2129,7 +2147,7 @@ static void kt_emit_prelude(FILE* out) {
         "import sage.runtime.SageRuntime as S\n"
         "import kotlinx.coroutines.*\n"
         "\n"
-        "typealias SageVal = SageRuntime.Value\n"
+        "typealias SageVal = S.Value\n"
         "\n",
         out
     );
@@ -2213,6 +2231,20 @@ static int write_kotlin_output_internal(const char* source, const char* input_pa
 
         // Emit functions
         kt_emit_function_definitions(&compiler, program);
+
+        // Emit global variables (top-level properties in Kotlin)
+        for (KtNameEntry* g = compiler.globals; g != NULL; g = g->next) {
+            if (g->spec_type == KT_TYPE_NUMBER) {
+                fprintf(out, "var %s: Double = 0.0\n", g->kt_name);
+            } else if (g->spec_type == KT_TYPE_STRING) {
+                fprintf(out, "var %s: String = \"\"\n", g->kt_name);
+            } else if (g->spec_type == KT_TYPE_BOOLEAN) {
+                fprintf(out, "var %s: Boolean = false\n", g->kt_name);
+            } else {
+                fprintf(out, "var %s: S.Value = S.nil\n", g->kt_name);
+            }
+        }
+        if (compiler.globals) fprintf(out, "\n");
 
         // Emit main
         if (!compiler.failed)
@@ -2454,7 +2486,7 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
 
     // Memory operations (ByteBuffer-backed)
     fputs("    fun memAlloc(size: Value): Value { val n=toDouble(size).toInt().coerceIn(1,67108864); return Value.Ptr(java.nio.ByteBuffer.allocateDirect(n).order(java.nio.ByteOrder.nativeOrder()), n) }\n", f);
-    fputs("    fun memFree(ptr: Value): Value { if(ptr is Value.Ptr) { (ptr.buf as? sun.nio.ch.DirectBuffer)?.cleaner()?.clean() }; return nil }\n", f);
+    fputs("    fun memFree(ptr: Value): Value { /* DirectByteBuffer is GC-managed on Android/JVM */ return nil }\n", f);
     fputs("    fun memRead(ptr: Value, offset: Value, type: Value): Value {\n", f);
     fputs("        if(ptr !is Value.Ptr) return nil; val o=toDouble(offset).toInt(); val t=toKString(type); val b=ptr.buf\n", f);
     fputs("        return when(t) { \"byte\"->num(b.get(o).toDouble()); \"int\"->num(b.getInt(o).toDouble()); \"double\"->num(b.getDouble(o))\n", f);
@@ -2558,12 +2590,13 @@ int compile_source_to_android(const char* source, const char* input_path,
     snprintf(kt_output, sizeof(kt_output), "%s/Main.kt", src_dir);
 #pragma GCC diagnostic pop
 
-    // Write with package header
+    // Write with package header and file annotations (which must precede package line in Kotlin)
     FILE* out = fopen(kt_output, "wb");
     if (!out) {
         fprintf(stderr, "Could not create %s: %s\n", kt_output, strerror(errno));
         return 0;
     }
+    fprintf(out, "@file:Suppress(\"UNUSED_PARAMETER\", \"UNUSED_VARIABLE\", \"NAME_SHADOWING\")\n");
     fprintf(out, "package %s\n\n", pkg);
     fclose(out);
 
@@ -2580,14 +2613,17 @@ int compile_source_to_android(const char* source, const char* input_path,
         return 0;
     }
 
-    // Read temp, append to output (skip the prelude's package line since we wrote our own)
-    FILE* temp_in = fopen(temp_kt, "rb");
-    out = fopen(kt_output, "ab");
+    // Read temp, append to output (skip the prelude's suppress line since we wrote our own at the very top)
+    FILE* temp_in = fopen(temp_kt, "r");
+    out = fopen(kt_output, "a");
     if (temp_in && out) {
-        char buf[4096];
-        size_t n;
-        while ((n = fread(buf, 1, sizeof(buf), temp_in)) > 0)
-            fwrite(buf, 1, n, out);
+        char line[4096];
+        while (fgets(line, sizeof(line), temp_in)) {
+            if (strstr(line, "@file:Suppress") != NULL) {
+                continue;
+            }
+            fputs(line, out);
+        }
     }
     if (temp_in) fclose(temp_in);
     if (out) fclose(out);
@@ -2603,8 +2639,7 @@ int compile_source_to_android(const char* source, const char* input_path,
     snprintf(manifest_path, sizeof(manifest_path), "%s/AndroidManifest.xml", manifest_dir);
     kt_write_file_fmt(manifest_path,
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
-        "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n"
-        "    package=\"%s\">\n"
+        "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n"
         "\n"
         "    <uses-permission android:name=\"android.permission.INTERNET\" />\n"
         "\n"
@@ -2624,7 +2659,7 @@ int compile_source_to_android(const char* source, const char* input_path,
         "        </activity>\n"
         "    </application>\n"
         "</manifest>\n",
-        pkg, name
+        name
     );
 
     // 4. Write MainActivity.kt
@@ -2652,8 +2687,6 @@ int compile_source_to_android(const char* source, const char* input_path,
             "import sage.runtime.SageRuntime as S\n"
             "import java.io.ByteArrayOutputStream\n"
             "import java.io.PrintStream\n"
-            "\n"
-            "typealias SageVal = SageRuntime.Value\n"
             "\n"
             "class MainActivity : ComponentActivity() {\n"
             "    override fun onCreate(savedInstanceState: Bundle?) {\n"
@@ -2699,8 +2732,6 @@ int compile_source_to_android(const char* source, const char* input_path,
             "import sage.runtime.SageRuntime as S\n"
             "import java.io.ByteArrayOutputStream\n"
             "import java.io.PrintStream\n"
-            "\n"
-            "typealias SageVal = SageRuntime.Value\n"
             "\n"
             "class MainActivity : AppCompatActivity() {\n"
             "    override fun onCreate(savedInstanceState: Bundle?) {\n"

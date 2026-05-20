@@ -6,7 +6,7 @@ import sage.runtime.*
 import sage.runtime.SageRuntime as S
 import kotlinx.coroutines.*
 
-typealias SageVal = SageRuntime.Value
+typealias SageVal = S.Value
 
 open class Circle : Shape() {
     override val props = mutableMapOf<String, SageVal>()
@@ -51,13 +51,15 @@ open class Shape : SageObject("Shape") {
     
 }
 
+var c: S.Value = S.nil
+
 fun main() {
     S.init()
     
     S.registerClass("Circle") { args -> Circle().also { it.sageInit(*args) } }
     S.registerClass("Shape") { args -> Shape().also { it.sageInit(*args) } }
     
-    var c = S.newInstance("Circle", S.num(5.0))
+    c = S.newInstance("Circle", S.num(5.0))
     S.printLn(S.callMethod(c, "describe"))
     S.printLn(S.callMethod(c, "area"))
     

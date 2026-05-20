@@ -6,7 +6,7 @@ import sage.runtime.*
 import sage.runtime.SageRuntime as S
 import kotlinx.coroutines.*
 
-typealias SageVal = SageRuntime.Value
+typealias SageVal = S.Value
 
 fun add(a: SageVal, b: SageVal): SageVal {
     return S.add(a, b)

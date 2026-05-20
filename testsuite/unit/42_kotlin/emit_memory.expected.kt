@@ -6,23 +6,29 @@ import sage.runtime.*
 import sage.runtime.SageRuntime as S
 import kotlinx.coroutines.*
 
-typealias SageVal = SageRuntime.Value
+typealias SageVal = S.Value
+
+var arch: S.Value = S.nil
+var c: S.Value = S.nil
+var b: S.Value = S.nil
+var a: S.Value = S.nil
+var buf: S.Value = S.nil
 
 fun main() {
     S.init()
     
-    var buf = S.memAlloc(S.num(256.0))
+    buf = S.memAlloc(S.num(256.0))
     S.memWrite(buf, S.num(0.0), S.str("int"), S.num(42.0))
     S.memWrite(buf, S.num(4.0), S.str("int"), S.num(100.0))
     S.memWrite(buf, S.num(8.0), S.str("double"), S.num(3.1400000000000001))
-    var a = S.memRead(buf, S.num(0.0), S.str("int"))
-    var b = S.memRead(buf, S.num(4.0), S.str("int"))
-    var c = S.memRead(buf, S.num(8.0), S.str("double"))
+    a = S.memRead(buf, S.num(0.0), S.str("int"))
+    b = S.memRead(buf, S.num(4.0), S.str("int"))
+    c = S.memRead(buf, S.num(8.0), S.str("double"))
     S.printLn(a)
     S.printLn(b)
     S.printLn(c)
     S.memFree(buf)
-    var arch = S.str("jvm")
+    arch = S.str("jvm")
     S.printLn(arch)
     
 }

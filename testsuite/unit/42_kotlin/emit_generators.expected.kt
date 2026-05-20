@@ -6,7 +6,7 @@ import sage.runtime.*
 import sage.runtime.SageRuntime as S
 import kotlinx.coroutines.*
 
-typealias SageVal = SageRuntime.Value
+typealias SageVal = S.Value
 
 fun count_up(n: SageVal): Sequence<SageVal> = sequence {
     var i = S.num(0.0)
@@ -26,6 +26,8 @@ fun fibonacci_gen(): Sequence<SageVal> = sequence {
         b = temp
     }
 }
+
+var x: S.Value = S.nil
 
 fun main() {
     S.init()

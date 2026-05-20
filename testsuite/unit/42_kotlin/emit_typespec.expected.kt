@@ -6,21 +6,30 @@ import sage.runtime.*
 import sage.runtime.SageRuntime as S
 import kotlinx.coroutines.*
 
-typealias SageVal = SageRuntime.Value
+typealias SageVal = S.Value
+
+var i: S.Value = S.nil
+var total: S.Value = S.nil
+var result: S.Value = S.nil
+var flag: S.Value = S.nil
+var name: S.Value = S.nil
+var sum: S.Value = S.nil
+var y: S.Value = S.nil
+var x: S.Value = S.nil
 
 fun main() {
     S.init()
     
-    var x = S.num(10.0)
-    var y = S.num(20.0)
-    var sum = S.add(x, y)
+    x = S.num(10.0)
+    y = S.num(20.0)
+    sum = S.add(x, y)
     S.printLn(sum)
-    var name = S.str("Sage")
-    var flag = S.bool(true)
-    var result = S.add(S.mul(x, y), S.num(5.0))
+    name = S.str("Sage")
+    flag = S.bool(true)
+    result = S.add(S.mul(x, y), S.num(5.0))
     S.printLn(result)
-    var total = S.num(0.0)
-    var i = S.num(0.0)
+    total = S.num(0.0)
+    i = S.num(0.0)
     while (S.truthy(S.lt(i, S.num(100.0)))) {
         total = S.add(total, i)
         i = S.add(i, S.num(1.0))

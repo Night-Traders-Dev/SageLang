@@ -6,7 +6,7 @@ import sage.runtime.*
 import sage.runtime.SageRuntime as S
 import kotlinx.coroutines.*
 
-typealias SageVal = SageRuntime.Value
+typealias SageVal = S.Value
 
 suspend fun fetch_data(): SageVal {
     return S.num(42.0)
@@ -18,12 +18,15 @@ suspend fun compute(x: SageVal): SageVal {
     return S.nil
 }
 
+var doubled: S.Value = S.nil
+var result: S.Value = S.nil
+
 fun main() {
     S.init()
     
-    var result = kotlinx.coroutines.runBlocking { fetch_data() }
+    result = kotlinx.coroutines.runBlocking { fetch_data() }
     S.printLn(result)
-    var doubled = kotlinx.coroutines.runBlocking { compute(S.num(21.0)) }
+    doubled = kotlinx.coroutines.runBlocking { compute(S.num(21.0)) }
     S.printLn(doubled)
     
 }

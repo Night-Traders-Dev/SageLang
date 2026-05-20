@@ -6,12 +6,22 @@ import sage.runtime.*
 import sage.runtime.SageRuntime as S
 import kotlinx.coroutines.*
 
-typealias SageVal = SageRuntime.Value
+typealias SageVal = S.Value
+
+var row: S.Value = S.nil
+var matrix: S.Value = S.nil
+var sliced: S.Value = S.nil
+var items: S.Value = S.nil
+var point: S.Value = S.nil
+var person: S.Value = S.nil
+var i: S.Value = S.nil
+var n: S.Value = S.nil
+var nums: S.Value = S.nil
 
 fun main() {
     S.init()
     
-    var nums = S.array(S.num(10.0), S.num(20.0), S.num(30.0), S.num(40.0), S.num(50.0))
+    nums = S.array(S.num(10.0), S.num(20.0), S.num(30.0), S.num(40.0), S.num(50.0))
     S.printLn(nums)
     S.printLn(S.len(nums))
     S.printLn(S.index(nums, S.num(0.0)))
@@ -36,20 +46,20 @@ fun main() {
             S.printLn(i)
         }
     }
-    var person = S.dict("name" to S.str("Alice"), "age" to S.num(30.0))
+    person = S.dict("name" to S.str("Alice"), "age" to S.num(30.0))
     S.printLn(person)
     S.printLn(S.dictKeys(person))
     S.printLn(S.dictValues(person))
     S.printLn(S.dictHas(person, S.str("name")))
     S.printLn(S.dictHas(person, S.str("email")))
-    var point = S.tuple(S.num(10.0), S.num(20.0), S.num(30.0))
+    point = S.tuple(S.num(10.0), S.num(20.0), S.num(30.0))
     S.printLn(point)
     S.printLn(S.index(point, S.num(0.0)))
     S.printLn(S.len(point))
-    var items = S.array(S.num(1.0), S.num(2.0), S.num(3.0), S.num(4.0), S.num(5.0))
-    var sliced = S.slice(items, S.num(1.0), S.num(3.0))
+    items = S.array(S.num(1.0), S.num(2.0), S.num(3.0), S.num(4.0), S.num(5.0))
+    sliced = S.slice(items, S.num(1.0), S.num(3.0))
     S.printLn(sliced)
-    var matrix = S.array(S.array(S.num(1.0), S.num(2.0)), S.array(S.num(3.0), S.num(4.0)), S.array(S.num(5.0), S.num(6.0)))
+    matrix = S.array(S.array(S.num(1.0), S.num(2.0)), S.array(S.num(3.0), S.num(4.0)), S.array(S.num(5.0), S.num(6.0)))
     run {
         val _iter_4 = S.toIterable(matrix)
         for (row in _iter_4) {

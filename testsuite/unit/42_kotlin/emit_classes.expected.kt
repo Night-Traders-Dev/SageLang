@@ -6,7 +6,7 @@ import sage.runtime.*
 import sage.runtime.SageRuntime as S
 import kotlinx.coroutines.*
 
-typealias SageVal = SageRuntime.Value
+typealias SageVal = S.Value
 
 open class Cat : Animal() {
     override val props = mutableMapOf<String, SageVal>()
@@ -49,6 +49,11 @@ open class Animal : SageObject("Animal") {
     
 }
 
+var e: S.Value = S.nil
+var animal: S.Value = S.nil
+var cat: S.Value = S.nil
+var dog: S.Value = S.nil
+
 fun main() {
     S.init()
     
@@ -56,12 +61,12 @@ fun main() {
     S.registerClass("Dog") { args -> Dog().also { it.sageInit(*args) } }
     S.registerClass("Animal") { args -> Animal().also { it.sageInit(*args) } }
     
-    var dog = S.newInstance("Dog", S.str("Rex"))
-    var cat = S.newInstance("Cat", S.str("Whiskers"))
+    dog = S.newInstance("Dog", S.str("Rex"))
+    cat = S.newInstance("Cat", S.str("Whiskers"))
     S.printLn(S.callMethod(dog, "speak"))
     S.printLn(S.callMethod(cat, "speak"))
     S.printLn(S.callMethod(dog, "describe"))
-    var animal = S.str("dog")
+    animal = S.str("dog")
     run {
         val _match_1 = animal
         if (S.equal(_match_1, S.str("dog"))) {

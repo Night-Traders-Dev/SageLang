@@ -6,28 +6,38 @@ import sage.runtime.*
 import sage.runtime.SageRuntime as S
 import kotlinx.coroutines.*
 
-typealias SageVal = SageRuntime.Value
+typealias SageVal = S.Value
+
+var greeting: S.Value = S.nil
+var d: S.Value = S.nil
+var c: S.Value = S.nil
+var b: S.Value = S.nil
+var a: S.Value = S.nil
+var nothing: S.Value = S.nil
+var flag: S.Value = S.nil
+var name: S.Value = S.nil
+var x: S.Value = S.nil
 
 fun main() {
     S.init()
     
-    var x = S.num(10.0)
-    var name = S.str("Sage")
-    var flag = S.bool(true)
-    var nothing = S.nil
+    x = S.num(10.0)
+    name = S.str("Sage")
+    flag = S.bool(true)
+    nothing = S.nil
     S.printLn(x)
     S.printLn(name)
     S.printLn(flag)
     S.printLn(nothing)
-    var a = S.add(S.num(10.0), S.num(20.0))
-    var b = S.mul(a, S.num(3.0))
-    var c = S.div(b, S.num(2.0))
-    var d = S.mod(S.num(100.0), S.num(7.0))
+    a = S.add(S.num(10.0), S.num(20.0))
+    b = S.mul(a, S.num(3.0))
+    c = S.div(b, S.num(2.0))
+    d = S.mod(S.num(100.0), S.num(7.0))
     S.printLn(a)
     S.printLn(b)
     S.printLn(c)
     S.printLn(d)
-    var greeting = S.add(S.add(S.str("Hello, "), name), S.str("!"))
+    greeting = S.add(S.add(S.str("Hello, "), name), S.str("!"))
     S.printLn(greeting)
     S.printLn(S.len(greeting))
     S.printLn(S.gt(S.num(10.0), S.num(5.0)))
