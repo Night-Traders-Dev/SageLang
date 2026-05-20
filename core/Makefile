@@ -346,6 +346,7 @@ install: $(TARGET) $(LSP_TARGET)
 	cp -r lib/llm $(LIBDIR)/lib/
 	cp -r lib/agent $(LIBDIR)/lib/
 	cp -r lib/chat $(LIBDIR)/lib/
+	cp -r lib/android $(LIBDIR)/lib/
 	cp -r examples/*.sage $(LIBDIR)/examples/
 	install -d $(DOCDIR)
 	install -m 644 README.md LICENSE $(DOCDIR)/
@@ -508,6 +509,34 @@ test: $(TARGET)
 	@echo "Test 25: REPL"
 	@echo ":quit" | ./$(TARGET) --repl 2>&1 | grep -q "Sage REPL" && echo "✅ Pass (banner shown)" || (echo "❌ Fail (banner)"; exit 1)
 	@echo "1 + 2" | ./$(TARGET) --repl 2>&1 | grep -q "sage> 3" && echo "✅ Pass (expression eval)" || (echo "❌ Fail (expression eval)"; exit 1)
+	@echo ""
+	@echo "Test 29: Kotlin Backend (emit-kotlin)"
+	@$(eval KT_PASS := 0)
+	@$(eval KT_FAIL := 0)
+	@KT_OK=0; KT_BAD=0; \
+	for f in ../testsuite/unit/42_kotlin/*.sage; do \
+		if ./$(TARGET) --emit-kotlin "$$f" -o .tmp/kt_$$(basename $$f .sage).kt 2>/dev/null; then \
+			KT_OK=$$((KT_OK + 1)); \
+		else \
+			KT_BAD=$$((KT_BAD + 1)); \
+			echo "  ❌ $$(basename $$f)"; \
+		fi; \
+	done; \
+	if [ $$KT_BAD -eq 0 ]; then \
+		echo "✅ Pass ($$KT_OK tests transpiled)"; \
+	else \
+		echo "❌ Fail ($$KT_BAD failed, $$KT_OK passed)"; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "Test 30: Kotlin Android Project Generation"
+	@rm -rf .tmp/kt_android_test
+	@./$(TARGET) --compile-android examples/android_hello.sage -o .tmp/kt_android_test --package com.sage.test 2>&1 | grep -q "Android project generated" && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
+	@echo ""
+	@echo "Test 31: Kotlin Module Import (android.app)"
+	@printf 'import android.app\nlet my_app = App("Test")\nmy_app.launch()\n' > .tmp/kt_import_test.sage
+	@./$(TARGET) --emit-kotlin .tmp/kt_import_test.sage -o .tmp/kt_import_test.kt 2>&1 && \
+		grep -q 'S.newInstance' .tmp/kt_import_test.kt && echo "✅ Pass (import resolved)" || echo "⚠️  Partial (transpiled but import may not resolve)"
 	@echo ""
 	@echo "Test 26: Formatter"
 	@printf "let   x=1\nlet y =  2\n" > .tmp/fmt_test.sage

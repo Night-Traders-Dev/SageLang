@@ -72,7 +72,7 @@ class UIContext:
         self.elements = []
         self.indent_level = 0
 
-    ## Layout containers
+
     proc column(self):
         push(self.elements, {"type": "column", "indent": self.indent_level})
         self.indent_level = self.indent_level + 1
@@ -83,12 +83,12 @@ class UIContext:
         self.indent_level = self.indent_level + 1
         return self
 
-    proc end(self):
+    proc end_block(self):
         if self.indent_level > 0:
             self.indent_level = self.indent_level - 1
         return self
 
-    ## Widgets
+
     proc text(self, content):
         push(self.elements, {"type": "text", "content": str(content)})
         return self
@@ -130,7 +130,7 @@ class UIContext:
         push(self.elements, {"type": "slider", "min": min_val, "max": max_val, "value": value, "on_change": on_change})
         return self
 
-    ## Navigation
+
     proc navigate(self, screen_name):
         print("[Nav] -> " + screen_name)
         return self
@@ -139,7 +139,7 @@ class UIContext:
         print("[Nav] <- back")
         return self
 
-    ## Feedback
+
     proc toast(self, message):
         print("[Toast] " + message)
         return self

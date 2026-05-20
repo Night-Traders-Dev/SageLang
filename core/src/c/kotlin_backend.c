@@ -1176,6 +1176,12 @@ static char* kt_emit_expr(KtCompiler* compiler, Expr* expr) {
             if (strcmp(name, "false") == 0) { free(name); return kt_str_dup("S.bool(false)"); }
             if (strcmp(name, "nil") == 0) { free(name); return kt_str_dup("S.nil"); }
 
+            // Map self → this when inside a class method
+            if (compiler->in_class && strcmp(name, "self") == 0) {
+                free(name);
+                return kt_str_dup("SageRuntime.Value.Obj(this)");
+            }
+
             const char* kt_name = kt_resolve_name(compiler, name);
             if (kt_name == NULL) {
                 // Could be a proc name used as a value reference
@@ -1699,33 +1705,120 @@ static void kt_collect_global_lets(KtCompiler* compiler, Stmt* stmt) {
 }
 
 // Import resolution
-static char* kt_find_module_path(const char* module_name, const char* input_path) {
-    char search_paths[4][512];
-    int path_count = 0;
 
-    // Same directory as input file
+// Convert dotted module name to path form (dots become slashes)
+// e.g. "android.app" → "android/app"
+static char* kt_module_name_to_path(const char* name) {
+    size_t len = strlen(name);
+    char* path_name = malloc(len + 1);
+    if (!path_name) return NULL;
+    for (size_t i = 0; i < len; i++)
+        path_name[i] = (name[i] == '.') ? '/' : name[i];
+    path_name[len] = '\0';
+    return path_name;
+}
+
+static char* kt_find_module_path(const char* module_name, const char* input_path) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+    // Convert dots to slashes: "android.app" → "android/app"
+    char* path_name = kt_module_name_to_path(module_name);
+    if (!path_name) return NULL;
+
+    // Collect search directories
+    char search_dirs[8][512];
+    int dir_count = 0;
+
+    // 1. Same directory as input file
     if (input_path != NULL) {
         const char* slash = strrchr(input_path, '/');
         if (slash != NULL) {
             size_t dir_len = (size_t)(slash - input_path);
-            snprintf(search_paths[path_count], sizeof(search_paths[0]),
-                     "%.*s/%s.sage", (int)dir_len, input_path, module_name);
+            snprintf(search_dirs[dir_count], sizeof(search_dirs[0]),
+                     "%.*s", (int)dir_len, input_path);
+            dir_count++;
+
+            // 2. input_dir/lib/
+            snprintf(search_dirs[dir_count], sizeof(search_dirs[0]),
+                     "%.*s/lib", (int)dir_len, input_path);
+            dir_count++;
+
+            // 3. Parent of input dir + /lib/ (handles examples/ or src/ subdirs)
+            // Find parent by removing the last path component from input dir
+            char parent[512];
+            snprintf(parent, sizeof(parent), "%.*s", (int)dir_len, input_path);
+            char* parent_slash = strrchr(parent, '/');
+            if (parent_slash != NULL) {
+                *parent_slash = '\0';
+                snprintf(search_dirs[dir_count], sizeof(search_dirs[0]),
+                         "%s/lib", parent);
+                dir_count++;
+            }
         } else {
-            snprintf(search_paths[path_count], sizeof(search_paths[0]),
-                     "%s.sage", module_name);
+            // Input is in current directory
+            snprintf(search_dirs[dir_count], sizeof(search_dirs[0]), ".");
+            dir_count++;
         }
-        path_count++;
     }
 
-    // lib/ directory (relative to input)
-    snprintf(search_paths[path_count], sizeof(search_paths[0]),
-             "lib/%s.sage", module_name);
-    path_count++;
+    // 4. CWD lib/ directory
+    snprintf(search_dirs[dir_count], sizeof(search_dirs[0]), "lib");
+    dir_count++;
 
-    for (int i = 0; i < path_count; i++) {
-        if (access(search_paths[i], R_OK) == 0)
-            return kt_str_dup(search_paths[i]);
+    // 5. Installed library path (SAGE_LIB_DIR)
+#ifndef SAGE_LIB_DIR
+#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
+#endif
+    snprintf(search_dirs[dir_count], sizeof(search_dirs[0]), "%s", SAGE_LIB_DIR);
+    dir_count++;
+
+    // 6. SAGE_PATH environment variable (colon-separated)
+    const char* sage_path = getenv("SAGE_PATH");
+    if (sage_path != NULL && sage_path[0] != '\0') {
+        char buf[512];
+        size_t sp_len = strlen(sage_path);
+        if (sp_len >= sizeof(buf)) sp_len = sizeof(buf) - 1;
+        memcpy(buf, sage_path, sp_len);
+        buf[sp_len] = '\0';
+        char* start = buf;
+        for (char* p = buf; ; p++) {
+            if (*p == ':' || *p == '\0') {
+                char end_ch = *p;
+                *p = '\0';
+                if (p > start && dir_count < 8) {
+                    snprintf(search_dirs[dir_count], sizeof(search_dirs[0]),
+                             "%s", start);
+                    dir_count++;
+                }
+                if (end_ch == '\0') break;
+                start = p + 1;
+            }
+        }
     }
+
+    // Search each directory for path_name.sage or path_name/__init__.sage
+    for (int i = 0; i < dir_count; i++) {
+        char try_path[1024];
+
+        // Try dir/path_name.sage
+        snprintf(try_path, sizeof(try_path), "%s/%s.sage",
+                 search_dirs[i], path_name);
+        if (access(try_path, R_OK) == 0) {
+            free(path_name);
+            return kt_str_dup(try_path);
+        }
+
+        // Try dir/path_name/__init__.sage
+        snprintf(try_path, sizeof(try_path), "%s/%s/__init__.sage",
+                 search_dirs[i], path_name);
+        if (access(try_path, R_OK) == 0) {
+            free(path_name);
+            return kt_str_dup(try_path);
+        }
+    }
+
+    free(path_name);
+#pragma GCC diagnostic pop
     return NULL;
 }
 
@@ -1936,29 +2029,44 @@ static void kt_emit_class_definition(KtCompiler* compiler, KtClassInfo* cls) {
 
             // init → constructor-like
             int is_init = (strcmp(mname, "init") == 0 || strcmp(mname, "__init__") == 0);
+            int non_self_params = proc->param_count - start_param;
 
             if (is_init) {
+                // Emit override fun sageInit(vararg args: SageVal) and
+                // destructure args into named parameters inside the body
                 kt_emit_indent(compiler);
-                fprintf(compiler->out, "fun sageInit(");
+                fprintf(compiler->out, "override fun sageInit(vararg args: SageVal): SageVal {\n");
+                compiler->indent++;
+                // Destructure varargs into named local variables
+                for (int i = start_param; i < proc->param_count; i++) {
+                    int arg_idx = i - start_param;
+                    char* pname = kt_token_to_string(proc->params[i]);
+                    KtNameEntry* param = kt_find_name(compiler->locals, pname);
+                    const char* kt_pname = param ? param->kt_name : pname;
+                    kt_emit_line(compiler, "val %s: SageVal = if (args.size > %d) args[%d] else S.nil",
+                                 kt_pname, arg_idx, arg_idx);
+                    free(pname);
+                }
             } else {
                 kt_emit_indent(compiler);
                 fprintf(compiler->out, "open fun %s(", mname);
+
+                for (int i = start_param; i < proc->param_count; i++) {
+                    if (i > start_param) fputs(", ", compiler->out);
+                    char* pname = kt_token_to_string(proc->params[i]);
+                    KtNameEntry* param = kt_find_name(compiler->locals, pname);
+                    fprintf(compiler->out, "%s: SageVal", param ? param->kt_name : pname);
+                    free(pname);
+                }
+
+                fputs("): SageVal {\n", compiler->out);
             }
 
-            for (int i = start_param; i < proc->param_count; i++) {
-                if (i > start_param) fputs(", ", compiler->out);
-                char* pname = kt_token_to_string(proc->params[i]);
-                KtNameEntry* param = kt_find_name(compiler->locals, pname);
-                fprintf(compiler->out, "%s: SageVal", param ? param->kt_name : pname);
-                free(pname);
+            // For non-init methods, we need to enter the indent block
+            if (!is_init) {
+
+                compiler->indent++;
             }
-
-            if (is_init)
-                fputs("): SageVal {\n", compiler->out);
-            else
-                fputs("): SageVal {\n", compiler->out);
-
-            compiler->indent++;
             compiler->in_function_body = 1;
 
             if (proc->body != NULL) {
@@ -1973,6 +2081,7 @@ static void kt_emit_class_definition(KtCompiler* compiler, KtClassInfo* cls) {
             compiler->indent--;
             kt_emit_line(compiler, "}");
             kt_emit_line(compiler, "");
+            (void)non_self_params;
 
             kt_free_name_entries(compiler->locals);
             compiler->locals = prev;
@@ -2181,7 +2290,7 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
     fputs("class SageException(val value: SageRuntime.Value) : Exception(SageRuntime.toKString(value))\n\n", f);
     fputs("open class SageObject(val className: String) {\n", f);
     fputs("    open val props = mutableMapOf<String, SageRuntime.Value>()\n", f);
-    fputs("    fun sageInit(vararg args: SageRuntime.Value): SageRuntime.Value = SageRuntime.nil\n", f);
+    fputs("    open fun sageInit(vararg args: SageRuntime.Value): SageRuntime.Value = SageRuntime.nil\n", f);
     fputs("}\n\nobject SageRuntime {\n\n", f);
 
     // Value type
@@ -2809,6 +2918,93 @@ int compile_source_to_android(const char* source, const char* input_path,
         name
     );
 #pragma GCC diagnostic pop
+
+    // 11. Write gradle wrapper properties
+    {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+        char wrapper_dir[4096];
+        snprintf(wrapper_dir, sizeof(wrapper_dir), "%s/gradle/wrapper", output_dir);
+        kt_mkdir_p(wrapper_dir);
+
+        char wrapper_props[4096];
+        snprintf(wrapper_props, sizeof(wrapper_props), "%s/gradle-wrapper.properties", wrapper_dir);
+        kt_write_file(wrapper_props,
+            "distributionBase=GRADLE_USER_HOME\n"
+            "distributionPath=wrapper/dists\n"
+            "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n"
+            "networkTimeout=10000\n"
+            "validateDistributionUrl=true\n"
+            "zipStoreBase=GRADLE_USER_HOME\n"
+            "zipStorePath=wrapper/dists\n"
+        );
+
+        // 12. Write gradlew shell script
+        char gradlew[4096];
+        snprintf(gradlew, sizeof(gradlew), "%s/gradlew", output_dir);
+        kt_write_file(gradlew,
+            "#!/bin/sh\n"
+            "#\n"
+            "# Gradle wrapper script generated by Sage Kotlin backend\n"
+            "#\n"
+            "APP_NAME=\"Gradle\"\n"
+            "APP_BASE_NAME=$(basename \"$0\")\n"
+            "DEFAULT_JVM_OPTS='\"--add-opens\" \"java.base/java.util=ALL-UNNAMED\"'\n"
+            "GRADLE_OPTS=\"${GRADLE_OPTS}\"\n"
+            "\n"
+            "# Determine JAVA_HOME\n"
+            "if [ -z \"$JAVA_HOME\" ]; then\n"
+            "    JAVACMD=java\n"
+            "else\n"
+            "    JAVACMD=\"$JAVA_HOME/bin/java\"\n"
+            "fi\n"
+            "\n"
+            "# Find project directory\n"
+            "PRG=\"$0\"\n"
+            "while [ -h \"$PRG\" ]; do\n"
+            "    ls=$(ls -ld \"$PRG\")\n"
+            "    link=$(expr \"$ls\" : '.*-> \\(.*\\)$')\n"
+            "    if expr \"$link\" : '/.*' > /dev/null; then\n"
+            "        PRG=\"$link\"\n"
+            "    else\n"
+            "        PRG=$(dirname \"$PRG\")/\"$link\"\n"
+            "    fi\n"
+            "done\n"
+            "APP_HOME=$(cd \"$(dirname \"$PRG\")\" && pwd -P)\n"
+            "\n"
+            "CLASSPATH=\"$APP_HOME/gradle/wrapper/gradle-wrapper.jar\"\n"
+            "\n"
+            "# Download wrapper jar if missing\n"
+            "if [ ! -f \"$CLASSPATH\" ]; then\n"
+            "    echo \"Downloading Gradle wrapper...\"\n"
+            "    DIST_URL=$(grep distributionUrl \"$APP_HOME/gradle/wrapper/gradle-wrapper.properties\" | sed 's/.*=//' | sed 's/\\\\\\\\:/:/g')\n"
+            "    GRADLE_ZIP=\"$APP_HOME/gradle/wrapper/gradle.zip\"\n"
+            "    if command -v curl > /dev/null 2>&1; then\n"
+            "        curl -sL -o \"$GRADLE_ZIP\" \"$DIST_URL\"\n"
+            "    elif command -v wget > /dev/null 2>&1; then\n"
+            "        wget -q -O \"$GRADLE_ZIP\" \"$DIST_URL\"\n"
+            "    else\n"
+            "        echo \"Error: curl or wget required to download Gradle.\"\n"
+            "        echo \"Install Gradle manually or run: gradle wrapper --gradle-version 8.5\"\n"
+            "        exit 1\n"
+            "    fi\n"
+            "    echo \"Please run 'gradle wrapper --gradle-version 8.5' to complete setup.\"\n"
+            "    echo \"Or install Gradle: https://gradle.org/install/\"\n"
+            "    # Fall back to system gradle\n"
+            "    if command -v gradle > /dev/null 2>&1; then\n"
+            "        exec gradle \"$@\"\n"
+            "    fi\n"
+            "    exit 1\n"
+            "fi\n"
+            "\n"
+            "exec \"$JAVACMD\" $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS \\\n"
+            "    -classpath \"$CLASSPATH\" \\\n"
+            "    org.gradle.wrapper.GradleWrapperMain \"$@\"\n"
+        );
+        // Make gradlew executable
+        chmod(gradlew, 0755);
+#pragma GCC diagnostic pop
+    }
 
     printf("Android project generated at: %s\n", output_dir);
     printf("  Package: %s\n", pkg);
