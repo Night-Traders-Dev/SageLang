@@ -6,12 +6,22 @@
 #include "gc.h"
 
 // ============================================================================
+// Type Inference
+// ============================================================================
+
+static SageType make_type(SageTypeKind kind) {
+    SageType t = { kind };
+    return t;
+}
+
+// ============================================================================
 // TypeMap Implementation
 // ============================================================================
 
 void typemap_init(TypeMap* map) {
     map->entries = NULL;
     map->env = NULL;
+    map->current_return_type = make_type(SAGE_TYPE_UNKNOWN);
 }
 
 void typemap_free(TypeMap* map) {
@@ -69,15 +79,6 @@ SageType typeenv_get(TypeMap* map, const char* name) {
     }
     SageType unknown = { SAGE_TYPE_UNKNOWN };
     return unknown;
-}
-
-// ============================================================================
-// Type Inference
-// ============================================================================
-
-static SageType make_type(SageTypeKind kind) {
-    SageType t = { kind };
-    return t;
 }
 
 static const char* type_kind_name(SageTypeKind kind) {
@@ -285,6 +286,13 @@ static void infer_stmt(TypeMap* map, Stmt* stmt) {
             infer_stmt_list(map, stmt->as.while_stmt.body);
             break;
         case STMT_PROC: {
+            SageType prev_ret = map->current_return_type;
+            map->current_return_type = make_type(SAGE_TYPE_UNKNOWN);
+            if (stmt->as.proc.return_type) {
+                SageTypeKind k = annotation_to_kind(stmt->as.proc.return_type);
+                if (k != SAGE_TYPE_UNKNOWN) map->current_return_type = make_type(k);
+            }
+
             // Register parameter types in scope
             for (int i = 0; i < stmt->as.proc.param_count; i++) {
                 Token param = stmt->as.proc.params[i];
@@ -307,15 +315,25 @@ static void infer_stmt(TypeMap* map, Stmt* stmt) {
             typeenv_set(map, fname, make_type(SAGE_TYPE_PROC));
             free(fname);
             infer_stmt_list(map, stmt->as.proc.body);
+            map->current_return_type = prev_ret;
             break;
         }
         case STMT_FOR:
             infer_expr(map, stmt->as.for_stmt.iterable);
             infer_stmt_list(map, stmt->as.for_stmt.body);
             break;
-        case STMT_RETURN:
-            infer_expr(map, stmt->as.ret.value);
+        case STMT_RETURN: {
+            SageType t = infer_expr(map, stmt->as.ret.value);
+            if (map->current_return_type.kind != SAGE_TYPE_UNKNOWN && 
+                t.kind != SAGE_TYPE_UNKNOWN && 
+                t.kind != map->current_return_type.kind) {
+                type_warning("return type mismatch",
+                             NULL,
+                             type_kind_name(map->current_return_type.kind),
+                             type_kind_name(t.kind));
+            }
             break;
+        }
         case STMT_BREAK:
         case STMT_CONTINUE:
             break;

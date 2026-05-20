@@ -16,4 +16,11 @@ void sage_print_token_diagnosticf(const char* severity, const Token* token,
                                   const char* fallback_filename, int span,
                                   const char* help, const char* fmt, ...);
 
+typedef struct {
+    const char* name;
+    const char* doc;
+} HoverEntry;
+
+extern const HoverEntry g_hover_docs[];
+
 #endif

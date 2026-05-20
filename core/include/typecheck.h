@@ -43,6 +43,7 @@ typedef struct TypeEnv {
 typedef struct {
     TypeEntry* entries;
     TypeEnv* env;
+    SageType current_return_type;
 } TypeMap;
 
 void typemap_init(TypeMap* map);

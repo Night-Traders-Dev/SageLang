@@ -33,6 +33,8 @@
 extern Environment* g_global_env;
 extern Stmt* parse_program(const char* source, const char* input_path);
 
+#include "diagnostic.h"
+
 // Phase 12: REPL error recovery globals
 int g_repl_mode = 0;
 jmp_buf g_repl_error_jmp;
@@ -726,11 +728,15 @@ static void repl_print_help(void) {
     printf("    :reset             Reset session, globals, and module cache\n");
     printf("    :clear             Clear the screen\n");
     printf("    :history [n]       Show last n entries (default: 20)\n");
+    printf("    :search <pattern>  Search history for a pattern\n");
+    printf("    :clear-history     Clear session history\n");
     printf("    :save <file>       Save session history to a Sage file\n");
+    printf("    :edit [file]       Edit a file (or a temporary buffer) and execute it\n");
     printf("\n");
     printf("  Inspection:\n");
     printf("    :vars [prefix]     List bindings, optionally filtered by prefix\n");
     printf("    :type <expr>       Evaluate expression and show its type\n");
+    printf("    :doc <name>        Show documentation for a function or keyword\n");
     printf("    :ast <code>        Show parsed AST for an expression or statement\n");
     printf("    :env               Show the full scope chain\n");
     printf("    :modules           List loaded modules and search paths\n");
@@ -747,6 +753,9 @@ static void repl_print_help(void) {
     printf("  System:\n");
     printf("    :pwd               Print the current working directory\n");
     printf("    :cd <dir>          Change the current working directory\n");
+    printf("    :ls [dir]          List files in a directory\n");
+    printf("    :cat <file>        Print the contents of a file\n");
+    printf("    :sh <command>      Execute a shell command\n");
     printf("    :gc                Run garbage collection and print stats\n");
     printf("    :runtime [mode]    Show or set runtime (ast, bytecode, jit, aot, auto)\n");
     printf("\n");
@@ -1120,6 +1129,40 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 continue;
             }
 
+            if (command_matches(line, ":ls", &arg)) {
+                char cmd[4096];
+                if (*arg == '\0') {
+                    snprintf(cmd, sizeof(cmd), "ls -F");
+                } else {
+                    snprintf(cmd, sizeof(cmd), "ls -F %s", arg);
+                }
+                (void)system(cmd);
+                free(line);
+                continue;
+            }
+
+            if (command_matches(line, ":cat", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :cat <file>\n");
+                } else {
+                    char cmd[4096];
+                    snprintf(cmd, sizeof(cmd), "cat %s", arg);
+                    (void)system(cmd);
+                }
+                free(line);
+                continue;
+            }
+
+            if (command_matches(line, ":sh", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :sh <command>\n");
+                } else {
+                    (void)system(arg);
+                }
+                free(line);
+                continue;
+            }
+
             if (command_matches(line, ":gc", NULL)) {
                 repl_print_gc_stats(env);
                 free(line);
@@ -1189,6 +1232,42 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 continue;
             }
 
+            if (command_matches(line, ":doc", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :doc <name>\n");
+                } else {
+                    // 1. Check builtins/keywords in g_hover_docs
+                    int found = 0;
+                    for (int i = 0; g_hover_docs[i].name != NULL; i++) {
+                        if (strcmp(arg, g_hover_docs[i].name) == 0) {
+                            printf("%s\n", g_hover_docs[i].doc);
+                            found = 1;
+                            break;
+                        }
+                    }
+
+                    // 2. Check environment for user-defined procs
+                    if (!found) {
+                        Value val;
+                        if (env_get(env, arg, strlen(arg), &val)) {
+                            if (val.type == VAL_FUNCTION && val.as.function->proc) {
+                                ProcStmt* proc = (ProcStmt*)val.as.function->proc;
+                                if (proc->doc) {
+                                    printf("%s\n", proc->doc);
+                                    found = 1;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!found) {
+                        printf("No documentation found for \"%s\".\n", arg);
+                    }
+                }
+                free(line);
+                continue;
+            }
+
             // :clear — clear screen
             if (command_matches(line, ":clear", NULL)) {
                 printf("\033[2J\033[H");
@@ -1212,12 +1291,81 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 continue;
             }
 
+            if (command_matches(line, ":search", &arg)) {
+                if (*arg == '\0') {
+                    printf("Usage: :search <pattern>\n");
+                } else {
+                    int found = 0;
+                    for (int i = 0; i < g_repl_history_count; i++) {
+                        if (strstr(g_repl_history[i], arg) != NULL) {
+                            printf("  %3d  %s\n", i + 1, g_repl_history[i]);
+                            found++;
+                        }
+                    }
+                    if (found == 0) printf("No matches found for \"%s\".\n", arg);
+                    else printf("%d match%s found.\n", found, found == 1 ? "" : "es");
+                }
+                free(line);
+                continue;
+            }
+
+            if (command_matches(line, ":clear-history", NULL)) {
+                repl_history_free();
+                printf("History cleared.\n");
+                free(line);
+                continue;
+            }
+
             // :save <file> — save session to file
             if (command_matches(line, ":save", &arg)) {
                 if (*arg == '\0') {
                     printf("Usage: :save <file>\n");
                 } else {
                     repl_save_session(arg);
+                }
+                free(line);
+                continue;
+            }
+
+            // :edit [file] — edit and execute
+            if (command_matches(line, ":edit", &arg)) {
+                char tmp_path[1024];
+                volatile int is_tmp = 0;
+                if (*arg == '\0') {
+                    char* tmp_dir = getenv("TMPDIR");
+                    if (!tmp_dir) tmp_dir = "/tmp";
+                    snprintf(tmp_path, sizeof(tmp_path), "%s/sage_edit_XXXXXX.sage", tmp_dir);
+                    int fd = mkstemps(tmp_path, 5);
+                    if (fd < 0) {
+                        perror("mkstemps");
+                        free(line);
+                        continue;
+                    }
+                    close(fd);
+                    is_tmp = 1;
+                } else {
+                    strncpy(tmp_path, arg, sizeof(tmp_path) - 1);
+                    tmp_path[sizeof(tmp_path) - 1] = '\0';
+                }
+
+                const char* editor = getenv("EDITOR");
+                if (!editor) editor = getenv("VISUAL");
+                if (!editor) editor = "vi";
+
+                char cmd[2048];
+                snprintf(cmd, sizeof(cmd), "%s %s", editor, tmp_path);
+                if (system(cmd) == 0) {
+                    char* buffer = try_main_read_file(tmp_path);
+                    if (buffer) {
+                        if (setjmp(g_repl_error_jmp) == 0) {
+                            repl_execute_source(buffer, env, runtime_mode, 1, NULL, NULL);
+                        }
+                        repl_keep_buffer(buffer);
+                    }
+                }
+
+                if (is_tmp) {
+                    unlink(tmp_path);
                 }
                 free(line);
                 continue;

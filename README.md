@@ -4,7 +4,7 @@
 
 ![SageLang Logo](core/assets/SageLang.png)
 
-Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.4.5, Sage features high-severity security hardening for the AOT compiler and graphics modules, thread-safe memory management, and inline caching optimizations.
+Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.4.8, Sage features expanded REPL commands, improved developer tools (Linter, Type Checker), and enhanced LSP support with user-defined documentation hover.
 
 ## Install (One line installer)
 
@@ -448,11 +448,11 @@ gpu.shutdown()
 
 ### Developer Tooling
 
-- **REPL**: `sage` (no args) or `sage --repl` for interactive development with multi-line blocks, error recovery, and built-in commands such as `:help`, `:vars`, `:type`, `:load`, `:reset`, `:pwd`, `:cd`, and `:gc`
+- **REPL**: `sage` (no args) or `sage --repl` for interactive development with multi-line blocks, error recovery, and built-in commands such as `:help`, `:vars`, `:type`, `:doc`, `:edit`, `:ls`, `:cat`, `:sh`, `:search`, `:clear-history`, `:load`, `:reset`, `:pwd`, `:cd`, and `:gc`
 - **Formatter**: `sage fmt <file>` formats in place, `sage fmt --check <file>` checks without modifying
-- **Linter**: `sage lint <file>` with 13 rules (E001-E003 errors, W001-W005 warnings, S001-S005 style)
+- **Linter**: `sage lint <file>` with expanded rules (E001-E003 errors, W001-W005 warnings, S001-S005 style)
 - **Syntax Highlighting**: TextMate grammar (`editors/sage.tmLanguage.json`), VSCode extension (`editors/vscode/`)
-- **LSP Server**: `sage --lsp` or standalone `sage-lsp` binary with diagnostics, completion, hover, formatting
+- **LSP Server**: `sage --lsp` or standalone `sage-lsp` binary with diagnostics, completion, hover (including user-defined docstrings), formatting
 
 ### Self-Hosting / Bootstrap
 

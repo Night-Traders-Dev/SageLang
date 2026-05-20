@@ -1,5 +1,22 @@
 # SageLang Updates
 
+## v3.4.8 — REPL Expansion & Developer Tooling Refinement (May 2026)
+
+- **Expanded REPL Commands**:
+  - Added `:doc <name>`: Show documentation for builtins, keywords, or user-defined functions (via docstrings).
+  - Added `:edit [file]`: Open an external editor to compose code and execute it in the current session.
+  - Added `:ls [dir]`, `:cat <file>`, `:sh <command>`: Direct access to filesystem and shell from the REPL.
+  - Added `:search <pattern>` and `:clear-history`: Improved history management.
+- **Improved Developer Tools**:
+  - **Type Checker**: Added return type tracking and validation. Functions with return type annotations are now checked against their `return` statements.
+  - **Linter**: Enhanced with S003 (missing docstring) and S005 (multiple statements per line) style rules.
+  - **LSP Server**: Integrated the shared documentation system. `textDocument/hover` now provides documentation for user-defined procedures by extracting their docstrings from the environment.
+- **Unified Documentation**:
+  - Moved `g_hover_docs` to `diagnostic.c` to provide a single source of truth for keywords and builtins across the REPL, LSP, and compiler diagnostics.
+- **Version Bump**: Updated to v3.4.8 across all core files and documentation.
+
+---
+
 ## v3.4.2 — Sentinel Security & Performance Refinement (May 2026)
 
 - **AOT Compiler Security**:
