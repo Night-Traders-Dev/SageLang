@@ -1,5 +1,20 @@
 # SageLang Updates
 
+## v3.4.9 — Concurrency & Async Refinement (May 2026)
+
+- **Concurrency Improvements**:
+  - Validated `sage_thread.c` for robust platform-agnostic threading (pthreads on desktop/Android, safe stubs on RP2040).
+  - Ensured GC safety in multi-threaded environments via Thread Registry and stack root protection.
+  - Improved `thread.spawn` and `thread.join` reliability in `stdlib.c`.
+- **Async/Await Integration**:
+  - Refined `EXPR_AWAIT` logic in the interpreter to transparently handle thread joining and result extraction.
+  - Validated `STMT_ASYNC_PROC` for seamless background execution using native threads.
+- **Documentation Refresh**:
+  - Synchronized all documentation across `README.md`, `core/docs/`, and `core/documentation/` for the v3.4.9 release.
+- **Version Bump**: Updated to v3.4.9 across all core files and documentation.
+
+---
+
 ## v3.4.8 — REPL Expansion & Developer Tooling Refinement (May 2026)
 
 - **Expanded REPL Commands**:
