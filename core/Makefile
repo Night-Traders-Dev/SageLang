@@ -510,22 +510,28 @@ test: $(TARGET)
 	@echo ":quit" | ./$(TARGET) --repl 2>&1 | grep -q "Sage REPL" && echo "✅ Pass (banner shown)" || (echo "❌ Fail (banner)"; exit 1)
 	@echo "1 + 2" | ./$(TARGET) --repl 2>&1 | grep -q "sage> 3" && echo "✅ Pass (expression eval)" || (echo "❌ Fail (expression eval)"; exit 1)
 	@echo ""
-	@echo "Test 29: Kotlin Backend (emit-kotlin)"
-	@$(eval KT_PASS := 0)
-	@$(eval KT_FAIL := 0)
+	@echo "Test 29: Kotlin Backend (emit-kotlin expected output)"
 	@KT_OK=0; KT_BAD=0; \
 	for f in ../testsuite/unit/42_kotlin/*.sage; do \
-		if ./$(TARGET) --emit-kotlin "$$f" -o .tmp/kt_$$(basename $$f .sage).kt 2>/dev/null; then \
-			KT_OK=$$((KT_OK + 1)); \
+		base=$$(basename $$f .sage); \
+		expected="../testsuite/unit/42_kotlin/$${base}.expected.kt"; \
+		if [ ! -f "$$expected" ]; then continue; fi; \
+		if ./$(TARGET) --emit-kotlin "$$f" -o .tmp/kt_$${base}.kt 2>/dev/null; then \
+			if diff -q "$$expected" ".tmp/kt_$${base}.kt" >/dev/null 2>&1; then \
+				KT_OK=$$((KT_OK + 1)); \
+			else \
+				KT_BAD=$$((KT_BAD + 1)); \
+				echo "  ❌ $${base} (output mismatch)"; \
+			fi; \
 		else \
 			KT_BAD=$$((KT_BAD + 1)); \
-			echo "  ❌ $$(basename $$f)"; \
+			echo "  ❌ $${base} (transpile failed)"; \
 		fi; \
 	done; \
 	if [ $$KT_BAD -eq 0 ]; then \
-		echo "✅ Pass ($$KT_OK tests transpiled)"; \
+		echo "✅ Pass ($$KT_OK tests matched expected output)"; \
 	else \
-		echo "❌ Fail ($$KT_BAD failed, $$KT_OK passed)"; \
+		echo "❌ Fail ($$KT_BAD mismatched, $$KT_OK passed)"; \
 		exit 1; \
 	fi
 	@echo ""
