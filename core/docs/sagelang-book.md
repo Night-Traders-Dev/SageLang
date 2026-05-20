@@ -1629,6 +1629,9 @@ print math.tau     # 6.28318530717959
 print math.inf     # Infinity
 print math.nan     # NaN
 
+# Utility
+print math.pow_int(2, 10) # 1024 (binary exponentiation, O(log n))
+
 # Random
 print math.random()    # random float in [0, 1)
 ```
@@ -1648,7 +1651,7 @@ io.appendfile("log.txt", "New entry\n")
 # File system queries
 print io.exists("data.txt")     # true/false
 print io.isdir("/home")         # true
-io.mkdir("new_dir")             # Creates directory with 0755 permissions
+io.mkdir("new_dir")             # Creates directory (0755 secure permissions)
 io.mkpath("a/b/c")              # Creates recursive path
 print io.filesize("data.txt")   # file size in bytes
 
@@ -3071,6 +3074,11 @@ serial.pl011_puts(0x09000000, "Hello from ARM\n")
 if serial.baud_rate_valid(115200):
     serial.uart_init(serial.COM1, 115200)
 end
+
+# Advanced I/O
+let line = serial.uart_readline(serial.COM1)
+let byte = serial.uart_read_timeout(serial.COM1, 1000) # 1s timeout
+serial.uart_flush_rx(serial.COM1)
 ```
 
 ## metal.irq
@@ -3100,6 +3108,8 @@ irq.unmask_irq(irq.IRQ_TIMER) # Arch-neutral helper
 | Function | Description |
 |----------|-------------|
 | `register_handler(v, f)` | Register function `f` for vector `v`. Panics if already registered. |
+| `set_priority(v, l)` | Set interrupt priority level `l` for vector `v`. |
+| `get_priority(v)` | Get current priority level for vector `v`. |
 | `irq_enter()` | Increment nesting depth. |
 | `irq_exit()` | Decrement nesting depth. |
 | `irq_depth()` | Returns current nesting depth. |
@@ -3153,6 +3163,12 @@ gpio.pin_write_masked(0b11, 0b10) # Set pin 1 HIGH, pin 0 LOW
 ```
 
 ### GPIO API
+
+**Constants:**
+- **Modes**: `PIN_INPUT`, `PIN_OUTPUT`, `PIN_ALT`, `PIN_ANALOG`
+- **Levels**: `PIN_LOW`, `PIN_HIGH`
+- **Pulls**: `PULL_NONE`, `PULL_UP`, `PULL_DOWN`
+- **Interrupts**: `INT_DISABLED`, `INT_RISING`, `INT_FALLING`, `INT_BOTH`, `INT_LOW`, `INT_HIGH`
 
 | Function | Description |
 |----------|-------------|

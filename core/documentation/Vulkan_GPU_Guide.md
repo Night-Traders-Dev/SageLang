@@ -1323,6 +1323,7 @@ Run any demo:
 | `gpu.get_time()` | number | Seconds since init |
 | `gpu.set_title(title)` | nil | Window title |
 | `gpu.save_screenshot(path)` | bool | Save to PNG |
+| `gpu.screenshot()` | dict | Get raw pixels {width, height, pixels} |
 
 ---
 

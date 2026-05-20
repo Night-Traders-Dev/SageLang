@@ -273,7 +273,10 @@ SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel
 | **qemu** | `import os.qemu` | QEMU VM launcher (x86_64/aarch64/riscv64, KVM, drives, networking, GDB, presets) |
 | **qemu_run** | `import os.linux.qemu_run` | Kernel module test runner (automated QEMU test pipelines, init script gen, result parsing) |
 | **Metal Core**| `import metal.core` | Bare-metal stubs: puts, putchar, inb/outb, mmio, cli/sti/hlt, panic |
-| **Metal Serial**| `import metal.serial` | NS16550A (x86) and PL011 (ARM) UART drivers for kernels |
+| **Metal Serial**| `import metal.serial` | NS16550A/PL011 drivers, baud rate validation, timeout-aware reads, line reading, buffer flushing |
+| **Metal GPIO** | `import metal.gpio` | MMIO-based GPIO, pin modes, pull config, interrupts, batch mask-based operations |
+| **Metal IRQ**  | `import metal.irq` | Interrupt registration, priority levels, nesting depth tracking, arch-neutral masking |
+| **Metal Timer**| `import metal.timer` | x86 PIT (periodic/one-shot), hardware latching remaining time, IRQ-safe cancellation |
 
 - **Discord Bot Library**: Gateway API and REST API support for building Discord bots, designed to mirror the familiarity of Python's `discord` and `discord.ext` libraries.
 
@@ -1328,7 +1331,7 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 **Recent Milestones:**
 
-- May 20, 2026: v3.4.5: Secure `io.mkdir` permissions (0755) and optimized `math.pow_int` with binary exponentiation.
+- May 20, 2026: v3.4.5: Secure `io.mkdir` permissions (0755) and optimized `math.pow_int` with binary exponentiation (O(log n)).
 - May 15, 2026: v3.4.2: High-severity security hardening for AOT compiler and graphics modules.
 - May 7, 2026: Optimization: implemented length-aware dictionary lookups and direct token pointers in method dispatch for 15% speedup
 - April 15, 2026: SageMetal VM — freestanding bytecode interpreter for OS kernels (no libc/malloc required)
