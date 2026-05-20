@@ -1,5 +1,19 @@
 # SageLang Updates
 
+## v3.5.0 — Self-Hosted Compiler Parity & Stability (May 2026)
+
+- **Self-Hosted Compiler Expansion**:
+  - Implemented `parse_struct` in the self-hosted parser, enabling full support for C-style value types in pure Sage.
+  - Synchronized the self-hosted AST with the latest C backend additions (Async, Structs, Advanced Imports).
+- **Core Stability**:
+  - Finalized v3.4.9 concurrency refinements and prepared the codebase for the v3.5.0 milestone.
+  - Cleaned up build system references and ensured single-source versioning across all tools.
+- **Documentation Refactoring**:
+  - Major update to the SageLang Book and system guides to reflect the 3.5.0 architecture.
+- **Version Bump**: Milestone v3.5.0 release.
+
+---
+
 ## v3.4.9 — Concurrency & Async Refinement (May 2026)
 
 - **Concurrency Improvements**:
