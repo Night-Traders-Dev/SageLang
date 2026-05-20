@@ -1458,7 +1458,7 @@ system but are not enforced at runtime by the interpreter.
 
 # The Safety System
 
-Sage v3.4.7 includes a compile-time safety system inspired by Rust. It provides
+Sage v3.4.8 includes a compile-time safety system inspired by Rust. It provides
 ownership tracking, borrow checking, lifetime analysis, Option type enforcement,
 and fearless concurrency checks.
 
@@ -2355,7 +2355,7 @@ make kernel-uefi      # Compile UEFI application
 
 The version is stored in a single `VERSION` file at the repository root.
 All build systems (Makefile, CMakeLists.txt, build.sh, sagemake) read from
-this file automatically. Current version: **3.4.7**.
+this file automatically. Current version: **3.4.8**.
 
 \newpage
 
