@@ -7,7 +7,7 @@ ois_fetch_version() {
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL --max-time 8 "${_url}?$(date +%s)" 2>/dev/null | tr -d '[:space:]'
     elif command -v wget >/dev/null 2>&1; then
-        wget -qO- --timeout=8 "$_url" 2>/dev/null | tr -d '[:space:]'
+        wget -qO- --timeout=8 "${_url}?$(date +%s)" 2>/dev/null | tr -d '[:space:]'
     else
         ois_warn "curl and wget not found — cannot check for updates."
         return 1
@@ -57,8 +57,8 @@ ois_update_run() {
     _diff=$((_now - _last))
     _remote=""
 
-    # Only skip if within 5 minutes AND not an explicit update command with --yes
-    if [ "$_diff" -lt 300 ] && [ "$_diff" -ge 0 ] && [ "$_yes" != "yes" ]; then
+    # Only skip if within 5 minutes AND not an explicit update command
+    if [ "$_diff" -lt 300 ] && [ "$_diff" -ge 0 ] && [ "$_yes" != "yes" ] && [ "${_explicit:-}" != "yes" ]; then
         _remote="$(ois_reg_get "$_app" last_remote_version 2>/dev/null)"
     fi
 
