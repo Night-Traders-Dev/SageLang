@@ -4,6 +4,18 @@
 // Desktop: delegates to pthreads
 // RP2040:  stubs that return errors (single-threaded environment)
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+#ifdef __ANDROID__
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <pthread.h>
+#define pthread_setaffinity_np(thread, size, set) syscall(__NR_sched_setaffinity, 0, size, set)
+#endif
+
+
 #ifndef PICO_BUILD
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
