@@ -27,7 +27,7 @@ proc mutex_lock(m):
     while not mutex_try_lock(m):
         # On bare-metal, we might want to hint the CPU or wait for an interrupt.
         # For the simulation, we can just yield or halt briefly.
-        metal.core.io_wait()
+        core.io_wait()
     end
 end
 

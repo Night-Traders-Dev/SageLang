@@ -1,5 +1,11 @@
 # SageLang Updates
 
+## v3.5.1 — Hotfix: Synchronization Primitives (May 2026)
+
+- **Bug Fix**:
+  - Fixed a critical bug in `mutex_lock` where it incorrectly attempted to call `metal.core.io_wait()` instead of using the bound name `core` under contention. This ensures mutex stability on bare-metal and simulation targets.
+- **Version Bump**: Milestone v3.5.1 release.
+
 ## v3.5.0 — Self-Hosted Compiler Parity & Stability (May 2026)
 
 - **Self-Hosted Compiler Expansion**:
