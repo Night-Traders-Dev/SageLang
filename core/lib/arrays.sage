@@ -2,14 +2,10 @@
 # Hot-path search and iteration procs marked @inline for compiled backends.
 
 proc copy(values):
-    let result = []
-    for item in values:
-        push(result, item)
-    return result
+    return slice(values, 0, len(values))
 
 proc append_all(target, extra):
-    for item in extra:
-        push(target, item)
+    array_extend(target, extra)
     return target
 
 proc concat(left, right):
