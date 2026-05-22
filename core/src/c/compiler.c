@@ -1236,6 +1236,21 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
         return sb_take(&sb);
     }
 
+    if (strcmp(callee_name, "array_extend") == 0) {
+        if (call->arg_count != 2) {
+            compiler_builtin_arity_error(compiler, call, "array_extend", "usage: array_extend(target, extra)", "2");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* target_arg = emit_expr(compiler, call->args[0]);
+            char* extra_arg = emit_expr(compiler, call->args[1]);
+            sb_appendf(&sb, "sage_array_extend(%s, %s)", target_arg, extra_arg);
+            free(target_arg);
+            free(extra_arg);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
     if (strcmp(callee_name, "range") == 0) {
         if (call->arg_count == 1) {
             char* arg = emit_expr(compiler, call->args[0]);
@@ -1754,6 +1769,14 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
         char* a = emit_expr(compiler, call->args[0]);
         char* b = emit_expr(compiler, call->args[1]);
         sb_appendf(&sb, "sage_contains(%s, %s)", a, b);
+        free(a); free(b);
+        free(callee_name);
+        return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "indexof") == 0 && call->arg_count == 2) {
+        char* a = emit_expr(compiler, call->args[0]);
+        char* b = emit_expr(compiler, call->args[1]);
+        sb_appendf(&sb, "sage_indexof(%s, %s)", a, b);
         free(a); free(b);
         free(callee_name);
         return sb_take(&sb);
@@ -2842,6 +2865,18 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    return array.as.array->elements[--array.as.array->count];\n"
         "}\n"
         "\n"
+        "static SageValue sage_array_extend(SageValue target, SageValue source) {\n"
+        "    if (target.type != SAGE_TAG_ARRAY || source.type != SAGE_TAG_ARRAY) return sage_nil();\n"
+        "    SageArray* dst = target.as.array;\n"
+        "    SageArray* src = source.as.array;\n"
+        "    if (src->count > 0) {\n"
+        "        sage_array_reserve(dst, dst->count + src->count);\n"
+        "        memcpy(dst->elements + dst->count, src->elements, sizeof(SageValue) * (size_t)src->count);\n"
+        "        dst->count += src->count;\n"
+        "    }\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "\n"
         ,
         out
     );
@@ -3054,7 +3089,15 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         "    if (haystack.type != SAGE_TAG_STRING || needle.type != SAGE_TAG_STRING) return sage_bool(0);\n"
         "    return sage_bool(strstr(haystack.as.string, needle.as.string) != NULL);\n"
         "}\n"
-        "\n",
+        "\n"
+        "static SageValue sage_indexof(SageValue haystack, SageValue needle) {\n"
+        "    if (haystack.type != SAGE_TAG_STRING || needle.type != SAGE_TAG_STRING) return sage_nil();\n"
+        "    char* found = strstr(haystack.as.string, needle.as.string);\n"
+        "    if (found == NULL) return sage_number(-1);\n"
+        "    return sage_number((double)(found - haystack.as.string));\n"
+        "}\n"
+        "\n"
+,
         out
     );
 
