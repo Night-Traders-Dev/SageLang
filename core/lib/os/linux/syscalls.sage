@@ -25,6 +25,9 @@ let SYS_MMAP = 9
 let SYS_MPROTECT = 10
 let SYS_MUNMAP = 11
 let SYS_BRK = 12
+let SYS_RT_SIGACTION = 13
+let SYS_RT_SIGPROCMASK = 14
+let SYS_RT_SIGRETURN = 15
 let SYS_IOCTL = 16
 let SYS_PIPE = 22
 let SYS_SELECT = 23
@@ -77,6 +80,9 @@ let ARM64_SYS_LSEEK = 62
 let ARM64_SYS_MMAP = 222
 let ARM64_SYS_MUNMAP = 215
 let ARM64_SYS_BRK = 214
+let ARM64_SYS_RT_SIGACTION = 134
+let ARM64_SYS_RT_SIGPROCMASK = 135
+let ARM64_SYS_RT_SIGRETURN = 139
 let ARM64_SYS_IOCTL = 29
 let ARM64_SYS_CLONE = 220
 let ARM64_SYS_EXECVE = 221
@@ -99,6 +105,9 @@ let RV64_SYS_LSEEK = 62
 let RV64_SYS_MMAP = 222
 let RV64_SYS_MUNMAP = 215
 let RV64_SYS_BRK = 214
+let RV64_SYS_RT_SIGACTION = 134
+let RV64_SYS_RT_SIGPROCMASK = 135
+let RV64_SYS_RT_SIGRETURN = 139
 let RV64_SYS_IOCTL = 29
 let RV64_SYS_CLONE = 220
 let RV64_SYS_EXECVE = 221
@@ -200,6 +209,7 @@ proc syscall_desc(nr, name, nargs):
 end
 
 # Build a syscall invocation record (for codegen)
+
 proc make_syscall(arch, nr, args):
     let sc = {}
     sc["arch"] = arch
@@ -227,6 +237,7 @@ proc make_syscall(arch, nr, args):
 end
 
 # Generate inline assembly for a syscall (x86_64)
+
 proc emit_syscall_asm_x64(nr, arg_count):
     let nl = chr(10)
     let asm = ""
@@ -245,6 +256,7 @@ proc emit_syscall_asm_x64(nr, arg_count):
 end
 
 # Generate inline assembly for a syscall (aarch64)
+
 proc emit_syscall_asm_arm64(nr, arg_count):
     let nl = chr(10)
     let asm = ""
@@ -302,9 +314,39 @@ proc sys_socket_desc(domain, sock_type, protocol):
     return make_syscall(ARCH_X86_64, SYS_SOCKET, [domain, sock_type, protocol])
 end
 
+proc sys_rt_sigaction_desc(sig, act, oact, sigsetsize):
+    return make_syscall(ARCH_X86_64, SYS_RT_SIGACTION, [sig, act, oact, sigsetsize])
+end
+
+proc sys_rt_sigprocmask_desc(how, set, oset, sigsetsize):
+    return make_syscall(ARCH_X86_64, SYS_RT_SIGPROCMASK, [how, set, oset, sigsetsize])
+end
+
+## High-level signal(sig, handler) helper.
+## Returns a syscall descriptor for rt_sigaction.
+## Note: On Linux, rt_sigaction expects a pointer to a sigaction struct.
+## This simplified helper currently passes the handler address directly.
+
+proc signal(sig, handler):
+    return sys_rt_sigaction_desc(sig, handler, nil, 8)
+end
+
+## Default SIGINT handler stub.
+
+proc sigint_handler(sig):
+    return sys_exit_desc(128 + sig)
+end
+
+## Default SIGTERM handler stub.
+
+proc sigterm_handler(sig):
+    return sys_exit_desc(128 + sig)
+end
+
 # ========== riscv64 syscall helpers ==========
 
 # Generate a riscv64 syscall invocation dict (ecall convention)
+
 proc riscv64_syscall(num, args):
     let sc = {}
     sc["arch"] = ARCH_RV64
@@ -338,6 +380,7 @@ proc riscv64_syscall(num, args):
 end
 
 # Generate inline assembly for a syscall (riscv64)
+
 proc emit_syscall_asm_rv64(nr, arg_count):
     let nl = chr(10)
     let asm = ""
@@ -382,10 +425,14 @@ proc build_syscall_table():
     append(table, syscall_desc(SYS_ACCEPT, "accept", 3))
     append(table, syscall_desc(SYS_CONNECT, "connect", 3))
     append(table, syscall_desc(SYS_GETRANDOM, "getrandom", 3))
+    append(table, syscall_desc(SYS_RT_SIGACTION, "rt_sigaction", 4))
+    append(table, syscall_desc(SYS_RT_SIGPROCMASK, "rt_sigprocmask", 4))
+    append(table, syscall_desc(SYS_RT_SIGRETURN, "rt_sigreturn", 0))
     return table
 end
 
 # Get the arch-specific syscall number
+
 proc get_syscall_nr(arch, name):
     let table = build_syscall_table()
     let i = 0
@@ -395,5 +442,5 @@ proc get_syscall_nr(arch, name):
         end
         i = i + 1
     end
-    return -1
+    return - 1
 end
