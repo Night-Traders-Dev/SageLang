@@ -1,6 +1,7 @@
 # math.sage — Core math library for SageLang
 # Uses comptime for constants and @inline for hot-path arithmetic.
 
+import _math
 from _math import *
 
 # ============================================================================
@@ -154,7 +155,7 @@ comptime:
 # ============================================================================
 
 # Initialize seed with a value from the native PRNG for unpredictability
-let _random_seed = int(random() * 4294967296.0)
+let _random_seed = int(_math.random() * 4294967296.0)
 
 comptime:
     let _LCG_A = 1664525
