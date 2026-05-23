@@ -1714,6 +1714,19 @@ int main(int argc, const char* argv[]) {
     // Initialize garbage collector
     gc_init();
 
+    // Seed the random number generator (CWE-337)
+    unsigned int seed;
+    FILE* urand = fopen("/dev/urandom", "r");
+    if (urand) {
+        if (fread(&seed, sizeof(seed), 1, urand) != 1) {
+            seed = (unsigned int)(time(NULL) ^ getpid());
+        }
+        fclose(urand);
+    } else {
+        seed = (unsigned int)(time(NULL) ^ getpid());
+    }
+    srand(seed);
+
     // Register main thread for GC
     ThreadState main_thread_state;
     memset(&main_thread_state, 0, sizeof(ThreadState));

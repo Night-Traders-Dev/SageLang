@@ -153,8 +153,10 @@ comptime:
 # Random number generation (Linear Congruential Generator)
 # ============================================================================
 
+# Initialize seed with a value from the native PRNG for unpredictability
+let _random_seed = int(random() * 4294967296.0)
+
 comptime:
-    let _random_seed = 123456789
     let _LCG_A = 1664525
     let _LCG_C = 1013904223
     let _LCG_M = 4294967296
