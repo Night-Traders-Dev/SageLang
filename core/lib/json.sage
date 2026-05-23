@@ -8,6 +8,8 @@
 #   print cJSON_GetStringValue(name)
 #   cJSON_Delete(root)
 
+from strings import repeat
+
 # ============================================================================
 # Type constants (matching cJSON exactly) — evaluated at compile time
 # ============================================================================
@@ -123,12 +125,16 @@ class _Parser:
             return nil
         self.pos = self.pos + 1
         let result = ""
+        let start = self.pos
         while self.pos < self.slen:
             let c = self.src[self.pos]
-            self.pos = self.pos + 1
             if c == chr(34):
+                result = result + slice(self.src, start, self.pos)
+                self.pos = self.pos + 1
                 return result
             if c == chr(92):
+                result = result + slice(self.src, start, self.pos)
+                self.pos = self.pos + 1
                 if self.pos >= self.slen:
                     return nil
                 let esc = self.src[self.pos]
@@ -153,8 +159,9 @@ class _Parser:
                         result = result + "?"
                 else:
                     result = result + _handle_escape(esc)
+                start = self.pos
             else:
-                result = result + c
+                self.pos = self.pos + 1
         return nil
 
     proc parse_string_node():
@@ -182,11 +189,7 @@ class _Parser:
                 self.pos = self.pos + 1
             while self.pos < self.slen and self.src[self.pos] >= "0" and self.src[self.pos] <= "9":
                 self.pos = self.pos + 1
-        let num_str = ""
-        let i = start
-        while i < self.pos:
-            num_str = num_str + self.src[i]
-            i = i + 1
+        let num_str = slice(self.src, start, self.pos)
         let val = tonumber(num_str)
         let node = cJSON()
         node.type = cJSON_Number
@@ -301,47 +304,23 @@ class _Parser:
 # ============================================================================
 
 proc _escape_str(s):
-    let result = ""
-    let i = 0
-    while i < len(s):
-        let c = s[i]
-        if c == chr(34):
-            result = result + chr(92) + chr(34)
-        elif c == chr(92):
-            result = result + chr(92) + chr(92)
-        elif c == chr(10):
-            result = result + chr(92) + "n"
-        elif c == chr(13):
-            result = result + chr(92) + "r"
-        elif c == chr(9):
-            result = result + chr(92) + "t"
-        elif c == chr(8):
-            result = result + chr(92) + "b"
-        elif c == chr(12):
-            result = result + chr(92) + "f"
-        else:
-            result = result + c
-        i = i + 1
-    return result
+    let r = replace(s, chr(92), chr(92) + chr(92))
+    r = replace(r, chr(34), chr(92) + chr(34))
+    r = replace(r, chr(10), chr(92) + "n")
+    r = replace(r, chr(13), chr(92) + "r")
+    r = replace(r, chr(9), chr(92) + "t")
+    r = replace(r, chr(8), chr(92) + "b")
+    r = replace(r, chr(12), chr(92) + "f")
+    return r
 
 proc _print_number(item):
     let s = str(item.valuedouble)
     if endswith(s, ".0"):
-        let trimmed = ""
-        let i = 0
-        while i < len(s) - 2:
-            trimmed = trimmed + s[i]
-            i = i + 1
-        return trimmed
+        return slice(s, 0, len(s) - 2)
     return s
 
 proc _make_pad(indent, depth):
-    let pad = ""
-    let i = 0
-    while i < indent * depth:
-        pad = pad + " "
-        i = i + 1
-    return pad
+    return repeat(" ", indent * depth)
 
 proc _print_node(item, fmt, depth, indent):
     if item == nil:
