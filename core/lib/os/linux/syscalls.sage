@@ -325,10 +325,19 @@ end
 ## High-level signal(sig, handler) helper.
 ## Returns a syscall descriptor for rt_sigaction.
 ## Note: On Linux, rt_sigaction expects a pointer to a sigaction struct.
-## This simplified helper currently passes the handler address directly.
+
+let _sigaction_type = struct_def([
+    ["sa_handler", "long"],
+    ["sa_flags", "long"],
+    ["sa_restorer", "long"],
+    ["sa_mask", "long"]
+])
 
 proc signal(sig, handler):
-    return sys_rt_sigaction_desc(sig, handler, nil, 8)
+    let sa = struct_new(_sigaction_type)
+    struct_set(sa, _sigaction_type, "sa_handler", handler)
+    # The remaining fields (flags, restorer, mask) are zero-initialized by struct_new
+    return sys_rt_sigaction_desc(sig, sa, nil, 8)
 end
 
 ## Default SIGINT handler stub.
