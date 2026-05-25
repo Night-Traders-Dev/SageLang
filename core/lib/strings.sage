@@ -25,13 +25,20 @@ proc count_substring(text, part):
         return 0
     return len(split(text, part)) - 1
 
+## Repeats a string a given number of times.
 proc repeat(text, count):
-    let pieces = []
-    let i = 0
-    while i < count:
-        push(pieces, text)
-        i = i + 1
-    return join(pieces, "")
+    if count <= 0:
+        return ""
+    let pieces = [text]
+    let res_pieces = []
+    let n = count
+    while n > 0:
+        if n % 2 == 1:
+            array_extend(res_pieces, pieces)
+        if n > 1:
+            array_extend(pieces, pieces)
+        n = int(n / 2)
+    return join(res_pieces, "")
 
 proc pad_left(text, width, pad):
     if len(text) >= width:

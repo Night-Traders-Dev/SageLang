@@ -12,3 +12,7 @@
 **Vulnerability:** Use of simple substring matching (e.g., `contains(code, "io")`) to block dangerous operations in the agent sandbox.
 **Learning:** Overly broad substrings cause significant false positives by matching common English words (e.g., "io" matches "action", "position"). It also remains easy to bypass via obfuscation.
 **Prevention:** Refine blacklists to use specific signatures (e.g., `io.`, `sys.`) or implement a proper lexer-based token check. For high-security sandboxing, an allowlist of safe operations is preferred over a blacklist of dangerous ones.
+## 2026-05-25 - Shell Injection in REPL Commands
+**Vulnerability:** User-provided arguments to REPL commands (:ls, :cat, :edit) were passed directly to the shell via `system()` without sanitization (CWE-78).
+**Learning:** High-level REPL commands that provide convenience features (like listing files) often bypass the language's own security model. Even if the language has a safe mode, these native commands can remain vulnerable if they shell out to system utilities.
+**Prevention:** Always sanitize or whitelist arguments before passing them to `system()` or similar functions. A strict whitelist of safe characters (alphanumeric, path separators, etc.) is the most robust defense against shell metacharacters.

@@ -38,11 +38,47 @@ let EMLINK = 31 # Too many links
 let EPIPE = 32 # Broken pipe
 let EDOM = 33 # Math argument out of domain of func
 let ERANGE = 34 # Math result not representable
+let EDEADLK = 35 # Resource deadlock avoided
+let ENAMETOOLONG = 36 # File name too long
+let ENOLCK = 37 # No locks available
+let ENOSYS = 38 # Function not implemented
+let ENOTEMPTY = 39 # Directory not empty
+let ELOOP = 40 # Too many levels of symbolic links
+let EADDRINUSE = 98 # Address already in use
+let ETIMEDOUT = 110 # Connection timed out
+let ECONNREFUSED = 111 # Connection refused
 
 ## Returns a human-readable string for the given error code.
 proc strerror(err):
     if err == OK:
         return "Success"
+    end
+    if err == EDEADLK:
+        return "Resource deadlock avoided"
+    end
+    if err == ENAMETOOLONG:
+        return "File name too long"
+    end
+    if err == ENOLCK:
+        return "No locks available"
+    end
+    if err == ENOSYS:
+        return "Function not implemented"
+    end
+    if err == ENOTEMPTY:
+        return "Directory not empty"
+    end
+    if err == ELOOP:
+        return "Too many levels of symbolic links"
+    end
+    if err == EADDRINUSE:
+        return "Address already in use"
+    end
+    if err == ETIMEDOUT:
+        return "Connection timed out"
+    end
+    if err == ECONNREFUSED:
+        return "Connection refused"
     end
     if err == EPERM:
         return "Operation not permitted"
