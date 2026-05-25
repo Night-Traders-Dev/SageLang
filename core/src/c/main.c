@@ -129,6 +129,19 @@ static const char* value_type_name(Value v) {
     }
 }
 
+// Validate a path contains no shell metacharacters (prevents injection via system())
+static int is_safe_path(const char* path) {
+    if (!path) return 1;
+    for (const char* p = path; *p; p++) {
+        // Allow only alphanumeric, /, ., -, _, ~
+        if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 
 static int parse_codegen_options(int argc, const char* argv[], int start_index,
                                  const char** output_path, const char** cc_command,
@@ -1136,13 +1149,17 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
             }
 
             if (command_matches(line, ":ls", &arg)) {
-                char cmd[4096];
-                if (*arg == '\0') {
-                    snprintf(cmd, sizeof(cmd), "ls -F");
+                if (!is_safe_path(arg)) {
+                    printf("Security Error: Unsafe characters in path\n");
                 } else {
-                    snprintf(cmd, sizeof(cmd), "ls -F %s", arg);
+                    char cmd[4096];
+                    if (*arg == '\0') {
+                        snprintf(cmd, sizeof(cmd), "ls -F");
+                    } else {
+                        snprintf(cmd, sizeof(cmd), "ls -F %s", arg);
+                    }
+                    (void)system(cmd);
                 }
-                (void)system(cmd);
                 free(line);
                 continue;
             }
@@ -1150,6 +1167,8 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
             if (command_matches(line, ":cat", &arg)) {
                 if (*arg == '\0') {
                     printf("Usage: :cat <file>\n");
+                } else if (!is_safe_path(arg)) {
+                    printf("Security Error: Unsafe characters in path\n");
                 } else {
                     char cmd[4096];
                     snprintf(cmd, sizeof(cmd), "cat %s", arg);
@@ -1335,6 +1354,11 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
 
             // :edit [file] — edit and execute
             if (command_matches(line, ":edit", &arg)) {
+                if (*arg != '\0' && !is_safe_path(arg)) {
+                    printf("Security Error: Unsafe characters in path\n");
+                    free(line);
+                    continue;
+                }
                 char tmp_path[1024];
                 volatile int is_tmp = 0;
                 if (*arg == '\0') {
