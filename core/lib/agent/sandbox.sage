@@ -44,15 +44,36 @@ proc extract_code_blocks(text):
 # ============================================================================
 
 # Validate code is safe to execute (no system calls, no file writes)
+# Blocks access to native modules and unsafe primitives.
 proc is_safe(code):
     let result = {}
     result["safe"] = true
     result["issues"] = []
-    let dangerous = ["ffi_open", "ffi_call", "mem_alloc", "mem_write", "asm_exec", "asm_compile"]
-    for i in range(len(dangerous)):
-        if contains(code, dangerous[i]):
+
+    # 1. Block very specific dangerous primitives (low false positive risk)
+    let primitives = ["ffi_open", "ffi_call", "mem_alloc", "mem_write", "asm_exec", "asm_compile"]
+    for i in range(len(primitives)):
+        if contains(code, primitives[i]):
             result["safe"] = false
-            push(result["issues"], "Contains dangerous call: " + dangerous[i])
+            push(result["issues"], "Contains dangerous primitive: " + primitives[i])
+        end
+    end
+
+    # 2. Block module access (using dot notation to avoid false positives like "action")
+    let modules = ["io.", "sys.", "http.", "tcp.", "net."]
+    for i in range(len(modules)):
+        if contains(code, modules[i]):
+            result["safe"] = false
+            push(result["issues"], "Contains unauthorized module access: " + modules[i])
+        end
+    end
+
+    # 3. Block module loading
+    if contains(code, "import ") or contains(code, "import" + chr(10)) or contains(code, "import" + chr(13)):
+        result["safe"] = false
+        push(result["issues"], "Contains unauthorized module loading (import)")
+    end
+
     return result
 
 # Execute a Sage expression and return the result
