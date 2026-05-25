@@ -49,12 +49,19 @@ proc last(values):
         return nil
     return values[len(values) - 1]
 
+## Returns an array containing the given value repeated count times.
 proc repeat_value(value, count):
+    if count <= 0:
+        return []
+    let pieces = [value]
     let result = []
-    let i = 0
-    while i < count:
-        push(result, value)
-        i = i + 1
+    let n = count
+    while n > 0:
+        if n % 2 == 1:
+            array_extend(result, pieces)
+        if n > 1:
+            array_extend(pieces, pieces)
+        n = int(n / 2)
     return result
 
 proc times(count, fn):

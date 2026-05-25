@@ -74,11 +74,11 @@ proc unique(values):
             seen[key] = true
     return result
 
+## Flattens a nested array into a single array.
 proc flatten(nested):
     let result = []
     for group in nested:
-        for item in group:
-            push(result, item)
+        array_extend(result, group)
     return result
 
 proc take(values, count):
