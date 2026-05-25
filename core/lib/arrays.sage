@@ -70,8 +70,18 @@ proc unique(values):
     for item in values:
         let key = str(item) + type(item)
         if dict_has(seen, key) == false:
+            seen[key] = [item]
             push(result, item)
-            seen[key] = true
+        else:
+            let bucket = seen[key]
+            let found = false
+            for x in bucket:
+                if x == item:
+                    found = true
+                    break
+            if found == false:
+                push(bucket, item)
+                push(result, item)
     return result
 
 ## Flattens a nested array into a single array.

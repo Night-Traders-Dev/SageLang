@@ -1,4 +1,4 @@
-import sandbox
+import agent.sandbox
 import assert
 
 proc test_sandbox_safety():
@@ -33,6 +33,26 @@ proc test_sandbox_safety():
     let unsafe_import_nl = "import" + chr(10) + "tcp"
     let unsafe_import_nl_res = sandbox.is_safe(unsafe_import_nl)
     assert.assert_false(unsafe_import_nl_res["safe"], "import with newline should be unsafe")
+
+    # Unsafe code: import with tab
+    let unsafe_import_tab = "import" + chr(9) + "tcp"
+    let unsafe_import_tab_res = sandbox.is_safe(unsafe_import_tab)
+    assert.assert_false(unsafe_import_tab_res["safe"], "import with tab should be unsafe")
+
+    # Unsafe code: from io import tab readfile
+    let unsafe_import_from_tab = "from io import" + chr(9) + "readfile"
+    let unsafe_import_from_tab_res = sandbox.is_safe(unsafe_import_from_tab)
+    assert.assert_false(unsafe_import_from_tab_res["safe"], "from import with tab should be unsafe")
+
+    # Safe code: import inside comment
+    let safe_import_comment = "# This is a comment containing import tcp\nlet x = 1"
+    let safe_import_comment_res = sandbox.is_safe(safe_import_comment)
+    assert.assert_true(safe_import_comment_res["safe"], "import in comment should be safe")
+
+    # Safe code: import inside string
+    let safe_import_string = "let msg = \"Please import this package\""
+    let safe_import_string_res = sandbox.is_safe(safe_import_string)
+    assert.assert_true(safe_import_string_res["safe"], "import in string should be safe")
 
     # Unsafe code: primitives
     let unsafe_prim = "ffi_open('libc.so.6')"

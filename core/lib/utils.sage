@@ -60,7 +60,8 @@ proc repeat_value(value, count):
         if n % 2 == 1:
             array_extend(result, pieces)
         if n > 1:
-            array_extend(pieces, pieces)
+            let temp = slice(pieces, 0, len(pieces))
+            array_extend(pieces, temp)
         n = int(n / 2)
     return result
 

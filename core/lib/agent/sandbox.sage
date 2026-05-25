@@ -43,6 +43,56 @@ proc extract_code_blocks(text):
 # Sandboxed execution
 # ============================================================================
 
+proc is_import_token_present(code):
+    let i = 0
+    let n = len(code)
+    while i < n:
+        let c = code[i]
+        # Skip comments
+        if c == "#":
+            i = i + 1
+            while i < n and code[i] != chr(10) and code[i] != chr(13):
+                i = i + 1
+            continue
+        # Skip strings
+        if c == "\"":
+            i = i + 1
+            while i < n and code[i] != "\"":
+                if code[i] == "\\" and i + 1 < n:
+                    i = i + 2
+                else:
+                    i = i + 1
+            if i < n:
+                i = i + 1
+            continue
+        if c == "'":
+            i = i + 1
+            while i < n and code[i] != "'":
+                if code[i] == "\\" and i + 1 < n:
+                    i = i + 2
+                else:
+                    i = i + 1
+            if i < n:
+                i = i + 1
+            continue
+        # Parse identifiers
+        let is_letter = (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or c == "_"
+        if is_letter:
+            let ident = ""
+            while i < n:
+                let ch = code[i]
+                let is_ident_char = (ch >= "a" and ch <= "z") or (ch >= "A" and ch <= "Z") or (ch >= "0" and ch <= "9") or ch == "_"
+                if is_ident_char:
+                    ident = ident + ch
+                    i = i + 1
+                else:
+                    break
+            if ident == "import":
+                return true
+            continue
+        i = i + 1
+    return false
+
 # Validate code is safe to execute (no system calls, no file writes)
 # Blocks access to native modules and unsafe primitives.
 proc is_safe(code):
@@ -69,7 +119,7 @@ proc is_safe(code):
     end
 
     # 3. Block module loading
-    if contains(code, "import ") or contains(code, "import" + chr(10)) or contains(code, "import" + chr(13)):
+    if is_import_token_present(code):
         result["safe"] = false
         push(result["issues"], "Contains unauthorized module loading (import)")
     end
