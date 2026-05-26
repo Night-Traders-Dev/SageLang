@@ -255,13 +255,13 @@
     },
     "module-names": {
       "name": "support.type.module.sage",
-      "match": "\\b(thread|io|sys|math|string|socket|tcp|http|ssl|json|arrays|strings|dicts|iter|stats|assert|utils)\\b"
+      "match": "\\b(thread|io|sys|math|string|socket|tcp|http|ssl|json|arrays|strings|dicts|iter|stats|assert|utils|gpu|gpt|paging|ui|evolve|sandbox|os|net)\\b"
     },
     "builtins": {
       "patterns": [
         {
           "name": "support.function.builtin.sage",
-          "match": "\\b(len|push|pop|range|split|join|replace|upper|lower|strip|slice|str|tonumber|input|clock|type|chr|ord|startswith|endswith|contains|indexof|dict_keys|dict_values|dict_has|dict_delete|gc_collect|gc_stats|gc_enable|gc_disable|next|ffi_open|ffi_call|ffi_sym|ffi_close|mem_alloc|mem_free|mem_read|mem_write|mem_size|addressof|asm_exec|asm_compile|asm_arch|struct_def|struct_new|struct_get|struct_set|struct_size)\\b(?=\\s*\\()"
+          "match": "\\b(len|push|pop|range|split|join|replace|upper|lower|strip|slice|str|tonumber|input|clock|type|chr|ord|startswith|endswith|contains|indexof|dict_keys|dict_values|dict_has|dict_delete|dict_set|dict_get|gc_collect|gc_stats|gc_enable|gc_disable|next|ffi_open|ffi_call|ffi_sym|ffi_close|mem_alloc|mem_free|mem_read|mem_write|mem_size|addressof|asm_exec|asm_compile|asm_arch|struct_def|struct_new|struct_get|struct_set|struct_size|cpu_count|cpu_physical_cores|cpu_has_hyperthreading|thread_get_core|atomic_new|atomic_load|atomic_store|atomic_add|atomic_cas|sem_new|sem_wait|sem_post|sem_trywait|path_join|path_exists|path_basename|path_dirname|path_ext|hash|sizeof)\\b(?=\\s*\\()"
         }
       ]
     },
