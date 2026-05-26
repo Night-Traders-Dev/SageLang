@@ -9,3 +9,7 @@
 ## 2025-05-15 - [Dictionary Key Type Constraints]
 **Learning:** SageLang dictionaries only support string keys. Non-string keys result in a "Runtime Error: Invalid index assignment". This necessitates converting other types to strings for deduplication or lookup tasks.
 **Action:** When using dictionaries for deduplication of arbitrary values, use `str(item) + type(item)` as the key to ensure uniqueness across types while adhering to the string-key-only constraint.
+
+## 2025-05-26 - [Optimized Array Take/Drop]
+**Learning:** Interpreted loops for array subset operations (`take` and `drop`) are significantly slower than native `slice()` calls because they incur per-iteration interpreter overhead and multiple `push()` calls.
+**Action:** Use native `slice()` for all array and string subset operations in library code. Added @inline hints to help compiled backends.
