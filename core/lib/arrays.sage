@@ -95,6 +95,8 @@ proc flatten(nested):
 ## Optimization: Uses native slice() to avoid interpreter loop overhead.
 @inline
 proc take(values, count):
+    if count <= 0:
+        return []
     return slice(values, 0, count)
 
 ## Returns a new array with all but the first 'count' elements.
