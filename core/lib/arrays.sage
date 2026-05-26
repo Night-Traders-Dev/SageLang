@@ -91,21 +91,17 @@ proc flatten(nested):
         array_extend(result, group)
     return result
 
+## Returns a new array with the first 'count' elements.
+## Optimization: Uses native slice() to avoid interpreter loop overhead.
+@inline
 proc take(values, count):
-    let result = []
-    let i = 0
-    while i < len(values) and i < count:
-        push(result, values[i])
-        i = i + 1
-    return result
+    return slice(values, 0, count)
 
+## Returns a new array with all but the first 'count' elements.
+## Optimization: Uses native slice() to avoid interpreter loop overhead.
+@inline
 proc drop(values, count):
-    let result = []
-    let i = count
-    while i < len(values):
-        push(result, values[i])
-        i = i + 1
-    return result
+    return slice(values, count, len(values))
 
 proc zip(left, right):
     let result = []
