@@ -35,3 +35,40 @@ end
 proc mutex_unlock(m):
     atomic_store(m["state"], 0)
 end
+
+## Semaphore structure -
+##   count - pointer to an atomic integer
+
+## Create a new semaphore with an initial value.
+proc semaphore_create(initial_value):
+    let s = {}
+    s["count"] = atomic_new(initial_value)
+    return s
+end
+
+## Attempt to decrement the semaphore (wait) without blocking.
+## Returns true if successful, false otherwise.
+proc semaphore_try_wait(s):
+    while true:
+        let val = atomic_load(s["count"])
+        if val <= 0:
+            return false
+        end
+        if atomic_cas(s["count"], val, val - 1):
+            return true
+        end
+    end
+end
+
+## Wait (P operation) until the semaphore is available, then decrement it.
+proc semaphore_wait(s):
+    while not semaphore_try_wait(s):
+        # Busy-wait or yield
+        core.io_wait()
+    end
+end
+
+## Post (V operation) to the semaphore, incrementing its value.
+proc semaphore_post(s):
+    atomic_add(s["count"], 1)
+end
