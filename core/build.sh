@@ -486,7 +486,12 @@ fi
 
 banner "Build Complete"
 
-printf "  ${SAGE} SageLang v${version:-0.15.0}\n"
+total_src_count=$(find src -name "*.c" | wc -l)
+# Use the already calculated bin_size if available, otherwise get it now
+if [ -z "${bin_size:-}" ] && [ -x "$SAGE_BIN" ]; then
+    bin_size=$(du -h "$SAGE_BIN" | cut -f1)
+fi
+printf "  Built: sage ${version:-$SAGE_VERSION}  (${bin_size:-0K}, $total_src_count source files)\n"
 printf "\n"
 printf "  ${BOLD}Binaries:${RESET}\n"
 printf "    ${ARROW} %-30s ${DIM}(C interpreter)${RESET}\n" "$SAGE_BIN"

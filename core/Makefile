@@ -206,7 +206,9 @@ all: $(TARGET)
 $(TARGET): $(ALL_OBJECTS) $(LLVM_RT_OBJECT)
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $(ALL_OBJECTS) $(LDFLAGS)
-	@echo "✅ Built: $(TARGET)"
+	@BIN_SIZE=$$(du -h $@ | cut -f1); \
+	 SRC_COUNT=$$(find src -name "*.c" | wc -l); \
+	 echo "Built: $(TARGET) $(SAGE_VERSION)  ($$BIN_SIZE, $$SRC_COUNT source files)"
 	@echo "   Run with: ./$(TARGET) examples/hello.sage"
 
 $(LLVM_RT_OBJECT): $(LLVM_RT_SOURCE) $(HEADERS)
