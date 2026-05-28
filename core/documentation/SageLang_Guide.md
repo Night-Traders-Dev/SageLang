@@ -11,7 +11,7 @@ toc: true
 
 ## Executive Summary
 
-**SageLang** is a **Python-inspired, systems-oriented programming language** written in C. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports ten execution backends (C, LLVM IR, native assembly, bytecode VM, SageMetal VM, JIT, AOT, Kotlin/Android) and a self-hosted interpreter written in Sage itself. As of v3.5.3, Sage features structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust tab/whitespace token checks in sandbox security guards. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
+**SageLang** is a **Python-inspired, systems-oriented programming language** written in C. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports ten execution backends (C, LLVM IR, native assembly, bytecode VM, SageMetal VM, JIT, AOT, Kotlin/Android) and a self-hosted interpreter written in Sage itself. As of v3.5.4, Sage features structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust tab/whitespace token checks in sandbox security guards. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
 
 ---
 

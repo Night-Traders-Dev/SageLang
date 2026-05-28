@@ -763,6 +763,8 @@ SageValue sage_rt_ord(SageValue val) {
 // ============================================================================
 // GPU Runtime Bridge — SageValue wrappers for sgpu_* API
 // ============================================================================
+#if defined(SAGE_HAS_VULKAN) || defined(SAGE_HAS_OPENGL)
+
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2179,6 +2181,151 @@ SageValue sage_rt_gpu_detected_platform(void) {
     const char* p = sgpu_detected_platform();
     return p ? sage_rt_string(p) : sage_rt_nil();
 }
+
+
+
+#else
+// GPU Stubs — returns nil or error handles when GPU support is disabled
+SageValue sage_rt_gpu_has_vulkan(void) { return sage_rt_bool(0); }
+SageValue sage_rt_gpu_has_opengl(void) { return sage_rt_bool(0); }
+SageValue sage_rt_gpu_get_active_backend(void) { return sage_rt_number((double)0); } // NONE
+SageValue sage_rt_gpu_init(SageValue name, SageValue validation) { (void)name; (void)validation; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_init_opengl(SageValue name, SageValue major, SageValue minor) { (void)name; (void)major; (void)minor; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_shutdown(void) { return sage_rt_nil(); }
+SageValue sage_rt_gpu_device_name(void) { return sage_rt_nil(); }
+SageValue sage_rt_gpu_device_limits(void) { return sage_rt_dict_new(); }
+SageValue sage_rt_gpu_last_error(void) { return sage_rt_string("GPU support disabled"); }
+SageValue sage_rt_gpu_create_buffer(SageValue size, SageValue usage, SageValue mem_props) { (void)size; (void)usage; (void)mem_props; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_destroy_buffer(SageValue handle) { (void)handle; return sage_rt_nil(); }
+SageValue sage_rt_gpu_buffer_upload(SageValue handle, SageValue array) { (void)handle; (void)array; return sage_rt_number(0); }
+SageValue sage_rt_gpu_buffer_upload_bytes(SageValue handle, SageValue array) { (void)handle; (void)array; return sage_rt_number(0); }
+SageValue sage_rt_gpu_buffer_download(SageValue handle) { (void)handle; return sage_rt_nil(); }
+SageValue sage_rt_gpu_buffer_size(SageValue handle) { (void)handle; return sage_rt_number(0); }
+SageValue sage_rt_gpu_create_image(SageValue w, SageValue h, SageValue fmt, SageValue usage, SageValue type) { (void)w; (void)h; (void)fmt; (void)usage; (void)type; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_image_3d(SageValue w, SageValue h, SageValue d, SageValue fmt, SageValue usage) { (void)w; (void)h; (void)d; (void)fmt; (void)usage; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_destroy_image(SageValue handle) { (void)handle; return sage_rt_nil(); }
+SageValue sage_rt_gpu_image_dims(SageValue handle) { (void)handle; return sage_rt_dict_new(); }
+SageValue sage_rt_gpu_create_sampler(SageValue min_f, SageValue mag_f, SageValue addr) { (void)min_f; (void)mag_f; (void)addr; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_sampler_advanced(SageValue min_f, SageValue mag_f, SageValue addr, SageValue mip, SageValue aniso, SageValue cmp) { (void)min_f; (void)mag_f; (void)addr; (void)mip; (void)aniso; (void)cmp; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_destroy_sampler(SageValue handle) { (void)handle; return sage_rt_nil(); }
+SageValue sage_rt_gpu_load_shader(SageValue path, SageValue stage) { (void)path; (void)stage; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_load_shader_glsl(SageValue src, SageValue stage) { (void)src; (void)stage; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_reload_shader(SageValue handle, SageValue path) { (void)handle; (void)path; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_destroy_shader(SageValue handle) { (void)handle; return sage_rt_nil(); }
+SageValue sage_rt_gpu_create_descriptor_layout(SageValue bindings_arr) { (void)bindings_arr; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_descriptor_pool(SageValue max_sets, SageValue type_counts_arr) { (void)max_sets; (void)type_counts_arr; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_allocate_descriptor_set(SageValue pool, SageValue layout) { (void)pool; (void)layout; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_allocate_descriptor_sets(SageValue pool, SageValue layout, SageValue count) { (void)pool; (void)layout; (void)count; return sage_rt_nil(); }
+SageValue sage_rt_gpu_update_descriptor(SageValue set, SageValue binding, SageValue type, SageValue res) { (void)set; (void)binding; (void)type; (void)res; return sage_rt_nil(); }
+SageValue sage_rt_gpu_update_descriptor_image(SageValue set, SageValue binding, SageValue type, SageValue image, SageValue sampler) { (void)set; (void)binding; (void)type; (void)image; (void)sampler; return sage_rt_nil(); }
+SageValue sage_rt_gpu_update_descriptor_range(SageValue set, SageValue binding, SageValue type, SageValue handles_arr) { (void)set; (void)binding; (void)type; (void)handles_arr; return sage_rt_nil(); }
+SageValue sage_rt_gpu_create_pipeline_layout(SageValue desc_layouts_arr, SageValue pc_size, SageValue pc_stages) { (void)desc_layouts_arr; (void)pc_size; (void)pc_stages; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_compute_pipeline(SageValue layout, SageValue shader) { (void)layout; (void)shader; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_graphics_pipeline(SageValue config_dict) { (void)config_dict; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_destroy_pipeline(SageValue handle) { (void)handle; return sage_rt_nil(); }
+SageValue sage_rt_gpu_create_pipeline_cache(void) { return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_render_pass(SageValue attachments_arr, SageValue has_depth) { (void)attachments_arr; (void)has_depth; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_render_pass_mrt(SageValue attachments_arr, SageValue has_depth) { (void)attachments_arr; (void)has_depth; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_destroy_render_pass(SageValue handle) { (void)handle; return sage_rt_nil(); }
+SageValue sage_rt_gpu_create_framebuffer(SageValue render_pass, SageValue image_handles_arr, SageValue w, SageValue h) { (void)render_pass; (void)image_handles_arr; (void)w; (void)h; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_destroy_framebuffer(SageValue handle) { (void)handle; return sage_rt_nil(); }
+SageValue sage_rt_gpu_create_depth_buffer(SageValue w, SageValue h, SageValue fmt) { (void)w; (void)h; (void)fmt; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_command_pool(SageValue queue_family) { (void)queue_family; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_command_buffer(SageValue pool) { (void)pool; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_secondary_command_buffer(SageValue pool) { (void)pool; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_begin_commands(SageValue cmd) { (void)cmd; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_begin_secondary(SageValue cmd, SageValue render_pass, SageValue framebuffer, SageValue subpass) { (void)cmd; (void)render_pass; (void)framebuffer; (void)subpass; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_end_commands(SageValue cmd) { (void)cmd; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_cmd_bind_compute_pipeline(SageValue cmd, SageValue pipeline) { (void)cmd; (void)pipeline; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_bind_graphics_pipeline(SageValue cmd, SageValue pipeline) { (void)cmd; (void)pipeline; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_bind_descriptor_set(SageValue cmd, SageValue pipeline_layout, SageValue set, SageValue bind_point) { (void)cmd; (void)pipeline_layout; (void)set; (void)bind_point; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_dispatch(SageValue cmd, SageValue gx, SageValue gy, SageValue gz) { (void)cmd; (void)gx; (void)gy; (void)gz; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_dispatch_indirect(SageValue cmd, SageValue buffer, SageValue offset) { (void)cmd; (void)buffer; (void)offset; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_push_constants(SageValue cmd, SageValue layout, SageValue stages, SageValue data_arr) { (void)cmd; (void)layout; (void)stages; (void)data_arr; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_begin_render_pass(SageValue cmd, SageValue render_pass, SageValue framebuffer, SageValue w, SageValue h, SageValue color) { (void)cmd; (void)render_pass; (void)framebuffer; (void)w; (void)h; (void)color; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_end_render_pass(SageValue cmd) { (void)cmd; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_draw(SageValue cmd, SageValue vcount, SageValue icount, SageValue fv, SageValue fi) { (void)cmd; (void)vcount; (void)icount; (void)fv; (void)fi; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_draw_indexed(SageValue cmd, SageValue icount, SageValue inscount, SageValue fi, SageValue vo, SageValue fins) { (void)cmd; (void)icount; (void)inscount; (void)fi; (void)vo; (void)fins; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_draw_indirect(SageValue cmd, SageValue buffer, SageValue offset, SageValue draw_count, SageValue stride) { (void)cmd; (void)buffer; (void)offset; (void)draw_count; (void)stride; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_draw_indexed_indirect(SageValue cmd, SageValue buffer, SageValue offset, SageValue draw_count, SageValue stride) { (void)cmd; (void)buffer; (void)offset; (void)draw_count; (void)stride; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_bind_vertex_buffer(SageValue cmd, SageValue buffer) { (void)cmd; (void)buffer; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_bind_vertex_buffers(SageValue cmd, SageValue buffers_arr) { (void)cmd; (void)buffers_arr; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_bind_index_buffer(SageValue cmd, SageValue buffer) { (void)cmd; (void)buffer; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_set_viewport(SageValue cmd, SageValue x, SageValue y, SageValue w, SageValue h, SageValue min_d, SageValue max_d) { (void)cmd; (void)x; (void)y; (void)w; (void)h; (void)min_d; (void)max_d; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_set_scissor(SageValue cmd, SageValue x, SageValue y, SageValue w, SageValue h) { (void)cmd; (void)x; (void)y; (void)w; (void)h; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_pipeline_barrier(SageValue cmd, SageValue src_s, SageValue dst_s, SageValue src_a, SageValue dst_a) { (void)cmd; (void)src_s; (void)dst_s; (void)src_a; (void)dst_a; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_image_barrier(SageValue cmd, SageValue image, SageValue old_l, SageValue new_l, SageValue src_s, SageValue dst_s, SageValue src_a, SageValue dst_a) { (void)cmd; (void)image; (void)old_l; (void)new_l; (void)src_s; (void)dst_s; (void)src_a; (void)dst_a; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_copy_buffer(SageValue cmd, SageValue src, SageValue dst, SageValue size) { (void)cmd; (void)src; (void)dst; (void)size; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_copy_buffer_to_image(SageValue cmd, SageValue buffer, SageValue image, SageValue w, SageValue h) { (void)cmd; (void)buffer; (void)image; (void)w; (void)h; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_execute_commands(SageValue cmd, SageValue secondary_cmds_arr) { (void)cmd; (void)secondary_cmds_arr; return sage_rt_nil(); }
+SageValue sage_rt_gpu_cmd_queue_transfer_barrier(SageValue cmd, SageValue buffer, SageValue src_f, SageValue dst_f) { (void)cmd; (void)buffer; (void)src_f; (void)dst_f; return sage_rt_nil(); }
+SageValue sage_rt_gpu_create_fence(SageValue signaled) { (void)signaled; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_wait_fence(SageValue fence, SageValue timeout) { (void)fence; (void)timeout; return sage_rt_number(0); }
+SageValue sage_rt_gpu_reset_fence(SageValue fence) { (void)fence; return sage_rt_nil(); }
+SageValue sage_rt_gpu_destroy_fence(SageValue handle) { (void)handle; return sage_rt_nil(); }
+SageValue sage_rt_gpu_create_semaphore(void) { return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_destroy_semaphore(SageValue handle) { (void)handle; return sage_rt_nil(); }
+SageValue sage_rt_gpu_submit(SageValue cmd, SageValue fence) { (void)cmd; (void)fence; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_submit_compute(SageValue cmd, SageValue fence) { (void)cmd; (void)fence; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_submit_with_sync(SageValue cmd, SageValue wait_sem, SageValue signal_sem, SageValue fence) { (void)cmd; (void)wait_sem; (void)signal_sem; (void)fence; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_queue_wait_idle(void) { return sage_rt_nil(); }
+SageValue sage_rt_gpu_device_wait_idle(void) { return sage_rt_nil(); }
+SageValue sage_rt_gpu_create_window(SageValue w, SageValue h, SageValue title) { (void)w; (void)h; (void)title; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_destroy_window(void) { return sage_rt_nil(); }
+SageValue sage_rt_gpu_window_should_close(void) { return sage_rt_bool(0); }
+SageValue sage_rt_gpu_poll_events(void) { return sage_rt_nil(); }
+SageValue sage_rt_gpu_init_windowed(SageValue title, SageValue w, SageValue h, SageValue validation) { (void)title; (void)w; (void)h; (void)validation; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_init_opengl_windowed(SageValue title, SageValue w, SageValue h, SageValue major, SageValue minor) { (void)title; (void)w; (void)h; (void)major; (void)minor; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_shutdown_windowed(void) { return sage_rt_nil(); }
+SageValue sage_rt_gpu_swapchain_image_count(void) { return sage_rt_number(0); }
+SageValue sage_rt_gpu_swapchain_format(void) { return sage_rt_number(0); }
+SageValue sage_rt_gpu_swapchain_extent(void) { return sage_rt_dict_new(); }
+SageValue sage_rt_gpu_acquire_next_image(SageValue semaphore) { (void)semaphore; return sage_rt_nil(); }
+SageValue sage_rt_gpu_present(SageValue semaphore, SageValue image_index) { (void)semaphore; (void)image_index; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_swapchain_framebuffers(SageValue render_pass) { (void)render_pass; return sage_rt_nil(); }
+SageValue sage_rt_gpu_create_swapchain_framebuffers_depth(SageValue render_pass, SageValue depth_image) { (void)render_pass; (void)depth_image; return sage_rt_nil(); }
+SageValue sage_rt_gpu_recreate_swapchain(void) { return sage_rt_number(0); }
+SageValue sage_rt_gpu_key_pressed(SageValue key) { (void)key; return sage_rt_bool(0); }
+SageValue sage_rt_gpu_key_down(SageValue key) { (void)key; return sage_rt_bool(0); }
+SageValue sage_rt_gpu_key_just_pressed(SageValue key) { (void)key; return sage_rt_bool(0); }
+SageValue sage_rt_gpu_key_just_released(SageValue key) { (void)key; return sage_rt_bool(0); }
+SageValue sage_rt_gpu_mouse_pos(void) { return sage_rt_dict_new(); }
+SageValue sage_rt_gpu_mouse_button(SageValue button) { (void)button; return sage_rt_bool(0); }
+SageValue sage_rt_gpu_mouse_just_pressed(SageValue button) { (void)button; return sage_rt_bool(0); }
+SageValue sage_rt_gpu_mouse_just_released(SageValue button) { (void)button; return sage_rt_bool(0); }
+SageValue sage_rt_gpu_mouse_delta(void) { return sage_rt_dict_new(); }
+SageValue sage_rt_gpu_scroll_delta(void) { return sage_rt_dict_new(); }
+SageValue sage_rt_gpu_set_cursor_mode(SageValue mode) { (void)mode; return sage_rt_nil(); }
+SageValue sage_rt_gpu_get_time(void) { return sage_rt_number(0); }
+SageValue sage_rt_gpu_window_size(void) { return sage_rt_dict_new(); }
+SageValue sage_rt_gpu_set_title(SageValue title) { (void)title; return sage_rt_nil(); }
+SageValue sage_rt_gpu_window_resized(void) { return sage_rt_bool(0); }
+SageValue sage_rt_gpu_update_input(void) { return sage_rt_nil(); }
+SageValue sage_rt_gpu_text_input_available(void) { return sage_rt_bool(0); }
+SageValue sage_rt_gpu_text_input_read(void) { return sage_rt_number(0); }
+SageValue sage_rt_gpu_load_texture(SageValue path, SageValue gen_mip, SageValue filter, SageValue addr) { (void)path; (void)gen_mip; (void)filter; (void)addr; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_texture_dims(SageValue handle) { (void)handle; return sage_rt_dict_new(); }
+SageValue sage_rt_gpu_generate_mipmaps(SageValue image) { (void)image; return sage_rt_number(0); }
+SageValue sage_rt_gpu_create_cubemap(SageValue face_paths_arr) { (void)face_paths_arr; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_upload_device_local(SageValue data_arr, SageValue usage) { (void)data_arr; (void)usage; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_upload_bytes(SageValue data_arr, SageValue usage) { (void)data_arr; (void)usage; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_create_uniform_buffer(SageValue size) { (void)size; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_update_uniform(SageValue handle, SageValue data_arr) { (void)handle; (void)data_arr; return sage_rt_number(0); }
+SageValue sage_rt_gpu_create_offscreen_target(SageValue w, SageValue h, SageValue fmt, SageValue usage) { (void)w; (void)h; (void)fmt; (void)usage; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_screenshot(SageValue max_size) { (void)max_size; return sage_rt_nil(); }
+SageValue sage_rt_gpu_save_screenshot(SageValue path) { (void)path; return sage_rt_number(0); }
+SageValue sage_rt_gpu_load_font(SageValue path, SageValue size) { (void)path; (void)size; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_font_atlas(SageValue font) { (void)font; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_font_set_atlas(SageValue font, SageValue image, SageValue sampler) { (void)font; (void)image; (void)sampler; return sage_rt_number(0); }
+SageValue sage_rt_gpu_font_text_verts(SageValue font, SageValue text, SageValue x, SageValue y, SageValue scale) { (void)font; (void)text; (void)x; (void)y; (void)scale; return sage_rt_nil(); }
+SageValue sage_rt_gpu_font_measure(SageValue font, SageValue text, SageValue scale) { (void)font; (void)text; (void)scale; return sage_rt_dict_new(); }
+SageValue sage_rt_gpu_load_gltf(SageValue path) { (void)path; return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_graphics_family(void) { return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_compute_family(void) { return sage_rt_number((double)-1); }
+SageValue sage_rt_gpu_set_platform(SageValue platform) { (void)platform; return sage_rt_nil(); }
+SageValue sage_rt_gpu_get_platform(void) { return sage_rt_nil(); }
+SageValue sage_rt_gpu_detected_platform(void) { return sage_rt_nil(); }
+#endif
 
 // ---------------------------------------------------------------------------
 // Dynamic Function Calls

@@ -420,6 +420,8 @@ proc cJSON_Parse(value):
 
 # cJSON_ParseWithLength(value, buffer_length) -> cJSON node or nil
 proc cJSON_ParseWithLength(value, buffer_length):
+    if buffer_length < 0:
+        return nil
     if buffer_length < len(value):
         return cJSON_Parse(slice(value, 0, buffer_length))
     return cJSON_Parse(value)
