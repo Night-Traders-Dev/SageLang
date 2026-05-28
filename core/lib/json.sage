@@ -409,12 +409,7 @@ proc cJSON_Parse(value):
 # cJSON_ParseWithLength(value, buffer_length) -> cJSON node or nil
 proc cJSON_ParseWithLength(value, buffer_length):
     if buffer_length < len(value):
-        let sub = ""
-        let i = 0
-        while i < buffer_length:
-            sub = sub + value[i]
-            i = i + 1
-        return cJSON_Parse(sub)
+        return cJSON_Parse(slice(value, 0, buffer_length))
     return cJSON_Parse(value)
 
 # cJSON_GetErrorPtr() -> string
