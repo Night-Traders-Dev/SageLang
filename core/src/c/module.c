@@ -566,6 +566,11 @@ void module_add_source_dir(const char* source_path) {
         char lib_dir[4096];
         snprintf(lib_dir, sizeof(lib_dir), "%slib", dir);
         add_search_path(global_module_cache, lib_dir);
+        
+        // Also add dir/core/lib/ for the common sage repo structure
+        char core_lib_dir[4096];
+        snprintf(core_lib_dir, sizeof(core_lib_dir), "%score/lib", dir);
+        add_search_path(global_module_cache, core_lib_dir);
 
         // Also add PARENT directory and parent/lib/ — handles the common
         // pattern where source is in examples/ or src/ but libs are in
@@ -583,7 +588,21 @@ void module_add_source_dir(const char* source_path) {
             char parent_lib[4096];
             snprintf(parent_lib, sizeof(parent_lib), "%slib", parent);
             add_search_path(global_module_cache, parent_lib);
+            
+            // Also parent/core/lib
+            char parent_core_lib[4096];
+            snprintf(parent_core_lib, sizeof(parent_core_lib), "%score/lib", parent);
+            add_search_path(global_module_cache, parent_core_lib);
         }
+    } else {
+        // No slash: script is in current directory
+        add_search_path(global_module_cache, "./");
+        add_search_path(global_module_cache, "./lib");
+        add_search_path(global_module_cache, "./core/lib");
+        
+        // Also add ../lib and ../core/lib
+        add_search_path(global_module_cache, "../lib");
+        add_search_path(global_module_cache, "../core/lib");
     }
 }
 
