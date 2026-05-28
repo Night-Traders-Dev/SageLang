@@ -29,7 +29,7 @@ void create_ml_native_module() {}
 #endif
 
 /* GPU stubs */
-#ifndef SAGE_HAS_VULKAN
+#if !defined(SAGE_HAS_VULKAN) && !defined(SAGE_HAS_OPENGL)
 void sgpu_cmd_bind_index_buffer() {}
 void sgpu_cmd_set_viewport() {}
 void sgpu_cmd_set_scissor() {}
