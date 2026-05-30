@@ -61,6 +61,7 @@ proc is_safe(code):
 
     let primitives = ["ffi_open", "ffi_call", "mem_alloc", "mem_write", "asm_exec", "asm_compile"]
     let modules = ["io", "sys", "http", "tcp", "net", "os"]
+    let keywords = ["import", "from", "quote"]
 
     let i = 0
     let n = len(code)
@@ -108,11 +109,13 @@ proc is_safe(code):
                 end
             end
 
-            # Check for 'import' keyword
-            if ident == "import":
-                result["safe"] = false
-                push(result["issues"], "Contains unauthorized module loading (import)")
-                return result
+            # Check for unauthorized keywords
+            for j in range(len(keywords)):
+                if ident == keywords[j]:
+                    result["safe"] = false
+                    push(result["issues"], "Contains unauthorized keyword/identifier: " + ident)
+                    return result
+                end
             end
 
             # Check for dangerous primitives
@@ -124,24 +127,13 @@ proc is_safe(code):
                 end
             end
 
-            # Check for unauthorized module access (e.g. io.readfile)
+            # Check for unauthorized module access
+            # We block unauthorized module identifiers entirely to prevent aliasing (e.g. let my_io = io)
             for j in range(len(modules)):
                 if ident == modules[j]:
-                    # Peek ahead for dot, skipping whitespace/newlines
-                    let k = i
-                    while k < n:
-                        let peek = code[k]
-                        if peek == " " or peek == chr(9) or peek == chr(10) or peek == chr(13):
-                            k = k + 1
-                        else:
-                            break
-                        end
-                    end
-                    if k < n and code[k] == ".":
-                        result["safe"] = false
-                        push(result["issues"], "Contains unauthorized module access: " + ident + ".")
-                        return result
-                    end
+                    result["safe"] = false
+                    push(result["issues"], "Contains unauthorized module identifier: " + ident)
+                    return result
                 end
             end
             continue
