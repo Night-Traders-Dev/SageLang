@@ -21,3 +21,8 @@
 **Vulnerability:** Use of simple substring matching (e.g., `contains(code, "io.")`) to block dangerous operations in the agent sandbox.
 **Learning:** Overly broad substrings cause significant false positives by matching inside comments or strings. It also remains easy to bypass via obfuscation (e.g., `io . readfile` or using newlines).
 **Prevention:** Implement a token-aware scanner for sandboxing. A basic lexer that skips comments and string literals, and recognizes identifiers, is much more robust. For even better security, block forbidden module identifiers entirely to prevent aliasing (e.g., `let my_io = io`).
+
+## 2025-06-01 - Sandbox Bypass via Module Aliasing
+**Vulnerability:** Sandbox allowed unauthorized module identifiers (e.g., `io`) as long as they weren't followed by a dot, enabling aliasing (`let my_io = io`).
+**Learning:** Checking for property access (e.g., `io.`) is insufficient because the module object itself can be assigned to a new name. The identifier must be blocked entirely.
+**Prevention:** Block all unauthorized module names and restricted keywords (`import`, `from`, `quote`) globally within the sandboxed code, regardless of context (except within comments/strings).
