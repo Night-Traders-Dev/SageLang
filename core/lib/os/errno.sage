@@ -146,8 +146,7 @@ let _error_messages = {
     "115": "Operation now in progress"
 }
 
-# # Returns a human-readable string for the given error code.
-
+## Returns a human-readable string for the given error code.
 proc strerror(err):
     let key = str(err)
     if dict_has(_error_messages, key):

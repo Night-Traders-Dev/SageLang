@@ -1,5 +1,11 @@
 # SageLang Updates
 
+## v3.5.6 — Hotfix: Doc Comment Restoration (May 2026)
+
+- **Bug Fix**:
+  - **Restored `errno.strerror` Documentation**: Fixed a bug where a detached and incorrectly formatted comment prevented `proc strerror` from being recognized as documented. Changed `# #` to `##` and removed the blank line to ensure adjacency, satisfying the linter's S003 check and restoring visibility to `doc(errno.strerror)`.
+- **Version Bump**: Milestone v3.5.6 release.
+
 ## v3.5.4 — Hotfix: Structural Uniqueness, Repeating, and Sandbox Import Guards (May 2026)
 
 - **Bug Fixes**:
