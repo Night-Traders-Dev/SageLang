@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "May 2026"
-version: "v3.5.4"
+version: "v3.5.6"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -58,6 +58,7 @@ by Rust, and a self-hosted compiler written in Sage itself.
 - **SageMetal VM**: freestanding bytecode interpreter for bare-metal (no malloc, no libc, no OS)
 - **Metal stdlib** (`lib/metal/`): serial, GPIO, IRQ, timer, MMIO for kernel/embedded development
 - **Default hybrid runtime**: JIT profiling on hosted, AST on bare-metal, automatic selection
+- **v3.5.6 updates**: Restored `errno.strerror` doc visibility and structural equality fixes.
 - **327 interpreter tests**, 1623 self-hosted tests (2060+ total)
 
 ## Quick Start
@@ -1392,6 +1393,16 @@ The following bundled Sage modules are in the `lib/` directory:
 | `assert`  | Testing assertions                      |
 | `math`    | Extended math (Sage-level supplement)    |
 | `json`    | Full JSON parser and serializer         |
+
+## OS and System Modules
+
+| Module    | Description                             |
+|-----------|-----------------------------------------|
+| `os.sync` | Synchronization primitives (Mutexes, Semaphores) |
+| `os.errno`| POSIX error codes and `strerror` utility |
+| `os.smp`  | Multicore work distribution and topology |
+| `os.cpio` | Initramfs CPIO archive handling          |
+| `os.tmpfs`| In-memory temporary filesystem           |
 
 \newpage
 
@@ -3278,8 +3289,6 @@ coin.mine_pending_transactions("miner-address")
 
 # Retrieve balance
 print coin.get_balance(wallet.get_address())
-```
-
 For advanced use cases, including P2P networking and validator configuration, refer to the examples in `examples/blockchain_*.sage`.
 
 \newpage
@@ -3321,6 +3330,45 @@ bot.send_message(CHANNEL_ID, "Hello, world!")
 
 \newpage
 
+# Part VIIIb: Machine Learning and AI
+
+## Large Language Models (LLM)
+
+SageLang provides a comprehensive LLM toolkit in `lib/llm/`.
+
+### TurboQuant (ICLR 2026)
+
+TurboQuant provides near-optimal vector quantization for KV cache and weights.
+
+- **3-bit compression**: 6x memory reduction with zero accuracy loss.
+- **Two-stage**: PolarQuant (MSE optimal) + QJL (Johnson-Lindenstrauss residual correction).
+- **Unbiased**: Inner product estimation remains unbiased.
+
+```python
+import llm.turboquant as tq
+
+let vec = tq.vec_random(128)
+let quantized = tq.quantize(vec, 3)
+let reconstructed = tq.dequantize(quantized)
+```
+
+### AutoResearch Agent
+
+An autonomous research agent inspired by Karpathy's work.
+
+- **Ratchet loop**: Propose → Train → Evaluate → Accept/Reject.
+- **Multi-agent**: Collaboration between researcher, programmer, and critic agents.
+- **Journal**: Keeps a detailed research log of all experiments.
+
+### Self-Evolving Architectures
+
+`lib/llm/evolve.sage` enables models to grow their architecture over time.
+
+- **Progressive growth**: Identity-init for depth, weight padding for width.
+- **Plateau detection**: Automatically grows when training loss plateaus.
+
+\newpage
+
 # Part IX: Appendices
 
 \newpage
@@ -3357,6 +3405,7 @@ The following functions are available globally without any imports.
 | `range(a, b)`         | Array `[a, a+1, ..., b-1]`              |
 | `slice(arr, start, end)` | Sub-array from start to end           |
 | `array_extend(a, b)`  | Extend array a with elements of b        |
+| `array_reverse(a)`    | Reverse array in-place (native speed)    |
 
 ## String Functions
 
@@ -3372,6 +3421,7 @@ The following functions are available globally without any imports.
 | `endswith(str, suffix)`     | Check if string ends with suffix   |
 | `contains(str, sub)`        | Check if string contains substring |
 | `indexof(str, sub)`         | Find index of substring (-1 if not found) |
+| `dict_get_len(d, key, len)` | Length-aware dictionary lookup      |
 
 ## Dictionary Functions
 
@@ -3413,6 +3463,9 @@ The following functions are available globally without any imports.
 | `path_is_dir(path)`      | Check if path is a directory          |
 | `path_is_file(path)`     | Check if path is a regular file       |
 | `path_mkpath(path)`      | Create full directory path            |
+| `device_exists(path)`    | Probe `/sys` attributes (Linux)       |
+| `read_sysfs_attr(path)`  | Read sysfs attribute as string        |
+| `read_sysfs_int(path)`   | Read sysfs attribute as integer       |
 
 ## VM & Gas Functions
 
