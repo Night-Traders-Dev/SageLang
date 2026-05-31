@@ -845,7 +845,7 @@ proc cc_emit_stmt(cc, stmt):
         # STMT_TRY
         cc_line(cc, "{")
         cc.indent = cc.indent + 1
-        cc_line(cc, "if (sage_try_depth >= SAGE_MAX_TRY_DEPTH) sage_fail(" + DQ + "Runtime Error: try nesting too deep" + DQ + ");")
+        cc_line(cc, "if (sage_try_depth >= SAGE_MAX_TRY_DEPTH) sage_fail(" + DQ + "Runtime Error: try nesting too deep (max 1024)" + DQ + ");")
         cc_line(cc, "int _caught = 0;")
         cc_line(cc, "sage_try_depth++;")
         cc_line(cc, "if (setjmp(sage_try_stack[sage_try_depth - 1]) == 0) {")
@@ -946,7 +946,7 @@ proc emit_runtime_prelude(cc):
     push(o, "} SageSlot;" + NL)
     push(o, NL)
     # Exception handling
-    push(o, "#define SAGE_MAX_TRY_DEPTH 64" + NL)
+    push(o, "#define SAGE_MAX_TRY_DEPTH 1024" + NL)
     push(o, "static jmp_buf sage_try_stack[SAGE_MAX_TRY_DEPTH];" + NL)
     push(o, "static SageValue sage_exception_value;" + NL)
     push(o, "static int sage_try_depth = 0;" + NL)

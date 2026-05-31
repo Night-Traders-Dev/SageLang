@@ -74,8 +74,8 @@ typedef struct {
     int global_count;
     int global_cap;
     // Loop label stack for break/continue
-    int loop_cond_labels[64];
-    int loop_end_labels[64];
+    int loop_cond_labels[1024];
+    int loop_end_labels[1024];
     int loop_depth;
     // Track whether the current basic block has been terminated (ret/br)
     int block_terminated;
@@ -1872,8 +1872,8 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             break;
         }
         case STMT_WHILE: {
-            if (lc->loop_depth >= 64) {
-                fprintf(stderr, "LLVM backend: loop nesting too deep (max 64)\n");
+            if (lc->loop_depth >= 1024) {
+                fprintf(stderr, "LLVM backend: loop nesting too deep (max 1024)\n");
                 lc->failed = 1;
                 return;
             }
@@ -1927,8 +1927,8 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             break;
         case STMT_FOR: {
             // for variable in iterable: body
-            if (lc->loop_depth >= 64) {
-                fprintf(stderr, "LLVM backend: loop nesting too deep (max 64)\n");
+            if (lc->loop_depth >= 1024) {
+                fprintf(stderr, "LLVM backend: loop nesting too deep (max 1024)\n");
                 lc->failed = 1;
                 return;
             }

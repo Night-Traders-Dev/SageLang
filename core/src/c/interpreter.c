@@ -110,7 +110,7 @@ void interpreter_set_jit(JitState* jit) { g_jit = jit; }
 JitState* interpreter_get_jit(void) { return g_jit; }
 
 // Recursion depth tracking to prevent stack overflow
-#define MAX_RECURSION_DEPTH 1000
+#define MAX_RECURSION_DEPTH 1000000
 
 // Check if a statement has a specific pragma decorator (@nojit, @noaot, etc.)
 static __attribute__((unused)) int stmt_has_pragma(Stmt* stmt, const char* name) {
@@ -3365,17 +3365,17 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
         case STMT_BLOCK: {
             Stmt* current = stmt->as.block.statements;
             // Collect deferred statements (LIFO order)
-            Stmt* deferred[64];
+            Stmt* deferred[1024];
             int defer_count = 0;
             ExecResult block_result = { val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
 
             while (current != NULL) {
                 if (current->type == STMT_DEFER) {
                     // Collect defer — don't execute yet
-                    if (defer_count < 64) {
+                    if (defer_count < 1024) {
                         deferred[defer_count++] = current->as.defer.statement;
                     } else {
-                        fprintf(stderr, "Warning: Maximum defer count (64) exceeded; statement dropped.\n");
+                        fprintf(stderr, "Warning: Maximum defer count (1024) exceeded; statement dropped.\n");
                     }
                     current = current->next;
                     continue;

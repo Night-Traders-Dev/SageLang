@@ -163,8 +163,8 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 
 ### Security Hardening
 - **Type-safe value access**: All native functions validate argument types before accessing union members
-- **Recursion depth limits**: Statement interpreter guards against stack overflow (max 1000); expression evaluator inlined for zero per-expression overhead
-- **Loop iteration limits**: While loops capped at 1M iterations; loop nesting capped at 64 levels
+- **Recursion depth limits**: Statement interpreter guards against stack overflow (max 1,000,000); expression evaluator inlined for zero per-expression overhead
+- **Loop iteration limits**: While loops capped at 1M iterations; loop nesting capped at 1024 levels
 - **Buffer safety**: String literals capped at 4096 chars, identifiers at 1024 chars; all allocation via abort-on-OOM wrappers
 - **Shell injection prevention**: Assembly exec/compile paths validate paths and use secure temp files (`mkstemps`)
 - **SSL handle safety**: Opaque pointers stored as `VAL_POINTER` (not truncated doubles); double-free prevention via handle nullification

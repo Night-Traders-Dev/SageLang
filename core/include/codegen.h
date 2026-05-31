@@ -130,8 +130,8 @@ typedef struct {
     int number_pool_count;
     int number_pool_cap;
     // Loop label stack for break/continue
-    char* loop_cond_labels[64];
-    char* loop_end_labels[64];
+    char* loop_cond_labels[1024];
+    char* loop_end_labels[1024];
     int loop_depth;
     char* current_module;
     char** imported_modules;

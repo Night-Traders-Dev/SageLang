@@ -2120,7 +2120,7 @@ static void emit_stmt(Compiler* compiler, Stmt* stmt) {
             TryStmt* try_stmt = &stmt->as.try_stmt;
             emit_line(compiler, "{");
             compiler->indent++;
-            emit_line(compiler, "if (sage_try_depth >= SAGE_MAX_TRY_DEPTH) sage_fail(\"Runtime Error: try nesting too deep\");");
+            emit_line(compiler, "if (sage_try_depth >= SAGE_MAX_TRY_DEPTH) sage_fail(\"Runtime Error: try nesting too deep (max 1024)\");");
             emit_line(compiler, "int _caught = 0;");
             emit_line(compiler, "sage_try_depth++;");
             emit_line(compiler, "if (setjmp(sage_try_stack[sage_try_depth - 1]) == 0) {");
@@ -2345,7 +2345,7 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
         , out);
     fputs(
         "/* Exception handling via setjmp/longjmp */\n"
-        "#define SAGE_MAX_TRY_DEPTH 64\n"
+        "#define SAGE_MAX_TRY_DEPTH 1024\n"
         "static jmp_buf sage_try_stack[SAGE_MAX_TRY_DEPTH];\n"
         "static SageValue sage_exception_value;\n"
         "static int sage_try_depth = 0;\n"

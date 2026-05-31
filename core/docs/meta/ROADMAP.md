@@ -362,8 +362,8 @@ A cross-cutting audit and hardening pass across the entire codebase.
 
 #### Recursion & Execution Safety ✅
 
-- [x] **Interpreter depth limit** - `MAX_RECURSION_DEPTH 1000` with graceful exception on overflow
-- [x] **Parser depth limit** - `MAX_PARSER_DEPTH 500` prevents stack overflow from malicious input
+- [x] **Interpreter depth limit** - `MAX_RECURSION_DEPTH 1000000` with graceful exception on overflow
+- [x] **Parser depth limit** - `MAX_PARSER_DEPTH 100000` prevents stack overflow from malicious input
 - [x] **Iterative lexer** - `scan_token()` converted from recursive to iterative (`for(;;)` loop)
 - [x] **Loop iteration limit** - `MAX_LOOP_ITERATIONS 1000000` prevents runaway `while` loops from exhausting the C stack; throws a catchable exception
 - [x] **String literal length limit** - `MAX_STRING_LENGTH 4096` in lexer rejects oversized string literals at parse time, preventing buffer-related crashes

@@ -597,8 +597,8 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             break;
         }
         case STMT_WHILE: {
-            if (ctx->loop_depth >= 64) {
-                fprintf(stderr, "codegen: loop nesting too deep (max 64)\n");
+            if (ctx->loop_depth >= 1024) {
+                fprintf(stderr, "codegen: loop nesting too deep (max 1024)\n");
                 return;
             }
             char* cond_label = isel_label(ctx);
@@ -679,8 +679,8 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             init_store->src2 = isel_add_string(ctx, "__for_idx__");
             isel_append(ctx, init_store);
 
-            if (ctx->loop_depth >= 64) {
-                fprintf(stderr, "codegen: loop nesting too deep (max 64)\n");
+            if (ctx->loop_depth >= 1024) {
+                fprintf(stderr, "codegen: loop nesting too deep (max 1024)\n");
                 return;
             }
             char* cond_label = isel_label(ctx);

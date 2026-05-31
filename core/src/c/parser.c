@@ -13,7 +13,7 @@ static Token current_token;
 static Token previous_token;
 
 // Parser recursion depth limit to prevent stack overflow on malicious input
-#define MAX_PARSER_DEPTH 500
+#define MAX_PARSER_DEPTH 100000
 static int parser_depth = 0;
 
 static int token_span(const Token* token) {

@@ -12,7 +12,7 @@
 
 extern __thread EnvRootNode* g_gc_root_stack;
 
-#define VM_STACK_MAX 1024
+#define VM_STACK_MAX 65536
 
 typedef struct ActiveVm {
     BytecodeChunk* chunk;
