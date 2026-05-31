@@ -391,6 +391,36 @@ SageValue sage_rt_array_pop(SageValue arr) {
     return arr.as.array->elements[--arr.as.array->count];
 }
 
+SageValue sage_rt_array_extend(SageValue target, SageValue source) {
+    if (target.type != SAGE_ARRAY || source.type != SAGE_ARRAY) return sage_rt_nil();
+    SageArray* dst = target.as.array;
+    SageArray* src = source.as.array;
+    if (src->count > 0) {
+        if (dst->count + src->count > dst->capacity) {
+            while (dst->capacity < dst->count + src->count) {
+                dst->capacity = dst->capacity ? dst->capacity * 2 : 4;
+            }
+            dst->elements = safe_realloc(dst->elements, sizeof(SageValue) * (size_t)dst->capacity);
+            if (!dst->elements) { fprintf(stderr, "OOM\n"); abort(); }
+        }
+        memcpy(dst->elements + dst->count, src->elements, sizeof(SageValue) * (size_t)src->count);
+        dst->count += src->count;
+    }
+    return sage_rt_nil();
+}
+
+SageValue sage_rt_array_reverse(SageValue array) {
+    if (array.type != SAGE_ARRAY) return sage_rt_nil();
+    SageArray* src = array.as.array;
+    SageValue result = sage_rt_array_new(src->count);
+    SageArray* dst = result.as.array;
+    for (int i = 0; i < src->count; i++) {
+        dst->elements[i] = src->elements[src->count - 1 - i];
+    }
+    dst->count = src->count;
+    return result;
+}
+
 int32_t sage_rt_array_len(SageValue arr) {
     if (arr.type != SAGE_ARRAY) return 0;
     return arr.as.array->count;

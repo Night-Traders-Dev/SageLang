@@ -740,6 +740,8 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare void @sage_rt_array_set(%%SageValue, i32, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_array_push(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_array_pop(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_array_extend(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_array_reverse(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_index(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_is_truthy(%%SageValue)\n");
     ll_emit(lc, "declare i32 @sage_rt_get_bool(%%SageValue)\n");
@@ -1508,6 +1510,12 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_array_push(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
                 } else if (strcmp(name, "pop") == 0 && expr->as.call.arg_count == 1) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_array_pop(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "array_extend") == 0 && expr->as.call.arg_count == 2) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_array_extend(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                } else if (strcmp(name, "array_reverse") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_array_reverse(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "slice") == 0 && expr->as.call.arg_count == 3) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_slice(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2]);
                 } else if (strcmp(name, "range") == 0 && expr->as.call.arg_count == 1) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_range(%%SageValue %%%d)", r, arg_regs[0]);
                 } else if (strcmp(name, "dict_keys") == 0 && expr->as.call.arg_count == 1) {
