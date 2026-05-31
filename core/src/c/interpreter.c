@@ -351,6 +351,27 @@ static Value array_extend_native(int argCount, Value* args) {
     return val_nil();
 }
 
+// array_reverse(array) - return a new array with elements in reverse order
+static Value array_reverse_native(int argCount, Value* args) {
+    if (argCount != 1 || args[0].type != VAL_ARRAY) return val_nil();
+    ArrayValue* source = args[0].as.array;
+
+    Value result = val_array();
+    if (source->count == 0) return result;
+
+    ArrayValue* target = result.as.array;
+    target->count = source->count;
+    target->capacity = source->count;
+    target->elements = SAGE_ALLOC(sizeof(Value) * target->capacity);
+    gc_track_external_allocation(sizeof(Value) * target->capacity);
+
+    for (int i = 0; i < source->count; i++) {
+        target->elements[i] = source->elements[source->count - 1 - i];
+    }
+
+    return result;
+}
+
 static Value pop_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
     if (args[0].type != VAL_ARRAY) return val_nil();
@@ -2094,6 +2115,7 @@ void init_stdlib(Env* env) {
     env_define_const(env, "append", 6, val_native(push_native));
     env_define_const(env, "build_quad_verts", 16, val_native(build_quad_verts_native));
     env_define_const(env, "array_extend", 12, val_native(array_extend_native));
+    env_define_const(env, "array_reverse", 13, val_native(array_reverse_native));
     env_define_const(env, "build_line_quads", 16, val_native(build_line_quads_native));
     env_define_const(env, "pop", 3, val_native(pop_native));
     env_define_const(env, "range", 5, val_native(range_native));
