@@ -37,6 +37,7 @@ let _gpio_base = 0
 let _pin_modes = []
 let _pin_pulls = []
 let _pin_interrupts = []
+let _pin_handlers = []
 let _pin_count = 0
 
 ## Initialize GPIO controller at MMIO base address
@@ -46,11 +47,13 @@ proc gpio_init(base, num_pins):
     _pin_modes = []
     _pin_pulls = []
     _pin_interrupts = []
+    _pin_handlers = []
     let i = 0
     while i < num_pins:
         push(_pin_modes, PIN_INPUT)
         push(_pin_pulls, PULL_NONE)
         push(_pin_interrupts, INT_DISABLED)
+        push(_pin_handlers, nil)
         i = i + 1
 
 ## Set pin mode (input/output/alt/analog)
@@ -93,6 +96,26 @@ proc pin_get_interrupt(pin):
     if pin >= 0 and pin < _pin_count:
         return _pin_interrupts[pin]
     return INT_DISABLED
+
+## Register an interrupt handler callback for a specific pin.
+proc pin_register_handler(pin, handler):
+    if pin >= 0 and pin < _pin_count:
+        _pin_handlers[pin] = handler
+
+## Enable GPIO interrupt for a pin with the specified trigger mode.
+proc pin_enable_interrupt(pin, mode):
+    pin_set_interrupt(pin, mode)
+
+## Disable GPIO interrupt for a pin.
+proc pin_disable_interrupt(pin):
+    pin_set_interrupt(pin, INT_DISABLED)
+
+## Dispatch a GPIO interrupt to the registered handler for a pin.
+proc gpio_dispatch(pin):
+    if pin >= 0 and pin < _pin_count:
+        let handler = _pin_handlers[pin]
+        if handler != nil:
+            handler(pin)
 
 ## Set multiple pins HIGH at once using a bitmask.
 proc pin_set_mask(mask):
