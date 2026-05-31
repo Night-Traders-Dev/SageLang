@@ -3289,6 +3289,8 @@ coin.mine_pending_transactions("miner-address")
 
 # Retrieve balance
 print coin.get_balance(wallet.get_address())
+```
+
 For advanced use cases, including P2P networking and validator configuration, refer to the examples in `examples/blockchain_*.sage`.
 
 \newpage
@@ -3405,7 +3407,6 @@ The following functions are available globally without any imports.
 | `range(a, b)`         | Array `[a, a+1, ..., b-1]`              |
 | `slice(arr, start, end)` | Sub-array from start to end           |
 | `array_extend(a, b)`  | Extend array a with elements of b        |
-| `array_reverse(a)`    | Reverse array in-place (native speed)    |
 
 ## String Functions
 
@@ -3421,7 +3422,6 @@ The following functions are available globally without any imports.
 | `endswith(str, suffix)`     | Check if string ends with suffix   |
 | `contains(str, sub)`        | Check if string contains substring |
 | `indexof(str, sub)`         | Find index of substring (-1 if not found) |
-| `dict_get_len(d, key, len)` | Length-aware dictionary lookup      |
 
 ## Dictionary Functions
 
@@ -3463,9 +3463,6 @@ The following functions are available globally without any imports.
 | `path_is_dir(path)`      | Check if path is a directory          |
 | `path_is_file(path)`     | Check if path is a regular file       |
 | `path_mkpath(path)`      | Create full directory path            |
-| `device_exists(path)`    | Probe `/sys` attributes (Linux)       |
-| `read_sysfs_attr(path)`  | Read sysfs attribute as string        |
-| `read_sysfs_int(path)`   | Read sysfs attribute as integer       |
 
 ## VM & Gas Functions
 
