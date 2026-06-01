@@ -1136,6 +1136,8 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
             if (command_matches(line, ":cd", &arg)) {
                 if (*arg == '\0') {
                     printf("Usage: :cd <dir>\n");
+                } else if (!is_safe_path(arg)) {
+                    printf("Security Error: Unsafe characters in path\n");
                 } else if (chdir(arg) != 0) {
                     perror("chdir");
                 } else {
@@ -1203,6 +1205,10 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
             if (command_matches(line, ":load", &arg)) {
                 if (*arg == '\0') {
                     printf("Usage: :load <file>\n");
+                    free(line);
+                    continue;
+                } else if (!is_safe_path(arg)) {
+                    printf("Security Error: Unsafe characters in path\n");
                     free(line);
                     continue;
                 }
@@ -1345,6 +1351,8 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
             if (command_matches(line, ":save", &arg)) {
                 if (*arg == '\0') {
                     printf("Usage: :save <file>\n");
+                } else if (!is_safe_path(arg)) {
+                    printf("Security Error: Unsafe characters in path\n");
                 } else {
                     repl_save_session(arg);
                 }
