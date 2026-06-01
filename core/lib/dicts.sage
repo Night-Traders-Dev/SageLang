@@ -9,9 +9,11 @@ proc keys(dict):
 proc values(dict):
     return dict_values(dict)
 
+## Returns the number of entries in the dictionary.
+## Optimization: Use native len(dict) which is O(1) instead of len(dict_keys(dict)) which is O(N).
 @inline
 proc size(dict):
-    return len(dict_keys(dict))
+    return len(dict)
 
 @inline
 proc has(dict, key):
