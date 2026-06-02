@@ -4,29 +4,30 @@
 ## On x86, GPIO is typically accessed via Super I/O chip or PCH.
 
 import metal.core
+import metal.irq
 
 ## ============================================================
 ## Pin Modes
 ## ============================================================
 
-let PIN_INPUT    = 0
-let PIN_OUTPUT   = 1
-let PIN_ALT      = 2
-let PIN_ANALOG   = 3
+let PIN_INPUT = 0
+let PIN_OUTPUT = 1
+let PIN_ALT = 2
+let PIN_ANALOG = 3
 
-let PIN_LOW  = 0
+let PIN_LOW = 0
 let PIN_HIGH = 1
 
 let PULL_NONE = 0
-let PULL_UP   = 1
+let PULL_UP = 1
 let PULL_DOWN = 2
 
 let INT_DISABLED = 0
-let INT_RISING   = 1
-let INT_FALLING  = 2
-let INT_BOTH     = 3
-let INT_LOW      = 4
-let INT_HIGH     = 5
+let INT_RISING = 1
+let INT_FALLING = 2
+let INT_BOTH = 3
+let INT_LOW = 4
+let INT_HIGH = 5
 
 ## ============================================================
 ## Generic GPIO (MMIO-based)
@@ -37,34 +38,37 @@ let _gpio_base = 0
 let _pin_modes = []
 let _pin_pulls = []
 let _pin_interrupts = []
+let _pin_handlers = []
 let _pin_count = 0
 
-## Initialize GPIO controller at MMIO base address
+## Initialize GPIO controller at MMIO base address.
 proc gpio_init(base, num_pins):
     _gpio_base = base
     _pin_count = num_pins
     _pin_modes = []
     _pin_pulls = []
     _pin_interrupts = []
+    _pin_handlers = []
     let i = 0
     while i < num_pins:
         push(_pin_modes, PIN_INPUT)
         push(_pin_pulls, PULL_NONE)
         push(_pin_interrupts, INT_DISABLED)
+        push(_pin_handlers, nil)
         i = i + 1
 
-## Set pin mode (input/output/alt/analog)
+## Set pin mode (input/output/alt/analog).
 proc pin_mode(pin, mode):
     if pin >= 0 and pin < _pin_count:
         _pin_modes[pin] = mode
 
-## Get current pin mode
+## Get current pin mode.
 proc pin_get_mode(pin):
     if pin >= 0 and pin < _pin_count:
         return _pin_modes[pin]
     return PIN_INPUT
 
-## Set pull-up/pull-down resistor configuration
+## Set pull-up/pull-down resistor configuration.
 proc pin_pull(pin, pull):
     if pin >= 0 and pin < _pin_count:
         _pin_pulls[pin] = pull
@@ -73,13 +77,13 @@ proc pin_pull(pin, pull):
         let pull_offset = (_pin_count * 4) + (pin * 4)
         core.mmio_write32(_gpio_base + pull_offset, pull)
 
-## Get current pin pull configuration
+## Get current pin pull configuration.
 proc pin_get_pull(pin):
     if pin >= 0 and pin < _pin_count:
         return _pin_pulls[pin]
     return PULL_NONE
 
-## Set GPIO interrupt trigger mode for a pin
+## Set GPIO interrupt trigger mode for a pin.
 proc pin_set_interrupt(pin, mode):
     if pin >= 0 and pin < _pin_count:
         _pin_interrupts[pin] = mode
@@ -88,11 +92,40 @@ proc pin_set_interrupt(pin, mode):
         let int_offset = (_pin_count * 8) + (pin * 4)
         core.mmio_write32(_gpio_base + int_offset, mode)
 
-## Get current GPIO interrupt mode for a pin
+## Get current GPIO interrupt mode for a pin.
 proc pin_get_interrupt(pin):
     if pin >= 0 and pin < _pin_count:
         return _pin_interrupts[pin]
     return INT_DISABLED
+
+## Register an interrupt handler for a specific pin.
+proc pin_register_handler(pin, handler):
+    if pin >= 0 and pin < _pin_count:
+        _pin_handlers[pin] = handler
+
+## Enable interrupts for a specific pin.
+proc pin_enable_interrupt(pin):
+    if pin >= 0 and pin < _pin_count:
+        # In a real driver, this would enable the interrupt in the controller.
+        # For the generic MMIO stub, we use an offset from base + (pin_count * 12).
+        let en_offset = (_pin_count * 12) + (pin * 4)
+        core.mmio_write32(_gpio_base + en_offset, 1)
+
+## Disable interrupts for a specific pin.
+proc pin_disable_interrupt(pin):
+    if pin >= 0 and pin < _pin_count:
+        # In a real driver, this would disable the interrupt in the controller.
+        let dis_offset = (_pin_count * 12) + (pin * 4)
+        core.mmio_write32(_gpio_base + dis_offset, 0)
+
+## Dispatch a GPIO interrupt to the registered handler.
+proc gpio_dispatch(pin):
+    irq.irq_enter()
+    if pin >= 0 and pin < _pin_count:
+        let handler = _pin_handlers[pin]
+        if handler != nil:
+            handler(pin)
+    irq.irq_exit()
 
 ## Set multiple pins HIGH at once using a bitmask.
 proc pin_set_mask(mask):
@@ -133,39 +166,35 @@ proc pin_debounce(pin, target_state, samples, delay_ms):
         j = j + 1
     return true
 
-## Write digital value to pin
+## Write digital value to a pin.
 proc digital_write(pin, value):
     if pin >= 0 and pin < _pin_count:
         if _pin_modes[pin] == PIN_OUTPUT:
             let offset_write = pin * 4
             core.mmio_write32(_gpio_base + offset_write, value)
 
-## Read digital value from pin
+## Read digital value from a pin.
 proc digital_read(pin):
     if pin >= 0 and pin < _pin_count:
         let offset_read = pin * 4
         return core.mmio_read32(_gpio_base + offset_read) & 1
     return 0
 
-## Toggle pin state
+## Toggle pin state.
 proc digital_toggle(pin):
     let current = digital_read(pin)
     digital_write(pin, 1 - current)
 
-## ============================================================
-## LED Helpers (common patterns)
-## ============================================================
-
-## Turn an LED on
+## Turn an LED on.
 proc led_on(pin):
     pin_mode(pin, PIN_OUTPUT)
     digital_write(pin, PIN_HIGH)
 
-## Turn an LED off
+## Turn an LED off.
 proc led_off(pin):
     digital_write(pin, PIN_LOW)
 
-## Blink an LED N times
+## Blink an LED N times.
 proc led_blink(pin, count, delay):
     let k = 0
     while k < count:
