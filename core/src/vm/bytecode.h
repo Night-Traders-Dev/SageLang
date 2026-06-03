@@ -20,6 +20,7 @@ typedef enum {
     BC_OP_SET_PROPERTY,
     BC_OP_GET_INDEX,
     BC_OP_SET_INDEX,
+    BC_OP_LOAD_FUNCTION,
     BC_OP_SLICE,
     BC_OP_ADD,
     BC_OP_SUB,

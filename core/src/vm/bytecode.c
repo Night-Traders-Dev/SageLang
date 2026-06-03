@@ -258,16 +258,12 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
             return res;
         }
         case STMT_TRY:
-            printf("DEBUG: STMT_TRY\n");
-            return 1;
-        case STMT_PROC:
-        case STMT_CLASS:
-            return 0;
-        case STMT_ASYNC_PROC:
-            printf("DEBUG: STMT_ASYNC_PROC\n");
-            return 1;
         case STMT_IMPORT:
-            printf("DEBUG: STMT_IMPORT\n");
+            return 0;
+        case STMT_CLASS:
+        case STMT_PROC:
+            return compiler->build_function == NULL;
+        case STMT_ASYNC_PROC:
             return 1;
         default:
             return 0;
@@ -493,6 +489,11 @@ static int compile_block(BytecodeCompiler* compiler, Stmt* stmt) {
     return 1;
 }
 
+static int emit_load_function(BytecodeCompiler* compiler, int function_index) {
+    return emit_op(compiler, BC_OP_LOAD_FUNCTION, 0, 0) &&
+           emit_u16(compiler, (uint16_t)function_index, 0, 0);
+}
+
 static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result) {
     if (stmt == NULL) {
         if (want_result) {
@@ -669,20 +670,70 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             return 1;
         }
         case STMT_IMPORT: {
-            // Fall through to AST fallback for now — module loading requires interpreter
-            break;
+            Token name_token = {0};
+            name_token.start = stmt->as.import.module_name;
+            name_token.length = (int)strlen(stmt->as.import.module_name);
+            if (!emit_name_op(compiler, BC_OP_IMPORT, name_token)) return 0;
+            if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, name_token)) return 0;
+            if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+            return 1;
         }
         case STMT_TRY: {
-            // Fall through to AST fallback — exception handling requires handler stack
-            break;
+            int handler_jump = emit_jump(compiler, BC_OP_SETUP_TRY, 0, 0);
+            if (handler_jump < 0) return 0;
+            if (!compile_stmt(compiler, stmt->as.try_stmt.try_block, 0)) return 0;
+            if (!emit_op(compiler, BC_OP_END_TRY, 0, 0)) return 0;
+            int end_jump = emit_jump(compiler, BC_OP_JUMP, 0, 0);
+            if (end_jump < 0) return 0;
+            if (!patch_jump(compiler, handler_jump, current_offset(compiler))) return 0;
+            if (stmt->as.try_stmt.catch_count > 0) {
+                CatchClause* catch_clause = stmt->as.try_stmt.catches[0];
+                if (!emit_op(compiler, BC_OP_PUSH_ENV, 0, 0)) return 0;
+                if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, catch_clause->exception_var)) return 0;
+                if (!compile_stmt(compiler, catch_clause->body, 0)) return 0;
+                if (!emit_op(compiler, BC_OP_POP_ENV, 0, 0)) return 0;
+            } else {
+                if (!emit_op(compiler, BC_OP_RAISE, 0, 0)) return 0;
+            }
+            if (!patch_jump(compiler, end_jump, current_offset(compiler))) return 0;
+            if (stmt->as.try_stmt.finally_block != NULL) {
+                if (!compile_stmt(compiler, stmt->as.try_stmt.finally_block, 0)) return 0;
+            }
+            if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+            return 1;
         }
         case STMT_RAISE: {
-            // Fall through to AST fallback
-            break;
+            if (!compile_expr(compiler, stmt->as.raise.exception)) return 0;
+            if (!emit_op(compiler, BC_OP_RAISE, 0, 0)) return 0;
+            if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+            return 1;
         }
         case STMT_CLASS: {
-            // Fall through to AST fallback — class definitions require interpreter
-            break;
+            if (stmt->as.class_stmt.has_parent) {
+                if (!emit_name_op(compiler, BC_OP_GET_GLOBAL, stmt->as.class_stmt.parent)) return 0;
+            }
+            if (!emit_name_op(compiler, BC_OP_CLASS, stmt->as.class_stmt.name)) return 0;
+            if (stmt->as.class_stmt.has_parent) {
+                if (!emit_op(compiler, BC_OP_INHERIT, 0, 0)) return 0;
+            }
+            Stmt* method = stmt->as.class_stmt.methods;
+            while (method != NULL) {
+                if (method->type == STMT_PROC) {
+                    int function_index = -1;
+                    if (compiler->build_function != NULL) {
+                        if (!compiler->build_function(compiler->build_function_data, &method->as.proc,
+                                                      compiler->error, compiler->error_size, &function_index)) {
+                            return 0;
+                        }
+                        if (!emit_load_function(compiler, function_index)) return 0;
+                        if (!emit_name_op(compiler, BC_OP_METHOD, method->as.proc.name)) return 0;
+                    }
+                }
+                method = method->next;
+            }
+            if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, stmt->as.class_stmt.name)) return 0;
+            if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+            return 1;
         }
         case STMT_RETURN:
             if (!compiler->allow_return) break;

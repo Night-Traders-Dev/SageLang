@@ -271,6 +271,13 @@ static Value str_native(int argCount, Value* args) {
         return val_string("nil");
     }
 
+    if (args[0].type == VAL_EXCEPTION) {
+        char* msg = args[0].as.exception->message;
+        size_t slen = strlen(msg);
+        char* result = SAGE_ALLOC(slen + 1);
+        memcpy(result, msg, slen + 1);
+        return val_string_take(result);
+    }
     if (args[0].type == VAL_INSTANCE && args[0].as.instance->class_def) {
         Method* str_method = class_find_method(args[0].as.instance->class_def, "__str__", 7);
         if (str_method) {
