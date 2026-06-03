@@ -59,8 +59,8 @@ proc is_safe(code):
     result["safe"] = true
     result["issues"] = []
 
-    let primitives = ["ffi_open", "ffi_call", "mem_alloc", "mem_write", "asm_exec", "asm_compile"]
-    let modules = ["io", "sys", "http", "tcp", "net", "os"]
+    let primitives = ["ffi_open", "ffi_call", "ffi_close", "ffi_sym", "mem_alloc", "mem_write", "mem_read", "mem_free", "mem_size", "addressof", "ptr_add", "ptr_to_int", "struct_def", "struct_new", "struct_get", "struct_set", "struct_size", "asm_exec", "asm_compile", "asm_arch", "vm_gas_limit_set", "vm_gas_limit_get", "vm_gas_used_get", "path_exists", "path_is_dir", "path_is_file"]
+    let modules = ["io", "sys", "http", "tcp", "net", "os", "socket", "ssl", "ffi", "vm", "thread", "fat", "ml_native", "gpu"]
     let keywords = ["import", "from", "quote"]
 
     let i = 0
