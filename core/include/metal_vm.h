@@ -18,6 +18,61 @@ extern "C" {
 #endif
 
 // ============================================================================
+// Bytecode opcodes — matching src/vm/bytecode.h
+// ============================================================================
+
+#define OP_CONSTANT       0
+#define OP_NIL            1
+#define OP_TRUE           2
+#define OP_FALSE          3
+#define OP_POP            4
+#define OP_GET_GLOBAL     5
+#define OP_DEFINE_GLOBAL  6
+#define OP_SET_GLOBAL     7
+#define OP_DEFINE_FN      8
+#define OP_GET_PROPERTY   9
+#define OP_SET_PROPERTY   10
+#define OP_GET_INDEX      11
+#define OP_SET_INDEX      12
+#define OP_ADD            15
+#define OP_SUB            16
+#define OP_MUL            17
+#define OP_DIV            18
+#define OP_MOD            19
+#define OP_NEGATE         20
+#define OP_EQUAL          21
+#define OP_NOT_EQUAL      22
+#define OP_GREATER        23
+#define OP_GREATER_EQ     24
+#define OP_LESS           25
+#define OP_LESS_EQ        26
+#define OP_BIT_AND        27
+#define OP_BIT_OR         28
+#define OP_BIT_XOR        29
+#define OP_BIT_NOT        30
+#define OP_SHIFT_LEFT     31
+#define OP_SHIFT_RIGHT    32
+#define OP_NOT            33
+#define OP_TRUTHY         34
+#define OP_JUMP           35
+#define OP_JUMP_IF_FALSE  36
+#define OP_CALL           37
+#define OP_CALL_METHOD    38
+#define OP_ARRAY          39
+#define OP_TUPLE          40
+#define OP_DICT           41
+#define OP_PRINT          42
+#define OP_RETURN         44
+#define OP_PUSH_ENV       45
+#define OP_POP_ENV        46
+#define OP_DUP            47
+#define OP_ARRAY_LEN      48
+#define OP_BREAK          49
+#define OP_CONTINUE       50
+#define OP_LOOP_BACK      51
+#define OP_HALT           0xFF
+
+// ============================================================================
 // Configuration — tune for your target's memory constraints
 // ============================================================================
 

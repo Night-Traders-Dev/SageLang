@@ -125,9 +125,8 @@ CORE_SOURCES = \
     $(SRC_DIR)/aot.c \
     $(SRC_DIR)/kotlin_backend.c \
     $(SRC_DIR)/ml_backend.c \
-    $(SRC_DIR)/net.c
-
-
+    $(SRC_DIR)/net.c \
+    $(SRC_DIR)/metal_vm.c
 
 ifeq ($(HAS_GPU_API),yes)
     CORE_SOURCES += $(SRC_DIR)/gpu_api.c
@@ -170,7 +169,8 @@ HEADERS = \
     $(INC_DIR)/value.h \
     $(INC_DIR)/graphics.h \
     $(INC_DIR)/gpu_api.h \
-    $(INC_DIR)/kotlin_backend.h
+    $(INC_DIR)/kotlin_backend.h \
+    $(INC_DIR)/metal_vm.h
 
 # Optional heartbeat header
 ifneq (,$(wildcard $(INC_DIR)/heartbeat.h))

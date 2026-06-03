@@ -13,53 +13,6 @@ extern void* memcpy(void* dest, const void* src, unsigned long n);
 extern unsigned long strlen(const char* s);
 extern int strcmp(const char* s1, const char* s2);
 
-// Bytecode opcodes — subset matching src/vm/bytecode.h
-#define OP_CONSTANT       0
-#define OP_NIL            1
-#define OP_TRUE           2
-#define OP_FALSE          3
-#define OP_POP            4
-#define OP_GET_GLOBAL     5
-#define OP_DEFINE_GLOBAL  6
-#define OP_SET_GLOBAL     7
-#define OP_GET_INDEX      11
-#define OP_SET_INDEX      12
-#define OP_ADD            14
-#define OP_SUB            15
-#define OP_MUL            16
-#define OP_DIV            17
-#define OP_MOD            18
-#define OP_NEGATE         19
-#define OP_EQUAL          20
-#define OP_NOT_EQUAL      21
-#define OP_GREATER        22
-#define OP_GREATER_EQ     23
-#define OP_LESS           24
-#define OP_LESS_EQ        25
-#define OP_BIT_AND        26
-#define OP_BIT_OR         27
-#define OP_BIT_XOR        28
-#define OP_BIT_NOT        29
-#define OP_SHIFT_LEFT     30
-#define OP_SHIFT_RIGHT    31
-#define OP_NOT            32
-#define OP_TRUTHY         33
-#define OP_JUMP           34
-#define OP_JUMP_IF_FALSE  35
-#define OP_CALL           36
-#define OP_ARRAY          38
-#define OP_PRINT          41
-#define OP_RETURN         43
-#define OP_PUSH_ENV       44
-#define OP_POP_ENV        45
-#define OP_DUP            46
-#define OP_ARRAY_LEN      47
-#define OP_BREAK          48
-#define OP_CONTINUE       49
-#define OP_LOOP_BACK      50
-#define OP_DEFINE_FN      8
-#define OP_HALT           0xFF
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -231,12 +184,26 @@ int metal_vm_verify(MetalVM* vm) {
                     break;
                 }
                 case OP_JUMP:
-                case OP_JUMP_IF_FALSE:
-                case OP_CALL: {
+                case OP_JUMP_IF_FALSE: {
                     if (ip + 2 > code_length) return -1;
                     int target = (code[ip] << 8) | code[ip + 1];
                     if (target >= code_length) return -3;
                     ip += 2;
+                    break;
+                }
+                case OP_CALL: {
+                    if (ip + 1 > code_length) return -1;
+                    ip += 1;
+                    break;
+                }
+                case OP_ARRAY: {
+                    if (ip + 2 > code_length) return -1;
+                    ip += 2;
+                    break;
+                }
+                case OP_DEFINE_FN: {
+                    if (ip + 4 > code_length) return -1;
+                    ip += 4;
                     break;
                 }
                 case OP_LOOP_BACK: {
@@ -244,11 +211,6 @@ int metal_vm_verify(MetalVM* vm) {
                     int offset = (code[ip] << 8) | code[ip + 1];
                     if (ip + 2 - offset < 0) return -3;
                     ip += 2;
-                    break;
-                }
-                case OP_ARRAY: {
-                    if (ip + 1 > code_length) return -1;
-                    ip++;
                     break;
                 }
                 case OP_HALT:
@@ -720,14 +682,16 @@ int metal_vm_step(MetalVM* vm) {
         }
 
         case OP_DEFINE_FN: {
+            int name_idx = read_u16(vm->code, &vm->ip);
             int fn_idx = read_u16(vm->code, &vm->ip);
+            (void)name_idx; (void)fn_idx;
             // Function definition handled by loader/compiler for now
-            // In MetalVM, we just skip it or store it
             break;
         }
 
         case OP_CALL: {
-            int arg_count = read_u16(vm->code, &vm->ip);
+            int arg_count = read_u8(vm->code, &vm->ip);
+            (void)arg_count;
             MetalValue fn = metal_vm_pop(vm);
             if (fn.type == MV_FN) {
                 if (vm->csp < METAL_CALL_STACK_SIZE) {

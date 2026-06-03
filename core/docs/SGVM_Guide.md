@@ -6,10 +6,9 @@ The Sage Virtual Machine (SGVM) is the portable execution substrate for SageLang
 ## 2. Compilation & Execution Pipeline
 SageLang source code follows this path to become a portable SGVM artifact:
 1. **Source**: Human-readable `.sage` files.
-2. **Compiler Frontend**: `sage --emit-vm` parses source into a text-based bytecode format (`.svm`).
-3. **Artifact Compilation**: `sgvmc` converts `.svm` into a compact, binary `.sgvm` file.
-4. **Verification**: `sgvm` performs mandatory security and safety checks on the binary before execution.
-5. **Runtime Execution**: Execution by the `MetalVM` engine.
+2. **Compiler Frontend**: `sage --sgvm` parses source directly into a binary `.sgvm` artifact. (Alternatively, `sage --emit-vm` emits text-based `.svm`).
+3. **Verification**: `sage` (or `sgvm`) performs mandatory security and safety checks on the binary before execution.
+4. **Runtime Execution**: Execution by the `MetalVM` engine integrated into `sage`.
 
 ## 3. Binary Format Specification (.sgvm)
 The `.sgvm` format is a compact, big-endian binary representation optimized for fast loading and low memory footprint.
@@ -50,19 +49,23 @@ SGVM supports multiple execution strategies within `MetalVM`:
 ## 6. Toolchain Usage
 
 ### 6.1 Compiling to SGVM
-Use `sgvmc` to compile Sage source into a binary SGVM artifact. This tool is available both as a C binary and a pure Sage tool.
+Use `sage --sgvm` to compile Sage source into a binary SGVM artifact.
+```bash
+./core/sage --sgvm script.sage -o artifact.sgvm
+```
+Alternatively, you can use the standalone `sgvmc` tool:
 ```bash
 ./core/sgvmc script.sage artifact.sgvm
-# OR via self-hosted Sage
-./sage core/src/sage/sgvmc.sage script.sage artifact.sgvm
 ```
 
 ### 6.2 Running SGVM
-Use `sgvm` to execute a compiled artifact. It will verify the file before starting execution.
+Use the `sage` command directly to execute a compiled artifact. It will verify the file before starting execution.
+```bash
+./core/sage artifact.sgvm
+```
+Or use the standalone `sgvm` engine:
 ```bash
 ./core/sgvm artifact.sgvm
-# OR via self-hosted Sage
-./sage core/src/sage/sgvm.sage artifact.sgvm
 ```
 
 ## 7. MetalVM C API (`metal_vm.h`)

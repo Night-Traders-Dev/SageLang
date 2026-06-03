@@ -59,13 +59,15 @@ SageLang uses a shared front-end with multiple execution backends:
 3. **AST** → one of five backends:
    - **AST interpreter** (tree-walking, default)
    - **Bytecode compiler + VM** (stack-based, faster for hot loops)
+   - **SGVM binary** (`--sgvm`, binary bytecode artifact)
    - **C codegen** (`--emit-c` / `--compile`)
    - **LLVM IR** (`--emit-llvm` / `--compile-llvm`, with GPU support)
    - **Native assembly** (`--emit-asm` / `--compile-native`, x86-64/aarch64/rv64)
    - **Freestanding ELF** (`--compile-bare`, bare-metal kernel output)
    - **UEFI PE** (`--compile-uefi`, EFI application output)
    - **SageMetal VM** (`make metal-vm`, freestanding bytecode object)
-4. **Runtime Values** stored in the shared **heap** managed by **GC**
+4. **Runtime Execution**: Execution by the `MetalVM` engine integrated into `sage` or via standalone `sgvm` tool.
+5. **Runtime Values** stored in the shared **heap** managed by **GC**
 
 All execution modes share the same object model: a **global environment**, nested **child environments** for scopes, and **tagged `Value` objects** that are either immediate (numbers, bools) or GC-managed heap values (arrays, dicts, strings, classes, instances, functions, generators).
 
@@ -1470,6 +1472,7 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | `sage --help` | Print usage text | Covers compiler, tooling, and REPL entry points |
 | `sage -c "source"` | Execute a source string | No file is loaded |
 | `sage <file.sage> [arg ...]` | Execute a Sage file | Additional CLI arguments are visible through `sys.args()` |
+| `sage <file.sgvm>` | Execute an SGVM binary | Runs via integrated MetalVM engine |
 | `sage --lsp` | Start the LSP server on stdin/stdout | `sage-lsp` is the standalone wrapper binary |
 | `sage fmt <file>` | Format a file in place | Prints `Formatted: <file>` on success |
 | `sage fmt --check <file>` | Check formatting without rewriting | Exit code `1` when changes are needed |
@@ -1477,7 +1480,8 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 
 | Compiler Command | Default Output | Options |
 | ---------------- | -------------- | ------- |
-| `sage --emit-c <input.sage>` | `<input>.c` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --emit-vm <input.sage>` | `<input>.svm` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --sgvm <input.sage>` | `<input>.sgvm` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--cc <compiler>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-llvm <input.sage>` | `<input>.ll` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-llvm <input.sage>` | `<input-without-.sage>` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |

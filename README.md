@@ -815,6 +815,7 @@ SageMake is the unified build system that auto-detects your platform, GPU, NPU, 
 | `sage --help` | Print CLI usage | Shows compiler, tooling, and REPL entry points |
 | `sage -c "source"` | Execute a source string | Runs without loading a file |
 | `sage <file.sage> [arg ...]` | Run a Sage source file | Extra arguments are available through `sys.args()` |
+| `sage <file.sgvm>` | Run a compiled SGVM binary | Runs via integrated MetalVM engine |
 | `sage --lsp` | Start the LSP server on stdin/stdout | `sage-lsp` is the standalone companion binary |
 | `sage fmt <file>` | Format a file in place | Prints `Formatted: <file>` on success |
 | `sage fmt --check <file>` | Check formatting without rewriting | Exit code `1` when formatting is needed |
@@ -826,6 +827,8 @@ SageMake is the unified build system that auto-detects your platform, GPU, NPU, 
 | ------- | -------------- | ----------------- |
 | `sage --emit-c <input.sage>` | `<input>.c` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--cc <compiler>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --emit-vm <input.sage>` | `<input>.svm` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --sgvm <input.sage>` | `<input>.sgvm` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-llvm <input.sage>` | `<input>.ll` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-llvm <input.sage>` | `<input-without-.sage>` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-asm <input.sage>` | `<input>.s` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
