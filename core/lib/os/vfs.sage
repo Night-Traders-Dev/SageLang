@@ -198,6 +198,10 @@ proc extension(path):
     if len(e_parts) < 2:
         return ""
     end
+    # If it starts with a dot and has only one dot, it's a hidden file without extension
+    if len(e_parts) == 2 and name[0] == ".":
+        return ""
+    end
     return e_parts[len(e_parts) - 1]
 end
 
@@ -249,7 +253,11 @@ proc vfs_open(vfs, path, mode):
     if internal == nil:
         return nil
     end
-    return make_handle(backend, internal, norm, mode)
+    let h = make_handle(backend, internal, norm, mode)
+    if (mode & VFS_APPEND) != 0:
+        vfs_seek(h, 0, SEEK_END)
+    end
+    return h
 end
 
 # VFS read
@@ -387,8 +395,14 @@ proc create_memfs():
         if dict_has(fs["files"], path):
             return path
         end
-        if (mode & 8) != 0:
+        if (mode & VFS_CREATE) != 0:
             fs["files"][path] = []
+            # Update parent
+            let d = dirname(path)
+            let n = basename(path)
+            if dict_has(fs["dirs"], d):
+                push(fs["dirs"][d], make_dirent(n, VFS_FILE, 0))
+            end
             return path
         end
         return nil
@@ -463,6 +477,12 @@ proc create_memfs():
     proc memfs_mkdir(path):
         if not dict_has(fs["dirs"], path):
             fs["dirs"][path] = []
+            # Update parent
+            let d = dirname(path)
+            let n = basename(path)
+            if dict_has(fs["dirs"], d):
+                push(fs["dirs"][d], make_dirent(n, VFS_DIR, 0))
+            end
             return 0
         end
         return -1
