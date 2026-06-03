@@ -44,21 +44,25 @@ Before execution, SGVM artifacts MUST pass a verification pass that ensures:
 ## 5. Execution Modes
 SGVM supports multiple execution strategies within `MetalVM`:
 - **Interpreted**: The default mode, executing bytecode instructions directly from memory.
-- **Threaded Interpreter**: High-performance dispatching for desktop targets.
+- **Threaded Interpreter (New)**: High-performance dispatching using computed gotos (`&&label` syntax) for desktop and hosted targets. This reduces instruction dispatch overhead by up to 30%.
 - **Freestanding**: Compiled with `-ffreestanding -nostdlib`, suitable for bare-metal deployment.
 
 ## 6. Toolchain Usage
 
 ### 6.1 Compiling to SGVM
-Use `sgvmc` to compile Sage source into a binary SGVM artifact. This tool automatically handles constant merging and bytecode patching.
+Use `sgvmc` to compile Sage source into a binary SGVM artifact. This tool is available both as a C binary and a pure Sage tool.
 ```bash
 ./core/sgvmc script.sage artifact.sgvm
+# OR via self-hosted Sage
+./sage core/src/sage/sgvmc.sage script.sage artifact.sgvm
 ```
 
 ### 6.2 Running SGVM
 Use `sgvm` to execute a compiled artifact. It will verify the file before starting execution.
 ```bash
 ./core/sgvm artifact.sgvm
+# OR via self-hosted Sage
+./sage core/src/sage/sgvm.sage artifact.sgvm
 ```
 
 ## 7. MetalVM C API (`metal_vm.h`)

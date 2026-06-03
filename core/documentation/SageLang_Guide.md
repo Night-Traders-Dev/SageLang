@@ -1593,7 +1593,9 @@ The practical result is that `bytecode` mode is already useful for long-running 
 
 **Interpreter Overhead**:
 - **AST runtime**: Walks the parsed tree directly. It is still the simplest and most mature execution path.
-- **Bytecode VM**: Adds a statement-at-a-time lowering step, then executes stack bytecode. On mixed arithmetic/loop workloads it is already modestly faster than AST mode, even before deeper optimizations.
+- **Bytecode VM**: Adds a statement-at-a-time lowering step, then executes stack bytecode. On mixed arithmetic/loop workloads it is already modestly faster than AST mode.
+- **Threaded Dispatch**: The VM uses computed gotos (threaded interpretation) for high-performance instruction dispatch on supported compilers, significantly reducing loop overhead.
+- **Register Spilling**: The VM stack pointer and instruction pointer are kept in CPU registers where possible, minimizing memory traffic during the execution loop.
 - **Nested scopes**: Linear search up parent chain; O(depth) for variable lookup.
 - **GC pauses**: Mark-and-sweep still pauses execution during collection, but the trigger is now dynamic and based on both object count and managed bytes.
 

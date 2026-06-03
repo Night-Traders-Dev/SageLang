@@ -34,8 +34,8 @@ build_sage/
 *.o
 models/build_sagellm
 sagellm_build
-sage-lsp
-sage
+/sage-lsp
+/sage
 sagellm_build
 sagellm_chat
 sagellm_chat_c

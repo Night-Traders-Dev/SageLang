@@ -1,5 +1,18 @@
 # SageLang Updates
 
+## v3.6.0 — VM Optimization & Self-Hosted Toolchain (June 2026)
+
+- **Bytecode VM Performance Boost**:
+  - **Threaded Dispatch (Computed Gotos)**: Implemented a dispatch table using the `&&label` syntax (on GCC/Clang) for instruction dispatch. This significantly reduces dispatch overhead compared to the previous `switch` statement, resulting in faster bytecode execution.
+  - **Register-Backed Stack Pointer**: Refactored the core VM loop (`vm_execute_chunk`) to use a local `Value* sp` register instead of struct-based indexing. This allows the compiler to keep the VM stack pointer in a CPU register.
+  - **Local Execution State**: Instruction pointer (`ip`), bytecode, and constant pool pointers are now cached in local variables during execution.
+- **Self-Hosted VM Toolchain**:
+  - **`sgvmc.sage`**: Ported the SGVM compiler from C to pure SageLang. It can now parse `.svm` artifacts and generate binary `.sgvm` files using the self-hosted environment.
+  - **`sgvm.sage`**: Ported the MetalVM runner to pure SageLang, enabling bytecode artifact execution on top of the Sage interpreter or VM.
+- **Example Fixes**:
+  - **Fibonacci Optimization**: Fixed a logic bug in `examples/fibonacci.sage` where `let` was incorrectly used for assignment in a loop.
+- **Version Bump**: Milestone v3.6.0 release.
+
 ## v3.5.6 — Hotfix: Doc Comment Restoration (May 2026)
 
 - **Bug Fix**:

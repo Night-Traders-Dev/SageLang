@@ -1,9 +1,19 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: May 12, 2026
-> **Current Phase**: v3.4.2 — Sentinel Security & Performance Refinement, all 18 phases complete
+> **Last Updated**: June 3, 2026
+> **Current Phase**: v3.6.0 — VM Optimization & Self-Hosted Toolchain, all 18 phases complete
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+
+---
+
+## v3.6.0: VM Optimization & Self-Hosted Toolchain (June 2026)
+
+### Completed
+
+- **VM Dispatch Optimization**: Implemented threaded interpretation via computed gotos for significant performance gains on supported compilers.
+- **Register-Backed Stack Pointer**: Optimized the stack VM execution loop to use local pointers and registers for stack management.
+- **Self-Hosted VM Tools**: Ported `sgvmc` and `sgvm` to pure SageLang, enabling fully self-hosted bytecode compilation and execution.
 
 ---
 

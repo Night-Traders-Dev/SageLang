@@ -12,8 +12,8 @@ proc fib_iterative(n):
     
     for i in range(2, n + 1):
         let next = prev + curr
-        let prev = curr
-        let curr = next
+        prev = curr
+        curr = next
     
     return curr
 
