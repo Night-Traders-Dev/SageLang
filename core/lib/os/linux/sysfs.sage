@@ -18,20 +18,14 @@ let SYSFS_KERNEL = "/sys/kernel"
 
 # ========== Sysfs readers ==========
 
+## Reads a sysfs attribute and trims whitespace.
 proc read_sysfs_attr(path):
     let content = io.readfile(path)
-    # Trim trailing newline
-    let result = ""
-    let i = 0
-    while i < len(content):
-        if content[i] != chr(10):
-            result = result + content[i]
-        end
-        i = i + 1
-    end
-    return result
+    # Trim trailing whitespace and newlines
+    return strip(content)
 end
 
+## Reads a sysfs attribute as an integer.
 proc read_sysfs_int(path):
     let val = read_sysfs_attr(path)
     return int(val)
@@ -44,6 +38,7 @@ end
 
 # ========== Device info ==========
 
+## Gets information about a block device.
 proc get_block_device_info(dev_name):
     let info = {}
     let base = SYSFS_BLOCK + "/" + dev_name
@@ -54,6 +49,7 @@ proc get_block_device_info(dev_name):
     return info
 end
 
+## Gets information about a network device.
 proc get_net_device_info(dev_name):
     let info = {}
     let base = SYSFS_CLASS + "/net/" + dev_name
@@ -67,6 +63,7 @@ proc get_net_device_info(dev_name):
     return info
 end
 
+## Gets information about a CPU.
 proc get_cpu_info(cpu_id):
     let info = {}
     let base = SYSFS_DEVICES + "/system/cpu/cpu" + str(cpu_id)
@@ -79,6 +76,7 @@ proc get_cpu_info(cpu_id):
     return info
 end
 
+## Gets information about a thermal zone.
 proc get_thermal_zone(zone_id):
     let info = {}
     let base = SYSFS_CLASS + "/thermal/thermal_zone" + str(zone_id)
@@ -89,6 +87,7 @@ proc get_thermal_zone(zone_id):
     return info
 end
 
+## Gets information about a power supply.
 proc get_power_supply_info(name):
     let info = {}
     let base = SYSFS_CLASS + "/power_supply/" + name
@@ -103,6 +102,7 @@ end
 
 # ========== Module info ==========
 
+## Gets information about a kernel module.
 proc get_module_info(mod_name):
     let info = {}
     let base = SYSFS_MODULE + "/" + mod_name
@@ -113,6 +113,7 @@ end
 
 # ========== Platform info ==========
 
+## Gets DMI platform information.
 proc get_dmi_info():
     let info = {}
     let base = SYSFS_DEVICES + "/virtual/dmi/id"
@@ -126,32 +127,35 @@ end
 
 # ========== Sysfs attribute codegen (for kernel modules) ==========
 
+## Creates a sysfs attribute descriptor.
 proc create_sysfs_attr(name, show_body, store_body):
-    let attr = {}
-    attr["name"] = name
-    attr["show_body"] = show_body
-    attr["store_body"] = store_body
-    attr["mode"] = 420
-    return attr
+    let s_attr = {}
+    s_attr["name"] = name
+    s_attr["show_body"] = show_body
+    s_attr["store_body"] = store_body
+    s_attr["mode"] = 420
+    return s_attr
 end
 
+## Creates a read-only sysfs attribute descriptor.
 proc create_sysfs_attr_ro(name, show_body):
-    let attr = {}
-    attr["name"] = name
-    attr["show_body"] = show_body
-    attr["store_body"] = []
-    attr["mode"] = 292
-    return attr
+    let sr_attr = {}
+    sr_attr["name"] = name
+    sr_attr["show_body"] = show_body
+    sr_attr["store_body"] = []
+    sr_attr["mode"] = 292
+    return sr_attr
 end
 
+## Emits C code for a sysfs attribute.
 proc emit_sysfs_attr_c(attr):
     let nl = chr(10)
-    let q = chr(34)
     let name = attr["name"]
     let code = ""
 
     # Show function
-    code = code + "static ssize_t " + name + "_show(struct device *dev, struct device_attribute *da, char *buf) {" + nl
+    code = code + "static ssize_t " + name + "_show(struct device *dev, "
+    code = code + "struct device_attribute *da, char *buf) {" + nl
     let si = 0
     while si < len(attr["show_body"]):
         code = code + "    " + attr["show_body"][si] + nl
@@ -161,7 +165,8 @@ proc emit_sysfs_attr_c(attr):
 
     # Store function (if writable)
     if len(attr["store_body"]) > 0:
-        code = code + "static ssize_t " + name + "_store(struct device *dev, struct device_attribute *da, const char *buf, size_t count) {" + nl
+        code = code + "static ssize_t " + name + "_store(struct device *dev, "
+        code = code + "struct device_attribute *da, const char *buf, size_t count) {" + nl
         let sti = 0
         while sti < len(attr["store_body"]):
             code = code + "    " + attr["store_body"][sti] + nl
