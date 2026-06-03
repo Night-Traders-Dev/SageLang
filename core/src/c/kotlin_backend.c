@@ -1772,7 +1772,7 @@ static char* kt_find_module_path(const char* module_name, const char* input_path
     if (!path_name) return NULL;
     char search_dirs[16][512];
     int dir_count = 0;
-    #define ADD_SEARCH_DIR(p) if (dir_count < 16) { strncpy(search_dirs[dir_count], (p), 511); search_dirs[dir_count][511] = 0; dir_count++; }
+    #define ADD_SEARCH_DIR(p) if (dir_count < 16) { snprintf(search_dirs[dir_count], 512, "%s", (p)); dir_count++; }
     if (input_path) {
         const char* slash = strrchr(input_path, '/');
         if (slash) {
@@ -2879,7 +2879,9 @@ int compile_source_to_android(const char* source, const char* input_path,
     );
 
     // 9. Write styles.xml and strings.xml
-    char styles_path[1024], strings_path[1024];
+    char styles_path[4096 + 32], strings_path[4096 + 32];
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
     snprintf(styles_path, sizeof(styles_path), "%s/styles.xml", res_dir);
     kt_write_file(styles_path,
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -2889,6 +2891,7 @@ int compile_source_to_android(const char* source, const char* input_path,
         "</resources>\n"
     );
     snprintf(strings_path, sizeof(strings_path), "%s/strings.xml", res_dir);
+#pragma GCC diagnostic pop
     kt_write_file_fmt(strings_path,
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         "<resources>\n"

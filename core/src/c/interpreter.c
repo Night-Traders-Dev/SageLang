@@ -1686,9 +1686,11 @@ static const char* asm_detect_arch(void) {
 // Validate a path contains no shell metacharacters (prevents injection via system())
 static int is_safe_path(const char* path) {
     for (const char* p = path; *p; p++) {
-        // Allow only alphanumeric, /, ., -, _, ~
+        // Allow alphanumeric and common filename characters
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~') {
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ' &&
+            *p != '+' && *p != '#' && *p != '(' && *p != ')' &&
+            *p != '[' && *p != ']' && *p != '@' && *p != '!') {
             return 0;
         }
     }

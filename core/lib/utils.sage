@@ -50,6 +50,7 @@ proc last(values):
     return values[len(values) - 1]
 
 ## Returns an array containing the given value repeated count times.
+## Work is linear in the size of the output array.
 proc repeat_value(value, count):
     if count <= 0:
         return []

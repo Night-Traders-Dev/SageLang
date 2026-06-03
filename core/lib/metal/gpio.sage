@@ -38,6 +38,7 @@ let _gpio_base = 0
 let _pin_modes = []
 let _pin_pulls = []
 let _pin_interrupts = []
+let _pin_enabled = []
 let _pin_handlers = []
 let _pin_count = 0
 
@@ -48,12 +49,14 @@ proc gpio_init(base, num_pins):
     _pin_modes = []
     _pin_pulls = []
     _pin_interrupts = []
+    _pin_enabled = []
     _pin_handlers = []
     let i = 0
     while i < num_pins:
         push(_pin_modes, PIN_INPUT)
         push(_pin_pulls, PULL_NONE)
         push(_pin_interrupts, INT_DISABLED)
+        push(_pin_enabled, 0)
         push(_pin_handlers, nil)
         i = i + 1
 
@@ -106,6 +109,7 @@ proc pin_register_handler(pin, handler):
 ## Enable interrupts for a specific pin.
 proc pin_enable_interrupt(pin):
     if pin >= 0 and pin < _pin_count:
+        _pin_enabled[pin] = 1
         # In a real driver, this would enable the interrupt in the controller.
         # For the generic MMIO stub, we use an offset from base + (pin_count * 12).
         let en_offset = (_pin_count * 12) + (pin * 4)
@@ -114,6 +118,7 @@ proc pin_enable_interrupt(pin):
 ## Disable interrupts for a specific pin.
 proc pin_disable_interrupt(pin):
     if pin >= 0 and pin < _pin_count:
+        _pin_enabled[pin] = 0
         # In a real driver, this would disable the interrupt in the controller.
         let dis_offset = (_pin_count * 12) + (pin * 4)
         core.mmio_write32(_gpio_base + dis_offset, 0)
@@ -122,9 +127,10 @@ proc pin_disable_interrupt(pin):
 proc gpio_dispatch(pin):
     irq.irq_enter()
     if pin >= 0 and pin < _pin_count:
-        let handler = _pin_handlers[pin]
-        if handler != nil:
-            handler(pin)
+        if _pin_enabled[pin] != 0:
+            let handler = _pin_handlers[pin]
+            if handler != nil:
+                handler(pin)
     irq.irq_exit()
 
 ## Set multiple pins HIGH at once using a bitmask.

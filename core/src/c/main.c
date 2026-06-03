@@ -133,9 +133,11 @@ static const char* value_type_name(Value v) {
 static int is_safe_path(const char* path) {
     if (!path) return 1;
     for (const char* p = path; *p; p++) {
-        // Allow only alphanumeric, /, ., -, _, ~
+        // Allow alphanumeric and common filename characters
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~' && *p != ' ') {
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ' &&
+            *p != '+' && *p != '#' && *p != '(' && *p != ')' &&
+            *p != '[' && *p != ']' && *p != '@' && *p != '!') {
             return 0;
         }
     }
@@ -1085,7 +1087,7 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
     g_repl_mode = 1;
 
     while (1) {
-        char* line = repl_readline("sage> ");
+        char* volatile line = repl_readline("sage> ");
         if (line == NULL) {
             // EOF (Ctrl-D)
             printf("\n");
@@ -1160,7 +1162,7 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                     } else {
                         snprintf(cmd, sizeof(cmd), "ls -F %s", arg);
                     }
-                    (void)system(cmd);
+                    if (system(cmd) == -1) { /* ignore */ }
                 }
                 free(line);
                 continue;
@@ -1174,7 +1176,7 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 } else {
                     char cmd[4096];
                     snprintf(cmd, sizeof(cmd), "cat %s", arg);
-                    (void)system(cmd);
+                    if (system(cmd) == -1) { /* ignore */ }
                 }
                 free(line);
                 continue;
@@ -1184,7 +1186,7 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 if (*arg == '\0') {
                     printf("Usage: :sh <command>\n");
                 } else {
-                    (void)system(arg);
+                    if (system(arg) == -1) { /* ignore */ }
                 }
                 free(line);
                 continue;

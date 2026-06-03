@@ -60,7 +60,9 @@ proc find(values, predicate):
 
 proc unique(values):
     ## Returns a new array containing only the unique elements of the input.
-    ## Uses a dictionary for O(n) average-case lookup performance.
+    ## Uses a dictionary for O(n) average-case lookup performance for simple
+    ## types. For structural values (arrays, dicts), this falls back to
+    ## linear scans of collision buckets, which may be O(n^2) in the worst case.
     let result = []
     let seen = {}
     for item in values:

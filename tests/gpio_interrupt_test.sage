@@ -32,8 +32,10 @@ proc test_gpio_interrupts():
     gpio.gpio_dispatch(3)
     assert.assert_true(interrupt_count == 2, "Interrupt count should still be 2")
 
-    # Disable interrupt for pin 2 (doesn't stop dispatch in stub, but tests the proc)
+    # Disable interrupt for pin 2 (now should stop dispatch)
     gpio.pin_disable_interrupt(2)
+    gpio.gpio_dispatch(2)
+    assert.assert_true(interrupt_count == 2, "Interrupt count should still be 2 after disable")
 
     print "GPIO interrupt test passed!"
 
