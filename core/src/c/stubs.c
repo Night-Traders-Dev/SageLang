@@ -23,7 +23,7 @@ void create_tcp_module() {}
 void create_http_module() {}
 void create_ssl_module() {}
 #endif
-void create_graphics_module() {}
+
 #ifndef SAGE_HAS_ML
 void create_ml_native_module() {}
 #endif

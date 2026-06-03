@@ -106,6 +106,7 @@ CORE_SOURCES = \
     $(SRC_DIR)/env.c \
     $(SRC_DIR)/formatter.c \
     $(SRC_DIR)/gc.c \
+    $(SRC_DIR)/graphics.c \
     $(SRC_DIR)/inline.c \
     $(SRC_DIR)/interpreter.c \
     $(SRC_DIR)/linter.c \
@@ -196,13 +197,20 @@ LSP_TARGET = sage-lsp
 LSP_MAIN_SOURCE = $(SRC_DIR)/lsp_main.c
 LSP_MAIN_OBJECT = $(OBJ_DIR)/lsp_main.o
 
+# SGVM Tools
+SGVM_TARGET = sgvm
+SGVM_COMPILER_TARGET = sgvmc
+SGVM_MAIN_OBJECT = $(OBJ_DIR)/sgvm_main.o
+SGVM_COMPILER_OBJECT = $(OBJ_DIR)/sgvm_compiler.o
+METAL_VM_OBJECT = $(OBJ_DIR)/metal_vm.o
+
 # ============================================================================
 # Build Rules
 # ============================================================================
 
-.PHONY: all clean run install uninstall help test examples charts pdf sage-boot sage-bench benchmark benchmark-chart
+.PHONY: all clean run install uninstall help test examples charts pdf sage-boot sage-bench benchmark benchmark-chart sgvm sgvmc
 
-all: $(TARGET)
+all: $(TARGET) $(SGVM_TARGET) $(SGVM_COMPILER_TARGET)
 
 # Link executable
 $(TARGET): $(ALL_OBJECTS) $(LLVM_RT_OBJECT)
@@ -213,6 +221,25 @@ $(TARGET): $(ALL_OBJECTS) $(LLVM_RT_OBJECT)
 	 echo "Built: $(TARGET) $(SAGE_VERSION)  ($$BIN_SIZE, $$SRC_COUNT source files)"
 	@echo "   Run with: ./$(TARGET) examples/hello.sage"
 
+# SGVM Runner
+$(SGVM_TARGET): $(SGVM_MAIN_OBJECT) $(METAL_VM_OBJECT)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "Built: $(SGVM_TARGET)"
+
+# SGVM Compiler
+$(SGVM_COMPILER_TARGET): $(SGVM_COMPILER_OBJECT)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "Built: $(SGVM_COMPILER_TARGET)"
+
+$(SGVM_MAIN_OBJECT): $(SRC_DIR)/sgvm_main.c $(HEADERS)
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
+
+$(SGVM_COMPILER_OBJECT): $(SRC_DIR)/sgvm_compiler.c
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
 $(LLVM_RT_OBJECT): $(LLVM_RT_SOURCE) $(HEADERS)
 	@mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@

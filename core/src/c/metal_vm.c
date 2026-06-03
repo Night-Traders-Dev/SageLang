@@ -19,10 +19,11 @@ extern int strcmp(const char* s1, const char* s2);
 #define OP_TRUE           2
 #define OP_FALSE          3
 #define OP_POP            4
-#define OP_DUP            5
-#define OP_GET_GLOBAL     6
-#define OP_DEFINE_GLOBAL  7
-#define OP_SET_GLOBAL     8
+#define OP_GET_GLOBAL     5
+#define OP_DEFINE_GLOBAL  6
+#define OP_SET_GLOBAL     7
+#define OP_GET_INDEX      11
+#define OP_SET_INDEX      12
 #define OP_ADD            14
 #define OP_SUB            15
 #define OP_MUL            16
@@ -35,29 +36,28 @@ extern int strcmp(const char* s1, const char* s2);
 #define OP_GREATER_EQ     23
 #define OP_LESS           24
 #define OP_LESS_EQ        25
-#define OP_NOT            26
-#define OP_TRUTHY         27
-#define OP_BIT_AND        28
-#define OP_BIT_OR         29
-#define OP_BIT_XOR        30
-#define OP_BIT_NOT        31
-#define OP_SHIFT_LEFT     32
-#define OP_SHIFT_RIGHT    33
+#define OP_BIT_AND        26
+#define OP_BIT_OR         27
+#define OP_BIT_XOR        28
+#define OP_BIT_NOT        29
+#define OP_SHIFT_LEFT     30
+#define OP_SHIFT_RIGHT    31
+#define OP_NOT            32
+#define OP_TRUTHY         33
 #define OP_JUMP           34
 #define OP_JUMP_IF_FALSE  35
-#define OP_LOOP_BACK      36
-#define OP_CALL           37
-#define OP_RETURN         38
-#define OP_PRINT          39
-#define OP_ARRAY          40
-#define OP_ARRAY_LEN      41
-#define OP_GET_INDEX      42
-#define OP_SET_INDEX      43
-#define OP_PUSH_ENV       48
-#define OP_POP_ENV        49
-#define OP_BREAK          50
-#define OP_CONTINUE       51
-#define OP_DEFINE_FN      52
+#define OP_CALL           36
+#define OP_ARRAY          38
+#define OP_PRINT          41
+#define OP_RETURN         43
+#define OP_PUSH_ENV       44
+#define OP_POP_ENV        45
+#define OP_DUP            46
+#define OP_ARRAY_LEN      47
+#define OP_BREAK          48
+#define OP_CONTINUE       49
+#define OP_LOOP_BACK      50
+#define OP_DEFINE_FN      8
 #define OP_HALT           0xFF
 
 // ============================================================================
@@ -155,6 +155,144 @@ void metal_vm_load(MetalVM* vm, const unsigned char* code, int length) {
     vm->code = code;
     vm->code_length = length;
     vm->ip = 0;
+}
+
+int metal_vm_load_binary(MetalVM* vm, const unsigned char* data, int size) {
+    if (size < 8) return -1;
+    int pos = 0;
+
+    // Magic: SGVM
+    if (data[pos++] != 'S' || data[pos++] != 'G' || data[pos++] != 'V' || data[pos++] != 'M')
+        return -2;
+
+    // Version
+    if (data[pos++] != 0x01) return -3;
+
+    // Flags
+    pos++;
+
+    // Constant Count
+    int const_count = (data[pos] << 8) | data[pos + 1];
+    pos += 2;
+
+    for (int i = 0; i < const_count; i++) {
+        unsigned char type = data[pos++];
+        if (type == 1) { // MV_NUM
+            double val;
+            memcpy(&val, &data[pos], 8);
+            metal_vm_add_constant(vm, mv_num(val));
+            pos += 8;
+        } else if (type == 3) { // MV_STR
+            int len = (data[pos] << 8) | data[pos + 1];
+            pos += 2;
+            int str_idx = metal_string_intern(vm, (const char*)&data[pos], len);
+            metal_vm_add_constant(vm, (MetalValue){MV_STR, {.str_idx = str_idx}});
+            pos += len;
+        } else {
+            return -4;
+        }
+    }
+
+    // Chunk Count
+    int chunk_count = (data[pos] << 24) | (data[pos + 1] << 16) | (data[pos + 2] << 8) | data[pos + 3];
+    pos += 4;
+
+    for (int i = 0; i < chunk_count; i++) {
+        int code_len = (data[pos] << 24) | (data[pos + 1] << 16) | (data[pos + 2] << 8) | data[pos + 3];
+        pos += 4;
+        if (pos + code_len > size) return -5;
+        if (vm->chunk_count < 1024) {
+            vm->chunks[vm->chunk_count] = &data[pos];
+            vm->chunk_lengths[vm->chunk_count] = code_len;
+            vm->chunk_count++;
+        }
+        pos += code_len;
+    }
+
+    return 0;
+}
+
+int metal_vm_verify(MetalVM* vm) {
+    for (int c = 0; c < vm->chunk_count; c++) {
+        int ip = 0;
+        const unsigned char* code = vm->chunks[c];
+        int code_length = vm->chunk_lengths[c];
+        while (ip < code_length) {
+            unsigned char op = code[ip++];
+            switch (op) {
+                case OP_CONSTANT:
+                case OP_GET_GLOBAL:
+                case OP_DEFINE_GLOBAL:
+                case OP_SET_GLOBAL: {
+                    if (ip + 2 > code_length) return -1;
+                    int idx = (code[ip] << 8) | code[ip + 1];
+                    if (idx >= vm->const_count) return -2;
+                    ip += 2;
+                    break;
+                }
+                case OP_JUMP:
+                case OP_JUMP_IF_FALSE:
+                case OP_CALL: {
+                    if (ip + 2 > code_length) return -1;
+                    int target = (code[ip] << 8) | code[ip + 1];
+                    if (target >= code_length) return -3;
+                    ip += 2;
+                    break;
+                }
+                case OP_LOOP_BACK: {
+                    if (ip + 2 > code_length) return -1;
+                    int offset = (code[ip] << 8) | code[ip + 1];
+                    if (ip + 2 - offset < 0) return -3;
+                    ip += 2;
+                    break;
+                }
+                case OP_ARRAY: {
+                    if (ip + 1 > code_length) return -1;
+                    ip++;
+                    break;
+                }
+                case OP_HALT:
+                case OP_NIL:
+                case OP_TRUE:
+                case OP_FALSE:
+                case OP_POP:
+                case OP_ADD:
+                case OP_SUB:
+                case OP_MUL:
+                case OP_DIV:
+                case OP_MOD:
+                case OP_NEGATE:
+                case OP_EQUAL:
+                case OP_NOT_EQUAL:
+                case OP_GREATER:
+                case OP_GREATER_EQ:
+                case OP_LESS:
+                case OP_LESS_EQ:
+                case OP_BIT_AND:
+                case OP_BIT_OR:
+                case OP_BIT_XOR:
+                case OP_BIT_NOT:
+                case OP_SHIFT_LEFT:
+                case OP_SHIFT_RIGHT:
+                case OP_NOT:
+                case OP_TRUTHY:
+                case OP_PRINT:
+                case OP_RETURN:
+                case OP_PUSH_ENV:
+                case OP_POP_ENV:
+                case OP_DUP:
+                case OP_ARRAY_LEN:
+                case OP_GET_INDEX:
+                case OP_SET_INDEX:
+                case OP_BREAK:
+                case OP_CONTINUE:
+                    break;
+                default:
+                    return -4;
+            }
+        }
+    }
+    return 0;
 }
 
 int metal_vm_add_constant(MetalVM* vm, MetalValue value) {
@@ -566,16 +704,47 @@ int metal_vm_step(MetalVM* vm) {
 
         // Arrays
         case OP_ARRAY: {
-            int count = read_u8(vm->code, &vm->ip);
+            int count = read_u16(vm->code, &vm->ip);
             int arr = metal_array_new(vm);
             // Elements are on stack in reverse order
-            for (int i = count - 1; i >= 0; i--) {
-                MetalValue elem = vm->stack[vm->sp - count + i];
-                metal_array_push(vm, arr, elem);
+            if (vm->sp >= count) {
+                for (int i = count - 1; i >= 0; i--) {
+                    MetalValue elem = vm->stack[vm->sp - count + i];
+                    metal_array_push(vm, arr, elem);
+                }
+                vm->sp -= count;
             }
-            vm->sp -= count;
             MetalValue v; v.type = MV_ARR; v.as.arr_idx = arr;
             metal_vm_push(vm, v);
+            break;
+        }
+
+        case OP_DEFINE_FN: {
+            int fn_idx = read_u16(vm->code, &vm->ip);
+            // Function definition handled by loader/compiler for now
+            // In MetalVM, we just skip it or store it
+            break;
+        }
+
+        case OP_CALL: {
+            int arg_count = read_u16(vm->code, &vm->ip);
+            MetalValue fn = metal_vm_pop(vm);
+            if (fn.type == MV_FN) {
+                if (vm->csp < METAL_CALL_STACK_SIZE) {
+                    vm->call_stack[vm->csp].ip = vm->ip;
+                    vm->call_stack[vm->csp].code = vm->code;
+                    vm->call_stack[vm->csp].code_length = vm->code_length;
+                    vm->csp++;
+
+                    MetalFunction* f = &vm->functions[fn.as.fn_idx];
+                    vm->code = vm->chunks[0]; // Assuming all code is in chunks
+                    // Actually, functions might need better mapping
+                    vm->ip = f->code_offset;
+                    vm->code_length = f->code_length;
+                }
+            } else {
+                // For now, allow calling native functions if we add them
+            }
             break;
         }
         case OP_ARRAY_LEN: {
@@ -611,9 +780,14 @@ int metal_vm_step(MetalVM* vm) {
         }
 
         case OP_RETURN:
-            // For bare-metal, return pops the current function's result
-            // The calling convention is handled by the compiler
-            return 0; // Signal return to caller
+            if (vm->csp > 0) {
+                vm->csp--;
+                vm->ip = vm->call_stack[vm->csp].ip;
+                vm->code = vm->call_stack[vm->csp].code;
+                vm->code_length = vm->call_stack[vm->csp].code_length;
+                return 1;
+            }
+            return 0;
 
         default:
             // Unknown opcode — halt
