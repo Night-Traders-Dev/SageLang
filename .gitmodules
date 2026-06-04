@@ -1,3 +1,3 @@
 [submodule "core/src/sage/vm-tools"]
 	path = core/src/sage/vm-tools
-	url = /root/Devel/sgvm-sage
+	url = https://github.com/Night-Traders-Dev/SageVM.git
