@@ -137,20 +137,33 @@ int main(int argc, char** argv) {
                 uint8_t op = hex_to_byte(line + j);
                 fputc(op, out);
                 j += 2;
-                // List of opcodes that take 16-bit operand
-                if (op == 0 || op == 5 || op == 6 || op == 7 || op == 8 || op == 9 || op == 10 ||
-                    op == 34 || op == 35 || op == 36 || op == 37 || op == 38 || op == 39 || op == 40 ||
-                    op == 50) {
-                    if (op == 0 || op == 5 || op == 6 || op == 7) {
-                        int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                        int g_idx = local_to_global[current_chunk][local_idx];
-                        fputc((g_idx >> 8) & 0xFF, out);
-                        fputc(g_idx & 0xFF, out);
-                    } else {
-                        fputc(hex_to_byte(line + j), out);
-                        fputc(hex_to_byte(line + j + 2), out);
-                    }
+                // List of opcodes that take operands
+                if (op == 0 || op == 5 || op == 6 || op == 7) {
+                    int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
+                    int g_idx = local_to_global[current_chunk][local_idx];
+                    fputc((g_idx >> 8) & 0xFF, out);
+                    fputc(g_idx & 0xFF, out);
                     j += 4;
+                } else if (op == 8) { // DEFINE_FUNCTION (16-bit name, 16-bit function)
+                    fputc(hex_to_byte(line + j), out);
+                    fputc(hex_to_byte(line + j + 2), out);
+                    fputc(hex_to_byte(line + j + 4), out);
+                    fputc(hex_to_byte(line + j + 6), out);
+                    j += 8;
+                } else if (op == 9 || op == 10 || op == 13 || op == 35 || op == 36 || op == 39 || 
+                           op == 40 || op == 41 || op == 43 || op == 49 || op == 50 || op == 51) {
+                    // 16-bit operand
+                    fputc(hex_to_byte(line + j), out);
+                    fputc(hex_to_byte(line + j + 2), out);
+                    j += 4;
+                } else if (op == 38) { // CALL_METHOD (16-bit name, 8-bit count)
+                    fputc(hex_to_byte(line + j), out);
+                    fputc(hex_to_byte(line + j + 2), out);
+                    fputc(hex_to_byte(line + j + 4), out);
+                    j += 6;
+                } else if (op == 37 || op == 47) { // 8-bit operand
+                    fputc(hex_to_byte(line + j), out);
+                    j += 2;
                 }
             }
         }

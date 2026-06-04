@@ -569,7 +569,7 @@ int metal_vm_step(MetalVM* vm) {
             metal_vm_push(vm, mv_bool(a.as.number > b.as.number));
             break;
         }
-        case OP_GREATER_EQ: {
+        case OP_GREATER_EQUAL: {
             MetalValue b = metal_vm_pop(vm), a = metal_vm_pop(vm);
             metal_vm_push(vm, mv_bool(a.as.number >= b.as.number));
             break;
@@ -579,7 +579,7 @@ int metal_vm_step(MetalVM* vm) {
             metal_vm_push(vm, mv_bool(a.as.number < b.as.number));
             break;
         }
-        case OP_LESS_EQ: {
+        case OP_LESS_EQUAL: {
             MetalValue b = metal_vm_pop(vm), a = metal_vm_pop(vm);
             metal_vm_push(vm, mv_bool(a.as.number <= b.as.number));
             break;

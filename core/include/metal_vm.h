@@ -34,6 +34,8 @@ extern "C" {
 #define OP_SET_PROPERTY   10
 #define OP_GET_INDEX      11
 #define OP_SET_INDEX      12
+#define OP_LOAD_FUNCTION  13
+#define OP_SLICE          14
 #define OP_ADD            15
 #define OP_SUB            16
 #define OP_MUL            17
@@ -43,9 +45,9 @@ extern "C" {
 #define OP_EQUAL          21
 #define OP_NOT_EQUAL      22
 #define OP_GREATER        23
-#define OP_GREATER_EQ     24
+#define OP_GREATER_EQUAL  24
 #define OP_LESS           25
-#define OP_LESS_EQ        26
+#define OP_LESS_EQUAL     26
 #define OP_BIT_AND        27
 #define OP_BIT_OR         28
 #define OP_BIT_XOR        29
@@ -62,6 +64,7 @@ extern "C" {
 #define OP_TUPLE          40
 #define OP_DICT           41
 #define OP_PRINT          42
+#define OP_EXEC_AST_STMT  43
 #define OP_RETURN         44
 #define OP_PUSH_ENV       45
 #define OP_POP_ENV        46
@@ -70,6 +73,13 @@ extern "C" {
 #define OP_BREAK          49
 #define OP_CONTINUE       50
 #define OP_LOOP_BACK      51
+#define OP_IMPORT         52
+#define OP_CLASS          53
+#define OP_METHOD         54
+#define OP_INHERIT        55
+#define OP_SETUP_TRY      56
+#define OP_END_TRY        57
+#define OP_RAISE          58
 #define OP_HALT           0xFF
 
 // ============================================================================
