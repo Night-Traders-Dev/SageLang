@@ -21,3 +21,7 @@
 ## 2025-05-28 - [Optimized Dictionary Size Lookup]
 **Learning:** `dicts.size(d)` was implemented as `len(dict_keys(d))`, which had O(N) complexity because `dict_keys` allocates and populates a new array with all keys. The native `len(d)` builtin already supports dictionaries and returns the count in O(1).
 **Action:** Use native `len()` for dictionary size checks. Verified a ~250x-600x speedup in benchmarks.
+
+## 2025-05-29 - [Interpreter Loop Performance Pattern]
+**Learning:** In the SageLang interpreter, 'for item in values' loops are significantly more efficient than 'while' loops using manual indexing (e.g., 'values[i]'). Baseline benchmarks for 10,000 elements showed 'contains' (using 'for') at ~0.09s vs 'index_of' (using 'while') at ~0.41s.
+**Action:** Prefer 'for' loops for array iteration in SageLang whenever possible. For high-frequency search operations, implement as native C built-ins to bypass VM overhead entirely.
