@@ -1184,6 +1184,16 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
         char* a1 = emit_expr(compiler, call->args[0]); char* a2 = emit_expr(compiler, call->args[1]);
         sb_appendf(&sb, "sage_io_writefile(%s, %s)", a1, a2); free(a1); free(a2); free(callee_name); return sb_take(&sb);
     }
+    if (strcmp(callee_name, "io_writebytes") == 0) {
+        if (call->arg_count != 2) return str_dup("sage_nil()");
+        char* a1 = emit_expr(compiler, call->args[0]); char* a2 = emit_expr(compiler, call->args[1]);
+        sb_appendf(&sb, "sage_io_writebytes(%s, %s)", a1, a2); free(a1); free(a2); free(callee_name); return sb_take(&sb);
+    }
+    if (strcmp(callee_name, "io_readbytes") == 0) {
+        if (call->arg_count != 1) return str_dup("sage_nil()");
+        char* arg = emit_expr(compiler, call->args[0]);
+        sb_appendf(&sb, "sage_io_readbytes(%s)", arg); free(arg); free(callee_name); return sb_take(&sb);
+    }
     if (strcmp(callee_name, "io_exists") == 0) {
         if (call->arg_count != 1) return str_dup("sage_nil()");
         char* arg = emit_expr(compiler, call->args[0]);
@@ -3700,6 +3710,28 @@ static void emit_runtime_prelude(FILE* out, CompilerTarget target) {
             "    if(p.type != SAGE_TAG_STRING || c.type != SAGE_TAG_STRING) return sage_bool(0);\n"
             "    FILE* f = fopen(p.as.string, \"wb\"); if(!f) return sage_bool(0);\n"
             "    fwrite(c.as.string, 1, strlen(c.as.string), f); fclose(f); return sage_bool(1);\n"
+            "}\n"
+            "static SageValue sage_io_writebytes(SageValue p, SageValue arr) {\n"
+            "    if(p.type != SAGE_TAG_STRING || arr.type != SAGE_TAG_ARRAY) return sage_bool(0);\n"
+            "    FILE* f = fopen(p.as.string, \"wb\"); if(!f) return sage_bool(0);\n"
+            "    SageArray* a = arr.as.array;\n"
+            "    unsigned char* buf = malloc(a->count);\n"
+            "    for(int i=0; i<a->count; i++) buf[i] = (unsigned char)a->elements[i].as.number;\n"
+            "    fwrite(buf, 1, a->count, f); fclose(f); free(buf); return sage_bool(1);\n"
+            "}\n"
+            "static SageValue sage_io_readbytes(SageValue p) {\n"
+            "    if(p.type != SAGE_TAG_STRING) return sage_nil();\n"
+            "    FILE* f = fopen(p.as.string, \"rb\"); if(!f) return sage_nil();\n"
+            "    fseek(f, 0, SEEK_END); long size = ftell(f); fseek(f, 0, SEEK_SET);\n"
+            "    SageValue arr = sage_array();\n"
+            "    if (size > 0) {\n"
+            "        unsigned char* buf = malloc(size);\n"
+            "        fread(buf, 1, size, f);\n"
+            "        for(int i=0; i<size; i++) sage_push(arr, sage_number((double)buf[i]));\n"
+            "        free(buf);\n"
+            "    }\n"
+            "    fclose(f);\n"
+            "    return arr;\n"
             "}\n"
             "static SageValue sage_io_exists(SageValue p) {\n"
             "    if(p.type != SAGE_TAG_STRING) return sage_bool(0);\n"

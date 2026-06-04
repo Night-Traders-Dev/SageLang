@@ -227,9 +227,9 @@ int metal_vm_verify(MetalVM* vm) {
                 case OP_EQUAL:
                 case OP_NOT_EQUAL:
                 case OP_GREATER:
-                case OP_GREATER_EQ:
+                case OP_GREATER_EQUAL:
                 case OP_LESS:
-                case OP_LESS_EQ:
+                case OP_LESS_EQUAL:
                 case OP_BIT_AND:
                 case OP_BIT_OR:
                 case OP_BIT_XOR:
