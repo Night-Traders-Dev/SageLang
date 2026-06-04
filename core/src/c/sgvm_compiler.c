@@ -2,6 +2,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <ctype.h>
+
+// Validate a path contains no shell metacharacters (prevents injection via system())
+static int is_safe_path(const char* path) {
+    if (!path) return 1;
+    for (const char* p = path; *p; p++) {
+        // Allow alphanumeric and strictly safe filename characters
+        if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
+            *p != '-' && *p != '_' && *p != '~') {
+            return 0;
+        }
+    }
+    return 1;
+}
 
 void write_be16(FILE* f, uint16_t v) {
     fputc((v >> 8) & 0xFF, f);
@@ -52,7 +66,15 @@ int add_const_str(const char* s, int len) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 3) return 1;
+    if (argc < 3) {
+        fprintf(stderr, "Usage: sgvmc <input.sage> <output.sgvm>\n");
+        return 1;
+    }
+
+    if (!is_safe_path(argv[1]) || !is_safe_path(argv[2])) {
+        fprintf(stderr, "Error: path contains unsafe characters.\n");
+        return 1;
+    }
 
     char cmd[1024];
     snprintf(cmd, sizeof(cmd), "./sage --emit-vm %s -o .tmp.svm", argv[1]);

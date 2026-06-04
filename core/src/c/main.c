@@ -135,11 +135,9 @@ static const char* value_type_name(Value v) {
 static int is_safe_path(const char* path) {
     if (!path) return 1;
     for (const char* p = path; *p; p++) {
-        // Allow alphanumeric and common filename characters
+        // Allow alphanumeric and strictly safe filename characters
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~' && *p != ' ' &&
-            *p != '+' && *p != '#' && *p != '(' && *p != ')' &&
-            *p != '[' && *p != ']' && *p != '@' && *p != '!') {
+            *p != '-' && *p != '_' && *p != '~') {
             return 0;
         }
     }
