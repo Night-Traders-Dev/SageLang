@@ -15,6 +15,10 @@
   - **`sgvm.sage`**: Ported the MetalVM runner to pure SageLang.
 - **Library Improvements**:
   - **`str()` builtin**: Added support for stringifying `EXCEPTION` values.
+- **Bug Fixes**:
+  - **REPL Path Injection**: Hardened path validation in the REPL (e.g. `:ls`, `:cat`) to explicitly reject leading dashes.
+  - **Native Array Search Equality**: Updated `array_contains` and `array_index_of` to use structural equality checks automatically for class instances via a fallback to standard Sage iteration logic.
+  - **Compiled Backend Compatibility**: Ensured `array_contains` and `array_index_of` compile properly on both the C codegen and LLVM backends.
 - **Version Bump**: Milestone v3.6.0 release.
 
 ## v3.5.6 — Hotfix: Doc Comment Restoration (May 2026)

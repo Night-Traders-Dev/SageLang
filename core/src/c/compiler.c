@@ -1264,6 +1264,34 @@ static char* emit_call_expr(Compiler* compiler, CallExpr* call) {
         return sb_take(&sb);
     }
 
+    if (strcmp(callee_name, "array_contains") == 0) {
+        if (call->arg_count != 2) {
+            compiler_builtin_arity_error(compiler, call, "array_contains", "usage: array_contains(array, needle)", "2");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* a = emit_expr(compiler, call->args[0]);
+            char* b = emit_expr(compiler, call->args[1]);
+            sb_appendf(&sb, "sage_array_contains(%s, %s)", a, b);
+            free(a); free(b);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
+    if (strcmp(callee_name, "array_index_of") == 0) {
+        if (call->arg_count != 2) {
+            compiler_builtin_arity_error(compiler, call, "array_index_of", "usage: array_index_of(array, needle)", "2");
+            sb_append(&sb, "sage_nil()");
+        } else {
+            char* a = emit_expr(compiler, call->args[0]);
+            char* b = emit_expr(compiler, call->args[1]);
+            sb_appendf(&sb, "sage_array_index_of(%s, %s)", a, b);
+            free(a); free(b);
+        }
+        free(callee_name);
+        return sb_take(&sb);
+    }
+
     if (strcmp(callee_name, "range") == 0) {
         if (call->arg_count == 1) {
             char* arg = emit_expr(compiler, call->args[0]);

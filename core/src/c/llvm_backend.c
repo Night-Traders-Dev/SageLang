@@ -742,6 +742,8 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_array_pop(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_array_extend(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_array_reverse(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_array_contains(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_array_index_of(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_index(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_is_truthy(%%SageValue)\n");
     ll_emit(lc, "declare i32 @sage_rt_get_bool(%%SageValue)\n");

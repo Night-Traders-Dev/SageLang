@@ -7,6 +7,7 @@
 // Validate a path contains no shell metacharacters (prevents injection via system())
 static int is_safe_path(const char* path) {
     if (!path) return 1;
+    if (path[0] == '-') return 0;
     for (const char* p = path; *p; p++) {
         // Allow alphanumeric and strictly safe filename characters
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&

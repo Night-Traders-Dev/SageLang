@@ -421,6 +421,26 @@ SageValue sage_rt_array_reverse(SageValue array) {
     return result;
 }
 
+SageValue sage_rt_array_contains(SageValue array, SageValue needle) {
+    if (array.type != SAGE_ARRAY) return sage_rt_nil();
+    SageArray* a = array.as.array;
+    for (int i = 0; i < a->count; i++) {
+        if (a->elements[i].type == SAGE_INSTANCE || needle.type == SAGE_INSTANCE) return sage_rt_nil();
+        if (vals_equal(a->elements[i], needle)) return sage_rt_bool(1);
+    }
+    return sage_rt_bool(0);
+}
+
+SageValue sage_rt_array_index_of(SageValue array, SageValue needle) {
+    if (array.type != SAGE_ARRAY) return sage_rt_nil();
+    SageArray* a = array.as.array;
+    for (int i = 0; i < a->count; i++) {
+        if (a->elements[i].type == SAGE_INSTANCE || needle.type == SAGE_INSTANCE) return sage_rt_nil();
+        if (vals_equal(a->elements[i], needle)) return sage_rt_number(i);
+    }
+    return sage_rt_number(-1);
+}
+
 int32_t sage_rt_array_len(SageValue arr) {
     if (arr.type != SAGE_ARRAY) return 0;
     return arr.as.array->count;

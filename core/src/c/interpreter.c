@@ -389,6 +389,7 @@ static Value array_contains_native(int argCount, Value* args) {
     ArrayValue* a = args[0].as.array;
     Value needle = args[1];
     for (int i = 0; i < a->count; i++) {
+        if (a->elements[i].type == VAL_INSTANCE || needle.type == VAL_INSTANCE) return val_nil();
         if (values_equal(a->elements[i], needle)) return val_bool(1);
     }
     return val_bool(0);
@@ -399,6 +400,7 @@ static Value array_index_of_native(int argCount, Value* args) {
     ArrayValue* a = args[0].as.array;
     Value needle = args[1];
     for (int i = 0; i < a->count; i++) {
+        if (a->elements[i].type == VAL_INSTANCE || needle.type == VAL_INSTANCE) return val_nil();
         if (values_equal(a->elements[i], needle)) return val_number(i);
     }
     return val_number(-1);
@@ -1718,6 +1720,7 @@ static const char* asm_detect_arch(void) {
 // Validate a path contains no shell metacharacters (prevents injection via system())
 static int is_safe_path(const char* path) {
     if (!path) return 1;
+    if (path[0] == '-') return 0;
     for (const char* p = path; *p; p++) {
         // Allow alphanumeric and strictly safe filename characters
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&

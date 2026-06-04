@@ -40,13 +40,25 @@ proc reduce(values, initial, fn):
 ## Optimization: Uses native array_contains built-in (~14x speedup).
 @inline
 proc contains(values, needle):
-    return array_contains(values, needle)
+    let res = array_contains(values, needle)
+    if type(res) == "nil":
+        for item in values:
+            if item == needle: return true
+        return false
+    return res
 
 ## Returns the index of the first occurrence of needle, or -1 if not found.
 ## Optimization: Uses native array_index_of built-in (~61x speedup).
 @inline
 proc index_of(values, needle):
-    return array_index_of(values, needle)
+    let res = array_index_of(values, needle)
+    if type(res) == "nil":
+        let i = 0
+        for item in values:
+            if item == needle: return i
+            i = i + 1
+        return -1
+    return res
 
 proc find(values, predicate):
     for item in values:
