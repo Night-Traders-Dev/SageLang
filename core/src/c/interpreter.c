@@ -358,6 +358,47 @@ static Value array_extend_native(int argCount, Value* args) {
     return val_nil();
 }
 
+// array_repeat(value, count) - return a new array with value repeated count times
+static Value array_repeat_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_NUMBER(args[1])) return val_nil();
+    int count = (int)AS_NUMBER(args[1]);
+    if (count <= 0) return val_array();
+
+    // Overflow guard: 1GB limit for the allocated elements array
+    if ((size_t)count > (1024 * 1024 * 1024) / sizeof(Value)) return val_nil();
+
+    Value res = val_array();
+    ArrayValue* a = res.as.array;
+    a->count = count;
+    a->capacity = count;
+    a->elements = SAGE_ALLOC(sizeof(Value) * (size_t)count);
+    gc_track_external_allocation(sizeof(Value) * (size_t)count);
+
+    Value val = args[0];
+    for (int i = 0; i < count; i++) {
+        a->elements[i] = val;
+    }
+    return res;
+}
+
+// string_repeat(string, count) - return a new string with string repeated count times
+static Value string_repeat_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_STRING(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    const char* s = AS_STRING(args[0]);
+    int count = (int)AS_NUMBER(args[1]);
+    if (count <= 0) return val_string("");
+    size_t slen = strlen(s);
+    if (slen > 0 && (size_t)count > (1024 * 1024 * 1024) / slen) return val_nil();
+    size_t total = slen * (size_t)count;
+    char* buf = SAGE_ALLOC(total + 1);
+    for (int i = 0; i < count; i++) {
+        memcpy(buf + (size_t)i * slen, s, slen);
+    }
+    buf[total] = '\0';
+    return val_string_take(buf);
+}
+
+
 // array_reverse(array) - return a new array with elements in reverse order
 static Value array_reverse_native(int argCount, Value* args) {
     if (argCount != 1 || args[0].type != VAL_ARRAY) return val_nil();
@@ -2165,6 +2206,9 @@ void init_stdlib(Env* env) {
     env_define_const(env, "append", 6, val_native(push_native));
     env_define_const(env, "build_quad_verts", 16, val_native(build_quad_verts_native));
     env_define_const(env, "array_extend", 12, val_native(array_extend_native));
+    env_define_const(env, "array_repeat", 12, val_native(array_repeat_native));
+
+
     env_define_const(env, "array_reverse", 13, val_native(array_reverse_native));
     env_define_const(env, "array_contains", 14, val_native(array_contains_native));
     env_define_const(env, "array_index_of", 14, val_native(array_index_of_native));
@@ -2177,6 +2221,9 @@ void init_stdlib(Env* env) {
     env_define_const(env, "split", 5, val_native(split_native));
     env_define_const(env, "join", 4, val_native(join_native));
     env_define_const(env, "replace", 7, val_native(replace_native));
+    env_define_const(env, "string_repeat", 13, val_native(string_repeat_native));
+
+
     env_define_const(env, "upper", 5, val_native(upper_native));
     env_define_const(env, "lower", 5, val_native(lower_native));
     env_define_const(env, "strip", 5, val_native(strip_native));
