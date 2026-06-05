@@ -1339,6 +1339,7 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 **Recent Milestones:**
 
+- June 5, 2026: Optimization: Hardened interpreter search path logic (preventing duplicate paths, increased budget to 64) and implemented high-performance native bridging for SageMetal VM (Math, IO, Sys, Regex).
 - May 29, 2026: v3.5.6: Fixed doc comment detachment for `errno.strerror` and updated core metadata.
 - May 25, 2026: v3.5.4: Structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust sandbox security guards.
 - May 20, 2026: v3.5.1: Critical bug fix in `mutex_lock` for bare-metal targets.
