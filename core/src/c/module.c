@@ -63,6 +63,11 @@ void add_search_path(ModuleCache* cache, const char* path) {
         return;
     }
     
+    // Avoid duplicates
+    for (int i = 0; i < cache->search_path_count; i++) {
+        if (strcmp(cache->search_paths[i], path) == 0) return;
+    }
+    
     cache->search_paths[cache->search_path_count] = SAGE_STRDUP(path);
     cache->search_path_count++;
 }

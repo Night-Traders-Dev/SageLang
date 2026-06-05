@@ -2102,45 +2102,40 @@ int main(int argc, const char* argv[]) {
     sage_set_args(argc, argv);
     init_module_system();
 
+    // Parse global flags that can appear before the command or script
+    while (cmd_argc >= 2) {
+        if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--runtime") == 0) {
+            if (!sage_runtime_parse_mode(cmd_argv[2], &runtime_mode)) {
+                fprintf(stderr, "Unknown runtime mode: %s (expected ast, bytecode, jit, aot, or auto)\n", cmd_argv[2]);
+                print_usage(stderr);
+                CLEANUP_AND_EXIT(64);
+            }
+            cmd_argv += 2;
+            cmd_argc -= 2;
+        } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "-I") == 0) {
+            add_search_path(global_module_cache, cmd_argv[2]);
+            cmd_argv += 2;
+            cmd_argc -= 2;
+        } else if (strcmp(cmd_argv[1], "--gc:arc") == 0) {
+            gc_set_mode(GC_MODE_ARC);
+            cmd_argv += 1;
+            cmd_argc -= 1;
+        } else if (strcmp(cmd_argv[1], "--gc:orc") == 0) {
+            gc_set_mode(GC_MODE_ORC);
+            cmd_argv += 1;
+            cmd_argc -= 1;
+        } else if (strcmp(cmd_argv[1], "--gc:tracing") == 0) {
+            gc_set_mode(GC_MODE_TRACING);
+            cmd_argv += 1;
+            cmd_argc -= 1;
+        } else {
+            break;
+        }
+    }
+
     // Add source file's directory to module search paths for compiler commands
     if (cmd_argc >= 3 && cmd_argv[2][0] != '-') {
         module_add_source_dir(cmd_argv[2]);
-    }
-
-    if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--runtime") == 0) {
-        if (!sage_runtime_parse_mode(cmd_argv[2], &runtime_mode)) {
-            fprintf(stderr, "Unknown runtime mode: %s (expected ast, bytecode, jit, aot, or auto)\n", cmd_argv[2]);
-            print_usage(stderr);
-            CLEANUP_AND_EXIT(64);
-        }
-        cmd_argv += 2;
-        cmd_argc -= 2;
-    }
-
-    // --gc:arc — switch to ARC (Automatic Reference Counting) mode
-    if (cmd_argc >= 2 && strcmp(cmd_argv[1], "--gc:arc") == 0) {
-        gc_set_mode(GC_MODE_ARC);
-        cmd_argv += 1;
-        cmd_argc -= 1;
-    }
-    // --gc:orc — switch to ORC (Optimized Reference Counting) mode
-    if (cmd_argc >= 2 && strcmp(cmd_argv[1], "--gc:orc") == 0) {
-        gc_set_mode(GC_MODE_ORC);
-        cmd_argv += 1;
-        cmd_argc -= 1;
-    }
-    // --gc:tracing — explicitly select tracing GC (default)
-    if (cmd_argc >= 2 && strcmp(cmd_argv[1], "--gc:tracing") == 0) {
-        gc_set_mode(GC_MODE_TRACING);
-        cmd_argv += 1;
-        cmd_argc -= 1;
-    }
-
-    // -I <dir> — add module search path
-    while (cmd_argc >= 3 && strcmp(cmd_argv[1], "-I") == 0) {
-        add_search_path(global_module_cache, cmd_argv[2]);
-        cmd_argv += 2;
-        cmd_argc -= 2;
     }
 
     if (cmd_argc == 1) {
