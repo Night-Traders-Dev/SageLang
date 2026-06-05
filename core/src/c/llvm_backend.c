@@ -775,6 +775,9 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_input(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_readfile(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_writefile(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_readbytes(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_writebytes(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_exists(%%SageValue)\n");
     // ML native runtime
     ll_emit(lc, "declare %%SageValue @sage_rt_load_weights(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_forward_pass(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
@@ -1575,6 +1578,15 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                         handled = 1;
                     } else if (strcmp(method_name, "writefile") == 0 && expr->as.call.arg_count == 2) {
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_writefile(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                        handled = 1;
+                    } else if (strcmp(method_name, "readbytes") == 0 && expr->as.call.arg_count == 1) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_readbytes(%%SageValue %%%d)", r, arg_regs[0]);
+                        handled = 1;
+                    } else if (strcmp(method_name, "writebytes") == 0 && expr->as.call.arg_count == 2) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_writebytes(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                        handled = 1;
+                    } else if (strcmp(method_name, "exists") == 0 && expr->as.call.arg_count == 1) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_exists(%%SageValue %%%d)", r, arg_regs[0]);
                         handled = 1;
                     }
                 }

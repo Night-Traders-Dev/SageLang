@@ -12,6 +12,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
+#include <sys/stat.h>
 
 #include "gpu_api.h"
 
@@ -740,6 +741,53 @@ SageValue sage_rt_writefile(SageValue path, SageValue content) {
     fwrite(content.as.string, 1, len, f);
     fclose(f);
     return sage_rt_number((double)len);
+}
+
+SageValue sage_rt_writebytes(SageValue path, SageValue content) {
+    if (path.type != SAGE_STRING || content.type != SAGE_ARRAY) return sage_rt_bool(0);
+    FILE* f = fopen(path.as.string, "wb");
+    if (!f) return sage_rt_bool(0);
+    SageArray* arr = content.as.array;
+    if (arr->count > 0) {
+        unsigned char* buf = (unsigned char*)malloc((size_t)arr->count);
+        if (buf) {
+            for (int i = 0; i < arr->count; i++) {
+                buf[i] = (unsigned char)arr->elements[i].as.number;
+            }
+            fwrite(buf, 1, (size_t)arr->count, f);
+            free(buf);
+        }
+    }
+    fclose(f);
+    return sage_rt_bool(1);
+}
+
+SageValue sage_rt_readbytes(SageValue path) {
+    if (path.type != SAGE_STRING) return sage_rt_nil();
+    FILE* f = fopen(path.as.string, "rb");
+    if (!f) return sage_rt_nil();
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    SageValue arr = sage_rt_array_new(size > 0 ? (int32_t)size : 4);
+    if (size > 0) {
+        unsigned char* buf = (unsigned char*)malloc((size_t)size);
+        if (buf) {
+            size_t read = fread(buf, 1, (size_t)size, f);
+            for (size_t i = 0; i < read; i++) {
+                sage_rt_array_push(arr, sage_rt_number((double)buf[i]));
+            }
+            free(buf);
+        }
+    }
+    fclose(f);
+    return arr;
+}
+
+SageValue sage_rt_exists(SageValue path) {
+    if (path.type != SAGE_STRING) return sage_rt_bool(0);
+    struct stat st;
+    return sage_rt_bool(stat(path.as.string, &st) == 0);
 }
 
 // Load weight file: returns array of float arrays (one per CSV line)
