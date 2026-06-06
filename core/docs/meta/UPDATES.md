@@ -1,5 +1,14 @@
 # SageLang Updates
 
+## v3.6.2 (In Progress) — SGVM Self-Hosting Support
+
+- **Compiler Enhancements**:
+  - **SGVM Backend**: Refactoring the bytecode compiler to emit binary `.sgvm` artifacts directly.
+  - **Toolchain Portability**: Working towards a standalone toolchain that doesn't rely on the host `sage` compiler.
+- **VM Hardening**:
+  - **Native Exceptions**: Implementing `OP_SETUP_TRY`, `OP_END_TRY`, and `OP_RAISE` for exception handling.
+  - **Class & OOP**: Refining the native bytecode instantiation and method dispatch for cross-module OOP.
+
 ## v3.6.1 — Native Builtin Expansion & C Codegen Hardening (June 2026)
 
 - **C Codegen Enhancements**:
