@@ -131,7 +131,6 @@ while i < 100000:
     let n = nil
     if b or n != nil:
         bool_count = bool_count + 1
-    end
     i = i + 1
 print("bool_count(100000) = " + str(bool_count))
 

@@ -95,12 +95,12 @@ int main(int argc, char** argv) {
         else if (strncmp(line, "constants ", 10) == 0) {
             int count = atoi(line + 10);
             for (int i = 0; i < count; i++) {
-                fgets(line, sizeof(line), in);
+                if (!fgets(line, sizeof(line), in)) break;
                 if (strncmp(line, "number ", 7) == 0) {
                     local_to_global[current_chunk][i] = add_const_num(atof(line + 7));
                 } else if (strncmp(line, "string ", 7) == 0) {
                     int len = atoi(line + 7);
-                    fgets(line, sizeof(line), in);
+                    if (!fgets(line, sizeof(line), in)) break;
                     char* buf = malloc(len);
                     for (int j = 0; j < len * 2; j += 2) buf[j / 2] = hex_to_byte(line + j);
                     local_to_global[current_chunk][i] = add_const_str(buf, len);
@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
         else if (strncmp(line, "code ", 5) == 0) {
             int len = atoi(line + 5);
             write_be32(out, (uint32_t)len);
-            fgets(line, sizeof(line), in);
+            if (!fgets(line, sizeof(line), in)) break;
             for (int j = 0; j < len * 2; ) {
                 uint8_t op = hex_to_byte(line + j);
                 fputc(op, out);

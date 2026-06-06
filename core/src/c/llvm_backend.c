@@ -1348,7 +1348,7 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
     switch (expr->type) {
         case EXPR_NUMBER: {
             int r = llc_new_reg(lc);
-            ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %e)", r, expr->as.number.value);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %.17e)", r, expr->as.number.value);
             return r;
         }
         case EXPR_STRING: {
@@ -1439,7 +1439,7 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 int r = llc_new_reg(lc);
                 switch (imported->value.type) {
                     case IMPORT_CONST_NUMBER:
-                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %e)",
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %.17e)",
                                 r, imported->value.number_value);
                         break;
                     case IMPORT_CONST_BOOL:
@@ -1742,7 +1742,7 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                     double const_val;
                     if (llvm_resolve_gpu_constant(prop_name, &const_val)) {
                         int r = llc_new_reg(lc);
-                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %e)", r, const_val);
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %.17e)", r, const_val);
                         free(mod_name);
                         free(prop_name);
                         return r;

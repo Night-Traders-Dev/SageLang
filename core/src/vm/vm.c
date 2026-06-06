@@ -283,6 +283,10 @@ static ExecResult call_method_value(Value object, const char* method_name, int a
     return vm_error("Only instances and modules have methods.");
 }
 
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     ActiveVm vm;
     ExecResult result = vm_normal(val_nil());
@@ -956,6 +960,9 @@ done:
 #undef DISPATCH
     return result;
 }
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 ExecResult vm_execute_program(BytecodeProgram* program, Env* env) {
     ExecResult result = vm_normal(val_nil());

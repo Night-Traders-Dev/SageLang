@@ -208,7 +208,7 @@ METAL_VM_OBJECT = $(OBJ_DIR)/metal_vm.o
 # Build Rules
 # ============================================================================
 
-.PHONY: all clean run install uninstall help test examples charts pdf sage-boot sage-bench benchmark benchmark-chart sgvm sgvmc
+.PHONY: all clean run install uninstall help test test-all examples chart charts benchmarks pdf sage-boot sage-bench benchmark benchmark-chart sgvm sgvmc
 
 all: $(TARGET) $(SGVM_TARGET) $(SGVM_COMPILER_TARGET)
 
@@ -611,6 +611,14 @@ test: $(TARGET)
 
 # (sage-boot defined above in build section)
 
+# Run all test suites: unit, compiler, selfhost, benchmarks
+test-all: $(TARGET)
+	@bash ../testsuite/run_all.sh
+
+# Run benchmark suite specifically
+benchmarks: $(TARGET)
+	@bash ../testsuite/run_all.sh benchmarks
+
 # Run all self-hosted tests
 test-selfhost: $(TARGET)
 	@echo ""
@@ -779,12 +787,6 @@ test-selfhost-llvm-gpu: $(TARGET)
 	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_llvm_gpu.sage
 
 # Run ALL tests (C + self-hosted)
-test-all: test test-selfhost
-	@echo ""
-	@echo "✅ All C and self-hosted tests complete"
-
-# ============================================================================
-# Cleanup
 # ============================================================================
 
 # Kernel-style build configuration (uses kconfiglib)
