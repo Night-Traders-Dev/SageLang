@@ -295,6 +295,7 @@ debug:
 	$(MAKE) DEBUG=1
 
 # Refresh repository metrics and benchmark charts for the README
+chart: charts
 charts: $(TARGET)
 	@$(PYTHON) $(CHART_SCRIPT)
 	@$(PYTHON) scripts/generate_backend_chart.py
