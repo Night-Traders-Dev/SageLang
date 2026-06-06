@@ -2160,6 +2160,125 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     return sb_take(&sb);
   }
 
+  /* FFI builtins */
+  if (strcmp(callee_name, "ffi_open") == 0 && call->arg_count == 1) {
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_ffi_open(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "ffi_call") == 0 &&
+      (call->arg_count == 3 || call->arg_count == 4)) {
+    char *handle = emit_expr(compiler, call->args[0]);
+    char *name = emit_expr(compiler, call->args[1]);
+    char *args = emit_expr(compiler, call->args[2]);
+    if (call->arg_count == 4) {
+      char *ret_type = emit_expr(compiler, call->args[3]);
+      sb_appendf(&sb, "sage_ffi_call_full(%s, %s, %s, %s)", handle, name, args,
+                 ret_type);
+      free(ret_type);
+    } else {
+      sb_appendf(&sb, "sage_ffi_call(%s, %s, %s)", handle, name, args);
+    }
+    free(handle);
+    free(name);
+    free(args);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "ffi_close") == 0 && call->arg_count == 1) {
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_ffi_close(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+
+  /* Atomic builtins */
+  if (strcmp(callee_name, "atomic_new") == 0 && call->arg_count == 1) {
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_atomic_new(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "atomic_load") == 0 && call->arg_count == 1) {
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_atomic_load(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "atomic_store") == 0 && call->arg_count == 2) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_atomic_store(%s, %s)", a, b);
+    free(a);
+    free(b);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "atomic_add") == 0 && call->arg_count == 2) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_atomic_add(%s, %s)", a, b);
+    free(a);
+    free(b);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "atomic_cas") == 0 && call->arg_count == 3) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    char *c = emit_expr(compiler, call->args[2]);
+    sb_appendf(&sb, "sage_atomic_cas(%s, %s, %s)", a, b, c);
+    free(a);
+    free(b);
+    free(c);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "atomic_exchange") == 0 && call->arg_count == 2) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_atomic_exchange(%s, %s)", a, b);
+    free(a);
+    free(b);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+
+  /* Semaphore builtins */
+  if (strcmp(callee_name, "sem_new") == 0 && call->arg_count == 1) {
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_sem_new(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "sem_post") == 0 && call->arg_count == 1) {
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_sem_post(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "sem_trywait") == 0 && call->arg_count == 1) {
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_sem_trywait(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "sem_wait") == 0 && call->arg_count == 1) {
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_sem_wait(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+
   ProcEntry *proc = find_proc_entry(compiler->procs, callee_name);
   if (proc == NULL) {
     char help[256];
@@ -2285,7 +2404,11 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
 
     StringBuffer sb;
     sb_init(&sb);
-    sb_appendf(&sb, "sage_load_slot(&%s, \"%s\")", slot_name, name);
+    if (strncmp(slot_name, "sage_fn_", 8) == 0) {
+      sb_appendf(&sb, "sage_function(%s)", slot_name);
+    } else {
+      sb_appendf(&sb, "sage_load_slot(&%s, \"%s\")", slot_name, name);
+    }
     free(name);
     return sb_take(&sb);
   }
@@ -2351,7 +2474,11 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
       if (slot_name) {
         StringBuffer sb;
         sb_init(&sb);
-        sb_appendf(&sb, "sage_load_slot(&%s, \"%s\")", slot_name, prop_name);
+        if (strncmp(slot_name, "sage_fn_", 8) == 0) {
+          sb_appendf(&sb, "sage_function(%s)", slot_name);
+        } else {
+          sb_appendf(&sb, "sage_load_slot(&%s, \"%s\")", slot_name, prop_name);
+        }
         free(obj_name);
         free(prop_name);
         return sb_take(&sb);
@@ -2667,7 +2794,12 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "#include <stdarg.h>\n"
         "#include <stdio.h>\n"
         "#include <stdlib.h>\n"
-        "#include <string.h>\n",
+        "#include <string.h>\n"
+        "#include <dlfcn.h>\n"
+        "#include <stdatomic.h>\n"
+        "#include <semaphore.h>\n"
+        "#include <time.h>\n"
+        "#include <unistd.h>\n",
         out);
 
   if (target == COMPILER_TARGET_PICO) {
@@ -2704,7 +2836,12 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    SAGE_TAG_STRING,\n"
         "    SAGE_TAG_ARRAY,\n"
         "    SAGE_TAG_DICT,\n"
-        "    SAGE_TAG_TUPLE\n"
+        "    SAGE_TAG_TUPLE,\n"
+        "    SAGE_TAG_FUNCTION,\n"
+        "    SAGE_TAG_CLIB,\n"
+        "    SAGE_TAG_POINTER,\n"
+        "    SAGE_TAG_THREAD,\n"
+        "    SAGE_TAG_MUTEX\n"
         "} SageTag;\n"
         "\n"
         "struct SageValue {\n"
@@ -2716,6 +2853,11 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        SageArray* array;\n"
         "        SageDict* dict;\n"
         "        SageTuple* tuple;\n"
+        "        void* function;\n"
+        "        void* clib;\n"
+        "        void* pointer;\n"
+        "        void* thread;\n"
+        "        void* mutex;\n"
         "    } as;\n"
         "};\n"
         "\n"
@@ -3021,6 +3163,59 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "sage_string(value == NULL ? \"\" : value); free(value); return v; }\n"
         "static SageValue sage_array(void) { SageValue v; v.type = "
         "SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
+        "static SageValue sage_function(void* fn) { SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = fn; return v; }\n"
+        "\n"
+        "static SageValue sage_ffi_open(SageValue libname) {\n"
+        "    if (libname.type != SAGE_TAG_STRING) return sage_nil();\n"
+        "    void* handle = dlopen(libname.as.string, RTLD_NOW);\n"
+        "    if (!handle) return sage_nil();\n"
+        "    SageValue v; v.type = SAGE_TAG_CLIB; v.as.clib = handle; return v;\n"
+        "}\n"
+        "static SageValue sage_ffi_close(SageValue handle) {\n"
+        "    if (handle.type != SAGE_TAG_CLIB) return sage_nil();\n"
+        "    dlclose(handle.as.clib);\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "static SageValue sage_ffi_call(SageValue handle, SageValue name, SageValue args) { return sage_nil(); }\n"
+        "static SageValue sage_ffi_call_full(SageValue handle, SageValue name, SageValue args, SageValue rt) { return sage_nil(); }\n"
+        "\n"
+        "static SageValue sage_atomic_new(SageValue val) {\n"
+        "    SageValue* atom = malloc(sizeof(SageValue));\n"
+        "    *atom = val;\n"
+        "    SageValue v; v.type = SAGE_TAG_POINTER; v.as.pointer = atom; return v;\n"
+        "}\n"
+        "static SageValue sage_atomic_load(SageValue atom) {\n"
+        "    if (atom.type != SAGE_TAG_POINTER) return sage_nil();\n"
+        "    return *(SageValue*)atom.as.pointer;\n"
+        "}\n"
+        "static SageValue sage_atomic_store(SageValue atom, SageValue val) {\n"
+        "    if (atom.type != SAGE_TAG_POINTER) return sage_nil();\n"
+        "    *(SageValue*)atom.as.pointer = val;\n"
+        "    return val;\n"
+        "}\n"
+        "static SageValue sage_atomic_add(SageValue atom, SageValue val) { return sage_nil(); }\n"
+        "static SageValue sage_atomic_cas(SageValue atom, SageValue old, SageValue new_val) { return sage_nil(); }\n"
+        "static SageValue sage_atomic_exchange(SageValue atom, SageValue val) { return sage_nil(); }\n"
+        "\n"
+        "static SageValue sage_sem_new(SageValue val) {\n"
+        "    sem_t* sem = malloc(sizeof(sem_t));\n"
+        "    sem_init(sem, 0, (unsigned int)val.as.number);\n"
+        "    SageValue v; v.type = SAGE_TAG_POINTER; v.as.pointer = sem; return v;\n"
+        "}\n"
+        "static SageValue sage_sem_wait(SageValue sem) {\n"
+        "    if (sem.type != SAGE_TAG_POINTER) return sage_nil();\n"
+        "    sem_wait((sem_t*)sem.as.pointer);\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "static SageValue sage_sem_post(SageValue sem) {\n"
+        "    if (sem.type != SAGE_TAG_POINTER) return sage_nil();\n"
+        "    sem_post((sem_t*)sem.as.pointer);\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "static SageValue sage_sem_trywait(SageValue sem) {\n"
+        "    if (sem.type != SAGE_TAG_POINTER) return sage_bool(0);\n"
+        "    return sage_bool(sem_trywait((sem_t*)sem.as.pointer) == 0);\n"
+        "}\n"
         "static SageSlot sage_slot_undefined(void) { SageSlot slot; "
         "slot.defined = 0; slot.value = sage_nil(); return slot; }\n"
         "\n",
