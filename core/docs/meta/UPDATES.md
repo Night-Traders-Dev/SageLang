@@ -3,10 +3,12 @@
 ## v3.6.1 — Native Builtin Expansion & C Codegen Hardening (June 2026)
 
 - **C Codegen Enhancements**:
-  - **Native FFI, Atomic, and Semaphore Builtins**: Added support for `ffi_open`, `ffi_call`, `ffi_close`, `atomic_new`, `atomic_load`, `atomic_store`, `atomic_add`, `atomic_cas`, `atomic_exchange`, `sem_new`, `sem_wait`, `sem_post`, and `sem_trywait` in the C backend.
+  - **Import Resolution & Module Access**: Implemented full symbol resolution for imported modules in the C backend. Namespaced access (e.g., `mod.func()`) now correctly maps to the imported module's symbol table.
+  - **Native Builtin Expansion**: Added support for `int()`, `abs()`, and `sqrt()` math primitives, along with high-performance `ffi_*`, `atomic_*`, and `sem_*` concurrency builtins.
   - **Runtime Prelude Update**: Expanded the `SageTag` and `SageValue` structures in the generated C runtime to support `CLIB`, `POINTER`, `THREAD`, `MUTEX`, and `FUNCTION` types.
   - **Function Reference Fix**: Corrected a bug where top-level function references (e.g., passed as arguments) were incorrectly loaded from slots; they are now correctly wrapped in `SageValue` using static function pointers.
 - **Compiler Improvements**:
+  - **Module Registry**: Enhanced the compiler's internal module registry to support native and namespaced symbol lookups during code emission.
   - **Builtin Registry Expansion**: Updated the compiler's internal builtin table to include the new concurrency and FFI primitives.
 - **Version Bump**: Milestone v3.6.1 release.
 
