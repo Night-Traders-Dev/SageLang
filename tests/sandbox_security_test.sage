@@ -59,6 +59,16 @@ proc test_sandbox_safety():
     let unsafe_prim_res = sandbox.is_safe(unsafe_prim)
     assert.assert_false(unsafe_prim_res["safe"], "ffi_open should be unsafe")
 
+    # New blacklisted primitives
+    let unsafe_input = "let x = input('name: ')"
+    assert.assert_false(sandbox.is_safe(unsafe_input)["safe"], "input() should be unsafe")
+
+    let unsafe_gc = "gc_disable()"
+    assert.assert_false(sandbox.is_safe(unsafe_gc)["safe"], "gc_disable() should be unsafe")
+
+    let unsafe_atomic = "let a = atomic_new(0)"
+    assert.assert_false(sandbox.is_safe(unsafe_atomic)["safe"], "atomic_new() should be unsafe")
+
     print "✅ Improved sandbox safety tests passed!"
 
 test_sandbox_safety()
