@@ -734,6 +734,7 @@ InstanceValue* instance_create(ClassValue* class_def) {
 
     Value fields_dict = val_dict();
     instance->fields = fields_dict.as.dict;
+    dict_set(&fields_dict, "__class__", val_string(class_def->name));
     gc_unpin();
 
     return instance;

@@ -511,14 +511,18 @@ static void compiler_builtin_arity_error(Compiler *compiler, CallExpr *call,
 }
 
 static ClassInfo *add_class_info(Compiler *compiler, const char *name,
-                                 const char *parent, Stmt *methods) {
+                                 const char *parent_name, Stmt *methods) {
+#ifdef SAGE_DEBUG
+  printf("DEBUG: add_class_info name=%s parent=%s\n", name, parent_name ? parent_name : "NULL");
+#endif
   ClassInfo *info = malloc(sizeof(ClassInfo));
+
   if (info == NULL) {
     fprintf(stderr, "Out of memory\n");
     exit(1);
   }
   info->class_name = str_dup(name);
-  info->parent_name = parent ? str_dup(parent) : NULL;
+  info->parent_name = parent_name ? str_dup(parent_name) : NULL;
   info->methods = methods;
   info->next = compiler->classes;
   compiler->classes = info;
@@ -909,10 +913,10 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
     if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC) {
       char *name = token_to_string(s->as.proc.name);
       if (import->import_all || is_in_import_list(import, name)) {
-        if (g_sage_verbose) {
-          printf("DEBUG: adding proc: %s, import_all: %d\n", name,
-                 import->import_all);
-        }
+#ifdef SAGE_DEBUG
+        printf("DEBUG: adding proc: %s, import_all: %d\n", name,
+               import->import_all);
+#endif
         add_proc_entry(compiler, name, s->as.proc.param_count, &s->as.proc.name);
       }
       free(name);
@@ -1444,6 +1448,7 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
         } else {
           /* Check if it's a class constructor */
           ClassInfo *cls = find_class_info(compiler->classes, c_name);
+          printf("DEBUG: emit_call_expr module constructor check: mod=%s c_name=%s found=%p\n", obj_name, c_name, (void*)cls);
           if (cls != NULL) {
             StringBuffer sb;
             sb_init(&sb);
@@ -2219,6 +2224,10 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
 
   /* Class constructor call: ClassName(args) */
   ClassInfo *cls = find_class_info(compiler->classes, callee_name);
+  #ifdef SAGE_DEBUG
+            printf("DEBUG: emit_call_expr constructor check: callee=%s found=%p\n", callee_name, (void*)cls);
+  #endif
+
   if (cls != NULL) {
     sb_appendf(&sb, "sage_construct(\"%s\", ", cls->class_name);
     if (cls->parent_name) {
@@ -4626,13 +4635,13 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "int argc, SageValue* argv) {\n"
         "    if (obj.type != SAGE_TAG_DICT) {\n"
         "        fprintf(stderr, \"Runtime Error: method call on "
-        "non-instance.\\n\");\n"
+        "non-instance (type=%d).\\n\", obj.type);\n"
         "        exit(1);\n"
         "    }\n"
         "    SageValue class_val = sage_dict_get(obj.as.dict, \"__class__\");\n"
         "    if (class_val.type != SAGE_TAG_STRING) {\n"
         "        fprintf(stderr, \"Runtime Error: no __class__ on "
-        "instance.\\n\");\n"
+        "instance (method=%s class_val_type=%d).\\n\", method, class_val.type);\n"
         "        exit(1);\n"
         "    }\n"
         "    const char* current = class_val.as.string;\n"
