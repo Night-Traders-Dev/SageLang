@@ -68,6 +68,8 @@ typedef struct {
   ImportedModule *modules;
 } Compiler;
 
+int g_sage_verbose = 0;
+
 typedef enum { COMPILER_TARGET_HOST, COMPILER_TARGET_PICO } CompilerTarget;
 
 static void sb_init(StringBuffer *sb) {
@@ -907,9 +909,11 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
     if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC) {
       char *name = token_to_string(s->as.proc.name);
       if (import->import_all || is_in_import_list(import, name)) {
-        printf("DEBUG: adding proc: %s, import_all: %d\n", name, import->import_all);
-        add_proc_entry(compiler, name, s->as.proc.param_count,
-                       &s->as.proc.name);
+        if (g_sage_verbose) {
+          printf("DEBUG: adding proc: %s, import_all: %d\n", name,
+                 import->import_all);
+        }
+        add_proc_entry(compiler, name, s->as.proc.param_count, &s->as.proc.name);
       }
       free(name);
     }

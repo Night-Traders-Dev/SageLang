@@ -8,6 +8,7 @@
   - **Runtime Prelude Update**: Expanded the `SageTag` and `SageValue` structures in the generated C runtime to support `CLIB`, `POINTER`, `THREAD`, `MUTEX`, and `FUNCTION` types.
   - **Function Reference Fix**: Corrected a bug where top-level function references (e.g., passed as arguments) were incorrectly loaded from slots; they are now correctly wrapped in `SageValue` using static function pointers.
 - **Compiler Improvements**:
+  - **Optional Debug Output**: Introduced a `--verbose` (or `-v`) flag to gate internal compiler diagnostic messages. Detailed `DEBUG: adding proc: ...` logs are now hidden by default for a cleaner build experience.
   - **Module Registry**: Enhanced the compiler's internal module registry to support native and namespaced symbol lookups during code emission.
   - **Builtin Registry Expansion**: Updated the compiler's internal builtin table to include the new concurrency and FFI primitives.
 - **Version Bump**: Milestone v3.6.1 release.

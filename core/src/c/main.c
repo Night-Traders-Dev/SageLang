@@ -67,7 +67,7 @@ static void cleanup_runtime_state(void) {
 static void print_usage(FILE* stream) {
     fprintf(stream,
             "Usage: sage                    Start interactive REPL\n"
-            "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [-I dir] [path]\n"
+            "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [--verbose] [-I dir] [path]\n"
             "       sage --repl             Start interactive REPL\n"
             "       sage [--runtime ast|bytecode|jit|aot|auto] [-I dir] -c \"source\"\n"
             "       sage --emit-c <input.sage> [-o output.c] [-I dir] [-O0..3] [-g]\n"
@@ -1985,6 +1985,8 @@ static void run(const char* source, const char* filename, SageRuntimeMode runtim
     exit(code); \
 } while(0)
 
+extern int g_sage_verbose;
+
 int main(int argc, const char* argv[]) {
     SageRuntimeMode runtime_mode = SAGE_RUNTIME_AUTO;
     const char** cmd_argv = argv;
@@ -2126,6 +2128,10 @@ int main(int argc, const char* argv[]) {
             cmd_argc -= 1;
         } else if (strcmp(cmd_argv[1], "--gc:tracing") == 0) {
             gc_set_mode(GC_MODE_TRACING);
+            cmd_argv += 1;
+            cmd_argc -= 1;
+        } else if (strcmp(cmd_argv[1], "--verbose") == 0 || strcmp(cmd_argv[1], "-v") == 0) {
+            g_sage_verbose = 1;
             cmd_argv += 1;
             cmd_argc -= 1;
         } else {
