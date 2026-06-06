@@ -21,8 +21,9 @@ from benchmark_recipes import (
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-CHART_DIR = REPO_ROOT / "assets" / "charts"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+CORE_ROOT = REPO_ROOT / "core"
+CHART_DIR = CORE_ROOT / "assets" / "charts"
 METRICS_JSON = CHART_DIR / "loc-metrics.json"
 REPO_CHART = CHART_DIR / "repo-loc.svg"
 COMPILER_CHART = CHART_DIR / "compiler-loc.svg"
@@ -30,7 +31,7 @@ BREAKDOWN_CHART = CHART_DIR / "project-breakdown.svg"
 BENCHMARK_TOTAL_CHART = CHART_DIR / "benchmark-recipes-total.svg"
 BENCHMARK_RUN_CHART = CHART_DIR / "benchmark-recipes-run.svg"
 
-BENCHMARK_WORKLOAD = REPO_ROOT / "benchmarks" / "runtime_compare.sage"
+BENCHMARK_WORKLOAD = REPO_ROOT / "testsuite" / "benchmarks" / "runtime_compare.sage"
 BENCHMARK_RUNS = 5
 BENCHMARK_WARMUPS = 1
 BENCHMARK_CC = "cc"
@@ -540,7 +541,7 @@ def main() -> None:
     repo_counts = collect_repo_language_counts()
     compiler_counts = collect_compiler_counts()
     benchmark_results = collect_recipe_results(
-        REPO_ROOT,
+        CORE_ROOT,
         BENCHMARK_WORKLOAD,
         BENCHMARK_RUNS,
         BENCHMARK_WARMUPS,

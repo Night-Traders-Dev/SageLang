@@ -297,6 +297,7 @@ debug:
 # Refresh repository metrics and benchmark charts for the README
 charts: $(TARGET)
 	@$(PYTHON) $(CHART_SCRIPT)
+	@$(PYTHON) scripts/generate_backend_chart.py
 	@echo "Updated README metric and benchmark chart assets"
 
 # Generate The Sage Programming Language PDF from the book markdown
