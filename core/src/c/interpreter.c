@@ -1192,7 +1192,11 @@ Value ffi_sym_native(int argCount, Value* args) {
 static Value bytes_new_native(int argCount, Value* args) {
     if (argCount == 0) return val_bytes(NULL, 0);
     if (argCount == 1 && IS_NUMBER(args[0])) {
-        return val_bytes_empty((int)AS_NUMBER(args[0]));
+        int len = (int)AS_NUMBER(args[0]);
+        Value b = val_bytes_empty(len);
+        b.as.bytes->length = len;
+        memset(b.as.bytes->data, 0, len);
+        return b;
     }
     if (argCount == 1 && args[0].type == VAL_STRING) {
         const char* s = AS_STRING(args[0]);
@@ -2628,6 +2632,16 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             if (arr.type == VAL_ARRAY && IS_NUMBER(idx)) {
                 int index = (int)AS_NUMBER(idx);
                 result = EVAL_RESULT(array_get(&arr, index));
+            } else if (arr.type == VAL_BYTES && IS_NUMBER(idx)) {
+                int index = (int)AS_NUMBER(idx);
+                BytesValue* b = arr.as.bytes;
+                if (index < 0) index += b->length;
+                if (index >= 0 && index < b->length) {
+                    result = EVAL_RESULT(val_number(b->data[index]));
+                } else {
+                    fprintf(stderr, "Runtime Error: Bytes index out of bounds.\n");
+                    result = EVAL_RESULT(val_nil());
+                }
             } else if (arr.type == VAL_TUPLE && IS_NUMBER(idx)) {
                 int index = (int)AS_NUMBER(idx);
                 result = EVAL_RESULT(tuple_get(&arr, index));
@@ -2671,6 +2685,12 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             if (arr.type == VAL_ARRAY && IS_NUMBER(idx)) {
                 int index = (int)AS_NUMBER(idx);
                 array_set(&arr, index, value);
+                result = EVAL_RESULT(value);
+            } else if (arr.type == VAL_BYTES && IS_NUMBER(idx)) {
+                int index = (int)AS_NUMBER(idx);
+                if (index >= 0 && index < arr.as.bytes->length) {
+                    arr.as.bytes->data[index] = (unsigned char)(int)AS_NUMBER(value);
+                }
                 result = EVAL_RESULT(value);
             } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
                 dict_set_len(&arr, AS_STRING(idx), (int)strlen(AS_STRING(idx)), value);

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "module.h"
 #include "repl.h"
@@ -489,6 +490,16 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     PUSH(array_get(&object, (int)AS_NUMBER(index)));
                 } else if (object.type == VAL_TUPLE && IS_NUMBER(index)) {
                     PUSH(tuple_get(&object, (int)AS_NUMBER(index)));
+                } else if (object.type == VAL_BYTES && IS_NUMBER(index)) {
+                    int b_index = (int)AS_NUMBER(index);
+                    BytesValue* b = object.as.bytes;
+                    if (b_index < 0) b_index += b->length;
+                    if (b_index >= 0 && b_index < b->length) {
+                        PUSH(val_number(b->data[b_index]));
+                    } else {
+                        result = vm_error("Bytes index out of bounds.");
+                        goto done;
+                    }
                 } else if (object.type == VAL_STRING && IS_NUMBER(index)) {
                     int string_index = (int)AS_NUMBER(index);
                     char* string = AS_STRING(object);
@@ -517,6 +528,12 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 SYNC_SP();
                 if (object.type == VAL_ARRAY && IS_NUMBER(index)) {
                     array_set(&object, (int)AS_NUMBER(index), value);
+                } else if (object.type == VAL_BYTES && IS_NUMBER(index)) {
+                    int b_index = (int)AS_NUMBER(index);
+                    BytesValue* b = object.as.bytes;
+                    if (b_index >= 0 && b_index < b->length) {
+                        b->data[b_index] = (unsigned char)(int)AS_NUMBER(value);
+                    }
                 } else if (object.type == VAL_DICT && IS_STRING(index)) {
                     dict_set(&object, AS_STRING(index), value);
                 } else {
@@ -627,7 +644,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                         case BC_OP_SUB: out = val_number(AS_NUMBER(left) - AS_NUMBER(right)); break;
                         case BC_OP_MUL: out = val_number(AS_NUMBER(left) * AS_NUMBER(right)); break;
                         case BC_OP_DIV: out = (AS_NUMBER(right) == 0) ? val_nil() : val_number(AS_NUMBER(left) / AS_NUMBER(right)); break;
-                        case BC_OP_MOD: out = ((int)AS_NUMBER(right) == 0) ? val_nil() : val_number((double)((int)AS_NUMBER(left) % (int)AS_NUMBER(right))); break;
+                        case BC_OP_MOD: out = (AS_NUMBER(right) == 0) ? val_nil() : val_number(fmod(AS_NUMBER(left), AS_NUMBER(right))); break;
                         case BC_OP_BIT_AND: out = val_number((double)(l & r)); break;
                         case BC_OP_BIT_OR: out = val_number((double)(l | r)); break;
                         case BC_OP_BIT_XOR: out = val_number((double)(l ^ r)); break;

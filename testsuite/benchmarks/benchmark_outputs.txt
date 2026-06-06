@@ -1,0 +1,27 @@
+
+[1m  SageLang Cross-Backend Benchmark[0m
+  [0;90mWorkload: testsuite/benchmarks/backend_compare.sage[0m
+  [0;90m───────────────────────────────────────────────[0m
+
+  [0;36mAST Interpreter         [0m[0;32m   236 ms[0m  [0;90m(interpret)[0m
+  [0;36mBytecode VM             [0m[0;32m   207 ms[0m  [0;90m(interpret)[0m
+  [0;36mC Backend               [0m[0;32m   854 ms[0m  [0;90m(build: 486 ms, run: 368 ms)[0m
+  [0;36mLLVM Backend            [0m[0;31mBUILD FAILED[0m
+  [0;36mC Backend -O3           [0m[0;32m   871 ms[0m  [0;90m(build: 495 ms, run: 376 ms)[0m
+  [0;36mJIT Profiled            [0m[0;32m   226 ms[0m  [0;90m(interpret)[0m
+  [0;36mAOT Backend             [0m[0;32m   700 ms[0m  [0;90m(build: 449 ms, run: 251 ms)[0m
+  [0;36mJIT+AOT Backend         [0m[0;32m   958 ms[0m  [0;90m(build: 705 ms, run: 253 ms)[0m
+  [0;36mSelf-Hosted Sage        [0m[0;31mRUN FAILED[0m
+  [0;36mKotlin Transpile        [0m[0;32m    55 ms[0m  [0;90m(transpile only)[0m
+
+  [0;90mChecksum Verification:[0m
+    [0;32m✓[0m AOT Backend
+    [0;32m✓[0m AST Interpreter
+    [0;32m✓[0m Bytecode VM
+    [0;32m✓[0m C Backend -O3
+    [0;32m✓[0m C Backend
+    [0;32m✓[0m JIT Profiled
+    [0;32m✓[0m JIT+AOT Backend
+
+  [0;90mDone.[0m
+

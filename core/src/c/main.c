@@ -2725,8 +2725,8 @@ int main(int argc, const char* argv[]) {
         extern void interpreter_set_jit(JitState* jit_state);
         interpreter_set_jit(&jit);
 
-        fprintf(stderr, "JIT: Enabled (threshold=%d calls, pool=%zuKB)\n",
-                JIT_HOT_THRESHOLD, jit.pool.capacity / 1024);
+        // fprintf(stderr, "JIT: Enabled (threshold=%d calls, pool=%zuKB)\n",
+//                JIT_HOT_THRESHOLD, jit.pool.capacity / 1024);
 
         // Run with interpreter (JIT profiling active)
         run(source, jit_file, runtime_mode);
@@ -2736,8 +2736,8 @@ int main(int argc, const char* argv[]) {
         for (int i = 0; i < jit.profile_count; i++) {
             if (jit.profiles[i] && jit.profiles[i]->call_count > 0) profiled++;
         }
-        fprintf(stderr, "JIT: %d functions profiled, %d compiled, %d bailouts\n",
-                profiled, jit.total_compiled, jit.total_bailouts);
+        // fprintf(stderr, "JIT: %d functions profiled, %d compiled, %d bailouts\n",
+        //         profiled, jit.total_compiled, jit.total_bailouts);
 
         // Print type feedback for hot functions
         for (int i = 0; i < jit.profile_count; i++) {
@@ -2813,11 +2813,11 @@ int main(int argc, const char* argv[]) {
                 int profiled = 0;
                 for (int i = 0; i < jit.profile_count; i++)
                     if (jit.profiles[i] && jit.profiles[i]->call_count > 0) profiled++;
-                fprintf(stderr, "AOT+JIT: Compiled %s → %s (%d functions profiled, %d compiled)\n",
-                        combo_file, out_path, profiled, jit.total_compiled);
+                // fprintf(stderr, "AOT+JIT: Compiled %s → %s (%d functions profiled, %d compiled)\n",
+                //         combo_file, out_path, profiled, jit.total_compiled);
                 unlink(c_path);
             } else {
-                fprintf(stderr, "AOT+JIT: Compilation failed\n");
+                // fprintf(stderr, "AOT+JIT: Compilation failed\n");
             }
         } else {
             fputs(c_code, stdout);
@@ -2854,10 +2854,10 @@ int main(int argc, const char* argv[]) {
             FILE* f = fopen(c_path, "w");
             if (f) { fputs(c_code, f); fclose(f); }
             if (aot_compile_to_binary(&aot, c_path, out_path)) {
-                fprintf(stderr, "AOT: Compiled %s → %s (type-specialized)\n", aot_file, out_path);
+                // fprintf(stderr, "AOT: Compiled %s → %s (type-specialized)\n", aot_file, out_path);
                 unlink(c_path);
             } else {
-                fprintf(stderr, "AOT: Compilation failed\n");
+                // fprintf(stderr, "AOT: Compilation failed\n");
             }
         } else {
             // Just print the C code
