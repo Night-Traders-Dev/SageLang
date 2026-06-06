@@ -805,6 +805,9 @@ static void collect_global_lets(Compiler *compiler, Stmt *stmt) {
       }
       break;
     }
+    case STMT_COMPTIME:
+      collect_global_lets(compiler, stmt->as.comptime.body);
+      break;
     default:
       break;
     }
@@ -824,9 +827,11 @@ static int is_in_import_list(ImportStmt *import, const char *name) {
 
 // Native C modules that don't have .sage files (handled at runtime)
 static int is_native_module(const char *name) {
-  const char *natives[] = {"math",     "thread",    "socket", "tcp",
-                           "http",     "ssl",       "fat",    "gpu",
-                           "graphics", "ml_native", NULL};
+  const char *natives[] = {"_math",    "_io",       "thread",    "_thread",
+                           "sys",      "_sys",      "socket",    "tcp",
+                           "http",     "ssl",       "fat",       "gpu",
+                           "graphics", "ml_native", "compiler",  "vm_native",
+                           NULL};
   for (int i = 0; natives[i] != NULL; i++) {
     if (strcmp(name, natives[i]) == 0)
       return 1;
@@ -853,6 +858,11 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
     mod->ast = NULL;
     mod->next = compiler->modules;
     compiler->modules = mod;
+
+    // Add the module itself to globals
+    const char *binding_name =
+        import->alias ? import->alias : import->module_name;
+    add_name_entry(compiler, &compiler->globals, binding_name, "sage_global");
     return;
   }
 
@@ -884,6 +894,10 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
   mod->ast = ast;
   mod->next = compiler->modules;
   compiler->modules = mod;
+
+  // Add the module itself to globals so it can be resolved as a variable
+  const char *binding_name = import->alias ? import->alias : import->module_name;
+  add_name_entry(compiler, &compiler->globals, binding_name, "sage_global");
 
   /* Collect module's procs and classes */
   for (Stmt *s = ast; s != NULL; s = s->next) {
@@ -973,11 +987,40 @@ static const char *resolve_slot_name(Compiler *compiler,
     return global->c_name;
   }
 
+  ProcEntry *proc = find_proc_entry(compiler->procs, sage_name);
+  if (proc != NULL) {
+    return proc->c_name;
+  }
+
   // Search imported modules
   for (ImportedModule *mod = compiler->modules; mod != NULL; mod = mod->next) {
-    // This is a simplification; a full implementation requires 
-    // traversing mod->ast to find the symbol's declaration.
-    // For now, this is a placeholder to indicate where the fix belongs.
+    if (strcmp(mod->name, sage_name) == 0) {
+      NameEntry *ge =
+          add_name_entry(compiler, &compiler->globals, sage_name, "sage_global");
+      return ge->c_name;
+    }
+
+    for (Stmt *s = mod->ast; s != NULL; s = s->next) {
+      if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC) {
+        char *name = token_to_string(s->as.proc.name);
+        if (strcmp(name, sage_name) == 0) {
+          free(name);
+          ProcEntry *pe = find_proc_entry(compiler->procs, sage_name);
+          if (pe)
+            return pe->c_name;
+        }
+        free(name);
+      } else if (s->type == STMT_LET) {
+        char *name = token_to_string(s->as.let.name);
+        if (strcmp(name, sage_name) == 0) {
+          free(name);
+          NameEntry *ge = find_name_entry(compiler->globals, sage_name);
+          if (ge)
+            return ge->c_name;
+        }
+        free(name);
+      }
+    }
   }
 
   return NULL;
@@ -1226,6 +1269,43 @@ static char *emit_binary_expr(Compiler *compiler, BinaryExpr *binary) {
 static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
   /* Method call: obj.method(args) */
   if (call->callee->type == EXPR_GET) {
+    char *obj_name = NULL;
+    if (call->callee->as.get.object->type == EXPR_VARIABLE) {
+      obj_name = token_to_string(call->callee->as.get.object->as.variable.name);
+    }
+
+    int is_module = 0;
+    if (obj_name) {
+      for (ImportedModule *m = compiler->modules; m != NULL; m = m->next) {
+        if (strcmp(m->name, obj_name) == 0) {
+          is_module = 1;
+          break;
+        }
+      }
+    }
+
+    if (is_module) {
+      char *method_name = token_to_string(call->callee->as.get.property);
+      ProcEntry *proc = find_proc_entry(compiler->procs, method_name);
+      if (proc != NULL) {
+        StringBuffer sb;
+        sb_init(&sb);
+        sb_appendf(&sb, "%s(", proc->c_name);
+        for (int i = 0; i < call->arg_count; i++) {
+          if (i > 0)
+            sb_append(&sb, ", ");
+          char *arg = emit_expr(compiler, call->args[i]);
+          sb_append(&sb, arg);
+          free(arg);
+        }
+        sb_append(&sb, ")");
+        free(obj_name);
+        free(method_name);
+        return sb_take(&sb);
+      }
+      free(method_name);
+    }
+
     char *obj = emit_expr(compiler, call->callee->as.get.object);
     char *method = token_to_string(call->callee->as.get.property);
     StringBuffer msb;
@@ -1246,6 +1326,8 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     }
     free(obj);
     free(method);
+    if (obj_name)
+      free(obj_name);
     return sb_take(&msb);
   }
 
@@ -1269,6 +1351,48 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     } else {
       char *arg = emit_expr(compiler, call->args[0]);
       sb_appendf(&sb, "sage_str(%s)", arg);
+      free(arg);
+    }
+    free(callee_name);
+    return sb_take(&sb);
+  }
+
+  if (strcmp(callee_name, "int") == 0) {
+    if (call->arg_count != 1) {
+      compiler_builtin_arity_error(compiler, call, "int", "usage: int(value)",
+                                   "1");
+      sb_append(&sb, "sage_nil()");
+    } else {
+      char *arg = emit_expr(compiler, call->args[0]);
+      sb_appendf(&sb, "sage_int(%s)", arg);
+      free(arg);
+    }
+    free(callee_name);
+    return sb_take(&sb);
+  }
+
+  if (strcmp(callee_name, "abs") == 0) {
+    if (call->arg_count != 1) {
+      compiler_builtin_arity_error(compiler, call, "abs", "usage: abs(value)",
+                                   "1");
+      sb_append(&sb, "sage_nil()");
+    } else {
+      char *arg = emit_expr(compiler, call->args[0]);
+      sb_appendf(&sb, "sage_abs(%s)", arg);
+      free(arg);
+    }
+    free(callee_name);
+    return sb_take(&sb);
+  }
+
+  if (strcmp(callee_name, "sqrt") == 0) {
+    if (call->arg_count != 1) {
+      compiler_builtin_arity_error(compiler, call, "sqrt", "usage: sqrt(value)",
+                                   "1");
+      sb_append(&sb, "sage_nil()");
+    } else {
+      char *arg = emit_expr(compiler, call->args[0]);
+      sb_appendf(&sb, "sage_sqrt(%s)", arg);
       free(arg);
     }
     free(callee_name);
@@ -2206,6 +2330,35 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
     return emit_tuple_expr(compiler, &expr->as.tuple);
   case EXPR_GET: {
     /* property access: object.property — emit as dict get for now */
+    char *obj_name = NULL;
+    if (expr->as.get.object->type == EXPR_VARIABLE) {
+      obj_name = token_to_string(expr->as.get.object->as.variable.name);
+    }
+
+    int is_module = 0;
+    if (obj_name) {
+      for (ImportedModule *m = compiler->modules; m != NULL; m = m->next) {
+        if (strcmp(m->name, obj_name) == 0) {
+          is_module = 1;
+          break;
+        }
+      }
+    }
+
+    if (is_module) {
+      char *prop_name = token_to_string(expr->as.get.property);
+      const char *slot_name = resolve_slot_name(compiler, prop_name);
+      if (slot_name) {
+        StringBuffer sb;
+        sb_init(&sb);
+        sb_appendf(&sb, "sage_load_slot(&%s, \"%s\")", slot_name, prop_name);
+        free(obj_name);
+        free(prop_name);
+        return sb_take(&sb);
+      }
+      free(prop_name);
+    }
+
     char *object = emit_expr(compiler, expr->as.get.object);
     char *prop = token_to_string(expr->as.get.property);
     char *escaped = escape_c_string(prop);
@@ -2215,6 +2368,8 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
     free(object);
     free(prop);
     free(escaped);
+    if (obj_name)
+      free(obj_name);
     return sb_take(&sb);
   }
   }
@@ -2418,6 +2573,15 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
   case STMT_IMPORT: {
     /* Emit module-level code inline at import site */
     ImportStmt *imp = &stmt->as.import;
+
+    const char *binding_name = imp->alias ? imp->alias : imp->module_name;
+    const char *slot_name = resolve_slot_name(compiler, binding_name);
+    if (slot_name) {
+      emit_line(compiler,
+                "sage_define_slot(&%s, sage_init_native_module(\"%s\"));",
+                slot_name, imp->module_name);
+    }
+
     for (ImportedModule *m = compiler->modules; m != NULL; m = m->next) {
       if (strcmp(m->name, imp->module_name) == 0) {
         for (Stmt *s = m->ast; s != NULL; s = s->next) {
@@ -2480,8 +2644,10 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
   case STMT_STRUCT:
   case STMT_ENUM:
   case STMT_TRAIT:
-  case STMT_COMPTIME:
   case STMT_MACRO_DEF:
+    break;
+  case STMT_COMPTIME:
+    emit_stmt(compiler, stmt->as.comptime.body);
     break;
   }
 }
@@ -3114,6 +3280,34 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "            return sage_string(\"<tuple>\");\n"
       "    }\n"
       "    return sage_string(\"nil\");\n"
+      "}\n"
+      "\n"
+      "static SageValue sage_int(SageValue value) {\n"
+      "    if (value.type == SAGE_TAG_NUMBER) return sage_number((double)(long "
+      "long)value.as.number);\n"
+      "    if (value.type == SAGE_TAG_STRING) return "
+      "sage_number((double)atof(value.as.string));\n"
+      "    if (value.type == SAGE_TAG_BOOL) return "
+      "sage_number((double)value.as.boolean);\n"
+      "    return sage_number(0);\n"
+      "}\n"
+      "\n"
+      "static SageValue sage_abs(SageValue value) {\n"
+      "    if (value.type == SAGE_TAG_NUMBER) return "
+      "sage_number(fabs(value.as.number));\n"
+      "    return sage_nil();\n"
+      "}\n"
+      "\n"
+      "static SageValue sage_sqrt(SageValue value) {\n"
+      "    if (value.type == SAGE_TAG_NUMBER) return "
+      "sage_number(sqrt(value.as.number));\n"
+      "    return sage_nil();\n"
+      "}\n"
+      "\n"
+      "static SageValue sage_init_native_module(const char* name) {\n"
+      "    /* For now, just return an empty dict; real native modules should be "
+      "linked */\n"
+      "    return sage_make_dict();\n"
       "}\n"
       "\n",
       out);
