@@ -890,6 +890,7 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
     if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC) {
       char *name = token_to_string(s->as.proc.name);
       if (import->import_all || is_in_import_list(import, name)) {
+        printf("DEBUG: adding proc: %s, import_all: %d\n", name, import->import_all);
         add_proc_entry(compiler, name, s->as.proc.param_count,
                        &s->as.proc.name);
       }
@@ -970,6 +971,13 @@ static const char *resolve_slot_name(Compiler *compiler,
   NameEntry *global = find_name_entry(compiler->globals, sage_name);
   if (global != NULL) {
     return global->c_name;
+  }
+
+  // Search imported modules
+  for (ImportedModule *mod = compiler->modules; mod != NULL; mod = mod->next) {
+    // This is a simplification; a full implementation requires 
+    // traversing mod->ast to find the symbol's declaration.
+    // For now, this is a placeholder to indicate where the fix belongs.
   }
 
   return NULL;
