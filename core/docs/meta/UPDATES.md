@@ -1,5 +1,15 @@
 # SageLang Updates
 
+## v3.6.1 — Native Builtin Expansion & C Codegen Hardening (June 2026)
+
+- **C Codegen Enhancements**:
+  - **Native FFI, Atomic, and Semaphore Builtins**: Added support for `ffi_open`, `ffi_call`, `ffi_close`, `atomic_new`, `atomic_load`, `atomic_store`, `atomic_add`, `atomic_cas`, `atomic_exchange`, `sem_new`, `sem_wait`, `sem_post`, and `sem_trywait` in the C backend.
+  - **Runtime Prelude Update**: Expanded the `SageTag` and `SageValue` structures in the generated C runtime to support `CLIB`, `POINTER`, `THREAD`, `MUTEX`, and `FUNCTION` types.
+  - **Function Reference Fix**: Corrected a bug where top-level function references (e.g., passed as arguments) were incorrectly loaded from slots; they are now correctly wrapped in `SageValue` using static function pointers.
+- **Compiler Improvements**:
+  - **Builtin Registry Expansion**: Updated the compiler's internal builtin table to include the new concurrency and FFI primitives.
+- **Version Bump**: Milestone v3.6.1 release.
+
 ## v3.6.0 — VM Optimization & Native Features (June 2026)
 
 - **Bytecode VM Performance Boost**:
