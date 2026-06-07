@@ -2044,7 +2044,7 @@ SageLang ships with 18 GPU/rendering library modules in `lib/graphics/`. All are
 
 ### 9.10 OS Development Libraries
 
-SageLang ships with 31 OS/bare-metal development modules across `lib/os/`, `lib/os/boot/`, `lib/os/kernel/`, and `lib/os/image/`:
+SageLang ships with 52 OS/bare-metal development modules across `lib/os/`, `lib/os/boot/`, `lib/os/kernel/`, and `lib/os/image/`:
 
 | Module | Import | Purpose |
 |--------|--------|---------|
@@ -2063,15 +2063,35 @@ SageLang ships with 31 OS/bare-metal development modules across `lib/os/`, `lib/
 | `dtb.sage` | `import os.dtb` | Flattened Device Tree parser for ARM64/RISC-V (nodes, properties, search) |
 | `alloc.sage` | `import os.alloc` | Bump, free-list, and bitmap page allocators for kernel memory |
 | `vfs.sage` | `import os.vfs` | Virtual filesystem layer with mount table, path utilities, memfs backend |
-| `ext.sage` | `import os.ext` | ext2/3/4 superblock, inode table, directory entries, extent tree |
+| `ext.sage" | `import os.ext` | ext2/3/4 superblock, inode table, directory entries, extent tree |
 | `btrfs.sage` | `import os.btrfs` | Btrfs superblock, chunk tree, root tree, subvolumes, checksums |
 | `f2fs.sage` | `import os.f2fs` | F2FS superblock, checkpoint, segment info, node/data addressing |
 | `boot/multiboot.sage` | `import os.boot.multiboot` | Multiboot2 header generation, tag building, boot info parsing |
 | `boot/gdt.sage` | `import os.boot.gdt` | x86_64 GDT descriptor construction, TSS entries, LGDT sequence |
 | `boot/start.sage` | `import os.boot.start` | x86_64 startup assembly generation (long mode entry, stack setup) |
 | `boot/linker.sage` | `import os.boot.linker` | Linker script generation for bare-metal ELF kernels |
+| `boot/bios.sage` | `import os.boot.bios` | BIOS interrupt interface (INT 0x10, 0x13, 0x15, 0x16) for legacy x86 boot |
+| `boot/e820.sage` | `import os.boot.e820` | BIOS memory map collection and normalization |
+| `boot/a20.sage` | `import os.boot.a20` | A20 gate enabling methods (BIOS, Fast A20, Keyboard Controller) |
+| `boot/cpuid.sage` | `import os.boot.cpuid` | CPU feature detection (Long mode, MSR, SSE, Vendor/Brand strings) |
+| `boot/real_mode.sage` | `import os.boot.real_mode` | Helpers for segment:offset addressing and real-mode stack setup |
+| `boot/prot_mode.sage` | `import os.boot.prot_mode` | Transition logic from real mode to 32-bit protected mode |
+| `boot/long_mode.sage` | `import os.boot.long_mode` | Transition logic from 32-bit protected mode to 64-bit long mode |
+| `boot/page_tables.sage`| `import os.boot.page_tables` | Bootstrap PML4/PDPT/PD builder for identity and higher-half mapping |
+| `boot/bump_alloc.sage`| `import os.boot.bump_alloc` | Lightweight, pre-kernel bump allocator with no GC dependencies |
+| `boot/disk.sage` | `import os.boot.disk` | Abstract sector I/O layer (BIOS, UEFI, direct ATA PIO probing) |
+| `boot/fat_boot.sage` | `import os.boot.fat_boot` | Minimal FAT filesystem reader designed for pre-kernel environments |
+| `boot/elf_load.sage` | `import os.boot.elf_load` | ELF segment loader with entry point detection and PT_LOAD support |
+| `boot/handoff.sage` | `import os.boot.handoff` | SageOS boot info protocol for passing system state to the kernel |
+| `boot/uefi_proto.sage` | `import os.boot.uefi_proto` | High-level wrappers for UEFI protocols (GOP, File, BlockIO) |
+| `boot/menu.sage` | `import os.boot.menu` | Text-mode boot selection UI with timeout support |
+| `boot/config.sage` | `import os.boot.config` | Parser for `boot.cfg` configuration files |
+| `boot/sbi.sage` | `import os.boot.sbi` | RISC-V Supervisor Binary Interface (SBI) wrappers for S-mode boot |
+| `boot/psci.sage` | `import os.boot.psci` | ARM Power State Coordination Interface for SMP core bring-up |
+| `boot/dtb_boot.sage` | `import os.boot.dtb_boot` | DTB-aware helpers for memory detection and /chosen manipulation |
+| `boot/verify.sage` | `import os.boot.verify` | Kernel signature verification (SHA-256, Ed25519) and TPM measurement |
 | `kernel/kmain.sage` | `import os.kernel.kmain` | Kernel entry point scaffolding, boot info handoff |
-| `kernel/console.sage` | `import os.kernel.console` | VGA text-mode console (80×25, color attributes, scrolling) |
+| `kernel/console.sage` | `import os.kernel.console` | VGA text-mode console (80x25, color attributes, scrolling) |
 | `kernel/keyboard.sage` | `import os.kernel.keyboard` | PS/2 keyboard driver (scancode set 2, key event dispatch) |
 | `kernel/timer.sage` | `import os.kernel.timer` | PIT channel 0 timer, IRQ0 handler, millisecond tick counter |
 | `kernel/syscall.sage` | `import os.kernel.syscall` | SYSCALL/SYSRET dispatch table, argument marshalling |
@@ -2079,6 +2099,7 @@ SageLang ships with 31 OS/bare-metal development modules across `lib/os/`, `lib/
 | `kernel/vmm.sage` | `import os.kernel.vmm` | Virtual memory manager (4-level paging, map/unmap, page fault handler) |
 | `image/diskimg.sage` | `import os.image.diskimg` | Bootable disk image builder (.img: MBR + FAT partition + kernel) |
 | `image/iso.sage` | `import os.image.iso` | ISO 9660 image creation (El Torito bootable CD/DVD) |
+| `metal/vga.sage` | `import metal.vga` | Early VGA text-mode display, cursor management, and progress bars |
 
 ### 9.11 Networking Libraries
 

@@ -90,6 +90,41 @@ import os.alloc   # Bump, free-list, and bitmap page allocators
 import os.vfs     # Virtual filesystem abstraction with pluggable backends
 ```
 
+### Boot Infrastructure
+
+```sage
+import os.boot.bios      # BIOS interrupt interface (INT 0x10, 0x13, 0x15, 0x16)
+import os.boot.e820      # BIOS memory map collection and normalization
+import os.boot.disk      # Abstract sector I/O (BIOS, UEFI, direct ATA PIO)
+import os.boot.elf_load  # ELF segment loader for kernel bring-up
+import os.boot.handoff   # SageOS boot info protocol and handoff helpers
+import os.boot.page_tables # Bootstrap PML4/PDPT/PD builder for x86-64
+import os.boot.a20       # A20 gate enabling methods (BIOS, Fast A20, KBD)
+import os.boot.cpuid     # CPU feature detection (Long mode, MSR, SSE)
+import os.boot.fat_boot  # Minimal FAT reader for pre-kernel (no GC)
+import os.boot.uefi_proto # High-level UEFI protocol wrappers (GOP, File)
+import os.boot.bump_alloc # Lightweight pre-kernel heap allocator (no GC)
+import os.boot.long_mode  # Composable x86-64 long mode transition logic
+import os.boot.prot_mode  # x86 32-bit protected mode transition helpers
+import os.boot.config     # Parser for boot.cfg configuration files
+import os.boot.menu       # Text-mode boot selection UI with timeout
+import metal.vga         # Early VGA text-mode display and progress bars
+```
+
+### Architecture-Specific
+
+```sage
+import os.boot.sbi       # RISC-V Supervisor Binary Interface (SBI) wrappers
+import os.boot.psci      # ARM Power State Coordination Interface
+import os.boot.dtb_boot  # DTB-aware boot helpers (memory, chosen node)
+```
+
+### Security
+
+```sage
+import os.boot.verify    # Kernel signature verification and TPM measurement
+```
+
 ### Example: Inspect an ELF kernel
 
 ```sage

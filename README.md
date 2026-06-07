@@ -250,6 +250,26 @@ SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel
 | **start** | `import os.boot.start` | Boot assembly generation (x86_64 multiboot + long mode, aarch64, riscv64) |
 | **build** | `import os.boot.build` | Build pipeline: serial drivers, kernel templates, QEMU commands (all 3 archs) |
 | **linker** | `import os.boot.linker` | Linker script generation for bare-metal ELF kernels (all 3 archs) |
+| **bios** | `import os.boot.bios` | BIOS interrupt interface (INT 0x10, 0x13, 0x15, 0x16) for legacy x86 boot |
+| **e820** | `import os.boot.e820` | BIOS memory map collection and normalization |
+| **a20** | `import os.boot.a20` | A20 gate enabling methods (BIOS, Fast A20, Keyboard Controller) |
+| **cpuid** | `import os.boot.cpuid` | CPU feature detection (Long mode, MSR, SSE, Vendor/Brand strings) |
+| **real_mode** | `import os.boot.real_mode` | Helpers for segment:offset addressing and real-mode stack setup |
+| **prot_mode** | `import os.boot.prot_mode` | Transition logic from real mode to 32-bit protected mode |
+| **long_mode** | `import os.boot.long_mode` | Transition logic from 32-bit protected mode to 64-bit long mode |
+| **page_tables**| `import os.boot.page_tables` | Bootstrap PML4/PDPT/PD builder for identity and higher-half mapping |
+| **bump_alloc**| `import os.boot.bump_alloc` | Lightweight, pre-kernel bump allocator with no GC dependencies |
+| **disk** | `import os.boot.disk` | Abstract sector I/O layer (BIOS, UEFI, direct ATA PIO probing) |
+| **fat_boot** | `import os.boot.fat_boot` | Minimal FAT filesystem reader designed for pre-kernel environments |
+| **elf_load** | `import os.boot.elf_load` | ELF segment loader with entry point detection and PT_LOAD support |
+| **handoff** | `import os.boot.handoff` | SageOS boot info protocol for passing system state to the kernel |
+| **uefi_proto** | `import os.boot.uefi_proto` | High-level wrappers for UEFI protocols (GOP, File, BlockIO) |
+| **menu** | `import os.boot.menu` | Text-mode boot selection UI with timeout support |
+| **config** | `import os.boot.config` | Parser for `boot.cfg` configuration files |
+| **sbi** | `import os.boot.sbi` | RISC-V Supervisor Binary Interface (SBI) wrappers for S-mode boot |
+| **psci** | `import os.boot.psci` | ARM Power State Coordination Interface for SMP core bring-up |
+| **dtb_boot** | `import os.boot.dtb_boot` | DTB-aware helpers for memory detection and /chosen manipulation |
+| **verify** | `import os.boot.verify` | Kernel signature verification (SHA-256, Ed25519) and TPM measurement |
 | **kmain** | `import os.kernel.kmain` | Kernel entry point scaffolding, boot info handoff |
 | **console** | `import os.kernel.console` | VGA text-mode console (80×25, color attributes, scrolling) |
 | **keyboard** | `import os.kernel.keyboard` | PS/2 keyboard driver (scancode set 2, key event dispatch) |
@@ -278,6 +298,7 @@ SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel
 | **Tmpfs** | `import os.tmpfs` | In-memory filesystem for temporary kernel storage |
 | **SMP** | `import os.smp` | Symmetric Multi-Processing: CPU topology, affinity, and work distribution |
 | **Metal Core**| `import metal.core` | Bare-metal stubs: puts, putchar, inb/outb, mmio, cli/sti/hlt, panic |
+| **Metal VGA** | `import metal.vga` | Early VGA text-mode display, cursor management, and progress bars |
 | **Metal Serial**| `import metal.serial` | NS16550A/PL011 drivers, baud rate validation, timeout-aware reads, line reading, buffer flushing |
 | **Metal GPIO** | `import metal.gpio` | MMIO-based GPIO, pin modes, pull config, interrupts, batch mask-based operations |
 | **Metal IRQ**  | `import metal.irq` | Interrupt registration, priority levels, nesting depth tracking, arch-neutral masking |

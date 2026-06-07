@@ -2090,6 +2090,57 @@ pure Sage code.
 | aarch64 | Direct ELF load | PL011 MMIO (0x09000000) | virt + cortex-a57 |
 | riscv64 | Direct ELF load | NS16550 MMIO (0x10000000) | virt (-bios none) |
 
+## Advanced Boot Infrastructure
+
+SageLang v0.8.2 expands the `os.boot` library with 20+ new modules for building sophisticated multi-stage bootloaders.
+
+### Firmware Interaction
+
+The `os.boot.bios` module provides code generation for legacy BIOS interrupts from real mode. This allows Sage-based bootloaders to set video modes, read from disks via LBA extensions, and query system information before switching to protected mode.
+
+```sage
+import os.boot.bios as bios
+
+# Set 80x25 text mode
+let asm = bios.set_video_mode(0x03)
+
+# Read disk sectors
+let dap = bios.disk_address_packet(lba=2048, count=16, dest=0x20000)
+asm = asm + bios.int13_read(drive=0x80, "dap_label")
+```
+
+### Memory Detection
+
+`os.boot.e820` handles the collection and normalization of the system memory map from BIOS. It can find usable RAM regions and determine the highest physical address available for kernel placement.
+
+```sage
+import os.boot.e820 as e820
+
+# Collect memory map entries
+let asm = e820.collect_asm("mmap_buffer")
+
+# Filter for usable RAM regions
+let usable = e820.filter_usable(mmap)
+```
+
+### Mode Transitions
+
+The transition from 16-bit real mode to 64-bit long mode is handled by a sequence of composable modules:
+
+*   **`os.boot.real_mode`**: Real-mode stack setup and far jumps.
+*   **`os.boot.prot_mode`**: Entering 32-bit protected mode with a flat GDT.
+*   **`os.boot.long_mode`**: Transitioning to 64-bit mode via PAE and PML4 setup.
+
+### Kernel Loading and Handoff
+
+*   **`os.boot.elf_load`**: Parses ELF binaries and copies `PT_LOAD` segments to their physical load addresses.
+*   **`os.boot.handoff`**: Defines the SageOS Boot Protocol, allowing the bootloader to pass a structured information block (framebuffer, memory map, ACPI tables) to the kernel entry point.
+
+### Architecture-Specific Support
+
+*   **`os.boot.sbi`**: RISC-V Supervisor Binary Interface (SBI) wrappers for S-mode bootloaders.
+*   **`os.boot.psci`**: ARM Power State Coordination Interface for secondary core bring-up.
+
 ## Quick Start: Build a Kernel with Sage
 
 The `os.boot.build` module generates all files needed for a bootable
