@@ -324,6 +324,29 @@ proc vfs_close(handle):
     return 0
 end
 
+## Checks if a path exists.
+proc vfs_exists(vfs, path):
+    return vfs_stat(vfs, path) != nil
+end
+
+## Checks if a path is a file.
+proc vfs_is_file(vfs, path):
+    let vif_st = vfs_stat(vfs, path)
+    if vif_st != nil:
+        return vif_st["type"] == VFS_FILE
+    end
+    return false
+end
+
+## Checks if a path is a directory.
+proc vfs_is_dir(vfs, path):
+    let vid_st = vfs_stat(vfs, path)
+    if vid_st != nil:
+        return vid_st["type"] == VFS_DIR
+    end
+    return false
+end
+
 # VFS stat
 proc vfs_stat(vfs, path):
     let norm = normalize_path(path)
@@ -382,6 +405,21 @@ proc vfs_unlink(vfs, path):
         return -1
     end
     return backend["unlink"](rel)
+end
+
+# VFS rmdir
+proc vfs_rmdir(vfs, path):
+    let vrm_norm = normalize_path(path)
+    let vrm_m = resolve_mount(vfs, vrm_norm)
+    if vrm_m == nil:
+        return -1
+    end
+    let vrm_rel = relative_path(vrm_m["path"], vrm_norm)
+    let vrm_backend = vrm_m["backend"]
+    if not dict_has(vrm_backend, "rmdir"):
+        return -1
+    end
+    return vrm_backend["rmdir"](vrm_rel)
 end
 
 # Create a simple in-memory filesystem backend for testing
@@ -491,6 +529,47 @@ proc create_memfs():
     proc memfs_unlink(path):
         if dict_has(fs["files"], path):
             dict_delete(fs["files"], path)
+            # Update parent
+            let d_un = dirname(path)
+            let n_un = basename(path)
+            if dict_has(fs["dirs"], d_un):
+                let entries_un = fs["dirs"][d_un]
+                let new_entries_un = []
+                for e_un in entries_un:
+                    if e_un["name"] != n_un:
+                        push(new_entries_un, e_un)
+                    end
+                end
+                fs["dirs"][d_un] = new_entries_un
+            end
+            return 0
+        end
+        return -1
+    end
+
+    proc memfs_rmdir(path):
+        if dict_has(fs["dirs"], path):
+            if path == "/":
+                return -1
+            end
+            let entries_rm = fs["dirs"][path]
+            if len(entries_rm) > 0:
+                return -1
+            end
+            dict_delete(fs["dirs"], path)
+            # Update parent
+            let d_rm = dirname(path)
+            let n_rm = basename(path)
+            if dict_has(fs["dirs"], d_rm):
+                let entries_p_rm = fs["dirs"][d_rm]
+                let new_entries_p_rm = []
+                for e_p_rm in entries_p_rm:
+                    if e_p_rm["name"] != n_rm:
+                        push(new_entries_p_rm, e_p_rm)
+                    end
+                end
+                fs["dirs"][d_rm] = new_entries_p_rm
+            end
             return 0
         end
         return -1
@@ -507,6 +586,7 @@ proc create_memfs():
     backend["stat"] = memfs_stat
     backend["readdir"] = memfs_readdir
     backend["mkdir"] = memfs_mkdir
+    backend["rmdir"] = memfs_rmdir
     backend["unlink"] = memfs_unlink
     backend["close"] = memfs_close
     backend["_fs"] = fs
