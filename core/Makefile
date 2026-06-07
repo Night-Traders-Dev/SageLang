@@ -12,7 +12,8 @@ SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null ||
 # CC/CFLAGS/LDFLAGS can be overridden by environment (OIS sets CC=clang on macOS/BSD)
 CC ?= gcc
 PYTHON ?= python3
-CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/home/kraken/.local/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"' -DSAGE_HAS_LSP -DSAGE_HAS_ML
+PREFIX ?= /usr/local
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"$(PREFIX)/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"' -DSAGE_HAS_LSP -DSAGE_HAS_ML
 # Merge any compiler flags from environment (e.g. Homebrew include paths)
 CFLAGS += $(CFLAGS_EXTRA)
 # Platform-conditional linking: pthread only on desktop (not RP2040)

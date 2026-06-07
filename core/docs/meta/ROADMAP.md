@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: June 6, 2026
-> **Current Phase**: v3.6.1 — Native Builtin Expansion & C Codegen Hardening, all 18 phases complete
+> **Current Phase**: v3.6.2 — Native Builtin Expansion & C Codegen Hardening, all 18 phases complete
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 

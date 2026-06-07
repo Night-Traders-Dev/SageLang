@@ -9,6 +9,11 @@
   - **Native Exceptions**: Implementing `OP_SETUP_TRY`, `OP_END_TRY`, and `OP_RAISE` for exception handling.
   - **Class & OOP**: Refining the native bytecode instantiation and method dispatch for cross-module OOP.
 
+## v3.6.2 — Bug Fixes & Improvements (June 2026)
+
+- **Bug Fixes**:
+  - **memfs_rmdir**: Fixed a bug where `vfs_rmdir` incorrectly allowed removing non-empty directories constructed via `memfs_write`.
+
 ## v3.6.1 — Native Builtin Expansion & C Codegen Hardening (June 2026)
 
 - **C Codegen Enhancements**:

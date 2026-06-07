@@ -228,16 +228,27 @@ if [ "$MISSING" -eq 1 ]; then
 fi
 
 # ============================================================
-#  1. Clean previous builds
+#  1. Clean previous builds and update submodules
 # ============================================================
 
-section "Cleaning previous builds"
+section "Preparing workspace"
+
+step "Updating submodules (non-recursive)"
+# Avoid infinite recursion by not using --recursive
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git submodule sync >/dev/null 2>&1 || true
+    git submodule update --init >/dev/null 2>&1 || true
+    step_ok "submodules initialized"
+else
+    step_ok "skipped (not a git repo)"
+fi
 
 step "Removing old build artifacts"
 if [ -d build_sage ]; then
     rm -rf build_sage
 fi
 make clean > /dev/null 2>&1 || true
+git clean -fdx > /dev/null 2>&1 || true
 step_ok "clean"
 
 # ============================================================
