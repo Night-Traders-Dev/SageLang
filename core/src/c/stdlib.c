@@ -368,6 +368,10 @@ Module* create_math_module(ModuleCache* cache) {
 // IO MODULE
 // ============================================================================
 
+// Security: Cap entire-file reads to 100MB to prevent memory exhaustion DoS attacks.
+// This affects io.readfile and io.readbytes which allocate the full content at once.
+#define SAGE_MAX_READ_SIZE (100 * 1024 * 1024)
+
 static Value io_readfile_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* path = AS_STRING(args[0]);
@@ -377,7 +381,7 @@ static Value io_readfile_native(int argCount, Value* args) {
 
     fseek(f, 0, SEEK_END);
     long length = ftell(f);
-    if (length < 0) { fclose(f); return val_nil(); }
+    if (length < 0 || length > SAGE_MAX_READ_SIZE) { fclose(f); return val_nil(); }
     fseek(f, 0, SEEK_SET);
 
     char* buf = SAGE_ALLOC((size_t)length + 1);
@@ -505,9 +509,9 @@ static Value io_readbytes_native(int argCount, Value* args) {
     if (!f) return val_nil();
     fseek(f, 0, SEEK_END);
     long length = ftell(f);
-    if (length < 0 || length > 100*1024*1024) { fclose(f); return val_nil(); } // 100MB max
+    if (length < 0 || length > SAGE_MAX_READ_SIZE) { fclose(f); return val_nil(); }
     fseek(f, 0, SEEK_SET);
-    unsigned char* buf = malloc((size_t)length);
+    unsigned char* buf = SAGE_ALLOC((size_t)length);
     size_t read = fread(buf, 1, (size_t)length, f);
     fclose(f);
     // Create array of byte values
