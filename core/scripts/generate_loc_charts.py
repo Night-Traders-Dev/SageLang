@@ -223,7 +223,7 @@ def collect_project_breakdown() -> list[tuple[str, int, str]]:
             counts["Graphics / GPU"] += lines
         elif path_str.startswith("lib/"):
             counts["Standard Library"] += lines
-        elif name in {"Makefile", "CMakeLists.txt", "build.sh", "sagemake"} or path.suffix in {".sh", ".cmake"}:
+        elif name in {"Makefile", "CMakeLists.txt", "sagemake"} or path.suffix in {".sh", ".cmake"}:
             counts["Build System"] += lines
 
     result = [(k, counts[k], categories[k][1]) for k in categories if counts[k] > 0]

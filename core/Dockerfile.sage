@@ -23,10 +23,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /src
 COPY . /src
 
-RUN chmod +x /src/build.sh && \
+RUN chmod +x /src/sagemake && \
     rm -rf /src/build /src/build_sage /tmp/out && \
     mkdir -p /tmp/out && \
-    bash /src/build.sh -DBUILD_SAGE=ON && \
+    python3 /src/sagemake -DBUILD_SAGE=ON && \
     if [ -f /src/build/sage ]; then cp /src/build/sage /tmp/out/sage_c; fi && \
     if [ -f /src/build_sage/sage ]; then cp /src/build_sage/sage /tmp/out/sage_selfhosted; fi && \
     if [ -f /src/build/sage-lsp ]; then cp /src/build/sage-lsp /tmp/out/sage_lsp_c; fi && \

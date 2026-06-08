@@ -134,7 +134,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 - GGUF import (lib/llm/gguf_import.sage): convert Ollama models to SageGPT
 - Models directory reorganized: architectures/, chatbots/, training/, data/, weights/, tools/, viz/, export/
 - Build targets: make train-c, train-sage, chatbot-c, chatbot-llvm, chatbot-native, sl-tq-chat, all-models
-- build.sh --train and --chatbot flags
+- sagemake --train and --chatbot flags
 - SageMake: unified build system with platform/GPU/NPU/compiler auto-detection (./sagemake build, train, chatbot, all)
 - 241 interpreter tests, all passing
 - super.init() and -> arrow operator

@@ -632,7 +632,7 @@ bash models/data/download_datasets.sh all    # + The Stack (~200 GB)
 - **Build pipeline v2.0** (`models/tools/build_sagellm.sage`): 12-phase pipeline — data collection, model init, pre-training, LoRA fine-tuning, DPO alignment, RAG, Engram memory, quantization, chatbot generation, GGUF export, visualization, and summary. SageGPT-Medium: d_model=128, 4 layers, 4 heads, d_ff=512, vocab=256, 16K context.
 - **C-Only Trainer**: `make train-c` builds a standalone training binary (`train_sl_tq`) with pure C backpropagation — no frameworks, no autograd, every gradient explicit. Usage: `./train_sl_tq 50000 0.002` (steps, learning rate). Auto-detects cuBLAS GPU acceleration and ARM NEON SIMD; 1000+ steps/sec on modern hardware. Saves weights compatible with the chatbot: `models/weights/sl_tq_llm.weights`. Also works on mobile via Termux + proot ARM64 (falls back to NEON SIMD when cuBLAS is unavailable).
 - **Additional build targets**: `make train-sage` (Sage interpreter training), `make chatbot-c` (compile chatbot via C backend), `make chatbot-llvm` (compile chatbot via LLVM backend), `make chatbot-native` (compile chatbot via native asm), `make sl-tq-chat` (compile SL-TQ-LLM generative chatbot), `make all-models` (build all model variants).
-- **`build.sh` flags**: `--train` (build C trainer), `--chatbot` (compile chatbots).
+- **`sagemake` flags**: `--train` (build C trainer), `--chatbot` (compile chatbots).
 - **SageMake**: Unified build system with platform, GPU, NPU, and compiler auto-detection (`./sagemake build`, `./sagemake train`, `./sagemake all`).
 
 **Agent Framework** (`lib/agent/`, imported as `import agent.<module>`):

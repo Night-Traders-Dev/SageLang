@@ -2474,7 +2474,7 @@ make kernel-uefi      # Compile UEFI application
 ## Version
 
 The version is stored in a single `VERSION` file at the repository root.
-All build systems (Makefile, CMakeLists.txt, build.sh, sagemake) read from
+All build systems (Makefile, CMakeLists.txt, sagemake) read from
 this file automatically. Current version: **3.5.4**.
 
 \newpage

@@ -143,7 +143,7 @@ build_now() {
         export VULKAN
     fi
 
-    exec ./build.sh $args
+    exec ../../sagemake $args
 }
 
 # --- Main loop ---

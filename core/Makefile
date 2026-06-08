@@ -392,6 +392,10 @@ install: $(TARGET) $(LSP_TARGET)
 	install -m 644 docs/meta/*.md $(DOCDIR)/
 	@echo "✅ Installation complete"
 	@echo "   Run with: sage <script.sage>"
+	@if [ -n "$$SUDO_USER" ]; then \
+		chown -R $$SUDO_USER ..; \
+		echo "   (Restored workspace ownership to $$SUDO_USER)"; \
+	fi
 
 uninstall:
 	@echo "Uninstalling SageLang..."

@@ -755,4 +755,4 @@ make chatbot-llvm   # Compile chatbot via LLVM backend
 make sl-tq-chat     # Compile SL-TQ-LLM generative chatbot
 ```
 
-`build.sh` flags: `--train` (build C trainer), `--chatbot` (compile chatbots).
+`sagemake` flags: `--train` (build C trainer), `--chatbot` (compile chatbots).
