@@ -1,0 +1,452 @@
+[
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/main.c.o -c /home/elf_g/Devel/sagelang/core/src/c/main.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/main.c",
+  "output": "CMakeFiles/sage.dir/src/c/main.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/ast.c.o -c /home/elf_g/Devel/sagelang/core/src/c/ast.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/ast.c",
+  "output": "CMakeFiles/sage.dir/src/c/ast.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/codegen.c.o -c /home/elf_g/Devel/sagelang/core/src/c/codegen.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/codegen.c",
+  "output": "CMakeFiles/sage.dir/src/c/codegen.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/compiler.c.o -c /home/elf_g/Devel/sagelang/core/src/c/compiler.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/compiler.c",
+  "output": "CMakeFiles/sage.dir/src/c/compiler.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/constfold.c.o -c /home/elf_g/Devel/sagelang/core/src/c/constfold.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/constfold.c",
+  "output": "CMakeFiles/sage.dir/src/c/constfold.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/dce.c.o -c /home/elf_g/Devel/sagelang/core/src/c/dce.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/dce.c",
+  "output": "CMakeFiles/sage.dir/src/c/dce.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/diagnostic.c.o -c /home/elf_g/Devel/sagelang/core/src/c/diagnostic.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/diagnostic.c",
+  "output": "CMakeFiles/sage.dir/src/c/diagnostic.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/env.c.o -c /home/elf_g/Devel/sagelang/core/src/c/env.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/env.c",
+  "output": "CMakeFiles/sage.dir/src/c/env.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/formatter.c.o -c /home/elf_g/Devel/sagelang/core/src/c/formatter.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/formatter.c",
+  "output": "CMakeFiles/sage.dir/src/c/formatter.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/gc.c.o -c /home/elf_g/Devel/sagelang/core/src/c/gc.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/gc.c",
+  "output": "CMakeFiles/sage.dir/src/c/gc.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/inline.c.o -c /home/elf_g/Devel/sagelang/core/src/c/inline.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/inline.c",
+  "output": "CMakeFiles/sage.dir/src/c/inline.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/interpreter.c.o -c /home/elf_g/Devel/sagelang/core/src/c/interpreter.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/interpreter.c",
+  "output": "CMakeFiles/sage.dir/src/c/interpreter.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/jit.c.o -c /home/elf_g/Devel/sagelang/core/src/c/jit.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/jit.c",
+  "output": "CMakeFiles/sage.dir/src/c/jit.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/aot.c.o -c /home/elf_g/Devel/sagelang/core/src/c/aot.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/aot.c",
+  "output": "CMakeFiles/sage.dir/src/c/aot.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/kotlin_backend.c.o -c /home/elf_g/Devel/sagelang/core/src/c/kotlin_backend.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/kotlin_backend.c",
+  "output": "CMakeFiles/sage.dir/src/c/kotlin_backend.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/linter.c.o -c /home/elf_g/Devel/sagelang/core/src/c/linter.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/linter.c",
+  "output": "CMakeFiles/sage.dir/src/c/linter.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/lexer.c.o -c /home/elf_g/Devel/sagelang/core/src/c/lexer.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/lexer.c",
+  "output": "CMakeFiles/sage.dir/src/c/lexer.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/llvm_backend.c.o -c /home/elf_g/Devel/sagelang/core/src/c/llvm_backend.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/llvm_backend.c",
+  "output": "CMakeFiles/sage.dir/src/c/llvm_backend.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/lsp.c.o -c /home/elf_g/Devel/sagelang/core/src/c/lsp.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/lsp.c",
+  "output": "CMakeFiles/sage.dir/src/c/lsp.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/module.c.o -c /home/elf_g/Devel/sagelang/core/src/c/module.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/module.c",
+  "output": "CMakeFiles/sage.dir/src/c/module.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/net.c.o -c /home/elf_g/Devel/sagelang/core/src/c/net.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/net.c",
+  "output": "CMakeFiles/sage.dir/src/c/net.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/parser.c.o -c /home/elf_g/Devel/sagelang/core/src/c/parser.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/parser.c",
+  "output": "CMakeFiles/sage.dir/src/c/parser.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/pass.c.o -c /home/elf_g/Devel/sagelang/core/src/c/pass.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/pass.c",
+  "output": "CMakeFiles/sage.dir/src/c/pass.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/sage_thread.c.o -c /home/elf_g/Devel/sagelang/core/src/c/sage_thread.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/sage_thread.c",
+  "output": "CMakeFiles/sage.dir/src/c/sage_thread.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/stdlib.c.o -c /home/elf_g/Devel/sagelang/core/src/c/stdlib.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/stdlib.c",
+  "output": "CMakeFiles/sage.dir/src/c/stdlib.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/typecheck.c.o -c /home/elf_g/Devel/sagelang/core/src/c/typecheck.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/typecheck.c",
+  "output": "CMakeFiles/sage.dir/src/c/typecheck.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/safety.c.o -c /home/elf_g/Devel/sagelang/core/src/c/safety.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/safety.c",
+  "output": "CMakeFiles/sage.dir/src/c/safety.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/value.c.o -c /home/elf_g/Devel/sagelang/core/src/c/value.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/value.c",
+  "output": "CMakeFiles/sage.dir/src/c/value.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/graphics.c.o -c /home/elf_g/Devel/sagelang/core/src/c/graphics.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/graphics.c",
+  "output": "CMakeFiles/sage.dir/src/c/graphics.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/gpu_api.c.o -c /home/elf_g/Devel/sagelang/core/src/c/gpu_api.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/gpu_api.c",
+  "output": "CMakeFiles/sage.dir/src/c/gpu_api.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/ml_backend.c.o -c /home/elf_g/Devel/sagelang/core/src/c/ml_backend.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/ml_backend.c",
+  "output": "CMakeFiles/sage.dir/src/c/ml_backend.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/heartbeat.c.o -c /home/elf_g/Devel/sagelang/core/src/c/heartbeat.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/heartbeat.c",
+  "output": "CMakeFiles/sage.dir/src/c/heartbeat.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/c/metal_vm.c.o -c /home/elf_g/Devel/sagelang/core/src/c/metal_vm.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/metal_vm.c",
+  "output": "CMakeFiles/sage.dir/src/c/metal_vm.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/vm/bytecode.c.o -c /home/elf_g/Devel/sagelang/core/src/vm/bytecode.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/vm/bytecode.c",
+  "output": "CMakeFiles/sage.dir/src/vm/bytecode.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/vm/program.c.o -c /home/elf_g/Devel/sagelang/core/src/vm/program.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/vm/program.c",
+  "output": "CMakeFiles/sage.dir/src/vm/program.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/vm/runtime.c.o -c /home/elf_g/Devel/sagelang/core/src/vm/runtime.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/vm/runtime.c",
+  "output": "CMakeFiles/sage.dir/src/vm/runtime.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -Wno-error=clobbered -Wno-error=stringop-overflow -o CMakeFiles/sage.dir/src/vm/vm.c.o -c /home/elf_g/Devel/sagelang/core/src/vm/vm.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/vm/vm.c",
+  "output": "CMakeFiles/sage.dir/src/vm/vm.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/lsp_main.c.o -c /home/elf_g/Devel/sagelang/core/src/c/lsp_main.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/lsp_main.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/lsp_main.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/ast.c.o -c /home/elf_g/Devel/sagelang/core/src/c/ast.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/ast.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/ast.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/codegen.c.o -c /home/elf_g/Devel/sagelang/core/src/c/codegen.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/codegen.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/codegen.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/compiler.c.o -c /home/elf_g/Devel/sagelang/core/src/c/compiler.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/compiler.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/compiler.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/constfold.c.o -c /home/elf_g/Devel/sagelang/core/src/c/constfold.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/constfold.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/constfold.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/dce.c.o -c /home/elf_g/Devel/sagelang/core/src/c/dce.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/dce.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/dce.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/diagnostic.c.o -c /home/elf_g/Devel/sagelang/core/src/c/diagnostic.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/diagnostic.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/diagnostic.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/env.c.o -c /home/elf_g/Devel/sagelang/core/src/c/env.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/env.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/env.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/formatter.c.o -c /home/elf_g/Devel/sagelang/core/src/c/formatter.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/formatter.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/formatter.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/gc.c.o -c /home/elf_g/Devel/sagelang/core/src/c/gc.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/gc.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/gc.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/inline.c.o -c /home/elf_g/Devel/sagelang/core/src/c/inline.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/inline.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/inline.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/interpreter.c.o -c /home/elf_g/Devel/sagelang/core/src/c/interpreter.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/interpreter.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/interpreter.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/jit.c.o -c /home/elf_g/Devel/sagelang/core/src/c/jit.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/jit.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/jit.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/aot.c.o -c /home/elf_g/Devel/sagelang/core/src/c/aot.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/aot.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/aot.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/kotlin_backend.c.o -c /home/elf_g/Devel/sagelang/core/src/c/kotlin_backend.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/kotlin_backend.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/kotlin_backend.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/linter.c.o -c /home/elf_g/Devel/sagelang/core/src/c/linter.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/linter.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/linter.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/lexer.c.o -c /home/elf_g/Devel/sagelang/core/src/c/lexer.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/lexer.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/lexer.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/llvm_backend.c.o -c /home/elf_g/Devel/sagelang/core/src/c/llvm_backend.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/llvm_backend.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/llvm_backend.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/lsp.c.o -c /home/elf_g/Devel/sagelang/core/src/c/lsp.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/lsp.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/lsp.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/module.c.o -c /home/elf_g/Devel/sagelang/core/src/c/module.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/module.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/module.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/net.c.o -c /home/elf_g/Devel/sagelang/core/src/c/net.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/net.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/net.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/parser.c.o -c /home/elf_g/Devel/sagelang/core/src/c/parser.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/parser.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/parser.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/pass.c.o -c /home/elf_g/Devel/sagelang/core/src/c/pass.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/pass.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/pass.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/sage_thread.c.o -c /home/elf_g/Devel/sagelang/core/src/c/sage_thread.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/sage_thread.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/sage_thread.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/stdlib.c.o -c /home/elf_g/Devel/sagelang/core/src/c/stdlib.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/stdlib.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/stdlib.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/typecheck.c.o -c /home/elf_g/Devel/sagelang/core/src/c/typecheck.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/typecheck.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/typecheck.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/safety.c.o -c /home/elf_g/Devel/sagelang/core/src/c/safety.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/safety.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/safety.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/value.c.o -c /home/elf_g/Devel/sagelang/core/src/c/value.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/value.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/value.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/graphics.c.o -c /home/elf_g/Devel/sagelang/core/src/c/graphics.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/graphics.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/graphics.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/gpu_api.c.o -c /home/elf_g/Devel/sagelang/core/src/c/gpu_api.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/gpu_api.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/gpu_api.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/ml_backend.c.o -c /home/elf_g/Devel/sagelang/core/src/c/ml_backend.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/ml_backend.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/ml_backend.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/heartbeat.c.o -c /home/elf_g/Devel/sagelang/core/src/c/heartbeat.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/heartbeat.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/heartbeat.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/c/metal_vm.c.o -c /home/elf_g/Devel/sagelang/core/src/c/metal_vm.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/metal_vm.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/c/metal_vm.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/vm/bytecode.c.o -c /home/elf_g/Devel/sagelang/core/src/vm/bytecode.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/vm/bytecode.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/vm/bytecode.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/vm/program.c.o -c /home/elf_g/Devel/sagelang/core/src/vm/program.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/vm/program.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/vm/program.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/vm/runtime.c.o -c /home/elf_g/Devel/sagelang/core/src/vm/runtime.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/vm/runtime.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/vm/runtime.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -o CMakeFiles/sage-lsp.dir/src/vm/vm.c.o -c /home/elf_g/Devel/sagelang/core/src/vm/vm.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/vm/vm.c",
+  "output": "CMakeFiles/sage-lsp.dir/src/vm/vm.c.o"
+},
+{
+  "directory": "/home/elf_g/Devel/sagelang/core/build_dev",
+  "command": "/usr/bin/cc -DSAGE_HAS_GLFW=1 -DSAGE_HAS_OPENGL=1 -DSAGE_HAS_VULKAN=1 -DSAGE_VERSION_STR=\\\"3.6.4\\\" -D_POSIX_C_SOURCE=200809L -I/home/elf_g/Devel/sagelang/core/include -I/home/elf_g/Devel/sagelang/core/src/c -I/home/elf_g/Devel/sagelang/core/src/vm -std=gnu11 -O2 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function -Wno-format-truncation -Wno-clobbered -Wno-unused-result -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch -Wno-overlength-strings -O3 -o CMakeFiles/train_sl_tq.dir/src/c/train_sl_tq.c.o -c /home/elf_g/Devel/sagelang/core/src/c/train_sl_tq.c",
+  "file": "/home/elf_g/Devel/sagelang/core/src/c/train_sl_tq.c",
+  "output": "CMakeFiles/train_sl_tq.dir/src/c/train_sl_tq.c.o"
+}
+]

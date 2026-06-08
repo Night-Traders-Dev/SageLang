@@ -80,6 +80,37 @@ extern "C" {
 #define OP_SETUP_TRY      56
 #define OP_END_TRY        57
 #define OP_RAISE          58
+
+// GPU hot-path opcodes (Phase 16)
+#define OP_GPU_POLL_EVENTS         59
+#define OP_GPU_WINDOW_SHOULD_CLOSE 60
+#define OP_GPU_GET_TIME            61
+#define OP_GPU_KEY_PRESSED         62
+#define OP_GPU_KEY_DOWN            63
+#define OP_GPU_MOUSE_POS           64
+#define OP_GPU_MOUSE_DELTA         65
+#define OP_GPU_UPDATE_INPUT        66
+#define OP_GPU_BEGIN_COMMANDS      67
+#define OP_GPU_END_COMMANDS        68
+#define OP_GPU_CMD_BEGIN_RP        69
+#define OP_GPU_CMD_END_RP          70
+#define OP_GPU_CMD_DRAW            71
+#define OP_GPU_CMD_BIND_GP         72
+#define OP_GPU_CMD_BIND_DS         73
+#define OP_GPU_CMD_SET_VP          74
+#define OP_GPU_CMD_SET_SC          75
+#define OP_GPU_CMD_BIND_VB         76
+#define OP_GPU_CMD_BIND_IB         77
+#define OP_GPU_CMD_DRAW_IDX        78
+#define OP_GPU_SUBMIT_SYNC         79
+#define OP_GPU_ACQUIRE_IMG         80
+#define OP_GPU_PRESENT             81
+#define OP_GPU_WAIT_FENCE          82
+#define OP_GPU_RESET_FENCE         83
+#define OP_GPU_UPDATE_UNIFORM      84
+#define OP_GPU_CMD_PUSH_CONST      85
+#define OP_GPU_CMD_DISPATCH         86
+
 #define OP_HALT           0xFF
 
 // ============================================================================
@@ -245,9 +276,18 @@ typedef struct {
     unsigned char heap[METAL_HEAP_SIZE];
     int heap_used;
 
+    // Exception handling
+    struct {
+        int ip;
+        int stack_size;
+    } handlers[128];
+    int hsp;
+    MetalValue exception_value;
+
     // Status
     int halted;
     int error;
+    int is_throwing;
     const char* error_msg;
 
     // I/O callbacks (set by the host kernel/bootloader)

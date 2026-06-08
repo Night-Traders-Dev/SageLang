@@ -1,0 +1,15 @@
+CMakeFiles/sage-lsp.dir/src/c/lsp_main.c.o: \
+ /home/elf_g/Devel/sagelang/core/src/c/lsp_main.c \
+ /usr/include/stdc-predef.h /usr/include/setjmp.h /usr/include/features.h \
+ /usr/include/features-time64.h \
+ /usr/include/x86_64-linux-gnu/bits/wordsize.h \
+ /usr/include/x86_64-linux-gnu/bits/timesize.h \
+ /usr/include/x86_64-linux-gnu/sys/cdefs.h \
+ /usr/include/x86_64-linux-gnu/bits/long-double.h \
+ /usr/include/x86_64-linux-gnu/gnu/stubs.h \
+ /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
+ /usr/include/x86_64-linux-gnu/bits/setjmp.h \
+ /usr/include/x86_64-linux-gnu/bits/types/struct___jmp_buf_tag.h \
+ /usr/include/x86_64-linux-gnu/bits/types/__sigset_t.h \
+ /usr/include/x86_64-linux-gnu/bits/setjmp2.h \
+ /home/elf_g/Devel/sagelang/core/include/lsp.h

@@ -938,6 +938,22 @@ static Value sys_exec_native(int argCount, Value* args) {
     return val_number(result);
 }
 
+static Value sys_call_native(int argCount, Value* args) {
+    if (argCount < 1) return val_nil();
+    Value callee = args[0];
+    int nargs = argCount - 1;
+    Value* qargs = (argCount > 1) ? &args[1] : NULL;
+    
+    if (callee.type == VAL_NATIVE) {
+        return callee.as.native(nargs, qargs);
+    } else if (callee.type == VAL_CLASS) {
+        InstanceValue* inst = instance_create(callee.as.class_val);
+        return val_instance(inst);
+    }
+    // Note: Calling VAL_FUNCTION/closures from here requires full interpreter context
+    return val_nil();
+}
+
 Module* create_sys_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "sys");
     Environment* e = m->env;
@@ -949,6 +965,7 @@ Module* create_sys_module(ModuleCache* cache) {
     env_define_const(e, "clock", 5, val_native(sys_clock_native));
     env_define_const(e, "sleep", 5, val_native(sys_sleep_native));
     env_define_const(e, "exec", 4, val_native(sys_exec_native));
+    env_define_const(e, "call", 4, val_native(sys_call_native));
 
     // Constants
     env_define_const(e, "version", 7, val_string(SAGE_VERSION_STR));

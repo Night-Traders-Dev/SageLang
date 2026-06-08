@@ -6,7 +6,5 @@ proc kmain():
         print("> ")
         ## Simplified input handling for PoC
         print("Shell not fully implemented.\n")
-    end
-end
 
 kmain()
