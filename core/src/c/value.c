@@ -890,17 +890,17 @@ void print_value(Value v) {
         }
 
         case VAL_POINTER:
-            printf("<pointer %p>", v.as.pointer->ptr);
+            printf("<pointer>");
             break;
         case VAL_VM_PROGRAM:
-            printf("<program %p>", (void*)v.as.program);
+            printf("<program>");
             break;
         case VAL_THREAD:
-            printf("<thread %p>", v.as.thread->handle);
+            printf("<thread>");
             break;
 
         case VAL_MUTEX: {
-            printf("<mutex %p>", v.as.mutex->handle);
+            printf("<mutex>");
             break;
         }
 

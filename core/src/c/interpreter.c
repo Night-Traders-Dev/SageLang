@@ -30,6 +30,17 @@
 Environment* g_global_env = NULL;
 __thread EnvRootNode* g_gc_root_stack = NULL;
 
+static uint64_t g_addr_salt = 0;
+
+static uint64_t scramble_ptr(void* ptr) {
+    if (ptr == NULL) return 0;
+    uint64_t x = (uintptr_t)ptr ^ g_addr_salt;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+    x = x ^ (x >> 31);
+    return x;
+}
+
 #define AST_GC_TEMP_MAX 1024
 __thread Value g_ast_gc_temps[AST_GC_TEMP_MAX];
 __thread int g_ast_gc_temp_count = 0;
@@ -1491,7 +1502,7 @@ static Value addressof_native(int argCount, Value* args) {
         fprintf(stderr, "addressof() expects (value).\n");
         return val_nil();
     }
-    // Return address of the underlying data
+    // Return a scrambled identity for the underlying data (prevents ASLR bypass)
     void* addr = NULL;
     switch (args[0].type) {
         case VAL_STRING:   addr = (void*)AS_STRING(args[0]); break;
@@ -1501,7 +1512,7 @@ static Value addressof_native(int argCount, Value* args) {
         case VAL_INSTANCE: addr = (void*)args[0].as.instance; break;
         default:           addr = (void*)&args[0]; break;
     }
-    return val_number((double)(uintptr_t)addr);
+    return val_number((double)scramble_ptr(addr));
 }
 
 // ========== Phase 9: C Struct Interop ==========
@@ -2100,7 +2111,7 @@ static Value hash_native(int argCount, Value* args) {
             return val_number(h);
         }
         default: {
-            // Use heap pointer as identity hash for heap-allocated types
+            // Use scrambled heap pointer as identity hash for heap-allocated types
             void* ptr = NULL;
             switch (v.type) {
                 case VAL_ARRAY:     ptr = v.as.array; break;
@@ -2118,7 +2129,7 @@ static Value hash_native(int argCount, Value* args) {
                 case VAL_MUTEX:     ptr = v.as.mutex; break;
                 default:            ptr = NULL; break;
             }
-            return val_number(ptr ? (double)(uintptr_t)ptr : 0);
+            return val_number((double)scramble_ptr(ptr));
         }
     }
 }
@@ -2192,6 +2203,20 @@ static Value path_is_file_native(int argCount, Value* args) {
 }
 
 void init_stdlib(Env* env) {
+    // Initialize address salt for secure hashing (CWE-200 prevention)
+    if (g_addr_salt == 0) {
+        FILE* urand = fopen("/dev/urandom", "r");
+        if (urand) {
+            if (fread(&g_addr_salt, sizeof(g_addr_salt), 1, urand) != 1) {
+                g_addr_salt = (uint64_t)time(NULL) ^ ((uint64_t)getpid() << 32);
+            }
+            fclose(urand);
+        } else {
+            g_addr_salt = (uint64_t)time(NULL) ^ ((uint64_t)getpid() << 32);
+        }
+        if (g_addr_salt == 0) g_addr_salt = 0x123456789ABCDEF0ULL;
+    }
+
     // Core functions
     env_define_const(env, "clock", 5, val_native(clock_native));
     env_define_const(env, "input", 5, val_native(input_native));
