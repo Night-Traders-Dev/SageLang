@@ -834,10 +834,12 @@ static int is_in_import_list(ImportStmt *import, const char *name) {
 
 // Native C modules that don't have .sage files (handled at runtime)
 static int is_native_module(const char *name) {
-  const char *natives[] = {"_math",    "_io",       "thread",    "_thread",
-                           "sys",      "_sys",      "socket",    "tcp",
-                           "http",     "ssl",       "fat",       "gpu",
-                           "graphics", "ml_native", "compiler",  "vm_native",
+  const char *natives[] = {"_math",    "math",      "_io",       "io",
+                           "thread",    "_thread",   "sys",      "_sys",
+                           "socket",    "tcp",       "http",     "ssl",
+                           "fat",       "gpu",       "graphics", "ml_native",
+                           "compiler",  "vm_native", "vm",       "ffi",
+                           "net",       "string",
                            NULL};
   for (int i = 0; natives[i] != NULL; i++) {
     if (strcmp(name, natives[i]) == 0)
