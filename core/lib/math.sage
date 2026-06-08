@@ -3,6 +3,7 @@
 
 import _math
 from _math import *
+import ffi
 
 ## Global math work format string, overridable via CLI --math-work=
 var __MATH_WORK__ = "grade"
