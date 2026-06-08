@@ -7,6 +7,20 @@ from _math import *
 ## Global math work format string, overridable via CLI --math-work=
 var __MATH_WORK__ = "grade"
 
+## Returns the larger of two values
+@inline
+proc max(a, b):
+    if a > b:
+        return a
+    return b
+
+## Returns the smaller of two values
+@inline
+proc min(a, b):
+    if a < b:
+        return a
+    return b
+
 # ============================================================================
 # Inline arithmetic primitives
 # ============================================================================
