@@ -4,6 +4,9 @@
 import _math
 from _math import *
 
+## Global math work format string, overridable via CLI --math-work=
+var __MATH_WORK__ = "grade"
+
 # ============================================================================
 # Inline arithmetic primitives
 # ============================================================================
@@ -202,13 +205,8 @@ proc pack64(n):
 ## formats: ["grade"] (default), can also include "exec", "bitwise"
 proc printm(expr, backend="sage", formats=nil):
     if type(formats) == "nil":
-        # Check global __MATH_WORK__ set via CLI
-        let global_work = "grade"
-        try:
-            global_work = __MATH_WORK__
-        catch e:
-            global_work = "grade"
-        end
+        # Check global __MATH_WORK__ set via CLI or defined in module
+        let global_work = __MATH_WORK__
         formats = split(global_work, ",")
     end
     
