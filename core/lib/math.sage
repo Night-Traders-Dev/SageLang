@@ -188,3 +188,7 @@ proc random_int(min_val, max_val):
 
 # Note: abs, min, max, clamp, sqrt, floor, ceil, round, and int
 # are now provided natively via _math or builtins.
+
+@inline
+proc pack64(n):
+    return _math.pack64(n)

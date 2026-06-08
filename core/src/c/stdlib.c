@@ -314,6 +314,16 @@ static Value math_isinf_native(int argCount, Value* args) {
     return val_bool(isinf(AS_NUMBER(args[0])));
 }
 
+static Value math_pack64_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_nil();
+    double d = AS_NUMBER(args[0]);
+    union { double d; uint8_t b[8]; } u;
+    u.d = d;
+    Value res = val_array();
+    for (int i = 0; i < 8; i++) array_push(&res, val_number((double)u.b[i]));
+    return res;
+}
+
 Module* create_math_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "_math");
     Environment* e = m->env;
@@ -348,6 +358,9 @@ Module* create_math_module(ModuleCache* cache) {
 
     // Checks
     env_define_const(e, "isnan", 5, val_native(math_isnan_native));
+    
+    // Packing
+    env_define_const(e, "pack64", 6, val_native(math_pack64_native));
     env_define_const(e, "isinf", 5, val_native(math_isinf_native));
 
     // Constants

@@ -321,9 +321,24 @@ if rsdp_table != nil:
 - `uefi.SMBIOS_TABLE_GUID`
 - `uefi.SMBIOS3_TABLE_GUID`
 
-## Compiler Flags for Bare-Metal and UEFI Output
+## Pure Sage Execution (SageVM Pipeline)
 
-Two dedicated compiler commands produce final linked artifacts without requiring external toolchain steps:
+For rapid prototyping or environments where a full native runtime port is not yet complete, the `SageVM` (`sgvm`) bytecode pipeline offers a stable path to "Pure Sage" execution on bare metal.
+
+Instead of generating native code directly, you can compile `SageLang` logic to bytecode (`.sgvm`) and run it on top of a minimal, freestanding `SageVM` interpreter.
+
+### Workflow:
+
+1. Compile kernel logic to bytecode:
+   ```bash
+   sgvmc kernel.sage kernel.sgvm
+   ```
+2. Execute the kernel bytecode via the freestanding `sgvm` interpreter:
+   ```bash
+   sgvm kernel.sgvm
+   ```
+
+This approach eliminates the dependency on a native C runtime for kernel logic and provides a fast, interpreted environment suitable for OS PoCs.
 
 ```bash
 # Produce a freestanding ELF kernel binary (x86_64 or aarch64)
