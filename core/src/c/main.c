@@ -816,6 +816,8 @@ static void repl_list_bindings(Env* env, const char* prefix) {
 static void set_math_work_env(Env* env) {
     if (g_math_work != NULL) {
         env_define_const(env, "__MATH_WORK__", 13, val_string(g_math_work));
+    } else {
+        env_define_const(env, "__MATH_WORK__", 13, val_string("grade"));
     }
 }
 

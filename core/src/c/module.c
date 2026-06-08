@@ -524,13 +524,7 @@ static void add_system_search_paths(ModuleCache* cache) {
         }
     }
 
-    // 2. Installed library path (compile-time default)
-#ifndef SAGE_LIB_DIR
-#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
-#endif
-    add_search_path(cache, SAGE_LIB_DIR);
-
-    // 3. Executable's own directory + /../share/sage/lib (for relocatable installs)
+    // 2. Executable's own directory (for portable/dev installs)
 #ifdef __linux__
     {
         char exe_path[4096];
@@ -554,6 +548,12 @@ static void add_system_search_paths(ModuleCache* cache) {
         }
     }
 #endif
+
+    // 3. Installed library path (compile-time default)
+#ifndef SAGE_LIB_DIR
+#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
+#endif
+    add_search_path(cache, SAGE_LIB_DIR);
 }
 
 // Add source file's directory as a search path

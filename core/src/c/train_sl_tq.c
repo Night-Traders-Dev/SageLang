@@ -16,6 +16,10 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #ifdef USE_CUBLAS
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
