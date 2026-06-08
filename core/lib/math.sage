@@ -192,3 +192,243 @@ proc random_int(min_val, max_val):
 @inline
 proc pack64(n):
     return _math.pack64(n)
+
+# ============================================================================
+# printm() — Show math work
+# ============================================================================
+
+## Evaluates an arithmetic expression and shows the work.
+## backend: "sage", "c", or "asm"
+## formats: ["grade"] (default), can also include "exec", "bitwise"
+proc printm(expr, backend="sage", formats=nil):
+    if type(formats) == "nil":
+        # Check global __MATH_WORK__ set via CLI
+        let global_work = "grade"
+        try:
+            global_work = __MATH_WORK__
+        catch e:
+            global_work = "grade"
+        end
+        formats = split(global_work, ",")
+    end
+    
+    let tokens = _printm_tokenize(expr)
+    if len(tokens) == 0: return 0
+    
+    # Simple shunting-yard / evaluator for +, -, *, /
+    # Precedence: * / > + -
+    return _printm_eval(tokens, backend, formats)
+
+proc _printm_tokenize(expr):
+    let tokens = []
+    let i = 0
+    while i < len(expr):
+        let c = expr[i]
+        if c == " " or c == "\t" or c == "\n" or c == "\r":
+            i = i + 1
+            continue
+        end
+        if c == "+" or c == "-" or c == "*" or c == "/":
+            push(tokens, c)
+            i = i + 1
+        elif (c >= "0" and c <= "9") or c == ".":
+            let num = ""
+            while i < len(expr) and ((expr[i] >= "0" and expr[i] <= "9") or expr[i] == "."):
+                num = num + expr[i]
+                i = i + 1
+            end
+            push(tokens, tonumber(num))
+        else:
+            i = i + 1
+        end
+    end
+    return tokens
+
+proc _printm_eval(tokens, backend, formats):
+    # Pass 1: Handle * and /
+    let i = 0
+    while i < len(tokens):
+        if tokens[i] == "*" or tokens[i] == "/":
+            let left = tokens[i-1]
+            let op = tokens[i]
+            let right = tokens[i+1]
+            let res = _printm_op(left, op, right, backend, formats)
+            
+            # Replace [left, op, right] with res
+            let new_tokens = []
+            let j = 0
+            while j < i - 1:
+                push(new_tokens, tokens[j])
+                j = j + 1
+            end
+            push(new_tokens, res)
+            j = i + 2
+            while j < len(tokens):
+                push(new_tokens, tokens[j])
+                j = j + 1
+            end
+            tokens = new_tokens
+            i = i - 1
+        end
+        i = i + 1
+    end
+    
+    # Pass 2: Handle + and -
+    let res = tokens[0]
+    let j = 1
+    while j < len(tokens):
+        let op = tokens[j]
+        let right = tokens[j+1]
+        res = _printm_op(res, op, right, backend, formats)
+        j = j + 2
+    end
+    return res
+
+proc _printm_op(a, op, b, backend, formats):
+    if backend == "c":
+        if op == "+": return _math.printm_add(a, b)
+        if op == "-": return _math.printm_sub(a, b)
+        if op == "*": return _math.printm_mul(a, b)
+        if op == "/": return _math.printm_div(a, b)
+    elif backend == "asm":
+        return _printm_op_asm(a, op, b, formats)
+    else: # default "sage"
+        return _printm_op_sage(a, op, b, formats)
+    end
+    return 0
+
+proc _printm_op_sage(a, op, b, formats):
+    let res = 0
+    if op == "+": res = a + b
+    elif op == "-": res = a - b
+    elif op == "*": res = a * b
+    elif op == "/": res = a / b
+    end
+    
+    # Simple Grade-school vertical display
+    let sa = str(a)
+    let sb = str(b)
+    let sr = str(res)
+    let width = max(len(sa), max(len(sb) + 2, len(sr)))
+    
+    print " " * (width - len(sa)) + sa
+    print op + " " + " " * (width - len(sb) - 2) + sb
+    print "-" * width
+    print " " * (width - len(sr)) + sr
+    print ""
+    return res
+
+proc _printm_op_asm(a, op, b, formats):
+    let arch = asm_arch()
+    let lib = ffi_open("")
+    if type(lib) == "nil":
+        return _printm_op_sage(a, op, b, formats)
+    end
+    let printf_addr = ffi_sym_addr(lib, "printf")
+    if printf_addr == 0:
+        ffi_close(lib)
+        return _printm_op_sage(a, op, b, formats)
+    end
+    
+    let fmt = "  %g\n" + op + " %g\n----\n  %g\n\n"
+    
+    if array_contains(formats, "exec"):
+        if op == "+": print "[ASM] Using ADD instruction"
+        elif op == "-": print "[ASM] Using SUB instruction"
+        elif op == "*": print "[ASM] Using MUL instruction"
+        elif op == "/": print "[ASM] Using DIV instruction"
+        end
+    end
+
+    if arch == "x86_64":
+        let instr = ""
+        if op == "+": instr = "addsd"
+        elif op == "-": instr = "subsd"
+        elif op == "*": instr = "mulsd"
+        elif op == "/": instr = "divsd"
+        end
+        if instr != "":
+            let code = "
+                push %rbp
+                mov %rsp, %rbp
+                sub $48, %rsp
+                movsd %xmm0, -8(%rbp)
+                movsd %xmm1, -16(%rbp)
+                cvttsd2si %xmm2, %r11
+                cvttsd2si %xmm3, %rdi
+                movsd -8(%rbp), %xmm0
+                movsd -16(%rbp), %xmm1
+                " + instr + " %xmm1, %xmm0
+                movsd %xmm0, -24(%rbp)
+                movsd -8(%rbp), %xmm0
+                movsd -16(%rbp), %xmm1
+                movsd -24(%rbp), %xmm2
+                mov $3, %rax
+                call *%r11
+                movsd -24(%rbp), %xmm0
+                leave
+                ret
+            "
+            return asm_exec(code, "double", a, b, printf_addr, addressof_raw(fmt))
+        end
+    elif arch == "aarch64":
+        let instr = ""
+        if op == "+": instr = "fadd"
+        elif op == "-": instr = "fsub"
+        elif op == "*": instr = "fmul"
+        elif op == "/": instr = "fdiv"
+        end
+        if instr != "":
+            let code = "
+                stp x29, x30, [sp, #-48]!
+                mov x29, sp
+                str d0, [sp, #16]
+                str d1, [sp, #24]
+                fcvtzs x4, d2
+                fcvtzs x0, d3
+                ldr d0, [sp, #16]
+                ldr d1, [sp, #24]
+                " + instr + " d2, d0, d1
+                str d2, [sp, #32]
+                ldr d0, [sp, #16]
+                ldr d1, [sp, #24]
+                blr x4
+                ldr d0, [sp, #32]
+                ldp x29, x30, [sp], #48
+                ret
+            "
+            return asm_exec(code, "double", a, b, printf_addr, addressof_raw(fmt))
+        end
+    elif arch == "rv64":
+        let instr = ""
+        if op == "+": instr = "fadd.d"
+        elif op == "-": instr = "fsub.d"
+        elif op == "*": instr = "fmul.d"
+        elif op == "/": instr = "fdiv.d"
+        end
+        if instr != "":
+            let code = "
+                addi sp, sp, -48
+                sd ra, 40(sp)
+                fsd fa0, 32(sp)
+                fsd fa1, 24(sp)
+                fcvt.l.d t0, fa2, rtz
+                fcvt.l.d a0, fa3, rtz
+                fld fa0, 32(sp)
+                fld fa1, 24(sp)
+                " + instr + " fa2, fa0, fa1
+                fsd fa2, 16(sp)
+                fld fa0, 32(sp)
+                fld fa1, 24(sp)
+                jalr t0
+                fld fa0, 16(sp)
+                ld ra, 40(sp)
+                addi sp, sp, 48
+                ret
+            "
+            return asm_exec(code, "double", a, b, printf_addr, addressof_raw(fmt))
+        end
+    end
+    
+    # Fallback to Sage if arch not supported or op not implemented in ASM
+    return _printm_op_sage(a, op, b, formats)

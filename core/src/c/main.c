@@ -42,6 +42,7 @@ jmp_buf g_repl_error_jmp;
 
 static Stmt* g_program_ast = NULL;
 static Stmt* g_program_ast_tail = NULL;
+static const char* g_math_work = NULL;
 
 static void retain_program_stmt(Stmt* stmt) {
     if (stmt == NULL) {
@@ -67,7 +68,7 @@ static void cleanup_runtime_state(void) {
 static void print_usage(FILE* stream) {
     fprintf(stream,
             "Usage: sage                    Start interactive REPL\n"
-            "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [--verbose] [-I dir] [path]\n"
+            "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [--math-work=grade,exec] [--verbose] [-I dir] [path]\n"
             "       sage --repl             Start interactive REPL\n"
             "       sage [--runtime ast|bytecode|jit|aot|auto] [-I dir] -c \"source\"\n"
             "       sage --emit-c <input.sage> [-o output.c] [-I dir] [-O0..3] [-g]\n"
@@ -812,6 +813,12 @@ static void repl_list_bindings(Env* env, const char* prefix) {
     }
 }
 
+static void set_math_work_env(Env* env) {
+    if (g_math_work != NULL) {
+        env_define_const(env, "__MATH_WORK__", 13, val_string(g_math_work));
+    }
+}
+
 static void repl_print_gc_stats(Env* env) {
     g_global_env = env;
     gc_collect();
@@ -837,6 +844,7 @@ static void repl_reset_session(Env** env_ptr) {
     *env_ptr = env_create(NULL);
     g_global_env = *env_ptr;
     init_stdlib(*env_ptr);
+    set_math_work_env(*env_ptr);
 
     printf("REPL session reset.\n");
 }
@@ -1329,6 +1337,7 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
     Env* env = env_create(NULL);
     g_global_env = env;
     init_stdlib(env);
+    set_math_work_env(env);
     g_repl_mode = 1;
 
     while (1) {
@@ -1969,6 +1978,7 @@ static void run(const char* source, const char* filename, SageRuntimeMode runtim
     Env* env = env_create(NULL);
     g_global_env = env;
     init_stdlib(env);
+    set_math_work_env(env);
 
     while (1) {
          Stmt* result = parse();
@@ -2134,6 +2144,10 @@ int main(int argc, const char* argv[]) {
             g_sage_verbose = 1;
             cmd_argv += 1;
             cmd_argc -= 1;
+        } else if (strncmp(cmd_argv[1], "--math-work=", 12) == 0) {
+            g_math_work = cmd_argv[1] + 12;
+            cmd_argv += 1;
+            cmd_argc -= 1;
         } else {
             break;
         }
@@ -2248,6 +2262,7 @@ int main(int argc, const char* argv[]) {
         env = env_create(NULL);
         g_global_env = env;
         init_stdlib(env);
+        set_math_work_env(env);
         (void)vm_execute_program(&program, env);
         bytecode_program_free(&program);
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile") == 0) {

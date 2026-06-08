@@ -1008,12 +1008,13 @@ Value ffi_open_native(int argCount, Value* args) {
         return val_nil();
     }
     const char* lib_name = AS_STRING(args[0]);
+    if (lib_name && lib_name[0] == '\0') lib_name = NULL;
     void* handle = dlopen(lib_name, RTLD_LAZY);
     if (!handle) {
         fprintf(stderr, "ffi_open: %s\n", dlerror());
         return val_nil();
     }
-    return val_clib(handle, lib_name);
+    return val_clib(handle, AS_STRING(args[0]));
 }
 
 // ffi_close(lib) -> nil
@@ -1192,6 +1193,21 @@ Value ffi_sym_native(int argCount, Value* args) {
     dlerror();
     dlsym(lib->handle, AS_STRING(args[1]));
     return val_bool(dlerror() == NULL);
+}
+
+// ffi_sym_addr(lib, "symbol_name") -> number (address)
+Value ffi_sym_addr_native(int argCount, Value* args) {
+    if (argCount != 2 || !IS_CLIB(args[0]) || !IS_STRING(args[1])) {
+        fprintf(stderr, "ffi_sym_addr() expects (clib, string).\n");
+        return val_number(0);
+    }
+    CLibValue* lib = AS_CLIB(args[0]);
+    if (!lib->handle) return val_number(0);
+
+    dlerror();
+    void* addr = dlsym(lib->handle, AS_STRING(args[1]));
+    if (dlerror() != NULL) return val_number(0);
+    return val_number((double)(uintptr_t)addr);
 }
 
 #endif // SAGE_NO_FFI
@@ -1513,6 +1529,24 @@ static Value addressof_native(int argCount, Value* args) {
         default:           addr = (void*)&args[0]; break;
     }
     return val_number((double)scramble_ptr(addr));
+}
+
+// addressof_raw(value) -> number (raw address as integer)
+static Value addressof_raw_native(int argCount, Value* args) {
+    if (argCount != 1) {
+        fprintf(stderr, "addressof_raw() expects (value).\n");
+        return val_nil();
+    }
+    void* addr = NULL;
+    switch (args[0].type) {
+        case VAL_STRING:   addr = (void*)AS_STRING(args[0]); break;
+        case VAL_ARRAY:    addr = (void*)AS_ARRAY(args[0]); break;
+        case VAL_DICT:     addr = (void*)AS_DICT(args[0]); break;
+        case VAL_POINTER:  addr = AS_POINTER(args[0])->ptr; break;
+        case VAL_INSTANCE: addr = (void*)args[0].as.instance; break;
+        default:           addr = (void*)&args[0]; break;
+    }
+    return val_number((double)(uintptr_t)addr);
 }
 
 // ========== Phase 9: C Struct Interop ==========
@@ -2289,6 +2323,7 @@ void init_stdlib(Env* env) {
     env_define_const(env, "ffi_close", 9, val_native(ffi_close_native));
     env_define_const(env, "ffi_call", 8, val_native(ffi_call_native));
     env_define_const(env, "ffi_sym", 7, val_native(ffi_sym_native));
+    env_define_const(env, "ffi_sym_addr", 12, val_native(ffi_sym_addr_native));
 #endif
 
     // Phase 1.8: Bytes operations
@@ -2323,6 +2358,7 @@ void init_stdlib(Env* env) {
     env_define_const(env, "mem_write", 9, val_native(mem_write_native));
     env_define_const(env, "mem_size", 8, val_native(mem_size_native));
     env_define_const(env, "addressof", 9, val_native(addressof_native));
+    env_define_const(env, "addressof_raw", 13, val_native(addressof_raw_native));
 
     // Phase 9: C struct interop
     env_define_const(env, "struct_def", 10, val_native(struct_def_native));
@@ -2523,9 +2559,24 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             return EVAL_RESULT(val_number(AS_NUMBER(left) - AS_NUMBER(right)));
 
         case TOKEN_STAR:
-            if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+            if (IS_NUMBER(left) && IS_NUMBER(right)) {
+                AST_GC_POP();
+                return EVAL_RESULT(val_number(AS_NUMBER(left) * AS_NUMBER(right)));
+            }
+            if (IS_STRING(left) && IS_NUMBER(right)) {
+                Value args[2] = { left, right };
+                Value res = string_repeat_native(2, args);
+                AST_GC_POP();
+                return EVAL_RESULT(res);
+            }
+            if (IS_NUMBER(left) && IS_STRING(right)) {
+                Value args[2] = { right, left };
+                Value res = string_repeat_native(2, args);
+                AST_GC_POP();
+                return EVAL_RESULT(res);
+            }
             AST_GC_POP();
-            return EVAL_RESULT(val_number(AS_NUMBER(left) * AS_NUMBER(right)));
+            return EVAL_RESULT(val_nil());
 
         case TOKEN_SLASH:
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }

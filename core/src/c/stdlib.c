@@ -324,6 +324,116 @@ static Value math_pack64_native(int argCount, Value* args) {
     return res;
 }
 
+static Value math_printm_add_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    double a = AS_NUMBER(args[0]);
+    double b = AS_NUMBER(args[1]);
+    double res = a + b;
+    char sa[64], sb[64], sr[64];
+    sprintf(sa, "%g", a);
+    sprintf(sb, "%g", b);
+    sprintf(sr, "%g", res);
+    int la = (int)strlen(sa), lb = (int)strlen(sb), lr = (int)strlen(sr);
+    int max_l = la > lb ? la : lb;
+    if (lr > max_l) max_l = lr;
+    printf("  %*s\n", max_l, sa);
+    printf("+ %*s\n", max_l, sb);
+    printf("--");
+    for (int i = 0; i < max_l; i++) {
+        putchar('-');
+    }
+    printf("\n");
+    printf("  %*s\n", max_l, sr);
+    return val_number(res);
+}
+
+static Value math_printm_sub_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    double a = AS_NUMBER(args[0]);
+    double b = AS_NUMBER(args[1]);
+    double res = a - b;
+    char sa[64], sb[64], sr[64];
+    sprintf(sa, "%g", a);
+    sprintf(sb, "%g", b);
+    sprintf(sr, "%g", res);
+    int la = (int)strlen(sa), lb = (int)strlen(sb), lr = (int)strlen(sr);
+    int max_l = la > lb ? la : lb;
+    if (lr > max_l) max_l = lr;
+    printf("  %*s\n", max_l, sa);
+    printf("- %*s\n", max_l, sb);
+    printf("--");
+    for (int i = 0; i < max_l; i++) {
+        putchar('-');
+    }
+    printf("\n");
+    printf("  %*s\n", max_l, sr);
+    return val_number(res);
+}
+
+static Value math_printm_mul_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    double a = AS_NUMBER(args[0]);
+    double b = AS_NUMBER(args[1]);
+    double res = a * b;
+    char sa[64], sb[64], sr[64];
+    sprintf(sa, "%g", a);
+    sprintf(sb, "%g", b);
+    sprintf(sr, "%g", res);
+    int la = (int)strlen(sa), lb = (int)strlen(sb), lr = (int)strlen(sr);
+    int max_l = la > lb ? la : lb;
+    if (lr > max_l) max_l = lr;
+    printf("  %*s\n", max_l, sa);
+    printf("x %*s\n", max_l, sb);
+    printf("--");
+    for (int i = 0; i < max_l; i++) {
+        putchar('-');
+    }
+    printf("\n");
+    if (a >= 0 && b >= 0 && a == (long long)a && b == (long long)b && b >= 10) {
+        long long ia = (long long)a;
+        long long ib = (long long)b;
+        int shift = 0;
+        long long temp_b = ib;
+        while (temp_b > 0) {
+            int digit = temp_b % 10;
+            printf("  %*lld", max_l - shift, ia * digit);
+            for (int j = 0; j < shift; j++) putchar(' ');
+            printf("\n");
+            temp_b /= 10;
+            shift++;
+        }
+        printf("--");
+    for (int i = 0; i < max_l; i++) {
+        putchar('-');
+    }
+    printf("\n");
+    }
+    printf("  %*s\n", max_l, sr);
+    return val_number(res);
+}
+
+static Value math_printm_div_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    double a = AS_NUMBER(args[0]), b = AS_NUMBER(args[1]);
+    if (b == 0) return val_nil();
+    double res = a / b;
+    if (a >= 0 && b > 0 && a == (long long)a && b == (long long)b) {
+        long long ia = (long long)a, ib = (long long)b, ires = (long long)res;
+        printf("    %lld\n", ires);
+        printf("    "); char s_ires[64]; sprintf(s_ires, "%lld", ires);
+        for (int i = 0; i < (int)strlen(s_ires); i++) {
+            putchar('-');
+        }
+        printf("\n");
+        printf("%lld | %lld\n", ib, ia);
+        long long rem = ia % ib;
+        if (rem != 0) printf("    (rem: %lld)\n", rem);
+    } else {
+        printf("  %g / %g = %g\n", a, b, res);
+    }
+    return val_number(res);
+}
+
 Module* create_math_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "_math");
     Environment* e = m->env;
@@ -362,6 +472,12 @@ Module* create_math_module(ModuleCache* cache) {
     // Packing
     env_define_const(e, "pack64", 6, val_native(math_pack64_native));
     env_define_const(e, "isinf", 5, val_native(math_isinf_native));
+
+    // Printm
+    env_define_const(e, "printm_add", 10, val_native(math_printm_add_native));
+    env_define_const(e, "printm_sub", 10, val_native(math_printm_sub_native));
+    env_define_const(e, "printm_mul", 10, val_native(math_printm_mul_native));
+    env_define_const(e, "printm_div", 10, val_native(math_printm_div_native));
 
     // Constants
     env_define_const(e, "pi", 2, val_number(3.14159265358979323846));

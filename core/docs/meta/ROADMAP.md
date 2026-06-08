@@ -1,9 +1,18 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: June 6, 2026
-> **Current Phase**: v3.6.2 — Native Builtin Expansion & C Codegen Hardening, all 18 phases complete
+> **Current Phase**: v3.6.4 — Math Matrix Printing & CLI Enhancements, all 18 phases complete
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+
+---
+
+## v3.6.4: Math Matrix Printing & CLI Enhancements (June 2026)
+
+### Completed
+
+- **math.printm()**: Added `math.printm()` with Sage, C, and Assembly backends, multi-architecture support (x86_64, aarch64, rv64).
+- **--math-work flag**: Added `--math-work` CLI flag for configuring math execution modes.
 
 ---
 

@@ -1,5 +1,11 @@
 # SageLang Updates
 
+## v3.6.4 — Math Matrix Printing & CLI Enhancements (June 2026)
+
+- **New Features**:
+  - **math.printm()**: Added `math.printm()` with Sage, C, and Assembly backends, multi-architecture support (x86_64, aarch64, rv64).
+  - **--math-work**: Added `--math-work` CLI flag for configuring math execution modes.
+
 ## v3.6.2 (In Progress) — SGVM Self-Hosting Support
 
 - **Compiler Enhancements**:

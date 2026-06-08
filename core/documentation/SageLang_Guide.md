@@ -1499,6 +1499,7 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | `--target <arch[-profile]>` | `--emit-asm`, `--compile-native` | Base targets: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64`; profile suffixes: `-baremetal`, `-osdev`, `-uefi` |
 | `-O0` / `-O1` / `-O2` / `-O3` | C, LLVM, and native codegen commands | Selects the optimization pass level |
 | `-g` | C, LLVM, asm, and native codegen commands | Enables debug information in generated output |
+| `--math-work=MODES` | All runtime modes | Comma-separated list of default math visualization formats: `grade`, `exec`, `bitwise` |
 | `--board <name>` | `--compile-pico` | Pico board name; defaults to `pico` |
 | `--name <program>` | `--compile-pico` | Overrides the generated program name derived from the input file |
 | `--sdk <path>` | `--compile-pico` | Pico SDK path; falls back to `PICO_SDK_PATH` |
@@ -2014,7 +2015,28 @@ Pure-Sage math helpers (shadowed by native `math` module — use when native mod
 | `gcd(a, b)`, `lcm(a, b)` | GCD and LCM |
 | `sum(arr)`, `product(arr)`, `mean(arr)` | Aggregates |
 | `sqrt(n)` | Newton's method approximation |
+| `printm(expr, backend, formats)` | Evaluate expression and show work |
 | `distance(x1, y1, x2, y2)` | Euclidean distance |
+
+**Arithmetic Visualization (`printm`)**:
+
+The `math.printm()` function evaluates an arithmetic expression provided as a string and visualizes the step-by-step "work" for each operation.
+
+```sagelang
+import math
+math.printm("123 + 456 * 2", backend="sage")
+```
+
+- **`backend`**: 
+    - `"sage"` (default): Pure SageLang implementation using vertical "grade-school" format.
+    - `"c"`: Uses native C-level arithmetic bridges.
+    - `"asm"`: Uses inline assembly (x86-64, aarch64, rv64) and calls `printf` via FFI to show the instruction-level execution.
+- **`formats`**: An array of strings to customize output.
+    - `"grade"`: Vertical grade-school arithmetic visualization.
+    - `"exec"`: Show the underlying execution mode (e.g., "[ASM] Using ADD instruction").
+    - `"bitwise"`: Reserved for bitwise operation visualization.
+
+The default format can be configured globally using the `--math-work` CLI flag.
 | `normalize(val, lo, hi)` | Scale to [0, 1] |
 
 ### 9.9 GPU Libraries
@@ -2416,9 +2438,10 @@ print math.ceil(3.2)   # 4
 print math.abs(-5)     # 5
 print math.pow(2, 10)  # 1024
 print math.log(math.e) # 1
+math.printm("10 + 20") # Show work for 10 + 20
 ```
 
-Available functions: `sqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `abs`, `pow`, `log`
+Available functions: `sqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `abs`, `pow`, `log`, `printm`
 Constants: `pi` (3.14159...), `e` (2.71828...)
 
 ### 10.2 IO Module

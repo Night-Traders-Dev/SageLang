@@ -1691,6 +1691,16 @@ print math.nan     # NaN
 # Utility
 print math.pow_int(2, 10) # 1024 (binary exponentiation, O(log n))
 
+# Arithmetic Visualization
+# Evaluates an expression string and shows step-by-step work.
+# Backends: "sage" (default), "c", "asm"
+math.printm("123 + 456", backend="sage", formats=["grade"])
+# Output:
+#   123
+# + 456
+# -----
+#   579
+
 # Random
 print math.random()    # random float in [0, 1)
 ```
@@ -3701,6 +3711,7 @@ Android Options:
 
 Runtime:
   --runtime MODE         Execution backend: ast, bytecode, jit, aot, auto
+  --math-work=MODES      Comma-separated list of math visualization formats: grade, exec, bitwise
   --jit FILE             JIT compile with profiling
   --aot FILE             AOT compile to native binary
 
