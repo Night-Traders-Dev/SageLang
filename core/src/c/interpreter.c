@@ -177,6 +177,10 @@ static int g_recursion_depth = 0;  // No TLS on Cortex-M0+
 static __thread int g_recursion_depth = 0;
 #endif
 
+int interpreter_get_stack_depth(void) {
+    return g_recursion_depth;
+}
+
 static int stmt_contains_target(Stmt* stmt, Stmt* target) {
     if (stmt == NULL || target == NULL) return 0;
     if (stmt == target) return 1;

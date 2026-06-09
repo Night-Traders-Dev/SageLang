@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "May 2026"
-version: "v3.6.8"
+version: "v3.6.9"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v3.6.8}
+  - \fancyfoot[C]{v3.6.9}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -58,7 +58,7 @@ by Rust, and a self-hosted compiler written in Sage itself.
 - **SageMetal VM**: freestanding bytecode interpreter for bare-metal (no malloc, no libc, no OS)
 - **Metal stdlib** (`lib/metal/`): serial, GPIO, IRQ, timer, MMIO for kernel/embedded development
 - **Default hybrid runtime**: JIT profiling on hosted, AST on bare-metal, automatic selection
-- **v3.6.8 updates**: $O(1)$ dictionary size, $O(N)$ unique checks (simple types), native array reversal, and binary exponentiation for repeating (linear output work).
+- **v3.6.9 updates**: $O(1)$ dictionary size, $O(N)$ unique checks (simple types), native array reversal, and binary exponentiation for repeating (linear output work).
 - **327 interpreter tests**, 1623 self-hosted tests (2060+ total)
 
 ## Quick Start
@@ -1418,7 +1418,7 @@ import os.errno as errno
 print errno.ENOENT      # 2
 print errno.strerror(2)  # "No such file or directory"
 
-# Networking error codes (v3.6.8+)
+# Networking error codes (v3.6.9+)
 print errno.ECONNRESET   # 104
 print errno.EINPROGRESS  # 115
 ```
@@ -1517,7 +1517,7 @@ system but are not enforced at runtime by the interpreter.
 
 # The Safety System
 
-Sage v3.6.8 includes a compile-time safety system inspired by Rust. It provides
+Sage v3.6.9 includes a compile-time safety system inspired by Rust. It provides
 ownership tracking, borrow checking, lifetime analysis, Option type enforcement,
 and fearless concurrency checks.
 
@@ -1779,7 +1779,7 @@ end
 
 # Environment
 print sys.platform          # "linux", "darwin", or "windows"
-print sys.version           # "3.6.8"
+print sys.version           # "3.6.9"
 print sys.getenv("HOME")   # /home/user
 
 # Timing
@@ -2102,7 +2102,7 @@ pure Sage code.
 
 ## Advanced Boot Infrastructure
 
-SageLang v3.6.8 expands the `os.boot` library with 20+ new modules for building sophisticated multi-stage bootloaders.
+SageLang v3.6.9 expands the `os.boot` library with 20+ new modules for building sophisticated multi-stage bootloaders.
 
 ### Firmware Interaction
 
@@ -2475,7 +2475,7 @@ make kernel-uefi      # Compile UEFI application
 
 The version is stored in a single `VERSION` file at the repository root.
 All build systems (Makefile, CMakeLists.txt, sagemake) read from
-this file automatically. Current version: **3.6.8**.
+this file automatically. Current version: **3.6.9**.
 
 \newpage
 
@@ -3016,7 +3016,7 @@ The C interpreter (`src/c/interpreter.c`, `src/c/env.c`) applies:
 4. **For-loop slot caching**: loop variable node pointer cached after first `env_define`, subsequent iterations write directly
 5. **String pointer equality**: `values_equal()` checks `AS_STRING(a) == AS_STRING(b)` before `strcmp`
 
-## Algorithmic Optimizations (v3.6.8)
+## Algorithmic Optimizations (v3.6.9)
 
 Recent updates have transitioned key library operations from interpreted loops to
 native C implementations or more efficient algorithms:
@@ -3050,7 +3050,7 @@ Workloads: fibonacci, loop sum, array ops, string concat, dict ops, prime sieve,
 
 ## JIT+AOT Hybrid Default
 
-As of v3.6.8, Sage's default runtime is `auto` — JIT profiling mode on hosted platforms,
+As of v3.6.9, Sage's default runtime is `auto` — JIT profiling mode on hosted platforms,
 AST interpreter on bare-metal:
 
 | Environment | Auto Resolves To | Why |

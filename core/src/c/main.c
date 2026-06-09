@@ -1373,6 +1373,14 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
             continue;
         }
 
+        if (strcmp(line, ":stats") == 0) {
+            gc_print_stats();
+            printf("Interpreter Stack Depth: %d\n", interpreter_get_stack_depth());
+            printf("Process CPU Time:        %.3f seconds\n", (double)clock() / CLOCKS_PER_SEC);
+            free(line);
+            continue;
+        }
+
         if (line[0] == ':') {
             const char* arg = NULL;
 

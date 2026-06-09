@@ -1,9 +1,18 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: June 6, 2026
-> **Current Phase**: v3.6.8 — Math Matrix Printing & CLI Enhancements, all 18 phases complete
+> **Last Updated**: June 9, 2026
+> **Current Phase**: v3.6.9 — REPL Statistics & Version 3.6.9 Release
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+
+---
+
+## v3.6.9: REPL Statistics & Version 3.6.9 Release (June 2026)
+
+### Completed
+
+- **REPL :stats**: Added `:stats` command to show real-time GC, Memory, Stack, and CPU statistics.
+- **Version Bump**: Official release of v3.6.9.
 
 ---
 

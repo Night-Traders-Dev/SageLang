@@ -1,5 +1,16 @@
 # SageLang Updates
 
+## v3.6.9 — REPL Statistics & Version 3.6.9 Release (June 2026)
+
+- **New Features**:
+  - **REPL :stats**: Added a new `:stats` command to the interactive REPL. It provides real-time insights into:
+    - Garbage Collection (mode, collections, objects, pauses).
+    - Memory Usage (live bytes, total allocated).
+    - Interpreter Stack Depth (recursion monitoring).
+    - Process CPU Time.
+- **Maintenance**:
+  - **Version Bump**: Updated all core files and documentation to version 3.6.9.
+
 ## v3.6.8 — Math Matrix Printing & CLI Enhancements (June 2026)
 
 - **New Features**:
