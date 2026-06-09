@@ -22,17 +22,22 @@
 #include "module.h"  // Phase 8: Module system
 #include "repl.h"    // Phase 12: REPL error recovery
 
-// Helper macro for creating normal expression results
-#define EVAL_RESULT(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL, g_gas_used, g_gas_limit })
-#define EVAL_EXCEPTION(exc) ((ExecResult){ sage_nil, 0, 0, 0, 1, (exc), 0, NULL, g_gas_used, g_gas_limit })
-#define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL, g_gas_used, g_gas_limit })
-
 Environment* g_global_env = NULL;
+#ifdef SAGE_BARE_METAL
+EnvRootNode* g_gc_root_stack = NULL;
+#else
 __thread EnvRootNode* g_gc_root_stack = NULL;
+#endif
 
 #define AST_GC_TEMP_MAX 1024
+#ifdef SAGE_BARE_METAL
+Value g_ast_gc_temps[AST_GC_TEMP_MAX];
+int g_ast_gc_temp_count = 0;
+#else
 __thread Value g_ast_gc_temps[AST_GC_TEMP_MAX];
 __thread int g_ast_gc_temp_count = 0;
+#endif
+
 #define AST_GC_PUSH(v) do { \
     ThreadState* ts = gc_get_thread_state(); \
     if (ts) { \
@@ -53,8 +58,14 @@ __thread int g_ast_gc_temp_count = 0;
 } while(0)
 
 #define AST_GC_ENV_TEMP_MAX 256
+#ifdef SAGE_BARE_METAL
+Env* g_ast_gc_env_temps[AST_GC_ENV_TEMP_MAX];
+int g_ast_gc_env_temp_count = 0;
+#else
 __thread Env* g_ast_gc_env_temps[AST_GC_ENV_TEMP_MAX];
 __thread int g_ast_gc_env_temp_count = 0;
+#endif
+
 #define AST_GC_PUSH_ENV(e) do { \
     ThreadState* ts = gc_get_thread_state(); \
     if (ts) { \
@@ -75,32 +86,59 @@ static Stmt* g_generator_resume_target = NULL;
 static __thread long g_gas_limit = -1; // -1 means unlimited
 static __thread long g_gas_used = 0;
 
+#define GET_GAS_LIMIT() (gc_get_thread_state() ? gc_get_thread_state()->gas_limit : g_gas_limit)
+#define GET_GAS_USED()  (gc_get_thread_state() ? gc_get_thread_state()->gas_used : g_gas_used)
+
+#define SET_GAS_LIMIT(v) do { \
+    ThreadState* ts = gc_get_thread_state(); \
+    if (ts) ts->gas_limit = (v); \
+    g_gas_limit = (v); \
+} while(0)
+
+#define SET_GAS_USED(v) do { \
+    ThreadState* ts = gc_get_thread_state(); \
+    if (ts) ts->gas_used = (v); \
+    g_gas_used = (v); \
+} while(0)
+
+#define ADD_GAS_USED(v) do { \
+    ThreadState* ts = gc_get_thread_state(); \
+    if (ts) ts->gas_used += (v); \
+    g_gas_used += (v); \
+} while(0)
+
+// Helper macro for creating normal expression results
+#define EVAL_RESULT(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL, GET_GAS_USED(), GET_GAS_LIMIT() })
+#define EVAL_EXCEPTION(exc) ((ExecResult){ sage_nil, 0, 0, 0, 1, (exc), 0, NULL, GET_GAS_USED(), GET_GAS_LIMIT() })
+#define RESULT_NORMAL(v) ((ExecResult){ (v), 0, 0, 0, 0, sage_nil, 0, NULL, GET_GAS_USED(), GET_GAS_LIMIT() })
+
 static ExecResult gas_error(void) {
     return EVAL_EXCEPTION(val_exception("Out of gas"));
 }
 
 static int consume_gas(long amount) {
-    if (g_gas_limit < 0) return 1;
-    g_gas_used += amount;
-    if (g_gas_used > g_gas_limit) return 0;
+    long limit = GET_GAS_LIMIT();
+    if (limit < 0) return 1;
+    ADD_GAS_USED(amount);
+    if (GET_GAS_USED() > limit) return 0;
     return 1;
 }
 
 static Value vm_set_gas_limit_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_NUMBER(args[0])) return val_nil();
-    g_gas_limit = (long)AS_NUMBER(args[0]);
-    g_gas_used = 0;
+    SET_GAS_LIMIT((long)AS_NUMBER(args[0]));
+    SET_GAS_USED(0);
     return val_nil();
 }
 
 static Value vm_get_gas_used_native(int argCount, Value* args) {
     (void)argCount; (void)args;
-    return val_number((double)g_gas_used);
+    return val_number((double)GET_GAS_USED());
 }
 
 static Value vm_get_gas_limit_native(int argCount, Value* args) {
     (void)argCount; (void)args;
-    return val_number((double)g_gas_limit);
+    return val_number((double)GET_GAS_LIMIT());
 }
 
 // JIT state — global, initialized by --jit mode
@@ -3297,7 +3335,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
         ts->gc_root_stack = &root_node;
     } else {
         root_node.next = g_gc_root_stack;
-        g_gc_root_stack = &root_node;
+        SET_GC_ROOT_STACK(&root_node);
     }
 
     ExecResult result = interpret_inner(stmt, env);
@@ -3305,7 +3343,7 @@ ExecResult interpret(Stmt* stmt, Env* env) {
     if (ts) {
         ts->gc_root_stack = root_node.next;
     } else {
-        g_gc_root_stack = root_node.next;
+        SET_GC_ROOT_STACK(root_node.next);
     }
 
     g_recursion_depth--;

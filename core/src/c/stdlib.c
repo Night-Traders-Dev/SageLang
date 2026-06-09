@@ -1115,6 +1115,7 @@ static void* sage_thread_entry(void* data) {
     ThreadState ts;
     memset(&ts, 0, sizeof(ThreadState));
     ts.thread_id = sage_thread_id();
+    ts.gas_limit = -1; // unlimited
     gc_register_thread(&ts);
 
     // Create execution scope from function closure

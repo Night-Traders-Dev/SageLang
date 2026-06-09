@@ -1,8 +1,0 @@
-{
-    "receiver": "0x1ff2a9f4c346ed68a7da711ccbae35102fc23944",
-    "amount": 0.05,
-    "hash": "23e24ea054a8efbdbb7a2ba64c487989f18d8a29c59c6c1594a48f82e7b33601",
-    "timestamp": 1.7783e+09,
-    "sender": "0xa04d7ba21042143b895a77bb1d635b783f67de23",
-    "type": "contract_transfer"
-}

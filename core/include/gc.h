@@ -68,6 +68,11 @@ typedef struct ThreadState {
     Env* ast_gc_env_temps[AST_GC_ENV_TEMP_MAX];
     int ast_gc_env_temp_count;
     
+    // Multitasking state (SageOS compatibility)
+    long gas_limit;
+    long gas_used;
+    int recursion_depth;
+
     struct ThreadState* next;
     sage_thread_t thread_id;
 } ThreadState;

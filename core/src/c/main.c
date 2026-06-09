@@ -1765,6 +1765,7 @@ int main(int argc, const char* argv[]) {
     ThreadState main_thread_state;
     memset(&main_thread_state, 0, sizeof(ThreadState));
     main_thread_state.thread_id = sage_thread_id();
+    main_thread_state.gas_limit = -1; // unlimited
     gc_register_thread(&main_thread_state);
 
     // ── OIS integration ──────────────────────────────────────────────────────

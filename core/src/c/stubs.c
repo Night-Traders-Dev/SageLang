@@ -16,16 +16,22 @@ void lsp_run() { fprintf(stderr, "LSP not supported in this build\n"); }
 /* compile_source_to_llvm_ir / compile_source_to_llvm_executable
    are provided by llvm_backend.c — no stubs needed */
 
+#include "module.h"
+
 #ifdef SAGE_NO_NET
-void create_net_module() {}
-void create_socket_module() {}
-void create_tcp_module() {}
-void create_http_module() {}
-void create_ssl_module() {}
+Module* create_net_module(ModuleCache* cache) { (void)cache; return NULL; }
+Module* create_socket_module(ModuleCache* cache) { (void)cache; return NULL; }
+Module* create_tcp_module(ModuleCache* cache) { (void)cache; return NULL; }
+Module* create_http_module(ModuleCache* cache) { (void)cache; return NULL; }
+Module* create_ssl_module(ModuleCache* cache) { (void)cache; return NULL; }
 #endif
 
 #ifndef SAGE_HAS_ML
-void create_ml_native_module() {}
+Module* create_ml_native_module(ModuleCache* cache) { (void)cache; return NULL; }
+#endif
+
+#if !defined(SAGE_HAS_VULKAN) && !defined(SAGE_HAS_OPENGL)
+Module* create_graphics_module(ModuleCache* cache) { (void)cache; return NULL; }
 #endif
 
 /* GPU stubs */
