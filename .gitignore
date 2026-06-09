@@ -62,3 +62,6 @@ models/weights/*.weights
 *.ll
 *.spv
 .blackboxcli/
+core/sage
+core/sgvm
+core/sgvmc
