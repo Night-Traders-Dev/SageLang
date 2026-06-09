@@ -6,6 +6,8 @@
 #include <setjmp.h>
 #include <ctype.h>
 #include <time.h>
+#include <errno.h>
+#include <sys/wait.h>
 #include "lexer.h"
 #include "token.h"
 #include "ast.h"
@@ -1648,9 +1650,33 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 if (!editor) editor = getenv("VISUAL");
                 if (!editor) editor = "vi";
 
-                char cmd[2048];
-                snprintf(cmd, sizeof(cmd), "%s %s", editor, tmp_path);
-                if (system(cmd) == 0) {
+                // Safe execution of editor (CWE-78)
+                int ok = 0;
+                pid_t pid = fork();
+                if (pid == 0) {
+                    char* args[64];
+                    int argc_local = 0;
+                    char editor_copy[1024];
+                    strncpy(editor_copy, editor, sizeof(editor_copy) - 1);
+                    editor_copy[sizeof(editor_copy) - 1] = '\0';
+
+                    char* token = strtok(editor_copy, " ");
+                    while (token != NULL && argc_local < 62) {
+                        args[argc_local++] = token;
+                        token = strtok(NULL, " ");
+                    }
+                    args[argc_local++] = tmp_path;
+                    args[argc_local] = NULL;
+
+                    execvp(args[0], args);
+                    _exit(127);
+                } else if (pid > 0) {
+                    int status;
+                    waitpid(pid, &status, 0);
+                    ok = (WIFEXITED(status) && WEXITSTATUS(status) == 0);
+                }
+
+                if (ok) {
                     char* buffer = try_main_read_file(tmp_path);
                     if (buffer) {
                         if (setjmp(g_repl_error_jmp) == 0) {
