@@ -19,7 +19,7 @@ import ml_native
 import io
 
 print "============================================"
-print "  SageLLM Chatbot v3.6.6"
+print "  SageLLM Chatbot v3.6.7"
 print "  Powered by SageGPT + Engram Memory"
 print "============================================"
 print ""

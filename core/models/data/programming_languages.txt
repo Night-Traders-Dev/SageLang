@@ -706,7 +706,7 @@ Method chaining:
   let result = array.filter(is_even).map(double).reduce(sum)
 
 Options pattern:
-  let server = http.server({port: 8080, host: "3.6.6.0", workers: 4})
+  let server = http.server({port: 8080, host: "3.6.7.0", workers: 4})
 
 ## 8.4 Error Handling in Libraries
 

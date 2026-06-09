@@ -938,6 +938,34 @@ static Value sys_exec_native(int argCount, Value* args) {
     return val_number(result);
 }
 
+static Value sys_shell_exec_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    const char* cmd = AS_STRING(args[0]);
+    
+    char buffer[4096];
+    char* result = NULL;
+    size_t result_len = 0;
+    
+    FILE* fp = popen(cmd, "r");
+    if (!fp) return val_string("");
+    
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        size_t len = strlen(buffer);
+        char* new_result = realloc(result, result_len + len + 1);
+        if (!new_result) { free(result); pclose(fp); return val_nil(); }
+        result = new_result;
+        memcpy(result + result_len, buffer, len);
+        result_len += len;
+        result[result_len] = '\0';
+    }
+    
+    pclose(fp);
+    
+    Value v = val_string(result ? result : "");
+    free(result);
+    return v;
+}
+
 static Value sys_call_native(int argCount, Value* args) {
     if (argCount < 1) return val_nil();
     Value callee = args[0];
@@ -965,6 +993,7 @@ Module* create_sys_module(ModuleCache* cache) {
     env_define_const(e, "clock", 5, val_native(sys_clock_native));
     env_define_const(e, "sleep", 5, val_native(sys_sleep_native));
     env_define_const(e, "exec", 4, val_native(sys_exec_native));
+    env_define_const(e, "shell_exec", 10, val_native(sys_shell_exec_native));
     env_define_const(e, "call", 4, val_native(sys_call_native));
 
     // Constants

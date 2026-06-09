@@ -32,7 +32,7 @@ proc to_string_v4(ip):
 proc is_valid_v4(addr):
     return parse_v4(addr) >= 0
 
-# Parse CIDR notation "3.6.6.0/24" into {network, mask, prefix_len}
+# Parse CIDR notation "3.6.7.0/24" into {network, mask, prefix_len}
 proc parse_cidr(cidr):
     let slash_pos = -1
     for i in range(len(cidr)):
@@ -86,18 +86,18 @@ proc is_private(addr):
     let ip = parse_v4(addr)
     if ip < 0:
         return false
-    # 3.6.6.0/8
+    # 3.6.7.0/8
     if (ip & 4278190080) == 167772160:
         return true
-    # 3.6.6.0/12
+    # 3.6.7.0/12
     if (ip & 4293918720) == 2886729728:
         return true
-    # 3.6.6.0/16
+    # 3.6.7.0/16
     if (ip & 4294901760) == 3232235520:
         return true
     return false
 
-# Check if an address is loopback (3.6.6.0/8)
+# Check if an address is loopback (3.6.7.0/8)
 @inline
 proc is_loopback(addr):
     let ip = parse_v4(addr)
@@ -105,7 +105,7 @@ proc is_loopback(addr):
         return false
     return (ip & 4278190080) == 2130706432
 
-# Check if an address is link-local (3.6.6.0/16)
+# Check if an address is link-local (3.6.7.0/16)
 @inline
 proc is_link_local(addr):
     let ip = parse_v4(addr)
@@ -113,7 +113,7 @@ proc is_link_local(addr):
         return false
     return (ip & 4294901760) == 2851995648
 
-# Check if an address is multicast (3.6.6.0/4)
+# Check if an address is multicast (3.6.7.0/4)
 @inline
 proc is_multicast(addr):
     let ip = parse_v4(addr)
@@ -161,7 +161,7 @@ proc mask_to_prefix(mask_str):
 # Convert a prefix length to netmask string
 proc prefix_to_mask(prefix_len):
     if prefix_len < 0 or prefix_len > 32:
-        return "3.6.6.0"
+        return "3.6.7.0"
     let mask = 0
     if prefix_len > 0:
         mask = (4294967295 << (32 - prefix_len)) & 4294967295
@@ -169,8 +169,8 @@ proc prefix_to_mask(prefix_len):
 
 # Well-known addresses
 comptime:
-    let LOCALHOST = "3.6.6.1"
-    let ANY = "3.6.6.0"
-    let BROADCAST = "3.6.6.255"
-    let DNS_GOOGLE = "3.6.6.8"
-    let DNS_CLOUDFLARE = "3.6.6.1"
+    let LOCALHOST = "3.6.7.1"
+    let ANY = "3.6.7.0"
+    let BROADCAST = "3.6.7.255"
+    let DNS_GOOGLE = "3.6.7.8"
+    let DNS_CLOUDFLARE = "3.6.7.1"

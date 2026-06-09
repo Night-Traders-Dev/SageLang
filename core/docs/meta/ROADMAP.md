@@ -1,13 +1,13 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: June 6, 2026
-> **Current Phase**: v3.6.6 — Math Matrix Printing & CLI Enhancements, all 18 phases complete
+> **Current Phase**: v3.6.7 — Math Matrix Printing & CLI Enhancements, all 18 phases complete
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
 ---
 
-## v3.6.6: Math Matrix Printing & CLI Enhancements (June 2026)
+## v3.6.7: Math Matrix Printing & CLI Enhancements (June 2026)
 
 ### Completed
 
@@ -16,7 +16,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.6.6: VM Optimization & Self-Hosted Toolchain (June 2026)
+## v3.6.7: VM Optimization & Self-Hosted Toolchain (June 2026)
 
 ### Completed
 
@@ -26,7 +26,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.6.6: Sentinel Security & Performance Refinement (May 2026)
+## v3.6.7: Sentinel Security & Performance Refinement (May 2026)
 
 ### Completed
 
@@ -42,7 +42,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.6.6: Performance Optimizations + Kotlin Fixes (April 2026)
+## v3.6.7: Performance Optimizations + Kotlin Fixes (April 2026)
 
 ### Completed
 
@@ -54,7 +54,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.6.6: Kotlin/Android Backend (April 2026)
+## v3.6.7: Kotlin/Android Backend (April 2026)
 
 ### Completed
 
@@ -68,7 +68,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.6.6: ORC Garbage Collector (April 2026)
+## v3.6.7: ORC Garbage Collector (April 2026)
 
 ### Completed
 
@@ -83,7 +83,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.6.6: QEMU Support (March 2026)
+## v3.6.7: QEMU Support (March 2026)
 
 ### Completed
 

@@ -13,7 +13,7 @@
 ## ---- Data ----
 
 let app_name = "Hello Sage"
-let version = "3.6.6"
+let version = "3.6.7"
 let features = [
     "Write Android apps in Sage",
     "Transpile to Kotlin automatically",
