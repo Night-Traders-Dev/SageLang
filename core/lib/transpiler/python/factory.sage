@@ -1,5 +1,5 @@
-from transpiler.python_ast_parser import PythonASTParser
-from transpiler.native_parser import SageNativeParser
+from transpiler.python.ast_parser import PythonASTParser
+from transpiler.python.native_parser import SageNativeParser
 
 proc get_parser(backend: String) -> Object:
     if backend == "ast":

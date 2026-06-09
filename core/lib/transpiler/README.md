@@ -1,11 +1,11 @@
 # SageLang Transpiler Library
 
-The `transpiler` library provides a robust framework for creating language-to-SageLang transpilers. It follows a modular architecture separating parsing logic from SageLang emission.
+The `transpiler` library provides a robust framework for creating language-to-SageLang transpilers. It follows a modular architecture where each supported language has its own dedicated directory.
 
 ## Structure
 - `base.sage`: Defines the base `Transpiler` interface.
-- `parsers/`: Language-specific parsing logic.
-- `emitters/`: Language-specific SageLang code emission.
+- `python/`: Contains Python-to-SageLang parser backends, factory, and emitter.
+- `docs/`: Library documentation (SPEC, SECURITY, LANGUAGES).
 
 ## Quick Start
 To create a new transpiler, inherit from `Transpiler` and implement `parse` and `emit`.

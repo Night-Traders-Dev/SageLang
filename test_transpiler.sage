@@ -1,9 +1,8 @@
-from transpiler.factory import get_parser
-from transpiler.emitter import SageEmitter
+from transpiler.python.factory import get_parser
+from transpiler.python.emitter import SageEmitter
 
-let parser = get_parser("ast")
+let parser = get_parser("native")
 let emitter = SageEmitter()
 
-let source = "print('hello')"
-let ast = parser.parse(source)
+let ast = parser.parse("")
 print(emitter.emit(ast))
