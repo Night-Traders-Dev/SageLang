@@ -1182,7 +1182,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v3.5.6
+- **Current Version**: v3.6.5
 - **Spec Version**: 3.0 (see `STABILITY.md` for guarantees)
 
 ## 💾 Project Structure
@@ -1360,6 +1360,7 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 **Recent Milestones:**
 
+- June 8, 2026: v3.6.5: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
 - June 5, 2026: Optimization: Hardened interpreter search path logic (preventing duplicate paths, increased budget to 64) and implemented high-performance native bridging for SageMetal VM (Math, IO, Sys, Regex).
 - May 29, 2026: v3.5.6: Fixed doc comment detachment for `errno.strerror` and updated core metadata.
 - May 25, 2026: v3.5.4: Structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust sandbox security guards.
