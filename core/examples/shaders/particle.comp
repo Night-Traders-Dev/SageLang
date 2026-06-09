@@ -1,0 +1,62 @@
+#version 450
+
+layout(local_size_x = 256) in;
+
+struct Particle {
+    vec2 position;
+    vec2 velocity;
+    vec4 color;
+};
+
+layout(std430, binding = 0) buffer ParticleIn {
+    Particle particlesIn[];
+};
+
+layout(std430, binding = 1) buffer ParticleOut {
+    Particle particlesOut[];
+};
+
+layout(push_constant) uniform PushConstants {
+    float deltaTime;
+    float attractorX;
+    float attractorY;
+    float particleCount;
+} pc;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= uint(pc.particleCount)) return;
+
+    Particle p = particlesIn[index];
+
+    // Attract towards cursor
+    vec2 toAttractor = vec2(pc.attractorX, pc.attractorY) - p.position;
+    float dist = length(toAttractor);
+    if (dist > 0.01) {
+        vec2 force = normalize(toAttractor) * 0.5 / (dist + 0.1);
+        p.velocity += force * pc.deltaTime;
+    }
+
+    // Damping
+    p.velocity *= 0.995;
+
+    // Integrate
+    p.position += p.velocity * pc.deltaTime;
+
+    // Wrap around
+    if (p.position.x > 1.0) p.position.x -= 2.0;
+    if (p.position.x < -1.0) p.position.x += 2.0;
+    if (p.position.y > 1.0) p.position.y -= 2.0;
+    if (p.position.y < -1.0) p.position.y += 2.0;
+
+    // Color based on speed
+    float speed = length(p.velocity);
+    p.color = vec4(
+        0.2 + speed * 2.0,
+        0.4 + speed * 0.5,
+        1.0 - speed * 0.5,
+        1.0
+    );
+
+    particlesOut[index] = p;
+}

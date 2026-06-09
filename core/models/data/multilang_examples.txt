@@ -1,0 +1,679 @@
+<|lang:python|>
+# Python - Dynamic typing, indentation-based, batteries included
+
+# Variables and types
+x = 42
+name = "hello"
+items = [1, 2, 3]
+config = {"key": "value", "count": 10}
+flag = True
+
+# Functions
+def factorial(n):
+    if n <= 1:
+        return 1
+    return n * factorial(n - 1)
+
+def fibonacci(n):
+    a, b = 0, 1
+    for _ in range(n):
+        yield a
+        a, b = b, a + b
+
+# Classes
+class Animal:
+    def __init__(self, name, sound):
+        self.name = name
+        self.sound = sound
+
+    def speak(self):
+        return f"{self.name} says {self.sound}"
+
+class Dog(Animal):
+    def __init__(self, name):
+        super().__init__(name, "woof")
+
+    def fetch(self, item):
+        return f"{self.name} fetches {item}"
+
+# List comprehensions
+squares = [x**2 for x in range(10)]
+evens = [x for x in range(20) if x % 2 == 0]
+matrix = [[i*j for j in range(5)] for i in range(5)]
+
+# Decorators
+def memoize(func):
+    cache = {}
+    def wrapper(*args):
+        if args not in cache:
+            cache[args] = func(*args)
+        return cache[args]
+    return wrapper
+
+@memoize
+def fib(n):
+    if n < 2:
+        return n
+    return fib(n-1) + fib(n-2)
+
+# Context managers
+class FileManager:
+    def __init__(self, path, mode):
+        self.path = path
+        self.mode = mode
+
+    def __enter__(self):
+        self.file = open(self.path, self.mode)
+        return self.file
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.file.close()
+
+# Pattern matching (Python 3.10+)
+def classify(value):
+    match value:
+        case 0:
+            return "zero"
+        case int(n) if n > 0:
+            return "positive"
+        case str(s):
+            return f"string: {s}"
+        case [x, y]:
+            return f"pair: {x}, {y}"
+        case _:
+            return "other"
+
+# Async/await
+import asyncio
+
+async def fetch_data(url):
+    await asyncio.sleep(1)
+    return {"status": 200, "data": "result"}
+
+async def main():
+    tasks = [fetch_data(f"url_{i}") for i in range(5)]
+    results = await asyncio.gather(*tasks)
+
+# Type hints (gradual typing)
+from typing import List, Dict, Optional, Callable
+
+def process(items: List[int], transform: Callable[[int], int]) -> List[int]:
+    return [transform(x) for x in items]
+
+def find_user(user_id: int) -> Optional[Dict[str, str]]:
+    users = {1: {"name": "Alice"}, 2: {"name": "Bob"}}
+    return users.get(user_id)
+
+# Error handling
+class AppError(Exception):
+    def __init__(self, message, code):
+        super().__init__(message)
+        self.code = code
+
+def divide(a, b):
+    try:
+        result = a / b
+    except ZeroDivisionError:
+        raise AppError("Division by zero", 400)
+    finally:
+        print("Division attempted")
+    return result
+
+# Metaclasses
+class Singleton(type):
+    _instances = {}
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+class Database(metaclass=Singleton):
+    def __init__(self):
+        self.connection = None
+
+<|end|>
+
+<|lang:c|>
+// C - Systems programming, manual memory management, close to hardware
+
+// Basic types and pointers
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct {
+    char* name;
+    int age;
+    double salary;
+} Employee;
+
+Employee* employee_create(const char* name, int age, double salary) {
+    Employee* e = (Employee*)malloc(sizeof(Employee));
+    e->name = strdup(name);
+    e->age = age;
+    e->salary = salary;
+    return e;
+}
+
+void employee_free(Employee* e) {
+    if (e) {
+        free(e->name);
+        free(e);
+    }
+}
+
+// Function pointers (first-class functions in C)
+typedef int (*Comparator)(const void*, const void*);
+
+int compare_int(const void* a, const void* b) {
+    return *(const int*)a - *(const int*)b;
+}
+
+void sort(void* array, size_t count, size_t size, Comparator cmp) {
+    qsort(array, count, size, cmp);
+}
+
+// Linked list
+typedef struct Node {
+    int data;
+    struct Node* next;
+} Node;
+
+Node* list_push(Node* head, int data) {
+    Node* node = (Node*)malloc(sizeof(Node));
+    node->data = data;
+    node->next = head;
+    return node;
+}
+
+void list_free(Node* head) {
+    while (head) {
+        Node* next = head->next;
+        free(head);
+        head = next;
+    }
+}
+
+int list_length(Node* head) {
+    int count = 0;
+    while (head) { count++; head = head->next; }
+    return count;
+}
+
+// Hash table
+#define TABLE_SIZE 256
+
+typedef struct Entry {
+    char* key;
+    void* value;
+    struct Entry* next;
+} Entry;
+
+typedef struct {
+    Entry* buckets[TABLE_SIZE];
+    int count;
+} HashTable;
+
+unsigned int hash(const char* key) {
+    unsigned int h = 5381;
+    while (*key) h = ((h << 5) + h) + (unsigned char)*key++;
+    return h % TABLE_SIZE;
+}
+
+void ht_set(HashTable* ht, const char* key, void* value) {
+    unsigned int idx = hash(key);
+    Entry* e = (Entry*)malloc(sizeof(Entry));
+    e->key = strdup(key);
+    e->value = value;
+    e->next = ht->buckets[idx];
+    ht->buckets[idx] = e;
+    ht->count++;
+}
+
+void* ht_get(HashTable* ht, const char* key) {
+    unsigned int idx = hash(key);
+    Entry* e = ht->buckets[idx];
+    while (e) {
+        if (strcmp(e->key, key) == 0) return e->value;
+        e = e->next;
+    }
+    return NULL;
+}
+
+// Memory arena allocator
+typedef struct {
+    char* base;
+    size_t size;
+    size_t offset;
+} Arena;
+
+Arena arena_create(size_t size) {
+    Arena a;
+    a.base = (char*)malloc(size);
+    a.size = size;
+    a.offset = 0;
+    return a;
+}
+
+void* arena_alloc(Arena* a, size_t size) {
+    size_t aligned = (a->offset + 7) & ~7;
+    if (aligned + size > a->size) return NULL;
+    void* ptr = a->base + aligned;
+    a->offset = aligned + size;
+    return ptr;
+}
+
+void arena_reset(Arena* a) { a->offset = 0; }
+void arena_destroy(Arena* a) { free(a->base); }
+
+// Bit manipulation
+int count_bits(unsigned int n) {
+    int count = 0;
+    while (n) { count += n & 1; n >>= 1; }
+    return count;
+}
+
+int is_power_of_two(unsigned int n) {
+    return n && !(n & (n - 1));
+}
+
+unsigned int next_power_of_two(unsigned int n) {
+    n--;
+    n |= n >> 1; n |= n >> 2; n |= n >> 4;
+    n |= n >> 8; n |= n >> 16;
+    return n + 1;
+}
+
+<|end|>
+
+<|lang:cpp|>
+// C++ - Multi-paradigm, RAII, templates, move semantics
+
+#include <iostream>
+#include <vector>
+#include <memory>
+#include <algorithm>
+#include <functional>
+#include <optional>
+#include <variant>
+#include <string>
+#include <map>
+
+// RAII resource management
+class File {
+    FILE* handle;
+public:
+    File(const char* path, const char* mode) : handle(fopen(path, mode)) {}
+    ~File() { if (handle) fclose(handle); }
+    File(const File&) = delete;
+    File& operator=(const File&) = delete;
+    File(File&& other) noexcept : handle(other.handle) { other.handle = nullptr; }
+    bool is_open() const { return handle != nullptr; }
+    size_t read(void* buf, size_t size) { return fread(buf, 1, size, handle); }
+};
+
+// Templates and concepts (C++20)
+template<typename T>
+concept Numeric = std::is_arithmetic_v<T>;
+
+template<Numeric T>
+T clamp(T value, T min_val, T max_val) {
+    if (value < min_val) return min_val;
+    if (value > max_val) return max_val;
+    return value;
+}
+
+// Smart pointers
+class TreeNode {
+public:
+    int value;
+    std::unique_ptr<TreeNode> left;
+    std::unique_ptr<TreeNode> right;
+
+    TreeNode(int v) : value(v) {}
+
+    void insert(int v) {
+        if (v < value) {
+            if (left) left->insert(v);
+            else left = std::make_unique<TreeNode>(v);
+        } else {
+            if (right) right->insert(v);
+            else right = std::make_unique<TreeNode>(v);
+        }
+    }
+};
+
+// std::variant (sum types / tagged union)
+using JsonValue = std::variant<
+    std::nullptr_t,
+    bool,
+    double,
+    std::string,
+    std::vector<JsonValue>,
+    std::map<std::string, JsonValue>
+>;
+
+// std::optional (Maybe/Option type)
+std::optional<int> find_index(const std::vector<int>& vec, int target) {
+    for (size_t i = 0; i < vec.size(); i++) {
+        if (vec[i] == target) return static_cast<int>(i);
+    }
+    return std::nullopt;
+}
+
+// Lambda expressions and higher-order functions
+auto make_adder(int n) {
+    return [n](int x) { return x + n; };
+}
+
+template<typename Container, typename Pred>
+auto filter(const Container& c, Pred predicate) {
+    Container result;
+    std::copy_if(c.begin(), c.end(), std::back_inserter(result), predicate);
+    return result;
+}
+
+// Move semantics
+class Buffer {
+    std::unique_ptr<uint8_t[]> data;
+    size_t size;
+public:
+    Buffer(size_t n) : data(std::make_unique<uint8_t[]>(n)), size(n) {}
+    Buffer(Buffer&& other) noexcept : data(std::move(other.data)), size(other.size) {
+        other.size = 0;
+    }
+    Buffer& operator=(Buffer&& other) noexcept {
+        data = std::move(other.data);
+        size = other.size;
+        other.size = 0;
+        return *this;
+    }
+    size_t get_size() const { return size; }
+};
+
+// Compile-time computation (constexpr)
+constexpr int factorial(int n) {
+    return n <= 1 ? 1 : n * factorial(n - 1);
+}
+
+constexpr auto compile_time_table = []() {
+    std::array<int, 10> table{};
+    for (int i = 0; i < 10; i++) table[i] = factorial(i);
+    return table;
+}();
+
+// Coroutines (C++20)
+// generator<int> fibonacci() {
+//     int a = 0, b = 1;
+//     while (true) {
+//         co_yield a;
+//         auto temp = a + b;
+//         a = b;
+//         b = temp;
+//     }
+// }
+
+<|end|>
+
+<|lang:nim|>
+# Nim - Expressive, compiled, Python-like syntax with C performance
+
+# Indentation-based (like Python and Sage)
+import std/[strutils, sequtils, tables, options, sugar]
+
+# Variables and types
+var x = 42          # mutable
+let y = "hello"     # immutable
+const PI = 3.14159  # compile-time constant
+
+# Procedures (functions)
+proc factorial(n: int): int =
+  if n <= 1: return 1
+  return n * factorial(n - 1)
+
+proc fibonacci(n: int): seq[int] =
+  result = @[]
+  var a = 0
+  var b = 1
+  for i in 0..<n:
+    result.add(a)
+    let temp = a + b
+    a = b
+    b = temp
+
+# Templates (compile-time code generation)
+template benchmark(name: string, body: untyped) =
+  let start = cpuTime()
+  body
+  let elapsed = cpuTime() - start
+  echo name, ": ", elapsed, "s"
+
+# Generics
+proc findIndex[T](s: seq[T], value: T): Option[int] =
+  for i, item in s:
+    if item == value:
+      return some(i)
+  return none(int)
+
+proc map[T, U](s: seq[T], f: proc(x: T): U): seq[U] =
+  result = newSeq[U](s.len)
+  for i, item in s:
+    result[i] = f(item)
+
+# Objects (classes)
+type
+  Animal = ref object of RootObj
+    name: string
+    sound: string
+
+  Dog = ref object of Animal
+    breed: string
+
+method speak(a: Animal): string {.base.} =
+  a.name & " says " & a.sound
+
+method speak(d: Dog): string =
+  d.name & " (" & d.breed & ") says " & d.sound
+
+# Sum types / Algebraic data types
+type
+  TokenKind = enum
+    tkNumber, tkString, tkIdent, tkPlus, tkMinus, tkStar, tkSlash
+
+  Token = object
+    case kind: TokenKind
+    of tkNumber:
+      numVal: float
+    of tkString:
+      strVal: string
+    of tkIdent:
+      name: string
+    else:
+      discard
+
+  # Result type
+  Result[T] = object
+    case isOk: bool
+    of true:
+      value: T
+    of false:
+      error: string
+
+proc ok[T](value: T): Result[T] =
+  Result[T](isOk: true, value: value)
+
+proc err[T](msg: string): Result[T] =
+  Result[T](isOk: false, error: msg)
+
+# Iterators (generators)
+iterator countUp(a, b: int): int =
+  var i = a
+  while i <= b:
+    yield i
+    inc i
+
+iterator pairs[T](s: seq[T]): tuple[idx: int, val: T] =
+  for i in 0..<s.len:
+    yield (i, s[i])
+
+# Macros (compile-time AST transformation)
+import std/macros
+
+macro genFields(n: int): untyped =
+  result = nnkRecList.newTree()
+  for i in 0..<n.intVal:
+    let fieldName = ident("field" & $i)
+    result.add newIdentDefs(fieldName, ident("int"))
+
+# Memory management
+# Nim has multiple GC options: ARC, ORC (cycle-detecting ARC), mark-and-sweep
+# Default is ORC (like Rust's ownership but automatic)
+
+type
+  LinkedList[T] = ref object
+    value: T
+    next: LinkedList[T]
+
+proc prepend[T](list: LinkedList[T], value: T): LinkedList[T] =
+  LinkedList[T](value: value, next: list)
+
+proc toSeq[T](list: LinkedList[T]): seq[T] =
+  result = @[]
+  var current = list
+  while current != nil:
+    result.add(current.value)
+    current = current.next
+
+# FFI (calling C from Nim)
+proc printf(format: cstring) {.importc, varargs, header: "<stdio.h>".}
+proc malloc(size: csize_t): pointer {.importc, header: "<stdlib.h>".}
+proc free(p: pointer) {.importc, header: "<stdlib.h>".}
+
+# Async/await
+import std/asyncdispatch
+
+proc fetchData(url: string): Future[string] {.async.} =
+  await sleepAsync(100)
+  return "data from " & url
+
+# Compile-time evaluation
+static:
+  let table = block:
+    var t: array[256, int]
+    for i in 0..255:
+      t[i] = i * i
+    t
+
+# Distinct types (strong typedefs)
+type
+  Dollars = distinct float
+  Euros = distinct float
+
+# Cannot accidentally mix Dollars and Euros:
+# var price: Dollars = 10.Dollars
+# var cost: Euros = price  # compile error!
+
+<|end|>
+
+<|comparison|>
+# Cross-Language Comparison: The Same Algorithm in 5 Languages
+
+## Quicksort
+
+### Python
+def quicksort(arr):
+    if len(arr) <= 1:
+        return arr
+    pivot = arr[len(arr) // 2]
+    left = [x for x in arr if x < pivot]
+    middle = [x for x in arr if x == pivot]
+    right = [x for x in arr if x > pivot]
+    return quicksort(left) + middle + quicksort(right)
+
+### C
+void quicksort(int* arr, int low, int high) {
+    if (low >= high) return;
+    int pivot = arr[(low + high) / 2];
+    int i = low, j = high;
+    while (i <= j) {
+        while (arr[i] < pivot) i++;
+        while (arr[j] > pivot) j--;
+        if (i <= j) {
+            int tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+            i++; j--;
+        }
+    }
+    quicksort(arr, low, j);
+    quicksort(arr, i, high);
+}
+
+### C++
+template<typename T>
+void quicksort(std::vector<T>& arr, int low, int high) {
+    if (low >= high) return;
+    T pivot = arr[(low + high) / 2];
+    int i = low, j = high;
+    while (i <= j) {
+        while (arr[i] < pivot) i++;
+        while (arr[j] > pivot) j--;
+        if (i <= j) { std::swap(arr[i++], arr[j--]); }
+    }
+    quicksort(arr, low, j);
+    quicksort(arr, i, high);
+}
+
+### Nim
+proc quicksort[T](arr: var seq[T], low, high: int) =
+  if low >= high: return
+  let pivot = arr[(low + high) div 2]
+  var i = low
+  var j = high
+  while i <= j:
+    while arr[i] < pivot: inc i
+    while arr[j] > pivot: dec j
+    if i <= j:
+      swap(arr[i], arr[j])
+      inc i
+      dec j
+  quicksort(arr, low, j)
+  quicksort(arr, i, high)
+
+### Sage
+proc quicksort(arr, low, high):
+    if low >= high:
+        return
+    let pivot = arr[((low + high) / 2) | 0]
+    let i = low
+    let j = high
+    while i <= j:
+        while arr[i] < pivot:
+            i = i + 1
+        while arr[j] > pivot:
+            j = j - 1
+        if i <= j:
+            let tmp = arr[i]
+            arr[i] = arr[j]
+            arr[j] = tmp
+            i = i + 1
+            j = j - 1
+    quicksort(arr, low, j)
+    quicksort(arr, i, high)
+
+## Key Differences
+
+| Feature | Python | C | C++ | Nim | Sage |
+|---------|--------|---|-----|-----|------|
+| Typing | Dynamic | Static | Static | Static | Dynamic |
+| Memory | GC | Manual | RAII/Smart ptrs | ARC/ORC | GC (tri-color) |
+| Syntax | Indentation | Braces | Braces | Indentation | Indentation |
+| Speed | Slow (interp) | Fast (native) | Fast (native) | Fast (native) | Medium (interp/compiled) |
+| Generics | Duck typing | Macros | Templates | Generics | Dynamic |
+| Error | Exceptions | Return codes | Exceptions | Exceptions | Exceptions |
+| Null | None | NULL | nullptr/optional | nil/Option | nil |
+| Closures | Yes | No (func ptrs) | Yes (lambdas) | Yes | Yes |
+| Pattern match | 3.10+ | No | variant/visit | case objects | match/case |
+| Macros | Decorators | Preprocessor | Templates | AST macros | No |
+| Concurrency | asyncio/threads | pthreads | std::thread | async/threads | threads/async/channels |
+| Compilation | Interpreted | Compiled | Compiled | Compiled | Interp + 3 backends |
+
+<|end|>

@@ -1,0 +1,18 @@
+{
+  "packages": [
+    {
+      "name": "SageFetch",
+      "version": "1.0.0",
+      "description": "A Neofetch clone in Sage",
+      "author": "Gemini CLI",
+      "architectures": ["x86_64", "aarch64"]
+    },
+    {
+      "name": "SageShell",
+      "version": "1.0.0",
+      "description": "A fish shell clone in Sage",
+      "author": "Gemini CLI",
+      "architectures": ["x86_64", "aarch64"]
+    }
+  ]
+}

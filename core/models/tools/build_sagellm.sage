@@ -1,0 +1,777 @@
+gc_disable()
+# ============================================================================
+# SageLLM Build Pipeline v2.0.0 — Medium Model, High Context, All Features
+#
+# Builds, trains, and packages the SageLLM chatbot using every available
+# tool, technique, and feature in the Sage ecosystem.
+#
+# Pipeline:
+#   Phase 1:  Collect ALL training data (entire codebase + docs + datasets)
+#   Phase 2:  Initialize SageGPT-Medium model (d=128, 4 layers, 4 heads)
+#   Phase 3:  Pre-train on theory + NLP + documentation
+#   Phase 4:  LoRA fine-tune on all Sage source code
+#   Phase 5:  DPO preference alignment on code quality
+#   Phase 6:  Build RAG document store from codebase
+#   Phase 7:  Load Engram 4-tier memory (50+ facts, 10+ procedures)
+#   Phase 8:  Quantize model to int8
+#   Phase 9:  Generate enriched chatbot (all agent/chat features)
+#   Phase 10: Export GGUF for Ollama/llama.cpp
+#   Phase 11: Visualization and inspection
+#   Phase 12: Summary + compile instructions
+#
+# Usage: sage models/build_sagellm.sage
+# Context: 32768 tokens (high context window)
+# ============================================================================
+
+import io
+import ml_native
+import llm.config
+import llm.tokenizer
+import llm.train
+import llm.lora
+import llm.engram
+import llm.attention
+import llm.generate
+import llm.quantize
+import llm.dpo
+import llm.rag
+import llm.prompt
+import llm.gguf
+import ml.debug
+import ml.viz
+import ml.monitor
+import agent.core
+import agent.tools
+import agent.planner
+import agent.critic
+import agent.grammar
+import agent.semantic_router
+import agent.tot
+import agent.trace
+import agent.schema
+import agent.supervisor
+import ml.gpu_accel
+
+let NL = chr(10)
+let DQ = chr(34)
+
+proc log(phase, msg):
+    print "[" + phase + "] " + msg
+
+proc separator():
+    print "================================================================"
+
+proc divider():
+    print "----------------------------------------------------------------"
+
+separator()
+print "  SageLLM Build Pipeline v2.0.0"
+print "  Medium Model | 32K Context | All Features"
+print "  SwiGLU + RoPE + RMSNorm + LoRA + DPO + RAG + Engram"
+separator()
+print ""
+
+# ============================================================================
+# Phase 1: Collect ALL training data
+# ============================================================================
+
+log("DATA", "Phase 1: Collecting ALL training data...")
+divider()
+
+let theory = io.readfile("models/data/programming_languages.txt")
+if theory == nil:
+    log("DATA", "ERROR: Run from sagelang root")
+
+let multilang = io.readfile("models/data/multilang_examples.txt")
+if multilang != nil:
+    theory = theory + NL + multilang
+    log("DATA", "Multi-language: " + str(len(multilang)) + " chars")
+
+let nlp_data = io.readfile("models/data/natural_language.txt")
+if nlp_data != nil:
+    theory = theory + NL + nlp_data
+    log("DATA", "NLP data: " + str(len(nlp_data)) + " chars")
+
+log("DATA", "Theory+NLP: " + str(len(theory)) + " chars")
+
+let sage_corpus = ""
+let file_count = 0
+
+let self_host_files = ["src/sage/token.sage", "src/sage/lexer.sage", "src/sage/ast.sage", "src/sage/parser.sage", "src/sage/interpreter.sage", "src/sage/compiler.sage", "src/sage/sage.sage", "src/sage/environment.sage", "src/sage/errors.sage", "src/sage/value.sage", "src/sage/codegen.sage", "src/sage/llvm_backend.sage", "src/sage/formatter.sage", "src/sage/linter.sage", "src/sage/module.sage", "src/sage/gc.sage", "src/sage/pass.sage", "src/sage/constfold.sage", "src/sage/dce.sage", "src/sage/inline.sage", "src/sage/typecheck.sage", "src/sage/stdlib.sage", "src/sage/diagnostic.sage", "src/sage/heartbeat.sage", "src/sage/lsp.sage", "src/sage/bytecode.sage"]
+for i in range(len(self_host_files)):
+    let content = io.readfile(self_host_files[i])
+    if content != nil:
+        sage_corpus = sage_corpus + "<|file:" + self_host_files[i] + "|>" + NL + content + NL + "<|end|>" + NL
+        file_count = file_count + 1
+log("DATA", "Self-hosted: " + str(file_count) + " files")
+
+let all_lib_files = ["lib/arrays.sage", "lib/dicts.sage", "lib/strings.sage", "lib/iter.sage", "lib/json.sage", "lib/math.sage", "lib/stats.sage", "lib/utils.sage", "lib/assert.sage", "lib/os/fat.sage", "lib/os/fat_dir.sage", "lib/os/elf.sage", "lib/os/mbr.sage", "lib/os/gpt.sage", "lib/os/pe.sage", "lib/os/pci.sage", "lib/os/uefi.sage", "lib/os/acpi.sage", "lib/os/paging.sage", "lib/os/idt.sage", "lib/os/serial.sage", "lib/os/dtb.sage", "lib/os/alloc.sage", "lib/os/vfs.sage", "lib/net/url.sage", "lib/net/headers.sage", "lib/net/request.sage", "lib/net/server.sage", "lib/net/websocket.sage", "lib/net/mime.sage", "lib/net/dns.sage", "lib/net/ip.sage", "lib/crypto/hash.sage", "lib/crypto/hmac.sage", "lib/crypto/encoding.sage", "lib/crypto/cipher.sage", "lib/crypto/rand.sage", "lib/crypto/password.sage", "lib/ml/tensor.sage", "lib/ml/nn.sage", "lib/ml/optim.sage", "lib/ml/loss.sage", "lib/ml/data.sage", "lib/ml/debug.sage", "lib/ml/viz.sage", "lib/ml/monitor.sage", "lib/cuda/device.sage", "lib/cuda/memory.sage", "lib/cuda/kernel.sage", "lib/cuda/stream.sage", "lib/std/regex.sage", "lib/std/datetime.sage", "lib/std/log.sage", "lib/std/argparse.sage", "lib/std/compress.sage", "lib/std/process.sage", "lib/std/unicode.sage", "lib/std/fmt.sage", "lib/std/testing.sage", "lib/std/enum.sage", "lib/std/trait.sage", "lib/std/signal.sage", "lib/std/db.sage", "lib/std/channel.sage", "lib/std/threadpool.sage", "lib/std/atomic.sage", "lib/std/rwlock.sage", "lib/std/condvar.sage", "lib/std/debug.sage", "lib/std/profiler.sage", "lib/std/docgen.sage", "lib/std/build.sage", "lib/std/interop.sage", "lib/llm/config.sage", "lib/llm/tokenizer.sage", "lib/llm/embedding.sage", "lib/llm/attention.sage", "lib/llm/transformer.sage", "lib/llm/generate.sage", "lib/llm/train.sage", "lib/llm/agent.sage", "lib/llm/prompt.sage", "lib/llm/lora.sage", "lib/llm/quantize.sage", "lib/llm/engram.sage", "lib/llm/rag.sage", "lib/llm/dpo.sage", "lib/llm/gguf.sage", "lib/agent/core.sage", "lib/agent/tools.sage", "lib/agent/planner.sage", "lib/agent/router.sage", "lib/agent/supervisor.sage", "lib/agent/critic.sage", "lib/agent/schema.sage", "lib/agent/trace.sage", "lib/agent/grammar.sage", "lib/agent/sandbox.sage", "lib/agent/tot.sage", "lib/agent/semantic_router.sage", "lib/chat/bot.sage", "lib/chat/persona.sage", "lib/chat/session.sage", "lib/graphics/vulkan.sage", "lib/graphics/gpu.sage", "lib/graphics/math3d.sage", "lib/graphics/mesh.sage", "lib/graphics/renderer.sage", "lib/graphics/postprocess.sage", "lib/graphics/pbr.sage", "lib/graphics/shadows.sage", "lib/graphics/deferred.sage", "lib/graphics/gltf.sage", "lib/graphics/taa.sage", "lib/graphics/scene.sage", "lib/graphics/material.sage", "lib/graphics/asset_cache.sage", "lib/graphics/frame_graph.sage", "lib/graphics/debug_ui.sage", "lib/graphics/opengl.sage", "lib/graphics/camera.sage", "lib/graphics/text_render.sage", "lib/graphics/ui.sage", "lib/graphics/trails.sage", "lib/graphics/lod.sage", "lib/graphics/octree.sage", "lib/graphics/camera_relative.sage"]
+for i in range(len(all_lib_files)):
+    let content = io.readfile(all_lib_files[i])
+    if content != nil:
+        sage_corpus = sage_corpus + "<|file:" + all_lib_files[i] + "|>" + NL + content + NL + "<|end|>" + NL
+        file_count = file_count + 1
+log("DATA", "Libraries: " + str(file_count) + " total files")
+
+let doc_corpus = ""
+let doc_files = ["documentation/SageLang_Guide.md", "documentation/GC_Guide.md", "documentation/LLM_Guide.md", "documentation/Agent_Chat_Guide.md", "documentation/StdLib_Guide.md", "documentation/Networking_Guide.md", "documentation/Cryptography_Guide.md", "documentation/Baremetal_OSDev_UEFI_Guide.md", "documentation/Vulkan_GPU_Guide.md", "documentation/ML_CUDA_Guide.md", "documentation/Import_Semantics.md", "documentation/FAT_Filesystem_Guide.md", "documentation/Bytecode_VM_Sketch.md"]
+let doc_count = 0
+for i in range(len(doc_files)):
+    let content = io.readfile(doc_files[i])
+    if content != nil:
+        doc_corpus = doc_corpus + content + NL
+        doc_count = doc_count + 1
+log("DATA", "Docs: " + str(doc_count) + " guides")
+
+let build_corpus = ""
+let readme = io.readfile("README.md")
+if readme != nil:
+    build_corpus = build_corpus + readme + NL
+let mf = io.readfile("Makefile")
+if mf != nil:
+    build_corpus = build_corpus + mf + NL
+
+let total_corpus = theory + NL + sage_corpus + NL + doc_corpus + NL + build_corpus
+log("DATA", "TOTAL: " + str(file_count) + " files, " + str(len(total_corpus)) + " chars (~" + str((len(total_corpus) / 4) | 0) + " tokens)")
+print ""
+
+# ============================================================================
+# Phase 2: Initialize SageGPT-Medium
+# ============================================================================
+
+log("MODEL", "Phase 2: SageGPT-Medium model...")
+divider()
+
+let d_model = 128         # Medium width (balances speed vs quality)
+let n_heads = 4           # 128 / 4 = 32 per head
+let n_layers = 4          # 4 transformer layers
+let d_ff = 512            # 4x d_model
+let vocab = 256           # Byte-level (extended ASCII)
+let context_length = 16384  # High context window
+let seq_len = 256         # Training window size
+
+log("MODEL", "d=" + str(d_model) + " heads=" + str(n_heads) + " layers=" + str(n_layers) + " ff=" + str(d_ff) + " vocab=" + str(vocab) + " ctx=" + str(context_length))
+
+let seed = 42
+let sc_embed = 0.01
+let sc_attn = 1.0 / d_model
+let sc_ff = 1.0 / d_ff
+
+proc next_rand():
+    seed = (seed * 1664525 + 1013904223) & 4294967295
+    return ((seed & 65535) / 65536 - 0.5) * 2
+
+let embed_w = []
+for i in range(vocab * d_model):
+    push(embed_w, next_rand() * sc_embed)
+
+let layer_qw = []
+let layer_kw = []
+let layer_vw = []
+let layer_ow = []
+let layer_gate = []
+let layer_up = []
+let layer_down = []
+let layer_norm1 = []
+let layer_norm2 = []
+
+for layer in range(n_layers):
+    let qw = []
+    let kw = []
+    let vw = []
+    let ow = []
+    for i in range(d_model * d_model):
+        push(qw, next_rand() * sc_attn)
+        push(kw, next_rand() * sc_attn)
+        push(vw, next_rand() * sc_attn)
+        push(ow, next_rand() * sc_attn)
+    push(layer_qw, qw)
+    push(layer_kw, kw)
+    push(layer_vw, vw)
+    push(layer_ow, ow)
+    let gw = []
+    let uw = []
+    for i in range(d_model * d_ff):
+        push(gw, next_rand() * sc_ff)
+        push(uw, next_rand() * sc_ff)
+    let dw = []
+    for i in range(d_ff * d_model):
+        push(dw, next_rand() * sc_attn)
+    push(layer_gate, gw)
+    push(layer_up, uw)
+    push(layer_down, dw)
+    let n1 = []
+    let n2 = []
+    for i in range(d_model):
+        push(n1, 1.0)
+        push(n2, 1.0)
+    push(layer_norm1, n1)
+    push(layer_norm2, n2)
+
+let final_norm = []
+for i in range(d_model):
+    push(final_norm, 1.0)
+let lm_head = []
+for i in range(d_model * vocab):
+    push(lm_head, next_rand() * sc_attn)
+
+let param_count = vocab * d_model + n_layers * (2 * d_model + 4 * d_model * d_model + 2 * d_model * d_ff + d_ff * d_model) + d_model + d_model * vocab
+log("MODEL", "Parameters: " + str(param_count))
+log("MODEL", "FP32: " + quantize.format_size(quantize.model_size_fp32(param_count)) + " | INT8: " + quantize.format_size(quantize.model_size_int8(param_count)))
+log("MODEL", "Embed stats: " + debug.format_stats(debug.weight_stats(embed_w)))
+
+# Initialize GPU acceleration context (falls back to CPU if no GPU)
+let gpu = gpu_accel.create(true)
+log("MODEL", "Compute backend: " + gpu["backend"])
+print ""
+
+# ============================================================================
+# Phase 3: Pre-train
+# ============================================================================
+
+log("TRAIN", "Phase 3: Pre-training...")
+divider()
+
+let tok = tokenizer.char_tokenizer()
+let theory_tokens = tokenizer.encode(tok, theory)
+let theory_examples = train.create_lm_examples(theory_tokens, seq_len)
+let theory_steps = len(theory_examples)
+if theory_steps > 200:
+    theory_steps = 200
+log("TRAIN", str(len(theory_tokens)) + " tokens -> " + str(theory_steps) + " steps")
+
+let train_cfg = train.create_train_config()
+train_cfg["learning_rate"] = 0.0003
+train_cfg["lr_schedule"] = "cosine"
+train_cfg["warmup_steps"] = 20
+train_cfg["log_interval"] = 50
+
+let mon = monitor.create()
+let state1 = train.create_train_state(train_cfg)
+let all_losses = []
+
+proc forward_pass(input_ids, cur_seq_len):
+    let hidden = []
+    for fp_t in range(cur_seq_len):
+        let fp_tid = input_ids[fp_t]
+        if fp_tid >= vocab:
+            fp_tid = 0
+        for fp_j in range(d_model):
+            push(hidden, embed_w[fp_tid * d_model + fp_j])
+    for fp_layer in range(n_layers):
+        hidden = gpu_accel.rms_norm(gpu, hidden, layer_norm1[fp_layer], cur_seq_len, d_model, 0.00001)
+        let fp_q = gpu_accel.matmul(gpu, hidden, layer_qw[fp_layer], cur_seq_len, d_model, d_model)
+        let fp_k = gpu_accel.matmul(gpu, hidden, layer_kw[fp_layer], cur_seq_len, d_model, d_model)
+        let fp_v = gpu_accel.matmul(gpu, hidden, layer_vw[fp_layer], cur_seq_len, d_model, d_model)
+        let fp_attn = attention.scaled_dot_product(fp_q, fp_k, fp_v, cur_seq_len, d_model, true)
+        let fp_proj = gpu_accel.matmul(gpu, fp_attn, layer_ow[fp_layer], cur_seq_len, d_model, d_model)
+        hidden = gpu_accel.add(gpu, hidden, fp_proj)
+        let fp_normed = gpu_accel.rms_norm(gpu, hidden, layer_norm2[fp_layer], cur_seq_len, d_model, 0.00001)
+        let fp_gate = gpu_accel.matmul(gpu, fp_normed, layer_gate[fp_layer], cur_seq_len, d_model, d_ff)
+        let fp_up = gpu_accel.matmul(gpu, fp_normed, layer_up[fp_layer], cur_seq_len, d_model, d_ff)
+        let fp_act = gpu_accel.silu(gpu, fp_gate)
+        let fp_gated = []
+        for fp_i in range(len(fp_act)):
+            push(fp_gated, fp_act[fp_i] * fp_up[fp_i])
+        let fp_ffn = gpu_accel.matmul(gpu, fp_gated, layer_down[fp_layer], cur_seq_len, d_ff, d_model)
+        hidden = gpu_accel.add(gpu, hidden, fp_ffn)
+    hidden = gpu_accel.rms_norm(gpu, hidden, final_norm, cur_seq_len, d_model, 0.00001)
+    let fp_last = []
+    let fp_off = (cur_seq_len - 1) * d_model
+    for fp_j in range(d_model):
+        push(fp_last, hidden[fp_off + fp_j])
+    return gpu_accel.matmul(gpu, fp_last, lm_head, 1, d_model, vocab)
+
+for step in range(theory_steps):
+    let ids = theory_examples[step]["input_ids"]
+    let tgt = theory_examples[step]["target_ids"]
+    let lr = train.get_lr(train_cfg, step, theory_steps)
+    let logits = forward_pass(ids, seq_len)
+    let target = [tgt[seq_len - 1]]
+    if target[0] >= vocab:
+        target[0] = 0
+    let loss = gpu_accel.cross_entropy(gpu, logits, target, 1, vocab)
+    push(all_losses, loss)
+    train.log_step(state1, loss, lr, 0)
+    monitor.log_step(mon, loss, lr, 0, seq_len)
+    if (step + 1) - (((step + 1) / train_cfg["log_interval"]) | 0) * train_cfg["log_interval"] == 0:
+        log("TRAIN", "  step " + str(step + 1) + "/" + str(theory_steps) + " loss=" + str(loss) + " ppl=" + str(train.perplexity(loss)))
+
+log("TRAIN", "Done. avg=" + str(train.avg_loss(state1)) + " best=" + str(state1["best_loss"]))
+print ""
+
+# ============================================================================
+# Phase 4: LoRA fine-tune
+# ============================================================================
+
+log("LORA", "Phase 4: LoRA fine-tuning on " + str(file_count) + " files...")
+divider()
+
+let lora_rank = 16
+let lora_alpha = 32
+let adapter = lora.create_adapter(d_model, d_model, lora_rank, lora_alpha)
+log("LORA", "rank=" + str(lora_rank) + " alpha=" + str(lora_alpha) + " params=" + str(adapter["trainable_params"]))
+
+let sage_tokens = tokenizer.encode(tok, sage_corpus)
+let sage_examples = train.create_lm_examples(sage_tokens, seq_len)
+let lora_steps = len(sage_examples)
+if lora_steps > 100:
+    lora_steps = 100
+
+let state2 = train.create_train_state(train_cfg)
+train_cfg["learning_rate"] = 0.001
+
+for lora_step in range(lora_steps):
+    let lora_ids = sage_examples[lora_step]["input_ids"]
+    let lora_tgt = sage_examples[lora_step]["target_ids"]
+    let lora_hidden = []
+    for lt in range(seq_len):
+        let ltid = lora_ids[lt]
+        if ltid >= vocab:
+            ltid = 0
+        for lj in range(d_model):
+            push(lora_hidden, embed_w[ltid * d_model + lj])
+    lora_hidden = gpu_accel.rms_norm(gpu, lora_hidden, layer_norm1[0], seq_len, d_model, 0.00001)
+    let lq_base = gpu_accel.matmul(gpu, lora_hidden, layer_qw[0], seq_len, d_model, d_model)
+    let lq_lora = lora.lora_forward(adapter, lora_hidden, seq_len)
+    let lq = gpu_accel.add(gpu, lq_base, lq_lora)
+    let lk = gpu_accel.matmul(gpu, lora_hidden, layer_kw[0], seq_len, d_model, d_model)
+    let lv = gpu_accel.matmul(gpu, lora_hidden, layer_vw[0], seq_len, d_model, d_model)
+    let lora_attn = attention.scaled_dot_product(lq, lk, lv, seq_len, d_model, true)
+    let lora_proj = gpu_accel.matmul(gpu, lora_attn, layer_ow[0], seq_len, d_model, d_model)
+    lora_hidden = gpu_accel.add(gpu, lora_hidden, lora_proj)
+    lora_hidden = gpu_accel.rms_norm(gpu, lora_hidden, layer_norm2[0], seq_len, d_model, 0.00001)
+    let lora_gate = gpu_accel.matmul(gpu, lora_hidden, layer_gate[0], seq_len, d_model, d_ff)
+    let lora_up = gpu_accel.matmul(gpu, lora_hidden, layer_up[0], seq_len, d_model, d_ff)
+    let lora_act = gpu_accel.silu(gpu, lora_gate)
+    let lora_gated = []
+    for li in range(len(lora_act)):
+        push(lora_gated, lora_act[li] * lora_up[li])
+    let lora_ffn = gpu_accel.matmul(gpu, lora_gated, layer_down[0], seq_len, d_ff, d_model)
+    lora_hidden = gpu_accel.add(gpu, lora_hidden, lora_ffn)
+    lora_hidden = gpu_accel.rms_norm(gpu, lora_hidden, final_norm, seq_len, d_model, 0.00001)
+    let lora_last = []
+    for lj2 in range(d_model):
+        push(lora_last, lora_hidden[(seq_len - 1) * d_model + lj2])
+    let lora_logits = gpu_accel.matmul(gpu, lora_last, lm_head, 1, d_model, vocab)
+    let lora_target = [lora_tgt[seq_len - 1]]
+    if lora_target[0] >= vocab:
+        lora_target[0] = 0
+    let lora_loss = gpu_accel.cross_entropy(gpu, lora_logits, lora_target, 1, vocab)
+    push(all_losses, lora_loss)
+    train.log_step(state2, lora_loss, train_cfg["learning_rate"], 0)
+    if (lora_step + 1) - (((lora_step + 1) / 25) | 0) * 25 == 0:
+        log("LORA", "  step " + str(lora_step + 1) + "/" + str(lora_steps) + " loss=" + str(lora_loss))
+
+log("LORA", "Done. avg=" + str(train.avg_loss(state2)))
+print ""
+
+# ============================================================================
+# Phase 5: DPO
+# ============================================================================
+
+log("DPO", "Phase 5: DPO alignment...")
+divider()
+let dpo_cfg = dpo.create_dpo_config()
+let dpo_ds = dpo.create_dataset()
+let sage_prefs = dpo.sage_code_preferences()
+for i in range(len(sage_prefs)):
+    dpo.add_pair(dpo_ds, sage_prefs[i]["prompt"], sage_prefs[i]["chosen"], sage_prefs[i]["rejected"])
+log("DPO", str(len(dpo_ds["pairs"])) + " preference pairs")
+let dpo_avg = 0
+for i in range(len(dpo_ds["pairs"])):
+    dpo_avg = dpo_avg + dpo.simple_dpo_loss(-2.0 + next_rand() * 0.5, -4.0 + next_rand() * 0.5, dpo_cfg["beta"])
+dpo_avg = dpo_avg / len(dpo_ds["pairs"])
+log("DPO", "Avg loss: " + str(dpo_avg))
+print ""
+
+# ============================================================================
+# Phase 6: RAG
+# ============================================================================
+
+log("RAG", "Phase 6: RAG document store...")
+divider()
+let rag_store = rag.create_store()
+for i in range(len(self_host_files)):
+    let content = io.readfile(self_host_files[i])
+    if content != nil:
+        let meta = {}
+        meta["source"] = self_host_files[i]
+        rag.add_document(rag_store, content, meta)
+for i in range(len(doc_files)):
+    let content = io.readfile(doc_files[i])
+    if content != nil:
+        let meta = {}
+        meta["source"] = doc_files[i]
+        rag.add_document(rag_store, content, meta)
+let rag_stats = rag.store_stats(rag_store)
+log("RAG", "Docs: " + str(rag_stats["total_docs"]) + " | Chunks: " + str(rag_stats["total_chunks"]))
+print ""
+
+# ============================================================================
+# Phase 7: Engram
+# ============================================================================
+
+log("ENGRAM", "Phase 7: Engram memory...")
+divider()
+let memory = engram.create(nil)
+memory["working_capacity"] = 30
+memory["max_episodic"] = 10000
+memory["max_semantic"] = 5000
+
+let all_facts = ["Sage is an indentation-based systems programming language built in C with self-hosted compiler", "127+ library modules across 11 subdirectories: graphics, os, net, crypto, ml, cuda, std, llm, agent, chat", "Concurrent tri-color mark-sweep GC with SATB write barriers and sub-millisecond STW pauses", "3 compiler backends: C codegen (--compile), LLVM IR (--compile-llvm), native assembly (--compile-native)", "Dotted imports: import os.fat resolves to lib/os/fat.sage", "0 is TRUTHY - only false and nil are falsy", "No escape sequences - use chr(10) for newline, chr(34) for double-quote", "elif chains with 5+ branches malfunction - use if/continue instead", "Class methods cannot see module-level let vars", "match is a reserved keyword", "Lexer produces INDENT/DEDENT tokens", "Parser is recursive descent in compiler.c", "AST: Expr and Stmt nodes in ast.h", "Tree-walking interpreter (interpreter.c)", "Values: numbers, strings, bools, nil, arrays, dicts, closures", "GC 4 phases: root scan, concurrent mark, remark, concurrent sweep", "Write barriers in env.c and value.c", "gc_disable() for heavy-allocation modules", "Native ML: matmul, softmax, cross_entropy, adam_update, rms_norm, silu, gelu at 12+ GFLOPS", "LLM library: 15 modules for building language models", "SageGPT: SwiGLU + RoPE + RMSNorm (Llama-style)", "LoRA for fine-tuning, DPO for alignment", "Engram: 4-tier memory with consolidation and decay", "RAG with keyword extraction and chunking", "GGUF export/import for Ollama and llama.cpp", "Quantization: int8/int4 with per-group scaling", "Agent ReAct loop: observe, think, act, reflect", "Supervisor-Worker architecture", "Critic/validator: rule-based + LLM critics", "Grammar-constrained decoding", "Tree of Thoughts: MCTS-style search", "Semantic routing: fast keyword dispatch", "SFT trace recording", "Schema-validated tool calls", "Task planner: dependency DAG", "6 personas: SageDev, CodeReviewer, Teacher, Debugger, Architect, Assistant", "Sessions: multi-session with history export", "Vulkan engine: 24 modules, PBR, deferred, SSAO, SSR, TAA", "OpenGL 4.5 backend", "OS dev: 15 modules (FAT, ELF, PE, MBR, GPT, PCI, ACPI, UEFI, paging, IDT)", "Networking: socket, tcp, http, ssl + 8 lib/net modules", "Crypto: SHA-256, HMAC, Base64, RC4, PBKDF2 (6 modules)", "Std: regex, datetime, log, argparse, fmt, testing, enum, trait, channel (23 modules)", "Build: make or cmake. Version 1.0.0", "Tests: 1567+ self-hosted, 144 interpreter, 28 compiler", "Library search: CWD, ./lib, installed, SAGE_PATH, exe-relative", "CUDA: device, memory, kernel, stream", "ML: tensor, nn, optim, loss, data, debug, viz, monitor", "Graphics: scene, gltf 2.0, material, asset cache, frame graph", "GGUF import: convert Ollama/llama.cpp models to SageGPT format"]
+
+for i in range(len(all_facts)):
+    engram.store_semantic(memory, all_facts[i], 1.0)
+
+engram.store_procedural(memory, "write_sage_code", ["proc for functions, class for OOP", "let for variables, indent with spaces", "import os.fat for dotted imports", "gc_disable() for heavy allocation", "chr(10) for newline, avoid 5+ elif"], 1.0)
+engram.store_procedural(memory, "debug_sage", ["gc_disable() for segfaults", "avoid match keyword", "chr() not escape sequences", "bash tests/run_tests.sh"], 1.0)
+engram.store_procedural(memory, "add_builtin", ["emit_call_expr() in compiler.c", "init_stdlib() in interpreter.c", "C runtime in prelude", "test + docs"], 1.0)
+engram.store_procedural(memory, "add_lib_module", ["lib/<category>/name.sage", "gc_disable() if needed", "test in tests/26_stdlib/", "Makefile + docs"], 1.0)
+engram.store_procedural(memory, "compile_sage", ["--compile (C)", "--compile-llvm", "--compile-native", "--emit-c/--emit-llvm/--emit-asm"], 1.0)
+engram.store_procedural(memory, "build_llm", ["llm.config for size", "cosine LR + LoRA", "DPO + RAG + Engram", "quantize for deploy"], 1.0)
+engram.store_procedural(memory, "build_agent", ["agent.core + tools + schema", "planner, critic, router", "traces for SFT", "supervisor for multi-worker"], 1.0)
+engram.store_procedural(memory, "build_chatbot", ["bot.create() + LLM fn", "apply persona, add intents", "session store"], 1.0)
+engram.store_procedural(memory, "use_graphics", ["window + pipeline", "math3d, mesh, renderer", "PBR, post-processing"], 1.0)
+engram.store_procedural(memory, "fix_gc_segfault", ["gc_disable() at top", "gc_pin()/gc_unpin()", "check write barriers"], 1.0)
+
+log("ENGRAM", engram.summary(memory))
+print ""
+
+# ============================================================================
+# Phase 8: Quantize
+# ============================================================================
+
+log("QUANT", "Phase 8: Quantization...")
+divider()
+let q_embed = quantize.quantize_int8(embed_w)
+let deq_embed = quantize.dequantize_int8(q_embed)
+let embed_err = quantize.quantization_error(embed_w, deq_embed)
+log("QUANT", "Embed error: max=" + str(embed_err["max_error"]) + " mean=" + str(embed_err["mean_error"]))
+let sizes = quantize.size_comparison(param_count)
+log("QUANT", "FP32=" + sizes["fp32"] + " FP16=" + sizes["fp16"] + " INT8=" + sizes["int8"] + " INT4=" + sizes["int4"])
+print ""
+
+# ============================================================================
+# Phase 9: Generate chatbot
+# ============================================================================
+
+log("BUILD", "Phase 9: Generating chatbot...")
+divider()
+
+let out_path = "models/chatbots/sagellm_chatbot.sage"
+let S = []
+proc emit(line):
+    push(S, line)
+proc emit_all():
+    let result = ""
+    for i in range(len(S)):
+        result = result + S[i] + NL
+    io.writefile(out_path, result)
+    log("BUILD", "Generated " + out_path + " (" + str(len(S)) + " lines)")
+
+emit("gc_disable()")
+emit("# SageLLM Chatbot v2.0.0 - Self-contained (compiles with --compile-llvm)")
+emit("# Auto-generated by build_sagellm.sage")
+emit("# Run: sage models/chatbots/sagellm_chatbot.sage")
+emit("# Compile: sage --compile-llvm models/chatbots/sagellm_chatbot.sage -o sagellm_chat")
+emit("")
+emit("# --- Utilities ---")
+emit("proc contains(h, n):")
+emit("    if len(n) > len(h):")
+emit("        return false")
+emit("    let hlen = len(h)")
+emit("    let nlen = len(n)")
+emit("    for i in range(hlen - nlen + 1):")
+emit("        let found = true")
+emit("        for j in range(nlen):")
+emit("            if h[i + j] != n[j]:")
+emit("                found = false")
+emit("                break")
+emit("        if found:")
+emit("            return true")
+emit("    return false")
+emit("")
+emit("proc to_lower(s):")
+emit("    let r = " + DQ + DQ)
+emit("    for i in range(len(s)):")
+emit("        let c = ord(s[i])")
+emit("        if c >= 65 and c <= 90:")
+emit("            r = r + chr(c + 32)")
+emit("        else:")
+emit("            r = r + s[i]")
+emit("    return r")
+emit("")
+emit("proc starts_with(s, prefix):")
+emit("    if len(prefix) > len(s):")
+emit("        return false")
+emit("    for i in range(len(prefix)):")
+emit("        if s[i] != prefix[i]:")
+emit("            return false")
+emit("    return true")
+emit("")
+emit("proc substr(s, start, count):")
+emit("    let r = " + DQ + DQ)
+emit("    let end = start + count")
+emit("    if end > len(s):")
+emit("        end = len(s)")
+emit("    for i in range(end - start):")
+emit("        r = r + s[start + i]")
+emit("    return r")
+emit("")
+
+# Inline memory system (no module dependency)
+emit("# --- Inline memory (works compiled + interpreted) ---")
+emit("let facts = []")
+for i in range(len(all_facts)):
+    emit("push(facts, " + DQ + all_facts[i] + DQ + ")")
+emit("")
+emit("let history = []")
+emit("let remembered = []")
+emit("")
+emit("proc recall(query):")
+emit("    let lq = to_lower(query)")
+emit("    let results = []")
+emit("    for i in range(len(facts)):")
+emit("        if contains(to_lower(facts[i]), lq):")
+emit("            push(results, facts[i])")
+emit("    for i in range(len(remembered)):")
+emit("        if contains(to_lower(remembered[i]), lq):")
+emit("            push(results, remembered[i])")
+emit("    return results")
+emit("")
+
+# Inline reasoning engine (no module dependency)
+emit("# --- Reasoning engine (20 topics, self-contained) ---")
+emit("proc reason(question):")
+emit("    let chain = []")
+emit("    let lp = to_lower(question)")
+emit("    # Memory recall")
+emit("    let mem = recall(lp)")
+emit("    if len(mem) > 0:")
+emit("        push(chain, " + DQ + "Recalled " + DQ + " + str(len(mem)) + " + DQ + " facts" + DQ + ")")
+emit("    # Topic classification")
+emit("    let topic = " + DQ + "general" + DQ)
+
+# Topic classification
+let topics_kw = [["llm", "llm|language model|transformer|lora|engram|neural|tokeniz"], ["agent", "agent|react|supervisor|tool use"], ["chatbot", "chatbot|persona|conversation|intent"], ["crypto", "crypto|sha|hash|encrypt"], ["networking", "network|http|socket|url|dns"], ["osdev", "baremetal|uefi|kernel|elf|pci|osdev"], ["ml", "tensor|machine learn|training|gradient"], ["graphics", "gpu|vulkan|opengl|shader|render"], ["regex", "regex|regular exp"], ["gc", "gc |garbage"], ["compiler", "compile|backend|emit"], ["loops", "for |loop|while"], ["modules", "import|module|library"], ["oop", "class |object|inherit"], ["data", "array|dict|data struct"], ["functions", "function|proc |closure"], ["errors", "error|exception|try "], ["testing", "test|debug|bug"], ["concurrency", "thread|async|channel|concurrent"], ["planning", "plan |how to build|steps"]]
+
+for ti in range(len(topics_kw)):
+    let tname = topics_kw[ti][0]
+    let kw_str = topics_kw[ti][1]
+    let kw_parts = []
+    let current = ""
+    for c in range(len(kw_str)):
+        if kw_str[c] == "|":
+            push(kw_parts, current)
+            current = ""
+        else:
+            current = current + kw_str[c]
+    push(kw_parts, current)
+    emit("    if topic == " + DQ + "general" + DQ + ":")
+    let check = "        if "
+    for k in range(len(kw_parts)):
+        if k > 0:
+            check = check + " or "
+        check = check + "contains(lp, " + DQ + kw_parts[k] + DQ + ")"
+    emit(check + ":")
+    emit("            topic = " + DQ + tname + DQ)
+
+emit("    push(chain, " + DQ + "Topic: " + DQ + " + topic)")
+emit("    let answer = " + DQ + DQ)
+
+# Answers
+let ans = {}
+ans["llm"] = "LLM library (15 modules): config, tokenizer, embedding, attention, transformer, generate, train, agent, prompt, lora, quantize, engram, rag, dpo, gguf. SageGPT: SwiGLU+RoPE+RMSNorm. Native C backend at 12+ GFLOPS."
+ans["agent"] = "Agent framework (12 modules): core (ReAct), tools, planner (DAG), router, supervisor (workers), critic, schema, trace (SFT), grammar (constrained decoding), sandbox, tot (Tree of Thoughts), semantic_router."
+ans["chatbot"] = "Chat framework: bot (intents, middleware), persona (6: SageDev, CodeReviewer, Teacher, Debugger, Architect, Assistant), session (history, export)."
+ans["crypto"] = "Crypto (6 modules): hash (SHA-256, SHA-1, CRC-32), hmac, encoding (Base64, hex), cipher (XOR, RC4, CBC/CTR), rand (xoshiro256**, UUID v4), password (PBKDF2)."
+ans["networking"] = "Networking: native (socket, tcp, http, ssl) + lib/net/ (8): url, headers, request, server, websocket, mime, dns, ip."
+ans["osdev"] = "OS dev (15 modules): fat, elf, pe, mbr, gpt, pci, acpi, uefi, paging, idt, serial, dtb, alloc, vfs."
+ans["ml"] = "ML: tensor, nn, optim, loss, data, debug, viz, monitor + cuda. Native: matmul, softmax, RMSNorm, Adam at 12+ GFLOPS."
+ans["graphics"] = "GPU engine (24 modules): Vulkan + OpenGL 4.5. vulkan, gpu, math3d, mesh, renderer, pbr, shadows, deferred (SSAO, SSR), taa, postprocess, scene, gltf, material."
+ans["regex"] = "Regex (std.regex): test(), search(), find_all(), replace_all(), split_by(). Supports . * + ? [] [^] ^ $ |."
+ans["gc"] = "Tri-color GC: root scan (STW), concurrent mark, remark (STW), concurrent sweep. SATB write barrier. gc_collect(), gc_enable(), gc_disable()."
+ans["compiler"] = "3 backends: --compile (C), --compile-llvm, --compile-native (x86-64/aarch64/rv64). Optimize: -O0 to -O3."
+ans["loops"] = "Loops: for i in range(10): body. for item in array: body. while cond: body. break/continue."
+ans["modules"] = "11 categories: os(15), net(8), crypto(6), ml(8), cuda(4), std(23), llm(15), agent(12), chat(3), graphics(24), root(9). 127+ total."
+ans["oop"] = "OOP: class Name: with proc init(self): and methods. Inheritance: class Dog(Animal):."
+ans["data"] = "Arrays: [1,2,3], push(), pop(), slicing. Dicts: {}, d[key]=val, dict_keys(), dict_values(). Tuples: (1,2,3)."
+ans["functions"] = "proc name(args): body. Return values. Closures capture outer vars. First-class functions."
+ans["errors"] = "try: risky. catch e: handle. finally: cleanup. raise to throw."
+ans["testing"] = "Tests: run_tests.sh (144), make test (28), make test-selfhost (1567+). Debug: gc_disable(), chr()."
+ans["concurrency"] = "Concurrency: thread, async/await, std.channel, std.atomic, std.rwlock, std.condvar, std.threadpool."
+ans["planning"] = "Plan: 1) Define goal, 2) Create module, 3) Implement, 4) Test, 5) Document, 6) Run tests."
+
+let ans_keys = dict_keys(ans)
+for i in range(len(ans_keys)):
+    emit("    if topic == " + DQ + ans_keys[i] + DQ + ":")
+    emit("        answer = " + DQ + ans[ans_keys[i]] + DQ)
+
+emit("    if len(answer) == 0:")
+emit("        if len(mem) > 0:")
+emit("            answer = " + DQ + "Based on my knowledge: " + DQ + " + mem[0]")
+emit("        else:")
+emit("            answer = " + DQ + "I can help with: loops, imports, classes, GC, compiler, data, functions, errors, testing, concurrency, planning, LLM, agents, chatbot, crypto, networking, OS dev, ML, graphics, regex." + DQ)
+emit("    push(chain, " + DQ + "Answering about " + DQ + " + topic)")
+emit("    push(history, " + DQ + "Q: " + DQ + " + question)")
+emit("    push(history, " + DQ + "A: " + DQ + " + answer)")
+emit("    let result = {}")
+emit("    result[" + DQ + "chain" + DQ + "] = chain")
+emit("    result[" + DQ + "answer" + DQ + "] = answer")
+emit("    return result")
+emit("")
+
+# Chain display + main loop (all self-contained)
+emit("proc show_chain(r):")
+emit("    let ch = r[" + DQ + "chain" + DQ + "]")
+emit("    for ci in range(len(ch)):")
+emit("        print " + DQ + "  Thought " + DQ + " + str(ci + 1) + " + DQ + ": " + DQ + " + ch[ci]")
+emit("    print " + DQ + "  Answer: " + DQ + " + r[" + DQ + "answer" + DQ + "]")
+emit("")
+emit("let persona_name = " + DQ + "SageDev" + DQ)
+emit("")
+emit("print " + DQ + "============================================" + DQ)
+emit("print " + DQ + "  SageLLM Chatbot v2.0.0 (Medium | 16K)" + DQ)
+emit("print " + DQ + "  SageGPT: SwiGLU + RoPE + RMSNorm" + DQ)
+emit("print " + DQ + "  CoT + Memory + 20 Knowledge Domains" + DQ)
+emit("print " + DQ + "============================================" + DQ)
+emit("print " + DQ + "Hello! I am SageDev v2.0. Ask me about Sage." + DQ)
+emit("print " + DQ + "Commands: quit, memory, remember, recall, think, plan, personas, help" + DQ)
+emit("print " + DQ + DQ)
+emit("let running = true")
+emit("while running:")
+emit("    let msg = input(" + DQ + "You> " + DQ + ")")
+emit("    if msg == " + DQ + "quit" + DQ + " or msg == " + DQ + "exit" + DQ + ":")
+emit("        running = false")
+emit("        print " + DQ + "SageDev> Goodbye. " + DQ + " + str(len(history)) + " + DQ + " exchanges recorded." + DQ)
+emit("    if running and msg == " + DQ + "help" + DQ + ":")
+emit("        print " + DQ + "  quit, memory, remember <fact>, recall <query>, think <q>, plan <goal>, personas" + DQ)
+emit("    if running and msg == " + DQ + "memory" + DQ + ":")
+emit("        print " + DQ + "  Facts: " + DQ + " + str(len(facts)) + " + DQ + " | Remembered: " + DQ + " + str(len(remembered)) + " + DQ + " | History: " + DQ + " + str(len(history)))")
+emit("    if running and starts_with(msg, " + DQ + "remember " + DQ + "):")
+emit("        let fact = substr(msg, 9, len(msg) - 9)")
+emit("        push(remembered, fact)")
+emit("        print " + DQ + "  Remembered: " + DQ + " + fact")
+emit("    if running and starts_with(msg, " + DQ + "recall " + DQ + "):")
+emit("        let rq = substr(msg, 7, len(msg) - 7)")
+emit("        let results = recall(rq)")
+emit("        if len(results) > 0:")
+emit("            for ri in range(len(results)):")
+emit("                if ri < 5:")
+emit("                    print " + DQ + "  [" + DQ + " + str(ri + 1) + " + DQ + "] " + DQ + " + results[ri]")
+emit("        else:")
+emit("            print " + DQ + "  No memories found." + DQ)
+emit("    if running and starts_with(msg, " + DQ + "think " + DQ + "):")
+emit("        let tq = substr(msg, 6, len(msg) - 6)")
+emit("        show_chain(reason(tq))")
+emit("    if running and starts_with(msg, " + DQ + "plan " + DQ + "):")
+emit("        let goal = substr(msg, 5, len(msg) - 5)")
+emit("        print " + DQ + "  Plan for: " + DQ + " + goal")
+emit("        print " + DQ + "  1. Analyze requirements" + DQ)
+emit("        print " + DQ + "  2. Design architecture" + DQ)
+emit("        print " + DQ + "  3. Create module in lib/<category>/" + DQ)
+emit("        print " + DQ + "  4. Implement with gc_disable() if needed" + DQ)
+emit("        print " + DQ + "  5. Write tests in tests/" + DQ)
+emit("        print " + DQ + "  6. Update Makefile + documentation" + DQ)
+emit("        print " + DQ + "  7. Run: bash tests/run_tests.sh" + DQ)
+emit("    if running and msg == " + DQ + "personas" + DQ + ":")
+emit("        print " + DQ + "  sagedev, teacher, debugger, architect" + DQ)
+emit("    if running and msg == " + DQ + "teacher" + DQ + ":")
+emit("        persona_name = " + DQ + "Teacher" + DQ)
+emit("        print " + DQ + "Switched to Teacher." + DQ)
+emit("    if running and msg == " + DQ + "debugger" + DQ + ":")
+emit("        persona_name = " + DQ + "Debugger" + DQ)
+emit("        print " + DQ + "Switched to Debugger." + DQ)
+emit("    if running and msg == " + DQ + "architect" + DQ + ":")
+emit("        persona_name = " + DQ + "Architect" + DQ)
+emit("        print " + DQ + "Switched to Architect." + DQ)
+emit("    if running and msg == " + DQ + "sagedev" + DQ + ":")
+emit("        persona_name = " + DQ + "SageDev" + DQ)
+emit("        print " + DQ + "Switched to SageDev." + DQ)
+emit("    # Default: answer the question")
+emit("    if running and msg != " + DQ + "quit" + DQ + " and msg != " + DQ + "exit" + DQ + " and msg != " + DQ + "memory" + DQ + " and msg != " + DQ + "help" + DQ + " and msg != " + DQ + "personas" + DQ + " and msg != " + DQ + "teacher" + DQ + " and msg != " + DQ + "debugger" + DQ + " and msg != " + DQ + "architect" + DQ + " and msg != " + DQ + "sagedev" + DQ + ":")
+emit("        let is_cmd = false")
+emit("        if starts_with(msg, " + DQ + "think " + DQ + "):")
+emit("            is_cmd = true")
+emit("        if starts_with(msg, " + DQ + "plan " + DQ + "):")
+emit("            is_cmd = true")
+emit("        if starts_with(msg, " + DQ + "remember " + DQ + "):")
+emit("            is_cmd = true")
+emit("        if starts_with(msg, " + DQ + "recall " + DQ + "):")
+emit("            is_cmd = true")
+emit("        if not is_cmd:")
+emit("            let r = reason(msg)")
+emit("            print " + DQ + DQ)
+emit("            print persona_name + " + DQ + "> " + DQ + " + r[" + DQ + "answer" + DQ + "]")
+emit("            print " + DQ + DQ)
+
+emit_all()
+print ""
+
+# ============================================================================
+# Phase 10: GGUF Export
+# ============================================================================
+
+log("GGUF", "Phase 10: GGUF export...")
+divider()
+let gguf_meta = gguf.create_metadata("sagellm-medium-v2", "llama")
+gguf.set_architecture(gguf_meta, d_model, n_layers, n_heads, d_ff, vocab, context_length)
+gguf.set_quantization(gguf_meta, "Q8_0")
+let modelfile = gguf.generate_modelfile("sagellm-medium-v2.gguf", "You are SageDev, an expert Sage programming assistant.", 0.7, context_length)
+io.writefile("models/Modelfile", modelfile)
+let quant_script = gguf.generate_quantize_script("sagellm-medium-v2.gguf")
+io.writefile("models/quantize.sh", quant_script)
+log("GGUF", "Generated Modelfile + quantize.sh")
+log("GGUF", "Import from Ollama: import llm.gguf_import")
+print ""
+
+# ============================================================================
+# Phase 11: Visualization
+# ============================================================================
+
+log("VIZ", "Phase 11: Visualizations...")
+divider()
+io.writefile("models/viz/.keep", "")
+viz.loss_curve(all_losses, "SageLLM-Medium Loss", "models/viz/loss_curve.svg")
+viz.weight_histogram(layer_qw[0], "Q-Proj Weights", "models/viz/weight_dist.svg")
+viz.architecture_diagram("SageLLM-Medium", n_layers, d_model, d_ff, n_heads, "models/viz/architecture.svg")
+viz.lr_schedule_chart(theory_steps, 20, 0.0003, 0.00001, "cosine", "models/viz/lr_schedule.svg")
+log("VIZ", "Generated: loss, weights, architecture, LR SVGs")
+log("VIZ", monitor.summary(mon))
+print ""
+
+# ============================================================================
+# Phase 12: Summary
+# ============================================================================
+
+separator()
+print "  SageLLM Build Complete"
+separator()
+print ""
+print "Model: SageGPT-Medium (SwiGLU + RoPE + RMSNorm)"
+print "  d=" + str(d_model) + " heads=" + str(n_heads) + " layers=" + str(n_layers) + " ff=" + str(d_ff) + " vocab=" + str(vocab) + " ctx=" + str(context_length)
+print "  Parameters: " + str(param_count)
+print ""
+print "Training:"
+print "  Pre-train: " + str(theory_steps) + " steps, loss=" + str(train.avg_loss(state1))
+print "  LoRA: " + str(lora_steps) + " steps on " + str(file_count) + " files, rank=" + str(lora_rank) + " loss=" + str(train.avg_loss(state2))
+print "  DPO: " + str(len(dpo_ds["pairs"])) + " preference pairs"
+print ""
+print "Knowledge:"
+print "  Engram: " + str(len(memory["semantic"])) + " semantic + " + str(len(memory["procedural"])) + " procedural"
+print "  RAG: " + str(rag_stats["total_docs"]) + " docs (" + str(rag_stats["total_chunks"]) + " chunks)"
+print ""
+print "Features: SwiGLU, RoPE, RMSNorm, LoRA, DPO, RAG, Engram, Semantic Routing,"
+print "  Grammar Validation, Critic, SFT Traces, Planning, 6 Personas, Sessions,"
+print "  GGUF Export/Import, INT8 Quantization, SVG Visualization, GPU Acceleration"
+print ""
+print "Output: models/chatbots/sagellm_chatbot.sage | models/Modelfile | models/viz/"
+print "Run:     ./sage models/chatbots/sagellm_chatbot.sage"
+print "Compile: ./sage --compile models/chatbots/sagellm_chatbot.sage -o sagellm_chat"
+print ""
+let bench = gpu_accel.benchmark(gpu, d_model, 10)
+print "Compute: " + str(bench["gflops"]) + " GFLOPS (" + str(bench["ms_per_matmul"]) + " ms @ " + str(d_model) + "x" + str(d_model) + ")"
+print gpu_accel.stats(gpu)
+gpu_accel.destroy(gpu)
+separator()

@@ -1,0 +1,315 @@
+#ifndef SAGE_VALUE_H
+#define SAGE_VALUE_H
+
+#include <stddef.h> // size_t
+
+// Forward declarations
+typedef struct Value Value;
+typedef struct ClassValue ClassValue;
+typedef struct InstanceValue InstanceValue;
+typedef struct Module Module;
+typedef struct DictValue DictValue;
+typedef struct Env Env; // Forward declare from env.h
+typedef Env Environment; // Alias for compatibility
+typedef struct BytecodeFunction BytecodeFunction;
+
+typedef Value (*NativeFn)(int argCount, Value* args);
+
+// Array structure
+typedef struct {
+    Value* elements;
+    int count;
+    int capacity;
+} ArrayValue;
+
+// Tuple structure (fixed-size, immutable)
+typedef struct {
+    Value* elements;
+    int count;
+} TupleValue;
+
+// Method structure
+typedef struct {
+    char* name;
+    int name_len;
+    void* method_stmt; // Pointer to ProcStmt (avoid circular dependency)
+} Method;
+
+// Class structure
+struct ClassValue {
+    char* name;
+    int name_len;
+    ClassValue* parent; // For inheritance
+    Method* methods;
+    int method_count;
+    Env* defining_env; // Environment where class was defined (for method scoping)
+};
+
+// Instance structure
+struct InstanceValue {
+    ClassValue* class_def;
+    struct DictValue* fields; // Instance variables
+};
+
+// PHASE 7: Exception structure
+typedef struct {
+    char* message; // Error message
+} ExceptionValue;
+
+// PHASE 7: Generator structure (for yield support)
+typedef struct {
+    void* body; // Pointer to Stmt (function body containing yields)
+    void* params; // Pointer to Token array (parameters)
+    int param_count; // Number of parameters
+    Env* closure; // Captured environment when generator was created
+    Env* gen_env; // Generator's execution environment (preserved state)
+    int is_started; // Has generator been started?
+    int is_exhausted; // Has generator finished?
+    void* current_stmt; // Current statement position (for resumption)
+    int has_resume_target; // Whether current_stmt is a valid resume target
+} GeneratorValue;
+
+// PHASE 8: Function value structure (for module exports)
+typedef struct {
+    void* proc; // Pointer to ProcStmt
+    Env* closure; // Closure environment where function was defined
+    int is_async; // Phase 11: async function flag
+    int is_vm; // VM-backed compiled function flag
+    BytecodeFunction* vm_function; // Bytecode metadata when is_vm == 1
+} FunctionValue;
+
+typedef struct {
+    Module* module;
+} ModuleValue;
+
+// Phase 9: FFI - C library handle
+typedef struct {
+    void* handle;   // dlopen handle
+    char* name;     // library name for display
+} CLibValue;
+
+// Phase 9: Raw pointer/memory handle
+typedef struct {
+    void* ptr;      // Raw memory pointer
+    size_t size;    // Allocated size (0 if external/unknown)
+    int owned;      // Whether we should free this on cleanup
+} PointerValue;
+
+// Phase 11: Thread handle
+typedef struct {
+    void* handle;       // pthread_t* (opaque to avoid pthread.h in header)
+    void* data;         // SageThreadData* (thread entry data)
+    int joined;         // Whether thread has been joined
+} ThreadValue;
+
+// Phase 11: Mutex handle
+typedef struct {
+    void* handle;       // pthread_mutex_t* (opaque)
+} MutexValue;
+
+// Phase 1.8: Binary-safe byte buffer
+typedef struct {
+    unsigned char* data;
+    int length;
+    int capacity;
+} BytesValue;
+
+typedef enum {
+    VAL_NUMBER,
+    VAL_BOOL,
+    VAL_NIL,
+    VAL_STRING,
+    VAL_FUNCTION,
+    VAL_NATIVE,
+    VAL_ARRAY,
+    VAL_DICT,
+    VAL_TUPLE,
+    VAL_CLASS,
+    VAL_INSTANCE,
+    VAL_MODULE,
+    VAL_EXCEPTION,
+    VAL_GENERATOR,
+    VAL_CLIB,      // Phase 9: FFI library handle
+    VAL_POINTER,   // Phase 9: Raw memory pointer
+    VAL_VM_PROGRAM, // Compiled bytecode program
+    VAL_THREAD,    // Phase 11: Thread handle
+    VAL_MUTEX,     // Phase 11: Mutex handle
+    VAL_BYTES      // Phase 1.8: Binary-safe byte buffer
+} ValueType;
+
+struct Value {
+    ValueType type;
+    union {
+        double number;
+        int boolean;
+        char* string;
+        NativeFn native;
+        FunctionValue* function; // PHASE 8: Function value
+        ArrayValue* array;
+        struct DictValue* dict;
+        TupleValue* tuple;
+        ClassValue* class_val;
+        InstanceValue* instance;
+        ModuleValue* module;
+        ExceptionValue* exception;
+        GeneratorValue* generator;
+        CLibValue* clib;        // Phase 9: FFI library handle
+        PointerValue* pointer;  // Phase 9: Raw memory pointer
+        struct BytecodeProgram* program; // Compiled bytecode program
+        ThreadValue* thread;    // Phase 11: Thread handle
+        MutexValue* mutex;      // Phase 11: Mutex handle
+        BytesValue* bytes;      // Phase 1.8: Binary-safe byte buffer
+    } as;
+};
+
+// ... existing macros ...
+#define IS_VM_PROGRAM(v) ((v).type == VAL_VM_PROGRAM)
+#define AS_PROGRAM(v) ((v).as.program)
+
+// Dictionary entry (key-value pair) - used in open-addressing hash table
+struct DictEntry {
+    char* key;        // NULL means empty slot
+    int key_len;      // Cached key length
+    Value value;      // Flat value (one fewer allocation)
+    unsigned int hash; // Cached hash of key
+};
+
+// Dictionary structure (open-addressing hash table)
+struct DictValue {
+    struct DictEntry* entries;
+    int count;       // Number of active entries
+    int capacity;    // Total slots (always a power of 2)
+};
+
+typedef struct DictEntry DictEntry;
+
+// Macros for checking type
+#define IS_NUMBER(v) ((v).type == VAL_NUMBER)
+#define IS_BOOL(v) ((v).type == VAL_BOOL)
+#define IS_NIL(v) ((v).type == VAL_NIL)
+#define IS_STRING(v) ((v).type == VAL_STRING)
+#define IS_FUNCTION(v) ((v).type == VAL_FUNCTION) // PHASE 8
+#define IS_ARRAY(v) ((v).type == VAL_ARRAY)
+#define IS_DICT(v) ((v).type == VAL_DICT)
+#define IS_TUPLE(v) ((v).type == VAL_TUPLE)
+#define IS_CLASS(v) ((v).type == VAL_CLASS)
+#define IS_INSTANCE(v) ((v).type == VAL_INSTANCE)
+#define IS_MODULE(v) ((v).type == VAL_MODULE)
+#define IS_EXCEPTION(v) ((v).type == VAL_EXCEPTION)
+#define IS_GENERATOR(v) ((v).type == VAL_GENERATOR)
+#define IS_CLIB(v) ((v).type == VAL_CLIB)
+#define IS_POINTER(v) ((v).type == VAL_POINTER)
+#define IS_THREAD(v) ((v).type == VAL_THREAD)
+#define IS_MUTEX(v) ((v).type == VAL_MUTEX)
+
+// Macros for accessing values (unchecked — caller must verify type first)
+#define AS_NUMBER(v) ((v).as.number)
+#define AS_BOOL(v) ((v).as.boolean)
+#define AS_STRING(v) ((v).as.string)
+#define AS_FUNCTION(v) ((v).as.function->proc) // PHASE 8
+#define AS_ARRAY(v) ((v).as.array)
+#define AS_DICT(v) ((v).as.dict)
+#define AS_TUPLE(v) ((v).as.tuple)
+#define AS_CLASS(v) ((v).as.class_val)
+#define AS_INSTANCE(v) ((v).as.instance)
+#define AS_MODULE(v) ((v).as.module->module)
+#define AS_EXCEPTION(v) ((v).as.exception)
+#define AS_GENERATOR(v) ((v).as.generator)
+#define AS_CLIB(v) ((v).as.clib)
+#define AS_POINTER(v) ((v).as.pointer)
+#define AS_THREAD(v) ((v).as.thread)
+#define AS_MUTEX(v) ((v).as.mutex)
+
+// Type-safe accessor macros — return safe defaults for wrong types instead of UB
+#define SAGE_AS_STRING(v) (IS_STRING(v) ? (v).as.string : "")
+#define SAGE_AS_NUMBER(v) (IS_NUMBER(v) ? (v).as.number : 0.0)
+#define SAGE_AS_BOOL(v)   (IS_BOOL(v) ? (v).as.boolean : 0)
+
+// Global constants
+extern const Value sage_nil;
+
+// Constructors
+static inline Value val_number(double value) {
+    Value v;
+    v.type = VAL_NUMBER;
+    v.as.number = value;
+    return v;
+}
+
+static inline Value val_bool(int value) {
+    Value v;
+    v.type = VAL_BOOL;
+    v.as.boolean = value;
+    return v;
+}
+
+static inline Value val_nil() {
+    return sage_nil;
+}
+Value val_string(const char* value);
+Value val_string_len(const char* value, int len);
+Value val_string_take(char* value);
+Value val_bytes(const unsigned char* data, int length);
+Value val_bytes_empty(int capacity);
+void bytes_push(Value* bytes_val, unsigned char byte);
+Value val_native(NativeFn fn);
+Value val_function(void* proc, Env* closure); // ✅ CHANGED: Added closure parameter
+Value val_bytecode_function(struct BytecodeFunction* function, Env* closure);
+Value val_vm_program(struct BytecodeProgram* program);
+Value val_array();
+Value val_dict();
+Value val_tuple(Value* elements, int count);
+Value val_class(ClassValue* class_val);
+Value val_instance(InstanceValue* instance);
+Value val_module(Module* module);
+Value val_exception(const char* message);
+Value val_generator(void* body, void* params, int param_count, Env* closure);
+Value val_clib(void* handle, const char* name); // Phase 9: FFI
+Value val_pointer(void* ptr, size_t size, int owned); // Phase 9: Raw memory
+Value val_thread(ThreadValue* tv); // Phase 11: Thread
+Value val_mutex(MutexValue* mv);   // Phase 11: Mutex
+
+// Helpers
+void print_value(Value v);
+int values_equal(Value a, Value b);
+
+// Array operations
+void array_push(Value* arr, Value val);
+Value array_get(Value* arr, int index);
+void array_set(Value* arr, int index, Value val);
+Value array_slice(Value* arr, int start, int end);
+
+// Dictionary operations
+void dict_set(Value* dict, const char* key, Value value);
+void dict_set_len(Value* dict, const char* key, int len, Value value);
+Value dict_get(Value* dict, const char* key);
+Value dict_get_len(Value* dict, const char* key, int len);
+int dict_has(Value* dict, const char* key);
+void dict_delete(Value* dict, const char* key);
+Value dict_keys(Value* dict);
+Value dict_values(Value* dict);
+
+// Tuple operations
+Value tuple_get(Value* tuple, int index);
+
+// String operations
+Value string_slice(Value* str, int start, int end);
+Value string_split(const char* str, const char* delimiter);
+Value string_join(Value* arr, const char* separator);
+char* string_replace(const char* str, const char* old, const char* new_str);
+char* string_upper(const char* str);
+char* string_lower(const char* str);
+char* string_strip(const char* str);
+
+// Class operations
+ClassValue* class_create(const char* name, int name_len, ClassValue* parent);
+void class_add_method(ClassValue* class_val, const char* name, int name_len, void* method_stmt);
+Method* class_find_method(ClassValue* class_val, const char* name, int name_len);
+ClassValue* class_find_method_owner(ClassValue* class_val, const char* name, int name_len);
+
+// Instance operations
+InstanceValue* instance_create(ClassValue* class_def);
+void instance_set_field(InstanceValue* instance, const char* name, int len, Value value);
+Value instance_get_field(InstanceValue* instance, const char* name, int len);
+
+#endif

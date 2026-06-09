@@ -1,0 +1,868 @@
+<|chapter|>
+# Chapter 1: Lexical Analysis and Tokenization
+
+## 1.1 What is a Lexer?
+
+A lexer (lexical analyzer, scanner, tokenizer) is the first phase of a compiler or interpreter. It reads raw source code characters and groups them into meaningful units called tokens.
+
+Input: "let x = 42 + y"
+Output tokens:
+  TOKEN_LET     "let"
+  TOKEN_IDENT   "x"
+  TOKEN_ASSIGN  "="
+  TOKEN_NUMBER  "42"
+  TOKEN_PLUS    "+"
+  TOKEN_IDENT   "y"
+
+## 1.2 Token Types
+
+Every language defines token categories:
+
+- **Keywords**: Reserved words with special meaning (let, proc, if, while, class, return, import)
+- **Identifiers**: User-defined names (variable names, function names, type names)
+- **Literals**: Constant values (numbers: 42, 3.14; strings: "hello"; booleans: true, false)
+- **Operators**: Symbols for operations (+, -, *, /, ==, !=, <, >, &&, ||, !, &, |, ^, ~, <<, >>)
+- **Delimiters**: Structural punctuation (, ; : . ( ) [ ] { })
+- **Whitespace**: Spaces, tabs, newlines (significant in indentation-based languages)
+- **Comments**: Ignored text (// line comment, /* block comment */, # hash comment)
+
+## 1.3 Indentation-Based Lexing
+
+Languages like Python, Haskell, and Sage use indentation instead of braces for block structure. The lexer must track indentation levels and emit synthetic INDENT/DEDENT tokens.
+
+Algorithm:
+1. Maintain a stack of indentation levels, starting with [0]
+2. At the beginning of each line, count leading whitespace
+3. If indent > stack top: push indent, emit INDENT token
+4. If indent < stack top: pop until matching level found, emit DEDENT for each pop
+5. If indent == stack top: no change (continue on same block level)
+
+Example:
+  proc foo():        # indent 0
+      let x = 1      # indent 4 -> INDENT
+      if x > 0:      # indent 4 (same)
+          print x     # indent 8 -> INDENT
+      print "done"    # indent 4 -> DEDENT
+  print "outside"     # indent 0 -> DEDENT, DEDENT
+
+This approach requires the lexer to be stateful (track indent stack), unlike brace-based languages where the lexer is stateless.
+
+## 1.4 Finite Automata for Token Recognition
+
+Lexers can be implemented as deterministic finite automata (DFA):
+
+States: START, IN_NUMBER, IN_IDENT, IN_STRING, IN_COMMENT
+Transitions:
+  START + digit -> IN_NUMBER
+  START + letter -> IN_IDENT
+  START + '"' -> IN_STRING
+  START + '#' -> IN_COMMENT
+  IN_NUMBER + digit -> IN_NUMBER
+  IN_NUMBER + non-digit -> emit NUMBER, back to START
+  IN_IDENT + alphanumeric -> IN_IDENT
+  IN_IDENT + non-alphanumeric -> check keyword table, emit IDENT or KEYWORD
+
+## 1.5 Keyword Recognition
+
+Two approaches:
+1. **Table lookup**: After recognizing an identifier, check a hash table of keywords
+2. **Trie matching**: Walk a trie during character scanning (faster for large keyword sets)
+
+Sage uses approach 1: scan the full identifier, then check against a dict of reserved words.
+
+## 1.6 Error Recovery in Lexing
+
+When the lexer encounters an unexpected character:
+1. Report the error with position (line:column)
+2. Skip the character and continue lexing (don't abort)
+3. Accumulate errors for batch reporting
+4. Provide context (show the source line with a pointer to the error)
+
+Good error: "Unexpected character '@' at line 5, column 12"
+Bad error: "Syntax error"
+
+<|end|>
+
+<|chapter|>
+# Chapter 2: Parsing and Abstract Syntax Trees
+
+## 2.1 What is a Parser?
+
+A parser takes a stream of tokens from the lexer and builds an Abstract Syntax Tree (AST) — a hierarchical representation of the program's structure.
+
+Token stream: [LET, IDENT("x"), ASSIGN, NUMBER(42), PLUS, NUMBER(8)]
+AST:
+  LetStmt
+    name: "x"
+    value: BinaryExpr
+      op: PLUS
+      left: NumberLiteral(42)
+      right: NumberLiteral(8)
+
+## 2.2 Recursive Descent Parsing
+
+The most common hand-written parsing technique. Each grammar rule becomes a function:
+
+Grammar:
+  expression -> term (('+' | '-') term)*
+  term       -> factor (('*' | '/') factor)*
+  factor     -> NUMBER | IDENT | '(' expression ')'
+
+Implementation:
+  proc parse_expression():
+      let left = parse_term()
+      while current is '+' or '-':
+          let op = consume()
+          let right = parse_term()
+          left = BinaryExpr(op, left, right)
+      return left
+
+  proc parse_term():
+      let left = parse_factor()
+      while current is '*' or '/':
+          let op = consume()
+          let right = parse_factor()
+          left = BinaryExpr(op, left, right)
+      return left
+
+## 2.3 Operator Precedence
+
+From lowest to highest precedence (typical):
+1. Assignment (=, +=, -=)
+2. Logical OR (or, ||)
+3. Logical AND (and, &&)
+4. Equality (==, !=)
+5. Comparison (<, >, <=, >=)
+6. Bitwise OR (|)
+7. Bitwise XOR (^)
+8. Bitwise AND (&)
+9. Shift (<<, >>)
+10. Addition/Subtraction (+, -)
+11. Multiplication/Division (*, /, %)
+12. Unary (-, not, ~)
+13. Call/Index (f(), a[i], a.b)
+
+Pratt parsing (top-down operator precedence) handles this elegantly by assigning binding powers to operators.
+
+## 2.4 AST Node Types
+
+Expressions (produce values):
+- NumberLiteral, StringLiteral, BoolLiteral, NilLiteral
+- Identifier (variable reference)
+- BinaryExpr (a + b, a * b)
+- UnaryExpr (-x, not x)
+- CallExpr (f(a, b))
+- IndexExpr (a[i])
+- GetExpr (a.field)
+- SetExpr (a.field = value)
+- ArrayExpr ([1, 2, 3])
+- DictExpr ({"key": value})
+
+Statements (perform actions):
+- LetStmt (variable declaration)
+- AssignStmt (variable assignment)
+- IfStmt (conditional)
+- WhileStmt (loop)
+- ForStmt (iteration)
+- ProcStmt (function definition)
+- ClassStmt (class definition)
+- ReturnStmt
+- BreakStmt, ContinueStmt
+- ImportStmt
+- TryStmt (exception handling)
+- RaiseStmt
+- YieldStmt (generator)
+- BlockStmt (indented block)
+- MatchStmt (pattern matching)
+- DeferStmt
+
+## 2.5 Error Recovery in Parsing
+
+Panic mode recovery:
+1. When an error is encountered, report it
+2. Skip tokens until a synchronization point (statement boundary, keyword)
+3. Resume parsing from the sync point
+4. This allows reporting multiple errors in one pass
+
+Statement-level sync points: let, proc, class, if, while, for, return, import
+
+## 2.6 Left Recursion and Ambiguity
+
+Left-recursive grammars cause infinite recursion in recursive descent parsers:
+  BAD: expr -> expr '+' term | term  (left-recursive)
+  GOOD: expr -> term ('+' term)*     (iterative)
+
+Ambiguity example: "a - b - c"
+  Left-associative: (a - b) - c  (correct for subtraction)
+  Right-associative: a - (b - c)  (wrong for subtraction)
+
+Solution: Loop-based parsing naturally produces left-associative trees.
+
+<|end|>
+
+<|chapter|>
+# Chapter 3: Semantic Analysis and Type Systems
+
+## 3.1 Name Resolution
+
+After parsing, the compiler must resolve what each identifier refers to:
+- Local variables (defined in current scope)
+- Enclosing scope variables (closures)
+- Global variables
+- Module members (via import)
+- Built-in functions
+
+Scope rules:
+- Block scoping: Variables visible only within their block and nested blocks
+- Function scoping: Each function creates a new scope
+- Module scoping: Each file/module has its own namespace
+- Lexical scoping: Inner scopes can see outer scopes (closures)
+
+## 3.2 Type Systems
+
+### Static vs Dynamic Typing
+
+Static (C, Rust, Java): Types checked at compile time
+  let x: int = 42       // type known at compile time
+  x = "hello"           // compile error
+
+Dynamic (Python, Sage, JavaScript): Types checked at runtime
+  let x = 42            // type inferred at runtime
+  x = "hello"           // legal (reassignment to different type)
+
+### Type Inference
+
+Hindley-Milner type inference (ML, Haskell, Rust):
+  let x = 42            // inferred as int
+  let y = x + 1         // inferred as int (because + requires int operands)
+  let f = proc(a): a + 1  // inferred as int -> int
+
+### Structural vs Nominal Typing
+
+Nominal (Java, C++): Types are distinct by name
+  class Cat { name: string }
+  class Dog { name: string }
+  // Cat and Dog are different types even though structurally identical
+
+Structural (TypeScript, Go interfaces): Types are compatible if structure matches
+  // Any value with a .name field of type string is compatible
+
+### Algebraic Data Types
+
+Sum types (tagged unions):
+  type Shape = Circle(radius) | Rectangle(width, height) | Triangle(a, b, c)
+
+Product types (structs/records):
+  type Point = { x: float, y: float }
+
+Pattern matching on sum types:
+  match shape:
+      Circle(r): return 3.14159 * r * r
+      Rectangle(w, h): return w * h
+
+## 3.3 Type Checking Algorithms
+
+For each AST node, verify type consistency:
+- Binary operations: operand types must be compatible
+- Function calls: argument types must match parameter types
+- Assignments: value type must match variable type (or be coercible)
+- Return statements: returned type must match function's return type
+- Array indexing: index must be integer, result is element type
+
+## 3.4 Coercion and Widening
+
+Implicit type conversions:
+  int -> float (widening, safe)
+  float -> int (narrowing, may lose precision)
+  any -> string (via str() or toString())
+
+Sage approach: Minimal implicit coercion. Use explicit conversion functions.
+
+<|end|>
+
+<|chapter|>
+# Chapter 4: Code Generation
+
+## 4.1 Compilation Targets
+
+A compiler can target:
+1. **Native machine code** (x86-64, ARM64, RISC-V) — fastest execution
+2. **Assembly language** — human-readable native code
+3. **Intermediate representation** (LLVM IR, JVM bytecode) — portable, optimizable
+4. **C source code** — portable, leverages existing C compilers
+5. **Bytecode** (custom VM) — portable, interpretable
+6. **JavaScript/WASM** — web deployment
+
+Sage supports targets 1-5: native ASM, C codegen, LLVM IR, and bytecode VM.
+
+## 4.2 C Code Generation
+
+The simplest backend: translate AST to equivalent C code.
+
+Sage AST:
+  proc add(a, b):
+      return a + b
+
+Generated C:
+  SageValue sage_fn_add(SageValue a, SageValue b) {
+      return sage_add(a, b);
+  }
+
+Advantages: Leverages GCC/Clang optimization, portable, easy to debug
+Disadvantages: Compilation speed (two-stage), limited control over output
+
+## 4.3 LLVM IR Generation
+
+LLVM IR is a typed, SSA (Static Single Assignment) intermediate representation:
+
+  define i64 @add(i64 %a, i64 %b) {
+  entry:
+      %sum = add i64 %a, %b
+      ret i64 %sum
+  }
+
+SSA rules:
+- Each variable is assigned exactly once
+- Use phi nodes for values that depend on control flow path
+- Enables powerful optimizations (constant propagation, dead code elimination)
+
+## 4.4 Native Assembly Generation
+
+Direct AST-to-assembly for maximum control:
+
+x86-64 for add(a, b):
+  add_func:
+      mov rax, rdi      ; first argument
+      add rax, rsi      ; add second argument
+      ret
+
+Register allocation strategies:
+- Linear scan: Fast, good enough for most code
+- Graph coloring: Optimal but slower
+- Sage uses a simple register allocator with spilling to stack
+
+## 4.5 Bytecode Compilation
+
+Custom bytecode for a stack-based or register-based VM:
+
+Stack-based (JVM style):
+  PUSH 42
+  PUSH 8
+  ADD           ; pops two, pushes result (50)
+  STORE x       ; pop and store in variable x
+
+Register-based (Lua style):
+  LOAD R0, 42
+  LOAD R1, 8
+  ADD R2, R0, R1
+  STORE x, R2
+
+## 4.6 Optimization Passes
+
+Common optimizations applied to AST or IR:
+
+1. **Constant folding**: 2 + 3 -> 5 (evaluate at compile time)
+2. **Dead code elimination**: Remove unreachable code after return/break
+3. **Function inlining**: Replace call with function body (for small functions)
+4. **Common subexpression elimination**: a*b + a*b -> let t = a*b; t + t
+5. **Loop-invariant code motion**: Move calculations that don't change per iteration outside the loop
+6. **Strength reduction**: Replace expensive operations with cheaper ones (x * 2 -> x << 1)
+7. **Tail call optimization**: Convert tail-recursive calls to loops
+
+Sage implements: constant folding, dead code elimination, and function inlining.
+
+<|end|>
+
+<|chapter|>
+# Chapter 5: Runtime Systems
+
+## 5.1 Memory Management
+
+### Stack Allocation
+- Local variables, function parameters, return addresses
+- Automatically freed when function returns
+- Fast (just move stack pointer)
+- Fixed size (stack overflow if exceeded)
+
+### Heap Allocation
+- Dynamic objects (arrays, strings, dicts, classes)
+- Must be explicitly freed (C) or garbage collected (Sage, Python, Java)
+- Slower than stack (allocator overhead)
+- No size limit (only system memory)
+
+### Garbage Collection Algorithms
+
+**Reference Counting**:
+- Each object tracks how many references point to it
+- When count reaches 0, free the object
+- Pro: Immediate cleanup, predictable
+- Con: Can't handle cycles (A -> B -> A), overhead per assignment
+
+**Mark-and-Sweep**:
+- Phase 1 (Mark): Starting from roots (stack, globals), mark all reachable objects
+- Phase 2 (Sweep): Free all unmarked objects
+- Pro: Handles cycles, simple
+- Con: Stop-the-world pauses, proportional to heap size
+
+**Tri-Color Marking (Concurrent)**:
+- Objects are White (unreachable), Gray (pending scan), Black (scanned)
+- Marker runs concurrently with mutator (application code)
+- Write barrier maintains invariant: no Black -> White edges
+- Pro: Sub-millisecond pauses
+- Con: Complexity, write barrier overhead
+
+**Generational GC**:
+- Observation: Most objects die young
+- Divide heap into young and old generations
+- Collect young generation frequently (fast, small)
+- Collect old generation rarely (slow, large)
+- Objects that survive multiple young collections are promoted to old
+
+Sage uses concurrent tri-color mark-sweep with SATB write barriers.
+
+## 5.2 Closures and Environments
+
+A closure captures variables from its enclosing scope:
+
+  proc make_counter():
+      let count = 0
+      proc increment():
+          count = count + 1
+          return count
+      return increment
+
+  let c = make_counter()
+  print c()  # 1
+  print c()  # 2
+
+Implementation: The inner function stores a reference to the environment (scope chain) where it was defined. When called, it accesses variables through this captured environment.
+
+## 5.3 Exception Handling
+
+Try/catch implementation using setjmp/longjmp (C) or exception tables:
+
+  try:
+      risky_operation()
+  catch e:
+      handle_error(e)
+  finally:
+      cleanup()
+
+Implementation approaches:
+1. **setjmp/longjmp**: Save/restore execution state. Simple but slow (saves registers on every try)
+2. **Exception tables**: Zero-cost when no exception. Compiler generates tables mapping PC ranges to handlers. Only pays cost when exception actually thrown.
+
+## 5.4 Concurrency Models
+
+**Threads (shared memory)**: OS-level parallelism, mutex/lock synchronization
+**Async/await**: Cooperative concurrency, single-threaded event loop
+**Channels (message passing)**: Go-style goroutines, no shared state
+**Actor model**: Erlang-style isolated actors with mailboxes
+
+Sage supports: OS threads + mutexes, async/await, and channel-based message passing.
+
+<|end|>
+
+<|chapter|>
+# Chapter 6: Language Design Patterns
+
+## 6.1 Expression vs Statement Languages
+
+Statement-oriented (C, Java, Sage):
+  if x > 0:
+      result = "positive"
+  else:
+      result = "negative"
+
+Expression-oriented (Rust, Haskell, Ruby):
+  let result = if x > 0 { "positive" } else { "negative" }
+
+Expression-oriented languages treat everything as producing a value, reducing the need for temporary variables.
+
+## 6.2 Pattern Matching
+
+Pattern matching is more powerful than switch/case:
+
+  match value:
+      0: print "zero"
+      1..9: print "single digit"
+      [x, y]: print "pair: " + str(x) + ", " + str(y)
+      {"name": n}: print "named: " + n
+      _: print "something else"
+
+Exhaustiveness checking: The compiler can verify that all possible cases are handled.
+
+## 6.3 Trait-Based Polymorphism
+
+Instead of inheritance hierarchies, define behavioral contracts:
+
+  trait Printable:
+      proc to_string(self) -> String
+
+  trait Comparable:
+      proc compare(self, other) -> int
+
+  # Any type can implement multiple traits
+  implement Printable for Point:
+      proc to_string(self):
+          return "(" + str(self.x) + ", " + str(self.y) + ")"
+
+Benefits over inheritance:
+- No diamond problem
+- Types can implement traits after definition
+- Composition over inheritance
+- Clear behavioral contracts
+
+## 6.4 Result/Option Types for Error Handling
+
+Instead of exceptions, use sum types:
+
+  type Result = Ok(value) | Err(error)
+  type Option = Some(value) | None
+
+  proc divide(a, b):
+      if b == 0:
+          return Err("division by zero")
+      return Ok(a / b)
+
+  match divide(10, 3):
+      Ok(v): print "Result: " + str(v)
+      Err(e): print "Error: " + e
+
+Benefits:
+- Errors are explicit in the function signature
+- Compiler enforces error handling (can't ignore an Err)
+- No hidden control flow (unlike exceptions)
+- Composable with map, and_then, unwrap_or
+
+## 6.5 Module Systems
+
+Good module systems provide:
+1. **Namespacing**: Avoid name collisions (math.sin vs custom sin)
+2. **Encapsulation**: Hide implementation details (pub/private)
+3. **Dependency management**: Import what you need
+4. **Circular dependency prevention**: Detect and reject cycles
+
+Sage module system:
+- `import module_name` loads and binds as namespace
+- `from module import name` imports specific items
+- `import a.b` resolves dotted paths to directories
+- Search path: CWD, ./lib, installed path, SAGE_PATH
+
+## 6.6 Metaprogramming
+
+Compile-time code generation:
+- **Macros** (Rust, Lisp): Transform AST at compile time
+- **Templates** (C++): Compile-time type parameterization
+- **Decorators** (Python): Wrap functions/classes at definition time
+- **Reflection** (Java, C#): Inspect types at runtime
+
+## 6.7 Memory Safety Without GC
+
+Rust's ownership model:
+1. Each value has exactly one owner
+2. When the owner goes out of scope, the value is dropped
+3. Ownership can be transferred (moved) or borrowed (referenced)
+4. References can be immutable (many) or mutable (one at a time)
+
+This eliminates:
+- Use-after-free
+- Double-free
+- Data races
+- Null pointer dereferences (via Option type)
+
+<|end|>
+
+<|chapter|>
+# Chapter 7: Interpreter Design
+
+## 7.1 Tree-Walking Interpreters
+
+The simplest interpreter: recursively walk the AST and evaluate each node.
+
+  proc interpret(node):
+      if node is NumberLiteral:
+          return node.value
+      if node is BinaryExpr:
+          left = interpret(node.left)
+          right = interpret(node.right)
+          if node.op == '+': return left + right
+          if node.op == '-': return left - right
+          if node.op == '*': return left * right
+
+Pros: Simple to implement, easy to debug
+Cons: Slow (recursive dispatch overhead, no optimization)
+
+## 7.2 Bytecode Interpreters
+
+Compile AST to bytecode, then interpret bytecode in a VM loop:
+
+  proc vm_execute(bytecode):
+      let pc = 0
+      let stack = []
+      while pc < len(bytecode):
+          let op = bytecode[pc]
+          if op == OP_PUSH:
+              push(stack, bytecode[pc + 1])
+              pc = pc + 2
+          if op == OP_ADD:
+              let b = pop(stack)
+              let a = pop(stack)
+              push(stack, a + b)
+              pc = pc + 1
+          if op == OP_CALL:
+              ...
+
+10-100x faster than tree-walking because:
+- Flat array traversal (cache-friendly)
+- No recursive function call overhead
+- Dispatch table (computed goto) instead of if-chains
+
+## 7.3 JIT Compilation
+
+Just-In-Time compilation: compile hot bytecode paths to native code at runtime.
+
+Tracing JIT (LuaJIT):
+1. Interpret bytecode normally
+2. When a loop executes N times, start recording a trace
+3. Compile the trace to native code
+4. Execute native code on subsequent iterations
+5. If trace guard fails, fall back to interpreter
+
+Method JIT (V8, HotSpot):
+1. Start with interpreter
+2. Profile which functions are hot
+3. Compile hot functions to optimized native code
+4. Deoptimize if assumptions are violated
+
+## 7.4 Value Representation
+
+Tagged unions (Sage approach):
+  struct Value {
+      int type;     // VAL_NUMBER, VAL_STRING, VAL_ARRAY, ...
+      union {
+          double number;
+          char* string;
+          Array* array;
+          Dict* dict;
+          ...
+      };
+  }
+
+NaN boxing (faster, used by LuaJIT, JavaScriptCore):
+  - Doubles have 2^52 NaN representations, only one is needed
+  - Use the remaining NaN bit patterns to encode pointers, integers, booleans
+  - Avoids the type tag branch on every operation
+
+## 7.5 Environment Model
+
+Variables are stored in environments (scope chains):
+
+  Environment:
+    head -> [x: 42] -> [y: "hello"] -> nil
+    parent -> outer_environment
+
+  Lookup(name):
+    search current env, then parent, then parent's parent, ...
+
+This naturally implements lexical scoping and closures.
+
+<|end|>
+
+<|chapter|>
+# Chapter 8: Standard Library Design
+
+## 8.1 Core Principles
+
+1. **Batteries included**: Common tasks should not require external libraries
+2. **Consistent API**: Similar operations should have similar interfaces
+3. **Composable**: Functions should work together (map, filter, reduce)
+4. **Safe by default**: Validate inputs, return errors instead of crashing
+5. **Well-documented**: Every public function has clear documentation
+
+## 8.2 Essential Modules
+
+Every serious language needs:
+- **Collections**: Arrays, hash maps, sets, queues, stacks
+- **Strings**: Manipulation, formatting, parsing, Unicode
+- **I/O**: File reading/writing, stdin/stdout, networking
+- **Math**: Arithmetic, trigonometry, random numbers
+- **Time**: Date/time, formatting, arithmetic
+- **Regex**: Pattern matching and text processing
+- **JSON/XML**: Data interchange formats
+- **Testing**: Assertions, test runners, benchmarks
+- **Logging**: Structured logging with levels
+- **Concurrency**: Threads, channels, locks, async
+
+## 8.3 API Design Patterns
+
+Builder pattern:
+  let request = http.get("https://api.example.com")
+      .header("Authorization", "Bearer token")
+      .timeout(30)
+      .send()
+
+Method chaining:
+  let result = array.filter(is_even).map(double).reduce(sum)
+
+Options pattern:
+  let server = http.server({port: 8080, host: "0.0.0.0", workers: 4})
+
+## 8.4 Error Handling in Libraries
+
+Libraries should:
+1. Never crash the program (return errors, don't abort)
+2. Provide descriptive error messages
+3. Include context (what operation failed, what input caused it)
+4. Allow callers to handle errors gracefully
+
+  proc read_file(path):
+      if not file_exists(path):
+          return Err("File not found: " + path)
+      let content = try_read(path)
+      if content is error:
+          return Err("Read failed: " + path + ": " + content.message)
+      return Ok(content)
+
+<|end|>
+
+<|chapter|>
+# Chapter 9: Advanced Topics
+
+## 9.1 Continuation-Passing Style (CPS)
+
+Transform all function calls to pass a continuation (what to do next):
+
+Direct style:
+  proc foo(x):
+      let y = bar(x)
+      return baz(y)
+
+CPS:
+  proc foo(x, k):
+      bar(x, proc(y): baz(y, k))
+
+CPS enables: tail call optimization, coroutines, async/await, delimited continuations.
+
+## 9.2 Effect Systems
+
+Track side effects in the type system:
+  proc pure_add(a: int, b: int) -> int:  # no effects
+      return a + b
+
+  proc read_file(path: string) -> IO[string]:  # IO effect
+      return fs.read(path)
+
+  proc log(msg: string) -> Console[unit]:  # Console effect
+      print(msg)
+
+Benefits: Compiler can optimize pure functions aggressively, effects are documented in types.
+
+## 9.3 Gradual Typing
+
+Allow mixing typed and untyped code:
+  proc add(a: int, b: int) -> int:  # fully typed
+      return a + b
+
+  proc process(data):  # untyped (dynamic)
+      return transform(data)
+
+  proc mixed(x: int, data) -> string:  # partially typed
+      let n = add(x, 1)
+      let result = process(data)
+      return str(n) + str(result)
+
+TypeScript, mypy (Python), and Sorbet (Ruby) use this approach.
+
+## 9.4 Compile-Time Evaluation
+
+constexpr (C++), comptime (Zig):
+  const TABLE = compute_lookup_table()  # evaluated at compile time
+  const SIZE = 1 << 20                  # computed at compile time
+
+Benefits: Zero runtime cost for constant expressions, compile-time assertions.
+
+## 9.5 Foreign Function Interface (FFI)
+
+Calling C from a higher-level language:
+1. Declare the C function signature
+2. Handle type marshaling (convert between language types and C types)
+3. Handle memory management (who owns the allocated memory?)
+4. Handle errors (convert C error codes to language exceptions)
+
+  # Sage FFI example
+  let lib = ffi_open("libm.so")
+  let sqrt = ffi_sym(lib, "sqrt")
+  let result = ffi_call(sqrt, [2.0])  # returns 1.414...
+
+## 9.6 Language Bootstrapping
+
+A language is self-hosting when its compiler is written in itself:
+
+1. Write initial compiler in another language (C for Sage)
+2. Use that compiler to compile a Sage-written compiler
+3. The Sage compiler can now compile itself
+4. The original C compiler is no longer needed
+
+Sage's bootstrap chain:
+  C source (src/c/) -> sage binary -> runs src/sage/sage.sage -> self-hosted compiler
+
+<|end|>
+
+<|chapter|>
+# Chapter 10: Building a Language from Scratch
+
+## 10.1 Design Decisions Checklist
+
+Before writing code, decide:
+- [ ] Typing: static, dynamic, or gradual?
+- [ ] Syntax: C-style braces, indentation, or significant whitespace?
+- [ ] Paradigm: OOP, functional, imperative, or multi-paradigm?
+- [ ] Memory: GC, reference counting, ownership, or manual?
+- [ ] Concurrency: threads, async, actors, or CSP?
+- [ ] Compilation: interpreted, compiled, JIT, or transpiled?
+- [ ] Error handling: exceptions, result types, or error codes?
+- [ ] Module system: file-based, package-based, or namespace-based?
+- [ ] Standard library: minimal or batteries-included?
+
+## 10.2 Implementation Order
+
+1. **Lexer**: Tokenize source code (1-2 days)
+2. **Parser**: Build AST from tokens (2-4 days)
+3. **Interpreter**: Tree-walking evaluator (2-3 days)
+4. **Variables and scoping**: Let bindings, environments (1 day)
+5. **Control flow**: If/else, while, for (1-2 days)
+6. **Functions**: Proc definitions, closures (2-3 days)
+7. **Data structures**: Arrays, dicts, tuples (2-3 days)
+8. **Classes**: OOP with inheritance (2-4 days)
+9. **Exceptions**: Try/catch/finally (1-2 days)
+10. **Module system**: Import/export (2-3 days)
+11. **Standard library**: Core functions (3-5 days)
+12. **Compiler backend**: C, LLVM, or native (5-10 days)
+13. **GC**: Garbage collection (3-5 days)
+14. **Tooling**: REPL, formatter, linter, LSP (3-5 days)
+15. **Self-hosting**: Rewrite compiler in your language (10-20 days)
+
+Total: A basic language in 4-8 weeks. A production-quality one in 6-12 months.
+
+## 10.3 Testing Strategy
+
+1. **Unit tests per feature**: Each language feature gets test cases
+2. **Expected output tests**: EXPECT comments matched against output
+3. **Error tests**: Verify error messages for invalid code
+4. **Compiler tests**: Each backend produces correct output
+5. **Self-hosted tests**: Self-hosted compiler matches C compiler output
+6. **Fuzzing**: Random program generation to find crashes
+7. **Benchmarks**: Track performance over time
+
+## 10.4 Performance Optimization Order
+
+1. First make it correct (all tests pass)
+2. Profile to find actual bottlenecks (don't guess)
+3. Optimize the hot path (usually the interpreter loop)
+4. Consider bytecode compilation for 10-100x speedup
+5. Consider JIT for another 10-100x on hot loops
+6. Optimize GC (concurrent collection, generational)
+7. Optimize allocator (arena allocation, object pooling)
+
+<|end|>

@@ -1,0 +1,229 @@
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+#include "env.h"
+#include "gc.h"
+#include "sage_thread.h"
+
+static Env* allocated_envs = NULL;
+static unsigned long long next_env_id = 1;
+static sage_mutex_t env_mutex = SAGE_MUTEX_INITIALIZER;
+
+// Helper function to duplicate a string with a max length (similar to strndup)
+static char* my_strndup(const char* s, size_t n) {
+    char* result;
+    size_t len = 0;
+
+    // Count length up to n or null terminator
+    while (len < n && s[len] != '\0') {
+        len++;
+    }
+
+    result = (char*)malloc(len + 1);
+    if (!result) return NULL;
+
+    memcpy(result, s, len);
+    result[len] = '\0'; // Explicit null terminator
+    return result;
+}
+
+Env* env_create(Env* parent) {
+    Env* env = SAGE_ALLOC(sizeof(Env));
+    env->head = NULL;
+    env->parent = parent;
+    env->marked = 0;
+    sage_mutex_lock(&env_mutex);
+    env->id = next_env_id++;
+    env->alloc_next = allocated_envs;
+    allocated_envs = env;
+    sage_mutex_unlock(&env_mutex);
+    return env;
+}
+
+
+void env_define(Env* env, const char* name, int length, Value value) {
+    // Search ONLY in current scope (head) to update
+    EnvNode* current = env->head;
+    while (current != NULL) {
+        // Fast path: length mismatch → skip immediately (avoids strncmp)
+        if (current->name_length == length &&
+            memcmp(current->name, name, (size_t)length) == 0) {
+            if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
+                arc_assign_value(&current->value, value);
+            } else {
+                GC_WRITE_BARRIER(current->value);
+                current->value = value;
+            }
+            return;
+        }
+        current = current->next;
+    }
+
+    // Create new in current scope
+    EnvNode* node = SAGE_ALLOC(sizeof(EnvNode));
+    node->name = my_strndup(name, length);
+    node->name_length = length;
+    node->owns_name = 1;
+    node->value = value;
+    node->next = env->head;
+    env->head = node;
+}
+
+void env_define_const(Env* env, const char* name, int length, Value value) {
+    // Search ONLY in current scope (head) to update
+    EnvNode* current = env->head;
+    while (current != NULL) {
+        // Fast path: length mismatch → skip immediately (avoids strncmp)
+        if (current->name_length == length &&
+            memcmp(current->name, name, (size_t)length) == 0) {
+            if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
+                arc_assign_value(&current->value, value);
+            } else {
+                GC_WRITE_BARRIER(current->value);
+                current->value = value;
+            }
+            return;
+        }
+        current = current->next;
+    }
+
+    // Create new in current scope
+    EnvNode* node = SAGE_ALLOC(sizeof(EnvNode));
+    node->name = (char*)name;
+    node->name_length = length;
+    node->owns_name = 0;
+    node->value = value;
+    node->next = env->head;
+    env->head = node;
+}
+
+
+int env_get(Env* env, const char* name, int length, Value* out_value) {
+    if (env == NULL) {
+        fprintf(stderr, "[DEBUG] env_get: env is NULL, name=%.*s\n", length, name);
+        return 0;
+    }
+    if (name == NULL) {
+        fprintf(stderr, "[DEBUG] env_get: name is NULL\n");
+        return 0;
+    }
+    Env* current_env = env;
+
+    // Search current scope, then parent, then parent's parent...
+    while (current_env != NULL) {
+        EnvNode* current = current_env->head;
+        while (current != NULL) {
+            // Fast path: length check first (integer compare), then memcmp
+            // This avoids expensive strncmp+null-check on every node
+            if (current->name_length == length &&
+                memcmp(current->name, name, (size_t)length) == 0) {
+                *out_value = current->value;
+                return 1;
+            }
+            current = current->next;
+        }
+        current_env = current_env->parent;
+    }
+    return 0;
+}
+
+int env_get_node(Env* env, const char* name, int length, Env** out_env, EnvNode** out_node) {
+    if (env == NULL || name == NULL) return 0;
+    Env* current_env = env;
+
+    while (current_env != NULL) {
+        EnvNode* current = current_env->head;
+        while (current != NULL) {
+            if (current->name_length == length &&
+                memcmp(current->name, name, (size_t)length) == 0) {
+                if (out_env) *out_env = current_env;
+                if (out_node) *out_node = current;
+                return 1;
+            }
+            current = current->next;
+        }
+        current_env = current_env->parent;
+    }
+    return 0;
+}
+
+// Assign to an existing variable (searches up the scope chain)
+int env_assign(Env* env, const char* name, int length, Value value) {
+    Env* current_env = env;
+
+    while (current_env != NULL) {
+        EnvNode* current = current_env->head;
+        while (current != NULL) {
+            if (current->name_length == length &&
+                memcmp(current->name, name, (size_t)length) == 0) {
+                if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
+                    arc_assign_value(&current->value, value);
+                } else {
+                    GC_WRITE_BARRIER(current->value);
+                    current->value = value;
+                }
+                return 1;
+            }
+            current = current->next;
+        }
+        current_env = current_env->parent;
+    }
+    return 0; // Not found
+}
+
+void env_cleanup_all(void) {
+    sage_mutex_lock(&env_mutex);
+    while (allocated_envs != NULL) {
+        Env* env = allocated_envs;
+        allocated_envs = allocated_envs->alloc_next;
+
+        EnvNode* current = env->head;
+        while (current != NULL) {
+            EnvNode* next = current->next;
+            if (current->owns_name) free(current->name);
+            free(current);
+            current = next;
+        }
+
+        free(env);
+    }
+    sage_mutex_unlock(&env_mutex);
+}
+
+// Free environments not marked as reachable during GC
+void env_sweep_unmarked(void) {
+    sage_mutex_lock(&env_mutex);
+    Env** ptr = &allocated_envs;
+    while (*ptr != NULL) {
+        Env* env = *ptr;
+        if (!env->marked) {
+            // Remove from list and free
+            *ptr = env->alloc_next;
+
+            EnvNode* node = env->head;
+            while (node != NULL) {
+                EnvNode* next = node->next;
+                if (node->owns_name) free(node->name);
+                free(node);
+                node = next;
+            }
+            free(env);
+        } else {
+            // Reachable — clear mark for next cycle and advance
+            env->marked = 0;
+            ptr = &env->alloc_next;
+        }
+    }
+    sage_mutex_unlock(&env_mutex);
+}
+
+// Clear all env marks (used if sweep is skipped)
+void env_clear_marks(void) {
+    sage_mutex_lock(&env_mutex);
+    Env* env = allocated_envs;
+    while (env != NULL) {
+        env->marked = 0;
+        env = env->alloc_next;
+    }
+    sage_mutex_unlock(&env_mutex);
+}

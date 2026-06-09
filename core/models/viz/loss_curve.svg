@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400" style="background:#1a1a2e">
+<text x="320" y="25" font-size="16" fill="#e0e0e0" font-family="monospace">SageGPT-Nano Training Loss</text>
+<rect x="60" y="60" width="680" height="280" fill="#16213e"/>
+<line x1="60" y1="60" x2="60" y2="340" stroke="#4a4a6a" stroke-width="1"/>
+<line x1="60" y1="340" x2="740" y2="340" stroke="#4a4a6a" stroke-width="1"/>
+<text x="5" y="64" font-size="10" fill="#8888aa" font-family="monospace">511</text>
+<line x1="60" y1="60" x2="740" y2="60" stroke="#2a2a4a" stroke-width="1"/>
+<text x="5" y="134" font-size="10" fill="#8888aa" font-family="monospace">500</text>
+<line x1="60" y1="130" x2="740" y2="130" stroke="#2a2a4a" stroke-width="1"/>
+<text x="5" y="204" font-size="10" fill="#8888aa" font-family="monospace">490</text>
+<line x1="60" y1="200" x2="740" y2="200" stroke="#2a2a4a" stroke-width="1"/>
+<text x="5" y="274" font-size="10" fill="#8888aa" font-family="monospace">479</text>
+<line x1="60" y1="270" x2="740" y2="270" stroke="#2a2a4a" stroke-width="1"/>
+<text x="5" y="344" font-size="10" fill="#8888aa" font-family="monospace">469</text>
+<line x1="60" y1="340" x2="740" y2="340" stroke="#2a2a4a" stroke-width="1"/>
+<text x="60" y="390" font-size="10" fill="#8888aa" font-family="monospace">0</text>
+<text x="230" y="390" font-size="10" fill="#8888aa" font-family="monospace">7</text>
+<text x="400" y="390" font-size="10" fill="#8888aa" font-family="monospace">15</text>
+<text x="570" y="390" font-size="10" fill="#8888aa" font-family="monospace">22</text>
+<text x="740" y="390" font-size="10" fill="#8888aa" font-family="monospace">30</text>
+<polyline points="60,235 83,232 106,195 130,234 153,98 177,186 200,249 224,245 247,150 271,132 294,340 317,199 341,213 364,110 388,267 411,217 435,210 458,230 482,189 505,228 528,239 552,185 575,296 599,286 622,245 646,185 669,60 693,237 716,241 740,183" fill="none" stroke="#00d4ff" stroke-width="2"/>
+<circle cx="60" cy="235" r="3" fill="#ff6b6b"/>
+<circle cx="83" cy="232" r="3" fill="#ff6b6b"/>
+<circle cx="106" cy="195" r="3" fill="#ff6b6b"/>
+<circle cx="130" cy="234" r="3" fill="#ff6b6b"/>
+<circle cx="153" cy="98" r="3" fill="#ff6b6b"/>
+<circle cx="177" cy="186" r="3" fill="#ff6b6b"/>
+<circle cx="200" cy="249" r="3" fill="#ff6b6b"/>
+<circle cx="224" cy="245" r="3" fill="#ff6b6b"/>
+<circle cx="247" cy="150" r="3" fill="#ff6b6b"/>
+<circle cx="271" cy="132" r="3" fill="#ff6b6b"/>
+<circle cx="294" cy="340" r="3" fill="#ff6b6b"/>
+<circle cx="317" cy="199" r="3" fill="#ff6b6b"/>
+<circle cx="341" cy="213" r="3" fill="#ff6b6b"/>
+<circle cx="364" cy="110" r="3" fill="#ff6b6b"/>
+<circle cx="388" cy="267" r="3" fill="#ff6b6b"/>
+<circle cx="411" cy="217" r="3" fill="#ff6b6b"/>
+<circle cx="435" cy="210" r="3" fill="#ff6b6b"/>
+<circle cx="458" cy="230" r="3" fill="#ff6b6b"/>
+<circle cx="482" cy="189" r="3" fill="#ff6b6b"/>
+<circle cx="505" cy="228" r="3" fill="#ff6b6b"/>
+<circle cx="528" cy="239" r="3" fill="#ff6b6b"/>
+<circle cx="552" cy="185" r="3" fill="#ff6b6b"/>
+<circle cx="575" cy="296" r="3" fill="#ff6b6b"/>
+<circle cx="599" cy="286" r="3" fill="#ff6b6b"/>
+<circle cx="622" cy="245" r="3" fill="#ff6b6b"/>
+<circle cx="646" cy="185" r="3" fill="#ff6b6b"/>
+<circle cx="669" cy="60" r="3" fill="#ff6b6b"/>
+<circle cx="693" cy="237" r="3" fill="#ff6b6b"/>
+<circle cx="716" cy="241" r="3" fill="#ff6b6b"/>
+<circle cx="740" cy="183" r="3" fill="#ff6b6b"/>
+<text x="60" y="395" font-size="11" fill="#8888aa" font-family="monospace">Step</text>
+<text x="5" y="55" font-size="11" fill="#8888aa" font-family="monospace">Loss</text>
+</svg>

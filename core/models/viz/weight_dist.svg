@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400" style="background:#1a1a2e">
+<text x="300" y="25" font-size="16" fill="#e0e0e0" font-family="monospace">SageGPT-Nano Weight Distribution</text>
+<rect x="60" y="60" width="680" height="280" fill="#16213e"/>
+<rect x="60" y="99" width="16" height="241" fill="rgb(219,100,36)"/>
+<rect x="77" y="63" width="16" height="277" fill="rgb(252,100,3)"/>
+<rect x="94" y="120" width="16" height="220" fill="rgb(201,100,54)"/>
+<rect x="111" y="111" width="16" height="229" fill="rgb(209,100,46)"/>
+<rect x="128" y="104" width="16" height="236" fill="rgb(215,100,40)"/>
+<rect x="145" y="95" width="16" height="245" fill="rgb(223,100,32)"/>
+<rect x="162" y="117" width="16" height="223" fill="rgb(203,100,52)"/>
+<rect x="179" y="60" width="16" height="280" fill="rgb(255,100,0)"/>
+<rect x="196" y="131" width="16" height="209" fill="rgb(190,100,65)"/>
+<rect x="213" y="81" width="16" height="259" fill="rgb(236,100,19)"/>
+<rect x="230" y="101" width="16" height="239" fill="rgb(217,100,38)"/>
+<rect x="247" y="92" width="16" height="248" fill="rgb(225,100,30)"/>
+<rect x="264" y="95" width="16" height="245" fill="rgb(223,100,32)"/>
+<rect x="281" y="136" width="16" height="204" fill="rgb(186,100,69)"/>
+<rect x="298" y="120" width="16" height="220" fill="rgb(201,100,54)"/>
+<rect x="315" y="95" width="16" height="245" fill="rgb(223,100,32)"/>
+<rect x="332" y="133" width="16" height="207" fill="rgb(188,100,67)"/>
+<rect x="349" y="113" width="16" height="227" fill="rgb(207,100,48)"/>
+<rect x="366" y="86" width="16" height="254" fill="rgb(232,100,23)"/>
+<rect x="383" y="115" width="16" height="225" fill="rgb(205,100,50)"/>
+<rect x="400" y="108" width="16" height="232" fill="rgb(211,100,44)"/>
+<rect x="417" y="90" width="16" height="250" fill="rgb(228,100,27)"/>
+<rect x="434" y="86" width="16" height="254" fill="rgb(232,100,23)"/>
+<rect x="451" y="129" width="16" height="211" fill="rgb(192,100,63)"/>
+<rect x="468" y="101" width="16" height="239" fill="rgb(217,100,38)"/>
+<rect x="485" y="70" width="16" height="270" fill="rgb(246,100,9)"/>
+<rect x="502" y="113" width="16" height="227" fill="rgb(207,100,48)"/>
+<rect x="519" y="127" width="16" height="213" fill="rgb(194,100,61)"/>
+<rect x="536" y="127" width="16" height="213" fill="rgb(194,100,61)"/>
+<rect x="553" y="122" width="16" height="218" fill="rgb(199,100,56)"/>
+<rect x="570" y="79" width="16" height="261" fill="rgb(238,100,17)"/>
+<rect x="587" y="106" width="16" height="234" fill="rgb(213,100,42)"/>
+<rect x="604" y="131" width="16" height="209" fill="rgb(190,100,65)"/>
+<rect x="621" y="95" width="16" height="245" fill="rgb(223,100,32)"/>
+<rect x="638" y="145" width="16" height="195" fill="rgb(178,100,77)"/>
+<rect x="655" y="124" width="16" height="216" fill="rgb(196,100,59)"/>
+<rect x="672" y="124" width="16" height="216" fill="rgb(196,100,59)"/>
+<rect x="689" y="142" width="16" height="198" fill="rgb(180,100,75)"/>
+<rect x="706" y="122" width="16" height="218" fill="rgb(199,100,56)"/>
+<rect x="723" y="90" width="16" height="250" fill="rgb(228,100,27)"/>
+<text x="60" y="395" font-size="10" fill="#8888aa" font-family="monospace">-2</text>
+<text x="710" y="395" font-size="10" fill="#8888aa" font-family="monospace">1</text>
+<text x="380" y="395" font-size="11" fill="#8888aa" font-family="monospace">Weight value (x100)</text>
+</svg>

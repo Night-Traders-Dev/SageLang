@@ -1,0 +1,60 @@
+#version 450
+
+layout(local_size_x = 256) in;
+
+struct Body {
+    vec4 positionMass;   // xyz = position, w = mass
+    vec4 velocity;       // xyz = velocity, w = pad
+};
+
+layout(std430, binding = 0) buffer BodiesIn  { Body bodiesIn[];  };
+layout(std430, binding = 1) buffer BodiesOut { Body bodiesOut[]; };
+
+layout(push_constant) uniform PushConstants {
+    float dt;
+    float softening;
+    float G;
+    uint bodyCount;
+} pc;
+
+shared vec4 sharedPos[256];
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    if (gid >= pc.bodyCount) return;
+
+    vec3 pos = bodiesIn[gid].positionMass.xyz;
+    float mass = bodiesIn[gid].positionMass.w;
+    vec3 vel = bodiesIn[gid].velocity.xyz;
+    vec3 acc = vec3(0.0);
+
+    // Barnes-Hut simplified: direct N-body with shared memory tiling
+    uint tiles = (pc.bodyCount + 255) / 256;
+    for (uint tile = 0; tile < tiles; tile++) {
+        uint idx = tile * 256 + gl_LocalInvocationID.x;
+        if (idx < pc.bodyCount) {
+            sharedPos[gl_LocalInvocationID.x] = bodiesIn[idx].positionMass;
+        } else {
+            sharedPos[gl_LocalInvocationID.x] = vec4(0.0);
+        }
+        barrier();
+
+        for (uint j = 0; j < 256; j++) {
+            vec3 r = sharedPos[j].xyz - pos;
+            float distSq = dot(r, r) + pc.softening * pc.softening;
+            float invDist = inversesqrt(distSq);
+            float invDist3 = invDist * invDist * invDist;
+            acc += r * sharedPos[j].w * invDist3;
+        }
+        barrier();
+    }
+
+    vel += acc * pc.G * pc.dt;
+    pos += vel * pc.dt;
+
+    // Boundary: wrap in [-50, 50] box
+    pos = mod(pos + 50.0, 100.0) - 50.0;
+
+    bodiesOut[gid].positionMass = vec4(pos, mass);
+    bodiesOut[gid].velocity = vec4(vel, 0.0);
+}

@@ -1,0 +1,10 @@
+# EXPECT: 7
+# EXPECT: 3
+# EXPECT: 10
+# EXPECT: 2.5
+# EXPECT: 1
+print(5 + 2)
+print(5 - 2)
+print(5 * 2)
+print(5 / 2)
+print(5 % 2)

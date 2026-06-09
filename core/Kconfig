@@ -1,0 +1,479 @@
+mainmenu "SageLang Configuration"
+
+menu "Compiler & Build"
+
+choice
+	prompt "C Compiler"
+	default CC_GCC
+
+config CC_GCC
+	bool "GCC"
+	help
+	  Use the GNU C Compiler (gcc).
+	  This is the default and most tested compiler.
+
+config CC_CLANG
+	bool "Clang"
+	help
+	  Use the LLVM Clang compiler.
+	  May produce smaller binaries.
+
+config CC_SYSTEM
+	bool "System default (cc)"
+	help
+	  Use whatever 'cc' points to on your system.
+
+endchoice
+
+choice
+	prompt "Build System"
+	default BUILD_MAKE
+
+config BUILD_MAKE
+	bool "Make (default)"
+	help
+	  Build using the Makefile directly.
+	  Fastest and simplest build path.
+
+config BUILD_CMAKE
+	bool "CMake"
+	help
+	  Build using CMake.
+	  Required for Pico/RP2040 builds and self-hosted mode.
+
+endchoice
+
+menu "Self-Hosted Sage Compiler"
+
+config SELFHOST
+	bool "Enable self-hosted Sage compiler"
+	default n
+	help
+	  Build and enable the self-hosted Sage compiler pipeline.
+	  The Sage interpreter (C) runs src/sage/sage.sage which
+	  implements a full Sage compiler/interpreter in Sage itself.
+
+	  This enables: make sage-boot FILE=<file>
+	  Bootstrap: sage sage.sage <your_program.sage>
+
+config SELFHOST_EMIT_C
+	bool "Self-hosted C code generation"
+	default y
+	depends on SELFHOST
+	help
+	  Enable 'sage --emit-c' and 'sage --compile' in self-hosted mode.
+	  Generates C source from Sage programs, then compiles via cc.
+
+	  The self-hosted compiler.sage emits standalone C with a
+	  runtime prelude — no external dependencies needed.
+
+config SELFHOST_EMIT_LLVM
+	bool "Self-hosted LLVM IR generation"
+	default y
+	depends on SELFHOST
+	help
+	  Enable 'sage --emit-llvm' and 'sage --compile-llvm' in self-hosted mode.
+	  Generates LLVM IR text (.ll files) from Sage programs.
+
+	  Compile with: clang output.ll obj/llvm_runtime.o -o binary
+
+	  The self-hosted llvm_backend.sage generates SSA registers,
+	  runtime declarations, and proper ABI-matching value types.
+
+config SELFHOST_EMIT_ASM
+	bool "Self-hosted native assembly generation"
+	default y
+	depends on SELFHOST
+	help
+	  Enable 'sage --emit-asm' and 'sage --compile-native' in self-hosted mode.
+	  Generates native assembly for x86-64, aarch64, or rv64.
+
+	  The self-hosted codegen.sage implements VInst IR instruction
+	  selection and register allocation for all three architectures.
+
+config SELFHOST_TOOLS
+	bool "Self-hosted developer tools"
+	default y
+	depends on SELFHOST
+	help
+	  Enable self-hosted formatter, linter, and LSP server.
+
+	  These are Sage-language reimplementations of the C tools:
+	  - sage fmt <file>     (formatter.sage)
+	  - sage lint <file>    (linter.sage)
+	  - sage --lsp          (lsp.sage)
+
+config SELFHOST_RUN_TESTS
+	bool "Run self-hosted test suite during build"
+	default y
+	depends on SELFHOST
+	help
+	  After building, run the self-hosted test suite.
+	  Currently 1567+ tests across 25+ test suites covering
+	  lexer, parser, interpreter, bootstrap, formatter, linter,
+	  optimization passes, type checker, code generation,
+	  LLVM backend, LSP, and GPU modules.
+
+endmenu
+
+menu "LLVM Backend"
+
+config LLVM_BACKEND
+	bool "LLVM IR code generation backend"
+	default y
+	help
+	  Enable the LLVM IR text generation backend in the C compiler.
+	  This allows: sage --emit-llvm <file.sage>
+	               sage --compile-llvm <file.sage>
+
+	  The backend generates LLVM IR text (.ll files) that can be
+	  compiled with clang. A standalone runtime library (llvm_runtime.c)
+	  provides 40+ sage_rt_* functions for the generated code.
+
+config LLVM_RUNTIME
+	bool "Build LLVM runtime library (llvm_runtime.o)"
+	default y
+	depends on LLVM_BACKEND
+	help
+	  Build obj/llvm_runtime.o from src/c/llvm_runtime.c.
+	  This object file is automatically linked when using
+	  --compile-llvm to produce standalone executables.
+
+	  Contains: value constructors, arithmetic, comparison,
+	  logical ops, bitwise ops, collections, property access,
+	  type conversion, I/O, and control flow primitives.
+
+config LLVM_COMPILE
+	bool "Auto-compile LLVM output (requires clang)"
+	default y
+	depends on LLVM_BACKEND && LLVM_RUNTIME
+	help
+	  When using --compile-llvm, automatically invoke clang
+	  to compile the generated .ll file into a native executable.
+
+	  Requires: clang installed and in PATH.
+
+	  Without this, --compile-llvm will fail but --emit-llvm
+	  still works (you compile manually with clang).
+
+endmenu
+
+menu "Native Code Generation"
+
+config NATIVE_CODEGEN
+	bool "Direct native assembly backend"
+	default y
+	help
+	  Enable direct assembly generation without LLVM.
+	  Generates .s assembly files via VInst IR.
+
+	  sage --emit-asm <file.sage>
+	  sage --compile-native <file.sage>
+
+choice
+	prompt "Default target architecture"
+	default NATIVE_TARGET_HOST
+	depends on NATIVE_CODEGEN
+
+config NATIVE_TARGET_HOST
+	bool "Host architecture (auto-detect)"
+	help
+	  Detect at runtime from the host system.
+	  On x86_64 Linux: generates x86-64 assembly.
+	  On aarch64: generates AArch64 assembly.
+
+config NATIVE_TARGET_X86_64
+	bool "x86-64"
+	help
+	  Generate x86-64 (AMD64) assembly.
+	  System V ABI calling convention.
+
+config NATIVE_TARGET_AARCH64
+	bool "AArch64 (ARM64)"
+	help
+	  Generate AArch64 assembly.
+	  AAPCS64 calling convention.
+
+config NATIVE_TARGET_RV64
+	bool "RISC-V 64-bit"
+	help
+	  Generate RV64GC assembly.
+	  LP64D ABI.
+
+endchoice
+
+endmenu
+
+choice
+	prompt "Optimization Level"
+	default OPT_O2
+
+config OPT_O0
+	bool "-O0 (no optimization, fastest compile)"
+	help
+	  No optimization. Best for debugging.
+	  Combined with DEBUG for development.
+
+config OPT_O1
+	bool "-O1 (basic optimization)"
+
+config OPT_O2
+	bool "-O2 (recommended)"
+	help
+	  Good balance of performance and compile time.
+	  This is the default for release builds.
+
+config OPT_O3
+	bool "-O3 (aggressive optimization)"
+	help
+	  Maximum optimization. May increase binary size.
+	  Useful for performance-critical deployments.
+
+endchoice
+
+config DEBUG
+	bool "Debug symbols (-g -DDEBUG)"
+	default n
+	help
+	  Add debug symbols and enable DEBUG macro.
+	  Use with -O0 for best debugging experience.
+
+	  Increases binary size significantly.
+
+endmenu
+
+menu "GPU & Graphics"
+
+config VULKAN
+	bool "Vulkan GPU support"
+	default y
+	help
+	  Enable the Vulkan graphics backend.
+	  Provides GPU compute and rendering via 'import gpu'.
+
+	  Requires: Vulkan SDK (libvulkan-dev)
+	  Auto-detected via pkg-config if available.
+
+	  If disabled, the gpu module loads in stub mode
+	  with all constants available but functions returning errors.
+
+config GLFW
+	bool "GLFW windowed mode"
+	default y
+	depends on VULKAN
+	help
+	  Enable GLFW for window creation and input handling.
+	  Required for all GPU demos that open a window.
+
+	  Requires: libglfw3-dev
+	  Auto-detected via pkg-config if available.
+
+	  Without GLFW, only headless compute is available.
+
+choice
+	prompt "Default GPU platform"
+	default GPU_PLATFORM_AUTO
+	depends on GLFW
+
+config GPU_PLATFORM_AUTO
+	bool "Auto-detect"
+	help
+	  Automatically detect the display server.
+	  Prefers XWayland when both X11 and Wayland are available.
+
+config GPU_PLATFORM_X11
+	bool "Force X11"
+	help
+	  Always use X11/Xorg for window creation.
+	  Most compatible option.
+
+config GPU_PLATFORM_WAYLAND
+	bool "Force Wayland"
+	help
+	  Use native Wayland protocol.
+	  May require working libdecor installation.
+
+endchoice
+
+config COMPILE_SHADERS
+	bool "Compile GLSL shaders to SPIR-V"
+	default y
+	depends on VULKAN
+	help
+	  Compile all .vert/.frag/.comp shaders in examples/shaders/
+	  to SPIR-V (.spv) format during build.
+
+	  Requires: glslc (from Vulkan SDK or shaderc)
+
+endmenu
+
+menu "Networking"
+
+config CURL
+	bool "HTTP support (libcurl)"
+	default y
+	help
+	  Enable the HTTP/HTTPS client module.
+	  Provides 'import http' with get/post/put/delete/download.
+
+	  Requires: libcurl4-openssl-dev
+
+config OPENSSL
+	bool "SSL/TLS support (OpenSSL)"
+	default y
+	help
+	  Enable the SSL/TLS module for encrypted connections.
+	  Provides 'import ssl' with context/wrap/connect/accept.
+
+	  Requires: libssl-dev
+
+endmenu
+
+menu "Platform & Cross-compilation"
+
+config PICO_BUILD
+	bool "Raspberry Pi Pico (RP2040) build"
+	default n
+	help
+	  Build for the Raspberry Pi Pico microcontroller.
+	  Disables: pthreads, networking, Vulkan, GLFW.
+	  Requires: Pico SDK (PICO_SDK_PATH).
+
+	  Uses CMake build system automatically.
+
+config PICO_BOARD
+	string "Pico board name"
+	default "pico"
+	depends on PICO_BUILD
+	help
+	  Board name for the Pico SDK.
+	  Common values: pico, pico_w, pico2
+
+config PICO_SDK_PATH
+	string "Pico SDK path"
+	default ""
+	depends on PICO_BUILD
+	help
+	  Path to the Raspberry Pi Pico SDK.
+	  Can also be set via PICO_SDK_PATH environment variable.
+
+choice
+	prompt "Target architecture (native codegen)"
+	default TARGET_HOST
+
+config TARGET_HOST
+	bool "Host architecture (auto-detect)"
+
+config TARGET_X86_64
+	bool "x86-64"
+
+config TARGET_AARCH64
+	bool "AArch64 (ARM64)"
+
+config TARGET_RV64
+	bool "RISC-V 64-bit"
+
+endchoice
+
+endmenu
+
+menu "Testing"
+
+config RUN_TESTS
+	bool "Run test suite after build"
+	default y
+	help
+	  Run the full test suite (interpreter + self-hosted) after building.
+	  Currently 1623+ tests across 25+ test suites.
+
+config TEST_INTERPRETER
+	bool "C interpreter tests (144 tests)"
+	default y
+	depends on RUN_TESTS
+
+config TEST_SELFHOST
+	bool "Self-hosted tests (1400+ tests)"
+	default y
+	depends on RUN_TESTS
+	help
+	  Run all self-hosted test suites:
+	  Lexer, Parser, Interpreter, Bootstrap, Formatter, Linter,
+	  Value, Pass, Constfold, DCE, Inline, Typecheck, Stdlib,
+	  Module, LLVM Backend, Codegen, C Compiler, Errors, LSP,
+	  Sage CLI, Diagnostic, GC, Heartbeat, GPU, GPU Advanced,
+	  GPU Features, GPU Engine.
+
+config TEST_GPU
+	bool "GPU/Vulkan tests (285 tests)"
+	default y
+	depends on RUN_TESTS && VULKAN
+	help
+	  Run GPU-specific test suites that verify Vulkan functionality.
+	  Requires Vulkan to be available at runtime.
+
+config TEST_SCREENSHOTS
+	bool "Visual screenshot tests"
+	default n
+	depends on RUN_TESTS && VULKAN && GLFW
+	help
+	  Render each GPU demo for a few frames and save screenshots
+	  to tests/screenshots/ for visual inspection.
+
+	  Requires a display server (X11 or Wayland).
+
+endmenu
+
+menu "Installation"
+
+config INSTALL_PREFIX
+	string "Install prefix"
+	default "/usr/local"
+	help
+	  Destination for 'make install'.
+	  Binary goes to PREFIX/bin/sage
+
+config INSTALL_LIBS
+	bool "Install standard library modules"
+	default y
+	help
+	  Install lib/*.sage modules to PREFIX/share/sage/lib/
+
+config INSTALL_LSP
+	bool "Install LSP server (sage-lsp)"
+	default y
+	help
+	  Install the Language Server Protocol binary.
+
+endmenu
+
+menu "Advanced"
+
+config THREADING
+	bool "Thread support (pthreads)"
+	default y
+	depends on !PICO_BUILD
+	help
+	  Enable threading support via pthreads.
+	  Required for: async/await, thread module, GC thread safety.
+
+config GC_ENABLED
+	bool "Garbage collection"
+	default y
+	help
+	  Enable the mark-and-sweep garbage collector.
+	  Self-hosted Sage code uses gc_disable() at startup.
+
+config LLVM_RUNTIME
+	bool "Build LLVM runtime library"
+	default y
+	help
+	  Build obj/llvm_runtime.o which is linked with
+	  --compile-llvm output for standalone executables.
+
+config VERBOSE_BUILD
+	bool "Verbose build output"
+	default n
+	help
+	  Show full compiler commands during build.
+
+endmenu

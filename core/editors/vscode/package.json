@@ -1,0 +1,61 @@
+{
+  "name": "sage-lang",
+  "displayName": "Sage Language",
+  "description": "Syntax highlighting and language configuration support for SageLang",
+  "version": "0.5.0",
+  "publisher": "sagelang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "sage",
+    "sagelang",
+    "syntax",
+    "highlighting",
+    "language"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Night-Traders-Dev/SageLang.git"
+  },
+  "homepage": "https://github.com/Night-Traders-Dev/SageLang",
+  "files": [
+    "language-configuration.json",
+    "syntaxes/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.2"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "sage",
+        "aliases": [
+          "Sage",
+          "sage",
+          "SageLang"
+        ],
+        "extensions": [
+          ".sage"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sage",
+        "scopeName": "source.sage",
+        "path": "./syntaxes/sage.tmLanguage.json"
+      }
+    ]
+  }
+}
