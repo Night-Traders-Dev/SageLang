@@ -672,11 +672,11 @@ void register_stdlib_modules(ModuleCache* cache) {
     create_vm_module(cache);
     create_thread_module(cache);
     create_fat_module(cache);
-    create_net_module(cache);
-    create_socket_module(cache);
-    create_tcp_module(cache);
-    create_http_module(cache);
-    create_ssl_module(cache);
+    // create_net_module(cache);
+    // create_socket_module(cache);
+    // create_tcp_module(cache);
+    // create_http_module(cache);
+    // create_ssl_module(cache);
     create_graphics_module(cache);
     create_ml_native_module(cache);
 #ifndef SAGE_NO_FFI
