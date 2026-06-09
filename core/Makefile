@@ -7,7 +7,7 @@
 # ============================================================================
 
 # Single-source version from VERSION file
-SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "0.0.0")
+SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.6.6")
 
 # CC/CFLAGS/LDFLAGS can be overridden by environment (OIS sets CC=clang on macOS/BSD)
 CC ?= gcc
@@ -1025,17 +1025,18 @@ all-models: $(TARGET) train-c chatbot-llvm sl-tq-chat
 # Show current version
 .PHONY: version
 version:
-	@cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "0.0.0"
+	@cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.6.6"
 
-# Bump version: make bump-version V=3.4.6
-# Updates VERSION in core/ AND root (../VERSION), keeping them in sync.
+# Bump version: make bump-version V=3.6.6
+# Updates VERSION in core/ AND root (../VERSION), and updates all files with the new version string.
 .PHONY: bump-version
 bump-version:
 	@[ -n "$(V)" ] || (echo "Usage: make bump-version V=X.Y.Z"; exit 1)
 	@printf "%s\n" "$(V)" > VERSION
 	@[ -f ../VERSION ] && printf "%s\n" "$(V)" > ../VERSION || true
-	@echo "✅ Version bumped to $(V)"
-	@echo "   Commit: git add VERSION ../VERSION -m \"chore: bump version to $(V)\""
+	@find . -type f \( -name "*.md" -o -name "*.txt" -o -name "*.sage" -o -name "*.sh" -o -name "Makefile" \) -exec sed -i "s/[0-9]\+\.[0-9]\+\.[0-9]\+/$(V)/g" {} +
+	@echo "✅ Version bumped to $(V) across all files"
+	@echo "   Commit: git add . -m \"chore: bump version to $(V)\""
 
 
 .PHONY: all clean clean-all run examples test install uninstall charts \

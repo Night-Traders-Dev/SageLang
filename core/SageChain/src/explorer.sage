@@ -77,7 +77,7 @@ proc api_get_tx(req):
             return server.response_json(json_stringify(tx))
     return server.response_not_found("Transaction not found")
 
-let srv = server.create_server("0.0.0.0", 8080)
+let srv = server.create_server("3.6.6.0", 8080)
 server.get_route(srv["router"], "/", handle_index)
 server.get_route(srv["router"], "/app.js", handle_app_js)
 server.get_route(srv["router"], "/style.css", handle_style_css)
