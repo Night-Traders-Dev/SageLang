@@ -4,7 +4,7 @@
 
 ![SageLang Logo](core/assets/SageLang.png)
 
-Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.5.9, Sage features $O(1)$ dictionary size lookups, $O(N)$ unique checks for simple types (with linear fallback for structural values), native array reversal (~105x faster), safe non-hanging string/value repeating via binary exponentiation (linear in output size), robust tab/whitespace token checks in sandbox security guards, and improved documentation visibility for POSIX error handling. This release also includes fixes for GPIO interrupt handling and relaxed REPL filename validation.
+Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.6.2, Sage features native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
 
 ## Install (One line installer)
 
@@ -12,7 +12,7 @@ Sage is a systems programming language that combines the readability of Python (
 git clone https://github.com/Night-Traders-Dev/SageLang.git && cd SageLang && chmod +x install.sh && ./install.sh
 ```
 
-The installer walks you through everything — building, setting up updating, installing dependencies.
+The installer walks you through everything — building, setting up updating, and installing dependencies. It provides automatic `PATH` configuration instructions for **Bash**, **Zsh**, and **Fish** shells.
 
 ### Supported Platforms
 
@@ -250,6 +250,26 @@ SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel
 | **start** | `import os.boot.start` | Boot assembly generation (x86_64 multiboot + long mode, aarch64, riscv64) |
 | **build** | `import os.boot.build` | Build pipeline: serial drivers, kernel templates, QEMU commands (all 3 archs) |
 | **linker** | `import os.boot.linker` | Linker script generation for bare-metal ELF kernels (all 3 archs) |
+| **bios** | `import os.boot.bios` | BIOS interrupt interface (INT 0x10, 0x13, 0x15, 0x16) for legacy x86 boot |
+| **e820** | `import os.boot.e820` | BIOS memory map collection and normalization |
+| **a20** | `import os.boot.a20` | A20 gate enabling methods (BIOS, Fast A20, Keyboard Controller) |
+| **cpuid** | `import os.boot.cpuid` | CPU feature detection (Long mode, MSR, SSE, Vendor/Brand strings) |
+| **real_mode** | `import os.boot.real_mode` | Helpers for segment:offset addressing and real-mode stack setup |
+| **prot_mode** | `import os.boot.prot_mode` | Transition logic from real mode to 32-bit protected mode |
+| **long_mode** | `import os.boot.long_mode` | Transition logic from 32-bit protected mode to 64-bit long mode |
+| **page_tables**| `import os.boot.page_tables` | Bootstrap PML4/PDPT/PD builder for identity and higher-half mapping |
+| **bump_alloc**| `import os.boot.bump_alloc` | Lightweight, pre-kernel bump allocator with no GC dependencies |
+| **disk** | `import os.boot.disk` | Abstract sector I/O layer (BIOS, UEFI, direct ATA PIO probing) |
+| **fat_boot** | `import os.boot.fat_boot` | Minimal FAT filesystem reader designed for pre-kernel environments |
+| **elf_load** | `import os.boot.elf_load` | ELF segment loader with entry point detection and PT_LOAD support |
+| **handoff** | `import os.boot.handoff` | SageOS boot info protocol for passing system state to the kernel |
+| **uefi_proto** | `import os.boot.uefi_proto` | High-level wrappers for UEFI protocols (GOP, File, BlockIO) |
+| **menu** | `import os.boot.menu` | Text-mode boot selection UI with timeout support |
+| **config** | `import os.boot.config` | Parser for `boot.cfg` configuration files |
+| **sbi** | `import os.boot.sbi` | RISC-V Supervisor Binary Interface (SBI) wrappers for S-mode boot |
+| **psci** | `import os.boot.psci` | ARM Power State Coordination Interface for SMP core bring-up |
+| **dtb_boot** | `import os.boot.dtb_boot` | DTB-aware helpers for memory detection and /chosen manipulation |
+| **verify** | `import os.boot.verify` | Kernel signature verification (SHA-256, Ed25519) and TPM measurement |
 | **kmain** | `import os.kernel.kmain` | Kernel entry point scaffolding, boot info handoff |
 | **console** | `import os.kernel.console` | VGA text-mode console (80×25, color attributes, scrolling) |
 | **keyboard** | `import os.kernel.keyboard` | PS/2 keyboard driver (scancode set 2, key event dispatch) |
@@ -278,6 +298,7 @@ SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel
 | **Tmpfs** | `import os.tmpfs` | In-memory filesystem for temporary kernel storage |
 | **SMP** | `import os.smp` | Symmetric Multi-Processing: CPU topology, affinity, and work distribution |
 | **Metal Core**| `import metal.core` | Bare-metal stubs: puts, putchar, inb/outb, mmio, cli/sti/hlt, panic |
+| **Metal VGA** | `import metal.vga` | Early VGA text-mode display, cursor management, and progress bars |
 | **Metal Serial**| `import metal.serial` | NS16550A/PL011 drivers, baud rate validation, timeout-aware reads, line reading, buffer flushing |
 | **Metal GPIO** | `import metal.gpio` | MMIO-based GPIO, pin modes, pull config, interrupts, batch mask-based operations |
 | **Metal IRQ**  | `import metal.irq` | Interrupt registration, priority levels, nesting depth tracking, arch-neutral masking |
@@ -611,7 +632,7 @@ bash models/data/download_datasets.sh all    # + The Stack (~200 GB)
 - **Build pipeline v2.0** (`models/tools/build_sagellm.sage`): 12-phase pipeline — data collection, model init, pre-training, LoRA fine-tuning, DPO alignment, RAG, Engram memory, quantization, chatbot generation, GGUF export, visualization, and summary. SageGPT-Medium: d_model=128, 4 layers, 4 heads, d_ff=512, vocab=256, 16K context.
 - **C-Only Trainer**: `make train-c` builds a standalone training binary (`train_sl_tq`) with pure C backpropagation — no frameworks, no autograd, every gradient explicit. Usage: `./train_sl_tq 50000 0.002` (steps, learning rate). Auto-detects cuBLAS GPU acceleration and ARM NEON SIMD; 1000+ steps/sec on modern hardware. Saves weights compatible with the chatbot: `models/weights/sl_tq_llm.weights`. Also works on mobile via Termux + proot ARM64 (falls back to NEON SIMD when cuBLAS is unavailable).
 - **Additional build targets**: `make train-sage` (Sage interpreter training), `make chatbot-c` (compile chatbot via C backend), `make chatbot-llvm` (compile chatbot via LLVM backend), `make chatbot-native` (compile chatbot via native asm), `make sl-tq-chat` (compile SL-TQ-LLM generative chatbot), `make all-models` (build all model variants).
-- **`build.sh` flags**: `--train` (build C trainer), `--chatbot` (compile chatbots).
+- **`sagemake` flags**: `--train` (build C trainer), `--chatbot` (compile chatbots).
 - **SageMake**: Unified build system with platform, GPU, NPU, and compiler auto-detection (`./sagemake build`, `./sagemake train`, `./sagemake all`).
 
 **Agent Framework** (`lib/agent/`, imported as `import agent.<module>`):
@@ -815,6 +836,7 @@ SageMake is the unified build system that auto-detects your platform, GPU, NPU, 
 | `sage --help` | Print CLI usage | Shows compiler, tooling, and REPL entry points |
 | `sage -c "source"` | Execute a source string | Runs without loading a file |
 | `sage <file.sage> [arg ...]` | Run a Sage source file | Extra arguments are available through `sys.args()` |
+| `sage <file.sgvm>` | Run a compiled SGVM binary | Runs via integrated MetalVM engine |
 | `sage --lsp` | Start the LSP server on stdin/stdout | `sage-lsp` is the standalone companion binary |
 | `sage fmt <file>` | Format a file in place | Prints `Formatted: <file>` on success |
 | `sage fmt --check <file>` | Check formatting without rewriting | Exit code `1` when formatting is needed |
@@ -826,6 +848,8 @@ SageMake is the unified build system that auto-detects your platform, GPU, NPU, 
 | ------- | -------------- | ----------------- |
 | `sage --emit-c <input.sage>` | `<input>.c` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--cc <compiler>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --emit-vm <input.sage>` | `<input>.svm` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --sgvm <input.sage>` | `<input>.sgvm` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-llvm <input.sage>` | `<input>.ll` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-llvm <input.sage>` | `<input-without-.sage>` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-asm <input.sage>` | `<input>.s` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
@@ -1158,7 +1182,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v3.5.6
+- **Current Version**: v3.6.5
 - **Spec Version**: 3.0 (see `STABILITY.md` for guarantees)
 
 ## 💾 Project Structure
@@ -1336,6 +1360,8 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 **Recent Milestones:**
 
+- June 8, 2026: v3.6.5: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
+- June 5, 2026: Optimization: Hardened interpreter search path logic (preventing duplicate paths, increased budget to 64) and implemented high-performance native bridging for SageMetal VM (Math, IO, Sys, Regex).
 - May 29, 2026: v3.5.6: Fixed doc comment detachment for `errno.strerror` and updated core metadata.
 - May 25, 2026: v3.5.4: Structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust sandbox security guards.
 - May 20, 2026: v3.5.1: Critical bug fix in `mutex_lock` for bare-metal targets.

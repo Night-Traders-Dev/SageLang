@@ -90,6 +90,41 @@ import os.alloc   # Bump, free-list, and bitmap page allocators
 import os.vfs     # Virtual filesystem abstraction with pluggable backends
 ```
 
+### Boot Infrastructure
+
+```sage
+import os.boot.bios      # BIOS interrupt interface (INT 0x10, 0x13, 0x15, 0x16)
+import os.boot.e820      # BIOS memory map collection and normalization
+import os.boot.disk      # Abstract sector I/O (BIOS, UEFI, direct ATA PIO)
+import os.boot.elf_load  # ELF segment loader for kernel bring-up
+import os.boot.handoff   # SageOS boot info protocol and handoff helpers
+import os.boot.page_tables # Bootstrap PML4/PDPT/PD builder for x86-64
+import os.boot.a20       # A20 gate enabling methods (BIOS, Fast A20, KBD)
+import os.boot.cpuid     # CPU feature detection (Long mode, MSR, SSE)
+import os.boot.fat_boot  # Minimal FAT reader for pre-kernel (no GC)
+import os.boot.uefi_proto # High-level UEFI protocol wrappers (GOP, File)
+import os.boot.bump_alloc # Lightweight pre-kernel heap allocator (no GC)
+import os.boot.long_mode  # Composable x86-64 long mode transition logic
+import os.boot.prot_mode  # x86 32-bit protected mode transition helpers
+import os.boot.config     # Parser for boot.cfg configuration files
+import os.boot.menu       # Text-mode boot selection UI with timeout
+import metal.vga         # Early VGA text-mode display and progress bars
+```
+
+### Architecture-Specific
+
+```sage
+import os.boot.sbi       # RISC-V Supervisor Binary Interface (SBI) wrappers
+import os.boot.psci      # ARM Power State Coordination Interface
+import os.boot.dtb_boot  # DTB-aware boot helpers (memory, chosen node)
+```
+
+### Security
+
+```sage
+import os.boot.verify    # Kernel signature verification and TPM measurement
+```
+
 ### Example: Inspect an ELF kernel
 
 ```sage
@@ -286,9 +321,24 @@ if rsdp_table != nil:
 - `uefi.SMBIOS_TABLE_GUID`
 - `uefi.SMBIOS3_TABLE_GUID`
 
-## Compiler Flags for Bare-Metal and UEFI Output
+## Pure Sage Execution (SageVM Pipeline)
 
-Two dedicated compiler commands produce final linked artifacts without requiring external toolchain steps:
+For rapid prototyping or environments where a full native runtime port is not yet complete, the `SageVM` (`sgvm`) bytecode pipeline offers a stable path to "Pure Sage" execution on bare metal.
+
+Instead of generating native code directly, you can compile `SageLang` logic to bytecode (`.sgvm`) and run it on top of a minimal, freestanding `SageVM` interpreter.
+
+### Workflow:
+
+1. Compile kernel logic to bytecode:
+   ```bash
+   sgvmc kernel.sage kernel.sgvm
+   ```
+2. Execute the kernel bytecode via the freestanding `sgvm` interpreter:
+   ```bash
+   sgvm kernel.sgvm
+   ```
+
+This approach eliminates the dependency on a native C runtime for kernel logic and provides a fast, interpreted environment suitable for OS PoCs.
 
 ```bash
 # Produce a freestanding ELF kernel binary (x86_64 or aarch64)

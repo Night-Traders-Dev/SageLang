@@ -1,0 +1,5 @@
+print type(42)
+print type(3.14)
+print type("hello")
+print type([])
+print type({})

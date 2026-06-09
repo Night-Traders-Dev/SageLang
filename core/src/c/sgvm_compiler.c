@@ -2,6 +2,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <ctype.h>
+
+// Validate a path contains no shell metacharacters (prevents injection via system())
+static int is_safe_path(const char* path) {
+    if (!path) return 1;
+    if (path[0] == '-') return 0;
+    for (const char* p = path; *p; p++) {
+        // Allow alphanumeric and strictly safe filename characters
+        if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
+            *p != '-' && *p != '_' && *p != '~') {
+            return 0;
+        }
+    }
+    return 1;
+}
 
 void write_be16(FILE* f, uint16_t v) {
     fputc((v >> 8) & 0xFF, f);
@@ -52,7 +67,15 @@ int add_const_str(const char* s, int len) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 3) return 1;
+    if (argc < 3) {
+        fprintf(stderr, "Usage: sgvmc <input.sage> <output.sgvm>\n");
+        return 1;
+    }
+
+    if (!is_safe_path(argv[1]) || !is_safe_path(argv[2])) {
+        fprintf(stderr, "Error: path contains unsafe characters.\n");
+        return 1;
+    }
 
     char cmd[1024];
     snprintf(cmd, sizeof(cmd), "./sage --emit-vm %s -o .tmp.svm", argv[1]);
@@ -72,12 +95,12 @@ int main(int argc, char** argv) {
         else if (strncmp(line, "constants ", 10) == 0) {
             int count = atoi(line + 10);
             for (int i = 0; i < count; i++) {
-                fgets(line, sizeof(line), in);
+                if (!fgets(line, sizeof(line), in)) break;
                 if (strncmp(line, "number ", 7) == 0) {
                     local_to_global[current_chunk][i] = add_const_num(atof(line + 7));
                 } else if (strncmp(line, "string ", 7) == 0) {
                     int len = atoi(line + 7);
-                    fgets(line, sizeof(line), in);
+                    if (!fgets(line, sizeof(line), in)) break;
                     char* buf = malloc(len);
                     for (int j = 0; j < len * 2; j += 2) buf[j / 2] = hex_to_byte(line + j);
                     local_to_global[current_chunk][i] = add_const_str(buf, len);
@@ -109,25 +132,38 @@ int main(int argc, char** argv) {
         else if (strncmp(line, "code ", 5) == 0) {
             int len = atoi(line + 5);
             write_be32(out, (uint32_t)len);
-            fgets(line, sizeof(line), in);
+            if (!fgets(line, sizeof(line), in)) break;
             for (int j = 0; j < len * 2; ) {
                 uint8_t op = hex_to_byte(line + j);
                 fputc(op, out);
                 j += 2;
-                // List of opcodes that take 16-bit operand
-                if (op == 0 || op == 5 || op == 6 || op == 7 || op == 8 || op == 9 || op == 10 ||
-                    op == 34 || op == 35 || op == 36 || op == 37 || op == 38 || op == 39 || op == 40 ||
-                    op == 50) {
-                    if (op == 0 || op == 5 || op == 6 || op == 7) {
-                        int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                        int g_idx = local_to_global[current_chunk][local_idx];
-                        fputc((g_idx >> 8) & 0xFF, out);
-                        fputc(g_idx & 0xFF, out);
-                    } else {
-                        fputc(hex_to_byte(line + j), out);
-                        fputc(hex_to_byte(line + j + 2), out);
-                    }
+                // List of opcodes that take operands
+                if (op == 0 || op == 5 || op == 6 || op == 7) {
+                    int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
+                    int g_idx = local_to_global[current_chunk][local_idx];
+                    fputc((g_idx >> 8) & 0xFF, out);
+                    fputc(g_idx & 0xFF, out);
                     j += 4;
+                } else if (op == 8) { // DEFINE_FUNCTION (16-bit name, 16-bit function)
+                    fputc(hex_to_byte(line + j), out);
+                    fputc(hex_to_byte(line + j + 2), out);
+                    fputc(hex_to_byte(line + j + 4), out);
+                    fputc(hex_to_byte(line + j + 6), out);
+                    j += 8;
+                } else if (op == 9 || op == 10 || op == 13 || op == 35 || op == 36 || op == 39 || 
+                           op == 40 || op == 41 || op == 43 || op == 49 || op == 50 || op == 51) {
+                    // 16-bit operand
+                    fputc(hex_to_byte(line + j), out);
+                    fputc(hex_to_byte(line + j + 2), out);
+                    j += 4;
+                } else if (op == 38) { // CALL_METHOD (16-bit name, 8-bit count)
+                    fputc(hex_to_byte(line + j), out);
+                    fputc(hex_to_byte(line + j + 2), out);
+                    fputc(hex_to_byte(line + j + 4), out);
+                    j += 6;
+                } else if (op == 37 || op == 47) { // 8-bit operand
+                    fputc(hex_to_byte(line + j), out);
+                    j += 2;
                 }
             }
         }

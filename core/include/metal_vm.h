@@ -18,6 +18,102 @@ extern "C" {
 #endif
 
 // ============================================================================
+// Bytecode opcodes — matching src/vm/bytecode.h
+// ============================================================================
+
+#define OP_CONSTANT       0
+#define OP_NIL            1
+#define OP_TRUE           2
+#define OP_FALSE          3
+#define OP_POP            4
+#define OP_GET_GLOBAL     5
+#define OP_DEFINE_GLOBAL  6
+#define OP_SET_GLOBAL     7
+#define OP_DEFINE_FN      8
+#define OP_GET_PROPERTY   9
+#define OP_SET_PROPERTY   10
+#define OP_GET_INDEX      11
+#define OP_SET_INDEX      12
+#define OP_LOAD_FUNCTION  13
+#define OP_SLICE          14
+#define OP_ADD            15
+#define OP_SUB            16
+#define OP_MUL            17
+#define OP_DIV            18
+#define OP_MOD            19
+#define OP_NEGATE         20
+#define OP_EQUAL          21
+#define OP_NOT_EQUAL      22
+#define OP_GREATER        23
+#define OP_GREATER_EQUAL  24
+#define OP_LESS           25
+#define OP_LESS_EQUAL     26
+#define OP_BIT_AND        27
+#define OP_BIT_OR         28
+#define OP_BIT_XOR        29
+#define OP_BIT_NOT        30
+#define OP_SHIFT_LEFT     31
+#define OP_SHIFT_RIGHT    32
+#define OP_NOT            33
+#define OP_TRUTHY         34
+#define OP_JUMP           35
+#define OP_JUMP_IF_FALSE  36
+#define OP_CALL           37
+#define OP_CALL_METHOD    38
+#define OP_ARRAY          39
+#define OP_TUPLE          40
+#define OP_DICT           41
+#define OP_PRINT          42
+#define OP_EXEC_AST_STMT  43
+#define OP_RETURN         44
+#define OP_PUSH_ENV       45
+#define OP_POP_ENV        46
+#define OP_DUP            47
+#define OP_ARRAY_LEN      48
+#define OP_BREAK          49
+#define OP_CONTINUE       50
+#define OP_LOOP_BACK      51
+#define OP_IMPORT         52
+#define OP_CLASS          53
+#define OP_METHOD         54
+#define OP_INHERIT        55
+#define OP_SETUP_TRY      56
+#define OP_END_TRY        57
+#define OP_RAISE          58
+
+// GPU hot-path opcodes (Phase 16)
+#define OP_GPU_POLL_EVENTS         59
+#define OP_GPU_WINDOW_SHOULD_CLOSE 60
+#define OP_GPU_GET_TIME            61
+#define OP_GPU_KEY_PRESSED         62
+#define OP_GPU_KEY_DOWN            63
+#define OP_GPU_MOUSE_POS           64
+#define OP_GPU_MOUSE_DELTA         65
+#define OP_GPU_UPDATE_INPUT        66
+#define OP_GPU_BEGIN_COMMANDS      67
+#define OP_GPU_END_COMMANDS        68
+#define OP_GPU_CMD_BEGIN_RP        69
+#define OP_GPU_CMD_END_RP          70
+#define OP_GPU_CMD_DRAW            71
+#define OP_GPU_CMD_BIND_GP         72
+#define OP_GPU_CMD_BIND_DS         73
+#define OP_GPU_CMD_SET_VP          74
+#define OP_GPU_CMD_SET_SC          75
+#define OP_GPU_CMD_BIND_VB         76
+#define OP_GPU_CMD_BIND_IB         77
+#define OP_GPU_CMD_DRAW_IDX        78
+#define OP_GPU_SUBMIT_SYNC         79
+#define OP_GPU_ACQUIRE_IMG         80
+#define OP_GPU_PRESENT             81
+#define OP_GPU_WAIT_FENCE          82
+#define OP_GPU_RESET_FENCE         83
+#define OP_GPU_UPDATE_UNIFORM      84
+#define OP_GPU_CMD_PUSH_CONST      85
+#define OP_GPU_CMD_DISPATCH         86
+
+#define OP_HALT           0xFF
+
+// ============================================================================
 // Configuration — tune for your target's memory constraints
 // ============================================================================
 
@@ -180,9 +276,18 @@ typedef struct {
     unsigned char heap[METAL_HEAP_SIZE];
     int heap_used;
 
+    // Exception handling
+    struct {
+        int ip;
+        int stack_size;
+    } handlers[128];
+    int hsp;
+    MetalValue exception_value;
+
     // Status
     int halted;
     int error;
+    int is_throwing;
     const char* error_msg;
 
     // I/O callbacks (set by the host kernel/bootloader)

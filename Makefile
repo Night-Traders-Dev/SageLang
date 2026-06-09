@@ -13,6 +13,12 @@ CORE := core
 all:
 	@$(MAKE) -C $(CORE)
 
+test-all:
+	@$(MAKE) -C $(CORE) test-all
+
+benchmarks:
+	@$(MAKE) -C $(CORE) benchmarks
+
 # Forward any target that isn't "all"
 %:
 	@$(MAKE) -C $(CORE) $@

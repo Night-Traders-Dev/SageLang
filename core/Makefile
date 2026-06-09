@@ -7,17 +7,18 @@
 # ============================================================================
 
 # Single-source version from VERSION file
-SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "0.0.0")
+SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.6.8")
 
 # CC/CFLAGS/LDFLAGS can be overridden by environment (OIS sets CC=clang on macOS/BSD)
 CC ?= gcc
 PYTHON ?= python3
-CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"' -DSAGE_HAS_LSP -DSAGE_HAS_ML
+PREFIX ?= /usr/local
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"$(PREFIX)/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"' -DSAGE_HAS_LSP -DSAGE_HAS_ML
 # Merge any compiler flags from environment (e.g. Homebrew include paths)
 CFLAGS += $(CFLAGS_EXTRA)
 # Platform-conditional linking: pthread only on desktop (not RP2040)
 ifndef PICO_BUILD
-LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto
+LDFLAGS = -lm -lpthread -ldl
 # Merge env-provided paths (Homebrew, BSD /usr/local/lib, etc.)
 ifneq ($(strip $(LDFLAGS_EXTRA)),)
     LDFLAGS += $(LDFLAGS_EXTRA)
@@ -125,9 +126,7 @@ CORE_SOURCES = \
     $(SRC_DIR)/aot.c \
     $(SRC_DIR)/kotlin_backend.c \
     $(SRC_DIR)/ml_backend.c \
-    $(SRC_DIR)/net.c
-
-
+    $(SRC_DIR)/metal_vm.c
 
 ifeq ($(HAS_GPU_API),yes)
     CORE_SOURCES += $(SRC_DIR)/gpu_api.c
@@ -170,7 +169,8 @@ HEADERS = \
     $(INC_DIR)/value.h \
     $(INC_DIR)/graphics.h \
     $(INC_DIR)/gpu_api.h \
-    $(INC_DIR)/kotlin_backend.h
+    $(INC_DIR)/kotlin_backend.h \
+    $(INC_DIR)/metal_vm.h
 
 # Optional heartbeat header
 ifneq (,$(wildcard $(INC_DIR)/heartbeat.h))
@@ -208,7 +208,7 @@ METAL_VM_OBJECT = $(OBJ_DIR)/metal_vm.o
 # Build Rules
 # ============================================================================
 
-.PHONY: all clean run install uninstall help test examples charts pdf sage-boot sage-bench benchmark benchmark-chart sgvm sgvmc
+.PHONY: all clean run install uninstall help test test-all examples chart charts benchmarks pdf sage-boot sage-bench benchmark benchmark-chart sgvm sgvmc
 
 all: $(TARGET) $(SGVM_TARGET) $(SGVM_COMPILER_TARGET)
 
@@ -295,8 +295,10 @@ debug:
 	$(MAKE) DEBUG=1
 
 # Refresh repository metrics and benchmark charts for the README
+chart: charts
 charts: $(TARGET)
 	@$(PYTHON) $(CHART_SCRIPT)
+	@$(PYTHON) scripts/generate_backend_chart.py
 	@echo "Updated README metric and benchmark chart assets"
 
 # Generate The Sage Programming Language PDF from the book markdown
@@ -389,6 +391,10 @@ install: $(TARGET) $(LSP_TARGET)
 	install -m 644 docs/meta/*.md $(DOCDIR)/
 	@echo "✅ Installation complete"
 	@echo "   Run with: sage <script.sage>"
+	@if [ -n "$$SUDO_USER" ]; then \
+		chown -R $$SUDO_USER ..; \
+		echo "   (Restored workspace ownership to $$SUDO_USER)"; \
+	fi
 
 uninstall:
 	@echo "Uninstalling SageLang..."
@@ -609,6 +615,14 @@ test: $(TARGET)
 
 # (sage-boot defined above in build section)
 
+# Run all test suites: unit, compiler, selfhost, benchmarks
+test-all: $(TARGET)
+	@bash ../testsuite/run_all.sh
+
+# Run benchmark suite specifically
+benchmarks: $(TARGET)
+	@bash ../testsuite/run_all.sh benchmarks
+
 # Run all self-hosted tests
 test-selfhost: $(TARGET)
 	@echo ""
@@ -777,12 +791,6 @@ test-selfhost-llvm-gpu: $(TARGET)
 	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_llvm_gpu.sage
 
 # Run ALL tests (C + self-hosted)
-test-all: test test-selfhost
-	@echo ""
-	@echo "✅ All C and self-hosted tests complete"
-
-# ============================================================================
-# Cleanup
 # ============================================================================
 
 # Kernel-style build configuration (uses kconfiglib)
@@ -1016,17 +1024,18 @@ all-models: $(TARGET) train-c chatbot-llvm sl-tq-chat
 # Show current version
 .PHONY: version
 version:
-	@cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "0.0.0"
+	@cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.6.8"
 
-# Bump version: make bump-version V=3.4.6
-# Updates VERSION in core/ AND root (../VERSION), keeping them in sync.
+# Bump version: make bump-version V=3.6.8
+# Updates VERSION in core/ AND root (../VERSION), and updates all files with the new version string.
 .PHONY: bump-version
 bump-version:
 	@[ -n "$(V)" ] || (echo "Usage: make bump-version V=X.Y.Z"; exit 1)
 	@printf "%s\n" "$(V)" > VERSION
 	@[ -f ../VERSION ] && printf "%s\n" "$(V)" > ../VERSION || true
-	@echo "✅ Version bumped to $(V)"
-	@echo "   Commit: git add VERSION ../VERSION -m \"chore: bump version to $(V)\""
+	@find . -type f \( -name "*.md" -o -name "*.txt" -o -name "*.sage" -o -name "*.sh" -o -name "Makefile" \) -exec sed -i "s/[0-9]\+\.[0-9]\+\.[0-9]\+/$(V)/g" {} +
+	@echo "✅ Version bumped to $(V) across all files"
+	@echo "   Commit: git add . -m \"chore: bump version to $(V)\""
 
 
 .PHONY: all clean clean-all run examples test install uninstall charts \

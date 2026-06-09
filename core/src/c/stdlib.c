@@ -314,6 +314,126 @@ static Value math_isinf_native(int argCount, Value* args) {
     return val_bool(isinf(AS_NUMBER(args[0])));
 }
 
+static Value math_pack64_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_nil();
+    double d = AS_NUMBER(args[0]);
+    union { double d; uint8_t b[8]; } u;
+    u.d = d;
+    Value res = val_array();
+    for (int i = 0; i < 8; i++) array_push(&res, val_number((double)u.b[i]));
+    return res;
+}
+
+static Value math_printm_add_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    double a = AS_NUMBER(args[0]);
+    double b = AS_NUMBER(args[1]);
+    double res = a + b;
+    char sa[64], sb[64], sr[64];
+    sprintf(sa, "%g", a);
+    sprintf(sb, "%g", b);
+    sprintf(sr, "%g", res);
+    int la = (int)strlen(sa), lb = (int)strlen(sb), lr = (int)strlen(sr);
+    int max_l = la > lb ? la : lb;
+    if (lr > max_l) max_l = lr;
+    printf("  %*s\n", max_l, sa);
+    printf("+ %*s\n", max_l, sb);
+    printf("--");
+    for (int i = 0; i < max_l; i++) {
+        putchar('-');
+    }
+    printf("\n");
+    printf("  %*s\n", max_l, sr);
+    return val_number(res);
+}
+
+static Value math_printm_sub_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    double a = AS_NUMBER(args[0]);
+    double b = AS_NUMBER(args[1]);
+    double res = a - b;
+    char sa[64], sb[64], sr[64];
+    sprintf(sa, "%g", a);
+    sprintf(sb, "%g", b);
+    sprintf(sr, "%g", res);
+    int la = (int)strlen(sa), lb = (int)strlen(sb), lr = (int)strlen(sr);
+    int max_l = la > lb ? la : lb;
+    if (lr > max_l) max_l = lr;
+    printf("  %*s\n", max_l, sa);
+    printf("- %*s\n", max_l, sb);
+    printf("--");
+    for (int i = 0; i < max_l; i++) {
+        putchar('-');
+    }
+    printf("\n");
+    printf("  %*s\n", max_l, sr);
+    return val_number(res);
+}
+
+static Value math_printm_mul_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    double a = AS_NUMBER(args[0]);
+    double b = AS_NUMBER(args[1]);
+    double res = a * b;
+    char sa[64], sb[64], sr[64];
+    sprintf(sa, "%g", a);
+    sprintf(sb, "%g", b);
+    sprintf(sr, "%g", res);
+    int la = (int)strlen(sa), lb = (int)strlen(sb), lr = (int)strlen(sr);
+    int max_l = la > lb ? la : lb;
+    if (lr > max_l) max_l = lr;
+    printf("  %*s\n", max_l, sa);
+    printf("x %*s\n", max_l, sb);
+    printf("--");
+    for (int i = 0; i < max_l; i++) {
+        putchar('-');
+    }
+    printf("\n");
+    if (a >= 0 && b >= 0 && a == (long long)a && b == (long long)b && b >= 10) {
+        long long ia = (long long)a;
+        long long ib = (long long)b;
+        int shift = 0;
+        long long temp_b = ib;
+        while (temp_b > 0) {
+            int digit = temp_b % 10;
+            printf("  %*lld", max_l - shift, ia * digit);
+            for (int j = 0; j < shift; j++) putchar(' ');
+            printf("\n");
+            temp_b /= 10;
+            shift++;
+        }
+        printf("--");
+    for (int i = 0; i < max_l; i++) {
+        putchar('-');
+    }
+    printf("\n");
+    }
+    printf("  %*s\n", max_l, sr);
+    return val_number(res);
+}
+
+static Value math_printm_div_native(int argCount, Value* args) {
+    if (argCount < 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
+    double a = AS_NUMBER(args[0]), b = AS_NUMBER(args[1]);
+    if (b == 0) return val_nil();
+    double res = a / b;
+    if (a >= 0 && b > 0 && a == (long long)a && b == (long long)b) {
+        long long ia = (long long)a, ib = (long long)b, ires = (long long)res;
+        printf("    %lld\n", ires);
+        printf("    "); char s_ires[64]; sprintf(s_ires, "%lld", ires);
+        for (int i = 0; i < (int)strlen(s_ires); i++) {
+            putchar('-');
+        }
+        printf("\n");
+        printf("%lld | %lld\n", ib, ia);
+        long long rem = ia % ib;
+        if (rem != 0) printf("    (rem: %lld)\n", rem);
+    } else {
+        printf("  %g / %g = %g\n", a, b, res);
+    }
+    return val_number(res);
+}
+
 Module* create_math_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "_math");
     Environment* e = m->env;
@@ -348,7 +468,16 @@ Module* create_math_module(ModuleCache* cache) {
 
     // Checks
     env_define_const(e, "isnan", 5, val_native(math_isnan_native));
+    
+    // Packing
+    env_define_const(e, "pack64", 6, val_native(math_pack64_native));
     env_define_const(e, "isinf", 5, val_native(math_isinf_native));
+
+    // Printm
+    env_define_const(e, "printm_add", 10, val_native(math_printm_add_native));
+    env_define_const(e, "printm_sub", 10, val_native(math_printm_sub_native));
+    env_define_const(e, "printm_mul", 10, val_native(math_printm_mul_native));
+    env_define_const(e, "printm_div", 10, val_native(math_printm_div_native));
 
     // Constants
     env_define_const(e, "pi", 2, val_number(3.14159265358979323846));
@@ -368,6 +497,10 @@ Module* create_math_module(ModuleCache* cache) {
 // IO MODULE
 // ============================================================================
 
+// Security: Cap entire-file reads to 100MB to prevent memory exhaustion DoS attacks.
+// This affects io.readfile and io.readbytes which allocate the full content at once.
+#define SAGE_MAX_READ_SIZE (100 * 1024 * 1024)
+
 static Value io_readfile_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* path = AS_STRING(args[0]);
@@ -377,7 +510,7 @@ static Value io_readfile_native(int argCount, Value* args) {
 
     fseek(f, 0, SEEK_END);
     long length = ftell(f);
-    if (length < 0) { fclose(f); return val_nil(); }
+    if (length < 0 || length > SAGE_MAX_READ_SIZE) { fclose(f); return val_nil(); }
     fseek(f, 0, SEEK_SET);
 
     char* buf = SAGE_ALLOC((size_t)length + 1);
@@ -505,9 +638,9 @@ static Value io_readbytes_native(int argCount, Value* args) {
     if (!f) return val_nil();
     fseek(f, 0, SEEK_END);
     long length = ftell(f);
-    if (length < 0 || length > 100*1024*1024) { fclose(f); return val_nil(); } // 100MB max
+    if (length < 0 || length > SAGE_MAX_READ_SIZE) { fclose(f); return val_nil(); }
     fseek(f, 0, SEEK_SET);
-    unsigned char* buf = malloc((size_t)length);
+    unsigned char* buf = SAGE_ALLOC((size_t)length);
     size_t read = fread(buf, 1, (size_t)length, f);
     fclose(f);
     // Create array of byte values
@@ -805,6 +938,50 @@ static Value sys_exec_native(int argCount, Value* args) {
     return val_number(result);
 }
 
+static Value sys_shell_exec_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    const char* cmd = AS_STRING(args[0]);
+    
+    char buffer[4096];
+    char* result = NULL;
+    size_t result_len = 0;
+    
+    FILE* fp = popen(cmd, "r");
+    if (!fp) return val_string("");
+    
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        size_t len = strlen(buffer);
+        char* new_result = realloc(result, result_len + len + 1);
+        if (!new_result) { free(result); pclose(fp); return val_nil(); }
+        result = new_result;
+        memcpy(result + result_len, buffer, len);
+        result_len += len;
+        result[result_len] = '\0';
+    }
+    
+    pclose(fp);
+    
+    Value v = val_string(result ? result : "");
+    free(result);
+    return v;
+}
+
+static Value sys_call_native(int argCount, Value* args) {
+    if (argCount < 1) return val_nil();
+    Value callee = args[0];
+    int nargs = argCount - 1;
+    Value* qargs = (argCount > 1) ? &args[1] : NULL;
+    
+    if (callee.type == VAL_NATIVE) {
+        return callee.as.native(nargs, qargs);
+    } else if (callee.type == VAL_CLASS) {
+        InstanceValue* inst = instance_create(callee.as.class_val);
+        return val_instance(inst);
+    }
+    // Note: Calling VAL_FUNCTION/closures from here requires full interpreter context
+    return val_nil();
+}
+
 Module* create_sys_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "sys");
     Environment* e = m->env;
@@ -816,6 +993,8 @@ Module* create_sys_module(ModuleCache* cache) {
     env_define_const(e, "clock", 5, val_native(sys_clock_native));
     env_define_const(e, "sleep", 5, val_native(sys_sleep_native));
     env_define_const(e, "exec", 4, val_native(sys_exec_native));
+    env_define_const(e, "shell_exec", 10, val_native(sys_shell_exec_native));
+    env_define_const(e, "call", 4, val_native(sys_call_native));
 
     // Constants
     env_define_const(e, "version", 7, val_string(SAGE_VERSION_STR));

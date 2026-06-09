@@ -41,7 +41,7 @@ require_sudo  = auto
 # system = auto    ← auto-detected from: Makefile, CMakeLists.txt, Cargo.toml…
 # system = make | cmake | meson | cargo | go | dotnet | python
 # binary_out = myapp    ← output binary name if different from binary=
-# custom = ./scripts/build.sh   ← override everything with a custom command
+# custom = ./sagemake   ← override everything with a custom command
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 # name.package_manager = package-name

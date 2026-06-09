@@ -734,6 +734,7 @@ InstanceValue* instance_create(ClassValue* class_def) {
 
     Value fields_dict = val_dict();
     instance->fields = fields_dict.as.dict;
+    dict_set(&fields_dict, "__class__", val_string(class_def->name));
     gc_unpin();
 
     return instance;
@@ -889,17 +890,17 @@ void print_value(Value v) {
         }
 
         case VAL_POINTER:
-            printf("<pointer %p>", v.as.pointer->ptr);
+            printf("<pointer>");
             break;
         case VAL_VM_PROGRAM:
-            printf("<program %p>", (void*)v.as.program);
+            printf("<program>");
             break;
         case VAL_THREAD:
-            printf("<thread %p>", v.as.thread->handle);
+            printf("<thread>");
             break;
 
         case VAL_MUTEX: {
-            printf("<mutex %p>", v.as.mutex->handle);
+            printf("<mutex>");
             break;
         }
 

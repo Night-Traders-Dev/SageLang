@@ -11,6 +11,7 @@ This document sketches a bytecode execution backend for SageLang that can live b
 - Share the same runtime objects where possible: `Value`, `Env`, GC, modules, native functions.
 - Make runtime selection explicit from the CLI so engine integrations can choose the backend at startup.
 - Roll out incrementally without breaking the existing AST path.
+- **Enable rapid bare-metal OS prototyping** by allowing high-level `SageLang` code to run on a freestanding bytecode interpreter.
 
 ## Why A Stack VM Fits SageLang
 

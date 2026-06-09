@@ -6,33 +6,32 @@ The Sage Virtual Machine (SGVM) is the portable execution substrate for SageLang
 ## 2. Compilation & Execution Pipeline
 SageLang source code follows this path to become a portable SGVM artifact:
 1. **Source**: Human-readable `.sage` files.
-2. **Compiler Frontend**: `sage --emit-vm` parses source into a text-based bytecode format (`.svm`).
-3. **Artifact Compilation**: `sgvmc` converts `.svm` into a compact, binary `.sgvm` file.
-4. **Verification**: `sgvm` performs mandatory security and safety checks on the binary before execution.
-5. **Runtime Execution**: Execution by the `MetalVM` engine.
+2. **Compiler Frontend**: `sage --sgvm` parses source directly into a binary `.sgvm` artifact. (Alternatively, `sage --emit-vm` emits text-based `.svm`).
+3. **Verification**: `sage` (or `sgvm`) performs mandatory security and safety checks on the binary before execution.
+4. **Runtime Execution**: Execution by the `MetalVM` engine integrated into `sage`.
 
-## 3. Binary Format Specification (.sgvm)
-The `.sgvm` format is a compact, big-endian binary representation optimized for fast loading and low memory footprint.
+## 3. Binary Format Specification (.sgvm 2.0)
+The `.sgvm` 2.0 format is a compact representation optimized for fast loading and low memory footprint. It uses little-endian for header fields and big-endian for bytecode operands.
 
 | Section | Size | Description |
 | :--- | :--- | :--- |
 | **Magic** | 4 bytes | Literal string `SGVM` |
-| **Version** | 1 byte | Currently `0x01` |
-| **Flags** | 1 byte | Bitmask for features (e.g., debug info, optimization) |
-| **Constant Count** | 2 bytes | Number of global constants (big-endian) |
-| **Constants** | Variable | Typed global constant pool (see below) |
-| **Chunk Count** | 4 bytes | Number of bytecode chunks (big-endian) |
-| **Chunks** | Variable | Sequential bytecode segments |
+| **Version** | 1 byte | Currently `0x02` |
+| **Constants** | Variable | Global constant pool (LE count + entries) |
+| **Main Code** | Variable | System entry point (LE length + bytecode) |
+| **Functions** | Variable | Function table (LE count + entries) |
 
 ### 3.1 Constants
-Each constant in the pool starts with a type byte:
+The constant pool starts with a 2-byte count (LE). Each constant starts with a type byte:
 - `0x01` (**MV_NUM**): 8 bytes (IEEE 754 double).
-- `0x03` (**MV_STR**): 2 bytes length (big-endian) + UTF-8 bytes.
+- `0x03` (**MV_STR**): 2 bytes length (LE) + UTF-8 bytes.
 
-### 3.2 Chunks
-Each chunk consists of:
-- **Length**: 4 bytes (big-endian).
-- **Bytecode**: Sequential 1-byte opcodes and operands.
+### 3.2 Functions
+The function pool starts with a 2-byte count (LE). Each function consists of:
+- **Param Count**: 2 bytes (LE).
+- **Param Hashes**: 4 bytes (LE) per parameter (FNV-1a).
+- **Constants**: Sub-pool for function-local constants.
+- **Code**: 4-byte length (LE) + raw bytecode.
 
 ## 4. Bytecode Verification
 Before execution, SGVM artifacts MUST pass a verification pass that ensures:
@@ -50,19 +49,23 @@ SGVM supports multiple execution strategies within `MetalVM`:
 ## 6. Toolchain Usage
 
 ### 6.1 Compiling to SGVM
-Use `sgvmc` to compile Sage source into a binary SGVM artifact. This tool is available both as a C binary and a pure Sage tool.
+Use `sage --sgvm` to compile Sage source into a binary SGVM artifact.
+```bash
+./core/sage --sgvm script.sage -o artifact.sgvm
+```
+Alternatively, you can use the standalone `sgvmc` tool:
 ```bash
 ./core/sgvmc script.sage artifact.sgvm
-# OR via self-hosted Sage
-./sage core/src/sage/sgvmc.sage script.sage artifact.sgvm
 ```
 
 ### 6.2 Running SGVM
-Use `sgvm` to execute a compiled artifact. It will verify the file before starting execution.
+Use the `sage` command directly to execute a compiled artifact. It will verify the file before starting execution.
+```bash
+./core/sage artifact.sgvm
+```
+Or use the standalone `sgvm` engine:
 ```bash
 ./core/sgvm artifact.sgvm
-# OR via self-hosted Sage
-./sage core/src/sage/sgvm.sage artifact.sgvm
 ```
 
 ## 7. MetalVM C API (`metal_vm.h`)

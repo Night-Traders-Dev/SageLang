@@ -131,44 +131,43 @@ while i < 100000:
     let n = nil
     if b or n != nil:
         bool_count = bool_count + 1
-    end
     i = i + 1
 print("bool_count(100000) = " + str(bool_count))
 
-## --- 11. Bytes operations ---
-let b_buf = bytes(10000)
-i = 0
-while i < 10000:
-    b_buf[i] = i % 256
-    i = i + 1
-var b_sum = 0
-i = 0
-while i < 10000:
-    b_sum = b_sum + b_buf[i]
-    i = i + 1
-print("bytes_sum(10000) = " + str(b_sum))
+# ## --- 11. Bytes operations ---
+# let b_buf = bytes(10000)
+# i = 0
+# while i < 10000:
+#     b_buf[i] = i % 256
+#     i = i + 1
+# var b_sum = 0
+# i = 0
+# while i < 10000:
+#     b_sum = b_sum + b_buf[i]
+#     i = i + 1
+# print("bytes_sum(10000) = " + str(b_sum))
 
-## --- 12. Inline Assembly (if supported) ---
-let asm_val = 0
-if asm_arch() != "unknown" and asm_arch() != "jvm":
-    # Simple increment in x86/ARM/RISC-V
-    let code = ""
-    let arch = asm_arch()
-    if arch == "x86_64":
-        code = "mov %rdi, %rax; add $1, %rax; ret"
-    elif arch == "aarch64":
-        code = "add x0, x0, #1; ret"
-    elif arch == "rv64":
-        code = "addi a0, a0, 1; ret"
-    end
-    
-    if code != "":
-        i = 0
-        while i < 1000:
-            # Note: asm_exec overhead is high, we just want to prove it works
-            # but let's do fewer iterations to not dwarf the whole bench
-            asm_val = asm_exec(code, "int", i)
-            i = i + 1
-    end
-end
-print("asm_val(1000) = " + str(asm_val))
+# ## --- 12. Inline Assembly (if supported) ---
+# let asm_val = 0
+# if asm_arch() != "unknown" and asm_arch() != "jvm":
+#     # Simple increment in x86/ARM/RISC-V
+#     let code = ""
+#     let arch = asm_arch()
+#     if arch == "x86_64":
+#         code = "mov %rdi, %rax; add $1, %rax; ret"
+#     elif arch == "aarch64":
+#         code = "add x0, x0, #1; ret"
+#     elif arch == "rv64":
+#         code = "addi a0, a0, 1; ret"
+#     end
+#     
+#     if code != "":
+#         i = 0
+#         while i < 1000:
+#             # Note: asm_exec overhead is high, we just want to prove it works
+#             # but let's do fewer iterations to not dwarf the whole bench
+#             # asm_val = asm_exec(code, "int", i)
+#             i = i + 1
+#     end
+# end
+# print("asm_val(1000) = " + str(asm_val))

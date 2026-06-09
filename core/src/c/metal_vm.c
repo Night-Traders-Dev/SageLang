@@ -13,53 +13,6 @@ extern void* memcpy(void* dest, const void* src, unsigned long n);
 extern unsigned long strlen(const char* s);
 extern int strcmp(const char* s1, const char* s2);
 
-// Bytecode opcodes — subset matching src/vm/bytecode.h
-#define OP_CONSTANT       0
-#define OP_NIL            1
-#define OP_TRUE           2
-#define OP_FALSE          3
-#define OP_POP            4
-#define OP_GET_GLOBAL     5
-#define OP_DEFINE_GLOBAL  6
-#define OP_SET_GLOBAL     7
-#define OP_GET_INDEX      11
-#define OP_SET_INDEX      12
-#define OP_ADD            14
-#define OP_SUB            15
-#define OP_MUL            16
-#define OP_DIV            17
-#define OP_MOD            18
-#define OP_NEGATE         19
-#define OP_EQUAL          20
-#define OP_NOT_EQUAL      21
-#define OP_GREATER        22
-#define OP_GREATER_EQ     23
-#define OP_LESS           24
-#define OP_LESS_EQ        25
-#define OP_BIT_AND        26
-#define OP_BIT_OR         27
-#define OP_BIT_XOR        28
-#define OP_BIT_NOT        29
-#define OP_SHIFT_LEFT     30
-#define OP_SHIFT_RIGHT    31
-#define OP_NOT            32
-#define OP_TRUTHY         33
-#define OP_JUMP           34
-#define OP_JUMP_IF_FALSE  35
-#define OP_CALL           36
-#define OP_ARRAY          38
-#define OP_PRINT          41
-#define OP_RETURN         43
-#define OP_PUSH_ENV       44
-#define OP_POP_ENV        45
-#define OP_DUP            46
-#define OP_ARRAY_LEN      47
-#define OP_BREAK          48
-#define OP_CONTINUE       49
-#define OP_LOOP_BACK      50
-#define OP_DEFINE_FN      8
-#define OP_HALT           0xFF
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -231,12 +184,26 @@ int metal_vm_verify(MetalVM* vm) {
                     break;
                 }
                 case OP_JUMP:
-                case OP_JUMP_IF_FALSE:
-                case OP_CALL: {
+                case OP_JUMP_IF_FALSE: {
                     if (ip + 2 > code_length) return -1;
                     int target = (code[ip] << 8) | code[ip + 1];
                     if (target >= code_length) return -3;
                     ip += 2;
+                    break;
+                }
+                case OP_CALL: {
+                    if (ip + 1 > code_length) return -1;
+                    ip += 1;
+                    break;
+                }
+                case OP_ARRAY: {
+                    if (ip + 2 > code_length) return -1;
+                    ip += 2;
+                    break;
+                }
+                case OP_DEFINE_FN: {
+                    if (ip + 4 > code_length) return -1;
+                    ip += 4;
                     break;
                 }
                 case OP_LOOP_BACK: {
@@ -244,11 +211,6 @@ int metal_vm_verify(MetalVM* vm) {
                     int offset = (code[ip] << 8) | code[ip + 1];
                     if (ip + 2 - offset < 0) return -3;
                     ip += 2;
-                    break;
-                }
-                case OP_ARRAY: {
-                    if (ip + 1 > code_length) return -1;
-                    ip++;
                     break;
                 }
                 case OP_HALT:
@@ -265,9 +227,9 @@ int metal_vm_verify(MetalVM* vm) {
                 case OP_EQUAL:
                 case OP_NOT_EQUAL:
                 case OP_GREATER:
-                case OP_GREATER_EQ:
+                case OP_GREATER_EQUAL:
                 case OP_LESS:
-                case OP_LESS_EQ:
+                case OP_LESS_EQUAL:
                 case OP_BIT_AND:
                 case OP_BIT_OR:
                 case OP_BIT_XOR:
@@ -299,6 +261,45 @@ int metal_vm_add_constant(MetalVM* vm, MetalValue value) {
     if (vm->const_count >= METAL_CONST_POOL) return -1;
     vm->constants[vm->const_count] = value;
     return vm->const_count++;
+}
+
+// ============================================================================
+// Dict Pool
+// ============================================================================
+
+int metal_dict_new(MetalVM* vm) {
+    if (vm->dict_count >= (int)(sizeof(vm->dicts) / sizeof(vm->dicts[0]))) return -1;
+    int idx = vm->dict_count++;
+    vm->dicts[idx].count = 0;
+    vm->dicts[idx].in_use = 1;
+    return idx;
+}
+
+void metal_dict_set(MetalVM* vm, int dict_idx, int key_str_idx, MetalValue val) {
+    if (dict_idx < 0 || dict_idx >= vm->dict_count) return;
+    MetalDict* d = &vm->dicts[dict_idx];
+    // Update existing
+    for (int i = 0; i < d->count; i++) {
+        if (d->key_str_idx[i] == key_str_idx) {
+            d->values[i] = val;
+            return;
+        }
+    }
+    // Add new
+    if (d->count < METAL_DICT_MAX_ENTRIES) {
+        d->key_str_idx[d->count] = key_str_idx;
+        d->values[d->count] = val;
+        d->count++;
+    }
+}
+
+MetalValue metal_dict_get(MetalVM* vm, int dict_idx, int key_str_idx) {
+    if (dict_idx < 0 || dict_idx >= vm->dict_count) return mv_nil();
+    MetalDict* d = &vm->dicts[dict_idx];
+    for (int i = 0; i < d->count; i++) {
+        if (d->key_str_idx[i] == key_str_idx) return d->values[i];
+    }
+    return mv_nil();
 }
 
 // ============================================================================
@@ -607,7 +608,7 @@ int metal_vm_step(MetalVM* vm) {
             metal_vm_push(vm, mv_bool(a.as.number > b.as.number));
             break;
         }
-        case OP_GREATER_EQ: {
+        case OP_GREATER_EQUAL: {
             MetalValue b = metal_vm_pop(vm), a = metal_vm_pop(vm);
             metal_vm_push(vm, mv_bool(a.as.number >= b.as.number));
             break;
@@ -617,7 +618,7 @@ int metal_vm_step(MetalVM* vm) {
             metal_vm_push(vm, mv_bool(a.as.number < b.as.number));
             break;
         }
-        case OP_LESS_EQ: {
+        case OP_LESS_EQUAL: {
             MetalValue b = metal_vm_pop(vm), a = metal_vm_pop(vm);
             metal_vm_push(vm, mv_bool(a.as.number <= b.as.number));
             break;
@@ -694,19 +695,11 @@ int metal_vm_step(MetalVM* vm) {
             if (vm->scope_depth > 0) vm->scope_depth--;
             break;
 
-        // I/O
-        case OP_PRINT: {
-            MetalValue val = metal_vm_pop(vm);
-            metal_print_value(vm, val);
-            if (vm->write_char) vm->write_char('\n');
-            break;
-        }
-
-        // Arrays
-        case OP_ARRAY: {
+        // Arrays & Tuples
+        case OP_ARRAY:
+        case OP_TUPLE: {
             int count = read_u16(vm->code, &vm->ip);
             int arr = metal_array_new(vm);
-            // Elements are on stack in reverse order
             if (vm->sp >= count) {
                 for (int i = count - 1; i >= 0; i--) {
                     MetalValue elem = vm->stack[vm->sp - count + i];
@@ -719,15 +712,196 @@ int metal_vm_step(MetalVM* vm) {
             break;
         }
 
-        case OP_DEFINE_FN: {
-            int fn_idx = read_u16(vm->code, &vm->ip);
-            // Function definition handled by loader/compiler for now
-            // In MetalVM, we just skip it or store it
+        case OP_DICT: {
+            int count = read_u16(vm->code, &vm->ip);
+            int dict = metal_dict_new(vm);
+            if (vm->sp >= count * 2) {
+                for (int i = 0; i < count; i++) {
+                    MetalValue val = metal_vm_pop(vm);
+                    MetalValue key = metal_vm_pop(vm);
+                    if (key.type == MV_STR) {
+                        metal_dict_set(vm, dict, key.as.str_idx, val);
+                    }
+                }
+            }
+            MetalValue v; v.type = MV_DICT; v.as.dict_idx = dict;
+            metal_vm_push(vm, v);
             break;
         }
 
+        case OP_SLICE: {
+            MetalValue end = metal_vm_pop(vm);
+            MetalValue start = metal_vm_pop(vm);
+            MetalValue obj = metal_vm_pop(vm);
+            (void)end; (void)start; (void)obj;
+            // Bare-metal slice: return nil for now or implement array subset
+            metal_vm_push(vm, mv_nil());
+            break;
+        }
+
+        case OP_DEFINE_FN: {
+            int name_idx = read_u16(vm->code, &vm->ip);
+            int fn_idx = read_u16(vm->code, &vm->ip);
+            (void)name_idx; (void)fn_idx;
+            // Function definition handled by loader/compiler for now
+            break;
+        }
+
+        // OOP
+        case OP_CLASS: {
+            int name_idx = read_u16(vm->code, &vm->ip);
+            (void)name_idx;
+            int dict = metal_dict_new(vm);
+            MetalValue v; v.type = MV_DICT; v.as.dict_idx = dict;
+            // Mark as class if needed
+            metal_vm_push(vm, v);
+            break;
+        }
+
+        case OP_METHOD: {
+            int name_idx = read_u16(vm->code, &vm->ip);
+            MetalValue fn = metal_vm_pop(vm);
+            MetalValue cls = metal_vm_peek(vm, 0);
+            if (cls.type == MV_DICT) {
+                metal_dict_set(vm, cls.as.dict_idx, vm->constants[name_idx].as.str_idx, fn);
+            }
+            break;
+        }
+
+        case OP_INHERIT: {
+            MetalValue cls = metal_vm_pop(vm);
+            MetalValue parent = metal_vm_pop(vm);
+            if (cls.type == MV_DICT && parent.type == MV_DICT) {
+                MetalDict* pd = &vm->dicts[parent.as.dict_idx];
+                for (int i = 0; i < pd->count; i++) {
+                    metal_dict_set(vm, cls.as.dict_idx, pd->key_str_idx[i], pd->values[i]);
+                }
+            }
+            metal_vm_push(vm, cls);
+            break;
+        }
+
+        case OP_GET_PROPERTY: {
+            int name_idx = read_u16(vm->code, &vm->ip);
+            MetalValue obj = metal_vm_pop(vm);
+            if (obj.type == MV_DICT) {
+                metal_vm_push(vm, metal_dict_get(vm, obj.as.dict_idx, vm->constants[name_idx].as.str_idx));
+            } else {
+                metal_vm_push(vm, mv_nil());
+            }
+            break;
+        }
+
+        case OP_SET_PROPERTY: {
+            int name_idx = read_u16(vm->code, &vm->ip);
+            MetalValue val = metal_vm_pop(vm);
+            MetalValue obj = metal_vm_pop(vm);
+            if (obj.type == MV_DICT) {
+                metal_dict_set(vm, obj.as.dict_idx, vm->constants[name_idx].as.str_idx, val);
+            }
+            metal_vm_push(vm, val);
+            break;
+        }
+
+        case OP_CALL_METHOD: {
+            int name_idx = read_u16(vm->code, &vm->ip);
+            int argc = read_u8(vm->code, &vm->ip);
+            (void)argc;
+            MetalValue obj = metal_vm_peek(vm, argc); // Obj is below args
+            if (obj.type == MV_DICT) {
+                MetalValue fn = metal_dict_get(vm, obj.as.dict_idx, vm->constants[name_idx].as.str_idx);
+                // Call fn...
+                if (fn.type == MV_FN) {
+                   // ... similar to OP_CALL but push 'self' ...
+                }
+            }
+            break;
+        }
+
+        // Exceptions
+        case OP_SETUP_TRY: {
+            int handler = read_u16(vm->code, &vm->ip);
+            if (vm->hsp < 128) {
+                vm->handlers[vm->hsp].ip = handler;
+                vm->handlers[vm->hsp].stack_size = vm->sp;
+                vm->hsp++;
+            }
+            break;
+        }
+
+        case OP_END_TRY:
+            if (vm->hsp > 0) vm->hsp--;
+            break;
+
+        case OP_RAISE: {
+            MetalValue val = metal_vm_pop(vm);
+            vm->exception_value = val;
+            vm->is_throwing = 1;
+            if (vm->hsp > 0) {
+                vm->hsp--;
+                vm->ip = vm->handlers[vm->hsp].ip;
+                vm->sp = vm->handlers[vm->hsp].stack_size;
+                metal_vm_push(vm, vm->exception_value);
+                vm->is_throwing = 0;
+            } else {
+                vm->error = 1;
+                vm->error_msg = "Unhandled exception";
+                return 0;
+            }
+            break;
+        }
+
+        case OP_IMPORT: {
+            int name_idx = read_u16(vm->code, &vm->ip);
+            (void)name_idx;
+            // Native bridge should handle dynamic loading
+            metal_vm_push(vm, mv_nil());
+            break;
+        }
+
+        case OP_EXEC_AST_STMT: {
+            int idx = read_u16(vm->code, &vm->ip);
+            (void)idx;
+            // Bridged to host AST interpreter
+            metal_vm_push(vm, mv_nil());
+            break;
+        }
+
+        // GPU Opcodes (Stubbed/Bridged)
+        case OP_GPU_POLL_EVENTS:
+        case OP_GPU_WINDOW_SHOULD_CLOSE:
+        case OP_GPU_GET_TIME:
+        case OP_GPU_KEY_PRESSED:
+        case OP_GPU_KEY_DOWN:
+        case OP_GPU_MOUSE_POS:
+        case OP_GPU_MOUSE_DELTA:
+        case OP_GPU_UPDATE_INPUT:
+        case OP_GPU_BEGIN_COMMANDS:
+        case OP_GPU_END_COMMANDS:
+        case OP_GPU_CMD_BEGIN_RP:
+        case OP_GPU_CMD_END_RP:
+        case OP_GPU_CMD_DRAW:
+        case OP_GPU_CMD_BIND_GP:
+        case OP_GPU_CMD_BIND_DS:
+        case OP_GPU_CMD_SET_VP:
+        case OP_GPU_CMD_SET_SC:
+        case OP_GPU_CMD_BIND_VB:
+        case OP_GPU_CMD_BIND_IB:
+        case OP_GPU_CMD_DRAW_IDX:
+        case OP_GPU_SUBMIT_SYNC:
+        case OP_GPU_ACQUIRE_IMG:
+        case OP_GPU_PRESENT:
+        case OP_GPU_WAIT_FENCE:
+        case OP_GPU_RESET_FENCE:
+        case OP_GPU_UPDATE_UNIFORM:
+        case OP_GPU_CMD_PUSH_CONST:
+        case OP_GPU_CMD_DISPATCH:
+            // GPU opcodes require host implementation (sgpu_*)
+            break;
+
         case OP_CALL: {
-            int arg_count = read_u16(vm->code, &vm->ip);
+            int arg_count = read_u8(vm->code, &vm->ip);
+            (void)arg_count;
             MetalValue fn = metal_vm_pop(vm);
             if (fn.type == MV_FN) {
                 if (vm->csp < METAL_CALL_STACK_SIZE) {

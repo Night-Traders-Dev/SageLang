@@ -742,6 +742,8 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_array_pop(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_array_extend(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_array_reverse(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_array_contains(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_array_index_of(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_index(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_is_truthy(%%SageValue)\n");
     ll_emit(lc, "declare i32 @sage_rt_get_bool(%%SageValue)\n");
@@ -773,6 +775,9 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_input(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_readfile(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_writefile(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_readbytes(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_writebytes(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_exists(%%SageValue)\n");
     // ML native runtime
     ll_emit(lc, "declare %%SageValue @sage_rt_load_weights(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_forward_pass(%%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
@@ -1343,7 +1348,7 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
     switch (expr->type) {
         case EXPR_NUMBER: {
             int r = llc_new_reg(lc);
-            ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %e)", r, expr->as.number.value);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %.17e)", r, expr->as.number.value);
             return r;
         }
         case EXPR_STRING: {
@@ -1434,7 +1439,7 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 int r = llc_new_reg(lc);
                 switch (imported->value.type) {
                     case IMPORT_CONST_NUMBER:
-                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %e)",
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %.17e)",
                                 r, imported->value.number_value);
                         break;
                     case IMPORT_CONST_BOOL:
@@ -1573,6 +1578,15 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                         handled = 1;
                     } else if (strcmp(method_name, "writefile") == 0 && expr->as.call.arg_count == 2) {
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_writefile(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                        handled = 1;
+                    } else if (strcmp(method_name, "readbytes") == 0 && expr->as.call.arg_count == 1) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_readbytes(%%SageValue %%%d)", r, arg_regs[0]);
+                        handled = 1;
+                    } else if (strcmp(method_name, "writebytes") == 0 && expr->as.call.arg_count == 2) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_writebytes(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                        handled = 1;
+                    } else if (strcmp(method_name, "exists") == 0 && expr->as.call.arg_count == 1) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_exists(%%SageValue %%%d)", r, arg_regs[0]);
                         handled = 1;
                     }
                 }
@@ -1728,7 +1742,7 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                     double const_val;
                     if (llvm_resolve_gpu_constant(prop_name, &const_val)) {
                         int r = llc_new_reg(lc);
-                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %e)", r, const_val);
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %.17e)", r, const_val);
                         free(mod_name);
                         free(prop_name);
                         return r;

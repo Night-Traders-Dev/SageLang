@@ -8,7 +8,7 @@ class RPCServer:
     proc init(blockchain, port):
         self.blockchain = blockchain
         self.port = port
-        self.server = server.create_server("0.0.0.0", port)
+        self.server = server.create_server("3.6.8.0", port)
         server.post_route(self.server["router"], "/rpc", self.handle_rpc)
 
     proc start():

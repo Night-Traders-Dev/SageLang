@@ -65,6 +65,7 @@ core/
 - **Interpreter** — default; runs .sage directly
 - **Bytecode VM** — `--runtime bytecode`
 - **C backend** — `--compile file.sage -o out` (via GCC)
+- **SGVM backend** — `--sgvm file.sage -o out.sgvm` (binary bytecode)
 - **LLVM backend** — `--compile-llvm file.sage -o out` (requires clang)
 - **Native ASM** — `--emit-asm file.sage -o out.s`
 - **Kotlin** — `--compile-kotlin`

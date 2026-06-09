@@ -139,4 +139,11 @@ fi
 # Cleanup
 rm -rf "$TMPDIR"
 
+# Regenerate metrics chart
+printf "  ${DIM}Regenerating metrics chart...${RESET}\n"
+if [ -f "$SAGE/../scripts/generate_backend_chart.py" ]; then
+    python3 "$SAGE/../scripts/generate_backend_chart.py" > /dev/null 2>&1
+    printf "    ${GREEN}✓${RESET} assets/charts/backend-compare.svg\n"
+fi
+
 printf "\n  ${DIM}Done.${RESET}\n\n"

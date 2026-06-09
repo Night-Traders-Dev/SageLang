@@ -3,6 +3,16 @@ class _Io:
         return io_readfile(p)
     proc writefile(p, c):
         return io_writefile(p, c)
+    proc writebytes(p, b):
+        return io_writebytes(p, b)
+    proc readbytes(p):
+        return io_readbytes(p)
     proc exists(p):
         return io_exists(p)
+    proc remove(p):
+        return io_remove(p)
+    proc isdir(p):
+        return io_isdir(p)
+    proc mkdir(p):
+        return io_mkdir(p)
 let io = _Io()

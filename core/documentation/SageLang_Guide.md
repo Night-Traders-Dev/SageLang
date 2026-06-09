@@ -11,7 +11,7 @@ toc: true
 
 ## Executive Summary
 
-**SageLang** is a **Python-inspired, systems-oriented programming language** written in C. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports ten execution backends (C, LLVM IR, native assembly, bytecode VM, SageMetal VM, JIT, AOT, Kotlin/Android) and a self-hosted interpreter written in Sage itself. As of v3.5.4, Sage features structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust tab/whitespace token checks in sandbox security guards. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
+**SageLang** is a **Python-inspired, systems-oriented programming language** written in C. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports ten execution backends (C, LLVM IR, native assembly, bytecode VM, SageMetal VM, JIT, AOT, Kotlin/Android) and a self-hosted interpreter written in Sage itself. As of v3.6.8, Sage features structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust tab/whitespace token checks in sandbox security guards. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
 
 ---
 
@@ -59,13 +59,15 @@ SageLang uses a shared front-end with multiple execution backends:
 3. **AST** → one of five backends:
    - **AST interpreter** (tree-walking, default)
    - **Bytecode compiler + VM** (stack-based, faster for hot loops)
+   - **SGVM binary** (`--sgvm`, binary bytecode artifact)
    - **C codegen** (`--emit-c` / `--compile`)
    - **LLVM IR** (`--emit-llvm` / `--compile-llvm`, with GPU support)
    - **Native assembly** (`--emit-asm` / `--compile-native`, x86-64/aarch64/rv64)
    - **Freestanding ELF** (`--compile-bare`, bare-metal kernel output)
    - **UEFI PE** (`--compile-uefi`, EFI application output)
    - **SageMetal VM** (`make metal-vm`, freestanding bytecode object)
-4. **Runtime Values** stored in the shared **heap** managed by **GC**
+4. **Runtime Execution**: Execution by the `MetalVM` engine integrated into `sage` or via standalone `sgvm` tool.
+5. **Runtime Values** stored in the shared **heap** managed by **GC**
 
 All execution modes share the same object model: a **global environment**, nested **child environments** for scopes, and **tagged `Value` objects** that are either immediate (numbers, bools) or GC-managed heap values (arrays, dicts, strings, classes, instances, functions, generators).
 
@@ -1428,7 +1430,7 @@ cmake --build build_pico
 
 Desktop builds require `libcurl` and OpenSSL development headers/libraries in addition to a C compiler, `make`, and/or `cmake`.
 
-#### 6.1.1 Build Parameter Reference
+#### 3.6.8 Build Parameter Reference
 
 **Make Variables**:
 
@@ -1461,7 +1463,7 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 
 `src/c/main.c` initializes the garbage collector, registers raw `argv` for the `sys` module, initializes the module cache, and then dispatches one of the top-level modes below.
 
-#### 6.2.1 `sage` CLI Parameter Reference
+#### 3.6.8 `sage` CLI Parameter Reference
 
 | Command | Meaning | Notes |
 | ------- | ------- | ----- |
@@ -1470,6 +1472,7 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | `sage --help` | Print usage text | Covers compiler, tooling, and REPL entry points |
 | `sage -c "source"` | Execute a source string | No file is loaded |
 | `sage <file.sage> [arg ...]` | Execute a Sage file | Additional CLI arguments are visible through `sys.args()` |
+| `sage <file.sgvm>` | Execute an SGVM binary | Runs via integrated MetalVM engine |
 | `sage --lsp` | Start the LSP server on stdin/stdout | `sage-lsp` is the standalone wrapper binary |
 | `sage fmt <file>` | Format a file in place | Prints `Formatted: <file>` on success |
 | `sage fmt --check <file>` | Check formatting without rewriting | Exit code `1` when changes are needed |
@@ -1477,7 +1480,8 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 
 | Compiler Command | Default Output | Options |
 | ---------------- | -------------- | ------- |
-| `sage --emit-c <input.sage>` | `<input>.c` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --emit-vm <input.sage>` | `<input>.svm` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --sgvm <input.sage>` | `<input>.sgvm` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--cc <compiler>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-llvm <input.sage>` | `<input>.ll` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-llvm <input.sage>` | `<input-without-.sage>` | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
@@ -1495,6 +1499,7 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | `--target <arch[-profile]>` | `--emit-asm`, `--compile-native` | Base targets: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64`; profile suffixes: `-baremetal`, `-osdev`, `-uefi` |
 | `-O0` / `-O1` / `-O2` / `-O3` | C, LLVM, and native codegen commands | Selects the optimization pass level |
 | `-g` | C, LLVM, asm, and native codegen commands | Enables debug information in generated output |
+| `--math-work=MODES` | All runtime modes | Comma-separated list of default math visualization formats: `grade`, `exec`, `bitwise` |
 | `--board <name>` | `--compile-pico` | Pico board name; defaults to `pico` |
 | `--name <program>` | `--compile-pico` | Overrides the generated program name derived from the input file |
 | `--sdk <path>` | `--compile-pico` | Pico SDK path; falls back to `PICO_SDK_PATH` |
@@ -1606,7 +1611,7 @@ The practical result is that `bytecode` mode is already useful for long-running 
 - Generational GC (mark only young objects frequently).
 - JIT compilation for hot paths.
 
-### 7.2.1 Current Recipe Benchmark
+### 3.6.8 Current Recipe Benchmark
 
 The repository now includes a five-recipe benchmark:
 
@@ -1640,7 +1645,7 @@ Interpretation:
 - `sage-compiled-c` has the lowest execution-only runtime on the default workload, but its total wall time includes code generation and host compilation.
 - The total-time chart answers "time to result"; the execution-only chart answers "steady-state runtime after the binary already exists."
 
-### 7.2.2 Sage vs Python 3 Benchmarks
+### 3.6.8 Sage vs Python 3 Benchmarks
 
 A separate benchmark suite compares all Sage execution paths against CPython 3.x:
 
@@ -2010,7 +2015,28 @@ Pure-Sage math helpers (shadowed by native `math` module — use when native mod
 | `gcd(a, b)`, `lcm(a, b)` | GCD and LCM |
 | `sum(arr)`, `product(arr)`, `mean(arr)` | Aggregates |
 | `sqrt(n)` | Newton's method approximation |
+| `printm(expr, backend, formats)` | Evaluate expression and show work |
 | `distance(x1, y1, x2, y2)` | Euclidean distance |
+
+**Arithmetic Visualization (`printm`)**:
+
+The `math.printm()` function evaluates an arithmetic expression provided as a string and visualizes the step-by-step "work" for each operation.
+
+```sagelang
+import math
+math.printm("123 + 456 * 2", backend="sage")
+```
+
+- **`backend`**: 
+    - `"sage"` (default): Pure SageLang implementation using vertical "grade-school" format.
+    - `"c"`: Uses native C-level arithmetic bridges.
+    - `"asm"`: Uses inline assembly (x86-64, aarch64, rv64) and calls `printf` via FFI to show the instruction-level execution.
+- **`formats`**: An array of strings to customize output.
+    - `"grade"`: Vertical grade-school arithmetic visualization.
+    - `"exec"`: Show the underlying execution mode (e.g., "[ASM] Using ADD instruction").
+    - `"bitwise"`: Reserved for bitwise operation visualization.
+
+The default format can be configured globally using the `--math-work` CLI flag.
 | `normalize(val, lo, hi)` | Scale to [0, 1] |
 
 ### 9.9 GPU Libraries
@@ -2040,7 +2066,7 @@ SageLang ships with 18 GPU/rendering library modules in `lib/graphics/`. All are
 
 ### 9.10 OS Development Libraries
 
-SageLang ships with 31 OS/bare-metal development modules across `lib/os/`, `lib/os/boot/`, `lib/os/kernel/`, and `lib/os/image/`:
+SageLang ships with 52 OS/bare-metal development modules across `lib/os/`, `lib/os/boot/`, `lib/os/kernel/`, and `lib/os/image/`:
 
 | Module | Import | Purpose |
 |--------|--------|---------|
@@ -2059,15 +2085,35 @@ SageLang ships with 31 OS/bare-metal development modules across `lib/os/`, `lib/
 | `dtb.sage` | `import os.dtb` | Flattened Device Tree parser for ARM64/RISC-V (nodes, properties, search) |
 | `alloc.sage` | `import os.alloc` | Bump, free-list, and bitmap page allocators for kernel memory |
 | `vfs.sage` | `import os.vfs` | Virtual filesystem layer with mount table, path utilities, memfs backend |
-| `ext.sage` | `import os.ext` | ext2/3/4 superblock, inode table, directory entries, extent tree |
+| `ext.sage" | `import os.ext` | ext2/3/4 superblock, inode table, directory entries, extent tree |
 | `btrfs.sage` | `import os.btrfs` | Btrfs superblock, chunk tree, root tree, subvolumes, checksums |
 | `f2fs.sage` | `import os.f2fs` | F2FS superblock, checkpoint, segment info, node/data addressing |
 | `boot/multiboot.sage` | `import os.boot.multiboot` | Multiboot2 header generation, tag building, boot info parsing |
 | `boot/gdt.sage` | `import os.boot.gdt` | x86_64 GDT descriptor construction, TSS entries, LGDT sequence |
 | `boot/start.sage` | `import os.boot.start` | x86_64 startup assembly generation (long mode entry, stack setup) |
 | `boot/linker.sage` | `import os.boot.linker` | Linker script generation for bare-metal ELF kernels |
+| `boot/bios.sage` | `import os.boot.bios` | BIOS interrupt interface (INT 0x10, 0x13, 0x15, 0x16) for legacy x86 boot |
+| `boot/e820.sage` | `import os.boot.e820` | BIOS memory map collection and normalization |
+| `boot/a20.sage` | `import os.boot.a20` | A20 gate enabling methods (BIOS, Fast A20, Keyboard Controller) |
+| `boot/cpuid.sage` | `import os.boot.cpuid` | CPU feature detection (Long mode, MSR, SSE, Vendor/Brand strings) |
+| `boot/real_mode.sage` | `import os.boot.real_mode` | Helpers for segment:offset addressing and real-mode stack setup |
+| `boot/prot_mode.sage` | `import os.boot.prot_mode` | Transition logic from real mode to 32-bit protected mode |
+| `boot/long_mode.sage` | `import os.boot.long_mode` | Transition logic from 32-bit protected mode to 64-bit long mode |
+| `boot/page_tables.sage`| `import os.boot.page_tables` | Bootstrap PML4/PDPT/PD builder for identity and higher-half mapping |
+| `boot/bump_alloc.sage`| `import os.boot.bump_alloc` | Lightweight, pre-kernel bump allocator with no GC dependencies |
+| `boot/disk.sage` | `import os.boot.disk` | Abstract sector I/O layer (BIOS, UEFI, direct ATA PIO probing) |
+| `boot/fat_boot.sage` | `import os.boot.fat_boot` | Minimal FAT filesystem reader designed for pre-kernel environments |
+| `boot/elf_load.sage` | `import os.boot.elf_load` | ELF segment loader with entry point detection and PT_LOAD support |
+| `boot/handoff.sage` | `import os.boot.handoff` | SageOS boot info protocol for passing system state to the kernel |
+| `boot/uefi_proto.sage` | `import os.boot.uefi_proto` | High-level wrappers for UEFI protocols (GOP, File, BlockIO) |
+| `boot/menu.sage` | `import os.boot.menu` | Text-mode boot selection UI with timeout support |
+| `boot/config.sage` | `import os.boot.config` | Parser for `boot.cfg` configuration files |
+| `boot/sbi.sage` | `import os.boot.sbi` | RISC-V Supervisor Binary Interface (SBI) wrappers for S-mode boot |
+| `boot/psci.sage` | `import os.boot.psci` | ARM Power State Coordination Interface for SMP core bring-up |
+| `boot/dtb_boot.sage` | `import os.boot.dtb_boot` | DTB-aware helpers for memory detection and /chosen manipulation |
+| `boot/verify.sage` | `import os.boot.verify` | Kernel signature verification (SHA-256, Ed25519) and TPM measurement |
 | `kernel/kmain.sage` | `import os.kernel.kmain` | Kernel entry point scaffolding, boot info handoff |
-| `kernel/console.sage` | `import os.kernel.console` | VGA text-mode console (80×25, color attributes, scrolling) |
+| `kernel/console.sage` | `import os.kernel.console` | VGA text-mode console (80x25, color attributes, scrolling) |
 | `kernel/keyboard.sage` | `import os.kernel.keyboard` | PS/2 keyboard driver (scancode set 2, key event dispatch) |
 | `kernel/timer.sage` | `import os.kernel.timer` | PIT channel 0 timer, IRQ0 handler, millisecond tick counter |
 | `kernel/syscall.sage` | `import os.kernel.syscall` | SYSCALL/SYSRET dispatch table, argument marshalling |
@@ -2075,6 +2121,7 @@ SageLang ships with 31 OS/bare-metal development modules across `lib/os/`, `lib/
 | `kernel/vmm.sage` | `import os.kernel.vmm` | Virtual memory manager (4-level paging, map/unmap, page fault handler) |
 | `image/diskimg.sage` | `import os.image.diskimg` | Bootable disk image builder (.img: MBR + FAT partition + kernel) |
 | `image/iso.sage` | `import os.image.iso` | ISO 9660 image creation (El Torito bootable CD/DVD) |
+| `metal/vga.sage` | `import metal.vga` | Early VGA text-mode display, cursor management, and progress bars |
 
 ### 9.11 Networking Libraries
 
@@ -2391,9 +2438,10 @@ print math.ceil(3.2)   # 4
 print math.abs(-5)     # 5
 print math.pow(2, 10)  # 1024
 print math.log(math.e) # 1
+math.printm("10 + 20") # Show work for 10 + 20
 ```
 
-Available functions: `sqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `abs`, `pow`, `log`
+Available functions: `sqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `abs`, `pow`, `log`, `printm`
 Constants: `pi` (3.14159...), `e` (2.71828...)
 
 ### 10.2 IO Module
@@ -2755,11 +2803,11 @@ socket.close(sock)
 
 # DNS resolution
 let ip = socket.resolve("example.com")
-print ip  # "93.184.216.34"
+print ip  # "3.6.8.34"
 
 # UDP
 let udp = socket.create(socket.AF_INET, socket.SOCK_DGRAM, 0)
-socket.sendto(udp, "hello", "127.0.0.1", 9999)
+socket.sendto(udp, "hello", "3.6.8.1", 9999)
 socket.close(udp)
 ```
 
@@ -2782,7 +2830,7 @@ print line
 tcp.close(conn)
 
 # Server
-let server = tcp.listen("0.0.0.0", 8080, 5)
+let server = tcp.listen("3.6.8.0", 8080, 5)
 let client = tcp.accept(server)
 tcp.send(client, "Hello from Sage!")
 tcp.close(client)

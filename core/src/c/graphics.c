@@ -452,20 +452,6 @@ static VkAttachmentStoreOp translate_store_op(int op) {
     }
 }
 
-static VkCompareOp translate_compare_op(int op) {
-    switch (op) {
-        case SAGE_COMPARE_NEVER:   return VK_COMPARE_OP_NEVER;
-        case SAGE_COMPARE_LESS:    return VK_COMPARE_OP_LESS;
-        case SAGE_COMPARE_EQUAL:   return VK_COMPARE_OP_EQUAL;
-        case SAGE_COMPARE_LEQUAL:  return VK_COMPARE_OP_LESS_OR_EQUAL;
-        case SAGE_COMPARE_GREATER: return VK_COMPARE_OP_GREATER;
-        case SAGE_COMPARE_NEQUAL:  return VK_COMPARE_OP_NOT_EQUAL;
-        case SAGE_COMPARE_GEQUAL:  return VK_COMPARE_OP_GREATER_OR_EQUAL;
-        case SAGE_COMPARE_ALWAYS:  return VK_COMPARE_OP_ALWAYS;
-        default: return VK_COMPARE_OP_LESS;
-    }
-}
-
 static VkPipelineStageFlags translate_pipeline_stage(int stage) {
     VkPipelineStageFlags flags = 0;
     if (stage & SAGE_PIPE_TOP)           flags |= VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -518,21 +504,6 @@ static VkFormat translate_attr_format(int attr_fmt) {
         case SAGE_ATTR_IVEC4: return VK_FORMAT_R32G32B32A32_SINT;
         case SAGE_ATTR_UINT:  return VK_FORMAT_R32_UINT;
         default: return VK_FORMAT_R32G32B32A32_SFLOAT;
-    }
-}
-
-static int attr_format_size(int attr_fmt) {
-    switch (attr_fmt) {
-        case SAGE_ATTR_FLOAT: return 4;
-        case SAGE_ATTR_VEC2:  return 8;
-        case SAGE_ATTR_VEC3:  return 12;
-        case SAGE_ATTR_VEC4:  return 16;
-        case SAGE_ATTR_INT:   return 4;
-        case SAGE_ATTR_IVEC2: return 8;
-        case SAGE_ATTR_IVEC3: return 12;
-        case SAGE_ATTR_IVEC4: return 16;
-        case SAGE_ATTR_UINT:  return 4;
-        default: return 16;
     }
 }
 
@@ -2242,34 +2213,6 @@ static Value gpu_cmd_copy_buffer_to_image(int argCount, Value* args) {
 // ============================================================================
 // One-shot command helper (internal)
 // ============================================================================
-
-static VkCommandBuffer sage_gpu_begin_one_shot(void) {
-    VkCommandPoolCreateInfo pool_info = {0};
-    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-    pool_info.queueFamilyIndex = g_gpu_ctx.graphics_family;
-
-    VkCommandPool tmp_pool;
-    if (vkCreateCommandPool(g_gpu_ctx.device, &pool_info, NULL, &tmp_pool) != VK_SUCCESS)
-        return VK_NULL_HANDLE;
-
-    VkCommandBufferAllocateInfo alloc_info = {0};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = tmp_pool;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandBufferCount = 1;
-
-    VkCommandBuffer cmd;
-    vkAllocateCommandBuffers(g_gpu_ctx.device, &alloc_info, &cmd);
-
-    VkCommandBufferBeginInfo begin = {0};
-    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(cmd, &begin);
-
-    // Store pool handle in a thread-local-ish way (we only support one at a time)
-    return cmd;
-}
 
 static VkCommandPool g_oneshot_pool = VK_NULL_HANDLE;
 

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "module.h"
 #include "repl.h"
@@ -200,6 +201,24 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
         return vm_normal(result.value);
     }
 
+    if (callee.type == VAL_CLASS) {
+        InstanceValue* instance = instance_create(callee.as.class_val);
+        Value inst_val = val_instance(instance);
+        
+        // Call init if it exists
+        Method* init_method = class_find_method(callee.as.class_val, "init", 4);
+        if (init_method) {
+            Value* init_args = SAGE_ALLOC(sizeof(Value) * (size_t)(arg_count + 1));
+            init_args[0] = inst_val;
+            for (int i = 0; i < arg_count; i++) init_args[i + 1] = args[i];
+            
+            ExecResult res = call_any_method(inst_val, init_method, arg_count + 1, init_args, env);
+            free(init_args);
+            if (res.is_throwing) return res;
+        }
+        return vm_normal(inst_val);
+    }
+
     if (callee.type == VAL_GENERATOR) {
         GeneratorValue* template = callee.as.generator;
         if (arg_count != template->param_count) {
@@ -282,6 +301,10 @@ static ExecResult call_method_value(Value object, const char* method_name, int a
     return vm_error("Only instances and modules have methods.");
 }
 
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     ActiveVm vm;
     ExecResult result = vm_normal(val_nil());
@@ -489,6 +512,16 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     PUSH(array_get(&object, (int)AS_NUMBER(index)));
                 } else if (object.type == VAL_TUPLE && IS_NUMBER(index)) {
                     PUSH(tuple_get(&object, (int)AS_NUMBER(index)));
+                } else if (object.type == VAL_BYTES && IS_NUMBER(index)) {
+                    int b_index = (int)AS_NUMBER(index);
+                    BytesValue* b = object.as.bytes;
+                    if (b_index < 0) b_index += b->length;
+                    if (b_index >= 0 && b_index < b->length) {
+                        PUSH(val_number(b->data[b_index]));
+                    } else {
+                        result = vm_error("Bytes index out of bounds.");
+                        goto done;
+                    }
                 } else if (object.type == VAL_STRING && IS_NUMBER(index)) {
                     int string_index = (int)AS_NUMBER(index);
                     char* string = AS_STRING(object);
@@ -517,6 +550,12 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 SYNC_SP();
                 if (object.type == VAL_ARRAY && IS_NUMBER(index)) {
                     array_set(&object, (int)AS_NUMBER(index), value);
+                } else if (object.type == VAL_BYTES && IS_NUMBER(index)) {
+                    int b_index = (int)AS_NUMBER(index);
+                    BytesValue* b = object.as.bytes;
+                    if (b_index >= 0 && b_index < b->length) {
+                        b->data[b_index] = (unsigned char)(int)AS_NUMBER(value);
+                    }
                 } else if (object.type == VAL_DICT && IS_STRING(index)) {
                     dict_set(&object, AS_STRING(index), value);
                 } else {
@@ -627,7 +666,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                         case BC_OP_SUB: out = val_number(AS_NUMBER(left) - AS_NUMBER(right)); break;
                         case BC_OP_MUL: out = val_number(AS_NUMBER(left) * AS_NUMBER(right)); break;
                         case BC_OP_DIV: out = (AS_NUMBER(right) == 0) ? val_nil() : val_number(AS_NUMBER(left) / AS_NUMBER(right)); break;
-                        case BC_OP_MOD: out = ((int)AS_NUMBER(right) == 0) ? val_nil() : val_number((double)((int)AS_NUMBER(left) % (int)AS_NUMBER(right))); break;
+                        case BC_OP_MOD: out = (AS_NUMBER(right) == 0) ? val_nil() : val_number(fmod(AS_NUMBER(left), AS_NUMBER(right))); break;
                         case BC_OP_BIT_AND: out = val_number((double)(l & r)); break;
                         case BC_OP_BIT_OR: out = val_number((double)(l | r)); break;
                         case BC_OP_BIT_XOR: out = val_number((double)(l ^ r)); break;
@@ -939,6 +978,9 @@ done:
 #undef DISPATCH
     return result;
 }
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 ExecResult vm_execute_program(BytecodeProgram* program, Env* env) {
     ExecResult result = vm_normal(val_nil());

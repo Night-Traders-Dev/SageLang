@@ -63,6 +63,11 @@ void add_search_path(ModuleCache* cache, const char* path) {
         return;
     }
     
+    // Avoid duplicates
+    for (int i = 0; i < cache->search_path_count; i++) {
+        if (strcmp(cache->search_paths[i], path) == 0) return;
+    }
+    
     cache->search_paths[cache->search_path_count] = SAGE_STRDUP(path);
     cache->search_path_count++;
 }
@@ -519,13 +524,7 @@ static void add_system_search_paths(ModuleCache* cache) {
         }
     }
 
-    // 2. Installed library path (compile-time default)
-#ifndef SAGE_LIB_DIR
-#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
-#endif
-    add_search_path(cache, SAGE_LIB_DIR);
-
-    // 3. Executable's own directory + /../share/sage/lib (for relocatable installs)
+    // 2. Executable's own directory (for portable/dev installs)
 #ifdef __linux__
     {
         char exe_path[4096];
@@ -549,6 +548,12 @@ static void add_system_search_paths(ModuleCache* cache) {
         }
     }
 #endif
+
+    // 3. Installed library path (compile-time default)
+#ifndef SAGE_LIB_DIR
+#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
+#endif
+    add_search_path(cache, SAGE_LIB_DIR);
 }
 
 // Add source file's directory as a search path
@@ -667,11 +672,11 @@ void register_stdlib_modules(ModuleCache* cache) {
     create_vm_module(cache);
     create_thread_module(cache);
     create_fat_module(cache);
-    create_net_module(cache);
-    create_socket_module(cache);
-    create_tcp_module(cache);
-    create_http_module(cache);
-    create_ssl_module(cache);
+    // create_net_module(cache);
+    // create_socket_module(cache);
+    // create_tcp_module(cache);
+    // create_http_module(cache);
+    // create_ssl_module(cache);
     create_graphics_module(cache);
     create_ml_native_module(cache);
 #ifndef SAGE_NO_FFI

@@ -6,6 +6,8 @@
 #include <setjmp.h>
 #include <ctype.h>
 #include <time.h>
+#include <errno.h>
+#include <sys/wait.h>
 #include "lexer.h"
 #include "token.h"
 #include "ast.h"
@@ -29,6 +31,7 @@
 #include "jit.h"
 #include "aot.h"
 #include "kotlin_backend.h"
+#include "metal_vm.h"
 
 extern Environment* g_global_env;
 extern Stmt* parse_program(const char* source, const char* input_path);
@@ -41,6 +44,7 @@ jmp_buf g_repl_error_jmp;
 
 static Stmt* g_program_ast = NULL;
 static Stmt* g_program_ast_tail = NULL;
+static const char* g_math_work = NULL;
 
 static void retain_program_stmt(Stmt* stmt) {
     if (stmt == NULL) {
@@ -66,11 +70,12 @@ static void cleanup_runtime_state(void) {
 static void print_usage(FILE* stream) {
     fprintf(stream,
             "Usage: sage                    Start interactive REPL\n"
-            "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [-I dir] [path]\n"
+            "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [--math-work=grade,exec] [--verbose] [-I dir] [path]\n"
             "       sage --repl             Start interactive REPL\n"
             "       sage [--runtime ast|bytecode|jit|aot|auto] [-I dir] -c \"source\"\n"
             "       sage --emit-c <input.sage> [-o output.c] [-I dir] [-O0..3] [-g]\n"
             "       sage --emit-vm <input.sage> [-o output.svm] [-I dir] [-O0..3] [-g]\n"
+            "       sage --sgvm <input.sage> [-o output.sgvm] [-I dir] [-O0..3] [-g]\n"
             "       sage --run-vm <input.svm>\n"
             "       sage --compile <input.sage> [-o output] [--cc compiler] [-I dir] [-O0..3] [-g]\n"
             "       sage --emit-llvm <input.sage> [-o output.ll] [-I dir] [-O0..3] [-g]\n"
@@ -132,12 +137,11 @@ static const char* value_type_name(Value v) {
 // Validate a path contains no shell metacharacters (prevents injection via system())
 static int is_safe_path(const char* path) {
     if (!path) return 1;
+    if (path[0] == '-') return 0;
     for (const char* p = path; *p; p++) {
-        // Allow alphanumeric and common filename characters
+        // Allow alphanumeric and strictly safe filename characters
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~' && *p != ' ' &&
-            *p != '+' && *p != '#' && *p != '(' && *p != ')' &&
-            *p != '[' && *p != ']' && *p != '@' && *p != '!') {
+            *p != '-' && *p != '_' && *p != '~') {
             return 0;
         }
     }
@@ -811,6 +815,14 @@ static void repl_list_bindings(Env* env, const char* prefix) {
     }
 }
 
+static void set_math_work_env(Env* env) {
+    if (g_math_work != NULL) {
+        env_define_const(env, "__MATH_WORK__", 13, val_string(g_math_work));
+    } else {
+        env_define_const(env, "__MATH_WORK__", 13, val_string("grade"));
+    }
+}
+
 static void repl_print_gc_stats(Env* env) {
     g_global_env = env;
     gc_collect();
@@ -836,6 +848,7 @@ static void repl_reset_session(Env** env_ptr) {
     *env_ptr = env_create(NULL);
     g_global_env = *env_ptr;
     init_stdlib(*env_ptr);
+    set_math_work_env(*env_ptr);
 
     printf("REPL session reset.\n");
 }
@@ -1010,6 +1023,250 @@ static void repl_print_ast_stmt(Stmt* stmt, int depth) {
 }
 
 // ============================================================================
+// SGVM: Compilation and Execution
+// ============================================================================
+
+static void write_be16(FILE* f, uint16_t v) {
+    fputc((v >> 8) & 0xFF, f);
+    fputc(v & 0xFF, f);
+}
+
+static void write_be32(FILE* f, uint32_t v) {
+    fputc((v >> 24) & 0xFF, f);
+    fputc((v >> 16) & 0xFF, f);
+    fputc((v >> 8) & 0xFF, f);
+    fputc(v & 0xFF, f);
+}
+
+static uint8_t hex_to_byte(const char* hex) {
+    uint32_t b;
+    if (sscanf(hex, "%02x", &b) != 1) return 0;
+    return (uint8_t)b;
+}
+
+typedef struct {
+    int type; // 1=num, 3=str
+    double num;
+    char* str;
+    int str_len;
+} SGVMConst;
+
+static SGVMConst g_sgvm_consts[1024];
+static int g_sgvm_const_count = 0;
+
+static int add_sgvm_const_num(double d) {
+    for (int i = 0; i < g_sgvm_const_count; i++) {
+        if (g_sgvm_consts[i].type == 1 && g_sgvm_consts[i].num == d) return i;
+    }
+    g_sgvm_consts[g_sgvm_const_count].type = 1;
+    g_sgvm_consts[g_sgvm_const_count].num = d;
+    return g_sgvm_const_count++;
+}
+
+static int add_sgvm_const_str(const char* s, int len) {
+    for (int i = 0; i < g_sgvm_const_count; i++) {
+        if (g_sgvm_consts[i].type == 3 && g_sgvm_consts[i].str_len == len && memcmp(g_sgvm_consts[i].str, s, len) == 0) return i;
+    }
+    g_sgvm_consts[g_sgvm_const_count].type = 3;
+    g_sgvm_consts[g_sgvm_const_count].str = malloc(len + 1);
+    memcpy(g_sgvm_consts[g_sgvm_const_count].str, s, len);
+    g_sgvm_consts[g_sgvm_const_count].str_len = len;
+    return g_sgvm_const_count++;
+}
+
+static int compile_to_sgvm(const char* input_path, const char* output_path, int opt_level, int debug_info) {
+    char* source = main_read_file(input_path);
+    if (!source) return 0;
+
+    char tmp_svm[] = "/tmp/sage_sgvm_XXXXXX.svm";
+    int fd = mkstemps(tmp_svm, 4);
+    if (fd < 0) {
+        free(source);
+        return 0;
+    }
+    close(fd);
+
+    if (!compile_source_to_vm_artifact(source, input_path, tmp_svm, opt_level, debug_info)) {
+        free(source);
+        unlink(tmp_svm);
+        return 0;
+    }
+    free(source);
+
+    FILE* in = fopen(tmp_svm, "r");
+    if (!in) {
+        unlink(tmp_svm);
+        return 0;
+    }
+
+    g_sgvm_const_count = 0;
+    char* line = NULL;
+    size_t line_cap = 0;
+    int chunk_count = 0;
+    int (*local_to_global)[256] = calloc(1024, sizeof(*local_to_global));
+    int current_chunk = -1;
+
+    while (getline(&line, &line_cap, in) > 0) {
+        if (strncmp(line, "chunks ", 7) == 0) chunk_count = atoi(line + 7);
+        else if (strcmp(line, "chunk\n") == 0) current_chunk++;
+        else if (strncmp(line, "constants ", 10) == 0) {
+            int count = atoi(line + 10);
+            for (int i = 0; i < count; i++) {
+                if (getline(&line, &line_cap, in) <= 0) break;
+                if (strncmp(line, "number ", 7) == 0) {
+                    local_to_global[current_chunk][i] = add_sgvm_const_num(atof(line + 7));
+                } else if (strncmp(line, "string ", 7) == 0) {
+                    int len = atoi(line + 7);
+                    if (getline(&line, &line_cap, in) <= 0) break;
+                    char* buf = malloc(len);
+                    for (int j = 0; j < len * 2; j += 2) buf[j / 2] = hex_to_byte(line + j);
+                    local_to_global[current_chunk][i] = add_sgvm_const_str(buf, len);
+                    free(buf);
+                }
+            }
+        }
+    }
+
+    FILE* out = fopen(output_path, "wb");
+    if (!out) {
+        fclose(in);
+        unlink(tmp_svm);
+        free(local_to_global);
+        free(line);
+        return 0;
+    }
+
+    fwrite("SGVM", 1, 4, out);
+    fputc(0x01, out); fputc(0x00, out);
+
+    write_be16(out, (uint16_t)g_sgvm_const_count);
+    for (int i = 0; i < g_sgvm_const_count; i++) {
+        fputc(g_sgvm_consts[i].type, out);
+        if (g_sgvm_consts[i].type == 1) fwrite(&g_sgvm_consts[i].num, 1, 8, out);
+        else {
+            write_be16(out, (uint16_t)g_sgvm_consts[i].str_len);
+            fwrite(g_sgvm_consts[i].str, 1, g_sgvm_consts[i].str_len, out);
+        }
+    }
+
+    write_be32(out, (uint32_t)chunk_count);
+    fseek(in, 0, SEEK_SET);
+    current_chunk = -1;
+    while (getline(&line, &line_cap, in) > 0) {
+        if (strcmp(line, "chunk\n") == 0) current_chunk++;
+        else if (strncmp(line, "code ", 5) == 0) {
+            int len = atoi(line + 5);
+            write_be32(out, (uint32_t)len);
+            if (getline(&line, &line_cap, in) <= 0) break;
+            for (int j = 0; j < len * 2; ) {
+                uint8_t op = hex_to_byte(line + j);
+                fputc(op, out);
+                j += 2;
+                
+                if (op == OP_CONSTANT || op == OP_GET_GLOBAL || op == OP_DEFINE_GLOBAL || 
+                    op == OP_SET_GLOBAL || op == OP_GET_PROPERTY || op == OP_SET_PROPERTY || 
+                    op == OP_JUMP || op == OP_JUMP_IF_FALSE || op == OP_ARRAY || 
+                    op == OP_TUPLE || op == OP_DICT || op == OP_LOOP_BACK || op == 52 /* OP_IMPORT */) {
+                    // 16-bit operand
+                    if (op == OP_CONSTANT || op == OP_GET_GLOBAL || op == OP_DEFINE_GLOBAL || 
+                        op == OP_SET_GLOBAL || op == OP_GET_PROPERTY || op == OP_SET_PROPERTY || op == 52 /* OP_IMPORT */) {
+                        int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
+                        int g_idx = local_to_global[current_chunk][local_idx];
+                        fputc((g_idx >> 8) & 0xFF, out);
+                        fputc(g_idx & 0xFF, out);
+                    } else {
+                        fputc(hex_to_byte(line + j), out);
+                        fputc(hex_to_byte(line + j + 2), out);
+                    }
+                    j += 4;
+                } else if (op == OP_DEFINE_FN) {
+                    // DEFINE_FN: two 16-bit operands
+                    int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
+                    int g_idx = local_to_global[current_chunk][local_idx];
+                    fputc((g_idx >> 8) & 0xFF, out);
+                    fputc(g_idx & 0xFF, out);
+                    j += 4;
+                    fputc(hex_to_byte(line + j), out);
+                    fputc(hex_to_byte(line + j + 2), out);
+                    j += 4;
+                } else if (op == OP_CALL || op == OP_DUP) {
+                    // 8-bit operand
+                    fputc(hex_to_byte(line + j), out);
+                    j += 2;
+                } else if (op == OP_CALL_METHOD) {
+                    // CALL_METHOD: 16-bit + 8-bit
+                    int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
+                    int g_idx = local_to_global[current_chunk][local_idx];
+                    fputc((g_idx >> 8) & 0xFF, out);
+                    fputc(g_idx & 0xFF, out);
+                    j += 4;
+                    fputc(hex_to_byte(line + j), out);
+                    j += 2;
+                }
+            }
+        }
+    }
+
+    fclose(in); fclose(out);
+    unlink(tmp_svm);
+    free(local_to_global);
+    free(line);
+    for (int i = 0; i < g_sgvm_const_count; i++) {
+        if (g_sgvm_consts[i].type == 3) free(g_sgvm_consts[i].str);
+    }
+    return 1;
+}
+
+static void run_sgvm_write_char(char c) {
+    putchar(c);
+}
+
+static int run_sgvm(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return 0;
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    unsigned char* data = malloc(size);
+    if (fread(data, 1, size, f) != (size_t)size) {
+        free(data);
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+
+    MetalVM vm;
+    metal_vm_init(&vm);
+    vm.write_char = run_sgvm_write_char;
+
+    int err = metal_vm_load_binary(&vm, data, (int)size);
+    if (err < 0) {
+        free(data);
+        return 0;
+    }
+
+    if (metal_vm_verify(&vm) < 0) {
+        fprintf(stderr, "SGVM verification failed.\n");
+        free(data);
+        return 0;
+    }
+
+    for (int i = 0; i < vm.chunk_count; i++) {
+        metal_vm_load(&vm, vm.chunks[i], vm.chunk_lengths[i]);
+        if (metal_vm_run(&vm) < 0) {
+            fprintf(stderr, "SGVM runtime error in chunk %d: %s\n", i, vm.error_msg ? vm.error_msg : "unknown");
+            free(data);
+            return 0;
+        }
+    }
+
+    free(data);
+    return 1;
+}
+
+// ============================================================================
 // REPL: Scope chain printer (for :env command)
 // ============================================================================
 
@@ -1084,6 +1341,7 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
     Env* env = env_create(NULL);
     g_global_env = env;
     init_stdlib(env);
+    set_math_work_env(env);
     g_repl_mode = 1;
 
     while (1) {
@@ -1392,9 +1650,33 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 if (!editor) editor = getenv("VISUAL");
                 if (!editor) editor = "vi";
 
-                char cmd[2048];
-                snprintf(cmd, sizeof(cmd), "%s %s", editor, tmp_path);
-                if (system(cmd) == 0) {
+                // Safe execution of editor (CWE-78)
+                int ok = 0;
+                pid_t pid = fork();
+                if (pid == 0) {
+                    char* args[64];
+                    int argc_local = 0;
+                    char editor_copy[1024];
+                    strncpy(editor_copy, editor, sizeof(editor_copy) - 1);
+                    editor_copy[sizeof(editor_copy) - 1] = '\0';
+
+                    char* token = strtok(editor_copy, " ");
+                    while (token != NULL && argc_local < 62) {
+                        args[argc_local++] = token;
+                        token = strtok(NULL, " ");
+                    }
+                    args[argc_local++] = tmp_path;
+                    args[argc_local] = NULL;
+
+                    execvp(args[0], args);
+                    _exit(127);
+                } else if (pid > 0) {
+                    int status;
+                    waitpid(pid, &status, 0);
+                    ok = (WIFEXITED(status) && WEXITSTATUS(status) == 0);
+                }
+
+                if (ok) {
                     char* buffer = try_main_read_file(tmp_path);
                     if (buffer) {
                         if (setjmp(g_repl_error_jmp) == 0) {
@@ -1724,6 +2006,7 @@ static void run(const char* source, const char* filename, SageRuntimeMode runtim
     Env* env = env_create(NULL);
     g_global_env = env;
     init_stdlib(env);
+    set_math_work_env(env);
 
     while (1) {
          Stmt* result = parse();
@@ -1739,6 +2022,8 @@ static void run(const char* source, const char* filename, SageRuntimeMode runtim
     cleanup_runtime_state(); \
     exit(code); \
 } while(0)
+
+extern int g_sage_verbose;
 
 int main(int argc, const char* argv[]) {
     SageRuntimeMode runtime_mode = SAGE_RUNTIME_AUTO;
@@ -1858,45 +2143,48 @@ int main(int argc, const char* argv[]) {
     sage_set_args(argc, argv);
     init_module_system();
 
+    // Parse global flags that can appear before the command or script
+    while (cmd_argc >= 2) {
+        if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--runtime") == 0) {
+            if (!sage_runtime_parse_mode(cmd_argv[2], &runtime_mode)) {
+                fprintf(stderr, "Unknown runtime mode: %s (expected ast, bytecode, jit, aot, or auto)\n", cmd_argv[2]);
+                print_usage(stderr);
+                CLEANUP_AND_EXIT(64);
+            }
+            cmd_argv += 2;
+            cmd_argc -= 2;
+        } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "-I") == 0) {
+            add_search_path(global_module_cache, cmd_argv[2]);
+            cmd_argv += 2;
+            cmd_argc -= 2;
+        } else if (strcmp(cmd_argv[1], "--gc:arc") == 0) {
+            gc_set_mode(GC_MODE_ARC);
+            cmd_argv += 1;
+            cmd_argc -= 1;
+        } else if (strcmp(cmd_argv[1], "--gc:orc") == 0) {
+            gc_set_mode(GC_MODE_ORC);
+            cmd_argv += 1;
+            cmd_argc -= 1;
+        } else if (strcmp(cmd_argv[1], "--gc:tracing") == 0) {
+            gc_set_mode(GC_MODE_TRACING);
+            cmd_argv += 1;
+            cmd_argc -= 1;
+        } else if (strcmp(cmd_argv[1], "--verbose") == 0 || strcmp(cmd_argv[1], "-v") == 0) {
+            g_sage_verbose = 1;
+            cmd_argv += 1;
+            cmd_argc -= 1;
+        } else if (strncmp(cmd_argv[1], "--math-work=", 12) == 0) {
+            g_math_work = cmd_argv[1] + 12;
+            cmd_argv += 1;
+            cmd_argc -= 1;
+        } else {
+            break;
+        }
+    }
+
     // Add source file's directory to module search paths for compiler commands
     if (cmd_argc >= 3 && cmd_argv[2][0] != '-') {
         module_add_source_dir(cmd_argv[2]);
-    }
-
-    if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--runtime") == 0) {
-        if (!sage_runtime_parse_mode(cmd_argv[2], &runtime_mode)) {
-            fprintf(stderr, "Unknown runtime mode: %s (expected ast, bytecode, jit, aot, or auto)\n", cmd_argv[2]);
-            print_usage(stderr);
-            CLEANUP_AND_EXIT(64);
-        }
-        cmd_argv += 2;
-        cmd_argc -= 2;
-    }
-
-    // --gc:arc — switch to ARC (Automatic Reference Counting) mode
-    if (cmd_argc >= 2 && strcmp(cmd_argv[1], "--gc:arc") == 0) {
-        gc_set_mode(GC_MODE_ARC);
-        cmd_argv += 1;
-        cmd_argc -= 1;
-    }
-    // --gc:orc — switch to ORC (Optimized Reference Counting) mode
-    if (cmd_argc >= 2 && strcmp(cmd_argv[1], "--gc:orc") == 0) {
-        gc_set_mode(GC_MODE_ORC);
-        cmd_argv += 1;
-        cmd_argc -= 1;
-    }
-    // --gc:tracing — explicitly select tracing GC (default)
-    if (cmd_argc >= 2 && strcmp(cmd_argv[1], "--gc:tracing") == 0) {
-        gc_set_mode(GC_MODE_TRACING);
-        cmd_argv += 1;
-        cmd_argc -= 1;
-    }
-
-    // -I <dir> — add module search path
-    while (cmd_argc >= 3 && strcmp(cmd_argv[1], "-I") == 0) {
-        add_search_path(global_module_cache, cmd_argv[2]);
-        cmd_argv += 2;
-        cmd_argc -= 2;
     }
 
     if (cmd_argc == 1) {
@@ -1964,6 +2252,30 @@ int main(int argc, const char* argv[]) {
 
         free(source);
         free(derived_output);
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--sgvm") == 0) {
+        const char* explicit_output = NULL;
+        const char* ignored_cc = NULL;
+        const char* ignored_target = NULL;
+        int opt_level = 0, debug_info = 0;
+        if (!parse_codegen_options(cmd_argc, cmd_argv, 3, &explicit_output, &ignored_cc,
+                                   &opt_level, &debug_info, &ignored_target)) {
+            print_usage(stderr);
+            CLEANUP_AND_EXIT(64);
+        }
+
+        char* derived_output = NULL;
+        const char* output_path = explicit_output;
+        if (output_path == NULL) {
+            derived_output = derive_output_path(cmd_argv[2], ".sgvm", 1);
+            output_path = derived_output;
+        }
+
+        if (!compile_to_sgvm(cmd_argv[2], output_path, opt_level, debug_info)) {
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+
+        free(derived_output);
     } else if (cmd_argc == 3 &&
                (strcmp(cmd_argv[1], "--run-vm") == 0 || strcmp(cmd_argv[1], "--run-bytecode") == 0)) {
         BytecodeProgram program;
@@ -1979,6 +2291,7 @@ int main(int argc, const char* argv[]) {
         env = env_create(NULL);
         g_global_env = env;
         init_stdlib(env);
+        set_math_work_env(env);
         (void)vm_execute_program(&program, env);
         bytecode_program_free(&program);
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile") == 0) {
@@ -2462,8 +2775,8 @@ int main(int argc, const char* argv[]) {
         extern void interpreter_set_jit(JitState* jit_state);
         interpreter_set_jit(&jit);
 
-        fprintf(stderr, "JIT: Enabled (threshold=%d calls, pool=%zuKB)\n",
-                JIT_HOT_THRESHOLD, jit.pool.capacity / 1024);
+        // fprintf(stderr, "JIT: Enabled (threshold=%d calls, pool=%zuKB)\n",
+//                JIT_HOT_THRESHOLD, jit.pool.capacity / 1024);
 
         // Run with interpreter (JIT profiling active)
         run(source, jit_file, runtime_mode);
@@ -2473,8 +2786,8 @@ int main(int argc, const char* argv[]) {
         for (int i = 0; i < jit.profile_count; i++) {
             if (jit.profiles[i] && jit.profiles[i]->call_count > 0) profiled++;
         }
-        fprintf(stderr, "JIT: %d functions profiled, %d compiled, %d bailouts\n",
-                profiled, jit.total_compiled, jit.total_bailouts);
+        // fprintf(stderr, "JIT: %d functions profiled, %d compiled, %d bailouts\n",
+        //         profiled, jit.total_compiled, jit.total_bailouts);
 
         // Print type feedback for hot functions
         for (int i = 0; i < jit.profile_count; i++) {
@@ -2550,11 +2863,11 @@ int main(int argc, const char* argv[]) {
                 int profiled = 0;
                 for (int i = 0; i < jit.profile_count; i++)
                     if (jit.profiles[i] && jit.profiles[i]->call_count > 0) profiled++;
-                fprintf(stderr, "AOT+JIT: Compiled %s → %s (%d functions profiled, %d compiled)\n",
-                        combo_file, out_path, profiled, jit.total_compiled);
+                // fprintf(stderr, "AOT+JIT: Compiled %s → %s (%d functions profiled, %d compiled)\n",
+                //         combo_file, out_path, profiled, jit.total_compiled);
                 unlink(c_path);
             } else {
-                fprintf(stderr, "AOT+JIT: Compilation failed\n");
+                // fprintf(stderr, "AOT+JIT: Compilation failed\n");
             }
         } else {
             fputs(c_code, stdout);
@@ -2591,10 +2904,10 @@ int main(int argc, const char* argv[]) {
             FILE* f = fopen(c_path, "w");
             if (f) { fputs(c_code, f); fclose(f); }
             if (aot_compile_to_binary(&aot, c_path, out_path)) {
-                fprintf(stderr, "AOT: Compiled %s → %s (type-specialized)\n", aot_file, out_path);
+                // fprintf(stderr, "AOT: Compiled %s → %s (type-specialized)\n", aot_file, out_path);
                 unlink(c_path);
             } else {
-                fprintf(stderr, "AOT: Compilation failed\n");
+                // fprintf(stderr, "AOT: Compilation failed\n");
             }
         } else {
             // Just print the C code
@@ -2606,10 +2919,16 @@ int main(int argc, const char* argv[]) {
         free(source);
     } else if (cmd_argc >= 2) {
         // File mode (extra args accessible via sys.args())
-        module_add_source_dir(cmd_argv[1]);  // Add source file's dir to search paths
-        char* source = main_read_file(cmd_argv[1]);
-        run(source, cmd_argv[1], runtime_mode);
-        free(source);
+        if (has_suffix(cmd_argv[1], ".sgvm")) {
+            if (!run_sgvm(cmd_argv[1])) {
+                CLEANUP_AND_EXIT(1);
+            }
+        } else {
+            module_add_source_dir(cmd_argv[1]);  // Add source file's dir to search paths
+            char* source = main_read_file(cmd_argv[1]);
+            run(source, cmd_argv[1], runtime_mode);
+            free(source);
+        }
     } else {
         print_usage(stderr);
         CLEANUP_AND_EXIT(64);

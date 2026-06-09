@@ -16,6 +16,10 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #ifdef USE_CUBLAS
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
@@ -729,6 +733,7 @@ int main(int argc, char** argv) {
             int eta_hr = (int)(eta_sec / 3600);
             int eta_min = ((int)(eta_sec) % 3600) / 60;
             int eta_s = (int)(eta_sec) % 60;
+            (void)eta_hr; (void)eta_min; (void)eta_s;
             int el_hr = (int)(elapsed / 3600);
             int el_min = ((int)(elapsed) % 3600) / 60;
             int el_s = (int)(elapsed) % 60;
@@ -776,6 +781,7 @@ int main(int argc, char** argv) {
     double elapsed = (ts_now.tv_sec - ts_start.tv_sec) + (ts_now.tv_nsec - ts_start.tv_nsec) / 1e9;
     int el_min = (int)(elapsed / 60);
     int el_s = (int)(elapsed) % 60;
+    (void)el_min; (void)el_s;
 
     printf("\n================================================================\n");
     printf("  Training Complete\n");

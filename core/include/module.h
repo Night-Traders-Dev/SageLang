@@ -12,7 +12,7 @@
 #define MAX_MODULE_PATH 1024
 
 // Module search paths
-#define MAX_SEARCH_PATHS 16
+#define MAX_SEARCH_PATHS 64
 
 // Module structure
 typedef struct Module {

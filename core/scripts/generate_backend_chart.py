@@ -8,7 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CHART_PATH = REPO_ROOT / "assets" / "charts" / "backend-compare.svg"
 SAGE = REPO_ROOT / "sage"
-BENCH = REPO_ROOT / "benchmarks" / "backend_compare.sage"
+BENCH = REPO_ROOT.parent / "testsuite" / "benchmarks" / "backend_compare.sage"
 
 
 def run_timed(cmd: list[str], cwd: Path = REPO_ROOT) -> tuple[float, str, bool]:

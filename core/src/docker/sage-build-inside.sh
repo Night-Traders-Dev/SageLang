@@ -9,7 +9,7 @@ cd /src
 
 rm -rf build build_sage
 
-bash build.sh -DBUILD_SAGE=ON
+python3 sagemake -DBUILD_SAGE=ON
 
 if [[ -f build/sage ]]; then
     cp build/sage "$OUT_DIR/sage_c"
