@@ -733,6 +733,7 @@ int metal_vm_step(MetalVM* vm) {
             MetalValue end = metal_vm_pop(vm);
             MetalValue start = metal_vm_pop(vm);
             MetalValue obj = metal_vm_pop(vm);
+            (void)end; (void)start; (void)obj;
             // Bare-metal slice: return nil for now or implement array subset
             metal_vm_push(vm, mv_nil());
             break;
@@ -749,6 +750,7 @@ int metal_vm_step(MetalVM* vm) {
         // OOP
         case OP_CLASS: {
             int name_idx = read_u16(vm->code, &vm->ip);
+            (void)name_idx;
             int dict = metal_dict_new(vm);
             MetalValue v; v.type = MV_DICT; v.as.dict_idx = dict;
             // Mark as class if needed
@@ -770,7 +772,6 @@ int metal_vm_step(MetalVM* vm) {
             MetalValue cls = metal_vm_pop(vm);
             MetalValue parent = metal_vm_pop(vm);
             if (cls.type == MV_DICT && parent.type == MV_DICT) {
-                MetalDict* cd = &vm->dicts[cls.as.dict_idx];
                 MetalDict* pd = &vm->dicts[parent.as.dict_idx];
                 for (int i = 0; i < pd->count; i++) {
                     metal_dict_set(vm, cls.as.dict_idx, pd->key_str_idx[i], pd->values[i]);

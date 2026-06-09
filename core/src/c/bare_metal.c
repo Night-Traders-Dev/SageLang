@@ -229,3 +229,6 @@ void _start(void) {
 
 #endif /* BARE_METAL_H */
 #endif /* SAGE_BARE_METAL */
+
+/* Ensure this translation unit is never empty (ISO C requirement) */
+typedef int bare_metal_unit_not_empty;

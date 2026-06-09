@@ -3351,8 +3351,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "static SageValue sage_array(void) { SageValue v; v.type = "
         "SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
         "static SageValue sage_function(void* fn) { SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = fn; return v; }\n"
-        "\n"
-        "static SageValue sage_ffi_open(SageValue libname) {\n"
+        "\n",
+        out);
+  fputs("static SageValue sage_ffi_open(SageValue libname) {\n"
         "    if (libname.type != SAGE_TAG_STRING) return sage_nil();\n"
         "    void* handle = dlopen(libname.as.string, RTLD_NOW);\n"
         "    if (!handle) return sage_nil();\n"
@@ -3695,8 +3696,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "static SageValue sage_native_exp(SageValue v) { return sage_number(exp(v.as.number)); }\n"
       "static SageValue sage_native_log(SageValue v) { return sage_number(log(v.as.number)); }\n"
       "static SageValue sage_native_sqrt(SageValue v) { return sage_number(sqrt(v.as.number)); }\n"
-      "\n"
-      "static SageValue sage_native_thread_mutex(void) {\n"
+      "\n",
+      out);
+  fputs("static SageValue sage_native_thread_mutex(void) {\n"
       "    pthread_mutex_t* m = malloc(sizeof(pthread_mutex_t));\n"
       "    pthread_mutex_init(m, NULL);\n"
       "    SageValue v; v.type = SAGE_TAG_MUTEX; v.as.mutex = m; return v;\n"
@@ -3870,8 +3872,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "return sage_nil();\n"
       "    return array.as.array->elements[--array.as.array->count];\n"
       "}\n"
-      "\n"
-      "static SageValue sage_array_extend(SageValue target, SageValue source) "
+      "\n",
+      out);
+  fputs("static SageValue sage_array_extend(SageValue target, SageValue source) "
       "{\n"
       "    if (target.type != SAGE_TAG_ARRAY || source.type != SAGE_TAG_ARRAY) "
       "return sage_nil();\n"
