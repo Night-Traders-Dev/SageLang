@@ -12,7 +12,7 @@ Sage is a systems programming language that combines the readability of Python (
 git clone https://github.com/Night-Traders-Dev/SageLang.git && cd SageLang && chmod +x install.sh && ./install.sh
 ```
 
-The installer walks you through everything — building, setting up updating, installing dependencies.
+The installer walks you through everything — building, setting up updating, and installing dependencies. It provides automatic `PATH` configuration instructions for **Bash**, **Zsh**, and **Fish** shells.
 
 ### Supported Platforms
 

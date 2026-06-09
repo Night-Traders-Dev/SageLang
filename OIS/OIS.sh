@@ -178,7 +178,8 @@ cmd_install() {
     # PATH reminder
     case ":${PATH}:" in *":${OIS_APP_INSTALL_PATH}:"*) ;;
         *) ois_warn "Add to your shell config:"
-           printf '\n    export PATH="$PATH:%s"\n\n' "$OIS_APP_INSTALL_PATH" ;;
+           printf '\n    Bash/Zsh: export PATH="$PATH:%s"\n' "$OIS_APP_INSTALL_PATH"
+           printf '    Fish:     fish_add_path %s\n\n' "$OIS_APP_INSTALL_PATH" ;;
     esac
 }
 
