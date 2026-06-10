@@ -11,7 +11,7 @@ toc: true
 
 ## Executive Summary
 
-**SageLang** is a **Python-inspired, systems-oriented programming language** written in C. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports ten execution backends (C, LLVM IR, native assembly, bytecode VM, SageMetal VM, JIT, AOT, Kotlin/Android) and a self-hosted interpreter written in Sage itself. As of v3.5.4, Sage features structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust tab/whitespace token checks in sandbox security guards. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
+**SageLang** is a **Python-inspired, systems-oriented programming language** written in C. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports ten execution backends (C, LLVM IR, native assembly, bytecode VM, SageMetal VM, JIT, AOT, Kotlin/Android) and a self-hosted interpreter written in Sage itself. As of v3.6.9, Sage features structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust tab/whitespace token checks in sandbox security guards. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
 
 ---
 
@@ -1430,7 +1430,7 @@ cmake --build build_pico
 
 Desktop builds require `libcurl` and OpenSSL development headers/libraries in addition to a C compiler, `make`, and/or `cmake`.
 
-#### 6.1.1 Build Parameter Reference
+#### 3.6.9 Build Parameter Reference
 
 **Make Variables**:
 
@@ -1463,7 +1463,7 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 
 `src/c/main.c` initializes the garbage collector, registers raw `argv` for the `sys` module, initializes the module cache, and then dispatches one of the top-level modes below.
 
-#### 6.2.1 `sage` CLI Parameter Reference
+#### 3.6.9 `sage` CLI Parameter Reference
 
 | Command | Meaning | Notes |
 | ------- | ------- | ----- |
@@ -1488,7 +1488,8 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | `sage --emit-asm <input.sage>` | `<input>.s` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-native <input.sage>` | hosted: `<input-without-.sage>`; non-hosted profiles: `<input-without-.sage>.o` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-pico-c <input.sage>` | `<input>.pico.c` | `-o <path>` |
-| `sage --compile-pico <input.sage>` | `.tmp/<program-name>` plus `<program-name>.uf2` | `-o <dir>`, `--board <name>`, `--name <program>`, `--sdk <path>` |
+| `sage --compile-pico <input.sage>` | `.tmp/<program-name>` plus `<program-name>.uf2` | `-o <dir>`, `--board <name>`, `--name <program>`, `--sdk <path>`, `--chip <type>` |
+| `--chip <type>` | `--compile-pico` | Chip type (`rp2040`, `rp2350-arm`, or `rp2350-riscv`); defaults to `rp2040` |
 | `sage --compile-bare <input.sage>` | `<input-without-.sage>.elf` | `-o <path>`, `--target <arch>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-uefi <input.sage>` | `<input-without-.sage>.efi` | `-o <path>`, `--target x86_64\|aarch64`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 
@@ -1611,7 +1612,7 @@ The practical result is that `bytecode` mode is already useful for long-running 
 - Generational GC (mark only young objects frequently).
 - JIT compilation for hot paths.
 
-### 7.2.1 Current Recipe Benchmark
+### 3.6.9 Current Recipe Benchmark
 
 The repository now includes a five-recipe benchmark:
 
@@ -1645,7 +1646,7 @@ Interpretation:
 - `sage-compiled-c` has the lowest execution-only runtime on the default workload, but its total wall time includes code generation and host compilation.
 - The total-time chart answers "time to result"; the execution-only chart answers "steady-state runtime after the binary already exists."
 
-### 7.2.2 Sage vs Python 3 Benchmarks
+### 3.6.9 Sage vs Python 3 Benchmarks
 
 A separate benchmark suite compares all Sage execution paths against CPython 3.x:
 
@@ -2803,11 +2804,11 @@ socket.close(sock)
 
 # DNS resolution
 let ip = socket.resolve("example.com")
-print ip  # "93.184.216.34"
+print ip  # "3.6.9.34"
 
 # UDP
 let udp = socket.create(socket.AF_INET, socket.SOCK_DGRAM, 0)
-socket.sendto(udp, "hello", "127.0.0.1", 9999)
+socket.sendto(udp, "hello", "3.6.9.1", 9999)
 socket.close(udp)
 ```
 
@@ -2830,7 +2831,7 @@ print line
 tcp.close(conn)
 
 # Server
-let server = tcp.listen("0.0.0.0", 8080, 5)
+let server = tcp.listen("3.6.9.0", 8080, 5)
 let client = tcp.accept(server)
 tcp.send(client, "Hello from Sage!")
 tcp.close(client)

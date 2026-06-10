@@ -12,7 +12,7 @@ Sage is a systems programming language that combines the readability of Python (
 git clone https://github.com/Night-Traders-Dev/SageLang.git && cd SageLang && chmod +x install.sh && ./install.sh
 ```
 
-The installer walks you through everything — building, setting up updating, installing dependencies.
+The installer walks you through everything — building, setting up updating, and installing dependencies. It provides automatic `PATH` configuration instructions for **Bash**, **Zsh**, and **Fish** shells.
 
 ### Supported Platforms
 
@@ -855,7 +855,8 @@ SageMake is the unified build system that auto-detects your platform, GPU, NPU, 
 | `sage --emit-asm <input.sage>` | `<input>.s` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-native <input.sage>` | hosted: `<input-without-.sage>`; non-hosted profiles: `<input-without-.sage>.o` | `-o <path>`, `--target <arch[-profile]>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --emit-pico-c <input.sage>` | `<input>.pico.c` | `-o <path>` |
-| `sage --compile-pico <input.sage>` | `.tmp/<program-name>` build dir and `<program-name>.uf2` | `-o <dir>`, `--board <name>`, `--name <program>`, `--sdk <path>` |
+| `sage --compile-pico <input.sage>` | `.tmp/<program-name>` build dir and `<program-name>.uf2` | `-o <dir>`, `--board <name>`, `--name <program>`, `--sdk <path>`, `--chip <type>` |
+| `--chip <type>` | `--compile-pico` | Chip type (`rp2040`, `rp2350-arm`, or `rp2350-riscv`); defaults to `rp2040` |
 | `sage --compile-bare <input.sage>` | `<input-without-.sage>.elf` | `-o <path>`, `--target <arch>`, `-O0`–`-O3`, `-g` |
 | `sage --compile-uefi <input.sage>` | `<input-without-.sage>.efi` | `-o <path>`, `--target x86_64\|aarch64`, `-O0`–`-O3`, `-g` |
 
@@ -1182,7 +1183,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v3.5.6
+- **Current Version**: v3.6.9
 - **Spec Version**: 3.0 (see `STABILITY.md` for guarantees)
 
 ## 💾 Project Structure
@@ -1360,6 +1361,7 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 **Recent Milestones:**
 
+- June 8, 2026: v3.6.5: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
 - June 5, 2026: Optimization: Hardened interpreter search path logic (preventing duplicate paths, increased budget to 64) and implemented high-performance native bridging for SageMetal VM (Math, IO, Sys, Regex).
 - May 29, 2026: v3.5.6: Fixed doc comment detachment for `errno.strerror` and updated core metadata.
 - May 25, 2026: v3.5.4: Structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust sandbox security guards.

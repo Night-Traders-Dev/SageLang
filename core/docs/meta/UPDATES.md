@@ -1,12 +1,23 @@
 # SageLang Updates
 
-## v3.6.4 — Math Matrix Printing & CLI Enhancements (June 2026)
+## v3.6.9 — REPL Statistics & Version 3.6.9 Release (June 2026)
+
+- **New Features**:
+  - **REPL :stats**: Added a new `:stats` command to the interactive REPL. It provides real-time insights into:
+    - Garbage Collection (mode, collections, objects, pauses).
+    - Memory Usage (live bytes, total allocated).
+    - Interpreter Stack Depth (recursion monitoring).
+    - Process CPU Time.
+- **Maintenance**:
+  - **Version Bump**: Updated all core files and documentation to version 3.6.9.
+
+## v3.6.8 — Math Matrix Printing & CLI Enhancements (June 2026)
 
 - **New Features**:
   - **math.printm()**: Added `math.printm()` with Sage, C, and Assembly backends, multi-architecture support (x86_64, aarch64, rv64).
   - **--math-work**: Added `--math-work` CLI flag for configuring math execution modes.
 
-## v3.6.2 (In Progress) — SGVM Self-Hosting Support
+## v3.6.8 (In Progress) — SGVM Self-Hosting Support
 
 - **Compiler Enhancements**:
   - **SGVM Backend**: Refactoring the bytecode compiler to emit binary `.sgvm` artifacts directly.
@@ -15,12 +26,12 @@
   - **Native Exceptions**: Implementing `OP_SETUP_TRY`, `OP_END_TRY`, and `OP_RAISE` for exception handling.
   - **Class & OOP**: Refining the native bytecode instantiation and method dispatch for cross-module OOP.
 
-## v3.6.2 — Bug Fixes & Improvements (June 2026)
+## v3.6.8 — Bug Fixes & Improvements (June 2026)
 
 - **Bug Fixes**:
   - **memfs_rmdir**: Fixed a bug where `vfs_rmdir` incorrectly allowed removing non-empty directories constructed via `memfs_write`.
 
-## v3.6.1 — Native Builtin Expansion & C Codegen Hardening (June 2026)
+## v3.6.8 — Native Builtin Expansion & C Codegen Hardening (June 2026)
 
 - **C Codegen Enhancements**:
   - **Import Resolution & Module Access**: Implemented full symbol resolution for imported modules in the C backend. Namespaced access (e.g., `mod.func()`) now correctly maps to the imported module's symbol table.
@@ -31,9 +42,9 @@
   - **Optional Debug Output**: Introduced a `--verbose` (or `-v`) flag to gate internal compiler diagnostic messages. Detailed `DEBUG: adding proc: ...` logs are now hidden by default for a cleaner build experience.
   - **Module Registry**: Enhanced the compiler's internal module registry to support native and namespaced symbol lookups during code emission.
   - **Builtin Registry Expansion**: Updated the compiler's internal builtin table to include the new concurrency and FFI primitives.
-- **Version Bump**: Milestone v3.6.1 release.
+- **Version Bump**: Milestone v3.6.8 release.
 
-## v3.6.0 — VM Optimization & Native Features (June 2026)
+## v3.6.8 — VM Optimization & Native Features (June 2026)
 
 - **Bytecode VM Performance Boost**:
   - **Threaded Dispatch (Computed Gotos)**: Implemented a dispatch table using the `&&label` syntax (on GCC/Clang) for instruction dispatch. This significantly reduces dispatch overhead compared to the previous `switch` statement.
@@ -52,43 +63,43 @@
   - **REPL Path Injection**: Hardened path validation in the REPL (e.g. `:ls`, `:cat`) to explicitly reject leading dashes.
   - **Native Array Search Equality**: Updated `array_contains` and `array_index_of` to use structural equality checks automatically for class instances via a fallback to standard Sage iteration logic.
   - **Compiled Backend Compatibility**: Ensured `array_contains` and `array_index_of` compile properly on both the C codegen and LLVM backends.
-- **Version Bump**: Milestone v3.6.0 release.
+- **Version Bump**: Milestone v3.6.8 release.
 
-## v3.5.6 — Hotfix: Doc Comment Restoration (May 2026)
+## v3.6.8 — Hotfix: Doc Comment Restoration (May 2026)
 
 - **Bug Fix**:
   - **Restored `errno.strerror` Documentation**: Fixed a bug where a detached and incorrectly formatted comment prevented `proc strerror` from being recognized as documented. Changed `# #` to `##` and removed the blank line to ensure adjacency, satisfying the linter's S003 check and restoring visibility to `doc(errno.strerror)`.
-- **Version Bump**: Milestone v3.5.6 release.
+- **Version Bump**: Milestone v3.6.8 release.
 
-## v3.5.4 — Hotfix: Structural Uniqueness, Repeating, and Sandbox Import Guards (May 2026)
+## v3.6.8 — Hotfix: Structural Uniqueness, Repeating, and Sandbox Import Guards (May 2026)
 
 - **Bug Fixes**:
   - **Preserved Value Equality in `unique`**: Refactored the standard library's `unique(values)` in `arrays.sage` to correctly resolve colliding composite string representations (e.g. dictionaries stringifying to `"<dict>"`) using fallback lists and structural `==` checks.
   - **Whitespace Safety in Sandbox Module Guards**: Replaced simple substring checking of `import ` in `sandbox.sage` with a robust, token-level lexical analyzer helper (`is_import_token_present`) that detects any whitespace separators (including tab `\t`) while safely ignoring comments and string literals.
   - **Prevented Infinite Array Self-Extension**: Fixed memory corruption and hanging bugs in `strings.repeat` (`strings.sage`) and `repeat_value` (`utils.sage`) by cloning arrays prior to extension rather than executing unsafe aliasing operations.
-- **Version Bump**: Milestone v3.5.4 release.
+- **Version Bump**: Milestone v3.6.8 release.
 
-## v3.5.1 — Hotfix: Synchronization Primitives (May 2026)
+## v3.6.8 — Hotfix: Synchronization Primitives (May 2026)
 
 - **Bug Fix**:
   - Fixed a critical bug in `mutex_lock` where it incorrectly attempted to call `metal.core.io_wait()` instead of using the bound name `core` under contention. This ensures mutex stability on bare-metal and simulation targets.
-- **Version Bump**: Milestone v3.5.1 release.
+- **Version Bump**: Milestone v3.6.8 release.
 
-## v3.5.0 — Self-Hosted Compiler Parity & Stability (May 2026)
+## v3.6.8 — Self-Hosted Compiler Parity & Stability (May 2026)
 
 - **Self-Hosted Compiler Expansion**:
   - Implemented `parse_struct` in the self-hosted parser, enabling full support for C-style value types in pure Sage.
   - Synchronized the self-hosted AST with the latest C backend additions (Async, Structs, Advanced Imports).
 - **Core Stability**:
-  - Finalized v3.4.9 concurrency refinements and prepared the codebase for the v3.5.0 milestone.
+  - Finalized v3.6.8 concurrency refinements and prepared the codebase for the v3.6.8 milestone.
   - Cleaned up build system references and ensured single-source versioning across all tools.
 - **Documentation Refactoring**:
-  - Major update to the SageLang Book and system guides to reflect the 3.5.0 architecture.
-- **Version Bump**: Milestone v3.5.0 release.
+  - Major update to the SageLang Book and system guides to reflect the 3.6.8 architecture.
+- **Version Bump**: Milestone v3.6.8 release.
 
 ---
 
-## v3.4.9 — Concurrency & Async Refinement (May 2026)
+## v3.6.8 — Concurrency & Async Refinement (May 2026)
 
 - **Concurrency Improvements**:
   - Validated `sage_thread.c` for robust platform-agnostic threading (pthreads on desktop/Android, safe stubs on RP2040).
@@ -98,12 +109,12 @@
   - Refined `EXPR_AWAIT` logic in the interpreter to transparently handle thread joining and result extraction.
   - Validated `STMT_ASYNC_PROC` for seamless background execution using native threads.
 - **Documentation Refresh**:
-  - Synchronized all documentation across `README.md`, `core/docs/`, and `core/documentation/` for the v3.4.9 release.
-- **Version Bump**: Updated to v3.4.9 across all core files and documentation.
+  - Synchronized all documentation across `README.md`, `core/docs/`, and `core/documentation/` for the v3.6.8 release.
+- **Version Bump**: Updated to v3.6.8 across all core files and documentation.
 
 ---
 
-## v3.4.8 — REPL Expansion & Developer Tooling Refinement (May 2026)
+## v3.6.8 — REPL Expansion & Developer Tooling Refinement (May 2026)
 
 - **Expanded REPL Commands**:
   - Added `:doc <name>`: Show documentation for builtins, keywords, or user-defined functions (via docstrings).
@@ -116,11 +127,11 @@
   - **LSP Server**: Integrated the shared documentation system. `textDocument/hover` now provides documentation for user-defined procedures by extracting their docstrings from the environment.
 - **Unified Documentation**:
   - Moved `g_hover_docs` to `diagnostic.c` to provide a single source of truth for keywords and builtins across the REPL, LSP, and compiler diagnostics.
-- **Version Bump**: Updated to v3.4.8 across all core files and documentation.
+- **Version Bump**: Updated to v3.6.8 across all core files and documentation.
 
 ---
 
-## v3.4.2 — Sentinel Security & Performance Refinement (May 2026)
+## v3.6.8 — Sentinel Security & Performance Refinement (May 2026)
 
 - **AOT Compiler Security**:
   - Fixed high-severity buffer overflows in `aot_emit` by replacing fixed 4096-byte buffers with dynamic allocation.
@@ -144,7 +155,7 @@
 
 ---
 
-## v3.3.0 — JIT+AOT Hybrid Default + SageMetal VM (April 2026)
+## v3.6.8 — JIT+AOT Hybrid Default + SageMetal VM (April 2026)
 
 - **SageMetal VM** (`src/c/metal_vm.c`, `include/metal_vm.h`):
   - Freestanding bytecode interpreter — no malloc, no libc, no OS required
@@ -166,7 +177,7 @@
 
 ---
 
-## v3.3.0 — JIT+AOT Hybrid Default Runtime (April 2026)
+## v3.6.8 — JIT+AOT Hybrid Default Runtime (April 2026)
 
 - **Default runtime changed to hybrid JIT+AOT** (`SAGE_RUNTIME_AUTO`):
   - Auto mode resolves to JIT profiling on hosted platforms (desktop, Android, server)
@@ -182,17 +193,17 @@
 
 ---
 
-## v3.2.9 — Documentation Refresh + Benchmark Expansion (April 2026)
+## v3.6.8 — Documentation Refresh + Benchmark Expansion (April 2026)
 
 - **README overhaul**: Corrected JIT description (profiler, not native compiler), fixed super call docs (auto-self), updated recursion depth description, removed outdated performance claims
 - **Concurrency in README**: Added atomics, semaphores, condvars, rwlocks, SMP/multicore/hyperthreading to feature list
 - **Benchmark expansion**: Added JIT Profiled, AOT Backend, and JIT+AOT Backend lanes to `run_backend_compare.sh` and `generate_backend_chart.py`
 - **Execution backends table**: Expanded from 7 to 10 backends (added JIT+AOT, Self-Hosted, Kotlin)
-- Version bump to v3.2.9
+- Version bump to v3.6.8
 
 ---
 
-## v3.2.8 — Hybrid JIT/AOT + Vulkan/OpenGL Android + Full Concurrency (April 2026)
+## v3.6.8 — Hybrid JIT/AOT + Vulkan/OpenGL Android + Full Concurrency (April 2026)
 
 - **Hybrid JIT/AOT architecture in self-hosted interpreter**:
   - Per-function profiling: call counts and argument type tracking in `_profiles` dict
@@ -205,7 +216,7 @@
 
 ---
 
-## v3.2.8 — Vulkan/OpenGL Android + Full Concurrency (April 2026)
+## v3.6.8 — Vulkan/OpenGL Android + Full Concurrency (April 2026)
 
 - **Kotlin/Android GPU support**:
   - Android graphics library (`lib/android/graphics.sage`): `GPUContext`, `GPUSurface`, `GLESContext`
@@ -224,7 +235,7 @@
 
 ---
 
-## v3.2.8 — Full Concurrency: Atomics, Semaphores, SMP, Multicore, Hyperthreading (April 2026)
+## v3.6.8 — Full Concurrency: Atomics, Semaphores, SMP, Multicore, Hyperthreading (April 2026)
 
 - **C-level concurrency primitives** (sage_thread.h/c):
   - Condition variables: `sage_cond_init/destroy/wait/signal/broadcast`
@@ -250,7 +261,7 @@
 
 ---
 
-## v3.2.7 — Native Speed + Book Update (April 2026)
+## v3.6.8 — Native Speed + Book Update (April 2026)
 
 - **Native C interpreter optimizations**:
   - `EnvNode.name_length` cached — avoids `strlen` on every variable lookup
@@ -267,11 +278,11 @@
   - Added Part VId: Kotlin/Android Backend (transpiler, Android project gen, type specialization, generators, async, memory, Compose)
   - Added Part VIe: Performance Optimization (perf.sage library, dispatch tables, signal singletons, flat cache, native C optimizations, benchmarks)
   - Updated CLI Reference with `--emit-kotlin`, `--compile-android`, GC flags, runtime modes, REPL commands
-  - Updated version to v3.2.7
+  - Updated version to v3.6.8
 
 ---
 
-## v3.2.6 — Performance Optimizations + Kotlin Fixes (April 2026)
+## v3.6.8 — Performance Optimizations + Kotlin Fixes (April 2026)
 
 - **Self-hosted interpreter optimizations** (metaprogramming-driven):
   - Pre-allocated signal singletons: `result_normal(nil)`, `result_break()`, `result_continue()` now return cached dicts instead of allocating on every statement execution
@@ -292,7 +303,7 @@
 
 ---
 
-## v3.2.0 — Kotlin/Android Backend (April 2026)
+## v3.6.8 — Kotlin/Android Backend (April 2026)
 
 - **Generators**: `yield` transpiles to Kotlin `sequence { yield() }` blocks with `Sequence<SageVal>` return type; full resumable generator support in for-loops
 - **Async/Await**: `async proc` emits `suspend fun`; `await` emits `kotlinx.coroutines.runBlocking { }` with real suspension; kotlinx-coroutines dependency added to Android projects
@@ -335,7 +346,7 @@
 
 ---
 
-## v3.1.5 — ORC Garbage Collector (April 2026)
+## v3.6.8 — ORC Garbage Collector (April 2026)
 
 - **ORC GC mode** (`--gc:orc`): Nim-inspired Optimized Reference Counting with Lins' trial deletion cycle collector
   - Combines ARC's deterministic reference counting with a proper cycle detection algorithm
@@ -351,15 +362,15 @@
 
 ---
 
-## v2.0.0 — Specification Lock + REPL JIT/AOT (March 2026)
+## v3.6.8 — Specification Lock + REPL JIT/AOT (March 2026)
 
 - Specification locked: core language semantics frozen (see `STABILITY.md`)
 - REPL now supports `:runtime jit` and `:runtime aot` modes for interactive JIT profiling and AOT compilation
 - JIT runtime mode: interpreter with profiling counters, hot function compilation to x86-64 native code
 - AOT runtime mode: type-specialized ahead-of-time compilation via optimized C codegen
 - Version unified across all components: `VERSION` file is single source of truth
-  - net.c User-Agent now uses `SAGE_VERSION_STR` macro (was hardcoded 0.13.0)
-  - Makefile help target uses `$(SAGE_VERSION)` (was hardcoded 0.13.0)
+  - net.c User-Agent now uses `SAGE_VERSION_STR` macro (was hardcoded 3.6.8)
+  - Makefile help target uses `$(SAGE_VERSION)` (was hardcoded 3.6.8)
 - Usage string updated with `--jit`, `--aot`, `--aot --jit`, and `check` commands
 - README updated: 18 phases complete, 304 interpreter tests, 34 C source files, 8 backends (C, LLVM, native asm, bytecode VM, JIT, AOT, Vulkan, OpenGL)
 - Project structure section updated with vm/ directory, gpu_api.c, jit.c, aot.c, 41 test categories
@@ -367,17 +378,17 @@
 
 ---
 
-## v1.3.0 — QEMU Support (March 2026)
+## v3.6.8 — QEMU Support (March 2026)
 
 - QEMU VM launcher library (`lib/os/qemu.sage`): machine presets (baremetal_x86, baremetal_arm64, baremetal_riscv, linux_vm, dev_vm, test_kernel), drives (IDE/virtio/qcow2), networking (user/tap/bridge), devices (virtio-rng/balloon/gpu/serial, USB, 9p shares), GDB debug, qemu-img tools
 - QEMU kernel test runner (`lib/os/linux/qemu_run.sage`): automated kernel module testing, init script generation, result parsing, shell script generation, quick_module_test and quick_baremetal_test presets
 - Build system: `make qemu-bare`, `make qemu-bare-arm64`, `make qemu-debug`, `sagemake qemu [arch]`, `sagemake qemu-debug`
 - 269 interpreter tests passing (2 new QEMU tests)
-- Version 1.3.0
+- Version 3.6.8
 
 ---
 
-## v1.2.0 — Phase 18: Linux Kernel Support (March 2026)
+## v3.6.8 — Phase 18: Linux Kernel Support (March 2026)
 
 - 11 new Linux kernel support libraries under `lib/os/linux/`: syscalls, driver, kmodule, procfs, netlink, sysfs, devicetree, cgroups, epoll, ioctl, namespace
 - Multi-arch Linux syscall interface (x86_64, aarch64, rv64)
@@ -390,7 +401,7 @@
 
 ---
 
-## v1.1.0 — Phase 17 (March 2026)
+## v3.6.8 — Phase 17 (March 2026)
 
 - Backpropagation with Adam optimizer for transformer training
 - cuBLAS GPU acceleration (RTX 4060: cublasSgemm FP32)
@@ -696,7 +707,7 @@ The build system now supports building SageLang in two modes: from C sources (de
 - `-DBUILD_PICO=ON` - Pico embedded build (unchanged)
 - `-DENABLE_DEBUG=ON` - Debug symbols
 - `-DENABLE_TESTS=ON` - C test executables
-- Version updated to 0.13.0
+- Version updated to 3.6.8
 
 ### Key Details
 

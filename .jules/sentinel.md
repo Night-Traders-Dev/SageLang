@@ -31,3 +31,8 @@
 **Vulnerability:** Sandbox blacklist covered high-level modules (io, sys) but missed several low-level C-registered primitives like `addressof`, `mem_read`, and `struct_def`. An attacker could use these to introspect heap memory or perform unauthorized FFI calls.
 **Learning:** Security sandboxes built on blacklists must be exhaustive across all execution layers. Merely blocking "modules" is insufficient if the language registers powerful global primitives directly in the environment. Memory introspection functions are particularly dangerous as they enable sandbox escape research.
 **Prevention:** Maintain a comprehensive registry of all registered native identifiers (`env_define` in C) and ensure every new low-level capability is audited for sandbox safety. Transitioning to an allowlist-based approach is recommended for higher security tiers.
+
+## 2026-06-09 - Shell Injection via EDITOR in REPL :edit
+**Vulnerability:** The REPL `:edit` command used `system()` to invoke the editor, interpolating the `EDITOR` environment variable without sanitization. An attacker could set `EDITOR="vim; rm -rf /"` to execute arbitrary commands.
+**Learning:** High-level REPL convenience features often use environment variables to delegate to external tools. If these are invoked via a shell, they become a prime target for injection.
+**Prevention:** Avoid `system()` for invoking external tools with arguments derived from environment variables or user input. Use `fork()` and `execvp()` to pass arguments as a literal array, ensuring they are never interpreted by a shell.

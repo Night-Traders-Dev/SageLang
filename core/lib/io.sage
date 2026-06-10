@@ -9,4 +9,10 @@ class _Io:
         return io_readbytes(p)
     proc exists(p):
         return io_exists(p)
+    proc remove(p):
+        return io_remove(p)
+    proc isdir(p):
+        return io_isdir(p)
+    proc mkdir(p):
+        return io_mkdir(p)
 let io = _Io()

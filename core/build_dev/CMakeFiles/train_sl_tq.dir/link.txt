@@ -1,1 +1,0 @@
-/usr/bin/cc CMakeFiles/train_sl_tq.dir/src/c/train_sl_tq.c.o -o train_sl_tq  -lm -lpthread 

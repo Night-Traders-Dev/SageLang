@@ -7,8 +7,8 @@
 #include "gc.h"
 #include "token.h"
 
-#define MAX_LOOP_DEPTH 64
-#define MAX_BREAK_PATCHES 64
+#define MAX_LOOP_DEPTH 128
+#define MAX_BREAK_PATCHES 128
 
 typedef struct {
     int break_patches[MAX_BREAK_PATCHES];

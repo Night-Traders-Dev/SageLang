@@ -70,7 +70,7 @@ typedef struct {
 
 int g_sage_verbose = 0;
 
-typedef enum { COMPILER_TARGET_HOST, COMPILER_TARGET_PICO } CompilerTarget;
+typedef enum { COMPILER_TARGET_HOST, COMPILER_TARGET_RP2040, COMPILER_TARGET_RP2350_ARM, COMPILER_TARGET_RP2350_RISCV } CompilerTarget;
 
 static void sb_init(StringBuffer *sb) {
   sb->cap = 128;
@@ -2982,7 +2982,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "#include <stdint.h>\n",
         out);
 
-  if (target == COMPILER_TARGET_PICO) {
+  if (target == COMPILER_TARGET_RP2040 || target == COMPILER_TARGET_RP2350_ARM || target == COMPILER_TARGET_RP2350_RISCV) {
     fputs("#include \"pico/stdlib.h\"\n", out);
   }
 
@@ -3173,17 +3173,13 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "            break;\n"
         "        case SAGE_GC_ARRAY: {\n"
         "            SageArray* array = (SageArray*)object;\n"
-        "            freed += sizeof(SageValue) * (size_t)array->capacity;\n"
         "            free(array->elements);\n"
         "            break;\n"
         "        }\n"
         "        case SAGE_GC_DICT: {\n"
         "            SageDict* dict = (SageDict*)object;\n"
-        "            freed += sizeof(char*) * (size_t)dict->capacity;\n"
-        "            freed += sizeof(SageValue) * (size_t)dict->capacity;\n"
         "            for (int i = 0; i < dict->count; i++) {\n"
         "                if (dict->keys[i] != NULL) {\n"
-        "                    freed += strlen(dict->keys[i]) + 1;\n"
         "                    free(dict->keys[i]);\n"
         "                }\n"
         "            }\n"
@@ -3193,7 +3189,6 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        }\n"
         "        case SAGE_GC_TUPLE: {\n"
         "            SageTuple* tuple = (SageTuple*)object;\n"
-        "            freed += sizeof(SageValue) * (size_t)tuple->count;\n"
         "            free(tuple->elements);\n"
         "            break;\n"
         "        }\n"
@@ -3351,8 +3346,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "static SageValue sage_array(void) { SageValue v; v.type = "
         "SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
         "static SageValue sage_function(void* fn) { SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = fn; return v; }\n"
-        "\n"
-        "static SageValue sage_ffi_open(SageValue libname) {\n"
+        "\n",
+        out);
+  fputs("static SageValue sage_ffi_open(SageValue libname) {\n"
         "    if (libname.type != SAGE_TAG_STRING) return sage_nil();\n"
         "    void* handle = dlopen(libname.as.string, RTLD_NOW);\n"
         "    if (!handle) return sage_nil();\n"
@@ -3695,8 +3691,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "static SageValue sage_native_exp(SageValue v) { return sage_number(exp(v.as.number)); }\n"
       "static SageValue sage_native_log(SageValue v) { return sage_number(log(v.as.number)); }\n"
       "static SageValue sage_native_sqrt(SageValue v) { return sage_number(sqrt(v.as.number)); }\n"
-      "\n"
-      "static SageValue sage_native_thread_mutex(void) {\n"
+      "\n",
+      out);
+  fputs("static SageValue sage_native_thread_mutex(void) {\n"
       "    pthread_mutex_t* m = malloc(sizeof(pthread_mutex_t));\n"
       "    pthread_mutex_init(m, NULL);\n"
       "    SageValue v; v.type = SAGE_TAG_MUTEX; v.as.mutex = m; return v;\n"
@@ -3870,8 +3867,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "return sage_nil();\n"
       "    return array.as.array->elements[--array.as.array->count];\n"
       "}\n"
-      "\n"
-      "static SageValue sage_array_extend(SageValue target, SageValue source) "
+      "\n",
+      out);
+  fputs("static SageValue sage_array_extend(SageValue target, SageValue source) "
       "{\n"
       "    if (target.type != SAGE_TAG_ARRAY || source.type != SAGE_TAG_ARRAY) "
       "return sage_nil();\n"
@@ -4721,7 +4719,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         out);
 
   /* clock() and input() */
-  if (target != COMPILER_TARGET_PICO) {
+  if (target != COMPILER_TARGET_RP2040 && target != COMPILER_TARGET_RP2350_ARM && target != COMPILER_TARGET_RP2350_RISCV) {
     fputs(
         "#include <time.h>\n"
         "static SageValue sage_clock_fn(void) {\n"
@@ -5115,7 +5113,7 @@ static void emit_main_function(Compiler *compiler, Stmt *program,
   emit_line(compiler, "    sage_argc = argc; sage_argv = argv;");
   compiler->indent++;
 
-  if (target == COMPILER_TARGET_PICO) {
+  if (target == COMPILER_TARGET_RP2040 || target == COMPILER_TARGET_RP2350_ARM || target == COMPILER_TARGET_RP2350_RISCV) {
     emit_line(compiler, "stdio_init_all();");
     emit_line(compiler, "sleep_ms(2000);");
   }
@@ -5558,14 +5556,23 @@ int compile_source_to_executable_opt(const char *source, const char *input_path,
 int compile_source_to_pico_c(const char *source, const char *input_path,
                              const char *output_path) {
   return write_c_output_internal(source, input_path, output_path,
-                                 COMPILER_TARGET_PICO, 0, 0);
+                                 COMPILER_TARGET_RP2040, 0, 0);
 }
 
 int compile_source_to_pico_uf2(const char *source, const char *input_path,
                                const char *output_dir, const char *program_name,
                                const char *pico_board,
-                               const char *pico_sdk_path, char *uf2_path_out,
-                               size_t uf2_path_out_size) {
+                               const char *pico_sdk_path, const char *pico_chip,
+                               char *uf2_path_out, size_t uf2_path_out_size) {
+  CompilerTarget target = COMPILER_TARGET_RP2040;
+  if (pico_chip != NULL) {
+    if (strcmp(pico_chip, "rp2350-arm") == 0) {
+      target = COMPILER_TARGET_RP2350_ARM;
+    } else if (strcmp(pico_chip, "rp2350-riscv") == 0) {
+      target = COMPILER_TARGET_RP2350_RISCV;
+    }
+  }
+
   const char *sdk_path = pico_sdk_path;
   if (sdk_path == NULL || sdk_path[0] == '\0') {
     sdk_path = getenv("PICO_SDK_PATH");
@@ -5627,7 +5634,7 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
   char *source_path = path_join(effective_output_dir, source_file_name);
 
   if (!write_c_output_internal(source, input_path, source_path,
-                               COMPILER_TARGET_PICO, 0, 0)) {
+                               target, 0, 0)) {
     free(repo_root);
     free(import_path);
     free(build_dir);

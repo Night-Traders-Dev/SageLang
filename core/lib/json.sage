@@ -999,7 +999,7 @@ proc cJSON_SetNumberHelper(object, number):
 
 # cJSON_Version() -> string
 proc cJSON_Version():
-    return "1.7.18-sage"
+    return "3.6.8-sage"
 
 # ============================================================================
 # Convenience: Native Sage value conversion

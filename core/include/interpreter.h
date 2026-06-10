@@ -22,5 +22,6 @@ typedef struct {
 
 ExecResult interpret(Stmt* stmt, Env* env);
 void init_stdlib(Env* env);
+int interpreter_get_stack_depth(void);
 
 #endif

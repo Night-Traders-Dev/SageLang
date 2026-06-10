@@ -6,6 +6,8 @@
 #include <setjmp.h>
 #include <ctype.h>
 #include <time.h>
+#include <errno.h>
+#include <sys/wait.h>
 #include "lexer.h"
 #include "token.h"
 #include "ast.h"
@@ -85,7 +87,7 @@ static void print_usage(FILE* stream) {
             "       sage --emit-kotlin <input.sage> [-o output.kt] [-I dir] [-O0..3]\n"
             "       sage --compile-android <input.sage> [-o output_dir] [--package com.example.app] [--app-name MyApp] [--min-sdk 24] [-I dir]\n"
             "       sage --emit-pico-c <input.sage> [-o output.c]\n"
-            "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path]\n"
+            "       sage --compile-pico <input.sage> [-o output_dir] [--board board] [--name program] [--sdk path] [--chip chip]\n"
             "       sage --jit <input.sage>   Run with JIT profiling and compilation\n"
             "       sage --aot <input.sage> [-o output]  AOT compile to native binary\n"
             "       sage --aot --jit <input.sage> [-o output]  Profile-guided AOT compilation\n"
@@ -204,11 +206,13 @@ static int parse_codegen_options(int argc, const char* argv[], int start_index,
 
 static int parse_pico_options(int argc, const char* argv[], int start_index,
                               const char** output_dir, const char** board,
-                              const char** program_name, const char** sdk_path) {
+                              const char** program_name, const char** sdk_path,
+                              const char** chip) {
     *output_dir = NULL;
     *board = NULL;
     *program_name = NULL;
     *sdk_path = NULL;
+    *chip = NULL;
 
     for (int i = start_index; i < argc; i++) {
         if (strcmp(argv[i], "-o") == 0) {
@@ -235,6 +239,12 @@ static int parse_pico_options(int argc, const char* argv[], int start_index,
                 return 0;
             }
             *sdk_path = argv[++i];
+        } else if (strcmp(argv[i], "--chip") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Missing chip after --chip.\n");
+                return 0;
+            }
+            *chip = argv[++i];
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
             return 0;
@@ -1371,6 +1381,14 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
             continue;
         }
 
+        if (strcmp(line, ":stats") == 0) {
+            gc_print_stats();
+            printf("Interpreter Stack Depth: %d\n", interpreter_get_stack_depth());
+            printf("Process CPU Time:        %.3f seconds\n", (double)clock() / CLOCKS_PER_SEC);
+            free(line);
+            continue;
+        }
+
         if (line[0] == ':') {
             const char* arg = NULL;
 
@@ -1648,9 +1666,33 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 if (!editor) editor = getenv("VISUAL");
                 if (!editor) editor = "vi";
 
-                char cmd[2048];
-                snprintf(cmd, sizeof(cmd), "%s %s", editor, tmp_path);
-                if (system(cmd) == 0) {
+                // Safe execution of editor (CWE-78)
+                int ok = 0;
+                pid_t pid = fork();
+                if (pid == 0) {
+                    char* args[64];
+                    int argc_local = 0;
+                    char editor_copy[1024];
+                    strncpy(editor_copy, editor, sizeof(editor_copy) - 1);
+                    editor_copy[sizeof(editor_copy) - 1] = '\0';
+
+                    char* token = strtok(editor_copy, " ");
+                    while (token != NULL && argc_local < 62) {
+                        args[argc_local++] = token;
+                        token = strtok(NULL, " ");
+                    }
+                    args[argc_local++] = tmp_path;
+                    args[argc_local] = NULL;
+
+                    execvp(args[0], args);
+                    _exit(127);
+                } else if (pid > 0) {
+                    int status;
+                    waitpid(pid, &status, 0);
+                    ok = (WIFEXITED(status) && WEXITSTATUS(status) == 0);
+                }
+
+                if (ok) {
                     char* buffer = try_main_read_file(tmp_path);
                     if (buffer) {
                         if (setjmp(g_repl_error_jmp) == 0) {
@@ -2024,6 +2066,7 @@ int main(int argc, const char* argv[]) {
     ThreadState main_thread_state;
     memset(&main_thread_state, 0, sizeof(ThreadState));
     main_thread_state.thread_id = sage_thread_id();
+    main_thread_state.gas_limit = -1; // unlimited
     gc_register_thread(&main_thread_state);
 
     // ── OIS integration ──────────────────────────────────────────────────────
@@ -2607,7 +2650,8 @@ int main(int argc, const char* argv[]) {
         const char* board = NULL;
         const char* program_name = NULL;
         const char* sdk_path = NULL;
-        if (!parse_pico_options(cmd_argc, cmd_argv, 3, &output_dir, &board, &program_name, &sdk_path)) {
+        const char* chip = NULL;
+        if (!parse_pico_options(cmd_argc, cmd_argv, 3, &output_dir, &board, &program_name, &sdk_path, &chip)) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
         }
@@ -2615,7 +2659,7 @@ int main(int argc, const char* argv[]) {
         char* source = main_read_file(cmd_argv[2]);
         char uf2_path[1024];
         if (!compile_source_to_pico_uf2(source, cmd_argv[2], output_dir, program_name,
-                                        board, sdk_path, uf2_path, sizeof(uf2_path))) {
+                                        board, sdk_path, chip, uf2_path, sizeof(uf2_path))) {
             free(source);
             CLEANUP_AND_EXIT(1);
         }

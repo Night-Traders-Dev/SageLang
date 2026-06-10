@@ -53,7 +53,7 @@ else:
 end
 
 shell_c = shell_c + "    serial_init();" + NL
-shell_c = shell_c + "    serial_puts(\"SageOS Shell v0.2.0 " + arch + "\\n\");" + NL
+shell_c = shell_c + "    serial_puts(\"SageOS Shell v3.6.8 " + arch + "\\n\");" + NL
 shell_c = shell_c + "    char cmd[CMD_MAX];" + NL
 shell_c = shell_c + "    while (1) {" + NL
 shell_c = shell_c + "        serial_puts(\"sage@os:~$ \");" + NL

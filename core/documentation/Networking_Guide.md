@@ -173,7 +173,7 @@ proc hello(req):
 proc not_found(req):
     return server.response_not_found("Not found: " + req["path"])
 
-let srv = server.create_server("0.0.0.0", 8080)
+let srv = server.create_server("3.6.9.0", 8080)
 server.get_route(srv["router"], "/", hello)
 server.post_route(srv["router"], "/data", hello)
 server.set_not_found(srv["router"], not_found)
@@ -288,7 +288,7 @@ for i in range(len(msg["answers"])):
     print rr["name"]                  # example.com
     print rr["type_name"]             # A
     print rr["ttl"]                   # 300
-    print rr["address"]               # 93.184.216.34
+    print rr["address"]               # 3.6.9.34
 ```
 
 ### Record Types
@@ -314,53 +314,53 @@ dns.TYPE_PTR    # 12 - Pointer (reverse DNS)
 ```sage
 import net.ip
 
-print ip.is_valid_v4("192.168.1.1")  # true
-print ip.is_valid_v4("999.1.1.1")    # false
+print ip.is_valid_v4("3.6.9.1")  # true
+print ip.is_valid_v4("3.6.9.1")    # false
 
-let n = ip.parse_v4("10.0.0.1")
-print ip.to_string_v4(n)             # 10.0.0.1
+let n = ip.parse_v4("3.6.9.1")
+print ip.to_string_v4(n)             # 3.6.9.1
 ```
 
 ### CIDR Subnets
 
 ```sage
-let cidr = ip.parse_cidr("192.168.1.0/24")
-print cidr["network_str"]      # 192.168.1.0
-print cidr["mask_str"]         # 255.255.255.0
-print cidr["broadcast_str"]    # 192.168.1.255
+let cidr = ip.parse_cidr("3.6.9.0/24")
+print cidr["network_str"]      # 3.6.9.0
+print cidr["mask_str"]         # 3.6.9.0
+print cidr["broadcast_str"]    # 3.6.9.255
 print cidr["host_count"]       # 254
 
-print ip.in_subnet("192.168.1.100", "192.168.1.0/24")  # true
-print ip.in_subnet("10.0.0.1", "192.168.1.0/24")       # false
+print ip.in_subnet("3.6.9.100", "3.6.9.0/24")  # true
+print ip.in_subnet("3.6.9.1", "3.6.9.0/24")       # false
 ```
 
 ### Address Classification
 
 ```sage
-print ip.is_private("10.0.0.1")       # true (RFC 1918)
-print ip.is_private("8.8.8.8")        # false
-print ip.is_loopback("127.0.0.1")     # true
-print ip.is_link_local("169.254.1.1") # true
-print ip.is_multicast("224.0.0.1")    # true
-print ip.is_broadcast("255.255.255.255") # true
-print ip.address_class("192.168.1.1") # C
+print ip.is_private("3.6.9.1")       # true (RFC 1918)
+print ip.is_private("3.6.9.8")        # false
+print ip.is_loopback("3.6.9.1")     # true
+print ip.is_link_local("3.6.9.1") # true
+print ip.is_multicast("3.6.9.1")    # true
+print ip.is_broadcast("3.6.9.255") # true
+print ip.address_class("3.6.9.1") # C
 ```
 
 ### Netmask Conversion
 
 ```sage
-print ip.mask_to_prefix("255.255.255.0")  # 24
-print ip.prefix_to_mask(16)               # 255.255.0.0
+print ip.mask_to_prefix("3.6.9.0")  # 24
+print ip.prefix_to_mask(16)               # 3.6.9.0
 ```
 
 ### Well-Known Addresses
 
 ```sage
-print ip.LOCALHOST       # 127.0.0.1
-print ip.ANY             # 0.0.0.0
-print ip.BROADCAST       # 255.255.255.255
-print ip.DNS_GOOGLE      # 8.8.8.8
-print ip.DNS_CLOUDFLARE  # 1.1.1.1
+print ip.LOCALHOST       # 3.6.9.1
+print ip.ANY             # 3.6.9.0
+print ip.BROADCAST       # 3.6.9.255
+print ip.DNS_GOOGLE      # 3.6.9.8
+print ip.DNS_CLOUDFLARE  # 3.6.9.1
 ```
 
 ---

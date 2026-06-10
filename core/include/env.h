@@ -24,7 +24,18 @@ typedef struct EnvRootNode {
     struct EnvRootNode* next;
 } EnvRootNode;
 
+#ifdef SAGE_BARE_METAL
+extern EnvRootNode* g_gc_root_stack;
+#else
 extern __thread EnvRootNode* g_gc_root_stack;
+#endif
+
+#define GET_GC_ROOT_STACK() (gc_get_thread_state() ? gc_get_thread_state()->gc_root_stack : g_gc_root_stack)
+#define SET_GC_ROOT_STACK(v) do { \
+    ThreadState* _ts = gc_get_thread_state(); \
+    if (_ts) _ts->gc_root_stack = (v); \
+    g_gc_root_stack = (v); \
+} while(0)
 
 Env* env_create(Env* parent);
 void env_define(Env* env, const char* name, int length, Value value);
