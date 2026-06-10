@@ -3643,8 +3643,8 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             if (iter_result.is_throwing) return iter_result;
             Value iterable = iter_result.value;
 
-            if (iterable.type != VAL_ARRAY) {
-                fprintf(stderr, "Runtime Error: for loop iterable must be an array.\n");
+            if (iterable.type != VAL_ARRAY && iterable.type != VAL_TUPLE && iterable.type != VAL_DICT) {
+                fprintf(stderr, "Runtime Error: for loop iterable must be an array, tuple, or dict.\n");
                 return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
             }
 
@@ -3653,22 +3653,39 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             AST_GC_PUSH_ENV(loop_env);
             Token var = stmt->as.for_stmt.variable;
 
-            ArrayValue* arr = iterable.as.array;
-            // Define loop variable once, then directly update the slot
-            // on subsequent iterations (avoids linked-list search per iteration)
-            if (arr->count > 0) {
-                env_define_const(loop_env, var.start, var.length, arr->elements[0]);
-                // Cache the node pointer for direct slot update
-                EnvNode* var_slot = loop_env->head; // just-inserted node
-                for (int i = 0; i < arr->count; i++) {
-                    // Direct slot write (bypasses env_define search)
+            Value* elements = NULL;
+            int count = 0;
+            if (iterable.type == VAL_ARRAY) {
+                elements = iterable.as.array->elements;
+                count = iterable.as.array->count;
+            } else if (iterable.type == VAL_TUPLE) {
+                elements = iterable.as.tuple->elements;
+                count = iterable.as.tuple->count;
+            } else if (iterable.type == VAL_DICT) {
+                // For dicts, we iterate over keys.
+                DictValue* d = iterable.as.dict;
+                count = d->count;
+                elements = (Value*)malloc(sizeof(Value) * count);
+                int j = 0;
+                for (int i = 0; i < d->capacity; i++) {
+                    if (d->entries[i].key != NULL) {
+                        elements[j++] = val_string(d->entries[i].key);
+                    }
+                }
+            }
+
+            if (count > 0) {
+                env_define_const(loop_env, var.start, var.length, elements[0]);
+                EnvNode* var_slot = loop_env->head;
+                for (int i = 0; i < count; i++) {
                     if (i > 0) {
                         GC_WRITE_BARRIER(var_slot->value);
-                        var_slot->value = arr->elements[i];
+                        var_slot->value = elements[i];
                     }
 
                     ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
                     if (res.is_returning || res.is_throwing) {
+                        if (iterable.type == VAL_DICT) free(elements);
                         AST_GC_POP_ENV();
                         AST_GC_POP();
                         return res;
@@ -3678,6 +3695,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                         if (res.next_stmt == NULL) {
                             res.next_stmt = stmt;
                         }
+                        if (iterable.type == VAL_DICT) free(elements);
                         AST_GC_POP_ENV();
                         AST_GC_POP();
                         return res;
@@ -3687,6 +3705,7 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     if (res.is_continuing) continue;
                 }
             }
+            if (iterable.type == VAL_DICT) free(elements);
             AST_GC_POP_ENV();
             AST_GC_POP();
             return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };

@@ -1465,14 +1465,22 @@ proc exec_stmt(stmt, env):
     # --- For ---
     if stype == STMT_FOR:
         let iterable = eval_expr(stmt.iterable, env)
-        if type(iterable) != "array":
-            runtime_error(stmt.variable.line, "for loop iterable must be an array", "got value of type '" + type(iterable) + "'")
+        if type(iterable) != "array" and type(iterable) != "tuple" and type(iterable) != "dict":
+            runtime_error(stmt.variable.line, "for loop iterable must be an array, tuple, or dict", "got value of type '" + type(iterable) + "'")
+        
         let loop_env = env_new(env)
         let var_name = stmt.variable.text
-        let n = len(iterable)
+        
+        var elements = []
+        if type(iterable) == "array" or type(iterable) == "tuple":
+            elements = iterable
+        elif type(iterable) == "dict":
+            elements = dict_keys(iterable)
+            
+        let n = len(elements)
         let i = 0
         while i < n:
-            env_define(loop_env, var_name, iterable[i])
+            env_define(loop_env, var_name, elements[i])
             let res = exec_stmt(stmt.body, loop_env)
             let kind = res["kind"]
             if kind == SIGNAL_RETURN:
