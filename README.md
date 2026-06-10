@@ -4,7 +4,7 @@
 
 ![SageLang Logo](core/assets/SageLang.png)
 
-Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.6.2, Sage features native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
+Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.6.9, Sage features One-line Install System (OIS) integration, native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
 
 ## Install (One line installer)
 
@@ -404,6 +404,36 @@ server.get_route(srv["router"], "/", hello_handler)
 # server.listen_and_serve(srv)  # blocking
 ```
 
+### Blockchain & Distributed Ledger (`lib/blockchain/`)
+
+SageLang features a pure-Sage enterprise-grade L1 blockchain implementation with smart contracts and NFTs.
+
+| Module | Import | Description |
+|--------|--------|-------------|
+| **Blockchain** | `import blockchain.blockchain` | Main ledger state, mempool, and consensus coordination |
+| **Wallet** | `import blockchain.wallet` | Deterministic HD address generation and transaction signing |
+| **Consensus** | `import blockchain.consensus.*` | Pluggable PoW and PoA consensus engines |
+| **Contracts** | `import blockchain.contract` | Smart contract management and gas-metered VM execution |
+| **NFT** | `import blockchain.std.nft` | SNFT-721 Standard for Non-Fungible Tokens |
+| **RPC** | `import blockchain.rpc` | JSON-RPC 2.0 API for dApp integration |
+| **P2P** | `import blockchain.net` | P2P node discovery, IBD, and block broadcasting |
+
+Example:
+```sage
+import blockchain.blockchain as bc_mod
+import blockchain.wallet as wallet_mod
+import blockchain.consensus.pow as pow_mod
+
+let consensus = pow_mod.PowConsensus(nil, 2)
+let coin = bc_mod.Blockchain(consensus, "./sagechain_db")
+let wallet = wallet_mod.Wallet(nil)
+
+let tx = coin.add_transaction(wallet.get_address(), "recipient", 100)
+wallet.sign_transaction(tx)
+coin.add_signed_transaction(tx)
+coin.mine_pending_transactions("miner-address")
+```
+
 ### GPU Graphics Engine (Vulkan + OpenGL)
 
 - **`gpu`**: Full Vulkan backend with handle-based resource management
@@ -435,6 +465,31 @@ server.get_route(srv["router"], "/", hello_handler)
 - **`lib/vulkan.sage`**: Ergonomic builder API — `vulkan.buffer("storage")`, `vulkan.shader("compute.spv", "compute")`
 - **`lib/gpu.sage`**: High-level helpers — `run_compute()` for one-shot GPU compute, ping-pong buffers, device info
 - **Rendering Libraries** (`lib/graphics/`): `math3d` (vectors/matrices/camera), `mesh` (procedural cube/plane/sphere, OBJ), `renderer` (frame loop), `material` (shader+texture binding), `scene` (scene graph), `pbr` (Cook-Torrance materials), `postprocess` (HDR/bloom/tonemapping), `shadows` (cascade shadow maps), `deferred` (G-buffer, SSAO, SSR), `taa` (temporal anti-aliasing), `gltf` (glTF 2.0 loading), `asset_cache`, `frame_graph`, `debug_ui`, `ui` (immediate-mode widgets) — imported with `graphics.` prefix (e.g., `from graphics.math3d import vec3`)
+
+### Agent AI Framework (`lib/agent/`)
+
+SageLang includes a comprehensive framework for building autonomous agents with program-aided reasoning.
+
+| Module | Import | Description |
+|--------|--------|-------------|
+| **Core** | `import agent.core` | ReAct agent loop (observe/think/act/reflect) and tool dispatch |
+| **Planner** | `import agent.planner` | Task decomposition with dependency DAG and auto-execution |
+| **Sandbox** | `import agent.sandbox` | Program-aided reasoning and sandboxed Sage code execution |
+| **ToT** | `import agent.tot` | Tree of Thoughts with MCTS search and state rollbacks |
+| **Critic** | `import agent.critic` | Verification loops and iterative self-correction |
+| **Router** | `import agent.router` | Multi-agent orchestrator and capability-based routing |
+
+### Large Language Models (`lib/llm/`)
+
+Advanced toolkit for working with LLMs, including quantization and training.
+
+| Module | Import | Description |
+|--------|--------|-------------|
+| **TurboQuant** | `import llm.turboquant` | Near-optimal 3-bit KV cache and weight quantization (ICLR 2026) |
+| **Transformer** | `import llm.transformer` | LayerNorm/RMSNorm, attention blocks, and model assembly |
+| **Generate** | `import llm.generate` | Greedy, top-k/p, and beam search text generation |
+| **GGUF** | `import llm.gguf` | GGUF v3 export for Ollama and llama.cpp compatibility |
+| **Evolve** | `import llm.evolve` | Self-evolving neural architectures with progressive growth |
 
 ### JSON Library (cJSON Port)
 
@@ -493,6 +548,7 @@ cd src/sage && ../../sage sage.sage program.sage
 - **Interpreter** (`interpreter.sage`, ~1050 lines) - Tree-walking evaluator with dict-based values
 - **Bootstrap coverage**: arithmetic, variables, control flow, functions, recursion, closures, classes, inheritance, arrays, dicts, strings, try/catch, break/continue, bitwise operators (~), module imports, loop iteration limits
 - **Module imports**: `import X`, `import X as Y`, `from X import a, b` with module caching and multi-path search (`./`, `lib/`)
+- **Soft Keywords**: `match`, `init`, `enum`, `struct`, and `trait` are now "soft keywords" and can be used as variable names in expressions and assignments (v3.6.9+)
 - **LLVM constant imports (C backend + self-hosted LLVM backend)**: `from X import Y` now resolves foldable top-level `let` constants across modules at compile time (with alias support via `from X import Y as Z`)
 - **Self-hosted test suites**: lexer, parser, interpreter, bootstrap, formatter, linter, value, optimization passes, stdlib, module loading, codegen, compiler, LSP, and CLI coverage
 - GC must be disabled for self-hosted code (`gc_disable()`)
@@ -503,14 +559,15 @@ The standard library is organized into subdirectories with dotted import paths:
 
 **General-purpose** (`lib/`, imported directly):
 - **`math`**: arithmetic helpers, `pow_int`, `factorial`, `gcd`, `lcm`, `sqrt`, distance helpers
-- **`arrays`**: `map`, `filter`, `reduce`, `unique`, `zip`, `chunk`, `flatten`, `concat`
-- **`strings`**: whitespace cleanup, `contains`, substring counting, padding, case formatting helpers
+- **`arrays`**: `map`, `filter`, `reduce`, `unique`, `zip`, `chunk`, `flatten`, `concat`, `reverse`, `take`, `drop`
+- **`strings`**: whitespace cleanup, `contains`, substring counting, padding, case formatting helpers, `repeat`
 - **`dicts`**: query-oriented helpers for dictionary size, fallback reads, entries, and key checks
 - **`iter`**: reusable generators such as `count`, `range_step`, `enumerate_array`, `cycle`, and `take`
 - **`stats`**: `mean`, `variance`, `stddev`, `cumulative`, and normalization helpers
 - **`assert`**: assertion helpers for writing Sage test scripts
 - **`utils`**: general helpers like `default_if_nil`, `swap`, `head`, `last`, and `repeat_value`
 - **`json`**: Complete 1:1 cJSON port — parse, print, create, query, modify JSON trees (88 tests)
+- **`perf`**: Performance optimization primitives, dispatch tables, and signal singletons
 
 **Graphics** (`lib/graphics/`, imported as `import graphics.<module>`):
 - **`vulkan`**: Ergonomic Vulkan builder API (string-based buffer/shader/pipeline creation, barrier helpers)
@@ -1184,7 +1241,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
 - **Current Version**: v3.6.9
-- **Spec Version**: 3.0 (see `STABILITY.md` for guarantees)
+- **Spec Version**: 2.0 (see `SPEC_VERSION` for details)
 
 ## 💾 Project Structure
 
@@ -1361,6 +1418,7 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 **Recent Milestones:**
 
+- June 9, 2026: v3.6.9: Integrated One-line Install System (OIS), optimized `dicts.size` to $O(1)$, achieved $O(N)$ array uniqueness, and implemented high-performance native library built-ins for array reversal (~105x), string repeating (~11x), and array partitioning (~88x).
 - June 8, 2026: v3.6.5: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
 - June 5, 2026: Optimization: Hardened interpreter search path logic (preventing duplicate paths, increased budget to 64) and implemented high-performance native bridging for SageMetal VM (Math, IO, Sys, Regex).
 - May 29, 2026: v3.5.6: Fixed doc comment detachment for `errno.strerror` and updated core metadata.

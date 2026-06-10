@@ -2,7 +2,7 @@
 title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
-date: "May 2026"
+date: "June 2026"
 version: "v3.6.9"
 documentclass: report
 geometry: "margin=1in"
@@ -58,7 +58,7 @@ by Rust, and a self-hosted compiler written in Sage itself.
 - **SageMetal VM**: freestanding bytecode interpreter for bare-metal (no malloc, no libc, no OS)
 - **Metal stdlib** (`lib/metal/`): serial, GPIO, IRQ, timer, MMIO for kernel/embedded development
 - **Default hybrid runtime**: JIT profiling on hosted, AST on bare-metal, automatic selection
-- **v3.6.9 updates**: $O(1)$ dictionary size, $O(N)$ unique checks (simple types), native array reversal, and binary exponentiation for repeating (linear output work).
+- **v3.6.9 updates**: OIS integration, $O(1)$ dictionary size, $O(N)$ unique checks (simple types), native array reversal, and binary exponentiation for repeating (linear output work).
 - **327 interpreter tests**, 1623 self-hosted tests (2060+ total)
 
 ## Quick Start
@@ -1694,12 +1694,20 @@ print math.pow_int(2, 10) # 1024 (binary exponentiation, O(log n))
 # Arithmetic Visualization
 # Evaluates an expression string and shows step-by-step work.
 # Backends: "sage" (default), "c", "asm"
+# Controlled by CLI flag --math-work=grade,exec
 math.printm("123 + 456", backend="sage", formats=["grade"])
 # Output:
 #   123
 # + 456
 # -----
 #   579
+
+# Constants
+print math.pi      # 3.14159265358979
+print math.e       # 2.71828182845905
+print math.tau     # 6.28318530717959
+print math.inf     # Infinity
+print math.nan     # NaN
 
 # Random
 print math.random()    # random float in [0, 1)
@@ -1793,6 +1801,15 @@ sys.sleep(0.5)    # sleep for 0.5 seconds
 
 # Exit
 sys.exit(0)
+
+# Dynamic Call
+# Calls a native function or class constructor with arguments.
+let res = sys.call(math.sqrt, 16) # 4
+
+# Shell Execution
+# exec() returns exit code, shell_exec() returns output string.
+let code = sys.exec("ls")
+let output = sys.shell_exec("whoami")
 ```
 
 ## Thread Module
@@ -3790,9 +3807,7 @@ This section documents known behaviors and design decisions. Items marked
     config["port"] = 8080
     ```
 
-5. **`match` and `init` are reserved keywords** -- `match` cannot be used as a
-   variable name. `init` is reserved but works as a property name after `.`
-   and `->`.
+5. **`match` and `init` are reserved keywords** -- **FIXED.** As of v3.6.9, `match`, `init`, `enum`, `struct`, and `trait` can be used as variable names in expression and assignment contexts, as long as they are not immediately followed by a block-starting colon or used in a declaration context.
 
 6. **`super` auto-injects `self`** -- Write `super.init(args)` not
    `super.init(self, args)`.
