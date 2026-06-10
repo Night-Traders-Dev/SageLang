@@ -124,20 +124,16 @@ proc zip(left, right):
     return result
 
 proc chunk(values, size):
+    ## Splits an array into chunks of a given size.
+    ## Optimization: Uses native slice() to avoid iterative push() calls.
     let result = []
     if size <= 0:
         return result
 
-    let current = []
+    let n = len(values)
     let i = 0
-    while i < len(values):
-        push(current, values[i])
-        if len(current) == size:
-            push(result, current)
-            current = []
-        i = i + 1
-
-    if len(current) > 0:
-        push(result, current)
+    while i < n:
+        push(result, slice(values, i, i + size))
+        i = i + size
 
     return result
