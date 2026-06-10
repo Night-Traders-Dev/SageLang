@@ -30,9 +30,6 @@ Module* create_ssl_module(ModuleCache* cache) { (void)cache; return NULL; }
 Module* create_ml_native_module(ModuleCache* cache) { (void)cache; return NULL; }
 #endif
 
-#if !defined(SAGE_HAS_VULKAN) && !defined(SAGE_HAS_OPENGL)
-Module* create_graphics_module(ModuleCache* cache) { (void)cache; return NULL; }
-#endif
 
 /* GPU stubs */
 #if !defined(SAGE_HAS_VULKAN) && !defined(SAGE_HAS_OPENGL)
