@@ -70,7 +70,7 @@ typedef struct {
 
 int g_sage_verbose = 0;
 
-typedef enum { COMPILER_TARGET_HOST, COMPILER_TARGET_PICO } CompilerTarget;
+typedef enum { COMPILER_TARGET_HOST, COMPILER_TARGET_RP2040, COMPILER_TARGET_RP2350_ARM, COMPILER_TARGET_RP2350_RISCV } CompilerTarget;
 
 static void sb_init(StringBuffer *sb) {
   sb->cap = 128;
@@ -2982,7 +2982,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "#include <stdint.h>\n",
         out);
 
-  if (target == COMPILER_TARGET_PICO) {
+  if (target == COMPILER_TARGET_RP2040 || target == COMPILER_TARGET_RP2350_ARM || target == COMPILER_TARGET_RP2350_RISCV) {
     fputs("#include \"pico/stdlib.h\"\n", out);
   }
 
@@ -4719,7 +4719,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         out);
 
   /* clock() and input() */
-  if (target != COMPILER_TARGET_PICO) {
+  if (target != COMPILER_TARGET_RP2040 && target != COMPILER_TARGET_RP2350_ARM && target != COMPILER_TARGET_RP2350_RISCV) {
     fputs(
         "#include <time.h>\n"
         "static SageValue sage_clock_fn(void) {\n"
@@ -5113,7 +5113,7 @@ static void emit_main_function(Compiler *compiler, Stmt *program,
   emit_line(compiler, "    sage_argc = argc; sage_argv = argv;");
   compiler->indent++;
 
-  if (target == COMPILER_TARGET_PICO) {
+  if (target == COMPILER_TARGET_RP2040 || target == COMPILER_TARGET_RP2350_ARM || target == COMPILER_TARGET_RP2350_RISCV) {
     emit_line(compiler, "stdio_init_all();");
     emit_line(compiler, "sleep_ms(2000);");
   }
@@ -5556,14 +5556,23 @@ int compile_source_to_executable_opt(const char *source, const char *input_path,
 int compile_source_to_pico_c(const char *source, const char *input_path,
                              const char *output_path) {
   return write_c_output_internal(source, input_path, output_path,
-                                 COMPILER_TARGET_PICO, 0, 0);
+                                 COMPILER_TARGET_RP2040, 0, 0);
 }
 
 int compile_source_to_pico_uf2(const char *source, const char *input_path,
                                const char *output_dir, const char *program_name,
                                const char *pico_board,
-                               const char *pico_sdk_path, char *uf2_path_out,
-                               size_t uf2_path_out_size) {
+                               const char *pico_sdk_path, const char *pico_chip,
+                               char *uf2_path_out, size_t uf2_path_out_size) {
+  CompilerTarget target = COMPILER_TARGET_RP2040;
+  if (pico_chip != NULL) {
+    if (strcmp(pico_chip, "rp2350-arm") == 0) {
+      target = COMPILER_TARGET_RP2350_ARM;
+    } else if (strcmp(pico_chip, "rp2350-riscv") == 0) {
+      target = COMPILER_TARGET_RP2350_RISCV;
+    }
+  }
+
   const char *sdk_path = pico_sdk_path;
   if (sdk_path == NULL || sdk_path[0] == '\0') {
     sdk_path = getenv("PICO_SDK_PATH");
@@ -5625,7 +5634,7 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
   char *source_path = path_join(effective_output_dir, source_file_name);
 
   if (!write_c_output_internal(source, input_path, source_path,
-                               COMPILER_TARGET_PICO, 0, 0)) {
+                               target, 0, 0)) {
     free(repo_root);
     free(import_path);
     free(build_dir);
