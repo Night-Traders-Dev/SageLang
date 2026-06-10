@@ -140,8 +140,9 @@ static int is_safe_path(const char* path) {
     if (path[0] == '-') return 0;
     for (const char* p = path; *p; p++) {
         // Allow alphanumeric and strictly safe filename characters
+        // Note: Space is allowed here but must be handled carefully (quoted) when used in system()
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~') {
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ') {
             return 0;
         }
     }
@@ -1434,7 +1435,8 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                     if (*arg == '\0') {
                         snprintf(cmd, sizeof(cmd), "ls -F");
                     } else {
-                        snprintf(cmd, sizeof(cmd), "ls -F %s", arg);
+                        // Single quotes around argument to handle spaces safely
+                        snprintf(cmd, sizeof(cmd), "ls -F '%s'", arg);
                     }
                     if (system(cmd) == -1) { /* ignore */ }
                 }
@@ -1449,7 +1451,8 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                     printf("Security Error: Unsafe characters in path\n");
                 } else {
                     char cmd[4096];
-                    snprintf(cmd, sizeof(cmd), "cat %s", arg);
+                    // Single quotes around argument to handle spaces safely
+                    snprintf(cmd, sizeof(cmd), "cat '%s'", arg);
                     if (system(cmd) == -1) { /* ignore */ }
                 }
                 free(line);
@@ -1459,6 +1462,8 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
             if (command_matches(line, ":sh", &arg)) {
                 if (*arg == '\0') {
                     printf("Usage: :sh <command>\n");
+                } else if (!is_safe_path(arg)) {
+                    printf("Security Error: Unsafe characters in command\n");
                 } else {
                     if (system(arg) == -1) { /* ignore */ }
                 }
