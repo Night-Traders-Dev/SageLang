@@ -11,6 +11,7 @@
 #include "gc.h"
 #include "interpreter.h"
 #include <math.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
@@ -544,7 +545,7 @@ static Value io_writebytes_native(int argCount, Value* args) {
     FILE* f = fopen(path, "wb");
     if (!f) return val_bool(0);
 
-    unsigned char* buf = malloc((size_t)arr->count);
+    unsigned char* buf = SAGE_ALLOC((size_t)arr->count);
     for (int i = 0; i < arr->count; i++) {
         if (IS_NUMBER(arr->elements[i])) {
             buf[i] = (unsigned char)AS_NUMBER(arr->elements[i]);
@@ -554,7 +555,7 @@ static Value io_writebytes_native(int argCount, Value* args) {
     }
 
     size_t written = fwrite(buf, 1, (size_t)arr->count, f);
-    free(buf);
+    SAGE_FREE(buf);
     fclose(f);
 
     return val_bool(written == (size_t)arr->count);
@@ -568,7 +569,7 @@ static Value io_appendbytes_native(int argCount, Value* args) {
     FILE* f = fopen(path, "ab");
     if (!f) return val_bool(0);
 
-    unsigned char* buf = malloc((size_t)arr->count);
+    unsigned char* buf = SAGE_ALLOC((size_t)arr->count);
     for (int i = 0; i < arr->count; i++) {
         if (IS_NUMBER(arr->elements[i])) {
             buf[i] = (unsigned char)AS_NUMBER(arr->elements[i]);
@@ -578,7 +579,7 @@ static Value io_appendbytes_native(int argCount, Value* args) {
     }
 
     size_t written = fwrite(buf, 1, (size_t)arr->count, f);
-    free(buf);
+    SAGE_FREE(buf);
     fclose(f);
 
     return val_bool(written == (size_t)arr->count);
@@ -931,9 +932,29 @@ static Value sys_sleep_native(int argCount, Value* args) {
     return val_nil();
 }
 
+// Validate a command contains no shell metacharacters (prevents injection)
+static int is_safe_command(const char* cmd) {
+    if (!cmd) return 1;
+    // Reject commands starting with hyphen to prevent flag injection in some contexts
+    if (cmd[0] == '-') return 0;
+    for (const char* p = cmd; *p; p++) {
+        // Allow alphanumeric, spaces, and safe path/filename characters.
+        // Blocks metacharacters like ; | & > < $ ( ) ` ' " etc.
+        if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 static Value sys_exec_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* cmd = AS_STRING(args[0]);
+    if (!is_safe_command(cmd)) {
+        fprintf(stderr, "Security Error: Unsafe characters in command\n");
+        return val_number(-1);
+    }
     int result = system(cmd);
     return val_number(result);
 }
@@ -941,6 +962,10 @@ static Value sys_exec_native(int argCount, Value* args) {
 static Value sys_shell_exec_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* cmd = AS_STRING(args[0]);
+    if (!is_safe_command(cmd)) {
+        fprintf(stderr, "Security Error: Unsafe characters in command\n");
+        return val_string("");
+    }
     
     char buffer[4096];
     char* result = NULL;

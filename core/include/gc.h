@@ -22,6 +22,7 @@
 // Safe allocation macro - aborts with diagnostic on OOM
 #define SAGE_ALLOC(size) sage_safe_malloc(size, __FILE__, __LINE__)
 #define SAGE_REALLOC(ptr, size) sage_safe_realloc(ptr, size, __FILE__, __LINE__)
+#define SAGE_FREE(ptr) free(ptr)
 
 static inline void* sage_safe_malloc(size_t size, const char* file, int line) {
     if (size == 0) size = 1;
