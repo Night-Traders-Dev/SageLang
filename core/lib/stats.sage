@@ -3,17 +3,31 @@
 
 from math import sqrt
 
+## Returns the sum of a list of values
+## Optimization: Uses native array_sum built-in.
+@inline
 proc sum(values):
-    let total = 0
-    for item in values:
-        total = total + item
-    return total
+    let res = array_sum(values)
+    if type(res) == "nil":
+        let total = 0
+        for item in values:
+            total = total + item
+        return total
+    end
+    return res
 
+## Returns the product of a list of values
+## Optimization: Uses native array_product built-in.
+@inline
 proc product(values):
-    let total = 1
-    for item in values:
-        total = total * item
-    return total
+    let res = array_product(values)
+    if type(res) == "nil":
+        let total = 1
+        for item in values:
+            total = total * item
+        return total
+    end
+    return res
 
 ## Returns both the minimum and maximum values in a single pass.
 ## Optimization: Single-pass O(n) instead of two O(n) passes.

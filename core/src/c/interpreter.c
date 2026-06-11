@@ -500,6 +500,28 @@ static Value array_index_of_native(int argCount, Value* args) {
     return val_number(-1);
 }
 
+static Value array_sum_native(int argCount, Value* args) {
+    if (argCount != 1 || args[0].type != VAL_ARRAY) return val_nil();
+    ArrayValue* a = args[0].as.array;
+    double total = 0.0;
+    for (int i = 0; i < a->count; i++) {
+        if (a->elements[i].type != VAL_NUMBER) return val_nil();
+        total += a->elements[i].as.number;
+    }
+    return val_number(total);
+}
+
+static Value array_product_native(int argCount, Value* args) {
+    if (argCount != 1 || args[0].type != VAL_ARRAY) return val_nil();
+    ArrayValue* a = args[0].as.array;
+    double total = 1.0;
+    for (int i = 0; i < a->count; i++) {
+        if (a->elements[i].type != VAL_NUMBER) return val_nil();
+        total *= a->elements[i].as.number;
+    }
+    return val_number(total);
+}
+
 static Value pop_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
     if (args[0].type != VAL_ARRAY) return val_nil();
@@ -2317,6 +2339,8 @@ void init_stdlib(Env* env) {
     env_define_const(env, "array_reverse", 13, val_native(array_reverse_native));
     env_define_const(env, "array_contains", 14, val_native(array_contains_native));
     env_define_const(env, "array_index_of", 14, val_native(array_index_of_native));
+    env_define_const(env, "array_sum", 9, val_native(array_sum_native));
+    env_define_const(env, "array_product", 13, val_native(array_product_native));
     env_define_const(env, "build_line_quads", 16, val_native(build_line_quads_native));
     env_define_const(env, "pop", 3, val_native(pop_native));
     env_define_const(env, "range", 5, val_native(range_native));
