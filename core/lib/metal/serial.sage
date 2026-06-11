@@ -26,6 +26,8 @@ let UART_MSR = 6 # Modem Status
 ## Initialize a COM port at the given baud rate.
 
 proc uart_init(port, baud):
+    if not baud_rate_valid(baud):
+        core.panic("Unsupported UART baud rate: " + str(baud))
     let divisor = 115200 / baud
     core.outb(port + UART_IER, 0) # Disable interrupts
     core.outb(port + UART_LCR, 128) # Enable DLAB
@@ -38,12 +40,12 @@ proc uart_init(port, baud):
 ## Check if transmit buffer is empty.
 
 proc uart_tx_ready(port):
-    return core.inb(port + UART_LSR) & 32
+    return (core.inb(port + UART_LSR) & 32) != 0
 
 ## Check if receive data is available.
 
 proc uart_rx_ready(port):
-    return core.inb(port + UART_LSR) & 1
+    return (core.inb(port + UART_LSR) & 1) != 0
 
 ## Send a single byte.
 
@@ -126,6 +128,16 @@ let PL011_IMSC = 56 # Interrupt mask (0x38)
 let PL011_FR_TXFF = 32 # TX FIFO full (bit 5)
 let PL011_FR_RXFE = 16 # RX FIFO empty (bit 4)
 
+## Check if PL011 transmit buffer is ready (not full).
+
+proc pl011_tx_ready(base):
+    return (core.mmio_read32(base + PL011_FR) & PL011_FR_TXFF) == 0
+
+## Check if PL011 receive data is available (not empty).
+
+proc pl011_rx_ready(base):
+    return (core.mmio_read32(base + PL011_FR) & PL011_FR_RXFE) == 0
+
 ## Initialize PL011 UART at the given base address.
 
 proc pl011_init(base):
@@ -138,14 +150,14 @@ proc pl011_init(base):
 ## Send a single byte via PL011 at the given base address.
 
 proc pl011_send(base, byte):
-    while core.mmio_read32(base + PL011_FR) & PL011_FR_TXFF:
+    while not pl011_tx_ready(base):
         pass
     core.mmio_write32(base + PL011_DR, byte)
 
 ## Receive a single byte via PL011 (blocking) at the given base address.
 
 proc pl011_recv(base):
-    while core.mmio_read32(base + PL011_FR) & PL011_FR_RXFE:
+    while not pl011_rx_ready(base):
         pass
     return core.mmio_read32(base + PL011_DR) & 255
 
@@ -162,6 +174,8 @@ proc pl011_puts(base, s):
 ## Initialize PL011 UART at a specific baud rate and reference clock.
 
 proc pl011_init_at_baud(base, baud, ref_clock):
+    if not baud_rate_valid(baud):
+        core.panic("Unsupported PL011 baud rate: " + str(baud))
     core.mmio_write32(base + PL011_CR, 0) # Disable UART
     # Baud rate divisor = ref_clock / (16 * baud)
     # IBRD = integer part, FBRD = fractional part
@@ -177,7 +191,7 @@ proc pl011_init_at_baud(base, baud, ref_clock):
 
 proc pl011_read_timeout(base, timeout_ms):
     let elapsed_ms_pl = 0
-    while core.mmio_read32(base + PL011_FR) & PL011_FR_RXFE:
+    while not pl011_rx_ready(base):
         if elapsed_ms_pl >= timeout_ms:
             return nil
         core.delay_ms(1)
@@ -209,7 +223,7 @@ proc pl011_readline(base):
 ## Flush the PL011 receive buffer at the given base address.
 
 proc pl011_flush_rx(base):
-    while not (core.mmio_read32(base + PL011_FR) & PL011_FR_RXFE):
+    while pl011_rx_ready(base):
         core.mmio_read32(base + PL011_DR)
 
 ## Check if a baud rate is valid/supported.
