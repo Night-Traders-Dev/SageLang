@@ -2397,7 +2397,7 @@ sage> print square(7)
 sage> :quit
 ```
 
-The REPL supports multiline input, error recovery, and all language features.
+The REPL supports multiline input, error recovery, and all language features. Commands like `:stats` can be used to view interpreter and GC statistics.
 
 ## Formatter
 
@@ -3332,6 +3332,14 @@ gpio.pin_write_masked(0b11, 0b10) # Set pin 1 HIGH, pin 0 LOW
 | `pin_get_pull(p)` | Get current pull configuration. |
 | `pin_set_interrupt(p, m)` | Set interrupt trigger (RISING, FALLING, BOTH, etc). |
 | `pin_get_interrupt(p)` | Get current interrupt mode. |
+| `pin_register_handler(p, f)`| Register callback `f` for pin `p`. |
+| `pin_enable_interrupt(p)` | Enable interrupt for pin `p`. |
+| `pin_disable_interrupt(p)`| Disable interrupt for pin `p`. |
+| `gpio_dispatch(p)` | Manually dispatch interrupt for pin `p`. |
+| `pin_debounce(p, s, n, d)`| Debounce pin `p` to state `s`. |
+| `led_on(p)` | Turn LED on pin `p` ON. |
+| `led_off(p)` | Turn LED on pin `p` OFF. |
+| `led_blink(p, n, d)` | Blink LED on pin `p`, `n` times with delay `d`. |
 | `pin_set_mask(m)` | Set multiple pins HIGH. |
 | `pin_clear_mask(m)` | Set multiple pins LOW. |
 | `pin_write_masked(m, v)` | Write values to multiple pins. |
@@ -3775,6 +3783,7 @@ REPL Commands:
   :emit-kotlin <code>    Show Kotlin backend output
   :time <expr>           Time expression evaluation
   :bench N <expr>        Benchmark expression N times
+  :stats                 Show interpreter and GC statistics
   :runtime MODE          Switch runtime (ast, bytecode, jit, aot)
 ```
 

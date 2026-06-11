@@ -26,6 +26,7 @@ sudo make install
 | `make test`           | Run compiler backend tests                |
 | `make test-selfhost`  | Run self-hosted interpreter tests         |
 | `make test-all`       | Both                                      |
+| `make charts`         | Regenerate codebase and benchmark charts  |
 | `make sage-boot FILE=x.sage` | Run via self-hosted interpreter   |
 | `make install`        | Install to PREFIX (default /usr/local)    |
 | `make cmake`          | Set up CMake build                        |
