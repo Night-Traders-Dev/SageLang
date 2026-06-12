@@ -36,3 +36,8 @@
 **Vulnerability:** The REPL `:edit` command used `system()` to invoke the editor, interpolating the `EDITOR` environment variable without sanitization. An attacker could set `EDITOR="vim; rm -rf /"` to execute arbitrary commands.
 **Learning:** High-level REPL convenience features often use environment variables to delegate to external tools. If these are invoked via a shell, they become a prime target for injection.
 **Prevention:** Avoid `system()` for invoking external tools with arguments derived from environment variables or user input. Use `fork()` and `execvp()` to pass arguments as a literal array, ensuring they are never interpreted by a shell.
+
+## 2026-06-11 - Shell Injection in sys.exec and sys.shell_exec
+**Vulnerability:** Native standard library functions `sys.exec` and `sys.shell_exec` passed user-provided strings directly to `system()` and `popen()` without any validation (CWE-78).
+**Learning:** Security hardening of REPL commands (like `:sh`) is insufficient if the underlying language primitives they use (or that are exposed to scripts) remain unprotected. Developers often overlook internal library functions when securing a language's exterior interface.
+**Prevention:** Implement and enforce a strict whitelist-based validation (allowing only alphanumeric, spaces, and safe path characters) for all strings passed to any C function that invokes a shell.
