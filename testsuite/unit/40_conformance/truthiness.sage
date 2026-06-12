@@ -1,4 +1,4 @@
-# Conformance: Truthiness (Spec §7 — updated v3.1.3)
+# Conformance: Truthiness (Spec §7 — updated v3.7.1)
 # false, nil, 0, and "" are falsy; everything else is truthy.
 # EXPECT: falsy
 # EXPECT: falsy

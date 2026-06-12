@@ -304,9 +304,62 @@ def build_chatbot(args, sage_bin):
     else:
         console.print("    [bold red]✗[/bold red] LLVM backend compilation failed")
 
+def propagate_version(new_version):
+    section(f"Propagating Version: {new_version}")
+    
+    # Regex to match 3.x.y or v3.x.y but NOT IP addresses
+    # Requires (?<![0-9.]) at start and (?![0-9.]) at end
+    pattern = re.compile(r'(?<![0-9.])(v?)3\.[0-9]+\.[0-9]+(?![0-9.])')
+    
+    exclude_dirs = {'.git', '.sagepkg', '.claude', '.jules', 'node_modules', 'obj', 'build_sage'}
+    exclude_files = {'sagemake', 'VERSION', 'SPEC_VERSION', 'package-lock.json'}
+    
+    # Update core/VERSION explicitly
+    core_version = Path("core/VERSION")
+    if core_version.exists():
+        core_version.write_text(new_version + "\n")
+        step_ok("core/VERSION updated")
+
+    count = 0
+    for path in Path(".").rglob("*"):
+        if any(part in exclude_dirs for part in path.parts):
+            continue
+        if path.name in exclude_files or path.is_dir():
+            continue
+            
+        try:
+            # Skip binary files
+            with open(path, 'rb') as f:
+                if b'\x00' in f.read(1024):
+                    continue
+            
+            content = path.read_text(encoding='utf-8', errors='ignore')
+            if pattern.search(content):
+                new_content = pattern.sub(rf'\g<1>{new_version}', content)
+                if new_content != content:
+                    path.write_text(new_content, encoding='utf-8')
+                    count += 1
+        except Exception:
+            continue
+            
+    step_ok(f"Updated {count} files")
+
+def handle_version(args):
+    global VERSION
+    new_ver = args.version_arg
+    
+    if new_ver:
+        # Update root VERSION file
+        Path("VERSION").write_text(new_ver + "\n")
+        VERSION = new_ver
+        step_ok(f"VERSION updated to {new_ver}")
+    
+    propagate_version(VERSION)
+
 def main():
     parser = argparse.ArgumentParser(description="SageLang Unified Build System")
-    parser.add_argument("subcommand", nargs="?", help="Subcommand (all, build, train, chatbot)")
+    parser.add_argument("subcommand", nargs="?", help="Subcommand (all, build, train, chatbot, version)")
+    parser.add_argument("version_arg", nargs="?", help="New version string (only for 'version' subcommand)")
     parser.add_argument("--install", action="store_true", help="Install to /usr/local after building")
     parser.add_argument("--skip-tests", action="store_true", help="Skip test suite")
     parser.add_argument("--make-only", action="store_true", help="Use Make instead of CMake")
@@ -328,6 +381,10 @@ def main():
         args.chatbot = True
     elif args.subcommand == "install":
         args.install = True
+    elif args.subcommand == "version":
+        banner(f"SageLang Version Management")
+        handle_version(args)
+        return
 
     if args.minimal:
         args.no_vulkan = args.no_glfw = args.no_curl = args.no_ssl = args.no_gpu = True

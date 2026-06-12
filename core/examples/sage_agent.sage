@@ -15,7 +15,7 @@ import llm.engram
 import io
 
 print "============================================"
-print "  SageLLM Agent v3.6.8"
+print "  SageLLM Agent v3.7.1"
 print "  Autonomous Sage Development Assistant"
 print "============================================"
 print ""
