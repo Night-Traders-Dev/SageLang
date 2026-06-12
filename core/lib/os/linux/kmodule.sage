@@ -19,7 +19,7 @@ proc create_module(name):
     m["license"] = "GPL"
     m["author"] = ""
     m["description"] = ""
-    m["version"] = "3.7.1"
+    m["version"] = "3.7.2"
     m["depends"] = []
     m["params"] = []
     m["init_body"] = []

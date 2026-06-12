@@ -4,7 +4,7 @@
 
 ![SageLang Logo](core/assets/SageLang.png)
 
-Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.7.1, Sage features One-line Install System (OIS) integration, native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
+Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3, Sage features One-line Install System (OIS) integration, native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
 
 ## Install (One line installer)
 
@@ -548,7 +548,7 @@ cd src/sage && ../../sage sage.sage program.sage
 - **Interpreter** (`interpreter.sage`, ~1050 lines) - Tree-walking evaluator with dict-based values
 - **Bootstrap coverage**: arithmetic, variables, control flow, functions, recursion, closures, classes, inheritance, arrays, dicts, strings, try/catch, break/continue, bitwise operators (~), module imports, loop iteration limits
 - **Module imports**: `import X`, `import X as Y`, `from X import a, b` with module caching and multi-path search (`./`, `lib/`)
-- **Soft Keywords**: `match`, `init`, `enum`, `struct`, and `trait` are now "soft keywords" and can be used as variable names in expressions and assignments (v3.7.1+)
+- **Soft Keywords**: `match`, `init`, `enum`, `struct`, and `trait` are now "soft keywords" and can be used as variable names in expressions and assignments (v3+)
 - **LLVM constant imports (C backend + self-hosted LLVM backend)**: `from X import Y` now resolves foldable top-level `let` constants across modules at compile time (with alias support via `from X import Y as Z`)
 - **Self-hosted test suites**: lexer, parser, interpreter, bootstrap, formatter, linter, value, optimization passes, stdlib, module loading, codegen, compiler, LSP, and CLI coverage
 - GC must be disabled for self-hosted code (`gc_disable()`)
@@ -1241,7 +1241,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v3.7.1
+- **Current Version**: v3
 - **Spec Version**: 2.0 (see `SPEC_VERSION` for details)
 
 ## 💾 Project Structure
@@ -1419,13 +1419,13 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 **Recent Milestones:**
 
-- June 9, 2026: v3.7.1: Integrated One-line Install System (OIS), optimized `dicts.size` to $O(1)$, achieved $O(N)$ array uniqueness, implemented high-performance native library built-ins for array reversal (~105x), added REPL `:stats` command, and introduced GPIO interrupt management.
-- June 8, 2026: v3.7.1: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
+- June 9, 2026: v3: Integrated One-line Install System (OIS), optimized `dicts.size` to $O(1)$, achieved $O(N)$ array uniqueness, implemented high-performance native library built-ins for array reversal (~105x), added REPL `:stats` command, and introduced GPIO interrupt management.
+- June 8, 2026: v3: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
 - June 5, 2026: Optimization: Hardened interpreter search path logic (preventing duplicate paths, increased budget to 64) and implemented high-performance native bridging for SageMetal VM (Math, IO, Sys, Regex).
-- May 29, 2026: v3.7.1: Fixed doc comment detachment for `errno.strerror` and updated core metadata.
-- May 25, 2026: v3.7.1: Structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust sandbox security guards.
-- May 20, 2026: v3.7.1: Critical bug fix in `mutex_lock` for bare-metal targets.
-- May 15, 2026: v3.7.1: Milestone release: Self-hosted compiler parity and synchronization primitives stabilization.
+- May 29, 2026: v3: Fixed doc comment detachment for `errno.strerror` and updated core metadata.
+- May 25, 2026: v3: Structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust sandbox security guards.
+- May 20, 2026: v3: Critical bug fix in `mutex_lock` for bare-metal targets.
+- May 15, 2026: v3: Milestone release: Self-hosted compiler parity and synchronization primitives stabilization.
 - May 7, 2026: Optimization: implemented length-aware dictionary lookups and direct token pointers in method dispatch for 15% speedup
 - April 15, 2026: SageMetal VM — freestanding bytecode interpreter for OS kernels (no libc/malloc required)
 - April 10, 2026: Default runtime changed to hybrid JIT+AOT (Silent JIT profiling with auto fallback)

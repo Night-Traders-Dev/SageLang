@@ -487,15 +487,15 @@ print process.timer_elapsed_ms(start)
 ```sage
 import std.build
 
-let proj = build.create_project("myapp", "3.7.1")
+let proj = build.create_project("myapp", "3")
 build.set_description(proj, "My application")
 build.add_dep(proj, "json", ">=1.0")
 build.add_target(proj, "main", "executable", ["main.sage"])
 print build.to_string(proj)
 
-let v = build.parse_version("3.7.1")
+let v = build.parse_version("3")
 let next = build.bump_minor(v)
-print next["string"]  # 3.7.1
+print next["string"]  # 3
 ```
 
 ---
@@ -512,7 +512,7 @@ if manifest != nil:
     print manifest["package.version"]
 
 # Create a new manifest
-let content = package.init_manifest("myapp", "3.7.1", "My awesome app")
+let content = package.init_manifest("myapp", "3", "My awesome app")
 # io.writefile("sage.toml", content)
 ```
 
