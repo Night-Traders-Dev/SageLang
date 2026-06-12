@@ -103,8 +103,13 @@ def run_git_ls_files() -> list[str]:
 
 
 def count_non_empty_lines(path: Path) -> int:
-    with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        return sum(1 for line in handle if line.strip())
+    if not path.is_file():
+        return 0
+    try:
+        with path.open("r", encoding="utf-8", errors="ignore") as handle:
+            return sum(1 for line in handle if line.strip())
+    except (UnicodeDecodeError, OSError):
+        return 0
 
 
 def detect_language(path_str: str) -> str | None:
