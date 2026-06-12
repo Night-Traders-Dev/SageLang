@@ -511,6 +511,44 @@ static Value array_sum_native(int argCount, Value* args) {
     return val_number(total);
 }
 
+static Value array_min_native(int argCount, Value* args) {
+    if (argCount != 1 || args[0].type != VAL_ARRAY) return val_nil();
+    ArrayValue* a = args[0].as.array;
+    if (a->count == 0) return val_nil();
+
+    Value min_val = a->elements[0];
+    for (int i = 1; i < a->count; i++) {
+        Value current = a->elements[i];
+        if (min_val.type == VAL_NUMBER && current.type == VAL_NUMBER) {
+            if (current.as.number < min_val.as.number) min_val = current;
+        } else if (min_val.type == VAL_STRING && current.type == VAL_STRING) {
+            if (strcmp(AS_STRING(current), AS_STRING(min_val)) < 0) min_val = current;
+        } else {
+            return val_nil();
+        }
+    }
+    return min_val;
+}
+
+static Value array_max_native(int argCount, Value* args) {
+    if (argCount != 1 || args[0].type != VAL_ARRAY) return val_nil();
+    ArrayValue* a = args[0].as.array;
+    if (a->count == 0) return val_nil();
+
+    Value max_val = a->elements[0];
+    for (int i = 1; i < a->count; i++) {
+        Value current = a->elements[i];
+        if (max_val.type == VAL_NUMBER && current.type == VAL_NUMBER) {
+            if (current.as.number > max_val.as.number) max_val = current;
+        } else if (max_val.type == VAL_STRING && current.type == VAL_STRING) {
+            if (strcmp(AS_STRING(current), AS_STRING(max_val)) > 0) max_val = current;
+        } else {
+            return val_nil();
+        }
+    }
+    return max_val;
+}
+
 static Value array_product_native(int argCount, Value* args) {
     if (argCount != 1 || args[0].type != VAL_ARRAY) return val_nil();
     ArrayValue* a = args[0].as.array;
@@ -2339,6 +2377,8 @@ void init_stdlib(Env* env) {
     env_define_const(env, "array_reverse", 13, val_native(array_reverse_native));
     env_define_const(env, "array_contains", 14, val_native(array_contains_native));
     env_define_const(env, "array_index_of", 14, val_native(array_index_of_native));
+    env_define_const(env, "array_min", 9, val_native(array_min_native));
+    env_define_const(env, "array_max", 9, val_native(array_max_native));
     env_define_const(env, "array_sum", 9, val_native(array_sum_native));
     env_define_const(env, "array_product", 13, val_native(array_product_native));
     env_define_const(env, "build_line_quads", 16, val_native(build_line_quads_native));

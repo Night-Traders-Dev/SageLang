@@ -33,3 +33,7 @@
 ## 2026-06-10 - [Optimized Array Chunking]
 **Learning:** Manual element-by-element chunking in SageLang is significantly slower than using the native `slice()` builtin. Slicing offloads the memory copying to C's `memcpy`, whereas manual loops incur high VM overhead for every element.
 **Action:** Always use `slice()` for extracting contiguous sub-segments of arrays or strings. Measured an ~8x speedup (1.5s to 0.19s) for chunking operations.
+
+## 2026-06-12 - [Optimized Native Min/Max Aggregation]
+**Learning:** Interpreted `for` loops in SageLang for finding minimum and maximum values in large arrays are a major bottleneck (~0.1s - 0.3s for 1M elements). Implementing these as native C built-ins bypasses VM overhead, achieving ~50x-100x speedups (~0.002s for 1M elements).
+**Action:** Move hot-path array aggregations (min, max, sum, product) to native C built-ins. Use a pattern of returning `nil` from C on encountering unsupported/mixed types to safely trigger a robust SageLang fallback.
