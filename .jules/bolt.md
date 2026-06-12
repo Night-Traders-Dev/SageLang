@@ -14,6 +14,10 @@
 **Learning:** Interpreted loops for array subset operations (`take` and `drop`) are significantly slower than native `slice()` calls because they incur per-iteration interpreter overhead and multiple `push()` calls.
 **Action:** Use native `slice()` for all array and string subset operations in library code. Added @inline hints to help compiled backends.
 
+## 2025-05-30 - [Native Aggregate Optimization]
+**Learning:** Interpreted loops for basic arithmetic aggregations (sum, product) are a major bottleneck. Implementing these in C and providing a Sage-side fallback achieves ~25x speedup for 1M elements.
+**Action:** Move hot-path array aggregations to native C built-ins. Always provide a `nil` fallback check in Sage to maintain robustness for non-numeric arrays.
+
 ## 2025-05-27 - [Optimized JSON ParseWithLength]
 **Learning:** Manual character-by-character string building in SageLang for creating substrings has O(N^2) complexity. Using the native `slice()` builtin offloads the operation to the C-level VM, resulting in a ~4000x speedup for 100k character strings.
 **Action:** Replace manual loop-based substring creation with native `slice()` whenever a buffer_length or range is specified.

@@ -121,18 +121,30 @@ proc lcm(a, b):
     return abs(a * b) / gcd(a, b)
 
 ## Returns the sum of a list of values
+## Optimization: Uses native array_sum built-in.
+@inline
 proc sum(values):
-    let total_sum = 0
-    for item in values:
-        total_sum = total_sum + item
-    return total_sum
+    let res = array_sum(values)
+    if type(res) == "nil":
+        let total_sum = 0
+        for item in values:
+            total_sum = total_sum + item
+        return total_sum
+    end
+    return res
 
 ## Returns the product of a list of values
+## Optimization: Uses native array_product built-in.
+@inline
 proc product(values):
-    let total_prod = 1
-    for item in values:
-        total_prod = total_prod * item
-    return total_prod
+    let res = array_product(values)
+    if type(res) == "nil":
+        let total_prod = 1
+        for item in values:
+            total_prod = total_prod * item
+        return total_prod
+    end
+    return res
 
 ## Returns the arithmetic mean of a list of values
 @inline
@@ -245,12 +257,11 @@ proc _printm_tokenize(expr):
             push(tokens, c)
             i = i + 1
         elif (c >= "0" and c <= "9") or c == ".":
-            let num = ""
+            let start = i
             while i < len(expr) and ((expr[i] >= "0" and expr[i] <= "9") or expr[i] == "."):
-                num = num + expr[i]
                 i = i + 1
             end
-            push(tokens, tonumber(num))
+            push(tokens, tonumber(slice(expr, start, i)))
         else:
             i = i + 1
         end
