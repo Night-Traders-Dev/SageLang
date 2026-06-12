@@ -300,7 +300,7 @@ SageLang ships with 44 binary format parsers, hardware abstraction, boot, kernel
 | **Metal Core**| `import metal.core` | Bare-metal stubs: puts, putchar, inb/outb, mmio, cli/sti/hlt, panic |
 | **Metal VGA** | `import metal.vga` | Early VGA text-mode display, cursor management, and progress bars |
 | **Metal Serial**| `import metal.serial` | NS16550A/PL011 drivers, baud rate validation, timeout-aware reads, line reading, buffer flushing |
-| **Metal GPIO** | `import metal.gpio` | MMIO-based GPIO, pin modes, pull config, interrupts, batch mask-based operations |
+| **Metal GPIO** | `import metal.gpio` | MMIO-based GPIO, pin modes, pull config, interrupts, handlers, debouncing, and batch mask-based operations |
 | **Metal IRQ**  | `import metal.irq` | Interrupt registration, priority levels, nesting depth tracking, arch-neutral masking |
 | **Metal Timer**| `import metal.timer` | x86 PIT (periodic/one-shot), hardware latching remaining time, IRQ-safe cancellation |
 
@@ -529,7 +529,7 @@ gpu.shutdown()
 
 ### Developer Tooling
 
-- **REPL**: `sage` (no args) or `sage --repl` for interactive development with multi-line blocks, error recovery, and built-in commands such as `:help`, `:vars`, `:type`, `:doc`, `:edit`, `:ls`, `:cat`, `:sh`, `:search`, `:clear-history`, `:load`, `:reset`, `:pwd`, `:cd`, and `:gc`
+- **REPL**: `sage` (no args) or `sage --repl` for interactive development with multi-line blocks, error recovery, and built-in commands such as `:help`, `:vars`, `:type`, `:doc`, `:edit`, `:ls`, `:cat`, `:sh`, `:stats`, `:search`, `:clear-history`, `:load`, `:reset`, `:pwd`, `:cd`, and `:gc`
 - **Formatter**: `sage fmt <file>` formats in place, `sage fmt --check <file>` checks without modifying
 - **Linter**: `sage lint <file>` with expanded rules (E001-E003 errors, W001-W005 warnings, S001-S005 style)
 - **Syntax Highlighting**: TextMate grammar (`editors/sage.tmLanguage.json`), VSCode extension (`editors/vscode/`)
@@ -952,6 +952,7 @@ Profile notes:
 | `:modules` | List loaded modules and search paths |
 | `:emit-c <code>` | Show C backend output for a statement |
 | `:emit-llvm <code>` | Show LLVM IR output for a statement |
+| `:stats` | Show GC stats, stack depth, and CPU time |
 | `:time <expr>` | Time a single expression evaluation |
 | `:bench <n> <expr>` | Run expression n times, show min/avg/max |
 | `:load <file>` | Execute a Sage file inside the current session |
@@ -1418,7 +1419,7 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 **Recent Milestones:**
 
-- June 9, 2026: v3.6.9: Integrated One-line Install System (OIS), optimized `dicts.size` to $O(1)$, achieved $O(N)$ array uniqueness, and implemented high-performance native library built-ins for array reversal (~105x), string repeating (~11x), and array partitioning (~88x).
+- June 9, 2026: v3.6.9: Integrated One-line Install System (OIS), optimized `dicts.size` to $O(1)$, achieved $O(N)$ array uniqueness, implemented high-performance native library built-ins for array reversal (~105x), added REPL `:stats` command, and introduced GPIO interrupt management.
 - June 8, 2026: v3.6.5: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
 - June 5, 2026: Optimization: Hardened interpreter search path logic (preventing duplicate paths, increased budget to 64) and implemented high-performance native bridging for SageMetal VM (Math, IO, Sys, Regex).
 - May 29, 2026: v3.5.6: Fixed doc comment detachment for `errno.strerror` and updated core metadata.

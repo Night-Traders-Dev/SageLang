@@ -2644,6 +2644,7 @@ The REPL supports multi-line blocks (indented code is automatically continued), 
 | `:pwd` | Print the current working directory |
 | `:cd <dir>` | Change the current working directory |
 | `:gc` | Run garbage collection and print GC statistics |
+| `:stats` | Show GC stats, stack depth, and CPU time |
 
 **Example Session**:
 
