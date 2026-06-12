@@ -31,6 +31,16 @@ proc read_sysfs_int(path):
     return int(val)
 end
 
+## Writes a string to a sysfs attribute.
+proc write_sysfs_attr(path, value):
+    return io.writefile(path, str(value))
+end
+
+## Writes an integer to a sysfs attribute.
+proc write_sysfs_int(path, value):
+    return write_sysfs_attr(path, value)
+end
+
 ## Returns true if the given sysfs path exists.
 proc device_exists(path):
     return io.exists(path)
@@ -51,78 +61,78 @@ end
 
 ## Gets information about a network device.
 proc get_net_device_info(dev_name):
-    let info = {}
-    let base = SYSFS_CLASS + "/net/" + dev_name
-    info["name"] = dev_name
-    info["mtu"] = read_sysfs_attr(base + "/mtu")
-    info["address"] = read_sysfs_attr(base + "/address")
-    info["operstate"] = read_sysfs_attr(base + "/operstate")
-    info["carrier"] = read_sysfs_attr(base + "/carrier")
-    info["speed"] = read_sysfs_attr(base + "/speed")
-    info["duplex"] = read_sysfs_attr(base + "/duplex")
-    return info
+    let info_net = {}
+    let base_net = SYSFS_CLASS + "/net/" + dev_name
+    info_net["name"] = dev_name
+    info_net["mtu"] = read_sysfs_attr(base_net + "/mtu")
+    info_net["address"] = read_sysfs_attr(base_net + "/address")
+    info_net["operstate"] = read_sysfs_attr(base_net + "/operstate")
+    info_net["carrier"] = read_sysfs_attr(base_net + "/carrier")
+    info_net["speed"] = read_sysfs_attr(base_net + "/speed")
+    info_net["duplex"] = read_sysfs_attr(base_net + "/duplex")
+    return info_net
 end
 
 ## Gets information about a CPU.
 proc get_cpu_info(cpu_id):
-    let info = {}
-    let base = SYSFS_DEVICES + "/system/cpu/cpu" + str(cpu_id)
-    info["id"] = cpu_id
-    info["online"] = read_sysfs_attr(base + "/online")
-    info["freq_cur"] = read_sysfs_attr(base + "/cpufreq/scaling_cur_freq")
-    info["freq_min"] = read_sysfs_attr(base + "/cpufreq/scaling_min_freq")
-    info["freq_max"] = read_sysfs_attr(base + "/cpufreq/scaling_max_freq")
-    info["governor"] = read_sysfs_attr(base + "/cpufreq/scaling_governor")
-    return info
+    let info_cpu = {}
+    let base_cpu = SYSFS_DEVICES + "/system/cpu/cpu" + str(cpu_id)
+    info_cpu["id"] = cpu_id
+    info_cpu["online"] = read_sysfs_attr(base_cpu + "/online")
+    info_cpu["freq_cur"] = read_sysfs_attr(base_cpu + "/cpufreq/scaling_cur_freq")
+    info_cpu["freq_min"] = read_sysfs_attr(base_cpu + "/cpufreq/scaling_min_freq")
+    info_cpu["freq_max"] = read_sysfs_attr(base_cpu + "/cpufreq/scaling_max_freq")
+    info_cpu["governor"] = read_sysfs_attr(base_cpu + "/cpufreq/scaling_governor")
+    return info_cpu
 end
 
 ## Gets information about a thermal zone.
 proc get_thermal_zone(zone_id):
-    let info = {}
-    let base = SYSFS_CLASS + "/thermal/thermal_zone" + str(zone_id)
-    info["id"] = zone_id
-    info["type"] = read_sysfs_attr(base + "/type")
-    info["temp"] = read_sysfs_attr(base + "/temp")
-    info["policy"] = read_sysfs_attr(base + "/policy")
-    return info
+    let info_thermal = {}
+    let base_thermal = SYSFS_CLASS + "/thermal/thermal_zone" + str(zone_id)
+    info_thermal["id"] = zone_id
+    info_thermal["type"] = read_sysfs_attr(base_thermal + "/type")
+    info_thermal["temp"] = read_sysfs_attr(base_thermal + "/temp")
+    info_thermal["policy"] = read_sysfs_attr(base_thermal + "/policy")
+    return info_thermal
 end
 
 ## Gets information about a power supply.
 proc get_power_supply_info(name):
-    let info = {}
-    let base = SYSFS_CLASS + "/power_supply/" + name
-    info["name"] = name
-    info["type"] = read_sysfs_attr(base + "/type")
-    info["status"] = read_sysfs_attr(base + "/status")
-    info["capacity"] = read_sysfs_attr(base + "/capacity")
-    info["voltage_now"] = read_sysfs_attr(base + "/voltage_now")
-    info["current_now"] = read_sysfs_attr(base + "/current_now")
-    return info
+    let info_ps = {}
+    let base_ps = SYSFS_CLASS + "/power_supply/" + name
+    info_ps["name"] = name
+    info_ps["type"] = read_sysfs_attr(base_ps + "/type")
+    info_ps["status"] = read_sysfs_attr(base_ps + "/status")
+    info_ps["capacity"] = read_sysfs_attr(base_ps + "/capacity")
+    info_ps["voltage_now"] = read_sysfs_attr(base_ps + "/voltage_now")
+    info_ps["current_now"] = read_sysfs_attr(base_ps + "/current_now")
+    return info_ps
 end
 
 # ========== Module info ==========
 
 ## Gets information about a kernel module.
 proc get_module_info(mod_name):
-    let info = {}
-    let base = SYSFS_MODULE + "/" + mod_name
-    info["name"] = mod_name
-    info["refcnt"] = read_sysfs_attr(base + "/refcnt")
-    return info
+    let info_mod = {}
+    let base_mod = SYSFS_MODULE + "/" + mod_name
+    info_mod["name"] = mod_name
+    info_mod["refcnt"] = read_sysfs_attr(base_mod + "/refcnt")
+    return info_mod
 end
 
 # ========== Platform info ==========
 
 ## Gets DMI platform information.
 proc get_dmi_info():
-    let info = {}
-    let base = SYSFS_DEVICES + "/virtual/dmi/id"
-    info["board_name"] = read_sysfs_attr(base + "/board_name")
-    info["board_vendor"] = read_sysfs_attr(base + "/board_vendor")
-    info["product_name"] = read_sysfs_attr(base + "/product_name")
-    info["bios_vendor"] = read_sysfs_attr(base + "/bios_vendor")
-    info["bios_version"] = read_sysfs_attr(base + "/bios_version")
-    return info
+    let info_dmi = {}
+    let base_dmi = SYSFS_DEVICES + "/virtual/dmi/id"
+    info_dmi["board_name"] = read_sysfs_attr(base_dmi + "/board_name")
+    info_dmi["board_vendor"] = read_sysfs_attr(base_dmi + "/board_vendor")
+    info_dmi["product_name"] = read_sysfs_attr(base_dmi + "/product_name")
+    info_dmi["bios_vendor"] = read_sysfs_attr(base_dmi + "/bios_vendor")
+    info_dmi["bios_version"] = read_sysfs_attr(base_dmi + "/bios_version")
+    return info_dmi
 end
 
 # ========== Sysfs attribute codegen (for kernel modules) ==========
