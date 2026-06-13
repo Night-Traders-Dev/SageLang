@@ -61,6 +61,7 @@ class cJSON:
         self.valueint = 0
         self.valuedouble = 0
         self.string = nil
+        self.string_lower = nil
 
 # ============================================================================
 # Internal: Parser
@@ -571,11 +572,24 @@ proc cJSON_GetObjectItem(object, name):
     if object == nil:
         return nil
     let child = object.child
+    let name_lower = nil
     while child != nil:
         if child.string != nil:
-            if lower(child.string) == lower(name):
+            # Fast path: exact match
+            if child.string == name:
                 return child
+            # Slow path: case-insensitive match
+            if name_lower == nil:
+                name_lower = lower(name)
+            end
+            if child.string_lower == nil:
+                child.string_lower = lower(child.string)
+            end
+            if child.string_lower == name_lower:
+                return child
+        end
         child = child.next
+    end
     return nil
 
 # cJSON_GetObjectItemCaseSensitive(object, string) -> cJSON node or nil
