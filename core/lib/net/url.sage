@@ -169,24 +169,27 @@ proc encode(text):
     return result
 
 # Decode a percent-encoded string
+# NOTE: Security-hardened to prevent infinite loop on malformed input (e.g., trailing %)
 proc decode(text):
     let result = ""
     let i = 0
-    while i < len(text):
-        if text[i] == "%" and i + 2 < len(text):
+    let n = len(text)
+    while i < n:
+        let c = text[i]
+        if c == "%" and i + 2 < n:
             let hi = hex_val(text[i + 1])
             let lo = hex_val(text[i + 2])
             if hi >= 0 and lo >= 0:
                 result = result + chr(hi * 16 + lo)
                 i = i + 3
             else:
-                result = result + text[i]
+                result = result + c
                 i = i + 1
-        if text[i] == "+" and i < len(text):
+        elif c == "+":
             result = result + " "
             i = i + 1
-        if i < len(text) and text[i] != "%" and text[i] != "+":
-            result = result + text[i]
+        else:
+            result = result + c
             i = i + 1
     return result
 
