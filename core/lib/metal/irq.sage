@@ -96,9 +96,12 @@ proc register_handler(vector, handler):
     _handlers[str(vector)] = handler
 
 let _irq_depth = 0
+let MAX_IRQ_DEPTH = 32
 
 ## Increment interrupt nesting depth
 proc irq_enter():
+    if _irq_depth >= MAX_IRQ_DEPTH:
+        core.panic("Maximum IRQ nesting depth exceeded")
     _irq_depth = _irq_depth + 1
 
 ## Decrement interrupt nesting depth

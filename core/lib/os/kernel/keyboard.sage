@@ -266,6 +266,16 @@ proc poll_key():
     return result
 end
 
+## Non-blocking read of the next character from the keyboard.
+## Returns the character as a string, or nil if no key is available.
+proc get_char():
+    let key = poll_key()
+    if key == nil:
+        return nil
+    end
+    return key["char"]
+end
+
 proc wait_key():
     let key = nil
     while key == nil:
