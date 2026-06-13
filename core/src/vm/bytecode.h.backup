@@ -52,7 +52,6 @@ typedef enum {
     BC_OP_PRINT,
     BC_OP_EXEC_AST_STMT,
     BC_OP_RETURN,
-    OP_MATH_PRINTM,
     BC_OP_PUSH_ENV,
     BC_OP_POP_ENV,
     BC_OP_DUP,

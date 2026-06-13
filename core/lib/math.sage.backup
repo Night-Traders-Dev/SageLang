@@ -456,26 +456,3 @@ proc _printm_op_asm(a, op, b, formats):
     
     # Fallback to Sage if arch not supported or op not implemented in ASM
     return _printm_op_sage(a, op, b, formats)
-
-
-# === math.printm() — print matrix / 2D array ===
-proc printm(matrix):
-    if not is_array(matrix):
-        panic("math.printm() expects an array")
-    end
-    print "["
-    for i in range(len(matrix)):
-        let row = matrix[i]
-        if is_array(row):
-            let parts = []
-            for j in range(len(row)):
-                push(parts, str(row[j]))
-            end
-            print "  [" + join(parts, ", ") + "]"
-        else:
-            print "  " + str(row)
-        end
-    end
-    print "]"
-end
-
