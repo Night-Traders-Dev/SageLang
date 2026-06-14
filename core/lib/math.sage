@@ -458,15 +458,16 @@ proc _printm_op_asm(a, op, b, formats):
     return _printm_op_sage(a, op, b, formats)
 
 
-# === math.printm() — print matrix / 2D array ===
-proc printm(matrix):
-    if not is_array(matrix):
-        panic("math.printm() expects an array")
+# === math.print_matrix() — print matrix / 2D array ===
+proc print_matrix(matrix):
+    if type(matrix) != "array":
+        print "Error: math.print_matrix() expects an array"
+        return 0
     end
     print "["
     for i in range(len(matrix)):
         let row = matrix[i]
-        if is_array(row):
+        if type(row) == "array":
             let parts = []
             for j in range(len(row)):
                 push(parts, str(row[j]))
