@@ -730,8 +730,8 @@ print d.breed      # German Shepherd
 print d.speak()    # Woof!
 ```
 
-Note that `super` auto-injects `self` as the first argument:
-`super.init(args)`.
+Note that `super` auto-injects `self` as the first argument, but as of v3.7.7, passing it explicitly is also supported for compatibility:
+`super.init(args)` or `super.init(self, args)`.
 
 ## Deep Inheritance
 
@@ -3816,10 +3816,9 @@ This section documents known behaviors and design decisions. Items marked
     config["port"] = 8080
     ```
 
-5. **`match` and `init` are reserved keywords** -- **FIXED.** As of v3.7.7, `match`, `init`, `enum`, `struct`, and `trait` can be used as variable names in expression and assignment contexts, as long as they are not immediately followed by a block-starting colon or used in a declaration context.
+5. **`match`, `init`, and `end` are reserved keywords** -- **FIXED.** As of v3.7.7, `match`, `init`, `end`, `enum`, `struct`, and `trait` can be used as variable names in expression and assignment contexts, as long as they are not immediately followed by a block-starting colon or used in a declaration context.
 
-6. **`super` auto-injects `self`** -- Write `super.init(args)` not
-   `super.init(self, args)`.
+6. **`super` auto-injects `self`** -- **FIXED.** As of v3.7.7, you can write either `super.init(args)` or `super.init(self, args)`. The interpreter and backends now handle both forms correctly.
 
 ## Fixed in v1.4+
 
@@ -3844,6 +3843,18 @@ This section documents known behaviors and design decisions. Items marked
 
 13. **~~Class methods can't see module-level vars~~** -- **FIXED.** Methods
     now have access to their defining environment via `defining_env`.
+
+14. **~~Circular Imports~~** -- **FIXED.** Circular dependencies now resolve
+    correctly by providing access to partially initialized state.
+
+15. **~~LLVM Loop Mutation~~** -- **FIXED.** Modifying a `for` loop variable
+    inside the loop now correctly affects the iteration count in LLVM.
+
+16. **~~No string interning~~** -- **FIXED.** Sage now implements global
+    string interning to reduce memory usage and speed up comparisons.
+
+17. **~~AST Interpreter Performance~~** -- **FIXED.** The tree-walking
+    interpreter has been optimized with "Quickened" nodes for numeric paths.
 
 \newpage
 

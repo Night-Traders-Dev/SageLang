@@ -1405,31 +1405,5 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 **Built with ❤️ for systems programming enthusiasts**
 
-**Recent Milestones:**
+For a detailed version history and recent improvements, see the [Official Changelog (UPDATES.md)](core/docs/meta/UPDATES.md).
 
-- June 9, 2026: v3.7.7: Integrated One-line Install System (OIS), optimized `dicts.size` to $O(1)$, achieved $O(N)$ array uniqueness, implemented high-performance native library built-ins for array reversal (~105x), added REPL `:stats` command, and introduced GPIO interrupt management.
-- June 8, 2026: v3.7.7: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
-- June 5, 2026: Optimization: Hardened interpreter search path logic (preventing duplicate paths, increased budget to 64) and implemented high-performance native bridging for SageMetal VM (Math, IO, Sys, Regex).
-- May 29, 2026: v3.7.7: Fixed doc comment detachment for `errno.strerror` and updated core metadata.
-- May 25, 2026: v3.7.7: Structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust sandbox security guards.
-- May 20, 2026: v3.7.7: Critical bug fix in `mutex_lock` for bare-metal targets.
-- May 15, 2026: v3.7.7: Milestone release: Self-hosted compiler parity and synchronization primitives stabilization.
-- May 7, 2026: Optimization: implemented length-aware dictionary lookups and direct token pointers in method dispatch for 15% speedup
-- April 15, 2026: SageMetal VM — freestanding bytecode interpreter for OS kernels (no libc/malloc required)
-- April 10, 2026: Default runtime changed to hybrid JIT+AOT (Silent JIT profiling with auto fallback)
-- April 5, 2026: ORC Garbage Collector — Nim-inspired Optimized Reference Counting with Lins' cycle detection
-- March 24, 2026: Added native `fat` module with FAT8/12/16/32 boot-sector parsing + initial bare-metal/OSdev/UEFI native target profiles
-- March 24, 2026: LLVM + self-hosted LLVM fix - resolved cross-module `from X import Y` constant imports (including aliases) at compile time
-- March 18, 2026: Phase 15 Complete - Vulkan graphics engine (4600-line C backend, 16 Sage libraries, 27 shaders, 6 demos, PBR/bloom/shadows/deferred/SSAO/particles/N-body, 285 GPU tests)
-- March 17, 2026: LLVM Backend - Standalone runtime library (40+ sage_rt_* functions), ABI fix, local variable allocation, block termination tracking; --compile-llvm now produces working executables
-- March 17, 2026: Phase 14 Complete - Security & performance audit (30 fixes across 14 files, all 1425 tests passing)
-- March 9, 2026: Networking modules (socket, tcp, http, ssl) + cJSON port (88 tests)
-- March 9, 2026: Phase 13 Complete - Self-hosted lexer, parser, interpreter with full bootstrap
-- March 9, 2026: Phase 12 Complete - REPL, formatter, linter, syntax highlighting, LSP server
-- March 9, 2026: Phase 11 Complete - Native stdlib, threads, async/await, backend expansion
-- March 9, 2026: Phase 10 Complete - C/LLVM/native backends, optimization passes
-- March 8, 2026: Phase 8.5 Complete - Security & performance hardening
-- November 29, 2025: Phase 7 Complete - Generators with yield/next
-- November 28, 2025: Phase 6 Complete - Object-Oriented Programming
-- November 27, 2025: Phase 5 Complete - Advanced Data Structures
-- November 27, 2025: Phase 4 Complete - Garbage Collection

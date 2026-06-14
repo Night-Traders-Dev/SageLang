@@ -1,5 +1,22 @@
 # SageLang Updates
 
+## v3.7.7 — Phase 19: "Gotcha" Fixes & Performance Optimization (June 14, 2026)
+
+- **Language Enhancements**:
+  - **Circular Imports**: Implemented support for partial module loads in `module.c`. Circular dependencies now resolve correctly by providing access to partially initialized state.
+  - **Full `super` Support**: Implemented `EXPR_SUPER` in both C and LLVM backends. Compiled binaries now support proper inheritance and parent method calls.
+  - **`super` Self-Injection**: Updated interpreter and backends to handle optional explicit `self` in `super` calls (`super.init(self, args)`), improving compatibility.
+  - **`end` Soft Keyword**: Transitioned `end` to a soft keyword. It can now be used as an identifier/variable name while still acting as a block terminator.
+  - **Modulo Float Support**: Updated the self-hosted compiler to use `fmod()` for the `%` operator, preserving floating-point semantics across all runtimes.
+- **Runtime & Performance**:
+  - **String Interning**: Implemented a global string interning table in the runtime and GC, significantly reducing memory usage for duplicate strings.
+  - **AST "Quickened" Nodes**: Optimized tree-walking interpreter with self-optimizing nodes that cache type information and use fast paths for numeric operations.
+  - **Loop Mutation**: Enabled loop variable mutation across all backends. Modifying the loop variable now correctly affects the iteration count.
+- **Bug Fixes**:
+  - **C Backend Scoping**: Fixed a bug where module-level `let` variables were not correctly marked as roots during GC in C-compiled binaries.
+- **Version Bump**: Milestone v3.7.7 release.
+
+
 ## v3.7.7 — REPL Statistics & Version 3.7.7 Release (June 2026)
 
 - **New Features**:
@@ -1135,3 +1152,36 @@ A comprehensive audit and hardening pass across the entire interpreter codebase,
 
 - Mark-and-sweep GC with configurable threshold
 - gc_collect(), gc_stats(), gc_enable(), gc_disable()
+
+---
+
+## Milestone History
+
+*Migrated from README.md*
+
+- **June 9, 2026**: v3.7.7: Integrated One-line Install System (OIS), optimized `dicts.size` to $O(1)$, achieved $O(N)$ array uniqueness, implemented high-performance native library built-ins for array reversal (~105x), added REPL `:stats` command, and introduced GPIO interrupt management.
+- **June 8, 2026**: v3.7.7: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
+- **June 5, 2026**: Optimization: Hardened interpreter search path logic (preventing duplicate paths, increased budget to 64) and implemented high-performance native bridging for SageMetal VM (Math, IO, Sys, Regex).
+- **May 29, 2026**: v3.7.7: Fixed doc comment detachment for `errno.strerror` and updated core metadata.
+- **May 25, 2026**: v3.7.7: Structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust sandbox security guards.
+- **May 20, 2026**: v3.7.7: Critical bug fix in `mutex_lock` for bare-metal targets.
+- **May 15, 2026**: v3.7.7: Milestone release: Self-hosted compiler parity and synchronization primitives stabilization.
+- **May 7, 2026**: Optimization: implemented length-aware dictionary lookups and direct token pointers in method dispatch for 15% speedup
+- **April 15, 2026**: SageMetal VM — freestanding bytecode interpreter for OS kernels (no libc/malloc required)
+- **April 10, 2026**: Default runtime changed to hybrid JIT+AOT (Silent JIT profiling with auto fallback)
+- **April 5, 2026**: ORC Garbage Collector — Nim-inspired Optimized Reference Counting with Lins' cycle detection
+- **March 24, 2026**: Added native `fat` module with FAT8/12/16/32 boot-sector parsing + initial bare-metal/OSdev/UEFI native target profiles
+- **March 24, 2026**: LLVM + self-hosted LLVM fix - resolved cross-module `from X import Y` constant imports (including aliases) at compile time
+- **March 18, 2026**: Phase 15 Complete - Vulkan graphics engine (4600-line C backend, 16 Sage libraries, 27 shaders, 6 demos, PBR/bloom/shadows/deferred/SSAO/particles/N-body, 285 GPU tests)
+- **March 17, 2026**: LLVM Backend - Standalone runtime library (40+ sage_rt_* functions), ABI fix, local variable allocation, block termination tracking; --compile-llvm now produces working executables
+- **March 17, 2026**: Phase 14 Complete - Security & performance audit (30 fixes across 14 files, all 1425 tests passing)
+- **March 9, 2026**: Networking modules (socket, tcp, http, ssl) + cJSON port (88 tests)
+- **March 9, 2026**: Phase 13 Complete - Self-hosted lexer, parser, interpreter with full bootstrap
+- **March 9, 2026**: Phase 12 Complete - REPL, formatter, linter, syntax highlighting, LSP server
+- **March 9, 2026**: Phase 11 Complete - Native stdlib, threads, async/await, backend expansion
+- **March 9, 2026**: Phase 10 Complete - C/LLVM/native backends, optimization passes
+- **March 8, 2026**: Phase 8.5 Complete - Security & performance hardening
+- **November 29, 2025**: Phase 7 Complete - Generators with yield/next
+- **November 28, 2025**: Phase 6 Complete - Object-Oriented Programming
+- **November 27, 2025**: Phase 5 Complete - Advanced Data Structures
+- **November 27, 2025**: Phase 4 Complete - Garbage Collection
