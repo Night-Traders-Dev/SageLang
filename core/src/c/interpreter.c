@@ -2634,8 +2634,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             if (b->op.type == TOKEN_LTE) return EVAL_RESULT(val_bool(cmp <= 0));
         }
         AST_GC_POP();
-        fprintf(stderr, "Runtime Error: Operands must be numbers or strings.\n");
-        return EVAL_RESULT(val_nil());
+        return EVAL_EXCEPTION(val_exception("Operands must be numbers or strings."));
     }
 
     switch (b->op.type) {
@@ -2656,8 +2655,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 return EVAL_RESULT(val_string_take(result));
             }
             AST_GC_POP();
-            fprintf(stderr, "Runtime Error: Operands must be numbers or strings.\n");
-            return EVAL_RESULT(val_nil());
+            return EVAL_EXCEPTION(val_exception("Operands must be numbers or strings."));
 
         case TOKEN_MINUS:
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }

@@ -201,24 +201,6 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
         return vm_normal(result.value);
     }
 
-    if (callee.type == VAL_CLASS) {
-        InstanceValue* instance = instance_create(callee.as.class_val);
-        Value inst_val = val_instance(instance);
-        
-        // Call init if it exists
-        Method* init_method = class_find_method(callee.as.class_val, "init", 4);
-        if (init_method) {
-            Value* init_args = SAGE_ALLOC(sizeof(Value) * (size_t)(arg_count + 1));
-            init_args[0] = inst_val;
-            for (int i = 0; i < arg_count; i++) init_args[i + 1] = args[i];
-            
-            ExecResult res = call_any_method(inst_val, init_method, arg_count + 1, init_args, env);
-            free(init_args);
-            if (res.is_throwing) return res;
-        }
-        return vm_normal(inst_val);
-    }
-
     if (callee.type == VAL_GENERATOR) {
         GeneratorValue* template = callee.as.generator;
         if (arg_count != template->param_count) {
