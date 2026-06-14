@@ -2988,6 +2988,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
   }
 
   fputs("\n"
+        "// Security: Cap entire-file reads to 100MB to prevent memory exhaustion DoS attacks.\n"
+        "#define SAGE_MAX_READ_SIZE (100 * 1024 * 1024)\n"
+        "\n"
         "typedef struct SageValue SageValue;\n"
         "typedef struct SageGcHeader SageGcHeader;\n"
         "typedef struct SageGcFrame SageGcFrame;\n"
@@ -3733,6 +3736,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    fseek(f, 0, SEEK_END);\n"
       "    long size = ftell(f);\n"
       "    fseek(f, 0, SEEK_SET);\n"
+      "    if (size < 0 || size > SAGE_MAX_READ_SIZE) { fclose(f); return sage_nil(); }\n"
       "    unsigned char* data = (unsigned char*)malloc((size_t)size);\n"
       "    if (data) fread(data, 1, (size_t)size, f);\n"
       "    fclose(f);\n"
@@ -4766,6 +4770,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    FILE* f = fopen(p.as.string, \"rb\"); if(!f) return sage_nil();\n"
         "    fseek(f, 0, SEEK_END); long size = ftell(f); fseek(f, 0, "
         "SEEK_SET);\n"
+        "    if (size < 0 || size > SAGE_MAX_READ_SIZE) { fclose(f); return sage_nil(); }\n"
         "    char* buf = malloc(size + 1); if(!buf) { fclose(f); return "
         "sage_nil(); }\n"
         "    fread(buf, 1, size, f); buf[size] = 0; fclose(f);\n"
@@ -4796,6 +4801,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    FILE* f = fopen(p.as.string, \"rb\"); if(!f) return sage_nil();\n"
         "    fseek(f, 0, SEEK_END); long size = ftell(f); fseek(f, 0, "
         "SEEK_SET);\n"
+        "    if (size < 0 || size > SAGE_MAX_READ_SIZE) { fclose(f); return sage_nil(); }\n"
         "    SageValue arr = sage_array();\n"
         "    if (size > 0) {\n"
         "        unsigned char* buf = malloc(size);\n"
