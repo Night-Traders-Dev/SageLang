@@ -24,7 +24,7 @@ import llm.attention
 let _compute = gpu_accel.create("auto")
 
 print "============================================"
-print "  SageLLM Model Inspector v3.7.5"
+print "  SageLLM Model Inspector v3.7.6"
 print "  Debug + Visualize + Analyze"
 print "============================================"
 print ""

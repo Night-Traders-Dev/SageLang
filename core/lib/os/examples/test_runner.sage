@@ -107,7 +107,7 @@ proc test_kernel(arch):
         km = km + "void kmain(void) {" + NL
     end
     km = km + "    serial_init();" + NL
-    km = km + "    serial_puts(\"SageOS Kernel v3.7.5\\n\");" + NL
+    km = km + "    serial_puts(\"SageOS Kernel v3.7.6\\n\");" + NL
     km = km + "    serial_puts(\"Arch: " + arch + "\\n\");" + NL
     km = km + "    serial_puts(\"DONE\\n\");" + NL
     if arch == "x86_64":
@@ -130,7 +130,7 @@ proc test_kernel(arch):
         return false
     end
 
-    return run_qemu_and_check(result["qemu"], "SageOS Kernel v3.7.5", 5)
+    return run_qemu_and_check(result["qemu"], "SageOS Kernel v3.7.6", 5)
 end
 
 proc test_shell(arch):

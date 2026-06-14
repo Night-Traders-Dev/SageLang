@@ -34,7 +34,7 @@ sage lib/os/examples/kernel.sage
 
 Expected output:
 ```
-SageOS Kernel v3.7.5
+SageOS Kernel v3.7.6
 [OK] Multiboot magic verified
 [OK] Memory: lower=0x280KB upper=0x7F00KB
 [OK] sum(1..100) = 0x00001388 (expected 0x1388 = 5050)

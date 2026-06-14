@@ -109,7 +109,7 @@ proc route(router, query):
 proc _rt_help(q):
     return "Commands: help, version, test, build, format, lint, repl"
 proc _rt_version(q):
-    return "Sage v3.7.5"
+    return "Sage v3.7.6"
 proc _rt_test(q):
     return "Run: bash tests/run_tests.sh"
 proc _rt_build(q):
