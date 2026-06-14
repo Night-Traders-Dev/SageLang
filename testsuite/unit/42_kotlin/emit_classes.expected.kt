@@ -12,7 +12,7 @@ open class Cat : Animal() {
     override val props = mutableMapOf<String, SageVal>()
     
     open fun speak(): SageVal {
-        return S.add(S.getProperty(SageRuntime.Value.Obj(this), "name"), S.str(" meows!"))
+        return S.add(S.getProperty(S.Value.Obj(this), "name"), S.str(" meows!"))
         return S.nil
     }
     
@@ -22,7 +22,7 @@ open class Dog : Animal() {
     override val props = mutableMapOf<String, SageVal>()
     
     open fun speak(): SageVal {
-        return S.add(S.getProperty(SageRuntime.Value.Obj(this), "name"), S.str(" barks!"))
+        return S.add(S.getProperty(S.Value.Obj(this), "name"), S.str(" barks!"))
         return S.nil
     }
     
@@ -31,19 +31,18 @@ open class Dog : Animal() {
 open class Animal : SageObject("Animal") {
     override val props = mutableMapOf<String, SageVal>()
     
-    override fun sageInit(vararg args: SageVal): SageVal {
-        val name: SageVal = if (args.size > 0) args[0] else S.nil
-        S.setProperty(SageRuntime.Value.Obj(this), "name", name)
+    open fun `init`(name: SageVal = S.nil): SageVal {
+        S.setProperty(S.Value.Obj(this), "name", name)
         return S.nil
     }
     
     open fun speak(): SageVal {
-        return S.add(S.getProperty(SageRuntime.Value.Obj(this), "name"), S.str(" makes a sound"))
+        return S.add(S.getProperty(S.Value.Obj(this), "name"), S.str(" makes a sound"))
         return S.nil
     }
     
     open fun describe(): SageVal {
-        return S.add(S.str("I am "), S.getProperty(SageRuntime.Value.Obj(this), "name"))
+        return S.add(S.str("I am "), S.getProperty(S.Value.Obj(this), "name"))
         return S.nil
     }
     
@@ -57,9 +56,9 @@ var dog: S.Value = S.nil
 fun main() {
     S.init()
     
-    S.registerClass("Cat") { args -> Cat().also { it.sageInit(*args) } }
-    S.registerClass("Dog") { args -> Dog().also { it.sageInit(*args) } }
-    S.registerClass("Animal") { args -> Animal().also { it.sageInit(*args) } }
+    S.registerClass("Cat") { args -> S.Value.Obj(Cat().also { it.sageInit(*args) }) }
+    S.registerClass("Dog") { args -> S.Value.Obj(Dog().also { it.sageInit(*args) }) }
+    S.registerClass("Animal") { args -> S.Value.Obj(Animal().also { it.sageInit(*args) }) }
     
     dog = S.newInstance("Dog", S.str("Rex"))
     cat = S.newInstance("Cat", S.str("Whiskers"))

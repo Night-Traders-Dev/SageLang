@@ -11,20 +11,19 @@ typealias SageVal = S.Value
 open class Circle : Shape() {
     override val props = mutableMapOf<String, SageVal>()
     
-    override fun sageInit(vararg args: SageVal): SageVal {
-        val radius: SageVal = if (args.size > 0) args[0] else S.nil
+    open fun `init`(radius: SageVal = S.nil): SageVal {
         super.sageInit(S.str("circle"))
-        S.setProperty(SageRuntime.Value.Obj(this), "radius", radius)
+        S.setProperty(S.Value.Obj(this), "radius", radius)
         return S.nil
     }
     
     open fun describe(): SageVal {
-        return S.add(S.add(super.describe(), S.str(" r=")), S.str(S.getProperty(SageRuntime.Value.Obj(this), "radius")))
+        return S.add(S.add(super.describe(), S.str(" r=")), S.str(S.getProperty(S.Value.Obj(this), "radius")))
         return S.nil
     }
     
     open fun area(): SageVal {
-        return S.mul(S.mul(S.num(3.1415899999999999), S.getProperty(SageRuntime.Value.Obj(this), "radius")), S.getProperty(SageRuntime.Value.Obj(this), "radius"))
+        return S.mul(S.mul(S.num(3.1415899999999999), S.getProperty(S.Value.Obj(this), "radius")), S.getProperty(S.Value.Obj(this), "radius"))
         return S.nil
     }
     
@@ -33,14 +32,13 @@ open class Circle : Shape() {
 open class Shape : SageObject("Shape") {
     override val props = mutableMapOf<String, SageVal>()
     
-    override fun sageInit(vararg args: SageVal): SageVal {
-        val name: SageVal = if (args.size > 0) args[0] else S.nil
-        S.setProperty(SageRuntime.Value.Obj(this), "name", name)
+    open fun `init`(name: SageVal = S.nil): SageVal {
+        S.setProperty(S.Value.Obj(this), "name", name)
         return S.nil
     }
     
     open fun describe(): SageVal {
-        return S.add(S.str("Shape: "), S.getProperty(SageRuntime.Value.Obj(this), "name"))
+        return S.add(S.str("Shape: "), S.getProperty(S.Value.Obj(this), "name"))
         return S.nil
     }
     
@@ -56,8 +54,8 @@ var c: S.Value = S.nil
 fun main() {
     S.init()
     
-    S.registerClass("Circle") { args -> Circle().also { it.sageInit(*args) } }
-    S.registerClass("Shape") { args -> Shape().also { it.sageInit(*args) } }
+    S.registerClass("Circle") { args -> S.Value.Obj(Circle().also { it.sageInit(*args) }) }
+    S.registerClass("Shape") { args -> S.Value.Obj(Shape().also { it.sageInit(*args) }) }
     
     c = S.newInstance("Circle", S.num(5.0))
     S.printLn(S.callMethod(c, "describe"))

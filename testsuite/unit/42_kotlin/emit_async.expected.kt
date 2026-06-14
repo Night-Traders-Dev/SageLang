@@ -13,7 +13,7 @@ suspend fun fetch_data(): SageVal {
     return S.nil
 }
 
-suspend fun compute(x: SageVal): SageVal {
+suspend fun compute(x: SageVal = S.nil): SageVal {
     return S.mul(x, S.num(2.0))
     return S.nil
 }

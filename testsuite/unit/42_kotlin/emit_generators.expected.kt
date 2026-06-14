@@ -8,7 +8,7 @@ import kotlinx.coroutines.*
 
 typealias SageVal = S.Value
 
-fun count_up(n: SageVal): Sequence<SageVal> = sequence {
+fun count_up(n: SageVal = S.nil): Sequence<SageVal> = sequence {
     var i = S.num(0.0)
     while (S.truthy(S.lt(i, n))) {
         yield(i)

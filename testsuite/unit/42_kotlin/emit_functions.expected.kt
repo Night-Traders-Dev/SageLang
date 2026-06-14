@@ -8,12 +8,12 @@ import kotlinx.coroutines.*
 
 typealias SageVal = S.Value
 
-fun add(a: SageVal, b: SageVal): SageVal {
+fun add(a: SageVal = S.nil, b: SageVal = S.nil): SageVal {
     return S.add(a, b)
     return S.nil
 }
 
-fun factorial(n: SageVal): SageVal {
+fun factorial(n: SageVal = S.nil): SageVal {
     if (S.truthy(S.lte(n, S.num(1.0)))) {
         return S.num(1.0)
     }
@@ -21,7 +21,7 @@ fun factorial(n: SageVal): SageVal {
     return S.nil
 }
 
-fun fibonacci(n: SageVal): SageVal {
+fun fibonacci(n: SageVal = S.nil): SageVal {
     if (S.truthy(S.lte(n, S.num(0.0)))) {
         return S.num(0.0)
     }
@@ -32,7 +32,7 @@ fun fibonacci(n: SageVal): SageVal {
     return S.nil
 }
 
-fun classify(n: SageVal): SageVal {
+fun classify(n: SageVal = S.nil): SageVal {
     if (S.truthy(S.gt(n, S.num(0.0)))) {
         return S.str("positive")
     }
@@ -43,7 +43,7 @@ fun classify(n: SageVal): SageVal {
     return S.nil
 }
 
-fun sum_to(n: SageVal): SageVal {
+fun sum_to(n: SageVal = S.nil): SageVal {
     var total = S.num(0.0)
     var i = S.num(1.0)
     while (S.truthy(S.lte(i, n))) {
@@ -54,7 +54,7 @@ fun sum_to(n: SageVal): SageVal {
     return S.nil
 }
 
-fun find_first_even(items: SageVal): SageVal {
+fun find_first_even(items: SageVal = S.nil): SageVal {
     run {
         val _iter_1 = S.toIterable(items)
         for (item in _iter_1) {
