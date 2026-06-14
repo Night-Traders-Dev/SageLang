@@ -370,6 +370,10 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     #define DISPATCH() \
         do { \
             if (ip >= ip_end) goto done; \
+            if (*ip == BC_OP_POP_ENV) printf("TRACE: POP_ENV\n"); \
+            if (*ip == BC_OP_PUSH_ENV) printf("TRACE: PUSH_ENV\n"); \
+            if (*ip == BC_OP_EXEC_AST_STMT) printf("TRACE: EXEC_AST_STMT\n"); \
+            if (*ip == BC_OP_GET_INDEX) printf("TRACE: GET_INDEX\n"); \
             goto *dispatch_table[*ip++]; \
         } while (0)
 #else

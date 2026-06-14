@@ -595,9 +595,10 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 !emit_op(compiler, BC_OP_LESS, loop_var.line, loop_var.column)) {
                 return 0;
             }
-
             int exit_jump = emit_jump(compiler, BC_OP_JUMP_IF_FALSE, loop_var.line, loop_var.column);
             if (exit_jump < 0) return 0;
+
+            // Pop the condition result so the stack is just [array, index]
             if (!emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column)) return 0;
 
             if (!emit_dup(compiler, 1, loop_var.line, loop_var.column) ||
@@ -609,8 +610,8 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
 
             // continue_target points to the increment section
             int continue_target_placeholder = current_offset(compiler);
-            // for-loop break needs: pop comparison result, pop index, pop array, pop_env
-            if (!push_loop(compiler, continue_target_placeholder, 1, 3)) return 0;
+            // for-loop break needs: pop index, pop array, pop_env
+            if (!push_loop(compiler, continue_target_placeholder, 1, 2)) return 0;
 
             if (!compile_stmt(compiler, stmt->as.for_stmt.body, 0)) {
                 compiler->loop_depth--;
@@ -628,8 +629,6 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 return 0;
             }
 
-            if (!pop_loop_and_patch_breaks(compiler)) return 0;
-
             if (!patch_jump(compiler, exit_jump, current_offset(compiler)) ||
                 !emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column) ||
                 !emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column) ||
@@ -637,6 +636,8 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 !emit_op(compiler, BC_OP_POP_ENV, loop_var.line, loop_var.column)) {
                 return 0;
             }
+
+            if (!pop_loop_and_patch_breaks(compiler)) return 0;
 
             if (want_result) return emit_op(compiler, BC_OP_NIL, loop_var.line, loop_var.column);
             return 1;

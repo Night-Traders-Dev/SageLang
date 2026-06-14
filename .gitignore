@@ -80,3 +80,8 @@ core/output/
 # Build artifacts
 *.ll
 *.spv
+.tmp_kt_emit_async.kt
+.tmp_kt_emit_classes.kt
+.tmp_kt_emit_functions.kt
+.tmp_kt_emit_generators.kt
+.tmp_kt_emit_super.kt
