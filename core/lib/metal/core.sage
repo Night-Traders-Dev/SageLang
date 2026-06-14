@@ -10,7 +10,6 @@
 ## ============================================================
 ## Serial / Console I/O
 ## ============================================================
-
 ## Write a single character to the console/serial port
 proc putchar(c):
     # Delegates to metal VM write_char callback
@@ -27,7 +26,6 @@ proc getchar():
 ## ============================================================
 ## Port I/O (x86)
 ## ============================================================
-
 ## Write a byte to an I/O port
 proc outb(port, val):
     mem_write(mem_alloc(1), 0, "byte", val)
@@ -55,7 +53,6 @@ proc inl(port):
 ## ============================================================
 ## Memory-Mapped I/O (MMIO)
 ## ============================================================
-
 ## Read a 32-bit value from a physical address
 proc mmio_read32(addr):
     let ptr = mem_alloc(4)
@@ -79,7 +76,6 @@ proc mmio_write8(addr, val):
 ## ============================================================
 ## CPU Control
 ## ============================================================
-
 ## Disable interrupts
 proc cli():
     return nil
@@ -90,6 +86,10 @@ proc sti():
 
 ## Halt CPU (wait for interrupt)
 proc hlt():
+    return nil
+
+## Yield CPU in a busy-wait loop (hint to the hardware)
+proc cpu_relax():
     return nil
 
 ## I/O wait (delay one I/O cycle)
@@ -143,7 +143,6 @@ proc spin_unlock(lock_ptr):
 ## ============================================================
 ## Timing
 ## ============================================================
-
 ## Busy-wait delay (approximate microseconds)
 proc delay_us(us):
     let i = 0
@@ -158,7 +157,6 @@ proc delay_ms(ms):
 ## ============================================================
 ## Memory Management (bump allocator)
 ## ============================================================
-
 let _heap_base = 0
 let _heap_used = 0
 let _heap_size = 65536
@@ -189,7 +187,6 @@ proc heap_stats():
 ## ============================================================
 ## Panic / Halt
 ## ============================================================
-
 ## Panic and halt the CPU
 proc panic(msg):
     puts("PANIC: " + msg)
