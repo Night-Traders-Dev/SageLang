@@ -142,6 +142,20 @@ static void consume(TokenType type, const char* message) {
     parser_expected_error(current_token, type, message);
 }
 
+static void consume_identifier_like(const char* message) {
+    if (current_token.type == TOKEN_IDENTIFIER ||
+        current_token.type == TOKEN_ENUM ||
+        current_token.type == TOKEN_STRUCT ||
+        current_token.type == TOKEN_TRAIT ||
+        current_token.type == TOKEN_MATCH ||
+        current_token.type == TOKEN_END ||
+        current_token.type == TOKEN_INIT) {
+        advance_parser();
+        return;
+    }
+    parser_expected_error(current_token, TOKEN_IDENTIFIER, message);
+}
+
 static char* process_string_escapes(const char* src, int src_len, int* out_len) {
     char* buf = SAGE_ALLOC(src_len + 1);
     int j = 0;
@@ -293,7 +307,7 @@ static Stmt* try_statement() {
     
     while (match(TOKEN_CATCH)) {
         // catch e:
-        consume(TOKEN_IDENTIFIER, "Expect exception variable after 'catch'.");
+        consume_identifier_like("Expect exception variable after 'catch'.");
         Token exception_var = previous_token;
         
         consume(TOKEN_COLON, "Expect ':' after catch variable.");
@@ -414,6 +428,7 @@ static int match_identifier_like(void) {
         current_token.type == TOKEN_STRUCT ||
         current_token.type == TOKEN_TRAIT ||
         current_token.type == TOKEN_MATCH ||
+        current_token.type == TOKEN_END ||
         current_token.type == TOKEN_INIT) {
         advance_parser();
         return 1;
@@ -430,7 +445,7 @@ static Stmt* import_statement() {
     
     if (match(TOKEN_FROM)) {
         // from module_name import item1 [as alias1], item2 [as alias2], ...
-        consume(TOKEN_IDENTIFIER, "Expect module name after 'from'.");
+        consume_identifier_like("Expect module name after 'from'.");
         Token module_token = previous_token;
 
         // Build dotted module name (e.g., graphics.vulkan)
@@ -474,7 +489,7 @@ static Stmt* import_statement() {
         int capacity = 0;
 
         do {
-            consume(TOKEN_IDENTIFIER, "Expect identifier in import list.");
+            consume_identifier_like("Expect identifier in import list.");
             Token item_token = previous_token;
             
             if (item_count >= capacity) {
@@ -490,7 +505,7 @@ static Stmt* import_statement() {
             
             // ✅ NEW: Check for 'as alias'
             if (match(TOKEN_AS)) {
-                consume(TOKEN_IDENTIFIER, "Expect alias name after 'as'.");
+                consume_identifier_like("Expect alias name after 'as'.");
                 Token alias_token = previous_token;
                 
                 item_aliases[item_count] = SAGE_ALLOC(alias_token.length + 1);
@@ -508,7 +523,7 @@ static Stmt* import_statement() {
     }
     
     // import module_name [as alias]
-    consume(TOKEN_IDENTIFIER, "Expect module name after 'import'.");
+    consume_identifier_like("Expect module name after 'import'.");
     Token module_token = previous_token;
 
     // Build dotted module name (e.g., graphics.vulkan)
@@ -534,7 +549,7 @@ static Stmt* import_statement() {
     
     char* alias = NULL;
     if (match(TOKEN_AS)) {
-        consume(TOKEN_IDENTIFIER, "Expect alias after 'as'.");
+        consume_identifier_like("Expect alias after 'as'.");
         Token alias_token = previous_token;
         
         alias = SAGE_ALLOC(alias_token.length + 1);
@@ -688,7 +703,7 @@ static Expr* primary() {
 
     // Identifiers (including keywords that can be used as variable names in expression context)
     if (match(TOKEN_IDENTIFIER) || match(TOKEN_ENUM) || match(TOKEN_STRUCT) || match(TOKEN_TRAIT) ||
-        match(TOKEN_MATCH) || match(TOKEN_INIT)) {
+        match(TOKEN_MATCH) || match(TOKEN_END) || match(TOKEN_INIT)) {
         Token name = previous_token;
         return new_variable_expr(name);
     }
@@ -954,7 +969,7 @@ static Stmt* comptime_statement() {
 
 // Phase 17: macro definition — macro name(params): body
 static Stmt* macro_declaration() {
-    consume(TOKEN_IDENTIFIER, "Expect macro name.");
+    consume_identifier_like("Expect macro name.");
     Token name = previous_token;
 
     consume(TOKEN_LPAREN, "Expect '(' after macro name.");
@@ -965,7 +980,7 @@ static Stmt* macro_declaration() {
     if (!check(TOKEN_RPAREN)) {
         do {
             if (check(TOKEN_RPAREN)) break;
-            consume(TOKEN_IDENTIFIER, "Expect parameter name.");
+            consume_identifier_like("Expect parameter name.");
             if (count >= capacity) {
                 capacity = capacity == 0 ? 4 : capacity * 2;
                 params = SAGE_REALLOC(params, sizeof(Token) * capacity);
@@ -983,7 +998,7 @@ static Stmt* macro_declaration() {
 
 // Phase 17: parse @pragma decorators and attach to next declaration
 static Pragma* parse_pragma(void) {
-    consume(TOKEN_IDENTIFIER, "Expect pragma name after '@'.");
+    consume_identifier_like("Expect pragma name after '@'.");
     Token name_tok = previous_token;
     char* name = SAGE_ALLOC(name_tok.length + 1);
     memcpy(name, name_tok.start, name_tok.length);
@@ -1040,7 +1055,7 @@ static void parse_generic_type_params(Token** out_params, int* out_count) {
 
     int capacity = 0;
     do {
-        consume(TOKEN_IDENTIFIER, "Expect type parameter name.");
+        consume_identifier_like("Expect type parameter name.");
         if (*out_count >= capacity) {
             capacity = capacity == 0 ? 4 : capacity * 2;
             *out_params = SAGE_REALLOC(*out_params, sizeof(Token) * capacity);
@@ -1127,7 +1142,7 @@ static Stmt* while_statement() {
 
 // Parse a type annotation: Int, String, Array[Int], Dict[String, Int], T?
 static TypeAnnotation* parse_type_annotation(void) {
-    if (current_token.type != TOKEN_IDENTIFIER) return NULL;
+    if (current_token.type != TOKEN_IDENTIFIER && current_token.type != TOKEN_MATCH && current_token.type != TOKEN_END && current_token.type != TOKEN_INIT) return NULL;
     Token name = current_token;
     advance_parser();
 
@@ -1180,7 +1195,7 @@ static Stmt* proc_declaration() {
         if (!check(TOKEN_RPAREN)) {
             do {
                 if (check(TOKEN_RPAREN)) break; // trailing comma
-                if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER) {
+                if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END || current_token.type == TOKEN_INIT) {
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
                         params = SAGE_REALLOC(params, sizeof(Token) * capacity);
@@ -1245,7 +1260,7 @@ static Stmt* proc_declaration() {
 
 static Stmt* async_proc_declaration() {
     consume(TOKEN_PROC, "Expect 'proc' after 'async'.");
-    if (current_token.type == TOKEN_IDENTIFIER) {
+    if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END || current_token.type == TOKEN_INIT) {
         Token name = current_token;
         advance_parser();
 
@@ -1258,7 +1273,7 @@ static Stmt* async_proc_declaration() {
         if (!check(TOKEN_RPAREN)) {
             do {
                 if (check(TOKEN_RPAREN)) break; // trailing comma
-                if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER) {
+                if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END || current_token.type == TOKEN_INIT) {
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
                         params = SAGE_REALLOC(params, sizeof(Token) * capacity);
@@ -1287,13 +1302,13 @@ static Stmt* async_proc_declaration() {
 }
 
 static Stmt* class_declaration() {
-    consume(TOKEN_IDENTIFIER, "Expect class name.");
+    consume_identifier_like("Expect class name.");
     Token name = previous_token;
     
     Token parent;
     int has_parent = 0;
     if (match(TOKEN_LPAREN)) {
-        consume(TOKEN_IDENTIFIER, "Expect parent class name.");
+        consume_identifier_like("Expect parent class name.");
         parent = previous_token;
         consume(TOKEN_RPAREN, "Expect ')' after parent class.");
         has_parent = 1;
@@ -1347,7 +1362,7 @@ static Stmt* class_declaration() {
 //     x: Int
 //     y: Int
 static Stmt* struct_declaration() {
-    consume(TOKEN_IDENTIFIER, "Expect struct name.");
+    consume_identifier_like("Expect struct name.");
     Token name = previous_token;
 
     // Phase 17: optional generic type parameters [T, U]
@@ -1366,7 +1381,7 @@ static Stmt* struct_declaration() {
 
     while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
         if (match(TOKEN_NEWLINE)) continue;
-        consume(TOKEN_IDENTIFIER, "Expect field name in struct.");
+        consume_identifier_like("Expect field name in struct.");
         Token fname = previous_token;
         TypeAnnotation* ftype = NULL;
         if (match(TOKEN_COLON)) {
@@ -1394,7 +1409,7 @@ static Stmt* struct_declaration() {
 //     Green
 //     Blue
 static Stmt* enum_declaration() {
-    consume(TOKEN_IDENTIFIER, "Expect enum name.");
+    consume_identifier_like("Expect enum name.");
     Token name = previous_token;
     consume(TOKEN_COLON, "Expect ':' after enum name.");
     consume(TOKEN_NEWLINE, "Expect newline after enum header.");
@@ -1406,7 +1421,7 @@ static Stmt* enum_declaration() {
 
     while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
         if (match(TOKEN_NEWLINE)) continue;
-        consume(TOKEN_IDENTIFIER, "Expect variant name in enum.");
+        consume_identifier_like("Expect variant name in enum.");
         Token vname = previous_token;
         if (count >= capacity) {
             capacity = capacity == 0 ? 4 : capacity * 2;
@@ -1422,7 +1437,7 @@ static Stmt* enum_declaration() {
 // trait Printable:
 //     proc to_string(self) -> String
 static Stmt* trait_declaration() {
-    consume(TOKEN_IDENTIFIER, "Expect trait name.");
+    consume_identifier_like("Expect trait name.");
     Token name = previous_token;
     consume(TOKEN_COLON, "Expect ':' after trait name.");
     consume(TOKEN_NEWLINE, "Expect newline after trait header.");
@@ -1563,7 +1578,7 @@ static Stmt* declaration() {
         Token saved_pt = previous_token;
         TokenType kw = current_token.type;
         advance_parser();
-        if (current_token.type == TOKEN_IDENTIFIER) {
+        if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END || current_token.type == TOKEN_INIT) {
             // It's a declaration
             Stmt* s = NULL;
             if (kw == TOKEN_STRUCT) s = struct_declaration();
@@ -1618,7 +1633,7 @@ static Stmt* declaration() {
             Token saved_current = current_token;
             Token saved_prev = previous_token;
             advance_parser(); // consume ':'
-            if (current_token.type == TOKEN_IDENTIFIER) {
+            if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END || current_token.type == TOKEN_INIT) {
                 type_ann = parse_type_annotation();
             } else {
                 // Not a type annotation, restore

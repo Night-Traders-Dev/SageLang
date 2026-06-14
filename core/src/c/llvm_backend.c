@@ -79,6 +79,9 @@ typedef struct {
     int loop_depth;
     // Track whether the current basic block has been terminated (ret/br)
     int block_terminated;
+    // Class context for super resolution
+    char* current_class_name;
+    char* parent_class_name;
     // Imported module tracking (for GPU/graphics support)
     char** imported_modules;
     int imported_module_count;
@@ -1499,6 +1502,39 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 }
             }
 
+            // Special case: super.method(args)
+            if (expr->as.call.callee->type == EXPR_SUPER) {
+                if (lc->parent_class_name == NULL) {
+                    fprintf(stderr, "LLVM backend: 'super' used outside a class with a parent\n");
+                    int r = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                    if (arg_regs) free(arg_regs);
+                    return r;
+                }
+                
+                int arg_offset = 0;
+                if (expr->as.call.arg_count > 0 && expr->as.call.args[0]->type == EXPR_VARIABLE) {
+                    char* first_arg_name = token_to_str(expr->as.call.args[0]->as.variable.name);
+                    if (strcmp(first_arg_name, "self") == 0) {
+                        arg_offset = 1;
+                    }
+                    free(first_arg_name);
+                }
+
+                char* method = token_to_str(expr->as.call.callee->as.super_expr.method);
+                
+                int r = llc_new_reg(lc);
+                // Call parent's method directly, passing 'self' (parameter is named %arg_self)
+                ll_emit(lc, "    %%%d = call %%SageValue @sage_fn_%s_%s(%%SageValue %%arg_self", r, lc->parent_class_name, method);
+                for (int i = 0; i < expr->as.call.arg_count - arg_offset; i++) {
+                    ll_emit(lc, ", %%SageValue %%%d", arg_regs[i + arg_offset]);
+                }
+                ll_emit(lc, ")\n");
+                free(method);
+                if (arg_regs) free(arg_regs);
+                return r;
+            }
+
             int r = llc_new_reg(lc);
 
             // Check for builtin calls
@@ -1992,11 +2028,17 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             lc->block_terminated = 0;
             llvm_emit_stmt_list(lc, stmt->as.for_stmt.body);
 
-            // Increment counter
-            int next_idx = llc_new_reg(lc);
-            ll_line(lc, "%%%d = add i32 %%%d, 1", next_idx, cur_idx);
-            ll_line(lc, "store i32 %%%d, i32* %%%d", next_idx, idx_ptr);
-            ll_line(lc, "br label %%L%d", cond_label);
+            if (!lc->block_terminated) {
+                // Mutation Fix: Sync loop variable back to internal counter
+                int updated_val = llc_new_reg(lc);
+                ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%s", updated_val, var_name);
+                
+                int next_idx = llc_new_reg(lc);
+                ll_line(lc, "%%%d = call i32 @sage_rt_get_updated_idx(%%SageValue %%%d, i32 %%%d)", next_idx, updated_val, cur_idx);
+                
+                ll_line(lc, "store i32 %%%d, i32* %%%d", next_idx, idx_ptr);
+                ll_line(lc, "br label %%L%d", cond_label);
+            }
 
             ll_emit(lc, "L%d:\n", end_label);
 
@@ -2309,6 +2351,10 @@ static int write_llvm_output(const char* source, const char* input_path, const c
         } else if (s->type == STMT_CLASS) {
             // Emit each class method as a standalone function
             char* cname = token_to_str(s->as.class_stmt.name);
+            char* pname = s->as.class_stmt.has_parent ? token_to_str(s->as.class_stmt.parent) : NULL;
+            lc.current_class_name = cname;
+            lc.parent_class_name = pname;
+            
             for (Stmt* m = s->as.class_stmt.methods; m != NULL; m = m->next) {
                 if (m->type == STMT_PROC) {
                     // Temporarily rename the proc to ClassName_methodName
@@ -2325,7 +2371,10 @@ static int write_llvm_output(const char* source, const char* input_path, const c
                     free(mname);
                 }
             }
+            lc.current_class_name = NULL;
+            lc.parent_class_name = NULL;
             free(cname);
+            if (pname) free(pname);
         }
     }
 

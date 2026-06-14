@@ -17,32 +17,21 @@ Value val_native(NativeFn fn) {
     return v;
 }
 
-static char* gc_string_copy_len(const char* value, int len) {
-    char* copy = gc_alloc(VAL_STRING, (size_t)len + 1);
-    memcpy(copy, value, (size_t)len);
-    copy[len] = '\0';
-    return copy;
-}
-
-static char* gc_string_copy(const char* value) {
-    return gc_string_copy_len(value, (int)strlen(value));
-}
-
 Value val_string(const char* value) {
     Value v;
     v.type = VAL_STRING;
-    v.as.string = gc_string_copy(value == NULL ? "" : value);
+    if (value == NULL) value = "";
+    extern void* gc_intern_string(const char* s, int len);
+    v.as.string = (char*)gc_intern_string(value, (int)strlen(value));
     return v;
 }
 
 Value val_string_len(const char* value, int len) {
     Value v;
     v.type = VAL_STRING;
-    if (value == NULL) {
-        v.as.string = gc_string_copy("");
-    } else {
-        v.as.string = gc_string_copy_len(value, len);
-    }
+    if (value == NULL) value = "", len = 0;
+    extern void* gc_intern_string(const char* s, int len);
+    v.as.string = (char*)gc_intern_string(value, len);
     return v;
 }
 

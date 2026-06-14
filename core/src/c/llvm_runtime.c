@@ -248,6 +248,14 @@ SageValue sage_rt_bit_and(SageValue a, SageValue b) { return sage_rt_number((dou
 SageValue sage_rt_bit_or(SageValue a, SageValue b)  { return sage_rt_number((double)((long long)as_num(a) | (long long)as_num(b))); }
 SageValue sage_rt_bit_xor(SageValue a, SageValue b) { return sage_rt_number((double)((long long)as_num(a) ^ (long long)as_num(b))); }
 SageValue sage_rt_bit_not(SageValue a) { return sage_rt_number((double)(~(long long)as_num(a))); }
+
+// Mutation Fix: support for loop variable mutation
+int sage_rt_get_updated_idx(SageValue val, int cur_idx) {
+    if (val.type == SAGE_NUMBER) {
+        return (int)val.as.number + 1;
+    }
+    return cur_idx + 1;
+}
 SageValue sage_rt_shl(SageValue a, SageValue b) { return sage_rt_number((double)((long long)as_num(a) << (long long)as_num(b))); }
 SageValue sage_rt_shr(SageValue a, SageValue b) { return sage_rt_number((double)((long long)as_num(a) >> (long long)as_num(b))); }
 

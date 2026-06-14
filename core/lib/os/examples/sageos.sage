@@ -214,14 +214,14 @@ kernel_c = kernel_c + "        mem_upper_kb = mbi->mem_upper;" + NL
 kernel_c = kernel_c + "    }" + NL
 kernel_c = kernel_c + "    /* VGA banner */" + NL
 kernel_c = kernel_c + "    vga_set_color(10, 0);" + NL
-kernel_c = kernel_c + "    vga_puts(\"  SageOS v3.7.6 — Built with Sage Programming Language\\n\");" + NL
+kernel_c = kernel_c + "    vga_puts(\"  SageOS v3.7.7 — Built with Sage Programming Language\\n\");" + NL
 kernel_c = kernel_c + "    vga_set_color(7, 0);" + NL
 kernel_c = kernel_c + "    vga_puts(\"  Serial shell active on COM1 (115200 8N1)\\n\");" + NL
 kernel_c = kernel_c + "    vga_puts(\"  Memory: \");" + NL
 kernel_c = kernel_c + "    /* Serial banner */" + NL
 kernel_c = kernel_c + "    puts(\"\\033[2J\\033[H\");" + NL
 kernel_c = kernel_c + "    puts(\"============================================\\n\");" + NL
-kernel_c = kernel_c + "    puts(\"  SageOS v3.7.6\\n\");" + NL
+kernel_c = kernel_c + "    puts(\"  SageOS v3.7.7\\n\");" + NL
 kernel_c = kernel_c + "    puts(\"  Bootloader + Kernel + Shell\\n\");" + NL
 kernel_c = kernel_c + "    puts(\"  Built with Sage Programming Language\\n\");" + NL
 kernel_c = kernel_c + "    puts(\"============================================\\n\");" + NL
@@ -253,7 +253,7 @@ kernel_c = kernel_c + "        else if (streq(cmd,\"uptime\")) {" + NL
 kernel_c = kernel_c + "            puts(\"Commands: \");putdec(cmd_count);puts(\"\\n\");}" + NL
 kernel_c = kernel_c + "        else if (streq(cmd,\"clear\"))      puts(\"\\033[2J\\033[H\");" + NL
 kernel_c = kernel_c + "        else if (streq(cmd,\"version\")) {" + NL
-kernel_c = kernel_c + "            puts(\"SageOS v3.7.6 (x86, Multiboot1)\\n\");}" + NL
+kernel_c = kernel_c + "            puts(\"SageOS v3.7.7 (x86, Multiboot1)\\n\");}" + NL
 kernel_c = kernel_c + "        else if (streq(cmd,\"halt\")) {" + NL
 kernel_c = kernel_c + "            puts(\"Halting...\\n\");" + NL
 kernel_c = kernel_c + "            __asm__ volatile(\"cli; hlt\");}" + NL

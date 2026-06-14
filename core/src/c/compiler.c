@@ -65,6 +65,7 @@ typedef struct {
   ProcEntry *procs;
   NameEntry *locals;
   ClassInfo *classes;
+  ClassInfo *current_class;
   ImportedModule *modules;
 } Compiler;
 
@@ -1315,6 +1316,48 @@ static char *emit_binary_expr(Compiler *compiler, BinaryExpr *binary) {
 }
 
 static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
+  /* Super call: super.method(args) */
+  if (call->callee->type == EXPR_SUPER) {
+    if (compiler->current_class == NULL || compiler->current_class->parent_name == NULL) {
+      compiler_error_at(compiler, expr_token(call->callee),
+                        "restructure to avoid 'super' outside a class with a parent",
+                        "'super' can only be used inside a method of a class with a parent");
+      return str_dup("sage_nil()");
+    }
+
+    int arg_offset = 0;
+    if (call->arg_count > 0 && call->args[0]->type == EXPR_VARIABLE) {
+        char* first_arg_name = token_to_string(call->args[0]->as.variable.name);
+        if (strcmp(first_arg_name, "self") == 0) {
+            arg_offset = 1;
+        }
+        free(first_arg_name);
+    }
+
+    char *method_name = token_to_string(call->callee->as.super_expr.method);
+    char *c_method_name = malloc(strlen(compiler->current_class->parent_name) + strlen(method_name) + 32);
+    sprintf(c_method_name, "sage_method_%s_%s", compiler->current_class->parent_name, method_name);
+    
+    StringBuffer sb;
+    sb_init(&sb);
+    // Inside a method, '_self' is the current instance.
+    sb_appendf(&sb, "%s(_self, %d, (SageValue[]){", 
+               c_method_name, call->arg_count - arg_offset);
+    
+    for (int i = 0; i < call->arg_count - arg_offset; i++) {
+      if (i > 0) sb_append(&sb, ", ");
+      char *arg = emit_expr(compiler, call->args[i + arg_offset]);
+      sb_append(&sb, arg);
+      free(arg);
+    }
+    if (call->arg_count - arg_offset == 0) sb_append(&sb, "sage_nil()");
+    sb_append(&sb, "})");
+    
+    free(method_name);
+    free(c_method_name);
+    return sb_take(&sb);
+  }
+
   /* Method call: obj.method(args) */
   if (call->callee->type == EXPR_GET) {
     char *obj_name = NULL;
@@ -2612,12 +2655,13 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
   case EXPR_AWAIT:
     // In compiled mode, await evaluates synchronously
     return emit_expr(compiler, expr->as.await.expression);
-  case EXPR_SUPER:
+  case EXPR_SUPER: {
     compiler_error_at(compiler, expr_token(expr),
-                      "use the interpreter for programs that need super, or "
-                      "restructure to avoid inheritance",
-                      "super expressions are not supported in the C backend");
+                      "use 'super.method(...)' directly",
+                      "standalone 'super' expressions are not supported in the C backend; "
+                      "they must be part of a method call");
     return str_dup("sage_nil()");
+  }
   // Phase 17: comptime expression — emit inner expression (constant folding
   // handles optimization)
   case EXPR_COMPTIME:
@@ -2799,6 +2843,9 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     emit_line(compiler, "sage_define_slot(&%s, %s.as.array->elements[%s]);",
               slot_name, iter_var, idx_var);
     emit_embedded_block(compiler, stmt->as.for_stmt.body);
+    // Mutation Fix: Sync loop variable back to internal counter if it's a number
+    emit_line(compiler, "{ SageValue _v = sage_load_slot(&%s, \"%s\"); if (_v.type == SAGE_TAG_NUMBER) %s = (int)_v.as.number; }",
+              slot_name, var_name, idx_var);
     compiler->indent--;
     emit_line(compiler, "}");
     compiler->indent--;
@@ -3154,8 +3201,10 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "}\n"
       "\n"
       "static void sage_gc_mark_value(SageValue value);\n"
+      "extern void sage_gc_mark_program_globals(void);\n"
       "\n"
       "static void sage_gc_mark_roots(void) {\n"
+      "    sage_gc_mark_program_globals();\n"
       "    for (SageGcFrame* frame = sage_gc.frames; frame != NULL; frame = "
       "frame->prev) {\n"
       "        if (frame->slots == NULL) continue;\n"
@@ -4849,6 +4898,18 @@ static void emit_proc_prototypes(Compiler *compiler) {
   }
 }
 
+static void emit_mark_globals_function(Compiler *compiler) {
+  emit_line(compiler, "void sage_gc_mark_program_globals(void) {");
+  compiler->indent++;
+  for (NameEntry *global = compiler->globals; global != NULL;
+       global = global->next) {
+    emit_line(compiler, "if (%s.defined) sage_gc_mark_value(%s.value);",
+              global->c_name, global->c_name);
+  }
+  compiler->indent--;
+  emit_line(compiler, "}\n");
+}
+
 static void emit_global_slots(Compiler *compiler) {
   for (NameEntry *global = compiler->globals; global != NULL;
        global = global->next) {
@@ -5015,7 +5076,9 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
   int param_start = has_self ? 1 : 0;
 
   NameEntry *previous_locals = compiler->locals;
+  ClassInfo *previous_class = compiler->current_class;
   compiler->locals = NULL;
+  compiler->current_class = cls;
 
   /* Add self as a local */
   add_name_entry(compiler, &compiler->locals, "self", "sage_local");
@@ -5075,6 +5138,7 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
 
   free_name_entries(compiler->locals);
   compiler->locals = previous_locals;
+  compiler->current_class = previous_class;
   free(method_name);
 }
 
@@ -5460,6 +5524,10 @@ static int write_c_output_internal(const char *source, const char *input_path,
     emit_global_slots(&compiler);
     if (compiler.globals != NULL) {
       fputc('\n', out);
+      emit_mark_globals_function(&compiler);
+      fputc('\n', out);
+    } else {
+      fputs("void sage_gc_mark_program_globals(void) {}\n\n", out);
     }
     emit_function_definitions(&compiler, program);
     if (!compiler.failed) {

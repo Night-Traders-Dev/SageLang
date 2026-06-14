@@ -79,6 +79,76 @@ GC gc = {0};
 static int gc_debug = 0;
 
 // ============================================================================
+// String Interning Table
+// ============================================================================
+
+typedef struct {
+    char** entries;
+    int count;
+    int capacity;
+} StringTable;
+
+static StringTable string_table = {NULL, 0, 0};
+
+static unsigned int intern_hash(const char* s, int len) {
+    unsigned int hash = 2166136261u;
+    for (int i = 0; i < len; i++) {
+        hash ^= (unsigned char)s[i];
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+void* gc_intern_string(const char* s, int len) {
+    if (len < 0) len = (int)strlen(s);
+    
+    if (string_table.capacity == 0 || string_table.count * 2 >= string_table.capacity) {
+        int old_cap = string_table.capacity;
+        string_table.capacity = old_cap == 0 ? 1024 : old_cap * 2;
+        char** old_entries = string_table.entries;
+        string_table.entries = (char**)calloc(string_table.capacity, sizeof(char*));
+        string_table.count = 0;
+        for (int i = 0; i < old_cap; i++) {
+            if (old_entries[i]) {
+                unsigned int h = intern_hash(old_entries[i], (int)strlen(old_entries[i]));
+                int idx = (int)(h % (unsigned int)string_table.capacity);
+                while (string_table.entries[idx]) idx = (idx + 1) % string_table.capacity;
+                string_table.entries[idx] = old_entries[i];
+                string_table.count++;
+            }
+        }
+        free(old_entries);
+    }
+
+    unsigned int h = intern_hash(s, len);
+    int idx = (int)(h % (unsigned int)string_table.capacity);
+    while (string_table.entries[idx]) {
+        if ((int)strlen(string_table.entries[idx]) == len && memcmp(string_table.entries[idx], s, (size_t)len) == 0) {
+            return string_table.entries[idx];
+        }
+        idx = (idx + 1) % string_table.capacity;
+    }
+
+    // Not found, allocate and add to table
+    char* interned = (char*)gc_alloc(VAL_STRING, (size_t)len + 1);
+    memcpy(interned, s, (size_t)len);
+    interned[len] = '\0';
+    
+    string_table.entries[idx] = interned;
+    string_table.count++;
+    return interned;
+}
+
+static void gc_mark_interned_strings(void) {
+    for (int i = 0; i < string_table.capacity; i++) {
+        if (string_table.entries[i]) {
+            gc_shade_gray(string_table.entries[i], VAL_STRING);
+        }
+    }
+}
+
+
+// ============================================================================
 // Timing helpers
 // ============================================================================
 
@@ -502,6 +572,8 @@ void gc_mark_all_roots(void) {
     // ...
     extern void gc_mark_modules(void);
     gc_mark_modules();
+    
+    gc_mark_interned_strings();
     
     // STW: Lock registry and mark all threads
     sage_mutex_lock(&thread_registry_mutex);

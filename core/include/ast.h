@@ -14,6 +14,9 @@ typedef struct {
     Token op;
     Expr* left;
     Expr* right;
+    int quickened;          // Flag for specialized execution
+    int left_is_num;       // Cache: left operand was a number
+    int right_is_num;      // Cache: right operand was a number
 } BinaryExpr;
 
 typedef struct {

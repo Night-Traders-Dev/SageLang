@@ -1301,8 +1301,8 @@ proc emit_runtime_prelude(cc):
     push(o, "}" + NL)
     push(o, "static SageValue sage_mod(SageValue left, SageValue right) {" + NL)
     push(o, "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) sage_fail(" + num_err + ");" + NL)
-    push(o, "    if ((int)right.as.number == 0) return sage_nil();" + NL)
-    push(o, "    return sage_number((double)((int)left.as.number % (int)right.as.number));" + NL)
+    push(o, "    if (right.as.number == 0) return sage_nil();" + NL)
+    push(o, "    return sage_number(fmod(left.as.number, right.as.number));" + NL)
     push(o, "}" + NL)
     # Comparison
     push(o, "static SageValue sage_eq(SageValue left, SageValue right) { return sage_bool(sage_values_equal(left, right)); }" + NL)

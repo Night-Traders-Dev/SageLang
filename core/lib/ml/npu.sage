@@ -201,7 +201,7 @@ proc to_one_format(weights, config):
     # ONE uses .circle format (based on TFLite FlatBuffers)
     let one_model = {}
     one_model["format"] = "circle"
-    one_model["version"] = "3.7.6"
+    one_model["version"] = "3.7.7"
     one_model["config"] = config
     one_model["ops"] = ["FullyConnected", "Softmax", "Add", "Mul", "Logistic", "Reshape"]
     one_model["quantization"] = "int8"

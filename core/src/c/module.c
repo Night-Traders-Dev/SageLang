@@ -241,8 +241,8 @@ bool execute_module(Module* module, Environment* global_env) {
     }
     
     if (module->is_loading) {
-        fprintf(stderr, "Error: Circular dependency detected for module '%s'\n", module->name);
-        return false;
+        // Support circular imports: allow access to partially loaded module
+        return true; 
     }
     
     module->is_loading = true;

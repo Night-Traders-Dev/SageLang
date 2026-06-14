@@ -2537,6 +2537,32 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env);
 // --- Evaluator ---
 
 static ExecResult eval_binary(BinaryExpr* b, Env* env) {
+    // Phase 19: Quickened path for numeric operations
+    if (b->quickened && b->left_is_num && b->right_is_num) {
+        ExecResult lr = eval_expr(b->left, env);
+        if (lr.is_throwing) return lr;
+        ExecResult rr = eval_expr(b->right, env);
+        if (rr.is_throwing) return rr;
+        
+        if (IS_NUMBER(lr.value) && IS_NUMBER(rr.value)) {
+            double l = AS_NUMBER(lr.value);
+            double r = AS_NUMBER(rr.value);
+            switch (b->op.type) {
+                case TOKEN_PLUS:  return EVAL_RESULT(val_number(l + r));
+                case TOKEN_MINUS: return EVAL_RESULT(val_number(l - r));
+                case TOKEN_STAR:  return EVAL_RESULT(val_number(l * r));
+                case TOKEN_SLASH: return EVAL_RESULT(r == 0 ? val_nil() : val_number(l / r));
+                case TOKEN_PERCENT: return EVAL_RESULT(r == 0 ? val_nil() : val_number(fmod(l, r)));
+                case TOKEN_GT: return EVAL_RESULT(val_bool(l > r));
+                case TOKEN_LT: return EVAL_RESULT(val_bool(l < r));
+                case TOKEN_GTE: return EVAL_RESULT(val_bool(l >= r));
+                case TOKEN_LTE: return EVAL_RESULT(val_bool(l <= r));
+                default: break;
+            }
+        }
+        b->quickened = 0; // De-optimize if types changed
+    }
+
     ExecResult left_result = eval_expr(b->left, env);
     if (left_result.is_throwing) return left_result;
     Value left = left_result.value;
@@ -2617,6 +2643,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
 
     if (b->op.type == TOKEN_GT || b->op.type == TOKEN_LT || b->op.type == TOKEN_GTE || b->op.type == TOKEN_LTE) {
         if (IS_NUMBER(left) && IS_NUMBER(right)) {
+            b->quickened = 1; b->left_is_num = 1; b->right_is_num = 1;
             double l = AS_NUMBER(left);
             double r = AS_NUMBER(right);
             AST_GC_POP();
@@ -2640,6 +2667,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
     switch (b->op.type) {
         case TOKEN_PLUS:
             if (IS_NUMBER(left) && IS_NUMBER(right)) {
+                b->quickened = 1; b->left_is_num = 1; b->right_is_num = 1;
                 AST_GC_POP();
                 return EVAL_RESULT(val_number(AS_NUMBER(left) + AS_NUMBER(right)));
             }
@@ -2659,11 +2687,13 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
 
         case TOKEN_MINUS:
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+            b->quickened = 1; b->left_is_num = 1; b->right_is_num = 1;
             AST_GC_POP();
             return EVAL_RESULT(val_number(AS_NUMBER(left) - AS_NUMBER(right)));
 
         case TOKEN_STAR:
             if (IS_NUMBER(left) && IS_NUMBER(right)) {
+                b->quickened = 1; b->left_is_num = 1; b->right_is_num = 1;
                 AST_GC_POP();
                 return EVAL_RESULT(val_number(AS_NUMBER(left) * AS_NUMBER(right)));
             }
@@ -2689,6 +2719,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 fprintf(stderr, "Runtime Error: Division by zero.\n");
                 return EVAL_EXCEPTION(val_exception("Division by zero"));
             }
+            b->quickened = 1; b->left_is_num = 1; b->right_is_num = 1;
             AST_GC_POP();
             return EVAL_RESULT(val_number(AS_NUMBER(left) / AS_NUMBER(right)));
 
@@ -2699,6 +2730,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 fprintf(stderr, "Runtime Error: Modulo by zero.\n");
                 return EVAL_EXCEPTION(val_exception("Modulo by zero"));
             }
+            b->quickened = 1; b->left_is_num = 1; b->right_is_num = 1;
             AST_GC_POP();
             return EVAL_RESULT(val_number(fmod(AS_NUMBER(left), AS_NUMBER(right))));
 
@@ -3220,12 +3252,24 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 int arg_count = expr->as.call.arg_count;
                 Value* eval_args = NULL;
                 int pushed_args = 0;
+                int arg_offset = 0;
+
+                // Support for explicit 'self' passing in super calls: super.init(self, args)
+                if (arg_count > 0 && param_start > 0) {
+                    ExecResult first_arg_res = eval_expr(expr->as.call.args[0], env);
+                    if (first_arg_res.is_throwing) { AST_GC_POP_ENV(); return first_arg_res; }
+                    if (values_equal(first_arg_res.value, self_val)) {
+                        // Redundant self passed, skip it
+                        arg_offset = 1;
+                    }
+                }
+
                 if (method_stmt->param_count > param_start) {
                     eval_args = SAGE_ALLOC(sizeof(Value) * (method_stmt->param_count - param_start));
-                    for (int i = 0; i < arg_count && i < method_stmt->param_count - param_start; i++) {
-                        ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
+                    for (int i = 0; i < (arg_count - arg_offset) && i < method_stmt->param_count - param_start; i++) {
+                        ExecResult arg_result = eval_expr(expr->as.call.args[i + arg_offset], env);
                         if (arg_result.is_throwing) { 
-                            free(eval_args); 
+                            if (eval_args) free(eval_args); 
                             AST_GC_POP_ENV(); 
                             AST_GC_POP_N(pushed_args);
                             return arg_result; 
@@ -3236,7 +3280,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                         env_define_const(method_env, method_stmt->params[i + param_start].start,
                                    method_stmt->params[i + param_start].length, arg_result.value);
                     }
-                    for (int i = arg_count; i < method_stmt->param_count - param_start; i++) {
+                    for (int i = (arg_count - arg_offset); i < method_stmt->param_count - param_start; i++) {
                         eval_args[i] = val_nil();
                         env_define_const(method_env, method_stmt->params[i + param_start].start,
                                    method_stmt->params[i + param_start].length, val_nil());
@@ -3788,6 +3832,12 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     }
 
                     ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
+                    
+                    // Mutation Fix: Sync loop variable back to internal counter if it's a number
+                    if (var_slot->value.type == VAL_NUMBER) {
+                        i = (int)var_slot->value.as.number;
+                    }
+
                     if (res.is_returning || res.is_throwing) {
                         if (iterable.type == VAL_DICT) free(elements);
                         AST_GC_POP_ENV();
