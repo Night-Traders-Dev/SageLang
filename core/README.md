@@ -46,8 +46,7 @@ core/
 ├── lib/            ← Sage standard library (.sage files)
 ├── examples/       ← example .sage programs
 ├── models/         ← ML models, training, chatbot
-├── docs/           ← language book, API docs
-├── documentation/  ← guides (Android, Baremetal, Blockchain…)
+├── docs/           ← language book, API docs, guides (Android, Baremetal, Blockchain…)
 ├── boards/         ← embedded board support (RP2040)
 ├── scripts/        ← build tooling, chart generators, benchmark runners
 ├── SageChain/      ← blockchain sub-project

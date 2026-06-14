@@ -52,7 +52,7 @@ proc collect_c_src():
 # Collect documentation
 proc collect_docs():
     let corpus = ""
-    let files = ["documentation/SageLang_Guide.md", "documentation/Import_Semantics.md", "documentation/GC_Guide.md", "documentation/Networking_Guide.md", "documentation/Cryptography_Guide.md", "documentation/ML_CUDA_Guide.md", "documentation/LLM_Guide.md", "documentation/StdLib_Guide.md", "documentation/Baremetal_OSDev_UEFI_Guide.md", "documentation/Vulkan_GPU_Guide.md"]
+    let files = ["docs/SageLang_Guide.md", "docs/Import_Semantics.md", "docs/GC_Guide.md", "docs/Networking_Guide.md", "docs/Cryptography_Guide.md", "docs/ML_CUDA_Guide.md", "docs/LLM_Guide.md", "docs/StdLib_Guide.md", "docs/Baremetal_OSDev_UEFI_Guide.md", "docs/Vulkan_GPU_Guide.md"]
     for i in range(len(files)):
         let content = io.readfile(files[i])
         if content != nil:

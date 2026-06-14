@@ -212,7 +212,7 @@ def collect_project_breakdown() -> list[tuple[str, int, str]]:
 
         if path_str.startswith("tests/"):
             counts["Test Suite"] += lines
-        elif path_str.startswith("documentation/") or path.suffix == ".md":
+        elif path_str.startswith("core/docs/") or path_str.startswith("core/documentation/") or path.suffix == ".md":
             counts["Documentation"] += lines
         elif path_str.startswith("src/c/") and name in backend_files:
             counts["Compiler Backends"] += lines

@@ -667,15 +667,27 @@ print next(gen)         # nil (exhausted)
 ```
 
 **Deferred Code** (Phase 7 addition):
+`defer` executes a statement on scope exit, in LIFO (Last-In, First-Out) order, which is extremely useful for cleanup:
 ```sagelang
-# defer not fully implemented but reserved for cleanup
-# Conceptually: defer expr → execute expr at function exit
+proc read_and_print():
+    let f = file_open("data.txt")
+    defer file_close(f)
+    print file_read(f)
 ```
 
-**Pattern Matching** (Phase 7 addition; reserved):
+**Pattern Matching** (Phase 7 addition):
+`match` allows matching a value against multiple patterns, with optional guards and a default fallback:
 ```sagelang
-# match/case syntax parsed but not fully evaluated
-# Conceptually: match expr over case patterns
+let x = 42
+match x:
+    case 1:
+        print "one"
+    case 42 if y > 0:
+        print "forty-two with positive y"
+    case 42:
+        print "forty-two"
+    default:
+        print "other"
 ```
 
 ### Phase 8: Modules
@@ -1765,7 +1777,8 @@ static Value my_native(int argCount, Value* args) {
 - No support for custom `__add__()`, etc.
 
 **Type Annotations**:
-- Not supported; fully dynamic typing.
+- Fully supported for variables (`let x: Int = 42`) and procedures (`proc add(a: Int, b: Int) -> Int:`).
+- Type checking is enforced during a static analysis pass (`pass_typecheck` in `typecheck.c`) prior to compilation or interpretation.
 
 ### 8.2 Design Decisions and Rationale
 

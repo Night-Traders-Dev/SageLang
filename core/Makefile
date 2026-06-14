@@ -7,7 +7,7 @@
 # ============================================================================
 
 # Single-source version from VERSION file
-SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.7.4")
+SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.7.5")
 
 # CC/CFLAGS/LDFLAGS can be overridden by environment (OIS sets CC=clang on macOS/BSD)
 CC ?= gcc
@@ -628,168 +628,168 @@ benchmarks: $(TARGET)
 test-selfhost: $(TARGET)
 	@echo ""
 	@echo "=== Self-Hosted Lexer Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_lexer.sage
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_lexer.sage
 	@echo ""
 	@echo "=== Self-Hosted Parser Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_parser.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_parser.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Interpreter Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_interpreter.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_interpreter.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Bootstrap Integration Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_bootstrap.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_bootstrap.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Formatter Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_formatter.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_formatter.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Linter Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_linter.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_linter.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Value Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_value.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_value.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Pass Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_pass.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_pass.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Constfold Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_constfold.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_constfold.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted DCE Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_dce.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_dce.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Inline Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_inline.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_inline.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Typecheck Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_typecheck.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_typecheck.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Stdlib Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_stdlib.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_stdlib.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Module Tests ==="
 	@mkdir -p /tmp/sage_test_modules
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_module.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_module.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted LLVM Backend Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_llvm_backend.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_llvm_backend.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Codegen Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_codegen.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_codegen.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted C Compiler Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_compiler.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_compiler.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Error Reporting Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_errors.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_errors.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted LSP Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_lsp.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_lsp.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Sage CLI Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_sage_cli.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_sage_cli.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Diagnostic Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_diagnostic.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_diagnostic.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted GC Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_gc.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gc.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted Heartbeat Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_heartbeat.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_heartbeat.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted GPU Module Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_gpu.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted GPU Advanced Tests ==="
-	@./$(TARGET) src/sage/test/test_gpu_advanced.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu_advanced.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted GPU Features 1-18 Tests ==="
-	@./$(TARGET) src/sage/test/test_gpu_features.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu_features.sage 2>&1 | tail -3
 	@echo ""
 	@echo "=== Self-Hosted GPU Engine Tests ==="
-	@./$(TARGET) src/sage/test/test_gpu_engine.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu_engine.sage 2>&1 | tail -3
 	@echo ""
 	@echo "✅ All self-hosted tests complete"
 
 # Run individual self-hosted test suites
 test-selfhost-lexer: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_lexer.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_lexer.sage
 
 test-selfhost-parser: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_parser.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_parser.sage
 
 test-selfhost-interpreter: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_interpreter.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_interpreter.sage
 
 test-selfhost-bootstrap: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_bootstrap.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_bootstrap.sage
 
 test-selfhost-formatter: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_formatter.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_formatter.sage
 
 test-selfhost-linter: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_linter.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_linter.sage
 
 test-selfhost-value: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_value.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_value.sage
 
 test-selfhost-pass: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_pass.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_pass.sage
 
 test-selfhost-constfold: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_constfold.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_constfold.sage
 
 test-selfhost-dce: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_dce.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_dce.sage
 
 test-selfhost-inline: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_inline.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_inline.sage
 
 test-selfhost-typecheck: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_typecheck.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_typecheck.sage
 
 test-selfhost-stdlib: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_stdlib.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_stdlib.sage
 
 test-selfhost-module: $(TARGET)
 	@mkdir -p /tmp/sage_test_modules
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_module.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_module.sage
 
 test-selfhost-llvm-backend: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_llvm_backend.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_llvm_backend.sage
 
 test-selfhost-codegen: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_codegen.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_codegen.sage
 
 test-selfhost-compiler: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_compiler.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_compiler.sage
 
 test-selfhost-errors: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_errors.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_errors.sage
 
 test-selfhost-lsp: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_lsp.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_lsp.sage
 
 test-selfhost-sage-cli: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_sage_cli.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_sage_cli.sage
 
 test-selfhost-diagnostic: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_diagnostic.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_diagnostic.sage
 
 test-selfhost-gc: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_gc.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gc.sage
 
 test-selfhost-heartbeat: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_heartbeat.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_heartbeat.sage
 
 test-selfhost-gpu: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_gpu.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu.sage
 
 test-selfhost-gpu-advanced: $(TARGET)
-	./$(TARGET) src/sage/test/test_gpu_advanced.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu_advanced.sage
 
 test-selfhost-llvm-gpu: $(TARGET)
-	cd src/sage && ../../$(TARGET) ../../testsuite/selfhost/test_llvm_gpu.sage
+	cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_llvm_gpu.sage
 
 # Run ALL tests (C + self-hosted)
 # ============================================================================
@@ -1025,7 +1025,7 @@ all-models: $(TARGET) train-c chatbot-llvm sl-tq-chat
 # Show current version
 .PHONY: version
 version:
-	@cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.7.4"
+	@cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.7.5"
 
 # Bump version: make bump-version V=3
 # Updates VERSION in core/ AND root (../VERSION), and updates all files with the new version string.

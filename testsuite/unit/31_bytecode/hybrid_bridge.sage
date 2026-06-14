@@ -1,5 +1,6 @@
 # RUN: bytecode-run
 # EXPECT: 9
+# EXPECT: 2
 # EXPECT: 7
 
 proc add(a, b):
@@ -8,6 +9,7 @@ proc add(a, b):
 class Counter:
     proc init(self, start):
         self.value = start
+        print self.value
 
     proc bump(self, delta):
         self.value = self.value + delta

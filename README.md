@@ -4,7 +4,7 @@
 
 ![SageLang Logo](core/assets/SageLang.png)
 
-Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.7.4, Sage features One-line Install System (OIS) integration, native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
+Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.7.5, Sage features One-line Install System (OIS) integration, native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
 
 ## Install (One line installer)
 
@@ -488,7 +488,7 @@ Advanced toolkit for working with LLMs, including quantization and training.
 | **TurboQuant** | `import llm.turboquant` | Near-optimal 3-bit KV cache and weight quantization (ICLR 2026) |
 | **Transformer** | `import llm.transformer` | LayerNorm/RMSNorm, attention blocks, and model assembly |
 | **Generate** | `import llm.generate` | Greedy, top-k/p, and beam search text generation |
-| **GGUF** | `import llm.gguf` | GGUF v3.7.4 export for Ollama and llama.cpp compatibility |
+| **GGUF** | `import llm.gguf` | GGUF v3.7.5 export for Ollama and llama.cpp compatibility |
 | **Evolve** | `import llm.evolve` | Self-evolving neural architectures with progressive growth |
 
 ### JSON Library (cJSON Port)
@@ -548,7 +548,7 @@ cd src/sage && ../../sage sage.sage program.sage
 - **Interpreter** (`interpreter.sage`, ~1050 lines) - Tree-walking evaluator with dict-based values
 - **Bootstrap coverage**: arithmetic, variables, control flow, functions, recursion, closures, classes, inheritance, arrays, dicts, strings, try/catch, break/continue, bitwise operators (~), module imports, loop iteration limits
 - **Module imports**: `import X`, `import X as Y`, `from X import a, b` with module caching and multi-path search (`./`, `lib/`)
-- **Soft Keywords**: `match`, `init`, `enum`, `struct`, and `trait` are now "soft keywords" and can be used as variable names in expressions and assignments (v3.7.4+)
+- **Soft Keywords**: `match`, `init`, `enum`, `struct`, and `trait` are now "soft keywords" and can be used as variable names in expressions and assignments (v3.7.5+)
 - **LLVM constant imports (C backend + self-hosted LLVM backend)**: `from X import Y` now resolves foldable top-level `let` constants across modules at compile time (with alias support via `from X import Y as Z`)
 - **Self-hosted test suites**: lexer, parser, interpreter, bootstrap, formatter, linter, value, optimization passes, stdlib, module loading, codegen, compiler, LSP, and CLI coverage
 - GC must be disabled for self-hosted code (`gc_disable()`)
@@ -662,7 +662,7 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`engram`**: Persistent neural memory (working/episodic/semantic/procedural), consolidation, decay, LLM context generation
 - **`rag`**: Retrieval-augmented generation (document chunking, keyword retrieval, context assembly, extractive summarization)
 - **`dpo`**: Direct Preference Optimization (DPO/ORPO alignment, preference pairs, reward models, Sage code preferences)
-- **`gguf`**: GGUF v3.7.4 export for Ollama and llama.cpp (metadata, Modelfile, quantization, conversion scripts)
+- **`gguf`**: GGUF v3.7.5 export for Ollama and llama.cpp (metadata, Modelfile, quantization, conversion scripts)
 - **`gguf_import`**: Import GGUF models from Ollama/llama.cpp into SageGPT format (Q4_0/Q8_0 dequantization, llama/gpt2/mistral/phi/gemma/qwen2 architectures) — `lib/llm/gguf_import.sage`
 - **`turboquant`**: TurboQuant near-optimal vector quantization (ICLR 2026, Google Research) — two-stage PolarQuant + QJL pipeline for 3-bit KV cache compression with 6x memory reduction and zero accuracy loss — `lib/llm/turboquant.sage`
 - **`autoresearch`**: Karpathy-style autonomous research agent. Ratchet loop: propose → train → evaluate → accept/reject. Runs 100+ experiments overnight. Research journal, multi-agent collaboration, built-in mutation strategies.
@@ -1241,7 +1241,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v3.7.4
+- **Current Version**: v3.7.5
 - **Spec Version**: 2.0 (see `SPEC_VERSION` for details)
 
 ## 💾 Project Structure
@@ -1369,7 +1369,7 @@ sage/
 3. **No string interning**: All strings are separate heap objects; memory usage can be high for string-heavy code.
 4. **LLVM Loop Mutation**: In LLVM-compiled binaries, modifying a `for` loop variable inside the loop will not affect the iteration count. Use `break` instead.
 5. **AST Interpreter Performance**: Tree-walking is slower than bytecode/compiled; use `--runtime bytecode` or `--compile` for performance.
-6. **`match` and `end` are reserved keywords** — do not use them as variable names.
+6. **`end` is a reserved keyword** — do not use it as a variable name. (`match` is a soft keyword as of v3.7.5+).
 7. **Class methods cannot see module-level `let` vars** — hardcode values or pass them as arguments.
 8. **`%` operator casts to int** — `3.7 % 1` returns `0`, not `0.7`.
 9. **`super` auto-injects `self`** — do NOT pass `self` as the first argument: `super.init(args)`, not `super.init(self, args)`.
@@ -1397,15 +1397,15 @@ Sage is an educational project aimed at understanding compiler construction and 
 - Add comments for complex logic
 - Update documentation for new features
 - Write example code demonstrating new features
-- Check the [docs/meta/ROADMAP.md](docs/meta/ROADMAP.md) for planned features
+- Check the [core/docs/meta/ROADMAP.md](core/docs/meta/ROADMAP.md) for planned features
 
 ## 🔗 Resources
 
 - **Repository**: [github.com/Night-Traders-Dev/SageLang](https://github.com/Night-Traders-Dev/SageLang)
-- **Detailed Roadmap**: [docs/meta/ROADMAP.md](docs/meta/ROADMAP.md)
-- **Import Semantics**: [documentation/Import_Semantics.md](documentation/Import_Semantics.md)
-- **FAT Filesystem Guide**: [documentation/FAT_Filesystem_Guide.md](documentation/FAT_Filesystem_Guide.md)
-- **Bare-Metal / OSdev / UEFI Guide**: [documentation/Baremetal_OSDev_UEFI_Guide.md](documentation/Baremetal_OSDev_UEFI_Guide.md)
+- **Detailed Roadmap**: [core/docs/meta/ROADMAP.md](core/docs/meta/ROADMAP.md)
+- **Import Semantics**: [core/docs/Import_Semantics.md](core/docs/Import_Semantics.md)
+- **FAT Filesystem Guide**: [core/docs/FAT_Filesystem_Guide.md](core/docs/FAT_Filesystem_Guide.md)
+- **Bare-Metal / OSdev / UEFI Guide**: [core/docs/Baremetal_OSDev_UEFI_Guide.md](core/docs/Baremetal_OSDev_UEFI_Guide.md)
 - **Issues**: [GitHub Issues](https://github.com/Night-Traders-Dev/SageLang/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Night-Traders-Dev/SageLang/discussions)
 
@@ -1419,13 +1419,13 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 
 **Recent Milestones:**
 
-- June 9, 2026: v3.7.4: Integrated One-line Install System (OIS), optimized `dicts.size` to $O(1)$, achieved $O(N)$ array uniqueness, implemented high-performance native library built-ins for array reversal (~105x), added REPL `:stats` command, and introduced GPIO interrupt management.
-- June 8, 2026: v3.7.4: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
+- June 9, 2026: v3.7.5: Integrated One-line Install System (OIS), optimized `dicts.size` to $O(1)$, achieved $O(N)$ array uniqueness, implemented high-performance native library built-ins for array reversal (~105x), added REPL `:stats` command, and introduced GPIO interrupt management.
+- June 8, 2026: v3.7.5: Implemented `sys.call` for dynamic native/closure invocation and reached full opcode parity in MetalVM (OOP, Exceptions, GPU).
 - June 5, 2026: Optimization: Hardened interpreter search path logic (preventing duplicate paths, increased budget to 64) and implemented high-performance native bridging for SageMetal VM (Math, IO, Sys, Regex).
-- May 29, 2026: v3.7.4: Fixed doc comment detachment for `errno.strerror` and updated core metadata.
-- May 25, 2026: v3.7.4: Structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust sandbox security guards.
-- May 20, 2026: v3.7.4: Critical bug fix in `mutex_lock` for bare-metal targets.
-- May 15, 2026: v3.7.4: Milestone release: Self-hosted compiler parity and synchronization primitives stabilization.
+- May 29, 2026: v3.7.5: Fixed doc comment detachment for `errno.strerror` and updated core metadata.
+- May 25, 2026: v3.7.5: Structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust sandbox security guards.
+- May 20, 2026: v3.7.5: Critical bug fix in `mutex_lock` for bare-metal targets.
+- May 15, 2026: v3.7.5: Milestone release: Self-hosted compiler parity and synchronization primitives stabilization.
 - May 7, 2026: Optimization: implemented length-aware dictionary lookups and direct token pointers in method dispatch for 15% speedup
 - April 15, 2026: SageMetal VM — freestanding bytecode interpreter for OS kernels (no libc/malloc required)
 - April 10, 2026: Default runtime changed to hybrid JIT+AOT (Silent JIT profiling with auto fallback)

@@ -567,14 +567,14 @@ static Expr* primary() {
             if (!match(TOKEN_IDENTIFIER) && !match(TOKEN_INIT)) {
                 parser_report(current_token, token_span(&current_token),
                               "expect method name after 'super.'",
-                              "use 'super.init(self, args)' or 'super.method(self, args)'");
+                              "use 'super.init(args)' or 'super.method(args)'");
             }
             Token method = previous_token;
             return new_super_expr(method);
         }
         parser_report(current_token, token_span(&current_token),
                       "expect '.' or '->' after 'super'",
-                      "use 'super.init(self, args)' to call parent method");
+                      "use 'super.init(args)' to call parent method");
     }
 
     // Phase 17: comptime expression — comptime(expr) evaluates at compile time

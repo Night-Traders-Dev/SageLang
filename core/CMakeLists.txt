@@ -581,7 +581,7 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     install(FILES
         README.md
         LICENSE
-        documentation/SageLang_Guide.md
+        docs/SageLang_Guide.md
         DESTINATION share/doc/sage
     )
     install(DIRECTORY docs/meta/
