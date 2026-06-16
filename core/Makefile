@@ -818,7 +818,7 @@ shaders:
 	@echo "✅ Shaders compiled ($$(ls examples/shaders/*.spv | wc -l) modules)"
 
 clean:
-	rm -rf $(OBJ_DIR) $(TARGET) $(LSP_TARGET)
+	rm -rf $(OBJ_DIR) $(TARGET) $(LSP_TARGET) $(SGVM_TARGET) $(SGVM_COMPILER_TARGET)
 	@echo "✅ Cleaned build artifacts"
 
 clean-all: clean
