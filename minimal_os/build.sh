@@ -4,7 +4,7 @@
 ## Ensure we are in the script's directory
 cd "$(dirname "$0")"
 
-SGVMC=/home/elf_g/testOS/src/sgvmc
+SGVMC=../core/sgvmc
 KERNEL_SAGE=kernel.sage
 KERNEL_SGVM=kernel.sgvm
 
