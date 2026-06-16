@@ -131,9 +131,9 @@ int metal_vm_load_binary(MetalVM* vm, const unsigned char* data, int size) {
     for (int i = 0; i < const_count; i++) {
         unsigned char type = data[pos++];
         if (type == 1) { // MV_NUM
-            double val;
-            memcpy(&val, &data[pos], 8);
-            metal_vm_add_constant(vm, mv_num(val));
+            union { double d; unsigned char b[8]; } u;
+            for (int j = 0; j < 8; j++) u.b[j] = data[pos + 7 - j];
+            metal_vm_add_constant(vm, mv_num(u.d));
             pos += 8;
         } else if (type == 3) { // MV_STR
             int len = (data[pos] << 8) | data[pos + 1];

@@ -127,7 +127,8 @@ CORE_SOURCES = \
     $(SRC_DIR)/kotlin_backend.c \
     $(SRC_DIR)/ml_backend.c \
     $(SRC_DIR)/net.c \
-    $(SRC_DIR)/metal_vm.c
+    $(SRC_DIR)/metal_vm.c \
+    $(SRC_DIR)/metal_rv64_vm.c
 
 ifeq ($(HAS_GPU_API),yes)
     CORE_SOURCES += $(SRC_DIR)/gpu_api.c
@@ -171,7 +172,8 @@ HEADERS = \
     $(INC_DIR)/graphics.h \
     $(INC_DIR)/gpu_api.h \
     $(INC_DIR)/kotlin_backend.h \
-    $(INC_DIR)/metal_vm.h
+    $(INC_DIR)/metal_vm.h \
+    $(INC_DIR)/metal_rv64_vm.h
 
 # Optional heartbeat header
 ifneq (,$(wildcard $(INC_DIR)/heartbeat.h))
@@ -204,6 +206,7 @@ SGVM_COMPILER_TARGET = sgvmc
 SGVM_MAIN_OBJECT = $(OBJ_DIR)/sgvm_main.o
 SGVM_COMPILER_OBJECT = $(OBJ_DIR)/sgvm_compiler.o
 METAL_VM_OBJECT = $(OBJ_DIR)/metal_vm.o
+METAL_RV64_VM_OBJECT = $(OBJ_DIR)/metal_rv64_vm.o
 
 # ============================================================================
 # Build Rules
@@ -223,7 +226,7 @@ $(TARGET): $(ALL_OBJECTS) $(LLVM_RT_OBJECT)
 	@echo "   Run with: ./$(TARGET) examples/hello.sage"
 
 # SGVM Runner
-$(SGVM_TARGET): $(SGVM_MAIN_OBJECT) $(METAL_VM_OBJECT)
+$(SGVM_TARGET): $(SGVM_MAIN_OBJECT) $(METAL_VM_OBJECT) $(METAL_RV64_VM_OBJECT)
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 	@echo "Built: $(SGVM_TARGET)"
@@ -320,14 +323,21 @@ $(BOOK_PDF): $(BOOK_SRC)
 # Compile the Metal VM object (freestanding bytecode VM for bare-metal)
 METAL_VM_SOURCE = src/c/metal_vm.c
 METAL_VM_OBJECT = obj/metal_vm.o
+METAL_RV64_VM_SOURCE = src/c/metal_rv64_vm.c
+METAL_RV64_VM_OBJECT = obj/metal_rv64_vm.o
 
 $(METAL_VM_OBJECT): $(METAL_VM_SOURCE) include/metal_vm.h
 	@mkdir -p obj
 	$(CC) -std=c11 -ffreestanding -O2 -Wall -Wextra -Iinclude -c $(METAL_VM_SOURCE) -o $(METAL_VM_OBJECT)
 	@echo "Compiled Metal VM (freestanding)"
 
-metal-vm: $(METAL_VM_OBJECT)
-	@echo "Metal VM object ready: $(METAL_VM_OBJECT)"
+$(METAL_RV64_VM_OBJECT): $(METAL_RV64_VM_SOURCE) include/metal_rv64_vm.h
+	@mkdir -p obj
+	$(CC) -std=c11 -ffreestanding -O2 -Wall -Wextra -Iinclude -c $(METAL_RV64_VM_SOURCE) -o $(METAL_RV64_VM_OBJECT)
+	@echo "Compiled Metal RV64 VM (freestanding)"
+
+metal-vm: $(METAL_VM_OBJECT) $(METAL_RV64_VM_OBJECT)
+	@echo "Metal VM objects ready: $(METAL_VM_OBJECT), $(METAL_RV64_VM_OBJECT)"
 
 # Run a Sage program through the self-hosted interpreter.
 SELFHOST_ENTRY = src/sage/sage.sage

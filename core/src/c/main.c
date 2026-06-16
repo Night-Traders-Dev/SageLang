@@ -32,6 +32,7 @@
 #include "aot.h"
 #include "kotlin_backend.h"
 #include "metal_vm.h"
+#include "metal_rv64_vm.h"
 
 extern Environment* g_global_env;
 extern Stmt* parse_program(const char* source, const char* input_path);
@@ -1246,29 +1247,60 @@ static int run_sgvm(const char* path) {
     }
     fclose(f);
 
-    MetalVM vm;
-    metal_vm_init(&vm);
-    vm.write_char = run_sgvm_write_char;
+    if (size >= 4 && data[0] == 'S' && data[1] == 'G' && data[2] == 'R' && data[3] == 'V') {
+        // RISC-V register VM path
+        MetalRV64VM vm;
+        metal_rv64_vm_init(&vm);
+        vm.write_char = run_sgvm_write_char;
 
-    int err = metal_vm_load_binary(&vm, data, (int)size);
-    if (err < 0) {
-        free(data);
-        return 0;
-    }
-
-    if (metal_vm_verify(&vm) < 0) {
-        fprintf(stderr, "SGVM verification failed.\n");
-        free(data);
-        return 0;
-    }
-
-    for (int i = 0; i < vm.chunk_count; i++) {
-        metal_vm_load(&vm, vm.chunks[i], vm.chunk_lengths[i]);
-        if (metal_vm_run(&vm) < 0) {
-            fprintf(stderr, "SGVM runtime error in chunk %d: %s\n", i, vm.error_msg ? vm.error_msg : "unknown");
+        int err = metal_rv64_vm_load_binary(&vm, data, (int)size);
+        if (err < 0) {
+            fprintf(stderr, "Error loading SGRV binary: %d\n", err);
             free(data);
             return 0;
         }
+
+        for (int i = 0; i < vm.chunk_count; i++) {
+            vm.current_chunk_idx = i;
+            vm.bytecode = vm.chunks[i];
+            vm.bytecode_length = vm.chunk_lengths[i];
+            vm.pc = 0;
+            if (metal_rv64_vm_run(&vm) < 0) {
+                fprintf(stderr, "SGRV runtime error in chunk %d: %s\n", i, vm.error_msg ? vm.error_msg : "unknown");
+                free(data);
+                return 0;
+            }
+        }
+    } else if (size >= 4 && data[0] == 'S' && data[1] == 'G' && data[2] == 'V' && data[3] == 'M') {
+        // Stack VM path
+        MetalVM vm;
+        metal_vm_init(&vm);
+        vm.write_char = run_sgvm_write_char;
+
+        int err = metal_vm_load_binary(&vm, data, (int)size);
+        if (err < 0) {
+            free(data);
+            return 0;
+        }
+
+        if (metal_vm_verify(&vm) < 0) {
+            fprintf(stderr, "SGVM verification failed.\n");
+            free(data);
+            return 0;
+        }
+
+        for (int i = 0; i < vm.chunk_count; i++) {
+            metal_vm_load(&vm, vm.chunks[i], vm.chunk_lengths[i]);
+            if (metal_vm_run(&vm) < 0) {
+                fprintf(stderr, "SGVM runtime error in chunk %d: %s\n", i, vm.error_msg ? vm.error_msg : "unknown");
+                free(data);
+                return 0;
+            }
+        }
+    } else {
+        fprintf(stderr, "Unknown VM binary format.\n");
+        free(data);
+        return 0;
     }
 
     free(data);
