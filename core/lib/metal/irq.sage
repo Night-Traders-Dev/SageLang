@@ -77,9 +77,13 @@ proc unmask_irq(irq):
 
 let _handlers = {}
 let _priorities = {}
+let _current_priority = 0
+let _priority_stack = []
 
 ## Set interrupt priority for a vector.
 proc set_priority(vector, level):
+    if level < 0:
+        core.panic("Negative interrupt priority: " + str(level))
     _priorities[str(vector)] = level
 
 ## Get interrupt priority for a vector (defaults to 0).
@@ -88,6 +92,10 @@ proc get_priority(vector):
     if dict_has(_priorities, key_val):
         return _priorities[key_val]
     return 0
+
+## Get the current interrupt priority level.
+proc get_current_priority():
+    return _current_priority
 
 ## Register an interrupt handler
 proc register_handler(vector, handler):
@@ -106,6 +114,8 @@ proc irq_enter():
 
 ## Decrement interrupt nesting depth
 proc irq_exit():
+    if _irq_depth <= 0:
+        core.panic("IRQ nesting depth underflow")
     _irq_depth = _irq_depth - 1
 
 ## Get current interrupt nesting depth
@@ -114,12 +124,23 @@ proc irq_depth():
 
 ## Dispatch an interrupt (called from ISR stub)
 proc dispatch(vector):
+    let prio = get_priority(vector)
+    let old_prio = _current_priority
+
+    # Track nested priority
+    push(_priority_stack, old_prio)
+    _current_priority = prio
+
+    irq_enter()
     let key = str(vector)
     if dict_has(_handlers, key):
         let handler = _handlers[key]
         handler(vector)
     else:
         core.puts("Unhandled interrupt: " + str(vector))
+    irq_exit()
+
+    _current_priority = pop(_priority_stack)
 
 ## ============================================================
 ## Common x86 Exception Vectors
