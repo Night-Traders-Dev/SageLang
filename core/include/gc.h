@@ -128,6 +128,10 @@ typedef struct ARCMeta {
 // Backward compat: "marked" maps to color != WHITE
 #define gc_header_marked(h) ((h)->color != GC_WHITE)
 
+/* Get the cached length of a Sage string from its GC header (O(1)).
+ * String payload size includes the null terminator, so length is size - 1. */
+#define SAGE_STRING_LEN(v) ((int)(((GCHeader*)AS_STRING(v) - 1)->size - 1))
+
 // GC Statistics struct (for gc_stats native function)
 typedef struct {
     unsigned long bytes_allocated;

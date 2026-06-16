@@ -373,7 +373,9 @@ static Value len_native(int argCount, Value* args) {
         return val_number(args[0].as.array->count);
     }
     if (args[0].type == VAL_STRING) {
-        return val_number(strlen(AS_STRING(args[0])));
+        /* Optimization: Sage strings are managed by the GC and have their length cached in the header.
+         * This avoids an O(N) scan with strlen(). */
+        return val_number((double)SAGE_STRING_LEN(args[0]));
     }
     if (args[0].type == VAL_TUPLE) {
         return val_number(args[0].as.tuple->count);
@@ -1413,7 +1415,7 @@ static Value sizeof_native(int argCount, Value* args) {
     switch (args[0].type) {
         case VAL_NUMBER: return val_number(sizeof(double));
         case VAL_BOOL: return val_number(sizeof(int));
-        case VAL_STRING: return val_number(strlen(AS_STRING(args[0])));
+        case VAL_STRING: return val_number(SAGE_STRING_LEN(args[0]));
         case VAL_BYTES: return val_number(args[0].as.bytes->length);
         case VAL_ARRAY: return val_number(args[0].as.array->count);
         case VAL_DICT: return val_number(args[0].as.dict->count);
@@ -2276,7 +2278,7 @@ static Value path_join_native(int argCount, Value* args) {
     int total_len = 0;
     for (int i = 0; i < argCount; i++) {
         if (!IS_STRING(args[i])) return val_nil();
-        total_len += (int)strlen(AS_STRING(args[i])) + 1;
+        total_len += SAGE_STRING_LEN(args[i]) + 1;
     }
     char* result = SAGE_ALLOC(total_len + 1);
     result[0] = '\0';
@@ -2869,7 +2871,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 }
                 result = EVAL_RESULT(val_string_len(str + index, 1));
             } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
-                result = EVAL_RESULT(dict_get_len(&arr, AS_STRING(idx), (int)strlen(AS_STRING(idx))));
+                result = EVAL_RESULT(dict_get_len(&arr, AS_STRING(idx), SAGE_STRING_LEN(idx)));
             } else {
                 fprintf(stderr, "Runtime Error: Invalid indexing operation.\n");
                 result = EVAL_RESULT(val_nil());
@@ -2905,7 +2907,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 }
                 result = EVAL_RESULT(value);
             } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
-                dict_set_len(&arr, AS_STRING(idx), (int)strlen(AS_STRING(idx)), value);
+                dict_set_len(&arr, AS_STRING(idx), SAGE_STRING_LEN(idx), value);
                 result = EVAL_RESULT(value);
             } else {
                 fprintf(stderr, "Runtime Error: Invalid index assignment.\n");
