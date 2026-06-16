@@ -58,7 +58,7 @@ end
 kernel_main_c = kernel_main_c + "    serial_init();" + NL
 kernel_main_c = kernel_main_c + "    serial_puts(\"\\n\");" + NL
 kernel_main_c = kernel_main_c + "    serial_puts(\"========================================\\n\");" + NL
-kernel_main_c = kernel_main_c + "    serial_puts(\"  SageOS Kernel v3.7.7\\n\");" + NL
+kernel_main_c = kernel_main_c + "    serial_puts(\"  SageOS Kernel v3.7.8\\n\");" + NL
 kernel_main_c = kernel_main_c + "    serial_puts(\"  Architecture: " + arch + "\\n\");" + NL
 kernel_main_c = kernel_main_c + "    serial_puts(\"  Built with Sage Programming Language\\n\");" + NL
 kernel_main_c = kernel_main_c + "    serial_puts(\"========================================\\n\");" + NL
@@ -115,4 +115,4 @@ print ""
 print "=== Run with QEMU ==="
 print result["qemu"]
 print ""
-print "Expected output: SageOS Kernel v3.7.7 + arch + sum(1..100)=5050"
+print "Expected output: SageOS Kernel v3.7.8 + arch + sum(1..100)=5050"

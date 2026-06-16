@@ -33,7 +33,7 @@
     "package": "npx @vscode/vsce package"
   },
   "devDependencies": {
-    "@vscode/vsce": "^3.7.7"
+    "@vscode/vsce": "^3.7.8"
   },
   "contributes": {
     "languages": [

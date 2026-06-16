@@ -44,7 +44,7 @@ proc handle_command(cmd):
     end
     
     if cmd == "version":
-        console.print_line("SageOS v3.7.7 (x86_64)")
+        console.print_line("SageOS v3.7.8 (x86_64)")
         return
     end
     
@@ -58,7 +58,7 @@ proc handle_command(cmd):
 end
 
 proc sh_main():
-    console.print_line("SageOS Shell v3.7.7")
+    console.print_line("SageOS Shell v3.7.8")
     console.print_line("Type 'help' for available commands.")
     console.print_line("")
     
