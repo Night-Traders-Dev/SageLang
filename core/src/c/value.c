@@ -286,7 +286,7 @@ Value array_slice(Value* arr, int start, int end) {
 Value string_slice(Value* str, int start, int end) {
     if (str->type != VAL_STRING) return val_nil();
     char* s = str->as.string;
-    int slen = (int)strlen(s);
+    int slen = SAGE_STRING_LEN(*str);
     
     if (start < 0) start = slen + start;
     if (end < 0) end = slen + end;
@@ -539,7 +539,7 @@ Value string_join(Value* arr, const char* separator) {
 
     for (int i = 0; i < a->count; i++) {
         if (a->elements[i].type == VAL_STRING) {
-            total_len += strlen(AS_STRING(a->elements[i]));
+            total_len += SAGE_STRING_LEN(a->elements[i]);
         }
         if (i < a->count - 1) total_len += sep_len;
     }
@@ -549,7 +549,7 @@ Value string_join(Value* arr, const char* separator) {
 
     for (int i = 0; i < a->count; i++) {
         if (a->elements[i].type == VAL_STRING) {
-            size_t slen = strlen(AS_STRING(a->elements[i]));
+            size_t slen = SAGE_STRING_LEN(a->elements[i]);
             memcpy(wp, AS_STRING(a->elements[i]), slen);
             wp += slen;
         }

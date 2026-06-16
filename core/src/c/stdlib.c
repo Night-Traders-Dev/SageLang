@@ -530,7 +530,7 @@ static Value io_writefile_native(int argCount, Value* args) {
     FILE* f = fopen(path, "wb");
     if (!f) return val_bool(0);
 
-    size_t len = strlen(content);
+    size_t len = SAGE_STRING_LEN(args[1]);
     size_t written = fwrite(content, 1, len, f);
     fclose(f);
 
@@ -593,7 +593,7 @@ static Value io_appendfile_native(int argCount, Value* args) {
     FILE* f = fopen(path, "ab");
     if (!f) return val_bool(0);
 
-    size_t len = strlen(content);
+    size_t len = SAGE_STRING_LEN(args[1]);
     size_t written = fwrite(content, 1, len, f);
     fclose(f);
 
@@ -721,8 +721,8 @@ static Value str_rfind_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_number(-1);
     const char* haystack = AS_STRING(args[0]);
     const char* needle = AS_STRING(args[1]);
-    size_t hlen = strlen(haystack);
-    size_t nlen = strlen(needle);
+    size_t hlen = SAGE_STRING_LEN(args[0]);
+    size_t nlen = SAGE_STRING_LEN(args[1]);
     if (nlen > hlen) return val_number(-1);
     for (size_t i = hlen - nlen + 1; i > 0; i--) {
         if (memcmp(haystack + i - 1, needle, nlen) == 0)
@@ -735,7 +735,7 @@ static Value str_startswith_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_bool(0);
     const char* s = AS_STRING(args[0]);
     const char* prefix = AS_STRING(args[1]);
-    size_t plen = strlen(prefix);
+    size_t plen = SAGE_STRING_LEN(args[1]);
     return val_bool(strncmp(s, prefix, plen) == 0);
 }
 
@@ -743,8 +743,8 @@ static Value str_endswith_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_bool(0);
     const char* s = AS_STRING(args[0]);
     const char* suffix = AS_STRING(args[1]);
-    size_t slen = strlen(s);
-    size_t xlen = strlen(suffix);
+    size_t slen = SAGE_STRING_LEN(args[0]);
+    size_t xlen = SAGE_STRING_LEN(args[1]);
     if (xlen > slen) return val_bool(0);
     return val_bool(memcmp(s + slen - xlen, suffix, xlen) == 0);
 }
@@ -758,7 +758,7 @@ static Value str_char_at_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_NUMBER(args[1])) return val_nil();
     const char* s = AS_STRING(args[0]);
     int idx = (int)AS_NUMBER(args[1]);
-    int slen = (int)strlen(s);
+    int slen = SAGE_STRING_LEN(args[0]);
     if (idx < 0 || idx >= slen) return val_nil();
     char buf[2] = { s[idx], '\0' };
     return val_string(buf);
@@ -784,7 +784,7 @@ static Value str_repeat_native(int argCount, Value* args) {
     const char* s = AS_STRING(args[0]);
     int count = (int)AS_NUMBER(args[1]);
     if (count <= 0) return val_string("");
-    size_t slen = strlen(s);
+    size_t slen = SAGE_STRING_LEN(args[0]);
     if (slen > 0 && (size_t)count > (64 * 1024 * 1024) / slen) return val_nil();  // overflow guard
     size_t total = slen * (size_t)count;
     char* buf = SAGE_ALLOC(total + 1);
@@ -799,7 +799,7 @@ static Value str_count_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_number(0);
     const char* s = AS_STRING(args[0]);
     const char* sub = AS_STRING(args[1]);
-    size_t sublen = strlen(sub);
+    size_t sublen = SAGE_STRING_LEN(args[1]);
     if (sublen == 0) return val_number(0);
     int count = 0;
     const char* p = s;
@@ -816,7 +816,7 @@ static Value str_substr_native(int argCount, Value* args) {
     const char* s = AS_STRING(args[0]);
     int start = (int)AS_NUMBER(args[1]);
     int length = (int)AS_NUMBER(args[2]);
-    int slen = (int)strlen(s);
+    int slen = SAGE_STRING_LEN(args[0]);
     if (start < 0) start = 0;
     if (start >= slen) return val_string("");
     if (length < 0) length = 0;
@@ -830,7 +830,7 @@ static Value str_substr_native(int argCount, Value* args) {
 static Value str_reverse_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* s = AS_STRING(args[0]);
-    size_t slen = strlen(s);
+    size_t slen = SAGE_STRING_LEN(args[0]);
     char* buf = SAGE_ALLOC(slen + 1);
     for (size_t i = 0; i < slen; i++) {
         buf[i] = s[slen - 1 - i];
