@@ -162,16 +162,22 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
         strcpy(path, cache->search_paths[i]);
         strcat(path, "/");
         strcat(path, path_name);
-        strcat(path, "/__init__.sage");
-        if (file_exists(path)) {
+        
+        char init_path[MAX_MODULE_PATH];
+        strcpy(init_path, path);
+        strcat(init_path, "/__init__.sage");
+        
+        if (file_exists(init_path)) {
 #ifndef PICO_BUILD
-            if (!path_is_within(path, cache->search_paths[i])) {
+            if (!path_is_within(init_path, cache->search_paths[i])) {
                 fprintf(stderr, "Error: Module '%s' resolves outside search directory\n", name);
                 continue;
             }
 #endif
+            // Add the directory itself to search paths so submodules can be found
+            add_search_path(cache, path);
             free(path_name);
-            return SAGE_STRDUP(path);
+            return SAGE_STRDUP(init_path);
         }
     }
 

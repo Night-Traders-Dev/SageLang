@@ -169,7 +169,7 @@ The inner `increment` function "closes over" the `count` variable, keeping it al
 User: My code crashes with a segfault when I import crypto.hash
 Bot: This is likely a GC issue. The crypto modules do heavy allocation (SHA-256 creates 64-entry arrays per block), which can trigger garbage collection during deeply-nested interpreter state.
 
-The fix: add `gc_disable()` at the top of your script, or the crypto modules already include it internally in v3.6.8. If you're on an older version, update or add `gc_disable()` before the import.
+The fix: add `gc_disable()` at the top of your script, or the crypto modules already include it internally in v3.8.0. If you're on an older version, update or add `gc_disable()` before the import.
 
 ## Step-by-step guidance
 User: How do I add a new module to Sage?

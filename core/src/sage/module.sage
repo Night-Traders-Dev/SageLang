@@ -104,9 +104,12 @@ proc resolve_module_path(cache, name):
         if content != nil:
             return path
         # Try __init__.sage in a directory
-        let init_path = search_dir + "/" + path_name + "/__init__.sage"
+        let dir_path = search_dir + "/" + path_name
+        let init_path = dir_path + "/__init__.sage"
         let init_content = io.readfile(init_path)
         if init_content != nil:
+            # Add the directory itself to search paths so submodules can be found
+            cache.add_search_path(dir_path)
             return init_path
     return nil
 

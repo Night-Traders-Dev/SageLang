@@ -68,7 +68,7 @@ log.info(logger, "Server started")
 log.error(logger, "Connection failed")
 
 # With structured fields
-let fields = {"port": 8080, "host": "3.6.8.0"}
+let fields = {"port": 8080, "host": "3.8.0.0"}
 log.info_f(logger, "Listening", fields)
 
 # Child logger with inherited fields
