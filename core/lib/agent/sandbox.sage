@@ -61,7 +61,7 @@ proc is_safe(code):
         let c = code[i]
 
         # Skip comments
-        if c == ": #":
+        if c == "#":
             i = i + 1
             while i < n and code[i] != chr(10) and code[i] != chr(13):
                 i = i + 1
