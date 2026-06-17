@@ -34,3 +34,6 @@
 [submodule "core/lib/net"]
 	path = core/lib/net
 	url = /root/Devel/sagelang_libs/net
+[submodule "core/lib/os"]
+	path = core/lib/os
+	url = /root/Devel/sagelang_libs/os
