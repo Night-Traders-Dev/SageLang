@@ -28,3 +28,6 @@
 [submodule "core/lib/metal"]
 	path = core/lib/metal
 	url = /root/Devel/sagelang_libs/metal
+[submodule "core/lib/ml"]
+	path = core/lib/ml
+	url = /root/Devel/sagelang_libs/ml
