@@ -42,6 +42,16 @@ The module system searches in order:
 
 For dotted names like `os.fat`, dots are converted to `/` before searching, so `import os.fat` looks for `./lib/os/fat.sage`.
 
+### Packages and __init__.sage
+
+If a module is a directory (e.g., `lib/blockchain/`), the module system looks for an `__init__.sage` file within that directory.
+
+```sage
+import blockchain   # resolves to lib/blockchain/__init__.sage
+```
+
+This allows grouping multiple related modules into a single package. The `__init__.sage` file can then import submodules to expose them to the user.
+
 ## Runtime vs Compile-Time Resolution
 
 - Interpreter paths resolve imports at runtime by loading module environments.

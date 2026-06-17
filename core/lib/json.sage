@@ -581,15 +581,11 @@ proc cJSON_GetObjectItem(object, name):
             # Slow path: case-insensitive match
             if name_lower == nil:
                 name_lower = lower(name)
-            end
             if child.string_lower == nil:
                 child.string_lower = lower(child.string)
-            end
             if child.string_lower == name_lower:
                 return child
-        end
         child = child.next
-    end
     return nil
 
 # cJSON_GetObjectItemCaseSensitive(object, string) -> cJSON node or nil

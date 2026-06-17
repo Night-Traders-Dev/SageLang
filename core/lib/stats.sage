@@ -13,7 +13,6 @@ proc sum(values):
         for item in values:
             total = total + item
         return total
-    end
     return res
 
 ## Returns the product of a list of values
@@ -26,7 +25,6 @@ proc product(values):
         for item in values:
             total = total * item
         return total
-    end
     return res
 
 ## Returns both the minimum and maximum values in a single pass.
@@ -39,7 +37,6 @@ proc min_max(values):
     let high = array_max(values)
     if type(low) != "nil" and type(high) != "nil":
         return (low, high)
-    end
 
     let low_v = values[0]
     let high_v = values[0]
@@ -60,7 +57,6 @@ proc min_value(values):
         for item in values:
             if item < current: current = item
         return current
-    end
     return res
 
 ## Returns the maximum value in the array.
@@ -73,7 +69,6 @@ proc max_value(values):
         for item in values:
             if item > current: current = item
         return current
-    end
     return res
 
 @inline

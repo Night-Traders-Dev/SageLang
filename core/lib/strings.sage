@@ -28,7 +28,6 @@ proc count_substring(text, part):
         if part == "":
             return 0
         return len(split(text, part)) - 1
-    end
     return res
 
 ## Repeats a string a given number of times.

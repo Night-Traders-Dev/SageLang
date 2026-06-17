@@ -21,19 +21,14 @@ proc extract_code_blocks(text):
             in_block = true
             current = ""
             continue
-        end
         if in_block and trimmed == "```":
             in_block = false
             if len(current) > 0:
                 push(blocks, current)
-            end
             current = ""
             continue
-        end
         if in_block:
             current = current + line + chr(10)
-        end
-    end
     # Also extract inline code after "CODE:" prefix
     for i in range(len(lines)):
         let line = lines[i]
@@ -41,10 +36,7 @@ proc extract_code_blocks(text):
             let code = ""
             for j in range(len(line) - 6):
                 code = code + line[6 + j]
-            end
             push(blocks, code)
-        end
-    end
     return blocks
 
 # ============================================================================
@@ -69,13 +61,11 @@ proc is_safe(code):
         let c = code[i]
 
         # Skip comments
-        if c == "#":
+        if c == ": #":
             i = i + 1
             while i < n and code[i] != chr(10) and code[i] != chr(13):
                 i = i + 1
-            end
             continue
-        end
 
         # Skip strings
         if c == "\"" or c == "'":
@@ -86,13 +76,9 @@ proc is_safe(code):
                     i = i + 2
                 else:
                     i = i + 1
-                end
-            end
             if i < n:
                 i = i + 1
-            end
             continue
-        end
 
         # Parse identifiers
         let is_letter = (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or c == "_"
@@ -106,8 +92,6 @@ proc is_safe(code):
                     i = i + 1
                 else:
                     break
-                end
-            end
 
             # Check for unauthorized keywords
             for j in range(len(keywords)):
@@ -115,8 +99,6 @@ proc is_safe(code):
                     result["safe"] = false
                     push(result["issues"], "Contains unauthorized keyword/identifier: " + ident)
                     return result
-                end
-            end
 
             # Check for dangerous primitives
             for j in range(len(primitives)):
@@ -124,8 +106,6 @@ proc is_safe(code):
                     result["safe"] = false
                     push(result["issues"], "Contains dangerous primitive: " + ident)
                     return result
-                end
-            end
 
             # Check for unauthorized module access
             # We block unauthorized module identifiers entirely to prevent aliasing (e.g. let my_io = io)
@@ -134,13 +114,9 @@ proc is_safe(code):
                     result["safe"] = false
                     push(result["issues"], "Contains unauthorized module identifier: " + ident)
                     return result
-                end
-            end
             continue
-        end
 
         i = i + 1
-    end
 
     return result
 
@@ -152,7 +128,6 @@ proc eval_expr(expr):
     let num = tonumber(trimmed)
     if str(num) == trimmed:
         return {"type": "number", "value": num}
-    end
     # Try as simple arithmetic
     # (Full eval would use the Sage parser — this handles common cases)
     return {"type": "string", "value": trimmed}
@@ -167,7 +142,6 @@ proc execute_block(code, timeout_ms):
         result["error"] = "Safety check failed: " + safety["issues"][0]
         result["output"] = ""
         return result
-    end
     # For now, we evaluate simple expressions directly
     # Full execution would write to temp file and run sage on it
     result["success"] = true
@@ -203,8 +177,6 @@ proc par_query(agent, question):
         else:
             agent["errors"] = agent["errors"] + 1
             return {"answer": response, "code_executed": false, "error": exec_result["error"]}
-        end
-    end
     return {"answer": response, "code_executed": false}
 
 # ============================================================================
@@ -217,30 +189,22 @@ proc eval_math(expr):
     let tokens = tokenize_math(expr)
     if len(tokens) == 1:
         return tonumber(tokens[0])
-    end
     if len(tokens) == 3:
         let a = tonumber(tokens[0])
         let op = tokens[1]
         let b = tonumber(tokens[2])
         if op == "+":
             return a + b
-        end
         if op == "-":
             return a - b
-        end
         if op == "*":
             return a * b
-        end
         if op == "/":
             if b != 0:
                 return a / b
-            end
             return 0
-        end
         if op == "%":
             return a - ((a / b) | 0) * b
-        end
-    end
     return 0
 
 proc tokenize_math(expr):
@@ -252,22 +216,15 @@ proc tokenize_math(expr):
             if len(current) > 0:
                 push(tokens, current)
                 current = ""
-            end
-        end
         if c == "+" or c == "-" or c == "*" or c == "/" or c == "%":
             if len(current) > 0:
                 push(tokens, current)
                 current = ""
-            end
             push(tokens, c)
-        end
         if c != " " and c != "+" and c != "-" and c != "*" and c != "/" and c != "%":
             current = current + c
-        end
-    end
     if len(current) > 0:
         push(tokens, current)
-    end
     return tokens
 
 # ============================================================================
@@ -281,43 +238,31 @@ proc split_lines(text):
         if text[i] == chr(10):
             push(lines, current)
             current = ""
-        end
         if text[i] != chr(10) and text[i] != chr(13):
             current = current + text[i]
-        end
-    end
     if len(current) > 0:
         push(lines, current)
-    end
     return lines
 
 proc trim(s):
     let start = 0
     while start < len(s) and (s[start] == " " or s[start] == chr(9)):
         start = start + 1
-    end
     let r = ""
     for i in range(len(s) - start):
         r = r + s[start + i]
-    end
     return r
 
 proc contains(h, n):
     if len(n) > len(h):
         return false
-    end
     for i in range(len(h) - len(n) + 1):
         let f = true
         for j in range(len(n)):
             if not f:
                 j = len(n)
-            end
             if f and h[i + j] != n[j]:
                 f = false
-            end
-        end
         if f:
             return true
-        end
-    end
     return false

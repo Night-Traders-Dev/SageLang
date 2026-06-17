@@ -130,7 +130,6 @@ proc sum(values):
         for item in values:
             total_sum = total_sum + item
         return total_sum
-    end
     return res
 
 ## Returns the product of a list of values
@@ -143,7 +142,6 @@ proc product(values):
         for item in values:
             total_prod = total_prod * item
         return total_prod
-    end
     return res
 
 ## Returns the arithmetic mean of a list of values
@@ -235,7 +233,6 @@ proc printm(expr, backend="sage", formats=nil):
         # Check global __MATH_WORK__ set via CLI or defined in module
         let global_work = __MATH_WORK__
         formats = split(global_work, ",")
-    end
     
     let tokens = _printm_tokenize(expr)
     if len(tokens) == 0: return 0
@@ -252,7 +249,6 @@ proc _printm_tokenize(expr):
         if c == " " or c == "\t" or c == "\n" or c == "\r":
             i = i + 1
             continue
-        end
         if c == "+" or c == "-" or c == "*" or c == "/":
             push(tokens, c)
             i = i + 1
@@ -260,12 +256,9 @@ proc _printm_tokenize(expr):
             let start = i
             while i < len(expr) and ((expr[i] >= "0" and expr[i] <= "9") or expr[i] == "."):
                 i = i + 1
-            end
             push(tokens, tonumber(slice(expr, start, i)))
         else:
             i = i + 1
-        end
-    end
     return tokens
 
 proc _printm_eval(tokens, backend, formats):
@@ -284,18 +277,14 @@ proc _printm_eval(tokens, backend, formats):
             while j < i - 1:
                 push(new_tokens, tokens[j])
                 j = j + 1
-            end
             push(new_tokens, res)
             j = i + 2
             while j < len(tokens):
                 push(new_tokens, tokens[j])
                 j = j + 1
-            end
             tokens = new_tokens
             i = i - 1
-        end
         i = i + 1
-    end
     
     # Pass 2: Handle + and -
     let res = tokens[0]
@@ -305,7 +294,6 @@ proc _printm_eval(tokens, backend, formats):
         let right = tokens[j+1]
         res = _printm_op(res, op, right, backend, formats)
         j = j + 2
-    end
     return res
 
 proc _printm_op(a, op, b, backend, formats):
@@ -318,7 +306,6 @@ proc _printm_op(a, op, b, backend, formats):
         return _printm_op_asm(a, op, b, formats)
     else: # default "sage"
         return _printm_op_sage(a, op, b, formats)
-    end
     return 0
 
 proc _printm_op_sage(a, op, b, formats):
@@ -327,7 +314,6 @@ proc _printm_op_sage(a, op, b, formats):
     elif op == "-": res = a - b
     elif op == "*": res = a * b
     elif op == "/": res = a / b
-    end
     
     # Simple Grade-school vertical display
     let sa = str(a)
@@ -347,12 +333,10 @@ proc _printm_op_asm(a, op, b, formats):
     let lib = ffi_open("")
     if type(lib) == "nil":
         return _printm_op_sage(a, op, b, formats)
-    end
     let printf_addr = ffi_sym_addr(lib, "printf")
     if printf_addr == 0:
         ffi_close(lib)
         return _printm_op_sage(a, op, b, formats)
-    end
     
     let fmt = "  %g\n" + op + " %g\n----\n  %g\n\n"
     
@@ -361,8 +345,6 @@ proc _printm_op_asm(a, op, b, formats):
         elif op == "-": print "[ASM] Using SUB instruction"
         elif op == "*": print "[ASM] Using MUL instruction"
         elif op == "/": print "[ASM] Using DIV instruction"
-        end
-    end
 
     if arch == "x86_64":
         let instr = ""
@@ -370,7 +352,6 @@ proc _printm_op_asm(a, op, b, formats):
         elif op == "-": instr = "subsd"
         elif op == "*": instr = "mulsd"
         elif op == "/": instr = "divsd"
-        end
         if instr != "":
             let code = "
                 push %rbp
@@ -394,14 +375,12 @@ proc _printm_op_asm(a, op, b, formats):
                 ret
             "
             return asm_exec(code, "double", a, b, printf_addr, addressof_raw(fmt))
-        end
     elif arch == "aarch64":
         let instr = ""
         if op == "+": instr = "fadd"
         elif op == "-": instr = "fsub"
         elif op == "*": instr = "fmul"
         elif op == "/": instr = "fdiv"
-        end
         if instr != "":
             let code = "
                 stp x29, x30, [sp, #-48]!
@@ -422,14 +401,12 @@ proc _printm_op_asm(a, op, b, formats):
                 ret
             "
             return asm_exec(code, "double", a, b, printf_addr, addressof_raw(fmt))
-        end
     elif arch == "rv64":
         let instr = ""
         if op == "+": instr = "fadd.d"
         elif op == "-": instr = "fsub.d"
         elif op == "*": instr = "fmul.d"
         elif op == "/": instr = "fdiv.d"
-        end
         if instr != "":
             let code = "
                 addi sp, sp, -48
@@ -451,8 +428,6 @@ proc _printm_op_asm(a, op, b, formats):
                 ret
             "
             return asm_exec(code, "double", a, b, printf_addr, addressof_raw(fmt))
-        end
-    end
     
     # Fallback to Sage if arch not supported or op not implemented in ASM
     return _printm_op_sage(a, op, b, formats)
@@ -463,7 +438,6 @@ proc print_matrix(matrix):
     if type(matrix) != "array":
         print "Error: math.print_matrix() expects an array"
         return 0
-    end
     print "["
     for i in range(len(matrix)):
         let row = matrix[i]
@@ -471,12 +445,8 @@ proc print_matrix(matrix):
             let parts = []
             for j in range(len(row)):
                 push(parts, str(row[j]))
-            end
             print "  [" + join(parts, ", ") + "]"
         else:
             print "  " + str(row)
-        end
-    end
     print "]"
-end
 
