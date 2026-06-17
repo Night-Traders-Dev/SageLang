@@ -7,3 +7,6 @@
 [submodule "core/lib/blockchain"]
 	path = core/lib/blockchain
 	url = /root/Devel/sagelang_libs/blockchain
+[submodule "core/lib/chat"]
+	path = core/lib/chat
+	url = /root/Devel/sagelang_libs/chat
