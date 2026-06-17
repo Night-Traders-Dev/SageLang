@@ -16,3 +16,6 @@
 [submodule "core/lib/cuda"]
 	path = core/lib/cuda
 	url = /root/Devel/sagelang_libs/cuda
+[submodule "core/lib/discord"]
+	path = core/lib/discord
+	url = /root/Devel/sagelang_libs/discord
