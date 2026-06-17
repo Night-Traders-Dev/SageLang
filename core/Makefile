@@ -385,6 +385,8 @@ install: $(TARGET) $(LSP_TARGET)
 	install -d $(LIBDIR)/lib
 	install -d $(LIBDIR)/examples
 	cp -r lib/*.sage $(LIBDIR)/lib/ 2>/dev/null || true
+	cp -r lib/blockchain $(LIBDIR)/lib/
+	cp -r lib/metal $(LIBDIR)/lib/
 	cp -r lib/graphics $(LIBDIR)/lib/
 	cp -r lib/os $(LIBDIR)/lib/
 	cp -r lib/net $(LIBDIR)/lib/
