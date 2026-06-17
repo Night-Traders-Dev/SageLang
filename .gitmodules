@@ -3,43 +3,43 @@
 	url = https://github.com/Night-Traders-Dev/SageVM.git
 [submodule "core/lib/android"]
 	path = core/lib/android
-	url = /root/Devel/sagelang_libs/android
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-android
 [submodule "core/lib/blockchain"]
 	path = core/lib/blockchain
-	url = /root/Devel/sagelang_libs/blockchain
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-blockchain
 [submodule "core/lib/chat"]
 	path = core/lib/chat
-	url = /root/Devel/sagelang_libs/chat
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-chat
 [submodule "core/lib/crypto"]
 	path = core/lib/crypto
-	url = /root/Devel/sagelang_libs/crypto
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-crypto
 [submodule "core/lib/cuda"]
 	path = core/lib/cuda
-	url = /root/Devel/sagelang_libs/cuda
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-cuda
 [submodule "core/lib/discord"]
 	path = core/lib/discord
-	url = /root/Devel/sagelang_libs/discord
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-discord
 [submodule "core/lib/gc"]
 	path = core/lib/gc
-	url = /root/Devel/sagelang_libs/gc
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-gc
 [submodule "core/lib/graphics"]
 	path = core/lib/graphics
-	url = /root/Devel/sagelang_libs/graphics
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-graphics
 [submodule "core/lib/metal"]
 	path = core/lib/metal
-	url = /root/Devel/sagelang_libs/metal
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-metal
 [submodule "core/lib/ml"]
 	path = core/lib/ml
-	url = /root/Devel/sagelang_libs/ml
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-ml
 [submodule "core/lib/net"]
 	path = core/lib/net
-	url = /root/Devel/sagelang_libs/net
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-net
 [submodule "core/lib/os"]
 	path = core/lib/os
-	url = /root/Devel/sagelang_libs/os
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-os
 [submodule "core/lib/std"]
 	path = core/lib/std
-	url = /root/Devel/sagelang_libs/std
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-std
 [submodule "core/lib/transpiler"]
 	path = core/lib/transpiler
-	url = /root/Devel/sagelang_libs/transpiler
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-transpiler
