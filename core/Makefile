@@ -1044,7 +1044,7 @@ bump-version:
 	@[ -n "$(V)" ] || (echo "Usage: make bump-version V=X.Y.Z"; exit 1)
 	@printf "%s\n" "$(V)" > VERSION
 	@[ -f ../VERSION ] && printf "%s\n" "$(V)" > ../VERSION || true
-	@find . -type f \( -name "*.md" -o -name "*.txt" -o -name "*.sage" -o -name "*.sh" -o -name "Makefile" \) -exec sed -i "s/[0-9]\+\.[0-9]\+\.[0-9]\+/$(V)/g" {} +
+	@find . -type f \( -name "*.md" -o -name "*.txt" -o -name "*.sage" -o -name "*.sh" -o -name "Makefile" \) ! -name "CHANGELOG.md" -exec sed -i "s/[0-9]\+\.[0-9]\+\.[0-9]\+/$(V)/g" {} +
 	@echo "✅ Version bumped to $(V) across all files"
 	@echo "   Commit: git add . -m \"chore: bump version to $(V)\""
 
