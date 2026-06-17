@@ -76,7 +76,7 @@ end
 
 proc resolve_mount(vfs, path):
     let best = nil
-    let best_len = 0
+    let best_len = - 1
     let mounts = vfs["mounts"]
     for i in range(len(mounts)):
         let mp = mounts[i]["path"]
@@ -89,9 +89,14 @@ proc resolve_mount(vfs, path):
                     j = mp_len
                 end
             end
-            if is_match and mp_len > best_len:
-                best = mounts[i]
-                best_len = mp_len
+            if is_match:
+                # Ensure it matches a full path component
+                if mp == "/" or mp_len == len(path) or path[mp_len] == "/":
+                    if mp_len > best_len:
+                        best = mounts[i]
+                        best_len = mp_len
+                    end
+                end
             end
         end
     end
@@ -451,6 +456,30 @@ proc vfs_rmdir(vfs, path):
     return vrm_backend["rmdir"](vrm_rel)
 end
 
+## Renames a file or directory within the VFS.
+## Paths must reside on the same mount point.
+
+proc vfs_rename(vfs, old_path, new_path):
+    let old_norm = normalize_path(old_path)
+    let new_norm = normalize_path(new_path)
+    let old_m = resolve_mount(vfs, old_norm)
+    let new_m = resolve_mount(vfs, new_norm)
+    if old_m == nil or new_m == nil:
+        return - 1
+    end
+    # Cross-mount rename not supported
+    if old_m["path"] != new_m["path"]:
+        return - 1
+    end
+    let old_rel = relative_path(old_m["path"], old_norm)
+    let new_rel = relative_path(new_m["path"], new_norm)
+    let backend = old_m["backend"]
+    if not dict_has(backend, "rename"):
+        return - 1
+    end
+    return backend["rename"](old_rel, new_rel)
+end
+
 # Create a simple in-memory filesystem backend for testing
 
 proc create_memfs():
@@ -577,6 +606,86 @@ proc create_memfs():
         return - 1
     end
 
+    ## Renames a file or directory in the memory filesystem.
+    proc memfs_rename(old_path, new_path):
+        if old_path == new_path:
+            return 0
+        end
+        let st = memfs_stat(old_path)
+        if st == nil:
+            return - 1
+        end
+        if memfs_stat(new_path) != nil:
+            # For simplicity, don't support overwrite in this stub
+            return - 1
+        end
+
+        if st["type"] == VFS_FILE:
+            let data = fs["files"][old_path]
+            dict_delete(fs["files"], old_path)
+            fs["files"][new_path] = data
+        else:
+            # Directory rename: update keys in fs["dirs"] and fs["files"]
+            let old_prefix = old_path
+            if old_prefix != "/":
+                old_prefix = old_prefix + "/"
+            end
+            let new_prefix = new_path
+            if new_prefix != "/":
+                new_prefix = new_prefix + "/"
+            end
+
+            # Update dirs
+            let d_keys = dict_keys(fs["dirs"])
+            for dk in d_keys:
+                if dk == old_path:
+                    let dir_data = fs["dirs"][dk]
+                    dict_delete(fs["dirs"], dk)
+                    fs["dirs"][new_path] = dir_data
+                elif len(dk) > len(old_prefix) and slice(dk, 0, len(old_prefix)) == old_prefix:
+                    let sub_rel = slice(dk, len(old_prefix), len(dk))
+                    let dir_data_sub = fs["dirs"][dk]
+                    dict_delete(fs["dirs"], dk)
+                    fs["dirs"][new_prefix + sub_rel] = dir_data_sub
+                end
+            end
+
+            # Update files
+            let f_keys = dict_keys(fs["files"])
+            for fk in f_keys:
+                if len(fk) > len(old_prefix) and slice(fk, 0, len(old_prefix)) == old_prefix:
+                    let file_rel = slice(fk, len(old_prefix), len(fk))
+                    let file_data = fs["files"][fk]
+                    dict_delete(fs["files"], fk)
+                    fs["files"][new_prefix + file_rel] = file_data
+                end
+            end
+        end
+
+        # Update old parent
+        let old_d = dirname(old_path)
+        let old_n = basename(old_path)
+        if dict_has(fs["dirs"], old_d):
+            let old_entries = fs["dirs"][old_d]
+            let new_old_entries = []
+            for oe in old_entries:
+                if oe["name"] != old_n:
+                    push(new_old_entries, oe)
+                end
+            end
+            fs["dirs"][old_d] = new_old_entries
+        end
+
+        # Update new parent
+        let new_d = dirname(new_path)
+        let new_n = basename(new_path)
+        if dict_has(fs["dirs"], new_d):
+            push(fs["dirs"][new_d], make_dirent(new_n, st["type"], st["size"]))
+        end
+
+        return 0
+    end
+
     proc memfs_rmdir(path):
         if dict_has(fs["dirs"], path):
             if path == "/":
@@ -636,6 +745,7 @@ proc create_memfs():
     backend["mkdir"] = memfs_mkdir
     backend["rmdir"] = memfs_rmdir
     backend["unlink"] = memfs_unlink
+    backend["rename"] = memfs_rename
     backend["close"] = memfs_close
     backend["_fs"] = fs
     return backend
