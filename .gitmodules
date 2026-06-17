@@ -40,3 +40,6 @@
 [submodule "core/lib/std"]
 	path = core/lib/std
 	url = /root/Devel/sagelang_libs/std
+[submodule "core/lib/transpiler"]
+	path = core/lib/transpiler
+	url = /root/Devel/sagelang_libs/transpiler
