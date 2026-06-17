@@ -10,3 +10,6 @@
 [submodule "core/lib/chat"]
 	path = core/lib/chat
 	url = /root/Devel/sagelang_libs/chat
+[submodule "core/lib/crypto"]
+	path = core/lib/crypto
+	url = /root/Devel/sagelang_libs/crypto
