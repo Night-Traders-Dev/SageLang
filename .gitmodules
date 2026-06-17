@@ -22,3 +22,6 @@
 [submodule "core/lib/gc"]
 	path = core/lib/gc
 	url = /root/Devel/sagelang_libs/gc
+[submodule "core/lib/graphics"]
+	path = core/lib/graphics
+	url = /root/Devel/sagelang_libs/graphics
