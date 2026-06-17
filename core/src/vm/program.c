@@ -160,6 +160,7 @@ static int compile_program_function(void* data, ProcStmt* proc, char* error, siz
     }
 
     if (!bytecode_compile_function_body(&function.chunk, proc->body,
+                                        function.params, function.param_count,
                                         compile_program_function, program,
                                         error, error_size)) {
         for (int i = 0; i < function.param_count; i++) {

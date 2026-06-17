@@ -66,6 +66,8 @@ typedef enum {
     BC_OP_SETUP_TRY,         // push exception handler (catch_target, finally_target)
     BC_OP_END_TRY,           // pop exception handler
     BC_OP_RAISE,             // raise exception (value on stack)
+    BC_OP_GET_LOCAL,
+    BC_OP_SET_LOCAL,
     // GPU hot-path opcodes (Phase 16: game engine optimization)
     BC_OP_GPU_POLL_EVENTS,         // gpu.poll_events() — no args, no result
     BC_OP_GPU_WINDOW_SHOULD_CLOSE, // gpu.window_should_close() -> bool
@@ -137,6 +139,7 @@ int bytecode_compile_statement_with_functions(BytecodeChunk* chunk, Stmt* stmt, 
                                               void* build_function_data,
                                               char* error, size_t error_size);
 int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
+                                   char** params, int param_count,
                                    BytecodeBuildFunctionFn build_function,
                                    void* build_function_data,
                                    char* error, size_t error_size);

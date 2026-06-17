@@ -1239,37 +1239,37 @@ static char *emit_binary_expr(Compiler *compiler, BinaryExpr *binary) {
   const char *helper = NULL;
   switch (binary->op.type) {
   case TOKEN_PLUS:
-    helper = "sage_add";
+    helper = "SAGE_ADD";
     break;
   case TOKEN_MINUS:
-    helper = "sage_sub";
+    helper = "SAGE_SUB";
     break;
   case TOKEN_STAR:
-    helper = "sage_mul";
+    helper = "SAGE_MUL";
     break;
   case TOKEN_SLASH:
-    helper = "sage_div";
+    helper = "SAGE_DIV";
     break;
   case TOKEN_PERCENT:
     helper = "sage_mod";
     break;
   case TOKEN_EQ:
-    helper = "sage_eq";
+    helper = "SAGE_EQ";
     break;
   case TOKEN_NEQ:
-    helper = "sage_neq";
+    helper = "SAGE_NEQ";
     break;
   case TOKEN_GT:
-    helper = "sage_gt";
+    helper = "SAGE_GT";
     break;
   case TOKEN_LT:
-    helper = "sage_lt";
+    helper = "SAGE_LT";
     break;
   case TOKEN_GTE:
-    helper = "sage_gte";
+    helper = "SAGE_GTE";
     break;
   case TOKEN_LTE:
-    helper = "sage_lte";
+    helper = "SAGE_LTE";
     break;
   case TOKEN_AMP:
     helper = "sage_bit_and";
@@ -2843,9 +2843,6 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     emit_line(compiler, "sage_define_slot(&%s, %s.as.array->elements[%s]);",
               slot_name, iter_var, idx_var);
     emit_embedded_block(compiler, stmt->as.for_stmt.body);
-    // Mutation Fix: Sync loop variable back to internal counter if it's a number
-    emit_line(compiler, "{ SageValue _v = sage_load_slot(&%s, \"%s\"); if (_v.type == SAGE_TAG_NUMBER) %s = (int)_v.as.number; }",
-              slot_name, var_name, idx_var);
     compiler->indent--;
     emit_line(compiler, "}");
     compiler->indent--;
@@ -3988,6 +3985,27 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "static SageValue sage_range1(SageValue end) {\n"
       "    return sage_range2(sage_number(0), end);\n"
       "}\n"
+      "\n"
+      "#define SAGE_ADD(a, b) ((a).type == SAGE_TAG_NUMBER && (b).type == SAGE_TAG_NUMBER ? \\\n"
+      "    sage_number((a).as.number + (b).as.number) : sage_add(a, b))\n"
+      "#define SAGE_SUB(a, b) ((a).type == SAGE_TAG_NUMBER && (b).type == SAGE_TAG_NUMBER ? \\\n"
+      "    sage_number((a).as.number - (b).as.number) : sage_sub(a, b))\n"
+      "#define SAGE_MUL(a, b) ((a).type == SAGE_TAG_NUMBER && (b).type == SAGE_TAG_NUMBER ? \\\n"
+      "    sage_number((a).as.number * (b).as.number) : sage_mul(a, b))\n"
+      "#define SAGE_DIV(a, b) ((a).type == SAGE_TAG_NUMBER && (b).type == SAGE_TAG_NUMBER && (b).as.number != 0.0 ? \\\n"
+      "    sage_number((a).as.number / (b).as.number) : sage_div(a, b))\n"
+      "#define SAGE_EQ(a, b) ((a).type == SAGE_TAG_NUMBER && (b).type == SAGE_TAG_NUMBER ? \\\n"
+      "    sage_bool((a).as.number == (b).as.number) : sage_eq(a, b))\n"
+      "#define SAGE_NEQ(a, b) ((a).type == SAGE_TAG_NUMBER && (b).type == SAGE_TAG_NUMBER ? \\\n"
+      "    sage_bool((a).as.number != (b).as.number) : sage_neq(a, b))\n"
+      "#define SAGE_GT(a, b) ((a).type == SAGE_TAG_NUMBER && (b).type == SAGE_TAG_NUMBER ? \\\n"
+      "    sage_bool((a).as.number > (b).as.number) : sage_gt(a, b))\n"
+      "#define SAGE_LT(a, b) ((a).type == SAGE_TAG_NUMBER && (b).type == SAGE_TAG_NUMBER ? \\\n"
+      "    sage_bool((a).as.number < (b).as.number) : sage_lt(a, b))\n"
+      "#define SAGE_GTE(a, b) ((a).type == SAGE_TAG_NUMBER && (b).type == SAGE_TAG_NUMBER ? \\\n"
+      "    sage_bool((a).as.number >= (b).as.number) : sage_gte(a, b))\n"
+      "#define SAGE_LTE(a, b) ((a).type == SAGE_TAG_NUMBER && (b).type == SAGE_TAG_NUMBER ? \\\n"
+      "    sage_bool((a).as.number <= (b).as.number) : sage_lte(a, b))\n"
       "\n"
       "static SageValue sage_add(SageValue left, SageValue right) {\n"
       "    if (left.type == SAGE_TAG_NUMBER && right.type == SAGE_TAG_NUMBER) {\n"

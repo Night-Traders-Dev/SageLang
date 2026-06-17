@@ -3853,11 +3853,6 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
 
                     ExecResult res = interpret(stmt->as.for_stmt.body, loop_env);
                     
-                    // Mutation Fix: Sync loop variable back to internal counter if it's a number
-                    if (var_slot->value.type == VAL_NUMBER) {
-                        i = (int)var_slot->value.as.number;
-                    }
-
                     if (res.is_returning || res.is_throwing) {
                         if (iterable.type == VAL_DICT) free(elements);
                         AST_GC_POP_ENV();

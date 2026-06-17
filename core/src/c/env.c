@@ -6,8 +6,11 @@
 #include "sage_thread.h"
 
 static Env* allocated_envs = NULL;
-static unsigned long long next_env_id = 1;
 static sage_mutex_t env_mutex = SAGE_MUTEX_INITIALIZER;
+static __thread Env* thread_env_pool = NULL;
+static __thread EnvNode* thread_node_pool = NULL;
+static unsigned long long next_env_id = 1;
+static sage_mutex_t env_id_mutex = SAGE_MUTEX_INITIALIZER;
 
 // Helper function to duplicate a string with a max length (similar to strndup)
 static char* my_strndup(const char* s, size_t n) {
@@ -28,18 +31,45 @@ static char* my_strndup(const char* s, size_t n) {
 }
 
 Env* env_create(Env* parent) {
-    Env* env = SAGE_ALLOC(sizeof(Env));
+    Env* env;
+    if (thread_env_pool) {
+        env = thread_env_pool;
+        thread_env_pool = env->alloc_next;
+    } else {
+        env = SAGE_ALLOC(sizeof(Env));
+    }
+    
     env->head = NULL;
     env->parent = parent;
     env->marked = 0;
-    sage_mutex_lock(&env_mutex);
+    
+    sage_mutex_lock(&env_id_mutex);
     env->id = next_env_id++;
+    sage_mutex_unlock(&env_id_mutex);
+    
+    // Maintain a global list for GC sweeping and cleanup
+    sage_mutex_lock(&env_mutex);
     env->alloc_next = allocated_envs;
     allocated_envs = env;
     sage_mutex_unlock(&env_mutex);
+    
     return env;
 }
 
+static EnvNode* node_alloc(void) {
+    if (thread_node_pool) {
+        EnvNode* node = thread_node_pool;
+        thread_node_pool = node->next;
+        return node;
+    }
+    return SAGE_ALLOC(sizeof(EnvNode));
+}
+
+static void node_free(EnvNode* node) {
+    if (node->owns_name) free(node->name);
+    node->next = thread_node_pool;
+    thread_node_pool = node;
+}
 
 void env_define(Env* env, const char* name, int length, Value value) {
     // Search ONLY in current scope (head) to update
@@ -60,7 +90,7 @@ void env_define(Env* env, const char* name, int length, Value value) {
     }
 
     // Create new in current scope
-    EnvNode* node = SAGE_ALLOC(sizeof(EnvNode));
+    EnvNode* node = node_alloc();
     node->name = my_strndup(name, length);
     node->name_length = length;
     node->owns_name = 1;
@@ -88,7 +118,7 @@ void env_define_const(Env* env, const char* name, int length, Value value) {
     }
 
     // Create new in current scope
-    EnvNode* node = SAGE_ALLOC(sizeof(EnvNode));
+    EnvNode* node = node_alloc();
     node->name = (char*)name;
     node->name_length = length;
     node->owns_name = 0;
@@ -197,17 +227,19 @@ void env_sweep_unmarked(void) {
     while (*ptr != NULL) {
         Env* env = *ptr;
         if (!env->marked) {
-            // Remove from list and free
+            // Remove from list and recycle
             *ptr = env->alloc_next;
 
             EnvNode* node = env->head;
             while (node != NULL) {
                 EnvNode* next = node->next;
-                if (node->owns_name) free(node->name);
-                free(node);
+                node_free(node);
                 node = next;
             }
-            free(env);
+            
+            // Recycle Env
+            env->alloc_next = thread_env_pool;
+            thread_env_pool = env;
         } else {
             // Reachable — clear mark for next cycle and advance
             env->marked = 0;

@@ -19,6 +19,13 @@ typedef struct {
 } LoopContext;
 
 typedef struct {
+    Token name;
+    int depth;
+} Local;
+
+#define MAX_LOCALS 256
+
+typedef struct {
     BytecodeChunk* chunk;
     BytecodeCompileMode mode;
     BytecodeBuildFunctionFn build_function;
@@ -28,6 +35,9 @@ typedef struct {
     size_t error_size;
     LoopContext loops[MAX_LOOP_DEPTH];
     int loop_depth;
+    Local locals[MAX_LOCALS];
+    int local_count;
+    int scope_depth;
 } BytecodeCompiler;
 
 static void set_error(BytecodeCompiler* compiler, const char* message) {
@@ -120,6 +130,42 @@ static int add_constant(BytecodeCompiler* compiler, Value value) {
     }
     chunk->constants[chunk->constant_count] = value;
     return chunk->constant_count++;
+}
+
+static void add_local(BytecodeCompiler* compiler, Token name) {
+    if (compiler->local_count >= MAX_LOCALS) {
+        set_error(compiler, "Too many local variables in function.");
+        return;
+    }
+    Local* local = &compiler->locals[compiler->local_count++];
+    local->name = name;
+    local->depth = compiler->scope_depth;
+}
+
+static int resolve_local(BytecodeCompiler* compiler, Token name) {
+    for (int i = compiler->local_count - 1; i >= 0; i--) {
+        Local* local = &compiler->locals[i];
+        if (local->name.length == name.length &&
+            memcmp(local->name.start, name.start, name.length) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void begin_scope(BytecodeCompiler* compiler) {
+    compiler->scope_depth++;
+}
+
+static int end_scope(BytecodeCompiler* compiler) {
+    compiler->scope_depth--;
+    int count = 0;
+    while (compiler->local_count > 0 &&
+           compiler->locals[compiler->local_count - 1].depth > compiler->scope_depth) {
+        compiler->local_count--;
+        count++;
+    }
+    return count;
 }
 
 static int add_name_constant(BytecodeCompiler* compiler, const char* start, int length) {
@@ -314,8 +360,14 @@ static int compile_expr(BytecodeCompiler* compiler, Expr* expr) {
             return emit_op(compiler, expr->as.boolean.value ? BC_OP_TRUE : BC_OP_FALSE, 0, 0);
         case EXPR_NIL:
             return emit_op(compiler, BC_OP_NIL, 0, 0);
-        case EXPR_VARIABLE:
+        case EXPR_VARIABLE: {
+            int arg = resolve_local(compiler, expr->as.variable.name);
+            if (arg != -1) {
+                return emit_op(compiler, BC_OP_GET_LOCAL, 0, 0) &&
+                       emit_u16(compiler, (uint16_t)arg, 0, 0);
+            }
             return emit_name_op(compiler, BC_OP_GET_GLOBAL, expr->as.variable.name);
+        }
         case EXPR_ARRAY:
             for (int i = 0; i < expr->as.array.count; i++) {
                 if (!compile_expr(compiler, expr->as.array.elements[i])) return 0;
@@ -362,8 +414,13 @@ static int compile_expr(BytecodeCompiler* compiler, Expr* expr) {
                    emit_name_op(compiler, BC_OP_GET_PROPERTY, expr->as.get.property);
         case EXPR_SET:
             if (expr->as.set.object == NULL) {
-                return compile_expr(compiler, expr->as.set.value) &&
-                       emit_name_op(compiler, BC_OP_SET_GLOBAL, expr->as.set.property);
+                if (!compile_expr(compiler, expr->as.set.value)) return 0;
+                int arg = resolve_local(compiler, expr->as.set.property);
+                if (arg != -1) {
+                    return emit_op(compiler, BC_OP_SET_LOCAL, 0, 0) &&
+                           emit_u16(compiler, (uint16_t)arg, 0, 0);
+                }
+                return emit_name_op(compiler, BC_OP_SET_GLOBAL, expr->as.set.property);
             }
             return compile_expr(compiler, expr->as.set.object) &&
                    compile_expr(compiler, expr->as.set.value) &&
@@ -483,8 +540,13 @@ static int pop_loop_and_patch_breaks(BytecodeCompiler* compiler) {
 }
 
 static int compile_block(BytecodeCompiler* compiler, Stmt* stmt) {
+    begin_scope(compiler);
     for (Stmt* current = stmt->as.block.statements; current != NULL; current = current->next) {
         if (!compile_stmt(compiler, current, 0)) return 0;
+    }
+    int pops = end_scope(compiler);
+    for (int i = 0; i < pops; i++) {
+        if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
     }
     return 1;
 }
@@ -521,6 +583,12 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 if (!compile_expr(compiler, stmt->as.let.initializer)) break;
             } else if (!emit_op(compiler, BC_OP_NIL, 0, 0)) {
                 return 0;
+            }
+            if (compiler->scope_depth > 0) {
+                add_local(compiler, stmt->as.let.name);
+                // The value is already on top of the stack from compile_expr
+                if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+                return 1;
             }
             if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, stmt->as.let.name)) return 0;
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
@@ -603,19 +671,31 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
 
             if (!emit_dup(compiler, 1, loop_var.line, loop_var.column) ||
                 !emit_dup(compiler, 1, loop_var.line, loop_var.column) ||
-                !emit_op(compiler, BC_OP_GET_INDEX, loop_var.line, loop_var.column) ||
-                !emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, loop_var)) {
+                !emit_op(compiler, BC_OP_GET_INDEX, loop_var.line, loop_var.column)) {
                 return 0;
+            }
+            if (compiler->scope_depth > 0) {
+                add_local(compiler, loop_var);
+            } else {
+                if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, loop_var)) return 0;
             }
 
             // continue_target points to the increment section
             int continue_target_placeholder = current_offset(compiler);
             // for-loop break needs: pop index, pop array, pop_env
-            if (!push_loop(compiler, continue_target_placeholder, 1, 2)) return 0;
+            // If local scope, we also need to account for the local variable
+            int extra_pops = (compiler->scope_depth > 0) ? 3 : 2;
+            if (!push_loop(compiler, continue_target_placeholder, 1, extra_pops)) return 0;
 
             if (!compile_stmt(compiler, stmt->as.for_stmt.body, 0)) {
                 compiler->loop_depth--;
                 return 0;
+            }
+
+            // If we added a local, we must pop it before the next iteration
+            if (compiler->scope_depth > 0) {
+                if (!emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column)) return 0;
+                compiler->local_count--; // Remove from local tracking for this iteration
             }
 
             // Patch continue target to the increment section (right here)
@@ -795,6 +875,7 @@ int bytecode_compile_statement_with_functions(BytecodeChunk* chunk, Stmt* stmt, 
 }
 
 int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
+                                   char** params, int param_count,
                                    BytecodeBuildFunctionFn build_function,
                                    void* build_function_data,
                                    char* error, size_t error_size) {
@@ -807,8 +888,19 @@ int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
     compiler.allow_return = 1;
     compiler.error = error;
     compiler.error_size = error_size;
+    compiler.scope_depth = 1; // Parameters and body are in local scope
     if (error != NULL && error_size > 0) {
         error[0] = '\0';
+    }
+
+    // Register parameters as locals
+    for (int i = 0; i < param_count; i++) {
+        Token t;
+        t.start = params[i];
+        t.length = (int)strlen(params[i]);
+        t.line = 0;
+        t.column = 0;
+        add_local(&compiler, t);
     }
 
     if (!compile_stmt(&compiler, body, 0)) {

@@ -92,13 +92,13 @@ static ExecResult vm_error(const char* message) {
     return result;
 }
 
-#define VM_CHECK_CONST(chunk, idx) \
-    do { if ((int)(idx) >= (chunk)->constant_count) { \
+#define VM_CHECK_CONST(c, idx) \
+    do { if ((int)(idx) >= (c)->constant_count) { \
         result = vm_error("VM constant pool index out of bounds."); goto done; \
     } } while(0)
 
-#define VM_CHECK_AST(chunk, idx) \
-    do { if ((int)(idx) >= (chunk)->ast_stmt_count) { \
+#define VM_CHECK_AST(c, idx) \
+    do { if ((int)(idx) >= (c)->ast_stmt_count) { \
         result = vm_error("VM AST statement index out of bounds."); goto done; \
     } } while(0)
 
@@ -287,6 +287,16 @@ static ExecResult call_method_value(Value object, const char* method_name, int a
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 #endif
+typedef struct {
+    uint8_t* ip;
+    uint8_t* ip_end;
+    BytecodeChunk* chunk;
+    Value* slots;
+    Env* closure;
+} CallFrame;
+
+#define MAX_FRAMES 1024
+
 ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     ActiveVm vm;
     ExecResult result = vm_normal(val_nil());
@@ -307,17 +317,25 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     
     memset(&vm, 0, sizeof(vm));
     vm.chunk = chunk;
-    vm.current_env = env;
     vm.parent = previous_vm;
 
     g_active_vm = &vm;
     if (ts) ts->active_vm = g_active_vm;
 
-    uint8_t* code = chunk->code;
-    uint8_t* ip = code;
-    uint8_t* ip_end = code + chunk->code_count;
-    Value* constants = chunk->constants;
+    CallFrame frames[MAX_FRAMES];
+    int frame_count = 0;
+
+    CallFrame* frame = &frames[frame_count++];
+    frame->chunk = chunk;
+    frame->ip = chunk->code;
+    frame->ip_end = chunk->code + chunk->code_count;
+    frame->slots = vm.stack;
+    frame->closure = env;
+
     Value* sp = vm.stack;
+    Value* constants = frame->chunk->constants;
+    uint8_t* ip = frame->ip;
+    uint8_t* ip_end = frame->ip_end;
 
 #ifdef __GNUC__
     static void* dispatch_table[] = {
@@ -335,7 +353,8 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
         &&BC_OP_PUSH_ENV, &&BC_OP_POP_ENV, &&BC_OP_DUP, &&BC_OP_ARRAY_LEN,
         &&BC_OP_BREAK, &&BC_OP_CONTINUE, &&BC_OP_LOOP_BACK, &&BC_OP_IMPORT,
         &&BC_OP_CLASS, &&BC_OP_METHOD, &&BC_OP_INHERIT, &&BC_OP_SETUP_TRY,
-        &&BC_OP_END_TRY, &&BC_OP_RAISE, &&BC_OP_GPU_POLL_EVENTS,
+        &&BC_OP_END_TRY, &&BC_OP_RAISE, &&BC_OP_GET_LOCAL, &&BC_OP_SET_LOCAL,
+        &&BC_OP_GPU_POLL_EVENTS,
         &&BC_OP_GPU_WINDOW_SHOULD_CLOSE, &&BC_OP_GPU_GET_TIME,
         &&BC_OP_GPU_KEY_PRESSED, &&BC_OP_GPU_KEY_DOWN, &&BC_OP_GPU_MOUSE_POS,
         &&BC_OP_GPU_MOUSE_DELTA, &&BC_OP_GPU_UPDATE_INPUT,
@@ -351,7 +370,10 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 
     #define DISPATCH() \
         do { \
-            if (ip >= ip_end) goto done; \
+            if (ip >= ip_end) { \
+                if (frame_count > 1) goto BC_OP_RETURN; \
+                else goto done; \
+            } \
             goto *dispatch_table[*ip++]; \
         } while (0)
 #else
@@ -380,14 +402,13 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 #endif
 
     while (ip < ip_end) {
-        fprintf(stderr, "DEBUG: Executing opcode byte %d at offset %ld\n", *ip, (long)(ip - code));
 #ifndef __GNUC__
         BytecodeOp op = (BytecodeOp)*ip++;
         switch (op) {
 #endif
             BC_OP_CONSTANT: {
                 uint16_t index = READ_U16();
-                VM_CHECK_CONST(chunk, index);
+                VM_CHECK_CONST(frame->chunk, index);
                 PUSH(constants[index]);
                 DISPATCH();
             }
@@ -403,13 +424,23 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             BC_OP_POP:
                 (void)POP();
                 DISPATCH();
+            BC_OP_GET_LOCAL: {
+                uint16_t index = READ_U16();
+                PUSH(frame->slots[index]);
+                DISPATCH();
+            }
+            BC_OP_SET_LOCAL: {
+                uint16_t index = READ_U16();
+                frame->slots[index] = PEEK(0);
+                DISPATCH();
+            }
             BC_OP_GET_GLOBAL: {
                 uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(chunk, name_index);
+                VM_CHECK_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
                 Value resolved = val_nil();
                 SYNC_SP();
-                if (!env_get(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), &resolved)) {
+                if (!env_get(frame->closure, AS_STRING(name), (int)strlen(AS_STRING(name)), &resolved)) {
                     result = vm_error("Undefined variable.");
                     goto done;
                 }
@@ -418,20 +449,20 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             BC_OP_DEFINE_GLOBAL: {
                 uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(chunk, name_index);
+                VM_CHECK_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
                 Value value = POP();
                 SYNC_SP();
-                env_define(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), value);
+                env_define(frame->closure, AS_STRING(name), (int)strlen(AS_STRING(name)), value);
                 DISPATCH();
             }
             BC_OP_SET_GLOBAL: {
                 uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(chunk, name_index);
+                VM_CHECK_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
                 Value value = PEEK(0);
                 SYNC_SP();
-                if (!env_assign(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), value)) {
+                if (!env_assign(frame->closure, AS_STRING(name), (int)strlen(AS_STRING(name)), value)) {
                     result = vm_error("Undefined variable.");
                     goto done;
                 }
@@ -440,20 +471,20 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             BC_OP_DEFINE_FUNCTION: {
                 uint16_t name_index = READ_U16();
                 uint16_t function_index = READ_U16();
-                VM_CHECK_CONST(chunk, name_index);
+                VM_CHECK_CONST(frame->chunk, name_index);
                 if (chunk->program == NULL || function_index >= chunk->program->function_count) {
                     result = vm_error("Invalid compiled VM function reference.");
                     goto done;
                 }
                 Value name = constants[name_index];
                 SYNC_SP();
-                Value function = val_bytecode_function(&chunk->program->functions[function_index], vm.current_env);
-                env_define(vm.current_env, AS_STRING(name), (int)strlen(AS_STRING(name)), function);
+                Value function = val_bytecode_function(&chunk->program->functions[function_index], frame->closure);
+                env_define(frame->closure, AS_STRING(name), (int)strlen(AS_STRING(name)), function);
                 DISPATCH();
             }
             BC_OP_GET_PROPERTY: {
                 uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(chunk, name_index);
+                VM_CHECK_CONST(frame->chunk, name_index);
                 Value object = POP();
                 const char* property = AS_STRING(constants[name_index]);
                 SYNC_SP();
@@ -473,7 +504,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             BC_OP_SET_PROPERTY: {
                 uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(chunk, name_index);
+                VM_CHECK_CONST(frame->chunk, name_index);
                 Value value = POP();
                 Value object = POP();
                 const char* property = AS_STRING(constants[name_index]);
@@ -554,7 +585,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     goto done;
                 }
                 SYNC_SP();
-                Value function = val_bytecode_function(&chunk->program->functions[function_index], vm.current_env);
+                Value function = val_bytecode_function(&chunk->program->functions[function_index], frame->closure);
                 PUSH(function);
                 DISPATCH();
             }
@@ -683,53 +714,72 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 DISPATCH();
             }
             BC_OP_JUMP:
-                ip = code + READ_U16();
+                ip = frame->chunk->code + READ_U16();
                 DISPATCH();
             BC_OP_JUMP_IF_FALSE: {
                 uint16_t target = READ_U16();
-                if (!vm_is_truthy(PEEK(0))) ip = code + target;
+                if (!vm_is_truthy(PEEK(0))) ip = frame->chunk->code + target;
                 DISPATCH();
             }
             BC_OP_CALL: {
                 int arg_count = (int)READ_U8();
                 if ((int)(sp - vm.stack) < arg_count + 1) { result = vm_error("VM stack underflow on call."); goto done; }
                 Value callee = *(sp - 1 - arg_count);
-                Value* args = sp - arg_count;
-                SYNC_SP();
-                ExecResult call_result = call_function_value(callee, arg_count, args, vm.current_env);
-                sp -= (arg_count + 1);
-                if (call_result.is_throwing) {
-                    if (vm.handler_count > 0) {
-                        vm.handler_count--;
-                        ip = code + vm.handlers[vm.handler_count].handler_ip_offset;
-                        sp = vm.stack + vm.handlers[vm.handler_count].stack_depth;
-                        vm.current_env = vm.handlers[vm.handler_count].env;
-                        PUSH(call_result.exception_value);
-                        DISPATCH();
-                    } else {
-                        result = call_result;
-                        goto done;
+                if (callee.type == VAL_FUNCTION && callee.as.function->is_vm) {
+                    if (frame_count >= MAX_FRAMES) { result = vm_error("Stack overflow (max frames reached)."); goto done; }
+                    BytecodeFunction* bcf = callee.as.function->vm_function;
+                    if (arg_count != bcf->param_count) { result = vm_error("Arity mismatch."); goto done; }
+                    
+                    frame->ip = ip;
+                    frame = &frames[frame_count++];
+                    frame->chunk = &bcf->chunk;
+                    frame->ip = bcf->chunk.code;
+                    frame->ip_end = bcf->chunk.code + bcf->chunk.code_count;
+                    frame->slots = sp - arg_count;
+                    frame->closure = callee.as.function->closure;
+                    
+                    ip = frame->ip;
+                    ip_end = frame->ip_end;
+                    constants = frame->chunk->constants;
+                    DISPATCH();
+                } else {
+                    Value* args = sp - arg_count;
+                    SYNC_SP();
+                    ExecResult call_result = call_function_value(callee, arg_count, args, frame->closure);
+                    sp -= (arg_count + 1);
+                    if (call_result.is_throwing) {
+                        if (vm.handler_count > 0) {
+                            vm.handler_count--;
+                            ip = frame->chunk->code + vm.handlers[vm.handler_count].handler_ip_offset;
+                            sp = vm.stack + vm.handlers[vm.handler_count].stack_depth;
+                            frame->closure = vm.handlers[vm.handler_count].env;
+                            PUSH(call_result.exception_value);
+                            DISPATCH();
+                        } else {
+                            result = call_result;
+                            goto done;
+                        }
                     }
+                    PUSH(call_result.value);
+                    DISPATCH();
                 }
-                PUSH(call_result.value);
-                DISPATCH();
             }
             BC_OP_CALL_METHOD: {
                 uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(chunk, name_index);
+                VM_CHECK_CONST(frame->chunk, name_index);
                 int arg_count = (int)READ_U8();
                 if ((int)(sp - vm.stack) < arg_count + 1) { result = vm_error("VM stack underflow on method call."); goto done; }
                 Value object = *(sp - 1 - arg_count);
                 Value* args = sp - arg_count;
                 SYNC_SP();
-                ExecResult call_result = call_method_value(object, AS_STRING(constants[name_index]), arg_count, args, vm.current_env);
+                ExecResult call_result = call_method_value(object, AS_STRING(constants[name_index]), arg_count, args, frame->closure);
                 sp -= (arg_count + 1);
                 if (call_result.is_throwing) {
                     if (vm.handler_count > 0) {
                         vm.handler_count--;
-                        ip = code + vm.handlers[vm.handler_count].handler_ip_offset;
+                        ip = frame->chunk->code + vm.handlers[vm.handler_count].handler_ip_offset;
                         sp = vm.stack + vm.handlers[vm.handler_count].stack_depth;
-                        vm.current_env = vm.handlers[vm.handler_count].env;
+                        frame->closure = vm.handlers[vm.handler_count].env;
                         PUSH(call_result.exception_value);
                         DISPATCH();
                     } else {
@@ -779,23 +829,41 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             BC_OP_EXEC_AST_STMT: {
                 uint16_t stmt_index = READ_U16();
-                VM_CHECK_AST(chunk, stmt_index);
+                VM_CHECK_AST(frame->chunk, stmt_index);
                 SYNC_SP();
-                ExecResult ast_result = interpret(chunk->ast_stmts[stmt_index], vm.current_env);
+                ExecResult ast_result = interpret(chunk->ast_stmts[stmt_index], frame->closure);
                 if (ast_result.is_throwing) { result = ast_result; goto done; }
                 PUSH(ast_result.value);
                 DISPATCH();
             }
-            BC_OP_RETURN:
-                result = vm_normal(sp > vm.stack ? POP() : val_nil());
-                goto done;
+            BC_OP_RETURN: {
+                Value res = sp > vm.stack ? POP() : val_nil();
+                if (frame_count > 1) {
+                    // Restore caller state
+                    frame->ip = ip; // Save current IP before popping
+                    
+                    sp = frame->slots; // Reset stack to start of current frame
+                    frame_count--;
+                    frame = &frames[frame_count - 1];
+                    
+                    ip = frame->ip;
+                    ip_end = frame->ip_end;
+                    constants = frame->chunk->constants;
+                    
+                    PUSH(res);
+                    DISPATCH();
+                } else {
+                    result = vm_normal(res);
+                    goto done;
+                }
+            }
             BC_OP_PUSH_ENV:
                 SYNC_SP();
-                vm.current_env = env_create(vm.current_env);
+                frame->closure = env_create(frame->closure);
                 DISPATCH();
             BC_OP_POP_ENV:
-                if (vm.current_env == NULL || vm.current_env->parent == NULL) { result = vm_error("Cannot pop root scope."); goto done; }
-                vm.current_env = vm.current_env->parent;
+                if (frame->closure == NULL || frame->closure->parent == NULL) { result = vm_error("Cannot pop root scope."); goto done; }
+                frame->closure = frame->closure->parent;
                 DISPATCH();
             BC_OP_DUP: {
                 uint8_t distance = READ_U8();
@@ -816,28 +884,28 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 goto done;
             BC_OP_IMPORT: {
                 uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(chunk, name_index);
+                VM_CHECK_CONST(frame->chunk, name_index);
                 SYNC_SP();
                 char* module_name = AS_STRING(constants[name_index]);
-                import_all(vm.current_env, module_name);
+                import_all(frame->closure, module_name);
                 Value module_val = val_nil();
-                env_get(vm.current_env, module_name, (int)strlen(module_name), &module_val);
+                env_get(frame->closure, module_name, (int)strlen(module_name), &module_val);
                 PUSH(module_val);
                 DISPATCH();
             }
             BC_OP_CLASS: {
                 uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(chunk, name_index);
+                VM_CHECK_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
                 SYNC_SP();
                 ClassValue* class_val = class_create(AS_STRING(name), (int)strlen(AS_STRING(name)), NULL);
-                class_val->defining_env = vm.current_env;
+                class_val->defining_env = frame->closure;
                 PUSH(val_class(class_val));
                 DISPATCH();
             }
             BC_OP_METHOD: {
                 uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(chunk, name_index);
+                VM_CHECK_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
                 SYNC_SP();
                 Value method_val = POP();
@@ -862,7 +930,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 if (vm.handler_count >= VM_HANDLER_MAX) { result = vm_error("Too many try blocks."); goto done; }
                 vm.handlers[vm.handler_count].handler_ip_offset = (int)handler_offset;
                 vm.handlers[vm.handler_count].stack_depth = (int)(sp - vm.stack);
-                vm.handlers[vm.handler_count].env = vm.current_env;
+                vm.handlers[vm.handler_count].env = frame->closure;
                 vm.handler_count++;
                 DISPATCH();
             }
@@ -875,9 +943,9 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 else if (IS_NUMBER(exc_val)) { char buf[64]; snprintf(buf, sizeof(buf), "%.14g", AS_NUMBER(exc_val)); exc_val = val_exception(buf); }
                 if (vm.handler_count > 0) {
                     vm.handler_count--;
-                    ip = code + vm.handlers[vm.handler_count].handler_ip_offset;
+                    ip = frame->chunk->code + vm.handlers[vm.handler_count].handler_ip_offset;
                     sp = vm.stack + vm.handlers[vm.handler_count].stack_depth;
-                    vm.current_env = vm.handlers[vm.handler_count].env;
+                    frame->closure = vm.handlers[vm.handler_count].env;
                     PUSH(exc_val);
                     DISPATCH();
                 } else { result.value = val_nil(); result.is_throwing = 1; result.exception_value = exc_val; goto done; }
