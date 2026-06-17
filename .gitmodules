@@ -4,3 +4,6 @@
 [submodule "core/lib/android"]
 	path = core/lib/android
 	url = /root/Devel/sagelang_libs/android
+[submodule "core/lib/blockchain"]
+	path = core/lib/blockchain
+	url = /root/Devel/sagelang_libs/blockchain
