@@ -13,3 +13,6 @@
 [submodule "core/lib/crypto"]
 	path = core/lib/crypto
 	url = /root/Devel/sagelang_libs/crypto
+[submodule "core/lib/cuda"]
+	path = core/lib/cuda
+	url = /root/Devel/sagelang_libs/cuda
