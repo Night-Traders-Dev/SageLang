@@ -173,6 +173,7 @@ set(SAGE_CORE_SOURCES
     src/c/ml_backend.c
     src/c/heartbeat.c
     src/c/metal_vm.c
+    src/c/metal_rv64_vm.c
 )
 
 set(SAGE_VM_SOURCES
