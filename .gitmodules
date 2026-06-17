@@ -25,3 +25,6 @@
 [submodule "core/lib/graphics"]
 	path = core/lib/graphics
 	url = /root/Devel/sagelang_libs/graphics
+[submodule "core/lib/metal"]
+	path = core/lib/metal
+	url = /root/Devel/sagelang_libs/metal
