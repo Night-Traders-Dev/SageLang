@@ -436,6 +436,23 @@ static Value array_repeat_native(int argCount, Value* args) {
     return res;
 }
 
+// string_count(string, part) - return the number of non-overlapping occurrences of part in string
+static Value string_count_native(int argCount, Value* args) {
+    if (argCount != 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_nil();
+    const char* text = AS_STRING(args[0]);
+    const char* part = AS_STRING(args[1]);
+    size_t part_len = SAGE_STRING_LEN(args[1]);
+    if (part_len == 0) return val_number(0);
+
+    int count = 0;
+    const char* tmp = text;
+    while ((tmp = strstr(tmp, part)) != NULL) {
+        count++;
+        tmp += part_len;
+    }
+    return val_number((double)count);
+}
+
 // string_repeat(string, count) - return a new string with string repeated count times
 static Value string_repeat_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_NUMBER(args[1])) return val_nil();
@@ -2392,6 +2409,7 @@ void init_stdlib(Env* env) {
     env_define_const(env, "split", 5, val_native(split_native));
     env_define_const(env, "join", 4, val_native(join_native));
     env_define_const(env, "replace", 7, val_native(replace_native));
+    env_define_const(env, "string_count", 12, val_native(string_count_native));
     env_define_const(env, "string_repeat", 13, val_native(string_repeat_native));
 
 
