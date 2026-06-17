@@ -37,3 +37,6 @@
 [submodule "core/lib/os"]
 	path = core/lib/os
 	url = /root/Devel/sagelang_libs/os
+[submodule "core/lib/std"]
+	path = core/lib/std
+	url = /root/Devel/sagelang_libs/std
