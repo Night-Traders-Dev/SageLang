@@ -49,6 +49,7 @@ proc _handle_escape(esc):
 
 # ============================================================================
 # cJSON node class (mirrors the C struct)
+# Optimization: Added last_child for O(1) append and count for O(1) size.
 # ============================================================================
 
 class cJSON:
@@ -56,6 +57,8 @@ class cJSON:
         self.next = nil
         self.prev = nil
         self.child = nil
+        self.last_child = nil # O(1) append support
+        self.count = 0        # O(1) size support
         self.type = cJSON_Invalid
         self.valuestring = nil
         self.valueint = 0
@@ -232,11 +235,13 @@ class _Parser:
         self.skip_ws()
         if self.pos < self.slen and self.src[self.pos] == "]":
             self.pos = self.pos + 1
+            node.count = 0
             return node
         let first = self.parse_value()
         if first == nil:
             return nil
         node.child = first
+        node.count = 1
         let current = first
         while true:
             self.skip_ws()
@@ -244,6 +249,7 @@ class _Parser:
                 return nil
             if self.src[self.pos] == "]":
                 self.pos = self.pos + 1
+                node.last_child = current
                 return node
             if self.src[self.pos] != ",":
                 return nil
@@ -254,6 +260,7 @@ class _Parser:
             current.next = next_item
             next_item.prev = current
             current = next_item
+            node.count = node.count + 1
 
     proc parse_object():
         self.pos = self.pos + 1
@@ -262,11 +269,13 @@ class _Parser:
         self.skip_ws()
         if self.pos < self.slen and self.src[self.pos] == "}":
             self.pos = self.pos + 1
+            node.count = 0
             return node
         let first = self.parse_kv()
         if first == nil:
             return nil
         node.child = first
+        node.count = 1
         let current = first
         while true:
             self.skip_ws()
@@ -274,6 +283,7 @@ class _Parser:
                 return nil
             if self.src[self.pos] == "}":
                 self.pos = self.pos + 1
+                node.last_child = current
                 return node
             if self.src[self.pos] != ",":
                 return nil
@@ -284,6 +294,7 @@ class _Parser:
             current.next = next_kv
             next_kv.prev = current
             current = next_kv
+            node.count = node.count + 1
 
     proc parse_kv():
         self.skip_ws()
@@ -545,16 +556,29 @@ proc cJSON_CreateStringArray(strings):
 # Query API
 # ============================================================================
 
+# Reconstruct metadata (last_child, count) for legacy or corrupted nodes.
+proc _cJSON_EnsureMetadata(node):
+    if node == nil: return 0
+    if node.count == 0 and node.child != nil:
+        let last = node.child
+        let n = 1
+        while last.next != nil:
+            last = last.next
+            n = n + 1
+        node.last_child = last
+        node.count = n
+    elif node.child == nil:
+        node.last_child = nil
+        node.count = 0
+    return node.count
+
 # cJSON_GetArraySize(array) -> int
+# Optimization: Returns cached O(1) count.
 proc cJSON_GetArraySize(array):
     if array == nil:
         return 0
-    let count = 0
-    let child = array.child
-    while child != nil:
-        count = count + 1
-        child = child.next
-    return count
+    _cJSON_EnsureMetadata(array)
+    return array.count
 
 # cJSON_GetArrayItem(array, index) -> cJSON node or nil
 proc cJSON_GetArrayItem(array, index):
@@ -691,32 +715,42 @@ proc cJSON_IsRaw(item):
 # ============================================================================
 
 # cJSON_AddItemToArray(array, item) -> bool
+# Optimization: Uses last_child for O(1) append and maintains O(1) count.
 proc cJSON_AddItemToArray(array, item):
     if array == nil or item == nil:
         return false
     if array.child == nil:
         array.child = item
+        array.last_child = item
+        array.count = 1
         item.prev = nil
         item.next = nil
         return true
-    let last = array.child
-    while last.next != nil:
-        last = last.next
+
+    _cJSON_EnsureMetadata(array)
+
+    let last = array.last_child
     last.next = item
     item.prev = last
     item.next = nil
+    array.last_child = item
+    array.count = array.count + 1
     return true
 
 # cJSON_InsertItemInArray(array, which, newitem) -> bool
 proc cJSON_InsertItemInArray(array, which, newitem):
     if array == nil or newitem == nil:
         return false
+    _cJSON_EnsureMetadata(array)
     if which == 0:
         newitem.next = array.child
         if array.child != nil:
             array.child.prev = newitem
+        else:
+            array.last_child = newitem
         array.child = newitem
         newitem.prev = nil
+        array.count = array.count + 1
         return true
     let child = array.child
     let i = 0
@@ -728,8 +762,11 @@ proc cJSON_InsertItemInArray(array, which, newitem):
     newitem.next = child.next
     if child.next != nil:
         child.next.prev = newitem
+    else:
+        array.last_child = newitem
     child.next = newitem
     newitem.prev = child
+    array.count = array.count + 1
     return true
 
 # cJSON_DetachItemFromArray(array, which) -> detached cJSON node or nil
@@ -833,14 +870,20 @@ proc cJSON_ReplaceItemInObjectCaseSensitive(object, name, newitem):
 proc cJSON_DetachItemViaPointer(parent, item):
     if parent == nil or item == nil:
         return nil
+    _cJSON_EnsureMetadata(parent)
     if item.prev == nil:
         parent.child = item.next
+    if item.next == nil:
+        parent.last_child = item.prev
+
     if item.prev != nil:
         item.prev.next = item.next
     if item.next != nil:
         item.next.prev = item.prev
+
     item.prev = nil
     item.next = nil
+    parent.count = parent.count - 1
     return item
 
 # cJSON_ReplaceItemViaPointer(parent, item, replacement) -> bool
@@ -849,14 +892,19 @@ proc cJSON_DetachItemViaPointer(parent, item):
 proc cJSON_ReplaceItemViaPointer(parent, item, replacement):
     if parent == nil or item == nil or replacement == nil:
         return false
+    _cJSON_EnsureMetadata(parent)
     replacement.next = item.next
     replacement.prev = item.prev
     if replacement.next != nil:
         replacement.next.prev = replacement
+    else:
+        parent.last_child = replacement
+
     if item.prev == nil:
         parent.child = replacement
-    if replacement.prev != nil:
+    else:
         replacement.prev.next = replacement
+
     replacement.string = item.string
     return true
 
@@ -913,6 +961,7 @@ proc cJSON_Duplicate(item, recurse):
         let src_child = item.child
         let prev_copy = nil
         let first_copy = nil
+        let copy_count = 0
         while src_child != nil:
             let child_copy = cJSON_Duplicate(src_child, true)
             if first_copy == nil:
@@ -922,7 +971,10 @@ proc cJSON_Duplicate(item, recurse):
                 child_copy.prev = prev_copy
             prev_copy = child_copy
             src_child = src_child.next
+            copy_count = copy_count + 1
         node.child = first_copy
+        node.last_child = prev_copy
+        node.count = copy_count
     return node
 
 # cJSON_Compare(a, b, case_sensitive) -> bool
@@ -1009,7 +1061,7 @@ proc cJSON_SetNumberHelper(object, number):
 
 # cJSON_Version() -> string
 proc cJSON_Version():
-    return "3-sage"
+    return "1.7.18-sage"
 
 # ============================================================================
 # Convenience: Native Sage value conversion
@@ -1071,6 +1123,8 @@ proc cJSON_FromSage(val):
                 fs_item.prev = fs_last
             fs_last = fs_item
             fs_i = fs_i + 1
+        fs_arr.last_child = fs_last
+        fs_arr.count = len(val)
         return fs_arr
     if t == "dict":
         let fs_obj = cJSON_CreateObject()
@@ -1088,5 +1142,7 @@ proc cJSON_FromSage(val):
                 fs_item.prev = fs_last_kv
             fs_last_kv = fs_item
             fs_idx = fs_idx + 1
+        fs_obj.last_child = fs_last_kv
+        fs_obj.count = len(fs_keys)
         return fs_obj
     return cJSON_CreateNull()
