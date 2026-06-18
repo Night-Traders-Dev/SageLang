@@ -43,3 +43,6 @@
 [submodule "core/lib/transpiler"]
 	path = core/lib/transpiler
 	url = https://github.com/Night-Traders-Dev/sagelang-lib-transpiler
+[submodule "core/lib/mips"]
+	path = core/lib/mips
+	url = https://github.com/Night-Traders-Dev/sagelang-lib-mips
