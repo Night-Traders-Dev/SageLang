@@ -1,8 +1,11 @@
+#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 // Validate a path contains no shell metacharacters (prevents injection via system())
 static int is_safe_path(const char* path) {
@@ -10,8 +13,9 @@ static int is_safe_path(const char* path) {
     if (path[0] == '-') return 0;
     for (const char* p = path; *p; p++) {
         // Allow alphanumeric and strictly safe filename characters
+        // Note: Space is allowed here but must be handled carefully (quoted or via execvp)
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~') {
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ') {
             return 0;
         }
     }
@@ -36,6 +40,10 @@ uint8_t hex_to_byte(const char* hex) {
     return (uint8_t)b;
 }
 
+#define MAX_CONSTS 1024
+#define MAX_CHUNKS 1024
+#define MAX_LOCALS 256
+
 typedef struct {
     int type; // 1=num, 3=str
     double num;
@@ -43,13 +51,14 @@ typedef struct {
     int str_len;
 } Const;
 
-Const global_consts[1024];
+Const global_consts[MAX_CONSTS];
 int global_const_count = 0;
 
 int add_const_num(double d) {
     for (int i = 0; i < global_const_count; i++) {
         if (global_consts[i].type == 1 && global_consts[i].num == d) return i;
     }
+    if (global_const_count >= MAX_CONSTS) return -1;
     global_consts[global_const_count].type = 1;
     global_consts[global_const_count].num = d;
     return global_const_count++;
@@ -59,9 +68,12 @@ int add_const_str(const char* s, int len) {
     for (int i = 0; i < global_const_count; i++) {
         if (global_consts[i].type == 3 && global_consts[i].str_len == len && memcmp(global_consts[i].str, s, len) == 0) return i;
     }
+    if (global_const_count >= MAX_CONSTS) return -1;
     global_consts[global_const_count].type = 3;
     global_consts[global_const_count].str = malloc(len + 1);
+    if (!global_consts[global_const_count].str) return -1;
     memcpy(global_consts[global_const_count].str, s, len);
+    global_consts[global_const_count].str[len] = '\0';
     global_consts[global_const_count].str_len = len;
     return global_const_count++;
 }
@@ -77,16 +89,44 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    char cmd[1024];
-    snprintf(cmd, sizeof(cmd), "./sage --emit-vm %s -o .tmp.svm", argv[1]);
-    if (system(cmd) != 0) return 1;
+    char tmp_svm[] = "/tmp/sgvm_XXXXXX.svm";
+    int fd = mkstemps(tmp_svm, 4);
+    if (fd < 0) {
+        perror("mkstemps");
+        return 1;
+    }
+    close(fd);
 
-    FILE* in = fopen(".tmp.svm", "r");
-    if (!in) return 1;
+    int ok = 0;
+    pid_t pid = fork();
+    if (pid == 0) {
+        char* sage_args[] = {"./sage", "--emit-vm", argv[1], "-o", tmp_svm, NULL};
+        execvp(sage_args[0], sage_args);
+        _exit(127);
+    } else if (pid > 0) {
+        int status;
+        waitpid(pid, &status, 0);
+        ok = (WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    }
+
+    if (!ok) {
+        remove(tmp_svm);
+        return 1;
+    }
+
+    FILE* in = fopen(tmp_svm, "r");
+    if (!in) {
+        remove(tmp_svm);
+        return 1;
+    }
 
     char line[1024];
     int chunk_count = 0;
-    int local_to_global[1024][256];
+    int (*local_to_global)[MAX_LOCALS] = calloc(MAX_CHUNKS, sizeof(*local_to_global));
+    if (!local_to_global) {
+        fclose(in);
+        return 1;
+    }
     int current_chunk = -1;
 
     while (fgets(line, sizeof(line), in)) {
@@ -94,17 +134,27 @@ int main(int argc, char** argv) {
         else if (strcmp(line, "chunk\n") == 0) current_chunk++;
         else if (strncmp(line, "constants ", 10) == 0) {
             int count = atoi(line + 10);
+            if (current_chunk < 0 || current_chunk >= MAX_CHUNKS) continue;
             for (int i = 0; i < count; i++) {
                 if (!fgets(line, sizeof(line), in)) break;
+                if (i >= MAX_LOCALS) continue;
                 if (strncmp(line, "number ", 7) == 0) {
                     local_to_global[current_chunk][i] = add_const_num(atof(line + 7));
                 } else if (strncmp(line, "string ", 7) == 0) {
                     int len = atoi(line + 7);
                     if (!fgets(line, sizeof(line), in)) break;
-                    char* buf = malloc(len);
-                    for (int j = 0; j < len * 2; j += 2) buf[j / 2] = hex_to_byte(line + j);
-                    local_to_global[current_chunk][i] = add_const_str(buf, len);
-                    free(buf);
+                    if (len > 0 && (size_t)len * 2 <= strlen(line)) {
+                        char* buf = malloc(len);
+                        if (buf) {
+                            for (int j = 0; j < len * 2; j += 2) buf[j / 2] = hex_to_byte(line + j);
+                            local_to_global[current_chunk][i] = add_const_str(buf, len);
+                            free(buf);
+                        } else {
+                            local_to_global[current_chunk][i] = -1;
+                        }
+                    } else {
+                        local_to_global[current_chunk][i] = -1;
+                    }
                 }
             }
         }
@@ -140,7 +190,9 @@ int main(int argc, char** argv) {
                 // List of opcodes that take operands
                 if (op == 0 || op == 5 || op == 6 || op == 7) {
                     int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                    int g_idx = local_to_global[current_chunk][local_idx];
+                    int g_idx = (current_chunk >= 0 && current_chunk < MAX_CHUNKS && local_idx >= 0 && local_idx < MAX_LOCALS)
+                                ? local_to_global[current_chunk][local_idx] : -1;
+                    if (g_idx < 0) g_idx = 0; // Fallback for invalid constants
                     fputc((g_idx >> 8) & 0xFF, out);
                     fputc(g_idx & 0xFF, out);
                     j += 4;
@@ -170,7 +222,8 @@ int main(int argc, char** argv) {
     }
 
     fclose(in); fclose(out);
-    remove(".tmp.svm");
+    free(local_to_global);
+    remove(tmp_svm);
     printf("Compiled %s to %s\n", argv[1], argv[2]);
     return 0;
 }
