@@ -22,7 +22,7 @@ import ml.gpu_accel
 let _compute = gpu_accel.create("auto")
 
 print "================================================================"
-print "  SageLLM Full Training Pipeline v3.8.2"
+print "  SageLLM Full Training Pipeline v3.8.3"
 print "  Programming Language Theory + Sage Codebase LoRA"
 print "================================================================"
 print ""

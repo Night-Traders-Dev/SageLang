@@ -4,7 +4,7 @@
 
 ![SageLang Logo](core/assets/SageLang.png)
 
-Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.8.2, Sage features One-line Install System (OIS) integration, native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
+Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.8.3, Sage features One-line Install System (OIS) integration, native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
 
 ## Install (One line installer)
 
@@ -488,7 +488,7 @@ Advanced toolkit for working with LLMs, including quantization and training.
 | **TurboQuant** | `import llm.turboquant` | Near-optimal 3-bit KV cache and weight quantization (ICLR 2026) |
 | **Transformer** | `import llm.transformer` | LayerNorm/RMSNorm, attention blocks, and model assembly |
 | **Generate** | `import llm.generate` | Greedy, top-k/p, and beam search text generation |
-| **GGUF** | `import llm.gguf` | GGUF v3.8.2 export for Ollama and llama.cpp compatibility |
+| **GGUF** | `import llm.gguf` | GGUF v3.8.3 export for Ollama and llama.cpp compatibility |
 | **Evolve** | `import llm.evolve` | Self-evolving neural architectures with progressive growth |
 
 ### JSON Library (cJSON Port)
@@ -547,8 +547,8 @@ cd src/sage && ../../sage sage.sage program.sage
 - **Parser** (`parser.sage`, ~700 lines) - Recursive descent with 12 precedence levels
 - **Interpreter** (`interpreter.sage`, ~1050 lines) - Tree-walking evaluator with dict-based values
 - **Bootstrap coverage**: arithmetic, variables, control flow, functions, recursion, closures, classes, inheritance, arrays, dicts, strings, try/catch, break/continue, bitwise operators (~), module imports, loop iteration limits
-- **Module imports**: `import X`, `import X as Y`, `from X import a, b` with module caching and multi-path search (`./`, `lib/`). Supports `__init__.sage` for directory-based packages (v3.8.2+).
-- **Soft Keywords**: `match`, `init`, `enum`, `struct`, and `trait` are now "soft keywords" and can be used as variable names in expressions and assignments (v3.8.2+)
+- **Module imports**: `import X`, `import X as Y`, `from X import a, b` with module caching and multi-path search (`./`, `lib/`). Supports `__init__.sage` for directory-based packages (v3.8.3+).
+- **Soft Keywords**: `match`, `init`, `enum`, `struct`, and `trait` are now "soft keywords" and can be used as variable names in expressions and assignments (v3.8.3+)
 - **LLVM constant imports (C backend + self-hosted LLVM backend)**: `from X import Y` now resolves foldable top-level `let` constants across modules at compile time (with alias support via `from X import Y as Z`)
 - **Self-hosted test suites**: lexer, parser, interpreter, bootstrap, formatter, linter, value, optimization passes, stdlib, module loading, codegen, compiler, LSP, and CLI coverage
 - GC must be disabled for self-hosted code (`gc_disable()`)
@@ -662,7 +662,7 @@ The standard library is organized into subdirectories with dotted import paths:
 - **`engram`**: Persistent neural memory (working/episodic/semantic/procedural), consolidation, decay, LLM context generation
 - **`rag`**: Retrieval-augmented generation (document chunking, keyword retrieval, context assembly, extractive summarization)
 - **`dpo`**: Direct Preference Optimization (DPO/ORPO alignment, preference pairs, reward models, Sage code preferences)
-- **`gguf`**: GGUF v3.8.2 export for Ollama and llama.cpp (metadata, Modelfile, quantization, conversion scripts)
+- **`gguf`**: GGUF v3.8.3 export for Ollama and llama.cpp (metadata, Modelfile, quantization, conversion scripts)
 - **`gguf_import`**: Import GGUF models from Ollama/llama.cpp into SageGPT format (Q4_0/Q8_0 dequantization, llama/gpt2/mistral/phi/gemma/qwen2 architectures) — `lib/llm/gguf_import.sage`
 - **`turboquant`**: TurboQuant near-optimal vector quantization (ICLR 2026, Google Research) — two-stage PolarQuant + QJL pipeline for 3-bit KV cache compression with 6x memory reduction and zero accuracy loss — `lib/llm/turboquant.sage`
 - **`autoresearch`**: Karpathy-style autonomous research agent. Ratchet loop: propose → train → evaluate → accept/reject. Runs 100+ experiments overnight. Research journal, multi-agent collaboration, built-in mutation strategies.
@@ -1241,7 +1241,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
-- **Current Version**: v3.8.2
+- **Current Version**: v3.8.3
 - **Spec Version**: 2.0 (see `SPEC_VERSION` for details)
 
 ## 💾 Project Structure

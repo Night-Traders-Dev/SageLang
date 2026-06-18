@@ -1,6 +1,6 @@
 gc_disable()
 # ============================================================================
-# SageLLM Build Pipeline v3.8.2 — Medium Model, High Context, All Features
+# SageLLM Build Pipeline v3.8.3 — Medium Model, High Context, All Features
 #
 # Builds, trains, and packages the SageLLM chatbot using every available
 # tool, technique, and feature in the Sage ecosystem.
@@ -65,7 +65,7 @@ proc divider():
     print "----------------------------------------------------------------"
 
 separator()
-print "  SageLLM Build Pipeline v3.8.2"
+print "  SageLLM Build Pipeline v3.8.3"
 print "  Medium Model | 32K Context | All Features"
 print "  SwiGLU + RoPE + RMSNorm + LoRA + DPO + RAG + Engram"
 separator()
@@ -419,7 +419,7 @@ memory["working_capacity"] = 30
 memory["max_episodic"] = 10000
 memory["max_semantic"] = 5000
 
-let all_facts = ["Sage is an indentation-based systems programming language built in C with self-hosted compiler", "127+ library modules across 11 subdirectories: graphics, os, net, crypto, ml, cuda, std, llm, agent, chat", "Concurrent tri-color mark-sweep GC with SATB write barriers and sub-millisecond STW pauses", "3 compiler backends: C codegen (--compile), LLVM IR (--compile-llvm), native assembly (--compile-native)", "Dotted imports: import os.fat resolves to lib/os/fat.sage", "0 is TRUTHY - only false and nil are falsy", "No escape sequences - use chr(10) for newline, chr(34) for double-quote", "elif chains with 5+ branches malfunction - use if/continue instead", "Class methods cannot see module-level let vars", "match is a reserved keyword", "Lexer produces INDENT/DEDENT tokens", "Parser is recursive descent in compiler.c", "AST: Expr and Stmt nodes in ast.h", "Tree-walking interpreter (interpreter.c)", "Values: numbers, strings, bools, nil, arrays, dicts, closures", "GC 4 phases: root scan, concurrent mark, remark, concurrent sweep", "Write barriers in env.c and value.c", "gc_disable() for heavy-allocation modules", "Native ML: matmul, softmax, cross_entropy, adam_update, rms_norm, silu, gelu at 12+ GFLOPS", "LLM library: 15 modules for building language models", "SageGPT: SwiGLU + RoPE + RMSNorm (Llama-style)", "LoRA for fine-tuning, DPO for alignment", "Engram: 4-tier memory with consolidation and decay", "RAG with keyword extraction and chunking", "GGUF export/import for Ollama and llama.cpp", "Quantization: int8/int4 with per-group scaling", "Agent ReAct loop: observe, think, act, reflect", "Supervisor-Worker architecture", "Critic/validator: rule-based + LLM critics", "Grammar-constrained decoding", "Tree of Thoughts: MCTS-style search", "Semantic routing: fast keyword dispatch", "SFT trace recording", "Schema-validated tool calls", "Task planner: dependency DAG", "6 personas: SageDev, CodeReviewer, Teacher, Debugger, Architect, Assistant", "Sessions: multi-session with history export", "Vulkan engine: 24 modules, PBR, deferred, SSAO, SSR, TAA", "OpenGL 4.5 backend", "OS dev: 15 modules (FAT, ELF, PE, MBR, GPT, PCI, ACPI, UEFI, paging, IDT)", "Networking: socket, tcp, http, ssl + 8 lib/net modules", "Crypto: SHA-256, HMAC, Base64, RC4, PBKDF2 (6 modules)", "Std: regex, datetime, log, argparse, fmt, testing, enum, trait, channel (23 modules)", "Build: make or cmake. Version 3.8.2", "Tests: 1567+ self-hosted, 144 interpreter, 28 compiler", "Library search: CWD, ./lib, installed, SAGE_PATH, exe-relative", "CUDA: device, memory, kernel, stream", "ML: tensor, nn, optim, loss, data, debug, viz, monitor", "Graphics: scene, gltf 2.0, material, asset cache, frame graph", "GGUF import: convert Ollama/llama.cpp models to SageGPT format"]
+let all_facts = ["Sage is an indentation-based systems programming language built in C with self-hosted compiler", "127+ library modules across 11 subdirectories: graphics, os, net, crypto, ml, cuda, std, llm, agent, chat", "Concurrent tri-color mark-sweep GC with SATB write barriers and sub-millisecond STW pauses", "3 compiler backends: C codegen (--compile), LLVM IR (--compile-llvm), native assembly (--compile-native)", "Dotted imports: import os.fat resolves to lib/os/fat.sage", "0 is TRUTHY - only false and nil are falsy", "No escape sequences - use chr(10) for newline, chr(34) for double-quote", "elif chains with 5+ branches malfunction - use if/continue instead", "Class methods cannot see module-level let vars", "match is a reserved keyword", "Lexer produces INDENT/DEDENT tokens", "Parser is recursive descent in compiler.c", "AST: Expr and Stmt nodes in ast.h", "Tree-walking interpreter (interpreter.c)", "Values: numbers, strings, bools, nil, arrays, dicts, closures", "GC 4 phases: root scan, concurrent mark, remark, concurrent sweep", "Write barriers in env.c and value.c", "gc_disable() for heavy-allocation modules", "Native ML: matmul, softmax, cross_entropy, adam_update, rms_norm, silu, gelu at 12+ GFLOPS", "LLM library: 15 modules for building language models", "SageGPT: SwiGLU + RoPE + RMSNorm (Llama-style)", "LoRA for fine-tuning, DPO for alignment", "Engram: 4-tier memory with consolidation and decay", "RAG with keyword extraction and chunking", "GGUF export/import for Ollama and llama.cpp", "Quantization: int8/int4 with per-group scaling", "Agent ReAct loop: observe, think, act, reflect", "Supervisor-Worker architecture", "Critic/validator: rule-based + LLM critics", "Grammar-constrained decoding", "Tree of Thoughts: MCTS-style search", "Semantic routing: fast keyword dispatch", "SFT trace recording", "Schema-validated tool calls", "Task planner: dependency DAG", "6 personas: SageDev, CodeReviewer, Teacher, Debugger, Architect, Assistant", "Sessions: multi-session with history export", "Vulkan engine: 24 modules, PBR, deferred, SSAO, SSR, TAA", "OpenGL 4.5 backend", "OS dev: 15 modules (FAT, ELF, PE, MBR, GPT, PCI, ACPI, UEFI, paging, IDT)", "Networking: socket, tcp, http, ssl + 8 lib/net modules", "Crypto: SHA-256, HMAC, Base64, RC4, PBKDF2 (6 modules)", "Std: regex, datetime, log, argparse, fmt, testing, enum, trait, channel (23 modules)", "Build: make or cmake. Version 3.8.3", "Tests: 1567+ self-hosted, 144 interpreter, 28 compiler", "Library search: CWD, ./lib, installed, SAGE_PATH, exe-relative", "CUDA: device, memory, kernel, stream", "ML: tensor, nn, optim, loss, data, debug, viz, monitor", "Graphics: scene, gltf 2.0, material, asset cache, frame graph", "GGUF import: convert Ollama/llama.cpp models to SageGPT format"]
 
 for i in range(len(all_facts)):
     engram.store_semantic(memory, all_facts[i], 1.0)
@@ -471,7 +471,7 @@ proc emit_all():
     log("BUILD", "Generated " + out_path + " (" + str(len(S)) + " lines)")
 
 emit("gc_disable()")
-emit("# SageLLM Chatbot v3.8.2 - Self-contained (compiles with --compile-llvm)")
+emit("# SageLLM Chatbot v3.8.3 - Self-contained (compiles with --compile-llvm)")
 emit("# Auto-generated by build_sagellm.sage")
 emit("# Run: sage models/chatbots/sagellm_chatbot.sage")
 emit("# Compile: sage --compile-llvm models/chatbots/sagellm_chatbot.sage -o sagellm_chat")
@@ -632,7 +632,7 @@ emit("")
 emit("let persona_name = " + DQ + "SageDev" + DQ)
 emit("")
 emit("print " + DQ + "============================================" + DQ)
-emit("print " + DQ + "  SageLLM Chatbot v3.8.2 (Medium | 16K)" + DQ)
+emit("print " + DQ + "  SageLLM Chatbot v3.8.3 (Medium | 16K)" + DQ)
 emit("print " + DQ + "  SageGPT: SwiGLU + RoPE + RMSNorm" + DQ)
 emit("print " + DQ + "  CoT + Memory + 20 Knowledge Domains" + DQ)
 emit("print " + DQ + "============================================" + DQ)
