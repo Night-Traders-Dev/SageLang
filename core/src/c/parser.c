@@ -1540,6 +1540,7 @@ static Stmt* declaration() {
     // Collect doc comments before declarations
     if (check(TOKEN_DOC_COMMENT)) {
         collect_doc_comment();
+        while (match(TOKEN_NEWLINE));
     }
 
     if (check(TOKEN_DEDENT) || check(TOKEN_EOF)) {
