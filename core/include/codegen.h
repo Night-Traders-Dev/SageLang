@@ -12,6 +12,7 @@ typedef enum {
     CODEGEN_TARGET_X86_64,
     CODEGEN_TARGET_AARCH64,
     CODEGEN_TARGET_RV64,
+    CODEGEN_TARGET_MIPS,
 } CodegenTarget;
 
 typedef enum {
@@ -149,6 +150,7 @@ VInst* isel_compile(const char* source, const char* input_path, int opt_level, i
 void codegen_x86_64_emit(VInst* program, CodeBuffer* buf);
 void codegen_aarch64_emit(VInst* program, CodeBuffer* buf);
 void codegen_rv64_emit(VInst* program, CodeBuffer* buf);
+void codegen_mips_emit(VInst* program, CodeBuffer* buf);
 
 // ============================================================================
 // ELF object file writer

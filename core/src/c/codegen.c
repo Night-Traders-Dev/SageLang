@@ -915,6 +915,8 @@ CodegenTarget codegen_detect_host_target(void) {
     return CODEGEN_TARGET_AARCH64;
 #elif defined(__riscv) && (__riscv_xlen == 64)
     return CODEGEN_TARGET_RV64;
+#elif defined(__mips__) || defined(__mips)
+    return CODEGEN_TARGET_MIPS;
 #else
     return CODEGEN_TARGET_X86_64;  // default fallback
 #endif
@@ -925,6 +927,7 @@ static const char* target_name(CodegenTarget target) {
         case CODEGEN_TARGET_X86_64: return "x86_64";
         case CODEGEN_TARGET_AARCH64: return "aarch64";
         case CODEGEN_TARGET_RV64: return "rv64";
+        case CODEGEN_TARGET_MIPS: return "mips";
     }
     return "unknown";
 }
@@ -974,6 +977,10 @@ static void emit_asm_header(FILE* out, CodegenTarget target, CodegenProfile prof
             fprintf(out, ".globl %s\n\n", entry_symbol);
             break;
         case CODEGEN_TARGET_RV64:
+            fprintf(out, ".text\n");
+            fprintf(out, ".globl %s\n\n", entry_symbol);
+            break;
+        case CODEGEN_TARGET_MIPS:
             fprintf(out, ".text\n");
             fprintf(out, ".globl %s\n\n", entry_symbol);
             break;
@@ -1308,6 +1315,174 @@ static void emit_asm_vinst_rv64(FILE* out, VInst* v) {
     }
 }
 
+static void emit_asm_vinst_mips(FILE* out, VInst* v) {
+    switch (v->kind) {
+        case VINST_LOAD_IMM:
+            fprintf(out, "  # v%d = number %f\n", v->dest, v->imm_number);
+            fprintf(out, "  addiu $a0, $sp, %d\n", v->dest * 16 + 32);
+            fprintf(out, "  lui $t0, %%hi(.LN%d)\n", v->src1);
+            fprintf(out, "  lw $a1, %%lo(.LN%d)($t0)\n", v->src1);
+            fprintf(out, "  addiu $t0, $t0, %%lo(.LN%d)\n", v->src1);
+            fprintf(out, "  lw $a2, 4($t0)\n");
+            fprintf(out, "  jal sage_rt_number\n");
+            fprintf(out, "  nop\n");
+            break;
+        case VINST_PRINT:
+            fprintf(out, "  # print v%d\n", v->src1);
+            fprintf(out, "  lw $a0, %d($sp)\n", v->src1 * 16 + 32);
+            fprintf(out, "  lw $a1, %d($sp)\n", v->src1 * 16 + 32 + 4);
+            fprintf(out, "  lw $a2, %d($sp)\n", v->src1 * 16 + 32 + 8);
+            fprintf(out, "  lw $a3, %d($sp)\n", v->src1 * 16 + 32 + 12);
+            fprintf(out, "  jal sage_rt_print\n");
+            fprintf(out, "  nop\n");
+            break;
+        case VINST_ADD:
+        case VINST_SUB:
+        case VINST_MUL:
+        case VINST_DIV: {
+            const char* fn = "sage_rt_add";
+            if (v->kind == VINST_SUB) fn = "sage_rt_sub";
+            else if (v->kind == VINST_MUL) fn = "sage_rt_mul";
+            else if (v->kind == VINST_DIV) fn = "sage_rt_div";
+            fprintf(out, "  # v%d = v%d op v%d\n", v->dest, v->src1, v->src2);
+            fprintf(out, "  addiu $a0, $sp, %d\n", v->dest * 16 + 32);
+            fprintf(out, "  lw $a1, %d($sp)\n", v->src1 * 16 + 32);
+            fprintf(out, "  lw $a2, %d($sp)\n", v->src1 * 16 + 32 + 4);
+            fprintf(out, "  lw $a3, %d($sp)\n", v->src1 * 16 + 32 + 8);
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src1 * 16 + 32 + 12);
+            fprintf(out, "  sw $t0, 16($sp)\n");
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src2 * 16 + 32);
+            fprintf(out, "  sw $t0, 20($sp)\n");
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src2 * 16 + 32 + 4);
+            fprintf(out, "  sw $t0, 24($sp)\n");
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src2 * 16 + 32 + 8);
+            fprintf(out, "  sw $t0, 28($sp)\n");
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src2 * 16 + 32 + 12);
+            fprintf(out, "  sw $t0, 32($sp)\n");
+            fprintf(out, "  jal %s\n", fn);
+            fprintf(out, "  nop\n");
+            break;
+        }
+        case VINST_EQ:
+        case VINST_NEQ:
+        case VINST_LT:
+        case VINST_GT:
+        case VINST_LTE:
+        case VINST_GTE: {
+            const char* fn = "sage_rt_eq";
+            if (v->kind == VINST_NEQ) fn = "sage_rt_neq";
+            else if (v->kind == VINST_LT) fn = "sage_rt_lt";
+            else if (v->kind == VINST_GT) fn = "sage_rt_gt";
+            else if (v->kind == VINST_LTE) fn = "sage_rt_lte";
+            else if (v->kind == VINST_GTE) fn = "sage_rt_gte";
+            fprintf(out, "  # v%d = v%d comparison v%d\n", v->dest, v->src1, v->src2);
+            fprintf(out, "  addiu $a0, $sp, %d\n", v->dest * 16 + 32);
+            fprintf(out, "  lw $a1, %d($sp)\n", v->src1 * 16 + 32);
+            fprintf(out, "  lw $a2, %d($sp)\n", v->src1 * 16 + 32 + 4);
+            fprintf(out, "  lw $a3, %d($sp)\n", v->src1 * 16 + 32 + 8);
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src1 * 16 + 32 + 12);
+            fprintf(out, "  sw $t0, 16($sp)\n");
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src2 * 16 + 32);
+            fprintf(out, "  sw $t0, 20($sp)\n");
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src2 * 16 + 32 + 4);
+            fprintf(out, "  sw $t0, 24($sp)\n");
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src2 * 16 + 32 + 8);
+            fprintf(out, "  sw $t0, 28($sp)\n");
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src2 * 16 + 32 + 12);
+            fprintf(out, "  sw $t0, 32($sp)\n");
+            fprintf(out, "  jal %s\n", fn);
+            fprintf(out, "  nop\n");
+            break;
+        }
+        case VINST_BRANCH:
+            fprintf(out, "  # branch v%d ? %s : %s\n", v->src1, v->label, v->label_false);
+            fprintf(out, "  lw $a0, %d($sp)\n", v->src1 * 16 + 32);
+            fprintf(out, "  lw $a1, %d($sp)\n", v->src1 * 16 + 32 + 4);
+            fprintf(out, "  lw $a2, %d($sp)\n", v->src1 * 16 + 32 + 8);
+            fprintf(out, "  lw $a3, %d($sp)\n", v->src1 * 16 + 32 + 12);
+            fprintf(out, "  jal sage_rt_get_bool\n");
+            fprintf(out, "  nop\n");
+            fprintf(out, "  bnez $v0, %s\n", v->label);
+            fprintf(out, "  nop\n");
+            fprintf(out, "  j %s\n", v->label_false);
+            fprintf(out, "  nop\n");
+            break;
+        case VINST_LABEL:
+            fprintf(out, "%s:\n", v->label);
+            break;
+        case VINST_JUMP:
+            fprintf(out, "  j %s\n", v->label);
+            fprintf(out, "  nop\n");
+            break;
+        case VINST_RET:
+            fprintf(out, "  # return v%d\n", v->src1);
+            fprintf(out, "  lw $t1, 244($sp)\n");
+            fprintf(out, "  lw $t2, %d($sp)\n", v->src1 * 16 + 32);
+            fprintf(out, "  sw $t2, 0($t1)\n");
+            fprintf(out, "  lw $t2, %d($sp)\n", v->src1 * 16 + 32 + 4);
+            fprintf(out, "  sw $t2, 4($t1)\n");
+            fprintf(out, "  lw $t2, %d($sp)\n", v->src1 * 16 + 32 + 8);
+            fprintf(out, "  sw $t2, 8($t1)\n");
+            fprintf(out, "  lw $t2, %d($sp)\n", v->src1 * 16 + 32 + 12);
+            fprintf(out, "  sw $t2, 12($t1)\n");
+            fprintf(out, "  lw $ra, 252($sp)\n");
+            fprintf(out, "  lw $fp, 248($sp)\n");
+            fprintf(out, "  addiu $sp, $sp, 256\n");
+            fprintf(out, "  jr $ra\n");
+            fprintf(out, "  nop\n");
+            break;
+        case VINST_LOAD_STRING:
+            fprintf(out, "  # v%d = string\n", v->dest);
+            fprintf(out, "  addiu $a0, $sp, %d\n", v->dest * 16 + 32);
+            fprintf(out, "  lui $a1, %%hi(.LC%d)\n", v->src1);
+            fprintf(out, "  addiu $a1, $a1, %%lo(.LC%d)\n", v->src1);
+            fprintf(out, "  jal sage_rt_string\n");
+            fprintf(out, "  nop\n");
+            break;
+        case VINST_LOAD_GLOBAL:
+            fprintf(out, "  # v%d = load global '%s'\n", v->dest, v->imm_string ? v->imm_string : "?");
+            fprintf(out, "  addiu $a0, $sp, %d\n", v->dest * 16 + 32);
+            fprintf(out, "  lui $a1, %%hi(sage_globals)\n");
+            fprintf(out, "  addiu $a1, $a1, %%lo(sage_globals)\n");
+            fprintf(out, "  lui $a2, %%hi(.LC%d)\n", v->src1);
+            fprintf(out, "  addiu $a2, $a2, %%lo(.LC%d)\n", v->src1);
+            fprintf(out, "  jal sage_rt_get_global\n");
+            fprintf(out, "  nop\n");
+            break;
+        case VINST_STORE_GLOBAL:
+            fprintf(out, "  # store global '%s' = v%d\n", v->imm_string ? v->imm_string : "?", v->src1);
+            fprintf(out, "  lui $a0, %%hi(sage_globals)\n");
+            fprintf(out, "  addiu $a0, $a0, %%lo(sage_globals)\n");
+            fprintf(out, "  lui $a1, %%hi(.LC%d)\n", v->src2);
+            fprintf(out, "  addiu $a1, $a1, %%lo(.LC%d)\n", v->src2);
+            fprintf(out, "  lw $a2, %d($sp)\n", v->src1 * 16 + 32);
+            fprintf(out, "  lw $a3, %d($sp)\n", v->src1 * 16 + 32 + 4);
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src1 * 16 + 32 + 8);
+            fprintf(out, "  sw $t0, 16($sp)\n");
+            fprintf(out, "  lw $t0, %d($sp)\n", v->src1 * 16 + 32 + 12);
+            fprintf(out, "  sw $t0, 20($sp)\n");
+            fprintf(out, "  jal sage_rt_set_global\n");
+            fprintf(out, "  nop\n");
+            break;
+        case VINST_CALL_BUILTIN:
+            fprintf(out, "  # call builtin %s\n", v->func_name);
+            fprintf(out, "  addiu $a0, $sp, %d\n", v->dest * 16 + 32);
+            if (v->call_arg_count >= 1) {
+                fprintf(out, "  lw $a1, %d($sp)\n", v->call_args[0] * 16 + 32);
+                fprintf(out, "  lw $a2, %d($sp)\n", v->call_args[0] * 16 + 32 + 4);
+                fprintf(out, "  lw $a3, %d($sp)\n", v->call_args[0] * 16 + 32 + 8);
+                fprintf(out, "  lw $t0, %d($sp)\n", v->call_args[0] * 16 + 32 + 12);
+                fprintf(out, "  sw $t0, 16($sp)\n");
+            }
+            fprintf(out, "  jal %s\n", v->func_name);
+            fprintf(out, "  nop\n");
+            break;
+        default:
+            fprintf(out, "  # unhandled vinst %d\n", v->kind);
+            break;
+    }
+}
+
 // ============================================================================
 // Assembly Output
 // ============================================================================
@@ -1331,6 +1506,13 @@ static void emit_asm_function_prologue(FILE* out, CodegenTarget target, const ch
             fprintf(out, "  sd s0, 0(sp)\n");
             fprintf(out, "  addi s0, sp, 256\n");
             break;
+        case CODEGEN_TARGET_MIPS:
+            fprintf(out, "  addiu $sp, $sp, -256\n");
+            fprintf(out, "  sw $ra, 252($sp)\n");
+            fprintf(out, "  sw $fp, 248($sp)\n");
+            fprintf(out, "  sw $a0, 244($sp)\n");
+            fprintf(out, "  move $fp, $sp\n");
+            break;
     }
 }
 
@@ -1352,6 +1534,14 @@ static void emit_asm_function_epilogue(FILE* out, CodegenTarget target) {
             fprintf(out, "  ld s0, 0(sp)\n");
             fprintf(out, "  addi sp, sp, 256\n");
             fprintf(out, "  ret\n");
+            break;
+        case CODEGEN_TARGET_MIPS:
+            fprintf(out, "  move $v0, $zero\n");
+            fprintf(out, "  lw $ra, 252($sp)\n");
+            fprintf(out, "  lw $fp, 248($sp)\n");
+            fprintf(out, "  addiu $sp, $sp, 256\n");
+            fprintf(out, "  jr $ra\n");
+            fprintf(out, "  nop\n");
             break;
     }
 }
@@ -1386,6 +1576,7 @@ static int write_asm_output(const char* source, const char* input_path, const ch
             case CODEGEN_TARGET_X86_64: emit_asm_vinst_x86_64(out, v); break;
             case CODEGEN_TARGET_AARCH64: emit_asm_vinst_aarch64(out, v); break;
             case CODEGEN_TARGET_RV64: emit_asm_vinst_rv64(out, v); break;
+            case CODEGEN_TARGET_MIPS: emit_asm_vinst_mips(out, v); break;
         }
     }
 
@@ -1446,6 +1637,7 @@ int elf_write_object(const char* output_path, CodeBuffer* buf, CodegenTarget tar
         case CODEGEN_TARGET_X86_64:  elf_header[18] = 0x3e; break; // EM_X86_64
         case CODEGEN_TARGET_AARCH64: elf_header[18] = 0xb7; break; // EM_AARCH64
         case CODEGEN_TARGET_RV64:    elf_header[18] = 0xf3; break; // EM_RISCV
+        case CODEGEN_TARGET_MIPS:    elf_header[18] = 0x08; break; // EM_MIPS
     }
     elf_header[19] = 0;
     // e_version
@@ -1483,6 +1675,12 @@ void codegen_rv64_emit(VInst* program, CodeBuffer* buf) {
     (void)program;
     (void)buf;
     fprintf(stderr, "codegen: direct RISC-V 64 machine code emission not available; use --emit-asm\n");
+}
+
+void codegen_mips_emit(VInst* program, CodeBuffer* buf) {
+    (void)program;
+    (void)buf;
+    fprintf(stderr, "codegen: direct MIPS machine code emission not available; use --emit-asm\n");
 }
 
 // ============================================================================

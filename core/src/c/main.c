@@ -354,16 +354,19 @@ static CodegenTargetSpec parse_target_spec(const char* arch) {
         spec.target = CODEGEN_TARGET_AARCH64;
     } else if (strcmp(normalized, "rv64") == 0 || strcmp(normalized, "riscv64") == 0) {
         spec.target = CODEGEN_TARGET_RV64;
+    } else if (strcmp(normalized, "mips") == 0 || strcmp(normalized, "mips32") == 0 ||
+               strcmp(normalized, "mips74k") == 0 || strcmp(normalized, "mips-74k") == 0) {
+        spec.target = CODEGEN_TARGET_MIPS;
     } else {
         fprintf(stderr,
                 "Unknown target architecture/profile: %s\n"
-                "Supported base targets: x86-64, aarch64, rv64\n"
+                "Supported base targets: x86-64, aarch64, rv64, mips\n"
                 "Supported profile suffixes: -baremetal, -osdev, -uefi\n",
                 arch);
         exit(64);
     }
 
-    if (spec.profile == CODEGEN_PROFILE_UEFI && spec.target == CODEGEN_TARGET_RV64) {
+    if (spec.profile == CODEGEN_PROFILE_UEFI && (spec.target == CODEGEN_TARGET_RV64 || spec.target == CODEGEN_TARGET_MIPS)) {
         fprintf(stderr, "UEFI profile is currently supported for x86-64/aarch64 targets only.\n");
         exit(64);
     }
