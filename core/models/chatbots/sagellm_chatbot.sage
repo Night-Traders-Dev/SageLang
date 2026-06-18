@@ -1,5 +1,5 @@
 gc_disable()
-# SageLLM Chatbot v3.8.1 - Self-contained (compiles with --compile-llvm)
+# SageLLM Chatbot v3.8.2 - Self-contained (compiles with --compile-llvm)
 # Compile: sage --compile-llvm models/sagellm_chatbot.sage -o sagellm_chat
 # Run:     ./sagellm_chat   OR   sage models/sagellm_chatbot.sage
 
@@ -267,7 +267,7 @@ proc show_chain(r):
 let persona_name = "SageDev"
 
 print "============================================"
-print "  SageLLM Chatbot v3.8.1 (Medium | 16K)"
+print "  SageLLM Chatbot v3.8.2 (Medium | 16K)"
 print "  SageGPT: SwiGLU + RoPE + RMSNorm"
 print "  CoT + Memory + 20 Knowledge Domains"
 print "============================================"
