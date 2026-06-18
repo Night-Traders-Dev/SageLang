@@ -1,5 +1,15 @@
 # SageLang Updates
 
+## v3.8.3 — MIPS Target & Library Support (June 18, 2026)
+
+- **MIPS Target Support**:
+  - **O32 ABI Compliance**: Added MIPS assembly emission supporting standard structure argument passing and pointer-based struct returns in MIPS O32 ABI.
+  - **Assembly Generator**: Implemented `emit_asm_vinst_mips` with full support for loading float/double constants from read-only data, global variables, printing, arithmetic operators, branching, jumps, and builtin calls.
+  - **MIPS Target Parsing**: Added target parsing for `--target mips / mips32 / mips74k` with profile constraint verification.
+  - **ELF Code Generation**: Updated the freestanding ELF object writer with the `EM_MIPS` (0x08) machine value.
+- **MIPS Submodule Library**:
+  - **sagelang-lib-mips**: Created a new submodule library `sagelang-lib-mips` under `core/lib/mips` with `README.md`, `CONTRIBUTING.md`, register configuration mappings, and integration tests.
+
 ## v3.8.3 — Phase 19: "Gotcha" Fixes & Performance Optimization (June 14, 2026)
 
 - **Language Enhancements**:

@@ -46,7 +46,7 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **Concurrency** | Multi-threaded `proc`, `async`/`await`, atomics, semaphores, condvars, rwlocks, SMP detection |
 | **GPU Graphics** | Vulkan + OpenGL 4.5 backends, handle-based API, 100+ functions, Android support |
 | **UI Widgets** | Immediate-mode GUI: windows, panels, buttons, sliders, menus, text inputs |
-| **Compilation** | C backend, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64), plus initial profile suffixes for bare-metal / OSdev / UEFI targets |
+| **Compilation** | C backend, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64, mips), plus initial profile suffixes for bare-metal / OSdev / UEFI targets |
 
 LLVM codegen has an additional import optimization path: both the C LLVM backend and the self-hosted LLVM backend resolve `from module import CONST` for foldable top-level constants during code generation (including `as` aliases).
 
@@ -62,7 +62,7 @@ SageLang uses a shared front-end with multiple execution backends:
    - **SGVM binary** (`--sgvm`, binary bytecode artifact)
    - **C codegen** (`--emit-c` / `--compile`)
    - **LLVM IR** (`--emit-llvm` / `--compile-llvm`, with GPU support)
-   - **Native assembly** (`--emit-asm` / `--compile-native`, x86-64/aarch64/rv64)
+   - **Native assembly** (`--emit-asm` / `--compile-native`, x86-64/aarch64/rv64/mips)
    - **Freestanding ELF** (`--compile-bare`, bare-metal kernel output)
    - **UEFI PE** (`--compile-uefi`, EFI application output)
    - **SageMetal VM** (`make metal-vm`, freestanding bytecode object)
@@ -104,7 +104,7 @@ main.c
   ├─ compiler.c              [C code generation backend]
   ├─ llvm_backend.c          [LLVM IR generation (with GPU support)]
   ├─ llvm_runtime.c          [Standalone runtime for LLVM-compiled programs]
-  ├─ codegen.c / codegen.h   [Native assembly (x86-64, aarch64, rv64)]
+  ├─ codegen.c / codegen.h   [Native assembly (x86-64, aarch64, rv64, mips)]
   ├─ graphics.c / graphics.h [Vulkan GPU module for interpreter]
   ├─ gpu_api.c / gpu_api.h   [Pure C GPU API (Vulkan + OpenGL)]
   └─ src/vm/                 [Bytecode VM: bytecode.c, vm.c, program.c, runtime.c]
@@ -794,7 +794,7 @@ mem_free(buf)
 
 Supported types for `mem_read`/`mem_write`: `"byte"` (1 byte), `"int"` (4 bytes), `"double"` (8 bytes), `"string"` (read-only, null-terminated). Allocations are capped at 64MB. Negative offsets are rejected. Bounds checking is enforced for owned memory (offset + type size must not exceed allocation). Double-free is prevented via handle nullification. Memory pointers are GC-tracked and freed on collection if owned.
 
-**Inline Assembly** (x86-64, aarch64, rv64):
+**Inline Assembly** (x86-64, aarch64, rv64, mips):
 ```sagelang
 # Detect host architecture
 print asm_arch()           # "x86_64"
@@ -818,7 +818,7 @@ let ok = asm_compile("    mov x0, #42", "aarch64", "/tmp/out.o")
 let ok2 = asm_compile("    li a0, 42", "rv64", "/tmp/out_rv.o")
 ```
 
-Supported architectures: `"x86_64"`, `"aarch64"`, `"rv64"`. Return types: `"int"`, `"double"`, `"void"`. Up to 4 numeric arguments.
+Supported architectures: `"x86_64"`, `"aarch64"`, `"rv64"`, `"mips"`. Return types: `"int"`, `"double"`, `"void"`. Up to 4 numeric arguments.
 
 **C Struct Interop**:
 ```sagelang
@@ -1509,7 +1509,7 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | ------ | ---------- | ------- |
 | `-o <path>` | All emit/compile commands, including `--compile-pico` | Output file or build directory |
 | `--cc <compiler>` | `--compile` | Overrides the host C compiler; defaults to `cc` |
-| `--target <arch[-profile]>` | `--emit-asm`, `--compile-native` | Base targets: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64`; profile suffixes: `-baremetal`, `-osdev`, `-uefi` |
+| `--target <arch[-profile]>` | `--emit-asm`, `--compile-native` | Base targets: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64`, `mips`, `mips32`, `mips74k`; profile suffixes: `-baremetal`, `-osdev`, `-uefi` |
 | `-O0` / `-O1` / `-O2` / `-O3` | C, LLVM, and native codegen commands | Selects the optimization pass level |
 | `-g` | C, LLVM, asm, and native codegen commands | Enables debug information in generated output |
 | `--math-work=MODES` | All runtime modes | Comma-separated list of default math visualization formats: `grade`, `exec`, `bitwise` |
@@ -2044,7 +2044,7 @@ math.printm("123 + 456 * 2", backend="sage")
 - **`backend`**: 
     - `"sage"` (default): Pure SageLang implementation using vertical "grade-school" format.
     - `"c"`: Uses native C-level arithmetic bridges.
-    - `"asm"`: Uses inline assembly (x86-64, aarch64, rv64) and calls `printf` via FFI to show the instruction-level execution.
+    - `"asm"`: Uses inline assembly (x86-64, aarch64, rv64, mips) and calls `printf` via FFI to show the instruction-level execution.
 - **`formats`**: An array of strings to customize output.
     - `"grade"`: Vertical grade-school arithmetic visualization.
     - `"exec"`: Show the underlying execution mode (e.g., "[ASM] Using ADD instruction").
@@ -3025,7 +3025,7 @@ print back["users"][0]["name"]  # Alice
 - **Exception handling**, **generators**, and **async/await** provide modern control flow.
 - **Module system** enables code reuse with native (C) and Sage library modules.
 - **Mark-and-sweep GC** manages memory automatically with thread safety.
-- **Multiple backends**: tree-walking interpreter, C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64).
+- **Multiple backends**: tree-walking interpreter, C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64, mips).
 - **Networking**: POSIX sockets, TCP, HTTP/HTTPS (libcurl), SSL/TLS (OpenSSL).
 - **Self-hosted**: Lexer, parser, and interpreter ported to Sage with full bootstrap.
 - **Test suite**: interpreter/compiler coverage, JSON coverage, and broad self-hosted suites spanning parsing, tooling, optimization, codegen, compiler, LSP, and CLI behavior.

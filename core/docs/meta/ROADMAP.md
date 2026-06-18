@@ -915,7 +915,7 @@ Deep audit and fixes across garbage collection, exception handling, and low-leve
 - **Phases Completed**: 16/16 + 4 audit phases (100%)
 - **Test Suite**: 151 interpreter + 28 compiler + 1623 self-host + 88 JSON tests (1890+ total), 100% pass rate
 - **Benchmarks**: 10 paired Sage/Python workloads across 5 execution recipes
-- **Backends**: C codegen, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64), Vulkan + OpenGL graphics
+- **Backends**: C codegen, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64, mips), Vulkan + OpenGL graphics
 - **Optimization Passes**: typecheck, constant folding, dead code elimination, function inlining
 - **Self-Hosting**: Lexer, parser, and interpreter ported to Sage with full bootstrap
 - **GPU**: Vulkan + OpenGL graphics engine (5700-line C + 900-line gpu_api, 17 Sage libraries, 27 shaders, 6 demos, PBR/bloom/shadows/deferred/particles)

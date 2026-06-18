@@ -4,7 +4,7 @@
 
 ![SageLang Logo](core/assets/SageLang.png)
 
-Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.8.3, Sage features One-line Install System (OIS) integration, native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
+Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64/mips, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.8.3, Sage features One-line Install System (OIS) integration, native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
 
 ## Install (One line installer)
 
@@ -189,7 +189,7 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **Generators**: `next()` for iterator protocol
 - **FFI**: `ffi_open()`, `ffi_call()`, `ffi_close()`, `ffi_sym()`
 - **Memory**: `mem_alloc()`, `mem_free()`, `mem_read()`, `mem_write()`, `mem_size()`, `addressof()`
-- **Assembly**: `asm_exec()`, `asm_compile()`, `asm_arch()` (x86-64, aarch64, rv64)
+- **Assembly**: `asm_exec()`, `asm_compile()`, `asm_arch()` (x86-64, aarch64, rv64, mips)
 - **Structs**: `struct_def()`, `struct_new()`, `struct_get()`, `struct_set()`, `struct_size()`
 
 ### Concurrency & Async/Await
@@ -923,7 +923,7 @@ SageMake is the unified build system that auto-detects your platform, GPU, NPU, 
 | ------ | ---------- | ------- |
 | `-o <path>` | All emit/compile commands, plus `--compile-pico` | Output file or output directory depending on command |
 | `--cc <compiler>` | `--compile` | Overrides the host C compiler; defaults to `cc` |
-| `--target <arch[-profile]>` | `--emit-asm`, `--compile-native` | Target architecture/profile. Base arch values: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64`. Profile suffixes: `-baremetal`, `-osdev`, `-uefi` |
+| `--target <arch[-profile]>` | `--emit-asm`, `--compile-native` | Target architecture/profile. Base arch values: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64`, `mips`, `mips32`, `mips74k`. Profile suffixes: `-baremetal`, `-osdev`, `-uefi` |
 
 Profile notes:
 - `hosted` (default, no suffix): current behavior, executable-oriented flow.
@@ -1175,7 +1175,7 @@ gc_enable()
   - [x] Bit manipulation (`&`, `|`, `^`, `~`, `<<`, `>>`)
   - [x] FFI (`ffi_open`, `ffi_call`, `ffi_close`, `ffi_sym`)
   - [x] Raw memory (`mem_alloc`, `mem_read`, `mem_write`, `mem_free`, `mem_size`, `addressof`)
-  - [x] Inline assembly (`asm_exec`, `asm_compile`, `asm_arch` — x86-64, aarch64, rv64)
+  - [x] Inline assembly (`asm_exec`, `asm_compile`, `asm_arch` — x86-64, aarch64, rv64, mips)
   - [x] C struct interop (`struct_def`, `struct_new`, `struct_get`, `struct_set`, `struct_size`)
 - [x] **Phase 10: Compiler Development** (C backend, LLVM IR, native ASM, optimization passes) ✅
 - [x] **Phase 11: Concurrency & Stdlib** (Native modules, threads, async/await, backend expansion) ✅
@@ -1237,7 +1237,7 @@ proc write_memory(ptr: *mut u8, value: u8):
 - **Language**: C
 - **Phases Completed**: 18/18 (100%)
 - **Test Suite**: 331 interpreter + 28 compiler + 88 JSON + 1623 self-hosted tests (2070+ total) across parsing, execution, tooling, optimization, codegen, compiler, LSP, CLI, GPU, JIT, and AOT
-- **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64), bytecode VM, SageMetal VM, JIT (x86-64), AOT, Vulkan/OpenGL graphics, and Kotlin/Android
+- **Backends**: C codegen, LLVM IR, native assembly (x86-64, aarch64, rv64, mips), bytecode VM, SageMetal VM, JIT (x86-64), AOT, Vulkan/OpenGL graphics, and Kotlin/Android
 - **Self-Hosting**: Lexer, parser, interpreter, formatter, linter, LSP, codegen, compiler ported to Sage with full bootstrap
 - **Status**: Specification locked (v2.0) with working interpreter, self-hosted compiler, C/LLVM/native/JIT/AOT backends, GPU graphics engine, and Linux kernel support
 - **License**: MIT
@@ -1275,7 +1275,7 @@ sage/
 │   ├── compiler.c    # C code generation backend
 │   ├── llvm_backend.c # LLVM IR generation backend
 │   ├── llvm_runtime.c # LLVM standalone runtime library (40+ sage_rt_* functions)
-│   ├── codegen.c     # Native assembly backend (x86-64, aarch64, rv64)
+│   ├── codegen.c     # Native assembly backend (x86-64, aarch64, rv64, mips)
 │   ├── jit.c         # JIT compiler (profiling, x86-64 code emission, type feedback)
 │   ├── aot.c         # AOT compiler (type-specialized C codegen, native binary output)
 │   ├── pass.c        # Optimization pass infrastructure
