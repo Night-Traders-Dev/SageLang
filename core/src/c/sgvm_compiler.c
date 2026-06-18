@@ -143,14 +143,18 @@ int main(int argc, char** argv) {
                 } else if (strncmp(line, "string ", 7) == 0) {
                     int len = atoi(line + 7);
                     if (!fgets(line, sizeof(line), in)) break;
-                    if (len > 0 && (size_t)len * 2 <= strlen(line)) {
-                        char* buf = malloc(len);
-                        if (buf) {
-                            for (int j = 0; j < len * 2; j += 2) buf[j / 2] = hex_to_byte(line + j);
-                            local_to_global[current_chunk][i] = add_const_str(buf, len);
-                            free(buf);
+                    if (len >= 0 && (size_t)len * 2 <= strlen(line)) {
+                        if (len == 0) {
+                            local_to_global[current_chunk][i] = add_const_str("", 0);
                         } else {
-                            local_to_global[current_chunk][i] = -1;
+                            char* buf = malloc(len);
+                            if (buf) {
+                                for (int j = 0; j < len * 2; j += 2) buf[j / 2] = hex_to_byte(line + j);
+                                local_to_global[current_chunk][i] = add_const_str(buf, len);
+                                free(buf);
+                            } else {
+                                local_to_global[current_chunk][i] = -1;
+                            }
                         }
                     } else {
                         local_to_global[current_chunk][i] = -1;
