@@ -41,3 +41,8 @@
 **Vulnerability:** Native standard library functions `sys.exec` and `sys.shell_exec` passed user-provided strings directly to `system()` and `popen()` without any validation (CWE-78).
 **Learning:** Security hardening of REPL commands (like `:sh`) is insufficient if the underlying language primitives they use (or that are exposed to scripts) remain unprotected. Developers often overlook internal library functions when securing a language's exterior interface.
 **Prevention:** Implement and enforce a strict whitelist-based validation (allowing only alphanumeric, spaces, and safe path characters) for all strings passed to any C function that invokes a shell.
+
+## 2026-06-18 - Hardening the SGVM Compiler Tool
+**Vulnerability:** The `sgvmc` tool used a hardcoded temporary file (`.tmp.svm`) in the current directory and invoked `./sage` via `system()`. It also lacked bounds checking for its internal constant and chunk mapping arrays.
+**Learning:** Utilities that act as wrappers or intermediate compilers are often less scrutinized than the core engine, yet they can be just as vulnerable. Using fixed-size buffers for data derived from input files (like VM bytecode artifacts) is a recipe for memory corruption.
+**Prevention:** Use `mkstemps()` for secure, unique temporary files. Prefer `fork()`/`execvp()` over `system()` to avoid shell injection entirely. Always implement robust bounds checking when parsing data from external files, and return error codes (like -1) that are distinct from valid indices.
