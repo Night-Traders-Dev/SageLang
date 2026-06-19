@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-06-17 16:44 UTC",
+  "generated_at": "2026-06-19 00:41 UTC",
   "repo_languages": [
     {
+      "language": "JSON",
+      "lines": 193602
+    },
+    {
       "language": "C",
-      "lines": 70159
+      "lines": 70646
     },
     {
       "language": "Sage",
-      "lines": 48524
-    },
-    {
-      "language": "JSON",
-      "lines": 5323
+      "lines": 48448
     },
     {
       "language": "Shell",
@@ -19,7 +19,7 @@
     },
     {
       "language": "Makefile",
-      "lines": 958
+      "lines": 960
     },
     {
       "language": "CMake",
@@ -51,11 +51,11 @@
   "project_breakdown": [
     {
       "area": "Documentation",
-      "lines": 16568
+      "lines": 16661
     },
     {
       "area": "Build System",
-      "lines": 4792
+      "lines": 4794
     },
     {
       "area": "Test Suite",
@@ -75,11 +75,11 @@
         "reason": "",
         "output": "421782618",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.02881666598841548,
-        "total_median_seconds": 0.02881666598841548,
+        "run_median_seconds": 0.012851952982600778,
+        "total_median_seconds": 0.012851952982600778,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.029680260620079935,
-        "total_mean_seconds": 0.029680260620079935
+        "run_mean_seconds": 0.013786517205880955,
+        "total_mean_seconds": 0.013786517205880955
       },
       {
         "name": "sage-interpreted-vm",
@@ -88,11 +88,11 @@
         "reason": "",
         "output": "421782618",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.030167342978529632,
-        "total_median_seconds": 0.030167342978529632,
+        "run_median_seconds": 0.013804714020807296,
+        "total_median_seconds": 0.013804714020807296,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.030043208179995416,
-        "total_mean_seconds": 0.030043208179995416
+        "run_mean_seconds": 0.014272633206564933,
+        "total_mean_seconds": 0.014272633206564933
       },
       {
         "name": "sage-compiled-c",
@@ -100,31 +100,31 @@
         "status": "ok",
         "reason": "",
         "output": "421782618",
-        "build_median_seconds": 0.5377078120363876,
-        "run_median_seconds": 0.006180364987812936,
-        "total_median_seconds": 0.5432530720718205,
-        "build_mean_seconds": 0.5500568438088521,
-        "run_mean_seconds": 0.006201708200387656,
-        "total_mean_seconds": 0.5562585520092398
+        "build_median_seconds": 0.1548687040049117,
+        "run_median_seconds": 0.0021265919785946608,
+        "total_median_seconds": 0.15714826600742526,
+        "build_mean_seconds": 0.15488288319902493,
+        "run_mean_seconds": 0.002062525600194931,
+        "total_mean_seconds": 0.15694540879921987
       },
       {
         "name": "sage-compiled-vm",
         "label": "Compiled (VM)",
-        "status": "ok",
-        "reason": "",
-        "output": "421782618",
-        "build_median_seconds": 0.03959369799122214,
-        "run_median_seconds": 0.08660489600151777,
-        "total_median_seconds": 0.12433833407703787,
-        "build_mean_seconds": 0.03799270843155682,
-        "run_mean_seconds": 0.08649053138215095,
-        "total_mean_seconds": 0.12448323981370776
+        "status": "failed",
+        "reason": "checksum mismatch: expected '421782618', got ''",
+        "output": "",
+        "build_median_seconds": 0.01095466798869893,
+        "run_median_seconds": 0.010504242003662512,
+        "total_median_seconds": 0.02241061898530461,
+        "build_mean_seconds": 0.01079172000172548,
+        "run_mean_seconds": 0.01070723959710449,
+        "total_mean_seconds": 0.02149895959882997
       },
       {
         "name": "sage-compiled-sage",
         "label": "Compiled (Sage)",
         "status": "failed",
-        "reason": "build step failed\ncommand: cc /root/Devel/sagelang/core/.tmp/sage-compiled-sage-17ite44o/recipe-compiled-sage.c -o /root/Devel/sagelang/core/.tmp/sage-compiled-sage-17ite44o/recipe-compiled-sage -lm\ncwd: /root/Devel/sagelang/core\nstderr:\n/root/Devel/sagelang/core/.tmp/sage-compiled-sage-17ite44o/recipe-compiled-sage.c: In function \u2018sage_mod\u2019:\n/root/Devel/sagelang/core/.tmp/sage-compiled-sage-17ite44o/recipe-compiled-sage.c:392:24: error: implicit declaration of function \u2018fmod\u2019 [-Wimplicit-function-declaration]\n  392 |     return sage_number(fmod(left.as.number, right.as.number));\n      |                        ^~~~\n/root/Devel/sagelang/core/.tmp/sage-compiled-sage-17ite44o/recipe-compiled-sage.c:6:1: note: include \u2018<math.h>\u2019 or provide a declaration of \u2018fmod\u2019\n    5 | #include <string.h>\n  +++ |+#include <math.h>\n    6 | \n/root/Devel/sagelang/core/.tmp/sage-compiled-sage-17ite44o/recipe-compiled-sage.c:392:24: warning: incompatible implicit declaration of built-in function \u2018fmod\u2019 [-Wbuiltin-declaration-mismatch]\n  392 |     return sage_number(fmod(left.as.number, right.as.number));\n      |                        ^~~~\n/root/Devel/sagelang/core/.tmp/sage-compiled-sage-17ite44o/recipe-compiled-sage.c:392:24: note: include \u2018<math.h>\u2019 or provide a declaration of \u2018fmod\u2019",
+        "reason": "build step failed\ncommand: cc /home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c -o /home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage -lm\ncwd: /home/kraken/Devel/sagelang/core\nstderr:\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c: In function \u2018sage_mod\u2019:\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c:392:24: error: implicit declaration of function \u2018fmod\u2019 [-Wimplicit-function-declaration]\n  392 |     return sage_number(fmod(left.as.number, right.as.number));\n      |                        ^~~~\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c:6:1: note: include \u2018<math.h>\u2019 or provide a declaration of \u2018fmod\u2019\n    5 | #include <string.h>\n  +++ |+#include <math.h>\n    6 | \n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c:392:24: warning: incompatible implicit declaration of built-in function \u2018fmod\u2019 [-Wbuiltin-declaration-mismatch]\n  392 |     return sage_number(fmod(left.as.number, right.as.number));\n      |                        ^~~~\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c:392:24: note: include \u2018<math.h>\u2019 or provide a declaration of \u2018fmod\u2019",
         "output": null,
         "build_median_seconds": null,
         "run_median_seconds": null,
@@ -140,11 +140,11 @@
         "reason": "",
         "output": "421782618",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.040235469001345336,
-        "total_median_seconds": 0.040235469001345336,
+        "run_median_seconds": 0.012439329002518207,
+        "total_median_seconds": 0.012439329002518207,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.03973606256768107,
-        "total_mean_seconds": 0.03973606256768107
+        "run_mean_seconds": 0.012622353003825993,
+        "total_mean_seconds": 0.012622353003825993
       },
       {
         "name": "sage-aot",
@@ -152,12 +152,12 @@
         "status": "ok",
         "reason": "",
         "output": "421782618",
-        "build_median_seconds": 0.537760155973956,
-        "run_median_seconds": 0.005971406004391611,
-        "total_median_seconds": 0.5451937490142882,
-        "build_mean_seconds": 0.5399229371920228,
-        "run_mean_seconds": 0.006370760593563318,
-        "total_mean_seconds": 0.5462936977855861
+        "build_median_seconds": 0.11165226800949313,
+        "run_median_seconds": 0.0013631099718622863,
+        "total_median_seconds": 0.11300364602357149,
+        "build_mean_seconds": 0.11134325678576715,
+        "run_mean_seconds": 0.0013494563929270953,
+        "total_mean_seconds": 0.11269271317869425
       }
     ]
   }
