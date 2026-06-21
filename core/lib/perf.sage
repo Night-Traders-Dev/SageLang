@@ -223,41 +223,29 @@ proc fast_neq(a, b):
 
 ## Iterate array with index, calling fn(index, element) for each
 proc fast_each_indexed(arr, fn):
-    let n = len(arr)
-    let i = 0
-    while i < n:
+    for i in range(len(arr)):
         fn(i, arr[i])
-        i = i + 1
 
 ## Sum an array of numbers without type checks
 proc fast_sum(arr):
     let total = 0
-    let n = len(arr)
-    let i = 0
-    while i < n:
-        total = total + arr[i]
-        i = i + 1
+    for item in arr:
+        total = total + item
     return total
 
 ## Map over array, returning new array
 proc fast_map(arr, fn):
     let result = []
-    let n = len(arr)
-    let i = 0
-    while i < n:
-        push(result, fn(arr[i]))
-        i = i + 1
+    for item in arr:
+        push(result, fn(item))
     return result
 
 ## Filter array by predicate
 proc fast_filter(arr, pred):
     let result = []
-    let n = len(arr)
-    let i = 0
-    while i < n:
-        if pred(arr[i]):
-            push(result, arr[i])
-        i = i + 1
+    for item in arr:
+        if pred(item):
+            push(result, item)
     return result
 
 ## ============================================================
