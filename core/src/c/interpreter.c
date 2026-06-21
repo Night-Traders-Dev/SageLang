@@ -732,36 +732,34 @@ static Value build_line_quads_native(int argCount, Value* args) {
 }
 
 static Value range_native(int argCount, Value* args) {
-    if (argCount < 1 || argCount > 2) return val_nil();
+    if (argCount < 1 || argCount > 3) return val_nil();
     
-    int start = 0, end = 0;
+    int start = 0, end = 0, step = 1;
     
     if (argCount == 1) {
         if (!IS_NUMBER(args[0])) return val_nil();
         end = (int)AS_NUMBER(args[0]);
-    } else {
+    } else if (argCount == 2) {
         if (!IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
         start = (int)AS_NUMBER(args[0]);
         end = (int)AS_NUMBER(args[1]);
+    } else {
+        if (!IS_NUMBER(args[0]) || !IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) return val_nil();
+        start = (int)AS_NUMBER(args[0]);
+        end = (int)AS_NUMBER(args[1]);
+        step = (int)AS_NUMBER(args[2]);
+        if (step == 0) return val_nil();
     }
 
-    int count = end - start;
-    if (count <= 0) return val_array();
-
-    /*
-     * Optimization: Pre-allocate the exact required size for the array elements.
-     * This avoids multiple reallocations and memory copies associated with iterative array_push.
-     * Measured Impact: ~34% speedup for range(100000) (0.016s -> 0.011s for 10 iterations).
-     */
     Value arr_val = val_array();
-    ArrayValue* arr = arr_val.as.array;
-    arr->count = count;
-    arr->capacity = count;
-    arr->elements = SAGE_ALLOC(sizeof(Value) * (size_t)count);
-    gc_track_external_allocation(sizeof(Value) * (size_t)count);
-
-    for (int i = 0; i < count; i++) {
-        arr->elements[i] = val_number(start + i);
+    if (step > 0) {
+        for (int i = start; i < end; i += step) {
+            array_push(&arr_val, val_number(i));
+        }
+    } else {
+        for (int i = start; i > end; i += step) {
+            array_push(&arr_val, val_number(i));
+        }
     }
     return arr_val;
 }
@@ -2702,6 +2700,21 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 AST_GC_POP();
                 return EVAL_RESULT(val_string_take(result));
             }
+            if (IS_ARRAY(left) && IS_ARRAY(right)) {
+                ArrayValue* la = left.as.array;
+                ArrayValue* ra = right.as.array;
+                int total = la->count + ra->count;
+                Value result = val_array();
+                ArrayValue* arr = result.as.array;
+                arr->count = total;
+                arr->capacity = total;
+                arr->elements = SAGE_ALLOC(sizeof(Value) * (size_t)total);
+                gc_track_external_allocation(sizeof(Value) * (size_t)total);
+                for (int i = 0; i < la->count; i++) arr->elements[i] = la->elements[i];
+                for (int i = 0; i < ra->count; i++) arr->elements[la->count + i] = ra->elements[i];
+                AST_GC_POP();
+                return EVAL_RESULT(result);
+            }
             AST_GC_POP();
             return EVAL_EXCEPTION(val_exception("Operands must be numbers or strings."));
 
@@ -2775,7 +2788,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             long long shift = (long long)AS_NUMBER(right);
             AST_GC_POP();
             if (shift < 0 || shift >= 64) return EVAL_RESULT(val_number(0.0));
-            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) << shift)));
+            return EVAL_RESULT(val_number((double)((unsigned long long)AS_NUMBER(left) << shift)));
         }
 
         case TOKEN_RSHIFT: {
@@ -2783,7 +2796,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             long long shift = (long long)AS_NUMBER(right);
             AST_GC_POP();
             if (shift < 0 || shift >= 64) return EVAL_RESULT(val_number(0.0));
-            return EVAL_RESULT(val_number((double)((long long)AS_NUMBER(left) >> shift)));
+            return EVAL_RESULT(val_number((double)((unsigned long long)AS_NUMBER(left) >> shift)));
         }
 
         default:

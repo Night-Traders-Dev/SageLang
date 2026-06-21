@@ -267,8 +267,8 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
                 case TOKEN_AMP:     sprintf(result, "sage_number((double)((long long)%s.as.number & (long long)%s.as.number))", left, right); break;
                 case TOKEN_PIPE:    sprintf(result, "sage_number((double)((long long)%s.as.number | (long long)%s.as.number))", left, right); break;
                 case TOKEN_CARET:   sprintf(result, "sage_number((double)((long long)%s.as.number ^ (long long)%s.as.number))", left, right); break;
-                case TOKEN_LSHIFT:  sprintf(result, "sage_number((double)((long long)%s.as.number << (int)%s.as.number))", left, right); break;
-                case TOKEN_RSHIFT:  sprintf(result, "sage_number((double)((long long)%s.as.number >> (int)%s.as.number))", left, right); break;
+                case TOKEN_LSHIFT:  sprintf(result, "sage_number((double)((unsigned long long)%s.as.number << (int)%s.as.number))", left, right); break;
+                case TOKEN_RSHIFT:  sprintf(result, "sage_number((double)((unsigned long long)%s.as.number >> (int)%s.as.number))", left, right); break;
                 default:            sprintf(result, "sage_add(%s, %s)", left, right); break;
             }
             done:

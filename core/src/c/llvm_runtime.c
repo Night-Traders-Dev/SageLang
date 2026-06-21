@@ -774,18 +774,29 @@ SageValue sage_rt_readbytes(SageValue path) {
     if (path.type != SAGE_STRING) return sage_rt_nil();
     FILE* f = fopen(path.as.string, "rb");
     if (!f) return sage_rt_nil();
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    SageValue arr = sage_rt_array_new(size > 0 ? (int32_t)size : 4);
-    if (size > 0) {
-        unsigned char* buf = (unsigned char*)malloc((size_t)size);
-        if (buf) {
-            size_t read = fread(buf, 1, (size_t)size, f);
-            for (size_t i = 0; i < read; i++) {
-                sage_rt_array_push(arr, sage_rt_number((double)buf[i]));
+    SageValue arr = sage_rt_array_new(128);
+    if (fseek(f, 0, SEEK_END) == 0) {
+        long size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (size > 0) {
+            unsigned char* buf = (unsigned char*)malloc((size_t)size);
+            if (buf) {
+                size_t read = fread(buf, 1, (size_t)size, f);
+                for (size_t i = 0; i < read; i++) {
+                    sage_rt_array_push(arr, sage_rt_number((double)buf[i]));
+                }
+                free(buf);
             }
-            free(buf);
+        }
+        fclose(f);
+        return arr;
+    }
+    // Non-seekable file (e.g., /dev/urandom) — read in chunks until EOF
+    unsigned char chunk[4096];
+    size_t nread;
+    while ((nread = fread(chunk, 1, sizeof(chunk), f)) > 0) {
+        for (size_t i = 0; i < nread; i++) {
+            sage_rt_array_push(arr, sage_rt_number((double)chunk[i]));
         }
     }
     fclose(f);

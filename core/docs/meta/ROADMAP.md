@@ -1,13 +1,13 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: June 9, 2026
-> **Current Phase**: v3.8.3 — REPL Statistics & Version 3.8.3 Release
+> **Current Phase**: v3.8.4 — REPL Statistics & Version 3.8.4 Release
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
 ---
 
-## v3.8.3: REPL Statistics & Version 3.8.3 Release (June 2026)
+## v3.8.4: REPL Statistics & Version 3.8.4 Release (June 2026)
 
 ### Completed
 
@@ -16,7 +16,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.3: Math Matrix Printing & CLI Enhancements (June 2026)
+## v3.8.4: Math Matrix Printing & CLI Enhancements (June 2026)
 
 ### Completed
 
@@ -25,7 +25,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.3: VM Optimization & Self-Hosted Toolchain (June 2026)
+## v3.8.4: VM Optimization & Self-Hosted Toolchain (June 2026)
 
 ### Completed
 
@@ -35,7 +35,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.3: Sentinel Security & Performance Refinement (May 2026)
+## v3.8.4: Sentinel Security & Performance Refinement (May 2026)
 
 ### Completed
 
@@ -51,7 +51,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.3: Performance Optimizations + Kotlin Fixes (April 2026)
+## v3.8.4: Performance Optimizations + Kotlin Fixes (April 2026)
 
 ### Completed
 
@@ -63,7 +63,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.3: Kotlin/Android Backend (April 2026)
+## v3.8.4: Kotlin/Android Backend (April 2026)
 
 ### Completed
 
@@ -77,7 +77,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.3: ORC Garbage Collector (April 2026)
+## v3.8.4: ORC Garbage Collector (April 2026)
 
 ### Completed
 
@@ -92,7 +92,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.3: QEMU Support (March 2026)
+## v3.8.4: QEMU Support (March 2026)
 
 ### Completed
 

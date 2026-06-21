@@ -671,6 +671,19 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     memcpy(joined, AS_STRING(left), len1);
                     memcpy(joined + len1, AS_STRING(right), len2 + 1);
                     out = val_string_take(joined);
+                } else if (local_op == BC_OP_ADD && IS_ARRAY(left) && IS_ARRAY(right)) {
+                    SYNC_SP();
+                    ArrayValue* la = left.as.array;
+                    ArrayValue* ra = right.as.array;
+                    int total = la->count + ra->count;
+                    out = val_array();
+                    ArrayValue* out_arr = out.as.array;
+                    out_arr->count = total;
+                    out_arr->capacity = total;
+                    out_arr->elements = SAGE_ALLOC(sizeof(Value) * (size_t)total);
+                    gc_track_external_allocation(sizeof(Value) * (size_t)total);
+                    memcpy(out_arr->elements, la->elements, sizeof(Value) * la->count);
+                    memcpy(out_arr->elements + la->count, ra->elements, sizeof(Value) * ra->count);
                 } else if (IS_NUMBER(left) && IS_NUMBER(right)) {
                     long long l = (long long)AS_NUMBER(left);
                     long long r = (long long)AS_NUMBER(right);
@@ -683,8 +696,8 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                         case BC_OP_BIT_AND: out = val_number((double)(l & r)); break;
                         case BC_OP_BIT_OR: out = val_number((double)(l | r)); break;
                         case BC_OP_BIT_XOR: out = val_number((double)(l ^ r)); break;
-                        case BC_OP_SHIFT_LEFT: out = val_number((double)(l << r)); break;
-                        case BC_OP_SHIFT_RIGHT: out = val_number((double)(l >> r)); break;
+                        case BC_OP_SHIFT_LEFT: out = val_number((double)((unsigned long long)l << r)); break;
+                        case BC_OP_SHIFT_RIGHT: out = val_number((double)((unsigned long long)l >> r)); break;
                         default: break;
                     }
                 } else { result = vm_error("Operands mismatch."); goto done; }

@@ -637,24 +637,35 @@ static Value io_readbytes_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     FILE* f = fopen(AS_STRING(args[0]), "rb");
     if (!f) return val_nil();
-    fseek(f, 0, SEEK_END);
-    long length = ftell(f);
-    if (length < 0 || length > SAGE_MAX_READ_SIZE) { fclose(f); return val_nil(); }
-    fseek(f, 0, SEEK_SET);
-    unsigned char* buf = SAGE_ALLOC((size_t)length);
-    size_t read = fread(buf, 1, (size_t)length, f);
-    fclose(f);
-    // Create array of byte values
     Value out_val = val_array();
-    ArrayValue* arr = out_val.as.array;
-    arr->count = (int)read;
-    arr->capacity = (int)read;
-    arr->elements = SAGE_ALLOC(sizeof(Value) * read);
-    gc_track_external_allocation(sizeof(Value) * (size_t)read);
-    for (size_t i = 0; i < read; i++) {
-        arr->elements[i] = val_number((double)buf[i]);
+    // Try to get file size via seek (works for regular files, fails for /dev/urandom etc.)
+    if (fseek(f, 0, SEEK_END) == 0) {
+        long length = ftell(f);
+        if (length < 0 || length > SAGE_MAX_READ_SIZE) { fclose(f); return val_nil(); }
+        fseek(f, 0, SEEK_SET);
+        unsigned char* buf = SAGE_ALLOC((size_t)length);
+        size_t read = fread(buf, 1, (size_t)length, f);
+        fclose(f);
+        ArrayValue* arr = out_val.as.array;
+        arr->count = (int)read;
+        arr->capacity = (int)read;
+        arr->elements = SAGE_ALLOC(sizeof(Value) * read);
+        gc_track_external_allocation(sizeof(Value) * (size_t)read);
+        for (size_t i = 0; i < read; i++) {
+            arr->elements[i] = val_number((double)buf[i]);
+        }
+        free(buf);
+    } else {
+        // Non-seekable file (e.g., /dev/urandom) — read in chunks until EOF
+        unsigned char chunk[4096];
+        size_t nread;
+        while ((nread = fread(chunk, 1, sizeof(chunk), f)) > 0) {
+            for (size_t i = 0; i < nread; i++) {
+                array_push(&out_val, val_number((double)chunk[i]));
+            }
+        }
+        fclose(f);
     }
-    free(buf);
     return out_val;
 }
 

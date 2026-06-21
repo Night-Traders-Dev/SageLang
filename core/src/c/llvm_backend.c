@@ -591,8 +591,8 @@ static ImportConstValue llvm_eval_const_expr(Expr* expr, ModuleConst* consts, in
                     if (op.type == TOKEN_AMP) result = import_const_number((double)(li & ri));
                     if (op.type == TOKEN_PIPE) result = import_const_number((double)(li | ri));
                     if (op.type == TOKEN_CARET) result = import_const_number((double)(li ^ ri));
-                    if (op.type == TOKEN_LSHIFT) result = import_const_number((double)(li << ri));
-                    if (op.type == TOKEN_RSHIFT) result = import_const_number((double)(li >> ri));
+                    if (op.type == TOKEN_LSHIFT) result = import_const_number((double)((unsigned long long)li << ri));
+                    if (op.type == TOKEN_RSHIFT) result = import_const_number((double)((unsigned long long)li >> ri));
                 }
             }
 
