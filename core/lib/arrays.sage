@@ -117,10 +117,8 @@ proc zip(left, right):
     if len(right) < limit:
         limit = len(right)
 
-    let i = 0
-    while i < limit:
+    for i in range(limit):
         push(result, (left[i], right[i]))
-        i = i + 1
     return result
 
 proc chunk(values, size):
@@ -131,9 +129,7 @@ proc chunk(values, size):
         return result
 
     let n = len(values)
-    let i = 0
-    while i < n:
+    for i in range(0, n, size):
         push(result, slice(values, i, i + size))
-        i = i + size
 
     return result

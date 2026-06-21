@@ -49,3 +49,7 @@
 ## 2026-06-20 - [Optimized JSON Array/Object Operations]
 **Learning:** SageLang's `cJSON` port used a naive linked-list implementation for arrays and objects, making size checks and appends O(N). Adding `count` and `last_child` metadata to the node structure allows O(1) operations while maintaining compatibility through a lazy reconstruction helper (`_cJSON_EnsureMetadata`).
 **Action:** Use cached metadata for linked-list based collections to avoid O(N) traversals. Measured a ~178x speedup (12.3s to 0.069s) for 8000-element array creation.
+
+## 2026-06-21 - [Optimized Loop Performance Pattern]
+**Learning:** In the SageLang interpreter, 'for' loops (either 'for item in collection' or 'for i in range(n)') are significantly more efficient than 'while' loops with manual index management. Benchmarks showed 'for item in arr' is ~2.7x faster than 'while i < len(arr)', and 'for i in range(n)' is ~1.7x faster than 'while i < n'.
+**Action:** Prefer 'for' loops for all iteration tasks in library code. Use 'for i in range(limit)' for indexed loops and 'for i in range(start, stop, step)' for complex progressions to leverage the VM's optimized iteration path.

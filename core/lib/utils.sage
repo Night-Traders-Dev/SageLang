@@ -56,8 +56,6 @@ proc repeat_value(value, count):
     return array_repeat(value, count)
 
 proc times(count, fn):
-    let i = 0
-    while i < count:
+    for i in range(count):
         fn(i)
-        i = i + 1
     return nil

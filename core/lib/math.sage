@@ -95,10 +95,8 @@ proc factorial(n):
         return 1
 
     let result = 1
-    let i = 2
-    while i <= n:
+    for i in range(2, n + 1):
         result = result * i
-        i = i + 1
     return result
 
 ## Returns the greatest common divisor of a and b
