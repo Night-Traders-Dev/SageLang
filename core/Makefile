@@ -1066,4 +1066,8 @@ bump-version:
         test-selfhost-diagnostic test-selfhost-gc test-selfhost-heartbeat test-selfhost-gpu test-selfhost-gpu-advanced \
         test-all stats help shaders menuconfig guiconfig \
         train-c train-sage chatbot-c chatbot-llvm chatbot-native sl-tq-chat all-models evolve datasets \
-        kernel-bare kernel-uefi qemu-bare qemu-bare-arm64 qemu-debug
+        kernel-bare kernel-uefi qemu-bare qemu-bare-arm64 qemu-debug sync
+
+sync:
+	../sagesync
+

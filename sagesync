@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""
+SageLang Submodule Sync Utility (sagesync)
+Synchronizes and updates all Git submodules recursively, with visual formatting.
+"""
+
+import os
+import sys
+import subprocess
+from pathlib import Path
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich import box
+
+console = Console()
+
+def banner(title):
+    console.print(Panel(Text(title, style="bold green", justify="center"), border_style="green", box=box.ROUNDED))
+
+def step(message):
+    console.print(f"  [yellow]⚙[/yellow] {message: <45}", end="")
+
+def step_ok(detail="done"):
+    console.print(f" [bold green]✓[/bold green] [green]done[/green] [dim]({detail})[/dim]")
+
+def step_fail(detail="failed"):
+    console.print(f" [bold red]✗[/bold red] [red]{detail}[/red]")
+    sys.exit(1)
+
+def run_cmd(cmd, cwd=None):
+    try:
+        res = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+        return res
+    except Exception as e:
+        return None
+
+def main():
+    banner("SageLang Submodule Synchronizer")
+    
+    if not Path(".git").exists():
+        console.print("[yellow]! Not a git repository, skipping submodule sync.[/yellow]")
+        sys.exit(0)
+        
+    step("Synchronizing submodules config")
+    res = run_cmd(["git", "submodule", "sync"])
+    if res and res.returncode == 0:
+        step_ok()
+    else:
+        step_fail("git submodule sync failed")
+
+    step("Updating submodules recursively")
+    res = run_cmd(["git", "submodule", "update", "--init", "--recursive"])
+    if res and res.returncode == 0:
+        step_ok()
+    else:
+        step_fail("git submodule update failed")
+
+    step("Checking submodules status")
+    res = run_cmd(["git", "submodule", "status"])
+    if res and res.returncode == 0:
+        step_ok("all synchronized")
+        console.print("\n[bold cyan]Submodule Status:[/bold cyan]")
+        for line in res.stdout.strip().split("\n"):
+            if line:
+                parts = line.split()
+                commit = parts[0]
+                path = parts[1]
+                branch = parts[2] if len(parts) > 2 else ""
+                console.print(f"  • [cyan]{path: <30}[/cyan] at [dim]{commit[:8]}[/dim] [green]{branch}[/green]")
+    else:
+        step_fail("git submodule status failed")
+
+    console.print("\n[bold green]✓ Synchronization complete![/bold green]\n")
+
+if __name__ == "__main__":
+    main()

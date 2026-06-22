@@ -13,7 +13,9 @@
 #include <string.h>
 #include <stdint.h>   // uintptr_t
 
-#ifdef __linux__
+#if defined(SAGE_BARE_METAL)
+#define JIT_SUPPORTED 1
+#elif defined(__linux__)
 #include <sys/mman.h>
 #include <unistd.h>
 /* MAP_ANONYMOUS fallback for older or non-GNU headers */
@@ -36,7 +38,15 @@
 
 void jit_init(JitState* jit) {
     memset(jit, 0, sizeof(JitState));
-#if JIT_SUPPORTED
+#if defined(SAGE_BARE_METAL)
+    jit->pool.capacity = JIT_CODE_POOL_SIZE;
+    jit->pool.code = malloc(jit->pool.capacity);
+    if (jit->pool.code == NULL) {
+        jit->pool.capacity = 0;
+    }
+    jit->pool.used = 0;
+    jit->enabled = (jit->pool.code != NULL);
+#elif JIT_SUPPORTED
     jit->pool.capacity = JIT_CODE_POOL_SIZE;
     jit->pool.code = mmap(NULL, jit->pool.capacity,
                           PROT_READ | PROT_WRITE | PROT_EXEC,
@@ -57,7 +67,11 @@ void jit_init(JitState* jit) {
 }
 
 void jit_shutdown(JitState* jit) {
-#if JIT_SUPPORTED
+#if defined(SAGE_BARE_METAL)
+    if (jit->pool.code) {
+        free(jit->pool.code);
+    }
+#elif JIT_SUPPORTED
     if (jit->pool.code) {
         munmap(jit->pool.code, jit->pool.capacity);
     }

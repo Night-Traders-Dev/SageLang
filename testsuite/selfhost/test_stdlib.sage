@@ -158,7 +158,7 @@ assert_eq(stdlib.string_reverse(""), "", "reverse empty")
 # ============================================================================
 
 # Test io_exists and io_read/io_write
-let test_path = "/tmp/sage_test_stdlib_io.txt"
+let test_path = "../../.tmp/sage_test_stdlib_io.txt"
 stdlib.io_write(test_path, "test content")
 assert_eq(stdlib.io_exists(test_path), true, "io exists after write")
 let content = stdlib.io_read(test_path)

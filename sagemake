@@ -114,13 +114,16 @@ def check_dependencies(args):
 def prepare_workspace():
     section("Preparing workspace")
     
-    step("Updating submodules")
-    if Path(".git").exists():
-        run_cmd(["git", "submodule", "sync"])
-        run_cmd(["git", "submodule", "update", "--init"])
-        step_ok("initialized")
+    if Path("sagesync").exists() and os.access("sagesync", os.X_OK):
+        run_cmd(["./sagesync"], capture_output=False)
     else:
-        step_ok("skipped (not a git repo)")
+        step("Updating submodules")
+        if Path(".git").exists():
+            run_cmd(["git", "submodule", "sync"])
+            run_cmd(["git", "submodule", "update", "--init", "--recursive"])
+            step_ok("initialized")
+        else:
+            step_ok("skipped (not a git repo)")
 
     step("Removing old build artifacts")
     if Path("core/build_sage").exists():

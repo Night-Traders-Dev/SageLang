@@ -765,6 +765,7 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     // Array iteration
     ll_emit(lc, "declare i32 @sage_rt_array_len(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_range(%%SageValue)\n");
+    ll_emit(lc, "declare i32 @sage_rt_get_updated_idx(%%SageValue, i32)\n");
     // Index set
     ll_emit(lc, "declare void @sage_rt_index_set(%%SageValue, %%SageValue, %%SageValue)\n");
     // Dict query operations
@@ -2029,13 +2030,8 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             llvm_emit_stmt_list(lc, stmt->as.for_stmt.body);
 
             if (!lc->block_terminated) {
-                // Mutation Fix: Sync loop variable back to internal counter
-                int updated_val = llc_new_reg(lc);
-                ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%s", updated_val, var_name);
-                
                 int next_idx = llc_new_reg(lc);
-                ll_line(lc, "%%%d = call i32 @sage_rt_get_updated_idx(%%SageValue %%%d, i32 %%%d)", next_idx, updated_val, cur_idx);
-                
+                ll_line(lc, "%%%d = add nsw i32 %%%d, 1", next_idx, cur_idx);
                 ll_line(lc, "store i32 %%%d, i32* %%%d", next_idx, idx_ptr);
                 ll_line(lc, "br label %%L%d", cond_label);
             }

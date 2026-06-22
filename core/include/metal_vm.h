@@ -207,6 +207,9 @@ typedef struct {
     int code_length;    // Length of function bytecode
     int param_count;    // Number of parameters
     int scope_depth;    // Scope depth at definition
+    int call_count;     // JIT profiling: entry execution count
+    int jit_compiled;   // 1 if JIT compiled, 0 otherwise
+    void* native_code;  // Pointer to JIT compiled native machine code
 } MetalFunction;
 
 // ============================================================================

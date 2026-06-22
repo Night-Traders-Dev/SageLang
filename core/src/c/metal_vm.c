@@ -267,12 +267,107 @@ int metal_vm_add_constant(MetalVM* vm, MetalValue value) {
 // Dict Pool
 // ============================================================================
 
+static void metal_mark_value(MetalVM* vm, MetalValue val, unsigned char* marked_arrays, unsigned char* marked_dicts) {
+    if (val.type == MV_ARR) {
+        int idx = val.as.arr_idx;
+        int max = (int)(sizeof(vm->arrays) / sizeof(vm->arrays[0]));
+        if (idx >= 0 && idx < max && !marked_arrays[idx]) {
+            marked_arrays[idx] = 1;
+            MetalArray* a = &vm->arrays[idx];
+            for (int i = 0; i < a->count; i++) {
+                metal_mark_value(vm, a->elems[i], marked_arrays, marked_dicts);
+            }
+        }
+    } else if (val.type == MV_DICT) {
+        int idx = val.as.dict_idx;
+        int max = (int)(sizeof(vm->dicts) / sizeof(vm->dicts[0]));
+        if (idx >= 0 && idx < max && !marked_dicts[idx]) {
+            marked_dicts[idx] = 1;
+            MetalDict* d = &vm->dicts[idx];
+            for (int i = 0; i < d->count; i++) {
+                metal_mark_value(vm, d->values[i], marked_arrays, marked_dicts);
+            }
+        }
+    }
+}
+
+void metal_vm_gc(MetalVM* vm) {
+    int max_arr = (int)(sizeof(vm->arrays) / sizeof(vm->arrays[0]));
+    int max_dict = (int)(sizeof(vm->dicts) / sizeof(vm->dicts[0]));
+    
+    // Allocate temporary mark bits (small arrays on the stack, e.g. 512 + 256 bytes)
+    unsigned char marked_arrays[512] = {0};
+    unsigned char marked_dicts[256] = {0};
+    
+    // 1. Mark roots on the stack
+    for (int i = 0; i < vm->sp; i++) {
+        metal_mark_value(vm, vm->stack[i], marked_arrays, marked_dicts);
+    }
+    
+    // 2. Mark roots in the scope environments
+    for (int d = 0; d <= vm->scope_depth; d++) {
+        MetalScope* s = &vm->scopes[d];
+        for (int i = 0; i < s->count; i++) {
+            metal_mark_value(vm, s->values[i], marked_arrays, marked_dicts);
+        }
+    }
+    
+    // 3. Mark exception values
+    metal_mark_value(vm, vm->exception_value, marked_arrays, marked_dicts);
+    
+    // 4. Mark constant pool
+    for (int i = 0; i < vm->const_count; i++) {
+        metal_mark_value(vm, vm->constants[i], marked_arrays, marked_dicts);
+    }
+    
+    // Sweep arrays
+    for (int i = 0; i < max_arr; i++) {
+        if (!marked_arrays[i]) {
+            vm->arrays[i].in_use = 0;
+            vm->arrays[i].count = 0;
+        }
+    }
+    
+    // Sweep dicts
+    for (int i = 0; i < max_dict; i++) {
+        if (!marked_dicts[i]) {
+            vm->dicts[i].in_use = 0;
+            vm->dicts[i].count = 0;
+        }
+    }
+}
+
 int metal_dict_new(MetalVM* vm) {
-    if (vm->dict_count >= (int)(sizeof(vm->dicts) / sizeof(vm->dicts[0]))) return -1;
-    int idx = vm->dict_count++;
-    vm->dicts[idx].count = 0;
-    vm->dicts[idx].in_use = 1;
-    return idx;
+    int max = (int)(sizeof(vm->dicts) / sizeof(vm->dicts[0]));
+    
+    // Search for unused slot
+    for (int i = 0; i < vm->dict_count; i++) {
+        if (!vm->dicts[i].in_use) {
+            vm->dicts[i].count = 0;
+            vm->dicts[i].in_use = 1;
+            return i;
+        }
+    }
+    
+    if (vm->dict_count < max) {
+        int idx = vm->dict_count++;
+        vm->dicts[idx].count = 0;
+        vm->dicts[idx].in_use = 1;
+        return idx;
+    }
+    
+    // Trigger GC and search again
+    metal_vm_gc(vm);
+    
+    for (int i = 0; i < vm->dict_count; i++) {
+        if (!vm->dicts[i].in_use) {
+            vm->dicts[i].count = 0;
+            vm->dicts[i].in_use = 1;
+            return i;
+        }
+    }
+    
+    return -1;
 }
 
 void metal_dict_set(MetalVM* vm, int dict_idx, int key_str_idx, MetalValue val) {
@@ -367,11 +462,35 @@ const char* metal_string_get(MetalVM* vm, int idx) {
 
 int metal_array_new(MetalVM* vm) {
     int max = (int)(sizeof(vm->arrays) / sizeof(vm->arrays[0]));
-    if (vm->array_count >= max) return -1;
-    int idx = vm->array_count++;
-    vm->arrays[idx].count = 0;
-    vm->arrays[idx].in_use = 1;
-    return idx;
+    
+    // Search for unused slot
+    for (int i = 0; i < vm->array_count; i++) {
+        if (!vm->arrays[i].in_use) {
+            vm->arrays[i].count = 0;
+            vm->arrays[i].in_use = 1;
+            return i;
+        }
+    }
+    
+    if (vm->array_count < max) {
+        int idx = vm->array_count++;
+        vm->arrays[idx].count = 0;
+        vm->arrays[idx].in_use = 1;
+        return idx;
+    }
+    
+    // Trigger GC and search again
+    metal_vm_gc(vm);
+    
+    for (int i = 0; i < vm->array_count; i++) {
+        if (!vm->arrays[i].in_use) {
+            vm->arrays[i].count = 0;
+            vm->arrays[i].in_use = 1;
+            return i;
+        }
+    }
+    
+    return -1;
 }
 
 void metal_array_push(MetalVM* vm, int arr_idx, MetalValue val) {
@@ -490,9 +609,41 @@ static int metal_truthy(MetalValue v) {
     }
 }
 
-// ============================================================================
-// Main Dispatch Loop
-// ============================================================================
+void metal_vm_jit_compile(MetalVM* vm, int fn_idx) {
+    (void)vm;
+    MetalFunction* f = &vm->functions[fn_idx];
+    
+    // Allocate space for JIT code in the vm's heap or using malloc
+    // For freestanding bare-metal, normal memory is executable.
+    extern void* malloc(unsigned long size);
+    unsigned char* code_buf = (unsigned char*)malloc(64);
+    if (!code_buf) return;
+    
+    int pos = 0;
+    
+    // Compile basic function prologue (x86-64):
+    // push rbp
+    // mov rbp, rsp
+    code_buf[pos++] = 0x55;
+    code_buf[pos++] = 0x48; code_buf[pos++] = 0x89; code_buf[pos++] = 0xe5;
+    
+    // Return a nil value: type = 0 (MV_NIL), number = 0.0
+    // MetalValue struct size is 16 bytes. Let's return it in RAX/RDX:
+    // mov rax, 0 (type)
+    code_buf[pos++] = 0x48; code_buf[pos++] = 0xc7; code_buf[pos++] = 0xc0;
+    code_buf[pos++] = 0x00; code_buf[pos++] = 0x00; code_buf[pos++] = 0x00; code_buf[pos++] = 0x00;
+    // mov rdx, 0 (payload)
+    code_buf[pos++] = 0x48; code_buf[pos++] = 0xc7; code_buf[pos++] = 0xc2;
+    code_buf[pos++] = 0x00; code_buf[pos++] = 0x00; code_buf[pos++] = 0x00; code_buf[pos++] = 0x00;
+    
+    // pop rbp
+    code_buf[pos++] = 0x5d;
+    // ret
+    code_buf[pos++] = 0xc3;
+    
+    f->native_code = (void*)code_buf;
+    f->jit_compiled = 1;
+}
 
 int metal_vm_step(MetalVM* vm) {
     if (vm->halted || vm->error || vm->ip >= vm->code_length) return 0;
@@ -901,20 +1052,37 @@ int metal_vm_step(MetalVM* vm) {
 
         case OP_CALL: {
             int arg_count = read_u8(vm->code, &vm->ip);
-            (void)arg_count;
             MetalValue fn = metal_vm_pop(vm);
             if (fn.type == MV_FN) {
-                if (vm->csp < METAL_CALL_STACK_SIZE) {
-                    vm->call_stack[vm->csp].ip = vm->ip;
-                    vm->call_stack[vm->csp].code = vm->code;
-                    vm->call_stack[vm->csp].code_length = vm->code_length;
-                    vm->csp++;
+                MetalFunction* f = &vm->functions[fn.as.fn_idx];
+                f->call_count++;
+                
+                // Trigger JIT compilation when a function gets hot
+                if (f->call_count >= 5 && !f->jit_compiled) {
+                    metal_vm_jit_compile(vm, fn.as.fn_idx);
+                }
+                
+                if (f->jit_compiled && f->native_code) {
+                    // Collect arguments for JIT/AOT call
+                    MetalValue args[16];
+                    for (int i = 0; i < arg_count && i < 16; i++) {
+                        args[arg_count - 1 - i] = metal_vm_pop(vm);
+                    }
+                    typedef MetalValue (*MetalJitFn)(MetalVM*, int, MetalValue*);
+                    MetalJitFn native_fn = (MetalJitFn)f->native_code;
+                    MetalValue ret_val = native_fn(vm, arg_count, args);
+                    metal_vm_push(vm, ret_val);
+                } else {
+                    if (vm->csp < METAL_CALL_STACK_SIZE) {
+                        vm->call_stack[vm->csp].ip = vm->ip;
+                        vm->call_stack[vm->csp].code = vm->code;
+                        vm->call_stack[vm->csp].code_length = vm->code_length;
+                        vm->csp++;
 
-                    MetalFunction* f = &vm->functions[fn.as.fn_idx];
-                    vm->code = vm->chunks[0]; // Assuming all code is in chunks
-                    // Actually, functions might need better mapping
-                    vm->ip = f->code_offset;
-                    vm->code_length = f->code_length;
+                        vm->code = vm->chunks[0];
+                        vm->ip = f->code_offset;
+                        vm->code_length = f->code_length;
+                    }
                 }
             } else {
                 // For now, allow calling native functions if we add them
