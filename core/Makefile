@@ -18,7 +18,10 @@ CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_
 CFLAGS += $(CFLAGS_EXTRA)
 # Platform-conditional linking: pthread only on desktop (not RP2040)
 ifndef PICO_BUILD
-LDFLAGS = -lm -lpthread -ldl -lcurl -lssl -lcrypto
+LDFLAGS = -lm -lpthread -ldl
+ifndef SAGE_NO_NET
+LDFLAGS += -lcurl -lssl -lcrypto
+endif
 # Merge env-provided paths (Homebrew, BSD /usr/local/lib, etc.)
 ifneq ($(strip $(LDFLAGS_EXTRA)),)
     LDFLAGS += $(LDFLAGS_EXTRA)
