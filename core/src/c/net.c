@@ -22,9 +22,11 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 
+#ifndef SAGE_NO_NET
 #include <curl/curl.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#endif
 
 // ========== SOCKET MODULE - Raw POSIX Sockets ==========
 
@@ -260,9 +262,13 @@ static Value tcp_close_native(int argc, Value* args) {
 // ========== HTTP MODULE - Client Patterns ==========
 
 static Value http_get_native(int argc, Value* args) {
+#ifndef SAGE_NO_NET
     if (argc < 1 || !IS_STRING(args[0])) return val_nil();
     CURL* curl = curl_easy_init();
     if (!curl) return val_nil();
+#else
+    (void)argc; (void)args;
+#endif
 
     // Simplified mock implementation or actual curl call
     // For now, let's assume we want working networking.
