@@ -316,6 +316,7 @@ def propagate_version(new_version):
     
     exclude_dirs = {'.git', '.sagepkg', '.claude', '.jules', 'node_modules', 'obj', 'build_sage'}
     exclude_files = {'sagemake', 'VERSION', 'SPEC_VERSION', 'package-lock.json'}
+    exclude_suffixes = {'CHANGELOG.md', 'UPDATES.md', 'ROADMAP.md'}
     
     # Update core/VERSION explicitly
     core_version = Path("core/VERSION")
@@ -328,6 +329,8 @@ def propagate_version(new_version):
         if any(part in exclude_dirs for part in path.parts):
             continue
         if path.name in exclude_files or path.is_dir():
+            continue
+        if any(path.name.endswith(s) for s in exclude_suffixes):
             continue
             
         try:
