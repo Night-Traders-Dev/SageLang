@@ -1497,10 +1497,14 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
           if (cls != NULL) {
             StringBuffer sb;
             sb_init(&sb);
+            char parent_buf[256];
+            if (cls->parent_name) {
+              snprintf(parent_buf, sizeof(parent_buf), "\"%s\"", cls->parent_name);
+            } else {
+              strcpy(parent_buf, "NULL");
+            }
             sb_appendf(&sb, "sage_construct(\"%s\", %s, %d, (SageValue[]){",
-                       cls->class_name,
-                       cls->parent_name ? cls->parent_name : "NULL",
-                       call->arg_count);
+                       cls->class_name, parent_buf, call->arg_count);
             for (int i = 0; i < call->arg_count; i++) {
               if (i > 0)
                 sb_append(&sb, ", ");
@@ -2367,7 +2371,25 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     free(callee_name);
     return sb_take(&sb);
   }
+  if (strcmp(callee_name, "_builtin_endswith") == 0 && call->arg_count == 2) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_endswith(%s, %s)", a, b);
+    free(a);
+    free(b);
+    free(callee_name);
+    return sb_take(&sb);
+  }
   if (strcmp(callee_name, "contains") == 0 && call->arg_count == 2) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_contains(%s, %s)", a, b);
+    free(a);
+    free(b);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "_builtin_contains") == 0 && call->arg_count == 2) {
     char *a = emit_expr(compiler, call->args[0]);
     char *b = emit_expr(compiler, call->args[1]);
     sb_appendf(&sb, "sage_contains(%s, %s)", a, b);
@@ -2380,6 +2402,24 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     char *a = emit_expr(compiler, call->args[0]);
     char *b = emit_expr(compiler, call->args[1]);
     sb_appendf(&sb, "sage_indexof(%s, %s)", a, b);
+    free(a);
+    free(b);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "string_count") == 0 && call->arg_count == 2) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_string_count(%s, %s)", a, b);
+    free(a);
+    free(b);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "string_repeat") == 0 && call->arg_count == 2) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_string_repeat(%s, %s)", a, b);
     free(a);
     free(b);
     free(callee_name);
@@ -4323,6 +4363,33 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    char* found = strstr(haystack.as.string, needle.as.string);\n"
       "    if (found == NULL) return sage_number(-1);\n"
       "    return sage_number((double)(found - haystack.as.string));\n"
+      "}\n"
+      "\n"
+      "static SageValue sage_string_count(SageValue haystack, SageValue needle) {\n"
+      "    if (haystack.type != SAGE_TAG_STRING || needle.type != "
+      "SAGE_TAG_STRING) return sage_nil();\n"
+      "    if (SAGE_STRING_LEN(needle) == 0) return sage_number(0);\n"
+      "    size_t count = 0;\n"
+       "    const char* pos = haystack.as.string;\n"
+      "    while ((pos = strstr(pos, needle.as.string)) != NULL) {\n"
+      "        count++;\n"
+      "        pos += SAGE_STRING_LEN(needle);\n"
+      "    }\n"
+      "    return sage_number((double)count);\n"
+      "}\n"
+      "\n"
+      "static SageValue sage_string_repeat(SageValue s, SageValue count) {\n"
+      "    if (s.type != SAGE_TAG_STRING || count.type != SAGE_TAG_NUMBER) "
+      "return sage_nil();\n"
+      "    int n = (int)count.as.number;\n"
+      "    if (n <= 0) return sage_string(\"\");\n"
+      "    size_t slen = SAGE_STRING_LEN(s);\n"
+      "    char* buf = malloc(slen * n + 1);\n"
+      "    if (!buf) return sage_nil();\n"
+      "    for (int i = 0; i < n; i++) memcpy(buf + i * slen, s.as.string, slen);\n"
+      "    buf[slen * n] = '\\0';\n"
+      "    SageValue result = sage_string_take(buf);\n"
+      "    return result;\n"
       "}\n"
       "\n",
       out);
