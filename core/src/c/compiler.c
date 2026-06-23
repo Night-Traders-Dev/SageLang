@@ -1381,11 +1381,15 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
       char *method_name = token_to_string(call->callee->as.get.property);
 
       /* Native module special cases */
-      if (strcmp(target_mod->name, "_math") == 0) {
+      if (strcmp(target_mod->name, "_math") == 0 || strcmp(target_mod->name, "math") == 0) {
         StringBuffer sb;
         sb_init(&sb);
-        if (strcmp(method_name, "random") == 0) sb_append(&sb, "sage_native_random(");
-        else if (strcmp(method_name, "sin") == 0) sb_append(&sb, "sage_native_sin(");
+        if (strcmp(method_name, "random") == 0) {
+          if (call->arg_count == 0)
+            sb_append(&sb, "sage_native_random(");
+          else
+            sb_append(&sb, "sage_native_srandom(");
+        } else if (strcmp(method_name, "sin") == 0) sb_append(&sb, "sage_native_sin(");
         else if (strcmp(method_name, "cos") == 0) sb_append(&sb, "sage_native_cos(");
         else if (strcmp(method_name, "tan") == 0) sb_append(&sb, "sage_native_tan(");
         else if (strcmp(method_name, "floor") == 0) sb_append(&sb, "sage_native_floor(");
@@ -1478,13 +1482,21 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
         if (strncmp(c_name, "sage_fn_", 8) == 0) {
           StringBuffer sb;
           sb_init(&sb);
+          /* Pad missing optional args with sage_nil() for default params */
+          ProcEntry *pe = find_proc_entry(compiler->procs, method_name);
+          int required = pe ? pe->param_count : call->arg_count;
+          int emit_count = call->arg_count > required ? call->arg_count : required;
           sb_appendf(&sb, "%s(", c_name);
-          for (int i = 0; i < call->arg_count; i++) {
+          for (int i = 0; i < emit_count; i++) {
             if (i > 0)
               sb_append(&sb, ", ");
-            char *arg = emit_expr(compiler, call->args[i]);
-            sb_append(&sb, arg);
-            free(arg);
+            if (i < call->arg_count) {
+              char *arg = emit_expr(compiler, call->args[i]);
+              sb_append(&sb, arg);
+              free(arg);
+            } else {
+              sb_append(&sb, "sage_nil()");
+            }
           }
           sb_append(&sb, ")");
           free(obj_name);
@@ -2559,27 +2571,32 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     return str_dup("sage_nil()");
   }
 
-  if (proc->param_count != call->arg_count) {
+  if (call->arg_count > proc->param_count) {
     char help[256];
-    snprintf(help, sizeof(help), "change this call to pass %d argument%s",
+    snprintf(help, sizeof(help), "change this call to pass at most %d argument%s",
              proc->param_count, proc->param_count == 1 ? "" : "s");
     compiler_error_at(
         compiler, expr_token(call->callee), help,
-        "call to '%s' passes %d argument%s, but the procedure expects %d",
+        "call to '%s' passes %d argument%s, but the procedure expects at most %d",
         callee_name, call->arg_count, call->arg_count == 1 ? "" : "s",
         proc->param_count);
     free(callee_name);
     return str_dup("sage_nil()");
   }
 
+  int emit_count = proc->param_count;
   sb_appendf(&sb, "%s(", proc->c_name);
-  for (int i = 0; i < call->arg_count; i++) {
-    char *arg = emit_expr(compiler, call->args[i]);
+  for (int i = 0; i < emit_count; i++) {
     if (i > 0) {
       sb_append(&sb, ", ");
     }
-    sb_append(&sb, arg);
-    free(arg);
+    if (i < call->arg_count) {
+      char *arg = emit_expr(compiler, call->args[i]);
+      sb_append(&sb, arg);
+      free(arg);
+    } else {
+      sb_append(&sb, "sage_nil()");
+    }
   }
   sb_append(&sb, ")");
   free(callee_name);
@@ -3782,6 +3799,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "}\n"
       "\n"
       "static SageValue sage_native_random(void) { return sage_number((double)rand() / (double)RAND_MAX); }\n"
+      "static SageValue sage_native_srandom(SageValue seed) { srand((unsigned int)seed.as.number); return sage_nil(); }\n"
       "static SageValue sage_native_sin(SageValue v) { return sage_number(sin(v.as.number)); }\n"
       "static SageValue sage_native_cos(SageValue v) { return sage_number(cos(v.as.number)); }\n"
       "static SageValue sage_native_tan(SageValue v) { return sage_number(tan(v.as.number)); }\n"
