@@ -207,6 +207,7 @@ void env_cleanup_all(void) {
         Env* env = allocated_envs;
         allocated_envs = allocated_envs->alloc_next;
 
+        // Free thread-local pool nodes
         EnvNode* current = env->head;
         while (current != NULL) {
             EnvNode* next = current->next;

@@ -11,6 +11,7 @@
 #include "value.h"
 #include "env.h"
 #include "sage_thread.h"
+#include <stdatomic.h>
 
 // GC configuration
 #define GC_HEAP_SIZE (16 * 1024 * 1024)        // 16MB heap
@@ -172,7 +173,7 @@ typedef struct {
     // Concurrent GC state
     int phase;                  // Current GC phase
     GCMarkStack mark_stack;     // Gray objects pending scan
-    int barrier_active;         // Write barrier enabled during marking
+    atomic_int barrier_active;   // Write barrier enabled during marking
 
     // Timing (nanoseconds)
     unsigned long last_root_scan_ns;
@@ -254,10 +255,10 @@ void gc_write_barrier_env(Env* old_env);
 
 // Convenience macro for the common case
 #define GC_WRITE_BARRIER(old_val) \
-    do { if (gc.barrier_active) gc_write_barrier_value(old_val); } while(0)
+    do { if (atomic_load_explicit(&gc.barrier_active, memory_order_relaxed)) gc_write_barrier_value(old_val); } while(0)
 
 #define GC_WRITE_BARRIER_ENV(old_env) \
-    do { if (gc.barrier_active) gc_write_barrier_env(old_env); } while(0)
+    do { if (atomic_load_explicit(&gc.barrier_active, memory_order_relaxed)) gc_write_barrier_env(old_env); } while(0)
 
 // ============================================================================
 // Mark stack operations

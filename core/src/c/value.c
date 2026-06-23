@@ -586,7 +586,12 @@ char* string_replace(const char* str, const char* old, const char* new_str) {
 
     // Use signed arithmetic to avoid underflow when new_len < old_len
     long long delta = (long long)new_len - (long long)old_len;
-    size_t result_len = (size_t)((long long)str_len + (long long)count * delta);
+    long long result_ll = (long long)str_len + (long long)count * delta;
+    if (result_ll < 0 || (size_t)result_ll > SIZE_MAX - 1) {
+        fprintf(stderr, "Error: String replace overflow\n");
+        return NULL;
+    }
+    size_t result_len = (size_t)result_ll;
     char* result = SAGE_ALLOC(result_len + 1);
     char* wp = result;  // Write pointer (O(n) instead of O(n²) strcat)
 

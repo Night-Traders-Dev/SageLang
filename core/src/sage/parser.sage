@@ -39,6 +39,8 @@ proc parse_number_literal(text):
             value = value * 2
             if text[i] == "1":
                 value = value + 1
+            elif text[i] != "0":
+                return tonumber(text)
             i = i + 1
         return value
     return tonumber(text)
@@ -65,10 +67,17 @@ class Parser:
 
     # --- Token access ---
 
+    proc is_at_end():
+        return self.pos >= len(self.tokens)
+
     proc peek():
+        if self.is_at_end():
+            return self.tokens[len(self.tokens) - 1]
         return self.tokens[self.pos]
 
     proc peek_type():
+        if self.is_at_end():
+            return self.tokens[len(self.tokens) - 1].type
         return self.tokens[self.pos].type
 
     proc advance():
@@ -77,6 +86,8 @@ class Parser:
         return tok
 
     proc previous():
+        if self.pos <= 0:
+            return self.tokens[0]
         return self.tokens[self.pos - 1]
 
     proc check(tok_type):

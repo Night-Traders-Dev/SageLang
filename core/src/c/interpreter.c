@@ -1981,27 +1981,27 @@ static int asm_get_commands(const char* arch, const char* asm_path,
 
     if (strcmp(arch, "x86_64") == 0) {
         if (cross) {
-            snprintf(as_cmd, as_sz, "x86_64-linux-gnu-as -o %s %s 2>/dev/null", obj_path, asm_path);
-            snprintf(ld_cmd, ld_sz, "x86_64-linux-gnu-gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+            snprintf(as_cmd, as_sz, "x86_64-linux-gnu-as -o '%s' '%s' 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "x86_64-linux-gnu-gcc -shared -o '%s' '%s' 2>/dev/null", so_path, obj_path);
         } else {
-            snprintf(as_cmd, as_sz, "as --64 -o %s %s 2>/dev/null", obj_path, asm_path);
-            snprintf(ld_cmd, ld_sz, "gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+            snprintf(as_cmd, as_sz, "as --64 -o '%s' '%s' 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "gcc -shared -o '%s' '%s' 2>/dev/null", so_path, obj_path);
         }
     } else if (strcmp(arch, "aarch64") == 0) {
         if (cross) {
-            snprintf(as_cmd, as_sz, "aarch64-linux-gnu-as -o %s %s 2>/dev/null", obj_path, asm_path);
-            snprintf(ld_cmd, ld_sz, "aarch64-linux-gnu-gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+            snprintf(as_cmd, as_sz, "aarch64-linux-gnu-as -o '%s' '%s' 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "aarch64-linux-gnu-gcc -shared -o '%s' '%s' 2>/dev/null", so_path, obj_path);
         } else {
-            snprintf(as_cmd, as_sz, "as -o %s %s 2>/dev/null", obj_path, asm_path);
-            snprintf(ld_cmd, ld_sz, "gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+            snprintf(as_cmd, as_sz, "as -o '%s' '%s' 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "gcc -shared -o '%s' '%s' 2>/dev/null", so_path, obj_path);
         }
     } else if (strcmp(arch, "rv64") == 0) {
         if (cross) {
-            snprintf(as_cmd, as_sz, "riscv64-linux-gnu-as -o %s %s 2>/dev/null", obj_path, asm_path);
-            snprintf(ld_cmd, ld_sz, "riscv64-linux-gnu-gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+            snprintf(as_cmd, as_sz, "riscv64-linux-gnu-as -o '%s' '%s' 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "riscv64-linux-gnu-gcc -shared -o '%s' '%s' 2>/dev/null", so_path, obj_path);
         } else {
-            snprintf(as_cmd, as_sz, "as -o %s %s 2>/dev/null", obj_path, asm_path);
-            snprintf(ld_cmd, ld_sz, "gcc -shared -o %s %s 2>/dev/null", so_path, obj_path);
+            snprintf(as_cmd, as_sz, "as -o '%s' '%s' 2>/dev/null", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "gcc -shared -o '%s' '%s' 2>/dev/null", so_path, obj_path);
         }
     } else {
         return -1; // Unknown arch
@@ -2719,6 +2719,11 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 char* s2 = AS_STRING(right);
                 size_t len1 = strlen(s1);
                 size_t len2 = strlen(s2);
+                if (len1 > SIZE_MAX - len2 - 1) {
+                    fprintf(stderr, "Error: String concatenation overflow\n");
+                    AST_GC_POP();
+                    return EVAL_RESULT(val_nil());
+                }
                 char* result = SAGE_ALLOC(len1 + len2 + 1);
                 memcpy(result, s1, len1);
                 memcpy(result + len1, s2, len2 + 1);
@@ -3694,12 +3699,12 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
     if (!consume_gas(10)) return gas_error();
 
     // Thread-safe first-call detection: only set g_global_env once
-    static volatile int first_call = 1;
-    if (first_call && stmt != NULL) {
-        // Benign race: multiple threads may set g_global_env to their env,
-        // but only the main thread's initial call matters.
-        g_global_env = env;
-        first_call = 0;
+    static atomic_int first_call = 1;
+    if (atomic_load_explicit(&first_call, memory_order_acquire) && stmt != NULL) {
+        int expected = 1;
+        if (atomic_compare_exchange_strong(&first_call, &expected, 0)) {
+            g_global_env = env;
+        }
     }
     if (!stmt) return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
 
@@ -3872,6 +3877,11 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 DictValue* d = iterable.as.dict;
                 count = d->count;
                 elements = (Value*)malloc(sizeof(Value) * count);
+                if (!elements && count > 0) {
+                    fprintf(stderr, "Error: Out of memory in for-in dict iteration\n");
+                    AST_GC_POP_ENV(); AST_GC_POP();
+                    return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
+                }
                 int j = 0;
                 for (int i = 0; i < d->capacity; i++) {
                     if (d->entries[i].key != NULL) {

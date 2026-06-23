@@ -949,10 +949,10 @@ static int is_safe_command(const char* cmd) {
     // Reject commands starting with hyphen to prevent flag injection in some contexts
     if (cmd[0] == '-') return 0;
     for (const char* p = cmd; *p; p++) {
-        // Allow alphanumeric, spaces, and safe path/filename characters.
-        // Blocks metacharacters like ; | & > < $ ( ) ` ' " etc.
+        // Allow alphanumeric and safe path/filename characters.
+        // Blocks metacharacters like ; | & > < $ ( ) ` ' " and spaces.
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~' && *p != ' ') {
+            *p != '-' && *p != '_' && *p != '~') {
             return 0;
         }
     }

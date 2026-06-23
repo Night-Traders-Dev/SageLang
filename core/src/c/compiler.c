@@ -206,7 +206,13 @@ static char *escape_c_string(const char *text) {
       sb_append(&sb, "\\t");
       break;
     default:
-      sb_append_char(&sb, text[i]);
+      if ((unsigned char)text[i] < 0x20 || (unsigned char)text[i] == 0x7F) {
+        char buf[8];
+        snprintf(buf, sizeof(buf), "\\x%02x", (unsigned char)text[i]);
+        sb_append(&sb, buf);
+      } else {
+        sb_append_char(&sb, text[i]);
+      }
       break;
     }
   }
@@ -1509,9 +1515,12 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
           if (cls != NULL) {
             StringBuffer sb;
             sb_init(&sb);
-            char parent_buf[256];
+            size_t pn_len = cls->parent_name ? strlen(cls->parent_name) : 0;
+            size_t pb_size = pn_len + 4;
+            if (pb_size < 16) pb_size = 16;
+            char* parent_buf = (char*)malloc(pb_size);
             if (cls->parent_name) {
-              snprintf(parent_buf, sizeof(parent_buf), "\"%s\"", cls->parent_name);
+              snprintf(parent_buf, pb_size, "\"%s\"", cls->parent_name);
             } else {
               strcpy(parent_buf, "NULL");
             }
@@ -1527,6 +1536,7 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
             if (call->arg_count == 0)
               sb_append(&sb, "sage_nil()");
             sb_append(&sb, "})");
+            free(parent_buf);
             free(obj_name);
             free(method_name);
             return sb_take(&sb);

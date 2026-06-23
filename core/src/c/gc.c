@@ -89,6 +89,7 @@ typedef struct {
 } StringTable;
 
 static StringTable string_table = {NULL, 0, 0};
+static sage_mutex_t string_table_mutex = SAGE_MUTEX_INITIALIZER;
 
 static unsigned int intern_hash(const char* s, int len) {
     unsigned int hash = 2166136261u;
@@ -101,6 +102,8 @@ static unsigned int intern_hash(const char* s, int len) {
 
 void* gc_intern_string(const char* s, int len) {
     if (len < 0) len = (int)strlen(s);
+    
+    sage_mutex_lock(&string_table_mutex);
     
     if (string_table.capacity == 0 || string_table.count * 2 >= string_table.capacity) {
         int old_cap = string_table.capacity;
@@ -124,6 +127,7 @@ void* gc_intern_string(const char* s, int len) {
     int idx = (int)(h % (unsigned int)string_table.capacity);
     while (string_table.entries[idx]) {
         if ((int)strlen(string_table.entries[idx]) == len && memcmp(string_table.entries[idx], s, (size_t)len) == 0) {
+            sage_mutex_unlock(&string_table_mutex);
             return string_table.entries[idx];
         }
         idx = (idx + 1) % string_table.capacity;
@@ -136,15 +140,18 @@ void* gc_intern_string(const char* s, int len) {
     
     string_table.entries[idx] = interned;
     string_table.count++;
+    sage_mutex_unlock(&string_table_mutex);
     return interned;
 }
 
 static void gc_mark_interned_strings(void) {
+    sage_mutex_lock(&string_table_mutex);
     for (int i = 0; i < string_table.capacity; i++) {
         if (string_table.entries[i]) {
             gc_shade_gray(string_table.entries[i], VAL_STRING);
         }
     }
+    sage_mutex_unlock(&string_table_mutex);
 }
 
 
@@ -351,6 +358,7 @@ void gc_init(void) {
 static void arc_table_cleanup(void);
 
 void gc_shutdown(void) {
+    sage_mutex_lock(&gc_mutex);
     if (gc.enabled) gc_collect();
     // Run final ORC/ARC cycle collection before full teardown
     if (gc.mode == GC_MODE_ORC) orc_collect_cycles();
@@ -363,6 +371,8 @@ void gc_shutdown(void) {
         free(obj);
         obj = next;
     }
+    gc.objects = NULL;
+    sage_mutex_unlock(&gc_mutex);
     gc_mark_stack_free(&gc.mark_stack);
     free(gc.cycle_buffer); gc.cycle_buffer = NULL;
     free(gc.orc_roots); gc.orc_roots = NULL;
@@ -448,7 +458,7 @@ void gc_shade_gray(void* object, int type) {
 
 void gc_write_barrier_value(Value old_val) {
     // Only active during concurrent marking
-    if (!gc.barrier_active) return;
+    if (!atomic_load_explicit(&gc.barrier_active, memory_order_acquire)) return;
 
     // Shade the OLD value being overwritten so the concurrent marker doesn't miss it
     switch (old_val.type) {
@@ -472,7 +482,7 @@ void gc_write_barrier_value(Value old_val) {
 }
 
 void gc_write_barrier_env(Env* old_env) {
-    if (!gc.barrier_active || old_env == NULL) return;
+    if (!atomic_load_explicit(&gc.barrier_active, memory_order_acquire) || old_env == NULL) return;
     if (!old_env->marked) {
         old_env->marked = 1;
         // Mark all values in the old environment
@@ -707,7 +717,7 @@ void gc_begin_cycle(void) {
     gc_mark_all_roots();
 
     // Enable write barrier for concurrent phase
-    gc.barrier_active = 1;
+    atomic_store_explicit(&gc.barrier_active, 1, memory_order_release);
     gc.phase = GC_PHASE_CONCURRENT_MARK;
 
     gc.last_root_scan_ns = now_ns() - t0;
@@ -753,7 +763,7 @@ void gc_remark(void) {
     }
 
     // Disable write barrier
-    gc.barrier_active = 0;
+    atomic_store_explicit(&gc.barrier_active, 0, memory_order_release);
 
     gc.last_remark_ns = now_ns() - t0;
     if (gc.last_remark_ns > gc.max_pause_ns)
@@ -1047,6 +1057,7 @@ static void arc_table_cleanup(void) {
 }
 
 void gc_set_mode(int mode) {
+    sage_mutex_lock(&gc_mutex);
     gc.mode = mode;
     if (mode == GC_MODE_ARC) {
         gc.enabled = 0; // Disable tracing GC in ARC mode
@@ -1076,6 +1087,7 @@ void gc_set_mode(int mode) {
         gc.enabled = 1;
         if (gc_debug) fprintf(stderr, "[GC] Tracing GC mode enabled\n");
     }
+    sage_mutex_unlock(&gc_mutex);
 }
 
 void arc_retain(void* obj) {
@@ -1158,7 +1170,9 @@ void arc_add_candidate(void* obj) {
 
     if (gc.cycle_buffer_count >= gc.cycle_buffer_capacity) {
         gc.cycle_buffer_capacity = gc.cycle_buffer_capacity ? gc.cycle_buffer_capacity * 2 : 256;
-        gc.cycle_buffer = (void**)realloc(gc.cycle_buffer, sizeof(void*) * (size_t)gc.cycle_buffer_capacity);
+        void** new_buf = (void**)realloc(gc.cycle_buffer, sizeof(void*) * (size_t)gc.cycle_buffer_capacity);
+        if (!new_buf) { fprintf(stderr, "[GC] OOM expanding cycle buffer\n"); return; }
+        gc.cycle_buffer = new_buf;
     }
     gc.cycle_buffer[gc.cycle_buffer_count++] = obj;
 }
@@ -1236,7 +1250,9 @@ void orc_mark_candidate(void* obj) {
 
     if (gc.orc_roots_count >= gc.orc_roots_capacity) {
         gc.orc_roots_capacity = gc.orc_roots_capacity ? gc.orc_roots_capacity * 2 : 512;
-        gc.orc_roots = (void**)realloc(gc.orc_roots, sizeof(void*) * (size_t)gc.orc_roots_capacity);
+        void** new_roots = (void**)realloc(gc.orc_roots, sizeof(void*) * (size_t)gc.orc_roots_capacity);
+        if (!new_roots) { fprintf(stderr, "[GC] OOM expanding ORC roots\n"); return; }
+        gc.orc_roots = new_roots;
     }
     gc.orc_roots[gc.orc_roots_count++] = obj;
 }

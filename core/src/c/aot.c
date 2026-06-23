@@ -174,7 +174,13 @@ static char* escape_c_str(const char* s) {
             case '\t': out[j++]='\\'; out[j++]='t'; break;
             case '\\': out[j++]='\\'; out[j++]='\\'; break;
             case '"':  out[j++]='\\'; out[j++]='"'; break;
-            default:   out[j++]=s[i]; break;
+            default:
+                if ((unsigned char)s[i] < 0x20 || (unsigned char)s[i] == 0x7F) {
+                    j += snprintf(out + j, 5, "\\x%02x", (unsigned char)s[i]);
+                } else {
+                    out[j++]=s[i];
+                }
+                break;
         }
     }
     out[j] = '\0';
@@ -321,7 +327,7 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
                 size_t total_len = strlen(fname) + 64; // preamble and postamble
                 for (int i = 0; i < argc; i++) {
                     compiled_args[i] = aot_compile_expr(aot, expr->as.call.args[i]);
-                    total_len += strlen(compiled_args[i]) + 32; // "_args[N] = ...; "
+                    total_len += strlen(compiled_args[i]) + 48; // "_args[NNNNN] = ...; "
                 }
 
                 char* buf = malloc(total_len);
@@ -355,10 +361,14 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
                 char* name = sanitize_name(expr->as.set.property.start, expr->as.set.property.length);
                 char* val = aot_compile_expr(aot, expr->as.set.value);
                 char* buf = malloc(strlen(name) + strlen(val) + 16);
-                sprintf(buf, "(%s = %s)", name, val);
+                if (buf) {
+                    sprintf(buf, "(%s = %s)", name, val);
+                } else {
+                    fprintf(stderr, "Error: Out of memory in AOT expression\n");
+                }
                 free(name);
                 free(val);
-                return buf;
+                return buf ? buf : strdup("sage_nil()");
             }
             return strdup("sage_nil()");
         }
@@ -441,18 +451,26 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
             char* prop = sanitize_name(expr->as.get.property.start, expr->as.get.property.length);
             char* esc = escape_c_str(prop + 2); // skip s_ prefix
             char* buf = malloc(strlen(obj) + strlen(esc) + 48);
-            sprintf(buf, "sage_get_property(%s, \"%s\")", obj, esc);
+            if (buf) {
+                sprintf(buf, "sage_get_property(%s, \"%s\")", obj, esc);
+            } else {
+                fprintf(stderr, "Error: Out of memory in AOT property access\n");
+            }
             free(obj); free(prop); free(esc);
-            return buf;
+            return buf ? buf : strdup("sage_nil()");
         }
         case EXPR_SLICE: {
             char* obj = aot_compile_expr(aot, expr->as.slice.array);
             char* start = expr->as.slice.start ? aot_compile_expr(aot, expr->as.slice.start) : strdup("sage_number(0)");
             char* end = expr->as.slice.end ? aot_compile_expr(aot, expr->as.slice.end) : strdup("sage_nil()");
             char* buf = malloc(strlen(obj) + strlen(start) + strlen(end) + 48);
-            sprintf(buf, "sage_slice(%s, %s, %s)", obj, start, end);
+            if (buf) {
+                sprintf(buf, "sage_slice(%s, %s, %s)", obj, start, end);
+            } else {
+                fprintf(stderr, "Error: Out of memory in AOT slice\n");
+            }
             free(obj); free(start); free(end);
-            return buf;
+            return buf ? buf : strdup("sage_nil()");
         }
         case EXPR_TUPLE: {
             int n = expr->as.tuple.count;

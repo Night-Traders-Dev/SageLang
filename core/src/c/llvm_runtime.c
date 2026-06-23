@@ -510,6 +510,7 @@ void sage_rt_index_set(SageValue obj, SageValue idx, SageValue val) {
             d->values = safe_realloc(d->values, sizeof(SageValue) * (size_t)d->capacity);
         }
         d->keys[d->count] = strdup(idx.as.string);
+        if (!d->keys[d->count]) { fprintf(stderr, "OOM\n"); abort(); }
         d->values[d->count] = val;
         d->count++;
     }
@@ -542,6 +543,7 @@ void sage_rt_dict_set(SageValue dict, const char* key, SageValue val) {
         d->values = safe_realloc(d->values, sizeof(SageValue) * (size_t)d->capacity);
     }
     d->keys[d->count] = strdup(key);
+    if (!d->keys[d->count]) { fprintf(stderr, "OOM\n"); abort(); }
     d->values[d->count] = val;
     d->count++;
 }
@@ -634,6 +636,7 @@ void sage_rt_set_attr(SageValue obj, const char* name, SageValue val) {
             fields->values = safe_realloc(fields->values, sizeof(SageValue) * (size_t)fields->capacity);
         }
         fields->keys[fields->count] = strdup(name);
+        if (!fields->keys[fields->count]) { fprintf(stderr, "OOM\n"); abort(); }
         fields->values[fields->count] = val;
         fields->count++;
     }
