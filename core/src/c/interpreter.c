@@ -1242,13 +1242,28 @@ Value ffi_call_native(int argCount, Value* args) {
         } else if (call_argc == 2 && IS_NUMBER(call_args->elements[0]) && IS_NUMBER(call_args->elements[1])) {
             int (*fn)(int, int) = (int (*)(int, int))sym;
             return val_number((double)fn((int)AS_NUMBER(call_args->elements[0]), (int)AS_NUMBER(call_args->elements[1])));
+        } else if (call_argc == 2 && IS_STRING(call_args->elements[0]) && IS_NUMBER(call_args->elements[1])) {
+            int (*fn)(const char*, int) = (int (*)(const char*, int))sym;
+            return val_number((double)fn(AS_STRING(call_args->elements[0]), (int)AS_NUMBER(call_args->elements[1])));
+        } else if (call_argc == 2 && IS_NUMBER(call_args->elements[0]) && IS_STRING(call_args->elements[1])) {
+            int (*fn)(int, const char*) = (int (*)(int, const char*))sym;
+            return val_number((double)fn((int)AS_NUMBER(call_args->elements[0]), AS_STRING(call_args->elements[1])));
+        } else if (call_argc == 3 && IS_NUMBER(call_args->elements[0]) && IS_NUMBER(call_args->elements[1]) && IS_NUMBER(call_args->elements[2])) {
+            int (*fn)(int, int, int) = (int (*)(int, int, int))sym;
+            return val_number((double)fn((int)AS_NUMBER(call_args->elements[0]), (int)AS_NUMBER(call_args->elements[1]), (int)AS_NUMBER(call_args->elements[2])));
+        } else if (call_argc == 3 && IS_NUMBER(call_args->elements[0]) && IS_STRING(call_args->elements[1]) && IS_NUMBER(call_args->elements[2])) {
+            int (*fn)(int, const char*, int) = (int (*)(int, const char*, int))sym;
+            return val_number((double)fn((int)AS_NUMBER(call_args->elements[0]), AS_STRING(call_args->elements[1]), (int)AS_NUMBER(call_args->elements[2])));
         }
         fprintf(stderr, "ffi_call: unsupported argument types for int return.\n");
         return val_nil();
     }
 
     if (strcmp(ret_type, "long") == 0) {
-        if (call_argc == 1 && IS_NUMBER(call_args->elements[0])) {
+        if (call_argc == 0) {
+            long (*fn)(void) = (long (*)(void))sym;
+            return val_number((double)fn());
+        } else if (call_argc == 1 && IS_NUMBER(call_args->elements[0])) {
             long (*fn)(long) = (long (*)(long))sym;
             return val_number((double)fn((long)AS_NUMBER(call_args->elements[0])));
         } else if (call_argc == 1 && IS_STRING(call_args->elements[0])) {
@@ -1257,6 +1272,12 @@ Value ffi_call_native(int argCount, Value* args) {
         } else if (call_argc == 2 && IS_NUMBER(call_args->elements[0]) && IS_NUMBER(call_args->elements[1])) {
             long (*fn)(long, long) = (long (*)(long, long))sym;
             return val_number((double)fn((long)AS_NUMBER(call_args->elements[0]), (long)AS_NUMBER(call_args->elements[1])));
+        } else if (call_argc == 2 && IS_STRING(call_args->elements[0]) && IS_NUMBER(call_args->elements[1])) {
+            long (*fn)(const char*, long) = (long (*)(const char*, long))sym;
+            return val_number((double)fn(AS_STRING(call_args->elements[0]), (long)AS_NUMBER(call_args->elements[1])));
+        } else if (call_argc == 3 && IS_NUMBER(call_args->elements[0]) && IS_NUMBER(call_args->elements[1]) && IS_NUMBER(call_args->elements[2])) {
+            long (*fn)(long, long, long) = (long (*)(long, long, long))sym;
+            return val_number((double)fn((long)AS_NUMBER(call_args->elements[0]), (long)AS_NUMBER(call_args->elements[1]), (long)AS_NUMBER(call_args->elements[2])));
         }
         fprintf(stderr, "ffi_call: unsupported argument types for long return.\n");
         return val_nil();
@@ -1288,6 +1309,10 @@ Value ffi_call_native(int argCount, Value* args) {
         } else if (call_argc == 1 && IS_STRING(call_args->elements[0])) {
             void (*fn)(const char*) = (void (*)(const char*))sym;
             fn(AS_STRING(call_args->elements[0]));
+            return val_nil();
+        } else if (call_argc == 2 && IS_NUMBER(call_args->elements[0]) && IS_NUMBER(call_args->elements[1])) {
+            void (*fn)(int, int) = (void (*)(int, int))sym;
+            fn((int)AS_NUMBER(call_args->elements[0]), (int)AS_NUMBER(call_args->elements[1]));
             return val_nil();
         }
         fprintf(stderr, "ffi_call: unsupported argument types for void return.\n");
