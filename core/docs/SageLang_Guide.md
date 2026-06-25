@@ -92,22 +92,22 @@ Sage ships with a benchmark suite (`benchmarks/01_fibonacci.sage` through `10_pr
 
 ```
 main.c
-  ├─ lexer.c / lexer.h       [Tokenization, indentation tracking]
-  ├─ parser.c / parser.h     [AST construction via recursive descent]
-  ├─ interpreter.c / interpreter.h  [Tree-walking evaluation]
-  ├─ value.c / value.h       [Runtime value representation]
-  ├─ env.c / env.h           [Lexical scoping via linked-list environments]
-  ├─ gc.c / gc.h             [Mark-and-sweep garbage collection]
-  ├─ ast.c / ast.h           [AST node factory functions]
-  ├─ token.h                 [Token type enumeration]
-  ├─ module.c / module.h     [Module loading, caching, imports]
-  ├─ compiler.c              [C code generation backend]
-  ├─ llvm_backend.c          [LLVM IR generation (with GPU support)]
-  ├─ llvm_runtime.c          [Standalone runtime for LLVM-compiled programs]
-  ├─ codegen.c / codegen.h   [Native assembly (x86-64, aarch64, rv64, mips)]
-  ├─ graphics.c / graphics.h [Vulkan GPU module for interpreter]
-  ├─ gpu_api.c / gpu_api.h   [Pure C GPU API (Vulkan + OpenGL)]
-  └─ src/vm/                 [Bytecode VM: bytecode.c, vm.c, program.c, runtime.c]
+  |- lexer.c / lexer.h       [Tokenization, indentation tracking]
+  |- parser.c / parser.h     [AST construction via recursive descent]
+  |- interpreter.c / interpreter.h  [Tree-walking evaluation]
+  |- value.c / value.h       [Runtime value representation]
+  |- env.c / env.h           [Lexical scoping via linked-list environments]
+  |- gc.c / gc.h             [Mark-and-sweep garbage collection]
+  |- ast.c / ast.h           [AST node factory functions]
+  |- token.h                 [Token type enumeration]
+  |- module.c / module.h     [Module loading, caching, imports]
+  |- compiler.c              [C code generation backend]
+  |- llvm_backend.c          [LLVM IR generation (with GPU support)]
+  |- llvm_runtime.c          [Standalone runtime for LLVM-compiled programs]
+  |- codegen.c / codegen.h   [Native assembly (x86-64, aarch64, rv64, mips)]
+  |- graphics.c / graphics.h [Vulkan GPU module for interpreter]
+  |- gpu_api.c / gpu_api.h   [Pure C GPU API (Vulkan + OpenGL)]
+  `- src/vm/                 [Bytecode VM: bytecode.c, vm.c, program.c, runtime.c]
 ```
 
 ### 2.2 Lexer (lexer.c / lexer.h)
@@ -1289,9 +1289,9 @@ v.as.array = malloc(...);  // Pointer to ArrayValue struct
 **Nested Example**:
 ```
 Global: { x: 10 }
-  └─ call add(3, 4)
-      └─ Local: { a: 3, b: 4 } (parent: Global)
-         └─ return a + b (7)
+  `- call add(3, 4)
+      `- Local: { a: 3, b: 4 } (parent: Global)
+         `- return a + b (7)
 ```
 
 ### 5.3 Exception Propagation
@@ -2215,7 +2215,7 @@ SageLang ships with 23 general-purpose standard library modules in `lib/std/`:
 
 | Module | Import | Purpose |
 |--------|--------|---------|
-| `regex.sage` | `import std.regex` | Regular expression engine (., *, +, ?, [], \d, \w, \s) |
+| `regex.sage` | `import std.regex` | Regular expression engine (., *, +, ?, [], \\d, \\w, \\s) |
 | `datetime.sage` | `import std.datetime` | Date/time creation, ISO 8601, arithmetic, comparison |
 | `log.sage` | `import std.log` | Structured logging (TRACE-FATAL), handlers, child loggers |
 | `argparse.sage` | `import std.argparse` | CLI argument parser (flags, options, positionals) |
@@ -3313,6 +3313,8 @@ and or not break continue class self init
 try catch finally raise yield defer
 match case default import from as
 async await unsafe
+comptime macro quote unquote
+struct enum trait
 true false nil
 ```
 
