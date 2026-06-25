@@ -53,3 +53,7 @@
 ## 2026-06-21 - [Optimized Loop Performance Pattern]
 **Learning:** In the SageLang interpreter, 'for' loops (either 'for item in collection' or 'for i in range(n)') are significantly more efficient than 'while' loops with manual index management. Benchmarks showed 'for item in arr' is ~2.7x faster than 'while i < len(arr)', and 'for i in range(n)' is ~1.7x faster than 'while i < n'.
 **Action:** Prefer 'for' loops for all iteration tasks in library code. Use 'for i in range(limit)' for indexed loops and 'for i in range(start, stop, step)' for complex progressions to leverage the VM's optimized iteration path.
+
+## 2026-06-25 - [Optimized Crypto Encodings]
+**Learning:** String concatenation using '+=' in SageLang has O(N^2) complexity due to string immutability. Replacing this with an array-push and join("") pattern achieves O(N) complexity and significant performance gains. Additionally, leveraging the native 'replace()' builtin for character translation is much faster than manual interpreted loops.
+**Action:** Use array-push + join("") for building large strings in loops. Use native 'replace()' for bulk string substitutions. Measured ~100x-130x speedup for 10k byte encoding.
