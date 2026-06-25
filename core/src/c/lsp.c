@@ -79,7 +79,7 @@ static char* json_get_string(const char* json, const char* key) {
     size_t len = 0;
     char* result = SAGE_ALLOC(cap);
 
-    while (*p && !(*p == '"' && (len == 0 || result[len-1] != '\\'))) {
+    while (*p && *p != '"') {
         if (*p == '\\' && *(p+1)) {
             p++;  /* skip backslash */
             switch (*p) {
@@ -935,8 +935,7 @@ void lsp_run(void) {
                             size_t cap = 4096;
                             size_t len = 0;
                             text = SAGE_ALLOC(cap);
-                            while (*text_key && !(*text_key == '"' &&
-                                   (len == 0 || text[len-1] != '\\'))) {
+                            while (*text_key && *text_key != '"') {
                                 if (*text_key == '\\' && *(text_key+1)) {
                                     text_key++;
                                     switch (*text_key) {

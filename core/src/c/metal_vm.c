@@ -432,7 +432,7 @@ int metal_string_intern(MetalVM* vm, const char* s, int len) {
     while (search < vm->string_used) {
         const char* existing = &vm->strings[search];
         int existing_len = (int)strlen(existing);
-        if (existing_len == len && memcpy(0, 0, 0) == 0) { // memcmp substitute
+        if (existing_len == len) {
             int match = 1;
             for (int i = 0; i < len; i++) {
                 if (existing[i] != s[i]) { match = 0; break; }
@@ -702,10 +702,30 @@ int metal_vm_step(MetalVM* vm) {
         case OP_ADD: {
             MetalValue b = metal_vm_pop(vm);
             MetalValue a = metal_vm_pop(vm);
-            if (a.type == MV_NUM && b.type == MV_NUM)
+            if (a.type == MV_NUM && b.type == MV_NUM) {
                 metal_vm_push(vm, mv_num(a.as.number + b.as.number));
-            else
+            } else if (a.type == MV_STR && b.type == MV_STR) {
+                const char* s1 = metal_string_get(vm, a.as.str_idx);
+                const char* s2 = metal_string_get(vm, b.as.str_idx);
+                int len1 = (int)strlen(s1);
+                int len2 = (int)strlen(s2);
+                char concat_buf[1024];
+                if (len1 + len2 < 1024) {
+                    memcpy(concat_buf, s1, len1);
+                    memcpy(concat_buf + len1, s2, len2);
+                    int new_idx = metal_string_intern(vm, concat_buf, len1 + len2);
+                    MetalValue res;
+                    res.type = MV_STR;
+                    res.as.str_idx = new_idx;
+                    metal_vm_push(vm, res);
+                } else {
+                    vm->error = 1;
+                    vm->error_msg = "String concatenation buffer overflow";
+                    metal_vm_push(vm, mv_nil());
+                }
+            } else {
                 metal_vm_push(vm, mv_nil());
+            }
             break;
         }
         case OP_SUB: {
@@ -742,6 +762,7 @@ int metal_vm_step(MetalVM* vm) {
             MetalValue b = metal_vm_pop(vm), a = metal_vm_pop(vm);
             int eq = (a.type == b.type) && (a.type == MV_NUM ? a.as.number == b.as.number :
                      a.type == MV_BOOL ? a.as.boolean == b.as.boolean :
+                     a.type == MV_STR ? strcmp(metal_string_get(vm, a.as.str_idx), metal_string_get(vm, b.as.str_idx)) == 0 :
                      a.type == MV_NIL ? 1 : 0);
             metal_vm_push(vm, mv_bool(eq));
             break;
@@ -750,28 +771,45 @@ int metal_vm_step(MetalVM* vm) {
             MetalValue b = metal_vm_pop(vm), a = metal_vm_pop(vm);
             int eq = (a.type == b.type) && (a.type == MV_NUM ? a.as.number == b.as.number :
                      a.type == MV_BOOL ? a.as.boolean == b.as.boolean :
+                     a.type == MV_STR ? strcmp(metal_string_get(vm, a.as.str_idx), metal_string_get(vm, b.as.str_idx)) == 0 :
                      a.type == MV_NIL ? 1 : 0);
             metal_vm_push(vm, mv_bool(!eq));
             break;
         }
         case OP_GREATER: {
             MetalValue b = metal_vm_pop(vm), a = metal_vm_pop(vm);
-            metal_vm_push(vm, mv_bool(a.as.number > b.as.number));
+            if (a.type == MV_STR && b.type == MV_STR) {
+                metal_vm_push(vm, mv_bool(strcmp(metal_string_get(vm, a.as.str_idx), metal_string_get(vm, b.as.str_idx)) > 0));
+            } else {
+                metal_vm_push(vm, mv_bool(a.as.number > b.as.number));
+            }
             break;
         }
         case OP_GREATER_EQUAL: {
             MetalValue b = metal_vm_pop(vm), a = metal_vm_pop(vm);
-            metal_vm_push(vm, mv_bool(a.as.number >= b.as.number));
+            if (a.type == MV_STR && b.type == MV_STR) {
+                metal_vm_push(vm, mv_bool(strcmp(metal_string_get(vm, a.as.str_idx), metal_string_get(vm, b.as.str_idx)) >= 0));
+            } else {
+                metal_vm_push(vm, mv_bool(a.as.number >= b.as.number));
+            }
             break;
         }
         case OP_LESS: {
             MetalValue b = metal_vm_pop(vm), a = metal_vm_pop(vm);
-            metal_vm_push(vm, mv_bool(a.as.number < b.as.number));
+            if (a.type == MV_STR && b.type == MV_STR) {
+                metal_vm_push(vm, mv_bool(strcmp(metal_string_get(vm, a.as.str_idx), metal_string_get(vm, b.as.str_idx)) < 0));
+            } else {
+                metal_vm_push(vm, mv_bool(a.as.number < b.as.number));
+            }
             break;
         }
         case OP_LESS_EQUAL: {
             MetalValue b = metal_vm_pop(vm), a = metal_vm_pop(vm);
-            metal_vm_push(vm, mv_bool(a.as.number <= b.as.number));
+            if (a.type == MV_STR && b.type == MV_STR) {
+                metal_vm_push(vm, mv_bool(strcmp(metal_string_get(vm, a.as.str_idx), metal_string_get(vm, b.as.str_idx)) <= 0));
+            } else {
+                metal_vm_push(vm, mv_bool(a.as.number <= b.as.number));
+            }
             break;
         }
         case OP_NOT: {

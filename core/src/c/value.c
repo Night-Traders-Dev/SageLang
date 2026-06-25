@@ -570,6 +570,12 @@ char* string_replace(const char* str, const char* old, const char* new_str) {
     size_t new_len = strlen(new_str);
     size_t str_len = strlen(str);
 
+    if (old_len == 0) {
+        char* result = SAGE_ALLOC(str_len + 1);
+        memcpy(result, str, str_len + 1);
+        return result;
+    }
+
     // Count occurrences
     size_t count = 0;
     const char* tmp = str;

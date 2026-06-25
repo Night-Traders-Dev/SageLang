@@ -274,13 +274,13 @@ void jit_emit_pop(JitEmitter* em, int reg) {
 }
 
 void jit_emit_mov_reg_imm64(JitEmitter* em, int reg, uint64_t imm) {
-    jit_emit_byte(em, rex_w(0, reg));
+    jit_emit_byte(em, rex_w(reg, 0));
     jit_emit_byte(em, 0xB8 + (reg & 7));
     jit_emit_u64(em, imm);
 }
 
 void jit_emit_mov_reg_reg(JitEmitter* em, int dst, int src) {
-    jit_emit_byte(em, rex_w(src, dst));
+    jit_emit_byte(em, rex_w(dst, src));
     jit_emit_byte(em, 0x89);
     jit_emit_byte(em, 0xC0 | ((src & 7) << 3) | (dst & 7));
 }
@@ -296,19 +296,19 @@ void jit_emit_ret(JitEmitter* em) {
 }
 
 void jit_emit_add_reg_reg(JitEmitter* em, int dst, int src) {
-    jit_emit_byte(em, rex_w(src, dst));
+    jit_emit_byte(em, rex_w(dst, src));
     jit_emit_byte(em, 0x01);
     jit_emit_byte(em, 0xC0 | ((src & 7) << 3) | (dst & 7));
 }
 
 void jit_emit_sub_reg_reg(JitEmitter* em, int dst, int src) {
-    jit_emit_byte(em, rex_w(src, dst));
+    jit_emit_byte(em, rex_w(dst, src));
     jit_emit_byte(em, 0x29);
     jit_emit_byte(em, 0xC0 | ((src & 7) << 3) | (dst & 7));
 }
 
 void jit_emit_cmp_reg_imm(JitEmitter* em, int reg, int32_t imm) {
-    jit_emit_byte(em, rex_w(0, reg));
+    jit_emit_byte(em, rex_w(reg, 0));
     jit_emit_byte(em, 0x81);
     jit_emit_byte(em, 0xF8 + (reg & 7));
     jit_emit_u32(em, (uint32_t)imm);

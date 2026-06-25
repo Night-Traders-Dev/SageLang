@@ -755,7 +755,17 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             name_token.start = stmt->as.import.module_name;
             name_token.length = (int)strlen(stmt->as.import.module_name);
             if (!emit_name_op(compiler, BC_OP_IMPORT, name_token)) return 0;
-            if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, name_token)) return 0;
+
+            const char* bind_name = stmt->as.import.alias;
+            if (bind_name == NULL) {
+                const char* dot = strrchr(stmt->as.import.module_name, '.');
+                bind_name = dot ? dot + 1 : stmt->as.import.module_name;
+            }
+            Token bind_token = {0};
+            bind_token.start = bind_name;
+            bind_token.length = (int)strlen(bind_name);
+            if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, bind_token)) return 0;
+
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
             return 1;
         }

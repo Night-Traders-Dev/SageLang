@@ -293,6 +293,16 @@ static void handle_branch(MetalRV64VM* vm, RV64Instruction inst) {
             case RV_F3_BLTU: take = ((unsigned long long)a < (unsigned long long)b); break;
             case RV_F3_BGEU: take = ((unsigned long long)a >= (unsigned long long)b); break;
         }
+    } else if (rs1_val.type == MV_STR && rs2_val.type == MV_STR) {
+        const char* a = metal_rv64_string_get(vm, rs1_val.as.str_idx);
+        const char* b = metal_rv64_string_get(vm, rs2_val.as.str_idx);
+        int cmp = strcmp(a, b);
+        switch (inst.funct3) {
+            case RV_F3_BEQ: take = (cmp == 0); break;
+            case RV_F3_BNE: take = (cmp != 0); break;
+            case RV_F3_BLT: take = (cmp < 0); break;
+            case RV_F3_BGE: take = (cmp >= 0); break;
+        }
     } else if (rs1_val.type == MV_BOOL && rs2_val.type == MV_BOOL) {
         int a = rs1_val.as.boolean;
         int b = rs2_val.as.boolean;
@@ -327,19 +337,35 @@ static void handle_imm(MetalRV64VM* vm, RV64Instruction inst) {
 
     switch (inst.funct3) {
         case RV_F3_ADD: // ADDI
-            vm->x[inst.rd] = mv_num(val + imm);
+            if (imm == 0) {
+                vm->x[inst.rd] = rs1_val;
+            } else {
+                vm->x[inst.rd] = mv_num(val + imm);
+            }
             break;
         case RV_F3_SLT: // SLTI
             vm->x[inst.rd] = mv_bool(val < imm);
             break;
         case RV_F3_XOR: // XORI
-            vm->x[inst.rd] = mv_num((double)((long long)val ^ imm));
+            if (imm == 0) {
+                vm->x[inst.rd] = rs1_val;
+            } else {
+                vm->x[inst.rd] = mv_num((double)((long long)val ^ imm));
+            }
             break;
         case RV_F3_OR: // ORI
-            vm->x[inst.rd] = mv_num((double)((long long)val | imm));
+            if (imm == 0) {
+                vm->x[inst.rd] = rs1_val;
+            } else {
+                vm->x[inst.rd] = mv_num((double)((long long)val | imm));
+            }
             break;
         case RV_F3_AND: // ANDI
-            vm->x[inst.rd] = mv_num((double)((long long)val & imm));
+            if (imm == -1) {
+                vm->x[inst.rd] = rs1_val;
+            } else {
+                vm->x[inst.rd] = mv_num((double)((long long)val & imm));
+            }
             break;
         case RV_F3_SLL: // SLLI
             vm->x[inst.rd] = mv_num((double)((long long)val << (imm & 0x3F)));
@@ -390,16 +416,48 @@ static void handle_reg(MetalRV64VM* vm, RV64Instruction inst) {
     switch (inst.funct3) {
         case RV_F3_ADD:
             if (inst.funct7 == 0x20) { // SUB
-                vm->x[inst.rd] = mv_num(v1 - v2);
+                if (inst.rs2 == 0) {
+                    vm->x[inst.rd] = rs1_val;
+                } else {
+                    vm->x[inst.rd] = mv_num(v1 - v2);
+                }
             } else { // ADD
-                vm->x[inst.rd] = mv_num(v1 + v2);
+                if (inst.rs2 == 0) {
+                    vm->x[inst.rd] = rs1_val;
+                } else if (inst.rs1 == 0) {
+                    vm->x[inst.rd] = rs2_val;
+                } else if (rs1_val.type == MV_STR && rs2_val.type == MV_STR) {
+                    const char* s1 = metal_rv64_string_get(vm, rs1_val.as.str_idx);
+                    const char* s2 = metal_rv64_string_get(vm, rs2_val.as.str_idx);
+                    int len1 = (int)strlen(s1);
+                    int len2 = (int)strlen(s2);
+                    char concat_buf[1024];
+                    if (len1 + len2 < 1024) {
+                        memcpy(concat_buf, s1, len1);
+                        memcpy(concat_buf + len1, s2, len2);
+                        int new_idx = metal_rv64_string_intern(vm, concat_buf, len1 + len2);
+                        vm->x[inst.rd] = (MetalValue){MV_STR, {.str_idx = new_idx}};
+                    } else {
+                        vm->error = 1;
+                        vm->error_msg = "String concatenation buffer overflow";
+                        vm->x[inst.rd] = mv_nil();
+                    }
+                } else {
+                    vm->x[inst.rd] = mv_num(v1 + v2);
+                }
             }
             break;
         case RV_F3_SLL:
             vm->x[inst.rd] = mv_num((double)((long long)v1 << ((int)v2 & 0x3F)));
             break;
         case RV_F3_SLT:
-            vm->x[inst.rd] = mv_bool(v1 < v2);
+            if (rs1_val.type == MV_STR && rs2_val.type == MV_STR) {
+                const char* a = metal_rv64_string_get(vm, rs1_val.as.str_idx);
+                const char* b = metal_rv64_string_get(vm, rs2_val.as.str_idx);
+                vm->x[inst.rd] = mv_bool(strcmp(a, b) < 0);
+            } else {
+                vm->x[inst.rd] = mv_bool(v1 < v2);
+            }
             break;
         case RV_F3_XOR:
             vm->x[inst.rd] = mv_num((double)((long long)v1 ^ (long long)v2));
@@ -495,6 +553,62 @@ static void handle_vmsys(MetalRV64VM* vm, RV64Instruction inst) {
                 if (func_obj.type == MV_NUM) {
                     target_chunk = (int)func_obj.as.number;
                 } else if (func_obj.type == MV_DICT) {
+                    // Check if class constructor call
+                    MetalValue type_val = metal_rv64_dict_get(vm, func_obj.as.dict_idx, metal_rv64_string_intern(vm, "__type__", 8));
+                    if (type_val.type == MV_STR && strcmp(metal_rv64_string_get(vm, type_val.as.str_idx), "class") == 0) {
+                        int inst_dict = metal_rv64_dict_new(vm);
+                        metal_rv64_dict_set(vm, inst_dict, metal_rv64_string_intern(vm, "__type__", 8), (MetalValue){MV_STR, {.str_idx = metal_rv64_string_intern(vm, "instance", 8)}});
+                        metal_rv64_dict_set(vm, inst_dict, metal_rv64_string_intern(vm, "__class__", 9), func_obj);
+
+                        MetalValue methods_val = metal_rv64_dict_get(vm, func_obj.as.dict_idx, metal_rv64_string_intern(vm, "__methods__", 11));
+                        MetalValue init_func = mv_nil();
+                        if (methods_val.type == MV_DICT) {
+                            init_func = metal_rv64_dict_get(vm, methods_val.as.dict_idx, metal_rv64_string_intern(vm, "init", 4));
+                        }
+
+                        if (init_func.type == MV_DICT) {
+                            MetalValue chunk_idx_val = metal_rv64_dict_get(vm, init_func.as.dict_idx, metal_rv64_string_intern(vm, "chunk_idx", 9));
+                            if (chunk_idx_val.type == MV_NUM) {
+                                target_chunk = (int)chunk_idx_val.as.number;
+                            }
+
+                            if (target_chunk >= 0 && target_chunk < vm->chunk_count) {
+                                if (vm->csp < RV64_CALL_STACK_SIZE) {
+                                    vm->call_stack[vm->csp].chunk_idx = vm->current_chunk_idx;
+                                    vm->call_stack[vm->csp].return_pc = vm->pc + 4;
+                                    vm->call_stack[vm->csp].saved_ra = vm->x[1];
+                                    vm->call_stack[vm->csp].is_constructor = 1;
+                                    vm->call_stack[vm->csp].constructor_instance = (MetalValue){MV_DICT, {.dict_idx = inst_dict}};
+                                    vm->csp++;
+
+                                    // Shift arguments: self is in x10, original args in x11..
+                                    for (int r = 17; r > 10; r--) {
+                                        vm->x[r] = vm->x[r - 1];
+                                    }
+                                    vm->x[10] = (MetalValue){MV_DICT, {.dict_idx = inst_dict}};
+
+                                    vm->current_chunk_idx = target_chunk;
+                                    vm->bytecode = vm->chunks[target_chunk];
+                                    vm->bytecode_length = vm->chunk_lengths[target_chunk];
+                                    vm->pc = 0;
+                                    vm->x[1] = mv_num(0);
+                                    return; // Skip standard PC increment
+                                } else {
+                                    vm->error = 1;
+                                    vm->error_msg = "Call stack overflow";
+                                }
+                            } else {
+                                vm->error = 1;
+                                vm->error_msg = "Invalid constructor chunk index";
+                            }
+                        } else {
+                            // No init method, just return the instance directly
+                            vm->x[10] = (MetalValue){MV_DICT, {.dict_idx = inst_dict}};
+                            vm->pc += 4;
+                        }
+                        return;
+                    }
+
                     // Check if __builtin__
                     MetalValue builtin = metal_rv64_dict_get(vm, func_obj.as.dict_idx, metal_rv64_string_intern(vm, "__builtin__", 11));
                     if (builtin.type == MV_STR) {
@@ -544,6 +658,8 @@ static void handle_vmsys(MetalRV64VM* vm, RV64Instruction inst) {
                         vm->call_stack[vm->csp].chunk_idx = vm->current_chunk_idx;
                         vm->call_stack[vm->csp].return_pc = vm->pc + 4;
                         vm->call_stack[vm->csp].saved_ra = vm->x[1]; // Save x1 (ra)
+                        vm->call_stack[vm->csp].is_constructor = 0;
+                        vm->call_stack[vm->csp].constructor_instance = mv_nil();
                         vm->csp++;
 
                         vm->current_chunk_idx = target_chunk;
@@ -557,6 +673,26 @@ static void handle_vmsys(MetalRV64VM* vm, RV64Instruction inst) {
                         vm->error_msg = "Call stack overflow";
                     }
                 } else {
+                    metal_rv64_print_str(vm, "VMO_CALL error: target_chunk=");
+                    metal_rv64_print_int(vm, target_chunk);
+                    metal_rv64_print_str(vm, " type=");
+                    metal_rv64_print_int(vm, func_obj.type);
+                    if (func_obj.type == MV_DICT) {
+                        metal_rv64_print_str(vm, " dict_idx=");
+                        metal_rv64_print_int(vm, func_obj.as.dict_idx);
+                        
+                        // Let's print keys in dict
+                        MetalDict* d = &vm->dicts[func_obj.as.dict_idx];
+                        metal_rv64_print_str(vm, " keys=[");
+                        for (int k = 0; k < d->count; k++) {
+                            if (k > 0) metal_rv64_print_str(vm, ", ");
+                            metal_rv64_print_str(vm, metal_rv64_string_get(vm, d->key_str_idx[k]));
+                            metal_rv64_print_str(vm, ":");
+                            metal_rv64_print_int(vm, d->values[k].type);
+                        }
+                        metal_rv64_print_str(vm, "]");
+                    }
+                    if (vm->write_char) vm->write_char('\n');
                     vm->error = 1;
                     vm->error_msg = "Invalid function call target";
                 }
@@ -641,11 +777,14 @@ static void handle_vmsys(MetalRV64VM* vm, RV64Instruction inst) {
                 int name_idx = 0;
                 if (vm->x[10].type == MV_NUM) name_idx = (int)vm->x[10].as.number;
                 int name_str_idx = vm->constants[name_idx].as.str_idx;
+                MetalValue val = mv_nil();
                 if (obj.type == MV_DICT) {
-                    vm->x[inst.rd] = metal_rv64_dict_get(vm, obj.as.dict_idx, name_str_idx);
-                } else {
-                    vm->x[inst.rd] = mv_nil();
+                    val = metal_rv64_dict_get(vm, obj.as.dict_idx, name_str_idx);
                 }
+                if (val.type == MV_NIL) {
+                    val = metal_rv64_dict_get(vm, vm->global_dict_idx, name_str_idx);
+                }
+                vm->x[inst.rd] = val;
                 break;
             }
             case RV_OBJ_SET_PROP: {
@@ -668,6 +807,7 @@ static void handle_vmsys(MetalRV64VM* vm, RV64Instruction inst) {
                 vm->x[inst.rd] = (MetalValue){MV_DICT, {.dict_idx = d_idx}};
                 break;
             }
+            case RV_OBJ_TUPLE_NEW:
             case RV_OBJ_ARRAY_NEW: {
                 int size = 0;
                 if (vm->x[10].type == MV_NUM) size = (int)vm->x[10].as.number;
@@ -750,6 +890,11 @@ int metal_rv64_vm_step(MetalRV64VM* vm) {
         metal_rv64_print_int(vm, inst.opcode);
         metal_rv64_print_str(vm, " rd: ");
         metal_rv64_print_int(vm, inst.rd);
+        metal_rv64_print_str(vm, " raw: ");
+        for (int b = 0; b < 4; b++) {
+            metal_rv64_print_int(vm, vm->bytecode[vm->pc + b]);
+            metal_rv64_print_str(vm, " ");
+        }
         if (vm->write_char) vm->write_char('\n');
     }
 
@@ -783,6 +928,9 @@ int metal_rv64_vm_step(MetalRV64VM* vm) {
                     vm->bytecode_length = vm->chunk_lengths[vm->current_chunk_idx];
                     vm->pc = vm->call_stack[vm->csp].return_pc;
                     vm->x[1] = vm->call_stack[vm->csp].saved_ra;
+                    if (vm->call_stack[vm->csp].is_constructor) {
+                        vm->x[10] = vm->call_stack[vm->csp].constructor_instance;
+                    }
                     return 1; // Skip standard PC increment
                 } else {
                     vm->running = 0;

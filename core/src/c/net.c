@@ -266,6 +266,7 @@ static Value http_get_native(int argc, Value* args) {
     if (argc < 1 || !IS_STRING(args[0])) return val_nil();
     CURL* curl = curl_easy_init();
     if (!curl) return val_nil();
+    curl_easy_cleanup(curl);
 #else
     (void)argc; (void)args;
 #endif

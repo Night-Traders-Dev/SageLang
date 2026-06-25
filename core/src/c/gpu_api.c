@@ -1197,11 +1197,27 @@ void sgpu_shutdown_windowed(void) {
     sgpu_destroy_window();
 }
 
-int sgpu_swapchain_image_count(void) { return (int)g_swapchain_image_count; }
+
+int sgpu_swapchain_image_count(void) {
+#ifdef SAGE_HAS_VULKAN
+    return (int)g_swapchain_image_count;
+#else
+    return 0;
+#endif
+}
+
+
 int sgpu_swapchain_format(void) { return 0; }
-void sgpu_swapchain_extent(int* w, int* h) {
+
+
+void sgpu_swapchain_extent(int *w, int *h) {
+#ifdef SAGE_HAS_VULKAN
     if (w) *w = (int)g_swapchain_width;
     if (h) *h = (int)g_swapchain_height;
+#else
+    if (w) *w = 0;
+    if (h) *h = 0;
+#endif
 }
 int sgpu_acquire_next_image(int sem, int* idx) {
     (void)sem; if (idx) *idx = 0;

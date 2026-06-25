@@ -45,6 +45,8 @@ static sage_mutex_t thread_registry_mutex = SAGE_MUTEX_INITIALIZER;
 static ThreadState* thread_registry_head = NULL;
 static __thread ThreadState* g_current_thread_state = NULL;
 
+static void arc_unregister(void* obj);
+
 void gc_register_thread(ThreadState* ts) {
     sage_mutex_lock(&thread_registry_mutex);
     ts->next = thread_registry_head;
@@ -105,6 +107,30 @@ void* gc_intern_string(const char* s, int len) {
     
     sage_mutex_lock(&string_table_mutex);
     
+    // Check if already in table first
+    if (string_table.capacity > 0) {
+        unsigned int h = intern_hash(s, len);
+        int idx = (int)(h % (unsigned int)string_table.capacity);
+        while (string_table.entries[idx]) {
+            if ((int)strlen(string_table.entries[idx]) == len && memcmp(string_table.entries[idx], s, (size_t)len) == 0) {
+                void* existing = string_table.entries[idx];
+                sage_mutex_unlock(&string_table_mutex);
+                return existing;
+            }
+            idx = (idx + 1) % string_table.capacity;
+        }
+    }
+    sage_mutex_unlock(&string_table_mutex);
+
+    // Allocate outside of the string_table_mutex lock!
+    char* interned = (char*)gc_alloc(VAL_STRING, (size_t)len + 1);
+    memcpy(interned, s, (size_t)len);
+    interned[len] = '\0';
+
+    // Now acquire string_table_mutex to insert it
+    sage_mutex_lock(&string_table_mutex);
+
+    // We must check if we need to grow the table
     if (string_table.capacity == 0 || string_table.count * 2 >= string_table.capacity) {
         int old_cap = string_table.capacity;
         string_table.capacity = old_cap == 0 ? 1024 : old_cap * 2;
@@ -113,31 +139,29 @@ void* gc_intern_string(const char* s, int len) {
         string_table.count = 0;
         for (int i = 0; i < old_cap; i++) {
             if (old_entries[i]) {
-                unsigned int h = intern_hash(old_entries[i], (int)strlen(old_entries[i]));
-                int idx = (int)(h % (unsigned int)string_table.capacity);
-                while (string_table.entries[idx]) idx = (idx + 1) % string_table.capacity;
-                string_table.entries[idx] = old_entries[i];
+                unsigned int h2 = intern_hash(old_entries[i], (int)strlen(old_entries[i]));
+                int idx2 = (int)(h2 % (unsigned int)string_table.capacity);
+                while (string_table.entries[idx2]) idx2 = (idx2 + 1) % string_table.capacity;
+                string_table.entries[idx2] = old_entries[i];
                 string_table.count++;
             }
         }
         free(old_entries);
     }
 
+    // Check again if someone else inserted it while we were unlocked
     unsigned int h = intern_hash(s, len);
     int idx = (int)(h % (unsigned int)string_table.capacity);
     while (string_table.entries[idx]) {
         if ((int)strlen(string_table.entries[idx]) == len && memcmp(string_table.entries[idx], s, (size_t)len) == 0) {
+            void* existing = string_table.entries[idx];
             sage_mutex_unlock(&string_table_mutex);
-            return string_table.entries[idx];
+            return existing;
         }
         idx = (idx + 1) % string_table.capacity;
     }
 
-    // Not found, allocate and add to table
-    char* interned = (char*)gc_alloc(VAL_STRING, (size_t)len + 1);
-    memcpy(interned, s, (size_t)len);
-    interned[len] = '\0';
-    
+    // Insert it
     string_table.entries[idx] = interned;
     string_table.count++;
     sage_mutex_unlock(&string_table_mutex);
@@ -358,8 +382,8 @@ void gc_init(void) {
 static void arc_table_cleanup(void);
 
 void gc_shutdown(void) {
-    sage_mutex_lock(&gc_mutex);
     if (gc.enabled) gc_collect();
+    sage_mutex_lock(&gc_mutex);
     // Run final ORC/ARC cycle collection before full teardown
     if (gc.mode == GC_MODE_ORC) orc_collect_cycles();
     else if (gc.mode == GC_MODE_ARC) arc_collect_cycles();
@@ -429,9 +453,24 @@ void* gc_alloc(int type, size_t size) {
 void gc_free(void* obj) {
     if (obj == NULL) return;
     GCHeader* header = (GCHeader*)obj - 1;
+
+    sage_mutex_lock(&gc_mutex);
+    void** prev = (void**)&gc.objects;
+    for (GCHeader* cur = gc.objects; cur != NULL; cur = cur->next) {
+        if (cur == header) {
+            *prev = header->next;
+            break;
+        }
+        prev = (void**)&cur->next;
+    }
+    gc.object_count--;
     gc.bytes_freed += gc_release_object(header);
     gc.freed_count++;
+    if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
+        arc_unregister(obj);
+    }
     free(header);
+    sage_mutex_unlock(&gc_mutex);
 }
 
 void gc_track_external_allocation(size_t size) { gc.bytes_allocated += (unsigned long)size; }
@@ -1152,14 +1191,40 @@ void arc_assign(void** slot, void* new_obj) {
     if (old) arc_release(old);
 }
 
+static inline void* value_heap_ptr(Value v) {
+    switch (v.type) {
+        case VAL_BYTES:     return v.as.bytes;
+        case VAL_ARRAY:     return v.as.array;
+        case VAL_TUPLE:     return v.as.tuple;
+        case VAL_DICT:      return v.as.dict;
+        case VAL_FUNCTION:  return v.as.function;
+        case VAL_CLASS:     return v.as.class_val;
+        case VAL_INSTANCE:  return v.as.instance;
+        case VAL_MODULE:    return v.as.module;
+        case VAL_EXCEPTION: return v.as.exception;
+        case VAL_GENERATOR: return v.as.generator;
+        case VAL_CLIB:      return v.as.clib;
+        case VAL_POINTER:   return v.as.pointer;
+        case VAL_THREAD:    return v.as.thread;
+        case VAL_MUTEX:     return v.as.mutex;
+        default:            return NULL;
+    }
+}
+
 void arc_assign_value(Value* slot, Value new_val) {
     if (gc.mode != GC_MODE_ARC && gc.mode != GC_MODE_ORC) {
         *slot = new_val;
         return;
     }
-    // In ARC/ORC mode, retain new and release old heap objects
-    // For simplicity, just assign — the env layer handles retain/release
+    void* new_ptr = value_heap_ptr(new_val);
+    void* old_ptr = value_heap_ptr(*slot);
+    if (new_ptr == old_ptr) {
+        *slot = new_val;
+        return;
+    }
+    if (new_ptr) arc_retain(new_ptr);
     *slot = new_val;
+    if (old_ptr) arc_release(old_ptr);
 }
 
 void arc_add_candidate(void* obj) {

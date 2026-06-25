@@ -1395,7 +1395,7 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                     case '&': ll_line(lc, "%%%d = call %%SageValue @sage_rt_bit_and(%%SageValue %%%d, %%SageValue %%%d)", r, left, right); break;
                     case '|': ll_line(lc, "%%%d = call %%SageValue @sage_rt_bit_or(%%SageValue %%%d, %%SageValue %%%d)", r, left, right); break;
                     case '^': ll_line(lc, "%%%d = call %%SageValue @sage_rt_bit_xor(%%SageValue %%%d, %%SageValue %%%d)", r, left, right); break;
-                    case '~': ll_line(lc, "%%%d = call %%SageValue @sage_rt_bit_not(%%SageValue %%%d)", r, right); break;
+                    case '~': ll_line(lc, "%%%d = call %%SageValue @sage_rt_bit_not(%%SageValue %%%d)", r, left); break;
                     default:
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
                         break;
@@ -1421,7 +1421,7 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             } else if (op_len == 3 && memcmp(op, "and", 3) == 0) {
                 ll_line(lc, "%%%d = call %%SageValue @sage_rt_and(%%SageValue %%%d, %%SageValue %%%d)", r, left, right);
             } else if (op_len == 3 && memcmp(op, "not", 3) == 0) {
-                ll_line(lc, "%%%d = call %%SageValue @sage_rt_not(%%SageValue %%%d)", r, right);
+                ll_line(lc, "%%%d = call %%SageValue @sage_rt_not(%%SageValue %%%d)", r, left);
             } else {
                 ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
             }

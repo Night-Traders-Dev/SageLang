@@ -192,6 +192,8 @@ typedef struct {
         int chunk_idx;
         int return_pc;
         MetalValue saved_ra;
+        int is_constructor;
+        MetalValue constructor_instance;
     } call_stack[RV64_CALL_STACK_SIZE];
     int csp;
 

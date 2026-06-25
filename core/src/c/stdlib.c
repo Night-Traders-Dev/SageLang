@@ -112,8 +112,15 @@ extern int bytecode_program_read_file(BytecodeProgram* program, const char* inpu
 // Wait, I'll just refactor bytecode_program_write_file in program.c to use a FILE* helper.
 
 static Value vm_serialize_native(int argCount, Value* args) {
-    if (argCount < 1 || args[0].type != VAL_POINTER) return val_nil();
-    BytecodeProgram* program = (BytecodeProgram*)args[0].as.pointer->ptr;
+    if (argCount < 1) return val_nil();
+    BytecodeProgram* program = NULL;
+    if (IS_VM_PROGRAM(args[0])) {
+        program = AS_PROGRAM(args[0]);
+    } else if (args[0].type == VAL_POINTER && args[0].as.pointer != NULL) {
+        program = (BytecodeProgram*)args[0].as.pointer->ptr;
+    } else {
+        return val_nil();
+    }
 
     char tmp_path[] = "/tmp/sage_vm_XXXXXX.svm";
     int fd = mkstemps(tmp_path, 4);

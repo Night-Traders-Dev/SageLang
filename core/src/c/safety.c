@@ -59,6 +59,8 @@ void safety_context_free(SafetyContext* ctx) {
     SafetyDiag* d = ctx->diagnostics;
     while (d) {
         SafetyDiag* next = d->next;
+        if (d->message) free((void*)d->message);
+        if (d->hint) free((void*)d->hint);
         free(d);
         d = next;
     }
@@ -394,8 +396,8 @@ void safety_emit(SafetyContext* ctx, SafetyLevel level, SafetyDiagKind kind,
     SafetyDiag* d = SAGE_ALLOC(sizeof(SafetyDiag));
     d->level = level;
     d->kind = kind;
-    d->message = message;
-    d->hint = hint;
+    d->message = message ? safety_strdup(message, strlen(message)) : NULL;
+    d->hint = hint ? safety_strdup(hint, strlen(hint)) : NULL;
     d->filename = ctx->filename;
     d->line = line;
     d->column = 0;
