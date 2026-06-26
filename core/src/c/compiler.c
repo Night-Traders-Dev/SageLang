@@ -3590,6 +3590,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    if (strcmp(rt, \"string\") == 0) {\n"
         "        if (call_argc == 0) { const char* (*fn)(void) = (const char*(*)(void))sym; const char* r = fn(); return r ? sage_string(r) : sage_nil(); }\n"
         "        if (call_argc == 1 && IS_STR(call_argv[0])) { const char* (*fn)(const char*) = (const char*(*)(const char*))sym; const char* r = fn(call_argv[0].as.string); return r ? sage_string(r) : sage_nil(); }\n"
+        "        if (call_argc == 1 && IS_NUM(call_argv[0])) { const char* (*fn)(int) = (const char*(*)(int))sym; const char* r = fn((int)call_argv[0].as.number); return r ? sage_string(r) : sage_nil(); }\n"
         "    }\n"
         "    #pragma GCC diagnostic pop\n"
         "    #undef IS_NUM\n"

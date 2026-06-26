@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 3.9.1 | **Spec Version:** 2.0 | **License:** MIT  
+> **Version:** 3.9.2 | **Spec Version:** 2.0 | **License:** MIT  
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -392,7 +392,7 @@ comptime macro    quote    unquote
 true     false    nil
 ```
 
-**Soft keywords** (v3.9.1+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
+**Soft keywords** (v3.9.2+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
 
 ### 3.2 Operators (Precedence Table)
 
