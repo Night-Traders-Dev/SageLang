@@ -33,3 +33,15 @@ Evidence:
 
 Documentation Impact:
 Added these keywords to the keywords list in the quick reference section.
+
+2024-06-26 - [Documentation Quick Reference]
+
+Discovery:
+The `super` and `end` keywords were present in the lexer and used heavily in the language, but they were missing from the "Keywords" list in the Appendix Quick Reference in `SageLang_Guide.md`.
+
+Evidence:
+`core/src/c/lexer.c` token generation (`TOKEN_SUPER` and `TOKEN_END`).
+`core/docs/SageLang_Guide.md` where `super` is described but not in the keywords list.
+
+Documentation Impact:
+Added `super` and `end` to the keywords list in the Quick Reference appendix.

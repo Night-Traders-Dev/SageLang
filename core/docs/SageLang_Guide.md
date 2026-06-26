@@ -3309,10 +3309,10 @@ glslc text3d.frag -o text3d.frag.spv
 
 ```
 let var proc if else elif while for in return print
-and or not break continue class self init
+and or not break continue class self init super
 try catch finally raise yield defer
 match case default import from as
-async await unsafe
+async await unsafe end
 comptime macro quote unquote
 struct enum trait
 true false nil
