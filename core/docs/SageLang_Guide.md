@@ -3309,10 +3309,10 @@ glslc text3d.frag -o text3d.frag.spv
 
 ```
 let var proc if else elif while for in return print
-and or not break continue class self init
+and or not break continue class self init super
 try catch finally raise yield defer
 match case default import from as
-async await unsafe
+async await unsafe end
 comptime macro quote unquote
 struct enum trait
 true false nil
@@ -3321,22 +3321,37 @@ true false nil
 ### Built-in Functions
 
 ```
-len(x) push(arr, val) pop(arr) range(a, b)
+len(x) push(arr, val) pop(arr) append(arr, val) range(a, b)
 split(str, delim) join(arr, sep) replace(s, old, new)
 upper(s) lower(s) strip(s) slice(arr, a, b)
-str(x) tonumber(s) input() clock()
-type(x) chr(n) ord(c)
+str(x) tonumber(s) int(x) input() clock()
+type(x) chr(n) ord(c) hash(x) sizeof(x) doc(x)
 startswith(s, prefix) endswith(s, suffix)
-contains(s, sub) indexof(s, sub)
+contains(s, sub) indexof(s, sub) string_count(s, sub) string_repeat(s, n)
+array_extend(a, b) array_repeat(a, n) array_reverse(a)
+array_contains(a, v) array_index_of(a, v) array_min(a) array_max(a)
+array_sum(a) array_product(a)
+bytes() bytes_len(b) bytes_get(b, i) bytes_set(b, i, v)
+bytes_push(b, v) bytes_slice(b, s, e) bytes_to_string(b)
 dict_keys(d) dict_values(d) dict_has(d, k) dict_delete(d, k)
-gc_collect() gc_stats() gc_enable() gc_disable()
+gc_collect() gc_stats() gc_collections() gc_enable() gc_disable()
+gc_mode() gc_set_arc() gc_set_orc()
 next(gen)
 ffi_open(path) ffi_call(lib, fn, ret, ...) ffi_sym(lib, name) ffi_close(lib)
+ffi_sym_addr(lib, name)
 mem_alloc(n) mem_free(ptr) mem_read(ptr, off, type) mem_write(ptr, off, type, val)
-mem_size(ptr) addressof(val)
+mem_size(ptr) addressof(val) addressof_raw(val) ptr_add(ptr, n) ptr_to_int(ptr)
+path_join(a, b) path_dirname(p) path_basename(p) path_ext(p)
+path_exists(p) path_is_dir(p) path_is_file(p)
 asm_exec(code, ret, ...) asm_compile(code, arch, out) asm_arch()
 struct_def(fields) struct_new(def) struct_get(ptr, def, name)
 struct_set(ptr, def, name, val) struct_size(def)
+cpu_count() cpu_physical_cores() cpu_has_hyperthreading()
+thread_set_affinity(id) thread_get_core()
+atomic_new(v) atomic_load(a) atomic_store(a, v)
+atomic_add(a, v) atomic_cas(a, e, d) atomic_exchange(a, v)
+sem_new(n) sem_wait(s) sem_post(s) sem_trywait(s)
+vm_gas_limit_set(n) vm_gas_used_get() vm_gas_limit_get()
 ```
 
 ### Operators

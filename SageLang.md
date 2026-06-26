@@ -302,7 +302,8 @@ trait Drawable:
 ```sage
 unsafe:
     # Low-level operations allowed here
-    mem_write(ptr, value)
+    mem_write(ptr, 0, "int", 42)
+end
 ```
 
 ### 1.19 Import System
@@ -1331,7 +1332,8 @@ struct_set(p, "y", 5.0)
 
 ```sage
 unsafe:
-    mem_write(ptr, 0, value)
+    mem_write(ptr, 0, "byte", 0xFF)
+end
 ```
 
 ---
