@@ -3523,21 +3523,25 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "sage_string(value == NULL ? \"\" : value); free(value); return v; }\n"
         "static SageValue sage_array(void) { SageValue v; v.type = "
         "SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
-        "static SageValue sage_function(void* fn) { SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = fn; return v; }\n"
-        "\n",
-        out);
-  fputs("static SageValue sage_ffi_open(SageValue libname) {\n"
-        "    if (libname.type != SAGE_TAG_STRING) return sage_nil();\n"
-        "    void* handle = dlopen(libname.as.string, RTLD_NOW);\n"
-        "    if (!handle) return sage_nil();\n"
-        "    SageValue v; v.type = SAGE_TAG_CLIB; v.as.clib = handle; return v;\n"
-        "}\n"
-        "static SageValue sage_ffi_close(SageValue handle) {\n"
-        "    if (handle.type != SAGE_TAG_CLIB) return sage_nil();\n"
-        "    dlclose(handle.as.clib);\n"
-        "    return sage_nil();\n"
-        "}\n"
-        "static SageValue sage_ffi_call(SageValue handle, SageValue name, SageValue ret_type, SageValue args) {\n"
+         "static SageValue sage_function(void* fn) { SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = fn; return v; }\n"
+         "\n",
+         out);
+
+  /* FFI runtime: dlopen/dlsym only for desktop targets.
+     Pico/baremetal targets get stubs (platform bridge overrides them). */
+  if (target == COMPILER_TARGET_HOST) {
+    fputs("static SageValue sage_ffi_open(SageValue libname) {\n"
+          "    if (libname.type != SAGE_TAG_STRING) return sage_nil();\n"
+          "    void* handle = dlopen(libname.as.string, RTLD_NOW);\n"
+          "    if (!handle) return sage_nil();\n"
+          "    SageValue v; v.type = SAGE_TAG_CLIB; v.as.clib = handle; return v;\n"
+          "}\n"
+          "static SageValue sage_ffi_close(SageValue handle) {\n"
+          "    if (handle.type != SAGE_TAG_CLIB) return sage_nil();\n"
+          "    dlclose(handle.as.clib);\n"
+          "    return sage_nil();\n"
+          "}\n"
+          "static SageValue sage_ffi_call(SageValue handle, SageValue name, SageValue ret_type, SageValue args) {\n"
         "    if (handle.type != SAGE_TAG_CLIB || name.type != SAGE_TAG_STRING || ret_type.type != SAGE_TAG_STRING)\n"
         "        return sage_nil();\n"
         "    void* lib_handle = handle.as.clib;\n"
@@ -3593,8 +3597,23 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    return sage_nil();\n"
         "}\n"
         "static SageValue sage_ffi_call_full(SageValue h, SageValue n, SageValue r, SageValue a) { return sage_ffi_call(h,n,r,a); }\n"
-        "\n"
-        "static SageValue sage_atomic_new(SageValue val) {\n"
+        "\n",
+        out);
+  } else {
+    /* Pico/baremetal: stubs that platform bridge must override */
+    fputs("static SageValue sage_ffi_open(SageValue libname) {"
+          " (void)libname; return sage_nil(); }\n"
+          "static SageValue sage_ffi_close(SageValue handle) {"
+          " (void)handle; return sage_nil(); }\n"
+          "static SageValue sage_ffi_call(SageValue h, SageValue n, SageValue r, SageValue a) {"
+          " (void)h; (void)n; (void)r; (void)a; return sage_nil(); }\n"
+          "static SageValue sage_ffi_call_full(SageValue h, SageValue n, SageValue r, SageValue a) {"
+          " (void)h; (void)n; (void)r; (void)a; return sage_nil(); }\n"
+          "\n",
+          out);
+  }
+
+  fputs("static SageValue sage_atomic_new(SageValue val) {\n"
         "    SageValue* atom = malloc(sizeof(SageValue));\n"
         "    *atom = val;\n"
         "    SageValue v; v.type = SAGE_TAG_POINTER; v.as.pointer = atom; return v;\n"
