@@ -1,5 +1,20 @@
 # SageLang Updates
 
+## v3.8.7 — OIS, O(1) Dicts, and Native Optimizations (July 2026)
+
+- **New Features**:
+  - **One-line Install System (OIS)**: Integrated the OIS installer for seamless building and dependency management across Linux, macOS, FreeBSD, and WSL2.
+  - **REPL Improvements**: Added `:stats` command for real-time GC and memory monitoring. Hardened REPL path validation to prevent unauthorized access.
+  - **C Codegen Primitives**: Added native support for FFI, atomic operations, and POSIX semaphores in the C backend.
+- **Performance Optimizations**:
+  - **$O(1)$ Dictionary Lookups**: Implemented constant-time size lookups for dictionaries.
+  - **Native Array Reversal**: Replaced interpreted loops with a native C implementation, achieving ~105x speedup.
+  - **Structural Equality in Search**: Updated `array_contains` and `array_index_of` to use structural equality for class instances via native code optimizations.
+  - **String Length Optimization**: Implemented $O(1)$ string length retrieval by caching sizes in the GC header.
+- **Security & Hardening**:
+  - **Sandbox Guards**: Hardened tab and whitespace token checks in the security sandbox to prevent bypasses.
+  - **Path Validation**: Improved path sanitization in the core interpreter and REPL.
+
 ## v3.8.5 — MIPS Target & Library Support (June 18, 2026)
 
 - **MIPS Target Support**:

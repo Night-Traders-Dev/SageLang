@@ -6,13 +6,15 @@
 
 Sage is a systems programming language that combines the readability of Python (indentation blocks, clean syntax) with the performance of C. It features ten execution backends (C, LLVM IR, native x86-64/aarch64/rv64/mips, bytecode VM, **SageMetal VM**, JIT, AOT, **Kotlin/Android**), a **self-hosted interpreter** with hybrid JIT/AOT profile-guided type specialization, **Vulkan + OpenGL graphics**, **true atomic operations** and **POSIX semaphores** for multicore concurrency, **SMP/hyperthreading detection**, and **three GC modes** (tracing, ARC, ORC). As of v3.9.2, Sage features One-line Install System (OIS) integration, native FFI, atomic, and semaphore builtins in the C codegen, $O(1)$ dictionary size lookups, native array reversal (~105x faster), array searching optimizations using native code while preserving structural equality for class instances, robust tab/whitespace token checks in sandbox security guards, and hardened REPL path validation.
 
-## Install (One line installer)
+## Install (One-line Install System - OIS)
+
+Sage v3.8.7+ features the **One-line Install System (OIS)** for seamless building and dependency management.
 
 ```bash
 git clone https://github.com/Night-Traders-Dev/SageLang.git && cd SageLang && chmod +x install.sh && ./install.sh
 ```
 
-The installer walks you through everything — building, setting up updating, and installing dependencies. It provides automatic `PATH` configuration instructions for **Bash**, **Zsh**, and **Fish** shells.
+The OIS installer handles environment detection, dependency installation (CURL, OpenSSL, Vulkan), and automatic `PATH` configuration for **Bash**, **Zsh**, and **Fish** shells across Linux, macOS, FreeBSD, and WSL2.
 
 ### Supported Platforms
 
@@ -180,17 +182,21 @@ Run `make benchmark-python` to compare all Sage execution backends against CPyth
 - **Indexing**: Access individual characters
 - **Conversion**: `str()` function for number-to-string conversion
 
-### Standard Library (35+ Native Functions)
-- **Core**: `print()`, `input()`, `clock()`, `tonumber()`, `str()`, `len()`
-- **Arrays**: `push()`, `pop()`, `range()`, `slice()`
-- **Strings**: `split()`, `join()`, `replace()`, `upper()`, `lower()`, `strip()`
+### Standard Library (100+ Native Functions)
+- **Core**: `print()`, `input()`, `clock()`, `tonumber()`, `int()`, `str()`, `len()`, `type()`, `hash()`, `sizeof()`, `doc()`
+- **Arrays**: `push()`, `pop()`, `append()`, `range()`, `slice()`, `array_extend()`, `array_repeat()`, `array_reverse()`, `array_contains()`, `array_index_of()`, `array_min()`, `array_max()`, `array_sum()`, `array_product()`
+- **Strings**: `split()`, `join()`, `replace()`, `upper()`, `lower()`, `strip()`, `string_count()`, `string_repeat()`, `startswith()`, `endswith()`, `contains()`, `indexof()`, `chr()`, `ord()`
+- **Bytes**: `bytes()`, `bytes_len()`, `bytes_get()`, `bytes_set()`, `bytes_push()`, `bytes_slice()`, `bytes_to_string()`
 - **Dictionaries**: `dict_keys()`, `dict_values()`, `dict_has()`, `dict_delete()`
-- **GC**: `gc_collect()`, `gc_stats()`, `gc_enable()`, `gc_disable()`
+- **GC**: `gc_collect()`, `gc_stats()`, `gc_collections()`, `gc_enable()`, `gc_disable()`, `gc_mode()`, `gc_set_arc()`, `gc_set_orc()`
 - **Generators**: `next()` for iterator protocol
-- **FFI**: `ffi_open()`, `ffi_call()`, `ffi_close()`, `ffi_sym()`
-- **Memory**: `mem_alloc()`, `mem_free()`, `mem_read()`, `mem_write()`, `mem_size()`, `addressof()`
+- **FFI**: `ffi_open()`, `ffi_call()`, `ffi_close()`, `ffi_sym()`, `ffi_sym_addr()`
+- **Memory**: `mem_alloc()`, `mem_free()`, `mem_read()`, `mem_write()`, `mem_size()`, `addressof()`, `addressof_raw()`, `ptr_add()`, `ptr_to_int()`
+- **Paths**: `path_join()`, `path_dirname()`, `path_basename()`, `path_ext()`, `path_exists()`, `path_is_dir()`, `path_is_file()`
 - **Assembly**: `asm_exec()`, `asm_compile()`, `asm_arch()` (x86-64, aarch64, rv64, mips)
 - **Structs**: `struct_def()`, `struct_new()`, `struct_get()`, `struct_set()`, `struct_size()`
+- **Concurrency**: `atomic_new()`, `atomic_load()`, `atomic_store()`, `atomic_add()`, `atomic_cas()`, `atomic_exchange()`, `sem_new()`, `sem_wait()`, `sem_post()`, `sem_trywait()`, `cpu_count()`, `cpu_physical_cores()`, `cpu_has_hyperthreading()`, `thread_set_affinity()`, `thread_get_core()`
+- **Resource Control**: `vm_gas_limit_set()`, `vm_gas_used_get()`, `vm_gas_limit_get()`
 
 ### Concurrency & Async/Await
 
@@ -1227,9 +1233,10 @@ proc fast_multiply(a: i64, b: i64) -> i64:
     return result
 
 # Pointer operations
-proc write_memory(ptr: *mut u8, value: u8):
+proc write_memory(ptr, value):
     unsafe:
-        *ptr = value
+        mem_write(ptr, 0, "byte", value)
+    end
 ```
 
 ## 📊 Project Stats
