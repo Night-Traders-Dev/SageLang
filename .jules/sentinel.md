@@ -46,3 +46,8 @@
 **Vulnerability:** The `sgvmc` tool used a hardcoded temporary file (`.tmp.svm`) in the current directory and invoked `./sage` via `system()`. It also lacked bounds checking for its internal constant and chunk mapping arrays.
 **Learning:** Utilities that act as wrappers or intermediate compilers are often less scrutinized than the core engine, yet they can be just as vulnerable. Using fixed-size buffers for data derived from input files (like VM bytecode artifacts) is a recipe for memory corruption.
 **Prevention:** Use `mkstemps()` for secure, unique temporary files. Prefer `fork()`/`execvp()` over `system()` to avoid shell injection entirely. Always implement robust bounds checking when parsing data from external files, and return error codes (like -1) that are distinct from valid indices.
+
+## 2025-06-26 - Resource Exhaustion in I/O and Shell Execution
+**Vulnerability:** Unbounded data accumulation in `io.readbytes` (fallback loop), `io.listdir`, and `sys.shell_exec` (CWE-400).
+**Learning:** High-level resource limits (like a file size check via `fseek`) are often bypassed by fallback paths designed for streams or non-seekable files (e.g., `/dev/urandom`). Similarly, directory listings and command output accumulation can grow indefinitely if not explicitly capped.
+**Prevention:** Always enforce global resource limits (like `SAGE_MAX_READ_SIZE`) within iterative accumulation loops, not just at the start of the operation. Use hard caps for collection sizes (e.g., maximum directory entries) to prevent memory exhaustion from "bomb" artifacts.

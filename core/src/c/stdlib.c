@@ -666,10 +666,16 @@ static Value io_readbytes_native(int argCount, Value* args) {
         // Non-seekable file (e.g., /dev/urandom) — read in chunks until EOF
         unsigned char chunk[4096];
         size_t nread;
+        size_t total_read = 0;
         while ((nread = fread(chunk, 1, sizeof(chunk), f)) > 0) {
+            if (total_read + nread > SAGE_MAX_READ_SIZE) {
+                nread = SAGE_MAX_READ_SIZE - total_read;
+            }
             for (size_t i = 0; i < nread; i++) {
                 array_push(&out_val, val_number((double)chunk[i]));
             }
+            total_read += nread;
+            if (total_read >= SAGE_MAX_READ_SIZE) break;
         }
         fclose(f);
     }
@@ -690,6 +696,7 @@ static Value io_listdir_native(int argCount, Value* args) {
     struct dirent* entry;
     while ((entry = readdir(d)) != NULL) {
         if (entry->d_name[0] == '.') continue; // skip hidden/. /..
+        if (arr->count >= 65536) break; // Security: cap directory listings to 64k entries
         if (arr->count >= arr->capacity) {
             size_t old_cap = (size_t)arr->capacity;
             arr->capacity *= 2;
@@ -994,12 +1001,16 @@ static Value sys_shell_exec_native(int argCount, Value* args) {
     
     while (fgets(buffer, sizeof(buffer), fp) != NULL) {
         size_t len = strlen(buffer);
+        if (result_len + len > SAGE_MAX_READ_SIZE) {
+            len = SAGE_MAX_READ_SIZE - result_len;
+        }
         char* new_result = realloc(result, result_len + len + 1);
         if (!new_result) { free(result); pclose(fp); return val_nil(); }
         result = new_result;
         memcpy(result + result_len, buffer, len);
         result_len += len;
         result[result_len] = '\0';
+        if (result_len >= SAGE_MAX_READ_SIZE) break;
     }
     
     pclose(fp);
