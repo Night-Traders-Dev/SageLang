@@ -466,7 +466,7 @@ proc step_engram():
     build["memory"]["max_semantic"] = prompt_num("Max semantic memories", 2000)
     # Auto-load Sage knowledge
     if prompt_yn("Load Sage codebase knowledge (19 facts)?"):
-        let facts = ["Sage is an indentation-based systems programming language built in C", "113 library modules across 11 subdirectories", "Concurrent tri-color mark-sweep GC with SATB write barriers", "3 compiler backends: C codegen, LLVM IR, native assembly", "Dotted imports: import os.fat resolves to lib/os/fat.sage", "0 is TRUTHY - only false and nil are falsy", "No escape sequences - use chr(10) for newline", "elif chains with 5+ branches malfunction", "Class methods cannot see module-level let vars", "match is a reserved keyword", "Native ML backend: ml_native with matmul, softmax", "Engram 4-tier memory: working, episodic, semantic, procedural", "Agent ReAct loop: observe, think, act, reflect", "Chatbot: intents, personas, sessions, middleware", "Library paths: CWD, ./lib, installed, SAGE_PATH", "Build: make or cmake -DBUILD_SAGE=ON", "224+ tests: bash tests/run_tests.sh", "Self-hosted modules start with gc_disable()", "Version: 3.8.7"]
+        let facts = ["Sage is an indentation-based systems programming language built in C", "113 library modules across 11 subdirectories", "Concurrent tri-color mark-sweep GC with SATB write barriers", "3 compiler backends: C codegen, LLVM IR, native assembly", "Dotted imports: import os.fat resolves to lib/os/fat.sage", "0 is TRUTHY - only false and nil are falsy", "No escape sequences - use chr(10) for newline", "elif chains with 5+ branches malfunction", "Class methods cannot see module-level let vars", "match is a reserved keyword", "Native ML backend: ml_native with matmul, softmax", "Engram 4-tier memory: working, episodic, semantic, procedural", "Agent ReAct loop: observe, think, act, reflect", "Chatbot: intents, personas, sessions, middleware", "Library paths: CWD, ./lib, installed, SAGE_PATH", "Build: make or cmake -DBUILD_SAGE=ON", "224+ tests: bash tests/run_tests.sh", "Self-hosted modules start with gc_disable()", "Version: 3.9.0"]
         for i in range(len(facts)):
             engram.store_semantic(build["memory"], facts[i], 1.0)
         print "  Loaded 19 semantic facts"
@@ -588,7 +588,7 @@ proc step_export():
 # Main interactive flow
 # ============================================================================
 
-print_header("SageLLM AI Builder v3.8.7")
+print_header("SageLLM AI Builder v3.9.0")
 print "Interactive step-by-step AI model builder."
 print "Uses the full Sage LLM/ML/AI library stack."
 print ""
