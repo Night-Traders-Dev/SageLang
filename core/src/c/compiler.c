@@ -467,7 +467,9 @@ static const char *find_name_suggestion(Compiler *compiler, const char *name) {
       "upper",       "lower",      "strip",       "split",      "join",
       "replace",     "mem_alloc",  "mem_free",    "mem_read",   "mem_write",
       "mem_size",    "struct_def", "struct_new",  "struct_get", "struct_set",
-      "struct_size", "clock",      "input",       "slice",      "asm_arch"};
+      "struct_size", "clock",      "input",       "slice",      "asm_arch",
+      "ffi_open",    "ffi_close",  "ffi_call",    "ffi_sym",    "ffi_sym_addr",
+      "ptr_to_int",  "addressof",  "ptr_add",     "sizeof"};
 
   const char *best_name = NULL;
   int best_score = 99;
@@ -2460,18 +2462,17 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
       (call->arg_count == 3 || call->arg_count == 4)) {
     char *handle = emit_expr(compiler, call->args[0]);
     char *name = emit_expr(compiler, call->args[1]);
-    char *args = emit_expr(compiler, call->args[2]);
+    char *ret_type = emit_expr(compiler, call->args[2]);
     if (call->arg_count == 4) {
-      char *ret_type = emit_expr(compiler, call->args[3]);
-      sb_appendf(&sb, "sage_ffi_call_full(%s, %s, %s, %s)", handle, name, args,
-                 ret_type);
-      free(ret_type);
+      char *args = emit_expr(compiler, call->args[3]);
+      sb_appendf(&sb, "sage_ffi_call(%s, %s, %s, %s)", handle, name, ret_type, args);
+      free(args);
     } else {
-      sb_appendf(&sb, "sage_ffi_call(%s, %s, %s)", handle, name, args);
+      sb_appendf(&sb, "sage_ffi_call(%s, %s, %s, sage_nil())", handle, name, ret_type);
     }
     free(handle);
     free(name);
-    free(args);
+    free(ret_type);
     free(callee_name);
     return sb_take(&sb);
   }
@@ -2479,6 +2480,51 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     char *arg = emit_expr(compiler, call->args[0]);
     sb_appendf(&sb, "sage_ffi_close(%s)", arg);
     free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "ffi_sym") == 0 && call->arg_count == 2) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_ffi_sym(%s, %s)", a, b);
+    free(a); free(b);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "ffi_sym_addr") == 0 && call->arg_count == 2) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_ffi_sym_addr(%s, %s)", a, b);
+    free(a); free(b);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "ptr_to_int") == 0 && call->arg_count == 1) {
+    char *a = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_ptr_to_int(%s)", a);
+    free(a);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "addressof") == 0 && call->arg_count == 1) {
+    char *a = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_addressof(%s)", a);
+    free(a);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "ptr_add") == 0 && call->arg_count == 2) {
+    char *a = emit_expr(compiler, call->args[0]);
+    char *b = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_ptr_add(%s, %s)", a, b);
+    free(a); free(b);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "sizeof") == 0 && call->arg_count == 1) {
+    char *a = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_sizeof(%s)", a);
+    free(a);
     free(callee_name);
     return sb_take(&sb);
   }
@@ -2875,11 +2921,16 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
   case STMT_RETURN: {
     char *expr = stmt->as.ret.value != NULL
                      ? emit_expr(compiler, stmt->as.ret.value)
-                     : str_dup("sage_nil()");
+                     : NULL;
     if (compiler->in_function_body) {
-      emit_line(compiler, "return sage_gc_return(&sage_gc_frame, %s);", expr);
+      emit_line(compiler, "return sage_gc_return(&sage_gc_frame, %s);",
+               expr ? expr : "sage_nil()");
     } else {
-      emit_line(compiler, "return %s;", expr);
+      if (expr) {
+        emit_line(compiler, "return %s;", expr);
+      } else {
+        emit_line(compiler, "return 0;");
+      }
     }
     free(expr);
     break;
@@ -3486,8 +3537,62 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    dlclose(handle.as.clib);\n"
         "    return sage_nil();\n"
         "}\n"
-        "static SageValue sage_ffi_call(SageValue handle, SageValue name, SageValue args) { return sage_nil(); }\n"
-        "static SageValue sage_ffi_call_full(SageValue handle, SageValue name, SageValue args, SageValue rt) { return sage_nil(); }\n"
+        "static SageValue sage_ffi_call(SageValue handle, SageValue name, SageValue ret_type, SageValue args) {\n"
+        "    if (handle.type != SAGE_TAG_CLIB || name.type != SAGE_TAG_STRING || ret_type.type != SAGE_TAG_STRING)\n"
+        "        return sage_nil();\n"
+        "    void* lib_handle = handle.as.clib;\n"
+        "    if (!lib_handle) return sage_nil();\n"
+        "    void* sym = dlsym(lib_handle, name.as.string);\n"
+        "    if (!sym) return sage_nil();\n"
+        "    const char* rt = ret_type.as.string;\n"
+        "    int call_argc = 0;\n"
+        "    SageValue call_argv[4];\n"
+        "    if (args.type == SAGE_TAG_ARRAY) {\n"
+        "        call_argc = args.as.array->count;\n"
+        "        if (call_argc > 3) call_argc = 3;\n"
+        "        for (int i = 0; i < call_argc; i++) call_argv[i] = args.as.array->elements[i];\n"
+        "    }\n"
+        "    #define IS_NUM(v) ((v).type == SAGE_TAG_NUMBER)\n"
+        "    #define IS_STR(v) ((v).type == SAGE_TAG_STRING)\n"
+        "    #pragma GCC diagnostic push\n"
+        "    #pragma GCC diagnostic ignored \"-Wpedantic\"\n"
+        "    if (strcmp(rt, \"int\") == 0) {\n"
+        "        if (call_argc == 0) { int (*fn)(void) = (int(*)(void))sym; return sage_number((double)fn()); }\n"
+        "        if (call_argc == 1 && IS_NUM(call_argv[0])) { int (*fn)(int) = (int(*)(int))sym; return sage_number((double)fn((int)call_argv[0].as.number)); }\n"
+        "        if (call_argc == 1 && IS_STR(call_argv[0])) { int (*fn)(const char*) = (int(*)(const char*))sym; return sage_number((double)fn(call_argv[0].as.string)); }\n"
+        "        if (call_argc == 2 && IS_NUM(call_argv[0]) && IS_NUM(call_argv[1])) { int (*fn)(int,int) = (int(*)(int,int))sym; return sage_number((double)fn((int)call_argv[0].as.number,(int)call_argv[1].as.number)); }\n"
+        "        if (call_argc == 2 && IS_STR(call_argv[0]) && IS_NUM(call_argv[1])) { int (*fn)(const char*,int) = (int(*)(const char*,int))sym; return sage_number((double)fn(call_argv[0].as.string,(int)call_argv[1].as.number)); }\n"
+        "        if (call_argc == 2 && IS_NUM(call_argv[0]) && IS_STR(call_argv[1])) { int (*fn)(int,const char*) = (int(*)(int,const char*))sym; return sage_number((double)fn((int)call_argv[0].as.number,call_argv[1].as.string)); }\n"
+        "        if (call_argc == 3 && IS_NUM(call_argv[0]) && IS_NUM(call_argv[1]) && IS_NUM(call_argv[2])) { int (*fn)(int,int,int) = (int(*)(int,int,int))sym; return sage_number((double)fn((int)call_argv[0].as.number,(int)call_argv[1].as.number,(int)call_argv[2].as.number)); }\n"
+        "        if (call_argc == 3 && IS_NUM(call_argv[0]) && IS_STR(call_argv[1]) && IS_NUM(call_argv[2])) { int (*fn)(int,const char*,int) = (int(*)(int,const char*,int))sym; return sage_number((double)fn((int)call_argv[0].as.number,call_argv[1].as.string,(int)call_argv[2].as.number)); }\n"
+        "    }\n"
+        "    if (strcmp(rt, \"void\") == 0) {\n"
+        "        if (call_argc == 0) { void (*fn)(void) = (void(*)(void))sym; fn(); return sage_nil(); }\n"
+        "        if (call_argc == 1 && IS_NUM(call_argv[0])) { void (*fn)(int) = (void(*)(int))sym; fn((int)call_argv[0].as.number); return sage_nil(); }\n"
+        "        if (call_argc == 1 && IS_STR(call_argv[0])) { void (*fn)(const char*) = (void(*)(const char*))sym; fn(call_argv[0].as.string); return sage_nil(); }\n"
+        "        if (call_argc == 2 && IS_NUM(call_argv[0]) && IS_NUM(call_argv[1])) { void (*fn)(int,int) = (void(*)(int,int))sym; fn((int)call_argv[0].as.number,(int)call_argv[1].as.number); return sage_nil(); }\n"
+        "    }\n"
+        "    if (strcmp(rt, \"double\") == 0) {\n"
+        "        if (call_argc == 0) { double (*fn)(void) = (double(*)(void))sym; return sage_number(fn()); }\n"
+        "        if (call_argc == 1 && IS_NUM(call_argv[0])) { double (*fn)(double) = (double(*)(double))sym; return sage_number(fn(call_argv[0].as.number)); }\n"
+        "        if (call_argc == 2 && IS_NUM(call_argv[0]) && IS_NUM(call_argv[1])) { double (*fn)(double,double) = (double(*)(double,double))sym; return sage_number(fn(call_argv[0].as.number,call_argv[1].as.number)); }\n"
+        "        if (call_argc == 3 && IS_NUM(call_argv[0]) && IS_NUM(call_argv[1]) && IS_NUM(call_argv[2])) { double (*fn)(double,double,double) = (double(*)(double,double,double))sym; return sage_number(fn(call_argv[0].as.number,call_argv[1].as.number,call_argv[2].as.number)); }\n"
+        "    }\n"
+        "    if (strcmp(rt, \"long\") == 0) {\n"
+        "        if (call_argc == 0) { long (*fn)(void) = (long(*)(void))sym; return sage_number((double)fn()); }\n"
+        "        if (call_argc == 1 && IS_NUM(call_argv[0])) { long (*fn)(long) = (long(*)(long))sym; return sage_number((double)fn((long)call_argv[0].as.number)); }\n"
+        "        if (call_argc == 2 && IS_NUM(call_argv[0]) && IS_NUM(call_argv[1])) { long (*fn)(long,long) = (long(*)(long,long))sym; return sage_number((double)fn((long)call_argv[0].as.number,(long)call_argv[1].as.number)); }\n"
+        "    }\n"
+        "    if (strcmp(rt, \"string\") == 0) {\n"
+        "        if (call_argc == 0) { const char* (*fn)(void) = (const char*(*)(void))sym; const char* r = fn(); return r ? sage_string(r) : sage_nil(); }\n"
+        "        if (call_argc == 1 && IS_STR(call_argv[0])) { const char* (*fn)(const char*) = (const char*(*)(const char*))sym; const char* r = fn(call_argv[0].as.string); return r ? sage_string(r) : sage_nil(); }\n"
+        "    }\n"
+        "    #pragma GCC diagnostic pop\n"
+        "    #undef IS_NUM\n"
+        "    #undef IS_STR\n"
+        "    return sage_nil();\n"
+        "}\n"
+        "static SageValue sage_ffi_call_full(SageValue h, SageValue n, SageValue r, SageValue a) { return sage_ffi_call(h,n,r,a); }\n"
         "\n"
         "static SageValue sage_atomic_new(SageValue val) {\n"
         "    SageValue* atom = malloc(sizeof(SageValue));\n"
@@ -4717,6 +4822,55 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
       "    if (sp == NULL) return sage_nil();\n"
       "    return sage_number((double)sp->size);\n"
+      "}\n"
+      "\n"
+      "static SageValue sage_ptr_to_int(SageValue ptr_val) {\n"
+      "    if (ptr_val.type != SAGE_TAG_POINTER) return sage_nil();\n"
+      "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
+      "    if (sp == NULL) return sage_nil();\n"
+      "    return sage_number((double)(uintptr_t)sp->ptr);\n"
+      "}\n"
+      "static SageValue sage_ffi_sym(SageValue handle, SageValue name) {\n"
+      "    if (handle.type != SAGE_TAG_CLIB || name.type != SAGE_TAG_STRING)\n"
+      "        return sage_bool(0);\n"
+      "    void* lib = handle.as.clib;\n"
+      "    if (!lib) return sage_bool(0);\n"
+      "    void* sym = dlsym(lib, name.as.string);\n"
+      "    return sage_bool(sym != NULL);\n"
+      "}\n"
+      "static SageValue sage_ffi_sym_addr(SageValue handle, SageValue name) {\n"
+      "    if (handle.type != SAGE_TAG_CLIB || name.type != SAGE_TAG_STRING)\n"
+      "        return sage_nil();\n"
+      "    void* lib = handle.as.clib;\n"
+      "    if (!lib) return sage_nil();\n"
+      "    void* sym = dlsym(lib, name.as.string);\n"
+      "    if (!sym) return sage_nil();\n"
+      "    return sage_number((double)(uintptr_t)sym);\n"
+      "}\n"
+      "static SageValue sage_addressof(SageValue val) {\n"
+      "    return sage_number((double)(uintptr_t)&val);\n"
+      "}\n"
+      "static SageValue sage_ptr_add(SageValue ptr_val, SageValue offset) {\n"
+      "    if (ptr_val.type != SAGE_TAG_POINTER || offset.type != SAGE_TAG_NUMBER)\n"
+      "        return sage_nil();\n"
+      "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
+      "    if (sp == NULL) return sage_nil();\n"
+      "    SageValue v; v.type = SAGE_TAG_POINTER;\n"
+      "    v.as.pointer = sp;\n"
+      "    sp->ptr = (void*)((uintptr_t)sp->ptr + (intptr_t)offset.as.number);\n"
+      "    return v;\n"
+      "}\n"
+      "static SageValue sage_sizeof(SageValue type_name) {\n"
+      "    if (type_name.type != SAGE_TAG_STRING) return sage_nil();\n"
+      "    const char* tn = type_name.as.string;\n"
+      "    if (strcmp(tn,\"char\")==0||strcmp(tn,\"byte\")==0) return sage_number(1);\n"
+      "    if (strcmp(tn,\"short\")==0) return sage_number(2);\n"
+      "    if (strcmp(tn,\"int\")==0) return sage_number(4);\n"
+      "    if (strcmp(tn,\"long\")==0) return sage_number(8);\n"
+      "    if (strcmp(tn,\"float\")==0) return sage_number(4);\n"
+      "    if (strcmp(tn,\"double\")==0) return sage_number(8);\n"
+      "    if (strcmp(tn,\"ptr\")==0) return sage_number(8);\n"
+      "    return sage_nil();\n"
       "}\n"
       "\n",
       out);
