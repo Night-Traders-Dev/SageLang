@@ -505,10 +505,6 @@ Module* create_math_module(ModuleCache* cache) {
 // IO MODULE
 // ============================================================================
 
-// Security: Cap entire-file reads to 100MB to prevent memory exhaustion DoS attacks.
-// This affects io.readfile and io.readbytes which allocate the full content at once.
-#define SAGE_MAX_READ_SIZE (100 * 1024 * 1024)
-
 static Value io_readfile_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* path = AS_STRING(args[0]);
