@@ -18,13 +18,6 @@ void lsp_run() { fprintf(stderr, "LSP not supported in this build\n"); }
 
 #include "module.h"
 
-#ifdef SAGE_NO_NET
-Module* create_net_module(ModuleCache* cache) { (void)cache; return NULL; }
-Module* create_socket_module(ModuleCache* cache) { (void)cache; return NULL; }
-Module* create_tcp_module(ModuleCache* cache) { (void)cache; return NULL; }
-Module* create_http_module(ModuleCache* cache) { (void)cache; return NULL; }
-Module* create_ssl_module(ModuleCache* cache) { (void)cache; return NULL; }
-#endif
 
 #ifndef SAGE_HAS_ML
 Module* create_ml_native_module(ModuleCache* cache) { (void)cache; return NULL; }
