@@ -183,7 +183,8 @@ static Value tcp_send_native(int argc, Value* args) {
     if (argc < 2 || !IS_NUMBER(args[0]) || !IS_STRING(args[1]))
         return val_number(-1);
     const char* data = AS_STRING(args[1]);
-    ssize_t n = send((int)AS_NUMBER(args[0]), data, strlen(data), 0);
+    size_t len = SAGE_STRING_LEN(args[1]);
+    ssize_t n = send((int)AS_NUMBER(args[0]), data, len, 0);
     return val_number((double)n);
 }
 
@@ -192,7 +193,7 @@ static Value tcp_recv_native(int argc, Value* args) {
         return val_nil();
     int fd = (int)AS_NUMBER(args[0]);
     int len = (int)AS_NUMBER(args[1]);
-    if (len <= 0) return val_nil();
+    if (len <= 0 || len > SAGE_MAX_READ_SIZE) return val_nil();
 
     char* buf = SAGE_ALLOC(len + 1);
     ssize_t n = recv(fd, buf, len, 0);
@@ -206,7 +207,7 @@ static Value tcp_sendall_native(int argc, Value* args) {
         return val_bool(0);
     int fd = (int)AS_NUMBER(args[0]);
     const char* data = AS_STRING(args[1]);
-    size_t len = strlen(data);
+    size_t len = SAGE_STRING_LEN(args[1]);
     size_t sent = 0;
     while (sent < len) {
         ssize_t n = send(fd, data + sent, len - sent, 0);
@@ -221,7 +222,7 @@ static Value tcp_recvall_native(int argc, Value* args) {
         return val_nil();
     int fd = (int)AS_NUMBER(args[0]);
     int length = (int)AS_NUMBER(args[1]);
-    if (length <= 0) return val_nil();
+    if (length <= 0 || length > SAGE_MAX_READ_SIZE) return val_nil();
 
     char* buf = SAGE_ALLOC(length + 1);
     int received = 0;
@@ -238,7 +239,8 @@ static Value tcp_recvline_native(int argc, Value* args) {
     if (argc < 1 || !IS_NUMBER(args[0])) return val_nil();
     int fd = (int)AS_NUMBER(args[0]);
     int maxlen = (argc >= 2 && IS_NUMBER(args[1])) ? (int)AS_NUMBER(args[1]) : 4096;
-    
+    if (maxlen <= 0 || maxlen > SAGE_MAX_READ_SIZE) maxlen = 4096;
+
     char* buf = SAGE_ALLOC(maxlen + 1);
     int pos = 0;
     char c;

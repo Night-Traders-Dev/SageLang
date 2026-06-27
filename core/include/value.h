@@ -107,6 +107,9 @@ typedef struct {
     void* handle;       // pthread_mutex_t* (opaque)
 } MutexValue;
 
+// Security: Global resource limit for I/O operations (100MB)
+#define SAGE_MAX_READ_SIZE (100 * 1024 * 1024)
+
 // Phase 1.8: Binary-safe byte buffer
 typedef struct {
     unsigned char* data;
