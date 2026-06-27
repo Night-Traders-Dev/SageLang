@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-06-19 00:41 UTC",
+  "generated_at": "2026-06-27 00:56 UTC",
   "repo_languages": [
     {
       "language": "JSON",
-      "lines": 193602
+      "lines": 193616
     },
     {
       "language": "C",
-      "lines": 70646
+      "lines": 71664
     },
     {
       "language": "Sage",
-      "lines": 48448
+      "lines": 48562
     },
     {
       "language": "Shell",
@@ -19,7 +19,7 @@
     },
     {
       "language": "Makefile",
-      "lines": 960
+      "lines": 965
     },
     {
       "language": "CMake",
@@ -51,15 +51,15 @@
   "project_breakdown": [
     {
       "area": "Documentation",
-      "lines": 16661
+      "lines": 17613
     },
     {
       "area": "Build System",
-      "lines": 4794
+      "lines": 4805
     },
     {
       "area": "Test Suite",
-      "lines": 258
+      "lines": 359
     }
   ],
   "recipe_benchmark": {
@@ -75,11 +75,11 @@
         "reason": "",
         "output": "421782618",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.012851952982600778,
-        "total_median_seconds": 0.012851952982600778,
+        "run_median_seconds": 0.018091822996211704,
+        "total_median_seconds": 0.018091822996211704,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.013786517205880955,
-        "total_mean_seconds": 0.013786517205880955
+        "run_mean_seconds": 0.018440663799992763,
+        "total_mean_seconds": 0.018440663799992763
       },
       {
         "name": "sage-interpreted-vm",
@@ -88,11 +88,11 @@
         "reason": "",
         "output": "421782618",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.013804714020807296,
-        "total_median_seconds": 0.013804714020807296,
+        "run_median_seconds": 0.017497458000434563,
+        "total_median_seconds": 0.017497458000434563,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.014272633206564933,
-        "total_mean_seconds": 0.014272633206564933
+        "run_mean_seconds": 0.016757463000249117,
+        "total_mean_seconds": 0.016757463000249117
       },
       {
         "name": "sage-compiled-c",
@@ -100,12 +100,12 @@
         "status": "ok",
         "reason": "",
         "output": "421782618",
-        "build_median_seconds": 0.1548687040049117,
-        "run_median_seconds": 0.0021265919785946608,
-        "total_median_seconds": 0.15714826600742526,
-        "build_mean_seconds": 0.15488288319902493,
-        "run_mean_seconds": 0.002062525600194931,
-        "total_mean_seconds": 0.15694540879921987
+        "build_median_seconds": 0.23027932299737586,
+        "run_median_seconds": 0.002084034997096751,
+        "total_median_seconds": 0.23248499899636954,
+        "build_mean_seconds": 0.22387282339914236,
+        "run_mean_seconds": 0.0020230679991072977,
+        "total_mean_seconds": 0.22589589139824967
       },
       {
         "name": "sage-compiled-vm",
@@ -113,18 +113,18 @@
         "status": "failed",
         "reason": "checksum mismatch: expected '421782618', got ''",
         "output": "",
-        "build_median_seconds": 0.01095466798869893,
-        "run_median_seconds": 0.010504242003662512,
-        "total_median_seconds": 0.02241061898530461,
-        "build_mean_seconds": 0.01079172000172548,
-        "run_mean_seconds": 0.01070723959710449,
-        "total_mean_seconds": 0.02149895959882997
+        "build_median_seconds": 0.014166713001031894,
+        "run_median_seconds": 0.014964042005885858,
+        "total_median_seconds": 0.026540951999777462,
+        "build_mean_seconds": 0.01328557800152339,
+        "run_mean_seconds": 0.013995361802517436,
+        "total_mean_seconds": 0.027280939804040828
       },
       {
         "name": "sage-compiled-sage",
         "label": "Compiled (Sage)",
         "status": "failed",
-        "reason": "build step failed\ncommand: cc /home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c -o /home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage -lm\ncwd: /home/kraken/Devel/sagelang/core\nstderr:\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c: In function \u2018sage_mod\u2019:\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c:392:24: error: implicit declaration of function \u2018fmod\u2019 [-Wimplicit-function-declaration]\n  392 |     return sage_number(fmod(left.as.number, right.as.number));\n      |                        ^~~~\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c:6:1: note: include \u2018<math.h>\u2019 or provide a declaration of \u2018fmod\u2019\n    5 | #include <string.h>\n  +++ |+#include <math.h>\n    6 | \n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c:392:24: warning: incompatible implicit declaration of built-in function \u2018fmod\u2019 [-Wbuiltin-declaration-mismatch]\n  392 |     return sage_number(fmod(left.as.number, right.as.number));\n      |                        ^~~~\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-uwksl3fd/recipe-compiled-sage.c:392:24: note: include \u2018<math.h>\u2019 or provide a declaration of \u2018fmod\u2019",
+        "reason": "build step failed\ncommand: cc /home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-8nxl00r1/recipe-compiled-sage.c -o /home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-8nxl00r1/recipe-compiled-sage -lm\ncwd: /home/kraken/Devel/sagelang/core\nstderr:\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-8nxl00r1/recipe-compiled-sage.c: In function \u2018sage_mod\u2019:\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-8nxl00r1/recipe-compiled-sage.c:392:24: error: implicit declaration of function \u2018fmod\u2019 [-Wimplicit-function-declaration]\n  392 |     return sage_number(fmod(left.as.number, right.as.number));\n      |                        ^~~~\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-8nxl00r1/recipe-compiled-sage.c:6:1: note: include \u2018<math.h>\u2019 or provide a declaration of \u2018fmod\u2019\n    5 | #include <string.h>\n  +++ |+#include <math.h>\n    6 | \n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-8nxl00r1/recipe-compiled-sage.c:392:24: warning: incompatible implicit declaration of built-in function \u2018fmod\u2019 [-Wbuiltin-declaration-mismatch]\n  392 |     return sage_number(fmod(left.as.number, right.as.number));\n      |                        ^~~~\n/home/kraken/Devel/sagelang/core/.tmp/sage-compiled-sage-8nxl00r1/recipe-compiled-sage.c:392:24: note: include \u2018<math.h>\u2019 or provide a declaration of \u2018fmod\u2019",
         "output": null,
         "build_median_seconds": null,
         "run_median_seconds": null,
@@ -140,11 +140,11 @@
         "reason": "",
         "output": "421782618",
         "build_median_seconds": 0.0,
-        "run_median_seconds": 0.012439329002518207,
-        "total_median_seconds": 0.012439329002518207,
+        "run_median_seconds": 0.016216453004744835,
+        "total_median_seconds": 0.016216453004744835,
         "build_mean_seconds": 0.0,
-        "run_mean_seconds": 0.012622353003825993,
-        "total_mean_seconds": 0.012622353003825993
+        "run_mean_seconds": 0.01655493600119371,
+        "total_mean_seconds": 0.01655493600119371
       },
       {
         "name": "sage-aot",
@@ -152,12 +152,12 @@
         "status": "ok",
         "reason": "",
         "output": "421782618",
-        "build_median_seconds": 0.11165226800949313,
-        "run_median_seconds": 0.0013631099718622863,
-        "total_median_seconds": 0.11300364602357149,
-        "build_mean_seconds": 0.11134325678576715,
-        "run_mean_seconds": 0.0013494563929270953,
-        "total_mean_seconds": 0.11269271317869425
+        "build_median_seconds": 0.1485170410014689,
+        "run_median_seconds": 0.0012342569971224293,
+        "total_median_seconds": 0.14975487499759765,
+        "build_mean_seconds": 0.14909418540046318,
+        "run_mean_seconds": 0.0011998035974102096,
+        "total_mean_seconds": 0.15029398899787338
       }
     ]
   }
