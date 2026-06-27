@@ -620,6 +620,15 @@ static char *resolve_module_path_for_compiler(const Compiler *compiler,
     strcat(path, ".sage");
     if (access(path, F_OK) == 0)
       return str_dup(path);
+    // Also try package directory: {dir}/{search}{name}/__init__.sage
+    if (dlen + slen + plen + 15 < sizeof(path)) {
+      strcpy(path, dir);
+      strcat(path, search[i]);
+      strcat(path, path_name);
+      strcat(path, "/__init__.sage");
+      if (access(path, F_OK) == 0)
+        return str_dup(path);
+    }
   }
   // Search relative to CWD
   for (int i = 0; i < 3; i++) {
@@ -633,6 +642,15 @@ static char *resolve_module_path_for_compiler(const Compiler *compiler,
     strcat(path, ".sage");
     if (access(path, F_OK) == 0)
       return str_dup(path);
+    // Also try package directory
+    if (slen + plen + 16 < sizeof(path)) {
+      strcpy(path, "./");
+      strcat(path, search[i]);
+      strcat(path, path_name);
+      strcat(path, "/__init__.sage");
+      if (access(path, F_OK) == 0)
+        return str_dup(path);
+    }
   }
   // Search SAGE_PATH environment variable
   const char *sage_path = getenv("SAGE_PATH");
@@ -648,6 +666,10 @@ static char *resolve_module_path_for_compiler(const Compiler *compiler,
           *p = '\0';
           if (p > start) {
             snprintf(path, sizeof(path), "%s/%s.sage", start, path_name);
+            if (access(path, F_OK) == 0)
+              return str_dup(path);
+            // Also try package directory
+            snprintf(path, sizeof(path), "%s/%s/__init__.sage", start, path_name);
             if (access(path, F_OK) == 0)
               return str_dup(path);
           }
@@ -671,6 +693,15 @@ static char *resolve_module_path_for_compiler(const Compiler *compiler,
     strcat(path, ".sage");
     if (access(path, F_OK) == 0)
       return str_dup(path);
+    // Also try package directory
+    if (sliblen + plen + 15 < sizeof(path)) {
+      strcpy(path, SAGE_LIB_DIR);
+      strcat(path, "/");
+      strcat(path, path_name);
+      strcat(path, "/__init__.sage");
+      if (access(path, F_OK) == 0)
+        return str_dup(path);
+    }
   }
   return NULL;
 }
