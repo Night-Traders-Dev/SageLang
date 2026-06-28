@@ -120,7 +120,7 @@ main.c
 - **Indent Stack**: Array tracking nesting depth; generates `TOKEN_INDENT` / `TOKEN_DEDENT` automatically
 
 **Token Types** (from token.h):
-- **Keywords**: `let`, `var`, `proc`, `if`, `else`, `while`, `for`, `in`, `return`, `print`, `class`, `self`, `init`, `break`, `continue`, `and`, `or`, `try`, `catch`, `finally`, `raise`, `yield`, `defer`, `match`, `case`, `default`, `import`, `from`, `as`, `true`, `false`, `nil`
+- **Keywords**: `let`, `var`, `proc`, `if`, `else`, `elif`, `while`, `for`, `in`, `return`, `print`, `class`, `self`, `init`, `super`, `break`, `continue`, `and`, `or`, `not`, `try`, `catch`, `finally`, `raise`, `yield`, `defer`, `match`, `case`, `default`, `import`, `from`, `as`, `async`, `await`, `unsafe`, `end`, `comptime`, `macro`, `quote`, `unquote`, `struct`, `enum`, `trait`, `true`, `false`, `nil`
 - **Operators**: `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `&`, `|`, `^`, `~`, `<<`, `>>`
 - **Punctuation**: `(`, `)`, `[`, `]`, `{`, `}`, `:`, `,`, `.`
 - **Structural**: `INDENT`, `DEDENT`, `NEWLINE`, `EOF`, `ERROR`
@@ -3308,8 +3308,8 @@ glslc text3d.frag -o text3d.frag.spv
 ### Keywords
 
 ```
-let var proc if else elif while for in return print
-and or not break continue class self init super
+let var proc if else elif while for in return print class self init super
+and or not break continue
 try catch finally raise yield defer
 match case default import from as
 async await unsafe end

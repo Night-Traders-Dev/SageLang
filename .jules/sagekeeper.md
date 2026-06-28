@@ -45,3 +45,14 @@ Evidence:
 
 Documentation Impact:
 Added `super` and `end` to the keywords list in the Quick Reference appendix.
+
+2024-06-28 - [Lexer Keyword Synchronization]
+
+Discovery:
+The `elif` keyword was missing from the "Keywords" list in both the "2.2 Lexer" section and the "Appendix: Quick Reference" section in `SageLang_Guide.md`, despite being fully implemented and tokenized by the lexer (`core/src/c/lexer.c` and `core/include/token.h`). Furthermore, the "2.2 Lexer" section's keyword list was missing several other implemented keywords: `super`, `not`, `async`, `await`, `unsafe`, `end`, `comptime`, `macro`, `quote`, `unquote`, `struct`, `enum`, and `trait`.
+
+Evidence:
+`core/src/c/lexer.c` identifier parsing logic, `core/include/token.h`.
+
+Documentation Impact:
+Updated the Lexer section's keyword list to include all active keywords for completeness. This ensures the lexer documentation matches the actual parser capabilities.
