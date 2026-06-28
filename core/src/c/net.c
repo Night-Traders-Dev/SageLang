@@ -199,7 +199,7 @@ static Value tcp_recv_native(int argc, Value* args) {
     ssize_t n = recv(fd, buf, len, 0);
     if (n <= 0) { free(buf); return val_nil(); }
     buf[n] = '\0';
-    return val_string_take(buf);
+    return val_string_take_len(buf, (int)n);
 }
 
 static Value tcp_sendall_native(int argc, Value* args) {
@@ -232,7 +232,7 @@ static Value tcp_recvall_native(int argc, Value* args) {
         received += n;
     }
     buf[length] = '\0';
-    return val_string_take(buf);
+    return val_string_take_len(buf, length);
 }
 
 static Value tcp_recvline_native(int argc, Value* args) {
@@ -252,7 +252,7 @@ static Value tcp_recvline_native(int argc, Value* args) {
     }
     if (pos == 0) { free(buf); return val_nil(); }
     buf[pos] = '\0';
-    return val_string_take(buf);
+    return val_string_take_len(buf, pos);
 }
 
 static Value tcp_close_native(int argc, Value* args) {

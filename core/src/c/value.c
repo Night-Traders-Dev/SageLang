@@ -41,6 +41,12 @@ Value val_string_take(char* value) {
     return v;
 }
 
+Value val_string_take_len(char* value, int len) {
+    Value v = val_string_len(value, len);
+    free(value);
+    return v;
+}
+
 Value val_bytes(const unsigned char* data, int length) {
     Value v;
     v.type = VAL_BYTES;
@@ -511,18 +517,18 @@ Value string_split(const char* str, const char* delimiter) {
     const char* found;
     
     while ((found = strstr(start, delimiter)) != NULL) {
-        int len = found - start;
+        int len = (int)(found - start);
         char* part = SAGE_ALLOC(len + 1);
-        strncpy(part, start, len);
+        memcpy(part, start, (size_t)len);
         part[len] = '\0';
-        array_push(&result, val_string_take(part));
+        array_push(&result, val_string_take_len(part, len));
         start = found + del_len;
     }
     
-    size_t tail_len = strlen(start);
+    int tail_len = (int)strlen(start);
     char* part = SAGE_ALLOC(tail_len + 1);
-    memcpy(part, start, tail_len + 1);
-    array_push(&result, val_string_take(part));
+    memcpy(part, start, (size_t)tail_len + 1);
+    array_push(&result, val_string_take_len(part, tail_len));
     
     gc_unpin();
     return result;
@@ -560,7 +566,7 @@ Value string_join(Value* arr, const char* separator) {
     }
     *wp = '\0';
 
-    return val_string_take(result);
+    return val_string_take_len(result, (int)total_len);
 }
 
 char* string_replace(const char* str, const char* old, const char* new_str) {

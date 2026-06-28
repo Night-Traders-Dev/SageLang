@@ -522,7 +522,7 @@ static Value io_readfile_native(int argCount, Value* args) {
     buf[read] = '\0';
     fclose(f);
 
-    return val_string_take(buf);
+    return val_string_take_len(buf, (int)read);
 }
 
 static Value io_writefile_native(int argCount, Value* args) {
@@ -1011,7 +1011,7 @@ static Value sys_shell_exec_native(int argCount, Value* args) {
     
     pclose(fp);
     
-    Value v = val_string(result ? result : "");
+    Value v = val_string_len(result ? result : "", (int)result_len);
     free(result);
     return v;
 }
