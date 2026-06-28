@@ -2934,7 +2934,9 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
                 result = EVAL_RESULT(dict_get_len(&arr, AS_STRING(idx), SAGE_STRING_LEN(idx)));
             } else {
-                fprintf(stderr, "Runtime Error: Invalid indexing operation.\n");
+                fprintf(stderr, "FOOBAR INVALID INDEX\n");
+                fprintf(stderr, "arr: "); print_value(arr); fprintf(stderr, "\nidx: "); print_value(idx); fprintf(stderr, "\n"); fflush(stdout);
+                fprintf(stderr, "arr: "); print_value(arr); fprintf(stderr, " idx: "); print_value(idx); fprintf(stderr, "\n"); fflush(stdout);
                 result = EVAL_RESULT(val_nil());
             }
             AST_GC_POP();
@@ -3051,6 +3053,8 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             }
 
             fprintf(stderr, "Runtime Error: Only instances and modules have properties.\n");
+            fprintf(stderr, "object: "); print_value(object); fprintf(stderr, "\n"); fflush(stdout);
+            fprintf(stderr, "object: "); print_value(object); fprintf(stderr, "\n"); fflush(stdout);
             return EVAL_RESULT(val_nil());
         }
 

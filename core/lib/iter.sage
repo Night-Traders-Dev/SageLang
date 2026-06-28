@@ -22,24 +22,32 @@ proc range_step(start, stop, step):
             current = current + step
 
 proc repeat(value, count):
-    for i in range(count):
+    let i = 0
+    while i < count:
         yield value
+        i = i + 1
 
 proc repeat_forever(value):
     while true:
         yield value
 
 proc enumerate_array(values):
-    for i in range(len(values)):
+    let i = 0
+    let n = len(values)
+    while i < n:
         yield (i, values[i])
+        i = i + 1
 
 proc cycle(values):
-    if len(values) == 0:
+    let n = len(values)
+    if n == 0:
         return nil
 
     while true:
-        for x in values:
-            yield x
+        let i = 0
+        while i < n:
+            yield values[i]
+            i = i + 1
 
 @inline
 proc take(gen, count):

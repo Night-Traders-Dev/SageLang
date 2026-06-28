@@ -284,7 +284,6 @@ class Parser:
                     expr = get_expr(expr, prop)
                 else:
                     self.consume(token.TOKEN_IDENTIFIER, "Expect property name after '.'.")
-                end
             else:
                 break
         return expr
@@ -424,20 +423,28 @@ class Parser:
     proc parse_if():
         let condition = self.parse_expression()
         self.consume(token.TOKEN_COLON, "Expect ':' after if condition.")
-        self.consume(token.TOKEN_NEWLINE, "Expect newline after if condition.")
-        let then_branch = self.parse_block()
+        let then_branch = nil
+        if self.match_tok(token.TOKEN_NEWLINE):
+            then_branch = self.parse_block()
+        else:
+            then_branch = self.parse_statement()
         let else_branch = nil
         if self.match_tok(token.TOKEN_ELSE):
             self.consume(token.TOKEN_COLON, "Expect ':' after else.")
-            self.consume(token.TOKEN_NEWLINE, "Expect newline after else.")
-            else_branch = self.parse_block()
+            if self.match_tok(token.TOKEN_NEWLINE):
+                else_branch = self.parse_block()
+            else:
+                else_branch = self.parse_statement()
         return if_stmt(condition, then_branch, else_branch)
 
     proc parse_while():
         let condition = self.parse_expression()
         self.consume(token.TOKEN_COLON, "Expect ':' after while condition.")
-        self.consume(token.TOKEN_NEWLINE, "Expect newline after while condition.")
-        let body = self.parse_block()
+        let body = nil
+        if self.match_tok(token.TOKEN_NEWLINE):
+            body = self.parse_block()
+        else:
+            body = self.parse_statement()
         return while_stmt(condition, body)
 
     proc parse_for():
@@ -448,8 +455,11 @@ class Parser:
         self.consume(token.TOKEN_IN, "Expect 'in' after loop variable.")
         let iterable = self.parse_expression()
         self.consume(token.TOKEN_COLON, "Expect ':' after for clause.")
-        self.consume(token.TOKEN_NEWLINE, "Expect newline after for clause.")
-        let body = self.parse_block()
+        let body = nil
+        if self.match_tok(token.TOKEN_NEWLINE):
+            body = self.parse_block()
+        else:
+            body = self.parse_statement()
         return for_stmt(var_tok, iterable, body)
 
     proc parse_proc():
@@ -637,6 +647,9 @@ class Parser:
             self.consume(token.TOKEN_IDENTIFIER, "Expect module name after 'from'.")
             let module_tok = self.previous()
             let module_name = module_tok.text
+            while self.match_tok(token.TOKEN_DOT):
+                self.consume(token.TOKEN_IDENTIFIER, "Expect submodule name after '.'.")
+                module_name = module_name + "/" + self.previous().text
             self.consume(token.TOKEN_IMPORT, "Expect 'import' after module name.")
             let items = []
             let item_aliases = []
@@ -665,6 +678,9 @@ class Parser:
         self.consume(token.TOKEN_IDENTIFIER, "Expect module name after 'import'.")
         let module_tok = self.previous()
         let module_name = module_tok.text
+        while self.match_tok(token.TOKEN_DOT):
+            self.consume(token.TOKEN_IDENTIFIER, "Expect submodule name after '.'.")
+            module_name = module_name + "/" + self.previous().text
         let alias = nil
         if self.match_tok(token.TOKEN_AS):
             self.consume(token.TOKEN_IDENTIFIER, "Expect alias after 'as'.")

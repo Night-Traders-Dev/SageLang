@@ -44,7 +44,7 @@ let g_error_ctx = nil
 let g_module_cache = {}
 
 # Module search paths (set by the host before running)
-let g_module_paths = [".", "lib"]
+let g_module_paths = [".", "lib", "core/src/sage", "core/lib"]
 
 # ---- Performance: pre-allocated signal singletons ----
 let _SIG_NORMAL_NIL = {"kind": 0, "value": nil}
@@ -955,7 +955,7 @@ proc eval_expr_impl(expr, env):
 # Each binary operator maps to a handler proc that takes (left, right).
 # Short-circuit ops (and, or, not) are handled inline before dispatch.
 
-let _binop_dispatch = {}
+
 
 proc _bop_eq(l, r):
     return l == r
@@ -998,22 +998,24 @@ proc _bop_lshift(l, r):
 proc _bop_rshift(l, r):
     return l >> r
 
-_binop_dispatch[TOKEN_EQ] = _bop_eq
-_binop_dispatch[TOKEN_NEQ] = _bop_neq
-_binop_dispatch[TOKEN_GT] = _bop_gt
-_binop_dispatch[TOKEN_LT] = _bop_lt
-_binop_dispatch[TOKEN_GTE] = _bop_gte
-_binop_dispatch[TOKEN_LTE] = _bop_lte
-_binop_dispatch[TOKEN_PLUS] = _bop_plus
-_binop_dispatch[TOKEN_MINUS] = _bop_minus
-_binop_dispatch[TOKEN_STAR] = _bop_star
-_binop_dispatch[TOKEN_SLASH] = _bop_slash
-_binop_dispatch[TOKEN_PERCENT] = _bop_percent
-_binop_dispatch[TOKEN_AMP] = _bop_amp
-_binop_dispatch[TOKEN_PIPE] = _bop_pipe
-_binop_dispatch[TOKEN_CARET] = _bop_caret
-_binop_dispatch[TOKEN_LSHIFT] = _bop_lshift
-_binop_dispatch[TOKEN_RSHIFT] = _bop_rshift
+proc get_binop_func(op_type):
+    if op_type == TOKEN_EQ: return _bop_eq
+    if op_type == TOKEN_NEQ: return _bop_neq
+    if op_type == TOKEN_GT: return _bop_gt
+    if op_type == TOKEN_LT: return _bop_lt
+    if op_type == TOKEN_GTE: return _bop_gte
+    if op_type == TOKEN_LTE: return _bop_lte
+    if op_type == TOKEN_PLUS: return _bop_plus
+    if op_type == TOKEN_MINUS: return _bop_minus
+    if op_type == TOKEN_STAR: return _bop_star
+    if op_type == TOKEN_SLASH: return _bop_slash
+    if op_type == TOKEN_PERCENT: return _bop_percent
+    if op_type == TOKEN_AMP: return _bop_amp
+    if op_type == TOKEN_PIPE: return _bop_pipe
+    if op_type == TOKEN_CARET: return _bop_caret
+    if op_type == TOKEN_LSHIFT: return _bop_lshift
+    if op_type == TOKEN_RSHIFT: return _bop_rshift
+    return nil
 
 proc eval_binary(expr, env):
     let op_type = expr.op.type
@@ -1094,8 +1096,9 @@ proc eval_binary(expr, env):
     if op_type == TOKEN_PERCENT and right == 0:
         runtime_error(expr.op.line, "Modulo by zero", nil)
 
-    if dict_has(_binop_dispatch, op_type):
-        return _binop_dispatch[op_type](left, right)
+    let func = get_binop_func(op_type)
+    if func != nil:
+        return func(left, right)
 
     runtime_error(expr.op.line, "Unknown binary operator type: " + str(op_type), nil)
 
@@ -1198,6 +1201,8 @@ proc eval_call(expr, env):
     # Recursion depth check at call boundary only
     g_depth = g_depth + 1
     if g_depth > MAX_RECURSION:
+        let callee_name = get_expr_name(expr.callee)
+        print "Recursion depth exceeded calling: " + callee_name
         g_depth = g_depth - 1
         runtime_error(get_expr_line(expr.callee), "Maximum recursion depth exceeded", "limit is " + str(MAX_RECURSION) + " frames")
     let _call_result = eval_call_impl(expr, env)
@@ -1575,7 +1580,7 @@ proc exec_stmt(stmt, env):
 
     # --- Import ---
     if stype == STMT_IMPORT:
-        let mod_name = stmt.module_name.text
+        let mod_name = stmt.module_name
         # Check stdlib modules first
         from stdlib import get_stdlib_module, is_stdlib_module
         if is_stdlib_module(mod_name):

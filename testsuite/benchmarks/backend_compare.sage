@@ -1,21 +1,22 @@
-## backend_compare.sage — Cross-backend performance benchmark
-##
-## Tests all Sage execution backends on the same workloads:
-##   1. Fibonacci (recursive function calls)
-##   2. Loop sum (tight arithmetic loop)
-##   3. Array operations (push/iterate)
-##   4. String concatenation
-##   5. Dict operations (insert/lookup)
-##   6. Prime sieve (algorithmic)
-##   7. Nested loops (control flow)
-##   8. LCG hash (integer arithmetic hot path)
-##
-## Run:  sage benchmarks/backend_compare.sage
-##
-## Compares: interpreter (AST), C-compiled, LLVM-compiled, native asm
-## Each workload prints its result for checksum validation.
+# # backend_compare.sage — Cross-backend performance benchmark
+# #
+# # Tests all Sage execution backends on the same workloads:
+# #   1. Fibonacci (recursive function calls)
+# #   2. Loop sum (tight arithmetic loop)
+# #   3. Array operations (push/iterate)
+# #   4. String concatenation
+# #   5. Dict operations (insert/lookup)
+# #   6. Prime sieve (algorithmic)
+# #   7. Nested loops (control flow)
+# #   8. LCG hash (integer arithmetic hot path)
+# #
+# # Run:  sage benchmarks/backend_compare.sage
+# #
+# # Compares: interpreter (AST), C-compiled, LLVM-compiled, native asm
+# # Each workload prints its result for checksum validation.
 
-## --- 1. Fibonacci ---
+# # --- 1. Fibonacci ---
+
 proc fib(n):
     if n <= 1:
         return n
@@ -24,7 +25,7 @@ proc fib(n):
 let fib_result = fib(25)
 print("fib(25) = " + str(fib_result))
 
-## --- 2. Loop sum ---
+# # --- 2. Loop sum ---
 let total = 0
 let i = 0
 while i < 100000:
@@ -32,7 +33,7 @@ while i < 100000:
     i = i + 1
 print("sum(0..99999) = " + str(total))
 
-## --- 3. Array operations ---
+# # --- 3. Array operations ---
 let arr = []
 i = 0
 while i < 10000:
@@ -45,7 +46,7 @@ while i < len(arr):
     i = i + 1
 print("array_sum(10000) = " + str(arr_sum))
 
-## --- 4. String concatenation ---
+# # --- 4. String concatenation ---
 let s = ""
 i = 0
 while i < 1000:
@@ -53,7 +54,7 @@ while i < 1000:
     i = i + 1
 print("string_len = " + str(len(s)))
 
-## --- 5. Dict operations ---
+# # --- 5. Dict operations ---
 let d = {}
 i = 0
 while i < 10000:
@@ -67,7 +68,8 @@ while i < len(keys):
     i = i + 1
 print("dict_sum(10000) = " + str(dict_sum))
 
-## --- 6. Prime sieve ---
+# # --- 6. Prime sieve ---
+
 proc sieve(limit):
     let is_prime = []
     let si = 0
@@ -95,7 +97,7 @@ proc sieve(limit):
 let primes_count = sieve(20000)
 print("primes(20000) = " + str(primes_count))
 
-## --- 7. Nested loops ---
+# # --- 7. Nested loops ---
 let nested_sum = 0
 i = 0
 while i < 200:
@@ -106,7 +108,7 @@ while i < 200:
     i = i + 1
 print("nested(200x200) = " + str(nested_sum))
 
-## --- 8. LCG hash (integer arithmetic hot path) ---
+# # --- 8. LCG hash (integer arithmetic hot path) ---
 let lcg = 12345
 i = 0
 while i < 100000:
@@ -114,7 +116,7 @@ while i < 100000:
     i = i + 1
 print("lcg(100000) = " + str(lcg))
 
-## --- 9. Tuple operations ---
+# # --- 9. Tuple operations ---
 let tuple_sum = 0
 i = 0
 while i < 100000:
@@ -123,7 +125,7 @@ while i < 100000:
     i = i + 1
 print("tuple_sum(100000) = " + str(tuple_sum))
 
-## --- 10. Boolean and Nil logic ---
+# # --- 10. Boolean and Nil logic ---
 let bool_count = 0
 i = 0
 while i < 100000:
@@ -160,7 +162,7 @@ print("bool_count(100000) = " + str(bool_count))
 #     elif arch == "rv64":
 #         code = "addi a0, a0, 1; ret"
 #     end
-#     
+#
 #     if code != "":
 #         i = 0
 #         while i < 1000:

@@ -238,6 +238,7 @@ run_selfhost() {
     _sh_test "Diagnostic"       "test_diagnostic.sage"
     _sh_test "GC"               "test_gc.sage"
     _sh_test "Heartbeat"        "test_heartbeat.sage"
+    _sh_test "Lily Transpiler"  "test_lily_transpiler.sage"
     # GPU tests require Vulkan hardware — skip gracefully if not available
     if vulkaninfo >/dev/null 2>&1 || (command -v vulkaninfo >/dev/null 2>&1); then
         _sh_test "GPU"              "test_gpu.sage"

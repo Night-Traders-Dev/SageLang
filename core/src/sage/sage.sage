@@ -246,6 +246,7 @@ proc make_pass_ctx(args):
 # ============================================================================
 
 proc mode_run(args):
+    print "mode_run: parsing..."
     let path = args["input"]
     if path == nil:
         print "Error: No input file specified"
@@ -254,12 +255,16 @@ proc mode_run(args):
     if source == nil:
         return
     let stmts = parse_source_file(source, path)
+    print "mode_run: parsing done. optimizing..."
     if args["opt_level"] > 0:
         let ctx = make_pass_ctx(args)
         stmts = pass.run_passes(stmts, ctx)
+    print "mode_run: setting error context..."
     set_error_context(source, path)
     let genv = new_interpreter()
+    print "mode_run: exec_program..."
     exec_program(genv, stmts)
+    print "mode_run: done."
 
 # ============================================================================
 # Mode: Emit C
@@ -425,6 +430,7 @@ proc mode_check(args):
 # ============================================================================
 
 proc main():
+    print "Entering sage.sage main()"
     let args = parse_args()
     let mode = args["mode"]
 

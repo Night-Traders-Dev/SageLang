@@ -572,7 +572,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 } else if (object.type == VAL_DICT && IS_STRING(index)) {
                     dict_set(&object, AS_STRING(index), value);
                 } else {
-                    result = vm_error("Invalid index assignment.");
+                    result = vm_error("VM: Invalid index assignment.");
                     goto done;
                 }
                 PUSH(value);
