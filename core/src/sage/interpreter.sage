@@ -222,7 +222,7 @@ proc import_bind(stmt, mod_name, mod_env, target_env):
         # from X import a, b, c
         let i = 0
         while i < stmt.item_count:
-            let item_name = stmt.items[i].text
+            let item_name = stmt.items[i]
             if dict_has(mod_vals, item_name):
                 let bind_name = item_name
                 if stmt.item_aliases[i] != nil:
@@ -233,7 +233,7 @@ proc import_bind(stmt, mod_name, mod_env, target_env):
         # import X  or  import X as Y
         let bind_name = mod_name
         if stmt.alias != nil:
-            bind_name = stmt.alias.text
+            bind_name = stmt.alias
         # Wrap module env as a dict-like module object
         let mod_obj = {}
         mod_obj["__interp_type"] = "module"
@@ -1610,7 +1610,7 @@ proc exec_stmt(stmt, env):
         let mod_stmts = parse_source_file(mod_source, mod_path)
         let mod_env = new_interpreter()
         g_module_cache[mod_name] = mod_env
-        exec_program(mod_stmts, mod_env)
+        exec_program(mod_env, mod_stmts)
         import_bind(stmt, mod_name, mod_env, env)
         return _SIG_NORMAL_NIL
 

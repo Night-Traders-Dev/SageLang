@@ -427,14 +427,14 @@ class Parser:
         if self.match_tok(token.TOKEN_NEWLINE):
             then_branch = self.parse_block()
         else:
-            then_branch = self.parse_statement()
+            then_branch = self.parse_declaration()
         let else_branch = nil
         if self.match_tok(token.TOKEN_ELSE):
             self.consume(token.TOKEN_COLON, "Expect ':' after else.")
             if self.match_tok(token.TOKEN_NEWLINE):
                 else_branch = self.parse_block()
             else:
-                else_branch = self.parse_statement()
+                else_branch = self.parse_declaration()
         return if_stmt(condition, then_branch, else_branch)
 
     proc parse_while():
@@ -444,7 +444,7 @@ class Parser:
         if self.match_tok(token.TOKEN_NEWLINE):
             body = self.parse_block()
         else:
-            body = self.parse_statement()
+            body = self.parse_declaration()
         return while_stmt(condition, body)
 
     proc parse_for():
@@ -459,7 +459,7 @@ class Parser:
         if self.match_tok(token.TOKEN_NEWLINE):
             body = self.parse_block()
         else:
-            body = self.parse_statement()
+            body = self.parse_declaration()
         return for_stmt(var_tok, iterable, body)
 
     proc parse_proc():
@@ -606,7 +606,7 @@ class Parser:
             self.consume(token.TOKEN_NEWLINE, "Expect newline after 'defer:'.")
             let body = self.parse_block()
             return defer_stmt(body)
-        let body = self.parse_statement()
+        let body = self.parse_declaration()
         return defer_stmt(body)
 
     proc parse_match():

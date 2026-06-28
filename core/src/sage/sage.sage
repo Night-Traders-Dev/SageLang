@@ -7,6 +7,7 @@ gc_disable()
 # ============================================================================
 
 import io
+import transpiler.lily.factory as lily_factory
 import sys
 import pass
 import compiler
@@ -47,6 +48,8 @@ proc print_usage():
     print "  --emit-vm <file>      Compile to VM bytecode artifact"
     print "  --emit-llvm <file>    Compile to LLVM IR"
     print "  --emit-asm <file>     Compile to assembly"
+    print "  --compile-to-lily <file>  Compile to Lily source"
+    print "  --compile-from-lily <file> Compile from Lily source"
     print ""
     print "Options:"
     print "  -o <path>             Output file path"
@@ -90,6 +93,22 @@ proc parse_args():
         if arg == "--version":
             result["mode"] = "version"
             return result
+
+        if arg == "--compile-to-lily":
+            result["mode"] = "compile-to-lily"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--compile-from-lily":
+            result["mode"] = "compile-from-lily"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
 
         if arg == "--emit-c":
             result["mode"] = "emit-c"
@@ -429,6 +448,48 @@ proc mode_check(args):
 # Main Dispatch
 # ============================================================================
 
+# ============================================================================
+# Mode: Lily Transpilation
+# ============================================================================
+
+proc mode_compile_to_lily(args):
+    let path = args["input"]
+    if path == nil:
+        print "Error: No input file specified"
+        return
+    let source = read_input(path)
+    if source == nil:
+        return
+    let t = lily_factory.get_parser("sage_to_lily")
+    let lily_code = t.transpile(source)
+    if lily_code == nil or lily_code == "":
+        print "Error: Transpilation to Lily failed"
+        return
+    let out = args["output"]
+    if out == nil:
+        out = derive_output(path, ".lily")
+    io.writefile(out, lily_code)
+    print "Wrote " + out
+
+proc mode_compile_from_lily(args):
+    let path = args["input"]
+    if path == nil:
+        print "Error: No input file specified"
+        return
+    let source = read_input(path)
+    if source == nil:
+        return
+    let t = lily_factory.get_parser("lily_to_sage")
+    let sage_code = t.transpile(source)
+    if sage_code == nil or sage_code == "":
+        print "Error: Transpilation from Lily failed"
+        return
+    let out = args["output"]
+    if out == nil:
+        out = derive_output(path, ".sage")
+    io.writefile(out, sage_code)
+    print "Wrote " + out
+
 proc main():
     print "Entering sage.sage main()"
     let args = parse_args()
@@ -444,6 +505,14 @@ proc main():
 
     if mode == "run":
         mode_run(args)
+        return
+
+    if mode == "compile-to-lily":
+        mode_compile_to_lily(args)
+        return
+
+    if mode == "compile-from-lily":
+        mode_compile_from_lily(args)
         return
 
     if mode == "emit-c":

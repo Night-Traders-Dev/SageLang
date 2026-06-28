@@ -60,6 +60,7 @@ SageLang uses a shared front-end with multiple execution backends:
    - **AST interpreter** (tree-walking, default)
    - **Bytecode compiler + VM** (stack-based, faster for hot loops)
    - **SGVM binary** (`--sgvm`, binary bytecode artifact)
+   - **Lily Transpiler** (`--compile-to-lily`, `--compile-from-lily`)
    - **C codegen** (`--emit-c` / `--compile`)
    - **LLVM IR** (`--emit-llvm` / `--compile-llvm`, with GPU support)
    - **Native assembly** (`--emit-asm` / `--compile-native`, x86-64/aarch64/rv64/mips)

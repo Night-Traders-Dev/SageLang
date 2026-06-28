@@ -74,6 +74,8 @@ static void print_usage(FILE* stream) {
             "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [--math-work=grade,exec] [--verbose] [-I dir] [path]\n"
             "       sage --repl             Start interactive REPL\n"
             "       sage [--runtime ast|bytecode|jit|aot|auto] [-I dir] -c \"source\"\n"
+            "       sage --compile-to-lily <input.sage>\n"
+            "       sage --compile-from-lily <input.lily>\n"
             "       sage --emit-c <input.sage> [-o output.c] [-I dir] [-O0..3] [-g]\n"
             "       sage --emit-vm <input.sage> [-o output.svm] [-I dir] [-O0..3] [-g]\n"
             "       sage --sgvm <input.sage> [-o output.sgvm] [-I dir] [-O0..3] [-g]\n"
@@ -2263,6 +2265,42 @@ int main(int argc, const char* argv[]) {
         print_usage(stdout);
     } else if (cmd_argc == 3 && strcmp(cmd_argv[1], "-c") == 0) {
         run(cmd_argv[2], "<command>", runtime_mode);
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile-to-lily") == 0) {
+        char script[1024];
+        const char* input_path = cmd_argv[2];
+        char* derived_output = derive_output_path(input_path, ".lily", 1);
+        snprintf(script, sizeof(script),
+            "import io\n"
+            "import transpiler.lily.factory as f\n"
+            "proc main():\n"
+            "    let source = io.readfile(\"%s\")\n"
+            "    let p = f.get_parser(\"sage_to_lily\")\n"
+            "    let res = p.transpile(source)\n"
+            "    io.writefile(\"%s\", res)\n"
+            "    print(\"Wrote \" + \"%s\")\n"
+            "main()\n",
+            input_path, derived_output, derived_output);
+        module_add_source_dir("src/sage/sage.sage");
+        free(derived_output);
+        CLEANUP_AND_EXIT(0);
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile-from-lily") == 0) {
+        char script[1024];
+        const char* input_path = cmd_argv[2];
+        char* derived_output = derive_output_path(input_path, ".sage", 1);
+        snprintf(script, sizeof(script),
+            "import io\n"
+            "import transpiler.lily.factory as f\n"
+            "proc main():\n"
+            "    let source = io.readfile(\"%s\")\n"
+            "    let p = f.get_parser(\"lily_to_sage\")\n"
+            "    let res = p.transpile(source)\n"
+            "    io.writefile(\"%s\", res)\n"
+            "    print(\"Wrote \" + \"%s\")\n"
+            "main()\n",
+            input_path, derived_output, derived_output);
+        module_add_source_dir("src/sage/sage.sage");
+        free(derived_output);
+        CLEANUP_AND_EXIT(0);
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--emit-c") == 0) {
         const char* explicit_output = NULL;
         const char* ignored_cc = NULL;
