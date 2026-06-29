@@ -7,11 +7,38 @@
 
 #include "metal_vm.h"
 
-// Bare-metal libc stubs (from bare_metal.c or provided by host)
+#ifdef SAGE_BARE_METAL
+// Freestanding: provide our own libc replacements
+static void* bm_memset(void* s, int c, unsigned long n) {
+    unsigned char* p = (unsigned char*)s;
+    while (n--) *p++ = (unsigned char)c;
+    return s;
+}
+static void* bm_memcpy(void* dest, const void* src, unsigned long n) {
+    unsigned char* d = (unsigned char*)dest;
+    const unsigned char* s2 = (const unsigned char*)src;
+    while (n--) *d++ = *s2++;
+    return dest;
+}
+static unsigned long bm_strlen(const char* s) {
+    unsigned long n = 0;
+    while (*s++) n++;
+    return n;
+}
+static int bm_strcmp(const char* s1, const char* s2) {
+    while (*s1 && *s1 == *s2) { s1++; s2++; }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}
+#define memset  bm_memset
+#define memcpy  bm_memcpy
+#define strlen  bm_strlen
+#define strcmp  bm_strcmp
+#else
 extern void* memset(void* s, int c, unsigned long n);
 extern void* memcpy(void* dest, const void* src, unsigned long n);
 extern unsigned long strlen(const char* s);
 extern int strcmp(const char* s1, const char* s2);
+#endif
 
 // ============================================================================
 // Helpers
@@ -613,8 +640,12 @@ void metal_vm_jit_compile(MetalVM* vm, int fn_idx) {
     (void)vm;
     MetalFunction* f = &vm->functions[fn_idx];
     
+#ifdef SAGE_BARE_METAL
+    // Bare-metal: code is already in executable memory (no W^X), just use the chunk directly
+    (void)f;
+    return;
+#else
     // Allocate space for JIT code in the vm's heap or using malloc
-    // For freestanding bare-metal, normal memory is executable.
     extern void* malloc(unsigned long size);
     unsigned char* code_buf = (unsigned char*)malloc(64);
     if (!code_buf) return;
@@ -643,6 +674,7 @@ void metal_vm_jit_compile(MetalVM* vm, int fn_idx) {
     
     f->native_code = (void*)code_buf;
     f->jit_compiled = 1;
+#endif
 }
 
 int metal_vm_step(MetalVM* vm) {

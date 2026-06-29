@@ -1,10 +1,37 @@
 #include "metal_rv64_vm.h"
 
-// Bare-metal libc stubs
+#ifdef SAGE_BARE_METAL
+// Freestanding: provide our own libc replacements
+static void* rv_memset(void* s, int c, unsigned long n) {
+    unsigned char* p = (unsigned char*)s;
+    while (n--) *p++ = (unsigned char)c;
+    return s;
+}
+static void* rv_memcpy(void* dest, const void* src, unsigned long n) {
+    unsigned char* d = (unsigned char*)dest;
+    const unsigned char* s2 = (const unsigned char*)src;
+    while (n--) *d++ = *s2++;
+    return dest;
+}
+static unsigned long rv_strlen(const char* s) {
+    unsigned long n = 0;
+    while (*s++) n++;
+    return n;
+}
+static int rv_strcmp(const char* s1, const char* s2) {
+    while (*s1 && *s1 == *s2) { s1++; s2++; }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}
+#define memset  rv_memset
+#define memcpy  rv_memcpy
+#define strlen  rv_strlen
+#define strcmp  rv_strcmp
+#else
 extern void* memset(void* s, int c, unsigned long n);
 extern void* memcpy(void* dest, const void* src, unsigned long n);
 extern unsigned long strlen(const char* s);
 extern int strcmp(const char* s1, const char* s2);
+#endif
 
 // ============================================================================
 // Helpers / Internals

@@ -3,10 +3,10 @@ Vulkan support enabled
 GLFW windowed mode enabled
 OpenGL support enabled
 Including heartbeat.c
-cc -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"3.9.6"' -DSAGE_HAS_LSP -DSAGE_HAS_ML  -DSAGE_HAS_VULKAN -DSAGE_HAS_GLFW  -DSAGE_HAS_OPENGL  -Iinclude -Isrc/vm -c src/vm/vm.c -o obj/vm/vm.o
+cc -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"3.9.7"' -DSAGE_HAS_LSP -DSAGE_HAS_ML  -DSAGE_HAS_VULKAN -DSAGE_HAS_GLFW  -DSAGE_HAS_OPENGL  -Iinclude -Isrc/vm -c src/vm/vm.c -o obj/vm/vm.o
 Compiled: src/vm/vm.c
-cc -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"3.9.6"' -DSAGE_HAS_LSP -DSAGE_HAS_ML  -DSAGE_HAS_VULKAN -DSAGE_HAS_GLFW  -DSAGE_HAS_OPENGL  -o sage obj/ast.o obj/codegen.o obj/compiler.o obj/constfold.o obj/dce.o obj/diagnostic.o obj/env.o obj/formatter.o obj/gc.o obj/graphics.o obj/inline.o obj/interpreter.o obj/linter.o obj/lexer.o obj/module.o obj/parser.o obj/pass.o obj/sage_thread.o obj/stdlib.o obj/typecheck.o obj/safety.o obj/value.o obj/lsp.o obj/llvm_backend.o obj/stubs.o obj/aot.o obj/kotlin_backend.o obj/ml_backend.o obj/net.o obj/metal_vm.o obj/metal_rv64_vm.o obj/gpu_api.o obj/heartbeat.o obj/vm/bytecode.o obj/vm/program.o obj/vm/runtime.o obj/vm/vm.o obj/main.o -lm -lpthread -ldl -lcurl -lssl -lcrypto -lvulkan -lglfw -lGL
-Built: sage 3.9.6  (1.3M, 146 source files)
+cc -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"/usr/local/share/sage/lib"' -DSAGE_VERSION_STR='"3.9.7"' -DSAGE_HAS_LSP -DSAGE_HAS_ML  -DSAGE_HAS_VULKAN -DSAGE_HAS_GLFW  -DSAGE_HAS_OPENGL  -o sage obj/ast.o obj/codegen.o obj/compiler.o obj/constfold.o obj/dce.o obj/diagnostic.o obj/env.o obj/formatter.o obj/gc.o obj/graphics.o obj/inline.o obj/interpreter.o obj/linter.o obj/lexer.o obj/module.o obj/parser.o obj/pass.o obj/sage_thread.o obj/stdlib.o obj/typecheck.o obj/safety.o obj/value.o obj/lsp.o obj/llvm_backend.o obj/stubs.o obj/aot.o obj/kotlin_backend.o obj/ml_backend.o obj/net.o obj/metal_vm.o obj/metal_rv64_vm.o obj/gpu_api.o obj/heartbeat.o obj/vm/bytecode.o obj/vm/program.o obj/vm/runtime.o obj/vm/vm.o obj/main.o -lm -lpthread -ldl -lcurl -lssl -lcrypto -lvulkan -lglfw -lGL
+Built: sage 3.9.7  (1.3M, 146 source files)
    Run with: ./sage examples/hello.sage
 [0;36m  ▸  Using: /home/kraken/Devel/sagelang/core/sage  (1.3M)[0m
 

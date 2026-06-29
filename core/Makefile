@@ -7,7 +7,7 @@
 # ============================================================================
 
 # Single-source version from VERSION file
-SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.9.6")
+SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.9.7")
 
 # CC/CFLAGS/LDFLAGS can be overridden by environment (OIS sets CC=clang on macOS/BSD)
 CC ?= gcc
@@ -1041,7 +1041,7 @@ all-models: $(TARGET) train-c chatbot-llvm sl-tq-chat
 # Show current version
 .PHONY: version
 version:
-	@cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.9.6"
+	@cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.9.7"
 
 # Bump version: make bump-version V=3
 # Updates VERSION in core/ AND root (../VERSION), and updates all files with the new version string.
