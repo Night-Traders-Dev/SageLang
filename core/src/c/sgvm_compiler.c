@@ -7,6 +7,27 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
+// Strip # comments from a line (returns pointer into the line buffer)
+static char* strip_comment(char* line) {
+    for (char* p = line; *p; p++) {
+        if (*p == '#') {
+            *p = '\0';
+            break;
+        }
+    }
+    return line;
+}
+
+// Trim trailing whitespace from a string
+static char* trim_right(char* line) {
+    int len = strlen(line);
+    while (len > 0 && (line[len-1] == ' ' || line[len-1] == '\t' || 
+                       line[len-1] == '\r' || line[len-1] == '\n')) {
+        line[--len] = '\0';
+    }
+    return line;
+}
+
 // Validate a path contains no shell metacharacters (prevents injection via system())
 static int is_safe_path(const char* path) {
     if (!path) return 1;
@@ -130,6 +151,14 @@ int main(int argc, char** argv) {
     int current_chunk = -1;
 
     while (fgets(line, sizeof(line), in)) {
+        strip_comment(line);
+        char* nl = strchr(line, '\n');
+        if (nl) {
+            // Trim trailing whitespace before newline
+            char* p = nl;
+            while (p > line && (p[-1] == ' ' || p[-1] == '\t')) p--;
+            memmove(p, nl, strlen(nl) + 1);
+        }
         if (strncmp(line, "chunks ", 7) == 0) chunk_count = atoi(line + 7);
         else if (strcmp(line, "chunk\n") == 0) current_chunk++;
         else if (strncmp(line, "constants ", 10) == 0) {
@@ -182,6 +211,13 @@ int main(int argc, char** argv) {
     fseek(in, 0, SEEK_SET);
     current_chunk = -1;
     while (fgets(line, sizeof(line), in)) {
+        strip_comment(line);
+        char* nl2 = strchr(line, '\n');
+        if (nl2) {
+            char* p = nl2;
+            while (p > line && (p[-1] == ' ' || p[-1] == '\t')) p--;
+            memmove(p, nl2, strlen(nl2) + 1);
+        }
         if (strcmp(line, "chunk\n") == 0) current_chunk++;
         else if (strncmp(line, "code ", 5) == 0) {
             int len = atoi(line + 5);
