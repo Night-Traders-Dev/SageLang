@@ -51,3 +51,8 @@
 **Vulnerability:** Unbounded data accumulation in `io.readbytes` (fallback loop), `io.listdir`, and `sys.shell_exec` (CWE-400).
 **Learning:** High-level resource limits (like a file size check via `fseek`) are often bypassed by fallback paths designed for streams or non-seekable files (e.g., `/dev/urandom`). Similarly, directory listings and command output accumulation can grow indefinitely if not explicitly capped.
 **Prevention:** Always enforce global resource limits (like `SAGE_MAX_READ_SIZE`) within iterative accumulation loops, not just at the start of the operation. Use hard caps for collection sizes (e.g., maximum directory entries) to prevent memory exhaustion from "bomb" artifacts.
+
+## 2026-06-28 - Resource Exhaustion via O(N^2) String Concatenation
+**Vulnerability:** Use of `result = result + fragment` inside loops for base64/hex encoding and decoding in the crypto library (CWE-400).
+**Learning:** In SageLang, string concatenation creates a new string every time. In large loops (e.g., encoding a large file), this results in quadratic time complexity. This is particularly dangerous in security libraries where inputs can be large, leading to an unauthenticated CPU-based Denial of Service.
+**Prevention:** Always use the array-push and `join(arr, "")` pattern for string building in loops. This is $O(N)$ and mitigates algorithmic complexity attacks.
