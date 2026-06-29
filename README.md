@@ -12,7 +12,7 @@ JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
 
-**Current version:** v3.9.7 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v3.9.8 · **Spec version:** 2.0 · **License:** MIT
 
 ## Install (One-line Install System — OIS)
 
@@ -261,7 +261,7 @@ features. See the [templates/](templates/) directory for library scaffolding.
 ## Resources
 
 - **Repository**: [github.com/Night-Traders-Dev/SageLang](https://github.com/Night-Traders-Dev/SageLang)
-- **Documentation**: [core/docs/](core/docs/) · [Language Book](core/docs/sagelang-book.md)
+- **Documentation**: [core/docs/](core/docs/) · [Language Book](core/docs/sagelang-book.md) · [Language Reference](core/docs/SageLang_Reference.md)
 - **Issues**: [GitHub Issues](https://github.com/Night-Traders-Dev/SageLang/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Night-Traders-Dev/SageLang/discussions)
 

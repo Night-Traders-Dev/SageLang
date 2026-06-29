@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(./sage --aot /tmp/test_jit_aot.sage)"
-    ]
-  }
-}
