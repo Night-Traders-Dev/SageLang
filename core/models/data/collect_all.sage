@@ -97,7 +97,7 @@ for i in range(len(all_lib_sets)):
 log("  Library modules: " + str(loaded) + " files")
 
 # Documentation
-let docs = ["docs/SageLang_Guide.md", "docs/GC_Guide.md", "docs/LLM_Guide.md", "docs/Agent_Chat_Guide.md", "docs/StdLib_Guide.md", "docs/Networking_Guide.md", "docs/Cryptography_Guide.md", "docs/Baremetal_OSDev_UEFI_Guide.md", "docs/Vulkan_GPU_Guide.md", "docs/ML_CUDA_Guide.md", "docs/Import_Semantics.md", "docs/FAT_Filesystem_Guide.md", "docs/Bytecode_VM_Sketch.md"]
+let docs = ["docs/SageLang_Guide.md", "docs/GC_Guide.md", "docs/LLM_Guide.md", "docs/Agent_Chat_Guide.md", "docs/StdLib_Guide.md", "docs/Networking_Guide.md", "docs/Cryptography_Guide.md", "docs/Baremetal_OSDev_UEFI_Guide.md", "docs/Vulkan_GPU_Guide.md", "docs/ML_CUDA_Guide.md", "docs/Import_Semantics.md", "docs/FAT_Filesystem_Guide.md", "docs/SGVM_Guide.md", "docs/Concurrency_Guide.md", "docs/JIT_AOT_Guide.md", "docs/Tooling_Guide.md", "docs/Self_Hosting_Guide.md", "docs/CLI_Reference.md", "docs/Build_Guide.md", "docs/Android_Guide.md", "docs/Discord_Bot_Guide.md", "docs/Blockchain.md"]
 loaded = 0
 for i in range(len(docs)):
     if load_file(docs[i], "documentation"):
