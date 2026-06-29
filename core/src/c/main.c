@@ -423,6 +423,11 @@ static char* try_main_read_file(const char* path) {
     }
 
     size_t file_size = (size_t)file_size_long;
+    // Security: Validate file size against global limit to prevent memory exhaustion DoS (CWE-400)
+    if (file_size > SAGE_MAX_READ_SIZE) {
+        fclose(file);
+        return NULL;
+    }
     rewind(file);
 
     char* buffer = malloc(file_size + 1);
