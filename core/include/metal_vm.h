@@ -11,10 +11,33 @@
 // Targets: x86-64, aarch64, rv64 (freestanding)
 //
 // Compile with: -ffreestanding -nostdlib -DSAGE_BARE_METAL -DSAGE_METAL_VM
+//
+// Number representation:
+//   Hosted (default)  : MV_NUM stores IEEE 754 double
+//   Bare-metal        : MV_NUM stores Q32.32 fixed-point in int64_t
+//                       Define SAGE_BARE_METAL to select this path.
+//                       This keeps the VM entirely FPU-free, safe for
+//                       -mabi=lp64 targets such as rv64imac (no F/D ext).
 // ============================================================================
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+// ---------------------------------------------------------------------------
+// Integer types — freestanding safe
+// ---------------------------------------------------------------------------
+#if defined(__GNUC__) || defined(__clang__)
+#  include <stdint.h>
+#else
+typedef signed   char      int8_t;
+typedef unsigned char      uint8_t;
+typedef signed   short     int16_t;
+typedef unsigned short     uint16_t;
+typedef signed   int       int32_t;
+typedef unsigned int       uint32_t;
+typedef signed   long long int64_t;
+typedef unsigned long long uint64_t;
 #endif
 
 // ============================================================================
@@ -109,7 +132,7 @@ extern "C" {
 #define OP_GPU_RESET_FENCE         83
 #define OP_GPU_UPDATE_UNIFORM      84
 #define OP_GPU_CMD_PUSH_CONST      85
-#define OP_GPU_CMD_DISPATCH         86
+#define OP_GPU_CMD_DISPATCH        86
 
 #define OP_HALT           0xFF
 
@@ -118,63 +141,73 @@ extern "C" {
 // ============================================================================
 
 #ifndef METAL_STACK_SIZE
-#define METAL_STACK_SIZE      4096    // Value stack depth
+#define METAL_STACK_SIZE      4096
 #endif
-
 #ifndef METAL_POOL_SIZE
-#define METAL_POOL_SIZE       4096    // Object pool entries
+#define METAL_POOL_SIZE       4096
 #endif
-
 #ifndef METAL_STRING_POOL
-#define METAL_STRING_POOL     32768   // String storage bytes
+#define METAL_STRING_POOL     32768
 #endif
-
 #ifndef METAL_HEAP_SIZE
-#define METAL_HEAP_SIZE       65536   // General heap bytes (bump allocator)
+#define METAL_HEAP_SIZE       65536
 #endif
-
 #ifndef METAL_CONST_POOL
-#define METAL_CONST_POOL      1024    // Constant pool entries
+#define METAL_CONST_POOL      1024
 #endif
-
 #ifndef METAL_ENV_DEPTH
-#define METAL_ENV_DEPTH       1024    // Maximum scope chain depth
+#define METAL_ENV_DEPTH       1024
 #endif
-
 #ifndef METAL_VARS_PER_SCOPE
-#define METAL_VARS_PER_SCOPE  128     // Variables per scope level
+#define METAL_VARS_PER_SCOPE  128
+#endif
+#ifndef METAL_CALL_STACK_SIZE
+#define METAL_CALL_STACK_SIZE 256
 #endif
 
 // ============================================================================
-// Value representation — compact 16-byte tagged union
+// Value representation
+//
+// SAGE_BARE_METAL path: number stored as Q32.32 fixed-point in int64_t.
+//   - No FPU registers touched.
+//   - Safe for rv64imac (-mabi=lp64), aarch64 soft-float, x86 -mno-80387.
+//   - mv_num(int64_t i)   : integer -> Q32.32  (stores i << 32)
+//   - mv_num_fp(int64_t f): raw Q32.32 passthrough (no conversion)
+//
+// Hosted path (default): number stored as IEEE 754 double.
+//   - mv_num(double v)    : standard double constructor
 // ============================================================================
 
 typedef enum {
-    MV_NIL = 0,
-    MV_NUM,         // IEEE 754 double
-    MV_BOOL,        // 0 or 1
-    MV_STR,         // Index into string pool
-    MV_ARR,         // Index into array pool
-    MV_DICT,        // Index into dict pool
-    MV_FN,          // Index into function table
-    MV_PTR,         // Raw pointer (for MMIO, DMA)
+    MV_NIL  = 0,
+    MV_NUM,
+    MV_BOOL,
+    MV_STR,
+    MV_ARR,
+    MV_DICT,
+    MV_FN,
+    MV_PTR,
 } MetalValueType;
 
 typedef struct {
     MetalValueType type;
     union {
-        double number;
-        int boolean;
-        int str_idx;        // String pool index
-        int arr_idx;        // Array pool index
-        int dict_idx;       // Dict pool index
-        int fn_idx;         // Function table index
-        void* ptr;          // Raw pointer for bare-metal I/O
+#ifdef SAGE_BARE_METAL
+        int64_t  number;   /* Q32.32 fixed-point — no FPU */
+#else
+        double   number;   /* IEEE 754 double (hosted) */
+#endif
+        int      boolean;
+        int      str_idx;
+        int      arr_idx;
+        int      dict_idx;
+        int      fn_idx;
+        void    *ptr;
     } as;
 } MetalValue;
 
 // ============================================================================
-// Metal Array — fixed-capacity array in pool
+// Container types
 // ============================================================================
 
 #define METAL_ARRAY_MAX_ELEMS 256
@@ -185,83 +218,60 @@ typedef struct {
     int in_use;
 } MetalArray;
 
-// ============================================================================
-// Metal Dict — fixed-capacity key-value store in pool
-// ============================================================================
-
 #define METAL_DICT_MAX_ENTRIES 64
 
 typedef struct {
-    int key_str_idx[METAL_DICT_MAX_ENTRIES];    // String pool indices for keys
+    int        key_str_idx[METAL_DICT_MAX_ENTRIES];
     MetalValue values[METAL_DICT_MAX_ENTRIES];
-    int count;
-    int in_use;
+    int        count;
+    int        in_use;
 } MetalDict;
 
-// ============================================================================
-// Metal Function — bytecode function reference
-// ============================================================================
-
 typedef struct {
-    int code_offset;    // Offset into bytecode stream
-    int code_length;    // Length of function bytecode
-    int param_count;    // Number of parameters
-    int scope_depth;    // Scope depth at definition
-    int call_count;     // JIT profiling: entry execution count
-    int jit_compiled;   // 1 if JIT compiled, 0 otherwise
-    void* native_code;  // Pointer to JIT compiled native machine code
+    int  code_offset;
+    int  code_length;
+    int  param_count;
+    int  scope_depth;
+    int  call_count;
+    int  jit_compiled;
+    void *native_code;
 } MetalFunction;
 
-// ============================================================================
-// Metal Environment — flat scope chain (no linked lists, no malloc)
-// ============================================================================
-
 typedef struct {
-    int name_hash[METAL_VARS_PER_SCOPE];    // FNV-1a hash of variable name
+    int        name_hash[METAL_VARS_PER_SCOPE];
     MetalValue values[METAL_VARS_PER_SCOPE];
-    int count;
+    int        count;
 } MetalScope;
 
-#ifndef METAL_CALL_STACK_SIZE
-#define METAL_CALL_STACK_SIZE 256     // Call stack depth
-#endif
-
 // ============================================================================
-// Value representation — compact 16-byte tagged union
+// VM struct
 // ============================================================================
 
 typedef struct {
-    // Value stack
     MetalValue stack[METAL_STACK_SIZE];
-    int sp;                                  // Stack pointer
+    int sp;
 
-    // Call stack (for functions/chunks)
     struct {
-        int ip;
-        const unsigned char* code;
-        int code_length;
+        int                  ip;
+        const unsigned char *code;
+        int                  code_length;
     } call_stack[METAL_CALL_STACK_SIZE];
     int csp;
 
-    // Bytecode (current chunk)
-    const unsigned char* code;
+    const unsigned char *code;
     int code_length;
-    int ip;                                  // Instruction pointer
+    int ip;
 
-    // Constant pool
     MetalValue constants[METAL_CONST_POOL];
     int const_count;
 
-    // Chunks (top-level segments)
-    const unsigned char* chunks[1024];
+    const unsigned char *chunks[1024];
     int chunk_lengths[1024];
     int chunk_count;
 
-    // Scope chain (flat array, not linked list)
     MetalScope scopes[METAL_ENV_DEPTH];
     int scope_depth;
 
-    // Object pools (no malloc — fixed-size arenas)
     MetalArray arrays[METAL_POOL_SIZE / 8];
     int array_count;
 
@@ -271,88 +281,76 @@ typedef struct {
     MetalFunction functions[256];
     int fn_count;
 
-    // String pool (bump allocator)
-    char strings[METAL_STRING_POOL];
-    int string_used;
+    char          strings[METAL_STRING_POOL];
+    int           string_used;
 
-    // General-purpose heap (bump allocator for misc)
     unsigned char heap[METAL_HEAP_SIZE];
-    int heap_used;
+    int           heap_used;
 
-    // Exception handling
     struct {
         int ip;
         int stack_size;
     } handlers[128];
-    int hsp;
+    int        hsp;
     MetalValue exception_value;
 
-    // Status
-    int halted;
-    int error;
-    int is_throwing;
-    const char* error_msg;
+    int         halted;
+    int         error;
+    int         is_throwing;
+    const char *error_msg;
 
-    // I/O callbacks (set by the host kernel/bootloader)
-    void (*write_char)(char c);              // Serial/console output
-    int  (*read_char)(void);                 // Serial/console input (-1 if none)
-    void (*write_port)(int port, int val);   // Port I/O (x86)
-    int  (*read_port)(int port);             // Port I/O (x86)
-    void* (*map_mmio)(unsigned long phys, unsigned long size); // MMIO mapping
+    void  (*write_char)(char c);
+    int   (*read_char)(void);
+    void  (*write_port)(int port, int val);
+    int   (*read_port)(int port);
+    void *(*map_mmio)(unsigned long phys, unsigned long size);
 } MetalVM;
 
 // ============================================================================
 // Public API
 // ============================================================================
 
-// Initialize VM state (zeroes all pools)
-void metal_vm_init(MetalVM* vm);
-
-// Load bytecode into VM
-void metal_vm_load(MetalVM* vm, const unsigned char* code, int length);
-
-// Load compiled SGVM binary into VM
-int metal_vm_load_binary(MetalVM* vm, const unsigned char* data, int size);
-
-// Verify bytecode for safety and integrity
-int metal_vm_verify(MetalVM* vm);
-
-// Add a constant to the constant pool
-int metal_vm_add_constant(MetalVM* vm, MetalValue value);
-
-// Execute bytecode until halt or error
-int metal_vm_run(MetalVM* vm);
-
-// Execute a single instruction (for cooperative multitasking)
-int metal_vm_step(MetalVM* vm);
+void       metal_vm_init(MetalVM *vm);
+void       metal_vm_load(MetalVM *vm, const unsigned char *code, int length);
+int        metal_vm_load_binary(MetalVM *vm, const unsigned char *data, int size);
+int        metal_vm_verify(MetalVM *vm);
+int        metal_vm_add_constant(MetalVM *vm, MetalValue value);
+int        metal_vm_run(MetalVM *vm);
+int        metal_vm_step(MetalVM *vm);
 
 // Value constructors
+// Bare-metal (SAGE_BARE_METAL defined):
+//   mv_num(int64_t i)   — integer, stored as i << 32 (Q32.32)
+//   mv_num_fp(int64_t f)— raw Q32.32 value, stored as-is
+// Hosted:
+//   mv_num(double v)    — IEEE 754 double
 MetalValue mv_nil(void);
-MetalValue mv_num(double v);
+#ifdef SAGE_BARE_METAL
+MetalValue mv_num(int64_t i);      /* integer -> Q32.32 */
+MetalValue mv_num_fp(int64_t fp);  /* raw Q32.32 passthrough */
+#else
+MetalValue mv_num(double v);       /* IEEE 754 hosted */
+#endif
 MetalValue mv_bool(int v);
-MetalValue mv_str(MetalVM* vm, const char* s, int len);
-MetalValue mv_ptr(void* p);
+MetalValue mv_str(MetalVM *vm, const char *s, int len);
+MetalValue mv_ptr(void *p);
 
-// Stack operations
-int metal_vm_push(MetalVM* vm, MetalValue value);
-MetalValue metal_vm_pop(MetalVM* vm);
-MetalValue metal_vm_peek(MetalVM* vm, int distance);
+int        metal_vm_push(MetalVM *vm, MetalValue value);
+MetalValue metal_vm_pop(MetalVM *vm);
+MetalValue metal_vm_peek(MetalVM *vm, int distance);
 
-// String pool
-int metal_string_intern(MetalVM* vm, const char* s, int len);
-const char* metal_string_get(MetalVM* vm, int idx);
+int         metal_string_intern(MetalVM *vm, const char *s, int len);
+const char *metal_string_get(MetalVM *vm, int idx);
 
-// Array pool
-int metal_array_new(MetalVM* vm);
-void metal_array_push(MetalVM* vm, int arr_idx, MetalValue val);
-MetalValue metal_array_get(MetalVM* vm, int arr_idx, int index);
-int metal_array_len(MetalVM* vm, int arr_idx);
+int        metal_array_new(MetalVM *vm);
+void       metal_array_push(MetalVM *vm, int arr_idx, MetalValue val);
+MetalValue metal_array_get(MetalVM *vm, int arr_idx, int index);
+int        metal_array_len(MetalVM *vm, int arr_idx);
 
-// Print (uses write_char callback)
-void metal_print_value(MetalVM* vm, MetalValue value);
+void       metal_print_value(MetalVM *vm, MetalValue value);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // SAGE_METAL_VM_H
+#endif /* SAGE_METAL_VM_H */
