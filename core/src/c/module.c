@@ -550,15 +550,28 @@ static void add_system_search_paths(ModuleCache* cache) {
                     snprintf(rel_lib, sizeof(rel_lib), "%s/lib", exe_path);
                     add_search_path(cache, rel_lib);
                 }
+                // Also add exe_dir/../core/lib for the common SageLang repo layout
+                if (strlen(exe_path) + 14 < sizeof(rel_lib)) {
+                    snprintf(rel_lib, sizeof(rel_lib), "%s/../core/lib", exe_path);
+                    add_search_path(cache, rel_lib);
+                }
+                // Also add exe_dir/../src/sage and exe_dir/../core/src/sage
+                // so `import ast`, `import parser`, `import compiler`, etc.
+                // resolve from the SageLang repo when running the shipped binary.
+                if (strlen(exe_path) + 20 < sizeof(rel_lib)) {
+                    snprintf(rel_lib, sizeof(rel_lib), "%s/../src/sage", exe_path);
+                    add_search_path(cache, rel_lib);
+                }
+                if (strlen(exe_path) + 22 < sizeof(rel_lib)) {
+                    snprintf(rel_lib, sizeof(rel_lib), "%s/../core/src/sage", exe_path);
+                    add_search_path(cache, rel_lib);
+                }
             }
         }
     }
 #endif
 
     // 3. Installed library path (compile-time default)
-#ifndef SAGE_LIB_DIR
-#define SAGE_LIB_DIR "/usr/local/share/sage/lib"
-#endif
     add_search_path(cache, SAGE_LIB_DIR);
 }
 
