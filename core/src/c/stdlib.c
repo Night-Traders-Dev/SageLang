@@ -570,14 +570,16 @@ static Value io_writefile_native(int argCount, Value* args) {
     }
 
     if (pos > 0) {
-        total_written += fwrite(chunk, 1, (size_t)pos, f);
+        size_t w = fwrite(chunk, 1, (size_t)pos, f);
+        if (w != (size_t)pos) { fclose(f); return val_bool(0); }
+        total_written += w;
     }
 
     fclose(f);
     return val_bool(total_written == (size_t)arr->count);
-}
+ }
 
-static Value io_appendbytes_native(int argCount, Value* args) {
+ static Value io_appendbytes_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_ARRAY(args[1])) return val_bool(0);
     const char* path = AS_STRING(args[0]);
     ArrayValue* arr = AS_ARRAY(args[1]);
