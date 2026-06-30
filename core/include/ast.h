@@ -106,6 +106,14 @@ typedef struct {
     Expr* expression;   // Expression to evaluate at compile time (single-expression form)
 } ComptimeExpr;
 
+// Anonymous proc expression: proc(params): body end
+typedef struct Stmt Stmt;
+typedef struct {
+    Token* params;      // Parameter name tokens
+    int param_count;    // Number of parameters
+    Stmt* body;         // Procedure body (statement block)
+} ProcExpr;
+
 struct Expr {
     enum {
         EXPR_NUMBER,
@@ -125,7 +133,8 @@ struct Expr {
         EXPR_INDEX_SET,
         EXPR_AWAIT,
         EXPR_SUPER,
-        EXPR_COMPTIME       // Phase 17: compile-time expression
+        EXPR_COMPTIME,      // Phase 17: compile-time expression
+        EXPR_PROC           // Anonymous proc expression
     } type;
     union {
         NumberExpr number;
@@ -145,6 +154,7 @@ struct Expr {
         AwaitExpr await;
         SuperExpr super_expr;
         ComptimeExpr comptime;
+        ProcExpr proc_expr;
     } as;
 };
 
@@ -384,6 +394,7 @@ Expr* new_set_expr(Expr* object, Token property, Expr* value);
 Expr* new_await_expr(Expr* expression);
 Expr* new_super_expr(Token method);
 Expr* new_comptime_expr(Expr* expression);  // Phase 17
+Expr* new_proc_expr(Token* params, int param_count, Stmt* body);  // Anonymous proc expression
 
 // Statement Constructors
 Stmt* new_print_stmt(Expr* expression);

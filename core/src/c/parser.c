@@ -12,6 +12,9 @@
 static Token current_token;
 static Token previous_token;
 
+// Forward declaration for anonymous proc expression parsing
+static Expr* parse_proc_expr(void);
+
 // Parser recursion depth limit to prevent stack overflow on malicious input
 #define MAX_PARSER_DEPTH 100000
 static int parser_depth = 0;
@@ -598,6 +601,11 @@ static Expr* primary() {
         Expr* inner = expression();
         consume(TOKEN_RPAREN, "Expect ')' after comptime expression.");
         return new_comptime_expr(inner);
+    }
+
+    // Anonymous proc expression: proc(params): body end
+    if (match(TOKEN_PROC)) {
+        return parse_proc_expr();
     }
 
     // Parentheses: ( expr ) or tuple (a, b, c)
@@ -1256,6 +1264,58 @@ static Stmt* proc_declaration() {
                   "expected procedure name",
                   "write a name after 'proc', for example: proc greet(name):");
     return NULL;
+}
+
+// Anonymous proc expression: proc(params): body end
+static Expr* parse_proc_expr(void) {
+    Token* params = NULL;
+    int param_count = 0;
+    int capacity = 0;
+
+    consume(TOKEN_LPAREN, "Expect '(' after 'proc' in expression context.");
+
+    // Check for empty params: proc()
+    if (!check(TOKEN_RPAREN)) {
+        do {
+            if (check(TOKEN_RPAREN)) break;
+            if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER ||
+                current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END ||
+                current_token.type == TOKEN_INIT) {
+                if (param_count >= capacity) {
+                    capacity = capacity == 0 ? 4 : capacity * 2;
+                    params = SAGE_REALLOC(params, sizeof(Token) * (size_t)capacity);
+                }
+                params[param_count] = current_token;
+                advance_parser();
+                if (match(TOKEN_ASSIGN)) {
+                    expression(); // Parse default expression (discarded for anonymous procs in C AST)
+                }
+                param_count++;
+            } else {
+                parser_report(current_token, token_span(&current_token),
+                              "expected parameter name",
+                              "parameters must be identifiers");
+                break;
+            }
+        } while (match(TOKEN_COMMA));
+    }
+
+    consume(TOKEN_RPAREN, "Expect ')' after parameters.");
+    consume(TOKEN_COLON, "Expect ':' after procedure signature.");
+
+    // For anonymous procs in expression context, the body is a single statement or block
+    // We wrap it in a STMT_BLOCK if it's not already one.
+    Stmt* body = parse_maybe_oneline_block();
+
+    // Consume optional 'end' keyword after the body
+    match(TOKEN_END);
+
+    Expr* e = new_proc_expr(params, param_count, body);
+    // Shrink params array to fit (optional)
+    if (param_count > 0) {
+        e->as.proc_expr.params = SAGE_REALLOC(params, sizeof(Token) * (size_t)param_count);
+    }
+    return e;
 }
 
 static Stmt* async_proc_declaration() {

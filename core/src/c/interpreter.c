@@ -3664,6 +3664,20 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
         case EXPR_COMPTIME:
             return eval_expr(expr->as.comptime.expression, env);
 
+        // Anonymous proc expression: create a closure
+        case EXPR_PROC: {
+            // Create a synthetic ProcStmt to represent the closure
+            ProcStmt* proc = SAGE_ALLOC(sizeof(ProcStmt));
+            memset(proc, 0, sizeof(ProcStmt));
+            proc->name = (Token){0};
+            proc->params = expr->as.proc_expr.params;
+            proc->param_count = expr->as.proc_expr.param_count;
+            proc->required_count = expr->as.proc_expr.param_count;
+            proc->body = expr->as.proc_expr.body;
+            Value func_val = val_function(proc, env);
+            return EVAL_RESULT(func_val);
+        }
+
         default:
             return EVAL_RESULT(val_nil());
     }

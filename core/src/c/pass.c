@@ -142,6 +142,19 @@ Expr* clone_expr(const Expr* expr) {
         case EXPR_COMPTIME:
             e->as.comptime.expression = clone_expr(expr->as.comptime.expression);
             break;
+        case EXPR_PROC: {
+            e->as.proc_expr.param_count = expr->as.proc_expr.param_count;
+            if (expr->as.proc_expr.param_count > 0) {
+                e->as.proc_expr.params = SAGE_ALLOC(sizeof(Token) * (size_t)expr->as.proc_expr.param_count);
+                for (int i = 0; i < expr->as.proc_expr.param_count; i++) {
+                    e->as.proc_expr.params[i] = clone_token(expr->as.proc_expr.params[i]);
+                }
+            } else {
+                e->as.proc_expr.params = NULL;
+            }
+            e->as.proc_expr.body = clone_stmt(expr->as.proc_expr.body);
+            break;
+        }
     }
 
     return e;

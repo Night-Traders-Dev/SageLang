@@ -150,6 +150,15 @@ Expr* new_comptime_expr(Expr* expression) {
     return e;
 }
 
+Expr* new_proc_expr(Token* params, int param_count, Stmt* body) {
+    Expr* e = SAGE_ALLOC(sizeof(Expr));
+    e->type = EXPR_PROC;
+    e->as.proc_expr.params = params;
+    e->as.proc_expr.param_count = param_count;
+    e->as.proc_expr.body = body;
+    return e;
+}
+
 // ========== STATEMENT CONSTRUCTORS ==========
 
 Stmt* new_print_stmt(Expr* expression) {
@@ -561,6 +570,10 @@ void free_expr(Expr* expr) {
             break;
         case EXPR_COMPTIME:
             free_expr(expr->as.comptime.expression);
+            break;
+        case EXPR_PROC:
+            free(expr->as.proc_expr.params);
+            free_stmt(expr->as.proc_expr.body);
             break;
         case EXPR_NUMBER:
         case EXPR_BOOL:
