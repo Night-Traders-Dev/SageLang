@@ -1,32 +1,47 @@
 #!/usr/bin/env python3
 """
 SageLang Submodule Sync Utility (sagesync)
-Synchronizes and updates all Git submodules recursively, with visual formatting.
+Synchronizes and updates all Git submodules recursively, with visual formatting and auto-repair.
 """
 
 import os
-import sys
+import re
 import subprocess
+import sys
 from pathlib import Path
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
-from rich import box
 
 console = Console()
 
+
 def banner(title):
-    console.print(Panel(Text(title, style="bold green", justify="center"), border_style="green", box=box.ROUNDED))
+    console.print(
+        Panel(
+            Text(title, style="bold green", justify="center"),
+            border_style="green",
+            box=box.ROUNDED,
+        )
+    )
+
 
 def step(message):
     console.print(f"  [yellow]⚙[/yellow] {message: <45}", end="")
 
-def step_ok(detail="done"):
-    console.print(f" [bold green]✓[/bold green] [green]done[/green] [dim]({detail})[/dim]")
 
-def step_fail(detail="failed"):
+def step_ok(detail="done"):
+    console.print(
+        f" [bold green]✓[/bold green] [green]done[/green] [dim]({detail})[/dim]"
+    )
+
+
+def step_fail(detail="failed", exit_script=True):
     console.print(f" [bold red]✗[/bold red] [red]{detail}[/red]")
-    sys.exit(1)
+    if exit_script:
+        sys.exit(1)
+
 
 def run_cmd(cmd, cwd=None):
     try:
@@ -35,13 +50,16 @@ def run_cmd(cmd, cwd=None):
     except Exception as e:
         return None
 
+
 def main():
     banner("SageLang Submodule Synchronizer")
-    
+
     if not Path(".git").exists():
-        console.print("[yellow]! Not a git repository, skipping submodule sync.[/yellow]")
+        console.print(
+            "[yellow]! Not a git repository, skipping submodule sync.[/yellow]"
+        )
         sys.exit(0)
-        
+
     step("Synchronizing submodules config")
     res = run_cmd(["git", "submodule", "sync"])
     if res and res.returncode == 0:
@@ -54,7 +72,90 @@ def main():
     if res and res.returncode == 0:
         step_ok()
     else:
-        step_fail("git submodule update failed")
+        # Check if the failure was caused by a missing ref/detached HEAD
+        stderr_output = res.stderr if res else ""
+        match = re.search(r"submodule path '([^']+)'", stderr_output)
+
+        if match:
+            broken_path = match.group(1)
+            step_fail("missing remote ref detected", exit_script=False)
+
+            console.print(
+                f"\n[bold yellow]🛠  Auto-Repair Triggered:[/bold yellow] Fixing reference for [cyan]{broken_path}[/cyan]\n"
+            )
+
+            # 1. Force deinit the broken submodule path
+            step(f"Deinitializing {broken_path}")
+            deinit_res = run_cmd(["git", "submodule", "deinit", "-f", broken_path])
+            if deinit_res and deinit_res.returncode == 0:
+                step_ok()
+            else:
+                step_fail("git submodule deinit failed")
+
+            # 2. Force pull the latest remote tracking reference
+            step(f"Fetching latest tracking reference for {broken_path}")
+            update_res = run_cmd(
+                [
+                    "git",
+                    "submodule",
+                    "update",
+                    "--init",
+                    "--remote",
+                    broken_path,
+                ]
+            )
+            if update_res and update_res.returncode == 0:
+                step_ok()
+            else:
+                step_fail("git submodule remote update failed")
+
+            # 3. Stage the pointer change
+            step(f"Staging updated submodule pointer")
+            add_res = run_cmd(["git", "add", broken_path])
+            if add_res and add_res.returncode == 0:
+                step_ok()
+            else:
+                step_fail("git add failed")
+
+            # 4. Commit the new valid commit reference
+            step(f"Committing fix locally")
+            commit_msg = f"Fix broken submodule reference for {broken_path}"
+            commit_res = run_cmd(["git", "commit", "-m", commit_msg])
+            if commit_res and commit_res.returncode == 0:
+                step_ok()
+            else:
+                step_fail("git commit failed")
+
+            # 5. Dynamically detect the current branch to avoid pushing to the wrong target
+            branch_res = run_cmd(["git", "branch", "--show-current"])
+            current_branch = (
+                branch_res.stdout.strip()
+                if (branch_res and branch_res.returncode == 0)
+                else "main"
+            )
+
+            # 6. Push the pointer update upstream
+            step(f"Pushing fix to origin/{current_branch}")
+            push_res = run_cmd(["git", "push", "origin", current_branch])
+            if push_res and push_res.returncode == 0:
+                step_ok()
+            else:
+                step_fail(f"git push origin {current_branch} failed")
+
+            # 7. Resume the original recursive sync command
+            console.print(
+                "\n[bold green]🔄 Resuming recursive submodule synchronization...[/bold green]"
+            )
+            step("Updating submodules recursively (Retry)")
+            retry_res = run_cmd(
+                ["git", "submodule", "update", "--init", "--recursive"]
+            )
+            if retry_res and retry_res.returncode == 0:
+                step_ok()
+            else:
+                step_fail("git submodule update failed on retry")
+        else:
+            step_fail("git submodule update failed")
 
     step("Checking submodules status")
     res = run_cmd(["git", "submodule", "status"])
@@ -67,11 +168,14 @@ def main():
                 commit = parts[0]
                 path = parts[1]
                 branch = parts[2] if len(parts) > 2 else ""
-                console.print(f"  • [cyan]{path: <30}[/cyan] at [dim]{commit[:8]}[/dim] [green]{branch}[/green]")
+                console.print(
+                    f"  • [cyan]{path: <30}[/cyan] at [dim]{commit[:8]}[/dim] [green]{branch}[/green]"
+                )
     else:
         step_fail("git submodule status failed")
 
     console.print("\n[bold green]✓ Synchronization complete![/bold green]\n")
+
 
 if __name__ == "__main__":
     main()
