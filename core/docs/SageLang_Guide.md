@@ -2216,7 +2216,7 @@ SageLang ships with 23 general-purpose standard library modules in `lib/std/`:
 
 | Module | Import | Purpose |
 |--------|--------|---------|
-| `regex.sage` | `import std.regex` | Regular expression engine (., *, +, ?, [], \\d, \\w, \\s) |
+| `regex.sage` | `import std.regex` | Regular expression engine (., *, +, ?, [], \\\\d, \\\\w, \\\\s) |
 | `datetime.sage` | `import std.datetime` | Date/time creation, ISO 8601, arithmetic, comparison |
 | `log.sage` | `import std.log` | Structured logging (TRACE-FATAL), handlers, child loggers |
 | `argparse.sage` | `import std.argparse` | CLI argument parser (flags, options, positionals) |
@@ -3353,6 +3353,7 @@ atomic_new(v) atomic_load(a) atomic_store(a, v)
 atomic_add(a, v) atomic_cas(a, e, d) atomic_exchange(a, v)
 sem_new(n) sem_wait(s) sem_post(s) sem_trywait(s)
 vm_gas_limit_set(n) vm_gas_used_get() vm_gas_limit_get()
+build_quad_verts(quads) build_line_quads(lines, thickness, r, g, b, a)
 ```
 
 ### Operators

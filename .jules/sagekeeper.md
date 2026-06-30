@@ -56,3 +56,14 @@ Evidence:
 
 Documentation Impact:
 Updated the Lexer section's keyword list to include all active keywords for completeness. This ensures the lexer documentation matches the actual parser capabilities.
+
+2024-06-30 - [Graphics Built-ins Documentation]
+
+Discovery:
+The `build_quad_verts` and `build_line_quads` native procedures are defined in `core/src/c/interpreter.c` but were missing from the Quick Reference "Built-in Functions" list in `SageLang_Guide.md`.
+
+Evidence:
+`core/src/c/interpreter.c` (definitions for `build_quad_verts_native` and `build_line_quads_native`).
+
+Documentation Impact:
+Added `build_quad_verts(quads)` and `build_line_quads(lines, thickness, r, g, b, a)` to the Appendix Quick Reference. Future language updates should keep the graphics built-ins synced.
