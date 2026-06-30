@@ -540,7 +540,7 @@ static Value io_writefile_native(int argCount, Value* args) {
     return val_bool(written == len);
 }
 
-static Value io_writebytes_native(int argCount, Value* args) {
+    static Value io_writebytes_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_ARRAY(args[1])) return val_bool(0);
     const char* path = AS_STRING(args[0]);
     ArrayValue* arr = AS_ARRAY(args[1]);
@@ -562,7 +562,9 @@ static Value io_writebytes_native(int argCount, Value* args) {
         }
 
         if (pos == sizeof(chunk)) {
-            total_written += fwrite(chunk, 1, sizeof(chunk), f);
+            size_t w = fwrite(chunk, 1, sizeof(chunk), f);
+            if (w != sizeof(chunk)) { fclose(f); return val_bool(0); }
+            total_written += w;
             pos = 0;
         }
     }
