@@ -56,3 +56,8 @@
 **Vulnerability:** Use of `result = result + fragment` inside loops for base64/hex encoding and decoding in the crypto library (CWE-400).
 **Learning:** In SageLang, string concatenation creates a new string every time. In large loops (e.g., encoding a large file), this results in quadratic time complexity. This is particularly dangerous in security libraries where inputs can be large, leading to an unauthenticated CPU-based Denial of Service.
 **Prevention:** Always use the array-push and `join(arr, "")` pattern for string building in loops. This is $O(N)$ and mitigates algorithmic complexity attacks.
+
+## 2026-07-02 - Resource Exhaustion in Native Array I/O
+**Vulnerability:** Native functions `io.writebytes` and `io.appendbytes` allocated a temporary heap buffer equal to the entire size of the input Sage array before writing to disk (CWE-400).
+**Learning:** Bridging high-level collections (like Sage arrays) to low-level C APIs (like `fwrite`) often tempts developers to allocate a single intermediate buffer for convenience. For large inputs, this creates a transient memory spike that can trigger OOM or DoS, even if the collection itself is already in memory.
+**Prevention:** Implement chunked processing for all native functions that transform or stream large data structures. Use a fixed-size stack buffer (e.g., 4KB) and iterate through the collection in a loop, performing partial operations. Always validate collection sizes (e.g., `count >= 0`) before processing.
