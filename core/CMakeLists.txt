@@ -73,6 +73,18 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ============================================================================
+# Install Prefix — derive SAGE_LIB_DIR for module.c compile-time search path
+# ============================================================================
+
+# Normalise the install prefix so SAGE_LIB_DIR always points at the same
+# directory that install(DIRECTORY lib/ DESTINATION share/sage/lib ...) uses.
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "/usr/local" CACHE PATH "Install prefix" FORCE)
+endif()
+set(SAGE_LIB_DIR_VALUE "${CMAKE_INSTALL_PREFIX}/share/sage/lib")
+message(STATUS "SAGE_LIB_DIR: ${SAGE_LIB_DIR_VALUE}")
+
+# ============================================================================
 # Compiler Flags
 # ============================================================================
 
@@ -260,6 +272,11 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
         ${SAGE_VM_SOURCES}
     )
 
+    # Provide the install-prefix lib path so module.c can resolve SAGE_LIB_DIR
+    target_compile_definitions(sage PRIVATE
+        SAGE_LIB_DIR="${SAGE_LIB_DIR_VALUE}"
+    )
+
     # Link math, pthread, dl, and optional GPU libraries
     target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
     
@@ -276,6 +293,9 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
             src/c/lsp_main.c
             ${SAGE_CORE_SOURCES}
             ${SAGE_VM_SOURCES}
+        )
+        target_compile_definitions(sage-lsp PRIVATE
+            SAGE_LIB_DIR="${SAGE_LIB_DIR_VALUE}"
         )
         target_link_libraries(sage-lsp m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
         message(STATUS "Building LSP server: sage-lsp")
@@ -295,6 +315,12 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
         ${SAGE_CORE_SOURCES}
         ${SAGE_VM_SOURCES}
     )
+
+    # Provide the install-prefix lib path so module.c can resolve SAGE_LIB_DIR
+    target_compile_definitions(sage PRIVATE
+        SAGE_LIB_DIR="${SAGE_LIB_DIR_VALUE}"
+    )
+
     target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
 
     # Custom target: run a .sage file through the self-hosted interpreter
@@ -422,6 +448,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_lexer.c
         ${SAGE_CORE_SOURCES}
     )
+    target_compile_definitions(test_lexer PRIVATE SAGE_LIB_DIR="${SAGE_LIB_DIR_VALUE}")
     target_link_libraries(test_lexer m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
     add_test(NAME LexerTest COMMAND test_lexer)
 
@@ -430,6 +457,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_parser.c
         ${SAGE_CORE_SOURCES}
     )
+    target_compile_definitions(test_parser PRIVATE SAGE_LIB_DIR="${SAGE_LIB_DIR_VALUE}")
     target_link_libraries(test_parser m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
     add_test(NAME ParserTest COMMAND test_parser)
 
@@ -438,6 +466,7 @@ if(ENABLE_TESTS AND NOT BUILD_PICO)
         tests/test_gc.c
         ${SAGE_CORE_SOURCES}
     )
+    target_compile_definitions(test_gc PRIVATE SAGE_LIB_DIR="${SAGE_LIB_DIR_VALUE}")
     target_link_libraries(test_gc m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES})
     add_test(NAME GCTest COMMAND test_gc)
 
@@ -607,6 +636,7 @@ message(STATUS "Debug mode:      ${ENABLE_DEBUG}")
 message(STATUS "Tests enabled:   ${ENABLE_TESTS}")
 message(STATUS "Source dir:      ${CMAKE_CURRENT_SOURCE_DIR}")
 message(STATUS "Binary dir:      ${CMAKE_BINARY_DIR}")
+message(STATUS "SAGE_LIB_DIR:    ${SAGE_LIB_DIR_VALUE}")
 
 if(BUILD_PICO)
     message(STATUS "")
