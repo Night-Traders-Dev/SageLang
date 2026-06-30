@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="439" viewBox="0 0 1600 439" role="img" aria-labelledby="title desc">
 <title>SageLang Project Breakdown by Area</title>
-<desc>21.2K tracked lines across 9 backends, 3 areas.</desc>
+<desc>21.3K tracked lines across 9 backends, 3 areas.</desc>
 <defs>
 <linearGradient id="bar-gradient-0" x1="0%" y1="0%" x2="100%" y2="0%">
 <stop offset="0%" stop-color="#FBD644"/>
@@ -18,7 +18,7 @@
 <rect width="100%" height="100%" fill="#0B1118"/>
 <rect x="12" y="12" width="1576" height="415" rx="18" fill="#0F1722" stroke="#1F2937"/>
 <text x="44" y="62" fill="#F8FAFC" font-size="34" font-family="Segoe UI, Arial, sans-serif" font-weight="700">SageLang Project Breakdown by Area</text>
-<text x="44" y="95" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">21.2K tracked lines across 9 backends, 3 areas.</text>
+<text x="44" y="95" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">21.3K tracked lines across 9 backends, 3 areas.</text>
 <line x1="240.0" y1="115" x2="240.0" y2="317" stroke="#182231" stroke-width="1"/>
 <text x="240.0" y="343" text-anchor="middle" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">0</text>
 <line x1="476.0" y1="115" x2="476.0" y2="317" stroke="#182231" stroke-width="1"/>
@@ -37,22 +37,22 @@
 <rect x="240" y="135" width="944.0" height="44" rx="12" fill="url(#bar-gradient-0)"/>
 <line x1="242.0" y1="137.0" x2="1182.0" y2="137.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
 <text x="1198.0" y="164.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">15.9K</text>
-<text x="1556" y="164.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">75.1% · 15,944 of 21,234 lines</text>
+<text x="1556" y="164.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">75.0% · 15,948 of 21,262 lines</text>
 <rect x="30" y="207.0" width="154" height="32" rx="10" fill="#77B814" opacity="0.95"/>
 <text x="107.0" y="229.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">BUILD SYSTEM</text>
 <rect x="240" y="201" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="201" width="284.6" height="44" rx="12" fill="url(#bar-gradient-1)"/>
-<line x1="242.0" y1="203.0" x2="522.6" y2="203.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="538.6" y="230.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">4.8K</text>
-<text x="1556" y="230.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">22.6% · 4,807 of 21,234 lines</text>
+<rect x="240" y="201" width="284.5" height="44" rx="12" fill="url(#bar-gradient-1)"/>
+<line x1="242.0" y1="203.0" x2="522.5" y2="203.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="538.5" y="230.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">4.8K</text>
+<text x="1556" y="230.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">22.6% · 4,807 of 21,262 lines</text>
 <rect x="30" y="273.0" width="134" height="32" rx="10" fill="#0EA674" opacity="0.95"/>
 <text x="97.0" y="295.0" text-anchor="middle" fill="#E2E8F0" font-size="14" font-family="Segoe UI, Arial, sans-serif" font-weight="700" letter-spacing="1.1">TEST SUITE</text>
 <rect x="240" y="267" width="1180" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="240" y="267" width="28.6" height="44" rx="12" fill="url(#bar-gradient-2)"/>
-<line x1="242.0" y1="269.0" x2="266.6" y2="269.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
-<text x="282.6" y="296.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">483</text>
-<text x="1556" y="296.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">2.3% · 483 of 21,234 lines</text>
+<rect x="240" y="267" width="30.0" height="44" rx="12" fill="url(#bar-gradient-2)"/>
+<line x1="242.0" y1="269.0" x2="268.0" y2="269.0" stroke="#F8FAFC" stroke-opacity="0.18"/>
+<text x="284.0" y="296.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">507</text>
+<text x="1556" y="296.0" text-anchor="end" fill="#64748B" font-size="15" font-family="Segoe UI, Arial, sans-serif">2.4% · 507 of 21,262 lines</text>
 <text x="44" y="369" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Backends: AST interpreter, bytecode VM, C, LLVM IR, native asm (x86-64/aarch64/rv64), JIT, AOT, Kotlin/Android.</text>
-<text x="44" y="393" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Test suite: 483 lines.  Standard library: 0 lines.</text>
-<text x="44" y="417" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-06-29 23:42 UTC</text>
+<text x="44" y="393" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Test suite: 507 lines.  Standard library: 0 lines.</text>
+<text x="44" y="417" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Last refreshed: 2026-06-30 02:01 UTC</text>
 </svg>
