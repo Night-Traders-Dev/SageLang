@@ -601,7 +601,9 @@ static Value io_writefile_native(int argCount, Value* args) {
         }
 
         if (pos == sizeof(chunk)) {
-            total_written += fwrite(chunk, 1, sizeof(chunk), f);
+            size_t w = fwrite(chunk, 1, sizeof(chunk), f);
+            if (w != sizeof(chunk)) { fclose(f); return val_bool(0); }
+            total_written += w;
             pos = 0;
         }
     }
