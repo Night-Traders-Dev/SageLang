@@ -7,7 +7,7 @@
 # ============================================================================
 
 # Single-source version from VERSION file
-SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.9.8")
+SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.9.9")
 
 # CC/CFLAGS/LDFLAGS can be overridden by environment (OIS sets CC=clang on macOS/BSD)
 CC ?= gcc
@@ -397,11 +397,14 @@ install: $(TARGET) $(LSP_TARGET)
 	cp -r lib/ml $(LIBDIR)/lib/
 	cp -r lib/cuda $(LIBDIR)/lib/
 	cp -r lib/std $(LIBDIR)/lib/
+	cp -r lib/transpiler $(LIBDIR)/lib/
 	cp -r lib/llm $(LIBDIR)/lib/
 	cp -r lib/agent $(LIBDIR)/lib/
 	cp -r lib/chat $(LIBDIR)/lib/
 	cp -r lib/android $(LIBDIR)/lib/
 	cp -r lib/rich $(LIBDIR)/lib/
+	install -d $(LIBDIR)/src/sage
+	cp -r src/sage/*.sage $(LIBDIR)/src/sage/
 	cp -r examples/*.sage $(LIBDIR)/examples/
 	install -d $(DOCDIR)
 	install -m 644 README.md LICENSE $(DOCDIR)/
@@ -1041,7 +1044,7 @@ all-models: $(TARGET) train-c chatbot-llvm sl-tq-chat
 # Show current version
 .PHONY: version
 version:
-	@cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.9.8"
+	@cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null || echo "3.9.9"
 
 # Bump version: make bump-version V=3
 # Updates VERSION in core/ AND root (../VERSION), and updates all files with the new version string.

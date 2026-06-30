@@ -573,6 +573,25 @@ static void add_system_search_paths(ModuleCache* cache) {
 
     // 3. Installed library path (compile-time default)
     add_search_path(cache, SAGE_LIB_DIR);
+
+    // 4. Self-hosted compiler modules (ast, parser, token, lexer, errors).
+    //    SAGE_LIB_DIR is typically ".../share/sage/lib"; the self-hosted
+    //    modules live alongside it at ".../share/sage/src/sage".
+    {
+        char selfhost_path[4096];
+        size_t lib_len = strlen(SAGE_LIB_DIR);
+        if (lib_len + 12 < sizeof(selfhost_path)) {
+            memcpy(selfhost_path, SAGE_LIB_DIR, lib_len + 1);
+            // Strip trailing "/lib" (or "\lib" on Windows) to get the share/sage root
+            if (lib_len >= 4) {
+                char* tail = selfhost_path + lib_len - 4;
+                if (strcmp(tail, "/lib") == 0 || strcmp(tail, "\\lib") == 0) {
+                    strcpy(tail, "/src/sage");
+                    add_search_path(cache, selfhost_path);
+                }
+            }
+        }
+    }
 }
 
 // Add source file's directory as a search path
