@@ -507,6 +507,9 @@ let square = proc(x):
 end
 
 print square(4)    # 16
+
+# Inline anonymous proc expressions
+print apply(proc(x): x * x end, 5)    # 25
 ```
 
 \newpage

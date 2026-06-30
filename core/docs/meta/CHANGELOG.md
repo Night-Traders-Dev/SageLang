@@ -9,6 +9,9 @@ propagation so the per-entry version history is never flattened again.
 
 ---
 
+## [3.9.8] - 2026-06-29
+- **Anonymous `proc` expressions (proc literals)**: Inline procs can now be passed as arguments to higher-order functions: `signal.once(bus, "event", proc(data): print data end)`. Supports both single-line (`proc(x): body end`) and multi-line block bodies. Closures capture the enclosing environment. `EXPR_PROC` added to the AST, parser, and self-hosted interpreter.
+
 ## [3.9.7] - 2026-06-29
 - **Lily Transpiler**: `--compile-to-lily` / `--compile-from-lily` CLI flags for round-trip Sage ↔ Lily transpilation via the `transpiler.lily` submodule.
 - **Linux signals**: Added missing POSIX signal constants and stubs to `linux/syscalls.sage`; enhanced signal handling.

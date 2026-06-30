@@ -12,7 +12,7 @@ import errors
 from ast import EXPR_NUMBER, EXPR_STRING, EXPR_BOOL, EXPR_NIL
 from ast import EXPR_BINARY, EXPR_VARIABLE, EXPR_CALL, EXPR_ARRAY
 from ast import EXPR_INDEX, EXPR_DICT, EXPR_TUPLE, EXPR_SLICE
-from ast import EXPR_GET, EXPR_SET, EXPR_INDEX_SET, EXPR_AWAIT
+from ast import EXPR_GET, EXPR_SET, EXPR_INDEX_SET, EXPR_AWAIT, EXPR_PROC
 from ast import STMT_PRINT, STMT_EXPRESSION, STMT_LET, STMT_IF
 from ast import STMT_BLOCK, STMT_WHILE, STMT_PROC, STMT_FOR
 from ast import STMT_RETURN, STMT_BREAK, STMT_CONTINUE, STMT_CLASS
@@ -21,7 +21,7 @@ from ast import STMT_ASYNC_PROC, STMT_DEFER, STMT_STRUCT
 from ast import number_expr, string_expr, bool_expr, nil_expr
 from ast import binary_expr, variable_expr, call_expr, array_expr
 from ast import index_expr, index_set_expr, dict_expr, tuple_expr
-from ast import slice_expr, get_expr, set_expr, await_expr
+from ast import slice_expr, get_expr, set_expr, await_expr, proc_expr
 from ast import print_stmt, expr_stmt, let_stmt, if_stmt
 from ast import block_stmt, while_stmt, proc_stmt, for_stmt
 from ast import return_stmt, break_stmt, continue_stmt, class_stmt
@@ -377,6 +377,10 @@ class Parser:
         if self.match_tok(token.TOKEN_IDENTIFIER):
             return variable_expr(self.previous())
 
+        # Anonymous proc expression (proc literal)
+        if self.match_tok(token.TOKEN_PROC):
+            return self.parse_proc_expr()
+
         let tok = self.peek()
         let got_name = token.token_type_name(tok.type)
         let hint = nil
@@ -489,6 +493,45 @@ class Parser:
         self.consume(token.TOKEN_NEWLINE, "Expect newline before procedure body.")
         let body = self.parse_block()
         return proc_stmt(name, params, body)
+
+    proc parse_proc_expr():
+        # Anonymous proc expression: proc(params): body end or proc(): body end
+        # Works as an expression that creates a function value
+        let params = []
+        if self.match_tok(token.TOKEN_LPAREN):
+            if not self.check(token.TOKEN_RPAREN):
+                let pt = self.peek_type()
+                if pt == token.TOKEN_SELF or pt == token.TOKEN_IDENTIFIER:
+                    push(params, self.advance())
+                else:
+                    let tok = self.peek()
+                    self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
+                while self.match_tok(token.TOKEN_COMMA):
+                    let pt2 = self.peek_type()
+                    if pt2 == token.TOKEN_SELF or pt2 == token.TOKEN_IDENTIFIER:
+                        push(params, self.advance())
+                    else:
+                        let tok = self.peek()
+                        self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
+            self.consume(token.TOKEN_RPAREN, "Expect ')' after parameters.")
+        else:
+            # No parens means no parameters: proc: body end
+            pass
+        self.consume(token.TOKEN_COLON, "Expect ':' after procedure signature.")
+        # Inline body: single statement followed by 'end' keyword
+        # or multi-line body with indentation
+        let body = nil
+        if self.match_tok(token.TOKEN_NEWLINE):
+            body = self.parse_block()
+            # Consume optional 'end' keyword after multi-line block
+            self.match_tok(token.TOKEN_END)
+        else:
+            # Parse a single statement as the body
+            let stmt = self.parse_statement()
+            body = block_stmt(stmt)
+            # Expect 'end' keyword to terminate the inline proc
+            self.consume(token.TOKEN_END, "Expect 'end' after inline procedure body.")
+        return proc_expr(params, body)
 
     proc parse_async_proc():
         self.consume(token.TOKEN_PROC, "Expect 'proc' after 'async'.")

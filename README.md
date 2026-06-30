@@ -95,7 +95,7 @@ section is a summary with links to the relevant guide.
 - **Indentation-based syntax** — no braces; clean, consistent indentation
 - **Types** — Integers, Strings, Booleans, Nil, Arrays, Dictionaries, Tuples,
   Classes, Instances, Exceptions, Generators, Bytes
-- **Functions** — `proc name(args):` with recursion, closures, first-class functions
+- **Functions** — `proc name(args):` with recursion, closures, first-class functions, inline anonymous proc expressions (`proc(x): body end`)
 - **Control flow** — `if`/`else`, `while`, `for`, `break`, `continue`,
   `try`/`catch`/`finally`, `match`/`case`/`default`, `defer`
 - **Operators** — arithmetic, comparison, logical (`and`/`or`), bitwise

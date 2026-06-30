@@ -105,3 +105,4 @@ core/output/
 .tmp_kt_emit_functions.kt
 .tmp_kt_emit_generators.kt
 .tmp_kt_emit_super.kt
+.aider*

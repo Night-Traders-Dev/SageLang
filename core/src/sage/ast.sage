@@ -24,6 +24,9 @@ let EXPR_AWAIT = 15
 let EXPR_SUPER = 16
 let EXPR_COMPTIME = 17
 
+# --- New expression types ---
+let EXPR_PROC = 18   # Anonymous proc/lambda expression
+
 # --- Statement type constants ---
 let STMT_PRINT = 100
 let STMT_EXPRESSION = 101
@@ -97,6 +100,8 @@ proc expr_type_name(t):
         return "EXPR_AWAIT"
     if t == EXPR_SUPER:
         return "EXPR_SUPER"
+    if t == EXPR_PROC:
+        return "EXPR_PROC"
     if t == EXPR_COMPTIME:
         return "EXPR_COMPTIME"
     return "UNKNOWN_EXPR"
@@ -419,6 +424,14 @@ proc macro_def_stmt(name, params, body):
     s.param_count = len(params)
     s.body = body
     return s
+
+# Anonymous proc expression factory
+proc proc_expr(params, body):
+    let e = Expr(EXPR_PROC)
+    e.params = params
+    e.param_count = len(params)
+    e.body = body
+    return e
 
 # --- CaseClause helper (with guard support) ---
 class CaseClause:

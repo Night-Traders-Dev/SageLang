@@ -37,7 +37,7 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **OOP** | Class-based inheritance with single parent, methods, instance fields, `self` parameter, `super.init()` auto-self |
 | **Control Flow** | `if/else`, `while`, `for...in`, `break`, `continue`, `return`, `try/catch/finally`, `raise`, `yield`, `defer` |
 | **Data Structures** | Arrays (dynamic), dicts (string-keyed), tuples (immutable), slicing, indexing |
-| **Functions** | First-class `proc` declarations with closures; native C functions; lambdas via generators |
+| **Functions** | First-class `proc` declarations with closures; anonymous `proc` expressions (`proc(x): body end`); native C functions |
 | **Generators** | Full `yield` support with resumable state; `next()` function to iterate |
 | **Exceptions** | `try/catch/finally/raise` with explicit exception objects and message strings |
 | **Modules** | `import module`, `import module as alias`, `from module import x, y`, `from module import x as y` |

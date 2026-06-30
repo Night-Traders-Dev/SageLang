@@ -8,7 +8,7 @@ from ast import EXPR_NUMBER, EXPR_STRING, EXPR_BOOL, EXPR_NIL
 from ast import EXPR_BINARY, EXPR_VARIABLE, EXPR_CALL, EXPR_ARRAY
 from ast import EXPR_INDEX, EXPR_DICT, EXPR_TUPLE, EXPR_SLICE
 from ast import EXPR_GET, EXPR_SET, EXPR_INDEX_SET, EXPR_AWAIT
-from ast import EXPR_SUPER, EXPR_COMPTIME
+from ast import EXPR_SUPER, EXPR_COMPTIME, EXPR_PROC
 from ast import STMT_PRINT, STMT_EXPRESSION, STMT_LET, STMT_IF
 from ast import STMT_BLOCK, STMT_WHILE, STMT_PROC, STMT_FOR
 from ast import STMT_RETURN, STMT_BREAK, STMT_CONTINUE, STMT_CLASS
@@ -234,6 +234,12 @@ proc import_bind(stmt, mod_name, mod_env, target_env):
         let bind_name = mod_name
         if stmt.alias != nil:
             bind_name = stmt.alias
+        else:
+            # For dotted/path imports like std/signal, use the last component
+            # as the default binding name (e.g. std/signal -> signal)
+            let parts = split(mod_name, "/")
+            if len(parts) > 1:
+                bind_name = parts[len(parts) - 1]
         # Wrap module env as a dict-like module object
         let mod_obj = {}
         mod_obj["__interp_type"] = "module"
@@ -941,6 +947,17 @@ proc eval_expr_impl(expr, env):
             runtime_error(-1, "Class has no parent for super call", nil)
         runtime_error(-1, "super used outside of a class method", nil)
 
+    # --- Anonymous proc expression ---
+    if etype == EXPR_PROC:
+        return {
+            "__interp_type": "function",
+            "name": "<lambda>",
+            "params": expr.params,
+            "body": expr.body,
+            "closure": env,
+            "is_generator": body_has_yield(expr.body)
+        }
+
     # --- Comptime expression (evaluate normally at runtime) ---
     if etype == EXPR_COMPTIME:
         return eval_expr(expr.expression, env)
@@ -1595,9 +1612,11 @@ proc exec_stmt(stmt, env):
         # Try to find and load the module file
         let mod_source = nil
         let mod_path = nil
+        # Convert dots to slashes for submodule paths (std.signal -> std/signal.sage)
+        let file_mod_name = join(split(mod_name, "."), "/")
         let si = 0
         while si < len(g_module_paths):
-            let try_path = g_module_paths[si] + "/" + mod_name + ".sage"
+            let try_path = g_module_paths[si] + "/" + file_mod_name + ".sage"
             if io.exists(try_path):
                 mod_source = io.readfile(try_path)
                 mod_path = try_path
