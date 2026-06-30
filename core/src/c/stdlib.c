@@ -544,48 +544,70 @@ static Value io_writebytes_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_ARRAY(args[1])) return val_bool(0);
     const char* path = AS_STRING(args[0]);
     ArrayValue* arr = AS_ARRAY(args[1]);
+    if (arr->count < 0) return val_bool(0);
 
     FILE* f = fopen(path, "wb");
     if (!f) return val_bool(0);
 
-    unsigned char* buf = SAGE_ALLOC((size_t)arr->count);
+    // Security: Use fixed-size stack buffer to avoid large transient heap allocations (CWE-400)
+    unsigned char chunk[4096];
+    int pos = 0;
+    size_t total_written = 0;
+
     for (int i = 0; i < arr->count; i++) {
         if (IS_NUMBER(arr->elements[i])) {
-            buf[i] = (unsigned char)AS_NUMBER(arr->elements[i]);
+            chunk[pos++] = (unsigned char)AS_NUMBER(arr->elements[i]);
         } else {
-            buf[i] = 0;
+            chunk[pos++] = 0;
+        }
+
+        if (pos == sizeof(chunk)) {
+            total_written += fwrite(chunk, 1, sizeof(chunk), f);
+            pos = 0;
         }
     }
 
-    size_t written = fwrite(buf, 1, (size_t)arr->count, f);
-    SAGE_FREE(buf);
-    fclose(f);
+    if (pos > 0) {
+        total_written += fwrite(chunk, 1, (size_t)pos, f);
+    }
 
-    return val_bool(written == (size_t)arr->count);
+    fclose(f);
+    return val_bool(total_written == (size_t)arr->count);
 }
 
 static Value io_appendbytes_native(int argCount, Value* args) {
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_ARRAY(args[1])) return val_bool(0);
     const char* path = AS_STRING(args[0]);
     ArrayValue* arr = AS_ARRAY(args[1]);
+    if (arr->count < 0) return val_bool(0);
 
     FILE* f = fopen(path, "ab");
     if (!f) return val_bool(0);
 
-    unsigned char* buf = SAGE_ALLOC((size_t)arr->count);
+    // Security: Use fixed-size stack buffer to avoid large transient heap allocations (CWE-400)
+    unsigned char chunk[4096];
+    int pos = 0;
+    size_t total_written = 0;
+
     for (int i = 0; i < arr->count; i++) {
         if (IS_NUMBER(arr->elements[i])) {
-            buf[i] = (unsigned char)AS_NUMBER(arr->elements[i]);
+            chunk[pos++] = (unsigned char)AS_NUMBER(arr->elements[i]);
         } else {
-            buf[i] = 0;
+            chunk[pos++] = 0;
+        }
+
+        if (pos == sizeof(chunk)) {
+            total_written += fwrite(chunk, 1, sizeof(chunk), f);
+            pos = 0;
         }
     }
 
-    size_t written = fwrite(buf, 1, (size_t)arr->count, f);
-    SAGE_FREE(buf);
-    fclose(f);
+    if (pos > 0) {
+        total_written += fwrite(chunk, 1, (size_t)pos, f);
+    }
 
-    return val_bool(written == (size_t)arr->count);
+    fclose(f);
+    return val_bool(total_written == (size_t)arr->count);
 }
 
 static Value io_appendfile_native(int argCount, Value* args) {
@@ -657,7 +679,7 @@ static Value io_readbytes_native(int argCount, Value* args) {
         for (size_t i = 0; i < read; i++) {
             arr->elements[i] = val_number((double)buf[i]);
         }
-        free(buf);
+        SAGE_FREE(buf);
     } else {
         // Non-seekable file (e.g., /dev/urandom) — read in chunks until EOF
         unsigned char chunk[4096];
