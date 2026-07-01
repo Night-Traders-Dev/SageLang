@@ -1,3 +1,4 @@
+## Smoke test for Read-Write Lock (rwlock) implementation in os.sync.
 import os.sync as sync
 
 proc test_rwlock():
