@@ -57,3 +57,7 @@
 ## 2026-06-25 - [Optimized Crypto Encodings]
 **Learning:** String concatenation using '+=' in SageLang has O(N^2) complexity due to string immutability. Replacing this with an array-push and join("") pattern achieves O(N) complexity and significant performance gains. Additionally, leveraging the native 'replace()' builtin for character translation is much faster than manual interpreted loops.
 **Action:** Use array-push + join("") for building large strings in loops. Use native 'replace()' for bulk string substitutions. Measured ~100x-130x speedup for 10k byte encoding.
+
+## 2025-05-30 - [Generator Yield-in-For Anti-pattern]
+**Learning:** In SageLang v3.9.9, using 'yield' inside a 'for' loop does not correctly advance the loop state, causing it to repeatedly yield the first element.
+**Action:** Always use 'while' loops with manual index management in generator procedures until the interpreter bug is resolved.
