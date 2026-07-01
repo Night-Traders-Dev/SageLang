@@ -39,7 +39,8 @@ print math.sqrt(16)    # 4
 
 import http
 let resp = http.get("https://example.com")
-print resp["status"]   # 200
+if resp != nil:
+    print resp["status"]   # 200
 
 async proc compute(x):
     return x * x
@@ -103,7 +104,7 @@ section is a summary with links to the relevant guide.
 - **v2.0 enhancements** — type annotations, `sage check`, structs, enums,
   traits, match guards, default params, multiline literals, escape sequences,
   hex/octal/binary literals, `super` auto-self, dunder hooks (`__str__`/`__eq__`),
-  bytes type, `unsafe` blocks, doc comments (`##`), path/hash builtins
+  bytes type, `unsafe` blocks, doc comments (`##`), path/hash builtins, `elif`
 - **Metaprogramming** — `comptime:` blocks, `comptime()` expressions, pragmas
   (`@inline`/`@packed`/`@section`/`@align`/`@deprecated`/`@noreturn`), AST macros,
   generics (`proc identity[T](x: T) -> T:`)

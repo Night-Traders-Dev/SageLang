@@ -88,6 +88,7 @@ import os.dtb     # Flattened Device Tree parser (ARM64/RISC-V)
 ```sage
 import os.alloc   # Bump, free-list, and bitmap page allocators
 import os.vfs     # Virtual filesystem abstraction with pluggable backends
+import os.sync    # Mutexes, semaphores, and rwlocks for bare-metal
 ```
 
 ### Boot Infrastructure
@@ -197,6 +198,24 @@ print decoded["present"]    # true
 print decoded["writable"]   # true
 ```
 
+### Example: Synchronization with rwlocks
+
+```sage
+import os.sync
+
+let lock = sync.rwlock_create()
+
+# Reader
+sync.rwlock_read_lock(lock)
+# ... read shared data ...
+sync.rwlock_read_unlock(lock)
+
+# Writer
+sync.rwlock_write_lock(lock)
+# ... write shared data ...
+sync.rwlock_write_unlock(lock)
+```
+
 ### Example: Set up IDT and serial debug output
 
 ```sage
@@ -204,9 +223,8 @@ import os.idt
 import os.serial
 
 # Configure COM1 for debug output
-let com1 = serial.default_config()
-let init_seq = serial.init_sequence(com1)
-# init_seq is a list of {port, value} pairs for port I/O
+let com1 = serial.COM1
+serial.uart_init(com1, 115200)
 
 # Build IDT with handlers
 let handlers = {}
