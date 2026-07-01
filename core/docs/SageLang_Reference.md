@@ -89,9 +89,11 @@ String escape sequences: `\n`, `\t`, `\r`, `\\`, `\"`, `\xHH`
 ### 1.6 Control Flow
 
 ```sage
-# if/else
+# if/elif/else
 if age >= 18:
     print "Adult"
+elif age >= 13:
+    print "Teenager"
 else:
     print "Minor"
 
@@ -373,12 +375,12 @@ Type annotations are **validated at runtime** by the type checker but do not aff
 
 ## 3. Keywords & Operators
 
-### 3.1 Keywords (54 total)
+### 3.1 Keywords (55 total)
 
 Full list from `token.h`:
 
 ```
-let      var      proc     if       else
+let      var      proc     if       else     elif
 while    for      return   print
 and      or       not      in       break    continue
 class    self     init     super
@@ -447,8 +449,8 @@ These are registered as native C functions and are available without any import.
 | `array_index_of` | `array_index_of(arr, val) -> Number` | Find index |
 | `array_min` | `array_min(arr) -> Number` | Minimum value |
 | `array_max` | `array_max(arr) -> Number` | Maximum value |
-| `array_sum` | `array_sum(arr) -> Number` | Sum of values |
-| `array_product` | `array_product(arr) -> Number` | Product of values |
+| `array_sum` | `array_sum(arr) -> Number` | Sum of values (native) |
+| `array_product` | `array_product(arr) -> Number` | Product of values (native) |
 | `array_extend` | `array_extend(arr1, arr2)` | Extend array |
 | `array_repeat` | `array_repeat(arr, n) -> Array` | Repeat array |
 | `dict_keys` | `dict_keys(d) -> Array` | Get all keys |
