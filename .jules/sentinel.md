@@ -61,3 +61,8 @@
 **Vulnerability:** Native functions `io.writebytes` and `io.appendbytes` allocated a temporary heap buffer equal to the entire size of the input Sage array before writing to disk (CWE-400).
 **Learning:** Bridging high-level collections (like Sage arrays) to low-level C APIs (like `fwrite`) often tempts developers to allocate a single intermediate buffer for convenience. For large inputs, this creates a transient memory spike that can trigger OOM or DoS, even if the collection itself is already in memory.
 **Prevention:** Implement chunked processing for all native functions that transform or stream large data structures. Use a fixed-size stack buffer (e.g., 4KB) and iterate through the collection in a loop, performing partial operations. Always validate collection sizes (e.g., `count >= 0`) before processing.
+
+## 2026-07-05 - Denial of Service in Sandbox Security Scanner
+**Vulnerability:** The sandbox safety scanner (`is_safe`) and code extractor used character-by-character string concatenation ((N^2)$ complexity) when parsing LLM output (CWE-400).
+**Learning:** Security components must be more robust than the data they analyze. A safety checker that can be frozen by malicious input becomes a Denial of Service vector that bypasses other resource limits (like gas) which haven't started yet.
+**Prevention:** Enforce linear-time complexity in all security-critical parsing and scanning logic by using array-based string building or native buffer manipulation built-ins.
