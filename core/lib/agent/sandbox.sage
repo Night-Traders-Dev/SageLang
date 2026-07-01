@@ -12,31 +12,30 @@ gc_disable()
 proc extract_code_blocks(text):
     let blocks = []
     let in_block = false
-    let current = ""
+    let current_parts = []
     let lines = split_lines(text)
     for i in range(len(lines)):
         let line = lines[i]
         let trimmed = trim(line)
         if not in_block and (trimmed == "```sage" or trimmed == "```"):
             in_block = true
-            current = ""
+            current_parts = []
             continue
         if in_block and trimmed == "```":
             in_block = false
-            if len(current) > 0:
-                push(blocks, current)
-            current = ""
+            if len(current_parts) > 0:
+                push(blocks, join(current_parts, ""))
+            current_parts = []
             continue
         if in_block:
-            current = current + line + chr(10)
+            push(current_parts, line)
+            push(current_parts, chr(10))
     # Also extract inline code after "CODE:" prefix
     for i in range(len(lines)):
         let line = lines[i]
         if len(line) > 6 and line[0] == "C" and line[1] == "O" and line[2] == "D" and line[3] == "E" and line[4] == ":" and line[5] == " ":
-            let code = ""
-            for j in range(len(line) - 6):
-                code = code + line[6 + j]
-            push(blocks, code)
+            # Optimized inline code extraction using native slice()
+            push(blocks, slice(line, 6, len(line)))
     return blocks
 
 # ============================================================================
@@ -83,15 +82,17 @@ proc is_safe(code):
         # Parse identifiers
         let is_letter = (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or c == "_"
         if is_letter:
-            let ident = ""
+            let start_ident = i
             while i < n:
                 let ch = code[i]
                 let is_ident_char = (ch >= "a" and ch <= "z") or (ch >= "A" and ch <= "Z") or (ch >= "0" and ch <= "9") or ch == "_"
                 if is_ident_char:
-                    ident = ident + ch
                     i = i + 1
                 else:
                     break
+
+            # Optimized identifier extraction using native slice()
+            let ident = slice(code, start_ident, i)
 
             # Check for unauthorized keywords
             for j in range(len(keywords)):
@@ -209,22 +210,27 @@ proc eval_math(expr):
 
 proc tokenize_math(expr):
     let tokens = []
-    let current = ""
-    for i in range(len(expr)):
+    let n = len(expr)
+    let i = 0
+    while i < n:
         let c = expr[i]
         if c == " ":
-            if len(current) > 0:
-                push(tokens, current)
-                current = ""
+            i = i + 1
+            continue
         if c == "+" or c == "-" or c == "*" or c == "/" or c == "%":
-            if len(current) > 0:
-                push(tokens, current)
-                current = ""
             push(tokens, c)
-        if c != " " and c != "+" and c != "-" and c != "*" and c != "/" and c != "%":
-            current = current + c
-    if len(current) > 0:
-        push(tokens, current)
+            i = i + 1
+            continue
+
+        # Parse operand
+        let start_op = i
+        while i < n:
+            let ch = expr[i]
+            if ch == " " or ch == "+" or ch == "-" or ch == "*" or ch == "/" or ch == "%":
+                break
+            i = i + 1
+        if i > start_op:
+            push(tokens, slice(expr, start_op, i))
     return tokens
 
 # ============================================================================
@@ -233,25 +239,25 @@ proc tokenize_math(expr):
 
 proc split_lines(text):
     let lines = []
-    let current = ""
-    for i in range(len(text)):
-        if text[i] == chr(10):
-            push(lines, current)
-            current = ""
-        if text[i] != chr(10) and text[i] != chr(13):
-            current = current + text[i]
-    if len(current) > 0:
-        push(lines, current)
+    let n = len(text)
+    let current_parts = []
+    for i in range(n):
+        let c = text[i]
+        if c == chr(10):
+            push(lines, join(current_parts, ""))
+            current_parts = []
+        elif c != chr(13):
+            push(current_parts, c)
+    if len(current_parts) > 0:
+        push(lines, join(current_parts, ""))
     return lines
 
 proc trim(s):
     let start = 0
-    while start < len(s) and (s[start] == " " or s[start] == chr(9)):
+    let n = len(s)
+    while start < n and (s[start] == " " or s[start] == chr(9)):
         start = start + 1
-    let r = ""
-    for i in range(len(s) - start):
-        r = r + s[start + i]
-    return r
+    return slice(s, start, n)
 
 proc contains(h, n):
     if len(n) > len(h):
