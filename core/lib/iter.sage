@@ -22,7 +22,6 @@ proc range_step(start, stop, step):
             current = current + step
 
 proc repeat(value, count):
-    # Optimization: Uses 'for' loop for performance (~1.7x to 2.7x speedup).
     # NOTE: SageLang v3.9.9 has a bug where 'yield' in 'for' doesn't advance state.
     # We must use 'while' for generators.
     let i = 0
