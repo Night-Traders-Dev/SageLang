@@ -34,7 +34,6 @@ proc repeat_forever(value):
         yield value
 
 proc enumerate_array(values):
-    # Optimization: Uses 'for' loop for performance.
     # NOTE: SageLang v3.9.9 has a bug where 'yield' in 'for' doesn't advance state.
     # We must use 'while' for generators.
     let i = 0
