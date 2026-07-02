@@ -12,7 +12,7 @@ JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
 
-**Current version:** v3.9.9 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.0.0 · **Spec version:** 2.0 · **License:** MIT
 
 ## Install (One-line Install System — OIS)
 

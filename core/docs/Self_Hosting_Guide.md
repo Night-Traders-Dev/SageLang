@@ -38,13 +38,13 @@ operators (`~`), and module imports with loop iteration limits.
 
 `import X`, `import X as Y`, `from X import a, b` with module caching and
 multi-path search (`./`, `lib/`). Supports `__init__.sage` for directory-based
-packages (v3.9.9+).
+packages (v4.0.0+).
 
 ## Soft Keywords
 
 `match`, `init`, `enum`, `struct`, and `trait` are "soft keywords" — usable as
 variable names in expressions and assignments while still acting as keywords in
-declarations (v3.9.9+). `end` is also a soft keyword (block terminator or
+declarations (v4.0.0+). `end` is also a soft keyword (block terminator or
 identifier).
 
 ## Hybrid JIT/AOT Profiling
