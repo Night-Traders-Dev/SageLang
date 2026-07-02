@@ -9,6 +9,16 @@ propagation so the per-entry version history is never flattened again.
 
 ---
 
+## [4.0.0] - 2026-07-02
+
+### Self-Hosted Toolchain Parity
+- **`sage.sage` — debug print cleanup**: Removed five stray diagnostic `print` statements from `mode_run` (`"mode_run: parsing..."`, `"mode_run: parsing done. optimizing..."`, `"mode_run: setting error context..."`, `"mode_run: exec_program..."`, `"mode_run: done."`). These polluted stdout on every interpreter invocation. The function is otherwise unchanged: parse → optional optimization passes → set error context → new interpreter → exec.
+- **`net.sage` — new self-hosted net stub module**: The C backend (`net.c`) provides full BSD-socket networking (TCP, UDP, `connect`, `bind`, `listen`, `accept`, `send`, `recv`, `sendto`, `recvfrom`, hostname resolution, non-blocking mode, `SO_REUSEADDR`, high-level `tcp_connect`/`tcp_listen`). No self-hosted counterpart existed, meaning `import net` would fail under the interpreter. `net.sage` now mirrors every public symbol in `net.c` exactly — returning `NET_UNAVAILABLE` (-1) or `nil` with an explanatory `net_strerror()` message — so the self-hosted and C-backend module APIs are identical. Exposes `create_net_module()` for registration by `stdlib.sage`.
+- **`stdlib.sage` — merge conflict resolved**: `create_sys_module` contained an unresolved three-way merge conflict (`<<<<<<< HEAD` / `=======` / `>>>>>>>`). The conflict is resolved: version is `"3"` (consistent with `sage.sage`'s `VERSION` constant), platform is `"sage-self-hosted"`, and all sys procs (`args`, `exit`, `getenv`, `clock`, `sleep`, `exec`, `shell_exec`, `call`) are wired into the module dict.
+- **`stdlib.sage` — net module registered**: `import net` added to the module header; a thin `create_net_module()` wrapper delegates to `net.create_net_module()`; `g_stdlib_registry["net"]` is now populated in `init_stdlib()` so any self-hosted Sage code using `import net` gets the parity stub rather than a module-lookup failure.
+
+---
+
 ## [3.9.8] - 2026-06-29
 - **Anonymous `proc` expressions (proc literals)**: Inline procs can now be passed as arguments to higher-order functions: `signal.once(bus, "event", proc(data): print data end)`. Supports both single-line (`proc(x): body end`) and multi-line block bodies. Closures capture the enclosing environment. `EXPR_PROC` added to the AST, parser, and self-hosted interpreter.
 
@@ -196,7 +206,7 @@ propagation so the per-entry version history is never flattened again.
 - **Performance Optimizations + Kotlin Fixes**: see 3.2.2/3.3.0 for merged detail.
 
 ## [3.2.0] - 2026-04-05
-- **ORC Garbage Collector** (`--gc:orc`): Nim-inspired Optimized Reference Counting with Lins' trial deletion cycle collector. Three-phase trial deletion (mark PURPLE, trial-decrement to WHITE, collect confirmed cycles). Recommended for complex object graphs (linked lists, trees, circular references). More aggressive cycle collection than ARC (every 500 vs 1000 decrements). `gc_set_orc()` / `gc_mode()` returns `"orc"`.
+- **ORC Garbage Collector** (`--gc:orc`): Nim-inspired Optimized Reference Counting with Lins' trial deletion cycle collector. Three-phase trial deletion (mark PURPLE, mark trial-decrement to WHITE, collect confirmed cycles). Recommended for complex object graphs (linked lists, trees, circular references). More aggressive cycle collection than ARC (every 500 vs 1000 decrements). `gc_set_orc()` / `gc_mode()` returns `"orc"`.
 - Three GC modes now available: `--gc:tracing` (default), `--gc:arc`, `--gc:orc`.
 - ARC convenience macros (`ARC_RETAIN`, `ARC_RELEASE`, `ARC_ASSIGN`) work in both ARC and ORC modes.
 - GC stats show mode name and ORC-specific metrics (epoch, cycle collections, cycles freed).
