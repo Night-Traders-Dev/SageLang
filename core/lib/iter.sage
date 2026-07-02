@@ -43,7 +43,6 @@ proc enumerate_array(values):
         i = i + 1
 
 proc cycle(values):
-    # Optimization: Uses 'for' loop for performance.
     # NOTE: SageLang v3.9.9 has a bug where 'yield' in 'for' doesn't advance state.
     # We must use 'while' for generators.
     let n = len(values)
