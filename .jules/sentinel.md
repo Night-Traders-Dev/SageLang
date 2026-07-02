@@ -66,3 +66,8 @@
 **Vulnerability:** The sandbox safety scanner (`is_safe`) and code extractor used character-by-character string concatenation ((N^2)$ complexity) when parsing LLM output (CWE-400).
 **Learning:** Security components must be more robust than the data they analyze. A safety checker that can be frozen by malicious input becomes a Denial of Service vector that bypasses other resource limits (like gas) which haven't started yet.
 **Prevention:** Enforce linear-time complexity in all security-critical parsing and scanning logic by using array-based string building or native buffer manipulation built-ins.
+
+## 2026-07-10 - Duplicated Vulnerable Logic in Core and Utilities
+**Vulnerability:** Hardening applied to the `sgvmc` utility (bounds checks, secure temp files) was missing in the redundant SGVM compilation path inside the core `sage` interpreter (`main.c`).
+**Learning:** Security fixes for shared logic must be applied across all implementations. Redundant logic in different binaries (core vs. utilities) often leads to inconsistent security postures where the "hardened" tool is safe but the core binary remains vulnerable to the same exploits.
+**Prevention:** Centralize shared logic into common modules rather than duplicating it across multiple entry points. Maintain an inventory of all locations where external data (like bytecode) is parsed and ensure resource limits and bounds checks are applied globally.
