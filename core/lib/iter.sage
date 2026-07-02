@@ -65,7 +65,7 @@ proc take(gen, count):
 
 @inline
 proc nth(gen, index):
-    # Optimization: Uses 'for' loop for performance (~1.7x to 2.7x speedup).
+    # Optimization: Uses 'for' loop for performance.
     let value = nil
     for i in range(index + 1):
         value = next(gen)
