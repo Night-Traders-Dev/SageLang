@@ -3,12 +3,14 @@ gc_disable()
 #
 # Pure Sage implementations of the standard library modules.
 # These provide the same interfaces as the C native modules
-# (math, io, string, sys, fat) for the self-hosted interpreter.
+# (math, io, string, sys, fat, net) for the self-hosted interpreter.
 #
 # Note: thread module requires C pthreads and cannot be ported.
 # IO delegates to the C native io module for file operations.
 # vm module requires C bytecode engine and cannot be ported.
+# net module stubs are in net.sage; actual sockets require C.
 import io
+import net
 
 # ============================================================================
 # Math Module
@@ -602,11 +604,7 @@ proc sys_call(callee):
 
 proc create_sys_module():
     let m = {}
-<<<<<<< HEAD
-    m["version"] = "4.0.0"
-    m["platform"] = "sage"
-=======
-    m["version"]    = "3.9.9"
+    m["version"]    = "3"
     m["platform"]   = "sage-self-hosted"
     m["args"]       = sys_args
     m["exit"]       = sys_exit
@@ -809,8 +807,14 @@ proc create_fat_module():
     m["FAT12"] = 12
     m["FAT16"] = 16
     m["FAT32"] = 32
->>>>>>> 8977e6fe2c06b22318b1ba3b23e5bded10d4991c
     return m
+
+# ============================================================================
+# Net Module (delegates to net.sage stubs)
+# ============================================================================
+
+proc create_net_module():
+    return net.create_net_module()
 
 # ============================================================================
 # Module Registry
@@ -825,6 +829,7 @@ proc init_stdlib():
     g_stdlib_registry["string"] = create_string_module()
     g_stdlib_registry["sys"]    = create_sys_module()
     g_stdlib_registry["fat"]    = create_fat_module()
+    g_stdlib_registry["net"]    = create_net_module()
 
 proc get_stdlib_module(name):
     if dict_has(g_stdlib_registry, name):
