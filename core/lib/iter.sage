@@ -57,7 +57,7 @@ proc cycle(values):
 
 @inline
 proc take(gen, count):
-    # Optimization: Uses 'for' loop for performance (~1.7x to 2.7x speedup).
+    # Optimization: Uses 'for' loop for performance.
     let result = []
     for i in range(count):
         push(result, next(gen))
