@@ -94,6 +94,7 @@ section is a summary with links to the relevant guide.
 ### Language & Core
 
 - **Indentation-based syntax** — no braces; clean, consistent indentation
+- **Variables** — `let` and `var` for bindings (both allow reassignment in current spec)
 - **Types** — Integers, Strings, Booleans, Nil, Arrays, Dictionaries, Tuples,
   Classes, Instances, Exceptions, Generators, Bytes
 - **Functions** — `proc name(args):` with recursion, closures, first-class functions, inline anonymous proc expressions (`proc(x): body end`)
@@ -104,7 +105,8 @@ section is a summary with links to the relevant guide.
 - **v2.0 enhancements** — type annotations, `sage check`, structs, enums,
   traits, match guards, default params, multiline literals, escape sequences,
   hex/octal/binary literals, `super` auto-self, dunder hooks (`__str__`/`__eq__`),
-  bytes type, `unsafe` blocks, doc comments (`##`), path/hash builtins, `elif`
+  bytes type, `unsafe` blocks, doc comments (`##`), path/hash builtins, `elif`,
+  `var` keyword
 - **Metaprogramming** — `comptime:` blocks, `comptime()` expressions, pragmas
   (`@inline`/`@packed`/`@section`/`@align`/`@deprecated`/`@noreturn`), AST macros,
   generics (`proc identity[T](x: T) -> T:`)
