@@ -71,3 +71,8 @@
 **Vulnerability:** Hardening applied to the `sgvmc` utility (bounds checks, secure temp files) was missing in the redundant SGVM compilation path inside the core `sage` interpreter (`main.c`).
 **Learning:** Security fixes for shared logic must be applied across all implementations. Redundant logic in different binaries (core vs. utilities) often leads to inconsistent security postures where the "hardened" tool is safe but the core binary remains vulnerable to the same exploits.
 **Prevention:** Centralize shared logic into common modules rather than duplicating it across multiple entry points. Maintain an inventory of all locations where external data (like bytecode) is parsed and ensure resource limits and bounds checks are applied globally.
+
+## 2026-07-03 - Heap Out-of-Bounds in SGVM Compilation
+**Vulnerability:** The `compile_to_sgvm` function used a fixed-size heap buffer (`local_to_global[1024][256]`) to map local constants to global ones, but lacked bounds checking for the chunk index (`current_chunk`) during the second parsing pass (CWE-129).
+**Learning:** Security fixes applied to one parsing pass (e.g., the first pass already had a check) must be consistently applied to all subsequent passes that access the same data structures. Incomplete hardening leaves "blind spots" that can be exploited by malformed input files.
+**Prevention:** Always use a consistent error-handling pattern (e.g., a `status` variable) across multiple parsing passes. Ensure that every array access derived from external input is preceded by a strict bounds check, and that memory allocation failures are handled gracefully with full resource cleanup.
