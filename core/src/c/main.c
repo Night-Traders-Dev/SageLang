@@ -1204,7 +1204,13 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
         if (strcmp(line, "chunk\n") == 0) current_chunk++;
         else if (strncmp(line, "code ", 5) == 0) {
             int len = atoi(line + 5);
-            write_be32(out, (uint32_t)len);
+        if (strcmp(line, "chunk\n") == 0) current_chunk++;
+        if (current_chunk < 0 || current_chunk >= 1024) {
+            fprintf(stderr, "SGVM Compile Error: chunk index %d out of bounds\n", current_chunk);
+            status = 0;
+            break;
+        }
+        if (strncmp(line, "code ", 5) == 0) {
             if (getline(&line, &line_cap, in) <= 0) break;
             // Security: bounds check current_chunk before indexing local_to_global (CWE-129)
             if (current_chunk < 0 || current_chunk >= 1024) {
