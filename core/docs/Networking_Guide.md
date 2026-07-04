@@ -38,6 +38,8 @@ import net.ip         # IP address utilities
 
 ## URL Parsing and Encoding (`net.url`)
 
+The `net.url` module has been optimized in v4.0.1 to provide $O(N)$ performance for parsing, building, encoding, and decoding. These improvements mitigate Resource Exhaustion (DoS) vulnerabilities previously caused by $O(N^2)$ string concatenation.
+
 ### Parsing URLs
 
 ```sage

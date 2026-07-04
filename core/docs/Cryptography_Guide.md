@@ -5,6 +5,9 @@ This guide covers the cryptography library suite (`lib/crypto/`) providing hashi
 ## Architecture
 
 All crypto modules are pure Sage implementations with no native C dependencies. They are imported with the `crypto.` prefix:
+Recent performance optimizations (v4.0.1) have replaced $O(N^2)$ string concatenation
+loops with $O(N)$ linear patterns (array-push + join()), significantly improving
+throughput for large inputs and mitigating Algorithmic Complexity DoS vulnerabilities.
 
 ```sage
 import crypto.hash       # SHA-256, SHA-1, CRC-32
