@@ -1133,7 +1133,7 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
     char* line = NULL;
     size_t line_cap = 0;
     int chunk_count = 0;
-    int (*local_to_global)[256] = calloc(1024, sizeof(*local_to_global));
+    int (*local_to_global)[256] = SAGE_ALLOC(1024 * sizeof(*local_to_global));
     if (!local_to_global) {
         fclose(in);
         unlink(tmp_svm);
@@ -1178,7 +1178,7 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
     if (!out) {
         fclose(in);
         unlink(tmp_svm);
-        free(local_to_global);
+        SAGE_FREE(local_to_global);
         free(line);
         return 0;
     }
@@ -1193,13 +1193,13 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
         else {
             write_be16(out, (uint16_t)g_sgvm_consts[i].str_len);
             fwrite(g_sgvm_consts[i].str, 1, g_sgvm_consts[i].str_len, out);
+    int status = 1;
         }
     }
 
     write_be32(out, (uint32_t)chunk_count);
     fseek(in, 0, SEEK_SET);
     current_chunk = -1;
-    int status = 1;
     while (getline(&line, &line_cap, in) > 0) {
         if (strcmp(line, "chunk\n") == 0) current_chunk++;
         else if (strncmp(line, "code ", 5) == 0) {
@@ -1263,7 +1263,7 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
 
     fclose(in); fclose(out);
     unlink(tmp_svm);
-    free(local_to_global);
+    SAGE_FREE(local_to_global);
     free(line);
     for (int i = 0; i < g_sgvm_const_count; i++) {
         if (g_sgvm_consts[i].type == 3) free(g_sgvm_consts[i].str);
