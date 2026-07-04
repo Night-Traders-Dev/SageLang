@@ -23,14 +23,14 @@ SageLang is designed as an **educational and practical embedded scripting langua
 
 - **Bridges Python and C**: Provides Python-like syntax and dynamic typing while running in a minimal C footprint suitable for the RP2040.
 - **Supports Systems Programming**: Unlike pure Python, SageLang includes explicit garbage collection control, class-based OOP, and low-level value representation suitable for embedded contexts.
-- **Phases Incrementally**: The language grows through discrete, completed phases (1–14), each adding a cohesive feature set without breaking prior functionality.
+- **Phases Incrementally**: The language grows through discrete, completed phases (1–18), each adding a cohesive feature set without breaking prior functionality.
 - **Prioritizes Correctness**: Uses explicit memory management (via mark-and-sweep GC), scoped environments, and exception handling rather than relying on OS-level resource management.
 
 ### 1.2 Language Characteristics
 
 | Feature | Details |
 |---------|---------|
-| **Syntax** | Python-like: indentation-based blocks, `:` terminators, keywords like `let`, `proc`, `class` |
+| **Syntax** | Python-like: indentation-based blocks, `:` terminators, keywords like `let`, `var`, `proc`, `class` |
 | **Type System** | Dynamically typed; values carry runtime type tags (numbers, strings, bools, arrays, dicts, tuples, classes, generators) |
 | **Scoping** | Lexical scoping via nested environments; each block/function/class creates a child environment |
 | **Memory** | Mark-and-sweep (tracing), ARC (reference counting), and ORC (optimized reference counting with cycle detection) modes |
@@ -124,7 +124,7 @@ main.c
 - **Keywords**: `let`, `var`, `proc`, `if`, `else`, `elif`, `while`, `for`, `in`, `return`, `print`, `class`, `self`, `init`, `super`, `break`, `continue`, `and`, `or`, `not`, `try`, `catch`, `finally`, `raise`, `yield`, `defer`, `match`, `case`, `default`, `import`, `from`, `as`, `async`, `await`, `unsafe`, `end`, `comptime`, `macro`, `quote`, `unquote`, `struct`, `enum`, `trait`, `true`, `false`, `nil`
 - **Operators**: `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `&`, `|`, `^`, `~`, `<<`, `>>`
 - **Punctuation**: `(`, `)`, `[`, `]`, `{`, `}`, `:`, `,`, `.`
-- **Structural**: `INDENT`, `DEDENT`, `NEWLINE`, `EOF`, `ERROR`
+- **Structural**: `INDENT`, `DEDENT`, `NEWLINE`, `DOC_COMMENT`, `EOF`, `ERROR`
 
 **Indentation Handling** (crucial for Python-like syntax):
 - Tracks column position at the start of each line.
@@ -370,7 +370,7 @@ struct ExecResult {
 ```
 
 **Statement Execution** (`interpret(stmt, env)`):
-- **`STMT_LET`**: Define variable in current scope; evaluate initializer if present.
+- **`STMT_LET`**: Define variable (`let` or `var`) in current scope; evaluate initializer if present.
 - **`STMT_EXPRESSION`**: Evaluate expression for side effects.
 - **`STMT_PRINT`**: Evaluate expression and print value.
 - **`STMT_IF`**: Evaluate condition; execute then-branch or else-branch.
@@ -856,7 +856,8 @@ Supported types: `"char"`, `"byte"` (1), `"short"` (2), `"int"` (4), `"long"` (8
 
 **Variables and Types**:
 ```sagelang
-let x = 42                      # Number
+let x = 42                      # Variable binding
+var y = 100                     # Explicitly mutable binding
 let s = "Hello, World"          # String
 let b = true                    # Boolean
 let arr = [1, 2, 3]             # Array
@@ -3017,7 +3018,7 @@ print back["users"][0]["name"]  # Alice
 
 ## Conclusion
 
-**SageLang** is a comprehensive, well-structured scripting language for systems and embedded programming. Its design combines the approachability of Python with low-level control through direct memory access, FFI, and inline assembly. The phased development approach (Phases 1–14) progresses from core features through advanced topics including OOP, generators, compilation backends (C, LLVM IR, native assembly), concurrency, networking, JSON processing, and a self-hosted interpreter — all fully implemented and integrated.
+**SageLang** is a comprehensive, well-structured scripting language for systems and embedded programming. Its design combines the approachability of Python with low-level control through direct memory access, FFI, and inline assembly. The phased development approach (Phases 1–18) progresses from core features through advanced topics including OOP, generators, compilation backends (C, LLVM IR, native assembly), concurrency, networking, JSON processing, and a self-hosted interpreter — all fully implemented and integrated.
 
 **Key Takeaways**:
 - **Lexer + Parser + Interpreter** pipeline is modular and extensible.
@@ -3316,7 +3317,7 @@ match case default import from as
 async await unsafe end
 comptime macro quote unquote
 struct enum trait
-true false nil
+true false nil @
 ```
 
 ### Built-in Functions

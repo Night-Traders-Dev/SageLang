@@ -394,6 +394,13 @@ static char* main_read_file(const char* path) {
         exit(74);
     }
     size_t fileSize = (size_t)fileSizeLong;
+    // Security: Validate file size against global limit to prevent memory exhaustion DoS (CWE-400)
+    if (fileSize > SAGE_MAX_READ_SIZE) {
+        fprintf(stderr, "Error: File \"%s\" is too large (%zu bytes, max %d).\n",
+                path, fileSize, SAGE_MAX_READ_SIZE);
+        fclose(file);
+        exit(74);
+    }
     rewind(file);
 
     char* buffer = (char*)SAGE_ALLOC(fileSize + 1);
@@ -1078,6 +1085,7 @@ static int add_sgvm_const_num(double d) {
     for (int i = 0; i < g_sgvm_const_count; i++) {
         if (g_sgvm_consts[i].type == 1 && g_sgvm_consts[i].num == d) return i;
     }
+    if (g_sgvm_const_count >= 1024) return -1;
     g_sgvm_consts[g_sgvm_const_count].type = 1;
     g_sgvm_consts[g_sgvm_const_count].num = d;
     return g_sgvm_const_count++;
@@ -1087,9 +1095,11 @@ static int add_sgvm_const_str(const char* s, int len) {
     for (int i = 0; i < g_sgvm_const_count; i++) {
         if (g_sgvm_consts[i].type == 3 && g_sgvm_consts[i].str_len == len && memcmp(g_sgvm_consts[i].str, s, len) == 0) return i;
     }
+    if (g_sgvm_const_count >= 1024) return -1;
     g_sgvm_consts[g_sgvm_const_count].type = 3;
-    g_sgvm_consts[g_sgvm_const_count].str = malloc(len + 1);
-    memcpy(g_sgvm_consts[g_sgvm_const_count].str, s, len);
+    g_sgvm_consts[g_sgvm_const_count].str = (char*)SAGE_ALLOC((size_t)len + 1);
+    memcpy(g_sgvm_consts[g_sgvm_const_count].str, s, (size_t)len);
+    g_sgvm_consts[g_sgvm_const_count].str[len] = '\0';
     g_sgvm_consts[g_sgvm_const_count].str_len = len;
     return g_sgvm_const_count++;
 }
@@ -1131,26 +1141,27 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
         else if (strcmp(line, "chunk\n") == 0) current_chunk++;
         else if (strncmp(line, "constants ", 10) == 0) {
             int count = atoi(line + 10);
+            if (current_chunk < 0 || current_chunk >= 1024) continue;
             for (int i = 0; i < count; i++) {
                 if (getline(&line, &line_cap, in) <= 0) break;
+                if (i >= 256) continue;
                 if (strncmp(line, "number ", 7) == 0) {
-                    local_to_global[current_chunk][i] = add_sgvm_const_num(atof(line + 7));
+                    int g_idx = add_sgvm_const_num(atof(line + 7));
+                    local_to_global[current_chunk][i] = (g_idx >= 0) ? g_idx : 0;
                 } else if (strncmp(line, "string ", 7) == 0) {
                     int len = atoi(line + 7);
                     if (getline(&line, &line_cap, in) <= 0) break;
                     if (len == 0) {
-                        local_to_global[current_chunk][i] = add_sgvm_const_str("", 0);
+                        int g_idx = add_sgvm_const_str("", 0);
+                        local_to_global[current_chunk][i] = (g_idx >= 0) ? g_idx : 0;
                     } else if (len > 0) {
-                        char* buf = malloc(len);
-                        if (buf) {
-                            for (int j = 0; j < len * 2; j += 2) buf[j / 2] = hex_to_byte(line + j);
-                            local_to_global[current_chunk][i] = add_sgvm_const_str(buf, len);
-                            free(buf);
-                        } else {
-                            local_to_global[current_chunk][i] = -1;
-                        }
+                        char* buf = (char*)SAGE_ALLOC((size_t)len);
+                        for (int j = 0; j < len * 2; j += 2) buf[j / 2] = hex_to_byte(line + j);
+                        int g_idx = add_sgvm_const_str(buf, len);
+                        local_to_global[current_chunk][i] = (g_idx >= 0) ? g_idx : 0;
+                        free(buf);
                     } else {
-                        local_to_global[current_chunk][i] = -1;
+                        local_to_global[current_chunk][i] = 0;
                     }
                 }
             }
@@ -1201,7 +1212,7 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
                     if (op == OP_CONSTANT || op == OP_GET_GLOBAL || op == OP_DEFINE_GLOBAL || 
                         op == OP_SET_GLOBAL || op == OP_GET_PROPERTY || op == OP_SET_PROPERTY || op == 52 /* OP_IMPORT */) {
                         int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                        int g_idx = local_to_global[current_chunk][local_idx];
+                        int g_idx = (local_idx >= 0 && local_idx < 256) ? local_to_global[current_chunk][local_idx] : 0;
                         fputc((g_idx >> 8) & 0xFF, out);
                         fputc(g_idx & 0xFF, out);
                     } else {
@@ -1212,7 +1223,7 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
                 } else if (op == OP_DEFINE_FN) {
                     // DEFINE_FN: two 16-bit operands
                     int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                    int g_idx = local_to_global[current_chunk][local_idx];
+                    int g_idx = (local_idx >= 0 && local_idx < 256) ? local_to_global[current_chunk][local_idx] : 0;
                     fputc((g_idx >> 8) & 0xFF, out);
                     fputc(g_idx & 0xFF, out);
                     j += 4;
@@ -1226,7 +1237,7 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
                 } else if (op == OP_CALL_METHOD) {
                     // CALL_METHOD: 16-bit + 8-bit
                     int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                    int g_idx = local_to_global[current_chunk][local_idx];
+                    int g_idx = (local_idx >= 0 && local_idx < 256) ? local_to_global[current_chunk][local_idx] : 0;
                     fputc((g_idx >> 8) & 0xFF, out);
                     fputc(g_idx & 0xFF, out);
                     j += 4;
@@ -1259,8 +1270,14 @@ static int run_sgvm(const char* path) {
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    unsigned char* data = malloc(size);
-    if (fread(data, 1, size, f) != (size_t)size) {
+    // Security: Validate file size against global limit to prevent memory exhaustion DoS (CWE-400)
+    if (size < 0 || size > SAGE_MAX_READ_SIZE) {
+        fclose(f);
+        return 0;
+    }
+
+    unsigned char* data = (unsigned char*)SAGE_ALLOC((size_t)size);
+    if (fread(data, 1, (size_t)size, f) != (size_t)size) {
         free(data);
         fclose(f);
         return 0;

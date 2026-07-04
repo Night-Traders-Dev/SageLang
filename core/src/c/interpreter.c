@@ -1995,13 +1995,20 @@ static int asm_get_commands(const char* arch, const char* asm_path,
             snprintf(as_cmd, as_sz, "as -o '%s' '%s' 2>/dev/null", obj_path, asm_path);
             snprintf(ld_cmd, ld_sz, "gcc -shared -o '%s' '%s' 2>/dev/null", so_path, obj_path);
         }
-    } else if (strcmp(arch, "rv64") == 0) {
+    } else if (strcmp(arch, "rv64") == 0 || strcmp(arch, "riscv64") == 0) {
         if (cross) {
-            snprintf(as_cmd, as_sz, "riscv64-linux-gnu-as -o '%s' '%s' 2>/dev/null", obj_path, asm_path);
-            snprintf(ld_cmd, ld_sz, "riscv64-linux-gnu-gcc -shared -o '%s' '%s' 2>/dev/null", so_path, obj_path);
+            snprintf(as_cmd, as_sz, "riscv64-linux-gnu-as -o '%s' '%s'", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "riscv64-linux-gnu-gcc -shared -o '%s' '%s'", so_path, obj_path);
         } else {
-            snprintf(as_cmd, as_sz, "as -o '%s' '%s' 2>/dev/null", obj_path, asm_path);
-            snprintf(ld_cmd, ld_sz, "gcc -shared -o '%s' '%s' 2>/dev/null", so_path, obj_path);
+            // Check if we're actually cross-compiling by checking if we need to use the specific toolchain
+            #if defined(__riscv) && __riscv_xlen == 64
+            snprintf(as_cmd, as_sz, "as -o '%s' '%s'", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "gcc -shared -o '%s' '%s'", so_path, obj_path);
+            #else
+            // Use riscv64 toolchain for cross-compilation to RISCV
+            snprintf(as_cmd, as_sz, "riscv64-linux-gnu-as -o '%s' '%s'", obj_path, asm_path);
+            snprintf(ld_cmd, ld_sz, "riscv64-linux-gnu-gcc -shared -o '%s' '%s'", so_path, obj_path);
+            #endif
         }
     } else {
         return -1; // Unknown arch
@@ -2017,8 +2024,7 @@ static int asm_write_source(const char* path, const char* code, const char* arch
     fprintf(f, ".text\n");
     fprintf(f, ".globl sage_asm_fn\n");
 
-    // Architecture-specific directives
-    if (strcmp(arch, "x86_64") == 0 || strcmp(arch, "aarch64") == 0 || strcmp(arch, "rv64") == 0) {
+    if (strcmp(arch, "x86_64") == 0 || strcmp(arch, "aarch64") == 0 || strcmp(arch, "rv64") == 0 || strcmp(arch, "riscv64") == 0) {
         fprintf(f, ".type sage_asm_fn, @function\n");
     }
 
@@ -2030,7 +2036,7 @@ static int asm_write_source(const char* path, const char* code, const char* arch
         fprintf(f, "    ret\n");
     } else if (strcmp(arch, "aarch64") == 0) {
         fprintf(f, "    ret\n");
-    } else if (strcmp(arch, "rv64") == 0) {
+    } else if (strcmp(arch, "rv64") == 0 || strcmp(arch, "riscv64") == 0) {
         fprintf(f, "    ret\n"); // RISC-V pseudo-instruction (jalr x0, x1, 0)
     }
 

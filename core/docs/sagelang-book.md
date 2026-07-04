@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "June 2026"
-version: "v3.9.9"
+version: "v4.0.0"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v3.9.9}
+  - \fancyfoot[C]{v4.0.0}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -58,7 +58,7 @@ by Rust, and a self-hosted compiler written in Sage itself.
 - **SageMetal VM**: freestanding bytecode interpreter for bare-metal (no malloc, no libc, no OS)
 - **Metal stdlib** (`lib/metal/`): serial, GPIO, IRQ, timer, MMIO for kernel/embedded development
 - **Default hybrid runtime**: JIT profiling on hosted, AST on bare-metal, automatic selection
-- **v3.9.9 updates**: OIS integration, $O(1)$ dictionary size, $O(N)$ unique checks (simple types), native array reversal, and binary exponentiation for repeating (linear output work).
+- **v4.0.0 updates**: OIS integration, $O(1)$ dictionary size, $O(N)$ unique checks (simple types), native array reversal, and binary exponentiation for repeating (linear output work).
 - **327 interpreter tests**, 1623 self-hosted tests (2060+ total)
 
 ## Quick Start
@@ -733,7 +733,7 @@ print d.breed      # German Shepherd
 print d.speak()    # Woof!
 ```
 
-Note that `super` auto-injects `self` as the first argument, but as of v3.9.9, passing it explicitly is also supported for compatibility:
+Note that `super` auto-injects `self` as the first argument, but as of v4.0.0, passing it explicitly is also supported for compatibility:
 `super.init(args)` or `super.init(self, args)`.
 
 ## Deep Inheritance
@@ -1421,7 +1421,7 @@ import os.errno as errno
 print errno.ENOENT      # 2
 print errno.strerror(2)  # "No such file or directory"
 
-# Networking error codes (v3.9.9+)
+# Networking error codes (v4.0.0+)
 print errno.ECONNRESET   # 104
 print errno.EINPROGRESS  # 115
 ```
@@ -1520,7 +1520,7 @@ system but are not enforced at runtime by the interpreter.
 
 # The Safety System
 
-Sage v3.9.9 includes a compile-time safety system inspired by Rust. It provides
+Sage v4.0.0 includes a compile-time safety system inspired by Rust. It provides
 ownership tracking, borrow checking, lifetime analysis, Option type enforcement,
 and fearless concurrency checks.
 
@@ -2122,7 +2122,7 @@ pure Sage code.
 
 ## Advanced Boot Infrastructure
 
-SageLang v3.9.9 expands the `os.boot` library with 20+ new modules for building sophisticated multi-stage bootloaders.
+SageLang v4.0.0 expands the `os.boot` library with 20+ new modules for building sophisticated multi-stage bootloaders.
 
 ### Firmware Interaction
 
@@ -3036,7 +3036,7 @@ The C interpreter (`src/c/interpreter.c`, `src/c/env.c`) applies:
 4. **For-loop slot caching**: loop variable node pointer cached after first `env_define`, subsequent iterations write directly
 5. **String pointer equality**: `values_equal()` checks `AS_STRING(a) == AS_STRING(b)` before `strcmp`
 
-## Algorithmic Optimizations (v3.9.9)
+## Algorithmic Optimizations (v4.0.0)
 
 Recent updates have transitioned key library operations from interpreted loops to
 native C implementations or more efficient algorithms:
@@ -3070,7 +3070,7 @@ Workloads: fibonacci, loop sum, array ops, string concat, dict ops, prime sieve,
 
 ## JIT+AOT Hybrid Default
 
-As of v3.9.9, Sage's default runtime is `auto` — JIT profiling mode on hosted platforms,
+As of v4.0.0, Sage's default runtime is `auto` — JIT profiling mode on hosted platforms,
 AST interpreter on bare-metal:
 
 | Environment | Auto Resolves To | Why |
@@ -3821,9 +3821,9 @@ This section documents known behaviors and design decisions. Items marked
     config["port"] = 8080
     ```
 
-5. **`match`, `init`, and `end` are reserved keywords** -- **FIXED.** As of v3.9.9, `match`, `init`, `end`, `enum`, `struct`, and `trait` can be used as variable names in expression and assignment contexts, as long as they are not immediately followed by a block-starting colon or used in a declaration context.
+5. **`match`, `init`, and `end` are reserved keywords** -- **FIXED.** As of v4.0.0, `match`, `init`, `end`, `enum`, `struct`, and `trait` can be used as variable names in expression and assignment contexts, as long as they are not immediately followed by a block-starting colon or used in a declaration context.
 
-6. **`super` auto-injects `self`** -- **FIXED.** As of v3.9.9, you can write either `super.init(args)` or `super.init(self, args)`. The interpreter and backends now handle both forms correctly.
+6. **`super` auto-injects `self`** -- **FIXED.** As of v4.0.0, you can write either `super.init(args)` or `super.init(self, args)`. The interpreter and backends now handle both forms correctly.
 
 ## Fixed in v1.4+
 

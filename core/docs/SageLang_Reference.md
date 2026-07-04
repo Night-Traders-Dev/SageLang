@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 3.9.9 | **Spec Version:** 2.0 | **License:** MIT  
+> **Version:** 4.0.0 | **Spec Version:** 2.0 | **License:** MIT  
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -38,17 +38,18 @@ Sage uses **indentation-based** blocks (like Python). Indentation must be consis
 ## Doc comment (stored on the following function, retrievable via doc(fn))
 ```
 
+Doc comments starting with `##` are associated with the following procedure or module and can be retrieved at runtime using the `doc()` built-in.
+
 ### 1.2 Variables
 
 ```sage
-let x = 42               # Immutable binding (reassignment not allowed)
+let x = 42               # Variable binding
 let x: Int = 42          # With type annotation
-let x = "Hello"
-let y = true
-let z = nil
+var y = 100              # Explicitly mutable binding
+let z = "Hello"
 ```
 
-`let` creates an immutable variable. There is no `var`/`mut` — all `let` bindings are immutable by design.
+In the current specification (v2.0), both `let` and `var` create bindings that allow reassignment. While `let` is conventionally used for immutable bindings, the interpreter does not currently enforce immutability for `let` at runtime.
 
 ### 1.3 Literals
 
@@ -330,6 +331,7 @@ All values are tagged unions (`Value` in C). The runtime type determines behavio
 | Type | Description | Example |
 |------|-------------|---------|
 | `Number` | Double-precision float | `42`, `3.14` |
+| `Int` | Integer (used in type annotations) | `let x: Int = 42` |
 | `Bool` | Boolean | `true`, `false` |
 | `Nil` | Null value | `nil` |
 | `String` | UTF-8 string | `"hello"` |
@@ -392,10 +394,10 @@ struct   enum     trait
 unsafe   end
 import   from     as
 comptime macro    quote    unquote
-true     false    nil
+true     false    nil    @
 ```
 
-**Soft keywords** (v3.9.9+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
+**Soft keywords** (v4.0.0+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
 
 ### 3.2 Operators (Precedence Table)
 
@@ -430,6 +432,7 @@ These are registered as native C functions and are available without any import.
 | `input` | `input() -> String` | Read line from stdin |
 | `clock` | `clock() -> Number` | Wall-clock time in seconds |
 | `tonumber` | `tonumber(s) -> Number` | Convert string to number |
+| `int` | `int(v) -> Number` | Truncate number to integer |
 | `str` | `str(v) -> String` | Convert value to string |
 | `type` | `type(v) -> String` | Get runtime type name |
 | `chr` | `chr(n) -> String` | Int to character |
@@ -465,6 +468,8 @@ These are registered as native C functions and are available without any import.
 | `split` | `split(s, delim) -> Array` | Split string |
 | `join` | `join(arr, sep) -> String` | Join array |
 | `replace` | `replace(s, old, new) -> String` | Replace substring |
+| `string_count` | `string_count(s, sub) -> Number` | Count occurrences |
+| `string_repeat` | `string_repeat(s, n) -> String` | Repeat string |
 | `upper` | `upper(s) -> String` | Uppercase |
 | `lower` | `lower(s) -> String` | Lowercase |
 | `strip` | `strip(s) -> String` | Trim whitespace |
@@ -498,6 +503,7 @@ These are registered as native C functions and are available without any import.
 | `mem_write(ptr, offset, value)` | Write byte at offset |
 | `mem_size(ptr) -> Number` | Get allocation size |
 | `addressof(v) -> Number` | Get memory address |
+| `addressof_raw(v) -> Number` | Get raw memory address |
 | `sizeof(type_name) -> Number` | Get type size |
 | `ptr_add(ptr, n) -> Pointer` | Pointer arithmetic |
 | `ptr_to_int(ptr) -> Number` | Convert pointer to int |
@@ -529,6 +535,13 @@ These are registered as native C functions and are available without any import.
 | `struct_set(ptr, field, val)` | Write field |
 | `struct_size(type) -> Number` | Get struct size |
 
+### Graphics (Native)
+
+| Function | Description |
+|----------|-------------|
+| `build_quad_verts` | Build vertex data for a quad |
+| `build_line_quads` | Build quad data for lines |
+
 ### Assembly
 
 | Function | Description |
@@ -559,6 +572,23 @@ These are registered as native C functions and are available without any import.
 | `path_is_dir(p) -> Bool` | Check if directory |
 | `path_is_file(p) -> Bool` | Check if file |
 
+### Networking (Native)
+
+| Function | Description |
+|----------|-------------|
+| `socket.create` | Create a new socket |
+| `socket.bind` | Bind socket to address |
+| `socket.listen` | Listen for connections |
+| `socket.accept` | Accept new connection |
+| `socket.connect` | Connect to remote address |
+| `socket.send` | Send data |
+| `socket.recv` | Receive data |
+| `socket.close` | Close socket |
+| `tcp.connect` | High-level TCP connect |
+| `tcp.listen` | High-level TCP listen |
+| `tcp.sendall` | Send all data |
+| `tcp.recvline` | Receive one line |
+
 ### Concurrency
 
 | Function | Description |
@@ -568,6 +598,13 @@ These are registered as native C functions and are available without any import.
 | `cpu_has_hyperthreading() -> Bool` | HT detection |
 | `thread_set_affinity(core_id)` | Pin thread to core |
 | `thread_get_core() -> Number` | Current core |
+| `atomic_new(init)` | Create atomic variable |
+| `atomic_load(a)` | Load atomic value |
+| `atomic_store(a, v)` | Store atomic value |
+| `atomic_add(a, v)` | Atomic addition |
+| `sem_new(permits)` | Create semaphore |
+| `sem_wait(s)` | Wait on semaphore |
+| `sem_post(s)` | Post to semaphore |
 
 ### VM
 
