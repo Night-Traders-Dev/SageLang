@@ -1134,7 +1134,13 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
     size_t line_cap = 0;
     int chunk_count = 0;
     int (*local_to_global)[256] = calloc(1024, sizeof(*local_to_global));
+    if (!local_to_global) {
+        fclose(in);
+        unlink(tmp_svm);
+        return 0;
+    }
     int current_chunk = -1;
+    int status = 1;
 
     while (getline(&line, &line_cap, in) > 0) {
         if (strncmp(line, "chunks ", 7) == 0) chunk_count = atoi(line + 7);
@@ -1147,24 +1153,34 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
                 if (i >= 256) continue;
                 if (strncmp(line, "number ", 7) == 0) {
                     int g_idx = add_sgvm_const_num(atof(line + 7));
-                    local_to_global[current_chunk][i] = (g_idx >= 0) ? g_idx : 0;
+                    if (current_chunk >= 0 && current_chunk < 1024 && i >= 0 && i < 256) {
+                        local_to_global[current_chunk][i] = (g_idx >= 0) ? g_idx : 0;
+                    }
                 } else if (strncmp(line, "string ", 7) == 0) {
                     int len = atoi(line + 7);
                     if (getline(&line, &line_cap, in) <= 0) break;
                     if (len == 0) {
                         int g_idx = add_sgvm_const_str("", 0);
-                        local_to_global[current_chunk][i] = (g_idx >= 0) ? g_idx : 0;
-                    } else if (len > 0) {
+                        if (current_chunk >= 0 && current_chunk < 1024 && i >= 0 && i < 256) {
+                            local_to_global[current_chunk][i] = (g_idx >= 0) ? g_idx : 0;
+                        }
+                    } else if (len > 0 && len <= SAGE_MAX_READ_SIZE) {
+                        if (strlen(line) < (size_t)len * 2) { status = 0; break; }
                         char* buf = (char*)SAGE_ALLOC((size_t)len);
                         for (int j = 0; j < len * 2; j += 2) buf[j / 2] = hex_to_byte(line + j);
                         int g_idx = add_sgvm_const_str(buf, len);
-                        local_to_global[current_chunk][i] = (g_idx >= 0) ? g_idx : 0;
+                        if (current_chunk >= 0 && current_chunk < 1024 && i >= 0 && i < 256) {
+                            local_to_global[current_chunk][i] = (g_idx >= 0) ? g_idx : 0;
+                        }
                         free(buf);
                     } else {
-                        local_to_global[current_chunk][i] = 0;
+                        if (current_chunk >= 0 && current_chunk < 1024 && i >= 0 && i < 256) {
+                            local_to_global[current_chunk][i] = 0;
+                        }
                     }
                 }
             }
+            if (!status) break;
         }
     }
 
@@ -1199,6 +1215,8 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
             int len = atoi(line + 5);
             write_be32(out, (uint32_t)len);
             if (getline(&line, &line_cap, in) <= 0) break;
+            if (current_chunk < 0 || current_chunk >= 1024) continue;
+            if (strlen(line) < (size_t)len * 2) { status = 0; break; }
             for (int j = 0; j < len * 2; ) {
                 uint8_t op = hex_to_byte(line + j);
                 fputc(op, out);
@@ -1209,10 +1227,12 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
                     op == OP_JUMP || op == OP_JUMP_IF_FALSE || op == OP_ARRAY || 
                     op == OP_TUPLE || op == OP_DICT || op == OP_LOOP_BACK || op == 52 /* OP_IMPORT */) {
                     // 16-bit operand
+                    if (j + 4 > len * 2) { status = 0; break; }
                     if (op == OP_CONSTANT || op == OP_GET_GLOBAL || op == OP_DEFINE_GLOBAL || 
                         op == OP_SET_GLOBAL || op == OP_GET_PROPERTY || op == OP_SET_PROPERTY || op == 52 /* OP_IMPORT */) {
                         int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                        int g_idx = (local_idx >= 0 && local_idx < 256) ? local_to_global[current_chunk][local_idx] : 0;
+                        int g_idx = (current_chunk >= 0 && current_chunk < 1024 && local_idx >= 0 && local_idx < 256)
+                                    ? local_to_global[current_chunk][local_idx] : 0;
                         fputc((g_idx >> 8) & 0xFF, out);
                         fputc(g_idx & 0xFF, out);
                     } else {
@@ -1222,8 +1242,10 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
                     j += 4;
                 } else if (op == OP_DEFINE_FN) {
                     // DEFINE_FN: two 16-bit operands
+                    if (j + 8 > len * 2) { status = 0; break; }
                     int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                    int g_idx = (local_idx >= 0 && local_idx < 256) ? local_to_global[current_chunk][local_idx] : 0;
+                    int g_idx = (current_chunk >= 0 && current_chunk < 1024 && local_idx >= 0 && local_idx < 256)
+                                ? local_to_global[current_chunk][local_idx] : 0;
                     fputc((g_idx >> 8) & 0xFF, out);
                     fputc(g_idx & 0xFF, out);
                     j += 4;
@@ -1232,12 +1254,15 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
                     j += 4;
                 } else if (op == OP_CALL || op == OP_DUP) {
                     // 8-bit operand
+                    if (j + 2 > len * 2) { status = 0; break; }
                     fputc(hex_to_byte(line + j), out);
                     j += 2;
                 } else if (op == OP_CALL_METHOD) {
                     // CALL_METHOD: 16-bit + 8-bit
+                    if (j + 6 > len * 2) { status = 0; break; }
                     int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                    int g_idx = (local_idx >= 0 && local_idx < 256) ? local_to_global[current_chunk][local_idx] : 0;
+                    int g_idx = (current_chunk >= 0 && current_chunk < 1024 && local_idx >= 0 && local_idx < 256)
+                                ? local_to_global[current_chunk][local_idx] : 0;
                     fputc((g_idx >> 8) & 0xFF, out);
                     fputc(g_idx & 0xFF, out);
                     j += 4;
@@ -1245,6 +1270,7 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
                     j += 2;
                 }
             }
+            if (!status) break;
         }
     }
 
@@ -1255,7 +1281,7 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
     for (int i = 0; i < g_sgvm_const_count; i++) {
         if (g_sgvm_consts[i].type == 3) free(g_sgvm_consts[i].str);
     }
-    return 1;
+    return status;
 }
 
 static void run_sgvm_write_char(char c) {
