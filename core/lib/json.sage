@@ -128,16 +128,19 @@ class _Parser:
         if self.pos >= self.slen or self.src[self.pos] != chr(34):
             return nil
         self.pos = self.pos + 1
-        let result = ""
+
+        # Optimization: Use array-push and join() to avoid O(N^2) string concatenation.
+        # This provides linear-time parsing for strings with many escape sequences.
+        let result_parts = []
         let start = self.pos
         while self.pos < self.slen:
             let c = self.src[self.pos]
             if c == chr(34):
-                result = result + slice(self.src, start, self.pos)
+                push(result_parts, slice(self.src, start, self.pos))
                 self.pos = self.pos + 1
-                return result
+                return join(result_parts, "")
             if c == chr(92):
-                result = result + slice(self.src, start, self.pos)
+                push(result_parts, slice(self.src, start, self.pos))
                 self.pos = self.pos + 1
                 if self.pos >= self.slen:
                     return nil
@@ -158,11 +161,11 @@ class _Parser:
                             code = code + 10 + (ord(hc) - ord("A"))
                         hi = hi + 1
                     if code < 128:
-                        result = result + chr(code)
+                        push(result_parts, chr(code))
                     else:
-                        result = result + "?"
+                        push(result_parts, "?")
                 else:
-                    result = result + _handle_escape(esc)
+                    push(result_parts, _handle_escape(esc))
                 start = self.pos
             else:
                 self.pos = self.pos + 1
