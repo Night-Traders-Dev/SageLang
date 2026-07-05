@@ -12,7 +12,7 @@ JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
 
-**Current version:** v4.0.0 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.0.1 · **Spec version:** 2.0 · **License:** MIT
 
 ## Install (One-line Install System — OIS)
 
@@ -152,7 +152,7 @@ bitwise shift validation.
 
 ### Standard Library
 
-100+ native functions plus a modern Sage standard library (`lib/std/`): regex,
+110+ native functions plus a modern Sage standard library (`lib/std/`): regex,
 datetime, log, argparse, compress, unicode, fmt, testing, enum, trait, signal,
 db, channel, threadpool, atomic, rwlock, condvar, debug, profiler, docgen,
 build, interop. Native modules: `math`, `io`, `string`, `sys`, `thread`, `fat`,

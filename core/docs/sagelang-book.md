@@ -1618,8 +1618,8 @@ Operations that bypass safety checks must be wrapped in `unsafe`:
 ```python
 unsafe:
     let ptr = mem_alloc(1024)
-    mem_write(ptr, 0, 42)
-    let val = mem_read(ptr, 0)
+    mem_write(ptr, 0, "int", 42)
+    let val = mem_read(ptr, 0, "int")
     mem_free(ptr)
 end
 ```
@@ -3561,6 +3561,7 @@ The following functions are available globally without any imports.
 | `range(a, b)`         | Array `[a, a+1, ..., b-1]`              |
 | `slice(arr, start, end)` | Sub-array from start to end           |
 | `array_extend(a, b)`  | Extend array a with elements of b        |
+| `array_repeat(a, n)`  | Repeat array n times                     |
 
 ## String Functions
 
@@ -3576,6 +3577,8 @@ The following functions are available globally without any imports.
 | `endswith(str, suffix)`     | Check if string ends with suffix   |
 | `contains(str, sub)`        | Check if string contains substring |
 | `indexof(str, sub)`         | Find index of substring (-1 if not found) |
+| `string_count(s, sub)`      | Count occurrences of substring     |
+| `string_repeat(s, n)`       | Repeat string n times              |
 
 ## Dictionary Functions
 
@@ -3651,10 +3654,11 @@ The following functions are available globally without any imports.
 |-----------------------|------------------------------------------|
 | `mem_alloc(size)`     | Allocate raw memory                      |
 | `mem_free(ptr)`       | Free allocated memory                    |
-| `mem_read(ptr, off)`  | Read value at pointer offset             |
-| `mem_write(ptr, off, val)` | Write value at pointer offset       |
+| `mem_read(ptr, off, type)`  | Read value at pointer offset             |
+| `mem_write(ptr, off, type, val)` | Write value at pointer offset       |
 | `mem_size(ptr)`       | Size of allocation                       |
 | `addressof(val)`      | Get memory address of a value            |
+| `addressof_raw(val)`  | Get raw memory address of a value        |
 | `sizeof(type)`        | Size of a type in bytes                  |
 | `ptr_add(ptr, off)`   | Pointer arithmetic                       |
 | `ptr_to_int(ptr)`     | Convert pointer to integer               |

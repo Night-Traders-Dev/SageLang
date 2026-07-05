@@ -9,6 +9,25 @@ propagation so the per-entry version history is never flattened again.
 
 ---
 
+## [4.0.1] - 2026-07-15
+
+### Hardening & Security
+- **Binary-safe I/O**: Refactored `net.c` and `stdlib.c` to use `val_string_take_len`, ensuring binary-safe handling of strings containing null bytes in `tcp_recv`, `io_readfile`, and `sys_shell_exec`.
+- **Resource Limits**: Enforced a global `SAGE_MAX_READ_SIZE` (100MB) limit across all I/O and networking modules to mitigate memory exhaustion DoS attacks (CWE-400).
+- **Algorithmic Complexity DoS (ReDoS) Mitigation**: Optimized `net.url` and `agent.sandbox` by replacing $O(N^2)$ string concatenation with linear-time patterns (array-push + `join()`, `slice()`), resulting in up to 3000x speedup for large inputs.
+- **Compiler Security**: Added bounds checks for constant pool allocations and SGVM chunk limits in `main.c` and `sgvm_compiler.c`.
+
+### API & Standard Library
+- **New Native Built-ins**: Added `int()` (truncation), `array_repeat()`, `string_count()`, `string_repeat()`, and `addressof_raw()` to the core language.
+- **Memory API Refinement**: `mem_read` and `mem_write` now require a type string argument ("byte", "int", "double", "string") for explicit width control and bounds checking.
+- **Networking**: Hardened `tcp_send` and `tcp_sendall` to be length-aware, using `SAGE_STRING_LEN()` instead of `strlen()`.
+
+### Performance
+- **Property Access Optimization**: Implemented length-aware dictionary and instance field lookups, bypassing temporary allocations during property resolution.
+- **Iterator Speedup**: Converted `take` and `nth` in `core/lib/iter.sage` to use `for` loops, yielding ~2x performance gains.
+
+---
+
 ## [4.0.0] - 2026-07-02
 
 ### Self-Hosted Toolchain Parity

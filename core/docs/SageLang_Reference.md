@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.0.0 | **Spec Version:** 2.0 | **License:** MIT  
+> **Version:** 4.0.1 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -477,8 +477,6 @@ These are registered as native C functions and are available without any import.
 | `endswith` | `endswith(s, suffix) -> Bool` | Check suffix |
 | `contains` | `contains(s, sub) -> Bool` | Check substring |
 | `indexof` | `indexof(s, sub) -> Number` | Find substring index |
-| `string_count` | `string_count(s, sub) -> Number` | Count occurrences |
-| `string_repeat` | `string_repeat(s, n) -> String` | Repeat string |
 
 ### GC Control
 
@@ -499,8 +497,8 @@ These are registered as native C functions and are available without any import.
 |----------|-------------|
 | `mem_alloc(size) -> Pointer` | Allocate raw memory |
 | `mem_free(ptr)` | Free raw memory |
-| `mem_read(ptr, offset) -> Number` | Read byte at offset |
-| `mem_write(ptr, offset, value)` | Write byte at offset |
+| `mem_read(ptr, offset, type) -> Value` | Read value from memory (byte/int/double/string) |
+| `mem_write(ptr, offset, type, value)` | Write value to memory (byte/int/double) |
 | `mem_size(ptr) -> Number` | Get allocation size |
 | `addressof(v) -> Number` | Get memory address |
 | `addressof_raw(v) -> Number` | Get raw memory address |
@@ -1344,8 +1342,8 @@ Max 3 arguments to `ffi_call`.
 
 ```sage
 let ptr = mem_alloc(1024)       # Allocate 1024 bytes
-mem_write(ptr, 0, 0xFF)        # Write byte at offset 0
-let val = mem_read(ptr, 0)     # Read byte at offset 0
+mem_write(ptr, 0, "byte", 0xFF) # Write byte at offset 0
+let val = mem_read(ptr, 0, "byte") # Read byte at offset 0
 mem_free(ptr)                   # Free memory
 print addressof(my_var)         # Get address of variable
 ```
