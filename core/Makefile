@@ -13,7 +13,7 @@ SAGE_VERSION := $(shell cat VERSION 2>/dev/null || cat ../VERSION 2>/dev/null ||
 CC ?= gcc
 PYTHON ?= python3
 PREFIX ?= /usr/local
-CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"$(PREFIX)/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"' -DSAGE_HAS_LSP -DSAGE_HAS_ML
+CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_LIB_DIR='"$(PREFIX)/share/sage/lib"' -DSAGE_VERSION_STR='"$(SAGE_VERSION)"' -DSAGE_HAS_LSP -DSAGE_HAS_ML -Wno-overlength-strings -Wno-format-truncation
 # Merge any compiler flags from environment (e.g. Homebrew include paths)
 CFLAGS += $(CFLAGS_EXTRA)
 # Platform-conditional linking: pthread only on desktop (not RP2040)

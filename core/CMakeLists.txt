@@ -102,6 +102,8 @@ add_compile_options(
     -Wpedantic
     -Wno-unused-parameter
     -Wno-unused-function
+    -Wno-overlength-strings
+    -Wno-format-truncation
 )
 
 # WSL: suppress known false-positive warnings from newer glibc/GCC
