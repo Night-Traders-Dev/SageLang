@@ -1133,7 +1133,13 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
     char* line = NULL;
     size_t line_cap = 0;
     int chunk_count = 0;
-    int (*local_to_global)[256] = calloc(1024, sizeof(*local_to_global));
+    int (*local_to_global)[256] = SAGE_ALLOC(1024 * sizeof(*local_to_global));
+    if (!local_to_global) {
+        fclose(in);
+        unlink(tmp_svm);
+        free(line);
+        return 0;
+    }
     int current_chunk = -1;
     int status = 0;
     FILE* out = NULL;
@@ -1184,6 +1190,14 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
 
     out = fopen(output_path, "wb");
     if (!out) goto cleanup;
+    FILE* out = fopen(output_path, "wb");
+    if (!out) {
+        fclose(in);
+        unlink(tmp_svm);
+        SAGE_FREE(local_to_global);
+        free(line);
+        return 0;
+    }
 
     fwrite("SGVM", 1, 4, out);
     fputc(0x01, out); fputc(0x00, out);
@@ -1195,6 +1209,7 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
         else {
             write_be16(out, (uint16_t)g_sgvm_consts[i].str_len);
             fwrite(g_sgvm_consts[i].str, 1, g_sgvm_consts[i].str_len, out);
+    int status = 1;
         }
     }
 
@@ -1209,6 +1224,13 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
             if (getline(&line, &line_cap, in) <= 0) goto cleanup;
             if (current_chunk < 0 || current_chunk >= 1024) continue;
             if (strlen(line) < (size_t)len * 2) goto cleanup;
+            if (getline(&line, &line_cap, in) <= 0) break;
+            // Security: bounds check current_chunk before indexing local_to_global (CWE-129)
+            if (current_chunk < 0 || current_chunk >= 1024) {
+                fprintf(stderr, "SGVM Compile Error: chunk index %d out of bounds\n", current_chunk);
+                status = 0;
+                break;
+            }
             for (int j = 0; j < len * 2; ) {
                 uint8_t op = hex_to_byte(line + j);
                 fputc(op, out);
@@ -1272,6 +1294,8 @@ cleanup:
     unlink(tmp_svm);
     if (local_to_global) free(local_to_global);
     if (line) free(line);
+    SAGE_FREE(local_to_global);
+    free(line);
     for (int i = 0; i < g_sgvm_const_count; i++) {
         if (g_sgvm_consts[i].type == 3) free(g_sgvm_consts[i].str);
     }

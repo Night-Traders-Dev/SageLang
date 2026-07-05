@@ -12,7 +12,7 @@ JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
 
-**Current version:** v4.0.0 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.0.1 · **Spec version:** 2.0 · **License:** MIT
 
 ## Install (One-line Install System — OIS)
 
@@ -143,9 +143,9 @@ core affinity.
 
 ### Security
 
-Type-safe value access, recursion/loop/string-length limits, abort-on-OOM
-allocations, shell-injection prevention, FFI bounds, memory safety, and
-bitwise shift validation.
+Type-safe value access, recursion/loop/string-length limits (100MB I/O limit),
+abort-on-OOM allocations, shell-injection prevention, FFI bounds, memory safety,
+and bitwise shift validation.
 
 📖 **[Safety Guide](core/docs/Safety_Guide.md)** ·
 [Security Policy](core/docs/meta/SECURITY.md)
