@@ -1,6 +1,6 @@
 # SageLang Safety System Guide
 
-SageLang v2.2 introduces a compile-time safety system that provides six major guarantees: **Ownership & Move Semantics**, **Borrow Checking**, **Lifetime Tracking**, **Option Types (No Nulls)**, **Fearless Concurrency**, and **Unsafe Barriers**.
+SageLang v4.0.1 (Spec 2.0) introduces a robust compile-time safety system that provides six major guarantees: **Ownership & Move Semantics**, **Borrow Checking**, **Lifetime Tracking**, **Option Types (No Nulls)**, **Fearless Concurrency**, and **Unsafe Barriers**.
 
 ## Design Philosophy
 
@@ -40,15 +40,22 @@ Functions without `@safe` annotation run in classic mode.
 
 ### C. Unsafe Blocks
 
-Raw pointer math and unchecked operations must be quarantined in `unsafe:` blocks when safety is active:
+Raw pointer math and unchecked operations must be quarantined in `unsafe:` blocks when safety is active. Note that `unsafe:` blocks require the `end` keyword.
 
 ```sage
 unsafe:
     # Low-level memory operations allowed here
-    let ptr = alloc(4096)
-    memset(ptr, 0, 4096)
+    let ptr = mem_alloc(4096)
+    mem_write(ptr, 0, "byte", 0)
 end
 ```
+
+## Resource Limits (Security)
+
+SageLang enforces strict resource limits to prevent Denial of Service (DoS) attacks:
+
+- **SAGE_MAX_READ_SIZE**: 100MB. This limit is checked by `io.readfile`, `tcp.recv`, and other I/O operations to prevent memory exhaustion (CWE-400).
+- **Recursion/Loop Limits**: Hard limits on recursion depth and loop iterations protect against infinite execution.
 
 ## Enforcement Matrix
 

@@ -127,6 +127,10 @@ main.c
 - **Structural**: `INDENT`, `DEDENT`, `NEWLINE`, `DOC_COMMENT`, `EOF`, `ERROR`
 
 **Indentation Handling** (crucial for Python-like syntax):
+
+**Resource Management**:
+- **SAGE_MAX_READ_SIZE**: A 100MB limit is enforced on all file I/O and network receive operations to prevent memory exhaustion DoS attacks.
+
 - Tracks column position at the start of each line.
 - Compares current indent to stack top:
   - **Increase**: Push new level, emit `TOKEN_INDENT`.
