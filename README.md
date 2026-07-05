@@ -14,6 +14,11 @@ modes (tracing, ARC, ORC).
 
 **Current version:** v4.0.1 · **Spec version:** 2.0 · **License:** MIT
 
+## Recent Updates
+
+- **Command Security**: Relaxed `is_safe_command` validation in `sys_exec` to allow spaces and single quotes for arguments while still blocking shell injection attacks.
+
+
 ## Install (One-line Install System — OIS)
 
 ```bash
