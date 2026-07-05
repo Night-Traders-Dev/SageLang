@@ -2872,6 +2872,10 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
       free(obj_name);
     return sb_take(&sb);
   }
+  case EXPR_PROC:
+    compiler_error_at(compiler, expr_token(expr), NULL,
+                      "inline procedures/lambdas are not supported in the C backend");
+    return str_dup("sage_nil()");
   }
 
   compiler_error_at(compiler, expr_token(expr), NULL,

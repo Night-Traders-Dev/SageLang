@@ -18,9 +18,7 @@ static char* strip_comment(char* line) {
     return line;
 }
 
-// Trim trailing whitespace from a string
-    return line;
-}
+
 
 // Validate a path contains no shell metacharacters (prevents injection via system())
 static int is_safe_path(const char* path) {

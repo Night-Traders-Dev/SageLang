@@ -1190,14 +1190,6 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
 
     out = fopen(output_path, "wb");
     if (!out) goto cleanup;
-    FILE* out = fopen(output_path, "wb");
-    if (!out) {
-        fclose(in);
-        unlink(tmp_svm);
-        SAGE_FREE(local_to_global);
-        free(line);
-        return 0;
-    }
 
     fwrite("SGVM", 1, 4, out);
     fputc(0x01, out); fputc(0x00, out);
@@ -1209,7 +1201,6 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
         else {
             write_be16(out, (uint16_t)g_sgvm_consts[i].str_len);
             fwrite(g_sgvm_consts[i].str, 1, g_sgvm_consts[i].str_len, out);
-    int status = 1;
         }
     }
 
@@ -1292,10 +1283,8 @@ cleanup:
     if (in) fclose(in);
     if (out) fclose(out);
     unlink(tmp_svm);
-    if (local_to_global) free(local_to_global);
+    if (local_to_global) SAGE_FREE(local_to_global);
     if (line) free(line);
-    SAGE_FREE(local_to_global);
-    free(line);
     for (int i = 0; i < g_sgvm_const_count; i++) {
         if (g_sgvm_consts[i].type == 3) free(g_sgvm_consts[i].str);
     }
