@@ -19,12 +19,6 @@ static char* strip_comment(char* line) {
 }
 
 // Trim trailing whitespace from a string
-static char* trim_right(char* line) {
-    int len = strlen(line);
-    while (len > 0 && (line[len-1] == ' ' || line[len-1] == '\t' || 
-                       line[len-1] == '\r' || line[len-1] == '\n')) {
-        line[--len] = '\0';
-    }
     return line;
 }
 
@@ -146,6 +140,7 @@ int main(int argc, char** argv) {
     int (*local_to_global)[MAX_LOCALS] = calloc(MAX_CHUNKS, sizeof(*local_to_global));
     if (!local_to_global) {
         fclose(in);
+        remove(tmp_svm);
         return 1;
     }
     int current_chunk = -1;
@@ -172,7 +167,8 @@ int main(int argc, char** argv) {
                 } else if (strncmp(line, "string ", 7) == 0) {
                     int len = atoi(line + 7);
                     if (!fgets(line, sizeof(line), in)) break;
-                    if (len >= 0 && (size_t)len * 2 <= strlen(line)) {
+                    // Cap string length to 100MB to prevent memory exhaustion DoS (CWE-400)
+                    if (len >= 0 && len <= 104857600 && (size_t)len * 2 <= strlen(line)) {
                         if (len == 0) {
                             local_to_global[current_chunk][i] = add_const_str("", 0);
                         } else {
@@ -223,23 +219,26 @@ int main(int argc, char** argv) {
             int len = atoi(line + 5);
             write_be32(out, (uint32_t)len);
             if (!fgets(line, sizeof(line), in)) break;
+            if (current_chunk < 0 || current_chunk >= MAX_CHUNKS) continue;
+            if (strlen(line) < (size_t)len * 2) break;
             for (int j = 0; j < len * 2; ) {
                 uint8_t op = hex_to_byte(line + j);
                 fputc(op, out);
                 j += 2;
                 // List of opcodes that take operands
-                // List of opcodes that take operands
                 if (op == 0 || op == 5 || op == 6 || op == 7 || op == 9 || op == 10 || op == 52 || op == 53 || op == 54) {
+                    if (j + 4 > len * 2) break;
                     int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                    int g_idx = (current_chunk >= 0 && current_chunk < MAX_CHUNKS && local_idx >= 0 && local_idx < MAX_LOCALS)
+                    int g_idx = (local_idx >= 0 && local_idx < MAX_LOCALS)
                                 ? local_to_global[current_chunk][local_idx] : -1;
                     if (g_idx < 0) g_idx = 0; // Fallback for invalid constants
                     fputc((g_idx >> 8) & 0xFF, out);
                     fputc(g_idx & 0xFF, out);
                     j += 4;
                 } else if (op == 8) { // DEFINE_FUNCTION (16-bit name, 16-bit function)
+                    if (j + 8 > len * 2) break;
                     int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                    int g_idx = local_to_global[current_chunk][local_idx];
+                    int g_idx = (local_idx >= 0 && local_idx < MAX_LOCALS) ? local_to_global[current_chunk][local_idx] : 0;
                     fputc((g_idx >> 8) & 0xFF, out);
                     fputc(g_idx & 0xFF, out);
                     fputc(hex_to_byte(line + j + 4), out);
@@ -247,18 +246,21 @@ int main(int argc, char** argv) {
                     j += 8;
                 } else if (op == 13 || op == 35 || op == 36 || op == 39 || op == 40 || op == 41 || 
                            op == 43 || op == 49 || op == 50 || op == 51 || op == 56) {
+                    if (j + 4 > len * 2) break;
                     // 16-bit non-constant operand
                     fputc(hex_to_byte(line + j), out);
                     fputc(hex_to_byte(line + j + 2), out);
                     j += 4;
                 } else if (op == 38) { // CALL_METHOD (16-bit name, 8-bit count)
+                    if (j + 6 > len * 2) break;
                     int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
-                    int g_idx = local_to_global[current_chunk][local_idx];
+                    int g_idx = (local_idx >= 0 && local_idx < MAX_LOCALS) ? local_to_global[current_chunk][local_idx] : 0;
                     fputc((g_idx >> 8) & 0xFF, out);
                     fputc(g_idx & 0xFF, out);
                     fputc(hex_to_byte(line + j + 4), out);
                     j += 6;
                 } else if (op == 37 || op == 47) { // 8-bit operand
+                    if (j + 2 > len * 2) break;
                     fputc(hex_to_byte(line + j), out);
                     j += 2;
                 }

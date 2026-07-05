@@ -143,9 +143,9 @@ core affinity.
 
 ### Security
 
-Type-safe value access, recursion/loop/string-length limits, abort-on-OOM
-allocations, shell-injection prevention, FFI bounds, memory safety, and
-bitwise shift validation.
+Type-safe value access, recursion/loop/string-length limits (100MB I/O limit),
+abort-on-OOM allocations, shell-injection prevention, FFI bounds, memory safety,
+and bitwise shift validation.
 
 📖 **[Safety Guide](core/docs/Safety_Guide.md)** ·
 [Security Policy](core/docs/meta/SECURITY.md)
