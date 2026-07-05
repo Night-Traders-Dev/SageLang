@@ -990,9 +990,9 @@ static int is_safe_command(const char* cmd) {
     if (cmd[0] == '-') return 0;
     for (const char* p = cmd; *p; p++) {
         // Allow alphanumeric and safe path/filename characters.
-        // Blocks metacharacters like ; | & > < $ ( ) ` ' " and spaces.
+        // Blocks metacharacters like ; | & > < $ ( ) ` " but allows spaces and single quotes for arguments
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~') {
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ' && *p != '\'') {
             return 0;
         }
     }
