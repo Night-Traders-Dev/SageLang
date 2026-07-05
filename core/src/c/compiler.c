@@ -664,7 +664,7 @@ static char *resolve_module_path_for_compiler(const Compiler *compiler,
         if (*p == ':' || *p == '\0') {
           char ec = *p;
           *p = '\0';
-          if (p > start) {
+          if (p > start && strlen(start) + strlen(path_name) + 15 < sizeof(path)) {
             snprintf(path, sizeof(path), "%s/%s.sage", start, path_name);
             if (access(path, F_OK) == 0)
               return str_dup(path);

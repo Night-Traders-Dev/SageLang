@@ -380,6 +380,9 @@ static int compile_expr(BytecodeCompiler* compiler, Expr* expr) {
             }
             return emit_op(compiler, BC_OP_TUPLE, 0, 0) &&
                    emit_u16(compiler, (uint16_t)expr->as.tuple.count, 0, 0);
+        case EXPR_PROC:
+            set_error(compiler, "inline procedures are not compiled to bytecode yet.");
+            return 0;
         case EXPR_DICT:
             for (int i = 0; i < expr->as.dict.count; i++) {
                 if (!emit_constant(compiler, val_string(expr->as.dict.keys[i]), 0, 0)) return 0;
@@ -905,7 +908,7 @@ int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
 
     // Register parameters as locals
     for (int i = 0; i < param_count; i++) {
-        Token t;
+        Token t = {0};
         t.start = params[i];
         t.length = (int)strlen(params[i]);
         t.line = 0;

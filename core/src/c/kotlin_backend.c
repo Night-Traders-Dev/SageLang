@@ -1286,6 +1286,9 @@ static char* kt_emit_expr(KtCompiler* compiler, Expr* expr) {
             free(object); free(prop); free(escaped);
             return kt_sb_take(&sb);
         }
+        case EXPR_PROC:
+            kt_error_at(compiler, kt_expr_token(expr), NULL, "inline procedures/lambdas are not supported in the Kotlin backend");
+            return kt_str_dup("S.nil");
     }
     kt_error_at(compiler, kt_expr_token(expr), NULL,
                  "internal compiler error: unknown expression kind");

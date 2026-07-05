@@ -1993,7 +1993,7 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                     continue;
                 }
                 // Parse count and expression
-                int count = atoi(arg);
+                volatile int count = atoi(arg);
                 const char* expr_start = arg;
                 while (*expr_start && !isspace((unsigned char)*expr_start)) expr_start++;
                 while (*expr_start && isspace((unsigned char)*expr_start)) expr_start++;

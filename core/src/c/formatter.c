@@ -151,7 +151,7 @@ static char* normalize_operators(const char* content) {
     char in_string = 0;  /* 0, '\'', or '"' */
     size_t i = 0;
 
-#define OUT(c) do { if (oi + 4 >= cap) { cap *= 2; out = SAGE_REALLOC(out, cap); } out[oi++] = (c); } while(0)
+#define OUT(c) do { if (oi + 4 >= cap) { cap = cap * 2 + 64; out = SAGE_REALLOC(out, cap); } out[oi++] = (c); } while(0)
 
     while (i < len) {
         char c = content[i];

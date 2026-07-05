@@ -1139,7 +1139,7 @@ int metal_vm_step(MetalVM* vm) {
                         args[arg_count - 1 - i] = metal_vm_pop(vm);
                     }
                     typedef MetalValue (*MetalJitFn)(MetalVM*, int, MetalValue*);
-                    MetalJitFn native_fn = (MetalJitFn)f->native_code;
+                    MetalJitFn native_fn = (MetalJitFn)(intptr_t)f->native_code;
                     MetalValue ret_val = native_fn(vm, arg_count, args);
                     metal_vm_push(vm, ret_val);
                 } else {

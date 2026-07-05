@@ -471,6 +471,12 @@ static void analyze_expr(SafetyContext* ctx, Expr* expr) {
         break;
     }
 
+    case EXPR_PROC:
+        if (expr->as.proc_expr.body) {
+            analyze_stmt(ctx, expr->as.proc_expr.body);
+        }
+        break;
+
     case EXPR_NIL:
         // nil usage checked at statement level, not here
         // (bare nil from 'end' keyword is a no-op, not an error)
