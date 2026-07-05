@@ -71,3 +71,8 @@
 **Vulnerability:** Hardening applied to the `sgvmc` utility (bounds checks, secure temp files) was missing in the redundant SGVM compilation path inside the core `sage` interpreter (`main.c`).
 **Learning:** Security fixes for shared logic must be applied across all implementations. Redundant logic in different binaries (core vs. utilities) often leads to inconsistent security postures where the "hardened" tool is safe but the core binary remains vulnerable to the same exploits.
 **Prevention:** Centralize shared logic into common modules rather than duplicating it across multiple entry points. Maintain an inventory of all locations where external data (like bytecode) is parsed and ensure resource limits and bounds checks are applied globally.
+
+## 2026-07-12 - Ignoring return value of inet_pton
+**Vulnerability:** The return value of `inet_pton` was ignored in networking native functions (CWE-252).
+**Learning:** `inet_pton` returns 0 if the input string is not a valid network address. Because the `sockaddr_in` structure was zeroed with `memset` before the call, ignoring this failure caused `bind()` to use `INADDR_ANY` (0.0.0.0), potentially exposing a service to the public internet when it was intended to be bound to a local interface like 127.0.0.1.
+**Prevention:** Always check return values of address conversion functions. `inet_pton` must return 1 for success. If it returns <= 0, the application should treat it as an error and abort the operation, ensuring no unintended defaults (like 0.0.0.0) are used.

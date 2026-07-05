@@ -49,7 +49,7 @@ static Value socket_bind_native(int argc, Value* args) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    inet_pton(AF_INET, host, &addr.sin_addr);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) <= 0) return val_bool(0);
 
     return val_bool(bind(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0);
 }
@@ -79,7 +79,7 @@ static Value socket_connect_native(int argc, Value* args) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    inet_pton(AF_INET, host, &addr.sin_addr);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) <= 0) return val_bool(0);
 
     return val_bool(connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0);
 }
@@ -155,7 +155,10 @@ static Value tcp_listen_native(int argc, Value* args) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    inet_pton(AF_INET, host, &addr.sin_addr);
+    if (inet_pton(AF_INET, host, &addr.sin_addr) <= 0) {
+        close(fd);
+        return val_number(-1);
+    }
 
     if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         close(fd);
