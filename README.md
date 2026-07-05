@@ -152,7 +152,7 @@ and bitwise shift validation.
 
 ### Standard Library
 
-100+ native functions plus a modern Sage standard library (`lib/std/`): regex,
+110+ native functions plus a modern Sage standard library (`lib/std/`): regex,
 datetime, log, argparse, compress, unicode, fmt, testing, enum, trait, signal,
 db, channel, threadpool, atomic, rwlock, condvar, debug, profiler, docgen,
 build, interop. Native modules: `math`, `io`, `string`, `sys`, `thread`, `fat`,

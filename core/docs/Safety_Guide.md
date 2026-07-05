@@ -265,3 +265,13 @@ The safety pass:
 | `src/sage/safety.sage` | Self-hosted safety analyzer |
 | `lib/safety.sage` | Safety library (Option type, ownership markers, thread traits) |
 | `tests/28_safety/` | Safety test suite |
+
+## 7. Resource Limits & Hardening
+
+To mitigate Denial of Service (DoS) attacks and ensure system stability, SageLang enforces several resource limits:
+
+- **SAGE_MAX_READ_SIZE (100MB)**: Maximum size for file reads and network reception buffers. This prevents memory exhaustion attacks via large malicious files or streams.
+- **Recursion Limits**: 1,000,000 statements deep to prevent stack overflow.
+- **Loop Limits**: 1,000,000 iterations per loop (in non-infinite mode) to prevent accidental hangs.
+- **Binary-Safe I/O**: Native I/O functions (io, tcp) are hardened to handle null bytes safely using length-aware string interning.
+- **Algorithmic Complexity Protection**: Critical library functions (e.g., URL parsing, sandbox code extraction) are optimized to avoid O(N^2) complexity, mitigating ReDoS and similar algorithmic DoS vectors.

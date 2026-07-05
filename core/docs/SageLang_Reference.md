@@ -478,8 +478,6 @@ These are registered as native C functions and are available without any import.
 | `endswith` | `endswith(s, suffix) -> Bool` | Check suffix |
 | `contains` | `contains(s, sub) -> Bool` | Check substring |
 | `indexof` | `indexof(s, sub) -> Number` | Find substring index |
-| `string_count` | `string_count(s, sub) -> Number` | Count occurrences |
-| `string_repeat` | `string_repeat(s, n) -> String` | Repeat string |
 
 ### GC Control
 
@@ -500,6 +498,8 @@ These are registered as native C functions and are available without any import.
 |----------|-------------|
 | `mem_alloc(size) -> Pointer` | Allocate raw memory |
 | `mem_free(ptr)` | Free raw memory |
+| `mem_read(ptr, offset, type) -> Value` | Read value from memory (byte/int/double/string) |
+| `mem_write(ptr, offset, type, value)` | Write value to memory (byte/int/double) |
 | `mem_read(ptr, offset, type) -> Value` | Read typed value at offset |
 | `mem_write(ptr, offset, type, value)` | Write typed value at offset |
 | `mem_size(ptr) -> Number` | Get allocation size |
@@ -1345,6 +1345,10 @@ Max 3 arguments to `ffi_call`.
 
 ```sage
 let ptr = mem_alloc(1024)       # Allocate 1024 bytes
+mem_write(ptr, 0, "byte", 0xFF) # Write byte at offset 0
+let val = mem_read(ptr, 0, "byte") # Read byte at offset 0
+mem_free(ptr)                   # Free memory
+print addressof(my_var)         # Get address of variable
 # Supported types: "byte", "int", "double", "string" (read-only)
 mem_write(ptr, 0, "byte", 0xFF)        # Write byte at offset 0
 let val = mem_read(ptr, 0, "byte")     # Read byte at offset 0
