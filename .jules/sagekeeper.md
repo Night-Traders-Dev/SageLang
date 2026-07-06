@@ -67,3 +67,25 @@ Evidence:
 
 Documentation Impact:
 Added `build_quad_verts(quads)` and `build_line_quads(lines, thickness, r, g, b, a)` to the Appendix Quick Reference. Future language updates should keep the graphics built-ins synced.
+
+2024-07-06 - [Unsafe Keyword Documentation]
+
+Discovery:
+The `unsafe` keyword was missing documentation on how it should be used in the `SageLang_Guide.md`, despite the parser implementing the `unsafe ... end` syntax.
+
+Evidence:
+`core/src/c/parser.c` parser execution.
+
+Documentation Impact:
+Added an "Unsafe Blocks" section detailing the use of `unsafe:` followed by an `end` terminator to `SageLang_Guide.md`.
+
+2024-07-06 - [Memory Functions Arguments]
+
+Discovery:
+The `mem_read` and `mem_write` functions lacked explicitly clear documentation in the `SageLang_Guide.md` on the number of required arguments.
+
+Evidence:
+`core/docs/SageLang_Guide.md` line 800.
+
+Documentation Impact:
+Updated the documentation to clarify `mem_read(ptr, offset, type)` requires 3 arguments and `mem_write(ptr, offset, type, val)` requires 4 arguments.
