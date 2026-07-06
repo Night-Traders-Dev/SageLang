@@ -745,6 +745,18 @@ print bit2 == 1    # true
 
 **Bitwise Safety**: Shift amounts are validated at runtime — values outside 0-63 return 0 instead of causing C undefined behavior. Right-shift is arithmetic (sign-extending) on signed values. Floating-point operands are truncated to `long long` before bitwise operations.
 
+**Unsafe Blocks**:
+As of version 4.0.1 (Specification 2.0), low-level memory operations or operations bypassing typical safety checks should be wrapped in an `unsafe` block. `unsafe` blocks must be terminated with the `end` keyword.
+
+```sagelang
+unsafe:
+    # Memory primitives or FFI calls here
+    let ptr = mem_alloc(16)
+    mem_write(ptr, 0, "int", 42)
+    mem_free(ptr)
+end
+```
+
 **Foreign Function Interface (FFI)**:
 ```sagelang
 # Open a shared C library
@@ -797,7 +809,8 @@ print addressof(arr)   # memory address as number
 mem_free(buf)
 ```
 
-Supported types for `mem_read`/`mem_write`: `"byte"` (1 byte), `"int"` (4 bytes), `"double"` (8 bytes), `"string"` (read-only, null-terminated). Allocations are capped at 64MB. Negative offsets are rejected. Bounds checking is enforced for owned memory (offset + type size must not exceed allocation). Double-free is prevented via handle nullification. Memory pointers are GC-tracked and freed on collection if owned.
+The `mem_read(ptr, offset, type)` function requires exactly 3 arguments, and `mem_write(ptr, offset, type, value)` requires exactly 4 arguments.
+Supported explicit type strings for `mem_read`/`mem_write` are: `"byte"` (1 byte), `"int"` (4 bytes), `"double"` (8 bytes), `"string"` (read-only, null-terminated). Allocations are capped at 64MB. Negative offsets are rejected. Bounds checking is enforced for owned memory (offset + type size must not exceed allocation). Double-free is prevented via handle nullification. Memory pointers are GC-tracked and freed on collection if owned.
 
 **Inline Assembly** (x86-64, aarch64, rv64, mips):
 ```sagelang
