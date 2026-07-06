@@ -9,6 +9,20 @@ propagation so the per-entry version history is never flattened again.
 
 ---
 
+## [4.0.2] - 2026-07-05
+
+### Install System — OIS v2.0 Overhaul
+- **CMake-first build**: Default build system is CMake with `-DBUILD_SAGE=ON` (self-hosted mode); falls back to Make if CMake is unavailable. Override with `--cmake` or `--make` flags.
+- **`make -C core install` always**: Installation always uses the Makefile install target (matching sagemake behavior), since CMake with `-DBUILD_SAGE=ON` defines no install targets. CMake-built binaries are copied from `core/build_sage/` first to avoid a redundant rebuild.
+- **Library exclusion**: New `--no-lib-<name>` flags (e.g. `--no-lib-ml`, `--no-lib-cuda`, `--no-lib-blockchain`) remove specific lib subdirectories post-install. `--minimal` excludes all optional libs (`blockchain`, `graphics`, `os`, `net`, `crypto`, `ml`, `cuda`, `llm`, `agent`, `chat`, `android`, `transpiler`, `metal`, `rich`) plus `VULKAN=0 SAGE_NO_NET=1`.
+- **Shader control**: `--no-shaders` skips GLSL→SPIR-V compilation for all 43 shader modules.
+- **Feature flags**: `--no-vulkan`, `--no-gpu`, `--no-curl`, `--no-ssl` wire the corresponding Makefile variables (`VULKAN=0`, `SAGE_NO_NET=1`).
+- **System-scope only**: Removed all user-scope (non-sudo) install paths. OIS now always installs to `/usr/local` with `sudo`.
+- **POSIX-sh compliance**: All shell scripts pass `bash -n` syntax check. Removed `updater.sh` as redundant.
+- **Non-interactive mode**: `--yes` / `-y` flag for unattended installs.
+
+---
+
 ## [4.0.1] - 2026-07-15
 
 ### Hardening & Security

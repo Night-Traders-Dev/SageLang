@@ -1,141 +1,108 @@
 #!/bin/sh
 # ═══════════════════════════════════════════════════════════════════════════════
-# OIS — OneInstallSystem  v1.0.0
-# Drop OIS/ into any project. Users run: sh install.sh
+# OIS — OneInstallSystem  v2.0.0  (SageLang)
 # Pure POSIX sh — Linux, macOS, FreeBSD, OpenBSD, NetBSD, WSL
 # ═══════════════════════════════════════════════════════════════════════════════
 
-OIS_VERSION="1.0.0"
+OIS_VERSION="2.0.0"
 OIS_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$OIS_DIR/.." && pwd)"
 export OIS_VERSION OIS_DIR PROJECT_ROOT
 
-# ── Source core ───────────────────────────────────────
+# ── Source core ────────────────────────────────────────────────────────────────
 . "$OIS_DIR/core/utils.sh"
 . "$OIS_DIR/core/system.sh"
 . "$OIS_DIR/core/conf.sh"
 . "$OIS_DIR/core/registry.sh"
 . "$OIS_DIR/core/deps.sh"
 . "$OIS_DIR/core/builder.sh"
-. "$OIS_DIR/core/updater.sh"
 . "$OIS_DIR/core/integrate.sh"
 
-# ── Sudo escalation ───────────────────────────────────
-# Re-execs as root for system-scope commands. One sudo prompt. Done.
+# ── Sudo escalation ────────────────────────────────────────────────────────────
 _ois_elevate() {
-    [ "${OIS_SCOPE:-user}" = "system" ] || return 0
-    [ "$OIS_IS_ROOT" = "yes" ]          && return 0
-    [ "$OIS_SUDO" = "none" ] && \
-        ois_die "System install requires sudo or doas. Use --user to install to ~/.local/bin"
+    [ "$OIS_IS_ROOT" = "yes" ] && return 0
+    [ "$OIS_SUDO" = "none" ] && ois_die "Install requires sudo or doas."
     printf "\n  ${_B}Administrator privileges required.${_R}\n"
     exec $OIS_SUDO sh "$OIS_DIR/OIS.sh" "$@"
 }
 
-# ── Scope ─────────────────────────────────────────────
 _resolve_scope() {
-    _force="${1:-}"
-    if   [ "$_force" = "user" ];            then OIS_SCOPE="user"
-    elif [ "$_force" = "system" ];          then OIS_SCOPE="system"
-    elif [ "$OIS_IS_ROOT" = "yes" ];        then OIS_SCOPE="system"
-    elif [ "$OIS_SUDO" != "none" ];         then OIS_SCOPE="system"
-    elif [ "${OIS_APP_REQUIRE_SUDO:-auto}" = "no" ]; then OIS_SCOPE="user"
-    else
-        OIS_SCOPE="user"
-        ois_warn "No sudo — installing to ~/.local/bin"
-    fi
-    [ "$OIS_SCOPE" = "user" ] && OIS_APP_INSTALL_PATH="${OIS_HOME}/.local/bin"
+    OIS_SCOPE="system"
+    OIS_APP_INSTALL_PATH="/usr/local/bin"
     export OIS_SCOPE OIS_APP_INSTALL_PATH
 }
 
-# ── Restore project root ──────────────────────────────
-# When called via hook (OIS_DIR = runtime), PROJECT_ROOT is wrong.
-# Read the stored project root from registry instead.
 _fix_project_root() {
     _fpr="$(ois_reg_get "${OIS_APP_NAME:-_}" project_root 2>/dev/null)" || return 0
     [ -n "$_fpr" ] && [ -d "$_fpr" ] && { PROJECT_ROOT="$_fpr"; export PROJECT_ROOT; }
 }
 
-# ═══════════════════════════════════════════════════════
+# ── Helpers ────────────────────────────────────────────────────────────────────
+_step()   { printf "  ${_Y}⚙${_R}  %s" "$*"; }
+_step_ok()   { printf "  ${_G}✓${_R}  %s\n" "${1:-done}"; }
+_step_fail() { printf "  ${_RED}✗${_R}  %s\n" "$*"; }
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # INSTALL
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 cmd_install() {
     ois_hdr "  $OIS_APP_DISPLAY" "Installing  ·  OIS v$OIS_VERSION  ·  $OIS_OS $OIS_ARCH"
-    printf "  ${_D}%-16s${_R} %s\n" "System:"  "$OIS_OS${OIS_DISTRO:+ ($OIS_DISTRO $OIS_DISTRO_VER)}"
-    printf "  ${_D}%-16s${_R} %s\n" "Package:" "$OIS_PM"
-    printf "  ${_D}%-16s${_R} %s\n" "Scope:"   "$OIS_SCOPE"
-    printf "  ${_D}%-16s${_R} %s/%s\n" "Install:" "$OIS_APP_INSTALL_PATH" "$OIS_APP_BINARY"
+    printf "  ${_D}%-16s${_R} %s\n" "System:"   "$OIS_OS${OIS_DISTRO:+ ($OIS_DISTRO $OIS_DISTRO_VER)}"
+    printf "  ${_D}%-16s${_R} %s\n" "Package:"  "$OIS_PM"
+    printf "  ${_D}%-16s${_R} %s\n" "Scope:"    "system (/usr/local)"
+    printf "  ${_D}%-16s${_R} %s/%s\n" "Install:" "/usr/local/bin" "$OIS_APP_BINARY"
     printf '\n'
 
-    # Already installed?
     if ois_reg_has "$OIS_APP_NAME"; then
         _ev="$(ois_reg_get "$OIS_APP_NAME" version)"
         ois_warn "$OIS_APP_NAME v$_ev is already installed."
-        printf '\n  Reinstall? [y/N] ' ; read -r _r
-        case "$_r" in y|Y|yes) _ois_remove_current ;; *)
-            printf '\n  Tip: %s --update\n\n' "$OIS_APP_BINARY"; exit 0 ;; esac
+        if [ "$OIS_YES" != "yes" ]; then
+            printf '\n  Reinstall? [y/N] ' ; read -r _r
+            case "$_r" in y|Y|yes) ;; *) printf '\n'; return 0 ;; esac
+        fi
+        _ois_remove_current
         printf '\n'
     fi
 
-    # [1/4] Deps
     printf "${_B}[1/4] Dependencies${_R}\n"
     ois_deps_install || ois_die "Required dependency failed — fix above and retry."
     printf '\n'
 
-    # [2/4] Build
     printf "${_B}[2/4] Build${_R}\n"
     _fix_project_root
     cd "$PROJECT_ROOT" || ois_die "Cannot cd to project root: $PROJECT_ROOT"
-    ois_builder_detect
-    ois_builder_clean 2>/dev/null || true
-    ois_builder_build
-    _built="$(ois_builder_find_binary)" || ois_die "Binary not found after build."
-    ois_ok "Binary: $_built  ($(du -sh "$_built" 2>/dev/null | cut -f1))"
-    printf '\n'
 
-    # [3/4] Install binary + OIS runtime
+    _step "Synchronizing submodules"
+    if [ -f "sagesync" ] && [ -x "sagesync" ]; then
+        python3 sagesync 2>/dev/null || true
+    elif [ -d ".git" ]; then
+        git submodule sync 2>/dev/null || true
+        git submodule update --init --recursive 2>/dev/null || true
+    fi
+    _step_ok "done"
+
+    _step "Cleaning build artifacts"
+    rm -rf core/build_sage 2>/dev/null || true
+    make -C core clean 2>/dev/null || true
+    _step_ok "clean"
+
+    if [ "$OIS_NO_SHADERS" != "yes" ]; then
+        _compile_shaders
+    fi
+
+    _detect_build_system
+    _build_sage
+
     printf "${_B}[3/4] Install${_R}\n"
-    ois_mkdir "$OIS_APP_INSTALL_PATH"
-    _dest="$OIS_APP_INSTALL_PATH/$OIS_APP_BINARY"
-    ois_cp "$_built" "$_dest" && ois_chmod 755 "$_dest"
-    ois_ok "Installed      →  $_dest"
+    _install_sage
+    _install_ois_runtime
+    _remove_excluded_libs
+    _fix_permissions
 
-    # Install OIS runtime to share dir so `sage --ois` works from any path.
-    # Path: /usr/local/share/sage/OIS/  (system) or ~/.local/share/sage/OIS/ (user)
-    if [ "$OIS_SCOPE" = "system" ]; then
-        _ois_share_dir="/usr/local/share/sage/OIS"
-    else
-        _ois_share_dir="${OIS_HOME}/.local/share/sage/OIS"
-    fi
-    ois_mkdir "$_ois_share_dir"
-    # Copy all OIS files (OIS.sh + core/) into the share dir
-    if ois_cp "$OIS_DIR/OIS.sh"        "$_ois_share_dir/OIS.sh" 2>/dev/null && \
-       ois_mkdir "$_ois_share_dir/core" && \
-       cp -r "$OIS_DIR/core/." "$_ois_share_dir/core/" 2>/dev/null; then
-        ois_chmod 755 "$_ois_share_dir/OIS.sh"
-        ois_chmod 755 "$_ois_share_dir/core/"*.sh 2>/dev/null || true
-        # Copy the conf so OIS.sh knows which app it's managing
-        ois_cp "$OIS_DIR/OIS.conf" "$_ois_share_dir/OIS.conf" 2>/dev/null || true
-        ois_ok "OIS runtime    →  $_ois_share_dir"
-        ois_mf_add "$OIS_APP_NAME" "$_ois_share_dir"
-    else
-        ois_warn "Could not install OIS runtime to share dir (sage --ois may not work from system path)"
-    fi
-
-    # Update preference
-    _umode="$OIS_APP_UPDATE_MODE"
-    if [ "$_umode" = "ask" ]; then
-        printf '\n  Enable automatic update checks on launch? [Y/n] '
-        read -r _u
-        case "$_u" in n|N|no) _umode="manual" ;; *) _umode="notify" ;; esac
-    fi
-    printf '\n'
-
-    # [4/4] Integrate
     printf "${_B}[4/4] Integrate${_R}\n"
     _ver="unknown"
     [ -f "$PROJECT_ROOT/VERSION" ] && _ver="$(tr -d '[:space:]' < "$PROJECT_ROOT/VERSION")"
 
-    # Build dep list for --install-info (stored as "name:cmd:optional" tokens)
     _dep_str=""
     _di=0
     while [ "$_di" -lt "$OIS_DEP_COUNT" ]; do
@@ -148,117 +115,217 @@ cmd_install() {
 
     ois_reg_init
     ois_reg_set "$OIS_APP_NAME" version         "$_ver"
-    ois_reg_set "$OIS_APP_NAME" binary_path     "$_dest"
-    ois_reg_set "$OIS_APP_NAME" scope           "$OIS_SCOPE"
-    ois_reg_set "$OIS_APP_NAME" version_url     "$OIS_APP_VERSION_URL"
-    ois_reg_set "$OIS_APP_NAME" github          "$OIS_APP_GITHUB"
-    ois_reg_set "$OIS_APP_NAME" update_mode     "$_umode"
+    ois_reg_set "$OIS_APP_NAME" binary_path     "/usr/local/bin/$OIS_APP_BINARY"
+    ois_reg_set "$OIS_APP_NAME" scope           "system"
+    ois_reg_set "$OIS_APP_NAME" version_url     "${OIS_APP_VERSION_URL:-}"
+    ois_reg_set "$OIS_APP_NAME" github          "${OIS_APP_GITHUB:-}"
+    ois_reg_set "$OIS_APP_NAME" update_mode     "off"
     ois_reg_set "$OIS_APP_NAME" installed_at    "$(date '+%Y-%m-%d %H:%M %Z')"
     ois_reg_set "$OIS_APP_NAME" project_root    "$PROJECT_ROOT"
     ois_reg_set "$OIS_APP_NAME" installed_by    "$OIS_PM"
     ois_reg_set "$OIS_APP_NAME" additional_info "${OIS_APP_ADDITIONAL_INFO:-}"
     ois_reg_set "$OIS_APP_NAME" deps            "$_dep_str"
-    # Binary is the FIRST manifest entry — always
-    ois_mf_add  "$OIS_APP_NAME" "$_dest"
+    ois_mf_add  "$OIS_APP_NAME" "/usr/local/bin/$OIS_APP_BINARY"
 
-    ois_integrate_run "$_dest"
+    ois_integrate_run "/usr/local/bin/$OIS_APP_BINARY"
     printf '\n'
 
-    # Done
     ois_div
     printf "${_B}${_G}  ✓  $OIS_APP_DISPLAY installed!${_R}\n"
     ois_div
     printf '\n'
-    printf "  ${_B}%-34s${_R} %s\n" "$OIS_APP_BINARY"             "launch"
-    printf "  ${_B}%-34s${_R} %s\n" "$OIS_APP_BINARY --ois"       "OIS panel"
-    printf "  ${_B}%-34s${_R} %s\n" "$OIS_APP_BINARY --update"    "update"
-    printf "  ${_B}%-34s${_R} %s\n" "$OIS_APP_BINARY --uninstall" "uninstall"
+    printf "  ${_B}%-34s${_R} %s\n" "$OIS_APP_BINARY" "launch"
     printf '\n'
-
-    # PATH reminder
-    case ":${PATH}:" in *":${OIS_APP_INSTALL_PATH}:"*) ;;
-        *) ois_warn "Add to your shell config:"
-           printf '\n    Bash/Zsh: export PATH="$PATH:%s"\n' "$OIS_APP_INSTALL_PATH"
-           printf '    Fish:     fish_add_path %s\n\n' "$OIS_APP_INSTALL_PATH" ;;
-    esac
 }
 
-# ── Remove current install (no prompts — used internally) ──
+# ── Shaders ────────────────────────────────────────────────────────────────────
+_compile_shaders() {
+    command -v glslc >/dev/null 2>&1 || return 0
+    [ -d "core/examples/shaders" ] || return 0
+    _step "Compiling GLSL shaders to SPIR-V"
+    _count=0; _fail=0
+    for _sf in core/examples/shaders/*.vert core/examples/shaders/*.frag core/examples/shaders/*.comp; do
+        [ -f "$_sf" ] || continue
+        if glslc "$_sf" -o "$_sf.spv" 2>/dev/null; then
+            _count=$(( _count + 1 ))
+        else
+            _fail=$(( _fail + 1 ))
+        fi
+    done
+    if [ "$_fail" -eq 0 ]; then
+        _step_ok "$_count modules"
+    else
+        _step_ok "$_count modules ($_fail failed)"
+    fi
+}
+
+# ── Build system detection ─────────────────────────────────────────────────────
+_detect_build_system() {
+    _has_cmake=0
+    command -v cmake >/dev/null 2>&1 && _has_cmake=1
+    case "$OIS_USE_CMAKE" in
+        yes) [ "$_has_cmake" -eq 1 ] || ois_die "CMake chosen but cmake(1) not found." ;;
+        no)  OIS_USE_CMAKE="no" ;;
+        auto)
+            if [ "$_has_cmake" -eq 1 ]; then
+                OIS_USE_CMAKE="yes"
+            else
+                OIS_USE_CMAKE="no"
+                ois_warn "cmake(1) not found — falling back to Make"
+            fi
+            ;;
+    esac
+    export OIS_USE_CMAKE
+}
+
+# ── Sage build ─────────────────────────────────────────────────────────────────
+_build_sage() {
+    _njobs="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+    if [ "$OIS_USE_CMAKE" = "yes" ]; then
+        _step "Configuring CMake build (self-hosted Sage mode)"
+        mkdir -p core/build_sage
+        if cmake -S core -B core/build_sage -DBUILD_SAGE=ON >/dev/null 2>&1; then
+            _step_ok "v$(tr -d '[:space:]' < VERSION 2>/dev/null || echo '?')"
+        else
+            ois_die "CMake configuration failed"
+        fi
+        _step "Compiling sage (C sources)"
+        if cmake --build core/build_sage --target sage -j "$_njobs" >/dev/null 2>&1; then
+            _step_ok "built"
+        else
+            ois_die "CMake build failed"
+        fi
+        OIS_BUILT_BIN="core/build_sage/sage"
+    else
+        _step "Compiling sage (C sources)"
+        if make -C core -j "$_njobs" $OIS_MAKE_VARS >/dev/null 2>&1; then
+            _step_ok "built"
+        else
+            ois_die "Make build failed"
+        fi
+        OIS_BUILT_BIN="core/sage"
+    fi
+
+    if [ -f "$OIS_BUILT_BIN" ] && [ -x "$OIS_BUILT_BIN" ]; then
+        _size="$(du -sh "$OIS_BUILT_BIN" 2>/dev/null | cut -f1)"
+        ois_ok "Binary: $OIS_BUILT_BIN  ($_size)"
+    else
+        ois_die "Binary not found after build: $OIS_BUILT_BIN"
+    fi
+}
+
+# ── Install sage + lsp + libs + examples + docs ────────────────────────────────
+_install_sage() {
+    # cmake build produces binaries in core/build_sage/; copy to core/ so
+    # the Makefile install target can find them without a redundant rebuild.
+    if [ "$OIS_USE_CMAKE" = "yes" ]; then
+        cp core/build_sage/sage    core/sage    2>/dev/null || true
+        cp core/build_sage/sage-lsp core/sage-lsp 2>/dev/null || true
+    fi
+    _step "Installing sage system-wide"
+    if [ "$OIS_IS_ROOT" = "yes" ]; then
+        make -C core install PREFIX=/usr/local >/dev/null 2>&1
+    else
+        sudo make -C core install PREFIX=/usr/local >/dev/null 2>&1
+    fi || ois_die "Install failed"
+    _step_ok "sage → /usr/local/bin"
+    [ -f "/usr/local/bin/sage-lsp" ] && ois_ok "sage-lsp → /usr/local/bin/sage-lsp"
+}
+
+# ── OIS runtime to share dir ───────────────────────────────────────────────────
+_install_ois_runtime() {
+    _oirs="/usr/local/share/sage/OIS"
+    ois_mkdir "$_oirs/core"
+    if ois_cp "$OIS_DIR/OIS.sh" "$_oirs/OIS.sh" 2>/dev/null && \
+       cp -r "$OIS_DIR/core/." "$_oirs/core/" 2>/dev/null; then
+        ois_chmod 755 "$_oirs/OIS.sh"
+        ois_chmod 755 "$_oirs/core/"*.sh 2>/dev/null || true
+        ois_cp "$OIS_DIR/OIS.conf" "$_oirs/OIS.conf" 2>/dev/null || true
+        ois_ok "OIS runtime    →  $_oirs"
+        ois_mf_add "$OIS_APP_NAME" "$_oirs"
+    else
+        ois_warn "Could not install OIS runtime to $_oirs"
+    fi
+}
+
+_remove_excluded_libs() {
+    [ -z "$OIS_EXCLUDE_LIBS" ] && return 0
+    for _lib in $OIS_EXCLUDE_LIBS; do
+        _lp="/usr/local/share/sage/lib/$_lib"
+        [ -d "$_lp" ] || continue
+        rm -rf "$_lp" 2>/dev/null || sudo rm -rf "$_lp" 2>/dev/null || true
+        ois_ok "Excluded lib: $_lib"
+    done
+}
+
+_fix_permissions() {
+    _su="${SUDO_USER:-}"
+    [ -z "$_su" ] && return 0
+    chown -R "$_su" "$PROJECT_ROOT" 2>/dev/null || true
+}
+
+# ── Remove current install (internal, no prompts) ──────────────────────────────
 _ois_remove_current() {
-    # Read binary and hook paths from registry BEFORE wiping it
-    _rc_bin="$(ois_reg_get  "$OIS_APP_NAME" binary_path 2>/dev/null)"
+    _rc_bin="$(ois_reg_get "$OIS_APP_NAME" binary_path 2>/dev/null)"
     _rc_hook="${OIS_APP_INSTALL_PATH}/.${OIS_APP_BINARY}-ois"
-    # Also try deriving hook from binary path in case install path differs
     [ -n "$_rc_bin" ] && _rc_hook="$(dirname "$_rc_bin")/.${OIS_APP_BINARY}-ois"
 
-    # Remove binary first
-    if [ -n "$_rc_bin" ] && [ -f "$_rc_bin" ]; then
-        ois_rm "$_rc_bin" && ois_ok "Removed  $_rc_bin"
-    fi
-    # Remove hook
+    [ -n "$_rc_bin" ] && [ -f "$_rc_bin" ] && ois_rm "$_rc_bin" && ois_ok "Removed  $_rc_bin"
     [ -f "$_rc_hook" ] && ois_rm "$_rc_hook" && ois_ok "Removed  $_rc_hook"
 
-    # Remove manifest items (skip runtime — we may still be running from it)
-    if [ "${OIS_SCOPE:-user}" = "system" ]; then
-        _rc_runtime="/usr/local/share/OIS/runtime"
-    else
-        _rc_runtime="${OIS_HOME}/.local/share/OIS/runtime"
-    fi
     _rc_mf="$(ois_mf_file "$OIS_APP_NAME")"
     if [ -f "$_rc_mf" ]; then
         while IFS= read -r _f || [ -n "$_f" ]; do
             [ -z "$_f" ] && continue
             [ "$_f" = "$_rc_bin" ]  && continue
             [ "$_f" = "$_rc_hook" ] && continue
-            case "$_f" in "$_rc_runtime"*) continue ;; esac
             [ -f "$_f" ] && ois_rm    "$_f" && ois_ok "Removed  $_f"
             [ -d "$_f" ] && ois_rmdir "$_f" && ois_ok "Removed  $_f"
         done < "$_rc_mf"
     fi
 
-    # Wipe registry records
+    for _mf in /usr/local/bin/sage /usr/local/bin/sage-lsp /usr/local/bin/sagepkg; do
+        [ -f "$_mf" ] && ois_rm "$_mf" && ois_ok "Removed  $_mf"
+    done
+    for _md in /usr/local/share/sage /usr/local/share/doc/sage; do
+        [ -d "$_md" ] && ois_rmdir "$_md" && ois_ok "Removed  $_md"
+    done
+
     ois_rm "$(ois_mf_file  "$OIS_APP_NAME")"
     ois_rm "$(ois_reg_file "$OIS_APP_NAME")"
 }
 
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # UNINSTALL
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 cmd_uninstall() {
     ois_hdr "  $OIS_APP_DISPLAY" "Uninstall  ·  OIS v$OIS_VERSION"
     ois_reg_has "$OIS_APP_NAME" || ois_die "$OIS_APP_NAME is not installed."
-
     _u="$(ois_reg_get "$OIS_APP_NAME" uninstaller 2>/dev/null)"
     if [ -n "$_u" ] && [ -f "$_u" ]; then
-        sh "$_u" "$@"
+        if [ "$OIS_YES" = "yes" ]; then
+            sh "$_u" --yes
+        else
+            sh "$_u"
+        fi
     else
-        # Fallback: manual removal
         ois_warn "Uninstaller not found — removing directly."
-        printf '  Remove %s? [y/N] ' "$OIS_APP_NAME" ; read -r _r
-        case "$_r" in y|Y|yes) ;; *) printf '  Cancelled.\n\n'; exit 0 ;; esac
+        if [ "$OIS_YES" != "yes" ]; then
+            printf '  Remove %s? [y/N] ' "$OIS_APP_NAME" ; read -r _r
+            case "$_r" in y|Y|yes) ;; *) printf '  Cancelled.\n\n'; exit 0 ;; esac
+        fi
         _ois_remove_current
         ois_ok "$OIS_APP_NAME removed."
     fi
 }
 
-# ═══════════════════════════════════════════════════════
-# UPDATE / UPGRADE
-# ═══════════════════════════════════════════════════════
-cmd_update() {
-    ois_hdr "  $OIS_APP_DISPLAY" "Update  ·  OIS v$OIS_VERSION"
-    ois_reg_has "$OIS_APP_NAME" || ois_die "$OIS_APP_NAME is not installed."
-    _explicit=yes ois_update_run "$OIS_APP_NAME" "${1:-}"
-}
-
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # REINSTALL
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 cmd_reinstall() {
     ois_hdr "  $OIS_APP_DISPLAY" "Reinstall  ·  OIS v$OIS_VERSION"
-
-    # Read everything we need from the registry BEFORE removing it
-    _ri_root="$(ois_reg_get  "$OIS_APP_NAME" project_root 2>/dev/null)"
-    _ri_gh="$(ois_reg_get    "$OIS_APP_NAME" github       2>/dev/null)"
+    _ri_root="$(ois_reg_get "$OIS_APP_NAME" project_root 2>/dev/null)"
+    _ri_gh="$(ois_reg_get   "$OIS_APP_NAME" github        2>/dev/null)"
 
     if ois_reg_has "$OIS_APP_NAME"; then
         ois_info "Removing current install..."
@@ -266,12 +333,9 @@ cmd_reinstall() {
         ois_ok "Removed."
     fi
 
-    # Decide build source
     _ri_tmp=""
     if [ -n "$_ri_root" ] && [ -d "$_ri_root" ] && \
-       { [ -f "$_ri_root/Makefile" ] || [ -f "$_ri_root/CMakeLists.txt" ] || \
-         [ -f "$_ri_root/Cargo.toml" ] || [ -f "$_ri_root/go.mod" ] || \
-         [ -f "$_ri_root/setup.py" ]   || [ -f "$_ri_root/pyproject.toml" ]; }; then
+       { [ -f "$_ri_root/Makefile" ] || [ -f "$_ri_root/CMakeLists.txt" ]; }; then
         PROJECT_ROOT="$_ri_root"
         export PROJECT_ROOT
         ois_info "Building from: $PROJECT_ROOT"
@@ -292,80 +356,90 @@ cmd_reinstall() {
     [ -n "$_ri_tmp" ] && rm -rf "$_ri_tmp" 2>/dev/null || true
 }
 
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # REPAIR
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 cmd_repair() {
     ois_hdr "  $OIS_APP_DISPLAY" "Repair  ·  OIS v$OIS_VERSION"
     ois_reg_has "$OIS_APP_NAME" || ois_die "$OIS_APP_NAME is not installed."
-    _dest="$(ois_reg_get "$OIS_APP_NAME" binary_path)"
-    ois_info "Rebuilding binary — config and data untouched."
+    ois_info "Rebuilding — config and data untouched."
     _fix_project_root
     cd "$PROJECT_ROOT" || ois_die "Cannot cd to project root."
-    ois_builder_detect ; ois_builder_clean 2>/dev/null || true ; ois_builder_build
-    _built="$(ois_builder_find_binary)" || ois_die "Binary not found after build."
-    ois_cp "$_built" "$_dest" && ois_chmod 755 "$_dest"
-    ois_ok "Repaired  →  $_dest"
+    rm -rf core/build_sage 2>/dev/null || true
+    make -C core clean 2>/dev/null || true
+    _detect_build_system
+    _build_sage
+    _install_sage
+    _install_ois_runtime
+    _fix_permissions
+    ois_ok "Repaired  →  /usr/local/bin/sage"
     printf '\n'
 }
 
-# ═══════════════════════════════════════════════════════
-# --ois PANEL
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# STATUS / INFO / LIST / HELP / PANEL
+# ═══════════════════════════════════════════════════════════════════════════════
+cmd_status() {
+    ois_hdr "  $OIS_APP_DISPLAY" "Status  ·  OIS v$OIS_VERSION"
+    if ! ois_reg_has "$OIS_APP_NAME"; then
+        ois_warn "Not installed."; printf '\n  Run: sh install.sh\n\n'; return 0
+    fi
+    _ver="$(ois_reg_get "$OIS_APP_NAME" version)"
+    _bin="$(ois_reg_get "$OIS_APP_NAME" binary_path)"
+    _date="$(ois_reg_get "$OIS_APP_NAME" installed_at)"
+    _bs="✓" ; [ ! -f "$_bin" ] && _bs="${_RED}missing${_R}"
+    printf "  ${_D}%-18s${_R} v%s  (%s)\n" "Installed:" "$_ver" "$_date"
+    printf "  ${_D}%-18s${_R} %s  [%b]\n"  "Binary:"    "$_bin" "$_bs"
+    printf '\n'
+}
+
+cmd_info() {
+    ois_hdr "  OIS System Info" "OIS v$OIS_VERSION"
+    printf "  ${_D}%-22s${_R} %s\n" "OS:"         "$OIS_OS"
+    printf "  ${_D}%-22s${_R} %s\n" "Distro:"     "${OIS_DISTRO:-n/a} ${OIS_DISTRO_VER:-}"
+    printf "  ${_D}%-22s${_R} %s\n" "Arch:"       "$OIS_ARCH"
+    printf "  ${_D}%-22s${_R} %s\n" "Package mgr:""$OIS_PM"
+    printf "  ${_D}%-22s${_R} %s\n" "Privilege:"  "${OIS_SUDO}  (root: $OIS_IS_ROOT)"
+    printf "  ${_D}%-22s${_R} %s\n" "Make:"       "$OIS_MAKE"
+    printf "  ${_D}%-22s${_R} %s\n" "Python:"     "${OIS_PYTHON:-not found}"
+    printf "  ${_D}%-22s${_R} %s\n" ".NET:"       "${OIS_DOTNET:-not found}"
+    printf '\n'
+}
+
+cmd_list() {
+    ois_hdr "  OIS — Installed Apps" "OIS v$OIS_VERSION"
+    printf "  ${_D}%-20s %-10s %-8s %-35s %s${_R}\n" "App" "Version" "Scope" "Binary" "Date"
+    printf '  %s\n' "──────────────────────────────────────────────────────────────────────"
+    ois_reg_list
+    printf '\n'
+}
+
 cmd_ois_panel() {
     ois_hdr "  $OIS_APP_DISPLAY" "Managed by OIS v$OIS_VERSION"
-
     if ! ois_reg_has "$OIS_APP_NAME"; then
         ois_warn "$OIS_APP_NAME is not installed."
         printf '\n  Run:  sh install.sh\n\n'; return 0
     fi
-
     _ver="$(ois_reg_get  "$OIS_APP_NAME" version)"
-    _mode="$(ois_reg_get "$OIS_APP_NAME" update_mode)"
     _date="$(ois_reg_get "$OIS_APP_NAME" installed_at)"
     _gh="$(ois_reg_get   "$OIS_APP_NAME" github)"
-    _url="$(ois_reg_get  "$OIS_APP_NAME" version_url)"
-    _by="$(ois_reg_get   "$OIS_APP_NAME" installed_by)"
     _info="$(ois_reg_get "$OIS_APP_NAME" additional_info)"
 
-    # ── Version & update status ──
     printf "  ${_D}%-14s${_R} v%s\n"  "Version:"  "$_ver"
-    printf "  ${_D}%-14s${_R} %s\n"   "Updates:"  "$_mode"
-    printf '\n'
-    if [ "$_mode" != "off" ] && [ -n "$_url" ]; then
-        if ois_update_check "$OIS_APP_NAME" 2>/dev/null; then
-            printf "  ${_Y}⬆  Update available:  %s  →  %s${_R}\n" \
-                "$OIS_LOCAL_VER" "$OIS_REMOTE_VER"
-            printf "  ${_Y}   Run: %s --update${_R}\n" "$OIS_APP_BINARY"
-        else
-            ois_ok "Up to date  ($OIS_REMOTE_VER)"
-        fi
-    fi
-
-    # ── Package info ──
     printf '\n'
     printf "  ${_D}%s${_R} Installed on:     %s\n" "$OIS_APP_NAME" "$_date"
     printf "  ${_D}%s${_R} Source:           https://github.com/%s\n" "$OIS_APP_NAME" "$_gh"
-    printf "  ${_D}%s${_R} Remote version:   %s\n" "$OIS_APP_NAME" "$_url"
     [ -n "$_info" ] && \
     printf "  ${_D}%s${_R} Info:             %s\n" "$OIS_APP_NAME" "$_info"
-    printf "  ${_D}%s${_R} Installed by:     %s\n" "$OIS_APP_NAME" "$_by"
-
-    # ── Commands ──
     printf '\n'
     printf "  ${_B}Commands:${_R}\n\n"
-    printf "  %-38s %s\n" "$OIS_APP_BINARY --update"       "update to latest version"
-    printf "  %-38s %s\n" "$OIS_APP_BINARY --upgrade"      "same as --update"
     printf "  %-38s %s\n" "$OIS_APP_BINARY --uninstall"    "remove cleanly"
     printf "  %-38s %s\n" "$OIS_APP_BINARY --reinstall"    "full clean reinstall from source"
     printf "  %-38s %s\n" "$OIS_APP_BINARY --install-info" "full installation details"
     printf '\n'
-    printf "  ${_D}OIS v%s — https://github.com/MilkmanAbi/OneInstallSystem${_R}\n\n" "$OIS_VERSION"
+    printf "  ${_D}OIS v%s${_R}\n\n" "$OIS_VERSION"
 }
 
-# ═══════════════════════════════════════════════════════
-# --install-info
-# ═══════════════════════════════════════════════════════
 cmd_install_info() {
     ois_hdr "  $OIS_APP_DISPLAY" "Installation Info  ·  OIS v$OIS_VERSION"
     if ! ois_reg_has "$OIS_APP_NAME"; then
@@ -373,11 +447,8 @@ cmd_install_info() {
     fi
     _ver="$(ois_reg_get  "$OIS_APP_NAME" version)"
     _bin="$(ois_reg_get  "$OIS_APP_NAME" binary_path)"
-    _scp="$(ois_reg_get  "$OIS_APP_NAME" scope)"
-    _mode="$(ois_reg_get "$OIS_APP_NAME" update_mode)"
     _date="$(ois_reg_get "$OIS_APP_NAME" installed_at)"
     _gh="$(ois_reg_get   "$OIS_APP_NAME" github)"
-    _url="$(ois_reg_get  "$OIS_APP_NAME" version_url)"
     _root="$(ois_reg_get "$OIS_APP_NAME" project_root)"
     _bin_s="✓" ; [ ! -f "$_bin" ] && _bin_s="${_RED}MISSING${_R}"
 
@@ -388,26 +459,8 @@ cmd_install_info() {
     printf '\n'
     printf "  ${_B}Location${_R}\n"
     printf "  ${_D}%-20s${_R} %b  [%b]\n" "Binary:"   "$_bin" "$_bin_s"
-    printf "  ${_D}%-20s${_R} %s\n"    "Scope:"     "$_scp"
+    printf "  ${_D}%-20s${_R} %s\n"    "Scope:"     "system"
     printf "  ${_D}%-20s${_R} %s\n"    "Source:"    "${_root:-unknown}"
-    printf '\n'
-    printf "  ${_B}Updates${_R}\n"
-    printf "  ${_D}%-20s${_R} %s\n"    "Mode:"      "$_mode"
-    printf "  ${_D}%-20s${_R} %s\n"    "GitHub:"    "github.com/$_gh"
-    printf "  ${_D}%-20s${_R} %s\n"    "URL:"       "$_url"
-    printf '\n'
-    printf "  ${_B}Update check${_R}\n"
-    if [ -n "$_url" ]; then
-        ois_info "Fetching..."
-        if ois_update_check "$OIS_APP_NAME" 2>/dev/null; then
-            printf "  ${_Y}%-20s${_R} ${_Y}%s → %s  (update available)${_R}\n" \
-                "Status:" "$OIS_LOCAL_VER" "$OIS_REMOTE_VER"
-        else
-            printf "  ${_D}%-20s${_R} ✓ Up to date  (%s)\n" "Status:" "$_ver"
-        fi
-    else
-        printf "  ${_D}%-20s${_R} no version_url set\n" "Status:"
-    fi
     printf '\n'
     printf "  ${_B}Dependencies${_R}\n"
     _deps="$(ois_reg_get "$OIS_APP_NAME" deps 2>/dev/null)"
@@ -440,106 +493,80 @@ cmd_install_info() {
     printf '\n  %bOIS v%s  ·  %s %s%b\n\n' "$_D" "$OIS_VERSION" "$OIS_OS" "$OIS_ARCH" "$_R"
 }
 
-# ═══════════════════════════════════════════════════════
-# STATUS / INFO / LIST / HELP
-# ═══════════════════════════════════════════════════════
-cmd_status() {
-    ois_hdr "  $OIS_APP_DISPLAY" "Status  ·  OIS v$OIS_VERSION"
-    if ! ois_reg_has "$OIS_APP_NAME"; then
-        ois_warn "Not installed."; printf '\n  Run: sh install.sh\n\n'; return 0
-    fi
-    _ver="$(ois_reg_get "$OIS_APP_NAME" version)"
-    _bin="$(ois_reg_get "$OIS_APP_NAME" binary_path)"
-    _mode="$(ois_reg_get "$OIS_APP_NAME" update_mode)"
-    _date="$(ois_reg_get "$OIS_APP_NAME" installed_at)"
-    _bs="✓" ; [ ! -f "$_bin" ] && _bs="${_RED}missing${_R}"
-    printf "  ${_D}%-18s${_R} v%s  (%s)\n" "Installed:" "$_ver" "$_date"
-    printf "  ${_D}%-18s${_R} %s  [%b]\n"  "Binary:"    "$_bin" "$_bs"
-    printf "  ${_D}%-18s${_R} %s\n"         "Updates:"  "$_mode"
-    printf '\n'
-    if [ -n "$OIS_APP_VERSION_URL" ]; then
-        ois_info "Checking for updates..."
-        if ois_update_check "$OIS_APP_NAME" 2>/dev/null; then
-            printf "  ${_Y}Update: %s → %s${_R}\n  Run: %s --update\n" \
-                "$OIS_LOCAL_VER" "$OIS_REMOTE_VER" "$OIS_APP_BINARY"
-        else
-            ois_ok "Up to date  ($_ver)"
-        fi
-    fi
-    printf '\n'
-}
-
-cmd_info() {
-    ois_hdr "  OIS System Info" "OIS v$OIS_VERSION"
-    printf "  ${_D}%-22s${_R} %s\n" "OS:"         "$OIS_OS"
-    printf "  ${_D}%-22s${_R} %s\n" "Distro:"     "${OIS_DISTRO:-n/a} ${OIS_DISTRO_VER:-}"
-    printf "  ${_D}%-22s${_R} %s\n" "Arch:"       "$OIS_ARCH"
-    printf "  ${_D}%-22s${_R} %s\n" "Package mgr:""$OIS_PM"
-    printf "  ${_D}%-22s${_R} %s\n" "Privilege:"  "${OIS_SUDO}  (root: $OIS_IS_ROOT)"
-    printf "  ${_D}%-22s${_R} %s\n" "Make:"       "$OIS_MAKE"
-    printf "  ${_D}%-22s${_R} %s\n" "Python:"     "${OIS_PYTHON:-not found}"
-    printf "  ${_D}%-22s${_R} %s\n" ".NET:"       "${OIS_DOTNET:-not found}"
-    printf '\n'
-}
-
-cmd_list() {
-    ois_hdr "  OIS — Installed Apps" "OIS v$OIS_VERSION"
-    printf "  ${_D}%-20s %-10s %-8s %-35s %s${_R}\n" "App" "Version" "Scope" "Binary" "Date"
-    printf '  %s\n' "──────────────────────────────────────────────────────────────────────"
-    ois_reg_list
-    printf '\n'
-}
-
 cmd_help() {
     printf '\n%bOIS — OneInstallSystem  v%s%b\n\n' "$_B" "$OIS_VERSION" "$_R"
     printf '  The one folder that makes any Unix app installable.\n\n'
     printf '  %bDev setup:%b  put OIS/ in your project, fill in OIS/OIS.conf\n' "$_B" "$_R"
     printf '  %bUser install:%b  sh install.sh\n\n' "$_B" "$_R"
-    printf '  %bApp flags (after install):%b\n\n' "$_B" "$_R"
-    printf '  %-36s %s\n' "myapp --ois"           "OIS panel"
-    printf '  %-36s %s\n' "myapp --install-info"  "full install details"
-    printf '  %-36s %s\n' "myapp --update"        "update to latest"
-    printf '  %-36s %s\n' "myapp --upgrade"       "same as --update"
-    printf '  %-36s %s\n' "myapp --uninstall"     "remove cleanly"
-    printf '  %-36s %s\n' "myapp --reinstall"     "full clean reinstall"
+    printf '  %bFlags:%b\n\n' "$_B" "$_R"
+    printf '  %-36s %s\n' "--cmake"           "use CMake build (default)"
+    printf '  %-36s %s\n' "--make"            "use Make build"
+    printf '  %-36s %s\n' "--no-shaders"      "skip shader compilation"
+    printf '  %-36s %s\n' "--no-vulkan"       "disable Vulkan GPU support"
+    printf '  %-36s %s\n' "--no-gpu"          "disable all GPU features"
+    printf '  %-36s %s\n' "--no-curl"         "disable HTTP/libcurl"
+    printf '  %-36s %s\n' "--no-ssl"          "disable OpenSSL"
+    printf '  %-36s %s\n' "--no-lib-<name>"   "exclude lib/<name> (e.g. --no-lib-ml)"
+    printf '  %-36s %s\n' "--minimal"         "disable all optional features"
+    printf '  %-36s %s\n' "--yes / -y"        "non-interactive mode"
+    printf '\n  %bApp flags (after install):%b\n\n' "$_B" "$_R"
+    printf '  %-36s %s\n' "sage --ois"           "OIS panel"
+    printf '  %-36s %s\n' "sage --install-info"  "full install details"
+    printf '  %-36s %s\n' "sage --uninstall"     "remove cleanly"
+    printf '  %-36s %s\n' "sage --reinstall"     "full clean reinstall"
     printf '\n  %bDirect OIS commands:%b\n\n' "$_B" "$_R"
     printf '  %-36s %s\n' "sh OIS/OIS.sh install"      "install"
-    printf '  %-36s %s\n' "sh OIS/OIS.sh update"       "update"
     printf '  %-36s %s\n' "sh OIS/OIS.sh uninstall"    "uninstall"
     printf '  %-36s %s\n' "sh OIS/OIS.sh reinstall"    "reinstall"
-    printf '  %-36s %s\n' "sh OIS/OIS.sh repair"       "rebuild binary only"
+    printf '  %-36s %s\n' "sh OIS/OIS.sh repair"       "rebuild only"
     printf '  %-36s %s\n' "sh OIS/OIS.sh status"       "status"
     printf '  %-36s %s\n' "sh OIS/OIS.sh install-info" "full install details"
     printf '  %-36s %s\n' "sh OIS/OIS.sh info"         "system detection"
     printf '  %-36s %s\n' "sh OIS/OIS.sh list"         "all OIS apps on system"
-    printf '\n  %bFlags:%b  --user  --system  --yes  --version\n\n' "$_B" "$_R"
+    printf '\n'
 }
 
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
 main() {
-    _cmd="" _scope="" _yes=""
+    _cmd="" OIS_USE_CMAKE="auto" OIS_NO_SHADERS="no" OIS_EXCLUDE_LIBS=""
+    OIS_MAKE_VARS="" OIS_YES=""
+
     for _a in "$@"; do
         case "$_a" in
-            install|uninstall|update|upgrade|reinstall|repair|\
+            install|uninstall|reinstall|repair|\
             status|info|list|help|ois|install-info) _cmd="$_a" ;;
-            --user)    _scope="user"   ;;
-            --system)  _scope="system" ;;
-            --yes|-y)  _yes="yes"      ;;
-            --version) printf 'OIS v%s\n' "$OIS_VERSION"; exit 0 ;;
-            --update|--upgrade|--uninstall|--reinstall|--ois|--install-info)
+            --cmake)       OIS_USE_CMAKE="yes"  ;;
+            --make)        OIS_USE_CMAKE="no"   ;;
+            --no-shaders)  OIS_NO_SHADERS="yes" ;;
+            --no-vulkan|--no-gpu)
+                OIS_MAKE_VARS="$OIS_MAKE_VARS VULKAN=0" ;;
+            --no-curl|--no-ssl)
+                OIS_MAKE_VARS="$OIS_MAKE_VARS SAGE_NO_NET=1 CFLAGS_EXTRA=-DSAGE_NO_NET" ;;
+            --minimal)
+                OIS_MAKE_VARS="$OIS_MAKE_VARS VULKAN=0 SAGE_NO_NET=1 CFLAGS_EXTRA=-DSAGE_NO_NET"
+                OIS_EXCLUDE_LIBS="blockchain graphics os net crypto ml cuda llm agent chat android transpiler metal rich" ;;
+            --no-lib-*)
+                _lib="${_a#--no-lib-}"
+                OIS_EXCLUDE_LIBS="$OIS_EXCLUDE_LIBS $_lib" ;;
+            --yes|-y)      OIS_YES="yes"        ;;
+            --version)     printf 'OIS v%s\n' "$OIS_VERSION"; exit 0 ;;
+            --update|--upgrade)
+                printf '  Updates are handled by re-running: sh install.sh\n\n'
+                exit 0 ;;
+            --uninstall|--reinstall|--ois|--install-info)
                 _cmd="${_a#--}" ;;
         esac
     done
+    export OIS_USE_CMAKE OIS_NO_SHADERS OIS_EXCLUDE_LIBS OIS_MAKE_VARS OIS_YES
 
     case "$_cmd" in info|list|help) ;;
         *) ois_conf_load ;;
     esac
 
-    _resolve_scope "$_scope"
+    _resolve_scope
 
-    # Elevate for write-requiring commands
     case "$_cmd" in
         install|uninstall|reinstall|repair)
             _ois_elevate "$@" ;;
@@ -548,7 +575,6 @@ main() {
     case "$_cmd" in
         install)          cmd_install        ;;
         uninstall)        cmd_uninstall      ;;
-        update|upgrade)   cmd_update "$_yes" ;;
         reinstall)        cmd_reinstall      ;;
         repair)           cmd_repair         ;;
         status)           cmd_status         ;;

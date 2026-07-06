@@ -53,7 +53,8 @@ _ois_build_env() {
 ois_builder_clean() {
     [ -n "$OIS_APP_CUSTOM_BUILD" ] && return 0
     case "$OIS_APP_BUILD_SYSTEM" in
-        make)  $OIS_MAKE clean 2>/dev/null || true ;;
+        make)  $OIS_MAKE -C core clean 2>/dev/null || true
+               rm -rf core/build_sage 2>/dev/null || true ;;
         cmake) rm -rf _ois_build 2>/dev/null || true ;;
         meson) rm -rf build 2>/dev/null || true ;;
         cargo) cargo clean 2>/dev/null || true ;;

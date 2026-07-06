@@ -5,16 +5,11 @@
 ois_integrate_run() {
     _bin_path="$1"
 
-    # ── Runtime copy ─────────────────────────────────
-    # Copies OIS scripts to a stable location so the source clone can be deleted.
-    if [ "${OIS_SCOPE:-user}" = "system" ]; then
-        _runtime="/usr/local/share/OIS/runtime"
-    else
-        _runtime="${OIS_HOME}/.local/share/OIS/runtime"
-    fi
-
-    ois_mkdir "$_runtime/core"
+    # ── OIS runtime copy ──────────────────────────────
+    # Only copy if OIS_DIR differs from the target runtime dir
+    _runtime="/usr/local/share/sage/OIS"
     if [ "$OIS_DIR" != "$_runtime" ]; then
+        ois_mkdir "$_runtime/core"
         for _f in "$OIS_DIR/OIS.sh" "$OIS_DIR/OIS.conf"; do
             [ -f "$_f" ] && ois_cp "$_f" "$_runtime/$(basename "$_f")" \
                          && ois_chmod 755 "$_runtime/$(basename "$_f")"
@@ -23,12 +18,11 @@ ois_integrate_run() {
             [ -f "$_f" ] && ois_cp "$_f" "$_runtime/core/$(basename "$_f")" \
                          && ois_chmod 755 "$_runtime/core/$(basename "$_f")"
         done
+        ois_mf_add "$OIS_APP_NAME" "$_runtime"
+        ois_ok "OIS runtime    →  $_runtime"
     fi
-    ois_mf_add "$OIS_APP_NAME" "$_runtime"
-    ois_ok "OIS runtime    →  $_runtime"
 
-    # ── OIS hook ─────────────────────────────────────
-    # Points to the runtime copy. Source clone can be deleted safely.
+    # ── OIS hook ───────────────────────────────────────
     _hook="${OIS_APP_INSTALL_PATH}/.${OIS_APP_BINARY}-ois"
     ois_writef "#!/bin/sh
 exec sh '${_runtime}/OIS.sh' \"\$@\"
@@ -49,13 +43,8 @@ exec sh '${_runtime}/OIS.sh' \"\$@\"
 
 # ── Linux .desktop ────────────────────────────────────
 _ois_desktop() {
-    if [ "${OIS_SCOPE:-user}" = "system" ]; then
-        _dd="/usr/share/applications"
-        _id="/usr/share/icons/hicolor/256x256/apps"
-    else
-        _dd="${OIS_HOME}/.local/share/applications"
-        _id="${OIS_HOME}/.local/share/icons/hicolor/256x256/apps"
-    fi
+    _dd="/usr/share/applications"
+    _id="/usr/share/icons/hicolor/256x256/apps"
     ois_mkdir "$_dd" ; ois_mkdir "$_id"
     _desk="$_dd/${OIS_APP_NAME}.desktop"
     _icon_line=""
@@ -86,9 +75,7 @@ _ois_macos_bundle() {
     [ -z "$OIS_APP_ICON" ] || [ ! -f "$OIS_APP_ICON" ] && {
         ois_warn "No icon set — skipping macOS app bundle"; return 0
     }
-    [ "${OIS_SCOPE:-user}" = "system" ] \
-        && _apps="/Applications" \
-        || _apps="${OIS_HOME}/Applications"
+    _apps="/Applications"
     _bundle="$_apps/${OIS_APP_DISPLAY}.app"
     ois_mkdir "$_bundle/Contents/MacOS"
     ois_mkdir "$_bundle/Contents/Resources"
@@ -114,25 +101,18 @@ exec '${1}' \"\$@\"
 }
 
 # ── Uninstaller generation ────────────────────────────
-# All paths baked in as literal strings — no runtime lookups.
-# Binary and hook removed first. Then manifest. Clean and total.
 _ois_gen_uninstaller() {
     _gu_bin="$1"
     _gu_hook="$2"
     _gu_runtime="$3"
 
-    if [ "${OIS_SCOPE:-user}" = "system" ]; then
-        _gu_dir="/usr/local/share/OIS/uninstallers"
-    else
-        _gu_dir="${OIS_HOME}/.local/share/OIS/uninstallers"
-    fi
+    _gu_dir="/usr/local/share/OIS/uninstallers"
     ois_mkdir "$_gu_dir"
 
     _gu_path="$_gu_dir/${OIS_APP_NAME}.sh"
-    _gu_mf="$(ois_mf_file   "$OIS_APP_NAME")"
-    _gu_reg="$(ois_reg_file  "$OIS_APP_NAME")"
+    _gu_mf="$(ois_mf_file  "$OIS_APP_NAME")"
+    _gu_reg="$(ois_reg_file "$OIS_APP_NAME")"
 
-    # Write via temp file — avoids all quoting/heredoc issues with ois_writef
     _gu_tmp="$(mktemp)"
     cat > "$_gu_tmp" << UEOF
 #!/bin/sh
@@ -140,7 +120,7 @@ _ois_gen_uninstaller() {
 # All paths are literal — no external lookups needed.
 
 G='\033[32m' Y='\033[33m' B='\033[1m' R='\033[0m'
-ok()   { printf "  \${G}ok\${R}  %s\n" "\$*"; }
+ok()   { printf "  \${G}✓\${R}  %s\n" "\$*"; }
 warn() { printf "  \${Y}!\${R}  %s\n" "\$*"; }
 prm()  { rm -f  "\$1" 2>/dev/null || sudo rm -f  "\$1" 2>/dev/null; }
 prmr() { rm -rf "\$1" 2>/dev/null || sudo rm -rf "\$1" 2>/dev/null; }
@@ -161,12 +141,12 @@ if [ "\$1" != "--purge" ]; then
 fi
 printf "\n"
 
-# ── Remove binary (literal path, no lookup) ──────────
-if [ -f "${_gu_bin}" ]; then
-    prm "${_gu_bin}" && ok "Removed  ${_gu_bin}"
-fi
+# ── Remove binaries (system paths from make install) ──
+prm  /usr/local/bin/sage       && ok "Removed  /usr/local/bin/sage"
+prm  /usr/local/bin/sage-lsp   && ok "Removed  /usr/local/bin/sage-lsp"
+prm  /usr/local/bin/sagepkg    && ok "Removed  /usr/local/bin/sagepkg"
 
-# ── Remove OIS hook (literal path) ───────────────────
+# ── Remove OIS hook ───────────────────────────────────
 if [ -f "${_gu_hook}" ]; then
     prm "${_gu_hook}" && ok "Removed  ${_gu_hook}"
 fi
@@ -175,8 +155,11 @@ fi
 if [ -f "${_gu_mf}" ]; then
     while IFS= read -r _f || [ -n "\$_f" ]; do
         [ -z "\$_f" ] && continue
-        [ "\$_f" = "${_gu_bin}" ]     && continue
-        [ "\$_f" = "${_gu_hook}" ]    && continue
+        [ "\$_f" = "${_gu_bin}" ]  && continue
+        [ "\$_f" = "/usr/local/bin/sage" ]    && continue
+        [ "\$_f" = "/usr/local/bin/sage-lsp" ] && continue
+        [ "\$_f" = "/usr/local/bin/sagepkg" ]  && continue
+        [ "\$_f" = "${_gu_hook}" ] && continue
         if [ "\$_keep" = "yes" ]; then
             case "\$_f" in
                 */.config/${OIS_APP_NAME}*)      continue ;;
@@ -190,6 +173,10 @@ if [ -f "${_gu_mf}" ]; then
     done < "${_gu_mf}"
 fi
 
+# ── Remove shared directories ────────────────────────
+prmr /usr/local/share/sage    && ok "Removed  /usr/local/share/sage"
+prmr /usr/local/share/doc/sage && ok "Removed  /usr/local/share/doc/sage"
+
 # ── Remove registry files and self ───────────────────
 prm  "${_gu_mf}"
 prm  "${_gu_reg}"
@@ -198,9 +185,6 @@ printf "\n"
 ok "${OIS_APP_NAME} uninstalled."
 printf "\n"
 UEOF
-
-    # Replace 'ok' → '✓' in the output functions (heredoc can't embed it directly)
-    sed -i "s/printf \"  \${G}ok\${R}/printf \"  \${G}✓\${R}/" "$_gu_tmp" 2>/dev/null || true
 
     ois_cp "$_gu_tmp" "$_gu_path"
     rm -f "$_gu_tmp"

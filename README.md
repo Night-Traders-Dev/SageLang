@@ -12,22 +12,40 @@ JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
 
-**Current version:** v4.0.1 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.0.2 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
 
-- **Command Security**: Relaxed `is_safe_command` validation in `sys_exec` to allow spaces and single quotes for arguments while still blocking shell injection attacks.
+- **OIS v2.0 Overhaul**: Installer rewritten with CMake-first default, `--cmake`/`--make` override flags, `--no-lib-<name>` to exclude specific lib subdirectories, `--no-shaders` to skip GLSL→SPIR-V compilation, `--no-vulkan`/`--no-gpu`/`--no-curl`/`--no-ssl`/`--minimal` flags, system-scope only, POSIX-sh compliance, `--yes` non-interactive mode, and removed user-scope support.
 
 
-## Install (One-line Install System — OIS)
+## Install (One-line Install System — OIS v2)
 
 ```bash
-git clone https://github.com/Night-Traders-Dev/SageLang.git && cd SageLang && chmod +x install.sh && ./install.sh
+git clone https://github.com/Night-Traders-Dev/SageLang.git && cd SageLang && sh install.sh
 ```
 
-The OIS installer handles environment detection, dependency installation (CURL,
-OpenSSL, Vulkan), and automatic `PATH` configuration for Bash, Zsh, and Fish
-across Linux, macOS, FreeBSD, and WSL2.
+OIS v2 is a POSIX-sh build and install system. It handles environment detection,
+dependency installation (CURL, OpenSSL, Vulkan, GLSL shader compiler), and
+installs Sage system-wide under `/usr/local`.
+
+### Usage
+
+```text
+sh OIS/OIS.sh install|uninstall|repair|reinstall [options]
+
+Options:
+  --cmake           Use CMake (default when available)
+  --make            Force Make build
+  --yes, -y         Non-interactive mode
+  --no-shaders      Skip GLSL→SPIR-V shader compilation
+  --no-vulkan       Disable Vulkan support
+  --no-gpu          Disable GPU graphics
+  --no-curl         Disable networking (CURL)
+  --no-ssl          Disable SSL/TLS
+  --no-lib-<name>   Exclude a lib subdirectory (e.g. --no-lib-ml)
+  --minimal         Exclude all optional libs + Vulkan + networking
+```
 
 | Platform | Package Manager | Notes |
 |----------|----------------|-------|

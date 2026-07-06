@@ -6,11 +6,7 @@
 # ──────────────────────────────────────────────────────
 
 ois_reg_dir() {
-    if [ "${OIS_SCOPE:-user}" = "system" ]; then
-        printf '/usr/local/share/OIS'
-    else
-        printf '%s/.local/share/OIS' "${OIS_HOME:-$HOME}"
-    fi
+    printf '/usr/local/share/OIS'
 }
 
 ois_reg_file()    { printf '%s/%s.reg'      "$(ois_reg_dir)" "$1"; }

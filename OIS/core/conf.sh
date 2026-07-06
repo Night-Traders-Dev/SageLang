@@ -9,7 +9,6 @@ ois_conf_load() {
     OIS_APP_NAME="" OIS_APP_DISPLAY="" OIS_APP_BINARY=""
     OIS_APP_VERSION_URL="" OIS_APP_GITHUB=""
     OIS_APP_INSTALL_PATH="/usr/local/bin"
-    OIS_APP_UPDATE_MODE="ask"
     OIS_APP_BUILD_SYSTEM="auto" OIS_APP_BINARY_OUT="" OIS_APP_CUSTOM_BUILD=""
     OIS_APP_ICON="" OIS_APP_DESKTOP_CAT="Utility" OIS_APP_DESKTOP_CMT=""
     OIS_APP_REQUIRE_SUDO="auto" OIS_APP_PYTHON_ENTRY=""
@@ -40,7 +39,7 @@ ois_conf_load() {
                     version_url)      OIS_APP_VERSION_URL="$_v"  ;;
                     github)           OIS_APP_GITHUB="$_v"       ;;
                     install_path)     OIS_APP_INSTALL_PATH="$_v" ;;
-                    update_mode)      OIS_APP_UPDATE_MODE="$_v"  ;;
+
                     icon)             OIS_APP_ICON="$_v"         ;;
                     desktop_category) OIS_APP_DESKTOP_CAT="$_v"  ;;
                     desktop_comment)  OIS_APP_DESKTOP_CMT="$_v"  ;;
@@ -84,7 +83,7 @@ ois_conf_load() {
     [ -z "$OIS_APP_BINARY_OUT" ] && OIS_APP_BINARY_OUT="$OIS_APP_BINARY"
 
     export OIS_APP_NAME OIS_APP_DISPLAY OIS_APP_BINARY OIS_APP_VERSION_URL
-    export OIS_APP_GITHUB OIS_APP_INSTALL_PATH OIS_APP_UPDATE_MODE
+    export OIS_APP_GITHUB OIS_APP_INSTALL_PATH
     export OIS_APP_BUILD_SYSTEM OIS_APP_BINARY_OUT OIS_APP_CUSTOM_BUILD
     export OIS_APP_ICON OIS_APP_DESKTOP_CAT OIS_APP_DESKTOP_CMT
     export OIS_APP_REQUIRE_SUDO OIS_APP_PYTHON_ENTRY OIS_APP_ADDITIONAL_INFO
