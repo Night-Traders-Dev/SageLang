@@ -1,1 +1,0 @@
-{"gas_price":10,"hash":"bd9f560765a3de7deb361c42be440e7a973a455f334aeec43a485efb93e9c1d9","gas_limit":20000,"timestamp":1.77854e+09,"sender":"0x8176c5876109571583134f02861ddf42586fe1ff","contract_address":"0xd678a7c6ac303818ab25b86d654847b254ab360a","amount":10,"args":{"test_interval":1,"action":"stake"},"type":"call"}
