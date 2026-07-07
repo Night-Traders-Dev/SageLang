@@ -429,15 +429,34 @@ Token scan_token(void) {
             spaces++;
         }
 
-        if (peek() == '\n') {
+        if (peek() == '\n' || peek() == '#') {
             start = current;
             token_line = line;
             token_line_start = line_start;
-            advance();
-            line++;
-            line_start = current;
-            at_beginning_of_line = 1;
-            continue;  // Was: return scan_token();
+            
+            if (peek() == '#') {
+                if (peek_next() == '#') {
+                    // Doc comment - must be emitted, so we don't skip the line here.
+                    // We let it process normally (which means doc comments DO affect indentation)
+                    // Wait, doc comments should affect indentation? Yes, they are attached to declarations.
+                } else {
+                    // Normal comment - skip to end of line
+                    while (peek() != '\n' && !is_at_end()) advance();
+                    if (peek() == '\n') {
+                        advance();
+                        line++;
+                        line_start = current;
+                    }
+                    at_beginning_of_line = 1;
+                    continue;
+                }
+            } else {
+                advance();
+                line++;
+                line_start = current;
+                at_beginning_of_line = 1;
+                continue;
+            }
         }
 
         // Inside brackets/parens/braces: skip indentation handling

@@ -186,10 +186,17 @@ class Lexer:
                     self.advance()
                     spaces = spaces + 1
 
-                # Skip blank lines
-                if self.peek() == chr(10):
-                    self.line = self.line + 1
-                    self.advance()
+                # Skip blank lines and comment lines
+                if self.peek() == chr(10) or self.peek() == "#":
+                    if self.peek() == "#":
+                        while self.peek() != nil and self.peek() != chr(10):
+                            self.advance()
+                        if self.peek() == chr(10):
+                            self.line = self.line + 1
+                            self.advance()
+                    else:
+                        self.line = self.line + 1
+                        self.advance()
                     self.at_bol = true
                     continue
 

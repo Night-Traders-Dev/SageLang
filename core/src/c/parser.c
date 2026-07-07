@@ -1386,6 +1386,12 @@ static Stmt* class_declaration() {
             continue;
         }
         
+        if (check(TOKEN_DOC_COMMENT)) {
+            collect_doc_comment();
+            while (match(TOKEN_NEWLINE));
+            continue;
+        }
+        
         if (match(TOKEN_PROC)) {
             Stmt* method = proc_declaration();
             
@@ -1441,6 +1447,15 @@ static Stmt* struct_declaration() {
 
     while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
         if (match(TOKEN_NEWLINE)) continue;
+        
+        if (check(TOKEN_DOC_COMMENT)) {
+            collect_doc_comment();
+            while (match(TOKEN_NEWLINE));
+            char* doc = take_pending_doc();
+            if (doc) free(doc);
+            continue;
+        }
+        
         consume_identifier_like("Expect field name in struct.");
         Token fname = previous_token;
         TypeAnnotation* ftype = NULL;
@@ -1481,6 +1496,15 @@ static Stmt* enum_declaration() {
 
     while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
         if (match(TOKEN_NEWLINE)) continue;
+        
+        if (check(TOKEN_DOC_COMMENT)) {
+            collect_doc_comment();
+            while (match(TOKEN_NEWLINE));
+            char* doc = take_pending_doc();
+            if (doc) free(doc);
+            continue;
+        }
+        
         consume_identifier_like("Expect variant name in enum.");
         Token vname = previous_token;
         if (count >= capacity) {
@@ -1508,6 +1532,13 @@ static Stmt* trait_declaration() {
 
     while (!check(TOKEN_DEDENT) && !check(TOKEN_EOF)) {
         if (match(TOKEN_NEWLINE)) continue;
+        
+        if (check(TOKEN_DOC_COMMENT)) {
+            collect_doc_comment();
+            while (match(TOKEN_NEWLINE));
+            continue;
+        }
+        
         if (match(TOKEN_PROC)) {
             Stmt* method = proc_declaration();
             if (method_head == NULL) {
