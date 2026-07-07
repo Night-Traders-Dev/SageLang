@@ -1,0 +1,18 @@
+{
+    "transactions": [
+        {
+            "receiver": "0x1ff2a9f4c346ed68a7da711ccbae35102fc23944",
+            "amount": 1.04747,
+            "hash": "a43b6eebf79b4ef4b94a153378aabc478266b614c7f06f6a28ead1b5d5e424a0",
+            "timestamp": 1.7783e+09,
+            "sender": "System",
+            "signature": null
+        }
+    ],
+    "previous_hash": "00424d3fc5dbaa0e5f16f459dfa6a38c4d584d8a06ace0faf999d3c5e8812652",
+    "difficulty": 2,
+    "timestamp": 1.7783e+09,
+    "hash": "003ee6d0366251901dd756b7e6a941aa935c8cd191ed7a53142593e0db1ac7e4",
+    "nonce": 410,
+    "index": 7
+}

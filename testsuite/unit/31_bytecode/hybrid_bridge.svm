@@ -1,0 +1,106 @@
+SAGEBC1
+functions 3
+function
+params 2
+param 1
+61
+param 1
+62
+constants 2
+string 1
+61
+string 1
+62
+code 10
+0500000500010f2c012c
+endfunction
+function
+params 2
+param 4
+73656c66
+param 5
+7374617274
+constants 3
+string 4
+73656c66
+string 5
+7374617274
+string 5
+76616c7565
+code 12
+0500000500010a000204012c
+endfunction
+function
+params 2
+param 4
+73656c66
+param 5
+64656c7461
+constants 7
+string 4
+73656c66
+string 4
+73656c66
+string 5
+76616c7565
+string 5
+64656c7461
+string 5
+76616c7565
+string 4
+73656c66
+string 5
+76616c7565
+code 26
+0500000500010900020500030f0a0004040500050900062c012c
+endfunction
+chunks 5
+chunk
+constants 1
+string 3
+616464
+code 7
+0800000000012c
+endchunk
+chunk
+constants 4
+string 7
+436f756e746572
+string 4
+696e6974
+string 4
+62756d70
+string 7
+436f756e746572
+code 20
+3500000d00013600010d0002360002060003012c
+endchunk
+chunk
+constants 3
+string 3
+616464
+number 4
+number 5
+code 14
+05000000000100000225022a012c
+endchunk
+chunk
+constants 3
+string 7
+436f756e746572
+number 2
+string 7
+636f756e746572
+code 13
+0500000000012501060002012c
+endchunk
+chunk
+constants 3
+string 7
+636f756e746572
+number 5
+string 4
+62756d70
+code 13
+050000000001260002012a012c
+endchunk
