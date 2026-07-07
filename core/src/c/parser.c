@@ -268,6 +268,7 @@ static Stmt* statement(void);
 static Stmt* block(void);
 static char* take_pending_doc(void);
 static TypeAnnotation* parse_type_annotation(void);
+static void collect_doc_comment(void);
 
 static Stmt* parse_maybe_oneline_block() {
     if (match(TOKEN_NEWLINE)) {
