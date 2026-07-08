@@ -541,18 +541,30 @@ static Value io_writefile_native(int argCount, Value* args) {
 }
 
     static Value io_writebytes_native(int argCount, Value* args) {
-    if (argCount < 2 || !IS_STRING(args[0]) || !IS_ARRAY(args[1])) return val_bool(0);
+    if (argCount < 2 || !IS_STRING(args[0])) return val_bool(0);
+    if (!IS_BYTES(args[1]) && !IS_ARRAY(args[1])) return val_bool(0);
     const char* path = AS_STRING(args[0]);
-    ArrayValue* arr = AS_ARRAY(args[1]);
-    if (arr->count < 0) return val_bool(0);
 
     FILE* f = fopen(path, "wb");
     if (!f) return val_bool(0);
 
+    size_t total_written = 0;
+
+    if (IS_BYTES(args[1])) {
+        BytesValue* b = AS_BYTES(args[1]);
+        if (b->length > 0) {
+            total_written = fwrite(b->data, 1, (size_t)b->length, f);
+        }
+        fclose(f);
+        return val_bool(total_written == (size_t)b->length);
+    }
+
+    ArrayValue* arr = AS_ARRAY(args[1]);
+    if (arr->count < 0) { fclose(f); return val_bool(0); }
+
     // Security: Use fixed-size stack buffer to avoid large transient heap allocations (CWE-400)
     unsigned char chunk[4096];
     int pos = 0;
-    size_t total_written = 0;
 
     for (int i = 0; i < arr->count; i++) {
         if (IS_NUMBER(arr->elements[i])) {
@@ -580,18 +592,30 @@ static Value io_writefile_native(int argCount, Value* args) {
  }
 
  static Value io_appendbytes_native(int argCount, Value* args) {
-    if (argCount < 2 || !IS_STRING(args[0]) || !IS_ARRAY(args[1])) return val_bool(0);
+    if (argCount < 2 || !IS_STRING(args[0])) return val_bool(0);
+    if (!IS_BYTES(args[1]) && !IS_ARRAY(args[1])) return val_bool(0);
     const char* path = AS_STRING(args[0]);
-    ArrayValue* arr = AS_ARRAY(args[1]);
-    if (arr->count < 0) return val_bool(0);
 
     FILE* f = fopen(path, "ab");
     if (!f) return val_bool(0);
 
+    size_t total_written = 0;
+
+    if (IS_BYTES(args[1])) {
+        BytesValue* b = AS_BYTES(args[1]);
+        if (b->length > 0) {
+            total_written = fwrite(b->data, 1, (size_t)b->length, f);
+        }
+        fclose(f);
+        return val_bool(total_written == (size_t)b->length);
+    }
+
+    ArrayValue* arr = AS_ARRAY(args[1]);
+    if (arr->count < 0) { fclose(f); return val_bool(0); }
+
     // Security: Use fixed-size stack buffer to avoid large transient heap allocations (CWE-400)
     unsigned char chunk[4096];
     int pos = 0;
-    size_t total_written = 0;
 
     for (int i = 0; i < arr->count; i++) {
         if (IS_NUMBER(arr->elements[i])) {
@@ -665,12 +689,11 @@ static Value io_filesize_native(int argCount, Value* args) {
     return val_number((double)st.st_size);
 }
 
-// io.readbytes(path) -> array of byte values (0-255)
+// io.readbytes(path) -> Bytes (byte buffer)
 static Value io_readbytes_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     FILE* f = fopen(AS_STRING(args[0]), "rb");
     if (!f) return val_nil();
-    Value out_val = val_array();
     // Try to get file size via seek (works for regular files, fails for /dev/urandom etc.)
     if (fseek(f, 0, SEEK_END) == 0) {
         long length = ftell(f);
@@ -679,33 +702,33 @@ static Value io_readbytes_native(int argCount, Value* args) {
         unsigned char* buf = SAGE_ALLOC((size_t)length);
         size_t read = fread(buf, 1, (size_t)length, f);
         fclose(f);
-        ArrayValue* arr = out_val.as.array;
-        arr->count = (int)read;
-        arr->capacity = (int)read;
-        arr->elements = SAGE_ALLOC(sizeof(Value) * read);
-        gc_track_external_allocation(sizeof(Value) * (size_t)read);
-        for (size_t i = 0; i < read; i++) {
-            arr->elements[i] = val_number((double)buf[i]);
-        }
+        Value out_val = val_bytes(buf, (int)read);
         SAGE_FREE(buf);
+        return out_val;
     } else {
         // Non-seekable file (e.g., /dev/urandom) — read in chunks until EOF
         unsigned char chunk[4096];
         size_t nread;
         size_t total_read = 0;
+        Value out_val = val_bytes_empty(4096);
+        BytesValue* b = AS_BYTES(out_val);
         while ((nread = fread(chunk, 1, sizeof(chunk), f)) > 0) {
             if (total_read + nread > SAGE_MAX_READ_SIZE) {
                 nread = SAGE_MAX_READ_SIZE - total_read;
             }
             for (size_t i = 0; i < nread; i++) {
-                array_push(&out_val, val_number((double)chunk[i]));
+                if (b->length >= b->capacity) {
+                    b->capacity = b->capacity * 2;
+                    b->data = SAGE_REALLOC(b->data, b->capacity);
+                }
+                b->data[b->length++] = chunk[i];
             }
             total_read += nread;
             if (total_read >= SAGE_MAX_READ_SIZE) break;
         }
         fclose(f);
+        return out_val;
     }
-    return out_val;
 }
 
 // io.listdir(path) -> array of filename strings

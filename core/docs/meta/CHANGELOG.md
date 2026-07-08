@@ -9,6 +9,15 @@ propagation so the per-entry version history is never flattened again.
 
 ---
 
+## [4.0.3] - 2026-07-07
+
+### Standard Library
+- **`io.writebytes` / `io.appendbytes`**: Now accept `Bytes` values in addition to `Array`, enabling native binary I/O with the `Bytes` type.
+- **`io.readbytes`**: Now returns a `Bytes` value instead of an `Array`, matching the documented behavior.
+- **`value.h`**: Added `IS_BYTES(v)` and `AS_BYTES(v)` macros for consistent type checking and access of `Bytes` values.
+
+---
+
 ## [4.0.2] - 2026-07-05
 
 ### Install System — OIS v2.0 Overhaul

@@ -1736,8 +1736,12 @@ io.mkpath("a/b/c")              # Creates recursive path
 print io.filesize("data.txt")   # file size in bytes
 
 # Binary I/O
-let bytes = io.readbytes("image.png")
-print len(bytes)    # number of bytes
+let bytes = io.readbytes("image.png")       # Read as Bytes buffer
+print bytes_len(bytes)                       # number of bytes
+
+let buf = bytes("Hello\n")
+io.writebytes("output.bin", buf)            # Write Bytes (also accepts Array)
+io.appendbytes("log.bin", buf)              # Append Bytes
 
 # Directory listing
 let files = io.listdir(".")

@@ -2491,9 +2491,15 @@ print io.exists("test.txt")  # true
 
 io.rename("test.txt", "renamed.txt")
 io.remove("renamed.txt")
+
+# Binary I/O
+let buf = bytes("Hello\n")
+io.writebytes("data.bin", buf)      # Write Bytes (also accepts Array)
+let r = io.readbytes("data.bin")    # Read as Bytes
+io.appendbytes("log.bin", buf)      # Append Bytes
 ```
 
-Available functions: `readfile`, `writefile`, `appendfile`, `exists`, `remove`, `rename`
+Available functions: `readfile`, `writefile`, `appendfile`, `exists`, `remove`, `rename`, `readbytes`, `writebytes`, `appendbytes`
 
 ### 10.3 String Module
 

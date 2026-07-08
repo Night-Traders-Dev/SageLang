@@ -204,6 +204,7 @@ typedef struct DictEntry DictEntry;
 #define IS_POINTER(v) ((v).type == VAL_POINTER)
 #define IS_THREAD(v) ((v).type == VAL_THREAD)
 #define IS_MUTEX(v) ((v).type == VAL_MUTEX)
+#define IS_BYTES(v) ((v).type == VAL_BYTES)
 
 // Macros for accessing values (unchecked — caller must verify type first)
 #define AS_NUMBER(v) ((v).as.number)
@@ -222,6 +223,7 @@ typedef struct DictEntry DictEntry;
 #define AS_POINTER(v) ((v).as.pointer)
 #define AS_THREAD(v) ((v).as.thread)
 #define AS_MUTEX(v) ((v).as.mutex)
+#define AS_BYTES(v) ((v).as.bytes)
 
 // Type-safe accessor macros — return safe defaults for wrong types instead of UB
 #define SAGE_AS_STRING(v) (IS_STRING(v) ? (v).as.string : "")

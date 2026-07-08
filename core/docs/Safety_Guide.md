@@ -54,7 +54,7 @@ end
 
 SageLang enforces strict resource limits to prevent Denial of Service (DoS) attacks:
 
-- **SAGE_MAX_READ_SIZE**: 100MB. This limit is checked by `io.readfile`, `tcp.recv`, and other I/O operations to prevent memory exhaustion (CWE-400).
+- **SAGE_MAX_READ_SIZE**: 100MB. This limit is checked by `io.readfile`, `io.readbytes`, `tcp.recv`, and other I/O operations to prevent memory exhaustion (CWE-400).
 - **Recursion/Loop Limits**: Hard limits on recursion depth and loop iterations protect against infinite execution.
 
 ## Enforcement Matrix

@@ -645,14 +645,16 @@ math.tau         # 6.28318...
 **io** — File operations:
 ```sage
 import io
-io.readfile("path.txt")       # Read entire file
-io.writefile("path.txt", s)   # Write string
-io.appendfile("path.txt", s)  # Append string
-io.exists("path")             # Check existence
-io.remove("path")             # Delete file
-io.isdir("path")              # Check if directory
-io.filesize("path")           # File size in bytes
-io.readbytes("path.img")      # Read as bytes
+io.readfile("path.txt")        # Read entire file
+io.writefile("path.txt", s)    # Write string
+io.appendfile("path.txt", s)   # Append string
+io.exists("path")              # Check existence
+io.remove("path")              # Delete file
+io.isdir("path")               # Check if directory
+io.filesize("path")            # File size in bytes
+io.readbytes("path.img")       # Read as Bytes buffer
+io.writebytes("path.img", b)   # Write Bytes buffer (also accepts Array)
+io.appendbytes("path.img", b)  # Append Bytes buffer (also accepts Array)
 ```
 
 **string** — String utilities:
