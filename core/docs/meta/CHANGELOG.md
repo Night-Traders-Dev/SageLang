@@ -16,6 +16,9 @@ propagation so the per-entry version history is never flattened again.
 - **`io.readbytes`**: Now returns a `Bytes` value instead of an `Array`, matching the documented behavior.
 - **`value.h`**: Added `IS_BYTES(v)` and `AS_BYTES(v)` macros for consistent type checking and access of `Bytes` values.
 
+### Parser
+- **Qualified type annotations**: `parse_type_annotation()` now consumes dotted names (`module.Type`), enabling `let fs: vfs.VFS = vfs.VFS(dev)` syntax.
+
 ---
 
 ## [4.0.2] - 2026-07-05

@@ -1149,11 +1149,20 @@ static Stmt* while_statement() {
     return new_while_stmt(condition, body);
 }
 
-// Parse a type annotation: Int, String, Array[Int], Dict[String, Int], T?
+// Parse a type annotation: Int, String, Array[Int], Dict[String, Int], T?, module.Type
 static TypeAnnotation* parse_type_annotation(void) {
     if (current_token.type != TOKEN_IDENTIFIER && current_token.type != TOKEN_MATCH && current_token.type != TOKEN_END && current_token.type != TOKEN_INIT) return NULL;
     Token name = current_token;
     advance_parser();
+
+    // Consume qualified name segments: module.Type.SubType -> keep last segment as name
+    while (match(TOKEN_DOT)) {
+        if (!match_identifier_like()) {
+            parser_expected_error(current_token, TOKEN_IDENTIFIER, "Expect type name after '.'.");
+            break;
+        }
+        name = previous_token;
+    }
 
     TypeAnnotation** params = NULL;
     int param_count = 0;
