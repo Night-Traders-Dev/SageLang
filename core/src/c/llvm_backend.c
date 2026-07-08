@@ -781,6 +781,7 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_writefile(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_readbytes(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_writebytes(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_appendbytes(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_exists(%%SageValue)\n");
     // ML native runtime
     ll_emit(lc, "declare %%SageValue @sage_rt_load_weights(%%SageValue)\n");
@@ -1621,6 +1622,9 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                         handled = 1;
                     } else if (strcmp(method_name, "writebytes") == 0 && expr->as.call.arg_count == 2) {
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_writebytes(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                        handled = 1;
+                    } else if (strcmp(method_name, "appendbytes") == 0 && expr->as.call.arg_count == 2) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_appendbytes(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
                         handled = 1;
                     } else if (strcmp(method_name, "exists") == 0 && expr->as.call.arg_count == 1) {
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_exists(%%SageValue %%%d)", r, arg_regs[0]);

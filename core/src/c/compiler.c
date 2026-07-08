@@ -1478,6 +1478,8 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
         StringBuffer sb;
         sb_init(&sb);
         if (strcmp(method_name, "readbytes") == 0) sb_append(&sb, "sage_native_io_readbytes(");
+        else if (strcmp(method_name, "writebytes") == 0) sb_append(&sb, "sage_native_io_writebytes(");
+        else if (strcmp(method_name, "appendbytes") == 0) sb_append(&sb, "sage_native_io_appendbytes(");
         else if (strcmp(method_name, "readfile") == 0) sb_append(&sb, "sage_native_io_readfile(");
         else if (strcmp(method_name, "writefile") == 0) sb_append(&sb, "sage_native_io_writefile(");
 
@@ -1714,6 +1716,17 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     char *a1 = emit_expr(compiler, call->args[0]);
     char *a2 = emit_expr(compiler, call->args[1]);
     sb_appendf(&sb, "sage_io_writebytes(%s, %s)", a1, a2);
+    free(a1);
+    free(a2);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "io_appendbytes") == 0) {
+    if (call->arg_count != 2)
+      return str_dup("sage_nil()");
+    char *a1 = emit_expr(compiler, call->args[0]);
+    char *a2 = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_io_appendbytes(%s, %s)", a1, a2);
     free(a1);
     free(a2);
     free(callee_name);
@@ -4043,15 +4056,55 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    sage_gc_unpin();\n"
       "    return arr;\n"
       "}\n"
-      "static SageValue sage_native_io_readfile(SageValue path) { return sage_native_io_readbytes(path); }\n"
-      "static SageValue sage_native_io_writefile(SageValue path, SageValue data) {\n"
-      "    if (path.type != SAGE_TAG_STRING || data.type != SAGE_TAG_STRING) return sage_nil();\n"
-      "    FILE* f = fopen(path.as.string, \"wb\");\n"
-      "    if (!f) return sage_nil();\n"
-      "    fwrite(data.as.string, 1, strlen(data.as.string), f);\n"
-      "    fclose(f);\n"
-      "    return sage_bool(1);\n"
-      "}\n"
+"static SageValue sage_native_io_writebytes(SageValue path, SageValue v) {\n"
+"    if (path.type != SAGE_TAG_STRING) return sage_nil();\n"
+"    FILE* f = fopen(path.as.string, \"wb\");\n"
+"    if (!f) return sage_nil();\n"
+"    if (v.type == SAGE_TAG_BYTES) {\n"
+"        fwrite(v.as.bytes->data, 1, v.as.bytes->count, f);\n"
+"        fclose(f);\n"
+"        return sage_bool(1);\n"
+"    }\n"
+"    if (v.type != SAGE_TAG_ARRAY) { fclose(f); return sage_nil(); }\n"
+"    SageArray* a = v.as.array;\n"
+"    unsigned char* buf = malloc(a->count);\n"
+"    if (buf) {\n"
+"        for (int i = 0; i < a->count; i++) buf[i] = (unsigned char)a->elements[i].as.number;\n"
+"        fwrite(buf, 1, a->count, f);\n"
+"        free(buf);\n"
+"    }\n"
+"    fclose(f);\n"
+"    return sage_bool(1);\n"
+"}\n"
+"static SageValue sage_native_io_appendbytes(SageValue path, SageValue v) {\n"
+"    if (path.type != SAGE_TAG_STRING) return sage_nil();\n"
+"    FILE* f = fopen(path.as.string, \"ab\");\n"
+"    if (!f) return sage_nil();\n"
+"    if (v.type == SAGE_TAG_BYTES) {\n"
+"        fwrite(v.as.bytes->data, 1, v.as.bytes->count, f);\n"
+"        fclose(f);\n"
+"        return sage_bool(1);\n"
+"    }\n"
+"    if (v.type != SAGE_TAG_ARRAY) { fclose(f); return sage_nil(); }\n"
+"    SageArray* a = v.as.array;\n"
+"    unsigned char* buf = malloc(a->count);\n"
+"    if (buf) {\n"
+"        for (int i = 0; i < a->count; i++) buf[i] = (unsigned char)a->elements[i].as.number;\n"
+"        fwrite(buf, 1, a->count, f);\n"
+"        free(buf);\n"
+"    }\n"
+"    fclose(f);\n"
+"    return sage_bool(1);\n"
+"}\n"
+"static SageValue sage_native_io_readfile(SageValue path) { return sage_native_io_readbytes(path); }\n"
+"static SageValue sage_native_io_writefile(SageValue path, SageValue data) {\n"
+"    if (path.type != SAGE_TAG_STRING || data.type != SAGE_TAG_STRING) return sage_nil();\n"
+"    FILE* f = fopen(path.as.string, \"wb\");\n"
+"    if (!f) return sage_nil();\n"
+"    fwrite(data.as.string, 1, strlen(data.as.string), f);\n"
+"    fclose(f);\n"
+"    return sage_bool(1);\n"
+"}\n"
       "\n"
       "extern int sage_argc;\n"
       "extern char** sage_argv;\n"
@@ -5253,12 +5306,36 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    fwrite(c.as.string, 1, strlen(c.as.string), f); fclose(f); return "
         "sage_bool(1);\n"
         "}\n"
-        "static SageValue sage_io_writebytes(SageValue p, SageValue arr) {\n"
-        "    if(p.type != SAGE_TAG_STRING || arr.type != SAGE_TAG_ARRAY) "
-        "return sage_bool(0);\n"
+        "static SageValue sage_io_writebytes(SageValue p, SageValue v) {\n"
+        "    if(p.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+        "    if(v.type == SAGE_TAG_BYTES) {\n"
+        "        FILE* f = fopen(p.as.string, \"wb\"); if(!f) return "
+        "sage_bool(0);\n"
+        "        fwrite(v.as.bytes->data, 1, v.as.bytes->count, f); "
+        "fclose(f); return sage_bool(1);\n"
+        "    }\n"
+        "    if(v.type != SAGE_TAG_ARRAY) return sage_bool(0);\n"
         "    FILE* f = fopen(p.as.string, \"wb\"); if(!f) return "
         "sage_bool(0);\n"
-        "    SageArray* a = arr.as.array;\n"
+        "    SageArray* a = v.as.array;\n"
+        "    unsigned char* buf = malloc(a->count);\n"
+        "    for(int i=0; i<a->count; i++) buf[i] = (unsigned "
+        "char)a->elements[i].as.number;\n"
+        "    fwrite(buf, 1, a->count, f); fclose(f); free(buf); return "
+        "sage_bool(1);\n"
+        "}\n"
+        "static SageValue sage_io_appendbytes(SageValue p, SageValue v) {\n"
+        "    if(p.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+        "    if(v.type == SAGE_TAG_BYTES) {\n"
+        "        FILE* f = fopen(p.as.string, \"ab\"); if(!f) return "
+        "sage_bool(0);\n"
+        "        fwrite(v.as.bytes->data, 1, v.as.bytes->count, f); "
+        "fclose(f); return sage_bool(1);\n"
+        "    }\n"
+        "    if(v.type != SAGE_TAG_ARRAY) return sage_bool(0);\n"
+        "    FILE* f = fopen(p.as.string, \"ab\"); if(!f) return "
+        "sage_bool(0);\n"
+        "    SageArray* a = v.as.array;\n"
         "    unsigned char* buf = malloc(a->count);\n"
         "    for(int i=0; i<a->count; i++) buf[i] = (unsigned "
         "char)a->elements[i].as.number;\n"

@@ -5,6 +5,8 @@ class _Io:
         return io_writefile(p, c)
     proc writebytes(p, b):
         return io_writebytes(p, b)
+    proc appendbytes(p, b):
+        return io_appendbytes(p, b)
     proc readbytes(p):
         return io_readbytes(p)
     proc exists(p):

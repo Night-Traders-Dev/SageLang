@@ -773,6 +773,25 @@ SageValue sage_rt_writebytes(SageValue path, SageValue content) {
     return sage_rt_bool(1);
 }
 
+SageValue sage_rt_appendbytes(SageValue path, SageValue content) {
+    if (path.type != SAGE_STRING || content.type != SAGE_ARRAY) return sage_rt_bool(0);
+    FILE* f = fopen(path.as.string, "ab");
+    if (!f) return sage_rt_bool(0);
+    SageArray* arr = content.as.array;
+    if (arr->count > 0) {
+        unsigned char* buf = (unsigned char*)malloc((size_t)arr->count);
+        if (buf) {
+            for (int i = 0; i < arr->count; i++) {
+                buf[i] = (unsigned char)arr->elements[i].as.number;
+            }
+            fwrite(buf, 1, (size_t)arr->count, f);
+            free(buf);
+        }
+    }
+    fclose(f);
+    return sage_rt_bool(1);
+}
+
 SageValue sage_rt_readbytes(SageValue path) {
     if (path.type != SAGE_STRING) return sage_rt_nil();
     FILE* f = fopen(path.as.string, "rb");
