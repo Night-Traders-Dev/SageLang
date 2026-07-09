@@ -2,7 +2,7 @@
 title: "The SageLang Programming Language"
 subtitle: "A Comprehensive Guide"
 author: "Jacob Yates"
-date: "May 2026"
+date: "July 2026"
 toc: true
 ---
 
@@ -2494,9 +2494,9 @@ io.remove("renamed.txt")
 
 # Binary I/O
 let buf = bytes("Hello\n")
-io.writebytes("data.bin", buf)      # Write Bytes (also accepts Array)
-let r = io.readbytes("data.bin")    # Read as Bytes
-io.appendbytes("log.bin", buf)      # Append Bytes
+io.writebytes("data.bin", buf)      # Write Bytes value (also accepts Array)
+let r = io.readbytes("data.bin")    # Read as Bytes value
+io.appendbytes("log.bin", buf)      # Append Bytes value
 ```
 
 Available functions: `readfile`, `writefile`, `appendfile`, `exists`, `remove`, `rename`, `readbytes`, `writebytes`, `appendbytes`
