@@ -79,11 +79,10 @@ make clean && make -j$(nproc)   # produces ./sage and ./sage-lsp
 ```
 
 Desktop build links against `libm`, `pthread`, `dl`, `libcurl`, and OpenSSL.
-Four build paths are supported: desktop C, self-hosted bootstrap, Pico/RP2040,
-and SageMake. See the **[Build Guide](core/docs/Build_Guide.md)** for CMake,
-SageMake, build parameters, and training targets.
 
-## Codebase & Benchmark Metrics
+Desktop build links against `libm`, `pthread`, `dl`, `libcurl`, and OpenSSL.
+
+All execution backends share robust generator support with cooperative multitasking via `yield` and `next()` functions, enabling non-blocking operations and efficient pausing/resumption of execution within procedures.
 
 Refreshed by `make charts` and as part of the default `make` build (count
 authored, non-empty tracked lines; exclude vendored deps and build artifacts).
