@@ -407,7 +407,7 @@ install: $(TARGET) $(LSP_TARGET)
 	cp -r src/sage/*.sage $(LIBDIR)/src/sage/
 	cp -r examples/*.sage $(LIBDIR)/examples/
 	install -d $(DOCDIR)
-	install -m 644 README.md LICENSE $(DOCDIR)/
+	install -m 644 README.md $(DOCDIR)/
 	install -m 644 docs/meta/*.md $(DOCDIR)/
 	@echo "✅ Installation complete"
 	@echo "   Run with: sage <script.sage>"
