@@ -2,8 +2,8 @@
 title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
-date: "June 2026"
-version: "v4.0.0"
+date: "July 2026"
+version: "v4.0.3"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v4.0.0}
+  - \fancyfoot[C]{v4.0.3}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
@@ -1501,9 +1501,11 @@ end
 
 ## Generic Type Parameters
 
-Type annotations support generic parameters for collections:
+Type annotations support generic parameters for collections and dotted names for types:
 
 ```python
+let fs: vfs.VFS = vfs.VFS(dev)
+
 proc sum_list(nums: Array[Int]) -> Int:
     var total = 0
     for n in nums:
@@ -1736,7 +1738,7 @@ io.mkpath("a/b/c")              # Creates recursive path
 print io.filesize("data.txt")   # file size in bytes
 
 # Binary I/O
-let bytes = io.readbytes("image.png")       # Read as Bytes buffer
+let bytes = io.readbytes("image.png")       # Read as Bytes value
 print bytes_len(bytes)                       # number of bytes
 
 let buf = bytes("Hello\n")

@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.0.1 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.0.3 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -652,9 +652,9 @@ io.exists("path")              # Check existence
 io.remove("path")              # Delete file
 io.isdir("path")               # Check if directory
 io.filesize("path")            # File size in bytes
-io.readbytes("path.img")       # Read as Bytes buffer
-io.writebytes("path.img", b)   # Write Bytes buffer (also accepts Array)
-io.appendbytes("path.img", b)  # Append Bytes buffer (also accepts Array)
+io.readbytes("path.img")       # Read as Bytes value
+io.writebytes("path.img", b)   # Write Bytes value (also accepts Array)
+io.appendbytes("path.img", b)  # Append Bytes value (also accepts Array)
 ```
 
 **string** — String utilities:
@@ -1503,7 +1503,7 @@ primary        = NUMBER | STRING | BOOL | NIL | IDENTIFIER
                | "super" "." IDENTIFIER "(" args ")"
                | "comptime" "(" expression ")"
 
-type_annotation = IDENTIFIER ("[" type_annotation ("," type_annotation)* "]")? ("?")?
+type_annotation = dotted_name ("[" type_annotation ("," type_annotation)* "]")? ("?")?
 ```
 
 ---
