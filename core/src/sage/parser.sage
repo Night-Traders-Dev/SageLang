@@ -756,6 +756,23 @@ class Parser:
         let expr = self.parse_expression()
         return expr_stmt(expr)
 
+    proc attach_pragmas(stmt, pragmas):
+        if stmt != nil and pragmas != nil:
+            stmt.pragmas = pragmas
+
+    proc collect_pragmas():
+        var pragma_list = nil
+        while self.check(token.TOKEN_AT):
+            self.advance()  # consume '@'
+            let tok = self.consume(token.TOKEN_IDENTIFIER, "Expect pragma name after '@'.")
+            let p = {"name": tok.text, "args": [], "next": pragma_list}
+            pragma_list = p
+            # Skip optional newlines between pragmas
+            self.match_tok(token.TOKEN_NEWLINE)
+            while self.match_tok(token.TOKEN_NEWLINE):
+                pass
+        return pragma_list
+
     proc parse_declaration():
         # Skip newlines
         while self.match_tok(token.TOKEN_NEWLINE):
@@ -764,26 +781,38 @@ class Parser:
         if self.check(token.TOKEN_DEDENT) or self.check(token.TOKEN_EOF):
             return nil
 
+        # Collect @pragma decorators
+        let pragmas = self.collect_pragmas()
+
         # Class declaration
         if self.match_tok(token.TOKEN_CLASS):
-            return self.parse_class()
+            let s = self.parse_class()
+            self.attach_pragmas(s, pragmas)
+            return s
 
         # Struct declaration
         if self.match_tok(token.TOKEN_STRUCT):
-            return self.parse_struct()
+            let s = self.parse_struct()
+            self.attach_pragmas(s, pragmas)
+            return s
 
         # Async proc declaration
         if self.match_tok(token.TOKEN_ASYNC):
-            return self.parse_async_proc()
+            let s = self.parse_async_proc()
+            self.attach_pragmas(s, pragmas)
+            return s
 
         # Proc declaration
         if self.match_tok(token.TOKEN_PROC):
-            return self.parse_proc()
+            let s = self.parse_proc()
+            self.attach_pragmas(s, pragmas)
+            return s
 
         # Import statements
         if self.match_tok(token.TOKEN_IMPORT) or self.check(token.TOKEN_FROM):
             let s = self.parse_import()
             self.match_tok(token.TOKEN_NEWLINE)
+            self.attach_pragmas(s, pragmas)
             return s
 
         # Return statement
@@ -792,7 +821,9 @@ class Parser:
             if not self.check(token.TOKEN_NEWLINE) and not self.check(token.TOKEN_EOF) and not self.check(token.TOKEN_DEDENT):
                 value = self.parse_expression()
             self.match_tok(token.TOKEN_NEWLINE)
-            return return_stmt(value)
+            let s = return_stmt(value)
+            self.attach_pragmas(s, pragmas)
+            return s
 
         # Let/var declaration
         if self.match_tok(token.TOKEN_LET) or self.match_tok(token.TOKEN_VAR):
@@ -803,10 +834,12 @@ class Parser:
                 initializer = self.parse_expression()
             let s = let_stmt(name, initializer)
             self.match_tok(token.TOKEN_NEWLINE)
+            self.attach_pragmas(s, pragmas)
             return s
 
         # General statement
         let s = self.parse_statement()
+        self.attach_pragmas(s, pragmas)
         self.match_tok(token.TOKEN_NEWLINE)
         return s
 

@@ -63,6 +63,7 @@ class Stmt:
     proc init(stmt_type):
         self.type = stmt_type
         self.next = nil
+        self.pragmas = nil
 
 # --- Expression type name (for debugging) ---
 proc expr_type_name(t):

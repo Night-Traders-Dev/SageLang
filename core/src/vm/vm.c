@@ -31,6 +31,12 @@ typedef struct ActiveVm {
 
     ExceptionHandler handlers[VM_HANDLER_MAX];
     int handler_count;
+    
+    // Generator support: set when executing a generator chunk
+    GeneratorValue* current_generator;
+    int is_generator_exec;
+    int resume_ip_offset;  // For generator resume: start from this offset
+    int resume_stack_count; // Stack depth to restore on resume
 } ActiveVm;
 
 static __thread ActiveVm* g_active_vm = NULL;
@@ -297,6 +303,9 @@ typedef struct {
 
 #define MAX_FRAMES 1024
 
+// Forward declarations
+static ExecResult vm_execute_generator(GeneratorValue* gen, Env* caller_env);
+
 ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     ActiveVm vm;
     ExecResult result = vm_normal(val_nil());
@@ -322,17 +331,35 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     g_active_vm = &vm;
     if (ts) ts->active_vm = g_active_vm;
 
+    // Inherit generator state from parent VM (set by vm_execute_generator)
+    if (previous_vm != NULL) {
+        vm.current_generator = previous_vm->current_generator;
+        vm.is_generator_exec = previous_vm->is_generator_exec;
+        vm.resume_ip_offset = previous_vm->resume_ip_offset;
+        vm.resume_stack_count = previous_vm->resume_stack_count;
+    }
+
     CallFrame frames[MAX_FRAMES];
     int frame_count = 0;
 
+    // Support generator resume: start from saved IP offset
+    uint8_t* resume_start = chunk->code;
+    int initial_stack_count = 0;
+    if (vm.resume_ip_offset > 0) {
+        resume_start = chunk->code + vm.resume_ip_offset;
+        initial_stack_count = vm.resume_stack_count;
+        vm.resume_ip_offset = 0;
+        vm.resume_stack_count = 0;
+    }
+
     CallFrame* frame = &frames[frame_count++];
     frame->chunk = chunk;
-    frame->ip = chunk->code;
+    frame->ip = resume_start;
     frame->ip_end = chunk->code + chunk->code_count;
     frame->slots = vm.stack;
     frame->closure = env;
 
-    Value* sp = vm.stack;
+    Value* sp = vm.stack + initial_stack_count;
     Value* constants = frame->chunk->constants;
     uint8_t* ip = frame->ip;
     uint8_t* ip_end = frame->ip_end;
@@ -354,6 +381,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
         &&BC_OP_BREAK, &&BC_OP_CONTINUE, &&BC_OP_LOOP_BACK, &&BC_OP_IMPORT,
         &&BC_OP_CLASS, &&BC_OP_METHOD, &&BC_OP_INHERIT, &&BC_OP_SETUP_TRY,
         &&BC_OP_END_TRY, &&BC_OP_RAISE, &&BC_OP_GET_LOCAL, &&BC_OP_SET_LOCAL,
+        &&BC_OP_YIELD, &&BC_OP_CREATE_GENERATOR, &&BC_OP_GENERATOR_NEXT,
         &&BC_OP_GPU_POLL_EVENTS,
         &&BC_OP_GPU_WINDOW_SHOULD_CLOSE, &&BC_OP_GPU_GET_TIME,
         &&BC_OP_GPU_KEY_PRESSED, &&BC_OP_GPU_KEY_DOWN, &&BC_OP_GPU_MOUSE_POS,
@@ -1018,6 +1046,60 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             }
             BC_OP_GPU_CMD_DISPATCH: { Value gz = POP(), gy = POP(), gx = POP(), cmd = POP(); sgpu_cmd_dispatch((int)AS_NUMBER(cmd), (int)AS_NUMBER(gx), (int)AS_NUMBER(gy), (int)AS_NUMBER(gz)); DISPATCH(); }
 
+            // --- Generator opcodes ---
+            BC_OP_YIELD: {
+                Value yielded = POP();
+                SYNC_SP();
+                // Save state for generator resumption (if in generator context)
+                if (vm.current_generator != NULL) {
+                    vm.current_generator->saved_ip_offset = (int)(ip - frame->chunk->code);
+                    vm.current_generator->saved_stack_count = vm.stack_count;
+                    vm.current_generator->gen_env = frame->closure;
+                    vm.current_generator->has_resume_target = 1;
+                }
+                PUSH(yielded);
+                result = vm_normal(yielded);
+                goto done;
+            }
+            BC_OP_CREATE_GENERATOR: {
+                uint16_t name_index = READ_U16();
+                uint16_t function_index = READ_U16();
+                VM_CHECK_CONST(frame->chunk, name_index);
+                (void)name_index;
+                BytecodeProgram* program = frame->chunk->program;
+                if (program == NULL || function_index >= program->function_count) {
+                    result = vm_error("Invalid generator function index.");
+                    goto done;
+                }
+                Value gen_val = val_generator(NULL, NULL, 0, frame->closure);
+                GeneratorValue* gen = gen_val.as.generator;
+                gen->is_started = 0;
+                gen->is_exhausted = 0;
+                gen->has_resume_target = 0;
+                gen->saved_ip_offset = 0;
+                gen->saved_stack_count = 0;
+                gen->vm_function_index = function_index;
+                PUSH(gen_val);
+                DISPATCH();
+            }
+            BC_OP_GENERATOR_NEXT: {
+                Value gen_val = POP();
+                if (gen_val.type != VAL_GENERATOR) {
+                    result = vm_error("GENERATOR_NEXT called on non-generator value.");
+                    goto done;
+                }
+                GeneratorValue* gen = gen_val.as.generator;
+                if (gen->is_exhausted) {
+                    PUSH(val_nil());
+                    DISPATCH();
+                }
+                // Execute/resume generator
+                ExecResult gen_result = vm_execute_generator(gen, frame->closure);
+                if (gen_result.is_throwing) { result = gen_result; goto done; }
+                PUSH(gen_result.value);
+                DISPATCH();
+            }
+
 #ifndef __GNUC__
         }
 #endif
@@ -1044,6 +1126,58 @@ done:
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
+
+static ExecResult vm_execute_generator(GeneratorValue* gen, Env* caller_env) {
+    BytecodeChunk* gen_chunk = NULL;
+    int fn_idx = gen->vm_function_index;
+    if (fn_idx >= 0 && g_active_vm && g_active_vm->chunk && g_active_vm->chunk->program) {
+        BytecodeProgram* program = g_active_vm->chunk->program;
+        if (fn_idx < program->function_count) {
+            gen_chunk = &program->functions[fn_idx].chunk;
+        }
+    }
+    if (gen_chunk == NULL && gen->body != NULL) {
+        if (!gen->is_started) {
+            gen->gen_env = env_create(gen->closure ? gen->closure : caller_env);
+            gen->is_started = 1;
+        }
+        ExecResult ast_result = interpret((Stmt*)gen->body, gen->gen_env);
+        if (ast_result.is_yielding) {
+            gen->current_stmt = ast_result.next_stmt;
+            gen->has_resume_target = 1;
+            return vm_normal(ast_result.value);
+        }
+        gen->is_exhausted = 1;
+        gen->has_resume_target = 0;
+        if (ast_result.is_throwing) return ast_result;
+        return vm_normal(val_nil());
+    }
+    if (gen_chunk == NULL) return vm_normal(val_nil());
+    Env* gen_env = gen->gen_env ? gen->gen_env : env_create(gen->closure ? gen->closure : caller_env);
+    gen->is_started = 1;
+    ActiveVm gen_vm;
+    memset(&gen_vm, 0, sizeof(gen_vm));
+    gen_vm.chunk = gen_chunk;
+    gen_vm.parent = g_active_vm;
+    gen_vm.current_generator = gen;
+    gen_vm.is_generator_exec = 1;
+    if (gen->has_resume_target && gen->saved_ip_offset > 0) {
+        gen_vm.resume_ip_offset = gen->saved_ip_offset;
+        gen_vm.resume_stack_count = gen->saved_stack_count;
+    }
+    ActiveVm* previous_vm = g_active_vm;
+    g_active_vm = &gen_vm;
+    ExecResult result = vm_execute_chunk(gen_chunk, gen_env);
+    g_active_vm = previous_vm;
+    // YIELD handler saved state directly to gen via vm.current_generator.
+    // Detect yield: gen->has_resume_target is set by YIELD handler.
+    if (gen->has_resume_target && !result.is_throwing) {
+        return result;
+    }
+    gen->is_exhausted = 1;
+    gen->has_resume_target = 0;
+    return result;
+}
 
 ExecResult vm_execute_program(BytecodeProgram* program, Env* env) {
     ExecResult result = vm_normal(val_nil());

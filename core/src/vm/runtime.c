@@ -71,9 +71,27 @@ int sage_runtime_parse_mode(const char* text, SageRuntimeMode* mode_out) {
     return 0;
 }
 
+// Local pragma check (Pragma struct available via ast.h included from bytecode.h)
+static int stmt_has_pragma(Stmt* stmt, const char* name) {
+    if (!stmt || !stmt->pragmas) return 0;
+    for (Pragma* p = stmt->pragmas; p; p = p->next) {
+        if (strcmp(p->name, name) == 0) return 1;
+    }
+    return 0;
+}
+
 ExecResult sage_execute_stmt(Stmt* stmt, Env* env, SageRuntimeMode mode) {
     if (stmt == NULL) {
         return runtime_normal(val_nil());
+    }
+
+    // @VM pragma: force bytecode VM mode for this statement
+    if (stmt_has_pragma(stmt, "VM")) {
+        mode = SAGE_RUNTIME_BYTECODE;
+    }
+    // @no_vm pragma: force AST interpreter mode for this statement
+    if (stmt_has_pragma(stmt, "no_vm")) {
+        mode = SAGE_RUNTIME_AST;
     }
 
     if (mode == SAGE_RUNTIME_AUTO) {

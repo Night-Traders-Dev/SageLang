@@ -104,6 +104,11 @@ typedef unsigned long long uint64_t;
 #define OP_END_TRY        57
 #define OP_RAISE          58
 
+// Generator opcodes (yield support)
+#define OP_YIELD                  90
+#define OP_CREATE_GENERATOR       91
+#define OP_GENERATOR_NEXT         92
+
 // GPU hot-path opcodes (Phase 16)
 #define OP_GPU_POLL_EVENTS         59
 #define OP_GPU_WINDOW_SHOULD_CLOSE 60
@@ -187,6 +192,7 @@ typedef enum {
     MV_DICT,
     MV_FN,
     MV_PTR,
+    MV_GENERATOR,
 } MetalValueType;
 
 typedef struct {
@@ -202,6 +208,7 @@ typedef struct {
         int      arr_idx;
         int      dict_idx;
         int      fn_idx;
+        int      gen_idx;
         void    *ptr;
     } as;
 } MetalValue;
@@ -236,6 +243,14 @@ typedef struct {
     int  jit_compiled;
     void *native_code;
 } MetalFunction;
+
+#define METAL_GENERATOR_MAX 16
+
+typedef struct {
+    int fn_idx;          // Function index the generator wraps
+    int saved_ip;        // Resume offset within the function chunk
+    int is_exhausted;
+} MetalGenerator;
 
 typedef struct {
     int        name_hash[METAL_VARS_PER_SCOPE];
@@ -287,6 +302,10 @@ typedef struct {
     unsigned char heap[METAL_HEAP_SIZE];
     int           heap_used;
 
+    MetalGenerator generators[METAL_GENERATOR_MAX];
+    int            gen_count;
+    int            current_gen_idx;  // -1 when not in generator exec
+
     struct {
         int ip;
         int stack_size;
@@ -334,6 +353,7 @@ MetalValue mv_num(double v);       /* IEEE 754 hosted */
 MetalValue mv_bool(int v);
 MetalValue mv_str(MetalVM *vm, const char *s, int len);
 MetalValue mv_ptr(void *p);
+MetalValue mv_generator(int gen_idx);
 
 int        metal_vm_push(MetalVM *vm, MetalValue value);
 MetalValue metal_vm_pop(MetalVM *vm);

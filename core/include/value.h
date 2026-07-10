@@ -67,6 +67,11 @@ typedef struct {
     int is_exhausted; // Has generator finished?
     void* current_stmt; // Current statement position (for resumption)
     int has_resume_target; // Whether current_stmt is a valid resume target
+    
+    // Bytecode VM generator state (full frame suspension)
+    int saved_ip_offset;     // IP offset within bytecode chunk to resume at
+    int saved_stack_count;   // Stack depth to restore on resume
+    int vm_function_index;   // Index into BytecodeProgram.functions[]
 } GeneratorValue;
 
 // PHASE 8: Function value structure (for module exports)

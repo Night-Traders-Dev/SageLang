@@ -68,6 +68,10 @@ typedef enum {
     BC_OP_RAISE,             // raise exception (value on stack)
     BC_OP_GET_LOCAL,         // [u16 index] Directly access value on the stack
     BC_OP_SET_LOCAL,         // [u16 index] Update value on the stack
+    // Generator opcodes (yield support)
+    BC_OP_YIELD,             // Yield a value from generator (value on stack, or nil)
+    BC_OP_CREATE_GENERATOR,  // [u16 name, u16 fn_idx] Define generator function
+    BC_OP_GENERATOR_NEXT,    // Resume generator execution (generator on stack, push yielded value)
     // GPU hot-path opcodes (Phase 16: game engine optimization)
     BC_OP_GPU_POLL_EVENTS,         // gpu.poll_events() — no args, no result
     BC_OP_GPU_WINDOW_SHOULD_CLOSE, // gpu.window_should_close() -> bool

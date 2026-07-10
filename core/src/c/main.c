@@ -1222,8 +1222,25 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
                 status = 0;
                 break;
             }
+            // Opcode remapping: bytecode.h numbers -> metal_vm.h numbers
+            // (the .svm text uses bytecode.h numbering, the .sgvm binary uses metal_vm.h)
+            static const uint8_t opcode_remap[256] = {
+                // 0-58: same in both
+                // 59 (BC_OP_GET_LOCAL) -> 88 (OP_GET_LOCAL)
+                0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,
+                0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,0,
+                0,0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0,0,
+                88,  // 59: BC_OP_GET_LOCAL -> OP_GET_LOCAL
+                89,  // 60: BC_OP_SET_LOCAL -> OP_SET_LOCAL
+                90,  // 61: BC_OP_YIELD -> OP_YIELD
+                91,  // 62: BC_OP_CREATE_GENERATOR -> OP_CREATE_GENERATOR
+                92,  // 63: BC_OP_GENERATOR_NEXT -> OP_GENERATOR_NEXT
+                // 64+: GPU opcodes, same in both (or pass through)
+            };
             for (int j = 0; j < len * 2; ) {
-                uint8_t op = hex_to_byte(line + j);
+                uint8_t host_op = hex_to_byte(line + j);
+                uint8_t op = opcode_remap[host_op];
+                if (op == 0) op = host_op;  // pass through if no remap
                 fputc(op, out);
                 j += 2;
                 
@@ -1245,8 +1262,8 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
                         fputc(hex_to_byte(line + j + 2), out);
                     }
                     j += 4;
-                } else if (op == OP_DEFINE_FN) {
-                    // DEFINE_FN: two 16-bit operands
+                } else if (op == OP_DEFINE_FN || op == OP_CREATE_GENERATOR) {
+                    // DEFINE_FN / CREATE_GENERATOR: two 16-bit operands
                     if (j + 8 > len * 2) goto cleanup;
                     int local_idx = (hex_to_byte(line + j) << 8) | hex_to_byte(line + j + 2);
                     int g_idx = (current_chunk >= 0 && current_chunk < 1024 && local_idx >= 0 && local_idx < 256)

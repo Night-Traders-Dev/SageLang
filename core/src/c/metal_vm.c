@@ -123,12 +123,17 @@ MetalValue mv_ptr(void* p) {
     MetalValue v; v.type = MV_PTR; v.as.ptr = p; return v;
 }
 
+MetalValue mv_generator(int gen_idx) {
+    MetalValue v; v.type = MV_GENERATOR; v.as.gen_idx = gen_idx; return v;
+}
+
 // ============================================================================
 // VM Init & Load
 // ============================================================================
 
 void metal_vm_init(MetalVM* vm) {
     memset(vm, 0, sizeof(MetalVM));
+    vm->current_gen_idx = -1;
 }
 
 void metal_vm_load(MetalVM* vm, const unsigned char* code, int length) {
@@ -240,6 +245,13 @@ int metal_vm_verify(MetalVM* vm) {
                     ip += 2;
                     break;
                 }
+                case OP_CREATE_GENERATOR: {
+                    if (ip + 4 > code_length) return -1;
+                    ip += 4;
+                    break;
+                }
+                case OP_GENERATOR_NEXT:
+                case OP_YIELD:
                 case OP_HALT:
                 case OP_NIL:
                 case OP_TRUE:
@@ -616,6 +628,9 @@ void metal_print_value(MetalVM* vm, MetalValue value) {
         case MV_PTR:
             metal_print_str(vm, "<ptr>");
             break;
+        case MV_GENERATOR:
+            metal_print_str(vm, "<generator>");
+            break;
         case MV_NIL:
         default:
             metal_print_str(vm, "nil");
@@ -968,6 +983,91 @@ int metal_vm_step(MetalVM* vm) {
             break;
         }
 
+        // Generator opcodes
+        case OP_CREATE_GENERATOR: {
+            int name_idx = read_u16(vm->code, &vm->ip);
+            int fn_idx = read_u16(vm->code, &vm->ip);
+            (void)name_idx;
+            if (vm->gen_count < METAL_GENERATOR_MAX) {
+                int gi = vm->gen_count++;
+                vm->generators[gi].fn_idx = fn_idx;
+                vm->generators[gi].saved_ip = 0;
+                vm->generators[gi].is_exhausted = 0;
+                metal_vm_push(vm, mv_generator(gi));
+            } else {
+                metal_vm_push(vm, mv_nil());
+            }
+            break;
+        }
+        case OP_YIELD: {
+            // Value to yield is on stack. Save IP to current generator.
+            if (vm->current_gen_idx >= 0) {
+                MetalGenerator* gen = &vm->generators[vm->current_gen_idx];
+                gen->saved_ip = vm->ip;
+                gen->is_exhausted = 0;
+                vm->current_gen_idx = -1;
+            }
+            // Pop call frame to return to caller
+            if (vm->csp > 0) {
+                vm->csp--;
+                vm->ip = vm->call_stack[vm->csp].ip;
+                vm->code = vm->call_stack[vm->csp].code;
+                vm->code_length = vm->call_stack[vm->csp].code_length;
+                // Yielded value remains on stack as "return value"
+            }
+            break;
+        }
+        case OP_GENERATOR_NEXT: {
+            MetalValue gen_val = metal_vm_pop(vm);
+            if (gen_val.type != MV_GENERATOR) {
+                metal_vm_push(vm, mv_nil());
+                break;
+            }
+            int gi = gen_val.as.gen_idx;
+            if (gi < 0 || gi >= vm->gen_count) {
+                metal_vm_push(vm, mv_nil());
+                break;
+            }
+            MetalGenerator* gen = &vm->generators[gi];
+            if (gen->is_exhausted) {
+                metal_vm_push(vm, mv_nil());
+                break;
+            }
+            if (gen->saved_ip == 0) {
+                // First call - invoke function
+                if (gen->fn_idx >= 0 && gen->fn_idx < vm->fn_count) {
+                    MetalFunction* f = &vm->functions[gen->fn_idx];
+                    vm->current_gen_idx = gi;
+                    if (vm->csp < METAL_CALL_STACK_SIZE) {
+                        vm->call_stack[vm->csp].ip = vm->ip;
+                        vm->call_stack[vm->csp].code = vm->code;
+                        vm->call_stack[vm->csp].code_length = vm->code_length;
+                        vm->csp++;
+                        vm->code = vm->chunks[0];
+                        vm->ip = f->code_offset;
+                        vm->code_length = f->code_length;
+                    }
+                } else {
+                    metal_vm_push(vm, mv_nil());
+                }
+            } else {
+                // Resume - set IP to saved position
+                vm->current_gen_idx = gi;
+                if (vm->csp < METAL_CALL_STACK_SIZE) {
+                    MetalFunction* f = &vm->functions[gen->fn_idx];
+                    vm->call_stack[vm->csp].ip = vm->ip;
+                    vm->call_stack[vm->csp].code = vm->code;
+                    vm->call_stack[vm->csp].code_length = vm->code_length;
+                    vm->csp++;
+                    vm->code = vm->chunks[0];
+                    vm->ip = gen->saved_ip;
+                    vm->code_length = f ? f->code_length : 65536;
+                    gen->saved_ip = 0;
+                }
+            }
+            break;
+        }
+
         // OOP
         case OP_CLASS: {
             int name_idx = read_u16(vm->code, &vm->ip);
@@ -1192,6 +1292,11 @@ int metal_vm_step(MetalVM* vm) {
         }
 
         case OP_RETURN:
+            // Mark generator exhausted if returning from generator context
+            if (vm->current_gen_idx >= 0) {
+                vm->generators[vm->current_gen_idx].is_exhausted = 1;
+                vm->current_gen_idx = -1;
+            }
             if (vm->csp > 0) {
                 vm->csp--;
                 vm->ip = vm->call_stack[vm->csp].ip;

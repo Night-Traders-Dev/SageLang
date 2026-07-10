@@ -220,6 +220,49 @@ static int emit_define_function(BytecodeCompiler* compiler, Token token, int fun
            emit_u16(compiler, (uint16_t)function_index, token.line, token.column);
 }
 
+static int emit_create_generator(BytecodeCompiler* compiler, Token token, int function_index) {
+    int name_index = add_name_constant(compiler, token.start, token.length);
+    if (name_index < 0) return 0;
+    if (name_index > 0xffff || function_index > 0xffff) {
+        set_error(compiler, "Bytecode function table exceeded 65535 entries.");
+        return 0;
+    }
+    return emit_op(compiler, BC_OP_CREATE_GENERATOR, token.line, token.column) &&
+           emit_u16(compiler, (uint16_t)name_index, token.line, token.column) &&
+           emit_u16(compiler, (uint16_t)function_index, token.line, token.column);
+}
+
+// Recursively check if a statement tree contains a yield statement
+static int stmt_contains_yield(Stmt* stmt) {
+    if (stmt == NULL) return 0;
+    if (stmt->type == STMT_YIELD) return 1;
+    switch (stmt->type) {
+        case STMT_BLOCK:
+            for (Stmt* s = stmt->as.block.statements; s; s = s->next) {
+                if (stmt_contains_yield(s)) return 1;
+            }
+            return 0;
+        case STMT_IF:
+            return stmt_contains_yield(stmt->as.if_stmt.then_branch) ||
+                   stmt_contains_yield(stmt->as.if_stmt.else_branch);
+        case STMT_WHILE:
+            return stmt_contains_yield(stmt->as.while_stmt.body);
+        case STMT_FOR:
+            return stmt_contains_yield(stmt->as.for_stmt.body);
+        case STMT_TRY:
+            for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+                if (stmt_contains_yield(stmt->as.try_stmt.catches[i]->body)) return 1;
+            }
+            if (stmt->as.try_stmt.finally_block && stmt_contains_yield(stmt->as.try_stmt.finally_block)) return 1;
+            return stmt_contains_yield(stmt->as.try_stmt.try_block);
+        case STMT_PROC:
+        case STMT_ASYNC_PROC:
+            return 0; // Nested procs don't count
+        default:
+            return 0;
+    }
+}
+
 static int emit_dup(BytecodeCompiler* compiler, uint8_t distance, int line, int column) {
     return emit_op(compiler, BC_OP_DUP, line, column) &&
            emit_u8(compiler, distance, line, column);
@@ -267,9 +310,15 @@ static int patch_jump(BytecodeCompiler* compiler, int patch_location, int target
 static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt);
 static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result);
 static int compile_expr(BytecodeCompiler* compiler, Expr* expr);
+static int stmt_has_pragma(Stmt* stmt, const char* name);
 
 static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
     if (stmt == NULL) return 0;
+
+    // @no_vm pragma: force AST fallback
+    if (stmt_has_pragma(stmt, "no_vm")) return 1;
+    // @VM pragma: compile to bytecode regardless of other considerations
+    if (stmt_has_pragma(stmt, "VM")) return 0;
 
     switch (stmt->type) {
         case STMT_BREAK:
@@ -277,8 +326,7 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
             if (compiler->loop_depth <= 0) { printf("DEBUG: break/continue outside loop\n"); return 1; }
             return 0;
         case STMT_YIELD:
-            printf("DEBUG: STMT_YIELD\n");
-            return 1;
+            return 0;
         case STMT_RETURN:
             if (!compiler->allow_return) { printf("DEBUG: STMT_RETURN not allowed\n"); return 1; }
             return 0;
@@ -559,10 +607,28 @@ static int emit_load_function(BytecodeCompiler* compiler, int function_index) {
            emit_u16(compiler, (uint16_t)function_index, 0, 0);
 }
 
+// Check if a statement has a specific pragma
+static int stmt_has_pragma(Stmt* stmt, const char* name) {
+    if (!stmt || !stmt->pragmas) return 0;
+    for (Pragma* p = stmt->pragmas; p; p = p->next) {
+        if (strcmp(p->name, name) == 0) return 1;
+    }
+    return 0;
+}
+
 static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result) {
     if (stmt == NULL) {
         if (want_result) {
             return emit_op(compiler, BC_OP_NIL, 0, 0);
+        }
+        return 1;
+    }
+
+    // @no_vm: skip bytecode compilation entirely (forces AST fallback)
+    if (stmt_has_pragma(stmt, "no_vm")) {
+        if (!emit_ast_stmt(compiler, stmt)) return 0;
+        if (!want_result) {
+            return emit_op(compiler, BC_OP_POP, 0, 0);
         }
         return 1;
     }
@@ -603,7 +669,12 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                                           compiler->error, compiler->error_size, &function_index)) {
                 return 0;
             }
-            if (!emit_define_function(compiler, stmt->as.proc.name, function_index)) return 0;
+            int is_generator = stmt_contains_yield((Stmt*)stmt->as.proc.body);
+            if (is_generator) {
+                if (!emit_create_generator(compiler, stmt->as.proc.name, function_index)) return 0;
+            } else {
+                if (!emit_define_function(compiler, stmt->as.proc.name, function_index)) return 0;
+            }
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
             return 1;
         }
@@ -837,6 +908,13 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 return 0;
             }
             return emit_op(compiler, BC_OP_RETURN, 0, 0);
+        case STMT_YIELD:
+            if (stmt->as.yield_stmt.value != NULL) {
+                if (!compile_expr(compiler, stmt->as.yield_stmt.value)) return 0;
+            } else if (!emit_op(compiler, BC_OP_NIL, 0, 0)) {
+                return 0;
+            }
+            return emit_op(compiler, BC_OP_YIELD, 0, 0);
         default:
             break;
     }

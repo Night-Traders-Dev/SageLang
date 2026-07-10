@@ -161,8 +161,8 @@ JitState* interpreter_get_jit(void) { return g_jit; }
 // Recursion depth tracking to prevent stack overflow
 #define MAX_RECURSION_DEPTH 500
 
-// Check if a statement has a specific pragma decorator (@nojit, @noaot, etc.)
-static __attribute__((unused)) int stmt_has_pragma(Stmt* stmt, const char* name) {
+// Check if a statement has a specific pragma decorator (@nojit, @noaot, @VM, @no_vm, etc.)
+static int stmt_has_pragma(Stmt* stmt, const char* name) {
     if (!stmt || !stmt->pragmas) return 0;
     for (Pragma* p = stmt->pragmas; p; p = p->next) {
         if (strcmp(p->name, name) == 0) return 1;
