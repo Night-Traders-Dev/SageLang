@@ -9,6 +9,27 @@ propagation so the per-entry version history is never flattened again.
 
 ---
 
+## [4.0.5] - 2026-07-12
+
+### Version Bump
+- Bumped SageLang version to 4.0.5 across the codebase.
+
+---
+
+## [4.0.4] - 2026-07-12
+
+### Standard Library & Hardening
+- **`crypto.hmac`**: Resolved $O(N^2)$ Algorithmic Complexity DoS vulnerability (CWE-400) in `to_hex` by refactoring it to collect hex characters in an array and run `join` once in $O(N)$ linear time.
+- **`crypto` auditing**: Confirmed all other core crypto functions (`to_hex` in `hash.sage` & `password.sage`, `split_colon`, `random_string`, and `uuid4`) are utilizing the $O(N)$ linear-time array-and-join pattern to prevent resource exhaustion attacks.
+
+### Parser & Core
+- **Multi-line assignments**: Fixed multiple parser/compiler errors caused by multi-line let statements without parentheses or line continuations (e.g. in `hash.sage` and `rand.sage`). All assignments were refactored to single-line declarations.
+
+### Testing
+- **`sys_info` unit test**: Converted `sys_info.sage` to dynamically load the version string from the project's single-source `VERSION` file, making the test fully version-independent and preventing future version-bump test failures.
+
+---
+
 ## [4.0.3] - 2026-07-07
 
 ### Standard Library
