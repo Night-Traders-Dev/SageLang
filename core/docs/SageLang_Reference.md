@@ -378,24 +378,19 @@ Type annotations are **validated at runtime** by the type checker but do not aff
 
 ## 3. Keywords & Operators
 
-### 3.1 Keywords (55 total)
+### 3.1 Keywords (47 total)
 
-Full list from `token.h`:
+Full list from `token.h` and lexer:
 
 ```
-let      var      proc     if       else     elif
-while    for      return   print
-and      or       not      in       break    continue
-class    self     init     super
-match    case     default
-try      catch    finally  raise
-defer    yield
-async    await
-struct   enum     trait
-unsafe   end
-import   from     as
-comptime macro    quote    unquote
-true     false    nil    @
+and      as       async    await    break    case
+catch    class    comptime continue default  defer
+elif     else     end      enum     false    finally
+for      from     if       import   in       init
+let      macro    match    nil      not      or
+print    proc     quote    raise    return   self
+struct   super    trait    true     try      unquote
+unsafe   var      while    yield    @
 ```
 
 **Soft keywords** (v4.0.0+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
