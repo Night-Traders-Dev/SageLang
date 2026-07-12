@@ -433,7 +433,8 @@ static int match_identifier_like(void) {
         current_token.type == TOKEN_TRAIT ||
         current_token.type == TOKEN_MATCH ||
         current_token.type == TOKEN_END ||
-        current_token.type == TOKEN_INIT) {
+        current_token.type == TOKEN_INIT ||
+        current_token.type == TOKEN_PRINT) {
         advance_parser();
         return 1;
     }
@@ -804,7 +805,8 @@ static Expr* postfix() {
             if (!match(TOKEN_IDENTIFIER) && !match(TOKEN_INIT) &&
                 !match(TOKEN_CLASS) && !match(TOKEN_SELF) &&
                 !match(TOKEN_SUPER) && !match(TOKEN_IN) &&
-                !match(TOKEN_IMPORT) && !match(TOKEN_END)) {
+                !match(TOKEN_IMPORT) && !match(TOKEN_END) &&
+                !match(TOKEN_PRINT)) {
                 parser_report(current_token, token_span(&current_token),
                               "expected property name after '.' or '->'",
                               "identifiers start with a letter or '_'");
@@ -1191,7 +1193,7 @@ static TypeAnnotation* parse_type_annotation(void) {
 }
 
 static Stmt* proc_declaration() {
-    if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_INIT) {
+    if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_INIT || current_token.type == TOKEN_PRINT) {
         Token name = current_token;
         advance_parser();
 

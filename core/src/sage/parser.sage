@@ -278,8 +278,8 @@ class Parser:
                     self.consume(token.TOKEN_RBRACKET, "Expect ']' after index.")
                     expr = index_expr(expr, start_or_index)
             elif self.match_tok(token.TOKEN_DOT):
-                # Property access (allow identifiers and 'end' keyword)
-                if self.check(token.TOKEN_IDENTIFIER) or self.check(token.TOKEN_END):
+                # Property access (allow identifiers, 'end', and 'print' keywords)
+                if self.check(token.TOKEN_IDENTIFIER) or self.check(token.TOKEN_END) or self.check(token.TOKEN_PRINT):
                     let prop = self.advance()
                     expr = get_expr(expr, prop)
                 else:
@@ -468,7 +468,7 @@ class Parser:
 
     proc parse_proc():
         let name_type = self.peek_type()
-        if name_type != token.TOKEN_IDENTIFIER and name_type != token.TOKEN_INIT:
+        if name_type != token.TOKEN_IDENTIFIER and name_type != token.TOKEN_INIT and name_type != token.TOKEN_PRINT:
             let tok = self.peek()
             self.parse_error(tok, "Expected procedure name", "proc must be followed by a name: proc my_function():")
         let name = self.advance()
@@ -827,8 +827,11 @@ class Parser:
 
         # Let/var declaration
         if self.match_tok(token.TOKEN_LET) or self.match_tok(token.TOKEN_VAR):
-            self.consume(token.TOKEN_IDENTIFIER, "Expect variable name.")
-            let name = self.previous()
+            let name = nil
+            if self.check(token.TOKEN_IDENTIFIER) or self.check(token.TOKEN_PRINT):
+                name = self.advance()
+            else:
+                self.consume(token.TOKEN_IDENTIFIER, "Expect variable name.")
             let initializer = nil
             if self.match_tok(token.TOKEN_ASSIGN):
                 initializer = self.parse_expression()
