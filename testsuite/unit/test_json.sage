@@ -1,3 +1,33 @@
+# EXPECT: --- Test 1: Parse simple object ---
+# EXPECT: --- Test 2: Parse array ---
+# EXPECT: --- Test 3: Create object with helpers ---
+# EXPECT: --- Test 4: Print formatted and unformatted ---
+# EXPECT: --- Test 5: Nested objects ---
+# EXPECT: --- Test 6: Roundtrip ---
+# EXPECT: --- Test 7: Type checks ---
+# EXPECT: --- Test 8: HasObjectItem ---
+# EXPECT: --- Test 9: Array manipulation ---
+# EXPECT: --- Test 10: Object manipulation ---
+# EXPECT: --- Test 11: Duplicate ---
+# EXPECT: --- Test 12: Compare ---
+# EXPECT: --- Test 13: Case sensitivity ---
+# EXPECT: --- Test 14: Set helpers ---
+# EXPECT: --- Test 15: Minify ---
+# EXPECT: --- Test 16: Version ---
+# EXPECT: --- Test 17: ToSage / FromSage ---
+# EXPECT: --- Test 18: ParseWithLength ---
+# EXPECT: --- Test 19: CreateIntArray / CreateStringArray ---
+# EXPECT: --- Test 20: Escape sequences ---
+# EXPECT: --- Test 21: Empty containers ---
+# EXPECT: --- Test 22: Nested array in object ---
+# EXPECT: --- Test 23: AddObjectToObject ---
+# EXPECT: --- Test 24: Number formats ---
+# EXPECT: --- Test 25: Delete ---
+# EXPECT: 
+# EXPECT: =========================================
+# EXPECT: cJSON Test Results: 88 passed, 0 failed
+# EXPECT: =========================================
+# EXPECT: ALL TESTS PASSED
 gc_disable()
 
 from json import cJSON, cJSON_Parse, cJSON_Print, cJSON_PrintUnformatted

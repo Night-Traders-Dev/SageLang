@@ -1,3 +1,4 @@
+# EXPECT: All imports ok
 import blockchain.block as block_mod
 import blockchain.transaction as tx_mod
 import blockchain.contract as contract_mod

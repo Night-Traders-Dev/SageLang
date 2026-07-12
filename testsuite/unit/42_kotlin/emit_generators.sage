@@ -1,3 +1,4 @@
+# EXPECT: Runtime Error: for loop iterable must be an array, tuple, or dict.
 ## Test: Kotlin backend — generators with yield
 ## Run: sage --emit-kotlin tests/42_kotlin/emit_generators.sage
 

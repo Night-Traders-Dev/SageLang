@@ -1,3 +1,5 @@
+# EXPECT: Shape: circle r=5
+# EXPECT: 78.5397
 ## Test: Kotlin backend — super calls with proper dispatch
 ## Run: sage --emit-kotlin tests/42_kotlin/emit_super.sage
 

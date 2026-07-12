@@ -1,3 +1,5 @@
+# EXPECT: 42
+# EXPECT: 42
 ## Test: Kotlin backend — async/await with coroutines
 ## Run: sage --emit-kotlin tests/42_kotlin/emit_async.sage
 

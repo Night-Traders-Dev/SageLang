@@ -604,8 +604,8 @@ proc sys_call(callee):
 
 proc create_sys_module():
     let m = {}
-    m["version"]    = "3"
-    m["platform"]   = "sage-self-hosted"
+    m["version"]    = "4.0.0"
+    m["platform"]   = "sage"
     m["args"]       = sys_args
     m["exit"]       = sys_exit
     m["getenv"]     = sys_getenv
@@ -632,14 +632,14 @@ proc _fat_is_pow2(x):
     return (x & (x - 1)) == 0
 
 proc _fat_copy_trimmed(bytes, start, length):
-    let end = start + length - 1
-    while end >= start:
-        let b = bytes[end]
+    let end_idx = start + length - 1
+    while end_idx >= start:
+        let b = bytes[end_idx]
         if b != 32 and b != 0:
             break
-        end = end - 1
+        end_idx = end_idx - 1
     let chars = []
-    for i in range(start, end + 1):
+    for i in range(start, end_idx + 1):
         push(chars, chr(bytes[i]))
     return join(chars, "")
 
@@ -814,7 +814,10 @@ proc create_fat_module():
 # ============================================================================
 
 proc create_net_module():
-    return net.create_net_module()
+    if type(net) == "dict":
+        return net.create_net_module()
+    end
+    return nil
 
 # ============================================================================
 # Module Registry

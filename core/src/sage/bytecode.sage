@@ -690,6 +690,16 @@ proc chunk_to_artifact_text(chunk):
     return "chunk" + NL + chunk_payload_to_artifact_text(chunk, "endchunk")
 
 proc compile_to_vm_artifact(stmts):
+    let was_array = (type(stmts) == "array")
+    if not was_array:
+        let arr = []
+        let s = stmts
+        while s != nil:
+            push(arr, s)
+            s = s.next
+        end
+        stmts = arr
+    end
     let program = compile_to_program(stmts)
     if program == nil:
         return nil

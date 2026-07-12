@@ -1,3 +1,7 @@
+# EXPECT: 11
+# EXPECT: hello world!
+# EXPECT: 3
+# EXPECT: 1
 let s = "hello world"
 print len(s)
 print s + "!"

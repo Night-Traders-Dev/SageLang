@@ -1,3 +1,13 @@
+# EXPECT: 1
+# EXPECT: 2
+# EXPECT: 3
+# EXPECT: 4
+# EXPECT: 5
+# EXPECT: 6
+# EXPECT: 7
+# EXPECT: 8
+# EXPECT: 9
+# EXPECT: 10
 import blockchain.block as block_mod
 print "1"
 import blockchain.transaction as tx_mod

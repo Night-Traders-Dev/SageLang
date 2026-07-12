@@ -1,3 +1,7 @@
+# EXPECT: 42
+# EXPECT: 100
+# EXPECT: 3.14
+# EXPECT: x86_64
 ## Test: Kotlin backend — FFI and memory operations
 ## Run: sage --emit-kotlin tests/42_kotlin/emit_memory.sage
 

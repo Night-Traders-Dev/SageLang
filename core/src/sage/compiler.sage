@@ -1814,6 +1814,18 @@ proc emit_main_function(cc, program):
 # ============================================================================
 
 proc compile_to_c(program):
+    let was_array = (type(program) == "array")
+    if was_array:
+        if len(program) == 0:
+            program = nil
+        else:
+            for i in range(len(program) - 1):
+                program[i].next = program[i + 1]
+            end
+            program[len(program) - 1].next = nil
+            program = program[0]
+        end
+    end
     let cc = CCompiler()
     collect_top_level_symbols(cc, program)
     if cc.failed:

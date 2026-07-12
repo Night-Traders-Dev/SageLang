@@ -1,3 +1,6 @@
+# EXPECT: Testing os.errno constants...
+# EXPECT: Testing strerror...
+# EXPECT: All errno tests passed!
 import os.errno
 
 print "Testing os.errno constants..."

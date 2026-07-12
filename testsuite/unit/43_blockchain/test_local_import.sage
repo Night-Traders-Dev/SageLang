@@ -1,3 +1,9 @@
+# EXPECT: 1
+# EXPECT: 2
+# EXPECT: 3
+# EXPECT: 4
+# EXPECT: 5
+# EXPECT: 6
 proc main():
     print "1"
     import blockchain.blockchain as bc

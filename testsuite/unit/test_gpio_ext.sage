@@ -1,3 +1,10 @@
+# EXPECT: Testing pin_pull...
+# EXPECT: Pull 0: 1
+# EXPECT: Pull 1: 2
+# EXPECT: Testing pin_debounce...
+# EXPECT: Debounce LOW success: true
+# EXPECT: Debounce HIGH fail (expected): true
+# EXPECT: GPIO tests passed!
 import metal.gpio
 import metal.core
 

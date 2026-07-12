@@ -1,3 +1,10 @@
+# EXPECT: 1
+# EXPECT: 2
+# EXPECT: 3
+# EXPECT: 4
+# EXPECT: 5
+# EXPECT: 6
+# EXPECT: 7
 print "1"
 import io
 print "2"

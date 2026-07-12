@@ -1,3 +1,9 @@
+# EXPECT: Rex barks!
+# EXPECT: Whiskers meows!
+# EXPECT: I am Rex
+# EXPECT: It's a dog
+# EXPECT: Caught: Something went wrong
+# EXPECT: Cleanup done
 ## Test: Kotlin backend — classes, inheritance, methods
 ## Run: sage --emit-kotlin tests/42_kotlin/emit_classes.sage
 

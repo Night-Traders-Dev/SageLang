@@ -32,7 +32,7 @@ proc test_sage_to_lily():
     if not contains(lily, "func greet():"):
         print "Error: SageToLily failed to emit func. Output was: " + lily
         return false
-    if not contains(lily, "let msg = 42"):
+    if not contains(lily, "var msg = 42"):
         print "Error: SageToLily failed to emit let"
         return false
     if not contains(lily, "ptr msg"):

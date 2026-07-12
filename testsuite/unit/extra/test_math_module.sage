@@ -1,6 +1,11 @@
+# EXPECT: (PI:, 3.14159)
+# EXPECT: (random >= 0:, true)
+# EXPECT: (Testing floor:, 3)
+# EXPECT: (Testing ceil:, 4)
+# EXPECT: (Testing round:, 4)
 import math
 print("PI:", math.PI)
-print("random:", math.random())
+print("random >= 0:", math.random() >= 0.0 and math.random() < 1.0)
 print("Testing floor:", math.floor(3.7))
 print("Testing ceil:", math.ceil(3.2))
 print("Testing round:", math.round(3.5))

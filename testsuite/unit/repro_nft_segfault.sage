@@ -1,6 +1,19 @@
+# EXPECT: error: Unexpected character.
+# EXPECT:   --> <vm-compile>:2:20
+# EXPECT:   |
+# EXPECT: 2 | let sender = state['sender']
+# EXPECT:   |                    ^
+# EXPECT: Init wallet...
+# EXPECT: Artist: 0x591ae5da36853445afe704598480b5d0efb0a9ba
+# EXPECT: Init blockchain...
+# EXPECT: Blockchain init ok
+# EXPECT: Deploying...
 import blockchain.blockchain as bc
 import blockchain.wallet as wallet_mod
 import io
+import sys
+
+sys.shell_exec("rm -rf ./tmp_db")
 
 print "Init wallet..."
 let artist = wallet_mod.Wallet(nil)

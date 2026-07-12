@@ -689,6 +689,18 @@ proc emit_asm_epilogue(target):
 # ============================================================================
 
 proc compile_to_asm(program, target):
+    let was_array = (type(program) == "array")
+    if was_array:
+        if len(program) == 0:
+            program = nil
+        else:
+            for i in range(len(program) - 1):
+                program[i].next = program[i + 1]
+            end
+            program[len(program) - 1].next = nil
+            program = program[0]
+        end
+    end
     let ctx = isel_compile(program)
     let parts = []
     push(parts, emit_asm_header(target))

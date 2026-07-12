@@ -1,3 +1,36 @@
+# EXPECT: [10, 20, 30, 40, 50]
+# EXPECT: 5
+# EXPECT: 10
+# EXPECT: 30
+# EXPECT: 6
+# EXPECT: 10
+# EXPECT: 20
+# EXPECT: 30
+# EXPECT: 40
+# EXPECT: 50
+# EXPECT: 60
+# EXPECT: 0
+# EXPECT: 1
+# EXPECT: 2
+# EXPECT: 3
+# EXPECT: 4
+# EXPECT: 2
+# EXPECT: 3
+# EXPECT: 4
+# EXPECT: 5
+# EXPECT: 6
+# EXPECT: {"age": 30, "name": Alice}
+# EXPECT: [age, name]
+# EXPECT: [30, Alice]
+# EXPECT: true
+# EXPECT: false
+# EXPECT: (10, 20, 30)
+# EXPECT: 10
+# EXPECT: 3
+# EXPECT: [2, 3]
+# EXPECT: [1, 2]
+# EXPECT: [3, 4]
+# EXPECT: [5, 6]
 ## Test: Kotlin backend — arrays, dicts, tuples, for loops
 ## Run: sage --emit-kotlin tests/42_kotlin/emit_collections.sage
 

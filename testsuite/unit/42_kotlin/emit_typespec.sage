@@ -1,3 +1,6 @@
+# EXPECT: 30
+# EXPECT: 205
+# EXPECT: 4950
 ## Test: Kotlin backend — type specialization at -O2
 ## Run: sage --emit-kotlin tests/42_kotlin/emit_typespec.sage -O2
 

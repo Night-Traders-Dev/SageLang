@@ -1,3 +1,5 @@
+# EXPECT: <native fn>
+# EXPECT: nil
 import sys
 let a = sys.args
 print a

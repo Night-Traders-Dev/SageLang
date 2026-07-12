@@ -1,3 +1,12 @@
+# EXPECT: 30
+# EXPECT: 120
+# EXPECT: 55
+# EXPECT: positive
+# EXPECT: negative
+# EXPECT: zero
+# EXPECT: 5050
+# EXPECT: 4
+# EXPECT: nil
 ## Test: Kotlin backend — functions, recursion, closures
 ## Run: sage --emit-kotlin tests/42_kotlin/emit_functions.sage
 

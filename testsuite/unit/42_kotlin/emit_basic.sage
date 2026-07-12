@@ -1,3 +1,24 @@
+# EXPECT: 10
+# EXPECT: Sage
+# EXPECT: true
+# EXPECT: nil
+# EXPECT: 30
+# EXPECT: 90
+# EXPECT: 45
+# EXPECT: 2
+# EXPECT: Hello, Sage!
+# EXPECT: 12
+# EXPECT: true
+# EXPECT: true
+# EXPECT: true
+# EXPECT: true
+# EXPECT: false
+# EXPECT: true
+# EXPECT: true
+# EXPECT: 42
+# EXPECT: 3.14
+# EXPECT: number
+# EXPECT: string
 ## Test: Kotlin backend — basic expressions and statements
 ## Run: sage --emit-kotlin tests/42_kotlin/emit_basic.sage
 

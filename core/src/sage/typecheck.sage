@@ -199,7 +199,30 @@ proc infer_stmt_list(tmap, head):
 
 # Pass entry point
 proc pass_typecheck(program, ctx):
+    let was_array = (type(program) == "array")
+    if was_array:
+        if len(program) == 0:
+            program = nil
+        else:
+            for i in range(len(program) - 1):
+                program[i].next = program[i + 1]
+            end
+            program[len(program) - 1].next = nil
+            program = program[0]
+        end
+    end
+
     let tmap = TypeMap()
     infer_stmt_list(tmap, program)
     # Type checking is informational for now; does not transform AST
+
+    if was_array:
+        let arr = []
+        let s = program
+        while s != nil:
+            push(arr, s)
+            s = s.next
+        end
+        return arr
+    end
     return program

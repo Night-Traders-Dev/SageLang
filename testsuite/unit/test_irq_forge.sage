@@ -1,3 +1,14 @@
+# EXPECT: Testing IRQ depth...
+# EXPECT: Initial depth: 0
+# EXPECT: Depth after enter: 1
+# EXPECT: Depth after second enter: 2
+# EXPECT: Depth after exit: 1
+# EXPECT: Final depth: 0
+# EXPECT: Testing handler registration...
+# EXPECT: Handler called for vector 42
+# EXPECT: Testing mask/unmask (stubs)...
+# EXPECT: Testing double registration guard (should panic)...
+# EXPECT: PANIC: IRQ handler already registered for vector 42
 import metal.irq
 import metal.core
 
