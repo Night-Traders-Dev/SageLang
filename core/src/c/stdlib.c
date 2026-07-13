@@ -859,7 +859,8 @@ static Value str_repeat_native(int argCount, Value* args) {
     int count = (int)AS_NUMBER(args[1]);
     if (count <= 0) return val_string("");
     size_t slen = SAGE_STRING_LEN(args[0]);
-    if (slen > 0 && (size_t)count > (64 * 1024 * 1024) / slen) return val_nil();  // overflow guard
+    // Security: Enforce global allocation limit (CWE-400)
+    if (slen > 0 && (size_t)count > SAGE_MAX_READ_SIZE / slen) return val_nil();
     size_t total = slen * (size_t)count;
     char* buf = SAGE_ALLOC(total + 1);
     for (int i = 0; i < count; i++) {

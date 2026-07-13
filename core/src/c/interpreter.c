@@ -419,8 +419,8 @@ static Value array_repeat_native(int argCount, Value* args) {
     int count = (int)AS_NUMBER(args[1]);
     if (count <= 0) return val_array();
 
-    // Overflow guard: 1GB limit for the allocated elements array
-    if ((size_t)count > (1024 * 1024 * 1024) / sizeof(Value)) return val_nil();
+    // Security: Enforce global allocation limit (CWE-400)
+    if ((size_t)count > SAGE_MAX_READ_SIZE / sizeof(Value)) return val_nil();
 
     Value res = val_array();
     ArrayValue* a = res.as.array;
@@ -460,7 +460,8 @@ static Value string_repeat_native(int argCount, Value* args) {
     int count = (int)AS_NUMBER(args[1]);
     if (count <= 0) return val_string("");
     size_t slen = strlen(s);
-    if (slen > 0 && (size_t)count > (1024 * 1024 * 1024) / slen) return val_nil();
+    // Security: Enforce global allocation limit (CWE-400)
+    if (slen > 0 && (size_t)count > SAGE_MAX_READ_SIZE / slen) return val_nil();
     size_t total = slen * (size_t)count;
     char* buf = SAGE_ALLOC(total + 1);
     for (int i = 0; i < count; i++) {
@@ -751,6 +752,21 @@ static Value range_native(int argCount, Value* args) {
         if (step == 0) return val_nil();
     }
 
+    // Security: Enforce global allocation limit (CWE-400)
+    long long count = 0;
+    if (step > 0) {
+        if (end > start) count = ((long long)end - start + step - 1) / step;
+    } else {
+        if (start > end) {
+            long long l_step = step;
+            count = ((long long)start - end + (-l_step) - 1) / (-l_step);
+        }
+    }
+    if (count > SAGE_MAX_READ_SIZE / (int)sizeof(Value)) {
+        fprintf(stderr, "Security Error: range too large\n");
+        return val_nil();
+    }
+
     Value arr_val = val_array();
     if (step > 0) {
         for (int i = start; i < end; i += step) {
@@ -781,6 +797,7 @@ static Value replace_native(int argCount, Value* args) {
     if (argCount != 3) return val_nil();
     if (!IS_STRING(args[0]) || !IS_STRING(args[1]) || !IS_STRING(args[2])) return val_nil();
     char* result = string_replace(AS_STRING(args[0]), AS_STRING(args[1]), AS_STRING(args[2]));
+    if (!result) return val_nil();
     return val_string_take(result);
 }
 
@@ -1364,6 +1381,8 @@ static Value bytes_new_native(int argCount, Value* args) {
     if (argCount == 0) return val_bytes(NULL, 0);
     if (argCount == 1 && IS_NUMBER(args[0])) {
         int len = (int)AS_NUMBER(args[0]);
+        // Security: Enforce global allocation limit (CWE-400)
+        if (len < 0 || len > SAGE_MAX_READ_SIZE) return val_nil();
         Value b = val_bytes_empty(len);
         b.as.bytes->length = len;
         memset(b.as.bytes->data, 0, len);
@@ -1493,8 +1512,9 @@ static Value mem_alloc_native(int argCount, Value* args) {
         return val_nil();
     }
     size_t size = (size_t)AS_NUMBER(args[0]);
-    if (size == 0 || size > 1024 * 1024 * 64) { // Cap at 64MB
-        fprintf(stderr, "mem_alloc(): invalid size (0 < size <= 64MB).\n");
+    // Security: Enforce global allocation limit (CWE-400)
+    if (size == 0 || size > SAGE_MAX_READ_SIZE) {
+        fprintf(stderr, "mem_alloc(): invalid size (0 < size <= 100MB).\n");
         return val_nil();
     }
     void* ptr = calloc(1, size); // Zero-initialized

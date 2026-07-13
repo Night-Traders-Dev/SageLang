@@ -548,6 +548,10 @@ Value string_join(Value* arr, const char* separator) {
             total_len += SAGE_STRING_LEN(a->elements[i]);
         }
         if (i < a->count - 1) total_len += sep_len;
+
+        // Security: Enforce global allocation limit (CWE-400)
+        // Check periodically during summation to prevent massive overflow bypass
+        if (total_len > SAGE_MAX_READ_SIZE) return val_nil();
     }
 
     char* result = SAGE_ALLOC(total_len + 1);
@@ -599,8 +603,8 @@ char* string_replace(const char* str, const char* old, const char* new_str) {
     // Use signed arithmetic to avoid underflow when new_len < old_len
     long long delta = (long long)new_len - (long long)old_len;
     long long result_ll = (long long)str_len + (long long)count * delta;
-    if (result_ll < 0 || (size_t)result_ll > SIZE_MAX - 1) {
-        fprintf(stderr, "Error: String replace overflow\n");
+    if (result_ll < 0 || (size_t)result_ll > SAGE_MAX_READ_SIZE) {
+        fprintf(stderr, "Security Error: String replace exceeds allocation limit\n");
         return NULL;
     }
     size_t result_len = (size_t)result_ll;
