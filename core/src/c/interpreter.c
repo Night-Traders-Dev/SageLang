@@ -2721,10 +2721,11 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 return EVAL_RESULT(val_number(AS_NUMBER(left) + AS_NUMBER(right)));
             }
             if (IS_STRING(left) && IS_STRING(right)) {
+                /* Optimization: Use cached string length from GC header (O(1) instead of O(N)). */
                 char* s1 = AS_STRING(left);
                 char* s2 = AS_STRING(right);
-                size_t len1 = strlen(s1);
-                size_t len2 = strlen(s2);
+                size_t len1 = (size_t)SAGE_STRING_LEN(left);
+                size_t len2 = (size_t)SAGE_STRING_LEN(right);
                 if (len1 > SIZE_MAX - len2 - 1) {
                     fprintf(stderr, "Error: String concatenation overflow\n");
                     AST_GC_POP();
@@ -2734,7 +2735,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 memcpy(result, s1, len1);
                 memcpy(result + len1, s2, len2 + 1);
                 AST_GC_POP();
-                return EVAL_RESULT(val_string_take(result));
+                return EVAL_RESULT(val_string_take_len(result, (int)(len1 + len2)));
             }
             if (IS_ARRAY(left) && IS_ARRAY(right)) {
                 ArrayValue* la = left.as.array;
