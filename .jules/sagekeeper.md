@@ -89,3 +89,15 @@ Evidence:
 
 Documentation Impact:
 Updated the documentation to clarify `mem_read(ptr, offset, type)` requires 3 arguments and `mem_write(ptr, offset, type, val)` requires 4 arguments.
+
+2024-07-12 - [Lexer Keywords Discrepancy]
+
+Discovery:
+The keyword lists in the documentation stated there were 55 keywords, but the lexer actually parses 46 exact keyword strings which are then augmented by `@` (as an operator/symbol in `token.h`) and `elif` (which the lexer maps internally to `TOKEN_IF` for parsing convenience, though it is syntactically a keyword to the user). The total number of valid user keywords in the language is exactly 47.
+
+Evidence:
+`core/src/c/lexer.c` identifier parsing logic (the `check_keyword` function calls and the switch statement).
+`core/include/token.h` which contains 46 token definitions corresponding to keywords (plus `TOKEN_AT`).
+
+Documentation Impact:
+Updated the Lexer section and Appendix in `SageLang_Guide.md`, as well as `SageLang_Reference.md` to list exactly the 47 active keywords: `and`, `as`, `async`, `await`, `break`, `case`, `catch`, `class`, `comptime`, `continue`, `default`, `defer`, `elif`, `else`, `end`, `enum`, `false`, `finally`, `for`, `from`, `if`, `import`, `in`, `init`, `let`, `macro`, `match`, `nil`, `not`, `or`, `print`, `proc`, `quote`, `raise`, `return`, `self`, `struct`, `super`, `trait`, `true`, `try`, `unquote`, `unsafe`, `var`, `while`, `yield`, and `@`. Future documentation should ensure consistency with `lexer.c` rather than purely `token.h` due to internal mappings like `elif`.
