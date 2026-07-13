@@ -713,7 +713,7 @@ static Expr* primary() {
 
     // Identifiers (including keywords that can be used as variable names in expression context)
     if (match(TOKEN_IDENTIFIER) || match(TOKEN_ENUM) || match(TOKEN_STRUCT) || match(TOKEN_TRAIT) ||
-        match(TOKEN_MATCH) || match(TOKEN_END) || match(TOKEN_INIT)) {
+        match(TOKEN_MATCH) || match(TOKEN_END) || match(TOKEN_INIT) || match(TOKEN_PRINT)) {
         Token name = previous_token;
         return new_variable_expr(name);
     }

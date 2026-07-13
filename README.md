@@ -128,7 +128,7 @@ section is a summary with links to the relevant guide.
   traits, match guards, default params, multiline literals, escape sequences,
   hex/octal/binary literals, `super` auto-self, dunder hooks (`__str__`/`__eq__`),
   bytes type, `unsafe` blocks, doc comments (`##`), path/hash builtins, `elif`,
-  `var` keyword
+  `var` keyword, `print` soft keyword
 - **Metaprogramming** — `comptime:` blocks, `comptime()` expressions, pragmas
   (`@inline`/`@packed`/`@section`/`@align`/`@deprecated`/`@noreturn`), AST macros,
   generics (`proc identity[T](x: T) -> T:`)

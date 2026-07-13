@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.0.3 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.0.5 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -378,7 +378,7 @@ Type annotations are **validated at runtime** by the type checker but do not aff
 
 ## 3. Keywords & Operators
 
-### 3.1 Keywords (55 total)
+### 3.1 Keywords (47 total)
 
 Full list from `token.h`:
 
@@ -398,7 +398,7 @@ comptime macro    quote    unquote
 true     false    nil    @
 ```
 
-**Soft keywords** (v4.0.0+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
+**Soft keywords** (v4.0.0+): `match`, `init`, `enum`, `struct`, `trait`, `print`, `end` — can be used as variable names in expressions and assignments.
 
 ### 3.2 Operators (Precedence Table)
 

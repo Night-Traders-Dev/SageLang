@@ -11,7 +11,7 @@ toc: true
 
 ## Executive Summary
 
-**SageLang** is a **Python-inspired, systems-oriented programming language** written in C. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports ten execution backends (C, LLVM IR, native assembly, bytecode VM, SageMetal VM, JIT, AOT, Kotlin/Android) and a self-hosted interpreter written in Sage itself. As of v3, Sage features structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust tab/whitespace token checks in sandbox security guards. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
+**SageLang** is a **Python-inspired, systems-oriented programming language** written in C. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports ten execution backends (C, LLVM IR, native assembly, bytecode VM, SageMetal VM, JIT, AOT, Kotlin/Android) and a self-hosted interpreter written in Sage itself. As of v4.0.5, Sage features structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust tab/whitespace token checks in sandbox security guards. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
 
 ---
 
@@ -122,6 +122,7 @@ main.c
 
 **Token Types** (from token.h):
 - **Keywords**: `let`, `var`, `proc`, `if`, `else`, `elif`, `while`, `for`, `in`, `return`, `print`, `class`, `self`, `init`, `super`, `break`, `continue`, `and`, `or`, `not`, `try`, `catch`, `finally`, `raise`, `yield`, `defer`, `match`, `case`, `default`, `import`, `from`, `as`, `async`, `await`, `unsafe`, `end`, `comptime`, `macro`, `quote`, `unquote`, `struct`, `enum`, `trait`, `true`, `false`, `nil`
+- **Soft Keywords**: `match`, `init`, `enum`, `struct`, `trait`, `print`, `end` — can be used as variable, property, or method names in expressions and assignments.
 - **Operators**: `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `&`, `|`, `^`, `~`, `<<`, `>>`
 - **Punctuation**: `(`, `)`, `[`, `]`, `{`, `}`, `:`, `,`, `.`
 - **Structural**: `INDENT`, `DEDENT`, `NEWLINE`, `DOC_COMMENT`, `EOF`, `ERROR`

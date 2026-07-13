@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "July 2026"
-version: "v4.0.3"
+version: "v4.0.5"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
