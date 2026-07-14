@@ -101,3 +101,90 @@ Evidence:
 
 Documentation Impact:
 Updated the Lexer section and Appendix in `SageLang_Guide.md`, as well as `SageLang_Reference.md` to list exactly the 47 active keywords: `and`, `as`, `async`, `await`, `break`, `case`, `catch`, `class`, `comptime`, `continue`, `default`, `defer`, `elif`, `else`, `end`, `enum`, `false`, `finally`, `for`, `from`, `if`, `import`, `in`, `init`, `let`, `macro`, `match`, `nil`, `not`, `or`, `print`, `proc`, `quote`, `raise`, `return`, `self`, `struct`, `super`, `trait`, `true`, `try`, `unquote`, `unsafe`, `var`, `while`, `yield`, and `@`. Future documentation should ensure consistency with `lexer.c` rather than purely `token.h` due to internal mappings like `elif`.
+
+2026-07-14 - [Enums Supported Natively]
+
+Discovery:
+The `enum` keyword is now supported natively in the language AST and interpreter (Phase 1.7), creating a dictionary mapping variant names to integers, and storing the enum name in `__name__`. Previous documentation claimed "Since Sage doesn't have enums or tagged unions, all AST nodes, functions, classes, and instances are represented as dicts with an `__interp_type` field".
+
+Evidence:
+`core/src/c/parser.c` parser execution (function `enum_declaration`).
+`core/src/c/interpreter.c` where `STMT_ENUM` is handled and creates the enum dictionary.
+
+Documentation Impact:
+Update `SageLang_Guide.md` section 13.3 "Key Design Decisions" which falsely claims Sage doesn't have enums, and correctly document the native enum feature in the language reference section (perhaps noting that ADTs / tagged unions still use the standard library `std.enum` or dicts, while simple C-like enums are native).
+
+2026-07-14 - [Structs and Traits Supported Natively]
+
+Discovery:
+The `struct` and `trait` keywords are now supported natively in the language AST and interpreter (Phase 1.7), creating native class representations for structs (with auto init/eq/str handled by field metadata) and dictionaries containing method signatures for traits.
+
+Evidence:
+`core/src/c/parser.c` (functions `struct_declaration` and `trait_declaration`).
+`core/src/c/interpreter.c` where `STMT_STRUCT` and `STMT_TRAIT` are handled.
+
+Documentation Impact:
+Document the native `struct` and `trait` features in `SageLang_Guide.md`. Previously, it may have been assumed these were purely library-based or non-existent in the core compiler. Update sections related to classes/types to mention `struct` and `trait` capabilities natively implemented via these AST nodes.
+
+2026-07-14 - [Tuple Documentation Discrepancy]
+
+Discovery:
+Line 613-614 of `SageLang_Guide.md` mentions:
+```
+let tuple = (1, 2, 3)
+print tuple             # (1, 2, 3)  # Immutable
+```
+I should verify if tuples are actually implemented natively in SageLang as a distinct type or if this is just an array syntax parsing artifact (or unimplemented feature).
+
+Evidence:
+Check parser.c for tuple expression logic. (To be done).
+
+2026-07-14 - [Tuples Supported Natively]
+
+Discovery:
+Tuples are supported natively by the parser (`new_tuple_expr`).
+
+Evidence:
+`core/src/c/parser.c` parser execution (function `primary` handles `(a, b)` syntax returning `new_tuple_expr`).
+
+Documentation Impact:
+No impact. Tuples are indeed supported, so lines 613-614 are correct.
+
+2026-07-14 - [Struct Value Types]
+
+Discovery:
+Structs in SageLang do not have a dedicated `VAL_STRUCT` runtime value type. Instead, they reuse the class machinery. Struct statements create a `VAL_CLASS` object that stores field metadata, but they do not introduce a distinct underlying type. Enums create dictionaries.
+
+Evidence:
+`core/src/c/interpreter.c` uses `class_create` for structs.
+`core/include/value.h` does not contain `VAL_STRUCT` or `VAL_ENUM`.
+
+Documentation Impact:
+When documenting `struct`, clarify that it is syntactic sugar for a lightweight class definition with auto-generated initializers, stringifiers, and equality operators, but backed by standard class and instance runtime representations.
+
+2026-07-14 - [Design Decisions Update]
+
+Discovery:
+Line 2405 of `SageLang_Guide.md` ("Dict-based value representation: Since Sage doesn't have enums or tagged unions...") is outdated and refers to the self-hosted interpreter's design. While the self-hosted interpreter may use dicts for its internal AST representation, the claim "Since Sage doesn't have enums..." is false as of Phase 1.7.
+
+Evidence:
+SageLang has native `enum` support which creates dictionaries mapped to integers. It's partially true that native ADTs (tagged unions) do not exist (they are implemented in `std.enum`), but the sentence is misleading.
+
+Documentation Impact:
+Reword to clarify that while SageLang recently introduced native C-like enums, the self-hosted interpreter relies on dictionary-based representations for its AST nodes because it was designed before these features existed or for simplicity.
+
+2026-07-14 - [SageLang Guide Review Complete]
+
+Discovery:
+I have audited the core documentation and verified it against implementation state, including newly discovered native keywords like `enum`, `struct`, and `trait`.
+
+Action:
+Update `core/docs/SageLang_Guide.md` to accurately document `enum`, `struct`, and `trait` natively, and correct the sentence claiming Sage doesn't have enums. Generate PDF using Pandoc.
+
+2026-07-14 - [Test Run Results]
+
+Discovery:
+I ran the tests and they passed with standard expected testsuite failures (like `asm_cross` due to missing `riscv64-linux-gnu-as` and `repro_nft_segfault` due to dynamic output).
+
+Action:
+No further action needed for tests. I will mark the step as complete.

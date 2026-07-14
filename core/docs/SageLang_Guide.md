@@ -1033,7 +1033,43 @@ print times3(10)              # 30
 print times5(10)              # 50
 ```
 
-### 4.4 Classes and Objects
+### 4.4 Structs, Enums, Traits, and Classes
+
+**Struct Definition (Phase 1.7)**:
+SageLang provides native `struct` support as a lightweight alternative to classes. Structs automatically generate `init`, `to_string`, and equality methods based on their fields. Under the hood, structs are represented as standard class/instance values (`VAL_CLASS`/`VAL_INSTANCE`).
+
+```sagelang
+struct Point:
+    x
+    y
+end
+
+let p = Point(10, 20)
+print p.x           # 10
+print p             # Point(x=10, y=20)
+```
+
+**Enum Definition (Phase 1.7)**:
+Native C-like `enum` support maps variant names to sequential integers starting from 0. At runtime, enums are represented as dictionaries. Note that tagged unions (ADTs with associated data) are still implemented via the standard library (`std.enum`).
+
+```sagelang
+enum Color:
+    Red
+    Green
+    Blue
+
+print Color.Red     # 0
+print Color.Green   # 1
+```
+
+**Trait Definition (Phase 1.7)**:
+Traits define an interface contract of method signatures. A trait compiles down to a dictionary containing the list of required method names.
+
+```sagelang
+trait Printable:
+    proc to_string(self)
+end
+```
 
 **Class Definition**:
 ```sagelang
@@ -2402,7 +2438,7 @@ The bootstrap reads a `.sage` file, tokenizes it, parses it to an AST, and evalu
 
 ### 13.3 Key Design Decisions
 
-**Dict-based value representation**: Since Sage doesn't have enums or tagged unions, all AST nodes, functions, classes, and instances are represented as dicts with an `__interp_type` field:
+**Dict-based value representation**: While SageLang recently added native C-like enums (Phase 1.7), the self-hosted interpreter relies on dictionary-based representations for its AST nodes because it was designed before these features existed and for simplicity. All AST nodes, functions, classes, and instances are represented as dicts with an `__interp_type` field:
 
 ```sagelang
 # A function value
