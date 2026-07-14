@@ -152,6 +152,21 @@ static int is_safe_path(const char* path) {
     return 1;
 }
 
+static int is_safe_command(const char* cmd) {
+    if (!cmd) return 1;
+    // Reject commands starting with hyphen to prevent flag injection in some contexts
+    if (cmd[0] == '-') return 0;
+    for (const char* p = cmd; *p; p++) {
+        // Allow alphanumeric and safe path/filename characters.
+        // Blocks metacharacters like ; | & > < $ ( ) ` " but allows spaces and single quotes for arguments
+        if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ' && *p != '\'') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 
 static int parse_codegen_options(int argc, const char* argv[], int start_index,
                                  const char** output_path, const char** cc_command,
@@ -1581,7 +1596,7 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
             if (command_matches(line, ":sh", &arg)) {
                 if (*arg == '\0') {
                     printf("Usage: :sh <command>\n");
-                } else if (!is_safe_path(arg)) {
+                } else if (!is_safe_command(arg)) {
                     printf("Security Error: Unsafe characters in command\n");
                 } else {
                     if (system(arg) == -1) { /* ignore */ }
