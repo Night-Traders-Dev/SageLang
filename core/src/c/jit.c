@@ -338,12 +338,18 @@ void jit_emit_jmp(JitEmitter* em, int label) {
 // JIT Compilation — Compile hot function to native x86-64
 // ============================================================================
 
-// Compile a Sage function to native code.
-// Strategy: Generate a wrapper that calls the C interpreter for the body
-// but with optimized dispatch for type-specialized arithmetic.
+#if defined(__x86_64__) || defined(_M_X64)
+#define JIT_SUPPORTED_ARCH 1
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#define JIT_SUPPORTED_ARCH 1
+#elif defined(__riscv) && __riscv_xlen == 64
+#define JIT_SUPPORTED_ARCH 1
+#else
+#define JIT_SUPPORTED_ARCH 0
+#endif
+
 JitNativeFn jit_compile_function(JitState* jit, void* proc_stmt, void* env) {
-#if !JIT_SUPPORTED || !(defined(__x86_64__) || defined(_M_X64))
-    // JIT code emission currently only supports x86-64
+#if !JIT_SUPPORTED || !JIT_SUPPORTED_ARCH
     (void)jit; (void)proc_stmt; (void)env;
     return NULL;
 #else
@@ -351,7 +357,6 @@ JitNativeFn jit_compile_function(JitState* jit, void* proc_stmt, void* env) {
     ProcStmt* proc = (ProcStmt*)proc_stmt;
     if (!proc) return NULL;
 
-    // Allocate code buffer from pool
     size_t code_start = jit->pool.used;
     size_t max_size = JIT_MAX_CODE_SIZE;
     if (code_start + max_size > jit->pool.capacity) return NULL;
@@ -360,48 +365,27 @@ JitNativeFn jit_compile_function(JitState* jit, void* proc_stmt, void* env) {
     JitEmitter em;
     jit_emitter_init(&em, code_buf, max_size);
 
-    // Generate a native wrapper that:
-    // 1. Sets up C calling convention frame
-    // 2. Calls the interpret() function with the proc body and environment
-    // 3. Returns the result
-    //
-    // Signature: Value jit_fn(int argc, Value* argv)
-    // System V ABI: rdi=argc, rsi=argv
-
-    // Function prologue
-    jit_emit_push(&em, JIT_RBP);
-    jit_emit_mov_reg_reg(&em, JIT_RBP, JIT_RSP);
-    jit_emit_push(&em, JIT_RBX);
-    jit_emit_push(&em, JIT_R12);
-    jit_emit_push(&em, JIT_R13);
-
-    // Save argc and argv
-    jit_emit_mov_reg_reg(&em, JIT_R12, JIT_RDI); // r12 = argc
-    jit_emit_mov_reg_reg(&em, JIT_R13, JIT_RSI); // r13 = argv
-
-    // Call the interpreter's exec function for the proc body:
-    // ExecResult interpret(Stmt* stmt, Env* env);
     extern ExecResult interpret(Stmt* stmt, Env* env);
 
-    // Load proc->body into rdi
-    jit_emit_mov_reg_imm64(&em, JIT_RDI, (uint64_t)(uintptr_t)proc->body);
-    // Load env into rsi
-    jit_emit_mov_reg_imm64(&em, JIT_RSI, (uint64_t)(uintptr_t)env);
-    // Call interpret
-    jit_emit_mov_reg_imm64(&em, JIT_RAX, (uint64_t)(uintptr_t)&interpret);
-    jit_emit_call_indirect(&em, JIT_RAX);
-
-    // ExecResult is returned in rax (value field for small structs)
-    // Just return it
-
-    // Epilogue
-    jit_emit_pop(&em, JIT_R13);
-    jit_emit_pop(&em, JIT_R12);
-    jit_emit_pop(&em, JIT_RBX);
-    jit_emit_pop(&em, JIT_RBP);
-    jit_emit_ret(&em);
-
-    jit_patch_jumps(&em);
+#if defined(__x86_64__) || defined(_M_X64)
+    // x86-64: mov rax, &interpret; jmp rax
+    jit_emit_byte(&em, 0x48); // REX.W
+    jit_emit_byte(&em, 0xB8); // movabs rax
+    jit_emit_u64(&em, (uint64_t)(uintptr_t)&interpret);
+    jit_emit_byte(&em, 0xFF); // jmp
+    jit_emit_byte(&em, 0xE0); // rax
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    // AArch64: ldr x16, .+8; br x16; .dword &interpret
+    jit_emit_u32(&em, 0x58000050);
+    jit_emit_u32(&em, 0xD61F0200);
+    jit_emit_u64(&em, (uint64_t)(uintptr_t)&interpret);
+#elif defined(__riscv) && __riscv_xlen == 64
+    // RV64: auipc t0, 0; ld t0, 12(t0); jr t0; .dword &interpret
+    jit_emit_u32(&em, 0x00000297);
+    jit_emit_u32(&em, 0x00c2b283);
+    jit_emit_u32(&em, 0x00028067);
+    jit_emit_u64(&em, (uint64_t)(uintptr_t)&interpret);
+#endif
 
     // Commit the code
     jit->pool.used = code_start + em.pos;

@@ -10,7 +10,8 @@
 //
 // Architecture: Method-level JIT with profiling counters.
 // - Profiling: Counts function entries and loop iterations
-// - Compilation: Hot functions compiled to x86-64 machine code
+// - Compilation: Hot functions compiled to native machine code
+//   Supported architectures: x86-64, AArch64, RV64
 // - Integration: JIT code callable from interpreter/VM via function pointer
 // - Tiered: Interpreter → Profiled Bytecode → JIT Native
 // ============================================================================
@@ -45,14 +46,14 @@ typedef struct {
     int param_count;
 } JitProfile;
 
-// x86-64 code buffer
+// Native code buffer (architecture-independent)
 typedef struct {
     uint8_t* code;            // Executable memory (mmap'd)
     size_t capacity;
     size_t used;
 } JitCodePool;
 
-// x86-64 code emitter
+// Native code emitter (architecture-independent)
 typedef struct {
     uint8_t* buf;
     size_t pos;
@@ -101,7 +102,7 @@ int  jit_new_label(JitEmitter* em);
 void jit_bind_label(JitEmitter* em, int label);
 void jit_patch_jumps(JitEmitter* em);
 
-// x86-64 instruction helpers
+// Instruction helpers (x86-64 primary, portable emit layer)
 void jit_emit_push(JitEmitter* em, int reg);
 void jit_emit_pop(JitEmitter* em, int reg);
 void jit_emit_mov_reg_imm64(JitEmitter* em, int reg, uint64_t imm);
@@ -116,10 +117,18 @@ void jit_emit_jne(JitEmitter* em, int label);
 void jit_emit_jmp(JitEmitter* em, int label);
 
 // Compilation
-typedef Value (*JitNativeFn)(int argc, Value* argv);
+typedef struct {
+    Value value;
+    int is_returning;
+    int is_breaking;
+    int is_continuing;
+    int is_throwing;
+    Value exception_value;
+} JitExecResult;
+typedef JitExecResult (*JitNativeFn)(void* stmt, void* env);
 JitNativeFn jit_compile_function(JitState* jit, void* proc_stmt, void* env);
 
-// x86-64 register names
+// x86-64 register names (used by x86-64 emitter helpers)
 #define JIT_RAX 0
 #define JIT_RCX 1
 #define JIT_RDX 2

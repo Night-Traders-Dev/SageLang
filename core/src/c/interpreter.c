@@ -3549,8 +3549,24 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 }
 
                 free(eval_args);
-
-                ExecResult res = interpret(func->body, scope);
+                
+                ExecResult res;
+                if (g_jit && g_jit->enabled && func_id >= 0) {
+                    JitProfile* profile = jit_get_profile(g_jit, func_id);
+                    if (profile && profile->jit_compiled && profile->native_code) {
+                        JitNativeFn native_fn = (JitNativeFn)(uintptr_t)profile->native_code;
+                        JitExecResult jres = native_fn((void*)func->body, (void*)scope);
+                        res.value = jres.value;
+                        res.is_returning = jres.is_returning;
+                        res.is_breaking = jres.is_breaking;
+                        res.is_continuing = jres.is_continuing;
+                        res.is_throwing = jres.is_throwing;
+                        res.exception_value = jres.exception_value;
+                        goto jitted;
+                    }
+                }
+                res = interpret(func->body, scope);
+jitted:
                 AST_GC_POP_ENV();
                 AST_GC_POP_N(1 + pushed_args);
 

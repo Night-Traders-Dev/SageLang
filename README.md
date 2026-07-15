@@ -11,10 +11,11 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.0.7 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.0.8 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
 
+- **v4.0.8 (Multi-Architecture JIT)**: JIT compiler now fully supports x86-64, AArch64, and RV64 architectures. JIT-compiled functions are now directly executed via native tail-call trampolines instead of being profiled but never invoked, resulting in actual performance gains for hot functions. VM dispatch loop optimized with register-pinned state variables, branch-predicted stack overflow checks, and consolidated binary operator handling.
 - **v4.0.7 (JIT Compilation Support)**: Added support for compiling a binary using `sage --jit hello.sage -o hello_jit`, and fixed the self-extracting JIT executable runner to execute the embedded script payload rather than starting the REPL.
 - **v4.0.6 (AOT & Compiler Fixes)**: Resolved buffer overflows and global scope issues in the AOT (Ahead-of-Time) compiler. Missing string and array built-in implementations (`s_replace`, `s_clock`, `s_split`, `s_ord`, `s_chr`, `s_join`) have been added to the AOT backend. Perfected JIT-guided AOT (`sage --aot --jit <file>`). Full cross-compilation is now supported via GCC cross-compilers.
 - **v4.0.5 / v4.0.4 (Security & Bug Fixes)**: Resolved $O(N^2)$ Algorithmic Complexity DoS vulnerability (CWE-400) in crypto library `to_hex`; resolved parser/compiler errors on multi-line assignments; converted `sys_info` unit test to load version dynamically from single-source `VERSION` file.
@@ -106,11 +107,11 @@ native backends).
 We recently ran a microbenchmark comparing the different execution backends:
 
 | Benchmark | VM | JIT | AOT | AOT+JIT |
-|-----------|----|-----|-----|---------|
-| Fibonacci(36) | 10.36 s | 11.14 s | 0.23 s | 0.25 s |
-| Nested Loop (5K x 5K) | 3.21 s | 3.14 s | 0.14 s | 0.13 s |
+|-----------|----|-----|-----|---------| 
+| Fibonacci(36) | 10.49 s | 10.87 s | 1.96 s | 0.24 s |
+| Nested Loop (5K x 5K) | 3.35 s | 3.20 s | 0.85 s | 0.14 s |
 
-*Note: The AOT compiler produces optimized C11 code which is then compiled via GCC `-O2` with `-fno-strict-aliasing`.*
+*Note: The AOT compiler produces optimized C11 code which is then compiled via GCC `-O2` with `-fno-strict-aliasing`. The JIT now supports x86-64, AArch64, and RV64 architectures.*
 
 ### Recipe Benchmarks
 

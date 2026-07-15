@@ -359,9 +359,9 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     frame->slots = vm.stack;
     frame->closure = env;
 
-    Value* sp = vm.stack + initial_stack_count;
-    Value* constants = frame->chunk->constants;
-    uint8_t* ip = frame->ip;
+    register Value* sp = vm.stack + initial_stack_count;
+    register Value* constants = frame->chunk->constants;
+    register uint8_t* ip = frame->ip;
     uint8_t* ip_end = frame->ip_end;
 
 #ifdef __GNUC__
@@ -398,10 +398,6 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 
     #define DISPATCH() \
         do { \
-            if (ip >= ip_end) { \
-                if (frame_count > 1) goto BC_OP_RETURN; \
-                else goto done; \
-            } \
             goto *dispatch_table[*ip++]; \
         } while (0)
 #else
@@ -411,7 +407,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 #define PUSH(val) \
     do { \
         Value _val = (val); \
-        if (sp >= vm.stack + VM_STACK_MAX) { \
+        if (__builtin_expect(sp >= vm.stack + VM_STACK_MAX, 0)) { \
             SYNC_SP(); \
             result = vm_error("VM stack overflow."); \
             goto done; \
@@ -674,7 +670,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 Value left = POP();
                 Value out = val_nil();
                 if (local_op == BC_OP_EQUAL || local_op == BC_OP_NOT_EQUAL) {
-                    int equal = values_equal(left, right);
+                    int equal = (left.type == right.type && left.type == VAL_NUMBER) ? (AS_NUMBER(left) == AS_NUMBER(right)) : values_equal(left, right);
                     out = val_bool(local_op == BC_OP_EQUAL ? equal : !equal);
                 } else if (local_op == BC_OP_GREATER || local_op == BC_OP_GREATER_EQUAL ||
                            local_op == BC_OP_LESS || local_op == BC_OP_LESS_EQUAL) {
