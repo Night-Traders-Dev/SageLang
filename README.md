@@ -107,10 +107,10 @@ We recently ran a microbenchmark comparing the different execution backends:
 
 | Benchmark | VM | JIT | AOT | AOT+JIT |
 |-----------|----|-----|-----|---------|
-| Fibonacci(36) | 11.16 s | 12.57 s | 0.0 s (Optimized) | 0.0 s (Optimized) |
-| Nested Loop (5K x 5K) | 3.18 s | 3.33 s | 0.0 s (Optimized) | 0.0 s (Optimized) |
+| Fibonacci(36) | 10.36 s | 11.14 s | 0.23 s | 0.25 s |
+| Nested Loop (5K x 5K) | 3.21 s | 3.14 s | 0.14 s | 0.13 s |
 
-*Note: AOT and AOT+JIT compilation modes heavily utilize GCC -O2 optimization during the build process, which completely optimized away the pure loop and fibonacci recursions into constants at compile-time, resulting in ~0.0s execution time.*
+*Note: The AOT compiler produces optimized C11 code which is then compiled via GCC `-O2` with `-fno-strict-aliasing`.*
 
 ### Recipe Benchmarks
 

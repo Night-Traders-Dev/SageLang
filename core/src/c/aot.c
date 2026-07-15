@@ -742,6 +742,7 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "#include <string.h>");
     aot_emit(aot, "#include <stdarg.h>");
     aot_emit(aot, "#include <math.h>");
+    aot_emit(aot, "#include <sys/time.h>");
     aot_emit(aot, "");
     aot_emit(aot, "/* Sage AOT Runtime */");
     aot_emit(aot, "typedef struct { int type; union { double number; int boolean; const char* string; void* ptr; } as; } SageValue;");
@@ -794,7 +795,7 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "static SageValue s_chr(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_NUM)return sage_string(\"\"); char b[2]={(char)a[0].as.number,0}; return sage_string(strdup(b)); }");
     aot_emit(aot, "static SageValue s_join(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_ARR||a[1].type!=SAGE_STR)return sage_string(\"\"); SageArr*arr=(SageArr*)a[0].as.ptr; if(arr->count==0)return sage_string(\"\"); int len=0; for(int i=0;i<arr->count;i++){SageValue sa=sage_str(arr->elems[i]); len+=strlen(sa.as.string);} len+=strlen(a[1].as.string)*arr->count; char*b=malloc(len+1); b[0]=0; for(int i=0;i<arr->count;i++){SageValue sa=sage_str(arr->elems[i]); strcat(b,sa.as.string); if(i<arr->count-1)strcat(b,a[1].as.string);} SageValue v; v.type=SAGE_STR; v.as.string=b; return v; }");
     aot_emit(aot, "static SageValue s_replace(int c, SageValue* a) { if(c<3||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR||a[2].type!=SAGE_STR)return a[0]; const char*str=a[0].as.string; const char*f=a[1].as.string; const char*r=a[2].as.string; if(strlen(f)==0)return a[0]; char*b=malloc(strlen(str)*4+1); b[0]=0; const char*p=str; while(1){const char*m=strstr(p,f); if(!m){strcat(b,p);break;} strncat(b,p,m-p); strcat(b,r); p=m+strlen(f);} SageValue v; v.type=SAGE_STR; v.as.string=b; return v; }");
-    aot_emit(aot, "static SageValue s_clock(int c, SageValue* a) { (void)c; (void)a; return sage_number(1234.5); }");
+    aot_emit(aot, "static SageValue s_clock(int c, SageValue* a) { (void)c; (void)a; struct timeval tv; gettimeofday(&tv, NULL); return sage_number((double)tv.tv_sec + (double)tv.tv_usec / 1000000.0); }");
     aot_emit(aot, "static SageValue s_ord(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR||strlen(a[0].as.string)==0)return sage_number(0); return sage_number((unsigned char)a[0].as.string[0]); }");
     // sage_print_value — MUST come after SageArr/SageDict definitions
     aot_emit(aot, "static void sage_print_value(SageValue v) { switch(v.type) { case SAGE_NUM: { double d=v.as.number; if(d==(double)(long long)d&&d>=-1e15&&d<=1e15) printf(\"%%lld\",(long long)d); else printf(\"%%g\",d); break; } case SAGE_BOOL: fputs(v.as.boolean?\"true\":\"false\",stdout); break; case SAGE_STR: fputs(v.as.string,stdout); break; case SAGE_ARR: { SageArr*a=(SageArr*)v.as.ptr; printf(\"[\"); for(int i=0;i<a->count;i++){if(i)printf(\", \");sage_print_value(a->elems[i]);} printf(\"]\"); break; } case SAGE_DICT: { SageDict*d=(SageDict*)v.as.ptr; printf(\"{\"); for(int i=0;i<d->count;i++){if(i)printf(\", \");printf(\"\\\"%%s\\\": \",d->keys[i]);sage_print_value(d->vals[i]);} printf(\"}\"); break; } default: fputs(\"nil\",stdout); } }");
@@ -881,7 +882,7 @@ int aot_compile_to_binary(AotCompiler* aot, const char* c_path, const char* bin_
     pid_t pid = fork();
     if (pid < 0) return 0;
     if (pid == 0) {
-        execlp(cc, cc, "-std=c11", "-O2", c_path, "-o", bin_path, "-lm", (char*)NULL);
+        execlp(cc, cc, "-std=c11", "-O2", "-fno-strict-aliasing", c_path, "-o", bin_path, "-lm", (char*)NULL);
         _exit(127);
     }
     int status;

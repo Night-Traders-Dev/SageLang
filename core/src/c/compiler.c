@@ -6101,7 +6101,7 @@ int compile_source_to_executable(const char *source, const char *input_path,
   }
 
   if (pid == 0) {
-    execlp(cc, cc, "-std=c11", c_output_path, "-o", exe_output_path, "-lm",
+    execlp(cc, cc, "-std=c11", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path, "-lm",
            (char *)NULL);
     fprintf(stderr, "Could not execute C compiler \"%s\": %s\n", cc,
             strerror(errno));
@@ -6143,11 +6143,16 @@ int compile_source_to_executable_opt(const char *source, const char *input_path,
 
   if (pid == 0) {
     if (debug_info) {
-      execlp(cc, cc, "-std=c11", "-g", c_output_path, "-o", exe_output_path,
+      execlp(cc, cc, "-std=c11", "-g", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path,
              "-lm", (char *)NULL);
     } else {
-      execlp(cc, cc, "-std=c11", c_output_path, "-o", exe_output_path, "-lm",
-             (char *)NULL);
+      if (opt_level >= 2) {
+          execlp(cc, cc, "-std=c11", "-O2", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path, "-lm",
+                 (char *)NULL);
+      } else {
+          execlp(cc, cc, "-std=c11", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path, "-lm",
+                 (char *)NULL);
+      }
     }
     fprintf(stderr, "Could not execute C compiler \"%s\": %s\n", cc,
             strerror(errno));
