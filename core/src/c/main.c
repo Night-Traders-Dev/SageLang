@@ -2228,17 +2228,22 @@ int main(int argc, const char* argv[]) {
                 int magic_len = (int)strlen(magic);
                 
                 fseek(f, search_start, SEEK_SET);
-                char* buf = malloc(size - search_start);
-                if (buf && fread(buf, 1, size - search_start, f) > 0) {
+                size_t to_read = (size_t)(size - search_start);
+                char* buf = malloc(to_read);
+                size_t nread = buf ? fread(buf, 1, to_read, f) : 0;
+                if (buf && nread > 0) {
                     char* found = NULL;
-                    for (long i = (size - search_start) - magic_len; i >= 0; i--) {
+                    for (long i = (long)nread - magic_len; i >= 0; i--) {
                         if (memcmp(buf + i, magic, magic_len) == 0) {
                             found = buf + i;
                             break;
                         }
                     }
                     if (found) {
-                        embedded_script = strdup(found + magic_len);
+                        size_t script_len = (size_t)((buf + nread) - (found + magic_len));
+                        embedded_script = SAGE_ALLOC(script_len + 1);
+                        memcpy(embedded_script, found + magic_len, script_len);
+                        embedded_script[script_len] = '\0';
                     }
                 }
                 if (buf) free(buf);
@@ -2336,6 +2341,12 @@ int main(int argc, const char* argv[]) {
     // PHASE 8: Initialize module system
     sage_set_args(argc, argv);
     init_module_system();
+
+    // If we have an embedded script, execute it and exit
+    if (embedded_script != NULL) {
+        run(embedded_script, "<embedded>", runtime_mode);
+        CLEANUP_AND_EXIT(0);
+    }
 
     // Parse global flags that can appear before the command or script
     while (cmd_argc >= 2) {
