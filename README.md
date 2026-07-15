@@ -101,6 +101,17 @@ Run `python3 scripts/generate_backend_chart.py` or
 `bash benchmarks/run_backend_compare.sh` to regenerate (8 workloads across all
 native backends).
 
+### AOT vs JIT vs VM Benchmarks
+
+We recently ran a microbenchmark comparing the different execution backends:
+
+| Benchmark | VM | JIT | AOT | AOT+JIT |
+|-----------|----|-----|-----|---------|
+| Fibonacci(36) | 11.16 s | 12.57 s | 0.0 s (Optimized) | 0.0 s (Optimized) |
+| Nested Loop (5K x 5K) | 3.18 s | 3.33 s | 0.0 s (Optimized) | 0.0 s (Optimized) |
+
+*Note: AOT and AOT+JIT compilation modes heavily utilize GCC -O2 optimization during the build process, which completely optimized away the pure loop and fibonacci recursions into constants at compile-time, resulting in ~0.0s execution time.*
+
 ### Recipe Benchmarks
 
 ![SageLang recipe benchmark total median time](core/assets/charts/benchmark-recipes-total.svg)
