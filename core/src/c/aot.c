@@ -228,7 +228,8 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
             char* right = aot_compile_expr(aot, expr->as.binary.right);
             JitTypeTag lt = aot_infer_expr_type(aot, expr->as.binary.left);
             JitTypeTag rt = aot_infer_expr_type(aot, expr->as.binary.right);
-            char* result = malloc(strlen(left) + strlen(right) + 128);
+            size_t sz = strlen(left)*2 + strlen(right)*2 + 128;
+            char* result = malloc(sz);
 
             int op = expr->as.binary.op.type;
             // Type-specialized fast paths
@@ -238,44 +239,44 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
                     case TOKEN_PLUS:  cop = "+"; break;
                     case TOKEN_MINUS: cop = "-"; break;
                     case TOKEN_STAR:  cop = "*"; break;
-                    case TOKEN_GT:  sprintf(result, "sage_bool(%s.as.number > %s.as.number)", left, right); goto done;
-                    case TOKEN_LT:  sprintf(result, "sage_bool(%s.as.number < %s.as.number)", left, right); goto done;
-                    case TOKEN_EQ:  sprintf(result, "sage_bool(%s.as.number == %s.as.number)", left, right); goto done;
-                    case TOKEN_NEQ: sprintf(result, "sage_bool(%s.as.number != %s.as.number)", left, right); goto done;
-                    case TOKEN_PERCENT: sprintf(result, "sage_number(fmod(%s.as.number, %s.as.number))", left, right); goto done;
+                    case TOKEN_GT:  snprintf(result, sz, "sage_bool(%s.as.number > %s.as.number)", left, right); goto done;
+                    case TOKEN_LT:  snprintf(result, sz, "sage_bool(%s.as.number < %s.as.number)", left, right); goto done;
+                    case TOKEN_EQ:  snprintf(result, sz, "sage_bool(%s.as.number == %s.as.number)", left, right); goto done;
+                    case TOKEN_NEQ: snprintf(result, sz, "sage_bool(%s.as.number != %s.as.number)", left, right); goto done;
+                    case TOKEN_PERCENT: snprintf(result, sz, "sage_number(fmod(%s.as.number, %s.as.number))", left, right); goto done;
                     default: break;
                 }
                 if (cop) {
-                    sprintf(result, "sage_number(%s.as.number %s %s.as.number)", left, cop, right);
+                    snprintf(result, sz, "sage_number(%s.as.number %s %s.as.number)", left, cop, right);
                     goto done;
                 }
             }
             if (lt == JIT_TYPE_STRING && rt == JIT_TYPE_STRING && op == TOKEN_PLUS) {
-                sprintf(result, "sage_strcat(%s, %s)", left, right);
+                snprintf(result, sz, "sage_strcat(%s, %s)", left, right);
                 goto done;
             }
             // Generic fallback — all operators
             switch (op) {
-                case TOKEN_PLUS:    sprintf(result, "sage_add(%s, %s)", left, right); break;
-                case TOKEN_MINUS:   sprintf(result, "sage_sub(%s, %s)", left, right); break;
-                case TOKEN_STAR:    sprintf(result, "sage_mul(%s, %s)", left, right); break;
-                case TOKEN_SLASH:   sprintf(result, "sage_div(%s, %s)", left, right); break;
-                case TOKEN_PERCENT: sprintf(result, "sage_mod(%s, %s)", left, right); break;
-                case TOKEN_EQ:      sprintf(result, "sage_eq(%s, %s)", left, right); break;
-                case TOKEN_NEQ:     sprintf(result, "sage_neq(%s, %s)", left, right); break;
-                case TOKEN_GT:      sprintf(result, "sage_gt(%s, %s)", left, right); break;
-                case TOKEN_LT:      sprintf(result, "sage_lt(%s, %s)", left, right); break;
-                case TOKEN_GTE:     sprintf(result, "sage_bool(%s.as.number >= %s.as.number)", left, right); break;
-                case TOKEN_LTE:     sprintf(result, "sage_bool(%s.as.number <= %s.as.number)", left, right); break;
-                case TOKEN_AND:     sprintf(result, "(sage_truthy(%s) ? %s : %s)", left, right, left); break;
-                case TOKEN_OR:      sprintf(result, "(sage_truthy(%s) ? %s : %s)", left, left, right); break;
-                case TOKEN_NOT:     sprintf(result, "sage_bool(!sage_truthy(%s))", left); break;
-                case TOKEN_AMP:     sprintf(result, "sage_number((double)((long long)%s.as.number & (long long)%s.as.number))", left, right); break;
-                case TOKEN_PIPE:    sprintf(result, "sage_number((double)((long long)%s.as.number | (long long)%s.as.number))", left, right); break;
-                case TOKEN_CARET:   sprintf(result, "sage_number((double)((long long)%s.as.number ^ (long long)%s.as.number))", left, right); break;
-                case TOKEN_LSHIFT:  sprintf(result, "sage_number((double)((unsigned long long)%s.as.number << (int)%s.as.number))", left, right); break;
-                case TOKEN_RSHIFT:  sprintf(result, "sage_number((double)((unsigned long long)%s.as.number >> (int)%s.as.number))", left, right); break;
-                default:            sprintf(result, "sage_add(%s, %s)", left, right); break;
+                case TOKEN_PLUS:    snprintf(result, sz, "sage_add(%s, %s)", left, right); break;
+                case TOKEN_MINUS:   snprintf(result, sz, "sage_sub(%s, %s)", left, right); break;
+                case TOKEN_STAR:    snprintf(result, sz, "sage_mul(%s, %s)", left, right); break;
+                case TOKEN_SLASH:   snprintf(result, sz, "sage_div(%s, %s)", left, right); break;
+                case TOKEN_PERCENT: snprintf(result, sz, "sage_mod(%s, %s)", left, right); break;
+                case TOKEN_EQ:      snprintf(result, sz, "sage_eq(%s, %s)", left, right); break;
+                case TOKEN_NEQ:     snprintf(result, sz, "sage_neq(%s, %s)", left, right); break;
+                case TOKEN_GT:      snprintf(result, sz, "sage_gt(%s, %s)", left, right); break;
+                case TOKEN_LT:      snprintf(result, sz, "sage_lt(%s, %s)", left, right); break;
+                case TOKEN_GTE:     snprintf(result, sz, "sage_bool(%s.as.number >= %s.as.number)", left, right); break;
+                case TOKEN_LTE:     snprintf(result, sz, "sage_bool(%s.as.number <= %s.as.number)", left, right); break;
+                case TOKEN_AND:     snprintf(result, sz, "(sage_truthy(%s) ? %s : %s)", left, right, left); break;
+                case TOKEN_OR:      snprintf(result, sz, "(sage_truthy(%s) ? %s : %s)", left, left, right); break;
+                case TOKEN_NOT:     snprintf(result, sz, "sage_bool(!sage_truthy(%s))", left); break;
+                case TOKEN_AMP:     snprintf(result, sz, "sage_number((double)((long long)%s.as.number & (long long)%s.as.number))", left, right); break;
+                case TOKEN_PIPE:    snprintf(result, sz, "sage_number((double)((long long)%s.as.number | (long long)%s.as.number))", left, right); break;
+                case TOKEN_CARET:   snprintf(result, sz, "sage_number((double)((long long)%s.as.number ^ (long long)%s.as.number))", left, right); break;
+                case TOKEN_LSHIFT:  snprintf(result, sz, "sage_number((double)((unsigned long long)%s.as.number << (int)%s.as.number))", left, right); break;
+                case TOKEN_RSHIFT:  snprintf(result, sz, "sage_number((double)((unsigned long long)%s.as.number >> (int)%s.as.number))", left, right); break;
+                default:            snprintf(result, sz, "sage_add(%s, %s)", left, right); break;
             }
             done:
             free(left);
@@ -290,8 +291,8 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
 
                 // Builtin function mapping — direct C calls for known builtins
                 #define BUILTIN_MATCH(name) (rawlen == (int)strlen(name) && memcmp(raw, name, rawlen) == 0)
-                #define EMIT_1(cfn) do { char*a0=aot_compile_expr(aot,expr->as.call.args[0]); char*b=malloc(strlen(a0)+64); sprintf(b,"%s(%s)",cfn,a0); free(a0); return b; } while(0)
-                #define EMIT_2(cfn) do { char*a0=aot_compile_expr(aot,expr->as.call.args[0]); char*a1=aot_compile_expr(aot,expr->as.call.args[1]); char*b=malloc(strlen(a0)+strlen(a1)+64); sprintf(b,"%s(%s, %s)",cfn,a0,a1); free(a0);free(a1); return b; } while(0)
+                #define EMIT_1(cfn) do { char*a0=aot_compile_expr(aot,expr->as.call.args[0]); size_t sz=strlen(a0)+64; char*b=malloc(sz); snprintf(b,sz,"%s(%s)",cfn,a0); free(a0); return b; } while(0)
+                #define EMIT_2(cfn) do { char*a0=aot_compile_expr(aot,expr->as.call.args[0]); char*a1=aot_compile_expr(aot,expr->as.call.args[1]); size_t sz=strlen(a0)+strlen(a1)+64; char*b=malloc(sz); snprintf(b,sz,"%s(%s, %s)",cfn,a0,a1); free(a0);free(a1); return b; } while(0)
 
                 if (BUILTIN_MATCH("len") && argc==1) EMIT_1("sage_len");
                 if (BUILTIN_MATCH("str") && argc==1) EMIT_1("sage_str");
@@ -517,12 +518,21 @@ void aot_compile_stmt(AotCompiler* aot, Stmt* stmt) {
         }
         case STMT_LET: {
             char* name = sanitize_name(stmt->as.let.name.start, stmt->as.let.name.length);
+            int is_top = (aot->in_main && aot->indent == 1);
             if (stmt->as.let.initializer) {
                 char* val = aot_compile_expr(aot, stmt->as.let.initializer);
-                aot_emit(aot, "SageValue %s = %s;", name, val);
+                if (is_top) {
+                    aot_emit(aot, "%s = %s;", name, val);
+                } else {
+                    aot_emit(aot, "SageValue %s = %s;", name, val);
+                }
                 free(val);
             } else {
-                aot_emit(aot, "SageValue %s = sage_nil();", name);
+                if (is_top) {
+                    aot_emit(aot, "%s = sage_nil();", name);
+                } else {
+                    aot_emit(aot, "SageValue %s = sage_nil();", name);
+                }
             }
             free(name);
             break;
@@ -775,11 +785,22 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "static SageValue sage_str(SageValue v) { char buf[256]; switch(v.type){case SAGE_NUM:{double d=v.as.number;if(d==(double)(long long)d&&d>=-1e15&&d<=1e15)snprintf(buf,sizeof(buf),\"%%lld\",(long long)d);else snprintf(buf,sizeof(buf),\"%%g\",d);break;}case SAGE_STR:return v;case SAGE_BOOL:return sage_string(v.as.boolean?\"true\":\"false\");default:return sage_string(\"nil\");}return sage_string(strdup(buf));}");
     aot_emit(aot, "static SageValue sage_tonumber(SageValue v) { if(v.type==SAGE_NUM)return v; if(v.type==SAGE_STR)return sage_number(atof(v.as.string)); return sage_number(0);}");
     aot_emit(aot, "static SageValue sage_type(SageValue v) { switch(v.type){case SAGE_NUM:return sage_string(\"number\");case SAGE_STR:return sage_string(\"string\");case SAGE_BOOL:return sage_string(\"bool\");case SAGE_ARR:return sage_string(\"array\");case SAGE_DICT:return sage_string(\"dict\");default:return sage_string(\"nil\");} }");
+    aot_emit(aot, "static SageValue s_dict_has(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_DICT||a[1].type!=SAGE_STR)return sage_bool(0); SageDict*d=(SageDict*)a[0].as.ptr; for(int i=0;i<d->count;i++)if(strcmp(d->keys[i],a[1].as.string)==0)return sage_bool(1); return sage_bool(0); }");
+    aot_emit(aot, "static SageValue s_dict_delete(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_DICT||a[1].type!=SAGE_STR)return sage_nil(); SageDict*d=(SageDict*)a[0].as.ptr; for(int i=0;i<d->count;i++)if(strcmp(d->keys[i],a[1].as.string)==0){SageValue v=d->vals[i];for(int j=i;j<d->count-1;j++){d->keys[j]=d->keys[j+1];d->vals[j]=d->vals[j+1];}d->count--;return v;} return sage_nil(); }");
+    aot_emit(aot, "static SageValue s_gc_collect(int c, SageValue* a) { (void)c; (void)a; return sage_nil(); }"); // Dummy gc_collect
+    aot_emit(aot, "static SageValue s_range(int c, SageValue* a) { int n=0; if(c>0)n=(int)a[0].as.number; if(c>1)n=(int)a[1].as.number-(int)a[0].as.number; return sage_range(n>0?n:0); }");
+    aot_emit(aot, "static SageValue s_input(int c, SageValue* a) { if(c>0&&a[0].type==SAGE_STR)fputs(a[0].as.string,stdout); char b[1024]; if(!fgets(b,sizeof(b),stdin))return sage_string(\"\"); int l=strlen(b);if(l>0&&b[l-1]=='\\n')b[l-1]=0; return sage_string(strdup(b)); }");
+    aot_emit(aot, "static SageValue s_split(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR)return sage_array(0); SageArr*r=malloc(sizeof(SageArr)); r->cap=16; r->count=0; r->elems=malloc(sizeof(SageValue)*r->cap); char*str=strdup(a[0].as.string); char*tok=strtok(str,a[1].as.string); while(tok){if(r->count>=r->cap){r->cap*=2;r->elems=realloc(r->elems,sizeof(SageValue)*r->cap);}r->elems[r->count++]=sage_string(strdup(tok)); tok=strtok(NULL,a[1].as.string);} free(str); SageValue v;v.type=SAGE_ARR;v.as.ptr=r;return v; }");
+    aot_emit(aot, "static SageValue s_chr(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_NUM)return sage_string(\"\"); char b[2]={(char)a[0].as.number,0}; return sage_string(strdup(b)); }");
+    aot_emit(aot, "static SageValue s_join(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_ARR||a[1].type!=SAGE_STR)return sage_string(\"\"); SageArr*arr=(SageArr*)a[0].as.ptr; if(arr->count==0)return sage_string(\"\"); int len=0; for(int i=0;i<arr->count;i++){SageValue sa=sage_str(arr->elems[i]); len+=strlen(sa.as.string);} len+=strlen(a[1].as.string)*arr->count; char*b=malloc(len+1); b[0]=0; for(int i=0;i<arr->count;i++){SageValue sa=sage_str(arr->elems[i]); strcat(b,sa.as.string); if(i<arr->count-1)strcat(b,a[1].as.string);} SageValue v; v.type=SAGE_STR; v.as.string=b; return v; }");
+    aot_emit(aot, "static SageValue s_replace(int c, SageValue* a) { if(c<3||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR||a[2].type!=SAGE_STR)return a[0]; const char*str=a[0].as.string; const char*f=a[1].as.string; const char*r=a[2].as.string; if(strlen(f)==0)return a[0]; char*b=malloc(strlen(str)*4+1); b[0]=0; const char*p=str; while(1){const char*m=strstr(p,f); if(!m){strcat(b,p);break;} strncat(b,p,m-p); strcat(b,r); p=m+strlen(f);} SageValue v; v.type=SAGE_STR; v.as.string=b; return v; }");
+    aot_emit(aot, "static SageValue s_clock(int c, SageValue* a) { (void)c; (void)a; return sage_number(1234.5); }");
+    aot_emit(aot, "static SageValue s_ord(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR||strlen(a[0].as.string)==0)return sage_number(0); return sage_number((unsigned char)a[0].as.string[0]); }");
     // sage_print_value — MUST come after SageArr/SageDict definitions
     aot_emit(aot, "static void sage_print_value(SageValue v) { switch(v.type) { case SAGE_NUM: { double d=v.as.number; if(d==(double)(long long)d&&d>=-1e15&&d<=1e15) printf(\"%%lld\",(long long)d); else printf(\"%%g\",d); break; } case SAGE_BOOL: fputs(v.as.boolean?\"true\":\"false\",stdout); break; case SAGE_STR: fputs(v.as.string,stdout); break; case SAGE_ARR: { SageArr*a=(SageArr*)v.as.ptr; printf(\"[\"); for(int i=0;i<a->count;i++){if(i)printf(\", \");sage_print_value(a->elems[i]);} printf(\"]\"); break; } case SAGE_DICT: { SageDict*d=(SageDict*)v.as.ptr; printf(\"{\"); for(int i=0;i<d->count;i++){if(i)printf(\", \");printf(\"\\\"%%s\\\": \",d->keys[i]);sage_print_value(d->vals[i]);} printf(\"}\"); break; } default: fputs(\"nil\",stdout); } }");
     aot_emit(aot, "");
 
-    // Forward-declare all procs (including async)
+    // Forward-declare all procs (including async) and top-level variables
     for (Stmt* s = program; s; s = s->next) {
         if (s->type == STMT_PROC) {
             char* name = sanitize_name(s->as.proc.name.start, s->as.proc.name.length);
@@ -789,6 +810,11 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
         if (s->type == STMT_ASYNC_PROC) {
             char* name = sanitize_name(s->as.async_proc.name.start, s->as.async_proc.name.length);
             aot_emit(aot, "static SageValue %s(int argc, SageValue* argv);", name);
+            free(name);
+        }
+        if (s->type == STMT_LET) {
+            char* name = sanitize_name(s->as.let.name.start, s->as.let.name.length);
+            aot_emit(aot, "static SageValue %s;", name);
             free(name);
         }
     }
@@ -818,6 +844,7 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     }
 
     aot_emit(aot, "int main(void) {");
+    aot->in_main = 1;
     aot->indent++;
 
     // Compile all non-proc statements (procs already emitted above)

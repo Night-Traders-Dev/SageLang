@@ -39,6 +39,7 @@ typedef struct {
     AotTypeEnv type_env;
     int opt_level;       // 0-3
     int emit_guards;     // If 1, emit type guards (for JIT interop)
+    int in_main;         // If 1, we are compiling the main() function
 } AotCompiler;
 
 // Lifecycle
