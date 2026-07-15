@@ -2337,6 +2337,13 @@ int main(int argc, const char* argv[]) {
     sage_set_args(argc, argv);
     init_module_system();
 
+    if (embedded_script != NULL) {
+        module_add_source_dir(argv[0]);
+        run(embedded_script, argv[0], SAGE_RUNTIME_JIT);
+        free(embedded_script);
+        CLEANUP_AND_EXIT(0);
+    }
+
     // Parse global flags that can appear before the command or script
     while (cmd_argc >= 2) {
         if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--runtime") == 0) {
@@ -3046,6 +3053,59 @@ int main(int argc, const char* argv[]) {
         // Phase 12: Language Server Protocol mode
         lsp_run();
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--jit") == 0) {
+        // Check if compiling a binary via -o
+        const char* output_file = NULL;
+        for (int i = 3; i < cmd_argc; i++) {
+            if (strcmp(cmd_argv[i], "-o") == 0 && i + 1 < cmd_argc) {
+                output_file = cmd_argv[i + 1];
+                break;
+            }
+        }
+
+        if (output_file != NULL) {
+            const char* input_file = cmd_argv[2];
+            char exe_path[4096] = {0};
+            ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+            if (len <= 0) {
+                strncpy(exe_path, cmd_argv[0], sizeof(exe_path) - 1); // fallback
+            }
+
+            char* source = main_read_file(input_file);
+            if (!source) {
+                fprintf(stderr, "Could not read input file: %s\n", input_file);
+                CLEANUP_AND_EXIT(1);
+            }
+
+            // Copy executable to output
+            FILE* f_in = fopen(exe_path, "rb");
+            FILE* f_out = fopen(output_file, "wb");
+            if (!f_in || !f_out) {
+                fprintf(stderr, "Could not open files for copying\n");
+                free(source);
+                CLEANUP_AND_EXIT(1);
+            }
+
+            char buf[8192];
+            size_t bytes;
+            while ((bytes = fread(buf, 1, sizeof(buf), f_in)) > 0) {
+                fwrite(buf, 1, bytes, f_out);
+            }
+            fclose(f_in);
+
+            // Append magic and source
+            char magic[32];
+            snprintf(magic, sizeof(magic), "\n__SAGE_%s_%s__\n", "EMBEDDED", "START");
+            fwrite(magic, 1, strlen(magic), f_out);
+            fwrite(source, 1, strlen(source), f_out);
+            fclose(f_out);
+
+            // Make output executable
+            chmod(output_file, 0755);
+            free(source);
+            printf("Built self-extracting JIT executable: %s\n", output_file);
+            CLEANUP_AND_EXIT(0);
+        }
+
         // JIT mode: interpret with profiling, compile hot functions
         const char* jit_file = cmd_argv[2];
         module_add_source_dir(jit_file);
