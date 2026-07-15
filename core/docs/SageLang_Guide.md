@@ -122,6 +122,7 @@ main.c
 
 **Token Types** (from token.h):
 - **Keywords**: `and`, `as`, `async`, `await`, `break`, `case`, `catch`, `class`, `comptime`, `continue`, `default`, `defer`, `elif`, `else`, `end`, `enum`, `false`, `finally`, `for`, `from`, `if`, `import`, `in`, `init`, `let`, `macro`, `match`, `nil`, `not`, `or`, `print`, `proc`, `quote`, `raise`, `return`, `self`, `struct`, `super`, `trait`, `true`, `try`, `unquote`, `unsafe`, `var`, `while`, `yield`, `@`
+  - *Soft Keywords*: `match`, `init`, `enum`, `struct`, `trait`, `print`, and `end` can also be used as variable names in expressions and as property/method names.
 - **Operators**: `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `&`, `|`, `^`, `~`, `<<`, `>>`
 - **Punctuation**: `(`, `)`, `[`, `]`, `{`, `}`, `:`, `,`, `.`
 - **Structural**: `INDENT`, `DEDENT`, `NEWLINE`, `DOC_COMMENT`, `EOF`, `ERROR`
@@ -1796,7 +1797,7 @@ static Value my_native(int argCount, Value* args) {
 - No support for custom `__add__()`, etc.
 
 **Type Annotations**:
-- Fully supported for variables (`let x: Int = 42`) and procedures (`proc add(a: Int, b: Int) -> Int:`).
+- Fully supported for variables (`let x: Int = 42`), procedures (`proc add(a: Int, b: Int) -> Int:`), and allows dotted names for qualified types (e.g. `let x: vfs.VFS`).
 - Type checking is enforced during a static analysis pass (`pass_typecheck` in `typecheck.c`) prior to compilation or interpretation.
 
 ### 8.2 Design Decisions and Rationale
@@ -2495,7 +2496,7 @@ io.remove("renamed.txt")
 # Binary I/O
 let buf = bytes("Hello\n")
 io.writebytes("data.bin", buf)      # Write Bytes value (also accepts Array)
-let r = io.readbytes("data.bin")    # Read as Bytes value
+let r = io.readbytes("data.bin")    # Read as Bytes value (returns a Bytes object)
 io.appendbytes("log.bin", buf)      # Append Bytes value
 ```
 
@@ -3335,6 +3336,9 @@ glslc text3d.frag -o text3d.frag.spv
 ```
 and as async await break case catch class comptime continue default defer elif else end enum false finally for from if import in init let macro match nil not or print proc quote raise return self struct super trait true try unquote unsafe var while yield @
 ```
+
+**Soft Keywords**:
+The keywords `match`, `init`, `enum`, `struct`, `trait`, `print`, and `end` are implemented as soft keywords. This means they can be used as variable names in expressions and as property or method names (e.g. `enum.enum_def`).
 
 ### Built-in Functions
 

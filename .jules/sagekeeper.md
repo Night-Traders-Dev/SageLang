@@ -101,3 +101,13 @@ Evidence:
 
 Documentation Impact:
 Updated the Lexer section and Appendix in `SageLang_Guide.md`, as well as `SageLang_Reference.md` to list exactly the 47 active keywords: `and`, `as`, `async`, `await`, `break`, `case`, `catch`, `class`, `comptime`, `continue`, `default`, `defer`, `elif`, `else`, `end`, `enum`, `false`, `finally`, `for`, `from`, `if`, `import`, `in`, `init`, `let`, `macro`, `match`, `nil`, `not`, `or`, `print`, `proc`, `quote`, `raise`, `return`, `self`, `struct`, `super`, `trait`, `true`, `try`, `unquote`, `unsafe`, `var`, `while`, `yield`, and `@`. Future documentation should ensure consistency with `lexer.c` rather than purely `token.h` due to internal mappings like `elif`.
+2024-07-28 - [Soft Keywords]
+
+Discovery:
+The keywords `match`, `init`, `enum`, `struct`, `trait`, `print`, and `end` are implemented as soft keywords in `core/src/c/parser.c` via `match_identifier_like()`. They can be used as variable names in expression contexts and as property/method names.
+
+Evidence:
+`core/src/c/parser.c` (implementation of `match_identifier_like`, `primary`, module imports, and struct/enum parsing).
+
+Documentation Impact:
+Added documentation about soft keywords to `SageLang_Guide.md` under the Lexer section and in the Keywords section, specifically noting that these seven keywords can be used as identifiers in certain contexts.
