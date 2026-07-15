@@ -21,6 +21,15 @@ Ahead-of-time compilation with static type inference. Generates self-contained
 C with type-specialized fast paths for `Int+Int`, `String+String`, and
 known-type comparisons. Compiles to a native binary via `cc -O2`.
 
+### Cross-Compilation
+
+Because the AOT compiler translates Sage code to standalone C11 source code, it serves as the primary avenue for seamless cross-compilation. To cross-compile a SageLang application:
+
+1. Generate the raw C file by omitting the `-o` flag and redirecting stdout:
+   `sage --aot file.sage > program.c`
+2. Compile the resulting C file with a target-specific cross compiler:
+   `aarch64-linux-gnu-gcc -std=c11 -O2 program.c -o program-aarch64 -lm`
+
 ## Combined Mode (Profile-Guided AOT)
 
 `sage --aot --jit file.sage -o binary`
