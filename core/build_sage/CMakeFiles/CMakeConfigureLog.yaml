@@ -20,26 +20,51 @@ events:
     names:
       - "uname"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/uname"
+      - "/home/kraken/.composio/uname"
+      - "/home/kraken/.opencode/bin/uname"
+      - "/home/kraken/.kimi-code/bin/uname"
+      - "/home/kraken/.local/bin/uname"
+      - "/home/kraken/.sagepkg/bin/uname"
       - "/usr/local/sbin/uname"
       - "/usr/local/bin/uname"
       - "/usr/sbin/uname"
     found: "/usr/bin/uname"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "message-v1"
@@ -69,26 +94,51 @@ events:
       - "make"
       - "smake"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/gmake"
+      - "/home/kraken/.composio/gmake"
+      - "/home/kraken/.opencode/bin/gmake"
+      - "/home/kraken/.kimi-code/bin/gmake"
+      - "/home/kraken/.local/bin/gmake"
+      - "/home/kraken/.sagepkg/bin/gmake"
       - "/usr/local/sbin/gmake"
       - "/usr/local/bin/gmake"
       - "/usr/sbin/gmake"
     found: "/usr/bin/gmake"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -116,26 +166,51 @@ events:
       - "icx"
       - "clang"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/cc"
+      - "/home/kraken/.composio/cc"
+      - "/home/kraken/.opencode/bin/cc"
+      - "/home/kraken/.kimi-code/bin/cc"
+      - "/home/kraken/.local/bin/cc"
+      - "/home/kraken/.sagepkg/bin/cc"
       - "/usr/local/sbin/cc"
       - "/usr/local/bin/cc"
       - "/usr/sbin/cc"
     found: "/usr/bin/cc"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -164,12 +239,23 @@ events:
     found: "/usr/share/cmake-4.2/Modules/CMakeCCompilerId.c.in"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "message-v1"
@@ -214,21 +300,40 @@ events:
       - "ar"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     found: "/usr/bin/ar"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -251,21 +356,40 @@ events:
       - "ranlib"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     found: "/usr/bin/ranlib"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -288,21 +412,40 @@ events:
       - "strip"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     found: "/usr/bin/strip"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -325,21 +468,40 @@ events:
       - "ld"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     found: "/usr/bin/ld"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -362,21 +524,40 @@ events:
       - "nm"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     found: "/usr/bin/nm"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -399,21 +580,40 @@ events:
       - "objdump"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     found: "/usr/bin/objdump"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -436,21 +636,40 @@ events:
       - "objcopy"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     found: "/usr/bin/objcopy"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -473,21 +692,40 @@ events:
       - "readelf"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     found: "/usr/bin/readelf"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -510,29 +748,56 @@ events:
       - "dlltool"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
       - "/usr/bin/dlltool"
+      - "/home/kraken/.gemini/antigravity-cli/bin/dlltool"
+      - "/home/kraken/.composio/dlltool"
+      - "/home/kraken/.opencode/bin/dlltool"
+      - "/home/kraken/.kimi-code/bin/dlltool"
+      - "/home/kraken/.local/bin/dlltool"
+      - "/home/kraken/.sagepkg/bin/dlltool"
       - "/usr/local/sbin/dlltool"
       - "/usr/local/bin/dlltool"
       - "/usr/sbin/dlltool"
       - "/sbin/dlltool"
       - "/bin/dlltool"
+      - "/usr/games/dlltool"
+      - "/usr/local/games/dlltool"
       - "/snap/bin/dlltool"
     found: false
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -555,21 +820,40 @@ events:
       - "addr2line"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     found: "/usr/bin/addr2line"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -592,29 +876,56 @@ events:
       - "tapi"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
       - "/usr/bin/tapi"
+      - "/home/kraken/.gemini/antigravity-cli/bin/tapi"
+      - "/home/kraken/.composio/tapi"
+      - "/home/kraken/.opencode/bin/tapi"
+      - "/home/kraken/.kimi-code/bin/tapi"
+      - "/home/kraken/.local/bin/tapi"
+      - "/home/kraken/.sagepkg/bin/tapi"
       - "/usr/local/sbin/tapi"
       - "/usr/local/bin/tapi"
       - "/usr/sbin/tapi"
       - "/sbin/tapi"
       - "/bin/tapi"
+      - "/usr/games/tapi"
+      - "/usr/local/games/tapi"
       - "/snap/bin/tapi"
     found: false
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -640,29 +951,56 @@ events:
       - "gcc-ar"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
       - "/usr/bin/gcc-ar-15.2"
+      - "/home/kraken/.gemini/antigravity-cli/bin/gcc-ar-15.2"
+      - "/home/kraken/.composio/gcc-ar-15.2"
+      - "/home/kraken/.opencode/bin/gcc-ar-15.2"
+      - "/home/kraken/.kimi-code/bin/gcc-ar-15.2"
+      - "/home/kraken/.local/bin/gcc-ar-15.2"
+      - "/home/kraken/.sagepkg/bin/gcc-ar-15.2"
       - "/usr/local/sbin/gcc-ar-15.2"
       - "/usr/local/bin/gcc-ar-15.2"
       - "/usr/sbin/gcc-ar-15.2"
       - "/sbin/gcc-ar-15.2"
       - "/bin/gcc-ar-15.2"
+      - "/usr/games/gcc-ar-15.2"
+      - "/usr/local/games/gcc-ar-15.2"
       - "/snap/bin/gcc-ar-15.2"
     found: "/usr/bin/gcc-ar-15"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -688,29 +1026,56 @@ events:
       - "gcc-ranlib"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
       - "/usr/bin/gcc-ranlib-15.2"
+      - "/home/kraken/.gemini/antigravity-cli/bin/gcc-ranlib-15.2"
+      - "/home/kraken/.composio/gcc-ranlib-15.2"
+      - "/home/kraken/.opencode/bin/gcc-ranlib-15.2"
+      - "/home/kraken/.kimi-code/bin/gcc-ranlib-15.2"
+      - "/home/kraken/.local/bin/gcc-ranlib-15.2"
+      - "/home/kraken/.sagepkg/bin/gcc-ranlib-15.2"
       - "/usr/local/sbin/gcc-ranlib-15.2"
       - "/usr/local/bin/gcc-ranlib-15.2"
       - "/usr/sbin/gcc-ranlib-15.2"
       - "/sbin/gcc-ranlib-15.2"
       - "/bin/gcc-ranlib-15.2"
+      - "/usr/games/gcc-ranlib-15.2"
+      - "/usr/local/games/gcc-ranlib-15.2"
       - "/snap/bin/gcc-ranlib-15.2"
     found: "/usr/bin/gcc-ranlib-15"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -745,12 +1110,23 @@ events:
     found: "/usr/bin/c++"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -779,12 +1155,23 @@ events:
     found: "/usr/share/cmake-4.2/Modules/CMakeCXXCompilerId.cpp.in"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "message-v1"
@@ -832,29 +1219,56 @@ events:
       - "gcc-ar"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
       - "/usr/bin/gcc-ar-15.2"
+      - "/home/kraken/.gemini/antigravity-cli/bin/gcc-ar-15.2"
+      - "/home/kraken/.composio/gcc-ar-15.2"
+      - "/home/kraken/.opencode/bin/gcc-ar-15.2"
+      - "/home/kraken/.kimi-code/bin/gcc-ar-15.2"
+      - "/home/kraken/.local/bin/gcc-ar-15.2"
+      - "/home/kraken/.sagepkg/bin/gcc-ar-15.2"
       - "/usr/local/sbin/gcc-ar-15.2"
       - "/usr/local/bin/gcc-ar-15.2"
       - "/usr/sbin/gcc-ar-15.2"
       - "/sbin/gcc-ar-15.2"
       - "/bin/gcc-ar-15.2"
+      - "/usr/games/gcc-ar-15.2"
+      - "/usr/local/games/gcc-ar-15.2"
       - "/snap/bin/gcc-ar-15.2"
     found: "/usr/bin/gcc-ar-15"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -880,29 +1294,56 @@ events:
       - "gcc-ranlib"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
       - "/usr/bin/gcc-ranlib-15.2"
+      - "/home/kraken/.gemini/antigravity-cli/bin/gcc-ranlib-15.2"
+      - "/home/kraken/.composio/gcc-ranlib-15.2"
+      - "/home/kraken/.opencode/bin/gcc-ranlib-15.2"
+      - "/home/kraken/.kimi-code/bin/gcc-ranlib-15.2"
+      - "/home/kraken/.local/bin/gcc-ranlib-15.2"
+      - "/home/kraken/.sagepkg/bin/gcc-ranlib-15.2"
       - "/usr/local/sbin/gcc-ranlib-15.2"
       - "/usr/local/bin/gcc-ranlib-15.2"
       - "/usr/sbin/gcc-ranlib-15.2"
       - "/sbin/gcc-ranlib-15.2"
       - "/bin/gcc-ranlib-15.2"
+      - "/usr/games/gcc-ranlib-15.2"
+      - "/usr/local/games/gcc-ranlib-15.2"
       - "/snap/bin/gcc-ranlib-15.2"
     found: "/usr/bin/gcc-ranlib-15"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -928,12 +1369,23 @@ events:
     found: "/usr/bin/cc"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "message-v1"
@@ -972,36 +1424,71 @@ events:
       - "gcc-ar"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
       - "/usr/bin/gcc-ar-"
+      - "/home/kraken/.gemini/antigravity-cli/bin/gcc-ar-"
+      - "/home/kraken/.composio/gcc-ar-"
+      - "/home/kraken/.opencode/bin/gcc-ar-"
+      - "/home/kraken/.kimi-code/bin/gcc-ar-"
+      - "/home/kraken/.local/bin/gcc-ar-"
+      - "/home/kraken/.sagepkg/bin/gcc-ar-"
       - "/usr/local/sbin/gcc-ar-"
       - "/usr/local/bin/gcc-ar-"
       - "/usr/sbin/gcc-ar-"
       - "/sbin/gcc-ar-"
       - "/bin/gcc-ar-"
+      - "/usr/games/gcc-ar-"
+      - "/usr/local/games/gcc-ar-"
       - "/snap/bin/gcc-ar-"
       - "/usr/bin/gcc-ar-"
+      - "/home/kraken/.gemini/antigravity-cli/bin/gcc-ar-"
+      - "/home/kraken/.composio/gcc-ar-"
+      - "/home/kraken/.opencode/bin/gcc-ar-"
+      - "/home/kraken/.kimi-code/bin/gcc-ar-"
+      - "/home/kraken/.local/bin/gcc-ar-"
+      - "/home/kraken/.sagepkg/bin/gcc-ar-"
       - "/usr/local/sbin/gcc-ar-"
       - "/usr/local/bin/gcc-ar-"
       - "/usr/sbin/gcc-ar-"
       - "/sbin/gcc-ar-"
       - "/bin/gcc-ar-"
+      - "/usr/games/gcc-ar-"
+      - "/usr/local/games/gcc-ar-"
       - "/snap/bin/gcc-ar-"
     found: "/usr/bin/gcc-ar"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "find-v1"
@@ -1027,36 +1514,71 @@ events:
       - "gcc-ranlib"
     candidate_directories:
       - "/usr/bin/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
     searched_directories:
       - "/usr/bin/gcc-ranlib-"
+      - "/home/kraken/.gemini/antigravity-cli/bin/gcc-ranlib-"
+      - "/home/kraken/.composio/gcc-ranlib-"
+      - "/home/kraken/.opencode/bin/gcc-ranlib-"
+      - "/home/kraken/.kimi-code/bin/gcc-ranlib-"
+      - "/home/kraken/.local/bin/gcc-ranlib-"
+      - "/home/kraken/.sagepkg/bin/gcc-ranlib-"
       - "/usr/local/sbin/gcc-ranlib-"
       - "/usr/local/bin/gcc-ranlib-"
       - "/usr/sbin/gcc-ranlib-"
       - "/sbin/gcc-ranlib-"
       - "/bin/gcc-ranlib-"
+      - "/usr/games/gcc-ranlib-"
+      - "/usr/local/games/gcc-ranlib-"
       - "/snap/bin/gcc-ranlib-"
       - "/usr/bin/gcc-ranlib-"
+      - "/home/kraken/.gemini/antigravity-cli/bin/gcc-ranlib-"
+      - "/home/kraken/.composio/gcc-ranlib-"
+      - "/home/kraken/.opencode/bin/gcc-ranlib-"
+      - "/home/kraken/.kimi-code/bin/gcc-ranlib-"
+      - "/home/kraken/.local/bin/gcc-ranlib-"
+      - "/home/kraken/.sagepkg/bin/gcc-ranlib-"
       - "/usr/local/sbin/gcc-ranlib-"
       - "/usr/local/bin/gcc-ranlib-"
       - "/usr/sbin/gcc-ranlib-"
       - "/sbin/gcc-ranlib-"
       - "/bin/gcc-ranlib-"
+      - "/usr/games/gcc-ranlib-"
+      - "/usr/local/games/gcc-ranlib-"
       - "/snap/bin/gcc-ranlib-"
     found: "/usr/bin/gcc-ranlib"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
   -
     kind: "try_compile-v1"
@@ -1067,8 +1589,8 @@ events:
     checks:
       - "Detecting C compiler ABI info"
     directories:
-      source: "/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-h5ARAB"
-      binary: "/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-h5ARAB"
+      source: "/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-gFeMPE"
+      binary: "/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-gFeMPE"
     cmakeVariables:
       CMAKE_C_FLAGS: ""
       CMAKE_C_FLAGS_DEBUG: "-g"
@@ -1077,13 +1599,13 @@ events:
       variable: "CMAKE_C_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-h5ARAB'
+        Change Dir: '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-gFeMPE'
         
-        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_05af0/fast
-        /usr/bin/gmake  -f CMakeFiles/cmTC_05af0.dir/build.make CMakeFiles/cmTC_05af0.dir/build
-        gmake[1]: Entering directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-h5ARAB'
-        Building C object CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o
-        /usr/bin/cc   -v -o CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o -c /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_a702d/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_a702d.dir/build.make CMakeFiles/cmTC_a702d.dir/build
+        gmake[1]: Entering directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-gFeMPE'
+        Building C object CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o
+        /usr/bin/cc   -v -o CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o -c /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c
         Using built-in specs.
         COLLECT_GCC=/usr/bin/cc
         OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa
@@ -1093,8 +1615,8 @@ events:
         Thread model: posix
         Supported LTO compression algorithms: zlib zstd
         gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) 
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_05af0.dir/'
-         /usr/libexec/gcc/x86_64-linux-gnu/15/cc1 -quiet -v -imultiarch x86_64-linux-gnu /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_05af0.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -fcf-protection -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/ccwP2Qtw.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_a702d.dir/'
+         /usr/libexec/gcc/x86_64-linux-gnu/15/cc1 -quiet -v -imultiarch x86_64-linux-gnu /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_a702d.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -fcf-protection -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/ccPvb6Qf.s
         GNU C23 (Ubuntu 15.2.0-16ubuntu1) version 15.2.0 (x86_64-linux-gnu)
         	compiled by GNU C version 15.2.0, GMP version 6.3.0, MPFR version 4.2.2, MPC version 1.3.1, isl version isl-0.27-GMP
         
@@ -1111,14 +1633,14 @@ events:
          /usr/include
         End of search list.
         Compiler executable checksum: edd70396dcc669433a92073f97309866
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_05af0.dir/'
-         /usr/bin/x86_64-linux-gnu-as -v --64 -o CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o /tmp/ccwP2Qtw.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_a702d.dir/'
+         /usr/bin/x86_64-linux-gnu-as -v --64 -o CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o /tmp/ccPvb6Qf.s
         GNU assembler version 2.46 (x86_64-linux-gnu) using BFD version (GNU Binutils for Ubuntu) 2.46
         COMPILER_PATH=/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/
         LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../:/lib/:/usr/lib/
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.'
-        Linking C executable cmTC_05af0
-        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_05af0.dir/link.txt --verbose=1
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.'
+        Linking C executable cmTC_a702d
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_a702d.dir/link.txt --verbose=1
         Using built-in specs.
         COLLECT_GCC=/usr/bin/cc
         COLLECT_LTO_WRAPPER=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper
@@ -1131,14 +1653,14 @@ events:
         gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) 
         COMPILER_PATH=/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/
         LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../:/lib/:/usr/lib/
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_05af0' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_05af0.'
-         /usr/libexec/gcc/x86_64-linux-gnu/15/collect2 -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccLAKka2.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_05af0 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_a702d' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_a702d.'
+         /usr/libexec/gcc/x86_64-linux-gnu/15/collect2 -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccxsnMBl.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_a702d /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o
         collect2 version 15.2.0
-        /usr/bin/ld -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccLAKka2.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_05af0 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o
+        /usr/bin/ld -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccxsnMBl.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_a702d /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o
         GNU ld (GNU Binutils for Ubuntu) 2.46
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_05af0' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_05af0.'
-        /usr/bin/cc  -v -Wl,-v CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o -o cmTC_05af0
-        gmake[1]: Leaving directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-h5ARAB'
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_a702d' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_a702d.'
+        /usr/bin/cc  -v -Wl,-v CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o -o cmTC_a702d
+        gmake[1]: Leaving directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-gFeMPE'
         
       exitCode: 0
   -
@@ -1173,13 +1695,13 @@ events:
       Parsed C implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
-        ignore line: [Change Dir: '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-h5ARAB']
+        ignore line: [Change Dir: '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-gFeMPE']
         ignore line: []
-        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_05af0/fast]
-        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_05af0.dir/build.make CMakeFiles/cmTC_05af0.dir/build]
-        ignore line: [gmake[1]: Entering directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-h5ARAB']
-        ignore line: [Building C object CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o]
-        ignore line: [/usr/bin/cc   -v -o CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o -c /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c]
+        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_a702d/fast]
+        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_a702d.dir/build.make CMakeFiles/cmTC_a702d.dir/build]
+        ignore line: [gmake[1]: Entering directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-gFeMPE']
+        ignore line: [Building C object CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o]
+        ignore line: [/usr/bin/cc   -v -o CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o -c /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=/usr/bin/cc]
         ignore line: [OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa]
@@ -1189,8 +1711,8 @@ events:
         ignore line: [Thread model: posix]
         ignore line: [Supported LTO compression algorithms: zlib zstd]
         ignore line: [gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) ]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_05af0.dir/']
-        ignore line: [ /usr/libexec/gcc/x86_64-linux-gnu/15/cc1 -quiet -v -imultiarch x86_64-linux-gnu /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_05af0.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -fcf-protection -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/ccwP2Qtw.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_a702d.dir/']
+        ignore line: [ /usr/libexec/gcc/x86_64-linux-gnu/15/cc1 -quiet -v -imultiarch x86_64-linux-gnu /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_a702d.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -mtune=generic -march=x86-64 -version -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -fcf-protection -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/ccPvb6Qf.s]
         ignore line: [GNU C23 (Ubuntu 15.2.0-16ubuntu1) version 15.2.0 (x86_64-linux-gnu)]
         ignore line: [	compiled by GNU C version 15.2.0  GMP version 6.3.0  MPFR version 4.2.2  MPC version 1.3.1  isl version isl-0.27-GMP]
         ignore line: []
@@ -1207,14 +1729,14 @@ events:
         ignore line: [ /usr/include]
         ignore line: [End of search list.]
         ignore line: [Compiler executable checksum: edd70396dcc669433a92073f97309866]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_05af0.dir/']
-        ignore line: [ /usr/bin/x86_64-linux-gnu-as -v --64 -o CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o /tmp/ccwP2Qtw.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_a702d.dir/']
+        ignore line: [ /usr/bin/x86_64-linux-gnu-as -v --64 -o CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o /tmp/ccPvb6Qf.s]
         ignore line: [GNU assembler version 2.46 (x86_64-linux-gnu) using BFD version (GNU Binutils for Ubuntu) 2.46]
         ignore line: [COMPILER_PATH=/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/]
         ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../:/lib/:/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.']
-        ignore line: [Linking C executable cmTC_05af0]
-        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_05af0.dir/link.txt --verbose=1]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o' '-c' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.']
+        ignore line: [Linking C executable cmTC_a702d]
+        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_a702d.dir/link.txt --verbose=1]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=/usr/bin/cc]
         ignore line: [COLLECT_LTO_WRAPPER=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper]
@@ -1227,13 +1749,13 @@ events:
         ignore line: [gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) ]
         ignore line: [COMPILER_PATH=/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/]
         ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../:/lib/:/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_05af0' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_05af0.']
-        link line: [ /usr/libexec/gcc/x86_64-linux-gnu/15/collect2 -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccLAKka2.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_05af0 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_a702d' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_a702d.']
+        link line: [ /usr/libexec/gcc/x86_64-linux-gnu/15/collect2 -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccxsnMBl.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_a702d /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o]
           arg [/usr/libexec/gcc/x86_64-linux-gnu/15/collect2] ==> ignore
           arg [-plugin] ==> ignore
           arg [/usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so] ==> ignore
           arg [-plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper] ==> ignore
-          arg [-plugin-opt=-fresolution=/tmp/ccLAKka2.res] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/ccxsnMBl.res] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
           arg [-plugin-opt=-pass-through=-lc] ==> ignore
@@ -1251,7 +1773,7 @@ events:
           arg [-znow] ==> ignore
           arg [-zrelro] ==> ignore
           arg [-o] ==> ignore
-          arg [cmTC_05af0] ==> ignore
+          arg [cmTC_a702d] ==> ignore
           arg [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o]
           arg [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o]
           arg [/usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o]
@@ -1266,7 +1788,7 @@ events:
           arg [-L/lib] ==> dir [/lib]
           arg [-L/usr/lib] ==> dir [/usr/lib]
           arg [-v] ==> ignore
-          arg [CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o] ==> ignore
+          arg [CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o] ==> ignore
           arg [-lgcc] ==> lib [gcc]
           arg [--push-state] ==> ignore
           arg [--as-needed] ==> ignore
@@ -1281,7 +1803,7 @@ events:
           arg [/usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o]
           arg [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o]
         ignore line: [collect2 version 15.2.0]
-        ignore line: [/usr/bin/ld -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccLAKka2.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_05af0 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_05af0.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o]
+        ignore line: [/usr/bin/ld -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccxsnMBl.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_a702d /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_a702d.dir/CMakeCCompilerABI.c.o -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o]
         linker tool for 'C': /usr/bin/ld
         collapse obj [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o] ==> [/usr/lib/x86_64-linux-gnu/Scrt1.o]
         collapse obj [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o] ==> [/usr/lib/x86_64-linux-gnu/crti.o]
@@ -1321,8 +1843,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-j7ldjR"
-      binary: "/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-j7ldjR"
+      source: "/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-C4pUZC"
+      binary: "/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-C4pUZC"
     cmakeVariables:
       CMAKE_CXX_FLAGS: ""
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -1332,13 +1854,13 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-j7ldjR'
+        Change Dir: '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-C4pUZC'
         
-        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_58511/fast
-        /usr/bin/gmake  -f CMakeFiles/cmTC_58511.dir/build.make CMakeFiles/cmTC_58511.dir/build
-        gmake[1]: Entering directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-j7ldjR'
-        Building CXX object CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o
-        /usr/bin/c++   -v -o CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_c4063/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_c4063.dir/build.make CMakeFiles/cmTC_c4063.dir/build
+        gmake[1]: Entering directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-C4pUZC'
+        Building CXX object CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o
+        /usr/bin/c++   -v -o CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp
         Using built-in specs.
         COLLECT_GCC=/usr/bin/c++
         OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa
@@ -1348,8 +1870,8 @@ events:
         Thread model: posix
         Supported LTO compression algorithms: zlib zstd
         gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) 
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_58511.dir/'
-         /usr/libexec/gcc/x86_64-linux-gnu/15/cc1plus -quiet -v -imultiarch x86_64-linux-gnu -D_GNU_SOURCE /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_58511.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -fcf-protection -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/cce2ULtr.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c4063.dir/'
+         /usr/libexec/gcc/x86_64-linux-gnu/15/cc1plus -quiet -v -imultiarch x86_64-linux-gnu -D_GNU_SOURCE /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_c4063.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -fcf-protection -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/ccoPXWpH.s
         GNU C++17 (Ubuntu 15.2.0-16ubuntu1) version 15.2.0 (x86_64-linux-gnu)
         	compiled by GNU C version 15.2.0, GMP version 6.3.0, MPFR version 4.2.2, MPC version 1.3.1, isl version isl-0.27-GMP
         
@@ -1370,14 +1892,14 @@ events:
          /usr/include
         End of search list.
         Compiler executable checksum: b661a74662ad7cf413c4193391ab5290
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_58511.dir/'
-         /usr/bin/x86_64-linux-gnu-as -v --64 -o CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o /tmp/cce2ULtr.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c4063.dir/'
+         /usr/bin/x86_64-linux-gnu-as -v --64 -o CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o /tmp/ccoPXWpH.s
         GNU assembler version 2.46 (x86_64-linux-gnu) using BFD version (GNU Binutils for Ubuntu) 2.46
         COMPILER_PATH=/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/
         LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../:/lib/:/usr/lib/
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.'
-        Linking CXX executable cmTC_58511
-        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_58511.dir/link.txt --verbose=1
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.'
+        Linking CXX executable cmTC_c4063
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_c4063.dir/link.txt --verbose=1
         Using built-in specs.
         COLLECT_GCC=/usr/bin/c++
         COLLECT_LTO_WRAPPER=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper
@@ -1390,14 +1912,14 @@ events:
         gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) 
         COMPILER_PATH=/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/
         LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../:/lib/:/usr/lib/
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_58511' '-foffload-options=-l_GCC_stdc++' '-foffload-options=-l_GCC_m' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_58511.'
-         /usr/libexec/gcc/x86_64-linux-gnu/15/collect2 -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/cchH4pqP.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_58511 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_c4063' '-foffload-options=-l_GCC_stdc++' '-foffload-options=-l_GCC_m' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_c4063.'
+         /usr/libexec/gcc/x86_64-linux-gnu/15/collect2 -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccpa7cCf.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_c4063 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o
         collect2 version 15.2.0
-        /usr/bin/ld -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/cchH4pqP.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_58511 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o
+        /usr/bin/ld -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccpa7cCf.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_c4063 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o
         GNU ld (GNU Binutils for Ubuntu) 2.46
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_58511' '-foffload-options=-l_GCC_stdc++' '-foffload-options=-l_GCC_m' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_58511.'
-        /usr/bin/c++  -v -Wl,-v CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_58511
-        gmake[1]: Leaving directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-j7ldjR'
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_c4063' '-foffload-options=-l_GCC_stdc++' '-foffload-options=-l_GCC_m' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_c4063.'
+        /usr/bin/c++  -v -Wl,-v CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o -o cmTC_c4063
+        gmake[1]: Leaving directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-C4pUZC'
         
       exitCode: 0
   -
@@ -1438,13 +1960,13 @@ events:
       Parsed CXX implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
-        ignore line: [Change Dir: '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-j7ldjR']
+        ignore line: [Change Dir: '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-C4pUZC']
         ignore line: []
-        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_58511/fast]
-        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_58511.dir/build.make CMakeFiles/cmTC_58511.dir/build]
-        ignore line: [gmake[1]: Entering directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-j7ldjR']
-        ignore line: [Building CXX object CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o]
-        ignore line: [/usr/bin/c++   -v -o CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_c4063/fast]
+        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_c4063.dir/build.make CMakeFiles/cmTC_c4063.dir/build]
+        ignore line: [gmake[1]: Entering directory '/home/kraken/Devel/sagelang/core/build_sage/CMakeFiles/CMakeScratch/TryCompile-C4pUZC']
+        ignore line: [Building CXX object CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o]
+        ignore line: [/usr/bin/c++   -v -o CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=/usr/bin/c++]
         ignore line: [OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa]
@@ -1454,8 +1976,8 @@ events:
         ignore line: [Thread model: posix]
         ignore line: [Supported LTO compression algorithms: zlib zstd]
         ignore line: [gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) ]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_58511.dir/']
-        ignore line: [ /usr/libexec/gcc/x86_64-linux-gnu/15/cc1plus -quiet -v -imultiarch x86_64-linux-gnu -D_GNU_SOURCE /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_58511.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -fcf-protection -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/cce2ULtr.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c4063.dir/']
+        ignore line: [ /usr/libexec/gcc/x86_64-linux-gnu/15/cc1plus -quiet -v -imultiarch x86_64-linux-gnu -D_GNU_SOURCE /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_c4063.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -fcf-protection -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/ccoPXWpH.s]
         ignore line: [GNU C++17 (Ubuntu 15.2.0-16ubuntu1) version 15.2.0 (x86_64-linux-gnu)]
         ignore line: [	compiled by GNU C version 15.2.0  GMP version 6.3.0  MPFR version 4.2.2  MPC version 1.3.1  isl version isl-0.27-GMP]
         ignore line: []
@@ -1476,14 +1998,14 @@ events:
         ignore line: [ /usr/include]
         ignore line: [End of search list.]
         ignore line: [Compiler executable checksum: b661a74662ad7cf413c4193391ab5290]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_58511.dir/']
-        ignore line: [ /usr/bin/x86_64-linux-gnu-as -v --64 -o CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o /tmp/cce2ULtr.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c4063.dir/']
+        ignore line: [ /usr/bin/x86_64-linux-gnu-as -v --64 -o CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o /tmp/ccoPXWpH.s]
         ignore line: [GNU assembler version 2.46 (x86_64-linux-gnu) using BFD version (GNU Binutils for Ubuntu) 2.46]
         ignore line: [COMPILER_PATH=/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/]
         ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../:/lib/:/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.']
-        ignore line: [Linking CXX executable cmTC_58511]
-        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_58511.dir/link.txt --verbose=1]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.']
+        ignore line: [Linking CXX executable cmTC_c4063]
+        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_c4063.dir/link.txt --verbose=1]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=/usr/bin/c++]
         ignore line: [COLLECT_LTO_WRAPPER=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper]
@@ -1496,13 +2018,13 @@ events:
         ignore line: [gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) ]
         ignore line: [COMPILER_PATH=/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/]
         ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../:/lib/:/usr/lib/]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_58511' '-foffload-options=-l_GCC_stdc++' '-foffload-options=-l_GCC_m' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_58511.']
-        link line: [ /usr/libexec/gcc/x86_64-linux-gnu/15/collect2 -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/cchH4pqP.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_58511 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_c4063' '-foffload-options=-l_GCC_stdc++' '-foffload-options=-l_GCC_m' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'cmTC_c4063.']
+        link line: [ /usr/libexec/gcc/x86_64-linux-gnu/15/collect2 -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccpa7cCf.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_c4063 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o]
           arg [/usr/libexec/gcc/x86_64-linux-gnu/15/collect2] ==> ignore
           arg [-plugin] ==> ignore
           arg [/usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so] ==> ignore
           arg [-plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper] ==> ignore
-          arg [-plugin-opt=-fresolution=/tmp/cchH4pqP.res] ==> ignore
+          arg [-plugin-opt=-fresolution=/tmp/ccpa7cCf.res] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc_s] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
           arg [-plugin-opt=-pass-through=-lc] ==> ignore
@@ -1520,7 +2042,7 @@ events:
           arg [-znow] ==> ignore
           arg [-zrelro] ==> ignore
           arg [-o] ==> ignore
-          arg [cmTC_58511] ==> ignore
+          arg [cmTC_c4063] ==> ignore
           arg [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o]
           arg [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o]
           arg [/usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o]
@@ -1535,7 +2057,7 @@ events:
           arg [-L/lib] ==> dir [/lib]
           arg [-L/usr/lib] ==> dir [/usr/lib]
           arg [-v] ==> ignore
-          arg [CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
+          arg [CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o] ==> ignore
           arg [-lstdc++] ==> lib [stdc++]
           arg [-lm] ==> lib [m]
           arg [-lgcc_s] ==> lib [gcc_s]
@@ -1546,7 +2068,7 @@ events:
           arg [/usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o]
           arg [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o] ==> obj [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o]
         ignore line: [collect2 version 15.2.0]
-        ignore line: [/usr/bin/ld -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/cchH4pqP.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_58511 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_58511.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o]
+        ignore line: [/usr/bin/ld -plugin /usr/libexec/gcc/x86_64-linux-gnu/15/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/15/lto-wrapper -plugin-opt=-fresolution=/tmp/ccpa7cCf.res -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lgcc --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro -o cmTC_c4063 /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/15/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/15 -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/15/../../.. -L/lib -L/usr/lib -v CMakeFiles/cmTC_c4063.dir/CMakeCXXCompilerABI.cpp.o -lstdc++ -lm -lgcc_s -lgcc -lc -lgcc_s -lgcc /usr/lib/gcc/x86_64-linux-gnu/15/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crtn.o]
         linker tool for 'CXX': /usr/bin/ld
         collapse obj [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/Scrt1.o] ==> [/usr/lib/x86_64-linux-gnu/Scrt1.o]
         collapse obj [/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/crti.o] ==> [/usr/lib/x86_64-linux-gnu/crti.o]
@@ -1597,12 +2119,20 @@ events:
       - "pkg-config"
       - "pkgconf"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/bin/"
       - "/usr/local/sbin/"
@@ -1622,6 +2152,18 @@ events:
       - "/opt/sbin/"
       - "/opt/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/pkg-config"
+      - "/home/kraken/.gemini/antigravity-cli/bin/pkgconf"
+      - "/home/kraken/.composio/pkg-config"
+      - "/home/kraken/.composio/pkgconf"
+      - "/home/kraken/.opencode/bin/pkg-config"
+      - "/home/kraken/.opencode/bin/pkgconf"
+      - "/home/kraken/.kimi-code/bin/pkg-config"
+      - "/home/kraken/.kimi-code/bin/pkgconf"
+      - "/home/kraken/.local/bin/pkg-config"
+      - "/home/kraken/.local/bin/pkgconf"
+      - "/home/kraken/.sagepkg/bin/pkg-config"
+      - "/home/kraken/.sagepkg/bin/pkgconf"
       - "/usr/local/sbin/pkg-config"
       - "/usr/local/sbin/pkgconf"
       - "/usr/local/bin/pkg-config"
@@ -1631,12 +2173,23 @@ events:
     found: "/usr/bin/pkg-config"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -1674,12 +2227,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libcurl.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -1719,12 +2283,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libssl.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -1764,12 +2339,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libcrypto.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -1809,12 +2395,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libvulkan.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -1854,12 +2451,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libglfw.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -1892,12 +2500,20 @@ events:
     names:
       - "GL/gl.h"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/include/x86_64-linux-gnu/"
       - "/usr/local/include/"
@@ -1921,12 +2537,20 @@ events:
       - "/usr/openwin/share/include/"
       - "/opt/graphics/OpenGL/include/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/GL/gl.h"
+      - "/home/kraken/.composio/GL/gl.h"
+      - "/home/kraken/.opencode/bin/GL/gl.h"
+      - "/home/kraken/.kimi-code/bin/GL/gl.h"
+      - "/home/kraken/.local/bin/GL/gl.h"
+      - "/home/kraken/.sagepkg/bin/GL/gl.h"
       - "/usr/local/sbin/GL/gl.h"
       - "/usr/local/bin/GL/gl.h"
       - "/usr/sbin/GL/gl.h"
       - "/usr/bin/GL/gl.h"
       - "/sbin/GL/gl.h"
       - "/bin/GL/gl.h"
+      - "/usr/games/GL/gl.h"
+      - "/usr/local/games/GL/gl.h"
       - "/snap/bin/GL/gl.h"
       - "/usr/local/include/x86_64-linux-gnu/GL/gl.h"
       - "/usr/local/include/GL/gl.h"
@@ -1935,12 +2559,23 @@ events:
     found: "/usr/include/"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -1973,12 +2608,20 @@ events:
     names:
       - "GL/glx.h"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/include/x86_64-linux-gnu/"
       - "/usr/local/include/"
@@ -1999,12 +2642,20 @@ events:
       - "/opt/"
       - "/usr/include/X11/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/GL/glx.h"
+      - "/home/kraken/.composio/GL/glx.h"
+      - "/home/kraken/.opencode/bin/GL/glx.h"
+      - "/home/kraken/.kimi-code/bin/GL/glx.h"
+      - "/home/kraken/.local/bin/GL/glx.h"
+      - "/home/kraken/.sagepkg/bin/GL/glx.h"
       - "/usr/local/sbin/GL/glx.h"
       - "/usr/local/bin/GL/glx.h"
       - "/usr/sbin/GL/glx.h"
       - "/usr/bin/GL/glx.h"
       - "/sbin/GL/glx.h"
       - "/bin/GL/glx.h"
+      - "/usr/games/GL/glx.h"
+      - "/usr/local/games/GL/glx.h"
       - "/snap/bin/GL/glx.h"
       - "/usr/local/include/x86_64-linux-gnu/GL/glx.h"
       - "/usr/local/include/GL/glx.h"
@@ -2013,12 +2664,23 @@ events:
     found: "/usr/include/"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2051,12 +2713,20 @@ events:
     names:
       - "EGL/egl.h"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/include/x86_64-linux-gnu/"
       - "/usr/local/include/"
@@ -2077,12 +2747,20 @@ events:
       - "/opt/"
       - "/usr/include/X11/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/EGL/egl.h"
+      - "/home/kraken/.composio/EGL/egl.h"
+      - "/home/kraken/.opencode/bin/EGL/egl.h"
+      - "/home/kraken/.kimi-code/bin/EGL/egl.h"
+      - "/home/kraken/.local/bin/EGL/egl.h"
+      - "/home/kraken/.sagepkg/bin/EGL/egl.h"
       - "/usr/local/sbin/EGL/egl.h"
       - "/usr/local/bin/EGL/egl.h"
       - "/usr/sbin/EGL/egl.h"
       - "/usr/bin/EGL/egl.h"
       - "/sbin/EGL/egl.h"
       - "/bin/EGL/egl.h"
+      - "/usr/games/EGL/egl.h"
+      - "/usr/local/games/EGL/egl.h"
       - "/snap/bin/EGL/egl.h"
       - "/usr/local/include/x86_64-linux-gnu/EGL/egl.h"
       - "/usr/local/include/EGL/egl.h"
@@ -2091,12 +2769,23 @@ events:
     found: "/usr/include/"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2129,12 +2818,20 @@ events:
     names:
       - "GLES2/gl2.h"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/include/x86_64-linux-gnu/"
       - "/usr/local/include/"
@@ -2155,12 +2852,20 @@ events:
       - "/opt/"
       - "/usr/include/X11/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/GLES2/gl2.h"
+      - "/home/kraken/.composio/GLES2/gl2.h"
+      - "/home/kraken/.opencode/bin/GLES2/gl2.h"
+      - "/home/kraken/.kimi-code/bin/GLES2/gl2.h"
+      - "/home/kraken/.local/bin/GLES2/gl2.h"
+      - "/home/kraken/.sagepkg/bin/GLES2/gl2.h"
       - "/usr/local/sbin/GLES2/gl2.h"
       - "/usr/local/bin/GLES2/gl2.h"
       - "/usr/sbin/GLES2/gl2.h"
       - "/usr/bin/GLES2/gl2.h"
       - "/sbin/GLES2/gl2.h"
       - "/bin/GLES2/gl2.h"
+      - "/usr/games/GLES2/gl2.h"
+      - "/usr/local/games/GLES2/gl2.h"
       - "/snap/bin/GLES2/gl2.h"
       - "/usr/local/include/x86_64-linux-gnu/GLES2/gl2.h"
       - "/usr/local/include/GLES2/gl2.h"
@@ -2169,12 +2874,23 @@ events:
     found: "/usr/include/"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2207,12 +2923,20 @@ events:
     names:
       - "GLES3/gl3.h"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/include/x86_64-linux-gnu/"
       - "/usr/local/include/"
@@ -2233,12 +2957,20 @@ events:
       - "/opt/"
       - "/usr/include/X11/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/GLES3/gl3.h"
+      - "/home/kraken/.composio/GLES3/gl3.h"
+      - "/home/kraken/.opencode/bin/GLES3/gl3.h"
+      - "/home/kraken/.kimi-code/bin/GLES3/gl3.h"
+      - "/home/kraken/.local/bin/GLES3/gl3.h"
+      - "/home/kraken/.sagepkg/bin/GLES3/gl3.h"
       - "/usr/local/sbin/GLES3/gl3.h"
       - "/usr/local/bin/GLES3/gl3.h"
       - "/usr/sbin/GLES3/gl3.h"
       - "/usr/bin/GLES3/gl3.h"
       - "/sbin/GLES3/gl3.h"
       - "/bin/GLES3/gl3.h"
+      - "/usr/games/GLES3/gl3.h"
+      - "/usr/local/games/GLES3/gl3.h"
       - "/snap/bin/GLES3/gl3.h"
       - "/usr/local/include/x86_64-linux-gnu/GLES3/gl3.h"
       - "/usr/local/include/GLES3/gl3.h"
@@ -2247,12 +2979,23 @@ events:
     found: "/usr/include/"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2285,12 +3028,20 @@ events:
     names:
       - "GL/xmesa.h"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/include/x86_64-linux-gnu/"
       - "/usr/local/include/"
@@ -2314,12 +3065,20 @@ events:
       - "/usr/openwin/share/include/"
       - "/opt/graphics/OpenGL/include/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/GL/xmesa.h"
+      - "/home/kraken/.composio/GL/xmesa.h"
+      - "/home/kraken/.opencode/bin/GL/xmesa.h"
+      - "/home/kraken/.kimi-code/bin/GL/xmesa.h"
+      - "/home/kraken/.local/bin/GL/xmesa.h"
+      - "/home/kraken/.sagepkg/bin/GL/xmesa.h"
       - "/usr/local/sbin/GL/xmesa.h"
       - "/usr/local/bin/GL/xmesa.h"
       - "/usr/sbin/GL/xmesa.h"
       - "/usr/bin/GL/xmesa.h"
       - "/sbin/GL/xmesa.h"
       - "/bin/GL/xmesa.h"
+      - "/usr/games/GL/xmesa.h"
+      - "/usr/local/games/GL/xmesa.h"
       - "/snap/bin/GL/xmesa.h"
       - "/usr/local/include/x86_64-linux-gnu/GL/xmesa.h"
       - "/usr/local/include/GL/xmesa.h"
@@ -2345,12 +3104,23 @@ events:
     found: false
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2383,12 +3153,20 @@ events:
     names:
       - "GL/glu.h"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/include/x86_64-linux-gnu/"
       - "/usr/local/include/"
@@ -2409,12 +3187,20 @@ events:
       - "/opt/"
       - "/usr/include/X11/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/GL/glu.h"
+      - "/home/kraken/.composio/GL/glu.h"
+      - "/home/kraken/.opencode/bin/GL/glu.h"
+      - "/home/kraken/.kimi-code/bin/GL/glu.h"
+      - "/home/kraken/.local/bin/GL/glu.h"
+      - "/home/kraken/.sagepkg/bin/GL/glu.h"
       - "/usr/local/sbin/GL/glu.h"
       - "/usr/local/bin/GL/glu.h"
       - "/usr/sbin/GL/glu.h"
       - "/usr/bin/GL/glu.h"
       - "/sbin/GL/glu.h"
       - "/bin/GL/glu.h"
+      - "/usr/games/GL/glu.h"
+      - "/usr/local/games/GL/glu.h"
       - "/snap/bin/GL/glu.h"
       - "/usr/local/include/x86_64-linux-gnu/GL/glu.h"
       - "/usr/local/include/GL/glu.h"
@@ -2423,12 +3209,23 @@ events:
     found: "/usr/include/"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2461,12 +3258,20 @@ events:
     names:
       - "OpenGL"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/"
       - "/usr/local/lib/"
@@ -2487,12 +3292,20 @@ events:
       - "/opt/"
       - "/usr/lib/X11/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/"
       - "/usr/local/lib/"
@@ -2500,12 +3313,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libOpenGL.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2538,6 +3362,18 @@ events:
     names:
       - "GLX"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/libglvnd/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/libglvnd/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/libglvnd/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/libglvnd/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/libglvnd/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/libglvnd/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/libglvnd/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/libglvnd/"
@@ -2550,6 +3386,10 @@ events:
       - "/sbin/"
       - "/bin/libglvnd/"
       - "/bin/"
+      - "/usr/games/libglvnd/"
+      - "/usr/games/"
+      - "/usr/local/games/libglvnd/"
+      - "/usr/local/games/"
       - "/snap/bin/libglvnd/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/libglvnd/"
@@ -2589,6 +3429,18 @@ events:
       - "/usr/lib/X11/libglvnd/"
       - "/usr/lib/X11/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/libglvnd/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/libglvnd/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/libglvnd/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/libglvnd/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/libglvnd/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/libglvnd/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/libglvnd/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/libglvnd/"
@@ -2601,6 +3453,10 @@ events:
       - "/sbin/"
       - "/bin/libglvnd/"
       - "/bin/"
+      - "/usr/games/libglvnd/"
+      - "/usr/games/"
+      - "/usr/local/games/libglvnd/"
+      - "/usr/local/games/"
       - "/snap/bin/libglvnd/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/libglvnd/"
@@ -2613,12 +3469,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libGLX.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2651,6 +3518,18 @@ events:
     names:
       - "EGL"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/libglvnd/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/libglvnd/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/libglvnd/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/libglvnd/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/libglvnd/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/libglvnd/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/libglvnd/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/libglvnd/"
@@ -2663,6 +3542,10 @@ events:
       - "/sbin/"
       - "/bin/libglvnd/"
       - "/bin/"
+      - "/usr/games/libglvnd/"
+      - "/usr/games/"
+      - "/usr/local/games/libglvnd/"
+      - "/usr/local/games/"
       - "/snap/bin/libglvnd/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/libglvnd/"
@@ -2702,6 +3585,18 @@ events:
       - "/usr/lib/X11/libglvnd/"
       - "/usr/lib/X11/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/libglvnd/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/libglvnd/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/libglvnd/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/libglvnd/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/libglvnd/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/libglvnd/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/libglvnd/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/libglvnd/"
@@ -2714,6 +3609,10 @@ events:
       - "/sbin/"
       - "/bin/libglvnd/"
       - "/bin/"
+      - "/usr/games/libglvnd/"
+      - "/usr/games/"
+      - "/usr/local/games/libglvnd/"
+      - "/usr/local/games/"
       - "/snap/bin/libglvnd/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/libglvnd/"
@@ -2726,12 +3625,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libEGL.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2764,12 +3674,20 @@ events:
     names:
       - "GLESv2"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/"
       - "/usr/local/lib/"
@@ -2790,12 +3708,20 @@ events:
       - "/opt/"
       - "/usr/lib/X11/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/"
       - "/usr/local/lib/"
@@ -2803,12 +3729,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libGLESv2.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2842,12 +3779,20 @@ events:
       - "GLESv3"
       - "GLESv2"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/"
       - "/usr/local/lib/"
@@ -2868,12 +3813,20 @@ events:
       - "/opt/"
       - "/usr/lib/X11/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/"
       - "/usr/local/lib/"
@@ -2893,12 +3846,20 @@ events:
       - "/opt/lib/"
       - "/opt/"
       - "/usr/lib/X11/"
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/"
       - "/usr/local/lib/"
@@ -2906,12 +3867,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libGLESv2.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2945,12 +3917,20 @@ events:
       - "GLU"
       - "MesaGLU"
     candidate_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/"
       - "/usr/local/lib/"
@@ -2974,12 +3954,20 @@ events:
       - "/usr/openwin/lib/"
       - "/usr/shlib/"
     searched_directories:
+      - "/home/kraken/.gemini/antigravity-cli/bin/"
+      - "/home/kraken/.composio/"
+      - "/home/kraken/.opencode/bin/"
+      - "/home/kraken/.kimi-code/bin/"
+      - "/home/kraken/.local/bin/"
+      - "/home/kraken/.sagepkg/bin/"
       - "/usr/local/sbin/"
       - "/usr/local/bin/"
       - "/usr/sbin/"
       - "/usr/bin/"
       - "/sbin/"
       - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
       - "/snap/bin/"
       - "/usr/local/lib/x86_64-linux-gnu/"
       - "/usr/local/lib/"
@@ -2987,12 +3975,23 @@ events:
     found: "/usr/lib/x86_64-linux-gnu/libGLU.so"
     search_context:
       ENV{PATH}:
+        - "/home/kraken/.gemini/antigravity-cli/bin"
+        - "/home/kraken/.composio"
+        - "/home/kraken/.opencode/bin"
+        - "/home/kraken/.kimi-code/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
+        - "/home/kraken/.local/bin"
+        - "/home/kraken/.sagepkg/bin"
         - "/usr/local/sbin"
         - "/usr/local/bin"
         - "/usr/sbin"
         - "/usr/bin"
         - "/sbin"
         - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
         - "/snap/bin"
       CMAKE_INSTALL_PREFIX: "/usr/local"
       CMAKE_SYSTEM_PREFIX_PATH:
