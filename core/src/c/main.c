@@ -8,6 +8,7 @@
 #include <time.h>
 #include <errno.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include "lexer.h"
 #include "token.h"
 #include "ast.h"
@@ -2193,6 +2194,44 @@ int main(int argc, const char* argv[]) {
     main_thread_state.gas_limit = -1; // unlimited
     gc_register_thread(&main_thread_state);
 
+    // ── Check for embedded script payload (Self-extracting ELF) ──────────────
+    char* embedded_script = NULL;
+    {
+        char exe_path[4096] = {0};
+        ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+        if (len > 0) {
+            exe_path[len] = '\0';
+            FILE* f = fopen(exe_path, "rb");
+            if (f) {
+                fseek(f, 0, SEEK_END);
+                long size = ftell(f);
+                long search_start = size - 500000; // Search last 500KB
+                if (search_start < 0) search_start = 0;
+                
+                char magic[32];
+                snprintf(magic, sizeof(magic), "\n__SAGE_%s_%s__\n", "EMBEDDED", "START");
+                int magic_len = (int)strlen(magic);
+                
+                fseek(f, search_start, SEEK_SET);
+                char* buf = malloc(size - search_start);
+                if (buf && fread(buf, 1, size - search_start, f) > 0) {
+                    char* found = NULL;
+                    for (long i = (size - search_start) - magic_len; i >= 0; i--) {
+                        if (memcmp(buf + i, magic, magic_len) == 0) {
+                            found = buf + i;
+                            break;
+                        }
+                    }
+                    if (found) {
+                        embedded_script = strdup(found + magic_len);
+                    }
+                }
+                if (buf) free(buf);
+                fclose(f);
+            }
+        }
+    }
+
     // ── OIS integration ──────────────────────────────────────────────────────
     // Intercept OIS-managed flags and delegate to OIS.sh before any sage logic.
     // OIS.sh lives at: <dir containing this binary>/../../OIS/OIS.sh
@@ -2470,6 +2509,59 @@ int main(int argc, const char* argv[]) {
         set_math_work_env(env);
         (void)vm_execute_program(&program, env);
         bytecode_program_free(&program);
+    } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile-jit") == 0) {
+        const char* input_file = cmd_argv[2];
+        char* derived_output = derive_output_path(input_file, "", 1);
+        const char* output_file = derived_output;
+        for (int i = 3; i < cmd_argc; i++) {
+            if (strcmp(cmd_argv[i], "-o") == 0 && i + 1 < cmd_argc) {
+                output_file = cmd_argv[i + 1];
+            }
+        }
+        
+        char exe_path[4096] = {0};
+        ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+        if (len <= 0) {
+            strncpy(exe_path, cmd_argv[0], sizeof(exe_path) - 1); // fallback
+        }
+        
+        char* source = main_read_file(input_file);
+        if (!source) {
+            fprintf(stderr, "Could not read input file: %s\n", input_file);
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+        
+        // Copy executable to output
+        FILE* f_in = fopen(exe_path, "rb");
+        FILE* f_out = fopen(output_file, "wb");
+        if (!f_in || !f_out) {
+            fprintf(stderr, "Could not open files for copying\n");
+            free(source);
+            free(derived_output);
+            CLEANUP_AND_EXIT(1);
+        }
+        
+        char buf[8192];
+        size_t bytes;
+        while ((bytes = fread(buf, 1, sizeof(buf), f_in)) > 0) {
+            fwrite(buf, 1, bytes, f_out);
+        }
+        fclose(f_in);
+        
+        // Append magic and source
+        char magic[32];
+        snprintf(magic, sizeof(magic), "\n__SAGE_%s_%s__\n", "EMBEDDED", "START");
+        fwrite(magic, 1, strlen(magic), f_out);
+        fwrite(source, 1, strlen(source), f_out);
+        fclose(f_out);
+        
+        // Make output executable
+        chmod(output_file, 0755);
+        free(source);
+        printf("Built self-extracting JIT executable: %s\n", output_file);
+        free(derived_output);
+        CLEANUP_AND_EXIT(0);
     } else if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--compile") == 0) {
         const char* explicit_output = NULL;
         const char* cc_command = NULL;
