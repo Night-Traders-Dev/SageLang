@@ -2172,6 +2172,141 @@ static void run(const char* source, const char* filename, SageRuntimeMode runtim
     }
 }
 
+// ============================================================================
+// JIT self-extracting executable: module bundling support
+// Bundles imported module sources so the binary runs without filesystem deps.
+// ============================================================================
+
+// Native module names that should never be bundled
+static int jit_is_native_module(const char* name) {
+    const char* natives[] = {"_math",   "math",      "_io",       "io",
+                             "thread",  "_thread",   "sys",       "_sys",
+                             "socket",  "tcp",       "http",      "ssl",
+                             "fat",     "gpu",       "graphics",  "ml_native",
+                             "compiler","vm_native", "vm",        "ffi",
+                             "net",     "string",    NULL};
+    for (int i = 0; natives[i] != NULL; i++) {
+        if (strcmp(name, natives[i]) == 0) return 1;
+    }
+    return 0;
+}
+
+// Collect top-level non-native import module names from a source string
+static char** jit_get_imports(const char* source, const char* filename, int* count) {
+    Stmt* ast = parse_program(source, filename);
+    if (!ast) { *count = 0; return NULL; }
+    int cap = 16, cnt = 0;
+    char** imports = SAGE_ALLOC(sizeof(char*) * cap);
+    for (Stmt* s = ast; s; s = s->next) {
+        if (s->type == STMT_IMPORT && s->as.import.import_all) {
+            char* name = s->as.import.module_name;
+            if (jit_is_native_module(name)) continue;
+            int found = 0;
+            for (int i = 0; i < cnt; i++) {
+                if (strcmp(imports[i], name) == 0) { found = 1; break; }
+            }
+            if (found) continue;
+            if (cnt >= cap) { cap *= 2; imports = realloc(imports, sizeof(char*) * cap); }
+            imports[cnt++] = SAGE_STRDUP(name);
+        }
+    }
+    *count = cnt;
+    return imports;
+}
+
+// Bundle entry for a module to be embedded
+typedef struct { char* name; char* source; char* path; } JitModuleEntry;
+
+// Recursively collect a module and all its non-native deps into the bundle
+static void jit_collect_deps(const char* module_name, JitModuleEntry** entries, int* count, int* cap) {
+    for (int i = 0; i < *count; i++) {
+        if (strcmp((*entries)[i].name, module_name) == 0) return;
+    }
+    char* path = resolve_module_path(global_module_cache, module_name);
+    if (!path) { fprintf(stderr, "Warning: Could not resolve module '%s'\n", module_name); return; }
+    char* source = read_file(path);
+    if (!source) { free(path); return; }
+    if (*count >= *cap) { *cap *= 2; *entries = realloc(*entries, sizeof(JitModuleEntry) * *cap); }
+    int idx = (*count)++;
+    (*entries)[idx].name = SAGE_STRDUP(module_name);
+    (*entries)[idx].source = source;
+    (*entries)[idx].path = path;
+    int sub_cnt = 0;
+    char** subs = jit_get_imports(source, path, &sub_cnt);
+    for (int i = 0; i < sub_cnt; i++) {
+        jit_collect_deps(subs[i], entries, count, cap);
+        free(subs[i]);
+    }
+    free(subs);
+}
+
+// Write a module bundle into the output file after the EMBEDDED_START marker
+static void jit_write_bundle(FILE* f_out, JitModuleEntry* entries, int count) {
+    fprintf(f_out, "__SAGE_BUNDLE_START__\n");
+    for (int i = 0; i < count; i++) {
+        fprintf(f_out, "%s\n", entries[i].name);
+        size_t slen = strlen(entries[i].source);
+        fprintf(f_out, "%zu\n", slen);
+        fwrite(entries[i].source, 1, slen, f_out);
+        fputc('\n', f_out);
+    }
+    fprintf(f_out, "__SAGE_BUNDLE_END__\n");
+}
+
+// Parse a module bundle from memory, pre-load every module, and return
+// the offset to the main source. Returns 0 if no bundle is present.
+static int jit_load_bundle_and_find_main(const char* script, Environment* env) {
+    const char* p = strstr(script, "__SAGE_BUNDLE_START__\n");
+    if (!p) return 0;
+    p += 22;
+
+    // Single pass: insert every module into the cache with source pre-set.
+    // Do NOT execute anything — let the main script's import statements trigger
+    // execution through the normal module loader, which already handles
+    // dependency ordering correctly via recursive imports.
+    while (1) {
+        if (strncmp(p, "__SAGE_BUNDLE_END__\n", 20) == 0) {
+            p += 20;
+            break;
+        }
+        const char* nl = strchr(p, '\n');
+        if (!nl) return 0;
+        int name_len = (int)(nl - p);
+        char* mod_name = SAGE_ALLOC(name_len + 1);
+        strncpy(mod_name, p, name_len);
+        mod_name[name_len] = '\0';
+        p = nl + 1;
+        long src_len = atol(p);
+        nl = strchr(p, '\n');
+        if (!nl) { free(mod_name); return 0; }
+        p = nl + 1;
+        char* src = SAGE_ALLOC(src_len + 1);
+        if (src_len > 0) strncpy(src, p, src_len);
+        src[src_len] = '\0';
+        p += src_len;
+        if (*p == '\n') p++;
+
+        Module* mod = find_module(global_module_cache, mod_name);
+        if (!mod) {
+            mod = SAGE_ALLOC(sizeof(Module));
+            mod->name = SAGE_STRDUP(mod_name);
+            mod->path = NULL;
+            mod->ast = NULL;
+            mod->ast_tail = NULL;
+            mod->env = NULL;
+            mod->is_loaded = false;
+            mod->is_loading = false;
+            mod->next = global_module_cache->modules;
+            global_module_cache->modules = mod;
+        }
+        // Free existing source if any, then assign new source
+        free(mod->source);
+        mod->source = src;
+        free(mod_name);
+    }
+    return (int)(p - script);
+}
+
 #define CLEANUP_AND_EXIT(code) do { \
     gc_shutdown(); \
     cleanup_module_system(); \
@@ -2339,7 +2474,18 @@ int main(int argc, const char* argv[]) {
 
     if (embedded_script != NULL) {
         module_add_source_dir(argv[0]);
-        run(embedded_script, argv[0], SAGE_RUNTIME_JIT);
+        // Check for embedded module bundle; if present, pre-load modules
+        Env* bundle_env = env_create(NULL);
+        g_global_env = bundle_env;
+        init_stdlib(bundle_env);
+        int main_offset = jit_load_bundle_and_find_main(embedded_script, bundle_env);
+        if (main_offset > 0) {
+            // Run the main source after the bundle
+            run(embedded_script + main_offset, argv[0], SAGE_RUNTIME_JIT);
+        } else {
+            // No bundle — entire script is the main source (backward compat)
+            run(embedded_script, argv[0], SAGE_RUNTIME_JIT);
+        }
         free(embedded_script);
         CLEANUP_AND_EXIT(0);
     }
@@ -2553,6 +2699,21 @@ int main(int argc, const char* argv[]) {
             free(derived_output);
             CLEANUP_AND_EXIT(1);
         }
+
+        // Add source dir to module search path so imports resolve
+        module_add_source_dir(input_file);
+
+        // Discover imported module dependencies and bundle them
+        JitModuleEntry* entries = NULL;
+        int entry_count = 0, entry_cap = 16;
+        entries = malloc(sizeof(JitModuleEntry) * entry_cap);
+        int import_cnt = 0;
+        char** imports = jit_get_imports(source, input_file, &import_cnt);
+        for (int i = 0; i < import_cnt; i++) {
+            jit_collect_deps(imports[i], &entries, &entry_count, &entry_cap);
+            free(imports[i]);
+        }
+        free(imports);
         
         // Copy executable to output
         FILE* f_in = fopen(exe_path, "rb");
@@ -2560,6 +2721,10 @@ int main(int argc, const char* argv[]) {
         if (!f_in || !f_out) {
             fprintf(stderr, "Could not open files for copying\n");
             free(source);
+            for (int i = 0; i < entry_count; i++) {
+                free(entries[i].name); free(entries[i].source); free(entries[i].path);
+            }
+            free(entries);
             free(derived_output);
             CLEANUP_AND_EXIT(1);
         }
@@ -2571,12 +2736,20 @@ int main(int argc, const char* argv[]) {
         }
         fclose(f_in);
         
-        // Append magic and source
+        // Append magic, module bundle, and main source
         char magic[32];
         snprintf(magic, sizeof(magic), "\n__SAGE_%s_%s__\n", "EMBEDDED", "START");
         fwrite(magic, 1, strlen(magic), f_out);
+        if (entry_count > 0) {
+            jit_write_bundle(f_out, entries, entry_count);
+        }
         fwrite(source, 1, strlen(source), f_out);
         fclose(f_out);
+
+        for (int i = 0; i < entry_count; i++) {
+            free(entries[i].name); free(entries[i].source); free(entries[i].path);
+        }
+        free(entries);
         
         // Make output executable
         chmod(output_file, 0755);
@@ -3076,12 +3249,33 @@ int main(int argc, const char* argv[]) {
                 CLEANUP_AND_EXIT(1);
             }
 
+            // Add source dir to module search path so imports resolve
+            module_add_source_dir(input_file);
+
+            // Discover imported module dependencies and bundle them
+            JitModuleEntry* entries = NULL;
+            int entry_count = 0, entry_cap = 16;
+            entries = malloc(sizeof(JitModuleEntry) * entry_cap);
+            int import_cnt = 0;
+            char** imports = jit_get_imports(source, input_file, &import_cnt);
+            for (int i = 0; i < import_cnt; i++) {
+                jit_collect_deps(imports[i], &entries, &entry_count, &entry_cap);
+                free(imports[i]);
+            }
+            free(imports);
+
             // Copy executable to output
             FILE* f_in = fopen(exe_path, "rb");
             FILE* f_out = fopen(output_file, "wb");
             if (!f_in || !f_out) {
                 fprintf(stderr, "Could not open files for copying\n");
                 free(source);
+                for (int i = 0; i < entry_count; i++) {
+                    free(entries[i].name);
+                    free(entries[i].source);
+                    free(entries[i].path);
+                }
+                free(entries);
                 CLEANUP_AND_EXIT(1);
             }
 
@@ -3092,12 +3286,23 @@ int main(int argc, const char* argv[]) {
             }
             fclose(f_in);
 
-            // Append magic and source
+            // Append magic, module bundle, and main source
             char magic[32];
             snprintf(magic, sizeof(magic), "\n__SAGE_%s_%s__\n", "EMBEDDED", "START");
             fwrite(magic, 1, strlen(magic), f_out);
+            if (entry_count > 0) {
+                jit_write_bundle(f_out, entries, entry_count);
+            }
             fwrite(source, 1, strlen(source), f_out);
             fclose(f_out);
+
+            // Cleanup bundle
+            for (int i = 0; i < entry_count; i++) {
+                free(entries[i].name);
+                free(entries[i].source);
+                free(entries[i].path);
+            }
+            free(entries);
 
             // Make output executable
             chmod(output_file, 0755);
