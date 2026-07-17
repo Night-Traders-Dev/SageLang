@@ -9,6 +9,24 @@ propagation so the per-entry version history is never flattened again.
 
 ---
 
+## [4.0.7] - 2026-07-15
+
+### JIT Compiler Command & Self-Extracting Runner
+- **Command support**: Allowed compiling a binary using `sage --jit hello.sage -o hello_jit` directly, matching other compilation modes.
+- **Self-extracting runner**: Fixed the self-extracting JIT executable runner to execute the embedded script payload rather than starting the REPL.
+
+---
+
+## [4.0.6] - 2026-07-15
+
+### AOT & Compiler Fixes
+- **Memory safety**: Resolved buffer overflows and global scope issues in the AOT (Ahead-of-Time) compiler.
+- **Built-in functions**: Added missing string and array built-in implementations (`s_replace`, `s_clock`, `s_split`, `s_ord`, `s_chr`, `s_join`) to the AOT backend.
+- **Combined JIT-AOT**: Perfected JIT-guided AOT (`sage --aot --jit <file>`).
+- **Cross-compilation**: Added full cross-compilation support via GCC cross-compilers.
+
+---
+
 ## [4.0.5] - 2026-07-12
 
 ### Version Bump

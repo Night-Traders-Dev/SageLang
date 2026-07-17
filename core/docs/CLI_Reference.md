@@ -38,6 +38,7 @@ Complete reference for the `sage` command-line interface.
 | `sage --compile-uefi <input.sage>` | `<input-without-.sage>.efi` | `-o <path>`, `--target x86_64\|aarch64`, `-O0`–`-O3`, `-g` |
 | `sage --emit-kotlin <input.sage>` | `<input>.kt` | `-o <path>` |
 | `sage --compile-android <input.sage>` | Gradle project dir | `--package`, `--app-name`, `--min-sdk` |
+| `sage --jit <input.sage> -o <bin>` | `<bin>` executable | JIT self-extracting executable with module bundling |
 
 ## Option Semantics
 
@@ -49,7 +50,7 @@ Complete reference for the `sage` command-line interface.
 | `-O0` / `-O1` / `-O2` / `-O3` | C, LLVM, and native codegen | Optimization pass level |
 | `-g` | C, LLVM, asm, and native compile/emit | Enables debug information in the generated output |
 | `--runtime ast\|bytecode\|jit\|aot` | Run commands | Runtime mode selection |
-| `--jit` | Run commands | Enable JIT profiling |
+| `--jit` | Run commands | Enable JIT profiling; if used with `-o`, compiles to a self-extracting executable with bundled module dependencies |
 | `--aot` | Run commands | Enable AOT compilation |
 | `--verbose` / `-v` | All | Gate internal compiler diagnostic messages |
 | `--math-work` | Run commands | Configure math execution modes |

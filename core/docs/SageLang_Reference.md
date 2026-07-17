@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.0.3 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.0.8 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -1404,7 +1404,8 @@ end
 | `sage --emit-vm <file>` | Emit bytecode |
 | `sage --sgvm <file>` | Emit SGVM binary |
 | `sage --emit-kotlin <file>` | Emit Kotlin/Android source |
-| `sage --jit <file>` | Run with JIT |
+| `sage --jit <file>` | Run with JIT profiling |
+| `sage --jit <file> -o <bin>` | Compile to JIT self-extracting executable (with module bundling) |
 | `sage --aot <file> -o <bin>` | Ahead-of-time compile |
 | `sage --compile-pico <file>` | Compile for Raspberry Pi Pico |
 | `sage --compile-bare <file>` | Freestanding ELF |

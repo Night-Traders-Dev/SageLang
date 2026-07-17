@@ -11,10 +11,13 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.0.6 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.0.8 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
 
+- **v4.0.9 (Rich Library Fixes)**: Fixed `sagelang-lib-rich` emoji duplicates (`dizzy`→`dizzy_face`, `mouse`→`mouse_peripheral`, removed duplicate `lavender_blush` in color map). Fixed `merge_styles` boolean override logic and added missing `not` style negation for all text attributes. Improved terminal size detection to query `stty size` instead of always returning 80×24. SageSMP shell now features a gradient-styled prompt using the corrected rich library.
+- **v4.0.8 (JIT Dependency Bundling & Multi-Arch)**: Added recursive module dependency bundling for JIT self-extracting executables (`sage --jit main.sage -o app`). Transitive non-native imports are discovered and serialized into the final binary. JIT compiler now fully supports x86-64, AArch64, and RV64 architectures. JIT-compiled functions are now directly executed via native tail-call trampolines, resulting in actual performance gains for hot functions. VM dispatch loop optimized with register-pinned state variables and branch-predicted stack overflow checks.
+- **v4.0.7 (JIT Compilation Support)**: Added support for compiling a binary using `sage --jit hello.sage -o hello_jit`, and fixed the self-extracting JIT executable runner to execute the embedded script payload rather than starting the REPL.
 - **v4.0.6 (AOT & Compiler Fixes)**: Resolved buffer overflows and global scope issues in the AOT (Ahead-of-Time) compiler. Missing string and array built-in implementations (`s_replace`, `s_clock`, `s_split`, `s_ord`, `s_chr`, `s_join`) have been added to the AOT backend. Perfected JIT-guided AOT (`sage --aot --jit <file>`). Full cross-compilation is now supported via GCC cross-compilers.
 - **v4.0.5 / v4.0.4 (Security & Bug Fixes)**: Resolved $O(N^2)$ Algorithmic Complexity DoS vulnerability (CWE-400) in crypto library `to_hex`; resolved parser/compiler errors on multi-line assignments; converted `sys_info` unit test to load version dynamically from single-source `VERSION` file.
 - **OIS v2.0 Overhaul**: Installer rewritten with CMake-first default, `--cmake`/`--make` override flags, `--no-lib-<name>` to exclude specific lib subdirectories, `--no-shaders` to skip GLSL→SPIR-V compilation, `--no-vulkan`/`--no-gpu`/`--no-curl`/`--no-ssl`/`--minimal` flags, system-scope only, POSIX-sh compliance, `--yes` non-interactive mode, and removed user-scope support.
@@ -99,6 +102,17 @@ authored, non-empty tracked lines; exclude vendored deps and build artifacts).
 Run `python3 scripts/generate_backend_chart.py` or
 `bash benchmarks/run_backend_compare.sh` to regenerate (8 workloads across all
 native backends).
+
+### AOT vs JIT vs VM Benchmarks
+
+We recently ran a microbenchmark comparing the different execution backends:
+
+| Benchmark | VM | JIT | AOT | AOT+JIT |
+|-----------|----|-----|-----|---------| 
+| Fibonacci(36) | 10.49 s | 10.87 s | 1.96 s | 0.24 s |
+| Nested Loop (5K x 5K) | 3.35 s | 3.20 s | 0.85 s | 0.14 s |
+
+*Note: The AOT compiler produces optimized C11 code which is then compiled via GCC `-O2` with `-fno-strict-aliasing`. The JIT now supports x86-64, AArch64, and RV64 architectures.*
 
 ### Recipe Benchmarks
 
