@@ -1,23 +1,3 @@
-# EXPECT: Runtime Error: Module 'os.sync' has no attribute 'rwlock_create'.
-# EXPECT: Runtime Error: '.rwlock_create' is not callable (type=2).
-# EXPECT: Runtime Error: Module 'os.sync' has no attribute 'rwlock_try_read_lock'.
-# EXPECT: Runtime Error: '.rwlock_try_read_lock' is not callable (type=2).
-# EXPECT: Runtime Error: Module 'os.sync' has no attribute 'rwlock_try_read_lock'.
-# EXPECT: Runtime Error: '.rwlock_try_read_lock' is not callable (type=2).
-# EXPECT: Runtime Error: Module 'os.sync' has no attribute 'rwlock_try_write_lock'.
-# EXPECT: Runtime Error: '.rwlock_try_write_lock' is not callable (type=2).
-# EXPECT: Runtime Error: Module 'os.sync' has no attribute 'rwlock_read_unlock'.
-# EXPECT: Runtime Error: '.rwlock_read_unlock' is not callable (type=2).
-# EXPECT: Runtime Error: Module 'os.sync' has no attribute 'rwlock_read_unlock'.
-# EXPECT: Runtime Error: '.rwlock_read_unlock' is not callable (type=2).
-# EXPECT: Runtime Error: Module 'os.sync' has no attribute 'rwlock_try_write_lock'.
-# EXPECT: Runtime Error: '.rwlock_try_write_lock' is not callable (type=2).
-# EXPECT: Runtime Error: Module 'os.sync' has no attribute 'rwlock_try_read_lock'.
-# EXPECT: Runtime Error: '.rwlock_try_read_lock' is not callable (type=2).
-# EXPECT: Runtime Error: Module 'os.sync' has no attribute 'rwlock_write_unlock'.
-# EXPECT: Runtime Error: '.rwlock_write_unlock' is not callable (type=2).
-# EXPECT: Runtime Error: Module 'os.sync' has no attribute 'rwlock_try_read_lock'.
-# EXPECT: Runtime Error: '.rwlock_try_read_lock' is not callable (type=2).
 # EXPECT: Mutex smoke test passed!
 # EXPECT: RWLock smoke test passed!
 import os.sync
