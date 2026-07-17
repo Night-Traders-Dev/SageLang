@@ -18,6 +18,22 @@
 #include "parser.h"
 #include "pass.h"
 
+// Native C modules that don't have .sage files (handled at runtime)
+static int is_native_module(const char *name) {
+    const char *natives[] = {"_math",    "math",      "_io",       "io",
+                             "thread",    "_thread",   "sys",      "_sys",
+                             "socket",    "tcp",       "http",     "ssl",
+                             "fat",       "gpu",       "graphics", "ml_native",
+                             "compiler",  "vm_native", "vm",       "ffi",
+                             "net",       "string",
+                             NULL};
+    for (int i = 0; natives[i] != NULL; i++) {
+        if (strcmp(name, natives[i]) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 // ============================================================================
 // LLVM IR Text Generation Backend
 //
@@ -609,6 +625,13 @@ static void llvm_process_import_constants(LLVMCompiler* lc, ImportStmt* import_s
     if (import_stmt == NULL || import_stmt->item_count <= 0) return;
     if (import_stmt->module_name == NULL) return;
 
+    // Native module constants — only GPU supports compile-time constants.
+    // For non-GPU native modules (tcp, json, sys, etc.), imported items are
+    // runtime-resolved functions, not constants — skip without error.
+    if (strcmp(import_stmt->module_name, "gpu") != 0 && is_native_module(import_stmt->module_name)) {
+        return;
+    }
+
     // Native GPU constants are resolved from the static table.
     if (strcmp(import_stmt->module_name, "gpu") == 0) {
         for (int i = 0; i < import_stmt->item_count; i++) {
@@ -670,12 +693,9 @@ static void llvm_process_import_constants(LLVMCompiler* lc, ImportStmt* import_s
         ModuleConst* hit = module_const_find(consts, const_count, item_name);
         if (hit != NULL) {
             llc_set_imported_const(lc, bind_name, &hit->value);
-        } else {
-            fprintf(stderr,
-                    "LLVM backend: unresolved imported constant '%s' from module '%s'\n",
-                    item_name, import_stmt->module_name);
-            lc->failed = 1;
         }
+        // Items that aren't compile-time constants (e.g. functions, procs)
+        // will be resolved at runtime through the module object.
     }
 
     module_const_free_all(consts, const_count);
@@ -1318,6 +1338,12 @@ static void llvm_collect_symbols(LLVMCompiler* lc, Stmt* program) {
                 if (bind != NULL) {
                     llc_add_global(lc, bind);
                 }
+            }
+            // Add imported items as globals (they will be resolved at runtime)
+            for (int i = 0; i < s->as.import.item_count; i++) {
+                const char* item_name = (s->as.import.item_aliases && s->as.import.item_aliases[i])
+                    ? s->as.import.item_aliases[i] : s->as.import.items[i];
+                llc_add_global(lc, item_name);
             }
             if (s->as.import.item_count > 0) {
                 llvm_process_import_constants(lc, &s->as.import);
@@ -2246,7 +2272,8 @@ static void llvm_emit_function(LLVMCompiler* lc, Stmt* proc) {
         free(param);
     }
     fputs(") {\n", lc->out);
-    fputs("entry:\n", lc->out);
+    int entry_label = llc_new_label(lc);
+    ll_emit(lc, "L%d:\n", entry_label);
 
     // Allocate parameter variables
     for (int i = 0; i < proc->as.proc.param_count; i++) {
@@ -2380,8 +2407,9 @@ static int write_llvm_output(const char* source, const char* input_path, const c
 
     // Emit main function
     lc.next_reg = 0;
+    int main_entry_label = llc_new_label(&lc);
     fprintf(out, "define i32 @main() {\n");
-    fprintf(out, "entry:\n");
+    fprintf(out, "L%d:\n", main_entry_label);
 
     // Pre-allocate all local variables used in main (for/let inside loops/blocks)
     {

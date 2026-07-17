@@ -864,14 +864,6 @@ static void collect_global_lets(Compiler *compiler, Stmt *stmt) {
 
 Stmt *parse_program(const char *source, const char *input_path);
 
-static int is_in_import_list(ImportStmt *import, const char *name) {
-  for (int i = 0; i < import->item_count; i++) {
-    if (strcmp(import->items[i], name) == 0)
-      return 1;
-  }
-  return 0;
-}
-
 // Native C modules that don't have .sage files (handled at runtime)
 static int is_native_module(const char *name) {
   const char *natives[] = {"_math",    "math",      "_io",       "io",
@@ -913,6 +905,17 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
 
     // Add the module itself to globals
     add_name_entry(compiler, &compiler->globals, binding_name, "sage_global");
+
+    // Add imported items from native modules as globals
+    // (they will be resolved at runtime through the module object)
+    for (int i = 0; i < import->item_count; i++) {
+        const char *item_name = import->item_aliases && import->item_aliases[i]
+                                    ? import->item_aliases[i]
+                                    : import->items[i];
+        add_name_entry(compiler, &compiler->globals,
+                       item_name, "sage_global");
+    }
+
     return;
   }
 
@@ -950,30 +953,24 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
   // Add the module itself to globals so it can be resolved as a variable
   add_name_entry(compiler, &compiler->globals, binding_name, "sage_global");
 
-  /* Collect module's procs and classes */
+  /* Collect module's procs and classes — all procs must be compiled
+     even if not explicitly imported, because opaque module references
+     (e.g. json.repeat) need them at code emission time. */
   for (Stmt *s = ast; s != NULL; s = s->next) {
     if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC) {
       char *name = token_to_string(s->as.proc.name);
-      if (import->import_all || is_in_import_list(import, name)) {
-#ifdef SAGE_DEBUG
-        printf("DEBUG: adding proc: %s, import_all: %d\n", name,
-               import->import_all);
-#endif
-        add_proc_entry(compiler, name, s->as.proc.param_count, &s->as.proc.name);
-      }
+      add_proc_entry(compiler, name, s->as.proc.param_count, &s->as.proc.name);
       free(name);
     }
     if (s->type == STMT_CLASS) {
       char *class_name = token_to_string(s->as.class_stmt.name);
-      if (import->import_all || is_in_import_list(import, class_name)) {
-        char *parent_name = NULL;
-        if (s->as.class_stmt.has_parent) {
-          parent_name = token_to_string(s->as.class_stmt.parent);
-        }
-        add_class_info(compiler, class_name, parent_name,
-                       s->as.class_stmt.methods);
-        free(parent_name);
+      char *parent_name = NULL;
+      if (s->as.class_stmt.has_parent) {
+        parent_name = token_to_string(s->as.class_stmt.parent);
       }
+      add_class_info(compiler, class_name, parent_name,
+                     s->as.class_stmt.methods);
+      free(parent_name);
       free(class_name);
     }
     if (s->type == STMT_IMPORT) {
