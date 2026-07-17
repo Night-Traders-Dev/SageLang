@@ -459,7 +459,7 @@ static Value string_repeat_native(int argCount, Value* args) {
     const char* s = AS_STRING(args[0]);
     int count = (int)AS_NUMBER(args[1]);
     if (count <= 0) return val_string("");
-    size_t slen = strlen(s);
+    size_t slen = SAGE_STRING_LEN(args[0]);
     // Security: Enforce global allocation limit (CWE-400)
     if (slen > 0 && (size_t)count > SAGE_MAX_READ_SIZE / slen) return val_nil();
     size_t total = slen * (size_t)count;
@@ -864,21 +864,23 @@ static Value ord_native(int argCount, Value* args) {
 // startswith(s, prefix) -> bool
 static Value startswith_native(int argCount, Value* args) {
     if (argCount != 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_nil();
+    size_t slen = SAGE_STRING_LEN(args[0]);
+    size_t plen = SAGE_STRING_LEN(args[1]);
+    if (plen > slen) return val_bool(0);
     char* s = AS_STRING(args[0]);
     char* prefix = AS_STRING(args[1]);
-    size_t plen = strlen(prefix);
     return val_bool(strncmp(s, prefix, plen) == 0);
 }
 
 // endswith(s, suffix) -> bool
 static Value endswith_native(int argCount, Value* args) {
     if (argCount != 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_nil();
+    size_t slen = SAGE_STRING_LEN(args[0]);
+    size_t suflen = SAGE_STRING_LEN(args[1]);
+    if (suflen > slen) return val_bool(0);
     char* s = AS_STRING(args[0]);
     char* suffix = AS_STRING(args[1]);
-    size_t slen = strlen(s);
-    size_t suflen = strlen(suffix);
-    if (suflen > slen) return val_bool(0);
-    return val_bool(strcmp(s + slen - suflen, suffix) == 0);
+    return val_bool(memcmp(s + slen - suflen, suffix, suflen) == 0);
 }
 
 // contains(s, sub) -> bool
@@ -2347,14 +2349,18 @@ static Value path_join_native(int argCount, Value* args) {
         total_len += SAGE_STRING_LEN(args[i]) + 1;
     }
     char* result = SAGE_ALLOC(total_len + 1);
-    result[0] = '\0';
+    char* p = result;
     for (int i = 0; i < argCount; i++) {
-        if (i > 0 && result[0] != '\0') {
-            int len = (int)strlen(result);
-            if (len > 0 && result[len - 1] != '/') strcat(result, "/");
+        size_t arg_len = SAGE_STRING_LEN(args[i]);
+        if (i > 0 && p != result) {
+            if (p[-1] != '/') {
+                *p++ = '/';
+            }
         }
-        strcat(result, AS_STRING(args[i]));
+        memcpy(p, AS_STRING(args[i]), arg_len);
+        p += arg_len;
     }
+    *p = '\0';
     return val_string_take(result);
 }
 
@@ -2743,8 +2749,8 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             if (IS_STRING(left) && IS_STRING(right)) {
                 char* s1 = AS_STRING(left);
                 char* s2 = AS_STRING(right);
-                size_t len1 = strlen(s1);
-                size_t len2 = strlen(s2);
+                size_t len1 = SAGE_STRING_LEN(left);
+                size_t len2 = SAGE_STRING_LEN(right);
                 if (len1 > SIZE_MAX - len2 - 1) {
                     fprintf(stderr, "Error: String concatenation overflow\n");
                     AST_GC_POP();
@@ -2949,7 +2955,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             } else if (arr.type == VAL_STRING && IS_NUMBER(idx)) {
                 int index = (int)AS_NUMBER(idx);
                 char* str = AS_STRING(arr);
-                int slen = (int)strlen(str);
+                int slen = SAGE_STRING_LEN(arr);
                 if (index < 0) index += slen;
                 if (index < 0 || index >= slen) {
                     fprintf(stderr, "Runtime Error: String index out of bounds.\n");
@@ -3023,7 +3029,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             if (arr.type == VAL_ARRAY) {
                 end = arr.as.array->count;
             } else {
-                end = (int)strlen(arr.as.string);
+                end = SAGE_STRING_LEN(arr);
             }
             
             if (expr->as.slice.start != NULL) {
@@ -3656,10 +3662,10 @@ jitted:
                 } else {
                     // Auto-init for structs: look for __StructName_fields__ metadata
                     char meta_key[256];
-                    snprintf(meta_key, sizeof(meta_key), "__%.*s_fields__",
-                             class_def->name_len, class_def->name);
+                    int meta_len = snprintf(meta_key, sizeof(meta_key), "__%.*s_fields__",
+                                            class_def->name_len, class_def->name);
                     Value fields_val;
-                    if (env_get(env, meta_key, (int)strlen(meta_key), &fields_val) &&
+                    if (env_get(env, meta_key, meta_len, &fields_val) &&
                         fields_val.type == VAL_ARRAY) {
                         ArrayValue* fields = fields_val.as.array;
                         int pushed_args = 0;
@@ -3673,7 +3679,7 @@ jitted:
                             pushed_args++;
                             if (fields->elements[i].type == VAL_STRING) {
                                 char* field_name = AS_STRING(fields->elements[i]);
-                                instance_set_field(instance, field_name, (int)strlen(field_name), arg_result.value);
+                                instance_set_field(instance, field_name, SAGE_STRING_LEN(fields->elements[i]), arg_result.value);
                             }
                         }
                         AST_GC_POP_N(pushed_args);
