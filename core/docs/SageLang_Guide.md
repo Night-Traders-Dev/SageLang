@@ -122,6 +122,7 @@ main.c
 
 **Token Types** (from token.h):
 - **Keywords**: `and`, `as`, `async`, `await`, `break`, `case`, `catch`, `class`, `comptime`, `continue`, `default`, `defer`, `elif`, `else`, `end`, `enum`, `false`, `finally`, `for`, `from`, `if`, `import`, `in`, `init`, `let`, `macro`, `match`, `nil`, `not`, `or`, `print`, `proc`, `quote`, `raise`, `return`, `self`, `struct`, `super`, `trait`, `true`, `try`, `unquote`, `unsafe`, `var`, `while`, `yield`, `@`
+  - *Note: `print`, `end`, `match`, `init`, `enum`, `struct`, and `trait` are soft keywords and can also be used as variable, property, or method names.*
 - **Operators**: `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `&`, `|`, `^`, `~`, `<<`, `>>`
 - **Punctuation**: `(`, `)`, `[`, `]`, `{`, `}`, `:`, `,`, `.`
 - **Structural**: `INDENT`, `DEDENT`, `NEWLINE`, `DOC_COMMENT`, `EOF`, `ERROR`
@@ -1834,6 +1835,7 @@ static Value my_native(int argCount, Value* args) {
 
 **Type Annotations**:
 - Fully supported for variables (`let x: Int = 42`) and procedures (`proc add(a: Int, b: Int) -> Int:`).
+- Dotted names are supported for qualified types (e.g., `let x: vfs.VFS`).
 - Type checking is enforced during a static analysis pass (`pass_typecheck` in `typecheck.c`) prior to compilation or interpretation.
 
 ### 8.2 Design Decisions and Rationale
@@ -2538,6 +2540,8 @@ io.appendbytes("log.bin", buf)      # Append Bytes value
 
 Available functions: `readfile`, `writefile`, `appendfile`, `exists`, `remove`, `rename`, `readbytes`, `writebytes`, `appendbytes`
 
+*Note: `io.readbytes` returns a `Bytes` value (byte buffer), and `io.writebytes`/`io.appendbytes` accept either `Bytes` or `Array` values.*
+
 ### 10.3 String Module
 
 ```sagelang
@@ -2767,6 +2771,11 @@ sage lint program.sage
 | Errors | E001-E003 | Syntax and structural errors |
 | Warnings | W001-W005 | Potential bugs and bad practices |
 | Style | S001-S005 | Code style and naming conventions |
+
+**Notable Rules**:
+- `[W001]`, `[W002]`: Issued for unused variables and variables that shadow existing declarations in scope.
+- `[W004]`: Warns about empty blocks (e.g., when a line ending in a colon `:` is followed by an empty or improperly indented section).
+- `[S003]`: Enforces documentation conventions; top-level `proc` declarations must be immediately preceded by a `##` style docstring (comment).
 
 **Example Output**:
 
@@ -3372,6 +3381,8 @@ glslc text3d.frag -o text3d.frag.spv
 ```
 and as async await break case catch class comptime continue default defer elif else end enum false finally for from if import in init let macro match nil not or print proc quote raise return self struct super trait true try unquote unsafe var while yield @
 ```
+
+*Note: `print`, `end`, `match`, `init`, `enum`, `struct`, and `trait` are soft keywords, meaning they can be used as variable, property, or method names where unambiguous.*
 
 ### Built-in Functions
 
