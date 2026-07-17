@@ -188,3 +188,22 @@ I ran the tests and they passed with standard expected testsuite failures (like 
 
 Action:
 No further action needed for tests. I will mark the step as complete.
+
+2026-07-17 - [Soft Keywords, Type Annotations, IO Bytes, Linter Warnings]
+
+Discovery:
+- `print`, `end`, `match`, `init`, `enum`, `struct`, and `trait` are implemented as soft keywords in `core/src/c/parser.c`, allowing them to be used as variable, property, or method names.
+- Type annotations natively support dotted names (e.g., `let x: vfs.VFS`) in `core/src/c/parser.c`.
+- `io.readbytes` natively returns a `Bytes` type (byte buffer), verified via `io_readbytes_native` in `core/src/c/stdlib.c`.
+- The linter (`core/src/c/linter.c`) correctly issues `[W001]` and `[W002]` for unused and shadowed variables, `[W004]` for empty blocks following a colon, and `[S003]` for missing docstrings (`##`) above top-level procedures (`proc`).
+
+Evidence:
+- `core/src/c/parser.c` (soft keywords, dotted type annotations).
+- `core/src/c/stdlib.c` (`io_readbytes_native`).
+- `core/src/c/linter.c` (W001, W002, W004, S003 logic).
+
+Documentation Impact:
+- Update the Lexer section and Appendix Quick Reference to document soft keywords.
+- Update Type Annotations section to mention dotted type names.
+- Update IO module section to correctly reflect `io.readbytes` returns a `Bytes` type.
+- Update the Linter section to outline the specific rules for shadowing, empty blocks, and docstrings.
