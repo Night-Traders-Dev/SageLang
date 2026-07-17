@@ -2342,12 +2342,6 @@ int main(int argc, const char* argv[]) {
     sage_set_args(argc, argv);
     init_module_system();
 
-    // If we have an embedded script, execute it and exit
-    if (embedded_script != NULL) {
-        run(embedded_script, "<embedded>", runtime_mode);
-        CLEANUP_AND_EXIT(0);
-    }
-
     // Parse global flags that can appear before the command or script
     while (cmd_argc >= 2) {
         if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--runtime") == 0) {
@@ -2385,6 +2379,12 @@ int main(int argc, const char* argv[]) {
         } else {
             break;
         }
+    }
+
+    // If we have an embedded script, execute it and exit
+    if (embedded_script != NULL) {
+        run(embedded_script, "<embedded>", runtime_mode);
+        CLEANUP_AND_EXIT(0);
     }
 
     // Add source file's directory to module search paths for compiler commands
