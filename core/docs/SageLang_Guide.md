@@ -46,7 +46,7 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **Concurrency** | Multi-threaded `proc`, `async`/`await`, atomics, semaphores, condvars, rwlocks, SMP detection |
 | **GPU Graphics** | Vulkan + OpenGL 4.5 backends, handle-based API, 100+ functions, Android support |
 | **UI Widgets** | Immediate-mode GUI: windows, panels, buttons, sliders, menus, text inputs |
-| **Compilation** | C backend, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64, mips), plus initial profile suffixes for bare-metal / OSdev / UEFI targets |
+| **Compilation** | C backend, LLVM IR (with GPU support), native assembly (x86-64, aarch64, rv64, mips), JIT self-extracting executables (with module bundling), plus initial profile suffixes for bare-metal / OSdev / UEFI targets |
 
 LLVM codegen has an additional import optimization path: both the C LLVM backend and the self-hosted LLVM backend resolve `from module import CONST` for foldable top-level constants during code generation (including `as` aliases).
 
@@ -1559,6 +1559,7 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | `--chip <type>` | `--compile-pico` | Chip type (`rp2040`, `rp2350-arm`, or `rp2350-riscv`); defaults to `rp2040` |
 | `sage --compile-bare <input.sage>` | `<input-without-.sage>.elf` | `-o <path>`, `--target <arch>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-uefi <input.sage>` | `<input-without-.sage>.efi` | `-o <path>`, `--target x86_64\|aarch64`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --jit <input.sage>` | JIT executable (temporary) | `-o <path>` for self-extracting executable with module bundling |
 
 | Option | Applies To | Meaning |
 | ------ | ---------- | ------- |

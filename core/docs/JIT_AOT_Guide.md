@@ -13,6 +13,14 @@ and type feedback. Hot functions (100+ calls) are detected; argument and return
 types are classified (`int`, `float`, `string`, `bool`, `mixed`). Profiling
 data is reported for AOT optimization.
 
+## JIT Self-Extracting Executables
+
+`sage --jit file.sage -o binary`
+
+SageLang can bundle a script and all its transitive non-native module dependencies into a single, self-extracting JIT executable. This is achieved by recursively discovering imports from the parse tree, serializing the module sources into the ELF binary, and inserting them into the module cache at runtime.
+
+This allows for easy distribution of SageLang applications without needing to manage a complex directory structure for custom libraries.
+
 ## AOT Compiler
 
 `sage --aot file.sage -o binary`
