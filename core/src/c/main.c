@@ -2533,6 +2533,12 @@ int main(int argc, const char* argv[]) {
         }
     }
 
+    // If we have an embedded script, execute it and exit
+    if (embedded_script != NULL) {
+        run(embedded_script, "<embedded>", runtime_mode);
+        CLEANUP_AND_EXIT(0);
+    }
+
     // Add source file's directory to module search paths for compiler commands
     if (cmd_argc >= 3 && cmd_argv[2][0] != '-') {
         module_add_source_dir(cmd_argv[2]);
