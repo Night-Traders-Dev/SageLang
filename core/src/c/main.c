@@ -2364,16 +2364,20 @@ int main(int argc, const char* argv[]) {
                 
                 fseek(f, search_start, SEEK_SET);
                 char* buf = malloc(size - search_start);
-                if (buf && fread(buf, 1, size - search_start, f) > 0) {
+                size_t bytes_read = 0;
+                if (buf && (bytes_read = fread(buf, 1, size - search_start, f)) >= (size_t)magic_len) {
                     char* found = NULL;
-                    for (long i = (size - search_start) - magic_len; i >= 0; i--) {
+                    for (long i = (long)bytes_read - magic_len; i >= 0; i--) {
                         if (memcmp(buf + i, magic, magic_len) == 0) {
                             found = buf + i;
                             break;
                         }
                     }
                     if (found) {
-                        embedded_script = strdup(found + magic_len);
+                        size_t script_len = bytes_read - (size_t)(found - buf) - (size_t)magic_len;
+                        embedded_script = SAGE_ALLOC(script_len + 1);
+                        memcpy(embedded_script, found + magic_len, script_len);
+                        embedded_script[script_len] = '\0';
                     }
                 }
                 if (buf) free(buf);
