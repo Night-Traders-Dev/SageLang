@@ -120,7 +120,7 @@ def prepare_workspace():
         step("Updating submodules")
         if Path(".git").exists():
             run_cmd(["git", "submodule", "sync"])
-            run_cmd(["git", "submodule", "update", "--init", "--recursive"])
+            update_submodules()
             step_ok("initialized")
         else:
             step_ok("skipped (not a git repo)")
@@ -133,6 +133,38 @@ def prepare_workspace():
     # but build.sh did it. I'll skip it for safety unless requested? 
     # Actually, let's stick to what build.sh did but maybe just build artifacts.
     step_ok("clean")
+
+def update_submodules():
+    """
+    Initialize first-level submodules without infinite recursion.
+
+    Some submodules (e.g. core/src/sage/vm-tools) vendor their own copy of
+    SageLang under .deps/. Naively running `git submodule update --recursive`
+    would re-enter that nested SageLang, which contains vm-tools again, and
+    recurse forever (vm-tools <-> SageLang circular dependency). We therefore
+    update only the top-level submodules of each repo and never descend into
+    any path that contains a `.deps` component, since those are self-managed
+    vendored dependency trees.
+    """
+    result = run_cmd(["git", "submodule", "foreach", "--quiet", "echo $name"])
+    if not result or not result.stdout:
+        return
+    names = [n for n in result.stdout.splitlines() if n.strip()]
+    for name in names:
+        name = name.strip()
+        # Resolve the submodule's working path.
+        path_res = run_cmd(["git", "submodule", "status", name])
+        if not path_res or not path_res.stdout:
+            continue
+        # `git submodule status` prints a leading char + path (+ optional commit).
+        parts = path_res.stdout.split()
+        if len(parts) < 2:
+            continue
+        path = parts[1]
+        if ".deps" in Path(path).parts:
+            console.print(f"    [dim]skipping nested dep: {path}[/dim]")
+            continue
+        run_cmd(["git", "submodule", "update", "--init", name])
 
 def compile_shaders(found_deps):
     if found_deps.get("GLSL compiler (glslc)") and Path("core/examples/shaders").exists():
