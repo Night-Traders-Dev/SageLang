@@ -1604,11 +1604,20 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
   }
 
   if (call->callee->type != EXPR_VARIABLE) {
-    compiler_error_at(
-        compiler, expr_token(call->callee),
-        "call a named procedure, class constructor, or builtin directly",
-        "only direct function calls are supported by the C backend");
-    return str_dup("sage_nil()");
+    char *callee_expr = emit_expr(compiler, call->callee);
+    StringBuffer dsb;
+    sb_init(&dsb);
+    sb_appendf(&dsb, "sage_call_any(%s, %d, (SageValue[]){", callee_expr, call->arg_count);
+    for (int i = 0; i < call->arg_count; i++) {
+      if (i > 0) sb_append(&dsb, ", ");
+      char *arg = emit_expr(compiler, call->args[i]);
+      sb_append(&dsb, arg);
+      free(arg);
+    }
+    if (call->arg_count == 0) sb_append(&dsb, "sage_nil()");
+    sb_append(&dsb, "})");
+    free(callee_expr);
+    return sb_take(&dsb);
   }
 
   char *callee_name = token_to_string(call->callee->as.variable.name);
@@ -2656,16 +2665,22 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
 
   ProcEntry *proc = find_proc_entry(compiler->procs, callee_name);
   if (proc == NULL) {
-    char help[256];
-    compiler_error_at(
-        compiler, expr_token(call->callee),
-        compiler_unknown_name_help(compiler, callee_name,
-                                   "only known procedures, class constructors, "
-                                   "and builtins can be compiled",
-                                   help, sizeof(help)),
-        "unknown call target '%s' in compiled code", callee_name);
+    /* Not a named proc — try dynamic dispatch for function-valued variables (callbacks, etc.) */
+    char *callee_expr = emit_expr(compiler, call->callee);
+    StringBuffer dsb;
+    sb_init(&dsb);
+    sb_appendf(&dsb, "sage_call_any(%s, %d, (SageValue[]){", callee_expr, call->arg_count);
+    for (int i = 0; i < call->arg_count; i++) {
+      if (i > 0) sb_append(&dsb, ", ");
+      char *arg = emit_expr(compiler, call->args[i]);
+      sb_append(&dsb, arg);
+      free(arg);
+    }
+    if (call->arg_count == 0) sb_append(&dsb, "sage_nil()");
+    sb_append(&dsb, "})");
+    free(callee_expr);
     free(callee_name);
-    return str_dup("sage_nil()");
+    return sb_take(&dsb);
   }
 
   if (call->arg_count > proc->param_count) {
@@ -3305,10 +3320,10 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    int enabled;\n"
         "} SageGcState;\n"
         "\n"
-        "#define SAGE_GC_MIN_TRIGGER_BYTES 65536UL\n"
-        "#define SAGE_GC_MIN_TRIGGER_OBJECTS 128\n"
-        "static SageGcState sage_gc = {NULL, NULL, 0, 0, 0, 0, 0, "
-        "SAGE_GC_MIN_TRIGGER_BYTES, SAGE_GC_MIN_TRIGGER_OBJECTS, 1};\n"
+         "#define SAGE_GC_MIN_TRIGGER_BYTES 65536UL\n"
+         "#define SAGE_GC_MIN_TRIGGER_OBJECTS 128\n"
+         "static SageGcState sage_gc = {NULL, NULL, 0, 0, 0, 0, 0, "
+         "SAGE_GC_MIN_TRIGGER_BYTES, SAGE_GC_MIN_TRIGGER_OBJECTS, 1};\n"
         "\n"
         "#define SAGE_STRING_LEN(v) ((int)(((SageGcHeader*)(v).as.string - 1)->size - 1))\n"
         "\n",
@@ -3569,6 +3584,27 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "static SageValue sage_array(void) { SageValue v; v.type = "
         "SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
          "static SageValue sage_function(void* fn) { SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = fn; return v; }\n"
+         "static SageValue sage_call_any(SageValue fn, int argc, SageValue* argv) {\n"
+         "    if (fn.type == SAGE_TAG_FUNCTION) {\n"
+         "        switch (argc) {\n"
+         "            case 0: return ((SageValue (*)(void))fn.as.function)();\n"
+         "            case 1: return ((SageValue (*)(SageValue))fn.as.function)(argv[0]);\n"
+         "            case 2: return ((SageValue (*)(SageValue, SageValue))fn.as.function)(argv[0], argv[1]);\n"
+         "            case 3: return ((SageValue (*)(SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2]);\n"
+         "            case 4: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3]);\n"
+         "            case 5: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3], argv[4]);\n"
+         "            case 6: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);\n"
+         "            case 7: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);\n"
+         "            case 8: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]);\n"
+         "            case 9: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8]);\n"
+         "            default: fprintf(stderr, \"Runtime Error: Cannot call function with %d arguments.\\n\", argc); exit(1);\n"
+         "        }\n"
+         "    }\n"
+     
+         "    fprintf(stderr, \"Runtime Error: Cannot call non-function value (type=%d).\\n\", fn.type);\n"
+         "    exit(1);\n"
+         "    return sage_nil();\n"
+         "}\n"
          "\n",
          out);
 
