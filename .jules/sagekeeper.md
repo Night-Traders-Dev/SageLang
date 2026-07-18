@@ -207,3 +207,11 @@ Documentation Impact:
 - Update Type Annotations section to mention dotted type names.
 - Update IO module section to correctly reflect `io.readbytes` returns a `Bytes` type.
 - Update the Linter section to outline the specific rules for shadowing, empty blocks, and docstrings.
+
+2026-07-18 - [SageLang Guide Review Complete]
+
+Discovery:
+I have audited the core documentation and verified it against implementation state, including newly discovered native keywords like `enum`, `struct`, and `trait`. I also fixed the string operations in the Built-in functions (`array_slice` -> `slice`, `string_split` -> `split`, `string_join` -> `join`), added documentation for the `os.sync` module (Mutex, Semaphore, RwLock), explicitly noted that strings are not iterable via `for` loops, and documented the `sage fmt` bitwise shift splitting bug.
+
+Action:
+Update `core/docs/SageLang_Guide.md` to accurately document `enum`, `struct`, and `trait` natively, correct the sentence claiming Sage doesn't have enums, update built-ins, and add `os.sync` and formatting/iteration notes. Cleaned up scratchpads.

@@ -239,7 +239,7 @@ struct Value {
 **Array Operations**:
 - `array_push(arr, val)`: Append to dynamic array (resizes if needed).
 - `array_get(arr, index)`, `array_set(arr, index, val)`: Access/modify.
-- `array_slice(arr, start, end)`: Subarray (negative indices supported).
+- `slice(arr, start, end)`: Subarray (negative indices supported).
 
 **Dictionary Operations** (O(1) amortized via hash table):
 - `dict_set(dict, key, value)`: Insert/update using FNV-1a hashing with open-addressing and linear probing. Table grows at 75% load factor.
@@ -248,7 +248,7 @@ struct Value {
 - `dict_keys(dict)`, `dict_values(dict)`: Return as arrays (iterates capacity, skips empty slots).
 
 **String Operations**:
-- `string_split(str, delim)`, `string_join(arr, sep)`: Splitting/joining arrays.
+- `split(str, delim)`, `join(arr, sep)`: Splitting/joining arrays.
 - `string_replace(str, old, new)`, `string_upper/lower/strip(str)`: Transformation.
 
 **Class/Instance Operations**:
@@ -990,6 +990,9 @@ while i < 5:
 let arr = [10, 20, 30]
 for item in arr:
     print item
+
+# Note: Strings are not iterable via `for` loops (e.g., `for c in s` will fail).
+# Use a `while` loop with index-based access (e.g., `s[i]`) instead.
 
 # For loop over range
 for i in range(0, 5):
@@ -2441,7 +2444,7 @@ The bootstrap reads a `.sage` file, tokenizes it, parses it to an AST, and evalu
 
 ### 13.3 Key Design Decisions
 
-**Dict-based value representation**: While SageLang recently added native C-like enums (Phase 1.7), the self-hosted interpreter relies on dictionary-based representations for its AST nodes because it was designed before these features existed and for simplicity. All AST nodes, functions, classes, and instances are represented as dicts with an `__interp_type` field:
+**Dict-based value representation**: While SageLang recently added native C-like enums, structs, and traits (Phase 1.7), the self-hosted interpreter relies on dictionary-based representations for its AST nodes because it was designed before these features existed and for simplicity. All AST nodes, functions, classes, and instances are represented as dicts with an `__interp_type` field:
 
 ```sagelang
 # A function value
@@ -2571,7 +2574,36 @@ print path
 
 Available functions: `args`, `exit`, `platform`, `version`, `env`, `setenv`
 
-### 10.5 FAT Module
+### 10.5 OS Sync Module
+
+The `os.sync` module provides low-level synchronization primitives for concurrent programming on bare-metal and simulation environments.
+
+```sagelang
+import os.sync
+
+# Mutex
+let mtx = sync.Mutex()
+mtx.lock()
+# critical section
+mtx.unlock()
+
+# Semaphore
+let sem = sync.Semaphore(1)
+sem.wait()
+sem.post()
+
+# Read-Write Lock (RwLock)
+let rw = sync.RwLock()
+rw.read_lock()
+# read data
+rw.read_unlock()
+
+rw.write_lock()
+# write data
+rw.write_unlock()
+```
+
+### 10.6 FAT Module
 
 The native `fat` module provides early FAT filesystem parsing helpers for image inspection and kernel/boot tooling.
 
@@ -2755,6 +2787,8 @@ Formatted: messy.sage
 $ sage fmt --check messy.sage
 messy.sage: already formatted
 ```
+
+*Note: As of v4.0.5, `sage fmt` contains a bug where it may incorrectly split bitwise shift operators (e.g., `<<` becomes `< <`), leading to syntax errors. Use multiplication (e.g., `* 16` for `<< 4`) or ensure manual spacing if the formatter persists the split.*
 
 ### 12.3 Linter
 
