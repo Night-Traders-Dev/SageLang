@@ -36,6 +36,7 @@ proc main():
             <textarea 
               value={code}
               onChange={(e) => setCode(e.target.value)}
+              maxLength={100000}
               className="w-full h-80 bg-neutral-900 border border-neutral-800 rounded p-4 font-mono text-sm focus:outline-none focus:border-emerald-500 text-emerald-400"
               spellCheck="false"
             />
