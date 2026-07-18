@@ -1034,6 +1034,22 @@ static Value sys_exec_native(int argCount, Value* args) {
     return val_number(result);
 }
 
+static Value sys_stdout_write_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    const char* text = AS_STRING(args[0]);
+    fputs(text, stdout);
+    fflush(stdout);
+    return val_nil();
+}
+
+static Value sys_stderr_write_native(int argCount, Value* args) {
+    if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
+    const char* text = AS_STRING(args[0]);
+    fputs(text, stderr);
+    fflush(stderr);
+    return val_nil();
+}
+
 static Value sys_shell_exec_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* cmd = AS_STRING(args[0]);
@@ -1099,6 +1115,8 @@ Module* create_sys_module(ModuleCache* cache) {
     env_define_const(e, "exec", 4, val_native(sys_exec_native));
     env_define_const(e, "shell_exec", 10, val_native(sys_shell_exec_native));
     env_define_const(e, "call", 4, val_native(sys_call_native));
+    env_define_const(e, "stdout_write", 12, val_native(sys_stdout_write_native));
+    env_define_const(e, "stderr_write", 12, val_native(sys_stderr_write_native));
 
     // Constants
     env_define_const(e, "version", 7, val_string(SAGE_VERSION_STR));
