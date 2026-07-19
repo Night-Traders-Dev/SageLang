@@ -224,7 +224,7 @@ declare %SageValue @sage_rt_gpu_detected_platform()
 @answer = internal global %SageValue zeroinitializer
 
 define %SageValue @sage_fn_fib(%SageValue %arg_n) {
-entry:
+L0:
   %n = alloca %SageValue
   store %SageValue %arg_n, %SageValue* %n
   %0 = load %SageValue, %SageValue* %n
@@ -232,11 +232,11 @@ entry:
   %2 = call %SageValue @sage_rt_lte(%SageValue %0, %SageValue %1)
   %3 = call i32 @sage_rt_get_bool(%SageValue %2)
   %4 = icmp ne i32 %3, 0
-  br i1 %4, label %L0, label %L2
-L0:
+  br i1 %4, label %L1, label %L3
+L1:
   %5 = load %SageValue, %SageValue* %n
   ret %SageValue %5
-L2:
+L3:
   %6 = load %SageValue, %SageValue* %n
   %7 = call %SageValue @sage_rt_number(double 1.00000000000000000e+00)
   %8 = call %SageValue @sage_rt_sub(%SageValue %6, %SageValue %7)
@@ -250,7 +250,7 @@ L2:
 }
 
 define %SageValue @sage_fn_accumulate(%SageValue %arg_limit) {
-entry:
+L4:
   %limit = alloca %SageValue
   store %SageValue %arg_limit, %SageValue* %limit
   %total = alloca %SageValue
@@ -259,15 +259,15 @@ entry:
   store %SageValue %0, %SageValue* %total
   %1 = call %SageValue @sage_rt_number(double 1.00000000000000000e+00)
   store %SageValue %1, %SageValue* %current
-  br label %L3
-L3:
+  br label %L5
+L5:
   %2 = load %SageValue, %SageValue* %current
   %3 = load %SageValue, %SageValue* %limit
   %4 = call %SageValue @sage_rt_lte(%SageValue %2, %SageValue %3)
   %5 = call i32 @sage_rt_get_bool(%SageValue %4)
   %6 = icmp ne i32 %5, 0
-  br i1 %6, label %L4, label %L5
-L4:
+  br i1 %6, label %L6, label %L7
+L6:
   %7 = load %SageValue, %SageValue* %total
   %8 = load %SageValue, %SageValue* %current
   %9 = call %SageValue @sage_rt_add(%SageValue %7, %SageValue %8)
@@ -276,31 +276,31 @@ L4:
   %11 = call %SageValue @sage_rt_number(double 1.00000000000000000e+00)
   %12 = call %SageValue @sage_rt_add(%SageValue %10, %SageValue %11)
   store %SageValue %12, %SageValue* %current
-  br label %L3
-L5:
+  br label %L5
+L7:
   %13 = load %SageValue, %SageValue* %total
   ret %SageValue %13
 }
 
 define i32 @main() {
-entry:
+L8:
   %0 = call %SageValue @sage_rt_number(double 0.00000000000000000e+00)
   store %SageValue %0, %SageValue* @counter
-  br label %L6
-L6:
+  br label %L9
+L9:
   %1 = load %SageValue, %SageValue* @counter
   %2 = call %SageValue @sage_rt_number(double 3.00000000000000000e+00)
   %3 = call %SageValue @sage_rt_lt(%SageValue %1, %SageValue %2)
   %4 = call i32 @sage_rt_get_bool(%SageValue %3)
   %5 = icmp ne i32 %4, 0
-  br i1 %5, label %L7, label %L8
-L7:
+  br i1 %5, label %L10, label %L11
+L10:
   %6 = load %SageValue, %SageValue* @counter
   %7 = call %SageValue @sage_rt_number(double 1.00000000000000000e+00)
   %8 = call %SageValue @sage_rt_add(%SageValue %6, %SageValue %7)
   store %SageValue %8, %SageValue* @counter
-  br label %L6
-L8:
+  br label %L9
+L11:
   %9 = load %SageValue, %SageValue* @counter
   call void @sage_rt_print(%SageValue %9)
   %10 = call %SageValue @sage_rt_number(double 6.00000000000000000e+00)
@@ -323,18 +323,18 @@ L8:
   %23 = call %SageValue @sage_rt_eq(%SageValue %21, %SageValue %22)
   %24 = call i32 @sage_rt_get_bool(%SageValue %23)
   %25 = icmp ne i32 %24, 0
-  br i1 %25, label %L9, label %L10
-L9:
+  br i1 %25, label %L12, label %L13
+L12:
   %26 = getelementptr [11 x i8], [11 x i8]* @.str.1, i64 0, i64 0
   %27 = call %SageValue @sage_rt_string(i8* %26)
   call void @sage_rt_print(%SageValue %27)
-  br label %L11
-L10:
+  br label %L14
+L13:
   %28 = getelementptr [12 x i8], [12 x i8]* @.str.2, i64 0, i64 0
   %29 = call %SageValue @sage_rt_string(i8* %28)
   call void @sage_rt_print(%SageValue %29)
-  br label %L11
-L11:
+  br label %L14
+L14:
   ret i32 0
 }
 
