@@ -1,14 +1,35 @@
 import { useState } from "react";
 
+const MAX_CODE_LENGTH = 100000;
+
 function App() {
   const [code, setCode] = useState(`// SageLang Hello World
 proc main():
     print("Hello from SageLang!")
 `);
   const [output, setOutput] = useState("");
+  const [warning, setWarning] = useState("");
 
   const handleRun = () => {
+    if (code.length > MAX_CODE_LENGTH) {
+      setOutput("Error: Code size limit exceeded.");
+      return;
+    }
     setOutput("Compiling...\n[SageLang Compiler] Note: Web compilation is currently a mock.\n[Output]:\nHello from SageLang!");
+  };
+
+  const handleCodeChange = (newCode: string) => {
+    if (newCode.length > MAX_CODE_LENGTH) {
+      setCode(newCode.substring(0, MAX_CODE_LENGTH));
+      setWarning(`Security Warning: Code editor limit of ${MAX_CODE_LENGTH.toLocaleString()} characters reached (input truncated).`);
+    } else {
+      setCode(newCode);
+      if (newCode.length >= MAX_CODE_LENGTH - 1000) {
+        setWarning(`Warning: Approaching code editor limit (${newCode.length.toLocaleString()} / ${MAX_CODE_LENGTH.toLocaleString()} characters).`);
+      } else {
+        setWarning("");
+      }
+    }
   };
 
   return (
@@ -33,9 +54,14 @@ proc main():
                 Run
               </button>
             </div>
+            {warning && (
+              <div className="mb-2 text-xs bg-amber-950/40 border border-amber-800 text-amber-400 p-2.5 rounded font-medium">
+                {warning}
+              </div>
+            )}
             <textarea 
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => handleCodeChange(e.target.value)}
               className="w-full h-80 bg-neutral-900 border border-neutral-800 rounded p-4 font-mono text-sm focus:outline-none focus:border-emerald-500 text-emerald-400"
               spellCheck="false"
             />
