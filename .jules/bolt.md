@@ -69,3 +69,7 @@
 ## 2025-06-03 - [Optimized URL Parsing and Encoding]
 **Learning:** String concatenation using '+=' in SageLang has O(N^2) complexity. URL utilities like `encode`, `decode`, `build`, and `build_query` were suffering from this. Additionally, manual character-by-character loops for extracting substrings are much slower than the native `slice()` builtin.
 **Action:** Replace string concatenation loops with array-push + `join("")` patterns. Use native `slice()` for all substring extraction. Replace linear scans for safe characters with O(1) dictionary lookups. Measured speedups: Encoding (~37x), Decoding (~8x), and Parsing (~3100x).
+
+## 2026-06-28 - [Optimized Flat Environment Cache]
+**Learning:** In the SageLang interpreter, manual index `while` loops (e.g. `while i < len(arr)`) are significantly slower (~2.7x) than native element-based `for` loops. The performance utility library `core/lib/perf.sage` was doing manual `while` loops inside the crucial environment snapshot and flush handlers (`flat_cache_snapshot` and `flat_cache_flush`), causing unnecessary VM overhead in hot loops.
+**Action:** Replace manual `while` indexing with native `for` loops inside standard library performance-critical procedures to leverage the VM's optimized iteration path. This also completely eliminates name shadowing warnings.
