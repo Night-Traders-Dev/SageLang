@@ -1,3 +1,7 @@
+## 2026-07-12 - [O(N) Direct Pointer Copy for Path Joins]
+**Learning:** Naively constructing paths or joining string buffers using `strcat` in a loop has $O(N^2)$ complexity due to repeated traversals to find the string's end. Converting this to a cursor-tracked buffer with direct `memcpy` reduces the complexity to $O(N)$.
+**Action:** Always construct multi-segment strings by maintaining a running pointer offset and copying segments directly with `memcpy` instead of calling `strcat` or `strlen` repeatedly.
+
 ## 2025-05-15 - [Optimized Property Access]
 **Learning:** The interpreter was performing expensive `SAGE_ALLOC`, `strncpy`, and `free` operations for every property access because it needed a null-terminated string for dictionary lookups, even though the `Token` already contained the start pointer and length.
 **Action:** Implement and use length-aware dictionary and instance field lookup functions (`dict_get_len`, `instance_get_field`, etc.) to allow direct lookups using `Token` data without temporary allocations.
