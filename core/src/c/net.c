@@ -114,26 +114,23 @@ static Value tcp_connect_native(int argc, Value* args) {
     const char* host = AS_STRING(args[0]);
     int port = (int)AS_NUMBER(args[1]);
 
-    struct addrinfo hints, *res;
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-
-    char port_str[16];
-    snprintf(port_str, sizeof(port_str), "%d", port);
-
-    if (getaddrinfo(host, port_str, &hints, &res) != 0) return val_number(-1);
-
-    int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (fd < 0) { freeaddrinfo(res); return val_number(-1); }
-
-    if (connect(fd, res->ai_addr, res->ai_addrlen) < 0) {
-        close(fd);
-        freeaddrinfo(res);
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    
+    if (inet_pton(AF_INET, host, &addr.sin_addr) <= 0) {
         return val_number(-1);
     }
 
-    freeaddrinfo(res);
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return val_number(-1);
+    
+    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(fd);
+        return val_number(-1);
+    }
+    
     return val_number(fd);
 }
 
