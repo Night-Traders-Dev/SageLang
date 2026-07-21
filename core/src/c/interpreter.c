@@ -1392,7 +1392,9 @@ static Value bytes_new_native(int argCount, Value* args) {
     }
     if (argCount == 1 && args[0].type == VAL_STRING) {
         const char* s = AS_STRING(args[0]);
-        return val_bytes((const unsigned char*)s, (int)strlen(s));
+        // Optimization: Use SAGE_STRING_LEN(args[0]) to get the length in O(1) from the GC header
+        // instead of doing an O(N) traversal with strlen(s).
+        return val_bytes((const unsigned char*)s, SAGE_STRING_LEN(args[0]));
     }
     if (argCount == 1 && args[0].type == VAL_ARRAY) {
         ArrayValue* arr = args[0].as.array;

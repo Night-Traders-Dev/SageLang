@@ -995,6 +995,14 @@ for item in arr:
 for i in range(0, 5):
     print i
 
+# Note: Strings are not currently iterable via `for` loops.
+# Use a `while` loop with index-based access instead.
+let s = "hello"
+let i_str = 0
+while i_str < len(s):
+    print s[i_str]
+    i_str = i_str + 1
+
 # Break and continue
 for i in range(0, 10):
     if i == 3:
@@ -2722,8 +2730,13 @@ The REPL supports multi-line blocks (indented code is automatically continued), 
 | `:reset` | Reset the REPL environment and module cache |
 | `:pwd` | Print the current working directory |
 | `:cd <dir>` | Change the current working directory |
+| `:cat <file>` | Print file contents. Uses `is_safe_path` (blocks single quotes, wraps in quotes). |
+| `:ls [dir]` | List directory contents. Uses `is_safe_path`. |
+| `:sh <cmd>` | Execute a shell command. Uses `is_safe_command` (blocks metacharacters like `;`, `&`, `|`, `>`). |
 | `:gc` | Run garbage collection and print GC statistics |
 | `:stats` | Show GC stats, stack depth, and CPU time |
+
+**Note on REPL Security**: The `:cat` and `:ls` commands validate arguments using `is_safe_path`, which allows spaces but blocks single quotes to prevent shell injection, wrapping the final argument in single quotes securely. The `:sh` command uses `is_safe_command` which allows both spaces and single quotes for arguments, but explicitly blocks shell metacharacters (`;`, `&`, `|`, `>`, etc.) for consistency with `sys.exec` hardening.
 
 **Example Session**:
 
