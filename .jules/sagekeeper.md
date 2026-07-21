@@ -207,3 +207,14 @@ Documentation Impact:
 - Update Type Annotations section to mention dotted type names.
 - Update IO module section to correctly reflect `io.readbytes` returns a `Bytes` type.
 - Update the Linter section to outline the specific rules for shadowing, empty blocks, and docstrings.
+
+2026-07-21 - [Built-in Function slice]
+
+Discovery:
+The `slice` built-in function accepts both arrays and strings, as verified in `core/src/c/interpreter.c` `slice_native`, which checks `IS_ARRAY` and `IS_STRING`.
+
+Evidence:
+`core/src/c/interpreter.c`
+
+Documentation Impact:
+Updated `core/docs/SageLang_Guide.md`'s "Built-in Functions" table to reflect `slice(arr/str, start, end)`.

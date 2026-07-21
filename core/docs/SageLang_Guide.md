@@ -425,7 +425,7 @@ SageLang provides built-in functions injected into global environment via `init_
 | `push(arr, val)` | `(array, value) → nil` | Append to array |
 | `pop(arr)` | `array → value` | Remove and return last element |
 | `range(start, end)` | `(number, number) → array` | Generate list `[start, start+1, ..., end-1]` |
-| `slice(arr, start, end)` | `(array, number, number) → array` | Extract subarray |
+| `slice(arr/str, start, end)` | `(array/string, number, number) → array/string` | Extract subarray or substring |
 | `split(str, delim)` | `(string, string) → array` | Split string by delimiter |
 | `join(arr, sep)` | `(array, string) → string` | Join array elements with separator |
 | `replace(str, old, new)` | `(string, string, string) → string` | Replace all occurrences |
