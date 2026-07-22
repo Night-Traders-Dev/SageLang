@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <math.h>
 
 // ============================================================================
 // AOT Compiler — Generates type-specialized C code
@@ -17,6 +18,30 @@ void aot_init(AotCompiler* aot, int opt_level) {
     memset(aot, 0, sizeof(AotCompiler));
     aot->opt_level = opt_level;
     aot->emit_guards = 0;
+    aot->line_capacity = 10000;
+    aot->lines = malloc(sizeof(char*) * aot->line_capacity);
+    aot->proc_count = 0;
+    
+    // Register built-in native procs so EXPR_CALL can call them directly
+    const char* builtins[] = {
+        "s_print", "s_input", "s_len", "s_push", "s_pop", "s_range", 
+        "s_keys", "s_typeof", "s_tonumber", "s_dict_has", "s_dict_delete",
+        "s_readfile", "s_sys_exec", "s_time", "s_sleep", "s_getenv", "s_getch",
+        "s_slice", "s_strip", "s_startswith", "s_endswith", "s_contains", "s_split",
+        "s_join", "s_replace", "s_clock", "s_words", "s_sys_args_builtin", "s_chr", "s_ord",
+        "s_stdout_write", "s_indexof", "s_lower", "s_upper",
+        "s_listdir", "s_shell_exec", "s_connect", "s_send", "s_recv", "s_close",
+        "s_isdir", "s_exists", "s_writefile", "s_writebytes", "s_appendbytes", 
+        "s_readbytes", "s_remove", "s_mkdir", "s_spawn", "s_string_count",
+        "s_string_repeat", "s_sendall", "s_gc_collect", "s_gc_disable",
+        "s_io_readfile", "s_io_writefile", "s_io_writebytes", "s_io_appendbytes",
+        "s_io_readbytes", "s_io_exists", "s_io_remove", "s_io_isdir", "s_io_mkdir",
+        "s_io_listdir", "s_sys_getenv_native", "s_sys_exec", "s_exec"
+    };
+    for (int i = 0; i < sizeof(builtins)/sizeof(char*); i++) {
+        aot->procs[aot->proc_count++] = strdup(builtins[i]);
+    }
+    aot->builtin_count = aot->proc_count;
 }
 
 void aot_free(AotCompiler* aot) {
@@ -55,11 +80,19 @@ static void aot_emit(AotCompiler* aot, const char* fmt, ...) {
     va_end(ap);
 
     if (aot->line_count >= aot->line_capacity) {
-        aot->line_capacity = aot->line_capacity == 0 ? 256 : aot->line_capacity * 2;
-        aot->lines = realloc(aot->lines, sizeof(char*) * aot->line_capacity);
+        size_t new_cap = aot->line_capacity == 0 ? 256 : aot->line_capacity * 2;
+        char **tmp = realloc(aot->lines, sizeof(char*) * new_cap);
+        if (!tmp) {
+            free(full_line);
+            va_end(ap);
+            return;
+        }
+        aot->lines = tmp;
+        aot->line_capacity = new_cap;
     }
     aot->lines[aot->line_count++] = full_line;
-}
+
+    }
 
 // ============================================================================
 // Type Inference
@@ -221,6 +254,24 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
             return strdup("sage_nil()");
         case EXPR_VARIABLE: {
             char* name = sanitize_name(expr->as.variable.name.start, expr->as.variable.name.length);
+            
+            // Check if this variable is actually a user-defined proc!
+            int is_proc = 0;
+            for (int i = aot->builtin_count; i < aot->proc_count; i++) {
+                if (strcmp(aot->procs[i], name) == 0) {
+                    is_proc = 1;
+                    break;
+                }
+            }
+            
+            if (is_proc) {
+                // Return it wrapped as a native function pointer so it can be passed around
+                char buf[512];
+                snprintf(buf, sizeof(buf), "val_native(%s)", name);
+                free(name);
+                return strdup(buf);
+            }
+            
             return name;
         }
         case EXPR_BINARY: {
@@ -284,9 +335,19 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
             return result;
         }
         case EXPR_CALL: {
+            const char* raw = NULL;
+            int rawlen = 0;
             if (expr->as.call.callee && expr->as.call.callee->type == EXPR_VARIABLE) {
-                const char* raw = expr->as.call.callee->as.variable.name.start;
-                int rawlen = expr->as.call.callee->as.variable.name.length;
+                raw = expr->as.call.callee->as.variable.name.start;
+                rawlen = expr->as.call.callee->as.variable.name.length;
+            } else if (expr->as.call.callee && expr->as.call.callee->type == EXPR_GET) {
+                if (expr->as.call.callee->as.get.object->type == EXPR_VARIABLE) {
+                    // For sys.stdout_write, raw becomes "stdout_write"
+                    raw = expr->as.call.callee->as.get.property.start;
+                    rawlen = expr->as.call.callee->as.get.property.length;
+                }
+            }
+            if (raw) {
                 int argc = expr->as.call.arg_count;
 
                 // Builtin function mapping — direct C calls for known builtins
@@ -325,7 +386,7 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
                     free(fname);
                     return strdup("sage_nil()");
                 }
-                size_t total_len = strlen(fname) + 64; // preamble and postamble
+                size_t total_len = strlen(fname) + 128; // preamble, postamble, and call logic
                 for (int i = 0; i < argc; i++) {
                     compiled_args[i] = aot_compile_expr(aot, expr->as.call.args[i]);
                     total_len += strlen(compiled_args[i]) + 48; // "_args[NNNNN] = ...; "
@@ -345,7 +406,26 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
                     free(compiled_args[i]);
                 }
                 free(compiled_args);
-                pos += sprintf(buf + pos, "%s(%d, _args); })", fname, argc);
+                
+                // Check if fname is a known top-level proc
+                int is_proc = 0;
+                for (int i = 0; i < aot->proc_count; i++) {
+                    if (strcmp(aot->procs[i], fname) == 0) {
+                        is_proc = 1;
+                        break;
+                    }
+                }
+                
+                if (is_proc) {
+                    pos += sprintf(buf + pos, "%s(%d, _args); })", fname, argc);
+                } else if (expr->as.call.callee && expr->as.call.callee->type == EXPR_GET) {
+                    char* callee_expr = aot_compile_expr(aot, expr->as.call.callee);
+                    pos += sprintf(buf + pos, "sage_call(%s, %d, _args); })", callee_expr, argc);
+                    free(callee_expr);
+                } else {
+                    pos += sprintf(buf + pos, "sage_call(%s, %d, _args); })", fname, argc);
+                }
+                
                 free(fname);
                 return buf;
             }
@@ -448,16 +528,58 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
             return buf;
         }
         case EXPR_GET: {
-            char* obj = aot_compile_expr(aot, expr->as.get.object);
-            char* prop = sanitize_name(expr->as.get.property.start, expr->as.get.property.length);
-            char* esc = escape_c_str(prop + 2); // skip s_ prefix
-            char* buf = malloc(strlen(obj) + strlen(esc) + 48);
-            if (buf) {
-                sprintf(buf, "sage_get_property(%s, \"%s\")", obj, esc);
-            } else {
-                fprintf(stderr, "Error: Out of memory in AOT property access\n");
+            if (expr->as.get.object->type == EXPR_VARIABLE) {
+                const char* obj_name = expr->as.get.object->as.variable.name.start;
+                int obj_len = expr->as.get.object->as.variable.name.length;
+                // Check if the object is a known module alias
+                if ((obj_len == 3 && strncmp(obj_name, "cfg", 3) == 0) ||
+                    (obj_len == 3 && strncmp(obj_name, "tui", 3) == 0) ||
+                    (obj_len == 5 && strncmp(obj_name, "agent", 5) == 0) ||
+                    (obj_len == 8 && strncmp(obj_name, "provider", 8) == 0) ||
+                    (obj_len == 6 && strncmp(obj_name, "router", 6) == 0) ||
+                    (obj_len == 5 && strncmp(obj_name, "tools", 5) == 0) ||
+                    (obj_len == 6 && strncmp(obj_name, "skills", 6) == 0) ||
+                    (obj_len == 6 && strncmp(obj_name, "ollama", 6) == 0) ||
+                    (obj_len == 12 && strncmp(obj_name, "bench_runner", 12) == 0) ||
+                    (obj_len == 3 && strncmp(obj_name, "sys", 3) == 0) ||
+                    (obj_len == 2 && strncmp(obj_name, "io", 2) == 0) ||
+                    (obj_len == 3 && strncmp(obj_name, "tcp", 3) == 0) ||
+                    (obj_len == 4 && strncmp(obj_name, "json", 4) == 0) ||
+                    (obj_len == 8 && strncmp(obj_name, "compiler", 8) == 0) ||
+                    (obj_len == 5 && strncmp(obj_name, "bench", 5) == 0)) {
+                    
+                    // It's a module variable access! Map directly to the global variable.
+                    char* prop = sanitize_name(expr->as.get.property.start, expr->as.get.property.length);
+                    
+                    int is_proc = 0;
+                    for (int i = 0; i < aot->proc_count; i++) {
+                        if (strcmp(aot->procs[i], prop) == 0) {
+                            is_proc = 1;
+                            break;
+                        }
+                    }
+                    
+                    char* buf;
+                    if (is_proc) {
+                        buf = malloc(strlen(prop) + 16);
+                        sprintf(buf, "val_native(%s)", prop);
+                        free(prop);
+                    } else {
+                        buf = prop; // already malloced
+                    }
+                    return buf;
+                }
             }
-            free(obj); free(prop); free(esc);
+
+            char* obj = aot_compile_expr(aot, expr->as.get.object);
+            char* name = sanitize_name(expr->as.get.property.start, expr->as.get.property.length);
+            // Revert sanitize_name's "s_" prefix for string property keys
+            char* clean_name = strdup(name + 2);
+            char* buf = malloc(strlen(obj) + strlen(clean_name) + 32);
+            if (buf) sprintf(buf, "sage_get_property(%s, \"%s\")", obj, clean_name);
+            free(obj);
+            free(name);
+            free(clean_name);
             return buf ? buf : strdup("sage_nil()");
         }
         case EXPR_SLICE: {
@@ -684,12 +806,80 @@ void aot_compile_stmt(AotCompiler* aot, Stmt* stmt) {
                 aot_emit(aot, "return sage_nil(); /* yield */");
             }
             break;
+        case STMT_PROC: {
+            char* name = sanitize_name(stmt->as.proc.name.start, stmt->as.proc.name.length);
+            aot_emit(aot, "static SageValue %s(int argc, SageValue* argv) {", name);
+            aot->indent++;
+            for (int i = 0; i < stmt->as.proc.param_count; i++) {
+                char* pname = sanitize_name(stmt->as.proc.params[i].start, stmt->as.proc.params[i].length);
+                aot_emit(aot, "SageValue %s = (argc > %d) ? argv[%d] : sage_nil();", pname, i, i);
+                free(pname);
+            }
+            for (Stmt* bs = stmt->as.proc.body; bs; bs = bs->next)
+                aot_compile_stmt(aot, bs);
+            aot_emit(aot, "return sage_nil();");
+            aot->indent--;
+            aot_emit(aot, "}");
+            aot_emit(aot, "");
+            free(name);
+            break;
+        }
         case STMT_IMPORT:
             aot_emit(aot, "/* import %s */", stmt->as.import.module_name ? stmt->as.import.module_name : "?");
             break;
-        case STMT_CLASS:
-            aot_emit(aot, "/* class %.*s — classes compiled as dict constructors */", stmt->as.class_stmt.name.length, stmt->as.class_stmt.name.start);
+        case STMT_CLASS: {
+            char* cname = sanitize_name(stmt->as.class_stmt.name.start, stmt->as.class_stmt.name.length);
+            for (Stmt* m = stmt->as.class_stmt.methods; m; m = m->next) {
+                if (m->type == STMT_PROC) {
+                    char* mname = sanitize_name(m->as.proc.name.start, m->as.proc.name.length);
+                    aot_emit(aot, "static SageValue %s_%s(int argc, SageValue* argv) {", cname, mname + 2);
+                    aot->indent++;
+                    aot_emit(aot, "SageValue s_self = s_current_self;");
+                    for (int i = 0; i < m->as.proc.param_count; i++) {
+                        char* pn = sanitize_name(m->as.proc.params[i].start, m->as.proc.params[i].length);
+                        aot_emit(aot, "SageValue %s = (argc > %d) ? argv[%d] : sage_nil();", pn, i, i);
+                        free(pn);
+                    }
+                    for (Stmt* bs = m->as.proc.body; bs; bs = bs->next)
+                        aot_compile_stmt(aot, bs);
+                    aot_emit(aot, "return sage_nil();");
+                    aot->indent--;
+                    aot_emit(aot, "}");
+                    aot_emit(aot, "");
+                    free(mname);
+                }
+            }
+
+            aot_emit(aot, "static SageValue %s(int argc, SageValue* argv) {", cname);
+            aot->indent++;
+            aot_emit(aot, "SageValue obj = sage_dict(0);");
+            for (Stmt* m = stmt->as.class_stmt.methods; m; m = m->next) {
+                if (m->type == STMT_PROC) {
+                    char* mname = sanitize_name(m->as.proc.name.start, m->as.proc.name.length);
+                    char raw_mname[256];
+                    snprintf(raw_mname, sizeof(raw_mname), "%.*s", m->as.proc.name.length, m->as.proc.name.start);
+                    aot_emit(aot, "sage_index_set(obj, sage_string(\"%s\"), val_native(%s_%s));", raw_mname, cname, mname + 2);
+                    free(mname);
+                }
+            }
+            int has_init = 0;
+            for (Stmt* m = stmt->as.class_stmt.methods; m; m = m->next) {
+                if (m->type == STMT_PROC && m->as.proc.name.length == 4 && memcmp(m->as.proc.name.start, "init", 4) == 0) {
+                    has_init = 1;
+                    break;
+                }
+            }
+            if (has_init) {
+                aot_emit(aot, "s_current_self = obj;");
+                aot_emit(aot, "%s_init(argc, argv);", cname);
+            }
+            aot_emit(aot, "return obj;");
+            aot->indent--;
+            aot_emit(aot, "}");
+            aot_emit(aot, "");
+            free(cname);
             break;
+        }
         case STMT_ASYNC_PROC:
             // Treat as regular proc
             if (1) {
@@ -731,6 +921,66 @@ void aot_compile_stmt(AotCompiler* aot, Stmt* stmt) {
     }
 }
 
+static void aot_forward_declare_stmt(AotCompiler* aot, Stmt* s) {
+    if (!s) return;
+    for (Stmt* curr = s; curr; curr = curr->next) {
+        if (curr->type == STMT_PROC || curr->type == STMT_ASYNC_PROC) {
+            char* name = sanitize_name(curr->type == STMT_PROC ? curr->as.proc.name.start : curr->as.async_proc.name.start, 
+                                       curr->type == STMT_PROC ? curr->as.proc.name.length : curr->as.async_proc.name.length);
+            int already = 0;
+            for (int j = 0; j < aot->proc_count; j++) {
+                if (strcmp(aot->procs[j], name) == 0) { already = 1; break; }
+            }
+            if (!already) {
+                aot_emit(aot, "static SageValue %s(int argc, SageValue* argv);", name);
+                if (aot->proc_count < 1024) aot->procs[aot->proc_count++] = strdup(name);
+            }
+            free(name);
+        } else if (curr->type == STMT_LET) {
+            char* name = sanitize_name(curr->as.let.name.start, curr->as.let.name.length);
+            int conflict = 0;
+            for (int j = 0; j < aot->proc_count; j++) {
+                if (strcmp(aot->procs[j], name) == 0) { conflict = 1; break; }
+            }
+            if (!conflict) {
+                aot_emit(aot, "static SageValue %s;", name);
+            }
+            free(name);
+        } else if (curr->type == STMT_BLOCK) {
+            aot_forward_declare_stmt(aot, curr->as.block.statements);
+        } else if (curr->type == STMT_COMPTIME) {
+            aot_forward_declare_stmt(aot, curr->as.comptime.body);
+        } else if (curr->type == STMT_CLASS) {
+            char* cname = sanitize_name(curr->as.class_stmt.name.start, curr->as.class_stmt.name.length);
+            int already = 0;
+            for (int j = 0; j < aot->proc_count; j++) {
+                if (strcmp(aot->procs[j], cname) == 0) { already = 1; break; }
+            }
+            if (!already) {
+                aot_emit(aot, "static SageValue %s(int argc, SageValue* argv);", cname);
+                if (aot->proc_count < 1024) aot->procs[aot->proc_count++] = strdup(cname);
+            }
+            for (Stmt* m = curr->as.class_stmt.methods; m; m = m->next) {
+                if (m->type == STMT_PROC) {
+                    char* mname = sanitize_name(m->as.proc.name.start, m->as.proc.name.length);
+                    char fullm_s[512];
+                    snprintf(fullm_s, sizeof(fullm_s), "%s_%s", cname, mname + 2);
+                    int malready = 0;
+                    for (int j = 0; j < aot->proc_count; j++) {
+                        if (strcmp(aot->procs[j], fullm_s) == 0) { malready = 1; break; }
+                    }
+                    if (!malready) {
+                        aot_emit(aot, "static SageValue %s(int argc, SageValue* argv);", fullm_s);
+                        if (aot->proc_count < 1024) aot->procs[aot->proc_count++] = strdup(fullm_s);
+                    }
+                    free(mname);
+                }
+            }
+            free(cname);
+        }
+    }
+}
+
 char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     // Type inference pass
     aot_infer_types(aot, program);
@@ -754,6 +1004,7 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "static int sage_truthy(SageValue v) { if(v.type==SAGE_NIL) return 0; if(v.type==SAGE_BOOL) return v.as.boolean; if(v.type==SAGE_NUM) return v.as.number!=0.0; return 1; }");
     aot_emit(aot, "static SageValue sage_str(SageValue v);  /* forward decl */");
     aot_emit(aot, "static SageValue sage_strcat(SageValue a, SageValue b);  /* forward decl */");
+    aot_emit(aot, "static void sage_print_value(SageValue v);  /* forward decl */");
     aot_emit(aot, "static SageValue sage_add(SageValue a, SageValue b) { if(a.type==SAGE_NUM&&b.type==SAGE_NUM) return sage_number(a.as.number+b.as.number); if(a.type==SAGE_STR&&b.type==SAGE_STR) return sage_strcat(a,b); if(a.type==SAGE_STR||b.type==SAGE_STR){SageValue sa=sage_str(a),sb=sage_str(b);return sage_strcat(sa,sb);} return sage_nil(); }");
     aot_emit(aot, "static SageValue sage_sub(SageValue a, SageValue b) { return sage_number(a.as.number-b.as.number); }");
     aot_emit(aot, "static SageValue sage_mul(SageValue a, SageValue b) { return sage_number(a.as.number*b.as.number); }");
@@ -766,9 +1017,12 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "static SageValue sage_strcat(SageValue a, SageValue b) { if(a.type!=SAGE_STR||b.type!=SAGE_STR) return sage_nil(); size_t la=strlen(a.as.string),lb=strlen(b.as.string); char* r=malloc(la+lb+1); memcpy(r,a.as.string,la); memcpy(r+la,b.as.string,lb); r[la+lb]=0; SageValue v; v.type=SAGE_STR; v.as.string=r; return v; }");
     aot_emit(aot, "");
     // Array/Dict/Index runtime support — must come before sage_print_value
-    aot_emit(aot, "enum { SAGE_ARR=4, SAGE_DICT=5, SAGE_TUPLE=6 };");
+    aot_emit(aot, "enum { SAGE_ARR=4, SAGE_DICT=5, SAGE_TUPLE=6, SAGE_NATIVE=7 };");
+    aot_emit(aot, "typedef SageValue (*SageNativeFn)(int, SageValue*);");
     aot_emit(aot, "typedef struct { SageValue* elems; int count; int cap; } SageArr;");
     aot_emit(aot, "typedef struct { char** keys; SageValue* vals; int count; int cap; } SageDict;");
+    aot_emit(aot, "static SageValue val_native(SageNativeFn f) { SageValue v; v.type=SAGE_NATIVE; v.as.ptr=f; return v; }");
+    aot_emit(aot, "static SageValue sage_call(SageValue f, int c, SageValue* a) { if(f.type==SAGE_NATIVE) return ((SageNativeFn)f.as.ptr)(c,a); return sage_nil(); }");
     aot_emit(aot, "static SageValue sage_array(int n, ...) { SageArr* a=malloc(sizeof(SageArr)); a->cap=n>4?n:4; a->count=n; a->elems=malloc(sizeof(SageValue)*a->cap); va_list ap; va_start(ap,n); for(int i=0;i<n;i++) a->elems[i]=va_arg(ap,SageValue); va_end(ap); SageValue v; v.type=SAGE_ARR; v.as.ptr=a; return v; }");
     aot_emit(aot, "static int sage_array_len(SageValue v) { if(v.type==SAGE_ARR) return ((SageArr*)v.as.ptr)->count; return 0; }");
     aot_emit(aot, "static SageValue sage_array_get(SageValue v, int i) { if(v.type==SAGE_ARR || v.type==SAGE_TUPLE){SageArr*a=(SageArr*)v.as.ptr; if(i>=0&&i<a->count) return a->elems[i];} return sage_nil(); }");
@@ -777,7 +1031,7 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "static SageValue sage_dict(int n, ...) { SageDict*d=calloc(1,sizeof(SageDict)); d->cap=n>2?n:2; d->keys=malloc(sizeof(char*)*d->cap); d->vals=malloc(sizeof(SageValue)*d->cap); va_list ap; va_start(ap,n); for(int i=0;i<n;i++){d->keys[i]=strdup(va_arg(ap,const char*));d->vals[i]=va_arg(ap,SageValue);d->count++;} va_end(ap); SageValue v; v.type=SAGE_DICT; v.as.ptr=d; return v; }");
     aot_emit(aot, "static SageValue sage_tuple(int n, ...) { SageArr*a=malloc(sizeof(SageArr)); a->cap=n; a->count=n; a->elems=malloc(sizeof(SageValue)*n); va_list ap; va_start(ap,n); for(int i=0;i<n;i++) a->elems[i]=va_arg(ap,SageValue); va_end(ap); SageValue v; v.type=SAGE_TUPLE; v.as.ptr=a; return v; }");
     aot_emit(aot, "static SageValue sage_slice(SageValue c, SageValue s, SageValue e) { if(c.type!=SAGE_ARR) return sage_nil(); SageArr*a=(SageArr*)c.as.ptr; int si=(int)s.as.number,ei=e.type==SAGE_NIL?a->count:(int)e.as.number; if(si<0)si=0;if(ei>a->count)ei=a->count; int n=ei-si;if(n<0)n=0; return sage_array(0); /* simplified */ }");
-    aot_emit(aot, "static void sage_push(SageValue arr, SageValue val) { if(arr.type==SAGE_ARR){SageArr*a=(SageArr*)arr.as.ptr;if(a->count>=a->cap){a->cap=a->cap?a->cap*2:4;a->elems=realloc(a->elems,sizeof(SageValue)*a->cap);}a->elems[a->count++]=val;} }");
+
     aot_emit(aot, "static SageValue sage_pop(SageValue arr) { if(arr.type==SAGE_ARR){SageArr*a=(SageArr*)arr.as.ptr;if(a->count>0)return a->elems[--a->count];} return sage_nil(); }");
     aot_emit(aot, "static SageValue sage_len(SageValue v) { if(v.type==SAGE_ARR) return sage_number(((SageArr*)v.as.ptr)->count); if(v.type==SAGE_STR) return sage_number(strlen(v.as.string)); if(v.type==SAGE_DICT) return sage_number(((SageDict*)v.as.ptr)->count); return sage_number(0); }");
     aot_emit(aot, "static SageValue sage_range(int n) { SageArr*a=malloc(sizeof(SageArr)); a->cap=n>4?n:4; a->count=n; a->elems=malloc(sizeof(SageValue)*a->cap); for(int i=0;i<n;i++) a->elems[i]=sage_number(i); SageValue v; v.type=SAGE_ARR; v.as.ptr=a; return v; }");
@@ -786,61 +1040,117 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "static SageValue sage_str(SageValue v) { char buf[256]; switch(v.type){case SAGE_NUM:{double d=v.as.number;if(d==(double)(long long)d&&d>=-1e15&&d<=1e15)snprintf(buf,sizeof(buf),\"%%lld\",(long long)d);else snprintf(buf,sizeof(buf),\"%%g\",d);break;}case SAGE_STR:return v;case SAGE_BOOL:return sage_string(v.as.boolean?\"true\":\"false\");default:return sage_string(\"nil\");}return sage_string(strdup(buf));}");
     aot_emit(aot, "static SageValue sage_tonumber(SageValue v) { if(v.type==SAGE_NUM)return v; if(v.type==SAGE_STR)return sage_number(atof(v.as.string)); return sage_number(0);}");
     aot_emit(aot, "static SageValue sage_type(SageValue v) { switch(v.type){case SAGE_NUM:return sage_string(\"number\");case SAGE_STR:return sage_string(\"string\");case SAGE_BOOL:return sage_string(\"bool\");case SAGE_ARR:return sage_string(\"array\");case SAGE_DICT:return sage_string(\"dict\");default:return sage_string(\"nil\");} }");
+
+    aot_emit(aot, "static SageValue s_getch(int c, SageValue* a) { (void)c; (void)a; int ch=getchar(); if(ch==EOF)return sage_string(\"\"); char b[2]={(char)ch,0}; return sage_string(strdup(b)); }");
+
+    aot_emit(aot, "static void sage_push(SageValue arr, SageValue val) { if(arr.type==SAGE_ARR){SageArr*a=(SageArr*)arr.as.ptr;if(a->count>=a->cap){a->cap=a->cap?a->cap*2:4;a->elems=realloc(a->elems,sizeof(SageValue)*a->cap);}a->elems[a->count++]=val;} }");
+    aot_emit(aot, "static SageValue s_current_self;");
     aot_emit(aot, "static SageValue s_dict_has(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_DICT||a[1].type!=SAGE_STR)return sage_bool(0); SageDict*d=(SageDict*)a[0].as.ptr; for(int i=0;i<d->count;i++)if(strcmp(d->keys[i],a[1].as.string)==0)return sage_bool(1); return sage_bool(0); }");
     aot_emit(aot, "static SageValue s_dict_delete(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_DICT||a[1].type!=SAGE_STR)return sage_nil(); SageDict*d=(SageDict*)a[0].as.ptr; for(int i=0;i<d->count;i++)if(strcmp(d->keys[i],a[1].as.string)==0){SageValue v=d->vals[i];for(int j=i;j<d->count-1;j++){d->keys[j]=d->keys[j+1];d->vals[j]=d->vals[j+1];}d->count--;return v;} return sage_nil(); }");
-    aot_emit(aot, "static SageValue s_gc_collect(int c, SageValue* a) { (void)c; (void)a; return sage_nil(); }"); // Dummy gc_collect
+    aot_emit(aot, "static SageValue s_gc_collect(int c, SageValue* a) { (void)c; (void)a; return sage_nil(); }");
+    aot_emit(aot, "static SageValue s_lower(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_string(\"\"); char*s=strdup(a[0].as.string); for(int i=0;s[i];i++)if(s[i]>='A'&&s[i]<='Z')s[i]+=32; SageValue v=sage_string(s); free(s); return v; }");
+    aot_emit(aot, "static SageValue s_shell_exec(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_string(\"\"); FILE*f=popen(a[0].as.string,\"r\"); if(!f)return sage_string(\"\"); char buf[4096]; char*out=NULL; size_t slen=0; while(fgets(buf,sizeof(buf),f)){size_t l=strlen(buf); out=realloc(out,slen+l+1); memcpy(out+slen,buf,l); slen+=l; out[slen]=0;} pclose(f); SageValue v=sage_string(out?out:\"\"); free(out); return v; }");
+    aot_emit(aot, "static SageValue s_stdout_write(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_nil(); fputs(a[0].as.string, stdout); fflush(stdout); return sage_nil(); }");
+    aot_emit(aot, "#include <sys/socket.h>");
+    aot_emit(aot, "#include <netinet/in.h>");
+    aot_emit(aot, "#include <arpa/inet.h>");
+    aot_emit(aot, "#include <netdb.h>");
+    aot_emit(aot, "#include <unistd.h>");
+    aot_emit(aot, "#include <time.h>");
+    aot_emit(aot, "static SageValue s_connect(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_NUM)return sage_number(-1); int fd=socket(AF_INET,SOCK_STREAM,0); if(fd<0)return sage_number(-1); struct hostent*h=gethostbyname(a[0].as.string); if(!h){close(fd);return sage_number(-1);} struct sockaddr_in saddr; memset(&saddr,0,sizeof(saddr)); saddr.sin_family=AF_INET; saddr.sin_port=htons((int)a[1].as.number); memcpy(&saddr.sin_addr.s_addr,h->h_addr_list[0],h->h_length); if(connect(fd,(struct sockaddr*)&saddr,sizeof(saddr))<0){close(fd);return sage_number(-1);} return sage_number(fd); }");
+    aot_emit(aot, "static SageValue s_send(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_NUM||a[1].type!=SAGE_STR)return sage_number(-1); int fd=(int)a[0].as.number; const char*str=a[1].as.string; int len=strlen(str); int s=send(fd,str,len,0); return sage_number(s); }");
+    aot_emit(aot, "static SageValue s_recv(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_NUM||a[1].type!=SAGE_NUM)return sage_string(\"\"); int fd=(int)a[0].as.number; int size=(int)a[1].as.number; char*buf=malloc(size+1); int r=recv(fd,buf,size,0); if(r<0){free(buf);return sage_string(\"\");} buf[r]=0; SageValue v=sage_string(buf); free(buf); return v; }");
+    aot_emit(aot, "static SageValue s_close(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_NUM)return sage_nil(); int fd=(int)a[0].as.number; close(fd); return sage_nil(); }");
+    aot_emit(aot, "static SageValue s_gc_disable(int c, SageValue* a) { (void)c; (void)a; return sage_nil(); }");
+    aot_emit(aot, "static SageValue s_slice(int c, SageValue* a) { if (c<3) return sage_nil(); return sage_slice(a[0], a[1], a[2]); }");
+    aot_emit(aot, "static SageValue s_startswith(int c, SageValue* a) { if (c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR) return sage_bool(0); return sage_bool(strncmp(a[0].as.string, a[1].as.string, strlen(a[1].as.string))==0); }");
+    aot_emit(aot, "static SageValue s_endswith(int c, SageValue* a) { if (c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR) return sage_bool(0); int l1=strlen(a[0].as.string); int l2=strlen(a[1].as.string); if(l2>l1)return sage_bool(0); return sage_bool(strcmp(a[0].as.string+l1-l2, a[1].as.string)==0); }");
+    aot_emit(aot, "static SageValue s_contains(int c, SageValue* a) { if (c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR) return sage_bool(0); return sage_bool(strstr(a[0].as.string, a[1].as.string)!=NULL); }");
+    aot_emit(aot, "static SageValue s_sleep(int c, SageValue* a) { if(c>0&&a[0].type==SAGE_NUM){ struct timespec req; req.tv_sec = (time_t)a[0].as.number; req.tv_nsec = (long)((a[0].as.number - (double)req.tv_sec) * 1e9); nanosleep(&req, NULL); } return sage_nil(); }");
+    aot_emit(aot, "#include <pthread.h>");
+    aot_emit(aot, "static void* _thread_runner(void* arg) { SageValue* fn = (SageValue*)arg; sage_call(*fn, 0, NULL); free(fn); return NULL; }");
+    aot_emit(aot, "static SageValue s_spawn(int c, SageValue* a) { if(c<1)return sage_nil(); pthread_t* t=malloc(sizeof(pthread_t)); SageValue* fn=malloc(sizeof(SageValue)); *fn=a[0]; pthread_create(t, NULL, _thread_runner, fn); SageValue v; v.type=6; v.as.ptr=t; return v; }");
+    aot_emit(aot, "static SageValue s_join(int c, SageValue* a) { if(c>0&&a[0].type==6){pthread_join(*(pthread_t*)a[0].as.ptr, NULL); free(a[0].as.ptr); return sage_nil();} if(c>1&&a[0].type==SAGE_ARR&&a[1].type==SAGE_STR){SageArr*arr=(SageArr*)a[0].as.ptr; if(arr->count==0)return sage_string(\"\"); int len=0; for(int i=0;i<arr->count;i++){SageValue sa=sage_str(arr->elems[i]); len+=strlen(sa.as.string);} len+=strlen(a[1].as.string)*arr->count; char*b=malloc(len+1); b[0]=0; for(int i=0;i<arr->count;i++){SageValue sa=sage_str(arr->elems[i]); strcat(b,sa.as.string); if(i<arr->count-1)strcat(b,a[1].as.string);} SageValue v; v.type=SAGE_STR; v.as.string=b; return v;} return sage_nil(); }");
+    aot_emit(aot, "static SageValue s_string_count(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR)return sage_number(0); int ct=0; const char*p=a[0].as.string; const char*f=a[1].as.string; int fl=strlen(f); if(fl==0)return sage_number(0); while((p=strstr(p,f))!=NULL){ct++; p+=fl;} return sage_number(ct); }");
+    aot_emit(aot, "static SageValue s_string_repeat(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_NUM)return sage_string(\"\"); int t=(int)a[1].as.number; if(t<=0)return sage_string(\"\"); int l=strlen(a[0].as.string); char*b=malloc(l*t+1); b[0]=0; for(int i=0;i<t;i++)strcat(b,a[0].as.string); return sage_string(b); }");
+    aot_emit(aot, "static SageValue s_sendall(int c, SageValue* a) { return s_send(c,a); }");
+    aot_emit(aot, "static SageValue s_indexof(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR)return sage_number(-1); char* p=strstr(a[0].as.string,a[1].as.string); if(!p)return sage_number(-1); return sage_number(p-a[0].as.string); }");
+    aot_emit(aot, "#include <ctype.h>");
+    aot_emit(aot, "static SageValue s_upper(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_string(\"\"); char* s=strdup(a[0].as.string); for(int i=0;s[i];i++) s[i]=toupper((unsigned char)s[i]); return sage_string(s); }");
+    aot_emit(aot, "#include <dirent.h>");
+    aot_emit(aot, "#include <sys/stat.h>");
+    aot_emit(aot, "static SageValue s_listdir(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_array(0); DIR* d=opendir(a[0].as.string); if(!d)return sage_array(0); SageValue r=sage_array(0); struct dirent* dir; while((dir=readdir(d))!=NULL){if(strcmp(dir->d_name,\".\")!=0&&strcmp(dir->d_name,\"..\")!=0)sage_push(r,sage_string(strdup(dir->d_name)));} closedir(d); return r; }");
+    aot_emit(aot, "static SageValue s_sys_args_builtin(int c, SageValue* a) { return sage_array(0); }");
+    aot_emit(aot, "static SageValue s_isdir(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_bool(0); struct stat st; if(stat(a[0].as.string,&st)==0)return sage_bool(S_ISDIR(st.st_mode)); return sage_bool(0); }");
+    aot_emit(aot, "static SageValue s_exists(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_bool(0); struct stat st; return sage_bool(stat(a[0].as.string,&st)==0); }");
+    aot_emit(aot, "static SageValue s_readfile(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_string(\"\"); FILE* f=fopen(a[0].as.string,\"rb\"); if(!f)return sage_string(\"\"); fseek(f,0,SEEK_END); long s=ftell(f); fseek(f,0,SEEK_SET); char* b=malloc(s+1); fread(b,1,s,f); b[s]=0; fclose(f); return sage_string(b); }");
+    aot_emit(aot, "static SageValue s_writefile(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR)return sage_bool(0); FILE* f=fopen(a[0].as.string,\"wb\"); if(!f)return sage_bool(0); size_t w=fwrite(a[1].as.string,1,strlen(a[1].as.string),f); fclose(f); return sage_bool(w==strlen(a[1].as.string)); }");
+    aot_emit(aot, "static SageValue s_writebytes(int c, SageValue* a) { return s_writefile(c,a); }");
+    aot_emit(aot, "static SageValue s_appendbytes(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR)return sage_bool(0); FILE* f=fopen(a[0].as.string,\"ab\"); if(!f)return sage_bool(0); size_t w=fwrite(a[1].as.string,1,strlen(a[1].as.string),f); fclose(f); return sage_bool(w==strlen(a[1].as.string)); }");
+    aot_emit(aot, "static SageValue s_readbytes(int c, SageValue* a) { return s_readfile(c,a); }");
+    aot_emit(aot, "static SageValue s_remove(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_bool(0); return sage_bool(remove(a[0].as.string)==0); }");
+    aot_emit(aot, "static SageValue s_mkdir(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_bool(0); return sage_bool(mkdir(a[0].as.string,0777)==0); }");
+    aot_emit(aot, "static SageValue s_getenv(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_string(\"\"); char* v=getenv(a[0].as.string); return sage_string(v?v:\"\"); }");
+    aot_emit(aot, "static SageValue s_sys_getenv_native(int c, SageValue* a) { return s_getenv(c, a); }");
+    aot_emit(aot, "static SageValue s_sys_exec(int c, SageValue* a) { return s_shell_exec(c, a); }");
+    aot_emit(aot, "static SageValue s_io_readfile(int c, SageValue* a) { return s_readfile(c, a); }");
+    aot_emit(aot, "static SageValue s_io_writefile(int c, SageValue* a) { return s_writefile(c, a); }");
+    aot_emit(aot, "static SageValue s_io_writebytes(int c, SageValue* a) { return s_writebytes(c, a); }");
+    aot_emit(aot, "static SageValue s_io_appendbytes(int c, SageValue* a) { return s_appendbytes(c, a); }");
+    aot_emit(aot, "static SageValue s_io_readbytes(int c, SageValue* a) { return s_readbytes(c, a); }");
+    aot_emit(aot, "static SageValue s_io_exists(int c, SageValue* a) { return s_exists(c, a); }");
+    aot_emit(aot, "static SageValue s_io_remove(int c, SageValue* a) { return s_remove(c, a); }");
+    aot_emit(aot, "static SageValue s_io_isdir(int c, SageValue* a) { return s_isdir(c, a); }");
+    aot_emit(aot, "static SageValue s_io_mkdir(int c, SageValue* a) { return s_mkdir(c, a); }");
+    aot_emit(aot, "static SageValue s_io_listdir(int c, SageValue* a) { return s_listdir(c, a); }");
+    aot_emit(aot, "static SageValue s_pass;"); // no-op for 'pass' keyword
+    aot_emit(aot, "static SageValue s_exec(int c, SageValue* a) { return s_shell_exec(c, a); }");
+    aot_emit(aot, "static SageValue s_time(int c, SageValue* a) { (void)c; (void)a; return sage_number((double)time(NULL)); }");
+    aot_emit(aot, "static SageValue s_print(int c, SageValue* a) { for(int i=0;i<c;i++){if(i)printf(\" \");sage_print_value(a[i]);}printf(\"\\n\");fflush(stdout);return sage_nil(); }");
+    aot_emit(aot, "static SageValue s_keys(int c, SageValue* a) { if(c<1)return sage_array(0); return sage_dict_keys(a[0]); }");
     aot_emit(aot, "static SageValue s_range(int c, SageValue* a) { int n=0; if(c>0)n=(int)a[0].as.number; if(c>1)n=(int)a[1].as.number-(int)a[0].as.number; return sage_range(n>0?n:0); }");
-    aot_emit(aot, "static SageValue s_input(int c, SageValue* a) { if(c>0&&a[0].type==SAGE_STR)fputs(a[0].as.string,stdout); char b[1024]; if(!fgets(b,sizeof(b),stdin))return sage_string(\"\"); int l=strlen(b);if(l>0&&b[l-1]=='\\n')b[l-1]=0; return sage_string(strdup(b)); }");
+    aot_emit(aot, "static SageValue s_input(int c, SageValue* a) { if(c>0&&a[0].type==SAGE_STR) { fputs(a[0].as.string,stdout); fflush(stdout); } char buf[4096]; int pos=0; while(pos<4095){ int ch=getchar(); if(ch==EOF||ch==4){ if(pos==0)return sage_string(\"\\x04\"); break; } if(ch=='\\n'||ch=='\\r'){ printf(\"\\r\\n\"); break; } if(ch==3||ch==27){ buf[pos++]=ch; break; } if(ch==12||ch=='\\t'){ buf[pos++]=ch; break; } if(ch==127||ch=='\\b'){ if(pos>0){ pos--; printf(\"\\b \\b\"); fflush(stdout); } continue; } buf[pos++]=ch; putchar(ch); fflush(stdout); } buf[pos]=0; return sage_string(buf); }");
     aot_emit(aot, "static SageValue s_split(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR)return sage_array(0); SageArr*r=malloc(sizeof(SageArr)); r->cap=16; r->count=0; r->elems=malloc(sizeof(SageValue)*r->cap); char*str=strdup(a[0].as.string); char*tok=strtok(str,a[1].as.string); while(tok){if(r->count>=r->cap){r->cap*=2;r->elems=realloc(r->elems,sizeof(SageValue)*r->cap);}r->elems[r->count++]=sage_string(strdup(tok)); tok=strtok(NULL,a[1].as.string);} free(str); SageValue v;v.type=SAGE_ARR;v.as.ptr=r;return v; }");
     aot_emit(aot, "static SageValue s_chr(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_NUM)return sage_string(\"\"); char b[2]={(char)a[0].as.number,0}; return sage_string(strdup(b)); }");
-    aot_emit(aot, "static SageValue s_join(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_ARR||a[1].type!=SAGE_STR)return sage_string(\"\"); SageArr*arr=(SageArr*)a[0].as.ptr; if(arr->count==0)return sage_string(\"\"); int len=0; for(int i=0;i<arr->count;i++){SageValue sa=sage_str(arr->elems[i]); len+=strlen(sa.as.string);} len+=strlen(a[1].as.string)*arr->count; char*b=malloc(len+1); b[0]=0; for(int i=0;i<arr->count;i++){SageValue sa=sage_str(arr->elems[i]); strcat(b,sa.as.string); if(i<arr->count-1)strcat(b,a[1].as.string);} SageValue v; v.type=SAGE_STR; v.as.string=b; return v; }");
     aot_emit(aot, "static SageValue s_replace(int c, SageValue* a) { if(c<3||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR||a[2].type!=SAGE_STR)return a[0]; const char*str=a[0].as.string; const char*f=a[1].as.string; const char*r=a[2].as.string; if(strlen(f)==0)return a[0]; char*b=malloc(strlen(str)*4+1); b[0]=0; const char*p=str; while(1){const char*m=strstr(p,f); if(!m){strcat(b,p);break;} strncat(b,p,m-p); strcat(b,r); p=m+strlen(f);} SageValue v; v.type=SAGE_STR; v.as.string=b; return v; }");
+    aot_emit(aot, "static SageValue s_strip(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_string(\"\"); const char*s=a[0].as.string; while(*s==' '||*s=='\\t'||*s=='\\n'||*s=='\\r')s++; if(*s==0)return sage_string(\"\"); const char*e=s+strlen(s)-1; while(e>s&&(*e==' '||*e=='\\t'||*e=='\\n'||*e=='\\r'))e--; char*b=malloc(e-s+2); memcpy(b,s,e-s+1); b[e-s+1]=0; return sage_string(b); }");
     aot_emit(aot, "static SageValue s_clock(int c, SageValue* a) { (void)c; (void)a; struct timeval tv; gettimeofday(&tv, NULL); return sage_number((double)tv.tv_sec + (double)tv.tv_usec / 1000000.0); }");
     aot_emit(aot, "static SageValue s_ord(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR||strlen(a[0].as.string)==0)return sage_number(0); return sage_number((unsigned char)a[0].as.string[0]); }");
-    // sage_print_value — MUST come after SageArr/SageDict definitions
     aot_emit(aot, "static void sage_print_value(SageValue v) { switch(v.type) { case SAGE_NUM: { double d=v.as.number; if(d==(double)(long long)d&&d>=-1e15&&d<=1e15) printf(\"%%lld\",(long long)d); else printf(\"%%g\",d); break; } case SAGE_BOOL: fputs(v.as.boolean?\"true\":\"false\",stdout); break; case SAGE_STR: fputs(v.as.string,stdout); break; case SAGE_ARR: { SageArr*a=(SageArr*)v.as.ptr; printf(\"[\"); for(int i=0;i<a->count;i++){if(i)printf(\", \");sage_print_value(a->elems[i]);} printf(\"]\"); break; } case SAGE_DICT: { SageDict*d=(SageDict*)v.as.ptr; printf(\"{\"); for(int i=0;i<d->count;i++){if(i)printf(\", \");printf(\"\\\"%%s\\\": \",d->keys[i]);sage_print_value(d->vals[i]);} printf(\"}\"); break; } default: fputs(\"nil\",stdout); } }");
+    aot_emit(aot, "static SageValue s_words(int argc, SageValue* argv);");
+    aot_emit(aot, "static SageValue s_compact(int argc, SageValue* argv);");
+    aot_emit(aot, "static SageValue s_count_substring(int argc, SageValue* argv);");
+    aot_emit(aot, "static SageValue s_repeat(int argc, SageValue* argv);");
+    aot_emit(aot, "static SageValue s_pad_left(int argc, SageValue* argv);");
+    aot_emit(aot, "static SageValue s_pad_right(int argc, SageValue* argv);");
+    aot_emit(aot, "static SageValue s_surround(int argc, SageValue* argv);");
+    aot_emit(aot, "static SageValue s_csv(int argc, SageValue* argv);");
+    aot_emit(aot, "static SageValue s_dash_case(int argc, SageValue* argv);");
+    aot_emit(aot, "static SageValue s_snake_case(int argc, SageValue* argv);");
+    aot_emit(aot, "static SageValue s_from_bin(int argc, SageValue* argv);");
     aot_emit(aot, "");
 
     // Forward-declare all procs (including async) and top-level variables
-    for (Stmt* s = program; s; s = s->next) {
-        if (s->type == STMT_PROC) {
-            char* name = sanitize_name(s->as.proc.name.start, s->as.proc.name.length);
-            aot_emit(aot, "static SageValue %s(int argc, SageValue* argv);", name);
-            free(name);
-        }
-        if (s->type == STMT_ASYNC_PROC) {
-            char* name = sanitize_name(s->as.async_proc.name.start, s->as.async_proc.name.length);
-            aot_emit(aot, "static SageValue %s(int argc, SageValue* argv);", name);
-            free(name);
-        }
-        if (s->type == STMT_LET) {
-            char* name = sanitize_name(s->as.let.name.start, s->as.let.name.length);
-            aot_emit(aot, "static SageValue %s;", name);
-            free(name);
-        }
-    }
+    int builtin_count = aot->proc_count;
+    aot_forward_declare_stmt(aot, program);
     aot_emit(aot, "");
 
-    // Emit proc definitions
+    // Emit proc and class definitions
     for (Stmt* s = program; s; s = s->next) {
-        if (s->type == STMT_PROC) {
-            char* name = sanitize_name(s->as.proc.name.start, s->as.proc.name.length);
-            aot_emit(aot, "static SageValue %s(int argc, SageValue* argv) {", name);
-            aot->indent++;
-            // Bind params
-            for (int i = 0; i < s->as.proc.param_count; i++) {
-                char* pname = sanitize_name(s->as.proc.params[i].start, s->as.proc.params[i].length);
-                aot_emit(aot, "SageValue %s = (argc > %d) ? argv[%d] : sage_nil();", pname, i, i);
-                free(pname);
+        if (s->type == STMT_PROC || s->type == STMT_CLASS) {
+            if (s->type == STMT_PROC) {
+                char* name = sanitize_name(s->as.proc.name.start, s->as.proc.name.length);
+                int already_builtin = 0;
+                for (int j = 0; j < builtin_count; j++) {
+                    if (strcmp(aot->procs[j], name) == 0) { already_builtin = 1; break; }
+                }
+                if (already_builtin) {
+                    free(name);
+                    continue;
+                }
+                free(name);
             }
-            // Compile body
-            for (Stmt* bs = s->as.proc.body; bs; bs = bs->next)
-                aot_compile_stmt(aot, bs);
-            aot_emit(aot, "return sage_nil();");
-            aot->indent--;
-            aot_emit(aot, "}");
-            aot_emit(aot, "");
-            free(name);
+            aot_compile_stmt(aot, s);
         }
     }
 
@@ -848,9 +1158,9 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot->in_main = 1;
     aot->indent++;
 
-    // Compile all non-proc statements (procs already emitted above)
+    // Compile all non-proc/non-class statements (procs and classes already emitted above)
     for (Stmt* s = program; s; s = s->next) {
-        if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC) continue;
+        if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC || s->type == STMT_CLASS) continue;
         aot_compile_stmt(aot, s);
     }
 

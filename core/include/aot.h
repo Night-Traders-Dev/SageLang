@@ -40,6 +40,9 @@ typedef struct {
     int opt_level;       // 0-3
     int emit_guards;     // If 1, emit type guards (for JIT interop)
     int in_main;         // If 1, we are compiling the main() function
+    char* procs[1024];   // Track defined proc names
+    int proc_count;
+    int builtin_count;   // Count of builtin procs registered in aot_init
 } AotCompiler;
 
 // Lifecycle

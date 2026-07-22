@@ -1042,6 +1042,14 @@ static Value sys_stdout_write_native(int argCount, Value* args) {
     return val_nil();
 }
 
+static Value sys_getch_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    int ch = getchar();
+    if (ch == EOF) return val_string("");
+    char buf[2] = {(char)ch, '\0'};
+    return val_string(buf);
+}
+
 static Value sys_stderr_write_native(int argCount, Value* args) {
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* text = AS_STRING(args[0]);
@@ -1116,6 +1124,7 @@ Module* create_sys_module(ModuleCache* cache) {
     env_define_const(e, "shell_exec", 10, val_native(sys_shell_exec_native));
     env_define_const(e, "call", 4, val_native(sys_call_native));
     env_define_const(e, "stdout_write", 12, val_native(sys_stdout_write_native));
+    env_define_const(e, "getch", 5, val_native(sys_getch_native));
     env_define_const(e, "stderr_write", 12, val_native(sys_stderr_write_native));
 
     // Constants

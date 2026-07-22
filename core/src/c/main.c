@@ -2316,6 +2316,51 @@ static int jit_load_bundle_and_find_main(const char* script, Environment* env) {
 
 extern int g_sage_verbose;
 
+static char* loaded_modules_aot[256];
+static int loaded_count_aot = 0;
+static int is_module_loaded_aot(const char* path) {
+    for (int i = 0; i < loaded_count_aot; i++) {
+        if (strcmp(loaded_modules_aot[i], path) == 0) return 1;
+    }
+    return 0;
+}
+static Stmt* flatten_imports(Stmt* ast) {
+    if (!ast) return NULL;
+    Stmt* head = ast;
+    Stmt* prev = NULL;
+    Stmt* curr = ast;
+    while (curr) {
+        if (curr->type == STMT_IMPORT && curr->as.import.module_name) {
+            char* mod_path = resolve_module_path(global_module_cache, curr->as.import.module_name);
+            if (mod_path && !is_module_loaded_aot(mod_path)) {
+                loaded_modules_aot[loaded_count_aot++] = strdup(mod_path);
+                char* src = main_read_file(mod_path);
+                if (src) {
+                    init_lexer(src, mod_path);
+                    Stmt* mod_ast = parse_program(src, mod_path);
+                    mod_ast = flatten_imports(mod_ast);
+                    if (mod_ast) {
+                        if (prev) {
+                            prev->next = mod_ast;
+                        } else {
+                            head = mod_ast;
+                        }
+                        Stmt* mod_tail = mod_ast;
+                        while (mod_tail->next) mod_tail = mod_tail->next;
+                        mod_tail->next = curr->next;
+                        curr = mod_tail;
+                        prev = mod_tail;
+                    }
+                }
+            }
+            if (mod_path) free(mod_path);
+        }
+        prev = curr;
+        if (curr) curr = curr->next;
+    }
+    return head;
+}
+
 int main(int argc, const char* argv[]) {
     SageRuntimeMode runtime_mode = SAGE_RUNTIME_AUTO;
     const char** cmd_argv = argv;
@@ -3390,6 +3435,17 @@ int main(int argc, const char* argv[]) {
         fprintf(stderr, "AOT+JIT: Phase 2 — type-specialized AOT compilation...\n");
         init_lexer(source, combo_file);
         Stmt* ast = parse_program(source, combo_file);
+        
+        // Add current file to loaded modules
+        char* main_mod_path = resolve_module_path(global_module_cache, combo_file);
+        if (main_mod_path) {
+            loaded_modules_aot[loaded_count_aot++] = strdup(main_mod_path);
+            free(main_mod_path);
+        } else {
+            loaded_modules_aot[loaded_count_aot++] = strdup(combo_file);
+        }
+        
+        ast = flatten_imports(ast);
 
         // Determine output path
         const char* out_path = NULL;
@@ -3424,7 +3480,7 @@ int main(int argc, const char* argv[]) {
                     if (jit.profiles[i] && jit.profiles[i]->call_count > 0) profiled++;
                 // fprintf(stderr, "AOT+JIT: Compiled %s → %s (%d functions profiled, %d compiled)\n",
                 //         combo_file, out_path, profiled, jit.total_compiled);
-                unlink(c_path);
+                // unlink(c_path);
             } else {
                 // fprintf(stderr, "AOT+JIT: Compilation failed\n");
             }
@@ -3464,7 +3520,7 @@ int main(int argc, const char* argv[]) {
             if (f) { fputs(c_code, f); fclose(f); }
             if (aot_compile_to_binary(&aot, c_path, out_path)) {
                 // fprintf(stderr, "AOT: Compiled %s → %s (type-specialized)\n", aot_file, out_path);
-                unlink(c_path);
+                // unlink(c_path);
             } else {
                 // fprintf(stderr, "AOT: Compilation failed\n");
             }

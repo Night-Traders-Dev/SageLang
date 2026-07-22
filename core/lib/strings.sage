@@ -13,11 +13,7 @@ proc words(text):
 proc compact(text):
     return join(words(text), " ")
 
-let _builtin_contains = contains
-
-@inline
-proc contains(text, part):
-    return _builtin_contains(text, part)
+# contains is provided by the VM builtins and AOT prelude
 
 ## Returns the number of non-overlapping occurrences of 'part' in 'text'.
 ## Optimization: Uses native string_count built-in (~10x speedup).
@@ -62,10 +58,7 @@ proc dash_case(text):
 proc snake_case(text):
     return lower(join(words(replace(text, "-", " ")), "_"))
 
-let _builtin_endswith = endswith
-
-proc endswith(a, b):
-    return _builtin_endswith(a, b)
+# endswith is provided by the VM builtins and AOT prelude
 
 proc from_bin(bits):
     let start = 0
