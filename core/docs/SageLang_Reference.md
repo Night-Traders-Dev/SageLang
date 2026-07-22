@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.1.1 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.1.2 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
