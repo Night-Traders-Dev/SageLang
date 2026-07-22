@@ -25,9 +25,14 @@ This allows for easy distribution of SageLang applications without needing to ma
 
 `sage --aot file.sage -o binary`
 
-Ahead-of-time compilation with static type inference. Generates self-contained
-C with type-specialized fast paths for `Int+Int`, `String+String`, and
-known-type comparisons. Compiles to a native binary via `cc -O2`.
+Ahead-of-time compilation with static type inference. Generates self-contained C11 code with type-specialized fast paths for `Int+Int`, `String+String`, and known-type comparisons, then compiles to a standalone native binary via `cc -O2`.
+
+As of **v4.1.1**, the AOT compiler supports:
+- **Full Class Compilation (`STMT_CLASS`)**: Generates C constructor functions (`s_ClassName`), method dispatch tables on `sage_dict` instances, and implicit `s_self` binding for method bodies.
+- **Built-in Protection & Symbol Deduplication**: Tracks builtin function signatures (`builtin_count`) to avoid duplicate emissions during flattened standard library module imports (`io.sage`, `sys.sage`).
+- **Scope-Safe `val_native` Wrapping**: Distinguishes user-defined function pointers from local variables shadowing builtin names (e.g. `let keys = dict_keys(...)`).
+- **Dynamic Property & Method Invocation**: Automatically translates method calls (`obj.method(...)`) to `sage_call(sage_get_property(obj, "method"), argc, args)`.
+- **Recursive `comptime:` Traversal**: Forward declares variables and procedures inside `comptime:` blocks (`aot_forward_declare_stmt`) at global static C scope.
 
 ### Cross-Compilation
 

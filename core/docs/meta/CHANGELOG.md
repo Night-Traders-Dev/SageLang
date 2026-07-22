@@ -7,6 +7,42 @@ v3.0.0 stability baseline (2026-03-01) are numbered `0.x` by development phase.
 The `sagemake` build tool excludes this file (and `ROADMAP.md`) from version
 propagation so the per-entry version history is never flattened again.
 
+## [4.1.1] - 2026-07-22
+
+### AOT Compiler Engine & Class Support
+- **Full Class Codegen (`STMT_CLASS`)**: Implemented C code generation for SageLang `class` statements in `src/c/aot.c`. Emits class constructor functions (`s_ClassName`), method dispatch tables on `sage_dict` instances, and implicit `s_self` binding for `s_current_self`.
+- **Built-in Registry & Symbol Protection**: Added `builtin_count` tracking to prevent flattened imports (`lib/io.sage`, `lib/sys.sage`) from emitting duplicate forward declarations or C function bodies for prelude natives.
+- **Scope-Safe `val_native` Wrapping**: Fixed `EXPR_VARIABLE` code generation to only wrap user-defined procedure pointers in `val_native(...)`, avoiding C type errors when local variables shadow builtin names (e.g. `let keys = dict_keys(...)`).
+- **Dynamic Property Calls**: Updated `EXPR_CALL` to evaluate `EXPR_GET` callees dynamically via `sage_get_property` when invoking object methods.
+- **Recursive `comptime:` Traversal**: Implemented `aot_forward_declare_stmt` to forward declare variables and procedures declared inside `comptime:` blocks at top-level static scope.
+- **Format Safety**: Updated `s_stdout_write` to use `fputs` instead of `printf("%s", ...)` to prevent format specifier consumption during code generation.
+
+---
+
+## [4.1.0] - 2026-07-20
+
+### Standard Library & Runtime Unification
+- **Standard Library Unification**: Unified standard library modules under `core/lib/` (`io.sage`, `sys.sage`, `strings.sage`, `json.sage`).
+- **Native System Builtins**: Exposed native C builtins `io_readfile`, `io_writefile`, `io_writebytes`, `io_appendbytes`, `io_readbytes`, `io_exists`, `io_remove`, `io_isdir`, `io_mkdir`, `io_listdir`, `sys_getenv_native`, `sys_exec`.
+- **Self-Hosting & VM Tooling**: Upgraded `src/sage/vm-tools` and self-hosting bootstrap pipeline.
+
+---
+
+## [4.0.9] - 2026-07-18
+
+### Rich Library & Terminal Overhaul
+- **Rich library fixes**: Fixed `sagelang-lib-rich` emoji duplicates (`dizzy`→`dizzy_face`, `mouse`→`mouse_peripheral`).
+- **Style handling**: Fixed `merge_styles` boolean override logic and added `not` style negation for text attributes.
+- **Terminal size detection**: Updated terminal size query to use `stty size` dynamically instead of defaulting to 80×24.
+
+---
+
+## [4.0.8] - 2026-07-16
+
+### JIT Dependency Bundling & Multi-Arch
+- **Module bundling**: Added recursive module dependency bundling for JIT self-extracting executables (`sage --jit main.sage -o app`).
+- **Multi-architecture support**: Expanded JIT compiler support for x86-64, AArch64, and RV64 architectures with native tail-call trampolines.
+
 ---
 
 ## [4.0.7] - 2026-07-15

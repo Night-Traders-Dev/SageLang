@@ -11,10 +11,12 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.0.8 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.1.1 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
 
+- **v4.1.1 (AOT Backend Stabilization & Class Codegen)**: Completed full AOT backend stabilization for multi-file applications (e.g. Bonsai Agent Harness). Implemented SageLang class compilation (`STMT_CLASS`), constructor generation (`s_ClassName`), method dispatch tables, and `s_self` binding via `s_current_self`. Added builtin function deduplication (`builtin_count`), `val_native` scope safety for local variables shadowing builtins, dynamic property call evaluation (`sage_get_property`), and recursive `comptime:` block forward declarations (`aot_forward_declare_stmt`).
+- **v4.1.0 (Standard Library Unification & System Builtins)**: Unified SageLang standard library modules under `core/lib/` (`io.sage`, `sys.sage`, `strings.sage`, `json.sage`). Added C built-in bindings for native I/O (`io_readfile`, `io_writefile`, `io_writebytes`, `io_appendbytes`, `io_readbytes`, `io_exists`, `io_remove`, `io_isdir`, `io_mkdir`, `io_listdir`) and system execution (`sys_getenv_native`, `sys_exec`). Updated unified cross-platform `sagemake` build tool.
 - **v4.0.9 (Rich Library Fixes)**: Fixed `sagelang-lib-rich` emoji duplicates (`dizzy`→`dizzy_face`, `mouse`→`mouse_peripheral`, removed duplicate `lavender_blush` in color map). Fixed `merge_styles` boolean override logic and added missing `not` style negation for all text attributes. Improved terminal size detection to query `stty size` instead of always returning 80×24. SageSMP shell now features a gradient-styled prompt using the corrected rich library.
 - **v4.0.8 (JIT Dependency Bundling & Multi-Arch)**: Added recursive module dependency bundling for JIT self-extracting executables (`sage --jit main.sage -o app`). Transitive non-native imports are discovered and serialized into the final binary. JIT compiler now fully supports x86-64, AArch64, and RV64 architectures. JIT-compiled functions are now directly executed via native tail-call trampolines, resulting in actual performance gains for hot functions. VM dispatch loop optimized with register-pinned state variables and branch-predicted stack overflow checks.
 - **v4.0.7 (JIT Compilation Support)**: Added support for compiling a binary using `sage --jit hello.sage -o hello_jit`, and fixed the self-extracting JIT executable runner to execute the embedded script payload rather than starting the REPL.

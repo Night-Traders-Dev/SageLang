@@ -3,7 +3,7 @@ title: "The Sage Programming Language"
 subtitle: "A Complete Guide to Systems Programming with Sage"
 author: "SageLang Project"
 date: "July 2026"
-version: "v4.0.7"
+version: "v4.1.1"
 documentclass: report
 geometry: "margin=1in"
 fontsize: 11pt
@@ -16,7 +16,7 @@ header-includes:
   - \pagestyle{fancy}
   - \fancyhead[L]{The Sage Programming Language}
   - \fancyhead[R]{\thepage}
-  - \fancyfoot[C]{v4.0.7}
+  - \fancyfoot[C]{v4.1.1}
   - \usepackage{titling}
   - \pretitle{\begin{center}\Huge\bfseries}
   - \posttitle{\par\end{center}\vskip 0.5em}
