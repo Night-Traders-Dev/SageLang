@@ -232,6 +232,19 @@ static char* sanitize_name(const char* start, int len) {
     return out;
 }
 
+static char* sanitize_var_name(AotCompiler* aot, const char* start, int len) {
+    char* name = sanitize_name(start, len);
+    for (int i = 0; i < aot->builtin_count; i++) {
+        if (strcmp(aot->procs[i], name) == 0) {
+            char* vname = malloc(strlen(name) + 8);
+            sprintf(vname, "v_%s", name);
+            free(name);
+            return vname;
+        }
+    }
+    return name;
+}
+
 char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
     if (!expr) return strdup("sage_nil()");
 
@@ -253,7 +266,7 @@ char* aot_compile_expr(AotCompiler* aot, Expr* expr) {
         case EXPR_NIL:
             return strdup("sage_nil()");
         case EXPR_VARIABLE: {
-            char* name = sanitize_name(expr->as.variable.name.start, expr->as.variable.name.length);
+            char* name = sanitize_var_name(aot, expr->as.variable.name.start, expr->as.variable.name.length);
             
             // Check if this variable is actually a user-defined proc!
             int is_proc = 0;
@@ -639,7 +652,7 @@ void aot_compile_stmt(AotCompiler* aot, Stmt* stmt) {
             break;
         }
         case STMT_LET: {
-            char* name = sanitize_name(stmt->as.let.name.start, stmt->as.let.name.length);
+            char* name = sanitize_var_name(aot, stmt->as.let.name.start, stmt->as.let.name.length);
             int is_top = (aot->in_main && aot->indent == 1);
             if (stmt->as.let.initializer) {
                 char* val = aot_compile_expr(aot, stmt->as.let.initializer);
@@ -714,7 +727,7 @@ void aot_compile_stmt(AotCompiler* aot, Stmt* stmt) {
         }
         case STMT_FOR: {
             char* iterable = aot_compile_expr(aot, stmt->as.for_stmt.iterable);
-            char* var = sanitize_name(stmt->as.for_stmt.variable.start, stmt->as.for_stmt.variable.length);
+            char* var = sanitize_var_name(aot, stmt->as.for_stmt.variable.start, stmt->as.for_stmt.variable.length);
             char* idx = aot_temp(aot);
             aot_emit(aot, "{ SageValue _iter_%s = %s;", idx, iterable);
             aot->indent++;
@@ -836,8 +849,12 @@ void aot_compile_stmt(AotCompiler* aot, Stmt* stmt) {
                     aot->indent++;
                     aot_emit(aot, "SageValue s_self = s_current_self;");
                     for (int i = 0; i < m->as.proc.param_count; i++) {
-                        char* pn = sanitize_name(m->as.proc.params[i].start, m->as.proc.params[i].length);
-                        aot_emit(aot, "SageValue %s = (argc > %d) ? argv[%d] : sage_nil();", pn, i, i);
+                        char* pn = sanitize_var_name(aot, m->as.proc.params[i].start, m->as.proc.params[i].length);
+                        if (strcmp(pn, "s_self") == 0 || strcmp(pn, "v_s_self") == 0) {
+                            aot_emit(aot, "if (argc > %d && sage_truthy(argv[%d])) s_self = argv[%d];", i, i, i);
+                        } else {
+                            aot_emit(aot, "SageValue %s = (argc > %d) ? argv[%d] : sage_nil();", pn, i, i);
+                        }
                         free(pn);
                     }
                     for (Stmt* bs = m->as.proc.body; bs; bs = bs->next)
@@ -937,7 +954,7 @@ static void aot_forward_declare_stmt(AotCompiler* aot, Stmt* s) {
             }
             free(name);
         } else if (curr->type == STMT_LET) {
-            char* name = sanitize_name(curr->as.let.name.start, curr->as.let.name.length);
+            char* name = sanitize_var_name(aot, curr->as.let.name.start, curr->as.let.name.length);
             int conflict = 0;
             for (int j = 0; j < aot->proc_count; j++) {
                 if (strcmp(aot->procs[j], name) == 0) { conflict = 1; break; }

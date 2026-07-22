@@ -103,8 +103,24 @@ authored, non-empty tracked lines; exclude vendored deps and build artifacts).
 ![SageLang backend performance comparison](core/assets/charts/backend-compare.svg)
 
 Run `python3 scripts/generate_backend_chart.py` or
-`bash benchmarks/run_backend_compare.sh` to regenerate (8 workloads across all
+`bash benchmarks/run_backend_compare.sh` to regenerate (12 workloads across all
 native backends).
+
+### Sage vs Python 3 Benchmark Suite
+
+| Benchmark | Python 3 | Sage AST | Sage VM | Sage C | Sage LLVM | Sage JIT | Sage AOT |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **01_fibonacci** | 29.47ms | 10.95ms *(2.69x)* | 10.87ms *(2.71x)* | 0.81ms *(36.4x)* | 0.82ms *(35.9x)* | 10.28ms *(2.87x)* | 0.77ms *(38.3x)* |
+| **02_loop_sum** | 2.50ms | 6.84ms *(0.37x)* | 7.62ms *(0.33x)* | 0.76ms *(3.29x)* | 0.80ms *(3.12x)* | 8.87ms *(0.28x)* | 0.76ms *(3.29x)* |
+| **02_loop_sum_large** | 25.10ms | 73.19ms *(0.34x)* | 73.08ms *(0.34x)* | 0.78ms *(32.2x)* | 0.78ms *(32.2x)* | 67.22ms *(0.37x)* | 0.76ms *(33.0x)* |
+| **03_string_concat** | 0.35ms | 6.64ms *(0.05x)* | 7.64ms *(0.05x)* | 0.82ms *(0.43x)* | 0.77ms *(0.45x)* | 6.86ms *(0.05x)* | 0.80ms *(0.44x)* |
+| **04_array_ops** | 1.09ms | 9.07ms *(0.12x)* | 9.09ms *(0.12x)* | 0.78ms *(1.40x)* | 0.77ms *(1.42x)* | 10.27ms *(0.11x)* | 0.78ms *(1.40x)* |
+| **05_dict_ops** | 2.87ms | 12.35ms *(0.23x)* | 12.67ms *(0.23x)* | 0.80ms *(3.59x)* | 0.80ms *(3.59x)* | 12.82ms *(0.22x)* | 0.76ms *(3.78x)* |
+| **06_class_method** | 0.40ms | 6.57ms *(0.06x)* | 6.66ms *(0.06x)* | 0.77ms *(0.52x)* | 0.80ms *(0.50x)* | 6.89ms *(0.06x)* | 0.79ms *(0.51x)* |
+| **07_nested_loops** | 180.59ms | 26.68ms *(6.77x)* | 27.60ms *(6.54x)* | 0.76ms *(238x)* | 0.78ms *(232x)* | 28.16ms *(6.41x)* | 0.76ms *(238x)* |
+| **08_exception_handling** | 0.28ms | 7.64ms *(0.04x)* | 7.74ms *(0.04x)* | 0.78ms *(0.36x)* | 0.80ms *(0.35x)* | 6.88ms *(0.04x)* | 0.78ms *(0.36x)* |
+| **09_recursion_closures** | 1.13ms | 7.65ms *(0.15x)* | 7.75ms *(0.15x)* | 0.78ms *(1.45x)* | 0.82ms *(1.38x)* | 8.87ms *(0.13x)* | 0.76ms *(1.49x)* |
+| **10_primes_sieve** | 2.06ms | 21.03ms *(0.10x)* | 20.25ms *(0.10x)* | 0.81ms *(2.54x)* | 0.81ms *(2.54x)* | 20.30ms *(0.10x)* | 0.78ms *(2.64x)* |
 
 ### AOT vs JIT vs VM Benchmarks
 
