@@ -7,6 +7,11 @@ v3.0.0 stability baseline (2026-03-01) are numbered `0.x` by development phase.
 The `sagemake` build tool excludes this file (and `ROADMAP.md`) from version
 propagation so the per-entry version history is never flattened again.
 
+## [4.1.2] - 2026-07-22
+
+- Veritas: audit and bug fixes for `dns.sage` duplicate parse_rrs call.
+- Veritas: hash.sage duplicate rotate_left declaration fix.
+
 ## [4.1.1] - 2026-07-22
 
 ### AOT Compiler Engine & Class Support
