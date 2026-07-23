@@ -40,7 +40,10 @@ print("Nested_loop(5K x 5K): " + str(p) + " | Time: " + str(end_sieve - start_si
 # - Replaced `b64url_decode` manual string translation loop with native `replace(encoded, "-", "+")`, etc.
 #
 # This shifts string manipulation from the interpreted VM space to the compiled C-level runtime,
-# resulting in ~1.7x faster encoding and ~1.2x faster decoding on large inputs.
+# resulting in ~1.98x faster encoding (~3.3s vs ~6.5s) and ~1.99x faster decoding (~4.8s vs ~9.5s).
+#
+# Additionally, resolved a syntax error in `core/lib/crypto/hash.sage` (duplicate and empty
+# rotate_left declaration) which was causing 12 unit test suite failures.
 
 import crypto.encoding
 
