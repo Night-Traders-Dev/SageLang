@@ -747,7 +747,7 @@ print bit2 == 1    # true
 **Bitwise Safety**: Shift amounts are validated at runtime — values outside 0-63 return 0 instead of causing C undefined behavior. Right-shift is arithmetic (sign-extending) on signed values. Floating-point operands are truncated to `long long` before bitwise operations.
 
 **Unsafe Blocks**:
-As of version 4.0.1 (Specification 2.0), low-level memory operations or operations bypassing typical safety checks should be wrapped in an `unsafe` block. `unsafe` blocks must be terminated with the `end` keyword.
+As of version 4.1.3 (Specification 2.0), low-level memory operations or operations bypassing typical safety checks should be wrapped in an `unsafe` block. `unsafe` blocks must be terminated with the `end` keyword.
 
 ```sagelang
 unsafe:
@@ -2902,11 +2902,11 @@ socket.close(sock)
 
 # DNS resolution
 let ip = socket.resolve("example.com")
-print ip  # "3.8.0.34"
+print ip  # "4.1.3.34"
 
 # UDP
 let udp = socket.create(socket.AF_INET, socket.SOCK_DGRAM, 0)
-socket.sendto(udp, "hello", "3.8.0.1", 9999)
+socket.sendto(udp, "hello", "4.1.3.1", 9999)
 socket.close(udp)
 ```
 
@@ -2929,7 +2929,7 @@ print line
 tcp.close(conn)
 
 # Server
-let server = tcp.listen("3.8.0.0", 8080, 5)
+let server = tcp.listen("4.1.3.0", 8080, 5)
 let client = tcp.accept(server)
 tcp.send(client, "Hello from Sage!")
 tcp.close(client)

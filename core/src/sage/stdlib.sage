@@ -604,7 +604,7 @@ proc sys_call(callee):
 
 proc create_sys_module():
     let m = {}
-    m["version"]    = "4.0.0"
+    m["version"]    = "4.1.3"
     m["platform"]   = "sage"
     m["args"]       = sys_args
     m["exit"]       = sys_exit
