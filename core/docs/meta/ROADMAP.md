@@ -1,22 +1,22 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: June 9, 2026
-> **Current Phase**: v3.8.5 — REPL Statistics & Version 3.8.5 Release
+> **Current Phase**: v4.1.3 — REPL Statistics & Version 4.1.3 Release
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
 ---
 
-## v3.8.5: REPL Statistics & Version 3.8.5 Release (June 2026)
+## v4.1.3: REPL Statistics & Version 4.1.3 Release (June 2026)
 
 ### Completed
 
 - **REPL :stats**: Added `:stats` command to show real-time GC, Memory, Stack, and CPU statistics.
-- **Version Bump**: Official release of v3.8.0.
+- **Version Bump**: Official release of v4.1.3.
 
 ---
 
-## v3.8.5: Math Matrix Printing & CLI Enhancements (June 2026)
+## v4.1.3: Math Matrix Printing & CLI Enhancements (June 2026)
 
 ### Completed
 
@@ -25,7 +25,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.5: VM Optimization & Self-Hosted Toolchain (June 2026)
+## v4.1.3: VM Optimization & Self-Hosted Toolchain (June 2026)
 
 ### Completed
 
@@ -35,7 +35,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.5: Sentinel Security & Performance Refinement (May 2026)
+## v4.1.3: Sentinel Security & Performance Refinement (May 2026)
 
 ### Completed
 
@@ -51,7 +51,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.5: Performance Optimizations + Kotlin Fixes (April 2026)
+## v4.1.3: Performance Optimizations + Kotlin Fixes (April 2026)
 
 ### Completed
 
@@ -63,7 +63,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.5: Kotlin/Android Backend (April 2026)
+## v4.1.3: Kotlin/Android Backend (April 2026)
 
 ### Completed
 
@@ -77,7 +77,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.5: ORC Garbage Collector (April 2026)
+## v4.1.3: ORC Garbage Collector (April 2026)
 
 ### Completed
 
@@ -92,7 +92,7 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v3.8.5: QEMU Support (March 2026)
+## v4.1.3: QEMU Support (March 2026)
 
 ### Completed
 

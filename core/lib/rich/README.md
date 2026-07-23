@@ -155,8 +155,8 @@ Parts are `[text, style_string]` pairs. Plain strings are also accepted (rendere
 
 ## Changelog
 
-- **v1.2.0**: Fixed duplicate emoji entries (`dizzy`→`dizzy_face`, `mouse`→`mouse_peripheral`, removed duplicate `lavender_blush` in color map). Fixed `merge_styles` boolean override logic (could not unset bold/italic via merge). Added missing `not` style negation for dim, underline, blink, reverse, strike. Improved `detect_terminal_size()` to actually query the terminal via `stty size` instead of always returning 80x24.
-- **v1.1.0**: Fixed bright color ANSI escape codes (colors 8-15 now correctly map to codes 90-97 for foreground and 100-107 for background). Added `render_prompt()` for building styled interactive prompts.
+- **v4.1.3**: Fixed duplicate emoji entries (`dizzy`→`dizzy_face`, `mouse`→`mouse_peripheral`, removed duplicate `lavender_blush` in color map). Fixed `merge_styles` boolean override logic (could not unset bold/italic via merge). Added missing `not` style negation for dim, underline, blink, reverse, strike. Improved `detect_terminal_size()` to actually query the terminal via `stty size` instead of always returning 80x24.
+- **v4.1.3**: Fixed bright color ANSI escape codes (colors 8-15 now correctly map to codes 90-97 for foreground and 100-107 for background). Added `render_prompt()` for building styled interactive prompts.
 
 ## License
 

@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.1.2 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.1.3 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -393,7 +393,7 @@ struct   super    trait    true     try      unquote
 unsafe   var      while    yield    @
 ```
 
-**Soft keywords** (v4.0.0+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
+**Soft keywords** (v4.1.3+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
 
 ### 3.2 Operators (Precedence Table)
 

@@ -1,6 +1,6 @@
 # SageLang Safety System Guide
 
-SageLang v4.0.1 (Spec 2.0) introduces a robust compile-time safety system that provides six major guarantees: **Ownership & Move Semantics**, **Borrow Checking**, **Lifetime Tracking**, **Option Types (No Nulls)**, **Fearless Concurrency**, and **Unsafe Barriers**.
+SageLang v4.1.3 (Spec 2.0) introduces a robust compile-time safety system that provides six major guarantees: **Ownership & Move Semantics**, **Borrow Checking**, **Lifetime Tracking**, **Option Types (No Nulls)**, **Fearless Concurrency**, and **Unsafe Barriers**.
 
 ## Design Philosophy
 
