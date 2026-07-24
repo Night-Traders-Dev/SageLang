@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: June 9, 2026
-> **Current Phase**: v4.1.3 — REPL Statistics & Version 4.1.3 Release
+> **Current Phase**: v3.8.5 — REPL Statistics & Version 3.8.5 Release
 
 This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
 
