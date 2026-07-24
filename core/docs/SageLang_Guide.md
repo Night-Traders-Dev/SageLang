@@ -2902,11 +2902,11 @@ socket.close(sock)
 
 # DNS resolution
 let ip = socket.resolve("example.com")
-print ip  # "3.8.0.34"
+print ip  # "4.1.3.34"
 
 # UDP
 let udp = socket.create(socket.AF_INET, socket.SOCK_DGRAM, 0)
-socket.sendto(udp, "hello", "3.8.0.1", 9999)
+socket.sendto(udp, "hello", "4.1.3.1", 9999)
 socket.close(udp)
 ```
 
@@ -2929,7 +2929,7 @@ print line
 tcp.close(conn)
 
 # Server
-let server = tcp.listen("3.8.0.0", 8080, 5)
+let server = tcp.listen("4.1.3.0", 8080, 5)
 let client = tcp.accept(server)
 tcp.send(client, "Hello from Sage!")
 tcp.close(client)

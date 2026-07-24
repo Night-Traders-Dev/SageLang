@@ -38,7 +38,7 @@ import net.ip         # IP address utilities
 
 ## URL Parsing and Encoding (`net.url`)
 
-The `net.url` module has been optimized in v4.0.1 to provide $O(N)$ performance for parsing, building, encoding, and decoding. These improvements mitigate Resource Exhaustion (DoS) vulnerabilities previously caused by $O(N^2)$ string concatenation.
+The `net.url` module has been optimized in v4.1.3 to provide $O(N)$ performance for parsing, building, encoding, and decoding. These improvements mitigate Resource Exhaustion (DoS) vulnerabilities previously caused by $O(N^2)$ string concatenation.
 
 ### Parsing URLs
 
@@ -175,7 +175,7 @@ proc hello(req):
 proc not_found(req):
     return server.response_not_found("Not found: " + req["path"])
 
-let srv = server.create_server("3.8.0.0", 8080)
+let srv = server.create_server("4.1.3.0", 8080)
 server.get_route(srv["router"], "/", hello)
 server.post_route(srv["router"], "/data", hello)
 server.set_not_found(srv["router"], not_found)
@@ -290,7 +290,7 @@ for i in range(len(msg["answers"])):
     print rr["name"]                  # example.com
     print rr["type_name"]             # A
     print rr["ttl"]                   # 300
-    print rr["address"]               # 3.8.0.34
+    print rr["address"]               # 4.1.3.34
 ```
 
 ### Record Types
@@ -316,53 +316,53 @@ dns.TYPE_PTR    # 12 - Pointer (reverse DNS)
 ```sage
 import net.ip
 
-print ip.is_valid_v4("3.8.0.1")  # true
-print ip.is_valid_v4("3.8.0.1")    # false
+print ip.is_valid_v4("4.1.3.1")  # true
+print ip.is_valid_v4("4.1.3.1")    # false
 
-let n = ip.parse_v4("3.8.0.1")
-print ip.to_string_v4(n)             # 3.8.0.1
+let n = ip.parse_v4("4.1.3.1")
+print ip.to_string_v4(n)             # 4.1.3.1
 ```
 
 ### CIDR Subnets
 
 ```sage
-let cidr = ip.parse_cidr("3.8.0.0/24")
-print cidr["network_str"]      # 3.8.0.0
-print cidr["mask_str"]         # 3.8.0.0
-print cidr["broadcast_str"]    # 3.8.0.255
+let cidr = ip.parse_cidr("4.1.3.0/24")
+print cidr["network_str"]      # 4.1.3.0
+print cidr["mask_str"]         # 4.1.3.0
+print cidr["broadcast_str"]    # 4.1.3.255
 print cidr["host_count"]       # 254
 
-print ip.in_subnet("3.8.0.100", "3.8.0.0/24")  # true
-print ip.in_subnet("3.8.0.1", "3.8.0.0/24")       # false
+print ip.in_subnet("4.1.3.100", "4.1.3.0/24")  # true
+print ip.in_subnet("4.1.3.1", "4.1.3.0/24")       # false
 ```
 
 ### Address Classification
 
 ```sage
-print ip.is_private("3.8.0.1")       # true (RFC 1918)
-print ip.is_private("3.8.0.8")        # false
-print ip.is_loopback("3.8.0.1")     # true
-print ip.is_link_local("3.8.0.1") # true
-print ip.is_multicast("3.8.0.1")    # true
-print ip.is_broadcast("3.8.0.255") # true
-print ip.address_class("3.8.0.1") # C
+print ip.is_private("4.1.3.1")       # true (RFC 1918)
+print ip.is_private("4.1.3.8")        # false
+print ip.is_loopback("4.1.3.1")     # true
+print ip.is_link_local("4.1.3.1") # true
+print ip.is_multicast("4.1.3.1")    # true
+print ip.is_broadcast("4.1.3.255") # true
+print ip.address_class("4.1.3.1") # C
 ```
 
 ### Netmask Conversion
 
 ```sage
-print ip.mask_to_prefix("3.8.0.0")  # 24
-print ip.prefix_to_mask(16)               # 3.8.0.0
+print ip.mask_to_prefix("4.1.3.0")  # 24
+print ip.prefix_to_mask(16)               # 4.1.3.0
 ```
 
 ### Well-Known Addresses
 
 ```sage
-print ip.LOCALHOST       # 3.8.0.1
-print ip.ANY             # 3.8.0.0
-print ip.BROADCAST       # 3.8.0.255
-print ip.DNS_GOOGLE      # 3.8.0.8
-print ip.DNS_CLOUDFLARE  # 3.8.0.1
+print ip.LOCALHOST       # 4.1.3.1
+print ip.ANY             # 4.1.3.0
+print ip.BROADCAST       # 4.1.3.255
+print ip.DNS_GOOGLE      # 4.1.3.8
+print ip.DNS_CLOUDFLARE  # 4.1.3.1
 ```
 
 ---

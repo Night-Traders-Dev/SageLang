@@ -341,7 +341,7 @@ if len(chain.contracts) == 0:
 
 let rpc_srv = rpc_mod.RPCServer(chain, RPC_PORT)
 let p2p_node = p2p_mod.P2PNode(chain, P2P_PORT)
-let explorer_srv = server.create_server("3.8.0.0", EXPLORER_PORT)
+let explorer_srv = server.create_server("4.1.3.0", EXPLORER_PORT)
 server.get_route(explorer_srv["router"], "/", handle_index)
 server.get_route(explorer_srv["router"], "/app.js", handle_app_js)
 server.get_route(explorer_srv["router"], "/style.css", handle_style_css)

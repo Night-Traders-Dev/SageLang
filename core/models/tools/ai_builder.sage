@@ -588,7 +588,7 @@ proc step_export():
 # Main interactive flow
 # ============================================================================
 
-print_header("SageLLM AI Builder v4.0.0")
+print_header("SageLLM AI Builder v4.1.3")
 print "Interactive step-by-step AI model builder."
 print "Uses the full Sage LLM/ML/AI library stack."
 print ""
