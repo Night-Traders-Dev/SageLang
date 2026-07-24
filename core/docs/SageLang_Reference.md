@@ -393,7 +393,7 @@ struct   super    trait    true     try      unquote
 unsafe   var      while    yield    @
 ```
 
-**Soft keywords** (v4.1.3+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
+**Soft keywords** (v4.0.0+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
 
 ### 3.2 Operators (Precedence Table)
 
