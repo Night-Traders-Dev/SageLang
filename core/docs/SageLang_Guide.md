@@ -747,7 +747,7 @@ print bit2 == 1    # true
 **Bitwise Safety**: Shift amounts are validated at runtime — values outside 0-63 return 0 instead of causing C undefined behavior. Right-shift is arithmetic (sign-extending) on signed values. Floating-point operands are truncated to `long long` before bitwise operations.
 
 **Unsafe Blocks**:
-As of version 4.1.3 (Specification 2.0), low-level memory operations or operations bypassing typical safety checks should be wrapped in an `unsafe` block. `unsafe` blocks must be terminated with the `end` keyword.
+As of version 4.0.1 (Specification 2.0), low-level memory operations or operations bypassing typical safety checks should be wrapped in an `unsafe` block. `unsafe` blocks must be terminated with the `end` keyword.
 
 ```sagelang
 unsafe:
