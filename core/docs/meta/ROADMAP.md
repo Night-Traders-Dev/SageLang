@@ -7,12 +7,12 @@ This roadmap outlines the development journey of Sage, from its initial bootstra
 
 ---
 
-## v4.1.3: REPL Statistics & Version 4.1.3 Release (June 2026)
+## v3.8.5: REPL Statistics & Version 3.8.5 Release (June 2026)
 
 ### Completed
 
 - **REPL :stats**: Added `:stats` command to show real-time GC, Memory, Stack, and CPU statistics.
-- **Version Bump**: Official release of v4.1.3.
+- **Version Bump**: Official release of v3.8.0.
 
 ---
 
