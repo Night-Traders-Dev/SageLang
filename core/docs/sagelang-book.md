@@ -58,7 +58,7 @@ by Rust, and a self-hosted compiler written in Sage itself.
 - **SageMetal VM**: freestanding bytecode interpreter for bare-metal (no malloc, no libc, no OS)
 - **Metal stdlib** (`lib/metal/`): serial, GPIO, IRQ, timer, MMIO for kernel/embedded development
 - **Default hybrid runtime**: JIT profiling on hosted, AST on bare-metal, automatic selection
-- **v4.1.3 updates**: OIS integration, $O(1)$ dictionary size, $O(N)$ unique checks (simple types), native array reversal, and binary exponentiation for repeating (linear output work).
+- **v4.0.0 updates**: OIS integration, $O(1)$ dictionary size, $O(N)$ unique checks (simple types), native array reversal, and binary exponentiation for repeating (linear output work).
 - **327 interpreter tests**, 1623 self-hosted tests (2060+ total)
 
 ## Quick Start
