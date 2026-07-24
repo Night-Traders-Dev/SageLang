@@ -22,7 +22,7 @@ proc range_step(start, stop, step):
             current = current + step
 
 proc repeat(value, count):
-    # NOTE: SageLang v4.1.3 has a bug where 'yield' in 'for' doesn't advance state.
+    # NOTE: SageLang v4.0.2 has a bug where 'yield' in 'for' doesn't advance state.
     # We must use 'while' for generators.
     let i = 0
     while i < count:
