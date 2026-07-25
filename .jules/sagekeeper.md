@@ -218,3 +218,14 @@ Evidence:
 
 Documentation Impact:
 Updated `core/docs/SageLang_Guide.md`'s "Built-in Functions" table to reflect `slice(arr/str, start, end)`.
+
+2026-07-25 - [Type Built-in and Bytes]
+
+Discovery:
+The `type()` built-in function was returning `"unknown"` for `VAL_BYTES` (Bytes buffers), which was missing in `type_native` (in `core/src/c/interpreter.c`). This has been patched to correctly return `"bytes"`.
+
+Evidence:
+`core/src/c/interpreter.c` (function `type_native`).
+
+Documentation Impact:
+No immediate documentation impact needed, as this corrects an implementation bug to align with expectations, but it is useful for future understanding that `io.readbytes` outputs a value of type `"bytes"`.

@@ -837,6 +837,7 @@ static Value type_native(int argCount, Value* args) {
         case VAL_INSTANCE: return val_string("instance");
         case VAL_TUPLE: return val_string("tuple");
         case VAL_GENERATOR: return val_string("generator");
+        case VAL_BYTES: return val_string("bytes");
         default: return val_string("unknown");
     }
 }
