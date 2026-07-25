@@ -3402,7 +3402,7 @@ and as async await break case catch class comptime continue default defer elif e
 ```
 len(x) push(arr, val) pop(arr) append(arr, val) range(a, b)
 split(str, delim) join(arr, sep) replace(s, old, new)
-upper(s) lower(s) strip(s) slice(arr, a, b)
+upper(s) lower(s) strip(s) slice(arr/str, a, b)
 str(x) tonumber(s) int(x) input() clock()
 type(x) chr(n) ord(c) hash(x) sizeof(x) doc(x)
 startswith(s, prefix) endswith(s, suffix)
