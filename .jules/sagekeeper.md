@@ -229,3 +229,13 @@ Evidence:
 
 Documentation Impact:
 No immediate documentation impact needed, as this corrects an implementation bug to align with expectations, but it is useful for future understanding that `io.readbytes` outputs a value of type `"bytes"`.
+2026-07-27 - [Linter Documentation Missing W001, W002, W004, S003]
+
+Discovery:
+The linter issues warnings [W001] (Unused variable), [W002] (Shadowed variable), [W004] (Empty block), and [S003] (Missing docstring) which were previously missing from the documentation.
+
+Evidence:
+core/docs/SageLang_Guide.md (previous state)
+
+Documentation Impact:
+Added these linting rules to the Linter section in SageLang_Guide.md to reflect the actual linter behavior.
