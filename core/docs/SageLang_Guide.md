@@ -2779,6 +2779,11 @@ sage lint program.sage
 
 **Rule Categories**:
 
+- `[W001]`: Unused variable warning.
+- `[W002]`: Shadowed variable warning.
+- `[W004]`: Empty block warning (e.g., following a colon).
+- `[S003]`: Missing docstring warning (requires `##` preceding top-level procedures).
+
 | Category | Rules | Description |
 | -------- | ----- | ----------- |
 | Errors | E001-E003 | Syntax and structural errors |
