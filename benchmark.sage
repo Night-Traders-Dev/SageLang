@@ -74,9 +74,10 @@ print("Base64 URL-safe Decode (100 iterations on large input): Time: " + str(end
 #   with highly efficient native C `slice()` built-in operations.
 #
 # These optimizations result in dramatic, measurable speedups:
-# - `trim`: Up to ~546x speedup on padded strings of moderate length.
-# - `repeat_str`: Up to ~12x speedup on multi-iteration repetition.
-# - `to_upper` / `to_lower`: Up to ~4.4x speedup on standard strings.
+# - `trim`: From ~0.88s to ~0.016s (~55x speedup) on padded strings.
+# - `to_upper`: From ~1.16s to ~0.48s (~2.4x speedup) on large strings.
+# - This shifts the intensive string copy and build operations from interpreted space
+#   to native, compiled VM operations.
 
 import std.unicode
 
