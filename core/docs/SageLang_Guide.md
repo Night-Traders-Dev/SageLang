@@ -440,6 +440,12 @@ SageLang provides built-in functions injected into global environment via `init_
 | `dict_values(dict)` | `dict → array` | Get values as array |
 | `dict_has(dict, key)` | `(dict, string) → bool` | Check if key exists |
 | `dict_delete(dict, key)` | `(dict, string) → nil` | Remove key from dict |
+| `type(val)` | `value → string` | Get string name of type |
+| `chr(n)` | `number → string` | Get single-character string from ASCII code |
+| `ord(c)` | `string → number` | Get ASCII code of single-character string |
+| `hash(val)` | `value → number` | Get hash code of a value |
+| `sizeof(val)` | `value → number` | Get memory size of a value in bytes |
+| `doc(val)` | `value → string` | Retrieve documentation from a function |
 | `gc_collect()` | `() → nil` | Trigger garbage collection |
 | `gc_stats()` | `() → dict` | Get GC statistics |
 | `gc_enable()`, `gc_disable()` | `() → nil` | Control automatic GC |
@@ -3407,7 +3413,7 @@ and as async await break case catch class comptime continue default defer elif e
 ```
 len(x) push(arr, val) pop(arr) append(arr, val) range(a, b)
 split(str, delim) join(arr, sep) replace(s, old, new)
-upper(s) lower(s) strip(s) slice(arr/str, a, b)
+upper(s) lower(s) strip(s) slice(arr/str, start, end)
 str(x) tonumber(s) int(x) input() clock()
 type(x) chr(n) ord(c) hash(x) sizeof(x) doc(x)
 startswith(s, prefix) endswith(s, suffix)
