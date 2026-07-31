@@ -440,7 +440,7 @@ SageLang provides built-in functions injected into global environment via `init_
 | `dict_values(dict)` | `dict → array` | Get values as array |
 | `dict_has(dict, key)` | `(dict, string) → bool` | Check if key exists |
 | `dict_delete(dict, key)` | `(dict, string) → nil` | Remove key from dict |
-| `type(val)` | `value → string` | Get string name of type |
+| `type(val)` | `value → string` | Get string name of type (e.g. "bytes" for byte buffers) |
 | `chr(n)` | `number → string` | Get single-character string from ASCII code |
 | `ord(c)` | `string → number` | Get ASCII code of single-character string |
 | `hash(val)` | `value → number` | Get hash code of a value |
@@ -2804,9 +2804,9 @@ sage lint program.sage
 **Example Output**:
 
 ```text
-program.sage:5: W003 unused variable 'temp'
-program.sage:12: S002 line too long (exceeds 100 characters)
-program.sage:20: E001 undefined variable 'foo'
+program.sage:5: W001 unused variable 'temp'
+program.sage:12: E003 line too long (exceeds 120 characters)
+program.sage:20: E001 Inconsistent indentation
 ```
 
 ### 12.4 Syntax Highlighting
