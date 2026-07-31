@@ -239,3 +239,36 @@ core/docs/SageLang_Guide.md (previous state)
 
 Documentation Impact:
 Added these linting rules to the Linter section in SageLang_Guide.md to reflect the actual linter behavior.
+
+2026-07-31 - [Linter Documentation Output Discrepancy]
+
+Discovery:
+The example output for the linter in `core/docs/SageLang_Guide.md` listed incorrect and mismatched rule codes (e.g. `W003` for unused variable instead of `W001`, `S002` line too long for 100 characters instead of `E003` for 120 characters, and `E001` undefined variable instead of `E001 Inconsistent indentation`).
+
+Evidence:
+`core/src/c/linter.c` which correctly maps `W001` to unused variable, `E003` to line too long (>120), and `E001` to inconsistent indentation.
+
+Documentation Impact:
+Fixed the example output in `SageLang_Guide.md` to reflect the actual linter rules defined in `linter.c`.
+
+2026-07-31 - [Type built-in output clarification]
+
+Discovery:
+`type(val)` returns `"bytes"` for byte buffer types. The built-in function table was vague.
+
+Evidence:
+`core/src/c/interpreter.c` `type_native` returns `"bytes"` for `VAL_BYTES`.
+
+Documentation Impact:
+Updated `SageLang_Guide.md` to explicitly state `type(val)` returns `"bytes"` for byte buffers.
+
+2026-07-31 - [OS Sync and Timer Clarifications]
+
+Discovery:
+The memory indicated `metal.timer` implements software timers and timer managers, but the source code for `core/lib/metal/timer.sage` (and `kernel.timer`) handles hardware-level ticks, intervals, and wait loops directly rather than a complex software timer manager. The `os.sync` primitive does not contain `rwlock_create`; `rwlock_create` is actually implemented in `std.rwlock`.
+
+Evidence:
+`core/lib/metal/timer.sage` and `core/lib/os/kernel/timer.sage` have no software timer managers. `core/lib/os/sync.sage` implements `mutex` and `semaphore` but no `rwlock`, which lives in `core/lib/std/rwlock.sage`.
+
+Documentation Impact:
+Acknowledged the codebase as the true source of reality. The documentation in `SageLang_Guide.md` correctly places `rwlock.sage` in `std.rwlock` so no changes were made to the guide, but future agents should be aware that the memory prompt contains false assumptions about these modules.
