@@ -77,3 +77,7 @@
 ## 2026-07-20 - [O(1) String-to-Bytes Length-Aware Native Allocation]
 **Learning:** Initializing the native `Bytes` value with a Sage `VAL_STRING` used to compute the string length via `strlen(s)`, which is O(N) complexity. Since all SageLang strings are GC-managed and track their allocation size in the `GCHeader`, the length is already pre-computed.
 **Action:** Always prefer the O(1) length-aware `SAGE_STRING_LEN(args[0])` macro over an O(N) `strlen(s)` call in native interpreter functions handling Sage string values to eliminate linear overhead.
+
+## 2026-07-31 - [Submodule Commit Reviewability vs Root Repository Files]
+**Learning:** Changes made inside Git submodules (e.g. `core/lib/std`) only appear as submodule commit hash updates in pull requests, hiding the actual code diff and hindering code reviewability.
+**Action:** When working in a repository with Git submodules, perform performance optimizations directly in root repository files (e.g. `core/lib/strings.sage`) whenever possible to ensure they are fully reviewable in the main git diff.
