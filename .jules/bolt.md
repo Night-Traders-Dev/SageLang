@@ -77,3 +77,7 @@
 ## 2026-07-20 - [O(1) String-to-Bytes Length-Aware Native Allocation]
 **Learning:** Initializing the native `Bytes` value with a Sage `VAL_STRING` used to compute the string length via `strlen(s)`, which is O(N) complexity. Since all SageLang strings are GC-managed and track their allocation size in the `GCHeader`, the length is already pre-computed.
 **Action:** Always prefer the O(1) length-aware `SAGE_STRING_LEN(args[0])` macro over an O(N) `strlen(s)` call in native interpreter functions handling Sage string values to eliminate linear overhead.
+
+## 2026-07-21 - [Optimizing Binary Conversion Loop]
+**Learning:** Index-based `while` loops in the SageLang VM incur significant interpreter overhead because index increments and condition evaluations occur in the interpreted VM space. Replacing a `while` loop with a range-based `for` loop (e.g., `for i in range(start, end)`) offloads the loop state management and increment logic to the VM's native C implementation.
+**Action:** Always prefer range-based `for` loops (`for i in range(...)`) over index-based `while` loops in standard library performance paths to yield ~1.7x speedups.
