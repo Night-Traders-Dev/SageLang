@@ -1435,8 +1435,8 @@ next(gen)                          # Resume, reach end, is_exhausted=1
 ### 5.6 Type Coercion and Truthiness
 
 **Truthiness** (for `if`/`while` conditions):
-- **Falsy**: `nil`, `false`.
-- **Truthy**: Everything else (0 is truthy, empty arrays are truthy, etc.).
+- **Falsy**: `nil`, `false`, `0`, and empty strings (`""`).
+- **Truthy**: Everything else (empty arrays are truthy, objects, etc.).
 
 **Type Coercion**:
 - **Addition**: If both are numbers, add; if either is string, concatenate; else nil.
