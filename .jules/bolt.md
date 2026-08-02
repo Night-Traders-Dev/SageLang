@@ -1,3 +1,7 @@
+## 2026-07-21 - [Submodule Scope Restriction in Code Reviews]
+**Learning:** Even if a syntax error or compilation blocker exists in a submodule, fixing it and updating the submodule reference pointer can be rejected as out of scope/risky. The reviewer considers submodule updates high risk for regressions or build failures in CI.
+**Action:** Focus performance optimizations strictly on root repository files, and avoid staging submodule pointer updates unless explicitly instructed or required by the task.
+
 ## 2026-07-12 - [O(N) Direct Pointer Copy for Path Joins]
 **Learning:** Naively constructing paths or joining string buffers using `strcat` in a loop has $O(N^2)$ complexity due to repeated traversals to find the string's end. Converting this to a cursor-tracked buffer with direct `memcpy` reduces the complexity to $O(N)$.
 **Action:** Always construct multi-segment strings by maintaining a running pointer offset and copying segments directly with `memcpy` instead of calling `strcat` or `strlen` repeatedly.
