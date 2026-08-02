@@ -11,11 +11,12 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.1.5 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.1.6 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
 
-- **v4.1.5 (Veritas Quality Audit & Submodule Stabilization)**: Audited standard test suites, resolved duplicate function definition issues in `crypto/hash.sage` and `net/dns.sage`, and bumped patch version on success.
+- **v4.1.6 (Veritas Quality Audit & Submodule Stabilization)**: Audited standard test suites, resolved duplicate function definition issues in `crypto/hash.sage` and `net/dns.sage`, and bumped patch version on success.
+- **v4.1.5 (Veritas Quality Audit & Submodule Stabilization)**: Previous release with Veritas quality audit.
 - **v4.1.4 (Veritas Quality Audit & Submodule Stabilization)**: Previous release with Veritas quality audit.
 - **v4.1.1 (AOT Backend Stabilization & Class Codegen)**: Completed full AOT backend stabilization for multi-file applications (e.g. Bonsai Agent Harness). Implemented SageLang class compilation (`STMT_CLASS`), constructor generation (`s_ClassName`), method dispatch tables, and `s_self` binding via `s_current_self`. Added builtin function deduplication (`builtin_count`), `val_native` scope safety for local variables shadowing builtins, dynamic property call evaluation (`sage_get_property`), and recursive `comptime:` block forward declarations (`aot_forward_declare_stmt`).
 - **v4.1.0 (Standard Library Unification & System Builtins)**: Unified SageLang standard library modules under `core/lib/` (`io.sage`, `sys.sage`, `strings.sage`, `json.sage`). Added C built-in bindings for native I/O (`io_readfile`, `io_writefile`, `io_writebytes`, `io_appendbytes`, `io_readbytes`, `io_exists`, `io_remove`, `io_isdir`, `io_mkdir`, `io_listdir`) and system execution (`sys_getenv_native`, `sys_exec`). Updated unified cross-platform `sagemake` build tool.
