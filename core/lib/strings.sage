@@ -17,10 +17,8 @@ proc compact(text):
 
 # contains is provided by the VM builtins and AOT prelude
 
-## Returns the number of non-overlapping occurrences of 'part' in 'text'.
-## Optimization: Uses native string_count built-in (~10x speedup).
 @inline
-# Returns the number of non-overlapping occurrences of 'part' in 'text'.
+# Returns the occurrences of 'part' in 'text'. (Uses native string_count).
 proc count_substring(text, part):
     let res = string_count(text, part)
     if type(res) == "nil":
@@ -29,10 +27,8 @@ proc count_substring(text, part):
         return len(split(text, part)) - 1
     return res
 
-## Repeats a string a given number of times.
-## Optimization: Uses native string_repeat built-in (~11x speedup).
 @inline
-# Repeats a string a given number of times.
+# Repeats a string a given number of times. (Uses native string_repeat).
 proc repeat(text, count):
     return string_repeat(text, count)
 
