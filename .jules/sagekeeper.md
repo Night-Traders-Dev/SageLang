@@ -272,3 +272,35 @@ Evidence:
 
 Documentation Impact:
 Acknowledged the codebase as the true source of reality. The documentation in `SageLang_Guide.md` correctly places `rwlock.sage` in `std.rwlock` so no changes were made to the guide, but future agents should be aware that the memory prompt contains false assumptions about these modules.
+
+2026-08-01 - [Truthy Clarification]
+
+Discovery:
+The memory indicated "0 is TRUTHY; only false and nil are falsy. To check for zero, use if x == 0:". However, the C interpreter implementation in `core/src/c/interpreter.c` `is_truthy()` returns 0 for `0.0` and empty string `""`.
+```c
+static int is_truthy(Value v) {
+    if (IS_NIL(v)) return 0;
+    if (IS_BOOL(v)) return AS_BOOL(v);
+    if (IS_NUMBER(v)) return AS_NUMBER(v) != 0.0;
+    if (IS_STRING(v)) return AS_STRING(v)[0] != '\0';
+    return 1;
+}
+```
+
+Evidence:
+`core/src/c/interpreter.c` (function `is_truthy`).
+Runtime execution of `if 0: print "yes" else: print "no"` outputs "no".
+
+Documentation Impact:
+Update `SageLang_Guide.md` Truthiness section to correctly state that 0 and empty strings are falsy, correcting the previous documentation which claimed "0 is truthy" and only `false` and `nil` were falsy.
+
+2026-08-01 - [Elif Bug Addressed]
+
+Discovery:
+Memory contained the statement: "SageLang elif chains with 5 or more branches can malfunction; use sequential if statements with continue instead." Testing the compiler on lengthy elif chains (both interpreter and bytecode VM) correctly executes the proper branch. A previous memory of `core/docs/sagelang-book.md` even explicitly notes "9. **~~elif chains malfunction~~** -- **FIXED.** Unlimited `elif` branches".
+
+Evidence:
+Interpreter tests and `core/docs/sagelang-book.md`.
+
+Documentation Impact:
+Disregard the outdated memory regarding elif malfunction. Elif chains work fine, no need to document a workaround for them.
