@@ -71,10 +71,19 @@ proc unique(values):
     ## Uses a dictionary for O(n) average-case lookup performance for simple
     ## types. For structural values (arrays, dicts), this falls back to
     ## linear scans of collision buckets, which may be O(n^2) in the worst case.
+    ##
+    ## Optimization:
+    ## Bypasses expensive str() call and string concatenation for string items.
+    ## This is extremely fast for arrays of strings while maintaining compatibility
+    ## using the fallback collision bucket check.
     let result = []
     let seen = {}
     for item in values:
-        let key = str(item) + type(item)
+        let key = item
+        let t = type(item)
+        if t != "string":
+            key = t + str(item)
+
         if dict_has(seen, key) == false:
             seen[key] = [item]
             push(result, item)
