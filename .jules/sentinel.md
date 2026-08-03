@@ -76,3 +76,8 @@
 **Vulnerability:** The return value of `inet_pton` was ignored in networking native functions (CWE-252).
 **Learning:** `inet_pton` returns 0 if the input string is not a valid network address. Because the `sockaddr_in` structure was zeroed with `memset` before the call, ignoring this failure caused `bind()` to use `INADDR_ANY` (0.0.0.0), potentially exposing a service to the public internet when it was intended to be bound to a local interface like 127.0.0.1.
 **Prevention:** Always check return values of address conversion functions. `inet_pton` must return 1 for success. If it returns <= 0, the application should treat it as an error and abort the operation, ensuring no unintended defaults (like 0.0.0.0) are used.
+
+## 2026-07-15 - Shell Injection in AOT s_shell_exec
+**Vulnerability:** The AOT compiler backend (`aot.c`) generated C runtime helper `s_shell_exec` that passed the user-provided command string directly to `popen()` without any validation (CWE-78).
+**Learning:** Hardening of the interpreter or REPL commands against shell injection is incomplete if alternative backends/execution engines (like AOT compilation) emit vulnerable code skeletons of standard library functions that bypass security checks.
+**Prevention:** Always centralize or emit strict validation logic (such as a character-whitelist command validator `s_is_safe_command`) inside every code-generation backend where shell execution primitives are generated.
