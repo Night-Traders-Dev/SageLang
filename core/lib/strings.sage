@@ -67,7 +67,7 @@ proc snake_case(text):
 # endswith is provided by the VM builtins and AOT prelude
 
 # Converts a binary string to an integer.
-# Optimization: Converts index-based while loop to range-based for loop.
+# Converts a binary string to an integer.
 proc from_bin(bits):
     let start_idx = 0
     if len(bits) >= 2:
