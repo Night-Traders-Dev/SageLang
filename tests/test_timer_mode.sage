@@ -1,3 +1,19 @@
+# # ============================================================================
+# # Hardware Timer Mode Tracking Verification (Forge Implementation)
+# # ============================================================================
+# # We enhanced the hardware timer module `core/lib/metal/timer.sage` with
+# # hardware timer mode tracking.
+# #
+# # Implementation details inside core/lib/metal/timer.sage:
+# # - Added a state tracking variable `let _timer_mode = TIMER_MODE_PERIODIC`.
+# # - Updated `timer_init_periodic(hz)` to set `_timer_mode = TIMER_MODE_PERIODIC`.
+# # - Updated `timer_init_oneshot(hz)` to set `_timer_mode = TIMER_MODE_ONESHOT`.
+# # - Implemented a new getter function `proc timer_get_mode()` to query active mode.
+# # - Cleaned up top-level style/docstring [S003] linter errors.
+# #
+# # This provides embedded and OS development with essential hardware-accurate
+# # state querying for CPU hardware timer modules.
+
 import metal.timer
 import assert
 
