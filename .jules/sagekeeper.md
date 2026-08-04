@@ -304,3 +304,14 @@ Interpreter tests and `core/docs/sagelang-book.md`.
 
 Documentation Impact:
 Disregard the outdated memory regarding elif malfunction. Elif chains work fine, no need to document a workaround for them.
+
+2026-08-04 - [OS Development Libraries Documentation]
+
+Discovery:
+Several modules in `core/lib/metal/`, `core/lib/os/`, and `core/lib/os/linux/` were implemented but omitted from the "OS Development Libraries" section of the official documentation. These include critical components for bare-metal initialization, timer control, memory-backed filesystems, and Linux-specific abstractions like cgroups and netlink.
+
+Evidence:
+The presence of modules like `core/lib/metal/core.sage`, `core/lib/metal/timer.sage`, `core/lib/os/tmpfs.sage`, `core/lib/os/sync.sage`, and `core/lib/os/linux/*.sage` inside the repository which were not listed in `core/docs/SageLang_Guide.md`.
+
+Documentation Impact:
+Updated the `SageLang_Guide.md` section 9.10 "OS Development Libraries" to comprehensively list these modules along with descriptions derived directly from their file headers to accurately reflect the codebase's current capabilities.
