@@ -81,3 +81,8 @@
 **Vulnerability:** The AOT compiler backend (`aot.c`) generated C runtime helper `s_shell_exec` that passed the user-provided command string directly to `popen()` without any validation (CWE-78).
 **Learning:** Hardening of the interpreter or REPL commands against shell injection is incomplete if alternative backends/execution engines (like AOT compilation) emit vulnerable code skeletons of standard library functions that bypass security checks.
 **Prevention:** Always centralize or emit strict validation logic (such as a character-whitelist command validator `s_is_safe_command`) inside every code-generation backend where shell execution primitives are generated.
+
+## 2026-08-05 - Insecure Temporary File Creation in AOT Statement Execution
+**Vulnerability:** Use of `mkstemp()` combined with dynamic filename suffix concatenation to execute AOT-compiled statements (CWE-377).
+**Learning:** While `mkstemp()` securely creates `/tmp/sage_aot_XXXXXX`, creating a corresponding `/tmp/sage_aot_XXXXXX.bin` by string concatenation bypasses `mkstemp` security. Because the `.bin` file is not securely opened using `O_CREAT | O_EXCL`, it is vulnerable to symlink attacks, race conditions, and pre-creation hijacking.
+**Prevention:** Use `mkstemps()` for any temporary files requiring specific suffixes, ensuring both the source and the binary files are securely and exclusively created before use.
