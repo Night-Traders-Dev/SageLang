@@ -1837,6 +1837,9 @@ static Value my_native(int argCount, Value* args) {
 
 ### 8.1 Planned Features (Incomplete Implementations)
 
+**Phase 17 Metaprogramming**:
+- Metaprogramming constructs like `comptime`, `macro`, `quote`, and `unquote` are implemented in the lexer and parser, but the compiler backend and evaluation stages for these features are incomplete and considered experimental.
+
 **Pattern Matching** (`match`/`case`): Fully implemented across all backends (see Section 4.9).
 
 **Defer Statements**: Fully implemented with LIFO ordering and scope-exit semantics (see Section 4.8).
@@ -2785,10 +2788,19 @@ sage lint program.sage
 
 **Rule Categories**:
 
+- `[E001]`: Inconsistent indentation (not multiple of 4).
+- `[E002]`: Mixed tabs and spaces.
+- `[E003]`: Line too long (exceeds 120 characters).
 - `[W001]`: Unused variable warning.
 - `[W002]`: Shadowed variable warning.
+- `[W003]`: Unreachable code after return/break/continue.
 - `[W004]`: Empty block warning (e.g., following a colon).
+- `[W005]`: Bare catch without variable warning.
+- `[S001]`: Procedure name not in `snake_case`.
+- `[S002]`: Class name not in `PascalCase`.
 - `[S003]`: Missing docstring warning (requires `##` preceding top-level procedures).
+- `[S004]`: Trailing semicolon.
+- `[S005]`: Multiple statements on one line.
 
 | Category | Rules | Description |
 | -------- | ----- | ----------- |
