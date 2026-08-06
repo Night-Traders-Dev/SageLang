@@ -11,10 +11,11 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.1.6 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.1.7 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
 
+- **v4.1.7 (AVR Assembler & Arduino Uno Support)**: Added a SageLang assembler backend for the AVR ISA (ATmega328P/ATmega328PB, Arduino Uno R3) under `core/boards/AVR/`. Includes a two-pass assembler (`avr_assembler.sage`) with label resolution, branch relative offsets and I/O-register names; a bit-exact instruction encoder (`avr_opcodes.sage`) verified against the Microchip datasheet and simavr decoder; and an Intel HEX emitter (`avr_hex.sage`) producing `.hex` flash images. Ships a working `blink` example and smoke test. Bumped patch version on success.
 - **v4.1.6 (Veritas Quality Audit & Submodule Stabilization)**: Audited standard test suites, resolved duplicate function definition issues in `crypto/hash.sage` and `net/dns.sage`, and bumped patch version on success.
 - **v4.1.5 (Veritas Quality Audit & Submodule Stabilization)**: Previous release with Veritas quality audit.
 - **v4.1.4 (Veritas Quality Audit & Submodule Stabilization)**: Previous release with Veritas quality audit.
