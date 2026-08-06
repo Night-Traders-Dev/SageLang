@@ -1,3 +1,7 @@
+## 2025-05-31 - [Optimized URL Parsing and Encoding in Standard Library]
+**Learning:** Manual character-by-character loops inside SageLang interpreter for parsing strings or validating characters (e.g. checking unreserved characters) incur severe VM performance overhead. Utilizing C-implemented, native string built-ins like `slice()`, `contains()`, and `indexof()` entirely bypasses the VM interpreter loops, yielding massive speedups. Additionally, using array-push and `join("")` patterns avoids quadratic allocations from string re-allocations on standard loop concatenations.
+**Action:** Always replace manual character-accumulation and linear-search interpreter loops with native functions (`slice`, `contains`, `indexof`) and `push` + `join` patterns.
+
 ## 2026-07-12 - [O(N) Direct Pointer Copy for Path Joins]
 **Learning:** Naively constructing paths or joining string buffers using `strcat` in a loop has $O(N^2)$ complexity due to repeated traversals to find the string's end. Converting this to a cursor-tracked buffer with direct `memcpy` reduces the complexity to $O(N)$.
 **Action:** Always construct multi-segment strings by maintaining a running pointer offset and copying segments directly with `memcpy` instead of calling `strcat` or `strlen` repeatedly.
