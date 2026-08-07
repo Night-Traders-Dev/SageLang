@@ -13,6 +13,7 @@
 # #
 # # This provides embedded and OS development with essential hardware-accurate
 # # state querying for CPU hardware timer modules.
+# # Verified by: Forge 🔩
 
 import metal.timer
 import assert
