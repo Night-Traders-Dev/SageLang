@@ -2207,7 +2207,30 @@ SageLang ships with 52 OS/bare-metal development modules across `lib/os/`, `lib/
 | `kernel/vmm.sage` | `import os.kernel.vmm` | Virtual memory manager (4-level paging, map/unmap, page fault handler) |
 | `image/diskimg.sage` | `import os.image.diskimg` | Bootable disk image builder (.img: MBR + FAT partition + kernel) |
 | `image/iso.sage` | `import os.image.iso` | ISO 9660 image creation (El Torito bootable CD/DVD) |
+| `metal/core.sage` | `import metal.core` | Bare-metal core primitives for SageMetal VM |
+| `metal/gpio.sage` | `import metal.gpio` | General Purpose I/O for Bare-Metal |
+| `metal/irq.sage` | `import metal.irq` | Interrupt Request Management for Bare-Metal |
+| `metal/serial.sage` | `import metal.serial` | UART Serial Port Driver for Bare-Metal |
+| `metal/timer.sage` | `import metal.timer` | Hardware Timer Driver for Bare-Metal |
 | `metal/vga.sage` | `import metal.vga` | Early VGA text-mode display, cursor management, and progress bars |
+| `os/sync.sage` | `import os.sync` | Synchronization Primitives for SageOS |
+| `os/smp.sage` | `import os.smp` | SMP, Multicore, and Hyperthreading Support for Sage |
+| `os/tmpfs.sage` | `import os.tmpfs` | In-memory filesystem |
+| `os/cpio.sage` | `import os.cpio` | CPIO archive format (newc/initramfs) |
+| `os/errno.sage` | `import os.errno` | POSIX-style error codes for SageOS |
+| `os/qemu.sage` | `import os.qemu` | QEMU virtual machine launcher and configuration |
+| `os/linux/cgroups.sage` | `import os.linux.cgroups` | Linux Control Groups (cgroups v2) interface |
+| `os/linux/devicetree.sage` | `import os.linux.devicetree` | Device Tree overlay and runtime interface |
+| `os/linux/driver.sage` | `import os.linux.driver` | Linux kernel driver framework for Sage |
+| `os/linux/epoll.sage` | `import os.linux.epoll` | Linux epoll event loop interface |
+| `os/linux/ioctl.sage` | `import os.linux.ioctl` | Linux ioctl command builder |
+| `os/linux/kmodule.sage` | `import os.linux.kmodule` | Linux kernel module builder for Sage |
+| `os/linux/namespace.sage` | `import os.linux.namespace` | Linux namespaces interface |
+| `os/linux/netlink.sage` | `import os.linux.netlink` | Linux Netlink socket interface |
+| `os/linux/procfs.sage` | `import os.linux.procfs` | /proc filesystem interface for Linux |
+| `os/linux/qemu_run.sage` | `import os.linux.qemu_run` | QEMU integration for Linux kernel development |
+| `os/linux/syscalls.sage` | `import os.linux.syscalls` | Linux system call interface for x86_64 and aarch64 |
+| `os/linux/sysfs.sage` | `import os.linux.sysfs` | Linux /sys filesystem interface |
 
 ### 9.11 Networking Libraries
 
