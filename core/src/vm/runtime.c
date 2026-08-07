@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "runtime.h"
 #include "bytecode.h"
 #include "vm.h"
@@ -139,26 +140,30 @@ ExecResult sage_execute_stmt(Stmt* stmt, Env* env, SageRuntimeMode mode) {
         char* c_code = aot_compile_program(&aot, stmt);
         if (c_code) {
             // Write and compile to temp binary
-            char c_path[] = "/tmp/sage_aot_XXXXXX";
-            int fd = mkstemp(c_path);
+            char c_path[] = "/tmp/sage_aot_XXXXXX.c";
+            int fd = mkstemps(c_path, 2);
             if (fd >= 0) {
                 FILE* f = fdopen(fd, "w");
                 if (f) { fputs(c_code, f); fclose(f); }
-                char bin_path[512];
-                snprintf(bin_path, sizeof(bin_path), "%s.bin", c_path);
-                if (aot_compile_to_binary(&aot, c_path, bin_path)) {
-                    // Execute the compiled binary and capture output
-                    char cmd[1024];
-                    snprintf(cmd, sizeof(cmd), "%s", bin_path);
-                    int ret = system(cmd);
-                    unlink(bin_path);
-                    unlink(c_path);
-                    free(c_code);
-                    aot_free(&aot);
-                    if (ret != 0) {
-                        return runtime_exception(val_exception("AOT: compiled binary returned non-zero"));
+                char bin_path[] = "/tmp/sage_aot_bin_XXXXXX.bin";
+                int bin_fd = mkstemps(bin_path, 4);
+                if (bin_fd >= 0) {
+                    close(bin_fd); // Close securely opened fd to allow compilation to overwrite it
+                    if (aot_compile_to_binary(&aot, c_path, bin_path)) {
+                        // Execute the compiled binary and capture output
+                        char cmd[1024];
+                        snprintf(cmd, sizeof(cmd), "%s", bin_path);
+                        int ret = system(cmd);
+                        unlink(bin_path);
+                        unlink(c_path);
+                        free(c_code);
+                        aot_free(&aot);
+                        if (ret != 0) {
+                            return runtime_exception(val_exception("AOT: compiled binary returned non-zero"));
+                        }
+                        return runtime_normal(val_nil());
                     }
-                    return runtime_normal(val_nil());
+                    unlink(bin_path);
                 }
                 unlink(c_path);
             }
