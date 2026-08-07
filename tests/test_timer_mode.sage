@@ -34,6 +34,10 @@ proc test_timer_modes():
     let periodic_mode = timer.timer_get_mode()
     assert.assert_true(periodic_mode == timer.TIMER_MODE_PERIODIC, "Timer mode should change back to TIMER_MODE_PERIODIC")
 
+    # Verify constants
+    assert.assert_equal(timer.TIMER_MODE_ONESHOT, 0, "TIMER_MODE_ONESHOT should be 0")
+    assert.assert_equal(timer.TIMER_MODE_PERIODIC, 1, "TIMER_MODE_PERIODIC should be 1")
+
     print "Hardware timer mode test passed successfully!"
 
 test_timer_modes()
