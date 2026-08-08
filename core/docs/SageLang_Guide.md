@@ -764,6 +764,15 @@ unsafe:
 end
 ```
 
+**Metaprogramming (Phase 17)**:
+SageLang includes experimental metaprogramming syntax constructs evaluated during parsing and compilation:
+- **`comptime(expr)`**: Evaluates the inner expression at compile-time (constant folding).
+- **`comptime:`**: A block statement executing code directly within the compiler context.
+- **`macro name(args):`**: Declares an AST transformation macro.
+- **`quote` / `unquote`**: Reserved lexer keywords for future AST token quoting integration.
+
+*Note: Phase 17 features are implemented in the parser but have incomplete compiler backend propagation outside constant expressions.*
+
 **Foreign Function Interface (FFI)**:
 ```sagelang
 # Open a shared C library
