@@ -39,6 +39,7 @@ assert.assert_equal(ord("H"), core.mmio_read8(753664), "VGA char should be H")
 assert.assert_equal(0xF0, core.mmio_read8(753665), "VGA attr should be 0xF0")
 
 print "Testing progress bar logic..."
+# 1. Test 50% progress bar
 vga.draw_progress_bar(0, 1, 10, 50, 0x0F)
 # [====    ] -> 10 chars. 10-2=8 slots. 50% of 8 is 4.
 # Index 0: [, 1-4: =, 5-8: space, 9: ]
@@ -47,5 +48,15 @@ assert.assert_equal(ord("["), core.mmio_read8(bar_pos), "Bar should start with [
 assert.assert_equal(ord("="), core.mmio_read8(bar_pos + 2), "Bar should have =")
 assert.assert_equal(ord(" "), core.mmio_read8(bar_pos + 10), "Bar should have space")
 assert.assert_equal(ord("]"), core.mmio_read8(bar_pos + 18), "Bar should end with ]")
+
+# 2. Test 100% progress bar
+vga.draw_progress_bar(0, 2, 10, 100, 0x0F)
+# [========] -> 10 chars. 10-2=8 slots. 100% of 8 is 8.
+# Index 0: [, 1-8: =, 9: ]
+let bar_pos_100 = 753664 + (2 * 80 * 2)
+assert.assert_equal(ord("["), core.mmio_read8(bar_pos_100), "100% Bar should start with [")
+assert.assert_equal(ord("="), core.mmio_read8(bar_pos_100 + 2), "100% Bar should have = at index 1")
+assert.assert_equal(ord("="), core.mmio_read8(bar_pos_100 + 16), "100% Bar should have = at index 8")
+assert.assert_equal(ord("]"), core.mmio_read8(bar_pos_100 + 18), "100% Bar should end with ]")
 
 print "All Forge metal tests passed!"
