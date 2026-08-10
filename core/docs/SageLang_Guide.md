@@ -74,7 +74,7 @@ All execution modes share the same object model: a **global environment**, neste
 
 For LLVM-compiled workloads, `from module import CONST` is resolved at compile time for foldable top-level module constants (numbers/strings/bools/nil plus simple constant expressions). In the C LLVM backend, GPU module constants are also resolved at compile time and GPU calls emit direct bridges to the pure C GPU API (`sgpu_*` in `gpu_api.h`), supporting both Vulkan and OpenGL backends. The bytecode VM provides 30 dedicated GPU opcodes for frame-loop hot paths.
 
-The bytecode VM operates in hybrid mode by default: expressions, variables, loops (including break/continue), and function calls compile to stack bytecode, while unsupported constructs (classes, imports, exceptions, generators) fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. This gives measurable speedups on loop-heavy workloads while maintaining full language coverage. Use `sage --runtime bytecode` or `sage --runtime auto` to enable.
+The bytecode VM operates in hybrid mode by default: expressions, variables, loops (including break/continue), and function calls compile to stack bytecode, while unsupported constructs (generators, async procs, match, defer) fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. This gives measurable speedups on loop-heavy workloads while maintaining full language coverage. Use `sage --runtime bytecode` or `sage --runtime auto` to enable.
 
 ### 1.4 Performance Characteristics
 
@@ -1640,12 +1640,13 @@ The C-hosted `sage` binary now supports several runtime selections:
 - `print`, expression statements, `if`, `while`, and array `for`
 - `break` and `continue` inside while/for loops (compiled natively with loop context stack)
 - Ahead-of-time proc definitions, proc calls, nested proc calls, explicit `return`, and implicit `nil` returns
+- Class definitions, module imports, and exception handling (`try`/`catch`/`raise`)
 - Calls to native functions, Sage functions, classes, and instance methods
 - 30 GPU hot-path opcodes for frame-loop performance (poll_events, key_pressed, cmd_draw, etc.)
 
 **What still bridges or stays unsupported**:
 
-- In hybrid `--runtime bytecode` mode: class definitions, module imports, exception handling (try/catch/raise), defer, match, yield, and async procs fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. Opcodes are defined for future native support (`BC_OP_CLASS`, `BC_OP_IMPORT`, `BC_OP_SETUP_TRY`, `BC_OP_RAISE`, etc.).
+- In hybrid `--runtime bytecode` mode: defer, match, yield, and async procs fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`.
 - In strict `--emit-vm` mode: these constructs fail compilation instead of bridging.
 - `EXPR_AWAIT` is not supported in either mode.
 

@@ -315,3 +315,14 @@ The presence of modules like `core/lib/metal/core.sage`, `core/lib/metal/timer.s
 
 Documentation Impact:
 Updated the `SageLang_Guide.md` section 9.10 "OS Development Libraries" to comprehensively list these modules along with descriptions derived directly from their file headers to accurately reflect the codebase's current capabilities.
+
+2026-08-04 - [AST Fallback Clarifications]
+
+Discovery:
+The guide claimed that `class`, `import`, `try`/`catch`/`raise`, `defer`, `match`, `yield`, and `async proc` fall back to AST in hybrid bytecode mode. However, the `stmt_requires_ast_fallback` function in `core/src/vm/bytecode.c` explicitly returns `0` (meaning they compile to bytecode and do NOT fall back) for `STMT_TRY`, `STMT_IMPORT`, and `STMT_CLASS` (and `STMT_PROC` unless building a function). `BC_OP_SETUP_TRY`, `BC_OP_END_TRY`, `BC_OP_RAISE`, `BC_OP_IMPORT`, `BC_OP_CLASS` opcodes are already implemented and emitted.
+
+Evidence:
+`core/src/vm/bytecode.c` (function `stmt_requires_ast_fallback` and compilation functions for these statements).
+
+Documentation Impact:
+Update the "Runtime Backends" section in `SageLang_Guide.md` to remove `class`, `import`, and `try/catch/raise` from the "What still bridges or stays unsupported" list, and move them to the "What runs natively in the VM today" list.
