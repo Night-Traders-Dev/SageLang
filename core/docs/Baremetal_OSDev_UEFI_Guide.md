@@ -339,6 +339,76 @@ if rsdp_table != nil:
 - `uefi.SMBIOS_TABLE_GUID`
 - `uefi.SMBIOS3_TABLE_GUID`
 
+## AVR & Arduino Uno Assembler Support (`core/boards/AVR`)
+
+Starting with v4.1.7, SageLang features a two-pass assembler backend for the **AVR 8-bit RISC architecture (ATmega328P and ATmega328PB)** under `core/boards/AVR/`. This enables compiling raw AVR assembly programs directly into Intel HEX (`.hex`) flash images, ready to be written to hardware (such as an Arduino Uno R3).
+
+The package consists of the following components:
+- **`avr_assembler.sage`**: A two-pass assembler that tokenizes inputs, resolves label/branch relative offsets, processes preprocessor-style directives (like `.org`, `.equ`, `.byte`), and matches registers (e.g., `r0..r31`) and standard Arduino/ATmega I/O registers (like `PORTB`, `DDRB`, `PORTC`, etc.).
+- **`avr_opcodes.sage`**: A bit-exact instruction encoder that maps assembly mnemonics to exact 16-bit word encodings verified against the Microchip AVR Instruction Set manual.
+- **`avr_hex.sage`**: An Intel HEX (I8HEX) emitter that converts the assembled 16-bit words into hexadecimal record strings (`.hex`) formatted for flashing tools like `avrdude`.
+
+### Standard I/O Registers Supported
+- `sreg`, `sph`, `spl` — CPU status and stack pointers
+- `eearl`, `eearh`, `eedr`, `eecr` — EEPROM registers
+- `spmcr` — Store Program Memory Control Register
+- `pinb`, `ddrb`, `portb` — Port B registers (onboard LED PB5 is Arduino Uno Pin 13)
+- `pinc`, `ddrc`, `portc` — Port C registers
+- `pind`, `ddrd`, `portd` — Port D registers
+
+### Example: Compiling and Flashing an Onboard LED Blinker
+
+Below is a complete AVR assembly program (`blink.asm`) targeting an ATmega328P (Arduino Uno) to toggle the onboard LED at Pin 13 (Port B, Bit 5):
+
+```assembly
+; ATmega328P blink -- toggles PORTB5 (Arduino Uno onboard LED).
+.org 0x0000
+    ldi r16, 0x20        ; bit 5 = LED pin
+    out DDRB, r16        ; DDRB = pin 5 as output
+loop:
+    out PORTB, r16       ; LED on
+    call delay
+    out PORTB, r0        ; LED off (r0 = 0 after clear)
+    rjmp loop
+
+delay:
+    ldi r18, 0xFF        ; outer loop counter
+delay_outer:
+    ldi r19, 0xFF        ; inner loop counter
+delay_inner:
+    dec r19
+    brne delay_inner
+    dec r18
+    brne delay_outer
+    ret
+```
+
+To compile this assembly file into a `.hex` file inside SageLang:
+
+```sage
+import avr_assembler
+import avr_hex
+import io
+
+# Load the source code
+let src = io.readfile("blink.asm")
+
+# Assemble to 16-bit words
+let words = avr_assembler.assemble(src)
+
+# Emit as Intel HEX format starting at PC offset 0
+let hex_txt = avr_hex.emit_hex(words, 0)
+
+# Write to disk
+io.writefile("blink.hex", hex_txt + "\n")
+print("Assembled " + str(len(words)) + " words.")
+```
+
+The resulting `blink.hex` file can be flashed to an Arduino Uno using `avrdude`:
+```bash
+avrdude -F -V -c arduino -p m328p -P /dev/ttyACM0 -b 115200 -U flash:w:blink.hex
+```
+
 ## Pure Sage Execution (SageVM Pipeline)
 
 For rapid prototyping or environments where a full native runtime port is not yet complete, the `SageVM` (`sgvm`) bytecode pipeline offers a stable path to "Pure Sage" execution on bare metal.

@@ -315,3 +315,14 @@ The presence of modules like `core/lib/metal/core.sage`, `core/lib/metal/timer.s
 
 Documentation Impact:
 Updated the `SageLang_Guide.md` section 9.10 "OS Development Libraries" to comprehensively list these modules along with descriptions derived directly from their file headers to accurately reflect the codebase's current capabilities.
+
+2026-08-07 - [AVR Assembler & Arduino Uno Support]
+
+Discovery:
+The newly introduced AVR assembler backend modules under `core/boards/AVR/` (`avr_assembler.sage`, `avr_opcodes.sage`, and `avr_hex.sage`) were missing from the main reference and OSDev documentation guides.
+
+Evidence:
+The presence of directories and files under `core/boards/AVR/` but complete lack of references to AVR or Arduino Uno in `core/docs/Baremetal_OSDev_UEFI_Guide.md` and `core/docs/SageLang_Guide.md`.
+
+Documentation Impact:
+Added comprehensive details and example assembly files/scripts under `core/docs/Baremetal_OSDev_UEFI_Guide.md` (new section "AVR & Arduino Uno Assembler Support") and `core/docs/SageLang_Guide.md` (new section "9.20 AVR Assembler & Arduino Uno Support"). Verified with the smoke test suite.
