@@ -2455,6 +2455,36 @@ Available widgets:
 
 Theming: `ctx["theme"]` is a dict with 20+ configurable colors (`bg`, `accent`, `text`, `border`, etc.) and sizes (`padding`, `font_size`, `title_height`, etc.). Call `ui.ui_default_theme()` for defaults.
 
+### 9.20 AVR Assembler & Arduino Uno Support (`core/boards/AVR/`)
+
+SageLang v4.1.7 introduces a complete two-pass assembler package targeting the **AVR 8-bit RISC architecture (ATmega328P / ATmega328PB)** such as the Arduino Uno R3.
+
+This includes:
+- **`avr_assembler`**: Parses AVR assembly, handles label resolution, relative offsets for branching (`brne`, `rjmp`, `rcall`), and resolves preprocessor directives (`.org`, `.equ`, `.byte`).
+- **`avr_opcodes`**: Encoder translating mnemonics to exact 16-bit instructions matching the Microchip datasheet.
+- **`avr_hex`**: Intel HEX (I8HEX) emitter generating `.hex` files ready for `avrdude` flashing.
+
+#### Standard I/O registers resolved automatically:
+- `DDRB`, `PORTB`, `PINB`, `DDRC`, `PORTC`, `PINC`, `DDRD`, `PORTD`, `PIND`, `SPL`, `SPH`, `SREG`
+
+#### Example Usage:
+```sage
+import avr_assembler
+import avr_hex
+import io
+
+let src = "
+    .org 0x0000
+    ldi r16, 0x20
+    out DDRB, r16
+    out PORTB, r16
+    ret
+"
+let words = avr_assembler.assemble(src)
+let hex_txt = avr_hex.emit_hex(words, 0)
+print(hex_txt)
+```
+
 ---
 
 ## Part 13: Self-Hosting (Phase 13)
