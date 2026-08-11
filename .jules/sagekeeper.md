@@ -315,3 +315,23 @@ The presence of modules like `core/lib/metal/core.sage`, `core/lib/metal/timer.s
 
 Documentation Impact:
 Updated the `SageLang_Guide.md` section 9.10 "OS Development Libraries" to comprehensively list these modules along with descriptions derived directly from their file headers to accurately reflect the codebase's current capabilities.
+2026-08-05 - [Phase 17 Metaprogramming Documentation]
+
+Discovery:
+Phase 17 (Metaprogramming), containing experimental `comptime`, `macro`, `quote`, and `unquote`, is already partially implemented in the lexer and parser. The AST holds nodes for `STMT_COMPTIME` and `STMT_MACRO_DEF`. The interpreter and compiler have basic stubs (or naive evaluation). However, these are experimental and currently omitted from the main guide.
+
+Evidence:
+`core/src/c/parser.c`, `core/include/ast.h`, `core/docs/meta/CHANGELOG.md`, and memory explicitly state Phase 17 metaprogramming has incomplete backends.
+
+Documentation Impact:
+Add a 'Phase 17: Metaprogramming (Experimental)' section to the Roadmap in `SageLang_Guide.md`.
+2026-08-05 - [Phase 18 Linux Kernel Documentation]
+
+Discovery:
+Phase 18 (Linux Kernel Support Libraries) is mentioned in `core/docs/meta/ROADMAP.md` and `UPDATES.md` but not integrated into the main roadmap of `SageLang_Guide.md`.
+
+Evidence:
+`core/docs/meta/ROADMAP.md` and `grep -rn Phase 18`.
+
+Documentation Impact:
+Add a 'Phase 18: Linux Kernel Support' section to the Roadmap in `SageLang_Guide.md`.

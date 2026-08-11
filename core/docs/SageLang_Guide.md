@@ -1833,19 +1833,32 @@ static Value my_native(int argCount, Value* args) {
 
 ---
 
-## Part 8: Future Directions and Design Notes
+## Part 8: Future Directions, Roadmap, and Design Notes
 
 ### 8.1 Planned Features (Incomplete Implementations)
+
+**Multiple Inheritance / Traits**:
+- Currently single-parent inheritance only. Traits keyword implemented but experimental.
+
+**Operator Overloading**:
+- No support for custom `__add__()`, etc.
+
+### 8.1.1 Roadmap: Phase 17 and Phase 18
+
+**Phase 17: Metaprogramming (Experimental)**:
+- Experimental support for `comptime` (blocks and expressions evaluated at compile time), `macro`, `quote`, and `unquote` is currently being implemented.
+- The Lexer, Parser, and AST can recognize `STMT_COMPTIME` and `STMT_MACRO_DEF`.
+- The compiler backend and evaluation stages remain naive/incomplete. Not recommended for production yet.
+
+**Phase 18: Linux Kernel Support Libraries**:
+- Advanced roadmap item aimed at embedding SageLang inside Linux kernel modules or interacting directly with low-level kernel APIs.
+- Expected to bring unified kernel support bindings (Waitqueues, RCU, Kmalloc).
+
+### 8.1.2 Implemented Features (Previously Planned)
 
 **Pattern Matching** (`match`/`case`): Fully implemented across all backends (see Section 4.9).
 
 **Defer Statements**: Fully implemented with LIFO ordering and scope-exit semantics (see Section 4.8).
-
-**Multiple Inheritance / Traits**:
-- Currently single-parent inheritance only.
-
-**Operator Overloading**:
-- No support for custom `__add__()`, etc.
 
 **Type Annotations**:
 - Fully supported for variables (`let x: Int = 42`) and procedures (`proc add(a: Int, b: Int) -> Int:`).
