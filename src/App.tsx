@@ -1,6 +1,36 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 
+// Performance Optimization (Bolt): Pre-compute string formatting to avoid running .toLocaleString() on every keystroke
 const MAX_CODE_LENGTH = 100000;
+const MAX_CODE_LENGTH_STR = MAX_CODE_LENGTH.toLocaleString();
+
+// Performance Optimization (Bolt): Memoize static elements like the Header and About section.
+// This prevents unnecessary virtual DOM reconstruction and diffing on every keystroke in the text editor.
+const Header = memo(function Header() {
+  return (
+    <header className="mb-8">
+      <h1 className="text-4xl font-bold text-white mb-2">🌿 SageLang Web Playground</h1>
+      <p className="text-neutral-400">
+        A clean, indentation-based systems programming language built in C.
+        (Web compiler is mocked as C/Native compilation is not available in the browser).
+      </p>
+    </header>
+  );
+});
+
+const AboutSection = memo(function AboutSection() {
+  return (
+    <div className="mt-12 bg-neutral-900 border border-neutral-800 rounded p-6">
+      <h2 className="text-2xl font-bold text-white mb-4">About SageLang</h2>
+      <ul className="space-y-2 text-neutral-400 list-disc pl-5">
+        <li><strong>Core Technology:</strong> C (C11 standard) and SageLang itself.</li>
+        <li><strong>Backends:</strong> C Codegen, LLVM IR, Native Assembly, Bytecode VM.</li>
+        <li><strong>Memory Management:</strong> Hybrid GC (Concurrent Mark-Sweep, ARC, ORC).</li>
+        <li><strong>Syntax:</strong> Indentation-based blocks, snake_case identifiers, PascalCase classes.</li>
+      </ul>
+    </div>
+  );
+});
 
 function App() {
   const [code, setCode] = useState(`// SageLang Hello World
@@ -21,11 +51,11 @@ proc main():
   const handleCodeChange = (newCode: string) => {
     if (newCode.length > MAX_CODE_LENGTH) {
       setCode(newCode.substring(0, MAX_CODE_LENGTH));
-      setWarning(`Security Warning: Code editor limit of ${MAX_CODE_LENGTH.toLocaleString()} characters reached (input truncated).`);
+      setWarning(`Security Warning: Code editor limit of ${MAX_CODE_LENGTH_STR} characters reached (input truncated).`);
     } else {
       setCode(newCode);
       if (newCode.length >= MAX_CODE_LENGTH - 1000) {
-        setWarning(`Warning: Approaching code editor limit (${newCode.length.toLocaleString()} / ${MAX_CODE_LENGTH.toLocaleString()} characters).`);
+        setWarning(`Warning: Approaching code editor limit (${newCode.length.toLocaleString()} / ${MAX_CODE_LENGTH_STR} characters).`);
       } else {
         setWarning("");
       }
@@ -35,13 +65,7 @@ proc main():
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200 font-sans p-8 flex flex-col items-center">
       <div className="max-w-4xl w-full">
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">🌿 SageLang Web Playground</h1>
-          <p className="text-neutral-400">
-            A clean, indentation-based systems programming language built in C. 
-            (Web compiler is mocked as C/Native compilation is not available in the browser).
-          </p>
-        </header>
+        <Header />
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col">
@@ -75,15 +99,7 @@ proc main():
           </div>
         </div>
 
-        <div className="mt-12 bg-neutral-900 border border-neutral-800 rounded p-6">
-          <h2 className="text-2xl font-bold text-white mb-4">About SageLang</h2>
-          <ul className="space-y-2 text-neutral-400 list-disc pl-5">
-            <li><strong>Core Technology:</strong> C (C11 standard) and SageLang itself.</li>
-            <li><strong>Backends:</strong> C Codegen, LLVM IR, Native Assembly, Bytecode VM.</li>
-            <li><strong>Memory Management:</strong> Hybrid GC (Concurrent Mark-Sweep, ARC, ORC).</li>
-            <li><strong>Syntax:</strong> Indentation-based blocks, snake_case identifiers, PascalCase classes.</li>
-          </ul>
-        </div>
+        <AboutSection />
       </div>
     </div>
   );

@@ -1,3 +1,7 @@
+## 2026-08-13 - [Optimized React Rendering with Component Memoization]
+**Learning:** Re-rendering static JSX elements (such as header or footer text boxes) on every keystroke within a React app causes unnecessary virtual DOM reconstruction and diffing. Wrapping these elements with `React.memo` keeps keypress responses fast and lightweight. Additionally, pre-computing string formats (such as `.toLocaleString()`) outside render loops avoids expensive operations in the hot path.
+**Action:** Extract large static blocks of markup into separate components and wrap them in `memo` to avoid re-render overhead. Lift any immutable computations or format transformations out of render loops as module-level constants.
+
 ## 2026-07-12 - [O(N) Direct Pointer Copy for Path Joins]
 **Learning:** Naively constructing paths or joining string buffers using `strcat` in a loop has $O(N^2)$ complexity due to repeated traversals to find the string's end. Converting this to a cursor-tracked buffer with direct `memcpy` reduces the complexity to $O(N)$.
 **Action:** Always construct multi-segment strings by maintaining a running pointer offset and copying segments directly with `memcpy` instead of calling `strcat` or `strlen` repeatedly.
