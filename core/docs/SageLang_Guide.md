@@ -40,7 +40,7 @@ SageLang is designed as an **educational and practical embedded scripting langua
 | **Functions** | First-class `proc` declarations with closures; anonymous `proc` expressions (`proc(x): body end`); native C functions |
 | **Generators** | Full `yield` support with resumable state; `next()` function to iterate |
 | **Exceptions** | `try/catch/finally/raise` with explicit exception objects and message strings |
-| **Modules** | `import module`, `import module as alias`, `from module import x, y`, `from module import x as y` |
+| **Modules** | `import module`, `import module as alias`, `from module import x, y`, `from module import x as y`. The same module can be imported under multiple bindings. |
 | **Standard Library** | Native modules: `math`, `io`, `string`, `sys`, `thread`, `fat`, `socket`, `tcp`, `http`, `ssl` |
 | **Networking** | POSIX sockets, TCP, HTTP/HTTPS (libcurl), SSL/TLS (OpenSSL) |
 | **Concurrency** | Multi-threaded `proc`, `async`/`await`, atomics, semaphores, condvars, rwlocks, SMP detection |
@@ -393,10 +393,10 @@ struct ExecResult {
 **Expression Evaluation** (`eval_expr(expr, env)`):
 - **Literals**: Numbers, strings, bools, nil returned as-is.
 - **Variables**: Look up in environment via `env_get()`.
-- **Binary Ops**: Evaluate left, then right (short-circuit for `and`/`or`); apply operator.
+- **Binary Ops**: Evaluate left, then right (short-circuit for `and`/`or` in both interpreter and C backend); apply operator.
   - Arithmetic: `+`, `-`, `*`, `/` on numbers; `+` on strings (concatenation).
   - Comparison: `<`, `>`, `<=`, `>=` on numbers; `==`, `!=` on any type.
-  - Logical: `and`, `or` with short-circuit evaluation.
+  - Logical: `and`, `or` with short-circuit evaluation (in both interpreter and C backend).
 - **Calls**: Look up function (user-defined or native); bind arguments to parameters; execute in new environment; return result.
 - **Indexing**: Evaluate array and index; return element or slice if range.
 - **Array/Dict/Tuple Construction**: Evaluate elements; construct heap-allocated structure.
@@ -3459,6 +3459,40 @@ glslc text3d.frag -o text3d.frag.spv
 ```
 
 ---
+
+
+### 9.21 Hardware Natives (Embedded Targets)
+
+For embedded targets (such as the Pico or other bare-metal environments), the SageLang C backend provides native hardware interaction routines through the `hw` namespace. These bindings map directly to standard C hardware APIs.
+
+| Function Signature | Description |
+|--------------------|-------------|
+| `hw.gpio_init(pin)` | Initializes a GPIO pin. |
+| `hw.gpio_set_dir(pin, out)` | Sets the direction of a GPIO pin (e.g., input or output). |
+| `hw.gpio_put(pin, val)` | Sets the output value of a GPIO pin. |
+| `hw.gpio_get(pin)` | Reads the value of a GPIO pin. |
+| `hw.gpio_set_pull(pin, up, down)` | Configures pull-up/pull-down resistors for a pin. |
+| `hw.clock_hz()` | Returns the system clock frequency in Hz. |
+| `hw.uptime_ms()` | Returns the system uptime in milliseconds. |
+| `hw.delay_ms(ms)` | Blocks execution for `ms` milliseconds. |
+| `hw.delay_us(us)` | Blocks execution for `us` microseconds. |
+| `hw.uart_init(baud)` | Initializes the default UART interface at the specified baud rate. |
+| `hw.uart_putc(c)` | Transmits a single character over UART. |
+| `hw.uart_puts(s)` | Transmits a string over UART. |
+| `hw.uart_getc()` | Reads a single character from UART (returns -1 if no data is available). |
+| `hw.adc_init(pin)` | Initializes an ADC (Analog-to-Digital Converter) pin. |
+| `hw.adc_read(pin)` | Reads the analog value from the specified ADC pin. |
+| `hw.temp_c()` | Returns the internal temperature sensor reading in degrees Celsius. |
+| `hw.rgb_set(r, g, b)` | Sets the color of an onboard RGB LED (e.g., WS2812). |
+| `hw.spi_init(bus, baud)` | Initializes an SPI bus. |
+| `hw.spi_write(bus, data)` | Writes data to the SPI bus. |
+| `hw.spi_read(bus, count)` | Reads `count` bytes from the SPI bus. |
+| `hw.lcd_fb_init(w, h)` | Initializes an LCD framebuffer of width `w` and height `h`. |
+| `hw.lcd_fb_pixel(x, y, color)` | Sets the color of a specific pixel in the LCD framebuffer. |
+| `hw.lcd_fb_fill(color)` | Fills the entire LCD framebuffer with `color`. |
+| `hw.lcd_fb_flush_bytes(count)` | Flushes `count` bytes of the framebuffer to the LCD screen. |
+
+*Note: These functions are resolved during compilation by the C backend when targeting appropriate platforms.*
 
 ## Appendix: Quick Reference
 

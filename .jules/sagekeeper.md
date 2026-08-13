@@ -326,3 +326,18 @@ The presence of directories and files under `core/boards/AVR/` but complete lack
 
 Documentation Impact:
 Added comprehensive details and example assembly files/scripts under `core/docs/Baremetal_OSDev_UEFI_Guide.md` (new section "AVR & Arduino Uno Assembler Support") and `core/docs/SageLang_Guide.md` (new section "9.20 AVR Assembler & Arduino Uno Support"). Verified with the smoke test suite.
+
+2026-08-12 - [Short-circuit and Multi-alias update]
+
+Discovery:
+- C backend now short-circuits `and`/`or` exactly like the interpreter.
+- The same module can now be imported under multiple bindings (import m as a, import m as b).
+- Added `hw.*` hardware natives for embedded targets.
+
+Evidence:
+Commit 5a7cbb4493771d579e1576e377212d5857b0f108.
+
+Documentation Impact:
+- Update Guide to reflect short-circuit logic for C backend.
+- Update Guide to reflect multi-alias import support.
+- Update Guide to mention `hw.*` natives.
