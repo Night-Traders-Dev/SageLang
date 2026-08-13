@@ -30,6 +30,10 @@ proc test_signal_helpers():
 proc test_handler_stubs():
     print "Testing handler stubs..."
 
+    let segv = sys.sigsegv_handler(sys.SIGSEGV)
+    assert.assert_equal(segv["nr"], sys.SYS_EXIT, "sigsegv_handler should return exit syscall")
+    assert.assert_equal(segv["args"][0], 128 + sys.SIGSEGV, "sigsegv_handler exit code should be 128 + SIGSEGV")
+
     let hup = sys.sighup_handler(sys.SIGHUP)
     assert.assert_equal(hup["nr"], sys.SYS_EXIT, "sighup_handler should return exit syscall")
     assert.assert_equal(hup["args"][0], 128 + sys.SIGHUP, "sighup_handler exit code should be 128 + SIGHUP")
