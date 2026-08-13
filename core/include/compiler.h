@@ -19,7 +19,7 @@ int compile_source_to_pico_c(const char* source, const char* input_path, const c
 int compile_source_to_pico_uf2(const char* source, const char* input_path,
                                 const char* output_dir, const char* program_name,
                                 const char* pico_board, const char* pico_sdk_path,
-                                const char* pico_chip,
+                                const char* pico_chip, const char* pico_board_dir,
                                 char* uf2_path_out, size_t uf2_path_out_size);
 
 #endif

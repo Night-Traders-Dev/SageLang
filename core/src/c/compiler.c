@@ -45,6 +45,7 @@ typedef struct ImportedModule {
   char *path;
   char *source;
   Stmt *ast;
+  int is_alias; /* 1 when this binding aliases an already-loaded module */
   struct ImportedModule *next;
 } ImportedModule;
 
@@ -868,6 +869,7 @@ Stmt *parse_program(const char *source, const char *input_path);
 static int is_native_module(const char *name) {
   const char *natives[] = {"_math",    "math",      "_io",       "io",
                            "thread",    "_thread",   "sys",      "_sys",
+                           "hw",        "_hw",
                            "socket",    "tcp",       "http",     "ssl",
                            "fat",       "gpu",       "graphics", "ml_native",
                            "compiler",  "vm_native", "vm",       "ffi",
@@ -881,10 +883,58 @@ static int is_native_module(const char *name) {
 }
 
 static void process_import(Compiler *compiler, ImportStmt *import) {
-  /* Check if already loaded */
+  /* Check if already loaded under this binding */
+  const char *binding_name =
+      import->alias ? import->alias : import->module_name;
   for (ImportedModule *m = compiler->modules; m != NULL; m = m->next) {
-    if (strcmp(m->name, import->module_name) == 0)
+    if (strcmp(m->name, import->module_name) == 0 &&
+        strcmp(m->binding_name, binding_name) == 0)
       return;
+  }
+
+  ImportedModule *existing = NULL;
+  for (ImportedModule *m = compiler->modules; m != NULL; m = m->next) {
+    if (strcmp(m->name, import->module_name) == 0) {
+      existing = m;
+      break;
+    }
+  }
+
+  /* Same module imported under a different binding (alias): register the
+     new binding only. Module procs/globals were already collected through
+     the first binding; member access is inlined to shared slot names, so
+     every binding resolves to the same values. */
+  if (existing != NULL) {
+    ImportedModule *mod = malloc(sizeof(ImportedModule));
+    if (mod == NULL) {
+      fprintf(stderr, "Out of memory\n");
+      exit(1);
+    }
+    mod->name = str_dup(existing->name);
+    mod->binding_name = str_dup(binding_name);
+    mod->path = existing->path ? str_dup(existing->path) : NULL;
+    mod->source = existing->source ? str_dup(existing->source) : NULL;
+    mod->ast = (existing->source != NULL && existing->path != NULL)
+                   ? parse_program(mod->source, mod->path)
+                   : NULL;
+    mod->is_alias = 1;
+    mod->next = compiler->modules;
+    compiler->modules = mod;
+
+    // Add the module itself to globals so it can be resolved as a variable
+    add_name_entry(compiler, &compiler->globals, binding_name, "sage_global");
+
+    // Native modules also expose items as globals resolved at runtime
+    if (existing->source == NULL) {
+      for (int i = 0; i < import->item_count; i++) {
+        const char *item_name = import->item_aliases && import->item_aliases[i]
+                                    ? import->item_aliases[i]
+                                    : import->items[i];
+        add_name_entry(compiler, &compiler->globals,
+                       item_name, "sage_global");
+      }
+    }
+    return;
   }
 
   /* Skip native C modules — they are available at runtime */
@@ -900,6 +950,7 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
     mod->binding_name = str_dup(binding_name);
     mod->path = NULL;
     mod->ast = NULL;
+    mod->is_alias = 0;
     mod->next = compiler->modules;
     compiler->modules = mod;
 
@@ -941,13 +992,13 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
     fprintf(stderr, "Out of memory\n");
     exit(1);
   }
-  const char *binding_name = import->alias ? import->alias : import->module_name;
   mod->name = str_dup(import->module_name);
   mod->binding_name = str_dup(binding_name);
   mod->path = module_path;
   mod->source = source;
-  mod->ast = ast;
-  mod->next = compiler->modules;
+mod->ast = ast;
+    mod->is_alias = 0;
+    mod->next = compiler->modules;
   compiler->modules = mod;
 
   // Add the module itself to globals so it can be resolved as a variable
@@ -1272,6 +1323,21 @@ static char *emit_binary_expr(Compiler *compiler, BinaryExpr *binary) {
     return str_dup("sage_nil()");
   }
 
+  /* Logical AND/OR must short-circuit like the interpreter: the right
+     operand is only evaluated when the left operand does not decide the
+     result. C's && / || operators provide this laziness natively, so the
+     right-hand expression (wrapped in sage_truthy()) is never evaluated
+     when the left operand already determines the outcome. */
+  if (binary->op.type == TOKEN_AND || binary->op.type == TOKEN_OR) {
+    StringBuffer sb;
+    sb_init(&sb);
+    sb_appendf(&sb, "sage_bool(sage_truthy(%s) %s sage_truthy(%s))",
+               left, binary->op.type == TOKEN_AND ? "&&" : "||", right);
+    free(left);
+    free(right);
+    return sb_take(&sb);
+  }
+
   const char *helper = NULL;
   switch (binary->op.type) {
   case TOKEN_PLUS:
@@ -1321,12 +1387,6 @@ static char *emit_binary_expr(Compiler *compiler, BinaryExpr *binary) {
     break;
   case TOKEN_RSHIFT:
     helper = "sage_rshift";
-    break;
-  case TOKEN_AND:
-    helper = "sage_and";
-    break;
-  case TOKEN_OR:
-    helper = "sage_or";
     break;
   default:
     break;
@@ -1493,12 +1553,53 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
           return sb_take(&sb);
         }
         free(sb.data);
-      } else if (strcmp(target_mod->name, "sys") == 0 || strcmp(target_mod->name, "_sys") == 0) {
+        } else if (strcmp(target_mod->name, "sys") == 0 || strcmp(target_mod->name, "_sys") == 0) {
         StringBuffer sb;
         sb_init(&sb);
         if (strcmp(method_name, "args") == 0) sb_append(&sb, "sage_native_sys_args(");
         else if (strcmp(method_name, "getenv") == 0) sb_append(&sb, "sage_native_sys_getenv(");
         else if (strcmp(method_name, "clock") == 0) sb_append(&sb, "sage_native_sys_clock(");
+
+        if (sb.len > 0) {
+          for (int i = 0; i < call->arg_count; i++) {
+            if (i > 0) sb_append(&sb, ", ");
+            char *arg = emit_expr(compiler, call->args[i]);
+            sb_append(&sb, arg);
+            free(arg);
+          }
+          sb_append(&sb, ")");
+          free(obj_name);
+          free(method_name);
+          return sb_take(&sb);
+        }
+        free(sb.data);
+      } else if (strcmp(target_mod->name, "hw") == 0 || strcmp(target_mod->name, "_hw") == 0) {
+        StringBuffer sb;
+        sb_init(&sb);
+        if (strcmp(method_name, "gpio_init") == 0) sb_append(&sb, "sage_native_hw_gpio_init(");
+        else if (strcmp(method_name, "gpio_set_dir") == 0) sb_append(&sb, "sage_native_hw_gpio_set_dir(");
+        else if (strcmp(method_name, "gpio_put") == 0) sb_append(&sb, "sage_native_hw_gpio_put(");
+        else if (strcmp(method_name, "gpio_get") == 0) sb_append(&sb, "sage_native_hw_gpio_get(");
+        else if (strcmp(method_name, "gpio_set_pull") == 0) sb_append(&sb, "sage_native_hw_gpio_set_pull(");
+        else if (strcmp(method_name, "clock_hz") == 0) sb_append(&sb, "sage_native_hw_clock_hz(");
+        else if (strcmp(method_name, "uptime_ms") == 0) sb_append(&sb, "sage_native_hw_uptime_ms(");
+        else if (strcmp(method_name, "delay_ms") == 0) sb_append(&sb, "sage_native_hw_delay_ms(");
+        else if (strcmp(method_name, "delay_us") == 0) sb_append(&sb, "sage_native_hw_delay_us(");
+        else if (strcmp(method_name, "uart_init") == 0) sb_append(&sb, "sage_native_hw_uart_init(");
+        else if (strcmp(method_name, "uart_putc") == 0) sb_append(&sb, "sage_native_hw_uart_putc(");
+        else if (strcmp(method_name, "uart_puts") == 0) sb_append(&sb, "sage_native_hw_uart_puts(");
+        else if (strcmp(method_name, "uart_getc") == 0) sb_append(&sb, "sage_native_hw_uart_getc(");
+        else if (strcmp(method_name, "adc_init") == 0) sb_append(&sb, "sage_native_hw_adc_init(");
+        else if (strcmp(method_name, "adc_read") == 0) sb_append(&sb, "sage_native_hw_adc_read(");
+        else if (strcmp(method_name, "temp_c") == 0) sb_append(&sb, "sage_native_hw_temp_c(");
+        else if (strcmp(method_name, "rgb_set") == 0) sb_append(&sb, "sage_native_hw_rgb_set(");
+        else if (strcmp(method_name, "spi_init") == 0) sb_append(&sb, "sage_native_hw_spi_init(");
+        else if (strcmp(method_name, "spi_write") == 0) sb_append(&sb, "sage_native_hw_spi_write(");
+        else if (strcmp(method_name, "spi_read") == 0) sb_append(&sb, "sage_native_hw_spi_read(");
+        else if (strcmp(method_name, "lcd_fb_init") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_init(");
+        else if (strcmp(method_name, "lcd_fb_pixel") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_pixel(");
+        else if (strcmp(method_name, "lcd_fb_fill") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_fill(");
+        else if (strcmp(method_name, "lcd_fb_flush_bytes") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_flush_bytes(");
 
         if (sb.len > 0) {
           for (int i = 0; i < call->arg_count; i++) {
@@ -3117,6 +3218,8 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     }
 
     for (ImportedModule *m = compiler->modules; m != NULL; m = m->next) {
+      if (m->is_alias)
+        continue;
       if (strcmp(m->name, imp->module_name) == 0) {
         for (Stmt *s = m->ast; s != NULL; s = s->next) {
           if (s->type != STMT_PROC && s->type != STMT_ASYNC_PROC &&
@@ -3196,25 +3299,41 @@ static void emit_stmt_list(Compiler *compiler, Stmt *stmt) {
 }
 
 static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
-  fputs("#define _POSIX_C_SOURCE 200809L\n"
-        "#include <math.h>\n"
-        "#include <setjmp.h>\n"
-        "#include <stdarg.h>\n"
-        "#include <stdio.h>\n"
-        "#include <stdlib.h>\n"
-        "#include <string.h>\n"
-        "#include <ctype.h>\n"
-        "#include <dlfcn.h>\n"
-        "#include <stdatomic.h>\n"
-        "#include <semaphore.h>\n"
-        "#include <time.h>\n"
-        "#include <unistd.h>\n"
-        "#include <pthread.h>\n"
-        "#include <stdint.h>\n",
-        out);
-
   if (target == COMPILER_TARGET_RP2040 || target == COMPILER_TARGET_RP2350_ARM || target == COMPILER_TARGET_RP2350_RISCV) {
-    fputs("#include \"pico/stdlib.h\"\n", out);
+    /* Embedded (Pico) build: host-only headers (dlfcn, pthread, semaphore,
+       unistd) are replaced by pico runtime equivalents. */
+    fputs("#define _POSIX_C_SOURCE 200809L\n"
+          "#include <math.h>\n"
+          "#include <setjmp.h>\n"
+          "#include <stdarg.h>\n"
+          "#include <stdio.h>\n"
+          "#include <stdlib.h>\n"
+          "#include <string.h>\n"
+          "#include <ctype.h>\n"
+          "#include <stdint.h>\n"
+          "#include \"pico/stdlib.h\"\n"
+          "#include \"hardware/adc.h\"\n"
+          "#include \"hardware/clocks.h\"\n"
+          "#include \"hardware/pio.h\"\n"
+          "#include \"hardware/spi.h\"\n",
+          out);
+  } else {
+    fputs("#define _POSIX_C_SOURCE 200809L\n"
+          "#include <math.h>\n"
+          "#include <setjmp.h>\n"
+          "#include <stdarg.h>\n"
+          "#include <stdio.h>\n"
+          "#include <stdlib.h>\n"
+          "#include <string.h>\n"
+          "#include <ctype.h>\n"
+          "#include <dlfcn.h>\n"
+          "#include <stdatomic.h>\n"
+          "#include <semaphore.h>\n"
+          "#include <time.h>\n"
+          "#include <unistd.h>\n"
+          "#include <pthread.h>\n"
+          "#include <stdint.h>\n",
+          out);
   }
 
   fputs("\n"
@@ -3713,6 +3832,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "static SageValue sage_atomic_cas(SageValue atom, SageValue old, SageValue new_val) { return sage_nil(); }\n"
         "static SageValue sage_atomic_exchange(SageValue atom, SageValue val) { return sage_nil(); }\n"
         "\n"
+        "#if !defined(PICO_ON_DEVICE)\n"
         "static SageValue sage_sem_new(SageValue val) {\n"
         "    sem_t* sem = malloc(sizeof(sem_t));\n"
         "    sem_init(sem, 0, (unsigned int)val.as.number);\n"
@@ -3732,6 +3852,12 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    if (sem.type != SAGE_TAG_POINTER) return sage_bool(0);\n"
         "    return sage_bool(sem_trywait((sem_t*)sem.as.pointer) == 0);\n"
         "}\n"
+        "#else\n"
+        "static SageValue sage_sem_new(SageValue val) { (void)val; return sage_nil(); }\n"
+        "static SageValue sage_sem_wait(SageValue sem) { (void)sem; return sage_nil(); }\n"
+        "static SageValue sage_sem_post(SageValue sem) { (void)sem; return sage_nil(); }\n"
+        "static SageValue sage_sem_trywait(SageValue sem) { (void)sem; return sage_bool(0); }\n"
+        "#endif\n"
         "static SageSlot sage_slot_undefined(void) { SageSlot slot; "
         "slot.defined = 0; slot.value = sage_nil(); return slot; }\n"
         "\n",
@@ -4027,7 +4153,8 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "static SageValue sage_native_sqrt(SageValue v) { return sage_number(sqrt(v.as.number)); }\n"
       "\n",
       out);
-  fputs("static SageValue sage_native_thread_mutex(void) {\n"
+  fputs("#if !defined(PICO_ON_DEVICE)\n"
+      "static SageValue sage_native_thread_mutex(void) {\n"
       "    pthread_mutex_t* m = malloc(sizeof(pthread_mutex_t));\n"
       "    pthread_mutex_init(m, NULL);\n"
       "    SageValue v; v.type = SAGE_TAG_MUTEX; v.as.mutex = m; return v;\n"
@@ -4058,6 +4185,14 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    return sage_nil();\n"
       "}\n"
       "static SageValue sage_native_thread_id(void) { return sage_number((double)(uintptr_t)pthread_self()); }\n"
+      "#else\n"
+      "static SageValue sage_native_thread_mutex(void) { return sage_nil(); }\n"
+      "static SageValue sage_native_thread_lock(SageValue m) { (void)m; return sage_nil(); }\n"
+      "static SageValue sage_native_thread_unlock(SageValue m) { (void)m; return sage_nil(); }\n"
+      "static SageValue sage_native_thread_spawn(SageValue fn, SageValue arg) { (void)fn; (void)arg; return sage_nil(); }\n"
+      "static SageValue sage_native_thread_sleep(SageValue ms) { sleep_ms((uint32_t)ms.as.number); return sage_nil(); }\n"
+      "static SageValue sage_native_thread_id(void) { return sage_number(0); }\n"
+      "#endif\n"
       "\n"
       "static SageValue sage_native_io_readbytes(SageValue path) {\n"
       "    if (path.type != SAGE_TAG_STRING) return sage_nil();\n"
@@ -4161,12 +4296,258 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    }\n"
       "    return arr;\n"
       "}\n"
-      "static SageValue sage_native_sys_getenv(SageValue name) {\n"
-      "    if (name.type != SAGE_TAG_STRING) return sage_nil();\n"
-      "    char* val = getenv(name.as.string);\n"
-      "    return val ? sage_string(val) : sage_nil();\n"
-      "}\n"
-      "static SageValue sage_native_sys_clock(void) { return sage_number((double)clock() / CLOCKS_PER_SEC); }\n"
+"#if !defined(PICO_ON_DEVICE)\n"
+"static SageValue sage_native_sys_getenv(SageValue name) {\n"
+"    if (name.type != SAGE_TAG_STRING) return sage_nil();\n"
+"    char* val = getenv(name.as.string);\n"
+"    return val ? sage_string(val) : sage_nil();\n"
+"}\n"
+"#else\n"
+"static SageValue sage_native_sys_getenv(SageValue name) { (void)name; return sage_nil(); }\n"
+"#endif\n"
+"#if !defined(PICO_ON_DEVICE)\n"
+"static SageValue sage_native_sys_clock(void) { return sage_number((double)clock() / CLOCKS_PER_SEC); }\n"
+"#else\n"
+"static SageValue sage_native_sys_clock(void) { return sage_number((double)to_ms_since_boot(get_absolute_time()) / 1000.0); }\n"
+"#endif\n"
+      "\n"
+"/* --- hw module: hardware access (implementation defined per target) --- */\n"
+"#if !defined(PICO_ON_DEVICE)\n"
+"static SageValue sage_native_hw_gpio_init(SageValue pin) { (void)pin; return sage_nil(); }\n"
+"static SageValue sage_native_hw_gpio_set_dir(SageValue pin, SageValue out) { (void)pin; (void)out; return sage_nil(); }\n"
+"static SageValue sage_native_hw_gpio_put(SageValue pin, SageValue val) { (void)pin; (void)val; return sage_nil(); }\n"
+"static SageValue sage_native_hw_gpio_get(SageValue pin) { (void)pin; return sage_bool(0); }\n"
+"static SageValue sage_native_hw_gpio_set_pull(SageValue pin, SageValue up, SageValue down) { (void)pin; (void)up; (void)down; return sage_nil(); }\n"
+"static SageValue sage_native_hw_clock_hz(void) { return sage_number(0); }\n"
+"static SageValue sage_native_hw_uptime_ms(void) { return sage_number(0); }\n"
+"static SageValue sage_native_hw_delay_ms(SageValue ms) { (void)ms; return sage_nil(); }\n"
+"static SageValue sage_native_hw_delay_us(SageValue us) { (void)us; return sage_nil(); }\n"
+"static SageValue sage_native_hw_uart_init(SageValue baud) { (void)baud; return sage_number(0); }\n"
+"static SageValue sage_native_hw_uart_putc(SageValue c) { (void)c; return sage_nil(); }\n"
+"static SageValue sage_native_hw_uart_puts(SageValue s) { (void)s; return sage_nil(); }\n"
+"static SageValue sage_native_hw_uart_getc(void) { return sage_number(-1); }\n"
+"static SageValue sage_native_hw_adc_init(SageValue pin) { (void)pin; return sage_nil(); }\n"
+"static SageValue sage_native_hw_adc_read(SageValue pin) { (void)pin; return sage_number(0); }\n"
+"static SageValue sage_native_hw_temp_c(void) { return sage_number(0); }\n"
+"static SageValue sage_native_hw_rgb_set(SageValue r, SageValue g, SageValue b) { (void)r; (void)g; (void)b; return sage_nil(); }\n"
+"static SageValue sage_native_hw_spi_init(SageValue bus, SageValue baud) { (void)bus; (void)baud; return sage_number(0); }\n"
+"static SageValue sage_native_hw_spi_write(SageValue bus, SageValue data) { (void)bus; (void)data; return sage_nil(); }\n"
+"static SageValue sage_native_hw_spi_read(SageValue bus, SageValue count) { (void)bus; (void)count; return sage_make_array(0, NULL); }\n"
+"static SageValue sage_native_hw_lcd_fb_init(SageValue w, SageValue h) { (void)w; (void)h; return sage_number(0); }\n"
+"static SageValue sage_native_hw_lcd_fb_pixel(SageValue x, SageValue y, SageValue color) { (void)x; (void)y; (void)color; return sage_nil(); }\n"
+"static SageValue sage_native_hw_lcd_fb_fill(SageValue color) { (void)color; return sage_nil(); }\n"
+"static SageValue sage_native_hw_lcd_fb_flush_bytes(SageValue count) { (void)count; return sage_nil(); }\n"
+"#else\n"
+"static int sage_hw_uart_ready = 0;\n"
+"static SageValue sage_native_hw_gpio_init(SageValue pin) {\n"
+"    if (pin.type == SAGE_TAG_NUMBER) gpio_init((uint)(int)pin.as.number);\n"
+"    return sage_nil();\n"
+"}\n"
+"static SageValue sage_native_hw_gpio_set_dir(SageValue pin, SageValue out) {\n"
+"    if (pin.type == SAGE_TAG_NUMBER) gpio_set_dir((uint)(int)pin.as.number, out.type == SAGE_TAG_BOOL ? out.as.boolean != 0 : out.as.number != 0);\n"
+"    return sage_nil();\n"
+"}\n"
+"static SageValue sage_native_hw_gpio_put(SageValue pin, SageValue val) {\n"
+"    if (pin.type == SAGE_TAG_NUMBER) gpio_put((uint)(int)pin.as.number, val.type == SAGE_TAG_BOOL ? val.as.boolean != 0 : val.as.number != 0);\n"
+"    return sage_nil();\n"
+"}\n"
+"static SageValue sage_native_hw_gpio_get(SageValue pin) {\n"
+"    if (pin.type != SAGE_TAG_NUMBER) return sage_bool(0);\n"
+"    return sage_bool(gpio_get((uint)(int)pin.as.number) != 0);\n"
+"}\n"
+"static SageValue sage_native_hw_gpio_set_pull(SageValue pin, SageValue up, SageValue down) {\n"
+"    if (pin.type == SAGE_TAG_NUMBER && up.type == SAGE_TAG_BOOL && down.type == SAGE_TAG_BOOL) {\n"
+"        gpio_set_pulls((uint)(int)pin.as.number, up.as.boolean != 0, down.as.boolean != 0);\n"
+"    }\n"
+"    return sage_nil();\n"
+"}\n"
+"static SageValue sage_native_hw_clock_hz(void) { return sage_number((double)clock_get_hz(clk_sys)); }\n"
+"static SageValue sage_native_hw_uptime_ms(void) { return sage_number((double)to_ms_since_boot(get_absolute_time())); }\n"
+"static SageValue sage_native_hw_delay_ms(SageValue ms) { if (ms.type == SAGE_TAG_NUMBER) sleep_ms((uint)(int)ms.as.number); return sage_nil(); }\n"
+"static SageValue sage_native_hw_delay_us(SageValue us) { if (us.type == SAGE_TAG_NUMBER) sleep_us((uint)(int)us.as.number); return sage_nil(); }\n"
+"static SageValue sage_native_hw_uart_init(SageValue baud) {\n"
+"    uint rate = baud.type == SAGE_TAG_NUMBER ? (uint)(int)baud.as.number : 115200;\n"
+"    uart_init(uart0, rate);\n"
+"    gpio_set_function(0, GPIO_FUNC_UART);\n"
+"    gpio_set_function(1, GPIO_FUNC_UART);\n"
+"    sage_hw_uart_ready = 1;\n"
+"    return sage_number((double)rate);\n"
+"}\n"
+"static SageValue sage_native_hw_uart_putc(SageValue c) {\n"
+"    if (c.type == SAGE_TAG_NUMBER && sage_hw_uart_ready) uart_putc_raw(uart0, (char)(int)c.as.number);\n"
+"    return sage_nil();\n"
+"}\n"
+"static SageValue sage_native_hw_uart_puts(SageValue s) {\n"
+"    if (s.type == SAGE_TAG_STRING && sage_hw_uart_ready) {\n"
+"        const char *p = s.as.string;\n"
+"        while (*p) uart_putc_raw(uart0, *p++);\n"
+"    }\n"
+"    return sage_nil();\n"
+"}\n"
+"static SageValue sage_native_hw_uart_getc(void) {\n"
+"    if (!sage_hw_uart_ready) return sage_number(-1);\n"
+"    return sage_number(uart_is_readable(uart0) ? uart_getc(uart0) : -1);\n"
+"}\n"
+"static SageValue sage_native_hw_adc_init(SageValue pin) {\n"
+"    if (pin.type == SAGE_TAG_NUMBER && (int)pin.as.number >= 26 && (int)pin.as.number <= 29) {\n"
+"        adc_init();\n"
+"        adc_gpio_init((uint)(int)pin.as.number);\n"
+"        adc_select_input((uint)((int)pin.as.number - 26));\n"
+"    }\n"
+"    return sage_nil();\n"
+"}\n"
+"static SageValue sage_native_hw_adc_read(SageValue pin) {\n"
+"    if (pin.type == SAGE_TAG_NUMBER && (int)pin.as.number >= 26 && (int)pin.as.number <= 29) {\n"
+"        adc_init();\n"
+"        adc_gpio_init((uint)(int)pin.as.number);\n"
+"        adc_select_input((uint)((int)pin.as.number - 26));\n"
+"        return sage_number((double)adc_read());\n"
+"    }\n"
+"    return sage_number(0);\n"
+"}\n"
+"static SageValue sage_native_hw_temp_c(void) {\n"
+"    adc_init();\n"
+"    adc_set_temp_sensor_enabled(true);\n"
+"    adc_select_input(4);\n"
+"    double voltage = 3.3 * (double)adc_read() / 4095.0;\n"
+"    double temp = 27.0 - (voltage - 0.616) / 0.001721;\n"
+"    return sage_number(temp);\n"
+"}\n"
+"static int sage_hw_rgb_initialized = 0;\n"
+"static uint sage_hw_rgb_sm;\n"
+"static void sage_hw_rgb_init(void) {\n"
+"    if (sage_hw_rgb_initialized) return;\n"
+"    sage_hw_rgb_initialized = 1;\n"
+"    const uint16_t ws2812_program[] = {\n"
+"        (uint16_t)(pio_encode_out(pio_x, 1) | pio_encode_delay(2) | pio_encode_sideset(1, 0)),\n"
+"        (uint16_t)(pio_encode_jmp_not_x(3) | pio_encode_delay(1) | pio_encode_sideset(1, 1)),\n"
+"        (uint16_t)(pio_encode_jmp(0) | pio_encode_delay(4) | pio_encode_sideset(1, 1)),\n"
+"        (uint16_t)(pio_encode_nop() | pio_encode_delay(4) | pio_encode_sideset(1, 0)),\n"
+"    };\n"
+"    sage_hw_rgb_sm = pio_claim_unused_sm(pio0, true);\n"
+"    uint offset = pio_add_program(pio0, &(pio_program_t){.instructions = ws2812_program, .length = 4, .origin = -1});\n"
+"    pio_gpio_init(pio0, 22);\n"
+"    pio_sm_set_consecutive_pindirs(pio0, sage_hw_rgb_sm, 22, 1, true);\n"
+"    pio_sm_config c = pio_get_default_sm_config();\n"
+"    sm_config_set_sideset(&c, 1, false, false);\n"
+"    sm_config_set_wrap(&c, offset, offset + 3);\n"
+"    sm_config_set_out_shift(&c, false, true, 24);\n"
+"    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);\n"
+"    sm_config_set_clkdiv_int_frac(&c, 18, 12);\n"
+"    pio_sm_init(pio0, sage_hw_rgb_sm, offset, &c);\n"
+"    pio_sm_set_enabled(pio0, sage_hw_rgb_sm, true);\n"
+"}\n"
+"static SageValue sage_native_hw_rgb_set(SageValue r, SageValue g, SageValue b) {\n"
+"    sage_hw_rgb_init();\n"
+"    uint grb = ((uint)(int)g.as.number << 24) | ((uint)(int)r.as.number << 16) | ((uint)(int)b.as.number << 8);\n"
+"    pio_sm_put_blocking(pio0, sage_hw_rgb_sm, grb);\n"
+"    return sage_nil();\n"
+"}\n"
+"static int sage_hw_spi_ready[2] = {0, 0};\n"
+"static spi_inst_t *sage_hw_spi_inst(int bus) {\n"
+"    return bus == 1 ? spi1 : spi0;\n"
+"}\n"
+"static SageValue sage_native_hw_spi_init(SageValue busv, SageValue baudv) {\n"
+"    int bus = busv.type == SAGE_TAG_NUMBER ? (int)busv.as.number : 0;\n"
+"    uint baud = baudv.type == SAGE_TAG_NUMBER ? (uint)(int)baudv.as.number : 1000000;\n"
+"    if (bus < 0 || bus > 1) return sage_number(0);\n"
+"    spi_inst_t *spi = sage_hw_spi_inst(bus);\n"
+"    if (!sage_hw_spi_ready[bus]) {\n"
+"        spi_init(spi, baud);\n"
+"        spi_set_format(spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);\n"
+"        if (bus == 0) {\n"
+"            gpio_set_function(18, GPIO_FUNC_SPI);\n"
+"            gpio_set_function(19, GPIO_FUNC_SPI);\n"
+"        } else {\n"
+"            gpio_set_function(10, GPIO_FUNC_SPI);\n"
+"            gpio_set_function(11, GPIO_FUNC_SPI);\n"
+"            gpio_set_function(12, GPIO_FUNC_SPI);\n"
+"        }\n"
+"        sage_hw_spi_ready[bus] = 1;\n"
+"    }\n"
+"    return sage_number((double)spi_set_baudrate(spi, baud));\n"
+"}\n"
+"static SageValue sage_native_hw_spi_write(SageValue busv, SageValue datav) {\n"
+"    int bus = busv.type == SAGE_TAG_NUMBER ? (int)busv.as.number : 0;\n"
+"    if (bus < 0 || bus > 1 || !sage_hw_spi_ready[bus]) return sage_nil();\n"
+"    spi_inst_t *spi = sage_hw_spi_inst(bus);\n"
+"    if (datav.type == SAGE_TAG_NUMBER) {\n"
+"        uint8_t b = (uint8_t)(int)datav.as.number;\n"
+"        spi_write_blocking(spi, &b, 1);\n"
+"    } else if (datav.type == SAGE_TAG_ARRAY) {\n"
+"        for (uint i = 0; i < datav.as.array->count; i++) {\n"
+"            SageValue e = datav.as.array->elements[i];\n"
+"            if (e.type != SAGE_TAG_NUMBER) continue;\n"
+"            uint8_t b = (uint8_t)(int)e.as.number;\n"
+"            spi_write_blocking(spi, &b, 1);\n"
+"        }\n"
+"    } else if (datav.type == SAGE_TAG_STRING) {\n"
+"        spi_write_blocking(spi, (const uint8_t *)datav.as.string, (size_t)SAGE_STRING_LEN(datav));\n"
+"    }\n"
+"    return sage_nil();\n"
+"}\n"
+"static SageValue sage_native_hw_spi_read(SageValue busv, SageValue countv) {\n"
+"    int bus = busv.type == SAGE_TAG_NUMBER ? (int)busv.as.number : 0;\n"
+"    uint count = countv.type == SAGE_TAG_NUMBER ? (uint)(int)countv.as.number : 0;\n"
+"    if (bus < 0 || bus > 1 || !sage_hw_spi_ready[bus]) return sage_make_array(0, NULL);\n"
+"    if (count > 4096) count = 4096;\n"
+"    sage_gc_pin();\n"
+"    SageValue arr = sage_array();\n"
+"    uint8_t buf[64];\n"
+"    while (count > 0) {\n"
+"        uint chunk = count > 64 ? 64 : count;\n"
+"        spi_read_blocking(sage_hw_spi_inst(bus), 0xFF, buf, chunk);\n"
+"        for (uint i = 0; i < chunk; i++) sage_array_push_raw(arr.as.array, sage_number((double)buf[i]));\n"
+"        count -= chunk;\n"
+"    }\n"
+"    sage_gc_unpin();\n"
+"    return arr;\n"
+"}\n"
+"static uint8_t *sage_lcd_fb = NULL;\n"
+"static uint32_t sage_lcd_fb_w = 0, sage_lcd_fb_h = 0;\n"
+"static SageValue sage_native_hw_lcd_fb_init(SageValue wv, SageValue hv) {\n"
+"    if (wv.type != SAGE_TAG_NUMBER || hv.type != SAGE_TAG_NUMBER) return sage_number(0);\n"
+"    uint32_t nw = (uint32_t)(int)wv.as.number, nh = (uint32_t)(int)hv.as.number;\n"
+"    if (nw == 0 || nh == 0 || nw > 320 || nh > 320) return sage_number(0);\n"
+"    size_t need = (size_t)nw * nh * 2;\n"
+"    if (sage_lcd_fb != NULL && sage_lcd_fb_w == nw && sage_lcd_fb_h == nh) return sage_number(1);\n"
+"    free(sage_lcd_fb);\n"
+"    sage_lcd_fb = (uint8_t *)malloc(need);\n"
+"    if (sage_lcd_fb == NULL) return sage_number(0);\n"
+"    sage_lcd_fb_w = nw;\n"
+"    sage_lcd_fb_h = nh;\n"
+"    return sage_number(1);\n"
+"}\n"
+"static SageValue sage_native_hw_lcd_fb_pixel(SageValue xv, SageValue yv, SageValue cv) {\n"
+"    if (sage_lcd_fb == NULL || xv.type != SAGE_TAG_NUMBER || yv.type != SAGE_TAG_NUMBER || cv.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+"    uint32_t x = (uint32_t)(int)xv.as.number, y = (uint32_t)(int)yv.as.number;\n"
+"    if (x >= sage_lcd_fb_w || y >= sage_lcd_fb_h) return sage_nil();\n"
+"    uint16_t c = (uint16_t)(int)cv.as.number;\n"
+"    uint8_t *p = &sage_lcd_fb[((size_t)y * sage_lcd_fb_w + x) * 2];\n"
+"    p[0] = (uint8_t)(c >> 8);\n"
+"    p[1] = (uint8_t)c;\n"
+"    return sage_nil();\n"
+"}\n"
+"static SageValue sage_native_hw_lcd_fb_fill(SageValue cv) {\n"
+"    if (sage_lcd_fb == NULL || cv.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+"    uint16_t c = (uint16_t)(int)cv.as.number;\n"
+"    size_t n = (size_t)sage_lcd_fb_w * sage_lcd_fb_h;\n"
+"    for (size_t i = 0; i < n; i++) {\n"
+"        sage_lcd_fb[i * 2] = (uint8_t)(c >> 8);\n"
+"        sage_lcd_fb[i * 2 + 1] = (uint8_t)c;\n"
+"    }\n"
+"    return sage_nil();\n"
+"}\n"
+"static SageValue sage_native_hw_lcd_fb_flush_bytes(SageValue countv) {\n"
+"    if (sage_lcd_fb == NULL || countv.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+"    size_t avail = (size_t)sage_lcd_fb_w * sage_lcd_fb_h * 2;\n"
+"    size_t n = (size_t)(int)countv.as.number;\n"
+"    if (n > avail) n = avail;\n"
+"    if (!sage_hw_spi_ready[0]) return sage_nil();\n"
+"    spi_write_blocking(spi0, sage_lcd_fb, n);\n"
+"    return sage_nil();\n"
+"}\n"
+"#endif\n"
       "\n"
       "static SageValue sage_init_native_module(const char* name) {\n"
       "    /* For now, just return an empty dict; real native modules should be "
@@ -4984,6 +5365,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    if (sp == NULL) return sage_nil();\n"
       "    return sage_number((double)(uintptr_t)sp->ptr);\n"
       "}\n"
+      "#if !defined(PICO_ON_DEVICE)\n"
       "static SageValue sage_ffi_sym(SageValue handle, SageValue name) {\n"
       "    if (handle.type != SAGE_TAG_CLIB || name.type != SAGE_TAG_STRING)\n"
       "        return sage_bool(0);\n"
@@ -5001,6 +5383,10 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    if (!sym) return sage_nil();\n"
       "    return sage_number((double)(uintptr_t)sym);\n"
       "}\n"
+      "#else\n"
+      "static SageValue sage_ffi_sym(SageValue handle, SageValue name) { (void)handle; (void)name; return sage_bool(0); }\n"
+      "static SageValue sage_ffi_sym_addr(SageValue handle, SageValue name) { (void)handle; (void)name; return sage_nil(); }\n"
+      "#endif\n"
       "static SageValue sage_addressof(SageValue val) {\n"
       "    return sage_number((double)(uintptr_t)&val);\n"
       "}\n"
@@ -5718,8 +6104,10 @@ static void emit_method_prototypes(Compiler *compiler) {
 }
 
 static void emit_function_definitions(Compiler *compiler, Stmt *program) {
-  /* Emit module functions first */
+  /* Emit module functions first (alias bindings share the primary's AST) */
   for (ImportedModule *m = compiler->modules; m != NULL; m = m->next) {
+    if (m->is_alias)
+      continue;
     for (Stmt *stmt = m->ast; stmt != NULL; stmt = stmt->next) {
       if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
         emit_function_definition(compiler, stmt);
@@ -5998,7 +6386,7 @@ static int write_pico_cmake_lists(const char *cmake_path,
           "set(CMAKE_CXX_STANDARD 17)\n"
           "pico_sdk_init()\n"
           "add_executable(%s \"%s\")\n"
-          "target_link_libraries(%s pico_stdlib)\n"
+          "target_link_libraries(%s pico_stdlib hardware_adc hardware_pio hardware_clocks hardware_spi)\n"
           "pico_enable_stdio_usb(%s 1)\n"
           "pico_enable_stdio_uart(%s 0)\n"
           "pico_add_extra_outputs(%s)\n",
@@ -6015,7 +6403,8 @@ static int write_pico_cmake_lists(const char *cmake_path,
   return 1;
 }
 
-static int run_command_with_sdk(char *const argv[], const char *pico_sdk_path) {
+static int run_command_with_sdk(char *const argv[], const char *pico_sdk_path,
+                               const char *pico_board_dir) {
   pid_t pid = fork();
   if (pid < 0) {
     fprintf(stderr, "Compiler error: could not fork %s.\n", argv[0]);
@@ -6025,6 +6414,9 @@ static int run_command_with_sdk(char *const argv[], const char *pico_sdk_path) {
   if (pid == 0) {
     if (pico_sdk_path != NULL && pico_sdk_path[0] != '\0') {
       setenv("PICO_SDK_PATH", pico_sdk_path, 1);
+    }
+    if (pico_board_dir != NULL && pico_board_dir[0] != '\0') {
+      setenv("PICO_BOARD_HEADER_DIRS", pico_board_dir, 1);
     }
     execvp(argv[0], argv);
     fprintf(stderr, "Compiler error: could not execute %s: %s\n", argv[0],
@@ -6217,6 +6609,7 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
                                const char *output_dir, const char *program_name,
                                const char *pico_board,
                                const char *pico_sdk_path, const char *pico_chip,
+                               const char *pico_board_dir,
                                char *uf2_path_out, size_t uf2_path_out_size) {
   CompilerTarget target = COMPILER_TARGET_RP2040;
   if (pico_chip != NULL) {
@@ -6282,6 +6675,23 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
   char *build_dir = path_join(effective_output_dir, "build");
   char *cmake_path = path_join(effective_output_dir, "CMakeLists.txt");
 
+  char *effective_board_dir = NULL;
+  if (pico_board_dir != NULL && pico_board_dir[0] != '\0') {
+    char resolved[PATH_MAX];
+    if (realpath(pico_board_dir, resolved) != NULL) {
+      effective_board_dir = str_dup(resolved);
+    } else {
+      effective_board_dir = str_dup(pico_board_dir);
+    }
+  } else {
+    char *candidate = path_join(repo_root, "boards");
+    if (path_exists(candidate)) {
+      effective_board_dir = candidate;
+    } else {
+      free(candidate);
+    }
+  }
+
   char source_file_name[PATH_MAX];
   snprintf(source_file_name, sizeof(source_file_name), "%s.c",
            effective_program_name);
@@ -6296,6 +6706,7 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
     free(source_path);
     free(effective_program_name);
     free(effective_output_dir);
+    free(effective_board_dir);
     return 0;
   }
 
@@ -6308,12 +6719,13 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
     free(source_path);
     free(effective_program_name);
     free(effective_output_dir);
+    free(effective_board_dir);
     return 0;
   }
 
   char *cmake_argv[] = {"cmake", "-S",      effective_output_dir,
                         "-B",    build_dir, NULL};
-  if (!run_command_with_sdk(cmake_argv, sdk_path)) {
+  if (!run_command_with_sdk(cmake_argv, sdk_path, effective_board_dir)) {
     fprintf(stderr, "Compiler error: Pico CMake configure failed.\n");
     free(repo_root);
     free(import_path);
@@ -6322,11 +6734,12 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
     free(source_path);
     free(effective_program_name);
     free(effective_output_dir);
+    free(effective_board_dir);
     return 0;
   }
 
   char *build_argv[] = {"cmake", "--build", build_dir, NULL};
-  if (!run_command_with_sdk(build_argv, sdk_path)) {
+  if (!run_command_with_sdk(build_argv, sdk_path, effective_board_dir)) {
     fprintf(stderr, "Compiler error: Pico build failed.\n");
     free(repo_root);
     free(import_path);
@@ -6335,6 +6748,7 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
     free(source_path);
     free(effective_program_name);
     free(effective_output_dir);
+    free(effective_board_dir);
     return 0;
   }
 
@@ -6353,6 +6767,7 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
     free(source_path);
     free(effective_program_name);
     free(effective_output_dir);
+    free(effective_board_dir);
     return 0;
   }
 
@@ -6368,5 +6783,6 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
   free(source_path);
   free(effective_program_name);
   free(effective_output_dir);
+  free(effective_board_dir);
   return 1;
 }

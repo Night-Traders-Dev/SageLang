@@ -158,6 +158,8 @@ run_compiler() {
     _run_c_test "structs"     "$CD/compiler_structs.sage"     "$CD/compiler_structs.expected"
     _run_c_test "classes"     "$CD/compiler_classes.sage"     "$CD/compiler_classes.expected"
     _run_c_test "modules"     "$CD/compiler_modules.sage"     "$CD/compiler_modules.expected"
+    _run_c_test "modules_aliases" "$CD/compiler_modules_aliases.sage" "$CD/compiler_modules_aliases.expected"
+    _run_c_test "logical_shortcircuit" "$CD/compiler_logical_shortcircuit.sage" "$CD/compiler_logical_shortcircuit.expected"
     _run_c_test "arch"        "$CD/compiler_arch.sage"        "$CD/compiler_arch.expected"
     _run_c_test "constfold"   "$CD/compiler_constfold.sage"   "$CD/compiler_constfold.expected" "-O1"
     _run_c_test "dce"         "$CD/compiler_dce.sage"         "$CD/compiler_dce.expected"       "-O2"
