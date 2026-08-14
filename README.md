@@ -11,10 +11,11 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.1.8 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.1.9 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
 
+- **v4.1.9 (Veritas Quality Audit & Submodule Stabilization)**: Audited standard test suites, resolved duplicate procedure definition in `crypto/hash.sage`, fixed invalid trailing `parse_rrs` calls in `net/dns.sage`, implemented missing VGA text mode rendering primitives (`clear`, `puts`, `draw_progress_bar`) in `metal/vga.sage`, updated expected wallet hash in `repro_nft_segfault.sage`, and bumped patch version on success.
 - **v4.1.8 (C Backend Short-Circuit Fix)**: Fixed the C backend (`--compile`, `--emit-c`, `--emit-pico-c`) to short-circuit `and`/`or` exactly like the interpreter: the right operand is now evaluated only when the left operand does not decide the result. Previously both operands were emitted into eager `sage_and()`/`sage_or()` calls, so guards such as `best == nil or best["priority"] > 0` crashed at runtime and side effects on the right ran unconditionally. The backend now emits `sage_bool(sage_truthy(L) && sage_truthy(R))` / `||`, leveraging C's native short-circuit semantics; results remain booleans, matching interpreter semantics. Added regression test `testsuite/compiler/compiler_logical_shortcircuit.sage`. Bumped patch version on success.
 - **v4.1.7 (AVR Assembler & Arduino Uno Support)**: Added a SageLang assembler backend for the AVR ISA (ATmega328P/ATmega328PB, Arduino Uno R3) under `core/boards/AVR/`. Includes a two-pass assembler (`avr_assembler.sage`) with label resolution, branch relative offsets and I/O-register names; a bit-exact instruction encoder (`avr_opcodes.sage`) verified against the Microchip datasheet and simavr decoder; and an Intel HEX emitter (`avr_hex.sage`) producing `.hex` flash images. Ships a working `blink` example and smoke test. Bumped patch version on success.
 - **v4.1.6 (Veritas Quality Audit & Submodule Stabilization)**: Audited standard test suites, resolved duplicate function definition issues in `crypto/hash.sage` and `net/dns.sage`, and bumped patch version on success.
