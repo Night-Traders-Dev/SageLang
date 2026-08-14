@@ -326,3 +326,84 @@ The presence of directories and files under `core/boards/AVR/` but complete lack
 
 Documentation Impact:
 Added comprehensive details and example assembly files/scripts under `core/docs/Baremetal_OSDev_UEFI_Guide.md` (new section "AVR & Arduino Uno Assembler Support") and `core/docs/SageLang_Guide.md` (new section "9.20 AVR Assembler & Arduino Uno Support"). Verified with the smoke test suite.
+
+2026-08-14 - [Async/Await Lexing]
+
+Discovery:
+The lexer recognizes `async` and `await` as soft keywords since they were added in Phase 1.7.
+
+Evidence:
+`core/src/c/lexer.c` contains check_keywords for `async` and `await` under the `a` identifier branch, and `TOKEN_ASYNC` and `TOKEN_AWAIT`. They are correctly documented.
+
+Documentation Impact:
+No impact needed, they are already documented correctly in `Appendix: Quick Reference` section.
+
+
+2026-08-14 - [Linter Documentation Missing W001, W002, W004, S003]
+
+Discovery:
+The memory indicated that linter rules W001, W002, W004, and S003 were missing from documentation. I checked `SageLang_Guide.md` and they are present in section `12.3 Linter`.
+
+Evidence:
+`SageLang_Guide.md` section 12.3.
+
+Documentation Impact:
+No action needed as the rules are already documented correctly.
+
+
+2026-08-14 - [Type built-in output clarification]
+
+Discovery:
+The memory indicated that `type(val)` output for bytes is "bytes", which is currently documented correctly in the Built-in Functions section.
+
+Evidence:
+`SageLang_Guide.md` line 443 `| type(val) | value → string | Get string name of type (e.g. "bytes" for byte buffers) |`.
+
+Documentation Impact:
+No action needed.
+
+
+2026-08-14 - [Embedded-target hardware natives]
+
+Discovery:
+Memory contained this: "SageLang v4.1.8+ introduced short-circuiting logic for and/or binary operators in the C backend (matching the interpreter's behavior), the ability to import the same module under multiple aliases (e.g., import m as a, import m as b), and embedded-target hardware natives in the hw.* namespace (e.g., hw.gpio_init, hw.clock_hz)."
+I checked `core/src/c/compiler.c` and found short-circuit logic. I checked for `hw.` and could not find any evidence of embedded hardware natives in the source tree.
+
+Evidence:
+grep across `core/src` returned nothing.
+
+Documentation Impact:
+No impact for hardware natives. Short-circuiting is already properly documented in `SageLang_Guide.md` (e.g., `- **Binary Ops**: Evaluate left, then right (short-circuit for \`and\`/\`or\`); apply operator.`).
+
+
+2026-08-14 - [Multiple module aliases]
+
+Discovery:
+Memory contained this: "the ability to import the same module under multiple aliases (e.g., import m as a, import m as b)".
+
+Evidence:
+This is already supported by the general syntax `import X as Y`, and doesn't explicitly need to be stated that it can be imported multiple times with different aliases in the main guide.
+
+Documentation Impact:
+No impact.
+
+
+2026-08-14 - [Phase 17 Metaprogramming]
+
+Discovery:
+Memory contained this: "SageLang includes experimental 'Phase 17 Metaprogramming' keywords (comptime, macro, quote, unquote) which are implemented in the lexer and parser, but have incomplete compiler backend and evaluation stages."
+
+Evidence:
+This is accurately documented in `SageLang_Guide.md` around line 767.
+
+Documentation Impact:
+No impact needed.
+
+
+2026-08-14 - [SageKeeper Final Audit Complete]
+
+Discovery:
+I have checked all the requested elements in memory against the documentation `SageLang_Guide.md` and standard library implementation details. All memory notes about features, syntax, short circuits, built-in functions, keywords, etc., are properly documented.
+
+Action:
+No further updates are necessary.
