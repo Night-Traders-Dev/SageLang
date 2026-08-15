@@ -56,6 +56,7 @@ Complete reference for the `sage` command-line interface.
 | `--math-work` | Run commands | Configure math execution modes |
 | `--gc:tracing\|arc\|orc` | Run/compile | Garbage collector mode |
 | `--board <name>` | `--compile-pico` | Pico board name; defaults to `pico` |
+| `--board-dir <dir>` | `--compile-pico` | Custom board templates directory |
 | `--name <program>` | `--compile-pico` | Program name for generated files; defaults to input basename |
 | `--sdk <path>` | `--compile-pico` | Pico SDK path; falls back to `PICO_SDK_PATH` |
 | `--chip <type>` | `--compile-pico` | Chip type: `rp2040`, `rp2350-arm`, `rp2350-riscv`; defaults to `rp2040` |

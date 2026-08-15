@@ -396,7 +396,7 @@ struct ExecResult {
 - **Binary Ops**: Evaluate left, then right (short-circuit for `and`/`or`); apply operator.
   - Arithmetic: `+`, `-`, `*`, `/` on numbers; `+` on strings (concatenation).
   - Comparison: `<`, `>`, `<=`, `>=` on numbers; `==`, `!=` on any type.
-  - Logical: `and`, `or` with short-circuit evaluation.
+  - Logical: `and`, `or` with short-circuit evaluation (right operand evaluated only if required to decide the result; C backend uses native `&&` / `||` short-circuiting while returning booleans).
 - **Calls**: Look up function (user-defined or native); bind arguments to parameters; execute in new environment; return result.
 - **Indexing**: Evaluate array and index; return element or slice if range.
 - **Array/Dict/Tuple Construction**: Evaluate elements; construct heap-allocated structure.
@@ -516,11 +516,13 @@ struct ModuleCache {
 ```sagelang
 # Import entire module (unaliased)
 import math
-# → Available as: math (currently placeholder; future: module.sin(), etc.)
 
 # Import module with alias
 import math as m
-# → Available as: m
+
+# Import same module under multiple aliases
+import math as m1
+import math as m2
 
 # Import specific items
 from math import sin, cos

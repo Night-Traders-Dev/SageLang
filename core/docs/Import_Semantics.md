@@ -7,9 +7,22 @@ This document describes how `import` and `from ... import ...` behave across Sag
 ```sage
 import math
 import math as m
+import math as m2
 from math import sin, cos
 from math import PI as CIRCLE_PI
 ```
+
+### Multi-Alias Imports
+
+The same module can be imported under multiple distinct aliases or bindings within the same program:
+
+```sage
+import math as m1
+import math as m2
+import math
+```
+
+All bindings share the primary imported module's AST and compiled structure without triggering duplicate symbol or unknown name errors across backends.
 
 ### Dotted Module Paths
 

@@ -585,6 +585,17 @@ These are registered as native C functions and are available without any import.
 | `tcp.sendall` | Send all data |
 | `tcp.recvline` | Receive one line |
 
+### Embedded Hardware (v4.1.8+)
+
+| Function / Namespace | Description |
+|----------------------|-------------|
+| `hw.gpio_init(pin, mode)` | Initialize GPIO pin mode |
+| `hw.gpio_write(pin, val)` | Set GPIO pin high/low |
+| `hw.gpio_read(pin) -> Number` | Read digital input from GPIO pin |
+| `hw.clock_hz() -> Number` | Get system clock frequency in Hz |
+| `hw.uptime_ms() -> Number` | Get uptime in milliseconds |
+| `hw.delay_ms(ms)` | Busy-wait delay in milliseconds |
+
 ### Concurrency
 
 | Function | Description |
