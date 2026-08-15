@@ -74,7 +74,7 @@ All execution modes share the same object model: a **global environment**, neste
 
 For LLVM-compiled workloads, `from module import CONST` is resolved at compile time for foldable top-level module constants (numbers/strings/bools/nil plus simple constant expressions). In the C LLVM backend, GPU module constants are also resolved at compile time and GPU calls emit direct bridges to the pure C GPU API (`sgpu_*` in `gpu_api.h`), supporting both Vulkan and OpenGL backends. The bytecode VM provides 30 dedicated GPU opcodes for frame-loop hot paths.
 
-The bytecode VM operates in hybrid mode by default: expressions, variables, loops (including break/continue), and function calls compile to stack bytecode, while unsupported constructs (classes, imports, exceptions, generators) fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. This gives measurable speedups on loop-heavy workloads while maintaining full language coverage. Use `sage --runtime bytecode` or `sage --runtime auto` to enable.
+The bytecode VM operates in hybrid mode by default: expressions, variables, loops (including break/continue), and function calls compile to stack bytecode, while unsupported constructs (defer, match, yield, async procs) fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. This gives measurable speedups on loop-heavy workloads while maintaining full language coverage. Use `sage --runtime bytecode` or `sage --runtime auto` to enable.
 
 ### 1.4 Performance Characteristics
 
@@ -1654,7 +1654,7 @@ The C-hosted `sage` binary now supports several runtime selections:
 
 **What still bridges or stays unsupported**:
 
-- In hybrid `--runtime bytecode` mode: class definitions, module imports, exception handling (try/catch/raise), defer, match, yield, and async procs fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. Opcodes are defined for future native support (`BC_OP_CLASS`, `BC_OP_IMPORT`, `BC_OP_SETUP_TRY`, `BC_OP_RAISE`, etc.).
+- In hybrid `--runtime bytecode` mode: defer, match, yield, and async procs fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. Opcodes are defined for future native support (`BC_OP_DEFER`, `BC_OP_MATCH`, etc.). Note that class definitions (`BC_OP_CLASS`), module imports (`BC_OP_IMPORT`), and exception handling (`BC_OP_SETUP_TRY`, `BC_OP_RAISE`) are now compiled natively in the bytecode VM.
 - In strict `--emit-vm` mode: these constructs fail compilation instead of bridging.
 - `EXPR_AWAIT` is not supported in either mode.
 

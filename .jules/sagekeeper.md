@@ -326,3 +326,14 @@ The presence of directories and files under `core/boards/AVR/` but complete lack
 
 Documentation Impact:
 Added comprehensive details and example assembly files/scripts under `core/docs/Baremetal_OSDev_UEFI_Guide.md` (new section "AVR & Arduino Uno Assembler Support") and `core/docs/SageLang_Guide.md` (new section "9.20 AVR Assembler & Arduino Uno Support"). Verified with the smoke test suite.
+
+2026-08-15 - [BC_OP Documentation Updates]
+
+Discovery:
+The `SageLang_Guide.md` documentation falsely states that class definitions, module imports, and exception handling still fall back to the AST interpreter in hybrid bytecode mode.
+
+Evidence:
+`core/src/vm/bytecode.c` lines 355-359 explicitly return 0 for `STMT_IMPORT` and `STMT_CLASS` in `stmt_requires_ast_fallback`, and lines 827-869 show `STMT_IMPORT` emitting `BC_OP_IMPORT` and `STMT_TRY`/`STMT_RAISE` emitting `BC_OP_SETUP_TRY`, `BC_OP_END_TRY`, `BC_OP_RAISE` instead of bridging via `BC_OP_EXEC_AST_STMT`.
+
+Documentation Impact:
+Updated `SageLang_Guide.md` section 6.2 "Bytecode VM Features" and 1.3 "Bytecode VM Architecture" to accurately reflect that classes (`BC_OP_CLASS`), imports (`BC_OP_IMPORT`), and exceptions (`BC_OP_SETUP_TRY`, `BC_OP_RAISE`) are now compiled natively in the VM.
