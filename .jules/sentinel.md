@@ -86,3 +86,8 @@
 **Vulnerability:** Use of `mkstemp()` combined with dynamic filename suffix concatenation to execute AOT-compiled statements (CWE-377).
 **Learning:** While `mkstemp()` securely creates `/tmp/sage_aot_XXXXXX`, creating a corresponding `/tmp/sage_aot_XXXXXX.bin` by string concatenation bypasses `mkstemp` security. Because the `.bin` file is not securely opened using `O_CREAT | O_EXCL`, it is vulnerable to symlink attacks, race conditions, and pre-creation hijacking.
 **Prevention:** Use `mkstemps()` for any temporary files requiring specific suffixes, ensuring both the source and the binary files are securely and exclusively created before use.
+
+## 2026-08-10 - Option Injection Bypass via Leading Whitespace in Command Validation
+**Vulnerability:** `is_safe_command` checked `cmd[0] == '-'` to prevent option injection, but failed to skip leading whitespace (e.g. `' -la'`).
+**Learning:** Checking character zero for flag characters (`-`) is easily bypassed if the shell/underlying runner strips leading whitespace before command execution or parameter expansion.
+**Prevention:** Always skip leading whitespace (e.g., `while (*cmd && isspace((unsigned char)*cmd)) cmd++;`) before performing position-dependent checks like leading hyphen checks.

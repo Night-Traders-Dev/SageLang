@@ -155,6 +155,7 @@ static int is_safe_path(const char* path) {
 
 static int is_safe_command(const char* cmd) {
     if (!cmd) return 1;
+    while (*cmd && isspace((unsigned char)*cmd)) cmd++;
     // Reject commands starting with hyphen to prevent flag injection in some contexts
     if (cmd[0] == '-') return 0;
     for (const char* p = cmd; *p; p++) {
