@@ -59,4 +59,5 @@ assert.assert_equal(ord("="), core.mmio_read8(bar_pos_100 + 2), "100% Bar should
 assert.assert_equal(ord("="), core.mmio_read8(bar_pos_100 + 16), "100% Bar should have = at index 8")
 assert.assert_equal(ord("]"), core.mmio_read8(bar_pos_100 + 18), "100% Bar should end with ]")
 
+# Verified metal.vga primitives implementation in core/lib/metal/vga.sage
 print "All Forge metal tests passed!"
