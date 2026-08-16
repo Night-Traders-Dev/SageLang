@@ -6241,7 +6241,8 @@ static int ensure_directory(const char *path) {
   for (char *cursor = buffer + 1; *cursor != '\0'; cursor++) {
     if (*cursor == '/') {
       *cursor = '\0';
-      if (mkdir(buffer, 0777) != 0 && errno != EEXIST) {
+      // Use 0755 instead of 0777 for secure permissions (CWE-276)
+      if (mkdir(buffer, 0755) != 0 && errno != EEXIST) {
         fprintf(stderr,
                 "Compiler error: could not create directory \"%s\": %s\n",
                 buffer, strerror(errno));
@@ -6251,7 +6252,8 @@ static int ensure_directory(const char *path) {
     }
   }
 
-  if (mkdir(buffer, 0777) != 0 && errno != EEXIST) {
+  // Use 0755 instead of 0777 for secure permissions (CWE-276)
+  if (mkdir(buffer, 0755) != 0 && errno != EEXIST) {
     fprintf(stderr, "Compiler error: could not create directory \"%s\": %s\n",
             buffer, strerror(errno));
     return 0;
