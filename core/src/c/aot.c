@@ -1108,7 +1108,8 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "static SageValue s_appendbytes(int c, SageValue* a) { if(c<2||a[0].type!=SAGE_STR||a[1].type!=SAGE_STR)return sage_bool(0); FILE* f=fopen(a[0].as.string,\"ab\"); if(!f)return sage_bool(0); size_t w=fwrite(a[1].as.string,1,strlen(a[1].as.string),f); fclose(f); return sage_bool(w==strlen(a[1].as.string)); }");
     aot_emit(aot, "static SageValue s_readbytes(int c, SageValue* a) { return s_readfile(c,a); }");
     aot_emit(aot, "static SageValue s_remove(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_bool(0); return sage_bool(remove(a[0].as.string)==0); }");
-    aot_emit(aot, "static SageValue s_mkdir(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_bool(0); return sage_bool(mkdir(a[0].as.string,0777)==0); }");
+    // Use 0755 instead of 0777 for secure directory creation (CWE-276)
+    aot_emit(aot, "static SageValue s_mkdir(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_bool(0); return sage_bool(mkdir(a[0].as.string,0755)==0); }");
     aot_emit(aot, "static SageValue s_getenv(int c, SageValue* a) { if(c<1||a[0].type!=SAGE_STR)return sage_string(\"\"); char* v=getenv(a[0].as.string); return sage_string(v?v:\"\"); }");
     aot_emit(aot, "static SageValue s_sys_getenv_native(int c, SageValue* a) { return s_getenv(c, a); }");
     aot_emit(aot, "static SageValue s_sys_exec(int c, SageValue* a) { return s_shell_exec(c, a); }");
