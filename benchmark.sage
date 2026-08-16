@@ -118,3 +118,26 @@ for i in range(100):
     let r_emoji = emoji.emoji_replace(emoji_test_str)
 let end_emoji = clock()
 print("Rich Emoji Replace (100 iterations on large input): Time: " + str(end_emoji - start_emoji) + " s")
+
+# ============================================================================
+# Rich Markdown Rendering Benchmark (Bolt Optimization)
+# ============================================================================
+# We optimized `Markdown.render()` and `_process_inline()` in `core/lib/rich/markdown.sage`:
+# - Replaced manual O(N^2) character-by-character string concatenation with
+#   native `slice()` and array-push + `join("")` patterns.
+# - Replaced manual linear character searching with native `indexof()` calls.
+# Resulting in significantly faster Markdown document parsing and rendering.
+
+import rich.markdown as markdown
+
+let md_sample = "# Header 1\n## Header 2\n\nParagraph with **bold**, *italic*, `inline code`, and [link](http://example.com).\n\n```python\ndef test():\n    return 42\n```\n\n- Item 1\n- Item 2\n\n> Blockquote text\n\n---"
+for i in range(5):
+    md_sample = md_sample + "\n\n" + md_sample
+
+let md_doc = markdown.parse_markdown(md_sample)
+
+let start_md = clock()
+for i in range(100):
+    let r_md = md_doc.render(nil)
+let end_md = clock()
+print("Rich Markdown Render (100 iterations on large input): Time: " + str(end_md - start_md) + " s")
