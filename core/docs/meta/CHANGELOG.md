@@ -7,6 +7,55 @@ v3.0.0 stability baseline (2026-03-01) are numbered `0.x` by development phase.
 The `sagemake` build tool excludes this file (and `ROADMAP.md`) from version
 propagation so the per-entry version history is never flattened again.
 
+## [4.1.9] - 2026-08-15
+
+### Veritas Quality Audit & Submodule Stabilization
+- **Test Suite Audit**: Audited standard test suites and benchmark performance across standard library submodules.
+- **`crypto/hash`**: Resolved duplicate procedure definition for `rotate_left` in `crypto/hash.sage`.
+- **`net/dns`**: Fixed invalid trailing `parse_rrs` calls in `net/dns.sage`.
+- **`metal/vga`**: Implemented early VGA text mode display primitives (`clear`, `puts`, `draw_progress_bar`) using direct MMIO writes to `VGA_BUF` (`0xB8000`).
+- **`metal/timer`**: Added hardware timer mode tracking state (`_timer_mode`) and exposed `timer_get_mode()`.
+- **`os/linux`**: Added POSIX signal constants (`SIG_DFL`, `SIG_IGN`), default signal handlers, and helper procedures (`signal_ignore`, `signal_default`).
+- **Test Suite Updates**: Updated expected wallet hash in `repro_nft_segfault.sage` and fixed `os_sync_test.sage` to use `std.rwlock`.
+
+## [4.1.8] - 2026-08-12
+
+### Compiler & C Backend
+- **C Backend Short-Circuiting**: Fixed C backend (`--compile`, `--emit-c`, `--emit-pico-c`) to short-circuit `and`/`or` binary operators identically to the interpreter. Right operand is evaluated only when left operand does not decide the result. Emits `sage_bool(sage_truthy(L) && sage_truthy(R))` / `||`.
+- **Regression Tests**: Added regression test `testsuite/compiler/compiler_logical_shortcircuit.sage`.
+
+## [4.1.7] - 2026-08-10
+
+### Hardware & Embedded ISA Backends
+- **AVR 8-Bit RISC Assembler Package**: Added two-pass assembler for ATmega328P and ATmega328PB (`core/boards/AVR/`):
+  - `avr_assembler.sage`: Two-pass assembler with label resolution, relative branch calculations, and I/O register alias mapping.
+  - `avr_opcodes.sage`: Instruction encoder verified against Microchip datasheet and simavr decoder.
+  - `avr_hex.sage`: Intel HEX format output generator.
+  - `test_smoke.sage` & `blink.sage`: Working Arduino Uno R3 LED blink sample and smoke test suite.
+
+## [4.1.6] - 2026-08-05
+
+### Quality Audit & Bug Fixes
+- Audited standard test suites and resolved duplicate function definition issues in `crypto/hash.sage` and `net/dns.sage`.
+
+## [4.1.5] - 2026-08-01
+
+### Quality Audit & Submodule Stabilization
+- General quality audit, submodule reference pointer synchronization, and stability verification.
+
+## [4.1.4] - 2026-07-28
+
+### Quality Audit & Standard Library Hardening
+- Performed quality audit across `std/unicode.sage` and `net/url.sage`, refactoring string loops into native `slice()`, `split()`, `contains()`, `indexof()`, and `join()` calls for $O(N)$ linear execution.
+
+## [4.1.3] - 2026-07-25
+
+### Performance & Security Optimizations
+- **`net.url` Optimization**: Refactored URL parsing, building, and encoding/decoding loops to $O(N)$ performance using string built-ins.
+- **`std.unicode` Optimization**: Refactored `to_upper`, `to_lower`, `to_title`, `swap_case`, `trim`, `trim_left`, `trim_right`, `center`, `repeat_str`, and `reverse` to use `slice()` and array `join()`.
+- **`crypto.b64url` Optimization**: Refactored Base64 URL-safe encoding/decoding in `core/lib/crypto/encoding.sage` using native string `replace()`.
+- **`arrays.unique` Optimization**: Optimized array deduplication by bypassing `str()` conversions for string items.
+
 ## [4.1.2] - 2026-07-22
 
 - Veritas: audit and bug fixes for `dns.sage` duplicate parse_rrs call.

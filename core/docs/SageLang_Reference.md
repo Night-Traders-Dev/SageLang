@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.1.7 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.1.9 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -1100,12 +1100,14 @@ Sage has 10 execution backends:
 - `aarch64` / `arm64`
 - `rv64` / `riscv64`
 - `mips` / `mips32` / `mips74k`
+- `avr` / `atmega328p` / `atmega328pb` (Arduino Uno R3 two-pass assembler under `core/boards/AVR/`)
 
 ### 8.2 Special Compile Targets
 
 - `--compile-pico`: RP2040/RP2350 (ARM/RISC-V via Pico SDK) → `.uf2`
 - `--compile-bare`: Freestanding ELF with bare-metal runtime
 - `--compile-uefi`: UEFI PE/COFF images
+- C Backend Short-Circuiting (v4.1.8+): Emits `sage_bool(sage_truthy(L) && sage_truthy(R))` / `||` to guarantee native C short-circuit evaluation matching interpreter behavior.
 
 ---
 

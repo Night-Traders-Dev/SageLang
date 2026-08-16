@@ -339,6 +339,21 @@ if rsdp_table != nil:
 - `uefi.SMBIOS_TABLE_GUID`
 - `uefi.SMBIOS3_TABLE_GUID`
 
+## Bare-Metal Hardware Abstraction (`metal.*`)
+
+The `metal` standard library provides low-level drivers for bare-metal execution:
+
+### `metal.vga` — Early VGA Text Mode
+- `vga.clear(color)` — Clears the 80x25 VGA text screen (`0xB8000`) with background color.
+- `vga.puts(x, y, s, attr)` — Writes string `s` at `(x, y)` position with foreground/background color attribute.
+- `vga.draw_progress_bar(x, y, width, pct, color)` — Renders a text-mode progress bar at `(x, y)`.
+
+### `metal.timer` — Hardware Timer Driver
+- `timer.timer_init_periodic(hz)` — Configures hardware PIT (8254) in periodic mode at `hz` frequency.
+- `timer.timer_init_oneshot(hz)` — Configures hardware PIT in one-shot mode.
+- `timer.timer_get_mode()` — Returns current timer mode (`TIMER_MODE_PERIODIC` or `TIMER_MODE_ONESHOT`).
+- `timer.sleep_ms(ms)` — Halts CPU execution (`hlt`) for the requested duration.
+
 ## AVR & Arduino Uno Assembler Support (`core/boards/AVR`)
 
 Starting with v4.1.7, SageLang features a two-pass assembler backend for the **AVR 8-bit RISC architecture (ATmega328P and ATmega328PB)** under `core/boards/AVR/`. This enables compiling raw AVR assembly programs directly into Intel HEX (`.hex`) flash images, ready to be written to hardware (such as an Arduino Uno R3).

@@ -178,8 +178,8 @@ section is a summary with links to the relevant guide.
 
 ### Execution Backends & Compilers
 
-C codegen, LLVM IR (`--compile-llvm`), native assembly (x86-64/aarch64/rv64/mips),
-bytecode VM, SageMetal VM, JIT, AOT, and Kotlin/Android — 10 backends total.
+C codegen, LLVM IR (`--compile-llvm`), native assembly (x86-64/aarch64/rv64/mips/AVR),
+bytecode VM, SageMetal VM, JIT, AOT, and Kotlin/Android — 10 backends total plus an AVR 8-bit RISC assembler package.
 
 📖 **[JIT & AOT Guide](core/docs/JIT_AOT_Guide.md)** ·
 [CLI Reference](core/docs/CLI_Reference.md) ·
