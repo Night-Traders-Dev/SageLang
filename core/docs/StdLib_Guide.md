@@ -150,6 +150,8 @@ print fmt.table(headers, rows)
 
 ## Unicode & Strings (`std.unicode`)
 
+All string manipulation procedures in `std.unicode` operate in $O(N)$ linear time using native `slice()` and array `join()` built-ins.
+
 ```sage
 import std.unicode
 
