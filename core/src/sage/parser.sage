@@ -46,8 +46,38 @@ proc parse_type_name(parser):
     if tok.type == token.TOKEN_IDENTIFIER:
         let t_text = tok.text
         let t_kind = annotation_to_kind(t_text)
+        parser.advance()  # consume the type name token
         return [t_text, t_kind]
     return [nil, TYPE_UNKNOWN]
+
+proc annotation_to_kind(name):
+    let n = name.text
+    let len = len(n)
+    if len == 3 and n == "Int": return TYPE_NUMBER
+    if len == 5 and n == "Float": return TYPE_NUMBER
+    if len == 6 and n == "Number": return TYPE_NUMBER
+    if len == 4 and n == "Bool": return TYPE_BOOL
+    if len == 6 and n == "String": return TYPE_STRING
+    if len == 3 and n == "Str": return TYPE_STRING
+    if len == 5 and n == "Array": return TYPE_ARRAY
+    if len == 4 and n == "Dict": return TYPE_DICT
+    if len == 5 and n == "Tuple": return TYPE_TUPLE
+    if len == 3 and n == "Nil": return TYPE_NIL
+    if len == 8 and n == "Function": return TYPE_PROC
+    if len == 4 and n == "Proc": return TYPE_PROC
+    return TYPE_UNKNOWN
+
+
+let TYPE_UNKNOWN = 0
+let TYPE_NUMBER = 1
+let TYPE_STRING = 2
+let TYPE_BOOL = 3
+let TYPE_NIL = 4
+let TYPE_ARRAY = 5
+let TYPE_DICT = 6
+let TYPE_TUPLE = 7
+let TYPE_PROC = 8
+
 
 proc annotation_to_kind(name):
     let n = name
@@ -154,6 +184,17 @@ class Parser:
             let tok = self.peek()
             self.parse_error(tok, "Maximum nesting depth exceeded", "reduce the depth of nested expressions")
         let result = self.parse_assignment()
+        self.depth = self.depth - 1
+        return result
+
+
+    # Parse expression for RHS of let statements (no assignment handling)
+    proc parse_expression_rhs():
+        self.depth = self.depth + 1
+        if self.depth > MAX_DEPTH:
+            let tok = self.peek()
+            self.parse_error(tok, "Maximum nesting depth exceeded", "reduce the depth of nested expressions")
+        let result = self.parse_or()
         self.depth = self.depth - 1
         return result
 
@@ -867,9 +908,6 @@ class Parser:
                 name = self.advance()
             else:
                 self.consume(token.TOKEN_IDENTIFIER, "Expect variable name.")
-            let initializer = nil
-            if self.match_tok(token.TOKEN_ASSIGN):
-                initializer = self.parse_expression()
             let type_ann_text = nil
             let type_ann_kind = TYPE_UNKNOWN
             if self.check(token.TOKEN_COLON):
@@ -880,6 +918,9 @@ class Parser:
                 if t_kind != TYPE_UNKNOWN:
                     type_ann_text = t_text
                     type_ann_kind = t_kind
+            let initializer = nil
+            if self.match_tok(token.TOKEN_ASSIGN):
+                initializer = self.parse_expression_rhs()
             let s = let_stmt(name, initializer, type_ann_text)
             self.attach_pragmas(s, pragmas)
             return s

@@ -17,23 +17,22 @@ let TYPE_DICT = 6
 let TYPE_TUPLE = 7
 let TYPE_FUNCTION = 8
 
-let annotation_to_kind_fn = \
-    proc annotation_to_kind(name):\
-        let n = name.text\
-        let len = len(n)\
-        if len == 3 and n == "Int": return TYPE_NUMBER\
-        if len == 5 and n == "Float": return TYPE_NUMBER\
-        if len == 6 and n == "Number": return TYPE_NUMBER\
-        if len == 4 and n == "Bool": return TYPE_BOOL\
-        if len == 6 and n == "String": return TYPE_STRING\
-        if len == 3 and n == "Str": return TYPE_STRING\
-        if len == 5 and n == "Array": return TYPE_ARRAY\
-        if len == 4 and n == "Dict": return TYPE_DICT\
-        if len == 5 and n == "Tuple": return TYPE_TUPLE\
-        if len == 3 and n == "Nil": return TYPE_NIL\
-        if len == 8 and n == "Function": return TYPE_PROC\
-        if len == 4 and n == "Proc": return TYPE_PROC\
-        return TYPE_UNKNOWN
+proc annotation_to_kind(name):
+    let n = name.text
+    let len = len(n)
+    if len == 3 and n == "Int": return TYPE_NUMBER
+    if len == 5 and n == "Float": return TYPE_NUMBER
+    if len == 6 and n == "Number": return TYPE_NUMBER
+    if len == 4 and n == "Bool": return TYPE_BOOL
+    if len == 6 and n == "String": return TYPE_STRING
+    if len == 3 and n == "Str": return TYPE_STRING
+    if len == 5 and n == "Array": return TYPE_ARRAY
+    if len == 4 and n == "Dict": return TYPE_DICT
+    if len == 5 and n == "Tuple": return TYPE_TUPLE
+    if len == 3 and n == "Nil": return TYPE_NIL
+    if len == 8 and n == "Function": return TYPE_PROC
+    if len == 4 and n == "Proc": return TYPE_PROC
+    return TYPE_UNKNOWN
 proc type_kind_name(kind):
     if kind == TYPE_UNKNOWN:
         return "unknown"
@@ -169,9 +168,7 @@ proc infer_stmt(tmap, stmt):
             if ann_kind != TYPE_UNKNOWN:
                 # Check if inferred type matches declared type
                 if var_type != ann_kind:
-                    print "Type Warning: type mismatch in let binding (expected " + 
-                          type_kind_name(ann_kind) + ", got " + 
-                          type_kind_name(var_type) + ")"
+                    print "Type Warning: type mismatch in let binding (expected " + type_kind_name(ann_kind) + ", got " + type_kind_name(var_type) + ")"
                 var_type = ann_kind
                 tmap.set_declared(stmt.name.text, ann_kind)
         tmap.set_var(stmt.name.text, var_type)
