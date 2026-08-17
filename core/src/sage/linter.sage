@@ -19,6 +19,47 @@ import io
 
 # Severity constants
 let SEV_ERROR = "error"
+
+# String state tracking for proper linting inside/outside strings
+proc update_string_state(state, line):
+    if state == 0:
+        if chr(39) * 3 in line:
+            return 3
+        elif chr(34) * 3 in line:
+            return 4
+        elif chr(39) in line and line.count(chr(39)) % 2 == 1:
+            return 1
+        elif chr(34) in line and line.count(chr(34)) % 2 == 1:
+            return 2
+        return 0
+    elif state == 1:
+        if line.count(chr(39)) % 2 == 1:
+            return 0
+        return 1
+    elif state == 2:
+        if line.count(chr(34)) % 2 == 1:
+            return 0
+        return 2
+    elif state == 3:
+        if chr(39) * 3 in line:
+            return 0
+        return 3
+    elif state == 4:
+        if chr(34) * 3 in line:
+            return 0
+        return 4
+    return 0
+
+# Check for multiple statements on one line (S005)
+proc check_multiple_statements(line):
+    let semicolons = 0
+    let i = 0
+    while i < len(line):
+        if line[i] == ";" and (i == 0 or line[i-1] != "\"):
+            if i < len(line) - 1:
+                return True
+        i = i + 1
+    return False
 let SEV_WARNING = "warning"
 let SEV_STYLE = "style"
 
@@ -282,6 +323,16 @@ proc lint_source(source):
             end2 = end2 - 1
         if end2 >= 0 and line[end2] == ";":
             push(messages, make_msg(lineno, end2 + 1, SEV_STYLE, "S004", "Trailing semicolon (not used in Sage)"))
+        # S005: Multiple statements on one line
+        let semicolon_count = 0
+        let k = 0
+        while k < len(line):
+            if line[k] == ";" and (k == 0 or line[k-1] != "\"):
+                if k < len(line) - 1:
+                    semicolon_count = semicolon_count + 1
+            k = k + 1
+        if semicolon_count > 1:
+            push(messages, make_msg(lineno, 1, SEV_STYLE, "S005", "Multiple statements on one line (use separate lines)"))
     # W001: Unused variable post-pass
     for v in vars:
         let found = false
