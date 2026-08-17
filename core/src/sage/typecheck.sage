@@ -163,6 +163,17 @@ proc infer_stmt(tmap, stmt):
         return
     if t == ast.STMT_LET:
         let var_type = infer_expr(tmap, stmt.initializer)
+        # Check for type annotation
+        if stmt.type_ann_text != nil:
+            let ann_kind = annotation_to_kind(stmt.type_ann_text)
+            if ann_kind != TYPE_UNKNOWN:
+                # Check if inferred type matches declared type
+                if var_type != ann_kind:
+                    print "Type Warning: type mismatch in let binding (expected " + 
+                          type_kind_name(ann_kind) + ", got " + 
+                          type_kind_name(var_type) + ")"
+                var_type = ann_kind
+                tmap.set_declared(stmt.name.text, ann_kind)
         tmap.set_var(stmt.name.text, var_type)
         return
     if t == ast.STMT_IF:
@@ -180,6 +191,11 @@ proc infer_stmt(tmap, stmt):
     if t == ast.STMT_PROC:
         # Register proc name as function type
         tmap.set_var(stmt.name.text, TYPE_FUNCTION)
+        # Track return type annotation
+        if stmt.ret_type_ann_text != nil:
+            let ann_kind = annotation_to_kind(stmt.ret_type_ann_text)
+            if ann_kind != TYPE_UNKNOWN:
+                tmap.set_declared(stmt.name.text + "_ret", ann_kind)
         infer_stmt_list(tmap, stmt.body)
         return
     if t == ast.STMT_FOR:

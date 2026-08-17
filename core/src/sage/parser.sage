@@ -31,6 +31,41 @@ from ast import async_proc_stmt, defer_stmt, struct_stmt
 # Maximum parser recursion depth
 let MAX_DEPTH = 500
 
+let TYPE_UNKNOWN = 0
+let TYPE_NUMBER = 1
+let TYPE_STRING = 2
+let TYPE_BOOL = 3
+let TYPE_NIL = 4
+let TYPE_ARRAY = 5
+let TYPE_DICT = 6
+let TYPE_TUPLE = 7
+let TYPE_PROC = 8
+
+proc parse_type_name(parser):
+    let tok = parser.peek()
+    if tok.type == token.TOKEN_IDENTIFIER:
+        let t_text = tok.text
+        let t_kind = annotation_to_kind(t_text)
+        return [t_text, t_kind]
+    return [nil, TYPE_UNKNOWN]
+
+proc annotation_to_kind(name):
+    let n = name
+    let len = len(n)
+    if len == 3 and n == "Int": return TYPE_NUMBER
+    if len == 5 and n == "Float": return TYPE_NUMBER
+    if len == 6 and n == "Number": return TYPE_NUMBER
+    if len == 4 and n == "Bool": return TYPE_BOOL
+    if len == 6 and n == "String": return TYPE_STRING
+    if len == 3 and n == "Str": return TYPE_STRING
+    if len == 5 and n == "Array": return TYPE_ARRAY
+    if len == 4 and n == "Dict": return TYPE_DICT
+    if len == 5 and n == "Tuple": return TYPE_TUPLE
+    if len == 3 and n == "Nil": return TYPE_NIL
+    if len == 8 and n == "Function": return TYPE_PROC
+    if len == 4 and n == "Proc": return TYPE_PROC
+    return TYPE_UNKNOWN
+
 proc parse_number_literal(text):
     if len(text) >= 2 and text[0] == "0" and (text[1] == "b" or text[1] == "B"):
         let value = 0
@@ -489,7 +524,7 @@ class Parser:
                     let tok = self.peek()
                     self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
         self.consume(token.TOKEN_RPAREN, "Expect ')' after parameters.")
-        self.consume(token.TOKEN_COLON, "Expect ':' after procedure signature.")
+        self.consume(token.TOKEN_COLON, "Expect \":\" after procedure signature.")
         self.consume(token.TOKEN_NEWLINE, "Expect newline before procedure body.")
         let body = self.parse_block()
         return proc_stmt(name, params, body)
@@ -517,7 +552,7 @@ class Parser:
         else:
             # No parens means no parameters: proc: body end
             pass
-        self.consume(token.TOKEN_COLON, "Expect ':' after procedure signature.")
+        self.consume(token.TOKEN_COLON, "Expect \":\" after procedure signature.")
         # Inline body: single statement followed by 'end' keyword
         # or multi-line body with indentation
         let body = nil
@@ -556,7 +591,7 @@ class Parser:
                     let tok = self.peek()
                     self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
         self.consume(token.TOKEN_RPAREN, "Expect ')' after parameters.")
-        self.consume(token.TOKEN_COLON, "Expect ':' after procedure signature.")
+        self.consume(token.TOKEN_COLON, "Expect \":\" after procedure signature.")
         self.consume(token.TOKEN_NEWLINE, "Expect newline before procedure body.")
         let body = self.parse_block()
         return async_proc_stmt(name, params, body)
@@ -835,8 +870,17 @@ class Parser:
             let initializer = nil
             if self.match_tok(token.TOKEN_ASSIGN):
                 initializer = self.parse_expression()
-            let s = let_stmt(name, initializer)
-            self.match_tok(token.TOKEN_NEWLINE)
+            let type_ann_text = nil
+            let type_ann_kind = TYPE_UNKNOWN
+            if self.check(token.TOKEN_COLON):
+                self.consume(token.TOKEN_COLON, "Expect type name after \":\"")
+                let result = parse_type_name(self)
+                let t_text = result[0]
+                let t_kind = result[1]
+                if t_kind != TYPE_UNKNOWN:
+                    type_ann_text = t_text
+                    type_ann_kind = t_kind
+            let s = let_stmt(name, initializer, type_ann_text)
             self.attach_pragmas(s, pragmas)
             return s
 

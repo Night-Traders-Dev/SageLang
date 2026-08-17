@@ -273,10 +273,11 @@ proc expr_stmt(expression):
     s.expression = expression
     return s
 
-proc let_stmt(name, initializer):
+proc let_stmt(name, initializer, type_ann_text = nil):
     let s = Stmt(STMT_LET)
     s.name = name
     s.initializer = initializer
+    s.type_ann_text = type_ann_text
     return s
 
 proc if_stmt(condition, then_branch, else_branch):
@@ -297,12 +298,14 @@ proc while_stmt(condition, body):
     s.body = body
     return s
 
-proc proc_stmt(name, params, body):
+proc proc_stmt(name, params, body, ret_type_ann_text = nil, param_type_anns = nil):
     let s = Stmt(STMT_PROC)
     s.name = name
     s.params = params
     s.param_count = len(params)
     s.body = body
+    s.ret_type_ann_text = ret_type_ann_text
+    s.param_type_anns = param_type_anns
     return s
 
 proc for_stmt(variable, iterable, body):
@@ -361,12 +364,14 @@ proc import_stmt(module_name, items, item_aliases, alias, import_all):
     s.import_all = import_all
     return s
 
-proc async_proc_stmt(name, params, body):
+proc async_proc_stmt(name, params, body, ret_type_ann_text = nil, param_type_anns = nil):
     let s = Stmt(STMT_ASYNC_PROC)
     s.name = name
     s.params = params
     s.param_count = len(params)
     s.body = body
+    s.ret_type_ann_text = ret_type_ann_text
+    s.param_type_anns = param_type_anns
     return s
 
 proc defer_stmt(statement):
