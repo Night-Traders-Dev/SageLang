@@ -17,7 +17,23 @@ let TYPE_DICT = 6
 let TYPE_TUPLE = 7
 let TYPE_FUNCTION = 8
 
-# Type kind name for debugging
+let annotation_to_kind_fn = \
+    proc annotation_to_kind(name):\
+        let n = name.text\
+        let len = len(n)\
+        if len == 3 and n == "Int": return TYPE_NUMBER\
+        if len == 5 and n == "Float": return TYPE_NUMBER\
+        if len == 6 and n == "Number": return TYPE_NUMBER\
+        if len == 4 and n == "Bool": return TYPE_BOOL\
+        if len == 6 and n == "String": return TYPE_STRING\
+        if len == 3 and n == "Str": return TYPE_STRING\
+        if len == 5 and n == "Array": return TYPE_ARRAY\
+        if len == 4 and n == "Dict": return TYPE_DICT\
+        if len == 5 and n == "Tuple": return TYPE_TUPLE\
+        if len == 3 and n == "Nil": return TYPE_NIL\
+        if len == 8 and n == "Function": return TYPE_PROC\
+        if len == 4 and n == "Proc": return TYPE_PROC\
+        return TYPE_UNKNOWN
 proc type_kind_name(kind):
     if kind == TYPE_UNKNOWN:
         return "unknown"
@@ -45,6 +61,7 @@ class TypeMap:
     proc init():
         # env maps variable name -> type kind
         self.env = {}
+        self.declared = {}
 
     proc set_var(name, kind):
         self.env[name] = kind
