@@ -51,6 +51,42 @@ proc parse_type_name(parser):
     return [nil, TYPE_UNKNOWN]
 
 proc annotation_to_kind(name):
+    let n = name
+    let len = len(n)
+    if len == 3 and n == "Int": return TYPE_NUMBER
+    if len == 5 and n == "Float": return TYPE_NUMBER
+    if len == 6 and n == "Number": return TYPE_NUMBER
+    if len == 4 and n == "Bool": return TYPE_BOOL
+    if len == 6 and n == "String": return TYPE_STRING
+    if len == 3 and n == "Str": return TYPE_STRING
+    if len == 5 and n == "Array": return TYPE_ARRAY
+    if len == 4 and n == "Dict": return TYPE_DICT
+    if len == 5 and n == "Tuple": return TYPE_TUPLE
+    if len == 3 and n == "Nil": return TYPE_NIL
+    if len == 8 and n == "Function": return TYPE_PROC
+    if len == 4 and n == "Proc": return TYPE_PROC
+    return TYPE_UNKNOWN
+
+let TYPE_UNKNOWN = 0
+let TYPE_NUMBER = 1
+let TYPE_STRING = 2
+let TYPE_BOOL = 3
+let TYPE_NIL = 4
+let TYPE_ARRAY = 5
+let TYPE_DICT = 6
+let TYPE_TUPLE = 7
+let TYPE_PROC = 8
+
+proc parse_type_name(parser):
+    let tok = parser.peek()
+    if tok.type == token.TOKEN_IDENTIFIER:
+        let t_text = tok.text
+        let t_kind = annotation_to_kind(t_text)
+        parser.advance()  # consume the type name token
+        return [t_text, t_kind]
+    return [nil, TYPE_UNKNOWN]
+
+proc annotation_to_kind(name):
     let n = name.text
     let len = len(n)
     if len == 3 and n == "Int": return TYPE_NUMBER
@@ -184,6 +220,16 @@ class Parser:
             let tok = self.peek()
             self.parse_error(tok, "Maximum nesting depth exceeded", "reduce the depth of nested expressions")
         let result = self.parse_assignment()
+        self.depth = self.depth - 1
+        return result
+
+    # Parse expression for RHS of let statements (no assignment handling)
+    proc parse_expression_rhs():
+        self.depth = self.depth + 1
+        if self.depth > MAX_DEPTH:
+            let tok = self.peek()
+            self.parse_error(tok, "Maximum nesting depth exceeded", "reduce the depth of nested expressions")
+        let result = self.parse_or()
         self.depth = self.depth - 1
         return result
 
@@ -550,64 +596,65 @@ class Parser:
         let name = self.advance()
         self.consume(token.TOKEN_LPAREN, "Expect '(' after procedure name.")
         let params = []
+        let param_type_anns = []
         if not self.check(token.TOKEN_RPAREN):
             let pt = self.peek_type()
             if pt == token.TOKEN_SELF or pt == token.TOKEN_IDENTIFIER:
-                push(params, self.advance())
+                let param_name = self.advance()
+                # Check for parameter type annotation: x: Type
+                let param_type_ann = nil
+                if self.check(token.TOKEN_COLON):
+                    self.consume(token.TOKEN_COLON, "Expect parameter type name")
+                    let result = parse_type_name(self)
+                    let t_text = result[0]
+                    let t_kind = result[1]
+                    if t_kind != TYPE_UNKNOWN:
+                        param_type_ann = t_text
+                push(params, param_name)
+                push(param_type_anns, param_type_ann)
             else:
                 let tok = self.peek()
                 self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
             while self.match_tok(token.TOKEN_COMMA):
                 let pt2 = self.peek_type()
                 if pt2 == token.TOKEN_SELF or pt2 == token.TOKEN_IDENTIFIER:
-                    push(params, self.advance())
+                    let param_name = self.advance()
+                    let param_type_ann = nil
+                    if self.check(token.TOKEN_COLON):
+                        self.consume(token.TOKEN_COLON, "Expect parameter type name")
+                        let result = parse_type_name(self)
+                        let t_text = result[0]
+                        let t_kind = result[1]
+                        if t_kind != TYPE_UNKNOWN:
+                            param_type_ann = t_text
+                    push(params, param_name)
+                    push(param_type_anns, param_type_ann)
                 else:
                     let tok = self.peek()
                     self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
         self.consume(token.TOKEN_RPAREN, "Expect ')' after parameters.")
+        
+        # Parse return type annotation: proc f() : Int
+        let ret_type_ann_text = nil
+        let ret_type_ann_kind = TYPE_UNKNOWN
+        if self.check(token.TOKEN_COLON):
+            let saved_pos = self.pos
+            self.consume(token.TOKEN_COLON, "Expect return type name")
+            if self.check(token.TOKEN_IDENTIFIER):
+                let result = parse_type_name(self)
+                let t_text = result[0]
+                let t_kind = result[1]
+                if t_kind != TYPE_UNKNOWN:
+                    ret_type_ann_text = t_text
+                    ret_type_ann_kind = t_kind
+            else:
+                # Not a return type annotation, restore position
+                self.pos = saved_pos
+        
         self.consume(token.TOKEN_COLON, "Expect \":\" after procedure signature.")
         self.consume(token.TOKEN_NEWLINE, "Expect newline before procedure body.")
         let body = self.parse_block()
-        return proc_stmt(name, params, body)
-
-    proc parse_proc_expr():
-        # Anonymous proc expression: proc(params): body end or proc(): body end
-        # Works as an expression that creates a function value
-        let params = []
-        if self.match_tok(token.TOKEN_LPAREN):
-            if not self.check(token.TOKEN_RPAREN):
-                let pt = self.peek_type()
-                if pt == token.TOKEN_SELF or pt == token.TOKEN_IDENTIFIER:
-                    push(params, self.advance())
-                else:
-                    let tok = self.peek()
-                    self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
-                while self.match_tok(token.TOKEN_COMMA):
-                    let pt2 = self.peek_type()
-                    if pt2 == token.TOKEN_SELF or pt2 == token.TOKEN_IDENTIFIER:
-                        push(params, self.advance())
-                    else:
-                        let tok = self.peek()
-                        self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
-            self.consume(token.TOKEN_RPAREN, "Expect ')' after parameters.")
-        else:
-            # No parens means no parameters: proc: body end
-            pass
-        self.consume(token.TOKEN_COLON, "Expect \":\" after procedure signature.")
-        # Inline body: single statement followed by 'end' keyword
-        # or multi-line body with indentation
-        let body = nil
-        if self.match_tok(token.TOKEN_NEWLINE):
-            body = self.parse_block()
-            # Consume optional 'end' keyword after multi-line block
-            self.match_tok(token.TOKEN_END)
-        else:
-            # Parse a single statement as the body
-            let stmt = self.parse_statement()
-            body = block_stmt(stmt)
-            # Expect 'end' keyword to terminate the inline proc
-            self.consume(token.TOKEN_END, "Expect 'end' after inline procedure body.")
-        return proc_expr(params, body)
+        return proc_stmt(name, params, body, ret_type_ann_text, param_type_anns)
 
     proc parse_async_proc():
         self.consume(token.TOKEN_PROC, "Expect 'proc' after 'async'.")
