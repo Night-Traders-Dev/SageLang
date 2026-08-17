@@ -93,8 +93,6 @@ make clean && make -j$(nproc)   # produces ./sage and ./sage-lsp
 
 Desktop build links against `libm`, `pthread`, `dl`, `libcurl`, and OpenSSL.
 
-Desktop build links against `libm`, `pthread`, `dl`, `libcurl`, and OpenSSL.
-
 All execution backends share robust generator support with cooperative multitasking via `yield` and `next()` functions, enabling non-blocking operations and efficient pausing/resumption of execution within procedures.
 
 Refreshed by `make charts` and as part of the default `make` build (count
