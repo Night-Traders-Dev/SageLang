@@ -36,8 +36,10 @@ inheritance, arrays, dicts, strings, try/catch, break/continue, bitwise
 operators (`~`), and module imports with loop iteration limits.
 
 **Type annotations**: `let x: Int = ...`, `proc f() : Int`, `proc f(x: Int)` — type
-declared/inferred tracking via `TypeMap.declared` dict. Infrastructure added but
-full parser/annotation node support pending (see typecheck.sage additions).
+declared/inferred tracking via `TypeMap.declared` dict and `annotation_to_kind`
+mapping. **Fully implemented in parser and typecheck** (see parser.sage:45-54,
+typecheck.sage:147-165). Type validation at let-binding, return statements,
+and proc parameters.
 
 ## Module Imports
 
