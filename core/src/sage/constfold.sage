@@ -34,19 +34,35 @@ proc fold_binary(expr):
         let l = expr.left.value
         let r = expr.right.value
         if op == "+":
-            return ast.number_expr(l + r)
+            let result = l + r
+            # inf/NaN guard (mirrors constfold.c:83)
+            if result != result:  # NaN check
+                return expr
+            return ast.number_expr(result)
         if op == "-":
-            return ast.number_expr(l - r)
+            let result = l - r
+            if result != result:
+                return expr
+            return ast.number_expr(result)
         if op == "*":
-            return ast.number_expr(l * r)
+            let result = l * r
+            if result != result:
+                return expr
+            return ast.number_expr(result)
         if op == "/":
             if r == 0:
                 return expr
-            return ast.number_expr(l / r)
+            let result = l / r
+            if result != result:
+                return expr
+            return ast.number_expr(result)
         if op == "%":
             if r == 0:
                 return expr
-            return ast.number_expr(l % r)
+            let result = l % r
+            if result != result:
+                return expr
+            return ast.number_expr(result)
         if op == "<":
             return ast.bool_expr(l < r)
         if op == ">":
@@ -60,10 +76,13 @@ proc fold_binary(expr):
         if op == ">=":
             return ast.bool_expr(l >= r)
         return expr
-    # String + String concatenation
-    if is_string_literal(expr.left) and is_string_literal(expr.right):
-        if op == "+":
-            return ast.string_expr(expr.left.value + expr.right.value)
+    # String + String concatenation (see 64KB cap above)
+if is_string_literal(expr.left) and is_string_literal(expr.right):
+    if op == "+":
+        let new_val = expr.left.value + expr.right.value
+        if len(new_val) > MAX_STRING_CONCAT:
+            return expr  # cap exceeded, don't fold
+        return ast.string_expr(new_val)
     # Boolean logic
     if is_bool_literal(expr.left) and is_bool_literal(expr.right):
         let l = expr.left.value
