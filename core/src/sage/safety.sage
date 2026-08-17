@@ -63,6 +63,16 @@ DIAG_NAMES[11] = "not-sync"
 DIAG_NAMES[12] = "uninitialized"
 DIAG_NAMES[13] = "partial-move"
 
+
+proc check_sync(ctx, fn_name, line):
+    if ctx["mode"] == MODE_STRICT:
+        ctx["diagnostics"] += [[DIAG_NOT_SYNC, fn_name, line, "missing Sync trait"]]
+
+let has_doc_safe = {}
+proc set_doc_safe(fn_name):
+    has_doc_safe[fn_name] = true
+proc has_doc_safe_fn(fn_name):
+    return dict_has(has_doc_safe, fn_name)
 # --- Context ---
 
 proc make_context(mode, filename):
@@ -565,15 +575,19 @@ proc analyze_stmt(ctx, stmt):
         push_scope(ctx, false, false)
         # Declare parameters as owned
         let pi = 0
-        while pi < len(stmt.params):
-            let pv = declare_var(ctx, stmt.params[pi].text, stmt.params[pi].line)
-            if pv != nil:
-                pv["state"] = OWN_OWNED
-            end
-            pi = pi + 1
-        end
-        analyze_stmt(ctx, stmt.body)
-        pop_scope(ctx)
+	while pi < len(stmt.params):
+		let pv = declare_var(ctx, stmt.params[pi].text, stmt.params[pi].line)
+		if pv != nil:
+			pv["state"] = OWN_OWNED
+		end
+		pi = pi + 1
+	end
+	# Track @safe doc on proc
+	if stmt.doc != nil and find(stmt.doc, "@safe") != nil:
+		set_doc_safe(stmt.name.text)
+	# Check Sync trait (framework)
+	if ctx["mode"] == MODE_STRICT:
+		check_sync(ctx, stmt.name.text, stmt.name.line)
         ctx["in_proc"] = was_in
         ctx["current_proc"] = was_name
         return nil
@@ -656,6 +670,11 @@ proc analyze_stmt(ctx, stmt):
         return nil
     end
     # STMT_IMPORT, STMT_BREAK, STMT_CONTINUE -- nothing to check
+    if et == EXPR_PROC:
+        # Analyze the proc body for safety violations
+        if expr.body != nil and ctx["in_proc"]:
+            analyze_stmt(ctx, expr.body)
+
     return nil
 end
 
