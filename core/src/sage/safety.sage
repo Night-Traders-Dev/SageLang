@@ -66,7 +66,10 @@ DIAG_NAMES[13] = "partial-move"
 
 proc check_sync(ctx, fn_name, line):
     if ctx["mode"] == MODE_STRICT:
-        ctx["diagnostics"] += [[DIAG_NOT_SYNC, fn_name, line, "missing Sync trait"]]
+        # Check if the function/type has Sync trait
+        # For now, emit diagnostic if in strict mode and not explicitly marked
+        # In a full implementation, this would check if the type implements Sync
+        ctx["diagnostics"] += [[DIAG_NOT_SYNC, fn_name, line, "missing Sync trait; mark type as Sync or use Mutex wrapper"]]
 
 let has_doc_safe = {}
 proc set_doc_safe(fn_name):
@@ -487,6 +490,12 @@ proc analyze_expr(ctx, expr):
     end
     if et == EXPR_AWAIT:
         analyze_expr(ctx, expr.expression)
+        return nil
+    end
+    if et == EXPR_PROC:
+        # Analyze the proc body for safety violations
+        if expr.body != nil and ctx["in_proc"]:
+            analyze_stmt(ctx, expr.body)
         return nil
     end
     return nil
