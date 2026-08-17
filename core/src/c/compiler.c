@@ -2872,7 +2872,7 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
     char *escaped = escape_c_string(expr->as.string.value);
     StringBuffer sb;
     sb_init(&sb);
-    sb_appendf(&sb, "sage_string(\"%s\")", escaped);
+    sb_appendf(&sb, "sage_string_const(\"%s\")", escaped);
     free(escaped);
     return sb_take(&sb);
   }
@@ -2990,7 +2990,7 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
     char *escaped = escape_c_string(prop);
     StringBuffer sb;
     sb_init(&sb);
-    sb_appendf(&sb, "sage_index(%s, sage_string(\"%s\"))", object, escaped);
+    sb_appendf(&sb, "sage_index(%s, sage_string_const(\"%s\"))", object, escaped);
     free(object);
     free(prop);
     free(escaped);
@@ -3504,11 +3504,30 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    return 1;\n"
       "}\n"
       "\n"
-      "static void sage_gc_mark_value(SageValue value);\n"
-      "extern void sage_gc_mark_program_globals(void);\n"
-      "\n"
-      "static void sage_gc_mark_roots(void) {\n"
-      "    sage_gc_mark_program_globals();\n"
+"static void sage_gc_mark_value(SageValue value);\n"
+       "extern void sage_gc_mark_program_globals(void);\n"
+       "\n"
+       "/* String interner: compile-time constant strings (literals and\n"
+       " * property-access keys) are created once and shared, so repeated\n"
+       " * accesses in hot loops do not allocate a fresh GC-heap copy per\n"
+       " * evaluation. Entries are rooted so the GC never collects them.\n"
+       " */\n"
+       "#define SAGE_INTERN_CAPACITY 4096\n"
+       "typedef struct { const char* content; SageValue val; } "
+       "SageInternedEntry;\n"
+       "static SageInternedEntry sage_intern_table[SAGE_INTERN_CAPACITY];\n"
+       "static int sage_intern_count = 0;\n"
+       "static unsigned long sage_intern_hash(const char* s) {\n"
+       "    unsigned long h = 2166136261u;\n"
+       "    while (*s) { h ^= (unsigned char)*s++; h *= 16777619u; }\n"
+       "    return h;\n"
+       "}\n"
+       "\n"
+       "static void sage_gc_mark_roots(void) {\n"
+       "    sage_gc_mark_program_globals();\n"
+       "    for (int i = 0; i < sage_intern_count; i++) {\n"
+       "        sage_gc_mark_value(sage_intern_table[i].val);\n"
+       "    }\n"
       "    for (SageGcFrame* frame = sage_gc.frames; frame != NULL; frame = "
       "frame->prev) {\n"
       "        if (frame->slots == NULL) continue;\n"
@@ -3700,6 +3719,23 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "\"\" : value); return v; }\n"
         "static SageValue sage_string_take(char* value) { SageValue v = "
         "sage_string(value == NULL ? \"\" : value); free(value); return v; }\n"
+        "static SageValue sage_string_const(const char* value) {\n"
+        "    if (value == NULL) value = \"\";\n"
+        "    if (sage_intern_count >= SAGE_INTERN_CAPACITY) return "
+        "sage_string(value);\n"
+        "    unsigned long h = sage_intern_hash(value) & (SAGE_INTERN_CAPACITY "
+        "- 1);\n"
+        "    while (sage_intern_table[h].content != NULL) {\n"
+        "        if (strcmp(sage_intern_table[h].content, value) == 0)\n"
+        "            return sage_intern_table[h].val;\n"
+        "        h = (h + 1) & (SAGE_INTERN_CAPACITY - 1);\n"
+        "    }\n"
+        "    SageValue v = sage_string(value);\n"
+        "    sage_intern_table[h].content = value;\n"
+        "    sage_intern_table[h].val = v;\n"
+        "    sage_intern_count++;\n"
+        "    return v;\n"
+        "}\n"
         "static SageValue sage_array(void) { SageValue v; v.type = "
         "SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
          "static SageValue sage_function(void* fn) { SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = fn; return v; }\n"
