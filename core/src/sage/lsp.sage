@@ -13,6 +13,8 @@
 # Wire protocol adapted for line-based I/O: reads Content-Length header,
 # then reads the JSON body line by line until we have enough characters.
 
+import sys
+
 # ========================================================================
 # Character constants (no escape sequences in Sage)
 # ========================================================================
@@ -559,11 +561,12 @@ proc get_initialize_result():
     result = result + dq + "completionProvider" + dq + ":{"
     result = result + dq + "triggerCharacters" + dq + ":[" + dq + "." + dq + "]"
     result = result + "},"
-    result = result + dq + "hoverProvider" + dq + ":true"
+    result = result + dq + "hoverProvider" + dq + ":true,"
+    result = result + dq + "documentFormattingProvider" + dq + ":true"
     result = result + "},"
     result = result + dq + "serverInfo" + dq + ":{"
     result = result + dq + "name" + dq + ":" + dq + "sage-lsp" + dq + ","
-    result = result + dq + "version" + dq + ":" + dq + "3" + dq
+    result = result + dq + "version" + dq + ":" + dq + sys.version + dq
     result = result + "}"
     result = result + "}"
     return result

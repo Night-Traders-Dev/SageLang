@@ -19,6 +19,7 @@ import linter
 import typecheck
 import safety
 import gc
+import lsp
 from parser import parse_source, parse_source_file
 from interpreter import new_interpreter, run_source, exec_program, set_error_context
 
@@ -51,8 +52,15 @@ proc print_usage():
     print "  --emit-vm <file>      Compile to VM bytecode artifact"
     print "  --emit-llvm <file>    Compile to LLVM IR"
     print "  --emit-asm <file>     Compile to assembly"
+    print "  --sgvm <file>         Compile to SageVM artifact (.sgvm)"
     print "  --compile-to-lily <file>  Compile to Lily source"
     print "  --compile-from-lily <file> Compile from Lily source"
+    print ""
+    print "Runtime flags:"
+    print "  -c <code>             Run code from a string"
+    print "  --jit <file>          Run with JIT profiling (default interpreter behavior)"
+    print "  --aot <file>          AOT: print type-specialized C code to stdout"
+    print "  --lsp                 Start LSP server (stdin/stdout)"
     print ""
     print "Options:"
     print "  -o <path>             Output file path"
@@ -62,7 +70,7 @@ proc print_usage():
     print "  --strict-safety <file>  Run with strict safety enforcement"
     print "  --gc:arc|orc|tracing  Select GC mode (default: tracing)"
     print "  --repl                Start interactive REPL"
-    print "  --verbose             Verbose pass output"
+    print "  --verbose, -v         Verbose pass output"
     print "  --version             Print version"
     print "  --help                Show this help"
 
@@ -148,6 +156,99 @@ proc parse_args():
             i = i + 1
             if i < argc:
                 result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--sgvm":
+            result["mode"] = "emit-vm"
+            result["sgvm_ext"] = true
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--emit-kotlin":
+            result["mode"] = "unsupported"
+            result["unsupported"] = "Kotlin backend is not available in the self-hosted build (C-only: src/c/kotlin_backend.c)"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--emit-pico-c":
+            result["mode"] = "unsupported"
+            result["unsupported"] = "Pico C backend is not available in the self-hosted build (C-only: src/c/pico_codegen.c)"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--compile" or arg == "--compile-native" or arg == "--compile-llvm":
+            result["mode"] = "unsupported"
+            result["unsupported"] = "flag requires invoking an external C/LLVM toolchain, which the self-hosted CLI cannot do (use --emit-c or --emit-llvm instead)"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--compile-jit" or arg == "--compile-pico" or arg == "--compile-bare":
+            result["mode"] = "unsupported"
+            result["unsupported"] = "flag requires bundling/copying the compiler executable or invoking an external toolchain; not available in the self-hosted build"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--compile-uefi" or arg == "--compile-android":
+            result["mode"] = "unsupported"
+            result["unsupported"] = "flag requires invoking an external SDK toolchain; not available in the self-hosted build"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--run-vm" or arg == "--run-bytecode":
+            result["mode"] = "unsupported"
+            result["unsupported"] = "VM bytecode execution is not available in the self-hosted build (emit artifacts with --emit-vm and run them with the sagevm binary)"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "-c":
+            result["mode"] = "run-string"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--jit":
+            result["mode"] = "run"
+            result["jit"] = true
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--aot":
+            result["mode"] = "aot"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--lsp":
+            result["mode"] = "lsp"
             i = i + 1
             continue
 
@@ -250,7 +351,7 @@ proc parse_args():
             i = i + 1
             continue
 
-        if arg == "--verbose":
+        if arg == "--verbose" or arg == "-v":
             result["verbose"] = true
             i = i + 1
             continue
@@ -381,7 +482,10 @@ proc mode_emit_vm(args):
         return
     let out = args["output"]
     if out == nil:
-        out = derive_output(path, ".svm")
+        if dict_has(args, "sgvm_ext") and args["sgvm_ext"]:
+            out = derive_output(path, ".sgvm")
+        else:
+            out = derive_output(path, ".svm")
     io.writefile(out, artifact)
     print "Wrote " + out
 
@@ -433,6 +537,57 @@ proc mode_emit_asm(args):
         out = derive_output(path, ".s")
     io.writefile(out, asm)
     print "Wrote " + out
+
+# ============================================================================
+# Mode: Run String (-c)
+# ============================================================================
+
+proc mode_run_string(args):
+    let source = args["input"]
+    if source == nil:
+        print "Error: -c requires a source string"
+        return
+    let stmts = parse_source(source)
+    if args["opt_level"] > 0:
+        let ctx = make_pass_ctx(args)
+        stmts = pass.run_passes(stmts, ctx)
+    set_error_context(source, "<command>")
+    let genv = new_interpreter()
+    exec_program(genv, stmts)
+
+# ============================================================================
+# Mode: AOT (--aot)
+# C behavior: without -o, print type-specialized C code to stdout;
+# with -o, write <out>.c (the cc invocation step cannot run self-hosted).
+# ============================================================================
+
+proc mode_aot(args):
+    let path = args["input"]
+    if path == nil:
+        print "Error: No input file specified"
+        return
+    let source = read_input(path)
+    if source == nil:
+        return
+    let stmts = parse_source_file(source, path)
+    let ctx = make_pass_ctx(args)
+    ctx["opt_level"] = 2
+    stmts = pass.run_passes(stmts, ctx)
+    let c_code = compiler.compile_to_c(stmts)
+    let out = args["output"]
+    if out == nil:
+        print c_code
+        return
+    io.writefile(out + ".c", c_code)
+    print "Wrote " + out + ".c"
+    print "Note: linking a native binary requires an external C toolchain (not available in the self-hosted build)"
+
+# ============================================================================
+# Mode: Unsupported flag
+# ============================================================================
+
+proc mode_unsupported(args):
+    print "Error: " + args["unsupported"]
 
 # ============================================================================
 # Mode: Format
@@ -629,6 +784,22 @@ proc main():
 
     if mode == "run":
         mode_run(args)
+        return
+
+    if mode == "run-string":
+        mode_run_string(args)
+        return
+
+    if mode == "aot":
+        mode_aot(args)
+        return
+
+    if mode == "lsp":
+        lsp.lsp_run()
+        return
+
+    if mode == "unsupported":
+        mode_unsupported(args)
         return
 
     if mode == "syntax-check":

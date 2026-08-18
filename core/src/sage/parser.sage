@@ -553,6 +553,33 @@ class Parser:
             hint = "got " + got_name + " which cannot start an expression"
         self.parse_error(tok, "Expected expression", hint)
 
+    # --- Anonymous proc expression: proc(params): body [end] ---
+    proc parse_proc_expr():
+        let params = []
+        self.consume(token.TOKEN_LPAREN, "Expect '(' after 'proc' in expression context.")
+        if not self.check(token.TOKEN_RPAREN):
+            while true:
+                if self.check(token.TOKEN_RPAREN):
+                    break
+                if self.check(token.TOKEN_SELF) or self.check(token.TOKEN_IDENTIFIER):
+                    push(params, self.advance())
+                    if self.match_tok(token.TOKEN_ASSIGN):
+                        self.parse_expression()
+                else:
+                    let tok = self.peek()
+                    self.parse_error(tok, "expected parameter name", "parameters must be identifiers")
+                if not self.match_tok(token.TOKEN_COMMA):
+                    break
+        self.consume(token.TOKEN_RPAREN, "Expect ')' after parameters.")
+        self.consume(token.TOKEN_COLON, "Expect ':' after procedure signature.")
+        let body = nil
+        if self.match_tok(token.TOKEN_NEWLINE):
+            body = self.parse_block()
+        else:
+            body = self.parse_declaration()
+        self.match_tok(token.TOKEN_END)
+        return proc_expr(params, body)
+
     # --- Statement parsing ---
 
     proc parse_print():
@@ -1012,6 +1039,8 @@ class Parser:
             return break_stmt()
         if self.match_tok(token.TOKEN_CONTINUE):
             return continue_stmt()
+        if self.match_tok(token.TOKEN_END):
+            return expr_stmt(nil_expr())
         let expr = self.parse_expression()
         return expr_stmt(expr)
 
