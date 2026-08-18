@@ -19,49 +19,74 @@ import io
 
 # Severity constants
 let SEV_ERROR = "error"
+let SEV_WARNING = "warning"
+let SEV_STYLE = "style"
+
+# Check if haystack contains needle (substring search)
+proc contains(haystack, needle):
+    let hlen = len(haystack)
+    let nlen = len(needle)
+    if nlen == 0:
+        return true
+    if nlen > hlen:
+        return false
+    let i = 0
+    while i <= hlen - nlen:
+        let is_match = true
+        let j = 0
+        while j < len(needle):
+            if haystack[i + j] != needle[j]:
+                is_match = false
+                break
+            j = j + 1
+        if is_match:
+            return true
+        i = i + 1
+    return false
 
 # String state tracking for proper linting inside/outside strings
 proc update_string_state(state, line):
+    let sq = chr(39)
+    let dq = chr(34)
+    let triple_sq = sq + sq + sq
+    let triple_dq = dq + dq + dq
     if state == 0:
-        if chr(39) * 3 in line:
+        if contains(line, triple_sq):
             return 3
-        elif chr(34) * 3 in line:
+        elif contains(line, triple_dq):
             return 4
-        elif chr(39) in line and line.count(chr(39)) % 2 == 1:
+        elif contains(line, sq) and line.count(sq) % 2 == 1:
             return 1
-        elif chr(34) in line and line.count(chr(34)) % 2 == 1:
+        elif contains(line, dq) and line.count(dq) % 2 == 1:
             return 2
         return 0
     elif state == 1:
-        if line.count(chr(39)) % 2 == 1:
+        if line.count(sq) % 2 == 1:
             return 0
         return 1
     elif state == 2:
-        if line.count(chr(34)) % 2 == 1:
+        if line.count(dq) % 2 == 1:
             return 0
         return 2
     elif state == 3:
-        if chr(39) * 3 in line:
+        if contains(line, triple_sq):
             return 0
         return 3
     elif state == 4:
-        if chr(34) * 3 in line:
+        if contains(line, triple_dq):
             return 0
         return 4
     return 0
 
 # Check for multiple statements on one line (S005)
 proc check_multiple_statements(line):
-    let semicolons = 0
     let i = 0
     while i < len(line):
-        if line[i] == ";" and (i == 0 or line[i-1] != "\"):
+        if line[i] == ";":
             if i < len(line) - 1:
-                return True
+                return true
         i = i + 1
-    return False
-let SEV_WARNING = "warning"
-let SEV_STYLE = "style"
+    return false
 
 # Create a lint message
 proc make_msg(line, col, severity, rule, message):
@@ -327,11 +352,11 @@ proc lint_source(source):
         let semicolon_count = 0
         let k = 0
         while k < len(line):
-            if line[k] == ";" and (k == 0 or line[k-1] != "\"):
+            if line[k] == ";" and (k == 0 or line[k-1] != chr(92)):
                 if k < len(line) - 1:
                     semicolon_count = semicolon_count + 1
             k = k + 1
-        if semicolon_count > 1:
+        if semicolon_count > 0:
             push(messages, make_msg(lineno, 1, SEV_STYLE, "S005", "Multiple statements on one line (use separate lines)"))
     # W001: Unused variable post-pass
     for v in vars:
