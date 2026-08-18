@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include "gc.h"
 
@@ -150,10 +151,20 @@ ExecResult sage_execute_stmt(Stmt* stmt, Env* env, SageRuntimeMode mode) {
                 if (bin_fd >= 0) {
                     close(bin_fd); // Close securely opened fd to allow compilation to overwrite it
                     if (aot_compile_to_binary(&aot, c_path, bin_path)) {
-                        // Execute the compiled binary and capture output
-                        char cmd[1024];
-                        snprintf(cmd, sizeof(cmd), "%s", bin_path);
-                        int ret = system(cmd);
+                        // Execute the compiled binary directly without invoking shell (CWE-78 defense-in-depth)
+                        int ret = -1;
+                        pid_t pid = fork();
+                        if (pid == 0) {
+                            char* args[] = {bin_path, NULL};
+                            execv(bin_path, args);
+                            _exit(127);
+                        } else if (pid > 0) {
+                            int status;
+                            waitpid(pid, &status, 0);
+                            if (WIFEXITED(status)) {
+                                ret = WEXITSTATUS(status);
+                            }
+                        }
                         unlink(bin_path);
                         unlink(c_path);
                         free(c_code);
