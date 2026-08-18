@@ -27,6 +27,8 @@ from ast import block_stmt, while_stmt, proc_stmt, for_stmt
 from ast import return_stmt, break_stmt, continue_stmt, class_stmt
 from ast import try_stmt, raise_stmt, yield_stmt, import_stmt
 from ast import async_proc_stmt, defer_stmt, struct_stmt
+from ast import enum_stmt, trait_stmt, match_stmt, comptime_stmt
+from ast import macro_def_stmt, comptime_expr, super_expr
 
 # Maximum parser recursion depth
 let MAX_DEPTH = 500
@@ -153,7 +155,24 @@ class Parser:
         self.depth = 0
         self.source = source
         self.filename = filename
+        self.pending_doc = nil
         self.error_ctx = nil
+
+    proc collect_doc_comment():
+        # Collect consecutive ## lines into one doc string
+        self.pending_doc = nil
+        let parts = []
+        while self.check(token.TOKEN_DOC_COMMENT):
+            let doc_tok = self.advance()
+            push(parts, doc_tok.text)
+            self.match_tok(token.TOKEN_NEWLINE)
+        if len(parts) > 0:
+            self.pending_doc = join(parts, chr(10))
+
+    proc take_pending_doc():
+        let doc = self.pending_doc
+        self.pending_doc = nil
+        return doc
 
     proc get_error_ctx():
         if self.error_ctx == nil:
@@ -399,7 +418,7 @@ class Parser:
                 else:
                     self.consume(token.TOKEN_RBRACKET, "Expect ']' after index.")
                     expr = index_expr(expr, start_or_index)
-            elif self.match_tok(token.TOKEN_DOT):
+            elif self.match_tok(token.TOKEN_DOT) or self.match_tok(token.TOKEN_ARROW):
                 # Property access (allow identifiers, 'end', and 'print' keywords)
                 if self.check(token.TOKEN_IDENTIFIER) or self.check(token.TOKEN_END) or self.check(token.TOKEN_PRINT):
                     let prop = self.advance()
@@ -424,6 +443,24 @@ class Parser:
         # Self keyword (treated as variable)
         if self.match_tok(token.TOKEN_SELF):
             return variable_expr(self.previous())
+
+        # Super keyword: super.method(args) calls parent class method
+        if self.match_tok(token.TOKEN_SUPER):
+            if self.match_tok(token.TOKEN_DOT) or self.match_tok(token.TOKEN_ARROW):
+                if self.check(token.TOKEN_IDENTIFIER) or self.check(token.TOKEN_INIT):
+                    let method = self.advance()
+                    return super_expr(method)
+                let tok = self.peek()
+                self.parse_error(tok, "expect method name after 'super.'", "use 'super.init(args)' or 'super.method(args)'")
+            let tok = self.peek()
+            self.parse_error(tok, "expect '.' or '->' after 'super'", "use 'super.init(args)' to call parent method")
+
+        # comptime expression: comptime(expr) evaluates at compile time
+        if self.match_tok(token.TOKEN_COMPTIME):
+            self.consume(token.TOKEN_LPAREN, "Expect '(' after 'comptime' in expression context.")
+            let inner = self.parse_expression()
+            self.consume(token.TOKEN_RPAREN, "Expect ')' after comptime expression.")
+            return comptime_expr(inner)
 
         # Parenthesized expression or tuple
         if self.match_tok(token.TOKEN_LPAREN):
@@ -634,7 +671,7 @@ class Parser:
                     self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
         self.consume(token.TOKEN_RPAREN, "Expect ')' after parameters.")
         
-        # Parse return type annotation: proc f() : Int
+        # Parse return type annotation: proc f() : Int  or  proc f() -> Int
         let ret_type_ann_text = nil
         let ret_type_ann_kind = TYPE_UNKNOWN
         if self.check(token.TOKEN_COLON):
@@ -650,6 +687,13 @@ class Parser:
             else:
                 # Not a return type annotation, restore position
                 self.pos = saved_pos
+        if ret_type_ann_text == nil and self.match_tok(token.TOKEN_ARROW):
+            let result = parse_type_name(self)
+            let t_text = result[0]
+            let t_kind = result[1]
+            if t_kind != TYPE_UNKNOWN:
+                ret_type_ann_text = t_text
+                ret_type_ann_kind = t_kind
         
         self.consume(token.TOKEN_COLON, "Expect \":\" after procedure signature.")
         self.consume(token.TOKEN_NEWLINE, "Expect newline before procedure body.")
@@ -695,6 +739,10 @@ class Parser:
         while not self.check(token.TOKEN_DEDENT) and not self.check(token.TOKEN_EOF):
             if self.match_tok(token.TOKEN_NEWLINE):
                 continue
+            if self.check(token.TOKEN_DOC_COMMENT):
+                self.advance()
+                self.match_tok(token.TOKEN_NEWLINE)
+                continue
             self.consume(token.TOKEN_IDENTIFIER, "Expect field name.")
             push(field_names, self.previous())
             self.consume(token.TOKEN_COLON, "Expect ':' after field name.")
@@ -704,6 +752,86 @@ class Parser:
             self.consume(token.TOKEN_NEWLINE, "Expect newline after field.")
         self.consume(token.TOKEN_DEDENT, "Expect dedent after struct body.")
         return struct_stmt(name, field_names, field_types, len(field_names))
+
+    proc parse_enum():
+        self.consume(token.TOKEN_IDENTIFIER, "Expect enum name.")
+        let name = self.previous()
+        self.consume(token.TOKEN_COLON, "Expect ':' after enum name.")
+        self.consume(token.TOKEN_NEWLINE, "Expect newline after enum header.")
+        self.consume(token.TOKEN_INDENT, "Expect indentation in enum body.")
+        let variants = []
+        while not self.check(token.TOKEN_DEDENT) and not self.check(token.TOKEN_EOF):
+            if self.match_tok(token.TOKEN_NEWLINE):
+                continue
+            if self.check(token.TOKEN_DOC_COMMENT):
+                self.advance()
+                self.match_tok(token.TOKEN_NEWLINE)
+                continue
+            self.consume(token.TOKEN_IDENTIFIER, "Expect variant name in enum.")
+            push(variants, self.previous())
+            self.match_tok(token.TOKEN_NEWLINE)
+        self.consume(token.TOKEN_DEDENT, "Expect dedent after enum body.")
+        return enum_stmt(name, variants, len(variants))
+
+    proc parse_trait():
+        self.consume(token.TOKEN_IDENTIFIER, "Expect trait name.")
+        let name = self.previous()
+        self.consume(token.TOKEN_COLON, "Expect ':' after trait name.")
+        self.consume(token.TOKEN_NEWLINE, "Expect newline after trait header.")
+        self.consume(token.TOKEN_INDENT, "Expect indentation in trait body.")
+        let method_head = nil
+        let method_current = nil
+        while not self.check(token.TOKEN_DEDENT) and not self.check(token.TOKEN_EOF):
+            if self.match_tok(token.TOKEN_NEWLINE):
+                continue
+            if self.check(token.TOKEN_DOC_COMMENT):
+                self.advance()
+                self.match_tok(token.TOKEN_NEWLINE)
+                continue
+            if self.match_tok(token.TOKEN_PROC):
+                let method = self.parse_proc()
+                if method_head == nil:
+                    method_head = method
+                    method_current = method
+                else:
+                    method_current.next = method
+                    method_current = method
+            else:
+                let tok = self.peek()
+                self.parse_error(tok, "Only method signatures allowed in trait body", "use 'proc' to define method signatures")
+        self.consume(token.TOKEN_DEDENT, "Expect dedent after trait body.")
+        return trait_stmt(name, method_head)
+
+    proc parse_macro():
+        self.consume(token.TOKEN_IDENTIFIER, "Expect macro name.")
+        let name = self.previous()
+        self.consume(token.TOKEN_LPAREN, "Expect '(' after macro name.")
+        let params = []
+        if not self.check(token.TOKEN_RPAREN):
+            self.consume(token.TOKEN_IDENTIFIER, "Expect parameter name.")
+            push(params, self.previous())
+            while self.match_tok(token.TOKEN_COMMA):
+                if self.check(token.TOKEN_RPAREN):
+                    break
+                self.consume(token.TOKEN_IDENTIFIER, "Expect parameter name.")
+                push(params, self.previous())
+        self.consume(token.TOKEN_RPAREN, "Expect ')' after macro parameters.")
+        self.consume(token.TOKEN_COLON, "Expect ':' after macro signature.")
+        self.consume(token.TOKEN_NEWLINE, "Expect newline before macro body.")
+        let body = self.parse_block()
+        return macro_def_stmt(name, params, body)
+
+    proc parse_comptime():
+        self.consume(token.TOKEN_COLON, "Expect ':' after 'comptime'.")
+        self.consume(token.TOKEN_NEWLINE, "Expect newline after 'comptime:'.")
+        let body = self.parse_block()
+        return comptime_stmt(body)
+
+    proc parse_unsafe():
+        self.consume(token.TOKEN_COLON, "Expect ':' after 'unsafe'.")
+        if self.match_tok(token.TOKEN_NEWLINE):
+            return self.parse_block()
+        return self.parse_declaration()
 
     proc parse_class():
         self.consume(token.TOKEN_IDENTIFIER, "Expect class name.")
@@ -722,6 +850,10 @@ class Parser:
         let method_current = nil
         while not self.check(token.TOKEN_DEDENT) and not self.check(token.TOKEN_EOF):
             if self.match_tok(token.TOKEN_NEWLINE):
+                continue
+            if self.check(token.TOKEN_DOC_COMMENT):
+                self.advance()
+                self.match_tok(token.TOKEN_NEWLINE)
                 continue
             if self.match_tok(token.TOKEN_PROC):
                 let method = self.parse_proc()
@@ -872,6 +1004,10 @@ class Parser:
             return self.parse_defer()
         if self.match_tok(token.TOKEN_MATCH):
             return self.parse_match()
+        if self.match_tok(token.TOKEN_COMPTIME):
+            return self.parse_comptime()
+        if self.match_tok(token.TOKEN_UNSAFE):
+            return self.parse_unsafe()
         if self.match_tok(token.TOKEN_BREAK):
             return break_stmt()
         if self.match_tok(token.TOKEN_CONTINUE):
@@ -904,30 +1040,61 @@ class Parser:
         if self.check(token.TOKEN_DEDENT) or self.check(token.TOKEN_EOF):
             return nil
 
+        # Collect doc comments before declarations
+        if self.check(token.TOKEN_DOC_COMMENT):
+            self.collect_doc_comment()
+            while self.match_tok(token.TOKEN_NEWLINE):
+                pass
+
         # Collect @pragma decorators
         let pragmas = self.collect_pragmas()
 
         # Class declaration
         if self.match_tok(token.TOKEN_CLASS):
             let s = self.parse_class()
+            s.doc = self.take_pending_doc()
             self.attach_pragmas(s, pragmas)
             return s
 
         # Struct declaration
         if self.match_tok(token.TOKEN_STRUCT):
             let s = self.parse_struct()
+            s.doc = self.take_pending_doc()
+            self.attach_pragmas(s, pragmas)
+            return s
+
+        # Enum declaration
+        if self.match_tok(token.TOKEN_ENUM):
+            let s = self.parse_enum()
+            s.doc = self.take_pending_doc()
+            self.attach_pragmas(s, pragmas)
+            return s
+
+        # Trait declaration
+        if self.match_tok(token.TOKEN_TRAIT):
+            let s = self.parse_trait()
+            s.doc = self.take_pending_doc()
+            self.attach_pragmas(s, pragmas)
+            return s
+
+        # Macro definition
+        if self.match_tok(token.TOKEN_MACRO):
+            let s = self.parse_macro()
+            s.doc = self.take_pending_doc()
             self.attach_pragmas(s, pragmas)
             return s
 
         # Async proc declaration
         if self.match_tok(token.TOKEN_ASYNC):
             let s = self.parse_async_proc()
+            s.doc = self.take_pending_doc()
             self.attach_pragmas(s, pragmas)
             return s
 
         # Proc declaration
         if self.match_tok(token.TOKEN_PROC):
             let s = self.parse_proc()
+            s.doc = self.take_pending_doc()
             self.attach_pragmas(s, pragmas)
             return s
 

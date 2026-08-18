@@ -1400,6 +1400,14 @@ proc eval_call_impl(expr, env):
                     env_define(init_env, params[pi].text, nil)
                 pi = pi + 1
             exec_stmt(init_method["body"], init_env)
+        else:
+            # Auto-init for structs: assign args to fields in order
+            if dict_has(callee, "struct_fields"):
+                let sfields = callee["struct_fields"]
+                let si = 0
+                while si < len(sfields) and si < len(args):
+                    inst["fields"][sfields[si]] = args[si]
+                    si = si + 1
         return inst
 
     runtime_error(get_expr_line(callee_expr), "Value is not callable", "got '" + callee_type + "'")
@@ -1686,53 +1694,53 @@ proc exec_stmt(stmt, env):
     # --- Struct declaration ---
     if stype == STMT_STRUCT:
         let name = stmt.name.text
-        let struct_def = {}
-        struct_def["__interp_type"] = "struct_def"
-        struct_def["name"] = name
-        struct_def["fields"] = []
+        # Structs are registered as classes (like C interpreter) so Point()
+        # instantiates via the class call path
+        let class_val = {}
+        class_val["__interp_type"] = "class"
+        class_val["name"] = name
+        class_val["methods"] = {}
+        class_val["parent"] = nil
+        class_val["defining_env"] = env
+        let fields_arr = []
         let fi = 0
         while fi < stmt.field_count:
-            push(struct_def["fields"], stmt.field_names[fi].text)
+            push(fields_arr, stmt.field_names[fi].text)
             fi = fi + 1
-        # Register a constructor function for the struct
-        let struct_ctor = {}
-        struct_ctor["__interp_type"] = "native"
-        struct_ctor["name"] = name
-        struct_ctor["arity"] = -1
-        struct_ctor["struct_def"] = struct_def
-        env_define(env, name, struct_def)
+        class_val["struct_fields"] = fields_arr
+        # Field metadata env var (mirrors C: __Name_fields__)
+        env_define(env, "__" + name + "_fields__", fields_arr)
+        env_define(env, name, class_val)
         return _SIG_NORMAL_NIL
 
     # --- Enum declaration ---
     if stype == STMT_ENUM:
         let name = stmt.name.text
-        let enum_def = {}
-        enum_def["__interp_type"] = "enum"
-        enum_def["name"] = name
-        enum_def["variants"] = {}
+        # Plain dict mapping variant names to indices (mirrors C)
+        let enum_dict = {}
         let vi = 0
         while vi < stmt.variant_count:
             let vname = stmt.variant_names[vi].text
-            enum_def["variants"][vname] = vi
-            # Also define each variant as a global constant
-            env_define(env, vname, vi)
+            enum_dict[vname] = vi
             vi = vi + 1
-        env_define(env, name, enum_def)
+        enum_dict["__name__"] = name
+        env_define(env, name, enum_dict)
         return _SIG_NORMAL_NIL
 
     # --- Trait declaration ---
     if stype == STMT_TRAIT:
         let name = stmt.name.text
-        let trait_def = {}
-        trait_def["__interp_type"] = "trait"
-        trait_def["name"] = name
-        trait_def["method_names"] = []
+        # Dict with __methods__/__name__ (mirrors C)
+        let trait_dict = {}
+        let method_names = []
         let method_node = stmt.methods
         while method_node != nil:
             if method_node.type == STMT_PROC:
-                push(trait_def["method_names"], method_node.name.text)
+                push(method_names, method_node.name.text)
             method_node = method_node.next
-        env_define(env, name, trait_def)
+        trait_dict["__methods__"] = method_names
+        trait_dict["__name__"] = name
+        env_define(env, name, trait_dict)
         return _SIG_NORMAL_NIL
 
     # --- Comptime block (execute normally at runtime) ---

@@ -64,6 +64,7 @@ class Stmt:
         self.type = stmt_type
         self.next = nil
         self.pragmas = nil
+        self.doc = nil
 
 # --- Expression type name (for debugging) ---
 proc expr_type_name(t):

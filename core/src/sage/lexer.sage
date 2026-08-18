@@ -44,6 +44,14 @@ KEYWORDS["from"] = token.TOKEN_FROM
 KEYWORDS["as"] = token.TOKEN_AS
 KEYWORDS["case"] = token.TOKEN_CASE
 KEYWORDS["default"] = token.TOKEN_DEFAULT
+KEYWORDS["struct"] = token.TOKEN_STRUCT
+KEYWORDS["enum"] = token.TOKEN_ENUM
+KEYWORDS["trait"] = token.TOKEN_TRAIT
+KEYWORDS["match"] = token.TOKEN_MATCH
+KEYWORDS["macro"] = token.TOKEN_MACRO
+KEYWORDS["comptime"] = token.TOKEN_COMPTIME
+KEYWORDS["super"] = token.TOKEN_SUPER
+KEYWORDS["unsafe"] = token.TOKEN_UNSAFE
 
 # Character classification helpers
 proc is_alpha(c):
@@ -186,6 +194,27 @@ class Lexer:
                     self.advance()
                     spaces = spaces + 1
 
+                # Doc comment at beginning of line: emit pending dedents first
+                if self.peek() == "#" and self.peek_next() == "#":
+                    let cur_indent = self.indent_stack[len(self.indent_stack) - 1]
+                    if spaces < cur_indent:
+                        while len(self.indent_stack) > 1 and self.indent_stack[len(self.indent_stack) - 1] > spaces:
+                            pop(self.indent_stack)
+                            self.pending_dedents = self.pending_dedents + 1
+                        if self.indent_stack[len(self.indent_stack) - 1] != spaces:
+                            return self.error_token("Indentation error.")
+                        self.pending_dedents = self.pending_dedents - 1
+                        return self.make_token(token.TOKEN_DEDENT, "")
+                    self.advance()
+                    self.advance()
+                    while self.peek() == " ":
+                        self.advance()
+                    let doc_start = self.pos
+                    while self.peek() != nil and self.peek() != chr(10):
+                        self.advance()
+                    let doc_text = slice(self.source, doc_start, self.pos)
+                    return self.make_token(token.TOKEN_DOC_COMMENT, doc_text)
+
                 # Skip blank lines and comment lines
                 if self.peek() == chr(10) or self.peek() == "#":
                     if self.peek() == "#":
@@ -234,6 +263,15 @@ class Lexer:
 
             # Comments
             if c == "#":
+                if self.peek() == "#":
+                    self.advance()
+                    while self.peek() == " ":
+                        self.advance()
+                    let doc_start = self.pos
+                    while self.peek() != nil and self.peek() != chr(10):
+                        self.advance()
+                    let doc_text = slice(self.source, doc_start, self.pos)
+                    return self.make_token(token.TOKEN_DOC_COMMENT, doc_text)
                 while self.peek() != nil and self.peek() != chr(10):
                     self.advance()
                 continue
@@ -270,6 +308,8 @@ class Lexer:
             if c == "+":
                 return self.make_token(token.TOKEN_PLUS, c)
             if c == "-":
+                if self.match_char(">"):
+                    return self.make_token(token.TOKEN_ARROW, "->")
                 return self.make_token(token.TOKEN_MINUS, c)
             if c == "*":
                 return self.make_token(token.TOKEN_STAR, c)
@@ -291,6 +331,8 @@ class Lexer:
                 return self.make_token(token.TOKEN_CARET, c)
             if c == "~":
                 return self.make_token(token.TOKEN_TILDE, c)
+            if c == "@":
+                return self.make_token(token.TOKEN_AT, c)
 
             # Two-character tokens
             if c == "!":
