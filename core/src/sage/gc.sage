@@ -117,6 +117,7 @@ class GCController:
         self.phase = 0
         self.barrier_active = false
         self.max_pause_us = 0
+        self.mode = "tracing"
 
     proc enable():
         self.is_enabled = true
@@ -127,6 +128,15 @@ class GCController:
         self.is_enabled = false
         if self.debug_mode:
             print "[GC] GC disabled"
+
+    proc set_mode(mode):
+        self.mode = mode
+        if mode == "arc" or mode == "orc":
+            self.is_enabled = false
+        else:
+            self.is_enabled = true
+        if self.debug_mode:
+            print "[GC] " + mode + " mode enabled"
 
     proc pin():
         self.pin_depth = self.pin_depth + 1

@@ -47,21 +47,36 @@ let LEVEL_ERROR = 0
 let LEVEL_WARNING = 1
 
 # Kind -> display string mapping
-let DIAG_NAMES = {}
-DIAG_NAMES[0] = "use-after-move"
-DIAG_NAMES[1] = "double-move"
-DIAG_NAMES[2] = "borrow-conflict"
-DIAG_NAMES[3] = "borrow-conflict"
-DIAG_NAMES[4] = "multiple-mut-borrow"
-DIAG_NAMES[5] = "dangling-ref"
-DIAG_NAMES[6] = "lifetime"
-DIAG_NAMES[7] = "no-nil"
-DIAG_NAMES[8] = "unwrap"
-DIAG_NAMES[9] = "unsafe-in-safe"
-DIAG_NAMES[10] = "not-send"
-DIAG_NAMES[11] = "not-sync"
-DIAG_NAMES[12] = "uninitialized"
-DIAG_NAMES[13] = "partial-move"
+proc diag_name(kind):
+    if kind == 0:
+        return "use-after-move"
+    if kind == 1:
+        return "double-move"
+    if kind == 2:
+        return "borrow-conflict"
+    if kind == 3:
+        return "borrow-conflict"
+    if kind == 4:
+        return "multiple-mut-borrow"
+    if kind == 5:
+        return "dangling-ref"
+    if kind == 6:
+        return "lifetime"
+    if kind == 7:
+        return "no-nil"
+    if kind == 8:
+        return "unwrap"
+    if kind == 9:
+        return "unsafe-in-safe"
+    if kind == 10:
+        return "not-send"
+    if kind == 11:
+        return "not-sync"
+    if kind == 12:
+        return "uninitialized"
+    if kind == 13:
+        return "partial-move"
+    return "unknown"
 
 
 proc check_sync(ctx, fn_name, line):
@@ -69,7 +84,7 @@ proc check_sync(ctx, fn_name, line):
         # Check if the function/type has Sync trait
         # For now, emit diagnostic if in strict mode and not explicitly marked
         # In a full implementation, this would check if the type implements Sync
-        ctx["diagnostics"] += [[DIAG_NOT_SYNC, fn_name, line, "missing Sync trait; mark type as Sync or use Mutex wrapper"]]
+        ctx["diagnostics"] = ctx["diagnostics"] + [[DIAG_NOT_SYNC, fn_name, line, "missing Sync trait; mark type as Sync or use Mutex wrapper"]]
 
 let has_doc_safe = {}
 proc set_doc_safe(fn_name):
@@ -184,34 +199,34 @@ proc lookup_var(ctx, name):
     return nil
 end
 
-proc mark_moved(var, line, dest):
-    if var == nil:
+proc mark_moved(v, line, dest):
+    if v == nil:
         return nil
     end
-    var["state"] = OWN_MOVED
-    var["moved_line"] = line
-    var["moved_to"] = dest
+    v["state"] = OWN_MOVED
+    v["moved_line"] = line
+    v["moved_to"] = dest
 end
 
-proc mark_borrowed(ctx, var, borrower, line, is_mutable):
-    if var == nil:
+proc mark_borrowed(ctx, v, borrower, line, is_mutable):
+    if v == nil:
         return nil
     end
     let scope = current_scope(ctx)
     let b = {}
     b["borrower"] = borrower
-    b["source"] = var["name"]
+    b["source"] = v["name"]
     b["is_mutable"] = is_mutable
     b["line"] = line
-    b["lifetime_id"] = var["lifetime_id"]
+    b["lifetime_id"] = v["lifetime_id"]
     push(scope["borrows"], b)
     if is_mutable:
-        var["mut_borrow_count"] = var["mut_borrow_count"] + 1
-        var["state"] = OWN_MUT_BORROW
+        v["mut_borrow_count"] = v["mut_borrow_count"] + 1
+        v["state"] = OWN_MUT_BORROW
     else:
-        var["borrow_count"] = var["borrow_count"] + 1
-        if var["state"] == OWN_OWNED:
-            var["state"] = OWN_BORROWED
+        v["borrow_count"] = v["borrow_count"] + 1
+        if v["state"] == OWN_OWNED:
+            v["state"] = OWN_BORROWED
         end
     end
 end
@@ -219,19 +234,19 @@ end
 # --- Ownership checks ---
 
 proc check_use(ctx, name, line):
-    let var = lookup_var(ctx, name)
-    if var == nil:
+    let v = lookup_var(ctx, name)
+    if v == nil:
         return true
     end
-    if var["state"] == OWN_MOVED:
-        let dest = var["moved_to"]
+    if v["state"] == OWN_MOVED:
+        let dest = v["moved_to"]
         if dest == nil:
             dest = "?"
         end
-        emit_diag(ctx, LEVEL_ERROR, DIAG_USE_AFTER_MOVE, "use of moved value '" + name + "' (moved to '" + dest + "' at line " + str(var["moved_line"]) + ")", "value was moved because it does not implement Copy", line)
+        emit_diag(ctx, LEVEL_ERROR, DIAG_USE_AFTER_MOVE, "use of moved value '" + name + "' (moved to '" + dest + "' at line " + str(v["moved_line"]) + ")", "value was moved because it does not implement Copy", line)
         return false
     end
-    if var["state"] == OWN_UNINITIALIZED:
+    if v["state"] == OWN_UNINITIALIZED:
         emit_diag(ctx, LEVEL_ERROR, DIAG_UNINITIALIZED_USE, "use of possibly uninitialized variable '" + name + "'", "assign a value before using this variable", line)
         return false
     end
@@ -239,45 +254,45 @@ proc check_use(ctx, name, line):
 end
 
 proc check_move(ctx, name, line, dest):
-    let var = lookup_var(ctx, name)
-    if var == nil:
+    let v = lookup_var(ctx, name)
+    if v == nil:
         return true
     end
-    if var["is_copy"]:
+    if v["is_copy"]:
         return true
     end
-    if var["state"] == OWN_MOVED:
-        emit_diag(ctx, LEVEL_ERROR, DIAG_DOUBLE_MOVE, "cannot move '" + name + "': already moved at line " + str(var["moved_line"]), "each value can only be moved once", line)
+    if v["state"] == OWN_MOVED:
+        emit_diag(ctx, LEVEL_ERROR, DIAG_DOUBLE_MOVE, "cannot move '" + name + "': already moved at line " + str(v["moved_line"]), "each value can only be moved once", line)
         return false
     end
-    if var["borrow_count"] > 0 or var["mut_borrow_count"] > 0:
+    if v["borrow_count"] > 0 or v["mut_borrow_count"] > 0:
         emit_diag(ctx, LEVEL_ERROR, DIAG_BORROW_WHILE_MUT_BORROWED, "cannot move '" + name + "': it is currently borrowed", "wait until all borrows have ended before moving", line)
         return false
     end
-    mark_moved(var, line, dest)
+    mark_moved(v, line, dest)
     return true
 end
 
 proc check_borrow(ctx, name, line, is_mutable):
-    let var = lookup_var(ctx, name)
-    if var == nil:
+    let v = lookup_var(ctx, name)
+    if v == nil:
         return true
     end
-    if var["state"] == OWN_MOVED:
+    if v["state"] == OWN_MOVED:
         emit_diag(ctx, LEVEL_ERROR, DIAG_USE_AFTER_MOVE, "cannot borrow '" + name + "': value has been moved", "the value was moved and is no longer available", line)
         return false
     end
     if is_mutable:
-        if var["borrow_count"] > 0:
+        if v["borrow_count"] > 0:
             emit_diag(ctx, LEVEL_ERROR, DIAG_MUT_BORROW_WHILE_BORROWED, "cannot borrow '" + name + "' as mutable: already borrowed as immutable", "an immutable reference exists; cannot create mutable reference", line)
             return false
         end
-        if var["mut_borrow_count"] > 0:
+        if v["mut_borrow_count"] > 0:
             emit_diag(ctx, LEVEL_ERROR, DIAG_MULTIPLE_MUT_BORROWS, "cannot borrow '" + name + "' as mutable: already mutably borrowed", "only one mutable reference is allowed at a time", line)
             return false
         end
     else:
-        if var["mut_borrow_count"] > 0:
+        if v["mut_borrow_count"] > 0:
             emit_diag(ctx, LEVEL_ERROR, DIAG_BORROW_WHILE_MUT_BORROWED, "cannot borrow '" + name + "' as immutable: already mutably borrowed", "a mutable reference exists; cannot create immutable reference", line)
             return false
         end
@@ -295,11 +310,11 @@ proc check_nil_usage(ctx, line):
 end
 
 proc check_send(ctx, name, line):
-    let var = lookup_var(ctx, name)
-    if var == nil:
+    let v = lookup_var(ctx, name)
+    if v == nil:
         return true
     end
-    if var["is_send"] == false:
+    if v["is_send"] == false:
         emit_diag(ctx, LEVEL_ERROR, DIAG_NOT_SEND, "'" + name + "' does not implement Send", "mark the type as Send or use a thread-safe wrapper", line)
         return false
     end
@@ -332,10 +347,7 @@ proc print_diagnostics(ctx):
         if d["level"] == LEVEL_ERROR:
             lv = "error"
         end
-        let ks = "unknown"
-        if dict_has(DIAG_NAMES, d["kind"]):
-            ks = DIAG_NAMES[d["kind"]]
-        end
+        let ks = diag_name(d["kind"])
         print(lv + "[" + ks + "]: " + d["message"])
         if d["filename"] != nil:
             print("  --> " + d["filename"] + ":" + str(d["line"]))
@@ -408,8 +420,8 @@ proc analyze_expr(ctx, expr):
             analyze_expr(ctx, arg)
             # Variable arguments may be moved in safe context
             if arg != nil and arg.type == EXPR_VARIABLE:
-                let var = lookup_var(ctx, arg.name.text)
-                if var != nil and var["is_copy"] == false and in_safe_scope(ctx):
+                let v = lookup_var(ctx, arg.name.text)
+                if v != nil and v["is_copy"] == false and in_safe_scope(ctx):
                     check_move(ctx, arg.name.text, arg.name.line, "(function argument)")
                 end
             end
@@ -451,8 +463,8 @@ proc analyze_expr(ctx, expr):
         analyze_expr(ctx, expr.value)
         # Property assignment may move the value
         if expr.value != nil and expr.value.type == EXPR_VARIABLE:
-            let var = lookup_var(ctx, expr.value.name.text)
-            if var != nil and var["is_copy"] == false and in_safe_scope(ctx):
+            let v = lookup_var(ctx, expr.value.name.text)
+            if v != nil and v["is_copy"] == false and in_safe_scope(ctx):
                 check_move(ctx, expr.value.name.text, expr.value.name.line, "(property assignment)")
             end
         end
@@ -512,19 +524,19 @@ proc analyze_stmt(ctx, stmt):
     if st == STMT_LET:
         let name = stmt.name.text
         let line = stmt.name.line
-        let var = declare_var(ctx, name, line)
+        let v = declare_var(ctx, name, line)
         if stmt.initializer != nil:
             analyze_expr(ctx, stmt.initializer)
-            var["state"] = OWN_OWNED
+            v["state"] = OWN_OWNED
             let ie = stmt.initializer
-            if ie.type == EXPR_VARIABLE and var["is_copy"] == false:
+            if ie.type == EXPR_VARIABLE and v["is_copy"] == false:
                 if in_safe_scope(ctx):
                     check_move(ctx, ie.name.text, line, name)
                 end
             end
             # Literals are implicitly Copy
             if ie.type == EXPR_NUMBER or ie.type == EXPR_BOOL or ie.type == EXPR_STRING:
-                var["is_copy"] = true
+                v["is_copy"] = true
             end
         end
         return nil
@@ -584,19 +596,19 @@ proc analyze_stmt(ctx, stmt):
         push_scope(ctx, false, false)
         # Declare parameters as owned
         let pi = 0
-	while pi < len(stmt.params):
-		let pv = declare_var(ctx, stmt.params[pi].text, stmt.params[pi].line)
-		if pv != nil:
-			pv["state"] = OWN_OWNED
-		end
-		pi = pi + 1
-	end
-	# Track @safe doc on proc
-	if stmt.doc != nil and find(stmt.doc, "@safe") != nil:
-		set_doc_safe(stmt.name.text)
-	# Check Sync trait (framework)
-	if ctx["mode"] == MODE_STRICT:
-		check_sync(ctx, stmt.name.text, stmt.name.line)
+    while pi < len(stmt.params):
+        let pv = declare_var(ctx, stmt.params[pi].text, stmt.params[pi].line)
+        if pv != nil:
+            pv["state"] = OWN_OWNED
+        end
+        pi = pi + 1
+    end
+    # Track @safe doc on proc
+    if stmt.doc != nil and find(stmt.doc, "@safe") != nil:
+        set_doc_safe(stmt.name.text)
+    # Check Sync trait (framework)
+    if ctx["mode"] == MODE_STRICT:
+        check_sync(ctx, stmt.name.text, stmt.name.line)
         ctx["in_proc"] = was_in
         ctx["current_proc"] = was_name
         return nil

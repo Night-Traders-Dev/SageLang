@@ -17,8 +17,10 @@ import codegen
 import formatter
 import linter
 import typecheck
+import safety
+import gc
 from parser import parse_source, parse_source_file
-from interpreter import new_interpreter, exec_program, set_error_context
+from interpreter import new_interpreter, run_source, exec_program, set_error_context
 
 # ============================================================================
 # Constants
@@ -42,6 +44,7 @@ proc print_usage():
     print "  fmt <file.sage>       Format a file in-place"
     print "  lint <file.sage>      Lint a file"
     print "  check <file.sage>     Type check a file"
+    print "  safety <file.sage>    Run safety analysis (ownership, borrows, lifetimes)"
     print ""
     print "Compiler flags:"
     print "  --emit-c <file>       Compile to C source"
@@ -55,6 +58,10 @@ proc print_usage():
     print "  -o <path>             Output file path"
     print "  -O0 .. -O3            Optimization level (default: 0)"
     print "  --target <arch>       Target: x86-64, aarch64, rv64 (for --emit-asm)"
+    print "  --check <file>        Check syntax only (no run, no typecheck)"
+    print "  --strict-safety <file>  Run with strict safety enforcement"
+    print "  --gc:arc|orc|tracing  Select GC mode (default: tracing)"
+    print "  --repl                Start interactive REPL"
     print "  --verbose             Verbose pass output"
     print "  --version             Print version"
     print "  --help                Show this help"
@@ -76,6 +83,8 @@ proc parse_args():
     result["opt_level"] = 0
     result["target"] = "x86-64"
     result["verbose"] = false
+    result["strict_safety"] = false
+    result["gc_mode"] = nil
 
     # No arguments beyond sage.sage
     if argc < 3:
@@ -163,6 +172,47 @@ proc parse_args():
             i = i + 1
             if i < argc:
                 result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "safety":
+            result["mode"] = "safety"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--check":
+            result["mode"] = "syntax-check"
+            i = i + 1
+            if i < argc:
+                result["input"] = argv[i]
+            i = i + 1
+            continue
+
+        if arg == "--strict-safety":
+            result["strict_safety"] = true
+            i = i + 1
+            continue
+
+        if arg == "--gc:arc":
+            result["gc_mode"] = "arc"
+            i = i + 1
+            continue
+
+        if arg == "--gc:orc":
+            result["gc_mode"] = "orc"
+            i = i + 1
+            continue
+
+        if arg == "--gc:tracing":
+            result["gc_mode"] = "tracing"
+            i = i + 1
+            continue
+
+        if arg == "--repl":
+            result["mode"] = "repl"
             i = i + 1
             continue
 
@@ -269,6 +319,9 @@ proc mode_run(args):
     if path == nil:
         print "Error: No input file specified"
         return
+    if args["strict_safety"]:
+        if run_strict_safety(path) == false:
+            return
     let source = read_input(path)
     if source == nil:
         return
@@ -440,6 +493,79 @@ proc mode_check(args):
     print "Type check complete: " + path
 
 # ============================================================================
+# Mode: Syntax Check
+# ============================================================================
+
+proc mode_syntax_check(args):
+    let path = args["input"]
+    if path == nil:
+        print "Error: No input file specified"
+        return
+    let source = read_input(path)
+    if source == nil:
+        return
+    parse_source_file(source, path)
+    print "Syntax OK: " + path
+
+# ============================================================================
+# Mode: Safety Analysis
+# ============================================================================
+
+proc mode_safety(args):
+    let path = args["input"]
+    if path == nil:
+        print "Error: No input file specified"
+        return
+    let source = read_input(path)
+    if source == nil:
+        return
+    let stmts = parse_source_file(source, path)
+    let result = safety.analyze(stmts, safety.MODE_STRICT, path)
+    if result["ok"] == false:
+        raise "Safety analysis failed: " + str(result["error_count"]) + " error(s)"
+    print "Safety analysis complete: no issues found."
+
+proc run_strict_safety(path):
+    let source = read_input(path)
+    if source == nil:
+        return false
+    let stmts = parse_source_file(source, path)
+    let result = safety.analyze(stmts, safety.MODE_STRICT, path)
+    if result["ok"] == false:
+        raise "Strict safety check failed: " + str(result["error_count"]) + " error(s)"
+    return true
+
+# ============================================================================
+# Mode: REPL
+# ============================================================================
+
+proc mode_repl(args):
+    print "Sage " + VERSION + " (self-hosted) - interactive REPL"
+    print "Type Sage statements. Blank line executes. Type 'exit' or 'quit' to leave."
+    let buffer = ""
+    let prompt = "sage> "
+    let genv = new_interpreter()
+    while true:
+        print prompt
+        let line = input()
+        if line == nil:
+            print ""
+            break
+        if line == "exit" or line == "quit":
+            break
+        if line == "":
+            if buffer != "":
+                let source = buffer
+                buffer = ""
+                set_error_context(source, "<repl>")
+                run_source(genv, source)
+            continue
+        if len(buffer) > 0:
+            buffer = buffer + chr(10) + line
+        else:
+            buffer = line
+
+# ============================================================================
 # Mode: Lily Transpilation
 # ============================================================================
 
@@ -489,6 +615,10 @@ proc main():
     let args = parse_args()
     let mode = args["mode"]
 
+    if args["gc_mode"] != nil:
+        let gc_mode = args["gc_mode"]
+        gc.controller.set_mode(gc_mode)
+
     if mode == "help":
         print_usage()
         return
@@ -499,6 +629,18 @@ proc main():
 
     if mode == "run":
         mode_run(args)
+        return
+
+    if mode == "syntax-check":
+        mode_syntax_check(args)
+        return
+
+    if mode == "safety":
+        mode_safety(args)
+        return
+
+    if mode == "repl":
+        mode_repl(args)
         return
 
     if mode == "compile-to-lily":
