@@ -8,6 +8,9 @@ gc_disable()
 # - Constant conditions: if true -> then-branch only
 import ast
 
+# 64KB cap on string concatenation folding (mirrors constfold.c:99)
+let MAX_STRING_CONCAT = 65536
+
 # Check literal types
 proc is_number_literal(e):
     if e == nil:
@@ -76,14 +79,15 @@ proc fold_binary(expr):
         if op == ">=":
             return ast.bool_expr(l >= r)
         return expr
-    # String + String concatenation (see 64KB cap above)
-if is_string_literal(expr.left) and is_string_literal(expr.right):
-    if op == "+":
-        let new_val = expr.left.value + expr.right.value
-        if len(new_val) > MAX_STRING_CONCAT:
-            return expr  # cap exceeded, don't fold
-        return ast.string_expr(new_val)
-    # Boolean logic
+    # String + String concatenation (64KB cap, mirrors constfold.c:98)
+    if is_string_literal(expr.left) and is_string_literal(expr.right):
+        if op == "+":
+            let new_val = expr.left.value + expr.right.value
+            if len(new_val) > MAX_STRING_CONCAT:
+                return expr  # cap exceeded, don't fold
+            return ast.string_expr(new_val)
+        return expr
+    # Boolean logic: true and false, true or false (mirrors constfold.c:118)
     if is_bool_literal(expr.left) and is_bool_literal(expr.right):
         let l = expr.left.value
         let r = expr.right.value
