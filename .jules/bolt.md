@@ -89,3 +89,7 @@
 ## 2026-07-22 - [Optimized Key Generation in Array Deduplication]
 **Learning:** Using `str(item) + type(item)` as a key inside `unique(values)` array deduplication helper is expensive because calling native `str()` and performing string concatenation on string types creates unnecessary allocations and string copy overhead in the interpreter.
 **Action:** By checking if `type(item) == "string"` first and directly using `item` as the key (bypassing `str()` and concatenation), we yield a major ~40% speedup.
+
+## 2026-08-14 - [Optimized Rich Text Measurement Utilities]
+**Learning:** Checking for special characters (`chr(27)` / ANSI escape codes) using `contains(text, chr(27))` enables a zero-allocation early return path for plain strings in text measurement utilities (`strip_ansi`, `measure_text`). For strings with ANSI codes, replacing O(N^2) character-by-character string concatenation with array-push, `slice()`, and `join("")` patterns avoids quadratic string allocation overhead. Furthermore, replacing manual character loops with `string_repeat` for string padding (`pad_right_to_width`, `pad_left_to_width`, `center_text`) offloads repetitive character assembly to C native code.
+**Action:** Always add early exits for fast paths when common inputs don't require heavy processing (e.g., plain strings without escape codes). Use `string_repeat` for character repetition and array `push` + `join("")` with `slice()` for multi-segment string assembly.
