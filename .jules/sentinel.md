@@ -91,3 +91,8 @@
 **Vulnerability:** Whitelist-based path and command validators (`is_safe_path`, `is_safe_command`, `sage_is_safe_command`) checked `cmd[0] == '-'` to prevent option injection, but evaluated string index 0 before skipping leading whitespace.
 **Learning:** When character whitelists include spaces, checking only `str[0]` for flag prefixes (such as `-`) allows attackers to prepend whitespace (e.g. `" -flag"`) to bypass prefix checks while keeping the option intact when passed to shell or system utilities.
 **Prevention:** Always trim or skip leading whitespace (`while (*str && isspace((unsigned char)*str)) str++;`) before performing prefix checks for option indicators like `-`.
+
+## 2026-08-20 - Unbounded Resource Allocation in AOT File Reading Primitives
+**Vulnerability:** Generated `s_readfile` helper in `aot.c` allocated heap memory for file reading without checking `ftell` size bounds (`SAGE_MAX_READ_SIZE`) or `malloc` NULL return (CWE-400 / CWE-789).
+**Learning:** Code generation engines for compiled backends (like AOT) often recreate native standard library functions as lightweight C snippets. If global resource limits enforced in standard interpreter built-ins are omitted in these C emitter skeletons, compiled binaries become vulnerable to memory exhaustion and NULL pointer dereferences when reading arbitrary or large streams.
+**Prevention:** Ensure code generator runtime skeletons enforce identical global resource boundaries (`SAGE_MAX_READ_SIZE`), allocation checks, and exact byte-count string terminations as interpreted standard library functions.
