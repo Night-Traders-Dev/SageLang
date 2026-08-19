@@ -27,7 +27,8 @@ Complete reference for the `sage` command-line interface.
 | `sage --emit-c <input.sage>` | `<input>.c` | `-o <path>`, `-O0`–`-O3`, `-g` |
 | `sage --compile <input.sage>` | `<input-without-.sage>` | `-o <path>`, `--cc <compiler>`, `-O0`–`-O3`, `-g` |
 | `sage --emit-vm <input.sage>` | `<input>.svm` | `-o <path>`, `-O0`–`-O3`, `-g` |
-| `sage --sgvm <input.sage>` | `<input>.sgvm` | `-o <path>`, `-O0`–`-O3`, `-g` |
+| `sage --sgvm <input.sage>` | `<input>.sgvm` | `-o <path>`, `-O0`–`-O3`, `-g` (alias for `--emit-vm` with `.sgvm` extension) |
+| `sage --aot <input.sage>` | stdout or `<out>.c` | Prints type-specialized C code to stdout; with `-o` writes output `.c` file |
 | `sage --emit-llvm <input.sage>` | `<input>.ll` | `-o <path>`, `-O0`–`-O3`, `-g` |
 | `sage --compile-llvm <input.sage>` | `<input-without-.sage>` | `-o <path>`, `-O0`–`-O3`, `-g` |
 | `sage --emit-asm <input.sage>` | `<input>.s` | `-o <path>`, `--target <arch[-profile]>`, `-O0`–`-O3`, `-g` |
@@ -51,7 +52,7 @@ Complete reference for the `sage` command-line interface.
 | `-g` | C, LLVM, asm, and native compile/emit | Enables debug information in the generated output |
 | `--runtime ast\|bytecode\|jit\|aot` | Run commands | Runtime mode selection |
 | `--jit` | Run commands | Enable JIT profiling; if used with `-o`, compiles to a self-extracting executable with bundled module dependencies |
-| `--aot` | Run commands | Enable AOT compilation |
+| `--aot` | Run commands | Enable AOT compilation; when passed alone as `sage --aot <file>`, prints type-specialized C code to stdout (or `-o <out>.c`) |
 | `--verbose` / `-v` | All | Gate internal compiler diagnostic messages |
 | `--math-work` | Run commands | Configure math execution modes |
 | `--gc:tracing\|arc\|orc` | Run/compile | Garbage collector mode |

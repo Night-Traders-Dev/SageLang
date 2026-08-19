@@ -1404,10 +1404,11 @@ end
 | `sage --emit-asm <file> --target <arch>` | Emit assembly |
 | `sage --compile-native <file> --target <arch>` | Compile native assembly |
 | `sage --emit-vm <file>` | Emit bytecode |
-| `sage --sgvm <file>` | Emit SGVM binary |
+| `sage --sgvm <file>` | Emit SGVM binary (alias for `--emit-vm` with `.sgvm` extension) |
 | `sage --emit-kotlin <file>` | Emit Kotlin/Android source |
 | `sage --jit <file>` | Run with JIT profiling |
 | `sage --jit <file> -o <bin>` | Compile to JIT self-extracting executable (with module bundling) |
+| `sage --aot <file>` | Print type-specialized C code to stdout (or `-o <out>.c`) |
 | `sage --aot <file> -o <bin>` | Ahead-of-time compile |
 | `sage --compile-pico <file>` | Compile for Raspberry Pi Pico |
 | `sage --compile-bare <file>` | Freestanding ELF |

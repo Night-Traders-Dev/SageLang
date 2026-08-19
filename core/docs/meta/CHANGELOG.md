@@ -7,6 +7,22 @@ v3.0.0 stability baseline (2026-03-01) are numbered `0.x` by development phase.
 The `sagemake` build tool excludes this file (and `ROADMAP.md`) from version
 propagation so the per-entry version history is never flattened again.
 
+## [4.1.14] - 2026-08-18
+
+### Self-Hosted Compiler & CLI Parity
+- **CLI Flag Surface Parity**: Completed flag surface parity in the self-hosted driver (`src/sage/sage.sage`) matching C `main.c`:
+  - `--lsp`: Wired LSP runner with formatting capabilities and version info.
+  - `-c 'code'`: Execute source string directly.
+  - `--jit <file>`: Execute script with JIT profiling.
+  - `--aot <file>`: Print type-specialized C code to stdout or write to file when passed `-o`.
+  - `--sgvm`: Added alias for `--emit-vm` defaulting to `.sgvm` extension.
+  - Recognized compile/backend flags (`--emit-kotlin`, `--emit-pico-c`, `--compile*`) with explicit self-hosted availability error messages.
+- **Parser & Syntax Additions**:
+  - Bare `end` statement parsed as nil-expression statement (optional block terminator matching C parity).
+  - Implemented `parse_proc_expr` for anonymous `proc` expressions (`EXPR_PROC`) with optional parameter lists and optional trailing `end`.
+  - Full support for procedure parameter and return type annotations (`proc f(x: Int, y: Int): Int`).
+- **Standard Library Parity**: Updated `sys` module platform and version declarations in `stdlib.sage`.
+
 ## [4.1.9] - 2026-08-15
 
 ### Veritas Quality Audit & Submodule Stabilization

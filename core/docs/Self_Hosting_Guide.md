@@ -47,12 +47,14 @@ and proc parameters.
 multi-path search (`./`, `lib/`). Supports `__init__.sage` for directory-based
 packages (v4.1.3+).
 
-## Soft Keywords
+## Soft Keywords & Parser Parity
 
 `match`, `init`, `enum`, `struct`, and `trait` are "soft keywords" — usable as
 variable names in expressions and assignments while still acting as keywords in
 declarations (v4.1.3+). `end` is also a soft keyword (block terminator or
-identifier).
+identifier). Bare `end` statements are parsed as nil-expression statements to
+serve as optional block terminators matching C `main.c` parity. Anonymous `proc`
+expressions (`proc(params...): body [end]`) are fully supported via `EXPR_PROC`.
 
 ## Hybrid JIT/AOT Profiling
 
