@@ -80,4 +80,5 @@ Features:
 - **Hover** — Type information and documentation on hover, including user-defined
   procedures (docstrings extracted from the environment via the shared
   `g_hover_docs` source of truth in `diagnostic.c`)
-- **Formatting** — Format-on-save via `textDocument/formatting`
+- **Formatting** — Format-on-save via `textDocument/formatting` (`documentFormattingProvider` capability exposed across C and self-hosted LSP implementations)
+- **Server Info** — Reports language server version synchronized with `sys.version` (`v4.1.14`)

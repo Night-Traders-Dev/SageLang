@@ -29,17 +29,16 @@ make test-selfhost
 | `src/sage/sage.sage` | — | Bootstrap entry point — runs target `.sage` files |
 | `src/sage/typecheck.sage` | 228 | **Type checker** — tracks inferred and declared types (type annotations `let x: Int`, `proc f() : Int`, `proc f(x: Int)`). Supports `TypeMap.declared` dict and `annotation_to_kind` mapping. Infrastructure for let/return/param type validation. |
 
-## Bootstrap Coverage
+## Bootstrap & Toolchain Parity Coverage
 
 Arithmetic, variables, control flow, functions, recursion, closures, classes,
 inheritance, arrays, dicts, strings, try/catch, break/continue, bitwise
 operators (`~`), and module imports with loop iteration limits.
 
-**Type annotations**: `let x: Int = ...`, `proc f() : Int`, `proc f(x: Int)` — type
-declared/inferred tracking via `TypeMap.declared` dict and `annotation_to_kind`
-mapping. **Fully implemented in parser and typecheck** (see parser.sage:45-54,
-typecheck.sage:147-165). Type validation at let-binding, return statements,
-and proc parameters.
+- **CLI Flag Surface Parity**: `sage.sage` provides full CLI flag parity with C `main.c` (`-c "code"`, `--jit <file>`, `--aot <file>`, `--sgvm <file>`, `--lsp`, `--emit-kotlin`, `--emit-pico-c`).
+- **Anonymous Procedure Expressions**: `parse_proc_expr` supports inline proc expressions (`proc(params...): body [end]`).
+- **Bare `end` Statements**: Parsed as nil-expression statements (optional block terminators, matching C behavior).
+- **Type annotations**: `let x: Int = ...`, `proc f(x: Int, y: Int): Int` — type declared/inferred tracking via `TypeMap.declared` dict and `annotation_to_kind` mapping. Type validation at let-binding, return statements, and procedure parameters.
 
 ## Module Imports
 

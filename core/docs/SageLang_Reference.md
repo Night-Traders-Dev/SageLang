@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.1.9 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.1.14 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -144,9 +144,18 @@ proc connect(host, port=8080):
 # Generic function
 proc identity[T](x: T) -> T:
     return x
+
+# Anonymous procedure expression (proc literal / closure)
+let double_fn = proc(x): return x * 2 end
+print double_fn(21)            # 42
+
+# Optional bare 'end' block terminator
+proc say_hi():
+    print "Hi"
+end
 ```
 
-Functions are defined with `proc` (short for "procedure"). Functions are first-class values (closures are supported).
+Functions are defined with `proc` (short for "procedure"). Functions are first-class values (closures are supported). Anonymous procedure expressions (`proc(params...): body [end]`) can be used inline as first-class function literals. Bare `end` statements act as optional block terminators (evaluating to `nil`).
 
 ### 1.8 Arrays
 
@@ -393,7 +402,7 @@ struct   super    trait    true     try      unquote
 unsafe   var      while    yield    @
 ```
 
-**Soft keywords** (v4.0.0+): `match`, `init`, `enum`, `struct`, `trait` — can be used as variable names in expressions and assignments.
+**Soft keywords** (v4.0.0+): `match`, `init`, `enum`, `struct`, `trait`, `end` — can be used as variable names in expressions and assignments. Bare `end` statements act as optional statement and block terminators evaluating to `nil`.
 
 ### 3.2 Operators (Precedence Table)
 
@@ -1470,7 +1479,8 @@ let_stmt       = "let" IDENTIFIER (":" type_annotation)? "=" expression
 if_stmt        = "if" expression ":" block ("else" ":" block)?
 while_stmt     = "while" expression ":" block
 for_stmt       = "for" IDENTIFIER "in" expression ":" block
-proc_stmt      = "proc" IDENTIFIER "(" param_list ")" ("->" type_annotation)? ":" block
+proc_stmt      = "proc" IDENTIFIER "(" param_list ")" (("->" | ":") type_annotation)? ":" block ("end")?
+proc_expr      = "proc" "(" param_list ")" (("->" | ":") type_annotation)? ":" (statement | block) ("end")?
 return_stmt    = "return" expression?
 class_stmt     = "class" IDENTIFIER ("(" IDENTIFIER ")")? ":" block
 struct_stmt    = "struct" IDENTIFIER ":" field_list
@@ -1490,7 +1500,7 @@ expression     = binary_op (all operators with precedence)
                | primary
 
 primary        = NUMBER | STRING | BOOL | NIL | IDENTIFIER
-               | array_literal | dict_literal | tuple_literal
+               | array_literal | dict_literal | tuple_literal | proc_expr
                | "(" expression ")"
                | primary "(" args ")"           # call
                | primary "[" expression "]"     # index

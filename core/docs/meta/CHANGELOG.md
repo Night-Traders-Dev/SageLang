@@ -7,6 +7,36 @@ v3.0.0 stability baseline (2026-03-01) are numbered `0.x` by development phase.
 The `sagemake` build tool excludes this file (and `ROADMAP.md`) from version
 propagation so the per-entry version history is never flattened again.
 
+## [4.1.14] - 2026-08-18
+
+### Self-Hosted CLI Parity, Procedure Type Annotations & Anonymous Procs
+- **Self-Hosted CLI Parity**: Completed CLI flag surface parity in `core/src/sage/sage.sage` matching C `main.c` (`-c "code"`, `--jit <file>`, `--aot <file>`, `--sgvm <file>`, `--lsp`, `--emit-kotlin`, `--emit-pico-c`).
+- **Procedure Type Annotations**: Added full support for procedure parameter and return type annotations in the self-hosted compiler (`proc f(x: Int, y: Int): Int` or `proc f(x: Int) -> Int`).
+- **Anonymous Procedure Expressions**: Implemented `parse_proc_expr` in `core/src/sage/parser.sage` supporting inline proc literal expressions (`proc(params...): body [end]`).
+- **Bare `end` Statements**: Parsed bare `end` statements as nil-expression statements (optional block terminators) in `core/src/sage/parser.sage`.
+- **LSP Formatting Capability**: Added `documentFormattingProvider` capability to LSP initialization response and wired server version reporting from `sys.version` (`v4.1.14`).
+
+## [4.1.13] - 2026-08-17
+
+### Self-Hosted Compiler Parity: Type Annotations
+- **Type Annotation Parsing**: Completed type annotation parsing in self-hosted compiler (`let x: Int = ...`, `proc f(): Int`, `proc f(x: Int)`).
+- **Type Maps & Safety**: Added `TypeMap.declared` dictionary and `annotation_to_kind` mapping. Enhanced safety checks (`check_sync`, `@safe` doc tracking, `EXPR_PROC` body analysis).
+
+## [4.1.12] - 2026-08-16
+
+### Self-Hosted Compiler Infrastructure
+- Added initial type annotation infrastructure and validation logic in `core/src/sage/typecheck.sage`.
+
+## [4.1.11] - 2026-08-16
+
+### String Interner & Memory Fixes
+- Added content-keyed string interner (`sage_string_const`) to the AOT runtime in `core/src/c/compiler.c`, eliminating per-instruction heap allocations for constant string literals.
+
+## [4.1.10] - 2026-08-15
+
+### Quality Audit & VGA Primitives
+- Audited test suites, fixed duplicate `rotate_left` in `crypto/hash.sage`, fixed trailing `parse_rrs` calls in `net/dns.sage`, implemented missing VGA text mode rendering primitives (`clear`, `puts`, `draw_progress_bar`) in `metal/vga.sage`.
+
 ## [4.1.9] - 2026-08-15
 
 ### Veritas Quality Audit & Submodule Stabilization

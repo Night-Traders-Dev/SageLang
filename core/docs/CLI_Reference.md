@@ -9,10 +9,10 @@ Complete reference for the `sage` command-line interface.
 | `sage` | Start the interactive REPL | Same as `sage --repl` |
 | `sage --repl` | Start the interactive REPL | Multi-line blocks are supported |
 | `sage --help` | Print CLI usage | Shows compiler, tooling, and REPL entry points |
-| `sage -c "source"` | Execute a source string | Runs without loading a file |
+| `sage -c "source"` | Execute a source string | Runs without loading a file (supported natively and self-hosted) |
 | `sage <file.sage> [arg ...]` | Run a Sage source file | Extra arguments are available through `sys.args()` |
 | `sage <file.sgvm>` | Run a compiled SGVM binary | Runs via integrated MetalVM engine |
-| `sage --lsp` | Start the LSP server on stdin/stdout | `sage-lsp` is the standalone companion binary |
+| `sage --lsp` | Start the LSP server on stdin/stdout | Wire `lsp_run()`, formatting capability (`documentFormattingProvider`), version from `sys.version` |
 | `sage fmt <file>` | Format a file in place | Prints `Formatted: <file>` on success |
 | `sage fmt --check <file>` | Check formatting without rewriting | Exit code `1` when formatting is needed |
 | `sage lint <file>` | Run the static linter | Exit code `1` when issues are found |
@@ -68,6 +68,10 @@ Complete reference for the `sage` command-line interface.
 - `hosted` (default, no suffix) — current behavior, executable-oriented flow.
 - `-baremetal` / `-osdev` — emits freestanding entry symbol (`sage_entry`) and object-oriented native output.
 - `-uefi` — emits `efi_main` entry symbol (freestanding object; full PE/COFF image linking is planned).
+
+### Self-Hosted Toolchain Parity
+
+The self-hosted interpreter (`core/src/sage/sage.sage`) maintains complete flag surface parity with C `main.c`. Flags `-c`, `--jit`, `--aot`, `--sgvm`, `--lsp`, `--emit-kotlin`, and `--emit-pico-c` are parsed and recognized across both native and self-hosted builds.
 
 ## REPL Commands
 
