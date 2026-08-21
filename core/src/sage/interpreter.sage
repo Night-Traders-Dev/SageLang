@@ -339,7 +339,11 @@ proc value_to_string(val):
         let i = 0
         while i < len(ks):
             let k = ks[i]
-            push(parts, value_to_string(k) + ": " + value_to_string(val[k]))
+            # Mirror the C printer: string keys are rendered quoted.
+            if type(k) == "string":
+                push(parts, "\"" + k + "\": " + value_to_string(val[k]))
+            else:
+                push(parts, value_to_string(k) + ": " + value_to_string(val[k]))
             i = i + 1
         return "{" + join(parts, ", ") + "}"
     return str(val)
@@ -694,6 +698,10 @@ _native_dispatch["path_is_dir"] = _n_path_is_dir
 _native_dispatch["path_is_file"] = _n_path_is_file
 _native_dispatch["hash"] = _n_hash
 _native_dispatch["sizeof"] = _n_sizeof
+
+proc _n_val_tag(args):
+    return val_tag(args[0])
+_native_dispatch["val_tag"] = _n_val_tag
 
 proc call_native(name, args):
     if dict_has(_native_dispatch, name):

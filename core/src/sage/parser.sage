@@ -685,7 +685,16 @@ class Parser:
         else:
             then_branch = self.parse_declaration()
         let else_branch = nil
-        if self.match_tok(token.TOKEN_ELSE):
+        # elif handling: the lexers emit 'elif' as TOKEN_IF. When such a
+        # token directly follows this if's block, chain it as the else
+        # branch (mirrors if_statement() in the C parser).
+        let prev_tok = self.previous()
+        if self.check(token.TOKEN_IF) and (prev_tok.type == token.TOKEN_NEWLINE or prev_tok.type == token.TOKEN_DEDENT):
+            let cur_tok = self.peek()
+            if cur_tok.text == "elif":
+                self.advance()
+                else_branch = self.parse_if()
+        if else_branch == nil and self.match_tok(token.TOKEN_ELSE):
             self.consume(token.TOKEN_COLON, "Expect ':' after else.")
             if self.match_tok(token.TOKEN_NEWLINE):
                 else_branch = self.parse_block()

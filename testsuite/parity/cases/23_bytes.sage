@@ -1,0 +1,6 @@
+let b = bytes(4)
+bytes_set(b, 0, 65)
+bytes_set(b, 1, 66)
+print bytes_len(b)
+print bytes_get(b, 0)
+print bytes_to_string(b)
