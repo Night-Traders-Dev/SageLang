@@ -54,6 +54,9 @@ endif()
 # Read version from single-source VERSION file
 file(READ "${CMAKE_SOURCE_DIR}/VERSION" SAGE_VER_RAW)
 string(STRIP "${SAGE_VER_RAW}" SAGE_VER)
+if(SAGE_VER MATCHES "^v(.+)")
+    set(SAGE_VER "${CMAKE_MATCH_1}")
+endif()
 
 project(SageLang VERSION ${SAGE_VER} LANGUAGES C CXX ASM)
 
