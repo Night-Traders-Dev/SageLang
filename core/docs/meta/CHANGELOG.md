@@ -7,6 +7,34 @@ v3.0.0 stability baseline (2026-03-01) are numbered `0.x` by development phase.
 The `sagemake` build tool excludes this file (and `ROADMAP.md`) from version
 propagation so the per-entry version history is never flattened again.
 
+## [4.1.14] - 2026-08-18
+
+### Self-Hosted Compiler Parity: Proc Type Annotations
+- **Procedure Annotations**: Added complete parsing and type checking for procedure parameter and return type annotations in the self-hosted Sage compiler (`core/src/sage/parser.sage`, `core/src/sage/ast.sage`, `core/src/sage/typecheck.sage`). Full support for `proc f(x: Int, y: Int): Int` with declared/inferred type tracking via `TypeMap.declared` dict and `annotation_to_kind` mapping.
+- **Validation**: All 430+ self-hosted tests and 18 bootstrap tests passing.
+
+## [4.1.13] - 2026-08-18
+
+### Self-Hosted Compiler Parity: Type Annotations
+- **Variable & Return Type Annotations**: Completed type annotation parsing support in the self-hosted compiler port. Full support for `let x: Int = ...`, `proc f() : Int`, and `proc f(x: Int)` with declared/inferred type tracking.
+- **Safety & Constfold**: Safety checks enhanced with `check_sync`, `@safe` doc tracking, and `EXPR_PROC` body analysis. `constfold` improved with inf/NaN guard and 64KB string concat cap.
+
+## [4.1.12] - 2026-08-17
+
+### Self-Hosted Compiler Parity: Type Check Infrastructure
+- **TypeMap Infrastructure**: Added type annotation infrastructure to the self-hosted Sage compiler port (`core/src/sage/typecheck.sage`), mirroring the C compiler's annotation system.
+
+## [4.1.11] - 2026-08-16
+
+### AOT Runtime String Interner & Linter S005 Rule
+- **String Interner & Memory Leak Fix**: Fixed unbounded memory growth (~140MB/s) in long-running RISC-V programs by adding a content-keyed string interner (`sage_string_const`) to the AOT runtime in `core/src/c/compiler.c`. Compile-time constant strings are now interned and rooted from the GC.
+- **Linter Rule S005**: Added S005 linter rule detecting multiple statements on a single line (`core/src/c/linter.c`, `core/include/linter.h`).
+
+## [4.1.10] - 2026-08-16
+
+### Veritas Quality Audit & Submodule Stabilization
+- **Submodule Fixes**: Audited standard test suites, resolved duplicate procedure definition for `rotate_left` in `crypto/hash.sage`, fixed invalid trailing `parse_rrs` calls in `net/dns.sage`, implemented missing VGA text mode rendering primitives (`clear`, `puts`, `draw_progress_bar`) in `metal/vga.sage`, and updated expected wallet hash in `repro_nft_segfault.sage`.
+
 ## [4.1.9] - 2026-08-15
 
 ### Veritas Quality Audit & Submodule Stabilization
