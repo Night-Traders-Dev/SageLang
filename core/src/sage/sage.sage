@@ -75,7 +75,16 @@ proc print_usage():
     print "  --help                Show this help"
 
 proc print_version():
-    print "sage " + VERSION + " (self-hosted)"
+    let info = build_info()
+    let ver = info["version"]
+    if ver[0] == "v":
+        ver = ver[1:]
+    end
+    print "SageLang v" + ver
+    print "Architecture : " + info["arch"]
+    print "Build type   : self-hosted (host: " + info["type"] + " interpreter)"
+    print "Built        : " + info["built"]
+    print "Spec         : " + info["spec"]
 
 # ============================================================================
 # Argument Parsing

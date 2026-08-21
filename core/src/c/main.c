@@ -796,6 +796,24 @@ static void repl_free_buffers(void) {
     g_repl_buffers = NULL;
 }
 
+// Version banner shared by --version and the REPL :version command.
+#ifndef SAGE_BUILD_ARCH
+#define SAGE_BUILD_ARCH "unknown"
+#endif
+#ifndef SAGE_BUILD_TYPE
+#define SAGE_BUILD_TYPE "C"
+#endif
+static void print_version_info(const char* build_type) {
+    // Normalize: some build paths embed the 'v' prefix in the version string.
+    const char* ver = SAGE_VERSION_STR;
+    if (ver[0] == 'v') ver++;
+    printf("SageLang v%s\n", ver);
+    printf("Architecture : %s\n", SAGE_BUILD_ARCH);
+    printf("Build type   : %s\n", build_type ? build_type : SAGE_BUILD_TYPE);
+    printf("Built        : %s %s\n", __DATE__, __TIME__);
+    printf("Spec         : 2.0\n");
+}
+
 static void repl_print_help(void) {
     printf("Sage REPL Commands:\n");
     printf("\n");
@@ -835,6 +853,7 @@ static void repl_print_help(void) {
     printf("    :sh <command>      Execute a shell command\n");
     printf("    :gc                Run garbage collection and print stats\n");
     printf("    :runtime [mode]    Show or set runtime (ast, bytecode, jit, aot, auto)\n");
+    printf("    :version           Show version, architecture, build type and date\n");
     printf("\n");
     printf("Multi-line blocks (if, for, while, proc, class) are\n");
     printf("detected automatically when a line ends with ':'.\n");
@@ -1522,6 +1541,12 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
 
         if (strcmp(line, ":help") == 0) {
             repl_print_help();
+            free(line);
+            continue;
+        }
+
+        if (strcmp(line, ":version") == 0 || strcmp(line, "version") == 0) {
+            print_version_info(NULL);
             free(line);
             continue;
         }
@@ -2562,6 +2587,12 @@ int main(int argc, const char* argv[]) {
 
     // Parse global flags that can appear before the command or script
     while (cmd_argc >= 2) {
+        if (strcmp(cmd_argv[1], "--version") == 0 ||
+            strcmp(cmd_argv[1], "-V") == 0 ||
+            strcmp(cmd_argv[1], "version") == 0) {
+            print_version_info(NULL);
+            CLEANUP_AND_EXIT(0);
+        }
         if (cmd_argc >= 3 && strcmp(cmd_argv[1], "--runtime") == 0) {
             if (!sage_runtime_parse_mode(cmd_argv[2], &runtime_mode)) {
                 fprintf(stderr, "Unknown runtime mode: %s (expected ast, bytecode, jit, aot, or auto)\n", cmd_argv[2]);

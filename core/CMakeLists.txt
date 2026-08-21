@@ -129,6 +129,8 @@ endif()
 if(NOT BUILD_PICO)
     add_compile_definitions(_POSIX_C_SOURCE=200809L)
     add_compile_definitions(SAGE_VERSION_STR="${PROJECT_VERSION}")
+    add_compile_definitions(SAGE_BUILD_ARCH="${CMAKE_SYSTEM_PROCESSOR}")
+    add_compile_definitions(SAGE_BUILD_TYPE="C")
 endif()
 
 # Find networking dependencies (desktop only)

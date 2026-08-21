@@ -941,6 +941,33 @@ static ExecResult binary_operand_error(Value l, Value r, const char* opname) {
 // self-hosted interpreter (avoids allocating a type-name string per check).
 // 0=unknown 1=nil 2=bool 3=number 4=string 5=array 6=dict 7=function
 // 8=native 9=instance 10=tuple 11=class 12=bytes
+// build_info() -> dict describing this binary: version, arch, build type
+// ("C"), build timestamp and spec version. Shared by --version, the REPL
+// :version command and the self-hosted toolchain's version output.
+static Value build_info_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    Value d = val_dict();
+#ifndef SAGE_BUILD_ARCH
+#define SAGE_BUILD_ARCH "unknown"
+#endif
+#ifndef SAGE_BUILD_TYPE
+#define SAGE_BUILD_TYPE "C"
+#endif
+    Value sv = val_string(SAGE_VERSION_STR);
+    dict_set_len(&d, "version", 7, sv);
+    Value sa = val_string(SAGE_BUILD_ARCH);
+    dict_set_len(&d, "arch", 4, sa);
+    Value sb = val_string(SAGE_BUILD_TYPE);
+    dict_set_len(&d, "type", 4, sb);
+    char built[64];
+    snprintf(built, sizeof(built), "%s %s", __DATE__, __TIME__);
+    Value sd = val_string(built);
+    dict_set_len(&d, "built", 5, sd);
+    Value sp = val_string("2.0");
+    dict_set_len(&d, "spec", 4, sp);
+    return d;
+}
+
 static Value val_tag_native(int argCount, Value* args) {
     if (argCount != 1) return val_number(0);
     switch (args[0].type) {
@@ -2615,6 +2642,7 @@ void init_stdlib(Env* env) {
     env_define_const(env, "strip", 5, val_native(strip_native));
     env_define_const(env, "type", 4, val_native(type_native));
     env_define_const(env, "val_tag", 7, val_native(val_tag_native));
+    env_define_const(env, "build_info", 10, val_native(build_info_native));
     env_define_const(env, "chr", 3, val_native(chr_native));
     env_define_const(env, "ord", 3, val_native(ord_native));
     env_define_const(env, "startswith", 10, val_native(startswith_native));
