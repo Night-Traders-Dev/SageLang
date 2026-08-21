@@ -1031,8 +1031,14 @@ proc _bop_minus(l, r):
 proc _bop_star(l, r):
     return l * r
 proc _bop_slash(l, r):
+    if r == 0:
+        sys.stderr_write("Runtime Error: Division by zero.\n")
+        raise "Division by zero"
     return l / r
 proc _bop_percent(l, r):
+    if r == 0:
+        sys.stderr_write("Runtime Error: Modulo by zero.\n")
+        raise "Modulo by zero"
     return l % r
 proc _bop_amp(l, r):
     return l & r
@@ -1107,10 +1113,12 @@ proc eval_binary(expr, env):
             return left * right
         if op_type == TOKEN_SLASH:
             if right == 0:
+                sys.stderr_write("Runtime Error: Division by zero.\n")
                 runtime_error(expr.op.line, "Division by zero", nil)
             return left / right
         if op_type == TOKEN_PERCENT:
             if right == 0:
+                sys.stderr_write("Runtime Error: Modulo by zero.\n")
                 runtime_error(expr.op.line, "Modulo by zero", nil)
             return left % right
         if op_type == TOKEN_GT:
@@ -1537,8 +1545,10 @@ proc call_resolved(callee, args, env, callee_expr):
 # Slow-path binary application shared by dynamic and compiled evaluators.
 proc binop_apply(expr, op_type, left, right):
     if op_type == TOKEN_SLASH and right == 0:
+        sys.stderr_write("Runtime Error: Division by zero.\n")
         runtime_error(expr.op.line, "Division by zero", nil)
     if op_type == TOKEN_PERCENT and right == 0:
+        sys.stderr_write("Runtime Error: Modulo by zero.\n")
         runtime_error(expr.op.line, "Modulo by zero", nil)
 
     let func = get_binop_func(op_type)
@@ -1909,13 +1919,27 @@ proc exec_stmt(stmt, env):
 # -----------------------------------------
 
 proc exec_block(first_stmt, env):
+    # Mirrors the C host: defer statements are collected at block level and
+    # executed in LIFO order when the scope exits (normally, via return,
+    # break/continue, or an exception).
+    let deferred = []
     let current = first_stmt
+    let block_result = _SIG_NORMAL_NIL
     while current != nil:
+        if current.type == STMT_DEFER:
+            push(deferred, current.statement)
+            current = current.next
+            continue
         let res = exec_stmt(current, env)
         if res["kind"] != SIGNAL_NORMAL:
-            return res
+            block_result = res
+            break
         current = current.next
-    return _SIG_NORMAL_NIL
+    let di = len(deferred) - 1
+    while di >= 0:
+        exec_stmt(deferred[di], env)
+        di = di - 1
+    return block_result
 
 # -----------------------------------------
 # Try/Catch execution
@@ -2039,10 +2063,12 @@ proc ccomp_expr(e):
                     return left * right
                 if op_type == TOKEN_SLASH:
                     if right == 0:
+                        sys.stderr_write("Runtime Error: Division by zero.\n")
                         runtime_error(op_line, "Division by zero", nil)
                     return left / right
                 if op_type == TOKEN_PERCENT:
                     if right == 0:
+                        sys.stderr_write("Runtime Error: Modulo by zero.\n")
                         runtime_error(op_line, "Modulo by zero", nil)
                     return left % right
                 if op_type == TOKEN_GT:
@@ -2277,20 +2303,33 @@ proc ccomp_stmt_list(first):
                     return res
                 k = k + 1
             return _SIG_NORMAL_NIL
+    # Partition defer statements statically (defer-ness is syntactic) so the
+    # emitted closure list can run them LIFO at scope exit, matching exec_block.
+    let main_stmts = []
+    let deferred_stmts = []
     let current = first
-    let compiled = []
     while current != nil:
-        push(compiled, ccomp_stmt(current))
+        if current.type == STMT_DEFER:
+            push(deferred_stmts, ccomp_stmt(current.statement))
+        else:
+            push(main_stmts, ccomp_stmt(current))
         current = current.next
-    let n = len(compiled)
+    let n = len(main_stmts)
+    let dn = len(deferred_stmts)
     return proc(env):
         let k = 0
+        let block_result = _SIG_NORMAL_NIL
         while k < n:
-            let res = compiled[k](env)
+            let res = main_stmts[k](env)
             if res["kind"] != SIGNAL_NORMAL:
-                return res
+                block_result = res
+                break
             k = k + 1
-        return _SIG_NORMAL_NIL
+        let di2 = dn - 1
+        while di2 >= 0:
+            deferred_stmts[di2](env)
+            di2 = di2 - 1
+        return block_result
 
 # Compiled-program entry: same contract as exec_program.
 proc exec_program_compiled(global_env, stmts):

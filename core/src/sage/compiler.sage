@@ -34,6 +34,7 @@ class CCompiler:
         self.globals = []
         self.procs = []
         self.locals = []
+        self.defer_scopes = [[]]
         self.classes = []
         self.modules = []
         self.failed = false
@@ -832,11 +833,21 @@ proc cc_emit_stmt_list(cc, stmt):
 
 proc cc_emit_embedded_block(cc, stmt):
     cc.indent = cc.indent + 1
+    push(cc.defer_scopes, [])
+    print "[dbg-eb] pushed, depth=" + str(len(cc.defer_scopes))
     if stmt != nil and stmt.type == 104:
         # STMT_BLOCK
         cc_emit_stmt_list(cc, stmt.statements)
     if stmt != nil and stmt.type != 104:
         cc_emit_stmt_list(cc, stmt)
+    # Flush this block's defers in LIFO order (scope exit).
+    let scope = cc.defer_scopes[len(cc.defer_scopes) - 1]
+    print "[dbg-eb] flush scope.len=" + str(len(scope)) + " si=" + str(len(scope) - 1)
+    let si = len(scope) - 1
+    while si >= 0:
+        cc_emit_stmt(cc, scope[si])
+        si = si - 1
+    pop(cc.defer_scopes)
     if stmt == nil:
         # empty block
         let x = 0
@@ -902,19 +913,49 @@ proc cc_emit_stmt(cc, stmt):
         cc_emit_embedded_block(cc, stmt.body)
         cc_line(cc, "}")
         return
+    if t == 113:
+        # STMT_DEFER: collect into the innermost block scope; the scope
+        # flush (below) emits it LIFO at scope exit.
+        push(cc.defer_scopes[len(cc.defer_scopes) - 1], stmt.statement)
+        return
     if t == 108:
-        # STMT_RETURN
+        # STMT_RETURN — run all active defers, innermost first. Do NOT pop
+        # scopes here; each enclosing block's exit-flush owns its scope.
+        let si3 = len(cc.defer_scopes) - 1
+        while si3 >= 0:
+            let sc = cc.defer_scopes[si3]
+            let dj3 = len(sc) - 1
+            while dj3 >= 0:
+                cc_emit_stmt(cc, sc[dj3])
+                dj3 = dj3 - 1
+            si3 = si3 - 1
         let ret_val = "sage_nil()"
         if stmt.value != nil:
             ret_val = cc_emit_expr(cc, stmt.value)
         cc_line(cc, "return " + ret_val + ";")
         return
     if t == 109:
-        # STMT_BREAK
+        # STMT_BREAK — flush active defers innermost first (no pops).
+        let sbi = len(cc.defer_scopes) - 1
+        while sbi >= 0:
+            let scb = cc.defer_scopes[sbi]
+            let dbj = len(scb) - 1
+            while dbj >= 0:
+                cc_emit_stmt(cc, scb[dbj])
+                dbj = dbj - 1
+            sbi = sbi - 1
         cc_line(cc, "break;")
         return
     if t == 110:
-        # STMT_CONTINUE
+        # STMT_CONTINUE — flush active defers innermost first (no pops).
+        let sci = len(cc.defer_scopes) - 1
+        while sci >= 0:
+            let scc = cc.defer_scopes[sci]
+            let dck = len(scc) - 1
+            while dck >= 0:
+                cc_emit_stmt(cc, scc[dck])
+                dck = dck - 1
+            sci = sci - 1
         cc_line(cc, "continue;")
         return
     if t == 106:
@@ -1500,12 +1541,12 @@ proc emit_runtime_prelude(cc):
     push(o, "}" + NL)
     push(o, "static SageValue sage_div(SageValue left, SageValue right) {" + NL)
     push(o, "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) sage_fail(" + num_err + ");" + NL)
-    push(o, "    if (right.as.number == 0) { fprintf(stderr, \"Runtime Error: Division by zero.\\n\"); return sage_nil(); }" + NL)
+    push(o, "    if (right.as.number == 0) { fprintf(stderr, \"Runtime Error: Division by zero.\\n\"); sage_raise(sage_string(sage_dup_string(\"Division by zero\"))); return sage_nil(); }" + NL)
     push(o, "    return sage_number(left.as.number / right.as.number);" + NL)
     push(o, "}" + NL)
     push(o, "static SageValue sage_mod(SageValue left, SageValue right) {" + NL)
     push(o, "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) sage_fail(" + num_err + ");" + NL)
-    push(o, "    if (right.as.number == 0) { fprintf(stderr, \"Runtime Error: Modulo by zero.\\n\"); return sage_nil(); }" + NL)
+    push(o, "    if (right.as.number == 0) { fprintf(stderr, \"Runtime Error: Modulo by zero.\\n\"); sage_raise(sage_string(sage_dup_string(\"Modulo by zero\"))); return sage_nil(); }" + NL)
     push(o, "    return sage_number(fmod(left.as.number, right.as.number));" + NL)
     push(o, "}" + NL)
     # Comparison
@@ -1890,6 +1931,8 @@ proc emit_function_definition(cc, stmt):
         let pname = stmt.params[i].text
         add_name_entry(cc, params, pname, "sage_param")
     let prev_locals = cc.locals
+    let prev_defers = cc.defer_scopes
+    push(cc.defer_scopes, [])
     cc.locals = params
     collect_local_lets(cc, stmt.body, cc.locals)
     # Emit function signature
@@ -1911,10 +1954,16 @@ proc emit_function_definition(cc, stmt):
         cc_line(cc, "sage_define_slot(&" + param_entry["c_name"] + ", arg" + str(i) + ");")
     # Emit body
     cc_emit_stmt_list(cc, stmt.body)
+    let end_scope = cc.defer_scopes[len(cc.defer_scopes) - 1]
+    let ei = len(end_scope) - 1
+    while ei >= 0:
+        cc_emit_stmt(cc, end_scope[ei])
+        ei = ei - 1
     cc_line(cc, "return sage_nil();")
     cc.indent = cc.indent - 1
     cc_line(cc, "}")
     cc_blank(cc)
+    cc.defer_scopes = prev_defers
     cc.locals = prev_locals
 
 proc emit_method_definition(cc, cls, method):
@@ -1927,6 +1976,8 @@ proc emit_method_definition(cc, cls, method):
     if has_self:
         param_start = 1
     let prev_locals = cc.locals
+    let prev_defers_m = cc.defer_scopes
+    push(cc.defer_scopes, [])
     cc.locals = []
     add_name_entry(cc, cc.locals, "self", "sage_local")
     for i in range(param_start, method.param_count):
@@ -1949,11 +2000,112 @@ proc emit_method_definition(cc, cls, method):
         argv_idx = argv_idx + 1
     cc_line(cc, "(void)_argc;")
     cc_emit_stmt_list(cc, method.body)
+    let mscope = cc.defer_scopes[len(cc.defer_scopes) - 1]
+    let mi = len(mscope) - 1
+    while mi >= 0:
+        cc_emit_stmt(cc, mscope[mi])
+        mi = mi - 1
     cc_line(cc, "return sage_nil();")
     cc.indent = cc.indent - 1
     cc_line(cc, "}")
     cc_blank(cc)
     cc.locals = prev_locals
+
+proc emit_function_definitions(cc, program):
+    # Class methods
+    for i in range(len(cc.classes)):
+        let cls = cc.classes[i]
+        let method = cls["methods"]
+        while method != nil:
+            if method.type == 106:
+                emit_method_definition(cc, cls, method)
+                if cc.failed:
+                    return
+            method = method.next
+    # Program functions
+    let stmt = program
+    while stmt != nil:
+        if stmt.type == 106:
+            emit_function_definition(cc, stmt)
+            if cc.failed:
+                return
+        stmt = stmt.next
+
+# ============================================================================
+# Main Function Emission
+# ============================================================================
+
+proc emit_main_function(cc, program):
+    cc_line(cc, "int main(void) {")
+    cc.indent = cc.indent + 1
+    # Init global slots
+    for i in range(len(cc.globals)):
+        cc_line(cc, cc.globals[i]["c_name"] + " = sage_slot_undefined();")
+    # Register classes and methods
+    for i in range(len(cc.classes)):
+        let cls = cc.classes[i]
+        if cls["parent_name"] != nil:
+            cc_line(cc, "sage_register_class(" + DQ + cls["class_name"] + DQ + ", " + DQ + cls["parent_name"] + DQ + ");")
+        if cls["parent_name"] == nil:
+            cc_line(cc, "sage_register_class(" + DQ + cls["class_name"] + DQ + ", NULL);")
+        let method = cls["methods"]
+        while method != nil:
+            if method.type == 106:
+                let mn = method.name.text
+                cc_line(cc, "sage_register_method(" + DQ + cls["class_name"] + DQ + ", " + DQ + mn + DQ + ", sage_method_" + cls["class_name"] + "_" + mn + ");")
+            method = method.next
+    # Emit top-level statements
+    let stmt = program
+    while stmt != nil:
+        if stmt.type != 106 and stmt.type != 111:
+            cc_emit_stmt(cc, stmt)
+            if cc.failed:
+                cc.indent = cc.indent - 1
+                cc_line(cc, "return 1;")
+                cc_line(cc, "}")
+                return
+        stmt = stmt.next
+    cc_line(cc, "return 0;")
+    cc.indent = cc.indent - 1
+    cc_line(cc, "}")
+
+# ============================================================================
+# Public API
+# ============================================================================
+
+proc compile_to_c(program):
+    let was_array = (type(program) == "array")
+    if was_array:
+        if len(program) == 0:
+            program = nil
+        else:
+            for i in range(len(program) - 1):
+                program[i].next = program[i + 1]
+            end
+            program[len(program) - 1].next = nil
+            program = program[0]
+        end
+    end
+    let cc = CCompiler()
+    collect_top_level_symbols(cc, program)
+    if cc.failed:
+        return ""
+    emit_runtime_prelude(cc)
+    cc.indent = 0
+    emit_proc_prototypes(cc)
+    emit_method_prototypes(cc)
+    if len(cc.procs) > 0 or len(cc.classes) > 0:
+        cc_blank(cc)
+    emit_global_slots(cc)
+    if len(cc.globals) > 0:
+        cc_blank(cc)
+    emit_function_definitions(cc, program)
+    if cc.failed:
+        return ""
+    emit_main_function(cc, program)
+    return join(cc.output, "")
+    cc.defer_scopes = prev_defers_m
+
 
 proc emit_function_definitions(cc, program):
     # Class methods

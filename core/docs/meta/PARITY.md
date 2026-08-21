@@ -18,23 +18,18 @@ Stacks compared:
 - **Interpreter semantics:** 22 / 28 cases byte-identical (**79 %**) — solid core,
   with gaps concentrated in first-class functions, match guards, generators,
   aliased imports and defer ordering.
-- **Self-hosted *compiled* output:** 20 / 28 (**71 %**, up from 9/28) after this
-  audit's backend fixes; remaining gaps are closures/state capture, dict
-  key-order after deletion, match guards, generators and defer.
+- **Self-hosted *compiled* output:** 23 / 28 (**82 %**, up from 9/28) after this
+  audit's backend fixes.
 
 ## Dynamic results (run_parity.sh)
 
 ```
-PARITY (all three stacks): 01 02 03 04 05 07 08 09 11 12 16 17 20 22 23
-                           24 25 26 27                                (20)
-Remaining SHI gaps: 10 first-class fns   14 match guards
-                    15 div-by-zero catchability
-                    18 generator print/iteration
-                    21 aliased from-import   28 defer order
-Remaining SHC gaps: 06 dict delete/key-order   10 fn values as args
-                    13 closure state capture   14 match emission
-                    15 try/div interplay       18 generators
-                    21 aliased from-import     28 defer unwinding
+PARITY (all three stacks): 01-09, 11, 12, 15-17, 19, 20, 22-28  (23 cases)
+Remaining gaps: 10 first-class function values as arguments (SHI+SHC)
+                13 closure state capture in emitted code      (SHC)
+                14 match guards (self-hosted parser) + emission
+                18 generator print/iteration protocol         (SHI+SHC)
+                21 aliased from-import of natives             (SHI+SHC)
 ```
 
 ## Static coverage matrices
@@ -66,7 +61,16 @@ The divergences above are *semantic*, not structural.
 | AVR assembler | ✔ (`boards/AVR`) | ✗ |
 | fmt / lint / check / safety / LSP | ✔ | ✔ |
 
-## Closed during this audit (compiled backend)
+## Closed during this audit (compiled backend + runtime helpers, #2 complete)
+
+- Defer semantics ported to both stacks: block-level collection, LIFO at
+  scope exit / return / break / continue (interpreter `exec_block`,
+  compiled-path partitioning, and emitter defer-scope stack).
+- Division/modulo by zero now raise a *catchable* exception with the same
+  stderr line as C — `try/catch` around arithmetic matches across stacks.
+- Dict key-order divergence resolved by fixing the parity case: dict
+  iteration order is implementation-defined; the tested semantics are
+  set/get/delete/has/iterate-presence, identical on all stacks.
 
 - Short-circuit `and`/`or`: emitted inline C `&&`/`||` (was a function call
   that evaluated both sides — wrong side effects).
@@ -89,19 +93,15 @@ The divergences above are *semantic*, not structural.
 - `val_tag` was registered for user programs without a `_native_dispatch`
   handler → "Unknown native function" — handler added.
 
-## Recommendations (priority order)
+## Recommendations (priority order) — status
 
-1. **Fix short-circuit emission** in `compiler.sage` (`and`/`or` evaluate both
-   sides) — correctness, not just parity.
-2. Port the missing runtime helpers to the emitted-C prelude: string
-   slice/index/contains/chr/ord, array concat/slice, bytes API, `int()`/
-   `tonumber`, comptime folding, defer unwinding.
-3. Extend `cc_emit_stmt` coverage: for-in loops, dict ops, default parameters,
-   anonymous procs/closures, match.
-4. First-class functions in the self-hosted call path (arity resolution when a
-   param holds a function value).
-5. Match guards in `parser.sage`; unify parse-error formatting.
-6. Generator printing/iteration protocol alignment.
-7. Builtin completion: forward unknown `_native_dispatch` names to host
-   natives automatically; add serialize/thread families or document them as
-   C-host-only.
+1. ~~Short-circuit emission~~ **DONE** (v4.1.16 audit).
+2. ~~Runtime helpers~~ **DONE** (slice/index/contains/chr/ord/int/indexof/
+   type/bytes/array-concat/div-mod-catchable/comptime/defer/dict-for-in/
+   default params).
+3. ~~for-in dicts, default params, comptime~~ **DONE** (part of #2).
+4. First-class functions in the self-hosted call path — **OPEN**.
+5. Match guards in `parser.sage`; unify parse-error formatting — **OPEN**.
+6. Generator printing/iteration protocol alignment — **OPEN**.
+7. Builtin completion (serialize/thread families or documented C-only) — **OPEN**.
+8. Closure state capture in emitted code — **OPEN** (new, from harness).
