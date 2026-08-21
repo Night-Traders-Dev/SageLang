@@ -30,7 +30,7 @@ let SIGNAL_CONTINUE = 3
 let SIGNAL_YIELD = 4
 
 # Maximum recursion depth
-let MAX_RECURSION = 2000
+let MAX_RECURSION = 50000
 
 # Maximum loop iterations (prevents infinite loops)
 let MAX_LOOP_ITERATIONS = 1000000

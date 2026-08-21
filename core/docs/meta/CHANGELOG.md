@@ -1,4 +1,9 @@
 # Changelog
+## [4.1.15] - 2026-08-21
+
+### Self-Hosted Compiler Parity: Recursion Depth
+- Increased maximum recursion depth from 2000/500 to 50000 in `core/src/sage/interpreter.sage:33` and `core/src/c/interpreter.c:162` to eliminate "Maximum recursion depth exceeded" errors in deep recursive programs and import chains.
+- All self-hosted tests pass (430+ tests).
 
 All notable changes to SageLang are documented in this file, newest first.
 
