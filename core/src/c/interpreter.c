@@ -930,6 +930,29 @@ static ExecResult binary_operand_error(Value l, Value r, const char* opname) {
     return EVAL_EXCEPTION(val_exception(buf));
 }
 
+// val_tag(v) -> small integer type tag for hot-path dispatch in the
+// self-hosted interpreter (avoids allocating a type-name string per check).
+// 0=unknown 1=nil 2=bool 3=number 4=string 5=array 6=dict 7=function
+// 8=native 9=instance 10=tuple 11=class 12=bytes
+static Value val_tag_native(int argCount, Value* args) {
+    if (argCount != 1) return val_number(0);
+    switch (args[0].type) {
+        case VAL_NIL:       return val_number(1);
+        case VAL_BOOL:      return val_number(2);
+        case VAL_NUMBER:    return val_number(3);
+        case VAL_STRING:    return val_number(4);
+        case VAL_ARRAY:     return val_number(5);
+        case VAL_DICT:      return val_number(6);
+        case VAL_FUNCTION:  return val_number(7);
+        case VAL_NATIVE:    return val_number(8);
+        case VAL_INSTANCE:  return val_number(9);
+        case VAL_TUPLE:     return val_number(10);
+        case VAL_CLASS:     return val_number(11);
+        case VAL_BYTES:     return val_number(12);
+        default:            return val_number(0);
+    }
+}
+
 // type(val) -> string name of type
 static Value type_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
@@ -2584,6 +2607,7 @@ void init_stdlib(Env* env) {
     env_define_const(env, "lower", 5, val_native(lower_native));
     env_define_const(env, "strip", 5, val_native(strip_native));
     env_define_const(env, "type", 4, val_native(type_native));
+    env_define_const(env, "val_tag", 7, val_native(val_tag_native));
     env_define_const(env, "chr", 3, val_native(chr_native));
     env_define_const(env, "ord", 3, val_native(ord_native));
     env_define_const(env, "startswith", 10, val_native(startswith_native));

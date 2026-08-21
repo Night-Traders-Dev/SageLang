@@ -3567,6 +3567,9 @@ int main(int argc, const char* argv[]) {
             }
         } else {
             module_add_source_dir(cmd_argv[1]);  // Add source file's dir to search paths
+            // Expose the SCRIPT-relative argument view: global flags consumed
+            // above (--runtime, -I, ...) must not leak into sys.args().
+            sage_set_args(cmd_argc, cmd_argv);
             char* source = main_read_file(cmd_argv[1]);
             run(source, cmd_argv[1], runtime_mode);
             free(source);

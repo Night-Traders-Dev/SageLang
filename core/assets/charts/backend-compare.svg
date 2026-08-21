@@ -88,93 +88,93 @@
 <text x="114.5" y="209.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">AST INTERPRETER</text>
 <rect x="280" y="181" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="280" y="181" width="6.0" height="44" rx="12" fill="url(#bg-0)"/>
-<text x="300.0" y="210.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">467ms</text>
+<text x="300.0" y="210.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">441ms</text>
 <rect x="30" y="253.0" width="133" height="32" rx="10" fill="#12A695" opacity="0.95"/>
 <text x="96.5" y="275.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">BYTECODE VM</text>
 <rect x="280" y="247" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="280" y="247" width="6.0" height="44" rx="12" fill="url(#bg-1)"/>
-<text x="300.0" y="276.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">340ms</text>
+<text x="300.0" y="276.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">322ms</text>
 <rect x="30" y="319.0" width="196" height="32" rx="10" fill="#974CDE" opacity="0.95"/>
 <text x="128.0" y="341.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">LLVM BACKEND (RUN)</text>
 <rect x="280" y="313" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="280" y="313" width="6.0" height="44" rx="12" fill="url(#bg-2)"/>
-<text x="300.0" y="342.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">438ms</text>
+<text x="300.0" y="342.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">451ms</text>
 <rect x="30" y="385.0" width="214" height="32" rx="10" fill="#AD77E3" opacity="0.95"/>
 <text x="137.0" y="407.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">LLVM BACKEND (TOTAL)</text>
 <rect x="280" y="379" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="280" y="379" width="6.0" height="44" rx="12" fill="url(#bg-3)"/>
-<text x="300.0" y="408.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">576ms</text>
+<rect x="280" y="379" width="19.1" height="44" rx="12" fill="url(#bg-3)"/>
+<text x="313.1" y="408.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">1.54s</text>
 <rect x="30" y="451.0" width="142" height="32" rx="10" fill="#DC8E0A" opacity="0.95"/>
 <text x="101.0" y="473.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">JIT PROFILED</text>
 <rect x="280" y="445" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="280" y="445" width="6.0" height="44" rx="12" fill="url(#bg-4)"/>
-<text x="300.0" y="474.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">454ms</text>
+<text x="300.0" y="474.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">450ms</text>
 <rect x="30" y="517.0" width="115" height="32" rx="10" fill="#0EA674" opacity="0.95"/>
 <text x="87.5" y="539.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">AOT (RUN)</text>
 <rect x="280" y="511" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="280" y="511" width="6.0" height="44" rx="12" fill="url(#bg-5)"/>
-<text x="300.0" y="540.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">428ms</text>
+<text x="300.0" y="540.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">420ms</text>
 <rect x="30" y="583.0" width="151" height="32" rx="10" fill="#77B814" opacity="0.95"/>
 <text x="105.5" y="605.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">JIT+AOT (RUN)</text>
 <rect x="280" y="577" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="280" y="577" width="6.0" height="44" rx="12" fill="url(#bg-6)"/>
-<text x="300.0" y="606.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">417ms</text>
+<text x="300.0" y="606.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">432ms</text>
 <rect x="30" y="649.0" width="178" height="32" rx="10" fill="#D4418A" opacity="0.95"/>
 <text x="119.0" y="671.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">SELF-HOSTED SAGE</text>
 <rect x="280" y="643" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="280" y="643" width="912.0" height="44" rx="12" fill="url(#bg-7)"/>
-<text x="1206.0" y="672.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">120.08s</text>
+<text x="1206.0" y="672.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">73.33s</text>
 <rect x="30" y="715.0" width="205" height="32" rx="10" fill="#1FBED6" opacity="0.95"/>
 <text x="132.5" y="737.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">VM IMAGE .SVM (RUN)</text>
 <rect x="280" y="709" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
 <rect x="280" y="709" width="6.0" height="44" rx="12" fill="url(#bg-8)"/>
-<text x="300.0" y="738.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">188ms</text>
+<text x="300.0" y="738.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">190ms</text>
 <rect x="30" y="781.0" width="223" height="32" rx="10" fill="#5DD1E0" opacity="0.95"/>
 <text x="141.5" y="803.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">VM IMAGE .SVM (TOTAL)</text>
 <rect x="280" y="775" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="280" y="775" width="6.2" height="44" rx="12" fill="url(#bg-9)"/>
-<text x="300.2" y="804.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">810ms</text>
+<rect x="280" y="775" width="6.0" height="44" rx="12" fill="url(#bg-9)"/>
+<text x="300.0" y="804.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">203ms</text>
 <text x="44" y="901.0" fill="#F8FAFC" font-size="22" font-family="Segoe UI, Arial, sans-serif" font-weight="700">Codegen / emit throughput — generation time only</text>
 <text x="44" y="927.0" fill="#94A3B8" font-size="15" font-family="Segoe UI, Arial, sans-serif">These backends did NOT execute the workload; bars measure compiler emission (+ assemble where a toolchain exists), hatched so they are never read as runtimes.</text>
 <rect x="30" y="949.0" width="178" height="32" rx="10" fill="#7034D5" opacity="0.75"/>
 <text x="119.0" y="971.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">KOTLIN TRANSPILE</text>
 <rect x="280" y="943" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="280" y="943" width="69.6" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
-<text x="363.6" y="972.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">12.8ms</text>
+<rect x="280" y="943" width="550.0" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
+<text x="844.0" y="972.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">14.2ms</text>
 <rect x="30" y="1015.0" width="187" height="32" rx="10" fill="#8593A6" opacity="0.75"/>
 <text x="123.5" y="1037.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">NATIVE X86-64 ASM</text>
 <rect x="280" y="1009" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="280" y="1009" width="912.0" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
-<text x="1206.0" y="1038.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">167ms</text>
+<rect x="280" y="1009" width="787.6" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
+<text x="1081.6" y="1038.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">20.4ms</text>
 <rect x="30" y="1081.0" width="196" height="32" rx="10" fill="#8593A6" opacity="0.75"/>
 <text x="128.0" y="1103.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">NATIVE AARCH64 ASM</text>
 <rect x="280" y="1075" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="280" y="1075" width="79.3" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
-<text x="373.3" y="1104.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">14.5ms</text>
+<rect x="280" y="1075" width="481.6" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
+<text x="775.6" y="1104.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">12.5ms</text>
 <rect x="30" y="1147.0" width="169" height="32" rx="10" fill="#8593A6" opacity="0.75"/>
 <text x="114.5" y="1169.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">NATIVE RV64 ASM</text>
 <rect x="280" y="1141" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="280" y="1141" width="79.6" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
-<text x="373.6" y="1170.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">14.6ms</text>
+<rect x="280" y="1141" width="527.1" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
+<text x="821.1" y="1170.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">13.6ms</text>
 <rect x="30" y="1213.0" width="169" height="32" rx="10" fill="#8593A6" opacity="0.75"/>
 <text x="114.5" y="1235.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">NATIVE MIPS ASM</text>
 <rect x="280" y="1207" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="280" y="1207" width="73.1" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
-<text x="367.1" y="1236.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">13.4ms</text>
+<rect x="280" y="1207" width="515.5" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
+<text x="809.5" y="1236.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">13.3ms</text>
 <rect x="30" y="1279.0" width="223" height="32" rx="10" fill="#5A687D" opacity="0.75"/>
 <text x="141.5" y="1301.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">BARE-METAL X86-64 OBJ</text>
 <rect x="280" y="1273" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="280" y="1273" width="114.5" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
-<text x="408.5" y="1302.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">21.0ms</text>
+<rect x="280" y="1273" width="912.0" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
+<text x="1206.0" y="1302.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">23.6ms</text>
 <rect x="30" y="1345.0" width="205" height="32" rx="10" fill="#7D53DD" opacity="0.75"/>
 <text x="132.5" y="1367.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">ANDROID PROJECT GEN</text>
 <rect x="280" y="1339" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="280" y="1339" width="71.9" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
-<text x="365.9" y="1368.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">13.2ms</text>
+<rect x="280" y="1339" width="581.9" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
+<text x="875.9" y="1368.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">15.1ms</text>
 <rect x="30" y="1411.0" width="133" height="32" rx="10" fill="#93CF30" opacity="0.75"/>
 <text x="96.5" y="1433.0" text-anchor="middle" fill="#E2E8F0" font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">PICO-C EMIT</text>
 <rect x="280" y="1405" width="1140" height="44" rx="12" fill="#131D2A" stroke="#233041"/>
-<rect x="280" y="1405" width="70.3" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
-<text x="364.3" y="1434.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">12.9ms</text>
-<text x="44" y="1401" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Lower is better within each section. Sections use independent scales. Last refreshed: 2026-08-21 17:45 UTC</text>
+<rect x="280" y="1405" width="588.5" height="44" rx="12" fill="url(#hatch)" stroke-dasharray="6 4"/>
+<text x="882.5" y="1434.0" text-anchor="start" fill="#E2E8F0" font-size="18" font-family="Segoe UI, Arial, sans-serif" font-weight="700">15.2ms</text>
+<text x="44" y="1401" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">Lower is better within each section. Sections use independent scales. Last refreshed: 2026-08-21 18:30 UTC</text>
 </svg>

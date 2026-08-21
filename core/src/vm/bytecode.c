@@ -352,7 +352,16 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
             return res;
         }
         case STMT_TRY:
+            return 0;
         case STMT_IMPORT:
+            // Plain "import module" compiles to BC_OP_IMPORT (import_all
+            // semantics). from-imports and aliased imports need the richer
+            // binding logic in interpreter.c, so fall back to the AST walker.
+            if (stmt->as.import.item_count > 0 ||
+                stmt->as.import.alias != NULL ||
+                !stmt->as.import.import_all) {
+                return 1;
+            }
             return 0;
         case STMT_CLASS:
         case STMT_PROC:

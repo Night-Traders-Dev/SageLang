@@ -717,6 +717,7 @@ proc init_builtins(env):
     register_native(env, "array_extend", 2)
     register_native(env, "range", -1)
     register_native(env, "type", 1)
+    register_native(env, "val_tag", 1)
     register_native(env, "input", 0)
     register_native(env, "clock", 0)
     register_native(env, "chr", 1)
@@ -1128,17 +1129,7 @@ proc eval_binary(expr, env):
         if op_type == TOKEN_RSHIFT:
             return left >> right
 
-    # ---- SLOW PATH: mixed types — dispatch table ----
-    if op_type == TOKEN_SLASH and right == 0:
-        runtime_error(expr.op.line, "Division by zero", nil)
-    if op_type == TOKEN_PERCENT and right == 0:
-        runtime_error(expr.op.line, "Modulo by zero", nil)
-
-    let func = get_binop_func(op_type)
-    if func != nil:
-        return func(left, right)
-
-    runtime_error(expr.op.line, "Unknown binary operator type: " + str(op_type), nil)
+    return binop_apply(expr, op_type, left, right)
 
 # -----------------------------------------
 # Helper: find method in class hierarchy
@@ -1420,6 +1411,11 @@ proc eval_call_impl(expr, env):
         push(args, arg)
         i = i + 1
 
+    return call_resolved(callee, args, env, callee_expr)
+
+# Resolved-call application: everything after callee/args evaluation.
+# Shared by the dynamic evaluator and the closure-compiled fast path.
+proc call_resolved(callee, args, env, callee_expr):
     # C-host function/native (compiled by the C host): delegate the call
     if type(callee) == "function" or type(callee) == "native":
         let cname = "?"
@@ -1529,6 +1525,19 @@ proc eval_call_impl(expr, env):
         return inst
 
     runtime_error(get_expr_line(callee_expr), "Value is not callable", "got '" + callee_type + "'")
+
+# Slow-path binary application shared by dynamic and compiled evaluators.
+proc binop_apply(expr, op_type, left, right):
+    if op_type == TOKEN_SLASH and right == 0:
+        runtime_error(expr.op.line, "Division by zero", nil)
+    if op_type == TOKEN_PERCENT and right == 0:
+        runtime_error(expr.op.line, "Modulo by zero", nil)
+
+    let func = get_binop_func(op_type)
+    if func != nil:
+        return func(left, right)
+
+    runtime_error(expr.op.line, "Unknown binary operator type: " + str(op_type), nil)
 
 # -----------------------------------------
 # Statement execution
@@ -1926,13 +1935,369 @@ proc exec_try(stmt, env):
 # Execute a program (array of top-level statements)
 # -----------------------------------------
 
-proc exec_program(global_env, stmts):
+proc exec_program_dynamic(global_env, stmts):
     let i = 0
     while i < len(stmts):
         let res = exec_stmt(stmts[i], global_env)
         if res["kind"] == SIGNAL_RETURN:
             return res["value"]
         i = i + 1
+    return nil
+
+proc exec_program(global_env, stmts):
+    # Closure-compiled execution: AST compiled once into nested closures so
+    # the hot loop skips per-node type dispatch. Unhandled node kinds fall
+    # back to the dynamic evaluator inside ccomp_stmt/ccomp_expr.
+    return exec_program_compiled(global_env, stmts)
+
+# -----------------------------------------
+# Closure-compilation quickening (CPC)
+#
+# Compiles the AST once into nested closures so the hot execution loop
+# skips per-node type dispatch and repeated field fetches. Any node kind
+# not handled here falls back to the dynamic evaluator, so semantics are
+# preserved for every construct (classes, imports, match, try, ...).
+# -----------------------------------------
+
+proc ccomp_expr(e):
+    if e == nil:
+        return proc(env): return nil
+
+    let t = e.type
+
+    if t == EXPR_NUMBER:
+        let v = e.value
+        return proc(env): return v
+
+    if t == EXPR_STRING:
+        let v = e.value
+        return proc(env): return v
+
+    if t == EXPR_BOOL:
+        let v = e.value
+        return proc(env): return v
+
+    if t == EXPR_NIL:
+        return proc(env): return nil
+
+    if t == EXPR_VARIABLE:
+        # Capture the resolved name string once instead of re-fetching
+        # expr.name.text (two dict lookups) on every evaluation.
+        let nm = e.name.text
+        return proc(env):
+            let ee = env
+            while ee != nil:
+                let vv = ee["vals"]
+                if dict_has(vv, nm):
+                    return vv[nm]
+                ee = ee["parent"]
+            report_undefined(nm)
+            return nil
+
+    if t == EXPR_BINARY:
+        let op_type = e.op.type
+        let op_line = e.op.line
+        let lc = ccomp_expr(e.left)
+        let rc = ccomp_expr(e.right)
+
+        # Unary forms short-circuit on one operand
+        if op_type == TOKEN_NOT:
+            return proc(env):
+                return not is_truthy(lc(env))
+        if op_type == TOKEN_TILDE:
+            return proc(env):
+                return 0 - lc(env) - 1
+        if op_type == TOKEN_OR:
+            return proc(env):
+                if is_truthy(lc(env)):
+                    return true
+                return is_truthy(rc(env))
+        if op_type == TOKEN_AND:
+            return proc(env):
+                if not is_truthy(lc(env)):
+                    return false
+                return is_truthy(rc(env))
+
+        return proc(env):
+            let left = lc(env)
+            let right = rc(env)
+            # Fast path: number arithmetic and comparisons (~70% of ops)
+            if val_tag(left) == 3 and val_tag(right) == 3:
+                if op_type == TOKEN_PLUS:
+                    return left + right
+                if op_type == TOKEN_MINUS:
+                    return left - right
+                if op_type == TOKEN_STAR:
+                    return left * right
+                if op_type == TOKEN_SLASH:
+                    if right == 0:
+                        runtime_error(op_line, "Division by zero", nil)
+                    return left / right
+                if op_type == TOKEN_PERCENT:
+                    if right == 0:
+                        runtime_error(op_line, "Modulo by zero", nil)
+                    return left % right
+                if op_type == TOKEN_GT:
+                    return left > right
+                if op_type == TOKEN_LT:
+                    return left < right
+                if op_type == TOKEN_GTE:
+                    return left >= right
+                if op_type == TOKEN_LTE:
+                    return left <= right
+                if op_type == TOKEN_EQ:
+                    return left == right
+                if op_type == TOKEN_NEQ:
+                    return left != right
+                if op_type == TOKEN_AMP:
+                    return left & right
+                if op_type == TOKEN_PIPE:
+                    return left | right
+                if op_type == TOKEN_CARET:
+                    return left ^ right
+                if op_type == TOKEN_LSHIFT:
+                    return left << right
+                if op_type == TOKEN_RSHIFT:
+                    return left >> right
+            # Slow path: mixed types via the shared dispatch helper
+            return binop_apply(e, op_type, left, right)
+
+    if t == EXPR_CALL:
+        # Fast path only for direct-name callees; method calls fall back.
+        if e.callee.type == EXPR_VARIABLE:
+            let cname = e.callee.name.text
+            let cexpr = e
+            let argcs = []
+            let ai = 0
+            while ai < e.arg_count:
+                push(argcs, ccomp_expr(e.args[ai]))
+                ai = ai + 1
+            let arg_count = e.arg_count
+            return proc(env):
+                let callee = nil
+                let found = false
+                let walk = env
+                while walk != nil:
+                    let vv = walk["vals"]
+                    if dict_has(vv, cname):
+                        callee = vv[cname]
+                        found = true
+                        break
+                    walk = walk["parent"]
+                if not found:
+                    report_undefined(cname)
+                    return nil
+                let args = []
+                let k = 0
+                while k < arg_count:
+                    push(args, argcs[k](env))
+                    k = k + 1
+                return call_resolved(callee, args, env, cexpr)
+
+    if t == EXPR_SET:
+        # Variable reassignment: x = value  (object == nil)
+        if e.object == nil:
+            let nm = e.property.text
+            let vc = ccomp_expr(e.value)
+            return proc(env):
+                let val = vc(env)
+                let ee = env
+                while ee != nil:
+                    let vv = ee["vals"]
+                    if dict_has(vv, nm):
+                        vv[nm] = val
+                        return val
+                    ee = ee["parent"]
+                report_undefined(nm)
+                return nil
+        # Property assignment: obj.prop = value — dynamic fallback
+        return proc(env):
+            return eval_expr_impl(e, env)
+
+    if t == EXPR_GET:
+        # Fast paths: instance field, dict key, module/dict member
+        let prop_name = e.property.text
+        let oc = ccomp_expr(e.object)
+        let pline = e.property.line
+        return proc(env):
+            let obj = oc(env)
+            if val_tag(obj) == 6:
+                if dict_has(obj, "__interp_type") and obj["__interp_type"] == "instance":
+                    let fields = obj["fields"]
+                    if dict_has(fields, prop_name):
+                        return fields[prop_name]
+                    let found = find_method(obj["class"], prop_name)
+                    if found != nil:
+                        return found
+                    runtime_error(pline, "Undefined property '" + prop_name + "'", "this instance does not have a field or method named '" + prop_name + "'")
+                if dict_has(obj, prop_name):
+                    return obj[prop_name]
+                runtime_error(pline, "Undefined property '" + prop_name + "'", nil)
+            runtime_error(pline, "Only instances and dicts have properties", "got value of type '" + type(obj) + "'")
+
+    if t == EXPR_INDEX:
+        # Fast path: array/string/dict indexing via precompiled operands
+        let ac = ccomp_expr(e.object)
+        let ic2 = ccomp_expr(e.index)
+        return proc(env):
+            let obj = ac(env)
+            let idx = ic2(env)
+            let ot = val_tag(obj)
+            if ot == 5 or ot == 4 or ot == 6:
+                return obj[idx]
+            runtime_error(-1, "Cannot index into value of type '" + type(obj) + "'", "only arrays, strings, and dicts can be indexed")
+
+    # Generic fallback: dynamic evaluation of this subtree
+    return proc(env):
+        return eval_expr_impl(e, env)
+
+proc ccomp_stmt(s):
+    if s == nil:
+        return proc(env): return _SIG_NORMAL_NIL
+
+    let stype = s.type
+
+    if stype == STMT_PRINT:
+        let ec = ccomp_expr(s.expression)
+        return proc(env):
+            print value_to_string(ec(env))
+            return _SIG_NORMAL_NIL
+
+    if stype == STMT_EXPRESSION:
+        let ec = ccomp_expr(s.expression)
+        return proc(env):
+            ec(env)
+            return _SIG_NORMAL_NIL
+
+    if stype == STMT_LET:
+        let nm = s.name.text
+        if s.initializer == nil:
+            return proc(env):
+                env_define(env, nm, nil)
+                return _SIG_NORMAL_NIL
+        let ic = ccomp_expr(s.initializer)
+        return proc(env):
+            env_define(env, nm, ic(env))
+            return _SIG_NORMAL_NIL
+
+    if stype == STMT_RETURN:
+        if s.value == nil:
+            return proc(env): return result_return(nil)
+        let vc = ccomp_expr(s.value)
+        return proc(env): return result_return(vc(env))
+
+    if stype == STMT_BREAK:
+        return proc(env): return result_break()
+
+    if stype == STMT_CONTINUE:
+        return proc(env): return result_continue()
+
+    if stype == STMT_BLOCK:
+        let body = ccomp_stmt_list(s.statements)
+        return proc(env): return body(env)
+
+    if stype == STMT_IF:
+        let cc = ccomp_expr(s.condition)
+        let tc = ccomp_stmt(s.then_branch)
+        if s.else_branch == nil:
+            return proc(env):
+                if is_truthy(cc(env)):
+                    return tc(env)
+                return _SIG_NORMAL_NIL
+        let ec2 = ccomp_stmt(s.else_branch)
+        return proc(env):
+            if is_truthy(cc(env)):
+                return tc(env)
+            return ec2(env)
+
+    if stype == STMT_WHILE:
+        let cc = ccomp_expr(s.condition)
+        let bc = ccomp_stmt(s.body)
+        return proc(env):
+            let loop_iters = 0
+            let body_is_simple = true
+            while true:
+                if not is_truthy(cc(env)):
+                    break
+                loop_iters = loop_iters + 1
+                if loop_iters > MAX_LOOP_ITERATIONS:
+                    raise "While loop exceeded maximum iterations (1000000)"
+                let res = bc(env)
+                let kind = res["kind"]
+                if kind == SIGNAL_RETURN:
+                    return res
+                if kind == SIGNAL_BREAK:
+                    break
+                if kind != SIGNAL_NORMAL:
+                    body_is_simple = false
+                if loop_iters == 8 and body_is_simple:
+                    while true:
+                        if not is_truthy(cc(env)):
+                            break
+                        loop_iters = loop_iters + 1
+                        if loop_iters > MAX_LOOP_ITERATIONS:
+                            raise "While loop exceeded maximum iterations (1000000)"
+                        let res2 = bc(env)
+                        if res2["kind"] == SIGNAL_RETURN:
+                            return res2
+                        if res2["kind"] == SIGNAL_BREAK:
+                            break
+                    break
+            return _SIG_NORMAL_NIL
+
+    # Generic fallback: dynamic execution of this statement
+    return proc(env):
+        return exec_stmt(s, env)
+
+# Compile a statement list that may be a Sage array or a C-style linked
+# list (stmt.next), mirroring exec_block semantics.
+proc ccomp_stmt_list(first):
+    if first == nil:
+        return proc(env): return _SIG_NORMAL_NIL
+    if type(first) == "array":
+        let compiled = []
+        let i = 0
+        while i < len(first):
+            push(compiled, ccomp_stmt(first[i]))
+            i = i + 1
+        let n = len(compiled)
+        return proc(env):
+            let k = 0
+            while k < n:
+                let res = compiled[k](env)
+                if res["kind"] != SIGNAL_NORMAL:
+                    return res
+                k = k + 1
+            return _SIG_NORMAL_NIL
+    let current = first
+    let compiled = []
+    while current != nil:
+        push(compiled, ccomp_stmt(current))
+        current = current.next
+    let n = len(compiled)
+    return proc(env):
+        let k = 0
+        while k < n:
+            let res = compiled[k](env)
+            if res["kind"] != SIGNAL_NORMAL:
+                return res
+            k = k + 1
+        return _SIG_NORMAL_NIL
+
+# Compiled-program entry: same contract as exec_program.
+proc exec_program_compiled(global_env, stmts):
+    let compiled = []
+    let i = 0
+    while i < len(stmts):
+        push(compiled, ccomp_stmt(stmts[i]))
+        i = i + 1
+    let n = len(compiled)
+    let k = 0
+    while k < n:
+        let res = compiled[k](global_env)
+        if res["kind"] == SIGNAL_RETURN:
+            return res["value"]
+        k = k + 1
     return nil
 
 # -----------------------------------------
