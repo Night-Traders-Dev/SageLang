@@ -115,6 +115,17 @@ Run `python3 scripts/generate_backend_chart.py` or
 `bash benchmarks/run_backend_compare.sh` to regenerate (12 workloads across all
 native backends).
 
+The chart reports two independently-scaled sections:
+
+- **Execution** — backends that actually ran all 12 workloads. The Self-Hosted
+  Sage entry executes the workload through the Sage-written interpreter running
+  under the C interpreter (double interpretation), so it reflects genuine
+  tree-walking-interpretation cost rather than a defect.
+- **Codegen / emit throughput** (hatched bars) — compiler emission timing only;
+  these backends did not execute the workload. Native asm entries are validated
+  by assembling the emitted assembly to an object file (hosted native linking
+  requires a runtime library still landing in `codegen.c`).
+
 ### Sage vs Python 3 Benchmark Suite
 
 | Benchmark | Python 3 | Sage AST | Sage VM | Sage C | Sage LLVM | Sage JIT | Sage AOT |

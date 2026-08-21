@@ -23,8 +23,10 @@ def run_timed(cmd: list[str], cwd: Path = REPO_ROOT) -> tuple[float, str, bool]:
         return elapsed, "", False
 
 
-def collect_results() -> list[tuple[str, float, str]]:
-    """Collect benchmark results for each backend. Returns [(name, seconds, color)]."""
+def collect_results() -> list[tuple[str, float, str, str]]:
+    """Collect benchmark results. Returns [(name, seconds, color, kind)] where kind is
+    "exec" (backend executed the workload) or "emit" (codegen/emit throughput
+    only — no execution)."""
     import shutil
     results = []
     tmp = Path("/tmp/sage_backend_bench")
@@ -33,12 +35,12 @@ def collect_results() -> list[tuple[str, float, str]]:
     # AST interpreter
     t, _, ok = run_timed([str(SAGE), str(BENCH)])
     if ok:
-        results.append(("AST Interpreter", t, "#3A86FF"))
+        results.append(("AST Interpreter", t, "#3A86FF", "exec"))
 
     # Bytecode VM
     t, _, ok = run_timed([str(SAGE), "--runtime", "bytecode", str(BENCH)])
     if ok:
-        results.append(("Bytecode VM", t, "#14B8A6"))
+        results.append(("Bytecode VM", t, "#14B8A6", "exec"))
 
     # C compiled (build + run)
     c_bin = tmp / "bench_c"
@@ -46,8 +48,8 @@ def collect_results() -> list[tuple[str, float, str]]:
     if ok:
         run_t, _, ok2 = run_timed([str(c_bin)])
         if ok2:
-            results.append(("C Backend (run)", run_t, "#F97316"))
-            results.append(("C Backend (total)", build_t + run_t, "#FB923C"))
+            results.append(("C Backend (run)", run_t, "#F97316", "exec"))
+            results.append(("C Backend (total)", build_t + run_t, "#FB923C", "exec"))
 
     # LLVM compiled
     llvm_bin = tmp / "bench_llvm"
@@ -55,8 +57,8 @@ def collect_results() -> list[tuple[str, float, str]]:
     if ok:
         run_t, _, ok2 = run_timed([str(llvm_bin)])
         if ok2:
-            results.append(("LLVM Backend (run)", run_t, "#A855F7"))
-            results.append(("LLVM Backend (total)", build_t + run_t, "#C084FC"))
+            results.append(("LLVM Backend (run)", run_t, "#A855F7", "exec"))
+            results.append(("LLVM Backend (total)", build_t + run_t, "#C084FC", "exec"))
 
     # C compiled -O3
     c_o3 = tmp / "bench_c_o3"
@@ -64,12 +66,12 @@ def collect_results() -> list[tuple[str, float, str]]:
     if ok:
         run_t, _, ok2 = run_timed([str(c_o3)])
         if ok2:
-            results.append(("C -O3 (run)", run_t, "#EF4444"))
+            results.append(("C -O3 (run)", run_t, "#EF4444", "exec"))
 
     # JIT profiled
     t, _, ok = run_timed([str(SAGE), "--jit", str(BENCH)])
     if ok:
-        results.append(("JIT Profiled", t, "#F59E0B"))
+        results.append(("JIT Profiled", t, "#F59E0B", "exec"))
 
     # AOT compiled
     aot_bin = tmp / "bench_aot"
@@ -77,7 +79,7 @@ def collect_results() -> list[tuple[str, float, str]]:
     if ok:
         run_t, _, ok2 = run_timed([str(aot_bin)])
         if ok2:
-            results.append(("AOT (run)", run_t, "#10B981"))
+            results.append(("AOT (run)", run_t, "#10B981", "exec"))
 
     # JIT+AOT (profile-guided)
     jitaot_bin = tmp / "bench_jitaot"
@@ -85,18 +87,18 @@ def collect_results() -> list[tuple[str, float, str]]:
     if ok:
         run_t, _, ok2 = run_timed([str(jitaot_bin)])
         if ok2:
-            results.append(("JIT+AOT (run)", run_t, "#84CC16"))
+            results.append(("JIT+AOT (run)", run_t, "#84CC16", "exec"))
 
     # Kotlin transpile (emit only)
     kt_out = tmp / "bench.kt"
     t, _, ok = run_timed([str(SAGE), "--emit-kotlin", str(BENCH), "-o", str(kt_out)])
     if ok:
-        results.append(("Kotlin Transpile", t, "#7C3AED"))
+        results.append(("Kotlin Transpile", t, "#7C3AED", "emit"))
 
     # Self-Hosted Sage
     t, _, ok = run_timed([str(SAGE), str(REPO_ROOT / "src" / "sage" / "sage.sage"), str(BENCH)])
     if ok:
-        results.append(("Self-Hosted Sage", t, "#EC4899"))
+        results.append(("Self-Hosted Sage", t, "#EC4899", "exec"))
 
     # VM image (.svm): compile to bytecode file, run via the file VM
     svm = tmp / "bench.svm"
@@ -104,8 +106,8 @@ def collect_results() -> list[tuple[str, float, str]]:
     if ok:
         run_t, _, ok2 = run_timed([str(SAGE), "--run-vm", str(svm)])
         if ok2:
-            results.append(("VM Image .svm (run)", run_t, "#22D3EE"))
-            results.append(("VM Image .svm (total)", build_t + run_t, "#67E8F9"))
+            results.append(("VM Image .svm (run)", run_t, "#22D3EE", "exec"))
+            results.append(("VM Image .svm (total)", build_t + run_t, "#67E8F9", "exec"))
 
     # SGVM metal binary: build; attempt run (honest skip when unsupported)
     sgvm = tmp / "bench.sgvm"
@@ -113,7 +115,7 @@ def collect_results() -> list[tuple[str, float, str]]:
     if ok:
         run_t, _, ok2 = run_timed([str(SAGE), str(sgvm)])
         if ok2:
-            results.append(("SGVM Metal (run)", run_t, "#F472B6"))
+            results.append(("SGVM Metal (run)", run_t, "#F472B6", "exec"))
 
     # Native assembly backends — emit + assemble-to-object validation.
     # Hosted native linking needs a sage_rt runtime still landing in codegen.c,
@@ -137,26 +139,26 @@ def collect_results() -> list[tuple[str, float, str]]:
             at, _, aok = run_timed(extra)
             if aok:
                 total += at
-        results.append((label, total, "#94A3B8"))
+        results.append((label, total, "#94A3B8", "emit"))
 
     # Bare-metal freestanding object (x86-64-baremetal profile)
     bare_obj = tmp / "bench_bare.o"
     t, _, ok = run_timed([str(SAGE), "--compile-bare", str(BENCH), "-o", str(bare_obj)])
     if ok:
-        results.append(("Bare-metal x86-64 obj", t, "#64748B"))
+        results.append(("Bare-metal x86-64 obj", t, "#64748B", "emit"))
 
     # Android project generation (transpile-only timing)
     and_out = tmp / "android"
     and_out.mkdir(exist_ok=True)
     t, _, ok = run_timed([str(SAGE), "--compile-android", str(BENCH), "-o", str(and_out)])
     if ok:
-        results.append(("Android Project Gen", t, "#8B5CF6"))
+        results.append(("Android Project Gen", t, "#8B5CF6", "emit"))
 
     # Pico-C emit
     pico_c = tmp / "bench_pico.c"
     t, _, ok = run_timed([str(SAGE), "--emit-pico-c", str(BENCH), "-o", str(pico_c)])
     if ok:
-        results.append(("Pico-C Emit", t, "#A3E635"))
+        results.append(("Pico-C Emit", t, "#A3E635", "emit"))
 
     # Cleanup
     shutil.rmtree(tmp, ignore_errors=True)
@@ -188,7 +190,7 @@ def adjust_color(color: str, factor: float) -> str:
     return "#{:02X}{:02X}{:02X}".format(*channels)
 
 
-def render_chart(results: list[tuple[str, float, str]]) -> None:
+def render_chart(results: list[tuple[str, float, str, str]]) -> None:
     from xml.sax.saxutils import escape
     from datetime import datetime, timezone
 
@@ -196,17 +198,27 @@ def render_chart(results: list[tuple[str, float, str]]) -> None:
         print("No results to chart")
         return
 
+    exec_results = [(n, v, c) for (n, v, c, k) in results if k == "exec"]
+    emit_results = [(n, v, c) for (n, v, c, k) in results if k == "emit"]
+
     width = 1600
     margin_left = 280
     margin_right = 180
     margin_top = 135
     bar_height = 44
     bar_gap = 22
-    footer_padding = 100
+    section_gap = 78          # extra space between the two sections
+    footer_padding = 130
     plot_width = width - margin_left - margin_right
-    plot_height = len(results) * bar_height + max(0, len(results) - 1) * bar_gap
-    height = margin_top + plot_height + footer_padding
-    max_value = max(v for _, v, _ in results)
+
+    def section_height(entries):
+        if not entries:
+            return 0
+        return len(entries) * bar_height + max(0, len(entries) - 1) * bar_gap
+
+    exec_h = section_height(exec_results)
+    emit_h = section_height(emit_results)
+    height = margin_top + exec_h + (section_gap if exec_results and emit_results else 0) + emit_h + footer_padding
 
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
@@ -215,55 +227,95 @@ def render_chart(results: list[tuple[str, float, str]]) -> None:
         "<defs>",
     ]
 
-    for i, (_, _, color) in enumerate(results):
-        start = adjust_color(color, 1.2)
-        end = adjust_color(color, 0.82)
+    for i, (_, _, color, _) in enumerate(results):
+        start_c = adjust_color(color, 1.2)
+        end_c = adjust_color(color, 0.82)
         svg.append(f'<linearGradient id="bg-{i}" x1="0%" y1="0%" x2="100%" y2="0%">')
-        svg.append(f'<stop offset="0%" stop-color="{start}"/>')
-        svg.append(f'<stop offset="100%" stop-color="{end}"/>')
+        svg.append(f'<stop offset="0%" stop-color="{start_c}"/>')
+        svg.append(f'<stop offset="100%" stop-color="{end_c}"/>')
         svg.append("</linearGradient>")
+    # Diagonal hatch for emit-only bars so they can never be read as runtimes
+    svg.extend([
+        '<pattern id="hatch" width="10" height="10" patternTransform="rotate(45)" '
+        'patternUnits="userSpaceOnUse">',
+        '<rect width="10" height="10" fill="#131D2A"/>',
+        '<line x1="0" y1="0" x2="0" y2="10" stroke="#94A3B8" stroke-width="3" opacity="0.55"/>',
+        "</pattern>",
+    ])
 
     svg.extend([
         "</defs>",
         '<rect width="100%" height="100%" fill="#0B1118"/>',
         f'<rect x="12" y="12" width="1576" height="{height - 24}" rx="18" fill="#0F1722" stroke="#1F2937"/>',
         '<text x="44" y="62" fill="#F8FAFC" font-size="34" font-family="Segoe UI, Arial, sans-serif" font-weight="700">SageLang Backend Performance Comparison</text>',
-        '<text x="44" y="95" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">benchmarks/backend_compare.sage — 12 workloads (all types: num, str, bool, nil, arr, dict, tup, bytes, asm)</text>',
+        '<text x="44" y="95" fill="#94A3B8" font-size="18" font-family="Segoe UI, Arial, sans-serif">benchmarks/backend_compare.sage — 12 workloads (num, str, bool, nil, arr, dict, tup, bytes)</text>',
     ])
 
     max_bar_ratio = 0.80
+    row_index = 0
+    cursor_y = margin_top
 
-    for i, (name, value, color) in enumerate(results):
-        y = margin_top + i * (bar_height + bar_gap)
-        bar_w = max(6.0, plot_width * (value / max_value) * max_bar_ratio)
-        badge_w = max(92, min(260, 34 + len(name) * 9))
-        badge_fill = adjust_color(color, 0.9)
-        count_text = fmt_duration(value)
-        badge_y = y + 6
+    def render_section(y0, entries, title, subtitle, hatched):
+        nonlocal row_index
+        parts = []
+        parts.append(f'<text x="44" y="{y0 + 4:.1f}" fill="#F8FAFC" font-size="22" '
+                     f'font-family="Segoe UI, Arial, sans-serif" font-weight="700">{escape(title)}</text>')
+        parts.append(f'<text x="44" y="{y0 + 30:.1f}" fill="#94A3B8" font-size="15" '
+                     f'font-family="Segoe UI, Arial, sans-serif">{escape(subtitle)}</text>')
+        y = y0 + 46
+        if not entries:
+            svg.extend(parts)
+            return y
+        max_value = max(v for _, v, _ in entries)
+        for (name, value, color) in entries:
+            i = row_index
+            row_index += 1
+            bar_w = max(6.0, plot_width * (value / max_value) * max_bar_ratio)
+            badge_w = max(92, min(260, 34 + len(name) * 9))
+            badge_fill = adjust_color(color, 0.9)
+            count_text = fmt_duration(value)
+            count_x = margin_left + bar_w + 14
+            if count_x > width - 240:
+                count_x = margin_left + bar_w - 14
+                anchor = "end"
+                tfill = "#0F1722"
+            else:
+                anchor = "start"
+                tfill = "#E2E8F0"
+            fill_attr = 'fill="url(#hatch)"' if hatched else f'fill="url(#bg-{i})"'
+            stroke_extra = ' stroke-dasharray="6 4"' if hatched else ""
+            parts.extend([
+                f'<rect x="30" y="{y + 6:.1f}" width="{badge_w}" height="32" rx="10" fill="{badge_fill}" opacity="{0.75 if hatched else 0.95}"/>',
+                f'<text x="{30 + badge_w/2:.1f}" y="{y + 28:.1f}" text-anchor="middle" fill="#E2E8F0" '
+                f'font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">{escape(name.upper())}</text>',
+                f'<rect x="{margin_left}" y="{y}" width="{plot_width}" height="{bar_height}" rx="12" fill="#131D2A" stroke="#233041"/>',
+                f'<rect x="{margin_left}" y="{y}" width="{bar_w:.1f}" height="{bar_height}" rx="12" {fill_attr}{stroke_extra}/>',
+                f'<text x="{count_x:.1f}" y="{y + 29:.1f}" text-anchor="{anchor}" fill="{tfill}" font-size="18" '
+                f'font-family="Segoe UI, Arial, sans-serif" font-weight="700">{escape(count_text)}</text>',
+            ])
+            y += bar_height + bar_gap
+        svg.extend(parts)
+        return y
 
-        count_x = margin_left + bar_w + 14
-        if count_x > width - 240:
-            count_x = margin_left + bar_w - 14
-            anchor = "end"
-            fill = "#0F1722"
-        else:
-            anchor = "start"
-            fill = "#E2E8F0"
+    cursor_y = render_section(
+        cursor_y, exec_results,
+        "Execution — workload runtime",
+        "Backend executed all 12 workloads; lower is better. Self-Hosted runs the workload through the Sage-written interpreter under the C interpreter (double interpretation).",
+        hatched=False)
 
-        svg.extend([
-            f'<rect x="30" y="{badge_y:.1f}" width="{badge_w}" height="32" rx="10" fill="{badge_fill}" opacity="0.95"/>',
-            f'<text x="{30 + badge_w/2:.1f}" y="{badge_y + 22:.1f}" text-anchor="middle" fill="#E2E8F0" '
-            f'font-size="13" font-family="Segoe UI, Arial, sans-serif" font-weight="700">{escape(name.upper())}</text>',
-            f'<rect x="{margin_left}" y="{y}" width="{plot_width}" height="{bar_height}" rx="12" fill="#131D2A" stroke="#233041"/>',
-            f'<rect x="{margin_left}" y="{y}" width="{bar_w:.1f}" height="{bar_height}" rx="12" fill="url(#bg-{i})"/>',
-            f'<text x="{count_x:.1f}" y="{y + 29:.1f}" text-anchor="{anchor}" fill="{fill}" font-size="18" '
-            f'font-family="Segoe UI, Arial, sans-serif" font-weight="700">{escape(count_text)}</text>',
-        ])
+    if exec_results and emit_results:
+        cursor_y += section_gap - bar_gap
+
+    render_section(
+        cursor_y, emit_results,
+        "Codegen / emit throughput — generation time only",
+        "These backends did NOT execute the workload; bars measure compiler emission (+ assemble where a toolchain exists), hatched so they are never read as runtimes.",
+        hatched=True)
 
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    footer_y = margin_top + plot_height + 40
+    footer_y = height - footer_padding + 44
     svg.append(f'<text x="44" y="{footer_y}" fill="#94A3B8" font-size="16" font-family="Segoe UI, Arial, sans-serif">'
-               f'Lower is better. Last refreshed: {generated}</text>')
+               f'Lower is better within each section. Sections use independent scales. Last refreshed: {generated}</text>')
     svg.append("</svg>")
 
     CHART_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -274,6 +326,7 @@ def render_chart(results: list[tuple[str, float, str]]) -> None:
 if __name__ == "__main__":
     print("Running cross-backend benchmark...")
     results = collect_results()
-    for name, t, _ in results:
-        print(f"  {name:30s} {fmt_duration(t)}")
+    for name, t, _, kind in results:
+        tag = "exec" if kind == "exec" else "emit"
+        print(f"  {name:30s} {fmt_duration(t):>10s}  [{tag}]")
     render_chart(results)
