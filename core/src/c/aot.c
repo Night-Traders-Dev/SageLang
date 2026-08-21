@@ -38,8 +38,8 @@ void aot_init(AotCompiler* aot, int opt_level) {
         "s_io_readbytes", "s_io_exists", "s_io_remove", "s_io_isdir", "s_io_mkdir",
         "s_io_listdir", "s_sys_getenv_native", "s_sys_exec", "s_exec"
     };
-    for (int i = 0; i < sizeof(builtins)/sizeof(char*); i++) {
-        aot->procs[aot->proc_count++] = strdup(builtins[i]);
+    for (size_t bi = 0; bi < sizeof(builtins)/sizeof(char*); bi++) {
+        aot->procs[aot->proc_count++] = strdup(builtins[bi]);
     }
     aot->builtin_count = aot->proc_count;
 }

@@ -256,7 +256,14 @@ static long stack_guard_budget(void) {
 // check correct for worker threads regardless of stack placement.
 static int stack_danger(void) {
     char probe;
+    // Intentionally persist this frame's address as a comparison anchor in
+    // TLS: it is never dereferenced after the frame returns, only subtracted
+    // from deeper frames' probes. Suppress the escape warning that the
+    // intentional lifetime extension triggers.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-pointer="
     if (t_stack_origin == NULL) t_stack_origin = &probe;
+#pragma GCC diagnostic pop
     return (t_stack_origin - &probe) > stack_guard_budget();
 }
 
