@@ -901,6 +901,35 @@ static Value strip_native(int argCount, Value* args) {
     return val_string_take(result);
 }
 
+// Human-readable type tag for runtime error messages
+static const char* binary_operand_type(Value v) {
+    switch (v.type) {
+        case VAL_NIL: return "nil";
+        case VAL_NUMBER: return "number";
+        case VAL_BOOL: return "bool";
+        case VAL_STRING: return "string";
+        case VAL_ARRAY: return "array";
+        case VAL_DICT: return "dict";
+        case VAL_FUNCTION: case VAL_NATIVE: return "function";
+        case VAL_INSTANCE: return "instance";
+        case VAL_TUPLE: return "tuple";
+        case VAL_GENERATOR: return "generator";
+        case VAL_BYTES: return "bytes";
+        default: return "value";
+    }
+}
+static ExecResult binary_operand_error(Value l, Value r, const char* opname) {
+    char buf[160];
+    snprintf(buf, sizeof(buf), "Operands must be numbers or strings (%s %s %s).",
+             binary_operand_type(l), opname, binary_operand_type(r));
+    if (getenv("SAGE_OPDBG")) {
+        void* bt[24];
+        int n = backtrace(bt, 24);
+        backtrace_symbols_fd(bt, n, STDERR_FILENO);
+    }
+    return EVAL_EXCEPTION(val_exception(buf));
+}
+
 // type(val) -> string name of type
 static Value type_native(int argCount, Value* args) {
     if (argCount != 1) return val_nil();
@@ -2819,7 +2848,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
             if (b->op.type == TOKEN_LTE) return EVAL_RESULT(val_bool(cmp <= 0));
         }
         AST_GC_POP();
-        return EVAL_EXCEPTION(val_exception("Operands must be numbers or strings."));
+        return binary_operand_error(left, right, "comparison");
     }
 
     switch (b->op.type) {
@@ -2861,7 +2890,7 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
                 return EVAL_RESULT(result);
             }
             AST_GC_POP();
-            return EVAL_EXCEPTION(val_exception("Operands must be numbers or strings."));
+            return binary_operand_error(left, right, "+");
 
         case TOKEN_MINUS:
             if (!IS_NUMBER(left) || !IS_NUMBER(right)) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
@@ -3052,10 +3081,21 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 result = EVAL_RESULT(val_string_len(str + index, 1));
             } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
                 result = EVAL_RESULT(dict_get_len(&arr, AS_STRING(idx), SAGE_STRING_LEN(idx)));
+            } else if (arr.type == VAL_INSTANCE && IS_STRING(idx)) {
+                // Instance field access via subscript: stmt["type"]
+                result = EVAL_RESULT(instance_get_field(arr.as.instance,
+                                                        AS_STRING(idx), SAGE_STRING_LEN(idx)));
             } else {
-                fprintf(stderr, "FOOBAR INVALID INDEX\n");
-                fprintf(stderr, "arr: "); print_value(arr); fprintf(stderr, "\nidx: "); print_value(idx); fprintf(stderr, "\n"); fflush(stdout);
-                fprintf(stderr, "arr: "); print_value(arr); fprintf(stderr, " idx: "); print_value(idx); fprintf(stderr, "\n"); fflush(stdout);
+                const char* tn = "value";
+                switch (arr.type) {
+                    case VAL_NIL: tn = "nil"; break;
+                    case VAL_NUMBER: tn = "number"; break;
+                    case VAL_BOOL: tn = "bool"; break;
+                    case VAL_STRING: tn = "string"; break;
+                    case VAL_FUNCTION: case VAL_NATIVE: tn = "function"; break;
+                    default: break;
+                }
+                fprintf(stderr, "Runtime Error: %s is not indexable.\n", tn);
                 result = EVAL_RESULT(val_nil());
             }
             AST_GC_POP();

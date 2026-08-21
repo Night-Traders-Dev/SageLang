@@ -99,7 +99,7 @@ end
 Use `safety.own()` to document ownership transfer:
 
 ```sage
-import safety
+import option
 
 let buffer = [0, 0, 0, 0]
 let owned = safety.own(buffer)    # explicit move
@@ -122,7 +122,7 @@ end
 Use `safety.ref()` and `safety.mut_ref()` to annotate borrow intent:
 
 ```sage
-import safety
+import option
 
 let original = [10, 20]
 let borrowed = safety.ref(original)     # immutable borrow
@@ -150,7 +150,7 @@ end
 In safe contexts, `nil` is prohibited. Use `Option[T]` instead:
 
 ```sage
-import safety
+import option
 
 # Instead of: let result = nil
 let result = safety.None()
@@ -193,7 +193,7 @@ let doubled = safety.map(result, proc(x): return x * 2 end)
 Types must implement **Send** (safe to transfer between threads) or **Sync** (safe to share between threads) to be used in concurrent contexts.
 
 ```sage
-import safety
+import option
 
 let shared_data = {"counter": 0}
 shared_data = safety.mark_send(shared_data)  # OK to send to threads
@@ -263,7 +263,7 @@ The safety pass:
 | `include/safety.h` | Safety system header (data structures, API) |
 | `src/c/safety.c` | C implementation of the safety analysis pass |
 | `src/sage/safety.sage` | Self-hosted safety analyzer |
-| `lib/safety.sage` | Safety library (Option type, ownership markers, thread traits) |
+| `lib/option.sage` | Option library (Option type, ownership markers, thread traits) |
 | `tests/28_safety/` | Safety test suite |
 
 ## 7. Resource Limits & Hardening

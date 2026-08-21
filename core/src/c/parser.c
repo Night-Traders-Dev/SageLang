@@ -1153,6 +1153,25 @@ static Stmt* while_statement() {
 
 // Parse a type annotation: Int, String, Array[Int], Dict[String, Int], T?, module.Type
 static TypeAnnotation* parse_type_annotation(void) {
+    // Bare array sugar: [Int] is equivalent to Array[Int]
+    if (current_token.type == TOKEN_LBRACKET) {
+        advance_parser();
+        TypeAnnotation* elem = parse_type_annotation();
+        consume(TOKEN_RBRACKET, "Expect ']' after array element type.");
+        TypeAnnotation** params = NULL;
+        int param_count = 0;
+        if (elem) {
+            params = SAGE_ALLOC(sizeof(TypeAnnotation*));
+            params[0] = elem;
+            param_count = 1;
+        }
+        Token arr_name;
+        memset(&arr_name, 0, sizeof(arr_name));
+        arr_name.type = TOKEN_IDENTIFIER;
+        arr_name.start = "Array";
+        arr_name.length = 5;
+        return new_type_annotation(arr_name, params, param_count, 0);
+    }
     if (current_token.type != TOKEN_IDENTIFIER && current_token.type != TOKEN_MATCH && current_token.type != TOKEN_END && current_token.type != TOKEN_INIT) return NULL;
     Token name = current_token;
     advance_parser();

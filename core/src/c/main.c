@@ -2177,7 +2177,17 @@ static void run(const char* source, const char* filename, SageRuntimeMode runtim
          Stmt* result = parse();
          if (result == NULL) break;
          retain_program_stmt(result);
-         sage_execute_stmt(result, env, runtime_mode);
+         ExecResult exec_res = sage_execute_stmt(result, env, runtime_mode);
+         if (exec_res.is_throwing) {
+             const char* msg = "unknown error";
+             if (exec_res.exception_value.type == VAL_EXCEPTION &&
+                 exec_res.exception_value.as.exception != NULL &&
+                 exec_res.exception_value.as.exception->message != NULL) {
+                 msg = exec_res.exception_value.as.exception->message;
+             }
+             fprintf(stderr, "Unhandled Exception: %s\n", msg);
+             exit(70);  // EX_SOFTWARE: uncaught runtime error
+         }
     }
 }
 

@@ -550,20 +550,28 @@ static void add_system_search_paths(ModuleCache* cache) {
                     snprintf(rel_lib, sizeof(rel_lib), "%s/lib", exe_path);
                     add_search_path(cache, rel_lib);
                 }
-                // Also add exe_dir/../core/lib for the common SageLang repo layout
-                if (strlen(exe_path) + 14 < sizeof(rel_lib)) {
-                    snprintf(rel_lib, sizeof(rel_lib), "%s/../core/lib", exe_path);
-                    add_search_path(cache, rel_lib);
-                }
-                // Also add exe_dir/../src/sage and exe_dir/../core/src/sage
-                // so `import ast`, `import parser`, `import compiler`, etc.
-                // resolve from the SageLang repo when running the shipped binary.
+                // Self-hosted compiler modules take precedence over lib/
+                // packages when names collide (e.g. gc): add src/sage dirs
+                // before lib dirs so `import gc` resolves the interpreter's
+                // GC interface rather than the (currently unported)
+                // core/lib/gc package.
                 if (strlen(exe_path) + 20 < sizeof(rel_lib)) {
                     snprintf(rel_lib, sizeof(rel_lib), "%s/../src/sage", exe_path);
                     add_search_path(cache, rel_lib);
                 }
                 if (strlen(exe_path) + 22 < sizeof(rel_lib)) {
                     snprintf(rel_lib, sizeof(rel_lib), "%s/../core/src/sage", exe_path);
+                    add_search_path(cache, rel_lib);
+                }
+                // Also add exe_dir/../core/lib for the common SageLang repo layout
+                if (strlen(exe_path) + 14 < sizeof(rel_lib)) {
+                    snprintf(rel_lib, sizeof(rel_lib), "%s/../core/lib", exe_path);
+                    add_search_path(cache, rel_lib);
+                }
+                // Also add exe_dir/../lib for dev builds living under core/
+                // (e.g. core/build_dbg/sage -> core/lib)
+                if (strlen(exe_path) + 9 < sizeof(rel_lib)) {
+                    snprintf(rel_lib, sizeof(rel_lib), "%s/../lib", exe_path);
                     add_search_path(cache, rel_lib);
                 }
             }

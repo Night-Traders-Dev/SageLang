@@ -628,10 +628,19 @@ proc analyze_stmt(ctx, stmt):
         return nil
     end
     if st == STMT_CLASS:
-        let mi = 0
-        while mi < len(stmt.methods):
-            analyze_stmt(ctx, stmt.methods[mi])
-            mi = mi + 1
+        # methods may be an array or a linked list (parser mirrors C AST)
+        if type(stmt.methods) == "array":
+            let mi = 0
+            while mi < len(stmt.methods):
+                analyze_stmt(ctx, stmt.methods[mi])
+                mi = mi + 1
+            end
+        else:
+            let m = stmt.methods
+            while m != nil:
+                analyze_stmt(ctx, m)
+                m = m.next
+            end
         end
         return nil
     end
@@ -712,11 +721,22 @@ proc analyze_stmt_list(ctx, stmts):
     if stmts == nil:
         return nil
     end
-    let i = 0
-    while i < len(stmts):
-        analyze_stmt(ctx, stmts[i])
-        i = i + 1
+    # The self-hosted parser mirrors the C AST: block bodies are C-style
+    # linked lists (stmt.next), not arrays. Support both representations.
+    if type(stmts) == "array":
+        let i = 0
+        while i < len(stmts):
+            analyze_stmt(ctx, stmts[i])
+            i = i + 1
+        end
+        return nil
     end
+    let cur = stmts
+    while cur != nil:
+        analyze_stmt(ctx, cur)
+        cur = cur.next
+    end
+    return nil
 end
 
 # --- Public entry point ---

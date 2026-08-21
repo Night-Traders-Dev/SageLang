@@ -8,13 +8,13 @@ gc_disable()
 # EXPECT: unsafe_block
 # EXPECT: PASS
 
-import safety
+import option
 
 # Test basic ownership - values are owned by their variables
-let a = safety.Some(10)
-let b = safety.Some(20)
-if safety.is_some(a):
-    if safety.is_some(b):
+let a = option.Some(10)
+let b = option.Some(20)
+if option.is_some(a):
+    if option.is_some(b):
         print "ownership_basic"
     end
 end
@@ -34,18 +34,18 @@ if n1 == 42:
     end
 end
 
-# Test move semantics with safety.own()
+# Test move semantics with option.own()
 let data = [1, 2, 3]
-let moved = safety.own(data)
+let moved = option.own(data)
 # In strict mode, 'data' would be marked as moved
 # In normal mode, both still work
 if len(moved) == 3:
     print "move_semantics"
 end
 
-# Test borrow semantics with safety.ref()
+# Test borrow semantics with option.ref()
 let original = [10, 20, 30]
-let borrowed = safety.ref(original)
+let borrowed = option.ref(original)
 # Both can read
 if len(original) == 3:
     if len(borrowed) == 3:
@@ -56,13 +56,13 @@ end
 # Test thread safety markers
 let shared = {}
 shared["value"] = 42
-shared = safety.mark_send(shared)
-shared = safety.mark_sync(shared)
-if safety.is_send(shared):
-    if safety.is_sync(shared):
+shared = option.mark_send(shared)
+shared = option.mark_sync(shared)
+if option.is_send(shared):
+    if option.is_sync(shared):
         # Primitives are always Send
-        if safety.is_send(42):
-            if safety.is_send("hello"):
+        if option.is_send(42):
+            if option.is_send("hello"):
                 print "thread_safety"
             end
         end
@@ -70,12 +70,12 @@ if safety.is_send(shared):
 end
 
 # Test Option type enforcement
-let maybe = safety.Some("present")
-if safety.is_some(maybe):
-    let val = safety.unwrap(maybe)
+let maybe = option.Some("present")
+if option.is_some(maybe):
+    let val = option.unwrap(maybe)
     if val == "present":
-        let empty = safety.None()
-        let safe_val = safety.unwrap_or(empty, "fallback")
+        let empty = option.None()
+        let safe_val = option.unwrap_or(empty, "fallback")
         if safe_val == "fallback":
             print "option_enforce"
         end
@@ -84,7 +84,7 @@ end
 
 # Test deep copy
 let orig = [1, [2, 3], 4]
-let copied = safety.copy(orig)
+let copied = option.copy(orig)
 if len(copied) == 3:
     if len(copied[1]) == 2:
         print "unsafe_block"
