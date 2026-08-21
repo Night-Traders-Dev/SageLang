@@ -338,9 +338,9 @@ static Value math_printm_add_native(int argCount, Value* args) {
     double b = AS_NUMBER(args[1]);
     double res = a + b;
     char sa[64], sb[64], sr[64];
-    sprintf(sa, "%g", a);
-    sprintf(sb, "%g", b);
-    sprintf(sr, "%g", res);
+    snprintf(sa, sizeof(sa), "%g", a);
+    snprintf(sb, sizeof(sb), "%g", b);
+    snprintf(sr, sizeof(sr), "%g", res);
     int la = (int)strlen(sa), lb = (int)strlen(sb), lr = (int)strlen(sr);
     int max_l = la > lb ? la : lb;
     if (lr > max_l) max_l = lr;
@@ -361,9 +361,9 @@ static Value math_printm_sub_native(int argCount, Value* args) {
     double b = AS_NUMBER(args[1]);
     double res = a - b;
     char sa[64], sb[64], sr[64];
-    sprintf(sa, "%g", a);
-    sprintf(sb, "%g", b);
-    sprintf(sr, "%g", res);
+    snprintf(sa, sizeof(sa), "%g", a);
+    snprintf(sb, sizeof(sb), "%g", b);
+    snprintf(sr, sizeof(sr), "%g", res);
     int la = (int)strlen(sa), lb = (int)strlen(sb), lr = (int)strlen(sr);
     int max_l = la > lb ? la : lb;
     if (lr > max_l) max_l = lr;
@@ -384,9 +384,9 @@ static Value math_printm_mul_native(int argCount, Value* args) {
     double b = AS_NUMBER(args[1]);
     double res = a * b;
     char sa[64], sb[64], sr[64];
-    sprintf(sa, "%g", a);
-    sprintf(sb, "%g", b);
-    sprintf(sr, "%g", res);
+    snprintf(sa, sizeof(sa), "%g", a);
+    snprintf(sb, sizeof(sb), "%g", b);
+    snprintf(sr, sizeof(sr), "%g", res);
     int la = (int)strlen(sa), lb = (int)strlen(sb), lr = (int)strlen(sr);
     int max_l = la > lb ? la : lb;
     if (lr > max_l) max_l = lr;
@@ -428,7 +428,7 @@ static Value math_printm_div_native(int argCount, Value* args) {
     if (a >= 0 && b > 0 && a == (long long)a && b == (long long)b) {
         long long ia = (long long)a, ib = (long long)b, ires = (long long)res;
         printf("    %lld\n", ires);
-        printf("    "); char s_ires[64]; sprintf(s_ires, "%lld", ires);
+        printf("    "); char s_ires[64]; snprintf(s_ires, sizeof(s_ires), "%lld", ires);
         for (int i = 0; i < (int)strlen(s_ires); i++) {
             putchar('-');
         }
