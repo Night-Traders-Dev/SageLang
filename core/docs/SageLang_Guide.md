@@ -2862,6 +2862,7 @@ sage lint program.sage
 - `[W001]`, `[W002]`: Issued for unused variables and variables that shadow existing declarations in scope.
 - `[W004]`: Warns about empty blocks (e.g., when a line ending in a colon `:` is followed by an empty or improperly indented section).
 - `[S003]`: Enforces documentation conventions; top-level `proc` declarations must be immediately preceded by a `##` style docstring (comment).
+- `[S005]`: Warns when multiple statements are on a single line separated by semicolons.
 
 **Example Output**:
 

@@ -341,3 +341,14 @@ Documentation Impact:
 - Update Guide to reflect short-circuit logic for C backend.
 - Update Guide to reflect multi-alias import support.
 - Update Guide to mention `hw.*` natives.
+
+2026-08-17 - [Linter S005 Rule]
+
+Discovery:
+The linter recently introduced S005, which warns when multiple statements are on a single line separated by semicolons.
+
+Evidence:
+Commit history.
+
+Documentation Impact:
+Added S005 to the "Notable Rules" section under Linter.
