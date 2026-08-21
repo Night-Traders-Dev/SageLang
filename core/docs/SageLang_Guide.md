@@ -170,7 +170,7 @@ primary         → NUMBER | STRING | BOOL | NIL | "(" expr ")" | "[" array "]" 
 
 **Statement Parsing** (top-down recursive descent):
 ```
-statement   → if_stmt | while_stmt | for_stmt | return_stmt | break | continue | try_stmt | raise_stmt | yield_stmt | print_stmt | expr_stmt
+statement   → if_stmt | while_stmt | for_stmt | return_stmt | break | continue | try_stmt | raise_stmt | yield_stmt | print_stmt | expr_stmt | end_stmt
 declaration → class_decl | proc_decl | let_decl | statement
 ```
 
@@ -972,6 +972,31 @@ dict_delete(dict, "age")
 print dict_has(dict, "age")    # false
 ```
 
+
+
+### 4.1.5 Documentation Comments
+
+Top-level procedure documentation comments use `##`. They must be placed immediately before the `proc` keyword or any decorators.
+
+```sagelang
+## Calculates the sum of two numbers.
+@inline
+proc add(a, b):
+    return a + b
+```
+
+Placing a doc comment between a decorator and the `proc` keyword will result in a parsing error.
+
+### 4.1.6 Block Terminators
+
+While SageLang uses indentation for block scoping, the `end` keyword is supported as an optional block terminator. A bare `end` statement is parsed as a nil-expression statement and can be used to explicitly close a block, which can be helpful in certain metaprogramming or explicit scoping contexts.
+
+```sagelang
+if true:
+    print "Inside block"
+end
+```
+
 ### 4.2 Control Flow Patterns
 
 **Conditionals**:
@@ -1041,6 +1066,18 @@ proc add(a, b):
 
 let result = add(5, 3)
 print result                   # 8
+```
+
+
+**Anonymous Functions**:
+SageLang supports anonymous procedure expressions, which are useful for callbacks. They use the syntax `proc(params...): body [end]`.
+
+```sagelang
+let multiply = proc(a, b):
+    return a * b
+end
+
+print multiply(5, 4)  # 20
 ```
 
 **Closures** (captured environment):

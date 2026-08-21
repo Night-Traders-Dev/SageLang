@@ -341,3 +341,15 @@ Documentation Impact:
 - Update Guide to reflect short-circuit logic for C backend.
 - Update Guide to reflect multi-alias import support.
 - Update Guide to mention `hw.*` natives.
+
+2024-05-15 - [Syntax & Parser]
+Discovery:
+Bare `end` statements are parsed as nil-expression statements and function as optional block terminators. Anonymous procedure expressions use `proc(params...): body [end]`.
+Evidence: Memory context; self-hosted interpreter v4.1.14+.
+Documentation Impact: Document optional `end` blocks and anonymous procs in syntax/functions sections.
+
+2024-05-15 - [Tools & Pragmas]
+Discovery:
+Top-level procedure doc comments (`## ...`) must be placed before decorators like `@inline`.
+Evidence: Memory context; parser logic and linter `sage lint`.
+Documentation Impact: Add this strict ordering rule to the Documentation Comments section.
