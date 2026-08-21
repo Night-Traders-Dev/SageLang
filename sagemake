@@ -270,6 +270,35 @@ def perform_install(args):
         return
 
     banner("Installation")
+
+    if args.selfhost:
+        # Self-hosted install: the bundled Sage-written toolchain becomes
+        # 'sage'; the C build is preserved as 'sage-c'.
+        sh_bin = Path("core/build_selfhost/sage-selfhosted")
+        if not sh_bin.exists():
+            step_fail("self-hosted binary missing; run the selfhost build first")
+            return
+
+        section("Building release C binary for sage-c")
+        step("Compiling sage via Make (release)")
+        res = run_cmd(["make", "-C", "core", "-j" + str(os.cpu_count() or 2)], capture_output=False)
+        if res and res.returncode == 0:
+            step_ok("sage-c source build")
+        else:
+            step_fail("Make build failed")
+
+        section("Installing SageLang (self-hosted) system-wide")
+        console.print("  [yellow]⚙[/yellow] [bold]Installing to /usr/local[/bold]")
+        sud = [] if os.geteuid() == 0 else ["sudo"]
+        r1 = run_cmd(sud + ["install", "-m", "755", str(sh_bin), "/usr/local/bin/sage"], capture_output=False)
+        r2 = run_cmd(sud + ["install", "-m", "755", "core/sage", "/usr/local/bin/sage-c"], capture_output=False)
+        if r1 and r1.returncode == 0 and r2 and r2.returncode == 0:
+            console.print("  [bold green]✓[/bold green] [green]/usr/local/bin/sage      -> self-hosted toolchain[/green]")
+            console.print("  [bold green]✓[/bold green] [green]/usr/local/bin/sage-c    -> C interpreter[/green]")
+        else:
+            step_fail("Installation failed (sudo required)")
+        return
+
     section("Building release binary for installation")
     step("Compiling sage via Make (release)")
     res = run_cmd(["make", "-C", "core", "-j" + str(os.cpu_count() or 2)], capture_output=False)
@@ -420,6 +449,29 @@ def build_selfhost(args, sage_bin):
         else:
             step_warn("some suites failed")
 
+    # 6) Package the self-hosted compiler as an installable executable.
+    # The JIT bundler embeds sage.sage plus every imported module into a
+    # copy of the host binary, producing a standalone 'sage' whose
+    # implementation is the Sage-written toolchain.
+    section("Building Standalone Self-Hosted Compiler")
+    sh_bin = out_dir / "sage-selfhosted"
+    step("Bundling sage.sage (+ modules) into a standalone executable")
+    bundle = run_cmd(
+        [str(sage_bin), "--jit", "core/src/sage/sage.sage", "-o", str(sh_bin)],
+        capture_output=False,
+    )
+    if not bundle or bundle.returncode != 0 or not sh_bin.exists():
+        step_fail("bundling failed")
+        return
+    step_ok(f"{sh_bin} ({run_cmd(['du','-h',str(sh_bin)]).stdout.split()[0]})")
+
+    step("Verifying bundled binary version")
+    ver = run_cmd([str(sh_bin), "--version"])
+    if ver and ver.returncode == 0 and "self-hosted" in (ver.stdout or ""):
+        step_ok("reports self-hosted")
+    else:
+        step_warn("version check inconclusive")
+
     console.print(f"\n  [dim]Artifacts in {out_dir}/[/dim]")
 
 
@@ -549,11 +601,11 @@ def main():
     # PDF generation (omitted for brevity in first draft but can be added)
     
     run_tests(args, sage_bin)
+    build_selfhost(args, sage_bin)
     perform_install(args)
     
     build_trainer(args)
     build_chatbot(args, sage_bin)
-    build_selfhost(args, sage_bin)
     
     fix_permissions()
     

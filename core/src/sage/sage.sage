@@ -103,12 +103,21 @@ proc parse_args():
     result["strict_safety"] = false
     result["gc_mode"] = nil
 
-    # No arguments beyond sage.sage
-    if argc < 3:
+    # Argument offset: standalone runs look like
+    #   [prog, sage.sage, command?, file...]  -> args start at index 2,
+    # while bundled/self-extracting executables receive
+    #   [exe, command?, file...]              -> args start at index 1.
+    let start = 2
+    if argc >= 2:
+        if not endswith(argv[1], "sage.sage"):
+            start = 1
+
+    # No arguments beyond the entry point
+    if argc <= start:
         result["mode"] = "help"
         return result
 
-    let i = 2
+    let i = start
     while i < argc:
         let arg = argv[i]
 
