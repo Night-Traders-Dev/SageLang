@@ -318,6 +318,111 @@ def build_trainer(args):
     else:
         console.print("    [bold red]✗[/bold red] Trainer build failed")
 
+def build_selfhost(args, sage_bin):
+    """
+    Build & verify the self-hosted compiler (bootstrap).
+
+    Uses the C-built host binary to drive the Sage-written toolchain
+    (core/src/sage/sage.sage), then proves the self-hosted compiler can
+    produce working native binaries: it emits C for a demo program, gcc's
+    it, and checks the result matches the C interpreter's output.
+    """
+    if not args.selfhost:
+        return
+
+    banner("Self-Hosted Build (Bootstrap)")
+    out_dir = Path("core/build_selfhost")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    demo_src = out_dir / "demo.sage"
+    demo_src.write_text(
+        "proc fib(n):\n"
+        "    if n <= 1:\n"
+        "        return n\n"
+        "    return fib(n - 1) + fib(n - 2)\n"
+        "end\n"
+        "let total = 0\n"
+        "let i = 0\n"
+        "while i < 1000:\n"
+        "    total = total + i\n"
+        "    i = i + 1\n"
+        "end\n"
+        'print("fib(15) = " + str(fib(15)))\n'
+        'print("sum(0..999) = " + str(total))\n'
+    )
+
+    # 1) Reference output from the C interpreter
+    step("Reference run via C interpreter")
+    ref = run_cmd([str(sage_bin), str(demo_src)])
+    if not ref or ref.returncode != 0:
+        step_fail("C reference run failed")
+    step_ok("ok")
+
+    # 2) Self-hosted interpretation of the same program
+    section("Self-Hosted Interpretation")
+    step("sage.sage running demo through the Sage-written interpreter")
+    sh_res = run_cmd(
+        [str(sage_bin), "core/src/sage/sage.sage", str(demo_src)],
+        capture_output=False,
+    )
+
+    # 3) Self-hosted compilation to native: emit-c -> gcc -> execute
+    section("Self-Hosted Compilation (emit-c → gcc)")
+    c_out = out_dir / "demo_selfhost.c"
+    bin_out = out_dir / "demo_selfhosted"
+    step("Emitting C via the self-hosted compiler")
+    emit = run_cmd(
+        [str(sage_bin), "core/src/sage/sage.sage", "--emit-c", str(demo_src),
+         "-o", str(c_out)]
+    )
+    if not emit or emit.returncode != 0 or not c_out.exists():
+        step_fail("self-hosted --emit-c failed")
+        console.print(emit.stdout[-500:] if emit else "No output")
+        return
+    step_ok(str(c_out))
+
+    step("Compiling emitted C with gcc")
+    cc = run_cmd(
+        ["gcc", "-O2", "-o", str(bin_out), str(c_out), "-lm"],
+        capture_output=False,
+    )
+    if not cc or cc.returncode != 0:
+        step_fail("gcc failed on self-hosted emitted C")
+        return
+    step_ok(str(bin_out))
+
+    step("Running native binary")
+    native = run_cmd([str(bin_out)])
+    if not native or native.returncode != 0:
+        step_fail("native run failed")
+        return
+    step_ok("ok")
+
+    # 4) Parity check
+    step("Comparing outputs (interpreter vs compiled)")
+    ref_lines = [l for l in (ref.stdout or "").strip().splitlines() if l.strip()]
+    nat_lines = [l for l in (native.stdout or "").strip().splitlines() if l.strip()]
+    if ref_lines == nat_lines:
+        step_ok("outputs identical")
+        console.print(f"    [dim]{nat_lines[0] if nat_lines else ''} …[/dim]")
+    else:
+        step_warn("output mismatch")
+        console.print(f"    [red]reference:[/red] {ref_lines}")
+        console.print(f"    [red]native   :[/red] {nat_lines}")
+
+    # 5) Full self-hosted test suite
+    if not args.skip_tests:
+        section("Self-Hosted Test Suite")
+        step("make -C core test-selfhost")
+        res = run_cmd(["make", "-C", "core", "test-selfhost"], capture_output=False)
+        if res and res.returncode == 0:
+            step_ok("all suites passed")
+        else:
+            step_warn("some suites failed")
+
+    console.print(f"\n  [dim]Artifacts in {out_dir}/[/dim]")
+
+
 def build_chatbot(args, sage_bin):
     if not args.chatbot:
         return
@@ -403,6 +508,9 @@ def main():
     parser.add_argument("--make-only", action="store_true", help="Use Make instead of CMake")
     parser.add_argument("--train", action="store_true", help="Build the SL-TQ-LLM C trainer")
     parser.add_argument("--chatbot", action="store_true", help="Compile chatbots (C + LLVM backends)")
+    parser.add_argument("--selfhost", action="store_true",
+                        help="Bootstrap & verify the self-hosted compiler "
+                             "(interpret + emit-c -> gcc -> native, then run its test suite)")
     parser.add_argument("--no-vulkan", action="store_true", help="Disable Vulkan GPU support")
     parser.add_argument("--no-glfw", action="store_true", help="Disable GLFW windowed mode")
     parser.add_argument("--no-curl", action="store_true", help="Disable HTTP/libcurl support")
@@ -417,6 +525,8 @@ def main():
         args.train = True
     elif args.subcommand == "chatbot":
         args.chatbot = True
+    elif args.subcommand == "selfhost":
+        args.selfhost = True
     elif args.subcommand == "install":
         args.install = True
     elif args.subcommand == "version":
@@ -443,6 +553,7 @@ def main():
     
     build_trainer(args)
     build_chatbot(args, sage_bin)
+    build_selfhost(args, sage_bin)
     
     fix_permissions()
     

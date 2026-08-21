@@ -9,6 +9,10 @@ gc_disable()
 # ============================================================================
 import token
 import ast
+from token import TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, TOKEN_SLASH, TOKEN_PERCENT
+from token import TOKEN_EQ, TOKEN_NEQ, TOKEN_LT, TOKEN_GT, TOKEN_LTE, TOKEN_GTE
+from token import TOKEN_AMP, TOKEN_PIPE, TOKEN_CARET, TOKEN_TILDE
+from token import TOKEN_LSHIFT, TOKEN_RSHIFT, TOKEN_AND, TOKEN_OR, TOKEN_NOT
 
 # ============================================================================
 # Character constants (Sage has no escape sequences)
@@ -339,48 +343,48 @@ proc cc_emit_binary_expr(cc, expr):
     let left = cc_emit_expr(cc, expr.left)
     let op_type = expr.op.type
     # Unary NOT
-    if op_type == 11:
+    if op_type == TOKEN_NOT:
         return "sage_not(" + left + ")"
     # Unary bitwise NOT
-    if op_type == 56:
+    if op_type == TOKEN_TILDE:
         return "sage_bit_not(" + left + ")"
     let right = cc_emit_expr(cc, expr.right)
     let helper = nil
-    if op_type == 34:
+    if op_type == TOKEN_PLUS:
         helper = "sage_add"
-    if op_type == 35:
+    if op_type == TOKEN_MINUS:
         helper = "sage_sub"
-    if op_type == 36:
+    if op_type == TOKEN_STAR:
         helper = "sage_mul"
-    if op_type == 37:
+    if op_type == TOKEN_SLASH:
         helper = "sage_div"
-    if op_type == 38:
+    if op_type == TOKEN_PERCENT:
         helper = "sage_mod"
-    if op_type == 40:
+    if op_type == TOKEN_EQ:
         helper = "sage_eq"
-    if op_type == 41:
+    if op_type == TOKEN_NEQ:
         helper = "sage_neq"
-    if op_type == 43:
+    if op_type == TOKEN_GT:
         helper = "sage_gt"
-    if op_type == 42:
+    if op_type == TOKEN_LT:
         helper = "sage_lt"
-    if op_type == 45:
+    if op_type == TOKEN_GTE:
         helper = "sage_gte"
-    if op_type == 44:
+    if op_type == TOKEN_LTE:
         helper = "sage_lte"
-    if op_type == 53:
+    if op_type == TOKEN_AMP:
         helper = "sage_bit_and"
-    if op_type == 54:
+    if op_type == TOKEN_PIPE:
         helper = "sage_bit_or"
-    if op_type == 55:
+    if op_type == TOKEN_CARET:
         helper = "sage_bit_xor"
-    if op_type == 57:
+    if op_type == TOKEN_LSHIFT:
         helper = "sage_lshift"
-    if op_type == 58:
+    if op_type == TOKEN_RSHIFT:
         helper = "sage_rshift"
-    if op_type == 9:
+    if op_type == TOKEN_AND:
         helper = "sage_and"
-    if op_type == 10:
+    if op_type == TOKEN_OR:
         helper = "sage_or"
     if helper == nil:
         cc.failed = true
@@ -896,6 +900,7 @@ proc emit_runtime_prelude(cc):
     push(o, "#include <stdio.h>" + NL)
     push(o, "#include <stdlib.h>" + NL)
     push(o, "#include <string.h>" + NL)
+    push(o, "#include <math.h>" + NL)
     push(o, NL)
     # Type definitions
     push(o, "typedef struct SageValue SageValue;" + NL)
