@@ -6,7 +6,7 @@ gc_disable()
 from ast import EXPR_NUMBER, EXPR_STRING, EXPR_BOOL, EXPR_NIL
 from ast import EXPR_BINARY, EXPR_VARIABLE, EXPR_CALL, EXPR_ARRAY
 from ast import EXPR_INDEX, EXPR_DICT, EXPR_TUPLE, EXPR_SLICE
-from ast import EXPR_GET, EXPR_SET, EXPR_INDEX_SET, EXPR_AWAIT
+from ast import EXPR_GET, EXPR_SET, EXPR_INDEX_SET, EXPR_AWAIT, EXPR_PROC
 from ast import STMT_PRINT, STMT_EXPRESSION, STMT_LET, STMT_IF
 from ast import STMT_BLOCK, STMT_WHILE, STMT_PROC, STMT_FOR
 from ast import STMT_RETURN, STMT_BREAK, STMT_CONTINUE, STMT_CLASS
@@ -506,7 +506,7 @@ proc analyze_expr(ctx, expr):
     end
     if et == EXPR_PROC:
         # Analyze the proc body for safety violations
-        if expr.body != nil and ctx["in_proc"]:
+        if expr.body != nil:
             analyze_stmt(ctx, expr.body)
         return nil
     end
@@ -593,22 +593,36 @@ proc analyze_stmt(ctx, stmt):
         let was_name = ctx["current_proc"]
         ctx["in_proc"] = true
         ctx["current_proc"] = stmt.name.text
-        push_scope(ctx, false, false)
-        # Declare parameters as owned
-        let pi = 0
-    while pi < len(stmt.params):
-        let pv = declare_var(ctx, stmt.params[pi].text, stmt.params[pi].line)
-        if pv != nil:
-            pv["state"] = OWN_OWNED
+        # @safe doc annotation marks the proc scope as safe
+        let proc_safe = false
+        if stmt.doc != nil and find(stmt.doc, "@safe") != nil:
+            proc_safe = true
         end
-        pi = pi + 1
-    end
-    # Track @safe doc on proc
-    if stmt.doc != nil and find(stmt.doc, "@safe") != nil:
-        set_doc_safe(stmt.name.text)
-    # Check Sync trait (framework)
-    if ctx["mode"] == MODE_STRICT:
-        check_sync(ctx, stmt.name.text, stmt.name.line)
+        push_scope(ctx, false, proc_safe)
+        # Declare parameters as owned (with type-annotation modifiers)
+        let pi = 0
+        while pi < len(stmt.params):
+            let pv = declare_var(ctx, stmt.params[pi].text, stmt.params[pi].line)
+            if pv != nil:
+                pv["state"] = OWN_OWNED
+                if stmt.param_type_anns != nil and stmt.param_type_anns[pi] != nil:
+                    let pt = stmt.param_type_anns[pi]
+                    if pt == "ref":
+                        pv["state"] = OWN_BORROWED
+                        pv["is_copy"] = true
+                    end
+                    if pt == "own":
+                        pv["state"] = OWN_OWNED
+                    end
+                    if pt == "Int" or pt == "Float" or pt == "Bool" or pt == "String" or pt == "Num":
+                        pv["is_copy"] = true
+                    end
+                end
+            end
+            pi = pi + 1
+        end
+        analyze_stmt(ctx, stmt.body)
+        pop_scope(ctx)
         ctx["in_proc"] = was_in
         ctx["current_proc"] = was_name
         return nil
@@ -691,11 +705,6 @@ proc analyze_stmt(ctx, stmt):
         return nil
     end
     # STMT_IMPORT, STMT_BREAK, STMT_CONTINUE -- nothing to check
-    if et == EXPR_PROC:
-        # Analyze the proc body for safety violations
-        if expr.body != nil and ctx["in_proc"]:
-            analyze_stmt(ctx, expr.body)
-
     return nil
 end
 

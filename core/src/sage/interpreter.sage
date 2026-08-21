@@ -18,6 +18,7 @@ from ast import STMT_STRUCT, STMT_ENUM, STMT_TRAIT, STMT_COMPTIME, STMT_MACRO_DE
 from token import TOKEN_NOT, TOKEN_TILDE, TOKEN_OR, TOKEN_AND
 from token import TOKEN_EQ, TOKEN_NEQ, TOKEN_GT, TOKEN_LT, TOKEN_GTE, TOKEN_LTE
 from token import TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, TOKEN_SLASH, TOKEN_PERCENT
+import sys
 from token import TOKEN_AMP, TOKEN_PIPE, TOKEN_CARET, TOKEN_LSHIFT, TOKEN_RSHIFT
 import errors
 
@@ -201,6 +202,11 @@ proc env_get(env, name):
             return vals[name]
         e = e["parent"]
     raise "Undefined variable '" + name + "'"
+
+# Report an undefined variable to stderr and continue (mirrors C interpreter:
+# fprintf(stderr, "Runtime Error: Undefined variable 'x'.\n"); return nil)
+proc report_undefined(name):
+    sys.stderr_write("Runtime Error: Undefined variable '" + name + "'.\n")
 
 proc env_set(env, name, value):
     let e = env
@@ -797,9 +803,15 @@ proc eval_expr_impl(expr, env):
         return expr.value
 
     if etype == EXPR_VARIABLE:
-        # Avoid try/catch — exception path is 10x slower than direct check.
-        # env_get raises on miss; we catch at the boundary instead.
-        return env_get(env, expr.name.text)
+        # Mirrors C: on miss, print error to stderr and continue with nil
+        let e = env
+        while e != nil:
+            let vals = e["vals"]
+            if dict_has(vals, expr.name.text):
+                return vals[expr.name.text]
+            e = e["parent"]
+        report_undefined(expr.name.text)
+        return nil
 
     if etype == EXPR_BINARY:
         return eval_binary(expr, env)
@@ -908,8 +920,16 @@ proc eval_expr_impl(expr, env):
         # Variable reassignment: x = value
         if expr.object == nil:
             let val = eval_expr(expr.value, env)
-            env_set(env, prop_name, val)
-            return val
+            # Mirrors C: on miss, print error to stderr and continue with nil
+            let e = env
+            while e != nil:
+                let vals = e["vals"]
+                if dict_has(vals, prop_name):
+                    vals[prop_name] = val
+                    return val
+                e = e["parent"]
+            report_undefined(prop_name)
+            return nil
         # Property assignment: obj.prop = value
         let obj = eval_expr(expr.object, env)
         let val = eval_expr(expr.value, env)
@@ -955,6 +975,7 @@ proc eval_expr_impl(expr, env):
             "params": expr.params,
             "body": expr.body,
             "closure": env,
+            "param_defaults": expr.param_defaults,
             "is_generator": body_has_yield(expr.body)
         }
 
@@ -1226,6 +1247,68 @@ proc eval_call(expr, env):
     g_depth = g_depth - 1
     return _call_result
 
+# Call a C-host function or native value (VAL_FUNCTION/VAL_NATIVE) with a
+# dynamic argument list. The C compiler dispatches fixed-arity call syntax
+# natively, so we build the call statically per arity.
+proc call_chost(callee, args):
+    let n = len(args)
+    if n == 0:
+        return callee()
+    if n == 1:
+        return callee(args[0])
+    if n == 2:
+        return callee(args[0], args[1])
+    if n == 3:
+        return callee(args[0], args[1], args[2])
+    if n == 4:
+        return callee(args[0], args[1], args[2], args[3])
+    if n == 5:
+        return callee(args[0], args[1], args[2], args[3], args[4])
+    if n == 6:
+        return callee(args[0], args[1], args[2], args[3], args[4], args[5])
+    if n == 7:
+        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
+    if n == 8:
+        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])
+    if n == 9:
+        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8])
+    if n == 10:
+        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9])
+    if n == 11:
+        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10])
+    if n == 12:
+        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11])
+    runtime_error(-1, "C-host function called with too many arguments", str(n))
+
+# Call a method on a C-host instance (VAL_INSTANCE) with a dynamic argument
+# list. `obj[name](...)` is compiled by the C host as an indexed call and
+# dispatched natively.
+proc call_chost_method(obj, name, args):
+    let n = len(args)
+    if n == 0:
+        return obj[name]()
+    if n == 1:
+        return obj[name](args[0])
+    if n == 2:
+        return obj[name](args[0], args[1])
+    if n == 3:
+        return obj[name](args[0], args[1], args[2])
+    if n == 4:
+        return obj[name](args[0], args[1], args[2], args[3])
+    if n == 5:
+        return obj[name](args[0], args[1], args[2], args[3], args[4])
+    if n == 6:
+        return obj[name](args[0], args[1], args[2], args[3], args[4], args[5])
+    if n == 7:
+        return obj[name](args[0], args[1], args[2], args[3], args[4], args[5], args[6])
+    if n == 8:
+        return obj[name](args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])
+    if n == 9:
+        return obj[name](args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8])
+    if n == 10:
+        return obj[name](args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9])
+    runtime_error(-1, "C-host method called with too many arguments", str(n))
+
 proc eval_call_impl(expr, env):
     let callee_expr = expr.callee
 
@@ -1258,7 +1341,11 @@ proc eval_call_impl(expr, env):
                         if arg_idx < len(args):
                             env_define(method_env, params[pi].text, args[arg_idx])
                         else:
-                            env_define(method_env, params[pi].text, nil)
+                            # Fill in defaults for missing arguments
+                            let dflt = nil
+                            if dict_has(method_val, "param_defaults") and method_val["param_defaults"] != nil and method_val["param_defaults"][pi] != nil:
+                                dflt = eval_expr(method_val["param_defaults"][pi], env)
+                            env_define(method_env, params[pi].text, dflt)
                         pi = pi + 1
                     let res = exec_stmt(method_val["body"], method_env)
                     if res["kind"] == SIGNAL_RETURN:
@@ -1301,12 +1388,26 @@ proc eval_call_impl(expr, env):
                 if arg_idx < len(args):
                     env_define(method_env, params[pi].text, args[arg_idx])
                 else:
-                    env_define(method_env, params[pi].text, nil)
+                    # Fill in defaults for missing arguments
+                    let dflt = nil
+                    if dict_has(method_val, "param_defaults") and method_val["param_defaults"] != nil and method_val["param_defaults"][pi] != nil:
+                        dflt = eval_expr(method_val["param_defaults"][pi], env)
+                    env_define(method_env, params[pi].text, dflt)
                 pi = pi + 1
             let res = exec_stmt(method_val["body"], method_env)
             if res["kind"] == SIGNAL_RETURN:
                 return res["value"]
             return nil
+
+        # C-host instance method call: delegate to the C host
+        if type(obj) == "instance":
+            let args = []
+            let i = 0
+            while i < expr.arg_count:
+                let arg = eval_expr(expr.args[i], env)
+                push(args, arg)
+                i = i + 1
+            return call_chost_method(obj, method_name, args)
 
     # Evaluate callee
     let callee = eval_expr(callee_expr, env)
@@ -1318,6 +1419,15 @@ proc eval_call_impl(expr, env):
         let arg = eval_expr(expr.args[i], env)
         push(args, arg)
         i = i + 1
+
+    # C-host function/native (compiled by the C host): delegate the call
+    if type(callee) == "function" or type(callee) == "native":
+        let cname = "?"
+        if callee_expr.type == EXPR_VARIABLE:
+            cname = callee_expr.name.text
+        if callee_expr.type == EXPR_GET:
+            cname = callee_expr.property.text
+        return call_chost(callee, args)
 
     if type(callee) != "dict":
         runtime_error(get_expr_line(callee_expr), "Value is not callable", "got value of type '" + type(callee) + "'")
@@ -1345,7 +1455,11 @@ proc eval_call_impl(expr, env):
             if pi < len(args):
                 env_define(func_env, params[pi].text, args[pi])
             else:
-                env_define(func_env, params[pi].text, nil)
+                # Fill in defaults for missing arguments (evaluated in caller scope)
+                let dflt = nil
+                if dict_has(callee, "param_defaults") and callee["param_defaults"] != nil and callee["param_defaults"][pi] != nil:
+                    dflt = eval_expr(callee["param_defaults"][pi], env)
+                env_define(func_env, params[pi].text, dflt)
             pi = pi + 1
 
         # Check if this is a generator function (contains yield)
@@ -1397,7 +1511,11 @@ proc eval_call_impl(expr, env):
                 if arg_idx < len(args):
                     env_define(init_env, params[pi].text, args[arg_idx])
                 else:
-                    env_define(init_env, params[pi].text, nil)
+                    # Fill in defaults for missing arguments
+                    let dflt = nil
+                    if dict_has(init_method, "param_defaults") and init_method["param_defaults"] != nil and init_method["param_defaults"][pi] != nil:
+                        dflt = eval_expr(init_method["param_defaults"][pi], env)
+                    env_define(init_env, params[pi].text, dflt)
                 pi = pi + 1
             exec_stmt(init_method["body"], init_env)
         else:
@@ -1488,7 +1606,11 @@ proc exec_stmt(stmt, env):
                     loop_iters = loop_iters + 1
                     if loop_iters > MAX_LOOP_ITERATIONS:
                         raise "While loop exceeded maximum iterations (1000000)"
-                    exec_stmt(stmt.body, env)
+                    let res2 = exec_stmt(stmt.body, env)
+                    if res2["kind"] == SIGNAL_RETURN:
+                        return res2
+                    if res2["kind"] == SIGNAL_BREAK:
+                        break
                 break
         return _SIG_NORMAL_NIL
 
@@ -1529,6 +1651,7 @@ proc exec_stmt(stmt, env):
             "params": stmt.params,
             "body": stmt.body,
             "closure": env,
+            "param_defaults": stmt.param_defaults,
             "is_generator": body_has_yield(stmt.body)
         })
         return _SIG_NORMAL_NIL
@@ -1587,6 +1710,7 @@ proc exec_stmt(stmt, env):
                 mfunc["params"] = method_node.params
                 mfunc["body"] = method_node.body
                 mfunc["closure"] = env
+                mfunc["param_defaults"] = method_node.param_defaults
                 cls["methods"][mname] = mfunc
             method_node = method_node.next
         env_define(env, name, cls)
@@ -1650,6 +1774,7 @@ proc exec_stmt(stmt, env):
         func["params"] = stmt.params
         func["body"] = stmt.body
         func["closure"] = env
+        func["param_defaults"] = stmt.param_defaults
         func["is_async"] = true
         func["is_generator"] = false
         env_define(env, name, func)

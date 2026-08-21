@@ -87,6 +87,7 @@ class Lexer:
         self.at_bol = true
         self.indent_stack = [0]
         self.pending_dedents = 0
+        self.bracket_depth = 0
 
     # Peek at current character without advancing
     proc peek():
@@ -170,7 +171,13 @@ class Lexer:
         while self.peek() != nil and self.peek() != self.source[start_pos]:
             if self.peek() == chr(10):
                 self.line = self.line + 1
-            self.advance()
+            if self.peek() == "\\" and self.peek_next() != nil:
+                self.advance()
+                if self.peek() == chr(10):
+                    self.line = self.line + 1
+                self.advance()
+            else:
+                self.advance()
         if self.is_at_end():
             return self.error_token("Unterminated string.")
         # Consume closing quote
@@ -215,7 +222,7 @@ class Lexer:
                     let doc_text = slice(self.source, doc_start, self.pos)
                     return self.make_token(token.TOKEN_DOC_COMMENT, doc_text)
 
-                # Skip blank lines and comment lines
+# Skip blank lines and comment lines
                 if self.peek() == chr(10) or self.peek() == "#":
                     if self.peek() == "#":
                         while self.peek() != nil and self.peek() != chr(10):
@@ -229,18 +236,21 @@ class Lexer:
                     self.at_bol = true
                     continue
 
-                let current_indent = self.indent_stack[len(self.indent_stack) - 1]
-                if spaces > current_indent:
-                    push(self.indent_stack, spaces)
-                    return self.make_token(token.TOKEN_INDENT, "")
-                elif spaces < current_indent:
-                    while len(self.indent_stack) > 1 and self.indent_stack[len(self.indent_stack) - 1] > spaces:
-                        pop(self.indent_stack)
-                        self.pending_dedents = self.pending_dedents + 1
-                    if self.indent_stack[len(self.indent_stack) - 1] != spaces:
-                        return self.error_token("Indentation error.")
-                    self.pending_dedents = self.pending_dedents - 1
-                    return self.make_token(token.TOKEN_DEDENT, "")
+                # Inside brackets/parens/braces: skip indentation handling
+                if self.bracket_depth == 0:
+                    let current_indent = self.indent_stack[len(self.indent_stack) - 1]
+                    if spaces > current_indent:
+                        push(self.indent_stack, spaces)
+                        return self.make_token(token.TOKEN_INDENT, "")
+                    elif spaces < current_indent:
+                        while len(self.indent_stack) > 1 and self.indent_stack[len(self.indent_stack) - 1] > spaces:
+                            pop(self.indent_stack)
+                            self.pending_dedents = self.pending_dedents + 1
+                        if self.indent_stack[len(self.indent_stack) - 1] != spaces:
+                            return self.error_token("Indentation error.")
+                        self.pending_dedents = self.pending_dedents - 1
+                        return self.make_token(token.TOKEN_DEDENT, "")
+                    end
 
             # Skip whitespace (non-newline)
             while self.peek() == " " or self.peek() == chr(9) or self.peek() == chr(13):
@@ -259,6 +269,8 @@ class Lexer:
             if c == chr(10):
                 self.line = self.line + 1
                 self.at_bol = true
+                if self.bracket_depth > 0:
+                    continue
                 return self.make_token(token.TOKEN_NEWLINE, c)
 
             # Comments
@@ -294,16 +306,25 @@ class Lexer:
 
             # Single-character tokens
             if c == "(":
+                self.bracket_depth = self.bracket_depth + 1
                 return self.make_token(token.TOKEN_LPAREN, c)
             if c == ")":
+                if self.bracket_depth > 0:
+                    self.bracket_depth = self.bracket_depth - 1
                 return self.make_token(token.TOKEN_RPAREN, c)
             if c == "[":
+                self.bracket_depth = self.bracket_depth + 1
                 return self.make_token(token.TOKEN_LBRACKET, c)
             if c == "]":
+                if self.bracket_depth > 0:
+                    self.bracket_depth = self.bracket_depth - 1
                 return self.make_token(token.TOKEN_RBRACKET, c)
             if c == "{":
+                self.bracket_depth = self.bracket_depth + 1
                 return self.make_token(token.TOKEN_LBRACE, c)
             if c == "}":
+                if self.bracket_depth > 0:
+                    self.bracket_depth = self.bracket_depth - 1
                 return self.make_token(token.TOKEN_RBRACE, c)
             if c == "+":
                 return self.make_token(token.TOKEN_PLUS, c)

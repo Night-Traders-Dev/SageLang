@@ -299,7 +299,7 @@ proc while_stmt(condition, body):
     s.body = body
     return s
 
-proc proc_stmt(name, params, body, ret_type_ann_text = nil, param_type_anns = nil):
+proc proc_stmt(name, params, body, ret_type_ann_text = nil, param_type_anns = nil, param_defaults = nil):
     let s = Stmt(STMT_PROC)
     s.name = name
     s.params = params
@@ -307,6 +307,7 @@ proc proc_stmt(name, params, body, ret_type_ann_text = nil, param_type_anns = ni
     s.body = body
     s.ret_type_ann_text = ret_type_ann_text
     s.param_type_anns = param_type_anns
+    s.param_defaults = param_defaults
     return s
 
 proc for_stmt(variable, iterable, body):
@@ -365,7 +366,7 @@ proc import_stmt(module_name, items, item_aliases, alias, import_all):
     s.import_all = import_all
     return s
 
-proc async_proc_stmt(name, params, body, ret_type_ann_text = nil, param_type_anns = nil):
+proc async_proc_stmt(name, params, body, ret_type_ann_text = nil, param_type_anns = nil, param_defaults = nil):
     let s = Stmt(STMT_ASYNC_PROC)
     s.name = name
     s.params = params
@@ -373,6 +374,7 @@ proc async_proc_stmt(name, params, body, ret_type_ann_text = nil, param_type_ann
     s.body = body
     s.ret_type_ann_text = ret_type_ann_text
     s.param_type_anns = param_type_anns
+    s.param_defaults = param_defaults
     return s
 
 proc defer_stmt(statement):
@@ -433,11 +435,12 @@ proc macro_def_stmt(name, params, body):
     return s
 
 # Anonymous proc expression factory
-proc proc_expr(params, body):
+proc proc_expr(params, body, param_defaults = nil):
     let e = Expr(EXPR_PROC)
     e.params = params
     e.param_count = len(params)
     e.body = body
+    e.param_defaults = param_defaults
     return e
 
 # --- CaseClause helper (with guard support) ---

@@ -9,6 +9,7 @@ from token import Token
 from lexer import tokenize
 from ast import Expr, Stmt, CatchClause
 import errors
+
 from ast import EXPR_NUMBER, EXPR_STRING, EXPR_BOOL, EXPR_NIL
 from ast import EXPR_BINARY, EXPR_VARIABLE, EXPR_CALL, EXPR_ARRAY
 from ast import EXPR_INDEX, EXPR_DICT, EXPR_TUPLE, EXPR_SLICE
@@ -147,6 +148,63 @@ proc parse_number_literal(text):
             i = i + 1
         return value
     return tonumber(text)
+
+proc hex_digit_value(c):
+    if c >= "0" and c <= "9":
+        return ord(c) - ord("0")
+    if c >= "a" and c <= "f":
+        return ord(c) - ord("a") + 10
+    if c >= "A" and c <= "F":
+        return ord(c) - ord("A") + 10
+    return -1
+
+# Process string escapes, mirroring C parser.c process_string_escapes
+proc unescape_string(raw):
+    let j = 0
+    let out = ""
+    while j < len(raw):
+        if raw[j] == "\\" and j + 1 < len(raw):
+            j = j + 1
+            let c = raw[j]
+            if c == "n":
+                out = out + chr(10)
+            elif c == "t":
+                out = out + chr(9)
+            elif c == "r":
+                out = out + chr(13)
+            elif c == "\\":
+                out = out + "\\"
+            elif c == "\"":
+                out = out + chr(34)
+            elif c == "'":
+                out = out + chr(39)
+            elif c == "0":
+                out = out + chr(0)
+            elif c == "a":
+                out = out + chr(7)
+            elif c == "b":
+                out = out + chr(8)
+            elif c == "f":
+                out = out + chr(12)
+            elif c == "v":
+                out = out + chr(11)
+            elif c == "x":
+                if j + 2 < len(raw):
+                    let hi = hex_digit_value(raw[j + 1])
+                    let lo = hex_digit_value(raw[j + 2])
+                    if hi >= 0 and lo >= 0:
+                        out = out + chr(hi * 16 + lo)
+                        j = j + 2
+                    else:
+                        out = out + "\\x"
+                else:
+                    out = out + "\\x"
+            else:
+                out = out + "\\" + c
+        else:
+            out = out + raw[j]
+        j = j + 1
+    return out
 
 class Parser:
     proc init(tokens, source, filename):
@@ -491,7 +549,7 @@ class Parser:
             if not self.check(token.TOKEN_RBRACE):
                 self.consume(token.TOKEN_STRING, "Expect string key in dictionary.")
                 let key_tok = self.previous()
-                let key_text = slice(key_tok.text, 1, len(key_tok.text) - 1)
+                let key_text = unescape_string(slice(key_tok.text, 1, len(key_tok.text) - 1))
                 self.consume(token.TOKEN_COLON, "Expect ':' after dictionary key.")
                 let val = self.parse_expression()
                 push(keys, key_text)
@@ -501,7 +559,7 @@ class Parser:
                         break
                     self.consume(token.TOKEN_STRING, "Expect string key in dictionary.")
                     let key_tok2 = self.previous()
-                    let key_text2 = slice(key_tok2.text, 1, len(key_tok2.text) - 1)
+                    let key_text2 = unescape_string(slice(key_tok2.text, 1, len(key_tok2.text) - 1))
                     self.consume(token.TOKEN_COLON, "Expect ':' after dictionary key.")
                     let val2 = self.parse_expression()
                     push(keys, key_text2)
@@ -529,7 +587,7 @@ class Parser:
         # String literal
         if self.match_tok(token.TOKEN_STRING):
             let tok = self.previous()
-            let val = slice(tok.text, 1, len(tok.text) - 1)
+            let val = unescape_string(slice(tok.text, 1, len(tok.text) - 1))
             return string_expr(val)
 
         # Identifier
@@ -556,6 +614,7 @@ class Parser:
     # --- Anonymous proc expression: proc(params): body [end] ---
     proc parse_proc_expr():
         let params = []
+        let param_defaults = []
         self.consume(token.TOKEN_LPAREN, "Expect '(' after 'proc' in expression context.")
         if not self.check(token.TOKEN_RPAREN):
             while true:
@@ -563,8 +622,10 @@ class Parser:
                     break
                 if self.check(token.TOKEN_SELF) or self.check(token.TOKEN_IDENTIFIER):
                     push(params, self.advance())
+                    let param_default = nil
                     if self.match_tok(token.TOKEN_ASSIGN):
-                        self.parse_expression()
+                        param_default = self.parse_expression()
+                    push(param_defaults, param_default)
                 else:
                     let tok = self.peek()
                     self.parse_error(tok, "expected parameter name", "parameters must be identifiers")
@@ -578,7 +639,7 @@ class Parser:
         else:
             body = self.parse_declaration()
         self.match_tok(token.TOKEN_END)
-        return proc_expr(params, body)
+        return proc_expr(params, body, param_defaults)
 
     # --- Statement parsing ---
 
@@ -591,6 +652,11 @@ class Parser:
         if self.depth > MAX_DEPTH:
             let tok = self.peek()
             self.parse_error(tok, "Maximum nesting depth exceeded", "reduce the depth of nested blocks")
+        while self.match_tok(token.TOKEN_NEWLINE):
+            pass
+        if self.check(token.TOKEN_END):
+            self.advance()
+            return block_stmt(nil)
         self.consume(token.TOKEN_INDENT, "Expect indentation after block start.")
         let head = nil
         let current = nil
@@ -661,6 +727,7 @@ class Parser:
         self.consume(token.TOKEN_LPAREN, "Expect '(' after procedure name.")
         let params = []
         let param_type_anns = []
+        let param_defaults = []
         if not self.check(token.TOKEN_RPAREN):
             let pt = self.peek_type()
             if pt == token.TOKEN_SELF or pt == token.TOKEN_IDENTIFIER:
@@ -674,8 +741,13 @@ class Parser:
                     let t_kind = result[1]
                     if t_kind != TYPE_UNKNOWN:
                         param_type_ann = t_text
+                # Check for default parameter value: x = expr
+                let param_default = nil
+                if self.match_tok(token.TOKEN_ASSIGN):
+                    param_default = self.parse_expression()
                 push(params, param_name)
                 push(param_type_anns, param_type_ann)
+                push(param_defaults, param_default)
             else:
                 let tok = self.peek()
                 self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
@@ -691,8 +763,12 @@ class Parser:
                         let t_kind = result[1]
                         if t_kind != TYPE_UNKNOWN:
                             param_type_ann = t_text
+                    let param_default = nil
+                    if self.match_tok(token.TOKEN_ASSIGN):
+                        param_default = self.parse_expression()
                     push(params, param_name)
                     push(param_type_anns, param_type_ann)
+                    push(param_defaults, param_default)
                 else:
                     let tok = self.peek()
                     self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
@@ -725,7 +801,7 @@ class Parser:
         self.consume(token.TOKEN_COLON, "Expect \":\" after procedure signature.")
         self.consume(token.TOKEN_NEWLINE, "Expect newline before procedure body.")
         let body = self.parse_block()
-        return proc_stmt(name, params, body, ret_type_ann_text, param_type_anns)
+        return proc_stmt(name, params, body, ret_type_ann_text, param_type_anns, param_defaults)
 
     proc parse_async_proc():
         self.consume(token.TOKEN_PROC, "Expect 'proc' after 'async'.")
@@ -735,10 +811,15 @@ class Parser:
         let name = self.advance()
         self.consume(token.TOKEN_LPAREN, "Expect '(' after procedure name.")
         let params = []
+        let param_defaults = []
         if not self.check(token.TOKEN_RPAREN):
             let pt = self.peek_type()
             if pt == token.TOKEN_SELF or pt == token.TOKEN_IDENTIFIER:
                 push(params, self.advance())
+                let param_default = nil
+                if self.match_tok(token.TOKEN_ASSIGN):
+                    param_default = self.parse_expression()
+                push(param_defaults, param_default)
             else:
                 let tok = self.peek()
                 self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
@@ -746,6 +827,10 @@ class Parser:
                 let pt2 = self.peek_type()
                 if pt2 == token.TOKEN_SELF or pt2 == token.TOKEN_IDENTIFIER:
                     push(params, self.advance())
+                    let param_default = nil
+                    if self.match_tok(token.TOKEN_ASSIGN):
+                        param_default = self.parse_expression()
+                    push(param_defaults, param_default)
                 else:
                     let tok = self.peek()
                     self.parse_error(tok, "Expected parameter name", "parameters must be identifiers")
@@ -753,7 +838,7 @@ class Parser:
         self.consume(token.TOKEN_COLON, "Expect \":\" after procedure signature.")
         self.consume(token.TOKEN_NEWLINE, "Expect newline before procedure body.")
         let body = self.parse_block()
-        return async_proc_stmt(name, params, body)
+        return async_proc_stmt(name, params, body, nil, nil, param_defaults)
 
     proc parse_struct():
         self.consume(token.TOKEN_IDENTIFIER, "Expect struct name.")

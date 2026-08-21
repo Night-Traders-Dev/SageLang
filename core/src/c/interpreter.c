@@ -12,6 +12,7 @@
 #include "sage_thread.h"  // Phase 11: async/await thread joining
 #ifndef SAGE_NO_FFI
 #include <dlfcn.h>    // Phase 9: FFI (dlopen, dlsym, dlclose)
+#include <execinfo.h> // recursion debug
 #endif
 #include "interpreter.h"
 #include "token.h"
@@ -159,7 +160,7 @@ void interpreter_set_jit(JitState* jit) { g_jit = jit; }
 JitState* interpreter_get_jit(void) { return g_jit; }
 
 // Recursion depth tracking to prevent stack overflow
-#define MAX_RECURSION_DEPTH 500
+#define MAX_RECURSION_DEPTH 12000
 
 // Check if a statement has a specific pragma decorator (@nojit, @noaot, @VM, @no_vm, etc.)
 static int stmt_has_pragma(Stmt* stmt, const char* name) {
