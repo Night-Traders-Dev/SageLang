@@ -150,7 +150,7 @@ proc add_name_entry(cc, entry_list, sage_name, prefix):
     push(entry_list, entry)
     return entry
 
-proc add_proc_entry(cc, sage_name, param_count):
+proc add_proc_entry(cc, sage_name, param_count, param_defaults):
     let existing = find_proc_entry(cc.procs, sage_name)
     if existing != nil:
         return existing
@@ -158,6 +158,7 @@ proc add_proc_entry(cc, sage_name, param_count):
     entry["sage_name"] = sage_name
     entry["c_name"] = make_unique_name(cc, "sage_fn", sage_name)
     entry["param_count"] = param_count
+    entry["param_defaults"] = param_defaults
     push(cc.procs, entry)
     return entry
 
@@ -230,6 +231,13 @@ proc collect_global_lets(cc, stmt):
         if t == 105:
             # STMT_WHILE
             collect_global_lets(cc, current.body)
+        if t == 122:
+            # STMT_COMPTIME: constants declared inside comptime blocks are
+            # globals like any other.
+            if current.body != nil and current.body.type == 104:
+                collect_global_lets(cc, current.body.statements)
+            else:
+                collect_global_lets(cc, current.body)
         if t == 107:
             # STMT_FOR
             let var_name = current.variable.text
@@ -252,7 +260,7 @@ proc collect_top_level_symbols(cc, program):
     while stmt != nil:
         if stmt.type == 106:
             # STMT_PROC
-            add_proc_entry(cc, stmt.name.text, stmt.param_count)
+            add_proc_entry(cc, stmt.name.text, stmt.param_count, stmt.param_defaults)
         if stmt.type == 111:
             # STMT_CLASS
             let parent = nil
@@ -348,6 +356,14 @@ proc cc_emit_binary_expr(cc, expr):
     # Unary bitwise NOT
     if op_type == TOKEN_TILDE:
         return "sage_bit_not(" + left + ")"
+    # Short-circuit: emit inline C logical operators so the right operand is
+    # only evaluated when the left does not decide the result — mirroring the
+    # interpreter and the C host backend. sage_and()/sage_or() as function
+    # calls would evaluate both sides unconditionally.
+    if op_type == TOKEN_AND:
+        return "sage_bool(sage_truthy(" + left + ") && sage_truthy(" + cc_emit_expr(cc, expr.right) + "))"
+    if op_type == TOKEN_OR:
+        return "sage_bool(sage_truthy(" + left + ") || sage_truthy(" + cc_emit_expr(cc, expr.right) + "))"
     let right = cc_emit_expr(cc, expr.right)
     let helper = nil
     if op_type == TOKEN_PLUS:
@@ -605,6 +621,68 @@ proc cc_emit_call_expr(cc, call_expr):
             return "sage_arch_fn()"
         cc.failed = true
         return "sage_nil()"
+    if name == "type":
+        if argc == 1:
+            return "sage_type_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "indexof":
+        if argc == 2:
+            return "sage_indexof_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ", " + cc_emit_expr(cc, call_expr.args[1]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "contains":
+        if argc == 2:
+            let a0 = cc_emit_expr(cc, call_expr.args[0])
+            let a1 = cc_emit_expr(cc, call_expr.args[1])
+            return "sage_str_contains(" + a0 + ", " + a1 + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "chr":
+        if argc == 1:
+            return "sage_chr_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "ord":
+        if argc == 1:
+            return "sage_ord_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "int":
+        if argc == 1:
+            return "sage_int_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "bytes":
+        if argc == 1:
+            return "sage_bytes_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "bytes_set":
+        if argc == 3:
+            return "sage_bytes_set_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ", " + cc_emit_expr(cc, call_expr.args[1]) + ", " + cc_emit_expr(cc, call_expr.args[2]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "bytes_get":
+        if argc == 2:
+            return "sage_bytes_get_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ", " + cc_emit_expr(cc, call_expr.args[1]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "bytes_len":
+        if argc == 1:
+            return "sage_bytes_len_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "bytes_to_string":
+        if argc == 1:
+            return "sage_bytes_to_string_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "bytes_push":
+        if argc == 2:
+            return "sage_bytes_push_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ", " + cc_emit_expr(cc, call_expr.args[1]) + ")"
+        cc.failed = true
+        return "sage_nil()"
     # Class constructor
     let cls = find_class_info(cc.classes, name)
     if cls != nil:
@@ -637,6 +715,23 @@ proc cc_emit_call_expr(cc, call_expr):
         if i > 0:
             push(parts, ", ")
         push(parts, cc_emit_expr(cc, call_expr.args[i]))
+    # Fill missing trailing arguments from declared parameter defaults.
+    let pcount = proc_entry["param_count"]
+    let pdefaults = proc_entry["param_defaults"]
+    let fi = argc
+    while fi < pcount:
+        if pdefaults == nil or fi >= len(pdefaults) or pdefaults[fi] == nil:
+            break
+        push(parts, ", ")
+        push(parts, cc_emit_expr(cc, pdefaults[fi]))
+        fi = fi + 1
+    while fi < pcount:
+        # No default available; keep arity correct with nil (runtime will
+        # surface the same value the interpreter would have left unset).
+        if fi > 0:
+            push(parts, ", ")
+        push(parts, "sage_nil()")
+        fi = fi + 1
     push(parts, ")")
     return join(parts, "")
 
@@ -702,6 +797,9 @@ proc cc_emit_expr(cc, expr):
     if t == 11:
         # EXPR_SLICE
         return cc_emit_slice_expr(cc, expr)
+    if t == 17:
+        # EXPR_COMPTIME: fold by emitting the inner expression.
+        return cc_emit_expr(cc, expr.expression)
     if t == 13:
         # EXPR_SET
         return cc_emit_set_expr(cc, expr)
@@ -755,6 +853,20 @@ proc cc_emit_stmt(cc, stmt):
         # STMT_EXPRESSION
         let e = cc_emit_expr(cc, stmt.expression)
         cc_line(cc, "(void)" + e + ";")
+        return
+    if t == 122:
+        # STMT_COMPTIME: constants evaluate identically at run time for the
+        # emitted subset; register body bindings as globals, then emit the
+        # body as ordinary statements (body may be list or block).
+        let cbody = stmt.body
+        collect_global_lets(cc, cbody)
+        if cbody != nil and cbody.type == 104:
+            cc_emit_stmt_list(cc, cbody.statements)
+            return
+        let cur = cbody
+        while cur != nil:
+            cc_emit_stmt(cc, cur)
+            cur = cur.next
         return
     if t == 102:
         # STMT_LET
@@ -835,8 +947,17 @@ proc cc_emit_stmt(cc, stmt):
         cc_line(cc, "int _len = (int)strlen(" + iter_var + ".as.string);")
         cc_line(cc, "for (int " + idx_var + " = 0; " + idx_var + " < _len; " + idx_var + "++) {")
         cc.indent = cc.indent + 1
-        cc_line(cc, "char _ch[2] = {" + iter_var + ".as.string[" + idx_var + "], " + BS + "0" + "};")
+        cc_line(cc, "char _ch[2] = {" + iter_var + ".as.string[" + idx_var + "], '" + BS + "0'};")
         cc_line(cc, "sage_define_slot(&" + slot + ", sage_string(sage_dup_string(_ch)));")
+        cc_emit_embedded_block(cc, stmt.body)
+        cc.indent = cc.indent - 1
+        cc_line(cc, "}")
+        cc.indent = cc.indent - 1
+        cc_line(cc, "} else if (" + iter_var + ".type == SAGE_TAG_DICT) {")
+        cc.indent = cc.indent + 1
+        cc_line(cc, "for (int " + idx_var + " = 0; " + idx_var + " < " + iter_var + ".as.dict->count; " + idx_var + "++) {")
+        cc.indent = cc.indent + 1
+        cc_line(cc, "sage_define_slot(&" + slot + ", sage_string(sage_dup_string(" + iter_var + ".as.dict->keys[" + idx_var + "])));")
         cc_emit_embedded_block(cc, stmt.body)
         cc.indent = cc.indent - 1
         cc_line(cc, "}")
@@ -1210,6 +1331,7 @@ proc emit_runtime_prelude(cc):
     push(o, "    if (collection.type == SAGE_TAG_STRING && index.type == SAGE_TAG_NUMBER) {" + NL)
     push(o, "        int idx = (int)index.as.number;" + NL)
     push(o, "        int len = (int)strlen(collection.as.string);" + NL)
+    push(o, "        if (idx < 0) idx = len + idx;" + NL)
     push(o, "        if (idx < 0 || idx >= len) return sage_nil();" + NL)
     push(o, "        char buf[2] = {collection.as.string[idx], '" + bs0 + "'};" + NL)
     push(o, "        return sage_string(sage_dup_string(buf));" + NL)
@@ -1230,6 +1352,20 @@ proc emit_runtime_prelude(cc):
     push(o, NL)
     # slice, push, pop, range
     push(o, "static SageValue sage_slice(SageValue array, SageValue start, SageValue end) {" + NL)
+    push(o, "    if (array.type == SAGE_TAG_STRING) {" + NL)
+    push(o, "        int len = (int)strlen(array.as.string);" + NL)
+    push(o, "        int sIdx = (start.type == SAGE_TAG_NUMBER) ? (int)start.as.number : 0;" + NL)
+    push(o, "        int eIdx = (end.type == SAGE_TAG_NUMBER) ? (int)end.as.number : len;" + NL)
+    push(o, "        if (sIdx < 0) sIdx = len + sIdx;" + NL)
+    push(o, "        if (eIdx < 0) eIdx = len + eIdx;" + NL)
+    push(o, "        if (sIdx < 0) sIdx = 0;" + NL)
+    push(o, "        if (eIdx > len) eIdx = len;" + NL)
+    push(o, "        if (sIdx >= eIdx) return sage_string(sage_dup_string(\"\"));" + NL)
+    push(o, "        char* result = (char*)malloc((size_t)(eIdx - sIdx) + 1);" + NL)
+    push(o, "        memcpy(result, array.as.string + sIdx, (size_t)(eIdx - sIdx));" + NL)
+    push(o, "        result[eIdx - sIdx] = '\\0';" + NL)
+    push(o, "        return sage_string(result);" + NL)
+    push(o, "    }" + NL)
     push(o, "    if (array.type != SAGE_TAG_ARRAY) return sage_nil();" + NL)
     push(o, "    int start_index = 0;" + NL)
     push(o, "    int end_index = array.as.array->count;" + NL)
@@ -1272,6 +1408,63 @@ proc emit_runtime_prelude(cc):
     push(o, "}" + NL)
     push(o, NL)
     # Arithmetic and comparison operators
+
+    push(o, "static const char* sage_type_name_of(SageValue v) {" + NL)
+    push(o, "    switch (v.type) {" + NL)
+    push(o, "        case SAGE_TAG_NIL: return \"nil\";" + NL)
+    push(o, "        case SAGE_TAG_BOOL: return \"bool\";" + NL)
+    push(o, "        case SAGE_TAG_NUMBER: return \"number\";" + NL)
+    push(o, "        case SAGE_TAG_STRING: return \"string\";" + NL)
+    push(o, "        case SAGE_TAG_ARRAY: return \"array\";" + NL)
+    push(o, "        case SAGE_TAG_DICT: return \"dict\";" + NL)
+    push(o, "        case SAGE_TAG_TUPLE: return \"tuple\";" + NL)
+    push(o, "        default: return \"unknown\";" + NL)
+    push(o, "    }" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_type_fn(SageValue v) { return sage_string(sage_dup_string(sage_type_name_of(v))); }" + NL)
+    push(o, "static SageValue sage_indexof_fn(SageValue hay, SageValue needle) {" + NL)
+    push(o, "    if (hay.type != SAGE_TAG_STRING || needle.type != SAGE_TAG_STRING) return sage_number(-1);" + NL)
+    push(o, "    const char* pos = strstr(hay.as.string, needle.as.string);" + NL)
+    push(o, "    if (pos == NULL) return sage_number(-1);" + NL)
+    push(o, "    return sage_number((double)(pos - hay.as.string));" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_str_contains(SageValue hay, SageValue needle) {" + NL)
+    push(o, "    if (hay.type != SAGE_TAG_STRING || needle.type != SAGE_TAG_STRING) return sage_bool(0);" + NL)
+    push(o, "    return sage_bool(strstr(hay.as.string, needle.as.string) != NULL);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_chr_fn(SageValue code) {" + NL)
+    push(o, "    char buf[2] = { (char)((int)code.as.number), '\\0' };" + NL)
+    push(o, "    return sage_string(sage_dup_string(buf));" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_ord_fn(SageValue s) {" + NL)
+    push(o, "    if (s.type != SAGE_TAG_STRING || strlen(s.as.string) == 0) return sage_nil();" + NL)
+    push(o, "    return sage_number((double)(unsigned char)s.as.string[0]);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_int_fn(SageValue v) {" + NL)
+    push(o, "    if (v.type == SAGE_TAG_NUMBER) return sage_number((double)(long long)v.as.number);" + NL)
+    push(o, "    if (v.type == SAGE_TAG_STRING) return sage_number((double)strtoll(v.as.string, NULL, 10));" + NL)
+    push(o, "    return sage_number(0);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_bytes_fn(SageValue n) {" + NL)
+    push(o, "    int count = (int)n.as.number;" + NL)
+    push(o, "    SageValue out = sage_array();" + NL)
+    push(o, "    sage_array_reserve(out.as.array, count < 0 ? 0 : count);" + NL)
+    push(o, "    for (int i = 0; i < count; i++) sage_array_push_raw(out.as.array, sage_number(0));" + NL)
+    push(o, "    return out;" + NL)
+    push(o, "}" + NL)
+    push(o, "static void sage_bytes_set_fn(SageValue b, SageValue i, SageValue v) { sage_index_set(b, i, v); }" + NL)
+    push(o, "static SageValue sage_bytes_get_fn(SageValue b, SageValue i) { return sage_index(b, i); }" + NL)
+    push(o, "static SageValue sage_bytes_len_fn(SageValue b) { return sage_len(b); }" + NL)
+    push(o, "static SageValue sage_bytes_to_string_fn(SageValue b) {" + NL)
+    push(o, "    if (b.type != SAGE_TAG_ARRAY) return sage_string(sage_dup_string(\"\"));" + NL)
+    push(o, "    int n = b.as.array->count;" + NL)
+    push(o, "    char* result = (char*)malloc((size_t)n + 1);" + NL)
+    push(o, "    for (int i = 0; i < n; i++) result[i] = (char)(int)b.as.array->elements[i].as.number;" + NL)
+    push(o, "    result[n] = '\\0';" + NL)
+    push(o, "    return sage_string(result);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_bytes_push_fn(SageValue b, SageValue v) { sage_array_push_raw(b.as.array, v); return b; }" + NL)
+    push(o, NL)
     push(o, "static SageValue sage_add(SageValue left, SageValue right) {" + NL)
     push(o, "    if (left.type == SAGE_TAG_NUMBER && right.type == SAGE_TAG_NUMBER) {" + NL)
     push(o, "        return sage_number(left.as.number + right.as.number);" + NL)
@@ -1284,6 +1477,12 @@ proc emit_runtime_prelude(cc):
     push(o, "        memcpy(result, left.as.string, len1);" + NL)
     push(o, "        memcpy(result + len1, right.as.string, len2 + 1);" + NL)
     push(o, "        return sage_string(result);" + NL)
+    push(o, "    }" + NL)
+    push(o, "    if (left.type == SAGE_TAG_ARRAY && right.type == SAGE_TAG_ARRAY) {" + NL)
+    push(o, "        SageValue out = sage_array();" + NL)
+    push(o, "        for (int i = 0; i < left.as.array->count; i++) sage_array_push_raw(out.as.array, left.as.array->elements[i]);" + NL)
+    push(o, "        for (int i = 0; i < right.as.array->count; i++) sage_array_push_raw(out.as.array, right.as.array->elements[i]);" + NL)
+    push(o, "        return out;" + NL)
     push(o, "    }" + NL)
     push(o, "    sage_fail(" + DQ + "Runtime Error: Operands must be numbers or strings." + DQ + ");" + NL)
     push(o, "    return sage_nil();" + NL)
@@ -1301,12 +1500,12 @@ proc emit_runtime_prelude(cc):
     push(o, "}" + NL)
     push(o, "static SageValue sage_div(SageValue left, SageValue right) {" + NL)
     push(o, "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) sage_fail(" + num_err + ");" + NL)
-    push(o, "    if (right.as.number == 0) return sage_nil();" + NL)
+    push(o, "    if (right.as.number == 0) { fprintf(stderr, \"Runtime Error: Division by zero.\\n\"); return sage_nil(); }" + NL)
     push(o, "    return sage_number(left.as.number / right.as.number);" + NL)
     push(o, "}" + NL)
     push(o, "static SageValue sage_mod(SageValue left, SageValue right) {" + NL)
     push(o, "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) sage_fail(" + num_err + ");" + NL)
-    push(o, "    if (right.as.number == 0) return sage_nil();" + NL)
+    push(o, "    if (right.as.number == 0) { fprintf(stderr, \"Runtime Error: Modulo by zero.\\n\"); return sage_nil(); }" + NL)
     push(o, "    return sage_number(fmod(left.as.number, right.as.number));" + NL)
     push(o, "}" + NL)
     # Comparison

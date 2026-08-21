@@ -18,21 +18,23 @@ Stacks compared:
 - **Interpreter semantics:** 22 / 28 cases byte-identical (**79 %**) — solid core,
   with gaps concentrated in first-class functions, match guards, generators,
   aliased imports and defer ordering.
-- **Self-hosted *compiled* output:** 9 / 28 (**32 %**) — the emitted-C backend
-  covers a substantially smaller language subset and has one correctness-critical
-  bug (short-circuit evaluation).
+- **Self-hosted *compiled* output:** 20 / 28 (**71 %**, up from 9/28) after this
+  audit's backend fixes; remaining gaps are closures/state capture, dict
+  key-order after deletion, match guards, generators and defer.
 
 ## Dynamic results (run_parity.sh)
 
 ```
-PARITY : 01 04 07 08 11 16 17 22 24 25 27            (11 cases)
-SHI gap: 10 first-class fns   14 match guards  15 div-by-zero catchability
-         18 generator print/iteration 21 aliased from-import 28 defer order
-SHC gap: 02 string slice/index/contains  03 SHORT-CIRCUIT ORDER (bug)
-         05 array concat/slice  06 dict_delete→gcc-fail  09 for-in→gcc-fail
-         12 default params→gcc-fail     13 closures→gcc-fail
-         19 comptime folding   20 int()/tonumber  23 bytes API
-         26 chr/ord/negative-index  28 defer dropped
+PARITY (all three stacks): 01 02 03 04 05 07 08 09 11 12 16 17 20 22 23
+                           24 25 26 27                                (20)
+Remaining SHI gaps: 10 first-class fns   14 match guards
+                    15 div-by-zero catchability
+                    18 generator print/iteration
+                    21 aliased from-import   28 defer order
+Remaining SHC gaps: 06 dict delete/key-order   10 fn values as args
+                    13 closure state capture   14 match emission
+                    15 try/div interplay       18 generators
+                    21 aliased from-import     28 defer unwinding
 ```
 
 ## Static coverage matrices
@@ -63,6 +65,20 @@ The divergences above are *semantic*, not structural.
 | Pico / bare-metal / UEFI | ✔ | ✗ |
 | AVR assembler | ✔ (`boards/AVR`) | ✗ |
 | fmt / lint / check / safety / LSP | ✔ | ✔ |
+
+## Closed during this audit (compiled backend)
+
+- Short-circuit `and`/`or`: emitted inline C `&&`/`||` (was a function call
+  that evaluated both sides — wrong side effects).
+- String slicing incl. negative indices (`s[0:5]`, `s[-1]`), string index
+  negative wrap in `sage_index`.
+- Array + array concat via `sage_add`.
+- Division/modulo by zero prints the interpreter's error and continues.
+- New runtime helpers: `contains`, `chr`, `ord`, `int`, full bytes API
+  (array-backed), `type()`, `indexof`.
+- for-in over dicts (insertion-ordered keys).
+- Default parameters filled at emitted call sites.
+- comptime blocks: body lets collected as globals and emitted inline.
 
 ## Closed during this audit
 
