@@ -1112,9 +1112,23 @@ static void emit_asm_vinst_x86_64(FILE* out, VInst* v) {
             break;
         case VINST_CALL_BUILTIN:
             fprintf(out, "  # call builtin %s\n", v->func_name);
+            // Marshal up to 4 SageValue args into SysV integer regs:
+            // arg0 rdi:rsi, arg1 rdx:rcx, arg2 r8:r9, arg3 r10 (+stack unused)
             if (v->call_arg_count >= 1) {
                 fprintf(out, "  movq %d(%%rbp), %%rdi\n", -(v->call_args[0] + 1) * 16);
                 fprintf(out, "  movq %d(%%rbp), %%rsi\n", -(v->call_args[0] + 1) * 16 + 8);
+            }
+            if (v->call_arg_count >= 2) {
+                fprintf(out, "  movq %d(%%rbp), %%rdx\n", -(v->call_args[1] + 1) * 16);
+                fprintf(out, "  movq %d(%%rbp), %%rcx\n", -(v->call_args[1] + 1) * 16 + 8);
+            }
+            if (v->call_arg_count >= 3) {
+                fprintf(out, "  movq %d(%%rbp), %%r8\n", -(v->call_args[2] + 1) * 16);
+                fprintf(out, "  movq %d(%%rbp), %%r9\n", -(v->call_args[2] + 1) * 16 + 8);
+            }
+            if (v->call_arg_count >= 4) {
+                fprintf(out, "  movq %d(%%rbp), %%r10\n", -(v->call_args[3] + 1) * 16);
+                fprintf(out, "  movq %d(%%rbp), %%r11\n", -(v->call_args[3] + 1) * 16 + 8);
             }
             fprintf(out, "  call %s\n", v->func_name);
             fprintf(out, "  movq %%rax, %d(%%rbp)\n", -(v->dest + 1) * 16);
