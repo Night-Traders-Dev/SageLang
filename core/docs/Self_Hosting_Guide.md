@@ -27,7 +27,7 @@ make test-selfhost
 | `src/sage/parser.sage` | ~700 | Recursive descent parser with 12 precedence levels |
 | `src/sage/interpreter.sage` | ~1050 | Tree-walking evaluator with dict-based value representation |
 | `src/sage/sage.sage` | — | Bootstrap entry point — runs target `.sage` files |
-| `src/sage/typecheck.sage` | 228 | **Type checker** — tracks inferred and declared types (type annotations `let x: Int`, `proc f() : Int`, `proc f(x: Int)`). Supports `TypeMap.declared` dict and `annotation_to_kind` mapping. Infrastructure for let/return/param type validation. |
+| `src/sage/typecheck.sage` | 228 | **Type checker** — tracks inferred and declared types (type annotations `let x: Int = ...`, `proc f(x: Int, y: Int): Int`). Supports `TypeMap.declared` dict and `annotation_to_kind` mapping. Infrastructure for let/return/param type validation. |
 
 ## Bootstrap Coverage
 
@@ -35,9 +35,9 @@ Arithmetic, variables, control flow, functions, recursion, closures, classes,
 inheritance, arrays, dicts, strings, try/catch, break/continue, bitwise
 operators (`~`), and module imports with loop iteration limits.
 
-**Type annotations**: `let x: Int = ...`, `proc f() : Int`, `proc f(x: Int)` — type
+**Type annotations**: `let x: Int = ...`, `proc f(x: Int, y: Int): Int` — type
 declared/inferred tracking via `TypeMap.declared` dict and `annotation_to_kind`
-mapping. **Fully implemented in parser and typecheck** (see parser.sage:45-54,
+mapping (v4.1.14+). **Fully implemented in parser and typecheck** (see parser.sage:45-54,
 typecheck.sage:147-165). Type validation at let-binding, return statements,
 and proc parameters.
 

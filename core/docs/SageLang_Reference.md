@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.1.9 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.1.14 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -133,8 +133,8 @@ proc greet(name):
 proc add(x, y):
     return x + y
 
-# With type annotations
-proc multiply(a: Int, b: Int) -> Int:
+# With type annotations (supports -> or : return type syntax)
+proc multiply(a: Int, b: Int): Int:
     return a * b
 
 # Default parameters

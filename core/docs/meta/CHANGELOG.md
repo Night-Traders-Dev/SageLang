@@ -7,6 +7,32 @@ v3.0.0 stability baseline (2026-03-01) are numbered `0.x` by development phase.
 The `sagemake` build tool excludes this file (and `ROADMAP.md`) from version
 propagation so the per-entry version history is never flattened again.
 
+## [4.1.14] - 2026-08-20
+
+### Self-Hosted Compiler Parity: Proc Type Annotations
+- **Procedure Annotations**: Added full support for procedure parameter and return type annotations in the self-hosted compiler (`core/src/sage/parser.sage`, `core/src/sage/ast.sage`, `core/src/sage/typecheck.sage`). Supports `proc f(x: Int, y: Int): Int` with declared/inferred type tracking via `TypeMap.declared` dict and `annotation_to_kind` mapping.
+
+## [4.1.13] - 2026-08-19
+
+### Self-Hosted Compiler Parity: Type Annotations
+- **Type Annotations**: Completed type annotation parsing support in the self-hosted compiler port (`core/src/sage/parser.sage`, `core/src/sage/ast.sage`, `core/src/sage/typecheck.sage`). Full support for `let x: Int = ...`, `proc f() : Int`, and `proc f(x: Int)` with declared/inferred type tracking.
+- **Safety & Constfold**: Safety checks enhanced with `check_sync`, `@safe` doc tracking, and `EXPR_PROC` body analysis. Constant folding improved with inf/NaN guard and 64KB string concat cap.
+
+## [4.1.12] - 2026-08-18
+
+### Self-Hosted Compiler Parity: Type Annotations Infrastructure
+- **Typecheck Infrastructure**: Added type annotation infrastructure to the self-hosted Sage compiler port (`core/src/sage/typecheck.sage`). Supports `let x: Int = ...`, `proc f() : Int`, and `proc f(x: Int)` with declared/inferred type tracking via `TypeMap.declared` dict and `annotation_to_kind` mapping.
+
+## [4.1.11] - 2026-08-17
+
+### String Interner & Memory Leak Fix
+- **AOT Runtime Interning**: Fixed unbounded memory growth in long-running RISC-V programs by adding a content-keyed string interner (`sage_string_const`) to the AOT runtime in `core/src/c/compiler.c`. Compile-time constant strings (literals and property-access keys like "pc"/"bytecode"/"trace") are now interned and rooted from the GC.
+
+## [4.1.10] - 2026-08-16
+
+### Veritas Quality Audit & Submodule Stabilization
+- **Quality Audit**: Audited standard test suites, resolved duplicate procedure definition in `crypto/hash.sage`, fixed invalid trailing `parse_rrs` calls in `net/dns.sage`, implemented missing VGA text mode rendering primitives (`clear`, `puts`, `draw_progress_bar`) in `metal/vga.sage`, and updated expected wallet hash in `repro_nft_segfault.sage`.
+
 ## [4.1.9] - 2026-08-15
 
 ### Veritas Quality Audit & Submodule Stabilization
