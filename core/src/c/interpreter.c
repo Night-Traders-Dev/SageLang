@@ -182,6 +182,84 @@ int interpreter_get_stack_depth(void) {
     return g_recursion_depth;
 }
 
+// ============================================================================
+// True C-stack proximity guard.
+//
+// g_recursion_depth counts interpret() entries only; eval_expr() recursion and
+// per-frame size variance (100x between a flat statement walk and deep nested
+// expression/call evaluation) are invisible to it, so a high
+// MAX_RECURSION_DEPTH can segfault long before the counter trips. Track the
+// origin of the main thread stack once and refuse to recurse once within the
+// safety margin of the real OS stack limit.
+// ============================================================================
+#if defined(__unix__) || defined(__unix) || defined(__linux__) || defined(__APPLE__) || defined(__MACH__)
+#include <sys/resource.h>
+#define SAGE_STACK_GUARD_HAS_RLIMIT 1
+#endif
+
+static char* g_stack_origin = NULL;
+static __thread char* t_stack_origin = NULL;
+
+// Registers the calling thread's stack origin (call near the top of main()).
+// Also records the global default so the first interpreter entry on this
+// thread reuses it; other threads self-register their own origin lazily.
+void sage_set_stack_origin(char* origin) {
+    g_stack_origin = origin;
+    t_stack_origin = origin;
+}
+
+// Raise the soft stack limit toward the hard limit so deeply recursive work
+// (self-hosted double interpretation, deep import chains) has headroom. The
+// main thread stack grows on demand gated by the soft limit, so this takes
+// effect immediately without re-execing. The stack_danger() budget below
+// recomputes from the raised value, keeping overflow protection intact.
+void sage_raise_stack_limit(void) {
+#ifdef SAGE_STACK_GUARD_HAS_RLIMIT
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_STACK, &rl) != 0) return;
+    if (rl.rlim_max == RLIM_INFINITY && rl.rlim_cur < 512ULL * 1024 * 1024) {
+        rl.rlim_cur = 512ULL * 1024 * 1024;
+        setrlimit(RLIMIT_STACK, &rl);
+    }
+#endif
+}
+
+// Per-thread stack origin. Threads that run Sage code without an explicit
+// registration adopt their own origin on first interpreter entry (the shallow
+// possible frame), so worker threads neither false-positive nor bypass
+// protection regardless of where the OS placed their stacks.
+
+static long stack_guard_budget(void) {
+    static long cached = 0;
+    if (cached != 0) return cached;
+#ifdef SAGE_STACK_GUARD_HAS_RLIMIT
+    struct rlimit rl;
+    long limit = 8 * 1024 * 1024;
+    if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY) {
+        limit = (long)rl.rlim_cur;
+    } else if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_max != RLIM_INFINITY) {
+        limit = (long)rl.rlim_max;
+    }
+    long margin = limit / 4;
+    if (margin < 1 * 1024 * 1024) margin = 1 * 1024 * 1024;
+    cached = limit - margin;
+#else
+    cached = 512 * 1024;  // Bare-metal: conservative fixed budget
+#endif
+    if (cached < 256 * 1024) cached = 256 * 1024;
+    return cached;
+}
+
+// Returns 1 when the current call is within the safety margin of the stack
+// limit. Uses this thread's own origin; a thread without one adopts its
+// current frame as origin on first use (shallowest possible), which keeps the
+// check correct for worker threads regardless of stack placement.
+static int stack_danger(void) {
+    char probe;
+    if (t_stack_origin == NULL) t_stack_origin = &probe;
+    return (t_stack_origin - &probe) > stack_guard_budget();
+}
+
 static int stmt_contains_target(Stmt* stmt, Stmt* target) {
     if (stmt == NULL || target == NULL) return 0;
     if (stmt == target) return 1;
@@ -2876,6 +2954,10 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
 // boundaries (EXPR_CALL), not on every expression. This eliminates 2
 // atomic increments per expression evaluation in the critical path.
 static ExecResult eval_expr(Expr* expr, Env* env) {
+    if (stack_danger()) {
+        fprintf(stderr, "Runtime Error: Maximum recursion depth exceeded (stack).\n");
+        return EVAL_EXCEPTION(val_exception("Maximum recursion depth exceeded"));
+    }
     switch (expr->type) {
         case EXPR_NUMBER: return EVAL_RESULT(val_number(expr->as.number.value));
         case EXPR_STRING: return EVAL_RESULT(val_string(expr->as.string.value));
@@ -3737,6 +3819,10 @@ jitted:
 }
 
 ExecResult interpret(Stmt* stmt, Env* env) {
+    if (stack_danger()) {
+        fprintf(stderr, "Runtime Error: Maximum recursion depth exceeded (stack).\n");
+        return EVAL_EXCEPTION(val_exception("Maximum recursion depth exceeded"));
+    }
     if (++g_recursion_depth > MAX_RECURSION_DEPTH) {
         g_recursion_depth--;
         fprintf(stderr, "Runtime Error: Maximum recursion depth exceeded (%d).\n", MAX_RECURSION_DEPTH);

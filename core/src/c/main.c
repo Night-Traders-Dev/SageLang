@@ -2371,6 +2371,8 @@ static Stmt* flatten_imports(Stmt* ast) {
 }
 
 int main(int argc, const char* argv[]) {
+    sage_raise_stack_limit();
+    sage_set_stack_origin((char*)&argc);
     SageRuntimeMode runtime_mode = SAGE_RUNTIME_AUTO;
     const char** cmd_argv = argv;
     int cmd_argc = argc;

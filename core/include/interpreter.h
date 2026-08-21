@@ -23,5 +23,7 @@ typedef struct {
 ExecResult interpret(Stmt* stmt, Env* env);
 void init_stdlib(Env* env);
 int interpreter_get_stack_depth(void);
+void sage_set_stack_origin(char* origin);
+void sage_raise_stack_limit(void);
 
 #endif
