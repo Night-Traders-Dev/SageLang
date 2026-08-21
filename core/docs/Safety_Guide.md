@@ -55,7 +55,7 @@ end
 SageLang enforces strict resource limits to prevent Denial of Service (DoS) attacks:
 
 - **SAGE_MAX_READ_SIZE**: 100MB. This limit is checked by `io.readfile`, `io.readbytes`, `tcp.recv`, and other I/O operations to prevent memory exhaustion (CWE-400).
-- **Recursion/Loop Limits**: Hard limits on recursion depth and loop iterations protect against infinite execution.
+- **Recursion/Loop Limits**: Hard limits on recursion depth and loop iterations protect against infinite execution. Since v4.1.16 a stack-proximity guard additionally tracks real C-stack consumption per thread (budget = 75% of `RLIMIT_STACK`), so deep recursion fails with a catchable exception before the OS stack overflows — regardless of per-frame size.
 
 ## Enforcement Matrix
 

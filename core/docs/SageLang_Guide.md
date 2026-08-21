@@ -1814,11 +1814,18 @@ SageLang enforces several compile-time and runtime limits to prevent crashes fro
 
 | Limit | Constant | Value | Location | Behavior on Violation |
 |-------|----------|-------|----------|----------------------|
-| Recursion depth | `MAX_RECURSION_DEPTH` | 1000000 | interpreter.c | Catchable exception |
+| Recursion depth (logical) | `MAX_RECURSION_DEPTH` | 12000 | interpreter.c | Catchable exception |
+| Recursion depth (real stack) | `stack_danger()` | 75% of `RLIMIT_STACK` | interpreter.c | Catchable exception — fires before the OS stack is exhausted regardless of frame size |
 | Parser nesting | `MAX_PARSER_DEPTH` | 100000 | parser.c | Parse error |
 | Loop iterations | `MAX_LOOP_ITERATIONS` | 1,000,000 | interpreter.c | Catchable exception |
 | String literal length | `MAX_STRING_LENGTH` | 4096 | lexer.c | Parse error |
 | Function arguments | Stack array | 255 | interpreter.c | Runtime error |
+
+The stack-proximity guard (v4.1.16) tracks a per-thread stack origin and
+refuses recursion once within the safety margin of the real OS limit, so deep
+or fat-framed call chains fail with a catchable exception instead of SIGSEGV.
+At startup the runtime also raises the soft stack limit to 512 MB when the
+hard limit permits, giving self-hosted double-interpretation chains headroom.
 
 **Null function guards**: The interpreter checks for null pointers in both `VAL_FUNCTION` and `VAL_NATIVE` call paths before dispatch. A null callee produces a runtime error and returns `nil`.
 
@@ -2553,7 +2560,7 @@ For self-hosted LLVM codegen specifically (`src/sage/llvm_backend.sage`), `from 
 
 **Not implemented**: true coroutine-based generators (uses eager collection instead), actual async threading in self-hosted path, GPU module (uses host `import gpu` directly).
 
-**Safety**: while loop iteration limit (1M), recursion depth limit (500), rich error messages with source context via `errors.sage`.
+**Safety**: while loop iteration limit (1M), recursion depth limit (50000 in the self-hosted interpreter, backed by the host's stack-proximity guard), rich error messages with source context via `errors.sage`.
 
 ### 13.5 Test Suite
 

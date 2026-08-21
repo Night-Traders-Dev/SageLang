@@ -3038,7 +3038,7 @@ The C interpreter (`src/c/interpreter.c`, `src/c/env.c`) applies:
 
 1. **Cached name length in EnvNode**: `name_length` field avoids `strlen` during lookup
 2. **`memcmp` with length pre-check**: `env_get`/`env_define`/`env_assign` check `name_length == length` before `memcmp`
-3. **Inlined eval_expr**: recursion depth checked only at `interpret()` boundaries, not per-expression
+3. **Inlined eval_expr**: a stack-proximity guard (`stack_danger()`) checks real stack usage at both `interpret()` and per-expression boundaries, so deep expression nesting fails with a catchable exception before the OS stack is exhausted (v4.1.16)
 4. **For-loop slot caching**: loop variable node pointer cached after first `env_define`, subsequent iterations write directly
 5. **String pointer equality**: `values_equal()` checks `AS_STRING(a) == AS_STRING(b)` before `strcmp`
 
