@@ -25,10 +25,12 @@ proc get_or(dict, key, fallback):
         return dict[key]
     return fallback
 
+## Returns key-value pairs as a list of 2-tuples.
+## Optimization: Uses direct 'for key in dict' iteration to avoid allocating
+## an intermediate array via 'dict_keys(dict)'.
 proc entries(dict):
     let result = []
-    let key_list = dict_keys(dict)
-    for key in key_list:
+    for key in dict:
         push(result, (key, dict[key]))
     return result
 
