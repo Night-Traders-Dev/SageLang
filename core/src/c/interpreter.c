@@ -3271,8 +3271,6 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             }
 
             fprintf(stderr, "Runtime Error: Only instances and modules have properties.\n");
-            fprintf(stderr, "object: "); print_value(object); fprintf(stderr, "\n"); fflush(stdout);
-            fprintf(stderr, "object: "); print_value(object); fprintf(stderr, "\n"); fflush(stdout);
             return EVAL_RESULT(val_nil());
         }
 

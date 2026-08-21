@@ -34,6 +34,7 @@ class CCompiler:
         self.globals = []
         self.procs = []
         self.locals = []
+        self.anon_fns = []
         self.defer_scopes = [[]]
         self.classes = []
         self.modules = []
@@ -408,6 +409,24 @@ proc cc_emit_binary_expr(cc, expr):
         return "sage_nil()"
     return helper + "(" + left + ", " + right + ")"
 
+proc cc_emit_dynamic_call(cc, call_expr):
+    let cv = cc_emit_expr(cc, call_expr.callee)
+    let argc = call_expr.arg_count
+    let parts = []
+    push(parts, "sage_call_function_value(")
+    push(parts, cv)
+    push(parts, ", " + str(argc))
+    if argc == 0:
+        push(parts, ", NULL)")
+    else:
+        push(parts, ", (SageValue[]){")
+        for i in range(argc):
+            if i > 0:
+                push(parts, ", ")
+            push(parts, cc_emit_expr(cc, call_expr.args[i]))
+        push(parts, "})")
+    return join(parts, "")
+
 proc cc_emit_call_expr(cc, call_expr):
     let callee = call_expr.callee
     # Method call: obj.method(args)
@@ -430,9 +449,9 @@ proc cc_emit_call_expr(cc, call_expr):
         push(parts, "})")
         return join(parts, "")
     if callee.type != 5:
-        # Not EXPR_VARIABLE
-        cc.failed = true
-        return "sage_nil()"
+        # Dynamic dispatch: the callee expression evaluates to a function
+        # value (first-class functions).
+        return cc_emit_dynamic_call(cc, call_expr)
     let name = callee.name.text
     let argc = call_expr.arg_count
     # Builtin dispatch
@@ -704,11 +723,23 @@ proc cc_emit_call_expr(cc, call_expr):
                 push(parts, cc_emit_expr(cc, call_expr.args[i]))
             push(parts, "})")
         return join(parts, "")
-    # User-defined function call
+    # User-defined function call (direct, arity-guarded)
     let proc_entry = find_proc_entry(cc.procs, name)
     if proc_entry == nil:
-        cc.failed = true
-        return "sage_nil()"
+        # Unknown name: maybe a slot holding a function value.
+        return cc_emit_dynamic_call(cc, call_expr)
+    # Compile-time arity guard mirroring the C host.
+    let pcount_g = proc_entry["param_count"]
+    let pdl_g = proc_entry["param_defaults"]
+    let req_g = pcount_g
+    let qi2 = 0
+    while qi2 < pcount_g:
+        if qi2 < len(pdl_g) and pdl_g[qi2] != nil:
+            req_g = qi2
+            break
+        qi2 = qi2 + 1
+    if argc < req_g or argc > pcount_g:
+        return "(fprintf(stderr, " + DQ + "Runtime Error: Expected " + str(req_g) + " to " + str(pcount_g) + " arguments but got " + str(argc) + ".\\n" + DQ + "), sage_nil())"
     let parts = []
     push(parts, proc_entry["c_name"])
     push(parts, "(")
@@ -777,6 +808,10 @@ proc cc_emit_expr(cc, expr):
         let name = expr.name.text
         let slot = resolve_slot_name(cc, name)
         if slot == nil:
+            # First-class reference to a named procedure.
+            let pe = find_proc_entry(cc.procs, name)
+            if pe != nil:
+                return "sage_function_value(&sage_fnobj_" + pe["c_name"] + ")"
             cc.failed = true
             return "sage_nil()"
         return "sage_load_slot(&" + slot + ", " + DQ + name + DQ + ")"
@@ -801,6 +836,23 @@ proc cc_emit_expr(cc, expr):
     if t == 17:
         # EXPR_COMPTIME: fold by emitting the inner expression.
         return cc_emit_expr(cc, expr.expression)
+    if t == 18:
+        # EXPR_PROC (anonymous): hoist to a generated top-level function and
+        # yield a first-class function value. Capture-free subset.
+        let uid = cc.next_unique_id
+        cc.next_unique_id = cc.next_unique_id + 1
+        let cname = "sage_anon_fn_" + str(uid)
+        let objname = "sage_anon_obj_" + str(uid)
+        let entry = {}
+        entry["c_name"] = cname
+        entry["fnobj"] = objname
+        entry["label"] = "<anon>"
+        entry["param_count"] = expr.param_count
+        entry["params"] = expr.params
+        entry["body"] = expr.body
+        entry["emitted"] = false
+        push(cc.anon_fns, entry)
+        return "sage_function_value(&" + objname + ")"
     if t == 13:
         # EXPR_SET
         return cc_emit_set_expr(cc, expr)
@@ -1092,9 +1144,11 @@ proc emit_runtime_prelude(cc):
     push(o, "    SAGE_TAG_STRING," + NL)
     push(o, "    SAGE_TAG_ARRAY," + NL)
     push(o, "    SAGE_TAG_DICT," + NL)
-    push(o, "    SAGE_TAG_TUPLE" + NL)
+    push(o, "    SAGE_TAG_TUPLE," + NL)
+    push(o, "    SAGE_TAG_FUNCTION" + NL)
     push(o, "} SageTag;" + NL)
     push(o, NL)
+    push(o, "typedef struct SageFunction SageFunction;" + NL)
     push(o, "struct SageValue {" + NL)
     push(o, "    SageTag type;" + NL)
     push(o, "    union {" + NL)
@@ -1104,8 +1158,40 @@ proc emit_runtime_prelude(cc):
     push(o, "        SageArray* array;" + NL)
     push(o, "        SageDict* dict;" + NL)
     push(o, "        SageTuple* tuple;" + NL)
+    push(o, "        SageFunction* function;" + NL)
     push(o, "    } as;" + NL)
     push(o, "};" + NL)
+    push(o, NL)
+    push(o, "#define SAGE_MAX_FN_ARGS 8" + NL)
+    push(o, "struct SageFunction {" + NL)
+    push(o, "    const char* name;" + NL)
+    push(o, "    int param_count;" + NL)
+    push(o, "    void* fn;" + NL)
+    push(o, "};" + NL)
+    push(o, NL)
+    push(o, "static SageValue sage_function_value(SageFunction* f) {" + NL)
+    push(o, "    SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = f; return v;" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_nil(void);" + NL)
+    push(o, "static SageValue sage_call_function_value(SageValue callee, int argc, SageValue* args) {" + NL)
+    push(o, "    if (callee.type != SAGE_TAG_FUNCTION || callee.as.function == NULL) {" + NL)
+    push(o, "        fprintf(stderr, \"Runtime Error: value is not callable.\\n\");" + NL)
+    push(o, "        return sage_nil();" + NL)
+    push(o, "    }" + NL)
+    push(o, "    SageFunction* sf = callee.as.function;" + NL)
+    push(o, "    if (argc != sf->param_count) {" + NL)
+    push(o, "        fprintf(stderr, \"Runtime Error: Expected %d to %d arguments but got %d.\\n\", sf->param_count, sf->param_count, argc);" + NL)
+    push(o, "        return sage_nil();" + NL)
+    push(o, "    }" + NL)
+    push(o, "    switch (sf->param_count) {" + NL)
+    push(o, "        case 0: return ((SageValue(*)(void))sf->fn)();" + NL)
+    push(o, "        case 1: return ((SageValue(*)(SageValue))sf->fn)(args[0]);" + NL)
+    push(o, "        case 2: return ((SageValue(*)(SageValue, SageValue))sf->fn)(args[0], args[1]);" + NL)
+    push(o, "        case 3: { SageValue a3[3]; for (int i=0;i<3;i++) a3[i]=args[i]; return ((SageValue(*)(SageValue, SageValue, SageValue))sf->fn)(a3[0], a3[1], a3[2]); }" + NL)
+    push(o, "        case 4: { SageValue a4[4]; for (int i=0;i<4;i++) a4[i]=args[i]; return ((SageValue(*)(SageValue, SageValue, SageValue, SageValue))sf->fn)(a4[0], a4[1], a4[2], a4[3]); }" + NL)
+    push(o, "        default: return sage_nil();" + NL)
+    push(o, "    }" + NL)
+    push(o, "}" + NL)
     push(o, NL)
     push(o, "typedef struct {" + NL)
     push(o, "    int defined;" + NL)
@@ -1899,6 +1985,13 @@ proc emit_proc_prototypes(cc):
             push(parts, "SageValue arg" + str(j))
         push(parts, ");" + NL)
         cc_emit(cc, join(parts, ""))
+    # First-class function objects: one per named proc.
+    for i in range(len(cc.procs)):
+        let proc_entry = cc.procs[i]
+        cc_emit(cc, "static SageFunction sage_fnobj_" + proc_entry["c_name"] + " = { " + DQ + proc_entry["sage_name"] + DQ + ", " + str(proc_entry["param_count"]) + ", (void*)" + proc_entry["c_name"] + " };" + NL)
+    for i in range(len(cc.anon_fns)):
+        let af = cc.anon_fns[i]
+        cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
 
 proc emit_method_prototypes(cc):
     for i in range(len(cc.classes)):
@@ -2033,8 +2126,75 @@ proc emit_function_definitions(cc, program):
 
 # ============================================================================
 # Main Function Emission
+proc emit_anon_definition(cc, af):
+    if af["emitted"]:
+        return
+    af["emitted"] = true
+    let out_len = len(cc.output)
+    let prev_failed = cc.failed
+    cc.failed = false
+    let parts = []
+    push(parts, "static SageValue " + af["c_name"] + "(")
+    for i in range(af["param_count"]):
+        if i > 0:
+            push(parts, ", ")
+        push(parts, "SageValue arg" + str(i))
+    push(parts, ");" + NL)
+    cc_emit(cc, join(parts, ""))
+    cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
+    let prev_locals = cc.locals
+    let prev_defers = cc.defer_scopes
+    push(cc.defer_scopes, [])
+    cc.locals = []
+    collect_local_lets(cc, af["body"], cc.locals)
+    let sig = []
+    push(sig, "static SageValue " + af["c_name"] + "(")
+    for i in range(af["param_count"]):
+        if i > 0:
+            push(sig, ", ")
+        push(sig, "SageValue arg" + str(i))
+    push(sig, ") {")
+    cc_emit(cc, join(sig, ""))
+    cc.indent = cc.indent + 1
+    emit_slot_declarations(cc, cc.locals)
+    for i in range(af["param_count"]):
+        let pname = af["params"][i].text
+        let pe2 = find_name_entry(cc.locals, pname)
+        if pe2 != nil:
+            cc_line(cc, "sage_define_slot(&" + pe2["c_name"] + ", arg" + str(i) + ");")
+    if af["body"] != nil and af["body"].type == 104:
+        cc_emit_stmt_list(cc, af["body"].statements)
+    else:
+        cc_emit_stmt_list(cc, af["body"])
+    let scope = cc.defer_scopes[len(cc.defer_scopes) - 1]
+    let si4 = len(scope) - 1
+    while si4 >= 0:
+        cc_emit_stmt(cc, scope[si4])
+        si4 = si4 - 1
+    pop(cc.defer_scopes)
+    cc_line(cc, "return sage_nil();")
+    cc.indent = cc.indent - 1
+    cc_line(cc, "}")
+    cc_blank(cc)
+    if cc.failed:
+        del cc.output[out_len:len(cc.output)]
+        cc_emit(cc, "static SageValue " + af["c_name"] + "() { return sage_nil(); }" + NL)
+        cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
+        cc.failed = prev_failed
+    else:
+        cc.failed = prev_failed
+    cc.defer_scopes = prev_defers
+    cc.locals = prev_locals
+
+proc emit_anon_flush(cc):
+    let i5 = 0
+    while i5 < len(cc.anon_fns):
+        emit_anon_definition(cc, cc.anon_fns[i5])
+        i5 = i5 + 1
+
 # ============================================================================
 
+    emit_anon_flush(cc)
 proc emit_main_function(cc, program):
     cc_line(cc, "int main(void) {")
     cc.indent = cc.indent + 1

@@ -1457,11 +1457,32 @@ proc call_resolved(callee, args, env, callee_expr):
     if callee_type == "function":
         let func_name = callee["name"]
 
+        # Arity check — mirrors the C host exactly: too few (missing
+        # non-defaulted) or too many arguments prints the C-format error to
+        # stderr and yields nil, letting execution continue.
+        let params = callee["params"]
+        let pcount = len(params)
+        let pdl = nil
+        if dict_has(callee, "param_defaults") and callee["param_defaults"] != nil:
+            pdl = callee["param_defaults"]
+        let required2 = pcount
+        let qi = 0
+        while qi < pcount:
+            if qi < len(pdl) and pdl[qi] != nil:
+                required2 = qi
+                break
+            end
+            qi = qi + 1
+        end
+        let na = len(args)
+        if na < required2 or na > pcount:
+            sys.stderr_write("Runtime Error: Expected " + str(required2) + " to " + str(pcount) + " arguments but got " + str(na) + ".\n")
+            return nil
+
         # ---- Profile this call (hybrid JIT phase) ----
         let profile = _profile_call(func_name, args)
 
         let func_env = env_new(callee["closure"])
-        let params = callee["params"]
         let pi = 0
         while pi < len(params):
             if pi < len(args):
@@ -2156,18 +2177,27 @@ proc ccomp_expr(e):
         return proc(env):
             let obj = oc(env)
             if val_tag(obj) == 6:
-                if dict_has(obj, "__interp_type") and obj["__interp_type"] == "instance":
-                    let fields = obj["fields"]
-                    if dict_has(fields, prop_name):
-                        return fields[prop_name]
-                    let found = find_method(obj["class"], prop_name)
-                    if found != nil:
-                        return found
-                    runtime_error(pline, "Undefined property '" + prop_name + "'", "this instance does not have a field or method named '" + prop_name + "'")
+                if dict_has(obj, "__interp_type"):
+                    let it2 = obj["__interp_type"]
+                    if it2 == "instance":
+                        let fields = obj["fields"]
+                        if dict_has(fields, prop_name):
+                            return fields[prop_name]
+                        let found = find_method(obj["class"], prop_name)
+                        if found != nil:
+                            return found
+                        return nil
+                    if it2 == "module":
+                        if dict_has(obj, prop_name):
+                            return obj[prop_name]
+                        sys.stderr_write("Runtime Error: Module '" + obj["name"] + "' has no attribute '" + prop_name + "'.\n")
+                        return nil
                 if dict_has(obj, prop_name):
                     return obj[prop_name]
-                runtime_error(pline, "Undefined property '" + prop_name + "'", nil)
-            runtime_error(pline, "Only instances and dicts have properties", "got value of type '" + type(obj) + "'")
+                sys.stderr_write("Runtime Error: Only instances and modules have properties.\n")
+                return nil
+            sys.stderr_write("Runtime Error: Only instances and modules have properties.\n")
+            return nil
 
     if t == EXPR_INDEX:
         # Fast path: array/string/dict indexing via precompiled operands

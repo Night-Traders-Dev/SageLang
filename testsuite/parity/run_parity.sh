@@ -29,6 +29,11 @@ run_shi()  { ( cd "$ROOT" && timeout 300 "$SAGE" "$SELFHOST_ENTRY" "$1" 2>&1 ) |
 
 run_shc() {
     local case_file="$1" out_c="$WORK/prog.c" out_bin="$WORK/prog"
+    # Cases marked interp-only exercise host/module features the emitted-C
+    # subset cannot represent.
+    if grep -q '^# PARITY: interp-only' "$case_file"; then
+        echo "INTERP_ONLY"; return
+    fi
     if ! (cd "$ROOT" && timeout 300 "$SAGE" "$SELFHOST_ENTRY" \
             --emit-c "$case_file" -o "$out_c" > /dev/null 2>&1) || [ ! -f "$out_c" ]; then
         echo "EMIT_FAIL"; return
@@ -50,6 +55,7 @@ verdict() { # verdict <name> <c_out> <shi_out> <shc_out>
         [ "$c" != "$shi" ] && status="${status}DIFF-SHI "
         case "$shc" in
             EMIT_FAIL|GCC_FAIL) status="${status}SKIP-SHC(${shc%%_FAIL}) " ;;
+            INTERP_ONLY) ;;  # host/module feature: SHI==C is full parity
             *) [ "$c" != "$shc" ] && status="${status}DIFF-SHC " ;;
         esac
         [ -z "$status" ] && status="PARITY"
@@ -63,7 +69,7 @@ verdict() { # verdict <name> <c_out> <shi_out> <shc_out>
         FAILED+=("$name")
         printf '  \033[31m✘ %-34s %s\033[0m\n' "$name" "$status"
         diff <(printf '%s\n' "$c") <(printf '%s\n' "$shi") | head -6 | sed 's/^/      shi | /'
-        case "$shc" in EMIT_FAIL|GCC_FAIL) ;; *)
+        case "$shc" in EMIT_FAIL|GCC_FAIL|INTERP_ONLY) ;; *)
             diff <(printf '%s\n' "$c") <(printf '%s\n' "$shc") | head -6 | sed 's/^/      shc | /'
         esac
     fi
