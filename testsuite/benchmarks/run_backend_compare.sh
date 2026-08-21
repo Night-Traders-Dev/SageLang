@@ -1,10 +1,20 @@
 #!/bin/bash
-## run_backend_compare.sh — Run backend_compare.sage across all native backends
-## Usage: bash benchmarks/run_backend_compare.sh
+## run_backend_compare.sh — Run backend_compare.sage across ALL SageLang backends
 ##
-## Tests: AST interpreter, bytecode VM, C-compiled, LLVM-compiled, native asm
+## Usage: bash testsuite/benchmarks/run_backend_compare.sh
+##
+## Coverage matrix (backend → runtime):
+##   Interpreters : AST, Bytecode VM (in-process), VM image (.svm), Self-Hosted
+##   Compilers    : C (-O0/-O3), LLVM (if llc), AOT, JIT+AOT
+##   Profilers    : JIT profiled run
+##   Native asm   : x86-64 / aarch64 / rv64 / mips — emit + assemble to object
+##                  (hosted native linking is not yet available; see codegen.c)
+##   Transpilers  : Kotlin, Android project, Pico-C (emit-only timing)
+##   Metal        : SGVM binary build + run attempt (honest FAIL if unsupported)
+##
+## Every runnable backend's stdout is checksum-verified against the AST baseline.
 
-set -e
+set -u
 
 SAGE="$(cd "$(dirname "$0")/../../core" && pwd)/sage"
 BENCH="$(dirname "$0")/backend_compare.sage"
@@ -23,127 +33,187 @@ printf "\n${BOLD}  SageLang Cross-Backend Benchmark${RESET}\n"
 printf "  ${DIM}Workload: %s${RESET}\n" "$BENCH"
 printf "  ${DIM}───────────────────────────────────────────────${RESET}\n\n"
 
+# Output files for checksum verification (runnable backends only)
+declare -a RUNNABLE_NAMES=()
+
 run_backend() {
+    # run_backend <name> <run_cmd> [build_cmd]
     local name="$1"
     local cmd="$2"
-    local build_cmd="$3"
+    local build_cmd="${3:-}"
 
-    printf "  ${CYAN}%-24s${RESET}" "$name"
+    printf "  ${CYAN}%-28s${RESET}" "$name"
 
-    # Build phase (if needed)
     if [ -n "$build_cmd" ]; then
-        local build_start=$(date +%s%N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1e9))')
+        local build_start=$(date +%s%N)
         if ! eval "$build_cmd" > /dev/null 2>&1; then
             printf "${RED}BUILD FAILED${RESET}\n"
-            return
+            return 1
         fi
-        local build_end=$(date +%s%N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1e9))')
+        local build_end=$(date +%s%N)
     fi
 
-    # Run phase
-    local run_start=$(date +%s%N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1e9))')
+    local run_start=$(date +%s%N)
     local output
     if ! output=$(eval "$cmd" 2>&1); then
         printf "${RED}RUN FAILED${RESET}\n"
-        return
+        return 1
     fi
-    local run_end=$(date +%s%N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1e9))')
+    local run_end=$(date +%s%N)
 
-    # Calculate times
     local run_ms=$(( (run_end - run_start) / 1000000 ))
-
     if [ -n "$build_cmd" ]; then
         local build_ms=$(( (build_end - build_start) / 1000000 ))
-        local total_ms=$(( build_ms + run_ms ))
-        printf "${GREEN}%6d ms${RESET}  ${DIM}(build: %d ms, run: %d ms)${RESET}\n" "$total_ms" "$build_ms" "$run_ms"
+        printf "${GREEN}%6d ms${RESET}  ${DIM}(build: %d ms, run: %d ms)${RESET}\n" \
+            "$((build_ms + run_ms))" "$build_ms" "$run_ms"
     else
         printf "${GREEN}%6d ms${RESET}  ${DIM}(interpret)${RESET}\n" "$run_ms"
     fi
 
-    # Save output for checksum verification
     echo "$output" > "$TMPDIR/$name.out"
+    RUNNABLE_NAMES+=("$name")
+    return 0
 }
 
-# 1. AST Interpreter (default)
+emit_only() {
+    # emit_only <name> <emit_cmd> [post_cmd]  — timed generation; optional
+    # post step (e.g. assembling) validates toolchain acceptance.
+    local name="$1"
+    local emit_cmd="$2"
+    local post_cmd="${3:-}"
+
+    printf "  ${CYAN}%-28s${RESET}" "$name"
+    local t_start=$(date +%s%N)
+    if ! eval "$emit_cmd" > /dev/null 2>&1; then
+        printf "${RED}EMIT FAILED${RESET}\n"
+        return 1
+    fi
+    if [ -n "$post_cmd" ]; then
+        if ! eval "$post_cmd" > /dev/null 2>&1; then
+            printf "${RED}ASSEMBLE FAILED${RESET}\n"
+            return 1
+        fi
+    fi
+    local t_end=$(date +%s%N)
+    printf "${GREEN}%6d ms${RESET}  ${DIM}(emit only)${RESET}\n" $(( (t_end - t_start) / 1000000 ))
+    return 0
+}
+
+# ── Interpreters ─────────────────────────────────────────────────────────────
 run_backend "AST Interpreter" \
     "$SAGE $BENCH"
 
-# 2. Bytecode VM
 run_backend "Bytecode VM" \
     "$SAGE --runtime bytecode $BENCH"
 
-# 3. C-compiled binary
+run_backend "VM Image (.svm)" \
+    "$SAGE --run-vm $TMPDIR/bench.svm" \
+    "$SAGE --emit-vm $BENCH -o $TMPDIR/bench.svm"
+
+SELFHOST_ENTRY="$(cd "$(dirname "$0")/../../core/src/sage" && pwd)/sage.sage"
+run_backend "Self-Hosted Sage" \
+    "$SAGE $SELFHOST_ENTRY $BENCH"
+
+# ── Compiled binaries ────────────────────────────────────────────────────────
 run_backend "C Backend" \
     "$TMPDIR/bench_c" \
     "$SAGE --compile $BENCH -o $TMPDIR/bench_c"
 
-# 4. LLVM-compiled binary
+run_backend "C Backend -O3" \
+    "$TMPDIR/bench_c_o3" \
+    "$SAGE --compile $BENCH -o $TMPDIR/bench_c_o3 -O3"
+
 if command -v llc >/dev/null 2>&1; then
     run_backend "LLVM Backend" \
         "$TMPDIR/bench_llvm" \
         "$SAGE --compile-llvm $BENCH -o $TMPDIR/bench_llvm"
 else
-    printf "  ${CYAN}%-24s${RESET}${YELLOW}SKIPPED (no llc)${RESET}\n" "LLVM Backend"
+    printf "  ${CYAN}%-28s${RESET}${YELLOW}SKIPPED (no llc)${RESET}\n" "LLVM Backend"
 fi
 
-# 5. C-compiled with -O3
-run_backend "C Backend -O3" \
-    "$TMPDIR/bench_c_o3" \
-    "$SAGE --compile $BENCH -o $TMPDIR/bench_c_o3 -O3"
-
-# 6. JIT mode (interpreter with profiling)
+# ── Profile-guided ───────────────────────────────────────────────────────────
 run_backend "JIT Profiled" \
     "$SAGE --jit $BENCH"
 
-# 7. AOT compiled binary
 run_backend "AOT Backend" \
     "$TMPDIR/bench_aot" \
     "$SAGE --aot $BENCH -o $TMPDIR/bench_aot"
 
-# 8. JIT+AOT (profile-guided AOT)
 run_backend "JIT+AOT Backend" \
     "$TMPDIR/bench_jitaot" \
     "$SAGE --aot --jit $BENCH -o $TMPDIR/bench_jitaot"
 
-# 9. Self-hosted interpreter (hybrid JIT/AOT)
-run_backend "Self-Hosted Sage" \
-    "$SAGE src/sage/sage.sage $BENCH"
+# ── Metal VM ─────────────────────────────────────────────────────────────────
+run_backend "SGVM Binary" \
+    "$SAGE $TMPDIR/bench.sgvm" \
+    "$SAGE --sgvm $BENCH -o $TMPDIR/bench.sgvm" || true
 
-# 10. Kotlin transpile (emit only, no JVM run)
-printf "  ${CYAN}%-24s${RESET}" "Kotlin Transpile"
-kt_start=$(date +%s%N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1e9))')
-if $SAGE --emit-kotlin "$BENCH" -o "$TMPDIR/bench.kt" > /dev/null 2>&1; then
-    kt_end=$(date +%s%N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1e9))')
-    kt_ms=$(( (kt_end - kt_start) / 1000000 ))
-    printf "${GREEN}%6d ms${RESET}  ${DIM}(transpile only)${RESET}\n" "$kt_ms"
+# ── Native assembly (emit + assemble-to-object validation) ───────────────────
+# Hosted native executables require a linked sage_rt runtime that is still
+# landing in codegen.c; until then we validate that each architecture's
+# assembly is emitted and accepted by an assembler.
+emit_only "Native x86-64 (asm obj)" \
+    "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_x86.s --target x86-64" \
+    "cc -c -ffreestanding -fPIC $TMPDIR/bench_x86.s -o $TMPDIR/bench_x86.o"
+
+if command -v aarch64-linux-gnu-as >/dev/null 2>&1; then
+    emit_only "Native aarch64 (asm obj)" \
+        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_a64.s --target aarch64" \
+        "aarch64-linux-gnu-as $TMPDIR/bench_a64.s -o $TMPDIR/bench_a64.o"
 else
-    printf "${RED}FAILED${RESET}\n"
+    emit_only "Native aarch64 (emit)" \
+        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_a64.s --target aarch64" || true
 fi
 
-# Checksum verification
-printf "\n  ${DIM}Checksum Verification:${RESET}\n"
+if command -v riscv64-linux-gnu-as >/dev/null 2>&1; then
+    emit_only "Native rv64 (asm obj)" \
+        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_rv.s --target rv64" \
+        "riscv64-linux-gnu-as $TMPDIR/bench_rv.s -o $TMPDIR/bench_rv.o"
+else
+    emit_only "Native rv64 (emit)" \
+        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_rv.s --target rv64" || true
+fi
+
+if command -v mips-linux-gnu-as >/dev/null 2>&1; then
+    emit_only "Native mips (asm obj)" \
+        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_mips.s --target mips" \
+        "mips-linux-gnu-as $TMPDIR/bench_mips.s -o $TMPDIR/bench_mips.o"
+else
+    emit_only "Native mips (emit)" \
+        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_mips.s --target mips" || true
+fi
+
+# Bare-metal freestanding object (x86-64-baremetal profile)
+emit_only "Bare-metal x86-64 (obj)" \
+    "$SAGE --compile-bare $BENCH -o $TMPDIR/bench_bare.o" || true
+
+# ── Transpilers (emit-only timing) ───────────────────────────────────────────
+emit_only "Kotlin Transpile" \
+    "$SAGE --emit-kotlin $BENCH -o $TMPDIR/bench.kt" || true
+
+emit_only "Pico-C Emit" \
+    "$SAGE --emit-pico-c $BENCH -o $TMPDIR/bench_pico.c" || true
+
+mkdir -p "$TMPDIR/android_out"
+emit_only "Android Project Gen" \
+    "$SAGE --compile-android $BENCH -o $TMPDIR/android_out" || true
+
+# ── Checksum verification across runnable backends ───────────────────────────
+printf "\n  ${DIM}Checksum Verification (vs AST baseline):${RESET}\n"
 BASELINE="$TMPDIR/AST Interpreter.out"
 if [ -f "$BASELINE" ]; then
-    BASELINE_HASH=$(md5sum "$BASELINE" 2>/dev/null | cut -d' ' -f1 || shasum "$BASELINE" | cut -d' ' -f1)
-    for f in "$TMPDIR"/*.out; do
-        bname=$(basename "$f" .out)
-        HASH=$(md5sum "$f" 2>/dev/null | cut -d' ' -f1 || shasum "$f" | cut -d' ' -f1)
+    BASELINE_HASH=$(md5sum "$BASELINE" 2>/dev/null | cut -d' ' -f1)
+    for name in "${RUNNABLE_NAMES[@]}"; do
+        f="$TMPDIR/$name.out"
+        [ -f "$f" ] || continue
+        HASH=$(md5sum "$f" 2>/dev/null | cut -d' ' -f1)
         if [ "$HASH" = "$BASELINE_HASH" ]; then
-            printf "    ${GREEN}✓${RESET} %s\n" "$bname"
+            printf "    ${GREEN}✓${RESET} %s\n" "$name"
         else
-            printf "    ${RED}✗${RESET} %s ${DIM}(output differs)${RESET}\n" "$bname"
+            printf "    ${RED}✗${RESET} %s ${DIM}(output differs)${RESET}\n" "$name"
         fi
     done
 fi
 
 # Cleanup
 rm -rf "$TMPDIR"
-
-# Regenerate metrics chart
-printf "  ${DIM}Regenerating metrics chart...${RESET}\n"
-if [ -f "$SAGE/../scripts/generate_backend_chart.py" ]; then
-    python3 "$SAGE/../scripts/generate_backend_chart.py" > /dev/null 2>&1
-    printf "    ${GREEN}✓${RESET} assets/charts/backend-compare.svg\n"
-fi
-
-printf "\n  ${DIM}Done.${RESET}\n\n"

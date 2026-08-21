@@ -15,7 +15,7 @@ def run_timed(cmd: list[str], cwd: Path = REPO_ROOT) -> tuple[float, str, bool]:
     """Run a command and return (seconds, stdout, success)."""
     start = time.monotonic()
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=cwd)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=900, cwd=cwd)
         elapsed = time.monotonic() - start
         return elapsed, result.stdout, result.returncode == 0
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -25,6 +25,7 @@ def run_timed(cmd: list[str], cwd: Path = REPO_ROOT) -> tuple[float, str, bool]:
 
 def collect_results() -> list[tuple[str, float, str]]:
     """Collect benchmark results for each backend. Returns [(name, seconds, color)]."""
+    import shutil
     results = []
     tmp = Path("/tmp/sage_backend_bench")
     tmp.mkdir(exist_ok=True)
@@ -97,8 +98,67 @@ def collect_results() -> list[tuple[str, float, str]]:
     if ok:
         results.append(("Self-Hosted Sage", t, "#EC4899"))
 
+    # VM image (.svm): compile to bytecode file, run via the file VM
+    svm = tmp / "bench.svm"
+    build_t, _, ok = run_timed([str(SAGE), "--emit-vm", str(BENCH), "-o", str(svm)])
+    if ok:
+        run_t, _, ok2 = run_timed([str(SAGE), "--run-vm", str(svm)])
+        if ok2:
+            results.append(("VM Image .svm (run)", run_t, "#22D3EE"))
+            results.append(("VM Image .svm (total)", build_t + run_t, "#67E8F9"))
+
+    # SGVM metal binary: build; attempt run (honest skip when unsupported)
+    sgvm = tmp / "bench.sgvm"
+    build_t, _, ok = run_timed([str(SAGE), "--sgvm", str(BENCH), "-o", str(sgvm)])
+    if ok:
+        run_t, _, ok2 = run_timed([str(SAGE), str(sgvm)])
+        if ok2:
+            results.append(("SGVM Metal (run)", run_t, "#F472B6"))
+
+    # Native assembly backends — emit + assemble-to-object validation.
+    # Hosted native linking needs a sage_rt runtime still landing in codegen.c,
+    # so these are timed as codegen+assemble throughput, not execution.
+    native_targets = [
+        ("Native x86-64 asm", "x86-64", "cc"),
+        ("Native aarch64 asm", "aarch64", "aarch64-linux-gnu-as"),
+        ("Native rv64 asm", "rv64", "riscv64-linux-gnu-as"),
+        ("Native mips asm", "mips", "mips-linux-gnu-as"),
+    ]
+    for label, target, assembler in native_targets:
+        asm_f = tmp / f"bench_{target.replace('-', '_')}.s"
+        t, _, ok = run_timed([str(SAGE), "--emit-asm", str(BENCH), "-o", str(asm_f),
+                              "--target", target])
+        if not ok:
+            continue
+        total = t
+        if shutil.which(assembler):
+            extra = ["cc", "-c", "-ffreestanding", "-fPIC", str(asm_f),
+                     "-o", str(tmp / "o.o")] if assembler == "cc" else                     [assembler, str(asm_f), "-o", str(tmp / "o.o")]
+            at, _, aok = run_timed(extra)
+            if aok:
+                total += at
+        results.append((label, total, "#94A3B8"))
+
+    # Bare-metal freestanding object (x86-64-baremetal profile)
+    bare_obj = tmp / "bench_bare.o"
+    t, _, ok = run_timed([str(SAGE), "--compile-bare", str(BENCH), "-o", str(bare_obj)])
+    if ok:
+        results.append(("Bare-metal x86-64 obj", t, "#64748B"))
+
+    # Android project generation (transpile-only timing)
+    and_out = tmp / "android"
+    and_out.mkdir(exist_ok=True)
+    t, _, ok = run_timed([str(SAGE), "--compile-android", str(BENCH), "-o", str(and_out)])
+    if ok:
+        results.append(("Android Project Gen", t, "#8B5CF6"))
+
+    # Pico-C emit
+    pico_c = tmp / "bench_pico.c"
+    t, _, ok = run_timed([str(SAGE), "--emit-pico-c", str(BENCH), "-o", str(pico_c)])
+    if ok:
+        results.append(("Pico-C Emit", t, "#A3E635"))
+
     # Cleanup
-    import shutil
     shutil.rmtree(tmp, ignore_errors=True)
 
     return results

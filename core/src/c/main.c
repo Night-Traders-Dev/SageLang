@@ -3011,8 +3011,10 @@ int main(int argc, const char* argv[]) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
         }
-        // Force baremetal profile if not already set
-        if (target_arch_str && !strstr(target_arch_str, "baremetal") && !strstr(target_arch_str, "osdev")) {
+        // parse_codegen_options resets *target_arch to NULL; restore the
+        // bare-metal default when no --target flag was given.
+        if (target_arch_str == NULL) target_arch_str = "x86-64-baremetal";
+        if (!strstr(target_arch_str, "baremetal") && !strstr(target_arch_str, "osdev")) {
             static char bare_target[64];
             snprintf(bare_target, sizeof(bare_target), "%s-baremetal", target_arch_str);
             target_arch_str = bare_target;
@@ -3043,7 +3045,10 @@ int main(int argc, const char* argv[]) {
             print_usage(stderr);
             CLEANUP_AND_EXIT(64);
         }
-        if (target_arch_str && !strstr(target_arch_str, "uefi")) {
+        // parse_codegen_options resets *target_arch to NULL; restore the
+        // UEFI default when no --target flag was given.
+        if (target_arch_str == NULL) target_arch_str = "x86-64-uefi";
+        if (!strstr(target_arch_str, "uefi")) {
             static char uefi_target[64];
             snprintf(uefi_target, sizeof(uefi_target), "%s-uefi", target_arch_str);
             target_arch_str = uefi_target;

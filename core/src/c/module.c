@@ -135,49 +135,56 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
     char* path_name = module_name_to_path(name);
     char path[MAX_MODULE_PATH];
 
-    // Try each search path
-    for (int i = 0; i < cache->search_path_count; i++) {
-        // Try .sage extension
-        if (strlen(cache->search_paths[i]) + strlen(path_name) + 7 >= MAX_MODULE_PATH) {
-            fprintf(stderr, "Error: Module path too long for '%s'\n", name);
-            continue;
-        }
-        strcpy(path, cache->search_paths[i]);
-        strcat(path, "/");
-        strcat(path, path_name);
-        strcat(path, ".sage");
-        if (file_exists(path)) {
+    // Two-pass resolution: exact <name>.sage files across ALL search paths take
+    // precedence over directory packages (<name>/__init__.sage). This prevents
+    // a lib package (e.g. core/lib/gc/) from shadowing the self-hosted
+    // compiler's own module (core/src/sage/gc.sage) when both exist.
+    for (int pass = 0; pass < 2; pass++) {
+        for (int i = 0; i < cache->search_path_count; i++) {
+            if (pass == 0) {
+                // Pass 1: exact .sage file
+                if (strlen(cache->search_paths[i]) + strlen(path_name) + 7 >= MAX_MODULE_PATH) {
+                    fprintf(stderr, "Error: Module path too long for '%s'\n", name);
+                    continue;
+                }
+                strcpy(path, cache->search_paths[i]);
+                strcat(path, "/");
+                strcat(path, path_name);
+                strcat(path, ".sage");
+                if (file_exists(path)) {
 #ifndef PICO_BUILD
-            if (!path_is_within(path, cache->search_paths[i])) {
-                fprintf(stderr, "Error: Module '%s' resolves outside search directory\n", name);
-                continue;
-            }
+                    if (!path_is_within(path, cache->search_paths[i])) {
+                        fprintf(stderr, "Error: Module '%s' resolves outside search directory\n", name);
+                        continue;
+                    }
 #endif
-            free(path_name);
-            return SAGE_STRDUP(path);
-        }
+                    free(path_name);
+                    return SAGE_STRDUP(path);
+                }
+            } else {
+                // Pass 2: directory with __init__.sage
+                if (strlen(cache->search_paths[i]) + strlen(path_name) + 15 >= MAX_MODULE_PATH) continue;
+                strcpy(path, cache->search_paths[i]);
+                strcat(path, "/");
+                strcat(path, path_name);
 
-        // Try without extension (for directories with __init__.sage)
-        if (strlen(cache->search_paths[i]) + strlen(path_name) + 15 >= MAX_MODULE_PATH) continue;
-        strcpy(path, cache->search_paths[i]);
-        strcat(path, "/");
-        strcat(path, path_name);
-        
-        char init_path[MAX_MODULE_PATH];
-        strcpy(init_path, path);
-        strcat(init_path, "/__init__.sage");
-        
-        if (file_exists(init_path)) {
+                char init_path[MAX_MODULE_PATH];
+                strcpy(init_path, path);
+                strcat(init_path, "/__init__.sage");
+
+                if (file_exists(init_path)) {
 #ifndef PICO_BUILD
-            if (!path_is_within(init_path, cache->search_paths[i])) {
-                fprintf(stderr, "Error: Module '%s' resolves outside search directory\n", name);
-                continue;
-            }
+                    if (!path_is_within(init_path, cache->search_paths[i])) {
+                        fprintf(stderr, "Error: Module '%s' resolves outside search directory\n", name);
+                        continue;
+                    }
 #endif
-            // Add the directory itself to search paths so submodules can be found
-            add_search_path(cache, path);
-            free(path_name);
-            return SAGE_STRDUP(init_path);
+                    // Add the directory itself to search paths so submodules can be found
+                    add_search_path(cache, path);
+                    free(path_name);
+                    return SAGE_STRDUP(init_path);
+                }
+            }
         }
     }
 

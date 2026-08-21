@@ -878,8 +878,11 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 if (frame_count > 1) {
                     // Restore caller state
                     frame->ip = ip; // Save current IP before popping
-                    
-                    sp = frame->slots; // Reset stack to start of current frame
+
+                    // Drop the frame's args AND the callee slot that sits just
+                    // below them (the CALL handler keeps it in place), matching
+                    // the native-call path which pops (arg_count + 1) values.
+                    sp = frame->slots - 1;
                     frame_count--;
                     frame = &frames[frame_count - 1];
                     
