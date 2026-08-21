@@ -6403,7 +6403,8 @@ static int write_pico_cmake_lists(const char *cmake_path,
                                   const char *import_path,
                                   const char *source_path,
                                   const char *program_name,
-                                  const char *pico_board) {
+                                  const char *pico_board,
+                                  const char *pico_platform) {
   FILE *out = fopen(cmake_path, "wb");
   if (out == NULL) {
     fprintf(stderr, "Compiler error: could not open \"%s\": %s\n", cmake_path,
@@ -6411,6 +6412,11 @@ static int write_pico_cmake_lists(const char *cmake_path,
     return 0;
   }
 
+  char platform_line[128] = {0};
+  if (pico_platform != NULL && pico_platform[0] != '\0') {
+    snprintf(platform_line, sizeof(platform_line),
+             "set(PICO_PLATFORM \"%s\")\n", pico_platform);
+  }
   char *escaped_import = escape_cmake_string(import_path);
   char *escaped_source = escape_cmake_string(source_path);
   char *escaped_program = escape_cmake_string(program_name);
@@ -6418,7 +6424,8 @@ static int write_pico_cmake_lists(const char *cmake_path,
 
   fprintf(out,
           "cmake_minimum_required(VERSION 3.13)\n"
-          "set(PICO_BOARD \"%s\" CACHE STRING \"RP2040 board\")\n"
+          "set(PICO_BOARD \"%s\" CACHE STRING \"Pico board\")\n"
+          "%s"
           "include(\"%s\")\n"
           "project(%s LANGUAGES C CXX ASM)\n"
           "set(CMAKE_C_STANDARD 11)\n"
@@ -6429,7 +6436,8 @@ static int write_pico_cmake_lists(const char *cmake_path,
           "pico_enable_stdio_usb(%s 1)\n"
           "pico_enable_stdio_uart(%s 0)\n"
           "pico_add_extra_outputs(%s)\n",
-          escaped_board, escaped_import, escaped_program, escaped_program,
+          escaped_board, platform_line,
+          escaped_import, escaped_program, escaped_program,
           escaped_source, escaped_program, escaped_program, escaped_program,
           escaped_program);
 
@@ -6669,8 +6677,15 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
     return 0;
   }
 
+  const char *platform = NULL;
+  if (target == COMPILER_TARGET_RP2350_ARM) {
+    platform = "rp2350-arm-cortex-m33";
+  } else if (target == COMPILER_TARGET_RP2350_RISCV) {
+    platform = "rp2350-riscv";
+  }
   const char *board =
-      (pico_board != NULL && pico_board[0] != '\0') ? pico_board : "pico";
+      (pico_board != NULL && pico_board[0] != '\0') ? pico_board
+      : (platform != NULL ? "pico2" : "pico");
   char *effective_program_name =
       (program_name != NULL && program_name[0] != '\0')
           ? sanitize_identifier(program_name)
@@ -6750,7 +6765,7 @@ int compile_source_to_pico_uf2(const char *source, const char *input_path,
   }
 
   if (!write_pico_cmake_lists(cmake_path, import_path, source_path,
-                              effective_program_name, board)) {
+                              effective_program_name, board, platform)) {
     free(repo_root);
     free(import_path);
     free(build_dir);
