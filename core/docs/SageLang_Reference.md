@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.1.14 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.1.16 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -234,6 +234,12 @@ raise nil
 
 ### 1.13 Generators
 
+Generators are functions containing one or more `yield` statements. Calling a generator function returns a tagged `Generator` value rather than executing the procedure body immediately. Values are evaluated and extracted on-demand using the built-in `next(gen)` procedure.
+
+All execution backends (AST Interpreter, Bytecode VM, and Compiled C/AOT) share full parity for eager-generator semantics. In compiled backends, generator procs are compiled with dedicated yield-collector wrappers (`SAGE_TAG_GENERATOR` / `SageGenerator` runtime) that collect yielded values and evaluate `next()` dispatches.
+
+Direct iteration via `for item in gen` is explicitly rejected across all runtimes with `Runtime Error: 'Generator' object is not iterable.` and skips loop execution.
+
 ```sage
 proc count_up_to(n):
     let i = 0
@@ -245,6 +251,7 @@ let gen = count_up_to(3)
 print next(gen)           # 0
 print next(gen)           # 1
 print next(gen)           # 2
+print next(gen)           # nil
 ```
 
 ### 1.14 Match/Case

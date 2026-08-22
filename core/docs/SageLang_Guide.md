@@ -1206,6 +1206,10 @@ raise nil                      # Exception with message "nil"
 
 ### 4.6 Generators
 
+Generators are procedures containing one or more `yield` statements. Calling a generator procedure produces a resumable generator object value (`VAL_GENERATOR` / `SAGE_TAG_GENERATOR`). Execution pauses at each `yield` statement until requested by `next(gen)`.
+
+All three core execution stacks—AST interpreter, bytecode VM, and compiled C/AOT backend—provide byte-level behavioral parity for generators. In the compiled backend, functions containing `yield` are automatically detected, marked, and compiled with per-generator collector routines (`YIELD` -> array push, `RETURN` -> bare return) alongside wrapper functions that construct `SageGenerator` objects. Built-in `next()` dispatch extracts elements on demand. Attempting to iterate directly over a generator with a `for...in` loop is rejected across all execution stacks with `Runtime Error: 'Generator' object is not iterable.` and the loop body is skipped.
+
 **Simple Generator**:
 ```sagelang
 proc fibonacci(n):
@@ -2558,7 +2562,7 @@ For self-hosted LLVM codegen specifically (`src/sage/llvm_backend.sage`), `from 
 
 **Stub/partial**: async proc (registered with `is_async` flag, executes synchronously), await (evaluates expression directly).
 
-**Not implemented**: true coroutine-based generators (uses eager collection instead), actual async threading in self-hosted path, GPU module (uses host `import gpu` directly).
+**Not implemented**: true stackful coroutine-based generators (uses eager collection and yield collectors instead, with full parity across interpreter, VM, and compiled backends), actual async threading in self-hosted path, GPU module (uses host `import gpu` directly).
 
 **Safety**: while loop iteration limit (1M), recursion depth limit (50000 in the self-hosted interpreter, backed by the host's stack-proximity guard), rich error messages with source context via `errors.sage`.
 
