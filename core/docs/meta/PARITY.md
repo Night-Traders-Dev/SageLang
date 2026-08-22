@@ -25,12 +25,10 @@ Stacks compared:
 
 ```
 PARITY (all three stacks): 01-09, 11, 12, 15-17, 19-21, 22-28   (24 cases)
-PARITY cases: 25 / 28 (89%)
+PARITY cases: 26 / 28 (93%)
 Remaining gaps: 10 nested named procs reading enclosing locals (last line)
                 13 closure state capture across calls          (SHC)
-                18 generator print/iteration protocol          (SHI+SHC)
-Both remaining categories require environment-capture support in the
-emitted runtime (#8) and generator protocol work (#6).
+Both require environment-capture support in the emitted runtime (#8).
 ```
 
 ## Static coverage matrices
@@ -104,7 +102,10 @@ The divergences above are *semantic*, not structural.
    accepts `case PATTERN if GUARD:` and stores clause guards; parse
    diagnostics now use the C style (`error:` severity, no doubled prefix);
    undefined-variable loads in emitted code print-and-continue like C.
-6. Generator printing/iteration protocol alignment — **OPEN**.
+6. ~~Generator printing/iteration protocol~~ **DONE** — eager-collect
+   generators in the emitted backend (SAGE_TAG_GENERATOR, per-proc collector
+   functions, `next()` dispatch) and C-parity for-in rejection on the
+   interpreter side.
 7. Builtin completion (serialize/thread families or documented C-only);
    from-import-as of native values through the stdlib registry — **OPEN**.
 8. Closure state capture in emitted code — **OPEN**.

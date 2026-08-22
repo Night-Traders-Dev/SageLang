@@ -1665,8 +1665,14 @@ proc exec_stmt(stmt, env):
     # --- For ---
     if stype == STMT_FOR:
         let iterable = eval_expr(stmt.iterable, env)
+        # Generators are dicts internally but are NOT iterable in either
+        # implementation; mirror the C host rejection before the dict check.
+        if type(iterable) == "dict" and dict_has(iterable, "__interp_type") and iterable["__interp_type"] == "generator":
+            sys.stderr_write("Runtime Error: for loop iterable must be an array, tuple, or dict.\n")
+            return _SIG_NORMAL_NIL
         if type(iterable) != "array" and type(iterable) != "tuple" and type(iterable) != "dict":
-            runtime_error(stmt.variable.line, "for loop iterable must be an array, tuple, or dict", "got value of type '" + type(iterable) + "'")
+            sys.stderr_write("Runtime Error: for loop iterable must be an array, tuple, or dict.\n")
+            return _SIG_NORMAL_NIL
         
         let loop_env = env_new(env)
         let var_name = stmt.variable.text

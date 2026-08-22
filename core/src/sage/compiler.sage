@@ -37,6 +37,8 @@ class CCompiler:
         self.anon_fns = []
         self.prebound_anons = nil
         self.prebind_active = false
+        self.gen_out_var = nil
+        self.gen_collector = false
         self.defer_scopes = [[]]
         self.classes = []
         self.modules = []
@@ -153,6 +155,39 @@ proc add_name_entry(cc, entry_list, sage_name, prefix):
     entry["c_name"] = make_unique_name(cc, prefix, sage_name)
     push(entry_list, entry)
     return entry
+
+proc stmt_has_yield(stmt):
+    if stmt == nil:
+        return false
+    let t = stmt.type
+    if t == 116:
+        return true
+    if t == 104:
+        return stmt_has_yield_list(stmt.statements)
+    if t == 103:
+        if stmt_has_yield(stmt.then_branch):
+            return true
+        if stmt.else_branch != nil and stmt_has_yield(stmt.else_branch):
+            return true
+        return false
+    if t == 105 or t == 107:
+        return stmt_has_yield(stmt.body)
+    if t == 114:
+        if stmt.try_block != nil and stmt_has_yield(stmt.try_block):
+            return true
+        if stmt.finally_block != nil and stmt_has_yield(stmt.finally_block):
+            return true
+    if t == 108 or t == 113:
+        return false
+    return false
+
+proc stmt_has_yield_list(first):
+    let cur = first
+    while cur != nil:
+        if stmt_has_yield(cur):
+            return true
+        cur = cur.next
+    return false
 
 proc add_proc_entry(cc, sage_name, param_count, param_defaults):
     let existing = find_proc_entry(cc.procs, sage_name)
@@ -279,7 +314,8 @@ proc collect_top_level_symbols(cc, program):
     while stmt != nil:
         if stmt.type == 106:
             # STMT_PROC
-            add_proc_entry(cc, stmt.name.text, stmt.param_count, stmt.param_defaults)
+            let pe_new = add_proc_entry(cc, stmt.name.text, stmt.param_count, stmt.param_defaults)
+            pe_new["is_generator"] = stmt_has_yield(stmt.body)
         if stmt.type == 111:
             # STMT_CLASS
             let parent = nil
@@ -668,6 +704,11 @@ proc cc_emit_call_expr(cc, call_expr):
             return "sage_indexof_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ", " + cc_emit_expr(cc, call_expr.args[1]) + ")"
         cc.failed = true
         return "sage_nil()"
+    if name == "next":
+        if argc == 1:
+            return "sage_generator_next(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
     if name == "contains":
         if argc == 2:
             let a0 = cc_emit_expr(cc, call_expr.args[0])
@@ -991,6 +1032,15 @@ proc cc_emit_stmt(cc, stmt):
         cc_emit_embedded_block(cc, stmt.body)
         cc_line(cc, "}")
         return
+    if t == 116:
+        # STMT_YIELD — inside a generator collector this pushes the yielded
+        # value onto the results array. Outside generators it is skipped.
+        if cc.gen_out_var != nil:
+            let yv = "sage_nil()"
+            if stmt.value != nil:
+                yv = cc_emit_expr(cc, stmt.value)
+            cc_line(cc, "sage_array_push_raw(" + cc.gen_out_var + ", " + yv + ");")
+        return
     if t == 113:
         # STMT_DEFER: collect into the innermost block scope; the scope
         # flush (below) emits it LIFO at scope exit.
@@ -999,6 +1049,17 @@ proc cc_emit_stmt(cc, stmt):
     if t == 108:
         # STMT_RETURN — run all active defers, innermost first. Do NOT pop
         # scopes here; each enclosing block's exit-flush owns its scope.
+        if cc.gen_collector:
+            let ei9 = len(cc.defer_scopes) - 1
+            while ei9 >= 0:
+                let sc9 = cc.defer_scopes[ei9]
+                let di9 = len(sc9) - 1
+                while di9 >= 0:
+                    cc_emit_stmt(cc, sc9[di9])
+                    di9 = di9 - 1
+                ei9 = ei9 - 1
+            cc_line(cc, "return;")
+            return
         let si3 = len(cc.defer_scopes) - 1
         while si3 >= 0:
             let sc = cc.defer_scopes[si3]
@@ -1052,7 +1113,11 @@ proc cc_emit_stmt(cc, stmt):
         cc_line(cc, "{")
         cc.indent = cc.indent + 1
         cc_line(cc, "SageValue " + iter_var + " = " + iterable + ";")
-        cc_line(cc, "if (" + iter_var + ".type == SAGE_TAG_ARRAY) {")
+        cc_line(cc, "if (" + iter_var + ".type == SAGE_TAG_GENERATOR) {")
+        cc.indent = cc.indent + 1
+        cc_line(cc, "fprintf(stderr, " + DQ + "Runtime Error: for loop iterable must be an array, tuple, or dict." + (BS + "n") + DQ + ");")
+        cc.indent = cc.indent - 1
+        cc_line(cc, "} else if (" + iter_var + ".type == SAGE_TAG_ARRAY) {")
         cc.indent = cc.indent + 1
         cc_line(cc, "for (int " + idx_var + " = 0; " + idx_var + " < " + iter_var + ".as.array->count; " + idx_var + "++) {")
         cc.indent = cc.indent + 1
@@ -1210,7 +1275,8 @@ proc emit_runtime_prelude(cc):
     push(o, "    SAGE_TAG_ARRAY," + NL)
     push(o, "    SAGE_TAG_DICT," + NL)
     push(o, "    SAGE_TAG_TUPLE," + NL)
-    push(o, "    SAGE_TAG_FUNCTION" + NL)
+    push(o, "    SAGE_TAG_FUNCTION," + NL)
+    push(o, "    SAGE_TAG_GENERATOR" + NL)
     push(o, "} SageTag;" + NL)
     push(o, NL)
     push(o, "typedef struct SageFunction SageFunction;" + NL)
@@ -1224,6 +1290,7 @@ proc emit_runtime_prelude(cc):
     push(o, "        SageDict* dict;" + NL)
     push(o, "        SageTuple* tuple;" + NL)
     push(o, "        SageFunction* function;" + NL)
+    push(o, "        void* generator;" + NL)
     push(o, "    } as;" + NL)
     push(o, "};" + NL)
     push(o, NL)
@@ -1238,6 +1305,29 @@ proc emit_runtime_prelude(cc):
     push(o, "    SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = f; return v;" + NL)
     push(o, "}" + NL)
     push(o, "static SageValue sage_nil(void);" + NL)
+    push(o, "static void sage_fail(const char* message);" + NL)
+    push(o, "typedef struct SageGenerator SageGenerator;" + NL)
+    push(o, "struct SageGenerator {" + NL)
+    push(o, "    SageArray* items;" + NL)
+    push(o, "    int index;" + NL)
+    push(o, "};" + NL)
+    push(o, "static SageValue sage_make_generator_from_array(SageArray* items) {" + NL)
+    push(o, "    SageGenerator* g = (SageGenerator*)malloc(sizeof(SageGenerator));" + NL)
+    push(o, "    if (g == NULL) sage_fail(" + DQ + "Runtime Error: out of memory" + DQ + ");" + NL)
+    push(o, "    g->items = items;" + NL)
+    push(o, "    g->index = 0;" + NL)
+    push(o, "    SageValue v; v.type = SAGE_TAG_GENERATOR; v.as.generator = g; return v;" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_generator_next(SageValue gv) {" + NL)
+    push(o, "    if (gv.type != SAGE_TAG_GENERATOR) {" + NL)
+    push(o, "        fprintf(stderr, \"Runtime Error: next() requires a generator.\\n\");" + NL)
+    push(o, "        return sage_nil();" + NL)
+    push(o, "    }" + NL)
+    push(o, "    SageGenerator* g = (SageGenerator*)gv.as.generator;" + NL)
+    push(o, "    if (g->index >= g->items->count) return sage_nil();" + NL)
+    push(o, "    return g->items->elements[g->index++];" + NL)
+    push(o, "}" + NL)
+
     push(o, "static SageValue sage_call_function_value(SageValue callee, int argc, SageValue* args) {" + NL)
     push(o, "    if (callee.type != SAGE_TAG_FUNCTION || callee.as.function == NULL) {" + NL)
     push(o, "        fprintf(stderr, \"Runtime Error: value is not callable.\\n\");" + NL)
@@ -2098,6 +2188,76 @@ proc emit_function_definition(cc, stmt):
     let proc_entry = find_proc_entry(cc.procs, proc_name)
     if proc_entry == nil:
         cc.failed = true
+        return
+    # ---- Generator functions: eager-collect emission --------------------
+    if proc_entry["is_generator"] == true:
+        let col_name = make_unique_name(cc, "sage_gencollect", proc_name)
+        # Collector prototype (void, array out-param first)
+        let cp2 = []
+        push(cp2, "static void " + col_name + "(SageArray* out")
+        for i in range(stmt.param_count):
+            push(cp2, ", SageValue arg" + str(i))
+        push(cp2, ");" + NL)
+        cc_emit(cc, join(cp2, ""))
+        # Wrapper: runs collector, wraps array as a generator value.
+        let wp = []
+        push(wp, "static SageValue " + proc_entry["c_name"] + "(")
+        for i in range(stmt.param_count):
+            if i > 0:
+                push(wp, ", ")
+            push(wp, "SageValue arg" + str(i))
+        push(wp, ") {" + NL)
+        cc_emit(cc, join(wp, ""))
+        cc.indent = cc.indent + 1
+        cc_line(cc, "SageArray* out = sage_array().as.array;")
+        let fwd = []
+        push(fwd, "    " + col_name + "(out")
+        for i in range(stmt.param_count):
+            push(fwd, ", arg" + str(i))
+        push(fwd, ");")
+        cc_emit(cc, join(fwd, ""))
+        cc_line(cc, "return sage_make_generator_from_array(out);")
+        cc.indent = cc.indent - 1
+        cc_line(cc, "}")
+        cc_blank(cc)
+        # Collector definition with YIELD -> push translation.
+        let params_g = []
+        for i in range(stmt.param_count):
+            add_name_entry(cc, params_g, stmt.params[i].text, "sage_param")
+        let prev_locals_g = cc.locals
+        let prev_defers_g = cc.defer_scopes
+        let prev_gen_out = cc.gen_out_var
+        push(cc.defer_scopes, [])
+        cc.locals = params_g
+        cc.gen_collector = true
+        cc.gen_out_var = "out"
+        collect_local_lets(cc, stmt.body, cc.locals)
+        let cg = []
+        push(cg, "static void " + col_name + "(SageArray* out")
+        for i in range(stmt.param_count):
+            push(cg, ", SageValue arg" + str(i))
+        push(cg, ") {" + NL)
+        cc_emit(cc, join(cg, ""))
+        cc.indent = cc.indent + 1
+        emit_slot_declarations(cc, cc.locals)
+        for i in range(stmt.param_count):
+            let pn2 = stmt.params[i].text
+            let pe3 = find_name_entry(cc.locals, pn2)
+            cc_line(cc, "sage_define_slot(&" + pe3["c_name"] + ", arg" + str(i) + ");")
+        cc_emit_stmt_list(cc, stmt.body)
+        let gscope = cc.defer_scopes[len(cc.defer_scopes) - 1]
+        let gi = len(gscope) - 1
+        while gi >= 0:
+            cc_emit_stmt(cc, gscope[gi])
+            gi = gi - 1
+        pop(cc.defer_scopes)
+        cc.gen_out_var = prev_gen_out
+        cc.gen_collector = false
+        cc.indent = cc.indent - 1
+        cc_line(cc, "}")
+        cc_blank(cc)
+        cc.defer_scopes = prev_defers_g
+        cc.locals = prev_locals_g
         return
     # Set up params as locals
     let params = []
