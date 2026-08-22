@@ -25,10 +25,12 @@ Stacks compared:
 
 ```
 PARITY (all three stacks): 01-09, 11, 12, 15-17, 19-21, 22-28   (24 cases)
-PARITY cases: 26 / 28 (93%)
-Remaining gaps: 10 nested named procs reading enclosing locals (last line)
-                13 closure state capture across calls          (SHC)
-Both require environment-capture support in the emitted runtime (#8).
+PARITY cases: 27 / 28 (96%)
+Remaining gap: case 10 (last line) — NESTED NAMED procedure definitions
+are not yet hoisted in the emitted backend; their statements are skipped,
+so calls resolve to undefined. Anonymous closures ARE fully supported
+(per-invocation heap environments carried by closure values), which is
+what case 13 exercises.
 ```
 
 ## Static coverage matrices
@@ -108,7 +110,12 @@ The divergences above are *semantic*, not structural.
    interpreter side.
 7. Builtin completion (serialize/thread families or documented C-only);
    from-import-as of native values through the stdlib registry — **OPEN**.
-8. Closure state capture in emitted code — **OPEN**.
+8. ~~Closure state capture in emitted code~~ **DONE** — capturing parents
+   promote locals/params into per-call heap environments; anonymous children
+   receive hidden `_cenv`, resolved through typed derefs; closure values
+   bind environment instances (`sage_bind_closure`); dispatcher passes env
+   first. Case 13 (independent counters) byte-identical.
+   Remaining sub-gap: hoisting of NESTED NAMED procs (case 10 tail).
 
 Also fixed en route: leftover double object-dump debug block in the C host's
 EXPR_GET error path; property-access miss semantics aligned to C across all

@@ -39,6 +39,8 @@ class CCompiler:
         self.prebind_active = false
         self.gen_out_var = nil
         self.gen_collector = false
+        self.fn_stack = []
+        self.hoisted_defs = []
         self.defer_scopes = [[]]
         self.classes = []
         self.modules = []
@@ -334,10 +336,165 @@ proc collect_top_level_symbols(cc, program):
 # Slot Resolution
 # ============================================================================
 
+proc expr_has_proc(expr):
+    if expr == nil:
+        return false
+    let t = expr.type
+    if t == 18:
+        # EXPR_PROC
+        return true
+    if t == 4:
+        return expr_has_proc(expr.left) or expr_has_proc(expr.right)
+    if t == 6:
+        if expr_has_proc(expr.callee):
+            return true
+        let i = 0
+        while i < expr.arg_count:
+            if expr_has_proc(expr.args[i]):
+                return true
+            i = i + 1
+        return false
+    if t == 7 or t == 10:
+        let i = 0
+        while i < expr.count:
+            if expr_has_proc(expr.elements[i]):
+                return true
+            i = i + 1
+        return false
+    if t == 8:
+        return expr_has_proc(expr.object) or expr_has_proc(expr.index)
+    if t == 9:
+        let vs = expr.values
+        if vs != nil and type(vs) == "array":
+            let i = 0
+            while i < len(vs):
+                if expr_has_proc(vs[i]):
+                    return true
+                i = i + 1
+        return false
+    if t == 12:
+        return expr_has_proc(expr.object)
+    if t == 13:
+        if expr.object != nil and expr_has_proc(expr.object):
+            return true
+        return expr_has_proc(expr.value)
+    if t == 14:
+        return expr_has_proc(expr.array) or expr_has_proc(expr.index) or expr_has_proc(expr.value)
+    if t == 17:
+        return expr_has_proc(expr.expression)
+    return false
+
+proc stmt_body_has_nested_fn(stmt):
+    # True when the body contains a nested function definition: either a
+    # named STMT_PROC descendant or an anonymous proc expression anywhere.
+    if stmt == nil:
+        return false
+    let t = stmt.type
+    if t == 116:
+        # Yield alone does not introduce a nested function.
+        return false
+    if t == 106:
+        # Nested named procedure definition.
+        return true
+    if t == 18:
+        return true
+    if t == 100 or t == 101:
+        if stmt.expression != nil and expr_has_proc(stmt.expression):
+            return true
+        return false
+    if t == 102:
+        if stmt.initializer != nil and expr_has_proc(stmt.initializer):
+            return true
+        return false
+    if t == 103:
+        if expr_has_proc(stmt.condition):
+            return true
+        if stmt_body_has_nested_fn(stmt.then_branch):
+            return true
+        if stmt.else_branch != nil and stmt_body_has_nested_fn(stmt.else_branch):
+            return true
+        return false
+    if t == 104:
+        return stmt_body_has_nested_fn_list(stmt.statements)
+    if t == 105 or t == 107:
+        if expr_has_proc(stmt.condition) or (t == 107 and expr_has_proc(stmt.iterable)):
+            return true
+        return stmt_body_has_nested_fn(stmt.body)
+    if t == 108:
+        if stmt.value != nil and expr_has_proc(stmt.value):
+            return true
+        return false
+    if t == 112:
+        if expr_has_proc(stmt.value):
+            return true
+        if stmt.cases != nil and type(stmt.cases) == "array":
+            let ci = 0
+            while ci < len(stmt.cases):
+                let cl = stmt.cases[ci]
+                if expr_has_proc(cl["pattern"]) or (cl["guard"] != nil and expr_has_proc(cl["guard"])):
+                    return true
+                if stmt_body_has_nested_fn(cl["body"]):
+                    return true
+                ci = ci + 1
+        return false
+    if t == 114:
+        if stmt.try_block != nil and stmt_body_has_nested_fn(stmt.try_block):
+            return true
+        if stmt.finally_block != nil and stmt_body_has_nested_fn(stmt.finally_block):
+            return true
+        return false
+    return false
+
+proc stmt_body_has_nested_fn_list(first):
+    let cur = first
+    while cur != nil:
+        if stmt_body_has_nested_fn(cur):
+            return true
+        cur = cur.next
+    return false
+
+# Frame helpers -----------------------------------------------------------
+proc fn_push_frame(cc, frame):
+    push(cc.fn_stack, frame)
+
+proc fn_pop_frame(cc):
+    pop(cc.fn_stack)
+
+proc entry_needs_cenv(entry):
+    entry["needs_cenv"] = true
+
+proc pb_fnobj_of(entry):
+    return entry["fnobj"]
+
+proc fn_top_capturing_frame(cc):
+    # Innermost PROMOTING frame (a function whose locals live in an env).
+    let i = len(cc.fn_stack) - 1
+    while i >= 0:
+        let fr = cc.fn_stack[i]
+        if fr["promoting"]:
+            return fr
+        i = i - 1
+    return nil
+
 proc resolve_slot_name(cc, sage_name):
+    # When emitting inside a capturing-parent function whose storage was
+    # promoted into an environment object, promoted names must resolve to
+    # their env field even though stack-slot duplicates were also declared.
+    if len(cc.fn_stack) > 0:
+        let top = cc.fn_stack[len(cc.fn_stack) - 1]
+        if top["promoting"] and dict_has(top["fields"], sage_name):
+            return "(" + top["deref"] + "->" + top["fields"][sage_name] + ")"
     let local = find_name_entry(cc.locals, sage_name)
     if local != nil:
         return local["c_name"]
+    # Captured variables: walk enclosing function environments innermost
+    # first. Frames expose their fields as slot lvalues via ->field.
+    let fi = len(cc.fn_stack) - 1
+    while fi >= 0:
+        let fr = cc.fn_stack[fi]
+        if fr["promoting"] and dict_has(fr["fields"], sage_name):
+            return "((" + fr["deref"] + ")->" + fr["fields"][sage_name] + ")"
+        fi = fi - 1
     let global_entry = find_name_entry(cc.globals, sage_name)
     if global_entry != nil:
         return global_entry["c_name"]
@@ -801,6 +958,20 @@ proc cc_emit_call_expr(cc, call_expr):
     let parts = []
     push(parts, proc_entry["c_name"])
     push(parts, "(")
+    let env_arg = ""
+    if proc_entry["needs_cenv"] == true:
+        let capf2 = fn_top_capturing_frame(cc)
+        if capf2 != nil:
+            env_arg = capf2["env_var"]
+        else:
+            env_arg = "NULL"
+    let parts = []
+    push(parts, proc_entry["c_name"])
+    push(parts, "(")
+    if env_arg != "":
+        push(parts, env_arg)
+        if argc > 0:
+            push(parts, ", ")
     for i in range(argc):
         if i > 0:
             push(parts, ", ")
@@ -869,6 +1040,11 @@ proc cc_emit_expr(cc, expr):
             # First-class reference to a named procedure.
             let pe = find_proc_entry(cc.procs, name)
             if pe != nil:
+                if pe["needs_cenv"] == true:
+                    let capv = fn_top_capturing_frame(cc)
+                    if capv != nil:
+                        return "sage_bind_closure(&sage_fnobj_" + pe["c_name"] + ", " + capv["env_var"] + ")"
+                    return "sage_bind_closure(&sage_fnobj_" + pe["c_name"] + ", NULL)"
                 return "sage_function_value(&sage_fnobj_" + pe["c_name"] + ")"
             # Unknown identifier: C-host behavior is a stderr diagnostic and
             # a nil value at each access site (execution continues).
@@ -903,8 +1079,12 @@ proc cc_emit_expr(cc, expr):
         # Two-pass compilation: the discovery pass pre-binds every anonymous
         # function (deterministic traversal => stable order), letting this
         # second pass reference prototypes/objects emitted up front.
+        let cap_frame = fn_top_capturing_frame(cc)
         if cc.prebind_active and len(cc.anon_fns) < len(cc.prebound_anons):
             push(cc.anon_fns, cc.prebound_anons[len(cc.anon_fns)])
+            if cap_frame != nil:
+                entry_needs_cenv(cc.anon_fns[len(cc.anon_fns) - 1])
+                return "sage_bind_closure(&" + pb_fnobj_of(cc.anon_fns[len(cc.anon_fns) - 1]) + ", " + cap_frame["env_var"] + ")"
             return "sage_function_value(&" + cc.anon_fns[len(cc.anon_fns) - 1]["fnobj"] + ")"
         let uid = cc.next_unique_id
         cc.next_unique_id = cc.next_unique_id + 1
@@ -919,6 +1099,13 @@ proc cc_emit_expr(cc, expr):
         entry["body"] = expr.body
         entry["emitted"] = false
         push(cc.anon_fns, entry)
+        if cap_frame != nil:
+            entry["needs_cenv"] = true
+            let snap9 = []
+            for fi12 in range(len(cc.fn_stack)):
+                push(snap9, cc.fn_stack[fi12])
+            entry["frames"] = snap9
+            return "sage_bind_closure(&" + objname + ", " + cap_frame["env_var"] + ")"
         return "sage_function_value(&" + objname + ")"
     if t == 13:
         # EXPR_SET
@@ -1098,8 +1285,11 @@ proc cc_emit_stmt(cc, stmt):
         cc_line(cc, "continue;")
         return
     if t == 106:
-        # STMT_PROC - handled at top level
+        # STMT_PROC - top-level defs emitted by emit_function_definitions.
+        # Nested named procedures are not yet hoisted in the emitted backend
+        # (requires environment capture); they are silently skipped here.
         return
+
     if t == 107:
         # STMT_FOR
         let iterable = cc_emit_expr(cc, stmt.iterable)
@@ -1299,6 +1489,7 @@ proc emit_runtime_prelude(cc):
     push(o, "    const char* name;" + NL)
     push(o, "    int param_count;" + NL)
     push(o, "    void* fn;" + NL)
+    push(o, "    void* env;" + NL)
     push(o, "};" + NL)
     push(o, NL)
     push(o, "static SageValue sage_function_value(SageFunction* f) {" + NL)
@@ -1338,14 +1529,31 @@ proc emit_runtime_prelude(cc):
     push(o, "        fprintf(stderr, \"Runtime Error: Expected %d to %d arguments but got %d.\\n\", sf->param_count, sf->param_count, argc);" + NL)
     push(o, "        return sage_nil();" + NL)
     push(o, "    }" + NL)
+    push(o, "    if (sf->env != NULL) {" + NL)
+    push(o, "        switch (sf->param_count) {" + NL)
+    push(o, "            case 0: return ((SageValue(*)(void*))sf->fn)(sf->env);" + NL)
+    push(o, "            case 1: return ((SageValue(*)(void*, SageValue))sf->fn)(sf->env, args[0]);" + NL)
+    push(o, "            case 2: return ((SageValue(*)(void*, SageValue, SageValue))sf->fn)(sf->env, args[0], args[1]);" + NL)
+    push(o, "            case 3: { SageValue a3[3]; for (int i=0;i<3;i++) a3[i]=args[i]; return ((SageValue(*)(void*, SageValue, SageValue, SageValue))sf->fn)(sf->env, a3[0], a3[1], a3[2]); }" + NL)
+    push(o, "            case 4: { SageValue a4[4]; for (int i=0;i<4;i++) a4[i]=args[i]; return ((SageValue(*)(void*, SageValue, SageValue, SageValue, SageValue))sf->fn)(sf->env, a4[0], a4[1], a4[2], a4[3]); }" + NL)
+    push(o, "            default: return sage_nil();" + NL)
+    push(o, "        }" + NL)
+    push(o, "    }" + NL)
     push(o, "    switch (sf->param_count) {" + NL)
     push(o, "        case 0: return ((SageValue(*)(void))sf->fn)();" + NL)
     push(o, "        case 1: return ((SageValue(*)(SageValue))sf->fn)(args[0]);" + NL)
     push(o, "        case 2: return ((SageValue(*)(SageValue, SageValue))sf->fn)(args[0], args[1]);" + NL)
-    push(o, "        case 3: { SageValue a3[3]; for (int i=0;i<3;i++) a3[i]=args[i]; return ((SageValue(*)(SageValue, SageValue, SageValue))sf->fn)(a3[0], a3[1], a3[2]); }" + NL)
-    push(o, "        case 4: { SageValue a4[4]; for (int i=0;i<4;i++) a4[i]=args[i]; return ((SageValue(*)(SageValue, SageValue, SageValue, SageValue))sf->fn)(a4[0], a4[1], a4[2], a4[3]); }" + NL)
+    push(o, "        case 3: { SageValue b3[3]; for (int i=0;i<3;i++) b3[i]=args[i]; return ((SageValue(*)(SageValue, SageValue, SageValue))sf->fn)(b3[0], b3[1], b3[2]); }" + NL)
+    push(o, "        case 4: { SageValue b4[4]; for (int i=0;i<4;i++) b4[i]=args[i]; return ((SageValue(*)(SageValue, SageValue, SageValue, SageValue))sf->fn)(b4[0], b4[1], b4[2], b4[3]); }" + NL)
     push(o, "        default: return sage_nil();" + NL)
     push(o, "    }" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_bind_closure(SageFunction* proto, void* env) {" + NL)
+    push(o, "    SageFunction* f = (SageFunction*)malloc(sizeof(SageFunction));" + NL)
+    push(o, "    if (f == NULL) sage_fail(" + DQ + "Runtime Error: out of memory" + DQ + ");" + NL)
+    push(o, "    f->name = proto->name; f->param_count = proto->param_count;" + NL)
+    push(o, "    f->fn = proto->fn; f->env = env;" + NL)
+    push(o, "    SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = f; return v;" + NL)
     push(o, "}" + NL)
     push(o, NL)
     push(o, "typedef struct {" + NL)
@@ -2138,8 +2346,10 @@ proc emit_proc_prototypes(cc):
         let proc_entry = cc.procs[i]
         let parts = []
         push(parts, "static SageValue " + proc_entry["c_name"] + "(")
+        if proc_entry["needs_cenv"] == true:
+            push(parts, "void* _cenv")
         for j in range(proc_entry["param_count"]):
-            if j > 0:
+            if j > 0 or proc_entry["needs_cenv"] == true:
                 push(parts, ", ")
             push(parts, "SageValue arg" + str(j))
         push(parts, ");" + NL)
@@ -2147,7 +2357,7 @@ proc emit_proc_prototypes(cc):
     # First-class function objects: one per named proc.
     for i in range(len(cc.procs)):
         let proc_entry = cc.procs[i]
-        cc_emit(cc, "static SageFunction sage_fnobj_" + proc_entry["c_name"] + " = { " + DQ + proc_entry["sage_name"] + DQ + ", " + str(proc_entry["param_count"]) + ", (void*)" + proc_entry["c_name"] + " };" + NL)
+        cc_emit(cc, "static SageFunction sage_fnobj_" + proc_entry["c_name"] + " = { " + DQ + proc_entry["sage_name"] + DQ + ", " + str(proc_entry["param_count"]) + ", (void*)" + proc_entry["c_name"] + ", NULL };" + NL)
     # Anonymous functions: prototype + object (definition emitted later).
     let anon_proto_src = cc.anon_fns
     if cc.prebind_active and cc.prebound_anons != nil:
@@ -2156,13 +2366,15 @@ proc emit_proc_prototypes(cc):
         let af = anon_proto_src[i]
         let parts9 = []
         push(parts9, "static SageValue " + af["c_name"] + "(")
+        if af["needs_cenv"] == true:
+            push(parts9, "void* _cenv")
         for j in range(af["param_count"]):
-            if j > 0:
+            if j > 0 or af["needs_cenv"] == true:
                 push(parts9, ", ")
             push(parts9, "SageValue arg" + str(j))
         push(parts9, ");" + NL)
         cc_emit(cc, join(parts9, ""))
-        cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
+        cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + ", NULL };" + NL)
 
 proc emit_method_prototypes(cc):
     for i in range(len(cc.classes)):
@@ -2269,23 +2481,71 @@ proc emit_function_definition(cc, stmt):
     push(cc.defer_scopes, [])
     cc.locals = params
     collect_local_lets(cc, stmt.body, cc.locals)
-    # Emit function signature
+
+    # ---- Closure capture: promote locals into a heap environment -------
+    let promoting = stmt_body_has_nested_fn(stmt.body)
+    let env_type = ""
+    let env_var = ""
+    let frame = {"promoting": false, "env_var": "", "fields": {}}
+    if promoting:
+        env_type = make_unique_name(cc, "SageEnv", proc_name)
+        env_var = make_unique_name(cc, "sage_env", proc_name)
+        let fields = {}
+        let td = []
+        push(td, "typedef struct {" + NL)
+        for i in range(len(cc.locals)):
+            let e9 = cc.locals[i]
+            fields[e9["sage_name"]] = e9["c_name"]
+            push(td, "    SageSlot " + e9["c_name"] + ";" + NL)
+        push(td, "} " + env_type + ";" + NL)
+        frame["promoting"] = true
+        frame["env_var"] = env_var
+        frame["env_type"] = env_type
+        frame["deref"] = env_var
+        frame["fields"] = fields
+        # Typedef precedes this definition; hoisted children are emitted
+        # later in the file, so the type is always declared before use.
+        cc_emit(cc, join(td, ""))
+
+    # Emit function signature. Only hoisted children of capturing parents
+    # receive the hidden environment parameter.
     let parts = []
     push(parts, "static SageValue " + proc_entry["c_name"] + "(")
+    let sig_cenv = proc_entry["needs_cenv"] == true
+    if sig_cenv:
+        push(parts, "void* _cenv")
     for i in range(stmt.param_count):
-        if i > 0:
+        if i > 0 or sig_cenv:
             push(parts, ", ")
         push(parts, "SageValue arg" + str(i))
     push(parts, ") {" + NL)
     cc_emit(cc, join(parts, ""))
     cc.indent = cc.indent + 1
-    # Declare local slots
-    emit_slot_declarations(cc, cc.locals)
+    if promoting:
+        cc_line(cc, env_type + "* " + env_var + " = (" + env_type + "*)malloc(sizeof(" + env_type + "));")
+        for i in range(len(cc.locals)):
+            let e10 = cc.locals[i]
+            cc_line(cc, "sage_define_slot(&" + env_var + "->" + e10["c_name"] + ", sage_nil());")
+    # Declare local slots, excluding promoted (environment-resident) names.
+    if promoting:
+        let non_promoted = []
+        for i in range(len(cc.locals)):
+            let e11 = cc.locals[i]
+            if not dict_has(frame["fields"], e11["sage_name"]):
+                push(non_promoted, e11)
+        emit_slot_declarations(cc, non_promoted)
+    else:
+        emit_slot_declarations(cc, cc.locals)
     # Bind params
     for i in range(stmt.param_count):
         let pname = stmt.params[i].text
         let param_entry = find_name_entry(cc.locals, pname)
-        cc_line(cc, "sage_define_slot(&" + param_entry["c_name"] + ", arg" + str(i) + ");")
+        if promoting:
+            cc_line(cc, "sage_define_slot(&" + env_var + "->" + param_entry["c_name"] + ", arg" + str(i) + ");")
+        else:
+            cc_line(cc, "sage_define_slot(&" + param_entry["c_name"] + ", arg" + str(i) + ");")
+    # Capture context for nested definitions discovered in this body
+    push(cc.fn_stack, frame)
     # Emit body
     cc_emit_stmt_list(cc, stmt.body)
     let end_scope = cc.defer_scopes[len(cc.defer_scopes) - 1]
@@ -2296,6 +2556,7 @@ proc emit_function_definition(cc, stmt):
     cc_line(cc, "return sage_nil();")
     cc.indent = cc.indent - 1
     cc_line(cc, "}")
+    pop(cc.fn_stack)
     cc_blank(cc)
     cc.defer_scopes = prev_defers
     cc.locals = prev_locals
@@ -2374,16 +2635,29 @@ proc emit_anon_definition(cc, af):
     let out_len = len(cc.output)
     let prev_failed = cc.failed
     cc.failed = false
+    let needs_cenv = af["needs_cenv"] == true
+    let saved_frames = cc.fn_stack
+    if needs_cenv and af["frames"] != nil:
+        cc.fn_stack = []
+        for fi13 in range(len(af["frames"])):
+            let fr13 = af["frames"][fi13]
+            fr13["deref"] = "((" + fr13["env_type"] + "*)" + "_cenv)"
+            push(cc.fn_stack, fr13)
     if not af["prototyped"]:
         let parts = []
         push(parts, "static SageValue " + af["c_name"] + "(")
+        if needs_cenv:
+            push(parts, "void* _cenv")
         for i in range(af["param_count"]):
+            if i > 0 or needs_cenv:
+                push(parts, ", ")
+            push(parts, "SageValue arg" + str(i))
             if i > 0:
                 push(parts, ", ")
             push(parts, "SageValue arg" + str(i))
         push(parts, ");" + NL)
         cc_emit(cc, join(parts, ""))
-        cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
+        cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + ", NULL };" + NL)
     let prev_locals = cc.locals
     let prev_defers = cc.defer_scopes
     push(cc.defer_scopes, [])
@@ -2394,8 +2668,10 @@ proc emit_anon_definition(cc, af):
     collect_local_lets(cc, af["body"], cc.locals)
     let sig = []
     push(sig, "static SageValue " + af["c_name"] + "(")
+    if needs_cenv:
+        push(sig, "void* _cenv")
     for i in range(af["param_count"]):
-        if i > 0:
+        if i > 0 or needs_cenv:
             push(sig, ", ")
         push(sig, "SageValue arg" + str(i))
     push(sig, ") {")
@@ -2422,12 +2698,14 @@ proc emit_anon_definition(cc, af):
     cc_line(cc, "}")
     cc_blank(cc)
     if cc.failed:
-        del cc.output[out_len:len(cc.output)]
+        cc.output = slice(cc.output, 0, out_len)
         if not af["prototyped"]:
-            cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
+            cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + ", NULL };" + NL)
         cc.failed = prev_failed
+        cc.fn_stack = saved_frames
     else:
         cc.failed = prev_failed
+        cc.fn_stack = saved_frames
     cc.defer_scopes = prev_defers
     cc.locals = prev_locals
 
@@ -2436,6 +2714,62 @@ proc emit_anon_flush(cc):
     while i5 < len(cc.anon_fns):
         emit_anon_definition(cc, cc.anon_fns[i5])
         i5 = i5 + 1
+    let h6 = 0
+    while h6 < len(cc.hoisted_defs):
+        emit_hoisted_definition(cc, cc.hoisted_defs[h6])
+        h6 = h6 + 1
+
+# Hoisted nested named proc: void*-env taking definition.
+proc emit_hoisted_definition(cc, hd):
+    let stmt2 = hd["stmt"]
+    let entry2 = hd["entry"]
+    print "[dbgH] start c_name=" + str(entry2["c_name"])
+    print "[dbgH] pc=" + str(stmt2.param_count)
+    print "[dbgH] defaults=" + str(stmt2.param_defaults)
+    print "[dbgH] frames=" + str(len(hd["frames"]))
+    let f0 = hd["frames"][len(hd["frames"]) - 1]
+    print "[dbgH] top.env_type=" + str(f0["env_type"])
+    print "[dbgH] top.promoting=" + str(f0["promoting"])
+    print "[dbgH] top.fields=" + str(len(f0["fields"]))
+    # Restore capture frames captured at queue time.
+    let saved_frames = cc.fn_stack
+    cc.fn_stack = []
+    for fi14 in range(len(hd["frames"])):
+        let fr14 = hd["frames"][fi14]
+        fr14["deref"] = "((" + fr14["env_type"] + "*)" + "_cenv)"
+        push(cc.fn_stack, fr14)
+    let prev_locals = cc.locals
+    let prev_defers = cc.defer_scopes
+    push(cc.defer_scopes, [])
+    cc.locals = []
+    collect_local_lets(cc, stmt2.body, cc.locals)
+    let sig = []
+    push(sig, "static SageValue " + entry2["c_name"] + "(void* _cenv")
+    for i in range(stmt2.param_count):
+        push(sig, ", SageValue arg" + str(i))
+    push(sig, ") {")
+    cc_emit(cc, join(sig, ""))
+    cc.indent = cc.indent + 1
+    emit_slot_declarations(cc, cc.locals)
+    for i in range(stmt2.param_count):
+        let pname = stmt2.params[i].text
+        let pe6 = find_name_entry(cc.locals, pname)
+        if pe6 != nil:
+            cc_line(cc, "sage_define_slot(&" + pe6["c_name"] + ", arg" + str(i) + ");")
+    cc_emit_stmt_list(cc, stmt2.body)
+    let scope6 = cc.defer_scopes[len(cc.defer_scopes) - 1]
+    let si7 = len(scope6) - 1
+    while si7 >= 0:
+        cc_emit_stmt(cc, scope6[si7])
+        si7 = si7 - 1
+    pop(cc.defer_scopes)
+    cc_line(cc, "return sage_nil();")
+    cc.indent = cc.indent - 1
+    cc_line(cc, "}")
+    cc_blank(cc)
+    cc.locals = prev_locals
+    cc.defer_scopes = prev_defers
+    cc.fn_stack = saved_frames
 
 # ============================================================================
 # Main Function Emission
@@ -2616,6 +2950,8 @@ proc compile_to_c(program):
         e2["body"] = src_e["body"]
         e2["emitted"] = false
         e2["prototyped"] = true
+        e2["needs_cenv"] = src_e["needs_cenv"]
+        e2["frames"] = src_e["frames"]
         push(prebound, e2)
     cc.prebound_anons = prebound
     cc.anon_fns = []
