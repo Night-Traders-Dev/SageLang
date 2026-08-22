@@ -874,4 +874,10 @@ proc main():
 try:
     main()
 catch e:
-    print "Error: " + str(e)
+    # Formatted diagnostics (parser errors) already carry their own
+    # lowercase severity; only plain exceptions get the wrapper.
+    let msg = str(e)
+    if len(msg) >= 6 and msg[0:6] == "error:":
+        print msg
+    else:
+        print "Error: " + msg

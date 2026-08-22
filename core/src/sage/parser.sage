@@ -240,7 +240,12 @@ class Parser:
     proc parse_error(tok, message, hint):
         let ctx = self.get_error_ctx()
         let col = -1
-        let formatted = errors.format_error(ctx, tok.line, col, "Error", message, hint)
+        # Match the C host's diagnostic style: lowercase severity, and strip
+        # any duplicated "Error:" prefix from hand-written messages.
+        let msg = message
+        if len(msg) >= 7 and msg[0:7] == "Error: ":
+            msg = msg[7:]
+        let formatted = errors.format_error(ctx, tok.line, col, "error", msg, hint)
         raise formatted
 
     # --- Token access ---
@@ -1047,11 +1052,16 @@ class Parser:
                 continue
             if self.match_tok(token.TOKEN_CASE):
                 let pattern = self.parse_expression()
+                # Optional guard: case PATTERN if CONDITION:
+                let guard = nil
+                if self.match_tok(token.TOKEN_IF):
+                    guard = self.parse_expression()
                 self.consume(token.TOKEN_COLON, "Expect ':' after case pattern.")
                 self.consume(token.TOKEN_NEWLINE, "Expect newline after case clause.")
                 let body = self.parse_block()
                 let clause = {}
                 clause["pattern"] = pattern
+                clause["guard"] = guard
                 clause["body"] = body
                 push(cases, clause)
                 continue

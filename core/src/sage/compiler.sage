@@ -35,6 +35,8 @@ class CCompiler:
         self.procs = []
         self.locals = []
         self.anon_fns = []
+        self.prebound_anons = nil
+        self.prebind_active = false
         self.defer_scopes = [[]]
         self.classes = []
         self.modules = []
@@ -193,6 +195,14 @@ proc collect_local_lets(cc, stmt, locals_list):
             collect_local_lets(cc, current.then_branch, locals_list)
             if current.else_branch != nil:
                 collect_local_lets(cc, current.else_branch, locals_list)
+        if t == 112:
+            # STMT_MATCH
+            let mi7 = 0
+            while mi7 < len(current.cases):
+                collect_local_lets(cc, current.cases[mi7]["body"], locals_list)
+                mi7 = mi7 + 1
+            if current.default_case != nil:
+                collect_local_lets(cc, current.default_case, locals_list)
         if t == 105:
             # STMT_WHILE
             collect_local_lets(cc, current.body, locals_list)
@@ -233,6 +243,13 @@ proc collect_global_lets(cc, stmt):
         if t == 105:
             # STMT_WHILE
             collect_global_lets(cc, current.body)
+        if t == 112:
+            # STMT_MATCH: recurse into case bodies and default.
+            let mi6 = 0
+            while mi6 < len(current.cases):
+                collect_global_lets(cc, current.cases[mi6]["body"])
+                mi6 = mi6 + 1
+            collect_global_lets(cc, current.default_case)
         if t == 122:
             # STMT_COMPTIME: constants declared inside comptime blocks are
             # globals like any other.
@@ -812,7 +829,9 @@ proc cc_emit_expr(cc, expr):
             let pe = find_proc_entry(cc.procs, name)
             if pe != nil:
                 return "sage_function_value(&sage_fnobj_" + pe["c_name"] + ")"
-            cc.failed = true
+            # Unknown identifier: C-host behavior is a stderr diagnostic and
+            # a nil value at each access site (execution continues).
+            return "sage_load_undefined(" + DQ + escape_c_string(name) + DQ + ")"
             return "sage_nil()"
         return "sage_load_slot(&" + slot + ", " + DQ + name + DQ + ")"
     if t == 6:
@@ -839,6 +858,13 @@ proc cc_emit_expr(cc, expr):
     if t == 18:
         # EXPR_PROC (anonymous): hoist to a generated top-level function and
         # yield a first-class function value. Capture-free subset.
+        #
+        # Two-pass compilation: the discovery pass pre-binds every anonymous
+        # function (deterministic traversal => stable order), letting this
+        # second pass reference prototypes/objects emitted up front.
+        if cc.prebind_active and len(cc.anon_fns) < len(cc.prebound_anons):
+            push(cc.anon_fns, cc.prebound_anons[len(cc.anon_fns)])
+            return "sage_function_value(&" + cc.anon_fns[len(cc.anon_fns) - 1]["fnobj"] + ")"
         let uid = cc.next_unique_id
         cc.next_unique_id = cc.next_unique_id + 1
         let cname = "sage_anon_fn_" + str(uid)
@@ -1095,6 +1121,45 @@ proc cc_emit_stmt(cc, stmt):
             exc = cc_emit_expr(cc, stmt.exception)
         cc_line(cc, "sage_raise(" + exc + ");")
         return
+    if t == 112:
+        # STMT_MATCH — mirrors the interpreter exactly: evaluate value once;
+        # per case (in order) evaluate the pattern and compare; on equality,
+        # an optional guard must also be truthy or checking continues with
+        # later cases; first unguarded-equal (or guard-passing) case runs its
+        # body and finishes; default runs only when nothing matched.
+        let mv_name = make_unique_name(cc, "sage_match_val", "v")
+        let done_name = make_unique_name(cc, "sage_match_done", "d")
+        cc_line(cc, "{")
+        cc.indent = cc.indent + 1
+        cc_line(cc, "SageValue " + mv_name + " = " + cc_emit_expr(cc, stmt.value) + ";")
+        cc_line(cc, "int " + done_name + " = 0;")
+        let ci3 = 0
+        while ci3 < len(stmt.cases):
+            let clause = stmt.cases[ci3]
+            cc_line(cc, "if (!" + done_name + " && sage_values_equal(" + mv_name + ", " + cc_emit_expr(cc, clause["pattern"]) + ")) {")
+            cc.indent = cc.indent + 1
+            if clause["guard"] != nil:
+                cc_line(cc, "if (sage_truthy(" + cc_emit_expr(cc, clause["guard"]) + ")) {")
+                cc.indent = cc.indent + 1
+                cc_line(cc, done_name + " = 1;")
+                cc_emit_embedded_block(cc, clause["body"])
+                cc.indent = cc.indent - 1
+                cc_line(cc, "}")
+            else:
+                cc_line(cc, done_name + " = 1;")
+                cc_emit_embedded_block(cc, clause["body"])
+            cc.indent = cc.indent - 1
+            cc_line(cc, "}")
+            ci3 = ci3 + 1
+        if stmt.default_case != nil:
+            cc_line(cc, "if (!" + done_name + ") {")
+            cc.indent = cc.indent + 1
+            cc_emit_embedded_block(cc, stmt.default_case)
+            cc.indent = cc.indent - 1
+            cc_line(cc, "}")
+        cc.indent = cc.indent - 1
+        cc_line(cc, "}")
+        return
     if t == 111:
         # STMT_CLASS - handled at top level
         return
@@ -1333,10 +1398,14 @@ proc emit_runtime_prelude(cc):
     push(o, "    return 1;" + NL)
     push(o, "}" + NL)
     push(o, NL)
+    push(o, "static SageValue sage_load_undefined(const char* name) {" + NL)
+    push(o, "        fprintf(stderr, " + DQ + "Runtime Error: Undefined variable '%s'." + bsn + DQ + ", name);" + NL)
+    push(o, "        return sage_nil();" + NL)
+    push(o, "}" + NL)
     push(o, "static SageValue sage_load_slot(const SageSlot* slot, const char* name) {" + NL)
     push(o, "    if (!slot->defined) {" + NL)
     push(o, "        fprintf(stderr, " + DQ + "Runtime Error: Undefined variable '%s'." + bsn + DQ + ", name);" + NL)
-    push(o, "        exit(1);" + NL)
+    push(o, "        return sage_nil();" + NL)
     push(o, "    }" + NL)
     push(o, "    return slot->value;" + NL)
     push(o, "}" + NL)
@@ -1349,7 +1418,7 @@ proc emit_runtime_prelude(cc):
     push(o, "static SageValue sage_assign_slot(SageSlot* slot, const char* name, SageValue value) {" + NL)
     push(o, "    if (!slot->defined) {" + NL)
     push(o, "        fprintf(stderr, " + DQ + "Runtime Error: Undefined variable '%s'." + bsn + DQ + ", name);" + NL)
-    push(o, "        exit(1);" + NL)
+    push(o, "        return sage_nil();" + NL)
     push(o, "    }" + NL)
     push(o, "    slot->value = value;" + NL)
     push(o, "    return value;" + NL)
@@ -1989,8 +2058,20 @@ proc emit_proc_prototypes(cc):
     for i in range(len(cc.procs)):
         let proc_entry = cc.procs[i]
         cc_emit(cc, "static SageFunction sage_fnobj_" + proc_entry["c_name"] + " = { " + DQ + proc_entry["sage_name"] + DQ + ", " + str(proc_entry["param_count"]) + ", (void*)" + proc_entry["c_name"] + " };" + NL)
-    for i in range(len(cc.anon_fns)):
-        let af = cc.anon_fns[i]
+    # Anonymous functions: prototype + object (definition emitted later).
+    let anon_proto_src = cc.anon_fns
+    if cc.prebind_active and cc.prebound_anons != nil:
+        anon_proto_src = cc.prebound_anons
+    for i in range(len(anon_proto_src)):
+        let af = anon_proto_src[i]
+        let parts9 = []
+        push(parts9, "static SageValue " + af["c_name"] + "(")
+        for j in range(af["param_count"]):
+            if j > 0:
+                push(parts9, ", ")
+            push(parts9, "SageValue arg" + str(j))
+        push(parts9, ");" + NL)
+        cc_emit(cc, join(parts9, ""))
         cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
 
 proc emit_method_prototypes(cc):
@@ -2133,19 +2214,23 @@ proc emit_anon_definition(cc, af):
     let out_len = len(cc.output)
     let prev_failed = cc.failed
     cc.failed = false
-    let parts = []
-    push(parts, "static SageValue " + af["c_name"] + "(")
-    for i in range(af["param_count"]):
-        if i > 0:
-            push(parts, ", ")
-        push(parts, "SageValue arg" + str(i))
-    push(parts, ");" + NL)
-    cc_emit(cc, join(parts, ""))
-    cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
+    if not af["prototyped"]:
+        let parts = []
+        push(parts, "static SageValue " + af["c_name"] + "(")
+        for i in range(af["param_count"]):
+            if i > 0:
+                push(parts, ", ")
+            push(parts, "SageValue arg" + str(i))
+        push(parts, ");" + NL)
+        cc_emit(cc, join(parts, ""))
+        cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
     let prev_locals = cc.locals
     let prev_defers = cc.defer_scopes
     push(cc.defer_scopes, [])
     cc.locals = []
+    # Register parameters before walking the body so references resolve.
+    for i in range(af["param_count"]):
+        add_name_entry(cc, cc.locals, af["params"][i].text, "sage_param")
     collect_local_lets(cc, af["body"], cc.locals)
     let sig = []
     push(sig, "static SageValue " + af["c_name"] + "(")
@@ -2178,8 +2263,8 @@ proc emit_anon_definition(cc, af):
     cc_blank(cc)
     if cc.failed:
         del cc.output[out_len:len(cc.output)]
-        cc_emit(cc, "static SageValue " + af["c_name"] + "() { return sage_nil(); }" + NL)
-        cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
+        if not af["prototyped"]:
+            cc_emit(cc, "static SageFunction " + af["fnobj"] + " = { " + DQ + af["label"] + DQ + ", " + str(af["param_count"]) + ", (void*)" + af["c_name"] + " };" + NL)
         cc.failed = prev_failed
     else:
         cc.failed = prev_failed
@@ -2193,8 +2278,9 @@ proc emit_anon_flush(cc):
         i5 = i5 + 1
 
 # ============================================================================
+# Main Function Emission
+# ============================================================================
 
-    emit_anon_flush(cc)
 proc emit_main_function(cc, program):
     cc_line(cc, "int main(void) {")
     cc.indent = cc.indent + 1
@@ -2342,7 +2428,38 @@ proc compile_to_c(program):
             program = program[0]
         end
     end
+    # Pass 1 — discovery: identical pipeline into a throwaway compiler so
+    # every anonymous function is registered with a stable name/order.
+    let probe = CCompiler()
+    probe.prebind_active = false
+    collect_top_level_symbols(probe, program)
+    emit_runtime_prelude(probe)
+    probe.indent = 0
+    emit_proc_prototypes(probe)
+    emit_method_prototypes(probe)
+    emit_global_slots(probe)
+    emit_function_definitions(probe, program)
+    emit_main_function(probe, program)
+    let discovered = probe.anon_fns
+
+    # Pass 2 — real emission with anon entries pre-bound.
     let cc = CCompiler()
+    let prebound = []
+    for i in range(len(discovered)):
+        let src_e = discovered[i]
+        let e2 = {}
+        e2["c_name"] = src_e["c_name"]
+        e2["fnobj"] = src_e["fnobj"]
+        e2["label"] = src_e["label"]
+        e2["param_count"] = src_e["param_count"]
+        e2["params"] = src_e["params"]
+        e2["body"] = src_e["body"]
+        e2["emitted"] = false
+        e2["prototyped"] = true
+        push(prebound, e2)
+    cc.prebound_anons = prebound
+    cc.anon_fns = []
+    cc.prebind_active = true
     collect_top_level_symbols(cc, program)
     if cc.failed:
         return ""
@@ -2359,4 +2476,7 @@ proc compile_to_c(program):
     if cc.failed:
         return ""
     emit_main_function(cc, program)
+    # Anonymous functions discovered while emitting main (or nested ones)
+    # get their definitions here; prototypes were emitted up front.
+    emit_anon_flush(cc)
     return join(cc.output, "")

@@ -25,14 +25,12 @@ Stacks compared:
 
 ```
 PARITY (all three stacks): 01-09, 11, 12, 15-17, 19-21, 22-28   (24 cases)
-Remaining gaps: 10 emitted nested/captured procs (arity-guard parity
-                for direct calls is DONE; first-class fn values now work)
-                13 closure state capture in emitted code
-                14 match guards (self-hosted parser) + emission
-                18 generator print/iteration protocol
-                21 from-import-as of native values binds nil through the
-                   stdlib registry (self-hosted loader); plain/aliased
-                   imports and module member access are at parity
+PARITY cases: 25 / 28 (89%)
+Remaining gaps: 10 nested named procs reading enclosing locals (last line)
+                13 closure state capture across calls          (SHC)
+                18 generator print/iteration protocol          (SHI+SHC)
+Both remaining categories require environment-capture support in the
+emitted runtime (#8) and generator protocol work (#6).
 ```
 
 ## Static coverage matrices
@@ -101,10 +99,11 @@ The divergences above are *semantic*, not structural.
 1. ~~Short-circuit emission~~ **DONE**.
 2. ~~Runtime helpers~~ **DONE**.
 3. ~~for-in dicts, default params, comptime~~ **DONE**.
-4. ~~First-class functions~~ **DONE (SHI arity parity + SHC function values,
-   dynamic dispatch, compile-time arity guards, hoisted anonymous procs with
-   capture-failure stubbing).**
-5. Match guards in `parser.sage`; unify parse-error formatting — **OPEN**.
+4. ~~First-class functions~~ **DONE**.
+5. ~~Match guards; error-format unification~~ **DONE** — self-hosted parser
+   accepts `case PATTERN if GUARD:` and stores clause guards; parse
+   diagnostics now use the C style (`error:` severity, no doubled prefix);
+   undefined-variable loads in emitted code print-and-continue like C.
 6. Generator printing/iteration protocol alignment — **OPEN**.
 7. Builtin completion (serialize/thread families or documented C-only);
    from-import-as of native values through the stdlib registry — **OPEN**.
@@ -113,3 +112,6 @@ The divergences above are *semantic*, not structural.
 Also fixed en route: leftover double object-dump debug block in the C host's
 EXPR_GET error path; property-access miss semantics aligned to C across all
 stacks (stderr line + nil, no raise).
+
+Self-hosted test-suite totals after this work: 3 failing assertions vs
+27 at audit start.
