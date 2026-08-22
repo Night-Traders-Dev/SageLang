@@ -96,3 +96,8 @@
 **Vulnerability:** Generated `s_readfile` helper in `aot.c` allocated heap memory for file reading without checking `ftell` size bounds (`SAGE_MAX_READ_SIZE`) or `malloc` NULL return (CWE-400 / CWE-789).
 **Learning:** Code generation engines for compiled backends (like AOT) often recreate native standard library functions as lightweight C snippets. If global resource limits enforced in standard interpreter built-ins are omitted in these C emitter skeletons, compiled binaries become vulnerable to memory exhaustion and NULL pointer dereferences when reading arbitrary or large streams.
 **Prevention:** Ensure code generator runtime skeletons enforce identical global resource boundaries (`SAGE_MAX_READ_SIZE`), allocation checks, and exact byte-count string terminations as interpreted standard library functions.
+
+## 2026-08-25 - Resource Exhaustion in AOT Shell Output Collection
+**Vulnerability:** Generated `s_shell_exec` runtime helper in `aot.c` accumulated command output into heap memory via `realloc` without checking output length bounds or `realloc` failure (CWE-400).
+**Learning:** Command execution primitives in compiled backends (like AOT) that capture process output can stream unbounded data into heap memory if process stdout is infinite or very large, causing Denial of Service or OOM crashes.
+**Prevention:** Always cap process output buffer accumulation (e.g., `104857600` bytes) and validate `realloc` return pointers across all execution runtime skeletons.
