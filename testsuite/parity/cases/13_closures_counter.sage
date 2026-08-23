@@ -3,8 +3,6 @@ proc make_counter():
     return proc():
         count = count + 1
         return count
-    end
-end
 let c1 = make_counter()
 print c1()
 print c1()

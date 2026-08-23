@@ -15,10 +15,6 @@ if b1 == 0 and b2 == 128:
             alloc.bump_reset(bump)
             if alloc.bump_used(bump) == 0:
                 print "bump_ok"
-            end
-        end
-    end
-end
 
 # Free-list allocator
 let fl = alloc.freelist_create(0, 4096)
@@ -29,8 +25,6 @@ if f1 == 0 and f2 == 256:
     let st = alloc.freelist_stats(fl)
     if st["used"] == 256 and st["fragments"] >= 1:
         print "freelist_ok"
-    end
-end
 
 # Bitmap allocator
 let bm = alloc.bitmap_create(0, 8, 4096)
@@ -43,9 +37,6 @@ if pg1 == 0 and pg2 == 4096:
         let pg3 = alloc.bitmap_alloc_page(bm)
         if pg3 == 0:
             print "bitmap_ok"
-        end
-    end
-end
 
 # Aliases: free_page, alloc_page, free_pages, alloc_pages
 let bm2 = alloc.bitmap_create(0, 8, 4096)
@@ -58,8 +49,5 @@ if ap == 0:
         if aps == 4096:
             alloc.free_pages(bm2, 4096, 3)
             print "aliases_ok"
-        end
-    end
-end
 
 print "PASS"

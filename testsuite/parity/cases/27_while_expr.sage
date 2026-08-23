@@ -5,7 +5,5 @@ while n != 1:
         n = n / 2
     else:
         n = 3 * n + 1
-    end
     steps = steps + 1
-end
 print steps

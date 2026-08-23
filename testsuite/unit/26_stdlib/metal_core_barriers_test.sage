@@ -16,7 +16,6 @@ print "barriers_ok"
 let cid = core.cpu_id()
 if cid == 0:
     print "cpu_id_ok"
-end
 
 # Test critical section enter/exit
 core.critical_section_enter()

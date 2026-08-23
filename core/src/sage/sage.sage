@@ -29,7 +29,7 @@ from interpreter import new_interpreter, run_source, exec_program, set_error_con
 
 let NL = chr(10)
 let SQ = chr(39)
-let VERSION = "3"
+let VERSION = "4.1.16"
 
 # ============================================================================
 # Usage / Help
@@ -79,7 +79,6 @@ proc print_version():
     let ver = info["version"]
     if ver[0] == "v":
         ver = ver[1:]
-    end
     print "SageLang v" + ver
     print "Architecture : " + info["arch"]
     print "Build type   : self-hosted (host: " + info["type"] + " interpreter)"

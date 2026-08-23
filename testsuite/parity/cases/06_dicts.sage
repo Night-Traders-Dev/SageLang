@@ -8,4 +8,3 @@ print len(dict_keys(d))
 print d["y"] + d["z"]
 for k in d:
     print dict_has(d, k)
-end

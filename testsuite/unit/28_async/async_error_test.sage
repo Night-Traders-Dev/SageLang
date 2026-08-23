@@ -15,13 +15,11 @@ let r2 = await t2
 let r3 = await t3
 if r1 == 6 and r2 == 9 and r3 == 12:
     print "multi_await_ok"
-end
 
 # await on a plain (non-thread) value returns it directly
 let plain = 42
 let r = await plain
 if r == 42:
     print "await_non_thread_ok"
-end
 
 print "PASS"

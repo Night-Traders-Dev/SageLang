@@ -949,6 +949,7 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
     mod->name = str_dup(import->module_name);
     mod->binding_name = str_dup(binding_name);
     mod->path = NULL;
+    mod->source = NULL;
     mod->ast = NULL;
     mod->is_alias = 0;
     mod->next = compiler->modules;

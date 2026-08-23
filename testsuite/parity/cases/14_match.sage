@@ -6,8 +6,6 @@ proc classify(x):
             return "one"
         default:
             return "many"
-end
-end
 print classify(0)
 print classify(1)
 print classify(99)
@@ -16,4 +14,3 @@ match 5:
         print "big"
     default:
         print "small"
-end

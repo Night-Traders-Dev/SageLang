@@ -7,7 +7,6 @@ if 0:
     print "0 is truthy"
 else:
     print "0 is falsy"
-end
 
 print "--- Atomic Initialization ---"
 let a = atomic_new(42)

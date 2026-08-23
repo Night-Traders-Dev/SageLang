@@ -697,9 +697,7 @@ proc compile_to_vm_artifact(stmts):
         while s != nil:
             push(arr, s)
             s = s.next
-        end
         stmts = arr
-    end
     let program = compile_to_program(stmts)
     if program == nil:
         return nil

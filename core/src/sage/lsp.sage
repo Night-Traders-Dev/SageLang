@@ -469,7 +469,6 @@ proc generate_diagnostics(content, filename):
             while ci < ll:
                 last = line[ci]
                 ci = ci + 1
-            end
             if last == " " or last == chr(9):
                 let d = {}
                 d["line"] = i
@@ -478,8 +477,6 @@ proc generate_diagnostics(content, filename):
                 d["severity"] = 2
                 d["message"] = "Trailing whitespace"
                 push(diagnostics, d)
-            end
-        end
         # Check line length > 120
         if ll > 120:
             let d = {}
@@ -489,7 +486,6 @@ proc generate_diagnostics(content, filename):
             d["severity"] = 2
             d["message"] = "Line exceeds 120 characters (" + str(ll) + ")"
             push(diagnostics, d)
-        end
         # Check for tab characters
         let ti = 0
         while ti < ll:
@@ -502,11 +498,8 @@ proc generate_diagnostics(content, filename):
                 d["message"] = "Tab character found (use spaces)"
                 push(diagnostics, d)
                 ti = ll
-            end
             ti = ti + 1
-        end
         i = i + 1
-    end
     return diagnostics
 
 # ========================================================================

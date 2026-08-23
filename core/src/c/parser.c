@@ -151,7 +151,6 @@ static void consume_identifier_like(const char* message) {
         current_token.type == TOKEN_STRUCT ||
         current_token.type == TOKEN_TRAIT ||
         current_token.type == TOKEN_MATCH ||
-        current_token.type == TOKEN_END ||
         current_token.type == TOKEN_INIT) {
         advance_parser();
         return;
@@ -432,7 +431,6 @@ static int match_identifier_like(void) {
         current_token.type == TOKEN_STRUCT ||
         current_token.type == TOKEN_TRAIT ||
         current_token.type == TOKEN_MATCH ||
-        current_token.type == TOKEN_END ||
         current_token.type == TOKEN_INIT ||
         current_token.type == TOKEN_PRINT) {
         advance_parser();
@@ -713,7 +711,7 @@ static Expr* primary() {
 
     // Identifiers (including keywords that can be used as variable names in expression context)
     if (match(TOKEN_IDENTIFIER) || match(TOKEN_ENUM) || match(TOKEN_STRUCT) || match(TOKEN_TRAIT) ||
-        match(TOKEN_MATCH) || match(TOKEN_END) || match(TOKEN_INIT)) {
+        match(TOKEN_MATCH) || match(TOKEN_INIT)) {
         Token name = previous_token;
         return new_variable_expr(name);
     }
@@ -805,8 +803,7 @@ static Expr* postfix() {
             if (!match(TOKEN_IDENTIFIER) && !match(TOKEN_INIT) &&
                 !match(TOKEN_CLASS) && !match(TOKEN_SELF) &&
                 !match(TOKEN_SUPER) && !match(TOKEN_IN) &&
-                !match(TOKEN_IMPORT) && !match(TOKEN_END) &&
-                !match(TOKEN_PRINT)) {
+                !match(TOKEN_IMPORT) && !match(TOKEN_PRINT)) {
                 parser_report(current_token, token_span(&current_token),
                               "expected property name after '.' or '->'",
                               "identifiers start with a letter or '_'");
@@ -1089,13 +1086,8 @@ static Stmt* block() {
         parser_report(current_token, 1, message,
                       "reduce the depth of nested blocks");
     }
-    // Allow 'end' to immediately close an empty block (no indented body)
+    // Allow empty block with just dedent (no indented body)
     while (check(TOKEN_NEWLINE)) match(TOKEN_NEWLINE);
-    if (check(TOKEN_END)) {
-        match(TOKEN_END);
-        parser_depth--;
-        return new_block_stmt(NULL);
-    }
     consume(TOKEN_INDENT, "Expect indentation after block start.");
 
     Stmt* head = NULL;
@@ -1172,7 +1164,7 @@ static TypeAnnotation* parse_type_annotation(void) {
         arr_name.length = 5;
         return new_type_annotation(arr_name, params, param_count, 0);
     }
-    if (current_token.type != TOKEN_IDENTIFIER && current_token.type != TOKEN_MATCH && current_token.type != TOKEN_END && current_token.type != TOKEN_INIT) return NULL;
+    if (current_token.type != TOKEN_IDENTIFIER && current_token.type != TOKEN_MATCH && current_token.type != TOKEN_INIT) return NULL;
     Token name = current_token;
     advance_parser();
 
@@ -1234,7 +1226,7 @@ static Stmt* proc_declaration() {
         if (!check(TOKEN_RPAREN)) {
             do {
                 if (check(TOKEN_RPAREN)) break; // trailing comma
-                if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END || current_token.type == TOKEN_INIT) {
+                if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_INIT) {
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
                         params = SAGE_REALLOC(params, sizeof(Token) * capacity);
@@ -1310,8 +1302,7 @@ static Expr* parse_proc_expr(void) {
         do {
             if (check(TOKEN_RPAREN)) break;
             if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER ||
-                current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END ||
-                current_token.type == TOKEN_INIT) {
+                current_token.type == TOKEN_MATCH || current_token.type == TOKEN_INIT) {
                 if (param_count >= capacity) {
                     capacity = capacity == 0 ? 4 : capacity * 2;
                     params = SAGE_REALLOC(params, sizeof(Token) * (size_t)capacity);
@@ -1338,9 +1329,6 @@ static Expr* parse_proc_expr(void) {
     // We wrap it in a STMT_BLOCK if it's not already one.
     Stmt* body = parse_maybe_oneline_block();
 
-    // Consume optional 'end' keyword after the body
-    match(TOKEN_END);
-
     Expr* e = new_proc_expr(params, param_count, body);
     // Shrink params array to fit (optional)
     if (param_count > 0) {
@@ -1351,7 +1339,7 @@ static Expr* parse_proc_expr(void) {
 
 static Stmt* async_proc_declaration() {
     consume(TOKEN_PROC, "Expect 'proc' after 'async'.");
-    if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END || current_token.type == TOKEN_INIT) {
+    if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_INIT) {
         Token name = current_token;
         advance_parser();
 
@@ -1364,7 +1352,7 @@ static Stmt* async_proc_declaration() {
         if (!check(TOKEN_RPAREN)) {
             do {
                 if (check(TOKEN_RPAREN)) break; // trailing comma
-                if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END || current_token.type == TOKEN_INIT) {
+                if (current_token.type == TOKEN_SELF || current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_INIT) {
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
                         params = SAGE_REALLOC(params, sizeof(Token) * capacity);
@@ -1609,8 +1597,6 @@ static Stmt* statement() {
     }
     if (match(TOKEN_BREAK)) return new_break_stmt();
     if (match(TOKEN_CONTINUE)) return new_continue_stmt();
-    // 'end' keyword: optional block terminator (blocks use INDENT/DEDENT)
-    if (match(TOKEN_END)) return new_expr_stmt(new_nil_expr());
 
     Expr* expr = expression();
     
@@ -1701,7 +1687,7 @@ static Stmt* declaration() {
         Token saved_pt = previous_token;
         TokenType kw = current_token.type;
         advance_parser();
-        if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END || current_token.type == TOKEN_INIT) {
+        if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_INIT) {
             // It's a declaration
             Stmt* s = NULL;
             if (kw == TOKEN_STRUCT) s = struct_declaration();
@@ -1756,7 +1742,7 @@ static Stmt* declaration() {
             Token saved_current = current_token;
             Token saved_prev = previous_token;
             advance_parser(); // consume ':'
-            if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_END || current_token.type == TOKEN_INIT) {
+if (current_token.type == TOKEN_IDENTIFIER || current_token.type == TOKEN_MATCH || current_token.type == TOKEN_INIT) {
                 type_ann = parse_type_annotation();
             } else {
                 // Not a type annotation, restore

@@ -2997,11 +2997,8 @@ proc compile_to_c(program):
         else:
             for i in range(len(program) - 1):
                 program[i].next = program[i + 1]
-            end
             program[len(program) - 1].next = nil
             program = program[0]
-        end
-    end
     # Pass 1 — discovery: identical pipeline into a throwaway compiler so
     # every anonymous function is registered with a stable name/order.
     let probe = CCompiler()

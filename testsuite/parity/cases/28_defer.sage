@@ -3,5 +3,4 @@ proc work():
     defer print "cleanup"
     print "middle"
     return "done"
-end
 print work()

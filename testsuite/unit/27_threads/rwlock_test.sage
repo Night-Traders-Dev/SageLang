@@ -18,8 +18,6 @@ if reader_count(rw) == 2 and is_read_locked(rw):
     read_unlock(rw)
     if reader_count(rw) == 0 and is_read_locked(rw) == false:
         print "read_lock_ok"
-    end
-end
 
 # --- exclusive writer ---
 let rw2 = create()
@@ -28,8 +26,6 @@ if is_write_locked(rw2):
     write_unlock(rw2)
     if is_write_locked(rw2) == false:
         print "write_lock_ok"
-    end
-end
 
 # --- try_lock ---
 let rw3 = create()
@@ -48,21 +44,15 @@ if r1 == true and r2 == true:
             if r3 == false:
                 write_unlock(rw3)
                 print "try_lock_ok"
-            end
-        end
-    end
-end
 
 # --- with_read scoped helper ---
 let rw4 = create()
 let shared_data = 42
 proc read_fn():
     return shared_data
-end
 let result = with_read(rw4, read_fn)
 if result == 42 and is_read_locked(rw4) == false:
     print "scoped_read_ok"
-end
 
 # --- with_write scoped helper ---
 let rw5 = create()
@@ -70,11 +60,9 @@ let counter = 0
 proc write_fn():
     counter = counter + 10
     return counter
-end
 let wresult = with_write(rw5, write_fn)
 if wresult == 10 and is_write_locked(rw5) == false:
     print "scoped_write_ok"
-end
 
 # --- stats ---
 let rw6 = create()
@@ -87,6 +75,5 @@ write_unlock(rw6)
 let st = stats(rw6)
 if st["read_ops"] == 2 and st["write_ops"] == 1 and st["readers"] == 0 and st["writer"] == false:
     print "stats_ok"
-end
 
 print "PASS"

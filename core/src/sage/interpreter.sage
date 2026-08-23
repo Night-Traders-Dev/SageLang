@@ -1471,9 +1471,7 @@ proc call_resolved(callee, args, env, callee_expr):
             if qi < len(pdl) and pdl[qi] != nil:
                 required2 = qi
                 break
-            end
             qi = qi + 1
-        end
         let na = len(args)
         if na < required2 or na > pcount:
             sys.stderr_write("Runtime Error: Expected " + str(required2) + " to " + str(pcount) + " arguments but got " + str(na) + ".\n")

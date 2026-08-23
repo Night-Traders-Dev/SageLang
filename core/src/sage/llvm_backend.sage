@@ -707,11 +707,8 @@ proc compile_to_llvm_ir(program):
         else:
             for i in range(len(program) - 1):
                 program[i].next = program[i + 1]
-            end
             program[len(program) - 1].next = nil
             program = program[0]
-        end
-    end
     let lc = LLVMCompiler()
     let nl = chr(10)
     let pct = chr(37)

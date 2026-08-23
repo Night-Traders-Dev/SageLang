@@ -47,7 +47,6 @@ let TOKEN_TRAIT = 32
 
 # Systems Layer
 let TOKEN_UNSAFE = 33
-let TOKEN_END = 34
 
 # Module system
 let TOKEN_IMPORT = 35
@@ -145,7 +144,6 @@ proc token_type_name(t):
     if t == TOKEN_ENUM: return "ENUM"
     if t == TOKEN_TRAIT: return "TRAIT"
     if t == TOKEN_UNSAFE: return "UNSAFE"
-    if t == TOKEN_END: return "END"
     if t == TOKEN_IMPORT: return "IMPORT"
     if t == TOKEN_FROM: return "FROM"
     if t == TOKEN_AS: return "AS"

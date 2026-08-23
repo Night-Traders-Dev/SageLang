@@ -16,8 +16,6 @@ let b = option.Some(20)
 if option.is_some(a):
     if option.is_some(b):
         print "ownership_basic"
-    end
-end
 
 # Test Copy trait - primitives are implicitly copied
 let n1 = 42
@@ -29,10 +27,6 @@ if n1 == 42:
         if s1 == "hello":
             if s2 == "hello":
                 print "copy_types"
-            end
-        end
-    end
-end
 
 # Test move semantics with option.own()
 let data = [1, 2, 3]
@@ -41,7 +35,6 @@ let moved = option.own(data)
 # In normal mode, both still work
 if len(moved) == 3:
     print "move_semantics"
-end
 
 # Test borrow semantics with option.ref()
 let original = [10, 20, 30]
@@ -50,8 +43,6 @@ let borrowed = option.ref(original)
 if len(original) == 3:
     if len(borrowed) == 3:
         print "borrow_check"
-    end
-end
 
 # Test thread safety markers
 let shared = {}
@@ -64,10 +55,6 @@ if option.is_send(shared):
         if option.is_send(42):
             if option.is_send("hello"):
                 print "thread_safety"
-            end
-        end
-    end
-end
 
 # Test Option type enforcement
 let maybe = option.Some("present")
@@ -78,9 +65,6 @@ if option.is_some(maybe):
         let safe_val = option.unwrap_or(empty, "fallback")
         if safe_val == "fallback":
             print "option_enforce"
-        end
-    end
-end
 
 # Test deep copy
 let orig = [1, [2, 3], 4]
@@ -88,7 +72,5 @@ let copied = option.copy(orig)
 if len(copied) == 3:
     if len(copied[1]) == 2:
         print "unsafe_block"
-    end
-end
 
 print "PASS"

@@ -56,7 +56,6 @@ const char* sage_token_type_name(TokenType type) {
         case TOKEN_ENUM: return "ENUM";
         case TOKEN_TRAIT: return "TRAIT";
         case TOKEN_UNSAFE: return "UNSAFE";
-        case TOKEN_END: return "END";
         case TOKEN_IMPORT: return "IMPORT";
         case TOKEN_FROM: return "FROM";
         case TOKEN_AS: return "AS";

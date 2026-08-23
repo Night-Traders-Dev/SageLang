@@ -816,7 +816,6 @@ proc create_fat_module():
 proc create_net_module():
     if type(net) == "dict":
         return net.create_net_module()
-    end
     return nil
 
 # ============================================================================

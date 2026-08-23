@@ -20,10 +20,6 @@ if waiter_count(cv) == 2:
             let st = stats(cv)
             if st["total_waits"] == 2 and st["total_notifies"] >= 2:
                 print "condvar_ok"
-            end
-        end
-    end
-end
 
 # --- barrier ---
 let b = create_barrier(3)
@@ -35,8 +31,6 @@ if r1 == false and r2 == false and r3 == true:
     let r4 = barrier_wait(b)
     if r4 == false:
         print "barrier_ok"
-    end
-end
 
 # --- latch ---
 let l = create_latch(3)
@@ -50,10 +44,6 @@ if latch_is_released(l) == false:
             latch_count_down(l)
             if latch_is_released(l) == true:
                 print "latch_ok"
-            end
-        end
-    end
-end
 
 # --- semaphore ---
 let sem = create_semaphore(3)
@@ -72,10 +62,5 @@ if available_permits(sem) == 3:
                 release(sem)
                 if available_permits(sem) == 3:
                     print "semaphore_ok"
-                end
-            end
-        end
-    end
-end
 
 print "PASS"

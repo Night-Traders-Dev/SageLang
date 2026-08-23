@@ -10,7 +10,6 @@ if ok1:
     print true
 else:
     print true
-end
 
 # Cross-compile RISC-V 64 assembly (requires riscv64-linux-gnu-as)
 let ok2 = asm_compile("    li a0, 42", "rv64", "/tmp/sage_test_rv64.o")
@@ -19,4 +18,3 @@ if ok2:
     print true
 else:
     print true
-end

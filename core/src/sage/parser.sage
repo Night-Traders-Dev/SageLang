@@ -482,8 +482,8 @@ class Parser:
                     self.consume(token.TOKEN_RBRACKET, "Expect ']' after index.")
                     expr = index_expr(expr, start_or_index)
             elif self.match_tok(token.TOKEN_DOT) or self.match_tok(token.TOKEN_ARROW):
-                # Property access (allow identifiers, 'end', and 'print' keywords)
-                if self.check(token.TOKEN_IDENTIFIER) or self.check(token.TOKEN_END) or self.check(token.TOKEN_PRINT):
+                # Property access (allow identifiers and 'print' keyword)
+                if self.check(token.TOKEN_IDENTIFIER) or self.check(token.TOKEN_PRINT):
                     let prop = self.advance()
                     expr = get_expr(expr, prop)
                 else:
@@ -643,7 +643,6 @@ class Parser:
             body = self.parse_block()
         else:
             body = self.parse_declaration()
-        self.match_tok(token.TOKEN_END)
         return proc_expr(params, body, param_defaults)
 
     # --- Statement parsing ---
@@ -659,9 +658,6 @@ class Parser:
             self.parse_error(tok, "Maximum nesting depth exceeded", "reduce the depth of nested blocks")
         while self.match_tok(token.TOKEN_NEWLINE):
             pass
-        if self.check(token.TOKEN_END):
-            self.advance()
-            return block_stmt(nil)
         self.consume(token.TOKEN_INDENT, "Expect indentation after block start.")
         let head = nil
         let current = nil
@@ -1143,8 +1139,6 @@ class Parser:
             return break_stmt()
         if self.match_tok(token.TOKEN_CONTINUE):
             return continue_stmt()
-        if self.match_tok(token.TOKEN_END):
-            return expr_stmt(nil_expr())
         let expr = self.parse_expression()
         return expr_stmt(expr)
 

@@ -25,7 +25,6 @@ print "Test 3: Large array write (chunking)"
 let data3 = []
 for i in range(5000):
     push(data3, i % 256)
-end
 assert.assert_true(io.writebytes(test_file, data3), "large writebytes failed")
 let read3 = io.readbytes(test_file)
 assert.assert_equal(len(read3), 5000, "large read length mismatch")
@@ -33,8 +32,6 @@ for i in range(5000):
     if read3[i] != i % 256:
         print "Mismatch at index " + str(i)
         assert.assert_true(false, "data mismatch in large write")
-    end
-end
 
 # Test 4: Empty array
 print "Test 4: Empty array"

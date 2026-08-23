@@ -12,39 +12,27 @@ if vfs.normalize_path("/foo//bar/../baz") == "/foo/baz":
     if vfs.normalize_path("/") == "/":
         if vfs.normalize_path("/a/b/c/../../d") == "/a/d":
             print "normalize_ok"
-        end
-    end
-end
 
 # join_path
 if vfs.join_path("/foo", "bar/baz") == "/foo/bar/baz":
     if vfs.join_path("/foo", "/abs") == "/abs":
         print "join_ok"
-    end
-end
 
 # dirname
 if vfs.dirname("/foo/bar/baz") == "/foo/bar":
     if vfs.dirname("/foo") == "/":
         print "dirname_ok"
-    end
-end
 
 # basename
 if vfs.basename("/foo/bar/baz") == "baz":
     if vfs.basename("/foo") == "foo":
         print "basename_ok"
-    end
-end
 
 # extension
 if vfs.extension("/foo/bar.txt") == "txt":
     if vfs.extension("/foo/bar.tar.gz") == "gz":
         if vfs.extension("/foo/noext") == "":
             print "extension_ok"
-        end
-    end
-end
 
 # mount/umount/resolve
 let v = vfs.create_vfs()
@@ -60,9 +48,5 @@ if resolved != nil:
             let gone = vfs.resolve_mount(v, "/mnt/foo")
             if gone == nil:
                 print "mount_ok"
-            end
-        end
-    end
-end
 
 print "PASS"

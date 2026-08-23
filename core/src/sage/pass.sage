@@ -155,11 +155,8 @@ proc run_passes(program, ctx):
         else:
             for i in range(len(program) - 1):
                 program[i].next = program[i + 1]
-            end
             program[len(program) - 1].next = nil
             program = program[0]
-        end
-    end
 
     let opt_level = ctx["opt_level"]
     let verbose = false
@@ -172,11 +169,8 @@ proc run_passes(program, ctx):
             while s != nil:
                 push(arr, s)
                 s = s.next
-            end
             return arr
-        end
         return program
-    end
     # Import passes lazily to avoid circular deps
     import constfold
     import dce
@@ -203,7 +197,5 @@ proc run_passes(program, ctx):
         while s != nil:
             push(arr, s)
             s = s.next
-        end
         return arr
-    end
     return program

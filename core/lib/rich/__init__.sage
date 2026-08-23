@@ -281,7 +281,6 @@ proc _rule_impl(title, style):
     var title_str = ""
     if title != "":
         let title_str = " " + title + " "
-    end
     let w = 80 - len(title_str)
     sys.stdout_write(style(str_repeat("─", w / 2) + title_str + str_repeat("─", w - w / 2), style) + "\n")
 
