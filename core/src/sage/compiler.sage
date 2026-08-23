@@ -765,7 +765,7 @@ proc cc_emit_call_expr(cc, call_expr):
         return "sage_nil()"
     if name == "mem_alloc":
         if argc == 1:
-            return "sage_mem_alloc(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+            return "sage_mem_alloc_v(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
         cc.failed = true
         return "sage_nil()"
     if name == "mem_free":
@@ -867,6 +867,61 @@ proc cc_emit_call_expr(cc, call_expr):
             return "sage_generator_next(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
         cc.failed = true
         return "sage_nil()"
+    if name == "startswith":
+        if argc == 2:
+            return "sage_str_startswith(" + cc_emit_expr(cc, call_expr.args[0]) + ", " + cc_emit_expr(cc, call_expr.args[1]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "endswith":
+        if argc == 2:
+            return "sage_str_endswith(" + cc_emit_expr(cc, call_expr.args[0]) + ", " + cc_emit_expr(cc, call_expr.args[1]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "readfile":
+        if argc == 1:
+            return "sage_read_file_v(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "writefile":
+        if argc == 2:
+            return "sage_write_file_v(" + cc_emit_expr(cc, call_expr.args[0]) + ", " + cc_emit_expr(cc, call_expr.args[1]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "exec":
+        if argc == 1:
+            return "sage_sys_exec_v(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "getenv":
+        if argc == 1:
+            return "sage_nil()"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "exists":
+        if argc == 1:
+            return "sage_file_exists_v(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "args":
+        if argc == 0:
+            return "sage_args_v()"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "__sys_exec":
+        if argc == 1:
+            return "sage_sys_exec_v(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "chr":
+        if argc == 1:
+            return "sage_chr_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
+    if name == "ord":
+        if argc == 1:
+            return "sage_ord_fn(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
+        cc.failed = true
+        return "sage_nil()"
     if name == "contains":
         if argc == 2:
             let a0 = cc_emit_expr(cc, call_expr.args[0])
@@ -966,9 +1021,6 @@ proc cc_emit_call_expr(cc, call_expr):
             env_arg = capf2["env_var"]
         else:
             env_arg = "NULL"
-    let parts = []
-    push(parts, proc_entry["c_name"])
-    push(parts, "(")
     if env_arg != "":
         push(parts, env_arg)
         if argc > 0:
@@ -1141,7 +1193,6 @@ proc cc_emit_stmt_list(cc, stmt):
 proc cc_emit_embedded_block(cc, stmt):
     cc.indent = cc.indent + 1
     push(cc.defer_scopes, [])
-    print "[dbg-eb] pushed, depth=" + str(len(cc.defer_scopes))
     if stmt != nil and stmt.type == 104:
         # STMT_BLOCK
         cc_emit_stmt_list(cc, stmt.statements)
@@ -1149,7 +1200,6 @@ proc cc_emit_embedded_block(cc, stmt):
         cc_emit_stmt_list(cc, stmt)
     # Flush this block's defers in LIFO order (scope exit).
     let scope = cc.defer_scopes[len(cc.defer_scopes) - 1]
-    print "[dbg-eb] flush scope.len=" + str(len(scope)) + " si=" + str(len(scope) - 1)
     let si = len(scope) - 1
     while si >= 0:
         cc_emit_stmt(cc, scope[si])
@@ -1453,6 +1503,7 @@ proc emit_runtime_prelude(cc):
     push(o, "#include <stdio.h>" + NL)
     push(o, "#include <stdlib.h>" + NL)
     push(o, "#include <string.h>" + NL)
+    push(o, "#include <stdint.h>" + NL)
     push(o, "#include <math.h>" + NL)
     push(o, NL)
     # Type definitions
@@ -1516,6 +1567,37 @@ proc emit_runtime_prelude(cc):
     push(o, "}" + NL)
     push(o, "static SageValue sage_nil(void);" + NL)
     push(o, "static void sage_fail(const char* message);" + NL)
+    push(o, "static SageValue sage_string(const char* value);" + NL)
+    push(o, "static SageValue sage_bool(int value);" + NL)
+    push(o, "static SageValue sage_number(double value);" + NL)
+    push(o, "static SageValue sage_nil(void);" + NL)
+    push(o, "static SageValue sage_str_startswith(SageValue hay, SageValue pre);" + NL)
+    push(o, "static SageValue sage_str_endswith(SageValue hay, SageValue suf);" + NL)
+    push(o, "static SageValue sage_number(double value);" + NL)
+    push(o, "static SageValue sage_read_file_v(SageValue path) {" + NL)
+    push(o, "    FILE* f = fopen(path.as.string, \"rb\");" + NL)
+    push(o, "    if (!f) return sage_nil();" + NL)
+    push(o, "    fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);" + NL)
+    push(o, "    char* buf = (char*)malloc(sz + 1);" + NL)
+    push(o, "    size_t rd = fread(buf, 1, sz, f); fclose(f);" + NL)
+    push(o, "    buf[rd] = 0;" + NL)
+    push(o, "    return sage_string(buf);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_write_file_v(SageValue path, SageValue data) {" + NL)
+    push(o, "    FILE* f = fopen(path.as.string, \"wb\");" + NL)
+    push(o, "    if (!f) return sage_bool(0);" + NL)
+    push(o, "    fwrite(data.as.string, 1, strlen(data.as.string), f); fclose(f);" + NL)
+    push(o, "    return sage_bool(1);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_file_exists_v(SageValue path) {" + NL)
+    push(o, "    FILE* f = fopen(path.as.string, \"rb\");" + NL)
+    push(o, "    if (!f) return sage_bool(0);" + NL)
+    push(o, "    fclose(f);" + NL)
+    push(o, "    return sage_bool(1);" + NL)
+    push(o, "}" + NL)
+
+
+
     push(o, "typedef struct SageGenerator SageGenerator;" + NL)
     push(o, "struct SageGenerator {" + NL)
     push(o, "    SageArray* items;" + NL)
@@ -1625,10 +1707,10 @@ proc emit_runtime_prelude(cc):
     push(o, "static SageValue sage_make_dict(void) {" + NL)
     push(o, "    SageDict* dict = (SageDict*)malloc(sizeof(SageDict));" + NL)
     push(o, "    if (dict == NULL) sage_fail(" + DQ + "Runtime Error: out of memory" + DQ + ");" + NL)
-    push(o, "    dict->keys = NULL;" + NL)
-    push(o, "    dict->values = NULL;" + NL)
+    push(o, "    dict->capacity = 16;" + NL)
+    push(o, "    dict->keys = (char**)calloc(dict->capacity, sizeof(char*));" + NL)
+    push(o, "    dict->values = (SageValue*)calloc(dict->capacity, sizeof(SageValue));" + NL)
     push(o, "    dict->count = 0;" + NL)
-    push(o, "    dict->capacity = 0;" + NL)
     push(o, "    SageValue v; v.type = SAGE_TAG_DICT; v.as.dict = dict;" + NL)
     push(o, "    return v;" + NL)
     push(o, "}" + NL)
@@ -1977,6 +2059,82 @@ proc emit_runtime_prelude(cc):
     push(o, "    return sage_string(result);" + NL)
     push(o, "}" + NL)
     push(o, "static SageValue sage_bytes_push_fn(SageValue b, SageValue v) { sage_array_push_raw(b.as.array, v); return b; }" + NL)
+    push(o, "static SageValue sage_str_startswith(SageValue hay, SageValue pre) {" + NL)
+    push(o, "    if (hay.type != SAGE_TAG_STRING || pre.type != SAGE_TAG_STRING) return sage_bool(0);" + NL)
+    push(o, "    return sage_bool(strncmp(hay.as.string, pre.as.string, strlen(pre.as.string)) == 0);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_str_endswith(SageValue hay, SageValue suf) {" + NL)
+    push(o, "    if (hay.type != SAGE_TAG_STRING || suf.type != SAGE_TAG_STRING) return sage_bool(0);" + NL)
+    push(o, "    size_t hl = strlen(hay.as.string), sl = strlen(suf.as.string);" + NL)
+    push(o, "    if (sl > hl) return sage_bool(0);" + NL)
+    push(o, "    return sage_bool(strcmp(hay.as.string + hl - sl, suf.as.string) == 0);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_sys_exec_v(SageValue cmd) {" + NL)
+    push(o, "    int rc = system(cmd.as.string);" + NL)
+    push(o, "    return sage_number((double)rc);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_mem_alloc_v(SageValue size) {" + NL)
+    push(o, "    size_t n = (size_t)(long long)size.as.number;" + NL)
+    push(o, "    unsigned char* base = (unsigned char*)malloc(n + 16);" + NL)
+    push(o, "    if (base == NULL) sage_fail(" + DQ + "Runtime Error: out of memory" + DQ + ");" + NL)
+    push(o, "    *(size_t*)base = n;" + NL)
+    push(o, "    return sage_number((double)(uintptr_t)(base + 16));" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_mem_free(SageValue p) {" + NL)
+    push(o, "    free((unsigned char*)(uintptr_t)p.as.number - 16);" + NL)
+    push(o, "    return sage_nil();" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_mem_read(SageValue a, SageValue o, SageValue s) {" + NL)
+    push(o, "    if (a.type != SAGE_TAG_NUMBER || o.type != SAGE_TAG_NUMBER || s.type != SAGE_TAG_NUMBER) return sage_nil();" + NL)
+    push(o, "    unsigned char* base = (unsigned char*)(uintptr_t)a.as.number - 16;" + NL)
+    push(o, "    size_t cap = *(size_t*)base;" + NL)
+    push(o, "    size_t off = (size_t)(long long)o.as.number;" + NL)
+    push(o, "    size_t len = (size_t)(long long)s.as.number;" + NL)
+    push(o, "    if (off + len > cap) return sage_nil();" + NL)
+    push(o, "    unsigned long long v = 0; memcpy(&v, base + 16 + off, len);" + NL)
+    push(o, "    return sage_number((double)v);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_mem_write(SageValue a, SageValue o, SageValue sz, SageValue v) {" + NL)
+    push(o, "    unsigned char* base = (unsigned char*)(uintptr_t)a.as.number - 16;" + NL)
+    push(o, "    size_t cap = *(size_t*)base;" + NL)
+    push(o, "    size_t off = (size_t)(long long)o.as.number;" + NL)
+    push(o, "    size_t wr = (size_t)(long long)sz.as.number; if (off + wr > cap) wr = cap - off;" + NL)
+    push(o, "    unsigned long long val = (unsigned long long)v.as.number;" + NL)
+    push(o, "    memcpy(base + 16 + off, &val, wr);" + NL)
+    push(o, "    return v;" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_mem_size(SageValue p) {" + NL)
+    push(o, "    unsigned char* base = (unsigned char*)(uintptr_t)p.as.number - 16;" + NL)
+    push(o, "    return sage_number((double)*(size_t*)base);" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_struct_new(SageValue defv) { (void)defv; return sage_make_dict(); }" + NL)
+    push(o, "static SageValue sage_struct_def(SageValue v) { (void)v; return sage_make_dict(); }" + NL)
+    push(o, "static SageValue sage_struct_size(SageValue v) { (void)v; return sage_number(0); }" + NL)
+    push(o, "static SageValue sage_struct_get(SageValue d, SageValue k, SageValue defv) {" + NL)
+    push(o, "    if (d.type != SAGE_TAG_DICT || k.type != SAGE_TAG_STRING) return defv;" + NL)
+    push(o, "    for (int i = 0; i < d.as.dict->count; i++) {" + NL)
+    push(o, "        if (strcmp(d.as.dict->keys[i], k.as.string) == 0) return d.as.dict->values[i];" + NL)
+    push(o, "    }" + NL)
+    push(o, "    return defv;" + NL)
+    push(o, "}" + NL)
+    push(o, "static SageValue sage_struct_set(SageValue d, SageValue k, SageValue t, SageValue val) {" + NL)
+    push(o, "    (void)t;" + NL)
+    push(o, "    if (d.type != SAGE_TAG_DICT || k.type != SAGE_TAG_STRING) return val;" + NL)
+    push(o, "        for (int i = 0; i < d.as.dict->count; i++) {" + NL)
+    push(o, "            if (strcmp(d.as.dict->keys[i], k.as.string) == 0) { d.as.dict->values[i] = val; return val; }" + NL)
+    push(o, "        }" + NL)
+    push(o, "        if (d.as.dict->count >= d.as.dict->capacity) {" + NL)
+    push(o, "            int nc = d.as.dict->capacity ? d.as.dict->capacity * 2 : 8;" + NL)
+    push(o, "            d.as.dict->keys = (char**)realloc(d.as.dict->keys, sizeof(char*) * nc);" + NL)
+    push(o, "            d.as.dict->values = (SageValue*)realloc(d.as.dict->values, sizeof(SageValue) * nc);" + NL)
+    push(o, "            d.as.dict->capacity = nc;" + NL)
+    push(o, "        }" + NL)
+    push(o, "        d.as.dict->keys[d.as.dict->count] = sage_dup_string(k.as.string);" + NL)
+    push(o, "        d.as.dict->values[d.as.dict->count] = val;" + NL)
+    push(o, "        d.as.dict->count++;" + NL)
+    push(o, "    return val;" + NL)
+    push(o, "}" + NL)
+
     push(o, NL)
     push(o, "static SageValue sage_add(SageValue left, SageValue right) {" + NL)
     push(o, "    if (left.type == SAGE_TAG_NUMBER && right.type == SAGE_TAG_NUMBER) {" + NL)
@@ -2305,6 +2463,9 @@ proc emit_runtime_prelude(cc):
     push(o, "    }" + NL)
     push(o, "    SageValue class_val = sage_dict_get(obj.as.dict, " + DQ + "__class__" + DQ + ");" + NL)
     push(o, "    if (class_val.type != SAGE_TAG_STRING) {" + NL)
+    push(o, "        /* Not a class instance: fall back to callable-field dispatch */" + NL)
+    push(o, "        SageValue fval = sage_dict_get(obj.as.dict, method);" + NL)
+    push(o, "        if (fval.type == SAGE_TAG_FUNCTION) return sage_call_function_value(fval, argc, argv);" + NL)
     push(o, "        fprintf(stderr, " + DQ + "Runtime Error: no __class__ on instance." + bsn + DQ + ");" + NL)
     push(o, "        exit(1);" + NL)
     push(o, "    }" + NL)
@@ -2742,14 +2903,7 @@ proc emit_anon_flush(cc):
 proc emit_hoisted_definition(cc, hd):
     let stmt2 = hd["stmt"]
     let entry2 = hd["entry"]
-    print "[dbgH] start c_name=" + str(entry2["c_name"])
-    print "[dbgH] pc=" + str(stmt2.param_count)
-    print "[dbgH] defaults=" + str(stmt2.param_defaults)
-    print "[dbgH] frames=" + str(len(hd["frames"]))
     let f0 = hd["frames"][len(hd["frames"]) - 1]
-    print "[dbgH] top.env_type=" + str(f0["env_type"])
-    print "[dbgH] top.promoting=" + str(f0["promoting"])
-    print "[dbgH] top.fields=" + str(len(f0["fields"]))
     # Restore capture frames captured at queue time.
     let saved_frames = cc.fn_stack
     cc.fn_stack = []
@@ -2795,103 +2949,10 @@ proc emit_hoisted_definition(cc, hd):
 # ============================================================================
 
 proc emit_main_function(cc, program):
-    cc_line(cc, "int main(void) {")
-    cc.indent = cc.indent + 1
-    # Init global slots
-    for i in range(len(cc.globals)):
-        cc_line(cc, cc.globals[i]["c_name"] + " = sage_slot_undefined();")
-    # Register classes and methods
-    for i in range(len(cc.classes)):
-        let cls = cc.classes[i]
-        if cls["parent_name"] != nil:
-            cc_line(cc, "sage_register_class(" + DQ + cls["class_name"] + DQ + ", " + DQ + cls["parent_name"] + DQ + ");")
-        if cls["parent_name"] == nil:
-            cc_line(cc, "sage_register_class(" + DQ + cls["class_name"] + DQ + ", NULL);")
-        let method = cls["methods"]
-        while method != nil:
-            if method.type == 106:
-                let mn = method.name.text
-                cc_line(cc, "sage_register_method(" + DQ + cls["class_name"] + DQ + ", " + DQ + mn + DQ + ", sage_method_" + cls["class_name"] + "_" + mn + ");")
-            method = method.next
-    # Emit top-level statements
-    let stmt = program
-    while stmt != nil:
-        if stmt.type != 106 and stmt.type != 111:
-            cc_emit_stmt(cc, stmt)
-            if cc.failed:
-                cc.indent = cc.indent - 1
-                cc_line(cc, "return 1;")
-                cc_line(cc, "}")
-                return
-        stmt = stmt.next
-    cc_line(cc, "return 0;")
-    cc.indent = cc.indent - 1
-    cc_line(cc, "}")
-
-# ============================================================================
-# Public API
-# ============================================================================
-
-proc compile_to_c(program):
-    let was_array = (type(program) == "array")
-    if was_array:
-        if len(program) == 0:
-            program = nil
-        else:
-            for i in range(len(program) - 1):
-                program[i].next = program[i + 1]
-            end
-            program[len(program) - 1].next = nil
-            program = program[0]
-        end
-    end
-    let cc = CCompiler()
-    collect_top_level_symbols(cc, program)
-    if cc.failed:
-        return ""
-    emit_runtime_prelude(cc)
-    cc.indent = 0
-    emit_proc_prototypes(cc)
-    emit_method_prototypes(cc)
-    if len(cc.procs) > 0 or len(cc.classes) > 0:
-        cc_blank(cc)
-    emit_global_slots(cc)
-    if len(cc.globals) > 0:
-        cc_blank(cc)
-    emit_function_definitions(cc, program)
-    if cc.failed:
-        return ""
-    emit_main_function(cc, program)
-    return join(cc.output, "")
-    cc.defer_scopes = prev_defers_m
-
-
-proc emit_function_definitions(cc, program):
-    # Class methods
-    for i in range(len(cc.classes)):
-        let cls = cc.classes[i]
-        let method = cls["methods"]
-        while method != nil:
-            if method.type == 106:
-                emit_method_definition(cc, cls, method)
-                if cc.failed:
-                    return
-            method = method.next
-    # Program functions
-    let stmt = program
-    while stmt != nil:
-        if stmt.type == 106:
-            emit_function_definition(cc, stmt)
-            if cc.failed:
-                return
-        stmt = stmt.next
-
-# ============================================================================
-# Main Function Emission
-# ============================================================================
-
-proc emit_main_function(cc, program):
-    cc_line(cc, "int main(void) {")
+    cc_line(cc, "static int g_sage_argc = 0;")
+    cc_line(cc, "static char** g_sage_argv = NULL;")
+    cc_line(cc, "static SageValue sage_args_v(void) { SageValue o = sage_array(); for (int i = 0; i < g_sage_argc; i++) sage_array_push_raw(o.as.array, sage_string(g_sage_argv[i])); return o; }")
+    cc_line(cc, "int main(int argc, char** argv) { g_sage_argc = argc; g_sage_argv = argv;")
     cc.indent = cc.indent + 1
     # Init global slots
     for i in range(len(cc.globals)):

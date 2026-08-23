@@ -70,6 +70,17 @@ proc is_digit(c):
         return false
     return c >= "0" and c <= "9"
 
+proc is_hex_digit(c):
+    if c == nil:
+        return false
+    if c >= "0" and c <= "9":
+        return true
+    if c >= "a" and c <= "f":
+        return true
+    if c >= "A" and c <= "F":
+        return true
+    return false
+
 proc is_binary_digit(c):
     if c == nil:
         return false
@@ -154,6 +165,28 @@ class Lexer:
                 return self.error_token("Invalid binary literal: use only 0 or 1 after '0b'.")
             let binary_text = slice(self.source, start_pos, self.pos)
             return self.make_token(token.TOKEN_NUMBER, binary_text)
+
+        if self.source[start_pos] == "0" and (self.peek() == "x" or self.peek() == "X"):
+            self.advance()
+            if not is_hex_digit(self.peek()):
+                return self.error_token("Invalid hex literal: expected at least one hex digit after '0x'.")
+            while is_hex_digit(self.peek()):
+                self.advance()
+            if is_alnum(self.peek()) or self.peek() == "_":
+                return self.error_token("Invalid hex literal: use only 0-9 a-f A-F after '0x'.")
+            let hex_text = slice(self.source, start_pos, self.pos)
+            return self.make_token(token.TOKEN_NUMBER, hex_text)
+
+        if self.source[start_pos] == "0" and (self.peek() == "o" or self.peek() == "O"):
+            self.advance()
+            if not (self.peek() >= "0" and self.peek() <= "7"):
+                return self.error_token("Invalid octal literal: expected at least one octal digit after '0o'.")
+            while self.peek() >= "0" and self.peek() <= "7":
+                self.advance()
+            if is_alnum(self.peek()) or self.peek() == "_":
+                return self.error_token("Invalid octal literal: use only 0-7 after '0o'.")
+            let octal_text = slice(self.source, start_pos, self.pos)
+            return self.make_token(token.TOKEN_NUMBER, octal_text)
 
         while is_digit(self.peek()):
             self.advance()
