@@ -25,12 +25,10 @@ Stacks compared:
 
 ```
 PARITY (all three stacks): 01-09, 11, 12, 15-17, 19-21, 22-28   (24 cases)
-PARITY cases: 27 / 28 (96%)
-Remaining gap: case 10 (last line) — NESTED NAMED procedure definitions
-are not yet hoisted in the emitted backend; their statements are skipped,
-so calls resolve to undefined. Anonymous closures ARE fully supported
-(per-invocation heap environments carried by closure values), which is
-what case 13 exercises.
+PARITY cases: **28 / 28 — FULL PARITY.** Every case in the differential
+harness produces byte-identical output across all three stacks: the C
+interpreter, self-hosted interpretation, and self-hosted compiled
+binaries.
 ```
 
 ## Static coverage matrices
@@ -115,11 +113,15 @@ The divergences above are *semantic*, not structural.
    receive hidden `_cenv`, resolved through typed derefs; closure values
    bind environment instances (`sage_bind_closure`); dispatcher passes env
    first. Case 13 (independent counters) byte-identical.
-   Remaining sub-gap: hoisting of NESTED NAMED procs (case 10 tail).
+   Nested NAMED procs are also hoisted: the probe pass records their
+   signatures, prototypes (with hidden `_cenv`) are emitted up-front via
+   pre-registration, and definitions flush with capture frames restored.
+   Case 10 tail byte-identical.
 
 Also fixed en route: leftover double object-dump debug block in the C host's
 EXPR_GET error path; property-access miss semantics aligned to C across all
 stacks (stderr line + nil, no raise).
 
 Self-hosted test-suite totals after this work: 3 failing assertions vs
-27 at audit start.
+27 at audit start (all three remaining failures pre-date the audit and
+are tracked separately).

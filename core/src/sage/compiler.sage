@@ -41,6 +41,7 @@ class CCompiler:
         self.gen_collector = false
         self.fn_stack = []
         self.hoisted_defs = []
+        self.discovered_nested = []
         self.defer_scopes = [[]]
         self.classes = []
         self.modules = []
@@ -1285,10 +1286,28 @@ proc cc_emit_stmt(cc, stmt):
         cc_line(cc, "continue;")
         return
     if t == 106:
-        # STMT_PROC - top-level defs emitted by emit_function_definitions.
-        # Nested named procedures are not yet hoisted in the emitted backend
-        # (requires environment capture); they are silently skipped here.
-        return
+        # STMT_PROC - top-level defs are emitted by
+        # emit_function_definitions. Nested named procedures are hoisted:
+        # registered here for call resolution, defined via the deferred
+        # hoisted-definition flush with the parent environment threaded
+        # through as a hidden leading parameter.
+        if len(cc.fn_stack) > 0:
+            # Register now so later call sites in this body resolve directly.
+            let child_entry = add_proc_entry(cc, stmt.name.text, stmt.param_count, stmt.param_defaults)
+            child_entry["needs_cenv"] = true
+            let disc = {"name": stmt.name.text}
+            disc["param_count"] = stmt.param_count
+            disc["param_defaults"] = stmt.param_defaults
+            push(cc.discovered_nested, disc)
+            let snap10 = []
+            for fi15 in range(len(cc.fn_stack)):
+                push(snap10, cc.fn_stack[fi15])
+            let hf2 = {}
+            hf2["kind"] = "named"
+            hf2["stmt"] = stmt
+            hf2["entry"] = child_entry
+            hf2["frames"] = snap10
+            push(cc.hoisted_defs, hf2)
 
     if t == 107:
         # STMT_FOR
@@ -2956,6 +2975,12 @@ proc compile_to_c(program):
     cc.prebound_anons = prebound
     cc.anon_fns = []
     cc.prebind_active = true
+    # Pre-register nested named procs discovered during the probe pass so
+    # their environment-taking prototypes are emitted up-front.
+    for i8 in range(len(probe.discovered_nested)):
+        let dn = probe.discovered_nested[i8]
+        let dn_entry = add_proc_entry(cc, dn["name"], dn["param_count"], dn["param_defaults"])
+        dn_entry["needs_cenv"] = true
     collect_top_level_symbols(cc, program)
     if cc.failed:
         return ""
