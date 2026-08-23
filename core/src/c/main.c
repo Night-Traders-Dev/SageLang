@@ -1600,14 +1600,21 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 if (!is_safe_path(arg)) {
                     printf("Security Error: Unsafe characters in path\n");
                 } else {
-                    char cmd[4096];
-                    if (*arg == '\0') {
-                        snprintf(cmd, sizeof(cmd), "ls -F");
-                    } else {
-                        // Single quotes around argument to handle spaces safely
-                        snprintf(cmd, sizeof(cmd), "ls -F '%s'", arg);
+                    // Safe process execution bypassing shell subshell (CWE-78)
+                    pid_t pid = fork();
+                    if (pid == 0) {
+                        if (*arg == '\0') {
+                            char* args[] = {"ls", "-F", NULL};
+                            execvp(args[0], args);
+                        } else {
+                            char* args[] = {"ls", "-F", (char*)arg, NULL};
+                            execvp(args[0], args);
+                        }
+                        _exit(127);
+                    } else if (pid > 0) {
+                        int status;
+                        waitpid(pid, &status, 0);
                     }
-                    if (system(cmd) == -1) { /* ignore */ }
                 }
                 free(line);
                 continue;
@@ -1619,10 +1626,16 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 } else if (!is_safe_path(arg)) {
                     printf("Security Error: Unsafe characters in path\n");
                 } else {
-                    char cmd[4096];
-                    // Single quotes around argument to handle spaces safely
-                    snprintf(cmd, sizeof(cmd), "cat '%s'", arg);
-                    if (system(cmd) == -1) { /* ignore */ }
+                    // Safe process execution bypassing shell subshell (CWE-78)
+                    pid_t pid = fork();
+                    if (pid == 0) {
+                        char* args[] = {"cat", (char*)arg, NULL};
+                        execvp(args[0], args);
+                        _exit(127);
+                    } else if (pid > 0) {
+                        int status;
+                        waitpid(pid, &status, 0);
+                    }
                 }
                 free(line);
                 continue;
