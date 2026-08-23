@@ -1,5 +1,40 @@
 # Changelog
 
+## [4.2.0] - 2026-08-22
+
+### Full Self-Hosted Compiler Parity
+
+The self-hosted Sage compiler now produces byte-identical output to the C
+compiler across the entire differential parity harness
+(`testsuite/parity/run_parity.sh`, 28 cases x 3 stacks: C interpreter,
+self-hosted interpretation, self-hosted compiled binaries).
+
+- **Short-circuit evaluation**: emitted `and`/`or` use inline C logical
+  operators; both-sides evaluation bug fixed.
+- **Runtime helpers ported**: string slicing with negative indices, contains,
+  chr, ord, int, indexof, type, array concatenation, full bytes API,
+  division/modulo by zero as catchable exceptions, dict for-in iteration,
+  default parameters filled at emitted call sites.
+- **First-class functions**: function values, dynamic dispatch through
+  `sage_call_function_value`, compile-time arity guards mirroring the C host.
+- **Match guards**: `case PATTERN if GUARD:` parsed in the self-hosted parser;
+  STMT_MATCH emitter mirrors interpreter order/guard/default semantics.
+- **Generators**: eager-collect generators in the emitted backend
+  (SAGE_TAG_GENERATOR, collector functions, next() dispatch); for-in
+  rejection parity on both stacks.
+- **Closures**: capturing parents promote locals into per-invocation heap
+  environments; anonymous and nested named children receive a hidden `_cenv`
+  resolved through typed derefs; closure values bind environment instances
+  via sage_bind_closure; two-pass emission hoists nested named procedures.
+- **Diagnostics parity**: parse errors use the C style (lowercase severity,
+  no doubled prefix); property-access misses and undefined variables print
+  the C diagnostics and yield nil on all stacks.
+- **Interpreter hardening**: for-in over generators rejects with the C
+  message; division/modulo by zero raise catchable exceptions.
+
+Toolchain: version 4.2.0. Self-hosted test suite failures reduced from 27
+to 3 vs audit baseline.
+
 ## [4.1.16] - 2026-08-21
 
 ### Runtime: True Stack-Proximity Guard (Segfault Fix)

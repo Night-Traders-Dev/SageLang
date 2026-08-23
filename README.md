@@ -11,9 +11,23 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.1.16 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.2.0 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
+- **v4.2.0 (Full Self-Hosted Compiler Parity)**: The self-hosted Sage compiler
+  now produces byte-identical output to the C compiler across the entire
+  differential parity harness — 28/28 cases on all three execution stacks
+  (C interpreter, self-hosted interpretation, self-hosted compiled binaries).
+  This release closes the parity roadmap: short-circuit emission, the full
+  emitted-C runtime helper set (string slice/index/contains, chr/ord/int,
+  indexof/type, bytes API, array concat, catchable div/mod, dict for-in,
+  default params), first-class functions with compile-time arity guards,
+  match guards in the self-hosted parser, eager generators in the emitted
+  backend, and full closure capture — capturing parents promote locals into
+  per-invocation heap environments carried by closure values, with nested
+  named procedures hoisted via two-pass discovery. Diagnostics (parse errors,
+  property misses, undefined variables) now match the C host across stacks.
+  Self-hosted test-suite failures reduced from 27 to 3 vs audit baseline.
 - **v4.1.16 (Runtime: True Stack-Proximity Guard)**: Fixed deep-recursion segfaults in the C host: the real C stack was exhausted (~280 frames in debug builds) long before the `MAX_RECURSION_DEPTH` counter tripped, and self-hosted double-interpretation chains ran at the 8 MB stack edge, producing flaky crashes previously misdiagnosed as AST corruption. Added a true stack-proximity guard (`stack_danger()` in `interpret()`/`eval_expr()`, per-thread TLS origins, budget derived from `RLIMIT_STACK`) plus `sage_raise_stack_limit()` headroom (512 MB when permitted). Verified under AddressSanitizer: zero memory errors across self-hosted runs; depth 5000+ recursion passes; runaway recursion fails cleanly.
 - **v4.1.15 (Self-Hosted Compiler Parity: Recursion Depth)**: Increased maximum recursion depth from 2000/500 to 50000 in `core/src/sage/interpreter.sage:33` and `core/src/c/interpreter.c:162` to eliminate "Maximum recursion depth exceeded" errors in deep recursive programs and import chains. All self-hosted tests pass (430+ tests). Bootstrap: 18/18 pass.
 - **v4.1.14 (Self-Hosted Compiler Parity: Proc Type Annotations)**: Added full support for procedure parameter and return type annotations in the self-hosted compiler (`core/src/sage/parser.sage`, `core/src/sage/ast.sage`, `core/src/sage/typecheck.sage`). Full support for `proc f(x: Int, y: Int): Int` with declared/inferred type tracking via `TypeMap.declared` dict and `annotation_to_kind` mapping. Parameter types are optional; return type annotation is optional. All self-hosted tests pass (430+ tests). Bootstrap: 18/18 pass.

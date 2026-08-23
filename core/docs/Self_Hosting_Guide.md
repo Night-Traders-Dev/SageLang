@@ -4,6 +4,16 @@ Sage can run Sage programs through a self-hosted interpreter written entirely in
 SageLang. The lexer, parser, interpreter, and full compiler toolchain have been
 ported from C to Sage (Phase 13+).
 
+## Compiler Parity (v4.2.0)
+
+As of v4.2.0 the self-hosted compiler is at **full parity** with the C
+compiler: the differential harness at `testsuite/parity/run_parity.sh`
+executes 28 feature cases through three stacks — the C interpreter, the
+self-hosted interpreter, and binaries compiled by the self-hosted compiler
+(`--emit-c` -> gcc) — and every case produces byte-identical output across
+all of them. See `core/docs/meta/PARITY.md` for the full matrix and the
+`--selfhost` mode of `sagemake` for one-command bootstrap verification.
+
 ## Running the Self-Hosted Interpreter
 
 ```bash
