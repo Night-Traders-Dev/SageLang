@@ -94,6 +94,13 @@ __thread int g_ast_gc_env_temp_count = 0;
 
 static Stmt* g_generator_resume_target = NULL;
 
+// For-loop generator resume state: the innermost for-loop that suspended on
+// a yield, plus its cursor, so next() can continue mid-iteration.
+static Stmt* g_gen_for_stmt = NULL;
+static int   g_gen_for_index = 0;
+static Value g_gen_for_iterable;
+static int   g_gen_for_captured = 0;
+
 // Phase 2: Gas tracking globals
 static __thread long g_gas_limit = -1; // -1 means unlimited
 static __thread long g_gas_used = 0;
@@ -1276,6 +1283,8 @@ static Value native_next(int arg_count, Value* args) {
     if (!gen->is_started) {
         gen->gen_env = env_create(gen->closure);
         gen->is_started = 1;
+        g_gen_for_stmt = NULL;
+        g_gen_for_captured = 0;
     }
 
     if (gen->has_resume_target && gen->current_stmt == NULL) {
@@ -1292,6 +1301,10 @@ static Value native_next(int arg_count, Value* args) {
         gen->has_resume_target = 1;
         return result.value;
     }
+
+    // Loop finished (or generator returned) — drop any stale cursor
+    g_gen_for_stmt = NULL;
+    g_gen_for_captured = 0;
     
     if (result.is_returning) {
         gen->is_exhausted = 1;
@@ -4148,9 +4161,23 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
         }
 
         case STMT_FOR: {
-            ExecResult iter_result = eval_expr(stmt->as.for_stmt.iterable, env);
-            if (iter_result.is_throwing) return iter_result;
-            Value iterable = iter_result.value;
+            // Generator resume support: when a yield suspends inside a for
+            // body, we stash the loop cursor so the next next() call can
+            // continue the iteration instead of restarting it.
+            int resuming = (g_gen_for_captured && g_gen_for_stmt == stmt);
+            Value iterable;
+            int start_i = 0;
+
+            if (resuming) {
+                iterable = g_gen_for_iterable;
+                start_i = g_gen_for_index + 1;
+                g_gen_for_stmt = NULL;
+                g_gen_for_captured = 0;
+            } else {
+                ExecResult iter_result = eval_expr(stmt->as.for_stmt.iterable, env);
+                if (iter_result.is_throwing) return iter_result;
+                iterable = iter_result.value;
+            }
 
             if (iterable.type != VAL_ARRAY && iterable.type != VAL_TUPLE && iterable.type != VAL_DICT) {
                 fprintf(stderr, "Runtime Error: for loop iterable must be an array, tuple, or dict.\n");
@@ -4188,11 +4215,11 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                 }
             }
 
-            if (count > 0) {
-                env_define_const(loop_env, var.start, var.length, elements[0]);
+            if (count > 0 && start_i < count) {
+                env_define_const(loop_env, var.start, var.length, elements[start_i]);
                 EnvNode* var_slot = loop_env->head;
-                for (int i = 0; i < count; i++) {
-                    if (i > 0) {
+                for (int i = start_i; i < count; i++) {
+                    if (i > start_i) {
                         GC_WRITE_BARRIER(var_slot->value);
                         var_slot->value = elements[i];
                     }
@@ -4209,6 +4236,13 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                     if (res.is_yielding) {
                         if (res.next_stmt == NULL) {
                             res.next_stmt = stmt;
+                        }
+                        // Stash the cursor so this loop can resume mid-stream
+                        if (g_gen_for_captured == 0) {
+                            g_gen_for_stmt = stmt;
+                            g_gen_for_index = i;
+                            g_gen_for_iterable = iterable;
+                            g_gen_for_captured = 1;
                         }
                         if (iterable.type == VAL_DICT) free(elements);
                         AST_GC_POP_ENV();

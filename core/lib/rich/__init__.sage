@@ -3,33 +3,58 @@
 
 import sys
 
-proc RESET(): "\x1b[0m"
-proc BOLD(): "\x1b[1m"
-proc DIM(): "\x1b[2m"
-proc ITALIC(): "\x1b[3m"
-proc UNDERLINE(): "\x1b[4m"
-proc BLINK(): "\x1b[5m"
-proc REVERSE(): "\x1b[7m"
-proc HIDDEN(): "\x1b[8m"
-proc STRIKETHROUGH(): "\x1b[9m"
+proc RESET():
+    return "\x1b[0m"
+proc BOLD():
+    return "\x1b[1m"
+proc DIM():
+    return "\x1b[2m"
+proc ITALIC():
+    return "\x1b[3m"
+proc UNDERLINE():
+    return "\x1b[4m"
+proc BLINK():
+    return "\x1b[5m"
+proc REVERSE():
+    return "\x1b[7m"
+proc HIDDEN():
+    return "\x1b[8m"
+proc STRIKETHROUGH():
+    return "\x1b[9m"
 
-proc RED(): "\x1b[31m"
-proc GREEN(): "\x1b[32m"
-proc YELLOW(): "\x1b[33m"
-proc BLUE(): "\x1b[34m"
-proc MAGENTA(): "\x1b[35m"
-proc CYAN(): "\x1b[36m"
-proc GRAY(): "\x1b[90m"
-proc WHITE(): "\x1b[97m"
+proc RED():
+    return "\x1b[31m"
+proc GREEN():
+    return "\x1b[32m"
+proc YELLOW():
+    return "\x1b[33m"
+proc BLUE():
+    return "\x1b[34m"
+proc MAGENTA():
+    return "\x1b[35m"
+proc CYAN():
+    return "\x1b[36m"
+proc GRAY():
+    return "\x1b[90m"
+proc WHITE():
+    return "\x1b[97m"
 
-proc BG_RED(): "\x1b[41m"
-proc BG_GREEN(): "\x1b[42m"
-proc BG_YELLOW(): "\x1b[43m"
-proc BG_BLUE(): "\x1b[44m"
-proc BG_MAGENTA(): "\x1b[45m"
-proc BG_CYAN(): "\x1b[46m"
-proc BG_GRAY(): "\x1b[100m"
-proc BG_WHITE(): "\x1b[107m"
+proc BG_RED():
+    return "\x1b[41m"
+proc BG_GREEN():
+    return "\x1b[42m"
+proc BG_YELLOW():
+    return "\x1b[43m"
+proc BG_BLUE():
+    return "\x1b[44m"
+proc BG_MAGENTA():
+    return "\x1b[45m"
+proc BG_CYAN():
+    return "\x1b[46m"
+proc BG_GRAY():
+    return "\x1b[100m"
+proc BG_WHITE():
+    return "\x1b[107m"
 
 proc style(text, style):
     return style + text + RESET()

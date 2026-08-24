@@ -1235,6 +1235,33 @@ proc collect_yields(stmt, env, values):
                 break
             collect_yields(stmt.body, env, values)
         return
+    if stype == STMT_FOR:
+        # Collect yields from for-loop bodies: bind each element in a fresh
+        # loop scope (mirrors the C host's per-iteration environment)
+        let iterable = eval_expr(stmt.iterable, env)
+        let it = type(iterable)
+        if it != "array" and it != "tuple" and it != "dict":
+            return
+        var elements = []
+        if it == "array" or it == "tuple":
+            elements = iterable
+        elif it == "dict":
+            elements = dict_keys(iterable)
+        let n = len(elements)
+        let i = 0
+        while i < n:
+            let loop_env = env_new(env)
+            env_define(loop_env, stmt.variable.text, elements[i])
+            collect_yields(stmt.body, loop_env, values)
+            i = i + 1
+        return
+    if stype == STMT_IF:
+        let cond = eval_expr(stmt.condition, env)
+        if is_truthy(cond):
+            collect_yields(stmt.then_branch, env, values)
+        elif stmt.else_branch != nil:
+            collect_yields(stmt.else_branch, env, values)
+        return
     # For other statement types, just execute them normally
     exec_stmt(stmt, env)
 
