@@ -96,10 +96,24 @@ static Stmt* g_generator_resume_target = NULL;
 
 // For-loop generator resume state: the innermost for-loop that suspended on
 // a yield, plus its cursor, so next() can continue mid-iteration.
+// NOTE: the iterable Value itself is kept in the generator's gen_env (GC
+// traced); only the statement pointer and index live in these statics.
 static Stmt* g_gen_for_stmt = NULL;
 static int   g_gen_for_index = 0;
-static Value g_gen_for_iterable;
 static int   g_gen_for_captured = 0;
+static GeneratorValue* g_active_generator = NULL;
+
+// Scope-local forced assignment (used for generator resume bookkeeping)
+static void env_force_set(Env* env, const char* name, int len, Value v) {
+    Env* owner = NULL;
+    EnvNode* node = NULL;
+    if (env_get_node(env, name, len, &owner, &node) && node != NULL) {
+        GC_WRITE_BARRIER(node->value);
+        node->value = v;
+    } else {
+        env_define(env, name, len, v);
+    }
+}
 
 // Phase 2: Gas tracking globals
 static __thread long g_gas_limit = -1; // -1 means unlimited
@@ -1293,7 +1307,9 @@ static Value native_next(int arg_count, Value* args) {
     }
 
     g_generator_resume_target = gen->has_resume_target ? (Stmt*)gen->current_stmt : NULL;
+    g_active_generator = gen;
     ExecResult result = interpret((Stmt*)gen->body, gen->gen_env);
+    g_active_generator = NULL;
     g_generator_resume_target = NULL;
     
     if (result.is_yielding) {
@@ -4169,7 +4185,10 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             int start_i = 0;
 
             if (resuming) {
-                iterable = g_gen_for_iterable;
+                iterable = val_nil();
+                if (g_active_generator != NULL) {
+                    env_get(g_active_generator->gen_env, "__for_iterable__", 16, &iterable);
+                }
                 start_i = g_gen_for_index + 1;
                 g_gen_for_stmt = NULL;
                 g_gen_for_captured = 0;
@@ -4237,12 +4256,16 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                         if (res.next_stmt == NULL) {
                             res.next_stmt = stmt;
                         }
-                        // Stash the cursor so this loop can resume mid-stream
+                        // Stash the cursor so this loop can resume mid-stream.
+                        // The iterable is rooted via the generator's traced env.
                         if (g_gen_for_captured == 0) {
                             g_gen_for_stmt = stmt;
                             g_gen_for_index = i;
-                            g_gen_for_iterable = iterable;
                             g_gen_for_captured = 1;
+                            if (g_active_generator != NULL) {
+                                env_force_set(g_active_generator->gen_env,
+                                              "__for_iterable__", 16, iterable);
+                            }
                         }
                         if (iterable.type == VAL_DICT) free(elements);
                         AST_GC_POP_ENV();
