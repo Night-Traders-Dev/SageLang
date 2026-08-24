@@ -1988,8 +1988,6 @@ static void kt_emit_class_definition(KtCompiler* compiler, KtClassInfo* cls) {
         if (method->type == STMT_PROC) {
             ProcStmt* proc = &method->as.proc;
             char* sage_mname = kt_token_to_string(proc->name);
-            char* mname = kt_sanitize_identifier(sage_mname);
-            free(sage_mname);
 
             // Determine if first param is self
             int start_param = 0;
@@ -2009,8 +2007,14 @@ static void kt_emit_class_definition(KtCompiler* compiler, KtClassInfo* cls) {
             }
             kt_collect_local_lets(compiler, proc->body, &compiler->locals);
 
-            // init → constructor-like
-            int is_init = (strcmp(mname, "init") == 0 || strcmp(mname, "__init__") == 0);
+            // init → constructor-like.
+            // Compare the RAW Sage name: kt_sanitize_identifier backtick-escapes
+            // 'init'/'set'/'get' (Kotlin soft keywords), which made this check
+            // always fail — constructors were emitted as plain methods, so
+            // newInstance(...) silently dropped every argument.
+            int is_init = (strcmp(sage_mname, "init") == 0 || strcmp(sage_mname, "__init__") == 0);
+            char* mname = kt_sanitize_identifier(sage_mname);
+            free(sage_mname);
             int non_self_params = proc->param_count - start_param;
 
             if (is_init) {
@@ -2431,7 +2435,7 @@ static int kt_write_sage_runtime(const char* runtime_dir) {
 
     // Method calls
     fputs("    fun callMethod(obj: Value, method: String, vararg args: Value): Value {\n", f);
-    fputs("        if(obj is Value.Obj) { val m=obj.v::class.java.methods.firstOrNull{it.name==method}; if(m!=null) return try{m.invoke(obj.v,*args) as? Value ?: nil}catch(_:Exception){nil} }\n", f);
+    fputs("        if(obj is Value.Obj) { val m=obj.v::class.java.methods.filter{!it.isSynthetic && it.name==method && it.parameterTypes.size==args.size && it.parameterTypes.all{pt->pt==Value::class.java}}.firstOrNull(); if(m!=null) return try{m.invoke(obj.v,*args) as? Value ?: nil}catch(e:Exception){ System.err.println(\"[SageRuntime] callMethod '\"+method+\"' failed: \"+e); nil } ; System.err.println(\"[SageRuntime] no method '\"+method+\"' with \"+args.size+\" arg(s) on \"+obj.v.className) }\n", f);
     fputs("        if(obj is Value.Str) return when(method) {\n", f);
     fputs("            \"upper\"->str(obj.v.uppercase()); \"lower\"->str(obj.v.lowercase()); \"strip\",\"trim\"->str(obj.v.trim())\n", f);
     fputs("            \"split\"->if(args.isNotEmpty()) Value.Arr(obj.v.split(toKString(args[0])).map{str(it)}.toMutableList()) else nil\n", f);
