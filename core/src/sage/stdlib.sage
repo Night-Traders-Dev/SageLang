@@ -824,6 +824,12 @@ proc create_net_module():
 
 let g_stdlib_registry = {}
 
+# Modules that exist only as C-host natives. The self-hosted interpreter
+# registers empty stubs so `import gpu` (etc.) succeeds; calling into them
+# raises a clear attribute error instead of a hard import failure.
+proc create_stub_module(name):
+    return {"__interp_type": "module", "name": name, "__stub": true}
+
 proc init_stdlib():
     g_stdlib_registry["math"]   = create_math_module()
     g_stdlib_registry["_math"]  = g_stdlib_registry["math"]   # C name alias
@@ -831,7 +837,19 @@ proc init_stdlib():
     g_stdlib_registry["string"] = create_string_module()
     g_stdlib_registry["sys"]    = create_sys_module()
     g_stdlib_registry["fat"]    = create_fat_module()
-    g_stdlib_registry["net"]    = create_net_module()
+    # NOTE: 'net' resolves as a real package (lib/net/__init__.sage) through
+    # the module-file loader, which supersedes this legacy stub entry.
+    # Host-only native modules — importable stubs under the self-hosted build
+    g_stdlib_registry["thread"]    = create_stub_module("thread")
+    g_stdlib_registry["_thread"]   = g_stdlib_registry["thread"]
+    g_stdlib_registry["socket"]    = create_stub_module("socket")
+    g_stdlib_registry["tcp"]       = create_stub_module("tcp")
+    g_stdlib_registry["http"]      = create_stub_module("http")
+    g_stdlib_registry["ssl"]       = create_stub_module("ssl")
+    g_stdlib_registry["gpu"]       = create_stub_module("gpu")
+    g_stdlib_registry["ml_native"] = create_stub_module("ml_native")
+    g_stdlib_registry["vm"]        = create_stub_module("vm")
+    g_stdlib_registry["ffi"]       = create_stub_module("ffi")
 
 proc get_stdlib_module(name):
     if dict_has(g_stdlib_registry, name):

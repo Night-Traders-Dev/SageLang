@@ -44,8 +44,11 @@ let g_error_ctx = nil
 # Module cache to prevent double-loading
 let g_module_cache = {}
 
-# Module search paths (set by the host before running)
-let g_module_paths = [".", "lib", "core/src/sage", "core/lib"]
+# Module search paths. Relative entries support running from a repo
+# checkout; the absolute entries mirror the C host's compiled-in
+# SAGE_LIB_DIR (/usr/local prefix) so installed libraries resolve from
+# any working directory.
+let g_module_paths = [".", "lib", "core/src/sage", "core/lib", "/usr/local/share/sage/lib", "/usr/local/share/sage/src/sage"]
 
 # ---- Performance: pre-allocated signal singletons ----
 let _SIG_NORMAL_NIL = {"kind": 0, "value": nil}
@@ -1946,6 +1949,30 @@ proc exec_stmt(stmt, env):
             if io.exists(try_path):
                 mod_source = io.readfile(try_path)
                 mod_path = try_path
+                # Sibling imports: register the module's own directory
+                let mod_dir = join(slice(split(try_path, "/"), 0, len(split(try_path, "/")) - 1), "/")
+                let dup_sib = false
+                for existing3 in g_module_paths:
+                    if existing3 == mod_dir:
+                        dup_sib = true
+                        break
+                if not dup_sib:
+                    push(g_module_paths, mod_dir)
+                break
+            # Package directory with __init__.sage
+            let init_path = g_module_paths[si] + "/" + file_mod_name + "/__init__.sage"
+            if io.exists(init_path):
+                mod_source = io.readfile(init_path)
+                mod_path = init_path
+                # Make submodules resolvable (a.b -> <pkgdir>/b.sage)
+                let pkg_dir = g_module_paths[si] + "/" + file_mod_name
+                let dup_dir = false
+                for existing2 in g_module_paths:
+                    if existing2 == pkg_dir:
+                        dup_dir = true
+                        break
+                if not dup_dir:
+                    push(g_module_paths, pkg_dir)
                 break
             si = si + 1
         if mod_source == nil:

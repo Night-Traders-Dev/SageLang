@@ -679,11 +679,22 @@ class Parser:
             self.parse_error(tok, "Maximum nesting depth exceeded", "reduce the depth of nested blocks")
         while self.match_tok(token.TOKEN_NEWLINE):
             pass
+        # Doc comments may precede the INDENT that opens the body
+        while self.check(token.TOKEN_DOC_COMMENT):
+            self.advance()
+            while self.match_tok(token.TOKEN_NEWLINE) or self.match_tok(token.TOKEN_DOC_COMMENT):
+                pass
         self.consume(token.TOKEN_INDENT, "Expect indentation after block start.")
         let head = nil
         let current = nil
         while not self.check(token.TOKEN_DEDENT) and not self.check(token.TOKEN_EOF):
             if self.match_tok(token.TOKEN_NEWLINE):
+                continue
+            # Doc comments (## lines) are legal anywhere a statement can
+            # appear — skip them like ordinary comments.
+            if self.check(token.TOKEN_DOC_COMMENT):
+                self.advance()
+                self.match_tok(token.TOKEN_NEWLINE)
                 continue
             let s = self.parse_declaration()
             if s == nil:

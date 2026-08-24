@@ -213,7 +213,8 @@ bytecode VM, SageMetal VM, JIT, AOT, and Kotlin/Android — 10 backends total pl
 📖 **[JIT & AOT Guide](core/docs/JIT_AOT_Guide.md)** ·
 [CLI Reference](core/docs/CLI_Reference.md) ·
 [SGVM Guide](core/docs/SGVM_Guide.md) ·
-[Android Guide](core/docs/Android_Guide.md)
+[Android Guide](core/docs/Android_Guide.md) ·
+[Library Support Matrix](core/docs/Library_Support.md)
 
 ### Memory Management
 

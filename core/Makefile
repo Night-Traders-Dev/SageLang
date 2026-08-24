@@ -388,21 +388,11 @@ install: $(TARGET) $(LSP_TARGET)
 	install -d $(LIBDIR)/lib
 	install -d $(LIBDIR)/examples
 	cp -r lib/*.sage $(LIBDIR)/lib/ 2>/dev/null || true
-	cp -r lib/blockchain $(LIBDIR)/lib/
-	cp -r lib/metal $(LIBDIR)/lib/
-	cp -r lib/graphics $(LIBDIR)/lib/
-	cp -r lib/os $(LIBDIR)/lib/
-	cp -r lib/net $(LIBDIR)/lib/
-	cp -r lib/crypto $(LIBDIR)/lib/
-	cp -r lib/ml $(LIBDIR)/lib/
-	cp -r lib/cuda $(LIBDIR)/lib/
-	cp -r lib/std $(LIBDIR)/lib/
-	cp -r lib/transpiler $(LIBDIR)/lib/
-	cp -r lib/llm $(LIBDIR)/lib/
-	cp -r lib/agent $(LIBDIR)/lib/
-	cp -r lib/chat $(LIBDIR)/lib/
-	cp -r lib/android $(LIBDIR)/lib/
-	cp -r lib/rich $(LIBDIR)/lib/
+	for d in lib/*/; do \
+		[ -d "$$d" ] || continue; \
+		case "$$d" in lib/vm-tools/) continue;; esac; \
+		cp -r "$$d" $(LIBDIR)/lib/ 2>/dev/null || true; \
+	done
 	install -d $(LIBDIR)/src/sage
 	cp -r src/sage/*.sage $(LIBDIR)/src/sage/
 	cp -r examples/*.sage $(LIBDIR)/examples/

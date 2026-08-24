@@ -182,6 +182,12 @@ char* resolve_module_path(ModuleCache* cache, const char* name) {
                         continue;
                     }
 #endif
+                    // Make sibling imports work: a module loaded as
+                    // pkg/mod.sage may import siblings by bare name.
+                    char dir_copy[MAX_MODULE_PATH];
+                    snprintf(dir_copy, sizeof(dir_copy), "%s", path);
+                    char* slash = strrchr(dir_copy, '/');
+                    if (slash) { *slash = '\0'; add_search_path(cache, dir_copy); }
                     free(path_name);
                     return SAGE_STRDUP(path);
                 }
