@@ -2221,13 +2221,17 @@ static void run(const char* source, const char* filename, SageRuntimeMode runtim
 // Bundles imported module sources so the binary runs without filesystem deps.
 // ============================================================================
 
-// Native module names that should never be bundled
+// Native module names that should never be bundled.
+// NOTE: 'compiler', 'parser' and 'interpreter' are NOT here on purpose —
+// they are Sage-written modules (core/src/sage/*.sage) that must be
+// embedded, otherwise the standalone binary silently loads whatever stale
+// copy it finds on disk at runtime.
 static int jit_is_native_module(const char* name) {
     const char* natives[] = {"_math",   "math",      "_io",       "io",
                              "thread",  "_thread",   "sys",       "_sys",
                              "socket",  "tcp",       "http",      "ssl",
                              "fat",     "gpu",       "graphics",  "ml_native",
-                             "compiler","vm_native", "vm",        "ffi",
+                             "vm_native", "vm",      "ffi",
                              "net",     "string",    NULL};
     for (int i = 0; natives[i] != NULL; i++) {
         if (strcmp(name, natives[i]) == 0) return 1;
@@ -2235,14 +2239,17 @@ static int jit_is_native_module(const char* name) {
     return 0;
 }
 
-// Collect top-level non-native import module names from a source string
+// Collect top-level non-native import module names from a source string.
+// Covers BOTH import forms: 'import X' (import_all=1) and
+// 'from X import a, b' / 'from X import *' (import_all=0) — missing the
+// latter silently produced standalone binaries with incomplete bundles.
 static char** jit_get_imports(const char* source, const char* filename, int* count) {
     Stmt* ast = parse_program(source, filename);
     if (!ast) { *count = 0; return NULL; }
     int cap = 16, cnt = 0;
     char** imports = SAGE_ALLOC(sizeof(char*) * cap);
     for (Stmt* s = ast; s; s = s->next) {
-        if (s->type == STMT_IMPORT && s->as.import.import_all) {
+        if (s->type == STMT_IMPORT && s->as.import.module_name) {
             char* name = s->as.import.module_name;
             if (jit_is_native_module(name)) continue;
             int found = 0;
@@ -2446,8 +2453,10 @@ int main(int argc, const char* argv[]) {
             if (f) {
                 fseek(f, 0, SEEK_END);
                 long size = ftell(f);
-                long search_start = size - 500000; // Search last 500KB
-                if (search_start < 0) search_start = 0;
+                // Scan the WHOLE file: bundles grow with the toolchain and
+                // the old last-500KB window silently missed payloads in
+                // larger builds, degrading the standalone to the C host CLI.
+                long search_start = 0;
                 
                 char magic[32];
                 snprintf(magic, sizeof(magic), "\n__SAGE_%s_%s__\n", "EMBEDDED", "START");

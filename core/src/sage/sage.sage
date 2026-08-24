@@ -22,6 +22,8 @@ import gc
 import lsp
 from parser import parse_source, parse_source_file
 from interpreter import new_interpreter, run_source, exec_program, set_error_context
+from interpreter import eval_expr, value_to_string
+from ast import STMT_EXPRESSION, EXPR_SET, EXPR_INDEX_SET
 
 # ============================================================================
 # Constants
@@ -111,9 +113,10 @@ proc parse_args():
         if not endswith(argv[1], "sage.sage"):
             start = 1
 
-    # No arguments beyond the entry point
+    # No arguments beyond the entry point: start the interactive REPL
+    # (mirrors the C host, which also drops into its REPL on bare invocation)
     if argc <= start:
-        result["mode"] = "help"
+        result["mode"] = "repl"
         return result
 
     let i = start
@@ -711,31 +714,111 @@ proc run_strict_safety(path):
 # Mode: REPL
 # ============================================================================
 
+# Heuristic: is this chunk an executable unit?
+# True when no string/bracket is left open and the last significant
+# character is not ':' (a block opener awaiting an indented body).
+proc repl_chunk_complete(src):
+    let n = len(src)
+    let paren = 0
+    let bracket = 0
+    let brace = 0
+    let in_str = false
+    let quote_ch = ""
+    let last_sig = ""
+    let i = 0
+    while i < n:
+        let c = src[i]
+        if in_str:
+            if c == "\\":
+                i = i + 2
+                continue
+            if c == quote_ch:
+                in_str = false
+            i = i + 1
+            continue
+        if c == "\"" or c == "'":
+            in_str = true
+            quote_ch = c
+        else:
+            if c == "#":
+                break
+            if c == "(":
+                paren = paren + 1
+            elif c == ")":
+                paren = paren - 1
+            elif c == "[":
+                bracket = bracket + 1
+            elif c == "]":
+                bracket = bracket - 1
+            elif c == "{":
+                brace = brace + 1
+            elif c == "}":
+                brace = brace - 1
+            elif c != " " and c != chr(9):
+                last_sig = c
+        i = i + 1
+    if in_str:
+        return false
+    if paren > 0 or bracket > 0 or brace > 0:
+        return false
+    if last_sig == ":":
+        return false
+    return true
+
+proc repl_run_chunk(genv, source):
+    set_error_context(source, "<repl>")
+    try:
+        let stmts = parse_source(source)
+        # REPL convenience: a lone expression echoes its value (like the C
+        # host REPL). Assignments and statements stay silent.
+        if len(stmts) == 1 and stmts[0].type == STMT_EXPRESSION:
+            let expr = stmts[0].expression
+            if expr.type != EXPR_SET and expr.type != EXPR_INDEX_SET:
+                let v = eval_expr(expr, genv)
+                if v != nil:
+                    print value_to_string(v)
+                return
+        exec_program(genv, stmts)
+    catch e:
+        # Keep the REPL alive on user errors; formatted diagnostics already
+        # carry their own lowercase severity.
+        let msg = str(e)
+        if len(msg) >= 6 and msg[0:6] == "error:":
+            print msg
+        else:
+            print "Error: " + msg
+
 proc mode_repl(args):
     print "Sage " + VERSION + " (self-hosted) - interactive REPL"
-    print "Type Sage statements. Blank line executes. Type 'exit' or 'quit' to leave."
-    let buffer = ""
-    let prompt = "sage> "
+    print "Complete statements run immediately. End a line with ':' to open a block; a blank line executes it. Type 'exit', 'quit' or :quit to leave."
     let genv = new_interpreter()
+    let buffer = ""
     while true:
-        print prompt
+        if len(buffer) > 0:
+            print "... "
+        else:
+            print "sage> "
         let line = input()
         if line == nil:
             print ""
             break
-        if line == "exit" or line == "quit":
+        let trimmed = strip(line)
+        if trimmed == "exit" or trimmed == "quit" or trimmed == ":exit" or trimmed == ":quit" or trimmed == ":q":
             break
-        if line == "":
+        if trimmed == "":
             if buffer != "":
                 let source = buffer
                 buffer = ""
-                set_error_context(source, "<repl>")
-                run_source(genv, source)
+                repl_run_chunk(genv, source)
             continue
         if len(buffer) > 0:
             buffer = buffer + chr(10) + line
         else:
             buffer = line
+        if repl_chunk_complete(buffer):
+            let source = buffer
+            buffer = ""
+            repl_run_chunk(genv, source)
 
 # ============================================================================
 # Mode: Lily Transpilation

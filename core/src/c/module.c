@@ -72,6 +72,30 @@ void add_search_path(ModuleCache* cache, const char* path) {
     cache->search_path_count++;
 }
 
+// Add a search path with the HIGHEST priority (searched first).
+// Used for the main script's own directory so that project-local modules
+// shadow any older copies installed system-wide (e.g. share/sage/src/sage).
+static void add_search_path_front(ModuleCache* cache, const char* path) {
+    if (cache->search_path_count >= MAX_SEARCH_PATHS) {
+        fprintf(stderr, "Error: Maximum search paths exceeded\n");
+        return;
+    }
+
+    // Avoid duplicates: if already present, move it to the front instead
+    int existing = -1;
+    for (int i = 0; i < cache->search_path_count; i++) {
+        if (strcmp(cache->search_paths[i], path) == 0) { existing = i; break; }
+    }
+    if (existing < 0) {
+        cache->search_paths[cache->search_path_count++] = SAGE_STRDUP(path);
+        existing = cache->search_path_count - 1;
+    }
+    char* dup = cache->search_paths[existing];
+    memmove(&cache->search_paths[1], &cache->search_paths[0],
+            sizeof(char*) * existing);
+    cache->search_paths[0] = dup;
+}
+
 #ifdef PICO_BUILD
 static bool file_exists(const char* path) {
     (void)path;  // Unused parameter
@@ -609,7 +633,10 @@ static void add_system_search_paths(ModuleCache* cache) {
     }
 }
 
-// Add source file's directory as a search path
+// Add source file's directory as a search path.
+// The directory containing the main script is inserted at the FRONT of the
+// search list: modules resolved relative to the running source must win
+// over system-wide installs, which may hold stale copies.
 void module_add_source_dir(const char* source_path) {
     if (global_module_cache == NULL || source_path == NULL) return;
     char dir[4096];
@@ -619,17 +646,8 @@ void module_add_source_dir(const char* source_path) {
     char* last_slash = strrchr(dir, '/');
     if (last_slash != NULL) {
         *(last_slash + 1) = '\0';
-        add_search_path(global_module_cache, dir);
-        // Also add dir/lib/ for project-relative libs
-        char lib_dir[4096];
-        snprintf(lib_dir, sizeof(lib_dir), "%slib", dir);
-        add_search_path(global_module_cache, lib_dir);
-        
-        // Also add dir/core/lib/ for the common sage repo structure
-        char core_lib_dir[4096];
-        snprintf(core_lib_dir, sizeof(core_lib_dir), "%score/lib", dir);
-        add_search_path(global_module_cache, core_lib_dir);
-
+        // Add in reverse priority order; each add_search_path_front call
+        // moves its path to the front, leaving `dir` with highest priority.
         // Also add PARENT directory and parent/lib/ — handles the common
         // pattern where source is in examples/ or src/ but libs are in
         // the project root's lib/ directory.
@@ -638,29 +656,35 @@ void module_add_source_dir(const char* source_path) {
         // Remove trailing slash
         size_t plen = strlen(parent);
         if (plen > 1 && parent[plen - 1] == '/') parent[plen - 1] = '\0';
-        // Find parent directory
         char* parent_slash = strrchr(parent, '/');
         if (parent_slash != NULL) {
             *(parent_slash + 1) = '\0';
-            add_search_path(global_module_cache, parent);
-            char parent_lib[4096];
-            snprintf(parent_lib, sizeof(parent_lib), "%slib", parent);
-            add_search_path(global_module_cache, parent_lib);
-            
-            // Also parent/core/lib
+            // parent/core/lib
             char parent_core_lib[4096];
             snprintf(parent_core_lib, sizeof(parent_core_lib), "%score/lib", parent);
-            add_search_path(global_module_cache, parent_core_lib);
+            add_search_path_front(global_module_cache, parent_core_lib);
+            char parent_lib[4096];
+            snprintf(parent_lib, sizeof(parent_lib), "%slib", parent);
+            add_search_path_front(global_module_cache, parent_lib);
+            add_search_path_front(global_module_cache, parent);
         }
+        // Also add dir/core/lib/ for the common sage repo structure
+        char core_lib_dir[4096];
+        snprintf(core_lib_dir, sizeof(core_lib_dir), "%score/lib", dir);
+        add_search_path_front(global_module_cache, core_lib_dir);
+        // Also add dir/lib/ for project-relative libs
+        char lib_dir[4096];
+        snprintf(lib_dir, sizeof(lib_dir), "%slib", dir);
+        add_search_path_front(global_module_cache, lib_dir);
+        add_search_path_front(global_module_cache, dir);
     } else {
-        // No slash: script is in current directory
-        add_search_path(global_module_cache, "./");
-        add_search_path(global_module_cache, "./lib");
-        add_search_path(global_module_cache, "./core/lib");
-        
-        // Also add ../lib and ../core/lib
-        add_search_path(global_module_cache, "../lib");
+        // No slash: script is in current directory.
+        // Front-insert so "./" outranks any later system paths.
         add_search_path(global_module_cache, "../core/lib");
+        add_search_path(global_module_cache, "../lib");
+        add_search_path_front(global_module_cache, "./core/lib");
+        add_search_path_front(global_module_cache, "./lib");
+        add_search_path_front(global_module_cache, "./");
     }
 }
 

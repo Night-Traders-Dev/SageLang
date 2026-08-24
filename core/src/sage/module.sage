@@ -9,7 +9,7 @@ gc_disable()
 # - Import types: import X, from X import Y, import X as Y
 import io
 
-let MAX_SEARCH_PATHS = 16
+let MAX_SEARCH_PATHS = 64
 
 # ============================================================================
 # Module Cache
@@ -27,8 +27,9 @@ class ModuleCache:
         push(self.search_paths, "./modules")
 
     proc add_search_path(path):
-        # MAX_SEARCH_PATHS = 16; hardcoded because class methods can't see module-level lets
-        if len(self.search_paths) >= 16:
+        # Keep in sync with MAX_SEARCH_PATHS; hardcoded because class methods
+        # can't see module-level lets
+        if len(self.search_paths) >= 64:
             print "Error: Maximum search paths exceeded"
             return
         push(self.search_paths, path)

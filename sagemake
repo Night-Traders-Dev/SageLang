@@ -297,6 +297,22 @@ def perform_install(args):
             console.print("  [bold green]✓[/bold green] [green]/usr/local/bin/sage-c    -> C interpreter[/green]")
         else:
             step_fail("Installation failed (sudo required)")
+            return
+
+        # Refresh the installed Sage-written compiler modules. A standalone
+        # binary bundles its own copies, but it (and any C-host fallback)
+        # resolves un-bundled imports from share/sage/src/sage — letting that
+        # directory go stale causes version-skew crashes like
+        # "Module 'token' has no attribute 'TOKEN_END'".
+        section("Refreshing installed self-hosted modules")
+        r3 = run_cmd(sud + ["install", "-d", "/usr/local/share/sage/src/sage"], capture_output=False)
+        r4 = run_cmd(sud + ["sh", "-c",
+                            "install -m 644 core/src/sage/*.sage /usr/local/share/sage/src/sage/"],
+                     capture_output=False)
+        if r3 and r3.returncode == 0 and r4 and r4.returncode == 0:
+            step_ok("/usr/local/share/sage/src/sage updated")
+        else:
+            step_warn("could not refresh /usr/local/share/sage/src/sage")
         return
 
     section("Building release binary for installation")
