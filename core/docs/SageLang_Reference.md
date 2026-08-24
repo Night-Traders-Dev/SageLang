@@ -206,6 +206,8 @@ dog.speak()                        # "Rex says Woof!"
 Key OOP features:
 - `self` is the instance reference (must be the first parameter of every method)
 - `init` is the constructor
+- Default parameter values supported on constructors and methods (e.g., `proc init(self, name="Default"):`)
+- `hasattr(obj, name)` built-in procedure for runtime duck-typing queries (methods, fields, dict keys)
 - `super.method()` calls parent methods (auto-self with `super.init()`)
 - `__str__` dunder for custom print output
 - `__eq__` dunder for custom equality
@@ -431,6 +433,7 @@ These are registered as native C functions and are available without any import.
 | `int` | `int(v) -> Number` | Truncate number to integer |
 | `str` | `str(v) -> String` | Convert value to string |
 | `type` | `type(v) -> String` | Get runtime type name |
+| `hasattr` | `hasattr(obj, name) -> Bool` | Duck-typing query: returns true if name exists as instance field/method or dict key |
 | `chr` | `chr(n) -> String` | Int to character |
 | `ord` | `ord(s) -> Number` | Character to int |
 

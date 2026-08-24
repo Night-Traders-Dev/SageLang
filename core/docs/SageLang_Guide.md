@@ -440,6 +440,7 @@ SageLang provides built-in functions injected into global environment via `init_
 | `dict_values(dict)` | `dict → array` | Get values as array |
 | `dict_has(dict, key)` | `(dict, string) → bool` | Check if key exists |
 | `dict_delete(dict, key)` | `(dict, string) → nil` | Remove key from dict |
+| `hasattr(obj, name)` | `(value, string) → bool` | Duck-typing query: true if name resolves as instance method, field, or dict key |
 | `type(val)` | `value → string` | Get string name of type (e.g. "bytes" for byte buffers) |
 | `chr(n)` | `number → string` | Get single-character string from ASCII code |
 | `ord(c)` | `string → number` | Get ASCII code of single-character string |
@@ -1157,6 +1158,8 @@ d.speak()
 # Rex speaks
 # Rex barks
 ```
+
+Class constructors (`init`) and instance methods support default parameter values (e.g. `proc init(self, name="Unknown", role="User"):`). Default values automatically bind when omitted by the caller. Dynamic member/method availability can be queried at runtime using the `hasattr(obj, name)` built-in procedure.
 
 The `->` arrow operator can also be used with super: `super->init(args)`.
 
@@ -3519,7 +3522,7 @@ len(x) push(arr, val) pop(arr) append(arr, val) range(a, b)
 split(str, delim) join(arr, sep) replace(s, old, new)
 upper(s) lower(s) strip(s) slice(arr/str, start, end)
 str(x) tonumber(s) int(x) input() clock()
-type(x) chr(n) ord(c) hash(x) sizeof(x) doc(x)
+type(x) chr(n) ord(c) hash(x) sizeof(x) doc(x) hasattr(obj, name)
 startswith(s, prefix) endswith(s, suffix)
 contains(s, sub) indexof(s, sub) string_count(s, sub) string_repeat(s, n)
 array_extend(a, b) array_repeat(a, n) array_reverse(a)

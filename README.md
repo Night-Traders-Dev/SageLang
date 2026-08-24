@@ -11,9 +11,10 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.2.0 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.2.1 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
+- **v4.2.1 (Blockchain Audit & Runtime Enhancements)**: Full functional audit and hardening of `core/lib/blockchain` (content-committed block hashes, PoA signing/validation, wallet address/signature coherence, collision-free mnemonics, recursive DB directory creation, System minting, unknown-tx-type rejection, and signed-transaction flows). Added native `hasattr(obj, name)` built-in procedure for duck-typing queries on instances (methods and fields) and dictionaries. Fixed default parameter value binding for class constructors (`init`) and methods, and upgraded float formatting (`sage_format_number`) to shortest round-trip output preventing precision loss.
 - **v4.2.0 (Full Self-Hosted Compiler Parity)**: The self-hosted Sage compiler
   now produces byte-identical output to the C compiler across the entire
   differential parity harness — 28/28 cases on all three execution stacks

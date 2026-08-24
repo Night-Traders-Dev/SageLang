@@ -1,5 +1,14 @@
 # Changelog
 
+## [4.2.1] - 2026-08-24
+
+### Blockchain Library Audit & Runtime Builtins
+
+- **Blockchain Hardening**: Comprehensive functional audit and fixes in `core/lib/blockchain` (content-committed block hashes, PoA signature validation, wallet address/signature coherence, collision-free mnemonic generation, recursive DB directory creation, System account minting, unknown-tx-type rejection). Updated examples to signed-transaction flow and added `testsuite/unit/29_lib/blockchain_audit_test.sage`.
+- **`hasattr(obj, name)` Builtin**: Added native C `hasattr` built-in function for runtime duck-typing queries (evaluates to true if `name` resolves as an instance method, instance field, or dictionary key).
+- **Default Parameters in OOP**: Class constructors (`init`) and method calls now correctly evaluate and bind default parameter values when optional arguments are omitted by callers.
+- **Shortest Round-Trip Float Formatting**: Updated `sage_format_number` float formatting to maintain shortest round-trip precision, eliminating precision loss at values >= 1e6.
+
 ## [4.2.0] - 2026-08-22
 
 ### Full Self-Hosted Compiler Parity
