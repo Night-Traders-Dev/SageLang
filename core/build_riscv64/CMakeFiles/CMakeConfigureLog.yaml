@@ -1,0 +1,1909 @@
+
+---
+events:
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineSystem.cmake:12 (find_program)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_UNAME"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "uname"
+    candidate_directories:
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/usr/bin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/opt/riscv/bin/uname"
+      - "/home/kraken/.opencode/bin/uname"
+      - "/usr/local/sbin/uname"
+      - "/usr/local/bin/uname"
+      - "/usr/sbin/uname"
+    found: "/usr/bin/uname"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineSystem.cmake:207 (message)"
+      - "CMakeLists.txt:61 (project)"
+    message: |
+      The target system is: Linux -  - riscv64
+      The host system is: Linux - 7.1.5-x64v2-xanmod1 - x86_64
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeUnixFindMake.cmake:5 (find_program)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_MAKE_PROGRAM"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "gmake"
+      - "make"
+      - "smake"
+    candidate_directories:
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/usr/bin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/opt/riscv/bin/gmake"
+      - "/home/kraken/.opencode/bin/gmake"
+      - "/usr/local/sbin/gmake"
+      - "/usr/local/bin/gmake"
+      - "/usr/sbin/gmake"
+    found: "/usr/bin/gmake"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompiler.cmake:115 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:67 (_cmake_find_compiler_path)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_C_COMPILER_WITH_PATH"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-gcc"
+    candidate_directories:
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/usr/bin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/opt/riscv/bin/riscv64-linux-gnu-gcc"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-gcc"
+      - "/usr/local/sbin/riscv64-linux-gnu-gcc"
+      - "/usr/local/bin/riscv64-linux-gnu-gcc"
+      - "/usr/sbin/riscv64-linux-gnu-gcc"
+    found: "/usr/bin/riscv64-linux-gnu-gcc"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:462 (find_file)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:500 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:122 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCCompilerId.c.in"
+    candidate_directories:
+      - "/usr/share/cmake-4.2/Modules/"
+    found: "/usr/share/cmake-4.2/Modules/CMakeCCompilerId.c.in"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:122 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:61 (project)"
+    message: |
+      Compiling the C compiler identification source file "CMakeCCompilerId.c" succeeded.
+      Compiler: /usr/bin/riscv64-linux-gnu-gcc 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the C compiler identification source "CMakeCCompilerId.c" produced "a.out"
+      
+      The C compiler identification is GNU, found in:
+        /home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/4.2.3/CompilerIdC/a.out
+      
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_AR"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-ar"
+      - "ar"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    found: "/usr/bin/riscv64-linux-gnu-ar"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_RANLIB"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-ranlib"
+      - "ranlib"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    found: "/usr/bin/riscv64-linux-gnu-ranlib"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_STRIP"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-strip"
+      - "strip"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    found: "/usr/bin/riscv64-linux-gnu-strip"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_LINKER"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-ld"
+      - "ld"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    found: "/usr/bin/riscv64-linux-gnu-ld"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_NM"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-nm"
+      - "nm"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    found: "/usr/bin/riscv64-linux-gnu-nm"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_OBJDUMP"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-objdump"
+      - "objdump"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    found: "/usr/bin/riscv64-linux-gnu-objdump"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_OBJCOPY"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-objcopy"
+      - "objcopy"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    found: "/usr/bin/riscv64-linux-gnu-objcopy"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_READELF"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-readelf"
+      - "readelf"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    found: "/usr/bin/riscv64-linux-gnu-readelf"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_DLLTOOL"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-dlltool"
+      - "dlltool"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/usr/bin/riscv64-linux-gnu-dlltool"
+      - "/opt/riscv/bin/riscv64-linux-gnu-dlltool"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-dlltool"
+      - "/usr/local/sbin/riscv64-linux-gnu-dlltool"
+      - "/usr/local/bin/riscv64-linux-gnu-dlltool"
+      - "/usr/sbin/riscv64-linux-gnu-dlltool"
+      - "/sbin/riscv64-linux-gnu-dlltool"
+      - "/bin/riscv64-linux-gnu-dlltool"
+      - "/usr/games/riscv64-linux-gnu-dlltool"
+      - "/usr/local/games/riscv64-linux-gnu-dlltool"
+      - "/snap/bin/riscv64-linux-gnu-dlltool"
+      - "/usr/bin/dlltool"
+      - "/opt/riscv/bin/dlltool"
+      - "/home/kraken/.opencode/bin/dlltool"
+      - "/usr/local/sbin/dlltool"
+      - "/usr/local/bin/dlltool"
+      - "/usr/sbin/dlltool"
+      - "/sbin/dlltool"
+      - "/bin/dlltool"
+      - "/usr/games/dlltool"
+      - "/usr/local/games/dlltool"
+      - "/snap/bin/dlltool"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_ADDR2LINE"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-addr2line"
+      - "addr2line"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    found: "/usr/bin/riscv64-linux-gnu-addr2line"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake:243 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:200 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_TAPI"
+    description: "Path to a program."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-tapi"
+      - "tapi"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/usr/bin/riscv64-linux-gnu-tapi"
+      - "/opt/riscv/bin/riscv64-linux-gnu-tapi"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-tapi"
+      - "/usr/local/sbin/riscv64-linux-gnu-tapi"
+      - "/usr/local/bin/riscv64-linux-gnu-tapi"
+      - "/usr/sbin/riscv64-linux-gnu-tapi"
+      - "/sbin/riscv64-linux-gnu-tapi"
+      - "/bin/riscv64-linux-gnu-tapi"
+      - "/usr/games/riscv64-linux-gnu-tapi"
+      - "/usr/local/games/riscv64-linux-gnu-tapi"
+      - "/snap/bin/riscv64-linux-gnu-tapi"
+      - "/usr/bin/tapi"
+      - "/opt/riscv/bin/tapi"
+      - "/home/kraken/.opencode/bin/tapi"
+      - "/usr/local/sbin/tapi"
+      - "/usr/local/bin/tapi"
+      - "/usr/sbin/tapi"
+      - "/sbin/tapi"
+      - "/bin/tapi"
+      - "/usr/games/tapi"
+      - "/usr/local/games/tapi"
+      - "/snap/bin/tapi"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/Compiler/GNU-FindBinUtils.cmake:18 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:201 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_C_COMPILER_AR"
+    description: "A wrapper around 'ar' adding the appropriate '--plugin' option for the GCC compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-gcc-ar-15.2"
+      - "riscv64-linux-gnu-gcc-ar-15"
+      - "riscv64-linux-gnu-gcc-ar15"
+      - "riscv64-linux-gnu-gcc-ar"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/usr/bin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/opt/riscv/bin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/usr/local/sbin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/usr/local/bin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/usr/sbin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/sbin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/bin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/usr/games/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/usr/local/games/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/snap/bin/riscv64-linux-gnu-gcc-ar-15.2"
+    found: "/usr/bin/riscv64-linux-gnu-gcc-ar-15"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/Compiler/GNU-FindBinUtils.cmake:30 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCCompiler.cmake:201 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_C_COMPILER_RANLIB"
+    description: "A wrapper around 'ranlib' adding the appropriate '--plugin' option for the GCC compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "riscv64-linux-gnu-gcc-ranlib-15"
+      - "riscv64-linux-gnu-gcc-ranlib15"
+      - "riscv64-linux-gnu-gcc-ranlib"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/usr/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/opt/riscv/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/usr/local/sbin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/usr/local/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/usr/sbin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/sbin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/usr/games/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/usr/local/games/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/snap/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+    found: "/usr/bin/riscv64-linux-gnu-gcc-ranlib-15"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompiler.cmake:54 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:69 (_cmake_find_compiler)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_CXX_COMPILER"
+    description: "CXX compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "c++"
+      - "CC"
+      - "riscv64-linux-gnu-c++"
+      - "riscv64-linux-gnu-g++"
+      - "aCC"
+      - "cl"
+      - "bcc"
+      - "xlC"
+      - "icpx"
+      - "icx"
+      - "clang++"
+    candidate_directories:
+      - "/usr/bin/"
+    found: "/usr/bin/c++"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:462 (find_file)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:500 (CMAKE_DETERMINE_COMPILER_ID_WRITE)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:8 (CMAKE_DETERMINE_COMPILER_ID_BUILD)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "file"
+    variable: "src_in"
+    description: "Path to a file."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "CMakeCXXCompilerId.cpp.in"
+    candidate_directories:
+      - "/usr/share/cmake-4.2/Modules/"
+    found: "/usr/share/cmake-4.2/Modules/CMakeCXXCompilerId.cpp.in"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:17 (message)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:64 (__determine_compiler_id_test)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:125 (CMAKE_DETERMINE_COMPILER_ID)"
+      - "CMakeLists.txt:61 (project)"
+    message: |
+      Compiling the CXX compiler identification source file "CMakeCXXCompilerId.cpp" succeeded.
+      Compiler: /usr/bin/c++ 
+      Build flags: 
+      Id flags:  
+      
+      The output was:
+      0
+      
+      
+      Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.out"
+      
+      The CXX compiler identification is GNU, found in:
+        /home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/4.2.3/CompilerIdCXX/a.out
+      
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/Compiler/GNU-FindBinUtils.cmake:18 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:207 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_CXX_COMPILER_AR"
+    description: "A wrapper around 'ar' adding the appropriate '--plugin' option for the GCC compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-gcc-ar-15.2"
+      - "riscv64-linux-gnu-gcc-ar-15"
+      - "riscv64-linux-gnu-gcc-ar15"
+      - "riscv64-linux-gnu-gcc-ar"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/usr/bin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/opt/riscv/bin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/usr/local/sbin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/usr/local/bin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/usr/sbin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/sbin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/bin/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/usr/games/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/usr/local/games/riscv64-linux-gnu-gcc-ar-15.2"
+      - "/snap/bin/riscv64-linux-gnu-gcc-ar-15.2"
+    found: "/usr/bin/riscv64-linux-gnu-gcc-ar-15"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/Compiler/GNU-FindBinUtils.cmake:30 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCXXCompiler.cmake:207 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_CXX_COMPILER_RANLIB"
+    description: "A wrapper around 'ranlib' adding the appropriate '--plugin' option for the GCC compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "riscv64-linux-gnu-gcc-ranlib-15"
+      - "riscv64-linux-gnu-gcc-ranlib15"
+      - "riscv64-linux-gnu-gcc-ranlib"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/usr/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/opt/riscv/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/usr/local/sbin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/usr/local/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/usr/sbin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/sbin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/usr/games/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/usr/local/games/riscv64-linux-gnu-gcc-ranlib-15.2"
+      - "/snap/bin/riscv64-linux-gnu-gcc-ranlib-15.2"
+    found: "/usr/bin/riscv64-linux-gnu-gcc-ranlib-15"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompiler.cmake:54 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineASMCompiler.cmake:61 (_cmake_find_compiler)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_ASM_COMPILER"
+    description: "ASM compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "/usr/bin/riscv64-linux-gnu-gcc"
+    candidate_directories:
+      - "/usr/bin/"
+    found: "/usr/bin/riscv64-linux-gnu-gcc"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerId.cmake:1290 (message)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineASMCompiler.cmake:170 (CMAKE_DETERMINE_COMPILER_ID_VENDOR)"
+      - "CMakeLists.txt:61 (project)"
+    message: |
+      Checking whether the ASM compiler is GNU using "--version" matched "(GNU assembler)|(GCC)|(Free Software Foundation)":
+      riscv64-linux-gnu-gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+      Copyright (C) 2025 Free Software Foundation, Inc.
+      This is free software; see the source for copying conditions.  There is NO
+      warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+      
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/Compiler/GNU-FindBinUtils.cmake:18 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineASMCompiler.cmake:268 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_ASM_COMPILER_AR"
+    description: "A wrapper around 'ar' adding the appropriate '--plugin' option for the GCC compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-gcc-ar-"
+      - "riscv64-linux-gnu-gcc-ar-"
+      - "riscv64-linux-gnu-gcc-ar"
+      - "riscv64-linux-gnu-gcc-ar"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/usr/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/opt/riscv/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/local/sbin/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/local/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/sbin/riscv64-linux-gnu-gcc-ar-"
+      - "/sbin/riscv64-linux-gnu-gcc-ar-"
+      - "/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/games/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/local/games/riscv64-linux-gnu-gcc-ar-"
+      - "/snap/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/opt/riscv/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/local/sbin/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/local/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/sbin/riscv64-linux-gnu-gcc-ar-"
+      - "/sbin/riscv64-linux-gnu-gcc-ar-"
+      - "/bin/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/games/riscv64-linux-gnu-gcc-ar-"
+      - "/usr/local/games/riscv64-linux-gnu-gcc-ar-"
+      - "/snap/bin/riscv64-linux-gnu-gcc-ar-"
+    found: "/usr/bin/riscv64-linux-gnu-gcc-ar"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/Compiler/GNU-FindBinUtils.cmake:30 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineASMCompiler.cmake:268 (include)"
+      - "CMakeLists.txt:61 (project)"
+    mode: "program"
+    variable: "CMAKE_ASM_COMPILER_RANLIB"
+    description: "A wrapper around 'ranlib' adding the appropriate '--plugin' option for the GCC compiler"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: false
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: false
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "riscv64-linux-gnu-gcc-ranlib-"
+      - "riscv64-linux-gnu-gcc-ranlib-"
+      - "riscv64-linux-gnu-gcc-ranlib"
+      - "riscv64-linux-gnu-gcc-ranlib"
+    candidate_directories:
+      - "/usr/bin/"
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+    searched_directories:
+      - "/usr/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/opt/riscv/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/local/sbin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/local/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/sbin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/sbin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/games/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/local/games/riscv64-linux-gnu-gcc-ranlib-"
+      - "/snap/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/opt/riscv/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/home/kraken/.opencode/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/local/sbin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/local/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/sbin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/sbin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/bin/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/games/riscv64-linux-gnu-gcc-ranlib-"
+      - "/usr/local/games/riscv64-linux-gnu-gcc-ranlib-"
+      - "/snap/bin/riscv64-linux-gnu-gcc-ranlib-"
+    found: "/usr/bin/riscv64-linux-gnu-gcc-ranlib"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "/usr/share/cmake-4.2/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:61 (project)"
+    checks:
+      - "Detecting C compiler ABI info"
+    directories:
+      source: "/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-rnwv8o"
+      binary: "/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-rnwv8o"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_C_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-rnwv8o'
+        
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_36113/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_36113.dir/build.make CMakeFiles/cmTC_36113.dir/build
+        gmake[1]: Entering directory '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-rnwv8o'
+        Building C object CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o
+        /usr/bin/riscv64-linux-gnu-gcc   -v -o CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o -c /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c
+        Using built-in specs.
+        COLLECT_GCC=/usr/bin/riscv64-linux-gnu-gcc
+        Target: riscv64-linux-gnu
+        Configured with: ../src/configure -v --with-pkgversion='Ubuntu 15.2.0-16ubuntu1' --with-bugurl=file:///usr/share/doc/gcc-15/README.Bugs --enable-languages=c,ada,c++,go,d,fortran,objc,obj-c++,m2,cobol,algol68 --prefix=/usr --with-gcc-major-version-only --program-suffix=-15 --enable-shared --enable-linker-build-id --libexecdir=/usr/libexec --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --with-sysroot=/ --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-libstdcxx-backtrace --enable-gnu-unique-object --disable-libquadmath --disable-libquadmath-support --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --without-target-system-zlib --enable-multiarch --disable-werror --disable-multilib --with-abi=lp64d --with-arch=rv64i_m_a_f_d_c_b_v_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=riscv64-linux-gnu --program-prefix=riscv64-linux-gnu- --includedir=/usr/riscv64-linux-gnu/include --with-build-config=bootstrap-lto-lean --enable-link-serialization=2
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) 
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o' '-c' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-mabi=lp64d' '-misa-spec=20191213' '-mtls-dialect=trad' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-dumpdir' 'CMakeFiles/cmTC_36113.dir/'
+         /usr/libexec/gcc-cross/riscv64-linux-gnu/15/cc1 -quiet -v -imultilib . -imultiarch riscv64-linux-gnu /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_36113.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm -mabi=lp64d -misa-spec=20191213 -mtls-dialect=trad -march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm -version -fstack-protector-strong -Wformat -Wformat-security -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/ccqPbkZj.s
+        GNU C23 (Ubuntu 15.2.0-16ubuntu1) version 15.2.0 (riscv64-linux-gnu)
+        	compiled by GNU C version 15.2.0, GMP version 6.3.0, MPFR version 4.2.2, MPC version 1.3.1, isl version isl-0.27-GMP
+        
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        ignoring nonexistent directory "/usr/local/include/riscv64-linux-gnu"
+        ignoring nonexistent directory "/usr/lib/gcc-cross/riscv64-linux-gnu/15/include-fixed/riscv64-linux-gnu"
+        ignoring nonexistent directory "/usr/lib/gcc-cross/riscv64-linux-gnu/15/include-fixed"
+        ignoring nonexistent directory "/usr/include/riscv64-linux-gnu"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /usr/lib/gcc-cross/riscv64-linux-gnu/15/include
+         /usr/lib/gcc-cross/riscv64-linux-gnu/15/../../../../riscv64-linux-gnu/include
+         /usr/include
+        End of search list.
+        Compiler executable checksum: d46628df3ea7770c12ed78ed2c40cebd
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o' '-c' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-mabi=lp64d' '-misa-spec=20191213' '-mtls-dialect=trad' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-dumpdir' 'CMakeFiles/cmTC_36113.dir/'
+         /usr/lib/gcc-cross/riscv64-linux-gnu/15/../../../../riscv64-linux-gnu/bin/as -v --traditional-format -fpic -march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm -march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm -mabi=lp64d -misa-spec=20191213 -o CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o /tmp/ccqPbkZj.s
+        GNU assembler version 2.46 (riscv64-linux-gnu) using BFD version (GNU Binutils for Ubuntu) 2.46
+        COMPILER_PATH=/usr/libexec/gcc-cross/riscv64-linux-gnu/15/:/usr/libexec/gcc-cross/riscv64-linux-gnu/15/:/usr/libexec/gcc-cross/riscv64-linux-gnu/:/usr/lib/gcc-cross/riscv64-linux-gnu/15/:/usr/lib/gcc-cross/riscv64-linux-gnu/:/usr/lib/gcc-cross/riscv64-linux-gnu/15/../../../../riscv64-linux-gnu/bin/
+        LIBRARY_PATH=/usr/lib/gcc-cross/riscv64-linux-gnu/15/:/usr/lib/gcc-cross/riscv64-linux-gnu/15/../../../../riscv64-linux-gnu/lib/:/lib/riscv64-linux-gnu/:/lib/:/usr/lib/riscv64-linux-gnu/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o' '-c' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-mabi=lp64d' '-misa-spec=20191213' '-mtls-dialect=trad' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-dumpdir' 'CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.'
+        Linking C static library libcmTC_36113.a
+        /usr/bin/cmake -P CMakeFiles/cmTC_36113.dir/cmake_clean_target.cmake
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_36113.dir/link.txt --verbose=1
+        /usr/bin/riscv64-linux-gnu-ar qc libcmTC_36113.a CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o
+        /usr/bin/riscv64-linux-gnu-ranlib libcmTC_36113.a
+        gmake[1]: Leaving directory '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-rnwv8o'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerABI.cmake:217 (message)"
+      - "/usr/share/cmake-4.2/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:61 (project)"
+    message: |
+      Parsed C implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/usr/lib/gcc-cross/riscv64-linux-gnu/15/include]
+          add: [/usr/lib/gcc-cross/riscv64-linux-gnu/15/../../../../riscv64-linux-gnu/include]
+          add: [/usr/include]
+        end of search list found
+        collapse include dir [/usr/lib/gcc-cross/riscv64-linux-gnu/15/include] ==> [/usr/lib/gcc-cross/riscv64-linux-gnu/15/include]
+        collapse include dir [/usr/lib/gcc-cross/riscv64-linux-gnu/15/../../../../riscv64-linux-gnu/include] ==> [/usr/riscv64-linux-gnu/include]
+        collapse include dir [/usr/include] ==> [/usr/include]
+        implicit include dirs: [/usr/lib/gcc-cross/riscv64-linux-gnu/15/include;/usr/riscv64-linux-gnu/include;/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerABI.cmake:253 (message)"
+      - "/usr/share/cmake-4.2/Modules/CMakeTestCCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:61 (project)"
+    message: |
+      Parsed C implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
+        ignore line: [Change Dir: '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-rnwv8o']
+        ignore line: []
+        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_36113/fast]
+        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_36113.dir/build.make CMakeFiles/cmTC_36113.dir/build]
+        ignore line: [gmake[1]: Entering directory '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-rnwv8o']
+        ignore line: [Building C object CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o]
+        ignore line: [/usr/bin/riscv64-linux-gnu-gcc   -v -o CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o -c /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/usr/bin/riscv64-linux-gnu-gcc]
+        ignore line: [Target: riscv64-linux-gnu]
+        ignore line: [Configured with: ../src/configure -v --with-pkgversion='Ubuntu 15.2.0-16ubuntu1' --with-bugurl=file:///usr/share/doc/gcc-15/README.Bugs --enable-languages=c ada c++ go d fortran objc obj-c++ m2 cobol algol68 --prefix=/usr --with-gcc-major-version-only --program-suffix=-15 --enable-shared --enable-linker-build-id --libexecdir=/usr/libexec --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --with-sysroot=/ --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-libstdcxx-backtrace --enable-gnu-unique-object --disable-libquadmath --disable-libquadmath-support --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --without-target-system-zlib --enable-multiarch --disable-werror --disable-multilib --with-abi=lp64d --with-arch=rv64i_m_a_f_d_c_b_v_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=riscv64-linux-gnu --program-prefix=riscv64-linux-gnu- --includedir=/usr/riscv64-linux-gnu/include --with-build-config=bootstrap-lto-lean --enable-link-serialization=2]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) ]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o' '-c' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-mabi=lp64d' '-misa-spec=20191213' '-mtls-dialect=trad' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-dumpdir' 'CMakeFiles/cmTC_36113.dir/']
+        ignore line: [ /usr/libexec/gcc-cross/riscv64-linux-gnu/15/cc1 -quiet -v -imultilib . -imultiarch riscv64-linux-gnu /usr/share/cmake-4.2/Modules/CMakeCCompilerABI.c -quiet -dumpdir CMakeFiles/cmTC_36113.dir/ -dumpbase CMakeCCompilerABI.c.c -dumpbase-ext .c -march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm -mabi=lp64d -misa-spec=20191213 -mtls-dialect=trad -march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm -version -fstack-protector-strong -Wformat -Wformat-security -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/ccqPbkZj.s]
+        ignore line: [GNU C23 (Ubuntu 15.2.0-16ubuntu1) version 15.2.0 (riscv64-linux-gnu)]
+        ignore line: [	compiled by GNU C version 15.2.0  GMP version 6.3.0  MPFR version 4.2.2  MPC version 1.3.1  isl version isl-0.27-GMP]
+        ignore line: []
+        ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
+        ignore line: [ignoring nonexistent directory "/usr/local/include/riscv64-linux-gnu"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc-cross/riscv64-linux-gnu/15/include-fixed/riscv64-linux-gnu"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc-cross/riscv64-linux-gnu/15/include-fixed"]
+        ignore line: [ignoring nonexistent directory "/usr/include/riscv64-linux-gnu"]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /usr/lib/gcc-cross/riscv64-linux-gnu/15/include]
+        ignore line: [ /usr/lib/gcc-cross/riscv64-linux-gnu/15/../../../../riscv64-linux-gnu/include]
+        ignore line: [ /usr/include]
+        ignore line: [End of search list.]
+        ignore line: [Compiler executable checksum: d46628df3ea7770c12ed78ed2c40cebd]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o' '-c' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-mabi=lp64d' '-misa-spec=20191213' '-mtls-dialect=trad' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-dumpdir' 'CMakeFiles/cmTC_36113.dir/']
+        ignore line: [ /usr/lib/gcc-cross/riscv64-linux-gnu/15/../../../../riscv64-linux-gnu/bin/as -v --traditional-format -fpic -march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm -march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm -mabi=lp64d -misa-spec=20191213 -o CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o /tmp/ccqPbkZj.s]
+        ignore line: [GNU assembler version 2.46 (riscv64-linux-gnu) using BFD version (GNU Binutils for Ubuntu) 2.46]
+        ignore line: [COMPILER_PATH=/usr/libexec/gcc-cross/riscv64-linux-gnu/15/:/usr/libexec/gcc-cross/riscv64-linux-gnu/15/:/usr/libexec/gcc-cross/riscv64-linux-gnu/:/usr/lib/gcc-cross/riscv64-linux-gnu/15/:/usr/lib/gcc-cross/riscv64-linux-gnu/:/usr/lib/gcc-cross/riscv64-linux-gnu/15/../../../../riscv64-linux-gnu/bin/]
+        ignore line: [LIBRARY_PATH=/usr/lib/gcc-cross/riscv64-linux-gnu/15/:/usr/lib/gcc-cross/riscv64-linux-gnu/15/../../../../riscv64-linux-gnu/lib/:/lib/riscv64-linux-gnu/:/lib/:/usr/lib/riscv64-linux-gnu/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o' '-c' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-mabi=lp64d' '-misa-spec=20191213' '-mtls-dialect=trad' '-march=rv64imafdcbv_zic64b_zicbom_zicbop_zicboz_ziccamoa_ziccif_zicclsm_ziccrse_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zmmul_za64rs_zaamo_zalrsc_zawrs_zfa_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbs_zkt_zvbb_zve32f_zve32x_zve64d_zve64f_zve64x_zvfhmin_zvkb_zvkt_zvl128b_zvl32b_zvl64b_supm' '-dumpdir' 'CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.']
+        ignore line: [Linking C static library libcmTC_36113.a]
+        ignore line: [/usr/bin/cmake -P CMakeFiles/cmTC_36113.dir/cmake_clean_target.cmake]
+        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_36113.dir/link.txt --verbose=1]
+        ignore line: [/usr/bin/riscv64-linux-gnu-ar qc libcmTC_36113.a CMakeFiles/cmTC_36113.dir/CMakeCCompilerABI.c.o]
+        ignore line: [/usr/bin/riscv64-linux-gnu-ranlib libcmTC_36113.a]
+        ignore line: [gmake[1]: Leaving directory '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-rnwv8o']
+        ignore line: []
+        ignore line: []
+        implicit libs: []
+        implicit objs: []
+        implicit dirs: []
+        implicit fwks: []
+      
+      
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerABI.cmake:83 (try_compile)"
+      - "/usr/share/cmake-4.2/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:61 (project)"
+    checks:
+      - "Detecting CXX compiler ABI info"
+    directories:
+      source: "/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-r6tGe2"
+      binary: "/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-r6tGe2"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: ""
+      CMAKE_CXX_FLAGS_DEBUG: "-g"
+      CMAKE_CXX_SCAN_FOR_MODULES: "OFF"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CMAKE_CXX_ABI_COMPILED"
+      cached: true
+      stdout: |
+        Change Dir: '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-r6tGe2'
+        
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_47797/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_47797.dir/build.make CMakeFiles/cmTC_47797.dir/build
+        gmake[1]: Entering directory '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-r6tGe2'
+        Building CXX object CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o
+        /usr/bin/c++   -v -o CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp
+        Using built-in specs.
+        COLLECT_GCC=/usr/bin/c++
+        OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa
+        OFFLOAD_TARGET_DEFAULT=1
+        Target: x86_64-linux-gnu
+        Configured with: ../src/configure -v --with-pkgversion='Ubuntu 15.2.0-16ubuntu1' --with-bugurl=file:///usr/share/doc/gcc-15/README.Bugs --enable-languages=c,ada,c++,go,d,fortran,objc,obj-c++,m2,rust,cobol,algol68 --prefix=/usr --with-gcc-major-version-only --program-suffix=-15 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/libexec --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-bootstrap --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-libstdcxx-backtrace --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32,m64,mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-15-j35TAX/gcc-15-15.2.0/debian/tmp-nvptx/usr,amdgcn-amdhsa=/build/gcc-15-j35TAX/gcc-15-15.2.0/debian/tmp-gcn/usr --enable-offload-defaulted --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu --with-build-config=bootstrap-lto-lean --enable-link-serialization=2
+        Thread model: posix
+        Supported LTO compression algorithms: zlib zstd
+        gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) 
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_47797.dir/'
+         /usr/libexec/gcc/x86_64-linux-gnu/15/cc1plus -quiet -v -imultiarch x86_64-linux-gnu -D_GNU_SOURCE /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_47797.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -fcf-protection -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/cccVOiXl.s
+        GNU C++17 (Ubuntu 15.2.0-16ubuntu1) version 15.2.0 (x86_64-linux-gnu)
+        	compiled by GNU C version 15.2.0, GMP version 6.3.0, MPFR version 4.2.2, MPC version 1.3.1, isl version isl-0.27-GMP
+        
+        GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
+        ignoring duplicate directory "/usr/include/x86_64-linux-gnu/c++/15"
+        ignoring nonexistent directory "/usr/local/include/x86_64-linux-gnu"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/15/include-fixed/x86_64-linux-gnu"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/15/include-fixed"
+        ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/15/../../../../x86_64-linux-gnu/include"
+        #include "..." search starts here:
+        #include <...> search starts here:
+         /usr/include/c++/15
+         /usr/include/x86_64-linux-gnu/c++/15
+         /usr/include/c++/15/backward
+         /usr/lib/gcc/x86_64-linux-gnu/15/include
+         /usr/local/include
+         /usr/include/x86_64-linux-gnu
+         /usr/include
+        End of search list.
+        Compiler executable checksum: b661a74662ad7cf413c4193391ab5290
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_47797.dir/'
+         /usr/bin/x86_64-linux-gnu-as -v --64 -o CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o /tmp/cccVOiXl.s
+        GNU assembler version 2.46 (x86_64-linux-gnu) using BFD version (GNU Binutils for Ubuntu) 2.46
+        COMPILER_PATH=/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/
+        LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../:/lib/:/usr/lib/
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.'
+        Linking CXX static library libcmTC_47797.a
+        /usr/bin/cmake -P CMakeFiles/cmTC_47797.dir/cmake_clean_target.cmake
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_47797.dir/link.txt --verbose=1
+        /usr/bin/riscv64-linux-gnu-ar qc libcmTC_47797.a CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o
+        /usr/bin/riscv64-linux-gnu-ranlib libcmTC_47797.a
+        gmake[1]: Leaving directory '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-r6tGe2'
+        
+      exitCode: 0
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerABI.cmake:217 (message)"
+      - "/usr/share/cmake-4.2/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:61 (project)"
+    message: |
+      Parsed CXX implicit include dir info: rv=done
+        found start of include info
+        found start of implicit include info
+          add: [/usr/include/c++/15]
+          add: [/usr/include/x86_64-linux-gnu/c++/15]
+          add: [/usr/include/c++/15/backward]
+          add: [/usr/lib/gcc/x86_64-linux-gnu/15/include]
+          add: [/usr/local/include]
+          add: [/usr/include/x86_64-linux-gnu]
+          add: [/usr/include]
+        end of search list found
+        collapse include dir [/usr/include/c++/15] ==> [/usr/include/c++/15]
+        collapse include dir [/usr/include/x86_64-linux-gnu/c++/15] ==> [/usr/include/x86_64-linux-gnu/c++/15]
+        collapse include dir [/usr/include/c++/15/backward] ==> [/usr/include/c++/15/backward]
+        collapse include dir [/usr/lib/gcc/x86_64-linux-gnu/15/include] ==> [/usr/lib/gcc/x86_64-linux-gnu/15/include]
+        collapse include dir [/usr/local/include] ==> [/usr/local/include]
+        collapse include dir [/usr/include/x86_64-linux-gnu] ==> [/usr/include/x86_64-linux-gnu]
+        collapse include dir [/usr/include] ==> [/usr/include]
+        implicit include dirs: [/usr/include/c++/15;/usr/include/x86_64-linux-gnu/c++/15;/usr/include/c++/15/backward;/usr/lib/gcc/x86_64-linux-gnu/15/include;/usr/local/include;/usr/include/x86_64-linux-gnu;/usr/include]
+      
+      
+  -
+    kind: "message-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineCompilerABI.cmake:253 (message)"
+      - "/usr/share/cmake-4.2/Modules/CMakeTestCXXCompiler.cmake:26 (CMAKE_DETERMINE_COMPILER_ABI)"
+      - "CMakeLists.txt:61 (project)"
+    message: |
+      Parsed CXX implicit link information:
+        link line regex: [^( *|.*[/\\])(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
+        linker tool regex: [^[ 	]*(->|"|[0-9]+>[ 	-]*Build:[ 	0-9]+ ms[ 	]*)?[ 	]*(([^"]*[/\\])?(ld[0-9]*(|\\.[a-rt-z][a-z]*|\\.s[a-np-z][a-z]*|\\.so[a-z]+)))("|,| |$)]
+        ignore line: [Change Dir: '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-r6tGe2']
+        ignore line: []
+        ignore line: [Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_47797/fast]
+        ignore line: [/usr/bin/gmake  -f CMakeFiles/cmTC_47797.dir/build.make CMakeFiles/cmTC_47797.dir/build]
+        ignore line: [gmake[1]: Entering directory '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-r6tGe2']
+        ignore line: [Building CXX object CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o]
+        ignore line: [/usr/bin/c++   -v -o CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o -c /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp]
+        ignore line: [Using built-in specs.]
+        ignore line: [COLLECT_GCC=/usr/bin/c++]
+        ignore line: [OFFLOAD_TARGET_NAMES=nvptx-none:amdgcn-amdhsa]
+        ignore line: [OFFLOAD_TARGET_DEFAULT=1]
+        ignore line: [Target: x86_64-linux-gnu]
+        ignore line: [Configured with: ../src/configure -v --with-pkgversion='Ubuntu 15.2.0-16ubuntu1' --with-bugurl=file:///usr/share/doc/gcc-15/README.Bugs --enable-languages=c ada c++ go d fortran objc obj-c++ m2 rust cobol algol68 --prefix=/usr --with-gcc-major-version-only --program-suffix=-15 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/libexec --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-bootstrap --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-libstdcxx-backtrace --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --enable-libphobos-checking=release --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --enable-cet --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32 m64 mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-15-j35TAX/gcc-15-15.2.0/debian/tmp-nvptx/usr amdgcn-amdhsa=/build/gcc-15-j35TAX/gcc-15-15.2.0/debian/tmp-gcn/usr --enable-offload-defaulted --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu --with-build-config=bootstrap-lto-lean --enable-link-serialization=2]
+        ignore line: [Thread model: posix]
+        ignore line: [Supported LTO compression algorithms: zlib zstd]
+        ignore line: [gcc version 15.2.0 (Ubuntu 15.2.0-16ubuntu1) ]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_47797.dir/']
+        ignore line: [ /usr/libexec/gcc/x86_64-linux-gnu/15/cc1plus -quiet -v -imultiarch x86_64-linux-gnu -D_GNU_SOURCE /usr/share/cmake-4.2/Modules/CMakeCXXCompilerABI.cpp -quiet -dumpdir CMakeFiles/cmTC_47797.dir/ -dumpbase CMakeCXXCompilerABI.cpp.cpp -dumpbase-ext .cpp -mtune=generic -march=x86-64 -version -fasynchronous-unwind-tables -fstack-protector-strong -Wformat -Wformat-security -fstack-clash-protection -fcf-protection -fzero-init-padding-bits=all -Wbidi-chars=any -o /tmp/cccVOiXl.s]
+        ignore line: [GNU C++17 (Ubuntu 15.2.0-16ubuntu1) version 15.2.0 (x86_64-linux-gnu)]
+        ignore line: [	compiled by GNU C version 15.2.0  GMP version 6.3.0  MPFR version 4.2.2  MPC version 1.3.1  isl version isl-0.27-GMP]
+        ignore line: []
+        ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
+        ignore line: [ignoring duplicate directory "/usr/include/x86_64-linux-gnu/c++/15"]
+        ignore line: [ignoring nonexistent directory "/usr/local/include/x86_64-linux-gnu"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/15/include-fixed/x86_64-linux-gnu"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/15/include-fixed"]
+        ignore line: [ignoring nonexistent directory "/usr/lib/gcc/x86_64-linux-gnu/15/../../../../x86_64-linux-gnu/include"]
+        ignore line: [#include "..." search starts here:]
+        ignore line: [#include <...> search starts here:]
+        ignore line: [ /usr/include/c++/15]
+        ignore line: [ /usr/include/x86_64-linux-gnu/c++/15]
+        ignore line: [ /usr/include/c++/15/backward]
+        ignore line: [ /usr/lib/gcc/x86_64-linux-gnu/15/include]
+        ignore line: [ /usr/local/include]
+        ignore line: [ /usr/include/x86_64-linux-gnu]
+        ignore line: [ /usr/include]
+        ignore line: [End of search list.]
+        ignore line: [Compiler executable checksum: b661a74662ad7cf413c4193391ab5290]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_47797.dir/']
+        ignore line: [ /usr/bin/x86_64-linux-gnu-as -v --64 -o CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o /tmp/cccVOiXl.s]
+        ignore line: [GNU assembler version 2.46 (x86_64-linux-gnu) using BFD version (GNU Binutils for Ubuntu) 2.46]
+        ignore line: [COMPILER_PATH=/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/15/:/usr/libexec/gcc/x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/]
+        ignore line: [LIBRARY_PATH=/usr/lib/gcc/x86_64-linux-gnu/15/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../x86_64-linux-gnu/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../../lib/:/lib/x86_64-linux-gnu/:/lib/../lib/:/usr/lib/x86_64-linux-gnu/:/usr/lib/../lib/:/usr/lib/gcc/x86_64-linux-gnu/15/../../../:/lib/:/usr/lib/]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o' '-c' '-shared-libgcc' '-mtune=generic' '-march=x86-64' '-dumpdir' 'CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.']
+        ignore line: [Linking CXX static library libcmTC_47797.a]
+        ignore line: [/usr/bin/cmake -P CMakeFiles/cmTC_47797.dir/cmake_clean_target.cmake]
+        ignore line: [/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_47797.dir/link.txt --verbose=1]
+        ignore line: [/usr/bin/riscv64-linux-gnu-ar qc libcmTC_47797.a CMakeFiles/cmTC_47797.dir/CMakeCXXCompilerABI.cpp.o]
+        ignore line: [/usr/bin/riscv64-linux-gnu-ranlib libcmTC_47797.a]
+        ignore line: [gmake[1]: Leaving directory '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-r6tGe2']
+        ignore line: []
+        ignore line: []
+        implicit libs: []
+        implicit objs: []
+        implicit dirs: []
+        implicit fwks: []
+      
+      
+  -
+    kind: "find-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/FindPkgConfig.cmake:517 (find_program)"
+      - "CMakeLists.txt:137 (find_package)"
+    mode: "program"
+    variable: "PKG_CONFIG_EXECUTABLE"
+    description: "pkg-config executable"
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "pkg-config"
+      - "pkgconf"
+    candidate_directories:
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/usr/bin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/snap/bin/"
+      - "/usr/local/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/"
+      - "/usr/bin/"
+      - "/usr/sbin/"
+      - "/usr/"
+      - "/bin/"
+      - "/sbin/"
+      - "/usr/X11R6/bin/"
+      - "/usr/X11R6/sbin/"
+      - "/usr/X11R6/"
+      - "/usr/pkg/bin/"
+      - "/usr/pkg/sbin/"
+      - "/usr/pkg/"
+      - "/opt/bin/"
+      - "/opt/sbin/"
+      - "/opt/"
+    searched_directories:
+      - "/opt/riscv/bin/pkg-config"
+      - "/opt/riscv/bin/pkgconf"
+      - "/home/kraken/.opencode/bin/pkg-config"
+      - "/home/kraken/.opencode/bin/pkgconf"
+      - "/usr/local/sbin/pkg-config"
+      - "/usr/local/sbin/pkgconf"
+      - "/usr/local/bin/pkg-config"
+      - "/usr/local/bin/pkgconf"
+      - "/usr/sbin/pkg-config"
+      - "/usr/sbin/pkgconf"
+    found: "/usr/bin/pkg-config"
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+      CMAKE_INSTALL_PREFIX: "/usr/local"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/local"
+        - "/usr"
+        - "/"
+        - "/usr"
+        - "/usr/local"
+        - "/usr/X11R6"
+        - "/usr/pkg"
+        - "/opt"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "CMakeLists.txt:520 (find_library)"
+    mode: "library"
+    variable: "CUBLAS_LIB"
+    description: "Path to a library."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "cublas"
+    candidate_directories:
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/usr/bin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/usr/local/lib/"
+      - "/usr/local/"
+      - "/usr/lib64/"
+      - "/usr/lib/"
+      - "/usr/"
+      - "/lib64/"
+      - "/lib/"
+      - "/opt/"
+      - "/usr/lib/X11/"
+    searched_directories:
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/usr/bin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/usr/local/lib/"
+      - "/usr/local/"
+      - "/usr/lib64/"
+      - "/usr/lib/"
+      - "/usr/"
+      - "/lib64/"
+      - "/lib/"
+      - "/opt/"
+      - "/usr/lib/X11/"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+      CMAKE_INSTALL_PREFIX: "/usr/local"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/local"
+        - "/usr"
+        - "/"
+        - "/usr"
+        - "/usr/local"
+        - "/usr/X11R6"
+        - "/usr/pkg"
+        - "/opt"
+      CMAKE_SYSTEM_LIBRARY_PATH:
+        - "/usr/lib/X11"
+  -
+    kind: "find-v1"
+    backtrace:
+      - "CMakeLists.txt:521 (find_library)"
+    mode: "library"
+    variable: "CUDART_LIB"
+    description: "Path to a library."
+    settings:
+      SearchFramework: "NEVER"
+      SearchAppBundle: "NEVER"
+      CMAKE_FIND_USE_CMAKE_PATH: true
+      CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+      CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+      CMAKE_FIND_USE_INSTALL_PREFIX: true
+    names:
+      - "cudart"
+    candidate_directories:
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/usr/bin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/usr/local/lib/"
+      - "/usr/local/"
+      - "/usr/lib64/"
+      - "/usr/lib/"
+      - "/usr/"
+      - "/lib64/"
+      - "/lib/"
+      - "/opt/"
+      - "/usr/lib/X11/"
+    searched_directories:
+      - "/opt/riscv/bin/"
+      - "/home/kraken/.opencode/bin/"
+      - "/usr/local/sbin/"
+      - "/usr/local/bin/"
+      - "/usr/sbin/"
+      - "/usr/bin/"
+      - "/sbin/"
+      - "/bin/"
+      - "/usr/games/"
+      - "/usr/local/games/"
+      - "/usr/local/lib/"
+      - "/usr/local/"
+      - "/usr/lib64/"
+      - "/usr/lib/"
+      - "/usr/"
+      - "/lib64/"
+      - "/lib/"
+      - "/opt/"
+      - "/usr/lib/X11/"
+    found: false
+    search_context:
+      ENV{PATH}:
+        - "/opt/riscv/bin"
+        - "/home/kraken/.opencode/bin"
+        - "/usr/local/sbin"
+        - "/usr/local/bin"
+        - "/usr/sbin"
+        - "/usr/bin"
+        - "/sbin"
+        - "/bin"
+        - "/usr/games"
+        - "/usr/local/games"
+        - "/snap/bin"
+      CMAKE_INSTALL_PREFIX: "/usr/local"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "/usr/local"
+        - "/usr"
+        - "/"
+        - "/usr"
+        - "/usr/local"
+        - "/usr/X11R6"
+        - "/usr/pkg"
+        - "/opt"
+      CMAKE_SYSTEM_LIBRARY_PATH:
+        - "/usr/lib/X11"
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "/usr/share/cmake-4.2/Modules/Internal/CheckSourceCompiles.cmake:104 (try_compile)"
+      - "/usr/share/cmake-4.2/Modules/Internal/CheckCompilerFlag.cmake:18 (cmake_check_source_compiles)"
+      - "/usr/share/cmake-4.2/Modules/CheckCCompilerFlag.cmake:105 (cmake_check_compiler_flag)"
+      - "CMakeLists.txt:548 (check_c_compiler_flag)"
+    checks:
+      - "Performing Test CC_HAS_RVV"
+    directories:
+      source: "/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-sVQaUS"
+      binary: "/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-sVQaUS"
+    cmakeVariables:
+      CMAKE_C_FLAGS: ""
+      CMAKE_C_FLAGS_DEBUG: "-g"
+      CMAKE_EXE_LINKER_FLAGS: ""
+    buildResult:
+      variable: "CC_HAS_RVV"
+      cached: true
+      stdout: |
+        Change Dir: '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-sVQaUS'
+        
+        Run Build Command(s): /usr/bin/cmake -E env VERBOSE=1 /usr/bin/gmake -f Makefile cmTC_7dd53/fast
+        /usr/bin/gmake  -f CMakeFiles/cmTC_7dd53.dir/build.make CMakeFiles/cmTC_7dd53.dir/build
+        gmake[1]: Entering directory '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-sVQaUS'
+        Building C object CMakeFiles/cmTC_7dd53.dir/src.c.o
+        /usr/bin/riscv64-linux-gnu-gcc -DCC_HAS_RVV  -std=gnu11   -march=rv64gcv -o CMakeFiles/cmTC_7dd53.dir/src.c.o -c /home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-sVQaUS/src.c
+        Linking C static library libcmTC_7dd53.a
+        /usr/bin/cmake -P CMakeFiles/cmTC_7dd53.dir/cmake_clean_target.cmake
+        /usr/bin/cmake -E cmake_link_script CMakeFiles/cmTC_7dd53.dir/link.txt --verbose=1
+        /usr/bin/riscv64-linux-gnu-ar qc libcmTC_7dd53.a CMakeFiles/cmTC_7dd53.dir/src.c.o
+        /usr/bin/riscv64-linux-gnu-ranlib libcmTC_7dd53.a
+        gmake[1]: Leaving directory '/home/kraken/Devel/SageLang/core/build_riscv64/CMakeFiles/CMakeScratch/TryCompile-sVQaUS'
+        
+      exitCode: 0
+...

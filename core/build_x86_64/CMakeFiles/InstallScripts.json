@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/kraken/Devel/SageLang/core/build_x86_64/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

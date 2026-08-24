@@ -1,0 +1,16 @@
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/sage.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/sage-lsp.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/run_example.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/run_all_examples.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/clean_all.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/train_sl_tq.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/chatbot-c.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/chatbot-llvm.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/sl-tq-chat.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/train-sage.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/edit_cache.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/rebuild_cache.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/list_install_components.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/install.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/install/local.dir
+/home/kraken/Devel/SageLang/core/build_dbg/CMakeFiles/install/strip.dir
