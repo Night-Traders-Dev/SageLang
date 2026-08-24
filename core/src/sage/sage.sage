@@ -29,7 +29,7 @@ from interpreter import new_interpreter, run_source, exec_program, set_error_con
 
 let NL = chr(10)
 let SQ = chr(39)
-let VERSION = "4.1.16"
+let VERSION = "4.20.1"
 
 # ============================================================================
 # Usage / Help
