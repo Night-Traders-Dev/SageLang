@@ -36,6 +36,7 @@ Expr* new_call_expr(Expr* callee, Expr** args, int arg_count) {
     e->as.call.callee = callee;
     e->as.call.args = args;
     e->as.call.arg_count = arg_count;
+    e->as.call.kw_names = NULL;
     return e;
 }
 

@@ -29,6 +29,7 @@ typedef struct {
     Expr* callee;
     Expr** args;
     int arg_count;
+    char** kw_names;   // parallel to args: keyword label per arg, NULL if positional
 } CallExpr;
 
 typedef struct {

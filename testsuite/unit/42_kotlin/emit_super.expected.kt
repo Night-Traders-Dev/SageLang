@@ -11,7 +11,8 @@ typealias SageVal = S.Value
 open class Circle : Shape() {
     override val props = mutableMapOf<String, SageVal>()
     
-    open fun `init`(radius: SageVal = S.nil): SageVal {
+    override fun sageInit(vararg args: SageVal): SageVal {
+        val radius: SageVal = if (args.size > 0) args[0] else S.nil
         super.sageInit(S.str("circle"))
         S.setProperty(S.Value.Obj(this), "radius", radius)
         return S.nil
@@ -32,7 +33,8 @@ open class Circle : Shape() {
 open class Shape : SageObject("Shape") {
     override val props = mutableMapOf<String, SageVal>()
     
-    open fun `init`(name: SageVal = S.nil): SageVal {
+    override fun sageInit(vararg args: SageVal): SageVal {
+        val name: SageVal = if (args.size > 0) args[0] else S.nil
         S.setProperty(S.Value.Obj(this), "name", name)
         return S.nil
     }

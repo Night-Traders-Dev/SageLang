@@ -333,6 +333,10 @@ proc compile_expr(chunk, expr):
         return compile_expr(chunk, expr.object) and compile_expr(chunk, expr.value) and emit_name_op(chunk, BC_OP_SET_PROPERTY, expr.property)
 
     if expr.type == ast.EXPR_CALL:
+        if expr.kw_names != nil:
+            for k in expr.kw_names:
+                if k != nil:
+                    return set_error("Keyword arguments are not supported in VM bytecode (use positional arguments).")
         if expr.callee.type == ast.EXPR_GET:
             let get_expr = expr.callee
             if not compile_expr(chunk, get_expr.object):

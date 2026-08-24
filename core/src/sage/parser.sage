@@ -459,12 +459,33 @@ class Parser:
             if self.match_tok(token.TOKEN_LPAREN):
                 # Function call
                 let args = []
+                let kw_names = []
                 if not self.check(token.TOKEN_RPAREN):
-                    push(args, self.parse_expression())
+                    # Keyword argument: a bare identifier followed by ':'
+                    # (`name: value`). Safe because no other argument-list
+                    # grammar produces IDENT ':' here — dicts and slices are
+                    # consumed by their own sub-parsers.
+                    let arg = self.parse_expression()
+                    let kwname = nil
+                    if arg.type == EXPR_VARIABLE and self.check(token.TOKEN_COLON):
+                        self.advance()
+                        kwname = arg.name.text
+                        arg = self.parse_expression()
+                    push(args, arg)
+                    push(kw_names, kwname)
                     while self.match_tok(token.TOKEN_COMMA):
-                        push(args, self.parse_expression())
+                        if self.check(token.TOKEN_RPAREN):
+                            break
+                        let arg2 = self.parse_expression()
+                        let kwname2 = nil
+                        if arg2.type == EXPR_VARIABLE and self.check(token.TOKEN_COLON):
+                            self.advance()
+                            kwname2 = arg2.name.text
+                            arg2 = self.parse_expression()
+                        push(args, arg2)
+                        push(kw_names, kwname2)
                 self.consume(token.TOKEN_RPAREN, "Expect ')' after arguments.")
-                expr = call_expr(expr, args)
+                expr = call_expr(expr, args, kw_names)
             elif self.match_tok(token.TOKEN_LBRACKET):
                 # Index or slice
                 let start_or_index = nil

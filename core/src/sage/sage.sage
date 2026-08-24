@@ -31,7 +31,7 @@ from ast import STMT_EXPRESSION, EXPR_SET, EXPR_INDEX_SET
 
 let NL = chr(10)
 let SQ = chr(39)
-let VERSION = "4.20.1"
+let VERSION = "4.2.2"
 
 # ============================================================================
 # Usage / Help

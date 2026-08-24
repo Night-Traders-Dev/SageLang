@@ -257,6 +257,24 @@ proc import_bind(stmt, mod_name, mod_env, target_env):
             ki = ki + 1
         env_define(target_env, bind_name, mod_obj)
 
+        # Dotted imports (e.g. `import android.app`) additionally export every
+        # top-level symbol into scope (never clobbering existing bindings) —
+        # this is what library documentation has always shown.
+        # NOTE: mod_name may arrive in dot or slash form depending on how the
+        # module was resolved, so both separators are recognized.
+        if stmt.alias == nil:
+            let parts = nil
+            if len(split(mod_name, ".")) > 1:
+                parts = split(mod_name, ".")
+            elif len(split(mod_name, "/")) > 1:
+                parts = split(mod_name, "/")
+            if parts != nil:
+                let di = 0
+                while di < len(keys):
+                    if not dict_has(target_env["vals"], keys[di]):
+                        env_define(target_env, keys[di], mod_vals[keys[di]])
+                    di = di + 1
+
 # -----------------------------------------
 # Helper: create control flow result dicts
 # -----------------------------------------
@@ -1343,6 +1361,57 @@ proc call_chost_method(obj, name, args):
         return obj[name](args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9])
     runtime_error(-1, "C-host method called with too many arguments", str(n))
 
+# Sentinel marking an unfilled keyword-resolution slot
+let KW_UNSET = "__sage_kw_unset__"
+
+# Resolve keyword arguments against parameter names (params[param_start..]).
+# Returns {"any": call-has-kwargs, "ok": resolution-succeeded,
+#          "vals": evaluated values aligned to params, KW_UNSET when unfilled}
+proc resolve_kwargs(expr, params, param_start, env):
+    let kw_names = expr.kw_names
+    let any = false
+    if kw_names != nil:
+        for name in kw_names:
+            if name != nil:
+                any = true
+                break
+    if not any:
+        return {"any": false, "ok": true, "vals": nil}
+    let want = len(params) - param_start
+    let slots = []
+    let si = 0
+    while si < want:
+        push(slots, KW_UNSET)
+        si = si + 1
+    let next_pos = 0
+    let ai = 0
+    while ai < expr.arg_count:
+        if kw_names[ai] != nil:
+            let found = -1
+            let pi = param_start
+            while pi < len(params):
+                if params[pi].text == kw_names[ai]:
+                    found = pi
+                    break
+                pi = pi + 1
+            if found < 0:
+                sys.stderr_write("Runtime Error: Unknown keyword argument '" + kw_names[ai] + "'.\n")
+                return {"any": true, "ok": false, "vals": nil}
+            if slots[found - param_start] != KW_UNSET:
+                sys.stderr_write("Runtime Error: Duplicate argument '" + kw_names[ai] + "'.\n")
+                return {"any": true, "ok": false, "vals": nil}
+            slots[found - param_start] = eval_expr(expr.args[ai], env)
+        else:
+            while next_pos < want and slots[next_pos] != KW_UNSET:
+                next_pos = next_pos + 1
+            if next_pos >= want:
+                sys.stderr_write("Runtime Error: Too many positional arguments.\n")
+                return {"any": true, "ok": false, "vals": nil}
+            slots[next_pos] = eval_expr(expr.args[ai], env)
+            next_pos = next_pos + 1
+        ai = ai + 1
+    return {"any": true, "ok": true, "vals": slots}
+
 proc eval_call_impl(expr, env):
     let callee_expr = expr.callee
 
@@ -1356,12 +1425,16 @@ proc eval_call_impl(expr, env):
             if parent != nil:
                 let method_val = find_method(parent, method_name)
                 if method_val != nil:
-                    # Evaluate arguments
+                    # Resolve arguments (kwargs-aware)
+                    let kwres = resolve_kwargs(expr, method_val["params"], 0, env)
+                    if not kwres["ok"]:
+                        return nil
                     let args = []
-                    let ai = 0
-                    while ai < expr.arg_count:
-                        push(args, eval_expr(expr.args[ai], env))
-                        ai = ai + 1
+                    if not kwres["any"]:
+                        let ai = 0
+                        while ai < expr.arg_count:
+                            push(args, eval_expr(expr.args[ai], env))
+                            ai = ai + 1
                     # Create method env with self bound
                     let method_env = env_new(method_val["closure"])
                     env_define(method_env, "self", self_val)
@@ -1372,9 +1445,16 @@ proc eval_call_impl(expr, env):
                     let pi = param_start
                     while pi < len(params):
                         let arg_idx = pi - param_start
-                        if arg_idx < len(args):
+                        let bound = false
+                        if kwres["any"]:
+                            let sv = kwres["vals"][pi]
+                            if sv != KW_UNSET:
+                                env_define(method_env, params[pi].text, sv)
+                                bound = true
+                        elif arg_idx < len(args):
                             env_define(method_env, params[pi].text, args[arg_idx])
-                        else:
+                            bound = true
+                        if not bound:
                             # Fill in defaults for missing arguments
                             let dflt = nil
                             if dict_has(method_val, "param_defaults") and method_val["param_defaults"] != nil and method_val["param_defaults"][pi] != nil:
@@ -1400,13 +1480,17 @@ proc eval_call_impl(expr, env):
             let method_val = find_method(cls, method_name)
             if method_val == nil:
                 runtime_error(callee_expr.property.line, "Undefined method '" + method_name + "'", nil)
-            # Evaluate arguments
+            # Resolve arguments (kwargs-aware)
+            let kwres = resolve_kwargs(expr, method_val["params"], 0, env)
+            if not kwres["ok"]:
+                return nil
             let args = []
-            let i = 0
-            while i < expr.arg_count:
-                let arg = eval_expr(expr.args[i], env)
-                push(args, arg)
-                i = i + 1
+            if not kwres["any"]:
+                let i = 0
+                while i < expr.arg_count:
+                    let arg = eval_expr(expr.args[i], env)
+                    push(args, arg)
+                    i = i + 1
             # Create method env with self bound
             let method_env = env_new(method_val["closure"])
             env_define(method_env, "self", obj)
@@ -1419,9 +1503,16 @@ proc eval_call_impl(expr, env):
             let pi = param_start
             while pi < len(params):
                 let arg_idx = pi - param_start
-                if arg_idx < len(args):
+                let bound = false
+                if kwres["any"]:
+                    let sv = kwres["vals"][pi]
+                    if sv != KW_UNSET:
+                        env_define(method_env, params[pi].text, sv)
+                        bound = true
+                elif arg_idx < len(args):
                     env_define(method_env, params[pi].text, args[arg_idx])
-                else:
+                    bound = true
+                if not bound:
                     # Fill in defaults for missing arguments
                     let dflt = nil
                     if dict_has(method_val, "param_defaults") and method_val["param_defaults"] != nil and method_val["param_defaults"][pi] != nil:
@@ -1484,6 +1575,11 @@ proc call_resolved(callee, args, env, callee_expr):
     if callee_type == "function":
         let func_name = callee["name"]
 
+        # Keyword-argument resolution against the callee's parameter names
+        let kwres = resolve_kwargs(callee_expr, callee["params"], 0, env)
+        if not kwres["ok"]:
+            return nil
+
         # Arity check — mirrors the C host exactly: too few (missing
         # non-defaulted) or too many arguments prints the C-format error to
         # stderr and yields nil, letting execution continue.
@@ -1500,17 +1596,36 @@ proc call_resolved(callee, args, env, callee_expr):
                 break
             qi = qi + 1
         let na = len(args)
-        if na < required2 or na > pcount:
-            sys.stderr_write("Runtime Error: Expected " + str(required2) + " to " + str(pcount) + " arguments but got " + str(na) + ".\n")
+        let provided = na
+        if kwres["any"]:
+            provided = 0
+            let ci = 0
+            while ci < pcount:
+                if kwres["vals"][ci] != KW_UNSET:
+                    provided = provided + 1
+                ci = ci + 1
+        if provided < required2 or provided > pcount:
+            sys.stderr_write("Runtime Error: Expected " + str(required2) + " to " + str(pcount) + " arguments but got " + str(provided) + ".\n")
             return nil
 
         # ---- Profile this call (hybrid JIT phase) ----
-        let profile = _profile_call(func_name, args)
+        if not kwres["any"]:
+            _profile_call(func_name, args)
 
         let func_env = env_new(callee["closure"])
         let pi = 0
         while pi < len(params):
-            if pi < len(args):
+            if kwres["any"]:
+                let sv = kwres["vals"][pi]
+                if sv != KW_UNSET:
+                    env_define(func_env, params[pi].text, sv)
+                else:
+                    # Fill in defaults for missing arguments (evaluated in caller scope)
+                    let dflt = nil
+                    if dict_has(callee, "param_defaults") and callee["param_defaults"] != nil and callee["param_defaults"][pi] != nil:
+                        dflt = eval_expr(callee["param_defaults"][pi], env)
+                    env_define(func_env, params[pi].text, dflt)
+            elif pi < len(args):
                 env_define(func_env, params[pi].text, args[pi])
             else:
                 # Fill in defaults for missing arguments (evaluated in caller scope)
@@ -2149,6 +2264,14 @@ proc ccomp_expr(e):
             return binop_apply(e, op_type, left, right)
 
     if t == EXPR_CALL:
+        # Keyword-argument calls: dynamic fallback (signature-aware binding)
+        if e.kw_names != nil:
+            let kwi = 0
+            while kwi < e.arg_count:
+                if e.kw_names[kwi] != nil:
+                    return proc(env):
+                        return eval_expr_impl(e, env)
+                kwi = kwi + 1
         # Fast path only for direct-name callees; method calls fall back.
         if e.callee.type == EXPR_VARIABLE:
             let cname = e.callee.name.text

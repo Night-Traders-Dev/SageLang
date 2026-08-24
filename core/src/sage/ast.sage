@@ -196,11 +196,14 @@ proc variable_expr(name):
     e.name = name
     return e
 
-proc call_expr(callee, args):
+proc call_expr(callee, args, kw_names = nil):
     let e = Expr(EXPR_CALL)
     e.callee = callee
     e.args = args
     e.arg_count = len(args)
+    # Parallel to args: keyword label per argument, nil when positional.
+    # nil when the call has no keyword arguments at all.
+    e.kw_names = kw_names
     return e
 
 proc array_expr(elements):

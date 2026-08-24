@@ -407,6 +407,23 @@ bool import_all(Environment* env, const char* module_name) {
     env_define_const(env, bind_name, strlen(bind_name), val_module(module));
     gc_unpin();
 
+    // Dotted imports (e.g. `import android.app`) additionally export every
+    // top-level symbol of the module into the caller's scope — this is what
+    // the library documentation has always shown (`App(...)`, `GPUContext(...)`).
+    // Existing bindings are never clobbered; the qualified last-segment
+    // binding above stays available for namespacing.
+    if (strchr(module_name, '.') != NULL && module->env) {
+        EnvNode* node = module->env->head;
+        gc_pin();
+        while (node != NULL) {
+            if (!env_has_local(env, node->name, node->name_length)) {
+                env_define_const(env, node->name, node->name_length, node->value);
+            }
+            node = node->next;
+        }
+        gc_unpin();
+    }
+
     return true;
 }
 

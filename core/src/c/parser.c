@@ -761,6 +761,7 @@ static Expr* postfix() {
     while (1) {
         if (match(TOKEN_LPAREN)) {
             Expr** args = NULL;
+            char** kw_names = NULL;
             int count = 0;
             int capacity = 0;
 
@@ -768,15 +769,33 @@ static Expr* postfix() {
                 do {
                     if (check(TOKEN_RPAREN)) break; // trailing comma
                     Expr* arg = expression();
+                    // Keyword argument: the parsed expression is a bare
+                    // identifier immediately followed by ':' — `name: value`.
+                    // Safe because no other argument-list grammar uses
+                    // IDENT ':' (dicts/slices are consumed by their own
+                    // sub-parsers before we ever see a bare colon here).
+                    char* kw = NULL;
+                    if (arg != NULL && arg->type == EXPR_VARIABLE && check(TOKEN_COLON)) {
+                        advance_parser();
+                        Token label = arg->as.variable.name;
+                        kw = SAGE_ALLOC(label.length + 1);
+                        memcpy(kw, label.start, label.length);
+                        kw[label.length] = '\0';
+                        arg = expression();
+                    }
                     if (count >= capacity) {
                         capacity = capacity == 0 ? 4 : capacity * 2;
                         args = SAGE_REALLOC(args, sizeof(Expr*) * capacity);
+                        kw_names = SAGE_REALLOC(kw_names, sizeof(char*) * capacity);
                     }
-                    args[count++] = arg;
+                    args[count] = arg;
+                    kw_names[count] = kw;
+                    count++;
                 } while (match(TOKEN_COMMA));
             }
             consume(TOKEN_RPAREN, "Expect ')' after arguments.");
             expr = new_call_expr(expr, args, count);
+            expr->as.call.kw_names = kw_names;
         } else if (match(TOKEN_LBRACKET)) {
             Expr* start_or_index = NULL;
             Expr* end = NULL;

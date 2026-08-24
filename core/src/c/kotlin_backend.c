@@ -91,7 +91,21 @@ typedef struct {
     KtNameEntry* locals;
     KtClassInfo* classes;
     KtImportedModule* modules;
+    struct KtSigEntry* sigs;  // callee signature index for keyword-argument resolution
 } KtCompiler;
+
+// Callee signature (parameter names) for keyword-argument resolution
+typedef struct KtSigEntry {
+    char* sage_name;
+    char** param_names;   // raw Sage parameter names, self excluded
+    int param_count;
+    struct KtSigEntry* next;
+} KtSigEntry;
+
+// Deferred inline-lambda definitions, flushed as top-level functions
+#define KT_MAX_LAMBDAS 512
+static char* g_lambda_defs[KT_MAX_LAMBDAS];
+static int g_lambda_def_count = 0;
 
 // --- AST scanning helpers ---
 
@@ -187,6 +201,17 @@ static char* kt_str_dup(const char* text) {
         exit(1);
     }
     memcpy(copy, text, len + 1);
+    return copy;
+}
+
+static char* kt_str_dup_length(const char* text, int length) {
+    char* copy = malloc((size_t)length + 1);
+    if (copy == NULL) {
+        fprintf(stderr, "Out of memory duplicating Kotlin compiler string.\n");
+        exit(1);
+    }
+    memcpy(copy, text, (size_t)length);
+    copy[length] = '\0';
     return copy;
 }
 
@@ -385,6 +410,33 @@ static void kt_add_proc(KtCompiler* compiler, const char* sage_name,
     entry->is_async = is_async;
     entry->next = compiler->procs;
     compiler->procs = entry;
+}
+
+// --- Callee signature index (keyword-argument support) ---
+
+static void kt_add_sig(KtCompiler* compiler, const char* sage_name,
+                       Token* params, int param_count, int skip_first) {
+    // First registration wins; later same-name signatures are ignored.
+    for (KtSigEntry* s = compiler->sigs; s != NULL; s = s->next) {
+        if (strcmp(s->sage_name, sage_name) == 0) return;
+    }
+    KtSigEntry* entry = malloc(sizeof(KtSigEntry));
+    entry->sage_name = kt_str_dup(sage_name);
+    int start = (skip_first && param_count > 0) ? 1 : 0;
+    entry->param_count = param_count - start;
+    entry->param_names = malloc(sizeof(char*) * (entry->param_count > 0 ? entry->param_count : 1));
+    for (int i = 0; i < entry->param_count; i++) {
+        entry->param_names[i] = kt_str_dup_length(params[start + i].start, params[start + i].length);
+    }
+    entry->next = compiler->sigs;
+    compiler->sigs = entry;
+}
+
+static KtSigEntry* kt_find_sig(KtCompiler* compiler, const char* sage_name) {
+    for (KtSigEntry* s = compiler->sigs; s != NULL; s = s->next) {
+        if (strcmp(s->sage_name, sage_name) == 0) return s;
+    }
+    return NULL;
 }
 
 static void kt_add_class(KtCompiler* compiler, const char* class_name,
@@ -754,9 +806,73 @@ static char* kt_emit_binary_expr(KtCompiler* compiler, BinaryExpr* binary) {
 
 // --- Built-in function call emission ---
 
+static void kt_emit_stmt_list(KtCompiler* compiler, Stmt* stmt);
+static void kt_collect_local_lets(KtCompiler* compiler, Stmt* stmt, KtNameEntry** locals);
+static char* kt_emit_expr(KtCompiler* compiler, Expr* expr);
+static void kt_emit_stmt(KtCompiler* compiler, Stmt* stmt);
+
 static char* kt_emit_call_expr(KtCompiler* compiler, CallExpr* call) {
+    // Does this call carry keyword arguments?
+    int call_has_kw = 0;
+    for (int i = 0; i < call->arg_count; i++) {
+        if (call->kw_names && call->kw_names[i]) { call_has_kw = 1; break; }
+    }
+
+    // Emit arguments for a resolved signature: positional args fill free
+    // slots left to right, kwargs land on their named parameter. Returns a
+    // malloc'd array of `count` emitted-expression strings, or NULL on error
+    // (message already reported).
+    #define KT_EMIT_REORDERED(sig_entry)                                              \
+        do {                                                                          \
+            char** parts_ = malloc(sizeof(char*) * (sig_entry)->param_count);         \
+            for (int i_ = 0; i_ < (sig_entry)->param_count; i_++) parts_[i_] = NULL;   \
+            int next_pos_ = 0, failed_ = 0;                                           \
+            for (int i_ = 0; i_ < call->arg_count && !failed_; i_++) {                 \
+                if (call->kw_names[i_]) {                                             \
+                    int found_ = -1;                                                  \
+                    for (int p_ = 0; p_ < (sig_entry)->param_count; p_++) {            \
+                        if (strcmp((sig_entry)->param_names[p_], call->kw_names[i_]) == 0) { found_ = p_; break; } \
+                    }                                                                 \
+                    if (found_ < 0) {                                                 \
+                        kt_error_at(compiler, kt_expr_token(call->callee), NULL,       \
+                                    "unknown keyword argument '%s'", call->kw_names[i_]);\
+                        failed_ = 1; break;                                           \
+                    }                                                                 \
+                    if (parts_[found_]) { failed_ = 1; break; }                       \
+                    parts_[found_] = kt_emit_expr(compiler, call->args[i_]);           \
+                } else {                                                              \
+                    while (next_pos_ < (sig_entry)->param_count && parts_[next_pos_]) next_pos_++; \
+                    if (next_pos_ >= (sig_entry)->param_count) {                       \
+                        kt_error_at(compiler, kt_expr_token(call->callee), NULL,       \
+                                    "too many positional arguments");                  \
+                        failed_ = 1; break;                                           \
+                    }                                                                 \
+                    parts_[next_pos_++] = kt_emit_expr(compiler, call->args[i_]);      \
+                }                                                                     \
+            }                                                                         \
+            if (!failed_) {                                                           \
+                /* Fill remaining slots with S.nil */                                 \
+                for (int i_ = 0; i_ < (sig_entry)->param_count; i_++)                  \
+                    if (!parts_[i_]) parts_[i_] = kt_str_dup("S.nil");                 \
+                out_parts = parts_;                                                    \
+                out_count = (sig_entry)->param_count;                                  \
+            } else {                                                                  \
+                for (int i_ = 0; i_ < (sig_entry)->param_count; i_++) free(parts_[i_]);\
+                free(parts_);                                                          \
+                return kt_str_dup("S.nil");                                            \
+            }                                                                         \
+        } while(0)
+
+    char** out_parts = NULL;
+    int out_count = 0;
+
     // Super method call: super.method(args) → super.method(args) in Kotlin
     if (call->callee->type == EXPR_SUPER) {
+        if (call_has_kw) {
+            kt_error_at(compiler, kt_expr_token(call->callee), NULL,
+                         "keyword arguments are not supported in super calls");
+            return kt_str_dup("S.nil");
+        }
         char* method = kt_token_to_string(call->callee->as.super_expr.method);
         KtStringBuffer sb;
         kt_sb_init(&sb);
@@ -783,6 +899,27 @@ static char* kt_emit_call_expr(KtCompiler* compiler, CallExpr* call) {
         char* method = kt_token_to_string(call->callee->as.get.property);
         KtStringBuffer sb;
         kt_sb_init(&sb);
+
+        if (call_has_kw) {
+            KtSigEntry* sig = kt_find_sig(compiler, method);
+            if (sig == NULL) {
+                kt_error_at(compiler, kt_expr_token(call->callee), NULL,
+                             "keyword argument on method '%s' whose signature is unknown to the Kotlin backend",
+                             method);
+                free(obj); free(method);
+                return kt_str_dup("S.nil");
+            }
+            KT_EMIT_REORDERED(sig);
+            kt_sb_appendf(&sb, "S.callMethod(%s, \"%s\"", obj, method);
+            for (int i = 0; i < out_count; i++) {
+                kt_sb_appendf(&sb, ", %s", out_parts[i]);
+                free(out_parts[i]);
+            }
+            kt_sb_append(&sb, ")");
+            free(out_parts);
+            free(obj); free(method);
+            return kt_sb_take(&sb);
+        }
 
         kt_sb_appendf(&sb, "S.callMethod(%s, \"%s\"", obj, method);
         for (int i = 0; i < call->arg_count; i++) {
@@ -1110,6 +1247,27 @@ static char* kt_emit_call_expr(KtCompiler* compiler, CallExpr* call) {
             // Assume it's a global procedure
             KtProcEntry* proc = kt_find_proc(compiler->procs, callee_name);
             const char* final_name = proc ? proc->kt_name : callee_name;
+            if (call_has_kw) {
+                KtSigEntry* sig = kt_find_sig(compiler, callee_name);
+                if (sig == NULL) {
+                    kt_error_at(compiler, kt_expr_token(call->callee), NULL,
+                                 "keyword argument on function '%s' whose signature is unknown to the Kotlin backend",
+                                 callee_name);
+                    free(callee_name);
+                    return kt_str_dup("S.nil");
+                }
+                KT_EMIT_REORDERED(sig);
+                kt_sb_appendf(&sb, "%s(", final_name);
+                for (int i = 0; i < out_count; i++) {
+                    if (i > 0) kt_sb_append(&sb, ", ");
+                    kt_sb_append(&sb, out_parts[i]);
+                    free(out_parts[i]);
+                }
+                kt_sb_append(&sb, ")");
+                free(out_parts);
+                free(callee_name);
+                return kt_sb_take(&sb);
+            }
             kt_sb_appendf(&sb, "%s(", final_name);
             for (int i = 0; i < call->arg_count; i++) {
                 if (i > 0) kt_sb_append(&sb, ", ");
@@ -1286,9 +1444,67 @@ static char* kt_emit_expr(KtCompiler* compiler, Expr* expr) {
             free(object); free(prop); free(escaped);
             return kt_sb_take(&sb);
         }
-        case EXPR_PROC:
-            kt_error_at(compiler, kt_expr_token(expr), NULL, "inline procedures/lambdas are not supported in the Kotlin backend");
-            return kt_str_dup("S.nil");
+        case EXPR_PROC: {
+            // Inline lambda: defer a synthetic top-level function and
+            // reference it through an S.fn wrapper at the use site.
+            ProcExpr* pe = &expr->as.proc_expr;
+            if (g_lambda_def_count >= KT_MAX_LAMBDAS) {
+                kt_error_at(compiler, kt_expr_token(expr), NULL,
+                             "too many inline lambdas (max %d)", KT_MAX_LAMBDAS);
+                return kt_str_dup("S.nil");
+            }
+            int lid = ++g_lambda_def_count;
+            char lname[40];
+            snprintf(lname, sizeof(lname), "lambda_%d", lid);
+
+            // Redirect the statement emitter into a memory stream while the
+            // lambda body is generated, then park it for top-level flush.
+            char* lbuf = NULL;
+            size_t lsize = 0;
+            FILE* ms = open_memstream(&lbuf, &lsize);
+            if (!ms) {
+                kt_error_at(compiler, kt_expr_token(expr), NULL, "could not buffer lambda body");
+                return kt_str_dup("S.nil");
+            }
+            FILE* saved_out = compiler->out;
+            compiler->out = ms;
+            fprintf(ms, "fun %s(vararg args: SageVal): SageVal {\n", lname);
+
+            KtNameEntry* prev_locals = compiler->locals;
+            compiler->locals = NULL;
+            for (int i = 0; i < pe->param_count; i++) {
+                char* pname = kt_token_to_string(pe->params[i]);
+                char* san = kt_sanitize_identifier(pname);
+                fprintf(ms, "    val %s: SageVal = if (args.size > %d) args[%d] else S.nil\n",
+                        san, i, i);
+                // Bind the Sage param name directly to the declared Kotlin local
+                KtNameEntry* entry = malloc(sizeof(KtNameEntry));
+                entry->sage_name = kt_str_dup(pname);
+                entry->kt_name = san;
+                entry->is_mutable = 0;
+                entry->spec_type = KT_TYPE_DYNAMIC;
+                entry->next = compiler->locals;
+                compiler->locals = entry;
+                free(pname);
+            }
+            kt_collect_local_lets(compiler, pe->body, &compiler->locals);
+
+            int saved_indent = compiler->indent;
+            compiler->indent = 1;
+            kt_emit_stmt_list(compiler, pe->body);
+            fprintf(ms, "    return S.nil\n}\n");
+            compiler->indent = saved_indent;
+            compiler->locals = prev_locals;
+
+            fflush(ms);
+            fclose(ms);
+            compiler->out = saved_out;
+            g_lambda_defs[g_lambda_def_count - 1] = lbuf;
+
+            KtStringBuffer sb; kt_sb_init(&sb);
+            kt_sb_appendf(&sb, "S.fn(\"%s\") { __args -> %s(*__args) }", lname, lname);
+            return kt_sb_take(&sb);
+        }
     }
     kt_error_at(compiler, kt_expr_token(expr), NULL,
                  "internal compiler error: unknown expression kind");
@@ -1299,7 +1515,6 @@ static char* kt_emit_expr(KtCompiler* compiler, Expr* expr) {
 // Statement Emission
 // ============================================================================
 
-static void kt_emit_stmt_list(KtCompiler* compiler, Stmt* stmt);
 
 static void kt_emit_embedded_block(KtCompiler* compiler, Stmt* stmt) {
     compiler->indent++;
@@ -1845,6 +2060,7 @@ static void kt_process_import(KtCompiler* compiler, ImportStmt* imp) {
             char* name = kt_token_to_string(s->as.proc.name);
             if (kt_find_proc(compiler->procs, name) == NULL)
                 kt_add_proc(compiler, name, s->as.proc.param_count, 0, s->type == STMT_ASYNC_PROC);
+            kt_add_sig(compiler, name, s->as.proc.params, s->as.proc.param_count, 0);
             free(name);
         }
         if (s->type == STMT_CLASS) {
@@ -1866,6 +2082,7 @@ static void kt_collect_top_level_symbols(KtCompiler* compiler, Stmt* program) {
             char* name = kt_token_to_string(stmt->as.proc.name);
             kt_add_proc(compiler, name, stmt->as.proc.param_count, 0,
                          stmt->type == STMT_ASYNC_PROC);
+            kt_add_sig(compiler, name, stmt->as.proc.params, stmt->as.proc.param_count, 0);
             free(name);
         }
         if (stmt->type == STMT_CLASS) {
@@ -2016,6 +2233,11 @@ static void kt_emit_class_definition(KtCompiler* compiler, KtClassInfo* cls) {
             char* mname = kt_sanitize_identifier(sage_mname);
             free(sage_mname);
             int non_self_params = proc->param_count - start_param;
+
+            // Register the method signature for keyword-argument resolution
+            if (!is_init) {
+                kt_add_sig(compiler, mname, proc->params, proc->param_count, start_param);
+            }
 
             if (is_init) {
                 // Emit override fun sageInit(vararg args: SageVal) and
@@ -2217,6 +2439,16 @@ static int write_kotlin_output_internal(const char* source, const char* input_pa
         if (!compiler.failed)
             kt_emit_main(&compiler, program);
     }
+
+    // Flush deferred inline-lambda definitions (Kotlin top-level functions
+    // may appear after their use sites)
+    for (int i = 0; i < g_lambda_def_count; i++) {
+        fputs(g_lambda_defs[i], out);
+        free(g_lambda_defs[i]);
+        g_lambda_defs[i] = NULL;
+    }
+    if (g_lambda_def_count > 0) fprintf(out, "\n");
+    g_lambda_def_count = 0;
 
     fclose(out);
     free_stmt(program);

@@ -2910,6 +2910,15 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
     return sb_take(&sb);
   }
   case EXPR_CALL:
+    if (expr->as.call.kw_names) {
+      for (int _kwi = 0; _kwi < expr->as.call.arg_count; _kwi++) {
+        if (expr->as.call.kw_names[_kwi]) {
+          compiler_error(compiler, "keyword arguments are not yet supported by the C backend ('%s') — run without --emit-c or use positional arguments",
+                         expr->as.call.kw_names[_kwi]);
+          return NULL;
+        }
+      }
+    }
     return emit_call_expr(compiler, &expr->as.call);
   case EXPR_ARRAY:
     return emit_array_expr(compiler, &expr->as.array);

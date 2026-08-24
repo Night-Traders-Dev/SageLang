@@ -127,6 +127,18 @@ void env_define_const(Env* env, const char* name, int length, Value value) {
     env->head = node;
 }
 
+bool env_has_local(Env* env, const char* name, int length) {
+    EnvNode* current = env->head;
+    while (current != NULL) {
+        if (current->name_length == length &&
+            memcmp(current->name, name, (size_t)length) == 0) {
+            return true;
+        }
+        current = current->next;
+    }
+    return false;
+}
+
 
 int env_get(Env* env, const char* name, int length, Value* out_value) {
     if (env == NULL) {

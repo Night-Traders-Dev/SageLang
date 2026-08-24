@@ -1,6 +1,7 @@
 #ifndef SAGE_ENV_H
 #define SAGE_ENV_H
 
+#include <stdbool.h>
 #include "value.h"
 
 typedef struct EnvNode {
@@ -40,6 +41,7 @@ extern __thread EnvRootNode* g_gc_root_stack;
 Env* env_create(Env* parent);
 void env_define(Env* env, const char* name, int length, Value value);
 void env_define_const(Env* env, const char* name, int length, Value value);
+bool env_has_local(Env* env, const char* name, int length);
 int env_get(Env* env, const char* name, int length, Value* value);
 int env_get_node(Env* env, const char* name, int length, Env** out_env, EnvNode** out_node);
 int env_assign(Env* env, const char* name, int length, Value value);

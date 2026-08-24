@@ -130,15 +130,16 @@ High-level app framework:
 ```sage
 import android.app
 
+proc on_click(ctx):
+    ctx.toast("Clicked!")
+
 let my_app = App("My App")
 my_app.package("com.example.app")
 my_app.permission("INTERNET")
 
 my_app.screen("home", proc(ctx):
-    ctx.text("Welcome!")
-    ctx.button("Click", proc():
-        ctx.toast("Clicked!")
-    )
+    ctx.text("Welcome!", size: 24)
+    ctx.button("Click", on_click)
 )
 
 my_app.launch()
@@ -159,6 +160,21 @@ ui.child(Button("+1", proc():
     counter.set(counter.get() + 1)
 ))
 ```
+
+## Language Notes (Sage ≥ 4.2.2)
+
+- **Dotted imports export names.** `import android.app` brings `App`, `UIContext`,
+  `Intent`, `Storage` and `HttpClient` directly into scope; the qualified form
+  (`app.App(...)`) also works.
+- **Keyword arguments.** Trailing `name: value` arguments are matched to
+  parameter names: `ctx.text("Hi", size: 24)`. Unknown or duplicate names are
+  runtime errors.
+- **Inline lambdas.** Anonymous procs work as call arguments:
+  `ctx.button("Tap", proc(): ctx.toast("Tapped!"))`.
+- **Known parser limitation:** an inline lambda used as a *statement inside
+  another block-lambda body* can mis-parse — prefer a named `proc` for nested
+  callbacks (as in the example above).
+- The C backend (`--emit-c`) does not accept keyword arguments yet.
 
 ## Requirements
 

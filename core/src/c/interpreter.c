@@ -3431,6 +3431,57 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
         case EXPR_CALL: {
             Expr* callee_expr = expr->as.call.callee;
 
+            // Resolve keyword arguments against the callee's parameter names.
+            // Positional args fill free slots left to right; kwargs land on
+            // their named parameter. Slots left NULL are filled by the caller
+            // from declared defaults (or nil).
+            //   out      -> Expr** array of `want` slots (malloc'd), or NULL
+            //   failed_p -> set to 1 on resolution error (message printed);
+            //               caller must clean up its own GC stack and bail.
+            #define CALL_RESOLVE_KWARGS(callx, params, pstart, want, out, failed_p)            \
+                do {                                                                          \
+                    char** kw_ = (callx)->as.call.kw_names;                                    \
+                    int n_ = (callx)->as.call.arg_count;                                       \
+                    int has_kw_ = 0;                                                          \
+                    for (int i_ = 0; i_ < n_; i_++) if (kw_ && kw_[i_]) { has_kw_ = 1; break;}\
+                    (failed_p) = 0;                                                           \
+                    if (!has_kw_) { (out) = NULL; break; }                                    \
+                    Expr** slots_ = SAGE_ALLOC(sizeof(Expr*) * (want));                       \
+                    for (int i_ = 0; i_ < (want); i_++) slots_[i_] = NULL;                    \
+                    int next_pos_ = 0;                                                        \
+                    for (int i_ = 0; i_ < n_; i_++) {                                         \
+                        if (kw_[i_]) {                                                        \
+                            int found_ = -1;                                                  \
+                            for (int p_ = (pstart); p_ < (want); p_++) {                      \
+                                if ((params)[p_].length == (int)strlen(kw_[i_]) &&            \
+                                    strncmp((params)[p_].start, kw_[i_],                      \
+                                            (params)[p_].length) == 0) { found_ = p_; break; }\
+                            }                                                                 \
+                            if (found_ < 0) {                                                 \
+                                fprintf(stderr, "Runtime Error: Unknown keyword argument '%s'.\n", kw_[i_]);\
+                                (failed_p) = 1;                                               \
+                                break;                                                        \
+                            }                                                                 \
+                            if (slots_[found_]) {                                             \
+                                fprintf(stderr, "Runtime Error: Duplicate argument '%s'.\n", kw_[i_]);\
+                                (failed_p) = 1;                                               \
+                                break;                                                        \
+                            }                                                                 \
+                            slots_[found_] = (callx)->as.call.args[i_];                        \
+                        } else {                                                              \
+                            while (next_pos_ < (want) && slots_[next_pos_]) next_pos_++;      \
+                            if (next_pos_ >= (want)) {                                        \
+                                fprintf(stderr, "Runtime Error: Too many positional arguments.\n");\
+                                (failed_p) = 1;                                               \
+                                break;                                                        \
+                            }                                                                 \
+                            slots_[next_pos_++] = (callx)->as.call.args[i_];                   \
+                        }                                                                     \
+                    }                                                                         \
+                    if (failed_p) { free(slots_); (out) = NULL; }                             \
+                    else (out) = slots_;                                                      \
+                } while(0)
+
             if (callee_expr->type == EXPR_GET) {
                 ExecResult obj_result = eval_expr(callee_expr->as.get.object, env);
                 if (obj_result.is_throwing) return obj_result;
@@ -3462,17 +3513,41 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                                       strncmp(method_stmt->params[0].start, "self", 4) == 0) ? 1 : 0;
 
                     int arg_count = expr->as.call.arg_count;
+                    int kw_want = method_stmt->param_count - param_start;
+                    Expr** kw_slots = NULL;
+                    int kw_failed = 0;
+                    if (kw_want > 0 && expr->as.call.kw_names) {
+                        CALL_RESOLVE_KWARGS(expr, method_stmt->params, param_start, kw_want, kw_slots, kw_failed);
+                        if (kw_failed) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+                    } else if (expr->as.call.kw_names) {
+                        int any_kw = 0;
+                        for (int i = 0; i < arg_count; i++) if (expr->as.call.kw_names[i]) any_kw = 1;
+                        if (any_kw) {
+                            fprintf(stderr, "Runtime Error: Method takes no arguments.\n");
+                            AST_GC_POP();
+                            return EVAL_RESULT(val_nil());
+                        }
+                    }
                     Value* eval_args = NULL;
                     int pushed_args = 0;
-                    if (method_stmt->param_count > param_start) {
-                        eval_args = SAGE_ALLOC(sizeof(Value) * (method_stmt->param_count - param_start));
-                        for (int i = 0; i < arg_count && i < method_stmt->param_count - param_start; i++) {
-                            ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                            if (arg_result.is_throwing) { 
-                                free(eval_args); 
-                                AST_GC_POP_ENV(); 
-                                AST_GC_POP_N(1 + pushed_args); 
-                                return arg_result; 
+                    if (kw_want > 0) {
+                        eval_args = SAGE_ALLOC(sizeof(Value) * kw_want);
+                        for (int i = 0; i < kw_want; i++) {
+                            ExecResult arg_result;
+                            if (kw_slots ? (kw_slots[i] != NULL)
+                                         : (i < arg_count)) {
+                                arg_result = eval_expr(kw_slots ? kw_slots[i] : expr->as.call.args[i], env);
+                            } else if (method_stmt->defaults && method_stmt->defaults[i + param_start]) {
+                                arg_result = eval_expr(method_stmt->defaults[i + param_start], env);
+                            } else {
+                                arg_result = (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
+                            }
+                            if (arg_result.is_throwing) {
+                                free(eval_args);
+                                if (kw_slots) free(kw_slots);
+                                AST_GC_POP_ENV();
+                                AST_GC_POP_N(1 + pushed_args);
+                                return arg_result;
                             }
                             eval_args[i] = arg_result.value;
                             AST_GC_PUSH(eval_args[i]);
@@ -3480,25 +3555,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                             env_define_const(method_env, method_stmt->params[i + param_start].start,
                                        method_stmt->params[i + param_start].length, arg_result.value);
                         }
-                        // Fill missing args from declared default expressions, else nil
-                        for (int i = arg_count; i < method_stmt->param_count - param_start; i++) {
-                            Value missing_val = val_nil();
-                            if (method_stmt->defaults && method_stmt->defaults[i + param_start]) {
-                                ExecResult def_result = eval_expr(method_stmt->defaults[i + param_start], env);
-                                if (def_result.is_throwing) {
-                                    free(eval_args);
-                                    AST_GC_POP_ENV();
-                                    AST_GC_POP_N(1 + pushed_args);
-                                    return def_result;
-                                }
-                                missing_val = def_result.value;
-                            }
-                            eval_args[i] = missing_val;
-                            AST_GC_PUSH(missing_val);
-                            pushed_args++;
-                            env_define_const(method_env, method_stmt->params[i + param_start].start,
-                                       method_stmt->params[i + param_start].length, missing_val);
-                        }
+                        if (kw_slots) free(kw_slots);
                     }
 
                     if (method_node->type == STMT_ASYNC_PROC) {
@@ -3595,7 +3652,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 int arg_offset = 0;
 
                 // Support for explicit 'self' passing in super calls: super.init(self, args)
-                if (arg_count > 0 && param_start > 0) {
+                if (arg_count > 0 && param_start > 0 && !expr->as.call.kw_names) {
                     ExecResult first_arg_res = eval_expr(expr->as.call.args[0], env);
                     if (first_arg_res.is_throwing) { AST_GC_POP_ENV(); return first_arg_res; }
                     if (values_equal(first_arg_res.value, self_val)) {
@@ -3604,15 +3661,40 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     }
                 }
 
-                if (method_stmt->param_count > param_start) {
-                    eval_args = SAGE_ALLOC(sizeof(Value) * (method_stmt->param_count - param_start));
-                    for (int i = 0; i < (arg_count - arg_offset) && i < method_stmt->param_count - param_start; i++) {
-                        ExecResult arg_result = eval_expr(expr->as.call.args[i + arg_offset], env);
-                        if (arg_result.is_throwing) { 
-                            if (eval_args) free(eval_args); 
-                            AST_GC_POP_ENV(); 
+                int kw_want = method_stmt->param_count - param_start;
+                Expr** kw_slots = NULL;
+                int has_kw_super = 0;
+                if (kw_want > 0 && expr->as.call.kw_names) {
+                    for (int i = 0; i < arg_count; i++) if (expr->as.call.kw_names[i]) has_kw_super = 1;
+                    if (has_kw_super) {
+                        int kw_failed = 0;
+                        CALL_RESOLVE_KWARGS(expr, method_stmt->params, param_start, kw_want, kw_slots, kw_failed);
+                        if (kw_failed) { AST_GC_POP_ENV(); return (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 }; }
+                    }
+                }
+                if (kw_want > 0) {
+                    eval_args = SAGE_ALLOC(sizeof(Value) * kw_want);
+                    for (int i = 0; i < kw_want; i++) {
+                        ExecResult arg_result;
+                        int pos_idx = i + arg_offset;
+                        if (has_kw_super) {
+                            if (kw_slots[i] != NULL) arg_result = eval_expr(kw_slots[i], env);
+                            else if (method_stmt->defaults && method_stmt->defaults[i + param_start])
+                                arg_result = eval_expr(method_stmt->defaults[i + param_start], env);
+                            else arg_result = (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
+                        } else if (pos_idx < (arg_count - arg_offset) && pos_idx >= 0) {
+                            arg_result = eval_expr(expr->as.call.args[pos_idx], env);
+                        } else if (method_stmt->defaults && method_stmt->defaults[i + param_start]) {
+                            arg_result = eval_expr(method_stmt->defaults[i + param_start], env);
+                        } else {
+                            arg_result = (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
+                        }
+                        if (arg_result.is_throwing) {
+                            free(eval_args);
+                            if (kw_slots) free(kw_slots);
+                            AST_GC_POP_ENV();
                             AST_GC_POP_N(pushed_args);
-                            return arg_result; 
+                            return arg_result;
                         }
                         eval_args[i] = arg_result.value;
                         AST_GC_PUSH(eval_args[i]);
@@ -3620,11 +3702,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                         env_define_const(method_env, method_stmt->params[i + param_start].start,
                                    method_stmt->params[i + param_start].length, arg_result.value);
                     }
-                    for (int i = (arg_count - arg_offset); i < method_stmt->param_count - param_start; i++) {
-                        eval_args[i] = val_nil();
-                        env_define_const(method_env, method_stmt->params[i + param_start].start,
-                                   method_stmt->params[i + param_start].length, val_nil());
-                    }
+                    if (kw_slots) free(kw_slots);
                 }
 
                 if (method_node->type == STMT_ASYNC_PROC) {
@@ -3679,6 +3757,16 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     AST_GC_POP();
                     return EVAL_RESULT(val_nil());
                 }
+                if (expr->as.call.kw_names) {
+                    for (int i = 0; i < expr->as.call.arg_count; i++) {
+                        if (expr->as.call.kw_names[i]) {
+                            fprintf(stderr, "Runtime Error: Native functions do not accept keyword arguments ('%s').\n",
+                                    expr->as.call.kw_names[i]);
+                            AST_GC_POP();
+                            return EVAL_RESULT(val_nil());
+                        }
+                    }
+                }
                 int count = expr->as.call.arg_count;
                 if (count > 255) {
                     fprintf(stderr, "Runtime Error: Too many arguments (%d, max 255).\n", count);
@@ -3707,11 +3795,25 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 }
                 ProcStmt* func = AS_FUNCTION(callee_value);
                 int required = func->required_count;
-                if (expr->as.call.arg_count < required || expr->as.call.arg_count > func->param_count) {
-                    fprintf(stderr, "Runtime Error: Expected %d to %d arguments but got %d.\n",
-                            required, func->param_count, expr->as.call.arg_count);
-                    AST_GC_POP();
-                    return EVAL_RESULT(val_nil());
+
+                int kw_want = func->param_count;
+                Expr** kw_slots = NULL;
+                if (expr->as.call.kw_names && kw_want > 0) {
+                    int kw_failed = 0;
+                    CALL_RESOLVE_KWARGS(expr, func->params, 0, kw_want, kw_slots, kw_failed);
+                    if (kw_failed) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+                    if (kw_slots) {
+                        for (int i = 0; i < kw_want; i++) {
+                            if (!kw_slots[i] && i < required &&
+                                !(func->defaults && func->defaults[i])) {
+                                fprintf(stderr, "Runtime Error: Expected %d to %d arguments but got %d.\n",
+                                        required, func->param_count, expr->as.call.arg_count);
+                                free(kw_slots);
+                                AST_GC_POP();
+                                return EVAL_RESULT(val_nil());
+                            }
+                        }
+                    }
                 }
 
                 // Pre-evaluate all provided arguments
@@ -3719,34 +3821,46 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 int pushed_args = 0;
                 if (func->param_count > 0) {
                     eval_args = SAGE_ALLOC(sizeof(Value) * func->param_count);
-                    for (int i = 0; i < expr->as.call.arg_count; i++) {
-                        ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                        if (arg_result.is_throwing) { 
-                            free(eval_args); 
-                            AST_GC_POP_N(1 + pushed_args); 
-                            return arg_result; 
+                    for (int i = 0; i < func->param_count; i++) {
+                        ExecResult arg_result;
+                        if (kw_slots) {
+                            if (kw_slots[i] != NULL) {
+                                arg_result = eval_expr(kw_slots[i], env);
+                            } else if (func->defaults && func->defaults[i]) {
+                                arg_result = eval_expr(func->defaults[i], env);
+                            } else {
+                                arg_result = (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
+                            }
+                        } else if (i < expr->as.call.arg_count) {
+                            arg_result = eval_expr(expr->as.call.args[i], env);
+                            if (arg_result.is_throwing) {
+                                free(eval_args);
+                                AST_GC_POP_N(1 + pushed_args);
+                                return arg_result;
+                            }
+                        } else if (func->defaults && func->defaults[i]) {
+                            arg_result = eval_expr(func->defaults[i], env);
+                            if (arg_result.is_throwing) {
+                                free(eval_args);
+                                AST_GC_POP_N(1 + pushed_args);
+                                return arg_result;
+                            }
+                        } else {
+                            arg_result = (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
                         }
                         eval_args[i] = arg_result.value;
                         AST_GC_PUSH(eval_args[i]);
                         pushed_args++;
                     }
-                    // Fill in defaults for missing arguments
-                    for (int i = expr->as.call.arg_count; i < func->param_count; i++) {
-                        if (func->defaults && func->defaults[i]) {
-                            ExecResult def_result = eval_expr(func->defaults[i], env);
-                            if (def_result.is_throwing) { 
-                                free(eval_args); 
-                                AST_GC_POP_N(1 + pushed_args); 
-                                return def_result; 
-                            }
-                            eval_args[i] = def_result.value;
-                            AST_GC_PUSH(eval_args[i]);
-                            pushed_args++;
-                        } else {
-                            eval_args[i] = val_nil();
-                            AST_GC_PUSH(eval_args[i]);
-                            pushed_args++;
-                        }
+                    if (kw_slots) free(kw_slots);
+                    // Arity check for the no-kwargs path
+                    if (!kw_slots && (expr->as.call.arg_count < required ||
+                                      expr->as.call.arg_count > func->param_count)) {
+                        fprintf(stderr, "Runtime Error: Expected %d to %d arguments but got %d.\n",
+                                required, func->param_count, expr->as.call.arg_count);
+                        free(eval_args);
+                        AST_GC_POP_N(1 + pushed_args);
+                        return EVAL_RESULT(val_nil());
                     }
                 }
 

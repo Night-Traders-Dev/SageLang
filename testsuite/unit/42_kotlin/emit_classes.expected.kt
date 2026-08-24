@@ -31,7 +31,8 @@ open class Dog : Animal() {
 open class Animal : SageObject("Animal") {
     override val props = mutableMapOf<String, SageVal>()
     
-    open fun `init`(name: SageVal = S.nil): SageVal {
+    override fun sageInit(vararg args: SageVal): SageVal {
+        val name: SageVal = if (args.size > 0) args[0] else S.nil
         S.setProperty(S.Value.Obj(this), "name", name)
         return S.nil
     }
