@@ -282,6 +282,10 @@ Value val_mutex(MutexValue* mv);   // Phase 11: Mutex
 
 // Helpers
 void print_value(Value v);
+
+/* Format a number for display/serialization: integers without decimals,
+   otherwise the shortest decimal form that round-trips through strtod. */
+void sage_format_number(double n, char* buf, size_t bufsize);
 int values_equal(Value a, Value b);
 
 // Array operations

@@ -779,6 +779,17 @@ static __thread int print_depth = 0;
 #endif
 #define MAX_PRINT_DEPTH 32
 
+void sage_format_number(double n, char* buf, size_t bufsize) {
+    if (n == (long long)n && n >= -9007199254740992.0 && n <= 9007199254740992.0) {
+        snprintf(buf, bufsize, "%lld", (long long)n);
+        return;
+    }
+    for (int prec = 15; prec <= 17; prec++) {
+        snprintf(buf, bufsize, "%.*g", prec, n);
+        if (strtod(buf, NULL) == n) return;
+    }
+}
+
 void print_value(Value v) {
     if (++print_depth > MAX_PRINT_DEPTH) {
         printf("<...>");
@@ -787,12 +798,9 @@ void print_value(Value v) {
     }
     switch (v.type) {
         case VAL_NUMBER: {
-            double n = AS_NUMBER(v);
-            if (n == (long long)n && n >= -9007199254740992.0 && n <= 9007199254740992.0) {
-                printf("%lld", (long long)n);
-            } else {
-                printf("%g", n);
-            }
+            char nbuf[64];
+            sage_format_number(AS_NUMBER(v), nbuf, sizeof(nbuf));
+            printf("%s", nbuf);
             break;
         }
             

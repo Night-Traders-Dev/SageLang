@@ -19,8 +19,14 @@ print "Wallet A Address: " + wallet_a.address
 print "Wallet B Address: " + wallet_b.address
 print "Miner Wallet Address: " + miner_wallet.address
 
+print "\nFunding Wallet A from the System mint..."
+let funding = {"sender": "System", "receiver": wallet_a.address, "amount": 500, "nonce": 0, "chain_id": 1, "timestamp": clock()}
+funding["hash"] = "funding-1"
+push(my_coin.mempool, funding)
+my_coin.mine_pending_transactions(miner_wallet.address)
+
 print "\nCreating a signed transaction from A to B..."
-let tx1 = tx_mod.Transaction(wallet_a.address, wallet_b.address, 100)
+let tx1 = tx_mod.Transaction(wallet_a.address, wallet_b.address, 100, 0, 1)
 wallet_a.sign_transaction(tx1)
 
 print "Submitting transaction..."
@@ -33,7 +39,7 @@ print "\nMining pending transactions..."
 my_coin.mine_pending_transactions(miner_wallet.address)
 
 print "\nCreating an UNSIGNED transaction from B to A..."
-let tx2 = tx_mod.Transaction(wallet_b.address, wallet_a.address, 50)
+let tx2 = tx_mod.Transaction(wallet_b.address, wallet_a.address, 50, 0, 1)
 # Skip signing
 
 print "Submitting transaction..."

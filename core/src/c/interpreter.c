@@ -351,12 +351,7 @@ static Value str_native(int argCount, Value* args) {
     
     char buffer[256];
     if (IS_NUMBER(args[0])) {
-        double n = AS_NUMBER(args[0]);
-        if (n == (long long)n && n >= -9007199254740992.0 && n <= 9007199254740992.0) {
-            snprintf(buffer, sizeof(buffer), "%lld", (long long)n);
-        } else {
-            snprintf(buffer, sizeof(buffer), "%g", n);
-        }
+        sage_format_number(AS_NUMBER(args[0]), buffer, sizeof(buffer));
         size_t slen = strlen(buffer);
         char* str = SAGE_ALLOC(slen + 1);
         memcpy(str, buffer, slen + 1);
@@ -383,12 +378,9 @@ static Value str_native(int argCount, Value* args) {
             if (i > 0) { buf[pos++] = ','; buf[pos++] = ' '; }
             Value elem = arr->elements[i];
             if (IS_NUMBER(elem)) {
-                double en = AS_NUMBER(elem);
-                if (en == (long long)en && en >= -9007199254740992.0 && en <= 9007199254740992.0) {
-                    pos += snprintf(buf + pos, buf_size - pos, "%lld", (long long)en);
-                } else {
-                    pos += snprintf(buf + pos, buf_size - pos, "%g", en);
-                }
+                char nbuf[64];
+                sage_format_number(AS_NUMBER(elem), nbuf, sizeof(nbuf));
+                pos += snprintf(buf + pos, buf_size - pos, "%s", nbuf);
             } else if (IS_STRING(elem)) {
                 pos += snprintf(buf + pos, buf_size - pos, "%s", AS_STRING(elem));
             } else if (IS_BOOL(elem)) {
@@ -1099,6 +1091,25 @@ static Value dict_delete_native(int argCount, Value* args) {
     if (!IS_DICT(args[0]) || !IS_STRING(args[1])) return val_nil();
     dict_delete(&args[0], AS_STRING(args[1]));
     return val_nil();
+}
+
+// hasattr(obj, name) — duck-typing check. True when name resolves as an
+// instance method, an instance field, or a dictionary key.
+static Value hasattr_native(int argCount, Value* args) {
+    if (argCount != 2 || !IS_STRING(args[1])) return val_bool(0);
+    const char* name = AS_STRING(args[1]);
+    int name_len = (int)strlen(name);
+    if (IS_INSTANCE(args[0]) && args[0].as.instance->class_def) {
+        if (class_find_method(args[0].as.instance->class_def, name, name_len)) {
+            return val_bool(1);
+        }
+        Value field = instance_get_field(args[0].as.instance, name, name_len);
+        return val_bool(!IS_NIL(field));
+    }
+    if (IS_DICT(args[0])) {
+        return val_bool(dict_has(&args[0], name));
+    }
+    return val_bool(0);
 }
 
 // GC functions
@@ -2655,6 +2666,10 @@ void init_stdlib(Env* env) {
     env_define_const(env, "dict_values", 11, val_native(dict_values_native));
     env_define_const(env, "dict_has", 8, val_native(dict_has_native));
     env_define_const(env, "dict_delete", 11, val_native(dict_delete_native));
+
+    // Duck-typing helper: hasattr(obj, name) — true for instance methods,
+    // instance fields, or dict keys.
+    env_define_const(env, "hasattr", 7, val_native(hasattr_native));
     
     // GC functions
     env_define_const(env, "gc_collect", 10, val_native(gc_collect_native));
@@ -3436,11 +3451,24 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                             env_define_const(method_env, method_stmt->params[i + param_start].start,
                                        method_stmt->params[i + param_start].length, arg_result.value);
                         }
-                        // Missing args set to nil
+                        // Fill missing args from declared default expressions, else nil
                         for (int i = arg_count; i < method_stmt->param_count - param_start; i++) {
-                            eval_args[i] = val_nil();
+                            Value missing_val = val_nil();
+                            if (method_stmt->defaults && method_stmt->defaults[i + param_start]) {
+                                ExecResult def_result = eval_expr(method_stmt->defaults[i + param_start], env);
+                                if (def_result.is_throwing) {
+                                    free(eval_args);
+                                    AST_GC_POP_ENV();
+                                    AST_GC_POP_N(1 + pushed_args);
+                                    return def_result;
+                                }
+                                missing_val = def_result.value;
+                            }
+                            eval_args[i] = missing_val;
+                            AST_GC_PUSH(missing_val);
+                            pushed_args++;
                             env_define_const(method_env, method_stmt->params[i + param_start].start,
-                                       method_stmt->params[i + param_start].length, val_nil());
+                                       method_stmt->params[i + param_start].length, missing_val);
                         }
                     }
 
@@ -3836,6 +3864,22 @@ jitted:
                             pushed_args++;
                             env_define_const(method_env, init_stmt->params[i].start,
                                        init_stmt->params[i].length, arg_result.value);
+                        } else {
+                            // Fill from declared default expression, else nil
+                            Value missing_val = val_nil();
+                            if (init_stmt->defaults && init_stmt->defaults[i]) {
+                                ExecResult def_result = eval_expr(init_stmt->defaults[i], env);
+                                if (def_result.is_throwing) {
+                                    AST_GC_POP_ENV();
+                                    AST_GC_POP_N(2 + pushed_args);
+                                    return def_result;
+                                }
+                                missing_val = def_result.value;
+                            }
+                            AST_GC_PUSH(missing_val);
+                            pushed_args++;
+                            env_define_const(method_env, init_stmt->params[i].start,
+                                       init_stmt->params[i].length, missing_val);
                         }
                     }
 
