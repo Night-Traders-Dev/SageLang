@@ -43,3 +43,4 @@ core/build_sage/
 # Test build artifacts
 core/obj/
 testsuite/.tmp/
+core/build_dbg/
