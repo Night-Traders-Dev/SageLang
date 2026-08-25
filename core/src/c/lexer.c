@@ -19,6 +19,8 @@ static int indent_stack_top = 0;
 static int pending_dedents = 0;
 static int bracket_depth = 0;
 
+int lexer_bracket_depth(void) { return bracket_depth; }
+
 void init_lexer(const char* source, const char* filename) {
     start = source;
     current = source;

@@ -60,8 +60,8 @@ CMakeFiles/sage.dir/src/vm/program.c.o: \
  /usr/include/x86_64-linux-gnu/bits/struct_rwlock.h \
  /home/kraken/Devel/SageLang/core/include/gc.h \
  /home/kraken/Devel/SageLang/core/include/env.h \
- /home/kraken/Devel/SageLang/core/include/sage_thread.h \
  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdbool.h \
+ /home/kraken/Devel/SageLang/core/include/sage_thread.h \
  /usr/include/pthread.h /usr/include/sched.h \
  /usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h \
  /usr/include/x86_64-linux-gnu/bits/endian.h \

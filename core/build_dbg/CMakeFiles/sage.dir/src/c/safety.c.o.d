@@ -42,8 +42,8 @@ CMakeFiles/sage.dir/src/c/safety.c.o: \
  /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
  /home/kraken/Devel/SageLang/core/include/../include/value.h \
  /home/kraken/Devel/SageLang/core/include/../include/env.h \
- /home/kraken/Devel/SageLang/core/include/../include/sage_thread.h \
  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdbool.h \
+ /home/kraken/Devel/SageLang/core/include/../include/sage_thread.h \
  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdint.h /usr/include/stdint.h \
  /usr/include/x86_64-linux-gnu/bits/wchar.h \
  /usr/include/x86_64-linux-gnu/bits/stdint-intn.h \

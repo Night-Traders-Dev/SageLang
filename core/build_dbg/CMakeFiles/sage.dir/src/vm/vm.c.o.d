@@ -24,7 +24,8 @@ CMakeFiles/sage.dir/src/vm/vm.c.o: \
  /home/kraken/Devel/SageLang/core/include/value.h \
  /home/kraken/Devel/SageLang/core/include/program.h \
  /home/kraken/Devel/SageLang/core/include/interpreter.h \
- /home/kraken/Devel/SageLang/core/include/env.h /usr/include/stdio.h \
+ /home/kraken/Devel/SageLang/core/include/env.h \
+ /usr/lib/gcc/x86_64-linux-gnu/15/include/stdbool.h /usr/include/stdio.h \
  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdarg.h \
  /usr/include/x86_64-linux-gnu/bits/types/__fpos_t.h \
  /usr/include/x86_64-linux-gnu/bits/types/__mbstate_t.h \
@@ -56,7 +57,6 @@ CMakeFiles/sage.dir/src/vm/vm.c.o: \
  /usr/include/x86_64-linux-gnu/bits/mathcalls.h \
  /home/kraken/Devel/SageLang/core/include/module.h \
  /home/kraken/Devel/SageLang/core/include/lexer.h \
- /usr/lib/gcc/x86_64-linux-gnu/15/include/stdbool.h \
  /home/kraken/Devel/SageLang/core/include/repl.h \
  /home/kraken/Devel/SageLang/core/include/sage_thread.h \
  /usr/include/pthread.h /usr/include/sched.h \

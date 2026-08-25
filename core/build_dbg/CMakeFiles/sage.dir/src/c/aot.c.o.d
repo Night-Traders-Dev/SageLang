@@ -45,8 +45,8 @@ CMakeFiles/sage.dir/src/c/aot.c.o: \
  /usr/include/x86_64-linux-gnu/bits/types/__locale_t.h \
  /usr/include/x86_64-linux-gnu/bits/string_fortified.h \
  /home/kraken/Devel/SageLang/core/include/env.h \
- /home/kraken/Devel/SageLang/core/include/sage_thread.h \
  /usr/lib/gcc/x86_64-linux-gnu/15/include/stdbool.h \
+ /home/kraken/Devel/SageLang/core/include/sage_thread.h \
  /usr/include/pthread.h /usr/include/sched.h \
  /usr/include/x86_64-linux-gnu/bits/types/time_t.h \
  /usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h \

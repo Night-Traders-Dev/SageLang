@@ -262,6 +262,7 @@ static double parse_number_literal(Token token) {
 static Expr* expression(void);
 static Expr* unary(void);
 static Expr* postfix(void);
+static int g_suppressed_lambda_depth = 0;  // multi-stmt suppressed-lambda nesting
 static Stmt* declaration(void);
 static Stmt* statement(void);
 static Stmt* block(void);
@@ -1344,9 +1345,52 @@ static Expr* parse_proc_expr(void) {
     consume(TOKEN_RPAREN, "Expect ')' after parameters.");
     consume(TOKEN_COLON, "Expect ':' after procedure signature.");
 
-    // For anonymous procs in expression context, the body is a single statement or block
-    // We wrap it in a STMT_BLOCK if it's not already one.
-    Stmt* body = parse_maybe_oneline_block();
+    // Anonymous-proc body, three shapes:
+    //   1) indented block      -> standard block()
+    //   2) inline single stmt  -> proc(): stmt
+    //   3) bracket-suppressed  -> inside unclosed call parens the lexer emits
+    //      NO NEWLINE/INDENT/DEDENT structure, so statements run back-to-back
+    //      ("stmt stmt stmt )"). Parse greedily until an argument-list
+    //      terminator appears — expressions end naturally at identifier/lit
+    //      boundaries, so this is unambiguous.
+    Stmt* body = NULL;
+    if (match(TOKEN_NEWLINE) && check(TOKEN_INDENT)) {
+        body = block();
+    } else {
+        int start_depth = lexer_bracket_depth();
+        int suppressed = start_depth > 0;
+        // Inside an enclosing suppressed lambda a nested anonymous lambda
+        // MUST be single-statement: a greedy nested body cannot know where
+        // the parent's statements resume (no separators exist in bracket
+        // context). Only the OUTERMOST suppressed lambda is multi-statement.
+        int multi = suppressed && g_suppressed_lambda_depth == 0;
+
+        Stmt* head = NULL;
+        Stmt* cur = NULL;
+        int guard = 0;
+        if (multi) g_suppressed_lambda_depth++;
+        while (!check(TOKEN_RPAREN) && !check(TOKEN_EOF) &&
+               !check(TOKEN_COMMA) && !check(TOKEN_DEDENT)) {
+            Stmt* st = declaration();
+            if (st == NULL) break;
+            if (head == NULL) { head = st; cur = st; }
+            else { cur->next = st; cur = st; }
+            // OUTSIDE brackets the statement consumed its own trailing
+            // newline: the body is exactly one statement long.
+            if (!multi) break;
+            match(TOKEN_NEWLINE);
+            // Terminate at this lambda's own argument-list delimiter: the
+            // ',' or ')' back at our starting bracket depth. Nested calls
+            // keep depth above start_depth while parsing a statement.
+            if (lexer_bracket_depth() < start_depth) break;
+            if (lexer_bracket_depth() == start_depth &&
+                (check(TOKEN_RPAREN) || check(TOKEN_COMMA)))
+                break;
+            if (++guard > 8192) break;
+        }
+        if (multi) g_suppressed_lambda_depth--;
+        body = new_block_stmt(head);
+    }
 
     Expr* e = new_proc_expr(params, param_count, body);
     // Shrink params array to fit (optional)

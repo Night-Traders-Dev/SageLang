@@ -27,6 +27,10 @@ proc assert_contains(haystack, needle, msg):
     else:
         failed = failed + 1
         print "FAIL: " + msg + " (not found: " + needle + ")"
+        var snip = haystack
+        if len(snip) > 300:
+            snip = slice(snip, 0, 300)
+        print "  HAYSTACK[" + str(len(haystack)) + "]: " + snip
 
 proc assert_not_contains(haystack, needle, msg):
     if contains(haystack, needle):
@@ -444,13 +448,15 @@ assert_contains(for_out, "sage_define_slot(", "for assigns loop var")
 # ============================================================================
 
 let cc23 = compiler.CCompiler()
+# add_proc_entry(cc, name, param_count, param_defaults)
+let _unused_probe = nil
 let fn_tok = make_tok("add")
 let fn_param_a = make_tok("a")
 let fn_param_b = make_tok("b")
 let fn_plus = make_tok_type("+", 34)
 let fn_body = ast.return_stmt(ast.binary_expr(ast.variable_expr(fn_param_a), fn_plus, ast.variable_expr(fn_param_b)))
 let fn_stmt = ast.proc_stmt(fn_tok, [fn_param_a, fn_param_b], fn_body)
-compiler.add_proc_entry(cc23, "add", 2)
+compiler.add_proc_entry(cc23, "add", 2, nil)
 compiler.emit_function_definition(cc23, fn_stmt)
 let fn_out = join(cc23.output, "")
 assert_contains(fn_out, "static SageValue", "function has static SageValue")
@@ -530,7 +536,7 @@ assert_contains(prelude, "sage_index_set(", "prelude has index_set")
 # Simple: print 42
 let simple_prog = ast.print_stmt(ast.number_expr(42))
 let simple_c = compiler.compile_to_c(simple_prog)
-assert_contains(simple_c, "int main(void)", "full compile has main")
+assert_contains(simple_c, "int main(int argc", "full compile has main")
 assert_contains(simple_c, "sage_print_ln(", "full compile has print")
 assert_contains(simple_c, "return 0;", "full compile returns 0")
 
@@ -555,7 +561,7 @@ proc_def.next = call_it
 let proc_c = compiler.compile_to_c(proc_def)
 assert_contains(proc_c, "static SageValue sage_fn_", "proc compile has function")
 assert_contains(proc_c, "sage_mul(", "proc compile has mul")
-assert_contains(proc_c, "int main(void)", "proc compile has main")
+assert_contains(proc_c, "int main(int argc", "proc compile has main")
 
 # Program with class
 let init_tok = make_tok("init")

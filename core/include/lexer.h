@@ -24,6 +24,7 @@ typedef struct {
 void init_lexer(const char* source, const char* filename);
 Token scan_token(void);
 LexerState lexer_get_state(void);
+int lexer_bracket_depth(void);
 void lexer_set_state(LexerState state);
 
 #endif

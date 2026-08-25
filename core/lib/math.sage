@@ -448,3 +448,31 @@ proc print_matrix(matrix):
             print "  " + str(row)
     print "]"
 
+
+# ── abs / sqrt: delegated to the C host natives (§ lib_suite contract) ──
+# This file shadows the native math module for file-based resolution, so the
+# commonly-imported native names must exist here too.
+proc abs(x):
+    if x < 0:
+        return 0 - x
+    return x
+
+# Newton–Raphson, pure Sage (deterministic; 200 iterations cap with
+# fixed-point early exit). Returns nil for negative inputs like the native.
+proc sqrt(x):
+    if x < 0:
+        return nil
+    if x == 0:
+        return 0
+    var g = x / 2 + 0.5
+    var i = 0
+    while i < 200:
+        let nxt = (g + x / g) / 2
+        let diff = nxt - g
+        if diff < 0:
+            diff = 0 - diff
+        if nxt == g or diff < 1e-15 * (g + 1):
+            return nxt
+        g = nxt
+        i = i + 1
+    return g

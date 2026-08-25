@@ -6,6 +6,7 @@ CMakeFiles/sage.dir/src/vm/runtime.c.o: \
  /home/kraken/Devel/SageLang/core/include/ast.h \
  /home/kraken/Devel/SageLang/core/include/token.h \
  /home/kraken/Devel/SageLang/core/include/env.h \
+ /usr/lib/gcc/x86_64-linux-gnu/15/include/stdbool.h \
  /home/kraken/Devel/SageLang/core/include/value.h \
  /usr/lib/gcc/x86_64-linux-gnu/15/include/stddef.h \
  /home/kraken/Devel/SageLang/core/src/vm/bytecode.h \
@@ -115,7 +116,6 @@ CMakeFiles/sage.dir/src/vm/runtime.c.o: \
  /usr/include/x86_64-linux-gnu/bits/types/idtype_t.h \
  /home/kraken/Devel/SageLang/core/include/gc.h \
  /home/kraken/Devel/SageLang/core/include/sage_thread.h \
- /usr/lib/gcc/x86_64-linux-gnu/15/include/stdbool.h \
  /usr/include/pthread.h /usr/include/sched.h \
  /usr/include/x86_64-linux-gnu/bits/sched.h \
  /usr/include/linux/sched/types.h /usr/include/linux/types.h \
