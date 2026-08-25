@@ -1,28 +1,46 @@
-## Tests for metal.vga primitives (clear, puts, draw_progress_bar)
+## Unit test for metal.vga module
 
-import metal.core
-import metal.vga
+import metal.vga as vga
 import assert
 
-# 1. Test clear
-vga.clear(vga.BLACK)
-assert.assert_equal(32, core.mmio_read8(0xB8000), "VGA cell 0 char should be space")
-assert.assert_equal(0, core.mmio_read8(0xB8001), "VGA cell 0 attr should be black")
+proc test_vga():
+    print("Testing metal.vga...")
 
-# 2. Test puts
-vga.puts(0, 0, "TEST", (vga.WHITE << 4) | vga.BLACK)
-assert.assert_equal(ord("T"), core.mmio_read8(0xB8000), "VGA cell 0 char should be T")
-assert.assert_equal(ord("E"), core.mmio_read8(0xB8002), "VGA cell 1 char should be E")
-assert.assert_equal(ord("S"), core.mmio_read8(0xB8004), "VGA cell 2 char should be S")
-assert.assert_equal(ord("T"), core.mmio_read8(0xB8006), "VGA cell 3 char should be T")
-assert.assert_equal(0xF0, core.mmio_read8(0xB8001), "VGA attr should be 0xF0")
+    # Test attribute creation
+    let attr = vga.make_attr(vga.WHITE, vga.BLUE)
+    assert.assert_equal(vga.BLUE, (attr >> 4) & 15, "Background color match")
+    assert.assert_equal(vga.WHITE, attr & 15, "Foreground color match")
 
-# 3. Test progress bar
-vga.draw_progress_bar(0, 1, 10, 50, 0x0F)
-let bar_addr = 0xB8000 + (1 * 80 * 2)
-assert.assert_equal(ord("["), core.mmio_read8(bar_addr), "Progress bar start should be [")
-assert.assert_equal(ord("="), core.mmio_read8(bar_addr + 2), "Progress bar slot 1 should be =")
-assert.assert_equal(ord(" "), core.mmio_read8(bar_addr + 10), "Progress bar slot 5 should be space")
-assert.assert_equal(ord("]"), core.mmio_read8(bar_addr + 18), "Progress bar end should be ]")
+    # Test clear screen
+    vga.clear(vga.BLACK)
+    assert.assert_equal(32, vga.read_char_at(0, 0), "Clear screen space character")
 
-print("metal.vga tests passed successfully!")
+    # Test putchar_at
+    let test_attr = vga.make_attr(vga.GREEN, vga.BLACK)
+    vga.putchar_at(10, 5, "S", test_attr)
+    assert.assert_equal(ord("S"), vga.read_char_at(10, 5), "Character code match at (10,5)")
+    assert.assert_equal(test_attr, vga.read_attr_at(10, 5), "Attribute byte match at (10,5)")
+
+    # Test puts
+    vga.puts(0, 0, "SageOS", test_attr)
+    assert.assert_equal(ord("S"), vga.read_char_at(0, 0), "puts char 0")
+    assert.assert_equal(ord("a"), vga.read_char_at(1, 0), "puts char 1")
+    assert.assert_equal(ord("g"), vga.read_char_at(2, 0), "puts char 2")
+    assert.assert_equal(ord("e"), vga.read_char_at(3, 0), "puts char 3")
+    assert.assert_equal(ord("O"), vga.read_char_at(4, 0), "puts char 4")
+    assert.assert_equal(ord("S"), vga.read_char_at(5, 0), "puts char 5")
+
+    # Test progress bar
+    vga.draw_progress_bar(0, 2, 10, 50, test_attr)
+    assert.assert_equal(ord("["), vga.read_char_at(0, 2), "Progress bar left bracket")
+    assert.assert_equal(ord("="), vga.read_char_at(1, 2), "Progress bar fill char 1")
+    assert.assert_equal(ord("="), vga.read_char_at(4, 2), "Progress bar fill char 4")
+    assert.assert_equal(ord(" "), vga.read_char_at(5, 2), "Progress bar empty char 5")
+    assert.assert_equal(ord("]"), vga.read_char_at(9, 2), "Progress bar right bracket")
+
+    print("metal.vga tests passed successfully!")
+
+proc main():
+    test_vga()
+
+main()
