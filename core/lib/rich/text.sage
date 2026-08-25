@@ -5,19 +5,19 @@ import rich.measure
 # Rich text - styled text with spans and segments
 
 # A segment is a single piece of text with a style
-proc Segment(text, style):
+proc Segment(text, style_obj):
     let seg = {}
     seg["text"] = ""
     if text != nil:
         seg["text"] = text
-    seg["style"] = rich.style.style_default()
-    if style != nil:
-        seg["style"] = style
+    seg["style"] = style.style_default()
+    if style_obj != nil:
+        seg["style"] = style_obj
     return seg
 
 # Create a segment from plain text
 proc segment_text(text):
-    return Segment(text, rich.style.style_default())
+    return Segment(text, style.style_default())
 
 # Render a segment to ANSI
 proc render_segment(seg):
@@ -26,54 +26,50 @@ proc render_segment(seg):
     let text = seg["text"]
     if type(text) == "number":
         text = str(text)
-    return rich.style.style_ansi_open(seg["style"]) + text + rich.style.style_ansi_close(seg["style"])
+    return style.style_ansi_open(seg["style"]) + text + style.style_ansi_close(seg["style"])
 
 # Measure segment visible width
 proc segment_width(seg):
-    return rich.measure.measure_text(seg["text"])
+    return measure.measure_text(seg["text"])
 
-# Split a segment at position
+# Optimization: Split segment using native slice()
 proc segment_split(seg, pos):
+    let seg_text = seg["text"]
+    let seg_len = len(seg_text)
     if pos <= 0:
         return (Segment("", seg["style"]), seg)
-    if pos >= len(seg["text"]):
+    if pos >= seg_len:
         return (seg, Segment("", seg["style"]))
-    let left = Segment("", seg["style"])
-    left["text"] = ""
-    for i in range(pos):
-        left["text"] = left["text"] + seg["text"][i]
-    let right = Segment("", seg["style"])
-    right["text"] = ""
-    for i in range(len(seg["text"]) - pos):
-        right["text"] = right["text"] + seg["text"][pos + i]
+    let left = Segment(slice(seg_text, 0, pos), seg["style"])
+    let right = Segment(slice(seg_text, pos, seg_len), seg["style"])
     return (left, right)
 
 # Style a segment
-proc segment_style(seg, style):
+proc segment_style(seg, style_obj):
     let new_seg = {}
     new_seg["text"] = seg["text"]
-    new_seg["style"] = rich.style.merge_styles(seg["style"], style)
+    new_seg["style"] = style.merge_styles(seg["style"], style_obj)
     return new_seg
 
 # --- Text class - collection of styled segments ---
 
 class Text:
-    proc init(self, text, style):
+    proc init(self, text, style_obj):
         if text == nil:
             text = ""
         self.segments = []
         if type(text) == "array":
             self.segments = text
         else:
-            self.append(text, style)
+            self.append(text, style_obj)
         self.justify = nil
         self.end = ""
         self.overflow = "fold"
 
     # Append text with optional style
-    proc append(self, text, style):
+    proc append(self, text, style_obj):
         if type(text) == "string" or type(text) == "number":
-            push(self.segments, Segment(str(text), style))
+            push(self.segments, Segment(str(text), style_obj))
         if type(text) == "instance":
             # Append another Text or Segment
             if self._is_segment(text):
@@ -88,8 +84,8 @@ class Text:
     proc append_text(self, text):
         return self.append(text, nil)
 
-    # Stylize - apply a style to the whole text
-    proc stylize(self, style, start, end_pos):
+    # Optimization: Stylize using native slice() instead of O(N^2) character loops
+    proc stylize(self, style_obj, start, end_pos):
         let actual_start = start
         let actual_end = end_pos
         if actual_start == nil:
@@ -108,37 +104,36 @@ class Text:
             if seg_end_pos <= actual_start or seg_start >= actual_end:
                 push(new_segs, seg)
             else:
-                let before_text = ""
-                let during_text = ""
-                let after_text = ""
-                let j = 0
-                while j < seg_len:
-                    let char_pos = pos + j
-                    if char_pos < actual_start:
-                        before_text = before_text + seg_text[j]
-                    if char_pos >= actual_start and char_pos < actual_end:
-                        during_text = during_text + seg_text[j]
-                    if char_pos >= actual_end:
-                        after_text = after_text + seg_text[j]
-                    j = j + 1
-                if len(before_text) > 0:
-                    push(new_segs, Segment(before_text, seg["style"]))
-                if len(during_text) > 0:
-                    let new_style = rich.style.merge_styles(seg["style"], style)
-                    push(new_segs, Segment(during_text, new_style))
-                if len(after_text) > 0:
-                    push(new_segs, Segment(after_text, seg["style"]))
+                let cut1 = actual_start - seg_start
+                if cut1 < 0:
+                    cut1 = 0
+                if cut1 > seg_len:
+                    cut1 = seg_len
+
+                let cut2 = actual_end - seg_start
+                if cut2 < 0:
+                    cut2 = 0
+                if cut2 > seg_len:
+                    cut2 = seg_len
+
+                if cut1 > 0:
+                    push(new_segs, Segment(slice(seg_text, 0, cut1), seg["style"]))
+                if cut2 > cut1:
+                    let new_style = style.merge_styles(seg["style"], style_obj)
+                    push(new_segs, Segment(slice(seg_text, cut1, cut2), new_style))
+                if seg_len > cut2:
+                    push(new_segs, Segment(slice(seg_text, cut2, seg_len), seg["style"]))
             pos = pos + seg_len
         self.segments = new_segs
         return self
 
     # Stylize entire text
-    proc stylize_all(self, style):
-        return self.stylize(style, 0, self._total_chars())
+    proc stylize_all(self, style_obj):
+        return self.stylize(style_obj, 0, self._total_chars())
 
     # Add an inline style to a slice
-    proc on(self, style):
-        self.stylize_all(style)
+    proc on(self, style_obj):
+        self.stylize_all(style_obj)
         return self
 
     # Concat with + operator support via join
@@ -150,12 +145,12 @@ class Text:
         result.segments = all_segs
         return result
 
-    # Get plain text without styling
+    # Optimization: Use array push and join("") to build plain text in O(N) time
     proc plain(self):
-        let result = ""
+        let parts = []
         for i in range(len(self.segments)):
-            result = result + self.segments[i]["text"]
-        return result
+            push(parts, self.segments[i]["text"])
+        return join(parts, "")
 
     # Get plain text
     proc str(self):
@@ -180,7 +175,7 @@ class Text:
     proc measure_width(self):
         let total = 0
         for i in range(len(self.segments)):
-            total = total + rich.measure.measure_text(self.segments[i]["text"])
+            total = total + measure.measure_text(self.segments[i]["text"])
         return total
 
     # Set justification
@@ -198,47 +193,40 @@ class Text:
         self.overflow = overflow
         return self
 
-    # Render to ANSI string
+    # Optimization: Use array push and join("") to assemble ANSI string in O(N) time
     proc render(self):
-        let result = ""
+        let parts = []
         for i in range(len(self.segments)):
-            result = result + render_segment(self.segments[i])
-        return result
+            push(parts, render_segment(self.segments[i]))
+        return join(parts, "")
 
     # Render a single line of the text (for wrapping)
     proc render_line(self):
         return self.render()
 
-    # Split text into lines at newline characters
+    # Optimization: Use native slice() for line segment extraction
     proc split_lines(self):
         let lines_list = []
         let current = Text("")
         for i in range(len(self.segments)):
             let seg = self.segments[i]
             let text = seg["text"]
+            let text_len = len(text)
             let start = 0
-            let j = 0
-            while j < len(text):
+            for j in range(text_len):
                 if text[j] == chr(10):
                     if j > start:
-                        let line_text = ""
-                        for k in range(j - start):
-                            line_text = line_text + text[start + k]
-                        current.append(line_text, seg["style"])
+                        current.append(slice(text, start, j), seg["style"])
                     push(lines_list, current)
                     current = Text("")
                     start = j + 1
-                j = j + 1
-            if start < len(text):
-                let remaining = ""
-                for k in range(len(text) - start):
-                    remaining = remaining + text[start + k]
-                current.append(remaining, seg["style"])
+            if start < text_len:
+                current.append(slice(text, start, text_len), seg["style"])
         if current._total_chars() > 0 or len(lines_list) == 0:
             push(lines_list, current)
         return lines_list
 
-    # Wrap text to a maximum width
+    # Optimization: Use native slice() for line wrapping segment extractions
     proc wrap(self, max_width):
         if max_width <= 0:
             return self.split_lines()
@@ -248,52 +236,42 @@ class Text:
         for i in range(len(self.segments)):
             let seg = self.segments[i]
             let text = seg["text"]
+            let text_len = len(text)
             let start = 0
             let j = 0
-            while j < len(text):
+            while j < text_len:
                 if text[j] == chr(10):
                     if j > start:
-                        let line_text = ""
-                        for k in range(j - start):
-                            line_text = line_text + text[start + k]
-                        current.append(line_text, seg["style"])
+                        current.append(slice(text, start, j), seg["style"])
                     push(lines_list, current)
                     current = Text("")
                     current_width = 0
                     start = j + 1
                     j = start
                     continue
-                let char_w = rich.measure.measure_char(text[j])
+                let char_w = measure.measure_char(text[j])
                 if current_width + char_w > max_width and current_width > 0:
                     if j > start:
-                        let line_text = ""
-                        for k in range(j - start):
-                            line_text = line_text + text[start + k]
-                        current.append(line_text, seg["style"])
+                        current.append(slice(text, start, j), seg["style"])
                     push(lines_list, current)
                     current = Text("")
                     current_width = 0
                     start = j
                 current_width = current_width + char_w
                 j = j + 1
-            if start < len(text):
-                let remaining = ""
-                for k in range(len(text) - start):
-                    remaining = remaining + text[start + k]
-                current.append(remaining, seg["style"])
+            if start < text_len:
+                current.append(slice(text, start, text_len), seg["style"])
         if current._total_chars() > 0 or len(lines_list) == 0:
             push(lines_list, current)
         return lines_list
 
-    # Render with wrapping
+    # Optimization: Use array push and join(chr(10)) for wrapped line rendering
     proc render_wrapped(self, width):
         let lines_list = self.wrap(width)
-        let result = ""
+        let rendered_lines = []
         for i in range(len(lines_list)):
-            if i > 0:
-                result = result + chr(10)
-            result = result + lines_list[i].render()
-        return result
+            push(rendered_lines, lines_list[i].render())
+        return join(rendered_lines, chr(10))
 
     # Helper to check if an object is a segment
     proc _is_segment(self, obj):
@@ -307,7 +285,7 @@ class Text:
             return false
         return dict_has(obj, "segments")
 
-    # Truncate text with ellipsis
+    # Optimization: Use native slice() for text truncation segment extraction
     proc truncate(self, max_width, overflow):
         if overflow == nil:
             overflow = "ellipsis"
@@ -322,14 +300,13 @@ class Text:
         for i in range(len(self.segments)):
             let seg = self.segments[i]
             let text = seg["text"]
-            let added = ""
+            let text_len = len(text)
             let j = 0
-            while j < len(text) and current_width < remaining:
-                added = added + text[j]
-                current_width = current_width + rich.measure.measure_char(text[j])
+            while j < text_len and current_width < remaining:
+                current_width = current_width + measure.measure_char(text[j])
                 j = j + 1
-            if len(added) > 0:
-                result.append(added, seg["style"])
+            if j > 0:
+                result.append(slice(text, 0, j), seg["style"])
             if current_width >= remaining:
                 break
         if overflow == "ellipsis":
@@ -345,17 +322,17 @@ class Text:
         return t
 
 # Create a text from a string (convenience)
-proc text_from_string(s, style):
-    return Text(s, style)
+proc text_from_string(s, style_obj):
+    return Text(s, style_obj)
 
 # Create styled text
 proc styled_text(text, style_str):
-    let style = rich.style.parse_style(style_str)
-    return Text(text, style)
+    let style_obj = style.parse_style(style_str)
+    return Text(text, style_obj)
 
 # Create a span (like Segment but public)
-proc span(text, style):
-    return Segment(text, style)
+proc span(text, style_obj):
+    return Segment(text, style_obj)
 
 # Assemble multiple Text pieces
 proc assemble(pieces):
