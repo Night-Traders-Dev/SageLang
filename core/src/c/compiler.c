@@ -5098,6 +5098,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    int n = (int)count.as.number;\n"
       "    if (n <= 0) return sage_string(\"\");\n"
       "    size_t slen = SAGE_STRING_LEN(s);\n"
+      "    if (slen > 0 && (size_t)n > 104857600 / slen) return sage_nil();\n"
       "    char* buf = malloc(slen * n + 1);\n"
       "    if (!buf) return sage_nil();\n"
       "    for (int i = 0; i < n; i++) memcpy(buf + i * slen, s.as.string, slen);\n"
