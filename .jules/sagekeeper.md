@@ -352,3 +352,14 @@ Commit history.
 
 Documentation Impact:
 Added S005 to the "Notable Rules" section under Linter.
+
+2026-08-26 - [Linter S004 and S005 Update]
+
+Discovery:
+The linter contains a rule `S004` (Trailing semicolon) which was entirely undocumented, and `S005` was documented inaccurately (it claimed statements separated by semicolons, but the linter flags multiple statements on a single line separated by spaces or semicolons based on keywords).
+
+Evidence:
+`core/src/c/linter.c` around lines 2085 (S004 checks for `;` at the end of the line) and 2095 (S005 checks for multiple keywords on a single line).
+
+Documentation Impact:
+Updated the "Notable Rules" section under `### 12.3 Linter` in `SageLang_Guide.md` to properly document `[S004]` and correct `[S005]`. Future agents should refer to these accurate definitions.

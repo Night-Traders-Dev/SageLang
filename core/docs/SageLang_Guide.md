@@ -2858,6 +2858,8 @@ sage lint program.sage
 - `[W002]`: Shadowed variable warning.
 - `[W004]`: Empty block warning (e.g., following a colon).
 - `[S003]`: Missing docstring warning (requires `##` preceding top-level procedures).
+- `[S004]`: Trailing semicolon warning (semicolons are not used in Sage).
+- `[S005]`: Multiple statements on one line warning (e.g., separated by spaces/semicolons).
 
 | Category | Rules | Description |
 | -------- | ----- | ----------- |
@@ -2869,7 +2871,8 @@ sage lint program.sage
 - `[W001]`, `[W002]`: Issued for unused variables and variables that shadow existing declarations in scope.
 - `[W004]`: Warns about empty blocks (e.g., when a line ending in a colon `:` is followed by an empty or improperly indented section).
 - `[S003]`: Enforces documentation conventions; top-level `proc` declarations must be immediately preceded by a `##` style docstring (comment).
-- `[S005]`: Warns when multiple statements are on a single line separated by semicolons.
+- `[S004]`: Warns when a line ends with a trailing semicolon (semicolons are not used in Sage).
+- `[S005]`: Warns when multiple statements are on a single line (e.g. separated by spaces or semicolons).
 
 **Example Output**:
 
