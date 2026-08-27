@@ -354,6 +354,10 @@ The `metal` standard library provides low-level drivers for bare-metal execution
 - `timer.timer_get_mode()` — Returns current timer mode (`TIMER_MODE_PERIODIC` or `TIMER_MODE_ONESHOT`).
 - `timer.sleep_ms(ms)` — Halts CPU execution (`hlt`) for the requested duration.
 
+### `metal.gpio` — General Purpose I/O
+- `gpio.pin_enable_interrupt_ext(pin, mode)` — Enables and configures interrupt triggers (rising edge, falling edge, low/high level) for the specified GPIO pin.
+- `gpio.pin_disable_interrupt_ext(pin)` — Disables interrupt generation for the specified GPIO pin.
+
 ## AVR & Arduino Uno Assembler Support (`core/boards/AVR`)
 
 Starting with v4.1.7, SageLang features a two-pass assembler backend for the **AVR 8-bit RISC architecture (ATmega328P and ATmega328PB)** under `core/boards/AVR/`. This enables compiling raw AVR assembly programs directly into Intel HEX (`.hex`) flash images, ready to be written to hardware (such as an Arduino Uno R3).

@@ -458,6 +458,20 @@ print md
 
 ---
 
+## Linux System Calls (`os.linux.syscalls`)
+
+```sage
+import os.linux.syscalls as syscalls
+
+# Signal mask control constants:
+# syscalls.SIG_BLOCK (0), syscalls.SIG_UNBLOCK (1), syscalls.SIG_SETMASK (2)
+let desc = syscalls.sigprocmask(syscalls.SIG_BLOCK, 1024)
+print desc["nr"]       # System call number (SYS_RT_SIGPROCMASK)
+print desc["args"]     # [SIG_BLOCK, 1024, nil, 8]
+```
+
+---
+
 ## Process & Environment (`std.process`)
 
 ```sage
@@ -556,6 +570,7 @@ print interop.TYPE_DOUBLE     # double
 | `log` | `import std.log` | `create`, `info`, `error`, `warn`, `debug`, `fatal`, `add_handler`, `child`, `with_field` |
 | `argparse` | `import std.argparse` | `create`, `add_flag`, `add_option`, `parse`, `get_flag`, `get_option`, `help_text` |
 | `compress` | `import std.compress` | `rle_encode`, `rle_decode`, `lz77_encode`, `lz77_decode`, `delta_encode`, `delta_decode` |
+| `syscalls` | `import os.linux.syscalls` | `sigprocmask`, `SIG_BLOCK`, `SIG_UNBLOCK`, `SIG_SETMASK`, Linux system call descriptors |
 | `process` | `import std.process` | `platform`, `args`, `get_env`, `exit_with`, `basename`, `dirname`, `extension`, `join_path` |
 | `unicode` | `import std.unicode` | `to_upper`, `to_lower`, `to_title`, `trim`, `center`, `reverse`, `encode_codepoint`, `is_alpha` |
 | `fmt` | `import std.fmt` | `to_hex`, `format_int`, `format_float`, `format_bytes`, `template`, `table`, `join` |
