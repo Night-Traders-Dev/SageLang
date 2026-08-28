@@ -54,8 +54,10 @@ concurrent access across cores.
 
 ## Read-Write Locks
 
-`sage_rwlock_rdlock()`, `sage_rwlock_wrlock()` — concurrent readers, exclusive
-writers. Also `tryrdlock` / `trywrlock` / `unlock`.
+SageLang supports read-write locks both at the C VM runtime level (`sage_rwlock_rdlock()`, `sage_rwlock_wrlock()`) and in Sage OS primitives (`os.sync` / `std.rwlock`):
+
+- **High-level std library (`import std.rwlock`)**: `create()`, `read_lock(l)`, `read_unlock(l)`, `write_lock(l)`, `write_unlock(l)`, `try_read_lock(l)`, `with_read(l, fn)`, `with_write(l, fn)`
+- **Low-level OS synchronization (`import os.sync`)**: `rwlock_create()`, `rwlock_read_lock(l)`, `rwlock_read_unlock(l)`, `rwlock_try_read_lock(l)`, `rwlock_write_lock(l)`, `rwlock_write_unlock(l)`, `rwlock_try_write_lock(l)`
 
 ## SMP / Multicore Detection
 

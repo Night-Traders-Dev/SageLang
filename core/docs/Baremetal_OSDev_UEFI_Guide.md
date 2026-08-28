@@ -201,19 +201,19 @@ print decoded["writable"]   # true
 ### Example: Synchronization with rwlocks
 
 ```sage
-import os.sync
+import std.rwlock
 
-let lock = sync.rwlock_create()
+let lock = rwlock.create()
 
 # Reader
-sync.rwlock_read_lock(lock)
+rwlock.read_lock(lock)
 # ... read shared data ...
-sync.rwlock_read_unlock(lock)
+rwlock.read_unlock(lock)
 
 # Writer
-sync.rwlock_write_lock(lock)
+rwlock.write_lock(lock)
 # ... write shared data ...
-sync.rwlock_write_unlock(lock)
+rwlock.write_unlock(lock)
 ```
 
 ### Example: Set up IDT and serial debug output
@@ -353,6 +353,10 @@ The `metal` standard library provides low-level drivers for bare-metal execution
 - `timer.timer_init_oneshot(hz)` — Configures hardware PIT in one-shot mode.
 - `timer.timer_get_mode()` — Returns current timer mode (`TIMER_MODE_PERIODIC` or `TIMER_MODE_ONESHOT`).
 - `timer.sleep_ms(ms)` — Halts CPU execution (`hlt`) for the requested duration.
+
+### `metal.gpio` — General Purpose I/O
+- `gpio.pin_enable_interrupt(p)` — Enables interrupt triggers for the specified GPIO pin.
+- `gpio.pin_disable_interrupt_ext(pin)` — Disables interrupt generation for the specified GPIO pin.
 
 ## AVR & Arduino Uno Assembler Support (`core/boards/AVR`)
 
