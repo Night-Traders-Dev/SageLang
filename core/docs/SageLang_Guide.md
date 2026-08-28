@@ -440,7 +440,7 @@ SageLang provides built-in functions injected into global environment via `init_
 | `dict_values(dict)` | `dict → array` | Get values as array |
 | `dict_has(dict, key)` | `(dict, string) → bool` | Check if key exists |
 | `dict_delete(dict, key)` | `(dict, string) → nil` | Remove key from dict |
-| `hasattr(obj, name)` | `(instance, string) → bool` | Duck-typing check for instance methods, fields, and dictionary keys |
+| `hasattr(obj, name)` | `(instance|dict, string) → bool` | Duck-typing check for instance methods, fields, and dictionary keys |
 | `type(val)` | `value → string` | Get string name of type (e.g. "bytes" for byte buffers) |
 | `chr(n)` | `number → string` | Get single-character string from ASCII code |
 | `ord(c)` | `string → number` | Get ASCII code of single-character string |
