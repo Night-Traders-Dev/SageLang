@@ -1,3 +1,7 @@
+## 2026-08-25 - [Optimized Rich Text Component Operations]
+**Learning:** Manual character-by-character loops inside `segment_split`, `Text.stylize`, `Text.plain`, `Text.render`, `Text.split_lines`, `Text.wrap`, `Text.render_wrapped`, and `Text.truncate` in `core/lib/rich/text.sage` cause $O(N^2)$ interpreter overhead due to repeated string allocation and manual index management. Replacing manual loops with native `slice()` and array `push` + `join("")` patterns offloads string slicing and assembly to C native built-ins. Always avoid parameter names (like `style`) that shadow imported module names (like `style`) inside library modules.
+**Action:** Use native `slice()` for contiguous string/array extractions and array `push` + `join("")` for multi-part string assembly in `rich` TUI components. Ensure procedure parameter names do not shadow imported module namespaces.
+
 ## 2026-08-13 - [Optimized React Rendering with Component Memoization]
 **Learning:** Re-rendering static JSX elements (such as header or footer text boxes) on every keystroke within a React app causes unnecessary virtual DOM reconstruction and diffing. Wrapping these elements with `React.memo` keeps keypress responses fast and lightweight. Additionally, pre-computing string formats (such as `.toLocaleString()`) outside render loops avoids expensive operations in the hot path.
 **Action:** Extract large static blocks of markup into separate components and wrap them in `memo` to avoid re-render overhead. Lift any immutable computations or format transformations out of render loops as module-level constants.
@@ -49,10 +53,6 @@
 ## 2026-06-16 - [O(1) String Length Optimization]
 **Learning:** SageLang's string length retrieval via `strlen()` was O(N), causing significant performance degradation for large strings in loops, concatenation, and slicing. Since all Sage strings are GC-managed and their allocation size is stored in the `GCHeader`, the length is already known at O(1).
 **Action:** Use the `SAGE_STRING_LEN(v)` macro to retrieve cached length from the GC header. Applied this optimization across the interpreter, standard library native functions, and the C backend runtime prelude, achieving up to ~267x speedup for large strings.
-
-## 2026-06-20 - [Optimized JSON Array/Object Operations]
-**Learning:** SageLang's  port used a naive linked-list implementation for arrays and objects, making size checks and appends (N)$. Adding  and  metadata to the node structure allows (1)$ operations while maintaining compatibility through a lazy reconstruction helper ().
-**Action:** Use cached metadata for linked-list based collections to avoid (N)$ traversals. Measured a ~178x speedup (12.3s to 0.069s) for 8000-element array creation.
 
 ## 2026-06-20 - [Optimized JSON Array/Object Operations]
 **Learning:** SageLang's `cJSON` port used a naive linked-list implementation for arrays and objects, making size checks and appends O(N). Adding `count` and `last_child` metadata to the node structure allows O(1) operations while maintaining compatibility through a lazy reconstruction helper (`_cJSON_EnsureMetadata`).
