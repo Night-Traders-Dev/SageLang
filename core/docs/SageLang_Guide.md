@@ -440,6 +440,7 @@ SageLang provides built-in functions injected into global environment via `init_
 | `dict_values(dict)` | `dict → array` | Get values as array |
 | `dict_has(dict, key)` | `(dict, string) → bool` | Check if key exists |
 | `dict_delete(dict, key)` | `(dict, string) → nil` | Remove key from dict |
+| `hasattr(obj, name)` | `(instance, string) → bool` | Duck-typing check for instance methods, fields, and dictionary keys |
 | `type(val)` | `value → string` | Get string name of type (e.g. "bytes" for byte buffers) |
 | `chr(n)` | `number → string` | Get single-character string from ASCII code |
 | `ord(c)` | `string → number` | Get ASCII code of single-character string |
@@ -3527,7 +3528,7 @@ array_contains(a, v) array_index_of(a, v) array_min(a) array_max(a)
 array_sum(a) array_product(a)
 bytes() bytes_len(b) bytes_get(b, i) bytes_set(b, i, v)
 bytes_push(b, v) bytes_slice(b, s, e) bytes_to_string(b)
-dict_keys(d) dict_values(d) dict_has(d, k) dict_delete(d, k)
+dict_keys(d) dict_values(d) dict_has(d, k) dict_delete(d, k) hasattr(obj, name)
 gc_collect() gc_stats() gc_collections() gc_enable() gc_disable()
 gc_mode() gc_set_arc() gc_set_orc()
 next(gen)
