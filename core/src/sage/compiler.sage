@@ -2070,7 +2070,7 @@ proc emit_runtime_prelude(cc):
     push(o, "    return sage_bool(strcmp(hay.as.string + hl - sl, suf.as.string) == 0);" + NL)
     push(o, "}" + NL)
     push(o, "static int sage_is_safe_command(const char* cmd) {" + NL)
-    push(o, "    if (!cmd) return 1;" + NL)
+    if (!cmd) return 0;
     push(o, "    while (*cmd && isspace((unsigned char)*cmd)) cmd++;" + NL)
     push(o, "    if (cmd[0] == '-') return 0;" + NL)
     push(o, "    for (const char* p = cmd; *p; p++) {" + NL)
