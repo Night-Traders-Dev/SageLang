@@ -355,7 +355,7 @@ The `metal` standard library provides low-level drivers for bare-metal execution
 - `timer.sleep_ms(ms)` — Halts CPU execution (`hlt`) for the requested duration.
 
 ### `metal.gpio` — General Purpose I/O
-- `gpio.pin_enable_interrupt_ext(pin, mode)` — Enables and configures interrupt triggers (rising edge, falling edge, low/high level) for the specified GPIO pin.
+- `gpio.pin_enable_interrupt(p)` — Enables interrupt triggers for the specified GPIO pin.
 - `gpio.pin_disable_interrupt_ext(pin)` — Disables interrupt generation for the specified GPIO pin.
 
 ## AVR & Arduino Uno Assembler Support (`core/boards/AVR`)
