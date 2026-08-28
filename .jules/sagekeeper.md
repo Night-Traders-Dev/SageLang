@@ -352,3 +352,14 @@ Commit history.
 
 Documentation Impact:
 Added S005 to the "Notable Rules" section under Linter.
+
+2026-08-20 - [hasattr Built-in Function]
+
+Discovery:
+The native built-in procedure `hasattr(obj, name)` was implemented in `core/src/c/interpreter.c` but was missing from the "Built-in Functions" appendix in the documentation.
+
+Evidence:
+`core/src/c/interpreter.c` (functions `hasattr_native` and environment constant binding).
+
+Documentation Impact:
+Added `hasattr(obj, name)` to the "Built-in Functions" appendix in `core/docs/SageLang_Guide.md`.
