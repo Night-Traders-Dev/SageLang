@@ -1505,6 +1505,7 @@ proc emit_runtime_prelude(cc):
     push(o, "#include <string.h>" + NL)
     push(o, "#include <stdint.h>" + NL)
     push(o, "#include <math.h>" + NL)
+    push(o, "#include <ctype.h>" + NL)
     push(o, NL)
     # Type definitions
     push(o, "typedef struct SageValue SageValue;" + NL)
@@ -2070,7 +2071,7 @@ proc emit_runtime_prelude(cc):
     push(o, "    return sage_bool(strcmp(hay.as.string + hl - sl, suf.as.string) == 0);" + NL)
     push(o, "}" + NL)
     push(o, "static int sage_is_safe_command(const char* cmd) {" + NL)
-    if (!cmd) return 0;
+    push(o, "    if (!cmd) return 0;" + NL)
     push(o, "    while (*cmd && isspace((unsigned char)*cmd)) cmd++;" + NL)
     push(o, "    if (cmd[0] == '-') return 0;" + NL)
     push(o, "    for (const char* p = cmd; *p; p++) {" + NL)
@@ -2300,7 +2301,6 @@ proc emit_runtime_prelude(cc):
     push(o, "}" + NL)
     push(o, NL)
     # String builtins (upper, lower, strip, split, join, replace)
-    push(o, "#include <ctype.h>" + NL)
     push(o, "static SageValue sage_upper(SageValue value) {" + NL)
     push(o, "    if (value.type != SAGE_TAG_STRING) return sage_nil();" + NL)
     push(o, "    size_t len = strlen(value.as.string);" + NL)

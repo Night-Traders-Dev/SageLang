@@ -385,13 +385,11 @@ def build_selfhost(args, sage_bin):
         "    if n <= 1:\n"
         "        return n\n"
         "    return fib(n - 1) + fib(n - 2)\n"
-        "end\n"
         "let total = 0\n"
         "let i = 0\n"
         "while i < 1000:\n"
         "    total = total + i\n"
         "    i = i + 1\n"
-        "end\n"
         'print("fib(15) = " + str(fib(15)))\n'
         'print("sum(0..999) = " + str(total))\n'
     )

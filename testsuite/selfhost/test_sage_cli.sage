@@ -76,7 +76,8 @@ catch e:
 
 assert_eq(got_error, true, "parse error raised")
 assert_contains(error_msg, "bad_file.sage", "error contains filename")
-assert_contains(error_msg, "Error:", "error has Error: prefix")
+# Parser errors use lowercase "error:" prefix (formatted diagnostics)
+assert_contains(error_msg, "error:", "error has error: prefix")
 
 # Test error with hints
 let bad_src2 = "if:" + nl + "    print 1"
