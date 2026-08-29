@@ -441,6 +441,8 @@ SageLang provides built-in functions injected into global environment via `init_
 | `dict_has(dict, key)` | `(dict, string) → bool` | Check if key exists |
 | `dict_delete(dict, key)` | `(dict, string) → nil` | Remove key from dict |
 | `hasattr(obj, name)` | `(instance|dict, string) → bool` | Duck-typing check for instance methods, fields, and dictionary keys |
+| `val_tag(val)` | `value → number` | Get internal numeric tag identifier of a value |
+| `build_info()` | `() → dict` | Get binary build metadata (version, arch, build type, spec version) |
 | `type(val)` | `value → string` | Get string name of type (e.g. "bytes" for byte buffers) |
 | `val_tag(val)` | `value → number` | Get the internal tag identifier of a value |
 | `build_info()` | `() → dict` | Get binary build info (version, arch, timestamp, spec) |
