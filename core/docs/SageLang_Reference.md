@@ -456,6 +456,9 @@ These are registered as native C functions and are available without any import.
 | `dict_values` | `dict_values(d) -> Array` | Get all values |
 | `dict_has` | `dict_has(d, key) -> Bool` | Check key exists |
 | `dict_delete` | `dict_delete(d, key)` | Remove key |
+| `hasattr` | `hasattr(obj, name) -> Bool` | Check method, field, or dict key existence |
+| `val_tag` | `val_tag(v) -> Number` | Get internal numeric tag identifier |
+| `build_info` | `build_info() -> Dict` | Get binary build metadata dictionary |
 
 ### String
 

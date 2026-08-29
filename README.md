@@ -14,6 +14,17 @@ modes (tracing, ARC, ORC).
 **Current version:** v4.2.2 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
+- **v4.2.2 (Standard Library Hardening & Read-Write Lock / Syscalls Expansion)**:
+  Full alignment of standard library modules (`std.rwlock`, `os.linux.syscalls`,
+  `metal.vga`, `dicts`). Hardened string repetition runtime helpers, command
+  validation (`is_safe_command`), and AOT process execution (`fork`/`execv`/`waitpid`)
+  against command execution (CWE-78) and integer overflow / resource exhaustion
+  (CWE-400 / CWE-190).
+- **v4.2.1 (VGA Primitives & Hardware Timer Tracking)**: Added VGA text mode
+  rendering primitives (`make_attr`, `putchar_at`, `puts`, `read_char_at`,
+  `read_attr_at`, `draw_progress_bar`) in `metal.vga`, hardware timer mode state
+  tracking (`timer_get_mode`), signal mask constants and syscalls (`sigprocmask`),
+  and `@inline` dictionary utility annotations in `dicts`.
 - **v4.2.0 (Full Self-Hosted Compiler Parity)**: The self-hosted Sage compiler
   now produces byte-identical output to the C compiler across the entire
   differential parity harness — 28/28 cases on all three execution stacks

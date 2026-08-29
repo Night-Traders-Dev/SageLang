@@ -344,15 +344,26 @@ if rsdp_table != nil:
 The `metal` standard library provides low-level drivers for bare-metal execution:
 
 ### `metal.vga` — Early VGA Text Mode
+- `vga.init()` — Initializes VGA text mode hardware state and cursor position.
+- `vga.make_attr(fg, bg)` — Combines 4-bit foreground and background color codes into an 8-bit attribute byte.
+- `vga.putchar_at(x, y, ch, attr)` — Writes a single character `ch` with color attribute `attr` at text coordinates `(x, y)`.
 - `vga.clear(color)` — Clears the 80x25 VGA text screen (`0xB8000`) with background color.
 - `vga.puts(x, y, s, attr)` — Writes string `s` at `(x, y)` position with foreground/background color attribute.
+- `vga.read_char_at(x, y)` — Reads character code at text position `(x, y)` from the VGA buffer.
+- `vga.read_attr_at(x, y)` — Reads attribute byte at text position `(x, y)` from the VGA buffer.
 - `vga.draw_progress_bar(x, y, width, pct, color)` — Renders a text-mode progress bar at `(x, y)`.
 
 ### `metal.timer` — Hardware Timer Driver
 - `timer.timer_init_periodic(hz)` — Configures hardware PIT (8254) in periodic mode at `hz` frequency.
 - `timer.timer_init_oneshot(hz)` — Configures hardware PIT in one-shot mode.
 - `timer.timer_get_mode()` — Returns current timer mode (`TIMER_MODE_PERIODIC` or `TIMER_MODE_ONESHOT`).
-- `timer.sleep_ms(ms)` — Halts CPU execution (`hlt`) for the requested duration.
+- `timer.sleep_ms(ms)` / `timer.sleep_secs(secs)` — Halts CPU execution (`hlt`) for the requested duration.
+- `timer.delay_us(us)` — Performs a precision busy-wait delay in microseconds.
+- `timer.stopwatch_start()` — Returns initial tick count for elapsed time measurement.
+- `timer.timer_now_ms()` / `timer.timer_now_us()` — Returns elapsed uptime in milliseconds or microseconds.
+- `timer.stopwatch_elapsed_ms(start)` / `timer.stopwatch_elapsed_us(start)` — Calculates elapsed time since start.
+- `timer.timer_remaining_ms()` — Reads latched hardware counter to get remaining time in the active timer cycle.
+- `timer.timer_cancel_safe()` — Safely cancels active hardware timer by masking its interrupt line.
 
 ### `metal.gpio` — General Purpose I/O
 - `gpio.pin_enable_interrupt(p)` — Enables interrupt triggers for the specified GPIO pin.

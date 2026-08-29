@@ -297,10 +297,25 @@ rwlock.read_lock(lock)
 # ... read ...
 rwlock.read_unlock(lock)
 
+# Non-blocking read try
+if rwlock.try_read_lock(lock):
+    # ... read ...
+    rwlock.read_unlock(lock)
+
 # Write access (exclusive)
 rwlock.write_lock(lock)
 # ... write ...
 rwlock.write_unlock(lock)
+
+# Non-blocking write try
+if rwlock.try_write_lock(lock):
+    # ... write ...
+    rwlock.write_unlock(lock)
+
+# Queries & Stats
+let active_readers = rwlock.reader_count(lock)
+let is_writing = rwlock.is_write_locked(lock)
+let info = rwlock.stats(lock)
 
 # Scoped helpers
 let val = rwlock.with_read(lock, proc(): return data["x"] end)
@@ -582,7 +597,9 @@ print interop.TYPE_DOUBLE     # double
 | `channel` | `import std.channel` | `buffered`, `send`, `recv`, `select`, `drain`, `close`, `pending`, `try_send` |
 | `threadpool` | `import std.threadpool` | `create`, `submit`, `run_all`, `get_result`, `parallel_map`, `pool_stats` |
 | `atomic` | `import std.atomic` | `atomic_int`, `load`, `store`, `add`, `cas`, `exchange`, `increment`, `create_spinlock` |
-| `rwlock` | `import std.rwlock` | `create`, `read_lock`, `write_lock`, `try_read_lock`, `with_read`, `with_write` |
+| `rwlock` | `import std.rwlock` | `create`, `read_lock`, `read_unlock`, `write_lock`, `write_unlock`, `try_read_lock`, `try_write_lock`, `is_read_locked`, `is_write_locked`, `reader_count`, `stats`, `with_read`, `with_write` |
+| `dicts` | `import dicts` | `keys`, `values`, `size`, `has`, `get_or`, `entries`, `has_all`, `has_any`, `select_values`, `remove_keys`, `count_missing` |
+| `vga` | `import metal.vga` | `init`, `clear`, `make_attr`, `putchar_at`, `puts`, `read_char_at`, `read_attr_at`, `draw_progress_bar` |
 | `condvar` | `import std.condvar` | `create`, `wait`, `notify`, `notify_all`, `create_barrier`, `create_semaphore`, `acquire` |
 | `debug` | `import std.debug` | `inspect`, `dump`, `trace`, `assert_msg`, `create_watcher`, `watch`, `time_it`, `memory_snapshot` |
 | `profiler` | `import std.profiler` | `create`, `begin`, `end_section`, `profile`, `report`, `hotspots`, `bench` |
