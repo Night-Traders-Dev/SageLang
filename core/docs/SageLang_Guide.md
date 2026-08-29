@@ -442,6 +442,8 @@ SageLang provides built-in functions injected into global environment via `init_
 | `dict_delete(dict, key)` | `(dict, string) → nil` | Remove key from dict |
 | `hasattr(obj, name)` | `(instance|dict, string) → bool` | Duck-typing check for instance methods, fields, and dictionary keys |
 | `type(val)` | `value → string` | Get string name of type (e.g. "bytes" for byte buffers) |
+| `val_tag(val)` | `value → number` | Get the internal tag identifier of a value |
+| `build_info()` | `() → dict` | Get binary build info (version, arch, timestamp, spec) |
 | `chr(n)` | `number → string` | Get single-character string from ASCII code |
 | `ord(c)` | `string → number` | Get ASCII code of single-character string |
 | `hash(val)` | `value → number` | Get hash code of a value |
@@ -3520,7 +3522,7 @@ len(x) push(arr, val) pop(arr) append(arr, val) range(a, b)
 split(str, delim) join(arr, sep) replace(s, old, new)
 upper(s) lower(s) strip(s) slice(arr/str, start, end)
 str(x) tonumber(s) int(x) input() clock()
-type(x) chr(n) ord(c) hash(x) sizeof(x) doc(x)
+type(x) val_tag(x) build_info() chr(n) ord(c) hash(x) sizeof(x) doc(x)
 startswith(s, prefix) endswith(s, suffix)
 contains(s, sub) indexof(s, sub) string_count(s, sub) string_repeat(s, n)
 array_extend(a, b) array_repeat(a, n) array_reverse(a)

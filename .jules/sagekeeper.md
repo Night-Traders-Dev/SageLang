@@ -363,3 +363,14 @@ Evidence:
 
 Documentation Impact:
 Added `hasattr(obj, name)` to the "Built-in Functions" appendix in `core/docs/SageLang_Guide.md`.
+
+2026-08-20 - [Missing Built-ins `val_tag` and `build_info`]
+
+Discovery:
+The native built-in functions `val_tag(val)` and `build_info()` were implemented in `core/src/c/interpreter.c` but were missing from the "Built-in Functions" section and appendix in the documentation.
+
+Evidence:
+`core/src/c/interpreter.c` (functions `val_tag_native` and `build_info_native`).
+
+Documentation Impact:
+Added `val_tag(val)` and `build_info()` to the "Built-in Functions" section and appendix in `core/docs/SageLang_Guide.md`.
