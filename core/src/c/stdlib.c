@@ -1009,7 +1009,7 @@ static Value sys_sleep_native(int argCount, Value* args) {
 
 // Validate a command contains no shell metacharacters (prevents injection)
 static int is_safe_command(const char* cmd) {
-    if (!cmd) return 1;
+    if (!cmd) return 0;
     while (*cmd && isspace((unsigned char)*cmd)) cmd++;
     // Reject commands starting with hyphen to prevent flag injection in some contexts
     if (cmd[0] == '-') return 0;

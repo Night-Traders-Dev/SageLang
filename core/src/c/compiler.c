@@ -5747,7 +5747,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    return list;\n"
         "}\n"
         "static int sage_is_safe_command(const char* cmd) {\n"
-        "    if (!cmd) return 1;\n"
+        "    if (!cmd) return 0;\n"
         "    while (*cmd && isspace((unsigned char)*cmd)) cmd++;\n"
         "    if (cmd[0] == '-') return 0;\n"
         "    for (const char* p = cmd; *p; p++) {\n"

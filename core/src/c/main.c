@@ -140,7 +140,7 @@ static const char* value_type_name(Value v) {
 
 // Validate a path contains no shell metacharacters (prevents injection via system())
 static int is_safe_path(const char* path) {
-    if (!path) return 1;
+    if (!path) return 0;
     while (*path && isspace((unsigned char)*path)) path++;
     if (path[0] == '-') return 0;
     for (const char* p = path; *p; p++) {
@@ -155,7 +155,7 @@ static int is_safe_path(const char* path) {
 }
 
 static int is_safe_command(const char* cmd) {
-    if (!cmd) return 1;
+    if (!cmd) return 0;
     while (*cmd && isspace((unsigned char)*cmd)) cmd++;
     // Reject commands starting with hyphen to prevent flag injection in some contexts
     if (cmd[0] == '-') return 0;
