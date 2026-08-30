@@ -1,3 +1,7 @@
+## 2026-08-30 - [Optimized Rich Panel Component Operations]
+**Learning:** Manual string repetition loops in `Panel._repeat_char` and string concatenation loops for assembling rendered output lines in `Panel.render` (`core/lib/rich/panel.sage`) introduce unnecessary $O(N^2)$ VM overhead. Replacing manual character loops with `string_repeat` VM built-in calls and `join(lines, chr(10))` offloads string assembly to native C code, resulting in faster UI rendering.
+**Action:** Always delegate character repetition to `string_repeat` and multi-line string assembly to `join(lines, chr(10))` in TUI components.
+
 ## 2026-08-25 - [Optimized Rich Text Component Operations]
 **Learning:** Manual character-by-character loops inside `segment_split`, `Text.stylize`, `Text.plain`, `Text.render`, `Text.split_lines`, `Text.wrap`, `Text.render_wrapped`, and `Text.truncate` in `core/lib/rich/text.sage` cause $O(N^2)$ interpreter overhead due to repeated string allocation and manual index management. Replacing manual loops with native `slice()` and array `push` + `join("")` patterns offloads string slicing and assembly to C native built-ins. Always avoid parameter names (like `style`) that shadow imported module names (like `style`) inside library modules.
 **Action:** Use native `slice()` for contiguous string/array extractions and array `push` + `join("")` for multi-part string assembly in `rich` TUI components. Ensure procedure parameter names do not shadow imported module namespaces.
