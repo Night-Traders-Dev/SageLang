@@ -374,3 +374,25 @@ Evidence:
 
 Documentation Impact:
 Added `val_tag(val)` and `build_info()` to the "Built-in Functions" section and appendix in `core/docs/SageLang_Guide.md`.
+
+2026-08-30 - [Duplicate Built-ins Removed]
+
+Discovery:
+The built-in functions `val_tag(val)` and `build_info()` were duplicated in the `Built-in Functions` table in `core/docs/SageLang_Guide.md` (lines 447-448).
+
+Evidence:
+`core/docs/SageLang_Guide.md` (lines 444-448).
+
+Documentation Impact:
+Removed the duplicate entries to ensure the documentation accurately reflects the single implementation of these functions.
+
+2026-08-30 - [Linter Documentation Missing W003 and S004]
+
+Discovery:
+The linter rules `[W003]` (Unreachable code after return/break/continue) and `[S004]` (Trailing semicolons) were implemented in `core/src/c/linter.c` but omitted from the `Rule Categories` and `Notable Rules` sections in the documentation.
+
+Evidence:
+`core/src/c/linter.c` (grep for W003 and S004).
+
+Documentation Impact:
+Added `[W003]` and `[S004]` to the linter rules section in `core/docs/SageLang_Guide.md` to reflect the complete linter behavior.

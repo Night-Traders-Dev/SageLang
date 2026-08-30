@@ -444,8 +444,6 @@ SageLang provides built-in functions injected into global environment via `init_
 | `val_tag(val)` | `value → number` | Get internal numeric tag identifier of a value |
 | `build_info()` | `() → dict` | Get binary build metadata (version, arch, build type, spec version) |
 | `type(val)` | `value → string` | Get string name of type (e.g. "bytes" for byte buffers) |
-| `val_tag(val)` | `value → number` | Get the internal tag identifier of a value |
-| `build_info()` | `() → dict` | Get binary build info (version, arch, timestamp, spec) |
 | `chr(n)` | `number → string` | Get single-character string from ASCII code |
 | `ord(c)` | `string → number` | Get ASCII code of single-character string |
 | `hash(val)` | `value → number` | Get hash code of a value |
@@ -2861,8 +2859,11 @@ sage lint program.sage
 
 - `[W001]`: Unused variable warning.
 - `[W002]`: Shadowed variable warning.
+- `[W003]`: Unreachable code warning (e.g., after return/break/continue).
 - `[W004]`: Empty block warning (e.g., following a colon).
 - `[S003]`: Missing docstring warning (requires `##` preceding top-level procedures).
+- `[S004]`: Trailing semicolon warning.
+- `[S005]`: Multiple statements on a single line.
 
 | Category | Rules | Description |
 | -------- | ----- | ----------- |
@@ -2872,8 +2873,10 @@ sage lint program.sage
 
 **Notable Rules**:
 - `[W001]`, `[W002]`: Issued for unused variables and variables that shadow existing declarations in scope.
+- `[W003]`: Warns about unreachable code following a `return`, `break`, or `continue` statement at the same indentation level.
 - `[W004]`: Warns about empty blocks (e.g., when a line ending in a colon `:` is followed by an empty or improperly indented section).
 - `[S003]`: Enforces documentation conventions; top-level `proc` declarations must be immediately preceded by a `##` style docstring (comment).
+- `[S004]`: Warns about trailing semicolons (not used in SageLang).
 - `[S005]`: Warns when multiple statements are on a single line separated by semicolons.
 
 **Example Output**:
