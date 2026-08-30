@@ -3208,10 +3208,24 @@ let val = core.inb(0x60) # Read keyboard scancode
 # MMIO
 core.mmio_write32(0xB8000, 0x0F41)  # Write 'A' to VGA
 
-# CPU control
+# CPU control & Memory barriers
 core.cli()    # Disable interrupts
 core.sti()    # Enable interrupts
 core.hlt()    # Halt until next interrupt
+core.dmb()    # ARM Data Memory Barrier
+core.dsb()    # ARM Data Synchronization Barrier
+core.isb()    # ARM Instruction Synchronization Barrier
+core.fence()  # RISC-V Memory Fence
+
+# Multicore & Synchronization
+let cid = core.cpu_id()
+core.critical_section_enter()
+# ... atomic operation ...
+core.critical_section_exit()
+
+core.spin_lock(0x1000)
+# ... protected section ...
+core.spin_unlock(0x1000)
 
 # Bump allocator
 core.heap_init(0x100000, 65536)

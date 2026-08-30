@@ -343,6 +343,20 @@ if rsdp_table != nil:
 
 The `metal` standard library provides low-level drivers for bare-metal execution:
 
+### `metal.core` — Bare-Metal Core & Memory Barriers
+- `core.putchar(c)` / `core.puts(s)` / `core.getchar()` — Serial and console I/O primitives.
+- `core.outb(port, val)` / `core.inb(port)` — 8-bit x86 I/O port write and read functions.
+- `core.outw(port, val)` / `core.inw(port)` / `core.outl(port, val)` / `core.inl(port)` — 16-bit word and 32-bit dword port I/O functions.
+- `core.mmio_read32(addr)` / `core.mmio_write32(addr, val)` / `core.mmio_read8(addr)` / `core.mmio_write8(addr, val)` — Physical memory-mapped I/O (MMIO) accessors.
+- `core.cli()` / `core.sti()` / `core.hlt()` — Interrupt disable, interrupt enable, and CPU halt primitives.
+- `core.dmb()` / `core.dsb()` / `core.isb()` — ARM memory barriers: Data Memory Barrier, Data Synchronization Barrier, and Instruction Synchronization Barrier.
+- `core.fence()` — RISC-V memory fence primitive.
+- `core.cpu_relax()` / `core.io_wait()` — Busy-wait loop hardware hint and single I/O cycle delay.
+- `core.cpu_id()` — Query current CPU core ID (e.g. core 0 or core 1 on multi-core microcontrollers).
+- `core.critical_section_enter()` / `core.critical_section_exit()` — Enter (disable interrupts + DSB) and exit (DSB + enable interrupts) atomic critical sections.
+- `core.spin_lock(lock_ptr)` / `core.spin_unlock(lock_ptr)` — Bare-metal spin lock acquisition and release helpers.
+- `core.heap_init(base, size)` / `core.heap_alloc(size)` / `core.heap_stats()` — Freestanding bump heap allocator operations.
+
 ### `metal.vga` — Early VGA Text Mode
 - `vga.init()` — Initializes VGA text mode hardware state and cursor position.
 - `vga.make_attr(fg, bg)` — Combines 4-bit foreground and background color codes into an 8-bit attribute byte.
