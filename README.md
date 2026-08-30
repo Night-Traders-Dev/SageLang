@@ -16,10 +16,12 @@ modes (tracing, ARC, ORC).
 ## Recent Updates
 - **v4.2.2 (Standard Library Hardening & Read-Write Lock / Syscalls Expansion)**:
   Full alignment of standard library modules (`std.rwlock`, `os.linux.syscalls`,
-  `metal.vga`, `dicts`). Hardened string repetition runtime helpers, command
-  validation (`is_safe_command`), and AOT process execution (`fork`/`execv`/`waitpid`)
-  against command execution (CWE-78) and integer overflow / resource exhaustion
-  (CWE-400 / CWE-190).
+  `metal.vga`, `metal.core`, `dicts`). Added hardware memory barrier primitives
+  (`dmb`, `dsb`, `isb`, `fence`), CPU relax hints, core ID query (`cpu_id`),
+  critical section helpers (`critical_section_enter`/`exit`), and spin locks to `metal.core`.
+  Hardened string repetition runtime helpers, command validation (`is_safe_command`),
+  and AOT process execution (`fork`/`execv`/`waitpid`) against command execution
+  (CWE-78) and integer overflow / resource exhaustion (CWE-400 / CWE-190).
 - **v4.2.1 (VGA Primitives & Hardware Timer Tracking)**: Added VGA text mode
   rendering primitives (`make_attr`, `putchar_at`, `puts`, `read_char_at`,
   `read_attr_at`, `draw_progress_bar`) in `metal.vga`, hardware timer mode state
