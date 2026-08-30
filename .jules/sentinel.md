@@ -101,3 +101,8 @@
 **Vulnerability:** Generated `s_shell_exec` runtime helper in `aot.c` accumulated command output into heap memory via `realloc` without checking output length bounds or `realloc` failure (CWE-400).
 **Learning:** Command execution primitives in compiled backends (like AOT) that capture process output can stream unbounded data into heap memory if process stdout is infinite or very large, causing Denial of Service or OOM crashes.
 **Prevention:** Always cap process output buffer accumulation (e.g., `104857600` bytes) and validate `realloc` return pointers across all execution runtime skeletons.
+
+## 2026-08-28 - Heap Buffer Overflow in AOT String Replacement Helper
+**Vulnerability:** Hardcoded allocation (`strlen(str)*4+1`) and `strcat` string substitution in AOT `s_replace` helper allowed heap buffer overflow (CWE-122) when replacing with larger string patterns.
+**Learning:** String manipulation runtime helpers in code emitters that use heuristics for buffer sizing (e.g., multiplying string length by a static factor) are highly prone to memory corruption when input strings deviate from assumed size ratios.
+**Prevention:** Always calculate exact required output buffer lengths dynamically using two-pass scanning before allocation, enforce global upper length bounds (100MB), validate `malloc` return pointers, and copy fragments via `memcpy`.
