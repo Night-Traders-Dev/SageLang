@@ -110,7 +110,10 @@ model and training details.
 | -------- | ------- | ------ |
 | `CC` | `gcc` | C compiler used for `make` builds |
 | `CFLAGS` | `-std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L` | Base compile flags for the desktop build |
+| `CFLAGS_EXTRA` | unset | Additional compiler flags merged into `CFLAGS` |
 | `LDFLAGS` | `-lm -lpthread -ldl -lcurl -lssl -lcrypto` | Desktop link flags; `-lvulkan` added when Vulkan SDK detected; `-lGL` added when OpenGL detected; switches to `-lm` when `PICO_BUILD` is set |
+| `LDFLAGS_EXTRA` | unset | Additional linker flags merged into `LDFLAGS` |
+| `SAGE_NO_NET` | unset | Set `SAGE_NO_NET=1` to build without `libcurl` and OpenSSL link dependencies |
 | `VULKAN` | `auto` | `auto` detects via pkg-config, `1` forces Vulkan, `0` disables |
 | `OPENGL` | `auto` | `auto` detects via pkg-config, `1` forces OpenGL, `0` disables |
 | `DEBUG` | `0` | `DEBUG=1` adds `-g -O0 -DDEBUG` |
@@ -122,8 +125,10 @@ model and training details.
 
 | Parameter | Default | Effect |
 | --------- | ------- | ------ |
-| `BUILD_PICO` | `OFF` | Enables the Pico/RP2040 build and imports `pico_sdk_import.cmake` before `project()` |
+| `BUILD_PICO` | `OFF` | Enables the Pico/RP2040/RP2350 build and imports `pico_sdk_import.cmake` before `project()` |
 | `BUILD_SAGE` | `OFF` | Enables bootstrap/self-hosted build targets such as `sage_boot` and `test_selfhost` |
+| `SAGE_NO_NET` | `OFF` | Builds without `libcurl`/OpenSSL dependencies (`-DSAGE_NO_NET=1`) |
+| `SAGE_NO_GPU` | `OFF` | Skips Vulkan/GLFW/OpenGL detection and graphics subsystem linking |
 | `ENABLE_DEBUG` | `OFF` | Adds `-g -O0 -DDEBUG` |
 | `ENABLE_TESTS` | `OFF` | Builds optional C test executables and enables `ctest` targets |
 | `CMAKE_BUILD_TYPE` | generator default | Standard CMake build type summary field |
@@ -131,6 +136,7 @@ model and training details.
 | `CMAKE_INSTALL_PREFIX` | CMake default | Install destination for `cmake --install` |
 | `PICO_SDK_PATH` | unset | Required for Pico builds unless your environment already exports it |
 | `PICO_BOARD` | `pico` | Pico board name used by Pico SDK builds |
+| `PICO_PLATFORM` | `rp2040` | Target Pico platform (`rp2040`, `rp2350-arm`, or `rp2350-riscv`) |
 | `SAGE_FILE` | unset | Input file consumed by the `sage_boot` custom target in self-hosted builds |
 
 ## Compiling the SageGPT Chatbot to a Native Binary

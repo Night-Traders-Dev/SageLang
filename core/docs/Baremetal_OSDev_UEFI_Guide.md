@@ -381,7 +381,9 @@ The `metal` standard library provides low-level drivers for bare-metal execution
 
 ### `metal.gpio` — General Purpose I/O
 - `gpio.pin_enable_interrupt(p)` — Enables interrupt triggers for the specified GPIO pin.
-- `gpio.pin_disable_interrupt_ext(pin)` — Disables interrupt generation for the specified GPIO pin.
+- `gpio.pin_disable_interrupt(p)` — Disables interrupt triggers for the specified GPIO pin.
+- `gpio.pin_enable_interrupt_ext(pin, mode)` — Sets interrupt mode and enables triggers for the specified GPIO pin.
+- `gpio.pin_disable_interrupt_ext(pin)` — Disables interrupt triggers and resets mode to `INT_DISABLED` for the specified GPIO pin.
 
 ## AVR & Arduino Uno Assembler Support (`core/boards/AVR`)
 

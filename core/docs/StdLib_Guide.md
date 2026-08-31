@@ -600,6 +600,7 @@ print interop.TYPE_DOUBLE     # double
 | `rwlock` | `import std.rwlock` | `create`, `read_lock`, `read_unlock`, `write_lock`, `write_unlock`, `try_read_lock`, `try_write_lock`, `is_read_locked`, `is_write_locked`, `reader_count`, `stats`, `with_read`, `with_write` |
 | `dicts` | `import dicts` | `keys`, `values`, `size`, `has`, `get_or`, `entries`, `has_all`, `has_any`, `select_values`, `remove_keys`, `count_missing` |
 | `core` | `import metal.core` | `putchar`, `puts`, `getchar`, `outb`, `inb`, `mmio_read32`, `mmio_write32`, `cli`, `sti`, `hlt`, `dmb`, `dsb`, `isb`, `fence`, `cpu_id`, `critical_section_enter`, `spin_lock` |
+| `gpio` | `import metal.gpio` | `gpio_init`, `pin_mode`, `pin_pull`, `pin_set_interrupt`, `pin_enable_interrupt`, `pin_enable_interrupt_ext`, `pin_disable_interrupt_ext`, `digital_write`, `digital_read`, `led_blink`, `pin_debounce` |
 | `vga` | `import metal.vga` | `init`, `clear`, `make_attr`, `putchar_at`, `puts`, `read_char_at`, `read_attr_at`, `draw_progress_bar` |
 | `condvar` | `import std.condvar` | `create`, `wait`, `notify`, `notify_all`, `create_barrier`, `create_semaphore`, `acquire` |
 | `debug` | `import std.debug` | `inspect`, `dump`, `trace`, `assert_msg`, `create_watcher`, `watch`, `time_it`, `memory_snapshot` |

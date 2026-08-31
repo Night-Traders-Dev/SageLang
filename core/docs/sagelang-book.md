@@ -3358,6 +3358,8 @@ gpio.pin_write_masked(0b11, 0b10) # Set pin 1 HIGH, pin 0 LOW
 | `pin_register_handler(p, f)`| Register callback `f` for pin `p`. |
 | `pin_enable_interrupt(p)` | Enable interrupt for pin `p`. |
 | `pin_disable_interrupt(p)`| Disable interrupt for pin `p`. |
+| `pin_enable_interrupt_ext(p, m)` | Enable interrupt for pin `p` with custom trigger mode `m`. |
+| `pin_disable_interrupt_ext(p)`| Disable interrupt for pin `p` and reset mode to `INT_DISABLED`. |
 | `gpio_dispatch(p)` | Manually dispatch interrupt for pin `p`. |
 | `pin_debounce(p, s, n, d)`| Debounce pin `p` to state `s`. |
 | `led_on(p)` | Turn LED on pin `p` ON. |
