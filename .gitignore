@@ -44,3 +44,12 @@ core/build_sage/
 core/obj/
 testsuite/.tmp/
 core/build_dbg/
+
+# Self-hosted build outputs (generated binaries + emitted C)
+core/build_selfhost/
+# Secrets - never commit tokens
+.env
+*.key
+*.pem
+# OS artifacts
+Thumbs.db
