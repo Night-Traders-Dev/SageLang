@@ -1,4 +1,5 @@
-// ============================================================================
+gc_disable()
+# ============================================================================
 # interpreter.sage - Thin orchestration layer
 # ============================================================================
 # After modularization, interpreter.sage becomes a thin orchestration layer that:
