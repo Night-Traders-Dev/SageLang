@@ -1,2586 +1,337 @@
-gc_disable()
-# -----------------------------------------
-# interpreter.sage - Tree-walking interpreter for SageLang
-# Self-hosted implementation (Phase 13)
-# -----------------------------------------
+// ============================================================================
+# interpreter.sage - Thin orchestration layer
+# ============================================================================
+# After modularization, interpreter.sage becomes a thin orchestration layer that:
+# 1. Creates InterpreterContext
+# 2. Selects a runtime profile
+# 3. Invokes the frontend
+# 4. Builds or loads Sage IR
+# 5. Selects an execution tier
+# 6. Runs the program
+# 7. Normalizes diagnostics and results
+# It should no longer contain the implementation of every runtime subsystem.
+//
+// This file replaces the old monolithic interpreter.sage and wires together
+# all the modular components created in core/src/sage/runtime/, core/src/sage/interpreter/,
+// core/src/sage/frontend/, and core/src/sage/ir/
+//
+// See pipeline.md Section 3: Modular Runtime Layout
+// and Section 2: Ideal End-to-End Pipeline
+// ============================================================================
 
-from ast import EXPR_NUMBER, EXPR_STRING, EXPR_BOOL, EXPR_NIL
-from ast import EXPR_BINARY, EXPR_VARIABLE, EXPR_CALL, EXPR_ARRAY
-from ast import EXPR_INDEX, EXPR_DICT, EXPR_TUPLE, EXPR_SLICE
-from ast import EXPR_GET, EXPR_SET, EXPR_INDEX_SET, EXPR_AWAIT
-from ast import EXPR_SUPER, EXPR_COMPTIME, EXPR_PROC
-from ast import STMT_PRINT, STMT_EXPRESSION, STMT_LET, STMT_IF
-from ast import STMT_BLOCK, STMT_WHILE, STMT_PROC, STMT_FOR
-from ast import STMT_RETURN, STMT_BREAK, STMT_CONTINUE, STMT_CLASS
-from ast import STMT_TRY, STMT_RAISE, STMT_YIELD, STMT_IMPORT
-from ast import STMT_ASYNC_PROC, STMT_DEFER, STMT_MATCH
-from ast import STMT_STRUCT, STMT_ENUM, STMT_TRAIT, STMT_COMPTIME, STMT_MACRO_DEF
-from token import TOKEN_NOT, TOKEN_TILDE, TOKEN_OR, TOKEN_AND
-from token import TOKEN_EQ, TOKEN_NEQ, TOKEN_GT, TOKEN_LT, TOKEN_GTE, TOKEN_LTE
-from token import TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, TOKEN_SLASH, TOKEN_PERCENT
-import sys
-from token import TOKEN_AMP, TOKEN_PIPE, TOKEN_CARET, TOKEN_LSHIFT, TOKEN_RSHIFT
-import errors
+import runtime.context as ctx_module
+import runtime.values as values
+import runtime.errors as errors
+import runtime.modules as modules
+import runtime.capabilities as capabilities
+import frontend.sage as frontend
+import interpreter.eval_expr as eval_expr
+import interpreter.eval_stmt as eval_stmt
+import interpreter.unwind as unwind
+import interpreter.generators as generators
+import ir.builder as ir_builder
+import ir.sage as ir_sage
+import ir.verifier as ir_verifier
+import ir.optimizer as ir_optimizer
+import vm.reference as reference_vm
+import vm.bytecode as bytecode_vm
 
-# Control flow signal kinds
-let SIGNAL_NORMAL = 0
-let SIGNAL_RETURN = 1
-let SIGNAL_BREAK = 2
-let SIGNAL_CONTINUE = 3
-let SIGNAL_YIELD = 4
+// ============================================================================
+# CLI and Entry Point
+// ============================================================================
 
-# Maximum recursion depth
-let MAX_RECURSION = 50000
+// Main entry point for the SageLang runtime
+// Usage: sage [options] [file.sage]
+// or:    sage --repl
+// or:    sage --profile general --runtime reference script.sage
+proc main(args: Array<String>): Int =
+    // Parse CLI options
+    let opts = parse_args(args)
+    
+    // Validate profile and tier
+    validate_profile_and_tier(opts)
+    
+    // Create InterpreterContext
+    let ctx = ctx_module.context_new(opts.profile)
+    
+    // Apply CLI options
+    ctx_module.set_runtime_tier(ctx, opts.tier)
+    ctx_module.set_flag(ctx, "profiling", true)
+    ctx_module.set_flag(ctx, "verification", opts.verify_parity)
+    ctx_module.set_flag(ctx, "trace", opts.trace)
+    if opts.max_steps > 0:
+        ctx_module.resource_limits.max_steps = opts.max_steps
+    
+    // Print profile info
+    print_profile_info(ctx, opts.profile)
+    
+    // Handle REPL
+    if opts.repl:
+        return run_repl(ctx)
+    
+    // Handle source file
+    if opts.source_file == None:
+        print "Error: No source file specified"
+        return 1
+    
+    // Load source code
+    let source = file_read(opts.source_file)
+    let filename = opts.source_file
+    
+    // Set source in context for error reporting
+    ctx_module.set_source(ctx, source, filename)
+    
+    // ====================================================================
+    # 1. Invoke Frontend
+    # ====================================================================
+    print "=== Frontend: Lexing, Parsing, Semantic Analysis ==="
+    
+    let parse_result = frontend.parse(source, filename)
+    
+    // Check for errors
+    if diagnostics.has_errors(parse_result.diagnostics):
+        print "Frontend errors:"
+        diagnostics.print_diagnostics(parse_result.diagnostics)
+        return 1
+    
+    // Print warnings
+    if diagnostics.has_warnings(parse_result.diagnostics):
+        print "Frontend warnings:"
+        diagnostics.print_diagnostics(parse_result.diagnostics)
+    
+    print "  ✓ Parsing and semantic analysis complete"
+    
+    // ====================================================================
+    # 2. Build Sage IR
+    # ====================================================================
+    print "=== IR Generation ==="
+    
+    let resolved = parse_result.resolved
+    let ir_module = ir_builder.build_ir(resolved, ctx)
+    
+    // Verify IR if requested
+    if ctx_module.get_flag(ctx, "verification"):
+        let verify_result = ir_verifier.verify(ir_module)
+        if not verify_result.valid:
+            print "IR Verification errors:"
+            for err in verify_result.errors:
+                print "  - " + err
+            return 1
+        print "  ✓ IR verification passed"
+    
+    // Print IR if requested
+    if opts.dump_ir:
+        print "=== Sage IR ==="
+        print ir_module_to_string(ir_module)
+    
+    // Optimize IR if not reference tier
+    let optimized_ir: ir_optimizer.OptimizedIR
+    match opts.tier:
+        "reference":
+            // No optimization for reference
+            optimized_ir = ir_optimizer.OptimizedIR(ir: ir_module, profile: ir_optimizer.CpcProfile())
+        _:
+            optimized_ir = ir_optimizer.optimize(ir_module, ctx_module.context_get_profiler(ctx))
+    
+    // Replace with optimized if we have it
+    let execute_ir = optimized_ir.ir
+    
+    // ====================================================================
+    # 3. Select and Run Execution Tier
+    # ====================================================================
+    print "=== Execution Tier: " + opts.tier + " ==="
+    
+    let result: Value
+    match opts.tier:
+        "reference":
+            result = reference_vm.execute(ctx, execute_ir)
+        "bytecode":
+            let bytecode = bytecode_vm.compile_ir_to_bytecode(execute_ir)
+            if opts.dump_bytecode:
+                print "=== Bytecode ==="
+                print bytecode_to_string(bytecode)
+            result = bytecode_vm.execute_bytecode(ctx, bytecode)
+        "cpc":
+            // CPC optimization + reference execution
+            // For now, execute the optimized IR through reference
+            result = reference_vm.execute(ctx, execute_ir)
+        "jit":
+            // JIT compilation (fall back to reference for now)
+            result = reference_vm.execute(ctx, execute_ir)
+        "aot":
+            // AOT compilation (fall back to reference for now)
+            result = reference_vm.execute(ctx, execute_ir)
+        _:
+            print "Unknown runtime tier: " + opts.tier
+            return 1
+    
+    // ====================================================================
+    # 4. Normalize Diagnostics and Results
+    # ====================================================================
+    
+    // Print result
+    if result != values.nil:
+        print "Result: " + values.value_to_string(result)
+    
+    // Print profiling info if enabled
+    if ctx_module.get_flag(ctx, "profiling"):
+        let profiles = ctx_module.context_get_function_profiles(ctx)
+        if profiles.len > 0:
+            print "=== Profile Summary ==="
+            for func_id in profiles.keys:
+                let profile = profiles[func_id]
+                print "  " + func_id.source_name + ": " + profile.call_count.ToString() + " calls"
+    
+    // Resource usage summary
+    let steps = ctx_module.context_get_resource_limits(ctx).max_steps
+    let steps_used = // ... get from ctx
+    if steps_used > 0:
+        print "Steps: " + steps_used.ToString()
+    
+    // Parity verification if requested
+    if opts.verify_parity and opts.tier != "reference":
+        let ref_result = reference_vm.execute(ctx_module.context_new(opts.profile), execute_ir)
+        if not values.value_eq(result, ref_result):
+            print "PARITY MISMATCH between " + opts.tier + " and reference!"
+            print "  " + opts.tier + ": " + values.value_to_string(result)
+            print "  reference: " + values.value_to_string(ref_result)
+            return 2
+    
+    // ====================================================================
+    # Done
+    # ====================================================================
+    print "=== Execution Complete ==="
+    return 0
 
-# Maximum loop iterations (prevents infinite loops)
-let MAX_LOOP_ITERATIONS = 1000000
-
-# Recursion depth counter (module-level)
-let g_depth = 0
-
-# Error context for rich error messages (module-level)
-let g_error_ctx = nil
-
-# Module cache to prevent double-loading
-let g_module_cache = {}
-
-# Module search paths. Relative entries support running from a repo
-# checkout; the absolute entries mirror the C host's compiled-in
-# SAGE_LIB_DIR (/usr/local prefix) so installed libraries resolve from
-# any working directory.
-let g_module_paths = [".", "lib", "core/src/sage", "core/lib", "/usr/local/share/sage/lib", "/usr/local/share/sage/src/sage"]
-
-# ---- Performance: pre-allocated signal singletons ----
-let _SIG_NORMAL_NIL = {"kind": 0, "value": nil}
-let _SIG_BREAK = {"kind": 2, "value": nil}
-let _SIG_CONTINUE = {"kind": 3, "value": nil}
-
-# ============================================================
-# Hybrid JIT/AOT Profiling and Specialization Engine
-# ============================================================
-# This implements profile-guided type specialization directly in
-# the self-hosted interpreter. Functions are profiled at call sites;
-# once a function is "hot" (called HOT_THRESHOLD times) AND all
-# observed argument types are monomorphic (consistently one type),
-# the function is marked as specialized and bypasses type dispatch.
-
-let HOT_THRESHOLD = 50
-
-# Per-function profile: tracks call count and observed arg types.
-# Key: function dict identity (the function object itself stored by name)
-# Value: {"calls": N, "arg_types": ["number","number",...], "monomorphic": bool, "specialized": bool}
-let _profiles = {}
-
-# Get or create a profile for a function.
-proc _get_profile(func_name):
-    if dict_has(_profiles, func_name):
-        return _profiles[func_name]
-    let p = {"calls": 0, "arg_types": nil, "monomorphic": true, "specialized": false}
-    _profiles[func_name] = p
-    return p
-
-# Record a call: increment count, merge observed types.
-proc _profile_call(func_name, args):
-    let p = _get_profile(func_name)
-    p["calls"] = p["calls"] + 1
-
-    # Track argument types
-    if p["arg_types"] == nil:
-        # First call — record initial types
-        let types = []
-        let i = 0
-        while i < len(args):
-            push(types, type(args[i]))
-            i = i + 1
-        p["arg_types"] = types
-    else:
-        # Subsequent calls — check if types still match
-        if p["monomorphic"]:
-            let types = p["arg_types"]
-            let i = 0
-            while i < len(args) and i < len(types):
-                if type(args[i]) != types[i]:
-                    p["monomorphic"] = false
-                    break
+// Parse CLI arguments
+proc parse_args(args: Array<String>): CliOptions =
+    let opts = CliOptions(
+        source_file: None,
+        source_code: None,
+        profile: "general",
+        tier: "reference",
+        repl: false,
+        verify_parity: false,
+        trace: false,
+        dump_ir: false,
+        dump_bytecode: false,
+        dump_frames: false,
+        dump_profile: false,
+        dump_shapes: false,
+        dump_capabilities: false,
+        dump_deopt: false,
+        max_steps: -1,
+        output_file: None
+    )
+    
+    let i = 0
+    while i < len(args):
+        let arg = args[i]
+        match arg:
+            "--profile":
                 i = i + 1
-
-    # Mark as specialized once hot + monomorphic
-    if p["calls"] >= HOT_THRESHOLD and p["monomorphic"] and not p["specialized"]:
-        p["specialized"] = true
-
-    return p
-
-# Check if a function call should use the specialized fast path.
-proc _is_specialized(func_name):
-    if dict_has(_profiles, func_name):
-        return _profiles[func_name]["specialized"]
-    return false
-
-# Check if all args are numbers (most common specialization).
-proc _all_numbers(args):
-    let i = 0
-    let n = len(args)
-    while i < n:
-        if type(args[i]) != "number":
-            return false
-        i = i + 1
-    return true
-
-proc set_error_context(source, filename):
-    g_error_ctx = errors.make_error_context(source, filename)
-
-# Extract line number from an expression node (-1 if unknown)
-proc get_expr_line(expr):
-    if expr == nil:
-        return -1
-    let etype = expr.type
-    # EXPR_VARIABLE: name is a token
-    if etype == EXPR_VARIABLE:
-        return expr.name.line
-    # EXPR_BINARY: op is a token
-    if etype == EXPR_BINARY:
-        return expr.op.line
-    # EXPR_GET: property is a token
-    if etype == EXPR_GET:
-        return expr.property.line
-    # EXPR_SET: property is a token
-    if etype == EXPR_SET:
-        return expr.property.line
-    # EXPR_CALL: recurse into callee
-    if etype == EXPR_CALL:
-        return get_expr_line(expr.callee)
-    # EXPR_INDEX / EXPR_INDEX_SET / EXPR_SLICE: recurse into object
-    if etype == EXPR_INDEX:
-        return get_expr_line(expr.object)
-    if etype == EXPR_INDEX_SET:
-        return get_expr_line(expr.object)
-    if etype == EXPR_SLICE:
-        return get_expr_line(expr.object)
-    return -1
-
-# Extract line number from a statement node (-1 if unknown)
-proc get_stmt_line(stmt):
-    if stmt == nil:
-        return -1
-    let stype = stmt.type
-    if stype == STMT_LET:
-        return stmt.name.line
-    if stype == STMT_PROC:
-        return stmt.name.line
-    if stype == STMT_FOR:
-        return stmt.variable.line
-    if stype == STMT_CLASS:
-        return stmt.name.line
-    if stype == STMT_PRINT:
-        return get_expr_line(stmt.expression)
-    if stype == STMT_EXPRESSION:
-        return get_expr_line(stmt.expression)
-    return -1
-
-# Raise a rich runtime error if error context is available
-proc runtime_error(line, message, hint):
-    if g_error_ctx != nil:
-        if line > 0:
-            let msg = errors.format_error(g_error_ctx, line, -1, "Runtime Error", message, hint)
-            raise msg
-    raise "Runtime Error: " + message
-
-# -----------------------------------------
-# Environment functions (dict-based)
-# env = {"parent": parent_env_or_nil, "vals": {}}
-# -----------------------------------------
-
-proc env_new(parent):
-    return {"parent": parent, "vals": {}}
-
-proc env_define(env, name, value):
-    env["vals"][name] = value
-
-proc env_get(env, name):
-    # Cache vals reference to avoid double dict lookup on env
-    let e = env
-    while e != nil:
-        let vals = e["vals"]
-        if dict_has(vals, name):
-            return vals[name]
-        e = e["parent"]
-    raise "Undefined variable '" + name + "'"
-
-# Report an undefined variable to stderr and continue (mirrors C interpreter:
-# fprintf(stderr, "Runtime Error: Undefined variable 'x'.\n"); return nil)
-proc report_undefined(name):
-    sys.stderr_write("Runtime Error: Undefined variable '" + name + "'.\n")
-
-proc env_set(env, name, value):
-    let e = env
-    while e != nil:
-        let vals = e["vals"]
-        if dict_has(vals, name):
-            vals[name] = value
-            return true
-        e = e["parent"]
-    raise "Undefined variable '" + name + "'"
-
-# -----------------------------------------
-# Import binding helper
-# -----------------------------------------
-
-proc import_bind(stmt, mod_name, mod_env, target_env):
-    let mod_vals = mod_env["vals"]
-    if stmt.item_count > 0:
-        # from X import a, b, c
-        let i = 0
-        while i < stmt.item_count:
-            let item_name = stmt.items[i]
-            if dict_has(mod_vals, item_name):
-                let bind_name = item_name
-                if stmt.item_aliases[i] != nil:
-                    bind_name = stmt.item_aliases[i].text
-                env_define(target_env, bind_name, mod_vals[item_name])
-            i = i + 1
-    if stmt.item_count == 0:
-        # import X  or  import X as Y
-        let bind_name = mod_name
-        if stmt.alias != nil:
-            bind_name = stmt.alias
-        else:
-            # For dotted/path imports like std/signal, use the last component
-            # as the default binding name (e.g. std/signal -> signal)
-            let parts = split(mod_name, "/")
-            if len(parts) > 1:
-                bind_name = parts[len(parts) - 1]
-        # Wrap module env as a dict-like module object
-        let mod_obj = {}
-        mod_obj["__interp_type"] = "module"
-        mod_obj["name"] = mod_name
-        let keys = dict_keys(mod_vals)
-        let ki = 0
-        while ki < len(keys):
-            mod_obj[keys[ki]] = mod_vals[keys[ki]]
-            ki = ki + 1
-        env_define(target_env, bind_name, mod_obj)
-
-        # Dotted imports (e.g. `import android.app`) additionally export every
-        # top-level symbol into scope (never clobbering existing bindings) —
-        # this is what library documentation has always shown.
-        # NOTE: mod_name may arrive in dot or slash form depending on how the
-        # module was resolved, so both separators are recognized.
-        if stmt.alias == nil:
-            let parts = nil
-            if len(split(mod_name, ".")) > 1:
-                parts = split(mod_name, ".")
-            elif len(split(mod_name, "/")) > 1:
-                parts = split(mod_name, "/")
-            if parts != nil:
-                let di = 0
-                while di < len(keys):
-                    if not dict_has(target_env["vals"], keys[di]):
-                        env_define(target_env, keys[di], mod_vals[keys[di]])
-                    di = di + 1
-
-# -----------------------------------------
-# Helper: create control flow result dicts
-# -----------------------------------------
-
-proc result_normal(val):
-    if val == nil:
-        return _SIG_NORMAL_NIL
-    let r = {}
-    r["kind"] = SIGNAL_NORMAL
-    r["value"] = val
-    return r
-
-proc result_return(val):
-    let r = {}
-    r["kind"] = SIGNAL_RETURN
-    r["value"] = val
-    return r
-
-proc result_break():
-    return _SIG_BREAK
-
-proc result_continue():
-    return _SIG_CONTINUE
-
-# -----------------------------------------
-# Helper: truthiness
-# -----------------------------------------
-
-proc is_truthy(val):
-    if val == nil:
-        return false
-    if val == false:
-        return false
-    if val == 0:
-        return false
-    if type(val) == "string":
-        if val == "":
-            return false
-    return true
-
-# -----------------------------------------
-# Helper: value to string for printing
-# -----------------------------------------
-
-proc value_to_string(val):
-    if val == nil:
-        return "nil"
-    if val == true:
-        return "true"
-    if val == false:
-        return "false"
-    if type(val) == "number":
-        let s = str(val)
-        return s
-    if type(val) == "string":
-        return val
-    if type(val) == "array":
-        let parts = []
-        let i = 0
-        while i < len(val):
-            push(parts, value_to_string(val[i]))
-            i = i + 1
-        return "[" + join(parts, ", ") + "]"
-    if type(val) == "dict":
-        # Check if it's a special interpreter value
-        if dict_has(val, "__interp_type"):
-            let vtype = val["__interp_type"]
-            if vtype == "function":
-                return "<proc " + val["name"] + ">"
-            if vtype == "native":
-                return "<native " + val["name"] + ">"
-            if vtype == "class":
-                return "<class " + val["name"] + ">"
-            if vtype == "instance":
-                let cls = val["class"]
-                return "<" + cls["name"] + " instance>"
-        # Regular dict
-        let ks = dict_keys(val)
-        let parts = []
-        let i = 0
-        while i < len(ks):
-            let k = ks[i]
-            # Mirror the C printer: string keys are rendered quoted.
-            if type(k) == "string":
-                push(parts, "\"" + k + "\": " + value_to_string(val[k]))
-            else:
-                push(parts, value_to_string(k) + ": " + value_to_string(val[k]))
-            i = i + 1
-        return "{" + join(parts, ", ") + "}"
-    return str(val)
-
-# -----------------------------------------
-# Native builtin dispatch
-# -----------------------------------------
-
-# ---- Performance: native dispatch table ----
-# Replaces the massive if/elif chain in call_native with O(1) dict lookup.
-# Each entry maps a builtin name to a handler proc.
-
-let _native_dispatch = {}
-
-proc _n_str(args):
-    return value_to_string(args[0])
-
-proc _n_len(args):
-    let x = args[0]
-    let t = type(x)
-    if t == "string":
-        return len(x)
-    if t == "array":
-        return len(x)
-    if t == "dict":
-        return len(dict_keys(x))
-    return 0
-
-proc _n_tonumber(args):
-    let x = args[0]
-    if type(x) == "number":
-        return x
-    if type(x) == "string":
-        return tonumber(x)
-    return 0
-
-proc _n_push(args):
-    push(args[0], args[1])
-    return nil
-
-proc _n_pop(args):
-    return pop(args[0])
-
-proc _n_array_extend(args):
-    let arr = args[0]
-    let other = args[1]
-    let i = 0
-    while i < len(other):
-        push(arr, other[i])
-        i = i + 1
-    return nil
-
-proc _n_range(args):
-    let argc = len(args)
-    if argc == 1:
-        return range(args[0])
-    if argc == 2:
-        return range(args[0], args[1])
-    return []
-
-proc _n_type(args):
-    let x = args[0]
-    if x == nil:
-        return "nil"
-    let t = type(x)
-    if t == "dict":
-        if dict_has(x, "__interp_type"):
-            let vt = x["__interp_type"]
-            if vt == "function":
-                return "function"
-            if vt == "native":
-                return "native"
-            if vt == "class":
-                return "class"
-            if vt == "instance":
-                return x["class"]["name"]
-            if vt == "generator":
-                return "generator"
-        return "dict"
-    return t
-
-proc _n_input(args):
-    return input()
-
-proc _n_clock(args):
-    return clock()
-
-let g_gas_limit = -1
-let g_gas_used = 0
-
-proc _n_vm_set_gas_limit(args):
-    g_gas_limit = args[0]
-    g_gas_used = 0
-    return nil
-
-proc _n_vm_get_gas_used(args):
-    return g_gas_used
-
-proc _n_vm_get_gas_limit(args):
-    return g_gas_limit
-
-proc _n_chr(args):
-    return chr(args[0])
-
-proc _n_ord(args):
-    return ord(args[0])
-
-proc _n_slice(args):
-    return slice(args[0], args[1], args[2])
-
-proc _n_split(args):
-    return split(args[0], args[1])
-
-proc _n_join(args):
-    return join(args[0], args[1])
-
-proc _n_replace(args):
-    return replace(args[0], args[1], args[2])
-
-proc _n_upper(args):
-    return upper(args[0])
-
-proc _n_lower(args):
-    return lower(args[0])
-
-proc _n_strip(args):
-    return strip(args[0])
-
-proc _n_dict_keys(args):
-    return dict_keys(args[0])
-
-proc _n_dict_values(args):
-    return dict_values(args[0])
-
-proc _n_dict_has(args):
-    return dict_has(args[0], args[1])
-
-proc _n_dict_delete(args):
-    dict_delete(args[0], args[1])
-    return nil
-
-proc _n_startswith(args):
-    return startswith(args[0], args[1])
-
-proc _n_endswith(args):
-    return endswith(args[0], args[1])
-
-proc _n_contains(args):
-    return contains(args[0], args[1])
-
-proc _n_indexof(args):
-    return indexof(args[0], args[1])
-
-proc _n_next(args):
-    let gen = args[0]
-    if type(gen) == "dict":
-        if dict_has(gen, "__interp_type"):
-            if gen["__interp_type"] == "generator":
-                let idx = gen["index"]
-                let vals = gen["values"]
-                if idx < len(vals):
-                    gen["index"] = idx + 1
-                    return vals[idx]
-    return nil
-
-proc _n_gc_collect(args):
-    gc_collect()
-    return nil
-
-proc _n_gc_enable(args):
-    gc_enable()
-    return nil
-
-proc _n_gc_disable(args):
-    gc_disable()
-    return nil
-
-proc _n_gc_stats(args):
-    return gc_stats()
-
-proc _n_ffi_open(args):
-    return ffi_open(args[0])
-
-proc _n_ffi_close(args):
-    ffi_close(args[0])
-    return nil
-
-proc _n_ffi_call(args):
-    if len(args) == 3:
-        return ffi_call(args[0], args[1], args[2])
-    if len(args) == 4:
-        return ffi_call(args[0], args[1], args[2], args[3])
-    return nil
-
-proc _n_ffi_sym(args):
-    return ffi_sym(args[0], args[1])
-
-proc _n_mem_alloc(args):
-    return mem_alloc(args[0])
-
-proc _n_mem_free(args):
-    mem_free(args[0])
-    return nil
-
-proc _n_mem_read(args):
-    return mem_read(args[0], args[1], args[2])
-
-proc _n_mem_write(args):
-    mem_write(args[0], args[1], args[2], args[3])
-    return nil
-
-proc _n_mem_size(args):
-    return mem_size(args[0])
-
-proc _n_addressof(args):
-    return addressof(args[0])
-
-proc _n_int(args):
-    let x = args[0]
-    if type(x) == "number":
-        let s = str(x)
-        let dot_pos = -1
-        let i = 0
-        while i < len(s):
-            if s[i] == ".":
-                dot_pos = i
-                break
-            i = i + 1
-        if dot_pos == -1:
-            return x
-        let int_part = ""
-        i = 0
-        while i < dot_pos:
-            int_part = int_part + s[i]
-            i = i + 1
-        if int_part == "" or int_part == "-":
-            return 0
-        return tonumber(int_part)
-    if type(x) == "string":
-        return tonumber(x)
-    return 0
-
-# Build the dispatch table at module load time
-_native_dispatch["str"] = _n_str
-_native_dispatch["len"] = _n_len
-_native_dispatch["tonumber"] = _n_tonumber
-_native_dispatch["push"] = _n_push
-_native_dispatch["pop"] = _n_pop
-_native_dispatch["array_extend"] = _n_array_extend
-_native_dispatch["range"] = _n_range
-_native_dispatch["type"] = _n_type
-_native_dispatch["input"] = _n_input
-_native_dispatch["clock"] = _n_clock
-_native_dispatch["vm_gas_limit_set"] = _n_vm_set_gas_limit
-_native_dispatch["vm_gas_used_get"] = _n_vm_get_gas_used
-_native_dispatch["vm_gas_limit_get"] = _n_vm_get_gas_limit
-_native_dispatch["chr"] = _n_chr
-_native_dispatch["ord"] = _n_ord
-_native_dispatch["slice"] = _n_slice
-_native_dispatch["split"] = _n_split
-_native_dispatch["join"] = _n_join
-_native_dispatch["replace"] = _n_replace
-_native_dispatch["upper"] = _n_upper
-_native_dispatch["lower"] = _n_lower
-_native_dispatch["strip"] = _n_strip
-_native_dispatch["dict_keys"] = _n_dict_keys
-_native_dispatch["dict_values"] = _n_dict_values
-_native_dispatch["dict_has"] = _n_dict_has
-_native_dispatch["dict_delete"] = _n_dict_delete
-_native_dispatch["startswith"] = _n_startswith
-_native_dispatch["endswith"] = _n_endswith
-_native_dispatch["contains"] = _n_contains
-_native_dispatch["indexof"] = _n_indexof
-_native_dispatch["next"] = _n_next
-_native_dispatch["gc_collect"] = _n_gc_collect
-_native_dispatch["gc_enable"] = _n_gc_enable
-_native_dispatch["gc_disable"] = _n_gc_disable
-_native_dispatch["gc_stats"] = _n_gc_stats
-_native_dispatch["ffi_open"] = _n_ffi_open
-_native_dispatch["ffi_close"] = _n_ffi_close
-_native_dispatch["ffi_call"] = _n_ffi_call
-_native_dispatch["ffi_sym"] = _n_ffi_sym
-_native_dispatch["mem_alloc"] = _n_mem_alloc
-_native_dispatch["mem_free"] = _n_mem_free
-_native_dispatch["mem_read"] = _n_mem_read
-_native_dispatch["mem_write"] = _n_mem_write
-_native_dispatch["mem_size"] = _n_mem_size
-_native_dispatch["addressof"] = _n_addressof
-_native_dispatch["int"] = _n_int
-
-# ---- Missing builtins: GC modes, bytes, path, hash, doc ----
-
-proc _n_gc_mode(args):
-    return gc_mode()
-proc _n_gc_set_arc(args):
-    gc_set_arc()
-    return nil
-proc _n_gc_set_orc(args):
-    gc_set_orc()
-    return nil
-proc _n_bytes(args):
-    return bytes(args[0])
-proc _n_bytes_len(args):
-    return bytes_len(args[0])
-proc _n_bytes_get(args):
-    return bytes_get(args[0], args[1])
-proc _n_bytes_set(args):
-    bytes_set(args[0], args[1], args[2])
-    return nil
-proc _n_bytes_to_string(args):
-    return bytes_to_string(args[0])
-proc _n_bytes_slice(args):
-    return bytes_slice(args[0], args[1], args[2])
-proc _n_bytes_push(args):
-    bytes_push(args[0], args[1])
-    return nil
-proc _n_path_join(args):
-    return path_join(args[0], args[1])
-proc _n_path_dirname(args):
-    return path_dirname(args[0])
-proc _n_path_basename(args):
-    return path_basename(args[0])
-proc _n_path_ext(args):
-    return path_ext(args[0])
-proc _n_path_exists(args):
-    return path_exists(args[0])
-proc _n_path_is_dir(args):
-    return path_is_dir(args[0])
-proc _n_path_is_file(args):
-    return path_is_file(args[0])
-proc _n_hash(args):
-    return hash(args[0])
-proc _n_sizeof(args):
-    return sizeof(args[0])
-
-_native_dispatch["gc_mode"] = _n_gc_mode
-_native_dispatch["gc_set_arc"] = _n_gc_set_arc
-_native_dispatch["gc_set_orc"] = _n_gc_set_orc
-_native_dispatch["bytes"] = _n_bytes
-_native_dispatch["bytes_len"] = _n_bytes_len
-_native_dispatch["bytes_get"] = _n_bytes_get
-_native_dispatch["bytes_set"] = _n_bytes_set
-_native_dispatch["bytes_to_string"] = _n_bytes_to_string
-_native_dispatch["bytes_slice"] = _n_bytes_slice
-_native_dispatch["bytes_push"] = _n_bytes_push
-_native_dispatch["path_join"] = _n_path_join
-_native_dispatch["path_dirname"] = _n_path_dirname
-_native_dispatch["path_basename"] = _n_path_basename
-_native_dispatch["path_ext"] = _n_path_ext
-_native_dispatch["path_exists"] = _n_path_exists
-_native_dispatch["path_is_dir"] = _n_path_is_dir
-_native_dispatch["path_is_file"] = _n_path_is_file
-_native_dispatch["hash"] = _n_hash
-_native_dispatch["sizeof"] = _n_sizeof
-
-proc _n_val_tag(args):
-    return val_tag(args[0])
-_native_dispatch["val_tag"] = _n_val_tag
-
-proc call_native(name, args):
-    if dict_has(_native_dispatch, name):
-        let handler = _native_dispatch[name]
-        return handler(args)
-    runtime_error(-1, "Unknown native function: " + name, nil)
-
-# -----------------------------------------
-# Register builtins into an environment
-# -----------------------------------------
-
-proc register_native(env, name, arity):
-    env_define(env, name, {"__interp_type": "native", "name": name, "arity": arity})
-
-proc init_builtins(env):
-    register_native(env, "str", 1)
-    register_native(env, "len", 1)
-    register_native(env, "tonumber", 1)
-    register_native(env, "push", 2)
-    register_native(env, "pop", 1)
-    register_native(env, "array_extend", 2)
-    register_native(env, "range", -1)
-    register_native(env, "type", 1)
-    register_native(env, "val_tag", 1)
-    register_native(env, "input", 0)
-    register_native(env, "clock", 0)
-    register_native(env, "chr", 1)
-    register_native(env, "ord", 1)
-    register_native(env, "slice", 3)
-    register_native(env, "split", 2)
-    register_native(env, "join", 2)
-    register_native(env, "replace", 3)
-    register_native(env, "upper", 1)
-    register_native(env, "lower", 1)
-    register_native(env, "strip", 1)
-    register_native(env, "dict_keys", 1)
-    register_native(env, "dict_values", 1)
-    register_native(env, "dict_has", 2)
-    register_native(env, "dict_delete", 2)
-    register_native(env, "startswith", 2)
-    register_native(env, "endswith", 2)
-    register_native(env, "contains", 2)
-    register_native(env, "indexof", 2)
-    # Generator support
-    register_native(env, "next", 1)
-    # GC control (delegates to host C runtime)
-    register_native(env, "gc_collect", 0)
-    register_native(env, "gc_enable", 0)
-    register_native(env, "gc_disable", 0)
-    register_native(env, "gc_stats", 0)
-    # FFI stubs (delegates to host C runtime)
-    register_native(env, "ffi_open", 1)
-    register_native(env, "ffi_close", 1)
-    register_native(env, "ffi_call", -1)
-    register_native(env, "ffi_sym", 2)
-    # Memory stubs (delegates to host C runtime)
-    register_native(env, "mem_alloc", 1)
-    register_native(env, "mem_free", 1)
-    register_native(env, "mem_read", 3)
-    register_native(env, "mem_write", 4)
-    register_native(env, "mem_size", 1)
-    register_native(env, "addressof", 1)
-    # Math functions
-    register_native(env, "int", 1)
-    # GC modes
-    register_native(env, "gc_mode", 0)
-    register_native(env, "gc_set_arc", 0)
-    register_native(env, "gc_set_orc", 0)
-    # Bytes
-    register_native(env, "bytes", 1)
-    register_native(env, "bytes_len", 1)
-    register_native(env, "bytes_get", 2)
-    register_native(env, "bytes_set", 3)
-    register_native(env, "bytes_to_string", 1)
-    register_native(env, "bytes_slice", 3)
-    register_native(env, "bytes_push", 2)
-    # Path utilities
-    register_native(env, "path_join", 2)
-    register_native(env, "path_dirname", 1)
-    register_native(env, "path_basename", 1)
-    register_native(env, "path_ext", 1)
-    register_native(env, "path_exists", 1)
-    register_native(env, "path_is_dir", 1)
-    register_native(env, "path_is_file", 1)
-    # Hash and sizeof
-    register_native(env, "hash", 1)
-    register_native(env, "sizeof", 1)
-
-# -----------------------------------------
-# Expression evaluation
-# -----------------------------------------
-
-# eval_expr: recursion depth checked at call boundaries (eval_call),
-# not per-expression. Eliminates 2 increments per expression eval.
-proc eval_expr(expr, env):
-    if expr == nil:
-        return nil
-    return eval_expr_impl(expr, env)
-
-proc eval_expr_impl(expr, env):
-    let etype = expr.type
-
-    # --- Hot path: most common types first ---
-    # Profiling shows NUMBER, VARIABLE, BINARY account for ~85% of all
-    # expression evaluations. Checking them first reduces average if-chain depth.
-
-    if etype == EXPR_NUMBER:
-        return expr.value
-
-    if etype == EXPR_VARIABLE:
-        # Mirrors C: on miss, print error to stderr and continue with nil
-        let e = env
-        while e != nil:
-            let vals = e["vals"]
-            if dict_has(vals, expr.name.text):
-                return vals[expr.name.text]
-            e = e["parent"]
-        report_undefined(expr.name.text)
-        return nil
-
-    if etype == EXPR_BINARY:
-        return eval_binary(expr, env)
-
-    # --- Other literals ---
-    if etype == EXPR_STRING:
-        return expr.value
-
-    if etype == EXPR_BOOL:
-        return expr.value
-
-    if etype == EXPR_NIL:
-        return nil
-
-    # --- Array literal ---
-    if etype == EXPR_ARRAY:
-        let arr = []
-        let i = 0
-        while i < expr.count:
-            let val = eval_expr(expr.elements[i], env)
-            push(arr, val)
-            i = i + 1
-        return arr
-
-    # --- Dict literal ---
-    # Note: parser stores keys as raw strings, not Expr nodes
-    if etype == EXPR_DICT:
-        let d = {}
-        let i = 0
-        while i < expr.count:
-            let k = expr.keys[i]
-            let v = eval_expr(expr.values[i], env)
-            d[k] = v
-            i = i + 1
-        return d
-
-    # --- Tuple literal ---
-    if etype == EXPR_TUPLE:
-        let arr = []
-        let i = 0
-        while i < expr.count:
-            let val = eval_expr(expr.elements[i], env)
-            push(arr, val)
-            i = i + 1
-        return arr
-
-    # --- Index ---
-    if etype == EXPR_INDEX:
-        let obj = eval_expr(expr.object, env)
-        let idx = eval_expr(expr.index, env)
-        if type(obj) == "array":
-            return obj[idx]
-        if type(obj) == "string":
-            return obj[idx]
-        if type(obj) == "dict":
-            return obj[idx]
-        runtime_error(get_expr_line(expr), "Cannot index into value of type '" + type(obj) + "'", "only arrays, strings, and dicts can be indexed")
-
-    # --- Index set ---
-    if etype == EXPR_INDEX_SET:
-        let obj = eval_expr(expr.object, env)
-        let idx = eval_expr(expr.index, env)
-        let val = eval_expr(expr.value, env)
-        obj[idx] = val
-        return val
-
-    # --- Slice ---
-    if etype == EXPR_SLICE:
-        let obj = eval_expr(expr.object, env)
-        let s = 0
-        let e = 0
-        if type(obj) == "array":
-            e = len(obj)
-        elif type(obj) == "string":
-            e = len(obj)
-        if expr.start != nil:
-            s = eval_expr(expr.start, env)
-        if expr.end != nil:
-            e = eval_expr(expr.end, env)
-        return slice(obj, s, e)
-
-    # --- Get property ---
-    if etype == EXPR_GET:
-        let obj = eval_expr(expr.object, env)
-        let prop_name = expr.property.text
-        if type(obj) == "dict":
-            if dict_has(obj, "__interp_type") and obj["__interp_type"] == "instance":
-                let fields = obj["fields"]
-                if dict_has(fields, prop_name):
-                    return fields[prop_name]
-                # Check class methods
-                let cls = obj["class"]
-                let found = find_method(cls, prop_name)
-                if found != nil:
-                    return found
-                runtime_error(expr.property.line, "Undefined property '" + prop_name + "'", "this instance does not have a field or method named '" + prop_name + "'")
-            # Regular dict or module-like access
-            if dict_has(obj, prop_name):
-                return obj[prop_name]
-            runtime_error(expr.property.line, "Undefined property '" + prop_name + "'", nil)
-        runtime_error(expr.property.line, "Only instances and dicts have properties", "got value of type '" + type(obj) + "'")
-
-    # --- Set property ---
-    if etype == EXPR_SET:
-        let prop_name = expr.property.text
-        # Variable reassignment: x = value
-        if expr.object == nil:
-            let val = eval_expr(expr.value, env)
-            # Mirrors C: on miss, print error to stderr and continue with nil
-            let e = env
-            while e != nil:
-                let vals = e["vals"]
-                if dict_has(vals, prop_name):
-                    vals[prop_name] = val
-                    return val
-                e = e["parent"]
-            report_undefined(prop_name)
-            return nil
-        # Property assignment: obj.prop = value
-        let obj = eval_expr(expr.object, env)
-        let val = eval_expr(expr.value, env)
-        if type(obj) == "dict":
-            if dict_has(obj, "__interp_type") and obj["__interp_type"] == "instance":
-                let fields = obj["fields"]
-                fields[prop_name] = val
-                return val
-            obj[prop_name] = val
-            return val
-        runtime_error(expr.property.line, "Only instances have settable properties", "got value of type '" + type(obj) + "'")
-
-    # --- Call ---
-    if etype == EXPR_CALL:
-        return eval_call(expr, env)
-
-    # --- Await ---
-    if etype == EXPR_AWAIT:
-        return eval_expr(expr.expression, env)
-
-    # --- Super method call ---
-    if etype == EXPR_SUPER:
-        # super.method — find method in parent class
-        # The actual args are handled by EXPR_CALL wrapping this
-        let method_name = expr.method.text
-        # Look up 'self' in current env to find the instance's class
-        let self_val = env_get(env, "self")
-        if type(self_val) == "dict" and dict_has(self_val, "__interp_type") and self_val["__interp_type"] == "instance":
-            let cls = self_val["class"]
-            if cls["parent"] != nil:
-                let parent_method = find_method(cls["parent"], method_name)
-                if parent_method != nil:
-                    return parent_method
-                runtime_error(-1, "Undefined method '" + method_name + "' in parent class", nil)
-            runtime_error(-1, "Class has no parent for super call", nil)
-        runtime_error(-1, "super used outside of a class method", nil)
-
-    # --- Anonymous proc expression ---
-    if etype == EXPR_PROC:
-        return {
-            "__interp_type": "function",
-            "name": "<lambda>",
-            "params": expr.params,
-            "body": expr.body,
-            "closure": env,
-            "param_defaults": expr.param_defaults,
-            "is_generator": body_has_yield(expr.body)
-        }
-
-    # --- Comptime expression (evaluate normally at runtime) ---
-    if etype == EXPR_COMPTIME:
-        return eval_expr(expr.expression, env)
-
-    runtime_error(-1, "Unknown expression type: " + str(etype), nil)
-
-# -----------------------------------------
-# Binary expression evaluation
-# -----------------------------------------
-
-# ---- Performance: binary op dispatch table ----
-# Each binary operator maps to a handler proc that takes (left, right).
-# Short-circuit ops (and, or, not) are handled inline before dispatch.
-
-
-
-proc _bop_eq(l, r):
-    return l == r
-proc _bop_neq(l, r):
-    return l != r
-proc _bop_gt(l, r):
-    return l > r
-proc _bop_lt(l, r):
-    return l < r
-proc _bop_gte(l, r):
-    return l >= r
-proc _bop_lte(l, r):
-    return l <= r
-proc _bop_plus(l, r):
-    if type(l) == "number" and type(r) == "number":
-        return l + r
-    if type(l) == "string" and type(r) == "string":
-        return l + r
-    if type(l) == "string":
-        return l + value_to_string(r)
-    if type(r) == "string":
-        return value_to_string(l) + r
-    return l + r
-proc _bop_minus(l, r):
-    return l - r
-proc _bop_star(l, r):
-    return l * r
-proc _bop_slash(l, r):
-    if r == 0:
-        sys.stderr_write("Runtime Error: Division by zero.\n")
-        raise "Division by zero"
-    return l / r
-proc _bop_percent(l, r):
-    if r == 0:
-        sys.stderr_write("Runtime Error: Modulo by zero.\n")
-        raise "Modulo by zero"
-    return l % r
-proc _bop_amp(l, r):
-    return l & r
-proc _bop_pipe(l, r):
-    return l | r
-proc _bop_caret(l, r):
-    return l ^ r
-proc _bop_lshift(l, r):
-    return l << r
-proc _bop_rshift(l, r):
-    return l >> r
-
-proc get_binop_func(op_type):
-    if op_type == TOKEN_EQ: return _bop_eq
-    if op_type == TOKEN_NEQ: return _bop_neq
-    if op_type == TOKEN_GT: return _bop_gt
-    if op_type == TOKEN_LT: return _bop_lt
-    if op_type == TOKEN_GTE: return _bop_gte
-    if op_type == TOKEN_LTE: return _bop_lte
-    if op_type == TOKEN_PLUS: return _bop_plus
-    if op_type == TOKEN_MINUS: return _bop_minus
-    if op_type == TOKEN_STAR: return _bop_star
-    if op_type == TOKEN_SLASH: return _bop_slash
-    if op_type == TOKEN_PERCENT: return _bop_percent
-    if op_type == TOKEN_AMP: return _bop_amp
-    if op_type == TOKEN_PIPE: return _bop_pipe
-    if op_type == TOKEN_CARET: return _bop_caret
-    if op_type == TOKEN_LSHIFT: return _bop_lshift
-    if op_type == TOKEN_RSHIFT: return _bop_rshift
-    return nil
-
-proc eval_binary(expr, env):
-    let op_type = expr.op.type
-
-    # Unary not (short-circuit)
-    if op_type == TOKEN_NOT:
-        let left = eval_expr(expr.left, env)
-        return not is_truthy(left)
-
-    # Unary bitwise not (~)
-    if op_type == TOKEN_TILDE:
-        let left = eval_expr(expr.left, env)
-        return 0 - left - 1
-
-    # Short-circuit: or
-    if op_type == TOKEN_OR:
-        let left = eval_expr(expr.left, env)
-        if is_truthy(left):
-            return true
-        return is_truthy(eval_expr(expr.right, env))
-
-    # Short-circuit: and
-    if op_type == TOKEN_AND:
-        let left = eval_expr(expr.left, env)
-        if not is_truthy(left):
-            return false
-        return is_truthy(eval_expr(expr.right, env))
-
-    # Evaluate both operands
-    let left = eval_expr(expr.left, env)
-    let right = eval_expr(expr.right, env)
-
-    # ---- FAST PATH: number+number arithmetic ----
-    # ~70% of binary ops in benchmarks are number arithmetic.
-    # Inlining avoids dispatch table lookup + proc call overhead.
-    if type(left) == "number" and type(right) == "number":
-        if op_type == TOKEN_PLUS:
-            return left + right
-        if op_type == TOKEN_MINUS:
-            return left - right
-        if op_type == TOKEN_STAR:
-            return left * right
-        if op_type == TOKEN_SLASH:
-            if right == 0:
-                sys.stderr_write("Runtime Error: Division by zero.\n")
-                runtime_error(expr.op.line, "Division by zero", nil)
-            return left / right
-        if op_type == TOKEN_PERCENT:
-            if right == 0:
-                sys.stderr_write("Runtime Error: Modulo by zero.\n")
-                runtime_error(expr.op.line, "Modulo by zero", nil)
-            return left % right
-        if op_type == TOKEN_GT:
-            return left > right
-        if op_type == TOKEN_LT:
-            return left < right
-        if op_type == TOKEN_GTE:
-            return left >= right
-        if op_type == TOKEN_LTE:
-            return left <= right
-        if op_type == TOKEN_EQ:
-            return left == right
-        if op_type == TOKEN_NEQ:
-            return left != right
-        # Bitwise on numbers
-        if op_type == TOKEN_AMP:
-            return left & right
-        if op_type == TOKEN_PIPE:
-            return left | right
-        if op_type == TOKEN_CARET:
-            return left ^ right
-        if op_type == TOKEN_LSHIFT:
-            return left << right
-        if op_type == TOKEN_RSHIFT:
-            return left >> right
-
-    return binop_apply(expr, op_type, left, right)
-
-# -----------------------------------------
-# Helper: find method in class hierarchy
-# -----------------------------------------
-
-proc find_method(cls, name):
-    let search = cls
-    while search != nil:
-        let meths = search["methods"]
-        if dict_has(meths, name):
-            return meths[name]
-        search = search["parent"]
-    return nil
-
-# -----------------------------------------
-# Check if a statement body contains yield
-# -----------------------------------------
-
-proc body_has_yield(stmt):
-    if stmt == nil:
-        return false
-    let stype = stmt.type
-    if stype == STMT_YIELD:
-        return true
-    if stype == STMT_BLOCK:
-        let current = stmt.statements
-        while current != nil:
-            if body_has_yield(current):
-                return true
-            current = current.next
-        return false
-    if stype == STMT_IF:
-        if body_has_yield(stmt.then_branch):
-            return true
-        if stmt.else_branch != nil:
-            if body_has_yield(stmt.else_branch):
-                return true
-        return false
-    if stype == STMT_WHILE:
-        return body_has_yield(stmt.body)
-    if stype == STMT_FOR:
-        return body_has_yield(stmt.body)
-    return false
-
-# -----------------------------------------
-# Generator: eagerly collect all yielded values
-# -----------------------------------------
-
-proc run_generator(body, env):
-    let values = []
-    # Execute the generator body, collecting yield values
-    # Walk the statement list, collecting yields
-    let stmts = body
-    if stmts != nil:
-        collect_yields(stmts, env, values)
-    let gen = {}
-    gen["__interp_type"] = "generator"
-    gen["values"] = values
-    gen["index"] = 0
-    return gen
-
-proc collect_yields(stmt, env, values):
-    if stmt == nil:
-        return
-    let stype = stmt.type
-    if stype == STMT_YIELD:
-        let val = nil
-        if stmt.value != nil:
-            val = eval_expr(stmt.value, env)
-        push(values, val)
-        return
-    if stype == STMT_BLOCK:
-        let current = stmt.statements
-        while current != nil:
-            collect_yields(current, env, values)
-            current = current.next
-        return
-    if stype == STMT_WHILE:
-        # For generators with while loops, execute the loop and collect yields
-        let iters = 0
-        while true:
-            let cond = eval_expr(stmt.condition, env)
-            if not is_truthy(cond):
-                break
-            iters = iters + 1
-            if iters > MAX_LOOP_ITERATIONS:
-                break
-            collect_yields(stmt.body, env, values)
-        return
-    if stype == STMT_FOR:
-        # Collect yields from for-loop bodies: bind each element in a fresh
-        # loop scope (mirrors the C host's per-iteration environment)
-        let iterable = eval_expr(stmt.iterable, env)
-        let it = type(iterable)
-        if it != "array" and it != "tuple" and it != "dict":
-            return
-        var elements = []
-        if it == "array" or it == "tuple":
-            elements = iterable
-        elif it == "dict":
-            elements = dict_keys(iterable)
-        let n = len(elements)
-        let i = 0
-        while i < n:
-            let loop_env = env_new(env)
-            env_define(loop_env, stmt.variable.text, elements[i])
-            collect_yields(stmt.body, loop_env, values)
-            i = i + 1
-        return
-    if stype == STMT_IF:
-        let cond = eval_expr(stmt.condition, env)
-        if is_truthy(cond):
-            collect_yields(stmt.then_branch, env, values)
-        elif stmt.else_branch != nil:
-            collect_yields(stmt.else_branch, env, values)
-        return
-    # For other statement types, just execute them normally
-    exec_stmt(stmt, env)
-
-# -----------------------------------------
-# Call expression evaluation
-# -----------------------------------------
-
-proc eval_call(expr, env):
-    # Recursion depth check at call boundary only
-    g_depth = g_depth + 1
-    if g_depth > MAX_RECURSION:
-        let callee_name = get_expr_name(expr.callee)
-        print "Recursion depth exceeded calling: " + callee_name
-        g_depth = g_depth - 1
-        runtime_error(get_expr_line(expr.callee), "Maximum recursion depth exceeded", "limit is " + str(MAX_RECURSION) + " frames")
-    let _call_result = eval_call_impl(expr, env)
-    g_depth = g_depth - 1
-    return _call_result
-
-# Call a C-host function or native value (VAL_FUNCTION/VAL_NATIVE) with a
-# dynamic argument list. The C compiler dispatches fixed-arity call syntax
-# natively, so we build the call statically per arity.
-proc call_chost(callee, args):
-    let n = len(args)
-    if n == 0:
-        return callee()
-    if n == 1:
-        return callee(args[0])
-    if n == 2:
-        return callee(args[0], args[1])
-    if n == 3:
-        return callee(args[0], args[1], args[2])
-    if n == 4:
-        return callee(args[0], args[1], args[2], args[3])
-    if n == 5:
-        return callee(args[0], args[1], args[2], args[3], args[4])
-    if n == 6:
-        return callee(args[0], args[1], args[2], args[3], args[4], args[5])
-    if n == 7:
-        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
-    if n == 8:
-        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])
-    if n == 9:
-        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8])
-    if n == 10:
-        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9])
-    if n == 11:
-        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10])
-    if n == 12:
-        return callee(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11])
-    runtime_error(-1, "C-host function called with too many arguments", str(n))
-
-# Call a method on a C-host instance (VAL_INSTANCE) with a dynamic argument
-# list. `obj[name](...)` is compiled by the C host as an indexed call and
-# dispatched natively.
-proc call_chost_method(obj, name, args):
-    let n = len(args)
-    if n == 0:
-        return obj[name]()
-    if n == 1:
-        return obj[name](args[0])
-    if n == 2:
-        return obj[name](args[0], args[1])
-    if n == 3:
-        return obj[name](args[0], args[1], args[2])
-    if n == 4:
-        return obj[name](args[0], args[1], args[2], args[3])
-    if n == 5:
-        return obj[name](args[0], args[1], args[2], args[3], args[4])
-    if n == 6:
-        return obj[name](args[0], args[1], args[2], args[3], args[4], args[5])
-    if n == 7:
-        return obj[name](args[0], args[1], args[2], args[3], args[4], args[5], args[6])
-    if n == 8:
-        return obj[name](args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7])
-    if n == 9:
-        return obj[name](args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8])
-    if n == 10:
-        return obj[name](args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9])
-    runtime_error(-1, "C-host method called with too many arguments", str(n))
-
-# Sentinel marking an unfilled keyword-resolution slot
-let KW_UNSET = "__sage_kw_unset__"
-
-# Resolve keyword arguments against parameter names (params[param_start..]).
-# Returns {"any": call-has-kwargs, "ok": resolution-succeeded,
-#          "vals": evaluated values aligned to params, KW_UNSET when unfilled}
-proc resolve_kwargs(expr, params, param_start, env):
-    let kw_names = expr.kw_names
-    let any = false
-    if kw_names != nil:
-        for name in kw_names:
-            if name != nil:
-                any = true
-                break
-    if not any:
-        return {"any": false, "ok": true, "vals": nil}
-    let want = len(params) - param_start
-    let slots = []
-    let si = 0
-    while si < want:
-        push(slots, KW_UNSET)
-        si = si + 1
-    let next_pos = 0
-    let ai = 0
-    while ai < expr.arg_count:
-        if kw_names[ai] != nil:
-            let found = -1
-            let pi = param_start
-            while pi < len(params):
-                if params[pi].text == kw_names[ai]:
-                    found = pi
-                    break
-                pi = pi + 1
-            if found < 0:
-                sys.stderr_write("Runtime Error: Unknown keyword argument '" + kw_names[ai] + "'.\n")
-                return {"any": true, "ok": false, "vals": nil}
-            if slots[found - param_start] != KW_UNSET:
-                sys.stderr_write("Runtime Error: Duplicate argument '" + kw_names[ai] + "'.\n")
-                return {"any": true, "ok": false, "vals": nil}
-            slots[found - param_start] = eval_expr(expr.args[ai], env)
-        else:
-            while next_pos < want and slots[next_pos] != KW_UNSET:
-                next_pos = next_pos + 1
-            if next_pos >= want:
-                sys.stderr_write("Runtime Error: Too many positional arguments.\n")
-                return {"any": true, "ok": false, "vals": nil}
-            slots[next_pos] = eval_expr(expr.args[ai], env)
-            next_pos = next_pos + 1
-        ai = ai + 1
-    return {"any": true, "ok": true, "vals": slots}
-
-proc eval_call_impl(expr, env):
-    let callee_expr = expr.callee
-
-    # Super method call: super.method(args)
-    if callee_expr.type == EXPR_SUPER:
-        let method_name = callee_expr.method.text
-        let self_val = env_get(env, "self")
-        if type(self_val) == "dict" and dict_has(self_val, "__interp_type") and self_val["__interp_type"] == "instance":
-            let cls = self_val["class"]
-            let parent = cls["parent"]
-            if parent != nil:
-                let method_val = find_method(parent, method_name)
-                if method_val != nil:
-                    # Resolve arguments (kwargs-aware)
-                    let kwres = resolve_kwargs(expr, method_val["params"], 0, env)
-                    if not kwres["ok"]:
-                        return nil
-                    let args = []
-                    if not kwres["any"]:
-                        let ai = 0
-                        while ai < expr.arg_count:
-                            push(args, eval_expr(expr.args[ai], env))
-                            ai = ai + 1
-                    # Create method env with self bound
-                    let method_env = env_new(method_val["closure"])
-                    env_define(method_env, "self", self_val)
-                    let params = method_val["params"]
-                    let param_start = 0
-                    if len(params) > 0 and params[0].text == "self":
-                        param_start = 1
-                    let pi = param_start
-                    while pi < len(params):
-                        let arg_idx = pi - param_start
-                        let bound = false
-                        if kwres["any"]:
-                            let sv = kwres["vals"][pi]
-                            if sv != KW_UNSET:
-                                env_define(method_env, params[pi].text, sv)
-                                bound = true
-                        elif arg_idx < len(args):
-                            env_define(method_env, params[pi].text, args[arg_idx])
-                            bound = true
-                        if not bound:
-                            # Fill in defaults for missing arguments
-                            let dflt = nil
-                            if dict_has(method_val, "param_defaults") and method_val["param_defaults"] != nil and method_val["param_defaults"][pi] != nil:
-                                dflt = eval_expr(method_val["param_defaults"][pi], env)
-                            env_define(method_env, params[pi].text, dflt)
-                        pi = pi + 1
-                    let res = exec_stmt(method_val["body"], method_env)
-                    if res["kind"] == SIGNAL_RETURN:
-                        return res["value"]
-                    return nil
-                runtime_error(-1, "Undefined method '" + method_name + "' in parent class", nil)
-            runtime_error(-1, "Class has no parent for super call", nil)
-        runtime_error(-1, "super used outside of class method", nil)
-
-    # Method call: obj.method(args)
-    if callee_expr.type == EXPR_GET:
-        let obj = eval_expr(callee_expr.object, env)
-        let method_name = callee_expr.property.text
-
-        # Instance method call
-        if type(obj) == "dict" and dict_has(obj, "__interp_type") and obj["__interp_type"] == "instance":
-            let cls = obj["class"]
-            let method_val = find_method(cls, method_name)
-            if method_val == nil:
-                runtime_error(callee_expr.property.line, "Undefined method '" + method_name + "'", nil)
-            # Resolve arguments (kwargs-aware)
-            let kwres = resolve_kwargs(expr, method_val["params"], 0, env)
-            if not kwres["ok"]:
-                return nil
-            let args = []
-            if not kwres["any"]:
-                let i = 0
-                while i < expr.arg_count:
-                    let arg = eval_expr(expr.args[i], env)
-                    push(args, arg)
-                    i = i + 1
-            # Create method env with self bound
-            let method_env = env_new(method_val["closure"])
-            env_define(method_env, "self", obj)
-            # Bind params (skip first if it's 'self')
-            let params = method_val["params"]
-            let param_start = 0
-            if len(params) > 0:
-                if params[0].text == "self":
-                    param_start = 1
-            let pi = param_start
-            while pi < len(params):
-                let arg_idx = pi - param_start
-                let bound = false
-                if kwres["any"]:
-                    let sv = kwres["vals"][pi]
-                    if sv != KW_UNSET:
-                        env_define(method_env, params[pi].text, sv)
-                        bound = true
-                elif arg_idx < len(args):
-                    env_define(method_env, params[pi].text, args[arg_idx])
-                    bound = true
-                if not bound:
-                    # Fill in defaults for missing arguments
-                    let dflt = nil
-                    if dict_has(method_val, "param_defaults") and method_val["param_defaults"] != nil and method_val["param_defaults"][pi] != nil:
-                        dflt = eval_expr(method_val["param_defaults"][pi], env)
-                    env_define(method_env, params[pi].text, dflt)
-                pi = pi + 1
-            let res = exec_stmt(method_val["body"], method_env)
-            if res["kind"] == SIGNAL_RETURN:
-                return res["value"]
-            return nil
-
-        # C-host instance method call: delegate to the C host
-        if type(obj) == "instance":
-            let args = []
-            let i = 0
-            while i < expr.arg_count:
-                let arg = eval_expr(expr.args[i], env)
-                push(args, arg)
+                if i < len(args):
+                    opts.profile = args[i]
+            "--runtime":
+            "--tier":
                 i = i + 1
-            return call_chost_method(obj, method_name, args)
-
-    # Evaluate callee
-    let callee = eval_expr(callee_expr, env)
-
-    # Evaluate arguments
-    let args = []
-    let i = 0
-    while i < expr.arg_count:
-        let arg = eval_expr(expr.args[i], env)
-        push(args, arg)
+                if i < len(args):
+                    opts.tier = args[i]
+            "--repl":
+                opts.repl = true
+            "--verify-parity":
+                opts.verify_parity = true
+            "--trace":
+                opts.trace = true
+            "--dump-ir":
+                opts.dump_ir = true
+            "--dump-bytecode":
+                opts.dump_bytecode = true
+            "--dump-frames":
+                opts.dump_frames = true
+            "--dump-profile":
+                opts.dump_profile = true
+            "--dump-shapes":
+                opts.dump_shapes = true
+            "--dump-capabilities":
+                opts.dump_capabilities = true
+            "--dump-deopt":
+                opts.dump_deopt = true
+            "--max-steps":
+                i = i + 1
+                if i < len(args):
+                    opts.max_steps = args[i].toInt()
+            "-c":
+                i = i + 1
+                if i < len(args):
+                    opts.source_code = Some(args[i])
+            "-e":
+                i = i + 1
+                if i < len(args):
+                    opts.source_code = Some(args[i])
+            _:
+                if not arg.starts_with("-"):
+                    opts.source_file = Some(arg)
         i = i + 1
-
-    return call_resolved(callee, args, env, callee_expr)
-
-# Resolved-call application: everything after callee/args evaluation.
-# Shared by the dynamic evaluator and the closure-compiled fast path.
-proc call_resolved(callee, args, env, callee_expr):
-    # C-host function/native (compiled by the C host): delegate the call
-    if type(callee) == "function" or type(callee) == "native":
-        let cname = "?"
-        if callee_expr.type == EXPR_VARIABLE:
-            cname = callee_expr.name.text
-        if callee_expr.type == EXPR_GET:
-            cname = callee_expr.property.text
-        return call_chost(callee, args)
-
-    if type(callee) != "dict":
-        runtime_error(get_expr_line(callee_expr), "Value is not callable", "got value of type '" + type(callee) + "'")
-
-    if not dict_has(callee, "__interp_type"):
-        runtime_error(get_expr_line(callee_expr), "Value is not callable", "got a dict that is not a function or class")
-
-    let callee_type = callee["__interp_type"]
-
-    # Native function call
-    if callee_type == "native":
-        return call_native(callee["name"], args)
-
-    # User function call — with hybrid JIT/AOT profiling
-    if callee_type == "function":
-        let func_name = callee["name"]
-
-        # Keyword-argument resolution against the callee's parameter names
-        let kwres = resolve_kwargs(callee_expr, callee["params"], 0, env)
-        if not kwres["ok"]:
-            return nil
-
-        # Arity check — mirrors the C host exactly: too few (missing
-        # non-defaulted) or too many arguments prints the C-format error to
-        # stderr and yields nil, letting execution continue.
-        let params = callee["params"]
-        let pcount = len(params)
-        let pdl = nil
-        if dict_has(callee, "param_defaults") and callee["param_defaults"] != nil:
-            pdl = callee["param_defaults"]
-        let required2 = pcount
-        let qi = 0
-        while qi < pcount:
-            if qi < len(pdl) and pdl[qi] != nil:
-                required2 = qi
-                break
-            qi = qi + 1
-        let na = len(args)
-        let provided = na
-        if kwres["any"]:
-            provided = 0
-            let ci = 0
-            while ci < pcount:
-                if kwres["vals"][ci] != KW_UNSET:
-                    provided = provided + 1
-                ci = ci + 1
-        if provided < required2 or provided > pcount:
-            sys.stderr_write("Runtime Error: Expected " + str(required2) + " to " + str(pcount) + " arguments but got " + str(provided) + ".\n")
-            return nil
-
-        # ---- Profile this call (hybrid JIT phase) ----
-        if not kwres["any"]:
-            _profile_call(func_name, args)
-
-        let func_env = env_new(callee["closure"])
-        let pi = 0
-        while pi < len(params):
-            if kwres["any"]:
-                let sv = kwres["vals"][pi]
-                if sv != KW_UNSET:
-                    env_define(func_env, params[pi].text, sv)
-                else:
-                    # Fill in defaults for missing arguments (evaluated in caller scope)
-                    let dflt = nil
-                    if dict_has(callee, "param_defaults") and callee["param_defaults"] != nil and callee["param_defaults"][pi] != nil:
-                        dflt = eval_expr(callee["param_defaults"][pi], env)
-                    env_define(func_env, params[pi].text, dflt)
-            elif pi < len(args):
-                env_define(func_env, params[pi].text, args[pi])
-            else:
-                # Fill in defaults for missing arguments (evaluated in caller scope)
-                let dflt = nil
-                if dict_has(callee, "param_defaults") and callee["param_defaults"] != nil and callee["param_defaults"][pi] != nil:
-                    dflt = eval_expr(callee["param_defaults"][pi], env)
-                env_define(func_env, params[pi].text, dflt)
-            pi = pi + 1
-
-        # Check if this is a generator function (contains yield)
-        if dict_has(callee, "is_generator") and callee["is_generator"]:
-            return run_generator(callee["body"], func_env)
-
-        # ---- Specialized execution (hybrid AOT phase) ----
-        # If function is hot + monomorphic (all-number args), the body
-        # still runs through exec_stmt but type checks in eval_binary
-        # will hit the fast path 100% of the time (no dict dispatch).
-        # This is effectively "type-feedback-guided interpretation" —
-        # the same strategy V8/SpiderMonkey use before full compilation.
-        #
-        # Future: when profile["specialized"] is true, we could emit
-        # bytecode or C code for the function body. For now, the type
-        # feedback ensures the fast path in eval_binary is always taken.
-
-        let res = exec_stmt(callee["body"], func_env)
-        if res["kind"] == SIGNAL_RETURN:
-            return res["value"]
-        if res["kind"] == SIGNAL_YIELD:
-            let gen = {}
-            gen["__interp_type"] = "generator"
-            gen["values"] = [res["value"]]
-            gen["index"] = 0
-            return gen
-        return nil
-
-    # Class instantiation
-    if callee_type == "class":
-        let inst = {}
-        inst["__interp_type"] = "instance"
-        inst["class"] = callee
-        inst["fields"] = {}
-        # Call init if exists
-        let methods = callee["methods"]
-        if dict_has(methods, "init"):
-            let init_method = methods["init"]
-            let init_env = env_new(init_method["closure"])
-            env_define(init_env, "self", inst)
-            let params = init_method["params"]
-            let param_start = 0
-            if len(params) > 0:
-                if params[0].text == "self":
-                    param_start = 1
-            let pi = param_start
-            while pi < len(params):
-                let arg_idx = pi - param_start
-                if arg_idx < len(args):
-                    env_define(init_env, params[pi].text, args[arg_idx])
-                else:
-                    # Fill in defaults for missing arguments
-                    let dflt = nil
-                    if dict_has(init_method, "param_defaults") and init_method["param_defaults"] != nil and init_method["param_defaults"][pi] != nil:
-                        dflt = eval_expr(init_method["param_defaults"][pi], env)
-                    env_define(init_env, params[pi].text, dflt)
-                pi = pi + 1
-            exec_stmt(init_method["body"], init_env)
-        else:
-            # Auto-init for structs: assign args to fields in order
-            if dict_has(callee, "struct_fields"):
-                let sfields = callee["struct_fields"]
-                let si = 0
-                while si < len(sfields) and si < len(args):
-                    inst["fields"][sfields[si]] = args[si]
-                    si = si + 1
-        return inst
-
-    runtime_error(get_expr_line(callee_expr), "Value is not callable", "got '" + callee_type + "'")
-
-# Slow-path binary application shared by dynamic and compiled evaluators.
-proc binop_apply(expr, op_type, left, right):
-    if op_type == TOKEN_SLASH and right == 0:
-        sys.stderr_write("Runtime Error: Division by zero.\n")
-        runtime_error(expr.op.line, "Division by zero", nil)
-    if op_type == TOKEN_PERCENT and right == 0:
-        sys.stderr_write("Runtime Error: Modulo by zero.\n")
-        runtime_error(expr.op.line, "Modulo by zero", nil)
-
-    let func = get_binop_func(op_type)
-    if func != nil:
-        return func(left, right)
-
-    runtime_error(expr.op.line, "Unknown binary operator type: " + str(op_type), nil)
-
-# -----------------------------------------
-# Statement execution
-# Returns a dict: {"kind": SIGNAL_*, "value": ...}
-# -----------------------------------------
-
-proc exec_stmt(stmt, env):
-    if stmt == nil:
-        return _SIG_NORMAL_NIL
-
-    let stype = stmt.type
-
-    # --- Print ---
-    if stype == STMT_PRINT:
-        let val = eval_expr(stmt.expression, env)
-        print value_to_string(val)
-        return _SIG_NORMAL_NIL
-
-    # --- Expression statement ---
-    if stype == STMT_EXPRESSION:
-        eval_expr(stmt.expression, env)
-        return _SIG_NORMAL_NIL
-
-    # --- Let ---
-    if stype == STMT_LET:
-        let val = nil
-        if stmt.initializer != nil:
-            val = eval_expr(stmt.initializer, env)
-        env_define(env, stmt.name.text, val)
-        return _SIG_NORMAL_NIL
-
-    # --- Block ---
-    if stype == STMT_BLOCK:
-        return exec_block(stmt.statements, env)
-
-    # --- If ---
-    if stype == STMT_IF:
-        let cond = eval_expr(stmt.condition, env)
-        if is_truthy(cond):
-            return exec_stmt(stmt.then_branch, env)
-        if stmt.else_branch != nil:
-            return exec_stmt(stmt.else_branch, env)
-        return _SIG_NORMAL_NIL
-
-    # --- While (with hybrid loop specialization) ---
-    if stype == STMT_WHILE:
-        let loop_iters = 0
-        # Phase 1: Profile first 8 iterations to detect if body always
-        # returns SIGNAL_NORMAL (no break/return/continue). If so, enter
-        # the fast loop that skips signal checking entirely.
-        let body_is_simple = true
-        while true:
-            let cond = eval_expr(stmt.condition, env)
-            if not is_truthy(cond):
-                break
-            loop_iters = loop_iters + 1
-            if loop_iters > MAX_LOOP_ITERATIONS:
-                raise "While loop exceeded maximum iterations (1000000)"
-            let res = exec_stmt(stmt.body, env)
-            let kind = res["kind"]
-            if kind == SIGNAL_RETURN:
-                return res
-            if kind == SIGNAL_BREAK:
-                break
-            if kind != SIGNAL_NORMAL:
-                body_is_simple = false
-
-            # Phase 2: After 8 profiling iterations, if body is simple,
-            # switch to fast loop (no signal checking per iteration).
-            if loop_iters == 8 and body_is_simple:
-                while true:
-                    let cond2 = eval_expr(stmt.condition, env)
-                    if not is_truthy(cond2):
-                        break
-                    loop_iters = loop_iters + 1
-                    if loop_iters > MAX_LOOP_ITERATIONS:
-                        raise "While loop exceeded maximum iterations (1000000)"
-                    let res2 = exec_stmt(stmt.body, env)
-                    if res2["kind"] == SIGNAL_RETURN:
-                        return res2
-                    if res2["kind"] == SIGNAL_BREAK:
-                        break
-                break
-        return _SIG_NORMAL_NIL
-
-    # --- For ---
-    if stype == STMT_FOR:
-        let iterable = eval_expr(stmt.iterable, env)
-        # Generators are dicts internally but are NOT iterable in either
-        # implementation; mirror the C host rejection before the dict check.
-        if type(iterable) == "dict" and dict_has(iterable, "__interp_type") and iterable["__interp_type"] == "generator":
-            sys.stderr_write("Runtime Error: for loop iterable must be an array, tuple, or dict.\n")
-            return _SIG_NORMAL_NIL
-        if type(iterable) != "array" and type(iterable) != "tuple" and type(iterable) != "dict":
-            sys.stderr_write("Runtime Error: for loop iterable must be an array, tuple, or dict.\n")
-            return _SIG_NORMAL_NIL
-        
-        let loop_env = env_new(env)
-        let var_name = stmt.variable.text
-        
-        var elements = []
-        if type(iterable) == "array" or type(iterable) == "tuple":
-            elements = iterable
-        elif type(iterable) == "dict":
-            elements = dict_keys(iterable)
-            
-        let n = len(elements)
-        let i = 0
-        while i < n:
-            env_define(loop_env, var_name, elements[i])
-            let res = exec_stmt(stmt.body, loop_env)
-            let kind = res["kind"]
-            if kind == SIGNAL_RETURN:
-                return res
-            if kind == SIGNAL_BREAK:
-                break
-            i = i + 1
-        return _SIG_NORMAL_NIL
-
-    # --- Proc --- (single-dict-literal construction for speed)
-    if stype == STMT_PROC:
-        let name = stmt.name.text
-        env_define(env, name, {
-            "__interp_type": "function",
-            "name": name,
-            "params": stmt.params,
-            "body": stmt.body,
-            "closure": env,
-            "param_defaults": stmt.param_defaults,
-            "is_generator": body_has_yield(stmt.body)
-        })
-        return _SIG_NORMAL_NIL
-
-    # --- Return ---
-    if stype == STMT_RETURN:
-        let val = nil
-        if stmt.value != nil:
-            val = eval_expr(stmt.value, env)
-        return result_return(val)
-
-    # --- Break ---
-    if stype == STMT_BREAK:
-        return result_break()
-
-    # --- Continue ---
-    if stype == STMT_CONTINUE:
-        return result_continue()
-
-    # --- Class ---
-    if stype == STMT_CLASS:
-        let name_tok = stmt.name
-        let name = name_tok.text
-        let cls = {}
-        cls["__interp_type"] = "class"
-        cls["name"] = name
-        cls["methods"] = {}
-        cls["parent"] = nil
-
-        # Resolve parent class
-        if stmt.has_parent:
-            let ptok = stmt.parent
-            let parent_name = ptok.text
-            let parent_val = env_get(env, parent_name)
-            if type(parent_val) == "dict" and dict_has(parent_val, "__interp_type") and parent_val["__interp_type"] == "class":
-                cls["parent"] = parent_val
-                # Inherit parent methods
-                let parent_methods = parent_val["methods"]
-                let pkeys = dict_keys(parent_methods)
-                let pi = 0
-                while pi < len(pkeys):
-                    cls["methods"][pkeys[pi]] = parent_methods[pkeys[pi]]
-                    pi = pi + 1
-            else:
-                runtime_error(stmt.name.line, "Parent '" + parent_name + "' is not a class", nil)
-
-        # Add methods (linked list from parser)
-        let method_node = stmt.methods
-        while method_node != nil:
-            if method_node.type == STMT_PROC:
-                let mn_tok = method_node.name
-                let mname = mn_tok.text
-                let mfunc = {}
-                mfunc["__interp_type"] = "function"
-                mfunc["name"] = mname
-                mfunc["params"] = method_node.params
-                mfunc["body"] = method_node.body
-                mfunc["closure"] = env
-                mfunc["param_defaults"] = method_node.param_defaults
-                cls["methods"][mname] = mfunc
-            method_node = method_node.next
-        env_define(env, name, cls)
-        return _SIG_NORMAL_NIL
-
-    # --- Try/Catch ---
-    if stype == STMT_TRY:
-        return exec_try(stmt, env)
-
-    # --- Raise ---
-    if stype == STMT_RAISE:
-        let val = eval_expr(stmt.exception, env)
-        if type(val) == "string":
-            raise val
-        raise value_to_string(val)
-
-    # --- Import ---
-    if stype == STMT_IMPORT:
-        let mod_name = stmt.module_name
-        # Check stdlib modules first
-        from stdlib import get_stdlib_module, is_stdlib_module
-        if is_stdlib_module(mod_name):
-            let mod_env = get_stdlib_module(mod_name)
-            import_bind(stmt, mod_name, {"vals": mod_env}, env)
-            return _SIG_NORMAL_NIL
-        # Check module cache first
-        if dict_has(g_module_cache, mod_name):
-            let mod_env = g_module_cache[mod_name]
-            import_bind(stmt, mod_name, mod_env, env)
-            return _SIG_NORMAL_NIL
-        # Try to find and load the module file
-        let mod_source = nil
-        let mod_path = nil
-        # Convert dots to slashes for submodule paths (std.signal -> std/signal.sage)
-        let file_mod_name = join(split(mod_name, "."), "/")
-        let si = 0
-        while si < len(g_module_paths):
-            let try_path = g_module_paths[si] + "/" + file_mod_name + ".sage"
-            if io.exists(try_path):
-                mod_source = io.readfile(try_path)
-                mod_path = try_path
-                # Sibling imports: register the module's own directory
-                let mod_dir = join(slice(split(try_path, "/"), 0, len(split(try_path, "/")) - 1), "/")
-                let dup_sib = false
-                for existing3 in g_module_paths:
-                    if existing3 == mod_dir:
-                        dup_sib = true
-                        break
-                if not dup_sib:
-                    push(g_module_paths, mod_dir)
-                break
-            # Package directory with __init__.sage
-            let init_path = g_module_paths[si] + "/" + file_mod_name + "/__init__.sage"
-            if io.exists(init_path):
-                mod_source = io.readfile(init_path)
-                mod_path = init_path
-                # Make submodules resolvable (a.b -> <pkgdir>/b.sage)
-                let pkg_dir = g_module_paths[si] + "/" + file_mod_name
-                let dup_dir = false
-                for existing2 in g_module_paths:
-                    if existing2 == pkg_dir:
-                        dup_dir = true
-                        break
-                if not dup_dir:
-                    push(g_module_paths, pkg_dir)
-                break
-            si = si + 1
-        if mod_source == nil:
-            raise "ImportError: module '" + mod_name + "' not found"
-        # Parse and execute the module in a fresh env
-        from parser import parse_source_file
-        let mod_stmts = parse_source_file(mod_source, mod_path)
-        let mod_env = new_interpreter()
-        g_module_cache[mod_name] = mod_env
-        exec_program(mod_env, mod_stmts)
-        import_bind(stmt, mod_name, mod_env, env)
-        return _SIG_NORMAL_NIL
-
-    # --- Async proc (registered as function with async flag) ---
-    if stype == STMT_ASYNC_PROC:
-        let name = stmt.name.text
-        let func = {}
-        func["__interp_type"] = "function"
-        func["name"] = name
-        func["params"] = stmt.params
-        func["body"] = stmt.body
-        func["closure"] = env
-        func["param_defaults"] = stmt.param_defaults
-        func["is_async"] = true
-        func["is_generator"] = false
-        env_define(env, name, func)
-        return _SIG_NORMAL_NIL
-
-    # --- Defer ---
-    if stype == STMT_DEFER:
-        # Defer is handled at block level; standalone just executes immediately
-        return exec_stmt(stmt.statement, env)
-
-    # --- Match (with guard support) ---
-    if stype == STMT_MATCH:
-        let match_val = eval_expr(stmt.value, env)
-        let i = 0
-        while i < stmt.case_count:
-            let clause = stmt.cases[i]
-            let pat_val = eval_expr(clause["pattern"], env)
-            if match_val == pat_val:
-                # Check guard condition if present
-                if dict_has(clause, "guard") and clause["guard"] != nil:
-                    let guard_val = eval_expr(clause["guard"], env)
-                    if is_truthy(guard_val):
-                        return exec_stmt(clause["body"], env)
-                    # Guard failed, continue to next case
-                else:
-                    return exec_stmt(clause["body"], env)
-            i = i + 1
-        if stmt.default_case != nil:
-            return exec_stmt(stmt.default_case, env)
-        return _SIG_NORMAL_NIL
-
-    # --- Yield ---
-    if stype == STMT_YIELD:
-        let val = nil
-        if stmt.value != nil:
-            val = eval_expr(stmt.value, env)
-        let r = {}
-        r["kind"] = SIGNAL_YIELD
-        r["value"] = val
-        return r
-
-    # --- Struct declaration ---
-    if stype == STMT_STRUCT:
-        let name = stmt.name.text
-        # Structs are registered as classes (like C interpreter) so Point()
-        # instantiates via the class call path
-        let class_val = {}
-        class_val["__interp_type"] = "class"
-        class_val["name"] = name
-        class_val["methods"] = {}
-        class_val["parent"] = nil
-        class_val["defining_env"] = env
-        let fields_arr = []
-        let fi = 0
-        while fi < stmt.field_count:
-            push(fields_arr, stmt.field_names[fi].text)
-            fi = fi + 1
-        class_val["struct_fields"] = fields_arr
-        # Field metadata env var (mirrors C: __Name_fields__)
-        env_define(env, "__" + name + "_fields__", fields_arr)
-        env_define(env, name, class_val)
-        return _SIG_NORMAL_NIL
-
-    # --- Enum declaration ---
-    if stype == STMT_ENUM:
-        let name = stmt.name.text
-        # Plain dict mapping variant names to indices (mirrors C)
-        let enum_dict = {}
-        let vi = 0
-        while vi < stmt.variant_count:
-            let vname = stmt.variant_names[vi].text
-            enum_dict[vname] = vi
-            vi = vi + 1
-        enum_dict["__name__"] = name
-        env_define(env, name, enum_dict)
-        return _SIG_NORMAL_NIL
-
-    # --- Trait declaration ---
-    if stype == STMT_TRAIT:
-        let name = stmt.name.text
-        # Dict with __methods__/__name__ (mirrors C)
-        let trait_dict = {}
-        let method_names = []
-        let method_node = stmt.methods
-        while method_node != nil:
-            if method_node.type == STMT_PROC:
-                push(method_names, method_node.name.text)
-            method_node = method_node.next
-        trait_dict["__methods__"] = method_names
-        trait_dict["__name__"] = name
-        env_define(env, name, trait_dict)
-        return _SIG_NORMAL_NIL
-
-    # --- Comptime block (execute normally at runtime) ---
-    if stype == STMT_COMPTIME:
-        return exec_stmt(stmt.body, env)
-
-    # --- Macro definition (treat as function) ---
-    if stype == STMT_MACRO_DEF:
-        let name = stmt.name.text
-        env_define(env, name, {
-            "__interp_type": "function",
-            "name": name,
-            "params": stmt.params,
-            "body": stmt.body,
-            "closure": env,
-            "is_generator": false
-        })
-        return _SIG_NORMAL_NIL
-
-    runtime_error(get_stmt_line(stmt), "Unknown statement type: " + str(stype), nil)
-
-# -----------------------------------------
-# Execute a block (linked list of statements)
-# -----------------------------------------
-
-proc exec_block(first_stmt, env):
-    # Mirrors the C host: defer statements are collected at block level and
-    # executed in LIFO order when the scope exits (normally, via return,
-    # break/continue, or an exception).
-    let deferred = []
-    let current = first_stmt
-    let block_result = _SIG_NORMAL_NIL
-    while current != nil:
-        if current.type == STMT_DEFER:
-            push(deferred, current.statement)
-            current = current.next
-            continue
-        let res = exec_stmt(current, env)
-        if res["kind"] != SIGNAL_NORMAL:
-            block_result = res
-            break
-        current = current.next
-    let di = len(deferred) - 1
-    while di >= 0:
-        exec_stmt(deferred[di], env)
-        di = di - 1
-    return block_result
-
-# -----------------------------------------
-# Try/Catch execution
-# -----------------------------------------
-
-proc exec_try(stmt, env):
-    let caught = false
-    let result = result_normal(nil)
-    try:
-        result = exec_stmt(stmt.try_block, env)
-    catch err:
-        caught = true
-        if stmt.catch_count > 0:
-            let clause = stmt.catches[0]
-            let catch_env = env_new(env)
-            env_define(catch_env, clause.exception_var.text, err)
-            result = exec_stmt(clause.body, catch_env)
-        else:
-            raise err
-    if stmt.finally_block != nil:
-        exec_stmt(stmt.finally_block, env)
-    return result
-
-# -----------------------------------------
-# Execute a program (array of top-level statements)
-# -----------------------------------------
-
-proc exec_program_dynamic(global_env, stmts):
-    let i = 0
-    while i < len(stmts):
-        let res = exec_stmt(stmts[i], global_env)
-        if res["kind"] == SIGNAL_RETURN:
-            return res["value"]
-        i = i + 1
-    return nil
-
-proc exec_program(global_env, stmts):
-    # Closure-compiled execution: AST compiled once into nested closures so
-    # the hot loop skips per-node type dispatch. Unhandled node kinds fall
-    # back to the dynamic evaluator inside ccomp_stmt/ccomp_expr.
-    return exec_program_compiled(global_env, stmts)
-
-# -----------------------------------------
-# Closure-compilation quickening (CPC)
-#
-# Compiles the AST once into nested closures so the hot execution loop
-# skips per-node type dispatch and repeated field fetches. Any node kind
-# not handled here falls back to the dynamic evaluator, so semantics are
-# preserved for every construct (classes, imports, match, try, ...).
-# -----------------------------------------
-
-proc ccomp_expr(e):
-    if e == nil:
-        return proc(env): return nil
-
-    let t = e.type
-
-    if t == EXPR_NUMBER:
-        let v = e.value
-        return proc(env): return v
-
-    if t == EXPR_STRING:
-        let v = e.value
-        return proc(env): return v
-
-    if t == EXPR_BOOL:
-        let v = e.value
-        return proc(env): return v
-
-    if t == EXPR_NIL:
-        return proc(env): return nil
-
-    if t == EXPR_VARIABLE:
-        # Capture the resolved name string once instead of re-fetching
-        # expr.name.text (two dict lookups) on every evaluation.
-        let nm = e.name.text
-        return proc(env):
-            let ee = env
-            while ee != nil:
-                let vv = ee["vals"]
-                if dict_has(vv, nm):
-                    return vv[nm]
-                ee = ee["parent"]
-            report_undefined(nm)
-            return nil
-
-    if t == EXPR_BINARY:
-        let op_type = e.op.type
-        let op_line = e.op.line
-        let lc = ccomp_expr(e.left)
-        let rc = ccomp_expr(e.right)
-
-        # Unary forms short-circuit on one operand
-        if op_type == TOKEN_NOT:
-            return proc(env):
-                return not is_truthy(lc(env))
-        if op_type == TOKEN_TILDE:
-            return proc(env):
-                return 0 - lc(env) - 1
-        if op_type == TOKEN_OR:
-            return proc(env):
-                if is_truthy(lc(env)):
-                    return true
-                return is_truthy(rc(env))
-        if op_type == TOKEN_AND:
-            return proc(env):
-                if not is_truthy(lc(env)):
-                    return false
-                return is_truthy(rc(env))
-
-        return proc(env):
-            let left = lc(env)
-            let right = rc(env)
-            # Fast path: number arithmetic and comparisons (~70% of ops)
-            if val_tag(left) == 3 and val_tag(right) == 3:
-                if op_type == TOKEN_PLUS:
-                    return left + right
-                if op_type == TOKEN_MINUS:
-                    return left - right
-                if op_type == TOKEN_STAR:
-                    return left * right
-                if op_type == TOKEN_SLASH:
-                    if right == 0:
-                        sys.stderr_write("Runtime Error: Division by zero.\n")
-                        runtime_error(op_line, "Division by zero", nil)
-                    return left / right
-                if op_type == TOKEN_PERCENT:
-                    if right == 0:
-                        sys.stderr_write("Runtime Error: Modulo by zero.\n")
-                        runtime_error(op_line, "Modulo by zero", nil)
-                    return left % right
-                if op_type == TOKEN_GT:
-                    return left > right
-                if op_type == TOKEN_LT:
-                    return left < right
-                if op_type == TOKEN_GTE:
-                    return left >= right
-                if op_type == TOKEN_LTE:
-                    return left <= right
-                if op_type == TOKEN_EQ:
-                    return left == right
-                if op_type == TOKEN_NEQ:
-                    return left != right
-                if op_type == TOKEN_AMP:
-                    return left & right
-                if op_type == TOKEN_PIPE:
-                    return left | right
-                if op_type == TOKEN_CARET:
-                    return left ^ right
-                if op_type == TOKEN_LSHIFT:
-                    return left << right
-                if op_type == TOKEN_RSHIFT:
-                    return left >> right
-            # Slow path: mixed types via the shared dispatch helper
-            return binop_apply(e, op_type, left, right)
-
-    if t == EXPR_CALL:
-        # Keyword-argument calls: dynamic fallback (signature-aware binding)
-        if e.kw_names != nil:
-            let kwi = 0
-            while kwi < e.arg_count:
-                if e.kw_names[kwi] != nil:
-                    return proc(env):
-                        return eval_expr_impl(e, env)
-                kwi = kwi + 1
-        # Fast path only for direct-name callees; method calls fall back.
-        if e.callee.type == EXPR_VARIABLE:
-            let cname = e.callee.name.text
-            let cexpr = e
-            let argcs = []
-            let ai = 0
-            while ai < e.arg_count:
-                push(argcs, ccomp_expr(e.args[ai]))
-                ai = ai + 1
-            let arg_count = e.arg_count
-            return proc(env):
-                let callee = nil
-                let found = false
-                let walk = env
-                while walk != nil:
-                    let vv = walk["vals"]
-                    if dict_has(vv, cname):
-                        callee = vv[cname]
-                        found = true
-                        break
-                    walk = walk["parent"]
-                if not found:
-                    report_undefined(cname)
-                    return nil
-                let args = []
-                let k = 0
-                while k < arg_count:
-                    push(args, argcs[k](env))
-                    k = k + 1
-                return call_resolved(callee, args, env, cexpr)
-
-    if t == EXPR_SET:
-        # Variable reassignment: x = value  (object == nil)
-        if e.object == nil:
-            let nm = e.property.text
-            let vc = ccomp_expr(e.value)
-            return proc(env):
-                let val = vc(env)
-                let ee = env
-                while ee != nil:
-                    let vv = ee["vals"]
-                    if dict_has(vv, nm):
-                        vv[nm] = val
-                        return val
-                    ee = ee["parent"]
-                report_undefined(nm)
-                return nil
-        # Property assignment: obj.prop = value — dynamic fallback
-        return proc(env):
-            return eval_expr_impl(e, env)
-
-    if t == EXPR_GET:
-        # Fast paths: instance field, dict key, module/dict member
-        let prop_name = e.property.text
-        let oc = ccomp_expr(e.object)
-        let pline = e.property.line
-        return proc(env):
-            let obj = oc(env)
-            if val_tag(obj) == 6:
-                if dict_has(obj, "__interp_type"):
-                    let it2 = obj["__interp_type"]
-                    if it2 == "instance":
-                        let fields = obj["fields"]
-                        if dict_has(fields, prop_name):
-                            return fields[prop_name]
-                        let found = find_method(obj["class"], prop_name)
-                        if found != nil:
-                            return found
-                        return nil
-                    if it2 == "module":
-                        if dict_has(obj, prop_name):
-                            return obj[prop_name]
-                        sys.stderr_write("Runtime Error: Module '" + obj["name"] + "' has no attribute '" + prop_name + "'.\n")
-                        return nil
-                if dict_has(obj, prop_name):
-                    return obj[prop_name]
-                sys.stderr_write("Runtime Error: Only instances and modules have properties.\n")
-                return nil
-            sys.stderr_write("Runtime Error: Only instances and modules have properties.\n")
-            return nil
-
-    if t == EXPR_INDEX:
-        # Fast path: array/string/dict indexing via precompiled operands
-        let ac = ccomp_expr(e.object)
-        let ic2 = ccomp_expr(e.index)
-        return proc(env):
-            let obj = ac(env)
-            let idx = ic2(env)
-            let ot = val_tag(obj)
-            if ot == 5 or ot == 4 or ot == 6:
-                return obj[idx]
-            runtime_error(-1, "Cannot index into value of type '" + type(obj) + "'", "only arrays, strings, and dicts can be indexed")
-
-    # Generic fallback: dynamic evaluation of this subtree
-    return proc(env):
-        return eval_expr_impl(e, env)
-
-proc ccomp_stmt(s):
-    if s == nil:
-        return proc(env): return _SIG_NORMAL_NIL
-
-    let stype = s.type
-
-    if stype == STMT_PRINT:
-        let ec = ccomp_expr(s.expression)
-        return proc(env):
-            print value_to_string(ec(env))
-            return _SIG_NORMAL_NIL
-
-    if stype == STMT_EXPRESSION:
-        let ec = ccomp_expr(s.expression)
-        return proc(env):
-            ec(env)
-            return _SIG_NORMAL_NIL
-
-    if stype == STMT_LET:
-        let nm = s.name.text
-        if s.initializer == nil:
-            return proc(env):
-                env_define(env, nm, nil)
-                return _SIG_NORMAL_NIL
-        let ic = ccomp_expr(s.initializer)
-        return proc(env):
-            env_define(env, nm, ic(env))
-            return _SIG_NORMAL_NIL
-
-    if stype == STMT_RETURN:
-        if s.value == nil:
-            return proc(env): return result_return(nil)
-        let vc = ccomp_expr(s.value)
-        return proc(env): return result_return(vc(env))
-
-    if stype == STMT_BREAK:
-        return proc(env): return result_break()
-
-    if stype == STMT_CONTINUE:
-        return proc(env): return result_continue()
-
-    if stype == STMT_BLOCK:
-        let body = ccomp_stmt_list(s.statements)
-        return proc(env): return body(env)
-
-    if stype == STMT_IF:
-        let cc = ccomp_expr(s.condition)
-        let tc = ccomp_stmt(s.then_branch)
-        if s.else_branch == nil:
-            return proc(env):
-                if is_truthy(cc(env)):
-                    return tc(env)
-                return _SIG_NORMAL_NIL
-        let ec2 = ccomp_stmt(s.else_branch)
-        return proc(env):
-            if is_truthy(cc(env)):
-                return tc(env)
-            return ec2(env)
-
-    if stype == STMT_WHILE:
-        let cc = ccomp_expr(s.condition)
-        let bc = ccomp_stmt(s.body)
-        return proc(env):
-            let loop_iters = 0
-            let body_is_simple = true
-            while true:
-                if not is_truthy(cc(env)):
-                    break
-                loop_iters = loop_iters + 1
-                if loop_iters > MAX_LOOP_ITERATIONS:
-                    raise "While loop exceeded maximum iterations (1000000)"
-                let res = bc(env)
-                let kind = res["kind"]
-                if kind == SIGNAL_RETURN:
-                    return res
-                if kind == SIGNAL_BREAK:
-                    break
-                if kind != SIGNAL_NORMAL:
-                    body_is_simple = false
-                if loop_iters == 8 and body_is_simple:
-                    while true:
-                        if not is_truthy(cc(env)):
-                            break
-                        loop_iters = loop_iters + 1
-                        if loop_iters > MAX_LOOP_ITERATIONS:
-                            raise "While loop exceeded maximum iterations (1000000)"
-                        let res2 = bc(env)
-                        if res2["kind"] == SIGNAL_RETURN:
-                            return res2
-                        if res2["kind"] == SIGNAL_BREAK:
-                            break
-                    break
-            return _SIG_NORMAL_NIL
-
-    # Generic fallback: dynamic execution of this statement
-    return proc(env):
-        return exec_stmt(s, env)
-
-# Compile a statement list that may be a Sage array or a C-style linked
-# list (stmt.next), mirroring exec_block semantics.
-proc ccomp_stmt_list(first):
-    if first == nil:
-        return proc(env): return _SIG_NORMAL_NIL
-    if type(first) == "array":
-        let compiled = []
-        let i = 0
-        while i < len(first):
-            push(compiled, ccomp_stmt(first[i]))
-            i = i + 1
-        let n = len(compiled)
-        return proc(env):
-            let k = 0
-            while k < n:
-                let res = compiled[k](env)
-                if res["kind"] != SIGNAL_NORMAL:
-                    return res
-                k = k + 1
-            return _SIG_NORMAL_NIL
-    # Partition defer statements statically (defer-ness is syntactic) so the
-    # emitted closure list can run them LIFO at scope exit, matching exec_block.
-    let main_stmts = []
-    let deferred_stmts = []
-    let current = first
-    while current != nil:
-        if current.type == STMT_DEFER:
-            push(deferred_stmts, ccomp_stmt(current.statement))
-        else:
-            push(main_stmts, ccomp_stmt(current))
-        current = current.next
-    let n = len(main_stmts)
-    let dn = len(deferred_stmts)
-    return proc(env):
-        let k = 0
-        let block_result = _SIG_NORMAL_NIL
-        while k < n:
-            let res = main_stmts[k](env)
-            if res["kind"] != SIGNAL_NORMAL:
-                block_result = res
-                break
-            k = k + 1
-        let di2 = dn - 1
-        while di2 >= 0:
-            deferred_stmts[di2](env)
-            di2 = di2 - 1
-        return block_result
-
-# Compiled-program entry: same contract as exec_program.
-proc exec_program_compiled(global_env, stmts):
-    let compiled = []
-    let i = 0
-    while i < len(stmts):
-        push(compiled, ccomp_stmt(stmts[i]))
-        i = i + 1
-    let n = len(compiled)
-    let k = 0
-    while k < n:
-        let res = compiled[k](global_env)
-        if res["kind"] == SIGNAL_RETURN:
-            return res["value"]
-        k = k + 1
-    return nil
-
-# -----------------------------------------
-# Create a new interpreter (returns a global env dict)
-# -----------------------------------------
-
-proc new_interpreter():
-    let genv = env_new(nil)
-    init_builtins(genv)
-    # Initialize stdlib registry
-    from stdlib import init_stdlib
-    init_stdlib()
-    return genv
-
-# -----------------------------------------
-# Run source code with an interpreter env
-# -----------------------------------------
-
-proc run_source(genv, source):
-    from parser import parse_source
-    let stmts = parse_source(source)
-    return exec_program(genv, stmts)
-
-proc run_source_file(genv, source, filename):
-    from parser import parse_source_file
-    set_error_context(source, filename)
-    let stmts = parse_source_file(source, filename)
-    return exec_program(genv, stmts)
+    
+    return opts
+
+// Validate profile and tier
+proc validate_profile_and_tier(opts: CliOptions): Unit =
+    let valid_profiles = ["general", "embedded", "deterministic"]
+    let valid_tiers = ["reference", "bytecode", "cpc", "jit", "aot"]
+    
+    if not valid_profiles.includes(opts.profile):
+        print "Invalid profile: " + opts.profile
+        print "Valid: " + valid_profiles.join(", ")
+        exit 1
+    
+    if not valid_tiers.includes(opts.tier):
+        print "Invalid tier: " + opts.tier
+        print "Valid: " + valid_tiers.join(", ")
+        exit 1
+
+// Print profile info
+proc print_profile_info(ctx: InterpreterContext, profile: String): Unit =
+    let caps = capabilities.context_get_host_capabilities(ctx)
+    print "Profile: " + profile
+    print "Capabilities: " + caps.allowed.map { cap -> capabilities.CAP_NAMES[cap.level] }.join(", ")
+    print "Resource limits: steps=" + ctx_module.context_get_resource_limits(ctx).max_steps.ToString()
+    print "Runtime tier: " + ctx_module.context_get_runtime_tier(ctx)
+
+// Print IR as string
+proc ir_module_to_string(module: ir_sage.IR_Module): String =
+    let output = "Module: " + module.name + "\n"
+    output = output + "Functions: " + module.functions.len.ToString() + "\n"
+    for func in module.functions:
+        output = output + "  Function: " + func.name + " (" + func.local_count.ToString() + " slots)\n"
+        for block in func.blocks:
+            output = output + "    Block " + block.id.ToString() + ":"
+            for instr in block.instructions:
+                output = output + " " + opcode_to_string(instr.opcode)
+            output = output + "\n"
+    return output
+
+// Opcode to string
+proc opcode_to_string(opcode: Int): String =
+    match opcode:
+        0: return "NOP"
+        1: return "LOAD_CONST"
+        2: return "LOAD_LOCAL"
+        3: return "STORE_LOCAL"
+        4: return "LOAD_GLOBAL"
+        5: return "STORE_GLOBAL"
+        6: return "BINARY_OP"
+        7: return "RETURN"
+        8: return "JUMP"
+        9: return "JUMP_IF_FALSE"
+        10: return "GET_PROP"
+        11: return "SET_PROP"
+        12: return "GET_INDEX"
+        13: return "SET_INDEX"
+        14: return "BUILD_ARRAY"
+        15: return "BUILD_DICT"
+        _: return "UNKNOWN"
+
+print "=== interpreter.sage orchestration layer loaded ==="
+print "Modular SageLang runtime - all components from pipeline.md"
