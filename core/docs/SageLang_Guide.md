@@ -443,7 +443,7 @@ SageLang provides built-in functions injected into global environment via `init_
 | `hasattr(obj, name)` | `(instance|dict, string) → bool` | Duck-typing check for instance methods, fields, and dictionary keys |
 | `val_tag(val)` | `value → number` | Get internal numeric tag identifier of a value |
 | `build_info()` | `() → dict` | Get binary build metadata (version, arch, build type, spec version) |
-| `type(val)` | `value → string` | Get string name of type (e.g. "bytes" for byte buffers) |
+| `type(val)` | `value → string` | Get string name of type (type(val) returns "bytes" for byte buffers) |
 | `chr(n)` | `number → string` | Get single-character string from ASCII code |
 | `ord(c)` | `string → number` | Get ASCII code of single-character string |
 | `hash(val)` | `value → number` | Get hash code of a value |
