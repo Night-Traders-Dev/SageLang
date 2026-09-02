@@ -234,7 +234,7 @@ struct Value {
 | `VAL_CLASS` | `ClassValue*` (metadata) | No | Class definition with methods and parent |
 | `VAL_INSTANCE` | `InstanceValue*` (fields dict) | Yes | Object; instance of a class |
 | `VAL_EXCEPTION` | `ExceptionValue*` (message) | No | Exception; raised via `raise` |
-| `VAL_GENERATOR` | `GeneratorValue*` (resumable) | Yes | Iterable; maintains state across `yield` |
+| `VAL_GENERATOR` (`SAGE_TAG_GENERATOR`) | `GeneratorValue*` (resumable) | Yes | Iterable; maintains state across `yield`, supports native yield collector routines and `next()` builtin dispatch |
 
 **Array Operations**:
 - `array_push(arr, val)`: Append to dynamic array (resizes if needed).
@@ -1101,7 +1101,7 @@ end
 **Class Definition**:
 ```sagelang
 class Point:
-    proc init(x, y):
+    proc init(x = 0, y = 0):  # Default parameters are supported
         self.x = x
         self.y = y
     
@@ -1410,6 +1410,9 @@ Global: { x: 10 }
 - **First `next()`**: Initialize `gen_env` as child of closure, run body until first `yield`.
 - **Subsequent `next()`**: Resume from `current_stmt` (set by prior yield), run until next `yield` or end.
 - **Yield execution**: Save `current_stmt = stmt->next`, return yielded value with `is_yielding = 1`.
+
+**Iteration Limits**:
+- Direct `for-in` iteration over generators is explicitly rejected with a runtime error (`Runtime Error: 'Generator' object is not iterable.`). Always use `next()` for extraction.
 
 **Example Trace**:
 ```
@@ -2553,9 +2556,11 @@ fn["body"] = body_ast
 
 The self-hosted interpreter supports (~70% feature parity with C):
 
-**Fully implemented**: arithmetic, variables, control flow (if/elif/else, while, for), functions with closures, recursion, classes with inheritance, arrays, dicts, tuples, strings, slicing, indexing, try/catch/finally, break/continue, raise, module imports (`import X`, `import X as Y`, `from X import a, b`), property access/set, all bitwise operators (& | ^ ~ << >>), `match`/`case`/`default` pattern matching, `defer` statements (LIFO cleanup on scope exit), generators/yield (eager collection via `next()`), 35+ builtins.
+**Fully implemented**: bare `end` statements (optional block terminators), anonymous procedure expressions (`proc(params...): body [end]`), full CLI flag surface parity with C `main.c` (`-c`, `--jit`, `--aot`, `--sgvm`, `--lsp`), arithmetic, variables, control flow (if/elif/else, while, for), functions with closures, recursion, classes with inheritance, arrays, dicts, tuples, strings, slicing, indexing, try/catch/finally, break/continue, raise, module imports (`import X`, `import X as Y`, `from X import a, b`), property access/set, all bitwise operators (& | ^ ~ << >>), `match`/`case`/`default` pattern matching, `defer` statements (LIFO cleanup on scope exit), generators/yield (eager collection via `next()`), 35+ builtins.
 
 For self-hosted LLVM codegen specifically (`src/sage/llvm_backend.sage`), `from X import Y` constant imports are resolved during code generation for foldable top-level `let` values (including `as` aliases), matching the C LLVM backend behavior for cross-module constants.
+
+**Data Representation**: The self-hosted interpreter relies on dictionary-based representations for its AST nodes, functions, classes, and instances, tagged with an `__interp_type` field, instead of native enums.
 
 **Delegated to host runtime**: GC control (`gc_collect`, `gc_enable`, `gc_disable`, `gc_stats`), FFI (`ffi_open`, `ffi_close`, `ffi_call`, `ffi_sym`), memory access (`mem_alloc`, `mem_free`, `mem_read`, `mem_write`, `mem_size`, `addressof`), networking (via host `import` of native modules).
 
@@ -2875,7 +2880,7 @@ sage lint program.sage
 - `[W001]`, `[W002]`: Issued for unused variables and variables that shadow existing declarations in scope.
 - `[W003]`: Warns about unreachable code following a `return`, `break`, or `continue` statement at the same indentation level.
 - `[W004]`: Warns about empty blocks (e.g., when a line ending in a colon `:` is followed by an empty or improperly indented section).
-- `[S003]`: Enforces documentation conventions; top-level `proc` declarations must be immediately preceded by a `##` style docstring (comment).
+- `[S003]`: Enforces documentation conventions; top-level `proc` declarations must be immediately preceded by a `##` style docstring (comment). Top-level procedure doc comments (`## ...`) must be placed before decorators like `@inline`. Placing them between `@inline` and `proc` triggers a parser error.
 - `[S004]`: Warns about trailing semicolons (not used in SageLang).
 - `[S005]`: Warns when multiple statements are on a single line separated by semicolons.
 
