@@ -396,3 +396,17 @@ Evidence:
 
 Documentation Impact:
 Added `[W003]` and `[S004]` to the linter rules section in `core/docs/SageLang_Guide.md` to reflect the complete linter behavior.
+
+2026-09-01 - [CLI Options & Soft Keywords Documentation Parity]
+
+Discovery:
+- `core/docs/CLI_Reference.md` was missing CLI options supported in `core/src/c/main.c`: `sage safety <file>`, `sage --strict-safety <file>`, `sage --sandbox`, `sage --run-vm <file.svm>`, `-I <dir>`, `sage --aot --jit <file>`, and OIS package management commands (`--ois`, `--update`, `--uninstall`).
+- `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` were missing `print` and `end` from their soft keywords lists, whereas `SageLang_Guide.md` and `core/src/c/parser.c` explicitly treat `print`, `end`, `match`, `init`, `enum`, `struct`, and `trait` as soft keywords.
+
+Evidence:
+- `core/src/c/main.c` (`print_usage` and option parsing logic).
+- `core/src/c/parser.c` (soft keyword identifier token fallbacks).
+
+Documentation Impact:
+- Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
+- Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.

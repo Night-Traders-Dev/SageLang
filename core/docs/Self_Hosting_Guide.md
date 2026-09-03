@@ -59,10 +59,9 @@ packages (v4.1.3+).
 
 ## Soft Keywords
 
-`match`, `init`, `enum`, `struct`, and `trait` are "soft keywords" — usable as
-variable names in expressions and assignments while still acting as keywords in
-declarations (v4.1.3+). `end` is also a soft keyword (block terminator or
-identifier).
+`print`, `end`, `match`, `init`, `enum`, `struct`, and `trait` are "soft keywords" —
+usable as variable, property, or method names in expressions and assignments while
+still acting as keywords in declarations (v4.1.3+).
 
 ## Hybrid JIT/AOT Profiling
 
