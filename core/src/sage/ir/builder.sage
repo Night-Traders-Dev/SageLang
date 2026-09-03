@@ -1,16 +1,16 @@
-// ============================================================================
+# ============================================================================
 # Sage IR - Intermediate Representation
-// ============================================================================
-// Shared production representation for bytecode, CPC, JIT, AOT
-// Represents: lexical slots, calls, property/index ops, branches, loops,
-// returns, break/continue, yield, throws, defer/finally, imports, source mappings
-// ============================================================================
+# ============================================================================
+# Shared production representation for bytecode, CPC, JIT, AOT
+# Represents: lexical slots, calls, property/index ops, branches, loops,
+# returns, break/continue, yield, throws, defer/finally, imports, source mappings
+# ============================================================================
 
 import ast
 import runtime.values as values
 import runtime.slots as slots
 
-// IR Instruction types
+# IR Instruction types
 let IR_NOP = 0
 let IR_LOAD_CONST = 1
 let IR_LOAD_LOCAL = 2
@@ -52,7 +52,7 @@ let IR_CONTINUE = 37
 let IR_IMPORT = 38
 let IR_DEBUG_LINE = 39
 
-// IR Instruction
+# IR Instruction
 class IR_Instr {
     let opcode: Int
     let dest: Int              // Destination slot
@@ -61,7 +61,7 @@ class IR_Instr {
     let source_loc: SourceLocation  // Source location for debugging
 }
 
-// IR Block (basic block)
+# IR Block (basic block)
 class IR_Block {
     let id: Int
     let instructions: List<IR_Instr>
@@ -73,7 +73,7 @@ class IR_Block {
     let is_exception_handler: Bool
 }
 
-// IR Function
+# IR Function
 class IR_Function {
     let function_id: FunctionId
     let name: String
@@ -86,7 +86,7 @@ class IR_Function {
     let defers: List<DeferInfo>
 }
 
-// Exception handler in IR
+# Exception handler in IR
 class ExceptionHandler {
     let try_start: Int
     let try_end: Int
@@ -95,13 +95,13 @@ class ExceptionHandler {
     let finally_block: Option<Int>
 }
 
-// Defer info in IR
+# Defer info in IR
 class DeferInfo {
     let handler_block: Int
     let scope_depth: Int
 }
 
-// IR Module
+# IR Module
 class IR_Module {
     let name: String
     let functions: List<IR_Function>
@@ -111,14 +111,14 @@ class IR_Module {
     let source_map: Dict<Int, SourceLocation>  // PC -> source location
 }
 
-// Import info
+# Import info
 class ImportInfo {
     let module_name: String
     let items: List<(String, Option<String>)>  // (name, alias)
     let is_wildcard: Bool
 }
 
-// Slot info for IR
+# Slot info for IR
 class IR_SlotInfo {
     let index: Int
     let name: String
@@ -128,11 +128,11 @@ class IR_SlotInfo {
     let type_hint: Option<String>
 }
 
-// ============================================================================
+# ============================================================================
 # IR Builder - Builds IR from resolved AST
-// ============================================================================
+# ============================================================================
 
-// Builder state
+# Builder state
 class IR_Builder {
     let resolved: ResolvedModule
     let functions: List<IR_Function>
@@ -144,7 +144,7 @@ class IR_Builder {
     let errors: List<String>
 }
 
-// Slot allocator for IR
+# Slot allocator for IR
 class SlotAllocator {
     let next_slot: Int
     let slot_info: Dict<Int, IR_SlotInfo>
@@ -185,7 +185,7 @@ class SlotAllocator {
         return None
 }
 
-// Create a new IR builder
+# Create a new IR builder
 proc builder_new(resolved: ResolvedModule): IR_Builder = IR_Builder(
     resolved: resolved,
     functions: [],
@@ -197,7 +197,7 @@ proc builder_new(resolved: ResolvedModule): IR_Builder = IR_Builder(
     errors: []
 )
 
-// Build IR from resolved module
+# Build IR from resolved module
 proc build_ir(resolved: ResolvedModule, ctx: InterpreterContext): IR_Module =
     let builder = builder_new(resolved)
     
@@ -220,7 +220,7 @@ proc build_ir(resolved: ResolvedModule, ctx: InterpreterContext): IR_Module =
         source_map: builder_collect_source_map(builder)
     )
 
-// Build module-level function
+# Build module-level function
 proc builder_build_module_function(builder: IR_Builder, resolved: ResolvedModule): IR_Function =
     let slot_alloc = builder.slot_allocator
     let blocks = []
@@ -249,7 +249,7 @@ proc builder_build_module_function(builder: IR_Builder, resolved: ResolvedModule
         defers: []
     )
 
-// Build a statement
+# Build a statement
 proc builder_build_statement(builder: IR_Builder, stmt: AST_Stmt): Unit =
     match stmt.kind:
         ast.STMT_EXPRESSION:
@@ -289,7 +289,7 @@ proc builder_build_statement(builder: IR_Builder, stmt: AST_Stmt): Unit =
         _:
             builder.errors = builder.errors.push("Unknown statement type")
 
-// Build let statement
+# Build let statement
 proc builder_build_let(builder: IR_Builder, stmt: AST_Stmt): Unit =
     let value_slot = builder_build_expression(builder, stmt.init_expr)
     if stmt.resolved_binding != None:
@@ -305,7 +305,7 @@ proc builder_build_let(builder: IR_Builder, stmt: AST_Stmt): Unit =
         let name_slot = builder.slot_allocator.alloc_global(stmt.name)
         builder_emit(builder, IR_STORE_GLOBAL, name_slot, [value_slot])
 
-// Build expression and return result slot
+# Build expression and return result slot
 proc builder_build_expression(builder: IR_Builder, expr: AST_Expr): Int =
     let dest = builder.slot_allocator.alloc_local("tmp_" + builder.next_instr_id.ToString(), false)
     
@@ -366,7 +366,7 @@ proc builder_build_expression(builder: IR_Builder, expr: AST_Expr): Int =
     
     return dest
 
-// Emit an instruction
+# Emit an instruction
 proc builder_emit(builder: IR_Builder, opcode: Int, dest: Int, operands: Array<Value>): Int =
     let instr = IR_Instr(
         opcode: opcode,
@@ -380,7 +380,7 @@ proc builder_emit(builder: IR_Builder, opcode: Int, dest: Int, operands: Array<V
     builder.next_instr_id = builder.next_instr_id + 1
     return dest
 
-// Create new basic block
+# Create new basic block
 proc builder_new_block(builder: IR_Builder): IR_Block =
     let block = IR_Block(
         id: builder.next_block_id,
@@ -397,19 +397,19 @@ proc builder_new_block(builder: IR_Builder): IR_Block =
         builder.current_function.blocks = builder.current_function.blocks.push(block)
     return block
 
-// Collect globals
+# Collect globals
 proc builder_collect_globals(builder: IR_Builder): Dict<String, Int> =
     return {} as Dict<String, Int>
 
-// Collect imports
+# Collect imports
 proc builder_collect_imports(builder: IR_Builder): List<ImportInfo> =
     return []
 
-// Collect source map
+# Collect source map
 proc builder_collect_source_map(builder: IR_Builder): Dict<Int, SourceLocation> =
     return {} as Dict<Int, SourceLocation>
 
-// Make module function ID
+# Make module function ID
 proc make_module_function_id(name: String): FunctionId =
     FunctionId(
         hash: name.hash(),

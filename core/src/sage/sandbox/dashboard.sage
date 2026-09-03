@@ -1,30 +1,30 @@
-// ============================================================================
+# ============================================================================
 # Sandbox Dashboard - Terminal-based dashboard architecture
 # ============================================================================
-// First dashboard should be terminal-based, pure Sage implementation
-// Recommended: Pure Sage TUI
-// ============================================================================
+# First dashboard should be terminal-based, pure Sage implementation
+# Recommended: Pure Sage TUI
+# ============================================================================
 
 import sandbox.sage as sandbox
 import sandbox.events.sage as events
 import sandbox.resources.sage as resources
 import sandbox.limits.sage as limits
 
-// Dashboard modes
+# Dashboard modes
 let DASHBOARD_MODE_OVERVIEW = 0
 let DASHBOARD_MODE_MODULES = 1
 let DASHBOARD_MODE_RESOURCES = 2
 let DASHBOARD_MODE_TIMELINE = 3
 let DASHBOARD_MODE_ERRORS = 4
 
-// Dashboard state
+# Dashboard state
 class DashboardState {
     let mode: Int
     let show_help: Bool
     let filter_module: Option[String]
 }
 
-// Create default dashboard state
+# Create default dashboard state
 proc dashboard_state_default(): DashboardState =
     DashboardState(
         mode: DASHBOARD_MODE_OVERVIEW,
@@ -32,9 +32,9 @@ proc dashboard_state_default(): DashboardState =
         filter_module: none
     )
 
-// Dashboard rendering functions
+# Dashboard rendering functions
 
-// Render the main dashboard screen
+# Render the main dashboard screen
 proc dashboard_render_main(ctx: sandbox.InterpreterContext, state: DashboardState): String =
     if ctx.sandbox_context == none:
         return "Sandbox not enabled"
@@ -62,7 +62,7 @@ proc dashboard_render_main(ctx: sandbox.InterpreterContext, state: DashboardStat
     sb = sb + "========================================================\n"
     return sb
 
-// Render module dashboard
+# Render module dashboard
 proc dashboard_render_modules(ctx: sandbox.InterpreterContext, state: DashboardState): String =
     if ctx.sandbox_context == none:
         return "Sandbox not enabled"
@@ -99,7 +99,7 @@ proc dashboard_render_modules(ctx: sandbox.InterpreterContext, state: DashboardS
     sb = sb + "  [ ] Quit              Q\n"
     return sb
 
-// Render resource dashboard
+# Render resource dashboard
 proc dashboard_render_resources(ctx: sandbox.InterpreterContext, state: DashboardState): String =
     if ctx.sandbox_context == none:
         return "Sandbox not enabled"
@@ -125,7 +125,7 @@ proc dashboard_render_resources(ctx: sandbox.InterpreterContext, state: Dashboar
     sb = sb + "  [ ] Quit              Q\n"
     return sb
 
-// Render timeline dashboard
+# Render timeline dashboard
 proc dashboard_render_timeline(ctx: sandbox.InterpreterContext, state: DashboardState): String =
     if ctx.sandbox_context == none:
         return "Sandbox not enabled"
@@ -148,7 +148,7 @@ proc dashboard_render_timeline(ctx: sandbox.InterpreterContext, state: Dashboard
     sb = sb + "  [ ] Quit              Q\n"
     return sb
 
-// Render errors dashboard
+# Render errors dashboard
 proc dashboard_render_errors(ctx: sandbox.InterpreterContext, state: DashboardState): String =
     if ctx.sandbox_context == none:
         return "Sandbox not enabled"
@@ -168,7 +168,7 @@ proc dashboard_render_errors(ctx: sandbox.InterpreterContext, state: DashboardSt
     sb = sb + "  [ ] Quit              Q\n"
     return sb
 
-// Handle dashboard navigation
+# Handle dashboard navigation
 proc dashboard_handle_navigation(key: String, ctx: sandbox.InterpreterContext, state: DashboardState): DashboardState =
     match key:
         "M": return dashboard_state_default() with mode = DASHBOARD_MODE_MODULES
@@ -181,16 +181,16 @@ proc dashboard_handle_navigation(key: String, ctx: sandbox.InterpreterContext, s
         "Q": return dashboard_state_default() with show_help = false  // Quit
         _: return state
 
-// ============================================================================
+# ============================================================================
 # Dashboard Initialization
 # ============================================================================
 
-// Initialize dashboard with given mode
+# Initialize dashboard with given mode
 proc dashboard_init(mode: Int): DashboardState =
     dashboard_state_default() with mode = mode
 
-// Run dashboard loop (pseudo-code - would be integrated with CLI)
-// This would be called from the main CLI after program execution
+# Run dashboard loop (pseudo-code - would be integrated with CLI)
+# This would be called from the main CLI after program execution
 proc dashboard_run(ctx: sandbox.InterpreterContext): None =
     let state = dashboard_init(DASHBOARD_MODE_OVERVIEW)
     
@@ -198,68 +198,68 @@ proc dashboard_run(ctx: sandbox.InterpreterContext): None =
     // For now, just render the initial overview
     print dashboard_render_main(ctx, state)
 
-// ============================================================================
+# ============================================================================
 # CLI Integration (from sandbox.md sections 21-23)
-// ============================================================================
+# ============================================================================
 
-// Dashboard TUI controls (from section 44):
-// ↑ ↓: Navigate
-// Enter: Expand module
-// M: Module view
-// R: Resource view
-// T: Timeline
-// E: Errors
-// Q: Quit dashboard
-// F: Filter modules
-// /: Search
+# Dashboard TUI controls (from section 44):
+# ↑ ↓: Navigate
+# Enter: Expand module
+# M: Module view
+# R: Resource view
+# T: Timeline
+# E: Errors
+# Q: Quit dashboard
+# F: Filter modules
+# /: Search
 
-// Example dashboard modes from section 26:
-//
-// OVERVIEW:
-// ──────────────────────────────────────────────────────────
-// │ SAGE SANDBOX                             RUNNING          │
-// ├──────────────────────────────────────────────────────────┤
-// │ Program       app.sage                                    │
-// │ Runtime       42.8 ms                                     │
-// │ Memory        1.2 MB / Peak 1.8 MB                        │
-// │ Modules       12                                           │
-// │ Events        248                                          │
-// ├──────────────────────────────────────────────────────────┤
-// │ SELECTED: crypto                                          │
-// │                                                          │
-// │ Load Time:      4.8 ms                                    │
-// │ Execution:      12.4 ms                                   │
-// │ Memory:         128 KB                                    │
-// │ Imported By:    main                                      │
-// └──────────────────────────────────────────────────────────┤
-// │ SELECTED: crypto                                          │
-// │                                                          │
-// │ Load Time:      4.8 ms                                    │
-// │ Execution:      12.4 ms                                   │
-// │ Memory:         128 KB                                    │
-// │ Imported By:    main                                      │
-// └──────────────────────────────────────────────────────────┤
-//
-// MODULE TREE:
-// ──────────────────────────────────────────────────────────
-// main
-// │
-// ├── ▼ crypto
-// │   ├── ▼ hash
-// │   │    ├── Dependencies: 2
-// │   │    └── Dependencies: random
-// │   │
-// │   └── ▼ network
-// │        ├── ▼ socket
-// │        │    ├── Dependencies: 3
-// │        │    └── Dependencies: protocol
-// │        │
-// │        └── ▼ protocol
-// │
-// └── ▼ ui
-//
-// Each node should display optional metrics:
-// crypto
-// ├── Load: 4.8 ms
-// ├── Memory: 128 KB
-// └── Dependencies: 2
+# Example dashboard modes from section 26:
+#
+# OVERVIEW:
+# ──────────────────────────────────────────────────────────
+# │ SAGE SANDBOX                             RUNNING          │
+# ├──────────────────────────────────────────────────────────┤
+# │ Program       app.sage                                    │
+# │ Runtime       42.8 ms                                     │
+# │ Memory        1.2 MB / Peak 1.8 MB                        │
+# │ Modules       12                                           │
+# │ Events        248                                          │
+# ├──────────────────────────────────────────────────────────┤
+# │ SELECTED: crypto                                          │
+# │                                                          │
+# │ Load Time:      4.8 ms                                    │
+# │ Execution:      12.4 ms                                   │
+# │ Memory:         128 KB                                    │
+# │ Imported By:    main                                      │
+# └──────────────────────────────────────────────────────────┤
+# │ SELECTED: crypto                                          │
+# │                                                          │
+# │ Load Time:      4.8 ms                                    │
+# │ Execution:      12.4 ms                                   │
+# │ Memory:         128 KB                                    │
+# │ Imported By:    main                                      │
+# └──────────────────────────────────────────────────────────┤
+#
+# MODULE TREE:
+# ──────────────────────────────────────────────────────────
+# main
+# │
+# ├── ▼ crypto
+# │   ├── ▼ hash
+# │   │    ├── Dependencies: 2
+# │   │    └── Dependencies: random
+# │   │
+# │   └── ▼ network
+# │        ├── ▼ socket
+# │        │    ├── Dependencies: 3
+# │        │    └── Dependencies: protocol
+# │        │
+# │        └── ▼ protocol
+# │
+# └── ▼ ui
+#
+# Each node should display optional metrics:
+# crypto
+# ├── Load: 4.8 ms
+# ├── Memory: 128 KB
+# └── Dependencies: 2

@@ -1,8 +1,8 @@
-// ============================================================================
+# ============================================================================
 # Frontend Facade - Unified frontend interface
-// ============================================================================
-// Provides unified interface for lexing, parsing, and semantic analysis
-// ============================================================================
+# ============================================================================
+# Provides unified interface for lexing, parsing, and semantic analysis
+# ============================================================================
 
 import frontend.lexer as lexer
 import frontend.parser as parser
@@ -10,7 +10,7 @@ import frontend.resolver as resolver
 import frontend.diagnostics as diagnostics
 import ast
 
-// Parse source code into AST with full diagnostics
+# Parse source code into AST with full diagnostics
 proc parse_source(source: String, filename: String): ParseResult =
     // 1. Lex
     let lexer_state = lexer.lexer_new(source)
@@ -40,7 +40,7 @@ proc parse_source(source: String, filename: String): ParseResult =
         diagnostics: all_diagnostics
     )
 
-// Parse result container
+# Parse result container
 class ParseResult {
     let ast: AST_Module
     let tokens: List<Token>
@@ -48,21 +48,21 @@ class ParseResult {
     let diagnostics: List<Diagnostic>
 }
 
-// Check if diagnostics contain errors
+# Check if diagnostics contain errors
 proc has_errors(diagnostics: List<Diagnostic>): Bool =
     for diag in diagnostics:
         if diag.level == diagnostics.DIAG_ERROR:
             return true
     return false
 
-// Check if diagnostics contain warnings
+# Check if diagnostics contain warnings
 proc has_warnings(diagnostics: List<Diagnostic>): Bool =
     for diag in diagnostics:
         if diag.level == diagnostics.DIAG_WARNING:
             return true
     return false
 
-// Print diagnostics to stderr
+# Print diagnostics to stderr
 proc print_diagnostics(diagnostics: List<Diagnostic>): Unit =
     for diag in diagnostics:
         let level_str = match diag.level:

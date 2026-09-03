@@ -1,15 +1,15 @@
-// ============================================================================
+# ============================================================================
 # Interpreter Unwind - Exception unwinding and control flow
 # ============================================================================
-// Part of the Reference VM tier
-// Handles exception propagation, finally blocks, defer execution
-// ============================================================================
+# Part of the Reference VM tier
+# Handles exception propagation, finally blocks, defer execution
+# ============================================================================
 
 import runtime.frames as frames
 import runtime.control as control
 import runtime.errors as errors
 
-// Unwind the stack looking for a handler
+# Unwind the stack looking for a handler
 proc unwind_stack(
     ctx: InterpreterContext,
     exception: Value
@@ -38,13 +38,13 @@ proc unwind_stack(
     
     return None  // Unhandled exception
 
-// Find exception handler in a frame
+# Find exception handler in a frame
 proc find_exception_handler(frame: Frame, exception: Value): Option[ExceptionHandler] =
     // Look for catch blocks in the frame's code
     // This would be determined at compile time
     return None  // Simplified
 
-// Exception handler structure
+# Exception handler structure
 class ExceptionHandler {
     let catch_var: String       // Variable name for caught exception
     let catch_block: Stmt       // Catch block AST
@@ -52,7 +52,7 @@ class ExceptionHandler {
     let handler_pc: Int         // Program counter of handler
 }
 
-// Run defer handlers in a frame
+# Run defer handlers in a frame
 proc run_defer_handlers(frame: Frame): Unit =
     while frames.has_pending_defer(frame):
         let defer = frames.pop_defer(frame)
@@ -60,7 +60,7 @@ proc run_defer_handlers(frame: Frame): Unit =
         // In the reference VM, this means running the deferred statements
         execute_defer_statement(defer.handler, frame.captured_locals)
 
-// Find finally block in a frame
+# Find finally block in a frame
 proc find_finally_block(frame: Frame): Option[Int] =
     // Check if there's a finally block associated with this frame
     // This would be stored in the frame's exception state
@@ -68,7 +68,7 @@ proc find_finally_block(frame: Frame): Option[Int] =
         return frame.exception_state.finalizer
     return None
 
-// Execute finally block
+# Execute finally block
 proc execute_finally(ctx: InterpreterContext, frame: Frame, finally_pc: Int): Unit =
     // Save current state
     let saved_ip = frame.ip
@@ -84,17 +84,17 @@ proc execute_finally(ctx: InterpreterContext, frame: Frame, finally_pc: Int): Un
     frame.ip = saved_ip
     frame.locals = saved_locals
 
-// Execute a defer statement
+# Execute a defer statement
 proc execute_defer_statement(handler: String, captured_locals: Array<Value>): Unit =
     // Execute the deferred code with captured locals
     // ...
 
-// Unwind result types
+# Unwind result types
 let UNWIND_HANDLED = 0
 let UNWIND_UNHANDLED = 1
 let UNWIND_FINALLY = 2
 
-// Handle control flow result
+# Handle control flow result
 proc handle_control_flow(
     ctx: InterpreterContext,
     frame: Frame,
@@ -127,7 +127,7 @@ proc handle_control_flow(
                 return UNWIND_UNHANDLED
     return UNWIND_HANDLED
 
-// Unwind for return
+# Unwind for return
 proc unwind_for_return(ctx: InterpreterContext, frame: Frame): Int =
     // Run defer handlers
     run_defer_handlers(frame)
@@ -141,18 +141,18 @@ proc unwind_for_return(ctx: InterpreterContext, frame: Frame): Int =
     frames.pop_frame()
     return UNWIND_HANDLED
 
-// Unwind for break
+# Unwind for break
 proc unwind_for_break(ctx: InterpreterContext, frame: Frame): Int =
     // Run defer handlers in frames being exited
     // Find enclosing loop
     // ...
 
-// Unwind for continue
+# Unwind for continue
 proc unwind_for_continue(ctx: InterpreterContext, frame: Frame): Int =
     // Similar to break but jumps to loop continuation
     // ...
 
-// Unhandled exception handler
+# Unhandled exception handler
 proc handle_unhandled_exception(ctx: InterpreterContext, exception: Value): Unit =
     // Print error and exit
     let msg = errors.format_error(exception)

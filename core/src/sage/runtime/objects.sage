@@ -1,23 +1,23 @@
-// ============================================================================
+# ============================================================================
 # Runtime Objects - Object representation and operations
 # ============================================================================
-// Compact internal representations for:
-//   Function, Class, Instance, Generator, Module, Environment
-// Keep user dictionaries fully dynamic.
-// ============================================================================
+# Compact internal representations for:
+#   Function, Class, Instance, Generator, Module, Environment
+# Keep user dictionaries fully dynamic.
+# ============================================================================
 
-// Function representation (from pipeline.md Function Identity section)
-// Use stable internal IDs keyed by "function_id", not source name
-//
-// Function
-//   ├── function_id
-//   ├── source_name
-//   ├── owner_class
-//   ├── params
-//   ├── defaults
-//   ├── body/IR
-//   ├── closure
-//   └── profile
+# Function representation (from pipeline.md Function Identity section)
+# Use stable internal IDs keyed by "function_id", not source name
+#
+# Function
+#   ├── function_id
+#   ├── source_name
+#   ├── owner_class
+#   ├── params
+#   ├── defaults
+#   ├── body/IR
+#   ├── closure
+#   └── profile
 
 class Function {
     let function_id: FunctionId      // Stable internal ID
@@ -30,8 +30,8 @@ class Function {
     let profile: FunctionProfile     // Profile information
 }
 
-// FunctionId structure - key for profiles (from pipeline.md line 668)
-// Profiles must be keyed by "function_id", not source name
+# FunctionId structure - key for profiles (from pipeline.md line 668)
+# Profiles must be keyed by "function_id", not source name
 class FunctionId {
     let hash: Int                    // Stable hash of function identity
     let source_name: String          // Source name (secondary key)
@@ -40,7 +40,7 @@ class FunctionId {
     let default_hash: Int            // Hash of default values
 }
 
-// Create a FunctionId from a function
+# Create a FunctionId from a function
 proc make_function_id(
     source_name: String,
     owner_class: Option<String>,
@@ -54,7 +54,7 @@ proc make_function_id(
     default_hash: hash_array(defaults)
 )
 
-// Function profile (keyed by function_id, not source name - pipeline.md line 668)
+# Function profile (keyed by function_id, not source name - pipeline.md line 668)
 class FunctionProfile {
     let function_id: FunctionId      // Keyed by function_id
     let call_count: Int              // Number of calls
@@ -64,7 +64,7 @@ class FunctionProfile {
     let deopt_reason: Option[String]   // Last deoptimization reason, if any
 }
 
-// Inline cache for property/function calls
+# Inline cache for property/function calls
 class InlineCache {
     let function_id: FunctionId      // Cached function
     let last_args: Array<Value>      // Last argument values
@@ -72,13 +72,13 @@ class InlineCache {
     let valid: Bool                  // Whether cache is valid
 }
 
-// Instance representation (from Compact Runtime Objects section)
-// Instance
-//   ├── class reference
-//   ├── fields: Dict<String, Value>  // User properties (dynamic)
-//   └── slots: Array<Value>          // Compact field storage (if shaped)
+# Instance representation (from Compact Runtime Objects section)
+# Instance
+#   ├── class reference
+#   ├── fields: Dict<String, Value>  // User properties (dynamic)
+#   └── slots: Array<Value>          // Compact field storage (if shaped)
 
-// Class representation
+# Class representation
 class Class {
     let class_id: ClassId            // Stable class identifier
     let name: String                   // Class name
@@ -88,21 +88,21 @@ class Class {
     let field_slots: Dict<String, Int>   // Field name -> slot mapping
 }
 
-// Instance structure
+# Instance structure
 class Instance {
     let class_obj: Class          // Reference to class
     let slots: Array<Value>       // Compact slot storage
     let dict: Dict<String, Value> // User-defined properties (dynamic)
 }
 
-// Create a new instance
+# Create a new instance
 proc new_instance(class_obj: Class, initial_fields: Dict<String, Value>): Instance = Instance(
     class_obj: class_obj,
     slots: Array<Value>(class_obj.field_slots.len),  // Initialize with nils
     dict: initial_fields
 )
 
-// Get a field from an instance (tries slot first, then dict)
+# Get a field from an instance (tries slot first, then dict)
 proc instance_get_field(instance: Instance, field_name: String): Value =
     if dict_has(instance.class_obj.field_slots, field_name):
         let slot_idx = instance.class_obj.field_slots[field_name]
@@ -113,7 +113,7 @@ proc instance_get_field(instance: Instance, field_name: String): Value =
     raise PropertyError("Property '" + field_name + "' not found on instance of class " + 
                        instance.class_obj.name)
 
-// Set a field on an instance
+# Set a field on an instance
 proc instance_set_field(instance: Instance, field_name: String, value: Value): Unit =
     if dict_has(instance.class_obj.field_slots, field_name):
         let slot_idx = instance.class_obj.field_slots[field_name]
@@ -126,7 +126,7 @@ proc instance_set_field(instance: Instance, field_name: String, value: Value): U
     // If dict is full and field not in shape, add to dict
     instance.dict[field_name] = value
 
-// Method lookup on instance
+# Method lookup on instance
 proc instance_call_method(instance: Instance, method_name: String, args: Array<Value>): Value =
     if dict_has(instance.class_obj.methods, method_name):
         let method = instance.class_obj.methods[method_name]
@@ -135,14 +135,14 @@ proc instance_call_method(instance: Instance, method_name: String, args: Array<V
     raise PropertyError("Method '" + method_name + "' not found on class " + 
                        instance.class_obj.name)
 
-// Module representation (from Compact Runtime Objects section)
-// Module
-//   ├── module ID
-//   ├── canonical path
-//   ├── source identity
-//   ├── dependencies
-//   ├── cache entry
-//   ├── capability requirements
+# Module representation (from Compact Runtime Objects section)
+# Module
+#   ├── module ID
+#   ├── canonical path
+#   ├── source identity
+#   ├── dependencies
+#   ├── cache entry
+#   ├── capability requirements
 
 class Module {
     let module_id: ModuleId         // Unique module identifier
@@ -153,7 +153,7 @@ class Module {
     let capability_reqs: List<Capability>  // Required capabilities
 }
 
-// Module cache entry
+# Module cache entry
 class ModuleCacheEntry {
     let ast: AST_InModule              // Parsed AST
     let ir: IR_Module                    // Compiled IR
@@ -163,7 +163,7 @@ class ModuleCacheEntry {
     let last_loaded: Timestamp         // When last loaded
 }
 
-// Create a new module
+# Create a new module
 proc new_module(
     module_id: ModuleId,
     canonical_path: String,
@@ -185,11 +185,11 @@ proc new_module(
     capability_reqs: capability_reqs
 )
 
-// Environment representation (from Compact Runtime Objects section)
-// Environment
-//   ├── bindings: Dict<String, Value>  // Variable bindings
-//   ├── parent: Option<Environment>    // Parent scope chain
-//   ├── slot_map: Dict<String, Int>    // Lexical slot mapping
+# Environment representation (from Compact Runtime Objects section)
+# Environment
+#   ├── bindings: Dict<String, Value>  // Variable bindings
+#   ├── parent: Option<Environment>    // Parent scope chain
+#   ├── slot_map: Dict<String, Int>    // Lexical slot mapping
 
 class Environment {
     let bindings: Dict<String, Value>  // Variable bindings
@@ -198,7 +198,7 @@ class Environment {
     let is_closure: Bool               // Whether this is a closure env
 }
 
-// Create a new environment
+# Create a new environment
 proc new_environment(parent: Option<Environment>): Environment = Environment(
     bindings: {} as Dict<String, Value>,
     parent: parent,
@@ -206,7 +206,7 @@ proc new_environment(parent: Option<Environment>): Environment = Environment(
     is_closure: false
 )
 
-// Add a binding to environment
+# Add a binding to environment
 proc env_add_binding(env: Environment, name: String, value: Value): Environment =
     env.bindings[name] = value
     // Also update slot map if optimized
@@ -214,7 +214,7 @@ proc env_add_binding(env: Environment, name: String, value: Value): Environment 
         env.slot_map[name] = get_next_slot(env)
     return env
 
-// Lookup a binding in environment (with parent chain)
+# Lookup a binding in environment (with parent chain)
 proc env_lookup_binding(env: Environment, name: String): Option<Value> =
     if dict_has(env.bindings, name):
         return env.bindings[name]
@@ -222,8 +222,8 @@ proc env_lookup_binding(env: Environment, name: String): Option<Value> =
         return env_lookup_binding(env.parent, name)
     return None
 
-// Host native handles (from Runtime Values section)
-// native handles - platform-specific handles for FFI, file descriptors, etc.
+# Host native handles (from Runtime Values section)
+# native handles - platform-specific handles for FFI, file descriptors, etc.
 class NativeHandle {
     let handle_type: String     // Type of handle (file, socket, etc.)
     let raw_handle: Int         // Platform-specific handle value

@@ -1,33 +1,33 @@
-// ============================================================================
+# ============================================================================
 # Sandbox Context - Integration with InterpreterContext
 # ============================================================================
-// SandboxContext should be owned by InterpreterContext rather than global mutable state
-// Target architecture per pipeline.md:
-// InterpreterContext
-// ├── global_env
-// ├── module_cache
-// ├── profiler
-// ├── capabilities
-// └── sandbox_context
-//
-// When disabled: sandbox_context = nil
-// Normal runtime should avoid Sandbox logic wherever possible
-// ============================================================================
+# SandboxContext should be owned by InterpreterContext rather than global mutable state
+# Target architecture per pipeline.md:
+# InterpreterContext
+# ├── global_env
+# ├── module_cache
+# ├── profiler
+# ├── capabilities
+# └── sandbox_context
+#
+# When disabled: sandbox_context = nil
+# Normal runtime should avoid Sandbox logic wherever possible
+# ============================================================================
 
 import sandbox.sage as sandbox
 
-// Add sandbox_context field to InterpreterContext
-// This would be done in runtime/context.sage
-// class InterpreterContext {
-//     ...
-//     let sandbox_context: Option[SandboxContext]
-// }
+# Add sandbox_context field to InterpreterContext
+# This would be done in runtime/context.sage
+# class InterpreterContext {
+#     ...
+#     let sandbox_context: Option[SandboxContext]
+# }
 
-// Initialize sandbox_context as nil
+# Initialize sandbox_context as nil
 proc interpreter_context_init_sandbox(ctx: InterpreterContext): Unit =
     ctx.sandbox_context = none
 
-// Enable sandbox for an interpreter instance
+# Enable sandbox for an interpreter instance
 proc interpreter_context_enable_sandbox(ctx: InterpreterContext, config: sandbox.SandboxConfig): Unit =
     sandbox.sandbox_enable(ctx)
     // Initialize with config
@@ -64,29 +64,29 @@ proc interpreter_context_enable_sandbox(ctx: InterpreterContext, config: sandbox
     // Emit program start event
     sandbox.event_bus.emit(sandbox.SANDBOX_EVENT_PROGRAM_START, none, none, {})
 
-// Disable sandbox for an interpreter instance
+# Disable sandbox for an interpreter instance
 proc interpreter_context_disable_sandbox(ctx: InterpreterContext): Unit =
     sandbox.sandbox_disable(ctx)
 
-// Check if sandbox is enabled for current context
+# Check if sandbox is enabled for current context
 proc interpreter_context_sandbox_enabled(ctx: InterpreterContext): Bool =
     SANDBOX_ENABLED and ctx.sandbox_context != none and ctx.sandbox_context.enabled
 
-// Sandbox configuration from CLI flags
+# Sandbox configuration from CLI flags
 proc interpreter_context_from_cli(ctx: InterpreterContext, args: Array<String>): sandbox.SandboxConfig =
     sandbox.sandbox_cli_config(args)
 
-// Module import tracking hooks (would be called from frontend/resolver or interpreter)
+# Module import tracking hooks (would be called from frontend/resolver or interpreter)
 proc interpreter_context_module_import(ctx: InterpreterContext, module_name: String): Unit =
     if sandbox.interpreter_context_sandbox_enabled(ctx):
         sandbox.sandbox_module_import_request(module_name, ctx)
 
-// Module resolution hooks
+# Module resolution hooks
 proc interpreter_context_module_resolved(ctx: InterpreterContext, module_name: String, module_info: sandbox.ModuleInfo): Unit =
     if sandbox.interpreter_context_sandbox_enabled(ctx):
         sandbox.sandbox_module_resolved(module_name, module_info, ctx)
 
-// Module load hooks
+# Module load hooks
 proc interpreter_context_module_load_begin(ctx: InterpreterContext, module_name: String): Unit =
     if sandbox.interpreter_context_sandbox_enabled(ctx):
         sandbox.sandbox_module_load_begin(module_name, ctx)
@@ -95,17 +95,17 @@ proc interpreter_context_module_load_complete(ctx: InterpreterContext, module_na
     if sandbox.interpreter_context_sandbox_enabled(ctx):
         sandbox.sandbox_module_load_complete(module_name, load_time, ctx)
 
-// Cache hit hook
+# Cache hit hook
 proc interpreter_context_module_cache_hit(ctx: InterpreterContext, module_name: String): Unit =
     if sandbox.interpreter_context_sandbox_enabled(ctx):
         sandbox.sandbox_module_cache_hit(module_name, ctx)
 
-// Load error hook
+# Load error hook
 proc interpreter_context_module_load_error(ctx: InterpreterContext, module_name: String, error: String): Unit =
     if sandbox.interpreter_context_sandbox_enabled(ctx):
         sandbox.sandbox_module_load_error(module_name, error, ctx)
 
-// Resource snapshot
+# Resource snapshot
 proc interpreter_context_resource_snapshot(ctx: InterpreterContext): sandbox.ResourceSnapshot =
     if sandbox.interpreter_context_sandbox_enabled(ctx):
         return sandbox.sandbox_resource_snapshot(ctx)
@@ -119,7 +119,7 @@ proc interpreter_context_resource_snapshot(ctx: InterpreterContext): sandbox.Res
         cpu_time: 0.0
     )
 
-// Function monitoring hooks
+# Function monitoring hooks
 proc interpreter_context_function_enter(ctx: InterpreterContext, fn_val: Value): Unit =
     if sandbox.interpreter_context_sandbox_enabled(ctx) and sandbox.function_monitor_enabled:
         sandbox.function_enter_hook(fn_val)
@@ -128,7 +128,7 @@ proc interpreter_context_function_exit(ctx: InterpreterContext, fn_val: Value): 
     if sandbox.interpreter_context_sandbox_enabled(ctx) and sandbox.function_monitor_enabled:
         sandbox.function_exit_hook(fn_val)
 
-// ============================================================================
+# ============================================================================
 # Sandbox Profiler (optional detailed profiling)
 # ============================================================================
 
@@ -159,7 +159,7 @@ class SandboxProfiler {
     }
 }
 
-// ============================================================================
+# ============================================================================
 # Sandbox Limits
 # ============================================================================
 
@@ -171,7 +171,7 @@ class SandboxLimits {
     let max_import_depth: Int
 }
 
-// Check limits and potentially trigger actions
+# Check limits and potentially trigger actions
 proc sandbox_check_limits(ctx: InterpreterContext, limits: sandbox.SandboxLimits): Bool =
     // Check memory limit
     if limits.max_memory != 0:
@@ -199,11 +199,11 @@ proc sandbox_check_limits(ctx: InterpreterContext, limits: sandbox.SandboxLimits
         return false
     return true
 
-// ============================================================================
+# ============================================================================
 # Report Generation
 # ============================================================================
 
-// Generate text report
+# Generate text report
 proc sandbox_generate_text_report(ctx: InterpreterContext): String =
     if ctx.sandbox_context == none:
         return "Sandbox not enabled"
@@ -225,7 +225,7 @@ proc sandbox_generate_text_report(ctx: InterpreterContext): String =
     sb = sb + "Status: " + ctx.sandbox_context.status + "\n"
     return sb
 
-// Generate JSON report
+# Generate JSON report
 proc sandbox_generate_json_report(ctx: InterpreterContext): String =
     if ctx.sandbox_context == none:
         return "{}"
@@ -238,11 +238,11 @@ proc sandbox_generate_json_report(ctx: InterpreterContext): String =
     sb = sb + "}"
     return sb
 
-// ============================================================================
+# ============================================================================
 # Export Formats
 # ============================================================================
 
-// Export module graph as text
+# Export module graph as text
 proc sandbox_export_graph_text(ctx: InterpreterContext): String =
     if ctx.sandbox_context == none:
         return "Sandbox not enabled"
@@ -256,15 +256,15 @@ proc sandbox_export_graph_text(ctx: InterpreterContext): String =
             sb = sb + "  -> " + dep_name + "\n"
     return sb
 
-// ============================================================================
+# ============================================================================
 # Default Configuration and CLI Entry
 # ============================================================================
 
-// Default sandbox configuration
+# Default sandbox configuration
 proc sandbox_default_config(): sandbox.SandboxConfig =
     sandbox.sandbox_config_default()
 
-// CLI entry point configuration
+# CLI entry point configuration
 proc sandbox_cli_entry(args: Array<String>): sandbox.SandboxConfig =
     // Parse --sandbox flags
     let config = sandbox.sandbox_default_config()
@@ -305,27 +305,27 @@ proc sandbox_cli_entry(args: Array<String>): sandbox.SandboxConfig =
     
     return config
 
-// ============================================================================
+# ============================================================================
 # Zero-Cost Disabled Path Guarantee
 # ============================================================================
 
-// When SANDBOX_ENABLED is false:
-// - All sandbox tracking is a no-op
-// - EventBus.emit with disabled type is a no-op
-// - Function monitors are no-ops
-// - Resource tracking does not increment counters
-// - No memory is allocated for sandbox data structures
-// - Dashboard is not displayed
-// - CLI --sandbox flag has no effect
+# When SANDBOX_ENABLED is false:
+# - All sandbox tracking is a no-op
+# - EventBus.emit with disabled type is a no-op
+# - Function monitors are no-ops
+# - Resource tracking does not increment counters
+# - No memory is allocated for sandbox data structures
+# - Dashboard is not displayed
+# - CLI --sandbox flag has no effect
 
-// The architecture ensures:
-// sage program.sage              === (no sandbox) === sage program.sage
-// sage --sandbox program.sage    === (minimal overhead) === approximately same
+# The architecture ensures:
+# sage program.sage              === (no sandbox) === sage program.sage
+# sage --sandbox program.sage    === (minimal overhead) === approximately same
 
-// Verification:
-// Running without --sandbox should produce identical output to running with --sandbox
-// (modulo the optional dashboard display which is separate from program output)
-// The sandbox must not modify AST behavior, change module resolution,
-// change import order, or change program values.
+# Verification:
+# Running without --sandbox should produce identical output to running with --sandbox
+# (modulo the optional dashboard display which is separate from program output)
+# The sandbox must not modify AST behavior, change module resolution,
+# change import order, or change program values.
 
-// ============================================================================
+# ============================================================================

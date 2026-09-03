@@ -1,9 +1,9 @@
-// ============================================================================
+# ============================================================================
 # Interpreter Expression Evaluation
 # ============================================================================
-// Part of the Reference VM tier
-// Evaluates AST expressions using the common runtime
-// ============================================================================
+# Part of the Reference VM tier
+# Evaluates AST expressions using the common runtime
+# ============================================================================
 
 import ast
 import runtime.values as values
@@ -13,7 +13,7 @@ import runtime.objects as objects
 import runtime.control as control
 import runtime.errors as errors
 
-// Evaluate an expression
+# Evaluate an expression
 proc eval_expr(ctx: InterpreterContext, expr: AST_Expr): Value =
     match expr.kind:
         EXPR_NUMBER:
@@ -59,7 +59,7 @@ proc eval_expr(ctx: InterpreterContext, expr: AST_Expr): Value =
         _:
             raise errors.error_invalid_operation("eval", "unknown expression type")
 
-// Evaluate variable reference
+# Evaluate variable reference
 proc eval_variable(ctx: InterpreterContext, expr: AST_Expr): Value =
     if expr.resolved_binding != None:
         let binding = expr.resolved_binding
@@ -74,7 +74,7 @@ proc eval_variable(ctx: InterpreterContext, expr: AST_Expr): Value =
     // Fallback: lookup in environment chain
     return env_lookup(ctx.current_env, expr.name)
 
-// Evaluate binary operation
+# Evaluate binary operation
 proc eval_binary(ctx: InterpreterContext, expr: AST_Expr): Value =
     let lhs = eval_expr(ctx, expr.lhs)
     let rhs = eval_expr(ctx, expr.rhs)
@@ -82,12 +82,12 @@ proc eval_binary(ctx: InterpreterContext, expr: AST_Expr): Value =
     // Use canonical runtime operation
     return runtime_binary(ctx, expr.op, lhs, rhs)
 
-// Evaluate unary operation
+# Evaluate unary operation
 proc eval_unary(ctx: InterpreterContext, expr: AST_Expr): Value =
     let operand = eval_expr(ctx, expr.operand)
     return runtime_unary(ctx, expr.op, operand)
 
-// Evaluate function call
+# Evaluate function call
 proc eval_call(ctx: InterpreterContext, expr: AST_Expr): Value =
     let callee = eval_expr(ctx, expr.callee)
     let args = []
@@ -103,38 +103,38 @@ proc eval_call(ctx: InterpreterContext, expr: AST_Expr): Value =
     // Use canonical call operation
     return runtime_call(ctx, callee, args, kw_map)
 
-// Evaluate property access
+# Evaluate property access
 proc eval_get(ctx: InterpreterContext, expr: AST_Expr): Value =
     let obj = eval_expr(ctx, expr.object)
     return runtime_get_property(ctx, obj, expr.property_name)
 
-// Evaluate property assignment
+# Evaluate property assignment
 proc eval_set(ctx: InterpreterContext, expr: AST_Expr): Value =
     let obj = eval_expr(ctx, expr.object)
     let value = eval_expr(ctx, expr.value)
     return runtime_set_property(ctx, obj, expr.property_name, value)
 
-// Evaluate index access
+# Evaluate index access
 proc eval_index(ctx: InterpreterContext, expr: AST_Expr): Value =
     let obj = eval_expr(ctx, expr.object)
     let index = eval_expr(ctx, expr.index)
     return runtime_index(ctx, obj, index)
 
-// Evaluate index assignment
+# Evaluate index assignment
 proc eval_index_set(ctx: InterpreterContext, expr: AST_Expr): Value =
     let obj = eval_expr(ctx, expr.object)
     let index = eval_expr(ctx, expr.index)
     let value = eval_expr(ctx, expr.value)
     return runtime_set_index(ctx, obj, index, value)
 
-// Evaluate array literal
+# Evaluate array literal
 proc eval_array(ctx: InterpreterContext, expr: AST_Expr): Value =
     let elements = []
     for elem in expr.elements:
         elements = elements.push(eval_expr(ctx, elem))
     return values.value_array(elements)
 
-// Evaluate dictionary literal
+# Evaluate dictionary literal
 proc eval_dict(ctx: InterpreterContext, expr: AST_Expr): Value =
     let entries = {} as Dict<String, Value>
     for pair in expr.entries:
@@ -143,14 +143,14 @@ proc eval_dict(ctx: InterpreterContext, expr: AST_Expr): Value =
         entries[key] = value
     return values.value_dict(entries)
 
-// Evaluate tuple literal
+# Evaluate tuple literal
 proc eval_tuple(ctx: InterpreterContext, expr: AST_Expr): Value =
     let elements = []
     for elem in expr.elements:
         elements = elements.push(eval_expr(ctx, elem))
     return values.value_tuple(elements)
 
-// Evaluate slice
+# Evaluate slice
 proc eval_slice(ctx: InterpreterContext, expr: AST_Expr): Value =
     let obj = eval_expr(ctx, expr.object)
     let start = eval_expr(ctx, expr.start)
@@ -158,13 +158,13 @@ proc eval_slice(ctx: InterpreterContext, expr: AST_Expr): Value =
     let step = eval_expr(ctx, expr.step)
     return runtime_slice(ctx, obj, start, end, step)
 
-// Evaluate await
+# Evaluate await
 proc eval_await(ctx: InterpreterContext, expr: AST_Expr): Value =
     let awaitable = eval_expr(ctx, expr.operand)
     // Handle await semantics
     return awaitable  // Simplified
 
-// Evaluate proc literal
+# Evaluate proc literal
 proc eval_proc(ctx: InterpreterContext, expr: AST_Expr): Value =
     // Create function value with closure
     let fn_id = make_function_id(
@@ -178,12 +178,12 @@ proc eval_proc(ctx: InterpreterContext, expr: AST_Expr): Value =
                                 expr.defaults, closure, 
                                 FunctionProfile(fn_id))
 
-// Evaluate super
+# Evaluate super
 proc eval_super(ctx: InterpreterContext, expr: AST_Expr): Value =
     // Look up super class method
     // ...
 
-// Evaluate comptime
+# Evaluate comptime
 proc eval_comptime(ctx: InterpreterContext, expr: AST_Expr): Value =
     // Evaluate at compile time
     // ...

@@ -1,22 +1,22 @@
-// ============================================================================
+# ============================================================================
 # Runtime Frames - CallFrame management
 # ============================================================================
-// The same conceptual frame model supports:
-//   reference execution, bytecode execution, generators
-//   exception unwinding, JIT deoptimization, debugging
-// ============================================================================
+# The same conceptual frame model supports:
+#   reference execution, bytecode execution, generators
+#   exception unwinding, JIT deoptimization, debugging
+# ============================================================================
 
-// CallFrame structure - matches pipeline.md definition:
-// CallFrame
-//   ├── function_id
-//   ├── function
-//   ├── instruction/AST position
-//   ├── locals or slots
-//   ├── closure
-//   ├── return target
-//   ├── defer stack
-//   ├── exception state
-//   └── source location
+# CallFrame structure - matches pipeline.md definition:
+# CallFrame
+#   ├── function_id
+#   ├── function
+#   ├── instruction/AST position
+#   ├── locals or slots
+#   ├── closure
+#   ├── return target
+#   ├── defer stack
+#   ├── exception state
+#   └── source location
 
 class CallFrame {
     let function_id: FunctionId      // Unique function identifier
@@ -30,14 +30,14 @@ class CallFrame {
     let source_location: SourceLocation  // Source code position
 }
 
-// Defer information for defer/finally semantics
+# Defer information for defer/finally semantics
 class DeferInfo {
     let handler: String       // Handler name/ID
     let pc: Int               // Program counter at defer point
     let captured_locals: Array<Value>  // Locals captured at defer point
 }
 
-// Exception state tracking
+# Exception state tracking
 class ExceptionState {
     let exception: Option[Value]  // The exception value, if any
     let handler_pc: Option[Int]   // Next handler to jump to
@@ -45,7 +45,7 @@ class ExceptionState {
     let finalizer: Option[Int]    // Finally block PC, if any
 }
 
-// Frame stack for call management
+# Frame stack for call management
 class FrameStack {
     let frames: List<CallFrame>
     let max_depth: Int
@@ -81,7 +81,7 @@ class FrameStack {
         return true
 }
 
-// Frame creation helpers
+# Frame creation helpers
 proc new_frame(
     function_id: FunctionId,
     function: Function,
@@ -100,10 +100,10 @@ proc new_frame(
     source_location: source_loc
 )
 
-// Frame stack singleton for the current interpreter
+# Frame stack singleton for the current interpreter
 let g_frame_stack: FrameStack = FrameStack(max_depth: 12000)
 
-// Accessor functions (matching pipeline.md canonical operations)
+# Accessor functions (matching pipeline.md canonical operations)
 proc get_current_frame(): Option[CallFrame] = g_frame_stack.current()
 proc set_current_frame(frame: CallFrame): Bool = g_frame_stack.set_current(frame)
 proc push_frame(frame: CallFrame): Bool = g_frame_stack.push(frame)
@@ -125,11 +125,11 @@ proc get_exception_state(frame: CallFrame): Option[ExceptionState] = frame.excep
 proc set_exception_state(frame: CallFrame, state: ExceptionState): Unit =
     frame.exception_state = Some(state)
 
-// Frame operations for control flow
-// The same frame model supports all execution tiers
-// Reference VM, Bytecode VM, JIT/AOT all use the same CallFrame concept
+# Frame operations for control flow
+# The same frame model supports all execution tiers
+# Reference VM, Bytecode VM, JIT/AOT all use the same CallFrame concept
 
-// Frame serialization for debugging/dump tools
+# Frame serialization for debugging/dump tools
 proc frame_to_string(frame: CallFrame): String =
     "Frame[func=" + frame.function_id.source_name + 
     " ip=" + frame.ip.ToString() +

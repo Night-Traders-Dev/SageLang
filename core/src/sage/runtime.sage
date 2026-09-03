@@ -1,15 +1,15 @@
-// ============================================================================
+# ============================================================================
 # SageLang Runtime Orchestration Layer
 # ============================================================================
-// Thin orchestration layer that:
-//   1. Creates InterpreterContext
-//   2. Selects runtime profile
-//   3. Invokes frontend
-//   4. Builds or loads Sage IR
-//   5. Selects execution tier
-//   6. Runs the program
-//   7. Normalizes diagnostics and results
-// ============================================================================
+# Thin orchestration layer that:
+#   1. Creates InterpreterContext
+#   2. Selects runtime profile
+#   3. Invokes frontend
+#   4. Builds or loads Sage IR
+#   5. Selects execution tier
+#   6. Runs the program
+#   7. Normalizes diagnostics and results
+# ============================================================================
 
 import runtime.context as context
 import runtime.values as values
@@ -27,7 +27,7 @@ import ir.verifier as ir_verifier
 import vm.reference as reference_vm
 import vm.bytecode as bytecode_vm
 
-// CLI options structure
+# CLI options structure
 class CliOptions {
     let source_file: Option<String>
     let source_code: Option<String>
@@ -46,7 +46,7 @@ class CliOptions {
     let output_file: Option<String>
 }
 
-// Parse command line arguments
+# Parse command line arguments
 proc parse_cli_args(args: Array<String>): CliOptions =
     let opts = CliOptions(
         source_file: None,
@@ -120,7 +120,7 @@ proc parse_cli_args(args: Array<String>): CliOptions =
     
     return opts
 
-// Main entry point
+# Main entry point
 proc run(opts: CliOptions): Int =
     // 1. Create InterpreterContext with selected profile
     let ctx = context.context_new(opts.profile)
@@ -270,7 +270,7 @@ proc run(opts: CliOptions): Int =
     
     return 0
 
-// REPL mode
+# REPL mode
 proc run_repl(ctx: InterpreterContext, sandbox_mode: String = ""): Int =
     // Enable sandbox if sandbox_mode is set
     if sandbox_mode == "sandbox":
@@ -332,36 +332,36 @@ proc print_repl_help(): Unit =
     print "  :ast         - Dump AST for last expression"
     print "  :tokens      - Dump tokens for last expression"
 
-// Parity verification
+# Parity verification
 proc verify_parity(result1: Value, result2: Value): Bool =
     // Compare values for parity
     return values.value_eq(result1, result2)
 
-// CPC optimization (stub)
+# CPC optimization (stub)
 proc cpc_optimize(ctx: InterpreterContext, ir: IR_Module): OptimizedIR =
     // Profile-guided optimization
     // ...
     return OptimizedIR(ir: ir, profile: CpcProfile())
 
-// JIT execution (stub)
+# JIT execution (stub)
 proc jit_execute(ctx: InterpreterContext, ir: IR_Module): Value =
     // JIT compilation and execution
     // For now, fall back to reference
     return reference_vm.execute(ctx, ir)
 
-// AOT execution (stub)
+# AOT execution (stub)
 proc aot_execute(ctx: InterpreterContext, ir: IR_Module): Value =
     // AOT compilation and execution
     // For now, fall back to reference
     return reference_vm.execute(ctx, ir)
 
-// ============================================================================
+# ============================================================================
 # Interpreter Loop (Reference VM)
-// ============================================================================
-// The reference VM executes IR directly using the common runtime operations
-// ============================================================================
+# ============================================================================
+# The reference VM executes IR directly using the common runtime operations
+# ============================================================================
 
-// Execute IR module
+# Execute IR module
 proc execute(ctx: InterpreterContext, module: IR_Module): Value =
     // Set up initial frame for module-level code
     let frame = frames.new_frame(
@@ -381,7 +381,7 @@ proc execute(ctx: InterpreterContext, module: IR_Module): Value =
     
     return result
 
-// Execute IR block
+# Execute IR block
 proc execute_ir_block(ctx: InterpreterContext, block: IR_Block): Value =
     let frame = context.get_current_frame(ctx).unwrap()
     frame.ip = block.start_pc
@@ -398,7 +398,7 @@ proc execute_ir_block(ctx: InterpreterContext, block: IR_Block): Value =
     
     return values.nil
 
-// Execute single IR instruction
+# Execute single IR instruction
 proc execute_instruction(ctx: InterpreterContext, frame: CallFrame, instr: IR_Instr): ControlResult =
     match instr.opcode:
         IR_LOAD_CONST:
@@ -461,7 +461,7 @@ proc execute_instruction(ctx: InterpreterContext, frame: CallFrame, instr: IR_In
             // Unknown instruction
             return control.result_normal(values.nil)
 
-// Handle control flow results
+# Handle control flow results
 proc handle_control_flow(ctx: InterpreterContext, frame: CallFrame, result: ControlResult): Value =
     match result.kind:
         control.CF_RETURN:
@@ -479,9 +479,9 @@ proc handle_control_flow(ctx: InterpreterContext, frame: CallFrame, result: Cont
         _:
             return values.nil
 
-// ============================================================================
+# ============================================================================
 # IR Types (minimal for orchestration)
-// ============================================================================
+# ============================================================================
 
 class IR_Module {
     let name: String
@@ -511,7 +511,7 @@ class CpcProfile {
     // CPC profile data
 }
 
-// IR opcodes
+# IR opcodes
 let IR_LOAD_CONST = 0
 let IR_LOAD_LOCAL = 1
 let IR_STORE_LOCAL = 2
@@ -524,7 +524,7 @@ let IR_GET_PROP = 8
 let IR_SET_PROP = 9
 let IR_INDEX = 10
 
-// Helper functions
+# Helper functions
 proc make_module_function_id(name: String): FunctionId =
     FunctionId(
         hash: name.hash(),

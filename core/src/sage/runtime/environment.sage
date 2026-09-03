@@ -1,43 +1,43 @@
-// ============================================================================
+# ============================================================================
 # Runtime Environments - Environment management for scope resolution
 # ============================================================================
-// Supports local bindings, closure captures, global bindings, module bindings
-// Allows the production pipeline to avoid repeated string-based environment lookup
-// ============================================================================
+# Supports local bindings, closure captures, global bindings, module bindings
+# Allows the production pipeline to avoid repeated string-based environment lookup
+# ============================================================================
 
-// Environment node for scope chain
+# Environment node for scope chain
 class EnvNode {
     let name: String
     let value: Value
     let parent: Option<EnvNode>
 }
 
-// Environment structure
+# Environment structure
 class Env {
     let nodes: Dict<String, EnvNode>
     let parent: Option<Env>
     let is_global: Bool
 }
 
-// Global environment (top-level)
+# Global environment (top-level)
 let g_global_env: Env = Env({
     nodes: {} as Dict<String, EnvNode>,
     parent: None,
     is_global: true
 })
 
-// Create a new child environment
+# Create a new child environment
 proc env_create(parent: Env): Env = Env({
     nodes: {} as Dict<String, EnvNode>,
     parent: Some(parent),
     is_global: false
 })
 
-// Define a binding in the current environment
+# Define a binding in the current environment
 proc env_define(env: Env, name: String, value: Value): Env =
     env.nodes[name] = EnvNode(name, value, env.parent)
 
-// Lookup a binding (searches parent chain)
+# Lookup a binding (searches parent chain)
 proc env_lookup(env: Env, name: String): Option<Value> =
     if dict_has(env.nodes, name):
         return env.nodes[name].value
@@ -45,7 +45,7 @@ proc env_lookup(env: Env, name: String): Option<Value> =
         return env_lookup(env.parent, name)
     return None
 
-// Set a binding (mutates existing or creates new)
+# Set a binding (mutates existing or creates new)
 proc env_set(env: Env, name: String, value: Value): Env =
     if dict_has(env.nodes, name):
         env.nodes[name].value = value
@@ -54,11 +54,11 @@ proc env_set(env: Env, name: String, value: Value): Env =
         return env_set(env.parent, name, value)
     env_define(env, name, value)
 
-// Check if a binding exists
+# Check if a binding exists
 proc env_has(env: Env, name: String): Bool =
     dict_has(env.nodes, name) or (env.parent != None and env_has(env.parent, name))
 
-// Get all bindings from an environment
+# Get all bindings from an environment
 proc env_get_all(env: Env): Dict<String, Value> =
     let result = {} as Dict<String, Value>
     let keys = env.nodes.keys
@@ -75,7 +75,7 @@ proc env_get_all(env: Env): Dict<String, Value> =
             pi = pi + 1
     return result
 
-// Environment stack for closures and nested scopes
+# Environment stack for closures and nested scopes
 class EnvStack {
     let frames: List<Env>
     let max_depth: Int
@@ -101,10 +101,10 @@ class EnvStack {
         return Some(frames.last)
 }
 
-// Default global environment accessor
+# Default global environment accessor
 proc get_global_env(): Env = g_global_env
 
-// Module environment wrapper
+# Module environment wrapper
 class ModuleEnv {
     let env: Env
     let module_id: ModuleId

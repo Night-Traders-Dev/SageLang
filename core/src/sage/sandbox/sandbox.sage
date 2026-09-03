@@ -1,22 +1,22 @@
-// ============================================================================
+# ============================================================================
 # Sandbox - Runtime observability and monitoring system for SageLang
 # ============================================================================
-// Pure Sage implementation for portability and self-hosted compatibility
-// Activation: optional via --sandbox flag
-// Design principle: "Sage Sandbox must observe the runtime without becoming a
-// required runtime dependency or changing program semantics."
-// ============================================================================
+# Pure Sage implementation for portability and self-hosted compatibility
+# Activation: optional via --sandbox flag
+# Design principle: "Sage Sandbox must observe the runtime without becoming a
+# required runtime dependency or changing program semantics."
+# ============================================================================
 
-// Sandbox activation state
+# Sandbox activation state
 let SANDBOX_ENABLED = false
 
-// Sandbox mode constants
+# Sandbox mode constants
 let SANDBOX_MODE_OFF = 0
 let SANDBOX_MODE_SUMMARY = 1
 let SANDBOX_MODE_STANDARD = 2
 let SANDBOX_MODE_DETAILED = 3
 
-// Sandbox configuration
+# Sandbox configuration
 class SandboxConfig {
     let mode: Int
     let enable_modules: Bool
@@ -32,7 +32,7 @@ class SandboxConfig {
     let sample_rate: Int         // 1 = all, 10 = 1/10, 100 = 1/100
 }
 
-// Default sandbox configuration
+# Default sandbox configuration
 proc sandbox_config_default(): SandboxConfig = SandboxConfig(
     mode: SANDBOX_MODE_STANDARD,
     enable_modules: true,
@@ -48,7 +48,7 @@ proc sandbox_config_default(): SandboxConfig = SandboxConfig(
     sample_rate: 1
 )
 
-// Sandbox context for a single execution
+# Sandbox context for a single execution
 class SandboxContext {
     let enabled: Bool
     let mode: Int
@@ -65,7 +65,7 @@ class SandboxContext {
     let status: String
 }
 
-// Module information
+# Module information
 class ModuleInfo {
     let id: String              // Unique module identifier (e.g., "module:crypto:ab12")
     let name: String            // Module name (e.g., "crypto")
@@ -82,7 +82,7 @@ class ModuleInfo {
     let status: String
 }
 
-// Module edge (import relationship)
+# Module edge (import relationship)
 class ModuleEdge {
     let importer_id: String     // Module ID of importer
     let imported_id: String     // Module ID of imported
@@ -92,14 +92,14 @@ class ModuleEdge {
     let status: String          // "success", "error", "cache_hit"
 }
 
-// Module graph
+# Module graph
 class ModuleGraph {
     let nodes: Dict<String, ModuleInfo>
     let edges: Dict<String, List<ModuleEdge>>
     // Edge key format: "importer_id:imported_id"
 }
 
-// Resource statistics
+# Resource statistics
 class ResourceStats {
     let memory_current: Int     // Current memory in bytes
     let memory_peak: Int        // Peak memory in bytes
@@ -109,7 +109,7 @@ class ResourceStats {
     let cpu_time: Float64       // CPU time in seconds
 }
 
-// Resource tracker
+# Resource tracker
 class ResourceTracker {
     let program_start_memory: Int
     let program_peak_memory: Int
@@ -121,7 +121,7 @@ class ResourceTracker {
     let current_module: Option[String]  // Currently executing module
 }
 
-// Event types
+# Event types
 let SANDBOX_EVENT_PROGRAM_START = 0
 let SANDBOX_EVENT_PROGRAM_END = 1
 let SANDBOX_EVENT_MODULE_IMPORT_REQUEST = 2
@@ -139,7 +139,7 @@ let SANDBOX_EVENT_RESOURCE_LIMIT = 13
 let SANDBOX_EVENT_EXCEPTION = 13
 let SANDBOX_EVENT_RUNTIME_ERROR = 14
 
-// Sandbox event
+# Sandbox event
 class SandboxEvent {
     let id: Int              // Event sequence number
     let type: Int            // Event type constant
@@ -150,7 +150,7 @@ class SandboxEvent {
     let resource_snapshot: Option[ResourceSnapshot]
 }
 
-// Resource snapshot
+# Resource snapshot
 class ResourceSnapshot {
     let timestamp: Float64
     let memory_current: Int
@@ -161,7 +161,7 @@ class ResourceSnapshot {
     let cpu_time: Float64
 }
 
-// Event bus (simple implementation)
+# Event bus (simple implementation)
 class EventBus {
     let handlers: Dict<String, List<(SandboxEvent -> None)>>
     
@@ -187,16 +187,16 @@ class EventBus {
             handler(event)
 }
 
-// Singleton event bus
+# Singleton event bus
 let event_bus = EventBus()
 let event_bus_next_id = 0
 
-// Runtime helper functions
+# Runtime helper functions
 proc runtime_current_time(): Float64 = // Use host clock or approximate
     // For pure Sage implementation, use approximate time
     0.0  // Would be provided by host runtime
 
-// Sandbox configuration from CLI
+# Sandbox configuration from CLI
 proc sandbox_cli_config(args: Array<String>): SandboxConfig =
     let config = sandbox_config_default()
     let i = 0
@@ -234,7 +234,7 @@ proc sandbox_cli_config(args: Array<String>): SandboxConfig =
         i = i + 1
     return config
 
-// Sandbox enable/disable
+# Sandbox enable/disable
 proc sandbox_enable(ctx: InterpreterContext): Unit =
     SANDBOX_ENABLED = true
     ctx.sandbox_context = SandboxContext(
@@ -277,11 +277,11 @@ proc sandbox_disable(ctx: InterpreterContext): Unit =
         event_bus.emit(SANDBOX_EVENT_PROGRAM_END, none, none, {})
     ctx.sandbox_context = none
 
-// InterpreterContext integration
-// Add sandbox_context field to InterpreterContext
-// (Would be added to runtime/context.sage)
+# InterpreterContext integration
+# Add sandbox_context field to InterpreterContext
+# (Would be added to runtime/context.sage)
 
-// Module import tracking
+# Module import tracking
 proc sandbox_module_import_request(module_name: String, ctx: InterpreterContext): Unit =
     if not SANDBOX_ENABLED or ctx.sandbox_context == none:
         return
@@ -380,7 +380,7 @@ proc sandbox_module_load_error(module_name: String, error: String, ctx: Interpre
         {"module_name": module_name, "error": error}
     )
 
-// Resource tracking
+# Resource tracking
 proc sandbox_resource_snapshot(ctx: InterpreterContext): ResourceSnapshot =
     if ctx.sandbox_context == none:
         return ResourceSnapshot(
@@ -405,7 +405,7 @@ proc sandbox_resource_snapshot(ctx: InterpreterContext): ResourceSnapshot =
         cpu_time: 0.0       // Would get from host
     )
 
-// Function monitoring
+# Function monitoring
 let function_monitor_enabled = false
 let function_enter_handlers: List<(Value -> None)> = []
 let function_exit_handlers: List<(Value -> None)> = []
@@ -426,11 +426,11 @@ proc function_exit_hook(value: Value): Unit =
         for handler in function_exit_handlers:
             handler(value)
 
-// ============================================================================
+# ============================================================================
 # Sandbox CLI Integration
 # ============================================================================
 
-// Sandbox CLI modes
+# Sandbox CLI modes
 proc sandbox_mode_to_string(mode: Int): String =
     match mode:
         SANDBOX_MODE_OFF: return "off"
@@ -439,33 +439,33 @@ proc sandbox_mode_to_string(mode: Int): String =
         SANDBOX_MODE_DETAILED: return "detailed"
     return "unknown"
 
-// ============================================================================
+# ============================================================================
 # Zero-Cost Disabled Path
 # ============================================================================
 
-// When sandbox is disabled, all operations should be no-ops
+# When sandbox is disabled, all operations should be no-ops
 proc sandbox_disabled_check(): Bool =
     not SANDBOX_ENABLED
 
-// All sandbox functions should check this at the start and return early if disabled
-// The EventBus.emit and other operations should be bound to no-op functions when disabled
+# All sandbox functions should check this at the start and return early if disabled
+# The EventBus.emit and other operations should be bound to no-op functions when disabled
 
-// ============================================================================
+# ============================================================================
 # Compatibility
 # ============================================================================
 
-// Ensure sandbox does not change program semantics
-// All operations are conditional on SANDBOX_ENABLED flag
-// When disabled, all tracking is a no-op
+# Ensure sandbox does not change program semantics
+# All operations are conditional on SANDBOX_ENABLED flag
+# When disabled, all tracking is a no-op
 
-// The sandbox should preserve:
-// - Program output
-// - Import behavior  
-// - Module cache behavior
-// - Exceptions
-// - Execution order
-// - Language semantics
+# The sandbox should preserve:
+# - Program output
+# - Import behavior  
+# - Module cache behavior
+# - Exceptions
+# - Execution order
+# - Language semantics
 
-// Verification:
-// sage --sandbox hello.sage should produce same output as sage hello.sage
-// sage-c --sandbox hello.sage should produce compatible report
+# Verification:
+# sage --sandbox hello.sage should produce same output as sage hello.sage
+# sage-c --sandbox hello.sage should produce compatible report

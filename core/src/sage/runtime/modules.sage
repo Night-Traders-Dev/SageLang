@@ -1,19 +1,19 @@
-// ============================================================================
+# ============================================================================
 # Runtime Modules - Module system
 # ============================================================================
-// Module state belongs to InterpreterContext
-// Track: module ID, canonical path, source identity, dependencies,
-// cache entry, capability requirements
-// Normalize module references before caching
-// ============================================================================
+# Module state belongs to InterpreterContext
+# Track: module ID, canonical path, source identity, dependencies,
+# cache entry, capability requirements
+# Normalize module references before caching
+# ============================================================================
 
-// Module ID structure
+# Module ID structure
 class ModuleId {
     let canonical_path: String    // Normalized path
     let hash: Int                 // Hash for fast comparison
 }
 
-// Module state in InterpreterContext
+# Module state in InterpreterContext
 class ModuleState {
     let module_cache: Dict<ModuleId, Module>
     let module_paths: List<String>      // Search paths
@@ -21,7 +21,7 @@ class ModuleState {
     let capability_checks: Bool         // Whether to enforce capability checks
 }
 
-// Get or create module state
+# Get or create module state
 proc get_module_state(ctx: InterpreterContext): ModuleState =
     if ctx.module_state == None:
         ctx.module_state = ModuleState(
@@ -33,7 +33,7 @@ proc get_module_state(ctx: InterpreterContext): ModuleState =
         )
     return ctx.module_state
 
-// Resolve a module name to a canonical path
+# Resolve a module name to a canonical path
 proc resolve_module(ctx: InterpreterContext, name: String): String =
     let state = get_module_state(ctx)
     let paths = state.module_paths
@@ -47,14 +47,14 @@ proc resolve_module(ctx: InterpreterContext, name: String): String =
         i = i + 1
     raise NameError("Module '" + name + "' not found in search paths")
 
-// Normalize module reference (from pipeline.md line 746)
+# Normalize module reference (from pipeline.md line 746)
 proc normalize_module_ref(path: String): String =
     // Resolve relative paths, remove .sage extension, etc.
     // This ensures consistent caching
     let abs = realpath(path)
     return abs
 
-// Load a module
+# Load a module
 proc load_module(ctx: InterpreterContext, name: String): Module =
     let state = get_module_state(ctx)
     let canonical = normalize_module_ref(resolve_module(ctx, name))
@@ -105,20 +105,20 @@ proc load_module(ctx: InterpreterContext, name: String): Module =
     
     return module
 
-// Verify capability requirements
+# Verify capability requirements
 proc verify_capabilities(reqs: List<Capability>, ctx: InterpreterContext): Unit =
     let caps = ctx.host_capabilities
     for req in reqs:
         if not capability_check(caps, req):
             raise CapabilityError("Module requires capability: " + req.name)
 
-// Extract capabilities from AST
+# Extract capabilities from AST
 proc extract_capabilities(ast: AST_InModule): List<Capability> =
     // Analyze AST for imports, FFI calls, filesystem access, etc.
     // Return list of required capabilities
     return []
 
-// Module unloading (for development/testing)
+# Module unloading (for development/testing)
 proc unload_module(ctx: InterpreterContext, name: String): Bool =
     let state = get_module_state(ctx)
     let canonical = normalize_module_ref(resolve_module(ctx, name))

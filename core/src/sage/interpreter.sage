@@ -11,14 +11,14 @@ gc_disable()
 # 6. Runs the program
 # 7. Normalizes diagnostics and results
 # It should no longer contain the implementation of every runtime subsystem.
-//
-// This file replaces the old monolithic interpreter.sage and wires together
+#
+# This file replaces the old monolithic interpreter.sage and wires together
 # all the modular components created in core/src/sage/runtime/, core/src/sage/interpreter/,
-// core/src/sage/frontend/, and core/src/sage/ir/
-//
-// See pipeline.md Section 3: Modular Runtime Layout
-// and Section 2: Ideal End-to-End Pipeline
-// ============================================================================
+# core/src/sage/frontend/, and core/src/sage/ir/
+#
+# See pipeline.md Section 3: Modular Runtime Layout
+# and Section 2: Ideal End-to-End Pipeline
+# ============================================================================
 
 import runtime.context as ctx_module
 import runtime.values as values
@@ -43,25 +43,25 @@ import sandbox.resources.sage as sandbox_resources
 import sandbox.limits.sage as sandbox_limits
 import sandbox.dashboard.sage as dashboard
 
-// ============================================================================
+# ============================================================================
 # CLI and Entry Point
-// ============================================================================
+# ============================================================================
 
-// Main entry point for the SageLang runtime
-// Usage: sage [options] [file.sage]
-// or:    sage --repl
-// or:    sage --profile general --runtime reference script.sage
-proc main(args: Array<String>): Int =
-    // Parse CLI options
+# Main entry point for the SageLang runtime
+# Usage: sage [options] [file.sage]
+# or:    sage --repl
+# or:    sage --profile general --runtime reference script.sage
+proc main(args):
+    # Parse CLI options
     let opts = parse_args(args)
     
-    // Validate profile and tier
+    # Validate profile and tier
     validate_profile_and_tier(opts)
     
-    // Create InterpreterContext
+    # Create InterpreterContext
     let ctx = ctx_module.context_new(opts.profile)
     
-    // Apply CLI options
+    # Apply CLI options
     ctx_module.set_runtime_tier(ctx, opts.tier)
     ctx_module.set_flag(ctx, "profiling", true)
     ctx_module.set_flag(ctx, "verification", opts.verify_parity)
@@ -69,10 +69,10 @@ proc main(args: Array<String>): Int =
     if opts.max_steps > 0:
         ctx_module.resource_limits.max_steps = opts.max_steps
     
-    // Print profile info
+    # Print profile info
     print_profile_info(ctx, opts.profile)
     
-    // Initialize sandbox if in sandbox mode
+    # Initialize sandbox if in sandbox mode
     if opts.sandbox or runtime_mode == SAGE_RUNTIME_SANDBOX:
         let sandbox_config = sandbox.SandboxModeConfig(
             mode: sandbox.SANDBOX_MODE_STANDARD,
@@ -85,43 +85,43 @@ proc main(args: Array<String>): Int =
         )
         ctx_module.interpreter_context_enable_sandbox(ctx, sandbox_config)
     
-    // Handle REPL
+    # Handle REPL
     if opts.repl:
         return run_repl(ctx)
     
-    // Handle source file
+    # Handle source file
     if opts.source_file == None:
         print "Error: No source file specified"
         return 1
     
-    // Load source code
+    # Load source code
     let source = file_read(opts.source_file)
     let filename = opts.source_file
     
-    // Set source in context for error reporting
+    # Set source in context for error reporting
     ctx_module.set_source(ctx, source, filename)
     
-    // ====================================================================
+    # ====================================================================
     # 1. Invoke Frontend
     # ====================================================================
     print "=== Frontend: Lexing, Parsing, Semantic Analysis ==="
     
     let parse_result = frontend.parse(source, filename)
     
-    // Check for errors
+    # Check for errors
     if diagnostics.has_errors(parse_result.diagnostics):
         print "Frontend errors:"
         diagnostics.print_diagnostics(parse_result.diagnostics)
         return 1
     
-    // Print warnings
+    # Print warnings
     if diagnostics.has_warnings(parse_result.diagnostics):
         print "Frontend warnings:"
         diagnostics.print_diagnostics(parse_result.diagnostics)
     
     print "  ✓ Parsing and semantic analysis complete"
     
-    // ====================================================================
+    # ====================================================================
     # 2. Build Sage IR
     # ====================================================================
     print "=== IR Generation ==="
@@ -129,7 +129,7 @@ proc main(args: Array<String>): Int =
     let resolved = parse_result.resolved
     let ir_module = ir_builder.build_ir(resolved, ctx)
     
-    // Verify IR if requested
+    # Verify IR if requested
     if ctx_module.get_flag(ctx, "verification"):
         let verify_result = ir_verifier.verify(ir_module)
         if not verify_result.valid:
@@ -139,24 +139,24 @@ proc main(args: Array<String>): Int =
             return 1
         print "  ✓ IR verification passed"
     
-    // Print IR if requested
+    # Print IR if requested
     if opts.dump_ir:
         print "=== Sage IR ==="
         print ir_module_to_string(ir_module)
     
-    // Optimize IR if not reference tier
+    # Optimize IR if not reference tier
     let optimized_ir: ir_optimizer.OptimizedIR
     match opts.tier:
         "reference":
-            // No optimization for reference
+            # No optimization for reference
             optimized_ir = ir_optimizer.OptimizedIR(ir: ir_module, profile: ir_optimizer.CpcProfile())
         _:
             optimized_ir = ir_optimizer.optimize(ir_module, ctx_module.context_get_profiler(ctx))
     
-    // Replace with optimized if we have it
+    # Replace with optimized if we have it
     let execute_ir = optimized_ir.ir
     
-    // ====================================================================
+    # ====================================================================
     # 3. Select and Run Execution Tier
     # ====================================================================
     print "=== Execution Tier: " + opts.tier + " ==="
@@ -172,28 +172,28 @@ proc main(args: Array<String>): Int =
                 print bytecode_to_string(bytecode)
             result = bytecode_vm.execute_bytecode(ctx, bytecode)
         "cpc":
-            // CPC optimization + reference execution
-            // For now, execute the optimized IR through reference
+            # CPC optimization + reference execution
+            # For now, execute the optimized IR through reference
             result = reference_vm.execute(ctx, execute_ir)
         "jit":
-            // JIT compilation (fall back to reference for now)
+            # JIT compilation (fall back to reference for now)
             result = reference_vm.execute(ctx, execute_ir)
         "aot":
-            // AOT compilation (fall back to reference for now)
+            # AOT compilation (fall back to reference for now)
             result = reference_vm.execute(ctx, execute_ir)
         _:
             print "Unknown runtime tier: " + opts.tier
             return 1
     
-    // ====================================================================
+    # ====================================================================
     # 4. Normalize Diagnostics and Results
     # ====================================================================
     
-    // Print result
+    # Print result
     if result != values.nil:
         print "Result: " + values.value_to_string(result)
     
-    // Print profiling info if enabled
+    # Print profiling info if enabled
     if ctx_module.get_flag(ctx, "profiling"):
         let profiles = ctx_module.context_get_function_profiles(ctx)
         if profiles.len > 0:
@@ -202,13 +202,13 @@ proc main(args: Array<String>): Int =
                 let profile = profiles[func_id]
                 print "  " + func_id.source_name + ": " + profile.call_count.ToString() + " calls"
     
-    // Resource usage summary
+    # Resource usage summary
     let steps = ctx_module.context_get_resource_limits(ctx).max_steps
-    let steps_used = // ... get from ctx
+    let steps_used = # ... get from ctx
     if steps_used > 0:
         print "Steps: " + steps_used.ToString()
     
-    // Parity verification if requested
+    # Parity verification if requested
     if opts.verify_parity and opts.tier != "reference":
         let ref_result = reference_vm.execute(ctx_module.context_new(opts.profile), execute_ir)
         if not values.value_eq(result, ref_result):
@@ -217,20 +217,20 @@ proc main(args: Array<String>): Int =
             print "  reference: " + values.value_to_string(ref_result)
             return 2
     
-    // Finish sandbox and generate report
+    # Finish sandbox and generate report
     if ctx_module.interpreter_context_sandbox_enabled(ctx):
         sandbox.sandbox_disable(ctx)
-        // Generate and display dashboard
+        # Generate and display dashboard
         let report = dashboard.dashboard_render_main(ctx, dashboard.dashboard_init(DASHBOARD_MODE_OVERVIEW))
         print "\n" + report + "\n"
 
-// ====================================================================
+# ====================================================================
     # Done
     # ====================================================================
     print "=== Execution Complete ==="
     return 0
 
-// Parse CLI arguments
+# Parse CLI arguments
 proc parse_args(args: Array<String>): CliOptions =
     let opts = CliOptions(
         source_file: None,
@@ -303,7 +303,7 @@ proc parse_args(args: Array<String>): CliOptions =
     
     return opts
 
-// Validate profile and tier
+# Validate profile and tier
 proc validate_profile_and_tier(opts: CliOptions): Unit =
     let valid_profiles = ["general", "embedded", "deterministic"]
     let valid_tiers = ["reference", "bytecode", "cpc", "jit", "aot"]
@@ -318,7 +318,7 @@ proc validate_profile_and_tier(opts: CliOptions): Unit =
         print "Valid: " + valid_tiers.join(", ")
         exit 1
 
-// Print profile info
+# Print profile info
 proc print_profile_info(ctx: InterpreterContext, profile: String): Unit =
     let caps = capabilities.context_get_host_capabilities(ctx)
     print "Profile: " + profile
@@ -326,7 +326,7 @@ proc print_profile_info(ctx: InterpreterContext, profile: String): Unit =
     print "Resource limits: steps=" + ctx_module.context_get_resource_limits(ctx).max_steps.ToString()
     print "Runtime tier: " + ctx_module.context_get_runtime_tier(ctx)
 
-// Print IR as string
+# Print IR as string
 proc ir_module_to_string(module: ir_sage.IR_Module): String =
     let output = "Module: " + module.name + "\n"
     output = output + "Functions: " + module.functions.len.ToString() + "\n"
@@ -339,7 +339,7 @@ proc ir_module_to_string(module: ir_sage.IR_Module): String =
             output = output + "\n"
     return output
 
-// Opcode to string
+# Opcode to string
 proc opcode_to_string(opcode: Int): String =
     match opcode:
         0: return "NOP"

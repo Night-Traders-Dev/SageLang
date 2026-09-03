@@ -1,15 +1,15 @@
-// ============================================================================
+# ============================================================================
 # Sandbox Resource Monitoring - Program and module resource tracking
 # ============================================================================
-// ResourceSnapshot, module resource scopes, program/runtime metrics
-// Tracking at program level, module level, function level
-// Optional runtime level support
-// ============================================================================
+# ResourceSnapshot, module resource scopes, program/runtime metrics
+# Tracking at program level, module level, function level
+# Optional runtime level support
+# ============================================================================
 
 import sandbox.sage as sandbox
 import sandbox.events.sage as events
 
-// Resource snapshot for program/module/execution
+# Resource snapshot for program/module/execution
 class ResourceSnapshot {
     let timestamp: Float64      // Time in seconds since program start
     let memory_current: Int     // Current memory in bytes
@@ -20,7 +20,7 @@ class ResourceSnapshot {
     let cpu_time: Float64       // CPU time in seconds
 }
 
-// Resource tracker - tracks program and module resources
+# Resource tracker - tracks program and module resources
 class ResourceTracker {
     let program_start_time: Float64
     let program_peak_memory: Int
@@ -64,7 +64,7 @@ class ResourceTracker {
         current_module = none
 }
 
-// Resource stats for a module
+# Resource stats for a module
 class ResourceStats {
     let memory_current: Int     // Direct memory usage
     let memory_peak: Int        // Peak direct memory
@@ -74,14 +74,14 @@ class ResourceStats {
     let cpu_time: Float64       // CPU time
 }
 
-// Global resource tracker
+# Global resource tracker
 let resource_tracker = ResourceTracker()
 
-// ============================================================================
-// Program-Level Resource Tracking
-// ============================================================================
+# ============================================================================
+# Program-Level Resource Tracking
+# ============================================================================
 
-// Start tracking program resources
+# Start tracking program resources
 proc sandbox_start_resources(): Unit =
     resource_tracker = ResourceTracker()
     // Emit program start event with initial snapshot
@@ -92,7 +92,7 @@ proc sandbox_start_resources(): Unit =
         {}
     )
 
-// End program resource tracking and emit end event
+# End program resource tracking and emit end event
 proc sandbox_end_resources(): Unit =
     // Get final snapshot
     let snapshot = resource_tracker.get_snapshot()
@@ -106,11 +106,11 @@ proc sandbox_end_resources(): Unit =
     // Reset tracker for potential reuse
     resource_tracker = ResourceTracker()
 
-// ============================================================================
-// Module-Level Resource Tracking
-// ============================================================================
+# ============================================================================
+# Module-Level Resource Tracking
+# ============================================================================
 
-// Start tracking a module's resources
+# Start tracking a module's resources
 proc sandbox_track_module_begin(module_name: String): Unit =
     if not sandbox.SANDBOX_ENABLED:
         return
@@ -126,7 +126,7 @@ proc sandbox_track_module_begin(module_name: String): Unit =
         {"snapshot": sandbox.sandbox_resource_snapshot(/* ctx */)}
     )
     
-// End tracking a module's resources
+# End tracking a module's resources
 proc sandbox_track_module_end(module_name: String, execution_time: Float64): Unit =
     if not sandbox.SANDBOX_ENABLED:
         return
@@ -142,7 +142,7 @@ proc sandbox_track_module_end(module_name: String, execution_time: Float64): Uni
         {"snapshot": sandbox.sandbox_resource_snapshot(/* ctx */)}
     )
     
-// Update module resources
+# Update module resources
 proc sandbox_update_module_resources(module_name: String, delta: sandbox.ResourceStats): Unit =
     if not sandbox.SANDBOX_ENABLED:
         return
@@ -150,18 +150,18 @@ proc sandbox_update_module_resources(module_name: String, delta: sandbox.Resourc
     // Update module resource stats
     // Would be called periodically or at module boundaries
     
-// ============================================================================
-// Per-Module Resource Scope
-// ============================================================================
+# ============================================================================
+# Per-Module Resource Scope
+# ============================================================================
 
-// Resource scope stack for nested imports
+# Resource scope stack for nested imports
 let resource_scope_stack: List<String> = []
 
-// Push a module onto the resource scope stack
+# Push a module onto the resource scope stack
 proc sandbox_push_resource_scope(module_name: String): Unit =
     resource_scope_stack = resource_scope_stack + [module_name]
 
-// Pop a module from the resource scope stack
+# Pop a module from the resource scope stack
 proc sandbox_pop_resource_scope(): Option[String] =
     if resource_scope_stack.is_empty():
         return none
@@ -169,13 +169,13 @@ proc sandbox_pop_resource_scope(): Option[String] =
     resource_scope_stack = resource_scope_stack[:-1]
     return Some(top)
 
-// Current resource scope
+# Current resource scope
 proc sandbox_current_resource_scope(): Option[String] =
     if resource_scope_stack.is_empty():
         return none
     return Some(resource_scope_stack.last())
 
-// Resource attribution - where to attribute allocations
+# Resource attribution - where to attribute allocations
 proc sandbox_attribute_resources(target_module: String, amount: Int): Unit =
     // Attribute allocations to the target module
     // Optionally aggregate upward through scope stack
@@ -193,68 +193,68 @@ proc sandbox_attribute_resources(target_module: String, amount: Int): Unit =
                 // Add amount to current module and propagate upward
                 pass  // Placeholder
 
-// Direct vs inclusive resource usage
-// Direct: memory allocated directly by the module
-// Inclusive: direct + all dependencies' memory
+# Direct vs inclusive resource usage
+# Direct: memory allocated directly by the module
+# Inclusive: direct + all dependencies' memory
 
-// Example structure:
-// crypto
-//   Direct: 128 KB
-//   Dependencies: hash 42 KB, random 18 KB
-//   Inclusive: 188 KB
+# Example structure:
+# crypto
+#   Direct: 128 KB
+#   Dependencies: hash 42 KB, random 18 KB
+#   Inclusive: 188 KB
 
-// ============================================================================
-// Resource Accuracy Levels
-// ============================================================================
+# ============================================================================
+# Resource Accuracy Levels
+# ============================================================================
 
-// Level 1 - Pure Sage (available everywhere):
-// - execution timers
-// - module load timing
-// - event counts
-// - allocation events exposed by runtime
-// - object counts
-// - estimated resource usage
+# Level 1 - Pure Sage (available everywhere):
+# - execution timers
+# - module load timing
+# - event counts
+# - allocation events exposed by runtime
+# - object counts
+# - estimated resource usage
 
-// Level 2 - Sage Runtime Counters (when host provides):
-// - allocation count
-// - allocated bytes
-// - freed bytes
-// - current runtime memory
-// - peak runtime memory
+# Level 2 - Sage Runtime Counters (when host provides):
+# - allocation count
+# - allocated bytes
+# - freed bytes
+# - current runtime memory
+# - peak runtime memory
 
-// Level 3 - Host Metrics (when supported):
-// - process RSS
-// - CPU time
-// - thread usage
-// - system memory
+# Level 3 - Host Metrics (when supported):
+# - process RSS
+# - CPU time
+# - thread usage
+# - system memory
 
-// The dashboard should indicate accuracy source:
-// Memory: 1.8 MB | Source: Runtime Counter
-// or: Memory: ~1.8 MB | Source: Estimated
+# The dashboard should indicate accuracy source:
+# Memory: 1.8 MB | Source: Runtime Counter
+# or: Memory: ~1.8 MB | Source: Estimated
 
-// ============================================================================
-// Memory Attribution Example
-// ============================================================================
+# ============================================================================
+# Memory Attribution Example
+# ============================================================================
 
-// Module: crypto
-// Direct: 128 KB
-// Dependencies:
-//   hash: 42 KB
-//   random: 18 KB
-// Inclusive: 188 KB
+# Module: crypto
+# Direct: 128 KB
+# Dependencies:
+#   hash: 42 KB
+#   random: 18 KB
+# Inclusive: 188 KB
 
-// This distinction is critical:
-// Otherwise:
-// main would appear responsible for every dependency resource cost
+# This distinction is critical:
+# Otherwise:
+# main would appear responsible for every dependency resource cost
 
-// ============================================================================
-// Function-Level Resource Tracking (optional)
-// ============================================================================
+# ============================================================================
+# Function-Level Resource Tracking (optional)
+# ============================================================================
 
-// Function monitoring should initially be optional
-// When enabled, FUNCTION_ENTER and FUNCTION_EXIT events are generated
+# Function monitoring should initially be optional
+# When enabled, FUNCTION_ENTER and FUNCTION_EXIT events are generated
 
-// Function stats
+# Function stats
 class FunctionStats {
     let function_id: String
     let name: String
@@ -266,11 +266,11 @@ class FunctionStats {
     let allocation_count: Int
 }
 
-// ============================================================================
-// Resource Limits
-// ============================================================================
+# ============================================================================
+# Resource Limits
+# ============================================================================
 
-// Resource limit configuration
+# Resource limit configuration
 class ResourceLimitsConfig {
     let max_execution_time: Option<Int>     // in milliseconds, 0 = unlimited
     let max_memory: Option<Int>             // in bytes, 0 = unlimited
@@ -279,7 +279,7 @@ class ResourceLimitsConfig {
     let max_import_depth: Int               // 0 = unlimited
 }
 
-// Check if limits are exceeded
+# Check if limits are exceeded
 proc sandbox_check_limits(config: ResourceLimitsConfig, 
                           execution_time: Float64,
                           memory: Int,
@@ -308,17 +308,17 @@ proc sandbox_check_limits(config: ResourceLimitsConfig,
     
     return "ok"
 
-// ============================================================================
-// Sandbox Modes Configuration
-// ============================================================================
+# ============================================================================
+# Sandbox Modes Configuration
+# ============================================================================
 
-// Sandbox mode constants
+# Sandbox mode constants
 let SANDBOX_MODE_OFF = 0
 let SANDBOX_MODE_SUMMARY = 1
 let SANDBOX_MODE_STANDARD = 2
 let SANDBOX_MODE_DETAILED = 3
 
-// Mode configurations
+# Mode configurations
 proc sandbox_mode_config(mode: Int): sandbox.SandboxModeConfig =
     match mode:
         SANDBOX_MODE_OFF:
@@ -339,11 +339,11 @@ proc sandbox_mode_config(mode: Int): sandbox.SandboxModeConfig =
             sandbox.sandbox_detailed_config()
     return sandbox.SandboxModeConfig(mode=SANDBOX_MODE_OFF, enable_modules=false, enable_resources=false, enable_functions=false, enable_timeline=false, enable_errors=false, sample_rate=1)
 
-// ============================================================================
+# ============================================================================
 # Dashboard Data Generation
 # ============================================================================
 
-// Generate module dashboard data
+# Generate module dashboard data
 proc sandbox_generate_module_dashboard(ctx: sandbox.InterpreterContext): String =
     if ctx.sandbox_context == none:
         return "Sandbox not enabled"
@@ -366,7 +366,7 @@ proc sandbox_generate_module_dashboard(ctx: sandbox.InterpreterContext): String 
     sb = sb + "Errors: " + "0" + "\n"
     return sb
 
-// Generate overview dashboard data
+# Generate overview dashboard data
 proc sandbox_generate_overview_dashboard(ctx: sandbox.InterpreterContext): String =
     if ctx.sandbox_context == none:
         return "Sandbox not enabled"

@@ -1,31 +1,31 @@
-// ============================================================================
+# ============================================================================
 # Runtime Capabilities - Capability-based security model
 # ============================================================================
-// Host APIs must be capability-controlled:
-//   SAFE: pure computation, data transforms
-//   HOST: clock, filesystem, operating-system APIs
-//   UNSAFE: FFI, dynamic libraries, raw memory, host addresses
-// Before executing privileged operations:
-//   capability_check(), argument_validation(), resource_check()
-// Restricted runtimes must fail with explicit errors
-// ============================================================================
+# Host APIs must be capability-controlled:
+#   SAFE: pure computation, data transforms
+#   HOST: clock, filesystem, operating-system APIs
+#   UNSAFE: FFI, dynamic libraries, raw memory, host addresses
+# Before executing privileged operations:
+#   capability_check(), argument_validation(), resource_check()
+# Restricted runtimes must fail with explicit errors
+# ============================================================================
 
-// Capability levels (from pipeline.md lines 750-763)
+# Capability levels (from pipeline.md lines 750-763)
 let CAP_SAFE = 0      // Pure computation, data transforms
 let CAP_HOST = 1      // Clock, filesystem, OS APIs
 let CAP_UNSAFE = 2    // FFI, dynamic libraries, raw memory, host addresses
 
-// Capability names
+# Capability names
 let CAP_NAMES = ["SAFE", "HOST", "UNSAFE"]
 
-// Capability structure
+# Capability structure
 class Capability {
     let level: Int          // CAP_SAFE, CAP_HOST, CAP_UNSAFE
     let name: String        // Human-readable name
     let description: String // Description of what this capability allows
 }
 
-// Predefined capabilities
+# Predefined capabilities
 let CAP_CLOCK = Capability(CAP_HOST, "clock", "Access system clock/time")
 let CAP_FILESYSTEM = Capability(CAP_HOST, "filesystem", "File system operations")
 let CAP_OS_API = Capability(CAP_HOST, "os", "Operating system APIs")
@@ -39,22 +39,22 @@ let CAP_PROCESS = Capability(CAP_HOST, "process", "Process execution")
 let CAP_THREAD = Capability(CAP_HOST, "thread", "Thread management")
 let CAP_GPU = Capability(CAP_HOST, "gpu", "GPU/Vulkan operations")
 
-// Host capabilities in InterpreterContext
+# Host capabilities in InterpreterContext
 class HostCapabilities {
     let allowed: Set<Capability>      // Capabilities granted to this context
     let profile: CapabilityProfile    // Profile that defined allowed capabilities
 }
 
-// Capability profiles (from pipeline.md lines 777-823)
-// General: SAFE + HOST + selected UNSAFE (for desktop/server)
-// Embedded: SAFE + selected HOST (small binary, bounded memory)
-// Deterministic: SAFE only (no ambient host access)
+# Capability profiles (from pipeline.md lines 777-823)
+# General: SAFE + HOST + selected UNSAFE (for desktop/server)
+# Embedded: SAFE + selected HOST (small binary, bounded memory)
+# Deterministic: SAFE only (no ambient host access)
 
 let PROFILE_GENERAL = "general"
 let PROFILE_EMBEDDED = "embedded"
 let PROFILE_DETERMINISTIC = "deterministic"
 
-// Create capabilities for a profile
+# Create capabilities for a profile
 proc make_capabilities(profile: String): Set<Capability> =
     match profile:
         PROFILE_GENERAL:
@@ -73,14 +73,14 @@ proc make_capabilities(profile: String): Set<Capability> =
             }
     return {}
 
-// Check if a capability is granted
+# Check if a capability is granted
 proc capability_check(caps: HostCapabilities, req: Capability): Bool =
     req in caps.allowed
 
-// Resource configuration (from pipeline.md lines 827-854)
-// Each InterpreterContext configures:
-//   max_steps, max_recursion_depth, max_memory, max_stack,
-//   max_generator_steps, max_module_count, max_output_bytes, max_call_depth
+# Resource configuration (from pipeline.md lines 827-854)
+# Each InterpreterContext configures:
+#   max_steps, max_recursion_depth, max_memory, max_stack,
+#   max_generator_steps, max_module_count, max_output_bytes, max_call_depth
 
 class ResourceLimits {
     let max_steps: Int
@@ -93,7 +93,7 @@ class ResourceLimits {
     let max_call_depth: Int
 }
 
-// Default resource limits for profiles
+# Default resource limits for profiles
 proc make_resource_limits(profile: String): ResourceLimits =
     match profile:
         PROFILE_GENERAL:
@@ -131,7 +131,7 @@ proc make_resource_limits(profile: String): ResourceLimits =
             )
     return make_resource_limits(PROFILE_GENERAL)
 
-// Check resource limits
+# Check resource limits
 proc resource_check(limits: ResourceLimits, resource: String): Bool =
     // Check if the resource is within limits
     // Return true if allowed, false if limit exceeded
@@ -146,6 +146,6 @@ proc resource_check(limits: ResourceLimits, resource: String): Bool =
         "calls": return limits.max_call_depth == -1 or g_call_depth < limits.max_call_depth
     return true
 
-// Raise resource limit error
+# Raise resource limit error
 proc raise_resource_limit(resource: String): Value =
     raise ResourceLimitError("Resource limit exceeded: " + resource)

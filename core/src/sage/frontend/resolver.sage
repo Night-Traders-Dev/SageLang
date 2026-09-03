@@ -1,15 +1,15 @@
-// ============================================================================
+# ============================================================================
 # Frontend Resolver - Semantic analysis
 # ============================================================================
-// Semantic analysis should additionally compute:
-//   local bindings, closure captures, global bindings, module bindings,
-//   function IDs, method ownership, parameter maps, control-flow regions,
-//   exception/defer regions, capability requirements
-// ============================================================================
+# Semantic analysis should additionally compute:
+#   local bindings, closure captures, global bindings, module bindings,
+#   function IDs, method ownership, parameter maps, control-flow regions,
+#   exception/defer regions, capability requirements
+# ============================================================================
 
 import ast
 
-// Resolver state
+# Resolver state
 class Resolver {
     let ast: AST_Module
     let errors: List<Diagnostic>
@@ -20,7 +20,7 @@ class Resolver {
     let current_function: Option<FunctionId>
 }
 
-// Scope for binding resolution
+# Scope for binding resolution
 class Scope {
     let bindings: Dict<String, Binding>
     let parent: Option<Scope>
@@ -29,7 +29,7 @@ class Scope {
     let captured: Dict<String, Bool>  // Variables captured by closures
 }
 
-// Binding information
+# Binding information
 class Binding {
     let name: String
     let kind: BindingKind      // LOCAL, CLOSURE, GLOBAL, MODULE
@@ -44,7 +44,7 @@ let BINDING_CLOSURE = 1
 let BINDING_GLOBAL = 2
 let BINDING_MODULE = 3
 
-// Create a new resolver
+# Create a new resolver
 proc resolver_new(ast: AST_Module): Resolver = Resolver(
     ast: ast,
     errors: [],
@@ -55,7 +55,7 @@ proc resolver_new(ast: AST_Module): Resolver = Resolver(
     current_function: None
 )
 
-// Run semantic analysis
+# Run semantic analysis
 proc resolver_run(resolver: Resolver): ResolvedModule =
     // Enter global scope
     resolver_enter_scope(resolver, is_function: false)
@@ -77,7 +77,7 @@ proc resolver_run(resolver: Resolver): ResolvedModule =
         diagnostics: resolver.errors
     )
 
-// Enter a new scope
+# Enter a new scope
 proc resolver_enter_scope(resolver: Resolver, is_function: Bool): Unit =
     let parent = if resolver.scopes.is_empty() then None else Some(resolver.scopes.last)
     resolver.scopes = resolver.scopes.push(Scope(
@@ -88,18 +88,18 @@ proc resolver_enter_scope(resolver: Resolver, is_function: Bool): Unit =
         captured: {} as Dict<String, Bool>
     ))
 
-// Exit current scope
+# Exit current scope
 proc resolver_exit_scope(resolver: Resolver): Unit =
     if resolver.scopes.len > 0:
         resolver.scopes = resolver.scopes.pop()
 
-// Get current scope
+# Get current scope
 proc resolver_current_scope(resolver: Resolver): Scope =
     if resolver.scopes.is_empty():
         error "No active scope"
     return resolver.scopes.last
 
-// Declare a binding in current scope
+# Declare a binding in current scope
 proc resolver_declare(resolver: Resolver, name: String, kind: Int, mutable: Bool): Binding =
     let scope = resolver_current_scope(resolver)
     let binding = Binding(
@@ -113,7 +113,7 @@ proc resolver_declare(resolver: Resolver, name: String, kind: Int, mutable: Bool
     scope.bindings[name] = binding
     return binding
 
-// Resolve a binding reference
+# Resolve a binding reference
 proc resolver_resolve(resolver: Resolver, name: String): Option<Binding> =
     let i = resolver.scopes.len - 1
     while i >= 0:
@@ -123,7 +123,7 @@ proc resolver_resolve(resolver: Resolver, name: String): Option<Binding> =
         i = i - 1
     return None
 
-// Mark a binding as captured by a closure
+# Mark a binding as captured by a closure
 proc resolver_mark_captured(resolver: Resolver, name: String): Unit =
     let i = resolver.scopes.len - 1
     while i >= 0:
@@ -135,7 +135,7 @@ proc resolver_mark_captured(resolver: Resolver, name: String): Unit =
             return
         i = i - 1
 
-// Assign slot indices to bindings (for IR generation)
+# Assign slot indices to bindings (for IR generation)
 proc resolver_assign_slots(resolver: Resolver): Unit =
     // Walk scopes and assign slots
     let i = 0
@@ -148,7 +148,7 @@ proc resolver_assign_slots(resolver: Resolver): Unit =
             slot = slot + 1
         i = i + 1
 
-// Resolve a statement
+# Resolve a statement
 proc resolver_resolve_statement(resolver: Resolver, stmt: AST_Stmt): Unit =
     match stmt.kind:
         STMT_LET:
@@ -178,7 +178,7 @@ proc resolver_resolve_statement(resolver: Resolver, stmt: AST_Stmt): Unit =
             if stmt.expr != None:
                 resolver_resolve_expression(resolver, stmt.expr)
 
-// Resolve an expression
+# Resolve an expression
 proc resolver_resolve_expression(resolver: Resolver, expr: AST_Expr): Unit =
     match expr.kind:
         EXPR_VARIABLE:
@@ -204,7 +204,7 @@ proc resolver_resolve_expression(resolver: Resolver, expr: AST_Expr): Unit =
             // Other expression types
             pass
 
-// Error reporting
+# Error reporting
 proc resolver_error(resolver: Resolver, msg: String): Unit =
     resolver.errors = resolver.errors.push(Diagnostic(
         level: "error",
@@ -217,7 +217,7 @@ proc resolver_error(resolver: Resolver, msg: String): Unit =
         )
     ))
 
-// Resolved module result
+# Resolved module result
 class ResolvedModule {
     let ast: AST_Module
     let function_map: Dict<String, FunctionId>

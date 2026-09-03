@@ -1,16 +1,16 @@
-// ============================================================================
+# ============================================================================
 # Sandbox Event System - Common event model for all Sandbox activity
 # ============================================================================
-// All Sandbox activity should use this common event model.
-// Event types define what happened; the EventBus dispatches them.
-// Event system should avoid expensive allocations when possible.
-// Recommended modes: OFF, SUMMARY, STANDARD, DETAILED
-// ============================================================================
+# All Sandbox activity should use this common event model.
+# Event types define what happened; the EventBus dispatches them.
+# Event system should avoid expensive allocations when possible.
+# Recommended modes: OFF, SUMMARY, STANDARD, DETAILED
+# ============================================================================
 
-// Event ID counter (module-global, reset per program execution)
+# Event ID counter (module-global, reset per program execution)
 let sandbox_event_next_id = 0
 
-// Sandbox event types
+# Sandbox event types
 let SANDBOX_EVENT_PROGRAM_START = 0
 let SANDBOX_EVENT_PROGRAM_END = 1
 let SANDBOX_EVENT_MODULE_IMPORT_REQUEST = 2
@@ -28,7 +28,7 @@ let SANDBOX_EVENT_RESOURCE_LIMIT = 13
 let SANDBOX_EVENT_EXCEPTION = 13
 let SANDBOX_EVENT_RUNTIME_ERROR = 14
 
-// Sandbox event structure
+# Sandbox event structure
 class SandboxEvent {
     let id: Int              // Unique event sequence number
     let type: Int            // One of the SANDBOX_EVENT_* constants
@@ -39,7 +39,7 @@ class SandboxEvent {
     let resource_snapshot: Option[ResourceSnapshot]  // Resource snapshot if applicable
 }
 
-// Resource snapshot for events
+# Resource snapshot for events
 class ResourceSnapshot {
     let timestamp: Float64
     let memory_current: Int
@@ -50,7 +50,7 @@ class ResourceSnapshot {
     let cpu_time: Float64
 }
 
-// Event bus (singleton, no-op when sandbox disabled)
+# Event bus (singleton, no-op when sandbox disabled)
 class EventBus {
     // Handler type: takes a SandboxEvent and returns nothing
     let handlers: Dict<String, List<(SandboxEvent -> None)>>
@@ -90,17 +90,17 @@ class EventBus {
             handler(event)
 }
 
-// Singleton event bus instance
+# Singleton event bus instance
 let event_bus = EventBus().init()
 
-// Runtime time helper (would be provided by host)
-// Returns current time in seconds since program start
+# Runtime time helper (would be provided by host)
+# Returns current time in seconds since program start
 proc runtime_current_time(): Float64 =
     // In pure Sage implementation, this would use host runtime clock
     // or approximate time based on operations
     0.0  // Placeholder - host would provide actual time
 
-// Event types as strings for debugging
+# Event types as strings for debugging
 proc event_type_to_string(type: Int): String =
     match type:
         SANDBOX_EVENT_PROGRAM_START: return "PROGRAM_START"
@@ -121,12 +121,12 @@ proc event_type_to_string(type: Int): String =
         SANDBOX_EVENT_RUNTIME_ERROR: return "RUNTIME_ERROR"
     return "UNKNOWN"
 
-// ============================================================================
+# ============================================================================
 # Event Handler Registration (for frontend/interpreter integration)
 # ============================================================================
 
-// Register handlers for Sandbox events from the interpreter/frontend
-// These would be called from the interpreter when sandbox is enabled
+# Register handlers for Sandbox events from the interpreter/frontend
+# These would be called from the interpreter when sandbox is enabled
 
 proc sandbox_register_program_start_handler(handler: (SandboxEvent -> None)): Unit =
     event_bus.handler(SANDBOX_EVENT_PROGRAM_START, handler)
@@ -176,17 +176,17 @@ proc sandbox_register_exception_handler(handler: (SandboxEvent -> None)): Unit =
 proc sandbox_register_runtime_error_handler(handler: (SandboxEvent -> None)): Unit =
     event_bus.handler(SANDBOX_EVENT_RUNTIME_ERROR, handler)
 
-// ============================================================================
+# ============================================================================
 # Sandbox Modes
 # ============================================================================
 
-// Sandbox mode constants
+# Sandbox mode constants
 let SANDBOX_MODE_OFF = 0
 let SANDBOX_MODE_SUMMARY = 1
 let SANDBOX_MODE_STANDARD = 2
 let SANDBOX_MODE_DETAILED = 3
 
-// Mode descriptions
+# Mode descriptions
 proc sandbox_mode_description(mode: Int): String =
     match mode:
         SANDBOX_MODE_OFF: return "No tracking. Normal execution."
@@ -195,7 +195,7 @@ proc sandbox_mode_description(mode: Int): String =
         SANDBOX_MODE_DETAILED: return "Detailed mode: function activity, allocation events, detailed module timing, resource timeline, event stream."
     return "unknown"
 
-// Sandbox mode configuration
+# Sandbox mode configuration
 class SandboxModeConfig {
     let mode: Int
     let enable_modules: Bool
@@ -206,7 +206,7 @@ class SandboxModeConfig {
     let sample_rate: Int  // 1 = all events, 10 = 1/10 sampled, 100 = 1/100 sampled
 }
 
-// Default modes
+# Default modes
 proc sandbox_summary_config(): SandboxModeConfig =
     SandboxModeConfig(
         mode: SANDBOX_MODE_SUMMARY,
@@ -240,11 +240,11 @@ proc sandbox_detailed_config(): SandboxModeConfig =
         sample_rate: 1
     )
 
-// ============================================================================
+# ============================================================================
 # Sampling Support
 # ============================================================================
 
-// Check if an event should be sampled based on sample_rate
+# Check if an event should be sampled based on sample_rate
 proc sandbox_should_sample(sample_rate: Int): Bool =
     // Simple deterministic sampling
     // In production, would use a proper random or round-robin approach
@@ -256,11 +256,11 @@ proc sandbox_should_sample(sample_rate: Int): Bool =
     import random
     return random.random() < (1.0 / Float64(sample_rate))
 
-// ============================================================================
+# ============================================================================
 # Sandbox Limits and Enforcement
 # ============================================================================
 
-// Resource limit check result
+# Resource limit check result
 enum SandboxLimitResult {
     ALLOW
     WARN
@@ -268,7 +268,7 @@ enum SandboxLimitResult {
     STOP
 }
 
-// Check a resource limit and return result
+# Check a resource limit and return result
 proc sandbox_check_resource_limit(
     limit_type: String,
     current: Int,
@@ -282,14 +282,14 @@ proc sandbox_check_resource_limit(
         return SandboxLimitResult.WARN  // Placeholder
     return SandboxLimitResult.ALLOW
 
-// ============================================================================
+# ============================================================================
 # Integration with Interpreter Hooks
 # ============================================================================
 
-// These hooks would be called from the interpreter main loop
-// when sandbox is enabled
+# These hooks would be called from the interpreter main loop
+# when sandbox is enabled
 
-// Program lifecycle hooks
+# Program lifecycle hooks
 proc sandbox_hook_program_start(): Unit =
     if SANDBOX_ENABLED:
         event_bus.emit(SANDBOX_EVENT_PROGRAM_START, none, none, {})
@@ -298,7 +298,7 @@ proc sandbox_hook_program_end(): Unit =
     if SANDBOX_ENABLED:
         event_bus.emit(SANDBOX_EVENT_PROGRAM_END, none, none, {})
 
-// Module import hooks
+# Module import hooks
 proc sandbox_hook_module_import_request(module_name: String): Unit =
     if SANDBOX_ENABLED:
         event_bus.emit(
@@ -353,7 +353,7 @@ proc sandbox_hook_module_load_error(module_name: String, error: String): Unit =
             {"module_name": module_name, "error": error}
         )
 
-// Function monitoring hooks
+# Function monitoring hooks
 proc sandbox_hook_function_enter(fn_val: Value): Unit =
     if SANDBOX_ENABLED and sandbox.function_monitor_enabled:
         function_enter_hook(fn_val)
@@ -374,7 +374,7 @@ proc sandbox_hook_function_exit(fn_val: Value): Unit =
             {}
         )
 
-// Resource snapshot hook
+# Resource snapshot hook
 proc sandbox_hook_resource_snapshot(): Unit =
     if SANDBOX_ENABLED:
         snapshot = sandbox.sandbox_resource_snapshot(/* ctx */)
@@ -385,7 +385,7 @@ proc sandbox_hook_resource_snapshot(): Unit =
             {"snapshot": snapshot}
         )
 
-// Exception hook
+# Exception hook
 proc sandbox_hook_exception(exception: Value): Unit =
     if SANDBOX_ENABLED:
         event_bus.emit(
@@ -395,7 +395,7 @@ proc sandbox_hook_exception(exception: Value): Unit =
             {"exception": exception}
         )
 
-// Resource limit hook
+# Resource limit hook
 proc sandbox_hook_resource_limit(limit_type: String, current: Int, limit: Int): Unit =
     if SANDBOX_ENABLED:
         result = sandbox.sandbox_check_resource_limit(limit_type, current, limit)

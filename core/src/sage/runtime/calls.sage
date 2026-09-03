@@ -1,16 +1,16 @@
-// ============================================================================
+# ============================================================================
 # Runtime Calls - Function call and argument binding management
 # ============================================================================
-// Keyword argument maps - precompute param lookup:
-//   param_lookup = {
-//       "foo": 0,
-//       "bar": 1,
-//       "baz": 2
-//   }
-// Preserve all argument errors and default behavior.
-// ============================================================================
+# Keyword argument maps - precompute param lookup:
+#   param_lookup = {
+#       "foo": 0,
+#       "bar": 1,
+#       "baz": 2
+#   }
+# Preserve all argument errors and default behavior.
+# ============================================================================
 
-// Keyword argument parameter map
+# Keyword argument parameter map
 class KwParamMap {
     let param_lookup: Dict<String, Int>  // Parameter name -> index mapping
     let required_count: Int              // Number of required parameters
@@ -18,7 +18,7 @@ class KwParamMap {
     let variadic: Bool                   // Whether function accepts varargs
 }
 
-// Create a keyword argument map
+# Create a keyword argument map
 proc make_kw_param_map(
     param_names: Array<String>,
     defaults: Array<Value>,
@@ -36,13 +36,13 @@ proc make_kw_param_map(
         variadic: variadic
     )
 
-// Lookup parameter index by name
+# Lookup parameter index by name
 proc kw_param_lookup(map: KwParamMap, name: String): Option<Int> =
     if dict_has(map.param_lookup, name):
         return Some(map.param_lookup[name])
     return None
 
-// Bind arguments to parameters
+# Bind arguments to parameters
 proc bind_arguments(
     map: KwParamMap,
     provided: Array<Value>,
@@ -77,8 +77,8 @@ proc bind_arguments(
     
     return bound
 
-// Call metadata structure (from pipeline.md IR section)
-// call metadata
+# Call metadata structure (from pipeline.md IR section)
+# call metadata
 class CallMetadata {
     let function_id: FunctionId         // Identifying the called function
     let arg_count: Int                  // Number of arguments provided
@@ -88,7 +88,7 @@ class CallMetadata {
     let profile_id: Option[FunctionId]  // Profile ID for optimization
 }
 
-// Build call metadata from a call site
+# Build call metadata from a call site
 proc build_call_metadata(
     func_id: FunctionId,
     arg_count: Int,
@@ -103,19 +103,19 @@ proc build_call_metadata(
     source_location: source_loc
 )
 
-// Canonical call operation (from pipeline.md Semantic Authority section)
-// All execution tiers must use the same definitions for calls
-// runtime_call() defines the language semantics for function calls
+# Canonical call operation (from pipeline.md Semantic Authority section)
+# All execution tiers must use the same definitions for calls
+# runtime_call() defines the language semantics for function calls
 
-// Call dispatch - same conceptual model across all tiers
-// Reference VM, Bytecode VM, JIT/AOT all use the same call semantics
+# Call dispatch - same conceptual model across all tiers
+# Reference VM, Bytecode VM, JIT/AOT all use the same call semantics
 
-// Tail call optimization hint
+# Tail call optimization hint
 proc is_tail_call(stmt: Stmt): Bool =
     // Check if the call is in tail position
     // ... implementation depends on AST structure
 
-// Argument validation (called before privileged operations - pipeline.md line 767-769)
+# Argument validation (called before privileged operations - pipeline.md line 767-769)
 proc validate_arguments(
     map: KwParamMap,
     provided: Array<Value>
@@ -130,8 +130,8 @@ proc validate_arguments(
     
     return None  // Validation passed
 
-// Function call execution (core runtime operation)
-// This is the canonical call semantics that all tiers must respect
+# Function call execution (core runtime operation)
+# This is the canonical call semantics that all tiers must respect
 proc execute_call(
     callee: Value,
     args: Array<Value>,

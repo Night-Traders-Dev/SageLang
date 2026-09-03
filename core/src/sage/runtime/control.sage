@@ -1,17 +1,17 @@
-// ============================================================================
+# ============================================================================
 # Runtime Control - Control flow management
 # ============================================================================
-// Represent control flow explicitly:
-//   Normal, Return, Break, Continue, Yield, Throw
-//
-// Each frame tracks:
-//   pending control flow, defer stack, exception state
-//
-// The runtime must define precedence for:
-//   try, finally, return, break, continue, throw, defer
-// ============================================================================
+# Represent control flow explicitly:
+#   Normal, Return, Break, Continue, Yield, Throw
+#
+# Each frame tracks:
+#   pending control flow, defer stack, exception state
+#
+# The runtime must define precedence for:
+#   try, finally, return, break, continue, throw, defer
+# ============================================================================
 
-// Control flow result kinds
+# Control flow result kinds
 let CF_NORMAL = 0
 let CF_RETURN = 1
 let CF_BREAK = 2
@@ -19,14 +19,14 @@ let CF_CONTINUE = 3
 let CF_YIELD = 4
 let CF_THROW = 5
 
-// Control flow result structure
+# Control flow result structure
 class ControlResult {
     let kind: Int          // One of CF_* constants
     let value: Value       // Return/yield/throw value
     let target: Option[Int]  // Return target PC, if applicable
 }
 
-// Structured error types (from pipeline.md)
+# Structured error types (from pipeline.md)
 class RuntimeError  (msg: String) extends Exception(msg)
 class TypeError     (msg: String) extends Exception(msg)
 class NameError     (msg: String) extends Exception(msg)
@@ -37,7 +37,7 @@ class CapabilityError(msg: String) extends Exception(msg)
 class ResourceLimitError(msg: String) extends Exception(msg)
 class HostError      (msg: String) extends Exception(msg)
 
-// Control flow propagation through frames
+# Control flow propagation through frames
 proc propagate_control(current: CallFrame, result: ControlResult): Bool =
     match result.kind:
         CF_NORMAL:
@@ -64,28 +64,28 @@ proc propagate_control(current: CallFrame, result: ControlResult): Bool =
             return true   // Indicate exception propagation
     return false
 
-// Defer/finally precedence rules (from pipeline.md line 707-715)
-// The runtime must define precedence for:
-//   try, finally, return, break, continue, throw, defer
+# Defer/finally precedence rules (from pipeline.md line 707-715)
+# The runtime must define precedence for:
+#   try, finally, return, break, continue, throw, defer
 
-// Precedence order (highest to lowest):
-// 1. throw (if active)
-// 2. defer (if pending)
-// 3. finally (if in try block)
-// 4. return
-// 5. break
-// 6. continue
-// 7. normal
+# Precedence order (highest to lowest):
+# 1. throw (if active)
+# 2. defer (if pending)
+# 3. finally (if in try block)
+# 4. return
+# 5. break
+# 6. continue
+# 7. normal
 
-// Check if there's a pending defer in the current frame
+# Check if there's a pending defer in the current frame
 proc has_pending_defer(frame: CallFrame): Bool =
     frame.defer_stack.len > 0
 
-// Check if there's a pending exception
+# Check if there's a pending exception
 proc has_pending_exception(frame: CallFrame): Bool =
     frame.exception_state != None and frame.exception_state.unwinding
 
-// Run defer handlers
+# Run defer handlers
 proc run_defer_handlers(frame: CallFrame): Unit =
     while has_pending_defer(frame):
         let defer = pop_defer(frame)
@@ -93,7 +93,7 @@ proc run_defer_handlers(frame: CallFrame): Unit =
         // Note: defer handlers run in LIFO order
         // Finally blocks run before return, after exception handling
 
-// Finally block execution
+# Finally block execution
 proc run_finally(frame: CallFrame, finalizer_pc: Int): Unit =
     if has_pending_exception(frame):
         // If there's an active exception, run finally before handling
@@ -102,8 +102,8 @@ proc run_finally(frame: CallFrame, finalizer_pc: Int): Unit =
     // Execute finally block at finalizer_pc
     // Jump back to normal execution after finally
 
-// Control flow precedence determination
-// Returns the effective control flow kind, considering all factors
+# Control flow precedence determination
+# Returns the effective control flow kind, considering all factors
 proc determine_control_flow(
     frame: CallFrame,
     proposed_kind: Int,
@@ -125,7 +125,7 @@ proc determine_control_flow(
     // Default: use proposed control flow
     return proposed_kind
 
-// Yield/resume operations for generators
+# Yield/resume operations for generators
 proc generator_yield(frame: CallFrame, value: Value): ControlResult =
     ControlResult(
         kind: CF_YIELD,
@@ -140,8 +140,8 @@ proc generator_resume(frame: CallFrame, resume_value: Value): ControlResult =
         target: None
     )
 
-// Entry point for control flow in execution tiers
-// All tiers must respect the same control flow semantics
+# Entry point for control flow in execution tiers
+# All tiers must respect the same control flow semantics
 proc execute_statement(
     genv: InterpreterContext,
     stmt: Stmt

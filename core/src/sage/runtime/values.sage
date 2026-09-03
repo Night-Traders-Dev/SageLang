@@ -1,13 +1,13 @@
-// ============================================================================
+# ============================================================================
 # Runtime Values - Common value model shared across all execution tiers
 # ============================================================================
-// All tiers must share a common value model for:
-//
-// nil, booleans, numbers, strings, arrays, dictionaries, functions,
-// classes, instances, modules, generators, native handles
-// ============================================================================
+# All tiers must share a common value model for:
+#
+# nil, booleans, numbers, strings, arrays, dictionaries, functions,
+# classes, instances, modules, generators, native handles
+# ============================================================================
 
-// Tag enumeration for value types
+# Tag enumeration for value types
 let TAG_NIL = 0
 let TAG_BOOL = 1
 let TAG_NUMBER = 2
@@ -18,7 +18,7 @@ let TAG_TUPLE = 6
 let TAG_FUNCTION = 7
 let TAG_GENERATOR = 8
 
-// Value structure definition
+# Value structure definition
 class Value {
     let tag: Int
     let data: Union {
@@ -34,29 +34,29 @@ class Value {
     }
 }
 
-// Nil singleton
+# Nil singleton
 let nil: Value = Value(TAG_NIL, {is_nil: true})
 
-// Boolean helpers
+# Boolean helpers
 let true_val: Value = Value(TAG_BOOL, {bool_val: true})
 let false_val: Value = Value(TAG_BOOL, {bool_val: false})
 
-// Number value creation
+# Number value creation
 proc value_number(n: Double): Value = Value(TAG_NUMBER, {num_val: n})
 
-// String value creation
+# String value creation
 proc value_string(s: String): Value = Value(TAG_STRING, {str_val: s})
 
-// Array value creation
+# Array value creation
 proc value_array(elements: Array<Value>): Value = Value(TAG_ARRAY, {arr_val: elements})
 
-// Dictionary value creation
+# Dictionary value creation
 proc value_dict(entries: Dict<String, Value>): Value = Value(TAG_DICT, {dict_val: entries})
 
-// Tuple value creation
+# Tuple value creation
 proc value_tuple(elements: Array<Value>): Value = Value(TAG_TUPLE, {tuple_val: elements})
 
-// Function value creation
+# Function value creation
 proc value_function(
     id: FunctionId,
     body: IR_Instr,
@@ -66,13 +66,13 @@ proc value_function(
     profile: FunctionProfile
 ): Value = Value(TAG_FUNCTION, {fn_val: Function(id, body, params, defaults, closure, profile)})
 
-// Generator value creation
+# Generator value creation
 proc value_generator(
     frame: Frame,
     resume_state: GeneratorResumeState
 ): Value = Value(TAG_GENERATOR, {gen_val: Generator(frame, resume_state)})
 
-// Truthiness determination (same across all tiers)
+# Truthiness determination (same across all tiers)
 proc is_truthy(val: Value): Bool =
     if val.tag == TAG_NIL:
         return false
@@ -94,13 +94,13 @@ proc is_truthy(val: Value): Bool =
         return true
     return true
 
-// Value equality (used for comparisons)
+# Value equality (used for comparisons)
 proc value_eq(a: Value, b: Value): Bool =
     if a.tag != b.tag:
         return false
     return a.data == b.data
 
-// Hash value for dict keys
+# Hash value for dict keys
 proc value_hash(val: Value): Int =
     match val.tag:
         TAG_NIL: return 0
@@ -114,7 +114,7 @@ proc value_hash(val: Value): Int =
         TAG_GENERATOR: return val.data.gen_val.frame.hash
     return 0
 
-// Common value conversion to string (for diagnostics)
+# Common value conversion to string (for diagnostics)
 proc value_to_string(val: Value): String =
     match val.tag:
         TAG_NIL: return "nil"
@@ -128,7 +128,7 @@ proc value_to_string(val: Value): String =
         TAG_GENERATOR: return "<gen " + str(val.data.gen_val.frame.id) + ">"
     return "unknown"
 
-// Default constructor for testing
+# Default constructor for testing
 let tag_map = [
     TAG_NIL: "NIL",
     TAG_BOOL: "BOOL",

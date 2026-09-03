@@ -1,15 +1,15 @@
-// ============================================================================
+# ============================================================================
 # Interpreter Classes - Class and instance handling
 # ============================================================================
-// Part of the Reference VM tier
-// ============================================================================
+# Part of the Reference VM tier
+# ============================================================================
 
 import ast
 import runtime.values as values
 import runtime.objects as objects
 import runtime.errors as errors
 
-// Evaluate class definition (called from eval_stmt)
+# Evaluate class definition (called from eval_stmt)
 proc eval_class(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     // Create class object
     let class_obj = objects.Class(
@@ -53,11 +53,11 @@ proc eval_class(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     env_define(ctx.current_env, stmt.name, class_obj)
     return control.result_normal(values.nil)
 
-// Class creation
+# Class creation
 proc make_class_id(name: String): ClassId =
     ClassId(hash: name.hash(), name: name)
 
-// Create an instance
+# Create an instance
 proc create_instance(ctx: InterpreterContext, class_val: Value, args: Array<Value>): Value =
     let class_obj = class_val.data.fn_val  // Actually a Class
     
@@ -73,22 +73,22 @@ proc create_instance(ctx: InterpreterContext, class_val: Value, args: Array<Valu
     let instance = objects.new_instance(class_obj, {} as Dict<String, Value>)
     return values.value_instance(instance)
 
-// Instance property access
+# Instance property access
 proc instance_get_property(ctx: InterpreterContext, instance: Value, name: String): Value =
     let inst = instance.data.fn_val  // Actually an Instance
     return objects.instance_get_field(inst, name)
 
-// Instance property set
+# Instance property set
 proc instance_set_property(ctx: InterpreterContext, instance: Value, name: String, value: Value): Unit =
     let inst = instance.data.fn_val
     objects.instance_set_field(inst, name, value)
 
-// Method call on instance
+# Method call on instance
 proc instance_call_method(ctx: InterpreterContext, instance: Value, method_name: String, args: Array<Value>): Value =
     let inst = instance.data.fn_val
     return objects.instance_call_method(inst, method_name, args)
 
-// Super call
+# Super call
 proc call_super(ctx: InterpreterContext, instance: Value, method_name: String, args: Array<Value>): Value =
     let inst = instance.data.fn_val
     if inst.class_obj.super_class != None:
@@ -98,7 +98,7 @@ proc call_super(ctx: InterpreterContext, instance: Value, method_name: String, a
             return runtime_call(ctx, method, args.prepend(instance))
     raise errors.error_property_not_found(inst.class_obj.name, "super." + method_name)
 
-// Static method call
+# Static method call
 proc class_call_static(ctx: InterpreterContext, class_val: Value, method_name: String, args: Array<Value>): Value =
     let class_obj = class_val.data.fn_val
     if dict_has(class_obj.methods, method_name):

@@ -1,20 +1,20 @@
-// ============================================================================
+# ============================================================================
 # IR Verifier - Validates IR correctness
-// ============================================================================
-// Verifies: control flow integrity, slot usage, type consistency,
-// exception handler coverage, defer matching, etc.
-// ============================================================================
+# ============================================================================
+# Verifies: control flow integrity, slot usage, type consistency,
+# exception handler coverage, defer matching, etc.
+# ============================================================================
 
 import ir.builder as builder
 
-// Verification result
+# Verification result
 class VerifyResult {
     let valid: Bool
     let errors: List<String>
     let warnings: List<String>
 }
 
-// Create a new verifier
+# Create a new verifier
 proc verify(module: IR_Module): VerifyResult =
     let errors = []
     let warnings = []
@@ -40,7 +40,7 @@ proc verify(module: IR_Module): VerifyResult =
         warnings: warnings
     )
 
-// Verify a single function
+# Verify a single function
 proc verify_function(func: IR_Function): VerifyResult =
     let errors = []
     let warnings = []
@@ -81,7 +81,7 @@ proc verify_function(func: IR_Function): VerifyResult =
         warnings: warnings
     )
 
-// Verify a basic block
+# Verify a basic block
 proc verify_block(func: IR_Function, block: IR_Block): VerifyResult =
     let errors = []
     let warnings = []
@@ -106,7 +106,7 @@ proc verify_block(func: IR_Function, block: IR_Block): VerifyResult =
         warnings: warnings
     )
 
-// Verify an instruction
+# Verify an instruction
 proc verify_instruction(func: IR_Function, block: IR_Block, instr: IR_Instr, index: Int): VerifyResult =
     let errors = []
     let warnings = []
@@ -188,7 +188,7 @@ proc verify_instruction(func: IR_Function, block: IR_Block, instr: IR_Instr, ind
         warnings: warnings
     )
 
-// Verify control flow graph
+# Verify control flow graph
 proc verify_cfg(func: IR_Function): VerifyResult =
     let errors = []
     let warnings = []
@@ -224,7 +224,7 @@ proc verify_cfg(func: IR_Function): VerifyResult =
         warnings: warnings
     )
 
-// Verify slot usage
+# Verify slot usage
 proc verify_slots(func: IR_Function): VerifyResult =
     let errors = []
     let warnings = []
@@ -257,7 +257,7 @@ proc verify_slots(func: IR_Function): VerifyResult =
         warnings: warnings
     )
 
-// Verify exception handlers
+# Verify exception handlers
 proc verify_exception_handlers(func: IR_Function): VerifyResult =
     let errors = []
     let warnings = []
@@ -279,7 +279,7 @@ proc verify_exception_handlers(func: IR_Function): VerifyResult =
         warnings: warnings
     )
 
-// Verify defers
+# Verify defers
 proc verify_defers(func: IR_Function): VerifyResult =
     let errors = []
     let warnings = []
@@ -295,7 +295,7 @@ proc verify_defers(func: IR_Function): VerifyResult =
         warnings: warnings
     )
 
-// Check if opcode is a terminator
+# Check if opcode is a terminator
 proc is_terminator(opcode: Int): Bool =
     match opcode:
         IR_RETURN: return true
@@ -306,7 +306,7 @@ proc is_terminator(opcode: Int): Bool =
         IR_CONTINUE: return true
         _: return false
 
-// Get total instruction count
+# Get total instruction count
 proc get_total_instructions(func: IR_Function): Int =
     let total = 0
     for block in func.blocks:

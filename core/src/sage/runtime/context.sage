@@ -1,10 +1,10 @@
-// ============================================================================
+# ============================================================================
 # InterpreterContext - Central runtime context
 # ============================================================================
-// InterpreterContext owns all mutable state for an interpreter instance.
-// Enables: multiple interpreters, thread isolation, embedding, sandboxing,
-// deterministic execution, independent tests.
-// ============================================================================
+# InterpreterContext owns all mutable state for an interpreter instance.
+# Enables: multiple interpreters, thread isolation, embedding, sandboxing,
+# deterministic execution, independent tests.
+# ============================================================================
 
 import runtime.values as values
 import runtime.environment as env
@@ -18,18 +18,18 @@ import runtime.capabilities as capabilities
 import frontend.resolver as resolver
 import frontend.diagnostics as diagnostics
 
-// InterpreterContext structure (from pipeline.md lines 219-229):
-// InterpreterContext
-//   ├── global_env
-//   ├── module_cache
-//   ├── module_paths
-//   ├── error_context
-//   ├── profiler
-//   ├── resource_limits
-//   ├── host_capabilities
-//   ├── runtime_profile
-//   ├── runtime_flags
-//   └── allocator/state
+# InterpreterContext structure (from pipeline.md lines 219-229):
+# InterpreterContext
+#   ├── global_env
+#   ├── module_cache
+#   ├── module_paths
+#   ├── error_context
+#   ├── profiler
+#   ├── resource_limits
+#   ├── host_capabilities
+#   ├── runtime_profile
+#   ├── runtime_flags
+#   └── allocator/state
 
 class InterpreterContext {
     // Environments
@@ -79,7 +79,7 @@ class InterpreterContext {
     let initialized: Bool                    // Whether context is fully initialized
 }
 
-// Runtime flags for feature toggles
+# Runtime flags for feature toggles
 class RuntimeFlags {
     let enable_profiling: Bool
     let enable_jit: Bool
@@ -93,7 +93,7 @@ class RuntimeFlags {
     let dump_frames: Bool
 }
 
-// Native function registration
+# Native function registration
 class NativeFunction {
     let name: String
     let arity: Int
@@ -101,14 +101,14 @@ class NativeFunction {
     let capabilities: List<Capability>
 }
 
-// Error context for rich diagnostics
+# Error context for rich diagnostics
 class ErrorContext {
     let source: String
     let filename: String
     let line_map: Dict<Int, Int>  // Byte offset -> line number
 }
 
-// Profiler state
+# Profiler state
 class ProfilerState {
     let enabled: Bool
     let call_counts: Dict<FunctionId, Int>
@@ -118,7 +118,7 @@ class ProfilerState {
     let branch_behavior: Dict<Int, Dict<String, Int>>
 }
 
-// Create a new InterpreterContext with the given profile
+# Create a new InterpreterContext with the given profile
 proc context_new(profile: String): InterpreterContext =
     let caps = capabilities.make_capabilities(profile)
     let limits = capabilities.make_resource_limits(profile)
@@ -189,7 +189,7 @@ proc context_new(profile: String): InterpreterContext =
     
     return ctx
 
-// Initialize builtins in the context
+# Initialize builtins in the context
 proc init_builtins(ctx: InterpreterContext): Unit =
     let env = ctx.global_env
     // Core builtins
@@ -206,7 +206,7 @@ proc init_builtins(ctx: InterpreterContext): Unit =
     ctx.builtin_registry["print"] = NativeFunction("print", 1, native_print, [])
     // ...
 
-// Builtin implementations (delegating to host)
+# Builtin implementations (delegating to host)
 proc native_print(args: Array<Value>): Value =
     let s = values.value_to_string(args[0])
     print s
@@ -234,7 +234,7 @@ proc native_clock(args: Array<Value>): Value =
 proc native_type(args: Array<Value>): Value =
     return values.value_string(values.value_type(args[0]))
 
-// Context accessors
+# Context accessors
 proc context_get_global_env(ctx: InterpreterContext): Env = ctx.global_env
 proc context_get_current_env(ctx: InterpreterContext): Env = ctx.current_env
 proc context_set_current_env(ctx: InterpreterContext, env: Env): Unit = ctx.current_env = env
@@ -250,7 +250,7 @@ proc context_set_runtime_tier(ctx: InterpreterContext, tier: String): Unit = ctx
 proc context_get_profiler(ctx: InterpreterContext): ProfilerState = ctx.profiler
 proc context_get_function_profiles(ctx: InterpreterContext): Dict<FunctionId, FunctionProfile> = ctx.function_profiles
 
-// Resource tracking
+# Resource tracking
 proc context_increment_steps(ctx: InterpreterContext): Bool =
     ctx.steps_used = ctx.steps_used + 1
     if ctx.resource_limits.max_steps != -1 and ctx.steps_used > ctx.resource_limits.max_steps:
@@ -269,7 +269,7 @@ proc context_decrement_recursion(ctx: InterpreterContext): Unit =
 proc context_check_resource(ctx: InterpreterContext, resource: String): Bool =
     capabilities.resource_check(ctx.resource_limits, resource)
 
-// Capability checking
+# Capability checking
 proc context_check_capability(ctx: InterpreterContext, cap: Capability): Bool =
     capabilities.capability_check(ctx.host_capabilities, cap)
 
@@ -277,7 +277,7 @@ proc context_require_capability(ctx: InterpreterContext, cap: Capability): Unit 
     if not capabilities.capability_check(ctx.host_capabilities, cap):
         raise capabilities.CapabilityError("Required capability not granted: " + cap.name)
 
-// Frame management helpers
+# Frame management helpers
 proc context_push_frame(ctx: InterpreterContext, frame: CallFrame): Bool =
     let result = frames.push_frame(frame)
     if result:
@@ -292,7 +292,7 @@ proc context_pop_frame(ctx: InterpreterContext): Option<CallFrame> =
         ctx.current_frame = None
     return frame
 
-// Error context management
+# Error context management
 proc context_set_source(ctx: InterpreterContext, source: String, filename: String): Unit =
     ctx.error_context.source = source
     ctx.error_context.filename = filename
@@ -301,7 +301,7 @@ proc context_set_source(ctx: InterpreterContext, source: String, filename: Strin
 
 proc context_get_error_context(ctx: InterpreterContext): ErrorContext = ctx.error_context
 
-// Build line map from source
+# Build line map from source
 proc build_line_map(source: String): Dict<Int, Int> =
     let map = {} as Dict<Int, Int>
     let line = 1
@@ -313,7 +313,7 @@ proc build_line_map(source: String): Dict<Int, Int> =
         i = i + 1
     return map
 
-// Get line number from byte offset
+# Get line number from byte offset
 proc context_get_line(ctx: InterpreterContext, offset: Int): Int =
     let map = ctx.error_context.line_map
     if dict_has(map, offset):
@@ -327,7 +327,7 @@ proc context_get_line(ctx: InterpreterContext, offset: Int): Int =
         i = i - 1
     return 1
 
-// Profile management
+# Profile management
 proc context_get_profile(ctx: InterpreterContext, func_id: FunctionId): Option<FunctionProfile> =
     if dict_has(ctx.function_profiles, func_id):
         return Some(ctx.function_profiles[func_id])
@@ -336,7 +336,7 @@ proc context_get_profile(ctx: InterpreterContext, func_id: FunctionId): Option<F
 proc context_update_profile(ctx: InterpreterContext, func_id: FunctionId, profile: FunctionProfile): Unit =
     ctx.function_profiles[func_id] = profile
 
-// Flag management
+# Flag management
 proc context_get_flag(ctx: InterpreterContext, flag: String): Bool =
     match flag:
         "profiling": return ctx.runtime_flags.enable_profiling
@@ -364,7 +364,7 @@ proc context_set_flag(ctx: InterpreterContext, flag: String, value: Bool): Unit 
         "dump_bytecode": ctx.runtime_flags.dump_bytecode = value
         "dump_frames": ctx.runtime_flags.dump_frames = value
 
-// Create a child context (for embedding/sandboxing)
+# Create a child context (for embedding/sandboxing)
 proc context_spawn_child(parent: InterpreterContext, profile: String): InterpreterContext =
     let child = context_new(profile)
     // Inherit module cache from parent
@@ -372,18 +372,18 @@ proc context_spawn_child(parent: InterpreterContext, profile: String): Interpret
     child.module_paths = parent.module_paths
     return child
 
-// Destroy context (cleanup)
+# Destroy context (cleanup)
 proc context_destroy(ctx: InterpreterContext): Unit =
     // Cleanup resources
     // ...
     ctx.initialized = false
 
-// ============================================================================
+# ============================================================================
 # Canonical Runtime Operations (from pipeline.md Semantic Authority section)
 # All execution tiers must use these definitions
 # ============================================================================
 
-// Property access
+# Property access
 proc runtime_get_property(ctx: InterpreterContext, obj: Value, name: String): Value =
     // Canonical property get semantics
     match obj.tag:
@@ -398,7 +398,7 @@ proc runtime_get_property(ctx: InterpreterContext, obj: Value, name: String): Va
         _:
             raise errors.TypeError("Cannot get property on type " + values.TAG_NAMES[obj.tag])
 
-// Property assignment
+# Property assignment
 proc runtime_set_property(ctx: InterpreterContext, obj: Value, name: String, value: Value): Value =
     match obj.tag:
         values.TAG_DICT:
@@ -410,7 +410,7 @@ proc runtime_set_property(ctx: InterpreterContext, obj: Value, name: String, val
         _:
             raise errors.TypeError("Cannot set property on type " + values.TAG_NAMES[obj.tag])
 
-// Index access
+# Index access
 proc runtime_index(ctx: InterpreterContext, obj: Value, index: Value): Value =
     match obj.tag:
         values.TAG_ARRAY:
@@ -431,7 +431,7 @@ proc runtime_index(ctx: InterpreterContext, obj: Value, index: Value): Value =
         _:
             raise errors.TypeError("Cannot index type " + values.TAG_NAMES[obj.tag])
 
-// Index assignment
+# Index assignment
 proc runtime_set_index(ctx: InterpreterContext, obj: Value, index: Value, value: Value): Value =
     match obj.tag:
         values.TAG_ARRAY:
@@ -447,45 +447,45 @@ proc runtime_set_index(ctx: InterpreterContext, obj: Value, index: Value, value:
         _:
             raise errors.TypeError("Cannot set index on type " + values.TAG_NAMES[obj.tag])
 
-// Slice operation
+# Slice operation
 proc runtime_slice(ctx: InterpreterContext, obj: Value, start: Value, end: Value, step: Value): Value =
     // ... slice implementation
     raise errors.NotImplementedError("slice")
 
-// Truthiness
+# Truthiness
 proc runtime_truthy(ctx: InterpreterContext, val: Value): Bool =
     values.is_truthy(val)
 
-// Binary operations
+# Binary operations
 proc runtime_binary(ctx: InterpreterContext, op: String, lhs: Value, rhs: Value): Value =
     // Canonical binary operation semantics
     // Delegate to values module
     return values.value_binary(op, lhs, rhs)
 
-// Unary operations
+# Unary operations
 proc runtime_unary(ctx: InterpreterContext, op: String, operand: Value): Value =
     // Canonical unary operation semantics
     return values.value_unary(op, operand)
 
-// Function call
+# Function call
 proc runtime_call(ctx: InterpreterContext, callee: Value, args: Array<Value>, kw_map: Option<KwParamMap>): Value =
     calls.execute_call(callee, args, kw_map, ctx)
 
-// Argument binding
+# Argument binding
 proc runtime_bind_arguments(ctx: InterpreterContext, map: KwParamMap, provided: Array<Value>, defaults: Array<Value>): Array<Value> =
     calls.bind_arguments(map, provided, defaults)
 
-// Exception raise
+# Exception raise
 proc runtime_raise(ctx: InterpreterContext, exception: Value): Value =
     ctx.pending_exception = Some(exception)
     // Control flow will handle unwinding
     return exception
 
-// Import
+# Import
 proc runtime_import(ctx: InterpreterContext, module_name: String): Module =
     modules.load_module(ctx, module_name)
 
-// Iteration
+# Iteration
 proc runtime_iterate(ctx: InterpreterContext, iterable: Value): Iterator =
     // Create iterator based on type
     match iterable.tag:
@@ -498,7 +498,7 @@ proc runtime_iterate(ctx: InterpreterContext, iterable: Value): Iterator =
         _:
             raise errors.TypeError("Cannot iterate type " + values.TAG_NAMES[iterable.tag])
 
-// Comparison
+# Comparison
 proc runtime_compare(ctx: InterpreterContext, op: String, lhs: Value, rhs: Value): Value =
     // Canonical comparison semantics
     return values.value_compare(op, lhs, rhs)

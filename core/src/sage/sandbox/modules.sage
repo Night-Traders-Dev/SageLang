@@ -1,17 +1,17 @@
-// ============================================================================
+# ============================================================================
 # Sandbox Module Observability - Module tracking, import relationships, dependency graph
 # ============================================================================
-// Primary feature: module observability
-// Every import should generate an event
-// Module identity uses Module ID (not just name)
-// Import relationship tracking: who imported what
-// Module graph construction and views
-// ============================================================================
+# Primary feature: module observability
+# Every import should generate an event
+# Module identity uses Module ID (not just name)
+# Import relationship tracking: who imported what
+# Module graph construction and views
+# ============================================================================
 
 import sandbox.sage as sandbox
 import sandbox.events.sage as events
 
-// Module tracker - tracks all imported modules
+# Module tracker - tracks all imported modules
 class ModuleTracker {
     let module_registry: Dict[String, sandbox.ModuleInfo]
     let module_graph: sandbox.ModuleGraph
@@ -122,10 +122,10 @@ class ModuleTracker {
         dict_has(module_registry, module_name)
 }
 
-// Global module tracker instance
+# Global module tracker instance
 let module_tracker = ModuleTracker(64)  // default max import depth
 
-// Convenience functions
+# Convenience functions
 proc sandbox_track_import_request(module_name: String): Unit =
     module_tracker.track_import_request(module_name)
 

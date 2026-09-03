@@ -1,14 +1,14 @@
-// ============================================================================
+# ============================================================================
 # Frontend Parser - Syntax analysis
 # ============================================================================
-// Part of the Frontend concern: parsing and semantic analysis
-// Produces AST for diagnostics, tooling, and reference execution
-// ============================================================================
+# Part of the Frontend concern: parsing and semantic analysis
+# Produces AST for diagnostics, tooling, and reference execution
+# ============================================================================
 
 import ast
 import token
 
-// Parser state
+# Parser state
 class Parser {
     let tokens: List<Token>
     let position: Int
@@ -16,7 +16,7 @@ class Parser {
     let ast: Option<AST_Module>
 }
 
-// Create a new parser
+# Create a new parser
 proc parser_new(tokens: List<Token>): Parser = Parser(
     tokens: tokens,
     position: 0,
@@ -24,26 +24,26 @@ proc parser_new(tokens: List<Token>): Parser = Parser(
     ast: None
 )
 
-// Run the parser
+# Run the parser
 proc parser_run(parser: Parser): AST_Module =
     // Parse module
     let module = parser_parse_module(parser)
     parser.ast = Some(module)
     return module
 
-// Current token
+# Current token
 proc parser_peek(parser: Parser): Token =
     if parser.position < len(parser.tokens):
         return parser.tokens[parser.position]
     return Token(TOKEN_EOF, "", 0, 0)
 
-// Advance parser
+# Advance parser
 proc parser_advance(parser: Parser): Token =
     let tok = parser_peek(parser)
     parser.position = parser.position + 1
     return tok
 
-// Parse a module
+# Parse a module
 proc parser_parse_module(parser: Parser): AST_Module =
     let statements = []
     while parser_peek(parser).kind != TOKEN_EOF:
@@ -52,7 +52,7 @@ proc parser_parse_module(parser: Parser): AST_Module =
             statements = statements.push(stmt)
     return AST_Module(statements: statements)
 
-// Parse a statement
+# Parse a statement
 proc parser_parse_statement(parser: Parser): Option<AST_Stmt> =
     let tok = parser_peek(parser)
     match tok.kind:
@@ -97,11 +97,11 @@ proc parser_parse_statement(parser: Parser): Option<AST_Stmt> =
             let expr = parser_parse_expression(parser)
             return Some(AST_Stmt(STMT_EXPRESSION, expr: expr))
 
-// Parse expressions with precedence
+# Parse expressions with precedence
 proc parser_parse_expression(parser: Parser): AST_Expr =
     return parser_parse_binary(parser, 0)
 
-// Binary operator precedence parsing
+# Binary operator precedence parsing
 proc parser_parse_binary(parser: Parser, min_prec: Int): AST_Expr =
     let lhs = parser_parse_unary(parser)
     while true:
@@ -114,7 +114,7 @@ proc parser_parse_binary(parser: Parser, min_prec: Int): AST_Expr =
         lhs = AST_Expr(EXPR_BINARY, lhs: lhs, rhs: rhs, op: tok.kind)
     return lhs
 
-// Parse unary expressions
+# Parse unary expressions
 proc parser_parse_unary(parser: Parser): AST_Expr =
     let tok = parser_peek(parser)
     if tok.kind in [TOKEN_NOT, TOKEN_TILDE, TOKEN_MINUS, TOKEN_AMP]:
@@ -123,7 +123,7 @@ proc parser_parse_unary(parser: Parser): AST_Expr =
         return AST_Expr(EXPR_UNARY, operand: expr, op: tok.kind)
     return parser_parse_primary(parser)
 
-// Parse primary expressions
+# Parse primary expressions
 proc parser_parse_primary(parser: Parser): AST_Expr =
     let tok = parser_peek(parser)
     match tok.kind:
@@ -152,7 +152,7 @@ proc parser_parse_primary(parser: Parser): AST_Expr =
             parser_advance(parser)
             return AST_Expr(EXPR_NIL)
 
-// Parse identifier (variable, function call, etc.)
+# Parse identifier (variable, function call, etc.)
 proc parser_parse_ident(parser: Parser): AST_Expr =
     let tok = parser_peek(parser)
     let name = tok.value
@@ -172,7 +172,7 @@ proc parser_parse_ident(parser: Parser): AST_Expr =
     // Simple variable reference
     return AST_Expr(EXPR_VARIABLE, name: name)
 
-// Parse function call
+# Parse function call
 proc parser_parse_call(parser: Parser, name: String): AST_Expr =
     parser_advance(parser)  // consume '('
     let args = []
@@ -192,7 +192,7 @@ proc parser_parse_call(parser: Parser, name: String): AST_Expr =
     parser_advance(parser)  // consume ')'
     return AST_Expr(EXPR_CALL, name: name, args: args, kwargs: kwargs)
 
-// Error reporting
+# Error reporting
 proc parser_error(parser: Parser, msg: String): Unit =
     let tok = parser_peek(parser)
     parser.errors = parser.errors.push(Diagnostic(
@@ -206,5 +206,5 @@ proc parser_error(parser: Parser, msg: String): Unit =
         )
     ))
 
-// Get diagnostics
+# Get diagnostics
 proc parser_get_diagnostics(parser: Parser): List<Diagnostic> = parser.errors

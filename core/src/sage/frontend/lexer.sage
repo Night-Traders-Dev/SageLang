@@ -1,12 +1,12 @@
-// ============================================================================
+# ============================================================================
 # Frontend Lexer - Lexical analysis
 # ============================================================================
-// Part of the Frontend concern: parsing and semantic analysis
-// ============================================================================
+# Part of the Frontend concern: parsing and semantic analysis
+# ============================================================================
 
 import token
 
-// Lexer state
+# Lexer state
 class Lexer {
     let source: String
     let position: Int
@@ -16,7 +16,7 @@ class Lexer {
     let errors: List<Diagnostic>
 }
 
-// Create a new lexer
+# Create a new lexer
 proc lexer_new(source: String): Lexer = Lexer(
     source: source,
     position: 0,
@@ -26,24 +26,24 @@ proc lexer_new(source: String): Lexer = Lexer(
     errors: []
 )
 
-// Lexer interface - returns tokens
+# Lexer interface - returns tokens
 proc lexer_run(lexer: Lexer): List<Token> =
     while not lexer_is_eof(lexer):
         let tok = lexer_next_token(lexer)
         lexer.tokens = lexer.tokens.push(tok)
     return lexer.tokens
 
-// Check if at end of source
+# Check if at end of source
 proc lexer_is_eof(lexer: Lexer): Bool =
     lexer.position >= len(lexer.source)
 
-// Get current character
+# Get current character
 proc lexer_peek(lexer: Lexer): Option<Char> =
     if lexer_is_eof(lexer):
         return None
     return Some(lexer.source[lexer.position])
 
-// Advance position
+# Advance position
 proc lexer_advance(lexer: Lexer): Unit =
     if lexer_is_eof(lexer):
         return
@@ -55,7 +55,7 @@ proc lexer_advance(lexer: Lexer): Unit =
         lexer.column = lexer.column + 1
     lexer.position = lexer.position + 1
 
-// Get next token (simplified - real implementation would be more complex)
+# Get next token (simplified - real implementation would be more complex)
 proc lexer_next_token(lexer: Lexer): Token =
     // Skip whitespace
     while not lexer_is_eof(lexer):
@@ -75,7 +75,7 @@ proc lexer_next_token(lexer: Lexer): Token =
     // For now, delegate to existing implementation
     return token.lex_next(lexer.source, lexer.position)
 
-// Diagnostics during lexing
+# Diagnostics during lexing
 proc lexer_error(lexer: Lexer, msg: String): Unit =
     lexer.errors = lexer.errors.push(Diagnostic(
         level: "error",
@@ -100,5 +100,5 @@ proc lexer_warning(lexer: Lexer, msg: String): Unit =
         )
     ))
 
-// Get diagnostics
+# Get diagnostics
 proc lexer_get_diagnostics(lexer: Lexer): List<Diagnostic> = lexer.errors

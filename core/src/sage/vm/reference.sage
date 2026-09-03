@@ -1,9 +1,9 @@
-// ============================================================================
+# ============================================================================
 # Reference VM - AST/IR Interpreter
-// ============================================================================
-// Tier 0: Reference Execution
-// Purpose: semantic oracle, bootstrap, debugging, differential testing
-// ============================================================================
+# ============================================================================
+# Tier 0: Reference Execution
+# Purpose: semantic oracle, bootstrap, debugging, differential testing
+# ============================================================================
 
 import runtime.context as context
 import runtime.values as values
@@ -15,7 +15,7 @@ import interpreter.eval_stmt as eval_stmt
 import interpreter.unwind as unwind
 import interpreter.generators as generators
 
-// Execute IR module using reference interpreter
+# Execute IR module using reference interpreter
 proc execute(ctx: InterpreterContext, module: IR_Module): Value =
     // Set runtime tier
     context.set_runtime_tier(ctx, "reference")
@@ -44,7 +44,7 @@ proc execute(ctx: InterpreterContext, module: IR_Module): Value =
     
     return result
 
-// Execute IR block
+# Execute IR block
 proc execute_ir_block(ctx: InterpreterContext, module: IR_Module, block: IR_Block): Value =
     let frame = context.get_current_frame(ctx).unwrap()
     
@@ -64,7 +64,7 @@ proc execute_ir_block(ctx: InterpreterContext, module: IR_Module, block: IR_Bloc
     
     return values.nil
 
-// Execute single IR instruction
+# Execute single IR instruction
 proc execute_instruction(ctx: InterpreterContext, frame: CallFrame, instr: IR_Instr, module: IR_Module): ControlResult =
     match instr.opcode:
         IR_LOAD_CONST:
@@ -181,7 +181,7 @@ proc execute_instruction(ctx: InterpreterContext, frame: CallFrame, instr: IR_In
             // Unknown instruction
             return control.result_normal(values.nil)
 
-// Handle control flow results
+# Handle control flow results
 proc handle_control_flow(ctx: InterpreterContext, frame: CallFrame, result: ControlResult): Value =
     match result.kind:
         control.CF_RETURN:
@@ -201,7 +201,7 @@ proc handle_control_flow(ctx: InterpreterContext, frame: CallFrame, result: Cont
         _:
             return values.nil
 
-// Make module function
+# Make module function
 proc make_module_function(module: IR_Module): Function =
     return Function(
         function_id: make_module_function_id(module.name),
@@ -221,7 +221,7 @@ proc make_module_function(module: IR_Module): Function =
         )
     )
 
-// Make module function ID
+# Make module function ID
 proc make_module_function_id(name: String): FunctionId =
     FunctionId(
         hash: name.hash(),

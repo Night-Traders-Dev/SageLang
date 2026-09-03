@@ -1,16 +1,16 @@
-// ============================================================================
+# ============================================================================
 # Runtime Slots - Lexical slot management
 # ============================================================================
-// Replace environment chain with resolved slot
-// name | environment chain | dictionary lookup
-// with:
-// name | resolved slot | frame storage
-//
-// Preserve:
-//   shadowing, closures, captured mutation, nested functions
-// ============================================================================
+# Replace environment chain with resolved slot
+# name | environment chain | dictionary lookup
+# with:
+# name | resolved slot | frame storage
+#
+# Preserve:
+#   shadowing, closures, captured mutation, nested functions
+# ============================================================================
 
-// Slot representation
+# Slot representation
 class Slot {
     let index: Int       // Slot index in the frame
     let scope: Scope     // Lexical scope information
@@ -18,13 +18,13 @@ class Slot {
     let mutable: Bool    // Whether the slot can be mutated
 }
 
-// Scope enumeration for slot tracking
+# Scope enumeration for slot tracking
 let SCOPE_GLOBAL = 0
 let SCOPE_LOCAL = 1
 let SCOPE_CLOSURE = 2
 let SCOPE_MODULE = 3
 
-// Frame structure with slots
+# Frame structure with slots
 class Frame {
     let function_id: FunctionId
     let return_address: Int
@@ -36,7 +36,7 @@ class Frame {
     let exception_state: Option[ExceptionState] // Current exception state
 }
 
-// Scope tracking for slot resolution
+# Scope tracking for slot resolution
 class SlotResolver {
     // Map variable names to slot indices
     let slot_map: Dict<String, Int>
@@ -88,7 +88,7 @@ class SlotResolver {
         return new_resolver
 }
 
-// Slot access helpers
+# Slot access helpers
 proc slot_load(frame: Frame, slot_index: Int): Value =
     if slot_index < frame.slot_count:
         return frame.locals[slot_index - frame.slot_base]
@@ -100,16 +100,16 @@ proc slot_store(frame: Frame, slot_index: Int, value: Value): Unit =
         return
     raise "Slot index out of range"
 
-// Compact runtime object slot layout
-// Instance fields use slot indices rather than dynamic dictionaries
-// Class defines shape ID -> field slot mapping
-// User dictionaries remain fully dynamic (unchanged)
+# Compact runtime object slot layout
+# Instance fields use slot indices rather than dynamic dictionaries
+# Class defines shape ID -> field slot mapping
+# User dictionaries remain fully dynamic (unchanged)
 
-// Slot optimization for closures
-// Captured slots are stored in the capturing frame
-// Closure creation copies captured slot values into the closure environment
-// Closure mutation goes through the original slot
+# Slot optimization for closures
+# Captured slots are stored in the capturing frame
+# Closure creation copies captured slot values into the closure environment
+# Closure mutation goes through the original slot
 
-// Module slot management
-// Module bindings are stored in module table entries
-// Module slots are resolved at compile time, not runtime
+# Module slot management
+# Module bindings are stored in module table entries
+# Module slots are resolved at compile time, not runtime

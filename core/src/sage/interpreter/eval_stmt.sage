@@ -1,9 +1,9 @@
-// ============================================================================
+# ============================================================================
 # Interpreter Statement Evaluation
 # ============================================================================
-// Part of the Reference VM tier
-// Evaluates AST statements using the common runtime
-// ============================================================================
+# Part of the Reference VM tier
+# Evaluates AST statements using the common runtime
+# ============================================================================
 
 import ast
 import runtime.values as values
@@ -11,7 +11,7 @@ import runtime.environment as env
 import runtime.control as control
 import runtime.errors as errors
 
-// Evaluate a statement
+# Evaluate a statement
 proc eval_stmt(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     match stmt.kind:
         STMT_EXPRESSION:
@@ -60,7 +60,7 @@ proc eval_stmt(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
         _:
             return control.result_normal(values.nil)
 
-// Evaluate let statement
+# Evaluate let statement
 proc eval_let(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     let value = eval_expr(ctx, stmt.init_expr)
     // Bind in current scope
@@ -78,7 +78,7 @@ proc eval_let(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
         env_define(ctx.current_env, stmt.name, value)
     return control.result_normal(values.nil)
 
-// Evaluate if statement
+# Evaluate if statement
 proc eval_if(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     let condition = eval_expr(ctx, stmt.condition)
     if values.is_truthy(condition):
@@ -87,7 +87,7 @@ proc eval_if(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
         return eval_block(ctx, stmt.else_block)
     return control.result_normal(values.nil)
 
-// Evaluate while loop
+# Evaluate while loop
 proc eval_while(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     let loop_frame = frames.get_current_frame()
     let iteration = 0
@@ -112,7 +112,7 @@ proc eval_while(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     
     return control.result_normal(values.nil)
 
-// Evaluate for loop
+# Evaluate for loop
 proc eval_for(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     let iterable = eval_expr(ctx, stmt.iterable)
     let iterator = runtime_iterate(ctx, iterable)
@@ -139,7 +139,7 @@ proc eval_for(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     
     return control.result_normal(values.nil)
 
-// Evaluate block
+# Evaluate block
 proc eval_block(ctx: InterpreterContext, block: AST_Stmt): ControlResult =
     // Enter new scope
     let prev_env = ctx.current_env
@@ -163,7 +163,7 @@ proc eval_block(ctx: InterpreterContext, block: AST_Stmt): ControlResult =
     ctx.current_frame = prev_frame
     return control.result_normal(values.nil)
 
-// Evaluate return
+# Evaluate return
 proc eval_return(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     let value = if stmt.value != None then eval_expr(ctx, stmt.value) else values.nil
     return ControlResult(
@@ -172,7 +172,7 @@ proc eval_return(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
         target: None
     )
 
-// Evaluate try/catch/finally
+# Evaluate try/catch/finally
 proc eval_try(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     // Push try handler
     let try_frame = ctx.current_frame
@@ -201,7 +201,7 @@ proc eval_try(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     
     return result
 
-// Evaluate raise
+# Evaluate raise
 proc eval_raise(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     let exception = eval_expr(ctx, stmt.exception)
     return ControlResult(
@@ -210,25 +210,25 @@ proc eval_raise(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
         target: None
     )
 
-// Evaluate yield
+# Evaluate yield
 proc eval_yield(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     let value = if stmt.value != None then eval_expr(ctx, stmt.value) else values.nil
     return control.generator_yield(ctx.current_frame, value)
 
-// Evaluate import
+# Evaluate import
 proc eval_import(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     let module = runtime_import(ctx, stmt.module_name)
     import_bind(stmt, stmt.module_name, module.env, ctx.current_env)
     return control.result_normal(values.nil)
 
-// Evaluate defer
+# Evaluate defer
 proc eval_defer(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     // Register defer handler
     let handler_id = "defer_" + ctx.current_frame.ip.ToString()
     frames.push_defer(ctx.current_frame, handler_id, ctx.current_frame.locals)
     return control.result_normal(values.nil)
 
-// Evaluate match
+# Evaluate match
 proc eval_match(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     let subject = eval_expr(ctx, stmt.subject)
     for case in stmt.cases:
@@ -237,7 +237,7 @@ proc eval_match(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
             return eval_block(ctx, case.body)
     return control.result_normal(values.nil)
 
-// Evaluate class definition
+# Evaluate class definition
 proc eval_class(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     // Create class object
     let class_obj = objects.Class(
@@ -252,25 +252,25 @@ proc eval_class(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     env_define(ctx.current_env, stmt.name, class_obj)
     return control.result_normal(values.nil)
 
-// Evaluate struct definition
+# Evaluate struct definition
 proc eval_struct(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     // Similar to class but no methods
     // ...
 
-// Evaluate enum definition
+# Evaluate enum definition
 proc eval_enum(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     // ...
 
-// Evaluate trait definition
+# Evaluate trait definition
 proc eval_trait(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     // ...
 
-// Evaluate comptime block
+# Evaluate comptime block
 proc eval_comptime_stmt(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     // Execute at compile time
     // ...
 
-// Evaluate macro definition
+# Evaluate macro definition
 proc eval_macro_def(ctx: InterpreterContext, stmt: AST_Stmt): ControlResult =
     // Register macro
     // ...

@@ -1,10 +1,10 @@
-// ============================================================================
+# ============================================================================
 # Bytecode VM - Compact production execution
 # ============================================================================
-// Tier 1: Bytecode VM
-// Purpose: general-purpose production execution, lower memory usage,
-// faster dispatch, compact deployment, embedded baseline
-// ============================================================================
+# Tier 1: Bytecode VM
+# Purpose: general-purpose production execution, lower memory usage,
+# faster dispatch, compact deployment, embedded baseline
+# ============================================================================
 
 import runtime.context as context
 import runtime.values as values
@@ -16,7 +16,7 @@ import ir.slots as ir_slots
 import interpreter.unwind as unwind
 import interpreter.generators as generators
 
-// Bytecode instruction types (compact encoding)
+# Bytecode instruction types (compact encoding)
 let BC_NOP = 0
 let BC_LOAD_CONST = 1
 let BC_LOAD_LOCAL = 2
@@ -41,7 +41,7 @@ let BC_POP_DEFER = 20
 let BC_PUSH_TRY = 21
 let BC_POP_TRY = 22
 
-// Bytecode instruction
+# Bytecode instruction
 class Bytecode_Instr {
     let opcode: Int
     let dest: Int
@@ -50,7 +50,7 @@ class Bytecode_Instr {
     let source_loc: SourceLocation  // Source location
 }
 
-// Bytecode module
+# Bytecode module
 class Bytecode_Artifact {
     let name: String
     let instructions: Array<Bytecode_Instr>
@@ -60,7 +60,7 @@ class Bytecode_Artifact {
     let function_ids: Dict<Int, String>  // Block/function IDs
 }
 
-// Compile IR module to bytecode
+# Compile IR module to bytecode
 proc compile_ir_to_bytecode(module: IR_Module): Bytecode_Artifact =
     // Compact bytecode compilation from IR
     let instructions = []
@@ -85,7 +85,7 @@ proc compile_ir_to_bytecode(module: IR_Module): Bytecode_Artifact =
         function_ids: {} as Dict<Int, String>
     )
 
-// Compile IR function to bytecode
+# Compile IR function to bytecode
 proc compile_function(func: IR_Function): Bytecode_Artifact_Inner =
     let instructions = []
     let constants = []
@@ -103,7 +103,7 @@ proc compile_function(func: IR_Function): Bytecode_Artifact_Inner =
         num_slots: num_slots
     )
 
-// Compile block
+# Compile block
 proc compile_block(func: IR_Function, block: IR_Block): Bytecode_Block =
     let instructions = []
     let pc_offset = 0
@@ -122,7 +122,7 @@ proc compile_block(func: IR_Function, block: IR_Block): Bytecode_Block =
         num_slots: num_slots
     )
 
-// Compile IR instruction to bytecode
+# Compile IR instruction to bytecode
 proc compile_instruction(func: IR_Function, instr: IR_Instr): Bytecode_Compile_Result =
     match instr.opcode:
         IR_LOAD_CONST:
@@ -252,23 +252,23 @@ proc compile_instruction(func: IR_Function, instr: IR_Instr): Bytecode_Compile_R
                 new_constants: None
             )
 
-// ============================================================================
+# ============================================================================
 # Bytecode VM Structures
-// ============================================================================
+# ============================================================================
 
-// Bytecode result from operation
+# Bytecode result from operation
 class Bytecode_Compile_Result {
     let instruction: Bytecode_Instr
     let new_constants: Option<Array<Value>>
 }
 
-// Bytecode block result
+# Bytecode block result
 class Bytecode_Block {
     let instructions: Array<Bytecode_Instr>
     let num_slots: Int
 }
 
-// Execute bytecode
+# Execute bytecode
 proc execute_bytecode(ctx: InterpreterContext, bytecode: Bytecode_Artifact): Value =
     context.set_runtime_tier(ctx, "bytecode")
     
@@ -291,7 +291,7 @@ proc execute_bytecode(ctx: InterpreterContext, bytecode: Bytecode_Artifact): Val
     
     return result
 
-// Execute bytecode block
+# Execute bytecode block
 proc execute_bytecode_block(ctx: InterpreterContext, frame: CallFrame, bytecode: Bytecode_Artifact): Value =
     let instructions = bytecode.instructions
     let pc = 0
@@ -311,7 +311,7 @@ proc execute_bytecode_block(ctx: InterpreterContext, frame: CallFrame, bytecode:
     
     return values.nil
 
-// Execute single bytecode instruction
+# Execute single bytecode instruction
 proc execute_bytecode_instr(ctx: InterpreterContext, frame: CallFrame, instr: Bytecode_Instr): ControlResult =
     match instr.opcode:
         BC_NOP:
@@ -384,13 +384,13 @@ proc execute_bytecode_instr(ctx: InterpreterContext, frame: CallFrame, instr: By
         _:
             return control.result_normal(values.nil)
 
-// Get binary op name from opcode
+# Get binary op name from opcode
 proc get_binary_op_name(opcode: Int): String =
     match opcode:
         BC_BINARY_OP: return "add"  // Default, actual op from slot or metadata
     return "add"
 
-// Make module function for bytecode
+# Make module function for bytecode
 proc make_module_function(name: String): Function =
     return Function(
         function_id: make_function_id(name),
@@ -410,7 +410,7 @@ proc make_module_function(name: String): Function =
         )
     )
 
-// Make function ID
+# Make function ID
 proc make_function_id(name: String): FunctionId =
     FunctionId(
         hash: name.hash(),

@@ -1,18 +1,18 @@
-// ============================================================================
+# ============================================================================
 # Interpreter Generators - Generator implementation
 # ============================================================================
-// True Generator Frames (from pipeline.md):
-// generator() creates GeneratorFrame
-// next() resumes frame, executes, yields, saves state
-// Generators must suspend execution rather than eagerly collecting
-// ============================================================================
+# True Generator Frames (from pipeline.md):
+# generator() creates GeneratorFrame
+# next() resumes frame, executes, yields, saves state
+# Generators must suspend execution rather than eagerly collecting
+# ============================================================================
 
 import runtime.values as values
 import runtime.frames as frames
 import runtime.control as control
 import runtime.errors as errors
 
-// Generator frame structure
+# Generator frame structure
 class GeneratorFrame {
     let frame: Frame              // The suspended frame
     let state: GeneratorState     // Current state
@@ -21,14 +21,14 @@ class GeneratorFrame {
     let is_exhausted: Bool        // Whether generator is done
 }
 
-// Generator state
+# Generator state
 let GEN_STATE_CREATED = 0
 let GEN_STATE_RUNNING = 1
 let GEN_STATE_SUSPENDED = 2
 let GEN_STATE_EXHAUSTED = 3
 let GEN_STATE_ERROR = 4
 
-// Create a generator from a function
+# Create a generator from a function
 proc create_generator(
     ctx: InterpreterContext,
     function: Value,
@@ -62,14 +62,14 @@ proc create_generator(
     
     return values.value_generator(gf, GeneratorResumeState())
 
-// Generator resume state
+# Generator resume state
 class GeneratorResumeState {
     let ip: Int              // Instruction pointer to resume at
     let locals: Array<Value> // Local variables at suspend point
     let stack_depth: Int     // Stack depth at suspend point
 }
 
-// Next/resume a generator
+# Next/resume a generator
 proc generator_next(ctx: InterpreterContext, gen_val: Value, resume_val: Value): Value =
     let gen = gen_val.data.gen_val
     let gf = gen.frame
@@ -100,7 +100,7 @@ proc generator_next(ctx: InterpreterContext, gen_val: Value, resume_val: Value):
         gf.is_exhausted = true
         raise errors.error_runtime("Generator ended with unexpected control flow")
 
-// Execute a generator frame until yield or return
+# Execute a generator frame until yield or return
 proc execute_generator_frame(ctx: InterpreterContext, gf: GeneratorFrame): ControlResult =
     // This is the core generator execution loop
     // It runs the frame's function until a yield or return
@@ -119,11 +119,11 @@ proc execute_generator_frame(ctx: InterpreterContext, gf: GeneratorFrame): Contr
     // For now, return a placeholder
     return control.result_normal(values.nil)
 
-// Send value to generator (like next() but with a value)
+# Send value to generator (like next() but with a value)
 proc generator_send(ctx: InterpreterContext, gen_val: Value, value: Value): Value =
     return generator_next(ctx, gen_val, value)
 
-// Throw exception into generator
+# Throw exception into generator
 proc generator_throw(ctx: InterpreterContext, gen_val: Value, exception: Value): Value =
     let gen = gen_val.data.gen_val
     let gf = gen.frame
@@ -147,7 +147,7 @@ proc generator_throw(ctx: InterpreterContext, gen_val: Value, exception: Value):
     
     return result.value
 
-// Close generator (cleanup)
+# Close generator (cleanup)
 proc generator_close(ctx: InterpreterContext, gen_val: Value): Unit =
     let gen = gen_val.data.gen_val
     let gf = gen.frame
@@ -161,7 +161,7 @@ proc generator_close(ctx: InterpreterContext, gen_val: Value): Unit =
     gf.state = GEN_STATE_EXHAUSTED
     gf.is_exhausted = true
 
-// Check if generator is exhausted
+# Check if generator is exhausted
 proc generator_is_exhausted(gen_val: Value): Bool =
     let gen = gen_val.data.gen_val
     return gen.frame.is_exhausted
