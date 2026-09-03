@@ -17,6 +17,13 @@ Complete reference for the `sage` command-line interface.
 | `sage fmt --check <file>` | Check formatting without rewriting | Exit code `1` when formatting is needed |
 | `sage lint <file>` | Run the static linter | Exit code `1` when issues are found |
 | `sage check <file>` | Type-check annotations | Validates annotations against inferred types |
+| `sage safety <file>` | Run safety analysis | Analyzes ownership, borrows, and lifetimes |
+| `sage --strict-safety <file>` | Strict safety execution | Aborts if safety violations are detected |
+| `sage --sandbox` | Run in sandbox mode | Enables observability TUI dashboard and tracing |
+| `sage --run-vm <file.svm>` | Run SVM bytecode file | Executes serialized bytecode via VM engine |
+| `sage --ois` | Show OIS package info | Displays installation info and available manager commands |
+| `sage --update` | Update SageLang | Fetches and rebuilds latest version from repository |
+| `sage --uninstall` | Uninstall SageLang | Removes system-wide installation cleanly |
 
 ## Compiler And Codegen Commands
 
@@ -39,6 +46,7 @@ Complete reference for the `sage` command-line interface.
 | `sage --emit-kotlin <input.sage>` | `<input>.kt` | `-o <path>` |
 | `sage --compile-android <input.sage>` | Gradle project dir | `--package`, `--app-name`, `--min-sdk` |
 | `sage --jit <input.sage> -o <bin>` | `<bin>` executable | JIT self-extracting executable with module bundling |
+| `sage --aot --jit <input.sage> -o <bin>` | `<bin>` executable | Profile-guided AOT compilation to native binary |
 
 ## Option Semantics
 
@@ -49,6 +57,7 @@ Complete reference for the `sage` command-line interface.
 | `--target <arch[-profile]>` | `--emit-asm`, `--compile-native` | Target architecture/profile. Base arch: `x86-64`, `x86_64`, `aarch64`, `arm64`, `rv64`, `riscv64`, `mips`, `mips32`, `mips74k`. Profile suffixes: `-baremetal`, `-osdev`, `-uefi` |
 | `-O0` / `-O1` / `-O2` / `-O3` | C, LLVM, and native codegen | Optimization pass level |
 | `-g` | C, LLVM, asm, and native compile/emit | Enables debug information in the generated output |
+| `-I <dir>` | All run/compile commands | Adds standard library / module search path directory |
 | `--runtime ast\|bytecode\|jit\|aot` | Run commands | Runtime mode selection |
 | `--jit` | Run commands | Enable JIT profiling; if used with `-o`, compiles to a self-extracting executable with bundled module dependencies |
 | `--aot` | Run commands | Enable AOT compilation |
