@@ -36,6 +36,12 @@ import ir.verifier as ir_verifier
 import ir.optimizer as ir_optimizer
 import vm.reference as reference_vm
 import vm.bytecode as bytecode_vm
+import sandbox.context as sandbox_ctx
+import sandbox.events.sage as sandbox_events
+import sandbox.modules.sage as sandbox_modules
+import sandbox.resources.sage as sandbox_resources
+import sandbox.limits.sage as sandbox_limits
+import sandbox.dashboard.sage as dashboard
 
 // ============================================================================
 # CLI and Entry Point
@@ -65,6 +71,19 @@ proc main(args: Array<String>): Int =
     
     // Print profile info
     print_profile_info(ctx, opts.profile)
+    
+    // Initialize sandbox if in sandbox mode
+    if opts.sandbox or runtime_mode == SAGE_RUNTIME_SANDBOX:
+        let sandbox_config = sandbox.SandboxModeConfig(
+            mode: sandbox.SANDBOX_MODE_STANDARD,
+            enable_modules: true,
+            enable_resources: true,
+            enable_functions: true,
+            enable_timeline: true,
+            enable_errors: true,
+            sample_rate: 1
+        )
+        ctx_module.interpreter_context_enable_sandbox(ctx, sandbox_config)
     
     // Handle REPL
     if opts.repl:
@@ -198,7 +217,14 @@ proc main(args: Array<String>): Int =
             print "  reference: " + values.value_to_string(ref_result)
             return 2
     
-    // ====================================================================
+    // Finish sandbox and generate report
+    if ctx_module.interpreter_context_sandbox_enabled(ctx):
+        sandbox.sandbox_disable(ctx)
+        // Generate and display dashboard
+        let report = dashboard.dashboard_render_main(ctx, dashboard.dashboard_init(DASHBOARD_MODE_OVERVIEW))
+        print "\n" + report + "\n"
+
+// ====================================================================
     # Done
     # ====================================================================
     print "=== Execution Complete ==="
@@ -222,7 +248,8 @@ proc parse_args(args: Array<String>): CliOptions =
         dump_capabilities: false,
         dump_deopt: false,
         max_steps: -1,
-        output_file: None
+        output_file: None,
+        sandbox: false
     )
     
     let i = 0
@@ -262,14 +289,13 @@ proc parse_args(args: Array<String>): CliOptions =
                 i = i + 1
                 if i < len(args):
                     opts.max_steps = args[i].toInt()
-            "-c":
+            "--output":
+            "-o":
                 i = i + 1
                 if i < len(args):
-                    opts.source_code = Some(args[i])
-            "-e":
-                i = i + 1
-                if i < len(args):
-                    opts.source_code = Some(args[i])
+                    opts.output_file = Some(args[i])
+            "--sandbox":
+                opts.sandbox = true
             _:
                 if not arg.starts_with("-"):
                     opts.source_file = Some(arg)

@@ -8,7 +8,8 @@ typedef enum {
     SAGE_RUNTIME_BYTECODE,
     SAGE_RUNTIME_JIT,
     SAGE_RUNTIME_AOT,
-    SAGE_RUNTIME_AUTO
+    SAGE_RUNTIME_AUTO,
+    SAGE_RUNTIME_SANDBOX
 } SageRuntimeMode;
 
 const char* sage_runtime_mode_name(SageRuntimeMode mode);

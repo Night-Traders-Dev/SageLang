@@ -74,6 +74,7 @@ static void print_usage(FILE* stream) {
             "Usage: sage                    Start interactive REPL\n"
             "       sage [--runtime ast|bytecode|jit|aot|auto] [--gc:arc|--gc:orc|--gc:tracing] [--math-work=grade,exec] [--verbose] [-I dir] [path]\n"
             "       sage --repl             Start interactive REPL\n"
+            "       sage --sandbox          Run in sandbox mode with observability\n"
             "       sage [--runtime ast|bytecode|jit|aot|auto] [-I dir] -c \"source\"\n"
             "       sage --compile-to-lily <input.sage>\n"
             "       sage --compile-from-lily <input.lily>\n"
@@ -2645,6 +2646,10 @@ int main(int argc, const char* argv[]) {
             cmd_argc -= 1;
         } else if (strncmp(cmd_argv[1], "--math-work=", 12) == 0) {
             g_math_work = cmd_argv[1] + 12;
+            cmd_argv += 1;
+            cmd_argc -= 1;
+        } else if (strcmp(cmd_argv[1], "--sandbox") == 0) {
+            runtime_mode = SAGE_RUNTIME_SANDBOX;
             cmd_argv += 1;
             cmd_argc -= 1;
         } else {

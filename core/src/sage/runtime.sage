@@ -271,7 +271,20 @@ proc run(opts: CliOptions): Int =
     return 0
 
 // REPL mode
-proc run_repl(ctx: InterpreterContext): Int =
+proc run_repl(ctx: InterpreterContext, sandbox_mode: String = ""): Int =
+    // Enable sandbox if sandbox_mode is set
+    if sandbox_mode == "sandbox":
+        let sandbox_config = sandbox.SandboxModeConfig(
+            mode: sandbox.SANDBOX_MODE_STANDARD,
+            enable_modules: true,
+            enable_resources: true,
+            enable_functions: true,
+            enable_timeline: true,
+            enable_errors: true,
+            sample_rate: 1
+        )
+        ctx_module.interpreter_context_enable_sandbox(ctx, sandbox_config)
+    
     print "Sage REPL (modular runtime)"
     print "Type :quit to exit, :help for commands"
     
