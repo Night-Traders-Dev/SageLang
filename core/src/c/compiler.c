@@ -1432,8 +1432,13 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     }
 
     char *method_name = token_to_string(call->callee->as.super_expr.method);
-    char *c_method_name = malloc(strlen(compiler->current_class->parent_name) + strlen(method_name) + 32);
-    sprintf(c_method_name, "sage_method_%s_%s", compiler->current_class->parent_name, method_name);
+    size_t c_method_len = strlen(compiler->current_class->parent_name) + strlen(method_name) + 32;
+    char *c_method_name = malloc(c_method_len);
+    if (c_method_name == NULL) {
+      fprintf(stderr, "Out of memory allocating method name.\n");
+      exit(1);
+    }
+    snprintf(c_method_name, c_method_len, "sage_method_%s_%s", compiler->current_class->parent_name, method_name);
     
     StringBuffer sb;
     sb_init(&sb);
