@@ -1,1 +1,0 @@
-/usr/bin/cc -fsanitize=address -fno-omit-frame-pointer -g -g -fsanitize=address -Wl,--dependency-file=CMakeFiles/train_sl_tq.dir/link.d CMakeFiles/train_sl_tq.dir/src/c/train_sl_tq.c.o -o train_sl_tq  -lm -lpthread
