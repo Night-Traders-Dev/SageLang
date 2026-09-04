@@ -6,6 +6,8 @@ gc_disable()
 @inline
 # Helper to check if a unicode character code is wide.
 proc _is_wide_code(code):
+    if code < 0x1100:
+        return false
     if code >= 0x1100 and code <= 0x115F:
         return true
     if code >= 0x2329 and code <= 0x232A:
