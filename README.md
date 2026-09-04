@@ -110,7 +110,7 @@ print math.sqrt(16)    # 4
 import http
 let resp = http.get("https://example.com")
 if resp != nil:
-    print resp["status"]   # 200
+    print resp         # HTTP GET response
 
 async proc compute(x):
     return x * x
