@@ -1,7 +1,7 @@
 # Library Support Matrix
 
 Import/behavior status of every bundled library under both interpreters
-(`sage` = self-hosted CLI, `sage-c` = C host), as of v4.2.2.
+(`sage` = self-hosted CLI, `sage-c` = C host), as of v4.2.3.
 Verified by importing all 295 modules from a neutral working directory.
 
 ## Summary

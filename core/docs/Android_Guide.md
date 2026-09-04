@@ -161,7 +161,7 @@ ui.child(Button("+1", proc():
 ))
 ```
 
-## Language Notes (Sage ≥ 4.2.2)
+## Language Notes (Sage ≥ 4.2.3)
 
 - **Dotted imports export names.** `import android.app` brings `App`, `UIContext`,
   `Intent`, `Storage` and `HttpClient` directly into scope; the qualified form
