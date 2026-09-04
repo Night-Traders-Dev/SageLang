@@ -147,10 +147,10 @@ proc main(args):
     # Optimize IR if not reference tier
     let optimized_ir: ir_optimizer.OptimizedIR
     match opts.tier:
-        "reference":
+        case "reference":
             # No optimization for reference
             optimized_ir = ir_optimizer.OptimizedIR(ir: ir_module, profile: ir_optimizer.CpcProfile())
-        _:
+        default:
             optimized_ir = ir_optimizer.optimize(ir_module, ctx_module.context_get_profiler(ctx))
     
     # Replace with optimized if we have it
@@ -163,25 +163,25 @@ proc main(args):
     
     let result: Value
     match opts.tier:
-        "reference":
+        case "reference":
             result = reference_vm.execute(ctx, execute_ir)
-        "bytecode":
+        case "bytecode":
             let bytecode = bytecode_vm.compile_ir_to_bytecode(execute_ir)
             if opts.dump_bytecode:
                 print "=== Bytecode ==="
                 print bytecode_to_string(bytecode)
             result = bytecode_vm.execute_bytecode(ctx, bytecode)
-        "cpc":
+        case "cpc":
             # CPC optimization + reference execution
             # For now, execute the optimized IR through reference
             result = reference_vm.execute(ctx, execute_ir)
-        "jit":
+        case "jit":
             # JIT compilation (fall back to reference for now)
             result = reference_vm.execute(ctx, execute_ir)
-        "aot":
+        case "aot":
             # AOT compilation (fall back to reference for now)
             result = reference_vm.execute(ctx, execute_ir)
-        _:
+        default:
             print "Unknown runtime tier: " + opts.tier
             return 1
     
@@ -190,7 +190,7 @@ proc main(args):
     # ====================================================================
     
     # Print result
-    if result != values.nil:
+    if result != nil:
         print "Result: " + values.value_to_string(result)
     
     # Print profiling info if enabled
@@ -204,9 +204,10 @@ proc main(args):
     
     # Resource usage summary
     let steps = ctx_module.context_get_resource_limits(ctx).max_steps
-    let steps_used = # ... get from ctx
-    if steps_used > 0:
-        print "Steps: " + steps_used.ToString()
+    # TODO: get steps_used from ctx
+    # let steps_used = steps
+    # if steps_used > 0:
+    #     print "Steps: " + steps_used.ToString()
     
     # Parity verification if requested
     if opts.verify_parity and opts.tier != "reference":
@@ -231,7 +232,7 @@ proc main(args):
     return 0
 
 # Parse CLI arguments
-proc parse_args(args: Array<String>): CliOptions =
+proc parse_args(args):
     let opts = CliOptions(
         source_file: None,
         source_code: None,
@@ -256,47 +257,53 @@ proc parse_args(args: Array<String>): CliOptions =
     while i < len(args):
         let arg = args[i]
         match arg:
-            "--profile":
+            case "--profile":
                 i = i + 1
                 if i < len(args):
                     opts.profile = args[i]
-            "--runtime":
-            "--tier":
+            case "--runtime":
                 i = i + 1
                 if i < len(args):
                     opts.tier = args[i]
-            "--repl":
+            case "--tier":
+                i = i + 1
+                if i < len(args):
+                    opts.tier = args[i]
+            case "--repl":
                 opts.repl = true
-            "--verify-parity":
+            case "--verify-parity":
                 opts.verify_parity = true
-            "--trace":
+            case "--trace":
                 opts.trace = true
-            "--dump-ir":
+            case "--dump-ir":
                 opts.dump_ir = true
-            "--dump-bytecode":
+            case "--dump-bytecode":
                 opts.dump_bytecode = true
-            "--dump-frames":
+            case "--dump-frames":
                 opts.dump_frames = true
-            "--dump-profile":
+            case "--dump-profile":
                 opts.dump_profile = true
-            "--dump-shapes":
+            case "--dump-shapes":
                 opts.dump_shapes = true
-            "--dump-capabilities":
+            case "--dump-capabilities":
                 opts.dump_capabilities = true
-            "--dump-deopt":
+            case "--dump-deopt":
                 opts.dump_deopt = true
-            "--max-steps":
+            case "--max-steps":
                 i = i + 1
                 if i < len(args):
                     opts.max_steps = args[i].toInt()
-            "--output":
-            "-o":
+            case "--output":
                 i = i + 1
                 if i < len(args):
                     opts.output_file = Some(args[i])
-            "--sandbox":
+            case "-o":
+                i = i + 1
+                if i < len(args):
+                    opts.output_file = Some(args[i])
+            case "--sandbox":
                 opts.sandbox = true
-            _:
+            default:
                 if not arg.starts_with("-"):
                     opts.source_file = Some(arg)
         i = i + 1
@@ -304,7 +311,7 @@ proc parse_args(args: Array<String>): CliOptions =
     return opts
 
 # Validate profile and tier
-proc validate_profile_and_tier(opts: CliOptions): Unit =
+proc validate_profile_and_tier(opts):
     let valid_profiles = ["general", "embedded", "deterministic"]
     let valid_tiers = ["reference", "bytecode", "cpc", "jit", "aot"]
     
@@ -319,15 +326,18 @@ proc validate_profile_and_tier(opts: CliOptions): Unit =
         exit 1
 
 # Print profile info
-proc print_profile_info(ctx: InterpreterContext, profile: String): Unit =
+proc print_profile_info(ctx, profile):
     let caps = capabilities.context_get_host_capabilities(ctx)
     print "Profile: " + profile
-    print "Capabilities: " + caps.allowed.map { cap -> capabilities.CAP_NAMES[cap.level] }.join(", ")
+    let cap_names = []
+    for cap in caps.allowed:
+        cap_names = cap_names.push(capabilities.CAP_NAMES[cap.level])
+    print "Capabilities: " + cap_names.join(", ")
     print "Resource limits: steps=" + ctx_module.context_get_resource_limits(ctx).max_steps.ToString()
     print "Runtime tier: " + ctx_module.context_get_runtime_tier(ctx)
 
 # Print IR as string
-proc ir_module_to_string(module: ir_sage.IR_Module): String =
+proc ir_module_to_string(module):
     let output = "Module: " + module.name + "\n"
     output = output + "Functions: " + module.functions.len.ToString() + "\n"
     for func in module.functions:
@@ -340,25 +350,25 @@ proc ir_module_to_string(module: ir_sage.IR_Module): String =
     return output
 
 # Opcode to string
-proc opcode_to_string(opcode: Int): String =
+proc opcode_to_string(opcode):
     match opcode:
-        0: return "NOP"
-        1: return "LOAD_CONST"
-        2: return "LOAD_LOCAL"
-        3: return "STORE_LOCAL"
-        4: return "LOAD_GLOBAL"
-        5: return "STORE_GLOBAL"
-        6: return "BINARY_OP"
-        7: return "RETURN"
-        8: return "JUMP"
-        9: return "JUMP_IF_FALSE"
-        10: return "GET_PROP"
-        11: return "SET_PROP"
-        12: return "GET_INDEX"
-        13: return "SET_INDEX"
-        14: return "BUILD_ARRAY"
-        15: return "BUILD_DICT"
-        _: return "UNKNOWN"
+        case 0: return "NOP"
+        case 1: return "LOAD_CONST"
+        case 2: return "LOAD_LOCAL"
+        case 3: return "STORE_LOCAL"
+        case 4: return "LOAD_GLOBAL"
+        case 5: return "STORE_GLOBAL"
+        case 6: return "BINARY_OP"
+        case 7: return "RETURN"
+        case 8: return "JUMP"
+        case 9: return "JUMP_IF_FALSE"
+        case 10: return "GET_PROP"
+        case 11: return "SET_PROP"
+        case 12: return "GET_INDEX"
+        case 13: return "SET_INDEX"
+        case 14: return "BUILD_ARRAY"
+        case 15: return "BUILD_DICT"
+        default: return "UNKNOWN"
 
 print "=== interpreter.sage orchestration layer loaded ==="
 print "Modular SageLang runtime - all components from pipeline.md"
