@@ -410,3 +410,23 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+
+2026-09-05 - [Documentation Sync 4.2.2]
+
+Discovery:
+- The `SageLang_Guide.md` still referenced v3 and v4.0.1 despite `VERSION` indicating `v4.2.2`.
+- Direct string indexing via bracket syntax (e.g. `s[i]`) throws a runtime error (`Runtime Error: string is not indexable`). Use `slice(s, i, i + 1)` instead.
+- `http.get` returns a string response directly, not a dictionary.
+- `core/lib/metal/timer.sage` includes state tracking via `_timer_mode` and `timer_get_mode()` query procedure.
+- `core/lib/os/kernel/kmain.sage` includes `proc_status_name(status)` helper.
+- `core/lib/os/linux/syscalls.sage` includes signal mask constants and `sigprocmask` helper.
+- Building without network dependencies requires `make CFLAGS_EXTRA="-DSAGE_NO_NET" SAGE_NO_NET=1`.
+
+Evidence:
+Previous memory entries and `VERSION` files.
+
+Documentation Impact:
+- Updated the version strings in `SageLang_Guide.md`.
+- Updated String Operations to explicitly document the `string is not indexable` behavior.
+- Updated the `http.get` example.
+- Added the OS Development library functions and the `SAGE_NO_NET` build flag.

@@ -11,7 +11,7 @@ toc: true
 
 ## Executive Summary
 
-**SageLang** is a **Python-inspired, systems-oriented programming language** written in C. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports ten execution backends (C, LLVM IR, native assembly, bytecode VM, SageMetal VM, JIT, AOT, Kotlin/Android) and a self-hosted interpreter written in Sage itself. As of v3, Sage features structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust tab/whitespace token checks in sandbox security guards. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
+**SageLang** is a **Python-inspired, systems-oriented programming language** written in C. It combines familiar Python syntax (indentation-based blocks, dynamic typing) with low-level systems capabilities (garbage collection, exception handling, generators, and module imports). The language now supports ten execution backends (C, LLVM IR, native assembly, bytecode VM, SageMetal VM, JIT, AOT, Kotlin/Android) and a self-hosted interpreter written in Sage itself. As of v4.2.2, Sage features structural value equality in uniqueness checks, safe non-hanging string/value repeating, and robust tab/whitespace token checks in sandbox security guards. This guide documents the language design, internal architecture, runtime semantics, and practical usage patterns derived from the complete C source implementation.
 
 ---
 
@@ -110,6 +110,8 @@ main.c
   |- gpu_api.c / gpu_api.h   [Pure C GPU API (Vulkan + OpenGL)]
   `- src/vm/                 [Bytecode VM: bytecode.c, vm.c, program.c, runtime.c]
 ```
+
+**Build Flags**: Building without network dependencies (such as libcurl) requires `make CFLAGS_EXTRA="-DSAGE_NO_NET" SAGE_NO_NET=1`. Executing scripts against standard libraries requires passing `-I core/lib`.
 
 ### 2.2 Lexer (lexer.c / lexer.h)
 
@@ -248,6 +250,7 @@ struct Value {
 - `dict_keys(dict)`, `dict_values(dict)`: Return as arrays (iterates capacity, skips empty slots).
 
 **String Operations**:
+- **String Indexing**: Direct string indexing via bracket syntax (e.g. `s[i]`) throws a runtime error (`Runtime Error: string is not indexable`). Use `slice(s, i, i + 1)` instead.
 - `string_split(str, delim)`, `string_join(arr, sep)`: Splitting/joining arrays.
 - `string_replace(str, old, new)`, `string_upper/lower/strip(str)`: Transformation.
 
@@ -931,6 +934,7 @@ print 16 >> 2          # 4
 ```
 
 **String Operations**:
+- **String Indexing**: Direct string indexing via bracket syntax (e.g. `s[i]`) throws a runtime error (`Runtime Error: string is not indexable`). Use `slice(s, i, i + 1)` instead.
 ```sagelang
 let a = "Hello"
 let b = "World"
@@ -3041,8 +3045,8 @@ import http
 
 # Simple GET
 let resp = http.get("https://httpbin.org/get")
-print resp["status"]   # 200
-print resp["body"]
+# Note: http.get returns a string response directly, not a dictionary.
+print resp
 
 # POST with options
 let opts = {"timeout": 30, "headers": {"Content-Type": "application/json"}}
@@ -3575,3 +3579,8 @@ Slicing:       arr[a:b]
 Property:      obj.field  or  obj->field
 Call:          func(args)
 ```
+
+## 9.10 OS Development Libraries (Updates)
+* **`core/lib/metal/timer.sage`**: Includes state tracking via `_timer_mode` and `timer_get_mode()` query procedure (supporting `TIMER_MODE_PERIODIC` and `TIMER_MODE_ONESHOT`).
+* **`core/lib/os/kernel/kmain.sage`**: Includes `proc_status_name(status)` helper to map `ProcStatus` enum integer variant values to human-readable string names.
+* **`core/lib/os/linux/syscalls.sage`**: Includes signal mask constants (`SIG_BLOCK`, `SIG_UNBLOCK`, `SIG_SETMASK`) and `sigprocmask(how, set)` helper procedure.
