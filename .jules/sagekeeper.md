@@ -410,3 +410,20 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+
+2026-09-02 - [Version Alignment and Quick Start HTTP Response Fix]
+
+Discovery:
+- `VERSION` (4.2.2), `core/VERSION` (v4.2.2), and `Makefile` were out of sync with `README.md` and `testsuite/selfhost/test_stdlib.sage` which specified `v4.2.3`.
+- `README.md` Quick Start example used `http.get` as returning a dictionary (`resp["status"]`), whereas native C `http.get` returns a string response directly (`"HTTP GET response"`).
+- `core/docs/SageLang_Guide.md` listed `string.char` instead of `string.chr` in section 10.3 and omitted several string module functions (`find`, `rfind`, `char_at`, `count`, `substr`).
+
+Evidence:
+- `core/src/c/net.c` (`http_get_native` returning `Value` string).
+- `core/src/c/stdlib.c` (`create_string_module` bindings).
+- `testsuite/selfhost/test_stdlib.sage` (`sys["version"]` check).
+
+Documentation Impact:
+- Updated `VERSION` to `4.2.3` and `core/VERSION` to `v4.2.3`.
+- Updated `README.md` Quick Start snippet to print `resp` string directly.
+- Fixed `string.chr` and available function list in `core/docs/SageLang_Guide.md`.

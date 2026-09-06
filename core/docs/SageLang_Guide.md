@@ -2638,7 +2638,7 @@ Available functions: `readfile`, `writefile`, `appendfile`, `exists`, `remove`, 
 ```sagelang
 import string
 
-print string.char(65)        # A
+print string.chr(65)        # A
 print string.ord("A")        # 65
 print string.startswith("hello", "he")  # true
 print string.endswith("hello", "lo")    # true
@@ -2647,7 +2647,7 @@ print string.repeat("ab", 3)            # ababab
 print string.reverse("hello")           # olleh
 ```
 
-Available functions: `char`, `ord`, `startswith`, `endswith`, `contains`, `repeat`, `reverse`
+Available functions: `find`, `rfind`, `startswith`, `endswith`, `contains`, `char_at`, `ord`, `chr`, `repeat`, `count`, `substr`, `reverse`
 
 ### 10.4 Sys Module
 
