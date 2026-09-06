@@ -101,3 +101,8 @@
 **Vulnerability:** Generated `s_shell_exec` runtime helper in `aot.c` accumulated command output into heap memory via `realloc` without checking output length bounds or `realloc` failure (CWE-400).
 **Learning:** Command execution primitives in compiled backends (like AOT) that capture process output can stream unbounded data into heap memory if process stdout is infinite or very large, causing Denial of Service or OOM crashes.
 **Prevention:** Always cap process output buffer accumulation (e.g., `104857600` bytes) and validate `realloc` return pointers across all execution runtime skeletons.
+
+## 2026-08-30 - Resource Exhaustion and Null Dereference in AOT s_join Runtime Helper
+**Vulnerability:** AOT runtime helper `s_join` used quadratic $O(N^2)$ `strcat` loops without `malloc` NULL check or upper bound limits on resulting string size (CWE-400 / CWE-476).
+**Learning:** Concatenating string arrays in compiled AOT helpers via `strcat` repeatedly scans the intermediate buffer from the start. For large input arrays, this causes $O(N^2)$ CPU freeze and can crash on `malloc` failure.
+**Prevention:** Construct joined strings using $O(N)$ linear `memcpy` writes via a write pointer, check `malloc` returns, and enforce a 100MB output limit (`104857600` bytes) before allocation.
