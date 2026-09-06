@@ -225,7 +225,7 @@ struct Value {
 | `VAL_NUMBER` | `double` (on stack) | Yes | Integers, floats; `10`, `3.14` |
 | `VAL_BOOL` | `int` (on stack) | Yes | Boolean logic; `true`, `false` |
 | `VAL_NIL` | N/A | No | Null value; `nil` |
-| `VAL_STRING` | `char*` (heap) | No | Text; immutable (assign new to mutate) |
+| `VAL_STRING` | `char*` (heap) | No | Text; immutable (assign new to mutate), supports bracket indexing (`str[i]`) |
 | `VAL_ARRAY` | `ArrayValue*` (dynamic) | Yes | Lists; `[1, 2, 3]`, `push()`, indexing |
 | `VAL_DICT` | `DictValue*` (string-keyed) | Yes | Maps; `{"key": value}`, `dict_set()` |
 | `VAL_TUPLE` | `TupleValue*` (immutable) | No | Fixed-size sequences; `(1, 2, 3)` |
@@ -933,6 +933,8 @@ print 16 >> 2          # 4
 **String Operations**:
 ```sagelang
 let a = "Hello"
+print a[0]                     # "H" (Indexing returns a single-character string)
+print indexof("hello", "l")    # 2 (Accepts exactly 2 strings, returns index or -1)
 let b = "World"
 print a + " " + b              # "Hello World"
 

@@ -410,3 +410,13 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+2026-09-06 - [String Indexing Behavior Correction]
+
+Discovery:
+The string behavior documentation and memory indicated 'indexing strings using bracket syntax (e.g. `s[i]`) throws `Runtime Error: string is not indexable` in the VM; string character access must use `slice(s, i, i + 1)`'. However, runtime execution reveals that `s[i]` correctly evaluates and returns the character as a string (e.g., `s = "hello"; s[0]` returns `"h"`), for both the AST interpreter and the bytecode VM.
+
+Evidence:
+Runtime tests of `s[0]` against both standard execution (`./sage`) and bytecode execution (`--runtime bytecode`). Both outputs matched `"h"`.
+
+Documentation Impact:
+Document that string indexing via bracket syntax (e.g., `str[index]`) is fully supported and returns a single-character string.
