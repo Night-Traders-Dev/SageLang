@@ -1,7 +1,7 @@
 gc_disable()
-import rich.style
-import rich.text
-import rich.measure
+import rich.style as style
+import rich.text as text
+import rich.measure as measure
 
 # Columns component - side-by-side layout
 
@@ -51,6 +51,9 @@ class Columns:
         if column_width < 1:
             column_width = 1
 
+        # Precompute left padding string
+        let lp = string_repeat(" ", pad)
+
         let rendered_cols = []
         for i in range(num_cols):
             let content = self._render_renderable(self.renderables[i])
@@ -58,16 +61,11 @@ class Columns:
             let padded_lines = []
             for j in range(len(lines)):
                 let line = lines[j]
-                let visible = rich.measure.measure_text(line)
+                let visible = measure.measure_text(line)
                 let right_pad = column_width - visible
                 if right_pad < 0:
                     right_pad = 0
-                let lp = ""
-                for k in range(pad):
-                    lp = lp + " "
-                let rp = ""
-                for k in range(pad + right_pad):
-                    rp = rp + " "
+                let rp = string_repeat(" ", pad + right_pad)
                 push(padded_lines, lp + line + rp)
             push(rendered_cols, padded_lines)
 
@@ -77,29 +75,22 @@ class Columns:
             if len(rendered_cols[i]) > max_lines:
                 max_lines = len(rendered_cols[i])
 
-        # Pad all columns to same height
+        # Pad all columns to same height using precalculated blank line
+        let blank = string_repeat(" ", column_width + pad * 2)
         for i in range(len(rendered_cols)):
             while len(rendered_cols[i]) < max_lines:
-                let blank = ""
-                for k in range(column_width + pad * 2):
-                    blank = blank + " "
                 push(rendered_cols[i], blank)
 
-        # Assemble result
+        # Assemble result lines using array push + join to avoid O(N^2) string concatenation
         let result_lines = []
         for line_idx in range(max_lines):
-            let line = ""
+            let line_parts = []
             for col_idx in range(num_cols):
                 if line_idx < len(rendered_cols[col_idx]):
-                    line = line + rendered_cols[col_idx][line_idx]
-            push(result_lines, line)
+                    push(line_parts, rendered_cols[col_idx][line_idx])
+            push(result_lines, join(line_parts, ""))
 
-        let result = ""
-        for i in range(len(result_lines)):
-            if i > 0:
-                result = result + chr(10)
-            result = result + result_lines[i]
-        return result
+        return join(result_lines, chr(10))
 
     proc _render_renderable(self, obj):
         if obj == nil:

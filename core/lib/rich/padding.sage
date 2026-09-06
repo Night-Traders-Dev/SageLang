@@ -52,13 +52,9 @@ class Padding:
         for i in range(self.top):
             push(result_lines, "")
 
-        # Content with left/right padding
-        let left_pad = ""
-        for i in range(self.left):
-            left_pad = left_pad + " "
-        let right_pad = ""
-        for i in range(self.right):
-            right_pad = right_pad + " "
+        # Content with left/right padding using native string_repeat
+        let left_pad = string_repeat(" ", self.left)
+        let right_pad = string_repeat(" ", self.right)
 
         for i in range(len(lines)):
             push(result_lines, left_pad + lines[i] + right_pad)
@@ -67,12 +63,7 @@ class Padding:
         for i in range(self.bottom):
             push(result_lines, "")
 
-        let result = ""
-        for i in range(len(result_lines)):
-            if i > 0:
-                result = result + chr(10)
-            result = result + result_lines[i]
-        return result
+        return join(result_lines, chr(10))
 
     proc _render_content(self, obj):
         if obj == nil:

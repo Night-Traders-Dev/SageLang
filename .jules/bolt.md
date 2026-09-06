@@ -109,3 +109,7 @@
 ## 2026-09-03 - [Optimized Process Path Utilities]
 **Learning:** Manual $O(N^2)$ character-by-character string concatenation loops in `join_path`, `basename`, `dirname`, and `extension` in `core/lib/std/process.sage` introduce heavy interpreter overhead due to immutable string reallocations. Delegating `join_path` to the native C `join(parts, sep)` built-in achieves a ~4.3x speedup. Scanning backwards with negative step ranges `range(len-1, -1, -1)` for path separators or dots in `basename`, `dirname`, and `extension` combined with native `slice()` built-in calls achieves up to ~4.5x speedup (~3.7x overall speedup).
 **Action:** Replace manual string concatenation loops with native `join()` and `slice()` built-ins and use backward range scans `range(n - 1, -1, -1)` for delimiter searches in string path utilities.
+
+## 2026-09-06 - [Optimized Rich Columns and Padding Operations]
+**Learning:** In `core/lib/rich/columns.sage`, `core/lib/rich/padding.sage`, and `core/lib/rich/__init__.sage`, manual character repetition loops for padding (`pad` and `right_pad`) and manual string concatenation loops for assembling multi-column lines caused quadratic VM overhead. Pre-calculating padding strings with native `string_repeat` VM built-ins and assembling lines via array `push` and `join(...)` offloads string rendering to C native built-ins.
+**Action:** Replace manual character loops and line assembly loops in Rich TUI components with native `string_repeat` and `join(...)` operations.
