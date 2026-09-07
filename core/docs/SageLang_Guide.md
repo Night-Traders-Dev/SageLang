@@ -3034,19 +3034,18 @@ tcp.close(server)
 
 ### 14.3 HTTP Module
 
-HTTP/HTTPS client via libcurl. All request functions return a dict with `status`, `body`, and `headers` keys.
+HTTP/HTTPS client via libcurl. Native request functions return response body strings directly.
 
 ```sagelang
 import http
 
 # Simple GET
 let resp = http.get("https://httpbin.org/get")
-print resp["status"]   # 200
-print resp["body"]
+if resp != nil:
+    print resp
 
-# POST with options
-let opts = {"timeout": 30, "headers": {"Content-Type": "application/json"}}
-let resp2 = http.post("https://httpbin.org/post", "{}", opts)
+# POST with body
+let resp2 = http.post("https://httpbin.org/post", "{}")
 
 # Download file
 http.download("https://example.com/file.txt", "/tmp/file.txt")
