@@ -165,3 +165,24 @@ for i in range(100):
     t_style_obj.stylize("bold", 10, 200)
 let end_txt_style = clock()
 print("Rich Text Stylize (100 iterations on large input): Time: " + str(end_txt_style - start_txt_style) + " s")
+
+# ============================================================================
+# Rich Rule and Progress Benchmark (Bolt Optimization)
+# ============================================================================
+import rich.rule as rule
+import rich.progress as progress
+
+let rule_obj = rule.Rule("Section Header", "bold blue", "center", "─")
+let start_rule_bench = clock()
+for i in range(1000):
+    let r_out = rule_obj.render(nil)
+let end_rule_bench = clock()
+print("Rich Rule Render (1000 iterations): Time: " + str(end_rule_bench - start_rule_bench) + " s")
+
+let prog_obj = progress.Progress(nil, 100, "Downloading", false, 10)
+prog_obj.add_task("Downloading archive.tar.gz", 100, 50, 0)
+let start_prog_bench = clock()
+for i in range(1000):
+    let p_out = prog_obj.render(nil)
+let end_prog_bench = clock()
+print("Rich Progress Render (1000 iterations): Time: " + str(end_prog_bench - start_prog_bench) + " s")

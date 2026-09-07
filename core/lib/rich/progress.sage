@@ -1,8 +1,8 @@
 gc_disable()
-import rich.style
-import rich.text
-import rich.measure
-import rich.color
+import rich.style as style
+import rich.text as text
+import rich.measure as measure
+import rich.color as color
 
 # Progress bar component
 
@@ -90,12 +90,9 @@ class Progress:
             filled = bar_width
         let empty = bar_width - filled
 
-        let bar_filled = ""
-        for i in range(filled):
-            bar_filled = bar_filled + "█"
-        let bar_empty = ""
-        for i in range(empty):
-            bar_empty = bar_empty + "░"
+        # Optimization: Use native string_repeat VM built-in
+        let bar_filled = string_repeat("█", filled)
+        let bar_empty = string_repeat("░", empty)
 
         let spinner_char = self._spinner[self._spinner_idx]
         self._spinner_idx = (self._spinner_idx + 1) % len(self._spinner)
@@ -104,8 +101,8 @@ class Progress:
         let pct_str = str(pct | 0) + "%"
         let padded_pct = ""
         let pct_len = 4 - len(pct_str)
-        for i in range(pct_len):
-            padded_pct = padded_pct + " "
+        if pct_len > 0:
+            padded_pct = string_repeat(" ", pct_len)
         padded_pct = padded_pct + pct_str
 
         # Format counts
@@ -113,10 +110,8 @@ class Progress:
 
         let desc = task["description"]
         if len(desc) > 25:
-            let desc_t = ""
-            for i in range(22):
-                desc_t = desc_t + desc[i]
-            desc = desc_t + "..."
+            # Optimization: Use native slice() instead of manual character loop
+            desc = slice(desc, 0, 22) + "..."
 
         let result = "  " + spinner_char + " " + desc + " " + bar_filled + bar_empty + " " + count_str + " " + padded_pct
         return result
@@ -129,12 +124,8 @@ class Progress:
         let lines = []
         for i in range(len(self._tasks)):
             push(lines, self._render_task(self._tasks[i], width))
-        let result = ""
-        for i in range(len(lines)):
-            if i > 0:
-                result = result + chr(10)
-            result = result + lines[i]
-        return result
+        # Optimization: Use join(chr(10)) to assemble lines in O(N) time
+        return join(lines, chr(10))
 
     proc __rich__(self, console):
         return self.render(console)
@@ -144,7 +135,7 @@ class Progress:
 
 # Simple progress bar (standalone)
 class ProgressBar:
-    proc init(self, total, width, complete_style, finished_style, pulse_style, style, show_percent):
+    proc init(self, total, width, complete_style, finished_style, pulse_style, style_name, show_percent):
         self.total = 100
         if total != nil:
             self.total = total
@@ -162,8 +153,8 @@ class ProgressBar:
         if pulse_style != nil:
             self.pulse_style = pulse_style
         self.style = ""
-        if style != nil:
-            self.style = style
+        if style_name != nil:
+            self.style = style_name
         self.show_percent = true
         if show_percent != nil:
             self.show_percent = show_percent
@@ -189,23 +180,21 @@ class ProgressBar:
         let filled_ch = "█"
         let empty_ch = "░"
 
-        let bar = rich.style.render_styled(
+        let bar = style.render_styled(
             self._repeat_char(filled_ch, filled),
-            rich.style.parse_style(self.complete_style))
-        bar = bar + rich.style.render_styled(
+            style.parse_style(self.complete_style))
+        bar = bar + style.render_styled(
             self._repeat_char(empty_ch, empty),
-            rich.style.parse_style("dim"))
+            style.parse_style("dim"))
 
         if self.show_percent:
             bar = bar + " " + str(pct | 0) + "%"
 
         return bar
 
+    # Optimization: Use native string_repeat VM built-in
     proc _repeat_char(self, ch, n):
-        let result = ""
-        for i in range(n):
-            result = result + ch
-        return result
+        return string_repeat(ch, n)
 
     proc __rich__(self, console):
         return self.render(console)

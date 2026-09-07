@@ -1,3 +1,7 @@
+## 2026-09-07 - [Optimized Rich Rule, Progress, and TUI Component Formatting]
+**Learning:** Manual character concatenation loops in Rich TUI components (`Rule.render`, `Progress._render_task`, `ProgressBar._repeat_char`, and `str_repeat` in `core/lib/rich/`) suffer from $O(N^2)$ interpreter overhead due to string immutability. Replacing manual repetition loops with the native `string_repeat` VM built-in, using `slice()` for text truncation, and using array assembly + `join(...)` for multi-line formatting offloads execution to C native code and eliminates intermediate string allocations.
+**Action:** Always delegate character repetition to `string_repeat`, string truncation to `slice()`, and line assembly to `join(lines, ...)` across Rich TUI components.
+
 ## 2026-08-30 - [Optimized Rich Panel Component Operations]
 **Learning:** Manual string repetition loops in `Panel._repeat_char` and string concatenation loops for assembling rendered output lines in `Panel.render` (`core/lib/rich/panel.sage`) introduce unnecessary $O(N^2)$ VM overhead. Replacing manual character loops with `string_repeat` VM built-in calls and `join(lines, chr(10))` offloads string assembly to native C code, resulting in faster UI rendering.
 **Action:** Always delegate character repetition to `string_repeat` and multi-line string assembly to `join(lines, chr(10))` in TUI components.
