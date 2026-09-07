@@ -936,6 +936,9 @@ let a = "Hello"
 let b = "World"
 print a + " " + b              # "Hello World"
 
+let first_char = a[0]          # String indexing via bracket syntax returns a single-character string: "H"
+# Strings remain immutable; reassignment (e.g., `a[0] = "J"`) will result in an error.
+
 let words = "a,b,c".split(",")
 print words                     # ["a", "b", "c"]
 
@@ -1014,7 +1017,7 @@ for i in range(0, 5):
     print i
 
 # Note: Strings are not currently iterable via `for` loops.
-# Use a `while` loop with index-based access instead.
+# Use a `while` loop with index-based bracket access instead.
 let s = "hello"
 let i_str = 0
 while i_str < len(s):
@@ -1450,7 +1453,7 @@ next(gen)                          # Resume, reach end, is_exhausted=1
 ### 5.6 Type Coercion and Truthiness
 
 **Truthiness** (for `if`/`while` conditions):
-- **Falsy**: `nil`, `false`, `0`, and empty strings (`""`).
+- **Falsy**: `nil`, `false`, `0` (and `0.0`), and empty strings (`""`).
 - **Truthy**: Everything else (empty arrays are truthy, objects, etc.).
 
 **Type Coercion**:
