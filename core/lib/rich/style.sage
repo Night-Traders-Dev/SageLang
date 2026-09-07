@@ -1,5 +1,5 @@
 gc_disable()
-import rich.color
+import rich.color as color
 
 # Text style definition and rendering
 
@@ -28,11 +28,11 @@ let STYLE_REVERSE = 32
 let STYLE_STRIKE = 64
 
 # Create a style object
-proc Style(color, bgcolor, bold, dim, italic, underline, blink, reverse, strike, link):
+proc Style(color_val, bgcolor, bold, dim, italic, underline, blink, reverse, strike, link):
     let style = {}
     style["color"] = nil
-    if color != nil:
-        style["color"] = color
+    if color_val != nil:
+        style["color"] = color_val
     style["bgcolor"] = nil
     if bgcolor != nil:
         style["bgcolor"] = bgcolor
@@ -140,7 +140,7 @@ proc parse_style(style_str):
                                                                                         s["color"] = nil
                                                                                         s["bgcolor"] = nil
                                                                                     else:
-                                                                                        let c = rich.color.parse_color(part)
+                                                                                        let c = color.parse_color(part)
                                                                                         if c != nil:
                                                                                             if expecting_on:
                                                                                                 s["bgcolor"] = c
@@ -151,62 +151,62 @@ proc parse_style(style_str):
     return s
 
 # Generate ANSI escape sequence for a style
-proc style_ansi_open(style):
-    if style == nil:
+proc style_ansi_open(style_obj):
+    if style_obj == nil:
         return ""
     let result = ""
-    if style["bold"]:
+    if style_obj["bold"]:
         result = result + BOLD
-    if style["dim"]:
+    if style_obj["dim"]:
         result = result + DIM
-    if style["italic"]:
+    if style_obj["italic"]:
         result = result + ITALIC
-    if style["underline"]:
+    if style_obj["underline"]:
         result = result + UNDERLINE
-    if style["blink"]:
+    if style_obj["blink"]:
         result = result + BLINK
-    if style["reverse"]:
+    if style_obj["reverse"]:
         result = result + REVERSE
-    if style["strike"]:
+    if style_obj["strike"]:
         result = result + STRIKE
-    if style["color"] != nil:
-        result = result + rich.color.color_ansi_escape(style["color"], false)
-    if style["bgcolor"] != nil:
-        result = result + rich.color.color_ansi_escape(style["bgcolor"], true)
+    if style_obj["color"] != nil:
+        result = result + color.color_ansi_escape(style_obj["color"], false)
+    if style_obj["bgcolor"] != nil:
+        result = result + color.color_ansi_escape(style_obj["bgcolor"], true)
     return result
 
-proc style_ansi_close(style):
-    if style == nil:
+proc style_ansi_close(style_obj):
+    if style_obj == nil:
         return ""
     let result = RESET
     # Re-apply surrounding style if any (for nested styles, handled by caller)
     return result
 
 # Render a string with a style applied
-proc render_styled(text, style):
-    if style == nil:
+proc render_styled(text, style_obj):
+    if style_obj == nil:
         return text
-    return style_ansi_open(style) + text + style_ansi_close(style)
+    return style_ansi_open(style_obj) + text + style_ansi_close(style_obj)
 
 # Check if a style is the default/empty style
-proc is_default_style(style):
-    if style == nil:
+proc is_default_style(style_obj):
+    if style_obj == nil:
         return true
-    if style["color"] != nil:
+    if style_obj["color"] != nil:
         return false
-    if style["bgcolor"] != nil:
+    if style_obj["bgcolor"] != nil:
         return false
-    if style["bold"]:
+    if style_obj["bold"]:
         return false
-    if style["italic"]:
+    if style_obj["italic"]:
         return false
-    if style["underline"]:
+    if style_obj["underline"]:
         return false
-    if style["blink"]:
+    if style_obj["blink"]:
         return false
-    if style["reverse"]:
+    if style_obj["reverse"]:
         return false
-    if style["strike"]:
+    if style_obj["strike"]:
         return false
     return true
 

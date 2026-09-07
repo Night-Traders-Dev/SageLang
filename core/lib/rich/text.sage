@@ -214,7 +214,7 @@ class Text:
             let text_len = len(text)
             let start = 0
             for j in range(text_len):
-                if text[j] == chr(10):
+                if slice(text, j, j + 1) == chr(10):
                     if j > start:
                         current.append(slice(text, start, j), seg["style"])
                     push(lines_list, current)
@@ -240,7 +240,8 @@ class Text:
             let start = 0
             let j = 0
             while j < text_len:
-                if text[j] == chr(10):
+                let ch = slice(text, j, j + 1)
+                if ch == chr(10):
                     if j > start:
                         current.append(slice(text, start, j), seg["style"])
                     push(lines_list, current)
@@ -249,7 +250,7 @@ class Text:
                     start = j + 1
                     j = start
                     continue
-                let char_w = measure.measure_char(text[j])
+                let char_w = measure.measure_char(ch)
                 if current_width + char_w > max_width and current_width > 0:
                     if j > start:
                         current.append(slice(text, start, j), seg["style"])
@@ -303,7 +304,7 @@ class Text:
             let text_len = len(text)
             let j = 0
             while j < text_len and current_width < remaining:
-                current_width = current_width + measure.measure_char(text[j])
+                current_width = current_width + measure.measure_char(slice(text, j, j + 1))
                 j = j + 1
             if j > 0:
                 result.append(slice(text, 0, j), seg["style"])

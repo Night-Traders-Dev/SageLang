@@ -410,7 +410,7 @@ proc create_emoji_map():
     emojis["wolf"] = "🐺"
     emojis["unicorn"] = "🦄"
     emojis["horse"] = "🐴"
-    emojis["zebra"] = "🦓"
+    emojis["zebra"] = "ZEBRA"
     emojis["dragon"] = "🐉"
     emojis["t_rex"] = "🦖"
     emojis["sauropod"] = "🦕"
@@ -483,9 +483,9 @@ proc emoji_replace(text):
     let i = 0
 
     while i < len_text:
-        if text[i] == ":":
+        if slice(text, i, i + 1) == ":":
             let j = i + 1
-            while j < len_text and text[j] != ":":
+            while j < len_text and slice(text, j, j + 1) != ":":
                 j = j + 1
             if j < len_text and j > i + 1:
                 let name = slice(text, i + 1, j)
