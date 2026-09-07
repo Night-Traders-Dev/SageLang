@@ -11,7 +11,9 @@ proc Segment(text, style_obj):
     if text != nil:
         seg["text"] = text
     seg["style"] = style.style_default()
-    if style_obj != nil:
+    if type(style_obj) == "string":
+        seg["style"] = style.parse_style(style_obj)
+    elif style_obj != nil:
         seg["style"] = style_obj
     return seg
 
@@ -48,7 +50,10 @@ proc segment_split(seg, pos):
 proc segment_style(seg, style_obj):
     let new_seg = {}
     new_seg["text"] = seg["text"]
-    new_seg["style"] = style.merge_styles(seg["style"], style_obj)
+    let st = style_obj
+    if type(style_obj) == "string":
+        st = style.parse_style(style_obj)
+    new_seg["style"] = style.merge_styles(seg["style"], st)
     return new_seg
 
 # --- Text class - collection of styled segments ---
@@ -69,7 +74,10 @@ class Text:
     # Append text with optional style
     proc append(self, text, style_obj):
         if type(text) == "string" or type(text) == "number":
-            push(self.segments, Segment(str(text), style_obj))
+            let st = style_obj
+            if type(style_obj) == "string":
+                st = style.parse_style(style_obj)
+            push(self.segments, Segment(str(text), st))
         if type(text) == "instance":
             # Append another Text or Segment
             if self._is_segment(text):
@@ -95,6 +103,9 @@ class Text:
             actual_end = total
         let pos = 0
         let new_segs = []
+        let st = style_obj
+        if type(style_obj) == "string":
+            st = style.parse_style(style_obj)
         for i in range(len(self.segments)):
             let seg = self.segments[i]
             let seg_text = seg["text"]
@@ -119,7 +130,7 @@ class Text:
                 if cut1 > 0:
                     push(new_segs, Segment(slice(seg_text, 0, cut1), seg["style"]))
                 if cut2 > cut1:
-                    let new_style = style.merge_styles(seg["style"], style_obj)
+                    let new_style = style.merge_styles(seg["style"], st)
                     push(new_segs, Segment(slice(seg_text, cut1, cut2), new_style))
                 if seg_len > cut2:
                     push(new_segs, Segment(slice(seg_text, cut2, seg_len), seg["style"]))

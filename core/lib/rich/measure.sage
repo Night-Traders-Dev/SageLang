@@ -4,9 +4,10 @@ gc_disable()
 
 ## Helper to check if a unicode character code is wide.
 @inline
-# Helper to check if a unicode character code is wide.
 proc _is_wide_code(code):
-    if code >= 0x1100 and code <= 0x115F:
+    if code < 0x1100:
+        return false
+    if code <= 0x115F:
         return true
     if code >= 0x2329 and code <= 0x232A:
         return true
@@ -33,24 +34,25 @@ proc measure_text(text):
     let len_txt = len(txt)
     if contains(txt, chr(27)) == false:
         for idx in range(len_txt):
-            if _is_wide_code(ord(txt[idx])):
+            if _is_wide_code(ord(slice(txt, idx, idx + 1))):
                 count = count + 2
             else:
                 count = count + 1
         return count
     let i = 0
     while i < len_txt:
-        if txt[i] == chr(27) and i + 1 < len_txt and txt[i + 1] == "[":
+        let ch = slice(txt, i, i + 1)
+        if ch == chr(27) and i + 1 < len_txt and slice(txt, i + 1, i + 2) == "[":
             # Skip ANSI escape sequence
             i = i + 2
             while i < len_txt:
-                let esc_c = txt[i]
+                let esc_c = slice(txt, i, i + 1)
                 if (esc_c >= "A" and esc_c <= "Z") or (esc_c >= "a" and esc_c <= "z"):
                     i = i + 1
                     break
                 i = i + 1
             continue
-        if _is_wide_code(ord(txt[i])):
+        if _is_wide_code(ord(ch)):
             count = count + 2
         else:
             count = count + 1
@@ -90,12 +92,13 @@ proc strip_ansi(text):
     let len_text = len(text)
     let last_start = 0
     while idx_ansi < len_text:
-        if text[idx_ansi] == chr(27) and idx_ansi + 1 < len_text and text[idx_ansi + 1] == "[":
+        let ch = slice(text, idx_ansi, idx_ansi + 1)
+        if ch == chr(27) and idx_ansi + 1 < len_text and slice(text, idx_ansi + 1, idx_ansi + 2) == "[":
             if idx_ansi > last_start:
                 push(parts, slice(text, last_start, idx_ansi))
             idx_ansi = idx_ansi + 2
             while idx_ansi < len_text:
-                let strip_esc_c = text[idx_ansi]
+                let strip_esc_c = slice(text, idx_ansi, idx_ansi + 1)
                 if (strip_esc_c >= "A" and strip_esc_c <= "Z") or (strip_esc_c >= "a" and strip_esc_c <= "z"):
                     idx_ansi = idx_ansi + 1
                     break

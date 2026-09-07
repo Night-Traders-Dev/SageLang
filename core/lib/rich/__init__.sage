@@ -127,7 +127,7 @@ proc on_white(text):
 
 # ─── Box Drawing ─────────────────────────────────────────────────────────
 let BOX_LIGHT = {"tl": "┌", "tr": "┐", "bl": "└", "br": "┘", "h": "─", "v": "│", "ml": "├", "mr": "┤", "mt": "┬", "mb": "┴", "c": "┼"}
-let BOX_HEAVY = {"tl": "┏", "tr": "┓", "bl": "┗", "br": "┛", "h": "━", "v": "┃", "ml": "┣", "mr": "┫", "mt": "┳", "mb": "┻", "c": "╋"}
+let BOX_HEAVY = {"tl": "┏", "tr": "┓", "bl": "┗", "br": "┛", "h": "━", "v": "┃", "ml": "┣", "mr": "┫", "mt": "┳", "mb": "┴", "c": "╋"}
 let BOX_DOUBLE = {"tl": "╔", "tr": "╗", "bl": "╚", "br": "╝", "h": "═", "v": "║", "ml": "╠", "mr": "╣", "mt": "╦", "mb": "╩", "c": "╬"}
 let BOX_ROUNDED = {"tl": "╭", "tr": "╮", "bl": "╰", "br": "╯", "h": "─", "v": "│", "ml": "├", "mr": "┤", "mt": "┬", "mb": "┴", "c": "┼"}
 
@@ -337,12 +337,14 @@ proc progress():
     p["add_task"] = proc(description, total, completed, visible):
         let id = PROGRESS_STATE._task_id
         PROGRESS_STATE._task_id = PROGRESS_STATE._task_id + 1
-        PROGRESS_STATE._tasks[id] = {"desc": description, "total": total, "completed": completed, "visible": visible}
+        let id_str = str(id)
+        PROGRESS_STATE._tasks[id_str] = {"desc": description, "total": total, "completed": completed, "visible": visible}
         return id
 
     p["update"] = proc(task_id, completed, total, description, visible):
-        if dict_has(PROGRESS_STATE._tasks, task_id):
-            let t = PROGRESS_STATE._tasks[task_id]
+        let tid_str = str(task_id)
+        if dict_has(PROGRESS_STATE._tasks, tid_str):
+            let t = PROGRESS_STATE._tasks[tid_str]
             if completed >= 0:
                 t["completed"] = completed
             if total >= 0:
@@ -352,8 +354,9 @@ proc progress():
             t["visible"] = visible
 
     p["remove_task"] = proc(task_id):
-        if dict_has(PROGRESS_STATE._tasks, task_id):
-            let t = PROGRESS_STATE._tasks[task_id]
+        let tid_str = str(task_id)
+        if dict_has(PROGRESS_STATE._tasks, tid_str):
+            let t = PROGRESS_STATE._tasks[tid_str]
             t["visible"] = false
 
     p["start"] = proc():
@@ -446,16 +449,16 @@ proc highlight_json(text):
 proc highlight_sage(text):
     let t = replace(text, "proc", CYAN() + "proc" + RESET())
     t = replace(t, "let", MAGENTA() + "let" + RESET())
-    t = replace(t, "var", MAGENTA() + "var" + RESET())
-    t = replace(t, "if", CYAN() + "if" + RESET())
-    t = replace(t, "else", CYAN() + "else" + RESET())
-    t = replace(t, "for", CYAN() + "for" + RESET())
-    t = replace(t, "while", CYAN() + "while" + RESET())
-    t = replace(t, "return", YELLOW() + "return" + RESET())
-    t = replace(t, "import", BLUE() + "import" + RESET())
-    t = replace(t, "true", GREEN() + "true" + RESET())
-    t = replace(t, "false", RED() + "false" + RESET())
-    t = replace(t, "nil", DIM() + "nil" + RESET())
+    t = replace(text, "var", MAGENTA() + "var" + RESET())
+    t = replace(text, "if", CYAN() + "if" + RESET())
+    t = replace(text, "else", CYAN() + "else" + RESET())
+    t = replace(text, "for", CYAN() + "for" + RESET())
+    t = replace(text, "while", CYAN() + "while" + RESET())
+    t = replace(text, "return", YELLOW() + "return" + RESET())
+    t = replace(text, "import", BLUE() + "import" + RESET())
+    t = replace(text, "true", GREEN() + "true" + RESET())
+    t = replace(text, "false", RED() + "false" + RESET())
+    t = replace(text, "nil", DIM() + "nil" + RESET())
     return t
 
 # ─── Export ──────────────────────────────────────────────────────────────
