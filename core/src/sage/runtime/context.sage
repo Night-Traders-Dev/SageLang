@@ -31,92 +31,26 @@ import frontend.diagnostics as diagnostics
 #   ├── runtime_flags
 #   └── allocator/state
 
-class InterpreterContext {
-    // Environments
-    let global_env: Env                      // Global scope environment
-    let current_env: Env                     // Current lexical environment
-    let module_env: Option<ModuleEnv>        // Current module environment
-    
-    // Module state
-    let module_state: ModuleState            // Module loading state
-    let module_paths: List<String>           // Search paths for modules
-    
-    // Frame stack
-    let frame_stack: FrameStack              // Call frame stack
-    let current_frame: Option<CallFrame>     // Currently executing frame
-    
-    // Error handling
-    let error_context: ErrorContext          // Rich error context
-    let pending_exception: Option<Value>     // Exception being unwound
-    
-    // Profiling & optimization
-    let profiler: ProfilerState              // Profiling data
-    let function_profiles: Dict<FunctionId, FunctionProfile>  // Function profiles
-    
-    // Resource limits
-    let resource_limits: ResourceLimits      // Configurable limits
-    let steps_used: Int                      // Step counter
-    let recursion_depth: Int                 // Current recursion depth
-    let memory_used: Int                     // Memory usage tracker
-    let output_bytes: Int                    // Output bytes written
-    
-    // Capabilities
-    let host_capabilities: HostCapabilities  // Granted capabilities
-    let runtime_profile: String              // Profile name (general/embedded/deterministic)
-    
-    // Runtime flags
-    let runtime_flags: RuntimeFlags          // Feature flags
-    let runtime_tier: String                 // Execution tier (reference/bytecode/cpc/jit/aot)
-    
-    // Builtins and native registry
-    let builtin_registry: Dict<String, NativeFunction>  // Registered builtins
-    
-    // Source tracking
-    let source_map: Dict<String, String>     // Module -> source mapping
-    let current_source: Option<String>       // Currently executing source
-    
-    // Initialization state
-    let initialized: Bool                    // Whether context is fully initialized
-}
+class InterpreterContext:
 
-# Runtime flags for feature toggles
-class RuntimeFlags {
-    let enable_profiling: Bool
-    let enable_jit: Bool
-    let enable_verification: Bool
-    let enable_parity_check: Bool
-    let enable_debug: Bool
-    let strict_mode: Bool
-    let trace_execution: Bool
-    let dump_ir: Bool
-    let dump_bytecode: Bool
-    let dump_frames: Bool
-}
+class RuntimeFlags:
+
+
 
 # Native function registration
-class NativeFunction {
-    let name: String
-    let arity: Int
-    let handler: NativeHandler
-    let capabilities: List<Capability>
-}
+class NativeFunction:
+
+
 
 # Error context for rich diagnostics
-class ErrorContext {
-    let source: String
-    let filename: String
-    let line_map: Dict<Int, Int>  // Byte offset -> line number
-}
+class ErrorContext:
+
+
 
 # Profiler state
-class ProfilerState {
-    let enabled: Bool
-    let call_counts: Dict<FunctionId, Int>
-    let type_feedback: Dict<FunctionId, Dict<String, Int>>
-    let shape_feedback: Dict<FunctionId, Dict<String, Int>>
-    let loop_counts: Dict<Int, Int>
-    let branch_behavior: Dict<Int, Dict<String, Int>>
-}
+class ProfilerState:
+
+
 
 # Create a new InterpreterContext with the given profile
 proc context_new(profile: String): InterpreterContext =

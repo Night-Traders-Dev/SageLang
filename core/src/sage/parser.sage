@@ -997,30 +997,49 @@ class Parser:
             parent = self.previous()
             self.consume(token.TOKEN_RPAREN, "Expect ')' after parent class.")
             has_parent = true
-        self.consume(token.TOKEN_COLON, "Expect ':' after class header.")
-        self.consume(token.TOKEN_NEWLINE, "Expect newline after class header.")
-        self.consume(token.TOKEN_INDENT, "Expect indentation in class body.")
-        let method_head = nil
-        let method_current = nil
-        while not self.check(token.TOKEN_DEDENT) and not self.check(token.TOKEN_EOF):
-            if self.match_tok(token.TOKEN_NEWLINE):
-                continue
-            if self.check(token.TOKEN_DOC_COMMENT):
-                self.advance()
-                self.match_tok(token.TOKEN_NEWLINE)
-                continue
-            if self.match_tok(token.TOKEN_PROC):
-                let method = self.parse_proc()
-                if method_head == nil:
-                    method_head = method
-                    method_current = method
+        # Support both class Name { (brace) and class Name: (colon) syntax
+        if self.check(token.TOKEN_LBRACE):
+            # class Name { brace syntax
+            self.advance()
+            while not self.check(token.TOKEN_RBRACE) and not self.check(token.TOKEN_EOF):
+                if self.match_tok(token.TOKEN_NEWLINE):
+                    continue
+                if self.check(token.TOKEN_DOC_COMMENT):
+                    self.advance()
+                    self.match_tok(token.TOKEN_NEWLINE)
+                    continue
+                if self.match_tok(token.TOKEN_PROC):
+                    let method = self.parse_proc()
                 else:
-                    method_current.next = method
-                    method_current = method
-            else:
-                let tok = self.peek()
-                self.parse_error(tok, "Only methods allowed in class body", "use 'proc' to define methods inside a class")
-        self.consume(token.TOKEN_DEDENT, "Expect dedent after class body.")
+                    let tok = self.peek()
+                    self.parse_error(tok, "Only methods allowed in class body", "use 'proc' to define methods inside a class")
+            self.consume(token.TOKEN_RBRACE, "Expect '}' after class body.")
+        else:
+            # class Name: colon syntax
+            self.consume(token.TOKEN_COLON, "Expect ':' after class header.")
+            self.consume(token.TOKEN_NEWLINE, "Expect newline after class header.")
+            self.consume(token.TOKEN_INDENT, "Expect indentation in class body.")
+            let method_head = nil
+            let method_current = nil
+            while not self.check(token.TOKEN_DEDENT) and not self.check(token.TOKEN_EOF):
+                if self.match_tok(token.TOKEN_NEWLINE):
+                    continue
+                if self.check(token.TOKEN_DOC_COMMENT):
+                    self.advance()
+                    self.match_tok(token.TOKEN_NEWLINE)
+                    continue
+                if self.match_tok(token.TOKEN_PROC):
+                    let method = self.parse_proc()
+                    if method_head == nil:
+                        method_head = method
+                        method_current = method
+                    else:
+                        method_current.next = method
+                        method_current = method
+                else:
+                    let tok = self.peek()
+                    self.parse_error(tok, "Only methods allowed in class body", "use 'proc' to define methods inside a class")
+            self.consume(token.TOKEN_DEDENT, "Expect dedent after class body.")
         return class_stmt(name, parent, has_parent, method_head)
 
     proc parse_try():
