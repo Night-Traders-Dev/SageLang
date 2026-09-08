@@ -410,3 +410,18 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+
+2026-09-08 - [CLI and Linter Updates]
+
+Discovery:
+- `SageLang_Guide.md` lacked full CLI coverage compared to `main.c`, and `--aot --jit` was duplicated during initial pass.
+- Soft keywords `print` and `end` were verified as valid variables via AST evaluation.
+
+Evidence:
+- `core/src/c/main.c` argument parser.
+- Testing script execution confirming soft keyword behavior.
+
+Documentation Impact:
+- CLI reference updated.
+- Soft keyword descriptions unified.
+- Linter rules W003, S004, S005 correctly appended in Guide.

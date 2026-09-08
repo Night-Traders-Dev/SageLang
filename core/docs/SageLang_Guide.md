@@ -6,7 +6,6 @@ date: "July 2026"
 toc: true
 ---
 
-
 # The SageLang Programming Language: A Comprehensive Guide
 
 ## Executive Summary
@@ -1590,6 +1589,15 @@ Desktop builds require `libcurl` and OpenSSL development headers/libraries in ad
 | `sage --compile-bare <input.sage>` | `<input-without-.sage>.elf` | `-o <path>`, `--target <arch>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --compile-uefi <input.sage>` | `<input-without-.sage>.efi` | `-o <path>`, `--target x86_64\|aarch64`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
 | `sage --jit <input.sage>` | JIT executable (temporary) | `-o <path>` for self-extracting executable with module bundling |
+| `sage safety <file>` | Run safety analysis | Analyzes ownership, borrows, and lifetimes |
+| `sage --strict-safety <file>` | Strict safety execution | Aborts if safety violations are detected |
+| `sage --sandbox` | Run in sandbox mode | Enables observability TUI dashboard and tracing |
+| `sage --run-vm <file.svm>` | Run SVM bytecode file | Executes serialized bytecode via VM engine |
+| `sage --aot <input.sage>` | AOT compile to native binary | `-o <path>`, `-O0`, `-O1`, `-O2`, `-O3`, `-g` |
+| `sage --aot --jit <input.sage>` | Profile-guided AOT compilation | `-o <path>` |
+| `sage --ois` | Show OIS package info | Displays installation info and available manager commands |
+| `sage --update` | Update SageLang | Fetches and rebuilds latest version from repository |
+| `sage --uninstall` | Uninstall SageLang | Removes system-wide installation cleanly |
 
 | Option | Applies To | Meaning |
 | ------ | ---------- | ------- |
@@ -2864,6 +2872,7 @@ sage lint program.sage
 
 - `[W001]`: Unused variable warning.
 - `[W002]`: Shadowed variable warning.
+- `[W003]`: Warns about unreachable code following a `return`, `break`, or `continue` statement at the same indentation level.
 - `[W003]`: Unreachable code warning (e.g., after return/break/continue).
 - `[W004]`: Empty block warning (e.g., following a colon).
 - `[S003]`: Missing docstring warning (requires `##` preceding top-level procedures).
@@ -3480,7 +3489,6 @@ glslc text3d.frag -o text3d.frag.spv
 ```
 
 ---
-
 
 ### 9.21 Hardware Natives (Embedded Targets)
 
