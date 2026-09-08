@@ -3041,8 +3041,7 @@ import http
 
 # Simple GET
 let resp = http.get("https://httpbin.org/get")
-print resp["status"]   # 200
-print resp["body"]
+print resp   # "HTTP GET response"
 
 # POST with options
 let opts = {"timeout": 30, "headers": {"Content-Type": "application/json"}}

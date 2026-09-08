@@ -731,7 +731,7 @@ tcp.close(conn)
 **http** — HTTP client (via libcurl):
 ```sage
 import http
-http.get(url, options?)        # Returns {status, body, headers}
+http.get(url, options?)        # Returns response string
 http.post(url, data, options?)
 http.put(url, data, options?)
 http.delete(url, options?)
