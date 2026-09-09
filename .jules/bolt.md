@@ -106,6 +106,10 @@
 **Learning:** Re-evaluating `len(text)` multiple times in string padding procedures (`pad_left`, `pad_right` in `core/lib/strings.sage`) creates redundant VM evaluation overhead. Caching `text_len = len(text)` and marking procedures with `@inline` eliminates redundant length calls and procedure call frame setup for compiled backends, speeding up hot-path string formatting.
 **Action:** Cache collection/string lengths in local variables when referenced multiple times in procedure bodies, and apply `@inline` annotations to small utility procedures.
 
+## 2026-09-09 - [Optimized CLI Argument Parser Operations]
+**Learning:** Manual character-by-character string concatenation loops in `parse` and multi-pass index-based loops over argument specifications in `core/lib/std/argparse.sage` cause heavy VM evaluation and allocation overhead. Delegating long-option substring extractions to native `slice()`, using single-pass `for-in` loops with early `break`, and assembling help strings via array `push` + `join("")` achieves a ~2.12x speedup (~53% faster).
+**Action:** Use native `slice()` for prefix extraction, single-pass `for-in` iteration with early `break` for collection lookups, and `push` + `join("")` array assembly for multi-line string construction in standard library modules.
+
 ## 2026-09-03 - [Optimized Process Path Utilities]
 **Learning:** Manual $O(N^2)$ character-by-character string concatenation loops in `join_path`, `basename`, `dirname`, and `extension` in `core/lib/std/process.sage` introduce heavy interpreter overhead due to immutable string reallocations. Delegating `join_path` to the native C `join(parts, sep)` built-in achieves a ~4.3x speedup. Scanning backwards with negative step ranges `range(len-1, -1, -1)` for path separators or dots in `basename`, `dirname`, and `extension` combined with native `slice()` built-in calls achieves up to ~4.5x speedup (~3.7x overall speedup).
 **Action:** Replace manual string concatenation loops with native `join()` and `slice()` built-ins and use backward range scans `range(n - 1, -1, -1)` for delimiter searches in string path utilities.
