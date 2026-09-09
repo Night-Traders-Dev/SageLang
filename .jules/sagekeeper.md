@@ -410,3 +410,17 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+
+2026-09-08 - [http.get Return Type & Documented Version Sync]
+
+Discovery:
+- `http.get` (native procedure in `core/src/c/net.c`) returns a string response directly rather than a dictionary object. Quick start code examples in `README.md`, `core/docs/SageLang_Guide.md`, `core/docs/Networking_Guide.md`, and `core/docs/SageLang_Reference.md` contained outdated `resp["status"]` indexing which caused runtime errors when run.
+- Documentation header versions in `core/docs/SageLang_Reference.md`, `core/docs/sagelang-book.md`, and `core/docs/meta/PARITY.md` were lagging behind the core `VERSION` (v4.2.3).
+
+Evidence:
+- `core/src/c/net.c` (`http_get_native` returning `val_string("HTTP GET response")`).
+- `VERSION` (`v4.2.3`).
+
+Documentation Impact:
+- Fixed `http.get` usage in code snippets across `README.md`, `core/docs/SageLang_Guide.md`, `core/docs/Networking_Guide.md`, and `core/docs/SageLang_Reference.md`.
+- Synchronized version tags in `core/docs/SageLang_Reference.md`, `core/docs/sagelang-book.md`, and `core/docs/meta/PARITY.md` to v4.2.3.

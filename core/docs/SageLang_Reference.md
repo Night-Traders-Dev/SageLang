@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.1.14 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.2.3 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -731,7 +731,7 @@ tcp.close(conn)
 **http** — HTTP client (via libcurl):
 ```sage
 import http
-http.get(url, options?)        # Returns {status, body, headers}
+http.get(url, options?)        # Returns response string
 http.post(url, data, options?)
 http.put(url, data, options?)
 http.delete(url, options?)

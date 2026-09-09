@@ -1,6 +1,6 @@
 # SageLang Compiler Parity Report
 
-**Date:** 2026-08-21 · **Version:** v4.1.16 · **Method:** static feature matrices +
+**Date:** 2026-09-08 · **Version:** v4.2.3 · **Method:** static feature matrices +
 differential test harness (`testsuite/parity/run_parity.sh`, 28 cases × 3 stacks)
 
 Stacks compared:
