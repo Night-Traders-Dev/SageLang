@@ -189,6 +189,13 @@ int main(int argc, char** argv) {
     }
 
     FILE* out = fopen(argv[2], "wb");
+    if (!out) {
+        perror("fopen output file");
+        fclose(in);
+        free(local_to_global);
+        remove(tmp_svm);
+        return 1;
+    }
     fwrite("SGVM", 1, 4, out);
     fputc(0x01, out); fputc(0x00, out);
 

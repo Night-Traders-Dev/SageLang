@@ -24,7 +24,18 @@ int main(int argc, char** argv) {
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
+    if (size < 0 || size > 104857600) {
+        fprintf(stderr, "Error: Invalid or oversized SGVM file\n");
+        fclose(f);
+        return 1;
+    }
+
     unsigned char* data = malloc(size);
+    if (!data) {
+        fprintf(stderr, "Error: Memory allocation failed\n");
+        fclose(f);
+        return 1;
+    }
     if (fread(data, 1, size, f) != (size_t)size) {
         fprintf(stderr, "Read error\n");
         free(data);
