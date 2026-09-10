@@ -109,3 +109,7 @@
 ## 2026-09-03 - [Optimized Process Path Utilities]
 **Learning:** Manual $O(N^2)$ character-by-character string concatenation loops in `join_path`, `basename`, `dirname`, and `extension` in `core/lib/std/process.sage` introduce heavy interpreter overhead due to immutable string reallocations. Delegating `join_path` to the native C `join(parts, sep)` built-in achieves a ~4.3x speedup. Scanning backwards with negative step ranges `range(len-1, -1, -1)` for path separators or dots in `basename`, `dirname`, and `extension` combined with native `slice()` built-in calls achieves up to ~4.5x speedup (~3.7x overall speedup).
 **Action:** Replace manual string concatenation loops with native `join()` and `slice()` built-ins and use backward range scans `range(n - 1, -1, -1)` for delimiter searches in string path utilities.
+
+## 2026-09-10 - [Optimized Emoji Shortcode Replacement]
+**Learning:** Manual character-by-character while loops scanning for `:` delimiters in string shortcode processing (`emoji_replace` in `core/lib/rich/emoji.sage`) introduce substantial interpreter VM overhead. Replacing character iteration with native `indexof()` C built-in calls on string slices enables jumping directly between delimiter positions in C speed, achieving a ~1.8x performance improvement.
+**Action:** Use native `indexof()` for finding delimiter positions in string parsing routines instead of character-by-character loops.
