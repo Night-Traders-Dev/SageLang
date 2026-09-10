@@ -410,3 +410,13 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+2026-09-02 - [Fixing http.get Example & Missing System APIs]
+
+Discovery:
+The HTTP example in `core/docs/SageLang_Guide.md` assumes `http.get` returns a dictionary (e.g., `resp["status"]` and `resp["body"]`). However, `http_get_native` in `core/src/c/net.c` returns a string response directly. Also, the guide is missing documentation for bare-metal helper `pin_enable_interrupt_ext` and `pin_pulse_in`, `proc_status_name` in kmain, interrupt removal `unregister_handler`, and the POSIX `sigprocmask`.
+
+Evidence:
+`core/src/c/net.c` (function `http_get_native`). `core/docs/Baremetal_OSDev_UEFI_Guide.md` vs `core/docs/SageLang_Guide.md`.
+
+Documentation Impact:
+Updated the `http.get` example in `core/docs/SageLang_Guide.md` to treat the return value as a string. Also integrated the missing system primitives into the guide.

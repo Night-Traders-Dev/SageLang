@@ -2220,7 +2220,7 @@ SageLang ships with 52 OS/bare-metal development modules across `lib/os/`, `lib/
 | `boot/psci.sage` | `import os.boot.psci` | ARM Power State Coordination Interface for SMP core bring-up |
 | `boot/dtb_boot.sage` | `import os.boot.dtb_boot` | DTB-aware helpers for memory detection and /chosen manipulation |
 | `boot/verify.sage` | `import os.boot.verify` | Kernel signature verification (SHA-256, Ed25519) and TPM measurement |
-| `kernel/kmain.sage` | `import os.kernel.kmain` | Kernel entry point scaffolding, boot info handoff |
+| `kernel/kmain.sage` | `import os.kernel.kmain` | Kernel entry point scaffolding, boot info handoff (`proc_status_name`) |
 | `kernel/console.sage` | `import os.kernel.console` | VGA text-mode console (80x25, color attributes, scrolling) |
 | `kernel/keyboard.sage` | `import os.kernel.keyboard` | PS/2 keyboard driver (scancode set 2, key event dispatch) |
 | `kernel/timer.sage` | `import os.kernel.timer` | PIT channel 0 timer, IRQ0 handler, millisecond tick counter |
@@ -2230,8 +2230,8 @@ SageLang ships with 52 OS/bare-metal development modules across `lib/os/`, `lib/
 | `image/diskimg.sage` | `import os.image.diskimg` | Bootable disk image builder (.img: MBR + FAT partition + kernel) |
 | `image/iso.sage` | `import os.image.iso` | ISO 9660 image creation (El Torito bootable CD/DVD) |
 | `metal/core.sage` | `import metal.core` | Bare-metal core primitives for SageMetal VM |
-| `metal/gpio.sage` | `import metal.gpio` | General Purpose I/O for Bare-Metal |
-| `metal/irq.sage` | `import metal.irq` | Interrupt Request Management for Bare-Metal |
+| `metal/gpio.sage` | `import metal.gpio` | General Purpose I/O for Bare-Metal (`pin_enable_interrupt_ext`, `pin_pulse_in`) |
+| `metal/irq.sage` | `import metal.irq` | Interrupt Request Management for Bare-Metal (`unregister_handler`) |
 | `metal/serial.sage` | `import metal.serial` | UART Serial Port Driver for Bare-Metal |
 | `metal/timer.sage` | `import metal.timer` | Hardware Timer Driver for Bare-Metal |
 | `metal/vga.sage` | `import metal.vga` | Early VGA text-mode display, cursor management, and progress bars |
@@ -2251,7 +2251,7 @@ SageLang ships with 52 OS/bare-metal development modules across `lib/os/`, `lib/
 | `os/linux/netlink.sage` | `import os.linux.netlink` | Linux Netlink socket interface |
 | `os/linux/procfs.sage` | `import os.linux.procfs` | /proc filesystem interface for Linux |
 | `os/linux/qemu_run.sage` | `import os.linux.qemu_run` | QEMU integration for Linux kernel development |
-| `os/linux/syscalls.sage` | `import os.linux.syscalls` | Linux system call interface for x86_64 and aarch64 |
+| `os/linux/syscalls.sage` | `import os.linux.syscalls` | Linux system call interface (`sigprocmask`, etc.) |
 | `os/linux/sysfs.sage` | `import os.linux.sysfs` | Linux /sys filesystem interface |
 
 ### 9.11 Networking Libraries
@@ -3034,15 +3034,14 @@ tcp.close(server)
 
 ### 14.3 HTTP Module
 
-HTTP/HTTPS client via libcurl. All request functions return a dict with `status`, `body`, and `headers` keys.
+HTTP/HTTPS client via libcurl. Request functions return the response body as a string directly.
 
 ```sagelang
 import http
 
 # Simple GET
-let resp = http.get("https://httpbin.org/get")
-print resp["status"]   # 200
-print resp["body"]
+let body = http.get("https://httpbin.org/get")
+print body
 
 # POST with options
 let opts = {"timeout": 30, "headers": {"Content-Type": "application/json"}}
