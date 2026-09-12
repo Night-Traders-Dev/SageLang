@@ -410,3 +410,15 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+
+2026-09-12 - [Truthiness clarification]
+
+Discovery:
+The memory indicated "0 is truthy; only false and nil are falsy. To check for zero, use if x == 0:". However, the C interpreter implementation in `core/src/c/interpreter.c` `is_truthy()` returns 0 for `0.0` and empty string `""`.
+
+Evidence:
+`core/src/c/interpreter.c` (function `is_truthy`).
+Runtime execution of `if 0: print "yes" else: print "no"` outputs "no".
+
+Documentation Impact:
+Checked `core/docs/SageLang_Guide.md` and verified it already correctly states that `0` and empty strings `""` are falsy. No documentation changes were needed, but this journal entry serves to correct the memory assumption.
