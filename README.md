@@ -11,7 +11,7 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.2.3 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.2.4 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
 - **v4.2.3 (Self-Hosted Build Pipeline Fixes & Sage Host Parity Progress)**: Fixed self-hosted build pipeline by resolving `Array<String>` parser error in `interpreter.sage`, converting `//` comments to `#` across core files, and adding `case`/`default` keywords to all `match` statements for self-hosted parser compatibility. Progress toward Sage Host / C Host compiler parity with 63 edits to `interpreter.sage` for self-hosted compiler compatibility. Self-hosted REPL and `emit-c` now functional.
