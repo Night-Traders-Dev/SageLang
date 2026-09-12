@@ -165,3 +165,21 @@ for i in range(100):
     t_style_obj.stylize("bold", 10, 200)
 let end_txt_style = clock()
 print("Rich Text Stylize (100 iterations on large input): Time: " + str(end_txt_style - start_txt_style) + " s")
+
+# ============================================================================
+# Rich Columns Benchmark (Bolt Optimization)
+# ============================================================================
+import rich.columns as columns
+
+let c_col1 = "Column 1 line 1\nColumn 1 line 2\nColumn 1 line 3\nColumn 1 line 4\nColumn 1 line 5"
+let c_col2 = "Column 2 line 1\nColumn 2 line 2\nColumn 2 line 3"
+let c_col3 = "Column 3 line 1\nColumn 3 line 2\nColumn 3 line 3\nColumn 3 line 4\nColumn 3 line 5\nColumn 3 line 6"
+let c_col4 = "Column 4 line 1\nColumn 4 line 2"
+
+let col_comp = columns.Columns([c_col1, c_col2, c_col3, c_col4], nil, [0, 2], false, 120, false, nil)
+
+let start_cols = clock()
+for i in range(500):
+    let c_res = col_comp.render(nil)
+let end_cols = clock()
+print("Rich Columns Render (500 iterations): Time: " + str(end_cols - start_cols) + " s")

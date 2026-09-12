@@ -168,10 +168,7 @@ proc panel(text, border_style, border_color, title, title_align, padding):
     return result
 
 proc str_repeat(s, n):
-    var r = ""
-    for i in range(n):
-        r = r + s
-    return r
+    return string_repeat(s, n)
 
 # ─── Tables ──────────────────────────────────────────────────────────────
 proc table(headers, rows, border):
@@ -385,20 +382,25 @@ proc columns(items, width, gap, equal):
         push(lines_per_item, lines)
         if len(lines) > max_h:
             max_h = len(lines)
-    var result = ""
+    let result_lines = []
+    let gap_str = string_repeat(" ", gap)
     for row in range(max_h):
-        var line = ""
+        let line_parts = []
         for ci in range(n):
             let item_lines = lines_per_item[ci]
             if row < len(item_lines):
                 let cell = item_lines[row]
-                line = line + cell + str_repeat(" ", col_w - len(cell))
+                let pad_len = col_w - len(cell)
+                if pad_len > 0:
+                    push(line_parts, cell + string_repeat(" ", pad_len))
+                else:
+                    push(line_parts, cell)
             else:
-                line = line + str_repeat(" ", col_w)
+                push(line_parts, string_repeat(" ", col_w))
             if ci < n - 1:
-                line = line + str_repeat(" ", gap)
-        result = result + line + "\n"
-    return result
+                push(line_parts, gap_str)
+        push(result_lines, join(line_parts, ""))
+    return join(result_lines, "\n")
 
 # ─── Tree ────────────────────────────────────────────────────────────────
 proc tree(root_label, children, guide_style):
