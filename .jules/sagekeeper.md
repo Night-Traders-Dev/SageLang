@@ -410,3 +410,20 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+
+2026-09-12 - [Bare-Metal Extensions & IRQ Unregistration Synchronization]
+
+Discovery:
+- `metal.gpio` introduced `pin_enable_interrupt_ext(pin, mode)`, `pin_disable_interrupt_ext(pin)`, and `pin_pulse_in(pin, target_state, timeout_us)` for atomic pin interrupt setup and microsecond pulse measurement.
+- `metal.irq` introduced `unregister_handler(vector)` for removing registered handlers safely via `dict_delete`.
+- `metal.serial` introduced timed byte read (`uart_read_timeout`, `pl011_read_timeout`), line read with echo (`uart_readline`, `pl011_readline`), and RX buffer flush (`uart_flush_rx`, `pl011_flush_rx`).
+- `os.kernel.kmain` introduced `proc_status_name(status)` to translate `ProcStatus` enum variant values to human-readable string names.
+
+Evidence:
+- `core/lib/metal/gpio.sage`
+- `core/lib/metal/irq.sage`
+- `core/lib/metal/serial.sage`
+- `core/lib/os/kernel/kmain.sage`
+
+Documentation Impact:
+- Updated `README.md`, `core/docs/sagelang-book.md`, and `core/docs/Baremetal_OSDev_UEFI_Guide.md` to document all newly added bare-metal and OS kernel APIs.
