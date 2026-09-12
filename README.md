@@ -14,6 +14,7 @@ modes (tracing, ARC, ORC).
 **Current version:** v4.2.4 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
+- **v4.2.4 (Bare-Metal Metal/OS Library Extensions & Unregister Handlers)**: Added GPIO interrupt configuration helpers (`pin_enable_interrupt_ext`, `pin_disable_interrupt_ext`) and microsecond pulse measurement (`pin_pulse_in`) to `metal.gpio`. Added IRQ vector unregistration (`unregister_handler`) to `metal.irq`. Added timed reads (`uart_read_timeout`, `pl011_read_timeout`), line reading (`uart_readline`, `pl011_readline`), and RX buffer flushing (`uart_flush_rx`, `pl011_flush_rx`) to `metal.serial`. Added `proc_status_name` variant name mapping helper to `os.kernel.kmain`.
 - **v4.2.3 (Self-Hosted Build Pipeline Fixes & Sage Host Parity Progress)**: Fixed self-hosted build pipeline by resolving `Array<String>` parser error in `interpreter.sage`, converting `//` comments to `#` across core files, and adding `case`/`default` keywords to all `match` statements for self-hosted parser compatibility. Progress toward Sage Host / C Host compiler parity with 63 edits to `interpreter.sage` for self-hosted compiler compatibility. Self-hosted REPL and `emit-c` now functional.
 - **v4.2.2 (Standard Library Hardening & Read-Write Lock / Syscalls Expansion)**:
   Full alignment of standard library modules (`std.rwlock`, `os.linux.syscalls`,
