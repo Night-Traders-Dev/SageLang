@@ -410,3 +410,20 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+
+2026-09-14 - [Repository Documentation Parity & Version Synchronization]
+
+Discovery:
+- Verified single-source version `v4.2.3` across `VERSION`, `core/VERSION`, `README.md`, `core/docs/SageLang_Reference.md`, and `core/docs/sagelang-book.md`.
+- Documented native C `http` and `ssl` networking modules as experimental stub/mock implementations in `core/docs/Networking_Guide.md`.
+- Confirmed bare-metal GPIO interrupt handlers (`pin_enable_interrupt`), timer mode tracking (`timer_get_mode`), UART timed reads/line reads/flushing, and Linux signal mask syscalls (`sigprocmask`) are properly reflected across documentation guides.
+
+Evidence:
+- `VERSION` and `core/VERSION` files.
+- `core/src/c/net.c` mock implementation.
+- `core/lib/metal/` and `core/lib/os/linux/syscalls.sage`.
+
+Documentation Impact:
+- Updated version header in `README.md` to `v4.2.3`.
+- Updated version headers in `core/docs/SageLang_Reference.md` and `core/docs/sagelang-book.md` to `v4.2.3`.
+- Updated `core/docs/Networking_Guide.md` to note native `http`/`ssl` stubs.

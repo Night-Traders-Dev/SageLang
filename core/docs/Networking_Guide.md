@@ -17,8 +17,8 @@ Layer 1:  System Libraries (POSIX sockets, libcurl, OpenSSL)
 ```sage
 import socket   # Low-level POSIX sockets
 import tcp      # High-level TCP client/server
-import http     # HTTP/HTTPS client via libcurl
-import ssl      # OpenSSL bindings
+import http     # HTTP/HTTPS client via libcurl (Note: Native C http is currently an experimental stub/mock)
+import ssl      # OpenSSL bindings (Note: Native C ssl is currently an experimental stub/mock)
 ```
 
 **Library modules** (`lib/net/`) provide higher-level abstractions for common networking tasks. They are imported with the `net.` prefix:
