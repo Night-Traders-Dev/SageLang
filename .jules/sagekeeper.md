@@ -410,3 +410,14 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+
+2026-09-02 - [HTTP and SSL modules are stubs]
+
+Discovery:
+The native HTTP and SSL modules documented as being backed by `libcurl` and `OpenSSL` are actually incomplete stubs. `http.get` and `http.post` return mock string responses (e.g., `"HTTP GET response"`), and the `ssl` module (`create_ssl_module`) has no native functions defined in `core/src/c/net.c`.
+
+Evidence:
+`core/src/c/net.c` (implementations of `http_get_native`, `http_post_native`, and `create_ssl_module`).
+
+Documentation Impact:
+Update `core/docs/SageLang_Guide.md` Section 14 (Networking) to explicitly clarify that the HTTP and SSL modules are experimental mocks/stubs and not fully backed by `libcurl` or `OpenSSL` at present.
