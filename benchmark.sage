@@ -130,6 +130,12 @@ for i in range(1000):
 let end_fmt_rep = clock()
 print("Std Fmt Repeat Char (1000 iterations): Time: " + str(end_fmt_rep - start_fmt_rep) + " s")
 
+let start_fmt_int = clock()
+for i in range(1000):
+    let r_int = fmt.format_int(123456789)
+let end_fmt_int = clock()
+print("Std Fmt Format Int (1000 iterations): Time: " + str(end_fmt_int - start_fmt_int) + " s")
+
 # ============================================================================
 # Rich Text Utilities Benchmark (Bolt Optimization)
 # ============================================================================
