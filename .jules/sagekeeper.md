@@ -481,3 +481,18 @@ Runtime execution of `if 0: print "yes" else: print "no"` outputs "no".
 
 Documentation Impact:
 Checked `core/docs/SageLang_Guide.md` and verified it already correctly states that `0` and empty strings `""` are falsy. No documentation changes were needed, but this journal entry serves to correct the memory assumption.
+
+2026-09-15 - [Update SageLang Guide for HTTP Mock and OS/Metal modules]
+
+Discovery:
+- `http.get` returns a string rather than a dictionary with status and body keys.
+- Several `os` and `metal` modules (`os.tmpfs`, `os.sync`, `os.linux.*`, `metal.core`, `metal.timer`) were not documented in the OS Development Libraries section of the guide.
+
+Evidence:
+- `core/src/c/net.c` mock implementation.
+- `core/lib/os` and `core/lib/metal` directories.
+
+Documentation Impact:
+- Updated `core/docs/SageLang_Guide.md` to reflect `http.get` returning a mock string and removed the property access indexing.
+- Added missing OS and metal modules to the OS Development Libraries section.
+- Generated an updated `core/docs/The_Sage_Programming_Language.pdf`.
