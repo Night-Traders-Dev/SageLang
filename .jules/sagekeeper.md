@@ -470,3 +470,14 @@ Evidence:
 Documentation Impact:
 - Updated version headers in `core/docs/SageLang_Reference.md` and `core/docs/sagelang-book.md` (brought to `v4.2.4`).
 - Updated `core/docs/Networking_Guide.md` to note native `http`/`ssl` stubs.
+2026-09-12 - [Truthiness clarification]
+
+Discovery:
+The memory indicated "0 is truthy; only false and nil are falsy. To check for zero, use if x == 0:". However, the C interpreter implementation in `core/src/c/interpreter.c` `is_truthy()` returns 0 for `0.0` and empty string `""`.
+
+Evidence:
+`core/src/c/interpreter.c` (function `is_truthy`).
+Runtime execution of `if 0: print "yes" else: print "no"` outputs "no".
+
+Documentation Impact:
+Checked `core/docs/SageLang_Guide.md` and verified it already correctly states that `0` and empty strings `""` are falsy. No documentation changes were needed, but this journal entry serves to correct the memory assumption.
