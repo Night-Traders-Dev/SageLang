@@ -101,3 +101,8 @@
 **Vulnerability:** Generated `s_shell_exec` runtime helper in `aot.c` accumulated command output into heap memory via `realloc` without checking output length bounds or `realloc` failure (CWE-400).
 **Learning:** Command execution primitives in compiled backends (like AOT) that capture process output can stream unbounded data into heap memory if process stdout is infinite or very large, causing Denial of Service or OOM crashes.
 **Prevention:** Always cap process output buffer accumulation (e.g., `104857600` bytes) and validate `realloc` return pointers across all execution runtime skeletons.
+
+## 2026-09-01 - Memory Exhaustion and O(N^2) Complexity in AOT Array Join
+**Vulnerability:** Runtime helper `s_join` in `aot.c` used $O(N^2)$ `strcat` in a loop over array elements, lacked integer overflow checks during total length calculation, omitted memory bounds enforcement (`104857600` bytes limit), and failed to check for `malloc` returning NULL before writing to the buffer (CWE-476, CWE-400, CWE-190, CWE-789).
+**Learning:** High-level string joining helpers emitted by code generators can easily introduce multiple CWE vulnerabilities if implemented naively with standard C string library functions like `strcat`. In addition to quadratic time complexity, unchecked accumulation of array item lengths can wrap integer sizes or allocate arbitrary amounts of heap memory.
+**Prevention:** Calculate total string length using overflow-safe addition capped at the global maximum string size (`104857600`), verify non-NULL `malloc` returns, and perform linear string assembly via `memcpy` and write-pointer offsets.
