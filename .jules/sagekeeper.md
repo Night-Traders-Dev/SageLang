@@ -424,3 +424,19 @@ Evidence:
 Documentation Impact:
 - Updated `README.md` Quick Start snippet to reflect `http.get` returning a string.
 - Cleared non-existent bare-metal function references in `core/docs/Baremetal_OSDev_UEFI_Guide.md`.
+
+2026-09-14 - [Repository Documentation Parity & Version Synchronization]
+
+Discovery:
+- Verified single-source version across `VERSION`, `core/VERSION`, `README.md`, `core/docs/SageLang_Reference.md`, and `core/docs/sagelang-book.md` (observed as `v4.2.3` at audit time; current release is `v4.2.4`).
+- Documented native C `http` and `ssl` networking modules as experimental stub/mock implementations in `core/docs/Networking_Guide.md`.
+- Confirmed bare-metal GPIO interrupt handlers (`pin_enable_interrupt`), timer mode tracking (`timer_get_mode`), UART timed reads/line reads/flushing, and Linux signal mask syscalls (`sigprocmask`) are properly reflected across documentation guides.
+
+Evidence:
+- `VERSION` and `core/VERSION` files.
+- `core/src/c/net.c` mock implementation.
+- `core/lib/metal/` and `core/lib/os/linux/syscalls.sage`.
+
+Documentation Impact:
+- Updated version headers in `core/docs/SageLang_Reference.md` and `core/docs/sagelang-book.md` (brought to `v4.2.4`).
+- Updated `core/docs/Networking_Guide.md` to note native `http`/`ssl` stubs.
