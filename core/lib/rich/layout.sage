@@ -24,6 +24,7 @@ class Layout:
         self.direction = "vertical"  # vertical or horizontal
 
     # Split layout to create sub-layouts
+    # Optimization: Use direct 'for key in dict' iteration to avoid allocating key arrays.
     proc split(self, name_or_spec):
         if type(name_or_spec) == "string":
             let child = Layout(nil, name_or_spec, nil, nil, nil, true)
@@ -31,9 +32,8 @@ class Layout:
             return child
         if type(name_or_spec) == "dict":
             # Spec like {"name": Layout(...)}
-            let keys = dict_keys(name_or_spec)
-            for i in range(len(keys)):
-                self.children[keys[i]] = name_or_spec[keys[i]]
+            for key in name_or_spec:
+                self.children[key] = name_or_spec[key]
             return self
         return self
 
@@ -74,19 +74,20 @@ class Layout:
         return self.render(nil)
 
     proc _render_region(self, available_width, available_height):
-        let child_count = len(dict_keys(self.children))
+        # Optimization: Use O(1) len(self.children) instead of O(N) len(dict_keys(self.children)).
+        let child_count = len(self.children)
         if child_count == 0:
             return self._render_content(self.content, available_width)
 
         let results = []
+        # Optimization: Use direct 'for name in self.children' iteration to bypass dict_keys array allocations.
         if self.direction == "vertical":
             let child_size = available_height / child_count
             child_size = child_size | 0
             if child_size < 1:
                 child_size = 1
-            let keys = dict_keys(self.children)
-            for i in range(len(keys)):
-                let child = self.children[keys[i]]
+            for name in self.children:
+                let child = self.children[name]
                 let rendered = child._render_region(available_width, child_size)
                 push(results, rendered)
         else:
@@ -94,18 +95,13 @@ class Layout:
             child_size = child_size | 0
             if child_size < 1:
                 child_size = 1
-            let keys = dict_keys(self.children)
-            for i in range(len(keys)):
-                let child = self.children[keys[i]]
+            for name in self.children:
+                let child = self.children[name]
                 let rendered = child._render_region(child_size, available_height)
                 push(results, rendered)
 
-        let result = ""
-        for i in range(len(results)):
-            if i > 0:
-                result = result + chr(10)
-            result = result + results[i]
-        return result
+        # Optimization: Use native C VM join(results, chr(10)) to eliminate O(N^2) string concatenation loop.
+        return join(results, chr(10))
 
     proc _render_content(self, content, width):
         if content == nil:
