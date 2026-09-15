@@ -137,6 +137,12 @@ static Value vm_serialize_native(int argCount, Value* args) {
     if (!f) { unlink(tmp_path); return val_nil(); }
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
+    // Security: Enforce global allocation limit (CWE-400 / CWE-789)
+    if (size < 0 || size > SAGE_MAX_READ_SIZE) {
+        fclose(f);
+        unlink(tmp_path);
+        return val_nil();
+    }
     fseek(f, 0, SEEK_SET);
 
     unsigned char* data = SAGE_ALLOC((size_t)size);
