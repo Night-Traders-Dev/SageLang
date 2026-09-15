@@ -3258,6 +3258,26 @@ let byte = serial.uart_read_timeout(serial.COM1, 1000) # 1s timeout
 serial.uart_flush_rx(serial.COM1)
 ```
 
+### Serial API
+
+| Function | Description |
+|----------|-------------|
+| `uart_init(port, baud)` | Initialize NS16550A COM port at specified baud rate. |
+| `uart_init_ext(port, baud, bits, stop, parity)` | Extended COM port initialization. |
+| `uart_send(port, byte)` | Transmit single byte (blocking). |
+| `uart_recv(port)` | Receive single byte (blocking). |
+| `uart_puts(port, s)` | Transmit string over COM port. |
+| `uart_read_timeout(port, timeout_ms)` | Receive single byte with timeout in milliseconds (returns nil on timeout). |
+| `uart_readline(port)` | Read line (until newline/CR) with terminal echo and backspace support. |
+| `uart_flush_rx(port)` | Flush pending bytes in RX buffer. |
+| `pl011_init(base)` | Initialize ARM PL011 UART at base address. |
+| `pl011_send(base, byte)` | Transmit single byte via PL011. |
+| `pl011_recv(base)` | Receive single byte via PL011 (blocking). |
+| `pl011_puts(base, s)` | Transmit string via PL011. |
+| `pl011_read_timeout(base, timeout_ms)` | Receive single byte via PL011 with timeout. |
+| `pl011_readline(base)` | Read line via PL011 with terminal echo and backspace support. |
+| `pl011_flush_rx(base)` | Flush pending bytes in PL011 RX buffer. |
+
 ## metal.irq
 
 Interrupt management and PIC control:

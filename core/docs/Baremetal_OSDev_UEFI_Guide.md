@@ -379,6 +379,11 @@ The `metal` standard library provides low-level drivers for bare-metal execution
 - `timer.timer_remaining_ms()` — Reads latched hardware counter to get remaining time in the active timer cycle.
 - `timer.timer_cancel_safe()` — Safely cancels active hardware timer by masking its interrupt line.
 
+### `metal.serial` — Serial Port Driver (UART)
+- `serial.uart_read_timeout(port, timeout_ms)` / `serial.pl011_read_timeout(base, timeout_ms)` — Reads byte with millisecond timeout.
+- `serial.uart_readline(port)` / `serial.pl011_readline(base)` — Reads line with terminal echo and backspace handling.
+- `serial.uart_flush_rx(port)` / `serial.pl011_flush_rx(base)` — Flushes pending receive buffer bytes.
+
 ### `metal.gpio` — General Purpose I/O
 - `gpio.pin_enable_interrupt(p)` — Enables interrupt triggers for the specified GPIO pin.
 - `gpio.pin_disable_interrupt(pin)` — Disables interrupt generation for the specified GPIO pin.
@@ -520,7 +525,7 @@ Seven modules provide the core drivers and subsystems for a minimal x86_64 kerne
 
 | Module | Import | Description |
 | ------ | ------ | ----------- |
-| `kmain.sage` | `import os.kernel.kmain` | Kernel entry scaffolding; handoff from Multiboot2 boot info |
+| `kmain.sage` | `import os.kernel.kmain` | Kernel entry scaffolding, process status mapping (`proc_status_name`); handoff from Multiboot2 boot info |
 | `console.sage` | `import os.kernel.console` | VGA text-mode console, 80×25, 16 color attributes, scrolling |
 | `keyboard.sage` | `import os.kernel.keyboard` | PS/2 keyboard driver, scancode set 2, key event dispatch |
 | `timer.sage` | `import os.kernel.timer` | PIT channel 0 configuration, IRQ0 handler, millisecond tick counter |
