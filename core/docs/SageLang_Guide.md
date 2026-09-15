@@ -2186,6 +2186,13 @@ SageLang ships with 52 OS/bare-metal development modules across `lib/os/`, `lib/
 | `pe.sage` | `import os.pe` | PE/COFF binary parser, DOS/COFF/optional headers, UEFI app detection |
 | `pci.sage` | `import os.pci` | PCI config space (Type 0/1), BAR decode, capability lists |
 | `uefi.sage` | `import os.uefi` | EFI memory map, config tables, RSDP, ACPI SDT headers |
+| `tmpfs.sage` | `import os.tmpfs` | In-memory filesystem implementation |
+| `sync.sage` | `import os.sync` | Synchronization primitives for the OS |
+| `cgroups.sage` | `import os.linux.cgroups` | Linux Control Groups API for resource limits |
+| `namespace.sage` | `import os.linux.namespace` | Linux Namespaces API for containerization |
+| `netlink.sage` | `import os.linux.netlink` | Linux Netlink socket bindings |
+| `core.sage` | `import metal.core` | Bare-metal CPU and architecture-specific routines (fences, yields, spinlocks) |
+| `timer.sage` | `import metal.timer` | Hardware timer control (periodic/oneshot tracking) |
 | `acpi.sage` | `import os.acpi` | MADT (APIC), FADT, HPET, MCFG parsers, processor enumeration |
 | `paging.sage` | `import os.paging` | x86-64 page tables, PTE flags, identity/higher-half mapping helpers |
 | `idt.sage` | `import os.idt` | x86-64 IDT gate construction, exception vectors, PIC remapping |
@@ -3043,8 +3050,7 @@ import http
 
 # Simple GET
 let resp = http.get("https://httpbin.org/get")
-print resp["status"]   # 200
-print resp["body"]
+print resp   # "HTTP GET response"
 
 # POST with options
 let opts = {"timeout": 30, "headers": {"Content-Type": "application/json"}}
