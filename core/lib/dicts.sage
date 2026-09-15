@@ -35,10 +35,12 @@ proc entries(dict):
     return result
 
 ## Checks if all keys in key_list are present in the dictionary.
+## Optimization: Replaced 'dict_has(dict, key) == false' with 'not dict_has(dict, key)'
+## to eliminate redundant truthiness coercion and comparison overhead in hot loop.
 @inline
 proc has_all(dict, key_list):
     for key in key_list:
-        if dict_has(dict, key) == false:
+        if not dict_has(dict, key):
             return false
     return true
 
