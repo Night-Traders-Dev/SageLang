@@ -2977,7 +2977,7 @@ print rect.area()  # 15
 
 ## Part 14: Networking (Phase 14)
 
-SageLang provides four native networking modules backed by libcurl and OpenSSL. These are implemented in C (`src/net.c`) and registered as native modules.
+SageLang provides four native networking modules originally planned to be backed by libcurl and OpenSSL. These are implemented in C (`src/net.c`) and registered as native modules. **Note:** Currently, only the `socket` and `tcp` modules have partial functional implementations. The `http` and `ssl` modules are experimental stubs/mocks returning hardcoded values.
 
 ### 14.1 Socket Module
 
@@ -3034,7 +3034,9 @@ tcp.close(server)
 
 ### 14.3 HTTP Module
 
-HTTP/HTTPS client via libcurl. All request functions return a dict with `status`, `body`, and `headers` keys.
+**Status: Experimental Stubs/Mocks.** The HTTP module is currently incomplete. Functions like `http.get` and `http.post` return hardcoded mock string responses rather than performing real network operations via `libcurl`.
+
+HTTP/HTTPS client API (planned via libcurl). When fully implemented, request functions will return a dict with `status`, `body`, and `headers` keys. Currently, they return mock strings.
 
 ```sagelang
 import http
@@ -3062,7 +3064,7 @@ print http.unescape("hello%20world") # "hello world"
 
 ### 14.4 SSL Module
 
-OpenSSL TLS/SSL bindings for encrypted socket communication.
+**Status: Unimplemented Stub.** The OpenSSL TLS/SSL bindings for encrypted socket communication are currently an empty module stub in `src/net.c`.
 
 ```sagelang
 import socket
@@ -3089,8 +3091,8 @@ socket.close(sock)
 ### 14.5 Important Notes
 
 - **No escape sequences**: Sage strings are raw. Use `chr(13) + chr(10)` for CRLF, `chr(34)` for double-quote, `chr(92)` for backslash.
-- **HTTP module** handles HTTPS automatically via libcurl — no need for manual SSL setup for HTTP requests.
-- **Build requirement**: libcurl and openssl development libraries must be installed.
+- **HTTP/SSL Mocks**: As of this version, the `http` module returns mock responses and the `ssl` module is an empty stub. While the API is documented above, real `libcurl` and `OpenSSL` integrations are not fully functional in the native backend.
+- **Build requirement**: libcurl and openssl development libraries must be installed for desktop builds to succeed, even though they are currently unused by the runtime stubs.
 
 ---
 
