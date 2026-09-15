@@ -410,3 +410,17 @@ Evidence:
 Documentation Impact:
 - Updated `core/docs/CLI_Reference.md` to include all supported CLI options and commands.
 - Updated `core/docs/SageLang_Reference.md` and `core/docs/Self_Hosting_Guide.md` to list `print` and `end` as soft keywords for full documentation parity across specification files.
+
+2026-09-13 - [Documentation Audit & Parity Sync]
+
+Discovery:
+- `http.get` in `net.c` returns a String directly rather than a response Object (`dict`), making `resp["status"]` invalid in Sage code.
+- Non-existent functions (`pin_enable_interrupt_ext`, `pin_disable_interrupt_ext`, `pin_pulse_in`, `unregister_handler`, `proc_status_name`) were previously referenced in `Baremetal_OSDev_UEFI_Guide.md` and `sagelang-book.md`.
+
+Evidence:
+- `core/src/c/net.c` (`http_get_native`).
+- Codebase grep across `core/lib/metal/` and `core/lib/os/kernel/kmain.sage`.
+
+Documentation Impact:
+- Updated `README.md` Quick Start snippet to reflect `http.get` returning a string.
+- Cleared non-existent bare-metal function references in `core/docs/Baremetal_OSDev_UEFI_Guide.md`.
