@@ -470,6 +470,20 @@ Evidence:
 Documentation Impact:
 - Updated version headers in `core/docs/SageLang_Reference.md` and `core/docs/sagelang-book.md` (brought to `v4.2.4`).
 - Updated `core/docs/Networking_Guide.md` to note native `http`/`ssl` stubs.
+
+2026-09-15 - [Version Alignment & Release Note Cleansing]
+
+Discovery:
+- `VERSION` and `core/VERSION` were at `v4.2.3` while `README.md`, `core/docs/sagelang-book.md`, `core/docs/SageLang_Reference.md`, `core/src/sage/stdlib.sage`, and tests pointed to `v4.2.4`.
+- Updated `README.md` v4.2.4 release notes and `core/docs/Baremetal_OSDev_UEFI_Guide.md` to sanitize references to non-existent functions (`proc_status_name`, `pin_pulse_in`, `pin_enable_interrupt_ext`, `unregister_handler`).
+
+Evidence:
+- `VERSION`, `core/VERSION`, `core/docs/Library_Support.md`.
+- `core/lib/metal/gpio.sage`, `core/lib/metal/irq.sage`, `core/lib/os/kernel/kmain.sage`.
+
+Documentation Impact:
+- Synchronized `VERSION`, `core/VERSION`, and `core/docs/Library_Support.md` to `v4.2.4`.
+- Cleansed non-existent function references in documentation to reflect exact code state.
 2026-09-12 - [Truthiness clarification]
 
 Discovery:

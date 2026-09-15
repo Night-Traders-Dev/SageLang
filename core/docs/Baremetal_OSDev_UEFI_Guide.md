@@ -525,7 +525,7 @@ Seven modules provide the core drivers and subsystems for a minimal x86_64 kerne
 
 | Module | Import | Description |
 | ------ | ------ | ----------- |
-| `kmain.sage` | `import os.kernel.kmain` | Kernel entry scaffolding, process status mapping (`proc_status_name`); handoff from Multiboot2 boot info |
+| `kmain.sage` | `import os.kernel.kmain` | Kernel entry scaffolding, kernel state initialization; handoff from Multiboot2 boot info |
 | `console.sage` | `import os.kernel.console` | VGA text-mode console, 80×25, 16 color attributes, scrolling |
 | `keyboard.sage` | `import os.kernel.keyboard` | PS/2 keyboard driver, scancode set 2, key event dispatch |
 | `timer.sage` | `import os.kernel.timer` | PIT channel 0 configuration, IRQ0 handler, millisecond tick counter |
