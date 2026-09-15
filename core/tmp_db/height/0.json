@@ -1,1 +1,1 @@
-{"transactions":["Genesis Block"],"previous_hash":"0","difficulty":1,"timestamp":1789467940.433401,"hash":"0bbbed9e54d3d4e59a26a03373a04d15eaac944dbdd69ffe1a04ad1d7155a602","signer":null,"state_root":"0x","nonce":13,"index":0,"signature":null}
+{"transactions":["Genesis Block"],"previous_hash":"0","difficulty":1,"timestamp":1.78474e+09,"hash":"01725bdb6762940ddb860d0a411221bc988c803abaed22f4fd548b405b8d74cd","state_root":"0x","nonce":26,"index":0}
