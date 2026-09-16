@@ -5,6 +5,8 @@
 # EXPECT: adc_ok
 # EXPECT: periph_ok
 # EXPECT: esptool_ok
+# EXPECT: i2c_ok
+# EXPECT: power_ok
 # EXPECT: PASS
 import esp32
 
@@ -47,5 +49,17 @@ let cmd = esp32.esptool_write_cmd("/dev/ttyUSB0", "firmware.bin")
 if esp32.image_size_ok(1810976) == true and esp32.image_size_ok(0) == false:
     if contains(cmd, "460800") and contains(cmd, "dio") and contains(cmd, "firmware.bin"):
         print "esptool_ok"
+
+# I2C buses, addresses, and rates
+if esp32.I2C_COUNT == 2 and esp32.I2C_SDA_PIN == 21:
+    if esp32.i2c_addr_usable(72) == true and esp32.i2c_addr_usable(3) == false:
+        if esp32.i2c_freq_ok(400000) == true and esp32.i2c_freq_ok(50000) == false:
+            print "i2c_ok"
+
+# Power planning: attenuation picker, EXT1 mask, battery estimator
+if esp32.adc_atten_for_voltage(3300) == 11 and esp32.adc_atten_for_voltage(5000) == -1:
+    if esp32.ext1_mask([0, 2]) == 5 and esp32.ext1_mask([5]) == -1:
+        if esp32.battery_hours(1000, 10, 100, 36) > 100:
+            print "power_ok"
 
 print "PASS"

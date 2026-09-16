@@ -306,6 +306,92 @@ proc image_size_ok(size_bytes):
 proc esptool_write_cmd(port, image):
     return "esptool --port " + port + " --baud " + str(ESPTOOL_BAUD) + " --no-stub --before default-reset --after hard-reset write-flash --flash-mode " + ESPTOOL_FLASH_MODE + " --flash-size detect --flash-freq " + ESPTOOL_FLASH_FREQ + " -z 0x0 " + image
 
+## ============================================================
+## I2C: two buses, fully muxable. Arduino Wire defaults are
+## SDA 21 / SCL 22; standard rates are 100k / 400k / 1M.
+## 7-bit addresses 0x00-0x07 and 0x78-0x7F are reserved.
+## ============================================================
+
+let I2C_COUNT = 2
+let I2C_SDA_PIN = 21
+let I2C_SCL_PIN = 22
+let I2C_RATES_HZ = [100000, 400000, 1000000]
+let I2C_ADDR_MIN = 8
+let I2C_ADDR_MAX = 119
+
+## True for usable 7-bit I2C addresses (reserved ranges excluded).
+@inline
+proc i2c_addr_usable(addr):
+    return addr >= I2C_ADDR_MIN and addr <= I2C_ADDR_MAX
+
+## True for the standard I2C bus rates the hardware supports.
+@inline
+proc i2c_freq_ok(freq):
+    for r in I2C_RATES_HZ:
+        if freq == r:
+            return true
+    return false
+
+## ============================================================
+## ADC calibration: pick the smallest attenuation whose
+## approximate full scale covers a sensor's max output voltage.
+## Returns the attenuation in dB, or -1 when nothing fits.
+## ============================================================
+
+## Smallest attenuation (dB) covering max_mv, or -1.
+proc adc_atten_for_voltage(max_mv):
+    if max_mv <= 0:
+        return -1
+    if max_mv <= 1100:
+        return 0
+    elif max_mv <= 1500:
+        return 2.5
+    elif max_mv <= 2200:
+        return 6
+    elif max_mv <= 3900:
+        return 11
+    return -1
+
+## ============================================================
+## Deep sleep: wake sources plus a battery-life estimator for
+## duty-cycled sensor nodes.
+## ============================================================
+
+let SLEEP_WAKE_TIMER = "timer"
+let SLEEP_WAKE_TOUCH = "touch"
+let SLEEP_WAKE_EXT0 = "ext0"
+let SLEEP_WAKE_EXT1 = "ext1"
+let SLEEP_WAKE_ULP = "ulp"
+
+## Bit mask for EXT1 wakeup over a list of pads. Returns -1 when
+## any pad is not RTC-capable.
+proc ext1_mask(pins):
+    let mask = 0
+    for pin in pins:
+        if rtc_capable(pin) == false:
+            return -1
+        let bit = 1
+        var i = 0
+        while i < pin:
+            bit = bit * 2
+            i = i + 1
+        mask = mask + bit
+    return mask
+
+## Estimated battery life in hours for a duty-cycled node:
+## capacity_mah battery, sleep_ua deep-sleep draw, active_ma draw
+## for active_s_per_h seconds of each hour. Returns -1 on bad input.
+proc battery_hours(capacity_mah, sleep_ua, active_ma, active_s_per_h):
+    if capacity_mah <= 0 or sleep_ua < 0 or active_ma < 0:
+        return -1
+    if active_s_per_h < 0 or active_s_per_h > 3600:
+        return -1
+    let sleep_s = 3600 - active_s_per_h
+    let avg_ua = (sleep_ua * sleep_s + active_ma * 1000 * active_s_per_h) / 3600
+    if avg_ua <= 0:
+        return -1
+    return capacity_mah * 1000 / avg_ua
+
 ## One-line human summary of the supported chip.
 proc describe():
     return CHIP_NAME + " " + CHIP_VARIANT + " (" + CPU_ARCH + " x" + str(CPU_CORES) + " @" + str(CPU_FREQ_MHZ) + "MHz, WiFi " + str(WIFI_BAND_GHZ) + "GHz only)"

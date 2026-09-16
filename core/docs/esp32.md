@@ -38,6 +38,14 @@ SageLang supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32
   are free.
 - **Flashing**: `image_size_ok(size)` fits against the 4MB part;
   `esptool_write_cmd(port, image)` renders the verified write command.
+- **I2C**: two buses (`I2C_COUNT`), Wire defaults SDA 21 / SCL 22;
+  `i2c_addr_usable(addr)` rejects reserved 7-bit ranges;
+  `i2c_freq_ok(freq)` accepts the standard 100k/400k/1M rates.
+- **Power planning**: `adc_atten_for_voltage(mv)` picks the smallest
+  attenuation covering a sensor's max output; `ext1_mask(pins)` builds
+  the EXT1 wake bitmask (`-1` on non-RTC pads);
+  `battery_hours(cap_mah, sleep_ua, active_ma, active_s_per_h)`
+  estimates duty-cycled node lifetime.
 
 Run the smoke test from the repo root:
 
