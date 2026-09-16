@@ -510,3 +510,17 @@ Documentation Impact:
 - Updated `core/docs/SageLang_Guide.md` to reflect `http.get` returning a mock string and removed the property access indexing.
 - Added missing OS and metal modules to the OS Development Libraries section.
 - Generated an updated `core/docs/The_Sage_Programming_Language.pdf`.
+
+2026-09-15 - [ESP32 board support]
+
+Discovery:
+- No ESP32 coverage existed (`core/boards/` had only AVR and RP2040; `metal/` is a submodule owned by another repo, so board support belongs in the parent repo).
+- Classic ESP32 (ESP32-D0WD-V3, 4MB) verified live via esptool: ROM-bootloader `--no-stub` flashing is stable at 115200 baud where the stub flasher fails; full flash images carry bootloader magic `0xE9` at `0x1000` and partition magic `0xAA 0x50` at `0x8000`.
+- Pads 20/24/28-31 do not exist; 34-39 are input-only; 6/7/8/11 are flash-bound; radio is 2.4GHz-only.
+
+Evidence:
+- `esptool chip-id` / `flash-id` output against `/dev/ttyUSB0` (CP2102 bridge).
+- `core/lib/esp32.sage`, `core/boards/ESP32/` (smoke test passes under `./core/sage`).
+
+Documentation Impact:
+- Added `core/lib/esp32.sage` board module, `core/boards/ESP32/` package with blink example and smoke test, `testsuite/unit/26_stdlib/esp32_board_test.sage`, and an ESP32 section in `core/docs/Baremetal_OSDev_UEFI_Guide.md` with the verified esptool recipe.
