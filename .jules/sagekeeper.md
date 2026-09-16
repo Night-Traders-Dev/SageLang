@@ -524,3 +524,13 @@ Evidence:
 
 Documentation Impact:
 - Added `core/lib/esp32.sage` board module, `core/boards/ESP32/` package with blink example and smoke test, `testsuite/unit/26_stdlib/esp32_board_test.sage`, and an ESP32 section in `core/docs/Baremetal_OSDev_UEFI_Guide.md` with the verified esptool recipe.
+
+2026-09-16 - [ESP32 library expansion]
+
+Discovery:
+- Sage division is float (`50 * 255 / 100` is `127.5`), so `pwm_duty` must floor via `math.floor` to return integer duty counts; probed before asserting.
+- `contains(haystack, needle)` works for string matching in tests (used to check the rendered esptool command).
+- `VERSION` / `core/VERSION` still read `v4.2.3` while the tree is `v4.2.4` (fixed by an earlier docs sync); `README.md` keeps a historical `v4.2.3` changelog line, which is intentional.
+
+Documentation Impact:
+- Extended `core/lib/esp32.sage` (ADC/touch/RTC maps, converters, PWM, UART remap guidance, flashing helpers), grew both test files, and documented the new API in `core/docs/esp32.md`.

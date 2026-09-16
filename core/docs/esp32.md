@@ -15,9 +15,29 @@ SageLang supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32
   flash offsets (bootloader `0x1000`, partitions `0x8000`, app `0x10000`),
   image magic checks, and the verified esptool recipe constants.
 - `core/boards/ESP32/` — board package: `__init__.sage`, `test_smoke.sage`
-  (35 assertions, host-runnable), and `examples/` with `hello.sage` and
+  (60+ assertions, host-runnable), and `examples/` with `hello.sage` and
   `blink.sage` firmware sources.
 - `testsuite/unit/26_stdlib/esp32_board_test.sage` — suite test.
+
+## Peripherals and helpers (`esp32.*`)
+
+- **GPIO**: `pin_valid`, `pin_can_output`, `pin_is_input_only`,
+  `pin_is_strapping`, `pin_is_flash`.
+- **ADC**: `adc1_channel(pin)` maps pads to ADC1 channels 0..7 (`-1` when
+  none — use ADC1 because ADC2 clashes with WiFi);
+  `adc_fullscale_mv(atten_db)` gives the approximate full scale for
+  0/2.5/6/11 dB; `adc_to_mv(raw, atten_db)` converts 12-bit readings,
+  `-1` on bad input.
+- **Touch / RTC**: `touch_channel(pin)` maps pads to T0..T9 (`-1` when
+  none); `rtc_capable(pin)` lists deep-sleep wake pads.
+- **PWM**: `pwm_duty(percent, bits)` returns floored duty counts over the
+  16 LEDC channels (e.g. `pwm_duty(50, 8)` is 127).
+- **UART**: UART0 is the USB-serial console (TX 1 / RX 3);
+  `uart_needs_remap(uart)` is true only for UART1, whose defaults
+  (TX 10 / RX 9) sit on flash pads — UART2 defaults (TX 17 / RX 16)
+  are free.
+- **Flashing**: `image_size_ok(size)` fits against the 4MB part;
+  `esptool_write_cmd(port, image)` renders the verified write command.
 
 Run the smoke test from the repo root:
 
