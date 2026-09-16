@@ -89,7 +89,11 @@ ESP32 it is built against the Arduino-ESP32 core:
    `sage_native_hw_*` C functions. Implement those bodies against Arduino
    (`pinMode` / `digitalWrite` / `digitalRead`) via a small
    `extern "C"` shim file — see `blink.sage`, which toggles GPIO2 and
-   verifies each write with a read-back.
+   verifies each write with a read-back. `hw.adc_init` / `hw.adc_read`
+   map the same way (`analogSetPinAttenuation` at 11 dB + `analogRead`);
+   see `adc_read.sage`, verified live on GPIO34 (a floating pad reads
+   near 0V with residual charge on the first sample — healthy behavior,
+   not a stuck peripheral).
 4. Sketch `.ino`: `Serial.begin(115200)`, call the entry once from
    `setup()`, idle in `loop()`.
 5. Compile for `esp32:esp32:esp32` (4MB Dev Module profile), upload over

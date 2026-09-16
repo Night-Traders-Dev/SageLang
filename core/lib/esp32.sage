@@ -392,6 +392,74 @@ proc battery_hours(capacity_mah, sleep_ua, active_ma, active_s_per_h):
         return -1
     return capacity_mah * 1000 / avg_ua
 
+## ============================================================
+## WiFi station config: SSIDs are 1..32 bytes; WPA2 passphrases
+## are 8..63 chars (empty means an open network). Channels 1..13
+## cover the 2.4GHz band this chip can use.
+## ============================================================
+
+let WIFI_SSID_MAX = 32
+let WIFI_PASS_MIN = 8
+let WIFI_PASS_MAX = 63
+let WIFI_CHANNEL_MIN = 1
+let WIFI_CHANNEL_MAX = 13
+let WIFI_AUTH_MODES = ["open", "WEP", "WPA-PSK", "WPA2-PSK", "WPA/WPA2-PSK"]
+
+## True for joinable SSIDs (1..32 bytes).
+@inline
+proc wifi_ssid_ok(ssid):
+    return len(ssid) >= 1 and len(ssid) <= WIFI_SSID_MAX
+
+## True for usable passphrases (empty = open network).
+@inline
+proc wifi_pass_ok(password):
+    if len(password) == 0:
+        return true
+    return len(password) >= WIFI_PASS_MIN and len(password) <= WIFI_PASS_MAX
+
+## True for a valid station config pair.
+@inline
+proc wifi_sta_ok(ssid, password):
+    return wifi_ssid_ok(ssid) and wifi_pass_ok(password)
+
+## True for 2.4GHz channels this chip can tune (1..13).
+@inline
+proc wifi_channel_ok(channel):
+    return channel >= WIFI_CHANNEL_MIN and channel <= WIFI_CHANNEL_MAX
+
+## True for auth modes the classic ESP32 station supports.
+@inline
+proc wifi_auth_ok(mode):
+    for m in WIFI_AUTH_MODES:
+        if mode == m:
+            return true
+    return false
+
+## ============================================================
+## NVS (non-volatile storage): namespaces and keys cap at 15
+## chars and must be non-empty.
+## ============================================================
+
+let NVS_NAME_MAX = 15
+let NVS_TYPES = ["i8", "u8", "i16", "u16", "i32", "u32", "i64", "u64", "str", "blob"]
+
+## True for usable NVS namespaces and keys.
+@inline
+proc nvs_namespace_ok(ns):
+    return len(ns) >= 1 and len(ns) <= NVS_NAME_MAX
+
+@inline
+proc nvs_key_ok(key):
+    return len(key) >= 1 and len(key) <= NVS_NAME_MAX
+
+## True for NVS value types.
+@inline
+proc nvs_type_ok(value_type):
+    for t in NVS_TYPES:
+        if value_type == t:
+            return true
+    return false
+
 ## One-line human summary of the supported chip.
 proc describe():
     return CHIP_NAME + " " + CHIP_VARIANT + " (" + CPU_ARCH + " x" + str(CPU_CORES) + " @" + str(CPU_FREQ_MHZ) + "MHz, WiFi " + str(WIFI_BAND_GHZ) + "GHz only)"

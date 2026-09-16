@@ -7,6 +7,8 @@
 # EXPECT: esptool_ok
 # EXPECT: i2c_ok
 # EXPECT: power_ok
+# EXPECT: wifi_ok2
+# EXPECT: nvs_ok
 # EXPECT: PASS
 import esp32
 
@@ -61,5 +63,18 @@ if esp32.adc_atten_for_voltage(3300) == 11 and esp32.adc_atten_for_voltage(5000)
     if esp32.ext1_mask([0, 2]) == 5 and esp32.ext1_mask([5]) == -1:
         if esp32.battery_hours(1000, 10, 100, 36) > 100:
             print "power_ok"
+
+# WiFi station config: SSID/passphrase rules, channels, auth modes
+if esp32.wifi_sta_ok("HomeNet", "correct-horse-1") == true:
+    if esp32.wifi_sta_ok("HomeNet", "abc") == false:
+        if esp32.wifi_channel_ok(6) == true and esp32.wifi_channel_ok(14) == false:
+            if esp32.wifi_auth_ok("WPA2-PSK") == true:
+                print "wifi_ok2"
+
+# NVS namespaces, keys, and value types
+if esp32.nvs_namespace_ok("sensor") == true and esp32.nvs_key_ok("boot_count") == true:
+    if esp32.nvs_key_ok("") == false and esp32.nvs_type_ok("str") == true:
+        if esp32.nvs_type_ok("float") == false:
+            print "nvs_ok"
 
 print "PASS"
