@@ -2505,6 +2505,20 @@ let hex_txt = avr_hex.emit_hex(words, 0)
 print(hex_txt)
 ```
 
+### 9.21 ESP32 Board Support (`core/boards/ESP32`, `core/lib/esp32.sage`)
+
+Starting with v4.2.4, SageLang supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32 / DevKitC with 4MB flash): dual-core Xtensa LX6 @ 240MHz with **2.4GHz-only WiFi** (there is no 5GHz radio — boards must join a 2.4GHz SSID).
+
+- **`core/lib/esp32.sage`**: chip constants, GPIO model (pads 0..39 minus absent 20/24/28-31, input-only 34..39, strapping 0/2/5/12/15, flash pads 6/7/8/11), UART0 pins (TX 1 / RX 3), standard flash offsets (bootloader `0x1000`, partitions `0x8000`, app `0x10000`), image magic checks, and the verified esptool recipe.
+- **`core/boards/ESP32/`**: package init, `examples/blink.sage` bring-up plan demo, and `test_smoke.sage` (run with `SAGE_PATH=core/lib ./core/sage core/boards/ESP32/test_smoke.sage`).
+
+Flashing a DevKit over its USB-serial bridge (esptool verified against real hardware; use `--no-stub` at 115200 if the stub flasher is flaky, then 460800 for the write):
+```bash
+esptool --port /dev/ttyUSB0 --baud 115200 --no-stub erase-region 0x0 0x400000
+esptool --port /dev/ttyUSB0 --baud 460800 --no-stub --before default-reset --after hard-reset \
+  write-flash --flash-mode dio --flash-size detect --flash-freq 40m -z 0x0 firmware.bin
+```
+
 ---
 
 ## Part 13: Self-Hosting (Phase 13)
