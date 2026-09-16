@@ -18,7 +18,12 @@ SageLang supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32
   (80+ assertions, host-runnable), and `examples/` firmware sources:
   `hello.sage` (first boot print), `blink.sage` (GPIO2 with read-backs),
   `adc_read.sage` (GPIO34 sampling with mV conversion), `sysinfo.sage`
-  (uptime/clock/temperature, verified live: 240MHz, ~42°C die).
+  (uptime/clock/temperature, verified live: 240MHz, ~42°C die),
+  `deep_sleep.sage` (5s timer-wakeup sleep loop, verified by reboot cadence).
+- `hw.deep_sleep_us(us)` is a compiler-mapped native (`core/src/c/compiler.c`):
+  no-op on host/Pico builds, timer-wakeup sleep on ESP32-Arduino. Deep
+  sleep always wakes with a reset, so firmware should expect reboot, not
+  return — verified by ~7s boot cycles with small uptimes and zero returns.
 - `testsuite/unit/26_stdlib/esp32_board_test.sage` — suite test.
 
 ## Peripherals and helpers (`esp32.*`)

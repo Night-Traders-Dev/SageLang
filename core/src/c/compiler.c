@@ -1606,6 +1606,7 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
         else if (strcmp(method_name, "lcd_fb_pixel") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_pixel(");
         else if (strcmp(method_name, "lcd_fb_fill") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_fill(");
         else if (strcmp(method_name, "lcd_fb_flush_bytes") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_flush_bytes(");
+        else if (strcmp(method_name, "deep_sleep_us") == 0) sb_append(&sb, "sage_native_hw_deep_sleep_us(");
 
         if (sb.len > 0) {
           for (int i = 0; i < call->arg_count; i++) {
@@ -4388,6 +4389,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
 "static SageValue sage_native_hw_lcd_fb_pixel(SageValue x, SageValue y, SageValue color) { (void)x; (void)y; (void)color; return sage_nil(); }\n"
 "static SageValue sage_native_hw_lcd_fb_fill(SageValue color) { (void)color; return sage_nil(); }\n"
 "static SageValue sage_native_hw_lcd_fb_flush_bytes(SageValue count) { (void)count; return sage_nil(); }\n"
+"static SageValue sage_native_hw_deep_sleep_us(SageValue us) { (void)us; return sage_nil(); }\n"
 "#else\n"
 "static int sage_hw_uart_ready = 0;\n"
 "static SageValue sage_native_hw_gpio_init(SageValue pin) {\n"
@@ -4598,6 +4600,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
 "    spi_write_blocking(spi0, sage_lcd_fb, n);\n"
 "    return sage_nil();\n"
 "}\n"
+"static SageValue sage_native_hw_deep_sleep_us(SageValue us) { (void)us; return sage_nil(); }\n"
 "#endif\n"
       "\n"
       "static SageValue sage_init_native_module(const char* name) {\n"
