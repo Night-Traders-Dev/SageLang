@@ -1,25 +1,33 @@
-## ESP32 blink demo plan (host-runnable).
+## Blink firmware for the classic ESP32 DevKit (onboard LED on GPIO2).
 ##
-## Prints the validated bring-up plan for an onboard-LED blinker on a
-## classic ESP32 DevKit. GPIO2 is the common onboard-LED pad; the plan
-## is validated with the esp32 board module instead of touching hardware.
+## `hw.*` calls map to native GPIO in emitted C (see the `hw` native
+## module in the Sage compiler). This file is emit-only: `import hw`
+## has no host implementation, so build it instead of running it:
+##   sage --emit-pico-c core/boards/ESP32/examples/blink.sage
 ##
-## Run from the repo root:
-##   SAGE_PATH=core/lib ./core/sage core/boards/ESP32/examples/blink.sage
+## Each drive is verified with a read-back; on ESP32, digitalRead on
+## an output pad returns the latched level, so the serial log proves
+## the peripheral toggled even with no eyes on the board.
 
 import esp32
+import hw
 
 let LED_PIN = 2
 
-print esp32.describe()
-print("flash app offset:", esp32.flash_offset("app"))
+print(esp32.describe())
+print("ESP32 blink start")
 
-if esp32.pin_can_output(LED_PIN):
-    print("LED pin", LED_PIN, "usable for output")
-else:
-    print("LED pin", LED_PIN, "NOT usable for output")
+hw.gpio_init(LED_PIN)
+hw.gpio_set_dir(LED_PIN, 1)
 
-if esp32.pin_is_strapping(LED_PIN):
-    print("note: pin", LED_PIN, "is a strapping pin, keep it high at reset")
+var i = 0
+while i < 5:
+    hw.gpio_put(LED_PIN, 1)
+    hw.delay_ms(500)
+    print("LED ON readback:", hw.gpio_get(LED_PIN))
+    hw.gpio_put(LED_PIN, 0)
+    hw.delay_ms(500)
+    print("LED OFF readback:", hw.gpio_get(LED_PIN))
+    i = i + 1
 
-print("blink plan: drive pin", LED_PIN, "high 500ms, low 500ms, repeat")
+print("blink done")

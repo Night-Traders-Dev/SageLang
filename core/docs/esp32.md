@@ -71,3 +71,8 @@ ESP32 it is built against the Arduino-ESP32 core:
 `print` output and `hw.gpio_get` read-backs over serial are the
 headless verification path: there is no screen on the bench, so every
 firmware example prints what it does and reads back what it drove.
+
+If the port ever streams framing-error zeros instead of text, the board
+is likely wedged in reset/download mode from manual DTR/RTS fiddling —
+recover with a proper reset (`esptool ... chip-id` ends in a hard reset
+via RTS) and then open the port without touching the modem lines.
