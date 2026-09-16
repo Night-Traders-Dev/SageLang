@@ -15,8 +15,10 @@ SageLang supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32
   flash offsets (bootloader `0x1000`, partitions `0x8000`, app `0x10000`),
   image magic checks, and the verified esptool recipe constants.
 - `core/boards/ESP32/` — board package: `__init__.sage`, `test_smoke.sage`
-  (60+ assertions, host-runnable), and `examples/` with `hello.sage` and
-  `blink.sage` firmware sources.
+  (80+ assertions, host-runnable), and `examples/` firmware sources:
+  `hello.sage` (first boot print), `blink.sage` (GPIO2 with read-backs),
+  `adc_read.sage` (GPIO34 sampling with mV conversion), `sysinfo.sage`
+  (uptime/clock/temperature, verified live: 240MHz, ~42°C die).
 - `testsuite/unit/26_stdlib/esp32_board_test.sage` — suite test.
 
 ## Peripherals and helpers (`esp32.*`)
