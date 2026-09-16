@@ -608,3 +608,4 @@ print interop.TYPE_DOUBLE     # double
 | `build` | `import std.build` | `create_project`, `add_dep`, `add_target`, `parse_version`, `bump_major`, `to_string` |
 | `package` | `import std.package` | `read_manifest`, `init_manifest`, `parse_toml_line` |
 | `interop` | `import std.interop` | `load_library`, `bind`, `call`, `pack_i32`, `unpack_i32`, `lib_path`, `define_struct` |
+| `esp32` | `import esp32` | `describe`, `pin_valid`, `pin_can_output`, `pin_is_input_only`, `pin_is_strapping`, `pin_is_flash`, `adc1_capable`, `dac_capable`, `flash_offset` |

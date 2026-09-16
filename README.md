@@ -14,7 +14,7 @@ modes (tracing, ARC, ORC).
 **Current version:** v4.2.4 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
-- **v4.2.4 (Bare-Metal Metal/OS Library Extensions & Serial Drivers Expansion)**: Added hardware GPIO pin interrupt setup (`pin_enable_interrupt`, `pin_disable_interrupt`) to `metal.gpio`. Added timed byte reading (`uart_read_timeout`, `pl011_read_timeout`), line reading with echo (`uart_readline`, `pl011_readline`), and RX buffer flushing (`uart_flush_rx`, `pl011_flush_rx`) to `metal.serial`. Added safe IRQ vector registration (`register_handler_safe`) in `metal.irq`.
+- **v4.2.4 (Bare-Metal Extensions & ESP32 Board Support)**: Added classic ESP32 board support (`core/lib/esp32.sage`, `core/boards/ESP32/`, verified on ESP32-D0WD-V3 with 4MB flash, dual-core Xtensa LX6 @ 240MHz, 2.4GHz WiFi). Added hardware GPIO pin interrupt setup (`pin_enable_interrupt`, `pin_disable_interrupt`) to `metal.gpio`. Added timed byte reading (`uart_read_timeout`, `pl011_read_timeout`), line reading with echo (`uart_readline`, `pl011_readline`), and RX buffer flushing (`uart_flush_rx`, `pl011_flush_rx`) to `metal.serial`. Added safe IRQ vector registration (`register_handler_safe`) in `metal.irq`.
 - **v4.2.3 (Self-Hosted Build Pipeline Fixes & Sage Host Parity Progress)**: Fixed self-hosted build pipeline by resolving `Array<String>` parser error in `interpreter.sage`, converting `//` comments to `#` across core files, and adding `case`/`default` keywords to all `match` statements for self-hosted parser compatibility. Progress toward Sage Host / C Host compiler parity with 63 edits to `interpreter.sage` for self-hosted compiler compatibility. Self-hosted REPL and `emit-c` now functional.
 - **v4.2.2 (Standard Library Hardening & Read-Write Lock / Syscalls Expansion)**:
   Full alignment of standard library modules (`std.rwlock`, `os.linux.syscalls`,
@@ -268,11 +268,11 @@ build, interop. Native modules: `math`, `io`, `string`, `sys`, `thread`, `fat`,
 📖 **[StdLib Guide](core/docs/StdLib_Guide.md)** ·
 [Networking Guide](core/docs/Networking_Guide.md)
 
-### OS Development
+### OS Development & Microcontroller Boards
 
 44 binary-format parsers, hardware abstraction, boot, kernel, filesystem, image,
 Linux kernel support, and QEMU virtualization modules for bare-metal, UEFI, and
-OS kernel development under `lib/os/`. Bare-metal C runtime for `--compile-bare`
+OS kernel development under `lib/os/`. Microcontroller board packages for ESP32 (`core/boards/ESP32/`), AVR (`core/boards/AVR/`), and RP2040. Bare-metal C runtime for `--compile-bare`
 and `--compile-uefi`.
 
 📖 **[Bare-Metal / OSdev / UEFI Guide](core/docs/Baremetal_OSDev_UEFI_Guide.md)** ·
