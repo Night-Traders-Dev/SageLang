@@ -17,7 +17,12 @@ toc: true
 
 ## Part 1: Language Overview and Design Philosophy
 
+> **Note on PDF Generation**: To generate the official PDF manual (`The_Sage_Programming_Language.pdf`), install `pandoc` and `texlive-xetex`, then execute `cd core/docs && pandoc SageLang_Guide.md -o The_Sage_Programming_Language.pdf --pdf-engine=xelatex -V geometry:margin=1in`.
+
 ### 1.1 Design Goals and Target Use Case
+
+SageLang supports execution on various platforms including x86_64, aarch64, Windows, macOS, Linux, and microcontrollers such as the classic ESP32 (verified on ESP32-D0WD-V3 / 4MB flash). The `core/lib/esp32.sage` module and `core/boards/ESP32/` package provide full ESP32 support.
+
 
 SageLang is designed as an **educational and practical embedded scripting language** that:
 
@@ -32,7 +37,7 @@ SageLang is designed as an **educational and practical embedded scripting langua
 |---------|---------|
 | **Syntax** | Python-like: indentation-based blocks, `:` terminators, keywords like `let`, `var`, `proc`, `class` |
 | **Type System** | Dynamically typed; values carry runtime type tags (numbers, strings, bools, arrays, dicts, tuples, classes, generators) |
-| **Scoping** | Lexical scoping via nested environments; each block/function/class creates a child environment |
+| **Scoping** | Lexical scoping via nested environments. Note: Procedure calls matching VM built-in names resolve to module procedures first, causing recursion exceptions unless name shadowing is avoided. |
 | **Memory** | Mark-and-sweep (tracing), ARC (reference counting), and ORC (optimized reference counting with cycle detection) modes |
 | **OOP** | Class-based inheritance with single parent, methods, instance fields, `self` parameter, `super.init()` auto-self |
 | **Control Flow** | `if/else`, `while`, `for...in`, `break`, `continue`, `return`, `try/catch/finally`, `raise`, `yield`, `defer` |
@@ -124,6 +129,7 @@ main.c
 - **Keywords**: `and`, `as`, `async`, `await`, `break`, `case`, `catch`, `class`, `comptime`, `continue`, `default`, `defer`, `elif`, `else`, `end`, `enum`, `false`, `finally`, `for`, `from`, `if`, `import`, `in`, `init`, `let`, `macro`, `match`, `nil`, `not`, `or`, `print`, `proc`, `quote`, `raise`, `return`, `self`, `struct`, `super`, `trait`, `true`, `try`, `unquote`, `unsafe`, `var`, `while`, `yield`, `@`
   - *Note: `print`, `end`, `match`, `init`, `enum`, `struct`, and `trait` are soft keywords and can also be used as variable, property, or method names.*
 - **Operators**: `+`, `-`, `*`, `/`, `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `&`, `|`, `^`, `~`, `<<`, `>>`
+  - *Note: Logical negation requires the `not` keyword. Using `!` produces a syntax error: `Unexpected '!' (use 'not' for logical negation)`.*
 - **Punctuation**: `(`, `)`, `[`, `]`, `{`, `}`, `:`, `,`, `.`
 - **Structural**: `INDENT`, `DEDENT`, `NEWLINE`, `DOC_COMMENT`, `EOF`, `ERROR`
 
@@ -1440,6 +1446,7 @@ next(gen)                          # Resume, reach end, is_exhausted=1
 10. Addition/Subtraction (`+`, `-`)
 11. Multiplication/Division (`*`, `/`, `%`)
 12. Unary (`-`, `not`, `~`)
+  * *Note: String indexing via bracket syntax (e.g., `s[i]`) returns a single-character string. Strings remain immutable. `slice(str, start, end)` and `indexof(str, sub)` are also available.*
 13. Postfix (indexing, slicing, property access)
 14. Primary (literals, variables, parens, function calls)
 
@@ -1525,7 +1532,9 @@ cmake -B build_pico -DBUILD_PICO=ON -DPICO_BOARD=pico
 cmake --build build_pico
 ```
 
-Desktop builds require `libcurl` and OpenSSL development headers/libraries in addition to a C compiler, `make`, and/or `cmake`.
+Desktop builds require `libcurl` and OpenSSL development headers/libraries (e.g., `libcurl4-openssl-dev`) in addition to a C compiler, `make`, and/or `cmake`.
+
+To build without network dependencies (such as libcurl), use `make CFLAGS_EXTRA="-DSAGE_NO_NET" SAGE_NO_NET=1`.
 
 #### 3 Build Parameter Reference
 
@@ -2239,8 +2248,8 @@ SageLang ships with 52 OS/bare-metal development modules across `lib/os/`, `lib/
 | `metal/core.sage` | `import metal.core` | Bare-metal core primitives for SageMetal VM |
 | `metal/gpio.sage` | `import metal.gpio` | General Purpose I/O for Bare-Metal |
 | `metal/irq.sage` | `import metal.irq` | Interrupt Request Management for Bare-Metal |
-| `metal/serial.sage` | `import metal.serial` | UART Serial Port Driver for Bare-Metal |
-| `metal/timer.sage` | `import metal.timer` | Hardware Timer Driver for Bare-Metal |
+| `metal/serial.sage` | `import metal.serial` | UART Serial Port Driver for Bare-Metal. Provides NS16550A/PL011 drivers with timed byte read (`uart_read_timeout`, `pl011_read_timeout`), line read (`uart_readline`, `pl011_readline`), and buffer flush (`uart_flush_rx`, `pl011_flush_rx`) |
+| `metal/timer.sage` | `import metal.timer` | Hardware Timer Driver for Bare-Metal. Includes hardware timer state tracking via `_timer_mode` and `timer_get_mode()` supporting `TIMER_MODE_PERIODIC` and `TIMER_MODE_ONESHOT` |
 | `metal/vga.sage` | `import metal.vga` | Early VGA text-mode display, cursor management, and progress bars |
 | `os/sync.sage` | `import os.sync` | Synchronization Primitives for SageOS |
 | `os/smp.sage` | `import os.smp` | SMP, Multicore, and Hyperthreading Support for Sage |
@@ -2641,7 +2650,7 @@ The self-hosted tree includes core parser/interpreter suites plus additional too
 | `test_interpreter.sage` | 18 | Evaluation, scoping, closures, classes |
 | `test_bootstrap.sage` | 18 | End-to-end: source → tokens → AST → result |
 
-The full test suite (interpreter + compiler + self-hosted tooling) totals **2060+ tests**.
+The full test suite (interpreter + compiler + self-hosted tooling) totals **2060+ tests**. Execute the unit tests using `bash testsuite/unit/run_tests.sh`.
 
 ---
 
@@ -2897,7 +2906,7 @@ sage> :quit
 The formatter normalizes indentation, spacing, and blank lines for consistent code style.
 
 ```bash
-sage fmt program.sage             # Format file in place
+sage fmt program.sage             # Format file in place (Note: may incorrectly format << and >> as < < and > >, causing syntax errors that require manual fixup)
 sage fmt --check program.sage     # Check formatting (exit code 1 if changes needed)
 ```
 
@@ -2943,6 +2952,13 @@ sage lint program.sage
 - `[S003]`: Enforces documentation conventions; top-level `proc` declarations must be immediately preceded by a `##` style docstring (comment). Top-level procedure doc comments (`## ...`) must be placed before decorators like `@inline`. Placing them between `@inline` and `proc` triggers a parser error.
 - `[S004]`: Warns about trailing semicolons (not used in SageLang).
 - `[S005]`: Warns when multiple statements are on a single line separated by semicolons.
+
+### 12.5 OIS Package Management
+
+SageLang includes a package manager accessed via the `--ois` flag. Commands include:
+- `sage --ois install <pkg>`
+- `sage --ois --update`
+- `sage --ois --uninstall <pkg>`
 
 **Example Output**:
 
