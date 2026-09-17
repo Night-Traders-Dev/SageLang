@@ -534,3 +534,28 @@ Discovery:
 
 Documentation Impact:
 - Extended `core/lib/esp32.sage` (ADC/touch/RTC maps, converters, PWM, UART remap guidance, flashing helpers), grew both test files, and documented the new API in `core/docs/esp32.md`.
+
+2026-09-17 - [Documenting Edge Cases and Support additions]
+
+Discovery:
+- String indexing via bracket syntax (e.g. `s[i]`) returns a single character string. Strings remain immutable. `slice` and `indexof` functions exist.
+- Logical negation requires `not`. Using `!` generates a syntax error (`Unexpected '!' (use 'not' for logical negation)`).
+- Procedure calls matching VM built-ins resolve to module procedures first, causing recursion exceptions unless name shadowing is avoided.
+- The `sage fmt` tool may incorrectly format bitwise shift operators `<<` and `>>` into `< <` and `> >`, causing syntax errors.
+- ESP32 microcontrollers are supported (verified on ESP32-D0WD-V3 / 4MB flash). The `core/lib/esp32.sage` module and `core/boards/ESP32/` package provide support.
+- `metal.serial` provides `uart_read_timeout`, `uart_readline`, `pl011_read_timeout`, `pl011_readline`, `uart_flush_rx`, `pl011_flush_rx`.
+- `metal.timer` mode tracking (`timer_get_mode`, `TIMER_MODE_PERIODIC`, `TIMER_MODE_ONESHOT`).
+- Linux syscall signal masking (`sigprocmask`, `SIG_BLOCK`, `SIG_UNBLOCK`, `SIG_SETMASK`) available.
+
+Evidence:
+- `core/src/c/lexer.c` for `!` syntax error.
+- `core/src/c/formatter.c` for formatting bug.
+- `core/lib/metal/serial.sage` and `timer.sage`.
+- `core/lib/esp32.sage` and `core/boards/ESP32`.
+- `core/lib/os/linux/syscalls.sage`.
+
+Documentation Impact:
+- Added the above discoveries to the `SageLang_Guide.md` where appropriate to ensure accurate representation of the codebase.
+- Added instructions on how to generate the pdf manual using `pandoc`.
+- Mentioned desktop builds requiring `libcurl4-openssl-dev` and how to build without network dependencies (`SAGE_NO_NET=1`).
+- Included OIS package manager commands.
