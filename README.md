@@ -11,7 +11,7 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.2.4 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.2.5 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
 - **v4.2.4 (Bare-Metal Extensions & ESP32 Board Support)**: Added classic ESP32 board support (`core/lib/esp32.sage`, `core/boards/ESP32/`, verified on ESP32-D0WD-V3 with 4MB flash, dual-core Xtensa LX6 @ 240MHz, 2.4GHz WiFi). Added hardware GPIO pin interrupt setup (`pin_enable_interrupt`, `pin_disable_interrupt`) to `metal.gpio`. Added timed byte reading (`uart_read_timeout`, `pl011_read_timeout`), line reading with echo (`uart_readline`, `pl011_readline`), and RX buffer flushing (`uart_flush_rx`, `pl011_flush_rx`) to `metal.serial`. Added safe IRQ vector registration (`register_handler_safe`) in `metal.irq`.
