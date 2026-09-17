@@ -3387,6 +3387,25 @@ gpio.pin_write_masked(0b11, 0b10) # Set pin 1 HIGH, pin 0 LOW
 | `pin_clear_mask(m)` | Set multiple pins LOW. |
 | `pin_write_masked(m, v)` | Write values to multiple pins. |
 
+### ESP32 Microcontroller Board Support (`core/boards/ESP32`, `core/lib/esp32.sage`)
+
+SageLang provides native board support for the classic **ESP32** (ESP32-D0WD-V3 / DevKitC, 4MB SPI flash): dual-core Xtensa LX6 @ 240MHz with 2.4GHz WiFi.
+
+- **Board Support Module**: `import esp32` provides chip identification constants (`CHIP_NAME`, `CPU_ARCH`, `CPU_CORES`, `CPU_FREQ_MHZ`), flash layout offsets (`FLASH_BOOTLOADER_OFFSET`, `FLASH_PART_TABLE_OFFSET`, `FLASH_APP_OFFSET`), pin capability predicates (`pin_valid`, `pin_can_output`, `pin_is_input_only`, `pin_is_strapping`, `pin_is_flash`), ADC1 voltage conversion (`adc1_channel`, `adc_to_mv`), touch pad mapping (`touch_channel`), deep-sleep wake pin mapping (`rtc_capable`), LEDC PWM duty count calculation (`pwm_duty`), UART remap detection (`uart_needs_remap`), and verified `esptool` flash command generation (`esptool_write_cmd`).
+- **Board Package**: `core/boards/ESP32/` includes `__init__.sage`, hardware bring-up examples (`examples/blink.sage`, `examples/hello.sage`), and unit tests (`test_smoke.sage`).
+
+```sage
+import esp32
+
+print esp32.describe()
+if esp32.pin_can_output(2):
+    let duty = esp32.pwm_duty(75, 8) # 75% duty cycle on 8-bit LEDC timer
+    print "PWM Duty: " + str(duty)
+
+let mv = esp32.adc_to_mv(2048, 11) # 2048 raw reading at 11dB attenuation
+print "ADC1 Voltage (mV): " + str(mv)
+```
+
 ## Bare-Metal Kernel Example
 
 Combining the Metal library into a minimal "Hello World" kernel with keyboard input:

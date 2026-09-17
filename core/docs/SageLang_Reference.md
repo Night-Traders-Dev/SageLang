@@ -1104,6 +1104,7 @@ Sage has 10 execution backends:
 - `rv64` / `riscv64`
 - `mips` / `mips32` / `mips74k`
 - `avr` / `atmega328p` / `atmega328pb` (Arduino Uno R3 two-pass assembler under `core/boards/AVR/`)
+- `esp32` / `esp32-d0wd-v3` (ESP32 DevKitC board package under `core/boards/ESP32/` and `core/lib/esp32.sage`)
 
 ### 8.2 Special Compile Targets
 
