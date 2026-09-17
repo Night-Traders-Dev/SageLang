@@ -1565,6 +1565,8 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
         if (strcmp(method_name, "args") == 0) sb_append(&sb, "sage_native_sys_args(");
         else if (strcmp(method_name, "getenv") == 0) sb_append(&sb, "sage_native_sys_getenv(");
         else if (strcmp(method_name, "clock") == 0) sb_append(&sb, "sage_native_sys_clock(");
+        else if (strcmp(method_name, "exec") == 0) sb_append(&sb, "sage_sys_exec(");
+        else if (strcmp(method_name, "shell_exec") == 0) sb_append(&sb, "sage_sys_shell_exec(");
 
         if (sb.len > 0) {
           for (int i = 0; i < call->arg_count; i++) {
@@ -1742,6 +1744,15 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
       sb_appendf(&sb, "sage_str(%s)", arg);
       free(arg);
     }
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "sys_shell_exec") == 0) {
+    if (call->arg_count != 1)
+      return str_dup("sage_nil()");
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_sys_shell_exec(%s)", arg);
+    free(arg);
     free(callee_name);
     return sb_take(&sb);
   }
@@ -5773,6 +5784,33 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        return sage_number(-1);\n"
         "    }\n"
         "    return sage_number(system(cmd.as.string));\n"
+        "}\n"
+        "static SageValue sage_sys_shell_exec(SageValue cmd) {\n"
+        "    if(cmd.type != SAGE_TAG_STRING) return sage_string(\"\");\n"
+        "    if(!sage_is_safe_command(cmd.as.string)) {\n"
+        "        fprintf(stderr, \"Security Error: Unsafe characters in command\\n\");\n"
+        "        return sage_string(\"\");\n"
+        "    }\n"
+        "    FILE* fp = popen(cmd.as.string, \"r\");\n"
+        "    if (!fp) return sage_string(\"\");\n"
+        "    char buffer[4096];\n"
+        "    char* result = NULL;\n"
+        "    size_t result_len = 0;\n"
+        "    while (fgets(buffer, sizeof(buffer), fp) != NULL) {\n"
+        "        size_t len = strlen(buffer);\n"
+        "        if (result_len + len > SAGE_MAX_READ_SIZE) len = SAGE_MAX_READ_SIZE - result_len;\n"
+        "        char* new_result = realloc(result, result_len + len + 1);\n"
+        "        if (!new_result) { free(result); pclose(fp); return sage_string(\"\"); }\n"
+        "        result = new_result;\n"
+        "        memcpy(result + result_len, buffer, len);\n"
+        "        result_len += len;\n"
+        "        result[result_len] = '\\0';\n"
+        "        if (result_len >= SAGE_MAX_READ_SIZE) break;\n"
+        "    }\n"
+        "    pclose(fp);\n"
+        "    SageValue v = sage_string(result ? result : \"\");\n"
+        "    free(result);\n"
+        "    return v;\n"
         "}\n"
         "static SageValue sage_io_readfile(SageValue p) {\n"
         "    if(p.type != SAGE_TAG_STRING) return sage_nil();\n"
