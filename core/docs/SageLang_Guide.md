@@ -2505,6 +2505,26 @@ let hex_txt = avr_hex.emit_hex(words, 0)
 print(hex_txt)
 ```
 
+### 9.21 ESP32 Board Support (`core/boards/ESP32/`, `core/lib/esp32.sage`)
+
+SageLang v4.2.4 supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32 / DevKitC, 4MB flash): dual-core Xtensa LX6 @ 240MHz with 2.4GHz-only WiFi.
+
+This includes:
+- **`core/lib/esp32.sage`**: Board support module with chip constants, GPIO validation rules (pads 0..39 minus absent 20/24/28-31, input-only 34..39, strapping 0/2/5/12/15, flash-bound 6/7/8/11), UART0 TX/RX defaults, standard flash partition offsets, and esptool flashing recipe parameters.
+- **`core/boards/ESP32/`**: Board package with `__init__.sage`, host-runnable `test_smoke.sage` (35 assertions), and bring-up firmware sources (`examples/hello.sage`, `examples/blink.sage`).
+
+#### Example Usage:
+```sage
+import esp32
+
+print esp32.describe()
+if esp32.pin_can_output(2):
+    print "GPIO2 is output capable"
+
+let flash_app = esp32.flash_offset("app")
+print "App partition offset: " + str(flash_app)
+```
+
 ---
 
 ## Part 13: Self-Hosting (Phase 13)
