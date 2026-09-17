@@ -1,0 +1,28 @@
+docs: Synchronize SageLang_Guide.md with codebase reality
+
+- Added string indexing via bracket syntax returning single-character strings
+- Clarified that `!` produces a syntax error for logical negation (requires `not`)
+- Added ESP32 to supported microcontrollers with module references
+- Added instructions on how to generate the official PDF manual using pandoc
+- Clarified that executing unit tests requires `bash testsuite/unit/run_tests.sh`
+- Added instructions on building without network dependencies via SAGE_NO_NET
+- Added a note that procedure calls matching VM built-ins resolve to module procedures first
+- Mentioned desktop builds require libcurl4-openssl-dev
+- Documented metal.serial drivers and timers functions
+- Clarified `sage fmt` issue with << and >>
+- Generated the updated `The_Sage_Programming_Language.pdf` manual.
+
+# Documentation Summary
+- Files examined: `core/docs/SageLang_Guide.md`, `.jules/sagekeeper.md`
+- Features verified: String indexing, logic negation `not`, ESP32 support, Pandoc PDF generation, Unit testing execution, `SAGE_NO_NET` flag, name shadowing, desktop dependencies, serial driver reads, formatting bug, metal timers tracking, sigprocmask, OIS package management
+- Features added: Added ESP32, Pandoc PDF instructions, test script runner, SAGE_NO_NET build flag, OIS commands
+- Features corrected: Missing documentation added for `not` negation, `sigprocmask`, module name shadowing, string indexing
+- Features removed: None
+- Missing implementation areas discovered: None new, added documentation for previously undocumented components.
+
+# Documentation Confidence Report
+- Verified from source: String indexing, logical negation `not` operator, ESP32 boards
+- Verified from tests: `testsuite/unit/run_tests.sh` execution
+- Verified from examples: Pandoc generation script
+- Partially verified: None
+- Not yet verified: None
