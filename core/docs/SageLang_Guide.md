@@ -2511,7 +2511,30 @@ SageLang v4.2.4 supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-W
 
 This includes:
 - **`core/lib/esp32.sage`**: Board support module with chip constants, GPIO validation rules (pads 0..39 minus absent 20/24/28-31, input-only 34..39, strapping 0/2/5/12/15, flash-bound 6/7/8/11), UART0 TX/RX defaults, standard flash partition offsets, and esptool flashing recipe parameters.
-- **`core/boards/ESP32/`**: Board package with `__init__.sage`, host-runnable `test_smoke.sage` (35 assertions), and bring-up firmware sources (`examples/hello.sage`, `examples/blink.sage`).
+- **`core/boards/ESP32/`**: Board package with `__init__.sage`, host-runnable `test_smoke.sage`, and bring-up firmware sources (`examples/hello.sage`, `examples/blink.sage`, `examples/adc_read.sage`, `examples/sysinfo.sage`, `examples/deep_sleep.sage`).
+
+#### Exported Hardware Constants & Predicates:
+
+#### Exported Hardware Constants & Predicates:
+- **Identity**: `CHIP_NAME` ("ESP32"), `CHIP_VARIANT` ("ESP32-D0WD-V3"), `CPU_ARCH` ("Xtensa LX6"), `CPU_CORES` (2), `CPU_FREQ_MHZ` (240), `HAS_LP_CORE` (true)
+- **Radio**: `WIFI_BAND_GHZ` (2.4), `WIFI_SUPPORTS_5GHZ` (false), `HAS_BT` (true), `HAS_BLE` (true)
+- **SPI Flash Layout**: `FLASH_SIZE_BYTES` (4194304), `FLASH_BOOTLOADER_OFFSET` (4096), `FLASH_PART_TABLE_OFFSET` (32768), `FLASH_APP_OFFSET` (65536)
+- **GPIO Model**: `GPIO_MIN` (0), `GPIO_MAX` (39), `GPIO_ABSENT` ([20, 24, 28, 29, 30, 31]), `GPIO_INPUT_ONLY_FIRST` (34), `GPIO_STRAPPING` ([0, 2, 5, 12, 15]), `GPIO_FLASH_PINS` ([6, 7, 8, 11]), `GPIO_ADC1_PINS` ([32..39]), `GPIO_DAC_PINS` ([25, 26]), `GPIO_RTC_PADS` ([0, 2, 4, 12, 13, 14, 15, 25, 26, 27, 32..39])
+- **Peripherals & Predicates**:
+  - `pin_valid(pin)`: True for physical ESP32 pads.
+  - `pin_can_output(pin)`: True for output-capable pads (excludes input-only pads 34..39 and absent pads).
+  - `pin_is_input_only(pin)`: True for input-only pads (34..39).
+  - `pin_is_strapping(pin)`: True for boot strapping pads (0, 2, 5, 12, 15).
+  - `pin_is_flash(pin)`: True for flash-bound SPI pins (6, 7, 8, 11).
+  - `adc1_channel(pin)`: Maps pad 32..39 to ADC1 channel 0..7 (-1 if unsupported; ADC1 avoids WiFi ADC2 conflict).
+  - `adc_fullscale_mv(atten_db)`: Approximate full scale voltage in mV for 0, 2.5, 6, or 11 dB attenuation.
+  - `adc_to_mv(raw, atten_db)`: Converts raw 12-bit ADC count (0..4095) to millivolts.
+  - `touch_channel(pin)`: Maps pad to touch channel T0..T9 (-1 if unsupported).
+  - `rtc_capable(pin)`: True for deep-sleep wake RTC pads.
+  - `pwm_duty(percent, bits)`: Calculates floored duty count for LEDC PWM given percentage (0..100) and resolution bits.
+  - `uart_needs_remap(uart)`: Returns true if UART default pins collide with flash (UART1 default TX 10 / RX 9).
+  - `esptool_write_cmd(port, image)`: Generates verified `esptool` flash command string.
+  - `describe()`: One-line summary string for the board configuration.
 
 #### Example Usage:
 ```sage
@@ -2519,10 +2542,20 @@ import esp32
 
 print esp32.describe()
 if esp32.pin_can_output(2):
-    print "GPIO2 is output capable"
+    print "GPIO2 ready for LED drive"
 
 let flash_app = esp32.flash_offset("app")
 print "App partition offset: " + str(flash_app)
+
+let ch = esp32.adc1_channel(34)
+let mv = esp32.adc_to_mv(2048, 11)
+print "ADC1 Channel: " + str(ch) + " Voltage (mV): " + str(mv)
+
+let duty = esp32.pwm_duty(50, 8)
+print "50% Duty Count (8-bit): " + str(duty)
+
+let cmd = esp32.esptool_write_cmd("/dev/ttyUSB0", "firmware.bin")
+print "Flash Command: " + cmd
 ```
 
 ---

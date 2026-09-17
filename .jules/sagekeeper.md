@@ -534,3 +534,15 @@ Discovery:
 
 Documentation Impact:
 - Extended `core/lib/esp32.sage` (ADC/touch/RTC maps, converters, PWM, UART remap guidance, flashing helpers), grew both test files, and documented the new API in `core/docs/esp32.md`.
+
+2026-09-17 - [Repository Documentation Synchronization for ESP32 Expansion]
+
+Discovery:
+- Synchronized `README.md`, `core/docs/SageLang_Guide.md`, `core/docs/sagelang-book.md`, and `core/docs/SageLang_Reference.md` to reflect full ESP32 board support and library expansion (`core/lib/esp32.sage` and `core/boards/ESP32/`).
+- Validated all code examples in documentation snippets against current SageLang compiler/interpreter rules.
+
+Documentation Impact:
+- Updated `README.md` Recent Updates and execution backends / board package listings for v4.2.4.
+- Added Section 9.21 (ESP32 Board Support) in `core/docs/SageLang_Guide.md`.
+- Added ESP32 Microcontroller Board Support section in `core/docs/sagelang-book.md`.
+- Added `esp32` hardware target architecture entry in `core/docs/SageLang_Reference.md`.

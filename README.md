@@ -15,6 +15,7 @@ modes (tracing, ARC, ORC).
 
 ## Recent Updates
 - **v4.2.4 (Bare-Metal Extensions & ESP32 Board Support)**: Added classic ESP32 board support (`core/lib/esp32.sage`, `core/boards/ESP32/`, verified on ESP32-D0WD-V3 with 4MB flash, dual-core Xtensa LX6 @ 240MHz, 2.4GHz WiFi). Added hardware GPIO pin interrupt setup (`pin_enable_interrupt`, `pin_disable_interrupt`) to `metal.gpio`. Added timed byte reading (`uart_read_timeout`, `pl011_read_timeout`), line reading with echo (`uart_readline`, `pl011_readline`), and RX buffer flushing (`uart_flush_rx`, `pl011_flush_rx`) to `metal.serial`. Added safe IRQ vector registration (`register_handler_safe`) in `metal.irq`.
+- **v4.2.4 (ESP32 Board Support & Library Expansion)**: Added classic ESP32 (ESP32-D0WD-V3 / DevKitC) board package (`core/boards/ESP32/`) and standard board support library (`core/lib/esp32.sage`). Features hardware constants, pad mapping and validity predicates (`pin_valid`, `pin_can_output`, `pin_is_input_only`, `pin_is_strapping`, `pin_is_flash`), ADC1 12-bit voltage conversion (`adc1_channel`, `adc_to_mv`), touch channel lookup (`touch_channel`), RTC wake pin mapping (`rtc_capable`), LEDC PWM duty calculator (`pwm_duty`), UART remap guidance (`uart_needs_remap`), and verified `esptool` flashing command generators.
 - **v4.2.3 (Self-Hosted Build Pipeline Fixes & Sage Host Parity Progress)**: Fixed self-hosted build pipeline by resolving `Array<String>` parser error in `interpreter.sage`, converting `//` comments to `#` across core files, and adding `case`/`default` keywords to all `match` statements for self-hosted parser compatibility. Progress toward Sage Host / C Host compiler parity with 63 edits to `interpreter.sage` for self-hosted compiler compatibility. Self-hosted REPL and `emit-c` now functional.
 - **v4.2.2 (Standard Library Hardening & Read-Write Lock / Syscalls Expansion)**:
   Full alignment of standard library modules (`std.rwlock`, `os.linux.syscalls`,
@@ -224,7 +225,7 @@ section is a summary with links to the relevant guide.
 ### Execution Backends & Compilers
 
 C codegen, LLVM IR (`--compile-llvm`), native assembly (x86-64/aarch64/rv64/mips/AVR),
-bytecode VM, SageMetal VM, JIT, AOT, and Kotlin/Android — 10 backends total plus an AVR 8-bit RISC assembler package.
+bytecode VM, SageMetal VM, JIT, AOT, and Kotlin/Android — 10 backends total plus AVR and ESP32 board support packages (`core/boards/AVR`, `core/boards/ESP32`).
 
 📖 **[JIT & AOT Guide](core/docs/JIT_AOT_Guide.md)** ·
 [CLI Reference](core/docs/CLI_Reference.md) ·
