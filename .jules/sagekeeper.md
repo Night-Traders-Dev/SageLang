@@ -571,3 +571,20 @@ Documentation Impact:
 - Added instructions on how to generate the pdf manual using `pandoc`.
 - Mentioned desktop builds requiring `libcurl4-openssl-dev` and how to build without network dependencies (`SAGE_NO_NET=1`).
 - Included OIS package manager commands.
+
+2026-09-17 - [Repository Documentation Synchronization for v4.2.5 Performance & Hardening]
+
+Discovery:
+- `VERSION`, `core/VERSION`, `stdlib.c`, `stdlib.sage`, `SageLang_Reference.md`, and `sagelang-book.md` were bumped to `v4.2.5`.
+- Recent commits introduced performance optimizations in `std.datetime` (Howard Hinnant civil calendar algorithm), `std.unicode`/`std.fmt`/`strings` (native `string_repeat` and `slice()`), `std.process` (linear path tools), and Rich TUI components (`align`, `columns`, `measure`, `padding`, `panel`, `progress`, `rule`, `table`, `tree`).
+- Security hardening was applied across SGVM (`sgvm_compiler`, `sgvm_main`), AOT runtime (`aot.c`), C compiler emission (`compiler.c`), and LLVM runtime (`llvm_runtime.c`) addressing CWE-400, CWE-789, CWE-476, and CWE-190.
+- Cleaned up duplicated release notes in `README.md` and updated `core/docs/Library_Support.md` version marker to `v4.2.5`.
+
+Evidence:
+- `README.md` version header and Recent Updates.
+- `core/docs/Library_Support.md`.
+- `VERSION` / `core/VERSION` files.
+
+Documentation Impact:
+- Added `v4.2.5` entry to `README.md` Recent Updates section and cleaned up duplicate `v4.2.4` section.
+- Synchronized version marker in `core/docs/Library_Support.md` to `v4.2.5`.
