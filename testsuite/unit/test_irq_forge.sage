@@ -7,6 +7,10 @@
 # EXPECT: Testing handler registration...
 # EXPECT: Handler called for vector 42
 # EXPECT: Testing mask/unmask (stubs)...
+# EXPECT: Testing register_handler_safe and unregister_handler...
+# EXPECT: Safe registration duplicate check: ok
+# EXPECT: Unregister handler status: ok
+# EXPECT: Re-registration after unregister status: ok
 # EXPECT: Testing double registration guard (should panic)...
 # EXPECT: PANIC: IRQ handler already registered for vector 42
 import metal.irq
@@ -33,6 +37,19 @@ irq.dispatch(42)
 print "Testing mask/unmask (stubs)..."
 irq.mask_irq(0)
 irq.unmask_irq(0)
+
+print "Testing register_handler_safe and unregister_handler..."
+let safe_dup = irq.register_handler_safe(42, dummy_handler)
+if not safe_dup:
+    print "Safe registration duplicate check: ok"
+
+let unreg_ok = irq.unregister_handler(42)
+if unreg_ok:
+    print "Unregister handler status: ok"
+
+let rereg_ok = irq.register_handler_safe(42, dummy_handler)
+if rereg_ok:
+    print "Re-registration after unregister status: ok"
 
 print "Testing double registration guard (should panic)..."
 # We wrap this in a way we can see it fail if the interpreter supports try/catch
