@@ -11,7 +11,7 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.2.5 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.2.6 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
 - **v4.2.5 (Performance Optimizations, Security Hardening & Version Alignment)**: Optimized datetime conversions (`std.datetime`) with O(1) civil calendar arithmetic (~12x speedup), string utilities (`std.unicode`, `std.fmt`, `strings`) via native `string_repeat` and `slice()` VM built-ins (~2.4x–3.75x speedup), path manipulation (`std.process`), and TUI component rendering (`rich.align`, `rich.columns`, `rich.measure`, `rich.padding`, `rich.panel`, `rich.progress`, `rich.rule`, `rich.table`, `rich.tree`). Hardened runtime utilities against resource exhaustion (CWE-400), allocation bounds (CWE-789), NULL dereferences (CWE-476), and CPU DoS (CWE-400) in SGVM (`sgvm_compiler`, `sgvm_main`), AOT runtime (`aot.c`), C compiler emission (`compiler.c`), and LLVM runtime (`llvm_runtime.c`).
