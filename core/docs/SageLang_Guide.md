@@ -2249,7 +2249,7 @@ SageLang ships with 52 OS/bare-metal development modules across `lib/os/`, `lib/
 | `metal/gpio.sage` | `import metal.gpio` | General Purpose I/O for Bare-Metal |
 | `metal/irq.sage` | `import metal.irq` | Interrupt Request Management for Bare-Metal |
 | `metal/serial.sage` | `import metal.serial` | UART Serial Port Driver for Bare-Metal. Provides NS16550A/PL011 drivers with timed byte read (`uart_read_timeout`, `pl011_read_timeout`), line read (`uart_readline`, `pl011_readline`), and buffer flush (`uart_flush_rx`, `pl011_flush_rx`) |
-| `metal/timer.sage` | `import metal.timer` | Hardware Timer Driver for Bare-Metal. Includes hardware timer state tracking via `_timer_mode` and `timer_get_mode()` supporting `TIMER_MODE_PERIODIC` and `TIMER_MODE_ONESHOT` |
+| `metal/timer.sage` | `import metal.timer` | Hardware Timer Driver for Bare-Metal. PIT setup (`timer_init_periodic`, `timer_init_oneshot`), sleeps (`sleep_ms`, `sleep_secs`, `delay_us`), stopwatch/uptime helpers, safe cancel (`timer_cancel_safe`), and mode constants (`TIMER_MODE_PERIODIC`, `TIMER_MODE_ONESHOT`) |
 | `metal/vga.sage` | `import metal.vga` | Early VGA text-mode display, cursor management, and progress bars |
 | `os/sync.sage` | `import os.sync` | Synchronization Primitives for SageOS |
 | `os/smp.sage` | `import os.smp` | SMP, Multicore, and Hyperthreading Support for Sage |

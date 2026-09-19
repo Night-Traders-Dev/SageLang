@@ -608,4 +608,4 @@ print interop.TYPE_DOUBLE     # double
 | `build` | `import std.build` | `create_project`, `add_dep`, `add_target`, `parse_version`, `bump_major`, `to_string` |
 | `package` | `import std.package` | `read_manifest`, `init_manifest`, `parse_toml_line` |
 | `interop` | `import std.interop` | `load_library`, `bind`, `call`, `pack_i32`, `unpack_i32`, `lib_path`, `define_struct` |
-| `esp32` | `import esp32` | `describe`, `pin_valid`, `pin_can_output`, `pin_is_input_only`, `pin_is_strapping`, `pin_is_flash`, `adc1_capable`, `dac_capable`, `flash_offset` |
+| `esp32` | `import esp32` | `describe`, `pin_valid`, `pin_can_output`, `pin_is_input_only`, `pin_is_strapping`, `pin_is_flash`, `adc1_capable`, `dac_capable`, `flash_offset`, `boot_magic_ok`, `part_magic_ok`, `valid_flash_mode`, `adc1_channel`, `adc_fullscale_mv`, `adc_to_mv`, `adc_atten_for_voltage`, `touch_channel`, `rtc_capable`, `pwm_duty`, `uart_needs_remap`, `image_size_ok`, `esptool_write_cmd`, `i2c_addr_usable`, `i2c_freq_ok`, `ext1_mask`, `battery_hours`, `wifi_ssid_ok`, `wifi_pass_ok`, `wifi_sta_ok`, `wifi_channel_ok`, `wifi_auth_ok`, `nvs_namespace_ok`, `nvs_key_ok`, `nvs_type_ok` |

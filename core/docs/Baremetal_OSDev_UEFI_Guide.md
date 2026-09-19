@@ -370,7 +370,6 @@ The `metal` standard library provides low-level drivers for bare-metal execution
 ### `metal.timer` — Hardware Timer Driver
 - `timer.timer_init_periodic(hz)` — Configures hardware PIT (8254) in periodic mode at `hz` frequency.
 - `timer.timer_init_oneshot(hz)` — Configures hardware PIT in one-shot mode.
-- `timer.timer_get_mode()` — Returns current timer mode (`TIMER_MODE_PERIODIC` or `TIMER_MODE_ONESHOT`).
 - `timer.sleep_ms(ms)` / `timer.sleep_secs(secs)` — Halts CPU execution (`hlt`) for the requested duration.
 - `timer.delay_us(us)` — Performs a precision busy-wait delay in microseconds.
 - `timer.stopwatch_start()` — Returns initial tick count for elapsed time measurement.

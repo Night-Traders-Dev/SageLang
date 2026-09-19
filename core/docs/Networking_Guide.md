@@ -134,8 +134,7 @@ print headers.TYPE_HTML       # text/html
 import net.request
 
 let resp = request.get("https://httpbin.org/get")
-print resp["status"]  # 200
-print resp["body"]
+print resp   # mock string for now; a dict with status/body once libcurl lands
 
 let resp2 = request.post("https://httpbin.org/post", "hello")
 ```

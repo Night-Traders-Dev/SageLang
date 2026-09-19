@@ -2,7 +2,7 @@
 
 Import/behavior status of every bundled library under both interpreters
 (`sage` = self-hosted CLI, `sage-c` = C host), as of v4.2.6.
-Verified by importing all 295 modules from a neutral working directory.
+Verified by importing all 296 modules from a neutral working directory.
 
 ## Summary
 

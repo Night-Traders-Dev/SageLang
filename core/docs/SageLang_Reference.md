@@ -1104,12 +1104,12 @@ Sage has 10 execution backends:
 - `rv64` / `riscv64`
 - `mips` / `mips32` / `mips74k`
 - `avr` / `atmega328p` / `atmega328pb` (Arduino Uno R3 two-pass assembler under `core/boards/AVR/`)
-- `esp32` / `esp32-d0wd-v3` (ESP32 DevKitC board package under `core/boards/ESP32/` and `core/lib/esp32.sage`)
+- `esp32` / `esp32-d0wd-v3` (ESP32 DevKitC board package under `core/boards/ESP32/` and `core/lib/esp32.sage`; built via the C backend + Arduino-ESP32 adaptation, not native ASM emission)
 
 ### 8.2 Special Compile Targets
 
 - `--compile-pico`: RP2040/RP2350 (ARM/RISC-V via Pico SDK) → `.uf2`
-- `--compile-esp32`: Classic ESP32 (Xtensa LX6 via Arduino-ESP32 / ESP-IDF) → firmware ELF / binary
+- `--emit-pico-c` + Arduino-ESP32 adaptation: Classic ESP32 (Xtensa LX6) firmware via adapted C-backend output → ELF / binary (see `core/docs/esp32.md`; there is no `--compile-esp32` flag)
 - `--compile-bare`: Freestanding ELF with bare-metal runtime
 - `--compile-uefi`: UEFI PE/COFF images
 - C Backend Short-Circuiting (v4.1.8+): Emits `sage_bool(sage_truthy(L) && sage_truthy(R))` / `||` to guarantee native C short-circuit evaluation matching interpreter behavior.
