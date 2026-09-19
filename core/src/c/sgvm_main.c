@@ -24,7 +24,21 @@ int main(int argc, char** argv) {
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    unsigned char* data = malloc(size);
+    // Validate size bounds to prevent resource exhaustion / invalid allocation (CWE-400 / CWE-789)
+    if (size < 0 || size > 104857600) {
+        fprintf(stderr, "Error: Invalid file size\n");
+        fclose(f);
+        return 1;
+    }
+
+    // Allocate memory with NULL check to prevent dereferencing NULL (CWE-476)
+    unsigned char* data = malloc(size > 0 ? size : 1);
+    if (!data) {
+        fprintf(stderr, "Error: Memory allocation failed\n");
+        fclose(f);
+        return 1;
+    }
+
     if (fread(data, 1, size, f) != (size_t)size) {
         fprintf(stderr, "Read error\n");
         free(data);
