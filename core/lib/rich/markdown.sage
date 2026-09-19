@@ -1,7 +1,15 @@
 gc_disable()
-import rich.style
+import rich.style as style
 import rich.text
 import rich.measure
+
+# Pre-parsed style objects for markdown formatting
+let STYLE_BOLD = style.parse_style("bold")
+let STYLE_DIM = style.parse_style("dim")
+let STYLE_CYAN = style.parse_style("cyan")
+let STYLE_ITALIC = style.parse_style("italic")
+let STYLE_CODE = style.parse_style("on bright_black")
+let STYLE_LINK = style.parse_style("underline blue")
 
 # Markdown rendering (simplified subset)
 
@@ -21,8 +29,7 @@ class Markdown:
         let in_code_block = false
         let code_lang = ""
 
-        for i in range(len(lines)):
-            let line = lines[i]
+        for line in lines:
             let lns = strip(line)
 
             # Code blocks
@@ -41,12 +48,11 @@ class Markdown:
                 continue
 
             # Headers
-            if self._count_leading(lns, "#") > 0:
-                let level = self._count_leading(lns, "#")
-                if level > 0 and len(lns) > level and lns[level] == " ":
+            let level = self._count_leading(lns, "#")
+            if level > 0:
+                if len(lns) > level and lns[level] == " ":
                     let text = slice(lns, level + 1, len(lns))
-                    let style_str = "markdown.h" + str(level)
-                    let rendered = rich.style.render_styled(text, rich.style.parse_style("bold"))
+                    let rendered = style.render_styled(text, STYLE_BOLD)
                     push(result_lines, rendered)
                     push(result_lines, "")
                     continue
@@ -57,13 +63,13 @@ class Markdown:
                 if console != nil and console.width != nil:
                     width = console.width
                 let hr = string_repeat("─", width)
-                push(result_lines, rich.style.render_styled(hr, rich.style.parse_style("dim")))
+                push(result_lines, style.render_styled(hr, STYLE_DIM))
                 continue
 
             # Unordered lists
             if startswith(lns, "- ") or startswith(lns, "* ") or startswith(lns, "+ "):
                 let text = slice(lns, 2, len(lns))
-                push(result_lines, "  " + rich.style.render_styled("•", rich.style.parse_style("cyan")) + " " + text)
+                push(result_lines, "  " + style.render_styled("•", STYLE_CYAN) + " " + text)
                 continue
 
             # Ordered lists
@@ -78,7 +84,7 @@ class Markdown:
             # Blockquotes
             if startswith(lns, "> "):
                 let text = slice(lns, 2, len(lns))
-                let rendered = rich.style.render_styled("│" + " ", rich.style.parse_style("dim")) + rich.style.render_styled(text, rich.style.parse_style("dim"))
+                let rendered = style.render_styled("│ ", STYLE_DIM) + style.render_styled(text, STYLE_DIM)
                 push(result_lines, rendered)
                 continue
 
@@ -111,7 +117,10 @@ class Markdown:
         return indexof(s, ch)
 
     proc _process_inline(self, text):
-        # Optimization: Use array-push and join("") with native slice() and indexof()
+        # Optimization: Fast path check using C native indexof() before character scanning
+        if indexof(text, "*") < 0 and indexof(text, "`") < 0 and indexof(text, "[") < 0:
+            return text
+
         let res_parts = []
         let last_pos = 0
         let i = 0
@@ -124,7 +133,7 @@ class Markdown:
                     if i > last_pos:
                         push(res_parts, slice(text, last_pos, i))
                     let inner = slice(text, i + 2, end_pos)
-                    push(res_parts, rich.style.render_styled(inner, rich.style.parse_style("bold")))
+                    push(res_parts, style.render_styled(inner, STYLE_BOLD))
                     i = end_pos + 2
                     last_pos = i
                     continue
@@ -135,7 +144,7 @@ class Markdown:
                     if i > last_pos:
                         push(res_parts, slice(text, last_pos, i))
                     let inner = slice(text, i + 1, end_pos)
-                    push(res_parts, rich.style.render_styled(inner, rich.style.parse_style("italic")))
+                    push(res_parts, style.render_styled(inner, STYLE_ITALIC))
                     i = end_pos + 1
                     last_pos = i
                     continue
@@ -146,7 +155,7 @@ class Markdown:
                     if i > last_pos:
                         push(res_parts, slice(text, last_pos, i))
                     let inner = slice(text, i + 1, end_pos)
-                    push(res_parts, rich.style.render_styled(inner, rich.style.parse_style("on bright_black")))
+                    push(res_parts, style.render_styled(inner, STYLE_CODE))
                     i = end_pos + 1
                     last_pos = i
                     continue
@@ -160,7 +169,7 @@ class Markdown:
                             push(res_parts, slice(text, last_pos, i))
                         let link_text = slice(text, i + 1, close_bracket)
                         let link_url = slice(text, close_bracket + 2, close_paren)
-                        push(res_parts, rich.style.render_styled(link_text, rich.style.parse_style("underline blue")))
+                        push(res_parts, style.render_styled(link_text, STYLE_LINK))
                         i = close_paren + 1
                         last_pos = i
                         continue
