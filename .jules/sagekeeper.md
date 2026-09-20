@@ -588,3 +588,18 @@ Evidence:
 Documentation Impact:
 - Added `v4.2.5` entry to `README.md` Recent Updates section and cleaned up duplicate `v4.2.4` section.
 - Synchronized version marker in `core/docs/Library_Support.md` to `v4.2.5`.
+
+2026-09-18 - [MAX_RECURSION_DEPTH limit discrepancy]
+
+Discovery:
+- The recursion depth limit `MAX_RECURSION_DEPTH` is stated as 1000000 in `core/docs/SageLang_Guide.md`, but the implementation in `core/src/c/interpreter.c:184` defines it as 12000.
+- `core/src/sage/runtime/capabilities.sage` also has it as 12000.
+- The actual C interpreter stack limit causes an OS segfault much earlier, hence the addition of the real stack limit `stack_danger()` which limits based on `RLIMIT_STACK`.
+
+Evidence:
+- `core/src/c/interpreter.c:184`
+- `core/src/sage/runtime/capabilities.sage`
+- `core/docs/SageLang_Guide.md` (Section 7.5 Interpreter Safety Limits)
+
+Documentation Impact:
+- Updated `core/docs/SageLang_Guide.md` to accurately reflect the `MAX_RECURSION_DEPTH` constant as 12000 instead of 1000000.
