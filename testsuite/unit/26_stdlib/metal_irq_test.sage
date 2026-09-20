@@ -2,6 +2,8 @@
 # EXPECT: exception_consts_ok
 # EXPECT: handler_register_ok
 # EXPECT: handler_dispatch_ok
+# EXPECT: safe_register_duplicate_ok
+# EXPECT: unregister_ok
 # EXPECT: PASS
 import metal.irq as irq
 
@@ -17,6 +19,7 @@ if irq.EXCEPTION_PAGE_FAULT == 14 and irq.EXCEPTION_DOUBLE_FAULT == 8:
 
 # Register and dispatch a handler
 let fired = false
+
 proc my_handler(vec):
     fired = true
 irq.register_handler(32, my_handler)
@@ -25,5 +28,13 @@ print "handler_register_ok"
 irq.dispatch(32)
 if fired == true:
     print "handler_dispatch_ok"
+
+# Test safe register (duplicate should return false)
+if not irq.register_handler_safe(32, my_handler):
+    print "safe_register_duplicate_ok"
+
+# Test unregister
+if irq.unregister_handler(32):
+    print "unregister_ok"
 
 print "PASS"
