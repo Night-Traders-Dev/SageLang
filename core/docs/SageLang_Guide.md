@@ -2516,7 +2516,7 @@ print(hex_txt)
 
 ### 9.21 ESP32 Board Support (`core/boards/ESP32/`, `core/lib/esp32.sage`)
 
-SageLang v4.2.4 supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32 / DevKitC, 4MB flash): dual-core Xtensa LX6 @ 240MHz with 2.4GHz-only WiFi.
+SageLang (v4.2.6) supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32 / DevKitC, 4MB flash): dual-core Xtensa LX6 @ 240MHz with 2.4GHz-only WiFi.
 
 This includes:
 - **`core/lib/esp32.sage`**: Board support module with chip constants, GPIO validation rules (pads 0..39 minus absent 20/24/28-31, input-only 34..39, strapping 0/2/5/12/15, flash-bound 6/7/8/11), UART0 TX/RX defaults, standard flash partition offsets, and esptool flashing recipe parameters.

@@ -588,3 +588,15 @@ Evidence:
 Documentation Impact:
 - Added `v4.2.5` entry to `README.md` Recent Updates section and cleaned up duplicate `v4.2.4` section.
 - Synchronized version marker in `core/docs/Library_Support.md` to `v4.2.5`.
+
+2026-09-20 - [Repository Documentation Synchronization for v4.2.6]
+
+Discovery:
+- Verified single-source version `v4.2.6` across `VERSION`, `core/VERSION`, `README.md`, `core/docs/SageLang_Reference.md`, `core/docs/sagelang-book.md`, and `core/docs/Library_Support.md`.
+- Added release notes for `v4.2.6` in `README.md` documenting documentation audit & system parity sync.
+- Synchronized ESP32 board support version markers in `core/docs/SageLang_Guide.md` and `core/docs/Baremetal_OSDev_UEFI_Guide.md`.
+- Verified Quick Start code examples against current SageLang CLI interpreter (`./sage -I core/lib`).
+
+Documentation Impact:
+- Updated `README.md` Recent Updates.
+- Synchronized ESP32 board support entries in `core/docs/SageLang_Guide.md` and `core/docs/Baremetal_OSDev_UEFI_Guide.md`.

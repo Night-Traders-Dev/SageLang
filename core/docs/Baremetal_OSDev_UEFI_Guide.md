@@ -459,7 +459,7 @@ avrdude -F -V -c arduino -p m328p -P /dev/ttyACM0 -b 115200 -U flash:w:blink.hex
 
 ## ESP32 Board Support (`core/boards/ESP32`, `core/lib/esp32.sage`)
 
-Starting with v4.2.4, SageLang supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32 / DevKitC with 4MB flash): dual-core Xtensa LX6 @ 240MHz with **2.4GHz-only WiFi** (there is no 5GHz radio — boards must join a 2.4GHz SSID).
+Starting with v4.2.6, SageLang supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32 / DevKitC with 4MB flash): dual-core Xtensa LX6 @ 240MHz with **2.4GHz-only WiFi** (there is no 5GHz radio — boards must join a 2.4GHz SSID).
 
 - **`core/lib/esp32.sage`**: chip constants, GPIO model (pads 0..39 minus absent 20/24/28-31, input-only 34..39, strapping 0/2/5/12/15, flash pads 6/7/8/11), UART0 pins (TX 1 / RX 3), standard flash offsets (bootloader `0x1000`, partitions `0x8000`, app `0x10000`), image magic checks, and the verified esptool recipe.
 - **`core/boards/ESP32/`**: package init, `examples/blink.sage` bring-up plan demo, and `test_smoke.sage` (run with `SAGE_PATH=core/lib ./core/sage core/boards/ESP32/test_smoke.sage`).
