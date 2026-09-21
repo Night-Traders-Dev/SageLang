@@ -262,27 +262,20 @@ proc parse_color(name):
             return Color(COLOR_TYPE_TRUECOLOR, 0, val)
     # Hex string: #RGB, #RRGGBB
     if startswith(sname, "#"):
-        let hex = ""
-        for i in range(len(name) - 1):
-            hex = hex + name[i + 1]
+        let hex = slice(sname, 1, len(sname))
         if len(hex) == 3:
             let r = hex_to_int(hex[0] + hex[0])
             let g = hex_to_int(hex[1] + hex[1])
             let b = hex_to_int(hex[2] + hex[2])
             return Color(COLOR_TYPE_TRUECOLOR, 0, [r, g, b])
         if len(hex) == 6:
-            let r = hex_to_int(hex[0:2])
-            let g = hex_to_int(hex[2:4])
-            let b = hex_to_int(hex[4:6])
+            let r = hex_to_int(slice(hex, 0, 2))
+            let g = hex_to_int(slice(hex, 2, 4))
+            let b = hex_to_int(slice(hex, 4, 6))
             return Color(COLOR_TYPE_TRUECOLOR, 0, [r, g, b])
     # rgb(r,g,b) string
     if startswith(sname, "rgb(") and endswith(sname, ")"):
-        let inner = ""
-        let start = 4
-        let endIdx = len(sname) - 1
-        while start < endIdx:
-            inner = inner + sname[start]
-            start = start + 1
+        let inner = slice(sname, 4, len(sname) - 1)
         let parts = split(inner, ",")
         if len(parts) == 3:
             let r = tonumber(strip(parts[0]))

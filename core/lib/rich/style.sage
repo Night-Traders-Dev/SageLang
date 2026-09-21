@@ -1,5 +1,5 @@
 gc_disable()
-import rich.color
+import rich.color as color
 
 # Text style definition and rendering
 
@@ -30,36 +30,16 @@ let STYLE_STRIKE = 64
 # Create a style object
 proc Style(color, bgcolor, bold, dim, italic, underline, blink, reverse, strike, link):
     let style = {}
-    style["color"] = nil
-    if color != nil:
-        style["color"] = color
-    style["bgcolor"] = nil
-    if bgcolor != nil:
-        style["bgcolor"] = bgcolor
-    style["bold"] = false
-    if bold != nil:
-        style["bold"] = bold
-    style["dim"] = false
-    if dim != nil:
-        style["dim"] = dim
-    style["italic"] = false
-    if italic != nil:
-        style["italic"] = italic
-    style["underline"] = false
-    if underline != nil:
-        style["underline"] = underline
-    style["blink"] = false
-    if blink != nil:
-        style["blink"] = blink
-    style["reverse"] = false
-    if reverse != nil:
-        style["reverse"] = reverse
-    style["strike"] = false
-    if strike != nil:
-        style["strike"] = strike
-    style["link"] = nil
-    if link != nil:
-        style["link"] = link
+    style["color"] = color
+    style["bgcolor"] = bgcolor
+    style["bold"] = bold or false
+    style["dim"] = dim or false
+    style["italic"] = italic or false
+    style["underline"] = underline or false
+    style["blink"] = blink or false
+    style["reverse"] = reverse or false
+    style["strike"] = strike or false
+    style["link"] = link
     return style
 
 proc style_default():
@@ -84,69 +64,50 @@ proc parse_style(style_str):
             continue
         if part == "bold":
             s["bold"] = true
-        else:
-            if part == "not" and i + 1 < len(parts) and lower(parts[i + 1]) == "bold":
+        elif part == "dim":
+            s["dim"] = true
+        elif part == "italic":
+            s["italic"] = true
+        elif part == "underline":
+            s["underline"] = true
+        elif part == "blink":
+            s["blink"] = true
+        elif part == "reverse":
+            s["reverse"] = true
+        elif part == "strike":
+            s["strike"] = true
+        elif part == "not" and i + 1 < len(parts):
+            let flag = lower(parts[i + 1])
+            if flag == "bold":
                 s["bold"] = false
+            elif flag == "dim":
+                s["dim"] = false
+            elif flag == "italic":
+                s["italic"] = false
+            elif flag == "underline":
+                s["underline"] = false
+            elif flag == "blink":
+                s["blink"] = false
+            elif flag == "reverse":
+                s["reverse"] = false
+            elif flag == "strike":
+                s["strike"] = false
+            i = i + 1
+        elif part == "link":
+            if i + 1 < len(parts):
+                s["link"] = parts[i + 1]
                 i = i + 1
-            else:
-                                if part == "dim":
-                                    s["dim"] = true
-                                else:
-                                    if part == "not" and i + 1 < len(parts) and lower(parts[i + 1]) == "dim":
-                                        s["dim"] = false
-                                        i = i + 1
-                                    else:
-                                        if part == "italic":
-                                            s["italic"] = true
-                                        else:
-                                            if part == "not" and i + 1 < len(parts) and lower(parts[i + 1]) == "italic":
-                                                s["italic"] = false
-                                                i = i + 1
-                                            else:
-                                                if part == "underline":
-                                                    s["underline"] = true
-                                                else:
-                                                    if part == "not" and i + 1 < len(parts) and lower(parts[i + 1]) == "underline":
-                                                        s["underline"] = false
-                                                        i = i + 1
-                                                    else:
-                                                        if part == "blink":
-                                                            s["blink"] = true
-                                                        else:
-                                                            if part == "not" and i + 1 < len(parts) and lower(parts[i + 1]) == "blink":
-                                                                s["blink"] = false
-                                                                i = i + 1
-                                                            else:
-                                                                if part == "reverse":
-                                                                    s["reverse"] = true
-                                                                else:
-                                                                    if part == "not" and i + 1 < len(parts) and lower(parts[i + 1]) == "reverse":
-                                                                        s["reverse"] = false
-                                                                        i = i + 1
-                                                                    else:
-                                                                        if part == "strike":
-                                                                            s["strike"] = true
-                                                                        else:
-                                                                            if part == "not" and i + 1 < len(parts) and lower(parts[i + 1]) == "strike":
-                                                                                s["strike"] = false
-                                                                                i = i + 1
-                                                                            else:
-                                                                                if part == "link":
-                                                                                    if i + 1 < len(parts):
-                                                                                        s["link"] = parts[i + 1]
-                                                                                        i = i + 1
-                                                                                else:
-                                                                                    if part == "default" or part == "none":
-                                                                                        s["color"] = nil
-                                                                                        s["bgcolor"] = nil
-                                                                                    else:
-                                                                                        let c = rich.color.parse_color(part)
-                                                                                        if c != nil:
-                                                                                            if expecting_on:
-                                                                                                s["bgcolor"] = c
-                                                                                                expecting_on = false
-                                                                                            else:
-                                                                                                s["color"] = c
+        elif part == "default" or part == "none":
+            s["color"] = nil
+            s["bgcolor"] = nil
+        else:
+            let c = color.parse_color(part)
+            if c != nil:
+                if expecting_on:
+                    s["bgcolor"] = c
+                    expecting_on = false
+                else:
+                    s["color"] = c
         i = i + 1
     return s
 
@@ -154,39 +115,42 @@ proc parse_style(style_str):
 proc style_ansi_open(style):
     if style == nil:
         return ""
-    let result = ""
+    let parts = []
     if style["bold"]:
-        result = result + BOLD
+        push(parts, BOLD)
     if style["dim"]:
-        result = result + DIM
+        push(parts, DIM)
     if style["italic"]:
-        result = result + ITALIC
+        push(parts, ITALIC)
     if style["underline"]:
-        result = result + UNDERLINE
+        push(parts, UNDERLINE)
     if style["blink"]:
-        result = result + BLINK
+        push(parts, BLINK)
     if style["reverse"]:
-        result = result + REVERSE
+        push(parts, REVERSE)
     if style["strike"]:
-        result = result + STRIKE
+        push(parts, STRIKE)
     if style["color"] != nil:
-        result = result + rich.color.color_ansi_escape(style["color"], false)
+        push(parts, color.color_ansi_escape(style["color"], false))
     if style["bgcolor"] != nil:
-        result = result + rich.color.color_ansi_escape(style["bgcolor"], true)
-    return result
+        push(parts, color.color_ansi_escape(style["bgcolor"], true))
+    if len(parts) == 0:
+        return ""
+    return join(parts, "")
 
 proc style_ansi_close(style):
     if style == nil:
         return ""
-    let result = RESET
-    # Re-apply surrounding style if any (for nested styles, handled by caller)
-    return result
+    return RESET
 
 # Render a string with a style applied
 proc render_styled(text, style):
     if style == nil:
         return text
-    return style_ansi_open(style) + text + style_ansi_close(style)
+    let open_seq = style_ansi_open(style)
+    if open_seq == "":
+        return text
+    return open_seq + text + RESET
 
 # Check if a style is the default/empty style
 proc is_default_style(style):
