@@ -1,0 +1,22 @@
+SAGEBC1
+functions 0
+chunks 2
+chunk
+constants 3
+string 10
+61746f6d69635f6e6577
+number 42
+string 1
+61
+code 13
+0500000000012501060002012c
+endchunk
+chunk
+constants 2
+string 11
+61746f6d69635f6c6f6164
+string 1
+61
+code 11
+05000005000125012a012c
+endchunk
