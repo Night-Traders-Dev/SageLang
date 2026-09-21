@@ -2247,7 +2247,7 @@ SageLang ships with 52 OS/bare-metal development modules across `lib/os/`, `lib/
 | `image/iso.sage` | `import os.image.iso` | ISO 9660 image creation (El Torito bootable CD/DVD) |
 | `metal/core.sage` | `import metal.core` | Bare-metal core primitives for SageMetal VM |
 | `metal/gpio.sage` | `import metal.gpio` | General Purpose I/O for Bare-Metal |
-| `metal/irq.sage` | `import metal.irq` | Interrupt Request Management for Bare-Metal |
+| `metal/irq.sage` | `import metal.irq` | Interrupt Request Management for Bare-Metal. Provides PIC 8259A control, priority/nesting tracking, vector registration (`register_handler`), panic-free handler registration (`register_handler_safe`), and unregistration (`unregister_handler`) |
 | `metal/serial.sage` | `import metal.serial` | UART Serial Port Driver for Bare-Metal. Provides NS16550A/PL011 drivers with timed byte read (`uart_read_timeout`, `pl011_read_timeout`), line read (`uart_readline`, `pl011_readline`), and buffer flush (`uart_flush_rx`, `pl011_flush_rx`) |
 | `metal/timer.sage` | `import metal.timer` | Hardware Timer Driver for Bare-Metal. PIT setup (`timer_init_periodic`, `timer_init_oneshot`), sleeps (`sleep_ms`, `sleep_secs`, `delay_us`), stopwatch/uptime helpers, safe cancel (`timer_cancel_safe`), and mode constants (`TIMER_MODE_PERIODIC`, `TIMER_MODE_ONESHOT`) |
 | `metal/vga.sage` | `import metal.vga` | Early VGA text-mode display, cursor management, and progress bars |

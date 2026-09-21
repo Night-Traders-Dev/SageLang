@@ -588,3 +588,20 @@ Evidence:
 Documentation Impact:
 - Added `v4.2.5` entry to `README.md` Recent Updates section and cleaned up duplicate `v4.2.4` section.
 - Synchronized version marker in `core/docs/Library_Support.md` to `v4.2.5`.
+
+2026-09-20 - [Repository Documentation Synchronization for v4.2.6 Release]
+
+Discovery:
+- `VERSION`, `core/VERSION`, `Library_Support.md`, and `sagelang-book.md` were confirmed at `v4.2.6`.
+- `metal.irq` introduced panic-free vector registration `register_handler_safe(v, f)` (returning `false` if already registered, `true` on success) and `unregister_handler(v)` (safely deleting vector entries).
+- Performance optimizations introduced in `std.regex` (VM C built-ins `slice()`, `join()`, `indexof()`) and Rich TUI (`color.sage`, `style.sage`, `markdown.sage`).
+- Security hardening applied to `sage_string_repeat` (`compiler.c`) against CWE-190/400/789, and `sgvm_compiler`/`sgvm_main` against CWE-400/476/789.
+
+Evidence:
+- `README.md`, `core/docs/SageLang_Guide.md`, `core/docs/sagelang-book.md`.
+- `core/lib/metal/irq.sage`.
+
+Documentation Impact:
+- Added `v4.2.6` entry to `README.md` Recent Updates section.
+- Updated `core/docs/sagelang-book.md` IRQ API table to include `register_handler_safe` and `unregister_handler`.
+- Updated `core/docs/SageLang_Guide.md` Section 9.10 OS Development Libraries table for `metal/irq.sage`.
