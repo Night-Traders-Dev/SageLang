@@ -149,3 +149,7 @@
 ## 2026-09-17 - [Optimized Datetime Timestamp Conversions]
 **Learning:** Year and month iteration loops (`while y < year:` and `while remaining >= days_in_year(...)`) in `to_timestamp` and `from_timestamp` (`core/lib/std/datetime.sage`) introduce $O(Y+M)$ interpreter VM overhead on every date conversion. Replacing loop traversals with Howard Hinnant's $O(1)$ arithmetic civil calendar conversion algorithm eliminates loop overhead completely, yielding a ~12x speedup.
 **Action:** Use $O(1)$ civil calendar arithmetic for timestamp conversions instead of linear year/month loops.
+
+## 2026-09-21 - [Optimized Standard Library Inner Join Operations]
+**Learning:** The nested loop implementation of `inner_join` in `core/lib/std/db.sage` (`std.db`) performed an $O(N \times M)$ scan over the left and right datasets, leading to severe performance bottlenecks on multi-thousand row table joins. Building an $O(M)$ hash index of the `right` dataset keyed by `str(r_item[right_key])` and probing it with $O(1)$ dictionary lookups during an $O(N)$ traversal of the `left` dataset reduces algorithmic complexity to $O(N + M)$, achieving a ~60x performance speedup (execution time dropped from 1016ms to 16.8ms for 1,000 x 2,000 record joins).
+**Action:** Use hash-indexed lookups ($O(N + M)$) instead of nested loop scans ($O(N \times M)$) when joining or correlating datasets in standard library modules.
