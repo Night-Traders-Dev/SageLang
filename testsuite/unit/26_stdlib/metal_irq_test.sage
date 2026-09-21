@@ -2,6 +2,8 @@
 # EXPECT: exception_consts_ok
 # EXPECT: handler_register_ok
 # EXPECT: handler_dispatch_ok
+# EXPECT: handler_safe_ok
+# EXPECT: unregister_ok
 # EXPECT: PASS
 import metal.irq as irq
 
@@ -25,5 +27,18 @@ print "handler_register_ok"
 irq.dispatch(32)
 if fired == true:
     print "handler_dispatch_ok"
+
+# Safe register check (vector 32 is already registered, should return false)
+let safe_res = irq.register_handler_safe(32, my_handler)
+let safe_res2 = irq.register_handler_safe(33, my_handler)
+if safe_res == false and safe_res2 == true:
+    print "handler_safe_ok"
+
+# Unregister handler check
+irq.unregister_handler(32)
+irq.unregister_handler(33)
+let rereg_ok = irq.register_handler_safe(32, my_handler)
+if rereg_ok == true:
+    print "unregister_ok"
 
 print "PASS"
