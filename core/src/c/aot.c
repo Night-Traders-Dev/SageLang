@@ -1031,7 +1031,7 @@ char* aot_compile_program(AotCompiler* aot, Stmt* program) {
     aot_emit(aot, "static SageValue sage_neq(SageValue a, SageValue b) { return sage_bool(!sage_eq(a,b).as.boolean); }");
     aot_emit(aot, "static SageValue sage_gt(SageValue a, SageValue b) { return sage_bool(a.as.number>b.as.number); }");
     aot_emit(aot, "static SageValue sage_lt(SageValue a, SageValue b) { return sage_bool(a.as.number<b.as.number); }");
-    aot_emit(aot, "static SageValue sage_strcat(SageValue a, SageValue b) { if(a.type!=SAGE_STR||b.type!=SAGE_STR) return sage_nil(); size_t la=strlen(a.as.string),lb=strlen(b.as.string); char* r=malloc(la+lb+1); memcpy(r,a.as.string,la); memcpy(r+la,b.as.string,lb); r[la+lb]=0; SageValue v; v.type=SAGE_STR; v.as.string=r; return v; }");
+    aot_emit(aot, "static SageValue sage_strcat(SageValue a, SageValue b) { if(a.type!=SAGE_STR||b.type!=SAGE_STR) return sage_nil(); if(!a.as.string||!b.as.string) return sage_nil(); size_t la=strlen(a.as.string),lb=strlen(b.as.string); if(la>104857600||lb>104857600||la+lb>104857600) return sage_nil(); char* r=malloc(la+lb+1); if(!r) return sage_nil(); memcpy(r,a.as.string,la); memcpy(r+la,b.as.string,lb); r[la+lb]=0; SageValue v; v.type=SAGE_STR; v.as.string=r; return v; }");
     aot_emit(aot, "");
     // Array/Dict/Index runtime support — must come before sage_print_value
     aot_emit(aot, "enum { SAGE_ARR=4, SAGE_DICT=5, SAGE_TUPLE=6, SAGE_NATIVE=7 };");
