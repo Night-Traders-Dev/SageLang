@@ -2477,6 +2477,18 @@ The LSP server provides:
 Both C and self-hosted implementations exist. Compatible with VS Code, Neovim,
 and any editor supporting the Language Server Protocol.
 
+## CommonJS → ESM Transpiler (cjs2esm)
+
+SageLang includes a bundled CommonJS-to-ESM transpiler (`core/lib/transpiler/cjs2esm/`) for automated JavaScript AST transformation.
+
+Commands:
+```bash
+sage core/lib/transpiler/cjs2esm/main.sage convert <input-file> [options]
+sage core/lib/transpiler/cjs2esm/main.sage inspect <file>
+sage core/lib/transpiler/cjs2esm/main.sage check <project-path>
+sage core/lib/transpiler/cjs2esm/main.sage report <project-path>
+```
+
 \newpage
 
 # Build System

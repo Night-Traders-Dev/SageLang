@@ -588,3 +588,18 @@ Evidence:
 Documentation Impact:
 - Added `v4.2.5` entry to `README.md` Recent Updates section and cleaned up duplicate `v4.2.4` section.
 - Synchronized version marker in `core/docs/Library_Support.md` to `v4.2.5`.
+
+2026-09-22 - [v4.2.6 CommonJS → ESM Transpiler Submodule Addition]
+
+Discovery:
+- Integrated `cjs2esm` CommonJS-to-ESM transpiler submodule under `core/lib/transpiler/cjs2esm/`.
+- Provides JS AST lexing/parsing/transforming, converting `require`/`module.exports` to ES `import`/`export`, and CLI tooling (`convert`, `inspect`, `check`, `report`).
+
+Evidence:
+- Commit 2133b64 (`feat: add cjs2esm CommonJS→ESM transpiler to submodule`)
+- `core/lib/transpiler/cjs2esm/main.sage`
+
+Documentation Impact:
+- Updated `README.md` with v4.2.6 release note under Recent Updates.
+- Updated `core/docs/Library_Support.md` support matrix to include `transpiler/cjs2esm/*`.
+- Updated `core/docs/SageLang_Guide.md` and `core/docs/sagelang-book.md` with `cjs2esm` CLI documentation.

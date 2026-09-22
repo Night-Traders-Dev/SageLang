@@ -3007,6 +3007,25 @@ sage-lsp                # Standalone LSP server binary
 }
 ```
 
+### 12.6 CommonJS → ESM Transpiler (cjs2esm)
+
+SageLang includes a bundled CommonJS to ES Module transpiler (`transpiler/cjs2esm`) written in SageLang for automated JavaScript project migration.
+
+**CLI Commands**:
+```bash
+sage core/lib/transpiler/cjs2esm/main.sage convert <input-file> [options]
+sage core/lib/transpiler/cjs2esm/main.sage inspect <file>
+sage core/lib/transpiler/cjs2esm/main.sage check <project-path>
+sage core/lib/transpiler/cjs2esm/main.sage report <project-path>
+```
+
+**Options**:
+- `--out <dir>`: Target output directory for converted files.
+- `--target <version>`: Target Node.js baseline (`node18`, `node20`, `node22`, `node24`).
+- `--mode <mode>`: Transformation mode (`strict`, `compat`, `discord`).
+- `--update-package-json`: Automatically updates `package.json` with `"type": "module"`.
+- `--dry-run`: Performs migration analysis and displays diagnostics without writing to disk.
+
 ---
 
 ### Example Programs
