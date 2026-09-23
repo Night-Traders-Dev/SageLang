@@ -1,5 +1,6 @@
-## Unit test for metal.core RP2040 SIO features
-import metal.core
+# EXPECT: sio_unit_ok
+# EXPECT: PASS
+import metal.core as core
 
 ## Unit test for SIO operations
 proc test_sio():
