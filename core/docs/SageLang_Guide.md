@@ -3007,11 +3007,11 @@ sage-lsp                # Standalone LSP server binary
 }
 ```
 
-### 12.7 CommonJS to ESM Transpiler (`cjs2esm`)
+### 12.7 CommonJS to ESM Transpiler (\`cjs2esm\`)
 
 SageLang includes a bundled, high-performance **CommonJS (CJS) to ECMAScript Modules (ESM)** native transpiler. Written entirely in SageLang, it is optimized for transforming Node.js ecosystems (including Discord.js bots) without external dependencies.
 
-The transpiler preserves runtime execution order, Node.js-specific conveniences (`__dirname`, `__filename`), and implements an AST-first, multi-pass transformation.
+The transpiler preserves runtime execution order, Node.js-specific conveniences (\`__dirname\`, \`__filename\`), and implements an AST-first, multi-pass transformation.
 
 **Commands**:
 
@@ -3022,17 +3022,17 @@ cjs2esm check <project-path>
 cjs2esm report <project-path>
 ```
 
-**Options for `convert`**:
+**Options for \`convert\`**:
 
-* `--out <dir>`: Output directory for transpiled files (defaults to in-place or `./dist`).
-* `--target <node18|node20|node22|node24>`: Target Node.js baseline (default: `node20`).
-* `--mode <strict|compat|discord>`: Transformation mode (default: `compat`).
-  - `strict`: Avoid compatibility shims; fail on unresolved dynamic requires.
-  - `compat`: Automatically inject `createRequire` and fallback shims where needed.
-  - `discord`: Optimized for Discord.js bot architectures; handles dynamic command loaders.
-* `--source-maps`: Generates `.map` source maps alongside converted `.js` files.
-* `--update-package-json`: Updates or injects `"type": "module"` in `package.json`.
-* `--dry-run`: Runs analysis without writing to disk.
+* \`--out <dir>\`: Output directory for transpiled files (defaults to in-place or \`./dist\`).
+* \`--target <node18|node20|node22|node24>\`: Target Node.js baseline (default: \`node20\`).
+* \`--mode <strict|compat|discord>\`: Transformation mode (default: \`compat\`).
+  - \`strict\`: Avoid compatibility shims; fail on unresolved dynamic requires.
+  - \`compat\`: Automatically inject \`createRequire\` and fallback shims where needed.
+  - \`discord\`: Optimized for Discord.js bot architectures; handles dynamic command loaders.
+* \`--source-maps\`: Generates \`.map\` source maps alongside converted \`.js\` files.
+* \`--update-package-json\`: Updates or injects \`"type": "module"\` in \`package.json\`.
+* \`--dry-run\`: Runs analysis without writing to disk.
 
 ---
 
