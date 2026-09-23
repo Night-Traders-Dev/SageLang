@@ -123,7 +123,7 @@ Naively hoisting the `require` calls into imports results in `discord.js` evalua
 **Transpiler Strategy:**
 1. The analyzer inspects whether any executable statements (function invocations, expressions, assignments) precede a `require()` call.
 2. If side-effect ordering is detected:
-   - **`--mode=strict`**: Emits diagnostic `CJS201` (`SEMANTIC_CHANGE` warning).
+   - **`--mode=strict`**: Fails closed with diagnostic `CJS201` when a require is dynamic, cache-dependent, non-leading, or requires a CommonJS runtime/export shim.
    - **`--mode=compat` (default)**: Retains inline execution order using `createRequire`:
      ```js
      import { createRequire } from "node:module";
@@ -482,9 +482,10 @@ Every transformed construct is evaluated against confidence levels:
 * `CJS102` — **Dynamic require preserved via `createRequire`** (`[COMPAT_SHIM]`).
 * `CJS103` — **`__dirname` / `__filename` converted to target specifier** (`[SAFE]`).
 * `CJS104` — **JSON require rewritten with import attributes & synthesized bindings** (`[SAFE]`).
-* `CJS201` — **Hoisting conflict detected: executable statement precedes require** (`[SEMANTIC_CHANGE]`).
-* `CJS202` — **`require.cache` invalidation detected: module unloading unsupported in native ESM** (`[MANUAL_REVIEW]`).
+* `CJS201` — **Strict-mode safety rejection for dynamic, order-sensitive, or shim-dependent constructs** (`[ERROR]`).
+* `CJS202` — **`require.cache` access detected: module unloading or cache inspection remains on `createRequire`** (`[MANUAL_REVIEW]`).
 * `CJS301` — **Dynamic export structure preserved via default export object** (`[COMPAT_SHIM]`).
+* `CJS405` — **Output relocation would change relative `require()` resolution** (`[ERROR]`).
 
 ---
 
@@ -501,10 +502,10 @@ cjs2esm report <project-path>
 
 ### Options & Flags
 
-* `--out=<dir>`: Output directory for transpiled files (defaults to in-place or `./dist`).
+* `--out=<dir>`: Output directory for transpiled files (defaults to in-place or `./dist`). Files containing `require()` are rejected when moved to a different directory until output-path rebasing is implemented.
 * `--target=<node18|node20|node22|node24>`: Target Node.js baseline (default: `node20`).
 * `--mode=<strict|compat|discord>`:
-  - `strict`: Avoid compatibility shims; fail on unresolved dynamic requires.
+  - `strict`: Accept only leading static imports; reject dynamic, order-sensitive, cache-dependent, and shim-dependent constructs.
   - `compat`: Automatically inject `createRequire` and fallback shims where needed.
   - `discord`: Optimized for Discord.js bot architectures; handles dynamic command loaders.
 * `--rewrite-dynamic-imports`: Converts filesystem dynamic `require()` calls into `await import()`.
@@ -542,17 +543,17 @@ Bot repositories frequently store tokens and keys in local configuration files o
 
 * **Token Redaction**: Any token matching regex patterns for Discord Bot tokens (`[MNO][A-Za-z\d]{23,}\.[\w-]{6}\.[\w-]{27,}`) is stripped from diagnostic outputs and reports.
 * **Non-Execution**: The transpiler parses ASTs statically and never evaluates or executes project source code at transform time.
-* **Credential Isolation**: `.env` and secret configuration files are excluded from diagnostic output.
+* **Credential Isolation**: Planned. `.env` and secret configuration files are not yet specially excluded from diagnostic output.
 
 ---
 
 ## 10. Phased Implementation Roadmap
 
 ### Phase 1: Lexer, Parser & AST Foundation (in SageLang)
-- [ ] Implement `scanner.sage` with ECMAScript 2026 lexical grammar.
-- [ ] Implement Pratt expression parser and recursive descent statement parser in SageLang.
-- [ ] Implement AST node hierarchy and visitor/mutator interfaces.
-- [ ] Verify parser on Discord.js bot code samples.
+- [x] Implement a byte-accurate JavaScript scanner with template, regex, comment, and ASI token handling.
+- [x] Implement Pratt expression parsing and top-level statement splitting in SageLang.
+- [x] Add foundational AST declaration nodes and visitor interfaces.
+- [ ] Complete ESTree-compatible AST construction and mutation.
 
 ### Phase 2: Scope Analysis & CommonJS Classifier
 - [ ] Implement lexical scope stack tracking `var`, `let`, `const`, `function`, and parameters.
@@ -560,29 +561,30 @@ Bot repositories frequently store tokens and keys in local configuration files o
 - [ ] Implement `cjs_usage.sage` to tag module classifications (`PURE_CJS`, `DYNAMIC_EXPORTS`, etc.).
 
 ### Phase 3: Core Import & Export Transformations
-- [ ] Implement static require conversion (`const x = require("x")`, destructured, aliased).
-- [ ] Implement export passes (`module.exports = ...`, `exports.key = ...`, object literals).
-- [ ] Implement JSON module handling (default import + import attributes + destructuring synthesis).
-- [ ] Implement Node runtime global replacements (`__dirname`, `__filename`, `require.resolve`).
+- [x] Implement leading static require conversion (`const x = require("x")`, destructured, property access).
+- [ ] Complete semantic export passes (`module.exports = ...`, `exports.key = ...`, object literals, aliases, and wholesale reassignment).
+- [x] Implement JSON module handling (default import + import attributes + destructuring synthesis).
+- [x] Implement conservative Node runtime global replacements (`__dirname`, `__filename`, `require.main`).
 
 ### Phase 4: Dynamic Requires, Shims & Hoisting Guards
-- [ ] Detect statement-preceded requires (hoisting guard) and inject `createRequire` where order matters.
-- [ ] Implement dynamic require fallback using `createRequire(import.meta.url)`.
-- [ ] Implement entry-point detection (`require.main === module`) matching `--target`.
-- [ ] Implement path resolver appending `.js` extensions and resolving directory indexes.
+- [x] Detect statement-preceded requires and preserve order with `createRequire`; strict mode fails with `CJS201`.
+- [x] Implement dynamic require fallback using `createRequire(import.meta.url)`.
+- [x] Implement conservative entry-point detection (`require.main === module`).
+- [x] Implement relative path resolution for extensions, `package.json` main fields, and directory indexes.
+- [ ] Add complete flow-aware hoisting and export analysis.
 
 ### Phase 5: Code Generator & Source Map Emitter
 - [ ] Implement `codegen.sage` formatting output AST back to JavaScript.
-- [ ] Implement Base64 VLQ source map encoder generating spec-compliant `.map` files.
-- [ ] Ensure comments and formatting trivia are preserved on untouched code sections.
+- [x] Implement Base64 VLQ source map encoder generating `.map` files.
+- [x] Preserve untouched source text and line-level mappings.
 
 ### Phase 6: Project Orchestrator & CLI
-- [ ] Implement CLI argument parser and filesystem workspace traversal in SageLang.
-- [ ] Implement `package.json` updater (`"type": "module"`).
-- [ ] Implement diagnostic engine with secret redaction.
-- [ ] Implement JSON and Markdown migration summary reports (`cjs2esm-report.md`).
+- [x] Implement CLI argument parsing and recursive filesystem workspace traversal in SageLang.
+- [x] Implement `package.json` updater (`"type": "module"`).
+- [x] Implement diagnostic engine with secret redaction.
+- [x] Implement Markdown migration summary reports (`cjs2esm-report.md`).
 
 ### Phase 7: Discord.js Integration & Differential Testing
-- [ ] Set up offline test harness running Node against converted fixtures.
-- [ ] Verify `SlashCommandBuilder`, `EmbedBuilder`, `Routes`, and event handlers.
+- [x] Run Node differential checks for dependency-free CJS/ESM runtime fixtures.
+- [ ] Add Discord.js mock packages for `SlashCommandBuilder`, `EmbedBuilder`, `Routes`, and event handlers.
 - [ ] Run end-to-end migration on a full, multi-command real-world CommonJS Discord bot.
