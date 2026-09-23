@@ -15,7 +15,7 @@ Verified by importing all 296 modules from a neutral working directory.
 
 arrays, assert, chat/*, crypto/*, dicts, iter, json, math, option, perf,
 rich/*, stats, std/* (except std.enum / std.trait on `sage`), strings,
-string, sys, utils, transpiler/lily/*, transpiler/base,
+string, sys, utils, transpiler/lily/*, transpiler/cjs2esm/*, transpiler/base,
 agent/*, blockchain/* (see exclusions), net/*, android/*, cuda/*,
 discord/*, gc/*, llm/*, metal/*, mips/*
 
