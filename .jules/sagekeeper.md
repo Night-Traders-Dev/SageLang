@@ -588,3 +588,18 @@ Evidence:
 Documentation Impact:
 - Added `v4.2.5` entry to `README.md` Recent Updates section and cleaned up duplicate `v4.2.4` section.
 - Synchronized version marker in `core/docs/Library_Support.md` to `v4.2.5`.
+
+2026-09-23 - [Documentation Update: Developer Tooling and Transpiler]
+
+Discovery:
+- Part 12 (Developer Tooling) in `SageLang_Guide.md` had a numbering error: `12.5 OIS Package Management` and `12.5 Language Server Protocol (LSP)`.
+- The new CommonJS to ESM native transpiler (`cjs2esm`) in `core/lib/transpiler/cjs2esm` was undocumented in the developer tooling section.
+
+Evidence:
+- `core/docs/SageLang_Guide.md` (Part 12).
+- `core/lib/transpiler/cjs2esm/main.sage` which implements `convert`, `inspect`, `check`, and `report` commands with multiple options like `--out`, `--target`, and `--mode`.
+- `core/docs/commonjs_to_esm_transpiler_plan.md`.
+
+Documentation Impact:
+- Renumbered sections 12.4 to 12.6.
+- Added new section `12.7 CommonJS to ESM Transpiler (cjs2esm)` to `SageLang_Guide.md` including its commands and options to provide accurate coverage of current developer tooling.

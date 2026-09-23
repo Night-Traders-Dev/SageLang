@@ -2953,7 +2953,7 @@ sage lint program.sage
 - `[S004]`: Warns about trailing semicolons (not used in SageLang).
 - `[S005]`: Warns when multiple statements are on a single line separated by semicolons.
 
-### 12.5 OIS Package Management
+### 12.4 OIS Package Management
 
 SageLang includes a package manager accessed via the `--ois` flag. Commands include:
 - `sage --ois install <pkg>`
@@ -2968,7 +2968,7 @@ program.sage:12: E003 line too long (exceeds 120 characters)
 program.sage:20: E001 Inconsistent indentation
 ```
 
-### 12.4 Syntax Highlighting
+### 12.5 Syntax Highlighting
 
 SageLang provides editor support via TextMate grammars:
 
@@ -2981,7 +2981,7 @@ SageLang provides editor support via TextMate grammars:
 2. Restart VSCode
 3. Open any `.sage` file to see syntax highlighting
 
-### 12.5 Language Server Protocol (LSP)
+### 12.6 Language Server Protocol (LSP)
 
 The LSP server provides IDE-like features for any editor that supports the Language Server Protocol.
 
@@ -3006,6 +3006,33 @@ sage-lsp                # Standalone LSP server binary
     "sage.lsp.path": "/path/to/sage-lsp"
 }
 ```
+
+### 12.7 CommonJS to ESM Transpiler (\`cjs2esm\`)
+
+SageLang includes a bundled, high-performance **CommonJS (CJS) to ECMAScript Modules (ESM)** native transpiler. Written entirely in SageLang, it is optimized for transforming Node.js ecosystems (including Discord.js bots) without external dependencies.
+
+The transpiler preserves runtime execution order, Node.js-specific conveniences (\`__dirname\`, \`__filename\`), and implements an AST-first, multi-pass transformation.
+
+**Commands**:
+
+```bash
+cjs2esm convert <input-path> [options]
+cjs2esm inspect <file-path>
+cjs2esm check <project-path>
+cjs2esm report <project-path>
+```
+
+**Options for \`convert\`**:
+
+* \`--out <dir>\`: Output directory for transpiled files (defaults to in-place or \`./dist\`).
+* \`--target <node18|node20|node22|node24>\`: Target Node.js baseline (default: \`node20\`).
+* \`--mode <strict|compat|discord>\`: Transformation mode (default: \`compat\`).
+  - \`strict\`: Avoid compatibility shims; fail on unresolved dynamic requires.
+  - \`compat\`: Automatically inject \`createRequire\` and fallback shims where needed.
+  - \`discord\`: Optimized for Discord.js bot architectures; handles dynamic command loaders.
+* \`--source-maps\`: Generates \`.map\` source maps alongside converted \`.js\` files.
+* \`--update-package-json\`: Updates or injects \`"type": "module"\` in \`package.json\`.
+* \`--dry-run\`: Runs analysis without writing to disk.
 
 ---
 
