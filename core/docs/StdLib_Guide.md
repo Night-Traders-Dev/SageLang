@@ -576,10 +576,29 @@ print interop.TYPE_DOUBLE     # double
 
 ---
 
+## CommonJS → ESM Transpiler (`cjs2esm`)
+
+```sage
+from cjs2esm.converter import convert_cjs_text
+
+let source = "const fs = require('fs'); module.exports = fs;"
+let result = convert_cjs_text(source, "node20", "compat")
+print result["code"]
+```
+
+Entry point script `core/lib/transpiler/cjs2esm/main.sage` provides CLI command routing:
+- `cjs2esm convert <input>` — Convert CJS file to ESM (`--out`, `--target`, `--mode`, `--source-maps`, `--update-package-json`, `--dry-run`)
+- `cjs2esm inspect <file>` — Inspect CJS/ESM module file
+- `cjs2esm check <path>` — Check project transformation compatibility
+- `cjs2esm report <path>` — Generate migration report
+
+---
+
 ## Module Reference
 
 | Module | Import | Key Functions |
 |--------|--------|---------------|
+| `cjs2esm` | `import cjs2esm.converter` | `convert_cjs_text`, `convert_cjs_file`, `cjs_redact_secrets` |
 | `regex` | `import std.regex` | `search`, `full_match`, `test`, `find_all`, `replace_all`, `split_by`, `compile` |
 | `datetime` | `import std.datetime` | `create`, `to_iso`, `parse_iso`, `add_days`, `diff_seconds`, `weekday_name`, `is_leap_year` |
 | `log` | `import std.log` | `create`, `info`, `error`, `warn`, `debug`, `fatal`, `add_handler`, `child`, `with_field` |
