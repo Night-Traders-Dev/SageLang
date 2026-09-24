@@ -2558,6 +2558,15 @@ proc exec_program_compiled(global_env, stmts):
         k = k + 1
     return nil
 
+proc interpreter_call_depth():
+    return g_depth
+
+proc module_cache_names():
+    return dict_keys(g_module_cache)
+
+proc module_search_paths():
+    return g_module_paths
+
 # -----------------------------------------
 # Create a new interpreter (returns a global env dict)
 # -----------------------------------------

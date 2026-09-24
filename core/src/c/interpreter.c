@@ -1153,6 +1153,18 @@ static Value gc_stats_native(int argCount, Value* args) {
     dict_set(&dict, "objects_freed", val_number(stats.objects_freed));
     dict_set(&dict, "next_gc", val_number(stats.next_gc));
     dict_set(&dict, "next_gc_bytes", val_number(stats.next_gc_bytes));
+    dict_set(&dict, "objects_since_gc", val_number(gc.objects_since_gc));
+    dict_set(&dict, "bytes_freed", val_number(gc.bytes_freed));
+    dict_set(&dict, "marked_count", val_number(gc.marked_count));
+    dict_set(&dict, "freed_count", val_number(gc.freed_count));
+    dict_set(&dict, "max_pause_us", val_number(gc.max_pause_ns / 1000));
+    dict_set(&dict, "last_root_scan_us", val_number(gc.last_root_scan_ns / 1000));
+    dict_set(&dict, "last_remark_us", val_number(gc.last_remark_ns / 1000));
+    dict_set(&dict, "last_sweep_us", val_number(gc.last_sweep_ns / 1000));
+    dict_set(&dict, "phase", val_number(gc.phase));
+    dict_set(&dict, "barrier_active", val_bool(atomic_load_explicit(&gc.barrier_active, memory_order_acquire)));
+    dict_set(&dict, "enabled", val_bool(gc.enabled));
+    dict_set(&dict, "mode", val_string(gc.mode == GC_MODE_ORC ? "orc" : (gc.mode == GC_MODE_ARC ? "arc" : "tracing")));
     
     gc_unpin();
     return dict;
@@ -1181,6 +1193,13 @@ static Value gc_mode_native(int argCount, Value* args) {
     if (gc.mode == GC_MODE_ORC) return val_string("orc");
     if (gc.mode == GC_MODE_ARC) return val_string("arc");
     return val_string("tracing");
+}
+
+static Value gc_set_tracing_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    gc_set_mode(GC_MODE_TRACING);
+    gc_enable();
+    return val_nil();
 }
 
 static Value gc_set_arc_native(int argCount, Value* args) {
@@ -2602,6 +2621,49 @@ static Value path_ext_native(int argCount, Value* args) {
     return val_string(dot);
 }
 
+static Value repl_getcwd_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    char cwd[4096];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) return val_string(".");
+    return val_string(cwd);
+}
+
+static Value repl_getenv_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) return val_nil();
+    const char* value = getenv(AS_STRING(args[0]));
+    return value == NULL ? val_nil() : val_string(value);
+}
+
+static Value repl_cpu_time_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_number((double)clock() / CLOCKS_PER_SEC);
+}
+
+static Value repl_chdir_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) return val_bool(0);
+    return val_bool(chdir(AS_STRING(args[0])) == 0);
+}
+
+static int repl_safe_command(const char* cmd) {
+    if (cmd == NULL || cmd[0] == '\0') return 0;
+    while (*cmd != '\0' && isspace((unsigned char)*cmd)) cmd++;
+    if (*cmd == '-') return 0;
+    for (const char* p = cmd; *p != '\0'; p++) {
+        if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ' && *p != '\'') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static Value repl_exec_native(int argCount, Value* args) {
+    if (argCount != 1 || !IS_STRING(args[0])) return val_number(-1);
+    const char* cmd = AS_STRING(args[0]);
+    if (!repl_safe_command(cmd)) return val_number(-1);
+    return val_number(system(cmd));
+}
+
 static Value path_exists_native(int argCount, Value* args) {
     if (argCount != 1 || !IS_STRING(args[0])) return val_bool(0);
     return val_bool(access(AS_STRING(args[0]), F_OK) == 0);
@@ -2707,6 +2769,7 @@ void init_stdlib(Env* env) {
     env_define_const(env, "gc_enable", 9, val_native(gc_enable_native));
     env_define_const(env, "gc_disable", 10, val_native(gc_disable_native));
     env_define_const(env, "gc_mode", 7, val_native(gc_mode_native));
+    env_define_const(env, "gc_set_tracing", sizeof("gc_set_tracing") - 1, val_native(gc_set_tracing_native));
     env_define_const(env, "gc_set_arc", 10, val_native(gc_set_arc_native));
     env_define_const(env, "gc_set_orc", 10, val_native(gc_set_orc_native));
 
@@ -2746,6 +2809,11 @@ void init_stdlib(Env* env) {
     env_define_const(env, "path_exists", 11, val_native(path_exists_native));
     env_define_const(env, "path_is_dir", 11, val_native(path_is_dir_native));
     env_define_const(env, "path_is_file", 12, val_native(path_is_file_native));
+    env_define_const(env, "repl_getcwd", sizeof("repl_getcwd") - 1, val_native(repl_getcwd_native));
+    env_define_const(env, "repl_getenv", sizeof("repl_getenv") - 1, val_native(repl_getenv_native));
+    env_define_const(env, "repl_cpu_time", sizeof("repl_cpu_time") - 1, val_native(repl_cpu_time_native));
+    env_define_const(env, "repl_chdir", sizeof("repl_chdir") - 1, val_native(repl_chdir_native));
+    env_define_const(env, "repl_exec", sizeof("repl_exec") - 1, val_native(repl_exec_native));
 
     // Phase 9: Memory operations
     env_define_const(env, "mem_alloc", 9, val_native(mem_alloc_native));

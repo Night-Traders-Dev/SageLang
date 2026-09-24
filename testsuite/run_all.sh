@@ -190,7 +190,9 @@ run_compiler() {
     fi
 
     # REPL sanity
-    if printf ":quit\n" | (cd "$CORE_DIR" && "$SAGE" --repl 2>&1) | grep -q "Sage REPL"; then
+    local c_repl_output
+    c_repl_output="$(printf ":help\n:stats\n:quit\n" | (cd "$CORE_DIR" && "$SAGE" --repl 2>&1) || true)"
+    if [[ "$c_repl_output" == *"Sage REPL"* && "$c_repl_output" == *":stats"* ]]; then
         ok "REPL banner"; _p=$((_p+1))
     else
         fail "REPL banner"; _f=$((_f+1))
@@ -237,6 +239,13 @@ run_selfhost() {
     _sh_test "Errors"           "test_errors.sage"
     _sh_test "LSP"              "test_lsp.sage"
     _sh_test "Sage CLI"         "test_sage_cli.sage"
+    local repl_output
+    repl_output="$(printf ':help\nlet repl_value = 6\nrepl_value + 1\n:stats\nif true:\n    print "repl-block"\n\n:quit\n' | (cd "$SAGE_SRC" && "$SAGE" sage.sage --repl 2>&1) || true)"
+    if [[ "$repl_output" == *"Sage REPL Commands"* && "$repl_output" == *"GC Statistics"* && "$repl_output" == *"repl-block"* && "$repl_output" == *$'\n7\n'* && "$repl_output" != *"Unknown REPL command"* ]]; then
+        ok "Self-hosted REPL"; _p=$((_p+1))
+    else
+        fail "Self-hosted REPL"; _f=$((_f+1))
+    fi
     _sh_test "Diagnostic"       "test_diagnostic.sage"
     _sh_test "GC"               "test_gc.sage"
     _sh_test "Heartbeat"        "test_heartbeat.sage"

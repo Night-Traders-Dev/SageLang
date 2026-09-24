@@ -21,8 +21,8 @@ import safety
 import gc
 import lsp
 from parser import parse_source, parse_source_file
-from interpreter import new_interpreter, run_source, exec_program, set_error_context
-from interpreter import eval_expr, value_to_string
+from interpreter import new_interpreter, run_source, exec_program, exec_program_dynamic, set_error_context
+from interpreter import eval_expr, value_to_string, interpreter_call_depth, module_cache_names, module_search_paths
 from ast import STMT_EXPRESSION, EXPR_SET, EXPR_INDEX_SET
 
 # ============================================================================
@@ -759,40 +759,557 @@ proc repl_chunk_complete(src):
         i = i + 1
     if in_str:
         return false
-    if paren > 0 or bracket > 0 or brace > 0:
+    if paren < 0 or bracket < 0 or brace < 0:
+        return true
+    if paren != 0 or bracket != 0 or brace != 0:
         return false
     if last_sig == ":":
         return false
     return true
 
+proc repl_starts_block(line):
+    let text = strip(line)
+    if len(text) == 0:
+        return false
+    return text[len(text) - 1] == ":"
+
+proc repl_command_arg(line, command):
+    let command_len = len(command)
+    if len(line) < command_len:
+        return nil
+    if slice(line, 0, command_len) != command:
+        return nil
+    if len(line) == command_len:
+        return ""
+    if line[command_len] != " " and line[command_len] != chr(9):
+        return nil
+    var start = command_len
+    while start < len(line):
+        if line[start] != " " and line[start] != chr(9):
+            break
+        start = start + 1
+    return slice(line, start, len(line))
+
+proc repl_stat(stats, key, fallback):
+    if dict_has(stats, key):
+        return stats[key]
+    return fallback
+
+proc repl_repr(value):
+    if type(value) == "string":
+        return "\"" + value + "\""
+    return value_to_string(value)
+
+proc repl_print_error(error):
+    let message = str(error)
+    if startswith(message, "error:"):
+        print message
+    else:
+        print "Error: " + message
+
+proc repl_print_help():
+    print "Sage REPL Commands:"
+    print ""
+    print "  Session:"
+    print "    :help              Show this help message"
+    print "    :quit / :exit      Exit the REPL (also Ctrl-D)"
+    print "    :reset             Reset session globals"
+    print "    :clear             Clear the screen"
+    print "    :history [n]       Show last n entries (default: 20)"
+    print "    :search <pattern>  Search history for a pattern"
+    print "    :clear-history     Clear session history"
+    print "    :save <file>       Save session history to a Sage file"
+    print "    :edit [file]       Edit a file (or a temporary buffer) and execute it"
+    print ""
+    print "  Inspection:"
+    print "    :vars [prefix]     List bindings, optionally filtered by prefix"
+    print "    :type <expr>       Evaluate expression and show its type"
+    print "    :doc <name>        Show documentation for a function or keyword"
+    print "    :ast <code>        Show parsed AST for an expression or statement"
+    print "    :env               Show the full scope chain"
+    print "    :modules           List loaded modules and search paths"
+    print ""
+    print "  Compilation:"
+    print "    :emit-c <code>     Show C backend output for a statement"
+    print "    :emit-llvm <code>  Show LLVM IR output for a statement"
+    print "    :emit-kotlin <code> Show Kotlin backend output for a statement"
+    print ""
+    print "  Performance:"
+    print "    :time <expr>       Time a single expression evaluation"
+    print "    :bench <n> <expr>  Run expression n times and show stats"
+    print ""
+    print "  System:"
+    print "    :pwd               Print the current working directory"
+    print "    :cd <dir>          Change the current working directory"
+    print "    :ls [dir]          List files in a directory"
+    print "    :cat <file>        Print the contents of a file"
+    print "    :sh <command>      Execute a shell command"
+    print "    :gc                Run garbage collection and print stats"
+    print "    :stats             Print interpreter and GC statistics"
+    print "    :runtime [mode]    Show or set the self-hosted runtime"
+    print "    :version           Show version, architecture, and build type"
+    print ""
+    print "Multi-line blocks are detected when a line ends with ':'."
+    print "End a block with an empty line."
+
+proc repl_print_stats():
+    let stats = gc_stats()
+    if stats == nil:
+        print "GC statistics are unavailable."
+        return
+    let mode = repl_stat(stats, "mode", "tracing")
+    let mode_label = "Tracing"
+    if mode == "arc":
+        mode_label = "ARC"
+    elif mode == "orc":
+        mode_label = "ORC"
+    print "=== GC Statistics (" + mode_label + " mode) ==="
+    print "Collections run:        " + str(repl_stat(stats, "collections", 0))
+    print "Objects allocated:      " + str(repl_stat(stats, "num_objects", 0))
+    print "Objects since GC:       " + str(repl_stat(stats, "objects_since_gc", 0))
+    print "Total bytes allocated:  " + str(repl_stat(stats, "bytes_allocated", 0))
+    print "Total bytes freed:      " + str(repl_stat(stats, "bytes_freed", 0))
+    print "Current memory usage:   " + str(repl_stat(stats, "current_bytes", 0)) + " bytes"
+    print "Marked in last cycle:   " + str(repl_stat(stats, "marked_count", 0))
+    print "Freed in last cycle:    " + str(repl_stat(stats, "freed_count", 0))
+    print "Max STW pause:          " + str(repl_stat(stats, "max_pause_us", 0)) + " us"
+    print "Last root scan:         " + str(repl_stat(stats, "last_root_scan_us", 0)) + " us"
+    print "Last remark:            " + str(repl_stat(stats, "last_remark_us", 0)) + " us"
+    print "Last sweep:             " + str(repl_stat(stats, "last_sweep_us", 0)) + " us"
+    print "Current phase:          " + str(repl_stat(stats, "phase", 0))
+    let barrier = repl_stat(stats, "barrier_active", false)
+    if barrier:
+        print "Write barrier active:   yes"
+    else:
+        print "Write barrier active:   no"
+    let enabled = repl_stat(stats, "enabled", false)
+    if enabled:
+        print "GC enabled:             yes"
+    else:
+        print "GC enabled:             no"
+    print "Interpreter Stack Depth: " + str(interpreter_call_depth())
+    print "Process CPU Time:        " + str(repl_cpu_time()) + " seconds"
+    print "================================"
+
+proc repl_print_gc_stats():
+    gc_collect()
+    repl_print_stats()
+
+proc repl_print_bindings(genv, prefix):
+    if prefix == nil:
+        prefix = ""
+    let values = genv["vals"]
+    let names = dict_keys(values)
+    let shown = 0
+    for name in names:
+        if prefix == "" or startswith(name, prefix):
+            print name + " = " + repl_repr(values[name])
+            shown = shown + 1
+    if shown == 0:
+        if prefix != "":
+            print "No bindings match prefix \"" + prefix + "\"."
+        else:
+            print "No bindings in the current REPL scope."
+    else:
+        if shown == 1:
+            print "1 binding shown."
+        else:
+            print str(shown) + " bindings shown."
+
+proc repl_print_env(genv):
+    let current = genv
+    let level = 0
+    while current != nil:
+        let names = dict_keys(current["vals"])
+        print "Scope " + str(level) + ": " + str(len(names)) + " bindings"
+        current = current["parent"]
+        level = level + 1
+
+proc repl_eval_expression(genv, source):
+    set_error_context(source, "<repl>")
+    let stmts = parse_source_file(source, "<repl>")
+    if len(stmts) != 1 or stmts[0].type != STMT_EXPRESSION:
+        raise "Expression did not produce a value."
+    let expr = stmts[0].expression
+    if expr.type == EXPR_SET or expr.type == EXPR_INDEX_SET:
+        raise "Expression did not produce a value."
+    return eval_expr(expr, genv)
+
 proc repl_run_chunk(genv, source):
     set_error_context(source, "<repl>")
     try:
-        let stmts = parse_source(source)
-        # REPL convenience: a lone expression echoes its value (like the C
-        # host REPL). Assignments and statements stay silent.
-        if len(stmts) == 1 and stmts[0].type == STMT_EXPRESSION:
-            let expr = stmts[0].expression
-            if expr.type != EXPR_SET and expr.type != EXPR_INDEX_SET:
-                let v = eval_expr(expr, genv)
-                if v != nil:
-                    print value_to_string(v)
-                return
-        exec_program(genv, stmts)
+        let stmts = parse_source_file(source, "<repl>")
+        let index = 0
+        while index < len(stmts):
+            let stmt = stmts[index]
+            if stmt.type == STMT_EXPRESSION:
+                let expr = stmt.expression
+                let value = eval_expr(expr, genv)
+                if value != nil:
+                    print repl_repr(value)
+            else:
+                let one = [stmt]
+                if genv["repl_runtime_mode"] == "ast":
+                    exec_program_dynamic(genv, one)
+                else:
+                    exec_program(genv, one)
+            index = index + 1
+        return nil
     catch e:
-        # Keep the REPL alive on user errors; formatted diagnostics already
-        # carry their own lowercase severity.
-        let msg = str(e)
-        if len(msg) >= 6 and msg[0:6] == "error:":
-            print msg
+        repl_print_error(e)
+
+proc repl_handle_command(line, genv, history):
+    if line == ":quit" or line == ":exit" or line == ":q":
+        return 2
+    if line == "version":
+        print_version()
+        return 1
+
+    var arg = repl_command_arg(line, ":help")
+    if arg != nil:
+        repl_print_help()
+        return 1
+
+    arg = repl_command_arg(line, ":stats")
+    if arg != nil:
+        repl_print_stats()
+        return 1
+
+    arg = repl_command_arg(line, ":gc")
+    if arg != nil:
+        repl_print_gc_stats()
+        return 1
+
+    arg = repl_command_arg(line, ":version")
+    if arg != nil:
+        print_version()
+        return 1
+
+    arg = repl_command_arg(line, ":reset")
+    if arg != nil:
+        let fresh = new_interpreter()
+        genv["vals"] = fresh["vals"]
+        genv["parent"] = fresh["parent"]
+        print "REPL session reset."
+        return 1
+
+    arg = repl_command_arg(line, ":pwd")
+    if arg != nil:
+        print(repl_getcwd())
+        return 1
+
+    arg = repl_command_arg(line, ":cd")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :cd <dir>"
+        elif repl_chdir(arg):
+            print(repl_getcwd())
         else:
-            print "Error: " + msg
+            print "chdir: unable to change directory"
+        return 1
+
+    arg = repl_command_arg(line, ":ls")
+    if arg != nil:
+        var directory = arg
+        if directory == "":
+            directory = "."
+        let entries = io.listdir(directory)
+        if entries == nil:
+            print "ls: unable to read directory " + directory
+        else:
+            for entry in entries:
+                print entry
+        return 1
+
+    arg = repl_command_arg(line, ":cat")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :cat <file>"
+        else:
+            let content = io.readfile(arg)
+            if content == nil:
+                print "cat: unable to read " + arg
+            else:
+                print content
+        return 1
+
+    arg = repl_command_arg(line, ":sh")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :sh <command>"
+        else:
+            let status = repl_exec(arg)
+            if status < 0:
+                print "Security Error: Unsafe characters in command"
+        return 1
+
+    arg = repl_command_arg(line, ":vars")
+    if arg != nil:
+        repl_print_bindings(genv, arg)
+        return 1
+
+    arg = repl_command_arg(line, ":type")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :type <expr>"
+        else:
+            let value = repl_eval_expression(genv, arg)
+            print type(value) + " = " + repl_repr(value)
+        return 1
+
+    arg = repl_command_arg(line, ":doc")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :doc <name>"
+        elif arg == "gc":
+            print "Garbage collection controls and statistics."
+        elif arg == "import":
+            print "Load a Sage module from the configured module search paths."
+        else:
+            print "No documentation found for \"" + arg + "\"."
+        return 1
+
+    arg = repl_command_arg(line, ":clear")
+    if arg != nil:
+        print "\x1b[2J\x1b[H"
+        return 1
+
+    arg = repl_command_arg(line, ":history")
+    if arg != nil:
+        var count = 20
+        if arg != "":
+            count = tonumber(arg)
+            if count <= 0:
+                count = 20
+        var start = len(history) - count
+        if start < 0:
+            start = 0
+        var index = start
+        while index < len(history):
+            print "  " + str(index + 1) + "  " + history[index]
+            index = index + 1
+        if len(history) == 0:
+            print "No history."
+        return 1
+
+    arg = repl_command_arg(line, ":search")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :search <pattern>"
+        else:
+            var matches = 0
+            var index = 0
+            while index < len(history):
+                if contains(history[index], arg):
+                    print "  " + str(index + 1) + "  " + history[index]
+                    matches = matches + 1
+                index = index + 1
+            if matches == 0:
+                print "No matches found for \"" + arg + "\"."
+            else:
+                print str(matches) + " matches found."
+        return 1
+
+    arg = repl_command_arg(line, ":clear-history")
+    if arg != nil:
+        while len(history) > 0:
+            pop(history)
+        print "History cleared."
+        return 1
+
+    arg = repl_command_arg(line, ":save")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :save <file>"
+        else:
+            var content = ""
+            for entry in history:
+                if len(entry) > 0 and entry[0] != ":":
+                    if content != "":
+                        content = content + chr(10)
+                    content = content + entry
+            io.writefile(arg, content)
+            print "Saved session history to " + arg
+        return 1
+
+    arg = repl_command_arg(line, ":edit")
+    if arg != nil:
+        if arg == "":
+            let editor = repl_getenv("EDITOR")
+            if editor == nil:
+                editor = repl_getenv("VISUAL")
+            if editor == nil:
+                editor = "vi"
+            arg = "/tmp/sage_repl_edit_" + str(clock()) + ".sage"
+            io.writefile(arg, "")
+        let editor = repl_getenv("EDITOR")
+        if editor == nil:
+            editor = repl_getenv("VISUAL")
+        if editor == nil:
+            editor = "vi"
+        if contains(arg, "'") or contains(editor, "'"):
+            print "Security Error: Unsafe characters in editor path"
+            return 1
+        let status = repl_exec(editor + " '" + arg + "'")
+        if status != 0:
+            print "Editor exited with status " + str(status)
+        else:
+            let source = io.readfile(arg)
+            if source != nil:
+                repl_run_chunk(genv, source)
+            if startswith(arg, "/tmp/sage_repl_edit_"):
+                io.remove(arg)
+        return 1
+
+    arg = repl_command_arg(line, ":env")
+    if arg != nil:
+        repl_print_env(genv)
+        return 1
+
+    arg = repl_command_arg(line, ":modules")
+    if arg != nil:
+        let names = module_cache_names()
+        if len(names) == 0:
+            print "No modules loaded."
+        else:
+            for name in names:
+                print "  " + name
+            if len(names) == 1:
+                print "1 module in cache."
+            else:
+                print str(len(names)) + " modules in cache."
+        let paths = module_search_paths()
+        if len(paths) > 0:
+            print "Search paths:"
+            for path in paths:
+                print "  " + path
+        return 1
+
+    arg = repl_command_arg(line, ":load")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :load <file>"
+        else:
+            let source = io.readfile(arg)
+            if source == nil:
+                print "sage repl: could not open \"" + arg + "\""
+            else:
+                repl_run_chunk(genv, source)
+        return 1
+
+    arg = repl_command_arg(line, ":ast")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :ast <code>"
+        else:
+            let stmts = parse_source_file(arg, "<repl-ast>")
+            var index = 0
+            while index < len(stmts):
+                print value_to_string(stmts[index])
+                index = index + 1
+        return 1
+
+    arg = repl_command_arg(line, ":emit-c")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :emit-c <code>"
+        else:
+            let stmts = parse_source_file(arg, "<repl>")
+            print compiler.compile_to_c(stmts)
+        return 1
+
+    arg = repl_command_arg(line, ":emit-llvm")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :emit-llvm <code>"
+        else:
+            let stmts = parse_source_file(arg, "<repl>")
+            print llvm_backend.compile_to_llvm_ir(stmts)
+        return 1
+
+    arg = repl_command_arg(line, ":emit-kotlin")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :emit-kotlin <code>"
+        else:
+            print "Kotlin backend output is unavailable in the self-hosted REPL."
+        return 1
+
+    arg = repl_command_arg(line, ":time")
+    if arg != nil:
+        if arg == "":
+            print "Usage: :time <expr>"
+        else:
+            let started = clock()
+            let value = repl_eval_expression(genv, arg)
+            let elapsed = clock() - started
+            if value != nil:
+                print repl_repr(value)
+            print "  " + str(elapsed * 1000000) + " us"
+        return 1
+
+    arg = repl_command_arg(line, ":bench")
+    if arg != nil:
+        let parts = split(strip(arg), " ")
+        if len(parts) < 2:
+            print "Usage: :bench <n> <expr>"
+        else:
+            var count = tonumber(parts[0])
+            if count <= 0:
+                print "Usage: :bench <n> <expr>"
+            else:
+                if count > 1000000:
+                    count = 1000000
+                var expression = ""
+                var part_index = 1
+                while part_index < len(parts):
+                    if expression != "":
+                        expression = expression + " "
+                    expression = expression + parts[part_index]
+                    part_index = part_index + 1
+                var total = 0
+                var minimum = 1000000000
+                var maximum = 0
+                var iteration = 0
+                while iteration < count:
+                    let started = clock()
+                    repl_eval_expression(genv, expression)
+                    let elapsed = clock() - started
+                    total = total + elapsed
+                    if elapsed < minimum:
+                        minimum = elapsed
+                    if elapsed > maximum:
+                        maximum = elapsed
+                    iteration = iteration + 1
+                let average = total / count
+                print str(count) + " iterations: total=" + str(total) + "s, avg=" + str(average) + "s, min=" + str(minimum) + "s, max=" + str(maximum) + "s"
+        return 1
+
+    arg = repl_command_arg(line, ":runtime")
+    if arg != nil:
+        if arg == "":
+            print "Current runtime: " + genv["repl_runtime_mode"]
+        elif arg == "ast" or arg == "bytecode" or arg == "jit" or arg == "aot" or arg == "auto" or arg == "self-hosted":
+            if arg == "ast":
+                genv["repl_runtime_mode"] = "ast"
+            else:
+                genv["repl_runtime_mode"] = "self-hosted"
+            print "Runtime set to: " + genv["repl_runtime_mode"]
+        else:
+            print "Unknown runtime mode: " + arg + " (use ast, bytecode, jit, aot, or auto)"
+        return 1
+
+    return 0
 
 proc mode_repl(args):
     print "Sage " + VERSION + " (self-hosted) - interactive REPL"
-    print "Complete statements run immediately. End a line with ':' to open a block; a blank line executes it. Type 'exit', 'quit' or :quit to leave."
+    print "Complete statements run immediately. End a line with ':' to open a block; a blank line executes it. Type 'help' for commands or 'exit' to leave."
+    gc_enable()
     let genv = new_interpreter()
-    let buffer = ""
+    genv["repl_runtime_mode"] = "self-hosted"
+    let history = []
+    var buffer = ""
+    var block_mode = false
     while true:
         if len(buffer) > 0:
             print "... "
@@ -800,24 +1317,44 @@ proc mode_repl(args):
             print "sage> "
         let line = input()
         if line == nil:
+            if buffer != "":
+                repl_run_chunk(genv, buffer)
             print ""
             break
         let trimmed = strip(line)
-        if trimmed == "exit" or trimmed == "quit" or trimmed == ":exit" or trimmed == ":quit" or trimmed == ":q":
+        if trimmed != "":
+            push(history, line)
+        if buffer == "" and (trimmed == "exit" or trimmed == "quit" or trimmed == ":exit" or trimmed == ":quit" or trimmed == ":q"):
             break
+        if buffer == "" and ((len(trimmed) > 0 and trimmed[0] == ":") or trimmed == "version"):
+            var action = 0
+            try:
+                action = repl_handle_command(trimmed, genv, history)
+            catch e:
+                repl_print_error(e)
+            if action == 2:
+                break
+            if action == 1:
+                continue
+            print "Unknown REPL command: " + trimmed
+            print "Type :help for available commands."
+            continue
         if trimmed == "":
             if buffer != "":
                 let source = buffer
                 buffer = ""
+                block_mode = false
                 repl_run_chunk(genv, source)
             continue
         if len(buffer) > 0:
             buffer = buffer + chr(10) + line
         else:
             buffer = line
-        if repl_chunk_complete(buffer):
+            block_mode = repl_starts_block(line)
+        if block_mode == false and repl_chunk_complete(buffer):
             let source = buffer
             buffer = ""
+            block_mode = false
             repl_run_chunk(genv, source)
 
 # ============================================================================
@@ -873,6 +1410,12 @@ proc main():
     if args["gc_mode"] != nil:
         let gc_mode = args["gc_mode"]
         gc.controller.set_mode(gc_mode)
+        if gc_mode == "arc":
+            gc_set_arc()
+        elif gc_mode == "orc":
+            gc_set_orc()
+        else:
+            gc_set_tracing()
 
     if mode == "help":
         print_usage()

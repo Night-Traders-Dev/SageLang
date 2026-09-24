@@ -853,6 +853,7 @@ static void repl_print_help(void) {
     printf("    :cat <file>        Print the contents of a file\n");
     printf("    :sh <command>      Execute a shell command\n");
     printf("    :gc                Run garbage collection and print stats\n");
+    printf("    :stats             Print interpreter and GC statistics\n");
     printf("    :runtime [mode]    Show or set runtime (ast, bytecode, jit, aot, auto)\n");
     printf("    :version           Show version, architecture, build type and date\n");
     printf("\n");
@@ -1508,7 +1509,9 @@ static void repl_save_session(const char* path) {
 
 // Phase 12: Interactive REPL
 static void run_repl(volatile SageRuntimeMode runtime_mode) {
-    printf("Sage REPL v" SAGE_VERSION_STR "\n");
+    const char* repl_version = SAGE_VERSION_STR;
+    if (repl_version[0] == 'v') repl_version++;
+    printf("Sage REPL v%s\n", repl_version);
     printf("Type :help for help, :quit to exit.\n");
 
     Env* env = env_create(NULL);
