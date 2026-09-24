@@ -58,6 +58,25 @@ def run_cmd(cmd, cwd=None, capture_output=True, shell=False):
     except Exception as e:
         return None
 
+def build_jobs(args):
+    requested = max(1, int(getattr(args, "jobs", 2)))
+    available = max(1, os.cpu_count() or 1)
+    return str(min(requested, available))
+
+
+def install_prefix(args):
+    return Path(args.prefix).expanduser()
+
+
+def install_sudo(prefix):
+    probe = prefix
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    if os.geteuid() == 0 or os.access(probe, os.W_OK):
+        return []
+    return ["sudo"]
+
+
 def check_dependencies(args):
     section("Checking dependencies")
     table = Table(box=box.SIMPLE, show_header=True, header_style="bold magenta")
@@ -128,6 +147,8 @@ def prepare_workspace():
     step("Removing old build artifacts")
     if Path("core/build_sage").exists():
         shutil.rmtree("core/build_sage")
+    if Path("core/build_selfhost").exists():
+        shutil.rmtree("core/build_selfhost")
     run_cmd(["make", "-C", "core", "clean"])
     # git clean -fdx is dangerous to run blindly from a script without user prompt usually
     # but build.sh did it. I'll skip it for safety unless requested? 
@@ -195,7 +216,7 @@ def build_sage(args, found_deps):
         section("Building with Make")
         step("Compiling sage (C sources)")
         start = time.time()
-        res = run_cmd(["make", "-C", "core", "-j" + str(os.cpu_count() or 2)], capture_output=False)
+        res = run_cmd(["make", "-C", "core", "-j" + build_jobs(args)], capture_output=False)
         if res and res.returncode == 0:
             elapsed = int(time.time() - start)
             step_ok(f"{elapsed}s")
@@ -216,7 +237,7 @@ def build_sage(args, found_deps):
         section("Building C host interpreter")
         step("Compiling sage (C sources)")
         start = time.time()
-        res = run_cmd(["make", "-j" + str(os.cpu_count() or 2), "sage"], cwd=build_dir, capture_output=False)
+        res = run_cmd(["make", "-j" + build_jobs(args), "sage"], cwd=build_dir, capture_output=False)
         if res and res.returncode == 0:
             elapsed = int(time.time() - start)
             step_ok(f"{elapsed}s")
@@ -270,10 +291,23 @@ def perform_install(args):
         return
 
     banner("Installation")
+    prefix = install_prefix(args)
+    bindir = prefix / "bin"
+    shared = prefix / "share" / "sage"
+    sud = install_sudo(prefix)
+    jobs = build_jobs(args)
+
+    step("Preparing installation directories")
+    dirs = run_cmd(
+        sud + ["install", "-d", str(bindir), str(shared / "src" / "sage"), str(shared / "lib")],
+        capture_output=False,
+    )
+    if not dirs or dirs.returncode != 0:
+        step_fail(f"could not create installation directories under {prefix}")
+        return
+    step_ok(str(prefix))
 
     if args.selfhost:
-        # Self-hosted install: the bundled Sage-written toolchain becomes
-        # 'sage'; the C build is preserved as 'sage-c'.
         sh_bin = Path("core/build_selfhost/sage-selfhosted")
         if not sh_bin.exists():
             step_fail("self-hosted binary missing; run the selfhost build first")
@@ -281,53 +315,55 @@ def perform_install(args):
 
         section("Building release C binary for sage-c")
         step("Compiling sage via Make (release)")
-        res = run_cmd(["make", "-C", "core", "-j" + str(os.cpu_count() or 2)], capture_output=False)
+        res = run_cmd(
+            ["make", "-C", "core", "-B", "-j" + jobs, "sage", "sage-lsp"],
+            capture_output=False,
+        )
         if res and res.returncode == 0:
             step_ok("sage-c source build")
         else:
             step_fail("Make build failed")
 
-        section("Installing SageLang (self-hosted) system-wide")
-        console.print("  [yellow]⚙[/yellow] [bold]Installing to /usr/local[/bold]")
-        sud = [] if os.geteuid() == 0 else ["sudo"]
-        r1 = run_cmd(sud + ["install", "-m", "755", str(sh_bin), "/usr/local/bin/sage"], capture_output=False)
-        r2 = run_cmd(sud + ["install", "-m", "755", "core/sage", "/usr/local/bin/sage-c"], capture_output=False)
-        if r1 and r1.returncode == 0 and r2 and r2.returncode == 0:
-            console.print("  [bold green]✓[/bold green] [green]/usr/local/bin/sage      -> self-hosted toolchain[/green]")
-            console.print("  [bold green]✓[/bold green] [green]/usr/local/bin/sage-c    -> C interpreter[/green]")
-        else:
-            step_fail("Installation failed (sudo required)")
+        section("Installing C runtime and libraries")
+        step(f"Installing runtime tree to {prefix}")
+        res = run_cmd(
+            sud + ["make", "-C", "core", f"PREFIX={prefix}", "install"],
+            capture_output=False,
+        )
+        if not res or res.returncode != 0:
+            step_fail("C runtime installation failed")
             return
+        step_ok("runtime and libraries installed")
 
-        # Refresh the installed Sage-written compiler modules. A standalone
-        # binary bundles its own copies, but it (and any C-host fallback)
-        # resolves un-bundled imports from share/sage/src/sage — letting that
-        # directory go stale causes version-skew crashes like
-        # "Module 'token' has no attribute 'TOKEN_END'".
-        section("Refreshing installed self-hosted modules")
-        r3 = run_cmd(sud + ["install", "-d", "/usr/local/share/sage/src/sage"], capture_output=False)
-        r4 = run_cmd(sud + ["sh", "-c",
-                            "install -m 644 core/src/sage/*.sage /usr/local/share/sage/src/sage/"],
-                     capture_output=False)
-        if r3 and r3.returncode == 0 and r4 and r4.returncode == 0:
-            step_ok("/usr/local/share/sage/src/sage updated")
+        section("Installing self-hosted toolchain")
+        r1 = run_cmd(sud + ["install", "-m", "755", str(sh_bin), str(bindir / "sage")], capture_output=False)
+        r2 = run_cmd(sud + ["install", "-m", "755", "core/sage", str(bindir / "sage-c")], capture_output=False)
+        if r1 and r1.returncode == 0 and r2 and r2.returncode == 0:
+            console.print(f"  [bold green]✓[/bold green] [green]{bindir / 'sage'}      -> self-hosted toolchain[/green]")
+            console.print(f"  [bold green]✓[/bold green] [green]{bindir / 'sage-c'}    -> C interpreter[/green]")
         else:
-            step_warn("could not refresh /usr/local/share/sage/src/sage")
+            step_fail("self-hosted binary installation failed")
         return
 
     section("Building release binary for installation")
     step("Compiling sage via Make (release)")
-    res = run_cmd(["make", "-C", "core", "-j" + str(os.cpu_count() or 2)], capture_output=False)
+    res = run_cmd(
+        ["make", "-C", "core", "-B", "-j" + jobs, "sage", "sage-lsp"],
+        capture_output=False,
+    )
     if res and res.returncode == 0:
         step_ok("sage + sage-lsp")
     else:
         step_fail("Make build failed")
 
     section("Installing SageLang system-wide")
-    console.print("  [yellow]⚙[/yellow] [bold]Installing to /usr/local[/bold]")
-    res = run_cmd(["sudo", "make", "-C", "core", "install"], capture_output=False)
+    step(f"Installing to {prefix}")
+    res = run_cmd(
+        sud + ["make", "-C", "core", f"PREFIX={prefix}", "install"],
+        capture_output=False,
+    )
     if res and res.returncode == 0:
-        console.print("  [bold green]✓[/bold green] [green]Installed to /usr/local/bin/sage[/green]")
+        console.print(f"  [bold green]✓[/bold green] [green]Installed to {bindir / 'sage'}[/green]")
     else:
         step_fail("Installation failed (sudo required)")
 
@@ -408,6 +444,10 @@ def build_selfhost(args, sage_bin):
         [str(sage_bin), "core/src/sage/sage.sage", str(demo_src)],
         capture_output=False,
     )
+    if not sh_res or sh_res.returncode != 0:
+        step_fail("self-hosted interpretation failed")
+        return
+    step_ok("ok")
 
     # 3) Self-hosted compilation to native: emit-c -> gcc -> execute
     section("Self-Hosted Compilation (emit-c → gcc)")
@@ -569,7 +609,9 @@ def main():
     parser = argparse.ArgumentParser(description="SageLang Unified Build System")
     parser.add_argument("subcommand", nargs="?", help="Subcommand (all, build, train, chatbot, version)")
     parser.add_argument("version_arg", nargs="?", help="New version string (only for 'version' subcommand)")
-    parser.add_argument("--install", action="store_true", help="Install to /usr/local after building")
+    parser.add_argument("--install", action="store_true", help="Install after building")
+    parser.add_argument("--prefix", default=os.environ.get("PREFIX", "/usr/local"), help="Installation prefix")
+    parser.add_argument("--jobs", type=int, default=2, help="Maximum parallel build jobs")
     parser.add_argument("--skip-tests", action="store_true", help="Skip test suite")
     parser.add_argument("--make-only", action="store_true", help="Use Make instead of CMake")
     parser.add_argument("--train", action="store_true", help="Build the SL-TQ-LLM C trainer")
