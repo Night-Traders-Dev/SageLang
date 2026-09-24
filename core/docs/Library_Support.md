@@ -2,14 +2,14 @@
 
 Import/behavior status of every bundled library under both interpreters
 (`sage` = self-hosted CLI, `sage-c` = C host), as of v4.2.7.
-Verified by importing all 296 modules from a neutral working directory.
+The C-host audit imports 331 non-executable library modules from a neutral working directory; executable examples and injected-state contract payloads are excluded.
 
 ## Summary
 
 | Interpreter | Modules importing cleanly | Notes |
 |-------------|--------------------------:|-------|
-| sage-c      | 281 / 295                 | remaining failures are contract payloads, osdev-experimental sources, and examples that intentionally shell out |
-| sage        | 273 / 295                 | additionally lacks `enum`/`trait` keywords and some C-only natives |
+| sage-c      | 331 / 331                 | all non-executable library modules pass the import audit |
+| sage        | not fully counted         | parser/runtime gaps remain; see the self-hosted section below |
 
 ## Fully supported under BOTH interpreters
 
@@ -34,13 +34,14 @@ discord/*, gc/*, llm/*, metal/*, mips/*
 | `blockchain.staking`, `blockchain.std.nft` | smart-contract payloads: they expect a `state` binding injected by the contract host |
 | `os.examples.*` | demo programs that execute shell commands at import — blocked by the security sandbox |
 
-## Known broken sources (parse errors under BOTH hosts)
+## Source audit status
 
-`os.boot.dtb`, `os.boot.elf_load`, `os.ext`,
-`transpiler.json_parser`, `transpiler.python.{ast_parser,emitter,factory}`
-
-These are experimental modules with syntax the current parser rejects;
-they need source-level fixes rather than interpreter changes.
+The C-host syntax check passes for all 342 tracked library `.sage` files.
+The previously reported parse failures in `os.boot.dtb`, `os.boot.elf_load`,
+`os.ext`, and the Python transpiler modules are repaired and importable.
+The self-hosted interpreter still reports parser/runtime gaps for a small
+number of C-oriented library features; those are listed below rather than
+being treated as source syntax failures.
 
 ## Self-hosted (`sage`) feature gaps
 
