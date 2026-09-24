@@ -3022,7 +3022,7 @@ cjs2esm report <project-path>
 
 **Options for `convert`**:
 
-* `--out <file|dir>`: Output file or directory. Without this option, the converter writes a same-directory `.mjs` file.
+* `--out <file|dir>`: Output file or directory. Without this option, the converter writes a same-directory `.mjs` file. Files containing `require()` are rejected when relocated until output-path rebasing is implemented.
 * `--target <node18|node20|node22|node24>`: Target Node.js baseline (default: `node20`).
 * `--mode <strict|compat|discord>`: Transformation mode (default: `compat`).
   - `strict`: Accept only leading static imports; reject dynamic, order-sensitive, cache-dependent, and shim-dependent constructs.

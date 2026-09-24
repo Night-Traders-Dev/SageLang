@@ -1,5 +1,22 @@
 # Changelog
 
+## [4.2.7] - 2026-09-23
+
+### Integrated Changes
+- Hardened generated AOT string concatenation, string repetition, and socket receive helpers against NULL, non-finite, fractional, negative, and oversized inputs.
+- Integrated the reviewed `cjs2esm` transpiler documentation and synchronized the transpiler submodule pointer.
+- Corrected developer-tooling numbering and removed stale transpiler API examples from the standard-library guide.
+
+### Runtime and Test Fixes
+- Fixed generated-runtime GC rooting for sparse string-interner tables, exact-boundary native loop limits, VM `break`/`continue` stack cleanup, and AOT class property/method dispatch.
+- Added host simulations for Metal MMIO, port I/O, CPU ID, and VGA primitives; corrected DNS record parsing and made benchmark/backend capability reporting explicit.
+- Replaced stale unit expectations with the current float, layout, argument, and error contracts.
+
+### Verification
+- SageLang `make test-all` passes: 389 unit tests, 24 compiler tests, 28 self-hosted tests, and the cross-backend benchmark matrix.
+- C/self-hosted parity harness passes all 28 cases.
+- `cjs2esm` reports 52 passing tests with the configured Sage path.
+
 ## [4.2.0] - 2026-08-22
 
 ### Full Self-Hosted Compiler Parity
