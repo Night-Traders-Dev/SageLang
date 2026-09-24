@@ -16,10 +16,12 @@ extern __thread EnvRootNode* g_gc_root_stack;
 typedef struct {
     int handler_ip_offset;
     int stack_depth;
+    int frame_depth;
     Env* env;
 } ExceptionHandler;
 
 #define VM_STACK_MAX 65536
+#define VM_MAX_LOCALS 256
 #define VM_HANDLER_MAX 256
 
 typedef struct ActiveVm {
@@ -39,6 +41,18 @@ typedef struct ActiveVm {
     int resume_stack_count; // Stack depth to restore on resume
 } ActiveVm;
 
+static int vm_pop_handler_for_frame(ActiveVm* vm, int frame_depth, int* index_out) {
+    if (vm == NULL || frame_depth < 0) return 0;
+    for (int i = vm->handler_count - 1; i >= 0; i--) {
+        if (vm->handlers[i].frame_depth == frame_depth) {
+            if (index_out != NULL) *index_out = i;
+            vm->handler_count = i;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static __thread ActiveVm* g_active_vm = NULL;
 
 static ExecResult vm_normal(Value value) {
@@ -56,6 +70,8 @@ static int vm_is_truthy(Value value) {
 static void vm_mark_chunk_constants(BytecodeChunk* chunk) {
     if (chunk == NULL) return;
 
+    if (chunk->constant_count < 0 || chunk->constant_count > chunk->constant_capacity ||
+        chunk->constant_count > 65536 || (chunk->constant_count > 0 && chunk->constants == NULL)) return;
     for (int i = 0; i < chunk->constant_count; i++) {
         gc_mark_value(chunk->constants[i]);
     }
@@ -63,6 +79,10 @@ static void vm_mark_chunk_constants(BytecodeChunk* chunk) {
 
 static void vm_mark_program_constants(BytecodeProgram* program) {
     if (program == NULL) return;
+    if (program->function_count < 0 || program->function_count > program->function_capacity ||
+        program->chunk_count < 0 || program->chunk_count > program->chunk_capacity ||
+        (program->function_count > 0 && program->functions == NULL) ||
+        (program->chunk_count > 0 && program->chunks == NULL)) return;
 
     for (int i = 0; i < program->function_count; i++) {
         vm_mark_chunk_constants(&program->functions[i].chunk);
@@ -79,10 +99,12 @@ void vm_mark_roots(void* active_vm_head) {
         vm_mark_program_constants(active->chunk != NULL ? active->chunk->program : NULL);
         gc_mark_env(active->current_env);
 
+        if (active->stack_count < 0 || active->stack_count > VM_STACK_MAX) return;
         for (int i = 0; i < active->stack_count; i++) {
             gc_mark_value(active->stack[i]);
         }
 
+        if (active->handler_count < 0 || active->handler_count > VM_HANDLER_MAX) return;
         for (int i = 0; i < active->handler_count; i++) {
             gc_mark_env(active->handlers[i].env);
         }
@@ -98,13 +120,39 @@ static ExecResult vm_error(const char* message) {
     return result;
 }
 
+static int vm_initial_stack_for_chunk(const BytecodeChunk* chunk) {
+    if (chunk == NULL || chunk->program == NULL) return 0;
+    const BytecodeProgram* program = chunk->program;
+    if (program->function_count < 0 || program->function_count > program->function_capacity ||
+        (program->function_count > 0 && program->functions == NULL)) return 0;
+    for (int i = 0; i < program->function_count; i++) {
+        if (&program->functions[i].chunk == chunk) return program->functions[i].param_count;
+    }
+    return 0;
+}
+
+static int vm_validate_chunk(const BytecodeChunk* chunk) {
+    char error[256];
+    return bytecode_chunk_validate(chunk, vm_initial_stack_for_chunk(chunk), chunk != NULL ? chunk->program : NULL,
+                                   error, sizeof(error));
+}
+
 #define VM_CHECK_CONST(c, idx) \
-    do { if ((int)(idx) >= (c)->constant_count) { \
+    do { if ((c) == NULL || (c)->constants == NULL || \
+        (uint64_t)(idx) >= (uint64_t)(c)->constant_count) { \
         result = vm_error("VM constant pool index out of bounds."); goto done; \
     } } while(0)
 
+#define VM_CHECK_NAME_CONST(c, idx) \
+    do { if ((c) == NULL || (c)->constants == NULL || \
+        (uint64_t)(idx) >= (uint64_t)(c)->constant_count || \
+        !IS_STRING((c)->constants[(uint16_t)(idx)])) { \
+        result = vm_error("VM name constant is invalid."); goto done; \
+    } } while(0)
+
 #define VM_CHECK_AST(c, idx) \
-    do { if ((int)(idx) >= (c)->ast_stmt_count) { \
+    do { if ((c) == NULL || (c)->ast_stmts == NULL || \
+        (uint64_t)(idx) >= (uint64_t)(c)->ast_stmt_count) { \
         result = vm_error("VM AST statement index out of bounds."); goto done; \
     } } while(0)
 
@@ -163,6 +211,9 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
     }
 
     if (callee.type == VAL_FUNCTION) {
+        if (callee.as.function == NULL) {
+            return vm_error("Invalid function value.");
+        }
         if (callee.as.function->is_async) {
 #if SAGE_PLATFORM_PICO
             return vm_error("async/await not supported on RP2040.");
@@ -307,6 +358,11 @@ typedef struct {
 static ExecResult vm_execute_generator(GeneratorValue* gen, Env* caller_env);
 
 ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
+    if (chunk == NULL) return vm_error("VM chunk is null.");
+    if (env == NULL) return vm_error("VM environment is null.");
+    if (!vm_validate_chunk(chunk)) return vm_error("Invalid VM bytecode artifact.");
+    if (chunk->code_count == 0) return vm_normal(val_nil());
+
     ActiveVm vm;
     ExecResult result = vm_normal(val_nil());
     
@@ -323,6 +379,11 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     }
 
     ActiveVm* previous_vm = g_active_vm;
+    if (previous_vm != NULL &&
+        (previous_vm->resume_ip_offset < 0 || previous_vm->resume_ip_offset > chunk->code_count ||
+         previous_vm->resume_stack_count < 0 || previous_vm->resume_stack_count > VM_STACK_MAX)) {
+        return vm_error("Invalid VM generator resume state.");
+    }
     
     memset(&vm, 0, sizeof(vm));
     vm.chunk = chunk;
@@ -398,16 +459,40 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 
     #define DISPATCH() \
         do { \
+            if (ip >= ip_end) goto done; \
+            if (*ip > BC_OP_GPU_CMD_DISPATCH) { \
+                result = vm_error("VM opcode is out of bounds."); \
+                goto done; \
+            } \
             goto *dispatch_table[*ip++]; \
         } while (0)
 #else
     #define DISPATCH() continue
 #endif
 
+#define VM_CHECK_IP(amount) \
+    do { \
+        if ((amount) < 0 || ip > ip_end || (size_t)(ip_end - ip) < (size_t)(amount)) { \
+            result = vm_error("VM bytecode operand is truncated."); \
+            goto done; \
+        } \
+    } while (0)
+
+#define VM_CHECK_STACK(amount) \
+    do { \
+        long _vm_amount = (long)(amount); \
+        if (_vm_amount < 0 || _vm_amount > VM_STACK_MAX || sp < vm.stack || \
+            sp > vm.stack + VM_STACK_MAX || (size_t)(sp - vm.stack) < (size_t)_vm_amount) { \
+            SYNC_SP(); \
+            result = vm_error("VM stack underflow."); \
+            goto done; \
+        } \
+    } while (0)
+
 #define PUSH(val) \
     do { \
         Value _val = (val); \
-        if (__builtin_expect(sp >= vm.stack + VM_STACK_MAX, 0)) { \
+        if (sp < vm.stack || sp >= vm.stack + VM_STACK_MAX) { \
             SYNC_SP(); \
             result = vm_error("VM stack overflow."); \
             goto done; \
@@ -419,7 +504,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 #define PEEK(dist) (*(sp - 1 - (dist)))
 #define SYNC_SP() vm.stack_count = (int)(sp - vm.stack)
 #define READ_U8() (*ip++)
-#define READ_U16() (ip += 2, (uint16_t)((ip[-2] << 8) | ip[-1]))
+#define READ_U16() (ip += 2, (uint16_t)(((unsigned int)ip[-2] << 8) | ip[-1]))
 
 #ifdef __GNUC__
     DISPATCH();
@@ -431,7 +516,9 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
         switch (op) {
 #endif
             BC_OP_CONSTANT: {
-                uint16_t index = READ_U16();
+                VM_CHECK_IP(2);
+;
+                 uint16_t index = READ_U16();
                 VM_CHECK_CONST(frame->chunk, index);
                 PUSH(constants[index]);
                 DISPATCH();
@@ -445,22 +532,41 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             BC_OP_FALSE:
                 PUSH(val_bool(0));
                 DISPATCH();
-            BC_OP_POP:
-                (void)POP();
+             BC_OP_POP:
+                 VM_CHECK_STACK(1);
+                 (void)POP();
                 DISPATCH();
-            BC_OP_GET_LOCAL: {
-                uint16_t index = READ_U16();
-                PUSH(frame->slots[index]);
-                DISPATCH();
-            }
-            BC_OP_SET_LOCAL: {
-                uint16_t index = READ_U16();
-                frame->slots[index] = PEEK(0);
-                DISPATCH();
-            }
+             BC_OP_GET_LOCAL: {
+                 VM_CHECK_IP(2);
+;
+                 uint16_t index = READ_U16();
+                 if (index >= VM_MAX_LOCALS || frame->slots == NULL ||
+                     frame->slots < vm.stack || frame->slots > vm.stack + VM_STACK_MAX ||
+                     frame->slots > sp || (size_t)(sp - frame->slots) <= index) {
+                     result = vm_error("VM local index is out of bounds.");
+                     goto done;
+                 }
+                 PUSH(frame->slots[index]);
+                 DISPATCH();
+             }
+              BC_OP_SET_LOCAL: {
+                 VM_CHECK_STACK(1);
+                 VM_CHECK_IP(2);
+                  uint16_t index = READ_U16();
+                 if (index >= VM_MAX_LOCALS || frame->slots == NULL ||
+                     frame->slots < vm.stack || frame->slots > vm.stack + VM_STACK_MAX ||
+                     frame->slots > sp || (size_t)(sp - frame->slots) <= index) {
+                     result = vm_error("VM local index is out of bounds.");
+                     goto done;
+                 }
+                 frame->slots[index] = PEEK(0);
+                 DISPATCH();
+             }
             BC_OP_GET_GLOBAL: {
-                uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
+                VM_CHECK_IP(2);
+;
+                 uint16_t name_index = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
                 Value resolved = val_nil();
                 SYNC_SP();
@@ -471,18 +577,22 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 PUSH(resolved);
                 DISPATCH();
             }
-            BC_OP_DEFINE_GLOBAL: {
-                uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
+             BC_OP_DEFINE_GLOBAL: {
+                 VM_CHECK_STACK(1);
+                 VM_CHECK_IP(2);
+                 uint16_t name_index = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
                 Value value = POP();
                 SYNC_SP();
                 env_define(frame->closure, AS_STRING(name), (int)strlen(AS_STRING(name)), value);
                 DISPATCH();
             }
-            BC_OP_SET_GLOBAL: {
-                uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
+             BC_OP_SET_GLOBAL: {
+                 VM_CHECK_STACK(1);
+                 VM_CHECK_IP(2);
+                 uint16_t name_index = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
                 Value value = PEEK(0);
                 SYNC_SP();
@@ -493,22 +603,29 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 DISPATCH();
             }
             BC_OP_DEFINE_FUNCTION: {
-                uint16_t name_index = READ_U16();
-                uint16_t function_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
-                if (chunk->program == NULL || function_index >= chunk->program->function_count) {
-                    result = vm_error("Invalid compiled VM function reference.");
-                    goto done;
-                }
-                Value name = constants[name_index];
-                SYNC_SP();
-                Value function = val_bytecode_function(&chunk->program->functions[function_index], frame->closure);
+                VM_CHECK_IP(2);
+;
+                 uint16_t name_index = READ_U16();
+                VM_CHECK_IP(2);
+;
+                 uint16_t function_index = READ_U16();
+                 VM_CHECK_NAME_CONST(frame->chunk, name_index);
+                 if (frame->chunk->program == NULL ||
+                     function_index >= frame->chunk->program->function_count) {
+                     result = vm_error("Invalid compiled VM function reference.");
+                     goto done;
+                 }
+                 Value name = constants[name_index];
+                 SYNC_SP();
+                 Value function = val_bytecode_function(&frame->chunk->program->functions[function_index], frame->closure);
                 env_define(frame->closure, AS_STRING(name), (int)strlen(AS_STRING(name)), function);
                 DISPATCH();
             }
-            BC_OP_GET_PROPERTY: {
-                uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
+             BC_OP_GET_PROPERTY: {
+                 VM_CHECK_STACK(1);
+                 VM_CHECK_IP(2);
+                 uint16_t name_index = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, name_index);
                 Value object = POP();
                 const char* property = AS_STRING(constants[name_index]);
                 SYNC_SP();
@@ -526,9 +643,11 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 }
                 DISPATCH();
             }
-            BC_OP_SET_PROPERTY: {
-                uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
+             BC_OP_SET_PROPERTY: {
+                 VM_CHECK_STACK(2);
+                 VM_CHECK_IP(2);
+                 uint16_t name_index = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, name_index);
                 Value value = POP();
                 Value object = POP();
                 const char* property = AS_STRING(constants[name_index]);
@@ -541,8 +660,9 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 PUSH(value);
                 DISPATCH();
             }
-            BC_OP_GET_INDEX: {
-                Value index = POP();
+             BC_OP_GET_INDEX: {
+                 VM_CHECK_STACK(2);
+                 Value index = POP();
                 Value object = POP();
                 SYNC_SP();
                 if (object.type == VAL_ARRAY && IS_NUMBER(index)) {
@@ -580,8 +700,9 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 }
                 DISPATCH();
             }
-            BC_OP_SET_INDEX: {
-                Value value = POP();
+             BC_OP_SET_INDEX: {
+                 VM_CHECK_STACK(3);
+                 Value value = POP();
                 Value index = POP();
                 Value object = POP();
                 SYNC_SP();
@@ -603,18 +724,22 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 DISPATCH();
             }
             BC_OP_LOAD_FUNCTION: {
-                uint16_t function_index = READ_U16();
-                if (chunk->program == NULL || function_index >= chunk->program->function_count) {
-                    result = vm_error("Invalid compiled VM function reference.");
-                    goto done;
-                }
-                SYNC_SP();
-                Value function = val_bytecode_function(&chunk->program->functions[function_index], frame->closure);
+                 VM_CHECK_IP(2);
+;
+                 uint16_t function_index = READ_U16();
+                 if (frame->chunk->program == NULL ||
+                     function_index >= frame->chunk->program->function_count) {
+                     result = vm_error("Invalid compiled VM function reference.");
+                     goto done;
+                 }
+                 SYNC_SP();
+                 Value function = val_bytecode_function(&frame->chunk->program->functions[function_index], frame->closure);
                 PUSH(function);
                 DISPATCH();
             }
-            BC_OP_SLICE: {
-                Value end = POP();
+             BC_OP_SLICE: {
+                 VM_CHECK_STACK(3);
+                 Value end = POP();
                 Value start = POP();
                 Value object = POP();
                 int start_index = 0, end_index = 0;
@@ -663,9 +788,10 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
             BC_OP_BIT_AND:
             BC_OP_BIT_OR:
             BC_OP_BIT_XOR:
-            BC_OP_SHIFT_LEFT:
-            BC_OP_SHIFT_RIGHT: {
-                BytecodeOp local_op = (BytecodeOp)ip[-1];
+             BC_OP_SHIFT_LEFT:
+             BC_OP_SHIFT_RIGHT: {
+                 VM_CHECK_STACK(2);
+                 BytecodeOp local_op = (BytecodeOp)ip[-1];
                 Value right = POP();
                 Value left = POP();
                 Value out = val_nil();
@@ -728,52 +854,79 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 PUSH(out);
                 DISPATCH();
             }
-            BC_OP_NEGATE: {
-                Value value = POP();
+             BC_OP_NEGATE: {
+                 VM_CHECK_STACK(1);
+                 Value value = POP();
                 if (!IS_NUMBER(value)) { result = vm_error("Unary '-' requires a number."); goto done; }
                 PUSH(val_number(-AS_NUMBER(value)));
                 DISPATCH();
             }
-            BC_OP_BIT_NOT: {
-                Value value = POP();
+             BC_OP_BIT_NOT: {
+                 VM_CHECK_STACK(1);
+                 Value value = POP();
                 if (!IS_NUMBER(value)) { result = vm_error("Bitwise NOT requires a number."); goto done; }
                 PUSH(val_number((double)(~(long long)AS_NUMBER(value))));
                 DISPATCH();
             }
-            BC_OP_NOT: {
-                Value value = POP();
+             BC_OP_NOT: {
+                 VM_CHECK_STACK(1);
+                 Value value = POP();
                 PUSH(val_bool(!vm_is_truthy(value)));
                 DISPATCH();
             }
-            BC_OP_TRUTHY: {
-                Value value = POP();
+             BC_OP_TRUTHY: {
+                 VM_CHECK_STACK(1);
+                 Value value = POP();
                 PUSH(val_bool(vm_is_truthy(value)));
                 DISPATCH();
             }
-            BC_OP_JUMP:
-                ip = frame->chunk->code + READ_U16();
-                DISPATCH();
-            BC_OP_JUMP_IF_FALSE: {
-                uint16_t target = READ_U16();
-                if (!vm_is_truthy(PEEK(0))) ip = frame->chunk->code + target;
-                DISPATCH();
-            }
+             BC_OP_JUMP: {
+                 VM_CHECK_IP(2);
+;
+                 uint16_t target = READ_U16();
+                  if (target >= frame->chunk->code_count) {
+                     result = vm_error("VM branch target is out of bounds.");
+                     goto done;
+                 }
+                 ip = frame->chunk->code + target;
+                 DISPATCH();
+             }
+             BC_OP_JUMP_IF_FALSE: {
+                 VM_CHECK_STACK(1);
+                 VM_CHECK_IP(2);
+                 uint16_t target = READ_U16();
+                  if (target >= frame->chunk->code_count) {
+                     result = vm_error("VM branch target is out of bounds.");
+                     goto done;
+                 }
+                 if (!vm_is_truthy(PEEK(0))) ip = frame->chunk->code + target;
+                 DISPATCH();
+             }
             BC_OP_CALL: {
-                int arg_count = (int)READ_U8();
-                if ((int)(sp - vm.stack) < arg_count + 1) { result = vm_error("VM stack underflow on call."); goto done; }
-                Value callee = *(sp - 1 - arg_count);
-                if (callee.type == VAL_FUNCTION && callee.as.function->is_vm) {
-                    if (frame_count >= MAX_FRAMES) { result = vm_error("Stack overflow (max frames reached)."); goto done; }
-                    BytecodeFunction* bcf = callee.as.function->vm_function;
-                    if (arg_count != bcf->param_count) { result = vm_error("Arity mismatch."); goto done; }
-                    
-                    frame->ip = ip;
-                    frame = &frames[frame_count++];
-                    frame->chunk = &bcf->chunk;
-                    frame->ip = bcf->chunk.code;
-                    frame->ip_end = bcf->chunk.code + bcf->chunk.code_count;
-                    frame->slots = sp - arg_count;
-                    frame->closure = callee.as.function->closure;
+                 VM_CHECK_IP(1);
+;
+                 int arg_count = (int)READ_U8();
+                 VM_CHECK_STACK(arg_count + 1);
+                 Value callee = *(sp - 1 - arg_count);
+                 if (callee.type == VAL_FUNCTION && callee.as.function != NULL && callee.as.function->is_vm) {
+                     if (frame_count >= MAX_FRAMES) { result = vm_error("Stack overflow (max frames reached)."); goto done; }
+                     BytecodeFunction* bcf = callee.as.function->vm_function;
+                     if (bcf == NULL || bcf->chunk.code_count <= 0 || bcf->chunk.code == NULL) {
+                         result = vm_error("Invalid compiled VM function.");
+                         goto done;
+                     }
+                     if (arg_count != bcf->param_count) { result = vm_error("Arity mismatch."); goto done; }
+                     if (!vm_validate_chunk(&bcf->chunk)) {
+                         result = vm_error("Invalid compiled VM function bytecode.");
+                         goto done;
+                      }
+                      frame->ip = ip;
+                     frame = &frames[frame_count++];
+                     frame->chunk = &bcf->chunk;
+                     frame->ip = bcf->chunk.code;
+                     frame->ip_end = bcf->chunk.code + bcf->chunk.code_count;
+                     frame->slots = sp - arg_count;
+                     frame->closure = callee.as.function->closure;
                     
                     ip = frame->ip;
                     ip_end = frame->ip_end;
@@ -784,72 +937,102 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     SYNC_SP();
                     ExecResult call_result = call_function_value(callee, arg_count, args, frame->closure);
                     sp -= (arg_count + 1);
-                    if (call_result.is_throwing) {
-                        if (vm.handler_count > 0) {
-                            vm.handler_count--;
-                            ip = frame->chunk->code + vm.handlers[vm.handler_count].handler_ip_offset;
-                            sp = vm.stack + vm.handlers[vm.handler_count].stack_depth;
-                            frame->closure = vm.handlers[vm.handler_count].env;
-                            PUSH(call_result.exception_value);
+                     if (call_result.is_throwing) {
+                         int handler_index;
+                         if (vm_pop_handler_for_frame(&vm, frame_count - 1, &handler_index)) {
+                             int handler_offset = vm.handlers[handler_index].handler_ip_offset;
+                             int handler_depth = vm.handlers[handler_index].stack_depth;
+                             if (handler_offset < 0 || handler_offset >= frame->chunk->code_count ||
+                                 handler_depth < 0 || handler_depth > VM_STACK_MAX) {
+                                 result = vm_error("VM exception handler state is invalid.");
+                                 goto done;
+                             }
+                             ip = frame->chunk->code + handler_offset;
+                             sp = vm.stack + handler_depth;
+                             frame->closure = vm.handlers[handler_index].env;
+                             PUSH(call_result.exception_value);
                             DISPATCH();
                         } else {
                             result = call_result;
                             goto done;
                         }
                     }
+
                     PUSH(call_result.value);
                     DISPATCH();
                 }
             }
             BC_OP_CALL_METHOD: {
-                uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
-                int arg_count = (int)READ_U8();
-                if ((int)(sp - vm.stack) < arg_count + 1) { result = vm_error("VM stack underflow on method call."); goto done; }
+                VM_CHECK_IP(2);
+;
+                 uint16_t name_index = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, name_index);
+                 VM_CHECK_IP(1);
+;
+                 int arg_count = (int)READ_U8();
+                 VM_CHECK_STACK(arg_count + 1);
                 Value object = *(sp - 1 - arg_count);
                 Value* args = sp - arg_count;
                 SYNC_SP();
                 ExecResult call_result = call_method_value(object, AS_STRING(constants[name_index]), arg_count, args, frame->closure);
                 sp -= (arg_count + 1);
-                if (call_result.is_throwing) {
-                    if (vm.handler_count > 0) {
-                        vm.handler_count--;
-                        ip = frame->chunk->code + vm.handlers[vm.handler_count].handler_ip_offset;
-                        sp = vm.stack + vm.handlers[vm.handler_count].stack_depth;
-                        frame->closure = vm.handlers[vm.handler_count].env;
-                        PUSH(call_result.exception_value);
-                        DISPATCH();
-                    } else {
-                        result = call_result;
-                        goto done;
-                    }
-                }
+                 if (call_result.is_throwing) {
+                     int handler_index;
+                     if (vm_pop_handler_for_frame(&vm, frame_count - 1, &handler_index)) {
+                         int handler_offset = vm.handlers[handler_index].handler_ip_offset;
+                         int handler_depth = vm.handlers[handler_index].stack_depth;
+                         if (handler_offset < 0 || handler_offset >= frame->chunk->code_count ||
+                             handler_depth < 0 || handler_depth > VM_STACK_MAX) {
+                             result = vm_error("VM exception handler state is invalid.");
+                             goto done;
+                         }
+                         ip = frame->chunk->code + handler_offset;
+                         sp = vm.stack + handler_depth;
+                         frame->closure = vm.handlers[handler_index].env;
+                         PUSH(call_result.exception_value);
+                         DISPATCH();
+                     } else {
+                         result = call_result;
+                         goto done;
+                     }
+                 }
+
                 PUSH(call_result.value);
                 DISPATCH();
             }
-            BC_OP_ARRAY: {
-                uint16_t count = READ_U16();
-                SYNC_SP();
-                Value array = val_array();
+             BC_OP_ARRAY: {
+                 VM_CHECK_IP(2);
+;
+                 uint16_t count = READ_U16();
+                 VM_CHECK_STACK(count);
+                 SYNC_SP();
+                 Value array = val_array();
                 for (int i = 0; i < (int)count; i++) array_push(&array, *(sp - (int)count + i));
                 sp -= (int)count;
                 PUSH(array);
                 DISPATCH();
             }
-            BC_OP_TUPLE: {
-                uint16_t count = READ_U16();
-                SYNC_SP();
-                Value tuple = val_tuple(sp - (int)count, (int)count);
+             BC_OP_TUPLE: {
+                 VM_CHECK_IP(2);
+;
+                 uint16_t count = READ_U16();
+                 VM_CHECK_STACK(count);
+                 SYNC_SP();
+                 Value tuple = val_tuple(sp - (int)count, (int)count);
                 sp -= (int)count;
                 PUSH(tuple);
                 DISPATCH();
             }
-            BC_OP_DICT: {
-                uint16_t count = READ_U16();
-                SYNC_SP();
-                Value dictionary = val_dict();
-                Value* d_values = SAGE_ALLOC(sizeof(Value) * (size_t)count * 2);
-                for (int i = ((int)count * 2) - 1; i >= 0; i--) d_values[i] = POP();
+             BC_OP_DICT: {
+                 VM_CHECK_IP(2);
+;
+                 uint16_t count = READ_U16();
+                 VM_CHECK_STACK(count * 2);
+                 SYNC_SP();
+                 Value dictionary = val_dict();
+                 Value* d_values = count == 0 ? NULL : SAGE_ALLOC(sizeof(Value) * (size_t)count * 2);
+                 if (count > 0 && d_values == NULL) { result = vm_error("VM dictionary allocation failed."); goto done; }
+                 for (int i = ((int)count * 2) - 1; i >= 0; i--) d_values[i] = POP();
                 for (int i = 0; i < (int)count; i++) {
                     if (!IS_STRING(d_values[i * 2])) { result = vm_error("Dict keys must be strings."); free(d_values); goto done; }
                     dict_set(&dictionary, AS_STRING(d_values[i * 2]), d_values[i * 2 + 1]);
@@ -858,26 +1041,34 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 PUSH(dictionary);
                 DISPATCH();
             }
-            BC_OP_PRINT: {
-                Value value = POP();
+             BC_OP_PRINT: {
+                 VM_CHECK_STACK(1);
+                 Value value = POP();
                 print_value(value);
                 printf("\n");
                 DISPATCH();
             }
             BC_OP_EXEC_AST_STMT: {
-                uint16_t stmt_index = READ_U16();
+                VM_CHECK_IP(2);
+;
+                 uint16_t stmt_index = READ_U16();
                 VM_CHECK_AST(frame->chunk, stmt_index);
                 SYNC_SP();
-                ExecResult ast_result = interpret(chunk->ast_stmts[stmt_index], frame->closure);
+                 ExecResult ast_result = interpret(frame->chunk->ast_stmts[stmt_index], frame->closure);
                 if (ast_result.is_throwing) { result = ast_result; goto done; }
                 PUSH(ast_result.value);
                 DISPATCH();
             }
             BC_OP_RETURN: {
                 Value res = sp > vm.stack ? POP() : val_nil();
-                if (frame_count > 1) {
-                    // Restore caller state
-                    frame->ip = ip; // Save current IP before popping
+                 if (frame_count > 1) {
+                     int returning_frame_depth = frame_count - 1;
+                     while (vm.handler_count > 0 &&
+                            vm.handlers[vm.handler_count - 1].frame_depth >= returning_frame_depth)
+                         vm.handler_count--;
+                     // Restore caller state
+                     frame->ip = ip; // Save current IP before popping
+
 
                     // Drop the frame's args AND the callee slot that sits just
                     // below them (the CALL handler keeps it in place), matching
@@ -906,7 +1097,9 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 frame->closure = frame->closure->parent;
                 DISPATCH();
             BC_OP_DUP: {
-                uint8_t distance = READ_U8();
+                VM_CHECK_IP(1);
+;
+                 uint8_t distance = READ_U8();
                 if ((int)distance >= (int)(sp - vm.stack)) { result = vm_error("Invalid stack duplicate."); goto done; }
                 PUSH(PEEK((int)distance));
                 DISPATCH();
@@ -917,14 +1110,27 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 PUSH(val_number((double)value.as.array->count));
                 DISPATCH();
             }
-            BC_OP_BREAK:
-            BC_OP_CONTINUE:
-            BC_OP_LOOP_BACK:
-                result = vm_error("Unexpected loop control opcode.");
-                goto done;
+             BC_OP_BREAK:
+             BC_OP_CONTINUE:
+                 result = vm_error("Unexpected loop control opcode.");
+                 goto done;
+             BC_OP_LOOP_BACK: {
+                 VM_CHECK_IP(2);
+;
+                 uint16_t offset = READ_U16();
+                 long target = (long)(ip - frame->chunk->code) - offset;
+                 if (target < 0 || target >= frame->chunk->code_count) {
+                     result = vm_error("VM loop target is out of bounds.");
+                     goto done;
+                 }
+                 ip = frame->chunk->code + target;
+                 DISPATCH();
+             }
             BC_OP_IMPORT: {
-                uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
+                VM_CHECK_IP(2);
+;
+                 uint16_t name_index = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, name_index);
                 SYNC_SP();
                 char* module_name = AS_STRING(constants[name_index]);
                 import_all(frame->closure, module_name);
@@ -934,8 +1140,10 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 DISPATCH();
             }
             BC_OP_CLASS: {
-                uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
+                VM_CHECK_IP(2);
+;
+                 uint16_t name_index = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
                 SYNC_SP();
                 ClassValue* class_val = class_create(AS_STRING(name), (int)strlen(AS_STRING(name)), NULL);
@@ -943,65 +1151,88 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 PUSH(val_class(class_val));
                 DISPATCH();
             }
-            BC_OP_METHOD: {
-                uint16_t name_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
+              BC_OP_METHOD: {
+                 VM_CHECK_STACK(1);
+                 VM_CHECK_IP(2);
+                  uint16_t name_index = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
                 SYNC_SP();
-                Value method_val = POP();
-                Value class_val = PEEK(0);
-                if (class_val.type != VAL_CLASS) {
-                    result = vm_error("BC_OP_METHOD expects a class.");
-                    goto done;
-                }
-                class_add_method(class_val.as.class_val, AS_STRING(name), (int)strlen(AS_STRING(name)), (void*)AS_FUNCTION(method_val));
+                 Value method_val = POP();
+                 Value class_val = PEEK(0);
+                 if (class_val.type != VAL_CLASS || !IS_FUNCTION(method_val)) {
+                     result = vm_error("BC_OP_METHOD expects a class and function.");
+                     goto done;
+                 }
+                 class_add_method(class_val.as.class_val, AS_STRING(name), (int)strlen(AS_STRING(name)), (void*)AS_FUNCTION(method_val));
                 DISPATCH();
             }
-            BC_OP_INHERIT: {
-                Value child = POP();
+             BC_OP_INHERIT: {
+                 VM_CHECK_STACK(2);
+                 Value child = POP();
                 Value parent = POP();
                 if (parent.type != VAL_CLASS || child.type != VAL_CLASS) { result = vm_error("Inheritance mismatch."); goto done; }
                 child.as.class_val->parent = parent.as.class_val;
                 PUSH(child);
                 DISPATCH();
             }
-            BC_OP_SETUP_TRY: {
-                uint16_t handler_offset = READ_U16();
-                if (vm.handler_count >= VM_HANDLER_MAX) { result = vm_error("Too many try blocks."); goto done; }
-                vm.handlers[vm.handler_count].handler_ip_offset = (int)handler_offset;
+             BC_OP_SETUP_TRY: {
+                 VM_CHECK_IP(2);
+;
+                 uint16_t handler_offset = READ_U16();
+                 if (handler_offset >= frame->chunk->code_count) {
+                     result = vm_error("VM exception handler target is out of bounds.");
+                     goto done;
+                 }
+                 if (vm.handler_count >= VM_HANDLER_MAX) { result = vm_error("Too many try blocks."); goto done; }
+                 vm.handlers[vm.handler_count].handler_ip_offset = (int)handler_offset;
                 vm.handlers[vm.handler_count].stack_depth = (int)(sp - vm.stack);
+                vm.handlers[vm.handler_count].frame_depth = frame_count - 1;
                 vm.handlers[vm.handler_count].env = frame->closure;
                 vm.handler_count++;
                 DISPATCH();
             }
-            BC_OP_END_TRY:
-                if (vm.handler_count > 0) vm.handler_count--;
-                DISPATCH();
-            BC_OP_RAISE: {
-                Value exc_val = POP();
+             BC_OP_END_TRY:
+                 if (vm.handler_count > 0 &&
+                     vm.handlers[vm.handler_count - 1].frame_depth == frame_count - 1)
+                     vm.handler_count--;
+                 DISPATCH();
+              BC_OP_RAISE: {
+
+                 VM_CHECK_STACK(1);
+                 Value exc_val = POP();
                 if (IS_STRING(exc_val)) exc_val = val_exception(AS_STRING(exc_val));
                 else if (IS_NUMBER(exc_val)) { char buf[64]; snprintf(buf, sizeof(buf), "%.14g", AS_NUMBER(exc_val)); exc_val = val_exception(buf); }
-                if (vm.handler_count > 0) {
-                    vm.handler_count--;
-                    ip = frame->chunk->code + vm.handlers[vm.handler_count].handler_ip_offset;
-                    sp = vm.stack + vm.handlers[vm.handler_count].stack_depth;
-                    frame->closure = vm.handlers[vm.handler_count].env;
-                    PUSH(exc_val);
-                    DISPATCH();
-                } else { result.value = val_nil(); result.is_throwing = 1; result.exception_value = exc_val; goto done; }
+                  int handler_index;
+                  if (vm_pop_handler_for_frame(&vm, frame_count - 1, &handler_index)) {
+                      int handler_offset = vm.handlers[handler_index].handler_ip_offset;
+                      int handler_depth = vm.handlers[handler_index].stack_depth;
+                      if (handler_offset < 0 || handler_offset >= frame->chunk->code_count ||
+                          handler_depth < 0 || handler_depth > VM_STACK_MAX) {
+                          result = vm_error("VM exception handler state is invalid.");
+                          goto done;
+                      }
+                      ip = frame->chunk->code + handler_offset;
+                      sp = vm.stack + handler_depth;
+                      frame->closure = vm.handlers[handler_index].env;
+                      PUSH(exc_val);
+                     DISPATCH();
+                 } else { result.value = val_nil(); result.is_throwing = 1; result.exception_value = exc_val; goto done; }
+
             }
             // GPU opcodes
             BC_OP_GPU_POLL_EVENTS: sgpu_poll_events(); DISPATCH();
             BC_OP_GPU_WINDOW_SHOULD_CLOSE: PUSH(val_bool(sgpu_window_should_close())); DISPATCH();
             BC_OP_GPU_GET_TIME: PUSH(val_number(sgpu_get_time())); DISPATCH();
-            BC_OP_GPU_KEY_PRESSED: { Value key = POP(); PUSH(val_bool(sgpu_key_pressed((int)AS_NUMBER(key)))); DISPATCH(); }
-            BC_OP_GPU_KEY_DOWN: { Value key = POP(); PUSH(val_bool(sgpu_key_down((int)AS_NUMBER(key)))); DISPATCH(); }
+                         BC_OP_GPU_KEY_PRESSED: { VM_CHECK_STACK(1); Value key = POP(); PUSH(val_bool(sgpu_key_pressed((int)AS_NUMBER(key)))); DISPATCH(); }
+                         BC_OP_GPU_KEY_DOWN: { VM_CHECK_STACK(1); Value key = POP(); PUSH(val_bool(sgpu_key_down((int)AS_NUMBER(key)))); DISPATCH(); }
             BC_OP_GPU_MOUSE_POS: { double mx, my; sgpu_mouse_pos(&mx, &my); SYNC_SP(); Value d = val_dict(); dict_set(&d, "x", val_number(mx)); dict_set(&d, "y", val_number(my)); PUSH(d); DISPATCH(); }
             BC_OP_GPU_MOUSE_DELTA: { double dx, dy; sgpu_mouse_delta(&dx, &dy); SYNC_SP(); Value d = val_dict(); dict_set(&d, "x", val_number(dx)); dict_set(&d, "y", val_number(dy)); PUSH(d); DISPATCH(); }
             BC_OP_GPU_UPDATE_INPUT: sgpu_update_input(); DISPATCH();
-            BC_OP_GPU_BEGIN_COMMANDS: { Value cmd = POP(); PUSH(val_bool(sgpu_begin_commands((int)AS_NUMBER(cmd)))); DISPATCH(); }
-            BC_OP_GPU_END_COMMANDS: { Value cmd = POP(); PUSH(val_bool(sgpu_end_commands((int)AS_NUMBER(cmd)))); DISPATCH(); }
+                         BC_OP_GPU_BEGIN_COMMANDS: { VM_CHECK_STACK(1); Value cmd = POP(); PUSH(val_bool(sgpu_begin_commands((int)AS_NUMBER(cmd)))); DISPATCH(); }
+                         BC_OP_GPU_END_COMMANDS: { VM_CHECK_STACK(1); Value cmd = POP(); PUSH(val_bool(sgpu_end_commands((int)AS_NUMBER(cmd)))); DISPATCH(); }
             BC_OP_GPU_CMD_BEGIN_RP: {
+                 VM_CHECK_STACK(6);
                 Value clear = POP(), h = POP(), w = POP(), fb = POP(), rp = POP(), cmd = POP();
                 float cr = 0, cg = 0, cb = 0, ca = 1;
                 if (IS_ARRAY(clear) && clear.as.array->count >= 4) {
@@ -1011,43 +1242,46 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 sgpu_cmd_begin_render_pass((int)AS_NUMBER(cmd), (int)AS_NUMBER(rp), (int)AS_NUMBER(fb), (int)AS_NUMBER(w), (int)AS_NUMBER(h), cr, cg, cb, ca);
                 DISPATCH();
             }
-            BC_OP_GPU_CMD_END_RP: { Value cmd = POP(); sgpu_cmd_end_render_pass((int)AS_NUMBER(cmd)); DISPATCH(); }
-            BC_OP_GPU_CMD_DRAW: { Value fi = POP(), fv = POP(), inst = POP(), verts = POP(), cmd = POP(); sgpu_cmd_draw((int)AS_NUMBER(cmd), (int)AS_NUMBER(verts), (int)AS_NUMBER(inst), (int)AS_NUMBER(fv), (int)AS_NUMBER(fi)); DISPATCH(); }
-            BC_OP_GPU_CMD_BIND_GP: { Value pipe = POP(), cmd = POP(); sgpu_cmd_bind_graphics_pipeline((int)AS_NUMBER(cmd), (int)AS_NUMBER(pipe)); DISPATCH(); }
-            BC_OP_GPU_CMD_BIND_DS: { Value bp = POP(), set = POP(), layout = POP(), cmd = POP(); sgpu_cmd_bind_descriptor_set((int)AS_NUMBER(cmd), (int)AS_NUMBER(layout), (int)AS_NUMBER(set), (int)AS_NUMBER(bp)); DISPATCH(); }
-            BC_OP_GPU_CMD_SET_VP: { Value maxd = POP(), mind = POP(), vh = POP(), vw = POP(), vy = POP(), vx = POP(), cmd = POP(); sgpu_cmd_set_viewport((int)AS_NUMBER(cmd), (float)AS_NUMBER(vx), (float)AS_NUMBER(vy), (float)AS_NUMBER(vw), (float)AS_NUMBER(vh), (float)AS_NUMBER(mind), (float)AS_NUMBER(maxd)); DISPATCH(); }
-            BC_OP_GPU_CMD_SET_SC: { Value sh = POP(), sw = POP(), sy = POP(), sx = POP(), cmd = POP(); sgpu_cmd_set_scissor((int)AS_NUMBER(cmd), (int)AS_NUMBER(sx), (int)AS_NUMBER(sy), (int)AS_NUMBER(sw), (int)AS_NUMBER(sh)); DISPATCH(); }
-            BC_OP_GPU_CMD_BIND_VB: { Value buf = POP(), cmd = POP(); sgpu_cmd_bind_vertex_buffer((int)AS_NUMBER(cmd), (int)AS_NUMBER(buf)); DISPATCH(); }
-            BC_OP_GPU_CMD_BIND_IB: { Value buf = POP(), cmd = POP(); sgpu_cmd_bind_index_buffer((int)AS_NUMBER(cmd), (int)AS_NUMBER(buf)); DISPATCH(); }
-            BC_OP_GPU_CMD_DRAW_IDX: { Value fi = POP(), vo = POP(), fidx = POP(), inst = POP(), idx_count = POP(), cmd = POP(); sgpu_cmd_draw_indexed((int)AS_NUMBER(cmd), (int)AS_NUMBER(idx_count), (int)AS_NUMBER(inst), (int)AS_NUMBER(fidx), (int)AS_NUMBER(vo), (int)AS_NUMBER(fi)); DISPATCH(); }
-            BC_OP_GPU_SUBMIT_SYNC: { Value fence = POP(), signal = POP(), wait = POP(), cmd = POP(); PUSH(val_bool(sgpu_submit_with_sync((int)AS_NUMBER(cmd), (int)AS_NUMBER(wait), (int)AS_NUMBER(signal), (int)AS_NUMBER(fence)))); DISPATCH(); }
-            BC_OP_GPU_ACQUIRE_IMG: { Value sem = POP(); int img_idx = 0; sgpu_acquire_next_image((int)AS_NUMBER(sem), &img_idx); PUSH(val_number(img_idx)); DISPATCH(); }
-            BC_OP_GPU_PRESENT: { Value idx = POP(), sem = POP(); sgpu_present((int)AS_NUMBER(sem), (int)AS_NUMBER(idx)); DISPATCH(); }
-            BC_OP_GPU_WAIT_FENCE: { Value timeout = POP(), fence = POP(); sgpu_wait_fence((int)AS_NUMBER(fence), AS_NUMBER(timeout)); DISPATCH(); }
-            BC_OP_GPU_RESET_FENCE: { Value fence = POP(); sgpu_reset_fence((int)AS_NUMBER(fence)); DISPATCH(); }
-            BC_OP_GPU_UPDATE_UNIFORM: {
+            BC_OP_GPU_CMD_END_RP: { VM_CHECK_STACK(1); Value cmd = POP(); sgpu_cmd_end_render_pass((int)AS_NUMBER(cmd)); DISPATCH(); }
+            BC_OP_GPU_CMD_DRAW: { VM_CHECK_STACK(5); Value fi = POP(), fv = POP(), inst = POP(), verts = POP(), cmd = POP(); sgpu_cmd_draw((int)AS_NUMBER(cmd), (int)AS_NUMBER(verts), (int)AS_NUMBER(inst), (int)AS_NUMBER(fv), (int)AS_NUMBER(fi)); DISPATCH(); }
+            BC_OP_GPU_CMD_BIND_GP: { VM_CHECK_STACK(2); Value pipe = POP(), cmd = POP(); sgpu_cmd_bind_graphics_pipeline((int)AS_NUMBER(cmd), (int)AS_NUMBER(pipe)); DISPATCH(); }
+            BC_OP_GPU_CMD_BIND_DS: { VM_CHECK_STACK(4); Value bp = POP(), set = POP(), layout = POP(), cmd = POP(); sgpu_cmd_bind_descriptor_set((int)AS_NUMBER(cmd), (int)AS_NUMBER(layout), (int)AS_NUMBER(set), (int)AS_NUMBER(bp)); DISPATCH(); }
+            BC_OP_GPU_CMD_SET_VP: { VM_CHECK_STACK(7); Value maxd = POP(), mind = POP(), vh = POP(), vw = POP(), vy = POP(), vx = POP(), cmd = POP(); sgpu_cmd_set_viewport((int)AS_NUMBER(cmd), (float)AS_NUMBER(vx), (float)AS_NUMBER(vy), (float)AS_NUMBER(vw), (float)AS_NUMBER(vh), (float)AS_NUMBER(mind), (float)AS_NUMBER(maxd)); DISPATCH(); }
+            BC_OP_GPU_CMD_SET_SC: { VM_CHECK_STACK(5); Value sh = POP(), sw = POP(), sy = POP(), sx = POP(), cmd = POP(); sgpu_cmd_set_scissor((int)AS_NUMBER(cmd), (int)AS_NUMBER(sx), (int)AS_NUMBER(sy), (int)AS_NUMBER(sw), (int)AS_NUMBER(sh)); DISPATCH(); }
+            BC_OP_GPU_CMD_BIND_VB: { VM_CHECK_STACK(2); Value buf = POP(), cmd = POP(); sgpu_cmd_bind_vertex_buffer((int)AS_NUMBER(cmd), (int)AS_NUMBER(buf)); DISPATCH(); }
+            BC_OP_GPU_CMD_BIND_IB: { VM_CHECK_STACK(2); Value buf = POP(), cmd = POP(); sgpu_cmd_bind_index_buffer((int)AS_NUMBER(cmd), (int)AS_NUMBER(buf)); DISPATCH(); }
+            BC_OP_GPU_CMD_DRAW_IDX: { VM_CHECK_STACK(6); Value fi = POP(), vo = POP(), fidx = POP(), inst = POP(), idx_count = POP(), cmd = POP(); sgpu_cmd_draw_indexed((int)AS_NUMBER(cmd), (int)AS_NUMBER(idx_count), (int)AS_NUMBER(inst), (int)AS_NUMBER(fidx), (int)AS_NUMBER(vo), (int)AS_NUMBER(fi)); DISPATCH(); }
+            BC_OP_GPU_SUBMIT_SYNC: { VM_CHECK_STACK(4); Value fence = POP(), signal = POP(), wait = POP(), cmd = POP(); PUSH(val_bool(sgpu_submit_with_sync((int)AS_NUMBER(cmd), (int)AS_NUMBER(wait), (int)AS_NUMBER(signal), (int)AS_NUMBER(fence)))); DISPATCH(); }
+            BC_OP_GPU_ACQUIRE_IMG: { VM_CHECK_STACK(1); Value sem = POP(); int img_idx = 0; sgpu_acquire_next_image((int)AS_NUMBER(sem), &img_idx); PUSH(val_number(img_idx)); DISPATCH(); }
+            BC_OP_GPU_PRESENT: { VM_CHECK_STACK(2); Value idx = POP(), sem = POP(); sgpu_present((int)AS_NUMBER(sem), (int)AS_NUMBER(idx)); DISPATCH(); }
+            BC_OP_GPU_WAIT_FENCE: { VM_CHECK_STACK(2); Value timeout = POP(), fence = POP(); sgpu_wait_fence((int)AS_NUMBER(fence), AS_NUMBER(timeout)); DISPATCH(); }
+            BC_OP_GPU_RESET_FENCE: { VM_CHECK_STACK(1); Value fence = POP(); sgpu_reset_fence((int)AS_NUMBER(fence)); DISPATCH(); }
+            BC_OP_GPU_UPDATE_UNIFORM: { VM_CHECK_STACK(2);
                 Value data = POP(), handle = POP();
                 if (IS_ARRAY(data) && data.as.array->count > 0) {
-                    SYNC_SP(); float* floats = SAGE_ALLOC(sizeof(float) * (size_t)data.as.array->count);
-                    for (int fi = 0; fi < data.as.array->count; fi++) floats[fi] = (float)AS_NUMBER(data.as.array->elements[fi]);
+                     SYNC_SP(); float* floats = SAGE_ALLOC(sizeof(float) * (size_t)data.as.array->count);
+                     if (floats == NULL) { result = vm_error("VM uniform allocation failed."); goto done; }
+                     for (int fi = 0; fi < data.as.array->count; fi++) floats[fi] = (float)AS_NUMBER(data.as.array->elements[fi]);
                     sgpu_update_uniform((int)AS_NUMBER(handle), floats, data.as.array->count); free(floats);
                 }
                 DISPATCH();
             }
-            BC_OP_GPU_CMD_PUSH_CONST: {
+            BC_OP_GPU_CMD_PUSH_CONST: { VM_CHECK_STACK(4);
                 Value data = POP(), stages = POP(), layout = POP(), cmd = POP();
                 if (IS_ARRAY(data) && data.as.array->count > 0) {
-                    SYNC_SP(); float* floats = SAGE_ALLOC(sizeof(float) * (size_t)data.as.array->count);
-                    for (int fi = 0; fi < data.as.array->count; fi++) floats[fi] = (float)AS_NUMBER(data.as.array->elements[fi]);
+                     SYNC_SP(); float* floats = SAGE_ALLOC(sizeof(float) * (size_t)data.as.array->count);
+                     if (floats == NULL) { result = vm_error("VM uniform allocation failed."); goto done; }
+                     for (int fi = 0; fi < data.as.array->count; fi++) floats[fi] = (float)AS_NUMBER(data.as.array->elements[fi]);
                     sgpu_cmd_push_constants((int)AS_NUMBER(cmd), (int)AS_NUMBER(layout), (int)AS_NUMBER(stages), floats, data.as.array->count); free(floats);
                 }
                 DISPATCH();
             }
-            BC_OP_GPU_CMD_DISPATCH: { Value gz = POP(), gy = POP(), gx = POP(), cmd = POP(); sgpu_cmd_dispatch((int)AS_NUMBER(cmd), (int)AS_NUMBER(gx), (int)AS_NUMBER(gy), (int)AS_NUMBER(gz)); DISPATCH(); }
+            BC_OP_GPU_CMD_DISPATCH: { VM_CHECK_STACK(4); Value gz = POP(), gy = POP(), gx = POP(), cmd = POP(); sgpu_cmd_dispatch((int)AS_NUMBER(cmd), (int)AS_NUMBER(gx), (int)AS_NUMBER(gy), (int)AS_NUMBER(gz)); DISPATCH(); }
 
             // --- Generator opcodes ---
-            BC_OP_YIELD: {
-                Value yielded = POP();
+             BC_OP_YIELD: {
+                 VM_CHECK_STACK(1);
+                 Value yielded = POP();
                 SYNC_SP();
                 // Save state for generator resumption (if in generator context)
                 if (vm.current_generator != NULL) {
@@ -1061,9 +1295,13 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 goto done;
             }
             BC_OP_CREATE_GENERATOR: {
-                uint16_t name_index = READ_U16();
-                uint16_t function_index = READ_U16();
-                VM_CHECK_CONST(frame->chunk, name_index);
+                VM_CHECK_IP(2);
+;
+                 uint16_t name_index = READ_U16();
+                VM_CHECK_IP(2);
+;
+                 uint16_t function_index = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, name_index);
                 (void)name_index;
                 BytecodeProgram* program = frame->chunk->program;
                 if (program == NULL || function_index >= program->function_count) {
@@ -1081,25 +1319,32 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 PUSH(gen_val);
                 DISPATCH();
             }
-            BC_OP_GENERATOR_NEXT: {
-                Value gen_val = POP();
-                if (gen_val.type != VAL_GENERATOR) {
-                    result = vm_error("GENERATOR_NEXT called on non-generator value.");
-                    goto done;
-                }
-                GeneratorValue* gen = gen_val.as.generator;
-                if (gen->is_exhausted) {
-                    PUSH(val_nil());
-                    DISPATCH();
-                }
-                // Execute/resume generator
-                ExecResult gen_result = vm_execute_generator(gen, frame->closure);
-                if (gen_result.is_throwing) { result = gen_result; goto done; }
-                PUSH(gen_result.value);
-                DISPATCH();
-            }
-
+             BC_OP_GENERATOR_NEXT: {
+                 VM_CHECK_STACK(1);
+                 Value gen_val = POP();
+                 if (gen_val.type != VAL_GENERATOR) {
+                     result = vm_error("GENERATOR_NEXT called on non-generator value.");
+                     goto done;
+                 }
+                 GeneratorValue* gen = gen_val.as.generator;
+                 if (gen == NULL) {
+                     result = vm_error("Invalid generator value.");
+                     goto done;
+                 }
+                 if (gen->is_exhausted) {
+                     PUSH(val_nil());
+                     DISPATCH();
+                 }
+                 // Execute/resume generator
+                 ExecResult gen_result = vm_execute_generator(gen, frame->closure);
+                 if (gen_result.is_throwing) { result = gen_result; goto done; }
+                 PUSH(gen_result.value);
+                 DISPATCH();
+             }
 #ifndef __GNUC__
+             default:
+                 result = vm_error("VM opcode is out of bounds.");
+                 goto done;
         }
 #endif
     }
@@ -1127,6 +1372,7 @@ done:
 #endif
 
 static ExecResult vm_execute_generator(GeneratorValue* gen, Env* caller_env) {
+    if (gen == NULL) return vm_error("Invalid generator value.");
     BytecodeChunk* gen_chunk = NULL;
     int fn_idx = gen->vm_function_index;
     if (fn_idx >= 0 && g_active_vm && g_active_vm->chunk && g_active_vm->chunk->program) {
@@ -1180,7 +1426,10 @@ static ExecResult vm_execute_generator(GeneratorValue* gen, Env* caller_env) {
 
 ExecResult vm_execute_program(BytecodeProgram* program, Env* env) {
     ExecResult result = vm_normal(val_nil());
-    if (program == NULL) return result;
+    if (program == NULL) return vm_error("VM program is null.");
+    if (!bytecode_program_validate(program, NULL, 0)) {
+        return vm_error("Invalid VM bytecode artifact.");
+    }
     for (int i = 0; i < program->chunk_count; i++) {
         result = vm_execute_chunk(&program->chunks[i], env);
         if (result.is_throwing) return result;

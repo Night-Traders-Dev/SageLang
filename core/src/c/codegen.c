@@ -20,6 +20,15 @@
 // Forward declaration
 extern Stmt* parse_program(const char* source);
 
+static _Thread_local int isel_failed;
+
+static void isel_set_failed(const char* message) {
+    if (!isel_failed) {
+        fprintf(stderr, "codegen: %s\n", message);
+    }
+    isel_failed = 1;
+}
+
 // ============================================================================
 // Code Buffer Implementation
 // ============================================================================
@@ -109,6 +118,7 @@ void vinst_free_list(VInst* head) {
 
 void isel_init(ISelContext* ctx) {
     memset(ctx, 0, sizeof(*ctx));
+    isel_failed = 0;
     ctx->next_vreg = 0;
     ctx->next_label = 0;
     ctx->string_pool_cap = 16;
@@ -294,6 +304,9 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
                 kind = VINST_AND;
             }
 
+            if (kind == VINST_ADD && !(op_len == 1 && *op == '+')) {
+                isel_set_failed("unsupported binary operator in native selection");
+            }
             VInst* v = vinst_new(kind);
             v->dest = r;
             v->src1 = left;
@@ -356,11 +369,13 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
                     free(mod_name);
                     free(prop_name);
                 } else {
+                    isel_set_failed("computed call targets are not supported by native selection");
                     VInst* v = vinst_new(VINST_LOAD_NIL);
                     v->dest = r;
                     isel_append(ctx, v);
                 }
             } else {
+                isel_set_failed("computed call targets are not supported by native selection");
                 VInst* v = vinst_new(VINST_LOAD_NIL);
                 v->dest = r;
                 isel_append(ctx, v);
@@ -414,11 +429,7 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             return r;
         }
         case EXPR_DICT: {
-            // Dict literals are complex (key-value pairs with string keys).
-            // The native codegen IR lacks a VINST_DICT_NEW instruction.
-            if (expr->as.dict.count > 0) {
-                fprintf(stderr, "codegen warning: dict literal with %d entries emitted as nil (native dict codegen not yet available)\n", expr->as.dict.count);
-            }
+            isel_set_failed("dict literals are not supported by native selection");
             int r = isel_vreg(ctx);
             VInst* v = vinst_new(VINST_LOAD_NIL);
             v->dest = r;
@@ -511,6 +522,7 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             return isel_expr(ctx, expr->as.await.expression);
         }
         default: {
+            isel_set_failed("expression type is not supported by native selection");
             int r = isel_vreg(ctx);
             VInst* v = vinst_new(VINST_LOAD_NIL);
             v->dest = r;
@@ -598,7 +610,7 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
         }
         case STMT_WHILE: {
             if (ctx->loop_depth >= 1024) {
-                fprintf(stderr, "codegen: loop nesting too deep (max 1024)\n");
+                isel_set_failed("loop nesting too deep (max 1024)");
                 return;
             }
             char* cond_label = isel_label(ctx);
@@ -680,7 +692,7 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             isel_append(ctx, init_store);
 
             if (ctx->loop_depth >= 1024) {
-                fprintf(stderr, "codegen: loop nesting too deep (max 1024)\n");
+                isel_set_failed("loop nesting too deep (max 1024)");
                 return;
             }
             char* cond_label = isel_label(ctx);
@@ -781,6 +793,8 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
                 VInst* jmp = vinst_new(VINST_JUMP);
                 jmp->label = SAGE_STRDUP(ctx->loop_end_labels[ctx->loop_depth - 1]);
                 isel_append(ctx, jmp);
+            } else {
+                isel_set_failed("break outside a loop is not supported by native selection");
             }
             break;
         }
@@ -789,24 +803,16 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
                 VInst* jmp = vinst_new(VINST_JUMP);
                 jmp->label = SAGE_STRDUP(ctx->loop_cond_labels[ctx->loop_depth - 1]);
                 isel_append(ctx, jmp);
+            } else {
+                isel_set_failed("continue outside a loop is not supported by native selection");
             }
             break;
         }
-        case STMT_MATCH: {
-            // Lower match to comparison chain
-            int val_reg = isel_expr(ctx, stmt->as.match_stmt.value);
-            for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
-                isel_expr(ctx, stmt->as.match_stmt.cases[i]->pattern);
-                isel_stmt_list(ctx, stmt->as.match_stmt.cases[i]->body);
-            }
-            if (stmt->as.match_stmt.default_case) {
-                isel_stmt_list(ctx, stmt->as.match_stmt.default_case);
-            }
-            (void)val_reg;
+        case STMT_MATCH:
+            isel_set_failed("match statements are not supported by native selection");
             break;
-        }
         case STMT_DEFER:
-            isel_stmt_list(ctx, stmt->as.defer.statement);
+            isel_set_failed("defer statements are not supported by native selection");
             break;
         case STMT_PROC: {
             char* name = tok_str(stmt->as.proc.name);
@@ -838,14 +844,24 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
             break;
         }
         case STMT_IMPORT: {
-            if (stmt->as.import.module_name == NULL) break;
+            if (stmt->as.import.module_name == NULL) {
+                isel_set_failed("module import has no name");
+                break;
+            }
             if (isel_is_module_imported(ctx, stmt->as.import.module_name)) break;
             isel_mark_module_imported(ctx, stmt->as.import.module_name);
 
             char* path = resolve_module_path(global_module_cache, stmt->as.import.module_name);
-            if (!path) break;
+            if (!path) {
+                isel_set_failed("module import could not be resolved");
+                break;
+            }
             char* source = read_file(path);
-            if (!source) { free(path); break; }
+            if (!source) {
+                isel_set_failed("module import source could not be read");
+                free(path);
+                break;
+            }
             Stmt* mod_ast = parse_program(source);
             char* old_mod = ctx->current_module;
             ctx->current_module = SAGE_STRDUP(stmt->as.import.module_name);
@@ -862,7 +878,11 @@ static void isel_stmt(ISelContext* ctx, Stmt* stmt) {
         case STMT_RAISE:
         case STMT_YIELD:
         case STMT_ASYNC_PROC:
-            fprintf(stderr, "Codegen backend: unsupported statement type %d\n", stmt->type);
+        case STMT_STRUCT:
+        case STMT_ENUM:
+        case STMT_TRAIT:
+        case STMT_MACRO_DEF:
+            isel_set_failed("statement type is not supported by native selection");
             break;
         default:
             break;
@@ -894,6 +914,10 @@ VInst* isel_compile(const char* source, const char* input_path, int opt_level, i
     ctx.head = NULL;
     ctx.tail = NULL;
 
+    if (isel_failed) {
+        vinst_free_list(result);
+        result = NULL;
+    }
     free_stmt(program);
     // Don't free ctx.head since we returned it
     for (int i = 0; i < ctx.string_pool_count; i++) {
@@ -1171,7 +1195,7 @@ static void emit_asm_vinst_x86_64(FILE* out, VInst* v) {
     }
 }
 
-static void emit_asm_vinst_aarch64(FILE* out, VInst* v) {
+static void emit_asm_vinst_aarch64(FILE* out, VInst* v, int stack_size) {
     switch (v->kind) {
         case VINST_LOAD_IMM:
             fprintf(out, "  // v%d = number %f\n", v->dest, v->imm_number);
@@ -1240,7 +1264,8 @@ static void emit_asm_vinst_aarch64(FILE* out, VInst* v) {
         case VINST_RET:
             fprintf(out, "  ldr x0, [sp, #%d]\n", v->src1 * 16);
             fprintf(out, "  ldr x1, [sp, #%d]\n", v->src1 * 16 + 8);
-            fprintf(out, "  ldp x29, x30, [sp], #%d\n", 256);
+            fprintf(out, "  ldp x29, x30, [sp, #%d]\n", stack_size - 16);
+            fprintf(out, "  add sp, sp, #%d\n", stack_size);
             fprintf(out, "  ret\n");
             break;
         default:
@@ -1338,8 +1363,8 @@ static void emit_asm_vinst_rv64(FILE* out, VInst* v, int stack_size) {
         case VINST_RET:
             emit_rv64_load(out, "a0", v->src1 * 16);
             emit_rv64_load(out, "a1", v->src1 * 16 + 8);
-            fprintf(out, "  ld ra, 8(sp)\n");
-            fprintf(out, "  ld s0, 0(sp)\n");
+            fprintf(out, "  ld ra, %d(sp)\n", stack_size - 8);
+            fprintf(out, "  ld s0, %d(sp)\n", stack_size - 16);
             fprintf(out, "  li t0, %d\n", stack_size);
             fprintf(out, "  add sp, sp, t0\n");
             fprintf(out, "  ret\n");
@@ -1350,7 +1375,7 @@ static void emit_asm_vinst_rv64(FILE* out, VInst* v, int stack_size) {
     }
 }
 
-static void emit_asm_vinst_mips(FILE* out, VInst* v) {
+static void emit_asm_vinst_mips(FILE* out, VInst* v, int stack_size) {
     switch (v->kind) {
         case VINST_LOAD_IMM:
             fprintf(out, "  # v%d = number %f\n", v->dest, v->imm_number);
@@ -1451,7 +1476,7 @@ static void emit_asm_vinst_mips(FILE* out, VInst* v) {
             break;
         case VINST_RET:
             fprintf(out, "  # return v%d\n", v->src1);
-            fprintf(out, "  lw $t1, 244($sp)\n");
+            fprintf(out, "  lw $t1, %d($sp)\n", stack_size - 12);
             fprintf(out, "  lw $t2, %d($sp)\n", v->src1 * 16 + 32);
             fprintf(out, "  sw $t2, 0($t1)\n");
             fprintf(out, "  lw $t2, %d($sp)\n", v->src1 * 16 + 32 + 4);
@@ -1460,9 +1485,9 @@ static void emit_asm_vinst_mips(FILE* out, VInst* v) {
             fprintf(out, "  sw $t2, 8($t1)\n");
             fprintf(out, "  lw $t2, %d($sp)\n", v->src1 * 16 + 32 + 12);
             fprintf(out, "  sw $t2, 12($t1)\n");
-            fprintf(out, "  lw $ra, 252($sp)\n");
-            fprintf(out, "  lw $fp, 248($sp)\n");
-            fprintf(out, "  addiu $sp, $sp, 256\n");
+            fprintf(out, "  lw $ra, %d($sp)\n", stack_size - 4);
+            fprintf(out, "  lw $fp, %d($sp)\n", stack_size - 8);
+            fprintf(out, "  addiu $sp, $sp, %d\n", stack_size);
             fprintf(out, "  jr $ra\n");
             fprintf(out, "  nop\n");
             break;
@@ -1528,25 +1553,26 @@ static void emit_asm_function_prologue(FILE* out, CodegenTarget target, const ch
         case CODEGEN_TARGET_X86_64:
             fprintf(out, "  pushq %%rbp\n");
             fprintf(out, "  movq %%rsp, %%rbp\n");
-            fprintf(out, "  subq $%d, %%rsp\n", 256);  // fixed stack frame
+            fprintf(out, "  subq $%d, %%rsp\n", stack_size);
             break;
         case CODEGEN_TARGET_AARCH64:
-            fprintf(out, "  stp x29, x30, [sp, #-256]!\n");
+            fprintf(out, "  sub sp, sp, #%d\n", stack_size);
+            fprintf(out, "  stp x29, x30, [sp, #%d]\n", stack_size - 16);
             fprintf(out, "  mov x29, sp\n");
             break;
         case CODEGEN_TARGET_RV64:
             fprintf(out, "  li t0, -%d\n", stack_size);
             fprintf(out, "  add sp, sp, t0\n");
-            fprintf(out, "  sd ra, 8(sp)\n");
-            fprintf(out, "  sd s0, 0(sp)\n");
+            fprintf(out, "  sd ra, %d(sp)\n", stack_size - 8);
+            fprintf(out, "  sd s0, %d(sp)\n", stack_size - 16);
             fprintf(out, "  li t0, %d\n", stack_size);
             fprintf(out, "  add s0, sp, t0\n");
             break;
         case CODEGEN_TARGET_MIPS:
-            fprintf(out, "  addiu $sp, $sp, -256\n");
-            fprintf(out, "  sw $ra, 252($sp)\n");
-            fprintf(out, "  sw $fp, 248($sp)\n");
-            fprintf(out, "  sw $a0, 244($sp)\n");
+            fprintf(out, "  addiu $sp, $sp, -%d\n", stack_size);
+            fprintf(out, "  sw $ra, %d($sp)\n", stack_size - 4);
+            fprintf(out, "  sw $fp, %d($sp)\n", stack_size - 8);
+            fprintf(out, "  sw $a0, %d($sp)\n", stack_size - 12);
             fprintf(out, "  move $fp, $sp\n");
             break;
     }
@@ -1561,26 +1587,176 @@ static void emit_asm_function_epilogue(FILE* out, CodegenTarget target, int stac
             break;
         case CODEGEN_TARGET_AARCH64:
             fprintf(out, "  mov w0, #0\n");
-            fprintf(out, "  ldp x29, x30, [sp], #256\n");
+            fprintf(out, "  ldp x29, x30, [sp, #%d]\n", stack_size - 16);
+            fprintf(out, "  add sp, sp, #%d\n", stack_size);
             fprintf(out, "  ret\n");
             break;
         case CODEGEN_TARGET_RV64:
             fprintf(out, "  li a0, 0\n");
-            fprintf(out, "  ld ra, 8(sp)\n");
-            fprintf(out, "  ld s0, 0(sp)\n");
+            fprintf(out, "  ld ra, %d(sp)\n", stack_size - 8);
+            fprintf(out, "  ld s0, %d(sp)\n", stack_size - 16);
             fprintf(out, "  li t0, %d\n", stack_size);
             fprintf(out, "  add sp, sp, t0\n");
             fprintf(out, "  ret\n");
             break;
         case CODEGEN_TARGET_MIPS:
             fprintf(out, "  move $v0, $zero\n");
-            fprintf(out, "  lw $ra, 252($sp)\n");
-            fprintf(out, "  lw $fp, 248($sp)\n");
-            fprintf(out, "  addiu $sp, $sp, 256\n");
+            fprintf(out, "  lw $ra, %d($sp)\n", stack_size - 4);
+            fprintf(out, "  lw $fp, %d($sp)\n", stack_size - 8);
+            fprintf(out, "  addiu $sp, $sp, %d\n", stack_size);
             fprintf(out, "  jr $ra\n");
             fprintf(out, "  nop\n");
             break;
     }
+}
+
+static int native_vinst_supported(CodegenTarget target, const VInst* v) {
+    switch (target) {
+        case CODEGEN_TARGET_X86_64:
+            switch (v->kind) {
+                case VINST_LOAD_IMM:
+                case VINST_LOAD_STRING:
+                case VINST_LOAD_BOOL:
+                case VINST_LOAD_NIL:
+                case VINST_LOAD_GLOBAL:
+                case VINST_STORE_GLOBAL:
+                case VINST_ADD:
+                case VINST_SUB:
+                case VINST_MUL:
+                case VINST_DIV:
+                case VINST_MOD:
+                case VINST_NEG:
+                case VINST_NOT:
+                case VINST_EQ:
+                case VINST_NEQ:
+                case VINST_LT:
+                case VINST_GT:
+                case VINST_LTE:
+                case VINST_GTE:
+                case VINST_AND:
+                case VINST_OR:
+                case VINST_CALL_BUILTIN:
+                case VINST_CALL:
+                case VINST_BRANCH:
+                case VINST_JUMP:
+                case VINST_LABEL:
+                case VINST_RET:
+                case VINST_PRINT:
+                    return 1;
+                default:
+                    return 0;
+            }
+        case CODEGEN_TARGET_AARCH64:
+            switch (v->kind) {
+                case VINST_LOAD_IMM:
+                case VINST_ADD:
+                case VINST_SUB:
+                case VINST_MUL:
+                case VINST_DIV:
+                case VINST_EQ:
+                case VINST_NEQ:
+                case VINST_LT:
+                case VINST_GT:
+                case VINST_LTE:
+                case VINST_GTE:
+                case VINST_BRANCH:
+                case VINST_JUMP:
+                case VINST_LABEL:
+                case VINST_RET:
+                case VINST_PRINT:
+                    return 1;
+                default:
+                    return 0;
+            }
+        case CODEGEN_TARGET_RV64:
+            switch (v->kind) {
+                case VINST_LOAD_IMM:
+                case VINST_ADD:
+                case VINST_SUB:
+                case VINST_MUL:
+                case VINST_DIV:
+                case VINST_EQ:
+                case VINST_NEQ:
+                case VINST_LT:
+                case VINST_GT:
+                case VINST_LTE:
+                case VINST_GTE:
+                case VINST_BRANCH:
+                case VINST_JUMP:
+                case VINST_LABEL:
+                case VINST_RET:
+                case VINST_PRINT:
+                    return 1;
+                default:
+                    return 0;
+            }
+        case CODEGEN_TARGET_MIPS:
+            switch (v->kind) {
+                case VINST_LOAD_IMM:
+                case VINST_LOAD_STRING:
+                case VINST_LOAD_GLOBAL:
+                case VINST_STORE_GLOBAL:
+                case VINST_ADD:
+                case VINST_SUB:
+                case VINST_MUL:
+                case VINST_DIV:
+                case VINST_EQ:
+                case VINST_NEQ:
+                case VINST_LT:
+                case VINST_GT:
+                case VINST_LTE:
+                case VINST_GTE:
+                case VINST_BRANCH:
+                case VINST_JUMP:
+                case VINST_LABEL:
+                case VINST_RET:
+                case VINST_PRINT:
+                    return 1;
+                default:
+                    return 0;
+            }
+    }
+    return 0;
+}
+
+static int validate_native_program(const ISelContext* ctx, CodegenTarget target) {
+    for (const VInst* v = ctx->head; v != NULL; v = v->next) {
+        if (v->kind == VINST_CALL || v->kind == VINST_CALL_BUILTIN) {
+            fprintf(stderr, "codegen: native calls are not supported safely\n");
+            return 0;
+        }
+        if (!native_vinst_supported(target, v)) {
+            fprintf(stderr, "codegen: unsupported instruction %d for target %s\n",
+                    v->kind, target_name(target));
+            return 0;
+        }
+        if ((v->kind == VINST_BRANCH || v->kind == VINST_JUMP ||
+             v->kind == VINST_LABEL) &&
+            (v->label == NULL || (v->kind == VINST_BRANCH && v->label_false == NULL))) {
+            fprintf(stderr, "codegen: branch instruction has no label\n");
+            return 0;
+        }
+        if (v->kind == VINST_CALL_BUILTIN && target == CODEGEN_TARGET_X86_64 &&
+            v->call_arg_count > 4) {
+            fprintf(stderr, "codegen: builtin call has more than four arguments\n");
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int calculate_native_stack_size(const ISelContext* ctx, CodegenTarget target) {
+    if (ctx->next_vreg < 0) return -1;
+    size_t slots = (size_t)ctx->next_vreg;
+    if (slots > (SIZE_MAX - 64) / 16) return -1;
+    size_t required = slots * 16 + 32;
+    if (target == CODEGEN_TARGET_MIPS) required = slots * 16 + 64;
+    if (required > 4095) return -1;
+    if (target == CODEGEN_TARGET_AARCH64 && required > 512) return -1;
+    size_t aligned = (required + 15) & ~((size_t)15);
+    if (aligned < 256) aligned = 256;
+    if (aligned > INT_MAX) return -1;
+    return (int)aligned;
 }
 
 static int write_asm_output(const char* source, const char* input_path, const char* output_path,
@@ -1596,6 +1772,19 @@ static int write_asm_output(const char* source, const char* input_path, const ch
     isel_init(&ctx);
     isel_stmt_list(&ctx, program);
 
+    int stack_size = calculate_native_stack_size(&ctx, spec.target);
+    if (stack_size < 0) {
+        fprintf(stderr, "codegen: native stack size exceeds supported range\n");
+        free_stmt(program);
+        isel_free(&ctx);
+        return 0;
+    }
+    if (isel_failed || !validate_native_program(&ctx, spec.target)) {
+        free_stmt(program);
+        isel_free(&ctx);
+        return 0;
+    }
+
     FILE* out = fopen(output_path, "w");
     if (out == NULL) {
         fprintf(stderr, "Could not open assembly output \"%s\": %s\n", output_path, strerror(errno));
@@ -1605,20 +1794,15 @@ static int write_asm_output(const char* source, const char* input_path, const ch
     }
 
     const char* entry_symbol = codegen_entry_symbol(spec.profile);
-    int stack_size = 256;
-    int required_stack = ctx.next_vreg * 16 + 64;
-    if (required_stack > stack_size) {
-        stack_size = (required_stack + 15) & ~15;
-    }
     emit_asm_header(out, spec.target, spec.profile, entry_symbol);
     emit_asm_function_prologue(out, spec.target, entry_symbol, stack_size);
 
     for (VInst* v = ctx.head; v != NULL; v = v->next) {
         switch (spec.target) {
             case CODEGEN_TARGET_X86_64: emit_asm_vinst_x86_64(out, v); break;
-            case CODEGEN_TARGET_AARCH64: emit_asm_vinst_aarch64(out, v); break;
+            case CODEGEN_TARGET_AARCH64: emit_asm_vinst_aarch64(out, v, stack_size); break;
             case CODEGEN_TARGET_RV64: emit_asm_vinst_rv64(out, v, stack_size); break;
-            case CODEGEN_TARGET_MIPS: emit_asm_vinst_mips(out, v); break;
+            case CODEGEN_TARGET_MIPS: emit_asm_vinst_mips(out, v, stack_size); break;
         }
     }
 
@@ -1741,9 +1925,14 @@ int compile_source_to_native(const char* source, const char* input_path,
     // Generate assembly, then assemble + link (secure temp file)
     char asm_path[] = "/tmp/sage_asm_XXXXXX.s";
     int asm_fd = mkstemps(asm_path, 2);
-    if (asm_fd >= 0) close(asm_fd);
+    if (asm_fd < 0) {
+        fprintf(stderr, "Could not create secure assembly temp file: %s\n", strerror(errno));
+        return 0;
+    }
+    close(asm_fd);
 
     if (!write_asm_output(source, input_path, asm_path, spec, opt_level, debug_info)) {
+        unlink(asm_path);
         return 0;
     }
 

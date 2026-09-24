@@ -5,13 +5,55 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SAGE="$SCRIPT_DIR/../core/sage"
+SAGE="${SAGE:-$SCRIPT_DIR/../core/sage}"
 TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Prefer local lib/ over any installed system copy
 export SAGE_PATH="$SCRIPT_DIR/../core/lib${SAGE_PATH:+:$SAGE_PATH}"
 PASS=0
 FAIL=0
 ERRORS=""
+FILTER="${SAGE_TEST_FILTER:-}"
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --filter)
+            [ "$#" -ge 2 ] || { printf 'Missing value for --filter\n' >&2; exit 2; }
+            FILTER="$2"
+            shift 2
+            ;;
+        --filter=*)
+            FILTER="${1#--filter=}"
+            shift
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            FILTER="$1"
+            shift
+            break
+            ;;
+    esac
+done
+FILTER_MATCHED=0
+
+matches_filter() {
+    local value="$1"
+    if [ -z "$FILTER" ]; then
+        return 0
+    fi
+    case "$value" in
+        *"$FILTER"*) FILTER_MATCHED=1; return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+smoke_output_failed() {
+    local output="$1"
+    [[ "$output" =~ (^|[[:space:]])[1-9][0-9]*[[:space:]]+(failed|failures)([[:space:]]|$) ]] && return 0
+    [[ "$output" =~ (^|[[:space:]])FAIL([[:space:]]|$) ]] && return 0
+    return 1
+}
 
 # Colors
 GREEN='\033[0;32m'
@@ -24,6 +66,8 @@ NC='\033[0m'
 capture_test_output() {
     local test_file="$1"
     local run_mode test_dir test_base tmp_path
+    TEST_OUTPUT=""
+    TEST_EXIT_CODE=0
     run_mode=$(grep '^# RUN: ' "$test_file" | head -1 | sed 's/^# RUN: //')
     test_dir=$(dirname "$test_file")
     test_base=$(basename "$test_file")
@@ -82,69 +126,82 @@ capture_test_output() {
 
 run_test() {
     local test_file="$1"
-    local test_name
+    local test_name expected actual has_expect
     test_name=$(basename "$test_file" .sage)
-
-    # Extract expected output from # EXPECT: comments at top of file
-    local expected
+    if grep -q '^# EXPECT: ' "$test_file"; then
+        has_expect=1
+    else
+        has_expect=0
+    fi
     expected=$(grep '^# EXPECT: ' "$test_file" | sed 's/^# EXPECT: //')
 
-    if [ -z "$expected" ]; then
-        echo -e "  ${YELLOW}SKIP${NC} $test_name (no EXPECT comments)"
-        return
-    fi
-
-    local actual
     capture_test_output "$test_file"
     actual="$TEST_OUTPUT"
 
-    if [ "$actual" = "$expected" ]; then
+    if [ "$has_expect" -eq 0 ]; then
+        if [ "$TEST_EXIT_CODE" -eq 0 ] && ! smoke_output_failed "$actual"; then
+            echo -e "  ${GREEN}PASS${NC} $test_name (no EXPECT; exit status)"
+            PASS=$((PASS + 1))
+        else
+            echo -e "  ${RED}FAIL${NC} $test_name"
+            ERRORS="${ERRORS}\n${RED}--- FAIL: ${test_name} ---${NC}\n"
+            ERRORS="${ERRORS}  Exit status: ${TEST_EXIT_CODE}\n"
+            ERRORS="${ERRORS}  Got:\n$(printf '%s\n' "$actual" | sed 's/^/    /')\n"
+            FAIL=$((FAIL + 1))
+        fi
+        return 0
+    fi
+
+    if [ "$actual" = "$expected" ] && { [ "$TEST_EXIT_CODE" -eq 0 ] || [[ "$expected" == error:* ]]; }; then
         echo -e "  ${GREEN}PASS${NC} $test_name"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         echo -e "  ${RED}FAIL${NC} $test_name"
         ERRORS="${ERRORS}\n${RED}--- FAIL: ${test_name} ---${NC}\n"
-        ERRORS="${ERRORS}  Expected:\n$(echo "$expected" | sed 's/^/    /')\n"
-        ERRORS="${ERRORS}  Got:\n$(echo "$actual" | sed 's/^/    /')\n"
-        ((FAIL++))
+        ERRORS="${ERRORS}  Exit status: ${TEST_EXIT_CODE}\n"
+        ERRORS="${ERRORS}  Expected:\n$(printf '%s\n' "$expected" | sed 's/^/    /')\n"
+        ERRORS="${ERRORS}  Got:\n$(printf '%s\n' "$actual" | sed 's/^/    /')\n"
+        FAIL=$((FAIL + 1))
     fi
+    return 0
 }
 
 run_error_test() {
     local test_file="$1"
-    local test_name
+    local test_name output
     test_name=$(basename "$test_file" .sage)
 
     local expected_errors=()
     mapfile -t expected_errors < <(grep '^# EXPECT_ERROR: ' "$test_file" | sed 's/^# EXPECT_ERROR: //')
 
     if [ "${#expected_errors[@]}" -eq 0 ]; then
-        echo -e "  ${YELLOW}SKIP${NC} $test_name (no EXPECT_ERROR comment)"
-        return
+        return 0
     fi
 
-    local output missing=()
+    local missing=()
     capture_test_output "$test_file"
     output="$TEST_OUTPUT"
-
+    if [ "$TEST_EXIT_CODE" -eq 0 ]; then
+        missing+=("command exited successfully")
+    fi
     for expected_error in "${expected_errors[@]}"; do
-        if ! echo "$output" | grep -qF -- "$expected_error"; then
-            missing+=("$expected_error")
-        fi
+        [[ "$output" == *"$expected_error"* ]] || missing+=("$expected_error")
     done
 
     if [ "${#missing[@]}" -eq 0 ]; then
         echo -e "  ${GREEN}PASS${NC} $test_name"
-        ((PASS++))
+        PASS=$((PASS + 1))
     else
         echo -e "  ${RED}FAIL${NC} $test_name"
         ERRORS="${ERRORS}\n${RED}--- FAIL: ${test_name} ---${NC}\n"
+        ERRORS="${ERRORS}  Exit status: ${TEST_EXIT_CODE}\n"
         for expected_error in "${missing[@]}"; do
             ERRORS="${ERRORS}  Missing error text: ${expected_error}\n"
         done
-        ERRORS="${ERRORS}  Got:\n$(echo "$output" | sed 's/^/    /')\n"
-        ((FAIL++))
+        ERRORS="${ERRORS}  Got:\n$(printf '%s\n' "$output" | sed 's/^/    /')\n"
+        FAIL=$((FAIL + 1))
     fi
+    return 0
 }
 
 echo -e "${BOLD}${CYAN}╔════════════════════════════════════════╗${NC}"
@@ -160,6 +217,7 @@ for category_dir in "$TESTS_DIR"/*/; do
 
     for test_file in "$category_dir"/*.sage; do
         [ -f "$test_file" ] || continue
+        matches_filter "$test_file" || continue
         if grep -q '^# EXPECT_ERROR: ' "$test_file"; then
             run_error_test "$test_file"
         else
@@ -172,6 +230,7 @@ done
 # Also run top-level test files (from project root so lib/ imports resolve)
 for test_file in "$TESTS_DIR"/*.sage; do
     [ -f "$test_file" ] || continue
+    matches_filter "$test_file" || continue
     if grep -q '^# EXPECT_ERROR: ' "$test_file"; then
         run_error_test "$test_file"
     else
@@ -180,6 +239,10 @@ for test_file in "$TESTS_DIR"/*.sage; do
 done
 
 # Summary
+if [ -n "$FILTER" ] && [ "$FILTER_MATCHED" -eq 0 ]; then
+    echo -e "  ${YELLOW}SKIP${NC} filter matched no tests: $FILTER"
+    exit 2
+fi
 echo -e "${BOLD}════════════════════════════════════════${NC}"
 TOTAL=$((PASS + FAIL))
 echo -e "${BOLD}Results: ${GREEN}${PASS} passed${NC}, ${RED}${FAIL} failed${NC} / ${TOTAL} total"

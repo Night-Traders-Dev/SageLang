@@ -1,5 +1,5 @@
 gc_disable()
-import io
+import sys
 import rich.style
 import rich.color
 import rich.theme
@@ -9,20 +9,20 @@ import rich.measure
 # Core console output with styling, sizing, and terminal detection
 
 # Terminal capabilities
+proc _terminal_dimension(name, fallback):
+    let raw = sys.getenv(name)
+    if raw == nil or raw == "":
+        return fallback
+    let value = tonumber(raw)
+    if value == nil or value <= 0:
+        return fallback
+    return value
+
 proc detect_terminal_size():
-    # Try to detect terminal size via stty
-    # Returns {"width": w, "height": h}
-    # Default to 80x24 if can't detect
-    let raw = io.shell("stty size 2>/dev/null")
-    if raw != nil and len(raw) > 0:
-        let trimmed = replace(replace(raw, chr(10), ""), chr(13), "")
-        let parts = split(trimmed, " ")
-        if len(parts) == 2:
-            let h = tonumber(parts[0])
-            let w = tonumber(parts[1])
-            if w != nil and h != nil and w > 0 and h > 0:
-                return {"width": w, "height": h}
-    return {"width": 80, "height": 24}
+    return {
+        "width": _terminal_dimension("COLUMNS", 80),
+        "height": _terminal_dimension("LINES", 24)
+    }
 
 # Console class
 class Console:

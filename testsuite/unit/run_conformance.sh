@@ -3,11 +3,13 @@
 # Runs conformance tests across: interpreter, C backend, LLVM backend
 set -e
 
-SAGE="./sage"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SAGE="${SAGE:-$REPO_ROOT/core/sage}"
 PASS=0
 FAIL=0
 SKIP=0
-TESTS_DIR="tests/40_conformance"
+TESTS_DIR="${SAGE_CONFORMANCE_TESTS:-$SCRIPT_DIR/40_conformance}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

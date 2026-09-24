@@ -22,7 +22,15 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdint.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
 #include "sage_thread.h"
+
+static int stdlib_sandbox_denied(const char* capability) {
+    if (!interpreter_sandbox_mode()) return 0;
+    fprintf(stderr, "Sandbox denied capability: %s\n", capability);
+    return 1;
+}
 
 // ============================================================================
 // Helper: Create a native module (pre-loaded, no .sage file needed)
@@ -112,6 +120,7 @@ extern int bytecode_program_read_file(BytecodeProgram* program, const char* inpu
 // Wait, I'll just refactor bytecode_program_write_file in program.c to use a FILE* helper.
 
 static Value vm_serialize_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_nil();
     if (argCount < 1) return val_nil();
     BytecodeProgram* program = NULL;
     if (IS_VM_PROGRAM(args[0])) {
@@ -159,6 +168,7 @@ static Value vm_serialize_native(int argCount, Value* args) {
 }
 
 static Value vm_deserialize_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_nil();
     if (argCount < 1 || args[0].type != VAL_BYTES) return val_nil();
     BytesValue* bv = args[0].as.bytes;
 
@@ -512,6 +522,7 @@ Module* create_math_module(ModuleCache* cache) {
 // ============================================================================
 
 static Value io_readfile_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_nil();
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* path = AS_STRING(args[0]);
 
@@ -532,6 +543,7 @@ static Value io_readfile_native(int argCount, Value* args) {
 }
 
 static Value io_writefile_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_bool(0);
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_bool(0);
     const char* path = AS_STRING(args[0]);
     const char* content = AS_STRING(args[1]);
@@ -547,6 +559,7 @@ static Value io_writefile_native(int argCount, Value* args) {
 }
 
     static Value io_writebytes_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_bool(0);
     if (argCount < 2 || !IS_STRING(args[0])) return val_bool(0);
     if (!IS_BYTES(args[1]) && !IS_ARRAY(args[1])) return val_bool(0);
     const char* path = AS_STRING(args[0]);
@@ -597,8 +610,10 @@ static Value io_writefile_native(int argCount, Value* args) {
     return val_bool(total_written == (size_t)arr->count);
  }
 
- static Value io_appendbytes_native(int argCount, Value* args) {
+  static Value io_appendbytes_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_bool(0);
     if (argCount < 2 || !IS_STRING(args[0])) return val_bool(0);
+
     if (!IS_BYTES(args[1]) && !IS_ARRAY(args[1])) return val_bool(0);
     const char* path = AS_STRING(args[0]);
 
@@ -648,8 +663,10 @@ static Value io_writefile_native(int argCount, Value* args) {
     return val_bool(total_written == (size_t)arr->count);
  }
 
- static Value io_appendfile_native(int argCount, Value* args) {
+  static Value io_appendfile_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_bool(0);
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_bool(0);
+
     const char* path = AS_STRING(args[0]);
     const char* content = AS_STRING(args[1]);
 
@@ -664,17 +681,20 @@ static Value io_writefile_native(int argCount, Value* args) {
 }
 
 static Value io_exists_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_bool(0);
     if (argCount < 1 || !IS_STRING(args[0])) return val_bool(0);
     struct stat st;
     return val_bool(stat(AS_STRING(args[0]), &st) == 0);
 }
 
 static Value io_remove_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_bool(0);
     if (argCount < 1 || !IS_STRING(args[0])) return val_bool(0);
     return val_bool(remove(AS_STRING(args[0])) == 0);
 }
 
 static Value io_isdir_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_bool(0);
     if (argCount < 1 || !IS_STRING(args[0])) return val_bool(0);
     struct stat st;
     if (stat(AS_STRING(args[0]), &st) != 0) return val_bool(0);
@@ -682,6 +702,7 @@ static Value io_isdir_native(int argCount, Value* args) {
 }
 
 static Value io_mkdir_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_bool(0);
     if (argCount < 1 || !IS_STRING(args[0])) return val_bool(0);
     // Use 0755 instead of 0777 for better security (CWE-276)
     int status = mkdir(AS_STRING(args[0]), 0755);
@@ -689,6 +710,7 @@ static Value io_mkdir_native(int argCount, Value* args) {
 }
 
 static Value io_filesize_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_number(-1);
     if (argCount < 1 || !IS_STRING(args[0])) return val_number(-1);
     struct stat st;
     if (stat(AS_STRING(args[0]), &st) != 0) return val_number(-1);
@@ -697,6 +719,7 @@ static Value io_filesize_native(int argCount, Value* args) {
 
 // io.readbytes(path) -> Bytes (byte buffer)
 static Value io_readbytes_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_nil();
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     FILE* f = fopen(AS_STRING(args[0]), "rb");
     if (!f) return val_nil();
@@ -739,6 +762,7 @@ static Value io_readbytes_native(int argCount, Value* args) {
 
 // io.listdir(path) -> array of filename strings
 static Value io_listdir_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_nil();
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     DIR* d = opendir(AS_STRING(args[0]));
     if (!d) return val_nil();
@@ -964,6 +988,7 @@ static Value sys_args_native(int argCount, Value* args) {
 }
 
 static Value sys_exit_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("process")) return val_nil();
     int code = 0;
     if (argCount >= 1 && IS_NUMBER(args[0])) {
         code = (int)AS_NUMBER(args[0]);
@@ -988,6 +1013,7 @@ static Value sys_platform_native(int argCount, Value* args) {
 }
 
 static Value sys_getenv_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("os")) return val_nil();
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* val = getenv(AS_STRING(args[0]));
     if (!val) return val_nil();
@@ -1002,6 +1028,7 @@ static Value sys_clock_native(int argCount, Value* args) {
 }
 
 static Value sys_sleep_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("clock")) return val_nil();
     if (argCount < 1 || !IS_NUMBER(args[0])) return val_nil();
     double seconds = AS_NUMBER(args[0]);
     if (seconds > 0) {
@@ -1031,6 +1058,7 @@ static int is_safe_command(const char* cmd) {
 }
 
 static Value sys_exec_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("process")) return val_number(-1);
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* cmd = AS_STRING(args[0]);
     if (!is_safe_command(cmd)) {
@@ -1042,6 +1070,7 @@ static Value sys_exec_native(int argCount, Value* args) {
 }
 
 static Value sys_stdout_write_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_nil();
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* text = AS_STRING(args[0]);
     fputs(text, stdout);
@@ -1050,6 +1079,7 @@ static Value sys_stdout_write_native(int argCount, Value* args) {
 }
 
 static Value sys_getch_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_string("");
     (void)argCount; (void)args;
     int ch = getchar();
     if (ch == EOF) return val_string("");
@@ -1058,6 +1088,7 @@ static Value sys_getch_native(int argCount, Value* args) {
 }
 
 static Value sys_stderr_write_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_nil();
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* text = AS_STRING(args[0]);
     fputs(text, stderr);
@@ -1066,6 +1097,7 @@ static Value sys_stderr_write_native(int argCount, Value* args) {
 }
 
 static Value sys_shell_exec_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("process")) return val_string("");
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* cmd = AS_STRING(args[0]);
     if (!is_safe_command(cmd)) {
@@ -1102,6 +1134,7 @@ static Value sys_shell_exec_native(int argCount, Value* args) {
 }
 
 static Value sys_call_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("process")) return val_nil();
     if (argCount < 1) return val_nil();
     Value callee = args[0];
     int nargs = argCount - 1;
@@ -1334,6 +1367,7 @@ static Value fat_parse_boot_sector_native(int argCount, Value* args) {
 }
 
 static Value fat_probe_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_nil();
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
     const char* path = AS_STRING(args[0]);
     FILE* f = fopen(path, "rb");
@@ -1413,6 +1447,163 @@ Module* create_fat_module(ModuleCache* cache) {
 }
 
 // ============================================================================
+// ED25519 MODULE
+// ============================================================================
+
+static int crypto_hex_value(char value) {
+    if (value >= '0' && value <= '9') return value - '0';
+    if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+    if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+    return -1;
+}
+
+static int crypto_hex_decode(const char* text, size_t expected, unsigned char* output) {
+    if (text == NULL || output == NULL || strlen(text) != expected * 2) return 0;
+    for (size_t i = 0; i < expected; i++) {
+        int high = crypto_hex_value(text[i * 2]);
+        int low = crypto_hex_value(text[i * 2 + 1]);
+        if (high < 0 || low < 0) return 0;
+        output[i] = (unsigned char)((high << 4) | low);
+    }
+    return 1;
+}
+
+static char* crypto_hex_encode(const unsigned char* data, size_t length) {
+    static const char digits[] = "0123456789abcdef";
+    if (data == NULL || length > (SIZE_MAX - 1) / 2) return NULL;
+    char* result = SAGE_ALLOC(length * 2 + 1);
+    for (size_t i = 0; i < length; i++) {
+        result[i * 2] = digits[data[i] >> 4];
+        result[i * 2 + 1] = digits[data[i] & 15];
+    }
+    result[length * 2] = '\0';
+    return result;
+}
+
+static Value ed25519_keypair_from_private_native(int argc, Value* args) {
+    if (argc != 1 || !IS_STRING(args[0])) return val_nil();
+    unsigned char private_key[32];
+    if (!crypto_hex_decode(AS_STRING(args[0]), sizeof(private_key), private_key)) return val_nil();
+    EVP_PKEY* pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, NULL, private_key, sizeof(private_key));
+    if (pkey == NULL) return val_nil();
+    unsigned char public_key[32];
+    size_t public_length = sizeof(public_key);
+    int ok = EVP_PKEY_get_raw_public_key(pkey, public_key, &public_length) == 1 &&
+             public_length == sizeof(public_key);
+    char* public_hex = ok ? crypto_hex_encode(public_key, sizeof(public_key)) : NULL;
+    EVP_PKEY_free(pkey);
+    if (public_hex == NULL) return val_nil();
+    gc_pin();
+    Value result = val_dict();
+    dict_set(&result, "private", val_string(AS_STRING(args[0])));
+    dict_set(&result, "public", val_string(public_hex));
+    free(public_hex);
+    gc_unpin();
+    return result;
+}
+
+static Value ed25519_generate_keypair_native(int argc, Value* args) {
+    (void)argc;
+    (void)args;
+    EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_ED25519, NULL);
+    if (ctx == NULL || EVP_PKEY_keygen_init(ctx) <= 0) {
+        EVP_PKEY_CTX_free(ctx);
+        return val_nil();
+    }
+    EVP_PKEY* pkey = NULL;
+    if (EVP_PKEY_keygen(ctx, &pkey) <= 0 || pkey == NULL) {
+        EVP_PKEY_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+        return val_nil();
+    }
+    unsigned char private_key[32];
+    unsigned char public_key[32];
+    size_t private_length = sizeof(private_key);
+    size_t public_length = sizeof(public_key);
+    int ok = EVP_PKEY_get_raw_private_key(pkey, private_key, &private_length) == 1 &&
+             EVP_PKEY_get_raw_public_key(pkey, public_key, &public_length) == 1 &&
+             private_length == sizeof(private_key) && public_length == sizeof(public_key);
+    EVP_PKEY_free(pkey);
+    EVP_PKEY_CTX_free(ctx);
+    if (!ok) return val_nil();
+    char* private_hex = crypto_hex_encode(private_key, sizeof(private_key));
+    char* public_hex = crypto_hex_encode(public_key, sizeof(public_key));
+    if (private_hex == NULL || public_hex == NULL) {
+        free(private_hex);
+        free(public_hex);
+        return val_nil();
+    }
+    gc_pin();
+    Value result = val_dict();
+    dict_set(&result, "private", val_string(private_hex));
+    dict_set(&result, "public", val_string(public_hex));
+    free(private_hex);
+    free(public_hex);
+    gc_unpin();
+    return result;
+}
+
+static Value ed25519_sign_native(int argc, Value* args) {
+    if (argc != 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) return val_nil();
+    unsigned char private_key[32];
+    if (!crypto_hex_decode(AS_STRING(args[1]), sizeof(private_key), private_key)) return val_nil();
+    EVP_PKEY* pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, NULL, private_key, sizeof(private_key));
+    EVP_MD_CTX* digest = EVP_MD_CTX_new();
+    if (pkey == NULL || digest == NULL || EVP_DigestSignInit(digest, NULL, NULL, NULL, pkey) <= 0) {
+        EVP_PKEY_free(pkey);
+        EVP_MD_CTX_free(digest);
+        return val_nil();
+    }
+    const unsigned char* message = (const unsigned char*)AS_STRING(args[0]);
+    size_t message_length = strlen(AS_STRING(args[0]));
+    size_t signature_length = 0;
+    int ok = EVP_DigestSign(digest, NULL, &signature_length, message, message_length) == 1;
+    unsigned char* signature = ok ? SAGE_ALLOC(signature_length) : NULL;
+    if (signature != NULL)
+        ok = EVP_DigestSign(digest, signature, &signature_length, message, message_length) == 1;
+    char* signature_hex = ok ? crypto_hex_encode(signature, signature_length) : NULL;
+    free(signature);
+    EVP_MD_CTX_free(digest);
+    EVP_PKEY_free(pkey);
+    if (signature_hex == NULL) return val_nil();
+    Value result = val_string(signature_hex);
+    free(signature_hex);
+    return result;
+}
+
+static Value ed25519_verify_native(int argc, Value* args) {
+    if (argc != 3 || !IS_STRING(args[0]) || !IS_STRING(args[1]) || !IS_STRING(args[2]))
+        return val_bool(0);
+    unsigned char signature[64];
+    unsigned char public_key[32];
+    if (!crypto_hex_decode(AS_STRING(args[1]), sizeof(signature), signature) ||
+        !crypto_hex_decode(AS_STRING(args[2]), sizeof(public_key), public_key)) return val_bool(0);
+    EVP_PKEY* pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, NULL, public_key, sizeof(public_key));
+    EVP_MD_CTX* digest = EVP_MD_CTX_new();
+    if (pkey == NULL || digest == NULL || EVP_DigestVerifyInit(digest, NULL, NULL, NULL, pkey) <= 0) {
+        EVP_PKEY_free(pkey);
+        EVP_MD_CTX_free(digest);
+        return val_bool(0);
+    }
+    int valid = EVP_DigestVerify(digest, signature, sizeof(signature),
+                                 (const unsigned char*)AS_STRING(args[0]),
+                                 strlen(AS_STRING(args[0]))) == 1;
+    EVP_MD_CTX_free(digest);
+    EVP_PKEY_free(pkey);
+    return val_bool(valid);
+}
+
+Module* create_ed25519_module(ModuleCache* cache) {
+    Module* m = create_native_module(cache, "ed25519");
+    Environment* e = m->env;
+    env_define_const(e, "generate_keypair", 16, val_native(ed25519_generate_keypair_native));
+    env_define_const(e, "keypair_from_private", 20, val_native(ed25519_keypair_from_private_native));
+    env_define_const(e, "sign", 4, val_native(ed25519_sign_native));
+    env_define_const(e, "verify", 6, val_native(ed25519_verify_native));
+    return m;
+}
+
+// ============================================================================
 // THREAD MODULE
 // ============================================================================
 
@@ -1455,6 +1646,7 @@ static void* sage_thread_entry(void* data) {
 
 // thread.spawn(func, arg1, arg2, ...) -> thread handle
 Value thread_spawn_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("thread")) return val_nil();
     if (argCount < 1 || !IS_FUNCTION(args[0])) {
         fprintf(stderr, "Runtime Error: thread.spawn requires a function argument.\n");
         return val_nil();
@@ -1491,7 +1683,7 @@ Value thread_spawn_native(int argCount, Value* args) {
     }
 
     // Create thread value
-    ThreadValue* tv = SAGE_ALLOC(sizeof(ThreadValue));
+    ThreadValue* tv = gc_alloc(VAL_THREAD, sizeof(ThreadValue));
     tv->handle = handle;
     tv->data = td;
     tv->joined = 0;
@@ -1501,6 +1693,7 @@ Value thread_spawn_native(int argCount, Value* args) {
 
 // thread.join(handle) -> result value
 static Value thread_join_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("thread")) return val_nil();
     if (argCount < 1 || !IS_THREAD(args[0])) {
         fprintf(stderr, "Runtime Error: thread.join requires a thread handle.\n");
         return val_nil();
@@ -1530,12 +1723,13 @@ static Value thread_join_native(int argCount, Value* args) {
 
 // thread.mutex() -> mutex handle
 static Value thread_mutex_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("thread")) return val_nil();
     (void)argCount; (void)args;
 
     sage_mutex_t* mtx = SAGE_ALLOC(sizeof(sage_mutex_t));
     sage_mutex_init(mtx);
 
-    MutexValue* mv = SAGE_ALLOC(sizeof(MutexValue));
+    MutexValue* mv = gc_alloc(VAL_MUTEX, sizeof(MutexValue));
     mv->handle = mtx;
 
     return val_mutex(mv);
@@ -1543,6 +1737,7 @@ static Value thread_mutex_native(int argCount, Value* args) {
 
 // thread.lock(mutex)
 static Value thread_lock_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("thread")) return val_nil();
     if (argCount < 1 || !IS_MUTEX(args[0])) {
         fprintf(stderr, "Runtime Error: thread.lock requires a mutex.\n");
         return val_nil();
@@ -1554,6 +1749,7 @@ static Value thread_lock_native(int argCount, Value* args) {
 
 // thread.unlock(mutex)
 static Value thread_unlock_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("thread")) return val_nil();
     if (argCount < 1 || !IS_MUTEX(args[0])) {
         fprintf(stderr, "Runtime Error: thread.unlock requires a mutex.\n");
         return val_nil();
@@ -1565,6 +1761,7 @@ static Value thread_unlock_native(int argCount, Value* args) {
 
 // thread.sleep(seconds)
 static Value thread_sleep_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("thread")) return val_nil();
     if (argCount < 1 || !IS_NUMBER(args[0])) return val_nil();
     double seconds = AS_NUMBER(args[0]);
     sage_sleep_secs(seconds);
@@ -1573,6 +1770,7 @@ static Value thread_sleep_native(int argCount, Value* args) {
 
 // thread.id() -> current thread id as number
 static Value thread_id_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("thread")) return val_number(-1);
     (void)argCount; (void)args;
     return val_number((double)sage_thread_id());
 }

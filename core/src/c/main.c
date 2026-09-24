@@ -2479,8 +2479,14 @@ int main(int argc, const char* argv[]) {
                 snprintf(magic, sizeof(magic), "\n__SAGE_%s_%s__\n", "EMBEDDED", "START");
                 int magic_len = (int)strlen(magic);
                 
-                fseek(f, search_start, SEEK_SET);
-                char* buf = malloc(size - search_start);
+                 if (size <= 0 || search_start < 0 || search_start > size) {
+                     fclose(f);
+                     f = NULL;
+                 }
+                 if (f != NULL) {
+                 fseek(f, search_start, SEEK_SET);
+                 char* buf = malloc((size_t)size - (size_t)search_start);
+
                 size_t bytes_read = 0;
                 if (buf && (bytes_read = fread(buf, 1, size - search_start, f)) >= (size_t)magic_len) {
                     char* found = NULL;
@@ -2497,9 +2503,11 @@ int main(int argc, const char* argv[]) {
                         embedded_script[script_len] = '\0';
                     }
                 }
-                if (buf) free(buf);
-                fclose(f);
-            }
+                 if (buf) free(buf);
+                 fclose(f);
+                 }
+             }
+
         }
     }
 

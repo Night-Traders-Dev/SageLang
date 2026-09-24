@@ -82,6 +82,68 @@ static int stmt_has_pragma(Stmt* stmt, const char* name) {
     return 0;
 }
 
+static int aot_expr_is_stateless(const Expr* expr) {
+    if (!expr) return 1;
+    switch (expr->type) {
+        case EXPR_NUMBER:
+        case EXPR_STRING:
+        case EXPR_BOOL:
+        case EXPR_NIL:
+            return 1;
+        case EXPR_BINARY:
+            return 0;
+        default:
+            return 0;
+    }
+}
+
+static int aot_stmt_list_requires_interpreter(const Stmt* stmt);
+
+static int aot_stmt_requires_interpreter(const Stmt* stmt) {
+    if (!stmt) return 0;
+    for (const Stmt* current = stmt; current; current = current->next) {
+        switch (current->type) {
+            case STMT_PRINT:
+                if (!aot_expr_is_stateless(current->as.print.expression)) return 1;
+                break;
+            case STMT_EXPRESSION:
+                if (!aot_expr_is_stateless(current->as.expression)) return 1;
+                break;
+            case STMT_BLOCK:
+                if (aot_stmt_list_requires_interpreter(current->as.block.statements))
+                    return 1;
+                break;
+            case STMT_IF:
+                if (!aot_expr_is_stateless(current->as.if_stmt.condition) ||
+                    aot_stmt_list_requires_interpreter(current->as.if_stmt.then_branch) ||
+                    aot_stmt_list_requires_interpreter(current->as.if_stmt.else_branch))
+                    return 1;
+                break;
+            case STMT_MATCH: {
+                if (!aot_expr_is_stateless(current->as.match_stmt.value))
+                    return 1;
+                for (int i = 0; i < current->as.match_stmt.case_count; i++) {
+                    const CaseClause* clause = current->as.match_stmt.cases[i];
+                    if (!aot_expr_is_stateless(clause->pattern) ||
+                        (clause->guard && !aot_expr_is_stateless(clause->guard)) ||
+                        aot_stmt_list_requires_interpreter(clause->body))
+                        return 1;
+                }
+                if (aot_stmt_list_requires_interpreter(current->as.match_stmt.default_case))
+                    return 1;
+                break;
+            }
+            default:
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static int aot_stmt_list_requires_interpreter(const Stmt* stmt) {
+    return aot_stmt_requires_interpreter(stmt);
+}
+
 ExecResult sage_execute_stmt(Stmt* stmt, Env* env, SageRuntimeMode mode) {
     if (stmt == NULL) {
         return runtime_normal(val_nil());
@@ -107,6 +169,14 @@ ExecResult sage_execute_stmt(Stmt* stmt, Env* env, SageRuntimeMode mode) {
 #endif
     }
 
+    if (mode == SAGE_RUNTIME_SANDBOX) {
+        int previous_sandbox_mode = interpreter_sandbox_mode();
+        interpreter_set_sandbox_mode(1);
+        ExecResult result = interpret(stmt, env);
+        interpreter_set_sandbox_mode(previous_sandbox_mode);
+        return result;
+    }
+
     if (mode == SAGE_RUNTIME_JIT) {
         // JIT mode: interpret with profiling enabled
         if (!g_repl_jit_initialized) {
@@ -121,6 +191,9 @@ ExecResult sage_execute_stmt(Stmt* stmt, Env* env, SageRuntimeMode mode) {
     }
 
     if (mode == SAGE_RUNTIME_AOT) {
+        if (aot_stmt_requires_interpreter(stmt)) {
+            return interpret(stmt, env);
+        }
         // AOT mode: compile statement to optimized C, then compile and run
         AotCompiler aot;
         aot_init(&aot, 2);

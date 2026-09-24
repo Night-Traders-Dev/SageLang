@@ -29,6 +29,9 @@ int bytecode_program_write_file(const BytecodeProgram* program, const char* outp
                                 char* error, size_t error_size);
 int bytecode_program_read_file(BytecodeProgram* program, const char* input_path,
                                char* error, size_t error_size);
+int bytecode_program_validate(const BytecodeProgram* program, char* error, size_t error_size);
+int bytecode_chunk_validate(const BytecodeChunk* chunk, int initial_stack,
+                            const BytecodeProgram* program, char* error, size_t error_size);
 int compile_source_to_vm_artifact(const char* source, const char* input_path, const char* output_path,
                                   int opt_level, int debug_info);
 

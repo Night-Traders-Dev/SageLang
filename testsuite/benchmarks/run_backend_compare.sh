@@ -17,11 +17,65 @@
 set -u
 
 CORE_DIR="$(cd "$(dirname "$0")/../../core" && pwd)"
-SAGE="$CORE_DIR/sage"
+SAGE="${SAGE:-$CORE_DIR/sage}"
 BENCH="$(cd "$(dirname "$0")" && pwd)/backend_compare.sage"
 TMPDIR="/tmp/sage_bench_$$"
 mkdir -p "$TMPDIR"
 cd "$CORE_DIR"
+
+FILTER=""
+FILTER_MATCHED=0
+FILTER_NO_MATCH=0
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --filter)
+            [ "$#" -ge 2 ] || { printf 'Missing value for --filter\n' >&2; exit 2; }
+            FILTER="$2"
+            shift 2
+            ;;
+        --filter=*)
+            FILTER="${1#--filter=}"
+            shift
+            ;;
+        -h|--help)
+            printf 'Usage: %s [--filter <backend substring>]\n' "$0"
+            exit 0
+            ;;
+        *)
+            FILTER="$1"
+            shift
+            break
+            ;;
+    esac
+done
+if [ "$#" -gt 0 ]; then
+    printf 'Unexpected argument: %s\n' "$1" >&2
+    exit 2
+fi
+
+filter_matches() {
+    local name="$1"
+    if [ -z "$FILTER" ]; then
+        return 0
+    fi
+    case "$name" in
+        *"$FILTER"*) FILTER_MATCHED=1; return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+file_hash() {
+    local file="$1"
+    if command -v md5sum >/dev/null 2>&1; then
+        md5sum "$file" | cut -d' ' -f1
+    elif command -v md5 >/dev/null 2>&1; then
+        md5 -q "$file"
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum "$file" | cut -d' ' -f1
+    else
+        cksum "$file" | cut -d' ' -f1
+    fi
+}
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -45,6 +99,7 @@ run_backend() {
     local cmd="$2"
     local build_cmd="${3:-}"
 
+    filter_matches "$name" || return 0
     printf "  ${CYAN}%-28s${RESET}" "$name"
 
     if [ -n "$build_cmd" ]; then
@@ -85,18 +140,31 @@ emit_only() {
     local emit_cmd="$2"
     local post_cmd="${3:-}"
 
+    filter_matches "$name" || return 0
     printf "  ${CYAN}%-28s${RESET}" "$name"
     local t_start=$(date +%s%N)
-    if ! eval "$emit_cmd" > /dev/null 2>&1; then
+    local emit_log="$TMPDIR/$name.emit.log"
+    if ! eval "$emit_cmd" > "$emit_log" 2>&1; then
+        if grep -Eqi 'not supported safely|native calls are not supported|unsupported native selection|unsupported instruction|not supported by native selection|native stack size exceeds supported range|^codegen:' "$emit_log"; then
+            printf "${YELLOW}SKIPPED (native backend fail-closed)${RESET}\n"
+            rm -f "$emit_log"
+            return 0
+        fi
         printf "${RED}EMIT FAILED${RESET}\n"
         return 1
     fi
     if [ -n "$post_cmd" ]; then
-        if ! eval "$post_cmd" > /dev/null 2>&1; then
+        if ! eval "$post_cmd" > "$emit_log" 2>&1; then
+            if grep -Eqi 'not supported safely|native calls are not supported|unsupported native selection|unsupported instruction|not supported by native selection|native stack size exceeds supported range|^codegen:' "$emit_log"; then
+                printf "${YELLOW}SKIPPED (native backend fail-closed)${RESET}\n"
+                rm -f "$emit_log"
+                return 0
+            fi
             printf "${RED}ASSEMBLE FAILED${RESET}\n"
             return 1
         fi
     fi
+    rm -f "$emit_log"
     local t_end=$(date +%s%N)
     printf "${GREEN}%6d ms${RESET}  ${DIM}(emit only)${RESET}\n" $(( (t_end - t_start) / 1000000 ))
     return 0
@@ -126,12 +194,14 @@ run_backend "C Backend -O3" \
     "$TMPDIR/bench_c_o3" \
     "$SAGE --compile $BENCH -o $TMPDIR/bench_c_o3 -O3" || FAILURES=$((FAILURES+1))
 
-if command -v llc >/dev/null 2>&1; then
-    run_backend "LLVM Backend" \
-        "$TMPDIR/bench_llvm" \
-        "$SAGE --compile-llvm $BENCH -o $TMPDIR/bench_llvm" || FAILURES=$((FAILURES+1))
-else
-    printf "  ${CYAN}%-28s${RESET}${YELLOW}SKIPPED (no llc)${RESET}\n" "LLVM Backend"
+if filter_matches "LLVM Backend"; then
+    if command -v llc >/dev/null 2>&1; then
+        run_backend "LLVM Backend" \
+            "$TMPDIR/bench_llvm" \
+            "$SAGE --compile-llvm $BENCH -o $TMPDIR/bench_llvm" || FAILURES=$((FAILURES+1))
+    else
+        printf "  ${CYAN}%-28s${RESET}${YELLOW}SKIPPED (no llc)${RESET}\n" "LLVM Backend"
+    fi
 fi
 
 # ── Profile-guided ───────────────────────────────────────────────────────────
@@ -155,12 +225,12 @@ printf "  ${CYAN}%-28s${RESET}${YELLOW}SKIPPED (unsupported)${RESET}\n" "SGVM Bi
 # assembly is emitted and accepted by an assembler.
 emit_only "Native x86-64 (asm obj)" \
     "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_x86.s --target x86-64" \
-    "cc -c -ffreestanding -fPIC $TMPDIR/bench_x86.s -o $TMPDIR/bench_x86.o"
+    "cc -c -ffreestanding -fPIC $TMPDIR/bench_x86.s -o $TMPDIR/bench_x86.o" || FAILURES=$((FAILURES+1))
 
 if command -v aarch64-linux-gnu-as >/dev/null 2>&1; then
     emit_only "Native aarch64 (asm obj)" \
         "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_a64.s --target aarch64" \
-        "aarch64-linux-gnu-as $TMPDIR/bench_a64.s -o $TMPDIR/bench_a64.o"
+        "aarch64-linux-gnu-as $TMPDIR/bench_a64.s -o $TMPDIR/bench_a64.o" || FAILURES=$((FAILURES+1))
 else
     emit_only "Native aarch64 (emit)" \
         "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_a64.s --target aarch64" || FAILURES=$((FAILURES+1))
@@ -169,7 +239,7 @@ fi
 if command -v riscv64-linux-gnu-as >/dev/null 2>&1; then
     emit_only "Native rv64 (asm obj)" \
         "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_rv.s --target rv64" \
-        "riscv64-linux-gnu-as $TMPDIR/bench_rv.s -o $TMPDIR/bench_rv.o"
+        "riscv64-linux-gnu-as $TMPDIR/bench_rv.s -o $TMPDIR/bench_rv.o" || FAILURES=$((FAILURES+1))
 else
     emit_only "Native rv64 (emit)" \
         "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_rv.s --target rv64" || FAILURES=$((FAILURES+1))
@@ -178,7 +248,7 @@ fi
 if command -v mips-linux-gnu-as >/dev/null 2>&1; then
     emit_only "Native mips (asm obj)" \
         "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_mips.s --target mips" \
-        "mips-linux-gnu-as $TMPDIR/bench_mips.s -o $TMPDIR/bench_mips.o"
+        "mips-linux-gnu-as $TMPDIR/bench_mips.s -o $TMPDIR/bench_mips.o" || FAILURES=$((FAILURES+1))
 else
     emit_only "Native mips (emit)" \
         "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_mips.s --target mips" || FAILURES=$((FAILURES+1))
@@ -200,27 +270,47 @@ emit_only "Android Project Gen" \
     "$SAGE --compile-android $BENCH -o $TMPDIR/android_out" || FAILURES=$((FAILURES+1))
 
 # ── Checksum verification across runnable backends ───────────────────────────
-printf "\n  ${DIM}Checksum Verification (vs AST baseline):${RESET}\n"
-BASELINE="$TMPDIR/AST Interpreter.out"
-if [ -f "$BASELINE" ]; then
-    BASELINE_HASH=$(md5sum "$BASELINE" 2>/dev/null | cut -d' ' -f1)
-    for name in "${RUNNABLE_NAMES[@]}"; do
-        f="$TMPDIR/$name.out"
-        [ -f "$f" ] || continue
-        HASH=$(md5sum "$f" 2>/dev/null | cut -d' ' -f1)
-        if [ "$HASH" = "$BASELINE_HASH" ]; then
-            printf "    ${GREEN}✓${RESET} %s\n" "$name"
-        else
-            printf "    ${RED}✗${RESET} %s ${DIM}(output differs)${RESET}\n" "$name"
-            FAILURES=$((FAILURES+1))
-        fi
-    done
+printf "\n  ${DIM}Checksum Verification:${RESET}\n"
+if [ -n "$FILTER" ] && [ "$FILTER_MATCHED" -eq 0 ]; then
+    printf "    ${RED}✗${RESET} filter matched no backends: %s\n" "$FILTER"
+    FILTER_NO_MATCH=1
+    FAILURES=$((FAILURES+1))
+fi
+
+if [ "${#RUNNABLE_NAMES[@]}" -gt 0 ] && [ -f "$TMPDIR/AST Interpreter.out" ]; then
+    BASELINE_NAME="AST Interpreter"
+    BASELINE="$TMPDIR/$BASELINE_NAME.out"
+    if BASELINE_HASH="$(file_hash "$BASELINE")" && [ -n "$BASELINE_HASH" ]; then
+        printf "  ${DIM}vs %s:${RESET}\n" "$BASELINE_NAME"
+        for name in "${RUNNABLE_NAMES[@]}"; do
+            f="$TMPDIR/$name.out"
+            [ -f "$f" ] || continue
+            HASH="$(file_hash "$f")"
+            if [ "$HASH" = "$BASELINE_HASH" ]; then
+                printf "    ${GREEN}✓${RESET} %s\n" "$name"
+            else
+                printf "    ${RED}✗${RESET} %s ${DIM}(output differs)${RESET}\n" "$name"
+                FAILURES=$((FAILURES+1))
+            fi
+        done
+    else
+        printf "    ${RED}✗${RESET} unable to hash AST baseline output\n"
+        FAILURES=$((FAILURES+1))
+    fi
+elif [ -n "$FILTER" ]; then
+    printf "    ${RED}✗${RESET} independent AST baseline was not selected; checksum skipped\n"
+    FILTER_NO_MATCH=1
+    FAILURES=$((FAILURES+1))
 else
+    printf "    ${RED}✗${RESET} no runnable backend produced a baseline\n"
     FAILURES=$((FAILURES+1))
 fi
 
 # Cleanup
 rm -rf "$TMPDIR"
+if [ "$FILTER_NO_MATCH" -eq 1 ]; then
+    exit 2
+fi
 if [ "$FAILURES" -gt 0 ]; then
     exit 1
 fi

@@ -19,8 +19,89 @@ from token import TOKEN_NOT, TOKEN_TILDE, TOKEN_OR, TOKEN_AND
 from token import TOKEN_EQ, TOKEN_NEQ, TOKEN_GT, TOKEN_LT, TOKEN_GTE, TOKEN_LTE
 from token import TOKEN_PLUS, TOKEN_MINUS, TOKEN_STAR, TOKEN_SLASH, TOKEN_PERCENT
 import sys
+import io
+import net as host_net
+import socket as host_socket
+import tcp as host_tcp
+import http as host_http
+import ssl as host_ssl
 from token import TOKEN_AMP, TOKEN_PIPE, TOKEN_CARET, TOKEN_LSHIFT, TOKEN_RSHIFT
 import errors
+
+let PROFILE_GENERAL = "general"
+let PROFILE_EMBEDDED = "embedded"
+let PROFILE_DETERMINISTIC = "deterministic"
+let PROFILE_RESTRICTED = "restricted"
+
+proc normalize_runtime_profile(profile):
+    if profile == nil:
+        return PROFILE_GENERAL
+    if profile == PROFILE_GENERAL:
+        return PROFILE_GENERAL
+    if profile == PROFILE_EMBEDDED:
+        return PROFILE_EMBEDDED
+    if profile == PROFILE_DETERMINISTIC:
+        return PROFILE_DETERMINISTIC
+    if profile == PROFILE_RESTRICTED:
+        return PROFILE_RESTRICTED
+    return PROFILE_DETERMINISTIC
+
+proc runtime_capability_allowed(profile, capability):
+    let p = normalize_runtime_profile(profile)
+    if p == PROFILE_GENERAL:
+        return true
+    if p == PROFILE_EMBEDDED:
+        if capability == "filesystem":
+            return true
+        if capability == "os":
+            return true
+        if capability == "crypto":
+            return true
+        if capability == "network":
+            return true
+    return false
+
+proc runtime_profile(env):
+    let current = env
+    while current != nil:
+        if dict_has(current, "__sage_runtime_profile"):
+            return normalize_runtime_profile(current["__sage_runtime_profile"])
+        current = current["parent"]
+    return PROFILE_GENERAL
+
+proc host_stub(name):
+    return {"__interp_type": "module", "name": name, "__stub": true}
+
+proc configure_host_modules(profile):
+    let io_module = nil
+    let sys_module = nil
+    let net_module = nil
+    let socket_module = nil
+    let tcp_module = nil
+    let http_module = nil
+    let ssl_module = nil
+    if runtime_capability_allowed(profile, "filesystem"):
+        io_module = io
+    else:
+        io_module = host_stub("io")
+    if runtime_capability_allowed(profile, "os"):
+        sys_module = sys
+    else:
+        sys_module = host_stub("sys")
+    if runtime_capability_allowed(profile, "network"):
+        net_module = host_net
+        socket_module = host_socket
+        tcp_module = host_tcp
+        http_module = host_http
+        ssl_module = host_ssl
+    else:
+        net_module = host_stub("net")
+        socket_module = host_stub("socket")
+        tcp_module = host_stub("tcp")
+        http_module = host_stub("http")
+        ssl_module = host_stub("ssl")
+    from stdlib import set_host_modules
+    set_host_modules(io_module, sys_module, net_module, socket_module, tcp_module, http_module, ssl_module)
 
 # Control flow signal kinds
 let SIGNAL_NORMAL = 0
@@ -43,6 +124,7 @@ let g_error_ctx = nil
 
 # Module cache to prevent double-loading
 let g_module_cache = {}
+let g_module_loading = {}
 
 # Module search paths. Relative entries support running from a repo
 # checkout; the absolute entries mirror the C host's compiled-in
@@ -225,6 +307,79 @@ proc env_set(env, name, value):
 # Import binding helper
 # -----------------------------------------
 
+proc hidden_host_export(mod_name, export_name, target_env):
+    let profile = runtime_profile(target_env)
+    if profile == PROFILE_GENERAL:
+        return false
+    if mod_name == "interpreter":
+        if export_name == "io" or export_name == "sys":
+            return true
+        if export_name == "host_net" or export_name == "host_socket":
+            return true
+        if export_name == "host_tcp" or export_name == "host_http":
+            return true
+        if export_name == "host_ssl" or export_name == "new_interpreter":
+            return true
+        if export_name == "host_stub" or export_name == "configure_host_modules":
+            return true
+        if export_name == "init_builtins" or export_name == "register_native":
+            return true
+        if export_name == "call_native" or export_name == "call_chost":
+            return true
+        if export_name == "_native_dispatch":
+            return true
+        if type(export_name) == "string":
+            return startswith(export_name, "_n_")
+        return false
+    if mod_name == "stdlib":
+        if export_name == "g_active_profile" or export_name == "g_native_io":
+            return true
+        if export_name == "g_native_net" or export_name == "g_native_socket":
+            return true
+        if export_name == "g_native_tcp" or export_name == "g_native_http":
+            return true
+        if export_name == "g_native_ssl" or export_name == "g_native_sys":
+            return true
+        if export_name == "g_io_module" or export_name == "g_sys_module":
+            return true
+        if export_name == "g_stdlib_registry" or export_name == "g_stdlib_registries":
+            return true
+        if export_name == "ensure_native_modules" or export_name == "set_host_modules":
+            return true
+        if export_name == "init_stdlib" or export_name == "get_stdlib_module":
+            return true
+        if export_name == "create_io_module" or export_name == "create_sys_module":
+            return true
+        if export_name == "create_net_module" or export_name == "create_socket_proxy":
+            return true
+        if export_name == "create_tcp_proxy" or export_name == "create_http_proxy":
+            return true
+        if export_name == "create_ssl_proxy" or export_name == "get_io_module":
+            return true
+        if export_name == "get_sys_module" or export_name == "io_read":
+            return true
+        if export_name == "io_write" or export_name == "io_append":
+            return true
+        if export_name == "io_exists" or export_name == "io_remove":
+            return true
+        if export_name == "io_isdir" or export_name == "io_mkdir":
+            return true
+        if export_name == "io_filesize" or export_name == "io_readbytes":
+            return true
+        if export_name == "io_writebytes" or export_name == "io_appendbytes":
+            return true
+        if export_name == "io_listdir" or export_name == "sys_args":
+            return true
+        if export_name == "sys_exit" or export_name == "sys_getenv":
+            return true
+        if export_name == "sys_clock" or export_name == "sys_sleep":
+            return true
+        if export_name == "sys_exec" or export_name == "sys_shell_exec":
+            return true
+        if export_name == "sys_call" or export_name == "fat_probe":
+            return true
+    return false
+
 proc import_bind(stmt, mod_name, mod_env, target_env):
     let mod_vals = mod_env["vals"]
     if stmt.item_count > 0:
@@ -232,7 +387,7 @@ proc import_bind(stmt, mod_name, mod_env, target_env):
         let i = 0
         while i < stmt.item_count:
             let item_name = stmt.items[i]
-            if dict_has(mod_vals, item_name):
+            if dict_has(mod_vals, item_name) and not hidden_host_export(mod_name, item_name, target_env):
                 let bind_name = item_name
                 if stmt.item_aliases[i] != nil:
                     bind_name = stmt.item_aliases[i].text
@@ -256,7 +411,8 @@ proc import_bind(stmt, mod_name, mod_env, target_env):
         let keys = dict_keys(mod_vals)
         let ki = 0
         while ki < len(keys):
-            mod_obj[keys[ki]] = mod_vals[keys[ki]]
+            if not hidden_host_export(mod_name, keys[ki], target_env):
+                mod_obj[keys[ki]] = mod_vals[keys[ki]]
             ki = ki + 1
         env_define(target_env, bind_name, mod_obj)
 
@@ -274,8 +430,9 @@ proc import_bind(stmt, mod_name, mod_env, target_env):
             if parts != nil:
                 let di = 0
                 while di < len(keys):
-                    if not dict_has(target_env["vals"], keys[di]):
-                        env_define(target_env, keys[di], mod_vals[keys[di]])
+                    if not hidden_host_export(mod_name, keys[di], target_env):
+                        if not dict_has(target_env["vals"], keys[di]):
+                            env_define(target_env, keys[di], mod_vals[keys[di]])
                     di = di + 1
 
 # -----------------------------------------
@@ -737,7 +894,8 @@ proc call_native(name, args):
 proc register_native(env, name, arity):
     env_define(env, name, {"__interp_type": "native", "name": name, "arity": arity})
 
-proc init_builtins(env):
+proc init_builtins(env, profile = "general"):
+    let normalized_profile = normalize_runtime_profile(profile)
     register_native(env, "str", 1)
     register_native(env, "len", 1)
     register_native(env, "tonumber", 1)
@@ -747,8 +905,10 @@ proc init_builtins(env):
     register_native(env, "range", -1)
     register_native(env, "type", 1)
     register_native(env, "val_tag", 1)
-    register_native(env, "input", 0)
-    register_native(env, "clock", 0)
+    if runtime_capability_allowed(normalized_profile, "os"):
+        register_native(env, "input", 0)
+    if runtime_capability_allowed(normalized_profile, "clock"):
+        register_native(env, "clock", 0)
     register_native(env, "chr", 1)
     register_native(env, "ord", 1)
     register_native(env, "slice", 3)
@@ -773,18 +933,18 @@ proc init_builtins(env):
     register_native(env, "gc_enable", 0)
     register_native(env, "gc_disable", 0)
     register_native(env, "gc_stats", 0)
-    # FFI stubs (delegates to host C runtime)
-    register_native(env, "ffi_open", 1)
-    register_native(env, "ffi_close", 1)
-    register_native(env, "ffi_call", -1)
-    register_native(env, "ffi_sym", 2)
-    # Memory stubs (delegates to host C runtime)
-    register_native(env, "mem_alloc", 1)
-    register_native(env, "mem_free", 1)
-    register_native(env, "mem_read", 3)
-    register_native(env, "mem_write", 4)
-    register_native(env, "mem_size", 1)
-    register_native(env, "addressof", 1)
+    if runtime_capability_allowed(normalized_profile, "ffi"):
+        register_native(env, "ffi_open", 1)
+        register_native(env, "ffi_close", 1)
+        register_native(env, "ffi_call", -1)
+        register_native(env, "ffi_sym", 2)
+    if runtime_capability_allowed(normalized_profile, "raw_memory"):
+        register_native(env, "mem_alloc", 1)
+        register_native(env, "mem_free", 1)
+        register_native(env, "mem_read", 3)
+        register_native(env, "mem_write", 4)
+        register_native(env, "mem_size", 1)
+        register_native(env, "addressof", 1)
     # Math functions
     register_native(env, "int", 1)
     # GC modes
@@ -799,14 +959,14 @@ proc init_builtins(env):
     register_native(env, "bytes_to_string", 1)
     register_native(env, "bytes_slice", 3)
     register_native(env, "bytes_push", 2)
-    # Path utilities
-    register_native(env, "path_join", 2)
-    register_native(env, "path_dirname", 1)
-    register_native(env, "path_basename", 1)
-    register_native(env, "path_ext", 1)
-    register_native(env, "path_exists", 1)
-    register_native(env, "path_is_dir", 1)
-    register_native(env, "path_is_file", 1)
+    if runtime_capability_allowed(normalized_profile, "filesystem"):
+        register_native(env, "path_join", 2)
+        register_native(env, "path_dirname", 1)
+        register_native(env, "path_basename", 1)
+        register_native(env, "path_ext", 1)
+        register_native(env, "path_exists", 1)
+        register_native(env, "path_is_dir", 1)
+        register_native(env, "path_is_file", 1)
     # Hash and sizeof
     register_native(env, "hash", 1)
     register_native(env, "sizeof", 1)
@@ -1927,15 +2087,24 @@ proc exec_stmt(stmt, env):
     # --- Import ---
     if stype == STMT_IMPORT:
         let mod_name = stmt.module_name
+        let profile = runtime_profile(env)
         # Check stdlib modules first
-        from stdlib import get_stdlib_module, is_stdlib_module
-        if is_stdlib_module(mod_name):
-            let mod_env = get_stdlib_module(mod_name)
+        from stdlib import get_stdlib_module, is_stdlib_module, restricted_module_stub
+        let restricted = restricted_module_stub(mod_name, profile)
+        if restricted != nil:
+            import_bind(stmt, mod_name, {"vals": restricted}, env)
+            return _SIG_NORMAL_NIL
+        if is_stdlib_module(mod_name, profile):
+            let mod_env = get_stdlib_module(mod_name, profile)
             import_bind(stmt, mod_name, {"vals": mod_env}, env)
             return _SIG_NORMAL_NIL
         # Check module cache first
-        if dict_has(g_module_cache, mod_name):
-            let mod_env = g_module_cache[mod_name]
+        let cache_key = mod_name
+        if profile != PROFILE_GENERAL:
+            cache_key = profile + ":" + mod_name
+        let loading_key = profile + ":" + mod_name
+        if dict_has(g_module_cache, cache_key):
+            let mod_env = g_module_cache[cache_key]
             import_bind(stmt, mod_name, mod_env, env)
             return _SIG_NORMAL_NIL
         # Try to find and load the module file
@@ -1943,8 +2112,25 @@ proc exec_stmt(stmt, env):
         let mod_path = nil
         # Convert dots to slashes for submodule paths (std.signal -> std/signal.sage)
         let file_mod_name = join(split(mod_name, "."), "/")
+        if mod_name == "net":
+            let ni = 0
+            while ni < len(g_module_paths):
+                let package_path = g_module_paths[ni] + "/" + file_mod_name + "/__init__.sage"
+                if io.exists(package_path):
+                    mod_source = io.readfile(package_path)
+                    mod_path = package_path
+                    let package_dir = g_module_paths[ni] + "/" + file_mod_name
+                    let package_exists = false
+                    for existing_path in g_module_paths:
+                        if existing_path == package_dir:
+                            package_exists = true
+                            break
+                    if not package_exists:
+                        push(g_module_paths, package_dir)
+                    break
+                ni = ni + 1
         let si = 0
-        while si < len(g_module_paths):
+        while si < len(g_module_paths) and mod_source == nil:
             let try_path = g_module_paths[si] + "/" + file_mod_name + ".sage"
             if io.exists(try_path):
                 mod_source = io.readfile(try_path)
@@ -1980,9 +2166,13 @@ proc exec_stmt(stmt, env):
         # Parse and execute the module in a fresh env
         from parser import parse_source_file
         let mod_stmts = parse_source_file(mod_source, mod_path)
-        let mod_env = new_interpreter()
-        g_module_cache[mod_name] = mod_env
+        g_module_loading[loading_key] = true
+        let mod_env = new_interpreter(profile)
+        g_module_cache[cache_key] = mod_env
         exec_program(mod_env, mod_stmts)
+        if mod_name == "stdlib":
+            configure_host_modules(profile)
+        dict_delete(g_module_loading, loading_key)
         import_bind(stmt, mod_name, mod_env, env)
         return _SIG_NORMAL_NIL
 
@@ -2571,12 +2761,16 @@ proc module_search_paths():
 # Create a new interpreter (returns a global env dict)
 # -----------------------------------------
 
-proc new_interpreter():
+proc new_interpreter(profile = "general"):
+    let normalized_profile = normalize_runtime_profile(profile)
     let genv = env_new(nil)
-    init_builtins(genv)
-    # Initialize stdlib registry
-    from stdlib import init_stdlib
-    init_stdlib()
+    genv["__sage_runtime_profile"] = normalized_profile
+    init_builtins(genv, normalized_profile)
+    let stdlib_key = normalized_profile + ":stdlib"
+    if not dict_has(g_module_loading, stdlib_key):
+        configure_host_modules(normalized_profile)
+        from stdlib import init_stdlib
+        init_stdlib(normalized_profile)
     return genv
 
 # -----------------------------------------

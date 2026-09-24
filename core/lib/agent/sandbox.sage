@@ -136,17 +136,16 @@ proc eval_expr(expr):
 # Execute a code block using the Sage interpreter (via temp file)
 proc execute_block(code, timeout_ms):
     let result = {}
-    # Safety check first
     let safety = is_safe(code)
     if not safety["safe"]:
         result["success"] = false
         result["error"] = "Safety check failed: " + safety["issues"][0]
         result["output"] = ""
+        result["code"] = code
         return result
-    # For now, we evaluate simple expressions directly
-    # Full execution would write to temp file and run sage on it
-    result["success"] = true
-    result["output"] = "(executed: " + str(len(code)) + " chars)"
+    result["success"] = false
+    result["error"] = "Sandboxed execution is unavailable: no isolated Sage runtime is configured"
+    result["output"] = ""
     result["code"] = code
     return result
 

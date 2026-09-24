@@ -60,6 +60,12 @@ typedef struct {
   const char *input_path;
   int failed;
   int in_function_body;
+  int try_depth;
+  Stmt **finally_stack;
+  int finally_stack_count;
+  int finally_stack_cap;
+  char *current_loop_try_marker;
+  int current_loop_finally_depth;
   int indent;
   int next_unique_id;
   NameEntry *globals;
@@ -68,6 +74,10 @@ typedef struct {
   ClassInfo *classes;
   ClassInfo *current_class;
   ImportedModule *modules;
+  NameEntry *gc_return_slot;
+  NameEntry *gc_match_slot;
+  NameEntry *gc_global_return_slot;
+  NameEntry *gc_global_match_slot;
 } Compiler;
 
 int g_sage_verbose = 0;
@@ -370,6 +380,22 @@ static NameEntry *add_name_entry(Compiler *compiler, NameEntry **list,
 
   entry->sage_name = str_dup(sage_name);
   entry->c_name = make_unique_name(compiler, prefix, sage_name);
+  entry->next = *list;
+  *list = entry;
+  return entry;
+}
+
+static NameEntry *add_internal_slot(Compiler *compiler, NameEntry **list,
+                                   const char *prefix) {
+  NameEntry *entry = malloc(sizeof(NameEntry));
+  if (entry == NULL) {
+    fprintf(stderr, "Out of memory creating compiler GC slot.\n");
+    exit(1);
+  }
+  char name[96];
+  snprintf(name, sizeof(name), "%s_%d", prefix, compiler->next_unique_id++);
+  entry->sage_name = str_dup(name);
+  entry->c_name = make_unique_name(compiler, prefix, name);
   entry->next = *list;
   *list = entry;
   return entry;
@@ -761,13 +787,23 @@ static void collect_local_lets(Compiler *compiler, Stmt *stmt,
       break;
     }
     case STMT_CLASS:
+      break;
     case STMT_MATCH: {
       for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
-        collect_local_lets(compiler, stmt->as.match_stmt.cases[i]->body,
-                           locals);
+        CaseClause *clause = stmt->as.match_stmt.cases[i];
+        if (clause->pattern != NULL && clause->pattern->type == EXPR_VARIABLE) {
+          char *pattern_name = token_to_string(clause->pattern->as.variable.name);
+          if (strcmp(pattern_name, "_") != 0 &&
+              find_name_entry(*locals, pattern_name) == NULL)
+            add_name_entry(compiler, locals, pattern_name, "sage_local");
+          free(pattern_name);
+        }
+        collect_local_lets(compiler, clause->body, locals);
       }
       if (stmt->as.match_stmt.default_case) {
         collect_local_lets(compiler, stmt->as.match_stmt.default_case, locals);
+
+
       }
       break;
     }
@@ -856,6 +892,19 @@ static void collect_global_lets(Compiler *compiler, Stmt *stmt) {
     case STMT_COMPTIME:
       collect_global_lets(compiler, stmt->as.comptime.body);
       break;
+    case STMT_MATCH:
+      for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+        CaseClause *clause = stmt->as.match_stmt.cases[i];
+        if (clause->pattern != NULL && clause->pattern->type == EXPR_VARIABLE) {
+          char *pattern_name = token_to_string(clause->pattern->as.variable.name);
+          if (strcmp(pattern_name, "_") != 0)
+            add_name_entry(compiler, &compiler->globals, pattern_name, "sage_global");
+          free(pattern_name);
+        }
+        collect_global_lets(compiler, clause->body);
+      }
+      collect_global_lets(compiler, stmt->as.match_stmt.default_case);
+      break;
     default:
       break;
     }
@@ -873,7 +922,7 @@ static int is_native_module(const char *name) {
                            "socket",    "tcp",       "http",     "ssl",
                            "fat",       "gpu",       "graphics", "ml_native",
                            "compiler",  "vm_native", "vm",       "ffi",
-                           "net",       "string",
+                           "net",       "string",    "ed25519",
                            NULL};
   for (int i = 0; natives[i] != NULL; i++) {
     if (strcmp(name, natives[i]) == 0)
@@ -3048,6 +3097,52 @@ static void emit_embedded_block(Compiler *compiler, Stmt *stmt) {
   compiler->indent--;
 }
 
+static void emit_finally_stack(Compiler *compiler, int floor) {
+  if (floor < 0) floor = 0;
+  int stack_count = compiler->finally_stack_count;
+  for (int i = stack_count - 1; i >= floor; i--) {
+    Stmt *finally_block = compiler->finally_stack[i];
+    if (finally_block != NULL) {
+      compiler->finally_stack_count = i;
+      emit_embedded_block(compiler, finally_block);
+      compiler->finally_stack_count = stack_count;
+    }
+  }
+}
+
+static void push_finally(Compiler *compiler, Stmt *finally_block) {
+  if (compiler->finally_stack_count == compiler->finally_stack_cap) {
+    int new_cap = compiler->finally_stack_cap == 0 ? 16 : compiler->finally_stack_cap * 2;
+    Stmt **new_stack = realloc(compiler->finally_stack,
+                               sizeof(Stmt *) * (size_t)new_cap);
+    if (new_stack == NULL) {
+      fprintf(stderr, "Out of memory tracking finally blocks.\n");
+      exit(1);
+    }
+    compiler->finally_stack = new_stack;
+    compiler->finally_stack_cap = new_cap;
+  }
+  compiler->finally_stack[compiler->finally_stack_count++] = finally_block;
+}
+
+static void emit_try_cleanup(Compiler *compiler) {
+  int depth = compiler->try_depth;
+  if (depth <= 0) return;
+  emit_line(compiler, "if (sage_try_depth >= %d) {", depth);
+  compiler->indent++;
+  emit_line(compiler,
+            "for (int _sage_try_cleanup = sage_try_depth - %d; "
+            "_sage_try_cleanup < sage_try_depth; _sage_try_cleanup++) {",
+            depth);
+  compiler->indent++;
+  emit_line(compiler, "sage_try_gc_frame[_sage_try_cleanup] = NULL;");
+  compiler->indent--;
+  emit_line(compiler, "}");
+  emit_line(compiler, "sage_try_depth -= %d;", depth);
+  compiler->indent--;
+  emit_line(compiler, "}");
+}
+
 static void emit_stmt(Compiler *compiler, Stmt *stmt) {
   switch (stmt->type) {
   case STMT_PRINT: {
@@ -3100,21 +3195,46 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     break;
   case STMT_WHILE: {
     char *condition = emit_expr(compiler, stmt->as.while_stmt.condition);
+    char *previous_marker = compiler->current_loop_try_marker;
+    int previous_finally_depth = compiler->current_loop_finally_depth;
+    char *loop_marker = make_unique_name(compiler, "sage_loop_try_depth", "loop");
+    compiler->current_loop_try_marker = loop_marker;
+    compiler->current_loop_finally_depth = compiler->finally_stack_count;
+    emit_line(compiler, "{");
+    compiler->indent++;
+    emit_line(compiler, "int %s = sage_try_depth;", loop_marker);
     emit_line(compiler, "while (sage_truthy(%s)) {", condition);
     free(condition);
     emit_embedded_block(compiler, stmt->as.while_stmt.body);
     emit_line(compiler, "}");
+    compiler->indent--;
+    emit_line(compiler, "}");
+    compiler->current_loop_try_marker = previous_marker;
+    compiler->current_loop_finally_depth = previous_finally_depth;
+    free(loop_marker);
     break;
   }
   case STMT_RETURN: {
     char *expr = stmt->as.ret.value != NULL
                      ? emit_expr(compiler, stmt->as.ret.value)
                      : NULL;
+    const char *return_slot = compiler->gc_return_slot != NULL
+                                  ? compiler->gc_return_slot->c_name
+                                  : NULL;
+    if (expr != NULL && return_slot != NULL) {
+      emit_line(compiler, "sage_define_slot(&%s, %s);", return_slot, expr);
+    }
+    emit_try_cleanup(compiler);
+    emit_finally_stack(compiler, 0);
     if (compiler->in_function_body) {
-      emit_line(compiler, "return sage_gc_return(&sage_gc_frame, %s);",
-               expr ? expr : "sage_nil()");
+      if (return_slot != NULL) {
+        emit_line(compiler, "return sage_gc_return(&sage_gc_frame, %s.value);",
+                  return_slot);
+      } else {
+        emit_line(compiler, "return sage_gc_return(&sage_gc_frame, sage_nil());");
+      }
     } else {
-      if (expr) {
+      if (expr && return_slot == NULL) {
         emit_line(compiler, "return %s;", expr);
       } else {
         emit_line(compiler, "return 0;");
@@ -3124,9 +3244,29 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     break;
   }
   case STMT_BREAK:
+    if (compiler->current_loop_try_marker != NULL) {
+      emit_line(compiler, "while (sage_try_depth > %s) {",
+                compiler->current_loop_try_marker);
+      compiler->indent++;
+      emit_line(compiler, "sage_try_gc_frame[sage_try_depth - 1] = NULL;");
+      emit_line(compiler, "sage_try_depth--;");
+      compiler->indent--;
+      emit_line(compiler, "}");
+      emit_finally_stack(compiler, compiler->current_loop_finally_depth);
+    }
     emit_line(compiler, "break;");
     break;
   case STMT_CONTINUE:
+    if (compiler->current_loop_try_marker != NULL) {
+      emit_line(compiler, "while (sage_try_depth > %s) {",
+                compiler->current_loop_try_marker);
+      compiler->indent++;
+      emit_line(compiler, "sage_try_gc_frame[sage_try_depth - 1] = NULL;");
+      emit_line(compiler, "sage_try_depth--;");
+      compiler->indent--;
+      emit_line(compiler, "}");
+      emit_finally_stack(compiler, compiler->current_loop_finally_depth);
+    }
     emit_line(compiler, "continue;");
     break;
   case STMT_PROC:
@@ -3146,8 +3286,14 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     }
     char *iter_var = make_unique_name(compiler, "sage_iter", var_name);
     char *idx_var = make_unique_name(compiler, "sage_idx", var_name);
+    char *previous_marker = compiler->current_loop_try_marker;
+    int previous_finally_depth = compiler->current_loop_finally_depth;
+    char *loop_marker = make_unique_name(compiler, "sage_loop_try_depth", "loop");
+    compiler->current_loop_try_marker = loop_marker;
+    compiler->current_loop_finally_depth = compiler->finally_stack_count;
     emit_line(compiler, "{");
     compiler->indent++;
+    emit_line(compiler, "int %s = sage_try_depth;", loop_marker);
     emit_line(compiler, "SageValue %s = %s;", iter_var, iterable);
     emit_line(compiler, "if (%s.type == SAGE_TAG_ARRAY) {", iter_var);
     compiler->indent++;
@@ -3176,24 +3322,33 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     emit_line(compiler, "}");
     compiler->indent--;
     emit_line(compiler, "}");
+    compiler->current_loop_try_marker = previous_marker;
+    compiler->current_loop_finally_depth = previous_finally_depth;
     free(var_name);
     free(iterable);
     free(iter_var);
     free(idx_var);
+    free(loop_marker);
     break;
   }
   case STMT_TRY: {
     TryStmt *try_stmt = &stmt->as.try_stmt;
+    push_finally(compiler, try_stmt->finally_block);
     emit_line(compiler, "{");
     compiler->indent++;
     emit_line(compiler,
               "if (sage_try_depth >= SAGE_MAX_TRY_DEPTH) sage_fail(\"Runtime "
               "Error: try nesting too deep (max 1024)\");");
+    emit_line(compiler, "int _sage_try_index = sage_try_depth;");
     emit_line(compiler, "int _caught = 0;");
+    emit_line(compiler,
+              "sage_try_gc_frame[_sage_try_index] = sage_gc.frames;");
     emit_line(compiler, "sage_try_depth++;");
     emit_line(compiler,
-              "if (setjmp(sage_try_stack[sage_try_depth - 1]) == 0) {");
+              "if (setjmp(sage_try_stack[_sage_try_index]) == 0) {");
+    compiler->try_depth++;
     emit_embedded_block(compiler, try_stmt->try_block);
+    compiler->try_depth--;
     emit_line(compiler, "} else {");
     compiler->indent++;
     emit_line(compiler, "_caught = 1;");
@@ -3209,15 +3364,21 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     compiler->indent--;
     emit_line(compiler, "}");
     emit_line(compiler, "sage_try_depth--;");
+    emit_line(compiler, "sage_try_gc_frame[_sage_try_index] = NULL;");
     if (try_stmt->catch_count > 0) {
       emit_line(compiler, "if (_caught) {");
       emit_embedded_block(compiler, try_stmt->catches[0]->body);
       emit_line(compiler, "}");
     }
-    if (try_stmt->finally_block != NULL) {
-      emit_embedded_block(compiler, try_stmt->finally_block);
-    }
-    compiler->indent--;
+    compiler->finally_stack_count--;
+     if (try_stmt->finally_block != NULL) {
+       emit_embedded_block(compiler, try_stmt->finally_block);
+     }
+     if (try_stmt->catch_count == 0) {
+       emit_line(compiler, "if (_caught) sage_raise(sage_exception_value);");
+     }
+     compiler->indent--;
+
     emit_line(compiler, "}");
     break;
   }
@@ -3263,25 +3424,98 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
   }
   case STMT_MATCH: {
     char *val = emit_expr(compiler, stmt->as.match_stmt.value);
+    const char *match_slot = compiler->gc_match_slot != NULL
+                                 ? compiler->gc_match_slot->c_name
+                                 : NULL;
+    emit_line(compiler, "{");
+    compiler->indent++;
+    if (val != NULL && match_slot != NULL) {
+      emit_line(compiler, "sage_define_slot(&%s, %s);", match_slot, val);
+      emit_line(compiler, "SageValue sage_match_value = %s.value;", match_slot);
+    } else {
+      emit_line(compiler, "SageValue _sage_match_value = %s;",
+                val ? val : "sage_nil()");
+    }
+    const char *match_value = match_slot != NULL ? "sage_match_value" : "_sage_match_value";
+    free(val);
+    int emitted_chain = 0;
+    int wildcard_consumed = 0;
     for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
       CaseClause *clause = stmt->as.match_stmt.cases[i];
-      char *pat = emit_expr(compiler, clause->pattern);
-      emit_line(compiler, "%sif (sage_equal(%s, %s)) {", i > 0 ? "} else " : "",
-                val, pat);
+      int wildcard = clause->pattern == NULL ||
+                     (clause->pattern->type == EXPR_VARIABLE &&
+                      clause->pattern->as.variable.name.length == 1 &&
+                      clause->pattern->as.variable.name.start[0] == '_');
+      char *pat = NULL;
+      const char *pattern_slot = NULL;
+      if (!wildcard && clause->pattern->type == EXPR_VARIABLE) {
+        char *pattern_name = token_to_string(clause->pattern->as.variable.name);
+        pattern_slot = resolve_slot_name(compiler, pattern_name);
+        free(pattern_name);
+        if (pattern_slot != NULL)
+          emit_line(compiler, "sage_define_slot(&%s, %s);", pattern_slot, match_value);
+      } else if (!wildcard) {
+        pat = emit_expr(compiler, clause->pattern);
+      }
+      char *guard = clause->guard ? emit_expr(compiler, clause->guard) : NULL;
+      int binding_or_wildcard = wildcard || pattern_slot != NULL;
+      const char *condition = binding_or_wildcard ? "1" :
+                              (pat ? pat : "sage_nil()");
+      if (emitted_chain == 0) {
+        if (guard) {
+          if (binding_or_wildcard)
+            emit_line(compiler, "if (sage_truthy(%s)) {", guard);
+          else
+            emit_line(compiler, "if (sage_truthy(SAGE_EQ(%s, %s)) && sage_truthy(%s)) {",
+                      match_value, condition, guard);
+        } else {
+          if (binding_or_wildcard) {
+            emit_line(compiler, "if (1) {");
+          } else {
+            emit_line(compiler, "if (sage_truthy(SAGE_EQ(%s, %s))) {",
+                      match_value, condition);
+          }
+        }
+      } else {
+        if (guard) {
+          if (binding_or_wildcard)
+            emit_line(compiler, "} else if (sage_truthy(%s)) {", guard);
+          else
+            emit_line(compiler, "} else if (sage_truthy(SAGE_EQ(%s, %s)) && sage_truthy(%s)) {",
+                      match_value, condition, guard);
+        } else {
+          if (binding_or_wildcard) {
+            emit_line(compiler, "} else if (1) {");
+          } else {
+            emit_line(compiler, "} else if (sage_truthy(SAGE_EQ(%s, %s))) {",
+                      match_value, condition);
+          }
+        }
+      }
+      free(pat);
+      free(guard);
       emit_embedded_block(compiler, clause->body);
+      emitted_chain = 1;
+      if (wildcard && clause->guard == NULL) {
+        wildcard_consumed = 1;
+        break;
+      }
     }
-    if (stmt->as.match_stmt.default_case) {
-      if (stmt->as.match_stmt.case_count > 0) {
-        emit_line(compiler, "} else {");
+     if (stmt->as.match_stmt.default_case && !wildcard_consumed) {
+       if (emitted_chain > 0) {
+         emit_line(compiler, "} else {");
+
       } else {
         emit_line(compiler, "{");
       }
       emit_embedded_block(compiler, stmt->as.match_stmt.default_case);
     }
-    if (stmt->as.match_stmt.case_count > 0 ||
-        stmt->as.match_stmt.default_case) {
+     if (emitted_chain > 0 || stmt->as.match_stmt.default_case) {
+
       emit_line(compiler, "}");
     }
+    compiler->indent--;
+    emit_line(compiler, "}");
     break;
   }
   case STMT_DEFER:
@@ -3291,16 +3525,31 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     emit_embedded_block(compiler, stmt->as.defer.statement);
     emit_line(compiler, "}");
     break;
-  case STMT_YIELD:
+  case STMT_YIELD: {
     // In compiled mode, yield acts as return (no coroutine support)
-    if (stmt->as.yield_stmt.value) {
-      char *val = emit_expr(compiler, stmt->as.yield_stmt.value);
-      emit_line(compiler, "return %s;", val);
-      free(val);
-    } else {
-      emit_line(compiler, "return sage_nil();");
+    char *val = stmt->as.yield_stmt.value
+                   ? emit_expr(compiler, stmt->as.yield_stmt.value)
+                   : NULL;
+    const char *return_slot = compiler->gc_return_slot != NULL
+                                  ? compiler->gc_return_slot->c_name
+                                  : NULL;
+    if (val != NULL && return_slot != NULL) {
+      emit_line(compiler, "sage_define_slot(&%s, %s);", return_slot, val);
     }
+    emit_try_cleanup(compiler);
+    emit_finally_stack(compiler, 0);
+    if (compiler->in_function_body) {
+      if (return_slot != NULL) {
+        emit_line(compiler, "return %s.value;", return_slot);
+      } else {
+        emit_line(compiler, "return sage_nil();");
+      }
+    } else {
+      emit_line(compiler, "return 0;");
+    }
+    free(val);
     break;
+  }
   case STMT_ASYNC_PROC:
     // In compiled mode, async procs are emitted as regular procs (synchronous)
     break;
@@ -3477,9 +3726,10 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
   fputs(
       "/* Exception handling via setjmp/longjmp */\n"
       "#define SAGE_MAX_TRY_DEPTH 1024\n"
-      "static jmp_buf sage_try_stack[SAGE_MAX_TRY_DEPTH];\n"
-      "static SageValue sage_exception_value;\n"
-      "static int sage_try_depth = 0;\n"
+       "static jmp_buf sage_try_stack[SAGE_MAX_TRY_DEPTH];\n"
+       "static SageGcFrame* sage_try_gc_frame[SAGE_MAX_TRY_DEPTH];\n"
+       "static SageValue sage_exception_value;\n"
+       "static int sage_try_depth = 0;\n"
       "\n"
       "static void sage_fail(const char* message) {\n"
       "    fputs(message, stderr);\n"
@@ -3659,11 +3909,19 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    sage_gc.frames = frame;\n"
       "}\n"
       "\n"
-      "static void sage_gc_pop_frame(SageGcFrame* frame) {\n"
-      "    if (sage_gc.frames == frame) sage_gc.frames = frame->prev;\n"
-      "}\n"
-      "\n"
-      "static void sage_gc_pin(void) { sage_gc.pin_count++; }\n"
+       "static void sage_gc_pop_frame(SageGcFrame* frame) {\n"
+       "    if (sage_gc.frames == frame) sage_gc.frames = frame->prev;\n"
+       "}\n"
+       "\n"
+       "static void sage_gc_unwind_to(SageGcFrame* target) {\n"
+       "    if (target == NULL) return;\n"
+       "    SageGcFrame* frame = sage_gc.frames;\n"
+       "    while (frame != NULL && frame != target) frame = frame->prev;\n"
+       "    if (frame == NULL) return;\n"
+       "    while (sage_gc.frames != target) sage_gc.frames = sage_gc.frames->prev;\n"
+       "}\n"
+       "\n"
+       "static void sage_gc_pin(void) { sage_gc.pin_count++; }\n"
       "static void sage_gc_unpin(void) { if (sage_gc.pin_count > 0) "
       "sage_gc.pin_count--; }\n"
       "\n"
@@ -3997,11 +4255,16 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    return v;\n"
       "}\n"
       "\n"
-      "static void sage_raise(SageValue value) {\n"
-      "    if (sage_try_depth > 0) {\n"
-      "        sage_exception_value = value;\n"
-      "        longjmp(sage_try_stack[sage_try_depth - 1], 1);\n"
-      "    }\n"
+       "static void sage_raise(SageValue value) {\n"
+       "    if (sage_try_depth > 0) {\n"
+       "        int target = sage_try_depth - 1;\n"
+       "        sage_exception_value = value;\n"
+       "        sage_gc_unwind_to(sage_try_gc_frame[target]);\n"
+       "        for (int i = target + 1; i < sage_try_depth; i++) {\n"
+       "            sage_try_gc_frame[i] = NULL;\n"
+       "        }\n"
+       "        longjmp(sage_try_stack[target], 1);\n"
+       "    }\n"
       "    fputs(\"Unhandled exception: \", stderr);\n"
       "    if (value.type == SAGE_TAG_STRING) fputs(value.as.string, stderr);\n"
       "    else fputs(\"(unknown)\", stderr);\n"
@@ -4898,13 +5161,13 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "static SageValue sage_div(SageValue left, SageValue right) {\n"
       "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) "
       "sage_fail(\"Runtime Error: Operands must be numbers.\");\n"
-      "    if (right.as.number == 0) return sage_nil();\n"
+      "    if (right.as.number == 0) sage_fail(\"Runtime Error: Division by zero\");\n"
       "    return sage_number(left.as.number / right.as.number);\n"
       "}\n"
       "static SageValue sage_mod(SageValue left, SageValue right) {\n"
       "    if (left.type != SAGE_TAG_NUMBER || right.type != SAGE_TAG_NUMBER) "
       "sage_fail(\"Runtime Error: Operands must be numbers.\");\n"
-      "    if (right.as.number == 0) return sage_nil();\n"
+      "    if (right.as.number == 0) sage_fail(\"Runtime Error: Modulo by zero\");\n"
       "    return sage_number(fmod(left.as.number, right.as.number));\n"
       "}\n"
       "static SageValue sage_eq(SageValue left, SageValue right) { return "
@@ -5369,6 +5632,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    if (v.type != SAGE_TAG_NUMBER) return NULL;\n"
         "    return (SagePointer*)(uintptr_t)v.as.number;\n"
         "}\n"
+        "static int sage_mem_range_valid(SagePointer* sp, size_t offset, size_t needed) {\n"
+        "    return sp != NULL && sp->ptr != NULL && needed <= sp->size && offset <= sp->size - needed;\n"
+        "}\n"
         "\n"
         "static SageValue sage_mem_free(SageValue ptr_val) {\n"
         "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
@@ -5389,10 +5655,16 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    if (sp == NULL || sp->ptr == NULL || off_val.type != "
       "SAGE_TAG_NUMBER || type_val.type != SAGE_TAG_STRING)\n"
       "        return sage_nil();\n"
-      "    size_t offset = (size_t)off_val.as.number;\n"
-      "    const char* type = type_val.as.string;\n"
-      "    unsigned char* base = (unsigned char*)sp->ptr + offset;\n"
-      "    if (strcmp(type, \"byte\") == 0) { return "
+        "    double raw_offset = off_val.as.number;\n"
+        "    if (!(raw_offset >= 0.0) || raw_offset != (double)(long long)raw_offset) return sage_nil();\n"
+        "    size_t offset = (size_t)raw_offset;\n"
+        "    const char* type = type_val.as.string;\n"
+        "    size_t needed = strcmp(type, \"int\") == 0 ? sizeof(int) :\n"
+        "        (strcmp(type, \"double\") == 0 ? sizeof(double) : 1);\n"
+        "    if (!sage_mem_range_valid(sp, offset, needed)) return sage_nil();\n"
+        "    unsigned char* base = (unsigned char*)sp->ptr + offset;\n"
+        "    if (strcmp(type, \"byte\") == 0) { return "
+
       "sage_number((double)*base); }\n"
       "    if (strcmp(type, \"int\") == 0) { int v; memcpy(&v, base, "
       "sizeof(int)); return sage_number((double)v); }\n"
@@ -5409,10 +5681,16 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    if (sp == NULL || sp->ptr == NULL || off_val.type != "
       "SAGE_TAG_NUMBER || type_val.type != SAGE_TAG_STRING)\n"
       "        return sage_nil();\n"
-      "    size_t offset = (size_t)off_val.as.number;\n"
-      "    const char* type = type_val.as.string;\n"
-      "    unsigned char* base = (unsigned char*)sp->ptr + offset;\n"
-      "    if (strcmp(type, \"byte\") == 0 && val.type == SAGE_TAG_NUMBER) { "
+        "    double raw_offset = off_val.as.number;\n"
+        "    if (!(raw_offset >= 0.0) || raw_offset != (double)(long long)raw_offset) return sage_nil();\n"
+        "    size_t offset = (size_t)raw_offset;\n"
+        "    const char* type = type_val.as.string;\n"
+        "    size_t needed = strcmp(type, \"int\") == 0 ? sizeof(int) :\n"
+        "        (strcmp(type, \"double\") == 0 ? sizeof(double) : 1);\n"
+        "    if (!sage_mem_range_valid(sp, offset, needed)) return sage_nil();\n"
+        "    unsigned char* base = (unsigned char*)sp->ptr + offset;\n"
+        "    if (strcmp(type, \"byte\") == 0 && val.type == SAGE_TAG_NUMBER) { "
+
       "*base = (unsigned char)val.as.number; }\n"
       "    else if (strcmp(type, \"int\") == 0 && val.type == SAGE_TAG_NUMBER) "
       "{ int v = (int)val.as.number; memcpy(base, &v, sizeof(int)); }\n"
@@ -5464,10 +5742,19 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "        return sage_nil();\n"
       "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
       "    if (sp == NULL) return sage_nil();\n"
-      "    SageValue v; v.type = SAGE_TAG_POINTER;\n"
-      "    v.as.pointer = sp;\n"
-      "    sp->ptr = (void*)((uintptr_t)sp->ptr + (intptr_t)offset.as.number);\n"
-      "    return v;\n"
+        "    double raw_offset = offset.as.number;\n"
+        "    if (!(raw_offset >= 0.0) || raw_offset != (double)(long long)raw_offset) return sage_nil();\n"
+        "    size_t delta = (size_t)raw_offset;\n"
+        "    if (sp == NULL || delta > sp->size) return sage_nil();\n"
+        "    SagePointer* derived = (SagePointer*)malloc(sizeof(SagePointer));\n"
+        "    if (derived == NULL) sage_fail(\"Runtime Error: out of memory\");\n"
+        "    derived->ptr = (void*)((uintptr_t)sp->ptr + delta);\n"
+        "    derived->size = sp->size - delta;\n"
+        "    derived->owned = 0;\n"
+        "    SageValue v; v.type = SAGE_TAG_POINTER;\n"
+        "    v.as.number = (double)(uintptr_t)derived;\n"
+        "    return v;\n"
+
       "}\n"
       "static SageValue sage_sizeof(SageValue type_name) {\n"
       "    if (type_name.type != SAGE_TAG_STRING) return sage_nil();\n"
@@ -6073,6 +6360,8 @@ static void emit_function_definition(Compiler *compiler, Stmt *stmt) {
     compiler->locals = previous_locals;
     return;
   }
+  compiler->gc_return_slot = add_internal_slot(compiler, &compiler->locals, "sage_gc_return_root");
+  compiler->gc_match_slot = add_internal_slot(compiler, &compiler->locals, "sage_gc_match_root");
 
   // Phase 17: emit pragma attributes before function
   if (stmt->pragmas)
@@ -6113,6 +6402,8 @@ static void emit_function_definition(Compiler *compiler, Stmt *stmt) {
   fputc('\n', compiler->out);
 
   free_name_entries(compiler->locals);
+  compiler->gc_return_slot = NULL;
+  compiler->gc_match_slot = NULL;
   compiler->locals = previous_locals;
 }
 
@@ -6149,6 +6440,8 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
     free(method_name);
     return;
   }
+  compiler->gc_return_slot = add_internal_slot(compiler, &compiler->locals, "sage_gc_return_root");
+  compiler->gc_match_slot = add_internal_slot(compiler, &compiler->locals, "sage_gc_match_root");
 
   emit_indent(compiler);
   fprintf(compiler->out,
@@ -6187,6 +6480,8 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
   fputc('\n', compiler->out);
 
   free_name_entries(compiler->locals);
+  compiler->gc_return_slot = NULL;
+  compiler->gc_match_slot = NULL;
   compiler->locals = previous_locals;
   compiler->current_class = previous_class;
   free(method_name);
@@ -6246,6 +6541,8 @@ static void emit_function_definitions(Compiler *compiler, Stmt *program) {
 
 static void emit_main_function(Compiler *compiler, Stmt *program,
                                CompilerTarget target) {
+  compiler->gc_return_slot = compiler->gc_global_return_slot;
+  compiler->gc_match_slot = compiler->gc_global_match_slot;
   emit_line(compiler, "int sage_argc; char** sage_argv;");
   emit_line(compiler, "int main(int argc, char** argv) {");
   emit_line(compiler, "    sage_argc = argc; sage_argv = argv;");
@@ -6578,6 +6875,10 @@ static int write_c_output_internal(const char *source, const char *input_path,
   }
 
   collect_top_level_symbols(&compiler, program);
+  if (!compiler.failed) {
+    compiler.gc_global_return_slot = add_internal_slot(&compiler, &compiler.globals, "sage_gc_return_root");
+    compiler.gc_global_match_slot = add_internal_slot(&compiler, &compiler.globals, "sage_gc_match_root");
+  }
 
   if (!compiler.failed) {
     emit_runtime_prelude(out, target);
@@ -6607,6 +6908,7 @@ static int write_c_output_internal(const char *source, const char *input_path,
   free_proc_entries(compiler.procs);
   free_class_info(compiler.classes);
   free_imported_modules(compiler.modules);
+  free(compiler.finally_stack);
   return compiler.failed ? 0 : 1;
 }
 

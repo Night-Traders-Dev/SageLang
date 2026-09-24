@@ -809,12 +809,21 @@ void aot_compile_stmt(AotCompiler* aot, Stmt* stmt) {
             for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
                 CaseClause* c = stmt->as.match_stmt.cases[i];
                 char* pat = aot_compile_expr(aot, c->pattern);
-                aot_emit(aot, "%sif (sage_eq(%s, %s).as.boolean) {", i > 0 ? "} else " : "", tmp, pat);
+                char* guard = c->guard ? aot_compile_expr(aot, c->guard) : NULL;
+                if (guard) {
+                    aot_emit(aot,
+                             "%sif (sage_eq(%s, %s).as.boolean && sage_truthy(%s)) {",
+                             i > 0 ? "} else " : "", tmp, pat, guard);
+                } else {
+                    aot_emit(aot, "%sif (sage_eq(%s, %s).as.boolean) {",
+                             i > 0 ? "} else " : "", tmp, pat);
+                }
                 aot->indent++;
                 for (Stmt* s = c->body; s; s = s->next)
                     aot_compile_stmt(aot, s);
                 aot->indent--;
                 free(pat);
+                free(guard);
             }
             if (stmt->as.match_stmt.default_case) {
                 aot_emit(aot, "} else {");

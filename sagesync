@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 SageLang Submodule Sync Utility (sagesync)
-Synchronizes and updates all Git submodules recursively, with visual formatting and auto-repair.
+Synchronizes and updates all Git submodules recursively. Reference repair is explicit.
 """
 
-import os
+import argparse
 import re
 import subprocess
 import sys
@@ -47,135 +47,325 @@ def run_cmd(cmd, cwd=None):
     try:
         res = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
         return res
-    except Exception as e:
+    except OSError:
         return None
 
 
+def command_ok(res):
+    return res is not None and res.returncode == 0
+
+
+def result_output(res):
+    return (getattr(res, "stdout", "") or "").strip()
+
+
+def require_clean_worktree():
+    staged_res = run_cmd(["git", "diff", "--cached", "--name-only"])
+    if not command_ok(staged_res):
+        step_fail("cannot verify staged changes")
+        return False
+    if result_output(staged_res):
+        step_fail("repair refuses pre-existing staged changes")
+        return False
+
+    status_res = run_cmd(
+        [
+            "git",
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+        ]
+    )
+    if not command_ok(status_res):
+        step_fail("cannot verify worktree cleanliness")
+        return False
+    if result_output(status_res):
+        step_fail("repair requires a clean worktree")
+        return False
+    return True
+
+
+def validate_push_target():
+    branch_res = run_cmd(["git", "branch", "--show-current"])
+    if not command_ok(branch_res) or not result_output(branch_res):
+        step_fail("cannot determine current branch")
+        return None
+    branch = result_output(branch_res)
+    if branch.startswith("-"):
+        step_fail("invalid current branch")
+        return None
+
+    upstream_res = run_cmd(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]
+    )
+    upstream = result_output(upstream_res)
+    if not command_ok(upstream_res) or "/" not in upstream:
+        step_fail("current branch has no valid upstream")
+        return None
+    remote, upstream_branch = upstream.split("/", 1)
+    if not remote or remote.startswith("-") or upstream_branch != branch:
+        step_fail("branch upstream does not match current branch")
+        return None
+
+    remotes_res = run_cmd(["git", "remote"])
+    if not command_ok(remotes_res) or remote not in result_output(remotes_res).splitlines():
+        step_fail(f"remote is not configured: {remote}")
+        return None
+
+    fetch_res = run_cmd(["git", "remote", "get-url", remote])
+    push_res = run_cmd(["git", "remote", "get-url", "--push", remote])
+    if not command_ok(fetch_res) or not result_output(fetch_res):
+        step_fail(f"remote fetch URL is unavailable: {remote}")
+        return None
+    if not command_ok(push_res) or not result_output(push_res):
+        step_fail(f"remote push URL is unavailable: {remote}")
+        return None
+    return remote, branch
+
+
+def valid_submodule_path(path):
+    if not path or path.startswith(("/", "-")):
+        return False
+    if "\\" in path or any(part in ("", ".", "..") for part in path.split("/")):
+        return False
+    return True
+
+
+def check_submodule_worktrees(entries):
+    paths = {path for _, path, _ in entries}
+    if not paths:
+        return True
+    res = run_cmd(
+        [
+            "git",
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+        ]
+    )
+    if not command_ok(res):
+        step_fail("cannot verify submodule worktrees")
+        return False
+    for line in (getattr(res, "stdout", "") or "").splitlines():
+        if len(line) >= 4 and line[3:].strip() in paths:
+            step_fail(f"submodule worktree is dirty: {line[3:].strip()}")
+            return False
+    return True
+
+
+def check_submodule_status():
+    step("Checking submodules status")
+    res = run_cmd(["git", "submodule", "status", "--recursive"])
+    if not command_ok(res):
+        step_fail("git submodule status failed")
+        return False
+
+    entries = []
+    for line in (getattr(res, "stdout", "") or "").splitlines():
+        if not line:
+            continue
+        if not line.startswith(" "):
+            step_fail(f"submodule status mismatch: {line}")
+            return False
+        parts = line[1:].split(None, 2)
+        if len(parts) < 2:
+            step_fail(f"invalid submodule status: {line}")
+            return False
+        commit, path = parts[:2]
+        branch = parts[2] if len(parts) > 2 else ""
+        entries.append((commit, path, branch))
+
+    if not check_submodule_worktrees(entries):
+        return False
+
+    step_ok("all synchronized")
+    console.print("\n[bold cyan]Submodule Status:[/bold cyan]")
+    for commit, path, branch in entries:
+        console.print(
+            f"  • [cyan]{path: <30}[/cyan] at [dim]{commit[:8]}[/dim] [green]{branch}[/green]"
+        )
+    return True
+
+
+def repair_reference(broken_path, push_target):
+    if not valid_submodule_path(broken_path):
+        step_fail("invalid broken submodule path")
+        return False
+
+    if not require_clean_worktree():
+        return False
+    current_target = validate_push_target()
+    if current_target != push_target:
+        step_fail("branch or remote changed during repair")
+        return False
+
+    step_fail("missing remote ref detected", exit_script=False)
+    console.print(
+        f"\n[bold yellow]🛠  Repair Mode:[/bold yellow] Fixing reference for [cyan]{broken_path}[/cyan]\n"
+    )
+
+    step(f"Deinitializing {broken_path}")
+    deinit_res = run_cmd(["git", "submodule", "deinit", "--", broken_path])
+    if not command_ok(deinit_res):
+        step_fail("git submodule deinit failed")
+        return False
+    step_ok()
+
+    step(f"Fetching latest tracking reference for {broken_path}")
+    update_res = run_cmd(
+        [
+            "git",
+            "submodule",
+            "update",
+            "--init",
+            "--remote",
+            "--",
+            broken_path,
+        ]
+    )
+    if not command_ok(update_res):
+        step_fail("git submodule remote update failed")
+        return False
+    step_ok()
+
+    staged_res = run_cmd(["git", "diff", "--cached", "--name-only"])
+    if not command_ok(staged_res):
+        step_fail("cannot verify staged changes before commit")
+        return False
+    if result_output(staged_res):
+        step_fail("repair refuses unrelated staged changes")
+        return False
+
+    step("Staging updated submodule pointer")
+    add_res = run_cmd(["git", "add", "--", broken_path])
+    if not command_ok(add_res):
+        step_fail("git add failed")
+        return False
+    step_ok()
+
+    staged_res = run_cmd(["git", "diff", "--cached", "--name-only"])
+    staged_paths = [] if not command_ok(staged_res) else result_output(staged_res).splitlines()
+    if not command_ok(staged_res) or staged_paths != [broken_path]:
+        step_fail("repair staged unrelated changes")
+        return False
+
+    step("Committing fix locally")
+    commit_msg = f"Fix broken submodule reference for {broken_path}"
+    commit_res = run_cmd(
+        ["git", "commit", "--only", "-m", commit_msg, "--", broken_path]
+    )
+    if not command_ok(commit_res):
+        step_fail("git commit failed")
+        return False
+    step_ok()
+
+    commit_paths_res = run_cmd(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"]
+    )
+    commit_paths = (
+        []
+        if not command_ok(commit_paths_res)
+        else result_output(commit_paths_res).splitlines()
+    )
+    if not command_ok(commit_paths_res) or commit_paths != [broken_path]:
+        step_fail("repair commit contains unrelated paths")
+        return False
+
+    current_target = validate_push_target()
+    if current_target != push_target:
+        step_fail("branch or remote changed before push")
+        return False
+    remote, current_branch = current_target
+    step(f"Pushing fix to {remote}/{current_branch}")
+    push_res = run_cmd(
+        ["git", "push", remote, f"HEAD:refs/heads/{current_branch}"]
+    )
+    if not command_ok(push_res):
+        step_fail(f"git push {remote} {current_branch} failed")
+        return False
+    step_ok()
+
+    console.print(
+        "\n[bold green]🔄 Resuming recursive submodule synchronization...[/bold green]"
+    )
+    step("Updating submodules recursively (Retry)")
+    retry_res = run_cmd(
+        ["git", "submodule", "update", "--init", "--recursive"]
+    )
+    if not command_ok(retry_res):
+        step_fail("git submodule update failed on retry")
+        return False
+    step_ok()
+    return True
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Synchronize SageLang submodules")
+    parser.add_argument(
+        "mode",
+        nargs="?",
+        choices=("sync", "repair"),
+        default="sync",
+        help="use repair mode to authorize reference repair and push",
+    )
+    parser.add_argument(
+        "--repair",
+        action="store_true",
+        help="authorize reference repair, including the repair commit and push",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+    repair_mode = args.repair or args.mode == "repair"
     banner("SageLang Submodule Synchronizer")
 
     if not Path(".git").exists():
         console.print(
             "[yellow]! Not a git repository, skipping submodule sync.[/yellow]"
         )
-        sys.exit(0)
+        return 0
+
+    push_target = None
+    if repair_mode:
+        if not require_clean_worktree():
+            return 1
+        push_target = validate_push_target()
+        if push_target is None:
+            return 1
 
     step("Synchronizing submodules config")
     res = run_cmd(["git", "submodule", "sync"])
-    if res and res.returncode == 0:
+    if command_ok(res):
         step_ok()
     else:
         step_fail("git submodule sync failed")
+        return 1
 
     step("Updating submodules recursively")
     res = run_cmd(["git", "submodule", "update", "--init", "--recursive"])
-    if res and res.returncode == 0:
+    if command_ok(res):
         step_ok()
     else:
-        # Check if the failure was caused by a missing ref/detached HEAD
-        stderr_output = res.stderr if res else ""
+        stderr_output = (getattr(res, "stderr", "") if res else "") or ""
         match = re.search(r"submodule path '([^']+)'", stderr_output)
 
-        if match:
-            broken_path = match.group(1)
-            step_fail("missing remote ref detected", exit_script=False)
-
-            console.print(
-                f"\n[bold yellow]🛠  Auto-Repair Triggered:[/bold yellow] Fixing reference for [cyan]{broken_path}[/cyan]\n"
-            )
-
-            # 1. Force deinit the broken submodule path
-            step(f"Deinitializing {broken_path}")
-            deinit_res = run_cmd(["git", "submodule", "deinit", "-f", broken_path])
-            if deinit_res and deinit_res.returncode == 0:
-                step_ok()
-            else:
-                step_fail("git submodule deinit failed")
-
-            # 2. Force pull the latest remote tracking reference
-            step(f"Fetching latest tracking reference for {broken_path}")
-            update_res = run_cmd(
-                [
-                    "git",
-                    "submodule",
-                    "update",
-                    "--init",
-                    "--remote",
-                    broken_path,
-                ]
-            )
-            if update_res and update_res.returncode == 0:
-                step_ok()
-            else:
-                step_fail("git submodule remote update failed")
-
-            # 3. Stage the pointer change
-            step(f"Staging updated submodule pointer")
-            add_res = run_cmd(["git", "add", broken_path])
-            if add_res and add_res.returncode == 0:
-                step_ok()
-            else:
-                step_fail("git add failed")
-
-            # 4. Commit the new valid commit reference
-            step(f"Committing fix locally")
-            commit_msg = f"Fix broken submodule reference for {broken_path}"
-            commit_res = run_cmd(["git", "commit", "-m", commit_msg])
-            if commit_res and commit_res.returncode == 0:
-                step_ok()
-            else:
-                step_fail("git commit failed")
-
-            # 5. Dynamically detect the current branch to avoid pushing to the wrong target
-            branch_res = run_cmd(["git", "branch", "--show-current"])
-            current_branch = (
-                branch_res.stdout.strip()
-                if (branch_res and branch_res.returncode == 0)
-                else "main"
-            )
-
-            # 6. Push the pointer update upstream
-            step(f"Pushing fix to origin/{current_branch}")
-            push_res = run_cmd(["git", "push", "origin", current_branch])
-            if push_res and push_res.returncode == 0:
-                step_ok()
-            else:
-                step_fail(f"git push origin {current_branch} failed")
-
-            # 7. Resume the original recursive sync command
-            console.print(
-                "\n[bold green]🔄 Resuming recursive submodule synchronization...[/bold green]"
-            )
-            step("Updating submodules recursively (Retry)")
-            retry_res = run_cmd(
-                ["git", "submodule", "update", "--init", "--recursive"]
-            )
-            if retry_res and retry_res.returncode == 0:
-                step_ok()
-            else:
-                step_fail("git submodule update failed on retry")
-        else:
+        if not repair_mode or not match:
             step_fail("git submodule update failed")
+            return 1
 
-    step("Checking submodules status")
-    res = run_cmd(["git", "submodule", "status"])
-    if res and res.returncode == 0:
-        step_ok("all synchronized")
-        console.print("\n[bold cyan]Submodule Status:[/bold cyan]")
-        for line in res.stdout.strip().split("\n"):
-            if line:
-                parts = line.split()
-                commit = parts[0]
-                path = parts[1]
-                branch = parts[2] if len(parts) > 2 else ""
-                console.print(
-                    f"  • [cyan]{path: <30}[/cyan] at [dim]{commit[:8]}[/dim] [green]{branch}[/green]"
-                )
-    else:
-        step_fail("git submodule status failed")
+        if not repair_reference(match.group(1), push_target):
+            return 1
+
+    if not check_submodule_status():
+        return 1
 
     console.print("\n[bold green]✓ Synchronization complete![/bold green]\n")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

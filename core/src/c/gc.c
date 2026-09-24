@@ -336,7 +336,13 @@ static size_t gc_release_object(GCHeader* header) {
         }
         case VAL_THREAD: {
             ThreadValue* tv = object;
-            free(tv->handle); free(tv->data);
+            if (tv->handle != NULL && !tv->joined) {
+                sage_thread_t* thread = (sage_thread_t*)tv->handle;
+                if (!sage_thread_is_current(*thread))
+                    (void)sage_thread_join(*thread, NULL);
+            }
+            free(tv->data);
+            free(tv->handle);
             break;
         }
         case VAL_MUTEX: {
@@ -1097,32 +1103,12 @@ static void arc_table_cleanup(void) {
 
 void gc_set_mode(int mode) {
     sage_mutex_lock(&gc_mutex);
+    if (mode == GC_MODE_ARC || mode == GC_MODE_ORC) {
+        fprintf(stderr, "Security Error: ARC/ORC modes are disabled; using tracing GC.\n");
+        mode = GC_MODE_TRACING;
+    }
     gc.mode = mode;
-    if (mode == GC_MODE_ARC) {
-        gc.enabled = 0; // Disable tracing GC in ARC mode
-        gc.arc_cycle_threshold = 1000;
-        gc.arc_decrements = 0;
-        if (gc.cycle_buffer == NULL) {
-            gc.cycle_buffer_capacity = 256;
-            gc.cycle_buffer = (void**)malloc(sizeof(void*) * (size_t)gc.cycle_buffer_capacity);
-            gc.cycle_buffer_count = 0;
-        }
-        if (gc_debug) fprintf(stderr, "[GC] ARC mode enabled\n");
-    } else if (mode == GC_MODE_ORC) {
-        gc.enabled = 0; // Disable tracing GC in ORC mode
-        gc.arc_cycle_threshold = 500;  // ORC collects cycles more aggressively
-        gc.arc_decrements = 0;
-        gc.orc_epoch = 0;
-        gc.orc_collections = 0;
-        gc.orc_cycles_freed = 0;
-        if (gc.orc_roots == NULL) {
-            gc.orc_roots_capacity = 512;
-            gc.orc_roots = (void**)malloc(sizeof(void*) * (size_t)gc.orc_roots_capacity);
-            gc.orc_roots_count = 0;
-        }
-        // ORC shares ARC's side-table — no separate cycle_buffer needed
-        if (gc_debug) fprintf(stderr, "[GC] ORC mode enabled (trial deletion cycle collector)\n");
-    } else {
+    if (mode == GC_MODE_TRACING) {
         gc.enabled = 1;
         if (gc_debug) fprintf(stderr, "[GC] Tracing GC mode enabled\n");
     }

@@ -42,6 +42,45 @@ _step()   { printf "  ${_Y}⚙${_R}  %s" "$*"; }
 _step_ok()   { printf "  ${_G}✓${_R}  %s\n" "${1:-done}"; }
 _step_fail() { printf "  ${_RED}✗${_R}  %s\n" "$*"; }
 
+_ois_validate_lib_name() {
+    _vl_name="${1:-}"
+    case "$_vl_name" in
+        ""|.|..|*/*|*\\*) return 1 ;;
+    esac
+    case "$_vl_name" in
+        *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-]*)
+            return 1
+            ;;
+    esac
+
+    _vl_parent="/usr/local/share/sage"
+    _vl_root="$_vl_parent/lib"
+    _vl_path="$_vl_root/$_vl_name"
+    command -v realpath >/dev/null 2>&1 || return 1
+    if realpath -m / >/dev/null 2>&1; then
+        _vl_parent_real="$(realpath -m "$_vl_parent" 2>/dev/null)" || return 1
+        _vl_root_real="$(realpath -m "$_vl_root" 2>/dev/null)" || return 1
+        _vl_path_real="$(realpath -m "$_vl_path" 2>/dev/null)" || return 1
+    else
+        _vl_parent_real="$(realpath "$_vl_parent" 2>/dev/null)" || return 1
+        _vl_root_real="$(realpath "$_vl_root" 2>/dev/null)" || return 1
+        _vl_path_real="$(realpath "$_vl_path" 2>/dev/null)" || return 1
+    fi
+    case "$_vl_parent_real" in
+        /*) ;;
+        *) return 1 ;;
+    esac
+    case "$_vl_root_real" in
+        "$_vl_parent_real"/lib) ;;
+        *) return 1 ;;
+    esac
+    case "$_vl_path_real" in
+        "$_vl_root_real"/*) ;;
+        *) return 1 ;;
+    esac
+    return 0
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # INSTALL
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -74,10 +113,19 @@ cmd_install() {
 
     _step "Synchronizing submodules"
     if [ -f "sagesync" ] && [ -x "sagesync" ]; then
-        python3 sagesync 2>/dev/null || true
-    elif [ -d ".git" ]; then
-        git submodule sync 2>/dev/null || true
-        git submodule update --init --recursive 2>/dev/null || true
+        if ! python3 sagesync 2>/dev/null; then
+            ois_die "Submodule synchronization failed"
+            return 1
+        fi
+    elif [ -e ".git" ]; then
+        if ! git submodule sync 2>/dev/null; then
+            ois_die "Submodule synchronization failed"
+            return 1
+        fi
+        if ! git submodule update --init --recursive 2>/dev/null; then
+            ois_die "Submodule synchronization failed"
+            return 1
+        fi
     fi
     _step_ok "done"
 
@@ -96,7 +144,7 @@ cmd_install() {
     printf "${_B}[3/4] Install${_R}\n"
     _install_sage
     _install_ois_runtime
-    _remove_excluded_libs
+    _remove_excluded_libs || ois_die "Failed to remove excluded libraries"
     _fix_permissions
 
     printf "${_B}[4/4] Integrate${_R}\n"
@@ -180,7 +228,7 @@ _detect_build_system() {
 
 # ── Sage build ─────────────────────────────────────────────────────────────────
 _build_sage() {
-    _njobs="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)"
+    _njobs=2
     if [ "$OIS_USE_CMAKE" = "yes" ]; then
         _step "Configuring CMake build (self-hosted Sage mode)"
         mkdir -p core/build_sage
@@ -251,11 +299,19 @@ _install_ois_runtime() {
 _remove_excluded_libs() {
     [ -z "$OIS_EXCLUDE_LIBS" ] && return 0
     for _lib in $OIS_EXCLUDE_LIBS; do
+        if ! _ois_validate_lib_name "$_lib"; then
+            ois_err "Refusing invalid excluded library: $_lib"
+            return 1
+        fi
         _lp="/usr/local/share/sage/lib/$_lib"
         [ -d "$_lp" ] || continue
-        rm -rf "$_lp" 2>/dev/null || sudo rm -rf "$_lp" 2>/dev/null || true
+        if ! rm -rf -- "$_lp" 2>/dev/null && ! sudo rm -rf -- "$_lp" 2>/dev/null; then
+            ois_err "Cannot remove excluded library: $_lib"
+            return 1
+        fi
         ois_ok "Excluded lib: $_lib"
     done
+    return 0
 }
 
 _fix_permissions() {
@@ -549,6 +605,7 @@ main() {
                 OIS_EXCLUDE_LIBS="blockchain graphics os net crypto ml cuda llm agent chat android transpiler metal rich" ;;
             --no-lib-*)
                 _lib="${_a#--no-lib-}"
+                _ois_validate_lib_name "$_lib" || ois_die "Invalid library name: $_lib"
                 OIS_EXCLUDE_LIBS="$OIS_EXCLUDE_LIBS $_lib" ;;
             --yes|-y)      OIS_YES="yes"        ;;
             --version)     printf 'OIS v%s\n' "$OIS_VERSION"; exit 0 ;;

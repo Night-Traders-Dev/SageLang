@@ -216,6 +216,8 @@ METAL_RV64_VM_OBJECT = $(OBJ_DIR)/metal_rv64_vm.o
 # Build Rules
 # ============================================================================
 
+.DEFAULT_GOAL := all
+
 .PHONY: all clean run install uninstall help test test-all examples chart charts benchmarks pdf sage-boot sage-bench benchmark benchmark-chart sgvm sgvmc
 
 all: $(TARGET) $(SGVM_TARGET) $(SGVM_COMPILER_TARGET)
@@ -423,123 +425,123 @@ uninstall:
 test: $(TARGET)
 	@echo "Running basic tests..."
 	@echo "Test 1: Lexer"
-	@./$(TARGET) -c "let x = 42" && echo "✅ Pass" || echo "❌ Fail"
+	@./$(TARGET) -c "let x = 42" && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 2: Expressions"
-	@./$(TARGET) -c "print 2 + 2 * 3" && echo "✅ Pass" || echo "❌ Fail"
+	@./$(TARGET) -c "print 2 + 2 * 3" && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 3: Functions"
-	@./$(TARGET) ../testsuite/compiler/test.sage && echo "✅ Pass" || echo "❌ Fail"
+	@./$(TARGET) ../testsuite/compiler/test.sage && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 4: Bundled Libraries"
-	@./$(TARGET) ../testsuite/compiler/lib_suite.sage && echo "✅ Pass" || echo "❌ Fail"
+	@./$(TARGET) ../testsuite/compiler/lib_suite.sage && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 5: Phase 10 C Backend"
 	@mkdir -p .tmp
 	@./$(TARGET) --emit-c ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke.c
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke
 	@./.tmp/compiler_smoke > .tmp/compiler_smoke.out
-	@diff -u ../testsuite/compiler/compiler_smoke.expected .tmp/compiler_smoke.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_smoke.expected .tmp/compiler_smoke.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 6: Phase 10 Arrays"
 	@./$(TARGET) --emit-c ../testsuite/compiler/compiler_arrays.sage -o .tmp/compiler_arrays.c
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_arrays.sage -o .tmp/compiler_arrays
 	@./.tmp/compiler_arrays > .tmp/compiler_arrays.out
-	@diff -u ../testsuite/compiler/compiler_arrays.expected .tmp/compiler_arrays.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_arrays.expected .tmp/compiler_arrays.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 7: Phase 10 Pico Codegen"
 	@./$(TARGET) --emit-pico-c examples/hello.sage -o .tmp/hello_pico.c && \
 		grep -F -q '#include "pico/stdlib.h"' .tmp/hello_pico.c && \
 		grep -F -q 'stdio_init_all();' .tmp/hello_pico.c && \
-		grep -F -q 'sleep_ms(2000);' .tmp/hello_pico.c && echo "✅ Pass" || echo "❌ Fail"
+		grep -F -q 'sleep_ms(2000);' .tmp/hello_pico.c && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 8: Phase 10 For Loops"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_for_loops.sage -o .tmp/compiler_for_loops
 	@./.tmp/compiler_for_loops > .tmp/compiler_for_loops.out
-	@diff -u ../testsuite/compiler/compiler_for_loops.expected .tmp/compiler_for_loops.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_for_loops.expected .tmp/compiler_for_loops.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 9: Phase 10 Dictionaries"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_dicts.sage -o .tmp/compiler_dicts
 	@./.tmp/compiler_dicts > .tmp/compiler_dicts.out
-	@diff -u ../testsuite/compiler/compiler_dicts.expected .tmp/compiler_dicts.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_dicts.expected .tmp/compiler_dicts.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 10: Phase 10 Tuples"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_tuples.sage -o .tmp/compiler_tuples
 	@./.tmp/compiler_tuples > .tmp/compiler_tuples.out
-	@diff -u ../testsuite/compiler/compiler_tuples.expected .tmp/compiler_tuples.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_tuples.expected .tmp/compiler_tuples.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 11: Phase 10 Exceptions"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_exceptions.sage -o .tmp/compiler_exceptions
 	@./.tmp/compiler_exceptions > .tmp/compiler_exceptions.out
-	@diff -u ../testsuite/compiler/compiler_exceptions.expected .tmp/compiler_exceptions.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_exceptions.expected .tmp/compiler_exceptions.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 12: Phase 10 String Builtins"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_strings.sage -o .tmp/compiler_strings
 	@./.tmp/compiler_strings > .tmp/compiler_strings.out
-	@diff -u ../testsuite/compiler/compiler_strings.expected .tmp/compiler_strings.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_strings.expected .tmp/compiler_strings.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 13: Phase 10 Memory Builtins"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_memory.sage -o .tmp/compiler_memory
 	@./.tmp/compiler_memory > .tmp/compiler_memory.out
-	@diff -u ../testsuite/compiler/compiler_memory.expected .tmp/compiler_memory.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_memory.expected .tmp/compiler_memory.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 14: Phase 10 Struct Builtins"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_structs.sage -o .tmp/compiler_structs
 	@./.tmp/compiler_structs > .tmp/compiler_structs.out
-	@diff -u ../testsuite/compiler/compiler_structs.expected .tmp/compiler_structs.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_structs.expected .tmp/compiler_structs.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 15: Phase 10 Classes"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_classes.sage -o .tmp/compiler_classes
 	@./.tmp/compiler_classes > .tmp/compiler_classes.out
-	@diff -u ../testsuite/compiler/compiler_classes.expected .tmp/compiler_classes.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_classes.expected .tmp/compiler_classes.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 16: Phase 10 Modules"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_modules.sage -o .tmp/compiler_modules
 	@./.tmp/compiler_modules > .tmp/compiler_modules.out
-	@diff -u ../testsuite/compiler/compiler_modules.expected .tmp/compiler_modules.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_modules.expected .tmp/compiler_modules.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 17: Phase 10 Architecture Detection"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_arch.sage -o .tmp/compiler_arch
 	@./.tmp/compiler_arch > .tmp/compiler_arch.out
-	@diff -u ../testsuite/compiler/compiler_arch.expected .tmp/compiler_arch.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_arch.expected .tmp/compiler_arch.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 18: Constant Folding (-O1)"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_constfold.sage -o .tmp/compiler_constfold -O1
 	@./.tmp/compiler_constfold > .tmp/compiler_constfold.out
-	@diff -u ../testsuite/compiler/compiler_constfold.expected .tmp/compiler_constfold.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_constfold.expected .tmp/compiler_constfold.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 19: Dead Code Elimination (-O2)"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_dce.sage -o .tmp/compiler_dce -O2
 	@./.tmp/compiler_dce > .tmp/compiler_dce.out
-	@diff -u ../testsuite/compiler/compiler_dce.expected .tmp/compiler_dce.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_dce.expected .tmp/compiler_dce.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 20: Function Inlining (-O3)"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_inline.sage -o .tmp/compiler_inline -O3
 	@./.tmp/compiler_inline > .tmp/compiler_inline.out
-	@diff -u ../testsuite/compiler/compiler_inline.expected .tmp/compiler_inline.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_inline.expected .tmp/compiler_inline.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 21: Optimization Levels (-O0 through -O3)"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_optlevels.sage -o .tmp/compiler_optlevels_o0 -O0
 	@./.tmp/compiler_optlevels_o0 > .tmp/compiler_optlevels_o0.out
-	@diff -u ../testsuite/compiler/compiler_optlevels.expected .tmp/compiler_optlevels_o0.out && echo "✅ -O0 Pass" || echo "❌ -O0 Fail"
+	@diff -u ../testsuite/compiler/compiler_optlevels.expected .tmp/compiler_optlevels_o0.out && echo "✅ -O0 Pass" || (echo "❌ -O0 Fail"; exit 1)
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_optlevels.sage -o .tmp/compiler_optlevels_o1 -O1
 	@./.tmp/compiler_optlevels_o1 > .tmp/compiler_optlevels_o1.out
-	@diff -u ../testsuite/compiler/compiler_optlevels.expected .tmp/compiler_optlevels_o1.out && echo "✅ -O1 Pass" || echo "❌ -O1 Fail"
+	@diff -u ../testsuite/compiler/compiler_optlevels.expected .tmp/compiler_optlevels_o1.out && echo "✅ -O1 Pass" || (echo "❌ -O1 Fail"; exit 1)
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_optlevels.sage -o .tmp/compiler_optlevels_o2 -O2
 	@./.tmp/compiler_optlevels_o2 > .tmp/compiler_optlevels_o2.out
-	@diff -u ../testsuite/compiler/compiler_optlevels.expected .tmp/compiler_optlevels_o2.out && echo "✅ -O2 Pass" || echo "❌ -O2 Fail"
+	@diff -u ../testsuite/compiler/compiler_optlevels.expected .tmp/compiler_optlevels_o2.out && echo "✅ -O2 Pass" || (echo "❌ -O2 Fail"; exit 1)
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_optlevels.sage -o .tmp/compiler_optlevels_o3 -O3
 	@./.tmp/compiler_optlevels_o3 > .tmp/compiler_optlevels_o3.out
-	@diff -u ../testsuite/compiler/compiler_optlevels.expected .tmp/compiler_optlevels_o3.out && echo "✅ -O3 Pass" || echo "❌ -O3 Fail"
+	@diff -u ../testsuite/compiler/compiler_optlevels.expected .tmp/compiler_optlevels_o3.out && echo "✅ -O3 Pass" || (echo "❌ -O3 Fail"; exit 1)
 	@echo ""
 	@echo "Test 22: LLVM IR Generation"
-	@./$(TARGET) --emit-llvm ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke.ll && echo "✅ Pass (LLVM IR emitted)" || echo "❌ Fail"
+	@./$(TARGET) --emit-llvm ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke.ll && echo "✅ Pass (LLVM IR emitted)" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 22b: LLVM Compile + Run"
 	@if command -v clang >/dev/null 2>&1; then \
 		./$(TARGET) --compile-llvm ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke_llvm && \
 		./.tmp/compiler_smoke_llvm > .tmp/compiler_smoke_llvm.out && \
-		diff -u ../testsuite/compiler/compiler_smoke.expected .tmp/compiler_smoke_llvm.out && echo "✅ Pass (LLVM compiled + ran)" || echo "❌ Fail"; \
+		diff -u ../testsuite/compiler/compiler_smoke.expected .tmp/compiler_smoke_llvm.out && echo "✅ Pass (LLVM compiled + ran)" || (echo "❌ Fail"; exit 1); \
 	else \
 		echo "⏭ Skip (clang not found)"; \
 	fi
@@ -548,22 +550,22 @@ test: $(TARGET)
 	@if command -v clang >/dev/null 2>&1; then \
 		./$(TARGET) --compile-llvm ../testsuite/compiler/llvm_features.sage -o .tmp/llvm_features && \
 		./.tmp/llvm_features > .tmp/llvm_features.out && \
-		diff -u ../testsuite/compiler/llvm_features.expected .tmp/llvm_features.out && echo "✅ Pass" || echo "❌ Fail"; \
+		diff -u ../testsuite/compiler/llvm_features.expected .tmp/llvm_features.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1); \
 	else \
 		echo "⏭ Skip (clang not found)"; \
 	fi
 	@echo ""
 	@echo "Test 23: Assembly Generation (host target)"
-	@./$(TARGET) --emit-asm ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke.s && echo "✅ Pass (ASM emitted)" || echo "❌ Fail"
+	@./$(TARGET) --emit-asm ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke.s && echo "✅ Pass (ASM emitted)" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 24: Debug Info (-g flag)"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke_debug -g
 	@./.tmp/compiler_smoke_debug > .tmp/compiler_smoke_debug.out
-	@diff -u ../testsuite/compiler/compiler_smoke.expected .tmp/compiler_smoke_debug.out && echo "✅ Pass" || echo "❌ Fail"
+	@diff -u ../testsuite/compiler/compiler_smoke.expected .tmp/compiler_smoke_debug.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 25: REPL"
-	@echo ":quit" | ./$(TARGET) --repl 2>&1 | grep -q "Sage REPL" && echo "✅ Pass (banner shown)" || (echo "❌ Fail (banner)"; exit 1)
-	@echo "1 + 2" | ./$(TARGET) --repl 2>&1 | grep -q "sage> 3" && echo "✅ Pass (expression eval)" || (echo "❌ Fail (expression eval)"; exit 1)
+	@printf ':quit\n' | ./$(TARGET) --repl > .tmp/repl_banner.out 2>&1 && grep -q "Sage REPL" .tmp/repl_banner.out && echo "✅ Pass (banner shown)" || (echo "❌ Fail (banner)"; exit 1)
+	@printf '1 + 2\n' | ./$(TARGET) --repl > .tmp/repl_eval.out 2>&1 && grep -q "sage> 3" .tmp/repl_eval.out && echo "✅ Pass (expression eval)" || (echo "❌ Fail (expression eval)"; exit 1)
 	@echo ""
 	@echo "Test 29: Kotlin Backend (emit-kotlin expected output)"
 	@KT_OK=0; KT_BAD=0; \
@@ -592,12 +594,12 @@ test: $(TARGET)
 	@echo ""
 	@echo "Test 30: Kotlin Android Project Generation"
 	@rm -rf .tmp/kt_android_test
-	@./$(TARGET) --compile-android examples/android_hello.sage -o .tmp/kt_android_test --package com.sage.test 2>&1 | grep -q "Android project generated" && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
+	@./$(TARGET) --compile-android examples/android_hello.sage -o .tmp/kt_android_test --package com.sage.test > .tmp/kt_android_test.out 2>&1 && grep -q "Android project generated" .tmp/kt_android_test.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 31: Kotlin Module Import (android.app)"
 	@printf 'import android.app\nlet my_app = App("Test")\nmy_app.launch()\n' > .tmp/kt_import_test.sage
 	@./$(TARGET) --emit-kotlin .tmp/kt_import_test.sage -o .tmp/kt_import_test.kt 2>&1 && \
-		grep -q 'S.newInstance' .tmp/kt_import_test.kt && echo "✅ Pass (import resolved)" || echo "⚠️  Partial (transpiled but import may not resolve)"
+		grep -q 'S.newInstance' .tmp/kt_import_test.kt && echo "✅ Pass (import resolved)" || (echo "❌ Fail (import unresolved)"; exit 1)
 	@echo ""
 	@echo "Test 26: Formatter"
 	@printf "let   x=1\nlet y =  2\n" > .tmp/fmt_test.sage
@@ -620,7 +622,8 @@ test: $(TARGET)
 	msg = '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"capabilities\":{}}}'; \
 	header = 'Content-Length: %d\r\n\r\n' % len(msg); \
 	sys.stdout.write(header + msg); \
-	sys.stdout.flush()" | timeout 5 ./$(TARGET) --lsp 2>/dev/null | head -c 4096 | grep -q '"sage-lsp"' && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
+	sys.stdout.flush()" > .tmp/lsp_request.json
+	@timeout 5 ./$(TARGET) --lsp < .tmp/lsp_request.json > .tmp/lsp_response.json 2>/dev/null && grep -q '"sage-lsp"' .tmp/lsp_response.json && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
 
 # ============================================================================
 # Self-Hosted Sage Build (Bootstrap)
@@ -643,83 +646,83 @@ test-selfhost: $(TARGET)
 	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_lexer.sage
 	@echo ""
 	@echo "=== Self-Hosted Parser Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_parser.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_parser.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Interpreter Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_interpreter.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_interpreter.sage 2>&1
 	@echo ""
 	@echo "=== Bootstrap Integration Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_bootstrap.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_bootstrap.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Formatter Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_formatter.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_formatter.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Linter Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_linter.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_linter.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Value Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_value.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_value.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Pass Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_pass.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_pass.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Constfold Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_constfold.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_constfold.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted DCE Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_dce.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_dce.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Inline Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_inline.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_inline.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Typecheck Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_typecheck.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_typecheck.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Stdlib Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_stdlib.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_stdlib.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Module Tests ==="
 	@mkdir -p /tmp/sage_test_modules
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_module.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_module.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted LLVM Backend Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_llvm_backend.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_llvm_backend.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Codegen Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_codegen.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_codegen.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted C Compiler Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_compiler.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_compiler.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Error Reporting Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_errors.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_errors.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted LSP Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_lsp.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_lsp.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Sage CLI Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_sage_cli.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_sage_cli.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Diagnostic Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_diagnostic.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_diagnostic.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted GC Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gc.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gc.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted Heartbeat Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_heartbeat.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_heartbeat.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted GPU Module Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted GPU Advanced Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu_advanced.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu_advanced.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted GPU Features 1-18 Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu_features.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu_features.sage 2>&1
 	@echo ""
 	@echo "=== Self-Hosted GPU Engine Tests ==="
-	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu_engine.sage 2>&1 | tail -3
+	@cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/test_gpu_engine.sage 2>&1
 	@echo ""
 	@echo "✅ All self-hosted tests complete"
 

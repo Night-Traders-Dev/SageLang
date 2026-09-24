@@ -103,6 +103,8 @@ typedef unsigned long long uint64_t;
 #define OP_SETUP_TRY      56
 #define OP_END_TRY        57
 #define OP_RAISE          58
+#define OP_GET_LOCAL      88
+#define OP_SET_LOCAL      89
 
 // Generator opcodes (yield support)
 #define OP_YIELD                  90
@@ -169,6 +171,10 @@ typedef unsigned long long uint64_t;
 #ifndef METAL_CALL_STACK_SIZE
 #define METAL_CALL_STACK_SIZE 256
 #endif
+#ifndef METAL_VERIFY_MAX_CODE
+#define METAL_VERIFY_MAX_CODE 65536
+#endif
+#define METAL_MAX_LOCALS 256
 
 // ============================================================================
 // Value representation

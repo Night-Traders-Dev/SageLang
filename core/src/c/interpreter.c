@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #include <ctype.h>    // isalnum
 #include <stdint.h>   // uintptr_t
+#include <limits.h>
 #include <math.h>     // isinf, isnan
 #include <unistd.h>   // getpid, unlink
 #include <sys/stat.h> // stat, S_ISDIR, S_ISREG
@@ -24,11 +25,22 @@
 #include "repl.h"    // Phase 12: REPL error recovery
 
 Environment* g_global_env = NULL;
+static int g_sandbox_mode = 0;
 #ifdef SAGE_BARE_METAL
 EnvRootNode* g_gc_root_stack = NULL;
 #else
 __thread EnvRootNode* g_gc_root_stack = NULL;
 #endif
+
+void interpreter_set_sandbox_mode(int enabled) {
+    g_sandbox_mode = enabled ? 1 : 0;
+}
+
+int interpreter_sandbox_mode(void) {
+    return g_sandbox_mode;
+}
+
+static int sandbox_denied(const char* capability);
 
 static uint64_t g_addr_salt = 0;
 
@@ -325,6 +337,7 @@ static int stmt_contains_target(Stmt* stmt, Stmt* target) {
 // --- Native Functions ---
 
 static Value clock_native(int argCount, Value* args) {
+    if (sandbox_denied("clock")) return val_number(0);
     (void)argCount; (void)args;
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -332,6 +345,7 @@ static Value clock_native(int argCount, Value* args) {
 }
 
 static Value input_native(int argCount, Value* args) {
+    if (sandbox_denied("filesystem")) return val_nil();
     (void)argCount; (void)args;
     char buffer[1024];
     if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
@@ -1231,44 +1245,52 @@ static Value cpu_has_hyperthreading_native(int argCount, Value* args) {
 }
 
 static Value thread_set_affinity_native(int argCount, Value* args) {
+    if (sandbox_denied("thread")) return val_bool(0);
     if (argCount < 1 || !IS_NUMBER(args[0])) return val_bool(0);
     int core_id = (int)AS_NUMBER(args[0]);
     return val_number((double)sage_thread_set_affinity(core_id));
 }
 
 static Value thread_get_core_native(int argCount, Value* args) {
+    if (sandbox_denied("thread")) return val_number(-1);
     (void)argCount; (void)args;
     return val_number((double)sage_thread_get_core());
 }
 
 // Atomic operations (C-level, truly atomic)
 static Value atomic_new_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     sage_atomic_t* a = SAGE_ALLOC(sizeof(sage_atomic_t));
     a->value = (argCount >= 1 && IS_NUMBER(args[0])) ? (long)AS_NUMBER(args[0]) : 0;
     return val_pointer(a, sizeof(sage_atomic_t), 1);
 }
 static Value atomic_load_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount < 1 || !IS_POINTER(args[0])) return val_nil();
     sage_atomic_t* a = (sage_atomic_t*)args[0].as.pointer->ptr;
     return val_number((double)sage_atomic_load(a));
 }
 static Value atomic_store_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount < 2 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
     sage_atomic_t* a = (sage_atomic_t*)args[0].as.pointer->ptr;
     sage_atomic_store(a, (long)AS_NUMBER(args[1]));
     return val_nil();
 }
 static Value atomic_add_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount < 2 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
     sage_atomic_t* a = (sage_atomic_t*)args[0].as.pointer->ptr;
     return val_number((double)sage_atomic_add(a, (long)AS_NUMBER(args[1])));
 }
 static Value atomic_cas_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_bool(0);
     if (argCount < 3 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) return val_bool(0);
     sage_atomic_t* a = (sage_atomic_t*)args[0].as.pointer->ptr;
     return val_bool(sage_atomic_cas(a, (long)AS_NUMBER(args[1]), (long)AS_NUMBER(args[2])));
 }
 static Value atomic_exchange_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount < 2 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1])) return val_nil();
     sage_atomic_t* a = (sage_atomic_t*)args[0].as.pointer->ptr;
     return val_number((double)sage_atomic_exchange(a, (long)AS_NUMBER(args[1])));
@@ -1276,22 +1298,26 @@ static Value atomic_exchange_native(int argCount, Value* args) {
 
 // Semaphore natives
 static Value sem_new_native(int argCount, Value* args) {
+    if (sandbox_denied("thread")) return val_nil();
     sage_sem_t* sem = SAGE_ALLOC(sizeof(sage_sem_t));
     int initial = (argCount >= 1 && IS_NUMBER(args[0])) ? (int)AS_NUMBER(args[0]) : 1;
     sage_sem_init(sem, initial);
     return val_pointer(sem, sizeof(sage_sem_t), 1);
 }
 static Value sem_wait_native(int argCount, Value* args) {
+    if (sandbox_denied("thread")) return val_nil();
     if (argCount < 1 || !IS_POINTER(args[0])) return val_nil();
     sage_sem_wait((sage_sem_t*)args[0].as.pointer->ptr);
     return val_nil();
 }
 static Value sem_post_native(int argCount, Value* args) {
+    if (sandbox_denied("thread")) return val_nil();
     if (argCount < 1 || !IS_POINTER(args[0])) return val_nil();
     sage_sem_post((sage_sem_t*)args[0].as.pointer->ptr);
     return val_nil();
 }
 static Value sem_trywait_native(int argCount, Value* args) {
+    if (sandbox_denied("thread")) return val_bool(0);
     if (argCount < 1 || !IS_POINTER(args[0])) return val_bool(0);
     return val_bool(sage_sem_trywait((sage_sem_t*)args[0].as.pointer->ptr) == 0);
 }
@@ -1362,10 +1388,17 @@ static Value native_next(int arg_count, Value* args) {
 // Phase 9: FFI Functions (requires dlfcn.h - disabled with SAGE_NO_FFI)
 // ============================================================================
 
+static int sandbox_denied(const char* capability) {
+    if (!interpreter_sandbox_mode()) return 0;
+    fprintf(stderr, "Sandbox denied capability: %s\n", capability);
+    return 1;
+}
+
 #ifndef SAGE_NO_FFI
 
 // ffi_open("libname.so") -> CLib handle
 Value ffi_open_native(int argCount, Value* args) {
+    if (sandbox_denied("ffi")) return val_nil();
     if (argCount != 1 || !IS_STRING(args[0])) {
         fprintf(stderr, "ffi_open() expects 1 string argument (library path).\n");
         return val_nil();
@@ -1382,6 +1415,7 @@ Value ffi_open_native(int argCount, Value* args) {
 
 // ffi_close(lib) -> nil
 Value ffi_close_native(int argCount, Value* args) {
+    if (sandbox_denied("ffi")) return val_nil();
     if (argCount != 1 || !IS_CLIB(args[0])) {
         fprintf(stderr, "ffi_close() expects 1 clib argument.\n");
         return val_nil();
@@ -1398,6 +1432,7 @@ Value ffi_close_native(int argCount, Value* args) {
 // Supported return types: "double", "int", "void", "string"
 // Args are automatically marshaled from Sage values
 Value ffi_call_native(int argCount, Value* args) {
+    if (sandbox_denied("ffi")) return val_nil();
     if (argCount < 3 || argCount > 4) {
         fprintf(stderr, "ffi_call() expects 3-4 arguments: (lib, func_name, return_type, [args]).\n");
         return val_nil();
@@ -1449,6 +1484,21 @@ Value ffi_call_native(int argCount, Value* args) {
         fprintf(stderr, "ffi_call(): maximum 3 arguments supported (got %d).\n", call_argc);
         return val_nil();
     }
+    if (strcmp(ret_type, "int") == 0 || strcmp(ret_type, "long") == 0 ||
+        strcmp(ret_type, "void") == 0) {
+        for (int i = 0; i < call_argc; i++) {
+            if (IS_NUMBER(call_args->elements[i])) {
+                double value = AS_NUMBER(call_args->elements[i]);
+                double limit = strcmp(ret_type, "int") == 0 ? (double)INT_MAX : (double)LONG_MAX;
+                if (!isfinite(value) || floor(value) != value ||
+                    value < (strcmp(ret_type, "int") == 0 ? (double)INT_MIN : (double)LONG_MIN) ||
+                    value > limit) {
+                    fprintf(stderr, "ffi_call(): numeric argument is out of range.\n");
+                    return val_nil();
+                }
+            }
+        }
+    }
 
     // POSIX guarantees dlsym void* converts to function pointers.
     // Suppress -Wpedantic for these necessary casts.
@@ -1498,6 +1548,14 @@ Value ffi_call_native(int argCount, Value* args) {
         } else if (call_argc == 3 && IS_NUMBER(call_args->elements[0]) && IS_STRING(call_args->elements[1]) && IS_NUMBER(call_args->elements[2])) {
             int (*fn)(int, const char*, int) = (int (*)(int, const char*, int))sym;
             return val_number((double)fn((int)AS_NUMBER(call_args->elements[0]), AS_STRING(call_args->elements[1]), (int)AS_NUMBER(call_args->elements[2])));
+        } else if (call_argc == 3 && IS_STRING(call_args->elements[0]) &&
+                   IS_STRING(call_args->elements[1]) &&
+                   IS_STRING(call_args->elements[2])) {
+            int (*fn)(const char*, const char*, const char*) =
+                (int (*)(const char*, const char*, const char*))sym;
+            return val_number((double)fn(AS_STRING(call_args->elements[0]),
+                                          AS_STRING(call_args->elements[1]),
+                                          AS_STRING(call_args->elements[2])));
         }
         fprintf(stderr, "ffi_call: unsupported argument types for int return.\n");
         return val_nil();
@@ -1536,6 +1594,22 @@ Value ffi_call_native(int argCount, Value* args) {
             const char* (*fn)(const char*) = (const char* (*)(const char*))sym;
             const char* result = fn(AS_STRING(call_args->elements[0]));
             return result ? val_string(result) : val_nil();
+        } else if (call_argc == 2 && IS_STRING(call_args->elements[0]) &&
+                   IS_STRING(call_args->elements[1])) {
+            const char* (*fn)(const char*, const char*) =
+                (const char* (*)(const char*, const char*))sym;
+            const char* result = fn(AS_STRING(call_args->elements[0]),
+                                     AS_STRING(call_args->elements[1]));
+            return result ? val_string(result) : val_nil();
+        } else if (call_argc == 3 && IS_STRING(call_args->elements[0]) &&
+                   IS_STRING(call_args->elements[1]) &&
+                   IS_STRING(call_args->elements[2])) {
+            const char* (*fn)(const char*, const char*, const char*) =
+                (const char* (*)(const char*, const char*, const char*))sym;
+            const char* result = fn(AS_STRING(call_args->elements[0]),
+                                     AS_STRING(call_args->elements[1]),
+                                     AS_STRING(call_args->elements[2]));
+            return result ? val_string(result) : val_nil();
         }
         fprintf(stderr, "ffi_call: unsupported argument types for string return.\n");
         return val_nil();
@@ -1571,6 +1645,7 @@ Value ffi_call_native(int argCount, Value* args) {
 
 // ffi_sym(lib, "symbol_name") -> true/false (check if symbol exists)
 Value ffi_sym_native(int argCount, Value* args) {
+    if (sandbox_denied("ffi")) return val_bool(0);
     if (argCount != 2 || !IS_CLIB(args[0]) || !IS_STRING(args[1])) {
         fprintf(stderr, "ffi_sym() expects (clib, string).\n");
         return val_bool(0);
@@ -1585,6 +1660,7 @@ Value ffi_sym_native(int argCount, Value* args) {
 
 // ffi_sym_addr(lib, "symbol_name") -> number (address)
 Value ffi_sym_addr_native(int argCount, Value* args) {
+    if (sandbox_denied("host_address")) return val_number(0);
     if (argCount != 2 || !IS_CLIB(args[0]) || !IS_STRING(args[1])) {
         fprintf(stderr, "ffi_sym_addr() expects (clib, string).\n");
         return val_number(0);
@@ -1593,14 +1669,26 @@ Value ffi_sym_addr_native(int argCount, Value* args) {
     if (!lib->handle) return val_number(0);
 
     dlerror();
-    void* addr = dlsym(lib->handle, AS_STRING(args[1]));
+    (void)dlsym(lib->handle, AS_STRING(args[1]));
     if (dlerror() != NULL) return val_number(0);
-    return val_number((double)(uintptr_t)addr);
+    return val_number(0);
 }
 
 #endif // SAGE_NO_FFI
 
 // ========== Phase 9: Raw Memory Operations ==========
+
+static int pointer_range_valid(const PointerValue* pointer, size_t offset, size_t needed) {
+    return pointer != NULL && pointer->ptr != NULL &&
+           pointer->size >= needed && offset <= pointer->size - needed;
+}
+
+static int finite_integer(double value, long long* out) {
+    if (!isfinite(value) || floor(value) != value ||
+        value < (double)LLONG_MIN || value > (double)LLONG_MAX) return 0;
+    if (out != NULL) *out = (long long)value;
+    return 1;
+}
 
 // mem_alloc(size) -> pointer
 // Phase 1.8: Bytes operations
@@ -1714,14 +1802,18 @@ static Value sizeof_native(int argCount, Value* args) {
 
 // Phase 1.8: Pointer arithmetic
 static Value ptr_add_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount == 2 && args[0].type == VAL_POINTER && IS_NUMBER(args[1])) {
         PointerValue* p = args[0].as.pointer;
-        int offset = (int)AS_NUMBER(args[1]);
+        long long offset_value;
+        if (!p || !p->ptr || !finite_integer(AS_NUMBER(args[1]), &offset_value) ||
+            offset_value < 0 || (unsigned long long)offset_value > p->size) return val_nil();
+        size_t offset = (size_t)offset_value;
         Value v;
         v.type = VAL_POINTER;
         v.as.pointer = gc_alloc(VAL_POINTER, sizeof(PointerValue));
         v.as.pointer->ptr = (char*)p->ptr + offset;
-        v.as.pointer->size = (p->size > (size_t)offset) ? p->size - offset : 0;
+        v.as.pointer->size = p->size - offset;
         v.as.pointer->owned = 0;
         return v;
     }
@@ -1729,23 +1821,25 @@ static Value ptr_add_native(int argCount, Value* args) {
 }
 
 static Value ptr_to_int_native(int argCount, Value* args) {
-    if (argCount == 1 && args[0].type == VAL_POINTER) {
-        return val_number((double)(uintptr_t)args[0].as.pointer->ptr);
-    }
+    if (sandbox_denied("host_address")) return val_nil();
+    (void)args;
+    (void)argCount;
     return val_nil();
 }
 
 static Value mem_alloc_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 1 || !IS_NUMBER(args[0])) {
         fprintf(stderr, "mem_alloc() expects (number).\n");
         return val_nil();
     }
-    size_t size = (size_t)AS_NUMBER(args[0]);
-    // Security: Enforce global allocation limit (CWE-400)
-    if (size == 0 || size > SAGE_MAX_READ_SIZE) {
+    long long requested;
+    if (!finite_integer(AS_NUMBER(args[0]), &requested) || requested <= 0 ||
+        (unsigned long long)requested > SAGE_MAX_READ_SIZE) {
         fprintf(stderr, "mem_alloc(): invalid size (0 < size <= 100MB).\n");
         return val_nil();
     }
+    size_t size = (size_t)requested;
     void* ptr = calloc(1, size); // Zero-initialized
     if (!ptr) {
         fprintf(stderr, "mem_alloc(): allocation failed.\n");
@@ -1756,6 +1850,7 @@ static Value mem_alloc_native(int argCount, Value* args) {
 
 // mem_free(ptr) -> nil
 static Value mem_free_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 1 || !IS_POINTER(args[0])) {
         fprintf(stderr, "mem_free() expects (pointer).\n");
         return val_nil();
@@ -1773,6 +1868,7 @@ static Value mem_free_native(int argCount, Value* args) {
 // mem_read(ptr, offset, type) -> value
 // type: "byte", "int", "double", "string"
 static Value mem_read_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 3 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1]) || !IS_STRING(args[2])) {
         fprintf(stderr, "mem_read() expects (pointer, offset, type_string).\n");
         return val_nil();
@@ -1782,26 +1878,25 @@ static Value mem_read_native(int argCount, Value* args) {
         fprintf(stderr, "mem_read(): null pointer.\n");
         return val_nil();
     }
-    double offset_d = AS_NUMBER(args[1]);
-    if (offset_d < 0) {
-        fprintf(stderr, "mem_read(): offset cannot be negative.\n");
+    long long offset_value;
+    if (!finite_integer(AS_NUMBER(args[1]), &offset_value) || offset_value < 0) {
+        fprintf(stderr, "mem_read(): invalid offset.\n");
         return val_nil();
     }
-    size_t offset = (size_t)offset_d;
+    size_t offset = (size_t)offset_value;
     const char* type = AS_STRING(args[2]);
-
-    // Bounds checking for owned memory
-    if (p->size > 0) {
-        size_t needed = 0;
-        if (strcmp(type, "byte") == 0) needed = 1;
-        else if (strcmp(type, "int") == 0) needed = sizeof(int);
-        else if (strcmp(type, "double") == 0) needed = sizeof(double);
-        else if (strcmp(type, "string") == 0) needed = 1; // at least 1 byte
-        if (offset + needed > p->size) {
-            fprintf(stderr, "mem_read(): offset %zu + %zu bytes exceeds allocation size %zu.\n",
-                    offset, needed, p->size);
-            return val_nil();
-        }
+    size_t needed = 0;
+    if (strcmp(type, "byte") == 0) needed = 1;
+    else if (strcmp(type, "int") == 0) needed = sizeof(int);
+    else if (strcmp(type, "double") == 0) needed = sizeof(double);
+    else if (strcmp(type, "string") == 0) needed = 1;
+    else {
+        fprintf(stderr, "mem_read(): unknown type '%s' (use byte/int/double/string).\n", type);
+        return val_nil();
+    }
+    if (!pointer_range_valid(p, offset, needed)) {
+        fprintf(stderr, "mem_read(): pointer range is not owned or is out of bounds.\n");
+        return val_nil();
     }
 
     unsigned char* base = (unsigned char*)p->ptr + offset;
@@ -1838,6 +1933,7 @@ static Value mem_read_native(int argCount, Value* args) {
 
 // mem_write(ptr, offset, type, value) -> nil
 static Value mem_write_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 4 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1]) || !IS_STRING(args[2])) {
         fprintf(stderr, "mem_write() expects (pointer, offset, type_string, value).\n");
         return val_nil();
@@ -1847,25 +1943,24 @@ static Value mem_write_native(int argCount, Value* args) {
         fprintf(stderr, "mem_write(): null pointer.\n");
         return val_nil();
     }
-    double offset_d = AS_NUMBER(args[1]);
-    if (offset_d < 0) {
-        fprintf(stderr, "mem_write(): offset cannot be negative.\n");
+    long long offset_value;
+    if (!finite_integer(AS_NUMBER(args[1]), &offset_value) || offset_value < 0) {
+        fprintf(stderr, "mem_write(): invalid offset.\n");
         return val_nil();
     }
-    size_t offset = (size_t)offset_d;
+    size_t offset = (size_t)offset_value;
     const char* type = AS_STRING(args[2]);
-
-    // Bounds checking for owned memory
-    if (p->size > 0) {
-        size_t needed = 0;
-        if (strcmp(type, "byte") == 0) needed = 1;
-        else if (strcmp(type, "int") == 0) needed = sizeof(int);
-        else if (strcmp(type, "double") == 0) needed = sizeof(double);
-        if (needed > 0 && offset + needed > p->size) {
-            fprintf(stderr, "mem_write(): offset %zu + %zu bytes exceeds allocation size %zu.\n",
-                    offset, needed, p->size);
-            return val_nil();
-        }
+    size_t needed = 0;
+    if (strcmp(type, "byte") == 0) needed = 1;
+    else if (strcmp(type, "int") == 0) needed = sizeof(int);
+    else if (strcmp(type, "double") == 0) needed = sizeof(double);
+    else {
+        fprintf(stderr, "mem_write(): unknown type '%s' (use byte/int/double).\n", type);
+        return val_nil();
+    }
+    if (!pointer_range_valid(p, offset, needed)) {
+        fprintf(stderr, "mem_write(): pointer range is not owned or is out of bounds.\n");
+        return val_nil();
     }
 
     unsigned char* base = (unsigned char*)p->ptr + offset;
@@ -1898,6 +1993,7 @@ static Value mem_write_native(int argCount, Value* args) {
 
 // mem_size(ptr) -> number
 static Value mem_size_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 1 || !IS_POINTER(args[0])) {
         fprintf(stderr, "mem_size() expects (pointer).\n");
         return val_nil();
@@ -1907,6 +2003,7 @@ static Value mem_size_native(int argCount, Value* args) {
 
 // addressof(value) -> number (address as integer, for inspection only)
 static Value addressof_native(int argCount, Value* args) {
+    if (sandbox_denied("host_address")) return val_number(0);
     if (argCount != 1) {
         fprintf(stderr, "addressof() expects (value).\n");
         return val_nil();
@@ -1926,6 +2023,7 @@ static Value addressof_native(int argCount, Value* args) {
 
 // addressof_raw(value) -> number (raw address as integer)
 static Value addressof_raw_native(int argCount, Value* args) {
+    if (sandbox_denied("host_address")) return val_number(0);
     if (argCount != 1) {
         fprintf(stderr, "addressof_raw() expects (value).\n");
         return val_nil();
@@ -1939,7 +2037,7 @@ static Value addressof_raw_native(int argCount, Value* args) {
         case VAL_INSTANCE: addr = (void*)args[0].as.instance; break;
         default:           addr = (void*)&args[0]; break;
     }
-    return val_number((double)(uintptr_t)addr);
+    return val_number(0);
 }
 
 // ========== Phase 9: C Struct Interop ==========
@@ -1978,6 +2076,7 @@ static size_t align_to(size_t offset, size_t alignment) {
 //   "__align__" -> struct alignment (number)
 //   "field_name" -> [offset, size, type] (tuple)
 static Value struct_def_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 1 || !IS_ARRAY(args[0])) {
         fprintf(stderr, "struct_def() expects (array of [name, type] pairs).\n");
         return val_nil();
@@ -2035,6 +2134,7 @@ static Value struct_def_native(int argCount, Value* args) {
 // struct_new(def) -> pointer
 // Allocates zeroed memory for the struct
 static Value struct_new_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 1 || !IS_DICT(args[0])) {
         fprintf(stderr, "struct_new() expects (struct_def dict).\n");
         return val_nil();
@@ -2046,7 +2146,13 @@ static Value struct_new_native(int argCount, Value* args) {
         return val_nil();
     }
 
-    size_t size = (size_t)AS_NUMBER(size_val);
+    long long requested;
+    if (!finite_integer(AS_NUMBER(size_val), &requested) || requested <= 0 ||
+        (unsigned long long)requested > SAGE_MAX_READ_SIZE) {
+        fprintf(stderr, "struct_new(): invalid struct size.\n");
+        return val_nil();
+    }
+    size_t size = (size_t)requested;
     void* ptr = calloc(1, size);
     if (!ptr) {
         fprintf(stderr, "struct_new(): allocation failed.\n");
@@ -2055,8 +2161,30 @@ static Value struct_new_native(int argCount, Value* args) {
     return val_pointer(ptr, size, 1);
 }
 
+static int struct_field_info(const Value* field_info, size_t* offset_out,
+                             size_t* size_out, const char** type_out) {
+    if (field_info == NULL || !IS_TUPLE(*field_info) ||
+        field_info->as.tuple->count != 3) return 0;
+    TupleValue* tuple = field_info->as.tuple;
+    if (!IS_NUMBER(tuple->elements[0]) || !IS_NUMBER(tuple->elements[1]) ||
+        !IS_STRING(tuple->elements[2])) return 0;
+    long long offset;
+    long long size;
+    if (!finite_integer(AS_NUMBER(tuple->elements[0]), &offset) || offset < 0 ||
+        !finite_integer(AS_NUMBER(tuple->elements[1]), &size) || size <= 0) return 0;
+    size_t actual_size;
+    size_t actual_align;
+    if (struct_type_info(AS_STRING(tuple->elements[2]), &actual_size, &actual_align) != 0 ||
+        actual_size != (size_t)size) return 0;
+    if (offset_out != NULL) *offset_out = (size_t)offset;
+    if (size_out != NULL) *size_out = actual_size;
+    if (type_out != NULL) *type_out = AS_STRING(tuple->elements[2]);
+    return 1;
+}
+
 // struct_get(ptr, def, field_name) -> value
 static Value struct_get_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 3 || !IS_POINTER(args[0]) || !IS_DICT(args[1]) || !IS_STRING(args[2])) {
         fprintf(stderr, "struct_get() expects (pointer, struct_def, field_name).\n");
         return val_nil();
@@ -2069,13 +2197,15 @@ static Value struct_get_native(int argCount, Value* args) {
     }
 
     Value field_info = dict_get(&args[1], AS_STRING(args[2]));
-    if (!IS_TUPLE(field_info) || field_info.as.tuple->count != 3) {
-        fprintf(stderr, "struct_get(): unknown field '%s'.\n", AS_STRING(args[2]));
+    size_t offset;
+    size_t field_size;
+    const char* type;
+    if (!struct_field_info(&field_info, &offset, &field_size, &type) ||
+        !pointer_range_valid(p, offset, field_size)) {
+        fprintf(stderr, "struct_get(): invalid field or pointer range.\n");
         return val_nil();
     }
 
-    size_t offset = (size_t)AS_NUMBER(field_info.as.tuple->elements[0]);
-    const char* type = AS_STRING(field_info.as.tuple->elements[2]);
     unsigned char* base = (unsigned char*)p->ptr + offset;
 
     if (strcmp(type, "char") == 0 || strcmp(type, "byte") == 0) {
@@ -2104,6 +2234,7 @@ static Value struct_get_native(int argCount, Value* args) {
 
 // struct_set(ptr, def, field_name, value) -> nil
 static Value struct_set_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 4 || !IS_POINTER(args[0]) || !IS_DICT(args[1]) || !IS_STRING(args[2])) {
         fprintf(stderr, "struct_set() expects (pointer, struct_def, field_name, value).\n");
         return val_nil();
@@ -2116,13 +2247,15 @@ static Value struct_set_native(int argCount, Value* args) {
     }
 
     Value field_info = dict_get(&args[1], AS_STRING(args[2]));
-    if (!IS_TUPLE(field_info) || field_info.as.tuple->count != 3) {
-        fprintf(stderr, "struct_set(): unknown field '%s'.\n", AS_STRING(args[2]));
+    size_t offset;
+    size_t field_size;
+    const char* type;
+    if (!struct_field_info(&field_info, &offset, &field_size, &type) ||
+        !pointer_range_valid(p, offset, field_size)) {
+        fprintf(stderr, "struct_set(): invalid field or pointer range.\n");
         return val_nil();
     }
 
-    size_t offset = (size_t)AS_NUMBER(field_info.as.tuple->elements[0]);
-    const char* type = AS_STRING(field_info.as.tuple->elements[2]);
     unsigned char* base = (unsigned char*)p->ptr + offset;
 
     if (!IS_NUMBER(args[3]) && strcmp(type, "ptr") != 0) {
@@ -2160,6 +2293,7 @@ static Value struct_set_native(int argCount, Value* args) {
 
 // struct_size(def) -> number
 static Value struct_size_native(int argCount, Value* args) {
+    if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 1 || !IS_DICT(args[0])) {
         fprintf(stderr, "struct_size() expects (struct_def dict).\n");
         return val_nil();
@@ -2303,6 +2437,7 @@ static int asm_write_source(const char* path, const char* code, const char* arch
 // args: up to 4 numeric arguments
 // Uses host architecture by default. For cross-compilation, see asm_compile().
 static Value asm_exec_native(int argCount, Value* args) {
+    if (sandbox_denied("process")) return val_number(-1);
     if (argCount < 2 || !IS_STRING(args[0]) || !IS_STRING(args[1])) {
         fprintf(stderr, "asm_exec() expects (code_string, ret_type, ...args).\n");
         return val_nil();
@@ -2464,6 +2599,7 @@ cleanup_files:
 // arch: "x86_64", "aarch64", or "rv64"
 // output_path: path to write the .o object file
 static Value asm_compile_native(int argCount, Value* args) {
+    if (sandbox_denied("process")) return val_bool(0);
     if (argCount != 3 || !IS_STRING(args[0]) || !IS_STRING(args[1]) || !IS_STRING(args[2])) {
         fprintf(stderr, "asm_compile() expects (code_string, arch, output_path).\n");
         return val_bool(0);
@@ -2622,6 +2758,7 @@ static Value path_ext_native(int argCount, Value* args) {
 }
 
 static Value repl_getcwd_native(int argCount, Value* args) {
+    if (sandbox_denied("filesystem")) return val_nil();
     (void)argCount; (void)args;
     char cwd[4096];
     if (getcwd(cwd, sizeof(cwd)) == NULL) return val_string(".");
@@ -2629,17 +2766,20 @@ static Value repl_getcwd_native(int argCount, Value* args) {
 }
 
 static Value repl_getenv_native(int argCount, Value* args) {
+    if (sandbox_denied("os")) return val_nil();
     if (argCount != 1 || !IS_STRING(args[0])) return val_nil();
     const char* value = getenv(AS_STRING(args[0]));
     return value == NULL ? val_nil() : val_string(value);
 }
 
 static Value repl_cpu_time_native(int argCount, Value* args) {
+    if (sandbox_denied("clock")) return val_number(0);
     (void)argCount; (void)args;
     return val_number((double)clock() / CLOCKS_PER_SEC);
 }
 
 static Value repl_chdir_native(int argCount, Value* args) {
+    if (sandbox_denied("filesystem")) return val_bool(0);
     if (argCount != 1 || !IS_STRING(args[0])) return val_bool(0);
     return val_bool(chdir(AS_STRING(args[0])) == 0);
 }
@@ -2658,6 +2798,7 @@ static int repl_safe_command(const char* cmd) {
 }
 
 static Value repl_exec_native(int argCount, Value* args) {
+    if (sandbox_denied("process")) return val_number(-1);
     if (argCount != 1 || !IS_STRING(args[0])) return val_number(-1);
     const char* cmd = AS_STRING(args[0]);
     if (!repl_safe_command(cmd)) return val_number(-1);
@@ -2665,11 +2806,13 @@ static Value repl_exec_native(int argCount, Value* args) {
 }
 
 static Value path_exists_native(int argCount, Value* args) {
+    if (sandbox_denied("filesystem")) return val_bool(0);
     if (argCount != 1 || !IS_STRING(args[0])) return val_bool(0);
     return val_bool(access(AS_STRING(args[0]), F_OK) == 0);
 }
 
 static Value path_is_dir_native(int argCount, Value* args) {
+    if (sandbox_denied("filesystem")) return val_bool(0);
     if (argCount != 1 || !IS_STRING(args[0])) return val_bool(0);
     struct stat st;
     if (stat(AS_STRING(args[0]), &st) != 0) return val_bool(0);
@@ -2677,6 +2820,7 @@ static Value path_is_dir_native(int argCount, Value* args) {
 }
 
 static Value path_is_file_native(int argCount, Value* args) {
+    if (sandbox_denied("filesystem")) return val_bool(0);
     if (argCount != 1 || !IS_STRING(args[0])) return val_bool(0);
     struct stat st;
     if (stat(AS_STRING(args[0]), &st) != 0) return val_bool(0);
@@ -3841,17 +3985,19 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     AST_GC_POP();
                     return EVAL_RESULT(val_nil());
                 }
+                gc_pin();
                 Value args[255];
                 int pushed_args = 0;
                 for (int i = 0; i < count; i++) {
                     ExecResult arg_result = eval_expr(expr->as.call.args[i], env);
-                    if (arg_result.is_throwing) { AST_GC_POP_N(1 + pushed_args); return arg_result; }
+                    if (arg_result.is_throwing) { AST_GC_POP_N(1 + pushed_args); gc_unpin(); return arg_result; }
                     args[i] = arg_result.value;
                     AST_GC_PUSH(args[i]);
                     pushed_args++;
                 }
                 Value native_res = callee_value.as.native(count, args);
                 AST_GC_POP_N(1 + pushed_args);
+                gc_unpin();
                 return EVAL_RESULT(native_res);
             }
 
@@ -4765,19 +4911,27 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
             // Try each case clause
             for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
                 CaseClause* clause = stmt->as.match_stmt.cases[i];
-                ExecResult pat_res = eval_expr(clause->pattern, env);
-                if (pat_res.is_throwing) { AST_GC_POP(); return pat_res; }
-                if (values_equal(match_val, pat_res.value)) {
-                    // Check guard if present
-                    if (clause->guard) {
-                        ExecResult guard_res = eval_expr(clause->guard, env);
-                        if (guard_res.is_throwing) { AST_GC_POP(); return guard_res; }
-                        if (!is_truthy(guard_res.value)) continue;
-                    }
-                    ExecResult res = interpret(clause->body, env);
-                    AST_GC_POP();
-                    return res;
+                int wildcard = clause->pattern == NULL ||
+                               (clause->pattern->type == EXPR_VARIABLE &&
+                                clause->pattern->as.variable.name.length == 1 &&
+                                clause->pattern->as.variable.name.start[0] == '_');
+                int binding = !wildcard && clause->pattern->type == EXPR_VARIABLE;
+                if (binding) {
+                    env_define(env, clause->pattern->as.variable.name.start,
+                               clause->pattern->as.variable.name.length, match_val);
+                } else if (!wildcard) {
+                    ExecResult pat_res = eval_expr(clause->pattern, env);
+                    if (pat_res.is_throwing) { AST_GC_POP(); return pat_res; }
+                    if (!values_equal(match_val, pat_res.value)) continue;
                 }
+                if (clause->guard) {
+                    ExecResult guard_res = eval_expr(clause->guard, env);
+                    if (guard_res.is_throwing) { AST_GC_POP(); return guard_res; }
+                    if (!is_truthy(guard_res.value)) continue;
+                }
+                ExecResult res = interpret(clause->body, env);
+                AST_GC_POP();
+                return res;
             }
             // No case matched — run default if present
             if (stmt->as.match_stmt.default_case != NULL) {

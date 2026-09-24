@@ -48,6 +48,10 @@ uintptr_t sage_thread_id(void) {
     return (uintptr_t)pthread_self();
 }
 
+int sage_thread_is_current(sage_thread_t thread) {
+    return pthread_equal(thread, pthread_self()) != 0;
+}
+
 int sage_mutex_init(sage_mutex_t* mutex) {
     return pthread_mutex_init(mutex, NULL);
 }
@@ -180,6 +184,10 @@ int sage_thread_join(sage_thread_t thread, void** retval) {
 
 uintptr_t sage_thread_id(void) {
     return 0;  // Single core ID
+}
+
+int sage_thread_is_current(sage_thread_t thread) {
+    return thread == 0;
 }
 
 int sage_mutex_init(sage_mutex_t* mutex) {

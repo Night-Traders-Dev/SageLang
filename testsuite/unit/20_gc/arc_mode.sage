@@ -1,6 +1,7 @@
 # RUN: run
+# EXPECT: Security Error: ARC/ORC modes are disabled; using tracing GC.
 # EXPECT: tracing
-# EXPECT: arc
+# EXPECT: tracing
 # EXPECT: 3
 # EXPECT: hello
 # EXPECT: 42

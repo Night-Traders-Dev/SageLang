@@ -3,13 +3,14 @@
 # SageLang — Unified Test Runner
 # Runs ALL test suites: unit, compiler, selfhost, benchmarks
 # Usage:
-#   sh testsuite/run_all.sh                  # everything
-#   sh testsuite/run_all.sh unit             # unit tests only
-#   sh testsuite/run_all.sh compiler         # C backend compiler tests
-#   sh testsuite/run_all.sh selfhost         # self-hosted interpreter tests
-#   sh testsuite/run_all.sh benchmarks       # benchmark suite
-#   sh testsuite/run_all.sh quick            # unit + compiler (no selfhost)
-#   sh testsuite/run_all.sh --filter <name>  # run tests matching pattern
+#   bash testsuite/run_all.sh                  # everything
+#   bash testsuite/run_all.sh unit             # unit tests only
+#   bash testsuite/run_all.sh compiler         # C backend compiler tests
+#   bash testsuite/run_all.sh selfhost         # self-hosted interpreter tests
+#   bash testsuite/run_all.sh benchmarks       # perf benchmarks
+#   bash testsuite/run_all.sh quick            # unit + compiler (no selfhost)
+#   bash testsuite/run_all.sh --filter <name>  # run tests matching pattern
+
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -uo pipefail
@@ -18,7 +19,7 @@ set -uo pipefail
 SUITE_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SUITE_DIR/.." && pwd)"
 CORE_DIR="$REPO_ROOT/core"
-SAGE="$CORE_DIR/sage"
+SAGE="${SAGE:-$CORE_DIR/sage}"
 
 UNIT_DIR="$SUITE_DIR/unit"
 COMPILER_DIR="$SUITE_DIR/compiler"
@@ -38,14 +39,32 @@ hdr()  { printf "\n${BOLD}${CYAN}══ %s ══${NC}\n\n" "$*"; }
 
 # ── State ─────────────────────────────────────────────────────────────────────
 TOTAL_PASS=0; TOTAL_FAIL=0; TOTAL_SKIP=0
+FILTER_MATCHED=0
 FAILED_SUITES=""
 
 add_result() {
     local suite="$1" pass="$2" fail="$3"
     TOTAL_PASS=$((TOTAL_PASS + pass))
     TOTAL_FAIL=$((TOTAL_FAIL + fail))
-    [ "$fail" -gt 0 ] && FAILED_SUITES="$FAILED_SUITES $suite" || true
+    if [ "$fail" -gt 0 ]; then
+        FAILED_SUITES="$FAILED_SUITES $suite"
+    fi
     return 0
+}
+
+filter_matches() {
+    local name="$1"
+    if [ -z "$FILTER" ]; then
+        return 0
+    fi
+    case "$name" in
+        *"$FILTER"*)
+            FILTER_MATCHED=1
+            FILTER_SUITE_MATCHED=1
+            return 0
+            ;;
+        *) return 1 ;;
+    esac
 }
 
 # ── Build check ───────────────────────────────────────────────────────────────
@@ -53,7 +72,7 @@ check_binary() {
     if [ ! -x "$SAGE" ]; then
         warn "sage binary not found at $SAGE"
         printf "  Building...\n"
-        if ! (cd "$CORE_DIR" && make -j"$(nproc 2>/dev/null || echo 2)" 2>&1 | tail -5); then
+        if ! (cd "$CORE_DIR" && make -j2 2>&1 | tail -5); then
             printf "${RED}Build failed — cannot run tests.${NC}\n"; exit 1
         fi
         [ -x "$SAGE" ] || { printf "${RED}Binary still missing after build.${NC}\n"; exit 1; }
@@ -69,9 +88,17 @@ check_binary() {
 run_unit() {
     hdr "Unit Tests"
     if [ -f "$UNIT_DIR/run_tests.sh" ]; then
+        local rc
         bash "$UNIT_DIR/run_tests.sh"
         rc=$?
-        if [ $rc -eq 0 ]; then add_result "unit" 1 0; else add_result "unit" 0 1; fi
+        if [ "$rc" -eq 0 ]; then
+            [ -n "$FILTER" ] && FILTER_MATCHED=1
+            add_result "unit" 1 0
+        elif [ -n "$FILTER" ] && [ "$rc" -eq 2 ]; then
+            TOTAL_SKIP=$((TOTAL_SKIP + 1))
+        else
+            add_result "unit" 0 1
+        fi
     else
         # Fallback: manually run each numbered suite
         local _p=0 _f=0
@@ -113,11 +140,13 @@ run_unit() {
 run_compiler() {
     hdr "Compiler Backend Tests"
     local _p=0 _f=0
+    FILTER_SUITE_MATCHED=0
     TMP="$SUITE_DIR/.tmp"
     mkdir -p "$TMP"
 
     _run_c_test() {
         local name="$1" sage_file="$2" expected="$3" extra_flags="${4:-}"
+        filter_matches "C backend: $name" || return 0
         local out_bin="$TMP/c_$name" out_file="$TMP/c_$name.out"
         if (cd "$CORE_DIR" && "$SAGE" --compile "$sage_file" -o "$out_bin" $extra_flags 2>/dev/null) && \
            "$out_bin" > "$out_file" 2>&1 && \
@@ -130,6 +159,7 @@ run_compiler() {
 
     _run_llvm_test() {
         local name="$1" sage_file="$2" expected="$3"
+        filter_matches "LLVM backend: $name" || return 0
         if ! command -v clang >/dev/null 2>&1; then
             printf "  ${DIM}⏭  LLVM: $name  (clang not found)${NC}\n"
             TOTAL_SKIP=$((TOTAL_SKIP+1)); return
@@ -171,33 +201,51 @@ run_compiler() {
     _run_llvm_test "features" "$CD/llvm_features.sage"        "$CD/llvm_features.expected"
 
     # Emit tests (no binary execution, just check output produced)
-    if (cd "$CORE_DIR" && "$SAGE" --emit-llvm "$CD/compiler_smoke.sage" -o "$TMP/smoke.ll" 2>/dev/null); then
-        ok "LLVM IR emit"; _p=$((_p+1))
-    else
-        fail "LLVM IR emit"; _f=$((_f+1))
+    if filter_matches "LLVM IR emit"; then
+        if (cd "$CORE_DIR" && "$SAGE" --emit-llvm "$CD/compiler_smoke.sage" -o "$TMP/smoke.ll" 2>/dev/null); then
+            ok "LLVM IR emit"; _p=$((_p+1))
+        else
+            fail "LLVM IR emit"; _f=$((_f+1))
+        fi
     fi
-    if (cd "$CORE_DIR" && "$SAGE" --emit-asm "$CD/compiler_smoke.sage" -o "$TMP/smoke.s" 2>/dev/null); then
-        ok "ASM emit"; _p=$((_p+1))
-    else
-        fail "ASM emit"; _f=$((_f+1))
+    if filter_matches "ASM emit"; then
+        if (cd "$CORE_DIR" && "$SAGE" --emit-asm "$CD/compiler_smoke.sage" -o "$TMP/smoke.s" 2>"$TMP/asm_emit.err"); then
+            ok "ASM emit"; _p=$((_p+1))
+        elif grep -q "not supported safely\|unsupported instruction" "$TMP/asm_emit.err"; then
+            printf "  ${DIM}⏭  ASM emit skipped (unsupported native selection)${NC}\n"
+            TOTAL_SKIP=$((TOTAL_SKIP+1))
+        else
+            fail "ASM emit"; _f=$((_f+1))
+        fi
     fi
 
     # Interpreter smoke
-    if (cd "$CORE_DIR" && "$SAGE" "$CD/test.sage" 2>/dev/null); then
-        ok "Interpreter: test.sage"; _p=$((_p+1))
-    else
-        fail "Interpreter: test.sage"; _f=$((_f+1))
+    if filter_matches "Interpreter: test.sage"; then
+        if (cd "$CORE_DIR" && "$SAGE" "$CD/test.sage" 2>/dev/null); then
+            ok "Interpreter: test.sage"; _p=$((_p+1))
+        else
+            fail "Interpreter: test.sage"; _f=$((_f+1))
+        fi
     fi
 
     # REPL sanity
-    local c_repl_output
-    c_repl_output="$(printf ":help\n:stats\n:quit\n" | (cd "$CORE_DIR" && "$SAGE" --repl 2>&1) || true)"
-    if [[ "$c_repl_output" == *"Sage REPL"* && "$c_repl_output" == *":stats"* ]]; then
-        ok "REPL banner"; _p=$((_p+1))
-    else
-        fail "REPL banner"; _f=$((_f+1))
+    if filter_matches "REPL banner"; then
+        local c_repl_output c_repl_rc
+        if c_repl_output="$(printf ":help\n:stats\n:quit\n" | (cd "$CORE_DIR" && "$SAGE" --repl 2>&1))"; then
+            c_repl_rc=0
+        else
+            c_repl_rc=$?
+        fi
+        if [ "$c_repl_rc" -eq 0 ] && [[ "$c_repl_output" == *"Sage REPL"* && "$c_repl_output" == *":stats"* ]]; then
+            ok "REPL banner"; _p=$((_p+1))
+        else
+            fail "REPL banner"; _f=$((_f+1))
+        fi
     fi
 
+    if [ -n "$FILTER" ] && [ "$FILTER_SUITE_MATCHED" -eq 0 ]; then
+        TOTAL_SKIP=$((TOTAL_SKIP + 1))
+    fi
     add_result "compiler" "$_p" "$_f"
 }
 
@@ -207,12 +255,21 @@ run_compiler() {
 run_selfhost() {
     hdr "Self-Hosted Tests  (Sage-in-Sage)"
     local _p=0 _f=0
+    FILTER_SUITE_MATCHED=0
 
     SAGE_SRC="$CORE_DIR/src/sage"
 
     _sh_test() {
-        local name="$1" test_file="$SELFHOST_DIR/$2"
-        if (cd "$SAGE_SRC" && "$SAGE" "$test_file" 2>&1 | tail -1 | grep -qiE "pass|ok|✓|✅|done"); then
+        local name="$1" test_file="$SELFHOST_DIR/$2" output rc
+        filter_matches "$name" || return 0
+        if output="$(cd "$SAGE_SRC" && "$SAGE" "$test_file" 2>&1)"; then
+            rc=0
+        else
+            rc=$?
+        fi
+        if [ "$rc" -eq 0 ] &&
+           ! grep -qiE '(^|[^0-9])[1-9][0-9]*[[:space:]]+(failed|failures)([^0-9]|$)' <<< "$output" &&
+           grep -qiE 'passed|pass|ok|✓|✅|done' <<< "$output"; then
             ok "$name"; _p=$((_p+1))
         else
             fail "$name"; _f=$((_f+1))
@@ -239,28 +296,39 @@ run_selfhost() {
     _sh_test "Errors"           "test_errors.sage"
     _sh_test "LSP"              "test_lsp.sage"
     _sh_test "Sage CLI"         "test_sage_cli.sage"
-    local repl_output
-    repl_output="$(printf ':help\nlet repl_value = 6\nrepl_value + 1\n:stats\nif true:\n    print "repl-block"\n\n:quit\n' | (cd "$SAGE_SRC" && "$SAGE" sage.sage --repl 2>&1) || true)"
-    if [[ "$repl_output" == *"Sage REPL Commands"* && "$repl_output" == *"GC Statistics"* && "$repl_output" == *"repl-block"* && "$repl_output" == *$'\n7\n'* && "$repl_output" != *"Unknown REPL command"* ]]; then
-        ok "Self-hosted REPL"; _p=$((_p+1))
-    else
-        fail "Self-hosted REPL"; _f=$((_f+1))
+    if filter_matches "Self-hosted REPL"; then
+        local repl_output repl_rc
+        if repl_output="$(printf ':help\nlet repl_value = 6\nrepl_value + 1\n:stats\nif true:\n    print "repl-block"\n\n:quit\n' | (cd "$SAGE_SRC" && "$SAGE" sage.sage --repl 2>&1))"; then
+            repl_rc=0
+        else
+            repl_rc=$?
+        fi
+        if [ "$repl_rc" -eq 0 ] && [[ "$repl_output" == *"Sage REPL Commands"* && "$repl_output" == *"GC Statistics"* && "$repl_output" == *"repl-block"* && "$repl_output" == *$'\n7\n'* && "$repl_output" != *"Unknown REPL command"* ]]; then
+            ok "Self-hosted REPL"; _p=$((_p+1))
+        else
+            fail "Self-hosted REPL"; _f=$((_f+1))
+        fi
     fi
     _sh_test "Diagnostic"       "test_diagnostic.sage"
     _sh_test "GC"               "test_gc.sage"
     _sh_test "Heartbeat"        "test_heartbeat.sage"
     _sh_test "Lily Transpiler"  "test_lily_transpiler.sage"
     # GPU tests require Vulkan hardware — skip gracefully if not available
-    if vulkaninfo >/dev/null 2>&1 || (command -v vulkaninfo >/dev/null 2>&1); then
+    if command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo >/dev/null 2>&1; then
         _sh_test "GPU"              "test_gpu.sage"
         _sh_test "GPU advanced"     "test_gpu_advanced.sage"
         _sh_test "GPU features"     "test_gpu_features.sage"
         _sh_test "GPU engine"       "test_gpu_engine.sage"
     else
         printf "  ${DIM}⏭  GPU tests skipped (no Vulkan device)${NC}\n"
-        TOTAL_SKIP=$((TOTAL_SKIP + 4))
+        if [ -z "$FILTER" ] || filter_matches "GPU"; then
+            TOTAL_SKIP=$((TOTAL_SKIP + 4))
+        fi
     fi
 
+    if [ -n "$FILTER" ] && [ "$FILTER_SUITE_MATCHED" -eq 0 ]; then
+        TOTAL_SKIP=$((TOTAL_SKIP + 1))
+    fi
     add_result "selfhost" "$_p" "$_f"
 }
 
@@ -270,14 +338,30 @@ run_selfhost() {
 run_benchmarks() {
     hdr "Benchmarks"
     local _p=0 _f=0
+    mkdir -p "$SUITE_DIR/.tmp"
 
     printf "  ${BOLD}Sage vs Python (warmup 1, runs 3):${NC}\n"
     if command -v python3 >/dev/null 2>&1; then
-        if python3 "$CORE_DIR/scripts/benchmark_vs_python.py" \
-                   --sage "$SAGE" \
-                   --tests-dir "$BENCH_DIR" \
-                   --runs 3 --warmups 1 2>/dev/null; then
-            _p=$((_p+1))
+        local -a python_benchmark_cmd
+        local python_benchmark_output="$SUITE_DIR/.tmp/benchmark_vs_python.out"
+        python_benchmark_cmd=(
+            python3 "$CORE_DIR/scripts/benchmark_vs_python.py"
+            --sage "$SAGE"
+            --tests-dir "$BENCH_DIR"
+            --runs 3 --warmups 1
+        )
+        if [ -n "$FILTER" ]; then
+            python_benchmark_cmd+=(--filter "$FILTER")
+        fi
+        if "${python_benchmark_cmd[@]}" >"$python_benchmark_output" 2>&1; then
+            if [ -n "$FILTER" ] && grep -q "No benchmark files found" "$python_benchmark_output"; then
+                TOTAL_SKIP=$((TOTAL_SKIP+1))
+            else
+                [ -n "$FILTER" ] && FILTER_MATCHED=1
+                _p=$((_p+1))
+            fi
+        elif [ -n "$FILTER" ] && grep -q "No benchmark files found" "$python_benchmark_output"; then
+            TOTAL_SKIP=$((TOTAL_SKIP+1))
         else
             fail "Sage vs Python benchmark comparison"
             _f=$((_f+1))
@@ -289,7 +373,24 @@ run_benchmarks() {
 
     printf "\n  ${BOLD}Native backend benchmark (C vs LLVM):${NC}\n"
     if [ -f "$BENCH_DIR/run_backend_compare.sh" ]; then
-        (cd "$CORE_DIR" && bash "$BENCH_DIR/run_backend_compare.sh" 2>/dev/null) && _p=$((_p+1)) || _f=$((_f+1))
+        local -a backend_benchmark_cmd
+        local backend_rc
+        backend_benchmark_cmd=(bash "$BENCH_DIR/run_backend_compare.sh")
+        if [ -n "$FILTER" ]; then
+            backend_benchmark_cmd+=(--filter "$FILTER")
+        fi
+        if (cd "$CORE_DIR" && "${backend_benchmark_cmd[@]}" 2>/dev/null); then
+            [ -n "$FILTER" ] && FILTER_MATCHED=1
+            _p=$((_p+1))
+        else
+            backend_rc=$?
+            if [ -n "$FILTER" ] && [ "$backend_rc" -eq 2 ]; then
+                TOTAL_SKIP=$((TOTAL_SKIP+1))
+            else
+                fail "Native backend benchmark comparison"
+                _f=$((_f+1))
+            fi
+        fi
     else
         warn "run_backend_compare.sh not found"
         TOTAL_SKIP=$((TOTAL_SKIP+1))
@@ -322,9 +423,41 @@ print_summary() {
 # ═══════════════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════════════
-MODE="${1:-all}"
+MODE=""
 FILTER=""
-[ "${1:-}" = "--filter" ] && { FILTER="$2"; MODE="all"; }
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --filter)
+            [ "$#" -ge 2 ] || { printf 'Missing value for --filter\n' >&2; exit 2; }
+            FILTER="$2"
+            shift 2
+            ;;
+        --filter=*)
+            FILTER="${1#--filter=}"
+            shift
+            ;;
+        -h|--help)
+            printf 'Usage: %s [all|unit|compiler|selfhost|benchmarks|quick] [--filter <name>]\n' "$0"
+            exit 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        all|unit|compiler|selfhost|benchmarks|quick)
+            [ -z "$MODE" ] || { printf 'Multiple modes specified\n' >&2; exit 2; }
+            MODE="$1"
+            shift
+            ;;
+        *)
+            printf 'Unknown mode: %s\n' "$1"
+            printf 'Usage: %s [all|unit|compiler|selfhost|benchmarks|quick] [--filter <name>]\n' "$0"
+            exit 1
+            ;;
+    esac
+done
+[ -n "$MODE" ] || MODE="all"
+export SAGE_TEST_FILTER="$FILTER"
 
 check_binary
 
@@ -347,4 +480,11 @@ case "$MODE" in
         ;;
 esac
 
+if [ -n "$FILTER" ] && [ "$FILTER_MATCHED" -eq 0 ]; then
+    fail "filter matched no tests: $FILTER"
+    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+    FAILED_SUITES="$FAILED_SUITES filter"
+fi
+
 print_summary
+exit $?

@@ -9,14 +9,14 @@ All tests live here. One runner to rule them all.
 make
 
 # Run everything
-sh testsuite/run_all.sh
+bash testsuite/run_all.sh
 
 # Run specific suite
-sh testsuite/run_all.sh unit        # numbered language unit tests
-sh testsuite/run_all.sh compiler    # C/LLVM backend compiler tests
-sh testsuite/run_all.sh selfhost    # self-hosted Sage-in-Sage tests
-sh testsuite/run_all.sh benchmarks  # perf benchmarks
-sh testsuite/run_all.sh quick       # unit + compiler only (fast)
+bash testsuite/run_all.sh unit        # numbered language unit tests
+bash testsuite/run_all.sh compiler    # C/LLVM backend compiler tests
+bash testsuite/run_all.sh selfhost    # self-hosted Sage-in-Sage tests
+bash testsuite/run_all.sh benchmarks  # perf benchmarks
+bash testsuite/run_all.sh quick       # unit + compiler only (fast)
 ```
 
 ## Structure

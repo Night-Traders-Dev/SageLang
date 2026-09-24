@@ -74,6 +74,9 @@ int sage_thread_join(sage_thread_t thread, void** retval);
 // Get current thread ID as a numeric value.
 uintptr_t sage_thread_id(void);
 
+// Return nonzero when the supplied thread is the calling thread.
+int sage_thread_is_current(sage_thread_t thread);
+
 // ============================================================================
 // Mutex API
 // ============================================================================

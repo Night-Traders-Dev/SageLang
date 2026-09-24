@@ -99,6 +99,19 @@ extern "C" {
 #define RV_VMO_ARRAY_LEN    0x0A
 #define RV_VMO_PRINTM       0x0B
 #define RV_VMO_EXEC_AST     0x0C
+#define RV_VMO_CMP_BINARY   0x0D
+#define RV_VMO_NIL          0x0E
+#define RV_VMO_TRUE         0x0F
+#define RV_VMO_FALSE        0x10
+#define RV_VMO_NOT          0x11
+#define RV_VMO_TRUTHY       0x12
+
+#define RV_CMP_EQ 0
+#define RV_CMP_NEQ 1
+#define RV_CMP_LT 2
+#define RV_CMP_GT 3
+#define RV_CMP_LE 4
+#define RV_CMP_GE 5
 
 // Object Ops (sub_op via rs1 field)
 #define RV_OBJ_GET_GLOBAL   0x00
@@ -134,6 +147,10 @@ extern "C" {
 
 #ifndef RV64_TRY_STACK_SIZE
 #define RV64_TRY_STACK_SIZE  128   // Exception handler stack depth
+#endif
+
+#ifndef RV64_MAX_CHUNK_BYTES
+#define RV64_MAX_CHUNK_BYTES (16 * 1024 * 1024)
 #endif
 
 // ============================================================================
@@ -201,6 +218,7 @@ typedef struct {
     struct {
         int catch_pc;
         int call_depth;
+        int chunk_idx;
     } try_stack[RV64_TRY_STACK_SIZE];
     int tsp;
 
@@ -223,6 +241,7 @@ typedef struct {
     int error;
     const char* error_msg;
     int trace;
+    int verified;
 
     // I/O callbacks (set by host kernel/bootloader)
     void (*write_char)(char c);
@@ -238,6 +257,8 @@ void metal_rv64_vm_init(MetalRV64VM* vm);
 
 // Load compiled SGRV binary into VM
 int metal_rv64_vm_load_binary(MetalRV64VM* vm, const unsigned char* data, int size);
+
+int metal_rv64_vm_verify(MetalRV64VM* vm);
 
 // Execute until halt or error
 int metal_rv64_vm_run(MetalRV64VM* vm);

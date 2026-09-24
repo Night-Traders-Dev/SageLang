@@ -9,8 +9,94 @@ gc_disable()
 # IO delegates to the C native io module for file operations.
 # vm module requires C bytecode engine and cannot be ported.
 # net module stubs are in net.sage; actual sockets require C.
-import io
-import net
+let PROFILE_GENERAL = "general"
+let PROFILE_EMBEDDED = "embedded"
+let PROFILE_DETERMINISTIC = "deterministic"
+let PROFILE_RESTRICTED = "restricted"
+
+proc normalize_profile(profile):
+    if profile == nil:
+        return PROFILE_GENERAL
+    if profile == PROFILE_GENERAL:
+        return PROFILE_GENERAL
+    if profile == PROFILE_EMBEDDED:
+        return PROFILE_EMBEDDED
+    if profile == PROFILE_DETERMINISTIC:
+        return PROFILE_DETERMINISTIC
+    if profile == PROFILE_RESTRICTED:
+        return PROFILE_RESTRICTED
+    return PROFILE_DETERMINISTIC
+
+proc capability_allowed(profile, capability):
+    let normalized = normalize_profile(profile)
+    if normalized == PROFILE_GENERAL:
+        return true
+    if normalized == PROFILE_EMBEDDED:
+        if capability == "filesystem":
+            return true
+        if capability == "os":
+            return true
+        if capability == "crypto":
+            return true
+        if capability == "network":
+            return true
+    return false
+
+let g_active_profile = PROFILE_GENERAL
+let g_stdlib_registries = {}
+let g_io_module = nil
+let g_sys_module = nil
+let g_native_io = nil
+let g_native_net = nil
+let g_native_socket = nil
+let g_native_tcp = nil
+let g_native_http = nil
+let g_native_ssl = nil
+let g_native_sys = nil
+
+proc profile_or_active(profile):
+    if profile == nil:
+        return normalize_profile(g_active_profile)
+    return normalize_profile(profile)
+
+proc ensure_native_modules():
+    let filesystem = capability_allowed(g_active_profile, "filesystem")
+    let network = capability_allowed(g_active_profile, "network")
+    let os_access = capability_allowed(g_active_profile, "os")
+    if not filesystem and not network and not os_access:
+        return
+    if g_native_io == nil:
+        import io as native_io
+        g_native_io = native_io
+    if g_native_net == nil:
+        import net as native_net
+        g_native_net = native_net
+    if g_native_socket == nil:
+        import socket as native_socket
+        g_native_socket = native_socket
+    if g_native_tcp == nil:
+        import tcp as native_tcp
+        g_native_tcp = native_tcp
+    if g_native_http == nil:
+        import http as native_http
+        g_native_http = native_http
+    if g_native_ssl == nil:
+        import ssl as native_ssl
+        g_native_ssl = native_ssl
+    if g_native_sys == nil:
+        import sys as native_sys
+        g_native_sys = native_sys
+
+proc set_host_modules(io_module, sys_module, net_module, socket_module, tcp_module, http_module, ssl_module):
+    g_native_io = io_module
+    g_native_sys = sys_module
+    g_native_net = net_module
+    g_native_socket = socket_module
+    g_native_tcp = tcp_module
+    g_native_http = http_module
+    g_native_ssl = ssl_module
+    g_io_module = nil
+    g_sys_module = nil
 
 # ============================================================================
 # Math Module
@@ -384,56 +470,104 @@ proc create_math_module():
 # IO Module
 # ============================================================================
 
+proc get_io_module():
+    if not capability_allowed(g_active_profile, "filesystem"):
+        return nil
+    ensure_native_modules()
+    if g_io_module == nil:
+        g_io_module = g_native_io
+    return g_io_module
+
 proc io_read(path):
-    return io.readfile(path)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return nil
+    return io_module.readfile(path)
 
 proc io_write(path, content):
-    return io.writefile(path, content)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return nil
+    return io_module.writefile(path, content)
 
 proc io_append(path, content):
-    return io.appendfile(path, content)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return nil
+    return io_module.appendfile(path, content)
 
 proc io_exists(path):
-    return io.exists(path)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return false
+    return io_module.exists(path)
 
 proc io_remove(path):
-    return io.remove(path)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return nil
+    return io_module.remove(path)
 
 proc io_isdir(path):
-    return io.isdir(path)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return false
+    return io_module.isdir(path)
 
 proc io_mkdir(path):
-    return io.mkdir(path)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return nil
+    return io_module.mkdir(path)
 
 proc io_filesize(path):
-    return io.filesize(path)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return nil
+    return io_module.filesize(path)
 
 proc io_readbytes(path):
-    return io.readbytes(path)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return nil
+    return io_module.readbytes(path)
 
 proc io_writebytes(path, arr):
-    return io.writebytes(path, arr)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return nil
+    return io_module.writebytes(path, arr)
 
 proc io_appendbytes(path, arr):
-    return io.appendbytes(path, arr)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return nil
+    return io_module.appendbytes(path, arr)
 
 proc io_listdir(path):
-    return io.listdir(path)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return []
+    return io_module.listdir(path)
 
-proc create_io_module():
+proc create_io_module(profile = nil):
+    let selected = profile_or_active(profile)
+    if not capability_allowed(selected, "filesystem"):
+        return create_stub_module("io")
+    ensure_native_modules()
     let m = {}
-    m["readfile"]    = io_read
-    m["writefile"]   = io_write
-    m["appendfile"]  = io_append
-    m["exists"]      = io_exists
-    m["remove"]      = io_remove
-    m["isdir"]       = io_isdir
-    m["mkdir"]       = io_mkdir
-    m["filesize"]    = io_filesize
-    m["readbytes"]   = io_readbytes
-    m["writebytes"]  = io_writebytes
-    m["appendbytes"] = io_appendbytes
-    m["listdir"]     = io_listdir
+    m["readfile"]    = proc(path): return g_native_io.readfile(path)
+    m["writefile"]   = proc(path, content): return g_native_io.writefile(path, content)
+    m["appendfile"]  = proc(path, content): return g_native_io.appendfile(path, content)
+    m["exists"]      = proc(path): return g_native_io.exists(path)
+    m["remove"]      = proc(path): return g_native_io.remove(path)
+    m["isdir"]       = proc(path): return g_native_io.isdir(path)
+    m["mkdir"]       = proc(path): return g_native_io.mkdir(path)
+    m["filesize"]    = proc(path): return g_native_io.filesize(path)
+    m["readbytes"]   = proc(path): return g_native_io.readbytes(path)
+    m["writebytes"]  = proc(path, arr): return g_native_io.writebytes(path, arr)
+    m["appendbytes"] = proc(path, arr): return g_native_io.appendbytes(path, arr)
+    m["listdir"]     = proc(path): return g_native_io.listdir(path)
     return m
 
 # ============================================================================
@@ -570,50 +704,96 @@ proc create_string_module():
 # Sys Module
 # ============================================================================
 
-# g_sys_args is set by the host before running user code.
-# Fall back to empty array if not set.
-let g_sys_args = []
+proc get_sys_module():
+    if not capability_allowed(g_active_profile, "os"):
+        return nil
+    ensure_native_modules()
+    if g_sys_module == nil:
+        g_sys_module = g_native_sys
+    return g_sys_module
 
 proc sys_args():
-    return g_sys_args
+    let sys_module = get_sys_module()
+    if sys_module == nil:
+        return []
+    return sys_module.args()
 
 proc sys_exit(code):
-    # In the self-hosted interpreter, delegate to C host.
-    # There is no pure-Sage way to hard-exit; raise a sentinel.
-    raise "__sys_exit__:" + str(code)
+    if not capability_allowed(g_active_profile, "process"):
+        return nil
+    let sys_module = get_sys_module()
+    if sys_module == nil:
+        return nil
+    return sys_module.exit(code)
 
 proc sys_getenv(name):
-    # Environment variables are not accessible from pure Sage.
-    return nil
+    let sys_module = get_sys_module()
+    if sys_module == nil:
+        return nil
+    return sys_module.getenv(name)
 
 proc sys_clock():
-    return clock()
+    if not capability_allowed(g_active_profile, "clock"):
+        return 0
+    let sys_module = get_sys_module()
+    if sys_module == nil:
+        return 0
+    return sys_module.clock()
 
 proc sys_sleep(seconds):
-    # Delegation to host — no-op in pure Sage.
-    return nil
+    if not capability_allowed(g_active_profile, "clock"):
+        return nil
+    let sys_module = get_sys_module()
+    if sys_module == nil:
+        return nil
+    return sys_module.sleep(seconds)
 
 proc sys_exec(cmd):
-    return nil
+    if not capability_allowed(g_active_profile, "process"):
+        return -1
+    let sys_module = get_sys_module()
+    if sys_module == nil:
+        return -1
+    return sys_module.exec(cmd)
 
 proc sys_shell_exec(cmd):
-    return ""
+    if not capability_allowed(g_active_profile, "process"):
+        return ""
+    let sys_module = get_sys_module()
+    if sys_module == nil:
+        return ""
+    return sys_module.shell_exec(cmd)
 
 proc sys_call(callee):
-    return nil
+    if not capability_allowed(g_active_profile, "process"):
+        return nil
+    let sys_module = get_sys_module()
+    if sys_module == nil:
+        return nil
+    return sys_module.call(callee)
 
-proc create_sys_module():
+proc create_sys_module(profile = nil):
+    let selected = profile_or_active(profile)
+    if not capability_allowed(selected, "os"):
+        return create_stub_module("sys")
+    ensure_native_modules()
     let m = {}
-    m["version"]    = "v4.2.7"
-    m["platform"]   = "linux"
-    m["args"]       = sys_args
-    m["exit"]       = sys_exit
-    m["getenv"]     = sys_getenv
-    m["clock"]      = sys_clock
-    m["sleep"]      = sys_sleep
-    m["exec"]       = sys_exec
-    m["shell_exec"] = sys_shell_exec
-    m["call"]       = sys_call
+    m["version"] = g_native_sys.version
+    m["platform"] = g_native_sys.platform
+    if capability_allowed(selected, "os"):
+        m["args"] = proc(): return g_native_sys.args()
+        m["getenv"] = proc(name): return g_native_sys.getenv(name)
+        m["stdout_write"] = g_native_sys.stdout_write
+        m["stderr_write"] = g_native_sys.stderr_write
+        m["getch"] = g_native_sys.getch
+    if capability_allowed(selected, "process"):
+        m["exit"] = proc(code): return g_native_sys.exit(code)
+        m["exec"] = proc(cmd): return g_native_sys.exec(cmd)
+        m["shell_exec"] = proc(cmd): return g_native_sys.shell_exec(cmd)
+        m["call"] = proc(callee): return g_native_sys.call(callee)
+    if capability_allowed(selected, "clock"):
+        m["clock"] = proc(): return g_native_sys.clock()
+        m["sleep"] = proc(seconds): return g_native_sys.sleep(seconds)
     return m
 
 # ============================================================================
@@ -761,7 +941,10 @@ proc fat_parse_boot_sector(byte_arr):
     return info
 
 proc fat_probe(path):
-    let data = io.readbytes(path)
+    let io_module = get_io_module()
+    if io_module == nil:
+        return nil
+    let data = io_module.readbytes(path)
     if data == nil:
         return nil
     let info = fat_parse_boot_sector(data)
@@ -810,13 +993,129 @@ proc create_fat_module():
     return m
 
 # ============================================================================
-# Net Module (delegates to net.sage stubs)
+# Net Module (delegates to native networking)
 # ============================================================================
 
-proc create_net_module():
-    if type(net) == "dict":
-        return net.create_net_module()
-    return nil
+proc create_net_module(profile = nil):
+    let selected = profile_or_active(profile)
+    if not capability_allowed(selected, "network"):
+        return create_stub_module("net")
+    ensure_native_modules()
+    let m = {}
+    m["connect"] = g_native_net.connect
+    m["listen"] = g_native_net.listen
+    m["accept"] = g_native_net.accept
+    m["send"] = g_native_net.send
+    m["recv"] = g_native_net.recv
+    m["sendall"] = g_native_net.sendall
+    m["recvall"] = g_native_net.recvall
+    m["recvline"] = g_native_net.recvline
+    m["close"] = g_native_net.close
+    m["resolve"] = g_native_net.resolve
+    m["strerror"] = g_native_net.strerror
+    m["http_get"] = g_native_net.http_get
+    m["http_post"] = g_native_net.http_post
+    m["http_put"] = g_native_net.http_put
+    m["http_delete"] = g_native_net.http_delete
+    m["http_patch"] = g_native_net.http_patch
+    m["http_head"] = g_native_net.http_head
+    m["http_download"] = g_native_net.http_download
+    m["http_escape"] = g_native_net.http_escape
+    m["http_unescape"] = g_native_net.http_unescape
+    return m
+
+proc create_socket_proxy(profile = nil):
+    let selected = profile_or_active(profile)
+    if not capability_allowed(selected, "network"):
+        return create_stub_module("socket")
+    ensure_native_modules()
+    let m = {}
+    m["create"] = g_native_socket.create
+    m["bind"] = g_native_socket.bind
+    m["listen"] = g_native_socket.listen
+    m["accept"] = g_native_socket.accept
+    m["connect"] = g_native_socket.connect
+    m["send"] = g_native_socket.send
+    m["recv"] = g_native_socket.recv
+    m["sendto"] = g_native_socket.sendto
+    m["recvfrom"] = g_native_socket.recvfrom
+    m["close"] = g_native_socket.close
+    m["setopt"] = g_native_socket.setopt
+    m["poll"] = g_native_socket.poll
+    m["resolve"] = g_native_socket.resolve
+    m["getpeername"] = g_native_socket.getpeername
+    m["nonblock"] = g_native_socket.nonblock
+    m["strerror"] = g_native_socket.strerror
+    m["AF_INET"] = g_native_socket.AF_INET
+    m["AF_INET6"] = g_native_socket.AF_INET6
+    m["SOCK_STREAM"] = g_native_socket.SOCK_STREAM
+    m["SOCK_DGRAM"] = g_native_socket.SOCK_DGRAM
+    m["SOCK_RAW"] = g_native_socket.SOCK_RAW
+    m["IPPROTO_TCP"] = g_native_socket.IPPROTO_TCP
+    m["IPPROTO_UDP"] = g_native_socket.IPPROTO_UDP
+    m["POLLIN"] = g_native_socket.POLLIN
+    m["POLLOUT"] = g_native_socket.POLLOUT
+    m["POLLERR"] = g_native_socket.POLLERR
+    m["POLLHUP"] = g_native_socket.POLLHUP
+    m["POLLNVAL"] = g_native_socket.POLLNVAL
+    return m
+
+proc create_tcp_proxy(profile = nil):
+    let selected = profile_or_active(profile)
+    if not capability_allowed(selected, "network"):
+        return create_stub_module("tcp")
+    ensure_native_modules()
+    let m = {}
+    m["connect"] = g_native_tcp.connect
+    m["listen"] = g_native_tcp.listen
+    m["accept"] = g_native_tcp.accept
+    m["send"] = g_native_tcp.send
+    m["recv"] = g_native_tcp.recv
+    m["sendall"] = g_native_tcp.sendall
+    m["recvall"] = g_native_tcp.recvall
+    m["recvline"] = g_native_tcp.recvline
+    m["close"] = g_native_tcp.close
+    return m
+
+proc create_http_proxy(profile = nil):
+    let selected = profile_or_active(profile)
+    if not capability_allowed(selected, "network"):
+        return create_stub_module("http")
+    ensure_native_modules()
+    let m = {}
+    m["get"] = g_native_http.get
+    m["post"] = g_native_http.post
+    m["put"] = g_native_http.put
+    m["delete"] = g_native_http.delete
+    m["patch"] = g_native_http.patch
+    m["head"] = g_native_http.head
+    m["download"] = g_native_http.download
+    m["escape"] = g_native_http.escape
+    m["unescape"] = g_native_http.unescape
+    return m
+
+proc create_ssl_proxy(profile = nil):
+    let selected = profile_or_active(profile)
+    if not capability_allowed(selected, "network"):
+        return create_stub_module("ssl")
+    ensure_native_modules()
+    let m = {}
+    m["available"] = g_native_ssl.available
+    m["is_available"] = g_native_ssl.is_available
+    m["error"] = g_native_ssl.error
+    m["context"] = g_native_ssl.context
+    m["load_cert"] = g_native_ssl.load_cert
+    m["wrap"] = g_native_ssl.wrap
+    m["connect"] = g_native_ssl.connect
+    m["accept"] = g_native_ssl.accept
+    m["send"] = g_native_ssl.send
+    m["recv"] = g_native_ssl.recv
+    m["shutdown"] = g_native_ssl.shutdown
+    m["free"] = g_native_ssl.free
+    m["free_context"] = g_native_ssl.free_context
+    m["peer_cert"] = g_native_ssl.peer_cert
+    m["set_verify"] = g_native_ssl.set_verify
+    return m
 
 # ============================================================================
 # Module Registry
@@ -824,37 +1123,113 @@ proc create_net_module():
 
 let g_stdlib_registry = {}
 
-# Modules that exist only as C-host natives. The self-hosted interpreter
-# registers empty stubs so `import gpu` (etc.) succeeds; calling into them
-# raises a clear attribute error instead of a hard import failure.
 proc create_stub_module(name):
     return {"__interp_type": "module", "name": name, "__stub": true}
 
-proc init_stdlib():
-    g_stdlib_registry["math"]   = create_math_module()
-    g_stdlib_registry["_math"]  = g_stdlib_registry["math"]   # C name alias
-    g_stdlib_registry["io"]     = create_io_module()
-    g_stdlib_registry["string"] = create_string_module()
-    g_stdlib_registry["sys"]    = create_sys_module()
-    g_stdlib_registry["fat"]    = create_fat_module()
-    # NOTE: 'net' resolves as a real package (lib/net/__init__.sage) through
-    # the module-file loader, which supersedes this legacy stub entry.
-    # Host-only native modules — importable stubs under the self-hosted build
-    g_stdlib_registry["thread"]    = create_stub_module("thread")
-    g_stdlib_registry["_thread"]   = g_stdlib_registry["thread"]
-    g_stdlib_registry["socket"]    = create_stub_module("socket")
-    g_stdlib_registry["tcp"]       = create_stub_module("tcp")
-    g_stdlib_registry["http"]      = create_stub_module("http")
-    g_stdlib_registry["ssl"]       = create_stub_module("ssl")
-    g_stdlib_registry["gpu"]       = create_stub_module("gpu")
-    g_stdlib_registry["ml_native"] = create_stub_module("ml_native")
-    g_stdlib_registry["vm"]        = create_stub_module("vm")
-    g_stdlib_registry["ffi"]       = create_stub_module("ffi")
+proc module_root(name):
+    let slash_parts = split(name, "/")
+    let first = slash_parts[0]
+    let dot_parts = split(first, ".")
+    return dot_parts[0]
 
-proc get_stdlib_module(name):
+proc restricted_module_stub(name, profile = nil):
+    let normalized = profile_or_active(profile)
+    if normalized == PROFILE_GENERAL:
+        return nil
+    let root = module_root(name)
+    let network_names = ["net", "socket", "tcp", "http", "ssl"]
+    let is_network = false
+    let ni = 0
+    while ni < len(network_names):
+        if root == network_names[ni]:
+            is_network = true
+        ni = ni + 1
+    if is_network and not capability_allowed(normalized, "network"):
+        return create_stub_module(root)
+    if root == "sys" and not capability_allowed(normalized, "os"):
+        return create_stub_module("sys")
+    if root == "io" and not capability_allowed(normalized, "filesystem"):
+        return create_stub_module("io")
+    if root == "os" and not capability_allowed(normalized, "os"):
+        return create_stub_module("os")
+    if root == "ffi" and not capability_allowed(normalized, "ffi"):
+        return create_stub_module("ffi")
+    let memory_names = ["mem", "struct", "addressof"]
+    let is_memory = false
+    let mi = 0
+    while mi < len(memory_names):
+        if root == memory_names[mi]:
+            is_memory = true
+        mi = mi + 1
+    if is_memory and not capability_allowed(normalized, "raw_memory"):
+        return create_stub_module(root)
+    if root == "process" and not capability_allowed(normalized, "process"):
+        return create_stub_module("process")
+    if root == "thread" and not capability_allowed(normalized, "thread"):
+        return create_stub_module("thread")
+    if root == "fat" and not capability_allowed(normalized, "filesystem"):
+        return create_stub_module("fat")
+    let host_names = ["vm", "gpu", "ml_native"]
+    let is_host_module = false
+    let hi = 0
+    while hi < len(host_names):
+        if root == host_names[hi]:
+            is_host_module = true
+        hi = hi + 1
+    if normalized != PROFILE_GENERAL and is_host_module:
+        return create_stub_module(root)
+    return nil
+
+proc init_stdlib(profile = nil):
+    let normalized = profile_or_active(profile)
+    g_active_profile = normalized
+    let registry = {}
+    g_stdlib_registries[normalized] = registry
+    g_stdlib_registry = registry
+    registry["math"]   = create_math_module()
+    registry["_math"]  = registry["math"]
+    registry["io"]     = create_io_module(normalized)
+    registry["string"] = create_string_module()
+    registry["sys"]    = create_sys_module(normalized)
+    if capability_allowed(normalized, "filesystem"):
+        registry["fat"] = create_fat_module()
+    else:
+        registry["fat"] = create_stub_module("fat")
+    registry["thread"]    = create_stub_module("thread")
+    registry["_thread"]   = registry["thread"]
+    registry["socket"]    = create_socket_proxy(normalized)
+    registry["tcp"]       = create_tcp_proxy(normalized)
+    registry["http"]      = create_http_proxy(normalized)
+    registry["ssl"]       = create_ssl_proxy(normalized)
+    let network_allowed = capability_allowed(normalized, "network")
+    if network_allowed:
+        registry["net"] = create_net_module(normalized)
+    else:
+        registry["net"] = create_stub_module("net")
+    registry["gpu"]       = create_stub_module("gpu")
+    registry["ml_native"] = create_stub_module("ml_native")
+    registry["vm"]        = create_stub_module("vm")
+    registry["ffi"]       = create_stub_module("ffi")
+    return registry
+
+proc get_stdlib_module(name, profile = nil):
+    let key = g_active_profile
+    if profile != nil:
+        key = normalize_profile(profile)
+        if dict_has(g_stdlib_registries, key):
+            if dict_has(g_stdlib_registries[key], name):
+                return g_stdlib_registries[key][name]
+            return nil
+        return nil
     if dict_has(g_stdlib_registry, name):
         return g_stdlib_registry[name]
     return nil
 
-proc is_stdlib_module(name):
+proc is_stdlib_module(name, profile = nil):
+    let key = g_active_profile
+    if profile != nil:
+        key = normalize_profile(profile)
+        if dict_has(g_stdlib_registries, key):
+            return dict_has(g_stdlib_registries[key], name)
+        return false
     return dict_has(g_stdlib_registry, name)

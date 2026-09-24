@@ -766,6 +766,7 @@ extern Module* create_socket_module(ModuleCache* cache);
 extern Module* create_tcp_module(ModuleCache* cache);
 extern Module* create_http_module(ModuleCache* cache);
 extern Module* create_ssl_module(ModuleCache* cache);
+extern Module* create_ed25519_module(ModuleCache* cache);
 
 // Register standard library modules (implemented in stdlib.c)
 void register_stdlib_modules(ModuleCache* cache) {
@@ -781,6 +782,7 @@ void register_stdlib_modules(ModuleCache* cache) {
     create_tcp_module(cache);
     create_http_module(cache);
     create_ssl_module(cache);
+    create_ed25519_module(cache);
     create_graphics_module(cache);
     create_ml_native_module(cache);
 #ifndef SAGE_NO_FFI
