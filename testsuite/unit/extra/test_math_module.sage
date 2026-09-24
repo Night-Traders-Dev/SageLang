@@ -1,4 +1,4 @@
-# EXPECT: (PI:, 3.14159)
+# EXPECT: (PI:, 3.141592653589793)
 # EXPECT: (random >= 0:, true)
 # EXPECT: (Testing floor:, 3)
 # EXPECT: (Testing ceil:, 4)

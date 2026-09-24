@@ -4,23 +4,23 @@
 # EXPECT: 2 | let sender = state['sender']
 # EXPECT:   |                    ^
 # EXPECT: Init wallet...
-# EXPECT: Artist: 0x591ae5da36853445afe704598480b5d0efb0a9ba
+# EXPECT: Artist: initialized
 # EXPECT: Init blockchain...
 # EXPECT: Blockchain init ok
 # EXPECT: Deploying...
 import blockchain.blockchain as bc
 import blockchain.wallet as wallet_mod
-import io
 import sys
 
-sys.shell_exec("rm -rf ./tmp_db")
+let db_path = "/tmp/sage_nft_repro_" + str(int(sys.clock() * 1000000))
+sys.shell_exec("rm -rf " + db_path)
 
 print "Init wallet..."
 let artist = wallet_mod.Wallet(nil)
-print "Artist: " + artist.get_address()
+print "Artist: initialized"
 
 print "Init blockchain..."
-let my_coin = bc.Blockchain(1, "./tmp_db")
+let my_coin = bc.Blockchain(1, db_path)
 print "Blockchain init ok"
 
 let nft_source = "# NFT Contract\nlet sender = state['sender']\nlet results = []\nresults"

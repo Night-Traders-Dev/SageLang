@@ -4266,13 +4266,14 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
         case STMT_WHILE: {
             int iterations = 0;
             while (1) {
-                if (++iterations > MAX_LOOP_ITERATIONS) {
-                    fprintf(stderr, "Runtime Error: While loop exceeded maximum iterations (%d).\n", MAX_LOOP_ITERATIONS);
-                    return EVAL_EXCEPTION(val_exception("While loop exceeded maximum iterations"));
-                }
                 ExecResult cond_result = eval_expr(stmt->as.while_stmt.condition, env);
                 if (cond_result.is_throwing) return cond_result;
                 if (!is_truthy(cond_result.value)) break;
+                if (iterations >= MAX_LOOP_ITERATIONS) {
+                    fprintf(stderr, "Runtime Error: While loop exceeded maximum iterations (%d).\n", MAX_LOOP_ITERATIONS);
+                    return EVAL_EXCEPTION(val_exception("While loop exceeded maximum iterations"));
+                }
+                iterations++;
 
                 ExecResult res = interpret(stmt->as.while_stmt.body, env);
                 if (res.is_returning || res.is_throwing) return res;

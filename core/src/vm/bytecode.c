@@ -16,6 +16,7 @@ typedef struct {
     int continue_target;
     int has_for_cleanup;  // for-loops need extra stack cleanup before break
     int for_pop_count;    // number of extra pops needed for for-loop break
+    int local_count_at_entry;
 } LoopContext;
 
 typedef struct {
@@ -572,7 +573,7 @@ static int compile_expr(BytecodeCompiler* compiler, Expr* expr) {
     return 0;
 }
 
-static int push_loop(BytecodeCompiler* compiler, int continue_target, int is_for, int for_pop_count) {
+static int push_loop(BytecodeCompiler* compiler, int continue_target, int is_for, int for_pop_count, int local_count_at_entry) {
     if (compiler->loop_depth >= MAX_LOOP_DEPTH) {
         set_error(compiler, "Loop nesting depth exceeded.");
         return 0;
@@ -582,6 +583,7 @@ static int push_loop(BytecodeCompiler* compiler, int continue_target, int is_for
     loop->continue_target = continue_target;
     loop->has_for_cleanup = is_for;
     loop->for_pop_count = for_pop_count;
+    loop->local_count_at_entry = local_count_at_entry;
     return 1;
 }
 
@@ -718,7 +720,7 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             int exit_jump = emit_jump(compiler, BC_OP_JUMP_IF_FALSE, 0, 0);
             if (exit_jump < 0) return 0;
             if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
-            if (!push_loop(compiler, loop_start, 0, 0)) return 0;
+            if (!push_loop(compiler, loop_start, 0, 0, compiler->local_count)) return 0;
             if (!compile_stmt(compiler, stmt->as.while_stmt.body, 0)) {
                 compiler->loop_depth--;
                 return 0;
@@ -768,7 +770,7 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             // for-loop break needs: pop index, pop array, pop_env
             // If local scope, we also need to account for the local variable
             int extra_pops = (compiler->scope_depth > 0) ? 3 : 2;
-            if (!push_loop(compiler, continue_target_placeholder, 1, extra_pops)) return 0;
+            if (!push_loop(compiler, continue_target_placeholder, 1, extra_pops, compiler->local_count)) return 0;
 
             if (!compile_stmt(compiler, stmt->as.for_stmt.body, 0)) {
                 compiler->loop_depth--;
@@ -808,6 +810,17 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
         case STMT_BREAK: {
             if (compiler->loop_depth <= 0) break;  // fall to AST fallback
             LoopContext* loop = &compiler->loops[compiler->loop_depth - 1];
+            int body_pops = compiler->local_count - loop->local_count_at_entry;
+            if (body_pops < 0) {
+                set_error(compiler, "Invalid local scope while compiling loop control.");
+                return 0;
+            }
+            for (int i = 0; i < body_pops; i++) {
+                if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
+            }
+            if (!loop->has_for_cleanup) {
+                if (!emit_op(compiler, BC_OP_NIL, 0, 0)) return 0;
+            }
             // For-loops need to clean up stack: pop index, pop array, and pop env
             if (loop->has_for_cleanup) {
                 for (int i = 0; i < loop->for_pop_count; i++) {
@@ -828,6 +841,14 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
         case STMT_CONTINUE: {
             if (compiler->loop_depth <= 0) break;  // fall to AST fallback
             LoopContext* loop = &compiler->loops[compiler->loop_depth - 1];
+            int body_pops = compiler->local_count - loop->local_count_at_entry;
+            if (body_pops < 0) {
+                set_error(compiler, "Invalid local scope while compiling loop control.");
+                return 0;
+            }
+            for (int i = 0; i < body_pops; i++) {
+                if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
+            }
             if (!emit_op(compiler, BC_OP_JUMP, 0, 0)) return 0;
             if (!emit_u16(compiler, (uint16_t)loop->continue_target, 0, 0)) return 0;
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);

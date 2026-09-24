@@ -1,4 +1,4 @@
-# EXPECT: (PI:, 3.14159)
+# EXPECT: (PI:, 3.141592653589793)
 # EXPECT: (random >= 0:, true)
 # EXPECT: (int(3.7):, 3)
 import math

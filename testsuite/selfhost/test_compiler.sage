@@ -15,7 +15,9 @@ proc assert_true(v, msg):
         print "FAIL: " + msg
 
 proc assert_eq(a, b, msg):
-    if a == b:
+    if a == nil and b == nil:
+        passed = passed + 1
+    elif a != nil and b != nil and a == b:
         passed = passed + 1
     else:
         failed = failed + 1
@@ -216,19 +218,19 @@ assert_contains(var_c, "sage_load_slot", "variable loads slot")
 assert_contains(var_c, "myvar", "variable has name")
 
 # Binary: 1 + 2
-let plus_tok = make_tok_type("+", 34)
+let plus_tok = make_tok_type("+", token.TOKEN_PLUS)
 let bin_expr = ast.binary_expr(ast.number_expr(1), plus_tok, ast.number_expr(2))
 let bin_c = compiler.cc_emit_expr(cc8, bin_expr)
 assert_contains(bin_c, "sage_add(", "binary add emission")
 
 # Binary: a == b
-let eq_tok = make_tok_type("==", 40)
+let eq_tok = make_tok_type("==", token.TOKEN_EQ)
 let eq_expr = ast.binary_expr(ast.number_expr(1), eq_tok, ast.number_expr(2))
 let eq_c = compiler.cc_emit_expr(cc8, eq_expr)
 assert_contains(eq_c, "sage_eq(", "binary eq emission")
 
 # Binary: not x
-let not_tok = make_tok_type("not", 11)
+let not_tok = make_tok_type("not", token.TOKEN_NOT)
 let not_expr = ast.binary_expr(ast.bool_expr(true), not_tok, nil)
 let not_c = compiler.cc_emit_expr(cc8, not_expr)
 assert_contains(not_c, "sage_not(", "not emission")
@@ -453,7 +455,7 @@ let _unused_probe = nil
 let fn_tok = make_tok("add")
 let fn_param_a = make_tok("a")
 let fn_param_b = make_tok("b")
-let fn_plus = make_tok_type("+", 34)
+let fn_plus = make_tok_type("+", token.TOKEN_PLUS)
 let fn_body = ast.return_stmt(ast.binary_expr(ast.variable_expr(fn_param_a), fn_plus, ast.variable_expr(fn_param_b)))
 let fn_stmt = ast.proc_stmt(fn_tok, [fn_param_a, fn_param_b], fn_body)
 compiler.add_proc_entry(cc23, "add", 2, nil)
@@ -553,7 +555,7 @@ assert_contains(let_prog_c, "sage_load_slot(", "let program loads slot")
 # Program with proc
 let proc_tok2 = make_tok("double_it")
 let proc_param = make_tok("n")
-let mul_tok = make_tok_type("*", 36)
+let mul_tok = make_tok_type("*", token.TOKEN_STAR)
 let proc_body = ast.return_stmt(ast.binary_expr(ast.variable_expr(proc_param), mul_tok, ast.number_expr(2)))
 let proc_def = ast.proc_stmt(proc_tok2, [proc_param], proc_body)
 let call_it = ast.print_stmt(ast.call_expr(ast.variable_expr(make_tok("double_it")), [ast.number_expr(21)]))
@@ -582,7 +584,7 @@ assert_contains(cls_c, "sage_construct(", "class compile constructs")
 # Empty program
 let empty_prog = ast.print_stmt(ast.nil_expr())
 let empty_c = compiler.compile_to_c(empty_prog)
-assert_contains(empty_c, "int main(void)", "empty prog has main")
+assert_contains(empty_c, "int main(", "empty prog has main")
 
 # ============================================================================
 # Edge Cases
@@ -626,37 +628,39 @@ let slice_c = compiler.cc_emit_expr(cc29, slice_e)
 assert_contains(slice_c, "sage_slice(", "slice emission")
 
 # Multiple binary operators
-let sub_tok = make_tok_type("-", 35)
+let sub_tok = make_tok_type("-", token.TOKEN_MINUS)
 let sub_c = compiler.cc_emit_expr(cc8, ast.binary_expr(ast.number_expr(5), sub_tok, ast.number_expr(3)))
 assert_contains(sub_c, "sage_sub(", "sub emission")
 
-let mul_tok2 = make_tok_type("*", 36)
+let mul_tok2 = make_tok_type("*", token.TOKEN_STAR)
 let mul_c = compiler.cc_emit_expr(cc8, ast.binary_expr(ast.number_expr(2), mul_tok2, ast.number_expr(3)))
 assert_contains(mul_c, "sage_mul(", "mul emission")
 
-let div_tok = make_tok_type("/", 37)
+let div_tok = make_tok_type("/", token.TOKEN_SLASH)
 let div_c = compiler.cc_emit_expr(cc8, ast.binary_expr(ast.number_expr(6), div_tok, ast.number_expr(2)))
 assert_contains(div_c, "sage_div(", "div emission")
 
-let mod_tok = make_tok_type("%", 38)
+let mod_tok = make_tok_type("%", token.TOKEN_PERCENT)
 let mod_c = compiler.cc_emit_expr(cc8, ast.binary_expr(ast.number_expr(7), mod_tok, ast.number_expr(3)))
 assert_contains(mod_c, "sage_mod(", "mod emission")
 
-let gt_tok = make_tok_type(">", 43)
+let gt_tok = make_tok_type(">", token.TOKEN_GT)
 let gt_c = compiler.cc_emit_expr(cc8, ast.binary_expr(ast.number_expr(5), gt_tok, ast.number_expr(3)))
 assert_contains(gt_c, "sage_gt(", "gt emission")
 
-let lt_tok = make_tok_type("<", 42)
+let lt_tok = make_tok_type("<", token.TOKEN_LT)
 let lt_c = compiler.cc_emit_expr(cc8, ast.binary_expr(ast.number_expr(3), lt_tok, ast.number_expr(5)))
 assert_contains(lt_c, "sage_lt(", "lt emission")
 
-let and_tok = make_tok_type("and", 9)
+let and_tok = make_tok_type("and", token.TOKEN_AND)
 let and_c = compiler.cc_emit_expr(cc8, ast.binary_expr(ast.bool_expr(true), and_tok, ast.bool_expr(false)))
-assert_contains(and_c, "sage_and(", "and emission")
+assert_contains(and_c, "sage_truthy", "and emission")
+assert_contains(and_c, "&&", "and short-circuits")
 
-let or_tok = make_tok_type("or", 10)
+let or_tok = make_tok_type("or", token.TOKEN_OR)
 let or_c = compiler.cc_emit_expr(cc8, ast.binary_expr(ast.bool_expr(true), or_tok, ast.bool_expr(false)))
-assert_contains(or_c, "sage_or(", "or emission")
+assert_contains(or_c, "sage_truthy", "or emission")
+assert_contains(or_c, "||", "or short-circuits")
 
 # ============================================================================
 # Summary

@@ -1,6 +1,6 @@
 # EXPECT: 0
 # EXPECT: 1
-# EXPECT: 3.14159
+# EXPECT: 3.141592653589793
 # Test math module trig and constants
 import math
 print math.sin(0)

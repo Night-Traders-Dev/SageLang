@@ -1,15 +1,8 @@
-# EXPECT: Runtime Error: Only instances and modules have properties.
-# EXPECT: object: 
-# EXPECT: hello worldobject: 
-# EXPECT: hello worldRuntime Error: '.find' is not callable (type=2).
-# EXPECT: Runtime Error: Only instances and modules have properties.
-# EXPECT: object: 
-# EXPECT: nil
-# EXPECT: hello worldobject: 
-# EXPECT: hello worldRuntime Error: '.find' is not callable (type=2).
-# EXPECT: nil
+# EXPECT: 6
+# EXPECT: -1
 # EXPECT: hello
+import string
 let s = "hello world"
-print s.find("world")
-print s.find("xyz")
+print string.find(s, "world")
+print string.find(s, "xyz")
 print s[0:5]

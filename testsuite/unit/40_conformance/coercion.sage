@@ -2,7 +2,7 @@
 # Int + Float = Float, Int / Int = Float, % preserves float
 # EXPECT: 5.5
 # EXPECT: 2.5
-# EXPECT: 0.7
+# EXPECT: 0.7000000000000002
 # EXPECT: 3
 # Mixed arithmetic
 print 3 + 2.5

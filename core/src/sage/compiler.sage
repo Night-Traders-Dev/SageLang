@@ -192,7 +192,9 @@ proc stmt_has_yield_list(first):
         cur = cur.next
     return false
 
-proc add_proc_entry(cc, sage_name, param_count, param_defaults):
+proc add_proc_entry(cc, sage_name, param_count, param_defaults = nil):
+    if param_defaults == nil:
+        param_defaults = []
     let existing = find_proc_entry(cc.procs, sage_name)
     if existing != nil:
         return existing
@@ -204,7 +206,7 @@ proc add_proc_entry(cc, sage_name, param_count, param_defaults):
     push(cc.procs, entry)
     return entry
 
-proc add_class_info(cc, name, parent, methods):
+proc add_class_info(cc, name, parent, methods = nil):
     let info = {}
     info["class_name"] = name
     info["parent_name"] = parent

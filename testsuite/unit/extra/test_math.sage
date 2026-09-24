@@ -1,4 +1,4 @@
-# EXPECT: (math.PI:, 3.14159)
+# EXPECT: (math.PI:, 3.141592653589793)
 # EXPECT: (math.random() >= 0:, true)
 # EXPECT: (int(3.7):, 3)
 # EXPECT: (int("42"):, 42)

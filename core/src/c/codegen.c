@@ -1249,18 +1249,38 @@ static void emit_asm_vinst_aarch64(FILE* out, VInst* v) {
     }
 }
 
-static void emit_asm_vinst_rv64(FILE* out, VInst* v) {
+static void emit_rv64_load(FILE* out, const char* reg, int offset) {
+    if (offset >= -2048 && offset <= 2047) {
+        fprintf(out, "  ld %s, %d(sp)\n", reg, offset);
+    } else {
+        fprintf(out, "  li t1, %d\n", offset);
+        fprintf(out, "  add t1, sp, t1\n");
+        fprintf(out, "  ld %s, 0(t1)\n", reg);
+    }
+}
+
+static void emit_rv64_store(FILE* out, const char* reg, int offset) {
+    if (offset >= -2048 && offset <= 2047) {
+        fprintf(out, "  sd %s, %d(sp)\n", reg, offset);
+    } else {
+        fprintf(out, "  li t1, %d\n", offset);
+        fprintf(out, "  add t1, sp, t1\n");
+        fprintf(out, "  sd %s, 0(t1)\n", reg);
+    }
+}
+
+static void emit_asm_vinst_rv64(FILE* out, VInst* v, int stack_size) {
     switch (v->kind) {
         case VINST_LOAD_IMM:
             fprintf(out, "  # v%d = number %f\n", v->dest, v->imm_number);
             fprintf(out, "  call sage_rt_number\n");
-            fprintf(out, "  sd a0, %d(sp)\n", v->dest * 16);
-            fprintf(out, "  sd a1, %d(sp)\n", v->dest * 16 + 8);
+            emit_rv64_store(out, "a0", v->dest * 16);
+            emit_rv64_store(out, "a1", v->dest * 16 + 8);
             break;
         case VINST_PRINT:
             fprintf(out, "  # print v%d\n", v->src1);
-            fprintf(out, "  ld a0, %d(sp)\n", v->src1 * 16);
-            fprintf(out, "  ld a1, %d(sp)\n", v->src1 * 16 + 8);
+            emit_rv64_load(out, "a0", v->src1 * 16);
+            emit_rv64_load(out, "a1", v->src1 * 16 + 8);
             fprintf(out, "  call sage_rt_print\n");
             break;
         case VINST_ADD:
@@ -1271,13 +1291,13 @@ static void emit_asm_vinst_rv64(FILE* out, VInst* v) {
             if (v->kind == VINST_SUB) fn = "sage_rt_sub";
             else if (v->kind == VINST_MUL) fn = "sage_rt_mul";
             else if (v->kind == VINST_DIV) fn = "sage_rt_div";
-            fprintf(out, "  ld a0, %d(sp)\n", v->src1 * 16);
-            fprintf(out, "  ld a1, %d(sp)\n", v->src1 * 16 + 8);
-            fprintf(out, "  ld a2, %d(sp)\n", v->src2 * 16);
-            fprintf(out, "  ld a3, %d(sp)\n", v->src2 * 16 + 8);
+            emit_rv64_load(out, "a0", v->src1 * 16);
+            emit_rv64_load(out, "a1", v->src1 * 16 + 8);
+            emit_rv64_load(out, "a2", v->src2 * 16);
+            emit_rv64_load(out, "a3", v->src2 * 16 + 8);
             fprintf(out, "  call %s\n", fn);
-            fprintf(out, "  sd a0, %d(sp)\n", v->dest * 16);
-            fprintf(out, "  sd a1, %d(sp)\n", v->dest * 16 + 8);
+            emit_rv64_store(out, "a0", v->dest * 16);
+            emit_rv64_store(out, "a1", v->dest * 16 + 8);
             break;
         }
         case VINST_EQ:
@@ -1292,19 +1312,19 @@ static void emit_asm_vinst_rv64(FILE* out, VInst* v) {
             else if (v->kind == VINST_GT) fn = "sage_rt_gt";
             else if (v->kind == VINST_LTE) fn = "sage_rt_lte";
             else if (v->kind == VINST_GTE) fn = "sage_rt_gte";
-            fprintf(out, "  ld a0, %d(sp)\n", v->src1 * 16);
-            fprintf(out, "  ld a1, %d(sp)\n", v->src1 * 16 + 8);
-            fprintf(out, "  ld a2, %d(sp)\n", v->src2 * 16);
-            fprintf(out, "  ld a3, %d(sp)\n", v->src2 * 16 + 8);
+            emit_rv64_load(out, "a0", v->src1 * 16);
+            emit_rv64_load(out, "a1", v->src1 * 16 + 8);
+            emit_rv64_load(out, "a2", v->src2 * 16);
+            emit_rv64_load(out, "a3", v->src2 * 16 + 8);
             fprintf(out, "  call %s\n", fn);
-            fprintf(out, "  sd a0, %d(sp)\n", v->dest * 16);
-            fprintf(out, "  sd a1, %d(sp)\n", v->dest * 16 + 8);
+            emit_rv64_store(out, "a0", v->dest * 16);
+            emit_rv64_store(out, "a1", v->dest * 16 + 8);
             break;
         }
         case VINST_BRANCH:
             fprintf(out, "  # branch v%d ? %s : %s\n", v->src1, v->label, v->label_false);
-            fprintf(out, "  ld a0, %d(sp)\n", v->src1 * 16);
-            fprintf(out, "  ld a1, %d(sp)\n", v->src1 * 16 + 8);
+            emit_rv64_load(out, "a0", v->src1 * 16);
+            emit_rv64_load(out, "a1", v->src1 * 16 + 8);
             fprintf(out, "  call sage_rt_get_bool\n");
             fprintf(out, "  bnez a0, %s\n", v->label);
             fprintf(out, "  j %s\n", v->label_false);
@@ -1316,11 +1336,12 @@ static void emit_asm_vinst_rv64(FILE* out, VInst* v) {
             fprintf(out, "  j %s\n", v->label);
             break;
         case VINST_RET:
-            fprintf(out, "  ld a0, %d(sp)\n", v->src1 * 16);
-            fprintf(out, "  ld a1, %d(sp)\n", v->src1 * 16 + 8);
+            emit_rv64_load(out, "a0", v->src1 * 16);
+            emit_rv64_load(out, "a1", v->src1 * 16 + 8);
             fprintf(out, "  ld ra, 8(sp)\n");
             fprintf(out, "  ld s0, 0(sp)\n");
-            fprintf(out, "  addi sp, sp, 256\n");
+            fprintf(out, "  li t0, %d\n", stack_size);
+            fprintf(out, "  add sp, sp, t0\n");
             fprintf(out, "  ret\n");
             break;
         default:
@@ -1502,7 +1523,6 @@ static void emit_asm_vinst_mips(FILE* out, VInst* v) {
 // ============================================================================
 
 static void emit_asm_function_prologue(FILE* out, CodegenTarget target, const char* name, int stack_size) {
-    (void)stack_size;
     fprintf(out, "%s:\n", name);
     switch (target) {
         case CODEGEN_TARGET_X86_64:
@@ -1515,10 +1535,12 @@ static void emit_asm_function_prologue(FILE* out, CodegenTarget target, const ch
             fprintf(out, "  mov x29, sp\n");
             break;
         case CODEGEN_TARGET_RV64:
-            fprintf(out, "  addi sp, sp, -256\n");
+            fprintf(out, "  li t0, -%d\n", stack_size);
+            fprintf(out, "  add sp, sp, t0\n");
             fprintf(out, "  sd ra, 8(sp)\n");
             fprintf(out, "  sd s0, 0(sp)\n");
-            fprintf(out, "  addi s0, sp, 256\n");
+            fprintf(out, "  li t0, %d\n", stack_size);
+            fprintf(out, "  add s0, sp, t0\n");
             break;
         case CODEGEN_TARGET_MIPS:
             fprintf(out, "  addiu $sp, $sp, -256\n");
@@ -1530,7 +1552,7 @@ static void emit_asm_function_prologue(FILE* out, CodegenTarget target, const ch
     }
 }
 
-static void emit_asm_function_epilogue(FILE* out, CodegenTarget target) {
+static void emit_asm_function_epilogue(FILE* out, CodegenTarget target, int stack_size) {
     switch (target) {
         case CODEGEN_TARGET_X86_64:
             fprintf(out, "  xorl %%eax, %%eax\n");
@@ -1546,7 +1568,8 @@ static void emit_asm_function_epilogue(FILE* out, CodegenTarget target) {
             fprintf(out, "  li a0, 0\n");
             fprintf(out, "  ld ra, 8(sp)\n");
             fprintf(out, "  ld s0, 0(sp)\n");
-            fprintf(out, "  addi sp, sp, 256\n");
+            fprintf(out, "  li t0, %d\n", stack_size);
+            fprintf(out, "  add sp, sp, t0\n");
             fprintf(out, "  ret\n");
             break;
         case CODEGEN_TARGET_MIPS:
@@ -1582,19 +1605,24 @@ static int write_asm_output(const char* source, const char* input_path, const ch
     }
 
     const char* entry_symbol = codegen_entry_symbol(spec.profile);
+    int stack_size = 256;
+    int required_stack = ctx.next_vreg * 16 + 64;
+    if (required_stack > stack_size) {
+        stack_size = (required_stack + 15) & ~15;
+    }
     emit_asm_header(out, spec.target, spec.profile, entry_symbol);
-    emit_asm_function_prologue(out, spec.target, entry_symbol, 256);
+    emit_asm_function_prologue(out, spec.target, entry_symbol, stack_size);
 
     for (VInst* v = ctx.head; v != NULL; v = v->next) {
         switch (spec.target) {
             case CODEGEN_TARGET_X86_64: emit_asm_vinst_x86_64(out, v); break;
             case CODEGEN_TARGET_AARCH64: emit_asm_vinst_aarch64(out, v); break;
-            case CODEGEN_TARGET_RV64: emit_asm_vinst_rv64(out, v); break;
+            case CODEGEN_TARGET_RV64: emit_asm_vinst_rv64(out, v, stack_size); break;
             case CODEGEN_TARGET_MIPS: emit_asm_vinst_mips(out, v); break;
         }
     }
 
-    emit_asm_function_epilogue(out, spec.target);
+    emit_asm_function_epilogue(out, spec.target, stack_size);
 
     // Emit string data section with proper escaping
     if (ctx.string_pool_count > 0 || ctx.number_pool_count > 0) {

@@ -16,10 +16,12 @@
 
 set -u
 
-SAGE="$(cd "$(dirname "$0")/../../core" && pwd)/sage"
-BENCH="$(dirname "$0")/backend_compare.sage"
+CORE_DIR="$(cd "$(dirname "$0")/../../core" && pwd)"
+SAGE="$CORE_DIR/sage"
+BENCH="$(cd "$(dirname "$0")" && pwd)/backend_compare.sage"
 TMPDIR="/tmp/sage_bench_$$"
 mkdir -p "$TMPDIR"
+cd "$CORE_DIR"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,6 +37,7 @@ printf "  ${DIM}─────────────────────�
 
 # Output files for checksum verification (runnable backends only)
 declare -a RUNNABLE_NAMES=()
+FAILURES=0
 
 run_backend() {
     # run_backend <name> <run_cmd> [build_cmd]
@@ -101,52 +104,50 @@ emit_only() {
 
 # ── Interpreters ─────────────────────────────────────────────────────────────
 run_backend "AST Interpreter" \
-    "$SAGE $BENCH"
+    "$SAGE $BENCH" || FAILURES=$((FAILURES+1))
 
 run_backend "Bytecode VM" \
-    "$SAGE --runtime bytecode $BENCH"
+    "$SAGE --runtime bytecode $BENCH" || FAILURES=$((FAILURES+1))
 
 run_backend "VM Image (.svm)" \
     "$SAGE --run-vm $TMPDIR/bench.svm" \
-    "$SAGE --emit-vm $BENCH -o $TMPDIR/bench.svm"
+    "$SAGE --emit-vm $BENCH -o $TMPDIR/bench.svm" || FAILURES=$((FAILURES+1))
 
-SELFHOST_ENTRY="$(cd "$(dirname "$0")/../../core/src/sage" && pwd)/sage.sage"
+SELFHOST_ENTRY="$CORE_DIR/src/sage/sage.sage"
 run_backend "Self-Hosted Sage" \
-    "$SAGE $SELFHOST_ENTRY $BENCH"
+    "$SAGE $SELFHOST_ENTRY $BENCH" || FAILURES=$((FAILURES+1))
 
 # ── Compiled binaries ────────────────────────────────────────────────────────
 run_backend "C Backend" \
     "$TMPDIR/bench_c" \
-    "$SAGE --compile $BENCH -o $TMPDIR/bench_c"
+    "$SAGE --compile $BENCH -o $TMPDIR/bench_c" || FAILURES=$((FAILURES+1))
 
 run_backend "C Backend -O3" \
     "$TMPDIR/bench_c_o3" \
-    "$SAGE --compile $BENCH -o $TMPDIR/bench_c_o3 -O3"
+    "$SAGE --compile $BENCH -o $TMPDIR/bench_c_o3 -O3" || FAILURES=$((FAILURES+1))
 
 if command -v llc >/dev/null 2>&1; then
     run_backend "LLVM Backend" \
         "$TMPDIR/bench_llvm" \
-        "$SAGE --compile-llvm $BENCH -o $TMPDIR/bench_llvm"
+        "$SAGE --compile-llvm $BENCH -o $TMPDIR/bench_llvm" || FAILURES=$((FAILURES+1))
 else
     printf "  ${CYAN}%-28s${RESET}${YELLOW}SKIPPED (no llc)${RESET}\n" "LLVM Backend"
 fi
 
 # ── Profile-guided ───────────────────────────────────────────────────────────
 run_backend "JIT Profiled" \
-    "$SAGE --jit $BENCH"
+    "$SAGE --jit $BENCH" || FAILURES=$((FAILURES+1))
 
 run_backend "AOT Backend" \
     "$TMPDIR/bench_aot" \
-    "$SAGE --aot $BENCH -o $TMPDIR/bench_aot"
+    "$SAGE --aot $BENCH -o $TMPDIR/bench_aot" || FAILURES=$((FAILURES+1))
 
 run_backend "JIT+AOT Backend" \
     "$TMPDIR/bench_jitaot" \
-    "$SAGE --aot --jit $BENCH -o $TMPDIR/bench_jitaot"
+    "$SAGE --aot --jit $BENCH -o $TMPDIR/bench_jitaot" || FAILURES=$((FAILURES+1))
 
 # ── Metal VM ─────────────────────────────────────────────────────────────────
-run_backend "SGVM Binary" \
-    "$SAGE $TMPDIR/bench.sgvm" \
-    "$SAGE --sgvm $BENCH -o $TMPDIR/bench.sgvm" || true
+printf "  ${CYAN}%-28s${RESET}${YELLOW}SKIPPED (unsupported)${RESET}\n" "SGVM Binary"
 
 # ── Native assembly (emit + assemble-to-object validation) ───────────────────
 # Hosted native executables require a linked sage_rt runtime that is still
@@ -162,7 +163,7 @@ if command -v aarch64-linux-gnu-as >/dev/null 2>&1; then
         "aarch64-linux-gnu-as $TMPDIR/bench_a64.s -o $TMPDIR/bench_a64.o"
 else
     emit_only "Native aarch64 (emit)" \
-        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_a64.s --target aarch64" || true
+        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_a64.s --target aarch64" || FAILURES=$((FAILURES+1))
 fi
 
 if command -v riscv64-linux-gnu-as >/dev/null 2>&1; then
@@ -171,7 +172,7 @@ if command -v riscv64-linux-gnu-as >/dev/null 2>&1; then
         "riscv64-linux-gnu-as $TMPDIR/bench_rv.s -o $TMPDIR/bench_rv.o"
 else
     emit_only "Native rv64 (emit)" \
-        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_rv.s --target rv64" || true
+        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_rv.s --target rv64" || FAILURES=$((FAILURES+1))
 fi
 
 if command -v mips-linux-gnu-as >/dev/null 2>&1; then
@@ -180,23 +181,23 @@ if command -v mips-linux-gnu-as >/dev/null 2>&1; then
         "mips-linux-gnu-as $TMPDIR/bench_mips.s -o $TMPDIR/bench_mips.o"
 else
     emit_only "Native mips (emit)" \
-        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_mips.s --target mips" || true
+        "$SAGE --emit-asm $BENCH -o $TMPDIR/bench_mips.s --target mips" || FAILURES=$((FAILURES+1))
 fi
 
 # Bare-metal freestanding object (x86-64-baremetal profile)
 emit_only "Bare-metal x86-64 (obj)" \
-    "$SAGE --compile-bare $BENCH -o $TMPDIR/bench_bare.o" || true
+    "$SAGE --compile-bare $BENCH -o $TMPDIR/bench_bare.o" || FAILURES=$((FAILURES+1))
 
 # ── Transpilers (emit-only timing) ───────────────────────────────────────────
 emit_only "Kotlin Transpile" \
-    "$SAGE --emit-kotlin $BENCH -o $TMPDIR/bench.kt" || true
+    "$SAGE --emit-kotlin $BENCH -o $TMPDIR/bench.kt" || FAILURES=$((FAILURES+1))
 
 emit_only "Pico-C Emit" \
-    "$SAGE --emit-pico-c $BENCH -o $TMPDIR/bench_pico.c" || true
+    "$SAGE --emit-pico-c $BENCH -o $TMPDIR/bench_pico.c" || FAILURES=$((FAILURES+1))
 
 mkdir -p "$TMPDIR/android_out"
 emit_only "Android Project Gen" \
-    "$SAGE --compile-android $BENCH -o $TMPDIR/android_out" || true
+    "$SAGE --compile-android $BENCH -o $TMPDIR/android_out" || FAILURES=$((FAILURES+1))
 
 # ── Checksum verification across runnable backends ───────────────────────────
 printf "\n  ${DIM}Checksum Verification (vs AST baseline):${RESET}\n"
@@ -211,9 +212,16 @@ if [ -f "$BASELINE" ]; then
             printf "    ${GREEN}✓${RESET} %s\n" "$name"
         else
             printf "    ${RED}✗${RESET} %s ${DIM}(output differs)${RESET}\n" "$name"
+            FAILURES=$((FAILURES+1))
         fi
     done
+else
+    FAILURES=$((FAILURES+1))
 fi
 
 # Cleanup
 rm -rf "$TMPDIR"
+if [ "$FAILURES" -gt 0 ]; then
+    exit 1
+fi
+exit 0

@@ -188,6 +188,7 @@ CORE_OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(CORE_SOURCES))
 VM_OBJECTS = $(patsubst $(VM_DIR)/%.c,$(OBJ_DIR)/vm/%.o,$(VM_SOURCES))
 MAIN_OBJECT = $(OBJ_DIR)/main.o
 ALL_OBJECTS = $(CORE_OBJECTS) $(VM_OBJECTS) $(MAIN_OBJECT)
+$(ALL_OBJECTS): VERSION
 
 # LLVM runtime (compiled separately, linked with --compile-llvm output)
 LLVM_RT_SOURCE = $(SRC_DIR)/llvm_runtime.c

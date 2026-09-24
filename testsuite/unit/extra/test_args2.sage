@@ -1,10 +1,6 @@
-# EXPECT: <native fn>
-# EXPECT: nil
+# EXPECT: 2
+# EXPECT: true
 import sys
-let a = sys.args
-print a
+let a = sys.args()
 print len(a)
-if len(a) > 0:
-    print a[0]
-if len(a) > 1:
-    print a[1]
+print a[0] != nil

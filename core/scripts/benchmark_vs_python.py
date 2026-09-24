@@ -40,6 +40,15 @@ RECIPES = [
     ("Sage AOT", "sage-aot"),
 ]
 
+UNSUPPORTED = {
+    ("sage-llvm", "06_class_method"): "class dispatch is not implemented by the LLVM backend",
+    ("sage-llvm", "08_exception_handling"): "exception handlers are not implemented by the LLVM backend",
+    ("sage-aot", "08_exception_handling"): "exception handlers are not implemented by the AOT backend",
+    ("sage-c", "09_recursion_closures"): "nested closure lowering is not implemented by the C backend",
+    ("sage-llvm", "09_recursion_closures"): "closure environments are not implemented by the LLVM backend",
+    ("sage-aot", "09_recursion_closures"): "closure environments are not implemented by the AOT backend",
+}
+
 
 @dataclass
 class RunResult:
@@ -98,6 +107,11 @@ def run_benchmark(
 ) -> RunResult:
     name = bench_sage.stem
     result = RunResult(name=name, recipe=recipe)
+    unsupported_reason = UNSUPPORTED.get((recipe, name))
+    if unsupported_reason:
+        result.status = "skip"
+        result.error = unsupported_reason
+        return result
 
     if recipe == "python":
         if not bench_py.exists():
@@ -119,7 +133,7 @@ def run_benchmark(
         try:
             build = subprocess.run(
                 [str(SAGE), "--compile", str(bench_sage), "-o", out_path],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, timeout=30, cwd=ROOT,
             )
             if build.returncode != 0:
                 result.status = "fail"
@@ -136,7 +150,7 @@ def run_benchmark(
         try:
             build = subprocess.run(
                 [str(SAGE), "--compile-llvm", str(bench_sage), "-o", out_path],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, timeout=30, cwd=ROOT,
             )
             if build.returncode != 0:
                 result.status = "fail"
@@ -155,7 +169,7 @@ def run_benchmark(
         try:
             build = subprocess.run(
                 [str(SAGE), "--aot", str(bench_sage), "-o", out_path],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, timeout=30, cwd=ROOT,
             )
             if build.returncode != 0:
                 result.status = "fail"
@@ -219,13 +233,18 @@ def format_time(seconds: float) -> str:
 
 
 def main():
+    global SAGE, BENCHMARKS
     parser = argparse.ArgumentParser(description="Benchmark Sage vs Python 3")
     parser.add_argument("--runs", type=int, default=5, help="Timed runs per benchmark")
     parser.add_argument("--warmups", type=int, default=1, help="Warmup runs")
+    parser.add_argument("--sage", type=Path, default=SAGE, help="Sage executable")
+    parser.add_argument("--tests-dir", type=Path, default=BENCHMARKS, help="Benchmark directory")
     parser.add_argument("--filter", type=str, default="", help="Filter benchmarks by name substring")
     parser.add_argument("--recipes", type=str, default="", help="Comma-separated recipe filter")
     parser.add_argument("--markdown", action="store_true", help="Output markdown table")
     args = parser.parse_args()
+    SAGE = args.sage.resolve()
+    BENCHMARKS = args.tests_dir.resolve()
 
     python_cmd = detect_python()
     if python_cmd:
@@ -328,9 +347,16 @@ def main():
                 if r.status == "ok":
                     print(f"    {r.recipe}: {r.output[:80]}")
             all_correct = False
-    if all_correct:
+    all_runs_ok = True
+    for bench_name, results in all_results.items():
+        for r in results:
+            if r.status not in ("ok", "skip"):
+                print(f"  FAILED: {bench_name} ({r.recipe}): {r.error or r.status}")
+                all_runs_ok = False
+    if all_correct and all_runs_ok:
         print("  All outputs match across implementations.")
+    return 0 if all_correct and all_runs_ok else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

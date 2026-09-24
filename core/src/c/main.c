@@ -3558,16 +3558,21 @@ int main(int argc, const char* argv[]) {
             char c_path[512];
             snprintf(c_path, sizeof(c_path), "%s.c", out_path);
             FILE* f = fopen(c_path, "w");
-            if (f) { fputs(c_code, f); fclose(f); }
-            if (aot_compile_to_binary(&aot, c_path, out_path)) {
-                int profiled = 0;
-                for (int i = 0; i < jit.profile_count; i++)
-                    if (jit.profiles[i] && jit.profiles[i]->call_count > 0) profiled++;
-                // fprintf(stderr, "AOT+JIT: Compiled %s → %s (%d functions profiled, %d compiled)\n",
-                //         combo_file, out_path, profiled, jit.total_compiled);
-                // unlink(c_path);
-            } else {
-                // fprintf(stderr, "AOT+JIT: Compilation failed\n");
+            if (!f) {
+                free(c_code);
+                aot_free(&aot);
+                jit_shutdown(&jit);
+                free(source);
+                CLEANUP_AND_EXIT(1);
+            }
+            fputs(c_code, f);
+            fclose(f);
+            if (!aot_compile_to_binary(&aot, c_path, out_path)) {
+                free(c_code);
+                aot_free(&aot);
+                jit_shutdown(&jit);
+                free(source);
+                CLEANUP_AND_EXIT(1);
             }
         } else {
             fputs(c_code, stdout);
@@ -3602,12 +3607,19 @@ int main(int argc, const char* argv[]) {
             char c_path[512];
             snprintf(c_path, sizeof(c_path), "%s.c", out_path);
             FILE* f = fopen(c_path, "w");
-            if (f) { fputs(c_code, f); fclose(f); }
-            if (aot_compile_to_binary(&aot, c_path, out_path)) {
-                // fprintf(stderr, "AOT: Compiled %s → %s (type-specialized)\n", aot_file, out_path);
-                // unlink(c_path);
-            } else {
-                // fprintf(stderr, "AOT: Compilation failed\n");
+            if (!f) {
+                free(c_code);
+                aot_free(&aot);
+                free(source);
+                CLEANUP_AND_EXIT(1);
+            }
+            fputs(c_code, f);
+            fclose(f);
+            if (!aot_compile_to_binary(&aot, c_path, out_path)) {
+                free(c_code);
+                aot_free(&aot);
+                free(source);
+                CLEANUP_AND_EXIT(1);
             }
         } else {
             // Just print the C code

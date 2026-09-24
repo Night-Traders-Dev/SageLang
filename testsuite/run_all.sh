@@ -270,16 +270,8 @@ run_benchmarks() {
                    --runs 3 --warmups 1 2>/dev/null; then
             _p=$((_p+1))
         else
-            # Fallback: run individual benchmarks manually
-            for bf in "$BENCH_DIR"/0[1-9]_*.sage "$BENCH_DIR"/1[0-9]_*.sage; do
-                [ -f "$bf" ] || continue
-                name="$(basename "${bf%.sage}")"
-                if (cd "$CORE_DIR" && "$SAGE" "$bf" >/dev/null 2>&1); then
-                    ok "$name"; _p=$((_p+1))
-                else
-                    fail "$name"; _f=$((_f+1))
-                fi
-            done
+            fail "Sage vs Python benchmark comparison"
+            _f=$((_f+1))
         fi
     else
         warn "python3 not found — skipping benchmark comparison"
