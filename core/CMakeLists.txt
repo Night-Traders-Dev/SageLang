@@ -53,7 +53,8 @@ endif()
 
 # Read version from single-source VERSION file
 file(READ "${CMAKE_SOURCE_DIR}/VERSION" SAGE_VER_RAW)
-string(STRIP "${SAGE_VER_RAW}" SAGE_VER)
+string(STRIP "${SAGE_VER_RAW}" SAGE_VER_FILE)
+set(SAGE_VER "${SAGE_VER_FILE}")
 if(SAGE_VER MATCHES "^v(.+)")
     set(SAGE_VER "${CMAKE_MATCH_1}")
 endif()
@@ -128,7 +129,7 @@ endif()
 # Add POSIX source for strdup (desktop only)
 if(NOT BUILD_PICO)
     add_compile_definitions(_POSIX_C_SOURCE=200809L)
-    add_compile_definitions(SAGE_VERSION_STR="${PROJECT_VERSION}")
+    add_compile_definitions(SAGE_VERSION_STR="${SAGE_VER_FILE}")
     add_compile_definitions(SAGE_BUILD_ARCH="${CMAKE_SYSTEM_PROCESSOR}")
     add_compile_definitions(SAGE_BUILD_TYPE="C")
 endif()
@@ -275,6 +276,27 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/vm
 )
 
+if(NOT BUILD_PICO)
+    add_library(sage_llvm_runtime OBJECT src/c/llvm_runtime.c)
+    add_library(sage_gpu_api OBJECT src/c/gpu_api.c)
+    set(SAGE_LLVM_RUNTIME_OBJECT "${CMAKE_BINARY_DIR}/obj/llvm_runtime.o")
+    set(SAGE_GPU_API_OBJECT "${CMAKE_BINARY_DIR}/obj/gpu_api.o")
+    add_custom_command(
+        OUTPUT "${SAGE_LLVM_RUNTIME_OBJECT}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/obj"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_OBJECTS:sage_llvm_runtime>" "${SAGE_LLVM_RUNTIME_OBJECT}"
+        DEPENDS sage_llvm_runtime
+    )
+    add_custom_target(sage_llvm_runtime_bundle ALL DEPENDS "${SAGE_LLVM_RUNTIME_OBJECT}")
+    add_custom_command(
+        OUTPUT "${SAGE_GPU_API_OBJECT}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/obj"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_OBJECTS:sage_gpu_api>" "${SAGE_GPU_API_OBJECT}"
+        DEPENDS sage_gpu_api
+    )
+    add_custom_target(sage_gpu_api_bundle ALL DEPENDS "${SAGE_GPU_API_OBJECT}")
+endif()
+
 # ============================================================================
 # Main Executable (Desktop/Linux C build)
 # ============================================================================
@@ -286,6 +308,9 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
         ${SAGE_CORE_SOURCES}
         ${SAGE_VM_SOURCES}
     )
+    if(NOT BUILD_PICO)
+        add_dependencies(sage sage_llvm_runtime_bundle sage_gpu_api_bundle)
+    endif()
 
     # Provide the install-prefix lib path so module.c can resolve SAGE_LIB_DIR
     target_compile_definitions(sage PRIVATE
@@ -330,6 +355,9 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
         ${SAGE_CORE_SOURCES}
         ${SAGE_VM_SOURCES}
     )
+    if(NOT BUILD_PICO)
+        add_dependencies(sage sage_llvm_runtime_bundle sage_gpu_api_bundle)
+    endif()
 
     # Provide the install-prefix lib path so module.c can resolve SAGE_LIB_DIR
     target_compile_definitions(sage PRIVATE
@@ -599,13 +627,20 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     install(TARGETS sage
         RUNTIME DESTINATION bin
     )
+    install(FILES
+        "${SAGE_LLVM_RUNTIME_OBJECT}"
+        "${SAGE_GPU_API_OBJECT}"
+        DESTINATION share/sage/obj
+    )
 
     # Install package manager
-    install(FILES sagepkg.sage
-        DESTINATION bin
-        RENAME sagepkg
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
-    )
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sagepkg.sage")
+        install(FILES sagepkg.sage
+            DESTINATION bin
+            RENAME sagepkg
+            PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+        )
+    endif()
 
     # Install LSP server
     if(TARGET sage-lsp)
@@ -631,10 +666,14 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     )
 
     # Install documentation
-    install(FILES
+    set(SAGE_DOC_FILES
         README.md
-        LICENSE
         docs/SageLang_Guide.md
+    )
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+        list(APPEND SAGE_DOC_FILES LICENSE)
+    endif()
+    install(FILES ${SAGE_DOC_FILES}
         DESTINATION share/doc/sage
     )
     install(DIRECTORY docs/meta/

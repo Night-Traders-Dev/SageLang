@@ -216,7 +216,7 @@ def build_sage(args, found_deps):
         section("Building with Make")
         step("Compiling sage (C sources)")
         start = time.time()
-        res = run_cmd(["make", "-C", "core", "-j" + build_jobs(args)], capture_output=False)
+        res = run_cmd(["make", "-C", "core", "-j" + build_jobs(args), "sage", "sage-lsp"], capture_output=False)
         if res and res.returncode == 0:
             elapsed = int(time.time() - start)
             step_ok(f"{elapsed}s")
@@ -230,7 +230,7 @@ def build_sage(args, found_deps):
         build_dir.mkdir(exist_ok=True)
         res = run_cmd(["cmake", "-DBUILD_SAGE=ON", ".."], cwd=build_dir)
         if res and res.returncode == 0:
-            step_ok(f"v{VERSION}")
+            step_ok(VERSION)
         else:
             step_fail("CMake configuration failed")
             
@@ -287,7 +287,7 @@ def run_tests(args, sage_bin):
 
 def perform_install(args):
     if not args.install:
-        console.print(f"\n [dim]To install: python3 sagemake.py --install[/dim]")
+        console.print(f"\n [dim]To install: ./sagemake --install[/dim]")
         return
 
     banner("Installation")
@@ -316,7 +316,7 @@ def perform_install(args):
         section("Building release C binary for sage-c")
         step("Compiling sage via Make (release)")
         res = run_cmd(
-            ["make", "-C", "core", "-B", "-j" + jobs, "sage", "sage-lsp"],
+            ["make", "-C", "core", "-B", "-j" + jobs, f"PREFIX={prefix}", "sage", "sage-lsp"],
             capture_output=False,
         )
         if res and res.returncode == 0:
@@ -348,7 +348,7 @@ def perform_install(args):
     section("Building release binary for installation")
     step("Compiling sage via Make (release)")
     res = run_cmd(
-        ["make", "-C", "core", "-B", "-j" + jobs, "sage", "sage-lsp"],
+        ["make", "-C", "core", "-B", "-j" + jobs, f"PREFIX={prefix}", "sage", "sage-lsp"],
         capture_output=False,
     )
     if res and res.returncode == 0:
@@ -645,7 +645,7 @@ def main():
     if args.minimal:
         args.no_vulkan = args.no_glfw = args.no_curl = args.no_ssl = args.no_gpu = True
 
-    banner(f"SageLang Build Pipeline v{VERSION}")
+    banner(f"SageLang Build Pipeline {VERSION}")
 
     found_deps = check_dependencies(args)
     prepare_workspace()

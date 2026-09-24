@@ -2495,18 +2495,39 @@ int compile_source_to_llvm_executable(const char* source, const char* input_path
     }
 
     if (pid == 0) {
-        // Find the LLVM runtime object next to the sage executable
-        const char* rt_paths[] = { "obj/llvm_runtime.o", "./llvm_runtime.o", NULL };
-        const char* rt_path = NULL;
-        for (int i = 0; rt_paths[i] != NULL; i++) {
-            if (access(rt_paths[i], F_OK) == 0) { rt_path = rt_paths[i]; break; }
+        char executable_dir[PATH_MAX] = "";
+        ssize_t executable_len = readlink("/proc/self/exe", executable_dir, sizeof(executable_dir) - 1);
+        if (executable_len > 0) {
+            executable_dir[executable_len] = '\0';
+            char *last_slash = strrchr(executable_dir, '/');
+            if (last_slash != NULL) {
+                *last_slash = '\0';
+            }
+        } else {
+            executable_dir[0] = '\0';
         }
 
-        // Find the GPU API object for GPU support
-        const char* gpu_paths[] = { "obj/gpu_api.o", "./gpu_api.o", NULL };
+        char executable_runtime[PATH_MAX] = "";
+        char executable_gpu[PATH_MAX] = "";
+        char installed_runtime[PATH_MAX] = "";
+        char installed_gpu[PATH_MAX] = "";
+        if (executable_dir[0] != '\0') {
+            snprintf(executable_runtime, sizeof(executable_runtime), "%s/obj/llvm_runtime.o", executable_dir);
+            snprintf(executable_gpu, sizeof(executable_gpu), "%s/obj/gpu_api.o", executable_dir);
+            snprintf(installed_runtime, sizeof(installed_runtime), "%s/../share/sage/obj/llvm_runtime.o", executable_dir);
+            snprintf(installed_gpu, sizeof(installed_gpu), "%s/../share/sage/obj/gpu_api.o", executable_dir);
+        }
+
+        const char* rt_paths[] = { "obj/llvm_runtime.o", "./llvm_runtime.o", executable_runtime, installed_runtime, NULL };
+        const char* rt_path = NULL;
+        for (int i = 0; rt_paths[i] != NULL; i++) {
+            if (rt_paths[i][0] != '\0' && access(rt_paths[i], F_OK) == 0) { rt_path = rt_paths[i]; break; }
+        }
+
+        const char* gpu_paths[] = { "obj/gpu_api.o", "./gpu_api.o", executable_gpu, installed_gpu, NULL };
         const char* gpu_path = NULL;
         for (int i = 0; gpu_paths[i] != NULL; i++) {
-            if (access(gpu_paths[i], F_OK) == 0) { gpu_path = gpu_paths[i]; break; }
+            if (gpu_paths[i][0] != '\0' && access(gpu_paths[i], F_OK) == 0) { gpu_path = gpu_paths[i]; break; }
         }
 
         // Build clang argument list dynamically based on available libraries

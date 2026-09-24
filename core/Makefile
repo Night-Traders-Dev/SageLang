@@ -381,12 +381,14 @@ BINDIR = $(PREFIX)/bin
 LIBDIR = $(PREFIX)/share/sage
 DOCDIR = $(PREFIX)/share/doc/sage
 
-install: $(TARGET) $(LSP_TARGET)
+install: $(TARGET) $(LSP_TARGET) $(GPU_API_OBJECT)
 	@echo "Installing SageLang to $(PREFIX)..."
 	install -d $(BINDIR)
 	install -m 755 $(TARGET) $(BINDIR)
 	install -m 755 $(LSP_TARGET) $(BINDIR)
 	install -d $(LIBDIR)/lib
+	install -d $(LIBDIR)/obj
+	install -m 644 $(LLVM_RT_OBJECT) $(GPU_API_OBJECT) $(LIBDIR)/obj/
 	install -d $(LIBDIR)/examples
 	cp -r lib/*.sage $(LIBDIR)/lib/ 2>/dev/null || true
 	for d in lib/*/; do \
