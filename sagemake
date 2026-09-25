@@ -290,10 +290,15 @@ def run_tests(args, sage_bin):
         os.chmod("sage", 0o755)
 
     section("C Interpreter Tests")
-    step("Unit tests")
+    # The unit runner is serial by default; --test-jobs opts into running
+    # several interpreters at once. It reuses the same CPU-affinity-aware
+    # budget as the build unless an explicit count is given.
+    test_jobs = args.test_jobs if args.test_jobs else build_jobs(args)
+    step(f"Unit tests (jobs={test_jobs})")
     test_env = dict(os.environ)
     test_env["SAGE"] = str(sage_bin.resolve())
-    res = run_cmd(["bash", "testsuite/unit/run_tests.sh"], shell=False, env=test_env)
+    res = run_cmd(["bash", "testsuite/unit/run_tests.sh", "--jobs", str(test_jobs)],
+                  shell=False, env=test_env)
     if res and res.returncode == 0:
         pass_match = re.search(r'(\d+) passed', res.stdout)
         pass_count = pass_match.group(1) if pass_match else "unknown"
@@ -638,6 +643,9 @@ def main():
     parser.add_argument("--install", action="store_true", help="Install after building")
     parser.add_argument("--prefix", default=os.environ.get("PREFIX", "/usr/local"), help="Installation prefix")
     parser.add_argument("--jobs", type=int, default=None, help="Maximum parallel build jobs (default: available CPUs)")
+    parser.add_argument("--test-jobs", type=int, default=None,
+                        help="Parallel interpreters for the unit test run "
+                             "(default: same as --jobs; use 1 to force serial)")
     parser.add_argument("--fresh", action="store_true", help="Remove build artifacts and perform a clean build")
     parser.add_argument("--skip-tests", action="store_true", help="Skip test suite")
     parser.add_argument("--make-only", action="store_true", help="Use Make instead of CMake")

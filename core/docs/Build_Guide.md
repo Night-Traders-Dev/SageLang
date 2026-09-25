@@ -90,6 +90,7 @@ and compiler backends.
 | Flag | Effect |
 | ---- | ------ |
 | `--jobs N` | Cap parallel build jobs. Defaults to the number of available CPUs (CPU-affinity aware, via `sched_getaffinity`) rather than raw core count. `SAGE_BUILD_JOBS` is honored as an environment default. |
+| `--test-jobs N` | Parallel interpreters for the unit test run. Defaults to the same budget as `--jobs`; use `--test-jobs 1` to force serial. |
 | `--fresh` | Remove build artifacts and perform a clean build. Without it, builds are incremental by default and reuse existing objects. |
 | `--make-only` | Use the Makefile path instead of CMake. |
 | `--tsan` | Build with ThreadSanitizer instrumentation into a separate `core/build_sage_tsan/` tree. See [Concurrency_Guide.md](Concurrency_Guide.md#verifying-with-threadsanitizer). |
@@ -103,6 +104,25 @@ recompile flag on every invocation. The Makefile also generates
 units that include it, and the CMake build compiles core objects once into a
 shared `sage_core_objects` library that the `sage` and `sage-lsp` targets both
 link against.
+
+## Running the Unit Tests Directly
+
+The unit runner is serial by default so CI output and ordering are unchanged.
+It can run several interpreters at once:
+
+```bash
+bash testsuite/unit/run_tests.sh                    # serial (default)
+bash testsuite/unit/run_tests.sh --jobs 4           # 4 interpreters in parallel
+bash testsuite/unit/run_tests.sh --jobs 1           # force serial
+bash testsuite/unit/run_tests.sh --filter threads   # only matching paths
+SAGE_TEST_JOBS=4 bash testsuite/unit/run_tests.sh   # same, via the environment
+```
+
+Each test runs in its own subshell and reports through a per-test result file,
+so the summary is reassembled in the original order: the report is byte-for-byte
+identical to the serial run, including failure details. A few suites (network
+and threads) are timing-sensitive, so parallel mode is opt-in rather than the
+default.
 
 ## LLM / Training Targets
 

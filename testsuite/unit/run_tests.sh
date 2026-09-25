@@ -13,6 +13,10 @@ PASS=0
 FAIL=0
 ERRORS=""
 FILTER="${SAGE_TEST_FILTER:-}"
+# Parallelism is opt-in: the default stays serial so CI output and ordering
+# are unchanged. Some suites (network, threads) are sensitive to running
+# several interpreters at once, so this is deliberately not the default.
+JOBS="${SAGE_TEST_JOBS:-1}"
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --filter)
@@ -22,6 +26,15 @@ while [ "$#" -gt 0 ]; do
             ;;
         --filter=*)
             FILTER="${1#--filter=}"
+            shift
+            ;;
+        --jobs)
+            [ "$#" -ge 2 ] || { printf 'Missing value for --jobs\n' >&2; exit 2; }
+            JOBS="$2"
+            shift 2
+            ;;
+        --jobs=*)
+            JOBS="${1#--jobs=}"
             shift
             ;;
         --)
@@ -35,6 +48,10 @@ while [ "$#" -gt 0 ]; do
             ;;
     esac
 done
+case "$JOBS" in
+    ''|*[!0-9]*) printf 'Invalid --jobs value: %s\n' "$JOBS" >&2; exit 2 ;;
+esac
+[ "$JOBS" -ge 1 ] || JOBS=1
 FILTER_MATCHED=0
 
 matches_filter() {
@@ -204,39 +221,117 @@ run_error_test() {
     return 0
 }
 
-echo -e "${BOLD}${CYAN}╔════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}${CYAN}║     SageLang Test Suite                ║${NC}"
-echo -e "${BOLD}${CYAN}╚════════════════════════════════════════╝${NC}"
-echo ""
-
-# Run each category
-for category_dir in "$TESTS_DIR"/*/; do
-    [ -d "$category_dir" ] || continue
-    category=$(basename "$category_dir")
-    echo -e "${BOLD}${CYAN}[$category]${NC}"
-
-    for test_file in "$category_dir"/*.sage; do
-        [ -f "$test_file" ] || continue
-        matches_filter "$test_file" || continue
-        if grep -q '^# EXPECT_ERROR: ' "$test_file"; then
-            run_error_test "$test_file"
-        else
-            run_test "$test_file"
-        fi
-    done
-    echo ""
-done
-
-# Also run top-level test files (from project root so lib/ imports resolve)
-for test_file in "$TESTS_DIR"/*.sage; do
-    [ -f "$test_file" ] || continue
-    matches_filter "$test_file" || continue
+# Dispatch a single test to the right checker.
+run_one() {
+    local test_file="$1"
     if grep -q '^# EXPECT_ERROR: ' "$test_file"; then
         run_error_test "$test_file"
     else
         run_test "$test_file"
     fi
+}
+
+echo -e "${BOLD}${CYAN}╔════════════════════════════════════════╗${NC}"
+echo -e "${BOLD}${CYAN}║     SageLang Test Suite                ║${NC}"
+echo -e "${BOLD}${CYAN}╚════════════════════════════════════════╝${NC}"
+echo ""
+
+# Collect the test list up front. Doing this in the parent (rather than while
+# iterating) keeps --filter's match tracking and the output order deterministic
+# no matter how many workers run.
+TEST_CATS=()
+TEST_PATHS=()
+for category_dir in "$TESTS_DIR"/*/; do
+    [ -d "$category_dir" ] || continue
+    category=$(basename "$category_dir")
+    for test_file in "$category_dir"/*.sage; do
+        [ -f "$test_file" ] || continue
+        matches_filter "$test_file" || continue
+        TEST_CATS+=("$category")
+        TEST_PATHS+=("$test_file")
+    done
 done
+# Top-level test files (run from the project root so lib/ imports resolve).
+for test_file in "$TESTS_DIR"/*.sage; do
+    [ -f "$test_file" ] || continue
+    matches_filter "$test_file" || continue
+    TEST_CATS+=("")
+    TEST_PATHS+=("$test_file")
+done
+
+if [ "$JOBS" -le 1 ]; then
+    prev_cat="__none__"
+    total=${#TEST_PATHS[@]}
+    idx=0
+    while [ "$idx" -lt "$total" ]; do
+        category="${TEST_CATS[$idx]}"
+        if [ "$category" != "$prev_cat" ]; then
+            [ -n "$category" ] && echo -e "${BOLD}${CYAN}[$category]${NC}"
+            prev_cat="$category"
+        fi
+        run_one "${TEST_PATHS[$idx]}"
+        # Blank line after each category, matching the original layout.
+        if [ -n "$category" ]; then
+            next_idx=$((idx + 1))
+            if [ "$next_idx" -ge "$total" ] || [ "${TEST_CATS[$next_idx]}" != "$category" ]; then
+                echo ""
+            fi
+        fi
+        idx=$((idx + 1))
+    done
+else
+    RESULT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/sage-tests-XXXXXX")
+    trap 'rm -rf "$RESULT_DIR"' EXIT
+
+    # Each test runs in its own subshell so the PASS/FAIL/ERRORS globals cannot
+    # race; the result is written to a per-test file and merged afterwards in
+    # the original order, which keeps the report stable run to run.
+    run_one_isolated() {
+        local idx="$1"
+        PASS=0
+        FAIL=0
+        ERRORS=""
+        run_one "${TEST_PATHS[$idx]}" > "$RESULT_DIR/$idx.line" 2>&1
+        printf '%s\n%s\n' "$PASS" "$FAIL" > "$RESULT_DIR/$idx.counts"
+        printf '%s\n' "$ERRORS" > "$RESULT_DIR/$idx.errs"
+    }
+
+    total=${#TEST_PATHS[@]}
+    idx=0
+    while [ "$idx" -lt "$total" ]; do
+        run_one_isolated "$idx" &
+        # Keep at most $JOBS interpreters alive at once.
+        while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
+            wait -n
+        done
+        idx=$((idx + 1))
+    done
+    wait
+
+    prev_cat="__none__"
+    idx=0
+    while [ "$idx" -lt "$total" ]; do
+        category="${TEST_CATS[$idx]}"
+        if [ "$category" != "$prev_cat" ]; then
+            [ -n "$category" ] && echo -e "${BOLD}${CYAN}[$category]${NC}"
+            prev_cat="$category"
+        fi
+        cat "$RESULT_DIR/$idx.line"
+        mapfile -t counts < "$RESULT_DIR/$idx.counts"
+        PASS=$((PASS + counts[0]))
+        FAIL=$((FAIL + counts[1]))
+        if [ -s "$RESULT_DIR/$idx.errs" ]; then
+            ERRORS="${ERRORS}$(cat "$RESULT_DIR/$idx.errs")"
+        fi
+        if [ -n "$category" ]; then
+            next_idx=$((idx + 1))
+            if [ "$next_idx" -ge "$total" ] || [ "${TEST_CATS[$next_idx]}" != "$category" ]; then
+                echo ""
+            fi
+        fi
+        idx=$((idx + 1))
+    done
+fi
 
 # Summary
 if [ -n "$FILTER" ] && [ "$FILTER_MATCHED" -eq 0 ]; then

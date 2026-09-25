@@ -102,6 +102,42 @@ that spawns threads cannot corrupt the runtime itself:
 | AST inline caches | Mutex on lookup and fill |
 | VM generator and JIT state | Thread-local storage on hosted builds |
 | Thread join | Atomic state machine |
+| GC allocation accounting (`bytes_allocated` / `bytes_freed`) | Relaxed atomics; updated both under the GC mutex and lock-free from the growth path |
+| Per-thread AST temp stacks | Atomic counts; a value pushed during concurrent mark is shaded (the write barrier cannot see stack pushes) |
+| Per-thread stack-guard budget | Measured from the calling thread's real stack bounds, not `RLIMIT_STACK` |
+| Interpreter GPU lifecycle (`initialize` / `shutdown`) | Serialized behind a recursive mutex; context bound to its owning thread |
+| C GPU API (`gpu_api.c`, used by the LLVM runtime and ML backend) | Single lock around init/shutdown, the error string, device name, and platform override |
+
+### GPU and Threads
+
+**Do not drive the `gpu` module from more than one thread.** The interpreter's
+GPU layer (`core/src/c/graphics.c`, the process-global `g_gpu_ctx`) is a single
+shared context with ~135 native entry points and no per-call locking. This is
+the same contract the underlying APIs impose: Khronos documents `VkDevice` and
+OpenGL contexts as *externally synchronized*, meaning the application must
+serialize access.
+
+Since v4.2.9 the context is **bound to the thread that initialized it**, and
+lifecycle calls are serialized behind a recursive mutex:
+
+- `gpu.initialize()` / `gpu.shutdown()` from a thread other than the owner are
+  refused with a diagnostic naming the offending call, instead of corrupting
+  the context. Before this, the same code aborted with `SIGABRT` or crashed
+  with `SIGSEGV` inside the Vulkan loader.
+- The lock matters on its own: `g_gpu_ctx.initialized` only becomes true at the
+  *end* of a successful init, so without mutual exclusion two threads could
+  both observe "not initialized" and both build a context into the same
+  globals.
+
+The rest of the GPU surface (buffer/shader/pipeline creation, draw and submit)
+is still not thread-safe. Confine all `gpu.*` calls to one thread — normally
+the main thread — and hand results to workers through the normal concurrency
+primitives (`channel`, `threadpool`, mutexes). Making the full surface
+thread-safe is tracked as follow-up work.
+
+The separate C GPU layer in `core/src/c/gpu_api.c` (used by the LLVM runtime
+and the ML backend) does take an internal lock around its lifecycle and
+error-state access.
 
 ### Verifying with ThreadSanitizer
 
