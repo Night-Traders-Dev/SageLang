@@ -239,6 +239,12 @@ proc collect_local_lets(cc, stmt, locals_list):
             # STMT_MATCH
             let mi7 = 0
             while mi7 < len(current.cases):
+                # A bare-identifier pattern binds the matched value, so it needs
+                # a slot like any other local. "_" stays a wildcard.
+                let mpat = current.cases[mi7]["pattern"]
+                if mpat != nil and mpat.type == 5 and mpat.name.text != "_":
+                    if find_name_entry(locals_list, mpat.name.text) == nil:
+                        add_name_entry(cc, locals_list, mpat.name.text, "sage_local")
                 collect_local_lets(cc, current.cases[mi7]["body"], locals_list)
                 mi7 = mi7 + 1
             if current.default_case != nil:
@@ -284,12 +290,17 @@ proc collect_global_lets(cc, stmt):
             # STMT_WHILE
             collect_global_lets(cc, current.body)
         if t == 112:
-            # STMT_MATCH: recurse into case bodies and default.
+            # STMT_MATCH: a bare-identifier pattern binds the matched value and
+            # needs a slot like any other local/global; "_" is a wildcard.
             let mi6 = 0
             while mi6 < len(current.cases):
+                let gpat = current.cases[mi6]["pattern"]
+                if gpat != nil and gpat.type == 5 and gpat.name.text != "_":
+                    add_name_entry(cc, cc.globals, gpat.name.text, "sage_global")
                 collect_global_lets(cc, current.cases[mi6]["body"])
                 mi6 = mi6 + 1
-            collect_global_lets(cc, current.default_case)
+            if current.default_case != nil:
+                collect_global_lets(cc, current.default_case)
         if t == 122:
             # STMT_COMPTIME: constants declared inside comptime blocks are
             # globals like any other.
@@ -1462,8 +1473,31 @@ proc cc_emit_stmt(cc, stmt):
         let ci3 = 0
         while ci3 < len(stmt.cases):
             let clause = stmt.cases[ci3]
-            cc_line(cc, "if (!" + done_name + " && sage_values_equal(" + mv_name + ", " + cc_emit_expr(cc, clause["pattern"]) + ")) {")
-            cc.indent = cc.indent + 1
+            let mpat = clause["pattern"]
+            # A bare identifier is a binding pattern: it always matches and
+            # assigns the matched value, so the clause runs (subject to its
+            # guard) rather than being compared with sage_values_equal. "_" is
+            # a wildcard and binds nothing.
+            let mbind = mpat != nil and mpat.type == 5
+            let mwild = mbind and mpat.name.text == "_"
+            var mslot = ""
+            if mbind and not mwild:
+                let resolved = resolve_slot_name(cc, mpat.name.text)
+                # resolve_slot_name returns nil when the name was not collected
+                # as a local (e.g. a capture that stayed in the environment).
+                if resolved != nil and resolved != "":
+                    mslot = resolved
+            if mbind:
+                if not mwild and mslot != "":
+                    cc_line(cc, "if (!" + done_name + ") {")
+                    cc.indent = cc.indent + 1
+                    cc_line(cc, "sage_define_slot(&" + mslot + ", " + mv_name + ");")
+                else:
+                    cc_line(cc, "if (!" + done_name + ") {")
+                    cc.indent = cc.indent + 1
+            else:
+                cc_line(cc, "if (!" + done_name + " && sage_values_equal(" + mv_name + ", " + cc_emit_expr(cc, mpat) + ")) {")
+                cc.indent = cc.indent + 1
             if clause["guard"] != nil:
                 cc_line(cc, "if (sage_truthy(" + cc_emit_expr(cc, clause["guard"]) + ")) {")
                 cc.indent = cc.indent + 1

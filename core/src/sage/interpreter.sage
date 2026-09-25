@@ -2243,16 +2243,31 @@ proc exec_stmt(stmt, env):
         let i = 0
         while i < stmt.case_count:
             let clause = stmt.cases[i]
-            let pat_val = eval_expr(clause["pattern"], env)
-            if match_val == pat_val:
+            let pat = clause["pattern"]
+            # A bare identifier is a *binding* pattern, not a value to compare
+            # against. Evaluating it as an expression raised "Undefined
+            # variable" and made guarded bindings such as `case n if n > 3:`
+            # fall through to `default`, where the C host binds n and takes
+            # the guarded branch. Bind it in a child scope so the name does
+            # not leak past the clause.
+            let is_binding = pat != nil and pat.type == EXPR_VARIABLE
+            var matched = is_binding
+            if not is_binding:
+                let pat_val = eval_expr(pat, env)
+                matched = (match_val == pat_val)
+            if matched:
+                let clause_env = env
+                if is_binding:
+                    clause_env = env_new(env)
+                    env_define(clause_env, pat.name.text, match_val)
                 # Check guard condition if present
                 if dict_has(clause, "guard") and clause["guard"] != nil:
-                    let guard_val = eval_expr(clause["guard"], env)
+                    let guard_val = eval_expr(clause["guard"], clause_env)
                     if is_truthy(guard_val):
-                        return exec_stmt(clause["body"], env)
+                        return exec_stmt(clause["body"], clause_env)
                     # Guard failed, continue to next case
                 else:
-                    return exec_stmt(clause["body"], env)
+                    return exec_stmt(clause["body"], clause_env)
             i = i + 1
         if stmt.default_case != nil:
             return exec_stmt(stmt.default_case, env)
