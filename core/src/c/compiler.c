@@ -2672,6 +2672,18 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
         else if (strcmp(method_name, "lcd_fb_fill") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_fill(");
         else if (strcmp(method_name, "lcd_fb_flush_bytes") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_flush_bytes(");
         else if (strcmp(method_name, "deep_sleep_us") == 0) sb_append(&sb, "sage_native_hw_deep_sleep_us(");
+        /* Bootloader primitives. A second-stage loader has to read the
+         * partition table and the app image header out of memory-mapped
+         * flash and then hand control over, and SageLang cannot do either on
+         * its own: mem_read/mem_write are deliberately confined to mem_alloc
+         * regions by sage_mem_range_valid(), so reaching MMIO through them
+         * would mean weakening a memory-safety check. These are the documented
+         * escape hatch instead -- the hw module is "implementation defined per
+         * target" -- and like every other hw.* name they get no-op stubs on
+         * targets that have no flash of their own to jump into. */
+        else if (strcmp(method_name, "flash_read8") == 0) sb_append(&sb, "sage_native_hw_flash_read8(");
+        else if (strcmp(method_name, "flash_read32") == 0) sb_append(&sb, "sage_native_hw_flash_read32(");
+        else if (strcmp(method_name, "jump") == 0) sb_append(&sb, "sage_native_hw_jump(");
 
         if (sb.len > 0) {
           for (int i = 0; i < call->arg_count; i++) {
@@ -5969,6 +5981,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
 "static SageValue sage_native_hw_lcd_fb_fill(SageValue color) { (void)color; return sage_nil(); }\n"
 "static SageValue sage_native_hw_lcd_fb_flush_bytes(SageValue count) { (void)count; return sage_nil(); }\n"
 "static SageValue sage_native_hw_deep_sleep_us(SageValue us) { (void)us; return sage_nil(); }\n"
+"static SageValue sage_native_hw_flash_read8(SageValue addr) { (void)addr; return sage_number(0); }\n"
+"static SageValue sage_native_hw_flash_read32(SageValue addr) { (void)addr; return sage_number(0); }\n"
+"static SageValue sage_native_hw_jump(SageValue entry, SageValue stack_top) { (void)entry; (void)stack_top; return sage_nil(); }\n"
 "#else\n"
 "static int sage_hw_uart_ready = 0;\n"
 "static SageValue sage_native_hw_gpio_init(SageValue pin) {\n"
@@ -6180,6 +6195,26 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
 "    return sage_nil();\n"
 "}\n"
 "static SageValue sage_native_hw_deep_sleep_us(SageValue us) { (void)us; return sage_nil(); }\n"
+/* Flash is memory-mapped, so a bootloader can read it with a plain load. The
+ * Pico SDK flash mapping puts it at FLASH_ORIGINAL_ADDRESS. */
+"static SageValue sage_native_hw_flash_read8(SageValue addr) {\n"
+"    if (addr.type != SAGE_TAG_NUMBER) return sage_number(0);\n"
+"    return sage_number((double)(*(const volatile uint8_t *)(uintptr_t)(uint32_t)addr.as.number));\n"
+"}\n"
+"static SageValue sage_native_hw_flash_read32(SageValue addr) {\n"
+"    if (addr.type != SAGE_TAG_NUMBER) return sage_number(0);\n"
+"    return sage_number((double)(*(const volatile uint32_t *)(uintptr_t)(uint32_t)addr.as.number));\n"
+"}\n"
+"/* Hand control to another entry point. There is deliberately no\n"
+" * implementation here: jumping to a bare address needs control of the\n"
+" * callee-saved stack pointer, which no portable expression in this file\n"
+" * can express. A target that boots another image (the ESP32 second-stage\n"
+" * bootloader in core/boards/ESP32/sagelet) replaces this whole hw block\n"
+" * with its own HAL, which provides a real sage_native_hw_jump. */\n"
+"static SageValue sage_native_hw_jump(SageValue entry, SageValue stack_top) {\n"
+"    (void)entry; (void)stack_top;\n"
+"    return sage_nil();\n"
+"}\n"
 "#endif\n"
       "\n"
       "static SageValue sage_init_native_module(const char* name) {\n"

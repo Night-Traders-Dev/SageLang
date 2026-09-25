@@ -156,24 +156,40 @@ Leading suspects, in order:
    module clock gate set explicitly (`APB_SERIAL_CLK_CONF`), which nothing here
    does yet.
 
-### Not started: the bootloader
+### Done: the bootloader primitives exist
 
-`boot.sage` cannot yet read the partition table or hand off to the app, because
-neither primitive is reachable from SageLang:
+`boot.sage` needs three primitives that nothing else can provide. `mem_read` /
+`mem_write` are deliberately confined to `mem_alloc` regions by
+`sage_mem_range_valid()`, so memory-mapped flash is unreachable through them, and
+reaching it that way would mean weakening a memory-safety check. The `hw` module
+is the documented "implementation defined per target" hook, so the three
+primitives live there:
 
-- `mem_read`/`mem_write` are **intentionally confined** to `mem_alloc` regions
-  by `sage_mem_range_valid()` in the emitted runtime, so they cannot touch
-  memory-mapped flash. Weakening that to enable MMIO would be a regression in a
-  memory-safety check, so it was not done.
-- The emitter's `hw.*` module is the documented "implementation defined per
-  target" hook and is where flash-read and jump belong, but it currently
-  exposes only 25 names and neither of these.
+| call | meaning |
+| --- | --- |
+| `hw.flash_read8(addr)` | one byte out of memory-mapped flash |
+| `hw.flash_read32(addr)` | one word out of memory-mapped flash |
+| `hw.jump(entry, stack_top)` | hand control to another image with a known stack |
 
-The prerequisite is a small, self-contained emitter change: add `hw.flash_read8`,
-`hw.flash_read32` and `hw.jump` to the known-native list in
-`core/src/c/compiler.c` (and `core/src/sage/compiler.sage` for parity), with the
-same no-op stubs the other `hw.*` names get. Once that lands the bootloader logic
-is small: validate the app image header, read the entry address, jump.
+They are emitted by `core/src/c/compiler.c`, and `core/boards/ESP32/sagelet/hal/esp32_hal.c`
+supplies the real ESP32 implementations (`hal_flash_read8`, `hal_flash_read32`,
+and a jump that sets `a15` before branching). Off-target they are no-op stubs, so
+`testsuite/unit/44_esp32/flash_primitives.sage` can assert the contract with no
+hardware attached.
+
+Two bugs had to be fixed to get there:
+
+- `import hw` failed with `Could not find module 'hw'` in the interpreter even
+  though the compiler already treated `hw` as a native. Nothing ever registered
+  the module, so `math`, `io`, `gpu` and `socket` all resolved and `hw` did not.
+  `create_hw_module()` in `core/src/c/stdlib.c` now registers it, with a `_hw`
+  alias to match the compiler.
+- `env_define_const()`'s second argument is the **name length**, not an arity.
+  `env_get` matches on `(name_length, memcmp)` and never inspects a terminating
+  NUL, so registering `"gpio_init"` with a length of 3 stores the name truncated
+  to `"gpio"` and attribute lookup then reports `has no attribute`. The
+  registration macro derives the length from the literal rather than hand-counting
+  it, since the failure is silent.
 
 ## Flashing by hand
 

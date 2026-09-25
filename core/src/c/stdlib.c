@@ -458,6 +458,117 @@ static Value math_printm_div_native(int argCount, Value* args) {
     return val_number(res);
 }
 
+/* ============================================================================
+ * hw module: hardware access (implementation defined per target)
+ *
+ * The compiler already treats `hw` as a native module (see is_native_module in
+ * compiler.c) and dispatches hw.* calls to sage_native_hw_* in the emitted
+ * C, but nothing ever registered the module itself, so `import hw` failed with
+ * "Could not find module 'hw'" in the interpreter while math, io, gpu and
+ * socket all resolved. That made the hw surface untestable off-target and left
+ * os.sage relying on the C backend alone.
+ *
+ * On a host there is no flash to read and nowhere to jump to, so these are the
+ * same no-op stubs the emitted C uses. That is the point: the names resolve,
+ * the arity is checked, and a test can assert the contract without hardware.
+ * ========================================================================== */
+static Value hw_gpio_init_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_gpio_set_dir_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_gpio_put_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_gpio_get_native(int argCount, Value* args) { (void)argCount; (void)args; return val_bool(false); }
+static Value hw_gpio_set_pull_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_clock_hz_native(int argCount, Value* args) { (void)argCount; (void)args; return val_number(0); }
+static Value hw_uptime_ms_native(int argCount, Value* args) { (void)argCount; (void)args; return val_number(0); }
+static Value hw_delay_ms_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_delay_us_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_uart_init_native(int argCount, Value* args) { (void)argCount; (void)args; return val_number(0); }
+static Value hw_uart_putc_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_uart_puts_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_uart_getc_native(int argCount, Value* args) { (void)argCount; (void)args; return val_number(-1); }
+static Value hw_adc_init_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_adc_read_native(int argCount, Value* args) { (void)argCount; (void)args; return val_number(0); }
+static Value hw_temp_c_native(int argCount, Value* args) { (void)argCount; (void)args; return val_number(0); }
+static Value hw_rgb_set_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_spi_init_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_spi_write_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_spi_read_native(int argCount, Value* args) { (void)argCount; (void)args; return val_number(0); }
+static Value hw_lcd_fb_init_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_lcd_fb_pixel_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_lcd_fb_fill_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_lcd_fb_flush_bytes_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+static Value hw_deep_sleep_us_native(int argCount, Value* args) { (void)argCount; (void)args; return val_nil(); }
+
+/* Bootloader primitives. A second-stage loader has to read the partition
+ * table and the app image header out of memory-mapped flash and then hand
+ * control over. SageLang cannot do either through mem_read/mem_write, which are
+ * deliberately confined to mem_alloc regions by sage_mem_range_valid(); using
+ * them for MMIO would mean weakening a memory-safety check. The hw module is
+ * the documented escape hatch, so these live here. */
+static Value hw_flash_read8_native(int argCount, Value* args) {
+    (void)argCount;
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_number(0);
+    return val_number(0);
+}
+static Value hw_flash_read32_native(int argCount, Value* args) {
+    (void)argCount;
+    if (argCount < 1 || !IS_NUMBER(args[0])) return val_number(0);
+    return val_number(0);
+}
+/* Silent, like every other hw stub: a host has nowhere to jump to, and the
+ * point of the stub is that the call is well formed, not that it complains. */
+static Value hw_jump_native(int argCount, Value* args) {
+    (void)argCount; (void)args;
+    return val_nil();
+}
+
+Module* create_hw_module(ModuleCache* cache) {
+    Module* m = create_native_module(cache, "hw");
+    Environment* e = m->env;
+    Module* alias = create_native_module(cache, "_hw");
+    Environment* a = alias->env;
+
+/* env_define_const's second argument is the name LENGTH, not an arity --
+ * env_get matches on (name_length, memcmp) and never looks at a terminating
+ * NUL, so passing strlen("gpio_init") as 9 is mandatory. Getting this wrong
+ * fails silently: the name is stored truncated and attribute lookup reports
+ * "has no attribute". Derive it from the literal instead of hand-counting. */
+#define HW_DEFINE(nm, fn) \
+    env_define_const(e, nm, (int)sizeof(nm) - 1, val_native(fn)); \
+    env_define_const(a, nm, (int)sizeof(nm) - 1, val_native(fn));
+
+    HW_DEFINE("gpio_init", hw_gpio_init_native)
+    HW_DEFINE("gpio_set_dir", hw_gpio_set_dir_native)
+    HW_DEFINE("gpio_put", hw_gpio_put_native)
+    HW_DEFINE("gpio_get", hw_gpio_get_native)
+    HW_DEFINE("gpio_set_pull", hw_gpio_set_pull_native)
+    HW_DEFINE("clock_hz", hw_clock_hz_native)
+    HW_DEFINE("uptime_ms", hw_uptime_ms_native)
+    HW_DEFINE("delay_ms", hw_delay_ms_native)
+    HW_DEFINE("delay_us", hw_delay_us_native)
+    HW_DEFINE("uart_init", hw_uart_init_native)
+    HW_DEFINE("uart_putc", hw_uart_putc_native)
+    HW_DEFINE("uart_puts", hw_uart_puts_native)
+    HW_DEFINE("uart_getc", hw_uart_getc_native)
+    HW_DEFINE("adc_init", hw_adc_init_native)
+    HW_DEFINE("adc_read", hw_adc_read_native)
+    HW_DEFINE("temp_c", hw_temp_c_native)
+    HW_DEFINE("rgb_set", hw_rgb_set_native)
+    HW_DEFINE("spi_init", hw_spi_init_native)
+    HW_DEFINE("spi_write", hw_spi_write_native)
+    HW_DEFINE("spi_read", hw_spi_read_native)
+    HW_DEFINE("lcd_fb_init", hw_lcd_fb_init_native)
+    HW_DEFINE("lcd_fb_pixel", hw_lcd_fb_pixel_native)
+    HW_DEFINE("lcd_fb_fill", hw_lcd_fb_fill_native)
+    HW_DEFINE("lcd_fb_flush_bytes", hw_lcd_fb_flush_bytes_native)
+    HW_DEFINE("deep_sleep_us", hw_deep_sleep_us_native)
+    HW_DEFINE("flash_read8", hw_flash_read8_native)
+    HW_DEFINE("flash_read32", hw_flash_read32_native)
+    HW_DEFINE("jump", hw_jump_native)
+
+#undef HW_DEFINE
+    return m;
+}
+
 Module* create_math_module(ModuleCache* cache) {
     Module* m = create_native_module(cache, "_math");
     Environment* e = m->env;
