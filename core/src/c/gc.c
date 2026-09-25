@@ -292,7 +292,7 @@ void gc_mark_stack_free(GCMarkStack* stack) {
 // ============================================================================
 
 static unsigned long gc_live_bytes(void) {
-    return gc.bytes_allocated - gc.bytes_freed;
+    return gc_bytes_allocated_load() - gc_bytes_freed_load();
 }
 
 static void gc_recompute_thresholds(size_t reclaimed_bytes, size_t reclaimed_objects) {
@@ -457,7 +457,7 @@ void gc_shutdown(void) {
     while (obj != NULL) {
         GCHeader* header = obj;
         void* next = header->next;
-        gc.bytes_freed += gc_release_object(header);
+        gc_bytes_freed_add(gc_release_object(header));
         free(obj);
         obj = next;
     }
@@ -523,7 +523,7 @@ void* gc_alloc(int type, size_t size) {
 
     gc.object_count++;
     gc.objects_since_gc++;
-    gc.bytes_allocated += total_size;
+    gc_bytes_allocated_add(total_size);
 
     sage_mutex_unlock(&gc_mutex);
     return (void*)(header + 1);
@@ -543,7 +543,7 @@ void gc_free(void* obj) {
         prev = (void**)&cur->next;
     }
     gc.object_count--;
-    gc.bytes_freed += gc_release_object(header);
+    gc_bytes_freed_add(gc_release_object(header));
     gc.freed_count++;
     if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
         arc_unregister(obj);
@@ -552,12 +552,12 @@ void gc_free(void* obj) {
     sage_mutex_unlock(&gc_mutex);
 }
 
-void gc_track_external_allocation(size_t size) { gc.bytes_allocated += (unsigned long)size; }
+void gc_track_external_allocation(size_t size) { gc_bytes_allocated_add(size); }
 void gc_track_external_resize(size_t old_size, size_t new_size) {
-    if (new_size >= old_size) gc.bytes_allocated += (unsigned long)(new_size - old_size);
-    else gc.bytes_freed += (unsigned long)(old_size - new_size);
+    if (new_size >= old_size) gc_bytes_allocated_add(new_size - old_size);
+    else gc_bytes_freed_add(old_size - new_size);
 }
-void gc_track_external_free(size_t size) { gc.bytes_freed += (unsigned long)size; }
+void gc_track_external_free(size_t size) { gc_bytes_freed_add(size); }
 
 // ============================================================================
 // Write Barrier (SATB)
@@ -573,29 +573,42 @@ void gc_shade_gray(void* object, int type) {
     }
 }
 
+// Shade whatever heap object a Value points at. Used both by the write barrier
+// (for the value being overwritten) and by GC_SHADE_NEW_ROOT (for a value that
+// has just become rooted on a per-thread temp stack).
+void gc_shade_value(Value v) {
+    switch (v.type) {
+        case VAL_STRING:    gc_shade_gray(v.as.string, VAL_STRING); break;
+        case VAL_ARRAY:     gc_shade_gray(v.as.array, VAL_ARRAY); break;
+        case VAL_DICT:      gc_shade_gray(v.as.dict, VAL_DICT); break;
+        case VAL_TUPLE:     gc_shade_gray(v.as.tuple, VAL_TUPLE); break;
+        case VAL_FUNCTION:  gc_shade_gray(v.as.function, VAL_FUNCTION); break;
+        case VAL_GENERATOR: gc_shade_gray(v.as.generator, VAL_GENERATOR); break;
+        case VAL_CLASS:     gc_shade_gray(v.as.class_val, VAL_CLASS); break;
+        case VAL_INSTANCE:  gc_shade_gray(v.as.instance, VAL_INSTANCE); break;
+        case VAL_EXCEPTION: gc_shade_gray(v.as.exception, VAL_EXCEPTION); break;
+        case VAL_MODULE:    gc_shade_gray(v.as.module, VAL_MODULE); break;
+        case VAL_CLIB:      gc_shade_gray(v.as.clib, VAL_CLIB); break;
+        case VAL_POINTER:   gc_shade_gray(v.as.pointer, VAL_POINTER); break;
+        case VAL_THREAD:    gc_shade_gray(v.as.thread, VAL_THREAD); break;
+        case VAL_MUTEX:     gc_shade_gray(v.as.mutex, VAL_MUTEX); break;
+        case VAL_BYTES:     gc_shade_gray(v.as.bytes, VAL_BYTES); break;
+        default: break; // Primitives (nil, number, bool) - no heap object
+    }
+}
+
+// Shade a newly-rooted environment and everything it holds.
+void gc_shade_env(Env* e) {
+    if (e == NULL) return;
+    gc_mark_env(e);
+}
+
 void gc_write_barrier_value(Value old_val) {
     // Only active during concurrent marking
     if (!atomic_load_explicit(&gc.barrier_active, memory_order_acquire)) return;
 
     // Shade the OLD value being overwritten so the concurrent marker doesn't miss it
-    switch (old_val.type) {
-        case VAL_STRING:    gc_shade_gray(old_val.as.string, VAL_STRING); break;
-        case VAL_ARRAY:     gc_shade_gray(old_val.as.array, VAL_ARRAY); break;
-        case VAL_DICT:      gc_shade_gray(old_val.as.dict, VAL_DICT); break;
-        case VAL_TUPLE:     gc_shade_gray(old_val.as.tuple, VAL_TUPLE); break;
-        case VAL_FUNCTION:  gc_shade_gray(old_val.as.function, VAL_FUNCTION); break;
-        case VAL_GENERATOR: gc_shade_gray(old_val.as.generator, VAL_GENERATOR); break;
-        case VAL_CLASS:     gc_shade_gray(old_val.as.class_val, VAL_CLASS); break;
-        case VAL_INSTANCE:  gc_shade_gray(old_val.as.instance, VAL_INSTANCE); break;
-        case VAL_EXCEPTION: gc_shade_gray(old_val.as.exception, VAL_EXCEPTION); break;
-        case VAL_MODULE:    gc_shade_gray(old_val.as.module, VAL_MODULE); break;
-        case VAL_CLIB:      gc_shade_gray(old_val.as.clib, VAL_CLIB); break;
-        case VAL_POINTER:   gc_shade_gray(old_val.as.pointer, VAL_POINTER); break;
-        case VAL_THREAD:    gc_shade_gray(old_val.as.thread, VAL_THREAD); break;
-        case VAL_MUTEX:     gc_shade_gray(old_val.as.mutex, VAL_MUTEX); break;
-        case VAL_BYTES:     gc_shade_gray(old_val.as.bytes, VAL_BYTES); break;
-        default: break; // Primitives (nil, number, bool) - no heap object
-    }
+    gc_shade_value(old_val);
 }
 
 void gc_write_barrier_env(Env* old_env) {
@@ -684,11 +697,19 @@ void gc_mark_thread_roots(ThreadState* ts) {
     // Mark per-thread VM roots
     vm_mark_roots(ts->active_vm);
     
-    // Mark per-thread AST temps
-    for (int i = 0; i < ts->ast_gc_temp_count; i++) {
+    // Mark per-thread AST temps. The owning thread may be pushing/popping
+    // concurrently, so read the counts atomically. An acquire load pairs with
+    // the release store in AST_GC_PUSH, so every slot below the observed count
+    // is fully written; and because pushes shade while a mark is in progress,
+    // a slot we observe as stale-but-live is still safe to mark.
+    int temps = atomic_load_explicit(&ts->ast_gc_temp_count, memory_order_acquire);
+    if (temps > AST_GC_TEMP_MAX) temps = AST_GC_TEMP_MAX;
+    for (int i = 0; i < temps; i++) {
         gc_mark_value(ts->ast_gc_temps[i]);
     }
-    for (int i = 0; i < ts->ast_gc_env_temp_count; i++) {
+    int env_temps = atomic_load_explicit(&ts->ast_gc_env_temp_count, memory_order_acquire);
+    if (env_temps > AST_GC_ENV_TEMP_MAX) env_temps = AST_GC_ENV_TEMP_MAX;
+    for (int i = 0; i < env_temps; i++) {
         gc_mark_env(ts->ast_gc_env_temps[i]);
     }
 }
@@ -906,7 +927,7 @@ void gc_sweep_step(int max_objects) {
             gc.sweep_cursor = header->next;
             gc.object_count--;
             gc.freed_count++;
-            gc.bytes_freed += gc_release_object(header);
+            gc_bytes_freed_add(gc_release_object(header));
             free(header);
         } else {
             // Reachable - reset color for next cycle
@@ -963,7 +984,7 @@ void gc_sweep(void) {
             *current = header->next;
             gc.object_count--;
             gc.freed_count++;
-            gc.bytes_freed += gc_release_object(header);
+            gc_bytes_freed_add(gc_release_object(header));
             free(unreached);
         } else {
             gc_color_store(header, GC_WHITE);
@@ -1046,8 +1067,8 @@ void gc_print_stats(void) {
     printf("Collections run:        %d\n", gc.collections);
     printf("Objects allocated:      %d\n", gc.object_count);
     printf("Objects since GC:       %d\n", gc.objects_since_gc);
-    printf("Total bytes allocated:  %lu\n", gc.bytes_allocated);
-    printf("Total bytes freed:      %lu\n", gc.bytes_freed);
+    printf("Total bytes allocated:  %lu\n", gc_bytes_allocated_load());
+    printf("Total bytes freed:      %lu\n", gc_bytes_freed_load());
     printf("Current memory usage:   %lu bytes\n", gc_live_bytes());
     printf("Marked in last cycle:   %d\n", gc.marked_count);
     printf("Freed in last cycle:    %d\n", gc.freed_count);
@@ -1072,7 +1093,7 @@ void gc_disable_debug(void) { gc_debug = 0; }
 
 GCStats gc_get_stats(void) {
     GCStats stats;
-    stats.bytes_allocated = gc.bytes_allocated;
+    stats.bytes_allocated = gc_bytes_allocated_load();
     stats.current_bytes = gc_live_bytes();
     stats.num_objects = gc.object_count;
     stats.collections = gc.collections;
@@ -1217,7 +1238,7 @@ void arc_release(void* obj) {
             prev = &cur->next;
         }
         gc.object_count--;
-        gc.bytes_freed += gc_release_object(header);
+        gc_bytes_freed_add(gc_release_object(header));
         gc.freed_count++;
         arc_unregister(obj);
         free(header);
@@ -1322,7 +1343,7 @@ void arc_collect_cycles(void) {
                     prev = &cur->next;
                 }
                 gc.object_count--;
-                gc.bytes_freed += gc_release_object(header);
+                gc_bytes_freed_add(gc_release_object(header));
                 gc.freed_count++;
                 arc_unregister(gc.cycle_buffer[i]);
                 free(header);
@@ -1556,7 +1577,7 @@ static void orc_collect_white(void* obj) {
         prev = &cur->next;
     }
     gc.object_count--;
-    gc.bytes_freed += gc_release_object(header);
+    gc_bytes_freed_add(gc_release_object(header));
     gc.freed_count++;
     gc.orc_cycles_freed++;
     arc_unregister(obj);

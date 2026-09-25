@@ -64,22 +64,44 @@ __thread Value g_ast_gc_temps[AST_GC_TEMP_MAX];
 __thread int g_ast_gc_temp_count = 0;
 #endif
 
+// AST temp stacks. These are read by the collector while root-scanning *other*
+// threads, so the counts are atomic and a pushed value is shaded while a
+// concurrent mark is in progress (see GC_SHADE_NEW_ROOT). Without the shading,
+// a temporary pushed and popped entirely inside the mark window would be
+// invisible to both the initial scan and the remark re-scan.
 #define AST_GC_PUSH(v) do { \
     ThreadState* ts = gc_get_thread_state(); \
+    Value ast_gc_push_v_ = (v); \
     if (ts) { \
-        if (ts->ast_gc_temp_count < AST_GC_TEMP_MAX) ts->ast_gc_temps[ts->ast_gc_temp_count++] = (v); \
+        int c_ = atomic_load_explicit(&ts->ast_gc_temp_count, memory_order_relaxed); \
+        if (c_ < AST_GC_TEMP_MAX) { \
+            ts->ast_gc_temps[c_] = ast_gc_push_v_; \
+            atomic_store_explicit(&ts->ast_gc_temp_count, c_ + 1, memory_order_release); \
+            GC_SHADE_NEW_ROOT(ast_gc_push_v_); \
+        } \
     } else { \
-        if (g_ast_gc_temp_count < AST_GC_TEMP_MAX) g_ast_gc_temps[g_ast_gc_temp_count++] = (v); \
+        if (g_ast_gc_temp_count < AST_GC_TEMP_MAX) { \
+            g_ast_gc_temps[g_ast_gc_temp_count] = ast_gc_push_v_; \
+            g_ast_gc_temp_count++; \
+            GC_SHADE_NEW_ROOT(ast_gc_push_v_); \
+        } \
     } \
 } while(0)
 #define AST_GC_POP() do { \
     ThreadState* ts = gc_get_thread_state(); \
-    if (ts) { if (ts->ast_gc_temp_count > 0) ts->ast_gc_temp_count--; } \
+    if (ts) { \
+        int c_ = atomic_load_explicit(&ts->ast_gc_temp_count, memory_order_relaxed); \
+        if (c_ > 0) atomic_store_explicit(&ts->ast_gc_temp_count, c_ - 1, memory_order_relaxed); \
+    } \
     else { if (g_ast_gc_temp_count > 0) g_ast_gc_temp_count--; } \
 } while(0)
 #define AST_GC_POP_N(n) do { \
     ThreadState* ts = gc_get_thread_state(); \
-    if (ts) { ts->ast_gc_temp_count -= (n); if (ts->ast_gc_temp_count < 0) ts->ast_gc_temp_count = 0; } \
+    if (ts) { \
+        int c_ = atomic_load_explicit(&ts->ast_gc_temp_count, memory_order_relaxed); \
+        c_ -= (n); if (c_ < 0) c_ = 0; \
+        atomic_store_explicit(&ts->ast_gc_temp_count, c_, memory_order_relaxed); \
+    } \
     else { g_ast_gc_temp_count -= (n); if (g_ast_gc_temp_count < 0) g_ast_gc_temp_count = 0; } \
 } while(0)
 
@@ -94,15 +116,27 @@ __thread int g_ast_gc_env_temp_count = 0;
 
 #define AST_GC_PUSH_ENV(e) do { \
     ThreadState* ts = gc_get_thread_state(); \
+    Env* ast_gc_push_e_ = (e); \
     if (ts) { \
-        if (ts->ast_gc_env_temp_count < AST_GC_ENV_TEMP_MAX) ts->ast_gc_env_temps[ts->ast_gc_env_temp_count++] = (e); \
+        int c_ = atomic_load_explicit(&ts->ast_gc_env_temp_count, memory_order_relaxed); \
+        if (c_ < AST_GC_ENV_TEMP_MAX) { \
+            ts->ast_gc_env_temps[c_] = ast_gc_push_e_; \
+            atomic_store_explicit(&ts->ast_gc_env_temp_count, c_ + 1, memory_order_release); \
+            GC_SHADE_NEW_ROOT_ENV(ast_gc_push_e_); \
+        } \
     } else { \
-        if (g_ast_gc_env_temp_count < AST_GC_ENV_TEMP_MAX) g_ast_gc_env_temps[g_ast_gc_env_temp_count++] = (e); \
+        if (g_ast_gc_env_temp_count < AST_GC_ENV_TEMP_MAX) { \
+            g_ast_gc_env_temps[g_ast_gc_env_temp_count++] = ast_gc_push_e_; \
+            GC_SHADE_NEW_ROOT_ENV(ast_gc_push_e_); \
+        } \
     } \
 } while(0)
 #define AST_GC_POP_ENV() do { \
     ThreadState* ts = gc_get_thread_state(); \
-    if (ts) { if (ts->ast_gc_env_temp_count > 0) ts->ast_gc_env_temp_count--; } \
+    if (ts) { \
+        int c_ = atomic_load_explicit(&ts->ast_gc_env_temp_count, memory_order_relaxed); \
+        if (c_ > 0) atomic_store_explicit(&ts->ast_gc_env_temp_count, c_ - 1, memory_order_relaxed); \
+    } \
     else { if (g_ast_gc_env_temp_count > 0) g_ast_gc_env_temp_count--; } \
 } while(0)
 
@@ -237,10 +271,13 @@ int interpreter_get_stack_depth(void) {
 #if defined(__unix__) || defined(__unix) || defined(__linux__) || defined(__APPLE__) || defined(__MACH__)
 #include <sys/resource.h>
 #define SAGE_STACK_GUARD_HAS_RLIMIT 1
+#include <pthread.h>
+#include <limits.h>
 #endif
 
 static char* g_stack_origin = NULL;
 static __thread char* t_stack_origin = NULL;
+static __thread long t_stack_budget = 0;
 
 // Registers the calling thread's stack origin (call near the top of main()).
 // Also records the global default so the first interpreter entry on this
@@ -272,24 +309,44 @@ void sage_raise_stack_limit(void) {
 // protection regardless of where the OS placed their stacks.
 
 static long stack_guard_budget(void) {
-    static long cached = 0;
-    if (cached != 0) return cached;
+    if (t_stack_budget != 0) return t_stack_budget;
+    long limit = 0;
 #ifdef SAGE_STACK_GUARD_HAS_RLIMIT
-    struct rlimit rl;
-    long limit = 8 * 1024 * 1024;
-    if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY) {
-        limit = (long)rl.rlim_cur;
-    } else if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_max != RLIM_INFINITY) {
-        limit = (long)rl.rlim_max;
+    // Ask the calling thread how much stack it actually has.
+    //
+    // RLIMIT_STACK only describes the *main* thread. Worker threads get a
+    // fixed size chosen at pthread_create() time (the default, typically
+    // 8 MiB) and are NOT affected by a later setrlimit(). Because
+    // sage_raise_stack_limit() raises RLIMIT_STACK to 512 MiB so the main
+    // thread can grow on demand, deriving the budget from the rlimit hands a
+    // worker thread a ~384 MiB budget for an 8 MiB stack — runaway recursion
+    // on a worker then segfaults instead of raising the catchable depth
+    // error. Querying the real thread bounds keeps both cases correct.
+    pthread_attr_t attr;
+    if (pthread_getattr_np(pthread_self(), &attr) == 0) {
+        void* addr = NULL;
+        size_t size = 0;
+        if (pthread_attr_getstack(&attr, &addr, &size) == 0 && size > 0) {
+            if (size < (size_t)LONG_MAX) limit = (long)size;
+        }
+        pthread_attr_destroy(&attr);
     }
+    if (limit <= 0) {
+        struct rlimit rl;
+        if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_cur != RLIM_INFINITY) {
+            limit = (long)rl.rlim_cur;
+        } else if (getrlimit(RLIMIT_STACK, &rl) == 0 && rl.rlim_max != RLIM_INFINITY) {
+            limit = (long)rl.rlim_max;
+        }
+    }
+#endif
+    if (limit <= 0) limit = 8 * 1024 * 1024;  // fallback
     long margin = limit / 4;
     if (margin < 1 * 1024 * 1024) margin = 1 * 1024 * 1024;
-    cached = limit - margin;
-#else
-    cached = 512 * 1024;  // Bare-metal: conservative fixed budget
-#endif
-    if (cached < 256 * 1024) cached = 256 * 1024;
-    return cached;
+    long budget = limit - margin;
+    if (budget < 256 * 1024) budget = 256 * 1024;
+    t_stack_budget = budget;
+    return budget;
 }
 
 // Returns 1 when the current call is within the safety margin of the stack
@@ -1181,7 +1238,7 @@ static Value gc_stats_native(int argCount, Value* args) {
     dict_set(&dict, "next_gc", val_number(stats.next_gc));
     dict_set(&dict, "next_gc_bytes", val_number(stats.next_gc_bytes));
     dict_set(&dict, "objects_since_gc", val_number(gc.objects_since_gc));
-    dict_set(&dict, "bytes_freed", val_number(gc.bytes_freed));
+    dict_set(&dict, "bytes_freed", val_number((double)gc_bytes_freed_load()));
     dict_set(&dict, "marked_count", val_number(gc.marked_count));
     dict_set(&dict, "freed_count", val_number(gc.freed_count));
     dict_set(&dict, "max_pause_us", val_number(gc.max_pause_ns / 1000));

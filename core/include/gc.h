@@ -66,9 +66,11 @@ typedef struct ThreadState {
     EnvRootNode* gc_root_stack;
     void* active_vm;
     Value ast_gc_temps[AST_GC_TEMP_MAX];
-    int ast_gc_temp_count;
+    // Atomic: the collector reads these while scanning roots for *other*
+    // threads, concurrently with the owning thread pushing/popping.
+    atomic_int ast_gc_temp_count;
     Env* ast_gc_env_temps[AST_GC_ENV_TEMP_MAX];
-    int ast_gc_env_temp_count;
+    atomic_int ast_gc_env_temp_count;
     
     // Multitasking state (SageOS compatibility)
     long gas_limit;
@@ -163,8 +165,12 @@ typedef struct {
     int collections;
     int marked_count;
     int freed_count;
-    unsigned long bytes_allocated;
-    unsigned long bytes_freed;
+    // Allocation accounting. These are touched by gc_alloc/gc_free under
+    // gc_mutex *and* by the lock-free gc_track_external_* helpers that run on
+    // hot paths (array growth, buffer resize), so they must be atomic. Relaxed
+    // ordering is sufficient: they are statistics, not synchronisation.
+    atomic_ulong bytes_allocated;
+    atomic_ulong bytes_freed;
     unsigned long next_gc_bytes;
     int next_gc_objects;
     int enabled;
@@ -207,6 +213,15 @@ typedef struct {
 
 // Global GC instance
 extern GC gc;
+
+// Allocation accounting helpers. The counters are plain statistics used for
+// GC heuristics and for `gc.stats()`, so relaxed ordering is all that is
+// needed; using atomics (rather than taking gc_mutex) keeps the
+// gc_track_external_* helpers usable on allocation hot paths.
+#define gc_bytes_allocated_load() atomic_load_explicit(&gc.bytes_allocated, memory_order_relaxed)
+#define gc_bytes_freed_load() atomic_load_explicit(&gc.bytes_freed, memory_order_relaxed)
+#define gc_bytes_allocated_add(n) atomic_fetch_add_explicit(&gc.bytes_allocated, (unsigned long)(n), memory_order_relaxed)
+#define gc_bytes_freed_add(n) atomic_fetch_add_explicit(&gc.bytes_freed, (unsigned long)(n), memory_order_relaxed)
 
 // Thread safety for GC
 void gc_lock(void);
@@ -259,6 +274,24 @@ void gc_write_barrier_env(Env* old_env);
 
 #define GC_WRITE_BARRIER_ENV(old_env) \
     do { if (atomic_load_explicit(&gc.barrier_active, memory_order_relaxed)) gc_write_barrier_env(old_env); } while(0)
+
+// Shade a value that has just become *newly* rooted somewhere the marker does
+// not already scan — in particular the per-thread AST temp stacks, which hold
+// temporaries between subexpression evaluation and the next statement.
+//
+// A temp that is pushed and popped entirely inside the concurrent-mark window
+// is never seen by the initial root scan and may already be gone by the time
+// remark re-scans the stacks. The write barrier above cannot help, because it
+// only shades values being *overwritten*; there is no old value on a push.
+// Shading on push keeps such temporaries alive for the whole cycle.
+#define GC_SHADE_NEW_ROOT(v) \
+    do { if (atomic_load_explicit(&gc.barrier_active, memory_order_relaxed)) gc_shade_value(v); } while(0)
+
+#define GC_SHADE_NEW_ROOT_ENV(e) \
+    do { if (atomic_load_explicit(&gc.barrier_active, memory_order_relaxed)) gc_shade_env(e); } while(0)
+
+void gc_shade_value(Value v);
+void gc_shade_env(Env* e);
 
 // ============================================================================
 // Mark stack operations
