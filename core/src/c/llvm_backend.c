@@ -1,6 +1,7 @@
 #define _DEFAULT_SOURCE
 #include "llvm_backend.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <math.h>
@@ -44,6 +45,7 @@ static int is_native_module(const char *name) {
 
 // Forward declaration
 extern Stmt* parse_program(const char* source);
+static char* token_to_str(Token tok);
 static int llvm_resolve_gpu_constant(const char* name, double* out_value);
 
 // ============================================================================
@@ -71,6 +73,94 @@ typedef struct {
 } ImportedConst;
 
 typedef struct {
+    char* name;
+    char* path;
+    char* source;
+    Stmt* ast;
+} LLVMImportedModule;
+
+typedef struct {
+    char* module_name;
+    char* member_name;
+    char* global_name;
+} LLVMImportedGlobal;
+
+typedef struct {
+    char* name;
+    char** param_names;
+    Expr** defaults;
+    int param_count;
+    int required_count;
+} LLVMProcSignature;
+
+typedef struct {
+    char* name;
+    char** field_names;
+    int field_count;
+} LLVMStructInfo;
+
+typedef struct {
+    char* name;
+    char** variant_names;
+    int variant_count;
+} LLVMEnumInfo;
+
+typedef struct {
+    char** items;
+    int count;
+    int capacity;
+} LLVMNameSet;
+
+typedef struct LLVMScopeInfo LLVMScopeInfo;
+
+typedef struct {
+    char* binding_name;
+    char* module_name;
+    char* member_name;
+    LLVMScopeInfo* proc_scope;
+    char* global_name;
+} LLVMImportedValue;
+
+typedef struct {
+    char* name;
+    char* parent_name;
+    ClassStmt* declaration;
+} LLVMClassInfo;
+
+typedef struct {
+    char* variable;
+    char* class_name;
+} LLVMValueClassInfo;
+
+typedef struct {
+    Stmt* statement;
+    LLVMScopeInfo* owner;
+    char* symbol;
+    char** captures;
+    int capture_count;
+    char* class_name;
+    char* parent_name;
+} LLVMTryCallback;
+
+struct LLVMScopeInfo {
+    Stmt* declaration;
+    ProcStmt* proc;
+    LLVMScopeInfo* parent;
+    LLVMScopeInfo* first_child;
+    LLVMScopeInfo* next_sibling;
+    char* symbol;
+    char* adapter_symbol;
+    LLVMNameSet bound_names;
+    LLVMNameSet free_names;
+    char** captures;
+    int capture_count;
+    int capture_capacity;
+    int is_nested;
+    char* module_name;
+    char* signature_name;
+};
+
+typedef struct {
     FILE* out;
     const char* input_path;
     int failed;
@@ -95,18 +185,62 @@ typedef struct {
     int loop_depth;
     // Track whether the current basic block has been terminated (ret/br)
     int block_terminated;
+    int deferred_return_active;
+    int deferred_return_label;
+    int deferred_mode_slot;
+    int deferred_return_slot;
+    int deferred_exception_slot;
     // Class context for super resolution
     char* current_class_name;
     char* parent_class_name;
     // Imported module tracking (for GPU/graphics support)
     char** imported_modules;
+    char** imported_module_names;
     int imported_module_count;
     int imported_module_cap;
+    LLVMImportedModule* source_modules;
+    int source_module_count;
+    int source_module_cap;
+    LLVMImportedGlobal* imported_globals;
+    int imported_global_count;
+    int imported_global_cap;
+    LLVMImportedValue* imported_values;
+    int imported_value_count;
+    int imported_value_cap;
+    const char* current_module_name;
     // Imported constants from "from module import CONST [as alias]"
     ImportedConst* imported_consts;
     int imported_const_count;
     int imported_const_cap;
+    LLVMProcSignature* proc_signatures;
+    int proc_signature_count;
+    int proc_signature_cap;
+    LLVMStructInfo* struct_infos;
+    int struct_info_count;
+    int struct_info_cap;
+    LLVMEnumInfo* enum_infos;
+    int enum_info_count;
+    int enum_info_cap;
+    LLVMClassInfo* class_infos;
+    int class_info_count;
+    int class_info_cap;
+    LLVMValueClassInfo* value_classes;
+    int value_class_count;
+    int value_class_cap;
+    LLVMScopeInfo* main_scope;
+    LLVMScopeInfo** scopes;
+    int scope_count;
+    int scope_capacity;
+    int next_nested_id;
+    LLVMScopeInfo* current_scope;
+    LLVMTryCallback* current_try_callback;
+    LLVMTryCallback* try_callbacks;
+    int try_callback_count;
+    int try_callback_capacity;
+    int next_try_id;
 } LLVMCompiler;
+
+static void llc_add_global_once(LLVMCompiler* lc, const char* name);
 
 static int llc_has_module(LLVMCompiler* lc, const char* name) {
     for (int i = 0; i < lc->imported_module_count; i++) {
@@ -115,14 +249,141 @@ static int llc_has_module(LLVMCompiler* lc, const char* name) {
     return 0;
 }
 
-static void llc_add_module(LLVMCompiler* lc, const char* name) {
-    if (llc_has_module(lc, name)) return;
+static const char* llc_module_name_for_binding(const LLVMCompiler* lc, const char* binding) {
+    for (int i = 0; i < lc->imported_module_count; i++) {
+        if (strcmp(lc->imported_modules[i], binding) == 0) {
+            return lc->imported_module_names[i];
+        }
+    }
+    return NULL;
+}
+
+static void llc_add_module_binding(LLVMCompiler* lc, const char* module_name,
+                                   const char* binding) {
+    if (module_name == NULL || binding == NULL) return;
+    for (int i = 0; i < lc->imported_module_count; i++) {
+        if (strcmp(lc->imported_modules[i], binding) == 0) {
+            return;
+        }
+    }
     if (lc->imported_module_count >= lc->imported_module_cap) {
         lc->imported_module_cap = lc->imported_module_cap ? lc->imported_module_cap * 2 : 8;
         lc->imported_modules = SAGE_REALLOC(lc->imported_modules,
             sizeof(char*) * (size_t)lc->imported_module_cap);
+        lc->imported_module_names = SAGE_REALLOC(lc->imported_module_names,
+            sizeof(char*) * (size_t)lc->imported_module_cap);
     }
-    lc->imported_modules[lc->imported_module_count++] = SAGE_STRDUP(name);
+    lc->imported_modules[lc->imported_module_count] = SAGE_STRDUP(binding);
+    lc->imported_module_names[lc->imported_module_count] = SAGE_STRDUP(module_name);
+    lc->imported_module_count++;
+}
+
+static LLVMImportedModule* llc_find_source_module(LLVMCompiler* lc, const char* name) {
+    for (int i = 0; i < lc->source_module_count; i++) {
+        if (strcmp(lc->source_modules[i].name, name) == 0) {
+            return &lc->source_modules[i];
+        }
+    }
+    return NULL;
+}
+
+static LLVMImportedGlobal* llc_find_imported_global(LLVMCompiler* lc,
+                                                    const char* module_name,
+                                                    const char* member_name) {
+    for (int i = 0; i < lc->imported_global_count; i++) {
+        if (strcmp(lc->imported_globals[i].module_name, module_name) == 0 &&
+            strcmp(lc->imported_globals[i].member_name, member_name) == 0) {
+            return &lc->imported_globals[i];
+        }
+    }
+    return NULL;
+}
+
+static void llvm_append_symbol_part(char* out, size_t capacity, const char* name) {
+    size_t index = 0;
+    for (size_t i = 0; name != NULL && name[i] != '\0' && index + 1 < capacity; i++) {
+        unsigned char ch = (unsigned char)name[i];
+        out[index++] = (isalnum(ch) || ch == '_') ? (char)ch : '_';
+    }
+    out[index] = '\0';
+}
+
+static void llc_add_imported_global(LLVMCompiler* lc, const char* module_name,
+                                    const char* member_name) {
+    if (module_name == NULL || member_name == NULL ||
+        llc_find_imported_global(lc, module_name, member_name) != NULL) {
+        return;
+    }
+    if (lc->imported_global_count >= lc->imported_global_cap) {
+        lc->imported_global_cap = lc->imported_global_cap ? lc->imported_global_cap * 2 : 8;
+        lc->imported_globals = SAGE_REALLOC(
+            lc->imported_globals,
+            sizeof(LLVMImportedGlobal) * (size_t)lc->imported_global_cap);
+    }
+    LLVMImportedModule* module = llc_find_source_module(lc, module_name);
+    int module_index = module != NULL ? (int)(module - lc->source_modules) : 0;
+    char member[256];
+    llvm_append_symbol_part(member, sizeof(member), member_name);
+    size_t size = strlen(member) + 48;
+    char* global_name = SAGE_ALLOC(size);
+    snprintf(global_name, size, "sage_modglob_%d_%s", module_index, member);
+    llc_add_global_once(lc, global_name);
+
+    LLVMImportedGlobal* global = &lc->imported_globals[lc->imported_global_count++];
+    global->module_name = SAGE_STRDUP(module_name);
+    global->member_name = SAGE_STRDUP(member_name);
+    global->global_name = global_name;
+}
+
+static LLVMImportedValue* llc_find_imported_value(LLVMCompiler* lc,
+                                                   const char* binding_name,
+                                                   const char* module_name,
+                                                   const char* member_name) {
+    for (int i = 0; i < lc->imported_value_count; i++) {
+        LLVMImportedValue* value = &lc->imported_values[i];
+        if (binding_name != NULL && strcmp(value->binding_name, binding_name) != 0) continue;
+        if (binding_name == NULL && strcmp(value->module_name, module_name) != 0) continue;
+        if (strcmp(value->member_name, member_name) == 0) return value;
+    }
+    return NULL;
+}
+
+static LLVMImportedValue* llc_find_imported_binding_value(LLVMCompiler* lc,
+                                                           const char* binding_name) {
+    if (binding_name == NULL) return NULL;
+    for (int i = 0; i < lc->imported_value_count; i++) {
+        if (strcmp(lc->imported_values[i].binding_name, binding_name) == 0) {
+            return &lc->imported_values[i];
+        }
+    }
+    return NULL;
+}
+
+static void llc_add_imported_value(LLVMCompiler* lc, const char* binding_name,
+                                   const char* module_name, const char* member_name,
+                                   LLVMScopeInfo* proc_scope, const char* global_name) {
+    if (binding_name == NULL || module_name == NULL || member_name == NULL) return;
+    LLVMImportedValue* existing = llc_find_imported_value(
+        lc, binding_name, module_name, member_name);
+    if (existing != NULL) {
+        if (existing->proc_scope == NULL) existing->proc_scope = proc_scope;
+        if (existing->global_name == NULL && global_name != NULL) {
+            existing->global_name = SAGE_STRDUP(global_name);
+        }
+        return;
+    }
+    if (lc->imported_value_count >= lc->imported_value_cap) {
+        lc->imported_value_cap = lc->imported_value_cap ? lc->imported_value_cap * 2 : 16;
+        lc->imported_values = SAGE_REALLOC(
+            lc->imported_values,
+            sizeof(LLVMImportedValue) * (size_t)lc->imported_value_cap);
+    }
+    LLVMImportedValue* value = &lc->imported_values[lc->imported_value_count++];
+    value->binding_name = SAGE_STRDUP(binding_name);
+    value->module_name = SAGE_STRDUP(module_name);
+    value->member_name = SAGE_STRDUP(member_name);
+    value->proc_scope = proc_scope;
+    value->global_name = global_name != NULL ? SAGE_STRDUP(global_name) : NULL;
 }
 
 static ImportConstValue import_const_invalid(void) {
@@ -248,6 +509,300 @@ static void llc_add_global(LLVMCompiler* lc, const char* name) {
     lc->global_names[lc->global_count++] = SAGE_STRDUP(name);
 }
 
+static int llc_has_global(LLVMCompiler* lc, const char* name) {
+    for (int i = 0; i < lc->global_count; i++) {
+        if (strcmp(lc->global_names[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
+static void llc_add_global_once(LLVMCompiler* lc, const char* name) {
+    if (!llc_has_global(lc, name)) llc_add_global(lc, name);
+}
+
+static LLVMProcSignature* llc_find_proc_signature(LLVMCompiler* lc, const char* name) {
+    for (int i = 0; i < lc->proc_signature_count; i++) {
+        if (strcmp(lc->proc_signatures[i].name, name) == 0) {
+            return &lc->proc_signatures[i];
+        }
+    }
+    return NULL;
+}
+
+static void llc_add_proc_signature(LLVMCompiler* lc, const char* name, ProcStmt* proc) {
+    if (name == NULL || proc == NULL || llc_find_proc_signature(lc, name) != NULL) return;
+
+    if (lc->proc_signature_count >= lc->proc_signature_cap) {
+        lc->proc_signature_cap = lc->proc_signature_cap ? lc->proc_signature_cap * 2 : 16;
+        lc->proc_signatures = SAGE_REALLOC(
+            lc->proc_signatures,
+            sizeof(LLVMProcSignature) * (size_t)lc->proc_signature_cap
+        );
+    }
+
+    LLVMProcSignature* sig = &lc->proc_signatures[lc->proc_signature_count++];
+    memset(sig, 0, sizeof(*sig));
+    sig->name = SAGE_STRDUP(name);
+    sig->param_count = proc->param_count > 0 ? proc->param_count : 0;
+    sig->required_count = proc->required_count;
+    if (sig->required_count < 0 || sig->required_count > sig->param_count) {
+        sig->required_count = sig->param_count;
+    }
+    if (sig->param_count > 0) {
+        sig->param_names = SAGE_ALLOC(sizeof(char*) * (size_t)sig->param_count);
+        sig->defaults = SAGE_ALLOC(sizeof(Expr*) * (size_t)sig->param_count);
+        for (int i = 0; i < sig->param_count; i++) {
+            if (proc->params != NULL && proc->params[i].start != NULL) {
+                sig->param_names[i] = token_to_str(proc->params[i]);
+            } else {
+                sig->param_names[i] = SAGE_STRDUP("");
+            }
+            sig->defaults[i] = proc->defaults != NULL ? proc->defaults[i] : NULL;
+        }
+    }
+}
+
+static LLVMStructInfo* llc_find_struct_info(LLVMCompiler* lc, const char* name) {
+    for (int i = 0; i < lc->struct_info_count; i++) {
+        if (strcmp(lc->struct_infos[i].name, name) == 0) return &lc->struct_infos[i];
+    }
+    return NULL;
+}
+
+static void llc_add_struct_info(LLVMCompiler* lc, const char* name, StructStmt* stmt) {
+    if (name == NULL || stmt == NULL || llc_find_struct_info(lc, name) != NULL) return;
+    if (lc->struct_info_count >= lc->struct_info_cap) {
+        lc->struct_info_cap = lc->struct_info_cap ? lc->struct_info_cap * 2 : 8;
+        lc->struct_infos = SAGE_REALLOC(
+            lc->struct_infos,
+            sizeof(LLVMStructInfo) * (size_t)lc->struct_info_cap
+        );
+    }
+    LLVMStructInfo* info = &lc->struct_infos[lc->struct_info_count++];
+    memset(info, 0, sizeof(*info));
+    info->name = SAGE_STRDUP(name);
+    info->field_count = stmt->field_count > 0 ? stmt->field_count : 0;
+    if (info->field_count > 0) {
+        info->field_names = SAGE_ALLOC(sizeof(char*) * (size_t)info->field_count);
+        for (int i = 0; i < info->field_count; i++) {
+            if (stmt->field_names != NULL && stmt->field_names[i].start != NULL) {
+                info->field_names[i] = token_to_str(stmt->field_names[i]);
+            } else {
+                info->field_names[i] = SAGE_STRDUP("");
+            }
+        }
+    }
+}
+
+static LLVMEnumInfo* llc_find_enum_info(LLVMCompiler* lc, const char* name) {
+    for (int i = 0; i < lc->enum_info_count; i++) {
+        if (strcmp(lc->enum_infos[i].name, name) == 0) return &lc->enum_infos[i];
+    }
+    return NULL;
+}
+
+static void llc_add_enum_info(LLVMCompiler* lc, const char* name, EnumStmt* stmt) {
+    if (name == NULL || stmt == NULL || llc_find_enum_info(lc, name) != NULL) return;
+    if (lc->enum_info_count >= lc->enum_info_cap) {
+        lc->enum_info_cap = lc->enum_info_cap ? lc->enum_info_cap * 2 : 8;
+        lc->enum_infos = SAGE_REALLOC(
+            lc->enum_infos,
+            sizeof(LLVMEnumInfo) * (size_t)lc->enum_info_cap
+        );
+    }
+    LLVMEnumInfo* info = &lc->enum_infos[lc->enum_info_count++];
+    memset(info, 0, sizeof(*info));
+    info->name = SAGE_STRDUP(name);
+    info->variant_count = stmt->variant_count > 0 ? stmt->variant_count : 0;
+    if (info->variant_count > 0) {
+        info->variant_names = SAGE_ALLOC(sizeof(char*) * (size_t)info->variant_count);
+        for (int i = 0; i < info->variant_count; i++) {
+            if (stmt->variant_names != NULL && stmt->variant_names[i].start != NULL) {
+                info->variant_names[i] = token_to_str(stmt->variant_names[i]);
+            } else {
+                info->variant_names[i] = SAGE_STRDUP("");
+            }
+        }
+    }
+}
+
+static LLVMClassInfo* llc_find_class_info(LLVMCompiler* lc, const char* name) {
+    if (name == NULL) return NULL;
+    for (int i = 0; i < lc->class_info_count; i++) {
+        if (strcmp(lc->class_infos[i].name, name) == 0) return &lc->class_infos[i];
+    }
+    return NULL;
+}
+
+static void llc_add_class_info(LLVMCompiler* lc, ClassStmt* stmt) {
+    if (stmt == NULL || stmt->name.start == NULL) return;
+    char* name = token_to_str(stmt->name);
+    if (llc_find_class_info(lc, name) != NULL) {
+        free(name);
+        return;
+    }
+    if (lc->class_info_count >= lc->class_info_cap) {
+        lc->class_info_cap = lc->class_info_cap ? lc->class_info_cap * 2 : 8;
+        lc->class_infos = SAGE_REALLOC(lc->class_infos,
+            sizeof(LLVMClassInfo) * (size_t)lc->class_info_cap);
+    }
+    LLVMClassInfo* info = &lc->class_infos[lc->class_info_count++];
+    memset(info, 0, sizeof(*info));
+    info->name = name;
+    info->declaration = stmt;
+    if (stmt->has_parent && stmt->parent.start != NULL) {
+        info->parent_name = token_to_str(stmt->parent);
+    }
+}
+
+static void llc_add_value_class(LLVMCompiler* lc, const char* variable,
+                                  const char* class_name) {
+    if (variable == NULL || class_name == NULL) return;
+    for (int i = 0; i < lc->value_class_count; i++) {
+        if (strcmp(lc->value_classes[i].variable, variable) == 0) {
+            free(lc->value_classes[i].class_name);
+            lc->value_classes[i].class_name = SAGE_STRDUP(class_name);
+            return;
+        }
+    }
+    if (lc->value_class_count >= lc->value_class_cap) {
+        lc->value_class_cap = lc->value_class_cap ? lc->value_class_cap * 2 : 8;
+        lc->value_classes = SAGE_REALLOC(
+            lc->value_classes,
+            sizeof(LLVMValueClassInfo) * (size_t)lc->value_class_cap);
+    }
+    lc->value_classes[lc->value_class_count].variable = SAGE_STRDUP(variable);
+    lc->value_classes[lc->value_class_count].class_name = SAGE_STRDUP(class_name);
+    lc->value_class_count++;
+}
+
+static const char* llc_find_value_class(LLVMCompiler* lc, const char* variable) {
+    if (variable == NULL) return NULL;
+    for (int i = 0; i < lc->value_class_count; i++) {
+        if (strcmp(lc->value_classes[i].variable, variable) == 0) {
+            return lc->value_classes[i].class_name;
+        }
+    }
+    return NULL;
+}
+
+static int llvm_name_set_has(const LLVMNameSet* set, const char* name) {
+    if (set == NULL || name == NULL) return 0;
+    for (int i = 0; i < set->count; i++) {
+        if (strcmp(set->items[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
+static void llvm_name_set_add(LLVMNameSet* set, const char* name) {
+    if (set == NULL || name == NULL || name[0] == '\0' || llvm_name_set_has(set, name)) return;
+    if (set->count >= set->capacity) {
+        set->capacity = set->capacity ? set->capacity * 2 : 16;
+        set->items = SAGE_REALLOC(set->items, sizeof(char*) * (size_t)set->capacity);
+    }
+    set->items[set->count++] = SAGE_STRDUP(name);
+}
+
+static void llvm_name_set_free(LLVMNameSet* set) {
+    if (set == NULL) return;
+    for (int i = 0; i < set->count; i++) free(set->items[i]);
+    free(set->items);
+    memset(set, 0, sizeof(*set));
+}
+
+static LLVMScopeInfo* llc_find_scope(LLVMCompiler* lc, Stmt* declaration) {
+    for (int i = 0; i < lc->scope_count; i++) {
+        if (lc->scopes[i]->declaration == declaration) return lc->scopes[i];
+    }
+    return NULL;
+}
+
+static LLVMScopeInfo* llc_find_top_scope_by_name(LLVMCompiler* lc, const char* name) {
+    if (name == NULL) return NULL;
+    size_t length = strlen(name);
+    const char* module_name = lc->current_scope != NULL &&
+                             lc->current_scope->module_name != NULL
+        ? lc->current_scope->module_name : lc->current_module_name;
+    LLVMScopeInfo* fallback = NULL;
+    for (int i = 0; i < lc->scope_count; i++) {
+        LLVMScopeInfo* scope = lc->scopes[i];
+        if (scope->is_nested || scope->proc == NULL) continue;
+        Token token = scope->proc->name;
+        if ((size_t)token.length != length ||
+            strncmp(token.start, name, length) != 0) {
+            continue;
+        }
+        if (module_name != NULL && scope->module_name != NULL &&
+            strcmp(scope->module_name, module_name) == 0) {
+            return scope;
+        }
+        if (fallback == NULL) fallback = scope;
+    }
+    return fallback;
+}
+
+static LLVMScopeInfo* llc_find_scope_by_qualified_name(LLVMCompiler* lc,
+                                                        const char* name) {
+    if (name == NULL) return NULL;
+    size_t length = strlen(name);
+    for (int i = 0; i < lc->scope_count; i++) {
+        LLVMScopeInfo* scope = lc->scopes[i];
+        if (scope->is_nested || scope->proc == NULL) continue;
+        const char* prefix = "sage_fn_";
+        size_t prefix_length = strlen(prefix);
+        if (strncmp(scope->symbol, prefix, prefix_length) == 0 &&
+            strlen(scope->symbol) == prefix_length + length &&
+            strcmp(scope->symbol + prefix_length, name) == 0) {
+            return scope;
+        }
+    }
+    return NULL;
+}
+
+static LLVMScopeInfo* llc_add_scope(LLVMCompiler* lc, Stmt* declaration,
+                                    LLVMScopeInfo* parent, const char* symbol,
+                                    int is_nested) {
+    LLVMScopeInfo* existing = llc_find_scope(lc, declaration);
+    if (existing != NULL) return existing;
+    if (lc->scope_count >= lc->scope_capacity) {
+        lc->scope_capacity = lc->scope_capacity ? lc->scope_capacity * 2 : 16;
+        lc->scopes = SAGE_REALLOC(lc->scopes,
+            sizeof(LLVMScopeInfo*) * (size_t)lc->scope_capacity);
+    }
+    LLVMScopeInfo* scope = SAGE_ALLOC(sizeof(LLVMScopeInfo));
+    memset(scope, 0, sizeof(*scope));
+    scope->declaration = declaration;
+    scope->proc = declaration != NULL && declaration->type == STMT_PROC
+        ? &declaration->as.proc : NULL;
+    scope->parent = parent;
+    scope->symbol = SAGE_STRDUP(symbol != NULL ? symbol : "");
+    size_t adapter_size = strlen(scope->symbol) + 16;
+    scope->adapter_symbol = SAGE_ALLOC(adapter_size);
+    snprintf(scope->adapter_symbol, adapter_size, "sage_call_%s", scope->symbol);
+    scope->is_nested = is_nested;
+    if (parent != NULL && parent->module_name != NULL) {
+        scope->module_name = SAGE_STRDUP(parent->module_name);
+    }
+    if (parent != NULL) {
+        scope->next_sibling = parent->first_child;
+        parent->first_child = scope;
+    }
+    lc->scopes[lc->scope_count++] = scope;
+    return scope;
+}
+
+static void llc_add_scope_capture(LLVMScopeInfo* scope, const char* name) {
+    for (int i = 0; i < scope->capture_count; i++) {
+        if (strcmp(scope->captures[i], name) == 0) return;
+    }
+    if (scope->capture_count >= scope->capture_capacity) {
+        scope->capture_capacity = scope->capture_capacity ? scope->capture_capacity * 2 : 8;
+        scope->captures = SAGE_REALLOC(scope->captures,
+            sizeof(char*) * (size_t)scope->capture_capacity);
+    }
+    scope->captures[scope->capture_count++] = SAGE_STRDUP(name);
+}
+
 static void llc_free(LLVMCompiler* lc) {
     for (int i = 0; i < lc->string_count; i++) free(lc->strings[i]);
     free(lc->strings);
@@ -255,13 +810,94 @@ static void llc_free(LLVMCompiler* lc) {
     free(lc->proc_names);
     for (int i = 0; i < lc->global_count; i++) free(lc->global_names[i]);
     free(lc->global_names);
-    for (int i = 0; i < lc->imported_module_count; i++) free(lc->imported_modules[i]);
+    for (int i = 0; i < lc->imported_module_count; i++) {
+        free(lc->imported_modules[i]);
+        free(lc->imported_module_names[i]);
+    }
     free(lc->imported_modules);
+    free(lc->imported_module_names);
+    for (int i = 0; i < lc->source_module_count; i++) {
+        free(lc->source_modules[i].name);
+        free(lc->source_modules[i].path);
+        free_stmt(lc->source_modules[i].ast);
+        free(lc->source_modules[i].source);
+    }
+    free(lc->source_modules);
+    for (int i = 0; i < lc->imported_global_count; i++) {
+        free(lc->imported_globals[i].module_name);
+        free(lc->imported_globals[i].member_name);
+        free(lc->imported_globals[i].global_name);
+    }
+    free(lc->imported_globals);
+    for (int i = 0; i < lc->imported_value_count; i++) {
+        free(lc->imported_values[i].binding_name);
+        free(lc->imported_values[i].module_name);
+        free(lc->imported_values[i].member_name);
+        free(lc->imported_values[i].global_name);
+    }
+    free(lc->imported_values);
     for (int i = 0; i < lc->imported_const_count; i++) {
         free(lc->imported_consts[i].name);
         import_const_value_free(&lc->imported_consts[i].value);
     }
     free(lc->imported_consts);
+    for (int i = 0; i < lc->proc_signature_count; i++) {
+        free(lc->proc_signatures[i].name);
+        for (int j = 0; j < lc->proc_signatures[i].param_count; j++) {
+            free(lc->proc_signatures[i].param_names[j]);
+        }
+        free(lc->proc_signatures[i].param_names);
+        free(lc->proc_signatures[i].defaults);
+    }
+    free(lc->proc_signatures);
+    for (int i = 0; i < lc->struct_info_count; i++) {
+        free(lc->struct_infos[i].name);
+        for (int j = 0; j < lc->struct_infos[i].field_count; j++) {
+            free(lc->struct_infos[i].field_names[j]);
+        }
+        free(lc->struct_infos[i].field_names);
+    }
+    free(lc->struct_infos);
+    for (int i = 0; i < lc->enum_info_count; i++) {
+        free(lc->enum_infos[i].name);
+        for (int j = 0; j < lc->enum_infos[i].variant_count; j++) {
+            free(lc->enum_infos[i].variant_names[j]);
+        }
+        free(lc->enum_infos[i].variant_names);
+    }
+    free(lc->enum_infos);
+    for (int i = 0; i < lc->class_info_count; i++) {
+        free(lc->class_infos[i].name);
+        free(lc->class_infos[i].parent_name);
+    }
+    free(lc->class_infos);
+    for (int i = 0; i < lc->value_class_count; i++) {
+        free(lc->value_classes[i].variable);
+        free(lc->value_classes[i].class_name);
+    }
+    free(lc->value_classes);
+    for (int i = 0; i < lc->try_callback_count; i++) {
+        LLVMTryCallback* callback = &lc->try_callbacks[i];
+        free(callback->symbol);
+        for (int j = 0; j < callback->capture_count; j++) free(callback->captures[j]);
+        free(callback->captures);
+        free(callback->class_name);
+        free(callback->parent_name);
+    }
+    free(lc->try_callbacks);
+    for (int i = 0; i < lc->scope_count; i++) {
+        LLVMScopeInfo* scope = lc->scopes[i];
+        free(scope->symbol);
+        free(scope->adapter_symbol);
+        llvm_name_set_free(&scope->bound_names);
+        llvm_name_set_free(&scope->free_names);
+        for (int j = 0; j < scope->capture_count; j++) free(scope->captures[j]);
+        free(scope->captures);
+        free(scope->module_name);
+        free(scope->signature_name);
+        free(scope);
+    }
+    free(lc->scopes);
 }
 
 // ============================================================================
@@ -373,7 +1009,7 @@ static char* llvm_read_file_contents(const char* path) {
         return NULL;
     }
     long size = ftell(f);
-    if (size < 0) {
+    if (size < 0 || size > 100L * 1024L * 1024L) {
         fclose(f);
         return NULL;
     }
@@ -432,6 +1068,10 @@ static char* resolve_module_path_for_llvm(const LLVMCompiler* lc, const char* mo
         if (dir_len + s_len + pn_len + 6 < sizeof(path)) {
             snprintf(path, sizeof(path), "%s%s%s.sage", dir, search[i], path_name);
             if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+            if (dir_len + s_len + pn_len + 15 < sizeof(path)) {
+                snprintf(path, sizeof(path), "%s%s%s/__init__.sage", dir, search[i], path_name);
+                if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+            }
         }
     }
     // Search relative to CWD
@@ -440,6 +1080,10 @@ static char* resolve_module_path_for_llvm(const LLVMCompiler* lc, const char* mo
         if (s_len + pn_len + 8 < sizeof(path)) {
             snprintf(path, sizeof(path), "./%s%s.sage", search[i], path_name);
             if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+            if (s_len + pn_len + 16 < sizeof(path)) {
+                snprintf(path, sizeof(path), "./%s%s/__init__.sage", search[i], path_name);
+                if (access(path, F_OK) == 0) return SAGE_STRDUP(path);
+            }
         }
     }
     // Search installed library path
@@ -785,6 +1429,8 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     // Array iteration
     ll_emit(lc, "declare i32 @sage_rt_array_len(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_range(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_range2(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_range3(%%SageValue, %%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare i32 @sage_rt_get_updated_idx(%%SageValue, i32)\n");
     // Index set
     ll_emit(lc, "declare void @sage_rt_index_set(%%SageValue, %%SageValue, %%SageValue)\n");
@@ -792,10 +1438,28 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_dict_keys(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_dict_values(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_dict_has(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_dict_delete(%%SageValue, %%SageValue)\n");
     // Type query
     ll_emit(lc, "declare %%SageValue @sage_rt_type(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_chr(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_ord(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_asm_arch()\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_upper(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_lower(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_strip(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_split(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_join(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_replace(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_mem_alloc(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_mem_free(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_mem_read(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_mem_write(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_mem_size(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_struct_def(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_struct_new(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_struct_get(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_struct_set(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_struct_size(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_input(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_readfile(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_writefile(%%SageValue, %%SageValue)\n");
@@ -812,8 +1476,21 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_scale(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_cross_entropy(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
     // Dynamic function calls
-    ll_emit(lc, "declare %%SageValue @sage_rt_make_function(i8*)\n");
-    ll_emit(lc, "declare %%SageValue @sage_rt_call_dynamic(%%SageValue, %%SageValue*, i32)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_make_function(i8*, i32, i32)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_make_closure(i8*, i32, %%SageValue*, i32, i32)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_closure_get(%%SageValue, i32)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_call_dynamic(%%SageValue, %%SageValue*, i32, i64)\n");
+    ll_emit(lc, "declare void @sage_rt_register_class(i8*, i8*)\n");
+    ll_emit(lc, "declare void @sage_rt_register_method(i8*, i8*, i8*, i32, i32, i32)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_construct_class(i8*, %%SageValue*, i32, i64)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_call_method(%%SageValue, i8*, %%SageValue*, i32, i64)\n");
+    ll_emit(lc, "declare i8* @sage_rt_try_enter()\n");
+    ll_emit(lc, "declare i32 @sage_rt_try_run(i8*, i8*, %%SageValue**)\n");
+    ll_emit(lc, "declare void @sage_rt_try_leave(i8*)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_exception_value()\n");
+    ll_emit(lc, "declare void @sage_rt_raise(%%SageValue) noreturn\n");
+    ll_emit(lc, "declare void @sage_rt_try_return(%%SageValue) noreturn\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_try_return_value()\n");
     // Abort (for raise)
     ll_emit(lc, "declare void @abort() noreturn\n");
     // Bitwise operations
@@ -1309,37 +1986,577 @@ static char* class_method_name(const char* class_name, Token method_token) {
     return result;
 }
 
+static void llvm_collect_expr_names(LLVMNameSet* names, Expr* expr) {
+    if (expr == NULL) return;
+    switch (expr->type) {
+        case EXPR_VARIABLE: {
+            char* name = token_to_str(expr->as.variable.name);
+            llvm_name_set_add(names, name);
+            free(name);
+            break;
+        }
+        case EXPR_BINARY:
+            llvm_collect_expr_names(names, expr->as.binary.left);
+            llvm_collect_expr_names(names, expr->as.binary.right);
+            break;
+        case EXPR_CALL:
+            llvm_collect_expr_names(names, expr->as.call.callee);
+            for (int i = 0; i < expr->as.call.arg_count; i++) {
+                llvm_collect_expr_names(names, expr->as.call.args[i]);
+            }
+            break;
+        case EXPR_ARRAY:
+            for (int i = 0; i < expr->as.array.count; i++) {
+                llvm_collect_expr_names(names, expr->as.array.elements[i]);
+            }
+            break;
+        case EXPR_INDEX:
+            llvm_collect_expr_names(names, expr->as.index.array);
+            llvm_collect_expr_names(names, expr->as.index.index);
+            break;
+        case EXPR_INDEX_SET:
+            llvm_collect_expr_names(names, expr->as.index_set.array);
+            llvm_collect_expr_names(names, expr->as.index_set.index);
+            llvm_collect_expr_names(names, expr->as.index_set.value);
+            break;
+        case EXPR_DICT:
+            for (int i = 0; i < expr->as.dict.count; i++) {
+                llvm_collect_expr_names(names, expr->as.dict.values[i]);
+            }
+            break;
+        case EXPR_TUPLE:
+            for (int i = 0; i < expr->as.tuple.count; i++) {
+                llvm_collect_expr_names(names, expr->as.tuple.elements[i]);
+            }
+            break;
+        case EXPR_SLICE:
+            llvm_collect_expr_names(names, expr->as.slice.array);
+            llvm_collect_expr_names(names, expr->as.slice.start);
+            llvm_collect_expr_names(names, expr->as.slice.end);
+            break;
+        case EXPR_GET:
+            llvm_collect_expr_names(names, expr->as.get.object);
+            break;
+        case EXPR_SET:
+            if (expr->as.set.object == NULL) {
+                char* name = token_to_str(expr->as.set.property);
+                llvm_name_set_add(names, name);
+                free(name);
+            } else {
+                llvm_collect_expr_names(names, expr->as.set.object);
+            }
+            llvm_collect_expr_names(names, expr->as.set.value);
+            break;
+        case EXPR_AWAIT:
+            llvm_collect_expr_names(names, expr->as.await.expression);
+            break;
+        case EXPR_COMPTIME:
+            llvm_collect_expr_names(names, expr->as.comptime.expression);
+            break;
+        default:
+            break;
+    }
+}
+
+static void llvm_collect_stmt_names(LLVMNameSet* names, Stmt* stmt) {
+    for (Stmt* s = stmt; s != NULL; s = s->next) {
+        switch (s->type) {
+            case STMT_PROC:
+            case STMT_ASYNC_PROC:
+            case STMT_CLASS:
+                break;
+            case STMT_PRINT:
+                llvm_collect_expr_names(names, s->as.print.expression);
+                break;
+            case STMT_EXPRESSION:
+                llvm_collect_expr_names(names, s->as.expression);
+                break;
+            case STMT_LET:
+                llvm_collect_expr_names(names, s->as.let.initializer);
+                break;
+            case STMT_IF:
+                llvm_collect_expr_names(names, s->as.if_stmt.condition);
+                llvm_collect_stmt_names(names, s->as.if_stmt.then_branch);
+                llvm_collect_stmt_names(names, s->as.if_stmt.else_branch);
+                break;
+            case STMT_BLOCK:
+                llvm_collect_stmt_names(names, s->as.block.statements);
+                break;
+            case STMT_WHILE:
+                llvm_collect_expr_names(names, s->as.while_stmt.condition);
+                llvm_collect_stmt_names(names, s->as.while_stmt.body);
+                break;
+            case STMT_FOR:
+                llvm_collect_expr_names(names, s->as.for_stmt.iterable);
+                llvm_collect_stmt_names(names, s->as.for_stmt.body);
+                break;
+            case STMT_RETURN:
+                llvm_collect_expr_names(names, s->as.ret.value);
+                break;
+            case STMT_MATCH:
+                llvm_collect_expr_names(names, s->as.match_stmt.value);
+                for (int i = 0; i < s->as.match_stmt.case_count; i++) {
+                    CaseClause* clause = s->as.match_stmt.cases[i];
+                    if (clause == NULL) continue;
+                    llvm_collect_expr_names(names, clause->pattern);
+                    llvm_collect_expr_names(names, clause->guard);
+                    llvm_collect_stmt_names(names, clause->body);
+                }
+                llvm_collect_stmt_names(names, s->as.match_stmt.default_case);
+                break;
+            case STMT_TRY:
+                llvm_collect_stmt_names(names, s->as.try_stmt.try_block);
+                for (int i = 0; i < s->as.try_stmt.catch_count; i++) {
+                    llvm_collect_stmt_names(names, s->as.try_stmt.catches[i]->body);
+                }
+                llvm_collect_stmt_names(names, s->as.try_stmt.finally_block);
+                break;
+            case STMT_RAISE:
+                llvm_collect_expr_names(names, s->as.raise.exception);
+                break;
+            case STMT_DEFER:
+                llvm_collect_stmt_names(names, s->as.defer.statement);
+                break;
+            case STMT_COMPTIME:
+                llvm_collect_stmt_names(names, s->as.comptime.body);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+static void llvm_collect_bound_names(LLVMNameSet* names, Stmt* stmt) {
+    for (Stmt* s = stmt; s != NULL; s = s->next) {
+        switch (s->type) {
+            case STMT_LET: {
+                char* name = token_to_str(s->as.let.name);
+                llvm_name_set_add(names, name);
+                free(name);
+                break;
+            }
+            case STMT_PROC:
+            case STMT_ASYNC_PROC: {
+                Token token = s->type == STMT_PROC ? s->as.proc.name : s->as.async_proc.name;
+                char* name = token_to_str(token);
+                llvm_name_set_add(names, name);
+                free(name);
+                break;
+            }
+            case STMT_FOR: {
+                char* name = token_to_str(s->as.for_stmt.variable);
+                llvm_name_set_add(names, name);
+                free(name);
+                llvm_collect_bound_names(names, s->as.for_stmt.body);
+                break;
+            }
+            case STMT_IF:
+                llvm_collect_bound_names(names, s->as.if_stmt.then_branch);
+                llvm_collect_bound_names(names, s->as.if_stmt.else_branch);
+                break;
+            case STMT_BLOCK:
+                llvm_collect_bound_names(names, s->as.block.statements);
+                break;
+            case STMT_WHILE:
+                llvm_collect_bound_names(names, s->as.while_stmt.body);
+                break;
+            case STMT_TRY:
+                llvm_collect_bound_names(names, s->as.try_stmt.try_block);
+                for (int i = 0; i < s->as.try_stmt.catch_count; i++) {
+                    char* name = token_to_str(s->as.try_stmt.catches[i]->exception_var);
+                    llvm_name_set_add(names, name);
+                    free(name);
+                    llvm_collect_bound_names(names, s->as.try_stmt.catches[i]->body);
+                }
+                llvm_collect_bound_names(names, s->as.try_stmt.finally_block);
+                break;
+            case STMT_MATCH:
+                for (int i = 0; i < s->as.match_stmt.case_count; i++) {
+                    CaseClause* clause = s->as.match_stmt.cases[i];
+                    if (clause == NULL) continue;
+                    if (clause->pattern != NULL && clause->pattern->type == EXPR_VARIABLE &&
+                        !(clause->pattern->as.variable.name.length == 1 &&
+                          clause->pattern->as.variable.name.start[0] == '_')) {
+                        char* name = token_to_str(clause->pattern->as.variable.name);
+                        llvm_name_set_add(names, name);
+                        free(name);
+                    }
+                    llvm_collect_bound_names(names, clause->body);
+                }
+                llvm_collect_bound_names(names, s->as.match_stmt.default_case);
+                break;
+            case STMT_DEFER:
+                llvm_collect_bound_names(names, s->as.defer.statement);
+                break;
+            case STMT_COMPTIME:
+                llvm_collect_bound_names(names, s->as.comptime.body);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+static void llvm_add_proc_bounds(LLVMScopeInfo* scope, ProcStmt* proc) {
+    if (scope == NULL || proc == NULL) return;
+    for (int i = 0; i < proc->param_count; i++) {
+        char* name = token_to_str(proc->params[i]);
+        llvm_name_set_add(&scope->bound_names, name);
+        free(name);
+    }
+    llvm_collect_bound_names(&scope->bound_names, proc->body);
+    if (proc->defaults != NULL) {
+        for (int i = 0; i < proc->param_count; i++) {
+            llvm_collect_expr_names(&scope->free_names, proc->defaults[i]);
+        }
+    }
+    llvm_collect_stmt_names(&scope->free_names, proc->body);
+}
+
+static void llvm_discover_nested_statements(LLVMCompiler* lc, LLVMScopeInfo* owner,
+                                            Stmt* stmt) {
+    for (Stmt* s = stmt; s != NULL; s = s->next) {
+        if (s->type == STMT_PROC) {
+            char* name = token_to_str(s->as.proc.name);
+            size_t size = strlen(name) + 64;
+            char* symbol = SAGE_ALLOC(size);
+            snprintf(symbol, size, "sage_fn_nested_%d_%s", lc->next_nested_id++, name);
+            LLVMScopeInfo* child = llc_add_scope(lc, s, owner, symbol, 1);
+            free(symbol);
+            free(name);
+            llvm_add_proc_bounds(child, &s->as.proc);
+            llvm_discover_nested_statements(lc, child, s->as.proc.body);
+            continue;
+        }
+        if (s->type == STMT_ASYNC_PROC) continue;
+        if (s->type == STMT_IF) {
+            llvm_discover_nested_statements(lc, owner, s->as.if_stmt.then_branch);
+            llvm_discover_nested_statements(lc, owner, s->as.if_stmt.else_branch);
+        } else if (s->type == STMT_BLOCK) {
+            llvm_discover_nested_statements(lc, owner, s->as.block.statements);
+        } else if (s->type == STMT_WHILE) {
+            llvm_discover_nested_statements(lc, owner, s->as.while_stmt.body);
+        } else if (s->type == STMT_FOR) {
+            llvm_discover_nested_statements(lc, owner, s->as.for_stmt.body);
+        } else if (s->type == STMT_TRY) {
+            llvm_discover_nested_statements(lc, owner, s->as.try_stmt.try_block);
+            for (int i = 0; i < s->as.try_stmt.catch_count; i++) {
+                llvm_discover_nested_statements(lc, owner, s->as.try_stmt.catches[i]->body);
+            }
+            llvm_discover_nested_statements(lc, owner, s->as.try_stmt.finally_block);
+        } else if (s->type == STMT_MATCH) {
+            for (int i = 0; i < s->as.match_stmt.case_count; i++) {
+                CaseClause* clause = s->as.match_stmt.cases[i];
+                if (clause != NULL) llvm_discover_nested_statements(lc, owner, clause->body);
+            }
+            llvm_discover_nested_statements(lc, owner, s->as.match_stmt.default_case);
+        } else if (s->type == STMT_DEFER) {
+            llvm_discover_nested_statements(lc, owner, s->as.defer.statement);
+        } else if (s->type == STMT_COMPTIME) {
+            llvm_discover_nested_statements(lc, owner, s->as.comptime.body);
+        }
+    }
+}
+
+static int llvm_scope_has_ancestor_name(LLVMScopeInfo* scope, const char* name) {
+    for (LLVMScopeInfo* parent = scope->parent; parent != NULL; parent = parent->parent) {
+        if (llvm_name_set_has(&parent->bound_names, name)) return 1;
+    }
+    return 0;
+}
+
+static void llvm_finalize_scope_captures(LLVMCompiler* lc) {
+    for (int i = 0; i < lc->scope_count; i++) {
+        LLVMScopeInfo* scope = lc->scopes[i];
+        if (!scope->is_nested) continue;
+        for (int j = 0; j < scope->free_names.count; j++) {
+            const char* name = scope->free_names.items[j];
+            if (!llvm_name_set_has(&scope->bound_names, name) &&
+                llvm_scope_has_ancestor_name(scope, name)) {
+                llc_add_scope_capture(scope, name);
+            }
+        }
+    }
+
+    int changed = 1;
+    while (changed) {
+        changed = 0;
+        for (int i = 0; i < lc->scope_count; i++) {
+            LLVMScopeInfo* scope = lc->scopes[i];
+            if (!scope->is_nested || scope->parent == NULL) continue;
+            for (int j = 0; j < scope->capture_count; j++) {
+                const char* name = scope->captures[j];
+                if (llvm_name_set_has(&scope->parent->bound_names, name)) continue;
+                int parent_has_capture = 0;
+                for (int k = 0; k < scope->parent->capture_count; k++) {
+                    if (strcmp(scope->parent->captures[k], name) == 0) {
+                        parent_has_capture = 1;
+                        break;
+                    }
+                }
+                if (!parent_has_capture) {
+                    llc_add_scope_capture(scope->parent, name);
+                    changed = 1;
+                }
+            }
+        }
+    }
+}
+
+static void llvm_collect_proc_signatures(LLVMCompiler* lc, Stmt* program) {
+    for (Stmt* s = program; s != NULL; s = s->next) {
+        if (s->type == STMT_PROC) {
+            char* name = token_to_str(s->as.proc.name);
+            llc_add_proc_signature(lc, name, &s->as.proc);
+            free(name);
+        } else if (s->type == STMT_ASYNC_PROC) {
+            char* name = token_to_str(s->as.async_proc.name);
+            llc_add_proc_signature(lc, name, &s->as.async_proc);
+            free(name);
+        } else if (s->type == STMT_CLASS) {
+            char* cname = token_to_str(s->as.class_stmt.name);
+            for (Stmt* m = s->as.class_stmt.methods; m != NULL; m = m->next) {
+                if (m->type == STMT_PROC) {
+                    char* mname = class_method_name(cname, m->as.proc.name);
+                    llc_add_proc_signature(lc, mname, &m->as.proc);
+                    free(mname);
+                }
+            }
+            free(cname);
+        }
+    }
+}
+
+static void llvm_collect_metadata(LLVMCompiler* lc, Stmt* program) {
+    for (Stmt* s = program; s != NULL; s = s->next) {
+        if (s->type == STMT_CLASS) llc_add_class_info(lc, &s->as.class_stmt);
+    }
+    for (Stmt* s = program; s != NULL; s = s->next) {
+        if (s->type != STMT_LET || s->as.let.initializer == NULL ||
+            s->as.let.initializer->type != EXPR_CALL ||
+            s->as.let.initializer->as.call.callee == NULL ||
+            s->as.let.initializer->as.call.callee->type != EXPR_VARIABLE) {
+            continue;
+        }
+        char* variable = token_to_str(s->as.let.name);
+        char* class_name = token_to_str(s->as.let.initializer->as.call.callee->as.variable.name);
+        if (llc_find_class_info(lc, class_name) != NULL) {
+            llc_add_value_class(lc, variable, class_name);
+        }
+        free(variable);
+        free(class_name);
+    }
+    lc->main_scope = llc_add_scope(lc, NULL, NULL, "main", 0);
+    llvm_collect_bound_names(&lc->main_scope->bound_names, program);
+    for (Stmt* s = program; s != NULL; s = s->next) {
+        if (s->type == STMT_PROC) {
+            char* name = token_to_str(s->as.proc.name);
+            size_t size = strlen(name) + 16;
+            char* symbol = SAGE_ALLOC(size);
+            snprintf(symbol, size, "sage_fn_%s", name);
+            LLVMScopeInfo* scope = llc_add_scope(lc, s, NULL, symbol, 0);
+            free(symbol);
+            free(name);
+            llvm_add_proc_bounds(scope, &s->as.proc);
+            llvm_discover_nested_statements(lc, scope, s->as.proc.body);
+        } else if (s->type == STMT_CLASS) {
+            char* cname = token_to_str(s->as.class_stmt.name);
+            for (Stmt* m = s->as.class_stmt.methods; m != NULL; m = m->next) {
+                if (m->type != STMT_PROC) continue;
+                char* mname = class_method_name(cname, m->as.proc.name);
+                size_t size = strlen(mname) + 16;
+                char* symbol = SAGE_ALLOC(size);
+                snprintf(symbol, size, "sage_fn_%s", mname);
+                LLVMScopeInfo* scope = llc_add_scope(lc, m, NULL, symbol, 0);
+                free(symbol);
+                free(mname);
+                llvm_add_proc_bounds(scope, &m->as.proc);
+                llvm_discover_nested_statements(lc, scope, m->as.proc.body);
+            }
+            free(cname);
+        } else {
+            Stmt* saved_next = s->next;
+            s->next = NULL;
+            llvm_discover_nested_statements(lc, lc->main_scope, s);
+            s->next = saved_next;
+        }
+    }
+    llvm_finalize_scope_captures(lc);
+    llvm_collect_proc_signatures(lc, program);
+}
+
+static LLVMScopeInfo* llc_find_module_proc_scope(LLVMCompiler* lc,
+                                                 const char* module_name,
+                                                 const char* member_name) {
+    if (module_name == NULL || member_name == NULL) return NULL;
+    size_t length = strlen(member_name);
+    for (int i = 0; i < lc->scope_count; i++) {
+        LLVMScopeInfo* scope = lc->scopes[i];
+        if (scope->is_nested || scope->proc == NULL || scope->module_name == NULL ||
+            strcmp(scope->module_name, module_name) != 0) {
+            continue;
+        }
+        Token token = scope->proc->name;
+        if ((size_t)token.length == length &&
+            strncmp(token.start, member_name, length) == 0) {
+            return scope;
+        }
+    }
+    return NULL;
+}
+
+static LLVMImportedModule* llvm_load_source_module(LLVMCompiler* lc,
+                                                    const char* module_name) {
+    LLVMImportedModule* existing = llc_find_source_module(lc, module_name);
+    if (existing != NULL) return existing;
+
+    char* module_path = resolve_module_path_for_llvm(lc, module_name);
+    if (module_path == NULL) {
+        fprintf(stderr, "LLVM backend: cannot resolve source module '%s'\n", module_name);
+        lc->failed = 1;
+        return NULL;
+    }
+    char* source = llvm_read_file_contents(module_path);
+    if (source == NULL) {
+        fprintf(stderr, "LLVM backend: cannot read source module '%s'\n", module_path);
+        free(module_path);
+        lc->failed = 1;
+        return NULL;
+    }
+
+    if (lc->source_module_count >= lc->source_module_cap) {
+        lc->source_module_cap = lc->source_module_cap ? lc->source_module_cap * 2 : 8;
+        lc->source_modules = SAGE_REALLOC(
+            lc->source_modules,
+            sizeof(LLVMImportedModule) * (size_t)lc->source_module_cap);
+    }
+    LLVMImportedModule* module = &lc->source_modules[lc->source_module_count++];
+    memset(module, 0, sizeof(*module));
+    module->name = SAGE_STRDUP(module_name);
+    module->path = module_path;
+    module->source = source;
+    module->ast = llvm_parse_program_with_path(source, module_path);
+    int module_index = (int)(module - lc->source_modules);
+
+    for (Stmt* stmt = module->ast; stmt != NULL; stmt = stmt->next) {
+        if (stmt->type == STMT_LET) {
+            char* member_name = token_to_str(stmt->as.let.name);
+            llc_add_imported_global(lc, module_name, member_name);
+            free(member_name);
+            continue;
+        }
+        if (stmt->type == STMT_PROC) {
+            char* member_name = token_to_str(stmt->as.proc.name);
+            char member_symbol[256];
+            llvm_append_symbol_part(member_symbol, sizeof(member_symbol), member_name);
+            size_t symbol_size = strlen(member_symbol) + 48;
+            char* symbol = SAGE_ALLOC(symbol_size);
+            snprintf(symbol, symbol_size, "sage_modfn_%d_%s", module_index, member_symbol);
+            size_t signature_size = strlen(member_symbol) + 48;
+            char* signature_name = SAGE_ALLOC(signature_size);
+            snprintf(signature_name, signature_size, "sage_modsig_%d_%s", module_index, member_symbol);
+
+            LLVMScopeInfo* scope = llc_add_scope(lc, stmt, NULL, symbol, 0);
+            scope->module_name = SAGE_STRDUP(module_name);
+            scope->signature_name = signature_name;
+            llvm_add_proc_bounds(scope, &stmt->as.proc);
+            llvm_discover_nested_statements(lc, scope, stmt->as.proc.body);
+            llc_add_proc_signature(lc, signature_name, &stmt->as.proc);
+            llc_add_proc(lc, member_name);
+            free(symbol);
+            free(member_name);
+            continue;
+        }
+        fprintf(stderr,
+                "LLVM backend: unsupported top-level statement type %d in source module '%s'\n",
+                stmt->type, module_name);
+        lc->failed = 1;
+    }
+    return module;
+}
+
+static void llvm_register_source_import(LLVMCompiler* lc, ImportStmt* import_stmt) {
+    if (import_stmt == NULL || import_stmt->module_name == NULL) return;
+    const char* module_name = import_stmt->module_name;
+    const char* binding = NULL;
+    if (import_stmt->alias != NULL) {
+        binding = import_stmt->alias;
+    } else if (import_stmt->item_count == 0) {
+        const char* dot = strrchr(module_name, '.');
+        binding = dot != NULL ? dot + 1 : module_name;
+    }
+    if (binding != NULL) llc_add_module_binding(lc, module_name, binding);
+
+    if (is_native_module(module_name)) return;
+    LLVMImportedModule* module = llvm_load_source_module(lc, module_name);
+    if (module == NULL) return;
+
+    if (import_stmt->item_count == 0) return;
+
+    for (int i = 0; i < import_stmt->item_count; i++) {
+        const char* member_name = import_stmt->items[i];
+        const char* item_binding = member_name;
+        if (import_stmt->item_aliases != NULL && import_stmt->item_aliases[i] != NULL) {
+            item_binding = import_stmt->item_aliases[i];
+        }
+        LLVMScopeInfo* proc_scope = llc_find_module_proc_scope(
+            lc, module_name, member_name);
+        LLVMImportedGlobal* global = llc_find_imported_global(
+            lc, module_name, member_name);
+        if (proc_scope == NULL && global == NULL) {
+            fprintf(stderr, "LLVM backend: source module '%s' has no member '%s'\n",
+                    module_name, member_name);
+            lc->failed = 1;
+            continue;
+        }
+        llc_add_imported_value(lc, item_binding, module_name, member_name,
+                               proc_scope, global != NULL ? global->global_name : NULL);
+    }
+}
+
+static void llvm_collect_imported_modules(LLVMCompiler* lc, Stmt* program) {
+    for (Stmt* stmt = program; stmt != NULL; stmt = stmt->next) {
+        if (stmt->type == STMT_IMPORT) llvm_register_source_import(lc, &stmt->as.import);
+    }
+    llvm_finalize_scope_captures(lc);
+}
+
 static void llvm_collect_symbols(LLVMCompiler* lc, Stmt* program) {
     for (Stmt* s = program; s != NULL; s = s->next) {
         if (s->type == STMT_PROC) {
             char* name = token_to_str(s->as.proc.name);
             llc_add_proc(lc, name);
             free(name);
+        } else if (s->type == STMT_ASYNC_PROC) {
+            char* name = token_to_str(s->as.async_proc.name);
+            llc_add_proc(lc, name);
+            free(name);
         } else if (s->type == STMT_LET) {
             char* name = token_to_str(s->as.let.name);
             llc_add_global(lc, name);
             free(name);
+        } else if (s->type == STMT_STRUCT) {
+            char* name = token_to_str(s->as.struct_stmt.name);
+            llc_add_global_once(lc, name);
+            llc_add_struct_info(lc, name, &s->as.struct_stmt);
+            free(name);
+        } else if (s->type == STMT_ENUM) {
+            char* name = token_to_str(s->as.enum_stmt.name);
+            llc_add_global_once(lc, name);
+            llc_add_enum_info(lc, name, &s->as.enum_stmt);
+            free(name);
         } else if (s->type == STMT_IMPORT) {
             if (s->as.import.module_name != NULL) {
-                llc_add_module(lc, s->as.import.module_name);
-                // Create a global variable for the module binding
-                // import agent.critic -> binding name is "critic"
-                // import foo as bar -> binding name is "bar"
                 const char* bind = s->as.import.alias;
                 if (bind == NULL && s->as.import.item_count == 0) {
-                    // Extract last component of dotted name
                     const char* dot = strrchr(s->as.import.module_name, '.');
-                    if (dot != NULL) {
-                        bind = dot + 1;
-                    } else {
-                        bind = s->as.import.module_name;
-                    }
+                    bind = dot != NULL ? dot + 1 : s->as.import.module_name;
                 }
                 if (bind != NULL) {
+                    llc_add_module_binding(lc, s->as.import.module_name, bind);
                     llc_add_global(lc, bind);
                 }
             }
-            // Add imported items as globals (they will be resolved at runtime)
             for (int i = 0; i < s->as.import.item_count; i++) {
                 const char* item_name = (s->as.import.item_aliases && s->as.import.item_aliases[i])
                     ? s->as.import.item_aliases[i] : s->as.import.items[i];
@@ -1350,10 +2567,13 @@ static void llvm_collect_symbols(LLVMCompiler* lc, Stmt* program) {
             }
         } else if (s->type == STMT_CLASS) {
             char* cname = token_to_str(s->as.class_stmt.name);
-            // Each method becomes a function sage_fn_ClassName_methodName
             for (Stmt* m = s->as.class_stmt.methods; m != NULL; m = m->next) {
                 if (m->type == STMT_PROC) {
                     char* mname = class_method_name(cname, m->as.proc.name);
+                    llc_add_proc(lc, mname);
+                    free(mname);
+                } else if (m->type == STMT_ASYNC_PROC) {
+                    char* mname = class_method_name(cname, m->as.async_proc.name);
                     llc_add_proc(lc, mname);
                     free(mname);
                 }
@@ -1363,11 +2583,520 @@ static void llvm_collect_symbols(LLVMCompiler* lc, Stmt* program) {
     }
 }
 
-// ============================================================================
-// Expression Emission - returns SSA register number
-// ============================================================================
-
 static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr);
+static void llvm_emit_call_adapter(LLVMCompiler* lc, LLVMScopeInfo* scope);
+
+static int llvm_emit_string_ptr(LLVMCompiler* lc, const char* value) {
+    int str_id = llc_add_string(lc, value != NULL ? value : "");
+    size_t slen = strlen(value != NULL ? value : "") + 1;
+    int ptr_reg = llc_new_reg(lc);
+    ll_line(lc, "%%%d = getelementptr [%zu x i8], [%zu x i8]* @.str.%d, i64 0, i64 0",
+            ptr_reg, slen, slen, str_id);
+    return ptr_reg;
+}
+
+static int llvm_emit_string_value(LLVMCompiler* lc, const char* value) {
+    int ptr_reg = llvm_emit_string_ptr(lc, value);
+    int r = llc_new_reg(lc);
+    ll_line(lc, "%%%d = call %%SageValue @sage_rt_string(i8* %%%d)", r, ptr_reg);
+    return r;
+}
+
+static void llvm_emit_dict_set_string(LLVMCompiler* lc, int dict_reg, const char* key, int value_reg) {
+    int ptr_reg = llvm_emit_string_ptr(lc, key);
+    ll_line(lc, "call void @sage_rt_dict_set(%%SageValue %%%d, i8* %%%d, %%SageValue %%%d)",
+            dict_reg, ptr_reg, value_reg);
+}
+
+static unsigned long long llvm_call_mask(int count) {
+    if (count <= 0) return 0;
+    if (count >= 64) return ~0ULL;
+    return (1ULL << count) - 1ULL;
+}
+
+static void llvm_emit_callable_arguments(LLVMCompiler* lc, Expr* call,
+                                         const char* name, int param_offset,
+                                         int** out_regs, int* out_count,
+                                         unsigned long long* out_mask) {
+    *out_regs = NULL;
+    *out_count = 0;
+    *out_mask = 0;
+    if (call == NULL) return;
+
+    int argument_count = call->as.call.arg_count;
+    if (argument_count < 0) argument_count = 0;
+    LLVMProcSignature* sig = name != NULL ? llc_find_proc_signature(lc, name) : NULL;
+    if (sig == NULL) {
+        *out_count = argument_count;
+        if (argument_count > 0) {
+            *out_regs = SAGE_ALLOC(sizeof(int) * (size_t)argument_count);
+            for (int i = 0; i < argument_count; i++) {
+                (*out_regs)[i] = llvm_emit_expr(lc, call->as.call.args[i]);
+            }
+        }
+        *out_mask = llvm_call_mask(argument_count);
+        return;
+    }
+
+    if (param_offset < 0) param_offset = 0;
+    if (param_offset > sig->param_count) param_offset = sig->param_count;
+    int count = sig->param_count - param_offset;
+    int has_keyword = 0;
+    if (call->as.call.kw_names != NULL) {
+        for (int i = 0; i < argument_count; i++) {
+            if (call->as.call.kw_names[i] != NULL) {
+                has_keyword = 1;
+                break;
+            }
+        }
+    }
+
+    if (!has_keyword) {
+        if (argument_count > count) lc->failed = 1;
+        int actual_count = argument_count;
+        if (actual_count > count) actual_count = count;
+        if (actual_count > 0) {
+            *out_regs = SAGE_ALLOC(sizeof(int) * (size_t)actual_count);
+            for (int i = 0; i < actual_count; i++) {
+                (*out_regs)[i] = llvm_emit_expr(lc, call->as.call.args[i]);
+            }
+        }
+        *out_count = actual_count;
+        *out_mask = llvm_call_mask(actual_count);
+        for (int i = 0; i < sig->required_count - param_offset; i++) {
+            if (i >= actual_count) lc->failed = 1;
+        }
+        return;
+    }
+
+    int* regs = count > 0 ? SAGE_ALLOC(sizeof(int) * (size_t)count) : NULL;
+    unsigned char* provided = count > 0 ? SAGE_ALLOC((size_t)count) : NULL;
+    for (int i = 0; i < count; i++) {
+        regs[i] = -1;
+        provided[i] = 0;
+    }
+
+    int positional = 0;
+    for (int i = 0; i < argument_count; i++) {
+        int target = -1;
+        const char* keyword = call->as.call.kw_names != NULL
+            ? call->as.call.kw_names[i] : NULL;
+        if (keyword != NULL) {
+            for (int j = param_offset; j < sig->param_count; j++) {
+                if (sig->param_names[j] != NULL &&
+                    strcmp(keyword, sig->param_names[j]) == 0) {
+                    target = j - param_offset;
+                    break;
+                }
+            }
+            if (target < 0) lc->failed = 1;
+        } else {
+            while (positional < count && provided[positional]) positional++;
+            if (positional < count) target = positional++;
+        }
+
+        int value = llvm_emit_expr(lc, call->as.call.args[i]);
+        if (target >= 0 && target < count && !provided[target]) {
+            regs[target] = value;
+            provided[target] = 1;
+        } else {
+            lc->failed = 1;
+        }
+    }
+
+    unsigned long long mask = 0;
+    for (int i = 0; i < count; i++) {
+        if (provided[i]) {
+            mask |= 1ULL << i;
+        } else {
+            regs[i] = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", regs[i]);
+        }
+    }
+    for (int i = 0; i < sig->required_count - param_offset; i++) {
+        if (i >= 0 && i < count && !provided[i]) lc->failed = 1;
+    }
+
+    *out_regs = regs;
+    *out_count = count;
+    *out_mask = mask;
+    free(provided);
+}
+
+static void llvm_remap_callable_arguments(LLVMCompiler* lc, Expr* call,
+                                          const char* name, int param_offset,
+                                          const int* raw_regs, int raw_count,
+                                          int** out_regs, int* out_count,
+                                          unsigned long long* out_mask) {
+    *out_regs = NULL;
+    *out_count = 0;
+    *out_mask = 0;
+    if (raw_count < 0) raw_count = 0;
+    LLVMProcSignature* sig = name != NULL ? llc_find_proc_signature(lc, name) : NULL;
+    if (sig == NULL) {
+        *out_count = raw_count;
+        if (raw_count > 0) {
+            *out_regs = SAGE_ALLOC(sizeof(int) * (size_t)raw_count);
+            memcpy(*out_regs, raw_regs, sizeof(int) * (size_t)raw_count);
+        }
+        *out_mask = llvm_call_mask(raw_count);
+        return;
+    }
+
+    if (param_offset < 0) param_offset = 0;
+    if (param_offset > sig->param_count) param_offset = sig->param_count;
+    int count = sig->param_count - param_offset;
+    int has_keyword = 0;
+    if (call != NULL && call->as.call.kw_names != NULL) {
+        for (int i = 0; i < raw_count; i++) {
+            if (call->as.call.kw_names[i] != NULL) {
+                has_keyword = 1;
+                break;
+            }
+        }
+    }
+
+    if (!has_keyword) {
+        int actual_count = raw_count;
+        if (actual_count > count) {
+            lc->failed = 1;
+            actual_count = count;
+        }
+        if (actual_count > 0) {
+            *out_regs = SAGE_ALLOC(sizeof(int) * (size_t)actual_count);
+            memcpy(*out_regs, raw_regs, sizeof(int) * (size_t)actual_count);
+        }
+        *out_count = actual_count;
+        *out_mask = llvm_call_mask(actual_count);
+        for (int i = 0; i < sig->required_count - param_offset; i++) {
+            if (i >= actual_count) lc->failed = 1;
+        }
+        return;
+    }
+
+    int* regs = count > 0 ? SAGE_ALLOC(sizeof(int) * (size_t)count) : NULL;
+    unsigned char* provided = count > 0 ? SAGE_ALLOC((size_t)count) : NULL;
+    for (int i = 0; i < count; i++) {
+        regs[i] = -1;
+        provided[i] = 0;
+    }
+    int positional = 0;
+    for (int i = 0; i < raw_count; i++) {
+        int target = -1;
+        const char* keyword = call->as.call.kw_names != NULL
+            ? call->as.call.kw_names[i] : NULL;
+        if (keyword != NULL) {
+            for (int j = param_offset; j < sig->param_count; j++) {
+                if (sig->param_names[j] != NULL &&
+                    strcmp(keyword, sig->param_names[j]) == 0) {
+                    target = j - param_offset;
+                    break;
+                }
+            }
+            if (target < 0) lc->failed = 1;
+        } else {
+            while (positional < count && provided[positional]) positional++;
+            if (positional < count) target = positional++;
+        }
+        if (target >= 0 && target < count && !provided[target]) {
+            regs[target] = raw_regs[i];
+            provided[target] = 1;
+        } else {
+            lc->failed = 1;
+        }
+    }
+    unsigned long long mask = 0;
+    for (int i = 0; i < count; i++) {
+        if (provided[i]) {
+            mask |= 1ULL << i;
+        } else {
+            regs[i] = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", regs[i]);
+        }
+    }
+    for (int i = 0; i < sig->required_count - param_offset; i++) {
+        if (i >= 0 && i < count && !provided[i]) lc->failed = 1;
+    }
+    *out_regs = regs;
+    *out_count = count;
+    *out_mask = mask;
+    free(provided);
+}
+
+static LLVMProcSignature* llvm_find_class_init_signature(LLVMCompiler* lc,
+                                                           LLVMClassInfo* info,
+                                                           int* param_offset,
+                                                           char** out_name) {
+    *param_offset = 0;
+    *out_name = NULL;
+    LLVMClassInfo* current = info;
+    while (current != NULL) {
+        for (Stmt* m = current->declaration->methods; m != NULL; m = m->next) {
+            if (m->type != STMT_PROC ||
+                !(m->as.proc.name.length == 4 &&
+                  strncmp(m->as.proc.name.start, "init", 4) == 0)) continue;
+            char* method_name = class_method_name(current->name, m->as.proc.name);
+            LLVMProcSignature* sig = llc_find_proc_signature(lc, method_name);
+            free(method_name);
+            if (sig == NULL) return NULL;
+            if (sig->param_count > 0 && sig->param_names[0] != NULL &&
+                strcmp(sig->param_names[0], "self") == 0) {
+                *param_offset = 1;
+            }
+            *out_name = SAGE_STRDUP(current->name);
+            return sig;
+        }
+        current = current->parent_name != NULL
+            ? llc_find_class_info(lc, current->parent_name) : NULL;
+    }
+    return NULL;
+}
+
+static LLVMProcSignature* llvm_find_method_signature(LLVMCompiler* lc,
+                                                     LLVMClassInfo* info,
+                                                     const char* method_name,
+                                                     int* param_offset,
+                                                     char** out_qualified_name) {
+    *param_offset = 0;
+    *out_qualified_name = NULL;
+    LLVMClassInfo* current = info;
+    while (current != NULL) {
+        for (Stmt* m = current->declaration->methods; m != NULL; m = m->next) {
+            if (m->type != STMT_PROC) continue;
+            size_t length = strlen(method_name);
+            if ((size_t)m->as.proc.name.length != length ||
+                strncmp(m->as.proc.name.start, method_name, length) != 0) {
+                continue;
+            }
+            char* qualified = class_method_name(current->name, m->as.proc.name);
+            LLVMProcSignature* sig = llc_find_proc_signature(lc, qualified);
+            if (sig == NULL) {
+                free(qualified);
+                return NULL;
+            }
+            if (sig->param_count > 0 && sig->param_names[0] != NULL &&
+                strcmp(sig->param_names[0], "self") == 0) {
+                *param_offset = 1;
+            }
+            *out_qualified_name = qualified;
+            return sig;
+        }
+        current = current->parent_name != NULL
+            ? llc_find_class_info(lc, current->parent_name) : NULL;
+    }
+    return NULL;
+}
+
+static int llvm_emit_class_construct(LLVMCompiler* lc, LLVMClassInfo* info, Expr* call) {
+    int* arg_regs = NULL;
+    int arg_count = 0;
+    unsigned long long arg_mask = 0;
+    int param_offset = 0;
+    char* init_owner = NULL;
+    LLVMProcSignature* init = llvm_find_class_init_signature(lc, info, &param_offset, &init_owner);
+    if (init != NULL) {
+        size_t size = strlen(init_owner) + 8;
+        char* init_name = SAGE_ALLOC(size);
+        snprintf(init_name, size, "%s_init", init_owner);
+        llvm_emit_callable_arguments(lc, call, init_name, param_offset,
+                                     &arg_regs, &arg_count, &arg_mask);
+        free(init_name);
+        free(init_owner);
+    } else {
+        llvm_emit_callable_arguments(lc, call, NULL, 0,
+                                     &arg_regs, &arg_count, &arg_mask);
+    }
+
+    int class_ptr = llvm_emit_string_ptr(lc, info->name);
+    int result;
+    if (arg_count > 0) {
+        int args = llc_new_reg(lc);
+        ll_line(lc, "%%%d = alloca %%SageValue, i32 %d", args, arg_count);
+        for (int i = 0; i < arg_count; i++) {
+            int slot = llc_new_reg(lc);
+            ll_line(lc, "%%%d = getelementptr %%SageValue, %%SageValue* %%%d, i32 %d", slot, args, i);
+            ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", arg_regs[i], slot);
+        }
+        result = llc_new_reg(lc);
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_construct_class(i8* %%%d, %%SageValue* %%%d, i32 %d, i64 %llu)",
+                result, class_ptr, args, arg_count, arg_mask);
+    } else {
+        result = llc_new_reg(lc);
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_construct_class(i8* %%%d, %%SageValue* null, i32 0, i64 %llu)",
+                result, class_ptr, arg_mask);
+    }
+    free(arg_regs);
+    return result;
+}
+
+static int llvm_emit_struct_construct(LLVMCompiler* lc, LLVMStructInfo* info, Expr* call) {
+    int object_reg = llc_new_reg(lc);
+    ll_line(lc, "%%%d = call %%SageValue @sage_rt_dict_new()", object_reg);
+
+    int field_count = info != NULL ? info->field_count : 0;
+    int* regs = field_count > 0 ? SAGE_ALLOC(sizeof(int) * (size_t)field_count) : NULL;
+    for (int i = 0; i < field_count; i++) regs[i] = -1;
+
+    int positional = 0;
+    if (call != NULL) {
+        for (int i = 0; i < call->as.call.arg_count; i++) {
+            int target = -1;
+            const char* keyword = call->as.call.kw_names != NULL ? call->as.call.kw_names[i] : NULL;
+            if (keyword != NULL && info != NULL) {
+                for (int j = 0; j < field_count; j++) {
+                    if (info->field_names[j] != NULL && strcmp(keyword, info->field_names[j]) == 0) {
+                        target = j;
+                        break;
+                    }
+                }
+                if (target < 0) lc->failed = 1;
+            } else {
+                while (positional < field_count && regs[positional] >= 0) positional++;
+                if (positional < field_count) target = positional++;
+            }
+
+            int value = llvm_emit_expr(lc, call->as.call.args[i]);
+            if (target >= 0 && target < field_count && regs[target] < 0) {
+                regs[target] = value;
+            } else {
+                if (call->as.call.arg_count > field_count) lc->failed = 1;
+                if (target >= 0) lc->failed = 1;
+            }
+        }
+        if (call->as.call.arg_count > field_count) lc->failed = 1;
+    }
+
+    for (int i = 0; i < field_count; i++) {
+        if (regs[i] < 0) {
+            regs[i] = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", regs[i]);
+        }
+        llvm_emit_dict_set_string(lc, object_reg, info->field_names[i], regs[i]);
+    }
+    free(regs);
+    return object_reg;
+}
+
+static void llvm_emit_type_store(LLVMCompiler* lc, const char* name, int value_reg) {
+    if (llc_has_global(lc, name)) {
+        ll_line(lc, "store %%SageValue %%%d, %%SageValue* @%s", value_reg, name);
+    } else {
+        ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", value_reg, name);
+    }
+}
+
+static void llvm_emit_struct_definition(LLVMCompiler* lc, StructStmt* stmt) {
+    if (stmt == NULL || stmt->name.start == NULL) return;
+    char* name = token_to_str(stmt->name);
+    LLVMStructInfo* info = llc_find_struct_info(lc, name);
+    int object_reg = llc_new_reg(lc);
+    ll_line(lc, "%%%d = call %%SageValue @sage_rt_dict_new()", object_reg);
+    if (info != NULL) {
+        for (int i = 0; i < info->field_count; i++) {
+            int field_reg = llvm_emit_string_value(lc, info->field_names[i]);
+            llvm_emit_dict_set_string(lc, object_reg, info->field_names[i], field_reg);
+        }
+    }
+    int name_reg = llvm_emit_string_value(lc, name);
+    llvm_emit_dict_set_string(lc, object_reg, "__name__", name_reg);
+    llvm_emit_type_store(lc, name, object_reg);
+    free(name);
+}
+
+static void llvm_emit_enum_definition(LLVMCompiler* lc, EnumStmt* stmt) {
+    if (stmt == NULL || stmt->name.start == NULL) return;
+    char* name = token_to_str(stmt->name);
+    LLVMEnumInfo* info = llc_find_enum_info(lc, name);
+    int object_reg = llc_new_reg(lc);
+    ll_line(lc, "%%%d = call %%SageValue @sage_rt_dict_new()", object_reg);
+    if (info != NULL) {
+        for (int i = 0; i < info->variant_count; i++) {
+            int value_reg = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %.17e)", value_reg, (double)i);
+            llvm_emit_dict_set_string(lc, object_reg, info->variant_names[i], value_reg);
+        }
+    }
+    int name_reg = llvm_emit_string_value(lc, name);
+    llvm_emit_dict_set_string(lc, object_reg, "__name__", name_reg);
+    llvm_emit_type_store(lc, name, object_reg);
+    free(name);
+}
+
+static int llvm_is_builtin_call(const char* name) {
+    static const char* names[] = {
+        "str", "len", "tonumber", "push", "pop", "array_extend",
+        "array_reverse", "slice", "range", "dict_keys", "dict_values",
+        "dict_has", "dict_delete", "upper", "lower", "strip", "split",
+        "join", "replace", "mem_alloc", "mem_free", "mem_read", "mem_write",
+        "mem_size", "struct_def", "struct_new", "struct_get", "struct_set",
+        "struct_size", "asm_arch", "type", "chr", "ord", "input", "gc_disable",
+        "gc_enable", "gc_collect", NULL
+    };
+    if (name == NULL) return 0;
+    for (int i = 0; names[i] != NULL; i++) {
+        if (strcmp(name, names[i]) == 0) return 1;
+    }
+    return 0;
+}
+
+static int llvm_emit_adapter_call(LLVMCompiler* lc, const char* adapter_symbol,
+                                  const int* args, int argc,
+                                  unsigned long long mask) {
+    int callable = llc_new_reg(lc);
+    ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", callable);
+    int array = -1;
+    if (argc > 0) {
+        array = llc_new_reg(lc);
+        ll_line(lc, "%%%d = alloca %%SageValue, i32 %d", array, argc);
+        for (int i = 0; i < argc; i++) {
+            int slot = llc_new_reg(lc);
+            ll_line(lc, "%%%d = getelementptr %%SageValue, %%SageValue* %%%d, i32 %d",
+                    slot, array, i);
+            ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", args[i], slot);
+        }
+    }
+    int result = llc_new_reg(lc);
+    if (array >= 0) {
+        ll_line(lc, "%%%d = call %%SageValue @%s(%%SageValue %%%d, %%SageValue* %%%d, i32 %d, i64 %llu)",
+                result, adapter_symbol, callable, array, argc, mask);
+    } else {
+        ll_line(lc, "%%%d = call %%SageValue @%s(%%SageValue %%%d, %%SageValue* null, i32 0, i64 %llu)",
+                result, adapter_symbol, callable, mask);
+    }
+    return result;
+}
+
+static int llvm_emit_dynamic_call(LLVMCompiler* lc, int callee,
+                                  const int* args, int argc,
+                                  unsigned long long mask) {
+    int array = -1;
+    if (argc > 0) {
+        array = llc_new_reg(lc);
+        ll_line(lc, "%%%d = alloca %%SageValue, i32 %d", array, argc);
+        for (int i = 0; i < argc; i++) {
+            int slot = llc_new_reg(lc);
+            ll_line(lc, "%%%d = getelementptr %%SageValue, %%SageValue* %%%d, i32 %d", slot, array, i);
+            ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", args[i], slot);
+        }
+    }
+    int result = llc_new_reg(lc);
+    if (array >= 0) {
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_call_dynamic(%%SageValue %%%d, %%SageValue* %%%d, i32 %d, i64 %llu)",
+                result, callee, array, argc, mask);
+    } else {
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_call_dynamic(%%SageValue %%%d, %%SageValue* null, i32 0, i64 %llu)",
+                result, callee, mask);
+    }
+    return result;
+}
+
+static int llvm_current_try_capture(LLVMCompiler* lc, const char* name) {
+    if (lc->current_try_callback == NULL || name == NULL) return 0;
+    for (int i = 0; i < lc->current_try_callback->capture_count; i++) {
+        if (strcmp(lc->current_try_callback->captures[i], name) == 0) return 1;
+    }
+    return 0;
+}
 
 static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
     if (expr == NULL) {
@@ -1403,6 +3132,51 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             return r;
         }
         case EXPR_BINARY: {
+            if (expr->as.binary.op.type == TOKEN_AND || expr->as.binary.op.type == TOKEN_OR) {
+                int left = llvm_emit_expr(lc, expr->as.binary.left);
+                int left_bool = llc_new_reg(lc);
+                ll_line(lc, "%%%d = call i32 @sage_rt_get_bool(%%SageValue %%%d)", left_bool, left);
+                int left_cmp = llc_new_reg(lc);
+                ll_line(lc, "%%%d = icmp ne i32 %%%d, 0", left_cmp, left_bool);
+                int decided_label = llc_new_label(lc);
+                int evaluate_label = llc_new_label(lc);
+                int merge_label = llc_new_label(lc);
+                if (expr->as.binary.op.type == TOKEN_AND) {
+                    ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d", left_cmp, evaluate_label, decided_label);
+                } else {
+                    ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d", left_cmp, decided_label, evaluate_label);
+                }
+                lc->block_terminated = 1;
+
+                ll_emit(lc, "L%d:\n", decided_label);
+                lc->block_terminated = 0;
+                int decided_value = llc_new_reg(lc);
+                if (expr->as.binary.op.type == TOKEN_AND) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_bool(i32 0)", decided_value);
+                } else {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_bool(i32 1)", decided_value);
+                }
+                ll_line(lc, "br label %%L%d", merge_label);
+                lc->block_terminated = 1;
+
+                ll_emit(lc, "L%d:\n", evaluate_label);
+                lc->block_terminated = 0;
+                int right = llvm_emit_expr(lc, expr->as.binary.right);
+                int right_bool = llc_new_reg(lc);
+                ll_line(lc, "%%%d = call i32 @sage_rt_get_bool(%%SageValue %%%d)", right_bool, right);
+                int right_value = llc_new_reg(lc);
+                ll_line(lc, "%%%d = call %%SageValue @sage_rt_bool(i32 %%%d)", right_value, right_bool);
+                ll_line(lc, "br label %%L%d", merge_label);
+                lc->block_terminated = 1;
+
+                ll_emit(lc, "L%d:\n", merge_label);
+                lc->block_terminated = 0;
+                int result = llc_new_reg(lc);
+                ll_line(lc, "%%%d = phi %%SageValue [ %%%d, %%L%d ], [ %%%d, %%L%d ]",
+                        result, decided_value, decided_label, right_value, evaluate_label);
+                return result;
+            }
+
             int left = llvm_emit_expr(lc, expr->as.binary.left);
             int right = llvm_emit_expr(lc, expr->as.binary.right);
             int r = llc_new_reg(lc);
@@ -1467,13 +3241,15 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
 
             ImportedConst* imported = llc_find_imported_const(lc, name);
             if (imported != NULL) {
-                int r = llc_new_reg(lc);
+                int r;
                 switch (imported->value.type) {
                     case IMPORT_CONST_NUMBER:
+                        r = llc_new_reg(lc);
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %.17e)",
                                 r, imported->value.number_value);
                         break;
                     case IMPORT_CONST_BOOL:
+                        r = llc_new_reg(lc);
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_bool(i32 %d)",
                                 r, imported->value.bool_value ? 1 : 0);
                         break;
@@ -1483,11 +3259,13 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                         int ptr_reg = llc_new_reg(lc);
                         ll_line(lc, "%%%d = getelementptr [%zu x i8], [%zu x i8]* @.str.%d, i64 0, i64 0",
                                 ptr_reg, slen, slen, str_id);
+                        r = llc_new_reg(lc);
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_string(i8* %%%d)", r, ptr_reg);
                         break;
                     }
                     case IMPORT_CONST_NIL:
                     default:
+                        r = llc_new_reg(lc);
                         ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
                         break;
                 }
@@ -1495,42 +3273,200 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 return r;
             }
 
-            int r = llc_new_reg(lc);
-            // Check if it's a global variable
+            LLVMImportedValue* imported_value =
+                llc_find_imported_binding_value(lc, name);
+            if (imported_value != NULL) {
+                int r;
+                if (imported_value->proc_scope != NULL) {
+                    int ptr = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = bitcast %%SageValue (...)* @%s to i8*",
+                            ptr, imported_value->proc_scope->adapter_symbol);
+                    r = llc_new_reg(lc);
+                    ll_line(lc,
+                            "%%%d = call %%SageValue @sage_rt_make_function(i8* %%%d, i32 %d, i32 %d)",
+                            r, ptr, imported_value->proc_scope->proc->param_count,
+                            imported_value->proc_scope->proc->required_count);
+                } else if (imported_value->global_name != NULL) {
+                    r = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = load %%SageValue, %%SageValue* @%s",
+                            r, imported_value->global_name);
+                } else {
+                    r = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                }
+                free(name);
+                return r;
+            }
+
+            const char* module_name = lc->current_scope != NULL &&
+                                     lc->current_scope->module_name != NULL
+                ? lc->current_scope->module_name : lc->current_module_name;
+            if (module_name != NULL) {
+                LLVMImportedGlobal* module_global =
+                    llc_find_imported_global(lc, module_name, name);
+                if (module_global != NULL) {
+                    int r = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = load %%SageValue, %%SageValue* @%s",
+                            r, module_global->global_name);
+                    free(name);
+                    return r;
+                }
+            }
+
+            int is_local = 0;
+            if (lc->current_scope != NULL && lc->current_scope != lc->main_scope) {
+                if (llvm_name_set_has(&lc->current_scope->bound_names, name)) {
+                    is_local = 1;
+                } else {
+                    for (int i = 0; i < lc->current_scope->capture_count; i++) {
+                        if (strcmp(lc->current_scope->captures[i], name) == 0) {
+                            is_local = 1;
+                            break;
+                        }
+                    }
+                }
+            }
             int is_global = 0;
             for (int i = 0; i < lc->global_count; i++) {
-                if (strcmp(lc->global_names[i], name) == 0) { is_global = 1; break; }
+                if (strcmp(lc->global_names[i], name) == 0) {
+                    is_global = 1;
+                    break;
+                }
             }
-            // Check if it's a known proc (used as first-class value / callback)
             int is_proc = 0;
             for (int i = 0; i < lc->proc_count; i++) {
-                if (strcmp(lc->proc_names[i], name) == 0) { is_proc = 1; break; }
+                if (strcmp(lc->proc_names[i], name) == 0) {
+                    is_proc = 1;
+                    break;
+                }
             }
-            if (is_proc) {
-                // Proc reference as first-class value: bitcast function pointer
-                // to i8* and wrap it in a SAGE_FUNCTION SageValue via the runtime.
+
+            int is_try_capture = llvm_current_try_capture(lc, name);
+            int r;
+            if (!is_local && !is_global && is_proc) {
+                LLVMScopeInfo* proc_scope = llc_find_top_scope_by_name(lc, name);
+                const char* signature_name = proc_scope != NULL &&
+                                             proc_scope->signature_name != NULL
+                    ? proc_scope->signature_name : name;
+                LLVMProcSignature* sig = llc_find_proc_signature(lc, signature_name);
+                const char* entry_symbol = proc_scope != NULL && proc_scope->adapter_symbol != NULL
+                    ? proc_scope->adapter_symbol : NULL;
+                size_t symbol_size = entry_symbol != NULL
+                    ? strlen(entry_symbol) + 32 : strlen(name) + 32;
+                char* symbol = SAGE_ALLOC(symbol_size);
+                if (entry_symbol != NULL) {
+                    snprintf(symbol, symbol_size, "%s", entry_symbol);
+                } else {
+                    snprintf(symbol, symbol_size, "sage_fn_%s", name);
+                }
                 int ptr_reg = llc_new_reg(lc);
-                ll_line(lc, "%%%d = bitcast %%SageValue (...)* @sage_fn_%s to i8*", ptr_reg, name);
-                ll_line(lc, "%%%d = call %%SageValue @sage_rt_make_function(i8* %%%d)", r, ptr_reg);
-            } else if (is_global) {
-                ll_line(lc, "%%%d = load %%SageValue, %%SageValue* @%s", r, name);
+                ll_line(lc, "%%%d = bitcast %%SageValue (...)* @%s to i8*", ptr_reg, symbol);
+                r = llc_new_reg(lc);
+                int param_count = sig != NULL ? sig->param_count : -1;
+                int required_count = sig != NULL ? sig->required_count : -1;
+                ll_line(lc, "%%%d = call %%SageValue @sage_rt_make_function(i8* %%%d, i32 %d, i32 %d)",
+                        r, ptr_reg, param_count, required_count);
+                free(symbol);
+            } else if (is_try_capture) {
+                int pointer = llc_new_reg(lc);
+                int value = llc_new_reg(lc);
+                ll_line(lc, "%%%d = load %%SageValue*, %%SageValue** %%%s", pointer, name);
+                ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%d", value, pointer);
+                r = value;
             } else {
-                ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%s", r, name);
+                r = llc_new_reg(lc);
+                if (is_local) {
+                    ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%s", r, name);
+                } else if (is_global) {
+                    ll_line(lc, "%%%d = load %%SageValue, %%SageValue* @%s", r, name);
+                } else {
+                    ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%s", r, name);
+                }
             }
             free(name);
             return r;
         }
         case EXPR_CALL: {
-            // Emit arguments
             int* arg_regs = NULL;
-            if (expr->as.call.arg_count > 0) {
-                arg_regs = SAGE_ALLOC(sizeof(int) * (size_t)expr->as.call.arg_count);
-                for (int i = 0; i < expr->as.call.arg_count; i++) {
-                    arg_regs[i] = llvm_emit_expr(lc, expr->as.call.args[i]);
+            int call_arg_count = 0;
+            unsigned long long call_arg_mask = 0;
+            char* direct_name = NULL;
+            const char* direct_signature_name = NULL;
+            LLVMProcSignature* direct_signature = NULL;
+            LLVMScopeInfo* direct_scope = NULL;
+            LLVMStructInfo* direct_struct = NULL;
+            LLVMClassInfo* direct_class = NULL;
+
+            if (expr->as.call.callee != NULL && expr->as.call.callee->type == EXPR_VARIABLE) {
+                direct_name = token_to_str(expr->as.call.callee->as.variable.name);
+                direct_class = llc_find_class_info(lc, direct_name);
+                if (direct_class != NULL) {
+                    int result = llvm_emit_class_construct(lc, direct_class, expr);
+                    free(direct_name);
+                    return result;
                 }
+                direct_struct = llc_find_struct_info(lc, direct_name);
+                if (direct_struct != NULL) {
+                    int result = llvm_emit_struct_construct(lc, direct_struct, expr);
+                    free(direct_name);
+                    return result;
+                }
+
+                LLVMImportedValue* imported_value =
+                    llc_find_imported_binding_value(lc, direct_name);
+                if (imported_value != NULL) {
+                    if (imported_value->proc_scope == NULL) {
+                        fprintf(stderr, "LLVM backend: imported value '%s' is not callable\n",
+                                direct_name);
+                        lc->failed = 1;
+                        free(direct_name);
+                        int result = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", result);
+                        return result;
+                    }
+                    llvm_emit_callable_arguments(
+                        lc, expr, imported_value->proc_scope->signature_name, 0,
+                        &arg_regs, &call_arg_count, &call_arg_mask);
+                    int result = llvm_emit_adapter_call(
+                        lc, imported_value->proc_scope->adapter_symbol, arg_regs,
+                        call_arg_count, call_arg_mask);
+                    free(arg_regs);
+                    free(direct_name);
+                    return result;
+                }
+
+                direct_scope = llc_find_top_scope_by_name(lc, direct_name);
+                direct_signature_name = direct_scope != NULL &&
+                                        direct_scope->signature_name != NULL
+                    ? direct_scope->signature_name : direct_name;
+                direct_signature = llc_find_proc_signature(lc, direct_signature_name);
             }
 
-            // Special case: super.method(args)
+            if (direct_signature != NULL) {
+                llvm_emit_callable_arguments(lc, expr, direct_signature_name, 0,
+                                             &arg_regs, &call_arg_count, &call_arg_mask);
+                int result;
+                if (direct_scope != NULL && !direct_scope->is_nested) {
+                    result = llvm_emit_adapter_call(
+                        lc, direct_scope->adapter_symbol, arg_regs,
+                        call_arg_count, call_arg_mask);
+                } else {
+                    int callee = llvm_emit_expr(lc, expr->as.call.callee);
+                    result = llvm_emit_dynamic_call(lc, callee, arg_regs,
+                                                     call_arg_count, call_arg_mask);
+                }
+                free(arg_regs);
+                free(direct_name);
+                return result;
+            }
+
+            if (direct_name != NULL) {
+                free(direct_name);
+                direct_name = NULL;
+            }
+            llvm_emit_callable_arguments(lc, expr, NULL, 0,
+                                         &arg_regs, &call_arg_count, &call_arg_mask);
+
             if (expr->as.call.callee->type == EXPR_SUPER) {
                 if (lc->parent_class_name == NULL) {
                     fprintf(stderr, "LLVM backend: 'super' used outside a class with a parent\n");
@@ -1539,20 +3475,73 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                     if (arg_regs) free(arg_regs);
                     return r;
                 }
-                
+
                 int arg_offset = 0;
-                if (expr->as.call.arg_count > 0 && expr->as.call.args[0]->type == EXPR_VARIABLE) {
+                if (expr->as.call.arg_count > 0 &&
+                    expr->as.call.args[0]->type == EXPR_VARIABLE) {
                     char* first_arg_name = token_to_str(expr->as.call.args[0]->as.variable.name);
-                    if (strcmp(first_arg_name, "self") == 0) {
-                        arg_offset = 1;
-                    }
+                    if (strcmp(first_arg_name, "self") == 0) arg_offset = 1;
                     free(first_arg_name);
                 }
 
                 char* method = token_to_str(expr->as.call.callee->as.super_expr.method);
-                
+                LLVMClassInfo* parent_info = llc_find_class_info(lc, lc->parent_class_name);
+                int parent_offset = 0;
+                char* qualified_name = NULL;
+                LLVMProcSignature* parent_signature = llvm_find_method_signature(
+                    lc, parent_info, method, &parent_offset, &qualified_name);
+                LLVMScopeInfo* parent_scope = llc_find_scope_by_qualified_name(
+                    lc, qualified_name);
+                if (parent_signature != NULL && parent_scope != NULL) {
+                    Expr adjusted = *expr;
+                    if (arg_offset > 0) {
+                        adjusted.as.call.args = expr->as.call.args + arg_offset;
+                        adjusted.as.call.kw_names = expr->as.call.kw_names != NULL
+                            ? expr->as.call.kw_names + arg_offset : NULL;
+                        adjusted.as.call.arg_count -= arg_offset;
+                    }
+                    const int* raw_regs = arg_offset > 0
+                        ? arg_regs + arg_offset : arg_regs;
+                    int raw_count = adjusted.as.call.arg_count;
+                    int* remapped_regs = NULL;
+                    int remapped_count = 0;
+                    unsigned long long remapped_mask = 0;
+                    llvm_remap_callable_arguments(
+                        lc, &adjusted, qualified_name, parent_offset,
+                        raw_regs, raw_count, &remapped_regs, &remapped_count,
+                        &remapped_mask);
+                    free(arg_regs);
+                    arg_regs = remapped_regs;
+                    call_arg_count = remapped_count;
+                    call_arg_mask = remapped_mask;
+                    int* full_args = NULL;
+                    int full_count = call_arg_count;
+                    unsigned long long full_mask = call_arg_mask;
+                    if (parent_offset > 0) {
+                        int self_value = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%self", self_value);
+                        full_count = call_arg_count + 1;
+                        full_args = SAGE_ALLOC(sizeof(int) * (size_t)full_count);
+                        full_args[0] = self_value;
+                        for (int i = 0; i < call_arg_count; i++) {
+                            full_args[i + 1] = arg_regs[i];
+                        }
+                        full_mask = (call_arg_mask << 1) | 1ULL;
+                    } else {
+                        full_args = arg_regs;
+                    }
+                    int result = llvm_emit_adapter_call(
+                        lc, parent_scope->adapter_symbol, full_args,
+                        full_count, full_mask);
+                    if (full_args != arg_regs) free(full_args);
+                    free(arg_regs);
+                    free(qualified_name);
+                    free(method);
+                    return result;
+                }
+
+                free(qualified_name);
                 int r = llc_new_reg(lc);
-                // Call parent's method directly, passing 'self' (parameter is named %arg_self)
                 ll_emit(lc, "    %%%d = call %%SageValue @sage_fn_%s_%s(%%SageValue %%arg_self", r, lc->parent_class_name, method);
                 for (int i = 0; i < expr->as.call.arg_count - arg_offset; i++) {
                     ll_emit(lc, ", %%SageValue %%%d", arg_regs[i + arg_offset]);
@@ -1563,11 +3552,12 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 return r;
             }
 
-            int r = llc_new_reg(lc);
+            int r = -1;
 
             // Check for builtin calls
             if (expr->as.call.callee->type == EXPR_VARIABLE) {
                 char* name = token_to_str(expr->as.call.callee->as.variable.name);
+                if (llvm_is_builtin_call(name)) r = llc_new_reg(lc);
 
                 if (strcmp(name, "str") == 0 && expr->as.call.arg_count == 1) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_str(%%SageValue %%%d)", r, arg_regs[0]);
@@ -1587,12 +3577,52 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_slice(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2]);
                 } else if (strcmp(name, "range") == 0 && expr->as.call.arg_count == 1) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_range(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "range") == 0 && expr->as.call.arg_count == 2) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_range2(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                } else if (strcmp(name, "range") == 0 && expr->as.call.arg_count == 3) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_range3(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2]);
                 } else if (strcmp(name, "dict_keys") == 0 && expr->as.call.arg_count == 1) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_dict_keys(%%SageValue %%%d)", r, arg_regs[0]);
                 } else if (strcmp(name, "dict_values") == 0 && expr->as.call.arg_count == 1) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_dict_values(%%SageValue %%%d)", r, arg_regs[0]);
                 } else if (strcmp(name, "dict_has") == 0 && expr->as.call.arg_count == 2) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_dict_has(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                } else if (strcmp(name, "dict_delete") == 0 && expr->as.call.arg_count == 2) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_dict_delete(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                } else if (strcmp(name, "upper") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_upper(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "lower") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_lower(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "strip") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_strip(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "split") == 0 && expr->as.call.arg_count == 2) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_split(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                } else if (strcmp(name, "join") == 0 && expr->as.call.arg_count == 2) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_join(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                } else if (strcmp(name, "replace") == 0 && expr->as.call.arg_count == 3) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_replace(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2]);
+                } else if (strcmp(name, "mem_alloc") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_mem_alloc(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "mem_free") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_mem_free(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "mem_read") == 0 && expr->as.call.arg_count == 3) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_mem_read(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2]);
+                } else if (strcmp(name, "mem_write") == 0 && expr->as.call.arg_count == 4) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_mem_write(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3]);
+                } else if (strcmp(name, "mem_size") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_mem_size(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "struct_def") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_struct_def(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "struct_new") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_struct_new(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "struct_get") == 0 && expr->as.call.arg_count == 3) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_struct_get(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2]);
+                } else if (strcmp(name, "struct_set") == 0 && expr->as.call.arg_count == 4) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_struct_set(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3]);
+                } else if (strcmp(name, "struct_size") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_struct_size(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "asm_arch") == 0 && expr->as.call.arg_count == 0) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_asm_arch()", r);
                 } else if (strcmp(name, "type") == 0 && expr->as.call.arg_count == 1) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_type(%%SageValue %%%d)", r, arg_regs[0]);
                 } else if (strcmp(name, "chr") == 0 && expr->as.call.arg_count == 1) {
@@ -1608,21 +3638,175 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 } else if (strcmp(name, "gc_collect") == 0) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
                 } else {
-                    // User function call
-                    fprintf(lc->out, "  %%%d = call %%SageValue @sage_fn_%s(", r, name);
-                    for (int i = 0; i < expr->as.call.arg_count; i++) {
-                        if (i > 0) fputs(", ", lc->out);
-                        fprintf(lc->out, "%%SageValue %%%d", arg_regs[i]);
-                    }
-                    fputs(")\n", lc->out);
+                    int callee = llvm_emit_expr(lc, expr->as.call.callee);
+                    r = llvm_emit_dynamic_call(lc, callee, arg_regs,
+                                                call_arg_count, call_arg_mask);
                 }
 
                 free(name);
             } else if (expr->as.call.callee->type == EXPR_GET &&
+                       expr->as.call.callee->as.get.object->type != EXPR_VARIABLE) {
+                char* method_name = token_to_str(expr->as.call.callee->as.get.property);
+                Expr* object_expr = expr->as.call.callee->as.get.object;
+                LLVMClassInfo* object_class = NULL;
+                if (object_expr->type == EXPR_CALL &&
+                    object_expr->as.call.callee != NULL &&
+                    object_expr->as.call.callee->type == EXPR_VARIABLE) {
+                    char* class_name = token_to_str(object_expr->as.call.callee->as.variable.name);
+                    object_class = llc_find_class_info(lc, class_name);
+                    free(class_name);
+                }
+                int method_offset = 0;
+                char* qualified_name = NULL;
+                LLVMProcSignature* method_signature = NULL;
+                if (object_class != NULL) {
+                    method_signature = llvm_find_method_signature(
+                        lc, object_class, method_name, &method_offset,
+                        &qualified_name);
+                }
+                if (method_signature != NULL) {
+                    int* remapped_regs = NULL;
+                    int remapped_count = 0;
+                    unsigned long long remapped_mask = 0;
+                    llvm_remap_callable_arguments(
+                        lc, expr, qualified_name, method_offset,
+                        arg_regs, call_arg_count, &remapped_regs,
+                        &remapped_count, &remapped_mask);
+                    free(arg_regs);
+                    arg_regs = remapped_regs;
+                    call_arg_count = remapped_count;
+                    call_arg_mask = remapped_mask;
+                }
+                free(qualified_name);
+                int object = llvm_emit_expr(lc, object_expr);
+                int method_ptr = llvm_emit_string_ptr(lc, method_name);
+                int method_result;
+                if (call_arg_count > 0) {
+                    int array = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = alloca %%SageValue, i32 %d", array, call_arg_count);
+                    for (int i = 0; i < call_arg_count; i++) {
+                        int slot = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = getelementptr %%SageValue, %%SageValue* %%%d, i32 %d",
+                                slot, array, i);
+                        ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", arg_regs[i], slot);
+                    }
+                    method_result = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_call_method(%%SageValue %%%d, i8* %%%d, %%SageValue* %%%d, i32 %d, i64 %llu)",
+                            method_result, object, method_ptr, array, call_arg_count,
+                            call_arg_mask);
+                } else {
+                    method_result = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_call_method(%%SageValue %%%d, i8* %%%d, %%SageValue* null, i32 0, i64 %llu)",
+                            method_result, object, method_ptr, call_arg_mask);
+                }
+                free(method_name);
+                free(arg_regs);
+                return method_result;
+            } else if (expr->as.call.callee->type == EXPR_GET &&
                        expr->as.call.callee->as.get.object->type == EXPR_VARIABLE) {
-                // Module method call: module.method(args...)
                 char* mod_name = token_to_str(expr->as.call.callee->as.get.object->as.variable.name);
                 char* method_name = token_to_str(expr->as.call.callee->as.get.property);
+
+                const char* source_module = llc_module_name_for_binding(lc, mod_name);
+                if (source_module != NULL) {
+                    LLVMScopeInfo* proc_scope = llc_find_module_proc_scope(
+                        lc, source_module, method_name);
+                    int method_result;
+                    if (proc_scope != NULL) {
+                        int* remapped_regs = NULL;
+                        int remapped_count = 0;
+                        unsigned long long remapped_mask = 0;
+                        llvm_remap_callable_arguments(
+                            lc, expr, proc_scope->signature_name, 0,
+                            arg_regs, call_arg_count, &remapped_regs,
+                            &remapped_count, &remapped_mask);
+                        free(arg_regs);
+                        arg_regs = remapped_regs;
+                        call_arg_count = remapped_count;
+                        call_arg_mask = remapped_mask;
+                        method_result = llvm_emit_adapter_call(
+                            lc, proc_scope->adapter_symbol, arg_regs,
+                            call_arg_count, call_arg_mask);
+                    } else {
+                        fprintf(stderr,
+                                "LLVM backend: source module '%s' has no callable member '%s'\n",
+                                source_module, method_name);
+                        lc->failed = 1;
+                        method_result = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", method_result);
+                    }
+                    free(mod_name);
+                    free(method_name);
+                    free(arg_regs);
+                    return method_result;
+                }
+
+                if (!llc_has_module(lc, mod_name)) {
+                    LLVMClassInfo* object_class = llc_find_class_info(lc, mod_name);
+                    if (object_class == NULL) {
+                        int value_shadowed = 0;
+                        if (lc->current_scope != NULL && lc->current_scope != lc->main_scope) {
+                            value_shadowed = llvm_name_set_has(&lc->current_scope->bound_names, mod_name);
+                            for (int i = 0; !value_shadowed && i < lc->current_scope->capture_count; i++) {
+                                if (strcmp(lc->current_scope->captures[i], mod_name) == 0) {
+                                    value_shadowed = 1;
+                                }
+                            }
+                        }
+                        if (!value_shadowed) {
+                            const char* value_class = llc_find_value_class(lc, mod_name);
+                            if (value_class != NULL) {
+                                object_class = llc_find_class_info(lc, value_class);
+                            }
+                        }
+                    }
+                    int method_offset = 0;
+                    char* qualified_name = NULL;
+                    LLVMProcSignature* method_signature = NULL;
+                    if (object_class != NULL) {
+                        method_signature = llvm_find_method_signature(
+                            lc, object_class, method_name, &method_offset,
+                            &qualified_name);
+                    }
+                    if (method_signature != NULL) {
+                        int* remapped_regs = NULL;
+                        int remapped_count = 0;
+                        unsigned long long remapped_mask = 0;
+                        llvm_remap_callable_arguments(
+                            lc, expr, qualified_name, method_offset,
+                            arg_regs, call_arg_count, &remapped_regs,
+                            &remapped_count, &remapped_mask);
+                        free(arg_regs);
+                        arg_regs = remapped_regs;
+                        call_arg_count = remapped_count;
+                        call_arg_mask = remapped_mask;
+                    }
+                    free(qualified_name);
+                    int object = llvm_emit_expr(lc, expr->as.call.callee->as.get.object);
+                    int method_ptr = llvm_emit_string_ptr(lc, method_name);
+                    int method_result;
+                    if (call_arg_count > 0) {
+                        int array = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = alloca %%SageValue, i32 %d", array, call_arg_count);
+                        for (int i = 0; i < call_arg_count; i++) {
+                            int slot = llc_new_reg(lc);
+                            ll_line(lc, "%%%d = getelementptr %%SageValue, %%SageValue* %%%d, i32 %d", slot, array, i);
+                            ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", arg_regs[i], slot);
+                        }
+                        method_result = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_call_method(%%SageValue %%%d, i8* %%%d, %%SageValue* %%%d, i32 %d, i64 %llu)",
+                                method_result, object, method_ptr, array, call_arg_count,
+                                call_arg_mask);
+                    } else {
+                        method_result = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_call_method(%%SageValue %%%d, i8* %%%d, %%SageValue* null, i32 0, i64 %llu)",
+                                method_result, object, method_ptr, call_arg_mask);
+                    }
+                    free(mod_name);
+                    free(method_name);
+                    free(arg_regs);
+                    return method_result;
+                }
 
                 if (llc_has_module(lc, mod_name) && strcmp(mod_name, "gpu") == 0) {
                     int gpu_r = llvm_try_emit_gpu_call(lc, method_name, arg_regs, expr->as.call.arg_count);
@@ -1633,6 +3817,8 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                         return gpu_r;
                     }
                 }
+
+                r = llc_new_reg(lc);
 
                 // io module: readfile, writefile
                 int handled = 0;
@@ -1722,25 +3908,9 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 free(mod_name);
                 free(method_name);
             } else {
-                // Dynamic/indirect call: evaluate callee expression to get a
-                // SageValue holding a function pointer, pack arguments into a
-                // stack-allocated array, and dispatch via sage_rt_call_dynamic.
                 int callee_reg = llvm_emit_expr(lc, expr->as.call.callee);
-                int argc = expr->as.call.arg_count;
-                if (argc > 0) {
-                    int arr_reg = llc_new_reg(lc);
-                    ll_line(lc, "%%%d = alloca %%SageValue, i32 %d", arr_reg, argc);
-                    for (int i = 0; i < argc; i++) {
-                        int slot = llc_new_reg(lc);
-                        ll_line(lc, "%%%d = getelementptr %%SageValue, %%SageValue* %%%d, i32 %d", slot, arr_reg, i);
-                        ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", arg_regs[i], slot);
-                    }
-                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_call_dynamic(%%SageValue %%%d, %%SageValue* %%%d, i32 %d)",
-                            r, callee_reg, arr_reg, argc);
-                } else {
-                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_call_dynamic(%%SageValue %%%d, %%SageValue* null, i32 0)",
-                            r, callee_reg);
-                }
+                r = llvm_emit_dynamic_call(lc, callee_reg, arg_regs,
+                                            call_arg_count, call_arg_mask);
             }
 
             free(arg_regs);
@@ -1756,6 +3926,30 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             return arr_reg;
         }
         case EXPR_INDEX: {
+            if (expr->as.index.array != NULL && expr->as.index.array->type == EXPR_VARIABLE &&
+                expr->as.index.index != NULL && expr->as.index.index->type == EXPR_STRING) {
+                char* enum_name = token_to_str(expr->as.index.array->as.variable.name);
+                LLVMEnumInfo* info = llc_find_enum_info(lc, enum_name);
+                if (info != NULL && expr->as.index.index->as.string.value != NULL) {
+                    const char* variant = expr->as.index.index->as.string.value;
+                    int result = -1;
+                    for (int i = 0; i < info->variant_count; i++) {
+                        if (strcmp(info->variant_names[i], variant) == 0) {
+                            result = i;
+                            break;
+                        }
+                    }
+                    free(enum_name);
+                    int r = llc_new_reg(lc);
+                    if (result >= 0) {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_number(double %.17e)", r, (double)result);
+                    } else {
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+                    }
+                    return r;
+                }
+                free(enum_name);
+            }
             int arr = llvm_emit_expr(lc, expr->as.index.array);
             int idx = llvm_emit_expr(lc, expr->as.index.index);
             int r = llc_new_reg(lc);
@@ -1805,6 +3999,35 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
             if (expr->as.get.object->type == EXPR_VARIABLE) {
                 char* mod_name = token_to_str(expr->as.get.object->as.variable.name);
                 char* prop_name = token_to_str(expr->as.get.property);
+                const char* source_module = llc_module_name_for_binding(lc, mod_name);
+                if (source_module != NULL) {
+                    LLVMImportedGlobal* global = llc_find_imported_global(
+                        lc, source_module, prop_name);
+                    LLVMScopeInfo* proc_scope = llc_find_module_proc_scope(
+                        lc, source_module, prop_name);
+                    int result = llc_new_reg(lc);
+                    if (global != NULL) {
+                        ll_line(lc, "%%%d = load %%SageValue, %%SageValue* @%s",
+                                result, global->global_name);
+                    } else if (proc_scope != NULL) {
+                        int ptr = llc_new_reg(lc);
+                        ll_line(lc, "%%%d = bitcast %%SageValue (...)* @%s to i8*",
+                                ptr, proc_scope->adapter_symbol);
+                        ll_line(lc,
+                                "%%%d = call %%SageValue @sage_rt_make_function(i8* %%%d, i32 %d, i32 %d)",
+                                result, ptr, proc_scope->proc->param_count,
+                                proc_scope->proc->required_count);
+                    } else {
+                        fprintf(stderr,
+                                "LLVM backend: source module '%s' has no member '%s'\n",
+                                source_module, prop_name);
+                        lc->failed = 1;
+                        ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", result);
+                    }
+                    free(mod_name);
+                    free(prop_name);
+                    return result;
+                }
                 if (llc_has_module(lc, mod_name) && strcmp(mod_name, "gpu") == 0) {
                     double const_val;
                     if (llvm_resolve_gpu_constant(prop_name, &const_val)) {
@@ -1840,7 +4063,11 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                 for (int i = 0; i < lc->global_count; i++) {
                     if (strcmp(lc->global_names[i], name) == 0) { is_global = 1; break; }
                 }
-                if (is_global) {
+                if (llvm_current_try_capture(lc, name)) {
+                    int pointer = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = load %%SageValue*, %%SageValue** %%%s", pointer, name);
+                    ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", val, pointer);
+                } else if (is_global) {
                     ll_line(lc, "store %%SageValue %%%d, %%SageValue* @%s", val, name);
                 } else {
                     ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", val, name);
@@ -1886,11 +4113,109 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
     }
 }
 
+static void llvm_emit_call_adapter(LLVMCompiler* lc, LLVMScopeInfo* scope) {
+    if (scope == NULL || scope->proc == NULL || scope->adapter_symbol == NULL) return;
+
+    ProcStmt* proc = scope->proc;
+    LLVMScopeInfo* previous_scope = lc->current_scope;
+    int previous_block_terminated = lc->block_terminated;
+    lc->current_scope = scope;
+    lc->block_terminated = 0;
+    lc->next_reg = 0;
+
+    fprintf(lc->out, "define %%SageValue @%s(%%SageValue %%arg_sage_callable, "
+                    "%%SageValue* %%arg_sage_args, i32 %%arg_sage_argc, "
+                    "i64 %%arg_sage_mask) {\n",
+            scope->adapter_symbol);
+    int entry = llc_new_label(lc);
+    ll_emit(lc, "L%d:\n", entry);
+
+    for (int i = 0; i < scope->capture_count; i++) {
+        const char* name = scope->captures[i];
+        ll_line(lc, "%%%s = alloca %%SageValue", name);
+        int value = llc_new_reg(lc);
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_closure_get(%%SageValue %%arg_sage_callable, i32 %d)",
+                value, i);
+        ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", value, name);
+    }
+
+    for (int i = 0; i < proc->param_count; i++) {
+        char* name = token_to_str(proc->params[i]);
+        ll_line(lc, "%%%s = alloca %%SageValue", name);
+
+        int bit = llc_new_reg(lc);
+        ll_line(lc, "%%%d = shl i64 1, %d", bit, i);
+        int masked = llc_new_reg(lc);
+        ll_line(lc, "%%%d = and i64 %%arg_sage_mask, %%%d", masked, bit);
+        int has_arg = llc_new_reg(lc);
+        ll_line(lc, "%%%d = icmp ne i64 %%%d, 0", has_arg, masked);
+        int provided_label = llc_new_label(lc);
+        int missing_label = llc_new_label(lc);
+        int merge_label = llc_new_label(lc);
+        ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d",
+                has_arg, provided_label, missing_label);
+
+        ll_emit(lc, "L%d:\n", provided_label);
+        lc->block_terminated = 0;
+        int slot = llc_new_reg(lc);
+        ll_line(lc, "%%%d = getelementptr %%SageValue, %%SageValue* %%arg_sage_args, i32 %d",
+                slot, i);
+        int provided_value = llc_new_reg(lc);
+        ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%d", provided_value, slot);
+        ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", provided_value, name);
+        ll_line(lc, "br label %%L%d", merge_label);
+
+        ll_emit(lc, "L%d:\n", missing_label);
+        lc->block_terminated = 0;
+        int value;
+        if (proc->defaults != NULL && proc->defaults[i] != NULL) {
+            value = llvm_emit_expr(lc, proc->defaults[i]);
+        } else {
+            value = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", value);
+        }
+        ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", value, name);
+        ll_line(lc, "br label %%L%d", merge_label);
+
+        ll_emit(lc, "L%d:\n", merge_label);
+        lc->block_terminated = 0;
+        free(name);
+    }
+
+    int* values = proc->param_count > 0
+        ? SAGE_ALLOC(sizeof(int) * (size_t)proc->param_count) : NULL;
+    for (int i = 0; i < proc->param_count; i++) {
+        char* name = token_to_str(proc->params[i]);
+        values[i] = llc_new_reg(lc);
+        ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%s", values[i], name);
+        free(name);
+    }
+
+    int result = llc_new_reg(lc);
+    fprintf(lc->out, "  %%%d = call %%SageValue @%s(", result, scope->symbol);
+    if (scope->is_nested) {
+        fputs("%SageValue %arg_sage_callable", lc->out);
+        if (proc->param_count > 0) fputs(", ", lc->out);
+    }
+    for (int i = 0; i < proc->param_count; i++) {
+        if (i > 0) fputs(", ", lc->out);
+        fprintf(lc->out, "%%SageValue %%%d", values[i]);
+    }
+    fputs(")\n", lc->out);
+    ll_line(lc, "ret %%SageValue %%%d", result);
+    fputs("}\n\n", lc->out);
+    free(values);
+
+    lc->current_scope = previous_scope;
+    lc->block_terminated = previous_block_terminated;
+}
+
 // ============================================================================
 // Statement Emission
 // ============================================================================
 
 static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt);
+static LLVMTryCallback* llvm_prepare_try_callback(LLVMCompiler* lc, Stmt* statement);
 
 static void llvm_emit_stmt_list(LLVMCompiler* lc, Stmt* head) {
     for (Stmt* s = head; s != NULL; s = s->next) {
@@ -1992,20 +4317,66 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             break;
         case STMT_RETURN: {
             if (lc->block_terminated) break;
+            int r;
             if (stmt->as.ret.value != NULL) {
-                int r = llvm_emit_expr(lc, stmt->as.ret.value);
-                ll_line(lc, "ret %%SageValue %%%d", r);
+                r = llvm_emit_expr(lc, stmt->as.ret.value);
             } else {
-                int r = llc_new_reg(lc);
+                r = llc_new_reg(lc);
                 ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", r);
+            }
+            if (lc->deferred_return_active) {
+                ll_line(lc, "store i32 2, i32* %%%d", lc->deferred_mode_slot);
+                ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", r, lc->deferred_return_slot);
+                ll_line(lc, "br label %%L%d", lc->deferred_return_label);
+            } else if (lc->current_try_callback != NULL) {
+                ll_line(lc, "call void @sage_rt_try_return(%%SageValue %%%d) noreturn", r);
+                ll_line(lc, "unreachable");
+            } else if (lc->current_scope == lc->main_scope) {
+                ll_line(lc, "ret i32 0");
+            } else {
                 ll_line(lc, "ret %%SageValue %%%d", r);
             }
             lc->block_terminated = 1;
             break;
         }
-        case STMT_PROC:
-            // Procs handled at top level
+        case STMT_PROC: {
+            LLVMScopeInfo* child = lc->current_scope != NULL
+                ? lc->current_scope->first_child : NULL;
+            while (child != NULL && child->declaration != stmt) child = child->next_sibling;
+            if (child == NULL) break;
+            char* name = token_to_str(stmt->as.proc.name);
+            if (child->capture_count > 0) {
+                int captures = llc_new_reg(lc);
+                ll_line(lc, "%%%d = alloca %%SageValue, i32 %d", captures, child->capture_count);
+                for (int i = 0; i < child->capture_count; i++) {
+                    Expr capture;
+                    memset(&capture, 0, sizeof(capture));
+                    capture.type = EXPR_VARIABLE;
+                    capture.as.variable.name.start = (char*)child->captures[i];
+                    capture.as.variable.name.length = (int)strlen(child->captures[i]);
+                    int value = llvm_emit_expr(lc, &capture);
+                    int slot = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = getelementptr %%SageValue, %%SageValue* %%%d, i32 %d", slot, captures, i);
+                    ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", value, slot);
+                }
+                int function = llc_new_reg(lc);
+                ll_line(lc, "%%%d = bitcast %%SageValue (...)* @%s to i8*", function, child->adapter_symbol);
+                int closure = llc_new_reg(lc);
+                ll_line(lc, "%%%d = call %%SageValue @sage_rt_make_closure(i8* %%%d, i32 %d, %%SageValue* %%%d, i32 %d, i32 %d)",
+                        closure, function, child->capture_count, captures,
+                        child->proc->param_count, child->proc->required_count);
+                ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", closure, name);
+            } else {
+                int function = llc_new_reg(lc);
+                ll_line(lc, "%%%d = bitcast %%SageValue (...)* @%s to i8*", function, child->adapter_symbol);
+                int closure = llc_new_reg(lc);
+                ll_line(lc, "%%%d = call %%SageValue @sage_rt_make_closure(i8* %%%d, i32 0, %%SageValue* null, i32 %d, i32 %d)",
+                        closure, function, child->proc->param_count, child->proc->required_count);
+                ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", closure, name);
+            }
+            free(name);
             break;
+        }
         case STMT_FOR: {
             // for variable in iterable: body
             if (lc->loop_depth >= 1024) {
@@ -2097,61 +4468,275 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             // Classes are collected and emitted at the top level
             break;
         case STMT_TRY: {
-            // Simplified try/catch: execute try block, ignore catch for now
-            // (Full setjmp/longjmp exception handling would require a different approach)
-            llvm_emit_stmt_list(lc, stmt->as.try_stmt.try_block);
+            if (lc->block_terminated) break;
+            LLVMTryCallback* callback = llvm_prepare_try_callback(lc, stmt);
+            int context = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call i8* @sage_rt_try_enter()", context);
+            int capture_array = -1;
+            if (callback->capture_count > 0) {
+                capture_array = llc_new_reg(lc);
+                ll_line(lc, "%%%d = alloca %%SageValue*, i32 %d", capture_array, callback->capture_count);
+                for (int i = 0; i < callback->capture_count; i++) {
+                    int slot = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = alloca %%SageValue*", slot);
+                    ll_line(lc, "store %%SageValue* %%%s, %%SageValue** %%%d", callback->captures[i], slot);
+                    int position = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = getelementptr %%SageValue*, %%SageValue** %%%d, i32 %d",
+                            position, capture_array, i);
+                    ll_line(lc, "store %%SageValue* %%%d, %%SageValue** %%%d", slot, position);
+                }
+            }
+            int callback_function = llc_new_reg(lc);
+            ll_line(lc, "%%%d = bitcast %%SageValue (%%SageValue**)* @%s to i8*",
+                    callback_function, callback->symbol);
+            int status = llc_new_reg(lc);
+            if (capture_array >= 0) {
+                ll_line(lc, "%%%d = call i32 @sage_rt_try_run(i8* %%%d, i8* %%%d, %%SageValue** %%%d)",
+                        status, context, callback_function, capture_array);
+            } else {
+                ll_line(lc, "%%%d = call i32 @sage_rt_try_run(i8* %%%d, i8* %%%d, %%SageValue** null)",
+                        status, context, callback_function);
+            }
+            int mode_slot = llc_new_reg(lc);
+            ll_line(lc, "%%%d = alloca i32", mode_slot);
+            ll_line(lc, "store i32 0, i32* %%%d", mode_slot);
+            int return_slot = llc_new_reg(lc);
+            ll_line(lc, "%%%d = alloca %%SageValue", return_slot);
+            int return_nil = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", return_nil);
+            ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", return_nil, return_slot);
+            int exception_slot = llc_new_reg(lc);
+            ll_line(lc, "%%%d = alloca %%SageValue", exception_slot);
+            int exception_nil = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", exception_nil);
+            ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", exception_nil, exception_slot);
+
+            int is_exception = llc_new_reg(lc);
+            ll_line(lc, "%%%d = icmp eq i32 %%%d, 1", is_exception, status);
+            int is_return = llc_new_reg(lc);
+            ll_line(lc, "%%%d = icmp eq i32 %%%d, 2", is_return, status);
+            int catch_label = llc_new_label(lc);
+            int return_test_label = llc_new_label(lc);
+            int return_label = llc_new_label(lc);
+            int normal_label = llc_new_label(lc);
+            int cleanup_label = llc_new_label(lc);
+            int dispatch_label = llc_new_label(lc);
+            int merge_label = llc_new_label(lc);
+            ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d", is_exception, catch_label, return_test_label);
+            ll_emit(lc, "L%d:\n", return_test_label);
+            ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d", is_return, return_label, normal_label);
+
+            int previous_deferred_active = lc->deferred_return_active;
+            int previous_deferred_label = lc->deferred_return_label;
+            int previous_deferred_mode = lc->deferred_mode_slot;
+            int previous_deferred_return = lc->deferred_return_slot;
+            int previous_deferred_exception = lc->deferred_exception_slot;
+            lc->deferred_return_active = 1;
+            lc->deferred_return_label = cleanup_label;
+            lc->deferred_mode_slot = mode_slot;
+            lc->deferred_return_slot = return_slot;
+            lc->deferred_exception_slot = exception_slot;
+
+            ll_emit(lc, "L%d:\n", catch_label);
+            lc->block_terminated = 0;
+            int exception = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_exception_value()", exception);
+            if (stmt->as.try_stmt.catch_count > 0) {
+                ll_line(lc, "store i32 0, i32* %%%d", mode_slot);
+            } else {
+                ll_line(lc, "store i32 1, i32* %%%d", mode_slot);
+            }
+            ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", exception, exception_slot);
+            ll_line(lc, "call void @sage_rt_try_leave(i8* %%%d)", context);
+            if (stmt->as.try_stmt.catch_count > 0) {
+                char* name = token_to_str(stmt->as.try_stmt.catches[0]->exception_var);
+                if (llc_has_global(lc, name)) {
+                    ll_line(lc, "store %%SageValue %%%d, %%SageValue* @%s", exception, name);
+                } else {
+                    ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", exception, name);
+                }
+                free(name);
+                llvm_emit_stmt_list(lc, stmt->as.try_stmt.catches[0]->body);
+            }
+            if (!lc->block_terminated) ll_line(lc, "br label %%L%d", cleanup_label);
+            lc->block_terminated = 1;
+
+            ll_emit(lc, "L%d:\n", return_label);
+            lc->block_terminated = 0;
+            int pending_return = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_try_return_value()", pending_return);
+            ll_line(lc, "store i32 2, i32* %%%d", mode_slot);
+            ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", pending_return, return_slot);
+            ll_line(lc, "call void @sage_rt_try_leave(i8* %%%d)", context);
+            ll_line(lc, "br label %%L%d", cleanup_label);
+            lc->block_terminated = 1;
+
+            ll_emit(lc, "L%d:\n", normal_label);
+            lc->block_terminated = 0;
+            ll_line(lc, "call void @sage_rt_try_leave(i8* %%%d)", context);
+            ll_line(lc, "br label %%L%d", cleanup_label);
+            lc->block_terminated = 1;
+
+            ll_emit(lc, "L%d:\n", cleanup_label);
+            lc->deferred_return_label = dispatch_label;
+            lc->block_terminated = 0;
+            llvm_emit_stmt_list(lc, stmt->as.try_stmt.finally_block);
+            if (!lc->block_terminated) ll_line(lc, "br label %%L%d", dispatch_label);
+            lc->block_terminated = 1;
+
+            lc->deferred_return_active = previous_deferred_active;
+            lc->deferred_return_label = previous_deferred_label;
+            lc->deferred_mode_slot = previous_deferred_mode;
+            lc->deferred_return_slot = previous_deferred_return;
+            lc->deferred_exception_slot = previous_deferred_exception;
+
+            ll_emit(lc, "L%d:\n", dispatch_label);
+            lc->block_terminated = 0;
+            int pending_mode = llc_new_reg(lc);
+            ll_line(lc, "%%%d = load i32, i32* %%%d", pending_mode, mode_slot);
+            int pending_exception = llc_new_reg(lc);
+            ll_line(lc, "%%%d = icmp eq i32 %%%d, 1", pending_exception, pending_mode);
+            int pending_is_return = llc_new_reg(lc);
+            ll_line(lc, "%%%d = icmp eq i32 %%%d, 2", pending_is_return, pending_mode);
+            int exception_action = llc_new_label(lc);
+            int return_check = llc_new_label(lc);
+            int return_action = llc_new_label(lc);
+            ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d", pending_exception, exception_action, return_check);
+
+            ll_emit(lc, "L%d:\n", exception_action);
+            lc->block_terminated = 0;
+            int pending_exception_value = llc_new_reg(lc);
+            ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%d", pending_exception_value, exception_slot);
+            if (previous_deferred_active) {
+                ll_line(lc, "store i32 1, i32* %%%d", previous_deferred_mode);
+                ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", pending_exception_value, previous_deferred_exception);
+                ll_line(lc, "br label %%L%d", previous_deferred_label);
+            } else {
+                ll_line(lc, "call void @sage_rt_raise(%%SageValue %%%d) noreturn", pending_exception_value);
+                ll_line(lc, "unreachable");
+            }
+            lc->block_terminated = 1;
+
+            ll_emit(lc, "L%d:\n", return_check);
+            lc->block_terminated = 0;
+            ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d", pending_is_return, return_action, merge_label);
+            lc->block_terminated = 1;
+
+            ll_emit(lc, "L%d:\n", return_action);
+            lc->block_terminated = 0;
+            int pending_return_value = llc_new_reg(lc);
+            ll_line(lc, "%%%d = load %%SageValue, %%SageValue* %%%d", pending_return_value, return_slot);
+            if (previous_deferred_active) {
+                ll_line(lc, "store i32 2, i32* %%%d", previous_deferred_mode);
+                ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", pending_return_value, previous_deferred_return);
+                ll_line(lc, "br label %%L%d", previous_deferred_label);
+            } else if (lc->current_try_callback != NULL) {
+                ll_line(lc, "call void @sage_rt_try_return(%%SageValue %%%d) noreturn", pending_return_value);
+                ll_line(lc, "unreachable");
+            } else if (lc->current_scope == lc->main_scope) {
+                ll_line(lc, "ret i32 0");
+            } else {
+                ll_line(lc, "ret %%SageValue %%%d", pending_return_value);
+            }
+            lc->block_terminated = 1;
+
+            ll_emit(lc, "L%d:\n", merge_label);
+            lc->block_terminated = 0;
             break;
         }
         case STMT_RAISE: {
-            // Emit the exception value, print it, then abort
+            int val;
             if (stmt->as.raise.exception != NULL) {
-                int val = llvm_emit_expr(lc, stmt->as.raise.exception);
-                ll_line(lc, "call void @sage_rt_print(%%SageValue %%%d)", val);
+                val = llvm_emit_expr(lc, stmt->as.raise.exception);
+            } else {
+                val = llvm_emit_string_value(lc, "exception");
             }
-            ll_line(lc, "call void @abort()");
-            ll_line(lc, "unreachable");
-            // Need a landing pad for any code after the raise
-            int unr = llc_new_label(lc);
-            ll_emit(lc, "L%d:\n", unr);
+            if (lc->deferred_return_active) {
+                ll_line(lc, "store i32 1, i32* %%%d", lc->deferred_mode_slot);
+                ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%d", val, lc->deferred_exception_slot);
+                ll_line(lc, "br label %%L%d", lc->deferred_return_label);
+            } else {
+                ll_line(lc, "call void @sage_rt_raise(%%SageValue %%%d) noreturn", val);
+                ll_line(lc, "unreachable");
+            }
+            lc->block_terminated = 1;
             break;
         }
         case STMT_IMPORT: {
             // Track imported modules for GPU/graphics support in compiled mode
             const char* mod_name = stmt->as.import.module_name;
             if (mod_name != NULL) {
-                llc_add_module(lc, mod_name);
+                const char* binding = stmt->as.import.alias;
+                if (binding == NULL && stmt->as.import.item_count == 0) {
+                    const char* dot = strrchr(mod_name, '.');
+                    binding = dot != NULL ? dot + 1 : mod_name;
+                }
+                if (binding != NULL) llc_add_module_binding(lc, mod_name, binding);
             }
             break;
         }
         case STMT_MATCH: {
+            if (lc->block_terminated) break;
             int match_val = llvm_emit_expr(lc, stmt->as.match_stmt.value);
             int lbl_end = llc_new_label(lc);
             for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
                 CaseClause* clause = stmt->as.match_stmt.cases[i];
-                int pat_reg = llvm_emit_expr(lc, clause->pattern);
-                int cmp_reg = lc->next_reg++;
-                int bool_reg = lc->next_reg++;
-                int lbl_then = llc_new_label(lc);
                 int lbl_next = llc_new_label(lc);
-                fprintf(lc->out, "  %%%d = call %%SageValue @sage_rt_eq(%%SageValue %%%d, %%SageValue %%%d)\n", cmp_reg, match_val, pat_reg);
-                fprintf(lc->out, "  %%%d = call i1 @sage_rt_get_bool(%%SageValue %%%d)\n", bool_reg, cmp_reg);
-                fprintf(lc->out, "  br i1 %%%d, label %%L%d, label %%L%d\n", bool_reg, lbl_then, lbl_next);
-                fprintf(lc->out, "L%d:\n", lbl_then);
+                int lbl_then = llc_new_label(lc);
+                int lbl_guard = clause->guard != NULL ? llc_new_label(lc) : -1;
+                int wildcard = clause->pattern == NULL ||
+                               (clause->pattern->type == EXPR_VARIABLE &&
+                                clause->pattern->as.variable.name.length == 1 &&
+                                clause->pattern->as.variable.name.start[0] == '_');
+                int binding = !wildcard && clause->pattern->type == EXPR_VARIABLE;
+
+                if (wildcard) {
+                    if (lbl_guard >= 0) ll_line(lc, "br label %%L%d", lbl_guard);
+                    else ll_line(lc, "br label %%L%d", lbl_then);
+                } else if (binding) {
+                    char* pattern_name = token_to_str(clause->pattern->as.variable.name);
+                    ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", match_val, pattern_name);
+                    free(pattern_name);
+                    if (lbl_guard >= 0) ll_line(lc, "br label %%L%d", lbl_guard);
+                    else ll_line(lc, "br label %%L%d", lbl_then);
+                } else {
+                    int pat_reg = llvm_emit_expr(lc, clause->pattern);
+                    int eq_reg = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_eq(%%SageValue %%%d, %%SageValue %%%d)",
+                            eq_reg, match_val, pat_reg);
+                    int bool_reg = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = call i32 @sage_rt_get_bool(%%SageValue %%%d)", bool_reg, eq_reg);
+                    int cmp_reg = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = icmp ne i32 %%%d, 0", cmp_reg, bool_reg);
+                    if (lbl_guard >= 0) {
+                        ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d", cmp_reg, lbl_guard, lbl_next);
+                    } else {
+                        ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d", cmp_reg, lbl_then, lbl_next);
+                    }
+                }
+
+                if (lbl_guard >= 0) {
+                    ll_emit(lc, "L%d:\n", lbl_guard);
+                    int guard_val = llvm_emit_expr(lc, clause->guard);
+                    int guard_bool = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = call i32 @sage_rt_get_bool(%%SageValue %%%d)", guard_bool, guard_val);
+                    int guard_cmp = llc_new_reg(lc);
+                    ll_line(lc, "%%%d = icmp ne i32 %%%d, 0", guard_cmp, guard_bool);
+                    ll_line(lc, "br i1 %%%d, label %%L%d, label %%L%d", guard_cmp, lbl_then, lbl_next);
+                }
+
+                ll_emit(lc, "L%d:\n", lbl_then);
                 lc->block_terminated = 0;
                 llvm_emit_stmt_list(lc, clause->body);
-                if (!lc->block_terminated) {
-                    fprintf(lc->out, "  br label %%L%d\n", lbl_end);
-                }
-                fprintf(lc->out, "L%d:\n", lbl_next);
+                if (!lc->block_terminated) ll_line(lc, "br label %%L%d", lbl_end);
+                ll_emit(lc, "L%d:\n", lbl_next);
                 lc->block_terminated = 0;
             }
-            if (stmt->as.match_stmt.default_case) {
+            if (stmt->as.match_stmt.default_case != NULL) {
                 llvm_emit_stmt_list(lc, stmt->as.match_stmt.default_case);
             }
-            if (!lc->block_terminated) {
-                fprintf(lc->out, "  br label %%L%d\n", lbl_end);
-            }
-            fprintf(lc->out, "L%d:\n", lbl_end);
+            if (!lc->block_terminated) ll_line(lc, "br label %%L%d", lbl_end);
+            ll_emit(lc, "L%d:\n", lbl_end);
             lc->block_terminated = 0;
             break;
         }
@@ -2170,7 +4755,11 @@ static void llvm_emit_stmt(LLVMCompiler* lc, Stmt* stmt) {
             break;
 
         case STMT_STRUCT:
+            llvm_emit_struct_definition(lc, &stmt->as.struct_stmt);
+            break;
         case STMT_ENUM:
+            llvm_emit_enum_definition(lc, &stmt->as.enum_stmt);
+            break;
         case STMT_TRAIT:
         case STMT_MACRO_DEF:
             break;
@@ -2186,6 +4775,22 @@ static void collect_local_names(Stmt* stmt, char*** names, int* count, int* cap)
         if (s->type == STMT_LET) {
             char* name = token_to_str(s->as.let.name);
             // Check for duplicates
+            int dup = 0;
+            for (int i = 0; i < *count; i++) {
+                if (strcmp((*names)[i], name) == 0) { dup = 1; break; }
+            }
+            if (!dup) {
+                if (*count >= *cap) {
+                    *cap = *cap ? *cap * 2 : 16;
+                    *names = SAGE_REALLOC(*names, sizeof(char*) * (size_t)*cap);
+                }
+                (*names)[(*count)++] = name;
+            } else {
+                free(name);
+            }
+        } else if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC) {
+            Token token = s->type == STMT_PROC ? s->as.proc.name : s->as.async_proc.name;
+            char* name = token_to_str(token);
             int dup = 0;
             for (int i = 0; i < *count; i++) {
                 if (strcmp((*names)[i], name) == 0) { dup = 1; break; }
@@ -2227,8 +4832,72 @@ static void collect_local_names(Stmt* stmt, char*** names, int* count, int* cap)
             collect_local_names(s->as.block.statements, names, count, cap);
         } else if (s->type == STMT_TRY) {
             collect_local_names(s->as.try_stmt.try_block, names, count, cap);
+            for (int i = 0; i < s->as.try_stmt.catch_count; i++) {
+                char* name = token_to_str(s->as.try_stmt.catches[i]->exception_var);
+                int dup = 0;
+                for (int j = 0; j < *count; j++) {
+                    if (strcmp((*names)[j], name) == 0) { dup = 1; break; }
+                }
+                if (!dup) {
+                    if (*count >= *cap) {
+                        *cap = *cap ? *cap * 2 : 16;
+                        *names = SAGE_REALLOC(*names, sizeof(char*) * (size_t)*cap);
+                    }
+                    (*names)[(*count)++] = name;
+                } else {
+                    free(name);
+                }
+                collect_local_names(s->as.try_stmt.catches[i]->body, names, count, cap);
+            }
+            collect_local_names(s->as.try_stmt.finally_block, names, count, cap);
         } else if (s->type == STMT_COMPTIME) {
             collect_local_names(s->as.comptime.body, names, count, cap);
+        } else if (s->type == STMT_MATCH) {
+            for (int i = 0; i < s->as.match_stmt.case_count; i++) {
+                CaseClause* clause = s->as.match_stmt.cases[i];
+                if (clause->pattern != NULL && clause->pattern->type == EXPR_VARIABLE &&
+                    !(clause->pattern->as.variable.name.length == 1 &&
+                      clause->pattern->as.variable.name.start[0] == '_')) {
+                    char* pattern_name = token_to_str(clause->pattern->as.variable.name);
+                    int dup = 0;
+                    for (int j = 0; j < *count; j++) {
+                        if (strcmp((*names)[j], pattern_name) == 0) {
+                            dup = 1;
+                            break;
+                        }
+                    }
+                    if (!dup) {
+                        if (*count >= *cap) {
+                            *cap = *cap ? *cap * 2 : 16;
+                            *names = SAGE_REALLOC(*names, sizeof(char*) * (size_t)*cap);
+                        }
+                        (*names)[(*count)++] = pattern_name;
+                    } else {
+                        free(pattern_name);
+                    }
+                }
+                collect_local_names(clause->body, names, count, cap);
+            }
+            collect_local_names(s->as.match_stmt.default_case, names, count, cap);
+        } else if (s->type == STMT_STRUCT || s->type == STMT_ENUM) {
+            Token type_token = s->type == STMT_STRUCT ? s->as.struct_stmt.name : s->as.enum_stmt.name;
+            char* type_name = token_to_str(type_token);
+            int dup = 0;
+            for (int j = 0; j < *count; j++) {
+                if (strcmp((*names)[j], type_name) == 0) {
+                    dup = 1;
+                    break;
+                }
+            }
+            if (!dup) {
+                if (*count >= *cap) {
+                    *cap = *cap ? *cap * 2 : 16;
+                    *names = SAGE_REALLOC(*names, sizeof(char*) * (size_t)*cap);
+                }
+                (*names)[(*count)++] = type_name;
+            } else {
+                free(type_name);
+            }
         } else if (s->type == STMT_IMPORT) {
             // Import binding variable (e.g. import agent.critic -> "critic")
             const char* bind = s->as.import.alias;
@@ -2260,22 +4929,29 @@ static void collect_local_names(Stmt* stmt, char*** names, int* count, int* cap)
 // Function Definition Emission
 // ============================================================================
 
-static void llvm_emit_function(LLVMCompiler* lc, Stmt* proc) {
+static void llvm_emit_function(LLVMCompiler* lc, Stmt* proc,
+                               LLVMScopeInfo* scope, const char* symbol) {
     lc->block_terminated = 0;
-    char* name = token_to_str(proc->as.proc.name);
+    LLVMScopeInfo* previous_scope = lc->current_scope;
+    lc->current_scope = scope;
 
-    fprintf(lc->out, "define %%SageValue @sage_fn_%s(", name);
+    fprintf(lc->out, "define %%SageValue @%s(", symbol);
+    int first = 1;
+    if (scope != NULL && scope->is_nested) {
+        fputs("%SageValue %arg_sage_closure_env", lc->out);
+        first = 0;
+    }
     for (int i = 0; i < proc->as.proc.param_count; i++) {
-        if (i > 0) fputs(", ", lc->out);
+        if (!first) fputs(", ", lc->out);
         char* param = token_to_str(proc->as.proc.params[i]);
         fprintf(lc->out, "%%SageValue %%arg_%s", param);
         free(param);
+        first = 0;
     }
     fputs(") {\n", lc->out);
     int entry_label = llc_new_label(lc);
     ll_emit(lc, "L%d:\n", entry_label);
 
-    // Allocate parameter variables
     for (int i = 0; i < proc->as.proc.param_count; i++) {
         char* param = token_to_str(proc->as.proc.params[i]);
         ll_line(lc, "%%%s = alloca %%SageValue", param);
@@ -2283,30 +4959,43 @@ static void llvm_emit_function(LLVMCompiler* lc, Stmt* proc) {
         free(param);
     }
 
-    // Collect and allocate local variables at function entry
+    if (scope != NULL) {
+        for (int i = 0; i < scope->capture_count; i++) {
+            const char* name = scope->captures[i];
+            ll_line(lc, "%%%s = alloca %%SageValue", name);
+            int value = llc_new_reg(lc);
+            ll_line(lc, "%%%d = call %%SageValue @sage_rt_closure_get(%%SageValue %%arg_sage_closure_env, i32 %d)",
+                    value, i);
+            ll_line(lc, "store %%SageValue %%%d, %%SageValue* %%%s", value, name);
+        }
+    }
+
     char** locals = NULL;
     int local_count = 0, local_cap = 0;
     collect_local_names(proc->as.proc.body, &locals, &local_count, &local_cap);
     for (int i = 0; i < local_count; i++) {
-        // Skip if it's already a parameter
-        int is_param = 0;
+        int already_allocated = 0;
         for (int j = 0; j < proc->as.proc.param_count; j++) {
-            char* p = token_to_str(proc->as.proc.params[j]);
-            if (strcmp(p, locals[i]) == 0) is_param = 1;
-            free(p);
-            if (is_param) break;
+            char* param = token_to_str(proc->as.proc.params[j]);
+            if (strcmp(param, locals[i]) == 0) already_allocated = 1;
+            free(param);
+            if (already_allocated) break;
         }
-        if (!is_param) {
-            ll_line(lc, "%%%s = alloca %%SageValue", locals[i]);
+        if (!already_allocated && scope != NULL) {
+            for (int j = 0; j < scope->capture_count; j++) {
+                if (strcmp(scope->captures[j], locals[i]) == 0) {
+                    already_allocated = 1;
+                    break;
+                }
+            }
         }
+        if (!already_allocated) ll_line(lc, "%%%s = alloca %%SageValue", locals[i]);
         free(locals[i]);
     }
     free(locals);
 
-    // Emit body
     llvm_emit_stmt_list(lc, proc->as.proc.body);
 
-    // Default return nil (only if block not already terminated)
     if (!lc->block_terminated) {
         int nil_reg = llc_new_reg(lc);
         ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", nil_reg);
@@ -2314,7 +5003,292 @@ static void llvm_emit_function(LLVMCompiler* lc, Stmt* proc) {
     }
 
     fputs("}\n\n", lc->out);
-    free(name);
+    lc->current_scope = previous_scope;
+}
+
+static void llvm_emit_nested_functions(LLVMCompiler* lc, LLVMScopeInfo* scope) {
+    for (LLVMScopeInfo* child = scope->first_child; child != NULL; child = child->next_sibling) {
+        lc->next_reg = 0;
+        llvm_emit_function(lc, child->declaration, child, child->symbol);
+        llvm_emit_call_adapter(lc, child);
+        llvm_emit_nested_functions(lc, child);
+    }
+}
+
+static int llvm_scope_stores_name(LLVMScopeInfo* scope, const char* name) {
+    if (scope == NULL) return 0;
+    if (llvm_name_set_has(&scope->bound_names, name)) return 1;
+    for (int i = 0; i < scope->capture_count; i++) {
+        if (strcmp(scope->captures[i], name) == 0) return 1;
+    }
+    return 0;
+}
+
+static LLVMTryCallback* llvm_prepare_try_callback(LLVMCompiler* lc, Stmt* statement) {
+    if (lc->try_callback_count >= lc->try_callback_capacity) {
+        lc->try_callback_capacity = lc->try_callback_capacity ? lc->try_callback_capacity * 2 : 8;
+        lc->try_callbacks = SAGE_REALLOC(lc->try_callbacks,
+            sizeof(LLVMTryCallback) * (size_t)lc->try_callback_capacity);
+    }
+    LLVMTryCallback* callback = &lc->try_callbacks[lc->try_callback_count++];
+    memset(callback, 0, sizeof(*callback));
+    callback->statement = statement;
+    callback->owner = lc->current_scope;
+    size_t size = 64;
+    callback->symbol = SAGE_ALLOC(size);
+    snprintf(callback->symbol, size, "sage_fn_try_%d", lc->next_try_id++);
+    if (lc->current_class_name != NULL) callback->class_name = SAGE_STRDUP(lc->current_class_name);
+    if (lc->parent_class_name != NULL) callback->parent_name = SAGE_STRDUP(lc->parent_class_name);
+
+    LLVMNameSet referenced;
+    memset(&referenced, 0, sizeof(referenced));
+    llvm_collect_stmt_names(&referenced, statement->as.try_stmt.try_block);
+    for (int i = 0; i < referenced.count; i++) {
+        const char* name = referenced.items[i];
+        if (callback->owner == lc->main_scope) continue;
+        if (!llvm_scope_stores_name(callback->owner, name)) continue;
+        int is_proc = 0;
+        for (int j = 0; j < lc->proc_count; j++) {
+            if (strcmp(lc->proc_names[j], name) == 0) {
+                is_proc = 1;
+                break;
+            }
+        }
+        if (is_proc) continue;
+        callback->captures = SAGE_REALLOC(callback->captures,
+            sizeof(char*) * (size_t)(callback->capture_count + 1));
+        callback->captures[callback->capture_count++] = SAGE_STRDUP(name);
+    }
+    llvm_name_set_free(&referenced);
+    return callback;
+}
+
+static void llvm_emit_try_callback(LLVMCompiler* lc, LLVMTryCallback* callback) {
+    lc->block_terminated = 0;
+    lc->next_reg = 0;
+    LLVMScopeInfo* previous_scope = lc->current_scope;
+    LLVMTryCallback* previous_try_callback = lc->current_try_callback;
+    int previous_deferred_active = lc->deferred_return_active;
+    int previous_deferred_label = lc->deferred_return_label;
+    int previous_deferred_mode = lc->deferred_mode_slot;
+    int previous_deferred_return = lc->deferred_return_slot;
+    int previous_deferred_exception = lc->deferred_exception_slot;
+    char* previous_class = lc->current_class_name;
+    char* previous_parent = lc->parent_class_name;
+    lc->current_scope = callback->owner;
+    lc->current_try_callback = callback;
+    lc->deferred_return_active = 0;
+    lc->deferred_return_label = 0;
+    lc->deferred_mode_slot = 0;
+    lc->deferred_return_slot = 0;
+    lc->deferred_exception_slot = 0;
+    lc->current_class_name = callback->class_name;
+    lc->parent_class_name = callback->parent_name;
+
+    fprintf(lc->out, "define %%SageValue @%s(%%SageValue** %%arg_try_context) {\n", callback->symbol);
+    int entry = llc_new_label(lc);
+    ll_emit(lc, "L%d:\n", entry);
+    for (int i = 0; i < callback->capture_count; i++) {
+        ll_line(lc, "%%%s = alloca %%SageValue*", callback->captures[i]);
+        int slot = llc_new_reg(lc);
+        ll_line(lc, "%%%d = getelementptr %%SageValue*, %%SageValue** %%arg_try_context, i32 %d", slot, i);
+        int pointer = llc_new_reg(lc);
+        ll_line(lc, "%%%d = load %%SageValue*, %%SageValue** %%%d", pointer, slot);
+        ll_line(lc, "store %%SageValue* %%%d, %%SageValue** %%%s", pointer, callback->captures[i]);
+    }
+
+    char** locals = NULL;
+    int local_count = 0;
+    int local_cap = 0;
+    collect_local_names(callback->statement->as.try_stmt.try_block,
+                        &locals, &local_count, &local_cap);
+    for (int i = 0; i < local_count; i++) {
+        int captured = 0;
+        for (int j = 0; j < callback->capture_count; j++) {
+            if (strcmp(callback->captures[j], locals[i]) == 0) captured = 1;
+        }
+        if (!captured) ll_line(lc, "%%%s = alloca %%SageValue", locals[i]);
+        free(locals[i]);
+    }
+    free(locals);
+
+    llvm_emit_stmt_list(lc, callback->statement->as.try_stmt.try_block);
+    if (!lc->block_terminated) {
+        int nil = llc_new_reg(lc);
+        ll_line(lc, "%%%d = call %%SageValue @sage_rt_nil()", nil);
+        ll_line(lc, "ret %%SageValue %%%d", nil);
+    }
+    fputs("}\n\n", lc->out);
+    lc->current_scope = previous_scope;
+    lc->current_try_callback = previous_try_callback;
+    lc->deferred_return_active = previous_deferred_active;
+    lc->deferred_return_label = previous_deferred_label;
+    lc->deferred_mode_slot = previous_deferred_mode;
+    lc->deferred_return_slot = previous_deferred_return;
+    lc->deferred_exception_slot = previous_deferred_exception;
+    lc->current_class_name = previous_class;
+    lc->parent_class_name = previous_parent;
+}
+
+static void llvm_emit_try_callbacks(LLVMCompiler* lc) {
+    for (int i = 0; i < lc->try_callback_count; i++) {
+        llvm_emit_try_callback(lc, &lc->try_callbacks[i]);
+    }
+}
+
+static int llvm_stmt_needs_unoptimized(Stmt* stmt);
+
+static int llvm_expr_needs_unoptimized(const Expr* expr) {
+    if (expr == NULL) return 0;
+    switch (expr->type) {
+        case EXPR_CALL:
+            if (expr->as.call.kw_names != NULL) {
+                for (int i = 0; i < expr->as.call.arg_count; i++) {
+                    if (expr->as.call.kw_names[i] != NULL) return 1;
+                }
+            }
+            if (llvm_expr_needs_unoptimized(expr->as.call.callee)) return 1;
+            for (int i = 0; i < expr->as.call.arg_count; i++) {
+                if (llvm_expr_needs_unoptimized(expr->as.call.args[i])) return 1;
+            }
+            return 0;
+        case EXPR_BINARY:
+            return llvm_expr_needs_unoptimized(expr->as.binary.left) ||
+                   llvm_expr_needs_unoptimized(expr->as.binary.right);
+        case EXPR_ARRAY:
+            for (int i = 0; i < expr->as.array.count; i++) {
+                if (llvm_expr_needs_unoptimized(expr->as.array.elements[i])) return 1;
+            }
+            return 0;
+        case EXPR_INDEX:
+            return llvm_expr_needs_unoptimized(expr->as.index.array) ||
+                   llvm_expr_needs_unoptimized(expr->as.index.index);
+        case EXPR_INDEX_SET:
+            return llvm_expr_needs_unoptimized(expr->as.index_set.array) ||
+                   llvm_expr_needs_unoptimized(expr->as.index_set.index) ||
+                   llvm_expr_needs_unoptimized(expr->as.index_set.value);
+        case EXPR_DICT:
+            for (int i = 0; i < expr->as.dict.count; i++) {
+                if (llvm_expr_needs_unoptimized(expr->as.dict.values[i])) return 1;
+            }
+            return 0;
+        case EXPR_TUPLE:
+            for (int i = 0; i < expr->as.tuple.count; i++) {
+                if (llvm_expr_needs_unoptimized(expr->as.tuple.elements[i])) return 1;
+            }
+            return 0;
+        case EXPR_SLICE:
+            return llvm_expr_needs_unoptimized(expr->as.slice.array) ||
+                   llvm_expr_needs_unoptimized(expr->as.slice.start) ||
+                   llvm_expr_needs_unoptimized(expr->as.slice.end);
+        case EXPR_GET:
+            return llvm_expr_needs_unoptimized(expr->as.get.object);
+        case EXPR_SET:
+            return llvm_expr_needs_unoptimized(expr->as.set.object) ||
+                   llvm_expr_needs_unoptimized(expr->as.set.value);
+        case EXPR_AWAIT:
+            return llvm_expr_needs_unoptimized(expr->as.await.expression);
+        case EXPR_COMPTIME:
+            return llvm_expr_needs_unoptimized(expr->as.comptime.expression);
+        case EXPR_PROC:
+            return llvm_stmt_needs_unoptimized(expr->as.proc_expr.body);
+        default:
+            return 0;
+    }
+}
+
+static int llvm_stmt_needs_unoptimized(Stmt* stmt) {
+    for (Stmt* s = stmt; s != NULL; s = s->next) {
+        switch (s->type) {
+            case STMT_PROC: {
+                ProcStmt* proc = &s->as.proc;
+                if (proc->defaults != NULL) {
+                    for (int i = 0; i < proc->param_count; i++) {
+                        if (proc->defaults[i] != NULL) return 1;
+                    }
+                }
+                if (llvm_stmt_needs_unoptimized(proc->body)) return 1;
+                break;
+            }
+            case STMT_ASYNC_PROC: {
+                ProcStmt* proc = &s->as.async_proc;
+                if (proc->defaults != NULL) {
+                    for (int i = 0; i < proc->param_count; i++) {
+                        if (proc->defaults[i] != NULL) return 1;
+                    }
+                }
+                if (llvm_stmt_needs_unoptimized(proc->body)) return 1;
+                break;
+            }
+            case STMT_STRUCT:
+            case STMT_ENUM:
+                return 1;
+            case STMT_CLASS:
+                if (llvm_stmt_needs_unoptimized(s->as.class_stmt.methods)) return 1;
+                break;
+            case STMT_LET:
+                if (llvm_expr_needs_unoptimized(s->as.let.initializer)) return 1;
+                break;
+            case STMT_PRINT:
+                if (llvm_expr_needs_unoptimized(s->as.print.expression)) return 1;
+                break;
+            case STMT_EXPRESSION:
+                if (llvm_expr_needs_unoptimized(s->as.expression)) return 1;
+                break;
+            case STMT_IF:
+                if (llvm_expr_needs_unoptimized(s->as.if_stmt.condition) ||
+                    llvm_stmt_needs_unoptimized(s->as.if_stmt.then_branch) ||
+                    llvm_stmt_needs_unoptimized(s->as.if_stmt.else_branch)) return 1;
+                break;
+            case STMT_BLOCK:
+                if (llvm_stmt_needs_unoptimized(s->as.block.statements)) return 1;
+                break;
+            case STMT_WHILE:
+                if (llvm_expr_needs_unoptimized(s->as.while_stmt.condition) ||
+                    llvm_stmt_needs_unoptimized(s->as.while_stmt.body)) return 1;
+                break;
+            case STMT_FOR:
+                if (llvm_expr_needs_unoptimized(s->as.for_stmt.iterable) ||
+                    llvm_stmt_needs_unoptimized(s->as.for_stmt.body)) return 1;
+                break;
+            case STMT_RETURN:
+                if (llvm_expr_needs_unoptimized(s->as.ret.value)) return 1;
+                break;
+            case STMT_MATCH:
+                for (int i = 0; i < s->as.match_stmt.case_count; i++) {
+                    CaseClause* clause = s->as.match_stmt.cases[i];
+                    if (clause == NULL) continue;
+                    if (clause->guard != NULL) return 1;
+                    if (llvm_expr_needs_unoptimized(clause->pattern) ||
+                        llvm_expr_needs_unoptimized(clause->guard) ||
+                        llvm_stmt_needs_unoptimized(clause->body)) return 1;
+                }
+                if (llvm_stmt_needs_unoptimized(s->as.match_stmt.default_case)) return 1;
+                break;
+            case STMT_DEFER:
+                if (llvm_stmt_needs_unoptimized(s->as.defer.statement)) return 1;
+                break;
+            case STMT_TRY:
+                if (llvm_stmt_needs_unoptimized(s->as.try_stmt.try_block)) return 1;
+                for (int i = 0; i < s->as.try_stmt.catch_count; i++) {
+                    if (llvm_stmt_needs_unoptimized(s->as.try_stmt.catches[i]->body)) return 1;
+                }
+                if (llvm_stmt_needs_unoptimized(s->as.try_stmt.finally_block)) return 1;
+                break;
+            case STMT_RAISE:
+                if (llvm_expr_needs_unoptimized(s->as.raise.exception)) return 1;
+                break;
+            case STMT_COMPTIME:
+                if (llvm_stmt_needs_unoptimized(s->as.comptime.body)) return 1;
+                break;
+            case STMT_MACRO_DEF:
+                if (llvm_stmt_needs_unoptimized(s->as.macro_def.body)) return 1;
+                break;
+            default:
+                break;
+        }
+    }
+    return 0;
 }
 
 // ============================================================================
@@ -2336,10 +5310,12 @@ static int write_llvm_output(const char* source, const char* input_path, const c
     lc.next_reg = 0;
     lc.next_label = 0;
 
-    Stmt* program = parse_program(source);
+    Stmt* source_program = parse_program(source);
+    Stmt* program = source_program;
+    llvm_collect_metadata(&lc, source_program);
 
-    // Run optimization passes
-    if (opt_level > 0) {
+    if (opt_level > 0 && lc.class_info_count == 0 && lc.next_nested_id == 0 &&
+        !llvm_stmt_needs_unoptimized(source_program)) {
         PassContext pass_ctx;
         pass_ctx.opt_level = opt_level;
         pass_ctx.debug_info = debug_info;
@@ -2349,10 +5325,12 @@ static int write_llvm_output(const char* source, const char* input_path, const c
     }
 
     // Collect symbols
+    llvm_collect_imported_modules(&lc, program);
     llvm_collect_symbols(&lc, program);
     if (lc.failed) {
         fclose(out);
         free_stmt(program);
+        if (program != source_program) free_stmt(source_program);
         llc_free(&lc);
         return 0;
     }
@@ -2371,31 +5349,41 @@ static int write_llvm_output(const char* source, const char* input_path, const c
     if (lc.global_count > 0) fputc('\n', out);
 
     // Emit function definitions
+    for (int i = 0; i < lc.source_module_count; i++) {
+        Stmt* module_ast = lc.source_modules[i].ast;
+        for (Stmt* stmt = module_ast; stmt != NULL; stmt = stmt->next) {
+            if (stmt->type != STMT_PROC) continue;
+            LLVMScopeInfo* scope = llc_find_scope(&lc, stmt);
+            if (scope == NULL) continue;
+            lc.next_reg = 0;
+            llvm_emit_function(&lc, stmt, scope, scope->symbol);
+            llvm_emit_call_adapter(&lc, scope);
+            llvm_emit_nested_functions(&lc, scope);
+        }
+    }
     for (Stmt* s = program; s != NULL; s = s->next) {
         if (s->type == STMT_PROC) {
-            lc.next_reg = 0;  // Reset per function
-            llvm_emit_function(&lc, s);
+            LLVMScopeInfo* scope = llc_find_scope(&lc, s);
+            if (scope == NULL) continue;
+            lc.next_reg = 0;
+            llvm_emit_function(&lc, s, scope, scope->symbol);
+            llvm_emit_call_adapter(&lc, scope);
+            llvm_emit_nested_functions(&lc, scope);
         } else if (s->type == STMT_CLASS) {
             // Emit each class method as a standalone function
             char* cname = token_to_str(s->as.class_stmt.name);
             char* pname = s->as.class_stmt.has_parent ? token_to_str(s->as.class_stmt.parent) : NULL;
             lc.current_class_name = cname;
             lc.parent_class_name = pname;
-            
+
             for (Stmt* m = s->as.class_stmt.methods; m != NULL; m = m->next) {
                 if (m->type == STMT_PROC) {
-                    // Temporarily rename the proc to ClassName_methodName
-                    Token orig_name = m->as.proc.name;
-                    char* mname = class_method_name(cname, orig_name);
-                    // Create a modified token pointing to the new name
-                    Token new_name = orig_name;
-                    new_name.start = mname;
-                    new_name.length = (int)strlen(mname);
-                    m->as.proc.name = new_name;
+                    LLVMScopeInfo* scope = llc_find_scope(&lc, m);
+                    if (scope == NULL) continue;
                     lc.next_reg = 0;
-                    llvm_emit_function(&lc, m);
-                    m->as.proc.name = orig_name;  // Restore
-                    free(mname);
+                    llvm_emit_function(&lc, m, scope, scope->symbol);
+                    llvm_emit_call_adapter(&lc, scope);
+                    llvm_emit_nested_functions(&lc, scope);
                 }
             }
             lc.current_class_name = NULL;
@@ -2405,11 +5393,67 @@ static int write_llvm_output(const char* source, const char* input_path, const c
         }
     }
 
+    llvm_emit_nested_functions(&lc, lc.main_scope);
+
     // Emit main function
     lc.next_reg = 0;
     int main_entry_label = llc_new_label(&lc);
     fprintf(out, "define i32 @main() {\n");
     fprintf(out, "L%d:\n", main_entry_label);
+    lc.current_scope = lc.main_scope;
+    lc.block_terminated = 0;
+
+    for (int i = 0; i < lc.class_info_count; i++) {
+        LLVMClassInfo* info = &lc.class_infos[i];
+        int name = llvm_emit_string_ptr(&lc, info->name);
+        int parent = info->parent_name != NULL
+            ? llvm_emit_string_ptr(&lc, info->parent_name) : 0;
+        if (parent > 0) {
+            ll_line(&lc, "call void @sage_rt_register_class(i8* %%%d, i8* %%%d)", name, parent);
+        } else {
+            ll_line(&lc, "call void @sage_rt_register_class(i8* %%%d, i8* null)", name);
+        }
+    }
+    for (int i = 0; i < lc.class_info_count; i++) {
+        LLVMClassInfo* info = &lc.class_infos[i];
+        int class_name = llvm_emit_string_ptr(&lc, info->name);
+        for (Stmt* m = info->declaration->methods; m != NULL; m = m->next) {
+            if (m->type != STMT_PROC) continue;
+            LLVMScopeInfo* scope = llc_find_scope(&lc, m);
+            if (scope == NULL) continue;
+            char* method_name = token_to_str(m->as.proc.name);
+            int method = llvm_emit_string_ptr(&lc, method_name);
+            int function = llc_new_reg(&lc);
+            ll_line(&lc, "%%%d = bitcast %%SageValue (...)* @%s to i8*", function, scope->adapter_symbol);
+            int required_count = m->as.proc.required_count;
+            if (required_count < 0 || required_count > m->as.proc.param_count) {
+                required_count = m->as.proc.param_count;
+            }
+            int has_self = m->as.proc.param_count > 0 &&
+                m->as.proc.params[0].length == 4 &&
+                strncmp(m->as.proc.params[0].start, "self", 4) == 0;
+            ll_line(&lc, "call void @sage_rt_register_method(i8* %%%d, i8* %%%d, i8* %%%d, i32 %d, i32 %d, i32 %d)",
+                    class_name, method, function, m->as.proc.param_count,
+                    required_count, has_self);
+            free(method_name);
+        }
+    }
+
+    for (int i = 0; i < lc.source_module_count; i++) {
+        lc.current_module_name = lc.source_modules[i].name;
+        for (Stmt* stmt = lc.source_modules[i].ast; stmt != NULL; stmt = stmt->next) {
+            if (stmt->type != STMT_LET) continue;
+            char* member_name = token_to_str(stmt->as.let.name);
+            LLVMImportedGlobal* global = llc_find_imported_global(
+                &lc, lc.current_module_name, member_name);
+            if (global != NULL && stmt->as.let.initializer != NULL) {
+                int value = llvm_emit_expr(&lc, stmt->as.let.initializer);
+                ll_line(&lc, "store %%SageValue %%%d, %%SageValue* @%s", value, global->global_name);
+            }
+            free(member_name);
+        }
+    }
+    lc.current_module_name = NULL;
 
     // Pre-allocate all local variables used in main (for/let inside loops/blocks)
     {
@@ -2456,6 +5500,8 @@ static int write_llvm_output(const char* source, const char* input_path, const c
     ll_line(&lc, "ret i32 0");
     fprintf(out, "}\n\n");
 
+    llvm_emit_try_callbacks(&lc);
+
     // Emit string constants
     for (int i = 0; i < lc.string_count; i++) {
         size_t slen = strlen(lc.strings[i]) + 1;
@@ -2464,8 +5510,17 @@ static int write_llvm_output(const char* source, const char* input_path, const c
         fprintf(out, "\\00\"\n");
     }
 
+    if (lc.failed) {
+        fclose(out);
+        free_stmt(program);
+        if (program != source_program) free_stmt(source_program);
+        llc_free(&lc);
+        return 0;
+    }
+
     fclose(out);
     free_stmt(program);
+    if (program != source_program) free_stmt(source_program);
     llc_free(&lc);
     return 1;
 }

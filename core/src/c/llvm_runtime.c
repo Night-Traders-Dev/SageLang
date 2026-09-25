@@ -12,6 +12,8 @@
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
+#include <setjmp.h>
+#include <ctype.h>
 #include <sys/stat.h>
 
 #include "gpu_api.h"
@@ -30,6 +32,15 @@ static void* safe_calloc(size_t count, size_t size) {
     void* result = calloc(count, size);
     if (result == NULL && count > 0 && size > 0) {
         fprintf(stderr, "sage_rt: out of memory (calloc %zu * %zu bytes)\n", count, size);
+        abort();
+    }
+    return result;
+}
+
+static void* safe_malloc(size_t size) {
+    void* result = malloc(size);
+    if (result == NULL && size > 0) {
+        fprintf(stderr, "sage_rt: out of memory (malloc %zu bytes)\n", size);
         abort();
     }
     return result;
@@ -79,6 +90,40 @@ typedef struct {
     void* class_def;
 } SageInstance;
 
+typedef struct {
+    char* name;
+    void* function;
+    int32_t arity;
+    int32_t required_count;
+    int has_self;
+} SageMethodEntry;
+
+typedef struct SageClass {
+    char* name;
+    const char* parent_name;
+    struct SageClass* parent;
+    SageMethodEntry* methods;
+    int method_count;
+    int method_capacity;
+} SageClass;
+
+typedef struct {
+    void* function;
+    SageValue* captures;
+    int32_t capture_count;
+    int32_t param_count;
+    int32_t required_count;
+    int is_closure;
+} SageFunction;
+
+typedef SageValue (*SageCallableEntry)(SageValue, SageValue*, int32_t, uint64_t);
+
+typedef struct SageTryContext {
+    jmp_buf destination;
+    struct SageTryContext* previous;
+    SageValue* return_value;
+} SageTryContext;
+
 struct SageValue {
     int32_t type;
     union {
@@ -92,6 +137,21 @@ struct SageValue {
         void* pointer;
     } as;
 };
+
+static _Thread_local SageTryContext* sage_current_try = NULL;
+static _Thread_local SageValue sage_current_exception;
+
+SageValue sage_rt_call_dynamic(SageValue callee, SageValue* args, int32_t argc,
+                               uint64_t mask);
+SageValue sage_rt_call_method(SageValue object, const char* name,
+                              SageValue* args, int32_t argc, uint64_t mask);
+void sage_rt_register_class(const char* name, const char* parent_name);
+void sage_rt_register_method(const char* class_name, const char* method_name,
+                             void* function, int32_t arity,
+                             int32_t required_count, int has_self);
+SageValue sage_rt_construct_class(const char* class_name,
+                                  SageValue* args, int32_t argc, uint64_t mask);
+void sage_rt_raise(SageValue value);
 
 // ============================================================================
 // Constructors
@@ -129,6 +189,71 @@ SageValue sage_rt_nil(void) {
     return sv;
 }
 
+void* sage_rt_try_enter(void) {
+    SageTryContext* context = safe_calloc(1, sizeof(SageTryContext));
+    context->previous = sage_current_try;
+    context->return_value = safe_calloc(1, sizeof(SageValue));
+    sage_current_try = context;
+    return context;
+}
+
+int32_t sage_rt_try_run(void* opaque, void* body, SageValue** captures) {
+    typedef SageValue (*SageTryBodyFn)(SageValue**);
+    SageTryContext* context = (SageTryContext*)opaque;
+    if (context == NULL || body == NULL) return 0;
+    int jump_result = setjmp(context->destination);
+    if (jump_result == 0) {
+        ((SageTryBodyFn)(uintptr_t)body)(captures);
+        return 0;
+    }
+    return jump_result == 2 ? 2 : 1;
+}
+
+void sage_rt_try_return(SageValue value) {
+    if (sage_current_try == NULL) {
+        sage_rt_raise(value);
+        return;
+    }
+    if (sage_current_try->return_value != NULL) {
+        *sage_current_try->return_value = value;
+    }
+    longjmp(sage_current_try->destination, 2);
+}
+
+SageValue sage_rt_try_return_value(void) {
+    if (sage_current_try == NULL || sage_current_try->return_value == NULL) {
+        return sage_rt_nil();
+    }
+    return *sage_current_try->return_value;
+}
+
+void sage_rt_try_leave(void* opaque) {
+    SageTryContext* context = (SageTryContext*)opaque;
+    if (context == NULL) return;
+    if (sage_current_try == context) sage_current_try = context->previous;
+    free(context->return_value);
+    free(context);
+}
+
+SageValue sage_rt_exception_value(void) {
+    return sage_current_exception;
+}
+
+void sage_rt_raise(SageValue value) {
+    sage_current_exception = value;
+    if (sage_current_try == NULL) {
+        if (value.type == SAGE_STRING) {
+            fprintf(stderr, "Uncaught exception: %s\n", value.as.string);
+        } else if (value.type == SAGE_INSTANCE && value.as.instance != NULL) {
+            fprintf(stderr, "Uncaught exception: <instance>\n");
+        } else {
+            fprintf(stderr, "Uncaught exception\n");
+        }
+        abort();
+    }
+    longjmp(sage_current_try->destination, 1);
+}
+
 // ============================================================================
 // Truthiness
 // ============================================================================
@@ -137,7 +262,8 @@ static int is_truthy(SageValue v) {
     switch (v.type) {
         case SAGE_NIL: return 0;
         case SAGE_BOOL: return v.as.boolean != 0;
-        // Sage: 0 is truthy, only nil and false are falsy
+        case SAGE_NUMBER: return v.as.number != 0.0;
+        case SAGE_STRING: return v.as.string != NULL && v.as.string[0] != '\0';
         default: return 1;
     }
 }
@@ -210,8 +336,80 @@ static int vals_equal(SageValue a, SageValue b) {
         case SAGE_NUMBER: return a.as.number == b.as.number;
         case SAGE_BOOL: return a.as.boolean == b.as.boolean;
         case SAGE_NIL: return 1;
-        case SAGE_STRING: return strcmp(a.as.string, b.as.string) == 0;
-        default: return 0;
+        case SAGE_STRING:
+            if (a.as.string == b.as.string) return 1;
+            return a.as.string != NULL && b.as.string != NULL &&
+                   strcmp(a.as.string, b.as.string) == 0;
+        case SAGE_FUNCTION: {
+            if (a.as.pointer == NULL || b.as.pointer == NULL) return a.as.pointer == b.as.pointer;
+            SageFunction* fa = (SageFunction*)a.as.pointer;
+            SageFunction* fb = (SageFunction*)b.as.pointer;
+            return fa->function == fb->function && fa->capture_count == 0 &&
+                   fb->capture_count == 0 && !fa->is_closure && !fb->is_closure;
+        }
+        case SAGE_NATIVE:
+            return a.as.pointer == b.as.pointer;
+        case SAGE_ARRAY: {
+            if (a.as.array == b.as.array) return 1;
+            if (a.as.array == NULL || b.as.array == NULL) return 0;
+            if (a.as.array->count != b.as.array->count) return 0;
+            for (int i = 0; i < a.as.array->count; i++) {
+                if (!vals_equal(a.as.array->elements[i], b.as.array->elements[i])) return 0;
+            }
+            return 1;
+        }
+        case SAGE_DICT: {
+            if (a.as.dict == b.as.dict) return 1;
+            if (a.as.dict == NULL || b.as.dict == NULL) return 0;
+            if (a.as.dict->count != b.as.dict->count) return 0;
+            for (int i = 0; i < a.as.dict->count; i++) {
+                int found = 0;
+                for (int j = 0; j < b.as.dict->count; j++) {
+                    if (strcmp(a.as.dict->keys[i], b.as.dict->keys[j]) == 0) {
+                        found = 1;
+                        if (!vals_equal(a.as.dict->values[i], b.as.dict->values[j])) return 0;
+                        break;
+                    }
+                }
+                if (!found) return 0;
+            }
+            return 1;
+        }
+        case SAGE_TUPLE: {
+            if (a.as.tuple == b.as.tuple) return 1;
+            if (a.as.tuple == NULL || b.as.tuple == NULL) return 0;
+            if (a.as.tuple->count != b.as.tuple->count) return 0;
+            for (int i = 0; i < a.as.tuple->count; i++) {
+                if (!vals_equal(a.as.tuple->elements[i], b.as.tuple->elements[i])) return 0;
+            }
+            return 1;
+        }
+        case SAGE_CLASS:
+            return a.as.pointer == b.as.pointer;
+        case SAGE_INSTANCE: {
+            if (a.as.instance == b.as.instance) return 1;
+            if (a.as.instance == NULL || b.as.instance == NULL) return 0;
+            if (a.as.instance->class_def != b.as.instance->class_def) return 0;
+            SageDict* af = a.as.instance->fields;
+            SageDict* bf = b.as.instance->fields;
+            if (af == bf) return 1;
+            if (af == NULL || bf == NULL) return af == bf;
+            if (af->count != bf->count) return 0;
+            for (int i = 0; i < af->count; i++) {
+                int found = 0;
+                for (int j = 0; j < bf->count; j++) {
+                    if (strcmp(af->keys[i], bf->keys[j]) == 0) {
+                        found = 1;
+                        if (!vals_equal(af->values[i], bf->values[j])) return 0;
+                        break;
+                    }
+                }
+                if (!found) return 0;
+            }
+            return 1;
+        }
+        default:
+            return a.as.pointer == b.as.pointer;
     }
 }
 
@@ -263,14 +461,24 @@ SageValue sage_rt_shr(SageValue a, SageValue b) { return sage_rt_number((double)
 // Print
 // ============================================================================
 
+static void sage_rt_format_number(double n, char* buf, size_t bufsize) {
+    if (isfinite(n) && n >= -9007199254740992.0 && n <= 9007199254740992.0 &&
+        n == (double)(long long)n) {
+        snprintf(buf, bufsize, "%lld", (long long)n);
+        return;
+    }
+    for (int prec = 15; prec <= 17; prec++) {
+        snprintf(buf, bufsize, "%.*g", prec, n);
+        if (strtod(buf, NULL) == n) return;
+    }
+}
+
 static void print_value(SageValue v) {
     switch (v.type) {
         case SAGE_NUMBER: {
-            double d = v.as.number;
-            if (d == (long long)d && fabs(d) < 1e15)
-                printf("%lld", (long long)d);
-            else
-                printf("%g", d);
+            char buf[64];
+            sage_rt_format_number(v.as.number, buf, sizeof(buf));
+            printf("%s", buf);
             break;
         }
         case SAGE_BOOL: printf(v.as.boolean ? "true" : "false"); break;
@@ -308,6 +516,26 @@ static void print_value(SageValue v) {
             printf(")");
             break;
         }
+        case SAGE_INSTANCE: {
+            SageValue rendered = sage_rt_call_method(v, "__str__", NULL, 0, 0);
+            if (rendered.type == SAGE_STRING) {
+                printf("%s", rendered.as.string);
+                break;
+            }
+            SageClass* class_def = v.as.instance != NULL
+                ? (SageClass*)v.as.instance->class_def : NULL;
+            if (class_def != NULL) printf("<instance of %s>", class_def->name);
+            else printf("<instance>");
+            break;
+        }
+        case SAGE_CLASS: {
+            SageClass* class_def = (SageClass*)v.as.pointer;
+            if (class_def != NULL) printf("<class %s>", class_def->name);
+            else printf("<class>");
+            break;
+        }
+        case SAGE_FUNCTION: printf("<function>"); break;
+        case SAGE_NATIVE: printf("<native>"); break;
         default: printf("<value type=%d>", v.type); break;
     }
 }
@@ -324,17 +552,26 @@ void sage_rt_print(SageValue v) {
 SageValue sage_rt_str(SageValue v) {
     char buf[64];
     switch (v.type) {
-        case SAGE_NUMBER: {
-            double d = v.as.number;
-            if (d == (long long)d && fabs(d) < 1e15)
-                snprintf(buf, sizeof(buf), "%lld", (long long)d);
-            else
-                snprintf(buf, sizeof(buf), "%g", d);
+        case SAGE_NUMBER:
+            sage_rt_format_number(v.as.number, buf, sizeof(buf));
             return sage_rt_string(buf);
-        }
         case SAGE_BOOL: return sage_rt_string(v.as.boolean ? "true" : "false");
         case SAGE_NIL: return sage_rt_string("nil");
         case SAGE_STRING: return sage_rt_string(v.as.string);
+        case SAGE_INSTANCE: {
+            SageValue rendered = sage_rt_call_method(v, "__str__", NULL, 0, 0);
+            if (rendered.type == SAGE_STRING) return rendered;
+            SageClass* class_def = v.as.instance != NULL
+                ? (SageClass*)v.as.instance->class_def : NULL;
+            if (class_def != NULL) {
+                char instance_buffer[256];
+                snprintf(instance_buffer, sizeof(instance_buffer),
+                         "<instance of %s>", class_def->name);
+                return sage_rt_string(instance_buffer);
+            }
+            return sage_rt_string("<instance>");
+        }
+        case SAGE_FUNCTION: return sage_rt_string("<function>");
         default:
             snprintf(buf, sizeof(buf), "<value type=%d>", v.type);
             return sage_rt_string(buf);
@@ -434,7 +671,6 @@ SageValue sage_rt_array_contains(SageValue array, SageValue needle) {
     if (array.type != SAGE_ARRAY) return sage_rt_nil();
     SageArray* a = array.as.array;
     for (int i = 0; i < a->count; i++) {
-        if (a->elements[i].type == SAGE_INSTANCE || needle.type == SAGE_INSTANCE) return sage_rt_nil();
         if (vals_equal(a->elements[i], needle)) return sage_rt_bool(1);
     }
     return sage_rt_bool(0);
@@ -444,7 +680,6 @@ SageValue sage_rt_array_index_of(SageValue array, SageValue needle) {
     if (array.type != SAGE_ARRAY) return sage_rt_nil();
     SageArray* a = array.as.array;
     for (int i = 0; i < a->count; i++) {
-        if (a->elements[i].type == SAGE_INSTANCE || needle.type == SAGE_INSTANCE) return sage_rt_nil();
         if (vals_equal(a->elements[i], needle)) return sage_rt_number(i);
     }
     return sage_rt_number(-1);
@@ -901,6 +1136,557 @@ SageValue sage_rt_ord(SageValue val) {
     if (val.type != SAGE_STRING || val.as.string == NULL || val.as.string[0] == '\0')
         return sage_rt_nil();
     return sage_rt_number((double)(unsigned char)val.as.string[0]);
+}
+
+SageValue sage_rt_asm_arch(void) {
+#if defined(__x86_64__) || defined(_M_X64)
+    return sage_rt_string("x86_64");
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    return sage_rt_string("aarch64");
+#elif defined(__riscv) && __riscv_xlen == 64
+    return sage_rt_string("rv64");
+#else
+    return sage_rt_string("unknown");
+#endif
+}
+
+SageValue sage_rt_range2(SageValue start, SageValue end) {
+    if (start.type != SAGE_NUMBER || end.type != SAGE_NUMBER) return sage_rt_nil();
+    int first = (int)start.as.number;
+    int last = (int)end.as.number;
+    if (last < first) return sage_rt_array_new(0);
+    SageValue result = sage_rt_array_new(last - first);
+    for (int i = first; i < last; i++) sage_rt_array_push(result, sage_rt_number((double)i));
+    return result;
+}
+
+SageValue sage_rt_range3(SageValue start, SageValue end, SageValue step) {
+    if (start.type != SAGE_NUMBER || end.type != SAGE_NUMBER || step.type != SAGE_NUMBER) {
+        return sage_rt_nil();
+    }
+    int first = (int)start.as.number;
+    int last = (int)end.as.number;
+    int stride = (int)step.as.number;
+    if (stride == 0) return sage_rt_nil();
+    size_t count = 0;
+    if (stride > 0 && last > first) {
+        count = (size_t)(((long long)last - first + stride - 1) / stride);
+    } else if (stride < 0 && last < first) {
+        count = (size_t)(((long long)first - last - (long long)stride - 1) /
+                         (long long)(-stride));
+    }
+    SageValue result = sage_rt_array_new((int32_t)count);
+    if (stride > 0) {
+        for (int i = 0; i < (int)count; i++) {
+            sage_rt_array_push(result, sage_rt_number((double)(first + i * stride)));
+        }
+    } else {
+        for (int i = 0; i < (int)count; i++) {
+            sage_rt_array_push(result, sage_rt_number((double)(first + i * stride)));
+        }
+    }
+    return result;
+}
+
+SageValue sage_rt_dict_delete(SageValue dict, SageValue key) {
+    if (dict.type != SAGE_DICT || key.type != SAGE_STRING) return sage_rt_nil();
+    SageDict* value = dict.as.dict;
+    for (int i = 0; i < value->count; i++) {
+        if (strcmp(value->keys[i], key.as.string) == 0) {
+            free(value->keys[i]);
+            for (int j = i; j + 1 < value->count; j++) {
+                value->keys[j] = value->keys[j + 1];
+                value->values[j] = value->values[j + 1];
+            }
+            value->count--;
+            return sage_rt_bool(1);
+        }
+    }
+    return sage_rt_bool(0);
+}
+
+SageValue sage_rt_upper(SageValue value) {
+    if (value.type != SAGE_STRING) return sage_rt_nil();
+    size_t length = strlen(value.as.string);
+    char* result = safe_malloc(length + 1);
+    for (size_t i = 0; i < length; i++) result[i] = (char)toupper((unsigned char)value.as.string[i]);
+    result[length] = '\0';
+    SageValue output = sage_rt_string(result);
+    free(result);
+    return output;
+}
+
+SageValue sage_rt_lower(SageValue value) {
+    if (value.type != SAGE_STRING) return sage_rt_nil();
+    size_t length = strlen(value.as.string);
+    char* result = safe_malloc(length + 1);
+    for (size_t i = 0; i < length; i++) result[i] = (char)tolower((unsigned char)value.as.string[i]);
+    result[length] = '\0';
+    SageValue output = sage_rt_string(result);
+    free(result);
+    return output;
+}
+
+SageValue sage_rt_strip(SageValue value) {
+    if (value.type != SAGE_STRING) return sage_rt_nil();
+    const char* start = value.as.string;
+    while (*start && isspace((unsigned char)*start)) start++;
+    const char* end = start + strlen(start);
+    while (end > start && isspace((unsigned char)*(end - 1))) end--;
+    size_t length = (size_t)(end - start);
+    char* result = safe_malloc(length + 1);
+    memcpy(result, start, length);
+    result[length] = '\0';
+    SageValue output = sage_rt_string(result);
+    free(result);
+    return output;
+}
+
+SageValue sage_rt_split(SageValue value, SageValue separator) {
+    if (value.type != SAGE_STRING || separator.type != SAGE_STRING) return sage_rt_array_new(0);
+    const char* text = value.as.string;
+    const char* delimiter = separator.as.string;
+    size_t delimiter_length = strlen(delimiter);
+    SageValue result = sage_rt_array_new(0);
+    if (delimiter_length == 0) {
+        for (const char* p = text; *p; p++) {
+            char item[2] = { *p, '\0' };
+            sage_rt_array_push(result, sage_rt_string(item));
+        }
+        return result;
+    }
+    const char* start = text;
+    const char* found;
+    while ((found = strstr(start, delimiter)) != NULL) {
+        size_t length = (size_t)(found - start);
+        char* item = safe_malloc(length + 1);
+        memcpy(item, start, length);
+        item[length] = '\0';
+        sage_rt_array_push(result, sage_rt_string(item));
+        free(item);
+        start = found + delimiter_length;
+    }
+    sage_rt_array_push(result, sage_rt_string(start));
+    return result;
+}
+
+SageValue sage_rt_join(SageValue values, SageValue separator) {
+    if (values.type != SAGE_ARRAY || separator.type != SAGE_STRING) return sage_rt_nil();
+    SageArray* array = values.as.array;
+    size_t total = 0;
+    for (int i = 0; i < array->count; i++) {
+        if (array->elements[i].type != SAGE_STRING) continue;
+        size_t length = strlen(array->elements[i].as.string);
+        if (total > SIZE_MAX - length) return sage_rt_nil();
+        total += length;
+        if (i > 0) {
+            size_t delimiter_length = strlen(separator.as.string);
+            if (total > SIZE_MAX - delimiter_length) return sage_rt_nil();
+            total += delimiter_length;
+        }
+    }
+    char* result = safe_malloc(total + 1);
+    char* cursor = result;
+    for (int i = 0; i < array->count; i++) {
+        if (i > 0) {
+            size_t delimiter_length = strlen(separator.as.string);
+            memcpy(cursor, separator.as.string, delimiter_length);
+            cursor += delimiter_length;
+        }
+        if (array->elements[i].type == SAGE_STRING) {
+            size_t length = strlen(array->elements[i].as.string);
+            memcpy(cursor, array->elements[i].as.string, length);
+            cursor += length;
+        }
+    }
+    *cursor = '\0';
+    SageValue output = sage_rt_string(result);
+    free(result);
+    return output;
+}
+
+SageValue sage_rt_replace(SageValue value, SageValue old_value, SageValue new_value) {
+    if (value.type != SAGE_STRING || old_value.type != SAGE_STRING || new_value.type != SAGE_STRING) {
+        return sage_rt_nil();
+    }
+    const char* text = value.as.string;
+    const char* old_text = old_value.as.string;
+    const char* new_text = new_value.as.string;
+    size_t old_length = strlen(old_text);
+    size_t new_length = strlen(new_text);
+    if (old_length == 0) return sage_rt_string(text);
+    size_t matches = 0;
+    const char* cursor = text;
+    const char* found;
+    while ((found = strstr(cursor, old_text)) != NULL) {
+        if (matches == SIZE_MAX) return sage_rt_nil();
+        matches++;
+        cursor = found + old_length;
+    }
+    size_t text_length = strlen(text);
+    size_t removed = 0;
+    if (matches != 0 && old_length > SIZE_MAX / matches) return sage_rt_nil();
+    removed = matches * old_length;
+    size_t added = 0;
+    if (matches != 0 && new_length > SIZE_MAX / matches) return sage_rt_nil();
+    added = matches * new_length;
+    if (text_length > SIZE_MAX - added) return sage_rt_nil();
+    size_t result_length = text_length - removed + added;
+    if (result_length > SIZE_MAX - 1) return sage_rt_nil();
+    char* result = safe_malloc(result_length + 1);
+    char* output = result;
+    while (*text) {
+        if (strncmp(text, old_text, old_length) == 0) {
+            memcpy(output, new_text, new_length);
+            output += new_length;
+            text += old_length;
+        } else {
+            *output++ = *text++;
+        }
+    }
+    *output = '\0';
+    SageValue result_value = sage_rt_string(result);
+    free(result);
+    return result_value;
+}
+
+typedef struct SageMemory {
+    struct SageMemory* next;
+    void* data;
+    size_t size;
+} SageMemory;
+
+static SageMemory* sage_memory_registry = NULL;
+static int sage_memory_cleanup_registered = 0;
+
+static void sage_memory_free_all(void) {
+    SageMemory* current = sage_memory_registry;
+    sage_memory_registry = NULL;
+    while (current != NULL) {
+        SageMemory* next = current->next;
+        free(current->data);
+        free(current);
+        current = next;
+    }
+}
+
+static void sage_memory_register_cleanup(void) {
+    if (sage_memory_cleanup_registered) return;
+    sage_memory_cleanup_registered = 1;
+    atexit(sage_memory_free_all);
+}
+
+static SageMemory* sage_memory_from_value(SageValue value) {
+    if (value.type != SAGE_NUMBER || !isfinite(value.as.number) ||
+        value.as.number <= 0.0 || value.as.number > (double)UINTPTR_MAX) {
+        return NULL;
+    }
+    uintptr_t raw = (uintptr_t)value.as.number;
+    if ((double)raw != value.as.number) return NULL;
+    for (SageMemory* current = sage_memory_registry; current != NULL; current = current->next) {
+        if ((uintptr_t)current == raw) return current;
+    }
+    return NULL;
+}
+
+static SageValue sage_memory_value(SageMemory* memory) {
+    return sage_rt_number((double)(uintptr_t)memory);
+}
+
+static int sage_memory_type_size(const char* type, size_t* size, size_t* alignment) {
+    if (strcmp(type, "char") == 0 || strcmp(type, "byte") == 0) {
+        *size = 1;
+        *alignment = 1;
+        return 0;
+    }
+    if (strcmp(type, "short") == 0) {
+        *size = sizeof(short);
+        *alignment = sizeof(short);
+        return 0;
+    }
+    if (strcmp(type, "int") == 0) {
+        *size = sizeof(int);
+        *alignment = sizeof(int);
+        return 0;
+    }
+    if (strcmp(type, "long") == 0) {
+        *size = sizeof(long);
+        *alignment = sizeof(long);
+        return 0;
+    }
+    if (strcmp(type, "float") == 0) {
+        *size = sizeof(float);
+        *alignment = sizeof(float);
+        return 0;
+    }
+    if (strcmp(type, "double") == 0) {
+        *size = sizeof(double);
+        *alignment = sizeof(double);
+        return 0;
+    }
+    if (strcmp(type, "ptr") == 0) {
+        *size = sizeof(void*);
+        *alignment = sizeof(void*);
+        return 0;
+    }
+    return -1;
+}
+
+static int sage_memory_range_valid(SageMemory* memory, size_t offset, size_t needed) {
+    return memory != NULL && memory->data != NULL && needed <= memory->size &&
+           offset <= memory->size - needed;
+}
+
+SageValue sage_rt_mem_alloc(SageValue size_value) {
+    if (size_value.type != SAGE_NUMBER || !isfinite(size_value.as.number) ||
+        size_value.as.number <= 0.0 || size_value.as.number > 64.0 * 1024.0 * 1024.0 ||
+        size_value.as.number != floor(size_value.as.number)) {
+        return sage_rt_nil();
+    }
+    size_t size = (size_t)size_value.as.number;
+    SageMemory* memory = safe_calloc(1, sizeof(SageMemory));
+    memory->data = safe_calloc(1, size);
+    memory->size = size;
+    memory->next = sage_memory_registry;
+    sage_memory_registry = memory;
+    sage_memory_register_cleanup();
+    return sage_memory_value(memory);
+}
+
+SageValue sage_rt_mem_free(SageValue pointer) {
+    SageMemory* memory = sage_memory_from_value(pointer);
+    if (memory == NULL) return sage_rt_nil();
+    SageMemory** link = &sage_memory_registry;
+    while (*link != NULL && *link != memory) link = &(*link)->next;
+    if (*link == NULL) return sage_rt_nil();
+    *link = memory->next;
+    free(memory->data);
+    free(memory);
+    return sage_rt_nil();
+}
+
+SageValue sage_rt_mem_read(SageValue pointer, SageValue offset_value, SageValue type_value) {
+    SageMemory* memory = sage_memory_from_value(pointer);
+    if (memory == NULL || offset_value.type != SAGE_NUMBER || type_value.type != SAGE_STRING) {
+        return sage_rt_nil();
+    }
+    if (!isfinite(offset_value.as.number) || offset_value.as.number < 0.0 ||
+        offset_value.as.number != floor(offset_value.as.number)) return sage_rt_nil();
+    size_t offset = (size_t)offset_value.as.number;
+    size_t size;
+    size_t alignment;
+    if (sage_memory_type_size(type_value.as.string, &size, &alignment) != 0 ||
+        !sage_memory_range_valid(memory, offset, size)) return sage_rt_nil();
+    unsigned char* base = (unsigned char*)memory->data + offset;
+    if (strcmp(type_value.as.string, "char") == 0 || strcmp(type_value.as.string, "byte") == 0) {
+        return sage_rt_number((double)*base);
+    }
+    if (strcmp(type_value.as.string, "short") == 0) {
+        short item;
+        memcpy(&item, base, sizeof(item));
+        return sage_rt_number((double)item);
+    }
+    if (strcmp(type_value.as.string, "int") == 0) {
+        int item;
+        memcpy(&item, base, sizeof(item));
+        return sage_rt_number((double)item);
+    }
+    if (strcmp(type_value.as.string, "long") == 0) {
+        long item;
+        memcpy(&item, base, sizeof(item));
+        return sage_rt_number((double)item);
+    }
+    if (strcmp(type_value.as.string, "float") == 0) {
+        float item;
+        memcpy(&item, base, sizeof(item));
+        return sage_rt_number((double)item);
+    }
+    if (strcmp(type_value.as.string, "double") == 0) {
+        double item;
+        memcpy(&item, base, sizeof(item));
+        return sage_rt_number(item);
+    }
+    return sage_rt_nil();
+}
+
+SageValue sage_rt_mem_write(SageValue pointer, SageValue offset_value, SageValue type_value, SageValue item_value) {
+    SageMemory* memory = sage_memory_from_value(pointer);
+    if (memory == NULL || offset_value.type != SAGE_NUMBER || type_value.type != SAGE_STRING ||
+        item_value.type != SAGE_NUMBER) return sage_rt_nil();
+    if (!isfinite(offset_value.as.number) || offset_value.as.number < 0.0 ||
+        offset_value.as.number != floor(offset_value.as.number)) return sage_rt_nil();
+    size_t offset = (size_t)offset_value.as.number;
+    size_t size;
+    size_t alignment;
+    if (sage_memory_type_size(type_value.as.string, &size, &alignment) != 0 ||
+        !sage_memory_range_valid(memory, offset, size)) return sage_rt_nil();
+    unsigned char* base = (unsigned char*)memory->data + offset;
+    if (strcmp(type_value.as.string, "char") == 0 || strcmp(type_value.as.string, "byte") == 0) {
+        *base = (unsigned char)item_value.as.number;
+    } else if (strcmp(type_value.as.string, "short") == 0) {
+        short item = (short)item_value.as.number;
+        memcpy(base, &item, sizeof(item));
+    } else if (strcmp(type_value.as.string, "int") == 0) {
+        int item = (int)item_value.as.number;
+        memcpy(base, &item, sizeof(item));
+    } else if (strcmp(type_value.as.string, "long") == 0) {
+        long item = (long)item_value.as.number;
+        memcpy(base, &item, sizeof(item));
+    } else if (strcmp(type_value.as.string, "float") == 0) {
+        float item = (float)item_value.as.number;
+        memcpy(base, &item, sizeof(item));
+    } else if (strcmp(type_value.as.string, "double") == 0) {
+        double item = item_value.as.number;
+        memcpy(base, &item, sizeof(item));
+    }
+    return sage_rt_nil();
+}
+
+SageValue sage_rt_mem_size(SageValue pointer) {
+    SageMemory* memory = sage_memory_from_value(pointer);
+    if (memory == NULL) return sage_rt_nil();
+    return sage_rt_number((double)memory->size);
+}
+
+SageValue sage_rt_struct_def(SageValue fields) {
+    if (fields.type != SAGE_ARRAY) return sage_rt_nil();
+    SageArray* field_array = fields.as.array;
+    SageValue result = sage_rt_dict_new();
+    size_t offset = 0;
+    size_t max_alignment = 1;
+    for (int i = 0; i < field_array->count; i++) {
+        SageValue field = field_array->elements[i];
+        if (field.type != SAGE_ARRAY || field.as.array->count < 2) continue;
+        SageValue name_value = field.as.array->elements[0];
+        SageValue type_value = field.as.array->elements[1];
+        if (name_value.type != SAGE_STRING || type_value.type != SAGE_STRING) continue;
+        size_t size;
+        size_t alignment;
+        if (sage_memory_type_size(type_value.as.string, &size, &alignment) != 0) continue;
+        size_t remainder = offset % alignment;
+        if (remainder != 0) {
+            if (offset > SIZE_MAX - (alignment - remainder)) return sage_rt_nil();
+            offset += alignment - remainder;
+        }
+        if (offset > SIZE_MAX - size) return sage_rt_nil();
+        SageValue info = sage_rt_array_new(2);
+        sage_rt_array_set(info, 0, sage_rt_number((double)offset));
+        sage_rt_array_set(info, 1, sage_rt_string(type_value.as.string));
+        sage_rt_dict_set(result, name_value.as.string, info);
+        offset += size;
+        if (alignment > max_alignment) max_alignment = alignment;
+    }
+    size_t remainder = offset % max_alignment;
+    if (remainder != 0) {
+        if (offset > SIZE_MAX - (max_alignment - remainder)) return sage_rt_nil();
+        offset += max_alignment - remainder;
+    }
+    sage_rt_dict_set(result, "__size__", sage_rt_number((double)offset));
+    sage_rt_dict_set(result, "__align__", sage_rt_number((double)max_alignment));
+    return result;
+}
+
+SageValue sage_rt_struct_new(SageValue definition) {
+    if (definition.type != SAGE_DICT) return sage_rt_nil();
+    SageValue size_value = sage_rt_dict_get(definition, "__size__");
+    if (size_value.type != SAGE_NUMBER || !isfinite(size_value.as.number) ||
+        size_value.as.number < 0.0 || size_value.as.number > 64.0 * 1024.0 * 1024.0) {
+        return sage_rt_nil();
+    }
+    size_t size = (size_t)size_value.as.number;
+    SageMemory* memory = safe_calloc(1, sizeof(SageMemory));
+    memory->data = safe_calloc(1, size > 0 ? size : 1);
+    memory->size = size;
+    memory->next = sage_memory_registry;
+    sage_memory_registry = memory;
+    sage_memory_register_cleanup();
+    return sage_memory_value(memory);
+}
+
+static int sage_struct_field_info(SageValue definition, SageValue field_name,
+                                  size_t* offset, const char** type, size_t* size) {
+    if (definition.type != SAGE_DICT || field_name.type != SAGE_STRING) return 0;
+    SageValue info = sage_rt_dict_get(definition, field_name.as.string);
+    if (info.type != SAGE_ARRAY || info.as.array->count < 2 ||
+        info.as.array->elements[0].type != SAGE_NUMBER ||
+        info.as.array->elements[1].type != SAGE_STRING) return 0;
+    size_t alignment;
+    if (sage_memory_type_size(info.as.array->elements[1].as.string, size, &alignment) != 0) return 0;
+    *offset = (size_t)info.as.array->elements[0].as.number;
+    *type = info.as.array->elements[1].as.string;
+    return 1;
+}
+
+SageValue sage_rt_struct_get(SageValue pointer, SageValue definition, SageValue field_name) {
+    SageMemory* memory = sage_memory_from_value(pointer);
+    size_t offset;
+    size_t size;
+    const char* type;
+    if (memory == NULL || !sage_struct_field_info(definition, field_name, &offset, &type, &size) ||
+        !sage_memory_range_valid(memory, offset, size)) return sage_rt_nil();
+    unsigned char* base = (unsigned char*)memory->data + offset;
+    if (strcmp(type, "char") == 0 || strcmp(type, "byte") == 0) return sage_rt_number((double)*base);
+    if (strcmp(type, "short") == 0) {
+        short item;
+        memcpy(&item, base, sizeof(item));
+        return sage_rt_number((double)item);
+    }
+    if (strcmp(type, "int") == 0) {
+        int item;
+        memcpy(&item, base, sizeof(item));
+        return sage_rt_number((double)item);
+    }
+    if (strcmp(type, "long") == 0) {
+        long item;
+        memcpy(&item, base, sizeof(item));
+        return sage_rt_number((double)item);
+    }
+    if (strcmp(type, "float") == 0) {
+        float item;
+        memcpy(&item, base, sizeof(item));
+        return sage_rt_number((double)item);
+    }
+    if (strcmp(type, "double") == 0) {
+        double item;
+        memcpy(&item, base, sizeof(item));
+        return sage_rt_number(item);
+    }
+    return sage_rt_nil();
+}
+
+SageValue sage_rt_struct_set(SageValue pointer, SageValue definition, SageValue field_name, SageValue item_value) {
+    SageMemory* memory = sage_memory_from_value(pointer);
+    size_t offset;
+    size_t size;
+    const char* type;
+    if (memory == NULL || item_value.type != SAGE_NUMBER ||
+        !sage_struct_field_info(definition, field_name, &offset, &type, &size) ||
+        !sage_memory_range_valid(memory, offset, size)) return sage_rt_nil();
+    unsigned char* base = (unsigned char*)memory->data + offset;
+    if (strcmp(type, "char") == 0 || strcmp(type, "byte") == 0) {
+        *base = (unsigned char)item_value.as.number;
+    } else if (strcmp(type, "short") == 0) {
+        short item = (short)item_value.as.number;
+        memcpy(base, &item, sizeof(item));
+    } else if (strcmp(type, "int") == 0) {
+        int item = (int)item_value.as.number;
+        memcpy(base, &item, sizeof(item));
+    } else if (strcmp(type, "long") == 0) {
+        long item = (long)item_value.as.number;
+        memcpy(base, &item, sizeof(item));
+    } else if (strcmp(type, "float") == 0) {
+        float item = (float)item_value.as.number;
+        memcpy(base, &item, sizeof(item));
+    } else if (strcmp(type, "double") == 0) {
+        double item = item_value.as.number;
+        memcpy(base, &item, sizeof(item));
+    }
+    return sage_rt_nil();
+}
+
+SageValue sage_rt_struct_size(SageValue definition) {
+    if (definition.type != SAGE_DICT) return sage_rt_nil();
+    return sage_rt_dict_get(definition, "__size__");
 }
 
 // ============================================================================
@@ -2474,61 +3260,217 @@ SageValue sage_rt_gpu_detected_platform(void) { return sage_rt_nil(); }
 // Dynamic Function Calls
 // ---------------------------------------------------------------------------
 
-// Construct a SAGE_FUNCTION SageValue from a raw function pointer.
-SageValue sage_rt_make_function(void* ptr) {
-    SageValue sv;
-    sv.type = SAGE_FUNCTION;
-    sv.as.pointer = ptr;
-    return sv;
+SageValue sage_rt_make_function(void* ptr, int32_t param_count,
+                                 int32_t required_count) {
+    SageFunction* function = safe_calloc(1, sizeof(SageFunction));
+    function->function = ptr;
+    function->param_count = param_count;
+    function->required_count = required_count;
+    SageValue value;
+    value.type = SAGE_FUNCTION;
+    value.as.pointer = function;
+    return value;
 }
 
-// Call a SageValue that holds a function pointer with the given argument array.
-// All sage-compiled functions have the signature:
-//   SageValue fn(SageValue, SageValue, ...) — N positional SageValue args.
-// We dispatch via a switch on argc for arities 0..16.
-SageValue sage_rt_call_dynamic(SageValue callee, SageValue* args, int32_t argc) {
+SageValue sage_rt_make_closure(void* ptr, int32_t capture_count,
+                               SageValue* captures, int32_t param_count,
+                               int32_t required_count) {
+    SageFunction* function = safe_calloc(1, sizeof(SageFunction));
+    function->function = ptr;
+    function->capture_count = capture_count;
+    function->param_count = param_count;
+    function->required_count = required_count;
+    function->is_closure = 1;
+    if (capture_count > 0) {
+        if (captures == NULL) {
+            free(function);
+            return sage_rt_nil();
+        }
+        function->captures = safe_calloc((size_t)capture_count, sizeof(SageValue));
+        memcpy(function->captures, captures, sizeof(SageValue) * (size_t)capture_count);
+    }
+    SageValue value;
+    value.type = SAGE_FUNCTION;
+    value.as.pointer = function;
+    return value;
+}
+
+SageValue sage_rt_closure_get(SageValue closure, int32_t index) {
+    if (closure.type != SAGE_FUNCTION || closure.as.pointer == NULL) return sage_rt_nil();
+    SageFunction* function = (SageFunction*)closure.as.pointer;
+    if (!function->is_closure || index < 0 || index >= function->capture_count) {
+        return sage_rt_nil();
+    }
+    return function->captures[index];
+}
+
+SageValue sage_rt_call_dynamic(SageValue callee, SageValue* args, int32_t argc,
+                               uint64_t mask) {
     if (callee.type != SAGE_FUNCTION || callee.as.pointer == NULL) {
         fprintf(stderr, "sage_rt: call_dynamic: callee is not a function\n");
         return sage_rt_nil();
     }
-    void* fp = callee.as.pointer;
-    typedef SageValue (*Fn0)(void);
-    typedef SageValue (*Fn1)(SageValue);
-    typedef SageValue (*Fn2)(SageValue, SageValue);
-    typedef SageValue (*Fn3)(SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn4)(SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn5)(SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn6)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn7)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn8)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn9)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn10)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn11)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn12)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn13)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn14)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn15)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    typedef SageValue (*Fn16)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue);
-    switch (argc) {
-        case 0:  return ((Fn0)(uintptr_t)fp)();
-        case 1:  return ((Fn1)(uintptr_t)fp)(args[0]);
-        case 2:  return ((Fn2)(uintptr_t)fp)(args[0], args[1]);
-        case 3:  return ((Fn3)(uintptr_t)fp)(args[0], args[1], args[2]);
-        case 4:  return ((Fn4)(uintptr_t)fp)(args[0], args[1], args[2], args[3]);
-        case 5:  return ((Fn5)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4]);
-        case 6:  return ((Fn6)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5]);
-        case 7:  return ((Fn7)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6]);
-        case 8:  return ((Fn8)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7]);
-        case 9:  return ((Fn9)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8]);
-        case 10: return ((Fn10)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9]);
-        case 11: return ((Fn11)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10]);
-        case 12: return ((Fn12)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11]);
-        case 13: return ((Fn13)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12]);
-        case 14: return ((Fn14)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13]);
-        case 15: return ((Fn15)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13], args[14]);
-        case 16: return ((Fn16)(uintptr_t)fp)(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10], args[11], args[12], args[13], args[14], args[15]);
-        default:
-            fprintf(stderr, "sage_rt: call_dynamic: unsupported arity %d (max 16)\n", argc);
+    SageFunction* function = (SageFunction*)callee.as.pointer;
+    if (function->function == NULL) return sage_rt_nil();
+    if (function->param_count >= 0) {
+        if (function->param_count > 64) return sage_rt_nil();
+        if (argc < 0 || argc > function->param_count) return sage_rt_nil();
+        if (argc < 64 && (mask >> argc) != 0) return sage_rt_nil();
+        uint64_t allowed = function->param_count >= 64
+            ? ~0ULL : ((1ULL << function->param_count) - 1ULL);
+        if ((mask & ~allowed) != 0) return sage_rt_nil();
+        int provided = 0;
+        for (int i = 0; i < function->param_count; i++) {
+            if ((mask & (1ULL << i)) != 0) provided++;
+        }
+        if (provided < function->required_count || provided > function->param_count) {
             return sage_rt_nil();
+        }
     }
+    SageCallableEntry entry = (SageCallableEntry)(uintptr_t)function->function;
+    return entry(callee, args, argc, mask);
+}
+
+static SageClass** sage_class_registry = NULL;
+static int sage_class_registry_count = 0;
+static int sage_class_registry_capacity = 0;
+
+static SageClass* sage_rt_find_class(const char* name) {
+    if (name == NULL) return NULL;
+    for (int i = 0; i < sage_class_registry_count; i++) {
+        if (strcmp(sage_class_registry[i]->name, name) == 0) return sage_class_registry[i];
+    }
+    return NULL;
+}
+
+void sage_rt_register_class(const char* name, const char* parent_name) {
+    if (name == NULL || sage_rt_find_class(name) != NULL) return;
+    if (sage_class_registry_count >= sage_class_registry_capacity) {
+        int capacity = sage_class_registry_capacity ? sage_class_registry_capacity * 2 : 8;
+        sage_class_registry = safe_realloc(sage_class_registry,
+            sizeof(SageClass*) * (size_t)capacity);
+        sage_class_registry_capacity = capacity;
+    }
+    SageClass* class_def = safe_calloc(1, sizeof(SageClass));
+    class_def->name = strdup(name);
+    if (class_def->name == NULL) abort();
+    class_def->parent_name = parent_name;
+    sage_class_registry[sage_class_registry_count++] = class_def;
+}
+
+static SageMethodEntry* sage_rt_find_method(SageClass* class_def, const char* name) {
+    while (class_def != NULL) {
+        for (int i = 0; i < class_def->method_count; i++) {
+            if (strcmp(class_def->methods[i].name, name) == 0) return &class_def->methods[i];
+        }
+        if (class_def->parent == NULL && class_def->parent_name != NULL) {
+            class_def->parent = sage_rt_find_class(class_def->parent_name);
+        }
+        class_def = class_def->parent;
+    }
+    return NULL;
+}
+
+void sage_rt_register_method(const char* class_name, const char* method_name,
+                             void* function, int32_t arity,
+                             int32_t required_count, int has_self) {
+    SageClass* class_def = sage_rt_find_class(class_name);
+    if (class_def == NULL || method_name == NULL || function == NULL) return;
+    for (int i = 0; i < class_def->method_count; i++) {
+        if (strcmp(class_def->methods[i].name, method_name) == 0) {
+            class_def->methods[i].function = function;
+            class_def->methods[i].arity = arity;
+            class_def->methods[i].required_count = required_count;
+            class_def->methods[i].has_self = has_self;
+            return;
+        }
+    }
+    if (class_def->method_count >= class_def->method_capacity) {
+        int capacity = class_def->method_capacity ? class_def->method_capacity * 2 : 8;
+        class_def->methods = safe_realloc(class_def->methods,
+            sizeof(SageMethodEntry) * (size_t)capacity);
+        class_def->method_capacity = capacity;
+    }
+    SageMethodEntry* method = &class_def->methods[class_def->method_count++];
+    method->name = strdup(method_name);
+    if (method->name == NULL) abort();
+    method->function = function;
+    method->arity = arity;
+    method->required_count = required_count;
+    method->has_self = has_self;
+}
+
+static SageValue sage_rt_invoke_function(void* function, SageValue* args,
+                                          int32_t argc, uint64_t mask,
+                                          int32_t param_count,
+                                          int32_t required_count) {
+    if (function == NULL) return sage_rt_nil();
+    SageFunction callable;
+    memset(&callable, 0, sizeof(callable));
+    callable.function = function;
+    callable.param_count = param_count;
+    callable.required_count = required_count;
+    SageValue callee;
+    callee.type = SAGE_FUNCTION;
+    callee.as.pointer = &callable;
+    return sage_rt_call_dynamic(callee, args, argc, mask);
+}
+
+SageValue sage_rt_construct_class(const char* class_name,
+                                  SageValue* args, int32_t argc, uint64_t mask) {
+    SageClass* class_def = sage_rt_find_class(class_name);
+    if (class_def == NULL) return sage_rt_nil();
+    SageInstance* instance = safe_calloc(1, sizeof(SageInstance));
+    instance->name = class_def->name;
+    instance->class_def = class_def;
+    instance->fields = sage_rt_dict_new().as.dict;
+    SageValue value;
+    value.type = SAGE_INSTANCE;
+    value.as.instance = instance;
+
+    SageMethodEntry* init = sage_rt_find_method(class_def, "init");
+    if (init != NULL) {
+        if (argc < 0 || (argc > 0 && args == NULL)) return value;
+        int total = init->has_self ? argc + 1 : argc;
+        if (total < 0) return value;
+        SageValue* call_args = total > 0
+            ? safe_calloc((size_t)total, sizeof(SageValue)) : NULL;
+        if (init->has_self) call_args[0] = value;
+        for (int i = 0; i < argc; i++) {
+            if (init->has_self) call_args[i + 1] = args[i];
+            else call_args[i] = args[i];
+        }
+        uint64_t call_mask = init->has_self ? ((mask << 1) | 1ULL) : mask;
+        sage_rt_invoke_function(init->function, call_args, total, call_mask,
+                                init->arity, init->required_count);
+        free(call_args);
+    }
+    return value;
+}
+
+SageValue sage_rt_call_method(SageValue object, const char* name,
+                              SageValue* args, int32_t argc, uint64_t mask) {
+    if (object.type != SAGE_INSTANCE || object.as.instance == NULL || name == NULL) {
+        return sage_rt_nil();
+    }
+    if (argc < 0 || (argc > 0 && args == NULL)) return sage_rt_nil();
+    SageClass* class_def = (SageClass*)object.as.instance->class_def;
+    SageMethodEntry* method = sage_rt_find_method(class_def, name);
+    if (method == NULL) return sage_rt_nil();
+
+    int total = method->has_self ? argc + 1 : argc;
+    if (total < 0) return sage_rt_nil();
+    SageValue* call_args = total > 0
+        ? safe_calloc((size_t)total, sizeof(SageValue)) : NULL;
+    if (method->has_self) call_args[0] = object;
+    for (int i = 0; i < argc; i++) {
+        if (method->has_self) call_args[i + 1] = args[i];
+        else call_args[i] = args[i];
+    }
+    uint64_t call_mask = method->has_self ? ((mask << 1) | 1ULL) : mask;
+    SageValue result = sage_rt_invoke_function(method->function, call_args, total,
+                                               call_mask, method->arity,
+                                               method->required_count);
+    free(call_args);
+    return result;
 }

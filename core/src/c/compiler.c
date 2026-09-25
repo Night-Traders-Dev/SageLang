@@ -22,13 +22,49 @@
 typedef struct NameEntry {
   char *sage_name;
   char *c_name;
+  char *storage_name;
+  int captured;
   struct NameEntry *next;
 } NameEntry;
+
+typedef struct {
+  char **items;
+  int count;
+  int capacity;
+} StringList;
+
+typedef struct LoopRootEntry {
+  Stmt *stmt;
+  NameEntry *slot;
+  struct LoopRootEntry *next;
+} LoopRootEntry;
+
+typedef struct FunctionInfo {
+  Stmt *stmt;
+  ProcStmt *proc;
+  char *c_name;
+  int is_nested;
+  int is_method;
+  StringList locals;
+  StringList required;
+  StringList captures;
+  StringList captured_locals;
+  char **capture_slot_names;
+  struct FunctionInfo *parent;
+  struct FunctionInfo *children;
+  struct FunctionInfo *next_child;
+  struct FunctionInfo *next;
+} FunctionInfo;
 
 typedef struct ProcEntry {
   char *sage_name;
   char *c_name;
   int param_count;
+  Expr **defaults;
+  int required_count;
+  char *adapter_name;
+  int adapter_needed;
+  int adapter_emitted;
   struct ProcEntry *next;
 } ProcEntry;
 
@@ -36,6 +72,8 @@ typedef struct ClassInfo {
   char *class_name;
   char *parent_name;
   Stmt *methods;
+  char **field_names;
+  int field_count;
   struct ClassInfo *next;
 } ClassInfo;
 
@@ -45,6 +83,7 @@ typedef struct ImportedModule {
   char *path;
   char *source;
   Stmt *ast;
+  FunctionInfo *root_function;
   int is_alias; /* 1 when this binding aliases an already-loaded module */
   struct ImportedModule *next;
 } ImportedModule;
@@ -71,6 +110,10 @@ typedef struct {
   NameEntry *globals;
   ProcEntry *procs;
   NameEntry *locals;
+  FunctionInfo *functions;
+  FunctionInfo *current_function;
+  FunctionInfo *main_function;
+  LoopRootEntry *loop_roots;
   ClassInfo *classes;
   ClassInfo *current_class;
   ImportedModule *modules;
@@ -236,6 +279,7 @@ static void free_name_entries(NameEntry *entry) {
     NameEntry *next = entry->next;
     free(entry->sage_name);
     free(entry->c_name);
+    free(entry->storage_name);
     free(entry);
     entry = next;
   }
@@ -246,9 +290,119 @@ static void free_proc_entries(ProcEntry *entry) {
     ProcEntry *next = entry->next;
     free(entry->sage_name);
     free(entry->c_name);
+    free(entry->adapter_name);
     free(entry);
     entry = next;
   }
+}
+
+static void free_loop_root_entries(LoopRootEntry *entry) {
+  while (entry != NULL) {
+    LoopRootEntry *next = entry->next;
+    free(entry);
+    entry = next;
+  }
+}
+
+static LoopRootEntry *find_loop_root_entry(Compiler *compiler, Stmt *stmt) {
+  for (LoopRootEntry *entry = compiler->loop_roots; entry != NULL;
+       entry = entry->next) {
+    if (entry->stmt == stmt) {
+      return entry;
+    }
+  }
+  return NULL;
+}
+
+static void free_string_list(StringList *list) {
+  for (int i = 0; i < list->count; i++) {
+    free(list->items[i]);
+  }
+  free(list->items);
+  list->items = NULL;
+  list->count = 0;
+  list->capacity = 0;
+}
+
+static int string_list_contains(const StringList *list, const char *text) {
+  for (int i = 0; i < list->count; i++) {
+    if (strcmp(list->items[i], text) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static void string_list_add(StringList *list, const char *text) {
+  if (text == NULL || string_list_contains(list, text)) {
+    return;
+  }
+  if (list->count == list->capacity) {
+    int capacity = list->capacity == 0 ? 8 : list->capacity * 2;
+    char **items = realloc(list->items, sizeof(char *) * (size_t)capacity);
+    if (items == NULL) {
+      fprintf(stderr, "Out of memory collecting closure variables.\n");
+      exit(1);
+    }
+    list->items = items;
+    list->capacity = capacity;
+  }
+  list->items[list->count++] = str_dup(text);
+}
+
+static void string_list_append(StringList *destination, const StringList *source) {
+  for (int i = 0; i < source->count; i++) {
+    string_list_add(destination, source->items[i]);
+  }
+}
+
+static void free_function_infos(FunctionInfo *function) {
+  while (function != NULL) {
+    FunctionInfo *next = function->next;
+    free(function->c_name);
+    free_string_list(&function->locals);
+    free_string_list(&function->required);
+    free_string_list(&function->captures);
+    free_string_list(&function->captured_locals);
+    for (int i = 0; i < function->captures.count; i++) {
+      free(function->capture_slot_names[i]);
+    }
+    free(function->capture_slot_names);
+    free(function);
+    function = next;
+  }
+}
+
+static FunctionInfo *find_function_info(Compiler *compiler, Stmt *stmt) {
+  for (FunctionInfo *function = compiler->functions; function != NULL;
+       function = function->next) {
+    if (function->stmt == stmt) {
+      return function;
+    }
+  }
+  return NULL;
+}
+
+static FunctionInfo *find_function_info_by_c_name(Compiler *compiler,
+                                                   const char *c_name) {
+  for (FunctionInfo *function = compiler->functions; function != NULL;
+       function = function->next) {
+    if (strcmp(function->c_name, c_name) == 0) {
+      return function;
+    }
+  }
+  return NULL;
+}
+
+static FunctionInfo *find_child_function_info(FunctionInfo *parent,
+                                               Stmt *stmt) {
+  for (FunctionInfo *child = parent->children; child != NULL;
+       child = child->next_child) {
+    if (child->stmt == stmt) {
+      return child;
+    }
+  }
+  return NULL;
 }
 
 static NameEntry *find_name_entry(NameEntry *list, const char *sage_name) {
@@ -269,6 +423,29 @@ static ProcEntry *find_proc_entry(ProcEntry *list, const char *sage_name) {
     list = list->next;
   }
   return NULL;
+}
+
+static ProcEntry *find_proc_entry_by_c_name(ProcEntry *list,
+                                            const char *c_name) {
+  while (list != NULL) {
+    if (strcmp(list->c_name, c_name) == 0) {
+      return list;
+    }
+    list = list->next;
+  }
+  return NULL;
+}
+
+static char *emit_procedure_value(ProcEntry *proc) {
+  if (proc->adapter_name != NULL) {
+    proc->adapter_needed = 1;
+  }
+  StringBuffer sb;
+  sb_init(&sb);
+  sb_appendf(&sb, "sage_procedure(%s, %d, %d, %s)", proc->c_name,
+             proc->param_count, proc->required_count,
+             proc->adapter_name != NULL ? proc->adapter_name : "NULL");
+  return sb_take(&sb);
 }
 
 static int token_span(const Token *token) {
@@ -355,6 +532,21 @@ static void emit_line(Compiler *compiler, const char *fmt, ...) {
   fputc('\n', compiler->out);
 }
 
+static void make_name_entry_captured(Compiler *compiler, NameEntry *entry);
+
+static void mark_captured_locals(Compiler *compiler) {
+  if (compiler->current_function == NULL) {
+    return;
+  }
+  for (NameEntry *local = compiler->locals; local != NULL;
+       local = local->next) {
+    if (string_list_contains(&compiler->current_function->captured_locals,
+                             local->sage_name)) {
+      make_name_entry_captured(compiler, local);
+    }
+  }
+}
+
 static char *make_unique_name(Compiler *compiler, const char *prefix,
                               const char *sage_name) {
   char *sanitized = sanitize_identifier(sage_name);
@@ -380,9 +572,24 @@ static NameEntry *add_name_entry(Compiler *compiler, NameEntry **list,
 
   entry->sage_name = str_dup(sage_name);
   entry->c_name = make_unique_name(compiler, prefix, sage_name);
+  entry->storage_name = NULL;
+  entry->captured = 0;
   entry->next = *list;
   *list = entry;
   return entry;
+}
+
+static void make_name_entry_captured(Compiler *compiler, NameEntry *entry) {
+  if (entry->captured) {
+    return;
+  }
+  entry->captured = 1;
+  entry->storage_name = make_unique_name(compiler, "sage_capture", entry->sage_name);
+  StringBuffer sb;
+  sb_init(&sb);
+  sb_appendf(&sb, "(*%s)", entry->storage_name);
+  free(entry->c_name);
+  entry->c_name = sb_take(&sb);
 }
 
 static NameEntry *add_internal_slot(Compiler *compiler, NameEntry **list,
@@ -396,13 +603,16 @@ static NameEntry *add_internal_slot(Compiler *compiler, NameEntry **list,
   snprintf(name, sizeof(name), "%s_%d", prefix, compiler->next_unique_id++);
   entry->sage_name = str_dup(name);
   entry->c_name = make_unique_name(compiler, prefix, name);
+  entry->storage_name = NULL;
+  entry->captured = 0;
   entry->next = *list;
   *list = entry;
   return entry;
 }
 
 static ProcEntry *add_proc_entry(Compiler *compiler, const char *sage_name,
-                                 int param_count, const Token *token) {
+                                 int param_count, int required_count,
+                                 Expr **defaults, const Token *token) {
   (void)token;
   ProcEntry *existing = find_proc_entry(compiler->procs, sage_name);
   if (existing != NULL) {
@@ -421,6 +631,17 @@ static ProcEntry *add_proc_entry(Compiler *compiler, const char *sage_name,
   entry->sage_name = str_dup(sage_name);
   entry->c_name = make_unique_name(compiler, "sage_fn", sage_name);
   entry->param_count = param_count;
+  entry->defaults = defaults;
+  entry->required_count = required_count;
+  entry->adapter_name = NULL;
+  entry->adapter_needed = 0;
+  entry->adapter_emitted = 0;
+  for (int i = 0; i < param_count; i++) {
+    if (defaults != NULL && defaults[i] != NULL) {
+      entry->adapter_name = make_unique_name(compiler, "sage_adapter", sage_name);
+      break;
+    }
+  }
   entry->next = compiler->procs;
   compiler->procs = entry;
   return entry;
@@ -560,8 +781,28 @@ static ClassInfo *add_class_info(Compiler *compiler, const char *name,
   info->class_name = str_dup(name);
   info->parent_name = parent_name ? str_dup(parent_name) : NULL;
   info->methods = methods;
+  info->field_names = NULL;
+  info->field_count = 0;
   info->next = compiler->classes;
   compiler->classes = info;
+  return info;
+}
+
+static ClassInfo *add_struct_info(Compiler *compiler, StructStmt *stmt) {
+  char *name = token_to_string(stmt->name);
+  ClassInfo *info = add_class_info(compiler, name, NULL, NULL);
+  free(name);
+  if (stmt->field_count > 0) {
+    info->field_names = calloc((size_t)stmt->field_count, sizeof(char *));
+    if (info->field_names == NULL) {
+      fprintf(stderr, "Out of memory creating compiler struct metadata.\n");
+      exit(1);
+    }
+    for (int i = 0; i < stmt->field_count; i++) {
+      info->field_names[i] = token_to_string(stmt->field_names[i]);
+    }
+    info->field_count = stmt->field_count;
+  }
   return info;
 }
 
@@ -570,6 +811,12 @@ static void free_class_info(ClassInfo *list) {
     ClassInfo *next = list->next;
     free(list->class_name);
     free(list->parent_name);
+    if (list->field_names != NULL) {
+      for (int i = 0; i < list->field_count; i++) {
+        free(list->field_names[i]);
+      }
+      free(list->field_names);
+    }
     free(list);
     list = next;
   }
@@ -733,6 +980,78 @@ static char *resolve_module_path_for_compiler(const Compiler *compiler,
   return NULL;
 }
 
+static void collect_local_names(Stmt *stmt, StringList *locals) {
+  while (stmt != NULL) {
+    switch (stmt->type) {
+    case STMT_LET: {
+      char *name = token_to_string(stmt->as.let.name);
+      string_list_add(locals, name);
+      free(name);
+      break;
+    }
+    case STMT_BLOCK:
+      collect_local_names(stmt->as.block.statements, locals);
+      break;
+    case STMT_IF:
+      collect_local_names(stmt->as.if_stmt.then_branch, locals);
+      collect_local_names(stmt->as.if_stmt.else_branch, locals);
+      break;
+    case STMT_WHILE:
+      collect_local_names(stmt->as.while_stmt.body, locals);
+      break;
+    case STMT_PROC:
+    case STMT_ASYNC_PROC: {
+      char *name = token_to_string(stmt->as.proc.name);
+      string_list_add(locals, name);
+      free(name);
+      break;
+    }
+    case STMT_FOR: {
+      char *name = token_to_string(stmt->as.for_stmt.variable);
+      string_list_add(locals, name);
+      free(name);
+      collect_local_names(stmt->as.for_stmt.body, locals);
+      break;
+    }
+    case STMT_TRY:
+      collect_local_names(stmt->as.try_stmt.try_block, locals);
+      for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+        char *name =
+            token_to_string(stmt->as.try_stmt.catches[i]->exception_var);
+        string_list_add(locals, name);
+        free(name);
+        collect_local_names(stmt->as.try_stmt.catches[i]->body, locals);
+      }
+      collect_local_names(stmt->as.try_stmt.finally_block, locals);
+      break;
+    case STMT_MATCH:
+      for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+        CaseClause *clause = stmt->as.match_stmt.cases[i];
+        if (clause->pattern != NULL &&
+            clause->pattern->type == EXPR_VARIABLE) {
+          char *name = token_to_string(clause->pattern->as.variable.name);
+          if (strcmp(name, "_") != 0) {
+            string_list_add(locals, name);
+          }
+          free(name);
+        }
+        collect_local_names(clause->body, locals);
+      }
+      collect_local_names(stmt->as.match_stmt.default_case, locals);
+      break;
+    case STMT_DEFER:
+      collect_local_names(stmt->as.defer.statement, locals);
+      break;
+    case STMT_COMPTIME:
+      collect_local_names(stmt->as.comptime.body, locals);
+      break;
+    default:
+      break;
+    }
+    stmt = stmt->next;
+  }
+}
+
 static void collect_local_lets(Compiler *compiler, Stmt *stmt,
                                NameEntry **locals) {
   while (stmt != NULL) {
@@ -756,10 +1075,14 @@ static void collect_local_lets(Compiler *compiler, Stmt *stmt,
       collect_local_lets(compiler, stmt->as.while_stmt.body, locals);
       break;
     case STMT_PROC:
-      compiler_error(
-          compiler,
-          "nested procedure declarations are not supported by the C backend");
-      return;
+    case STMT_ASYNC_PROC: {
+      char *name = token_to_string(stmt->as.proc.name);
+      if (find_name_entry(*locals, name) == NULL) {
+        add_name_entry(compiler, locals, name, "sage_local");
+      }
+      free(name);
+      break;
+    }
     case STMT_FOR: {
       char *var_name = token_to_string(stmt->as.for_stmt.variable);
       if (find_name_entry(*locals, var_name) == NULL) {
@@ -810,11 +1133,6 @@ static void collect_local_lets(Compiler *compiler, Stmt *stmt,
     case STMT_DEFER:
       collect_local_lets(compiler, stmt->as.defer.statement, locals);
       break;
-    case STMT_ASYNC_PROC:
-      compiler_error(
-          compiler,
-          "nested procedure declarations are not supported by the C backend");
-      return;
     case STMT_RAISE:
     case STMT_YIELD:
     case STMT_IMPORT:
@@ -833,6 +1151,63 @@ static void collect_local_lets(Compiler *compiler, Stmt *stmt,
     case STMT_BREAK:
     case STMT_CONTINUE:
       break;
+    }
+    stmt = stmt->next;
+  }
+}
+
+static void collect_loop_root_slots(Compiler *compiler, Stmt *stmt,
+                                    NameEntry **slots) {
+  while (stmt != NULL) {
+    if (stmt->type == STMT_FOR) {
+      LoopRootEntry *entry = malloc(sizeof(LoopRootEntry));
+      if (entry == NULL) {
+        fprintf(stderr, "Out of memory creating compiler loop root.\n");
+        exit(1);
+      }
+      entry->stmt = stmt;
+      entry->slot = add_internal_slot(compiler, slots, "sage_gc_loop_root");
+      entry->next = compiler->loop_roots;
+      compiler->loop_roots = entry;
+      collect_loop_root_slots(compiler, stmt->as.for_stmt.body, slots);
+    } else {
+      switch (stmt->type) {
+      case STMT_BLOCK:
+        collect_loop_root_slots(compiler, stmt->as.block.statements, slots);
+        break;
+      case STMT_IF:
+        collect_loop_root_slots(compiler, stmt->as.if_stmt.then_branch, slots);
+        collect_loop_root_slots(compiler, stmt->as.if_stmt.else_branch, slots);
+        break;
+      case STMT_WHILE:
+        collect_loop_root_slots(compiler, stmt->as.while_stmt.body, slots);
+        break;
+      case STMT_TRY:
+        collect_loop_root_slots(compiler, stmt->as.try_stmt.try_block, slots);
+        for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+          collect_loop_root_slots(compiler,
+                                  stmt->as.try_stmt.catches[i]->body, slots);
+        }
+        collect_loop_root_slots(compiler, stmt->as.try_stmt.finally_block,
+                                slots);
+        break;
+      case STMT_MATCH:
+        for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+          collect_loop_root_slots(compiler,
+                                  stmt->as.match_stmt.cases[i]->body, slots);
+        }
+        collect_loop_root_slots(compiler, stmt->as.match_stmt.default_case,
+                                slots);
+        break;
+      case STMT_DEFER:
+        collect_loop_root_slots(compiler, stmt->as.defer.statement, slots);
+        break;
+      case STMT_COMPTIME:
+        collect_loop_root_slots(compiler, stmt->as.comptime.body, slots);
+        break;
+      default:
+        break;
+      }
     }
     stmt = stmt->next;
   }
@@ -861,6 +1236,9 @@ static void collect_global_lets(Compiler *compiler, Stmt *stmt) {
       break;
     case STMT_WHILE:
       collect_global_lets(compiler, stmt->as.while_stmt.body);
+      break;
+    case STMT_PROC:
+    case STMT_ASYNC_PROC:
       break;
     case STMT_FOR: {
       char *var_name = token_to_string(stmt->as.for_stmt.variable);
@@ -892,6 +1270,9 @@ static void collect_global_lets(Compiler *compiler, Stmt *stmt) {
     case STMT_COMPTIME:
       collect_global_lets(compiler, stmt->as.comptime.body);
       break;
+    case STMT_DEFER:
+      collect_global_lets(compiler, stmt->as.defer.statement);
+      break;
     case STMT_MATCH:
       for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
         CaseClause *clause = stmt->as.match_stmt.cases[i];
@@ -905,8 +1286,74 @@ static void collect_global_lets(Compiler *compiler, Stmt *stmt) {
       }
       collect_global_lets(compiler, stmt->as.match_stmt.default_case);
       break;
+    case STMT_ENUM: {
+      char *name = token_to_string(stmt->as.enum_stmt.name);
+      add_name_entry(compiler, &compiler->globals, name, "sage_global");
+      free(name);
+      break;
+    }
     default:
       break;
+    }
+    stmt = stmt->next;
+  }
+}
+
+static void collect_global_closures(Compiler *compiler, Stmt *stmt,
+                                    int nested_context) {
+  while (stmt != NULL) {
+    if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
+      if (nested_context) {
+        char *name = token_to_string(stmt->as.proc.name);
+        if (find_proc_entry(compiler->procs, name) != NULL) {
+          compiler_error(compiler,
+                         "global closure '%s' conflicts with procedure name",
+                         name);
+        } else {
+          add_name_entry(compiler, &compiler->globals, name, "sage_global");
+        }
+        free(name);
+      }
+    } else {
+      switch (stmt->type) {
+      case STMT_BLOCK:
+        collect_global_closures(compiler, stmt->as.block.statements, 1);
+        break;
+      case STMT_IF:
+        collect_global_closures(compiler, stmt->as.if_stmt.then_branch, 1);
+        collect_global_closures(compiler, stmt->as.if_stmt.else_branch, 1);
+        break;
+      case STMT_WHILE:
+        collect_global_closures(compiler, stmt->as.while_stmt.body, 1);
+        break;
+      case STMT_FOR:
+        collect_global_closures(compiler, stmt->as.for_stmt.body, 1);
+        break;
+      case STMT_TRY:
+        collect_global_closures(compiler, stmt->as.try_stmt.try_block, 1);
+        for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+          collect_global_closures(compiler,
+                                  stmt->as.try_stmt.catches[i]->body, 1);
+        }
+        collect_global_closures(compiler, stmt->as.try_stmt.finally_block, 1);
+        break;
+      case STMT_MATCH:
+        for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+          collect_global_closures(compiler,
+                                  stmt->as.match_stmt.cases[i]->body, 1);
+        }
+        collect_global_closures(compiler, stmt->as.match_stmt.default_case,
+                                1);
+        break;
+      case STMT_DEFER:
+        collect_global_closures(compiler, stmt->as.defer.statement, 1);
+        break;
+      case STMT_COMPTIME:
+        collect_global_closures(compiler, stmt->as.comptime.body, 1);
+        break;
+      default:
+        break;
+      }
     }
     stmt = stmt->next;
   }
@@ -966,6 +1413,7 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
     mod->ast = (existing->source != NULL && existing->path != NULL)
                    ? parse_program(mod->source, mod->path)
                    : NULL;
+    mod->root_function = NULL;
     mod->is_alias = 1;
     mod->next = compiler->modules;
     compiler->modules = mod;
@@ -1000,6 +1448,7 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
     mod->path = NULL;
     mod->source = NULL;
     mod->ast = NULL;
+    mod->root_function = NULL;
     mod->is_alias = 0;
     mod->next = compiler->modules;
     compiler->modules = mod;
@@ -1047,6 +1496,7 @@ static void process_import(Compiler *compiler, ImportStmt *import) {
   mod->path = module_path;
   mod->source = source;
 mod->ast = ast;
+    mod->root_function = NULL;
     mod->is_alias = 0;
     mod->next = compiler->modules;
   compiler->modules = mod;
@@ -1060,7 +1510,9 @@ mod->ast = ast;
   for (Stmt *s = ast; s != NULL; s = s->next) {
     if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC) {
       char *name = token_to_string(s->as.proc.name);
-      add_proc_entry(compiler, name, s->as.proc.param_count, &s->as.proc.name);
+      add_proc_entry(compiler, name, s->as.proc.param_count,
+                     s->as.proc.required_count, s->as.proc.defaults,
+                     &s->as.proc.name);
       free(name);
     }
     if (s->type == STMT_CLASS) {
@@ -1073,6 +1525,9 @@ mod->ast = ast;
                      s->as.class_stmt.methods);
       free(parent_name);
       free(class_name);
+    }
+    if (s->type == STMT_STRUCT) {
+      add_struct_info(compiler, &s->as.struct_stmt);
     }
     if (s->type == STMT_IMPORT) {
       process_import(compiler, &s->as.import);
@@ -1088,6 +1543,7 @@ mod->ast = ast;
       collect_global_lets(compiler, s);
     }
   }
+  collect_global_closures(compiler, ast, 0);
 }
 
 static void collect_top_level_symbols(Compiler *compiler, Stmt *program) {
@@ -1096,6 +1552,7 @@ static void collect_top_level_symbols(Compiler *compiler, Stmt *program) {
     if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
       char *name = token_to_string(stmt->as.proc.name);
       add_proc_entry(compiler, name, stmt->as.proc.param_count,
+                     stmt->as.proc.required_count, stmt->as.proc.defaults,
                      &stmt->as.proc.name);
       free(name);
     }
@@ -1109,6 +1566,9 @@ static void collect_top_level_symbols(Compiler *compiler, Stmt *program) {
                      stmt->as.class_stmt.methods);
       free(class_name);
       free(parent_name);
+    }
+    if (stmt->type == STMT_STRUCT) {
+      add_struct_info(compiler, &stmt->as.struct_stmt);
     }
     if (stmt->type == STMT_IMPORT) {
       process_import(compiler, &stmt->as.import);
@@ -1124,6 +1584,521 @@ static void collect_top_level_symbols(Compiler *compiler, Stmt *program) {
       collect_global_lets(compiler, stmt);
     }
   }
+  collect_global_closures(compiler, program, 0);
+}
+
+static void collect_statement_required(Compiler *compiler, FunctionInfo *owner,
+                                      Stmt *stmt, StringList *required);
+
+static void collect_expression_required(Compiler *compiler,
+                                        FunctionInfo *owner, Expr *expr,
+                                        StringList *required) {
+  if (expr == NULL) {
+    return;
+  }
+
+  switch (expr->type) {
+  case EXPR_VARIABLE: {
+    char *name = token_to_string(expr->as.variable.name);
+    if (!string_list_contains(&owner->locals, name)) {
+      string_list_add(required, name);
+    }
+    free(name);
+    break;
+  }
+  case EXPR_BINARY:
+    collect_expression_required(compiler, owner, expr->as.binary.left, required);
+    collect_expression_required(compiler, owner, expr->as.binary.right,
+                                required);
+    break;
+  case EXPR_CALL:
+    collect_expression_required(compiler, owner, expr->as.call.callee, required);
+    for (int i = 0; i < expr->as.call.arg_count; i++) {
+      collect_expression_required(compiler, owner, expr->as.call.args[i],
+                                  required);
+    }
+    break;
+  case EXPR_ARRAY:
+    for (int i = 0; i < expr->as.array.count; i++) {
+      collect_expression_required(compiler, owner, expr->as.array.elements[i],
+                                  required);
+    }
+    break;
+  case EXPR_INDEX:
+    collect_expression_required(compiler, owner, expr->as.index.array, required);
+    collect_expression_required(compiler, owner, expr->as.index.index, required);
+    break;
+  case EXPR_DICT:
+    for (int i = 0; i < expr->as.dict.count; i++) {
+      collect_expression_required(compiler, owner, expr->as.dict.values[i],
+                                  required);
+    }
+    break;
+  case EXPR_TUPLE:
+    for (int i = 0; i < expr->as.tuple.count; i++) {
+      collect_expression_required(compiler, owner, expr->as.tuple.elements[i],
+                                  required);
+    }
+    break;
+  case EXPR_SLICE:
+    collect_expression_required(compiler, owner, expr->as.slice.array, required);
+    collect_expression_required(compiler, owner, expr->as.slice.start, required);
+    collect_expression_required(compiler, owner, expr->as.slice.end, required);
+    break;
+  case EXPR_GET:
+    collect_expression_required(compiler, owner, expr->as.get.object, required);
+    break;
+  case EXPR_SET:
+    if (expr->as.set.object != NULL) {
+      collect_expression_required(compiler, owner, expr->as.set.object, required);
+    } else {
+      char *name = token_to_string(expr->as.set.property);
+      if (!string_list_contains(&owner->locals, name)) {
+        string_list_add(required, name);
+      }
+      free(name);
+    }
+    collect_expression_required(compiler, owner, expr->as.set.value, required);
+    break;
+  case EXPR_INDEX_SET:
+    collect_expression_required(compiler, owner, expr->as.index_set.array,
+                                required);
+    collect_expression_required(compiler, owner, expr->as.index_set.index,
+                                required);
+    collect_expression_required(compiler, owner, expr->as.index_set.value,
+                                required);
+    break;
+  case EXPR_AWAIT:
+    collect_expression_required(compiler, owner, expr->as.await.expression,
+                                required);
+    break;
+  case EXPR_COMPTIME:
+    collect_expression_required(compiler, owner, expr->as.comptime.expression,
+                                required);
+    break;
+  case EXPR_NUMBER:
+  case EXPR_STRING:
+  case EXPR_BOOL:
+  case EXPR_NIL:
+  case EXPR_SUPER:
+  case EXPR_PROC:
+    break;
+  }
+}
+
+static void collect_statement_required(Compiler *compiler, FunctionInfo *owner,
+                                      Stmt *stmt, StringList *required) {
+  while (stmt != NULL) {
+    switch (stmt->type) {
+    case STMT_PRINT:
+      collect_expression_required(compiler, owner, stmt->as.print.expression,
+                                  required);
+      break;
+    case STMT_EXPRESSION:
+      collect_expression_required(compiler, owner, stmt->as.expression, required);
+      break;
+    case STMT_LET:
+      collect_expression_required(compiler, owner, stmt->as.let.initializer,
+                                  required);
+      break;
+    case STMT_IF:
+      collect_expression_required(compiler, owner, stmt->as.if_stmt.condition,
+                                  required);
+      collect_statement_required(compiler, owner,
+                                 stmt->as.if_stmt.then_branch, required);
+      collect_statement_required(compiler, owner,
+                                 stmt->as.if_stmt.else_branch, required);
+      break;
+    case STMT_BLOCK:
+      collect_statement_required(compiler, owner, stmt->as.block.statements,
+                                 required);
+      break;
+    case STMT_WHILE:
+      collect_expression_required(compiler, owner, stmt->as.while_stmt.condition,
+                                  required);
+      collect_statement_required(compiler, owner, stmt->as.while_stmt.body,
+                                 required);
+      break;
+    case STMT_PROC:
+    case STMT_ASYNC_PROC: {
+      FunctionInfo *child = find_child_function_info(owner, stmt);
+      if (child != NULL) {
+        string_list_append(required, &child->required);
+      }
+      break;
+    }
+    case STMT_FOR:
+      collect_expression_required(compiler, owner, stmt->as.for_stmt.iterable,
+                                  required);
+      collect_statement_required(compiler, owner, stmt->as.for_stmt.body,
+                                 required);
+      break;
+    case STMT_RETURN:
+      collect_expression_required(compiler, owner, stmt->as.ret.value, required);
+      break;
+    case STMT_TRY:
+      collect_statement_required(compiler, owner, stmt->as.try_stmt.try_block,
+                                 required);
+      for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+        collect_statement_required(compiler,
+                                   owner,
+                                   stmt->as.try_stmt.catches[i]->body,
+                                   required);
+      }
+      collect_statement_required(compiler, owner,
+                                 stmt->as.try_stmt.finally_block, required);
+      break;
+    case STMT_RAISE:
+      collect_expression_required(compiler, owner, stmt->as.raise.exception,
+                                  required);
+      break;
+    case STMT_YIELD:
+      collect_expression_required(compiler, owner, stmt->as.yield_stmt.value,
+                                  required);
+      break;
+    case STMT_MATCH:
+      collect_expression_required(compiler, owner, stmt->as.match_stmt.value,
+                                  required);
+      for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+        CaseClause *clause = stmt->as.match_stmt.cases[i];
+        if (clause->pattern != NULL &&
+            clause->pattern->type != EXPR_VARIABLE) {
+          collect_expression_required(compiler, owner, clause->pattern, required);
+        }
+        collect_expression_required(compiler, owner, clause->guard, required);
+        collect_statement_required(compiler, owner, clause->body, required);
+      }
+      collect_statement_required(compiler, owner,
+                                 stmt->as.match_stmt.default_case, required);
+      break;
+    case STMT_DEFER:
+      collect_statement_required(compiler, owner, stmt->as.defer.statement,
+                                 required);
+      break;
+    case STMT_COMPTIME:
+      collect_statement_required(compiler, owner, stmt->as.comptime.body,
+                                 required);
+      break;
+    case STMT_IMPORT:
+    case STMT_CLASS:
+    case STMT_STRUCT:
+    case STMT_ENUM:
+    case STMT_TRAIT:
+    case STMT_MACRO_DEF:
+    case STMT_BREAK:
+    case STMT_CONTINUE:
+      break;
+    }
+    stmt = stmt->next;
+  }
+}
+
+static FunctionInfo *create_function_info(Compiler *compiler, Stmt *stmt,
+                                          FunctionInfo *parent, int is_nested,
+                                          int is_method) {
+  FunctionInfo *existing = find_function_info(compiler, stmt);
+  if (existing != NULL) {
+    return existing;
+  }
+
+  FunctionInfo *function = calloc(1, sizeof(FunctionInfo));
+  if (function == NULL) {
+    fprintf(stderr, "Out of memory creating compiler function metadata.\n");
+    exit(1);
+  }
+  function->stmt = stmt;
+  function->proc = stmt->type == STMT_ASYNC_PROC ? &stmt->as.async_proc
+                                                  : &stmt->as.proc;
+  function->is_nested = is_nested;
+  function->is_method = is_method;
+  function->parent = parent;
+
+  if (is_nested) {
+    char *name = token_to_string(function->proc->name);
+    function->c_name = make_unique_name(compiler, "sage_nested", name);
+    free(name);
+  } else if (is_method) {
+    char *name = token_to_string(function->proc->name);
+    function->c_name = make_unique_name(compiler, "sage_method", name);
+    free(name);
+  } else {
+    char *name = token_to_string(function->proc->name);
+    ProcEntry *proc = find_proc_entry(compiler->procs, name);
+    if (proc == NULL) {
+      compiler_error_at(compiler, &function->proc->name, NULL,
+                        "missing procedure metadata for '%s'", name);
+      free(name);
+      free(function);
+      return NULL;
+    }
+    function->c_name = str_dup(proc->c_name);
+    free(name);
+  }
+
+  FunctionInfo **tail = &compiler->functions;
+  while (*tail != NULL) {
+    tail = &(*tail)->next;
+  }
+  *tail = function;
+
+  if (is_method) {
+    string_list_add(&function->locals, "self");
+  }
+  for (int i = 0; i < function->proc->param_count; i++) {
+    char *name = token_to_string(function->proc->params[i]);
+    string_list_add(&function->locals, name);
+    free(name);
+  }
+  collect_local_names(function->proc->body, &function->locals);
+  if (function->proc->defaults != NULL) {
+    for (int i = 0; i < function->proc->param_count; i++) {
+      collect_expression_required(compiler, function,
+                                  function->proc->defaults[i],
+                                  &function->required);
+    }
+  }
+
+  collect_statement_required(compiler, function, function->proc->body,
+                             &function->required);
+  return function;
+}
+
+static void discover_nested_functions(Compiler *compiler, FunctionInfo *parent,
+                                      Stmt *stmt) {
+  while (stmt != NULL) {
+    if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
+      FunctionInfo *child =
+          create_function_info(compiler, stmt, parent, 1, 0);
+      if (child != NULL) {
+        child->next_child = parent->children;
+        parent->children = child;
+        discover_nested_functions(compiler, child, child->proc->body);
+        collect_statement_required(compiler, child, child->proc->body,
+                                   &child->required);
+      }
+    } else {
+      switch (stmt->type) {
+      case STMT_BLOCK:
+        discover_nested_functions(compiler, parent, stmt->as.block.statements);
+        break;
+      case STMT_IF:
+        discover_nested_functions(compiler, parent,
+                                  stmt->as.if_stmt.then_branch);
+        discover_nested_functions(compiler, parent,
+                                  stmt->as.if_stmt.else_branch);
+        break;
+      case STMT_WHILE:
+        discover_nested_functions(compiler, parent, stmt->as.while_stmt.body);
+        break;
+      case STMT_FOR:
+        discover_nested_functions(compiler, parent, stmt->as.for_stmt.body);
+        break;
+      case STMT_TRY:
+        discover_nested_functions(compiler, parent, stmt->as.try_stmt.try_block);
+        for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+          discover_nested_functions(compiler, parent,
+                                    stmt->as.try_stmt.catches[i]->body);
+        }
+        discover_nested_functions(compiler, parent,
+                                  stmt->as.try_stmt.finally_block);
+        break;
+      case STMT_MATCH:
+        for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+          discover_nested_functions(compiler, parent,
+                                    stmt->as.match_stmt.cases[i]->body);
+        }
+        discover_nested_functions(compiler, parent,
+                                  stmt->as.match_stmt.default_case);
+        break;
+      case STMT_DEFER:
+        discover_nested_functions(compiler, parent, stmt->as.defer.statement);
+        break;
+      case STMT_COMPTIME:
+        discover_nested_functions(compiler, parent, stmt->as.comptime.body);
+        break;
+      default:
+        break;
+      }
+    }
+    stmt = stmt->next;
+  }
+}
+
+static void discover_root_nested_functions(Compiler *compiler,
+                                           FunctionInfo *root, Stmt *program) {
+  for (Stmt *stmt = program; stmt != NULL; stmt = stmt->next) {
+    switch (stmt->type) {
+    case STMT_BLOCK:
+      discover_nested_functions(compiler, root, stmt->as.block.statements);
+      break;
+    case STMT_IF:
+      discover_nested_functions(compiler, root, stmt->as.if_stmt.then_branch);
+      discover_nested_functions(compiler, root, stmt->as.if_stmt.else_branch);
+      break;
+    case STMT_WHILE:
+      discover_nested_functions(compiler, root, stmt->as.while_stmt.body);
+      break;
+    case STMT_FOR:
+      discover_nested_functions(compiler, root, stmt->as.for_stmt.body);
+      break;
+    case STMT_TRY:
+      discover_nested_functions(compiler, root, stmt->as.try_stmt.try_block);
+      for (int i = 0; i < stmt->as.try_stmt.catch_count; i++) {
+        discover_nested_functions(compiler, root,
+                                  stmt->as.try_stmt.catches[i]->body);
+      }
+      discover_nested_functions(compiler, root,
+                                stmt->as.try_stmt.finally_block);
+      break;
+    case STMT_MATCH:
+      for (int i = 0; i < stmt->as.match_stmt.case_count; i++) {
+        discover_nested_functions(compiler, root,
+                                  stmt->as.match_stmt.cases[i]->body);
+      }
+      discover_nested_functions(compiler, root,
+                                stmt->as.match_stmt.default_case);
+      break;
+    case STMT_DEFER:
+      discover_nested_functions(compiler, root, stmt->as.defer.statement);
+      break;
+    case STMT_COMPTIME:
+      discover_nested_functions(compiler, root, stmt->as.comptime.body);
+      break;
+    default:
+      break;
+    }
+  }
+}
+
+static FunctionInfo *create_root_function_info(Compiler *compiler,
+                                                const char *name) {
+  FunctionInfo *function = calloc(1, sizeof(FunctionInfo));
+  if (function == NULL) {
+    fprintf(stderr, "Out of memory creating compiler root metadata.\n");
+    exit(1);
+  }
+  function->c_name = str_dup(name);
+  for (NameEntry *global = compiler->globals; global != NULL;
+       global = global->next) {
+    string_list_add(&function->locals, global->sage_name);
+  }
+  FunctionInfo **tail = &compiler->functions;
+  while (*tail != NULL) {
+    tail = &(*tail)->next;
+  }
+  *tail = function;
+  return function;
+}
+
+static int function_has_available_name(FunctionInfo *function,
+                                       const char *name) {
+  return string_list_contains(&function->locals, name) ||
+         string_list_contains(&function->captures, name);
+}
+
+static void assign_function_captures(FunctionInfo *function) {
+  if (function->parent != NULL) {
+    for (int i = 0; i < function->required.count; i++) {
+      const char *name = function->required.items[i];
+      if (function_has_available_name(function->parent, name)) {
+        string_list_add(&function->captures, name);
+      }
+    }
+  }
+
+  if (function->captures.count > 0) {
+    function->capture_slot_names = calloc(
+        (size_t)function->captures.count, sizeof(char *));
+    if (function->capture_slot_names == NULL) {
+      fprintf(stderr, "Out of memory creating compiler closure metadata.\n");
+      exit(1);
+    }
+    for (int i = 0; i < function->captures.count; i++) {
+      char buffer[96];
+      snprintf(buffer, sizeof(buffer),
+               "(*((SageSlot**)sage_closure_environment->environment)[%d])", i);
+      function->capture_slot_names[i] = str_dup(buffer);
+    }
+  }
+
+  for (FunctionInfo *child = function->children; child != NULL;
+       child = child->next_child) {
+    assign_function_captures(child);
+    for (int i = 0; i < child->captures.count; i++) {
+      const char *name = child->captures.items[i];
+      if (string_list_contains(&function->locals, name)) {
+        string_list_add(&function->captured_locals, name);
+      }
+    }
+  }
+}
+
+static void build_function_info(Compiler *compiler, Stmt *stmt,
+                                int is_method) {
+  FunctionInfo *function =
+      create_function_info(compiler, stmt, NULL, 0, is_method);
+  if (function == NULL) {
+    return;
+  }
+  discover_nested_functions(compiler, function, function->proc->body);
+  collect_statement_required(compiler, function, function->proc->body,
+                             &function->required);
+}
+
+static void build_function_infos(Compiler *compiler, Stmt *program) {
+  for (ImportedModule *module = compiler->modules; module != NULL;
+       module = module->next) {
+    if (module->is_alias) {
+      continue;
+    }
+    for (Stmt *stmt = module->ast; stmt != NULL; stmt = stmt->next) {
+      if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
+        build_function_info(compiler, stmt, 0);
+      }
+    }
+    module->root_function =
+        create_root_function_info(compiler, module->binding_name);
+    discover_root_nested_functions(compiler, module->root_function,
+                                   module->ast);
+  }
+
+  for (ClassInfo *class_info = compiler->classes; class_info != NULL;
+       class_info = class_info->next) {
+    for (Stmt *method = class_info->methods; method != NULL;
+         method = method->next) {
+      if (method->type == STMT_PROC) {
+        build_function_info(compiler, method, 1);
+      }
+    }
+  }
+
+  for (Stmt *stmt = program; stmt != NULL; stmt = stmt->next) {
+    if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
+      build_function_info(compiler, stmt, 0);
+    }
+  }
+
+  compiler->main_function = create_root_function_info(compiler, "main");
+  discover_root_nested_functions(compiler, compiler->main_function, program);
+
+  for (FunctionInfo *function = compiler->functions; function != NULL;
+       function = function->next) {
+    if (function->parent == NULL) {
+      assign_function_captures(function);
+    }
+  }
+}
+
+static int find_capture_index(FunctionInfo *function, const char *name) {
+  if (function == NULL) {
+    return -1;
+  }
+  for (int i = 0; i < function->captures.count; i++) {
+    if (strcmp(function->captures.items[i], name) == 0) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 static const char *resolve_slot_name(Compiler *compiler,
@@ -1131,6 +2106,12 @@ static const char *resolve_slot_name(Compiler *compiler,
   NameEntry *local = find_name_entry(compiler->locals, sage_name);
   if (local != NULL) {
     return local->c_name;
+  }
+
+  int capture_index =
+      find_capture_index(compiler->current_function, sage_name);
+  if (capture_index >= 0) {
+    return compiler->current_function->capture_slot_names[capture_index];
   }
 
   NameEntry *global = find_name_entry(compiler->globals, sage_name);
@@ -1203,8 +2184,22 @@ static const char *resolve_symbol_in_module(Compiler *compiler,
       char *sname = token_to_string(s->as.class_stmt.name);
       if (strcmp(sname, name) == 0) {
         free(sname);
-        /* Classes are referred to by their name in C */
         return name;
+      }
+      free(sname);
+    } else if (s->type == STMT_STRUCT) {
+      char *sname = token_to_string(s->as.struct_stmt.name);
+      if (strcmp(sname, name) == 0) {
+        free(sname);
+        return name;
+      }
+      free(sname);
+    } else if (s->type == STMT_ENUM) {
+      char *sname = token_to_string(s->as.enum_stmt.name);
+      if (strcmp(sname, name) == 0) {
+        free(sname);
+        NameEntry *entry = find_name_entry(compiler->globals, name);
+        return entry != NULL ? entry->c_name : NULL;
       }
       free(sname);
     }
@@ -1461,6 +2456,25 @@ static char *emit_binary_expr(Compiler *compiler, BinaryExpr *binary) {
   return sb_take(&sb);
 }
 
+static void append_call_argument(Compiler *compiler, StringBuffer *sb,
+                                 CallExpr *call, int param_index,
+                                 Expr **defaults, int param_count) {
+  if (param_index < call->arg_count) {
+    char *arg = emit_expr(compiler, call->args[param_index]);
+    sb_append(sb, arg);
+    free(arg);
+    return;
+  }
+  if (defaults != NULL && param_index < param_count &&
+      defaults[param_index] != NULL) {
+    char *arg = emit_expr(compiler, defaults[param_index]);
+    sb_append(sb, arg);
+    free(arg);
+    return;
+  }
+  sb_append(sb, "sage_nil()");
+}
+
 static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
   /* Super call: super.method(args) */
   if (call->callee->type == EXPR_SUPER) {
@@ -1679,21 +2693,22 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
         if (strncmp(c_name, "sage_fn_", 8) == 0) {
           StringBuffer sb;
           sb_init(&sb);
-          /* Pad missing optional args with sage_nil() for default params */
           ProcEntry *pe = find_proc_entry(compiler->procs, method_name);
-          int required = pe ? pe->param_count : call->arg_count;
-          int emit_count = call->arg_count > required ? call->arg_count : required;
+          int emit_count = pe != NULL ? pe->param_count : call->arg_count;
+          if (pe != NULL && call->arg_count < pe->required_count) {
+            compiler_error_at(
+                compiler, expr_token(call->callee), NULL,
+                "call to '%s' passes %d argument%s, but the procedure requires %d",
+                method_name, call->arg_count, call->arg_count == 1 ? "" : "s",
+                pe->required_count);
+          }
           sb_appendf(&sb, "%s(", c_name);
           for (int i = 0; i < emit_count; i++) {
             if (i > 0)
               sb_append(&sb, ", ");
-            if (i < call->arg_count) {
-              char *arg = emit_expr(compiler, call->args[i]);
-              sb_append(&sb, arg);
-              free(arg);
-            } else {
-              sb_append(&sb, "sage_nil()");
-            }
+            append_call_argument(compiler, &sb, call, i,
+                                 pe != NULL ? pe->defaults : NULL,
+                                 emit_count);
           }
           sb_append(&sb, ")");
           free(obj_name);
@@ -1702,7 +2717,6 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
         } else {
           /* Check if it's a class constructor */
           ClassInfo *cls = find_class_info(compiler->classes, c_name);
-          printf("DEBUG: emit_call_expr module constructor check: mod=%s c_name=%s found=%p\n", obj_name, c_name, (void*)cls);
           if (cls != NULL) {
             StringBuffer sb;
             sb_init(&sb);
@@ -2831,7 +3845,11 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     return sb_take(&sb);
   }
 
-  ProcEntry *proc = find_proc_entry(compiler->procs, callee_name);
+  ProcEntry *proc =
+      find_name_entry(compiler->locals, callee_name) == NULL &&
+              find_capture_index(compiler->current_function, callee_name) < 0
+          ? find_proc_entry(compiler->procs, callee_name)
+          : NULL;
   if (proc == NULL) {
     /* Not a named proc — try dynamic dispatch for function-valued variables (callbacks, etc.) */
     char *callee_expr = emit_expr(compiler, call->callee);
@@ -2864,19 +3882,27 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     return str_dup("sage_nil()");
   }
 
+  if (call->arg_count < proc->required_count) {
+    char help[256];
+    snprintf(help, sizeof(help), "pass at least %d argument%s",
+             proc->required_count, proc->required_count == 1 ? "" : "s");
+    compiler_error_at(
+        compiler, expr_token(call->callee), help,
+        "call to '%s' passes %d argument%s, but the procedure requires %d",
+        callee_name, call->arg_count, call->arg_count == 1 ? "" : "s",
+        proc->required_count);
+    free(callee_name);
+    return str_dup("sage_nil()");
+  }
+
   int emit_count = proc->param_count;
   sb_appendf(&sb, "%s(", proc->c_name);
   for (int i = 0; i < emit_count; i++) {
     if (i > 0) {
       sb_append(&sb, ", ");
     }
-    if (i < call->arg_count) {
-      char *arg = emit_expr(compiler, call->args[i]);
-      sb_append(&sb, arg);
-      free(arg);
-    } else {
-      sb_append(&sb, "sage_nil()");
-    }
+    append_call_argument(compiler, &sb, call, i, proc->defaults,
+                         proc->param_count);
   }
   sb_append(&sb, ")");
   free(callee_name);
@@ -2967,8 +3993,15 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
 
     StringBuffer sb;
     sb_init(&sb);
-    if (strncmp(slot_name, "sage_fn_", 8) == 0) {
-      sb_appendf(&sb, "sage_function(%s)", slot_name);
+    ProcEntry *proc =
+        find_name_entry(compiler->locals, name) == NULL &&
+                find_capture_index(compiler->current_function, name) < 0
+            ? find_proc_entry_by_c_name(compiler->procs, slot_name)
+            : NULL;
+    if (proc != NULL) {
+      char *procedure = emit_procedure_value(proc);
+      sb_append(&sb, procedure);
+      free(procedure);
     } else {
       sb_appendf(&sb, "sage_load_slot(&%s, \"%s\")", slot_name, name);
     }
@@ -3049,8 +4082,11 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
       if (slot_name) {
         StringBuffer sb;
         sb_init(&sb);
-        if (strncmp(slot_name, "sage_fn_", 8) == 0) {
-          sb_appendf(&sb, "sage_function(%s)", slot_name);
+        ProcEntry *proc = find_proc_entry_by_c_name(compiler->procs, slot_name);
+        if (proc != NULL) {
+          char *procedure = emit_procedure_value(proc);
+          sb_append(&sb, procedure);
+          free(procedure);
         } else {
           sb_appendf(&sb, "sage_load_slot(&%s, \"%s\")", slot_name, prop_name);
         }
@@ -3141,6 +4177,55 @@ static void emit_try_cleanup(Compiler *compiler) {
   emit_line(compiler, "sage_try_depth -= %d;", depth);
   compiler->indent--;
   emit_line(compiler, "}");
+}
+
+static void emit_nested_procedure_declaration(Compiler *compiler,
+                                               Stmt *stmt) {
+  FunctionInfo *function = find_child_function_info(compiler->current_function,
+                                                    stmt);
+  if (function == NULL) {
+    compiler_error_at(compiler, &stmt->as.proc.name, NULL,
+                      "missing nested procedure metadata");
+    return;
+  }
+
+  char *name = token_to_string(stmt->as.proc.name);
+  const char *slot_name = resolve_slot_name(compiler, name);
+  if (slot_name == NULL) {
+    compiler_error_at(compiler, &stmt->as.proc.name, NULL,
+                      "missing local binding for nested procedure '%s'", name);
+    free(name);
+    return;
+  }
+
+  if (function->captures.count == 0) {
+    emit_line(compiler,
+              "sage_define_slot(&%s, sage_bind_closure(%s, %d, %d, 0, "
+              "NULL));",
+              slot_name, function->c_name, function->proc->param_count,
+              function->proc->required_count);
+    free(name);
+    return;
+  }
+
+  emit_line(compiler,
+            "sage_define_slot(&%s, sage_bind_closure(%s, %d, %d, %d, ",
+            slot_name, function->c_name, function->proc->param_count,
+            function->proc->required_count, function->captures.count);
+  emit_line(compiler, "    (SageSlot*[]){");
+  for (int i = 0; i < function->captures.count; i++) {
+    const char *capture_slot =
+        resolve_slot_name(compiler, function->captures.items[i]);
+    if (capture_slot == NULL) {
+      compiler_error(compiler, "missing closure binding for '%s'",
+                     function->captures.items[i]);
+      break;
+    }
+    emit_line(compiler, "        &%s%s", capture_slot,
+              i + 1 < function->captures.count ? "," : "");
+  }
+  emit_line(compiler, "    }));");
+  free(name);
 }
 
 static void emit_stmt(Compiler *compiler, Stmt *stmt) {
@@ -3270,6 +4355,7 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     emit_line(compiler, "continue;");
     break;
   case STMT_PROC:
+    emit_nested_procedure_declaration(compiler, stmt);
     break;
   case STMT_FOR: {
     char *iterable = emit_expr(compiler, stmt->as.for_stmt.iterable);
@@ -3294,7 +4380,15 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     emit_line(compiler, "{");
     compiler->indent++;
     emit_line(compiler, "int %s = sage_try_depth;", loop_marker);
-    emit_line(compiler, "SageValue %s = %s;", iter_var, iterable);
+    LoopRootEntry *loop_root = find_loop_root_entry(compiler, stmt);
+    if (loop_root != NULL) {
+      emit_line(compiler, "sage_define_slot(&%s, %s);",
+                loop_root->slot->c_name, iterable);
+      emit_line(compiler, "SageValue %s = %s.value;", iter_var,
+                loop_root->slot->c_name);
+    } else {
+      emit_line(compiler, "SageValue %s = %s;", iter_var, iterable);
+    }
     emit_line(compiler, "if (%s.type == SAGE_TAG_ARRAY) {", iter_var);
     compiler->indent++;
     emit_line(compiler, "for (int %s = 0; %s < %s.as.array->count; %s++) {",
@@ -3409,14 +4503,19 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
       if (m->is_alias)
         continue;
       if (strcmp(m->name, imp->module_name) == 0) {
+        FunctionInfo *previous_function = compiler->current_function;
+        compiler->current_function = m->root_function;
         for (Stmt *s = m->ast; s != NULL; s = s->next) {
           if (s->type != STMT_PROC && s->type != STMT_ASYNC_PROC &&
               s->type != STMT_CLASS) {
             emit_stmt(compiler, s);
-            if (compiler->failed)
+            if (compiler->failed) {
+              compiler->current_function = previous_function;
               return;
+            }
           }
         }
+        compiler->current_function = previous_function;
         break;
       }
     }
@@ -3551,11 +4650,43 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
     break;
   }
   case STMT_ASYNC_PROC:
-    // In compiled mode, async procs are emitted as regular procs (synchronous)
+    emit_nested_procedure_declaration(compiler, stmt);
     break;
 
   case STMT_STRUCT:
-  case STMT_ENUM:
+    break;
+  case STMT_ENUM: {
+    char *name = token_to_string(stmt->as.enum_stmt.name);
+    const char *slot_name = resolve_slot_name(compiler, name);
+    if (slot_name == NULL) {
+      compiler_error_at(compiler, &stmt->as.enum_stmt.name, NULL,
+                        "internal compiler error: enum '%s' was not collected",
+                        name);
+      free(name);
+      break;
+    }
+    emit_line(compiler,
+              "sage_define_slot(&%s, sage_make_dict_from_entries(%d, ",
+              slot_name, stmt->as.enum_stmt.variant_count + 1);
+    emit_line(compiler, "    (const char*[]){");
+    for (int i = 0; i < stmt->as.enum_stmt.variant_count; i++) {
+      char *variant = token_to_string(stmt->as.enum_stmt.variant_names[i]);
+      char *escaped = escape_c_string(variant);
+      emit_line(compiler, "        \"%s\",", escaped);
+      free(escaped);
+      free(variant);
+    }
+    emit_line(compiler, "        \"__name__\"");
+    emit_line(compiler, "    },");
+    emit_line(compiler, "    (SageValue[]){");
+    for (int i = 0; i < stmt->as.enum_stmt.variant_count; i++) {
+      emit_line(compiler, "        sage_number(%d),", i);
+    }
+    emit_line(compiler, "        sage_string(\"%s\")", name);
+    emit_line(compiler, "    }));");
+    free(name);
+    break;
+  }
   case STMT_TRAIT:
   case STMT_MACRO_DEF:
     break;
@@ -3617,6 +4748,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "#define SAGE_MAX_READ_SIZE (100 * 1024 * 1024)\n"
         "\n"
         "typedef struct SageValue SageValue;\n"
+        "typedef SageValue (*SageProcedureAdapter)(int, SageValue*);\n"
+        "typedef struct SageFunction SageFunction;\n"
+        "typedef struct SageSlot SageSlot;\n"
         "typedef struct SageGcHeader SageGcHeader;\n"
         "typedef struct SageGcFrame SageGcFrame;\n"
         "\n"
@@ -3668,7 +4802,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        SageArray* array;\n"
         "        SageDict* dict;\n"
         "        SageTuple* tuple;\n"
-        "        void* function;\n"
+        "        SageFunction* function;\n"
         "        void* clib;\n"
         "        void* pointer;\n"
         "        void* thread;\n"
@@ -3677,16 +4811,29 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    } as;\n"
         "};\n"
         "\n"
-        "typedef struct {\n"
+        "struct SageSlot {\n"
         "    int defined;\n"
+        "    int heap_allocated;\n"
         "    SageValue value;\n"
-        "} SageSlot;\n"
+        "};\n"
+        "\n"
+        "struct SageFunction {\n"
+        "    void* fn;\n"
+        "    SageProcedureAdapter adapter;\n"
+        "    void* environment;\n"
+        "    int capture_count;\n"
+        "    int param_count;\n"
+        "    int required_count;\n"
+        "    int has_environment;\n"
+        "};\n"
         "\n"
         "typedef enum {\n"
         "    SAGE_GC_STRING,\n"
         "    SAGE_GC_ARRAY,\n"
         "    SAGE_GC_DICT,\n"
-        "    SAGE_GC_TUPLE\n"
+        "    SAGE_GC_TUPLE,\n"
+        "    SAGE_GC_FUNCTION,\n"
+        "    SAGE_GC_SLOT\n"
         "} SageGcKind;\n"
         "\n"
         "struct SageGcHeader {\n"
@@ -3807,12 +4954,18 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
        "            sage_gc_mark_value(sage_intern_table[i].val);\n"
        "        }\n"
        "    }\n"
-      "    for (SageGcFrame* frame = sage_gc.frames; frame != NULL; frame = "
-      "frame->prev) {\n"
-      "        if (frame->slots == NULL) continue;\n"
-      "        for (int i = 0; i < frame->slot_count; i++) {\n"
-      "            if (frame->slots[i] != NULL && frame->slots[i]->defined) {\n"
-      "                sage_gc_mark_value(frame->slots[i]->value);\n"
+        "    for (SageGcFrame* frame = sage_gc.frames; frame != NULL; frame = "
+       "frame->prev) {\n"
+       "        if (frame->slots == NULL) continue;\n"
+       "        for (int i = 0; i < frame->slot_count; i++) {\n"
+       "            if (frame->slots[i] != NULL) {\n"
+       "                if (frame->slots[i]->heap_allocated) {\n"
+       "                    (void)sage_gc_try_mark(frame->slots[i]);\n"
+       "                }\n"
+       "            }\n"
+       "            if (frame->slots[i] != NULL && frame->slots[i]->defined) {\n"
+       "                sage_gc_mark_value(frame->slots[i]->value);\n"
+
       "            }\n"
       "        }\n"
       "    }\n"
@@ -3847,6 +5000,13 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "            free(tuple->elements);\n"
         "            break;\n"
         "        }\n"
+        "        case SAGE_GC_FUNCTION: {\n"
+        "            SageFunction* function = (SageFunction*)object;\n"
+        "            free(function->environment);\n"
+        "            break;\n"
+        "        }\n"
+        "        case SAGE_GC_SLOT:\n"
+        "            break;\n"
         "    }\n"
         "    return freed;\n"
         "}\n"
@@ -3960,6 +5120,21 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "sage_gc_mark_value(value.as.dict->values[i]);\n"
         "            }\n"
         "            return;\n"
+        "        case SAGE_TAG_FUNCTION:\n"
+        "            if (sage_gc_try_mark(value.as.function)) {\n"
+        "                SageFunction* function = value.as.function;\n"
+        "                SageSlot** captures = (SageSlot**)function->environment;\n"
+        "                for (int i = 0; i < function->capture_count; i++) {\n"
+        "                    if (captures[i] == NULL) continue;\n"
+        "                    if (captures[i]->heap_allocated) {\n"
+        "                        (void)sage_gc_try_mark(captures[i]);\n"
+        "                    }\n"
+        "                    if (captures[i]->defined) {\n"
+        "                        sage_gc_mark_value(captures[i]->value);\n"
+        "                    }\n"
+        "                }\n"
+        "            }\n"
+        "            return;\n"
         "        case SAGE_TAG_TUPLE:\n"
         "            if (sage_gc_try_mark(value.as.tuple)) {\n"
         "                for (int i = 0; i < value.as.tuple->count; i++) "
@@ -4023,30 +5198,93 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    sage_intern_count++;\n"
         "    return v;\n"
         "}\n"
-        "static SageValue sage_array(void) { SageValue v; v.type = "
-        "SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
-         "static SageValue sage_function(void* fn) { SageValue v; v.type = SAGE_TAG_FUNCTION; v.as.function = fn; return v; }\n"
-         "static SageValue sage_call_any(SageValue fn, int argc, SageValue* argv) {\n"
-         "    if (fn.type == SAGE_TAG_FUNCTION) {\n"
-         "        switch (argc) {\n"
-         "            case 0: return ((SageValue (*)(void))fn.as.function)();\n"
-         "            case 1: return ((SageValue (*)(SageValue))fn.as.function)(argv[0]);\n"
-         "            case 2: return ((SageValue (*)(SageValue, SageValue))fn.as.function)(argv[0], argv[1]);\n"
-         "            case 3: return ((SageValue (*)(SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2]);\n"
-         "            case 4: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3]);\n"
-         "            case 5: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3], argv[4]);\n"
-         "            case 6: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);\n"
-         "            case 7: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);\n"
-         "            case 8: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]);\n"
-         "            case 9: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))fn.as.function)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8]);\n"
-         "            default: fprintf(stderr, \"Runtime Error: Cannot call function with %d arguments.\\n\", argc); exit(1);\n"
-         "        }\n"
+         "static SageValue sage_array(void) { SageValue v; v.type = "
+         "SAGE_TAG_ARRAY; v.as.array = sage_new_array(); return v; }\n"
+         "static SageFunction* sage_new_function(void* fn, int param_count, "
+         "int required_count, SageProcedureAdapter adapter) {\n"
+         "    SageFunction* function = (SageFunction*)sage_gc_alloc("
+         "SAGE_GC_FUNCTION, sizeof(SageFunction));\n"
+         "    function->fn = fn;\n"
+         "    function->adapter = adapter;\n"
+         "    function->environment = NULL;\n"
+         "    function->capture_count = 0;\n"
+         "    function->param_count = param_count;\n"
+         "    function->required_count = required_count;\n"
+         "    function->has_environment = 0;\n"
+         "    return function;\n"
+         "}\n"
+         "static SageValue sage_function_value(SageFunction* function) {\n"
+         "    SageValue value; value.type = SAGE_TAG_FUNCTION; "
+         "value.as.function = function; return value;\n"
+         "}\n"
+         "static SageValue sage_function(void* fn) {\n"
+         "    return sage_function_value(sage_new_function(fn, -1, -1, NULL));\n"
+         "}\n"
+         "static SageValue sage_procedure(void* fn, int param_count, "
+         "int required_count, SageProcedureAdapter adapter) {\n"
+         "    return sage_function_value(sage_new_function(fn, param_count, "
+         "required_count, adapter));\n"
+         "}\n"
+         "static SageValue sage_bind_closure(void* fn, int param_count, "
+         "int required_count, int capture_count, SageSlot* captures[]) {\n"
+         "    SageFunction* function = sage_new_function(fn, param_count, "
+         "required_count, NULL);\n"
+         "    function->has_environment = 1;\n"
+         "    function->capture_count = capture_count;\n"
+         "    if (capture_count > 0) {\n"
+         "        function->environment = malloc(sizeof(SageSlot*) * "
+         "(size_t)capture_count);\n"
+         "        if (function->environment == NULL) "
+         "sage_fail(\"Runtime Error: out of memory\");\n"
+         "        memcpy(function->environment, captures, sizeof(SageSlot*) * "
+         "(size_t)capture_count);\n"
          "    }\n"
-     
-         "    fprintf(stderr, \"Runtime Error: Cannot call non-function value (type=%d).\\n\", fn.type);\n"
-         "    exit(1);\n"
+         "    return sage_function_value(function);\n"
+         "}\n"
+         "static SageValue sage_call_any(SageValue fn, int argc, SageValue* argv) {\n"
+         "    if (fn.type != SAGE_TAG_FUNCTION || fn.as.function == NULL) {\n"
+         "        fprintf(stderr, \"Runtime Error: Cannot call non-function value "
+         "(type=%d).\\n\", fn.type);\n"
+         "        exit(1);\n"
+         "    }\n"
+         "    SageFunction* function = fn.as.function;\n"
+         "    if (!function->has_environment && function->param_count >= 0 &&\n"
+         "        (argc < function->required_count || argc > function->param_count)) {\n"
+         "        fprintf(stderr, \"Runtime Error: Procedure expects %d to %d "
+         "arguments but got %d.\\n\", function->required_count, "
+         "function->param_count, argc);\n"
+         "        exit(1);\n"
+         "    }\n"
+         "    if (function->adapter != NULL) {\n"
+         "        return function->adapter(argc, argv);\n"
+         "    }\n"
+         "    if (function->has_environment) {\n"
+         "        if (argc < function->required_count || "
+         "argc > function->param_count) {\n"
+         "            fprintf(stderr, \"Runtime Error: Closure expects %d to "
+         "%d arguments but got %d.\\n\", function->required_count, "
+         "function->param_count, argc);\n"
+         "            exit(1);\n"
+         "        }\n"
+         "        return ((SageValue (*)(SageFunction*, int, SageValue*))"
+         "function->fn)(function, argc, argv);\n"
+         "    }\n"
+         "    switch (argc) {\n"
+         "        case 0: return ((SageValue (*)(void))function->fn)();\n"
+         "        case 1: return ((SageValue (*)(SageValue))function->fn)(argv[0]);\n"
+         "        case 2: return ((SageValue (*)(SageValue, SageValue))function->fn)(argv[0], argv[1]);\n"
+         "        case 3: return ((SageValue (*)(SageValue, SageValue, SageValue))function->fn)(argv[0], argv[1], argv[2]);\n"
+         "        case 4: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue))function->fn)(argv[0], argv[1], argv[2], argv[3]);\n"
+         "        case 5: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue))function->fn)(argv[0], argv[1], argv[2], argv[3], argv[4]);\n"
+         "        case 6: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))function->fn)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);\n"
+         "        case 7: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))function->fn)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6]);\n"
+         "        case 8: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))function->fn)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7]);\n"
+         "        case 9: return ((SageValue (*)(SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue, SageValue))function->fn)(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5], argv[6], argv[7], argv[8]);\n"
+         "        default: fprintf(stderr, \"Runtime Error: Cannot call function with %d arguments.\\n\", argc); exit(1);\n"
+         "    }\n"
          "    return sage_nil();\n"
          "}\n"
+
          "\n",
          out);
 
@@ -4182,7 +5420,15 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "static SageValue sage_sem_trywait(SageValue sem) { (void)sem; return sage_bool(0); }\n"
         "#endif\n"
         "static SageSlot sage_slot_undefined(void) { SageSlot slot; "
-        "slot.defined = 0; slot.value = sage_nil(); return slot; }\n"
+        "slot.defined = 0; slot.heap_allocated = 0; slot.value = sage_nil(); "
+        "return slot; }\n"
+        "static SageSlot* sage_new_slot(void) {\n"
+        "    SageSlot* slot = (SageSlot*)sage_gc_alloc(SAGE_GC_SLOT, "
+        "sizeof(SageSlot));\n"
+        "    *slot = sage_slot_undefined();\n"
+        "    slot->heap_allocated = 1;\n"
+        "    return slot;\n"
+        "}\n"
         "\n",
         out);
 
@@ -4336,6 +5582,20 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    return value;\n"
       "}\n"
       "\n"
+      "static void sage_format_number(double n, char* buffer, size_t size) {\n"
+      "    if (isfinite(n) && n >= -9007199254740992.0 && n <= "
+      "9007199254740992.0 && n == (double)(long long)n) {\n"
+      "        snprintf(buffer, size, \"%lld\", (long long)n);\n"
+      "        return;\n"
+      "    }\n"
+      "    for (int precision = 15; precision <= 17; precision++) {\n"
+      "        snprintf(buffer, size, \"%.*g\", precision, n);\n"
+      "        if (strtod(buffer, NULL) == n) return;\n"
+      "    }\n"
+      "}\n"
+      "\n"
+      "static SageValue sage_str(SageValue value);\n"
+      "\n"
       "static int sage_values_equal(SageValue left, SageValue right) {\n"
       "    if (left.type != right.type) return 0;\n"
       "    switch (left.type) {\n"
@@ -4356,7 +5616,25 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "            }\n"
       "            return 1;\n"
       "        }\n"
-      "        case SAGE_TAG_DICT: return left.as.dict == right.as.dict;\n"
+      "        case SAGE_TAG_DICT: {\n"
+      "            if (left.as.dict == right.as.dict) return 1;\n"
+      "            if (left.as.dict == NULL || right.as.dict == NULL) return 0;\n"
+      "            if (left.as.dict->count != right.as.dict->count) return 0;\n"
+      "            for (int i = 0; i < left.as.dict->count; i++) {\n"
+      "                int found = 0;\n"
+      "                for (int j = 0; j < right.as.dict->count; j++) {\n"
+      "                    if (strcmp(left.as.dict->keys[i], "
+      "right.as.dict->keys[j]) == 0) {\n"
+      "                        found = 1;\n"
+      "                        if (!sage_values_equal(left.as.dict->values[i], "
+      "right.as.dict->values[j])) return 0;\n"
+      "                        break;\n"
+      "                    }\n"
+      "                }\n"
+      "                if (!found) return 0;\n"
+      "            }\n"
+      "            return 1;\n"
+      "        }\n"
       "        case SAGE_TAG_TUPLE: {\n"
       "            if (left.as.tuple == right.as.tuple) return 1;\n"
       "            if (left.as.tuple->count != right.as.tuple->count) return "
@@ -4376,11 +5654,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "static void sage_print_value(SageValue value) {\n"
       "    switch (value.type) {\n"
       "        case SAGE_TAG_NUMBER: {\n"
-      "            double d = value.as.number;\n"
-      "            if (d == (double)(long long)d && d >= -1e15 && d <= 1e15)\n"
-      "                printf(\"%lld\", (long long)d);\n"
-      "            else\n"
-      "                printf(\"%g\", d);\n"
+      "            char buffer[64];\n"
+      "            sage_format_number(value.as.number, buffer, sizeof(buffer));\n"
+      "            fputs(buffer, stdout);\n"
       "            break;\n"
       "        }\n"
       "        case SAGE_TAG_BOOL: fputs(value.as.boolean ? \"true\" : "
@@ -4394,7 +5670,18 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "            }\n"
       "            fputc(']', stdout);\n"
       "            break;\n"
-      "        case SAGE_TAG_DICT:\n"
+      "        case SAGE_TAG_DICT: {\n"
+      "            if (value.as.dict != NULL) {\n"
+      "                SageValue class_value = sage_dict_get(value.as.dict, "
+      "\"__class__\");\n"
+      "                if (class_value.type == SAGE_TAG_STRING) {\n"
+      "                    SageValue rendered = sage_str(value);\n"
+      "                    if (rendered.type == SAGE_TAG_STRING) {\n"
+      "                        fputs(rendered.as.string, stdout);\n"
+      "                        break;\n"
+      "                    }\n"
+      "                }\n"
+      "            }\n"
       "            fputc('{', stdout);\n"
       "            for (int i = 0; i < value.as.dict->count; i++) {\n"
       "                if (i > 0) fputs(\", \", stdout);\n"
@@ -4403,6 +5690,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "            }\n"
       "            fputc('}', stdout);\n"
       "            break;\n"
+      "        }\n"
       "        case SAGE_TAG_TUPLE:\n"
       "            fputc('(', stdout);\n"
       "            for (int i = 0; i < value.as.tuple->count; i++) {\n"
@@ -4418,33 +5706,6 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "static void sage_print_ln(SageValue value) {\n"
       "    sage_print_value(value);\n"
       "    fputc('\\n', stdout);\n"
-      "}\n"
-      "\n"
-      "static SageValue sage_str(SageValue value) {\n"
-      "    char buffer[64];\n"
-      "    switch (value.type) {\n"
-      "        case SAGE_TAG_STRING: return value;\n"
-      "        case SAGE_TAG_NUMBER: {\n"
-      "            double d = value.as.number;\n"
-      "            if (d == (double)(long long)d && d >= -1e15 && d <= 1e15)\n"
-      "                snprintf(buffer, sizeof(buffer), \"%lld\", (long long)d);\n"
-      "            else\n"
-      "                snprintf(buffer, sizeof(buffer), \"%g\", d);\n"
-      "            return sage_string(buffer);\n"
-      "        }\n"
-      "        case SAGE_TAG_BOOL:\n"
-      "            return sage_string(value.as.boolean ? \"true\" : "
-      "\"false\");\n"
-      "        case SAGE_TAG_NIL:\n"
-      "            return sage_string(\"nil\");\n"
-      "        case SAGE_TAG_ARRAY:\n"
-      "            return sage_string(\"<array>\");\n"
-      "        case SAGE_TAG_DICT:\n"
-      "            return sage_string(\"<dict>\");\n"
-      "        case SAGE_TAG_TUPLE:\n"
-      "            return sage_string(\"<tuple>\");\n"
-      "    }\n"
-      "    return sage_string(\"nil\");\n"
       "}\n"
       "\n"
       "static SageValue sage_int(SageValue value) {\n"
@@ -5916,10 +7177,12 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
   fputs("typedef SageValue (*SageMethodFn)(SageValue, int, SageValue*);\n"
         "typedef struct { const char* class_name; const char* method_name; "
         "SageMethodFn fn; } SageMethodEntry;\n"
-        "typedef struct { const char* name; const char* parent; } "
-        "SageClassEntry;\n"
         "#define SAGE_MAX_METHODS 256\n"
         "#define SAGE_MAX_CLASSES 64\n"
+        "#define SAGE_MAX_FIELDS 64\n"
+        "typedef struct { const char* name; const char* parent; "
+        "const char* fields[SAGE_MAX_FIELDS]; int field_count; } "
+        "SageClassEntry;\n"
         "static SageMethodEntry sage_method_table[SAGE_MAX_METHODS];\n"
         "static int sage_method_count = 0;\n"
         "static SageClassEntry sage_class_registry[SAGE_MAX_CLASSES];\n"
@@ -5931,7 +7194,18 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "classes\");\n"
         "    sage_class_registry[sage_class_count].name = name;\n"
         "    sage_class_registry[sage_class_count].parent = parent;\n"
+        "    sage_class_registry[sage_class_count].field_count = 0;\n"
         "    sage_class_count++;\n"
+        "}\n"
+        "\n"
+        "static void sage_register_struct(const char* name, const char** fields, "
+        "int field_count) {\n"
+        "    if (field_count < 0 || field_count > SAGE_MAX_FIELDS) "
+        "sage_fail(\"too many struct fields\");\n"
+        "    sage_register_class(name, NULL);\n"
+        "    SageClassEntry* entry = &sage_class_registry[sage_class_count - 1];\n"
+        "    entry->field_count = field_count;\n"
+        "    for (int i = 0; i < field_count; i++) entry->fields[i] = fields[i];\n"
         "}\n"
         "\n"
         "static void sage_register_method(const char* cls, const char* name, "
@@ -5946,7 +7220,31 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "\n",
         out);
 
-  fputs("static SageValue sage_call_method(SageValue obj, const char* method, "
+  fputs("static SageMethodFn sage_find_method(SageValue obj, const char* method) {\n"
+        "    if (obj.type != SAGE_TAG_DICT || obj.as.dict == NULL) return NULL;\n"
+        "    SageValue class_val = sage_dict_get(obj.as.dict, \"__class__\");\n"
+        "    if (class_val.type != SAGE_TAG_STRING) return NULL;\n"
+        "    const char* current = class_val.as.string;\n"
+        "    while (current != NULL) {\n"
+        "        for (int i = 0; i < sage_method_count; i++) {\n"
+        "            if (strcmp(sage_method_table[i].class_name, current) == 0 "
+        "&&\n"
+        "                strcmp(sage_method_table[i].method_name, method) == "
+        "0) return sage_method_table[i].fn;\n"
+        "        }\n"
+        "        const char* parent = NULL;\n"
+        "        for (int j = 0; j < sage_class_count; j++) {\n"
+        "            if (strcmp(sage_class_registry[j].name, current) == 0) {\n"
+        "                parent = sage_class_registry[j].parent;\n"
+        "                break;\n"
+        "            }\n"
+        "        }\n"
+        "        current = parent;\n"
+        "    }\n"
+        "    return NULL;\n"
+        "}\n"
+        "\n"
+        "static SageValue sage_call_method(SageValue obj, const char* method, "
         "int argc, SageValue* argv) {\n"
         "    if (obj.type != SAGE_TAG_DICT) {\n"
         "        fprintf(stderr, \"Runtime Error: method call on "
@@ -5959,25 +7257,8 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "instance (method=%s class_val_type=%d).\\n\", method, class_val.type);\n"
         "        exit(1);\n"
         "    }\n"
-        "    const char* current = class_val.as.string;\n"
-        "    while (current != NULL) {\n"
-        "        for (int i = 0; i < sage_method_count; i++) {\n"
-        "            if (strcmp(sage_method_table[i].class_name, current) == 0 "
-        "&&\n"
-        "                strcmp(sage_method_table[i].method_name, method) == "
-        "0) {\n"
-        "                return sage_method_table[i].fn(obj, argc, argv);\n"
-        "            }\n"
-        "        }\n"
-        "        const char* parent = NULL;\n"
-        "        for (int j = 0; j < sage_class_count; j++) {\n"
-        "            if (strcmp(sage_class_registry[j].name, current) == 0) {\n"
-        "                parent = sage_class_registry[j].parent;\n"
-        "                break;\n"
-        "            }\n"
-        "        }\n"
-        "        current = parent;\n"
-        "    }\n"
+        "    SageMethodFn fn = sage_find_method(obj, method);\n"
+        "    if (fn != NULL) return fn(obj, argc, argv);\n"
         "    fprintf(stderr, \"Runtime Error: Undefined method '%s'.\\n\", "
         "method);\n"
         "    exit(1);\n"
@@ -5992,7 +7273,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "sage_string(class_name));\n"
         "    if (parent_name != NULL) sage_dict_set(inst.as.dict, "
         "\"__parent__\", sage_string(parent_name));\n"
-        "    sage_gc_unpin();\n"
+        "    SageMethodFn init_fn = NULL;\n"
         "    const char* current = class_name;\n"
         "    while (current != NULL) {\n"
         "        for (int i = 0; i < sage_method_count; i++) {\n"
@@ -6000,10 +7281,11 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "&&\n"
         "                strcmp(sage_method_table[i].method_name, \"init\") == "
         "0) {\n"
-        "                sage_method_table[i].fn(inst, argc, argv);\n"
-        "                return inst;\n"
+        "                init_fn = sage_method_table[i].fn;\n"
+        "                break;\n"
         "            }\n"
         "        }\n"
+        "        if (init_fn != NULL) break;\n"
         "        const char* parent = NULL;\n"
         "        for (int j = 0; j < sage_class_count; j++) {\n"
         "            if (strcmp(sage_class_registry[j].name, current) == 0) {\n"
@@ -6013,7 +7295,66 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        }\n"
         "        current = parent;\n"
         "    }\n"
+        "    if (init_fn != NULL) {\n"
+        "        sage_gc_unpin();\n"
+        "        init_fn(inst, argc, argv);\n"
+        "        return inst;\n"
+        "    }\n"
+        "    for (int i = 0; i < sage_class_count; i++) {\n"
+        "        if (strcmp(sage_class_registry[i].name, class_name) == 0 && "
+        "sage_class_registry[i].field_count > 0) {\n"
+        "            int supplied = argc < sage_class_registry[i].field_count ? "
+        "argc : sage_class_registry[i].field_count;\n"
+        "            for (int j = 0; j < supplied; j++) {\n"
+        "                sage_dict_set(inst.as.dict, "
+        "sage_class_registry[i].fields[j], argv[j]);\n"
+        "            }\n"
+        "            break;\n"
+        "        }\n"
+        "    }\n"
+        "    sage_gc_unpin();\n"
         "    return inst;\n"
+        "}\n"
+        "\n",
+        out);
+
+  fputs("static SageValue sage_str(SageValue value) {\n"
+        "    char buffer[64];\n"
+        "    switch (value.type) {\n"
+        "        case SAGE_TAG_STRING: return value;\n"
+        "        case SAGE_TAG_NUMBER:\n"
+        "            sage_format_number(value.as.number, buffer, sizeof(buffer));\n"
+        "            return sage_string(buffer);\n"
+        "        case SAGE_TAG_BOOL:\n"
+        "            return sage_string(value.as.boolean ? \"true\" : "
+        "\"false\");\n"
+        "        case SAGE_TAG_NIL:\n"
+        "            return sage_string(\"nil\");\n"
+        "        case SAGE_TAG_ARRAY:\n"
+        "            return sage_string(\"<array>\");\n"
+        "        case SAGE_TAG_DICT: {\n"
+        "            if (value.as.dict != NULL) {\n"
+        "                SageValue class_value = sage_dict_get(value.as.dict, "
+        "\"__class__\");\n"
+        "                if (class_value.type == SAGE_TAG_STRING) {\n"
+        "                    if (sage_find_method(value, \"__str__\") != NULL) {\n"
+        "                        SageValue rendered = sage_call_method(value, "
+        "\"__str__\", 0, NULL);\n"
+        "                        if (rendered.type == SAGE_TAG_STRING) return "
+        "rendered;\n"
+        "                    }\n"
+        "                    char class_buffer[256];\n"
+        "                    snprintf(class_buffer, sizeof(class_buffer), "
+        "\"<instance of %s>\", class_value.as.string);\n"
+        "                    return sage_string(class_buffer);\n"
+        "                }\n"
+        "            }\n"
+        "            return sage_string(\"<dict>\");\n"
+        "        }\n"
+        "        case SAGE_TAG_TUPLE:\n"
+        "            return sage_string(\"<tuple>\");\n"
+        "    }\n"
+        "    return sage_string(\"nil\");\n"
         "}\n"
         "\n",
         out);
@@ -6232,6 +7573,13 @@ static void emit_proc_prototypes(Compiler *compiler) {
       fprintf(compiler->out, "SageValue arg%d", i);
     }
     fputs(");\n", compiler->out);
+    if (proc->adapter_name != NULL) {
+      emit_indent(compiler);
+      fprintf(compiler->out,
+              "static SageValue %s(int sage_adapter_argc, "
+              "SageValue* sage_adapter_argv);\n",
+              proc->adapter_name);
+    }
   }
 }
 
@@ -6264,7 +7612,21 @@ static int count_name_entries(NameEntry *entries) {
 
 static void emit_slot_declarations(Compiler *compiler, NameEntry *locals) {
   for (NameEntry *local = locals; local != NULL; local = local->next) {
-    emit_line(compiler, "SageSlot %s = sage_slot_undefined();", local->c_name);
+    if (local->captured) {
+      emit_line(compiler, "SageSlot* %s = NULL;", local->storage_name);
+    } else {
+      emit_line(compiler, "SageSlot %s = sage_slot_undefined();",
+                local->c_name);
+    }
+  }
+}
+
+static void emit_captured_slot_initialization(Compiler *compiler,
+                                             NameEntry *locals) {
+  for (NameEntry *local = locals; local != NULL; local = local->next) {
+    if (local->captured) {
+      emit_line(compiler, "%s = sage_new_slot();", local->storage_name);
+    }
   }
 }
 
@@ -6286,12 +7648,161 @@ static void emit_slot_frame_setup(Compiler *compiler, NameEntry *locals,
     if (index > 0) {
       fputs(", ", compiler->out);
     }
-    fprintf(compiler->out, "&%s", local->c_name);
+    if (local->captured) {
+      fprintf(compiler->out, "%s", local->storage_name);
+    } else {
+      fprintf(compiler->out, "&%s", local->c_name);
+    }
   }
   fputs("};\n", compiler->out);
   emit_line(compiler, "SageGcFrame %s;", frame_name);
   emit_line(compiler, "sage_gc_push_frame(&%s, %s, %d);", frame_name,
             roots_name, count);
+}
+
+static void emit_procedure_adapter(Compiler *compiler, FunctionInfo *function) {
+  if (function->parent != NULL || function->is_method) {
+    return;
+  }
+
+  ProcEntry *proc = find_proc_entry_by_c_name(compiler->procs, function->c_name);
+  if (proc == NULL || proc->adapter_name == NULL) {
+    return;
+  }
+
+  ProcStmt *proc_stmt = function->proc;
+  NameEntry *params = NULL;
+  for (int i = 0; i < proc_stmt->param_count; i++) {
+    char *param_name = token_to_string(proc_stmt->params[i]);
+    if (find_name_entry(params, param_name) != NULL) {
+      compiler_error_at(
+          compiler, &proc_stmt->params[i],
+          "rename one of the parameters so every parameter name is unique",
+          "duplicate parameter '%s' in procedure '%.*s'", param_name,
+          proc_stmt->name.length, proc_stmt->name.start);
+      free(param_name);
+      free_name_entries(params);
+      return;
+    }
+    add_name_entry(compiler, &params, param_name, "sage_adapter_param");
+    free(param_name);
+  }
+
+  NameEntry *previous_locals = compiler->locals;
+  FunctionInfo *previous_function = compiler->current_function;
+  NameEntry *previous_return_slot = compiler->gc_return_slot;
+  NameEntry *previous_match_slot = compiler->gc_match_slot;
+  LoopRootEntry *previous_loop_roots = compiler->loop_roots;
+  int previous_in_function_body = compiler->in_function_body;
+  compiler->locals = params;
+  compiler->current_function = function;
+  compiler->loop_roots = NULL;
+  compiler->in_function_body = 0;
+
+  emit_indent(compiler);
+  fprintf(compiler->out,
+          "static SageValue %s(int sage_adapter_argc, "
+          "SageValue* sage_adapter_argv) {\n",
+          proc->adapter_name);
+  compiler->indent++;
+  emit_slot_declarations(compiler, compiler->locals);
+  emit_slot_frame_setup(compiler, compiler->locals, "sage_adapter_roots",
+                        "sage_adapter_frame");
+  emit_line(compiler, "sage_gc_pin();");
+  for (int i = 0; i < proc_stmt->param_count; i++) {
+    char *param_name = token_to_string(proc_stmt->params[i]);
+    NameEntry *param = find_name_entry(compiler->locals, param_name);
+    emit_line(compiler, "if (%d < sage_adapter_argc) {", i);
+    compiler->indent++;
+    emit_line(compiler, "sage_define_slot(&%s, sage_adapter_argv[%d]);",
+              param->c_name, i);
+    compiler->indent--;
+    emit_line(compiler, "} else {");
+    compiler->indent++;
+    if (proc_stmt->defaults != NULL && proc_stmt->defaults[i] != NULL) {
+      char *default_expr = emit_expr(compiler, proc_stmt->defaults[i]);
+      emit_line(compiler, "sage_define_slot(&%s, %s);", param->c_name,
+                default_expr);
+      free(default_expr);
+    } else {
+      emit_line(compiler, "sage_define_slot(&%s, sage_nil());",
+                param->c_name);
+    }
+    compiler->indent--;
+    emit_line(compiler, "}");
+    free(param_name);
+    if (compiler->failed) {
+      free_loop_root_entries(compiler->loop_roots);
+      compiler->loop_roots = previous_loop_roots;
+      compiler->gc_return_slot = previous_return_slot;
+      compiler->gc_match_slot = previous_match_slot;
+      compiler->in_function_body = previous_in_function_body;
+      compiler->current_function = previous_function;
+      compiler->locals = previous_locals;
+      free_name_entries(params);
+      return;
+    }
+  }
+
+  StringBuffer call;
+  sb_init(&call);
+  sb_appendf(&call, "%s(", proc->c_name);
+  for (int i = 0; i < proc_stmt->param_count; i++) {
+    if (i > 0) {
+      sb_append(&call, ", ");
+    }
+    char *param_name = token_to_string(proc_stmt->params[i]);
+    NameEntry *param = find_name_entry(compiler->locals, param_name);
+    char *escaped = escape_c_string(param_name);
+    sb_appendf(&call, "sage_load_slot(&%s, \"%s\")", param->c_name, escaped);
+    free(escaped);
+    free(param_name);
+  }
+  sb_append(&call, ")");
+  char *call_expr = sb_take(&call);
+  emit_line(compiler, "SageValue sage_adapter_result = %s;", call_expr);
+  free(call_expr);
+  emit_line(compiler, "sage_gc_unpin();");
+  emit_line(compiler, "sage_gc_pop_frame(&sage_adapter_frame);");
+  emit_line(compiler, "return sage_adapter_result;");
+  compiler->indent--;
+  emit_line(compiler, "}");
+  fputc('\n', compiler->out);
+
+  free_loop_root_entries(compiler->loop_roots);
+  compiler->loop_roots = previous_loop_roots;
+  compiler->gc_return_slot = previous_return_slot;
+  compiler->gc_match_slot = previous_match_slot;
+  compiler->in_function_body = previous_in_function_body;
+  compiler->current_function = previous_function;
+  compiler->locals = previous_locals;
+  free_name_entries(params);
+}
+
+static void emit_requested_procedure_adapters(Compiler *compiler) {
+  int changed;
+  do {
+    changed = 0;
+    for (ProcEntry *proc = compiler->procs; proc != NULL; proc = proc->next) {
+      if (!proc->adapter_needed || proc->adapter_emitted ||
+          proc->adapter_name == NULL) {
+        continue;
+      }
+      FunctionInfo *function =
+          find_function_info_by_c_name(compiler, proc->c_name);
+      if (function == NULL) {
+        compiler_error(compiler, "missing procedure metadata for adapter '%s'",
+                       proc->sage_name);
+        return;
+      }
+      proc->adapter_emitted = 1;
+      emit_procedure_adapter(compiler, function);
+      if (compiler->failed) {
+        return;
+      }
+      changed = 1;
+    }
+  } while (changed);
 }
 
 // Phase 17: Emit C attributes/pragmas for decorated declarations
@@ -6324,18 +7835,14 @@ static int has_pragma(Pragma *pragmas, const char *name) {
   return 0;
 }
 
-static void emit_function_definition(Compiler *compiler, Stmt *stmt) {
-  ProcStmt *proc_stmt = &stmt->as.proc;
-  char *proc_name = token_to_string(proc_stmt->name);
-  ProcEntry *proc = find_proc_entry(compiler->procs, proc_name);
-  free(proc_name);
-  if (proc == NULL) {
-    compiler_error_at(compiler, &proc_stmt->name, NULL,
-                      "internal compiler error: missing procedure metadata "
-                      "during code generation");
-    return;
-  }
+static void emit_nested_function_definitions(Compiler *compiler,
+                                              FunctionInfo *parent);
+static void emit_captured_slot_initialization(Compiler *compiler,
+                                             NameEntry *locals);
 
+static void emit_sage_function_definition(Compiler *compiler,
+                                           FunctionInfo *function) {
+  ProcStmt *proc_stmt = function->proc;
   NameEntry *params = NULL;
   for (int i = 0; i < proc_stmt->param_count; i++) {
     char *param_name = token_to_string(proc_stmt->params[i]);
@@ -6346,6 +7853,7 @@ static void emit_function_definition(Compiler *compiler, Stmt *stmt) {
           "duplicate parameter '%s' in procedure '%.*s'", param_name,
           proc_stmt->name.length, proc_stmt->name.start);
       free(param_name);
+      free_name_entries(params);
       return;
     }
     add_name_entry(compiler, &params, param_name, "sage_param");
@@ -6353,31 +7861,62 @@ static void emit_function_definition(Compiler *compiler, Stmt *stmt) {
   }
 
   NameEntry *previous_locals = compiler->locals;
+  FunctionInfo *previous_function = compiler->current_function;
+  NameEntry *previous_return_slot = compiler->gc_return_slot;
+  NameEntry *previous_match_slot = compiler->gc_match_slot;
+  LoopRootEntry *previous_loop_roots = compiler->loop_roots;
+  int previous_in_function_body = compiler->in_function_body;
   compiler->locals = params;
+  compiler->current_function = function;
+  compiler->loop_roots = NULL;
   collect_local_lets(compiler, proc_stmt->body, &compiler->locals);
+  collect_loop_root_slots(compiler, proc_stmt->body, &compiler->locals);
   if (compiler->failed) {
     free_name_entries(compiler->locals);
     compiler->locals = previous_locals;
+    compiler->current_function = previous_function;
+    free_loop_root_entries(compiler->loop_roots);
+    compiler->loop_roots = previous_loop_roots;
     return;
   }
-  compiler->gc_return_slot = add_internal_slot(compiler, &compiler->locals, "sage_gc_return_root");
-  compiler->gc_match_slot = add_internal_slot(compiler, &compiler->locals, "sage_gc_match_root");
+  mark_captured_locals(compiler);
+  compiler->gc_return_slot =
+      add_internal_slot(compiler, &compiler->locals, "sage_gc_return_root");
+  compiler->gc_match_slot =
+      add_internal_slot(compiler, &compiler->locals, "sage_gc_match_root");
+  NameEntry *environment_slot = NULL;
+  if (function->is_nested) {
+    environment_slot =
+        add_internal_slot(compiler, &compiler->locals, "sage_gc_environment_root");
+  }
 
-  // Phase 17: emit pragma attributes before function
-  if (stmt->pragmas)
-    emit_pragma_attributes(compiler, stmt->pragmas);
+  if (function->stmt->pragmas) {
+    emit_pragma_attributes(compiler, function->stmt->pragmas);
+  }
 
   emit_indent(compiler);
-  if (stmt->pragmas && has_pragma(stmt->pragmas, "inline")) {
-    fprintf(compiler->out, "static inline SageValue %s(", proc->c_name);
+  if (function->stmt->pragmas &&
+      has_pragma(function->stmt->pragmas, "inline")) {
+    fprintf(compiler->out, "static inline SageValue %s(",
+            function->c_name);
   } else {
-    fprintf(compiler->out, "static SageValue %s(", proc->c_name);
+    fprintf(compiler->out, "static SageValue %s(", function->c_name);
   }
-  for (int i = 0; i < proc_stmt->param_count; i++) {
-    if (i > 0) {
-      fputs(", ", compiler->out);
+  int first_parameter = 1;
+  if (function->is_nested) {
+    fputs("SageFunction* sage_closure_environment, int "
+          "sage_closure_argc, SageValue* sage_closure_argv",
+          compiler->out);
+    first_parameter = 0;
+  }
+  if (!function->is_nested) {
+    for (int i = 0; i < proc_stmt->param_count; i++) {
+      if (!first_parameter) {
+        fputs(", ", compiler->out);
+      }
+      fprintf(compiler->out, "SageValue arg%d", i);
+      first_parameter = 0;
     }
-    fprintf(compiler->out, "SageValue arg%d", i);
   }
   fputs(") {\n", compiler->out);
   compiler->indent++;
@@ -6385,16 +7924,53 @@ static void emit_function_definition(Compiler *compiler, Stmt *stmt) {
   emit_slot_declarations(compiler, compiler->locals);
   emit_slot_frame_setup(compiler, compiler->locals, "sage_gc_roots",
                         "sage_gc_frame");
-  for (int i = 0; i < proc_stmt->param_count; i++) {
-    char *param_name = token_to_string(proc_stmt->params[i]);
-    NameEntry *param = find_name_entry(compiler->locals, param_name);
-    free(param_name);
-    emit_line(compiler, "sage_define_slot(&%s, arg%d);", param->c_name, i);
+  if (environment_slot != NULL) {
+    emit_line(compiler,
+              "sage_define_slot(&%s, sage_function_value("
+              "sage_closure_environment));",
+              environment_slot->c_name);
+  }
+  emit_captured_slot_initialization(compiler, compiler->locals);
+  if (function->is_nested) {
+    for (int i = 0; i < proc_stmt->param_count; i++) {
+      char *param_name = token_to_string(proc_stmt->params[i]);
+      NameEntry *param = find_name_entry(compiler->locals, param_name);
+      free(param_name);
+      emit_line(compiler, "if (%d < sage_closure_argc) {", i);
+      compiler->indent++;
+      emit_line(compiler, "sage_define_slot(&%s, sage_closure_argv[%d]);",
+                param->c_name, i);
+      compiler->indent--;
+      emit_line(compiler, "} else {");
+      compiler->indent++;
+      if (proc_stmt->defaults != NULL && proc_stmt->defaults[i] != NULL) {
+        char *default_expr = emit_expr(compiler, proc_stmt->defaults[i]);
+        emit_line(compiler, "sage_define_slot(&%s, %s);", param->c_name,
+                  default_expr);
+        free(default_expr);
+      } else {
+        emit_line(compiler, "sage_define_slot(&%s, sage_nil());",
+                  param->c_name);
+      }
+      compiler->indent--;
+      emit_line(compiler, "}");
+    }
+    if (proc_stmt->param_count == 0) {
+      emit_line(compiler, "(void)sage_closure_argc;");
+      emit_line(compiler, "(void)sage_closure_argv;");
+    }
+  } else {
+    for (int i = 0; i < proc_stmt->param_count; i++) {
+      char *param_name = token_to_string(proc_stmt->params[i]);
+      NameEntry *param = find_name_entry(compiler->locals, param_name);
+      free(param_name);
+      emit_line(compiler, "sage_define_slot(&%s, arg%d);", param->c_name, i);
+    }
   }
 
   compiler->in_function_body = 1;
   emit_stmt_list(compiler, proc_stmt->body);
-  compiler->in_function_body = 0;
+  compiler->in_function_body = previous_in_function_body;
   emit_line(compiler, "return sage_gc_return(&sage_gc_frame, sage_nil());");
 
   compiler->indent--;
@@ -6402,10 +7978,29 @@ static void emit_function_definition(Compiler *compiler, Stmt *stmt) {
   fputc('\n', compiler->out);
 
   free_name_entries(compiler->locals);
-  compiler->gc_return_slot = NULL;
-  compiler->gc_match_slot = NULL;
   compiler->locals = previous_locals;
+  compiler->current_function = previous_function;
+  compiler->gc_return_slot = previous_return_slot;
+  compiler->gc_match_slot = previous_match_slot;
+  free_loop_root_entries(compiler->loop_roots);
+  compiler->loop_roots = previous_loop_roots;
 }
+
+static void emit_function_definition(Compiler *compiler, Stmt *stmt) {
+  FunctionInfo *function = find_function_info(compiler, stmt);
+  if (function == NULL) {
+    compiler_error_at(compiler, &stmt->as.proc.name, NULL,
+                      "missing procedure metadata during code generation");
+    return;
+  }
+  emit_sage_function_definition(compiler, function);
+  if (!compiler->failed) {
+    emit_nested_function_definitions(compiler, function);
+  }
+}
+
+static void emit_nested_function_definitions(Compiler *compiler,
+                                              FunctionInfo *parent);
 
 static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
                                    Stmt *method) {
@@ -6416,9 +8011,23 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
                   strncmp(proc->params[0].start, "self", 4) == 0);
   int param_start = has_self ? 1 : 0;
 
+  FunctionInfo *function = find_function_info(compiler, method);
+  if (function == NULL) {
+    compiler_error_at(compiler, &proc->name, NULL,
+                      "missing method metadata during code generation");
+    free(method_name);
+    return;
+  }
+
   NameEntry *previous_locals = compiler->locals;
+  FunctionInfo *previous_function = compiler->current_function;
+  NameEntry *previous_return_slot = compiler->gc_return_slot;
+  NameEntry *previous_match_slot = compiler->gc_match_slot;
+  LoopRootEntry *previous_loop_roots = compiler->loop_roots;
   ClassInfo *previous_class = compiler->current_class;
   compiler->locals = NULL;
+  compiler->current_function = function;
+  compiler->loop_roots = NULL;
   compiler->current_class = cls;
 
   /* Add self as a local */
@@ -6434,12 +8043,20 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
   }
 
   collect_local_lets(compiler, proc->body, &compiler->locals);
+  collect_loop_root_slots(compiler, proc->body, &compiler->locals);
   if (compiler->failed) {
     free_name_entries(compiler->locals);
     compiler->locals = previous_locals;
+    compiler->current_function = previous_function;
+    compiler->gc_return_slot = previous_return_slot;
+    compiler->gc_match_slot = previous_match_slot;
+    free_loop_root_entries(compiler->loop_roots);
+    compiler->loop_roots = previous_loop_roots;
+    compiler->current_class = previous_class;
     free(method_name);
     return;
   }
+  mark_captured_locals(compiler);
   compiler->gc_return_slot = add_internal_slot(compiler, &compiler->locals, "sage_gc_return_root");
   compiler->gc_match_slot = add_internal_slot(compiler, &compiler->locals, "sage_gc_match_root");
 
@@ -6453,22 +8070,39 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
   emit_slot_declarations(compiler, compiler->locals);
   emit_slot_frame_setup(compiler, compiler->locals, "sage_gc_roots",
                         "sage_gc_frame");
+  emit_captured_slot_initialization(compiler, compiler->locals);
 
   /* Bind self */
   NameEntry *self_entry = find_name_entry(compiler->locals, "self");
   emit_line(compiler, "sage_define_slot(&%s, _self);", self_entry->c_name);
 
-  /* Bind params from argv */
-  int argv_idx = 0;
   for (int i = param_start; i < proc->param_count; i++) {
     char *pname = token_to_string(proc->params[i]);
     NameEntry *entry = find_name_entry(compiler->locals, pname);
+    int arg_index = i - param_start;
+    emit_line(compiler, "if (%d < _argc) {", arg_index);
+    compiler->indent++;
     emit_line(compiler, "sage_define_slot(&%s, _argv[%d]);", entry->c_name,
-              argv_idx++);
+              arg_index);
+    compiler->indent--;
+    emit_line(compiler, "} else {");
+    compiler->indent++;
+    if (proc->defaults != NULL && proc->defaults[i] != NULL) {
+      char *default_expr = emit_expr(compiler, proc->defaults[i]);
+      emit_line(compiler, "sage_define_slot(&%s, %s);", entry->c_name,
+                default_expr);
+      free(default_expr);
+    } else {
+      emit_line(compiler, "sage_define_slot(&%s, sage_nil());", entry->c_name);
+    }
+    compiler->indent--;
+    emit_line(compiler, "}");
     free(pname);
   }
 
-  emit_line(compiler, "(void)_argc;");
+  if (proc->param_count == param_start) {
+    emit_line(compiler, "(void)_argc;");
+  }
 
   compiler->in_function_body = 1;
   emit_stmt_list(compiler, proc->body);
@@ -6480,11 +8114,29 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
   fputc('\n', compiler->out);
 
   free_name_entries(compiler->locals);
-  compiler->gc_return_slot = NULL;
-  compiler->gc_match_slot = NULL;
+  compiler->gc_return_slot = previous_return_slot;
+  compiler->gc_match_slot = previous_match_slot;
   compiler->locals = previous_locals;
+  compiler->current_function = previous_function;
+  free_loop_root_entries(compiler->loop_roots);
+  compiler->loop_roots = previous_loop_roots;
+  if (!compiler->failed) {
+    emit_nested_function_definitions(compiler, function);
+  }
   compiler->current_class = previous_class;
   free(method_name);
+}
+
+static void emit_nested_function_definitions(Compiler *compiler,
+                                              FunctionInfo *parent) {
+  for (FunctionInfo *child = parent->children; child != NULL;
+       child = child->next_child) {
+    emit_sage_function_definition(compiler, child);
+    if (compiler->failed) {
+      return;
+    }
+    emit_nested_function_definitions(compiler, child);
+  }
 }
 
 static void emit_method_prototypes(Compiler *compiler) {
@@ -6500,6 +8152,20 @@ static void emit_method_prototypes(Compiler *compiler) {
         free(method_name);
       }
     }
+  }
+}
+
+static void emit_nested_procedure_prototypes(Compiler *compiler) {
+  for (FunctionInfo *function = compiler->functions; function != NULL;
+       function = function->next) {
+    if (!function->is_nested) {
+      continue;
+    }
+    emit_indent(compiler);
+    fprintf(compiler->out,
+            "static SageValue %s(SageFunction* sage_closure_environment, "
+            "int sage_closure_argc, SageValue* sage_closure_argv);\n",
+            function->c_name);
   }
 }
 
@@ -6541,6 +8207,8 @@ static void emit_function_definitions(Compiler *compiler, Stmt *program) {
 
 static void emit_main_function(Compiler *compiler, Stmt *program,
                                CompilerTarget target) {
+  FunctionInfo *previous_function = compiler->current_function;
+  compiler->current_function = compiler->main_function;
   compiler->gc_return_slot = compiler->gc_global_return_slot;
   compiler->gc_match_slot = compiler->gc_global_match_slot;
   emit_line(compiler, "int sage_argc; char** sage_argv;");
@@ -6562,7 +8230,17 @@ static void emit_main_function(Compiler *compiler, Stmt *program,
 
   /* Register classes and methods */
   for (ClassInfo *cls = compiler->classes; cls != NULL; cls = cls->next) {
-    if (cls->parent_name) {
+    if (cls->field_count > 0) {
+      emit_line(compiler,
+                "sage_register_struct(\"%s\", (const char*[]){", cls->class_name);
+      for (int i = 0; i < cls->field_count; i++) {
+        char *field = escape_c_string(cls->field_names[i]);
+        emit_line(compiler, "    \"%s\"%s", field,
+                  i + 1 < cls->field_count ? "," : "");
+        free(field);
+      }
+      emit_line(compiler, "}, %d);", cls->field_count);
+    } else if (cls->parent_name) {
       emit_line(compiler, "sage_register_class(\"%s\", \"%s\");",
                 cls->class_name, cls->parent_name);
     } else {
@@ -6588,6 +8266,7 @@ static void emit_main_function(Compiler *compiler, Stmt *program,
         compiler->indent--;
         emit_line(compiler, "return 1;");
         emit_line(compiler, "}");
+        compiler->current_function = previous_function;
         return;
       }
     }
@@ -6598,6 +8277,16 @@ static void emit_main_function(Compiler *compiler, Stmt *program,
   emit_line(compiler, "return 0;");
   compiler->indent--;
   emit_line(compiler, "}");
+  compiler->current_function = previous_function;
+  if (!compiler->failed) {
+    emit_nested_function_definitions(compiler, compiler->main_function);
+    for (ImportedModule *module = compiler->modules; module != NULL;
+         module = module->next) {
+      if (!module->is_alias) {
+        emit_nested_function_definitions(compiler, module->root_function);
+      }
+    }
+  }
 }
 
 Stmt *parse_program(const char *source, const char *input_path) {
@@ -6876,8 +8565,18 @@ static int write_c_output_internal(const char *source, const char *input_path,
 
   collect_top_level_symbols(&compiler, program);
   if (!compiler.failed) {
+    build_function_infos(&compiler, program);
+  }
+  if (!compiler.failed) {
     compiler.gc_global_return_slot = add_internal_slot(&compiler, &compiler.globals, "sage_gc_return_root");
     compiler.gc_global_match_slot = add_internal_slot(&compiler, &compiler.globals, "sage_gc_match_root");
+    collect_loop_root_slots(&compiler, program, &compiler.globals);
+    for (ImportedModule *module = compiler.modules; module != NULL;
+         module = module->next) {
+      if (!module->is_alias) {
+        collect_loop_root_slots(&compiler, module->ast, &compiler.globals);
+      }
+    }
   }
 
   if (!compiler.failed) {
@@ -6885,6 +8584,7 @@ static int write_c_output_internal(const char *source, const char *input_path,
     compiler.indent = 0;
     emit_proc_prototypes(&compiler);
     emit_method_prototypes(&compiler);
+    emit_nested_procedure_prototypes(&compiler);
     if (compiler.procs != NULL || compiler.classes != NULL) {
       fputc('\n', out);
     }
@@ -6900,14 +8600,19 @@ static int write_c_output_internal(const char *source, const char *input_path,
     if (!compiler.failed) {
       emit_main_function(&compiler, program, target);
     }
+    if (!compiler.failed) {
+      emit_requested_procedure_adapters(&compiler);
+    }
   }
 
   fclose(out);
   free_stmt(program);
   free_name_entries(compiler.globals);
   free_proc_entries(compiler.procs);
+  free_function_infos(compiler.functions);
   free_class_info(compiler.classes);
   free_imported_modules(compiler.modules);
+  free_loop_root_entries(compiler.loop_roots);
   free(compiler.finally_stack);
   return compiler.failed ? 0 : 1;
 }
