@@ -4413,6 +4413,11 @@ ExecResult interpret(Stmt* stmt, Env* env) {
         root_node.next = g_gc_root_stack;
         SET_GC_ROOT_STACK(&root_node);
     }
+    // Publishing an environment on the GC root stack is a new root, exactly
+    // like a temp-stack push: the write barrier cannot observe it, so an env
+    // that becomes rooted here during concurrent mark would be invisible to
+    // both the initial root scan and the remark re-scan.
+    GC_SHADE_NEW_ROOT_ENV(env);
 
     ExecResult result = interpret_inner(stmt, env);
 
