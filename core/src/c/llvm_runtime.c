@@ -17,6 +17,8 @@
 #include <sys/stat.h>
 
 #include "gpu_api.h"
+#include <pthread.h>
+#include <stdatomic.h>
 
 // Safe allocation wrappers — abort on OOM instead of returning NULL
 static void* safe_realloc(void* ptr, size_t size) {
@@ -1357,9 +1359,11 @@ typedef struct SageMemory {
 } SageMemory;
 
 static SageMemory* sage_memory_registry = NULL;
-static int sage_memory_cleanup_registered = 0;
+static pthread_mutex_t sage_memory_mutex = PTHREAD_MUTEX_INITIALIZER;
+static atomic_int sage_memory_cleanup_registered = 0;
 
 static void sage_memory_free_all(void) {
+    pthread_mutex_lock(&sage_memory_mutex);
     SageMemory* current = sage_memory_registry;
     sage_memory_registry = NULL;
     while (current != NULL) {
@@ -1368,15 +1372,15 @@ static void sage_memory_free_all(void) {
         free(current);
         current = next;
     }
+    pthread_mutex_unlock(&sage_memory_mutex);
 }
 
 static void sage_memory_register_cleanup(void) {
-    if (sage_memory_cleanup_registered) return;
-    sage_memory_cleanup_registered = 1;
+    if (atomic_exchange_explicit(&sage_memory_cleanup_registered, 1, memory_order_acq_rel)) return;
     atexit(sage_memory_free_all);
 }
 
-static SageMemory* sage_memory_from_value(SageValue value) {
+static SageMemory* sage_memory_from_value_locked(SageValue value) {
     if (value.type != SAGE_NUMBER || !isfinite(value.as.number) ||
         value.as.number <= 0.0 || value.as.number > (double)UINTPTR_MAX) {
         return NULL;
@@ -1447,79 +1451,92 @@ SageValue sage_rt_mem_alloc(SageValue size_value) {
     SageMemory* memory = safe_calloc(1, sizeof(SageMemory));
     memory->data = safe_calloc(1, size);
     memory->size = size;
+    pthread_mutex_lock(&sage_memory_mutex);
     memory->next = sage_memory_registry;
     sage_memory_registry = memory;
     sage_memory_register_cleanup();
+    pthread_mutex_unlock(&sage_memory_mutex);
     return sage_memory_value(memory);
 }
 
 SageValue sage_rt_mem_free(SageValue pointer) {
-    SageMemory* memory = sage_memory_from_value(pointer);
-    if (memory == NULL) return sage_rt_nil();
+    pthread_mutex_lock(&sage_memory_mutex);
+    SageMemory* memory = sage_memory_from_value_locked(pointer);
+    if (memory == NULL) {
+        pthread_mutex_unlock(&sage_memory_mutex);
+        return sage_rt_nil();
+    }
     SageMemory** link = &sage_memory_registry;
     while (*link != NULL && *link != memory) link = &(*link)->next;
-    if (*link == NULL) return sage_rt_nil();
+    if (*link == NULL) {
+        pthread_mutex_unlock(&sage_memory_mutex);
+        return sage_rt_nil();
+    }
     *link = memory->next;
     free(memory->data);
     free(memory);
+    pthread_mutex_unlock(&sage_memory_mutex);
     return sage_rt_nil();
 }
 
 SageValue sage_rt_mem_read(SageValue pointer, SageValue offset_value, SageValue type_value) {
-    SageMemory* memory = sage_memory_from_value(pointer);
-    if (memory == NULL || offset_value.type != SAGE_NUMBER || type_value.type != SAGE_STRING) {
-        return sage_rt_nil();
-    }
+    if (offset_value.type != SAGE_NUMBER || type_value.type != SAGE_STRING) return sage_rt_nil();
     if (!isfinite(offset_value.as.number) || offset_value.as.number < 0.0 ||
         offset_value.as.number != floor(offset_value.as.number)) return sage_rt_nil();
     size_t offset = (size_t)offset_value.as.number;
     size_t size;
     size_t alignment;
-    if (sage_memory_type_size(type_value.as.string, &size, &alignment) != 0 ||
-        !sage_memory_range_valid(memory, offset, size)) return sage_rt_nil();
-    unsigned char* base = (unsigned char*)memory->data + offset;
-    if (strcmp(type_value.as.string, "char") == 0 || strcmp(type_value.as.string, "byte") == 0) {
-        return sage_rt_number((double)*base);
+    if (sage_memory_type_size(type_value.as.string, &size, &alignment) != 0) return sage_rt_nil();
+    pthread_mutex_lock(&sage_memory_mutex);
+    SageMemory* memory = sage_memory_from_value_locked(pointer);
+    if (memory == NULL || !sage_memory_range_valid(memory, offset, size)) {
+        pthread_mutex_unlock(&sage_memory_mutex);
+        return sage_rt_nil();
     }
-    if (strcmp(type_value.as.string, "short") == 0) {
+    unsigned char* base = (unsigned char*)memory->data + offset;
+    SageValue result = sage_rt_nil();
+    if (strcmp(type_value.as.string, "char") == 0 || strcmp(type_value.as.string, "byte") == 0) {
+        result = sage_rt_number((double)*base);
+    } else if (strcmp(type_value.as.string, "short") == 0) {
         short item;
         memcpy(&item, base, sizeof(item));
-        return sage_rt_number((double)item);
-    }
-    if (strcmp(type_value.as.string, "int") == 0) {
+        result = sage_rt_number((double)item);
+    } else if (strcmp(type_value.as.string, "int") == 0) {
         int item;
         memcpy(&item, base, sizeof(item));
-        return sage_rt_number((double)item);
-    }
-    if (strcmp(type_value.as.string, "long") == 0) {
+        result = sage_rt_number((double)item);
+    } else if (strcmp(type_value.as.string, "long") == 0) {
         long item;
         memcpy(&item, base, sizeof(item));
-        return sage_rt_number((double)item);
-    }
-    if (strcmp(type_value.as.string, "float") == 0) {
+        result = sage_rt_number((double)item);
+    } else if (strcmp(type_value.as.string, "float") == 0) {
         float item;
         memcpy(&item, base, sizeof(item));
-        return sage_rt_number((double)item);
-    }
-    if (strcmp(type_value.as.string, "double") == 0) {
+        result = sage_rt_number((double)item);
+    } else if (strcmp(type_value.as.string, "double") == 0) {
         double item;
         memcpy(&item, base, sizeof(item));
-        return sage_rt_number(item);
+        result = sage_rt_number(item);
     }
-    return sage_rt_nil();
+    pthread_mutex_unlock(&sage_memory_mutex);
+    return result;
 }
 
 SageValue sage_rt_mem_write(SageValue pointer, SageValue offset_value, SageValue type_value, SageValue item_value) {
-    SageMemory* memory = sage_memory_from_value(pointer);
-    if (memory == NULL || offset_value.type != SAGE_NUMBER || type_value.type != SAGE_STRING ||
+    if (offset_value.type != SAGE_NUMBER || type_value.type != SAGE_STRING ||
         item_value.type != SAGE_NUMBER) return sage_rt_nil();
     if (!isfinite(offset_value.as.number) || offset_value.as.number < 0.0 ||
         offset_value.as.number != floor(offset_value.as.number)) return sage_rt_nil();
     size_t offset = (size_t)offset_value.as.number;
     size_t size;
     size_t alignment;
-    if (sage_memory_type_size(type_value.as.string, &size, &alignment) != 0 ||
-        !sage_memory_range_valid(memory, offset, size)) return sage_rt_nil();
+    if (sage_memory_type_size(type_value.as.string, &size, &alignment) != 0) return sage_rt_nil();
+    pthread_mutex_lock(&sage_memory_mutex);
+    SageMemory* memory = sage_memory_from_value_locked(pointer);
+    if (memory == NULL || !sage_memory_range_valid(memory, offset, size)) {
+        pthread_mutex_unlock(&sage_memory_mutex);
+        return sage_rt_nil();
+    }
     unsigned char* base = (unsigned char*)memory->data + offset;
     if (strcmp(type_value.as.string, "char") == 0 || strcmp(type_value.as.string, "byte") == 0) {
         *base = (unsigned char)item_value.as.number;
@@ -1539,13 +1556,16 @@ SageValue sage_rt_mem_write(SageValue pointer, SageValue offset_value, SageValue
         double item = item_value.as.number;
         memcpy(base, &item, sizeof(item));
     }
+    pthread_mutex_unlock(&sage_memory_mutex);
     return sage_rt_nil();
 }
 
 SageValue sage_rt_mem_size(SageValue pointer) {
-    SageMemory* memory = sage_memory_from_value(pointer);
-    if (memory == NULL) return sage_rt_nil();
-    return sage_rt_number((double)memory->size);
+    pthread_mutex_lock(&sage_memory_mutex);
+    SageMemory* memory = sage_memory_from_value_locked(pointer);
+    SageValue result = memory == NULL ? sage_rt_nil() : sage_rt_number((double)memory->size);
+    pthread_mutex_unlock(&sage_memory_mutex);
+    return result;
 }
 
 SageValue sage_rt_struct_def(SageValue fields) {
@@ -1597,9 +1617,11 @@ SageValue sage_rt_struct_new(SageValue definition) {
     SageMemory* memory = safe_calloc(1, sizeof(SageMemory));
     memory->data = safe_calloc(1, size > 0 ? size : 1);
     memory->size = size;
+    pthread_mutex_lock(&sage_memory_mutex);
     memory->next = sage_memory_registry;
     sage_memory_registry = memory;
     sage_memory_register_cleanup();
+    pthread_mutex_unlock(&sage_memory_mutex);
     return sage_memory_value(memory);
 }
 
@@ -1618,50 +1640,57 @@ static int sage_struct_field_info(SageValue definition, SageValue field_name,
 }
 
 SageValue sage_rt_struct_get(SageValue pointer, SageValue definition, SageValue field_name) {
-    SageMemory* memory = sage_memory_from_value(pointer);
     size_t offset;
     size_t size;
     const char* type;
-    if (memory == NULL || !sage_struct_field_info(definition, field_name, &offset, &type, &size) ||
-        !sage_memory_range_valid(memory, offset, size)) return sage_rt_nil();
+    if (!sage_struct_field_info(definition, field_name, &offset, &type, &size)) return sage_rt_nil();
+    pthread_mutex_lock(&sage_memory_mutex);
+    SageMemory* memory = sage_memory_from_value_locked(pointer);
+    if (memory == NULL || !sage_memory_range_valid(memory, offset, size)) {
+        pthread_mutex_unlock(&sage_memory_mutex);
+        return sage_rt_nil();
+    }
     unsigned char* base = (unsigned char*)memory->data + offset;
-    if (strcmp(type, "char") == 0 || strcmp(type, "byte") == 0) return sage_rt_number((double)*base);
-    if (strcmp(type, "short") == 0) {
+    SageValue result = sage_rt_nil();
+    if (strcmp(type, "char") == 0 || strcmp(type, "byte") == 0) {
+        result = sage_rt_number((double)*base);
+    } else if (strcmp(type, "short") == 0) {
         short item;
         memcpy(&item, base, sizeof(item));
-        return sage_rt_number((double)item);
-    }
-    if (strcmp(type, "int") == 0) {
+        result = sage_rt_number((double)item);
+    } else if (strcmp(type, "int") == 0) {
         int item;
         memcpy(&item, base, sizeof(item));
-        return sage_rt_number((double)item);
-    }
-    if (strcmp(type, "long") == 0) {
+        result = sage_rt_number((double)item);
+    } else if (strcmp(type, "long") == 0) {
         long item;
         memcpy(&item, base, sizeof(item));
-        return sage_rt_number((double)item);
-    }
-    if (strcmp(type, "float") == 0) {
+        result = sage_rt_number((double)item);
+    } else if (strcmp(type, "float") == 0) {
         float item;
         memcpy(&item, base, sizeof(item));
-        return sage_rt_number((double)item);
-    }
-    if (strcmp(type, "double") == 0) {
+        result = sage_rt_number((double)item);
+    } else if (strcmp(type, "double") == 0) {
         double item;
         memcpy(&item, base, sizeof(item));
-        return sage_rt_number(item);
+        result = sage_rt_number(item);
     }
-    return sage_rt_nil();
+    pthread_mutex_unlock(&sage_memory_mutex);
+    return result;
 }
 
 SageValue sage_rt_struct_set(SageValue pointer, SageValue definition, SageValue field_name, SageValue item_value) {
-    SageMemory* memory = sage_memory_from_value(pointer);
+    if (item_value.type != SAGE_NUMBER) return sage_rt_nil();
     size_t offset;
     size_t size;
     const char* type;
-    if (memory == NULL || item_value.type != SAGE_NUMBER ||
-        !sage_struct_field_info(definition, field_name, &offset, &type, &size) ||
-        !sage_memory_range_valid(memory, offset, size)) return sage_rt_nil();
+    if (!sage_struct_field_info(definition, field_name, &offset, &type, &size)) return sage_rt_nil();
+    pthread_mutex_lock(&sage_memory_mutex);
+    SageMemory* memory = sage_memory_from_value_locked(pointer);
+    if (memory == NULL || !sage_memory_range_valid(memory, offset, size)) {
+        pthread_mutex_unlock(&sage_memory_mutex);
+        return sage_rt_nil();
+    }
     unsigned char* base = (unsigned char*)memory->data + offset;
     if (strcmp(type, "char") == 0 || strcmp(type, "byte") == 0) {
         *base = (unsigned char)item_value.as.number;
@@ -1681,6 +1710,7 @@ SageValue sage_rt_struct_set(SageValue pointer, SageValue definition, SageValue 
         double item = item_value.as.number;
         memcpy(base, &item, sizeof(item));
     }
+    pthread_mutex_unlock(&sage_memory_mutex);
     return sage_rt_nil();
 }
 
@@ -3334,8 +3364,9 @@ SageValue sage_rt_call_dynamic(SageValue callee, SageValue* args, int32_t argc,
 static SageClass** sage_class_registry = NULL;
 static int sage_class_registry_count = 0;
 static int sage_class_registry_capacity = 0;
+static pthread_mutex_t sage_class_registry_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static SageClass* sage_rt_find_class(const char* name) {
+static SageClass* sage_rt_find_class_unlocked(const char* name) {
     if (name == NULL) return NULL;
     for (int i = 0; i < sage_class_registry_count; i++) {
         if (strcmp(sage_class_registry[i]->name, name) == 0) return sage_class_registry[i];
@@ -3343,8 +3374,20 @@ static SageClass* sage_rt_find_class(const char* name) {
     return NULL;
 }
 
+static SageClass* sage_rt_find_class(const char* name) {
+    pthread_mutex_lock(&sage_class_registry_mutex);
+    SageClass* result = sage_rt_find_class_unlocked(name);
+    pthread_mutex_unlock(&sage_class_registry_mutex);
+    return result;
+}
+
 void sage_rt_register_class(const char* name, const char* parent_name) {
-    if (name == NULL || sage_rt_find_class(name) != NULL) return;
+    if (name == NULL) return;
+    pthread_mutex_lock(&sage_class_registry_mutex);
+    if (sage_rt_find_class_unlocked(name) != NULL) {
+        pthread_mutex_unlock(&sage_class_registry_mutex);
+        return;
+    }
     if (sage_class_registry_count >= sage_class_registry_capacity) {
         int capacity = sage_class_registry_capacity ? sage_class_registry_capacity * 2 : 8;
         sage_class_registry = safe_realloc(sage_class_registry,
@@ -3356,32 +3399,47 @@ void sage_rt_register_class(const char* name, const char* parent_name) {
     if (class_def->name == NULL) abort();
     class_def->parent_name = parent_name;
     sage_class_registry[sage_class_registry_count++] = class_def;
+    pthread_mutex_unlock(&sage_class_registry_mutex);
 }
 
-static SageMethodEntry* sage_rt_find_method(SageClass* class_def, const char* name) {
+static int sage_rt_find_method(SageClass* class_def, const char* name,
+                               SageMethodEntry* result) {
+    if (class_def == NULL || name == NULL || result == NULL) return 0;
+    pthread_mutex_lock(&sage_class_registry_mutex);
     while (class_def != NULL) {
         for (int i = 0; i < class_def->method_count; i++) {
-            if (strcmp(class_def->methods[i].name, name) == 0) return &class_def->methods[i];
+            if (strcmp(class_def->methods[i].name, name) == 0) {
+                *result = class_def->methods[i];
+                pthread_mutex_unlock(&sage_class_registry_mutex);
+                return 1;
+            }
         }
         if (class_def->parent == NULL && class_def->parent_name != NULL) {
-            class_def->parent = sage_rt_find_class(class_def->parent_name);
+            class_def->parent = sage_rt_find_class_unlocked(class_def->parent_name);
         }
         class_def = class_def->parent;
     }
-    return NULL;
+    pthread_mutex_unlock(&sage_class_registry_mutex);
+    return 0;
 }
 
 void sage_rt_register_method(const char* class_name, const char* method_name,
                              void* function, int32_t arity,
                              int32_t required_count, int has_self) {
-    SageClass* class_def = sage_rt_find_class(class_name);
-    if (class_def == NULL || method_name == NULL || function == NULL) return;
+    if (class_name == NULL || method_name == NULL || function == NULL) return;
+    pthread_mutex_lock(&sage_class_registry_mutex);
+    SageClass* class_def = sage_rt_find_class_unlocked(class_name);
+    if (class_def == NULL) {
+        pthread_mutex_unlock(&sage_class_registry_mutex);
+        return;
+    }
     for (int i = 0; i < class_def->method_count; i++) {
         if (strcmp(class_def->methods[i].name, method_name) == 0) {
             class_def->methods[i].function = function;
             class_def->methods[i].arity = arity;
             class_def->methods[i].required_count = required_count;
             class_def->methods[i].has_self = has_self;
+            pthread_mutex_unlock(&sage_class_registry_mutex);
             return;
         }
     }
@@ -3398,6 +3456,7 @@ void sage_rt_register_method(const char* class_name, const char* method_name,
     method->arity = arity;
     method->required_count = required_count;
     method->has_self = has_self;
+    pthread_mutex_unlock(&sage_class_registry_mutex);
 }
 
 static SageValue sage_rt_invoke_function(void* function, SageValue* args,
@@ -3428,21 +3487,21 @@ SageValue sage_rt_construct_class(const char* class_name,
     value.type = SAGE_INSTANCE;
     value.as.instance = instance;
 
-    SageMethodEntry* init = sage_rt_find_method(class_def, "init");
-    if (init != NULL) {
+    SageMethodEntry init;
+    if (sage_rt_find_method(class_def, "init", &init)) {
         if (argc < 0 || (argc > 0 && args == NULL)) return value;
-        int total = init->has_self ? argc + 1 : argc;
+        int total = init.has_self ? argc + 1 : argc;
         if (total < 0) return value;
         SageValue* call_args = total > 0
             ? safe_calloc((size_t)total, sizeof(SageValue)) : NULL;
-        if (init->has_self) call_args[0] = value;
+        if (init.has_self) call_args[0] = value;
         for (int i = 0; i < argc; i++) {
-            if (init->has_self) call_args[i + 1] = args[i];
+            if (init.has_self) call_args[i + 1] = args[i];
             else call_args[i] = args[i];
         }
-        uint64_t call_mask = init->has_self ? ((mask << 1) | 1ULL) : mask;
-        sage_rt_invoke_function(init->function, call_args, total, call_mask,
-                                init->arity, init->required_count);
+        uint64_t call_mask = init.has_self ? ((mask << 1) | 1ULL) : mask;
+        sage_rt_invoke_function(init.function, call_args, total, call_mask,
+                                init.arity, init.required_count);
         free(call_args);
     }
     return value;
@@ -3455,22 +3514,22 @@ SageValue sage_rt_call_method(SageValue object, const char* name,
     }
     if (argc < 0 || (argc > 0 && args == NULL)) return sage_rt_nil();
     SageClass* class_def = (SageClass*)object.as.instance->class_def;
-    SageMethodEntry* method = sage_rt_find_method(class_def, name);
-    if (method == NULL) return sage_rt_nil();
+    SageMethodEntry method;
+    if (!sage_rt_find_method(class_def, name, &method)) return sage_rt_nil();
 
-    int total = method->has_self ? argc + 1 : argc;
+    int total = method.has_self ? argc + 1 : argc;
     if (total < 0) return sage_rt_nil();
     SageValue* call_args = total > 0
         ? safe_calloc((size_t)total, sizeof(SageValue)) : NULL;
-    if (method->has_self) call_args[0] = object;
+    if (method.has_self) call_args[0] = object;
     for (int i = 0; i < argc; i++) {
-        if (method->has_self) call_args[i + 1] = args[i];
+        if (method.has_self) call_args[i + 1] = args[i];
         else call_args[i] = args[i];
     }
-    uint64_t call_mask = method->has_self ? ((mask << 1) | 1ULL) : mask;
-    SageValue result = sage_rt_invoke_function(method->function, call_args, total,
-                                               call_mask, method->arity,
-                                               method->required_count);
+    uint64_t call_mask = method.has_self ? ((mask << 1) | 1ULL) : mask;
+    SageValue result = sage_rt_invoke_function(method.function, call_args, total,
+                                               call_mask, method.arity,
+                                               method.required_count);
     free(call_args);
     return result;
 }

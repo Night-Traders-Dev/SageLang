@@ -1686,9 +1686,47 @@ Value thread_spawn_native(int argCount, Value* args) {
     ThreadValue* tv = gc_alloc(VAL_THREAD, sizeof(ThreadValue));
     tv->handle = handle;
     tv->data = td;
-    tv->joined = 0;
+    __atomic_store_n(&tv->joined, 0, __ATOMIC_RELEASE);
 
     return val_thread(tv);
+}
+
+Value sage_join_thread_value(Value value) {
+    if (!IS_THREAD(value)) return val_nil();
+    ThreadValue* tv = AS_THREAD(value);
+    int state = __atomic_load_n(&tv->joined, __ATOMIC_ACQUIRE);
+    if (state == 1) {
+        SageThreadData* td = (SageThreadData*)tv->data;
+        return td == NULL ? val_nil() : td->result;
+    }
+    if (state != 0) {
+        do {
+            sage_usleep(100);
+            state = __atomic_load_n(&tv->joined, __ATOMIC_ACQUIRE);
+        } while (state == 2);
+        SageThreadData* td = (SageThreadData*)tv->data;
+        return td == NULL ? val_nil() : td->result;
+    }
+
+    int expected = 0;
+    if (!__atomic_compare_exchange_n(&tv->joined, &expected, 2, 0,
+                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        return sage_join_thread_value(value);
+    }
+
+    sage_thread_t* handle = (sage_thread_t*)tv->handle;
+    if (handle != NULL) sage_thread_join(*handle, NULL);
+    SageThreadData* td = (SageThreadData*)tv->data;
+    Value result = td == NULL ? val_nil() : td->result;
+    if (td != NULL) {
+        free(td->args);
+        free(td);
+    }
+    free(handle);
+    tv->data = NULL;
+    tv->handle = NULL;
+    __atomic_store_n(&tv->joined, 1, __ATOMIC_RELEASE);
+    return result;
 }
 
 // thread.join(handle) -> result value
@@ -1698,27 +1736,7 @@ static Value thread_join_native(int argCount, Value* args) {
         fprintf(stderr, "Runtime Error: thread.join requires a thread handle.\n");
         return val_nil();
     }
-
-    ThreadValue* tv = AS_THREAD(args[0]);
-    if (tv->joined) {
-        // Already joined, return cached result
-        SageThreadData* td = (SageThreadData*)tv->data;
-        return td->result;
-    }
-
-    sage_thread_t* handle = (sage_thread_t*)tv->handle;
-    sage_thread_join(*handle, NULL);
-    tv->joined = 1;
-
-    SageThreadData* td = (SageThreadData*)tv->data;
-    Value result = td->result;
-    // Free thread resources
-    free(td->args);
-    free(td);
-    free(handle);
-    tv->data = NULL;
-    tv->handle = NULL;
-    return result;
+    return sage_join_thread_value(args[0]);
 }
 
 // thread.mutex() -> mutex handle

@@ -88,6 +88,7 @@ OBJ_DIR = obj
 BIN_DIR = .
 BOARD_DIR = boards
 CHART_SCRIPT = scripts/generate_loc_charts.py
+DEPFLAGS = -MMD -MP
 
 # Debug flags
 DEBUG ?= 0
@@ -211,6 +212,7 @@ SGVM_MAIN_OBJECT = $(OBJ_DIR)/sgvm_main.o
 SGVM_COMPILER_OBJECT = $(OBJ_DIR)/sgvm_compiler.o
 METAL_VM_OBJECT = $(OBJ_DIR)/metal_vm.o
 METAL_RV64_VM_OBJECT = $(OBJ_DIR)/metal_rv64_vm.o
+DEPFILES = $(ALL_OBJECTS:.o=.d) $(LSP_MAIN_OBJECT:.o=.d) $(LLVM_RT_OBJECT:.o=.d) $(GPU_API_OBJECT:.o=.d) $(SGVM_MAIN_OBJECT:.o=.d) $(SGVM_COMPILER_OBJECT:.o=.d) $(METAL_VM_OBJECT:.o=.d) $(METAL_RV64_VM_OBJECT:.o=.d)
 
 # ============================================================================
 # Build Rules
@@ -227,7 +229,7 @@ $(TARGET): $(ALL_OBJECTS) $(LLVM_RT_OBJECT)
 	@mkdir -p $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $(ALL_OBJECTS) $(LDFLAGS)
 	@BIN_SIZE=$$(du -h $@ | cut -f1); \
-	 SRC_COUNT=$$(find src -name "*.c" | wc -l); \
+	 SRC_COUNT=$$(( $(words $(CORE_SOURCES)) + $(words $(VM_SOURCES)) + 1 )); \
 	 echo "Built: $(TARGET) $(SAGE_VERSION)  ($$BIN_SIZE, $$SRC_COUNT source files)"
 	@echo "   Run with: ./$(TARGET) examples/hello.sage"
 
@@ -243,16 +245,16 @@ $(SGVM_COMPILER_TARGET): $(SGVM_COMPILER_OBJECT)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 	@echo "Built: $(SGVM_COMPILER_TARGET)"
 
-$(SGVM_MAIN_OBJECT): $(SRC_DIR)/sgvm_main.c $(HEADERS)
+$(SGVM_MAIN_OBJECT): $(SRC_DIR)/sgvm_main.c
 	@mkdir -p $(OBJ_DIR)
-	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
+	$(CC) $(CFLAGS) $(DEPFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
 
 $(SGVM_COMPILER_OBJECT): $(SRC_DIR)/sgvm_compiler.c
 	@mkdir -p $(OBJ_DIR)
-	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
-$(LLVM_RT_OBJECT): $(LLVM_RT_SOURCE) $(HEADERS)
+	$(CC) $(CFLAGS) $(DEPFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
+$(LLVM_RT_OBJECT): $(LLVM_RT_SOURCE)
 	@mkdir -p $(OBJ_DIR)
-	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
+	$(CC) $(CFLAGS) $(DEPFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
 	@echo "Compiled: $<"
 
 # LSP server binary (standalone)
@@ -261,21 +263,23 @@ $(LSP_TARGET): $(LSP_MAIN_OBJECT) $(CORE_OBJECTS) $(VM_OBJECTS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 	@echo "Built: $(LSP_TARGET)"
 
-$(LSP_MAIN_OBJECT): $(LSP_MAIN_SOURCE) $(HEADERS)
+$(LSP_MAIN_OBJECT): $(LSP_MAIN_SOURCE)
 	@mkdir -p $(OBJ_DIR)
-	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
+	$(CC) $(CFLAGS) $(DEPFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
 	@echo "Compiled: $<"
 
 # Compile source files
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(HEADERS)
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(OBJ_DIR)
-	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
+	$(CC) $(CFLAGS) $(DEPFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
 	@echo "Compiled: $<"
 
-$(OBJ_DIR)/vm/%.o: $(VM_DIR)/%.c $(HEADERS)
+$(OBJ_DIR)/vm/%.o: $(VM_DIR)/%.c
 	@mkdir -p $(OBJ_DIR)/vm
-	$(CC) $(CFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
+	$(CC) $(CFLAGS) $(DEPFLAGS) -I$(INC_DIR) -I$(VM_DIR) -c $< -o $@
 	@echo "Compiled: $<"
+
+-include $(DEPFILES)
 
 # ============================================================================
 # Development Targets
@@ -334,12 +338,12 @@ METAL_RV64_VM_OBJECT = obj/metal_rv64_vm.o
 
 $(METAL_VM_OBJECT): $(METAL_VM_SOURCE) include/metal_vm.h
 	@mkdir -p obj
-	$(CC) -std=c11 -ffreestanding -O2 -Wall -Wextra -Iinclude -c $(METAL_VM_SOURCE) -o $(METAL_VM_OBJECT)
+	$(CC) -std=c11 -ffreestanding -O2 -Wall -Wextra -Iinclude $(DEPFLAGS) -c $(METAL_VM_SOURCE) -o $(METAL_VM_OBJECT)
 	@echo "Compiled Metal VM (freestanding)"
 
 $(METAL_RV64_VM_OBJECT): $(METAL_RV64_VM_SOURCE) include/metal_rv64_vm.h
 	@mkdir -p obj
-	$(CC) -std=c11 -ffreestanding -O2 -Wall -Wextra -Iinclude -c $(METAL_RV64_VM_SOURCE) -o $(METAL_RV64_VM_OBJECT)
+	$(CC) -std=c11 -ffreestanding -O2 -Wall -Wextra -Iinclude $(DEPFLAGS) -c $(METAL_RV64_VM_SOURCE) -o $(METAL_RV64_VM_OBJECT)
 	@echo "Compiled Metal RV64 VM (freestanding)"
 
 metal-vm: $(METAL_VM_OBJECT) $(METAL_RV64_VM_OBJECT)
@@ -556,7 +560,7 @@ test: $(TARGET)
 	fi
 	@echo ""
 	@echo "Test 23: Assembly Generation (host target)"
-	@./$(TARGET) --emit-asm ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke.s && echo "✅ Pass (ASM emitted)" || (echo "❌ Fail"; exit 1)
+	@./$(TARGET) --emit-asm ../testsuite/compiler/compiler_smoke_asm.sage -o .tmp/compiler_smoke.s && test -s .tmp/compiler_smoke.s && echo "✅ Pass (ASM emitted)" || (echo "❌ Fail"; exit 1)
 	@echo ""
 	@echo "Test 24: Debug Info (-g flag)"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke_debug -g

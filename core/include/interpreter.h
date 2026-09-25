@@ -27,5 +27,7 @@ int interpreter_sandbox_mode(void);
 int interpreter_get_stack_depth(void);
 void sage_set_stack_origin(char* origin);
 void sage_raise_stack_limit(void);
+int sage_stack_danger(void);
+Value sage_join_thread_value(Value value);
 
 #endif

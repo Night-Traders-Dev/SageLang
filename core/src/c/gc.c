@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <limits.h>
 #include "sage_thread.h"
 #include "gc.h"
 #include "value.h"
@@ -39,6 +40,7 @@ extern __thread int g_ast_gc_env_temp_count;
 
 // Thread safety: global GC mutex
 static sage_mutex_t gc_mutex = SAGE_MUTEX_INITIALIZER;
+static sage_mutex_t mark_stack_mutex = SAGE_MUTEX_INITIALIZER;
 
 // Multi-threading support: Thread Registry
 static sage_mutex_t thread_registry_mutex = SAGE_MUTEX_INITIALIZER;
@@ -80,6 +82,20 @@ void gc_unlock(void) { sage_mutex_unlock(&gc_mutex); }
 GC gc = {0};
 static int gc_debug = 0;
 
+static int gc_color_load(GCHeader* header) {
+    return __atomic_load_n(&header->color, __ATOMIC_ACQUIRE);
+}
+
+static void gc_color_store(GCHeader* header, int color) {
+    __atomic_store_n(&header->color, color, __ATOMIC_RELEASE);
+}
+
+static int gc_color_try_shade(GCHeader* header) {
+    int expected = GC_WHITE;
+    return __atomic_compare_exchange_n(&header->color, &expected, GC_GRAY, 0,
+                                       __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+}
+
 // ============================================================================
 // String Interning Table
 // ============================================================================
@@ -91,7 +107,10 @@ typedef struct {
 } StringTable;
 
 static StringTable string_table = {NULL, 0, 0};
+static size_t string_table_bytes = 0;
 static sage_mutex_t string_table_mutex = SAGE_MUTEX_INITIALIZER;
+#define GC_MAX_INTERN_STRINGS 65536
+#define GC_MAX_INTERN_BYTES (64 * 1024 * 1024)
 
 static unsigned int intern_hash(const char* s, int len) {
     unsigned int hash = 2166136261u;
@@ -130,12 +149,30 @@ void* gc_intern_string(const char* s, int len) {
     // Now acquire string_table_mutex to insert it
     sage_mutex_lock(&string_table_mutex);
 
+    size_t entry_bytes = (size_t)len + 1;
+    if (entry_bytes > GC_MAX_INTERN_BYTES ||
+        string_table.count >= GC_MAX_INTERN_STRINGS ||
+        string_table_bytes > GC_MAX_INTERN_BYTES - entry_bytes) {
+        sage_mutex_unlock(&string_table_mutex);
+        return interned;
+    }
+
     // We must check if we need to grow the table
-    if (string_table.capacity == 0 || string_table.count * 2 >= string_table.capacity) {
+    if (string_table.capacity == 0 || (int64_t)string_table.count * 2 >= string_table.capacity) {
         int old_cap = string_table.capacity;
+        if (old_cap > INT_MAX / 2) {
+            sage_mutex_unlock(&string_table_mutex);
+            return interned;
+        }
         string_table.capacity = old_cap == 0 ? 1024 : old_cap * 2;
         char** old_entries = string_table.entries;
-        string_table.entries = (char**)calloc(string_table.capacity, sizeof(char*));
+        string_table.entries = (char**)calloc((size_t)string_table.capacity, sizeof(char*));
+        if (string_table.entries == NULL) {
+            string_table.entries = old_entries;
+            string_table.capacity = old_cap;
+            sage_mutex_unlock(&string_table_mutex);
+            return interned;
+        }
         string_table.count = 0;
         for (int i = 0; i < old_cap; i++) {
             if (old_entries[i]) {
@@ -164,6 +201,7 @@ void* gc_intern_string(const char* s, int len) {
     // Insert it
     string_table.entries[idx] = interned;
     string_table.count++;
+    string_table_bytes += (size_t)len + 1;
     sage_mutex_unlock(&string_table_mutex);
     return interned;
 }
@@ -195,8 +233,8 @@ static unsigned long now_ns(void) {
 
 void gc_mark_stack_init(GCMarkStack* stack) {
     stack->capacity = GC_MARK_STACK_INIT;
-    stack->count = 0;
-    stack->items = (void**)malloc(sizeof(void*) * stack->capacity);
+    atomic_init(&stack->count, 0);
+    stack->items = (void**)malloc(sizeof(void*) * (size_t)stack->capacity);
     if (!stack->items) {
         fprintf(stderr, "Fatal: cannot allocate GC mark stack\n");
         abort();
@@ -204,27 +242,49 @@ void gc_mark_stack_init(GCMarkStack* stack) {
 }
 
 void gc_mark_stack_push(GCMarkStack* stack, void* obj) {
-    if (stack->count >= stack->capacity) {
-        stack->capacity *= 2;
-        stack->items = (void**)realloc(stack->items, sizeof(void*) * stack->capacity);
-        if (!stack->items) {
+    sage_mutex_lock(&mark_stack_mutex);
+    int count = atomic_load_explicit(&stack->count, memory_order_relaxed);
+    if (count >= stack->capacity) {
+        if (stack->capacity > INT_MAX / 2) {
+            sage_mutex_unlock(&mark_stack_mutex);
+            fprintf(stderr, "Fatal: GC mark stack capacity limit exceeded\n");
+            abort();
+        }
+        int new_capacity = stack->capacity * 2;
+        void** new_items = (void**)realloc(stack->items, sizeof(void*) * (size_t)new_capacity);
+        if (!new_items) {
+            sage_mutex_unlock(&mark_stack_mutex);
             fprintf(stderr, "Fatal: cannot grow GC mark stack\n");
             abort();
         }
+        stack->items = new_items;
+        stack->capacity = new_capacity;
     }
-    stack->items[stack->count++] = obj;
+    stack->items[count] = obj;
+    atomic_store_explicit(&stack->count, count + 1, memory_order_release);
+    sage_mutex_unlock(&mark_stack_mutex);
 }
 
 void* gc_mark_stack_pop(GCMarkStack* stack) {
-    if (stack->count == 0) return NULL;
-    return stack->items[--stack->count];
+    sage_mutex_lock(&mark_stack_mutex);
+    int count = atomic_load_explicit(&stack->count, memory_order_acquire);
+    if (count == 0) {
+        sage_mutex_unlock(&mark_stack_mutex);
+        return NULL;
+    }
+    void* item = stack->items[count - 1];
+    atomic_store_explicit(&stack->count, count - 1, memory_order_release);
+    sage_mutex_unlock(&mark_stack_mutex);
+    return item;
 }
 
 void gc_mark_stack_free(GCMarkStack* stack) {
+    sage_mutex_lock(&mark_stack_mutex);
     free(stack->items);
     stack->items = NULL;
-    stack->count = 0;
+    atomic_store_explicit(&stack->count, 0, memory_order_relaxed);
     stack->capacity = 0;
+    sage_mutex_unlock(&mark_stack_mutex);
 }
 
 // ============================================================================
@@ -259,7 +319,7 @@ static void gc_recompute_thresholds(size_t reclaimed_bytes, size_t reclaimed_obj
 }
 
 static int gc_should_collect(size_t incoming_size) {
-    if (!gc.enabled || gc.pin_count > 0) return 0;
+    if (!gc.enabled || atomic_load_explicit(&gc.pin_count, memory_order_acquire) > 0) return 0;
     if (gc.phase != GC_PHASE_IDLE) return 0; // Already collecting
     if ((gc.object_count + 1) >= gc.next_gc_objects) return 1;
     return gc_live_bytes() + (unsigned long)sizeof(GCHeader) + (unsigned long)incoming_size
@@ -336,7 +396,7 @@ static size_t gc_release_object(GCHeader* header) {
         }
         case VAL_THREAD: {
             ThreadValue* tv = object;
-            if (tv->handle != NULL && !tv->joined) {
+            if (tv->handle != NULL && __atomic_load_n(&tv->joined, __ATOMIC_ACQUIRE) == 0) {
                 sage_thread_t* thread = (sage_thread_t*)tv->handle;
                 if (!sage_thread_is_current(*thread))
                     (void)sage_thread_join(*thread, NULL);
@@ -404,6 +464,13 @@ void gc_shutdown(void) {
     gc.objects = NULL;
     sage_mutex_unlock(&gc_mutex);
     gc_mark_stack_free(&gc.mark_stack);
+    sage_mutex_lock(&string_table_mutex);
+    free(string_table.entries);
+    string_table.entries = NULL;
+    string_table.count = 0;
+    string_table.capacity = 0;
+    string_table_bytes = 0;
+    sage_mutex_unlock(&string_table_mutex);
     free(gc.cycle_buffer); gc.cycle_buffer = NULL;
     free(gc.orc_roots); gc.orc_roots = NULL;
     arc_table_cleanup();
@@ -414,8 +481,14 @@ void gc_shutdown(void) {
 // Memory Allocation
 // ============================================================================
 
-void gc_pin(void) { gc.pin_count++; }
-void gc_unpin(void) { if (gc.pin_count > 0) gc.pin_count--; }
+void gc_pin(void) { atomic_fetch_add_explicit(&gc.pin_count, 1, memory_order_acq_rel); }
+void gc_unpin(void) {
+    int current = atomic_load_explicit(&gc.pin_count, memory_order_acquire);
+    while (current > 0) {
+        if (atomic_compare_exchange_weak_explicit(&gc.pin_count, &current, current - 1,
+                                                  memory_order_acq_rel, memory_order_acquire)) return;
+    }
+}
 
 void* gc_alloc(int type, size_t size) {
     sage_mutex_lock(&gc_mutex);
@@ -437,8 +510,8 @@ void* gc_alloc(int type, size_t size) {
     // New objects are BLACK during concurrent mark (allocated-black invariant)
     // This means newly allocated objects survive the current cycle.
     // During IDLE phase, color doesn't matter (will be reset at next cycle start).
-    header->color = (gc.phase == GC_PHASE_CONCURRENT_MARK || gc.phase == GC_PHASE_REMARK)
-                    ? GC_BLACK : GC_WHITE;
+    gc_color_store(header, (gc.phase == GC_PHASE_CONCURRENT_MARK || gc.phase == GC_PHASE_REMARK)
+                    ? GC_BLACK : GC_WHITE);
     header->type = type;
     header->size = size;
     header->next = gc.objects;
@@ -495,8 +568,7 @@ void gc_shade_gray(void* object, int type) {
     (void)type;
     if (object == NULL) return;
     GCHeader* header = (GCHeader*)object - 1;
-    if (header->color == GC_WHITE) {
-        header->color = GC_GRAY;
+    if (gc_color_try_shade(header)) {
         gc_mark_stack_push(&gc.mark_stack, header);
     }
 }
@@ -549,10 +621,9 @@ static void gc_shade_children(GCHeader* header);
 static int gc_try_shade(void* object) {
     if (object == NULL) return 0;
     GCHeader* header = (GCHeader*)object - 1;
-    if (header->color != GC_WHITE) return 0;
-    header->color = GC_GRAY;
+    if (!gc_color_try_shade(header)) return 0;
     gc_mark_stack_push(&gc.mark_stack, header);
-    gc.marked_count++;
+    __atomic_fetch_add(&gc.marked_count, 1, __ATOMIC_RELAXED);
     return 1;
 }
 
@@ -735,7 +806,7 @@ static void gc_shade_children(GCHeader* header) {
         }
         default: break; // String, exception, clib, pointer, thread, mutex: no children
     }
-    header->color = GC_BLACK;
+    gc_color_store(header, GC_BLACK);
 }
 
 // ============================================================================
@@ -749,12 +820,12 @@ void gc_begin_cycle(void) {
 
     gc.phase = GC_PHASE_ROOT_SCAN;
     gc.marked_count = 0;
-    gc.mark_stack.count = 0;
+    atomic_store_explicit(&gc.mark_stack.count, 0, memory_order_relaxed);
 
     // All existing objects start as WHITE
     GCHeader* obj = (GCHeader*)gc.objects;
     while (obj != NULL) {
-        obj->color = GC_WHITE;
+        gc_color_store(obj, GC_WHITE);
         obj = (GCHeader*)obj->next;
     }
 
@@ -771,15 +842,15 @@ void gc_begin_cycle(void) {
 
     if (gc_debug)
         fprintf(stderr, "[GC] Root scan: %lu us, %d gray objects\n",
-                gc.last_root_scan_ns / 1000, gc.mark_stack.count);
+                gc.last_root_scan_ns / 1000, atomic_load_explicit(&gc.mark_stack.count, memory_order_relaxed));
 }
 
 // Phase 2 (Concurrent): Process up to max_objects from the mark stack
 void gc_mark_step(int max_objects) {
     int processed = 0;
-    while (processed < max_objects && gc.mark_stack.count > 0) {
+    while (processed < max_objects && atomic_load_explicit(&gc.mark_stack.count, memory_order_acquire) > 0) {
         GCHeader* header = (GCHeader*)gc_mark_stack_pop(&gc.mark_stack);
-        if (header != NULL && header->color == GC_GRAY) {
+        if (header != NULL && gc_color_load(header) == GC_GRAY) {
             gc_shade_children(header);
             processed++;
         }
@@ -787,7 +858,7 @@ void gc_mark_step(int max_objects) {
 }
 
 int gc_mark_complete(void) {
-    return gc.mark_stack.count == 0;
+    return atomic_load_explicit(&gc.mark_stack.count, memory_order_acquire) == 0;
 }
 
 // Phase 3 (STW): Remark - drain any objects shaded by write barrier during concurrent mark
@@ -800,9 +871,9 @@ void gc_remark(void) {
     gc_mark_all_roots();
 
     // Drain the mark stack completely (barrier-shaded objects)
-    while (gc.mark_stack.count > 0) {
+    while (atomic_load_explicit(&gc.mark_stack.count, memory_order_acquire) > 0) {
         GCHeader* header = (GCHeader*)gc_mark_stack_pop(&gc.mark_stack);
-        if (header != NULL && header->color == GC_GRAY) {
+        if (header != NULL && gc_color_load(header) == GC_GRAY) {
             gc_shade_children(header);
         }
     }
@@ -829,7 +900,7 @@ void gc_sweep_step(int max_objects) {
     int processed = 0;
     while (gc.sweep_cursor != NULL && processed < max_objects) {
         GCHeader* header = (GCHeader*)gc.sweep_cursor;
-        if (header->color == GC_WHITE) {
+        if (gc_color_load(header) == GC_WHITE) {
             // Unreachable - unlink and free
             *gc.sweep_prev = header->next;
             gc.sweep_cursor = header->next;
@@ -839,7 +910,7 @@ void gc_sweep_step(int max_objects) {
             free(header);
         } else {
             // Reachable - reset color for next cycle
-            header->color = GC_WHITE;
+            gc_color_store(header, GC_WHITE);
             gc.sweep_prev = (void**)&header->next;
             gc.sweep_cursor = header->next;
         }
@@ -864,19 +935,19 @@ void gc_mark_from_root(Env* root_env) {
     // Reset all objects to white
     GCHeader* obj = (GCHeader*)gc.objects;
     while (obj != NULL) {
-        obj->color = GC_WHITE;
+        gc_color_store(obj, GC_WHITE);
         obj = (GCHeader*)obj->next;
     }
-    gc.mark_stack.count = 0;
+    atomic_store_explicit(&gc.mark_stack.count, 0, memory_order_relaxed);
     
     // Shade roots
     gc_mark_all_roots();
     if (root_env != NULL) gc_mark_env(root_env);
     
     // Drain mark stack fully
-    while (gc.mark_stack.count > 0) {
+    while (atomic_load_explicit(&gc.mark_stack.count, memory_order_acquire) > 0) {
         GCHeader* header = (GCHeader*)gc_mark_stack_pop(&gc.mark_stack);
-        if (header != NULL && header->color == GC_GRAY) {
+        if (header != NULL && gc_color_load(header) == GC_GRAY) {
             gc_shade_children(header);
         }
     }
@@ -887,7 +958,7 @@ void gc_sweep(void) {
     void** current = (void**)&gc.objects;
     while (*current != NULL) {
         GCHeader* header = (GCHeader*)*current;
-        if (header->color == GC_WHITE) {
+        if (gc_color_load(header) == GC_WHITE) {
             void* unreached = *current;
             *current = header->next;
             gc.object_count--;
@@ -895,7 +966,7 @@ void gc_sweep(void) {
             gc.bytes_freed += gc_release_object(header);
             free(unreached);
         } else {
-            header->color = GC_WHITE;
+            gc_color_store(header, GC_WHITE);
             current = (void**)&header->next;
         }
     }

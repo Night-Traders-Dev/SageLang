@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include "gc.h"
 #include "token.h"
@@ -47,15 +48,23 @@ static void set_error(BytecodeCompiler* compiler, const char* message) {
     }
 }
 
-static int ensure_byte_capacity(BytecodeChunk* chunk, int needed) {
-    if (chunk->code_count + needed <= chunk->code_capacity) {
-        return 1;
+static int next_bytecode_capacity(int current, int initial, int needed) {
+    if (needed < 0 || needed > INT_MAX - current) return 0;
+    int capacity = current == 0 ? initial : current;
+    while (capacity < needed) {
+        if (capacity > INT_MAX / 2) return 0;
+        capacity *= 2;
     }
+    return capacity;
+}
 
-    int new_capacity = chunk->code_capacity == 0 ? 64 : chunk->code_capacity * 2;
-    while (new_capacity < chunk->code_count + needed) {
-        new_capacity *= 2;
-    }
+static int ensure_byte_capacity(BytecodeChunk* chunk, int needed) {
+    if (chunk->code_count < 0 || chunk->code_capacity < 0 || needed < 0 ||
+        chunk->code_count > INT_MAX - needed) return 0;
+    if (chunk->code_count <= chunk->code_capacity - needed) return 1;
+
+    int new_capacity = next_bytecode_capacity(chunk->code_capacity, 64, chunk->code_count + needed);
+    if (new_capacity <= 0) return 0;
 
     chunk->code = SAGE_REALLOC(chunk->code, (size_t)new_capacity);
     chunk->lines = SAGE_REALLOC(chunk->lines, sizeof(int) * (size_t)new_capacity);
@@ -65,20 +74,20 @@ static int ensure_byte_capacity(BytecodeChunk* chunk, int needed) {
 }
 
 static int ensure_constant_capacity(BytecodeChunk* chunk) {
-    if (chunk->constant_count < chunk->constant_capacity) {
-        return 1;
-    }
-    int new_capacity = chunk->constant_capacity == 0 ? 16 : chunk->constant_capacity * 2;
+    if (chunk->constant_count < 0 || chunk->constant_capacity < 0) return 0;
+    if (chunk->constant_count < chunk->constant_capacity) return 1;
+    int new_capacity = next_bytecode_capacity(chunk->constant_capacity, 16, chunk->constant_count + 1);
+    if (new_capacity <= 0) return 0;
     chunk->constants = SAGE_REALLOC(chunk->constants, sizeof(Value) * (size_t)new_capacity);
     chunk->constant_capacity = new_capacity;
     return 1;
 }
 
 static int ensure_ast_stmt_capacity(BytecodeChunk* chunk) {
-    if (chunk->ast_stmt_count < chunk->ast_stmt_capacity) {
-        return 1;
-    }
-    int new_capacity = chunk->ast_stmt_capacity == 0 ? 8 : chunk->ast_stmt_capacity * 2;
+    if (chunk->ast_stmt_count < 0 || chunk->ast_stmt_capacity < 0) return 0;
+    if (chunk->ast_stmt_count < chunk->ast_stmt_capacity) return 1;
+    int new_capacity = next_bytecode_capacity(chunk->ast_stmt_capacity, 8, chunk->ast_stmt_count + 1);
+    if (new_capacity <= 0) return 0;
     chunk->ast_stmts = SAGE_REALLOC(chunk->ast_stmts, sizeof(Stmt*) * (size_t)new_capacity);
     chunk->ast_stmt_capacity = new_capacity;
     return 1;
@@ -174,6 +183,10 @@ static int add_name_constant(BytecodeCompiler* compiler, const char* start, int 
     memcpy(name, start, (size_t)length);
     name[length] = '\0';
     int index = add_constant(compiler, val_string_take(name));
+    if (index > 0xffff) {
+        set_error(compiler, "Bytecode name pool exceeded 65535 entries.");
+        return -1;
+    }
     return index;
 }
 

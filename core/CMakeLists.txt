@@ -9,6 +9,7 @@ option(BUILD_PICO "Build for Raspberry Pi Pico (RP2040)" OFF)
 option(BUILD_SAGE "Build using self-hosted Sage interpreter (bootstrap)" OFF)
 option(ENABLE_DEBUG "Enable debug symbols and logging" OFF)
 option(ENABLE_TESTS "Build test executables" OFF)
+option(ENABLE_TSAN "Enable ThreadSanitizer instrumentation" OFF)
 
 # Import Pico SDK if building for Pico (BEFORE project())
 if(BUILD_PICO)
@@ -97,6 +98,16 @@ if(ENABLE_DEBUG)
     message(STATUS "Debug mode enabled")
 else()
     add_compile_options(-O2)
+endif()
+
+# ThreadSanitizer: opt-in because it slows the compiler down a lot.
+if(ENABLE_TSAN)
+    if(BUILD_PICO)
+        message(FATAL_ERROR "ENABLE_TSAN is not supported on the Pico target")
+    endif()
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=thread)
+    message(STATUS "ThreadSanitizer enabled")
 endif()
 
 # Warning flags
@@ -197,7 +208,6 @@ set(SAGE_CORE_SOURCES
     src/c/safety.c
     src/c/value.c
     src/c/graphics.c
-    src/c/gpu_api.c
     src/c/ml_backend.c
     src/c/heartbeat.c
     src/c/metal_vm.c
@@ -277,6 +287,13 @@ include_directories(
 )
 
 if(NOT BUILD_PICO)
+    add_library(sage_core_objects OBJECT ${SAGE_CORE_SOURCES} ${SAGE_VM_SOURCES})
+    target_compile_definitions(sage_core_objects PRIVATE
+        SAGE_LIB_DIR="${SAGE_LIB_DIR_VALUE}"
+    )
+endif()
+
+if(NOT BUILD_PICO)
     add_library(sage_llvm_runtime OBJECT src/c/llvm_runtime.c)
     add_library(sage_gpu_api OBJECT src/c/gpu_api.c)
     set(SAGE_LLVM_RUNTIME_OBJECT "${CMAKE_BINARY_DIR}/obj/llvm_runtime.o")
@@ -305,8 +322,8 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     # Standard desktop executable built from C
     add_executable(sage
         ${SAGE_MAIN_SOURCE}
-        ${SAGE_CORE_SOURCES}
-        ${SAGE_VM_SOURCES}
+        $<TARGET_OBJECTS:sage_core_objects>
+        $<TARGET_OBJECTS:sage_gpu_api>
     )
     if(NOT BUILD_PICO)
         add_dependencies(sage sage_llvm_runtime_bundle sage_gpu_api_bundle)
@@ -331,8 +348,8 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/c/lsp_main.c")
         add_executable(sage-lsp
             src/c/lsp_main.c
-            ${SAGE_CORE_SOURCES}
-            ${SAGE_VM_SOURCES}
+            $<TARGET_OBJECTS:sage_core_objects>
+            $<TARGET_OBJECTS:sage_gpu_api>
         )
         target_compile_definitions(sage-lsp PRIVATE
             SAGE_LIB_DIR="${SAGE_LIB_DIR_VALUE}"
@@ -352,8 +369,8 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
     # First build the C host interpreter (needed to bootstrap)
     add_executable(sage
         ${SAGE_MAIN_SOURCE}
-        ${SAGE_CORE_SOURCES}
-        ${SAGE_VM_SOURCES}
+        $<TARGET_OBJECTS:sage_core_objects>
+        $<TARGET_OBJECTS:sage_gpu_api>
     )
     if(NOT BUILD_PICO)
         add_dependencies(sage sage_llvm_runtime_bundle sage_gpu_api_bundle)

@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>   // uintptr_t
+#include <limits.h>
 
 #if defined(SAGE_BARE_METAL)
 #define JIT_SUPPORTED 1
@@ -93,8 +94,9 @@ void jit_shutdown(JitState* jit) {
 JitProfile* jit_get_profile(JitState* jit, int func_id) {
     if (func_id < 0) return NULL;
     while (func_id >= jit->profile_capacity) {
+        if (jit->profile_capacity > INT_MAX / 2) return NULL;
         int new_cap = jit->profile_capacity == 0 ? 64 : jit->profile_capacity * 2;
-        jit->profiles = realloc(jit->profiles, sizeof(JitProfile*) * new_cap);
+        jit->profiles = SAGE_REALLOC(jit->profiles, sizeof(JitProfile*) * (size_t)new_cap);
         for (int i = jit->profile_capacity; i < new_cap; i++) {
             jit->profiles[i] = NULL;
         }
@@ -104,7 +106,7 @@ JitProfile* jit_get_profile(JitState* jit, int func_id) {
         jit->profile_count = func_id + 1;
     }
     if (!jit->profiles[func_id]) {
-        jit->profiles[func_id] = calloc(1, sizeof(JitProfile));
+        jit->profiles[func_id] = SAGE_ALLOC(sizeof(JitProfile));
     }
     return jit->profiles[func_id];
 }
@@ -208,8 +210,9 @@ void jit_emit_u64(JitEmitter* em, uint64_t v) {
 
 int jit_new_label(JitEmitter* em) {
     if (em->label_count >= em->label_capacity) {
+        if (em->label_capacity > INT_MAX / 2) return -1;
         em->label_capacity = em->label_capacity == 0 ? 16 : em->label_capacity * 2;
-        em->labels = realloc(em->labels, sizeof(size_t) * em->label_capacity);
+        em->labels = SAGE_REALLOC(em->labels, sizeof(size_t) * (size_t)em->label_capacity);
     }
     int id = em->label_count++;
     em->labels[id] = 0; // unbound
@@ -224,8 +227,9 @@ void jit_bind_label(JitEmitter* em, int label) {
 
 static void add_fixup(JitEmitter* em, size_t patch_pos, int label_id) {
     if (em->fixup_count >= em->fixup_capacity) {
+        if (em->fixup_capacity > INT_MAX / 2) return;
         em->fixup_capacity = em->fixup_capacity == 0 ? 16 : em->fixup_capacity * 2;
-        em->fixups = realloc(em->fixups, sizeof(*em->fixups) * em->fixup_capacity);
+        em->fixups = SAGE_REALLOC(em->fixups, sizeof(*em->fixups) * (size_t)em->fixup_capacity);
     }
     em->fixups[em->fixup_count].patch_pos = patch_pos;
     em->fixups[em->fixup_count].label_id = label_id;

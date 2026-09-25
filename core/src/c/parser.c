@@ -8,6 +8,7 @@
 #include "token.h"
 #include "gc.h"
 #include "repl.h"
+#include "interpreter.h"
 
 static Token current_token;
 static Token previous_token;
@@ -16,7 +17,7 @@ static Token previous_token;
 static Expr* parse_proc_expr(void);
 
 // Parser recursion depth limit to prevent stack overflow on malicious input
-#define MAX_PARSER_DEPTH 100000
+#define MAX_PARSER_DEPTH 2000
 static int parser_depth = 0;
 
 static int token_span(const Token* token) {
@@ -27,6 +28,13 @@ static void parser_report(Token token, int span, const char* message, const char
     sage_print_token_diagnosticf("error", &token, NULL, span > 0 ? span : 1,
                                  help, "%s", message);
     sage_error_exit();
+}
+
+static void parser_check_stack(void) {
+    if (sage_stack_danger()) {
+        parser_report(current_token, 1, "maximum call stack depth exceeded",
+                      "reduce the nesting depth of this source file");
+    }
 }
 
 static const char* parser_expected_help(TokenType expected, Token got) {
@@ -974,6 +982,7 @@ static Expr* assignment() {
 }
 
 static Expr* expression() {
+    parser_check_stack();
     if (++parser_depth > MAX_PARSER_DEPTH) {
         char message[128];
         snprintf(message, sizeof(message),
@@ -1099,6 +1108,7 @@ static Stmt* print_statement() {
 }
 
 static Stmt* block() {
+    parser_check_stack();
     if (++parser_depth > MAX_PARSER_DEPTH) {
         char message[128];
         snprintf(message, sizeof(message),

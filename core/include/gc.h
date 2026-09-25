@@ -127,7 +127,7 @@ typedef struct ARCMeta {
 } ARCMeta;
 
 // Backward compat: "marked" maps to color != WHITE
-#define gc_header_marked(h) ((h)->color != GC_WHITE)
+#define gc_header_marked(h) (__atomic_load_n(&(h)->color, __ATOMIC_ACQUIRE) != GC_WHITE)
 
 /* Get the cached length of a Sage string from its GC header (O(1)).
  * String payload size includes the null terminator, so length is size - 1. */
@@ -151,7 +151,7 @@ typedef struct {
 // Mark stack for concurrent gray-object processing
 typedef struct {
     void** items;       // Array of GCHeader pointers
-    int count;
+    atomic_int count;
     int capacity;
 } GCMarkStack;
 
@@ -168,7 +168,7 @@ typedef struct {
     unsigned long next_gc_bytes;
     int next_gc_objects;
     int enabled;
-    int pin_count;
+    atomic_int pin_count;
 
     // Concurrent GC state
     int phase;                  // Current GC phase

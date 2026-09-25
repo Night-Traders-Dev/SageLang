@@ -42,6 +42,8 @@ int interpreter_sandbox_mode(void) {
 
 static int sandbox_denied(const char* capability);
 
+static sage_mutex_t inline_cache_mutex = SAGE_MUTEX_INITIALIZER;
+
 static uint64_t g_addr_salt = 0;
 
 static uint64_t scramble_ptr(void* ptr) {
@@ -104,16 +106,19 @@ __thread int g_ast_gc_env_temp_count = 0;
     else { if (g_ast_gc_env_temp_count > 0) g_ast_gc_env_temp_count--; } \
 } while(0)
 
+#ifdef SAGE_BARE_METAL
 static Stmt* g_generator_resume_target = NULL;
-
-// For-loop generator resume state: the innermost for-loop that suspended on
-// a yield, plus its cursor, so next() can continue mid-iteration.
-// NOTE: the iterable Value itself is kept in the generator's gen_env (GC
-// traced); only the statement pointer and index live in these statics.
 static Stmt* g_gen_for_stmt = NULL;
 static int   g_gen_for_index = 0;
 static int   g_gen_for_captured = 0;
 static GeneratorValue* g_active_generator = NULL;
+#else
+static __thread Stmt* g_generator_resume_target = NULL;
+static __thread Stmt* g_gen_for_stmt = NULL;
+static __thread int   g_gen_for_index = 0;
+static __thread int   g_gen_for_captured = 0;
+static __thread GeneratorValue* g_active_generator = NULL;
+#endif
 
 // Scope-local forced assignment (used for generator resume bookkeeping)
 static void env_force_set(Env* env, const char* name, int len, Value v) {
@@ -188,7 +193,11 @@ static Value vm_get_gas_limit_native(int argCount, Value* args) {
 
 // JIT state — global, initialized by --jit mode
 #include "jit.h"
+#ifdef SAGE_BARE_METAL
 static JitState* g_jit = NULL;
+#else
+static __thread JitState* g_jit = NULL;
+#endif
 void interpreter_set_jit(JitState* jit) { g_jit = jit; }
 JitState* interpreter_get_jit(void) { return g_jit; }
 
@@ -298,6 +307,10 @@ static int stack_danger(void) {
     if (t_stack_origin == NULL) t_stack_origin = &probe;
 #pragma GCC diagnostic pop
     return (t_stack_origin - &probe) > stack_guard_budget();
+}
+
+int sage_stack_danger(void) {
+    return stack_danger();
 }
 
 static int stmt_contains_target(Stmt* stmt, Stmt* target) {
@@ -3539,25 +3552,33 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 if (val_result.is_throwing) return val_result;
                 Value value = val_result.value;
 
-                // Inline caching for variable assignment
+                int cache_hit = 0;
+                EnvNode* cached_node = NULL;
+                sage_mutex_lock(&inline_cache_mutex);
                 if (expr->as.set.cached_env_id == env->id) {
-                    EnvNode* node = expr->as.set.cached_node;
+                    cached_node = expr->as.set.cached_node;
+                    cache_hit = cached_node != NULL;
+                }
+                sage_mutex_unlock(&inline_cache_mutex);
+                if (cache_hit) {
                     if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
-                        arc_assign_value(&node->value, value);
+                        arc_assign_value(&cached_node->value, value);
                     } else {
-                        GC_WRITE_BARRIER(node->value);
-                        node->value = value;
+                        GC_WRITE_BARRIER(cached_node->value);
+                        cached_node->value = value;
                     }
                     return EVAL_RESULT(value);
                 }
-                
+
                 // Try to update the variable in the environment
                 Env* found_env = NULL;
                 EnvNode* found_node = NULL;
                 if (env_get_node(env, var_name.start, var_name.length, &found_env, &found_node)) {
                     if (found_env == env) {
-                        expr->as.set.cached_env_id = env->id;
+                        sage_mutex_lock(&inline_cache_mutex);
                         expr->as.set.cached_node = found_node;
+                        expr->as.set.cached_env_id = env->id;
+                        sage_mutex_unlock(&inline_cache_mutex);
                     }
                     if (gc.mode == GC_MODE_ARC || gc.mode == GC_MODE_ORC) {
                         arc_assign_value(&found_node->value, value);
@@ -3600,16 +3621,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             if (inner.is_throwing) return inner;
             Value v = inner.value;
             if (IS_THREAD(v)) {
-                // Join the thread and return its result
-                ThreadValue* tv = AS_THREAD(v);
-                if (!tv->joined) {
-                    sage_thread_t* handle = (sage_thread_t*)tv->handle;
-                    sage_thread_join(*handle, NULL);
-                    tv->joined = 1;
-                }
-                typedef struct { FunctionValue* func; int arg_count; Value* args; Value result; } SageThreadData;
-                SageThreadData* td = (SageThreadData*)tv->data;
-                return EVAL_RESULT(td->result);
+                return EVAL_RESULT(sage_join_thread_value(v));
             }
             // If not a thread, just return the value (already resolved)
             return EVAL_RESULT(v);
@@ -3619,20 +3631,27 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
             return eval_binary(&expr->as.binary, env);
 
         case EXPR_VARIABLE: {
-            // Inline caching for variable lookup
-            if (expr->as.variable.cached_env_id == env->id) {
-                return EVAL_RESULT(expr->as.variable.cached_node->value);
+            int cache_hit = 0;
+            Value cached_value = sage_nil;
+            sage_mutex_lock(&inline_cache_mutex);
+            if (expr->as.variable.cached_env_id == env->id && expr->as.variable.cached_node != NULL) {
+                cached_value = expr->as.variable.cached_node->value;
+                cache_hit = 1;
+            }
+            sage_mutex_unlock(&inline_cache_mutex);
+            if (cache_hit) {
+                return EVAL_RESULT(cached_value);
             }
 
-            
             Token t = expr->as.variable.name;
             Env* found_env = NULL;
             EnvNode* found_node = NULL;
             if (env_get_node(env, t.start, t.length, &found_env, &found_node)) {
-                // Only cache if found in the current environment (most frequent case in loops)
                 if (found_env == env) {
-                    expr->as.variable.cached_env_id = env->id;
+                    sage_mutex_lock(&inline_cache_mutex);
                     expr->as.variable.cached_node = found_node;
+                    expr->as.variable.cached_env_id = env->id;
+                    sage_mutex_unlock(&inline_cache_mutex);
                 }
                 return EVAL_RESULT(found_node->value);
             }

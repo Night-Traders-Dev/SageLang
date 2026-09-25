@@ -3,7 +3,7 @@ gc_disable()
 # test_interpreter.sage - Tests for the self-hosted interpreter
 # -----------------------------------------
 
-from interpreter import new_interpreter, run_source, exec_program
+from interpreter import new_interpreter, run_source, exec_program, value_to_string
 from parser import parse_source
 
 let pass_count = 0
@@ -271,6 +271,18 @@ proc test_inheritance():
     pass_count = pass_count + 1
     print "  [PASS] test_inheritance (visual: Rex, Rex says woof)"
 
+proc test_instance_string():
+    class Animal:
+        proc init(name):
+            self.name = name
+        proc __str__(self):
+            return "Animal:" + self.name
+    class Dog(Animal):
+        proc init(name):
+            super.init(name)
+    let value = Dog("Rex")
+    assert_eq(value_to_string(value), "Animal:Rex", "instance __str__")
+
 # === Run all tests ===
 print "=== Interpreter Tests ==="
 print ""
@@ -293,6 +305,7 @@ test_break_continue()
 test_booleans()
 test_nil()
 test_inheritance()
+test_instance_string()
 
 print ""
 print "=== Results: " + str(pass_count) + " passed, " + str(fail_count) + " failed ==="

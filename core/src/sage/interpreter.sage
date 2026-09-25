@@ -510,6 +510,13 @@ proc value_to_string(val):
                 return "<class " + val["name"] + ">"
             if vtype == "instance":
                 let cls = val["class"]
+                let string_method = find_method(cls, "__str__")
+                if string_method != nil:
+                    let method_env = env_new(string_method["closure"])
+                    env_define(method_env, "self", val)
+                    let result = exec_stmt(string_method["body"], method_env)
+                    if result["kind"] == SIGNAL_RETURN:
+                        return value_to_string(result["value"])
                 return "<" + cls["name"] + " instance>"
         # Regular dict
         let ks = dict_keys(val)
@@ -856,6 +863,28 @@ proc _n_hash(args):
     return hash(args[0])
 proc _n_sizeof(args):
     return sizeof(args[0])
+proc _n_atomic_new(args):
+    let atom = {}
+    atom["value"] = args[0]
+    return atom
+proc _n_atomic_load(args):
+    return args[0]["value"]
+proc _n_atomic_store(args):
+    args[0]["value"] = args[1]
+    return nil
+proc _n_atomic_add(args):
+    let old = args[0]["value"]
+    args[0]["value"] = old + args[1]
+    return old
+proc _n_atomic_cas(args):
+    if args[0]["value"] == args[1]:
+        args[0]["value"] = args[2]
+        return true
+    return false
+proc _n_atomic_exchange(args):
+    let old = args[0]["value"]
+    args[0]["value"] = args[1]
+    return old
 
 _native_dispatch["gc_mode"] = _n_gc_mode
 _native_dispatch["gc_set_arc"] = _n_gc_set_arc
@@ -876,6 +905,12 @@ _native_dispatch["path_is_dir"] = _n_path_is_dir
 _native_dispatch["path_is_file"] = _n_path_is_file
 _native_dispatch["hash"] = _n_hash
 _native_dispatch["sizeof"] = _n_sizeof
+_native_dispatch["atomic_new"] = _n_atomic_new
+_native_dispatch["atomic_load"] = _n_atomic_load
+_native_dispatch["atomic_store"] = _n_atomic_store
+_native_dispatch["atomic_add"] = _n_atomic_add
+_native_dispatch["atomic_cas"] = _n_atomic_cas
+_native_dispatch["atomic_exchange"] = _n_atomic_exchange
 
 proc _n_val_tag(args):
     return val_tag(args[0])
@@ -970,6 +1005,12 @@ proc init_builtins(env, profile = "general"):
     # Hash and sizeof
     register_native(env, "hash", 1)
     register_native(env, "sizeof", 1)
+    register_native(env, "atomic_new", 1)
+    register_native(env, "atomic_load", 1)
+    register_native(env, "atomic_store", 2)
+    register_native(env, "atomic_add", 2)
+    register_native(env, "atomic_cas", 3)
+    register_native(env, "atomic_exchange", 2)
 
 # -----------------------------------------
 # Expression evaluation

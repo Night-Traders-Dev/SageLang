@@ -565,7 +565,7 @@ static char* repl_readline(const char* prompt) {
         size_t len = 0;
         int c;
         while ((c = fgetc(stdin)) != EOF && c != '\n') {
-            if (len + 1 >= cap) { cap *= 2; line = realloc(line, cap); }
+            if (len + 1 >= cap) { cap *= 2; line = SAGE_REALLOC(line, cap); }
             line[len++] = (char)c;
         }
         if (c == EOF && len == 0) { free(line); return NULL; }
@@ -751,7 +751,7 @@ static char* repl_readline(const char* prompt) {
             // Printable character — insert at cursor position
             if (len + 1 >= capacity) {
                 capacity *= 2;
-                char* new_buf = realloc(buf, capacity);
+                char* new_buf = SAGE_REALLOC(buf, capacity);
                 if (!new_buf) continue;
                 buf = new_buf;
             }
@@ -2150,7 +2150,7 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
         size_t line_len = strlen(line);
         if (line_len + 2 > buf_capacity) {
             buf_capacity = line_len + 256;
-            buffer = realloc(buffer, buf_capacity);
+            buffer = SAGE_REALLOC(buffer, buf_capacity);
         }
         memcpy(buffer, line, line_len);
         buffer[line_len] = '\n';
@@ -2178,7 +2178,7 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                 // Ensure buffer has enough space
                 while (buf_len + cont_len + 2 > buf_capacity) {
                     buf_capacity *= 2;
-                    buffer = realloc(buffer, buf_capacity);
+                    buffer = SAGE_REALLOC(buffer, buf_capacity);
                 }
                 memcpy(buffer + buf_len, cont, cont_len);
                 buf_len += cont_len;
@@ -2274,7 +2274,7 @@ static char** jit_get_imports(const char* source, const char* filename, int* cou
                 if (strcmp(imports[i], name) == 0) { found = 1; break; }
             }
             if (found) continue;
-            if (cnt >= cap) { cap *= 2; imports = realloc(imports, sizeof(char*) * cap); }
+            if (cnt >= cap) { cap *= 2; imports = SAGE_REALLOC(imports, sizeof(char*) * (size_t)cap); }
             imports[cnt++] = SAGE_STRDUP(name);
         }
     }
@@ -2294,7 +2294,7 @@ static void jit_collect_deps(const char* module_name, JitModuleEntry** entries, 
     if (!path) { fprintf(stderr, "Warning: Could not resolve module '%s'\n", module_name); return; }
     char* source = read_file(path);
     if (!source) { free(path); return; }
-    if (*count >= *cap) { *cap *= 2; *entries = realloc(*entries, sizeof(JitModuleEntry) * *cap); }
+    if (*count >= *cap) { *cap *= 2; *entries = SAGE_REALLOC(*entries, sizeof(JitModuleEntry) * (size_t)*cap); }
     int idx = (*count)++;
     (*entries)[idx].name = SAGE_STRDUP(module_name);
     (*entries)[idx].source = source;

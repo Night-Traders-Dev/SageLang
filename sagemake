@@ -48,20 +48,32 @@ def step_fail(detail="failed"):
     console.print(f" [bold red]✗[/bold red] [red]{detail}[/red]")
     sys.exit(1)
 
-def run_cmd(cmd, cwd=None, capture_output=True, shell=False):
+def run_cmd(cmd, cwd=None, capture_output=True, shell=False, env=None):
     try:
         if shell:
-            result = subprocess.run(cmd, cwd=cwd, capture_output=capture_output, text=True, shell=True)
+            result = subprocess.run(cmd, cwd=cwd, capture_output=capture_output, text=True, shell=True, env=env)
         else:
-            result = subprocess.run(cmd, cwd=cwd, capture_output=capture_output, text=True)
+            result = subprocess.run(cmd, cwd=cwd, capture_output=capture_output, text=True, env=env)
         return result
     except Exception as e:
         return None
 
+def available_cpus():
+    try:
+        return max(1, len(os.sched_getaffinity(0)))
+    except (AttributeError, OSError):
+        return max(1, os.cpu_count() or 1)
+
+
 def build_jobs(args):
-    requested = max(1, int(getattr(args, "jobs", 2)))
-    available = max(1, os.cpu_count() or 1)
-    return str(min(requested, available))
+    requested = getattr(args, "jobs", None)
+    if requested is None:
+        requested = os.environ.get("SAGE_BUILD_JOBS") or available_cpus()
+    try:
+        requested = int(requested)
+    except (TypeError, ValueError):
+        requested = available_cpus()
+    return str(max(1, min(requested, available_cpus())))
 
 
 def install_prefix(args):
@@ -130,7 +142,7 @@ def check_dependencies(args):
         step_fail("Missing required dependencies (gcc/make).")
     return found_deps
 
-def prepare_workspace():
+def prepare_workspace(args):
     section("Preparing workspace")
     
     if Path("sagesync").exists() and os.access("sagesync", os.X_OK):
@@ -144,16 +156,15 @@ def prepare_workspace():
         else:
             step_ok("skipped (not a git repo)")
 
-    step("Removing old build artifacts")
-    if Path("core/build_sage").exists():
-        shutil.rmtree("core/build_sage")
-    if Path("core/build_selfhost").exists():
-        shutil.rmtree("core/build_selfhost")
-    run_cmd(["make", "-C", "core", "clean"])
-    # git clean -fdx is dangerous to run blindly from a script without user prompt usually
-    # but build.sh did it. I'll skip it for safety unless requested? 
-    # Actually, let's stick to what build.sh did but maybe just build artifacts.
-    step_ok("clean")
+    if getattr(args, "fresh", False):
+        step("Removing old build artifacts")
+        for d in ("core/build_sage", "core/build_sage_tsan", "core/build_selfhost"):
+            if Path(d).exists():
+                shutil.rmtree(d)
+        run_cmd(["make", "-C", "core", "clean"])
+        step_ok("clean")
+    else:
+        step_ok("reused (use --fresh for a clean build)")
 
 def update_submodules():
     """
@@ -216,7 +227,14 @@ def build_sage(args, found_deps):
         section("Building with Make")
         step("Compiling sage (C sources)")
         start = time.time()
-        res = run_cmd(["make", "-C", "core", "-j" + build_jobs(args), "sage", "sage-lsp"], capture_output=False)
+        make_env = dict(os.environ)
+        if args.tsan:
+            # The Makefile hard-assigns CFLAGS, so extra flags go through the
+            # CFLAGS_EXTRA/LDFLAGS_EXTRA hooks it merges in.
+            make_env["CFLAGS_EXTRA"] = make_env.get("CFLAGS_EXTRA", "") + " -fsanitize=thread -fno-omit-frame-pointer"
+            make_env["LDFLAGS_EXTRA"] = make_env.get("LDFLAGS_EXTRA", "") + " -fsanitize=thread"
+        res = run_cmd(["make", "-C", "core", "-j" + build_jobs(args), "sage", "sage-lsp"],
+                      capture_output=False, env=make_env)
         if res and res.returncode == 0:
             elapsed = int(time.time() - start)
             step_ok(f"{elapsed}s")
@@ -225,10 +243,15 @@ def build_sage(args, found_deps):
         return Path("core/sage"), Path("core/sage-lsp")
     else:
         section("Configuring CMake (self-hosted Sage mode)")
-        step("Running cmake -DBUILD_SAGE=ON")
-        build_dir = Path("core/build_sage")
+        build_dir = Path("core/build_sage_tsan") if args.tsan else Path("core/build_sage")
+        cmake_args = ["-DBUILD_SAGE=ON"]
+        if args.tsan:
+            cmake_args.append("-DENABLE_TSAN=ON")
+        step("Running cmake " + " ".join(cmake_args))
+        # Sanitizer builds live in their own tree so they never clobber the
+        # normal build artifacts (and the two build trees stay cache-warm).
         build_dir.mkdir(exist_ok=True)
-        res = run_cmd(["cmake", "-DBUILD_SAGE=ON", ".."], cwd=build_dir)
+        res = run_cmd(["cmake"] + cmake_args + [".."], cwd=build_dir)
         if res and res.returncode == 0:
             step_ok(VERSION)
         else:
@@ -267,8 +290,10 @@ def run_tests(args, sage_bin):
         os.chmod("sage", 0o755)
 
     section("C Interpreter Tests")
-    step("Interpreter tests (241)")
-    res = run_cmd(["bash", "core/tests/run_tests.sh"], shell=False)
+    step("Unit tests")
+    test_env = dict(os.environ)
+    test_env["SAGE"] = str(sage_bin.resolve())
+    res = run_cmd(["bash", "testsuite/unit/run_tests.sh"], shell=False, env=test_env)
     if res and res.returncode == 0:
         pass_match = re.search(r'(\d+) passed', res.stdout)
         pass_count = pass_match.group(1) if pass_match else "unknown"
@@ -277,13 +302,14 @@ def run_tests(args, sage_bin):
         step_warn("failed")
         console.print(res.stdout[-500:] if res else "No output")
 
-    section("Self-Hosted Tests")
-    step("Full self-hosted suite")
-    res = run_cmd(["make", "-C", "core", "test-selfhost"], capture_output=False)
-    if res and res.returncode == 0:
-        step_ok("all suites passed")
-    else:
-        step_warn("some tests failed")
+    if not args.selfhost:
+        section("Self-Hosted Tests")
+        step("Full self-hosted suite")
+        res = run_cmd(["make", "-C", "core", "test-selfhost"], capture_output=False)
+        if res and res.returncode == 0:
+            step_ok("all suites passed")
+        else:
+            step_warn("some tests failed")
 
 def perform_install(args):
     if not args.install:
@@ -316,7 +342,7 @@ def perform_install(args):
         section("Building release C binary for sage-c")
         step("Compiling sage via Make (release)")
         res = run_cmd(
-            ["make", "-C", "core", "-B", "-j" + jobs, f"PREFIX={prefix}", "sage", "sage-lsp"],
+            ["make", "-C", "core", "-j" + jobs, f"PREFIX={prefix}", "sage", "sage-lsp"],
             capture_output=False,
         )
         if res and res.returncode == 0:
@@ -611,7 +637,8 @@ def main():
     parser.add_argument("version_arg", nargs="?", help="New version string (only for 'version' subcommand)")
     parser.add_argument("--install", action="store_true", help="Install after building")
     parser.add_argument("--prefix", default=os.environ.get("PREFIX", "/usr/local"), help="Installation prefix")
-    parser.add_argument("--jobs", type=int, default=2, help="Maximum parallel build jobs")
+    parser.add_argument("--jobs", type=int, default=None, help="Maximum parallel build jobs (default: available CPUs)")
+    parser.add_argument("--fresh", action="store_true", help="Remove build artifacts and perform a clean build")
     parser.add_argument("--skip-tests", action="store_true", help="Skip test suite")
     parser.add_argument("--make-only", action="store_true", help="Use Make instead of CMake")
     parser.add_argument("--train", action="store_true", help="Build the SL-TQ-LLM C trainer")
@@ -625,6 +652,8 @@ def main():
     parser.add_argument("--no-ssl", action="store_true", help="Disable OpenSSL support")
     parser.add_argument("--no-gpu", action="store_true", help="Disable all GPU features (Vulkan + GLFW)")
     parser.add_argument("--minimal", action="store_true", help="Disable all optional features (core only)")
+    parser.add_argument("--tsan", action="store_true",
+                        help="Build with ThreadSanitizer instrumentation (slow; use for race debugging)")
     args = parser.parse_args()
 
     if args.subcommand == "all":
@@ -648,7 +677,7 @@ def main():
     banner(f"SageLang Build Pipeline {VERSION}")
 
     found_deps = check_dependencies(args)
-    prepare_workspace()
+    prepare_workspace(args)
     compile_shaders(found_deps)
     
     sage_bin, lsp_bin = build_sage(args, found_deps)

@@ -2,11 +2,20 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <limits.h>
 #include "value.h"
 #include "gc.h"
 #include "module.h"
 
 const Value sage_nil = {VAL_NIL, {.number = 0.0}};
+
+static int collection_next_capacity(int current, int initial) {
+    if (current < 0 || current > INT_MAX / 2) {
+        fprintf(stderr, "Fatal: collection capacity limit exceeded\n");
+        abort();
+    }
+    return current == 0 ? initial : current * 2;
+}
 
 // ========== VALUE CONSTRUCTORS ==========
 
@@ -76,8 +85,10 @@ void bytes_push(Value* bytes_val, unsigned char byte) {
     if (bytes_val->type != VAL_BYTES) return;
     BytesValue* b = bytes_val->as.bytes;
     if (b->length >= b->capacity) {
-        b->capacity = b->capacity * 2;
-        b->data = SAGE_REALLOC(b->data, b->capacity);
+        size_t old_bytes = (size_t)b->capacity;
+        b->capacity = collection_next_capacity(b->capacity, 8);
+        b->data = SAGE_REALLOC(b->data, (size_t)b->capacity);
+        gc_track_external_resize(old_bytes, (size_t)b->capacity);
     }
     b->data[b->length++] = byte;
 }
@@ -239,8 +250,8 @@ void array_push(Value* arr, Value val) {
 
     if (a->count >= a->capacity) {
         size_t old_bytes = sizeof(Value) * (size_t)a->capacity;
-        a->capacity = a->capacity == 0 ? 4 : a->capacity * 2;
-        a->elements = SAGE_REALLOC(a->elements, sizeof(Value) * a->capacity);
+        a->capacity = collection_next_capacity(a->capacity, 4);
+        a->elements = SAGE_REALLOC(a->elements, sizeof(Value) * (size_t)a->capacity);
         gc_track_external_resize(old_bytes, sizeof(Value) * (size_t)a->capacity);
     }
     a->elements[a->count++] = val;
@@ -346,8 +357,8 @@ static void dict_grow(DictValue* d) {
     int old_capacity = d->capacity;
     DictEntry* old_entries = d->entries;
 
-    d->capacity = old_capacity == 0 ? 8 : old_capacity * 2;
-    d->entries = SAGE_ALLOC(sizeof(DictEntry) * d->capacity);
+    d->capacity = collection_next_capacity(old_capacity, 8);
+    d->entries = SAGE_ALLOC(sizeof(DictEntry) * (size_t)d->capacity);
     gc_track_external_resize(sizeof(DictEntry) * (size_t)old_capacity,
                              sizeof(DictEntry) * (size_t)d->capacity);
     memset(d->entries, 0, sizeof(DictEntry) * d->capacity);
@@ -367,7 +378,7 @@ void dict_set_len(Value* dict, const char* key, int len, Value value) {
     if (dict->type != VAL_DICT) return;
     DictValue* d = dict->as.dict;
 
-    if (d->capacity == 0 || d->count * 4 >= d->capacity * 3) {
+    if (d->capacity == 0 || (int64_t)d->count * 4 >= (int64_t)d->capacity * 3) {
         dict_grow(d);
     }
 
@@ -939,7 +950,8 @@ void print_value(Value v) {
     print_depth--;
 }
 
-int values_equal(Value a, Value b) {
+static int values_equal_at(Value a, Value b, int depth) {
+    if (depth > 128) return 0;
     if (a.type != b.type) return 0;
     switch (a.type) {
         case VAL_NUMBER: return AS_NUMBER(a) == AS_NUMBER(b);
@@ -962,7 +974,7 @@ int values_equal(Value a, Value b) {
             TupleValue* tb = b.as.tuple;
             if (ta->count != tb->count) return 0;
             for (int i = 0; i < ta->count; i++) {
-                if (!values_equal(ta->elements[i], tb->elements[i])) return 0;
+                if (!values_equal_at(ta->elements[i], tb->elements[i], depth + 1)) return 0;
             }
             return 1;
         }
@@ -984,7 +996,7 @@ int values_equal(Value a, Value b) {
             if (aa == ab) return 1;
             if (aa->count != ab->count) return 0;
             for (int i = 0; i < aa->count; i++) {
-                if (!values_equal(aa->elements[i], ab->elements[i])) return 0;
+                if (!values_equal_at(aa->elements[i], ab->elements[i], depth + 1)) return 0;
             }
             return 1;
         }
@@ -997,7 +1009,7 @@ int values_equal(Value a, Value b) {
                 if (da->entries[i].key == NULL) continue;
                 if (!dict_has(&b, da->entries[i].key)) return 0;
                 Value vb = dict_get(&b, da->entries[i].key);
-                if (!values_equal(da->entries[i].value, vb)) return 0;
+                if (!values_equal_at(da->entries[i].value, vb, depth + 1)) return 0;
             }
             return 1;
         }
@@ -1008,7 +1020,7 @@ int values_equal(Value a, Value b) {
             if (ia->class_def != ib->class_def) return 0;
             Value da; da.type = VAL_DICT; da.as.dict = ia->fields;
             Value db; db.type = VAL_DICT; db.as.dict = ib->fields;
-            return values_equal(da, db);
+            return values_equal_at(da, db, depth + 1);
         }
         case VAL_CLASS:
             return a.as.class_val == b.as.class_val;
@@ -1021,4 +1033,8 @@ int values_equal(Value a, Value b) {
         }
         default: return 0;
     }
+}
+
+int values_equal(Value a, Value b) {
+    return values_equal_at(a, b, 0);
 }

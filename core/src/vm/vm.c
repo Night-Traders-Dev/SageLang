@@ -4,12 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
 
 #include "module.h"
 #include "repl.h"
 #include "sage_thread.h"
 #include "gc.h"
 #include "gpu_api.h"
+#include "interpreter.h"
 
 extern __thread EnvRootNode* g_gc_root_stack;
 
@@ -353,6 +355,15 @@ typedef struct {
 } CallFrame;
 
 #define MAX_FRAMES 1024
+#define VM_MAX_LOOP_ITERATIONS 1000000ULL
+
+static int vm_consume_gas(long amount) {
+    ThreadState* ts = gc_get_thread_state();
+    if (ts == NULL || ts->gas_limit < 0) return 1;
+    if (amount < 0 || ts->gas_used > LONG_MAX - amount) return 0;
+    ts->gas_used += amount;
+    return ts->gas_used <= ts->gas_limit;
+}
 
 // Forward declarations
 static ExecResult vm_execute_generator(GeneratorValue* gen, Env* caller_env);
@@ -362,6 +373,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     if (env == NULL) return vm_error("VM environment is null.");
     if (!vm_validate_chunk(chunk)) return vm_error("Invalid VM bytecode artifact.");
     if (chunk->code_count == 0) return vm_normal(val_nil());
+    if (sage_stack_danger()) return vm_error("VM call stack depth limit exceeded.");
 
     ActiveVm vm;
     ExecResult result = vm_normal(val_nil());
@@ -402,6 +414,7 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 
     CallFrame frames[MAX_FRAMES];
     int frame_count = 0;
+    unsigned long long loop_iterations = 0;
 
     // Support generator resume: start from saved IP offset
     uint8_t* resume_start = chunk->code;
@@ -885,10 +898,21 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 ;
                  uint16_t target = READ_U16();
                   if (target >= frame->chunk->code_count) {
-                     result = vm_error("VM branch target is out of bounds.");
-                     goto done;
-                 }
-                 ip = frame->chunk->code + target;
+                      result = vm_error("VM branch target is out of bounds.");
+                      goto done;
+                  }
+                  if (target < (uint16_t)(ip - frame->chunk->code)) {
+                      if (++loop_iterations > VM_MAX_LOOP_ITERATIONS) {
+                          result = vm_error("VM loop iteration limit exceeded.");
+                          goto done;
+                      }
+                      if (!vm_consume_gas(10)) {
+                          result = vm_error("Out of gas");
+                          goto done;
+                      }
+                  }
+                  ip = frame->chunk->code + target;
+
                  DISPATCH();
              }
              BC_OP_JUMP_IF_FALSE: {
@@ -1115,6 +1139,14 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                  result = vm_error("Unexpected loop control opcode.");
                  goto done;
              BC_OP_LOOP_BACK: {
+                 if (++loop_iterations > VM_MAX_LOOP_ITERATIONS) {
+                     result = vm_error("VM loop iteration limit exceeded.");
+                     goto done;
+                 }
+                 if (!vm_consume_gas(10)) {
+                     result = vm_error("Out of gas");
+                     goto done;
+                 }
                  VM_CHECK_IP(2);
 ;
                  uint16_t offset = READ_U16();
