@@ -40,6 +40,12 @@ print await future     # 1764
 Additional C-level operations: `sub`, `fetch_and`, `fetch_or`. Safe for
 concurrent access across cores.
 
+The `std.atomic` module is a thin wrapper over these builtins, so its
+`atomic_int`, `atomic_flag`, and `create_spinlock` values are genuinely atomic
+rather than simulated. `std.atomic.cas` maps to a single `atomic_cas`,
+`test_and_set` to one `atomic_exchange`, `spin_lock` spins on a failed CAS, and
+`spin_try_lock` is a single non-blocking CAS.
+
 ## Semaphores (POSIX)
 
 - `sem_new(permits)` — Create a counting semaphore
@@ -80,6 +86,39 @@ The `lib/os/smp.sage` library provides higher-level multicore helpers:
 The GC mutex protects allocation and collection; environment list operations
 are mutex-protected. All concurrency primitives have RP2040 stubs for
 cross-platform compatibility.
+
+The following shared runtime state is additionally synchronized, so a program
+that spawns threads cannot corrupt the runtime itself:
+
+| State | Protection |
+| ----- | ---------- |
+| LLVM runtime class and method registries | Mutex around register/lookup/resolve |
+| LLVM runtime raw-memory registry | Mutex around alloc/read/write/free and cleanup registration |
+| Emitted-C method table and class registry | Locked during dispatch and registration |
+| GC mark-stack entry count | Atomic counter |
+| GC mark phase (color transitions) | Atomic compare-and-swap |
+| GC pin count | Atomic counter |
+| GC string intern table | Bounded, and drained at shutdown |
+| AST inline caches | Mutex on lookup and fill |
+| VM generator and JIT state | Thread-local storage on hosted builds |
+| Thread join | Atomic state machine |
+
+### Verifying with ThreadSanitizer
+
+A reproducible ThreadSanitizer build is available:
+
+```bash
+./sagemake --tsan              # CMake build into core/build_sage_tsan/
+./sagemake --tsan --skip-tests # build only
+```
+
+`--tsan` configures a separate CMake tree, so it never clobbers the normal
+build artifacts and both trees stay cache-warm. Equivalently, configure CMake
+directly with `-DENABLE_TSAN=ON` (rejected on the Pico target), or use the Make
+path with `CFLAGS_EXTRA`/`LDFLAGS_EXTRA`.
+
+The thread, GC, async, JIT/AOT, and memory unit suites run clean under
+ThreadSanitizer with this build.
 
 ## Standard Library Concurrency Modules
 

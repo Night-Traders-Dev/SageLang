@@ -1,5 +1,75 @@
 # Changelog
 
+## [4.2.8] - 2026-09-25
+
+### Concurrency and Thread Safety
+- **`std.atomic` backed by real atomics** (`core/lib/std/atomic.sage`): the module
+  previously simulated atomics with plain dictionaries, so `add`/`sub` lost
+  updates, `cas` and `test_and_set` were non-atomic read-then-write sequences,
+  and the spin lock never blocked. It is now a thin wrapper over the native
+  `atomic_new`/`atomic_load`/`atomic_store`/`atomic_add`/`atomic_cas`/
+  `atomic_exchange` builtins. Public API unchanged.
+- **LLVM runtime registries synchronized** (`core/src/c/llvm_runtime.c`): the
+  class/method registry and the raw-memory registry are now mutex-protected
+  across register, lookup, resolve, alloc/read/write/free, and cleanup
+  registration.
+- **Emitted-C runtime dispatch synchronized** (`core/src/c/compiler.c`): the
+  method table and class registry are locked during dispatch and registration.
+- **GC state made atomic** (`core/src/c/gc.c`, `core/include/gc.h`): mark-stack
+  entry count, color transitions (compare-and-swap), and the pin count are
+  atomic.
+- **Per-thread state isolated** (`core/src/c/interpreter.c`): AST inline caches
+  are mutex-guarded; VM generator and JIT state use thread-local storage on
+  hosted builds.
+- **Thread join uses an atomic state machine** (`core/src/c/stdlib.c`).
+- Self-hosted atomic compatibility handlers added in
+  `core/src/sage/interpreter.sage`; the C backend emits a real spinlock-based
+  atomic runtime.
+
+### Memory Safety and Resource Limits
+- **Parser depth limit** (`MAX_PARSER_DEPTH`, 2000) enforced with the existing
+  stack-proximity guard (CWE-674).
+- **VM loop limit** (`VM_MAX_LOOP_ITERATIONS`, 1,000,000) charged against VM gas,
+  so runaway loops fail cleanly instead of spinning (CWE-835).
+- **Bounded allocation growth** across collection, bytecode, JIT, and main
+  buffers: growth reallocations validate new size against current capacity and
+  fail cleanly on overflow (CWE-190 / CWE-789).
+- **Emitted-C runtime caps** for array, dict, range, join, and string-replacement
+  results, and for raw memory allocation.
+- **Bounded string interning**: the GC intern table has a maximum entry count and
+  is drained at shutdown, preventing unbounded growth in long-running programs.
+- Recursive `values_equal` depth is bounded.
+
+### Build Pipeline
+- Incremental builds are now the default; `--fresh` opts into a clean build.
+  SageMake no longer forces a recompile flag on every invocation.
+- Parallel job count is CPU-affinity aware (`sched_getaffinity`) and
+  overridable with `--jobs` or `SAGE_BUILD_JOBS`.
+- Makefile generates `-MMD -MP` dependency files and no longer declares broad
+  header prerequisites, so an edited header rebuilds only dependents.
+- CMake compiles core sources once into a shared `sage_core_objects` library
+  reused by the `sage` and `sage-lsp` targets, with a separate GPU object list.
+- Fixed a stale test path in SageMake (`core/tests/run_tests.sh` →
+  `testsuite/unit/run_tests.sh`) and stopped duplicating self-host tests in
+  selfhost mode.
+- **Reproducible ThreadSanitizer build**: new `ENABLE_TSAN` CMake option and
+  `./sagemake --tsan`. The TSan build uses its own `core/build_sage_tsan/` tree
+  so it never clobbers normal artifacts; `--fresh` cleans it too.
+
+### Fixes
+- Self-hosted `__str__` no longer inherits a stub from the base object, so
+  `str()` of a subclass instance returns `Class:value` as the C host does
+  (regression test in `testsuite/selfhost/test_interpreter.sage`).
+
+### Verification
+- 395/395 unit tests pass; `make -C core test` and all self-host suites pass.
+- ThreadSanitizer is clean across the thread, GC, async, JIT/AOT, and memory
+  unit suites, including the previously racing `smp` and `threadpool` cases.
+- Standalone LLVM compile/run of the compiler smoke test passes after the
+  runtime registry changes.
+- Clean `./sagemake --fresh --skip-tests` measured ~41s wall clock and ~282 MiB
+  peak RSS.
+
 ## [4.2.7] - 2026-09-23
 
 ### Integrated Changes

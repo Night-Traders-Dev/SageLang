@@ -11,9 +11,10 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.2.7 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.2.8 · **Spec version:** 2.0 · **License:** MIT
 
 ## Recent Updates
+- **v4.2.8 (Concurrency, Memory Safety & Build Pipeline)**: Made threaded execution and allocation paths race-free and bounded. `std.atomic` is now backed by real native atomics instead of simulated dictionaries, so counters, flags, CAS, and spin locks behave as documented under contention. The LLVM/AOT runtimes synchronize their class/method registries and raw-memory registry; GC mark-stack accounting, color CAS, and the pin count are atomic; the VM and generator/JIT caches are thread-local or lock-guarded; and thread join uses an atomic state machine. Added allocation-growth and overflow bounds across parser, bytecode, VM, JIT, main, and emitted-C runtime, plus parser depth and VM loop-iteration limits to convert runaway recursion and infinite loops into clean errors instead of OOM crashes. Build pipeline: incremental builds by default (`--fresh` for clean), CPU-affinity-aware job sizing (`--jobs`/`SAGE_BUILD_JOBS`), dependency-file generation and shared CMake object libraries to cut redundant compiles, and a reproducible opt-in ThreadSanitizer build (`./sagemake --tsan`, `ENABLE_TSAN=ON`) that builds into its own tree. Verified TSan-clean across all thread, GC, async, JIT/AOT, and memory suites; 395/395 unit tests and all self-host suites pass.
 - **v4.2.7 (PR Integration, Runtime Hardening & Documentation)**: Integrated reviewed security, AOT bounds, cjs2esm, and developer-documentation changes; added bounded validation for generated string repetition and socket receive helpers; synchronized version markers and transpiler documentation.
 - **v4.2.6 (CommonJS → ESM Transpiler Submodule Integration)**: Integrated `cjs2esm` CommonJS → ESM native transpiler library submodule under `core/lib/transpiler/cjs2esm/`. Written in SageLang, `cjs2esm` provides an AST-first multi-pass transformation pipeline featuring configurable Node.js target baselines (`node18`, `node20`, `node22`, `node24`), transformation modes (`strict`, `compat`, `discord`), CLI subcommands (`convert`, `inspect`, `check`, `report`), source maps generation (`--source-maps`), package manifest updates (`--update-package-json`), and dry-run static analysis (`--dry-run`).
 - **v4.2.5 (Performance Optimizations, Security Hardening & Version Alignment)**: Optimized datetime conversions (`std.datetime`) with O(1) civil calendar arithmetic (~12x speedup), string utilities (`std.unicode`, `std.fmt`, `strings`) via native `string_repeat` and `slice()` VM built-ins (~2.4x–3.75x speedup), path manipulation (`std.process`), and TUI component rendering (`rich.align`, `rich.columns`, `rich.measure`, `rich.padding`, `rich.panel`, `rich.progress`, `rich.rule`, `rich.table`, `rich.tree`). Hardened runtime utilities against resource exhaustion (CWE-400), allocation bounds (CWE-789), NULL dereferences (CWE-476), and CPU DoS (CWE-400) in SGVM (`sgvm_compiler`, `sgvm_main`), AOT runtime (`aot.c`), C compiler emission (`compiler.c`), and LLVM runtime (`llvm_runtime.c`).
@@ -128,6 +129,17 @@ print await future     # 1764
 
 ```bash
 make clean && make -j$(nproc)   # produces ./sage and ./sage-lsp
+```
+
+Or use the unified build system, which builds incrementally by default and
+sizes its job count to available CPUs:
+
+```bash
+./sagemake                 # incremental build + full test suite
+./sagemake --fresh         # clean build
+./sagemake --jobs 4        # cap parallel build jobs
+./sagemake --tsan          # reproducible ThreadSanitizer build
+./sagemake --install       # build, test, and install
 ```
 
 Desktop build links against `libm`, `pthread`, `dl`, `libcurl`, and OpenSSL.

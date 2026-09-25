@@ -56,6 +56,10 @@ SageLang enforces strict resource limits to prevent Denial of Service (DoS) atta
 
 - **SAGE_MAX_READ_SIZE**: 100MB. This limit is checked by `io.readfile`, `io.readbytes`, `tcp.recv`, and other I/O operations to prevent memory exhaustion (CWE-400).
 - **Recursion/Loop Limits**: Hard limits on recursion depth and loop iterations protect against infinite execution. Since v4.1.16 a stack-proximity guard additionally tracks real C-stack consumption per thread (budget = 75% of `RLIMIT_STACK`), so deep recursion fails with a catchable exception before the OS stack overflows — regardless of per-frame size.
+- **Parser depth limit**: 2000 nested levels (`MAX_PARSER_DEPTH`), enforced alongside the stack-proximity guard, so deeply nested input cannot exhaust the C stack during parsing (CWE-674).
+- **VM loop limit**: A backward jump cannot execute more than 1,000,000 iterations (`VM_MAX_LOOP_ITERATIONS`). The counter is charged against VM gas, so runaway loops terminate with a clean runtime error rather than spinning forever (CWE-835).
+- **Bounded allocation growth**: Collection, bytecode, JIT, and main-buffer growth reallocations check the new size against the current capacity and fail cleanly on overflow instead of wrapping (CWE-190 / CWE-789). Emitted-C runtime caps bound array, dict, range, join, and string-replacement results.
+- **Bounded string interning**: The GC string intern table has a maximum entry count and is drained at shutdown, preventing unbounded growth in long-running programs.
 
 ## Enforcement Matrix
 

@@ -85,6 +85,25 @@ and compiler backends.
 ./sagemake --minimal build   # Core only (no optional deps)
 ```
 
+### Build Control Flags
+
+| Flag | Effect |
+| ---- | ------ |
+| `--jobs N` | Cap parallel build jobs. Defaults to the number of available CPUs (CPU-affinity aware, via `sched_getaffinity`) rather than raw core count. `SAGE_BUILD_JOBS` is honored as an environment default. |
+| `--fresh` | Remove build artifacts and perform a clean build. Without it, builds are incremental by default and reuse existing objects. |
+| `--make-only` | Use the Makefile path instead of CMake. |
+| `--tsan` | Build with ThreadSanitizer instrumentation into a separate `core/build_sage_tsan/` tree. See [Concurrency_Guide.md](Concurrency_Guide.md#verifying-with-threadsanitizer). |
+| `--skip-tests` | Skip the test suite after building. |
+| `--install` | Install after building (honors `--prefix`, default `/usr/local`). |
+| `--selfhost` | Bootstrap and verify the self-hosted compiler. |
+
+Incremental builds are the default because SageMake no longer forces a
+recompile flag on every invocation. The Makefile also generates
+`-MMD -MP` dependency files so an edited header rebuilds only the translation
+units that include it, and the CMake build compiles core objects once into a
+shared `sage_core_objects` library that the `sage` and `sage-lsp` targets both
+link against.
+
 ## LLM / Training Targets
 
 ```bash
@@ -110,6 +129,8 @@ model and training details.
 | -------- | ------- | ------ |
 | `CC` | `gcc` | C compiler used for `make` builds |
 | `CFLAGS` | `-std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L` | Base compile flags for the desktop build |
+| `CFLAGS_EXTRA` | unset | Extra compile flags appended to `CFLAGS`; use this (not `CFLAGS`) to inject sanitizer or include-path flags, since the Makefile assigns `CFLAGS` itself |
+| `LDFLAGS_EXTRA` | unset | Extra link flags appended to `LDFLAGS`; likewise appended after platform detection |
 | `LDFLAGS` | `-lm -lpthread -ldl -lcurl -lssl -lcrypto` | Desktop link flags; `-lvulkan` added when Vulkan SDK detected; `-lGL` added when OpenGL detected; switches to `-lm` when `PICO_BUILD` is set |
 | `VULKAN` | `auto` | `auto` detects via pkg-config, `1` forces Vulkan, `0` disables |
 | `OPENGL` | `auto` | `auto` detects via pkg-config, `1` forces OpenGL, `0` disables |
@@ -126,6 +147,7 @@ model and training details.
 | `BUILD_SAGE` | `OFF` | Enables bootstrap/self-hosted build targets such as `sage_boot` and `test_selfhost` |
 | `ENABLE_DEBUG` | `OFF` | Adds `-g -O0 -DDEBUG` |
 | `ENABLE_TESTS` | `OFF` | Builds optional C test executables and enables `ctest` targets |
+| `ENABLE_TSAN` | `OFF` | Adds `-fsanitize=thread -fno-omit-frame-pointer` and links the ThreadSanitizer runtime. Not supported on the Pico target (configuration fails). |
 | `CMAKE_BUILD_TYPE` | generator default | Standard CMake build type summary field |
 | `CMAKE_C_COMPILER` | toolchain default | Chooses the C compiler shown in the config summary |
 | `CMAKE_INSTALL_PREFIX` | CMake default | Install destination for `cmake --install` |
