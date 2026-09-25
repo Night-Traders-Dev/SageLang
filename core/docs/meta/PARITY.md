@@ -1,6 +1,6 @@
 # SageLang Compiler Parity Report
 
-**Date:** 2026-09-25 · **Version:** v4.2.9 · **Method:** static feature matrices +
+**Date:** 2026-09-25 · **Version:** v4.2.10 · **Method:** static feature matrices +
 differential test harness (`testsuite/parity/run_parity.sh`, 28 cases × 3 stacks)
 
 Stacks compared:
@@ -13,35 +13,33 @@ Stacks compared:
 
 ## Verdict
 
-**27 of 28 cases are byte-identical across all three stacks. One case diverges.**
+**All 28 cases are byte-identical across all three stacks.**
 
-- **Parity:** 27 / 28 (**96 %**). The single gap is `14_match`, and it is the
-  same gap on both self-hosted stacks.
-- The gap is **binding patterns in `match`**. A bare-identifier case pattern is
-  evaluated as an ordinary expression instead of binding the value, so
-  `case n if n > 3:` reports `Undefined variable 'n'` and falls through to
-  `default`. The C host binds `n` and takes the guarded branch. Confirmed
-  present at v4.2.8 and unrelated to the concurrency work in v4.2.9.
+Parity was 27/28 at v4.2.9 with a single gap, `14_match`: the self-hosted
+compiler did not implement **binding patterns** in `match`, so a bare-identifier
+case pattern such as `case n if n > 3:` was evaluated as an ordinary expression
+and reported `Undefined variable 'n'` instead of binding `n` and taking the
+guarded branch. That is implemented in the self-hosted interpreter and codegen
+as of v4.2.10, and `testsuite/unit/33_match/match_binding.sage` covers it.
 
 > This section previously carried two contradictory verdicts in the same file
 > ("22 / 28" and "28 / 28 — FULL PARITY"). The number above is the measured
-> result of running the harness at this version, not a restatement of either.
+> result of running the harness at this version.
 
 ## Dynamic results (run_parity.sh)
 
 ```
-Parity: 27   Gaps: 1
-Gap: 14_match  (DIFF-SHI, DIFF-SHC)
+Parity: 28   Gaps: 0
 ```
 
-All other cases — 01-13 and 15-28 — produce byte-identical output across the C
-interpreter, self-hosted interpretation, and self-hosted compiled binaries.
+All 28 cases — 01-13 and 15-28 plus `14_match` — produce byte-identical output
+across the C interpreter, self-hosted interpretation, and self-hosted compiled
+binaries.
 
 ## Static coverage matrices
 
 Statements: **24/24 handled by both interpreters.**
 Expressions: aligned (C handles EXPR_SUPER inside its call path; Sage matches).
-The divergence above is *semantic*, not structural.
 
 ### Builtins
 

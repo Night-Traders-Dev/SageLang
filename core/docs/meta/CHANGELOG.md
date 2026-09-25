@@ -1,5 +1,34 @@
 # Changelog
 
+## [4.2.10] - 2026-09-25
+
+### Fixed
+- **Binding patterns in `match` for the self-hosted compiler.** A bare-identifier
+  case pattern is a *binding*, not a value to compare. The self-hosted
+  interpreter evaluated it as an ordinary expression, so `case n if n > 3:`
+  reported `Undefined variable 'n'` and fell through to `default`, where the C
+  host binds `n` and takes the guarded branch. This was the single remaining gap
+  in the differential parity harness (`14_match`).
+  - `core/src/sage/interpreter.sage`: a bare-identifier pattern now binds the
+    matched value in a clause-scoped child environment, so the guard and body
+    can see it and the name does not leak past the clause. `_` remains a
+    wildcard.
+  - `core/src/sage/compiler.sage`: the same for emitted C. The pattern name is
+    collected as a local (`collect_local_lets`) or global
+    (`collect_global_lets`) so it has a slot, and the clause emits
+    `sage_define_slot(&slot, match_value)` before evaluating the guard instead
+    of comparing with `sage_values_equal`. Top-level matches needed the global
+    collector, which had the same gap as the local one.
+
+### Verification
+- Differential parity harness: **28/28, no gaps** across the C interpreter,
+  self-hosted interpretation, and self-hosted compiled binaries.
+- New `testsuite/unit/33_match/match_binding.sage` covers unguarded bindings,
+  guards that pass, guards that fail through to the next case and to `default`,
+  binding a non-numeric value, the `_` wildcard, the binding not leaking past
+  its clause, and literal patterns still comparing by value.
+- 401/401 unit tests pass; `make -C core test` and all self-host suites pass.
+
 ## [4.2.9] - 2026-09-25
 
 ### Concurrency and Memory Safety

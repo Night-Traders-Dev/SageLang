@@ -11,15 +11,17 @@ feature cases through three stacks — the C interpreter, the self-hosted
 interpreter, and binaries compiled by the self-hosted compiler
 (`--emit-c` → gcc) — and compares their output byte for byte.
 
-**Current result: 27 of 28 cases are byte-identical across all three stacks**
-(v4.2.9). The single gap is `14_match`: the self-hosted compiler does not
-implement *binding patterns* in `match`, so a bare-identifier case pattern such
-as `case n if n > 3:` is evaluated as an ordinary expression and reports
-`Undefined variable 'n'` instead of binding `n` and taking the guarded branch.
+**All 28 cases are byte-identical across all three stacks** (v4.2.10).
 
-This was full parity at v4.2.0; binding patterns are the one known regression in
-coverage. See `core/docs/meta/PARITY.md` for the full matrix and the
-`--selfhost` mode of `sagemake` for one-command bootstrap verification.
+This was 27/28 at v4.2.9: the self-hosted compiler did not implement *binding
+patterns* in `match`, so a bare-identifier case pattern such as
+`case n if n > 3:` was evaluated as an ordinary expression and reported
+`Undefined variable 'n'` instead of binding `n` and taking the guarded branch.
+Both the self-hosted interpreter and the self-hosted codegen now treat a
+bare-identifier pattern as a binding, define it in a clause-scoped environment
+(interpreter) or slot (codegen) before evaluating the guard, and keep `_` as a
+wildcard that binds nothing. See `core/docs/meta/PARITY.md` for the full matrix
+and the `--selfhost` mode of `sagemake` for one-command bootstrap verification.
 
 ## Running the Self-Hosted Interpreter
 
