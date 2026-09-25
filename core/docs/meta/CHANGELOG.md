@@ -1,5 +1,83 @@
 # Changelog
 
+## [4.2.9] - 2026-09-25
+
+### Concurrency and Memory Safety
+- **GC allocation accounting race** (`core/src/c/gc.c`, `core/include/gc.h`):
+  `gc_alloc`/`gc_free` update `bytes_allocated`/`bytes_freed` under the GC
+  mutex, but `gc_track_external_resize` — called from `array_push` and the
+  collection growth path — updated the same fields with no lock. Concurrent
+  allocation produced 79 ThreadSanitizer data races. The counters are now
+  relaxed atomics, which keeps the lock-free growth path cheap instead of
+  serializing every array append behind the GC mutex.
+- **GC root scan vs. mutator** (`core/src/c/gc.c`, `core/src/c/interpreter.c`):
+  the collector's "STW" phases never stopped mutators, and it read each
+  thread's AST temp stack while that thread was writing it. A temporary pushed
+  and popped entirely inside the concurrent-mark window was seen by neither the
+  initial root scan nor the remark re-scan, so it could be freed while still
+  live. The write barrier cannot help: it only shades values being
+  *overwritten*, and a stack push has no old value. Added
+  `GC_SHADE_NEW_ROOT`, applied to both AST temp pushes and to environments
+  published on the GC root stack, and made the temp counts atomic so the
+  collector's acquire load pairs with the releasing push.
+- **Per-thread stack guard** (`core/src/c/interpreter.c`):
+  `stack_guard_budget()` derived the recursion budget from `RLIMIT_STACK`, which
+  only describes the main thread. `sage_raise_stack_limit()` raises that limit
+  to 512 MB so the main stack can grow on demand, but worker threads are created
+  by `pthread_create(NULL, ...)` and get a fixed 8 MB stack that a later
+  `setrlimit` cannot change. A worker was therefore granted a ~384 MB budget for
+  an 8 MB stack, and unbounded recursion in any thread segfaulted instead of
+  raising a catchable error. The budget is now measured from the calling
+  thread's real stack bounds via `pthread_getattr_np`.
+
+### GPU Threading
+- **GPU lifecycle serialized and bound to an owner thread**
+  (`core/src/c/graphics.c`): concurrent `gpu.initialize()`/`gpu.shutdown()`
+  corrupted the shared context and killed the process with `SIGABRT` or a
+  `SIGSEGV` inside the Vulkan loader. This was pre-existing and reproduced on
+  the unmodified build. Lifecycle calls now run under a recursive mutex, and
+  the context is bound to the thread that initialized it; a non-owner call is
+  refused with a diagnostic naming the call. The lock is load-bearing on its own:
+  `g_gpu_ctx.initialized` only becomes true at the *end* of a successful init, so
+  without mutual exclusion two threads both observed "not initialized" and both
+  built a context into the same globals. The remaining GPU surface (buffer,
+  shader and pipeline creation, draw, submit) is still single-threaded by
+  design, matching the Vulkan/OpenGL "externally synchronized" contract.
+- **C GPU layer synchronized** (`core/src/c/gpu_api.c`): the layer used by the
+  LLVM runtime and the ML backend took no lock at all. Guarded the lazy init, the
+  shared error buffer that `sgpu_last_error()` returned as a raw pointer, the
+  function-local static behind `sgpu_device_name()`, and the platform override.
+  It uses a self-contained pthread lock, because this translation unit is
+  deliberately standalone and is linked into the LLVM runtime without the
+  thread module.
+
+### Build and Test Tooling
+- The unit runner takes `--jobs` (or `SAGE_TEST_JOBS`) to run several
+  interpreters at once; `sagemake` exposes the same budget through `--test-jobs`,
+  defaulting to the same CPU-affinity-aware count as `--jobs`. Each test runs in
+  its own subshell and reports through a per-test result file merged back in the
+  original order, so the report is byte-for-byte identical to a serial run.
+  Serial remains the default so CI output and ordering are unchanged. Measured
+  on 4 cores over 3 runs each: 41.7s serial to 28.8s at `--jobs 4`.
+- Added regression tests for the parser depth limit, allocation growth and
+  bounded value equality, the per-thread stack guard, concurrent GC allocation
+  under ThreadSanitizer, and GPU lifecycle (which guards the new locking
+  wrappers against self-deadlock).
+
+### Known Gap
+- The self-hosted compiler does not implement **binding patterns** in `match`.
+  A bare-identifier case pattern is evaluated as an ordinary expression, so
+  `case n if n > 3:` reports `Undefined variable 'n'` and falls through to
+  `default`, where the C host binds `n` and takes the guarded branch. This
+  accounts for the single parity gap (`14_match`) in the differential harness.
+  Pre-existing and unrelated to the changes above.
+
+### Verification
+- 400/400 unit tests pass; `make -C core test` and all self-host suites pass.
+- ThreadSanitizer is clean across the thread, GC, async, JIT/AOT, memory and
+  edge-case suites, including a concurrent-allocation stress test.
+- Differential parity harness: 27/28 (gap: `14_match`, see Known Gap).
+
 ## [4.2.8] - 2026-09-25
 
 ### Concurrency and Thread Safety

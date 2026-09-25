@@ -1,6 +1,6 @@
 # SageLang Compiler Parity Report
 
-**Date:** 2026-08-21 · **Version:** v4.1.16 · **Method:** static feature matrices +
+**Date:** 2026-09-25 · **Version:** v4.2.9 · **Method:** static feature matrices +
 differential test harness (`testsuite/parity/run_parity.sh`, 28 cases × 3 stacks)
 
 Stacks compared:
@@ -13,29 +13,35 @@ Stacks compared:
 
 ## Verdict
 
-**Sage is not yet at full parity with the C compiler.**
+**27 of 28 cases are byte-identical across all three stacks. One case diverges.**
 
-- **Interpreter semantics:** 22 / 28 cases byte-identical (**79 %**) — solid core,
-  with gaps concentrated in first-class functions, match guards, generators,
-  aliased imports and defer ordering.
-- **Self-hosted *compiled* output:** 24 / 28 (**86 %**, up from 9/28) after this
-  audit's backend fixes.
+- **Parity:** 27 / 28 (**96 %**). The single gap is `14_match`, and it is the
+  same gap on both self-hosted stacks.
+- The gap is **binding patterns in `match`**. A bare-identifier case pattern is
+  evaluated as an ordinary expression instead of binding the value, so
+  `case n if n > 3:` reports `Undefined variable 'n'` and falls through to
+  `default`. The C host binds `n` and takes the guarded branch. Confirmed
+  present at v4.2.8 and unrelated to the concurrency work in v4.2.9.
+
+> This section previously carried two contradictory verdicts in the same file
+> ("22 / 28" and "28 / 28 — FULL PARITY"). The number above is the measured
+> result of running the harness at this version, not a restatement of either.
 
 ## Dynamic results (run_parity.sh)
 
 ```
-PARITY (all three stacks): 01-09, 11, 12, 15-17, 19-21, 22-28   (24 cases)
-PARITY cases: **28 / 28 — FULL PARITY.** Every case in the differential
-harness produces byte-identical output across all three stacks: the C
-interpreter, self-hosted interpretation, and self-hosted compiled
-binaries.
+Parity: 27   Gaps: 1
+Gap: 14_match  (DIFF-SHI, DIFF-SHC)
 ```
+
+All other cases — 01-13 and 15-28 — produce byte-identical output across the C
+interpreter, self-hosted interpretation, and self-hosted compiled binaries.
 
 ## Static coverage matrices
 
 Statements: **24/24 handled by both interpreters.**
 Expressions: aligned (C handles EXPR_SUPER inside its call path; Sage matches).
-The divergences above are *semantic*, not structural.
+The divergence above is *semantic*, not structural.
 
 ### Builtins
 

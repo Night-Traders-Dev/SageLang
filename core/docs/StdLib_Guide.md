@@ -362,6 +362,13 @@ print atomic.cas(counter, 11, 20)   # true (swapped)
 print atomic.load(counter)          # 20
 ```
 
+Since v4.2.8 this module is a thin wrapper over the native `atomic_*` builtins
+rather than a simulation over plain dictionaries. `add`/`sub` no longer lose
+updates, `cas` and `test_and_set` are single atomic operations, and
+`spin_lock` actually spins instead of setting a flag that blocked nothing. The
+API is unchanged, so existing callers need no edits. The underlying builtins
+are listed in [Concurrency_Guide.md](Concurrency_Guide.md).
+
 ---
 
 ## Signal & Event Bus (`std.signal`)

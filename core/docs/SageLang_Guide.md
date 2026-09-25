@@ -1841,6 +1841,15 @@ refuses recursion once within the safety margin of the real OS limit, so deep
 or fat-framed call chains fail with a catchable exception instead of SIGSEGV.
 At startup the runtime also raises the soft stack limit to 512 MB when the
 hard limit permits, giving self-hosted double-interpretation chains headroom.
+Since v4.2.9 the margin is computed from the **calling thread's actual stack
+bounds** rather than from `RLIMIT_STACK`: the raised limit only describes the
+main thread, while worker threads are created with a fixed stack that a later
+`setrlimit` cannot change. Deriving the budget from the rlimit therefore
+overstated a worker's headroom (~384 MB for an 8 MB stack) and let runaway
+recursion in any thread segfault. Each thread now gets a budget for the stack
+it really has; on a typical Linux host a worker tops out cleanly at roughly 200
+levels of Sage recursion, while the main thread still reaches the 12000-level
+counter limit.
 
 **Null function guards**: The interpreter checks for null pointers in both `VAL_FUNCTION` and `VAL_NATIVE` call paths before dispatch. A null callee produces a runtime error and returns `nil`.
 

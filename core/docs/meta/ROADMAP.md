@@ -1,11 +1,50 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: June 9, 2026
-> **Current Phase**: v3.8.5 — REPL Statistics & Version 3.8.5 Release
+> **Last Updated**: September 25, 2026
+> **Current Version**: v4.2.9 · **Spec Version**: 2.0
+>
+> The phase-by-phase history below is retained for context but is ordered
+> oldest-first and its entries are not in release order; the authoritative
+> record of what shipped is [CHANGELOG.md](CHANGELOG.md), and current
+> cross-backend status is [PARITY.md](PARITY.md).
 
-This roadmap outlines the development journey of Sage, from its initial bootstrapping phase to becoming a fully self-hosted systems programming language with low-level capabilities.
+## Current status
+
+All 18 original development phases are complete: core logic, functions, types,
+GC, data structures, OOP, control flow, modules, security/performance
+hardening, low-level programming, compiler, concurrency, tooling,
+self-hosting, security audit, Vulkan graphics, Linux kernel support, and
+ML/training.
+
+Work is now driven by defect reports rather than phases. Recent releases have
+concentrated on runtime correctness under concurrency and on resource bounds:
+
+- **v4.2.9** — GC allocation-accounting and root-scan races, a per-thread
+  stack-guard budget that no longer overstates a worker's stack, serialized and
+  single-owner GPU lifecycle, and parallel unit-test execution.
+- **v4.2.8** — `std.atomic` backed by real atomics, synchronized LLVM/AOT
+  runtime registries, bounded allocation growth, parser depth and VM loop
+  limits, incremental builds, and a reproducible ThreadSanitizer build
+  (`./sagemake --tsan`).
+
+### Known open items
+
+- **Binding patterns in `match` for the self-hosted compiler.** A bare
+  identifier case pattern is evaluated as an ordinary expression, so
+  `case n if n > 3:` cannot see the binding. This is the single remaining gap in
+  the differential parity harness (see [PARITY.md](PARITY.md)).
+- **Full GPU surface is single-threaded.** Lifecycle calls are serialized and
+  bound to an owner thread, but buffer/shader/pipeline creation, draw and submit
+  are not internally locked. Vulkan and OpenGL contexts are externally
+  synchronized by spec, so callers must confine `gpu.*` to one thread for now.
+- **GC root traversal is not a true stop-the-world.** Marking is concurrent and
+  the stop-the-world phases do not park mutators; newly-rooted values are
+  shaded on publish to compensate, but a full safepoint protocol would be more
+  robust.
 
 ---
+
+## Historical phases
 
 ## v3.8.5: REPL Statistics & Version 3.8.5 Release (June 2026)
 
