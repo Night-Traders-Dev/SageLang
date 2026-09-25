@@ -40,6 +40,7 @@ get_keywords3.py
 builtins_c.txt
 core/build_sage/
 core/build_sage_tsan/
+core/boards/ESP32/sagelet/build/
 
 # Test build artifacts
 core/obj/
