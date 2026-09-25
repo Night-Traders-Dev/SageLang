@@ -56,6 +56,9 @@ ESPTOOL="${ESPTOOL:-python3 -m esptool}"
 
 mkdir -p "$OUT"
 
+# Extra flags for the support objects, e.g. -DSAGE_ENTRY_HEARTBEAT.
+EXTRA_CFLAGS="${SAGET_EXTRA_CFLAGS:-}"
+
 # --- step 2: swap the emitted stub block for the real HAL ------------------
 rewrite_stubs() {
     local in_c="$1" out_c="$2"
@@ -182,13 +185,15 @@ build_image() {
         -c "$OUT/$prefix.c" -o "$OUT/$prefix.o"
     "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" -c "$HERE/hal/esp32_hal.c"  -o "$OUT/hal_$prefix.o"
     "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" -c "$HERE/hal/esp32_newlib.c" -o "$OUT/newlib_$prefix.o"
-    "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" -c "$HERE/hal/startup.c"    -o "$OUT/startup_$prefix.o"
+    "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" $EXTRA_CFLAGS \
+        -c "$HERE/hal/startup.c" -o "$OUT/startup_$prefix.o"
+    "$CC" -c "$HERE/hal/entry.S" -o "$OUT/entry_$prefix.o"
 
     echo "  [4/5] link (load $load, text $text)"
     "$CC" -mlongcalls -nostartfiles -T "$ld" \
         -Wl,--gc-sections \
         -Wl,-Map,"$OUT/$prefix.map" \
-        "$OUT/startup_$prefix.o" "$OUT/$prefix.o" \
+        "$OUT/entry_$prefix.o" "$OUT/startup_$prefix.o" "$OUT/$prefix.o" \
         "$OUT/hal_$prefix.o" "$OUT/newlib_$prefix.o" \
         -Wl,--start-group -lc -lm -lgcc -Wl,--end-group \
         -o "$OUT/$prefix.elf"

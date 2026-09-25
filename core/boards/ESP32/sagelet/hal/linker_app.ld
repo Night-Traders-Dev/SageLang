@@ -12,7 +12,7 @@
  * entry stub sets a0 to a safe value rather than argc.
  */
 
-ENTRY(reset_handler)
+ENTRY(boot_entry)
 
 MEMORY
 {
