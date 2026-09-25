@@ -221,6 +221,64 @@ Module* create_graphics_module(ModuleCache* cache) {
 
 SageGPUContext g_gpu_ctx = {0};
 
+// Owner binding for the GPU context.
+//
+// g_gpu_ctx is a single process-wide context with no internal locking, and
+// Vulkan/OpenGL contexts are *externally synchronized* by spec: the
+// application must serialize access. Without an owner check, two threads
+// calling gpu.initialize()/gpu.shutdown() corrupt the context and take the
+// process down with SIGSEGV (verified: the unguarded build aborts or
+// segfaults). That is a memory-safety failure with a confusing symptom, so
+// lifecycle calls from a thread other than the one that brought the context
+// up are refused with a clear diagnostic instead.
+//
+// This deliberately does not make the whole GPU API thread-safe; confine
+// gpu.* calls to one thread and hand results to workers through channel /
+// threadpool / mutexes. See core/docs/Concurrency_Guide.md.
+#if defined(__unix__) || defined(__unix) || defined(__linux__) || defined(__APPLE__) || defined(__MACH__)
+#include <pthread.h>
+static pthread_t g_gpu_owner;
+static int g_gpu_owner_valid = 0;
+
+// Lifecycle calls are serialized. g_gpu_ctx.initialized only becomes 1 at the
+// *end* of a successful init, so without a lock two threads can both see 0 and
+// build two contexts into the same globals. Recursive because
+// gpu_shutdown_windowed() calls gpu_shutdown().
+static pthread_mutex_t g_gpu_lifecycle = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+#define GPU_LIFECYCLE_LOCK()   pthread_mutex_lock(&g_gpu_lifecycle)
+#define GPU_LIFECYCLE_UNLOCK() pthread_mutex_unlock(&g_gpu_lifecycle)
+
+static int gpu_is_owner_thread(void) {
+    return g_gpu_owner_valid && pthread_equal(pthread_self(), g_gpu_owner);
+}
+
+// Returns 0 when the caller is allowed to drive the context, 1 otherwise
+// (having already explained why). Callers must hold the lifecycle lock.
+static int gpu_check_owner(const char* op) {
+    if (!g_gpu_ctx.initialized) return 0;   // nothing to protect yet
+    if (gpu_is_owner_thread()) return 0;
+    fprintf(stderr,
+            "gpu: %s() refused: the GPU context is owned by another thread.\n"
+            "     Confine gpu.* calls to the thread that called gpu.initialize(),\n"
+            "     and pass results to workers via channel/threadpool/mutexes.\n",
+            op);
+    return 1;
+}
+
+static void gpu_claim_owner(void) {
+    g_gpu_owner = pthread_self();
+    g_gpu_owner_valid = 1;
+}
+
+static void gpu_release_owner(void) { g_gpu_owner_valid = 0; }
+#else
+#define GPU_LIFECYCLE_LOCK()   ((void)0)
+#define GPU_LIFECYCLE_UNLOCK() ((void)0)
+static int gpu_check_owner(const char* op) { (void)op; return 0; }
+static void gpu_claim_owner(void) { }
+static void gpu_release_owner(void) { }
+#endif
+
 // Swapchain format (set by init_windowed, used by FORMAT_SWAPCHAIN)
 static VkFormat g_active_swapchain_format = VK_FORMAT_B8G8R8A8_UNORM;
 
@@ -546,8 +604,11 @@ static Value gpu_has_vulkan(int argCount, Value* args) {
 }
 
 // gpu.init(app_name?, validation?) -> bool
-static Value gpu_init(int argCount, Value* args) {
+static Value gpu_init_impl(int argCount, Value* args) {
     if (g_gpu_ctx.initialized) {
+        // A second thread asking to initialize an already-live context is the
+        // exact shape that used to corrupt g_gpu_ctx, so refuse it.
+        if (gpu_check_owner("initialize")) return val_bool(0);
         fprintf(stderr, "gpu: already initialized\n");
         return val_bool(1);
     }
@@ -717,13 +778,17 @@ static Value gpu_init(int argCount, Value* args) {
     vkGetDeviceQueue(g_gpu_ctx.device, g_gpu_ctx.transfer_family, 0, &g_gpu_ctx.transfer_queue);
 
     g_gpu_ctx.initialized = 1;
+    gpu_claim_owner();
     return val_bool(1);
 }
 
 // gpu.shutdown()
-static Value gpu_shutdown(int argCount, Value* args) {
+static Value gpu_shutdown_impl(int argCount, Value* args) {
     (void)argCount; (void)args;
     if (!g_gpu_ctx.initialized) return val_nil();
+    // Tearing the context down from a non-owner thread while another thread is
+    // mid-call is what produced the segfault; refuse it.
+    if (gpu_check_owner("shutdown")) return val_nil();
 
     vkDeviceWaitIdle(g_gpu_ctx.device);
 
@@ -815,6 +880,7 @@ static Value gpu_shutdown(int argCount, Value* args) {
 
     vkDestroyInstance(g_gpu_ctx.instance, NULL);
     memset(&g_gpu_ctx, 0, sizeof(g_gpu_ctx));
+    gpu_release_owner();
     return val_nil();
 }
 
@@ -3715,7 +3781,7 @@ static Value gpu_poll_events(int argCount, Value* args) {
 
 // gpu.init_windowed(app_name, width, height, title, validation?) -> bool
 // Combines window creation + Vulkan init with surface support
-static Value gpu_init_windowed(int argCount, Value* args) {
+static Value gpu_init_windowed_impl(int argCount, Value* args) {
     if (argCount < 4) return val_bool(0);
     const char* app_name = IS_STRING(args[0]) ? AS_STRING(args[0]) : "SageLang GPU";
     int w = IS_NUMBER(args[1]) ? (int)AS_NUMBER(args[1]) : 800;
@@ -3960,6 +4026,7 @@ static Value gpu_init_windowed(int argCount, Value* args) {
     }
 
     g_gpu_ctx.initialized = 1;
+    gpu_claim_owner();
     return val_bool(1);
 }
 
@@ -5226,9 +5293,9 @@ static Value gpu_save_screenshot(int argCount, Value* args) {
 }
 
 // gpu.shutdown_windowed() -> nil  (cleanup window + vulkan)
-static Value gpu_shutdown_windowed(int argCount, Value* args) {
+static Value gpu_shutdown_windowed_impl(int argCount, Value* args) {
     // First do normal gpu shutdown
-    gpu_shutdown(argCount, args);
+    gpu_shutdown_impl(argCount, args);
 
     // Destroy swapchain resources
     if (g_swapchain_views) {
@@ -5253,6 +5320,42 @@ static Value gpu_shutdown_windowed(int argCount, Value* args) {
 }
 
 #endif // SAGE_HAS_GLFW
+
+// ---------------------------------------------------------------------------
+// Lifecycle wrappers
+//
+// These serialize context create/destroy and enforce single-owner access.
+// Wrapping whole functions (rather than sprinkling lock/unlock through the
+// bodies) keeps every early return balanced. The mutex is recursive so
+// shutdown_windowed -> shutdown does not self-deadlock.
+// ---------------------------------------------------------------------------
+static Value gpu_init(int argCount, Value* args) {
+    GPU_LIFECYCLE_LOCK();
+    Value v = gpu_init_impl(argCount, args);
+    GPU_LIFECYCLE_UNLOCK();
+    return v;
+}
+
+static Value gpu_init_windowed(int argCount, Value* args) {
+    GPU_LIFECYCLE_LOCK();
+    Value v = gpu_init_windowed_impl(argCount, args);
+    GPU_LIFECYCLE_UNLOCK();
+    return v;
+}
+
+static Value gpu_shutdown(int argCount, Value* args) {
+    GPU_LIFECYCLE_LOCK();
+    Value v = gpu_shutdown_impl(argCount, args);
+    GPU_LIFECYCLE_UNLOCK();
+    return v;
+}
+
+static Value gpu_shutdown_windowed(int argCount, Value* args) {
+    GPU_LIFECYCLE_LOCK();
+    Value v = gpu_shutdown_windowed_impl(argCount, args);
+    GPU_LIFECYCLE_UNLOCK();
+    return v;
+}
 
 // ============================================================================
 // Module Registration

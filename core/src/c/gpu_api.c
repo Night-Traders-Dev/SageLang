@@ -19,6 +19,20 @@
 #include <string.h>
 #include <math.h>
 
+// Self-contained lock. This translation unit is deliberately standalone (no GC
+// dependency) and is also linked into the LLVM runtime, which does not pull in
+// the thread module — so it must not depend on sage_mutex_* either. Bare-metal
+// and Pico builds are single-threaded, so the lock compiles away there.
+#if defined(PICO_BUILD) || defined(SAGE_BARE_METAL)
+#define GPU_LOCK()   ((void)0)
+#define GPU_UNLOCK() ((void)0)
+#else
+#include <pthread.h>
+static pthread_mutex_t g_gpu_mutex = PTHREAD_MUTEX_INITIALIZER;
+#define GPU_LOCK()   pthread_mutex_lock(&g_gpu_mutex)
+#define GPU_UNLOCK() pthread_mutex_unlock(&g_gpu_mutex)
+#endif
+
 #ifdef SAGE_HAS_GLFW
 #define GLFW_INCLUDE_NONE
 #ifdef SAGE_HAS_VULKAN
@@ -50,9 +64,33 @@
 // Error State
 // ============================================================================
 
+// The GPU API is reachable from any SageLang thread, and the state in this
+// file is process-global, so it is guarded by a single lock. Without it:
+//   * two threads entering sgpu_init() concurrently both observe
+//     g_initialized == 0 and both build a Vulkan instance / GL context into the
+//     same globals, leaking one device and leaving the backend struct torn;
+//   * SET_ERROR() snprintf()s into a shared buffer that sgpu_last_error()
+//     hands out as a raw pointer, so readers can see a half-written string.
+//
+// Functions that already hold the lock use the *_locked helpers; the
+// SET_ERROR/CLEAR_ERROR macros take it for everyone else.
 static char g_gpu_error[512] = {0};
-#define SET_ERROR(msg) snprintf(g_gpu_error, sizeof(g_gpu_error), "%s", (msg))
-#define CLEAR_ERROR() (g_gpu_error[0] = '\0')
+
+static void gpu_set_error_locked(const char* msg) {
+    snprintf(g_gpu_error, sizeof(g_gpu_error), "%s", (msg));
+}
+static void gpu_clear_error_locked(void) { g_gpu_error[0] = '\0'; }
+
+#define SET_ERROR(msg) do { \
+    GPU_LOCK(); \
+    gpu_set_error_locked(msg); \
+    GPU_UNLOCK(); \
+} while (0)
+#define CLEAR_ERROR() do { \
+    GPU_LOCK(); \
+    gpu_clear_error_locked(); \
+    GPU_UNLOCK(); \
+} while (0)
 
 // ============================================================================
 // Backend State
@@ -317,7 +355,12 @@ static VkMemoryPropertyFlags translate_mem(int sage_mem) {
 // Core Lifecycle
 // ============================================================================
 
-int sgpu_get_active_backend(void) { return g_active_backend; }
+int sgpu_get_active_backend(void) {
+    GPU_LOCK();
+    int backend = g_active_backend;
+    GPU_UNLOCK();
+    return backend;
+}
 int sgpu_has_vulkan(void) {
     #ifdef SAGE_HAS_VULKAN
     return 1;
@@ -334,8 +377,12 @@ int sgpu_has_opengl(void) {
 }
 
 int sgpu_init(const char* app_name, int validation) {
-    if (g_initialized) return 1;
-    CLEAR_ERROR();
+    // Hold the lock for the whole init. g_initialized is a plain flag, so
+    // without this two threads can both pass the check and both create a
+    // device into the same globals.
+    GPU_LOCK();
+    if (g_initialized) { GPU_UNLOCK(); return 1; }
+    gpu_clear_error_locked();
 
 #ifdef SAGE_HAS_VULKAN
     VkApplicationInfo app_info = {0};
@@ -355,7 +402,8 @@ int sgpu_init(const char* app_name, int validation) {
     }
 
     if (vkCreateInstance(&create_info, NULL, &g_vk.instance) != VK_SUCCESS) {
-        SET_ERROR("Failed to create Vulkan instance");
+        gpu_set_error_locked("Failed to create Vulkan instance");
+        GPU_UNLOCK();
         return 0;
     }
 
@@ -363,7 +411,8 @@ int sgpu_init(const char* app_name, int validation) {
     uint32_t dev_count = 0;
     vkEnumeratePhysicalDevices(g_vk.instance, &dev_count, NULL);
     if (dev_count == 0) {
-        SET_ERROR("No Vulkan-capable GPU found");
+        gpu_set_error_locked("No Vulkan-capable GPU found");
+        GPU_UNLOCK();
         return 0;
     }
     VkPhysicalDevice* devices = GPU_ALLOC(sizeof(VkPhysicalDevice) * dev_count);
@@ -415,7 +464,8 @@ int sgpu_init(const char* app_name, int validation) {
     dev_info.ppEnabledExtensionNames = dev_exts;
 
     if (vkCreateDevice(g_vk.physical_device, &dev_info, NULL, &g_vk.device) != VK_SUCCESS) {
-        SET_ERROR("Failed to create Vulkan device");
+        gpu_set_error_locked("Failed to create Vulkan device");
+        GPU_UNLOCK();
         return 0;
     }
 
@@ -425,31 +475,37 @@ int sgpu_init(const char* app_name, int validation) {
     g_vk.initialized = 1;
     g_active_backend = SAGE_GPU_BACKEND_VULKAN;
     g_initialized = 1;
+    GPU_UNLOCK();
     return 1;
 #else
     (void)app_name; (void)validation;
-    SET_ERROR("No GPU backend available (compile with SAGE_HAS_VULKAN or SAGE_HAS_OPENGL)");
+    gpu_set_error_locked("No GPU backend available (compile with SAGE_HAS_VULKAN or SAGE_HAS_OPENGL)");
+    GPU_UNLOCK();
     return 0;
 #endif
 }
 
 int sgpu_init_opengl(const char* app_name, int major, int minor) {
-    if (g_initialized) return 1;
-    CLEAR_ERROR();
+    GPU_LOCK();
+    if (g_initialized) { GPU_UNLOCK(); return 1; }
+    gpu_clear_error_locked();
 #ifdef SAGE_HAS_OPENGL
     (void)app_name; (void)major; (void)minor;
     g_active_backend = SAGE_GPU_BACKEND_OPENGL;
     g_initialized = 1;
+    GPU_UNLOCK();
     return 1;
 #else
     (void)app_name; (void)major; (void)minor;
-    SET_ERROR("OpenGL not available (compile with SAGE_HAS_OPENGL)");
+    gpu_set_error_locked("OpenGL not available (compile with SAGE_HAS_OPENGL)");
+    GPU_UNLOCK();
     return 0;
 #endif
 }
 
 void sgpu_shutdown(void) {
-    if (!g_initialized) return;
+    GPU_LOCK();
+    if (!g_initialized) { GPU_UNLOCK(); return; }
 #ifdef SAGE_HAS_VULKAN
     if (g_active_backend == SAGE_GPU_BACKEND_VULKAN && g_vk.initialized) {
         vkDeviceWaitIdle(g_vk.device);
@@ -476,20 +532,43 @@ void sgpu_shutdown(void) {
 #endif
     g_active_backend = SAGE_GPU_BACKEND_NONE;
     g_initialized = 0;
+    GPU_UNLOCK();
 }
 
+static char g_gpu_device_name[256] = {0};
+
 const char* sgpu_device_name(void) {
+    GPU_LOCK();
 #ifdef SAGE_HAS_VULKAN
     if (g_active_backend == SAGE_GPU_BACKEND_VULKAN && g_vk.initialized) {
         static VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(g_vk.physical_device, &props);
-        return props.deviceName;
+        snprintf(g_gpu_device_name, sizeof(g_gpu_device_name), "%s", props.deviceName);
+    } else {
+        snprintf(g_gpu_device_name, sizeof(g_gpu_device_name), "%s", "Unknown");
     }
+#else
+    snprintf(g_gpu_device_name, sizeof(g_gpu_device_name), "%s", "Unknown");
 #endif
-    return "Unknown";
+    const char* name = g_gpu_device_name;
+    GPU_UNLOCK();
+    return name;
 }
 
-const char* sgpu_last_error(void) { return g_gpu_error; }
+const char* sgpu_last_error(void) {
+    // Copy into scratch that rotates between two buffers so a caller reading
+    // the returned string is not racing a concurrent SET_ERROR. Two buffers are
+    // enough: errors are reported far less often than they are read.
+    static char scratch[2][512];
+    static int next = 0;
+    GPU_LOCK();
+    int slot = next;
+    next = !next;
+    memcpy(scratch[slot], g_gpu_error, sizeof(scratch[slot]));
+    scratch[slot][sizeof(scratch[slot]) - 1] = '\0';
+    GPU_UNLOCK();
+    return scratch[slot];
+}
 
 // ============================================================================
 // Buffer Operations
@@ -1124,19 +1203,22 @@ void sgpu_device_wait_idle(void) {
 
 // Window & Swapchain
 int sgpu_create_window(int w, int h, const char* title) {
+    GPU_LOCK();
 #ifdef SAGE_HAS_GLFW
-    if (!glfwInit()) return 0;
+    if (!glfwInit()) { GPU_UNLOCK(); return 0; }
     if (g_active_backend == SAGE_GPU_BACKEND_VULKAN)
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     g_window = glfwCreateWindow(w, h, title ? title : "SageLang", NULL, NULL);
-    if (!g_window) return 0;
+    if (!g_window) { GPU_UNLOCK(); return 0; }
     glfwSetKeyCallback(g_window, glfw_key_callback);
     glfwSetMouseButtonCallback(g_window, glfw_mouse_callback);
     glfwSetScrollCallback(g_window, glfw_scroll_callback);
     glfwSetFramebufferSizeCallback(g_window, glfw_resize_callback);
+    GPU_UNLOCK();
     return 1;
 #else
     (void)w; (void)h; (void)title;
+    GPU_UNLOCK();
     return 0;
 #endif
 }
@@ -1171,13 +1253,14 @@ int sgpu_init_windowed(const char* title, int w, int h, int validation) {
 }
 
 int sgpu_init_opengl_windowed(const char* title, int w, int h, int major, int minor) {
+    GPU_LOCK();
 #ifdef SAGE_HAS_GLFW
-    if (!glfwInit()) return 0;
+    if (!glfwInit()) { GPU_UNLOCK(); return 0; }
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, major);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, minor);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     g_window = glfwCreateWindow(w, h, title ? title : "SageLang", NULL, NULL);
-    if (!g_window) return 0;
+    if (!g_window) { GPU_UNLOCK(); return 0; }
     glfwMakeContextCurrent(g_window);
     glfwSetKeyCallback(g_window, glfw_key_callback);
     glfwSetMouseButtonCallback(g_window, glfw_mouse_callback);
@@ -1185,9 +1268,11 @@ int sgpu_init_opengl_windowed(const char* title, int w, int h, int major, int mi
     glfwSetFramebufferSizeCallback(g_window, glfw_resize_callback);
     g_active_backend = SAGE_GPU_BACKEND_OPENGL;
     g_initialized = 1;
+    GPU_UNLOCK();
     return 1;
 #else
     (void)title; (void)w; (void)h; (void)major; (void)minor;
+    GPU_UNLOCK();
     return 0;
 #endif
 }
@@ -1375,7 +1460,10 @@ int sgpu_compute_family(void) {
 
 // Platform
 void sgpu_set_platform(const char* p) {
-    if (p) snprintf(g_platform_override, sizeof(g_platform_override), "%s", p);
+    if (!p) return;
+    GPU_LOCK();
+    snprintf(g_platform_override, sizeof(g_platform_override), "%s", p);
+    GPU_UNLOCK();
 }
 const char* sgpu_get_platform(void) {
     if (g_platform_override[0]) return g_platform_override;
