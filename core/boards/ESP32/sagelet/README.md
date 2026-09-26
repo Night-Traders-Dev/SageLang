@@ -278,6 +278,22 @@ only stores to peripherals works while the first genuinely nested call sequence
 walks off the end of it. Both now start at the same top, as in a normal ESP-IDF
 application.
 
+### Fixed: `__getreent` was newlib's failing stub
+
+The linker had been saying this all along, past in the build output:
+
+```
+warning: __getreent is not implemented and will always fail
+```
+
+newlib's `malloc` is `_malloc_r(__getreent(), size)` -- the reentrancy struct
+is an argument, not something it looks up itself. A single-core bare-metal image
+has exactly one, so a static instance is the whole implementation. Without it
+the first heap allocation in the runtime operates on a NULL reent pointer.
+
+This is not the current blocker, but it was a real defect on the path and the
+warning is now gone.
+
 ### Open: startup stops at the OS body's first call
 
 Precisely located. With markers injected into the generated `main()`, the

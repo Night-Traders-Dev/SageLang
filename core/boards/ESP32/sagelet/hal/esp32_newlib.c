@@ -17,6 +17,25 @@ int hal_uart_init(uint32_t baud);
 int hal_uart_putc(int byte);
 int hal_uart_getc(void);
 
+/* ------------------------------------------------------------- reentrancy
+ *
+ * newlib's malloc is _malloc_r(__getreent(), size): the reentrancy struct is
+ * an argument, not something it looks up itself. A single-core bare-metal image
+ * has exactly one, so a static instance is the whole story.
+ *
+ * Without this the link pulls in newlib's fallback __getreent, which is a stub
+ * that fails -- the linker says so explicitly:
+ *
+ *   warning: __getreent is not implemented and will always fail
+ *
+ * and the first heap allocation in the runtime (the generated main()'s
+ * sage_make_array() calls for the esp32.sage constant tables) then operates on
+ * a NULL reent pointer. That is where startup stopped, silently and without a
+ * reset, long after the console itself was working.
+ */
+static struct _reent sage_reent;
+struct _reent *__getreent(void) { return &sage_reent; }
+
 /* ------------------------------------------------------------- syscalls */
 
 void *_sbrk_r(struct _reent *r, ptrdiff_t incr) {
