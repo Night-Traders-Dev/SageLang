@@ -92,6 +92,11 @@ proc enc_sbi(a, b):   return 0x9A00 | _io5(a) | (b & 7)
 proc enc_cbi(a, b):   return 0x9800 | _io5(a) | (b & 7)
 proc enc_sbis(a, b):  return 0x9B00 | _io5(a) | (b & 7)
 proc enc_sbic(a, b):  return 0x9900 | _io5(a) | (b & 7)
+
+## --- register bit skip (Rd, b) -----------------------------------------
+## bit8 = Rd[4], bits7..4 = Rd[3:0], bits2..0 = b, bit3 = 0
+proc enc_sbrs(rd, b):  return 0xFE00 | ((rd & 0x1F) << 4) | (b & 7)
+proc enc_sbrc(rd, b):  return 0xFC00 | ((rd & 0x1F) << 4) | (b & 7)
 proc enc_in(rd, a):   return 0xB000 | _d5(rd) | _a6(a)
 proc enc_out(a, rr):  return 0xB800 | _d5(rr) | _a6(a)
 

@@ -261,6 +261,10 @@ proc encode_instr(it, pc, syms, consts):
         return [avr_opcodes.enc_sbis(resolve_operand(a[0], syms, consts), resolve_operand(a[1], syms, consts))]
     if op == "sbic":
         return [avr_opcodes.enc_sbic(resolve_operand(a[0], syms, consts), resolve_operand(a[1], syms, consts))]
+    if op == "sbrs":
+        return [avr_opcodes.enc_sbrs(parse_reg(a[0]), resolve_operand(a[1], syms, consts))]
+    if op == "sbrc":
+        return [avr_opcodes.enc_sbrc(parse_reg(a[0]), resolve_operand(a[1], syms, consts))]
     if op == "in":
         return [avr_opcodes.enc_in(parse_reg(a[0]), resolve_operand(a[1], syms, consts))]
     if op == "out":
@@ -296,7 +300,7 @@ proc encode_instr(it, pc, syms, consts):
     if op == "lds":
         return avr_opcodes.enc_lds(parse_reg(a[0]), resolve_operand(a[1], syms, consts))
     if op == "sts":
-        return avr_opcodes.enc_sts(parse_reg(a[0]), resolve_operand(a[1], syms, consts))
+        return avr_opcodes.enc_sts(parse_reg(a[1]), resolve_operand(a[0], syms, consts))
 
     return [0x0000]
 

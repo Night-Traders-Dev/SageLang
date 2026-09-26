@@ -29,7 +29,7 @@ proc emit_hex(words_list, base):
             let w = words_list[j]
             let hi = (w >> 8) & 0xFF
             let lo = w & 0xFF
-            rec = rec + hex2(hi) + hex2(lo)
+            rec = rec + hex2(lo) + hex2(hi)
             cksum = cksum + hi + lo
             j = j + 1
         let chk = (0 - cksum) & 0xFF
