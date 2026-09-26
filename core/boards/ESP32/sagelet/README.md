@@ -323,66 +323,71 @@ the mistake documented above.
 
 ### Narrowed to: `sage_string_const` receives the wrong pointer
 
-**Correction first.** The previous commit claimed a specific root cause -- that
+**Correction first.** An earlier commit claimed a specific root cause -- that
 string-literal `l32r` pool entries resolve to newlib's assertion text at
-`0x4008d3ed` -- and that claim is withdrawn. It came from two measurements that
-were both wrong:
+`0x4008d3ed` -- and that claim is withdrawn. It came from two bad measurements:
+the pool word was picked as "the nearest preceding `l32r`", which belonged to a
+different call (`SAGE_EQ`), and the "pointer is outside every segment" reading
+came from a hand-rolled segment parser using the wrong offset. esptool's own
+`image-info` shows the image is well formed: `0x12c` at `0x3ffb0000`, `0xd084` at
+`0x40080000`, `0xf38` at `0x4008d088`.
 
-- The pool word was picked as "the nearest preceding `l32r`", which turned out to
-  belong to a *different* call (`SAGE_EQ`) entirely.
-- The "image is malformed / pointer is outside every segment" reading came from
-  a hand-rolled segment-table parser using the wrong offset. esptool's own
-  `image-info` shows the image is well formed: three real segments, `0x12c` at
-  `0x3ffb0000`, `0xd084` at `0x40080000`, `0xf38` at `0x4008d088`.
+What is established, by direct on-the-wire measurement:
 
-What is actually established, by direct on-the-wire measurement:
-
-1. Startup reaches `sage_string_const` and stops inside it. A marker emitted at
-   function entry arrives; one emitted after `sage_intern_hash()` does not.
+1. Startup reaches `sage_string_const` and stops inside it. A marker at function
+   entry arrives; one after `sage_intern_hash()` does not.
 2. It is the string path. Neutralising only the 16 `sage_string_const(...)` call
    sites lets the OS start; neutralising only the 9 `sage_make_array(...)` sites
    does not.
-3. The pointer it receives is a *valid loaded address in the wrong place*.
-   Dumping the argument straight to the UART gives `0x4008d317`, which lies in
-   segment 2 (rodata) and whose bytes are `b'gelet> '` -- three bytes into the
-   literal `"sagelet> "`. The literal that call should have received was
-   `"open"`, which is elsewhere in the same section.
+3. The pointer it receives is a valid loaded address in the *wrong place*, and
+   it lands inside a different literal each time. `tools/ptr_dump.py`, injected
+   by `SAGE_PTR_DUMP=1`, reports the argument directly:
 
-So the bug is that a string-literal address is computed wrong, landing a short,
-*varying* distance from the intended literal. The offset has been observed at
-3 bytes, 0xC3 and ~0xD93 in different builds -- so it is layout-dependent, not a
-constant.
+   | build | pointer | bytes there |
+   | --- | --- | --- |
+   | stock | `0x4008d317` | `b'gelet> '` -- 3 bytes into `"sagelet> "` |
+   | `-mlongcalls` off | `0x4008d03f` | `b'tOS for ESP32'` -- 6 bytes into `"SageletOS for ESP32"` |
 
-Ruled out by direct measurement, all of which changed nothing:
+The `sage_intern_hash()` loop is `while (*s)`, so a pointer into the middle of a
+literal never finds its terminator and spins. That is the whole failure: a
+string-literal address is computed wrong.
+
+**`-mlongcalls` is not the cause.** Turning it off was the obvious test -- the
+image is only ~57 KB so `l32r`'s +/-256 KB reach is not needed, and long-call
+expansion is what forces a distant literal pool. It changed the symptom and
+fixed nothing: startup markers still all pass, the pointer is still wrong
+(`0x4008d03f`), and the failure is no better. `-mlongcalls` has been restored
+rather than removed, since the experiment bought nothing.
+
+The offset is not constant either (+3, then +6), so this is not a fixed skew in
+the `l32r` encoding. It is layout-dependent, and the wrong address moves around
+with unrelated changes -- which is also the signature of the failure *point*
+moving when the flag changed.
+
+Ruled out by measurement, none of which changed anything:
 
 - the toolchain and this linker script -- a four-line C file with the same flags
-  and the same linker script resolves its literal exactly;
+  and script resolves its literal exactly;
 - removing `-mtext-section-literals`;
 - removing `-ffunction-sections -fdata-sections`;
 - merging `.iram0.rodata` into `.iram0.text` (reverted, it bought nothing);
-- excluding library rodata from IRAM0 with `EXCLUDE_FILE`.
+- excluding library rodata from IRAM0 with `EXCLUDE_FILE`;
+- removing `-mlongcalls`.
 
-One structural observation that is solid: newlib's own code lands *inside* the
-runtime's region -- `memcpy`, `memset`, `__divdf3` and `__udivdi3` sit at
-`0x4008c000`-`0x4008d081`, because `*(.text .text.*)` collects library text into
-the same IRAM0 output section. So the program's literals and the C library's are
-interleaved in one section, and the misresolved addresses land in that mixture.
-Excluding library *rodata* did not fix it, which suggests the mechanism is in the
-literal/expansion machinery rather than in what the wildcard collects: the
-object carries 436 `R_XTENSA_ASM_EXPAND` pseudo-relocations, which are the
-assembler's `l32r`/pool expansion hooks and are the part that grows with code
-size.
+One solid structural observation: newlib's own code lands *inside* the runtime's
+region -- `memcpy`, `memset`, `__divdf3` and `__udivdi3` sit at
+`0x4008c000`-`0x4008d081` -- because `*(.text .text.*)` collects library text
+into the same IRAM0 output section, so program literals and the C library's are
+interleaved. Excluding library *rodata* did not help, so the mechanism is more
+likely the literal-expansion machinery: the object carries 436
+`R_XTENSA_ASM_EXPAND` pseudo-relocations, the assembler's `l32r`/pool expansion
+hooks, which are the part that scales with code size.
 
-Next steps, in order of cheapness:
-
-- compile the generated C with `-mlongcalls` **off** and check whether literals
-  resolve. The long-call expansion is what forces the distant literal pool, and
-  the image is only ~57 KB, so `l32r`'s +/-256 KB reach is not actually needed.
-- if that does not help, bisect by size: build a cut-down generated C (only
-  `main`, no `esp32.sage` globals) and see whether literals resolve. That
-  separates "large TU" from "specific construct".
-- separately worth fixing regardless: keep library text out of the IRAM0 text
-  section so the program's own layout is not interleaved with newlib's.
+Next step, now that there is a reliable probe: bisect by size. Build a cut-down
+generated C -- `main` with the value-init block removed, which is known to get
+the OS started -- and check whether literals resolve there. That separates "this
+TU is too big" from "this construct is broken", and unlike the flag flailing it
+narrows the search in one step. `tools/ptr_dump.py` makes the check a one-liner.
 
 ### Open: the second blocker
 
@@ -391,42 +396,3 @@ then stops before its first `hw.uart_puts`, i.e. in `led_init()` or on entry to
 `repl()`. Given what A turned out to be, this is quite likely the same
 misresolution in a different callee rather than an independent fault, so it
 should be re-checked once literals resolve.
-
-### JTAG
-
-`gdb-multiarch` (with Xtensa support) and `openocd` v0.12.0-esp32 are both
-installed. **No probe is connected** — the only ESP32 device on the bus is the
-CP2102 UART bridge, which carries no JTAG lines. A session needs an external
-probe (FTDI/ESP-PROG/CMSIS-DAP will all work; the `ftdi`, `cmsis-dap` and
-`esp_usb_jtag` adapter configs ship with this openocd) wired to the board:
-
-| board pin | signal |
-| --- | --- |
-| GPIO15 | TCK |
-| GPIO13 | TMS |
-| GPIO12 | TDI |
-| GPIO14 | TDO |
-| GND | ground |
-
-Optionally `EN` and `GPIO0` for reset/boot control. With that in place:
-
-```
-openocd -f interface/ftdi/esp32_devkitj_v1.cfg -f target/esp32.cfg
-gdb-multiarch core/boards/ESP32/sagelet/build/sagelet_os.elf \
-    -ex 'target remote :3333' -ex 'monitor reset halt' -ex continue
-```
-
-## Flashing by hand
-
-```bash
-python3 -m esptool --port /dev/ttyUSB0 --baud 115200 --no-stub \
-    erase-region 0x0 0x400000
-
-python3 -m esptool --port /dev/ttyUSB0 --baud 460800 --no-stub \
-    write-flash --flash-mode dio --flash-size detect --flash-freq 40m \
-    -z 0x1000  core/boards/ESP32/sagelet/build/sagelet_os.bin
-```
-
-The board currently holds this experimental image and will reset-loop. To
-restore a usable device, see the CircuitPython recovery recipe in
-`core/docs/esp32.md`, or flash an Arduino sketch with `arduino-cli`.

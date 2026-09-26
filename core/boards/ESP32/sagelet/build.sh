@@ -172,6 +172,16 @@ build_image() {
     echo "  [2/5] rewrite hw stubs"
     rewrite_stubs "$OUT/$prefix.raw.c" "$OUT/$prefix.c"
 
+    # Optional diagnostic: dump the pointer sage_string_const() receives, straight
+    # to the UART, four bytes little-endian. Reading the argument on the wire is
+    # the only trustworthy way to see what a literal resolved to -- inferring it
+    # from disassembly has twice picked the wrong pool word.
+    #   SAGE_PTR_DUMP=1 bash build.sh app
+    if [ -n "${SAGE_PTR_DUMP:-}" ]; then
+        "$HERE/tools/ptr_dump.py" "$OUT/$prefix.c"
+        echo "  [probe] pointer dump injected"
+    fi
+
     echo "  [3/5] compile"
     "$CC" \
         -mlongcalls -mtext-section-literals \
