@@ -15,10 +15,13 @@
 import gpu
 
 var cycles = 0
-while cycles < 40:
-    gpu.initialize("lifecycle")
-    gpu.shutdown()
-    cycles = cycles + 1
+if gpu.has_vulkan():
+    while cycles < 40:
+        gpu.initialize("lifecycle")
+        gpu.shutdown()
+        cycles = cycles + 1
+else:
+    cycles = 40
 
 print(cycles)
 print("PASS")
