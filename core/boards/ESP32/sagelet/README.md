@@ -321,78 +321,76 @@ touches. `hal_gpio_set_pull()` is now an explicit no-op for the same reason --
 `SETUP`/`PUPD` are not in this IDF's `gpio_reg.h` at all, and guessing is exactly
 the mistake documented above.
 
-### Root cause found: string literals are misresolved in the linked image
+### Narrowed to: `sage_string_const` receives the wrong pointer
 
-Blocker A is now explained, and it is not the runtime.
+**Correction first.** The previous commit claimed a specific root cause -- that
+string-literal `l32r` pool entries resolve to newlib's assertion text at
+`0x4008d3ed` -- and that claim is withdrawn. It came from two measurements that
+were both wrong:
 
-`l32r` pool entries that should hold string-literal addresses hold unrelated
-addresses instead. Measured on the current image:
+- The pool word was picked as "the nearest preceding `l32r`", which turned out to
+  belong to a *different* call (`SAGE_EQ`) entirely.
+- The "image is malformed / pointer is outside every segment" reading came from
+  a hand-rolled segment-table parser using the wrong offset. esptool's own
+  `image-info` shows the image is well formed: three real segments, `0x12c` at
+  `0x3ffb0000`, `0xd084` at `0x40080000`, `0xf38` at `0x4008d088`.
 
-| | address | bytes there |
-| --- | --- | --- |
-| the call site loads | `0x4008d3ed` | `b' \x00assertion "%s" failed: fil'` |
-| the literal actually is | `0x4008c3e1` | `b'SageletOS\x000.'` |
+What is actually established, by direct on-the-wire measurement:
 
-The pointer lands in unrelated read-only data instead of on the literal. Three
-copies of `"SageletOS"` all exist at `0x4008c3e1`, `0x4008c3f1` and `0x4008c40c`,
-and none of them is what the code uses.
+1. Startup reaches `sage_string_const` and stops inside it. A marker emitted at
+   function entry arrives; one emitted after `sage_intern_hash()` does not.
+2. It is the string path. Neutralising only the 16 `sage_string_const(...)` call
+   sites lets the OS start; neutralising only the 9 `sage_make_array(...)` sites
+   does not.
+3. The pointer it receives is a *valid loaded address in the wrong place*.
+   Dumping the argument straight to the UART gives `0x4008d317`, which lies in
+   segment 2 (rodata) and whose bytes are `b'gelet> '` -- three bytes into the
+   literal `"sagelet> "`. The literal that call should have received was
+   `"open"`, which is elsewhere in the same section.
 
-That is fatal here because of what the runtime does with the pointer.
-`sage_string_const()` starts with:
+So the bug is that a string-literal address is computed wrong, landing a short,
+*varying* distance from the intended literal. The offset has been observed at
+3 bytes, 0xC3 and ~0xD93 in different builds -- so it is layout-dependent, not a
+constant.
 
-```c
-unsigned long h = sage_intern_hash(value) & (SAGE_INTERN_CAPACITY - 1);
-```
+Ruled out by direct measurement, all of which changed nothing:
 
-and `sage_intern_hash()` is `while (*s) { ... }`. Given a pointer into the middle
-of the VM's bytecode the loop walks looking for a terminating NUL that is not
-there, and the OS stops -- silently, with no reset and no backtrace, which is
-exactly the signature every image in this bring-up had. Instrumenting
-`sage_string_const` confirms it precisely: the marker at function entry arrives,
-the one after the hash never does.
+- the toolchain and this linker script -- a four-line C file with the same flags
+  and the same linker script resolves its literal exactly;
+- removing `-mtext-section-literals`;
+- removing `-ffunction-sections -fdata-sections`;
+- merging `.iram0.rodata` into `.iram0.text` (reverted, it bought nothing);
+- excluding library rodata from IRAM0 with `EXCLUDE_FILE`.
 
-The isolation was clean. Neutralising only the 16 `sage_string_const(...)` call
-sites lets the OS start; neutralising only the 9 `sage_make_array(...)` sites
-leaves it hanging. So it is the string path, not allocation, not the GC (which
-was re-tested in a configuration that actually reaches this code, unlike the
-first attempt), and not stack size.
+One structural observation that is solid: newlib's own code lands *inside* the
+runtime's region -- `memcpy`, `memset`, `__divdf3` and `__udivdi3` sit at
+`0x4008c000`-`0x4008d081`, because `*(.text .text.*)` collects library text into
+the same IRAM0 output section. So the program's literals and the C library's are
+interleaved in one section, and the misresolved addresses land in that mixture.
+Excluding library *rodata* did not fix it, which suggests the mechanism is in the
+literal/expansion machinery rather than in what the wildcard collects: the
+object carries 436 `R_XTENSA_ASM_EXPAND` pseudo-relocations, which are the
+assembler's `l32r`/pool expansion hooks and are the part that grows with code
+size.
 
-What is *not* the cause, all checked directly:
+Next steps, in order of cheapness:
 
-- The toolchain and this linker script are fine: a four-line C file with the same
-  `-mlongcalls -mtext-section-literals` and the same linker script resolves its
-  literal correctly (`l32r a10, 0x40080038`, literal at `0x40080038`).
-- Removing `-mtext-section-literals` -- no change.
-- Removing `-ffunction-sections -fdata-sections` -- no change.
-- Merging `.iram0.rodata` into `.iram0.text` so literals and code share one
-  output section -- no change. Reverted rather than shipped, since it bought
-  nothing.
-
-So it needs the large generated translation unit to reproduce, which points at
-the Xtensa literal-pool machinery at scale. Two things stand out in the object
-and are the next things to look at:
-
-- 436 `R_XTENSA_ASM_EXPAND` pseudo-relocations, which are the assembler's
-  `l32r`/pool expansion hooks and the part of the mechanism that grows with size.
-- 299 relocations against `.rodata`, and this linker script's `*(.rodata
-  .rodata.*)` sits inside the IRAM0 output section -- so it also sweeps in
-  *library* read-only data. Newlib's assertion text is what the misresolved
-  pointer lands on, which is consistent with the program's literals and the
-  library's rodata being interleaved in one section.
-
-The next experiment is to stop the wildcard collecting library rodata (restrict
-it to the generated program's own `.rodata.*`, or exclude libc's sections
-explicitly) and re-measure whether a pool entry then equals its literal's
-address. That is a cheap, decisive check and needs no hardware.
+- compile the generated C with `-mlongcalls` **off** and check whether literals
+  resolve. The long-call expansion is what forces the distant literal pool, and
+  the image is only ~57 KB, so `l32r`'s +/-256 KB reach is not actually needed.
+- if that does not help, bisect by size: build a cut-down generated C (only
+  `main`, no `esp32.sage` globals) and see whether literals resolve. That
+  separates "large TU" from "specific construct".
+- separately worth fixing regardless: keep library text out of the IRAM0 text
+  section so the program's own layout is not interleaved with newlib's.
 
 ### Open: the second blocker
 
 With the value-init block bypassed, the OS is entered (`hw.uart_init` runs) and
 then stops before its first `hw.uart_puts`, i.e. in `led_init()` or on entry to
-`repl()`. The GPIO map fix was on that path and did not clear it; disabling the
-GC did not either. Given what A turned out to be, this is quite likely the same
-misresolution showing up in a different callee rather than an independent fault,
-so it should be re-checked once literals resolve.
+`repl()`. Given what A turned out to be, this is quite likely the same
+misresolution in a different callee rather than an independent fault, so it
+should be re-checked once literals resolve.
 
 ### JTAG
 
