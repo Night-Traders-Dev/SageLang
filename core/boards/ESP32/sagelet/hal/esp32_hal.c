@@ -237,6 +237,13 @@ uint32_t hal_uart_init(uint32_t baud) {
     REG_UART0_CONF0 |= UART_CONF0_CLK_EN;
     REG_UART0_INT_ENA = 0;   /* polled TX, no interrupts */
 
+#if defined(SAGE_HAL_TRACE)
+    {   /* temporary bisection marker: proves the OS reached uart_init */
+        static const char k = 'U';
+        while ((((REG_UART0_STATUS >> 16) & 0xFFu) >= 128u)) {}
+        REG_UART0_FIFO = (uint32_t)(unsigned char)k;
+    }
+#endif
     return baud;
 }
 

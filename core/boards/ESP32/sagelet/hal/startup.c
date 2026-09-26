@@ -231,7 +231,7 @@ void reset_handler(void) {
     for (uint32_t* b = &_bss_start; b < &_bss_end; ) {
         *b++ = 0;
     }
-    TRACE("3-bss");
+    TRACE('x');
 
     /* Copy .data from its load address in the memory-mapped flash window. */
     {
@@ -241,7 +241,7 @@ void reset_handler(void) {
             *dst++ = *src++;
         }
     }
-    TRACE("4-data");
+    TRACE('x');
 
     /* Deliberately leave CPU1 alone. The ROM bootloader has already released
      * it into its own idle loop, and re-pointing RTC_AUTOSTART_CPUS_REG from an
@@ -251,7 +251,7 @@ void reset_handler(void) {
      * SageletOS is single-core by design. */
     (void)park_here;
 
-    TRACE("5-main");
+    TRACE('x');
     main(0, 0);
 
     /* main() is not expected to return; park rather than fall off the end of

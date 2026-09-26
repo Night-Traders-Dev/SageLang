@@ -92,7 +92,7 @@ SECTIONS
   {
     _heap_start = ABSOLUTE(.);
     . = ALIGN(8);
-    . = . + 0x18000;          /* 96 KB heap for the Sage runtime */
+    . = . + 0x19000;          /* 100 KB heap for the Sage runtime */
     _heap_end = ABSOLUTE(.);
   } > DRAM_HI
 
@@ -103,7 +103,9 @@ SECTIONS
   .stack (NOLOAD) :
   {
     . = ALIGN(16);
-    . = . + 0x6000;           /* 24 KB stack: the Sage REPL nests interpreter frames */
+    . = . + 0xC000;           /* 48 KB stack: the Sage REPL nests interpreter
+                             * frames deeply, and overflowing this runs into
+                             * the text below with no fault to show for it */
     . = ALIGN(16);
     _stack_top = ABSOLUTE(.);
   } > IRAM0

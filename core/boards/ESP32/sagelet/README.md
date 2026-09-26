@@ -200,105 +200,86 @@ A trace marker written *before* `take_over_watchdogs()` reliably produced
 with the watchdog still armed. Any diagnostic has to disarm the watchdogs first,
 or it manufactures the very failure it is looking for.
 
-### Open: the startup stops after the first marker
+### Fixed: my own diagnostic was faking a toolchain bug
 
-`SAGE_TRACE=1` emits one byte per startup step. Step 1 (the watchdog takeover)
-reaches the console; the marker after the `.bss` clear does not. The generated
-code for that loop is correct — it walks `_bss_start` = `0x3ffce000` to
-`_bss_end` = `0x3ffe6848` with a plain `bltu` — so the loop itself is not the
-problem, and with the corrected DRAM map the range is real internal SRAM.
+Worth recording, because it cost real time and the wrong conclusion was
+committed before it was caught.
 
-What is *not* explained yet: the marker instructions for steps 2 and 3 do not
-reuse the `movi`/store pair that step 1 uses. Step 1 is `movi a12, 49` followed
-by a single `s32i` to the FIFO; the later steps go through a load from a
-different address first, and the second step's `conf0` write ORs in `a11`
-(= 1, bit 0) rather than `1 << 25`. That is not what the C source says, so the
-divergence is between the source and the emitted code for anything after the
-first marker — the same shape of problem as the string-literal addresses below,
-and most likely the same root cause.
+Startup markers are emitted with:
 
-This needs a toolchain-level look rather than more hardware experiments: the
-Xtensa `l32r` literal-pool addresses for read-only data are not resolving to the
-linked addresses in this build (a string literal lives at `0x4008c2e8` while the
-pool word for it holds `0x4008d190`, a `0xEA8` discrepancy that survives both
-removing `-mtext-section-literals` and removing `-mlongcalls`). Dropping either
-flag changes nothing observable, so both were restored. The build-system flags
-for the Xtensa target are the thing to check next — most plausibly against a
-reference ESP-IDF build of a trivial file that reads a string and prints it.
+```c
+#define TRACE(c) do {                        /* takes a CHARACTER */     \
+        REG_UART0_CONF0 |= (1u << 25);                                  \
+        while ((((REG_UART0_STATUS >> 16) & 0xFFu) >= 128u)) {}         \
+        REG_UART0_FIFO = (uint32_t)(unsigned char)(c);                   \
+    } while (0)
+```
 
-Practical consequence: the hardware bring-up is now *past* every watchdog, stack
-and memory-map problem, and the remaining work is a code-generation issue rather
-than a chip or board one. A JTAG session (`gdb`/`openocd` are installed) would
-settle it immediately, since it would show the faulting PC directly.
+The `.bss` and later markers were still being passed **strings** — `TRACE("3-bss")`
+— which expands to `(unsigned char)(&"3-bss"[0])`, i.e. the low byte of the
+string's *address*, not `'3'`. On the wire that appeared as three mystery bytes
+(`0x80 0x86 0x8d`, the low bytes of three different string pointers) and looked
+exactly like corrupted or miscompiled data.
 
-`startup.c` has two diagnostic modes, both enabled with `SAGET_EXTRA_CFLAGS`:
+That produced two wrong conclusions, both now retracted:
 
-- `-DSAGE_ENTRY_PARK_ONLY` — take over the watchdogs, then spin and touch
-  nothing else.
-- `-DSAGE_ENTRY_HEARTBEAT` — push a `[SAGE-ENTRY]` marker out of the UART
-  before anything else.
+- that string literals were being miscompiled — a literal really did live at
+  `0x4008c2e8` while the `l32r` pool word held `0x4008d190`, but the two
+  measurements came from different builds, and removing `-mlongcalls` or
+  `-mtext-section-literals` never changed anything because nothing was wrong;
+- that a line reading `ho 0 tail 12 room 4` came from the ROM. It is our own
+  output. It still appears once per boot and is not yet explained, but it is
+  definitely not the ROM (Espressif's own bootloader does not print it).
 
-Neither marker ever appears, and the park-only image still resets. The stub
-assembles and links, and the ROM reports loading it and jumping to it, so the
-handoff happens; the CPU then resets before the first observable side effect.
-No fatal-exception backtrace is printed, so this is not an ordinary trap.
+With the markers passing characters, **all four appear** (`1xxx`) and startup
+runs clean through the watchdog takeover, the `.bss` clear, the `.data` copy and
+into `main()`, with no reset.
 
-Things already tried and ruled out: code in the flash window vs. internal SRAM
-at both `0x40080000` and `0x40078000`; UART offsets from the TRM, from the IDF
-struct, and via the AHB alias; five clock sources (26/40/80/160/240/320 MHz) and
-both the TRM and IDF divisor formulas; watching a suspiciously fast reset that
-turned out to be the host's own RTS toggling EN; and opening the port with DTR
-and RTS left deasserted.
+### Open: the OS hangs before its first statement
 
-Leading suspects, in order:
+`main()` is entered, and `hal_uart_init()` is never reached, so the hang is in
+the generated runtime's own startup rather than in anything hand-written here.
+A marker inside `hal_uart_init()` (build with `SAGET_EXTRA_CFLAGS=-DSAGE_HAL_TRACE`)
+does not appear, which is what places the failure before the first `.sage`
+statement executes.
 
-1. The image overruns the internal SRAM block it is linked into. At
-   `0x40080000` the image is ~58 KB, past the 32 KB DRAM2 block; Espressif
-   keeps its loadable part small and runs the rest from flash. Worth testing
-   with a genuinely small image (a few hundred bytes) linked at `0x40078000` —
-   the 256-byte park-only build was linked at `0x40080000` throughout.
-2. Something between the ROM's jump and the first store. The stub is six
-   instructions and the reported entry address matches, but the CPU may still
-   be resetting on entry for a reason the ROM does not report.
-3. Clock gating. UART0 and the RTC block are peripherals whose module clocks the
-   ROM enables for itself; a bare-metal image that relies on them may need the
-   module clock gate set explicitly (`APB_SERIAL_CLK_CONF`), which nothing here
-   does yet.
+Enlarging the stack from 24 KB to 48 KB and the heap from 96 KB to 100 KB did
+not change it, so it is not simply out of room. Remaining suspects, in order:
 
-### Done: the bootloader primitives exist
+1. The runtime's initial allocation. The heap starts at `0x3ffe6848` and the
+   `.bss` at `0x3ffce000`; both are now inside real DRAM, but the allocator's
+   assumptions about the region have not been checked against the runtime.
+2. The generated C's global initialisers, which run before the first statement
+   and are the only code executed between entry into `main()` and the OS body.
+3. A CPU fault with no handler installed. Nothing resets, which argues against
+   this, but an exception with an invalid vector table can spin instead.
 
-`boot.sage` needs three primitives that nothing else can provide. `mem_read` /
-`mem_write` are deliberately confined to `mem_alloc` regions by
-`sage_mem_range_valid()`, so memory-mapped flash is unreachable through them, and
-reaching it that way would mean weakening a memory-safety check. The `hw` module
-is the documented "implementation defined per target" hook, so the three
-primitives live there:
+This now looks like a runtime/toolchain question rather than a board one, and a
+JTAG session would answer it immediately.
 
-| call | meaning |
+### JTAG
+
+`gdb-multiarch` (with Xtensa support) and `openocd` v0.12.0-esp32 are both
+installed. **No probe is connected** — the only ESP32 device on the bus is the
+CP2102 UART bridge, which carries no JTAG lines. A session needs an external
+probe (FTDI/ESP-PROG/CMSIS-DAP will all work; the `ftdi`, `cmsis-dap` and
+`esp_usb_jtag` adapter configs ship with this openocd) wired to the board:
+
+| board pin | signal |
 | --- | --- |
-| `hw.flash_read8(addr)` | one byte out of memory-mapped flash |
-| `hw.flash_read32(addr)` | one word out of memory-mapped flash |
-| `hw.jump(entry, stack_top)` | hand control to another image with a known stack |
+| GPIO15 | TCK |
+| GPIO13 | TMS |
+| GPIO12 | TDI |
+| GPIO14 | TDO |
+| GND | ground |
 
-They are emitted by `core/src/c/compiler.c`, and `core/boards/ESP32/sagelet/hal/esp32_hal.c`
-supplies the real ESP32 implementations (`hal_flash_read8`, `hal_flash_read32`,
-and a jump that sets `a15` before branching). Off-target they are no-op stubs, so
-`testsuite/unit/44_esp32/flash_primitives.sage` can assert the contract with no
-hardware attached.
+Optionally `EN` and `GPIO0` for reset/boot control. With that in place:
 
-Two bugs had to be fixed to get there:
-
-- `import hw` failed with `Could not find module 'hw'` in the interpreter even
-  though the compiler already treated `hw` as a native. Nothing ever registered
-  the module, so `math`, `io`, `gpu` and `socket` all resolved and `hw` did not.
-  `create_hw_module()` in `core/src/c/stdlib.c` now registers it, with a `_hw`
-  alias to match the compiler.
-- `env_define_const()`'s second argument is the **name length**, not an arity.
-  `env_get` matches on `(name_length, memcmp)` and never inspects a terminating
-  NUL, so registering `"gpio_init"` with a length of 3 stores the name truncated
-  to `"gpio"` and attribute lookup then reports `has no attribute`. The
-  registration macro derives the length from the literal rather than hand-counting
-  it, since the failure is silent.
+```
+openocd -f interface/ftdi/esp32_devkitj_v1.cfg -f target/esp32.cfg
+gdb-multiarch core/boards/ESP32/sagelet/build/sagelet_os.elf \
+    -ex 'target remote :3333' -ex 'monitor reset halt' -ex continue
+```
 
 ## Flashing by hand
 
