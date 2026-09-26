@@ -51,6 +51,8 @@ SageValue sage_native_hw_rx_pending(void);
 
 /* --- plain C helpers, also used by startup.c ---------------------------- */
 uint32_t hal_uart_init(uint32_t baud);
+void     hal_uart_set_baud(uint32_t sclk_hz, uint32_t baud);
+uint32_t hal_uart_sclk_hz(void);
 int      hal_uart_getc(void);
 int      hal_uart_putc(int byte);
 int      hal_uart_puts(const char* s);

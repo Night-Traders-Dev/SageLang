@@ -187,7 +187,14 @@ build_image() {
     "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" -c "$HERE/hal/esp32_newlib.c" -o "$OUT/newlib_$prefix.o"
     "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" $EXTRA_CFLAGS \
         -c "$HERE/hal/startup.c" -o "$OUT/startup_$prefix.o"
-    "$CC" -c "$HERE/hal/entry.S" -o "$OUT/entry_$prefix.o"
+    # entry.S honours -DSAGE_ENTRY_LED, so the assembler's flags follow the
+    # same SAGET_EXTRA_CFLAGS switch the C compiler uses.
+    EXTRA_ASFLAGS=""
+    case " ${SAGET_EXTRA_CFLAGS:-} " in
+        *-DSAGE_ENTRY_LED*) EXTRA_ASFLAGS="-DSAGE_ENTRY_LED" ;;
+        *-DSAGE_ENTRY_UART*) EXTRA_ASFLAGS="-DSAGE_ENTRY_UART" ;;
+    esac
+    "$CC" -c $EXTRA_ASFLAGS "$HERE/hal/entry.S" -o "$OUT/entry_$prefix.o"
 
     echo "  [4/5] link (load $load, text $text)"
     "$CC" -mlongcalls -nostartfiles -T "$ld" \

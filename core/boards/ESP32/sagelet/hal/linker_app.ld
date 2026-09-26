@@ -20,11 +20,17 @@ MEMORY
    * so text must be executable without the cache: put it in internal SRAM.
    * Espressif's own bootloader does the same (its entry is 0x4008059c). */
   IRAM0 (rx)  : ORIGIN = 0x40080000, LENGTH = 0x20000
-  /* SRAM below the flash alias. The alias is mapped *over* this address
-   * range, so nothing else may be placed in 0x3FFB0000..0x3FFC0000. */
-  DRAM0 (rw)  : ORIGIN = 0x3FF80000, LENGTH = 0x30000
-  /* SRAM above the flash alias: free for the heap and the stack. */
-  DRAM_HI (rw): ORIGIN = 0x3FFC0000, LENGTH = 0x20000
+  /* Real internal DRAM, per the ESP32 memory map and the ESP-IDF layout.
+   *
+   * This used to claim 0x3FF80000, which is not DRAM: internal DRAM begins at
+   * 0x3FFB0000. The ROM's loader will happily write a .data image to an
+   * arbitrary address, so a bogus .data placement looks fine at link and flash
+   * time -- and .bss, which is simply a loop of stores, then walks off into
+   * unmapped space. Symptom: everything up to the .bss clear works, then
+   * nothing, with no reset and no output. */
+  DRAM0 (rw)  : ORIGIN = 0x3FFB0000, LENGTH = 0x6000
+  /* The high DRAM block, ending exactly at the top of internal SRAM. */
+  DRAM_HI (rw): ORIGIN = 0x3FFCE000, LENGTH = 0x32000
 }
 
 SECTIONS
@@ -68,6 +74,10 @@ SECTIONS
   _data_load = LOADADDR(.data);
 
   /* ---- zero-initialized data, heap, stack ----------------------------- */
+  /* .bss is ~100 KB, far more than DRAM0's 24 KB, so it goes in the high
+   * block. Keeping it out of DRAM0 also leaves the low block free for .data,
+   * which does have to be adjacent to its load address in a predictable
+   * place. */
   .bss (NOLOAD) :
   {
     _bss_start = ABSOLUTE(.);
@@ -76,7 +86,7 @@ SECTIONS
     *(COMMON)
     . = ALIGN(8);
     _bss_end = ABSOLUTE(.);
-  } > DRAM0
+  } > DRAM_HI
 
   .heap (NOLOAD) :
   {
@@ -99,8 +109,8 @@ SECTIONS
   } > IRAM0
 
   _dram_end = ABSOLUTE(.) ;
-  ASSERT(_bss_end <= ORIGIN(DRAM0) + LENGTH(DRAM0),
-         "SageletOS .bss does not fit in DRAM0 (below the flash alias)")
+  ASSERT(_data_end <= ORIGIN(DRAM0) + LENGTH(DRAM0),
+         "SageletOS .data does not fit in DRAM0")
   ASSERT(_heap_end <= ORIGIN(DRAM_HI) + LENGTH(DRAM_HI),
          "SageletOS heap does not fit in DRAM_HI (above the flash alias)")
   ASSERT(_stack_top <= ORIGIN(IRAM0) + LENGTH(IRAM0),

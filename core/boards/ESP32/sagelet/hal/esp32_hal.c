@@ -66,6 +66,12 @@ enum {
 #define REG_UART0_CONF0   (*(volatile uint32_t *)(UART0_BASE + 0x20))
 
 #define UART_STATUS_RXFIFO_CNT_MASK  0x000000FFu
+/* txfifo_cnt is bits [23:16] of STATUS. The mask is not optional: bits 31:29
+ * are TXD/RTSN/DTRN and bits 27:24 are st_utx_out, so an unmasked `>> 16` is
+ * always >= 0x1000 and the FIFO permanently looks full. That made
+ * hal_uart_putc() spin to its timeout and drop every byte, which is why the
+ * whole OS was silent. */
+#define UART_STATUS_TXFIFO_CNT_MASK  0x000000FFu
 #define UART_STATUS_TXFIFO_CNT_SHIFT 16
 
 #define UART_CONF0_BIT_NUM_SHIFT     2
@@ -75,6 +81,7 @@ enum {
 #define UART_CONF0_RXFIFO_RST        (1u << 17)
 #define UART_CONF0_TXFIFO_RST        (1u << 18)
 #define UART_CONF0_CLK_EN            (1u << 25)
+#define UART_CONF0_TICK_REF_ALWAYS_ON (1u << 27)
 
 #define UART_FIFO_LEN 128u
 
@@ -192,32 +199,62 @@ void hal_gpio_set_pull(uint32_t pin, int up, int down) {
 
 /* ------------------------------------------------------------------ UART0 */
 
+/* The UART clock source is selected by conf0.tick_ref_always_on (bit 27):
+ * 0 = REF_TICK, the crystal reference, 1 = APB. On this board that is a 26 MHz
+ * crystal, and the ROM leaves the console on REF_TICK -- so a divisor computed
+ * for 80 MHz produces roughly 3.3x the intended rate and pure garbage. That is
+ * exactly what happened: the ROM's own banner came out mangled once this ran.
+ * Read the bit rather than assuming, and keep the frequency overridable for
+ * boards with a different crystal. */
+#ifndef UART_REF_TICK_HZ
+#define UART_REF_TICK_HZ 26000000u
+#endif
+#ifndef UART_APB_HZ
+#define UART_APB_HZ 80000000u
+#endif
+
 uint32_t hal_uart_init(uint32_t baud) {
     if (baud == 0) baud = 115200;
 
-    /* Route UART0 to the console pads: TX1 = GPIO1, RX1 = GPIO3, function 1. */
-    IO_MUX_GPIO(1) = (IO_MUX_GPIO(1) & ~0x3u) | IO_MUX_FUNC_GPIO;
-    IO_MUX_GPIO(3) = (IO_MUX_GPIO(3) & ~0x3u) | IO_MUX_FUNC_GPIO;
-
-    /* Mask interrupts, 8N1, peripheral clock on. */
-    REG_UART0_INT_ENA = 0;
-    REG_UART0_CONF0 = (UART_CONF0_BIT_NUM_8 << UART_CONF0_BIT_NUM_SHIFT)
-                    | (UART_CONF0_STOP_BIT_1 << UART_CONF0_STOP_BIT_SHIFT)
-                    | UART_CONF0_CLK_EN;
-
-    /* Flush both FIFOs with a reset pulse, as uart_ll_txfifo_rst() does. */
-    REG_UART0_CONF0 |= UART_CONF0_RXFIFO_RST;
-    REG_UART0_CONF0 &= ~UART_CONF0_RXFIFO_RST;
-    REG_UART0_CONF0 |= UART_CONF0_TXFIFO_RST;
-    REG_UART0_CONF0 &= ~UART_CONF0_TXFIFO_RST;
-
-    /* clk_div = (sclk << 4) / baud; integer in div_int, rest in div_frag. */
-    uint32_t div = (UART_CLK_HZ << 4) / baud;
-    uint32_t div_int = (div >> 4) & 0xFFFFFu;
-    uint32_t div_frag = div & 0xFu;
-    REG_UART0_CLK_DIV = (div_frag << 20) | div_int;
+    /* Deliberately do NOT touch the pads, the clock-source select, or CLKDIV.
+     *
+     * The ROM has already routed GPIO1/GPIO3 to UART0 and programmed the
+     * console for 115200 on the clock source it is actually using, and that
+     * works. Re-deriving the divisor is not free: conf0.tick_ref_always_on
+     * (bit 27) selects REF_TICK (the 26 MHz crystal here) or APB, and computing
+     * the wrong one gives roughly 3.3x the intended rate. Worse, writing CLKDIV
+     * while the ROM still has "entry 0x40080000" in the FIFO re-rates the
+     * shift register mid-character and garbles that line. The IO_MUX map in
+     * this IDF is also sparse and non-uniform (pin 0 is base+0x44, pin 2 is
+     * base+0x40, pin 4 is base+0x48), so a stride-based pin address is simply
+     * wrong for some pins -- and breaking the one working debug channel is the
+     * fastest way to go blind.
+     *
+     * The one thing that does have to be set is the module clock. Writes to a
+     * gated peripheral's FIFO are accepted and discarded, which is exactly the
+     * observed symptom: the byte leaves hal_uart_putc() and nothing appears.
+     * OR-ing conf0.clk_en in preserves every other field the ROM chose. */
+    REG_UART0_CONF0 |= UART_CONF0_CLK_EN;
+    REG_UART0_INT_ENA = 0;   /* polled TX, no interrupts */
 
     return baud;
+}
+
+/* Change the baud rate explicitly. Separate from hal_uart_init because the ROM
+ * has already programmed the console correctly and changing CLKDIV while the
+ * ROM still has output in flight garbles it. The divisor follows
+ * uart_ll_set_baudrate(): clk_div = (sclk << 4) / baud, integer part in
+ * div_int, remainder in div_frag. Call hal_uart_set_baud() first if the
+ * divisor must be recomputed for a different source clock. */
+void hal_uart_set_baud(uint32_t sclk_hz, uint32_t baud) {
+    if (baud == 0) return;
+    uint32_t div = (sclk_hz << 4) / baud;
+    REG_UART0_CLK_DIV = ((div & 0xFu) << 20) | ((div >> 4) & 0xFFFFFu);
+}
+
+uint32_t hal_uart_sclk_hz(void) {
+    return (REG_UART0_CONF0 & UART_CONF0_TICK_REF_ALWAYS_ON) ? UART_APB_HZ
+                                                             : UART_REF_TICK_HZ;
 }
 
 int hal_uart_rx_pending(void) {
@@ -232,7 +269,8 @@ int hal_uart_getc(void) {
 int hal_uart_putc(int byte) {
     if (byte < 0) return -1;
     uint32_t spins = 0;
-    while ((REG_UART0_STATUS >> UART_STATUS_TXFIFO_CNT_SHIFT) >= UART_FIFO_LEN) {
+    while (((REG_UART0_STATUS >> UART_STATUS_TXFIFO_CNT_SHIFT) & UART_STATUS_TXFIFO_CNT_MASK)
+           >= UART_FIFO_LEN) {
         if (++spins > 2000000u) return -1;   /* never wedge the caller */
     }
     REG_UART0_FIFO = (uint32_t)(byte & 0xFF);

@@ -16,7 +16,7 @@ proven and what is not.
 | `esptool elf2image` -> flashable image | works (valid header, checksum) |
 | `esptool write-flash` | works (ROM loads every segment) |
 | ROM jumps to the entry and executes it | works (one real bug found and fixed) |
-| OS reaches its REPL and prints a prompt | **not yet** — resets before the first side effect |
+| OS reaches its REPL and prints a prompt | **not yet** — boots and runs, but stops after the first startup marker |
 | `blink` over the REPL | **not reached** |
 
 ## Layout
@@ -120,7 +120,116 @@ authoritative UART register map also agrees with what the HAL uses
 `0x0C` INT_ENA, `0x14` CLKDIV, `0x18` AUTOBAUD, `0x1C` STATUS, `0x20` CONF0);
 the AHB alias `UART_FIFO_AHB_REG` at `0x60000000` was tried as well.
 
-### Open: the entry does not survive long enough to talk
+### Fixed: the watchdog was never actually disarmed
+
+This was the real cause of the reset loop, and it took three rounds to find
+because the failure is silent and the symptom is misleading.
+
+The ROM leaves **three** watchdogs armed when it hands over to a second-stage
+image. The previous startup code tried to disarm one of them using the
+`0x3FFA1Fxx` "RTC_WD_*" block from older TRM revisions. On this chip that block
+is not the watchdog: every write landed somewhere harmless. The registers that
+matter are in the `0x3ff48000` RTC_CNTL block and the `0x3ff5f000` timer-group
+blocks, and the timer-group ones sit behind a write-protect register unlocked
+with the key `0x50d83aa1`:
+
+| what | address | notes |
+| --- | --- | --- |
+| `RTC_CNTL_WDTWPROTECT` | `0x3ff480a4` | write `0x50d83aa1` to unlock |
+| `RTC_CNTL_WDTCONFIG0` | `0x3ff4808c` | `WDT_EN` bit 31, `STG0` bits [30:28] |
+| `TIMG0_WDTWPROTECT` | `0x3ff5f064` | same key |
+| `TIMG0_WDTCONFIG0` | `0x3ff5f048` | `WDT_EN` bit 31, `STG0` bits [30:29] |
+| `TIMG1_*` | `+0x1000` | second timer group, disarmed too |
+
+All of these are transcribed from the installed IDF headers
+(`rtc_cntl_reg.h`, `timer_group_reg.h`, `wdt_periph.h`).
+
+Each fix moved the reset reason one step along, which is how the chain was
+identified at all:
+
+- wrong RTC addresses -> `rst:0x10 (RTCWDT_RTC_RESET)`
+- RTC fixed, TG ignored -> still `RTCWDT_RTC_RESET`
+- RTC + TG0 fixed -> `rst:0x7 (TG0WDT_SYS_RESET)`
+- RTC + TG0 + TG1 fixed -> **no reset**; the image runs and parks
+
+Verified three independent ways, none of which depend on the console: a
+GPIO2 blink, a `SAGE_ENTRY_PARK_ONLY` build that stays up indefinitely, and a
+build that streams tens of thousands of bytes to UART0 and keeps running.
+
+### Fixed: the entry stub began with data, not code
+
+`l32r` on this toolchain only reaches *backwards*, so the literal pool has to
+precede the instructions that load it. That put 12 bytes of constants at the
+image's load address. The entry is now a single `j` over the pool, so the first
+instruction in the loaded segment is real code. The pool also has to stay
+4-byte aligned: the `j` is 3 bytes, and an `l32r` whose target sits at an
+unaligned offset is rejected as "out of range" (`-13` fails where `-12` works).
+
+### Fixed: the UART TX FIFO always looked full
+
+`REG_UART0_STATUS >> 16` was used unmasked. `txfifo_cnt` is bits [23:16], but
+bits 31:29 are `TXD`/`RTSN`/`DTRN` and 27:24 are `st_utx_out`, so the value was
+always at least `0x1000`, the "FIFO full" test was permanently true, and
+`hal_uart_putc()` spun to its timeout and dropped **every byte**. With the mask
+added, C code drives the console: a `P`-emitting park loop produced 45,840
+characters and kept running.
+
+Related: `hal_uart_init()` no longer reprograms the pads or the divisor. The ROM
+has already routed GPIO1/GPIO3 and set 115200 on the clock source it is really
+using, and `conf0.tick_ref_always_on` (bit 27) selects between the 26 MHz
+crystal and the 80 MHz APB clock — assuming the wrong one gives roughly 3.3x the
+intended rate. The IO_MUX map in this IDF is also sparse and non-uniform (pin 0
+is `base+0x44`, pin 2 is `base+0x40`, pin 4 is `base+0x48`), so a stride-based
+pin address is simply wrong for some pins. It only re-asserts `conf0.clk_en`,
+because writes to a gated peripheral's FIFO are accepted and discarded.
+
+### Fixed: DRAM was mapped to an address that is not DRAM
+
+The linker claimed `0x3FF80000` for `DRAM0`. Internal DRAM begins at
+`0x3FFB0000`. The ROM's loader will write a `.data` image to any address, so a
+bogus placement looks completely fine at link and flash time — and `.bss`, which
+is just a loop of stores, then walks into unmapped space. Now:
+
+- `DRAM0` `0x3FFB0000`, 24 KB (`.data`)
+- `DRAM_HI` `0x3FFCE000`, 200 KB (`.bss`, heap)
+
+### Fixed: a diagnostic that hid its own result
+
+A trace marker written *before* `take_over_watchdogs()` reliably produced
+`RTCWDT_RTC_RESET`, because the UART write polls the FIFO and that polling runs
+with the watchdog still armed. Any diagnostic has to disarm the watchdogs first,
+or it manufactures the very failure it is looking for.
+
+### Open: the startup stops after the first marker
+
+`SAGE_TRACE=1` emits one byte per startup step. Step 1 (the watchdog takeover)
+reaches the console; the marker after the `.bss` clear does not. The generated
+code for that loop is correct — it walks `_bss_start` = `0x3ffce000` to
+`_bss_end` = `0x3ffe6848` with a plain `bltu` — so the loop itself is not the
+problem, and with the corrected DRAM map the range is real internal SRAM.
+
+What is *not* explained yet: the marker instructions for steps 2 and 3 do not
+reuse the `movi`/store pair that step 1 uses. Step 1 is `movi a12, 49` followed
+by a single `s32i` to the FIFO; the later steps go through a load from a
+different address first, and the second step's `conf0` write ORs in `a11`
+(= 1, bit 0) rather than `1 << 25`. That is not what the C source says, so the
+divergence is between the source and the emitted code for anything after the
+first marker — the same shape of problem as the string-literal addresses below,
+and most likely the same root cause.
+
+This needs a toolchain-level look rather than more hardware experiments: the
+Xtensa `l32r` literal-pool addresses for read-only data are not resolving to the
+linked addresses in this build (a string literal lives at `0x4008c2e8` while the
+pool word for it holds `0x4008d190`, a `0xEA8` discrepancy that survives both
+removing `-mtext-section-literals` and removing `-mlongcalls`). Dropping either
+flag changes nothing observable, so both were restored. The build-system flags
+for the Xtensa target are the thing to check next — most plausibly against a
+reference ESP-IDF build of a trivial file that reads a string and prints it.
+
+Practical consequence: the hardware bring-up is now *past* every watchdog, stack
+and memory-map problem, and the remaining work is a code-generation issue rather
+than a chip or board one. A JTAG session (`gdb`/`openocd` are installed) would
+settle it immediately, since it would show the faulting PC directly.
 
 `startup.c` has two diagnostic modes, both enabled with `SAGET_EXTRA_CFLAGS`:
 

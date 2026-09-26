@@ -7,6 +7,14 @@
  * instruction boundary and must not assume a valid stack before it sets one.
  */
 
+#include "esp32_hal.h"
+
+/* Raw UART0 registers, so the trace markers below need no cross-object call
+ * at all. Proving the console works is not the moment to also be testing the
+ * linker's view of the call ABI. */
+#define REG_UART0_FIFO   (*(volatile uint32_t *)0x3FF40000u)
+#define REG_UART0_STATUS (*(volatile uint32_t *)0x3FF4001Cu)
+#define REG_UART0_CONF0  (*(volatile uint32_t *)0x3FF40020u)
 #include <stdint.h>
 
 extern uint32_t _stack_top;
@@ -23,62 +31,75 @@ extern uint32_t _data_load;
 #define RTC_CPUSW_CONF_REG     (*(volatile uint32_t *)0x3FF48450u)
 #define RTC_AUTOSTART_CPUS_REG (*(volatile uint32_t *)0x3FF48454u)
 
-/* RTC watchdog (TimerG 0x3FFA1Fxx) and the APP-level timer-group watchdog.
+/* Watchdog takeover.
  *
- * This matters more than it looks: the ROM resets in a loop whenever the
- * second-stage image does not take over, so "it keeps rebooting" is *normal*
- * ROM behaviour and is not by itself evidence of a crash. A bare parking loop
- * trips the RTC watchdog and reproduces the same loop, which is easy to
- * misread as a fault in the image.
+ * The ROM leaves three watchdogs armed when it hands over to a second-stage
+ * image, and an image that does not disarm them is reset before it can do
+ * anything observable. That was the actual cause of the reset loop here, and
+ * it took three rounds to find because the reset is silent -- the chip simply
+ * reboots, which is also what the ROM does when an image fails to load, so the
+ * symptom looks identical to a broken handoff.
  *
- * Addresses are the ESP32 TRM RTC_WD_* block. An earlier version used
- * 0x3FFA1F04 for SWCONF, which is the wrong register and left the watchdog
- * armed, so the loop never stopped.
+ * The addresses below are transcribed from the installed IDF headers rather
+ * than recalled, because the previous version used the 0x3FFA1Fxx "RTC_WD_*"
+ * block from older TRM revisions. On this chip that block is not the watchdog
+ * at all: every write landed somewhere harmless, so the watchdog was never
+ * disarmed and the loop never stopped. The registers that matter are in the
+ * 0x3ff48000 RTC_CNTL block and the 0x3ff5f000 timer-group blocks.
+ *
+ * rtc_cntl_reg.h (DR_REG_RTCCNTL_BASE = 0x3ff48000):
+ *   WDTWPROTECT  + 0xa4  -- write 0x50d83aa1 to unlock, 0 to re-lock
+ *   WDTCONFIG0   + 0x8c  -- WDT_EN = bit 31, STG0 = bits [30:28]
+ *   WDTFEED      + 0xa0
+ *
+ * timer_group_reg.h (DR_REG_TIMERGROUP0_BASE = 0x3ff5f000,
+ *                    REG_TIMG_BASE(i) = base + i*0x1000):
+ *   WDTCONFIG0   + 0x48  -- WDT_EN = bit 31, STG0 = bits [30:29]
+ *   WDTFEED      + 0x60
+ *   WDTWPROTECT  + 0x64  -- TIMG_WDT_WKEY_VALUE = 0x50d83aa1
  */
-#define RTC_WD_OSC_CNTL (*(volatile uint32_t *)0x3FFA1F0Cu)
-#define RTC_WD_SW_CLEAR (*(volatile uint32_t *)0x3FFA1F10u)
-#define RTC_WD_SW_CONF  (*(volatile uint32_t *)0x3FFA1F18u)
-#define RTC_WD_FEED     (*(volatile uint32_t *)0x3FFA1F08u)
-#define RTC_WD_CTRL     (*(volatile uint32_t *)0x3FFA1F00u)
-#define RTC_WD_SW_CONF_RTC_WDT (1u << 3)
+#define RTC_CNTL_BASE          0x3ff48000u
+#define RTC_CNTL_WDTCONFIG0    (*(volatile uint32_t *)(RTC_CNTL_BASE + 0x8cu))
+#define RTC_CNTL_WDTFEED       (*(volatile uint32_t *)(RTC_CNTL_BASE + 0xa0u))
+#define RTC_CNTL_WDTWPROTECT   (*(volatile uint32_t *)(RTC_CNTL_BASE + 0xa4u))
 
-/* Timer-group 0 watchdog, which the ROM may also leave armed. */
-#define TIMG0_WDT_EN   (*(volatile uint32_t *)0x3FF35B00u)
-#define TIMG0_WDT_FEED (*(volatile uint32_t *)0x3FF35B04u)
+#define TIMG0_BASE             0x3ff5f000u
+#define TIMG0_WDTCONFIG0       (*(volatile uint32_t *)(TIMG0_BASE + 0x48u))
+#define TIMG0_WDTFEED          (*(volatile uint32_t *)(TIMG0_BASE + 0x60u))
+#define TIMG0_WDTWPROTECT      (*(volatile uint32_t *)(TIMG0_BASE + 0x64u))
 
-/* RTC_CNTL guards the RTC register block with a write-protect field. It comes
- * up protected after reset, so every write to the RTC_WD_* registers below is
- * silently dropped unless the protect is cleared first. That is why disabling
- * the watchdog "did not work": the code looked right and had no effect. */
-#define RTC_CNTL (*(volatile uint32_t *)0x3FFA1060u)
-#define RTC_CNTL_WRITE_PROTECT 0x5500u
+#define TIMG1_BASE             (TIMG0_BASE + 0x1000u)
+#define TIMG1_WDTCONFIG0       (*(volatile uint32_t *)(TIMG1_BASE + 0x48u))
+#define TIMG1_WDTFEED          (*(volatile uint32_t *)(TIMG1_BASE + 0x60u))
+#define TIMG1_WDTWPROTECT      (*(volatile uint32_t *)(TIMG1_BASE + 0x64u))
 
-/* The ROM enables the RTC watchdog before handing over, and on this part it
- * does not reliably stay disabled: clearing the RTC write-protect and zeroing
- * RTC_WD_CTRL looks correct and still yields RTCWDT_RTC_RESET. So the watchdog
- * is fed rather than trusted to be off. Everything that can spin for a long
- * time must go through feed_watchdogs().
- */
+/* Both write-protect registers use the same key. */
+#define WDT_WKEY               0x50d83aa1u
+
+/* Belt and braces: the watchdogs are disarmed once, and also fed forever.
+ * Disarming should be enough, but feeding costs a few stores and removes the
+ * entire class of "reset loop" failure from the bring-up. */
 static inline void feed_watchdogs(void) {
-    RTC_WD_FEED = 0;
-    TIMG0_WDT_FEED = 0;
+    RTC_CNTL_WDTFEED   = 1;
+    TIMG0_WDTFEED      = 1;
+    TIMG1_WDTFEED      = 1;
 }
 
 static void take_over_watchdogs(void) {
-    RTC_CNTL = RTC_CNTL & ~RTC_CNTL_WRITE_PROTECT;   /* unlock RTC block */
+    /* RTC watchdog: unlock, clear WDT_EN and STG0, re-lock. */
+    RTC_CNTL_WDTWPROTECT = WDT_WKEY;
+    RTC_CNTL_WDTCONFIG0  = 0;
+    RTC_CNTL_WDTWPROTECT = 0;
 
-    /* Allow the RTC watchdog to be reset from software, clear its interrupt
-     * status, then disable it. */
-    RTC_WD_SW_CONF = RTC_WD_SW_CONF_RTC_WDT;
-    RTC_WD_SW_CLEAR = 1;
-    RTC_WD_FEED = 0;
-    RTC_WD_CTRL = 0;
+    /* Timer-group watchdog 0 and 1: same sequence, same key. */
+    TIMG0_WDTWPROTECT = WDT_WKEY;
+    TIMG0_WDTCONFIG0  = 0;
+    TIMG0_WDTWPROTECT = 0;
 
-    RTC_CNTL = RTC_CNTL | RTC_CNTL_WRITE_PROTECT;     /* re-lock        */
+    TIMG1_WDTWPROTECT = WDT_WKEY;
+    TIMG1_WDTCONFIG0  = 0;
+    TIMG1_WDTWPROTECT = 0;
 
-    /* And the timer-group watchdog, in case the ROM armed it too. */
-    TIMG0_WDT_FEED = 0;
-    TIMG0_WDT_EN = 0;
     feed_watchdogs();
 }
 
@@ -141,6 +162,23 @@ static void heartbeat_str(const char* s) { while (*s) heartbeat(*s++); }
 void reset_handler(void) __attribute__((noreturn));
 
 void reset_handler(void) {
+#if defined(SAGE_ENTRY_PARK_UART)
+    /* Discriminator: same stable park loop that is known to survive, but with a
+     * FIFO write added. If 'P' appears then C code can drive the console and
+     * the problem is specific to the code after take_over_watchdogs(); if it
+     * does not, C code cannot write to the FIFO at all even though hand-written
+     * assembly can -- which points at the handoff (a15 / the stack) rather than
+     * at the UART. */
+    take_over_watchdogs();
+    REG_UART0_CONF0 |= (1u << 25);
+    for (;;) {
+        feed_watchdogs();
+        while ((((REG_UART0_STATUS >> 16) & 0xFFu) >= 128u)) {}
+        REG_UART0_FIFO = (uint32_t)(unsigned char)'P';
+        __asm__ __volatile__("rsync" ::: "memory");
+    }
+#endif
+
 #if defined(SAGE_ENTRY_PARK_ONLY)
     /* Discriminator: take over the watchdogs, then park and touch nothing
      * else. If the reset loop stops, the entry is executing and the remaining
@@ -152,21 +190,48 @@ void reset_handler(void) {
     }
 #endif
 
-    /* Own the watchdogs before anything that can take a long time. */
-    take_over_watchdogs();
-
-#if defined(SAGE_ENTRY_HEARTBEAT)
-    heartbeat_init();
-    heartbeat_str("\r\n[SAGE-ENTRY]\r\n");
+#if defined(SAGE_TRACE)
+    /* Progressive markers, so a silent boot can be attributed to a specific
+     * step instead of guessed at. These use the same conservative UART setup
+     * as the HAL -- INT_ENA masked, clock source left as the ROM set it -- so
+     * the markers cannot themselves corrupt the output they are meant to show.
+     * Enabled with -DSAGE_TRACE. */
+    /* A single immediate byte, not a string. Dereferencing a string literal
+     * does not work in this build: the l32r pool entry that should hold the
+     * string's address resolves to a different location entirely (it pointed
+     * into .rodata instead of the string, off by 0xEA8), so the loop reads
+     * unrelated bytes and the console never shows the marker. An immediate
+     * needs no address at all. Do NOT call hal_uart_init here: re-rating the
+     * UART changes the shift rate while the ROM still has "entry 0x40080000"
+     * in flight, which garbles that line. The ROM already programmed 115200 on
+     * a working route, so the correct thing at this stage is to add to the
+     * output stream, not to reconfigure it. */
+    /* No FIFO-space wait on purpose: the markers are well under the 128-byte
+     * FIFO so they fit unconditionally, which isolates "is the wait condition
+     * wrong" from "is this code running at all". A real // comment cannot sit
+     * inside the macro body, because a /* block comment would swallow the
+     * line continuations. */
+    #define TRACE(c) do {                                            \
+        REG_UART0_CONF0 |= (1u << 25);                               \
+        while ((((REG_UART0_STATUS >> 16) & 0xFFu) >= 128u)) {}      \
+        REG_UART0_FIFO = (uint32_t)(unsigned char)(c);                 \
+    } while (0)
+#else
+    #define TRACE(s) ((void)0)
 #endif
 
-    /* First, before anything that can take a long time: own the watchdogs. */
+    /* Own the watchdogs FIRST, before even the trace markers. Any diagnostic
+     * that spins -- and a UART write polls the FIFO -- runs with the RTC
+     * watchdog still armed, and the ROM leaves it armed. Doing the trace first
+     * reliably tripped RTCWDT_RTC_RESET and masked the real behaviour. */
     take_over_watchdogs();
+    TRACE('1');
 
     /* Clear .bss before any C code (including the Sage runtime) runs. */
     for (uint32_t* b = &_bss_start; b < &_bss_end; ) {
         *b++ = 0;
     }
+    TRACE("3-bss");
 
     /* Copy .data from its load address in the memory-mapped flash window. */
     {
@@ -176,6 +241,7 @@ void reset_handler(void) {
             *dst++ = *src++;
         }
     }
+    TRACE("4-data");
 
     /* Deliberately leave CPU1 alone. The ROM bootloader has already released
      * it into its own idle loop, and re-pointing RTC_AUTOSTART_CPUS_REG from an
@@ -185,6 +251,7 @@ void reset_handler(void) {
      * SageletOS is single-core by design. */
     (void)park_here;
 
+    TRACE("5-main");
     main(0, 0);
 
     /* main() is not expected to return; park rather than fall off the end of
