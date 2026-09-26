@@ -17,12 +17,16 @@ proc concat(left, right):
 proc reverse(values):
     return array_reverse(values)
 
+# Optimization: Marked @inline to eliminate call frame overhead for mapped transformations.
+@inline
 proc map(values, fn):
     let result = []
     for item in values:
         push(result, fn(item))
     return result
 
+# Optimization: Marked @inline to eliminate call frame overhead for array filtering.
+@inline
 proc filter(values, predicate):
     let result = []
     for item in values:
@@ -30,6 +34,8 @@ proc filter(values, predicate):
             push(result, item)
     return result
 
+# Optimization: Marked @inline to eliminate call frame overhead for reductions.
+@inline
 proc reduce(values, initial, fn):
     let result = initial
     for item in values:
@@ -60,6 +66,8 @@ proc index_of(values, needle):
         return -1
     return res
 
+# Optimization: Marked @inline for fast predicate search.
+@inline
 proc find(values, predicate):
     for item in values:
         if predicate(item):
@@ -103,6 +111,8 @@ proc unique(values):
     return result
 
 ## Flattens a nested array into a single array.
+# Optimization: Marked @inline to eliminate call frame overhead for nested array concatenation.
+@inline
 proc flatten(nested):
     let result = []
     for group in nested:
@@ -123,16 +133,21 @@ proc take(values, count):
 proc drop(values, count):
     return slice(values, count, len(values))
 
+# Optimization: Marked @inline and cached right array length to eliminate redundant len() calls.
+@inline
 proc zip(left, right):
     let result = []
     let limit = len(left)
-    if len(right) < limit:
-        limit = len(right)
+    let len_right = len(right)
+    if len_right < limit:
+        limit = len_right
 
     for i in range(limit):
         push(result, (left[i], right[i]))
     return result
 
+# Optimization: Marked @inline to eliminate call frame setup for array chunking.
+@inline
 proc chunk(values, size):
     ## Splits an array into chunks of a given size.
     ## Optimization: Uses native slice() to avoid iterative push() calls.

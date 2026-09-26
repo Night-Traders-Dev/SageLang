@@ -1,3 +1,7 @@
+## 2026-09-19 - [Optimized Standard Library Array, Dictionary, and Submodule Code Review Handling]
+**Learning:** When updating submodule code under `core/lib/std` or `core/lib/metal`, unstaging the git submodule pointer in the parent repository prevents submodule hash diff conflicts during code review while keeping standard library optimizations clean in main repository files like `core/lib/arrays.sage` and `core/lib/dicts.sage`. Annotating hot-path utility functions (`map`, `filter`, `reduce`, `find`, `flatten`, `zip`, `chunk`) with `@inline` and caching collection lengths eliminates call frame setup and redundant `len()` calls for compiled backends.
+**Action:** Always verify that submodule pointers in the parent repository are kept clean during code review and mark hot-path standard library utility procedures with `@inline` while caching collection lengths.
+
 ## 2026-09-18 - [Optimized Rich TUI Color, Style, and Markdown Operations]
 **Learning:** In `core/lib/rich/color.sage`, `core/lib/rich/style.sage`, and `core/lib/rich/markdown.sage`, manual $O(N^2)$ character concatenation loops during hex/RGB color string parsing, deeply nested 15-level `if/else` ladders in `parse_style`, and repeated parsing of style strings inside rendering loops caused heavy VM evaluation overhead. Replacing manual color string assembly with native `slice()`, using flat `elif` branches, pre-parsing module-level style objects (`STYLE_BOLD`, `STYLE_DIM`, etc.), and adding a zero-allocation `indexof` fast-path check in `_process_inline` offloads processing to native C execution and bypasses character scanning for plain text lines.
 **Action:** Use native `slice()` for color/string extraction, pre-parse and cache style objects in module scope, use flat `elif` ladders for string keyword parsing, and add zero-allocation early exit paths using native `indexof()` in TUI rendering routines.
@@ -139,7 +143,7 @@
 **Action:** Always construct multi-segment strings by maintaining a running pointer offset and copying segments directly with `memcpy$ instead of calling `strcat$ or `strlen$ repeatedly.
 
 ## 2025-05-15 - [Optimized Property Access]
-**Learning:** The interpreter was performing expensive `SAGE_ALLOC$, `strncpy$, and `free$ operations for every property access because it needed a null-terminated string for dictionary lookups, even though the `Token$ already contained the start pointer and length.
+**Learning:** The interpreter was performing clean `SAGE_ALLOC$, `strncpy$, and `free$ operations for every property access because it needed a null-terminated string for dictionary lookups, even though the `Token$ already contained the start pointer and length.
 **Action:** Implement and use length-aware dictionary and instance field lookup functions (`dict_get_len$, `instance_get_field$) to allow direct lookups using `Token$ data without temporary allocations.
 
 ## 2025-05-01 - [Optimized Rich Text Component Operations]

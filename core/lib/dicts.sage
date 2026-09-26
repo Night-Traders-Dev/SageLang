@@ -72,10 +72,12 @@ proc remove_keys(dict, key_list):
     return dict
 
 ## Returns the count of keys from key_list missing in the dictionary.
+## Optimization: Replaced 'dict_has(dict, key) == false' with 'not dict_has(dict, key)'
+## to eliminate boolean comparison overhead in hot loop.
 @inline
 proc count_missing(dict, key_list):
     let missing = 0
     for key in key_list:
-        if dict_has(dict, key) == false:
+        if not dict_has(dict, key):
             missing = missing + 1
     return missing
