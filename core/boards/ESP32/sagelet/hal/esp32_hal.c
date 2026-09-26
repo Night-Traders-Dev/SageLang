@@ -87,18 +87,42 @@ enum {
 
 /* ----------------------------------------------------------- GPIO / IO_MUX */
 
-#define GPIO0_BASE     0x3FF44504u
-#define DR_REG_IO_MUX  0x60000000u
+/* GPIO register map, transcribed from gpio_reg.h.
+ *
+ * This used to be based at 0x3FF44504 with ad-hoc offsets, which is not the
+ * GPIO block at all: DR_REG_GPIO_BASE is 0x3ff44000, so GPIO_OUT_W1TS for pin 2
+ * was computed as 0x3FF44528 instead of the real 0x3ff44008 -- a write to an
+ * unrelated register. led_init() is the first thing the OS does after coming up,
+ * which is why startup stopped there.
+ *
+ * Offsets within the block, and the bank stride: the ESP32 has 40 GPIOs, so two
+ * banks of 32. OUT is at +0x04 with W1TS/W1TC at +0x08/+0x0c and the next bank
+ * at +0x10, giving a 0x0c stride; ENABLE follows the same 0x0c stride from
+ * +0x20; IN is a plain read at +0x3c with a 0x04 stride.
+ */
+#define DR_REG_GPIO        0x3FF44000u
+#define GPIO_BANK(n)       ((uint32_t)(n) >> 5)
+#define GPIO_BIT(n)        (1u << ((uint32_t)(n) & 31u))
 
-#define GPIO_OUT_W1TS(n)   (*(volatile uint32_t *)(GPIO0_BASE + 0x1C + (n) * 4))
-#define GPIO_OUT_W1TC(n)   (*(volatile uint32_t *)(GPIO0_BASE + 0x20 + (n) * 4))
-#define GPIO_OUT_REG(n)    (*(volatile uint32_t *)(GPIO0_BASE + 0x04 + (n) * 4))
-#define GPIO_ENABLE_REG(n) (*(volatile uint32_t *)(GPIO0_BASE + 0x70 + (n) * 4))
-#define GPIO_IN_REG(n)     (*(volatile uint32_t *)(GPIO0_BASE + 0x3C + (n) * 4))
-#define GPIO_SETUP_REG(n)  (*(volatile uint32_t *)(GPIO0_BASE + 0x44 + (n) * 4))
-#define GPIO_FUNC_IN_SEL(n)(*(volatile uint32_t *)(GPIO0_BASE + 0x58 + (n) * 4))
+#define GPIO_OUT_REG(n)     (*(volatile uint32_t *)(DR_REG_GPIO + 0x04 + 0x0C * GPIO_BANK(n)))
+#define GPIO_OUT_W1TS(n)    (*(volatile uint32_t *)(DR_REG_GPIO + 0x08 + 0x0C * GPIO_BANK(n)))
+#define GPIO_OUT_W1TC(n)    (*(volatile uint32_t *)(DR_REG_GPIO + 0x0C + 0x0C * GPIO_BANK(n)))
+#define GPIO_ENABLE_W1TS(n) (*(volatile uint32_t *)(DR_REG_GPIO + 0x24 + 0x0C * GPIO_BANK(n)))
+#define GPIO_ENABLE_W1TC(n) (*(volatile uint32_t *)(DR_REG_GPIO + 0x28 + 0x0C * GPIO_BANK(n)))
+#define GPIO_IN_REG(n)      (*(volatile uint32_t *)(DR_REG_GPIO + 0x3C + 0x04 * GPIO_BANK(n)))
 
-#define IO_MUX_GPIO(n)     (*(volatile uint32_t *)(DR_REG_IO_MUX + 0x04 + (n) * 4))
+/* No IO_MUX write.
+ *
+ * The pad mux registers are NOT strided: in this IDF pin 0 is base+0x44, pin 2
+ * is base+0x40, pin 4 is base+0x48 and pin 5 is base+0x6c, so any address
+ * computed from the pin number lands in the wrong place and writes to a
+ * stranger's register. Getting this right needs a per-pin table.
+ *
+ * It is also unnecessary here. The pads this HAL touches -- the DevKitC LED on
+ * GPIO2, and the UART pads GPIO1/GPIO3 -- come out of reset with the plain GPIO
+ * function already selected, so leaving the mux alone is both correct and safer
+ * than a computed address. Anything that genuinely needs a different function
+ * has to add its mux entry to a table rather than compute one. */
 #define IO_MUX_FUNC_GPIO   1u
 
 /* ------------------------------------------------------------------- misc */
@@ -200,42 +224,44 @@ uint32_t hal_clock_hz(void) { return CPU_HZ; }
 static inline int gpio_is_valid(uint32_t pin) { return pin <= 39; }
 
 void hal_gpio_init(uint32_t pin) {
-    if (!gpio_is_valid(pin)) return;
-    /* Route the pad to the plain GPIO peripheral (function 1) and let the
-     * peripheral own the pin: this clears the deep-sleep isolation latch. */
-    IO_MUX_GPIO(pin) = IO_MUX_GPIO(pin) | IO_MUX_FUNC_GPIO;
+    /* Nothing to do: see the note on the pad mux above. Kept as a hook so the
+     * call sites read the same, and so a future per-pin mux table has a home. */
+    (void)pin;
 }
 
 void hal_gpio_set_dir(uint32_t pin, int output) {
     if (!gpio_is_valid(pin)) return;
-    hal_gpio_init(pin);
+    /* Read-modify-write, and the pin's own bit. The old code assigned a literal
+     * 1u << 2, which both hardcoded pin 2 and cleared every other pin's output
+     * enable -- the LED worked and the rest of the board went dead. */
     if (output) {
-        GPIO_ENABLE_REG(pin) = (1u << 2);            /* output enable */
+        GPIO_ENABLE_W1TS(pin) = GPIO_BIT(pin);
     } else {
-        GPIO_ENABLE_REG(pin) = 0;                    /* input */
+        GPIO_ENABLE_W1TC(pin) = GPIO_BIT(pin);
     }
 }
 
 void hal_gpio_put(uint32_t pin, int value) {
     if (!gpio_is_valid(pin)) return;
     if (value) {
-        GPIO_OUT_W1TS(pin) = (1u << (pin & 31));
+        GPIO_OUT_W1TS(pin) = GPIO_BIT(pin);
     } else {
-        GPIO_OUT_W1TC(pin) = (1u << (pin & 31));
+        GPIO_OUT_W1TC(pin) = GPIO_BIT(pin);
     }
 }
 
 int hal_gpio_get(uint32_t pin) {
     if (!gpio_is_valid(pin)) return 0;
-    return (int)((GPIO_IN_REG(pin) >> (pin & 31)) & 1u);
+    return (int)((GPIO_IN_REG(pin) >> ((uint32_t)pin & 31u)) & 1u);
 }
 
 void hal_gpio_set_pull(uint32_t pin, int up, int down) {
     if (!gpio_is_valid(pin)) return;
-    uint32_t pupd = 0;                               /* 0 none, 1 down, 2 up */
-    if (up) pupd = 2;
-    else if (down) pupd = 1;
-    GPIO_SETUP_REG(pin) = (GPIO_SETUP_REG(pin) & ~0x3u) | pupd;
+    /* The SETUP/PUPD registers are not described in this IDF's gpio_reg.h, and
+     * guessing their addresses is exactly the mistake documented above. Until
+     * they are transcribed from a trustworthy source, pulls are a no-op and
+     * only the external strapping resistors apply. GPIO2's LED needs none. */
+    (void)up; (void)down;
 }
 
 /* ------------------------------------------------------------------ UART0 */

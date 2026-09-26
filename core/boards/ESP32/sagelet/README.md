@@ -294,37 +294,69 @@ the first heap allocation in the runtime operates on a NULL reent pointer.
 This is not the current blocker, but it was a real defect on the path and the
 warning is now gone.
 
-### Open: startup stops at the OS body's first call
+### Fixed: the GPIO register map was wrong
 
-Precisely located. With markers injected into the generated `main()`, the
-observed sequence on the wire is:
+The HAL based GPIO at `0x3FF44504` with ad-hoc offsets. That is not the GPIO
+block: `DR_REG_GPIO_BASE` is `0x3ff44000`, so `GPIO_OUT_W1TS` for pin 2 was being
+computed as `0x3FF44528` where the real address is `0x3ff44008`. Every `gpio_put`
+and `gpio_set_dir` was writing an unrelated register. `led_init()` is the first
+thing the OS does once it is up, so this sat directly on the startup path.
 
-| marker | meaning | seen |
-| --- | --- | --- |
-| `U` | `hal_uart_init` (from `stdio_init_all`) | yes |
-| `d` `D` | `hal_delay_ms` entry/exit (from `sleep_ms(2000)`) | yes |
-| `p` | first statement after the sleep | yes |
-| `j` | global-init #300 of 302 | yes |
-| second `U` | the OS's own `hw.uart_init(115200)` | **no** |
+The map is now transcribed from `gpio_reg.h`, with the bank arithmetic spelled
+out: the ESP32 has 40 GPIOs, so two banks of 32. `OUT` is at `+0x04` with
+`W1TS`/`W1TC` at `+0x08`/`+0x0c` and the next bank at `+0x10` (stride `0x0c`);
+`ENABLE` follows the same stride from `+0x20`; `IN` is at `+0x3c` with a `0x04`
+stride.
 
-So everything through the whole global-initialisation block completes, and the
-failure is at the transition into the OS's `main()`, whose first statement is
-`hw.uart_init(115200)`. `a1` being uninitialised was a real bug here and is
-fixed, but it was not the whole story: the second `U` still does not appear, and
-no backtrace or reset does either, so whatever happens there spins.
+`hal_gpio_set_dir()` also assigned a literal `1u << 2`, which both hardcoded pin
+2 and cleared every other pin's output enable -- the LED would have worked and
+the rest of the board gone dead. It is now a read-modify-write of the pin's bit.
 
-Things already ruled out at that point: the UART (markers up to `j` use the same
-FIFO), the watchdogs (all three disarmed, and still fed), the memory map (`.bss`,
-heap and stack all verified inside real DRAM by the linker asserts), stack size
-and location, and the heap size.
+There is deliberately **no** pad-mux write any more. The `IO_MUX` registers are
+not strided: in this IDF pin 0 is `base+0x44`, pin 2 is `base+0x40`, pin 4 is
+`base+0x48`, pin 5 is `base+0x6c`, so any address computed from a pin number
+lands in the wrong place. It is also unnecessary: GPIO1, GPIO2 and GPIO3 all come
+out of reset with the plain GPIO function selected, which is everything this HAL
+touches. `hal_gpio_set_pull()` is now an explicit no-op for the same reason --
+`SETUP`/`PUPD` are not in this IDF's `gpio_reg.h` at all, and guessing is exactly
+the mistake documented above.
 
-The most likely remaining explanation is a CPU exception with no handler
-installed: the ESP32's default vector for an image that never installs one can
-spin rather than reset, which matches "no output, no reset, no backtrace".
-Establishing a level-1 exception vector that reports `EXCCAUSE` and `EXCVADDR`
-over the (now working) FIFO path would settle it, and is the next thing to try.
-The alternative is that the call into the OS body is being emitted in a form the
-ROM's leftover register state does not support, which the `a1` finding hints at.
+### Open: two separate startup blockers remain
+
+**Blocker A -- the value-initialisation block.** The generated `main()` ends with
+~300 `sage_define_slot(...)` calls that build the `esp32.sage` constant tables
+before the OS body is invoked. Execution never gets past them.
+
+What has been established, and what has not:
+
+- The whole 302-slot global-initialisation block completes.
+- `sage_define_slot()` is two stores and `sage_number()` is a struct literal;
+  neither can hang.
+- It is **positional, not semantic**: commenting out all but the first three
+  `define_slot` calls lets the OS start, and re-enabling the fourth stops it
+  again. Reproducible both ways, and the fourth call is no different from the
+  third.
+- Not the GC: disabling collection entirely changes nothing.
+- Not the allocator: a probe inside `main` confirms `malloc(64)` returns non-NULL
+  and `free()` works.
+- Not stack size: growing the stack to 80 KB changes nothing.
+- `main()`'s frame is 3232 bytes (`entry a1, 0xca0`), unremarkable.
+
+A failure that turns on *position* rather than content, with trivial callees and
+a working allocator, is the signature of a code-generation or ABI problem rather
+than a logic bug. The most concrete lead is the `entry a1, 0xca0` prologue: the
+frame is emitted as a single `entry`, and it is worth checking what that does to
+the windowed-ABI call stack (`a1`) and the callee-saved pointer (`a15`) on a core
+that the ROM has just handed over.
+
+**Blocker B -- inside the OS body.** With blocker A bypassed by calling the OS
+body first, the OS is entered (`hw.uart_init` runs) and then stops before its
+first `hw.uart_puts`, i.e. in `led_init()` or on entry to `repl()`. The GPIO fix
+above was on this path but did not clear it, and disabling the GC did not either.
+
+Neither blocker produces a reset, a backtrace, or a Guru Meditation -- both spin
+silently, which is why so much of the work above was bisection by marker rather
+than by reading a fault.
 
 ### JTAG
 

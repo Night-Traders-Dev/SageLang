@@ -92,7 +92,7 @@ SECTIONS
   {
     _heap_start = ABSOLUTE(.);
     . = ALIGN(8);
-    . = . + 0x11000;          /* 68 KB heap: DRAM_HI holds .bss, heap and stack,
+    . = . + 0x12000;          /* 72 KB heap: DRAM_HI holds .bss, heap and stack,
                              * and the ASSERT below enforces that */
     _heap_end = ABSOLUTE(.);
   } > DRAM_HI
@@ -110,7 +110,7 @@ SECTIONS
   .stack (NOLOAD) :
   {
     . = ALIGN(16);
-    . = . + 0x8000;           /* 32 KB stack */
+    . = . + 0x6000;           /* 24 KB stack */
     . = ALIGN(16);
     _stack_top = ABSOLUTE(.);
   } > DRAM_HI
