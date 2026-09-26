@@ -298,7 +298,8 @@ enum Color:
 
 # Trait (interface contract)
 trait Drawable:
-    proc draw(self)
+    proc draw(self):
+        pass
 ```
 
 ### 1.18 Unsafe Blocks

@@ -1100,7 +1100,8 @@ Traits define an interface contract of method signatures. A trait compiles down 
 
 ```sagelang
 trait Printable:
-    proc to_string(self)
+    proc to_string(self):
+        pass
 end
 ```
 
