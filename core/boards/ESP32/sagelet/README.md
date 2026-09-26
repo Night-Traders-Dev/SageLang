@@ -321,42 +321,78 @@ touches. `hal_gpio_set_pull()` is now an explicit no-op for the same reason --
 `SETUP`/`PUPD` are not in this IDF's `gpio_reg.h` at all, and guessing is exactly
 the mistake documented above.
 
-### Open: two separate startup blockers remain
+### Root cause found: string literals are misresolved in the linked image
 
-**Blocker A -- the value-initialisation block.** The generated `main()` ends with
-~300 `sage_define_slot(...)` calls that build the `esp32.sage` constant tables
-before the OS body is invoked. Execution never gets past them.
+Blocker A is now explained, and it is not the runtime.
 
-What has been established, and what has not:
+`l32r` pool entries that should hold string-literal addresses hold unrelated
+addresses instead. Measured on the current image:
 
-- The whole 302-slot global-initialisation block completes.
-- `sage_define_slot()` is two stores and `sage_number()` is a struct literal;
-  neither can hang.
-- It is **positional, not semantic**: commenting out all but the first three
-  `define_slot` calls lets the OS start, and re-enabling the fourth stops it
-  again. Reproducible both ways, and the fourth call is no different from the
-  third.
-- Not the GC: disabling collection entirely changes nothing.
-- Not the allocator: a probe inside `main` confirms `malloc(64)` returns non-NULL
-  and `free()` works.
-- Not stack size: growing the stack to 80 KB changes nothing.
-- `main()`'s frame is 3232 bytes (`entry a1, 0xca0`), unremarkable.
+| | address | bytes there |
+| --- | --- | --- |
+| the call site loads | `0x4008d3ed` | `b' \x00assertion "%s" failed: fil'` |
+| the literal actually is | `0x4008c3e1` | `b'SageletOS\x000.'` |
 
-A failure that turns on *position* rather than content, with trivial callees and
-a working allocator, is the signature of a code-generation or ABI problem rather
-than a logic bug. The most concrete lead is the `entry a1, 0xca0` prologue: the
-frame is emitted as a single `entry`, and it is worth checking what that does to
-the windowed-ABI call stack (`a1`) and the callee-saved pointer (`a15`) on a core
-that the ROM has just handed over.
+The pointer lands in unrelated read-only data instead of on the literal. Three
+copies of `"SageletOS"` all exist at `0x4008c3e1`, `0x4008c3f1` and `0x4008c40c`,
+and none of them is what the code uses.
 
-**Blocker B -- inside the OS body.** With blocker A bypassed by calling the OS
-body first, the OS is entered (`hw.uart_init` runs) and then stops before its
-first `hw.uart_puts`, i.e. in `led_init()` or on entry to `repl()`. The GPIO fix
-above was on this path but did not clear it, and disabling the GC did not either.
+That is fatal here because of what the runtime does with the pointer.
+`sage_string_const()` starts with:
 
-Neither blocker produces a reset, a backtrace, or a Guru Meditation -- both spin
-silently, which is why so much of the work above was bisection by marker rather
-than by reading a fault.
+```c
+unsigned long h = sage_intern_hash(value) & (SAGE_INTERN_CAPACITY - 1);
+```
+
+and `sage_intern_hash()` is `while (*s) { ... }`. Given a pointer into the middle
+of the VM's bytecode the loop walks looking for a terminating NUL that is not
+there, and the OS stops -- silently, with no reset and no backtrace, which is
+exactly the signature every image in this bring-up had. Instrumenting
+`sage_string_const` confirms it precisely: the marker at function entry arrives,
+the one after the hash never does.
+
+The isolation was clean. Neutralising only the 16 `sage_string_const(...)` call
+sites lets the OS start; neutralising only the 9 `sage_make_array(...)` sites
+leaves it hanging. So it is the string path, not allocation, not the GC (which
+was re-tested in a configuration that actually reaches this code, unlike the
+first attempt), and not stack size.
+
+What is *not* the cause, all checked directly:
+
+- The toolchain and this linker script are fine: a four-line C file with the same
+  `-mlongcalls -mtext-section-literals` and the same linker script resolves its
+  literal correctly (`l32r a10, 0x40080038`, literal at `0x40080038`).
+- Removing `-mtext-section-literals` -- no change.
+- Removing `-ffunction-sections -fdata-sections` -- no change.
+- Merging `.iram0.rodata` into `.iram0.text` so literals and code share one
+  output section -- no change. Reverted rather than shipped, since it bought
+  nothing.
+
+So it needs the large generated translation unit to reproduce, which points at
+the Xtensa literal-pool machinery at scale. Two things stand out in the object
+and are the next things to look at:
+
+- 436 `R_XTENSA_ASM_EXPAND` pseudo-relocations, which are the assembler's
+  `l32r`/pool expansion hooks and the part of the mechanism that grows with size.
+- 299 relocations against `.rodata`, and this linker script's `*(.rodata
+  .rodata.*)` sits inside the IRAM0 output section -- so it also sweeps in
+  *library* read-only data. Newlib's assertion text is what the misresolved
+  pointer lands on, which is consistent with the program's literals and the
+  library's rodata being interleaved in one section.
+
+The next experiment is to stop the wildcard collecting library rodata (restrict
+it to the generated program's own `.rodata.*`, or exclude libc's sections
+explicitly) and re-measure whether a pool entry then equals its literal's
+address. That is a cheap, decisive check and needs no hardware.
+
+### Open: the second blocker
+
+With the value-init block bypassed, the OS is entered (`hw.uart_init` runs) and
+then stops before its first `hw.uart_puts`, i.e. in `led_init()` or on entry to
+`repl()`. The GPIO map fix was on that path and did not clear it; disabling the
+GC did not either. Given what A turned out to be, this is quite likely the same
+misresolution showing up in a different callee rather than an independent fault,
+so it should be re-checked once literals resolve.
 
 ### JTAG
 
