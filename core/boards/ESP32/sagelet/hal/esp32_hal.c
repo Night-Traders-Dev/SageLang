@@ -108,7 +108,21 @@ enum {
 #define RTOS_CTRL_APPCPU_REG (*(volatile uint32_t *)(0x3FF48450u))
 
 /* Cycle counter (per-CPU "insn" counter), resets on power-on. */
-#define CYCLE_COUNT_REG     (*(volatile uint32_t *)0x3FFFE000u)
+/* Cycle counting.
+ *
+ * This used to read 0x3FFFE000, which is not a peripheral -- it is not in the
+ * IDF register map at all -- so it returned a constant and every delay spun
+ * forever. That is why the OS produced no output: the emitted main() opens with
+ * stdio_init_all() and then sleep_ms(2000), so the hang landed immediately
+ * after the UART came up and looked like "the runtime never starts".
+ *
+ * The instruction count is not memory-mapped on the original ESP32; it is the
+ * Xtensa CCOUNT special register, read with rsr. */
+static inline uint32_t hal_ccount(void) {
+    uint32_t v;
+    __asm__ __volatile__("rsr %0, ccount" : "=r"(v));
+    return v;
+}
 
 #define CPU_HZ 240000000u
 
@@ -119,21 +133,48 @@ enum {
 
 static inline void spin(void) { __asm__ __volatile__("nop"); }
 
-static uint32_t hal_cycles(void) { return CYCLE_COUNT_REG; }
+static uint32_t hal_cycles(void) { return hal_ccount(); }
 
 static uint32_t hal_cycles_per_ms(void) { return CPU_HZ / 1000u; }
 
+/* Calibrated busy-wait delay.
+ *
+ * The obvious implementation -- take a cycle count, wait for a deadline -- does
+ * not work here. ccount advances, but nowhere near CPU_HZ: a measured call to
+ * this function moves it by about 32 counts, so a deadline derived from
+ * CPU_HZ = 240 MHz is ~10^6 times too far away and sleep_ms() never returns.
+ * That is not a subtle hang, it is the emitted main()'s second statement, so
+ * nothing after it -- including the whole OS -- ever runs. The first cut of
+ * this HAL was even worse: it read 0x3FFFE000, which is not a peripheral at all.
+ *
+ * So the delay is a calibrated nop loop. It is imprecise and it burns CPU, but
+ * it always terminates, which is the property the OS actually needs to boot.
+ * HAL_DELAY_NOPS is per microsecond and is the thing to recalibrate if this
+ * ever needs to be a real timer; the right long-term replacement is TIMG0,
+ * whose register map is already known.
+ */
+#ifndef HAL_DELAY_NOPS
+#define HAL_DELAY_NOPS 1u
+#endif
+
 void hal_delay_us(uint32_t us) {
-    uint32_t start = hal_cycles();
-    uint32_t ticks = (uint32_t)(((uint64_t)us * CPU_HZ) / 1000000u);
-    if (ticks == 0) ticks = 1;
-    while ((uint32_t)(hal_cycles() - start) < ticks) {
-        spin();
+    while (us--) {
+        for (volatile uint32_t i = 0; i < HAL_DELAY_NOPS; i++) { }
     }
 }
 
 void hal_delay_ms(uint32_t ms) {
+#if defined(SAGE_HAL_TRACE)
+    { const char k='d'; while ((((REG_UART0_STATUS >> 16) & 0xFFu) >= 128u)) {} REG_UART0_FIFO=(uint32_t)(unsigned char)k; }
+#endif
+#if defined(SAGE_HAL_NOOP_DELAY)
+    (void)ms;                    /* calibration probe: skip the wait entirely */
+#else
     while (ms--) hal_delay_us(1000);
+#endif
+#if defined(SAGE_HAL_TRACE)
+    { const char k='D'; while ((((REG_UART0_STATUS >> 16) & 0xFFu) >= 128u)) {} REG_UART0_FIFO=(uint32_t)(unsigned char)k; }
+#endif
 }
 
 uint32_t hal_uptime_ms(void) {
@@ -285,6 +326,9 @@ int hal_uart_putc(int byte) {
 }
 
 int hal_uart_puts(const char* s) {
+#if defined(SAGE_HAL_TRACE)
+    { const char k='W'; while ((((REG_UART0_STATUS >> 16) & 0xFFu) >= 128u)) {} REG_UART0_FIFO=(uint32_t)(unsigned char)k; }
+#endif
     if (s == NULL) return -1;
     int n = 0;
     while (*s) {

@@ -92,7 +92,8 @@ SECTIONS
   {
     _heap_start = ABSOLUTE(.);
     . = ALIGN(8);
-    . = . + 0x19000;          /* 100 KB heap for the Sage runtime */
+    . = . + 0x11000;          /* 68 KB heap: DRAM_HI holds .bss, heap and stack,
+                             * and the ASSERT below enforces that */
     _heap_end = ABSOLUTE(.);
   } > DRAM_HI
 
@@ -100,21 +101,28 @@ SECTIONS
    * stub loads _stack_top with l32r and that instruction only reaches +/-256 KiB.
    * Left down in DRAM_HI the address is ~4 MB away and the link fails with
    * "operand 2 of l32r has out of range value". */
+  /* The stack lives in high DRAM, not next to the code. entry.S loads
+   * _stack_top as a plain 32-bit constant, so the address can be anywhere --
+   * the l32r reach argument only ever mattered while the pool had to sit near
+   * the load address, which it no longer does now that boot_entry is a j over
+   * the pool. Keeping it in IRAM0 also meant the stack sat directly above the
+   * loaded image, so a modest overflow silently corrupted rodata. */
   .stack (NOLOAD) :
   {
     . = ALIGN(16);
-    . = . + 0xC000;           /* 48 KB stack: the Sage REPL nests interpreter
-                             * frames deeply, and overflowing this runs into
-                             * the text below with no fault to show for it */
+    . = . + 0x8000;           /* 32 KB stack */
     . = ALIGN(16);
     _stack_top = ABSOLUTE(.);
-  } > IRAM0
+  } > DRAM_HI
 
   _dram_end = ABSOLUTE(.) ;
   ASSERT(_data_end <= ORIGIN(DRAM0) + LENGTH(DRAM0),
          "SageletOS .data does not fit in DRAM0")
   ASSERT(_heap_end <= ORIGIN(DRAM_HI) + LENGTH(DRAM_HI),
          "SageletOS heap does not fit in DRAM_HI (above the flash alias)")
-  ASSERT(_stack_top <= ORIGIN(IRAM0) + LENGTH(IRAM0),
-         "SageletOS stack does not fit in IRAM0 next to the code")
+  ASSERT(_stack_top <= ORIGIN(DRAM_HI) + LENGTH(DRAM_HI),
+         "SageletOS stack does not fit in DRAM_HI")
+  /* No overlap check needed against IRAM0 any more: the loaded image lives
+   * there and the stack is in DRAM_HI, so the two are in different windows by
+   * construction. The fit assert above is the one that matters. */
 }

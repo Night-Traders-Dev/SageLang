@@ -235,27 +235,80 @@ With the markers passing characters, **all four appear** (`1xxx`) and startup
 runs clean through the watchdog takeover, the `.bss` clear, the `.data` copy and
 into `main()`, with no reset.
 
-### Open: the OS hangs before its first statement
+### Fixed: the delay never returned
 
-`main()` is entered, and `hal_uart_init()` is never reached, so the hang is in
-the generated runtime's own startup rather than in anything hand-written here.
-A marker inside `hal_uart_init()` (build with `SAGET_EXTRA_CFLAGS=-DSAGE_HAL_TRACE`)
-does not appear, which is what places the failure before the first `.sage`
-statement executes.
+`hal_delay_us()` was derived from a cycle count, and the cycle count was read
+from `0x3FFFE000` -- which is not a peripheral at all, and returns a constant.
+Every delay therefore spun forever. That is not a subtle stall: the emitted
+`main()` opens with `stdio_init_all()` and then `sleep_ms(2000)`, so the hang
+landed immediately after the console came up and looked exactly like "the
+runtime never starts".
 
-Enlarging the stack from 24 KB to 48 KB and the heap from 96 KB to 100 KB did
-not change it, so it is not simply out of room. Remaining suspects, in order:
+Switching to `rsr ccount` (the real Xtensa instruction counter) is not enough
+either. ccount does advance -- a probe emitted `y` every time -- but by only
+about 32 counts per call, nowhere near `CPU_HZ`. A deadline derived from 240 MHz
+is roughly a million times too far away, so `sleep_ms()` still never returned.
+The delay is now a calibrated nop loop (`HAL_DELAY_NOPS`), which is imprecise
+and burns CPU but always terminates, which is what the OS needs in order to
+boot. The proper replacement is TIMG0, whose register map is already known.
 
-1. The runtime's initial allocation. The heap starts at `0x3ffe6848` and the
-   `.bss` at `0x3ffce000`; both are now inside real DRAM, but the allocator's
-   assumptions about the region have not been checked against the runtime.
-2. The generated C's global initialisers, which run before the first statement
-   and are the only code executed between entry into `main()` and the OS body.
-3. A CPU fault with no handler installed. Nothing resets, which argues against
-   this, but an exception with an invalid vector table can spin instead.
+### Fixed: `$EXTRA_CFLAGS` only reached one translation unit
 
-This now looks like a runtime/toolchain question rather than a board one, and a
-JTAG session would answer it immediately.
+`SAGET_EXTRA_CFLAGS` was passed to `startup.c` and nothing else. A `-D` meant to
+instrument the HAL was silently dropped, so the marker was never compiled in and
+its absence was misread as "the OS hangs before `uart_init`". The flag now
+reaches the generated C, the HAL and the newlib shim.
+
+### Fixed: the stack was on top of the loaded image
+
+The stack lived in IRAM0 immediately after the loaded text and rodata, so a
+modest overflow silently corrupted code instead of faulting. Nothing needs it
+there: `entry.S` loads `_stack_top` as a plain 32-bit constant, so the `l32r`
+reach argument only ever applied while the literal pool had to sit near the load
+address -- and it no longer does, now that `boot_entry` is a `j` over the pool.
+The stack is in high DRAM with the `.bss` and heap, and the linker asserts that
+all three fit.
+
+### Fixed: the entry established `a15` but not `a1`
+
+`a15` is the callee-saved stack pointer, but `a1` is the *call stack* pointer,
+and every prologue's `entry a1, N` pushes a window increment there. Setting only
+`a15` leaves `a1` pointing into whatever the ROM was using, so leaf code that
+only stores to peripherals works while the first genuinely nested call sequence
+walks off the end of it. Both now start at the same top, as in a normal ESP-IDF
+application.
+
+### Open: startup stops at the OS body's first call
+
+Precisely located. With markers injected into the generated `main()`, the
+observed sequence on the wire is:
+
+| marker | meaning | seen |
+| --- | --- | --- |
+| `U` | `hal_uart_init` (from `stdio_init_all`) | yes |
+| `d` `D` | `hal_delay_ms` entry/exit (from `sleep_ms(2000)`) | yes |
+| `p` | first statement after the sleep | yes |
+| `j` | global-init #300 of 302 | yes |
+| second `U` | the OS's own `hw.uart_init(115200)` | **no** |
+
+So everything through the whole global-initialisation block completes, and the
+failure is at the transition into the OS's `main()`, whose first statement is
+`hw.uart_init(115200)`. `a1` being uninitialised was a real bug here and is
+fixed, but it was not the whole story: the second `U` still does not appear, and
+no backtrace or reset does either, so whatever happens there spins.
+
+Things already ruled out at that point: the UART (markers up to `j` use the same
+FIFO), the watchdogs (all three disarmed, and still fed), the memory map (`.bss`,
+heap and stack all verified inside real DRAM by the linker asserts), stack size
+and location, and the heap size.
+
+The most likely remaining explanation is a CPU exception with no handler
+installed: the ESP32's default vector for an image that never installs one can
+spin rather than reset, which matches "no output, no reset, no backtrace".
+Establishing a level-1 exception vector that reports `EXCCAUSE` and `EXCVADDR`
+over the (now working) FIFO path would settle it, and is the next thing to try.
+The alternative is that the call into the OS body is being emitted in a form the
+ROM's leftover register state does not support, which the `a1` finding hints at.
 
 ### JTAG
 

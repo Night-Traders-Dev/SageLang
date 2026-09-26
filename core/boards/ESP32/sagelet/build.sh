@@ -181,10 +181,11 @@ build_image() {
         -Wall -Wno-unused-function -Wno-unused-variable \
         -Wno-format-truncation \
         -I"$HERE/hal" \
-        -DTARGET_ESP32=1 -DUART_CLK_HZ=80000000 \
+        -DTARGET_ESP32=1 -DUART_CLK_HZ=80000000 $EXTRA_CFLAGS \
         -c "$OUT/$prefix.c" -o "$OUT/$prefix.o"
-    "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" -c "$HERE/hal/esp32_hal.c"  -o "$OUT/hal_$prefix.o"
-    "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" -c "$HERE/hal/esp32_newlib.c" -o "$OUT/newlib_$prefix.o"
+    # $EXTRA_CFLAGS has to reach every translation unit, not just startup.c.
+    "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" $EXTRA_CFLAGS -c "$HERE/hal/esp32_hal.c"  -o "$OUT/hal_$prefix.o"
+    "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" $EXTRA_CFLAGS -c "$HERE/hal/esp32_newlib.c" -o "$OUT/newlib_$prefix.o"
     "$CC" -mlongcalls -mtext-section-literals -Os -I"$HERE/hal" $EXTRA_CFLAGS \
         -c "$HERE/hal/startup.c" -o "$OUT/startup_$prefix.o"
     # entry.S honours -DSAGE_ENTRY_LED, so the assembler's flags follow the

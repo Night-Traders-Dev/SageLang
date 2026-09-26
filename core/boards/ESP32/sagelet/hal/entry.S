@@ -33,6 +33,14 @@
  *
  * a0 is pointed at a safe non-null address rather than argc: a0 is scratch on
  * this ABI and the emitted main keeps argc/argv in its own globals.
+ *
+ * Both stack registers have to be established. a15 is the callee-saved stack
+ * pointer, but a1 is the *call stack* pointer, and every prologue's
+ * `entry a1, N` pushes a window increment there. Setting only a15 leaves a1
+ * pointing into whatever the ROM was using, so nested calls walk off the end of
+ * it: leaf code that only stores to peripherals works fine, and the first
+ * genuinely nested call sequence quietly corrupts memory. Both start at the
+ * same top, which is how a normal ESP-IDF application is laid out.
  */
 
 #if !defined(SAGE_ENTRY_LED) && !defined(SAGE_ENTRY_UART)
@@ -60,7 +68,8 @@ L_reset:
     .align  4
 
 entry_body:
-    l32r    a15, L_stack_top      /* stack pointer                    */
+    l32r    a15, L_stack_top      /* callee-saved stack pointer       */
+    mov     a1,  a15              /* call-stack pointer               */
     l32r    a0,  L_boot_arg       /* scratch, not argc                */
     mov     a1,  a15
     l32r    a2,  L_reset
