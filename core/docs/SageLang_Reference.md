@@ -66,7 +66,7 @@ nil                      # Null value
 
 ### 1.4 Arithmetic Operators
 
-```sage
+```text
 +   -   *   /   %       # Arithmetic
 ==  !=  >   <   >=  <=  # Comparison
 and or not               # Logical
@@ -298,7 +298,7 @@ enum Color:
 
 # Trait (interface contract)
 trait Drawable:
-    proc draw(self)
+    proc draw(self): pass
 ```
 
 ### 1.18 Unsafe Blocks
@@ -363,8 +363,8 @@ let lookup: Dict[String, Int] = {"a": 1}
 proc add(a: Int, b: Int) -> Int:
     return a + b
 
-# Optional type (T?)
-let maybe: String? = nil
+# Optional type
+let maybe: Option[String] = nil
 ```
 
 Type annotations are **validated at runtime** by the type checker but do not affect execution semantics. The type checker (`sage check file.sage`) reports mismatches.
@@ -685,7 +685,7 @@ sys.platform()                # Platform name
 **thread** — Threading primitives:
 ```sage
 import thread
-thread.spawn(proc_ref, args?) # Spawn thread
+thread.spawn(proc_ref, args)  # Spawn thread
 thread.join(thread_handle)    # Join thread
 thread.mutex()                # Create mutex
 thread.lock(mutex)            # Lock mutex
@@ -731,12 +731,12 @@ tcp.close(conn)
 **http** — HTTP client (via libcurl):
 ```sage
 import http
-http.get(url, options?)        # Returns {status, body, headers}
-http.post(url, data, options?)
-http.put(url, data, options?)
-http.delete(url, options?)
-http.patch(url, data, options?)
-http.head(url, options?)
+http.get(url, options)        # Returns {status, body, headers}
+http.post(url, data, options)
+http.put(url, data, options)
+http.delete(url, options)
+http.patch(url, data, options)
+http.head(url, options)
 http.download(url, filepath)
 ```
 
@@ -1239,7 +1239,7 @@ let x = comptime(factorial(10))
 
 ### 11.2 Pragmas / Decorators
 
-```sage
+```text
 @inline                # Suggest inlining
 @packed                # Packed struct layout
 @section(".text")     # Place in specific section
@@ -1263,7 +1263,7 @@ Generics use monomorphization in compiled backends.
 
 ### 11.4 Macros (v3.7+)
 
-```sage
+```text
 macro name(params):
     quote:
         # Template with unquote() for substitutions

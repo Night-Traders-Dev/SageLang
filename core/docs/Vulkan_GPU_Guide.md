@@ -250,7 +250,7 @@ gpu.STAGE_ALL                             # All stages
 ### Window Management
 
 ```sage
-gpu.init_windowed(app_name, width, height, title, validation?)  # Create window + Vulkan
+gpu.init_windowed(app_name, width, height, title, validation)  # Create window + Vulkan
 gpu.window_should_close()     # Check close button
 gpu.poll_events()             # Process OS events
 gpu.set_title(new_title)      # Update window title
@@ -333,7 +333,7 @@ let ibuf = gpu.upload_bytes([0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0], gpu.BUFFER_IND
 
 ```sage
 let ubo = gpu.create_uniform_buffer(256)    # Persistent mapped
-gpu.update_uniform(ubo, [1.0, 0.0, 0.0, 0.0, ...])  # Fast write (no staging)
+gpu.update_uniform(ubo, [1.0, 0.0, 0.0, 0.0])  # Fast write (no staging)
 ```
 
 ### Buffer Usage Flags
@@ -1097,7 +1097,7 @@ let cfg = lod.create_lod_config([50, 200, 1000, 5000, 20000])
 
 let level = lod.compute_lod(cfg, camera_pos, object_pos)
 if level == lod.LOD_FULL:
-    # render high-poly
+    pass # render high-poly
 ```
 
 ### Trails & Orbit Prediction (`graphics.trails`)

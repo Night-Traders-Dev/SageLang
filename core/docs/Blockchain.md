@@ -11,83 +11,83 @@ The library is designed for modularity and high performance. It features a plugg
 The `Blockchain` class is the central orchestrator, managing the chain, mempool, contracts, and node network.
 
 - **Usage:**
-  ```sage
-  import blockchain.blockchain as bc_mod
-  import blockchain.consensus.pow as pow_mod
-  
-  let consensus = pow_mod.PowConsensus(nil, 2)
-  let coin = bc_mod.Blockchain(consensus, "data/my_chain")
-  consensus.blockchain = coin
-  ```
+```sage
+import blockchain.blockchain as bc_mod
+import blockchain.consensus.pow as pow_mod
+
+let consensus = pow_mod.PowConsensus(nil, 2)
+let coin = bc_mod.Blockchain(consensus, "data/my_chain")
+consensus.blockchain = coin
+```
 
 ### 2.2 `Block`
 Represents a single block in the chain. Blocks are immutable once mined.
 
 - **Example:**
-  ```sage
-  import blockchain.block as block_mod
-  let block = block_mod.Block(height, tx_list, prev_hash, difficulty)
-  await block.mine()
-  ```
+```sage
+import blockchain.block as block_mod
+let block = block_mod.Block(height, tx_list, prev_hash, difficulty)
+await block.mine()
+```
 
 ### 2.3 `Transaction`
 Standard value transfer between addresses.
 
 - **Example:**
-  ```sage
-  import blockchain.transaction as tx_mod
-  let tx = tx_mod.Transaction("Alice", "Bob", 100)
-  let hash = tx.calculate_hash()
-  ```
+```sage
+import blockchain.transaction as tx_mod
+let tx = tx_mod.Transaction("Alice", "Bob", 100)
+let hash = tx.calculate_hash()
+```
 
 ### 2.4 `Wallet`
 Handles address generation and transaction signing.
 
 - **Example:**
-  ```sage
-  import blockchain.wallet as wallet_mod
-  let wallet = wallet_mod.Wallet()
-  wallet.sign_transaction(tx)
-  ```
+```sage
+import blockchain.wallet as wallet_mod
+let wallet = wallet_mod.Wallet()
+wallet.sign_transaction(tx)
+```
 
 ### 2.5 `Contract`
 Manages SageLang smart contract state and execution.
 
 - **Example:**
-  ```sage
-  import blockchain.contract as contract_mod
-  let c = contract_mod.Contract(source_code)
-  let result = c.execute(args, context)
-  ```
+```sage
+import blockchain.contract as contract_mod
+let c = contract_mod.Contract(source_code)
+let result = c.execute(args, context)
+```
 
 ### 2.6 `LedgerDB`
 High-performance storage for the ledger. Uses `blockchain.db`.
 
 - **Example:**
-  ```sage
-  import blockchain.db as db_mod
-  let db = db_mod.LedgerDB("data/ledger")
-  await db.save_block(block)
-  ```
+```sage
+import blockchain.db as db_mod
+let db = db_mod.LedgerDB("data/ledger")
+await db.save_block(block)
+```
 
 ### 2.7 `Orbit`
 Dynamic mining rate model that adjusts based on adoption and supply.
 
 - **Example:**
-  ```sage
-  import blockchain.orbit as orbit
-  let rate = orbit.calculate_mining_rate(users, total_mined, height, score)
-  ```
+```sage
+import blockchain.orbit as orbit
+let rate = orbit.calculate_mining_rate(users, total_mined, height, score)
+```
 
 ### 2.8 `Staking`
 A built-in contract for ORBIT token staking with APR rewards.
 
 - **Example:**
-  ```sage
-  import blockchain.staking
-  let state = {"action": "stake", "value": 1000, "sender": "Alice"}
-  let results = staking.execute(state)
-  ```
+```sage
+import blockchain.staking
+let state = {"action": "stake", "value": 1000, "sender": "Alice"}
+let results = staking.execute(state)
+```
 
 ## 3. Consensus Mechanism (Pluggable)
 The system supports pluggable consensus via the `Consensus` base class (in `lib/blockchain/consensus/base.sage`).

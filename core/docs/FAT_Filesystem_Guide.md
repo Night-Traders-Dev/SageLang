@@ -35,7 +35,10 @@ let info = fat.parse_boot_sector(disk)
 # List root directory
 let entries = fat_dir.list_root(disk, info)
 for entry in entries:
-    print entry["name"] + (entry["is_dir"] ? "/" : "")
+    let suffix = ""
+    if entry["is_dir"]:
+        suffix = "/"
+    print entry["name"] + suffix
 
 # Find and read a file by path
 let content = fat_dir.read_file_by_path(disk, info, "/SYSTEM/BOOT.CFG")
