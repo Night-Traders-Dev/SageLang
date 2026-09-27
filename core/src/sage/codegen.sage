@@ -217,14 +217,19 @@ proc isel_expr(ctx, expr):
         let v = vinst_new(VINST_LOAD_STRING)
         v["dest"] = r
         v["imm_string"] = expr.value
+        v["src1"] = isel_add_string(ctx, expr.value)
         isel_append(ctx, v)
-        isel_add_string(ctx, expr.value)
         return r
     if t == ast.EXPR_BOOL:
         let r = isel_vreg(ctx)
         let v = vinst_new(VINST_LOAD_BOOL)
         v["dest"] = r
-        v["imm_bool"] = expr.value
+        ## sage_rt_bool takes an int32_t. Storing the AST's boolean directly made
+        ## str() render "true" into the assembly, giving `li a0, true`.
+        if expr.value:
+            v["imm_bool"] = 1
+        else:
+            v["imm_bool"] = 0
         isel_append(ctx, v)
         return r
     if t == ast.EXPR_NIL:
@@ -234,11 +239,24 @@ proc isel_expr(ctx, expr):
         isel_append(ctx, v)
         return r
     if t == ast.EXPR_BINARY:
+        ## `not x` is parsed as a binary node with a NULL right operand, so it
+        ## has to be handled before the right operand is evaluated below.
+        ## aot.c and llvm_backend.c both read only the left in that case.
+        if expr.op.type == token.TOKEN_NOT:
+            let nleft = isel_expr(ctx, expr.left)
+            let nr = isel_vreg(ctx)
+            let nv = vinst_new(VINST_NOT)
+            nv["dest"] = nr
+            nv["src1"] = nleft
+            isel_append(ctx, nv)
+            return nr
         let left = isel_expr(ctx, expr.left)
         let right = isel_expr(ctx, expr.right)
         let r = isel_vreg(ctx)
         let op_type = expr.op.type
-        let kind = VINST_ADD
+        ## -1 is not a VInstKind, so an operator that matches no case below is
+        ## reported rather than silently becoming an addition.
+        let kind = -1
         if op_type == token.TOKEN_PLUS:
             kind = VINST_ADD
         if op_type == token.TOKEN_MINUS:
@@ -265,6 +283,8 @@ proc isel_expr(ctx, expr):
             kind = VINST_AND
         if op_type == token.TOKEN_OR:
             kind = VINST_OR
+        if kind == -1:
+            raise "codegen: no native selection for binary operator"
         let v = vinst_new(kind)
         v["dest"] = r
         v["src1"] = left
@@ -605,6 +625,38 @@ proc emit_asm_vinst_x86_64(v):
         return "  # v" + str(v["dest"]) + " = v" + str(v["src1"]) + " op v" + str(v["src2"]) + nl + "  movq " + str(-(v["src1"] + 1) * 16) + "(" + pct + "rbp), " + pct + "rdi" + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rsi" + nl + "  movq " + str(-(v["src2"] + 1) * 16) + "(" + pct + "rbp), " + pct + "rdx" + nl + "  movq " + str(-(v["src2"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rcx" + nl + "  call " + fn + nl + "  movq " + pct + "rax, " + str(-(v["dest"] + 1) * 16) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx, " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
     if kind == VINST_CALL:
         return "  # call " + str(v["func_name"]) + nl + "  call sage_fn_" + str(v["func_name"]) + nl + "  movq " + pct + "rax, " + str(-(v["dest"] + 1) * 16) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx, " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+    if kind == VINST_MOD:
+        let fn = "sage_rt_mod"
+        return "  # v" + str(v["dest"]) + " = v" + str(v["src1"]) + " op v" + str(v["src2"]) + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 0) + "(" + pct + "rbp), " + pct + "rdi" + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rsi" + nl + "  movq " + str(-(v["src2"] + 1) * 16 + 0) + "(" + pct + "rbp), " + pct + "rdx" + nl + "  movq " + str(-(v["src2"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rcx" + nl + "  call " + fn + nl + "  movq " + pct + "rax" + ", " + str(-(v["dest"] + 1) * 16 + 0) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx" + ", " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+    if kind == VINST_EQ or kind == VINST_NEQ or kind == VINST_LT or kind == VINST_GT or kind == VINST_LTE or kind == VINST_GTE:
+        let fn = "sage_rt_eq"
+        if kind == VINST_NEQ:
+            fn = "sage_rt_neq"
+        if kind == VINST_LT:
+            fn = "sage_rt_lt"
+        if kind == VINST_GT:
+            fn = "sage_rt_gt"
+        if kind == VINST_LTE:
+            fn = "sage_rt_lte"
+        if kind == VINST_GTE:
+            fn = "sage_rt_gte"
+        return "  # v" + str(v["dest"]) + " = v" + str(v["src1"]) + " op v" + str(v["src2"]) + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 0) + "(" + pct + "rbp), " + pct + "rdi" + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rsi" + nl + "  movq " + str(-(v["src2"] + 1) * 16 + 0) + "(" + pct + "rbp), " + pct + "rdx" + nl + "  movq " + str(-(v["src2"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rcx" + nl + "  call " + fn + nl + "  movq " + pct + "rax" + ", " + str(-(v["dest"] + 1) * 16 + 0) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx" + ", " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+    if kind == VINST_AND or kind == VINST_OR:
+        let fn = "sage_rt_and"
+        if kind == VINST_OR:
+            fn = "sage_rt_or"
+        return "  # v" + str(v["dest"]) + " = v" + str(v["src1"]) + " op v" + str(v["src2"]) + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 0) + "(" + pct + "rbp), " + pct + "rdi" + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rsi" + nl + "  movq " + str(-(v["src2"] + 1) * 16 + 0) + "(" + pct + "rbp), " + pct + "rdx" + nl + "  movq " + str(-(v["src2"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rcx" + nl + "  call " + fn + nl + "  movq " + pct + "rax" + ", " + str(-(v["dest"] + 1) * 16 + 0) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx" + ", " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+    if kind == VINST_NOT:
+        let fn = "sage_rt_neg"
+        if kind == VINST_NOT:
+            fn = "sage_rt_not"
+        return "  # v" + str(v["dest"]) + " = op v" + str(v["src1"]) + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 0) + "(" + pct + "rbp), " + pct + "rdi" + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rsi" + nl + "  call " + fn + nl + "  movq " + pct + "rax" + ", " + str(-(v["dest"] + 1) * 16 + 0) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx" + ", " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+    if kind == VINST_LOAD_BOOL:
+        return "  # v" + str(v["dest"]) + " = bool" + nl + "  li " + "rdi" + ", " + str(v["imm_bool"]) + nl + "  call sage_rt_bool" + nl + "  movq " + pct + "rax" + ", " + str(-(v["dest"] + 1) * 16 + 0) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx" + ", " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+    if kind == VINST_LOAD_NIL:
+        return "  # v" + str(v["dest"]) + " = nil" + nl + "  call sage_rt_nil" + nl + "  movq " + pct + "rax" + ", " + str(-(v["dest"] + 1) * 16 + 0) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx" + ", " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+    if kind == VINST_BRANCH:
+        return "  # branch v" + str(v["src1"]) + " ? " + str(v["label"]) + " : " + str(v["label_false"]) + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 0) + "(" + pct + "rbp), " + pct + "rdi" + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rsi" + nl + "  call sage_rt_get_bool" + nl + "  testl " + pct + "eax, " + pct + "eax" + nl + "  jne " + str(v["label"]) + nl + "  j " + str(v["label_false"]) + nl
     if kind == VINST_LABEL:
         return str(v["label"]) + ":" + nl
     if kind == VINST_JUMP:
@@ -632,6 +684,46 @@ proc emit_asm_vinst_aarch64(v):
         return "  // store global = v" + str(v["src1"]) + nl + "  adrp x0, sage_globals" + nl + "  adrp x1, .LC" + str(v["src2"]) + nl + "  ldr x2, [sp, #" + str(v["src1"] * 16) + "]" + nl + "  ldr x3, [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  bl sage_rt_set_global" + nl
     if kind == VINST_PRINT:
         return "  // print v" + str(v["src1"]) + nl + "  ldr x0, [sp, #" + str(v["src1"] * 16) + "]" + nl + "  ldr x1, [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  bl sage_rt_print" + nl
+    if kind == VINST_ADD or kind == VINST_SUB or kind == VINST_MUL or kind == VINST_DIV or kind == VINST_MOD:
+        let fn = "sage_rt_add"
+        if kind == VINST_SUB:
+            fn = "sage_rt_sub"
+        if kind == VINST_MUL:
+            fn = "sage_rt_mul"
+        if kind == VINST_DIV:
+            fn = "sage_rt_div"
+        if kind == VINST_MOD:
+            fn = "sage_rt_mod"
+        return "  // v" + str(v["dest"]) + " = v" + str(v["src1"]) + " op v" + str(v["src2"]) + nl + "  ldr " + "x0" + ", [sp, #" + str(v["src1"] * 16 + 0) + "]" + nl + "  ldr " + "x1" + ", [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  ldr " + "x2" + ", [sp, #" + str(v["src2"] * 16 + 0) + "]" + nl + "  ldr " + "x3" + ", [sp, #" + str(v["src2"] * 16 + 8) + "]" + nl + "  bl " + fn + nl + "  str " + "x0" + ", [sp, #" + str(v["dest"] * 16 + 0) + "]" + nl + "  str " + "x1" + ", [sp, #" + str(v["dest"] * 16 + 8) + "]" + nl
+    if kind == VINST_EQ or kind == VINST_NEQ or kind == VINST_LT or kind == VINST_GT or kind == VINST_LTE or kind == VINST_GTE:
+        let fn = "sage_rt_eq"
+        if kind == VINST_NEQ:
+            fn = "sage_rt_neq"
+        if kind == VINST_LT:
+            fn = "sage_rt_lt"
+        if kind == VINST_GT:
+            fn = "sage_rt_gt"
+        if kind == VINST_LTE:
+            fn = "sage_rt_lte"
+        if kind == VINST_GTE:
+            fn = "sage_rt_gte"
+        return "  // v" + str(v["dest"]) + " = v" + str(v["src1"]) + " op v" + str(v["src2"]) + nl + "  ldr " + "x0" + ", [sp, #" + str(v["src1"] * 16 + 0) + "]" + nl + "  ldr " + "x1" + ", [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  ldr " + "x2" + ", [sp, #" + str(v["src2"] * 16 + 0) + "]" + nl + "  ldr " + "x3" + ", [sp, #" + str(v["src2"] * 16 + 8) + "]" + nl + "  bl " + fn + nl + "  str " + "x0" + ", [sp, #" + str(v["dest"] * 16 + 0) + "]" + nl + "  str " + "x1" + ", [sp, #" + str(v["dest"] * 16 + 8) + "]" + nl
+    if kind == VINST_AND or kind == VINST_OR:
+        let fn = "sage_rt_and"
+        if kind == VINST_OR:
+            fn = "sage_rt_or"
+        return "  // v" + str(v["dest"]) + " = v" + str(v["src1"]) + " op v" + str(v["src2"]) + nl + "  ldr " + "x0" + ", [sp, #" + str(v["src1"] * 16 + 0) + "]" + nl + "  ldr " + "x1" + ", [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  ldr " + "x2" + ", [sp, #" + str(v["src2"] * 16 + 0) + "]" + nl + "  ldr " + "x3" + ", [sp, #" + str(v["src2"] * 16 + 8) + "]" + nl + "  bl " + fn + nl + "  str " + "x0" + ", [sp, #" + str(v["dest"] * 16 + 0) + "]" + nl + "  str " + "x1" + ", [sp, #" + str(v["dest"] * 16 + 8) + "]" + nl
+    if kind == VINST_NOT:
+        let fn = "sage_rt_neg"
+        if kind == VINST_NOT:
+            fn = "sage_rt_not"
+        return "  // v" + str(v["dest"]) + " = op v" + str(v["src1"]) + nl + "  ldr " + "x0" + ", [sp, #" + str(v["src1"] * 16 + 0) + "]" + nl + "  ldr " + "x1" + ", [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  bl " + fn + nl + "  str " + "x0" + ", [sp, #" + str(v["dest"] * 16 + 0) + "]" + nl + "  str " + "x1" + ", [sp, #" + str(v["dest"] * 16 + 8) + "]" + nl
+    if kind == VINST_LOAD_BOOL:
+        return "  // v" + str(v["dest"]) + " = bool" + nl + "  li " + "x0" + ", " + str(v["imm_bool"]) + nl + "  bl sage_rt_bool" + nl + "  str " + "x0" + ", [sp, #" + str(v["dest"] * 16 + 0) + "]" + nl + "  str " + "x1" + ", [sp, #" + str(v["dest"] * 16 + 8) + "]" + nl
+    if kind == VINST_LOAD_NIL:
+        return "  // v" + str(v["dest"]) + " = nil" + nl + "  bl sage_rt_nil" + nl + "  str " + "x0" + ", [sp, #" + str(v["dest"] * 16 + 0) + "]" + nl + "  str " + "x1" + ", [sp, #" + str(v["dest"] * 16 + 8) + "]" + nl
+    if kind == VINST_BRANCH:
+        return "  // branch v" + str(v["src1"]) + " ? " + str(v["label"]) + " : " + str(v["label_false"]) + nl + "  ldr " + "x0" + ", [sp, #" + str(v["src1"] * 16 + 0) + "]" + nl + "  ldr " + "x1" + ", [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  bl sage_rt_get_bool" + nl + "  cbnz w0, " + str(v["label"]) + nl + "  b " + str(v["label_false"]) + nl
     if kind == VINST_LABEL:
         return str(v["label"]) + ":" + nl
     if kind == VINST_JUMP:
@@ -654,11 +746,51 @@ proc emit_asm_vinst_rv64(v):
     if kind == VINST_LOAD_STRING:
         return "  # v" + str(v["dest"]) + " = string" + nl + "  lui a0, " + pct + "hi(.LC" + str(v["src1"]) + ")" + nl + "  addi a0, a0, " + pct + "lo(.LC" + str(v["src1"]) + ")" + nl + "  call sage_rt_string" + nl + "  sd a0, " + str(v["dest"] * 16) + "(sp)" + nl + "  sd a1, " + str(v["dest"] * 16 + 8) + "(sp)" + nl
     if kind == VINST_LOAD_GLOBAL:
-        return "  # v" + str(v["dest"]) + " = load global" + nl + "  lui a0, " + pct + "hi(sage_globals)" + nl + "  lui a1, " + pct + "hi(.LC" + str(v["src1"]) + ")" + nl + "  addi a1, a1, " + pct + "lo(.LC" + str(v["src1"]) + ")" + nl + "  call sage_rt_get_global" + nl + "  sd a0, " + str(v["dest"] * 16) + "(sp)" + nl + "  sd a1, " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+        return "  # v" + str(v["dest"]) + " = load global" + nl + "  lui a0, " + pct + "hi(sage_globals)" + nl + "  addi a0, a0, " + pct + "lo(sage_globals)" + nl + "  lui a1, " + pct + "hi(.LC" + str(v["src1"]) + ")" + nl + "  addi a1, a1, " + pct + "lo(.LC" + str(v["src1"]) + ")" + nl + "  call sage_rt_get_global" + nl + "  sd a0, " + str(v["dest"] * 16) + "(sp)" + nl + "  sd a1, " + str(v["dest"] * 16 + 8) + "(sp)" + nl
     if kind == VINST_STORE_GLOBAL:
-        return "  # store global = v" + str(v["src1"]) + nl + "  lui a0, " + pct + "hi(sage_globals)" + nl + "  lui a1, " + pct + "hi(.LC" + str(v["src2"]) + ")" + nl + "  addi a1, a1, " + pct + "lo(.LC" + str(v["src2"]) + ")" + nl + "  ld a2, " + str(v["src1"] * 16) + "(sp)" + nl + "  ld a3, " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  call sage_rt_set_global" + nl
+        return "  # store global = v" + str(v["src1"]) + nl + "  lui a0, " + pct + "hi(sage_globals)" + nl + "  addi a0, a0, " + pct + "lo(sage_globals)" + nl + "  lui a1, " + pct + "hi(.LC" + str(v["src2"]) + ")" + nl + "  addi a1, a1, " + pct + "lo(.LC" + str(v["src2"]) + ")" + nl + "  ld a2, " + str(v["src1"] * 16) + "(sp)" + nl + "  ld a3, " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  call sage_rt_set_global" + nl
     if kind == VINST_PRINT:
         return "  # print v" + str(v["src1"]) + nl + "  ld a0, " + str(v["src1"] * 16) + "(sp)" + nl + "  ld a1, " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  call sage_rt_print" + nl
+    if kind == VINST_ADD or kind == VINST_SUB or kind == VINST_MUL or kind == VINST_DIV or kind == VINST_MOD:
+        let fn = "sage_rt_add"
+        if kind == VINST_SUB:
+            fn = "sage_rt_sub"
+        if kind == VINST_MUL:
+            fn = "sage_rt_mul"
+        if kind == VINST_DIV:
+            fn = "sage_rt_div"
+        if kind == VINST_MOD:
+            fn = "sage_rt_mod"
+        return "  # v" + str(v["dest"]) + " = v" + str(v["src1"]) + " op v" + str(v["src2"]) + nl + "  ld " + "a0" + ", " + str(v["src1"] * 16 + 0) + "(sp)" + nl + "  ld " + "a1" + ", " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  ld " + "a2" + ", " + str(v["src2"] * 16 + 0) + "(sp)" + nl + "  ld " + "a3" + ", " + str(v["src2"] * 16 + 8) + "(sp)" + nl + "  call " + fn + nl + "  sd " + "a0" + ", " + str(v["dest"] * 16 + 0) + "(sp)" + nl + "  sd " + "a1" + ", " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+    if kind == VINST_EQ or kind == VINST_NEQ or kind == VINST_LT or kind == VINST_GT or kind == VINST_LTE or kind == VINST_GTE:
+        let fn = "sage_rt_eq"
+        if kind == VINST_NEQ:
+            fn = "sage_rt_neq"
+        if kind == VINST_LT:
+            fn = "sage_rt_lt"
+        if kind == VINST_GT:
+            fn = "sage_rt_gt"
+        if kind == VINST_LTE:
+            fn = "sage_rt_lte"
+        if kind == VINST_GTE:
+            fn = "sage_rt_gte"
+        return "  # v" + str(v["dest"]) + " = v" + str(v["src1"]) + " op v" + str(v["src2"]) + nl + "  ld " + "a0" + ", " + str(v["src1"] * 16 + 0) + "(sp)" + nl + "  ld " + "a1" + ", " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  ld " + "a2" + ", " + str(v["src2"] * 16 + 0) + "(sp)" + nl + "  ld " + "a3" + ", " + str(v["src2"] * 16 + 8) + "(sp)" + nl + "  call " + fn + nl + "  sd " + "a0" + ", " + str(v["dest"] * 16 + 0) + "(sp)" + nl + "  sd " + "a1" + ", " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+    if kind == VINST_AND or kind == VINST_OR:
+        let fn = "sage_rt_and"
+        if kind == VINST_OR:
+            fn = "sage_rt_or"
+        return "  # v" + str(v["dest"]) + " = v" + str(v["src1"]) + " op v" + str(v["src2"]) + nl + "  ld " + "a0" + ", " + str(v["src1"] * 16 + 0) + "(sp)" + nl + "  ld " + "a1" + ", " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  ld " + "a2" + ", " + str(v["src2"] * 16 + 0) + "(sp)" + nl + "  ld " + "a3" + ", " + str(v["src2"] * 16 + 8) + "(sp)" + nl + "  call " + fn + nl + "  sd " + "a0" + ", " + str(v["dest"] * 16 + 0) + "(sp)" + nl + "  sd " + "a1" + ", " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+    if kind == VINST_NOT:
+        let fn = "sage_rt_neg"
+        if kind == VINST_NOT:
+            fn = "sage_rt_not"
+        return "  # v" + str(v["dest"]) + " = op v" + str(v["src1"]) + nl + "  ld " + "a0" + ", " + str(v["src1"] * 16 + 0) + "(sp)" + nl + "  ld " + "a1" + ", " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  call " + fn + nl + "  sd " + "a0" + ", " + str(v["dest"] * 16 + 0) + "(sp)" + nl + "  sd " + "a1" + ", " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+    if kind == VINST_LOAD_BOOL:
+        return "  # v" + str(v["dest"]) + " = bool" + nl + "  li " + "a0" + ", " + str(v["imm_bool"]) + nl + "  call sage_rt_bool" + nl + "  sd " + "a0" + ", " + str(v["dest"] * 16 + 0) + "(sp)" + nl + "  sd " + "a1" + ", " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+    if kind == VINST_LOAD_NIL:
+        return "  # v" + str(v["dest"]) + " = nil" + nl + "  call sage_rt_nil" + nl + "  sd " + "a0" + ", " + str(v["dest"] * 16 + 0) + "(sp)" + nl + "  sd " + "a1" + ", " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+    if kind == VINST_BRANCH:
+        return "  # branch v" + str(v["src1"]) + " ? " + str(v["label"]) + " : " + str(v["label_false"]) + nl + "  ld " + "a0" + ", " + str(v["src1"] * 16 + 0) + "(sp)" + nl + "  ld " + "a1" + ", " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  call sage_rt_get_bool" + nl + "  bnez a0, " + str(v["label"]) + nl + "  j " + str(v["label_false"]) + nl
     if kind == VINST_LABEL:
         return str(v["label"]) + ":" + nl
     if kind == VINST_JUMP:
@@ -695,10 +827,14 @@ proc emit_asm_prologue(target, name):
         push(parts, "  stp x29, x30, [sp, #-256]!" + nl)
         push(parts, "  mov x29, sp" + nl)
     if target == TARGET_RV64:
-        push(parts, "  addi sp, sp, -256" + nl)
-        push(parts, "  sd ra, 8(sp)" + nl)
-        push(parts, "  sd s0, 0(sp)" + nl)
-        push(parts, "  addi s0, sp, 256" + nl)
+        ## 0(sp) and 8(sp) are vreg 0 and vreg 1, so the saved ra and s0
+        ## go at the top of the frame, as the C port does.
+        push(parts, "  li t0, -256" + nl)
+        push(parts, "  add sp, sp, t0" + nl)
+        push(parts, "  sd ra, 248(sp)" + nl)
+        push(parts, "  sd s0, 240(sp)" + nl)
+        push(parts, "  li t0, 256" + nl)
+        push(parts, "  add s0, sp, t0" + nl)
     return join(parts, "")
 
 proc emit_asm_epilogue(target):
@@ -715,8 +851,10 @@ proc emit_asm_epilogue(target):
         push(parts, "  ret" + nl)
     if target == TARGET_RV64:
         push(parts, "  li a0, 0" + nl)
-        push(parts, "  ld ra, 8(sp)" + nl)
-        push(parts, "  ld s0, 0(sp)" + nl)
+        push(parts, "  ld ra, 248(sp)" + nl)
+        push(parts, "  ld s0, 240(sp)" + nl)
+        push(parts, "  li t0, 256" + nl)
+        push(parts, "  add sp, sp, t0" + nl)
         push(parts, "  addi sp, sp, 256" + nl)
         push(parts, "  ret" + nl)
     return join(parts, "")

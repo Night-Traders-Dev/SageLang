@@ -132,7 +132,12 @@ assert_eq(ctx4.string_pool_count, 1, "string added to pool")
 let ctx5 = codegen.ISelContext()
 codegen.isel_expr(ctx5, ast.bool_expr(true))
 assert_eq(ctx5.head["kind"], codegen.VINST_LOAD_BOOL, "bool -> LOAD_BOOL")
-assert_eq(ctx5.head["imm_bool"], true, "bool imm = true")
+## imm_bool is 1/0, not a boolean: sage_rt_bool takes an int32_t, and
+## str() of a boolean rendered "true" into the assembly as `li a0, true`.
+assert_eq(ctx5.head["imm_bool"], 1, "bool imm = 1")
+let ctx5b = codegen.ISelContext()
+codegen.isel_expr(ctx5b, ast.bool_expr(false))
+assert_eq(ctx5b.head["imm_bool"], 0, "false imm = 0")
 
 # --- Nil ---
 let ctx6 = codegen.ISelContext()
@@ -477,6 +482,102 @@ try:
 catch err:
     raised = true
 assert_true(raised, "an instruction with no emitter raises instead of commenting")
+
+
+# ============================================================================
+# Emitter parity: the instruction families the isel can select
+# ============================================================================
+
+proc bin_ast(tok_type, tok_text, left, right):
+    return ast.binary_expr(left, token.Token(tok_type, tok_text), right)
+
+let x_var = ast.variable_expr(token.Token(token.TOKEN_IDENTIFIER, "x", 1))
+let one = ast.number_expr(1)
+let cmp_prog = ast.print_stmt(bin_ast(token.TOKEN_GT, ">", x_var, one))
+
+let cmp_rv = codegen.compile_to_asm(cmp_prog, codegen.TARGET_RV64)
+assert_true(contains(cmp_rv, "call sage_rt_gt"), "rv64: comparison emits the right runtime call")
+assert_true(contains(cmp_rv, "call sage_rt_number"), "rv64: comparison keeps its literal load")
+assert_true(not contains(cmp_rv, "unhandled vinst"), "rv64: comparison did not fall through")
+
+let cmp_x86 = codegen.compile_to_asm(cmp_prog, codegen.TARGET_X86_64)
+assert_true(contains(cmp_x86, "call sage_rt_gt"), "x86: comparison emits the right runtime call")
+assert_true(not contains(cmp_x86, "unhandled vinst"), "x86: comparison did not fall through")
+
+let cmp_aarch = codegen.compile_to_asm(cmp_prog, codegen.TARGET_AARCH64)
+assert_true(contains(cmp_aarch, "bl sage_rt_gt"), "aarch64: comparison emits the right runtime call")
+assert_true(not contains(cmp_aarch, "unhandled vinst"), "aarch64: comparison did not fall through")
+
+# Each comparison must map to its own runtime function, not a shared default.
+let cmp_pairs = [[token.TOKEN_LT, "sage_rt_lt"], [token.TOKEN_GTE, "sage_rt_gte"],
+                 [token.TOKEN_EQ, "sage_rt_eq"], [token.TOKEN_NEQ, "sage_rt_neq"]]
+for pair in cmp_pairs:
+    let p = ast.print_stmt(bin_ast(pair[0], "?", x_var, one))
+    let a = codegen.compile_to_asm(p, codegen.TARGET_RV64)
+    assert_true(contains(a, "call " + pair[1]), "rv64: comparison emits " + pair[1])
+
+# Modulo and the logical connectives.
+let mod_prog = ast.print_stmt(bin_ast(token.TOKEN_PERCENT, "%", x_var, one))
+assert_true(contains(codegen.compile_to_asm(mod_prog, codegen.TARGET_RV64), "call sage_rt_mod"),
+            "rv64: modulo emits sage_rt_mod")
+let and_prog = ast.print_stmt(bin_ast(token.TOKEN_AND, "and", x_var, one))
+assert_true(contains(codegen.compile_to_asm(and_prog, codegen.TARGET_RV64), "call sage_rt_and"),
+            "rv64: and emits sage_rt_and")
+let or_prog = ast.print_stmt(bin_ast(token.TOKEN_OR, "or", x_var, one))
+assert_true(contains(codegen.compile_to_asm(or_prog, codegen.TARGET_RV64), "call sage_rt_or"),
+            "rv64: or emits sage_rt_or")
+
+# Booleans and nil.
+let bool_prog = ast.print_stmt(ast.bool_expr(true))
+let bool_rv = codegen.compile_to_asm(bool_prog, codegen.TARGET_RV64)
+assert_true(contains(bool_rv, "call sage_rt_bool"), "rv64: a boolean literal calls sage_rt_bool")
+assert_true(contains(bool_rv, "li a0, 1"), "rv64: the boolean value is passed in a0")
+let nil_prog = ast.print_stmt(ast.nil_expr())
+assert_true(contains(codegen.compile_to_asm(nil_prog, codegen.TARGET_RV64), "call sage_rt_nil"),
+            "rv64: nil calls sage_rt_nil")
+
+# A branch tests the condition then jumps to one of two labels.
+let br = codegen.vinst_new(codegen.VINST_BRANCH)
+br["src1"] = 0
+br["label"] = "Ltrue"
+br["label_false"] = "Lfalse"
+assert_true(contains(codegen.emit_asm_vinst_rv64(br), "call sage_rt_get_bool"),
+            "rv64: branch asks the runtime whether the value is true")
+assert_true(contains(codegen.emit_asm_vinst_rv64(br), "bnez a0, Ltrue"),
+            "rv64: branch jumps to the true label when set")
+assert_true(contains(codegen.emit_asm_vinst_rv64(br), "j Lfalse"),
+            "rv64: branch otherwise falls to the false label")
+assert_true(contains(codegen.emit_asm_vinst_x86_64(br), "sage_rt_get_bool"),
+            "x86: branch asks the runtime whether the value is true")
+assert_true(contains(codegen.emit_asm_vinst_aarch64(br), "bl sage_rt_get_bool"),
+            "aarch64: branch asks the runtime whether the value is true")
+
+# ============================================================================
+# isel guards
+# ============================================================================
+
+# An operator that matches no case used to leave `kind` at its VINST_ADD
+# initialiser, so a bitwise and silently compiled to an addition.
+let bad = ast.print_stmt(bin_ast(token.TOKEN_AMP, "&", x_var, one))
+let bad_raised = false
+try:
+    codegen.compile_to_asm(bad, codegen.TARGET_RV64)
+catch err:
+    bad_raised = true
+assert_true(bad_raised, "an operator with no native selection is reported, not treated as +")
+
+# `not` arrives as a binary node with a NULL right operand, so it must be
+# lowered before that operand is evaluated.
+let not_ctx = codegen.isel_compile(ast.print_stmt(bin_ast(token.TOKEN_NOT, "not", one, nil)))
+let not_vs = codegen.collect_vinsts(not_ctx)
+var found_not = false
+for i in range(len(not_vs)):
+    if not_vs[i]["kind"] == codegen.VINST_NOT:
+        found_not = true
+assert_true(found_not, "not lowers to VINST_NOT")
+assert_true(contains(codegen.compile_to_asm(ast.print_stmt(bin_ast(token.TOKEN_NOT, "not", one, nil)),
+                                            codegen.TARGET_RV64), "call sage_rt_not"),
+            "rv64: not emits sage_rt_not")
 
 print ""
 print "Codegen tests: " + str(passed) + " passed, " + str(failed) + " failed"

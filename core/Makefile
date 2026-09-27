@@ -582,6 +582,16 @@ test: $(TARGET)
 		echo "⏭ Skip (gcc not found)"; \
 	fi
 	@echo ""
+	@echo "Test 23c: Self-host Codegen ASM Assembled + Run (rv64)"
+	@if command -v gcc >/dev/null 2>&1; then \
+		cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/emit_rv64_exec.sage >/dev/null && cd ../.. && \
+		gcc -static -o .tmp/sage_codegen_rv64 /tmp/sage_codegen_rv64.s ../testsuite/compiler/asm_runtime.c -lm && \
+		./.tmp/sage_codegen_rv64 > .tmp/sage_codegen_rv64.out && \
+		diff -u ../testsuite/selfhost/rv64_exec.expected .tmp/sage_codegen_rv64.out && echo "✅ Pass (assembled + ran)" || (echo "❌ Fail"; exit 1); \
+	else \
+		echo "⏭ Skip (gcc not found)"; \
+	fi
+	@echo ""
 	@echo "Test 24: Debug Info (-g flag)"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke_debug -g
 	@./.tmp/compiler_smoke_debug > .tmp/compiler_smoke_debug.out
