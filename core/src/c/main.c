@@ -1150,28 +1150,15 @@ static int add_sgvm_const_str(const char* s, int len) {
     return g_sgvm_const_count++;
 }
 
-static int compile_to_sgvm(const char* input_path, const char* output_path, int opt_level, int debug_info) {
-    char* source = main_read_file(input_path);
-    if (!source) return 0;
-
-    char tmp_svm[] = "/tmp/sage_sgvm_XXXXXX.svm";
-    int fd = mkstemps(tmp_svm, 4);
-    if (fd < 0) {
-        free(source);
-        return 0;
-    }
-    close(fd);
-
-    if (!compile_source_to_vm_artifact(source, input_path, tmp_svm, opt_level, debug_info)) {
-        free(source);
-        unlink(tmp_svm);
-        return 0;
-    }
-    free(source);
-
-    FILE* in = fopen(tmp_svm, "r");
+// Encodes one compiled text .svm into a binary unit: a constant pool followed
+// by that unit's chunks, with no magic or version. A unit is self-contained --
+// its chunks index its own pool -- so an imported module can be written as a
+// unit and instantiated later without sharing the program's pool. The program's
+// own layout is byte-for-byte what it was, so a reader that predates the module
+// table still parses everything up to the chunks exactly as before.
+static int sgvm_encode_text_file(const char* text_path, const char* bin_path) {
+    FILE* in = fopen(text_path, "r");
     if (!in) {
-        unlink(tmp_svm);
         return 0;
     }
 
@@ -1182,7 +1169,6 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
     int (*local_to_global)[256] = SAGE_ALLOC(1024 * sizeof(*local_to_global));
     if (!local_to_global) {
         fclose(in);
-        unlink(tmp_svm);
         free(line);
         return 0;
     }
@@ -1234,11 +1220,8 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
         }
     }
 
-    out = fopen(output_path, "wb");
+    out = fopen(bin_path, "wb");
     if (!out) goto cleanup;
-
-    fwrite("SGVM", 1, 4, out);
-    fputc(0x01, out); fputc(0x00, out);
 
     write_be16(out, (uint16_t)g_sgvm_const_count);
     for (int i = 0; i < g_sgvm_const_count; i++) {
@@ -1345,12 +1328,220 @@ static int compile_to_sgvm(const char* input_path, const char* output_path, int 
 cleanup:
     if (in) fclose(in);
     if (out) fclose(out);
-    unlink(tmp_svm);
     if (local_to_global) SAGE_FREE(local_to_global);
     if (line) free(line);
     for (int i = 0; i < g_sgvm_const_count; i++) {
         if (g_sgvm_consts[i].type == 3) free(g_sgvm_consts[i].str);
     }
+    return status;
+    return status;
+}
+
+#define SGVM_MAX_EMBEDDED_MODULES 64
+#define SGVM_MAX_MODULE_NAME 128
+
+typedef struct {
+    char name[SGVM_MAX_MODULE_NAME];
+    unsigned char* data;
+    size_t len;
+} SgvmEmbeddedModule;
+
+// Collects the distinct module names imported anywhere in an AST -- including
+// from inside blocks, procs, classes and control flow -- so a module reached
+// only from a nested scope is still embedded in the artifact.
+static void sgvm_collect_imports(Stmt* stmt,
+                                 char names[SGVM_MAX_EMBEDDED_MODULES][SGVM_MAX_MODULE_NAME],
+                                 int* count) {
+    for (Stmt* s = stmt; s != NULL; s = s->next) {
+        if (s->type == STMT_IMPORT && s->as.import.module_name != NULL) {
+            const char* name = s->as.import.module_name;
+            int seen = 0;
+            for (int i = 0; i < *count; i++) {
+                if (strcmp(names[i], name) == 0) { seen = 1; break; }
+            }
+            if (!seen && *count < SGVM_MAX_EMBEDDED_MODULES) {
+                strncpy(names[*count], name, SGVM_MAX_MODULE_NAME - 1);
+                names[*count][SGVM_MAX_MODULE_NAME - 1] = '\0';
+                (*count)++;
+            }
+            continue;
+        }
+        switch (s->type) {
+            case STMT_BLOCK:
+                sgvm_collect_imports(s->as.block.statements, names, count);
+                break;
+            case STMT_IF:
+                sgvm_collect_imports(s->as.if_stmt.then_branch, names, count);
+                sgvm_collect_imports(s->as.if_stmt.else_branch, names, count);
+                break;
+            case STMT_WHILE:
+                sgvm_collect_imports(s->as.while_stmt.body, names, count);
+                break;
+            case STMT_FOR:
+                sgvm_collect_imports(s->as.for_stmt.body, names, count);
+                break;
+            case STMT_PROC:
+            case STMT_ASYNC_PROC:
+                sgvm_collect_imports(s->as.proc.body, names, count);
+                break;
+            case STMT_CLASS:
+                sgvm_collect_imports(s->as.class_stmt.methods, names, count);
+                break;
+            case STMT_TRY:
+                sgvm_collect_imports(s->as.try_stmt.try_block, names, count);
+                sgvm_collect_imports(s->as.try_stmt.finally_block, names, count);
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+static long sgvm_file_size(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return -1;
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fclose(f);
+    return size;
+}
+
+static int sgvm_copy_file(FILE* out, const char* path, size_t len) {
+    FILE* f = fopen(path, "rb");
+    if (!f) return 0;
+    unsigned char buf[4096];
+    size_t remaining = len;
+    while (remaining > 0) {
+        size_t want = remaining < sizeof(buf) ? remaining : sizeof(buf);
+        size_t n = fread(buf, 1, want, f);
+        if (n == 0) break;
+        if (fwrite(buf, 1, n, out) != n) { fclose(f); return 0; }
+        remaining -= n;
+    }
+    fclose(f);
+    return remaining == 0;
+}
+
+// Compiles `input_path` to a binary SGVM artifact, embedding the bytecode of
+// every module it imports.
+//
+// Each module is compiled and encoded as its own self-contained unit and
+// appended in a trailing table, so the artifact needs no filesystem and no host
+// bridge to resolve an import. Before this, OP_IMPORT discarded its operand and
+// pushed nil, so any program that imported anything bound an empty module and
+// failed at the first attribute lookup.
+static int compile_to_sgvm(const char* input_path, const char* output_path, int opt_level, int debug_info) {
+    char* source = main_read_file(input_path);
+    if (!source) return 0;
+
+    // Parse once, only to collect the import list. The AST is released
+    // immediately, so the module names are copied out rather than referenced.
+    char import_names[SGVM_MAX_EMBEDDED_MODULES][SGVM_MAX_MODULE_NAME];
+    int import_count = 0;
+    Stmt* ast = parse_program(source, input_path);
+    if (ast != NULL) {
+        sgvm_collect_imports(ast, import_names, &import_count);
+        free_stmt(ast);
+    }
+
+    char tmp_svm[] = "/tmp/sage_sgvm_XXXXXX.svm";
+    int fd = mkstemps(tmp_svm, 4);
+    if (fd < 0) { free(source); return 0; }
+    close(fd);
+
+    if (!compile_source_to_vm_artifact(source, input_path, tmp_svm, opt_level, debug_info)) {
+        free(source);
+        unlink(tmp_svm);
+        return 0;
+    }
+    free(source);
+
+    char tmp_bin[] = "/tmp/sage_sgbin_XXXXXX.bin";
+    fd = mkstemps(tmp_bin, 4);
+    if (fd < 0) { unlink(tmp_svm); return 0; }
+    close(fd);
+
+    if (!sgvm_encode_text_file(tmp_svm, tmp_bin)) {
+        unlink(tmp_svm);
+        unlink(tmp_bin);
+        return 0;
+    }
+    unlink(tmp_svm);
+
+    SgvmEmbeddedModule modules[SGVM_MAX_EMBEDDED_MODULES];
+    memset(modules, 0, sizeof(modules));
+    int module_count = 0;
+
+    for (int i = 0; i < import_count; i++) {
+        Module* module = load_module(global_module_cache, import_names[i]);
+        // An unresolvable module is left out rather than fatal here, so the
+        // failure surfaces at run time as "module not found" instead of
+        // refusing to emit an artifact at all.
+        if (module == NULL || module->path == NULL) continue;
+
+        char* module_source = main_read_file(module->path);
+        if (!module_source) continue;
+
+        char mod_text[] = "/tmp/sage_modt_XXXXXX.svm";
+        int mfd = mkstemps(mod_text, 4);
+        if (mfd < 0) { free(module_source); continue; }
+        close(mfd);
+
+        int compiled = compile_source_to_vm_artifact(module_source, module->path,
+                                                     mod_text, opt_level, debug_info);
+        free(module_source);
+        if (!compiled) { unlink(mod_text); continue; }
+
+        char mod_bin[] = "/tmp/sage_modb_XXXXXX.bin";
+        mfd = mkstemps(mod_bin, 4);
+        if (mfd < 0) { unlink(mod_text); continue; }
+        close(mfd);
+
+        int encoded = sgvm_encode_text_file(mod_text, mod_bin);
+        unlink(mod_text);
+        if (!encoded) { unlink(mod_bin); continue; }
+
+        long size = sgvm_file_size(mod_bin);
+        FILE* mf = (size >= 0) ? fopen(mod_bin, "rb") : NULL;
+        unsigned char* data = mf ? (unsigned char*)SAGE_ALLOC((size_t)size > 0 ? (size_t)size : 1) : NULL;
+        if (data == NULL || (size > 0 && fread(data, 1, (size_t)size, mf) != (size_t)size)) {
+            free(data);
+            if (mf) fclose(mf);
+            unlink(mod_bin);
+            continue;
+        }
+        fclose(mf);
+        unlink(mod_bin);
+
+        strncpy(modules[module_count].name, import_names[i], SGVM_MAX_MODULE_NAME - 1);
+        modules[module_count].data = data;
+        modules[module_count].len = (size_t)size;
+        module_count++;
+    }
+
+    int status = 0;
+    FILE* out = fopen(output_path, "wb");
+    if (out != NULL) {
+        long main_size = sgvm_file_size(tmp_bin);
+        fwrite("SGVM", 1, 4, out);
+        fputc(0x01, out);
+        fputc(0x00, out);
+        if (main_size > 0 && sgvm_copy_file(out, tmp_bin, (size_t)main_size)) {
+            write_be32(out, (uint32_t)module_count);
+            for (int i = 0; i < module_count; i++) {
+                size_t nlen = strlen(modules[i].name);
+                write_be16(out, (uint16_t)nlen);
+                fwrite(modules[i].name, 1, nlen, out);
+                write_be32(out, (uint32_t)modules[i].len);
+                if (modules[i].len > 0) fwrite(modules[i].data, 1, modules[i].len, out);
+            }
+            status = 1;
+        }
+        fclose(out);
+    }
+
+    unlink(tmp_bin);
+    for (int i = 0; i < module_count; i++) free(modules[i].data);
     return status;
 }
 
