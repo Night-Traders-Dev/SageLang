@@ -321,78 +321,99 @@ touches. `hal_gpio_set_pull()` is now an explicit no-op for the same reason --
 `SETUP`/`PUPD` are not in this IDF's `gpio_reg.h` at all, and guessing is exactly
 the mistake documented above.
 
-### Narrowed to: `sage_string_const` receives the wrong pointer
+### Wrong: the literal addresses are fine. The marker method was unsound.
 
-**Correction first.** An earlier commit claimed a specific root cause -- that
-string-literal `l32r` pool entries resolve to newlib's assertion text at
-`0x4008d3ed` -- and that claim is withdrawn. It came from two bad measurements:
-the pool word was picked as "the nearest preceding `l32r`", which belonged to a
-different call (`SAGE_EQ`), and the "pointer is outside every segment" reading
-came from a hand-rolled segment parser using the wrong offset. esptool's own
-`image-info` shows the image is well formed: `0x12c` at `0x3ffb0000`, `0xd084` at
-`0x40080000`, `0xf38` at `0x4008d088`.
+**This retracts the previous two commits' conclusions.** String literals resolve
+correctly, and the "misresolved literal" theory is dead.
 
-What is established, by direct on-the-wire measurement:
+How that was settled, and why the earlier evidence was wrong:
 
-1. Startup reaches `sage_string_const` and stops inside it. A marker at function
-   entry arrives; one after `sage_intern_hash()` does not.
-2. It is the string path. Neutralising only the 16 `sage_string_const(...)` call
-   sites lets the OS start; neutralising only the 9 `sage_make_array(...)` sites
-   does not.
-3. The pointer it receives is a valid loaded address in the *wrong place*, and
-   it lands inside a different literal each time. `tools/ptr_dump.py`, injected
-   by `SAGE_PTR_DUMP=1`, reports the argument directly:
+- The probe (`tools/ptr_dump.py`) now prints *two* values: the pointer
+  `sage_string_const` received, and the address of a literal defined **inside the
+  probe itself**. That gives a ground-truth calibration point in the same
+  translation unit, so addresses can be mapped without trusting a segment table
+  or a disassembly guess.
+- The received pointer was `0x4008d0e6`. The byte at that address is `0x00` -- it
+  is the empty-string literal `""`.
+- The disassembly confirms it: the `l32r` that loads `0x4008d0e6` is
+  `sage_string_take`'s own `value == NULL ? "" : value` fallback. Entirely
+  correct code.
 
-   | build | pointer | bytes there |
-   | --- | --- | --- |
-   | stock | `0x4008d317` | `b'gelet> '` -- 3 bytes into `"sagelet> "` |
-   | `-mlongcalls` off | `0x4008d03f` | `b'tOS for ESP32'` -- 6 bytes into `"SageletOS for ESP32"` |
+The "+3 / +6 / +9 into a string" pattern that drove the earlier theory was an
+artefact of measuring from whatever string happened to precede the address. The
+empty string legitimately follows `" "`, so `start + 3` *is* the correct
+address of `""`. There was never a skew.
 
-The `sage_intern_hash()` loop is `while (*s)`, so a pointer into the middle of a
-literal never finds its terminator and spins. That is the whole failure: a
-string-literal address is computed wrong.
+**The marker method itself is unsound, which invalidates the localisation.**
+The startup markers are `volatile` byte stores, and a volatile store may be
+reordered with respect to ordinary computation -- it is only ordered against
+*other* volatile accesses. So "marker at function entry appears, marker after
+the hash does not" does **not** prove the hang is in the hash; the compiler is
+free to sink that store past it. Every location conclusion drawn from marker
+ordering in this bring-up is suspect for the same reason.
 
-**`-mlongcalls` is not the cause.** Turning it off was the obvious test -- the
-image is only ~57 KB so `l32r`'s +/-256 KB reach is not needed, and long-call
-expansion is what forces a distant literal pool. It changed the symptom and
-fixed nothing: startup markers still all pass, the pointer is still wrong
-(`0x4008d03f`), and the failure is no better. `-mlongcalls` has been restored
-rather than removed, since the experiment bought nothing.
+### What is still established
 
-The offset is not constant either (+3, then +6), so this is not a fixed skew in
-the `l32r` encoding. It is layout-dependent, and the wrong address moves around
-with unrelated changes -- which is also the signature of the failure *point*
-moving when the flag changed.
+1. Startup reaches `sage_string_const` and stops somewhere inside it.
+2. It is the string path, not allocation: neutralising only the 16
+   `sage_string_const(...)` sites lets the OS start, neutralising only the 9
+   `sage_make_array(...)` sites does not. Reproducible.
+3. The argument it receives is a valid pointer to a valid string.
+4. The GC is not involved (retested in a configuration that reaches this code).
+5. `malloc` works: a probe inside `main` gets non-NULL from `malloc(64)` and
+   `free()` succeeds.
+6. Stack size and the memory map are ruled out.
 
-Ruled out by measurement, none of which changed anything:
+So the remaining candidates inside `sage_string_const` are the intern-table
+probe loop, or `sage_string` -> `sage_gc_copy_string` -> `sage_gc_alloc` ->
+`malloc`, and the previous evidence cannot distinguish them.
 
-- the toolchain and this linker script -- a four-line C file with the same flags
-  and script resolves its literal exactly;
-- removing `-mtext-section-literals`;
-- removing `-ffunction-sections -fdata-sections`;
-- merging `.iram0.rodata` into `.iram0.text` (reverted, it bought nothing);
-- excluding library rodata from IRAM0 with `EXCLUDE_FILE`;
-- removing `-mlongcalls`.
+### The failure is a fault, not a logic bug
 
-One solid structural observation: newlib's own code lands *inside* the runtime's
-region -- `memcpy`, `memset`, `__divdf3` and `__udivdi3` sit at
-`0x4008c000`-`0x4008d081` -- because `*(.text .text.*)` collects library text
-into the same IRAM0 output section, so program literals and the C library's are
-interleaved. Excluding library *rodata* did not help, so the mechanism is more
-likely the literal-expansion machinery: the object carries 436
-`R_XTENSA_ASM_EXPAND` pseudo-relocations, the assembler's `l32r`/pool expansion
-hooks, which are the part that scales with code size.
+Two further measurements, and they change the diagnosis:
 
-Next step, now that there is a reliable probe: bisect by size. Build a cut-down
-generated C -- `main` with the value-init block removed, which is known to get
-the OS started -- and check whether literals resolve there. That separates "this
-TU is too big" from "this construct is broken", and unlike the flag flailing it
-narrows the search in one step. `tools/ptr_dump.py` makes the check a one-liner.
+- The intern probe loop is implicated. Replacing
+  `while (sage_intern_table[h].content != NULL) { ... }` with a single `if`
+  changed the run from 656 bytes of output to 2388 in one configuration. So
+  control does reach that loop and does not come back.
+- **The behaviour is not reproducible.** The same image flashed twice, and the
+  all-call-sites configuration, alternates between two failure modes: a silent
+  hang, and a reset loop in which the ROM re-enters `entry` several hundred
+  times in twelve seconds (10 888 bytes, all `entry 0x40080000`).
+
+A loop that sometimes hangs and sometimes resets is a fault, not a slow
+algorithm. Note the flip is not attributable to the loop stub: stubbing the loop
+made one configuration better and the other worse, so the loop result above is
+suggestive, not established.
+
+The memory layout is *not* the cause and is now checked:
+
+```
+.iram0.text    0x40080000   51 KB
+.iram0.rodata  0x4008ce90    3 KB
+.data          0x3ffb0000    0 KB
+.bss           0x3ffce000   98 KB   <- mostly the 4096-entry intern table
+.heap          0x3ffe6938   72 KB
+.stack         0x3fff8938   24 KB
+                                    ends 0x3fffe940, limit 0x40000000
+```
+
+194 KB of the 200 KB `DRAM_HI` block, entirely inside internal SRAM. The intern
+table is 4096 x 20 bytes = 80 KB, so ~80% of `.bss`, and a full sweep of it is
+readable. The layout is tight -- 5 KB spare -- but not overrunning.
+
+### Next step
+
+Stop black-box probing. Install an exception handler in IRAM0 that dumps
+`EXCCAUSE` and `EPC` (plus a few `a` registers) over the UART, so a reset or a
+fault reports the exact faulting PC and cause. A reset loop is a crash, and the
+PC is the one piece of information every marker experiment was trying to
+approximate. Point `EXCVECTOR` at a small table in IRAM0, and dump from the
+handler itself.
 
 ### Open: the second blocker
 
 With the value-init block bypassed, the OS is entered (`hw.uart_init` runs) and
 then stops before its first `hw.uart_puts`, i.e. in `led_init()` or on entry to
-`repl()`. Given what A turned out to be, this is quite likely the same
-misresolution in a different callee rather than an independent fault, so it
-should be re-checked once literals resolve.
+`repl()`. This should be re-checked once the first blocker is resolved.
+

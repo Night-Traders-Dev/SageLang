@@ -8,7 +8,17 @@ without guessing, and guessing has been wrong twice: the address a literal
 because picking "the nearest preceding l32r" picks a neighbouring call's pool
 word. So the program reports what it actually got.
 
-Emits four bytes, little-endian, before anything else in the function.
+Emits eight bytes, little-endian, before anything else in the function:
+
+    bytes 0..3   the pointer sage_string_const() actually received
+    bytes 4..7   the address of a literal defined right here in the probe
+
+The second value is the reference point. Attributing a pool word to a specific
+call site from disassembly is unreliable -- that has been wrong twice -- but a
+literal defined inside the probe is unambiguous: it goes through the same
+assembler, the same literal pool and the same linker, in the same translation
+unit, so the difference between the two printed values is the skew directly,
+with no guessing about which literal "should" have been passed.
 """
 import sys
 
@@ -16,10 +26,21 @@ UART_FIFO = 0x3FF40000
 UART_STATUS = 0x3FF4001C
 
 NEEDLE = 'static SageValue sage_string_const(const char* value) {\n    if (value == NULL) value = "";'
-REPLACEMENT = f"""static SageValue sage_string_const(const char* value) {{
+REPLACEMENT = f"""static const char sage_probe_literal[] = "SAGEPROBE";
+
+static SageValue sage_string_const(const char* value) {{
     {{
         volatile unsigned long v = (volatile unsigned long)value;
         volatile char* fp = (volatile char*){UART_FIFO};
+        while ((*(volatile unsigned*){UART_STATUS} >> 16 & 0xFFu) >= 128u) {{}}
+        *fp = (char)(v & 0xFFu);
+        while ((*(volatile unsigned*){UART_STATUS} >> 16 & 0xFFu) >= 128u) {{}}
+        *fp = (char)((v >> 8) & 0xFFu);
+        while ((*(volatile unsigned*){UART_STATUS} >> 16 & 0xFFu) >= 128u) {{}}
+        *fp = (char)((v >> 16) & 0xFFu);
+        while ((*(volatile unsigned*){UART_STATUS} >> 16 & 0xFFu) >= 128u) {{}}
+        *fp = (char)((v >> 24) & 0xFFu);
+        v = (volatile unsigned long)sage_probe_literal;
         while ((*(volatile unsigned*){UART_STATUS} >> 16 & 0xFFu) >= 128u) {{}}
         *fp = (char)(v & 0xFFu);
         while ((*(volatile unsigned*){UART_STATUS} >> 16 & 0xFFu) >= 128u) {{}}
