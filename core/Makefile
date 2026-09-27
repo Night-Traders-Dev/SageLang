@@ -220,7 +220,7 @@ DEPFILES = $(ALL_OBJECTS:.o=.d) $(LSP_MAIN_OBJECT:.o=.d) $(LLVM_RT_OBJECT:.o=.d)
 
 .DEFAULT_GOAL := all
 
-.PHONY: all clean run install uninstall help test test-all examples chart charts benchmarks pdf sage-boot sage-bench benchmark benchmark-chart sgvm sgvmc
+.PHONY: all clean run install uninstall help test test-all examples chart charts benchmarks pdf sage-boot sage-bench benchmark benchmark-chart sgvm sgvmc avr-test
 
 all: $(TARGET) $(SGVM_TARGET) $(SGVM_COMPILER_TARGET)
 
@@ -348,6 +348,16 @@ $(METAL_RV64_VM_OBJECT): $(METAL_RV64_VM_SOURCE) include/metal_rv64_vm.h
 
 metal-vm: $(METAL_VM_OBJECT) $(METAL_RV64_VM_OBJECT)
 	@echo "Metal VM objects ready: $(METAL_VM_OBJECT), $(METAL_RV64_VM_OBJECT)"
+
+# AVR assembler backend. Its tests assert on *emitted Intel HEX bytes*, not on
+# words: the byte order, the `sts` operand order and the missing sbrs/sbrc all
+# slipped past a word-level check. AVR_TEST_DIR is the module path so the test
+# can `import avr_assembler`.
+AVR_DIR = boards/AVR
+
+avr-test: $(TARGET)
+	@cd .. && ./core/$(TARGET) -I core/$(AVR_DIR) core/$(AVR_DIR)/test_golden.sage
+	@cd .. && ./core/$(TARGET) -I core/$(AVR_DIR) core/$(AVR_DIR)/test_smoke.sage
 
 # Run a Sage program through the self-hosted interpreter.
 SELFHOST_ENTRY = src/sage/sage.sage
@@ -920,6 +930,7 @@ help:
 	@echo "  make test         - Run C compiler/interpreter tests"
 	@echo "  make test-selfhost - Run self-hosted tests"
 	@echo "  make test-all     - Run ALL tests (C + self-hosted)"
+	@echo "  make avr-test     - AVR backend tests (emitted HEX bytes vs GNU as/ld)"
 	@echo ""
 	@echo "Development:"
 	@echo "  make run          - Run hello.sage example"
