@@ -1303,8 +1303,15 @@ int bytecode_compile_program(BytecodeProgram* program, Stmt* statements, Bytecod
         BytecodeChunk chunk;
         bytecode_chunk_init(&chunk);
 
+        // Pass compile_program_function in BOTH modes. It was only passed under
+        // STRICT, which meant HYBRID set build_function = NULL, and
+        // stmt_requires_ast_fallback() reports STMT_PROC as needing the AST
+        // walker whenever build_function is NULL -- so HYBRID quietly compiled
+        // every procedure through the interpreter instead of to bytecode.
+        // HYBRID is meant to relax the *statement* gate, not to disable proc
+        // compilation.
         if (!bytecode_compile_statement_with_functions(&chunk, stmt, mode,
-                                                      mode == BYTECODE_COMPILE_STRICT ? compile_program_function : NULL,
+                                                      compile_program_function,
                                                       program,
                                                       error, error_size)) {
             bytecode_chunk_free(&chunk);
@@ -1573,7 +1580,14 @@ int compile_source_to_vm_artifact(const char* source, const char* input_path, co
         ast = run_passes(ast, &pass_ctx);
     }
 
-    if (!bytecode_compile_program(&program, ast, BYTECODE_COMPILE_STRICT, error, sizeof(error))) {
+    // HYBRID, not STRICT. This is the path `sage --emit-vm` takes, i.e. the one
+    // SageOS and SageVM use to build .svm artifacts, and it was the *only*
+    // whole-program compile that ran strict. The in-process path
+    // (core/src/c/stdlib.c) has always used HYBRID, which is why the same source
+    // could run through the VM but could not be written to a file: a single
+    // `import foo as bar` failed with "Unsupported stmt type 17 requires AST
+    // fallback" even though STMT_IMPORT is 17 and the emitter has a case for it.
+    if (!bytecode_compile_program(&program, ast, BYTECODE_COMPILE_HYBRID, error, sizeof(error))) {
         fprintf(stderr, "VM compile error: %s\n", error[0] ? error : "unknown error");
         bytecode_program_free(&program);
         free_stmt(ast);

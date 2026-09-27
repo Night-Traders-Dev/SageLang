@@ -1016,7 +1016,14 @@ int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
     BytecodeCompiler compiler;
     memset(&compiler, 0, sizeof(compiler));
     compiler.chunk = chunk;
-    compiler.mode = BYTECODE_COMPILE_STRICT;
+    // HYBRID, not STRICT. In STRICT, emit_ast_stmt() refuses outright, so a
+    // statement that legitimately needs the AST walker -- an aliased or
+    // from-import, break/continue outside a loop, an async proc -- makes the
+    // whole file uncompilable, even though the walker and its opcode
+    // (BC_OP_EXEC_AST_STMT, executed at core/src/vm/vm.c) are implemented and
+    // work. HYBRID still compiles procs to bytecode; it only lets the flagged
+    // statements fall back.
+    compiler.mode = BYTECODE_COMPILE_HYBRID;
     compiler.build_function = build_function;
     compiler.build_function_data = build_function_data;
     compiler.allow_return = 1;
