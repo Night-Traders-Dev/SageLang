@@ -1609,6 +1609,7 @@ static int run_sgvm(const char* path) {
 
         int err = metal_vm_load_binary(&vm, data, (int)size);
         if (err < 0) {
+            fprintf(stderr, "SGVM load error %d: %s\n", err, vm.error_msg ? vm.error_msg : "unknown");
             free(data);
             return 0;
         }

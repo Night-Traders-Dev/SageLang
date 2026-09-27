@@ -535,10 +535,13 @@ static int metal_verify_chunk(const MetalVM* vm, const unsigned char* code,
     while (offset < code_length) {
          metal_verify_mark_start(instruction_starts, offset);
         int width = metal_opcode_width(code[offset]);
-        if (width < 0 || width > code_length - offset - 1 ||
-            !metal_validate_operands(vm, code, code_length, offset, NULL)) {
-            return -1;
-        }
+        // Distinguish the three ways an instruction can be rejected. These used
+        // to collapse into one opaque "invalid chunk payload", which made an
+        // artifact that failed here indistinguishable from one truncated by a
+        // header field being read at the wrong offset.
+        if (width < 0) return -2;
+        if (width > code_length - offset - 1) return -3;
+        if (!metal_validate_operands(vm, code, code_length, offset, NULL)) return -4;
         offset += 1 + width;
     }
      metal_verify_mark_start(instruction_starts, code_length);
@@ -573,10 +576,28 @@ static int metal_verify_chunk(const MetalVM* vm, const unsigned char* code,
                 if (minimum[instruction] < distance + 1) return -5;
             } else if (op == OP_GET_LOCAL) {
                 int index = (code[operand_pos] << 8) | code[operand_pos + 1];
-                if (index >= minimum[instruction]) return -6;
+                // Locals share the frame's stack array with the operand stack:
+                // the runtime reads vm->stack[index], and the frame's locals sit
+                // at the base below the operand stack. So the bound is the size
+                // of that array.
+                //
+                // This used to compare the index against minimum[instruction],
+                // the operand depth at this instruction, which does not include
+                // the frame's local slots. A chunk opening with `GET_LOCAL 0` --
+                // reading a parameter, i.e. the first thing most functions do --
+                // was rejected with "indexes a stack slot it cannot reach",
+                // because at that point the operand depth is 0 and 0 >= 0.
+                // Since every non-rv64 SageBoot/SageOS kernel is written by
+                // `sagevm compile` and verified here, and all of them contain
+                // functions with parameters, that check is why none of them ever
+                // produced serial output.
+                if (index >= METAL_STACK_SIZE) return -6;
             } else if (op == OP_SET_LOCAL) {
                 int index = (code[operand_pos] << 8) | code[operand_pos + 1];
-                if (minimum[instruction] < 1 || index >= minimum[instruction]) return -6;
+                // Same bound as GET_LOCAL. The `minimum < 1` half is kept: this
+                // instruction does read the top of the operand stack, which the
+                // generic pop check does not cover for SET_LOCAL.
+                if (minimum[instruction] < 1 || index >= METAL_STACK_SIZE) return -6;
             }
             long next_minimum = (long)minimum[instruction] - flow.pops + flow.pushes;
             long next_maximum = (long)maximum[instruction] - flow.pops + flow.pushes;
@@ -766,6 +787,26 @@ int metal_vm_load_binary(MetalVM* vm, const unsigned char* data, int size) {
         return -4;
     }
 
+    // The writer emits a function count here, carried straight from the
+    // `functions N` line of the compiled text form. It has to be consumed even
+    // though the functions are already appended to the chunk list, or every
+    // field after it is read from the wrong offset.
+    //
+    // Without this, the function count is consumed as the constant-pool size:
+    // a program with one function and three constants is read as a one-constant
+    // pool whose first "constant" is tagged type 0, and the load dies with
+    // "invalid constant type" before reaching a single chunk. That is what
+    // stopped every non-rv64 SageBoot/SageOS target from producing serial
+    // output -- those artifacts are written by `sagevm compile` and read here.
+    // rv64 was unaffected only because it takes the native SGRV path, which has
+    // no such field.
+    int function_count = 0;
+    if (!metal_read_u16(data, size, &pos, &function_count) || function_count > 1024) {
+        (void)metal_vm_fail(vm, "Metal VM: invalid function count");
+        return -4;
+    }
+    (void)function_count;
+
     int const_count = 0;
     if (!metal_read_u16(data, size, &pos, &const_count) || const_count > METAL_CONST_POOL) {
         (void)metal_vm_fail(vm, "Metal VM: invalid constant count");
@@ -831,7 +872,9 @@ int metal_vm_load_binary(MetalVM* vm, const unsigned char* data, int size) {
         pos += (int)code_length;
     }
     if (pos != size || metal_vm_verify(vm) < 0) {
-        (void)metal_vm_fail(vm, "Metal VM: invalid chunk payload");
+        // metal_vm_verify has already set a specific reason; only overwrite it
+        // when the failure really was a length mismatch.
+        if (pos != size) (void)metal_vm_fail(vm, "Metal VM: invalid chunk payload");
         return -10;
     }
     return 0;
@@ -844,7 +887,24 @@ int metal_vm_verify(MetalVM* vm) {
     }
     for (int c = 0; c < vm->chunk_count; c++) {
         int result = metal_verify_chunk(vm, vm->chunks[c], vm->chunk_lengths[c], 0);
-        if (result < 0) return result;
+        if (result < 0) {
+            // Name the cause. A verifier that only says "invalid" cannot be told
+            // apart from a load that read a field at the wrong offset, which is
+            // exactly the confusion this had already caused. Must be a literal:
+            // metal_vm_fail keeps the pointer rather than copying it.
+            switch (result) {
+                case -1: (void)metal_vm_fail(vm, "Metal VM: chunk verifier rejected its own arguments"); break;
+                case -2: (void)metal_vm_fail(vm, "Metal VM: chunk contains an undefined opcode"); break;
+                case -3: (void)metal_vm_fail(vm, "Metal VM: chunk instruction operand or branch target is out of range"); break;
+                case -4: (void)metal_vm_fail(vm, "Metal VM: chunk instruction has an invalid operand"); break;
+                case -5: (void)metal_vm_fail(vm, "Metal VM: chunk underflows the operand stack"); break;
+                case -6: (void)metal_vm_fail(vm, "Metal VM: chunk indexes a stack slot it cannot reach"); break;
+                case -7: (void)metal_vm_fail(vm, "Metal VM: chunk exceeds the verified stack depth"); break;
+                case -8: (void)metal_vm_fail(vm, "Metal VM: chunk does not terminate"); break;
+                default:  (void)metal_vm_fail(vm, "Metal VM: chunk failed verification"); break;
+            }
+            return result;
+        }
     }
     return 0;
 }
@@ -1309,10 +1369,18 @@ static int metal_step_preflight(MetalVM* vm, int op, int instruction_offset) {
         if (distance >= vm->sp) return metal_vm_fail(vm, "Metal VM: invalid duplicate");
     } else if (op == OP_GET_LOCAL) {
         int index = (vm->code[operand_pos] << 8) | vm->code[operand_pos + 1];
-        if (index >= vm->sp) return metal_vm_fail(vm, "Metal VM: invalid local index");
+        // Locals share the frame's stack array with the operand stack, so the
+        // bound is the array size, not the live operand pointer. Comparing
+        // against vm->sp rejected `GET_LOCAL 0` at the top of a chunk, where
+        // sp is 0, i.e. it rejected the first instruction of any function that
+        // reads a parameter.
+        if (index < 0 || index >= METAL_STACK_SIZE)
+            return metal_vm_fail(vm, "Metal VM: invalid local index");
     } else if (op == OP_SET_LOCAL) {
         int index = (vm->code[operand_pos] << 8) | vm->code[operand_pos + 1];
-        if (vm->sp < 1 || index >= vm->sp) return metal_vm_fail(vm, "Metal VM: invalid local index");
+        // sp < 1 is kept: this one does read the top of the operand stack.
+        if (vm->sp < 1 || index < 0 || index >= METAL_STACK_SIZE)
+            return metal_vm_fail(vm, "Metal VM: invalid local index");
     } else if (op == OP_ARRAY || op == OP_TUPLE) {
         int count = (vm->code[operand_pos] << 8) | vm->code[operand_pos + 1];
         if (count > vm->sp) return metal_vm_fail(vm, "Metal VM: stack underflow");
@@ -1361,11 +1429,23 @@ int metal_vm_step(MetalVM* vm) {
         case OP_POP:   metal_vm_pop(vm); break;
         case OP_GET_LOCAL: {
             int index = read_u16(vm->code, &vm->ip);
+            // Locals and the operand stack share vm->stack, so this indexes the
+            // array directly. metal_vm_verify bounds the index, but the runtime
+            // should not depend on having been verified: a corrupt artifact must
+            // not be able to read outside the stack.
+            if (index < 0 || index >= METAL_STACK_SIZE) {
+                (void)metal_vm_fail(vm, "Metal VM: invalid local index");
+                return 0;
+            }
             if (!metal_vm_push(vm, vm->stack[index])) return 0;
             break;
         }
         case OP_SET_LOCAL: {
             int index = read_u16(vm->code, &vm->ip);
+            if (index < 0 || index >= METAL_STACK_SIZE) {
+                (void)metal_vm_fail(vm, "Metal VM: invalid local index");
+                return 0;
+            }
             vm->stack[index] = vm->stack[vm->sp - 1];
             break;
         }
