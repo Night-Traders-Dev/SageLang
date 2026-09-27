@@ -8,21 +8,11 @@ import sys
 # Cross-compile aarch64 assembly (requires aarch64-linux-gnu-as)
 let has_aarch64_as = sys.shell_exec("which aarch64-linux-gnu-as") != ""
 if has_aarch64_as:
-    let ok1 = asm_compile("    mov x0, #42", "aarch64", "/tmp/sage_test_aarch64.o")
-    if ok1:
-        print true
-    else:
-        print true
-else:
-    print true
+    asm_compile("    mov x0, #42", "aarch64", "/tmp/sage_test_aarch64.o")
+print true
 
 # Cross-compile RISC-V 64 assembly (requires riscv64-linux-gnu-as)
 let has_rv64_as = sys.shell_exec("which riscv64-linux-gnu-as") != ""
 if has_rv64_as:
-    let ok2 = asm_compile("    li a0, 42", "rv64", "/tmp/sage_test_rv64.o")
-    if ok2:
-        print true
-    else:
-        print true
-else:
-    print true
+    asm_compile("    li a0, 42", "rv64", "/tmp/sage_test_rv64.o")
+print true
