@@ -159,7 +159,9 @@ PY
 }
 
 # --- one image -------------------------------------------------------------
-# build_image <sage-src> <ld-script> <prefix> <load-addr> <text-addr>
+# build_image <sage-src> <ld-script> <prefix> <flash-addr> <iram0-base>
+# The ld script decides the real addresses; the last two are only echoed in
+# the progress line. IRAM0 is 0x40080000 -- 0x3FFB0000 is DRAM0.
 build_image() {
     local src="$1" ld="$2" prefix="$3" load="$4" text="$5"
     local stem; stem="$(basename "$src" .sage)"
@@ -227,11 +229,11 @@ build_image() {
 TARGET="${1:-all}"
 
 if [ "$TARGET" = "all" ] || [ "$TARGET" = "app" ]; then
-    build_image "$HERE/os.sage" "$HERE/hal/linker_app.ld" "sagelet_os" 0x10000 0x3FFB0000
+    build_image "$HERE/os.sage" "$HERE/hal/linker_app.ld" "sagelet_os" 0x10000 0x40080000
 fi
 
 if [ "$TARGET" = "all" ] || [ "$TARGET" = "boot" ]; then
-    build_image "$HERE/boot.sage" "$HERE/hal/linker_boot.ld" "sagelet_boot" 0x1000 0x3FFB0000
+    build_image "$HERE/boot.sage" "$HERE/hal/linker_boot.ld" "sagelet_boot" 0x1000 0x40080000
 fi
 
 echo

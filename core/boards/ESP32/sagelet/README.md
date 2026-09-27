@@ -16,16 +16,33 @@ proven and what is not.
 | `esptool elf2image` -> flashable image | works (valid header, checksum) |
 | `esptool write-flash` | works (ROM loads every segment) |
 | ROM jumps to the entry and executes it | works (one real bug found and fixed) |
+| `build.sh boot` / `build.sh all` | **works** — both images build and validate (`boot_entry` at `0x40080000`) |
+| `gen_partitions.py` | works — 3 entries + terminator, app at `0x10000` |
+| SageBoot does anything | **no** — `boot.sage` is a stub whose `main` is `nil` |
 | OS reaches its REPL and prints a prompt | **not yet** — boots and runs, but stops after the first startup marker |
 | `blink` over the REPL | **not reached** |
 
 ## Layout
 
 ```
-0x001000  (intended)  SageBoot   — second-stage bootloader, boot.sage
-0x008000  (intended)  partition table (gen_partitions.py)
-0x010000  (intended)  SageOS     — os.sage, the REPL
+0x001000  SageBoot      — second-stage bootloader, boot.sage  (builds, stub)
+0x008000  partition table — gen_partitions.py
+0x010000  SageOS        — os.sage, the REPL
 ```
+
+Both images are built by `bash core/boards/ESP32/sagelet/build.sh all`, and the
+partition table by
+
+```
+python3 core/boards/ESP32/sagelet/gen_partitions.py \
+        core/boards/ESP32/sagelet/build/partitions.bin
+```
+
+`gen_partitions.py` takes the output path first and then optional
+`name:type:subtype:offset:size` specs, defaulting to nsv/otadata/app. Subtypes
+are symbolic (`nvs`, `ota`, `spiffs`, `coredump`; `ota`, `factory`, `test`), not
+hex. The default app partition is at `0x10000`, which is where `build.sh` links
+`sagelet_os`, so the two agree.
 
 ## Files
 
