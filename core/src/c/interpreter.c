@@ -1187,14 +1187,33 @@ static Value dict_values_native(int argCount, Value* args) {
 
 static Value dict_has_native(int argCount, Value* args) {
     if (argCount != 2) return val_nil();
-    if (!IS_DICT(args[0]) || !IS_STRING(args[1])) return val_nil();
-    return val_bool(dict_has(&args[0], AS_STRING(args[1])));
+    if (!IS_DICT(args[0])) return val_nil();
+    // Same key normalization the subscript operators use, so dict_has(d, 1)
+    // agrees with d[1] and d["1"]. Rejecting non-string keys here made every
+    // integer-keyed dict report `has` as nil, which reads as "key absent".
+    const char* key = NULL;
+    int key_len = 0;
+    char scratch[64];
+    if (!dict_key_from_value(args[1], &key, &key_len, scratch, sizeof(scratch))) {
+        return val_nil();
+    }
+    if (key_len == (int)strlen(key)) {
+        return val_bool(dict_has(&args[0], key));
+    }
+    return val_bool(dict_get_len(&args[0], key, key_len).type != VAL_NIL);
 }
 
 static Value dict_delete_native(int argCount, Value* args) {
     if (argCount != 2) return val_nil();
-    if (!IS_DICT(args[0]) || !IS_STRING(args[1])) return val_nil();
-    dict_delete(&args[0], AS_STRING(args[1]));
+    if (!IS_DICT(args[0])) return val_nil();
+    const char* key = NULL;
+    int key_len = 0;
+    char scratch[64];
+    if (!dict_key_from_value(args[1], &key, &key_len, scratch, sizeof(scratch))) {
+        return val_nil();
+    }
+    (void)key_len;
+    dict_delete(&args[0], key);
     return val_nil();
 }
 
@@ -3464,8 +3483,22 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     return EVAL_RESULT(val_nil());
                 }
                 result = EVAL_RESULT(val_string_len(str + index, 1));
-            } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
-                result = EVAL_RESULT(dict_get_len(&arr, AS_STRING(idx), SAGE_STRING_LEN(idx)));
+            } else if (arr.type == VAL_DICT) {
+                // Any scalar subscript is a valid key; dict_key_from_value
+                // renders numbers and bools the way str() would, so d[42] and
+                // d[str(42)] are the same entry. Previously only string keys
+                // were accepted, which made every integer-keyed dict -- the
+                // common case -- fail with "Invalid indexing operation".
+                const char* dict_key = NULL;
+                int dict_key_len = 0;
+                char key_scratch[64];
+                if (dict_key_from_value(idx, &dict_key, &dict_key_len,
+                                        key_scratch, sizeof(key_scratch))) {
+                    result = EVAL_RESULT(dict_get_len(&arr, dict_key, dict_key_len));
+                } else {
+                    fprintf(stderr, "Runtime Error: Invalid dict key type.\n");
+                    result = EVAL_RESULT(val_nil());
+                }
             } else if (arr.type == VAL_INSTANCE && IS_STRING(idx)) {
                 // Instance field access via subscript: stmt["type"]
                 result = EVAL_RESULT(instance_get_field(arr.as.instance,
@@ -3513,9 +3546,20 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     arr.as.bytes->data[index] = (unsigned char)(int)AS_NUMBER(value);
                 }
                 result = EVAL_RESULT(value);
-            } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
-                dict_set_len(&arr, AS_STRING(idx), SAGE_STRING_LEN(idx), value);
-                result = EVAL_RESULT(value);
+            } else if (arr.type == VAL_DICT) {
+                // Same key normalization as the read path, so a subscript that
+                // reads an entry is always able to write it back.
+                const char* dict_key = NULL;
+                int dict_key_len = 0;
+                char key_scratch[64];
+                if (dict_key_from_value(idx, &dict_key, &dict_key_len,
+                                        key_scratch, sizeof(key_scratch))) {
+                    dict_set_len(&arr, dict_key, dict_key_len, value);
+                    result = EVAL_RESULT(value);
+                } else {
+                    fprintf(stderr, "Runtime Error: Invalid dict key type.\n");
+                    result = EVAL_RESULT(val_nil());
+                }
             } else {
                 fprintf(stderr, "Runtime Error: Invalid index assignment.\n");
                 result = EVAL_RESULT(val_nil());

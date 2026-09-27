@@ -401,6 +401,33 @@ void dict_set_len(Value* dict, const char* key, int len, Value value) {
     d->count++;
 }
 
+int dict_key_from_value(Value key, const char** out_key, int* out_len,
+                        char* scratch, size_t scratch_size) {
+    if (out_key == NULL || scratch == NULL || scratch_size == 0) return 0;
+
+    if (IS_STRING(key)) {
+        *out_key = AS_STRING(key);
+        if (out_len != NULL) *out_len = SAGE_STRING_LEN(key);
+        return 1;
+    }
+    if (IS_NUMBER(key)) {
+        sage_format_number(AS_NUMBER(key), scratch, scratch_size);
+        *out_key = scratch;
+        if (out_len != NULL) *out_len = (int)strlen(scratch);
+        return 1;
+    }
+    if (IS_BOOL(key)) {
+        const char* text = AS_BOOL(key) ? "true" : "false";
+        size_t len = strlen(text);
+        if (len >= scratch_size) return 0;
+        memcpy(scratch, text, len + 1);
+        *out_key = scratch;
+        if (out_len != NULL) *out_len = (int)len;
+        return 1;
+    }
+    return 0;
+}
+
 void dict_set(Value* dict, const char* key, Value value) {
     dict_set_len(dict, key, (int)strlen(key), value);
 }
