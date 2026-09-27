@@ -275,6 +275,19 @@ static int isel_expr(ISelContext* ctx, Expr* expr) {
             return r;
         }
         case EXPR_BINARY: {
+            /* `not x` is parsed as a binary node with a NULL right operand.
+               aot.c and llvm_backend.c both read only the left in that case.
+               This has to be handled before the right operand is evaluated
+               below, which would otherwise dereference that NULL. */
+            if (expr->as.binary.op.type == TOKEN_NOT) {
+                int nleft = isel_expr(ctx, expr->as.binary.left);
+                int nr = isel_vreg(ctx);
+                VInst* nv = vinst_new(VINST_NOT);
+                nv->dest = nr;
+                nv->src1 = nleft;
+                isel_append(ctx, nv);
+                return nr;
+            }
             int left = isel_expr(ctx, expr->as.binary.left);
             int right = isel_expr(ctx, expr->as.binary.right);
             int r = isel_vreg(ctx);
