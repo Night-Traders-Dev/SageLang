@@ -1187,14 +1187,33 @@ static Value dict_values_native(int argCount, Value* args) {
 
 static Value dict_has_native(int argCount, Value* args) {
     if (argCount != 2) return val_nil();
-    if (!IS_DICT(args[0]) || !IS_STRING(args[1])) return val_nil();
-    return val_bool(dict_has(&args[0], AS_STRING(args[1])));
+    if (!IS_DICT(args[0])) return val_nil();
+    // Same key normalization the subscript operators use, so dict_has(d, 1)
+    // agrees with d[1] and d["1"]. Rejecting non-string keys here made every
+    // integer-keyed dict report `has` as nil, which reads as "key absent".
+    const char* key = NULL;
+    int key_len = 0;
+    char scratch[64];
+    if (!dict_key_from_value(args[1], &key, &key_len, scratch, sizeof(scratch))) {
+        return val_nil();
+    }
+    if (key_len == (int)strlen(key)) {
+        return val_bool(dict_has(&args[0], key));
+    }
+    return val_bool(dict_get_len(&args[0], key, key_len).type != VAL_NIL);
 }
 
 static Value dict_delete_native(int argCount, Value* args) {
     if (argCount != 2) return val_nil();
-    if (!IS_DICT(args[0]) || !IS_STRING(args[1])) return val_nil();
-    dict_delete(&args[0], AS_STRING(args[1]));
+    if (!IS_DICT(args[0])) return val_nil();
+    const char* key = NULL;
+    int key_len = 0;
+    char scratch[64];
+    if (!dict_key_from_value(args[1], &key, &key_len, scratch, sizeof(scratch))) {
+        return val_nil();
+    }
+    (void)key_len;
+    dict_delete(&args[0], key);
     return val_nil();
 }
 
@@ -3464,8 +3483,22 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     return EVAL_RESULT(val_nil());
                 }
                 result = EVAL_RESULT(val_string_len(str + index, 1));
-            } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
-                result = EVAL_RESULT(dict_get_len(&arr, AS_STRING(idx), SAGE_STRING_LEN(idx)));
+            } else if (arr.type == VAL_DICT) {
+                // Any scalar subscript is a valid key; dict_key_from_value
+                // renders numbers and bools the way str() would, so d[42] and
+                // d[str(42)] are the same entry. Previously only string keys
+                // were accepted, which made every integer-keyed dict -- the
+                // common case -- fail with "Invalid indexing operation".
+                const char* dict_key = NULL;
+                int dict_key_len = 0;
+                char key_scratch[64];
+                if (dict_key_from_value(idx, &dict_key, &dict_key_len,
+                                        key_scratch, sizeof(key_scratch))) {
+                    result = EVAL_RESULT(dict_get_len(&arr, dict_key, dict_key_len));
+                } else {
+                    fprintf(stderr, "Runtime Error: Invalid dict key type.\n");
+                    result = EVAL_RESULT(val_nil());
+                }
             } else if (arr.type == VAL_INSTANCE && IS_STRING(idx)) {
                 // Instance field access via subscript: stmt["type"]
                 result = EVAL_RESULT(instance_get_field(arr.as.instance,
@@ -3513,9 +3546,20 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     arr.as.bytes->data[index] = (unsigned char)(int)AS_NUMBER(value);
                 }
                 result = EVAL_RESULT(value);
-            } else if (arr.type == VAL_DICT && IS_STRING(idx)) {
-                dict_set_len(&arr, AS_STRING(idx), SAGE_STRING_LEN(idx), value);
-                result = EVAL_RESULT(value);
+            } else if (arr.type == VAL_DICT) {
+                // Same key normalization as the read path, so a subscript that
+                // reads an entry is always able to write it back.
+                const char* dict_key = NULL;
+                int dict_key_len = 0;
+                char key_scratch[64];
+                if (dict_key_from_value(idx, &dict_key, &dict_key_len,
+                                        key_scratch, sizeof(key_scratch))) {
+                    dict_set_len(&arr, dict_key, dict_key_len, value);
+                    result = EVAL_RESULT(value);
+                } else {
+                    fprintf(stderr, "Runtime Error: Invalid dict key type.\n");
+                    result = EVAL_RESULT(val_nil());
+                }
             } else {
                 fprintf(stderr, "Runtime Error: Invalid index assignment.\n");
                 result = EVAL_RESULT(val_nil());
@@ -4996,21 +5040,50 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                                (clause->pattern->type == EXPR_VARIABLE &&
                                 clause->pattern->as.variable.name.length == 1 &&
                                 clause->pattern->as.variable.name.start[0] == '_');
-                int binding = !wildcard && clause->pattern->type == EXPR_VARIABLE;
+                // A bare name in a case is a *value* pattern when that name
+                // already resolves to something, and a *binding* pattern
+                // otherwise. Treating every bare name as a binding made
+                // `match op: case FUSE_LOOKUP: ...` bind `op` to a variable
+                // named FUSE_LOOKUP and take that branch unconditionally, so
+                // the first case won for every input -- which silently routed
+                // every FUSE opcode to FUSE_INIT. `case x:` where x is not yet
+                // in scope still binds, as before.
+                int binding = 0;
+                Value bound_value;
+                int resolves = 0;
+                if (!wildcard && clause->pattern->type == EXPR_VARIABLE) {
+                    resolves = env_get(env, clause->pattern->as.variable.name.start,
+                                       clause->pattern->as.variable.name.length,
+                                       &bound_value);
+                    binding = !resolves;
+                }
+                // A binding lives in a child scope, so it is gone once the
+                // clause ends. Defining it in the enclosing scope leaked the
+                // name into later matches, which then saw a stale binding and
+                // stopped treating the name as a binder.
+                Env* clause_env = env;
                 if (binding) {
-                    env_define(env, clause->pattern->as.variable.name.start,
+                    Env* child = env_create(env);
+                    if (child == NULL) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+                    clause_env = child;
+                    env_define(clause_env, clause->pattern->as.variable.name.start,
                                clause->pattern->as.variable.name.length, match_val);
                 } else if (!wildcard) {
-                    ExecResult pat_res = eval_expr(clause->pattern, env);
-                    if (pat_res.is_throwing) { AST_GC_POP(); return pat_res; }
-                    if (!values_equal(match_val, pat_res.value)) continue;
+                    if (resolves) {
+                        if (!values_equal(match_val, bound_value)) continue;
+                    } else {
+                        ExecResult pat_res = eval_expr(clause->pattern, env);
+                        if (pat_res.is_throwing) { AST_GC_POP(); return pat_res; }
+                        if (!values_equal(match_val, pat_res.value)) continue;
+                    }
                 }
                 if (clause->guard) {
-                    ExecResult guard_res = eval_expr(clause->guard, env);
+                    // The guard has to see this clause's own binding.
+                    ExecResult guard_res = eval_expr(clause->guard, clause_env);
                     if (guard_res.is_throwing) { AST_GC_POP(); return guard_res; }
                     if (!is_truthy(guard_res.value)) continue;
                 }
-                ExecResult res = interpret(clause->body, env);
+                ExecResult res = interpret(clause->body, clause_env);
                 AST_GC_POP();
                 return res;
             }

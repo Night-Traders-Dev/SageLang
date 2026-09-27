@@ -705,8 +705,19 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     character[0] = string[string_index];
                     character[1] = '\0';
                     PUSH(val_string_take(character));
-                } else if (object.type == VAL_DICT && IS_STRING(index)) {
-                    PUSH(dict_get(&object, AS_STRING(index)));
+                } else if (object.type == VAL_DICT) {
+                    // Any scalar subscript is a valid key; see
+                    // dict_key_from_value. Matches the interpreter's read path
+                    // so the two cannot disagree about what a key is.
+                    const char* dict_key = NULL;
+                    int dict_key_len = 0;
+                    char key_scratch[64];
+                    if (!dict_key_from_value(index, &dict_key, &dict_key_len,
+                                             key_scratch, sizeof(key_scratch))) {
+                        result = vm_error("Invalid dict key type.");
+                        goto done;
+                    }
+                    PUSH(dict_get_len(&object, dict_key, dict_key_len));
                 } else {
                     result = vm_error("Invalid indexing operation.");
                     goto done;
@@ -727,8 +738,17 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     if (b_index >= 0 && b_index < b->length) {
                         b->data[b_index] = (unsigned char)(int)AS_NUMBER(value);
                     }
-                } else if (object.type == VAL_DICT && IS_STRING(index)) {
-                    dict_set(&object, AS_STRING(index), value);
+                } else if (object.type == VAL_DICT) {
+                    // Same key normalization as the read path above.
+                    const char* dict_key = NULL;
+                    int dict_key_len = 0;
+                    char key_scratch[64];
+                    if (!dict_key_from_value(index, &dict_key, &dict_key_len,
+                                             key_scratch, sizeof(key_scratch))) {
+                        result = vm_error("VM: Invalid dict key type.");
+                        goto done;
+                    }
+                    dict_set_len(&object, dict_key, dict_key_len, value);
                 } else {
                     result = vm_error("VM: Invalid index assignment.");
                     goto done;

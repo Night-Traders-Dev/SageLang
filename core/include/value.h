@@ -296,6 +296,21 @@ Value array_slice(Value* arr, int start, int end);
 
 // Dictionary operations
 void dict_set(Value* dict, const char* key, Value value);
+
+// Normalize a subscript into a dict key.
+//
+// Dicts are keyed by strings internally, so a subscript has to be reduced to
+// text. Strings are used as-is; numbers and bools are rendered with the same
+// formatting str() uses, so d[42] and d[str(42)] address the same entry. That
+// symmetry is the point: the read path and the write path must agree, and
+// neither may accept a key the other rejects.
+//
+// scratch/scratch_size hold the formatted text for non-string keys and must
+// outlive the returned pointer. Returns 1 and sets *out_key (plus *out_len when
+// out_len is non-NULL) for a usable key, or 0 for a type that cannot be one.
+int dict_key_from_value(Value key, const char** out_key, int* out_len,
+                        char* scratch, size_t scratch_size);
+
 void dict_set_len(Value* dict, const char* key, int len, Value value);
 Value dict_get(Value* dict, const char* key);
 Value dict_get_len(Value* dict, const char* key, int len);
