@@ -291,6 +291,28 @@ proc isel_expr(ctx, expr):
         v["src2"] = right
         isel_append(ctx, v)
         return r
+    if t == ast.EXPR_SET:
+        ## `x = value` parses to set_expr(nil, name, value). With no case here
+        ## the expression fell through and became LOAD_NIL, so a loop body of
+        ## assignments compiled to a loop that computed nothing and printed
+        ## nothing, with correct-looking control flow and no error at all.
+        if expr.object != nil:
+            raise "codegen: property assignment has no native selection"
+        let aname = expr.property.text
+        let aval = isel_expr(ctx, expr.value)
+        let store = vinst_new(VINST_STORE_GLOBAL)
+        store["src1"] = aval
+        store["imm_string"] = aname
+        store["src2"] = isel_add_string(ctx, aname)
+        isel_append(ctx, store)
+        ## Assignment is an expression, so yield the value just stored.
+        let ar = isel_vreg(ctx)
+        let load = vinst_new(VINST_LOAD_GLOBAL)
+        load["dest"] = ar
+        load["imm_string"] = aname
+        load["src1"] = isel_add_string(ctx, aname)
+        isel_append(ctx, load)
+        return ar
     if t == ast.EXPR_VARIABLE:
         let r = isel_vreg(ctx)
         let name = expr.name.text
@@ -669,7 +691,7 @@ proc emit_asm_vinst_x86_64(v):
 # Assembly Text Emission - aarch64
 # ============================================================================
 
-proc emit_asm_vinst_aarch64(v):
+proc emit_asm_vinst_aarch64(v, stack_size):
     let nl = chr(10)
     let pct = chr(37)
     let kind = v["kind"]
@@ -729,14 +751,14 @@ proc emit_asm_vinst_aarch64(v):
     if kind == VINST_JUMP:
         return "  b " + str(v["label"]) + nl
     if kind == VINST_RET:
-        return "  ldr x0, [sp, #" + str(v["src1"] * 16) + "]" + nl + "  ldr x1, [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  ldp x29, x30, [sp], #256" + nl + "  ret" + nl
+        return "  ldr x0, [sp, #" + str(v["src1"] * 16) + "]" + nl + "  ldr x1, [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  ldp x29, x30, [sp], #" + str(stack_size) + nl + "  ret" + nl
     raise "codegen: emitter has no case for vinst " + str(kind) + nl
 
 # ============================================================================
 # Assembly Text Emission - rv64
 # ============================================================================
 
-proc emit_asm_vinst_rv64(v):
+proc emit_asm_vinst_rv64(v, stack_size):
     let nl = chr(10)
     let pct = chr(37)
     let kind = v["kind"]
@@ -796,7 +818,7 @@ proc emit_asm_vinst_rv64(v):
     if kind == VINST_JUMP:
         return "  j " + str(v["label"]) + nl
     if kind == VINST_RET:
-        return "  ld a0, " + str(v["src1"] * 16) + "(sp)" + nl + "  ld a1, " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  ld ra, 8(sp)" + nl + "  ld s0, 0(sp)" + nl + "  addi sp, sp, 256" + nl + "  ret" + nl
+        return "  ld a0, " + str(v["src1"] * 16) + "(sp)" + nl + "  ld a1, " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  ld ra, " + str(stack_size - 8) + "(sp)" + nl + "  ld s0, " + str(stack_size - 16) + "(sp)" + nl + "  addi sp, sp, " + str(stack_size) + nl + "  ret" + nl
     raise "codegen: emitter has no case for vinst " + str(kind) + nl
 
 # ============================================================================
@@ -814,7 +836,24 @@ proc emit_asm_header(target):
     push(parts, ".globl main" + nl + nl)
     return join(parts, "")
 
-proc emit_asm_prologue(target, name):
+proc calculate_native_stack_size(ctx, target):
+    ## Slots are 16 bytes each, plus 32 for the saved ra and s0. Aligned to 16
+    ## and never below 256. Refused past 4095 rather than emitting a frame that
+    ## cannot be addressed, which is what the C port does.
+    let slots = ctx.next_vreg
+    if slots < 0:
+        return 256
+    let required = slots * 16 + 32
+    if required > 4095:
+        raise "codegen: frame of " + str(required) + " bytes is too large to address"
+    var aligned = required
+    while aligned % 16 != 0:
+        aligned = aligned + 1
+    if aligned < 256:
+        return 256
+    return aligned
+
+proc emit_asm_prologue(target, name, stack_size):
     let nl = chr(10)
     let pct = chr(37)
     let parts = []
@@ -822,22 +861,22 @@ proc emit_asm_prologue(target, name):
     if target == TARGET_X86_64:
         push(parts, "  push rbp" + nl)
         push(parts, "  mov rbp, rsp" + nl)
-        push(parts, "  sub rsp, 256" + nl)
+        push(parts, "  sub rsp, " + str(stack_size) + nl)
     if target == TARGET_AARCH64:
-        push(parts, "  stp x29, x30, [sp, #-256]!" + nl)
+        push(parts, "  stp x29, x30, [sp, #-" + str(stack_size) + "]!" + nl)
         push(parts, "  mov x29, sp" + nl)
     if target == TARGET_RV64:
-        ## 0(sp) and 8(sp) are vreg 0 and vreg 1, so the saved ra and s0
-        ## go at the top of the frame, as the C port does.
-        push(parts, "  li t0, -256" + nl)
+        ## The saved ra and s0 go at the top of the frame, above the virtual
+        ## registers, whose count decides the frame size.
+        push(parts, "  li t0, -" + str(stack_size) + nl)
         push(parts, "  add sp, sp, t0" + nl)
-        push(parts, "  sd ra, 248(sp)" + nl)
-        push(parts, "  sd s0, 240(sp)" + nl)
-        push(parts, "  li t0, 256" + nl)
+        push(parts, "  sd ra, " + str(stack_size - 8) + "(sp)" + nl)
+        push(parts, "  sd s0, " + str(stack_size - 16) + "(sp)" + nl)
+        push(parts, "  li t0, " + str(stack_size) + nl)
         push(parts, "  add s0, sp, t0" + nl)
     return join(parts, "")
 
-proc emit_asm_epilogue(target):
+proc emit_asm_epilogue(target, stack_size):
     let nl = chr(10)
     let pct = chr(37)
     let parts = []
@@ -847,15 +886,14 @@ proc emit_asm_epilogue(target):
         push(parts, "  ret" + nl)
     if target == TARGET_AARCH64:
         push(parts, "  mov w0, #0" + nl)
-        push(parts, "  ldp x29, x30, [sp], #256" + nl)
+        push(parts, "  ldp x29, x30, [sp], #" + str(stack_size) + "]" + nl)
         push(parts, "  ret" + nl)
     if target == TARGET_RV64:
         push(parts, "  li a0, 0" + nl)
-        push(parts, "  ld ra, 248(sp)" + nl)
-        push(parts, "  ld s0, 240(sp)" + nl)
-        push(parts, "  li t0, 256" + nl)
+        push(parts, "  ld ra, " + str(stack_size - 8) + "(sp)" + nl)
+        push(parts, "  ld s0, " + str(stack_size - 16) + "(sp)" + nl)
+        push(parts, "  li t0, " + str(stack_size) + nl)
         push(parts, "  add sp, sp, t0" + nl)
-        push(parts, "  addi sp, sp, 256" + nl)
         push(parts, "  ret" + nl)
     return join(parts, "")
 
@@ -876,17 +914,18 @@ proc compile_to_asm(program, target):
     let ctx = isel_compile(program)
     let parts = []
     push(parts, emit_asm_header(target))
-    push(parts, emit_asm_prologue(target, "main"))
+    let stack_size = calculate_native_stack_size(ctx, target)
+    push(parts, emit_asm_prologue(target, "main", stack_size))
     let v = ctx.head
     while v != nil:
         if target == TARGET_X86_64:
             push(parts, emit_asm_vinst_x86_64(v))
         if target == TARGET_AARCH64:
-            push(parts, emit_asm_vinst_aarch64(v))
+            push(parts, emit_asm_vinst_aarch64(v, stack_size))
         if target == TARGET_RV64:
-            push(parts, emit_asm_vinst_rv64(v))
+            push(parts, emit_asm_vinst_rv64(v, stack_size))
         v = v["next"]
-    push(parts, emit_asm_epilogue(target))
+    push(parts, emit_asm_epilogue(target, stack_size))
     # Emit string and number data. Both pools are needed: LOAD_IMM reads a
     # double from .LN and LOAD_STRING takes the address of a .LC.
     if ctx.string_pool_count > 0 or ctx.number_pool_count > 0:

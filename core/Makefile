@@ -592,6 +592,13 @@ test: $(TARGET)
 		echo "⏭ Skip (gcc not found)"; \
 	fi
 	@echo ""
+	@echo "Test 23d: Native Codegen Differential (3 backends)"
+	@if command -v gcc >/dev/null 2>&1; then \
+		cd .. && bash testsuite/native/differential.sh && echo "✅ Pass (all backends agree)" || (echo "❌ Fail"; exit 1); \
+	else \
+		echo "⏭ Skip (gcc not found)"; \
+	fi
+	@echo ""
 	@echo "Test 24: Debug Info (-g flag)"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke_debug -g
 	@./.tmp/compiler_smoke_debug > .tmp/compiler_smoke_debug.out

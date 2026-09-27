@@ -352,7 +352,11 @@ assert_true(contains(asm_aarch64, "ldp x29"), "aarch64: epilogue ldp")
 # --- rv64 ---
 let asm_rv64 = codegen.compile_to_asm(prog, codegen.TARGET_RV64)
 assert_true(contains(asm_rv64, "rv64"), "rv64: target name")
-assert_true(contains(asm_rv64, "addi sp"), "rv64: prologue addi sp")
+## The frame is sized from the virtual register count and the saved ra and
+## s0 sit at its top, clear of the registers, matching the C port.
+assert_true(contains(asm_rv64, "add sp, sp, t0"), "rv64: prologue allocates the frame")
+assert_true(contains(asm_rv64, "sd ra, 248(sp)"), "rv64: ra is saved above the registers")
+assert_true(contains(asm_rv64, "sd s0, 240(sp)"), "rv64: s0 is saved above the registers")
 assert_true(contains(asm_rv64, "sd ra"), "rv64: saves ra")
 
 # ============================================================================
@@ -371,12 +375,12 @@ assert_true(not contains(hdr_arm, ".intel_syntax"), "header aarch64: no intel sy
 # Assembly Prologue / Epilogue
 # ============================================================================
 
-let pro_x86 = codegen.emit_asm_prologue(codegen.TARGET_X86_64, "test_fn")
+let pro_x86 = codegen.emit_asm_prologue(codegen.TARGET_X86_64, "test_fn", 256)
 assert_true(contains(pro_x86, "test_fn:"), "prologue x86: label")
 assert_true(contains(pro_x86, "push rbp"), "prologue x86: push rbp")
 assert_true(contains(pro_x86, "sub rsp, 256"), "prologue x86: sub rsp")
 
-let epi_x86 = codegen.emit_asm_epilogue(codegen.TARGET_X86_64)
+let epi_x86 = codegen.emit_asm_epilogue(codegen.TARGET_X86_64, 256)
 assert_true(contains(epi_x86, "xor eax, eax"), "epilogue x86: xor eax")
 assert_true(contains(epi_x86, "ret"), "epilogue x86: ret")
 
@@ -478,7 +482,7 @@ let missing = codegen.vinst_new(codegen.VINST_INDEX)
 missing["dest"] = 0
 let raised = false
 try:
-    codegen.emit_asm_vinst_rv64(missing)
+    codegen.emit_asm_vinst_rv64(missing, 256)
 catch err:
     raised = true
 assert_true(raised, "an instruction with no emitter raises instead of commenting")
@@ -541,15 +545,15 @@ let br = codegen.vinst_new(codegen.VINST_BRANCH)
 br["src1"] = 0
 br["label"] = "Ltrue"
 br["label_false"] = "Lfalse"
-assert_true(contains(codegen.emit_asm_vinst_rv64(br), "call sage_rt_get_bool"),
+assert_true(contains(codegen.emit_asm_vinst_rv64(br, 256), "call sage_rt_get_bool"),
             "rv64: branch asks the runtime whether the value is true")
-assert_true(contains(codegen.emit_asm_vinst_rv64(br), "bnez a0, Ltrue"),
+assert_true(contains(codegen.emit_asm_vinst_rv64(br, 256), "bnez a0, Ltrue"),
             "rv64: branch jumps to the true label when set")
-assert_true(contains(codegen.emit_asm_vinst_rv64(br), "j Lfalse"),
+assert_true(contains(codegen.emit_asm_vinst_rv64(br, 256), "j Lfalse"),
             "rv64: branch otherwise falls to the false label")
 assert_true(contains(codegen.emit_asm_vinst_x86_64(br), "sage_rt_get_bool"),
             "x86: branch asks the runtime whether the value is true")
-assert_true(contains(codegen.emit_asm_vinst_aarch64(br), "bl sage_rt_get_bool"),
+assert_true(contains(codegen.emit_asm_vinst_aarch64(br, 256), "bl sage_rt_get_bool"),
             "aarch64: branch asks the runtime whether the value is true")
 
 # ============================================================================
