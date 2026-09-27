@@ -1580,14 +1580,15 @@ int compile_source_to_vm_artifact(const char* source, const char* input_path, co
         ast = run_passes(ast, &pass_ctx);
     }
 
-    // HYBRID, not STRICT. This is the path `sage --emit-vm` takes, i.e. the one
-    // SageOS and SageVM use to build .svm artifacts, and it was the *only*
-    // whole-program compile that ran strict. The in-process path
-    // (core/src/c/stdlib.c) has always used HYBRID, which is why the same source
-    // could run through the VM but could not be written to a file: a single
-    // `import foo as bar` failed with "Unsupported stmt type 17 requires AST
-    // fallback" even though STMT_IMPORT is 17 and the emitter has a case for it.
-    if (!bytecode_compile_program(&program, ast, BYTECODE_COMPILE_HYBRID, error, sizeof(error))) {
+    // STRICT, deliberately. This is the path `sage --emit-vm` takes, i.e. the one
+    // SageOS and SageVM use to build .sgvm/.svm artifacts, and it is the only
+    // whole-program compile whose output is written to a file. STRICT is what
+    // guarantees no statement in the artifact needs the AST walker, because the
+    // walker's statements are referenced by pointer into the live AST and are
+    // never serialized. Do not relax this to HYBRID: the artifact would load
+    // and then trap on an opcode no VM implements. Constructs that need the
+    // walker have to be compiled natively instead.
+    if (!bytecode_compile_program(&program, ast, BYTECODE_COMPILE_STRICT, error, sizeof(error))) {
         fprintf(stderr, "VM compile error: %s\n", error[0] ? error : "unknown error");
         bytecode_program_free(&program);
         free_stmt(ast);

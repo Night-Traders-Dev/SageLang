@@ -284,6 +284,12 @@ static int emit_dup(BytecodeCompiler* compiler, uint8_t distance, int line, int 
 
 static int emit_ast_stmt(BytecodeCompiler* compiler, Stmt* stmt) {
     if (compiler->mode == BYTECODE_COMPILE_STRICT) {
+        if (stmt->type == STMT_IMPORT) {
+            set_error(compiler, "from-imports ('from module import name') are not "
+                                "supported by the bytecode VM yet; use "
+                                "'import module' or 'import module as name'");
+            return 0;
+        }
         printf("DEBUG: Unsupported stmt type %d requires AST fallback\n", stmt->type);
         set_error(compiler,
                   "Statement requires AST fallback and cannot be emitted as a compiled VM artifact yet.");
@@ -368,15 +374,21 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
         case STMT_TRY:
             return 0;
         case STMT_IMPORT:
-            // Plain "import module" compiles to BC_OP_IMPORT (import_all
-            // semantics). from-imports and aliased imports need the richer
-            // binding logic in interpreter.c, so fall back to the AST walker.
-            if (stmt->as.import.item_count > 0 ||
-                stmt->as.import.alias != NULL ||
-                !stmt->as.import.import_all) {
-                return 1;
-            }
-            return 0;
+            // "import module" and "import module as alias" both compile
+            // natively: the emitter writes BC_OP_IMPORT and then
+            // BC_OP_DEFINE_GLOBAL naming the alias, or the last dotted segment
+            // when there is no alias. Rejecting the aliased form here was what
+            // made `import os as o` fail even though the emitter could already
+            // produce it.
+            //
+            // Only from-imports ("from module import a, b") need the richer
+            // per-item binding logic in interpreter.c. They must stay a hard
+            // error rather than a fallback: the walker is addressed by pointer
+            // into the live AST (vm.c reads chunk->ast_stmts[...]), and that
+            // table is not written into a .sgvm/.svm artifact, so a fallback
+            // opcode in a file would be unrunnable. A clear compile error
+            // beats a silently broken artifact.
+            return stmt->as.import.import_all ? 0 : 1;
         case STMT_CLASS:
         case STMT_PROC:
             return compiler->build_function == NULL;
@@ -1016,14 +1028,7 @@ int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
     BytecodeCompiler compiler;
     memset(&compiler, 0, sizeof(compiler));
     compiler.chunk = chunk;
-    // HYBRID, not STRICT. In STRICT, emit_ast_stmt() refuses outright, so a
-    // statement that legitimately needs the AST walker -- an aliased or
-    // from-import, break/continue outside a loop, an async proc -- makes the
-    // whole file uncompilable, even though the walker and its opcode
-    // (BC_OP_EXEC_AST_STMT, executed at core/src/vm/vm.c) are implemented and
-    // work. HYBRID still compiles procs to bytecode; it only lets the flagged
-    // statements fall back.
-    compiler.mode = BYTECODE_COMPILE_HYBRID;
+    compiler.mode = BYTECODE_COMPILE_STRICT;
     compiler.build_function = build_function;
     compiler.build_function_data = build_function_data;
     compiler.allow_return = 1;
