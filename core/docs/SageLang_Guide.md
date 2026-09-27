@@ -1100,7 +1100,7 @@ Traits define an interface contract of method signatures. A trait compiles down 
 
 ```sagelang
 trait Printable:
-    proc to_string(self)
+    proc to_string(self): pass
 end
 ```
 
@@ -1305,7 +1305,17 @@ Implementation: the interpreter collects deferred statements in a 1024-slot stac
 
 ### 4.9 Pattern Matching (match/case/default)
 
-Match evaluates a value and compares it against case patterns using equality. The first matching case body executes. An optional `default` clause runs if no case matches.
+Match evaluates a value and compares it against case patterns. Patterns support literal value comparisons, bare-identifier variable bindings (which capture the matched value into a clause-scoped variable visible in guards and clause bodies), match guards (`if condition`), and the `_` wildcard pattern. An optional `default` clause runs if no case matches.
+
+```sage
+match x:
+    case n if n > 10:
+        print "Large number: " + str(n)
+    case n:
+        print "Matched value: " + str(n)
+    default:
+        print "Fallback"
+```
 
 ```sagelang
 let cmd = "hello"
