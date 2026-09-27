@@ -190,6 +190,47 @@ check(len(sts_bytes) >= 4 and sts_bytes[2] == 0x00 and sts_bytes[3] == 0x93
           and sts_bytes[4] == 0xC5 and sts_bytes[5] == 0x00,
       "sts 0x00C5, r16 keeps the address 0x00C5 and register r16")
 
+## The assembler used to have no error path at all, which is how `sts 0x00C5,
+## r16` became `sts r5, 0x0010` and how sbrs/sbrc became nops. Both classes of
+## mistake have to be *rejected*, not merely absent from the examples.
+proc expect_rejected(src, label):
+    var rejected = false
+    try:
+        avr_assembler.assemble(src)
+    catch e:
+        rejected = true
+    check(rejected, label)
+
+print("== malformed input is rejected, not guessed ==")
+expect_rejected("    sts r16, 0x00C5\n",
+                "sts written register-first is rejected, not mis-encoded")
+expect_rejected("    mov 0x10, r16\n",
+                "a hex literal in a register field is rejected")
+expect_rejected("    ldi r99, 0x20\n",
+                "a register above r31 is rejected")
+expect_rejected("    mov r16x, r1\n",
+                "a register with trailing junk is rejected")
+expect_rejected("    frobnicate r16\n",
+                "an unknown mnemonic is rejected rather than emitting a nop")
+expect_rejected("    sbrs r16\n",
+                "a missing operand is rejected")
+
+## And the well-formed forms still assemble.
+proc expect_accepted(src, label):
+    var ok = true
+    try:
+        avr_assembler.assemble(src)
+    catch e:
+        ok = false
+    check(ok, label)
+
+print("== well-formed input still assembles ==")
+expect_accepted("    sts 0x00C5, r16\n", "sts with address first is accepted")
+expect_accepted("    lds r17, 0x00C0\n", "lds with register first is accepted")
+expect_accepted("    sbrs r17, 5\n", "sbrs is accepted")
+expect_accepted("    sbrc r0, 0\n", "sbrc with r0 is accepted")
+expect_accepted("    mov r16, r1\n", "a bare decimal register is still accepted")
+
 print("")
 print("Results:", passes, "passed,", failures, "failed")
 if failures == 0:

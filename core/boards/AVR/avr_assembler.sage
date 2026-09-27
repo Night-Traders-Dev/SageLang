@@ -47,11 +47,32 @@ proc parse_int(s):
         v = 0 - v
     return v
 
+proc _all_digits(s):
+    if s == "":
+        return false
+    var i = 0
+    while i < len(s):
+        let c = s[i]
+        if c < "0" or c > "9":
+            return false
+        i = i + 1
+    return true
+
+## Registers are r0-r31. Validate the operand instead of accepting anything
+## parse_int() can make sense of: it ignores characters it cannot read, so
+## parse_reg("0x00C5") returned 197 and parse_reg("r16x") returned 16, either
+## of which then assembled into a plausible-looking but wrong instruction.
 proc parse_reg(s):
-    s = lower(strip(s))
-    if len(s) >= 1 and s[0] == "r":
-        return parse_int(slice(s, 1, len(s)))
-    return parse_int(s)
+    let t = lower(strip(s))
+    var digits = t
+    if len(t) >= 1 and t[0] == "r":
+        digits = slice(t, 1, len(t))
+    if not _all_digits(digits):
+        raise "bad register operand: " + t
+    let n = parse_int(digits)
+    if n > 31:
+        raise "register out of range, expected r0-r31: " + t
+    return n
 
 # I/O-space register names (direct 0x00..0x3F)
 proc io_const(name):
@@ -300,9 +321,16 @@ proc encode_instr(it, pc, syms, consts):
     if op == "lds":
         return avr_opcodes.enc_lds(parse_reg(a[0]), resolve_operand(a[1], syms, consts))
     if op == "sts":
+        # lds is `lds Rd, k` but sts is `sts k, Rd`. A register in the first
+        # position means the source was written the wrong way round, and it
+        # would otherwise assemble into a wrong encoding without complaint.
+        if len(a) >= 2 and lower(strip(a[0]))[0] == "r":
+            raise "sts takes the address first: use \"sts " + strip(a[0]) + ", " + strip(a[1]) + "\""
         return avr_opcodes.enc_sts(parse_reg(a[1]), resolve_operand(a[0], syms, consts))
 
-    return [0x0000]
+    # An unrecognised mnemonic used to fall through to a nop, which is how
+    # sbrs/sbrc could be "implemented" and do nothing at all. Fail instead.
+    raise "unknown instruction: " + op
 
 proc br_word(set_flag, flag_s, opnd, pc, syms, consts):
     let target = resolve_target(opnd, syms, consts)
