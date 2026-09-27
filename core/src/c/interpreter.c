@@ -5040,21 +5040,50 @@ static ExecResult interpret_inner(Stmt* stmt, Env* env) {
                                (clause->pattern->type == EXPR_VARIABLE &&
                                 clause->pattern->as.variable.name.length == 1 &&
                                 clause->pattern->as.variable.name.start[0] == '_');
-                int binding = !wildcard && clause->pattern->type == EXPR_VARIABLE;
+                // A bare name in a case is a *value* pattern when that name
+                // already resolves to something, and a *binding* pattern
+                // otherwise. Treating every bare name as a binding made
+                // `match op: case FUSE_LOOKUP: ...` bind `op` to a variable
+                // named FUSE_LOOKUP and take that branch unconditionally, so
+                // the first case won for every input -- which silently routed
+                // every FUSE opcode to FUSE_INIT. `case x:` where x is not yet
+                // in scope still binds, as before.
+                int binding = 0;
+                Value bound_value;
+                int resolves = 0;
+                if (!wildcard && clause->pattern->type == EXPR_VARIABLE) {
+                    resolves = env_get(env, clause->pattern->as.variable.name.start,
+                                       clause->pattern->as.variable.name.length,
+                                       &bound_value);
+                    binding = !resolves;
+                }
+                // A binding lives in a child scope, so it is gone once the
+                // clause ends. Defining it in the enclosing scope leaked the
+                // name into later matches, which then saw a stale binding and
+                // stopped treating the name as a binder.
+                Env* clause_env = env;
                 if (binding) {
-                    env_define(env, clause->pattern->as.variable.name.start,
+                    Env* child = env_create(env);
+                    if (child == NULL) { AST_GC_POP(); return EVAL_RESULT(val_nil()); }
+                    clause_env = child;
+                    env_define(clause_env, clause->pattern->as.variable.name.start,
                                clause->pattern->as.variable.name.length, match_val);
                 } else if (!wildcard) {
-                    ExecResult pat_res = eval_expr(clause->pattern, env);
-                    if (pat_res.is_throwing) { AST_GC_POP(); return pat_res; }
-                    if (!values_equal(match_val, pat_res.value)) continue;
+                    if (resolves) {
+                        if (!values_equal(match_val, bound_value)) continue;
+                    } else {
+                        ExecResult pat_res = eval_expr(clause->pattern, env);
+                        if (pat_res.is_throwing) { AST_GC_POP(); return pat_res; }
+                        if (!values_equal(match_val, pat_res.value)) continue;
+                    }
                 }
                 if (clause->guard) {
-                    ExecResult guard_res = eval_expr(clause->guard, env);
+                    // The guard has to see this clause's own binding.
+                    ExecResult guard_res = eval_expr(clause->guard, clause_env);
                     if (guard_res.is_throwing) { AST_GC_POP(); return guard_res; }
                     if (!is_truthy(guard_res.value)) continue;
                 }
-                ExecResult res = interpret(clause->body, env);
+                ExecResult res = interpret(clause->body, clause_env);
                 AST_GC_POP();
                 return res;
             }
