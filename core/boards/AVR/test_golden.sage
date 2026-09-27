@@ -270,6 +270,50 @@ expect_error_at("    nop\n    nop\n    sbrs r16\n", 3,
 expect_error_at("    nop\n\n    ; a comment\n\n    ldi r16, r5\n", 5,
                 "blank lines and comments are counted correctly")
 
+## in/out and the bit ops can only reach the 0x00-0x3F I/O window, and a bit
+## number is three bits. Both used to be masked rather than refused:
+## `out 0xC5, r16` -- written when the author meant UBRR0H in the data space --
+## assembled as `out 0x05, r16`, PORTB. That is the defect that made
+## SageApple's tools/avr_boot.sage configure a GPIO pin instead of the USART.
+print("== out-of-range I/O addresses and bit numbers are rejected ==")
+expect_rejected("    out 0xC5, r16\n",
+                "an I/O address above 0x3F is rejected, not masked")
+expect_rejected("    in r17, 0xC0\n",
+                "in with a data-space address is rejected")
+expect_rejected("    sbi 0xC5, 3\n", "sbi with a data-space address is rejected")
+expect_rejected("    cbi 0x80, 1\n", "cbi with an address above 0x3F is rejected")
+expect_rejected("    sbi 0x04, 9\n", "a bit number above 7 is rejected, not masked")
+expect_rejected("    sbrs r16, 12\n", "sbrs with a bit number above 7 is rejected")
+expect_rejected("    sbrc r16, 8\n", "sbrc with a bit number of 8 is rejected")
+
+## And the in-range forms still assemble to the same bytes as before.
+proc expect_encodes(src, want_hex, label):
+    var got = ""
+    try:
+        got = strip(avr_hex.emit_hex(avr_assembler.assemble(src), 0))
+    catch e:
+        check(false, label + " (raised: " + str(e) + ")")
+        return
+    # compare only the payload, ignoring record framing and the EOF record
+    var payload = ""
+    for rec in split(got, "\n"):
+        let line = strip(rec)
+        if len(line) >= 11 and line[0] == ":" and hexdig(line[7]) == 0:
+            payload = payload + slice(line, 9, len(line) - 2)
+    check(payload == lower(want_hex), label)
+
+print("== in-range I/O addresses and bit numbers still encode ==")
+expect_encodes("    ldi r16, 0x20\n    out 0x04, r16\n", "00e204b9",
+               "out 0x04 (DDRB) is unchanged")
+expect_encodes("    in r17, 0x3D\n", "1db7",
+               "in 0x3D (SPL) is unchanged")
+expect_encodes("    sbi 0x04, 3\n", "239a",
+               "sbi 0x04, 3 is unchanged")
+expect_encodes("    sbrs r16, 7\n", "07ff",
+               "sbrs r16, 7 is unchanged")
+expect_encodes("    sbrc r16, 0\n", "00fd",
+               "sbrc r16, 0 is unchanged")
+
 print("")
 print("Results:", passes, "passed,", failures, "failed")
 if failures == 0:

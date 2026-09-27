@@ -110,6 +110,24 @@ proc resolve_operand(s, syms, consts):
         raise "unexpected register in an operand position: " + strip(s)
     return parse_int(s)
 
+## An I/O-space operand. in/out/sbi/cbi/sbis/sbic reach only 0x00-0x3F; the
+## encoder took the low six bits, so `out 0xC5, r16` silently became
+## `out 0x05, r16` (PORTB). Registers above the window live in the data space
+## and need sts/lds.
+proc io_operand(s, syms, consts):
+    let v = resolve_operand(s, syms, consts)
+    if v < 0 or v > 0x3F:
+        var tail = " -- use sts/lds for the data space"
+        raise "I/O address out of range (0x00-0x3F): " + strip(s) + tail
+    return v
+
+## A bit number is three bits wide; anything larger is masked, not an error.
+proc bit_operand(s, syms, consts):
+    let v = resolve_operand(s, syms, consts)
+    if v < 0 or v > 7:
+        raise "bit number out of range (0-7): " + strip(s)
+    return v
+
 proc resolve_target(s, syms, consts):
     let t = strip(s)
     if dicts.has(syms, t):
@@ -361,21 +379,21 @@ proc encode_instr(it, pc, syms, consts):
     if op == "tst":   return [avr_opcodes.enc_and(parse_reg(a[0]), parse_reg(a[0]))]
 
     if op == "sbi":
-        return [avr_opcodes.enc_sbi(resolve_operand(a[0], syms, consts), resolve_operand(a[1], syms, consts))]
+        return [avr_opcodes.enc_sbi(io_operand(a[0], syms, consts), bit_operand(a[1], syms, consts))]
     if op == "cbi":
-        return [avr_opcodes.enc_cbi(resolve_operand(a[0], syms, consts), resolve_operand(a[1], syms, consts))]
+        return [avr_opcodes.enc_cbi(io_operand(a[0], syms, consts), bit_operand(a[1], syms, consts))]
     if op == "sbis":
-        return [avr_opcodes.enc_sbis(resolve_operand(a[0], syms, consts), resolve_operand(a[1], syms, consts))]
+        return [avr_opcodes.enc_sbis(io_operand(a[0], syms, consts), bit_operand(a[1], syms, consts))]
     if op == "sbic":
-        return [avr_opcodes.enc_sbic(resolve_operand(a[0], syms, consts), resolve_operand(a[1], syms, consts))]
+        return [avr_opcodes.enc_sbic(io_operand(a[0], syms, consts), bit_operand(a[1], syms, consts))]
     if op == "sbrs":
-        return [avr_opcodes.enc_sbrs(parse_reg(a[0]), resolve_operand(a[1], syms, consts))]
+        return [avr_opcodes.enc_sbrs(parse_reg(a[0]), bit_operand(a[1], syms, consts))]
     if op == "sbrc":
-        return [avr_opcodes.enc_sbrc(parse_reg(a[0]), resolve_operand(a[1], syms, consts))]
+        return [avr_opcodes.enc_sbrc(parse_reg(a[0]), bit_operand(a[1], syms, consts))]
     if op == "in":
-        return [avr_opcodes.enc_in(parse_reg(a[0]), resolve_operand(a[1], syms, consts))]
+        return [avr_opcodes.enc_in(parse_reg(a[0]), io_operand(a[1], syms, consts))]
     if op == "out":
-        return [avr_opcodes.enc_out(resolve_operand(a[0], syms, consts), parse_reg(a[1]))]
+        return [avr_opcodes.enc_out(io_operand(a[0], syms, consts), parse_reg(a[1]))]
 
     if op == "rjmp" or op == "rcall":
         let target = resolve_target(a[0], syms, consts)
