@@ -56,14 +56,14 @@ proc BG_GRAY():
 proc BG_WHITE():
     return "\x1b[107m"
 
-proc style(text, style):
-    return style + text + RESET()
+proc style(text, style_str):
+    return style_str + text + RESET()
 
 proc color(text, fg):
     return fg + text + RESET()
 
-proc bg(text, bg):
-    return bg + text + RESET()
+proc bg(text, bg_str):
+    return bg_str + text + RESET()
 
 proc bold(text):
     return BOLD() + text + RESET()
@@ -131,101 +131,112 @@ let BOX_HEAVY = {"tl": "┏", "tr": "┓", "bl": "┗", "br": "┛", "h": "━",
 let BOX_DOUBLE = {"tl": "╔", "tr": "╗", "bl": "╚", "br": "╝", "h": "═", "v": "║", "ml": "╠", "mr": "╣", "mt": "╦", "mb": "╩", "c": "╬"}
 let BOX_ROUNDED = {"tl": "╭", "tr": "╮", "bl": "╰", "br": "╯", "h": "─", "v": "│", "ml": "├", "mr": "┤", "mt": "┬", "mb": "┴", "c": "┼"}
 
+# Optimization: Pre-calculates line paddings, avoids variable name shadowing, and assembles output lines via join()
+@inline
 proc panel(text, border_style, border_color, title, title_align, padding):
-    var style = BOX_ROUNDED
+    var box_style = BOX_ROUNDED
     if border_style == "light":
-        style = BOX_LIGHT
+        box_style = BOX_LIGHT
     elif border_style == "heavy":
-        style = BOX_HEAVY
+        box_style = BOX_HEAVY
     elif border_style == "double":
-        style = BOX_DOUBLE
+        box_style = BOX_DOUBLE
     let lines = split(text, "\n")
     let max_w = 0
-    for l in lines:
-        if len(l) > max_w:
-            max_w = len(l)
+    let n_lines = len(lines)
+    for i in range(n_lines):
+        let line_len = len(lines[i])
+        if line_len > max_w:
+            max_w = line_len
     let inner_w = max_w + padding * 2
     let w = inner_w + 2
-    let h = style.h
-    let v = style.v
-    let tl = style.tl
-    let tr = style.tr
-    let bl = style.bl
-    let br = style.br
-    var result = ""
+    let h = box_style["h"]
+    let v = box_style["v"]
+    let tl = box_style["tl"]
+    let tr = box_style["tr"]
+    let bl = box_style["bl"]
+    let br = box_style["br"]
+    let out_lines = []
     if title != "":
         let t = " " + title + " "
         let title_len = len(t)
-        let left_w = (w - 2 - title_len) / 2
+        let left_w = ((w - 2 - title_len) / 2) | 0
         let right_w = w - 2 - title_len - left_w
-        result = result + style(tl + str_repeat(style.h, left_w) + t + str_repeat(style.h, right_w) + tr, border_color) + "\n"
+        push(out_lines, style(tl + string_repeat(h, left_w) + t + string_repeat(h, right_w) + tr, border_color))
     else:
-        result = result + style(tl + str_repeat(style.h, w - 2) + tr, border_color) + "\n"
-    for l in lines:
-        let pad = w - 2 - len(l)
-        result = result + style(v + " " + l + str_repeat(" ", pad) + " " + v, border_color) + "\n"
-    result = result + style(bl + str_repeat(style.h, w - 2) + br, border_color)
-    return result
+        push(out_lines, style(tl + string_repeat(h, w - 2) + tr, border_color))
+    let pad_left_str = string_repeat(" ", padding)
+    for i in range(n_lines):
+        let l = lines[i]
+        let pad_right_len = max_w - len(l) + padding
+        push(out_lines, style(v + pad_left_str + l + string_repeat(" ", pad_right_len) + v, border_color))
+    push(out_lines, style(bl + string_repeat(h, w - 2) + br, border_color))
+    return join(out_lines, "\n")
 
 proc str_repeat(s, n):
     return string_repeat(s, n)
 
 # ─── Tables ──────────────────────────────────────────────────────────────
+# Optimization: Pre-calculates cell paddings, accumulates line arrays, and uses native join()
+@inline
 proc table(headers, rows, border):
     let cols = len(headers)
     let widths = []
-    for i in range(len(headers)):
-        widths[i] = len(headers[i])
-    for row in rows:
-        for i in range(len(row)):
-            if len(str(row[i])) > widths[i]:
-                widths[i] = len(str(row[i]))
-    let h = "─"
-    let v = "│"
-    let tl = "┌"
-    let tr = "┐"
-    let bl = "└"
-    let br = "┘"
-    let ml = "├"
-    let mr = "┤"
-    let mt = "┬"
-    let mb = "┴"
-    let c = "┼"
-    var result = ""
+    for i in range(cols):
+        push(widths, len(headers[i]))
+    let num_rows = len(rows)
+    for r in range(num_rows):
+        let row = rows[r]
+        let row_len = len(row)
+        for i in range(row_len):
+            let cell_str_len = len(str(row[i]))
+            if cell_str_len > widths[i]:
+                widths[i] = cell_str_len
+    let out_lines = []
     if border:
-        result = result + "┌"
-        for i in range(len(widths)):
-            result = result + str_repeat("─", widths[i] + 2)
-            if i < len(widths) - 1:
-                result = result + "┬"
-        result = result + "┐\n"
-    result = result + "│"
-    for i in range(len(headers)):
+        let top_parts = ["┌"]
+        for i in range(cols):
+            push(top_parts, string_repeat("─", widths[i] + 2))
+            if i < cols - 1:
+                push(top_parts, "┬")
+        push(top_parts, "┐")
+        push(out_lines, join(top_parts, ""))
+
+    let hdr_parts = ["│"]
+    for i in range(cols):
         let pad = widths[i] - len(headers[i])
-        result = result + " " + headers[i] + str_repeat(" ", pad) + " │"
-    result = result + "\n"
+        push(hdr_parts, " " + headers[i] + string_repeat(" ", pad) + " │")
+    push(out_lines, join(hdr_parts, ""))
+
     if border:
-        result = result + "├"
-        for i in range(len(widths)):
-            result = result + str_repeat("─", widths[i] + 2)
-            if i < len(widths) - 1:
-                result = result + "┼"
-        result = result + "┤\n"
-    for ri in range(len(rows)):
-        result = result + "│"
-        for i in range(len(rows[ri])):
-            let cell = str(rows[ri][i])
+        let mid_parts = ["├"]
+        for i in range(cols):
+            push(mid_parts, string_repeat("─", widths[i] + 2))
+            if i < cols - 1:
+                push(mid_parts, "┼")
+        push(mid_parts, "┤")
+        push(out_lines, join(mid_parts, ""))
+
+    for ri in range(num_rows):
+        let row_parts = ["│"]
+        let row = rows[ri]
+        let row_len = len(row)
+        for i in range(row_len):
+            let cell = str(row[i])
             let pad = widths[i] - len(cell)
-            result = result + " " + cell + str_repeat(" ", pad) + " │"
-        result = result + "\n"
+            push(row_parts, " " + cell + string_repeat(" ", pad) + " │")
+        push(out_lines, join(row_parts, ""))
+
     if border:
-        result = result + "└"
-        for i in range(len(widths)):
-            result = result + str_repeat("─", widths[i] + 2)
-            if i < len(widths) - 1:
-                result = result + "┴"
-        result = result + "┘"
-    return result
+        let bot_parts = ["└"]
+        for i in range(cols):
+            push(bot_parts, string_repeat("─", widths[i] + 2))
+            if i < cols - 1:
+                push(bot_parts, "┴")
+        push(bot_parts, "┘")
+        push(out_lines, join(bot_parts, ""))
+
+    return join(out_lines, "\n")
 
 # ─── Progress / Spinner ──────────────────────────────────────────────────
 let SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -245,7 +256,7 @@ proc progress_bar(current, total, width, filled, empty, color):
     let pct = current / total
     let filled_w = int(current * width / total)
     let empty_w = width - filled_w
-    let bar = color + str_repeat("█", filled_w) + DIM() + str_repeat("░", width - filled_w) + RESET()
+    let bar = color + string_repeat("█", filled_w) + DIM() + string_repeat("░", width - filled_w) + RESET()
     return "[" + bar + "] " + str(int(current * 100 / total)) + "%"
 
 # ─── Live Rendering ──────────────────────────────────────────────────────
@@ -298,13 +309,12 @@ proc println(text):
     sys.stdout_write(text + "\n")
 
 # ─── Rich Console ────────────────────────────────────────────────────────
-# ─── Rich Console ────────────────────────────────────────────────────────
-proc _rule_impl(title, style):
+proc _rule_impl(title, style_fn):
     var title_str = ""
     if title != "":
-        let title_str = " " + title + " "
+        title_str = " " + title + " "
     let w = 80 - len(title_str)
-    sys.stdout_write(style(str_repeat("─", w / 2) + title_str + str_repeat("─", w - w / 2), style) + "\n")
+    sys.stdout_write(style(string_repeat("─", w / 2) + title_str + string_repeat("─", w - w / 2), style_fn) + "\n")
 
 let CONSOLE_METHODS = {
     "log": proc(text): sys.stdout_write(text + "\n"),
@@ -326,14 +336,14 @@ let PROGRESS_STATE = {"_task_id": 0, "_tasks": {}, "_running": false}
 proc progress():
     let p = {}
     p["add_task"] = proc(description, total, completed, visible):
-        let id = PROGRESS_STATE._task_id
-        PROGRESS_STATE._task_id = PROGRESS_STATE._task_id + 1
-        PROGRESS_STATE._tasks[id] = {"desc": description, "total": total, "completed": completed, "visible": visible}
+        let id = PROGRESS_STATE["_task_id"]
+        PROGRESS_STATE["_task_id"] = PROGRESS_STATE["_task_id"] + 1
+        PROGRESS_STATE["_tasks"][id] = {"desc": description, "total": total, "completed": completed, "visible": visible}
         return id
 
     p["update"] = proc(task_id, completed, total, description, visible):
-        if dict_has(PROGRESS_STATE._tasks, task_id):
-            let t = PROGRESS_STATE._tasks[task_id]
+        if dict_has(PROGRESS_STATE["_tasks"], task_id):
+            let t = PROGRESS_STATE["_tasks"][task_id]
             if completed >= 0:
                 t["completed"] = completed
             if total >= 0:
@@ -343,33 +353,38 @@ proc progress():
             t["visible"] = visible
 
     p["remove_task"] = proc(task_id):
-        if dict_has(PROGRESS_STATE._tasks, task_id):
-            let t = PROGRESS_STATE._tasks[task_id]
+        if dict_has(PROGRESS_STATE["_tasks"], task_id):
+            let t = PROGRESS_STATE["_tasks"][task_id]
             t["visible"] = false
 
     p["start"] = proc():
-        PROGRESS_STATE._running = true
+        PROGRESS_STATE["_running"] = true
         hide_cursor()
         save_cursor()
 
     p["stop"] = proc():
-        PROGRESS_STATE._running = false
+        PROGRESS_STATE["_running"] = false
         show_cursor()
         restore_cursor()
 
     p["render"] = proc():
         restore_cursor()
-        for id in dict_keys(PROGRESS_STATE._tasks):
-            let t = PROGRESS_STATE._tasks[id]
+        let keys = dict_keys(PROGRESS_STATE["_tasks"])
+        let n = len(keys)
+        for i in range(n):
+            let id = keys[i]
+            let t = PROGRESS_STATE["_tasks"][id]
             if not t["visible"]:
                 continue
             let pct = t["completed"] / t["total"]
-            let bar = progress_bar(t["completed"], t["total"], 40)
+            let bar = progress_bar(t["completed"], t["total"], 40, "█", "░", GREEN())
             sys.stdout_write("  " + t["desc"] + " " + bar + "\n")
 
     return p
 
 # ─── Layout ──────────────────────────────────────────────────────────────
+# Optimization: Pre-allocates column width padding strings and assembles output lines via join()
+@inline
 proc columns(items, width, gap, equal):
     let n = len(items)
     if n == 0:
@@ -403,28 +418,25 @@ proc columns(items, width, gap, equal):
     return join(result_lines, "\n")
 
 # ─── Tree ────────────────────────────────────────────────────────────────
+# Optimization: Uses array accumulator for rendered tree lines and assembles output via join()
+@inline
 proc tree(root_label, children, guide_style):
-    var result = style(root_label, BOLD()) + "\n"
+    let out_lines = [style(root_label, BOLD())]
     let prefix = "   "
     let mid = "├─ "
-    let end = "└─ "
-    let cont = "│  "
-    proc render(name, child, depth, is_last):
-        var line = str_repeat(prefix, depth)
-        if is_last:
-            line = line + end
-        else:
-            line = line + mid
-        line = line + name
-        return line
-    for i in range(len(children)):
+    let end_str = "└─ "
+    let num_children = len(children)
+    for i in range(num_children):
         let child = children[i]
-        let is_last = (i == len(children) - 1)
-        let line = render(child["label"] or child, child, 0, is_last)
-        result = result + style(line, guide_style) + "\n"
-        if dict_has(child, "children"):
-            pass
-    return result
+        let is_last = (i == num_children - 1)
+        let branch = mid
+        if is_last:
+            branch = end_str
+        let label = child
+        if type(child) == "dict" and dict_has(child, "label"):
+            label = child["label"]
+        push(out_lines, style(branch + str(label), guide_style))
+    return join(out_lines, "\n")
 
 # ─── Syntax Highlighting (basic) ─────────────────────────────────────────
 proc highlight_json(text):
