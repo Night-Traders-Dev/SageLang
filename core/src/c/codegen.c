@@ -1284,6 +1284,15 @@ static void emit_rv64_load(FILE* out, const char* reg, int offset) {
     }
 }
 
+/* Materialise the address of a rodata label, or of an external symbol such as
+   sage_globals, into an integer register. RISC-V has no pc-relative addressing
+   and cannot fold a %hi/%lo pair into a single instruction, so the address is
+   built explicitly. */
+static void emit_rv64_addr(FILE* out, const char* reg, const char* label) {
+    fprintf(out, "  lui %s, %%hi(%s)\n", reg, label);
+    fprintf(out, "  addi %s, %s, %%lo(%s)\n", reg, reg, label);
+}
+
 static void emit_rv64_store(FILE* out, const char* reg, int offset) {
     if (offset >= -2048 && offset <= 2047) {
         fprintf(out, "  sd %s, %d(sp)\n", reg, offset);
@@ -1296,12 +1305,19 @@ static void emit_rv64_store(FILE* out, const char* reg, int offset) {
 
 static void emit_asm_vinst_rv64(FILE* out, VInst* v, int stack_size) {
     switch (v->kind) {
-        case VINST_LOAD_IMM:
+        case VINST_LOAD_IMM: {
+            char lbl[32];
+            snprintf(lbl, sizeof(lbl), ".LN%d", v->src1);
             fprintf(out, "  # v%d = number %f\n", v->dest, v->imm_number);
+            /* sage_rt_number takes a double, so it arrives in fa0. Leaving
+               this out made every numeric literal read stale fa0. */
+            emit_rv64_addr(out, "t0", lbl);
+            fprintf(out, "  fld fa0, 0(t0)\n");
             fprintf(out, "  call sage_rt_number\n");
             emit_rv64_store(out, "a0", v->dest * 16);
             emit_rv64_store(out, "a1", v->dest * 16 + 8);
             break;
+        }
         case VINST_PRINT:
             fprintf(out, "  # print v%d\n", v->src1);
             emit_rv64_load(out, "a0", v->src1 * 16);
@@ -1311,11 +1327,13 @@ static void emit_asm_vinst_rv64(FILE* out, VInst* v, int stack_size) {
         case VINST_ADD:
         case VINST_SUB:
         case VINST_MUL:
-        case VINST_DIV: {
+        case VINST_DIV:
+        case VINST_MOD: {
             const char* fn = "sage_rt_add";
             if (v->kind == VINST_SUB) fn = "sage_rt_sub";
             else if (v->kind == VINST_MUL) fn = "sage_rt_mul";
             else if (v->kind == VINST_DIV) fn = "sage_rt_div";
+            else if (v->kind == VINST_MOD) fn = "sage_rt_mod";
             emit_rv64_load(out, "a0", v->src1 * 16);
             emit_rv64_load(out, "a1", v->src1 * 16 + 8);
             emit_rv64_load(out, "a2", v->src2 * 16);
@@ -1323,6 +1341,83 @@ static void emit_asm_vinst_rv64(FILE* out, VInst* v, int stack_size) {
             fprintf(out, "  call %s\n", fn);
             emit_rv64_store(out, "a0", v->dest * 16);
             emit_rv64_store(out, "a1", v->dest * 16 + 8);
+            break;
+        }
+        case VINST_LOAD_STRING: {
+            char lbl[32];
+            snprintf(lbl, sizeof(lbl), ".LC%d", v->src1);
+            fprintf(out, "  # v%d = string\n", v->dest);
+            emit_rv64_addr(out, "a0", lbl);
+            fprintf(out, "  call sage_rt_string\n");
+            emit_rv64_store(out, "a0", v->dest * 16);
+            emit_rv64_store(out, "a1", v->dest * 16 + 8);
+            break;
+        }
+        case VINST_LOAD_BOOL:
+            fprintf(out, "  # v%d = bool %d\n", v->dest, v->imm_bool);
+            fprintf(out, "  li a0, %d\n", v->imm_bool);
+            fprintf(out, "  call sage_rt_bool\n");
+            emit_rv64_store(out, "a0", v->dest * 16);
+            emit_rv64_store(out, "a1", v->dest * 16 + 8);
+            break;
+        case VINST_LOAD_NIL:
+            fprintf(out, "  # v%d = nil\n", v->dest);
+            fprintf(out, "  call sage_rt_nil\n");
+            emit_rv64_store(out, "a0", v->dest * 16);
+            emit_rv64_store(out, "a1", v->dest * 16 + 8);
+            break;
+        case VINST_NEG:
+            fprintf(out, "  # v%d = -v%d\n", v->dest, v->src1);
+            emit_rv64_load(out, "a0", v->src1 * 16);
+            emit_rv64_load(out, "a1", v->src1 * 16 + 8);
+            fprintf(out, "  call sage_rt_neg\n");
+            emit_rv64_store(out, "a0", v->dest * 16);
+            emit_rv64_store(out, "a1", v->dest * 16 + 8);
+            break;
+        case VINST_NOT:
+            fprintf(out, "  # v%d = !v%d\n", v->dest, v->src1);
+            emit_rv64_load(out, "a0", v->src1 * 16);
+            emit_rv64_load(out, "a1", v->src1 * 16 + 8);
+            fprintf(out, "  call sage_rt_not\n");
+            emit_rv64_store(out, "a0", v->dest * 16);
+            emit_rv64_store(out, "a1", v->dest * 16 + 8);
+            break;
+        case VINST_AND:
+        case VINST_OR: {
+            const char* fn = v->kind == VINST_AND ? "sage_rt_and" : "sage_rt_or";
+            fprintf(out, "  # v%d = v%d %s v%d\n", v->dest, v->src1,
+                    v->kind == VINST_AND ? "&&" : "||", v->src2);
+            emit_rv64_load(out, "a0", v->src1 * 16);
+            emit_rv64_load(out, "a1", v->src1 * 16 + 8);
+            emit_rv64_load(out, "a2", v->src2 * 16);
+            emit_rv64_load(out, "a3", v->src2 * 16 + 8);
+            fprintf(out, "  call %s\n", fn);
+            emit_rv64_store(out, "a0", v->dest * 16);
+            emit_rv64_store(out, "a1", v->dest * 16 + 8);
+            break;
+        }
+        case VINST_LOAD_GLOBAL: {
+            char lbl[32];
+            snprintf(lbl, sizeof(lbl), ".LC%d", v->src1);
+            fprintf(out, "  # v%d = load global '%s'\n", v->dest,
+                    v->imm_string ? v->imm_string : "?");
+            emit_rv64_addr(out, "a0", "sage_globals");
+            emit_rv64_addr(out, "a1", lbl);
+            fprintf(out, "  call sage_rt_get_global\n");
+            emit_rv64_store(out, "a0", v->dest * 16);
+            emit_rv64_store(out, "a1", v->dest * 16 + 8);
+            break;
+        }
+        case VINST_STORE_GLOBAL: {
+            char lbl[32];
+            snprintf(lbl, sizeof(lbl), ".LC%d", v->src2);
+            fprintf(out, "  # store global '%s' = v%d\n",
+                    v->imm_string ? v->imm_string : "?", v->src1);
+            emit_rv64_addr(out, "a0", "sage_globals");
+            emit_rv64_addr(out, "a1", lbl);
+            emit_rv64_load(out, "a2", v->src1 * 16);
+            emit_rv64_load(out, "a3", v->src1 * 16 + 8);
+            fprintf(out, "  call sage_rt_set_global\n");
             break;
         }
         case VINST_EQ:
@@ -1370,7 +1465,11 @@ static void emit_asm_vinst_rv64(FILE* out, VInst* v, int stack_size) {
             fprintf(out, "  ret\n");
             break;
         default:
+            /* The validator rejects anything not emitted above, so this is
+               unreachable in practice. Report it on stderr as well: a case
+               that only writes a comment yields silently wrong code. */
             fprintf(out, "  # unhandled vinst %d\n", v->kind);
+            fprintf(stderr, "codegen: rv64 emitter has no case for vinst %d\n", v->kind);
             break;
     }
 }
@@ -1671,10 +1770,20 @@ static int native_vinst_supported(CodegenTarget target, const VInst* v) {
         case CODEGEN_TARGET_RV64:
             switch (v->kind) {
                 case VINST_LOAD_IMM:
+                case VINST_LOAD_STRING:
+                case VINST_LOAD_BOOL:
+                case VINST_LOAD_NIL:
+                case VINST_LOAD_GLOBAL:
+                case VINST_STORE_GLOBAL:
                 case VINST_ADD:
                 case VINST_SUB:
                 case VINST_MUL:
                 case VINST_DIV:
+                case VINST_MOD:
+                case VINST_NEG:
+                case VINST_NOT:
+                case VINST_AND:
+                case VINST_OR:
                 case VINST_EQ:
                 case VINST_NEQ:
                 case VINST_LT:

@@ -572,6 +572,16 @@ test: $(TARGET)
 	@echo "Test 23: Assembly Generation (host target)"
 	@./$(TARGET) --emit-asm ../testsuite/compiler/compiler_smoke_asm.sage -o .tmp/compiler_smoke.s && test -s .tmp/compiler_smoke.s && echo "✅ Pass (ASM emitted)" || (echo "❌ Fail"; exit 1)
 	@echo ""
+	@echo "Test 23b: Native ASM Assembled + Run (host target)"
+	@if command -v gcc >/dev/null 2>&1; then \
+		./$(TARGET) --emit-asm ../testsuite/compiler/compiler_asm_ops.sage -o .tmp/compiler_asm_ops.s && \
+		gcc -static -o .tmp/compiler_asm_ops .tmp/compiler_asm_ops.s ../testsuite/compiler/asm_runtime.c -lm && \
+		./.tmp/compiler_asm_ops > .tmp/compiler_asm_ops.out && \
+		diff -u ../testsuite/compiler/compiler_asm_ops.expected .tmp/compiler_asm_ops.out && echo "✅ Pass (assembled + ran)" || (echo "❌ Fail"; exit 1); \
+	else \
+		echo "⏭ Skip (gcc not found)"; \
+	fi
+	@echo ""
 	@echo "Test 24: Debug Info (-g flag)"
 	@./$(TARGET) --compile ../testsuite/compiler/compiler_smoke.sage -o .tmp/compiler_smoke_debug -g
 	@./.tmp/compiler_smoke_debug > .tmp/compiler_smoke_debug.out
