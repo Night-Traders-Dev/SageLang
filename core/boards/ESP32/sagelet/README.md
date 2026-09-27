@@ -441,6 +441,63 @@ which never calls C at all) emits 100 000+ bytes and then runs steadily.
 
 **Where it stops:** the boot is stable and the OS emits no output at all.
 
+### Sound tracing: where it actually stops
+
+`tools/step_trace.py` injects a marker at the head of every function in the
+emitted C, each bracketed by an empty asm barrier with a memory clobber. The
+barrier is the entire point: a plain `volatile` store orders only against other
+volatile accesses, so the compiler may sink it past the code it was meant to
+bracket, and a missing marker then means nothing. With barriers, the byte on the
+wire is a truthful statement that the function was entered.
+
+The trace, on a build that is otherwise silent:
+
+```
+main
+  -> sage_gc_push_frame
+  -> sage_init_native_module -> sage_make_dict -> sage_gc_alloc
+     -> sage_gc_should_collect -> sage_define_slot          (x3)
+  -> sage_string_const -> sage_intern_hash                 [stop]
+```
+
+`main` **is** entered, which retires the earlier claim that it was not. The
+hang is at or just after `sage_intern_hash`.
+
+**And the literal is fine, again, now measured soundly.** A diagnostic build
+that emits the pointer before dereferencing it reported `s = 0x4008d36f`, which
+is the string `"ESP32"` (inside `"...OS for ESP32\0BANNER\0SageletOS \0..."`),
+loaded by a genuine `l32r a10, ...` inside `main` at `0x4008263b`. A 5-byte
+NUL-terminated string; the hash loop finishes in five iterations. Third
+independent confirmation that literal resolution is not the problem.
+
+So the remaining window between `sage_intern_hash` returning and
+`sage_gc_copy_string` being entered contains only the intern probe loop. The
+candidates are therefore the probe loop and the allocation path, and the trace
+cannot split them further because `strcmp` lives in libc and is not traced.
+
+### The failure is size/layout sensitive
+
+This is the most reproducible signal found so far, and it points at code
+generation rather than at logic:
+
+| Build | `.iram0.text` | Result |
+| --- | --- | --- |
+| baseline | 51 KB | stable, 2 boots, silent hang |
+| `step_trace.py` (markers in 209 functions) | ~55 KB | stable, 2 boots, full trace |
+| diagnostic injected *into* `sage_string_const` | ~51 KB | **329 boots, reset loop** |
+
+Adding a few dozen bytes to that one function flips a silent hang into a reset
+loop, while adding several kilobytes of markers elsewhere does not. So the
+trigger is specific to `sage_string_const`'s own code and its literal pool, not
+to total image size. This is consistent with the very first hypothesis from the
+early rounds -- that something about code generation for this large generated
+function goes wrong -- and it is now backed by a controlled experiment rather
+than inference.
+
+It also explains why so many fixes have appeared to work and then stopped
+working: the failure mode depends on where the code lands, so any change that
+shuffles the layout is a coin flip.
+
 ### Three measurement errors that cost most of this session
 
 Recorded so they are not repeated:
