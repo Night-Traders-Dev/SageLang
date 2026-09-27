@@ -7619,6 +7619,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        if (size < 0 || size > SAGE_MAX_READ_SIZE) { fclose(f); return sage_nil(); }\n"
         "        if (size > 0) {\n"
         "            unsigned char* buf = malloc(size);\n"
+        "            if (!buf) { fclose(f); return sage_nil(); }\n"
         "            fread(buf, 1, size, f);\n"
         "            for(int i=0; i<size; i++) sage_push(arr, "
         "sage_number((double)buf[i]));\n"
