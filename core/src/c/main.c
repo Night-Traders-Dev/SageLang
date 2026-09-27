@@ -1166,6 +1166,7 @@ static int sgvm_encode_text_file(const char* text_path, const char* bin_path) {
     char* line = NULL;
     size_t line_cap = 0;
     int chunk_count = 0;
+    int function_count = 0;
     int (*local_to_global)[256] = SAGE_ALLOC(1024 * sizeof(*local_to_global));
     if (!local_to_global) {
         fclose(in);
@@ -1180,7 +1181,8 @@ static int sgvm_encode_text_file(const char* text_path, const char* bin_path) {
 
     // Pass 1: Collect constants
     while (getline(&line, &line_cap, in) > 0) {
-        if (strncmp(line, "chunks ", 7) == 0) chunk_count = atoi(line + 7);
+        if (strncmp(line, "functions ", 10) == 0) function_count = atoi(line + 10);
+        else if (strncmp(line, "chunks ", 7) == 0) chunk_count = atoi(line + 7);
         else if (strcmp(line, "chunk\n") == 0) current_chunk++;
         else if (strncmp(line, "constants ", 10) == 0) {
             int count = atoi(line + 10);
@@ -1223,6 +1225,10 @@ static int sgvm_encode_text_file(const char* text_path, const char* bin_path) {
     out = fopen(bin_path, "wb");
     if (!out) goto cleanup;
 
+    // The function count, as `sagevm compile` writes it. metal_vm's reader
+    // expects this field; without it the count is consumed as the constant
+    // pool size and every field after it is read from the wrong offset.
+    write_be16(out, (uint16_t)function_count);
     write_be16(out, (uint16_t)g_sgvm_const_count);
     for (int i = 0; i < g_sgvm_const_count; i++) {
         fputc(g_sgvm_consts[i].type, out);
