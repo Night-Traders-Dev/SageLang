@@ -2525,16 +2525,16 @@ print(hex_txt)
 
 ### 9.21 ESP32 Board Support (`core/boards/ESP32/`, `core/lib/esp32.sage`)
 
-SageLang v4.2.4 supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32 / DevKitC, 4MB flash): dual-core Xtensa LX6 @ 240MHz with 2.4GHz-only WiFi.
+SageLang v4.2.11 supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32 / DevKitC, 4MB flash): dual-core Xtensa LX6 @ 240MHz with 2.4GHz-only WiFi.
 
 This includes:
 - **`core/lib/esp32.sage`**: Board support module with chip constants, GPIO validation rules (pads 0..39 minus absent 20/24/28-31, input-only 34..39, strapping 0/2/5/12/15, flash-bound 6/7/8/11), UART0 TX/RX defaults, standard flash partition offsets, and esptool flashing recipe parameters.
 - **`core/boards/ESP32/`**: Board package with `__init__.sage`, host-runnable `test_smoke.sage`, and bring-up firmware sources (`examples/hello.sage`, `examples/blink.sage`, `examples/adc_read.sage`, `examples/sysinfo.sage`, `examples/deep_sleep.sage`).
 
 #### Exported Hardware Constants & Predicates:
-
-#### Exported Hardware Constants & Predicates:
 - **Identity**: `CHIP_NAME` ("ESP32"), `CHIP_VARIANT` ("ESP32-D0WD-V3"), `CPU_ARCH` ("Xtensa LX6"), `CPU_CORES` (2), `CPU_FREQ_MHZ` (240), `HAS_LP_CORE` (true)
+- **Memory Map**: Internal SRAM accommodates 98 KB of `.bss` residing safely at `0x3ffce000-0x3ffe6938` within the `0x40000000` limit. The `.data` copy during boot is strictly required to prevent reset loops, even if landing in `IRAM0`.
+- **Peripherals**: UART0 FIFO is located at `0x3FF40000` and UART0 STATUS is at `0x3FF4001C`. Scratch probing the STATUS register instead of FIFO can cause artificial reset loops. Note: When investigating hangs during OS bring-up, volatile marker stores may be reordered by the compiler, invalidating localization theories.
 - **Radio**: `WIFI_BAND_GHZ` (2.4), `WIFI_SUPPORTS_5GHZ` (false), `HAS_BT` (true), `HAS_BLE` (true)
 - **SPI Flash Layout**: `FLASH_SIZE_BYTES` (4194304), `FLASH_BOOTLOADER_OFFSET` (4096), `FLASH_PART_TABLE_OFFSET` (32768), `FLASH_APP_OFFSET` (65536)
 - **GPIO Model**: `GPIO_MIN` (0), `GPIO_MAX` (39), `GPIO_ABSENT` ([20, 24, 28, 29, 30, 31]), `GPIO_INPUT_ONLY_FIRST` (34), `GPIO_STRAPPING` ([0, 2, 5, 12, 15]), `GPIO_FLASH_PINS` ([6, 7, 8, 11]), `GPIO_ADC1_PINS` ([32..39]), `GPIO_DAC_PINS` ([25, 26]), `GPIO_RTC_PADS` ([0, 2, 4, 12, 13, 14, 15, 25, 26, 27, 32..39])

@@ -604,3 +604,20 @@ Evidence:
 Documentation Impact:
 - Renumbered the Developer Tooling subsections and documented the transpiler commands and options.
 - Updated the library support matrix, README feature list, and standard-library guide with the bundled transpiler.
+
+2026-09-27 - [Repository Documentation Parity & ESP32 Corrections]
+
+Discovery:
+- Version has advanced to `v4.2.11` focusing on test suite stabilization (particularly GPU lifecycle tests and thread safety under ThreadSanitizer).
+- ESP32 hardware findings corrected: Volatile marker stores order only against other volatile accesses, invalidating previous hang localization theories based on startup markers.
+- ESP32 correct peripheral addresses verified: UART0 FIFO is at `0x3FF40000`, STATUS is at `0x3FF4001C`. Scratch probes previously wrote to STATUS instead of FIFO causing artificial reset loops.
+- ESP32 DRAM is sound: 98 KB of `.bss` securely sits at `0x3ffce000-0x3ffe6938` within the `0x40000000` limit.
+- The `.data` copy during boot is required, even though it lands in `IRAM0`, otherwise the chip enters a reset loop.
+
+Evidence:
+- `VERSION` file, `README.md` (Recent Updates for v4.2.8 - v4.2.11).
+- Git commit `962b263` (`esp32: verify the startup path, and record three measurement errors`).
+
+Documentation Impact:
+- Replace remaining `v4.2.4` references with `v4.2.11` across `SageLang_Guide.md` and `Baremetal_OSDev_UEFI_Guide.md`.
+- Document the UART0 FIFO address and the `.bss` limits, and explicitly mention the compiler reordering of volatile markers.
