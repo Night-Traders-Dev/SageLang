@@ -19,6 +19,7 @@
 ##   sage -I core/boards/AVR core/boards/AVR/test_golden.sage
 #########################################################################
 
+import avr_common
 import avr_assembler
 import avr_hex
 import io
@@ -230,6 +231,44 @@ expect_accepted("    lds r17, 0x00C0\n", "lds with register first is accepted")
 expect_accepted("    sbrs r17, 5\n", "sbrs is accepted")
 expect_accepted("    sbrc r0, 0\n", "sbrc with r0 is accepted")
 expect_accepted("    mov r16, r1\n", "a bare decimal register is still accepted")
+
+## The package entry point declared in __init__.sage could not be imported at
+## all: AsmError used `def` for its methods, which SageLang rejects, so
+## `import avr_common` failed. It was never noticed because every test imports
+## the modules directly and never touches the package.
+print("== the AVR package imports ==")
+check(str(avr_common.AsmError("boom", 12)) == "error at line 12: boom",
+      "AsmError formats with its line number")
+check(str(avr_common.AsmError("boom")) == "boom",
+      "AsmError without a line omits the prefix")
+
+## Diagnostics must say *where* the problem is, not just what it is.
+proc expect_error_at(src, want_line, label):
+    var got_line = 0
+    var got_msg = ""
+    try:
+        avr_assembler.assemble(src)
+    catch e:
+        got_msg = str(e)
+        got_line = e.line
+    check(got_line == want_line and contains_line(got_msg, want_line),
+          label + " (reported line " + str(got_line) + ")")
+
+proc contains_line(msg, n):
+    return contains(msg, "error at line " + str(n) + ":")
+
+print("== diagnostics cite the source line ==")
+expect_error_at("    ldi r16, 0x00\n    ldi r17, 0x01\n    frobnicate r16\n", 3,
+                "unknown mnemonic is reported on its own line")
+expect_error_at("    nop\n    nop\n    nop\n    ldi r16, r5\n", 4,
+                "a register in an operand position is reported on its line")
+expect_error_at("    nop\n    ldi r99, 0x20\n", 2,
+                "an out-of-range register cites line 2")
+expect_error_at("    nop\n    nop\n    sbrs r16\n", 3,
+                "a missing operand cites line 3")
+## Comments and blank lines must not shift the count.
+expect_error_at("    nop\n\n    ; a comment\n\n    ldi r16, r5\n", 5,
+                "blank lines and comments are counted correctly")
 
 print("")
 print("Results:", passes, "passed,", failures, "failed")

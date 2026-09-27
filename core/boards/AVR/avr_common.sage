@@ -2,11 +2,11 @@
 
 ## Assembler error carrying source line context.
 class AsmError:
-    def init(self, msg, line=0):
+    proc init(self, msg, line=0):
         self.msg = msg
         self.line = line
 
-    def __str__(self):
+    proc __str__(self):
         if self.line > 0:
             return "error at line " + str(self.line) + ": " + self.msg
         return self.msg

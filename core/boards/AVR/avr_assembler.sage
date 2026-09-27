@@ -4,6 +4,7 @@
 ##   let words = avr_assembler.assemble(source_text)   # list of 16-bit words
 
 import avr_opcodes
+import avr_common
 import dicts
 import std.fmt
 
@@ -103,6 +104,10 @@ proc resolve_operand(s, syms, consts):
         return io
     if dicts.has(consts, t):
         return consts[t]
+    # parse_int ignores characters it cannot read, so a register name here
+    # became a number: `ldi r16, r5` silently assembled as `ldi r16, 0x05`.
+    if len(t) > 1 and t[0] == "r" and _all_digits(slice(t, 1, len(t))):
+        raise "unexpected register in an operand position: " + strip(s)
     return parse_int(s)
 
 proc resolve_target(s, syms, consts):
@@ -123,7 +128,9 @@ proc size_of(op):
 # ---------------------------------------------------------------------------
 proc tokenize(source_text):
     let items = []
+    var lineno = 0
     for raw in split(source_text, "\n"):
+        lineno = lineno + 1
         let ln = strip(raw)
         let ci = index_of(ln, ";")
         if ci >= 0:
@@ -131,7 +138,7 @@ proc tokenize(source_text):
         if ln == "":
             continue
 
-        let inst = { "kind": "instr", "op": "", "args": [], "name": "" }
+        let inst = { "kind": "instr", "op": "", "args": [], "name": "", "line": lineno }
         let spaces = index_of(ln, " ")
 
         # optional label prefix
@@ -210,7 +217,13 @@ proc assemble(source_text):
                 pc = pc + len(it["args"])
             continue
         # instruction
-        let wl = encode_instr(it, pc, syms, consts)
+        # Helpers raise plain strings; attach the source line so the diagnostic
+        # points at the offending line rather than the file.
+        var wl = []
+        try:
+            wl = encode_instr(it, pc, syms, consts)
+        catch e:
+            raise avr_common.AsmError(str(e), it["line"])
         for w in wl:
             push(out, w)
         pc = pc + ((size_of(it["op"])) << 1)
@@ -219,9 +232,82 @@ proc assemble(source_text):
 # ---------------------------------------------------------------------------
 # encode one instruction
 # ---------------------------------------------------------------------------
+## Operand count per mnemonic, so a missing operand is a diagnostic rather than
+## a nil index surfacing as an internal type error.
+let _ARITY = {
+    "adc": 2,
+    "add": 2,
+    "and": 2,
+    "cbi": 2,
+    "cp": 2,
+    "cpc": 2,
+    "cpse": 2,
+    "eor": 2,
+    "in": 2,
+    "lds": 2,
+    "mov": 2,
+    "movw": 2,
+    "mul": 2,
+    "muls": 2,
+    "or": 2,
+    "out": 2,
+    "sbc": 2,
+    "sbi": 2,
+    "sbic": 2,
+    "sbis": 2,
+    "sbrc": 2,
+    "sbrs": 2,
+    "sts": 2,
+    "sub": 2,
+    "adiw": 1,
+    "andi": 1,
+    "asr": 1,
+    "brcc": 1,
+    "brcs": 1,
+    "breq": 1,
+    "brge": 1,
+    "brhc": 1,
+    "brhs": 1,
+    "brlo": 1,
+    "brlt": 1,
+    "brmi": 1,
+    "brne": 1,
+    "brpl": 1,
+    "brsh": 1,
+    "brvc": 1,
+    "brvs": 1,
+    "call": 1,
+    "com": 1,
+    "cpi": 1,
+    "dec": 1,
+    "inc": 1,
+    "jmp": 1,
+    "ldi": 1,
+    "lsl": 1,
+    "lsr": 1,
+    "neg": 1,
+    "ori": 1,
+    "pop": 1,
+    "push": 1,
+    "rcall": 1,
+    "rjmp": 1,
+    "rol": 1,
+    "ror": 1,
+    "sbci": 1,
+    "sbiw": 1,
+    "ser": 1,
+    "subi": 1,
+    "swap": 1,
+    "tst": 1,
+}
+
 proc encode_instr(it, pc, syms, consts):
     let op = it["op"]
     let a = it["args"]
+
+    if dicts.has(_ARITY, op) and len(a) < _ARITY[op]:
+        var want = str(_ARITY[op])
+        raise "missing operand for " + op + ": expected " + want + ", got " + str(len(a))
 
     if op == "nop":   return [0x0000]
     if op == "ret":   return [0x9508]
