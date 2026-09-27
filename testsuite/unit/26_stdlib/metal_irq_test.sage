@@ -2,6 +2,10 @@
 # EXPECT: exception_consts_ok
 # EXPECT: handler_register_ok
 # EXPECT: handler_dispatch_ok
+# EXPECT: safe_register_ok
+# EXPECT: safe_register_duplicate_ok
+# EXPECT: unregister_ok
+# EXPECT: unregister_nonexistent_ok
 # EXPECT: PASS
 import metal.irq as irq
 
@@ -25,5 +29,19 @@ print "handler_register_ok"
 irq.dispatch(32)
 if fired == true:
     print "handler_dispatch_ok"
+
+# Safe register test
+if irq.register_handler_safe(33, my_handler) == true:
+    print "safe_register_ok"
+
+if irq.register_handler_safe(33, my_handler) == false:
+    print "safe_register_duplicate_ok"
+
+# Unregister test
+if irq.unregister_handler(33) == true:
+    print "unregister_ok"
+
+if irq.unregister_handler(33) == false:
+    print "unregister_nonexistent_ok"
 
 print "PASS"

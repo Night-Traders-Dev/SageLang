@@ -4,6 +4,12 @@
 # EXPECT: Testing pin_debounce...
 # EXPECT: Debounce LOW success: true
 # EXPECT: Debounce HIGH fail (expected): true
+# EXPECT: Testing pin_enable_interrupt_ext...
+# EXPECT: Int mode 3: 1
+# EXPECT: Int enabled 3: 1
+# EXPECT: Testing pin_disable_interrupt_ext...
+# EXPECT: Int mode 3 after disable: 0
+# EXPECT: Int enabled 3 after disable: 0
 # EXPECT: GPIO tests passed!
 import metal.gpio
 import metal.core
@@ -33,5 +39,16 @@ print "Debounce LOW success: " + str(debounced_low)
 # Test debounce failure with HIGH
 let debounced_high_fail = gpio.pin_debounce(2, gpio.PIN_HIGH, 5, 0)
 print "Debounce HIGH fail (expected): " + str(not debounced_high_fail)
+
+# Test pin_enable_interrupt_ext and pin_disable_interrupt_ext
+print "Testing pin_enable_interrupt_ext..."
+let en_res = gpio.pin_enable_interrupt_ext(3, gpio.INT_RISING)
+print "Int mode 3: " + str(gpio.pin_get_interrupt(3))
+print "Int enabled 3: " + str(gpio._pin_enabled[3])
+
+print "Testing pin_disable_interrupt_ext..."
+let dis_res = gpio.pin_disable_interrupt_ext(3)
+print "Int mode 3 after disable: " + str(gpio.pin_get_interrupt(3))
+print "Int enabled 3 after disable: " + str(gpio._pin_enabled[3])
 
 print "GPIO tests passed!"
