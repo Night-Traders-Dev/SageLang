@@ -2,11 +2,24 @@
  *
  * Loaded by our second-stage bootloader from the OTA slot at 0x10000.
  *
- * Memory regions follow the ESP-IDF esp32 layout:
- *   IRAM0  0x3FFB0000  320 KB  the memory-mapped *flash* window. Code and
- *                              rodata must live here or they will not execute,
- *                              and .data is loaded from here at startup.
- *   DRAM   0x3FF80000  512 KB  SRAM: .data copy, .bss, heap, stack.
+ * Memory regions follow the ESP-IDF esp32 layout. The header used to describe a
+ * memory-mapped flash window at 0x3FFB0000 and 512 KB of DRAM at 0x3FF80000;
+ * both were wrong and the MEMORY block below is the one that is verified.
+ * Nothing here is in flash: the ROM bootloader loads the whole image into
+ * internal SRAM before it jumps, so code, rodata and the .data initialisers all
+ * live in IRAM0, and only .bss/heap/stack sit in DRAM.
+ *
+ *   IRAM0    0x40080000  128 KB  internal SRAM: the loaded image. Code must be
+ *                                here rather than in flash because the ROM
+ *                                jumps to the entry before the flash cache is
+ *                                live. .iram0.text, .iram0.rodata and the .data
+ *                                initialisers.
+ *   DRAM0    0x3FFB0000   24 KB  internal SRAM: .data run-time copy.
+ *   DRAM_HI  0x3FFCE000  200 KB  internal SRAM: .bss, heap, stack.
+ *
+ * Verified by readback on the board: the whole of .bss (0x3ffce000-0x3ffe6938,
+ * 98 KB) writes and reads back correctly, and .data, heap and stack end at
+ * 0x3fffe940, inside the 0x40000000 limit.
  *
  * The Xtensa windowed ABI uses a15 as the callee-saved stack pointer, so the
  * entry stub sets a0 to a safe value rather than argc.
@@ -97,16 +110,12 @@ SECTIONS
     _heap_end = ABSOLUTE(.);
   } > DRAM_HI
 
-  /* The stack sits immediately after the code, inside IRAM0, because the entry
-   * stub loads _stack_top with l32r and that instruction only reaches +/-256 KiB.
-   * Left down in DRAM_HI the address is ~4 MB away and the link fails with
-   * "operand 2 of l32r has out of range value". */
-  /* The stack lives in high DRAM, not next to the code. entry.S loads
-   * _stack_top as a plain 32-bit constant, so the address can be anywhere --
-   * the l32r reach argument only ever mattered while the pool had to sit near
-   * the load address, which it no longer does now that boot_entry is a j over
-   * the pool. Keeping it in IRAM0 also meant the stack sat directly above the
-   * loaded image, so a modest overflow silently corrupted rodata. */
+  /* The stack lives in high DRAM, not next to the code. An earlier version put
+   * it immediately after the code inside IRAM0, on the argument that the entry
+   * stub reaches _stack_top with an l32r limited to +/-256 KiB. That argument
+   * stopped applying once boot_entry became a literal-free j over the pool, and
+   * while the stack was in IRAM0 it sat directly above the loaded image, so a
+   * modest overflow silently corrupted rodata. */
   .stack (NOLOAD) :
   {
     . = ALIGN(16);

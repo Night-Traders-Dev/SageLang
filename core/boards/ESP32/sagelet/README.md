@@ -368,25 +368,22 @@ So the remaining candidates inside `sage_string_const` are the intern-table
 probe loop, or `sage_string` -> `sage_gc_copy_string` -> `sage_gc_alloc` ->
 `malloc`, and the previous evidence cannot distinguish them.
 
-### The failure is a fault, not a logic bug
+### The intern probe loop is implicated (weakly)
 
-Two further measurements, and they change the diagnosis:
+Replacing `while (sage_intern_table[h].content != NULL) { ... }` with a single
+`if` changed one run from 656 bytes of output to 2388, so control does reach
+that loop. Treat this as weak: the same experiment run in another configuration
+appeared to get *worse*, and both measurements were taken before the two probe
+bugs described below were found. Re-run it with a sound build before relying on
+it.
 
-- The intern probe loop is implicated. Replacing
-  `while (sage_intern_table[h].content != NULL) { ... }` with a single `if`
-  changed the run from 656 bytes of output to 2388 in one configuration. So
-  control does reach that loop and does not come back.
-- **The behaviour is not reproducible.** The same image flashed twice, and the
-  all-call-sites configuration, alternates between two failure modes: a silent
-  hang, and a reset loop in which the ROM re-enters `entry` several hundred
-  times in twelve seconds (10 888 bytes, all `entry 0x40080000`).
+The apparent second failure mode — "not reproducible, alternating between a
+silent hang and a 327-boot reset loop" — **was an artefact of my own probe**,
+which was writing the UART status register as though it were the TX FIFO. The
+same build is stable once the probe is correct. See "Three measurement errors"
+below. The chip is not resetting in a loop.
 
-A loop that sometimes hangs and sometimes resets is a fault, not a slow
-algorithm. Note the flip is not attributable to the loop stub: stubbing the loop
-made one configuration better and the other worse, so the loop result above is
-suggestive, not established.
-
-The memory layout is *not* the cause and is now checked:
+The memory layout is *not* the cause, and is now verified by readback:
 
 ```
 .iram0.text    0x40080000   51 KB
@@ -402,14 +399,92 @@ The memory layout is *not* the cause and is now checked:
 table is 4096 x 20 bytes = 80 KB, so ~80% of `.bss`, and a full sweep of it is
 readable. The layout is tight -- 5 KB spare -- but not overrunning.
 
+### What is now verified on the board
+
+Everything below was checked against the installed Espressif headers, or measured
+on the board, in one session. Treat it as the current truth.
+
+**Peripheral addresses — all correct as written.** Checked one by one against
+`soc/esp32/register/soc/*.h` in `esp32-libs/3.3.11`:
+
+| Register | Address | Header |
+| --- | --- | --- |
+| UART0 FIFO | `0x3FF40000` | `uart_struct.h` index 0 |
+| UART0 STATUS (`txfifo_cnt` = bits 23:16) | `0x3FF4001C` | index 7 |
+| UART0 CONF0 (`clk_en` = bit 25) | `0x3FF40020` | index 8 |
+| RTC_CNTL base / `WDTCONFIG0` / `WDTFEED` / `WDTWPROTECT` | `0x3FF48000` + `0x8C` / `0xA0` / `0xA4` | `rtc_cntl_reg.h` |
+| TIMG0 / TIMG1 base | `0x3FF5F000` / `0x3FF60000` | `timer_group_reg.h` |
+| TIMG `WDTCONFIG0` / `WDTFEED` / `WDTWPROTECT` | base + `0x48` / `0x60` / `0x64` | `timer_group_reg.h` |
+| GPIO base | `0x3FF44000` | `gpio_reg.h` |
+
+**DRAM is sound.** A write-then-readback sweep of all 98 KB of `.bss`
+(`0x3FFCE000`–`0x3FFE6938`, 25 blocks of 4 KB) returns correct data in every
+block. `.data` is `0x3FFB0000`–`0x3FFB012C`, heap 72 KB, stack 24 KB, ending
+`0x3FFFE940` — 194 KB of the 200 KB `DRAM_HI`, inside the `0x40000000` limit.
+The earlier fear that the top of `.bss` walked into unmapped space is wrong.
+
+**The `.data` copy is required.** `_data_load` resolves to `0x4008E040`, inside
+IRAM0, and the ROM prints `load:0x3FFB0000,len:300` before it jumps, so the
+copy looks redundant. It is not: skipping it turns a stable boot into a 330-boot
+reset loop. Keep it.
+
+**Startup runs to completion, and C-to-C calls work.** With `-DSAGE_TRACE` the
+markers print in full — `1` after the watchdog takeover, `x` after the `.bss`
+clear, `x` after the `.data` copy, `x` immediately before `main()` — and a
+`noinline` C function called from `reset_handler` at that point writes to the
+UART correctly. So the entry stub, both stack registers, the watchdog takeover,
+`.bss`, `.data` and the call mechanism are all sound.
+
+**The board itself is healthy.** `esptool chip-id` works, and three flash reads
+return identical checksums. The pure-assembly park (`SAGET_EXTRA_CFLAGS=-DSAGE_ENTRY_UART`,
+which never calls C at all) emits 100 000+ bytes and then runs steadily.
+
+**Where it stops:** the boot is stable and the OS emits no output at all.
+
+### Three measurement errors that cost most of this session
+
+Recorded so they are not repeated:
+
+1. **Volatile markers do not order against ordinary computation.** A `volatile`
+   store is ordered only against *other* volatile accesses, so the compiler may
+   sink one past surrounding work. "The entry marker printed and the later one
+   did not" therefore does not localise a hang. This invalidated every location
+   claim made from marker ordering, including the one that `main()` is never
+   entered — that claim came from a marker inside `main` and is **not**
+   established.
+2. **Defining a flag on the wrong translation unit silently does nothing.**
+   Injecting `-D...` into the `sagelet_os.c` compile alone leaves `startup.c` and
+   `entry.S` untouched, so `-DSAGE_SKIP_WDT`, `-DSAGE_STOP_AFTER_BSS` and
+   `-DSAGE_TRACE` all did nothing until they were passed through
+   `SAGET_EXTRA_CFLAGS`, which `build.sh` applies to every unit. Three bisects
+   were invalid before this was spotted.
+3. **A probe that writes the wrong register looks like a firmware bug.** Scratch
+   probes were built using `0x3FF4001C` as the TX FIFO and `0x3FF40020` as the
+   status register. `0x3FF4001C` is *STATUS*; the FIFO is `0x3FF40000`. Poking
+   `txfifo_cnt` and the write-1-to-clear interrupt bits with byte values
+   destabilised the chip and produced an convincing but entirely artificial
+   "327-boot reset loop". The shipped `tools/ptr_dump.py` was always correct; only
+   the scratch copies were wrong.
+
+The upshot: the "non-reproducible fault" described above was mostly artefact.
+The build is stable, and the remaining failure is that the OS produces no
+output after startup.
+
 ### Next step
 
-Stop black-box probing. Install an exception handler in IRAM0 that dumps
-`EXCCAUSE` and `EPC` (plus a few `a` registers) over the UART, so a reset or a
-fault reports the exact faulting PC and cause. A reset loop is a crash, and the
-PC is the one piece of information every marker experiment was trying to
-approximate. Point `EXCVECTOR` at a small table in IRAM0, and dump from the
-handler itself.
+Two things are worth doing before more probing, and neither is a marker
+experiment:
+
+- Get `EXCCAUSE` and `EPC`. On this chip an unhandled exception goes to the ROM
+  panic handler, which resets, so a fault presents exactly like the reset loops
+  above. `rsr` is available for `exccause`, `epc1`, `ps` and `excvaddr`; only
+  `EXCVECTOR` has no symbolic name, and it is set with the enable variant.
+  Installing a level-1 vector table in IRAM0 is the one measurement that would
+  settle what happens after `main()` is entered.
+- Sound tracing. If markers are used again they need
+  `__asm__ __volatile__("" ::: "memory")` fences on both sides, or a step index
+  written to a RAM array and dumped afterwards. A plain `volatile` store is not
+  enough, and that is what made the last three conclusions unreliable.
 
 ### Open: the second blocker
 

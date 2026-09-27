@@ -196,12 +196,14 @@ void reset_handler(void) {
      * as the HAL -- INT_ENA masked, clock source left as the ROM set it -- so
      * the markers cannot themselves corrupt the output they are meant to show.
      * Enabled with -DSAGE_TRACE. */
-    /* A single immediate byte, not a string. Dereferencing a string literal
-     * does not work in this build: the l32r pool entry that should hold the
-     * string's address resolves to a different location entirely (it pointed
-     * into .rodata instead of the string, off by 0xEA8), so the loop reads
-     * unrelated bytes and the console never shows the marker. An immediate
-     * needs no address at all. Do NOT call hal_uart_init here: re-rating the
+    /* A single immediate byte, not a string, so the marker needs no literal
+     * address at all and cannot be confused by one. (An earlier version of this
+     * comment claimed string-literal l32r resolution was broken here. That was
+     * wrong, and cost two rounds: the address really was correct, and the
+     * "+3 into a string" that seemed to prove otherwise was the empty-string
+     * literal "" legitimately following "\b \b". See README, "Wrong: the
+     * literal addresses are fine".) Do NOT call hal_uart_init here: re-rating
+     * the
      * UART changes the shift rate while the ROM still has "entry 0x40080000"
      * in flight, which garbles that line. The ROM already programmed 115200 on
      * a working route, so the correct thing at this stage is to add to the
