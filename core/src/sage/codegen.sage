@@ -157,6 +157,8 @@ class ISelContext:
         self.tail = nil
         self.string_pool = []
         self.string_pool_count = 0
+        self.number_pool = []
+        self.number_pool_count = 0
         self.loop_cond_labels = []
         self.loop_end_labels = []
         self.loop_depth = 0
@@ -184,6 +186,12 @@ proc isel_add_string(ctx, s):
     ctx.string_pool_count = ctx.string_pool_count + 1
     return idx
 
+proc isel_add_number(ctx, n):
+    push(ctx.number_pool, n)
+    let idx = ctx.number_pool_count
+    ctx.number_pool_count = ctx.number_pool_count + 1
+    return idx
+
 # ============================================================================
 # Instruction Selection - Expression
 # ============================================================================
@@ -201,6 +209,7 @@ proc isel_expr(ctx, expr):
         let v = vinst_new(VINST_LOAD_IMM)
         v["dest"] = r
         v["imm_number"] = expr.value
+        v["src1"] = isel_add_number(ctx, expr.value)
         isel_append(ctx, v)
         return r
     if t == ast.EXPR_STRING:
@@ -268,6 +277,7 @@ proc isel_expr(ctx, expr):
         let v = vinst_new(VINST_LOAD_GLOBAL)
         v["dest"] = r
         v["imm_string"] = name
+        v["src1"] = isel_add_string(ctx, name)
         isel_append(ctx, v)
         return r
     if t == ast.EXPR_CALL:
@@ -359,6 +369,7 @@ proc isel_stmt(ctx, stmt):
         let v = vinst_new(VINST_STORE_GLOBAL)
         v["src1"] = val
         v["imm_string"] = name
+        v["src2"] = isel_add_string(ctx, name)
         isel_append(ctx, v)
         return
     if t == ast.STMT_IF:
@@ -453,6 +464,7 @@ proc isel_stmt(ctx, stmt):
         let init_store = vinst_new(VINST_STORE_GLOBAL)
         init_store["src1"] = idx_reg
         init_store["imm_string"] = "__for_idx__"
+        init_store["src2"] = isel_add_string(ctx, "__for_idx__")
         isel_append(ctx, init_store)
         let cond_label = isel_label(ctx)
         let body_label = isel_label(ctx)
@@ -470,6 +482,7 @@ proc isel_stmt(ctx, stmt):
         let load_idx = vinst_new(VINST_LOAD_GLOBAL)
         load_idx["dest"] = cur_idx
         load_idx["imm_string"] = "__for_idx__"
+        load_idx["src1"] = isel_add_string(ctx, "__for_idx__")
         isel_append(ctx, load_idx)
         let cmp = isel_vreg(ctx)
         let lt_v = vinst_new(VINST_LT)
@@ -494,6 +507,7 @@ proc isel_stmt(ctx, stmt):
         let store_var = vinst_new(VINST_STORE_GLOBAL)
         store_var["src1"] = elem
         store_var["imm_string"] = var_name
+        store_var["src2"] = isel_add_string(ctx, var_name)
         isel_append(ctx, store_var)
         isel_stmt_list(ctx, stmt.body)
         let one_reg = isel_vreg(ctx)
@@ -510,6 +524,7 @@ proc isel_stmt(ctx, stmt):
         let store_idx = vinst_new(VINST_STORE_GLOBAL)
         store_idx["src1"] = next_idx
         store_idx["imm_string"] = "__for_idx__"
+        store_idx["src2"] = isel_add_string(ctx, "__for_idx__")
         isel_append(ctx, store_idx)
         let jmp1 = vinst_new(VINST_JUMP)
         jmp1["label"] = cond_label
@@ -570,7 +585,13 @@ proc emit_asm_vinst_x86_64(v):
     let pct = chr(37)
     let kind = v["kind"]
     if kind == VINST_LOAD_IMM:
-        return "  # v" + str(v["dest"]) + " = number " + str(v["imm_number"]) + nl + "  movsd .LC" + str(v["dest"]) + "(" + pct + "rip), " + pct + "xmm0" + nl + "  call sage_rt_number" + nl + "  movq " + pct + "rax, " + str(-(v["dest"] + 1) * 16) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx, " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+        return "  # v" + str(v["dest"]) + " = number " + str(v["imm_number"]) + nl + "  movsd .LN" + str(v["src1"]) + "(" + pct + "rip), " + pct + "xmm0" + nl + "  call sage_rt_number" + nl + "  movq " + pct + "rax, " + str(-(v["dest"] + 1) * 16) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx, " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+    if kind == VINST_LOAD_STRING:
+        return "  # v" + str(v["dest"]) + " = string" + nl + "  leaq .LC" + str(v["src1"]) + "(" + pct + "rip), " + pct + "rdi" + nl + "  call sage_rt_string" + nl + "  movq " + pct + "rax, " + str(-(v["dest"] + 1) * 16) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx, " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+    if kind == VINST_LOAD_GLOBAL:
+        return "  # v" + str(v["dest"]) + " = load global" + nl + "  leaq sage_globals(" + pct + "rip), " + pct + "rdi" + nl + "  leaq .LC" + str(v["src1"]) + "(" + pct + "rip), " + pct + "rsi" + nl + "  call sage_rt_get_global" + nl + "  movq " + pct + "rax, " + str(-(v["dest"] + 1) * 16) + "(" + pct + "rbp)" + nl + "  movq " + pct + "rdx, " + str(-(v["dest"] + 1) * 16 + 8) + "(" + pct + "rbp)" + nl
+    if kind == VINST_STORE_GLOBAL:
+        return "  # store global = v" + str(v["src1"]) + nl + "  leaq sage_globals(" + pct + "rip), " + pct + "rdi" + nl + "  leaq .LC" + str(v["src2"]) + "(" + pct + "rip), " + pct + "rsi" + nl + "  movq " + str(-(v["src1"] + 1) * 16) + "(" + pct + "rbp), " + pct + "rdx" + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rcx" + nl + "  call sage_rt_set_global" + nl
     if kind == VINST_PRINT:
         return "  # print v" + str(v["src1"]) + nl + "  movq " + str(-(v["src1"] + 1) * 16) + "(" + pct + "rbp), " + pct + "rdi" + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rsi" + nl + "  call sage_rt_print" + nl
     if kind == VINST_ADD or kind == VINST_SUB or kind == VINST_MUL or kind == VINST_DIV:
@@ -590,7 +611,7 @@ proc emit_asm_vinst_x86_64(v):
         return "  jmp " + str(v["label"]) + nl
     if kind == VINST_RET:
         return "  movq " + str(-(v["src1"] + 1) * 16) + "(" + pct + "rbp), " + pct + "rax" + nl + "  movq " + str(-(v["src1"] + 1) * 16 + 8) + "(" + pct + "rbp), " + pct + "rdx" + nl + "  leave" + nl + "  ret" + nl
-    return "  # unhandled vinst " + str(kind) + nl
+    raise "codegen: emitter has no case for vinst " + str(kind) + nl
 
 # ============================================================================
 # Assembly Text Emission - aarch64
@@ -598,9 +619,17 @@ proc emit_asm_vinst_x86_64(v):
 
 proc emit_asm_vinst_aarch64(v):
     let nl = chr(10)
+    let pct = chr(37)
     let kind = v["kind"]
     if kind == VINST_LOAD_IMM:
-        return "  // v" + str(v["dest"]) + " = number " + str(v["imm_number"]) + nl + "  bl sage_rt_number" + nl + "  str x0, [sp, #" + str(v["dest"] * 16) + "]" + nl + "  str x1, [sp, #" + str(v["dest"] * 16 + 8) + "]" + nl
+        ## sage_rt_number takes a double, which arrives in d0.
+        return "  // v" + str(v["dest"]) + " = number " + str(v["imm_number"]) + nl + "  adrp x0, .LN" + str(v["src1"]) + nl + "  ldr d0, [x0]" + nl + "  bl sage_rt_number" + nl + "  str x0, [sp, #" + str(v["dest"] * 16) + "]" + nl + "  str x1, [sp, #" + str(v["dest"] * 16 + 8) + "]" + nl
+    if kind == VINST_LOAD_STRING:
+        return "  // v" + str(v["dest"]) + " = string" + nl + "  adrp x0, .LC" + str(v["src1"]) + nl + "  bl sage_rt_string" + nl + "  str x0, [sp, #" + str(v["dest"] * 16) + "]" + nl + "  str x1, [sp, #" + str(v["dest"] * 16 + 8) + "]" + nl
+    if kind == VINST_LOAD_GLOBAL:
+        return "  // v" + str(v["dest"]) + " = load global" + nl + "  adrp x0, sage_globals" + nl + "  adrp x1, .LC" + str(v["src1"]) + nl + "  bl sage_rt_get_global" + nl + "  str x0, [sp, #" + str(v["dest"] * 16) + "]" + nl + "  str x1, [sp, #" + str(v["dest"] * 16 + 8) + "]" + nl
+    if kind == VINST_STORE_GLOBAL:
+        return "  // store global = v" + str(v["src1"]) + nl + "  adrp x0, sage_globals" + nl + "  adrp x1, .LC" + str(v["src2"]) + nl + "  ldr x2, [sp, #" + str(v["src1"] * 16) + "]" + nl + "  ldr x3, [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  bl sage_rt_set_global" + nl
     if kind == VINST_PRINT:
         return "  // print v" + str(v["src1"]) + nl + "  ldr x0, [sp, #" + str(v["src1"] * 16) + "]" + nl + "  ldr x1, [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  bl sage_rt_print" + nl
     if kind == VINST_LABEL:
@@ -609,7 +638,7 @@ proc emit_asm_vinst_aarch64(v):
         return "  b " + str(v["label"]) + nl
     if kind == VINST_RET:
         return "  ldr x0, [sp, #" + str(v["src1"] * 16) + "]" + nl + "  ldr x1, [sp, #" + str(v["src1"] * 16 + 8) + "]" + nl + "  ldp x29, x30, [sp], #256" + nl + "  ret" + nl
-    return "  // unhandled vinst " + str(kind) + nl
+    raise "codegen: emitter has no case for vinst " + str(kind) + nl
 
 # ============================================================================
 # Assembly Text Emission - rv64
@@ -617,9 +646,17 @@ proc emit_asm_vinst_aarch64(v):
 
 proc emit_asm_vinst_rv64(v):
     let nl = chr(10)
+    let pct = chr(37)
     let kind = v["kind"]
     if kind == VINST_LOAD_IMM:
-        return "  # v" + str(v["dest"]) + " = number " + str(v["imm_number"]) + nl + "  call sage_rt_number" + nl + "  sd a0, " + str(v["dest"] * 16) + "(sp)" + nl + "  sd a1, " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+        ## sage_rt_number takes a double, which arrives in fa0.
+        return "  # v" + str(v["dest"]) + " = number " + str(v["imm_number"]) + nl + "  lui t0, " + pct + "hi(.LN" + str(v["src1"]) + ")" + nl + "  addi t0, t0, " + pct + "lo(.LN" + str(v["src1"]) + ")" + nl + "  fld fa0, 0(t0)" + nl + "  call sage_rt_number" + nl + "  sd a0, " + str(v["dest"] * 16) + "(sp)" + nl + "  sd a1, " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+    if kind == VINST_LOAD_STRING:
+        return "  # v" + str(v["dest"]) + " = string" + nl + "  lui a0, " + pct + "hi(.LC" + str(v["src1"]) + ")" + nl + "  addi a0, a0, " + pct + "lo(.LC" + str(v["src1"]) + ")" + nl + "  call sage_rt_string" + nl + "  sd a0, " + str(v["dest"] * 16) + "(sp)" + nl + "  sd a1, " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+    if kind == VINST_LOAD_GLOBAL:
+        return "  # v" + str(v["dest"]) + " = load global" + nl + "  lui a0, " + pct + "hi(sage_globals)" + nl + "  lui a1, " + pct + "hi(.LC" + str(v["src1"]) + ")" + nl + "  addi a1, a1, " + pct + "lo(.LC" + str(v["src1"]) + ")" + nl + "  call sage_rt_get_global" + nl + "  sd a0, " + str(v["dest"] * 16) + "(sp)" + nl + "  sd a1, " + str(v["dest"] * 16 + 8) + "(sp)" + nl
+    if kind == VINST_STORE_GLOBAL:
+        return "  # store global = v" + str(v["src1"]) + nl + "  lui a0, " + pct + "hi(sage_globals)" + nl + "  lui a1, " + pct + "hi(.LC" + str(v["src2"]) + ")" + nl + "  addi a1, a1, " + pct + "lo(.LC" + str(v["src2"]) + ")" + nl + "  ld a2, " + str(v["src1"] * 16) + "(sp)" + nl + "  ld a3, " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  call sage_rt_set_global" + nl
     if kind == VINST_PRINT:
         return "  # print v" + str(v["src1"]) + nl + "  ld a0, " + str(v["src1"] * 16) + "(sp)" + nl + "  ld a1, " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  call sage_rt_print" + nl
     if kind == VINST_LABEL:
@@ -628,7 +665,7 @@ proc emit_asm_vinst_rv64(v):
         return "  j " + str(v["label"]) + nl
     if kind == VINST_RET:
         return "  ld a0, " + str(v["src1"] * 16) + "(sp)" + nl + "  ld a1, " + str(v["src1"] * 16 + 8) + "(sp)" + nl + "  ld ra, 8(sp)" + nl + "  ld s0, 0(sp)" + nl + "  addi sp, sp, 256" + nl + "  ret" + nl
-    return "  # unhandled vinst " + str(kind) + nl
+    raise "codegen: emitter has no case for vinst " + str(kind) + nl
 
 # ============================================================================
 # Assembly Header / Prologue / Epilogue
@@ -712,11 +749,15 @@ proc compile_to_asm(program, target):
             push(parts, emit_asm_vinst_rv64(v))
         v = v["next"]
     push(parts, emit_asm_epilogue(target))
-    # Emit string data section
-    if ctx.string_pool_count > 0:
+    # Emit string and number data. Both pools are needed: LOAD_IMM reads a
+    # double from .LN and LOAD_STRING takes the address of a .LC.
+    if ctx.string_pool_count > 0 or ctx.number_pool_count > 0:
         let nl = chr(10)
         push(parts, nl + ".section .rodata" + nl)
         for i in range(ctx.string_pool_count):
             push(parts, ".LC" + str(i) + ":" + nl)
             push(parts, "  .asciz " + chr(34) + ctx.string_pool[i] + chr(34) + nl)
+        for i in range(ctx.number_pool_count):
+            push(parts, ".LN" + str(i) + ":" + nl)
+            push(parts, "  .double " + str(ctx.number_pool[i]) + nl)
     return join(parts, "")

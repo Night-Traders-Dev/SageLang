@@ -400,6 +400,84 @@ for i in range(len(for_vs)):
 assert_true(for_has_branch, "for: has BRANCH")
 assert_true(for_has_idx, "for: has INDEX for element access")
 
+
+# ============================================================================
+# Per-instruction emission
+#
+# The assertions above check structure only. These check that each instruction
+# is actually turned into code, because an emitter that wrote a comment instead
+# satisfied every structural assertion while producing wrong assembly.
+# ============================================================================
+
+proc contains(hay, needle):
+    let hn = len(hay)
+    let nn = len(needle)
+    if nn == 0:
+        return true
+    if nn > hn:
+        return false
+    var i = 0
+    while i <= hn - nn:
+        if slice(hay, i, i + nn) == needle:
+            return true
+        i = i + 1
+    return false
+
+# `let x = 42` then `print x` selects LOAD_IMM, STORE_GLOBAL, LOAD_GLOBAL, PRINT.
+# sage_rt_number takes a double, so each target must load one into its FP
+# register before the call; all three used to call it with nothing loaded.
+let lit_x86 = codegen.compile_to_asm(prog, codegen.TARGET_X86_64)
+assert_true(contains(lit_x86, "movsd .LN0(%rip), %xmm0"), "x86: LOAD_IMM loads the literal into xmm0")
+assert_true(contains(lit_x86, "call sage_rt_number"), "x86: LOAD_IMM calls sage_rt_number")
+assert_true(contains(lit_x86, "call sage_rt_set_global"), "x86: STORE_GLOBAL emits a real call")
+assert_true(contains(lit_x86, "call sage_rt_get_global"), "x86: LOAD_GLOBAL emits a real call")
+assert_true(contains(lit_x86, "sage_globals(%rip)"), "x86: global ops pass the globals table")
+assert_true(not contains(lit_x86, "unhandled vinst"), "x86: nothing fell through to a comment")
+
+let lit_aarch = codegen.compile_to_asm(prog, codegen.TARGET_AARCH64)
+assert_true(contains(lit_aarch, "ldr d0, [x0]"), "aarch64: LOAD_IMM loads the literal into d0")
+assert_true(contains(lit_aarch, "bl sage_rt_number"), "aarch64: LOAD_IMM calls sage_rt_number")
+assert_true(contains(lit_aarch, "bl sage_rt_set_global"), "aarch64: STORE_GLOBAL emits a real call")
+assert_true(contains(lit_aarch, "bl sage_rt_get_global"), "aarch64: LOAD_GLOBAL emits a real call")
+assert_true(not contains(lit_aarch, "unhandled vinst"), "aarch64: nothing fell through to a comment")
+
+let lit_rv64 = codegen.compile_to_asm(prog, codegen.TARGET_RV64)
+assert_true(contains(lit_rv64, "fld fa0, 0(t0)"), "rv64: LOAD_IMM loads the literal into fa0")
+assert_true(contains(lit_rv64, "%hi(.LN0)"), "rv64: LOAD_IMM materialises the literal address")
+assert_true(contains(lit_rv64, "call sage_rt_number"), "rv64: LOAD_IMM calls sage_rt_number")
+assert_true(contains(lit_rv64, "call sage_rt_set_global"), "rv64: STORE_GLOBAL emits a real call")
+assert_true(contains(lit_rv64, "call sage_rt_get_global"), "rv64: LOAD_GLOBAL emits a real call")
+assert_true(contains(lit_rv64, "hi(sage_globals)"), "rv64: global ops pass the globals table")
+assert_true(not contains(lit_rv64, "unhandled vinst"), "rv64: nothing fell through to a comment")
+
+# The number pool must exist, or every numeric literal references nothing.
+# There was no number pool at all: the rodata section emitted strings only.
+assert_true(contains(lit_x86, ".LN0:"), "x86: number pool emits .LN0")
+assert_true(contains(lit_x86, ".double 42"), "x86: the literal value is in the number pool")
+assert_true(contains(lit_rv64, ".double 42"), "rv64: the literal value is in the number pool")
+
+# Globals take their name from the string pool, so the label has to be real.
+assert_true(contains(lit_x86, ".asciz \"x\""), "x86: the global name is in the string pool")
+assert_true(not contains(lit_x86, ".LC-1"), "x86: no global references an unset pool index")
+assert_true(not contains(lit_rv64, ".LC-1"), "rv64: no global references an unset pool index")
+
+# A string literal must reach sage_rt_string by address.
+assert_true(contains(asm_with_str, "call sage_rt_string") or contains(asm_with_str, "bl sage_rt_string"),
+            "string: LOAD_STRING emits a real call")
+assert_true(contains(asm_with_str, ".asciz"), "string: the literal is in the string pool")
+
+# An instruction with no emitter must raise. Silently writing
+# "# unhandled vinst N" is what let a program containing STORE_GLOBAL and
+# LOAD_GLOBAL pass every structural assertion while emitting no code for them.
+let missing = codegen.vinst_new(codegen.VINST_INDEX)
+missing["dest"] = 0
+let raised = false
+try:
+    codegen.emit_asm_vinst_rv64(missing)
+catch err:
+    raised = true
+assert_true(raised, "an instruction with no emitter raises instead of commenting")
+
 print ""
 print "Codegen tests: " + str(passed) + " passed, " + str(failed) + " failed"
 if failed == 0:
