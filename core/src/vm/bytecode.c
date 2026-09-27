@@ -40,6 +40,19 @@ typedef struct {
     Local locals[MAX_LOCALS];
     int local_count;
     int scope_depth;
+    // Whether local slots may be allocated at all. Locals are addressed as
+    // absolute indices into the frame's slot array (frame->slots), which is only
+    // meaningful inside a compiled function: there frame->slots points at the
+    // argument block, so slot 0 is the first parameter and locals line up.
+    //
+    // The top-level chunk sets frame->slots = vm.stack, i.e. the bottom of the
+    // VM stack, so slot 0 is merely the first value the chunk happened to
+    // push. A block bumps scope_depth, which used to be enough to make `let`
+    // allocate a local there -- so the first local of any top-level block
+    // aliased whatever the chunk had already pushed. Inside a `for` loop that
+    // is the iterable itself, so `let r = 7` in a loop body read the array
+    // being iterated. Locals are therefore disabled outside function bodies.
+    int locals_valid;
 } BytecodeCompiler;
 
 static void set_error(BytecodeCompiler* compiler, const char* message) {
@@ -153,6 +166,7 @@ static void add_local(BytecodeCompiler* compiler, Token name) {
 }
 
 static int resolve_local(BytecodeCompiler* compiler, Token name) {
+    if (!compiler->locals_valid) return -1;
     for (int i = compiler->local_count - 1; i >= 0; i--) {
         Local* local = &compiler->locals[i];
         if (local->name.length == name.length &&
@@ -689,7 +703,7 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             } else if (!emit_op(compiler, BC_OP_NIL, 0, 0)) {
                 return 0;
             }
-            if (compiler->scope_depth > 0) {
+            if (compiler->locals_valid && compiler->scope_depth > 0) {
                 add_local(compiler, stmt->as.let.name);
                 // The value is already on top of the stack from compile_expr
                 if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
@@ -784,7 +798,7 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 !emit_op(compiler, BC_OP_GET_INDEX, loop_var.line, loop_var.column)) {
                 return 0;
             }
-            if (compiler->scope_depth > 0) {
+            if (compiler->locals_valid && compiler->scope_depth > 0) {
                 add_local(compiler, loop_var);
             } else {
                 if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, loop_var)) return 0;
@@ -794,7 +808,7 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             int continue_target_placeholder = current_offset(compiler);
             // for-loop break needs: pop index, pop array, pop_env
             // If local scope, we also need to account for the local variable
-            int extra_pops = (compiler->scope_depth > 0) ? 3 : 2;
+            int extra_pops = (compiler->locals_valid && compiler->scope_depth > 0) ? 3 : 2;
             if (!push_loop(compiler, continue_target_placeholder, 1, extra_pops, compiler->local_count)) return 0;
 
             if (!compile_stmt(compiler, stmt->as.for_stmt.body, 0)) {
@@ -803,7 +817,7 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             }
 
             // If we added a local, we must pop it before the next iteration
-            if (compiler->scope_depth > 0) {
+            if (compiler->locals_valid && compiler->scope_depth > 0) {
                 if (!emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column)) return 0;
                 compiler->local_count--; // Remove from local tracking for this iteration
             }
@@ -1034,6 +1048,7 @@ int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
     compiler.allow_return = 1;
     compiler.error = error;
     compiler.error_size = error_size;
+    compiler.locals_valid = 1; // Only function bodies have a meaningful slot base
     compiler.scope_depth = 1; // Parameters and body are in local scope
     if (error != NULL && error_size > 0) {
         error[0] = '\0';
