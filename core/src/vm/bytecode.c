@@ -55,6 +55,132 @@ typedef struct {
     int locals_valid;
 } BytecodeCompiler;
 
+// ---------------------------------------------------------------------------
+// Call signatures, for filling in default arguments at the call site.
+//
+// The C backend does this with its ProcEntry table: it knows each procedure's
+// param_count, required_count and defaults, so it rewrites `two(1)` into
+// `two(1, 99, 100)` in the generated C. The bytecode compiler had no equivalent,
+// so a call that omitted a default reached the VM with fewer arguments than the
+// function declared and was rejected as an arity mismatch.
+//
+// The VM cannot paper over it. BytecodeFunction carries only parameter *names*,
+// and it is serialised into the .svm artifact, so defaults cannot be added to it
+// without a format change. The VM also has no expression evaluator of its own
+// for this path. Filling them in here, where the same AST is in hand, is the
+// same fix the C backend already makes.
+//
+// The table is file-static so procedure bodies compiled via
+// bytecode_compile_function_body() can see top-level signatures too: their
+// compiler instance is fresh and receives only the body, not the enclosing
+// program. Compilation is single-threaded, and bytecode_register_signatures()
+// resets the table per program.
+//
+// Method calls (obj.m()) are not padded: the receiver's type is not tracked, so
+// two classes may define the same method name with different signatures and
+// choosing one would be a guess. Those keep failing loudly rather than silently
+// binding the wrong default. Methods reached by name, and constructors, are
+// handled -- see below.
+#define MAX_CALL_SIGNATURES 1024
+
+typedef struct {
+    const char* name;
+    int name_len;
+    int param_count;
+    int required_count;
+    /* 1 when this signature came from a class's init, so declared parameter 0
+     * is `self` and the call's arguments map to parameters 1..N rather than
+     * 0..N-1. Getting this wrong pads the wrong slots: an extra NIL lands in the
+     * first real parameter and every value shifts. */
+    int is_ctor;
+    Expr** defaults; /* Borrowed from the AST, as chunk->ast_stmts already is. */
+} CallSignature;
+
+static CallSignature g_call_signatures[MAX_CALL_SIGNATURES];
+static int g_call_signature_count = 0;
+
+static void register_signature(const Token* name, int param_count, int required_count,
+                               Expr** defaults, int is_ctor) {
+    if (g_call_signature_count >= MAX_CALL_SIGNATURES) {
+        return;
+    }
+    CallSignature* sig = &g_call_signatures[g_call_signature_count++];
+    sig->name = name->start;
+    sig->name_len = name->length;
+    sig->param_count = param_count;
+    sig->required_count = required_count;
+    sig->is_ctor = is_ctor;
+    sig->defaults = defaults;
+}
+
+static void register_proc_signature(Stmt* stmt) {
+    if (stmt == NULL) {
+        return;
+    }
+    if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
+        ProcStmt* proc = (stmt->type == STMT_ASYNC_PROC) ? &stmt->as.async_proc
+                                                         : &stmt->as.proc;
+        register_signature(&proc->name, proc->param_count, proc->required_count,
+                           proc->defaults, 0);
+    } else if (stmt->type == STMT_CLASS) {
+        ClassStmt* cls = &stmt->as.class_stmt;
+        for (Stmt* m = cls->methods; m != NULL; m = m->next) {
+            if (m->type != STMT_PROC) {
+                continue;
+            }
+            ProcStmt* method = &m->as.proc;
+            register_signature(&method->name, method->param_count,
+                               method->required_count, method->defaults, 0);
+            /* A bare `VFS(path)` constructs through init, so the class name needs
+             * init's signature. This is what VFS.init's 18 defaulted parameters
+             * were tripping over. */
+            if (method->name.length == 4 && memcmp(method->name.start, "init", 4) == 0) {
+                register_signature(&cls->name, method->param_count, method->required_count,
+                                   method->defaults, 1);
+            }
+        }
+    }
+}
+
+static CallSignature* find_signature(const Token* name) {
+    for (int i = 0; i < g_call_signature_count; i++) {
+        CallSignature* sig = &g_call_signatures[i];
+        if (sig->name_len == name->length &&
+            memcmp(sig->name, name->start, (size_t)name->length) == 0) {
+            return sig;
+        }
+    }
+    return NULL;
+}
+
+/* Like find_signature, but returns NULL when the name is ambiguous.
+ *
+ * Used for method calls: the receiver's type is not tracked, so two classes may
+ * define the same method name with different signatures. Padding those would be a
+ * guess, and a wrong guess binds a wrong default silently. Returning NULL leaves
+ * the call alone so the VM reports the arity error. */
+static CallSignature* find_unique_signature(const Token* name) {
+    CallSignature* found = NULL;
+    for (int i = 0; i < g_call_signature_count; i++) {
+        CallSignature* sig = &g_call_signatures[i];
+        if (sig->name_len == name->length &&
+            memcmp(sig->name, name->start, (size_t)name->length) == 0) {
+            if (found != NULL) {
+                return NULL;
+            }
+            found = sig;
+        }
+    }
+    return found;
+}
+
+void bytecode_register_signatures(Stmt* statements) {
+    g_call_signature_count = 0;
+    for (Stmt* stmt = statements; stmt != NULL; stmt = stmt->next) {
+        register_proc_signature(stmt);
+    }
+}
+
 static void set_error(BytecodeCompiler* compiler, const char* message) {
     if (compiler->error != NULL && compiler->error_size > 0) {
         snprintf(compiler->error, compiler->error_size, "%s", message);
@@ -532,27 +658,84 @@ static int compile_expr(BytecodeCompiler* compiler, Expr* expr) {
                 for (int i = 0; i < expr->as.call.arg_count; i++) {
                     if (!compile_expr(compiler, expr->as.call.args[i])) return 0;
                 }
+                /* Pad a method call's omitted defaults, but only when exactly one
+                 * class defines that method name -- see find_unique_signature.
+                 *
+                 * Declared parameter 0 is `self`, which the receiver supplies, so
+                 * the caller's N arguments fill declared parameters 1..N and the
+                 * remaining defaults are for N+1..param_count-1. They are emitted
+                 * after the real arguments because the stack is
+                 * [object, arg0, arg1, ...] and CALL_METHOD reads the arguments
+                 * from the top. */
+                int method_args = expr->as.call.arg_count;
+                CallSignature* msig = find_unique_signature(&get->property);
+                if (msig != NULL && method_args < msig->param_count - 1 &&
+                    method_args + 1 >= msig->required_count) {
+                    for (int i = method_args + 1; i < msig->param_count; i++) {
+                        Expr* def = (msig->defaults != NULL) ? msig->defaults[i] : NULL;
+                        if (def == NULL) {
+                            if (!emit_op(compiler, BC_OP_NIL, 0, 0)) return 0;
+                        } else if (!compile_expr(compiler, def)) {
+                            return 0;
+                        }
+                    }
+                    method_args = msig->param_count - 1;
+                }
                 int name_index = add_name_constant(compiler, get->property.start, get->property.length);
                 if (name_index < 0) return 0;
-                if (name_index > 0xffff || expr->as.call.arg_count > 0xff) {
+                if (name_index > 0xffff || method_args > 0xff) {
                     set_error(compiler, "Method call operand limit exceeded.");
                     return 0;
                 }
                 return emit_op(compiler, BC_OP_CALL_METHOD, get->property.line, get->property.column) &&
                        emit_u16(compiler, (uint16_t)name_index, get->property.line, get->property.column) &&
-                       emit_u8(compiler, (uint8_t)expr->as.call.arg_count, get->property.line, get->property.column);
+                       emit_u8(compiler, (uint8_t)method_args, get->property.line, get->property.column);
             }
 
             if (!compile_expr(compiler, expr->as.call.callee)) return 0;
             for (int i = 0; i < expr->as.call.arg_count; i++) {
                 if (!compile_expr(compiler, expr->as.call.args[i])) return 0;
             }
-            if (expr->as.call.arg_count > 0xff) {
+
+            /* Fill in omitted default arguments.
+             *
+             * `two(1)` must reach the VM as `two(1, 99, 100)`: it checks
+             * arg_count against the declared param_count and rejects a mismatch.
+             * The C backend substitutes defaults here for the same reason.
+             *
+             * A call passing fewer arguments than required_count is left alone,
+             * so the VM still reports the arity error rather than binding nil to
+             * a parameter the caller was obliged to supply. */
+            int emit_count = expr->as.call.arg_count;
+            if (expr->as.call.callee->type == EXPR_VARIABLE) {
+                CallSignature* sig = find_signature(&expr->as.call.callee->as.variable.name);
+                if (sig != NULL) {
+                    /* A constructor's parameter 0 is `self`, supplied implicitly,
+                     * so the call's arguments occupy parameters 1..N. A plain
+                     * function's occupy 0..N-1. */
+                    int base = sig->is_ctor ? 1 : 0;
+                    int last_arg_param = base + emit_count;
+                    if (emit_count + base < sig->param_count &&
+                        last_arg_param >= sig->required_count) {
+                        for (int i = last_arg_param; i < sig->param_count; i++) {
+                            Expr* def = (sig->defaults != NULL) ? sig->defaults[i] : NULL;
+                            if (def == NULL) {
+                                if (!emit_op(compiler, BC_OP_NIL, 0, 0)) return 0;
+                            } else if (!compile_expr(compiler, def)) {
+                                return 0;
+                            }
+                        }
+                        emit_count = sig->param_count - base;
+                    }
+                }
+            }
+
+            if (emit_count > 0xff) {
                 set_error(compiler, "Call argument count exceeded 255.");
                 return 0;
             }
             return emit_op(compiler, BC_OP_CALL, 0, 0) &&
-                   emit_u8(compiler, (uint8_t)expr->as.call.arg_count, 0, 0);
+                   emit_u8(compiler, (uint8_t)emit_count, 0, 0);
         }
         case EXPR_BINARY: {
             BinaryExpr* binary = &expr->as.binary;

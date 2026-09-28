@@ -148,4 +148,13 @@ int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
                                    void* build_function_data,
                                    char* error, size_t error_size);
 
+/* Record the signatures of every top-level procedure, class method and class
+ * constructor reachable from `statements`, so that calls omitting default
+ * arguments can be padded at the call site. Resets any previous table.
+ *
+ * The caller must parse the whole program before executing any of it: the
+ * compiler has no way to learn the signature of a procedure it has not been
+ * shown yet. run() in main.c does this; the REPL registers incrementally. */
+void bytecode_register_signatures(Stmt* statements);
+
 #endif
