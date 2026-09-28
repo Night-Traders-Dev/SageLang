@@ -1520,6 +1520,13 @@ Value ffi_close_native(int argCount, Value* args) {
 // ffi_call(lib, "func_name", "return_type", [args...])
 // Supported return types: "double", "int", "void", "string"
 // Args are automatically marshaled from Sage values
+/* Raw address behind a Sage pointer value (a mem_alloc handle).
+ * ffi_call() previously accepted only numbers and strings, so any C function
+ * taking a buffer -- read(), write(), ptsname_r(), fstat(), ioctl() -- could not
+ * be called at all. SageLink depends on all of them, and crypto/rand.sage needs
+ * read() for /dev/urandom, so a broken CSPRNG took the whole handshake with it. */
+#define FFI_RAWPTR(v) (AS_POINTER(v)->ptr)
+
 Value ffi_call_native(int argCount, Value* args) {
     if (sandbox_denied("ffi")) return val_nil();
     if (argCount < 3 || argCount > 4) {
@@ -1646,6 +1653,36 @@ Value ffi_call_native(int argCount, Value* args) {
                                           AS_STRING(call_args->elements[1]),
                                           AS_STRING(call_args->elements[2])));
         }
+            /* Buffer-pointer shapes: read/write/ptsname_r/fstat/ioctl/open. */
+            else if (call_argc == 2 && IS_NUMBER(call_args->elements[0]) &&
+                     IS_POINTER(call_args->elements[1])) {
+                int (*fn)(long, void*) = (int (*)(long, void*))sym;
+                return val_number((double)fn((long)AS_NUMBER(call_args->elements[0]),
+                                             FFI_RAWPTR(call_args->elements[1])));
+            } else if (call_argc == 3 && IS_NUMBER(call_args->elements[0]) &&
+                       IS_POINTER(call_args->elements[1]) &&
+                       IS_NUMBER(call_args->elements[2])) {
+                int (*fn)(long, void*, long) = (int (*)(long, void*, long))sym;
+                return val_number((double)fn((long)AS_NUMBER(call_args->elements[0]),
+                                             FFI_RAWPTR(call_args->elements[1]),
+                                             (long)AS_NUMBER(call_args->elements[2])));
+            } else if (call_argc == 3 && IS_NUMBER(call_args->elements[0]) &&
+                       IS_NUMBER(call_args->elements[1]) &&
+                       IS_POINTER(call_args->elements[2])) {
+                int (*fn)(long, long, void*) = (int (*)(long, long, void*))sym;
+                return val_number((double)fn((long)AS_NUMBER(call_args->elements[0]),
+                                             (long)AS_NUMBER(call_args->elements[1]),
+                                             FFI_RAWPTR(call_args->elements[2])));
+            } else if (call_argc == 3 && IS_STRING(call_args->elements[0]) &&
+                       IS_NUMBER(call_args->elements[1]) &&
+                       IS_NUMBER(call_args->elements[2])) {
+                /* open(path, flags, mode) */
+                int (*fn)(const char*, long, long) =
+                    (int (*)(const char*, long, long))sym;
+                return val_number((double)fn(AS_STRING(call_args->elements[0]),
+                                             (long)AS_NUMBER(call_args->elements[1]),
+                                             (long)AS_NUMBER(call_args->elements[2])));
+            }
         fprintf(stderr, "ffi_call: unsupported argument types for int return.\n");
         return val_nil();
     }
@@ -1670,6 +1707,27 @@ Value ffi_call_native(int argCount, Value* args) {
             long (*fn)(long, long, long) = (long (*)(long, long, long))sym;
             return val_number((double)fn((long)AS_NUMBER(call_args->elements[0]), (long)AS_NUMBER(call_args->elements[1]), (long)AS_NUMBER(call_args->elements[2])));
         }
+            /* Buffer-pointer shapes. read()/write() return ssize_t. */
+            else if (call_argc == 2 && IS_NUMBER(call_args->elements[0]) &&
+                     IS_POINTER(call_args->elements[1])) {
+                long (*fn)(long, void*) = (long (*)(long, void*))sym;
+                return val_number((double)fn((long)AS_NUMBER(call_args->elements[0]),
+                                             FFI_RAWPTR(call_args->elements[1])));
+            } else if (call_argc == 3 && IS_NUMBER(call_args->elements[0]) &&
+                       IS_POINTER(call_args->elements[1]) &&
+                       IS_NUMBER(call_args->elements[2])) {
+                long (*fn)(long, void*, long) = (long (*)(long, void*, long))sym;
+                return val_number((double)fn((long)AS_NUMBER(call_args->elements[0]),
+                                             FFI_RAWPTR(call_args->elements[1]),
+                                             (long)AS_NUMBER(call_args->elements[2])));
+            } else if (call_argc == 3 && IS_NUMBER(call_args->elements[0]) &&
+                       IS_NUMBER(call_args->elements[1]) &&
+                       IS_POINTER(call_args->elements[2])) {
+                long (*fn)(long, long, void*) = (long (*)(long, long, void*))sym;
+                return val_number((double)fn((long)AS_NUMBER(call_args->elements[0]),
+                                             (long)AS_NUMBER(call_args->elements[1]),
+                                             FFI_RAWPTR(call_args->elements[2])));
+            }
         fprintf(stderr, "ffi_call: unsupported argument types for long return.\n");
         return val_nil();
     }

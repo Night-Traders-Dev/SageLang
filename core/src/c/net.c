@@ -495,19 +495,53 @@ static Value tcp_recv_native(int argc, Value* args) {
 
 static Value tcp_sendall_native(int argc, Value* args) {
     if (net_sandbox_denied()) return val_bool(0);
-    if (argc < 2 || !IS_NUMBER(args[0]) || !IS_STRING(args[1])) return val_bool(0);
+    if (argc < 2 || !IS_NUMBER(args[0])) return val_bool(0);
+    /* Accept a bytes object as well as a string.
+     *
+     * `bytes` is a real type in this language and indexing it yields numbers, so
+     * a caller building binary protocol frames naturally holds one. Requiring a
+     * string made every such call return false *silently* -- no error, no bytes on
+     * the wire -- and the peer then blocked forever in recvall. That is how
+     * SageLink's integration test hung after its handshake.
+     *
+     * The argument is materialised into a local buffer for the bytes case so the
+     * pointer handed to send() is not a SageValue interior. */
+    unsigned char stack_buf[4096];
+    unsigned char* heap_buf = NULL;
+    const char* data;
+    size_t length;
+    if (IS_STRING(args[1])) {
+        data = AS_STRING(args[1]);
+        length = (size_t)SAGE_STRING_LEN(args[1]);
+    } else if (IS_BYTES(args[1])) {
+        BytesValue* b = AS_BYTES(args[1]);
+        length = b->length;
+        if (length <= sizeof(stack_buf)) {
+            data = (const char*)stack_buf;
+            if (length) memcpy(stack_buf, b->data, length);
+        } else {
+            heap_buf = (unsigned char*)SAGE_ALLOC(length);
+            if (heap_buf == NULL) return val_bool(0);
+            if (length) memcpy(heap_buf, b->data, length);
+            data = (const char*)heap_buf;
+        }
+    } else {
+        return val_bool(0);
+    }
     int fd = (int)AS_NUMBER(args[0]);
-    const char* data = AS_STRING(args[1]);
-    size_t length = (size_t)SAGE_STRING_LEN(args[1]);
     size_t sent = 0;
     while (sent < length) {
         ssize_t count;
         do {
             count = send(fd, data + sent, length - sent, MSG_NOSIGNAL);
         } while (count < 0 && errno == EINTR);
-        if (count <= 0) return val_bool(0);
+        if (count <= 0) {
+            if (heap_buf) SAGE_FREE(heap_buf);
+            return val_bool(0);
+        }
         sent += (size_t)count;
     }
+    if (heap_buf) SAGE_FREE(heap_buf);
     return val_bool(1);
 }
 
