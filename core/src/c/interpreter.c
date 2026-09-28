@@ -3386,6 +3386,29 @@ static ExecResult eval_binary(BinaryExpr* b, Env* env) {
 // Inlined eval_expr — recursion depth is checked only at function call
 // boundaries (EXPR_CALL), not on every expression. This eliminates 2
 // atomic increments per expression evaluation in the critical path.
+/* Evaluate a single expression and return its value.
+ *
+ * eval_expr() is static, but the VM needs it. call_any_method() binds a
+ * method's parameters and has to evaluate the default expression for any the
+ * caller omitted; those parameters were otherwise left undefined in the method
+ * environment, so reading one raised "Undefined variable" -- and, on the
+ * remount path where a second VFS is constructed over a live one, could walk off
+ * an undefined binding and segfault. A class with defaulted parameters therefore
+ * could not be constructed at all under the bytecode VM.
+ *
+ * The C backend substitutes defaults at the call site for the same reason. That
+ * path is not available here: the VM's entry point parses and executes one
+ * top-level statement at a time (see run() in main.c), so the compiler never
+ * sees a declaration that has not been parsed yet, and a top-level *function*
+ * still needs separate work.
+ *
+ * This delegates to eval_expr() directly rather than wrapping the expression in
+ * a statement node: interpret() may retain the node it is handed, so allocating
+ * one here and freeing it afterwards was a use-after-free that crashed the VM. */
+ExecResult interpreter_eval_expr(Expr* expr, Env* env) {
+    return eval_expr(expr, env);
+}
+
 static ExecResult eval_expr(Expr* expr, Env* env) {
     if (stack_danger()) {
         fprintf(stderr, "Runtime Error: Maximum recursion depth exceeded (stack).\n");

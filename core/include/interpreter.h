@@ -21,6 +21,8 @@ typedef struct {
 } ExecResult;
 
 ExecResult interpret(Stmt* stmt, Env* env);
+/* Evaluate a single expression, returning its value. See interpreter.c. */
+ExecResult interpreter_eval_expr(Expr* expr, Env* env);
 void init_stdlib(Env* env);
 void interpreter_set_sandbox_mode(int enabled);
 int interpreter_sandbox_mode(void);

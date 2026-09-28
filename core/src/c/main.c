@@ -14,6 +14,7 @@
 #include "ast.h"
 #include "parser.h"
 #include "interpreter.h"
+#include "bytecode.h"
 #include "env.h"
 #include "gc.h"
 #include "module.h"
@@ -939,11 +940,16 @@ static void repl_execute_source(char* buffer, Env* env, SageRuntimeMode runtime_
     init_lexer(buffer, "<repl>");
     parser_init();
 
-    while (1) {
-        Stmt* stmt = parse();
-        if (stmt == NULL) break;
-        retain_program_stmt(stmt);
-        ExecResult result = sage_execute_stmt(stmt, env, runtime_mode);
+      while (1) {
+          Stmt* stmt = parse();
+          if (stmt == NULL) break;
+          retain_program_stmt(stmt);
+          /* Register everything entered so far before compiling this statement,
+           * so a call can use the signature of a procedure defined earlier in
+           * the session. One statement at a time is inherent to a REPL, so a call
+           * to something not yet entered still cannot work. */
+          bytecode_register_signatures(g_program_ast);
+          ExecResult result = sage_execute_stmt(stmt, env, runtime_mode);
 
         if (stmt->type == STMT_EXPRESSION) {
             if (last_value != NULL) {
@@ -2405,31 +2411,56 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
     repl_history_free();
 }
 
-static void run(const char* source, const char* filename, SageRuntimeMode runtime_mode) {
-    init_lexer(source, filename);
-    parser_init();
-    Env* env = env_create(NULL);
-    g_global_env = env;
-    init_stdlib(env);
-    set_math_work_env(env);
-
-    while (1) {
-         Stmt* result = parse();
-         if (result == NULL) break;
-         retain_program_stmt(result);
-         ExecResult exec_res = sage_execute_stmt(result, env, runtime_mode);
-         if (exec_res.is_throwing) {
-             const char* msg = "unknown error";
-             if (exec_res.exception_value.type == VAL_EXCEPTION &&
-                 exec_res.exception_value.as.exception != NULL &&
-                 exec_res.exception_value.as.exception->message != NULL) {
-                 msg = exec_res.exception_value.as.exception->message;
-             }
-             fprintf(stderr, "Unhandled Exception: %s\n", msg);
-             exit(70);  // EX_SOFTWARE: uncaught runtime error
-         }
-    }
-}
+  static void run(const char* source, const char* filename, SageRuntimeMode runtime_mode) {
+      init_lexer(source, filename);
+      parser_init();
+      Env* env = env_create(NULL);
+      g_global_env = env;
+      init_stdlib(env);
+      set_math_work_env(env);
+  
+      /* Parse the whole program before executing any of it.
+       *
+       * Statements used to be parsed and executed one at a time, so the
+       * bytecode compiler only ever saw the statement it was compiling and
+       * never a declaration further down the file. That made it impossible to
+       * fill in a call's omitted default arguments: the compiler has to know
+       * the callee's signature, and for a procedure that appears after the call
+       * it had no way to learn it. The C backend does not have this problem
+       * because it compiles from the whole source buffer up front.
+       *
+       * retain_program_stmt() already links every parsed statement into
+       * g_program_ast, so the list is there for free; the loop below now just
+       * executes it in order. Execution order and error behaviour are otherwise
+       * unchanged -- uncaught exceptions still exit(70) at the same point, and a
+       * parse error still stops before anything runs. The REPL is deliberately
+       * left alone: there, one statement at a time is the whole point, and a
+       * later call to an earlier definition works because the earlier definition
+       * is registered by the time the later call is compiled. */
+      while (1) {
+          Stmt* result = parse();
+          if (result == NULL) break;
+          retain_program_stmt(result);
+      }
+  
+      /* Record every procedure and class signature up front so the compiler can
+       * pad calls that omit default arguments. */
+      bytecode_register_signatures(g_program_ast);
+  
+      for (Stmt* result = g_program_ast; result != NULL; result = result->next) {
+          ExecResult exec_res = sage_execute_stmt(result, env, runtime_mode);
+          if (exec_res.is_throwing) {
+              const char* msg = "unknown error";
+              if (exec_res.exception_value.type == VAL_EXCEPTION &&
+                  exec_res.exception_value.as.exception != NULL &&
+                  exec_res.exception_value.as.exception->message != NULL) {
+                  msg = exec_res.exception_value.as.exception->message;
+              }
+              fprintf(stderr, "Unhandled Exception: %s\n", msg);
+              exit(70);  // EX_SOFTWARE: uncaught runtime error
+          }
+      }
+  }
 
 // ============================================================================
 // JIT self-extracting executable: module bundling support

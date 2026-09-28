@@ -201,7 +201,29 @@ static ExecResult call_any_method(Value object, Method* method, int arg_count, V
         if (i - param_start < arg_count) {
             env_define(method_env, method_stmt->params[i].start,
                        method_stmt->params[i].length, args[i - param_start]);
+            continue;
         }
+        /* Parameter omitted by the caller: bind its default.
+         *
+         * These were left undefined, so reading one raised "Undefined variable",
+         * and on the remount path -- where a second VFS is constructed over a
+         * live one -- walking an undefined binding could segfault. A class with
+         * defaulted parameters could therefore not be constructed at all under
+         * the bytecode VM. VFS.init alone has 18 of them, which is where the
+         * per-construction error spew came from.
+         *
+         * A parameter with no default that the caller omitted is genuinely
+         * missing; leaving it undefined preserves the existing error rather than
+         * inventing a value. */
+        if (method_stmt->defaults == NULL || method_stmt->defaults[i] == NULL) {
+            continue;
+        }
+        ExecResult def = interpreter_eval_expr(method_stmt->defaults[i], method_env);
+        if (def.is_throwing) {
+            return def;
+        }
+        env_define(method_env, method_stmt->params[i].start,
+                   method_stmt->params[i].length, def.value);
     }
 
     return interpret(method_stmt->body, method_env);
