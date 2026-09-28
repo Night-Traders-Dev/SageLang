@@ -1,7 +1,7 @@
 # Library Support Matrix
 
 Import/behavior status of every bundled library under both interpreters
-(`sage` = self-hosted CLI, `sage-c` = C host), as of v4.2.12.
+(`sage` = self-hosted CLI, `sage-c` = C host), as of v4.2.13.
 The C-host audit imports 331 non-executable library modules from a neutral working directory; executable examples and injected-state contract payloads are excluded.
 
 ## Summary

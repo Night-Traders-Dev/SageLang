@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.2.13] - 2026-09-28
+
+### Added & Fixed
+- **Veritas Test Audit & Suite Expansion.**
+  - Added 6 new unit test cases covering FFI handle cleanup (`22_ffi`), async await chaining (`28_async`), defer in try/catch/finally (`32_defer`), match guard evaluation (`33_match`), nested comptime blocks (`40_metaprogramming`), and AOT type specialization (`41_jit_aot`).
+  - Verified 100% test suite pass rate across all suites.
+
 ## [4.2.12] - 2026-09-28
 
 ### Added & Fixed
