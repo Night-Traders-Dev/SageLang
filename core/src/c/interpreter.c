@@ -4486,6 +4486,14 @@ ExecResult interpret(Stmt* stmt, Env* env) {
     // both the initial root scan and the remark re-scan.
     GC_SHADE_NEW_ROOT_ENV(env);
 
+    /* The frame's Env is a published, shaded root from here, and this thread is
+     * at a node boundary rather than inside an allocation, so this is a safe
+     * point for a collection the environment accounting has asked for. Without a
+     * consumer here, a workload that spends its time in calls rather than in the
+     * value heap -- the 6502 emulation, the proof-of-work test -- raises the
+     * flag and never collects, which is how power_on() got back to 2.9 GB. */
+    gc_try_collect_at_safe_point();
+
     ExecResult result = interpret_inner(stmt, env);
 
     if (ts) {

@@ -9,6 +9,10 @@ static Env* allocated_envs = NULL;
 static sage_mutex_t env_mutex = SAGE_MUTEX_INITIALIZER;
 static __thread Env* thread_env_pool = NULL;
 static __thread EnvNode* thread_node_pool = NULL;
+/* Non-zero while an Env or EnvNode is allocated but not yet reachable from a
+ * root. Collecting inside that window can reclaim live state, and because
+ * gc_collect() allocates, it re-enters this code. */
+static __thread int env_build_depth = 0;
 static unsigned long long next_env_id = 1;
 static sage_mutex_t env_id_mutex = SAGE_MUTEX_INITIALIZER;
 
@@ -30,8 +34,11 @@ static char* my_strndup(const char* s, size_t n) {
     return result;
 }
 
+int env_build_in_progress(void) { return env_build_depth > 0; }
+
 Env* env_create(Env* parent) {
     Env* env;
+    env_build_depth++;
     if (thread_env_pool) {
         env = thread_env_pool;
         thread_env_pool = env->alloc_next;
@@ -53,18 +60,22 @@ Env* env_create(Env* parent) {
     env->alloc_next = allocated_envs;
     allocated_envs = env;
     sage_mutex_unlock(&env_mutex);
-    
+
+    env_build_depth--;
     return env;
 }
 
 static EnvNode* node_alloc(void) {
+    env_build_depth++;
     if (thread_node_pool) {
         EnvNode* node = thread_node_pool;
         thread_node_pool = node->next;
+        env_build_depth--;
         return node;
     }
     EnvNode* node = SAGE_ALLOC(sizeof(EnvNode));
     gc_track_external_allocation(sizeof(EnvNode));
+    env_build_depth--;
     return node;
 }
 

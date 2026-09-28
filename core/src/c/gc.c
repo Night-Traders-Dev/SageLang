@@ -597,6 +597,15 @@ void gc_track_external_allocation(size_t size) {
         gc_external_collect_pending = 1;
     }
 }
+void gc_try_collect_at_safe_point(void) {
+    if (!gc.enabled) return;
+    if (!gc_external_collect_pending) return;
+    /* Refuse the window where an Env is allocated but not yet a root. */
+    if (env_build_in_progress()) return;
+    gc_external_collect_pending = 0;
+    gc_collect();
+}
+
 void gc_track_external_resize(size_t old_size, size_t new_size) {
     if (new_size >= old_size) gc_bytes_allocated_add(new_size - old_size);
     else gc_bytes_freed_add(old_size - new_size);

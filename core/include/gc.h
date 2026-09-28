@@ -255,6 +255,10 @@ void gc_free(void* obj);
 
 // Track auxiliary heap buffers
 void gc_track_external_allocation(size_t size);
+/* Consume a pending external-allocation collection, but only where it is
+ * safe: not while an environment is mid-construction. Call from a point
+ * every node passes through, or env-heavy workloads never collect. */
+void gc_try_collect_at_safe_point(void);
 void gc_track_external_resize(size_t old_size, size_t new_size);
 void gc_track_external_free(size_t size);
 

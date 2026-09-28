@@ -39,6 +39,9 @@ extern __thread EnvRootNode* g_gc_root_stack;
 } while(0)
 
 Env* env_create(Env* parent);
+/* Non-zero while this thread is inside an env/node allocation, before the
+ * structure is reachable from a root. Collecting then is unsafe. */
+int env_build_in_progress(void);
 void env_define(Env* env, const char* name, int length, Value value);
 void env_define_const(Env* env, const char* name, int length, Value value);
 bool env_has_local(Env* env, const char* name, int length);
