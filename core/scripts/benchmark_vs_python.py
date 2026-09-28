@@ -68,20 +68,37 @@ class RunResult:
         return statistics.stdev(self.times) if len(self.times) > 1 else 0.0
 
 
-def run_timed(cmd: list[str], cwd: Path, timeout: int = 60) -> tuple[float, str, int]:
+# A run that trips one of these is the backend declining the workload, not a
+# defect. Each is a deliberate guard with a test of its own, so failing the whole
+# suite over one of them hides the failures that do matter.
+CAPABILITY_LIMITS = {
+    "VM loop iteration limit exceeded":
+        "VM caps one loop at 1,000,000 iterations (VM_MAX_LOOP_ITERATIONS)",
+}
+
+
+def capability_limit(text: str) -> str | None:
+    """Return the reason a backend declined the workload, or None if it is a real failure."""
+    for marker, reason in CAPABILITY_LIMITS.items():
+        if marker in text:
+            return reason
+    return None
+
+
+def run_timed(cmd: list[str], cwd: Path, timeout: int = 60) -> tuple[float, str, int, str]:
     start = time.perf_counter()
     try:
         result = subprocess.run(
             cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout
         )
         elapsed = time.perf_counter() - start
-        return elapsed, result.stdout.strip(), result.returncode
+        return elapsed, result.stdout.strip(), result.returncode, result.stderr.strip()
     except subprocess.TimeoutExpired:
-        return timeout, "", -1
+        return timeout, "", -1, ""
     except FileNotFoundError:
-        return 0.0, "", -2
+        return 0.0, "", -2, ""
     except OSError:
-        return 0.0, "", -3
+        return 0.0, "", -3, ""
 
 
 def detect_python() -> str:
@@ -194,20 +211,30 @@ def run_benchmark(
 
     # Warmup runs
     for _ in range(warmups):
-        elapsed, output, rc = run_timed(cmd, ROOT)
+        elapsed, output, rc, err = run_timed(cmd, ROOT)
         if rc != 0 and rc != -1:
+            limit = capability_limit(err)
+            if limit:
+                result.status = "skip"
+                result.error = limit
+                return result
             result.status = "fail"
             result.error = f"Warmup failed (rc={rc})"
             return result
 
     # Timed runs
     for _ in range(runs):
-        elapsed, output, rc = run_timed(cmd, ROOT)
+        elapsed, output, rc, err = run_timed(cmd, ROOT)
         if rc == -1:
             result.status = "timeout"
             result.error = "Timed out"
             return result
         if rc != 0:
+            limit = capability_limit(err)
+            if limit:
+                result.status = "skip"
+                result.error = limit
+                return result
             result.status = "fail"
             result.error = f"Run failed (rc={rc})"
             return result
