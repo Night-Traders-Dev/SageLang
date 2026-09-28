@@ -55,3 +55,9 @@ core/build_selfhost/
 *.pem
 # OS artifacts
 Thumbs.db
+
+# Python bytecode. Two .pyc files were committed here by a run that imported a
+# script instead of executing it; they are tied to a CPython version and are
+# never read by the repo.
+__pycache__/
+*.pyc
