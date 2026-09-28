@@ -1,6 +1,11 @@
 # RUN: compile-run
 # EXPECT: true
 # EXPECT: true
+# Note on scope: the probe below allocates a value on purpose to give the
+# collector a reason to run, which is right for a cycle test and wrong for a
+# reclaim test -- it makes this file pass whether or not Env churn is ever
+# reclaimed, because gc_alloc() is not on the path a call-heavy workload takes.
+# gc_env_reclaim covers that case, and fails when the collector is unreachable.
 let baseline_objects = gc_stats()["num_objects"]
 let before_collections = gc_collections()
 
