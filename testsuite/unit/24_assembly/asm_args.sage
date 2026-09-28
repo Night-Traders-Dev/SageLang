@@ -1,3 +1,5 @@
+# REQUIRES-ARCH: x86_64
+# Writes x86_64 assembly and runs it through the system assembler.
 # Test inline assembly with arguments
 # EXPECT: 42
 # EXPECT: 42

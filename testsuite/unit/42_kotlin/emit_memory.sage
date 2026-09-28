@@ -2,6 +2,8 @@
 # EXPECT: 100
 # EXPECT: 3.14
 # EXPECT: x86_64
+# REQUIRES-ARCH: x86_64
+# The generated Kotlin targets the host, and the expected output includes its arch.
 ## Test: Kotlin backend — FFI and memory operations
 ## Run: sage --emit-kotlin tests/42_kotlin/emit_memory.sage
 

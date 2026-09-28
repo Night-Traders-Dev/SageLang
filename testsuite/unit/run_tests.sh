@@ -11,6 +11,7 @@ TESTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 export SAGE_PATH="$SCRIPT_DIR/../core/lib${SAGE_PATH:+:$SAGE_PATH}"
 PASS=0
 FAIL=0
+SKIP=0
 ERRORS=""
 FILTER="${SAGE_TEST_FILTER:-}"
 # Parallelism is opt-in: the default stays serial so CI output and ordering
@@ -222,8 +223,43 @@ run_error_test() {
 }
 
 # Dispatch a single test to the right checker.
+# Some tests exercise one host and cannot pass on another. Reporting those as
+# failures is worse than useless: the suite can never be green, so the next real
+# regression is a seventh entry nobody reads.
+#
+#   # REQUIRES-ARCH: x86_64    only meaningful on that uname -m
+#   # REQUIRES-GPU: 1          needs a usable Vulkan driver
+#
+# Both are declared by the test rather than guessed here, so the requirement
+# travels with the file. An absent Vulkan ICD is the check for the driver: the
+# failure without one is vkCreateInstance returning VK_ERROR_INCOMPATIBLE_DRIVER
+# (-9), which is a missing driver rather than a defect.
+should_skip() {
+    local test_file="$1" want_arch=""
+    want_arch=$(grep '^# REQUIRES-ARCH: ' "$test_file" | head -1 | sed 's/^# REQUIRES-ARCH: //')
+    if [ -n "$want_arch" ] && [ "$(uname -m)" != "$want_arch" ]; then
+        echo -e "  ${YELLOW}SKIP${NC} $(basename "$test_file" .sage) (needs arch $want_arch, host is $(uname -m))"
+        return 0
+    fi
+    if grep -q '^# REQUIRES-GPU: 1' "$test_file"; then
+        local has_icd=0
+        for d in /usr/share/vulkan/icd.d /etc/vulkan/icd.d /usr/local/share/vulkan/icd.d; do
+            ls "$d"/*.json >/dev/null 2>&1 && { has_icd=1; break; }
+        done
+        if [ "$has_icd" -eq 0 ]; then
+            echo -e "  ${YELLOW}SKIP${NC} $(basename "$test_file" .sage) (no Vulkan driver on this host)"
+            return 0
+        fi
+    fi
+    return 1
+}
+
 run_one() {
     local test_file="$1"
+    if should_skip "$test_file"; then
+        SKIP=$((SKIP + 1))
+        return 0
+    fi
     if grep -q '^# EXPECT_ERROR: ' "$test_file"; then
         run_error_test "$test_file"
     else
@@ -290,9 +326,10 @@ else
         local idx="$1"
         PASS=0
         FAIL=0
+        SKIP=0
         ERRORS=""
         run_one "${TEST_PATHS[$idx]}" > "$RESULT_DIR/$idx.line" 2>&1
-        printf '%s\n%s\n' "$PASS" "$FAIL" > "$RESULT_DIR/$idx.counts"
+        printf '%s\n%s\n%s\n' "$PASS" "$FAIL" "$SKIP" > "$RESULT_DIR/$idx.counts"
         printf '%s\n' "$ERRORS" > "$RESULT_DIR/$idx.errs"
     }
 
@@ -320,6 +357,7 @@ else
         mapfile -t counts < "$RESULT_DIR/$idx.counts"
         PASS=$((PASS + counts[0]))
         FAIL=$((FAIL + counts[1]))
+        SKIP=$((SKIP + counts[2]))
         if [ -s "$RESULT_DIR/$idx.errs" ]; then
             ERRORS="${ERRORS}$(cat "$RESULT_DIR/$idx.errs")"
         fi
@@ -339,8 +377,8 @@ if [ -n "$FILTER" ] && [ "$FILTER_MATCHED" -eq 0 ]; then
     exit 2
 fi
 echo -e "${BOLD}════════════════════════════════════════${NC}"
-TOTAL=$((PASS + FAIL))
-echo -e "${BOLD}Results: ${GREEN}${PASS} passed${NC}, ${RED}${FAIL} failed${NC} / ${TOTAL} total"
+TOTAL=$((PASS + FAIL + SKIP))
+echo -e "${BOLD}Results: ${GREEN}${PASS} passed${NC}, ${RED}${FAIL} failed${NC}, ${YELLOW}${SKIP} skipped${NC} / ${TOTAL} total"
 
 if [ -n "$ERRORS" ]; then
     echo ""

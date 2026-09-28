@@ -1,5 +1,7 @@
 # EXPECT: 40
 # EXPECT: PASS
+# REQUIRES-GPU: 1
+# Brings a Vulkan context up and down; without a driver it returns -9.
 #
 # GPU lifecycle must be usable repeatedly from a single thread, and must not
 # deadlock. Context create/destroy is now serialized behind a recursive mutex

@@ -1,3 +1,5 @@
+# REQUIRES-ARCH: x86_64
+# Writes x86_64 assembly with SSE operands and runs it.
 # Test inline assembly with double return type
 # EXPECT: 4.2
 # EXPECT: 6
