@@ -37,6 +37,7 @@ Env* env_create(Env* parent) {
         thread_env_pool = env->alloc_next;
     } else {
         env = SAGE_ALLOC(sizeof(Env));
+        gc_track_external_allocation(sizeof(Env));
     }
     
     env->head = NULL;
@@ -62,7 +63,9 @@ static EnvNode* node_alloc(void) {
         thread_node_pool = node->next;
         return node;
     }
-    return SAGE_ALLOC(sizeof(EnvNode));
+    EnvNode* node = SAGE_ALLOC(sizeof(EnvNode));
+    gc_track_external_allocation(sizeof(EnvNode));
+    return node;
 }
 
 static void node_free(EnvNode* node) {

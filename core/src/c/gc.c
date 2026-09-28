@@ -552,7 +552,33 @@ void gc_free(void* obj) {
     sage_mutex_unlock(&gc_mutex);
 }
 
-void gc_track_external_allocation(size_t size) { gc_bytes_allocated_add(size); }
+// External allocations -- environments, binding nodes, the mesh arrays in
+// graphics.c -- go straight to malloc, so gc_alloc never sees them. They
+// therefore miss the trigger that reclaims everything else, and nothing else
+// asked on their behalf: a plain proc call leaked 96 bytes and a 6502 boot
+// running a million steps reached 2.9 GB, because no collection could ever be
+// scheduled while the workload consisted of them.
+//
+// The counter is bytes accumulated *since the last collection* rather than
+// bytes outstanding. Outstanding would be wrong twice over. Envs that the
+// sweep reclaims are recycled into a free list, not released, so they stay
+// outstanding for as long as the pool is warm; and feeding a retained total
+// back into the trigger would fire a collection on every subsequent
+// allocation. Measuring the delta instead puts a hard ceiling on how much
+// unreclaimable memory can exist between two collections, which is the thing
+// that actually has to be bounded.
+static unsigned long gc_external_since_collect = 0;
+
+#define GC_EXTERNAL_TRIGGER_BYTES (4u << 20)
+
+void gc_track_external_allocation(size_t size) {
+    gc_bytes_allocated_add(size);
+    if (!gc.enabled) return;
+    gc_external_since_collect += size;
+    if (gc_external_since_collect >= GC_EXTERNAL_TRIGGER_BYTES) {
+        gc_collect();
+    }
+}
 void gc_track_external_resize(size_t old_size, size_t new_size) {
     if (new_size >= old_size) gc_bytes_allocated_add(new_size - old_size);
     else gc_bytes_freed_add(old_size - new_size);
@@ -999,6 +1025,7 @@ static sage_mutex_t g_gc_cycle_mutex = SAGE_MUTEX_INITIALIZER;
 // Main collection entry point - runs concurrent phases inline
 void gc_collect(void) {
     if (!gc.enabled) return;
+    gc_external_since_collect = 0;
     
     // Prevent multiple threads from running a full cycle simultaneously
     if (sage_mutex_trylock(&g_gc_cycle_mutex) != 0) return;
