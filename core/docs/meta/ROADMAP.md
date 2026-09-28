@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
 > **Last Updated**: September 25, 2026
-> **Current Version**: v4.2.10 · **Spec Version**: 2.0
+> **Current Version**: v4.2.12 · **Spec Version**: 2.0
 >
 > The phase-by-phase history below is retained for context but is ordered
 > oldest-first and its entries are not in release order; the authoritative

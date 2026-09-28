@@ -621,3 +621,13 @@ Evidence:
 Documentation Impact:
 - Replace remaining `v4.2.4` references with `v4.2.11` across `SageLang_Guide.md` and `Baremetal_OSDev_UEFI_Guide.md`.
 - Document the UART0 FIFO address and the `.bss` limits, and explicitly mention the compiler reordering of volatile markers.
+2026-09-28 - [v4.2.12 Update & Match Guard Integration]
+
+Discovery:
+Updated documentation to reflect v4.2.12 and the integration of match guards (testsuite/unit/33_match/match_guard.sage) closing the remaining parity gaps.
+
+Evidence:
+README.md
+
+Documentation Impact:
+Updated version numbers across docs. Kept historical markers for ESP32 introduction at v4.2.11 and v4.2.10 additions intact while updating Current Version blocks.
