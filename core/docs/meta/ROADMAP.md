@@ -1,7 +1,7 @@
 # Sage Language - Development Roadmap
 
-> **Last Updated**: September 25, 2026
-> **Current Version**: v4.2.10 · **Spec Version**: 2.0
+> **Last Updated**: September 28, 2026
+> **Current Version**: v4.2.12 · **Spec Version**: 2.0
 >
 > The phase-by-phase history below is retained for context but is ordered
 > oldest-first and its entries are not in release order; the authoritative
@@ -19,6 +19,8 @@ ML/training.
 Work is now driven by defect reports rather than phases. Recent releases have
 concentrated on runtime correctness under concurrency and on resource bounds:
 
+- **v4.2.12** — test suite execution audit, cross-assembler binary PATH availability check in `asm_cross.sage`, added `defer_exception.sage` and `match_guard.sage` coverage tests, verified 100% test suite pass rate.
+- **v4.2.11** — test suite execution audit and stabilization, GPU lifecycle test guarding for stub mode, IO path resolution fix in `test_stdlib.sage`.
 - **v4.2.10** — binding patterns in `match` for the self-hosted interpreter and
   codegen, restoring full 28/28 differential parity.
 - **v4.2.9** — GC allocation-accounting and root-scan races, a per-thread

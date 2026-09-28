@@ -11,7 +11,7 @@ feature cases through three stacks — the C interpreter, the self-hosted
 interpreter, and binaries compiled by the self-hosted compiler
 (`--emit-c` → gcc) — and compares their output byte for byte.
 
-**All 28 cases are byte-identical across all three stacks** (v4.2.10).
+**All 28 cases are byte-identical across all three stacks** (v4.2.12).
 
 This was 27/28 at v4.2.9: the self-hosted compiler did not implement *binding
 patterns* in `match`, so a bare-identifier case pattern such as

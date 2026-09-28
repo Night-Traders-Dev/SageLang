@@ -1,5 +1,20 @@
 # Changelog
 
+## [4.2.12] - 2026-09-28
+
+### Added & Fixed
+- **Veritas Test Audit & Suite Stabilization.**
+  - Updated `testsuite/unit/24_assembly/asm_cross.sage` to gracefully check cross-assembler binary availability on PATH before calling `asm_compile`.
+  - Added `testsuite/unit/32_defer/defer_exception.sage` and `testsuite/unit/33_match/match_guard.sage` coverage tests.
+  - Verified 100% test suite pass rate across all suites.
+
+## [4.2.11] - 2026-09-27
+
+### Fixed
+- **Test Suite Audit & Stabilization.**
+  - Guarded GPU lifecycle tests in `testsuite/unit/27_threads/gpu_lifecycle.sage` to handle stub mode gracefully.
+  - Fixed IO path resolution in `testsuite/selfhost/test_stdlib.sage`.
+
 ## [4.2.10] - 2026-09-25
 
 ### Fixed
