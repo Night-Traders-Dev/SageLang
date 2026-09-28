@@ -566,7 +566,20 @@ static Value tcp_recvall_native(int argc, Value* args) {
         received += (int)count;
     }
     buffer[length] = '\0';
-    return val_string_take_len(buffer, length);
+    /* Return bytes, not a string.
+     *
+     * A socket carries arbitrary binary, and a Sage string cannot hold it: the
+     * payload passes through UTF-8 decoding on the way in and out, so a NUL or a
+     * high byte does not survive a round trip. Callers were forced into
+     * to_list()-style re-decoding, and ord() on an undecodable byte returns nil,
+     * so binary frames failed to parse -- intermittently, depending on the bytes
+     * in them. Indexing a bytes object yields numbers directly, so this removes
+     * the conversion entirely and makes recvall/sendall symmetric.
+     *
+     * Callers that genuinely want text should decode explicitly. */
+    Value out = val_bytes(buffer, length);
+    free(buffer);
+    return out;
 }
 
 static Value tcp_recvline_native(int argc, Value* args) {

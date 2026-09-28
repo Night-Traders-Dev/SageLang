@@ -1169,6 +1169,27 @@ static Value slice_native(int argCount, Value* args) {
     int end = (int)AS_NUMBER(args[2]);
     if (IS_ARRAY(args[0])) return array_slice(&args[0], start, end);
     if (IS_STRING(args[0])) return string_slice(&args[0], start, end);
+    if (IS_BYTES(args[0])) {
+        /* Slice a bytes object into a list of byte values, matching what indexing
+         * one yields. Without this, slice() returned nil for bytes, so every
+         * `slice(frame, 0, 8)` in a protocol parser handed nil to the next step
+         * and failed as "nil is not indexable" rather than at the slice itself.
+         * tcp.recvall() now returns bytes, so this is the common path for wire
+         * data. End is exclusive, as for the other cases. */
+        BytesValue* b = AS_BYTES(args[0]);
+        int n = (int)b->length;
+        if (start < 0) start = 0;
+        if (end > n) end = n;
+        if (end <= start) return val_array();
+        Value out_val = val_array();
+        ArrayValue* out = out_val.as.array;
+        out->count = end - start;
+        out->capacity = out->count;
+        for (int i = 0; i < out->count; i++) {
+            out->elements[i] = val_number((double)b->data[start + i]);
+        }
+        return out_val;
+    }
     return val_nil();
 }
 
