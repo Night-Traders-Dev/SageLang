@@ -61,3 +61,4 @@ Thumbs.db
 # never read by the repo.
 __pycache__/
 *.pyc
+core/build_relg/

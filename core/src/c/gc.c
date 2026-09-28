@@ -490,10 +490,16 @@ void gc_unpin(void) {
     }
 }
 
+/* Set by gc_track_external_allocation(); consumed by gc_alloc(), which is a safe
+ * collection point. gc_alloc() appears before the definition, so this is
+ * declared up here. */
+static int gc_external_collect_pending = 0;
+
 void* gc_alloc(int type, size_t size) {
     sage_mutex_lock(&gc_mutex);
 
-    if (gc_should_collect(size)) {
+    if (gc_should_collect(size) || gc_external_collect_pending) {
+        gc_external_collect_pending = 0;
         sage_mutex_unlock(&gc_mutex);
         gc_collect();
         sage_mutex_lock(&gc_mutex);
@@ -576,7 +582,19 @@ void gc_track_external_allocation(size_t size) {
     if (!gc.enabled) return;
     gc_external_since_collect += size;
     if (gc_external_since_collect >= GC_EXTERNAL_TRIGGER_BYTES) {
-        gc_collect();
+        /* Raise a flag; do not collect here.
+         *
+         * env_create() and node_alloc() call this while the caller is still
+         * building an environment, so the Env being populated is not yet
+         * reachable from any root. Collecting at that point can reclaim live
+         * state mid-construction, and gc_collect() allocates, which re-enters
+         * this function. SageFS reproduced it: writing an 8 KiB file walks a
+         * long chain of env_create() calls, the 4 MB threshold trips partway
+         * through, and the next mount lost every directory entry and the VM
+         * segfaulted. gc_alloc() is the ordinary safe point -- it drops the mutex
+         * and collects between allocations -- so the collection is deferred
+         * there. */
+        gc_external_collect_pending = 1;
     }
 }
 void gc_track_external_resize(size_t old_size, size_t new_size) {
