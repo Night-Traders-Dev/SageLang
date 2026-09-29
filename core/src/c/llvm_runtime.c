@@ -20,6 +20,9 @@
 #include <pthread.h>
 #include <stdatomic.h>
 
+// Security: Global resource limit for I/O operations (100MB)
+#define SAGE_MAX_READ_SIZE (100 * 1024 * 1024)
+
 // Safe allocation wrappers — abort on OOM instead of returning NULL
 static void* safe_realloc(void* ptr, size_t size) {
     void* result = realloc(ptr, size);
@@ -970,7 +973,7 @@ SageValue sage_rt_readfile(SageValue path) {
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
     fseek(f, 0, SEEK_SET);
-    if (sz <= 0 || sz > 100 * 1024 * 1024) { fclose(f); return sage_rt_nil(); }
+    if (sz <= 0 || sz > SAGE_MAX_READ_SIZE) { fclose(f); return sage_rt_nil(); }
     char* buf = (char*)malloc((size_t)sz + 1);
     if (!buf) { fclose(f); return sage_rt_nil(); }
     size_t rd = fread(buf, 1, (size_t)sz, f);
@@ -1042,7 +1045,7 @@ SageValue sage_rt_readbytes(SageValue path) {
         long size = ftell(f);
         fseek(f, 0, SEEK_SET);
         // Security: Bound maximum file read size to 100 MB to prevent resource exhaustion (CWE-400/789)
-        if (size > 0 && size <= 100 * 1024 * 1024) {
+        if (size > 0 && size <= SAGE_MAX_READ_SIZE) {
             unsigned char* buf = (unsigned char*)malloc((size_t)size);
             if (buf) {
                 size_t read = fread(buf, 1, (size_t)size, f);
@@ -1060,14 +1063,14 @@ SageValue sage_rt_readbytes(SageValue path) {
     size_t nread;
     size_t total_read = 0;
     while ((nread = fread(chunk, 1, sizeof(chunk), f)) > 0) {
-        if (total_read + nread > 100 * 1024 * 1024) {
-            nread = (100 * 1024 * 1024) - total_read;
+        if (total_read + nread > SAGE_MAX_READ_SIZE) {
+            nread = SAGE_MAX_READ_SIZE - total_read;
         }
         for (size_t i = 0; i < nread; i++) {
             sage_rt_array_push(arr, sage_rt_number((double)chunk[i]));
         }
         total_read += nread;
-        if (total_read >= 100 * 1024 * 1024) break;
+        if (total_read >= SAGE_MAX_READ_SIZE) break;
     }
     fclose(f);
     return arr;
@@ -1090,7 +1093,7 @@ SageValue sage_rt_load_weights(SageValue path) {
     long fsize = ftell(f);
     fseek(f, 0, SEEK_SET);
     // Security: Validate file size bounds before allocation (CWE-400/789)
-    if (fsize <= 0 || fsize > 100 * 1024 * 1024) { fclose(f); return sage_rt_nil(); }
+    if (fsize <= 0 || fsize > SAGE_MAX_READ_SIZE) { fclose(f); return sage_rt_nil(); }
     char* buf = (char*)malloc((size_t)fsize + 1);
     if (!buf) { fclose(f); return sage_rt_nil(); }
     size_t rd = fread(buf, 1, fsize, f);
