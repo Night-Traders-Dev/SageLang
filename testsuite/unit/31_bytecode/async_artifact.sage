@@ -3,6 +3,7 @@
 # EXPECT: 3
 # EXPECT: 42
 # EXPECT: 12
+# EXPECT: DISTINCT
 #
 # Async in a real .svm artifact -- the compiled branch of the async worker.
 #
@@ -13,25 +14,30 @@
 # for the two async opcodes -- all of which reject an artifact the compiler has
 # just produced if any one of them is out of step.
 #
-# KNOWN GAP: these results do NOT prove the body ran on its own thread. A
-# synchronous call produces exactly the same four numbers, so this test is blind
-# to it. Probing with thread.id() shows the compiled proc currently runs inline
-# on the caller's thread: the emitter references function 0 for the async proc,
-# and function 0 is the entry function, so the "body" being run is the whole
-# program. The probe asserts
+# The last check is the one that matters. Results alone cannot tell async from a
+# synchronous call: both print 30, 3, 42, 12. So this asserts that the body
+# actually ran on another thread. It is here because the compiled path did once
+# run inline, and the test that missed it was exactly this one without it.
 #
-#     if w1 != main_id and w2 != main_id: print "DISTINCT" else: print "SAME_THREAD"
+# That happened for two reasons, both worth remembering:
 #
-# and prints SAME_THREAD today. It is left out rather than committed failing, but
-# it should be the first thing restored when that is fixed -- a passing
-# results-only check is exactly what let this look working.
+#   - BC_OP_CALL's fast path pushes a frame and runs the chunk itself, so it
+#     never reached the place an async call becomes a task, and an `async proc`
+#     is a compiled function like any other;
+#   - a compiled function's parameters are stack slots, so the worker had to hand
+#     its arguments over the way the call fast path does.
 #
-# The AST-backed counterpart, which does spawn, is async_vm.sage.
+# `awaiting` also has to print before the body. A body that ran inline would
+# print first, which reads like concurrency and is in fact the signature of the
+# bug.
 
 import thread
 
 async proc add(a, b):
     return a + b
+
+async proc who():
+    return thread.id()
 
 let future = add(10, 20)
 print await future
@@ -52,3 +58,11 @@ let twice = add(5, 7)
 let first = await twice
 let second = await twice
 print first + second - 12
+
+let main_id = thread.id()
+let w1 = await who()
+let w2 = await who()
+if w1 != main_id and w2 != main_id:
+    print "DISTINCT"
+else:
+    print "SAME_THREAD"

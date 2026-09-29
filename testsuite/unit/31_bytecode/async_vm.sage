@@ -3,6 +3,7 @@
 # EXPECT: 3
 # EXPECT: 42
 # EXPECT: 12
+# EXPECT: DISTINCT
 # Async under the bytecode runtime, as a plain script.
 #
 # A script run with --runtime bytecode has no BytecodeProgram behind it, so
@@ -11,8 +12,13 @@
 # The counterpart is async_artifact.sage, which is the same program through a
 # .svm and therefore does reach the compiled branch.
 
+import thread
+
 async proc add(a, b):
     return a + b
+
+async proc who():
+    return thread.id()
 
 let future = add(10, 20)
 print await future
@@ -33,3 +39,11 @@ let twice = add(5, 7)
 let first = await twice
 let second = await twice
 print first + second - 12
+
+let main_id = thread.id()
+let w1 = await who()
+let w2 = await who()
+if w1 != main_id and w2 != main_id:
+    print "DISTINCT"
+else:
+    print "SAME_THREAD"

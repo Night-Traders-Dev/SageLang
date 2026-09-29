@@ -39,8 +39,28 @@ typedef struct ActiveVm {
     // Generator support: set when executing a generator chunk
     GeneratorValue* current_generator;
     int is_generator_exec;
-    int resume_ip_offset;  // For generator resume: start from this offset
-    int resume_stack_count; // Stack depth to restore on resume
+  int resume_ip_offset;  // For generator resume: start from this offset
+  int resume_stack_count; // Stack depth to restore on resume
+  /* Arguments for a call that has to start a fresh frame chain -- currently the
+   * async worker, which runs a compiled body on its own thread.
+   *
+   * vm_execute_chunk builds its own local ActiveVm and inherits only the resume
+   * fields from previous_vm, so a caller cannot pre-seed vm.stack directly: the
+   * values it wrote are discarded before the frame is set up. Passing the
+   * arguments here is what survives.
+   *
+   * A call lays the stack out as
+   *
+   *     vm.stack[0]              the callee slot, kept in place by BC_OP_CALL
+   *     vm.stack[1]              first argument
+   *     ...
+   *
+   * with frame->slots = vm.stack + 1, so local 0 is the first argument -- the
+   * same layout BC_OP_CALL's fast path produces with sp - arg_count. The callee
+   * slot has to exist because RETURN pops to frame->slots - 1 to drop the
+   * arguments and the callee together. Nothing else writes it, so nil is fine. */
+  const Value* call_args;
+  int call_arg_count;
 } ActiveVm;
 
 static int vm_pop_handler_for_frame(ActiveVm* vm, int frame_depth, int* index_out) {
@@ -265,14 +285,36 @@ static void* vm_future_entry(void* data) {
 
     if (func->is_vm && func->vm_function != NULL) {
         /* Compiled body. g_active_vm is __thread, so this thread gets its own VM
-         * frame chain instead of sharing the caller's. */
+         * frame chain instead of sharing the caller's.
+         *
+         * The arguments cross as call arguments, not as scoped names, because a
+         * compiled function's parameters are stack slots: vm_execute_chunk derives
+         * frame->slots from vm.stack and the body reads them by slot index. It
+         * builds its own local ActiveVm and inherits only the resume fields from
+         * the previous one, so anything else a caller pre-seeds is discarded --
+         * which is why binding the names in an Env was not enough and every
+         * parameter read came back "VM local index is out of bounds". The names are
+         * still defined, so a body reaching a parameter through an upvalue
+         * resolves as well. */
         BytecodeFunction* bf = func->vm_function;
         Env* scope = env_create(fut->closure);
         for (int i = 0; i < bf->param_count; i++) {
             Value v = (i < fut->arg_count) ? fut->args[i] : val_nil();
             env_define(scope, bf->params[i], (int)strlen(bf->params[i]), v);
         }
+
+        ActiveVm task_vm;
+        memset(&task_vm, 0, sizeof(task_vm));
+        task_vm.chunk = &bf->chunk;
+        task_vm.parent = g_active_vm;
+        task_vm.call_args = fut->args;
+        task_vm.call_arg_count = bf->param_count < fut->arg_count ? bf->param_count
+                                                                  : fut->arg_count;
+
+        ActiveVm* previous_vm = g_active_vm;
+        g_active_vm = &task_vm;
         r = vm_execute_chunk(&bf->chunk, scope);
+        g_active_vm = previous_vm;
     } else if (func->proc != NULL) {
         /* AST body. A plain script run under the bytecode runtime has no
          * BytecodeProgram, so build_function is NULL and every procedure is
@@ -603,6 +645,10 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
          previous_vm->resume_stack_count < 0 || previous_vm->resume_stack_count > VM_STACK_MAX)) {
         return vm_error("Invalid VM generator resume state.");
     }
+    if (previous_vm != NULL &&
+        (previous_vm->call_arg_count < 0 || previous_vm->call_arg_count + 1 > VM_STACK_MAX)) {
+        return vm_error("Invalid VM call argument state.");
+    }
     
     memset(&vm, 0, sizeof(vm));
     vm.chunk = chunk;
@@ -617,6 +663,8 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
         vm.is_generator_exec = previous_vm->is_generator_exec;
         vm.resume_ip_offset = previous_vm->resume_ip_offset;
         vm.resume_stack_count = previous_vm->resume_stack_count;
+        vm.call_args = previous_vm->call_args;
+        vm.call_arg_count = previous_vm->call_arg_count;
     }
 
     CallFrame frames[MAX_FRAMES];
@@ -626,6 +674,21 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     // Support generator resume: start from saved IP offset
     uint8_t* resume_start = chunk->code;
     int initial_stack_count = 0;
+    /* Arguments for a call that is starting its own frame chain. They are laid
+     * out exactly as BC_OP_CALL leaves them, and the slot base is shifted past
+     * the callee slot, so a body reads local 0 as its first parameter whether it
+     * was called from the fast path or from the async worker. With no call
+     * arguments this is all zero and the slot base is vm.stack, which is what
+     * generators and top-level chunks have always used. */
+    int slots_base_offset = 0;
+    if (vm.call_arg_count > 0 && vm.call_args != NULL) {
+        vm.stack[0] = val_nil();
+        for (int i = 0; i < vm.call_arg_count; i++) {
+            vm.stack[1 + i] = vm.call_args[i];
+        }
+        slots_base_offset = 1;
+        initial_stack_count = vm.call_arg_count;
+    }
     if (vm.resume_ip_offset > 0) {
         resume_start = chunk->code + vm.resume_ip_offset;
         initial_stack_count = vm.resume_stack_count;
@@ -637,10 +700,10 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     frame->chunk = chunk;
     frame->ip = resume_start;
     frame->ip_end = chunk->code + chunk->code_count;
-    frame->slots = vm.stack;
+    frame->slots = vm.stack + slots_base_offset;
     frame->closure = env;
 
-    register Value* sp = vm.stack + initial_stack_count;
+    register Value* sp = frame->slots + initial_stack_count;
     register Value* constants = frame->chunk->constants;
     register uint8_t* ip = frame->ip;
     uint8_t* ip_end = frame->ip_end;
@@ -1205,8 +1268,24 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 ;
                  int arg_count = (int)READ_U8();
                  VM_CHECK_STACK(arg_count + 1);
-                 Value callee = *(sp - 1 - arg_count);
-                 if (callee.type == VAL_FUNCTION && callee.as.function != NULL && callee.as.function->is_vm) {
+                Value callee = *(sp - 1 - arg_count);
+                /* is_async has to be excluded. This fast path pushes a frame and
+                 * runs the chunk itself, so it never reaches call_function_value,
+                 * which is where an async call becomes a spawned task. An
+                 * `async proc` is a compiled function like any other, so it took
+                 * this path and ran its body inline on the caller's thread -- the C
+                 * backend's behaviour, with async's syntax. The flag was set
+                 * correctly the whole time; there was simply nothing here to read
+                 * it. Correct results hid it, because a synchronous call of the
+                 * same function returns the same values, and the body printing
+                 * before the next statement looks like concurrency when it is in
+                 * fact the signature of the bug.
+                 *
+                 * The interpreter's call path has the mirror-image gap: it assumes
+                 * an async function has an AST body, so it routes compiled ones
+                 * through sage_vm_spawn_async() instead. */
+                if (callee.type == VAL_FUNCTION && callee.as.function != NULL &&
+                    callee.as.function->is_vm && !callee.as.function->is_async) {
                      if (frame_count >= MAX_FRAMES) { result = vm_error("Stack overflow (max frames reached)."); goto done; }
                      BytecodeFunction* bcf = callee.as.function->vm_function;
                      if (bcf == NULL || bcf->chunk.code_count <= 0 || bcf->chunk.code == NULL) {
