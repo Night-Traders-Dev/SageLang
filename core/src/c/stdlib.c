@@ -1730,6 +1730,19 @@ static void* sage_thread_entry(void* data) {
     SageThreadData* td = (SageThreadData*)data;
     ProcStmt* proc = (ProcStmt*)td->func->proc;
 
+    /* An async call on a compiled function used to land here with proc == NULL
+     * and be dereferenced straight away. Callers now route is_vm functions to
+     * the VM's spawn, so reaching this with a NULL proc means a new call site
+     * made the same assumption: fail here, loudly, instead of returning a task
+     * that answers with whatever happened to be in memory. */
+    if (proc == NULL) {
+        fprintf(stderr,
+                "Runtime Error: cannot run a compiled function on a plain "
+                "thread.\n");
+        td->result = val_nil();
+        return NULL;
+    }
+
     // Register this thread for GC
     ThreadState ts;
     memset(&ts, 0, sizeof(ThreadState));

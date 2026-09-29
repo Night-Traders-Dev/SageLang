@@ -4314,6 +4314,22 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     AST_GC_POP_N(1 + pushed_args);
                     return EVAL_RESULT(val_nil());
 #else
+                    /* A compiled async function has no ProcStmt and no
+                     * FunctionValue.param_count, so the AST path below would size
+                     * its argument array from 0 and drop every argument, then hand
+                     * the call to a worker that reads the NULL proc. This is the
+                     * normal shape under `sage --run-vm`, where the top level runs
+                     * through this walker but the async proc is compiled, so the
+                     * VM's own spawn is the only one that can run it. */
+                    if (callee_value.as.function->is_vm) {
+                        extern Value sage_vm_spawn_async(Value callee, int arg_count,
+                                                          Value* args);
+                        Value vhandle = sage_vm_spawn_async(callee_value, pushed_args,
+                                                            eval_args);
+                        free(eval_args);
+                        AST_GC_POP_N(1 + pushed_args);
+                        return EVAL_RESULT(vhandle);
+                    }
                     // Async call: spawn thread, return thread handle
                     Value spawn_args[1 + func->param_count];
                     spawn_args[0] = callee_value;

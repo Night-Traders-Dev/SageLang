@@ -342,6 +342,30 @@ static Value vm_spawn_async(FunctionValue* func, int arg_count, Value* args) {
     return val_thread(tv);
 }
 
+/* Spawn an async function on behalf of a caller that is not the VM's own
+ * dispatch loop -- currently the tree-walking interpreter.
+ *
+ * An artifact is not homogeneous: `sage --run-vm` runs the top-level statements
+ * through the AST walker and only the functions the VM defined stay compiled. So
+ * a program whose async proc is compiled still has its *call* seen by the
+ * interpreter, and the interpreter's own async path assumed every async function
+ * had an AST body: it sized the argument array from FunctionValue.param_count,
+ * which is 0 for a compiled function, so every argument was dropped, and the
+ * worker it handed off to read FunctionValue.proc, which is NULL for a compiled
+ * function. The result was a task that ran no body and answered with the
+ * caller's own thread id -- and it happened not to crash, which is the worst
+ * version of that bug.
+ *
+ * The two callers cannot both own "start an async function", because they
+ * disagree about which representation the body has. This is the one place that
+ * handles either. */
+Value sage_vm_spawn_async(Value callee, int arg_count, Value* args) {
+    if (callee.type != VAL_FUNCTION || callee.as.function == NULL) {
+        return val_nil();
+    }
+    return vm_spawn_async(callee.as.function, arg_count, args);
+}
+
 static Value vm_await_value(Value v) {
     /* Not a future: already its own answer. Mirrors the interpreter, where a
      * non-thread operand is returned directly. */
