@@ -1181,14 +1181,21 @@ static Value slice_native(int argCount, Value* args) {
         if (start < 0) start = 0;
         if (end > n) end = n;
         if (end <= start) return val_array();
-        Value out_val = val_array();
-        ArrayValue* out = out_val.as.array;
-        out->count = end - start;
-        out->capacity = out->count;
-        for (int i = 0; i < out->count; i++) {
-            out->elements[i] = val_number((double)b->data[start + i]);
-        }
-        return out_val;
+          Value out_val = val_array();
+          ArrayValue* out = out_val.as.array;
+          out->count = end - start;
+          out->capacity = out->count;
+          /* elements was never allocated here, so the loop below wrote through
+           * whatever val_array() left in the slot -- a segfault on any non-empty
+           * slice. The buffer also needs registering with the GC, or it could be
+           * collected while the returned array still points at it. array_slice()
+           * does both; this now matches it. */
+          out->elements = SAGE_ALLOC(sizeof(Value) * (size_t)out->count);
+          gc_track_external_allocation(sizeof(Value) * (size_t)out->count);
+          for (int i = 0; i < out->count; i++) {
+              out->elements[i] = val_number((double)b->data[start + i]);
+          }
+          return out_val;
     }
     return val_nil();
 }
