@@ -624,7 +624,7 @@ Documentation Impact:
 
 2026-09-29 - [Parity Sync Update]
 Discovery:
-Addressed documentation sync for v4.2.11 updates missed in the guide.
+Addressed documentation sync for v4.2.12 updates missed in the guide.
 Evidence:
 - `VERSION` file, `README.md` (Recent Updates for v4.2.8 - v4.2.11).
 - Git commit `962b263`
