@@ -352,10 +352,24 @@ The `metal` standard library provides low-level drivers for bare-metal execution
 - `core.dmb()` / `core.dsb()` / `core.isb()` — ARM memory barriers: Data Memory Barrier, Data Synchronization Barrier, and Instruction Synchronization Barrier.
 - `core.fence()` — RISC-V memory fence primitive.
 - `core.cpu_relax()` / `core.io_wait()` — Busy-wait loop hardware hint and single I/O cycle delay.
-- `core.cpu_id()` — Query current CPU core ID (e.g. core 0 or core 1 on multi-core microcontrollers).
+- `core.cpu_id()` / `core.rp2040_cpuid()` — Query current CPU core ID or RP2040 SIO CPUID.
+- `core.sio_gpio_set_mask(mask)` / `core.sio_gpio_clr_mask(mask)` / `core.sio_gpio_xor_mask(mask)` / `core.sio_gpio_get_all()` — RP2040 SIO single-cycle GPIO bitmask controls.
+- `core.sio_gpio_set_oe_mask(mask)` / `core.sio_gpio_clr_mask_oe(mask)` / `core.sio_gpio_xor_oe_mask(mask)` — RP2040 SIO GPIO output-enable bitmask procedures.
+- `core.sio_fifo_rx_valid()` / `core.sio_fifo_tx_ready()` / `core.sio_fifo_push(data)` / `core.sio_fifo_pop()` / `core.sio_fifo_drain()` — RP2040 inter-core FIFO IPC operations.
+- `core.sio_hw_spinlock(idx)` / `core.sio_hw_spinunlock(idx)` — RP2040 hardware spinlock acquisition and release.
 - `core.critical_section_enter()` / `core.critical_section_exit()` — Enter (disable interrupts + DSB) and exit (DSB + enable interrupts) atomic critical sections.
 - `core.spin_lock(lock_ptr)` / `core.spin_unlock(lock_ptr)` — Bare-metal spin lock acquisition and release helpers.
 - `core.heap_init(base, size)` / `core.heap_alloc(size)` / `core.heap_stats()` — Freestanding bump heap allocator operations.
+
+### `metal.irq` — Interrupt Request Management
+- `irq.pic_remap(off1, off2)` / `irq.pic_eoi(irq)` / `irq.pic_mask(irq)` / `irq.pic_unmask(irq)` — Programmable Interrupt Controller (8259A) remapping, EOI, and masking.
+- `irq.mask_irq(irq)` / `irq.unmask_irq(irq)` — Architecture-neutral IRQ masking primitives.
+- `irq.set_priority(vector, level)` / `irq.get_priority(vector)` / `irq.get_current_priority()` — Software-managed interrupt priority levels.
+- `irq.register_handler(vector, handler)` — Registers an interrupt handler (panics if already registered).
+- `irq.register_handler_safe(vector, handler)` — Safely registers an interrupt handler, returning `false` if already registered instead of throwing a panic.
+- `irq.unregister_handler(vector)` — Safely unregisters an interrupt handler.
+- `irq.irq_enter()` / `irq.irq_exit()` / `irq.irq_depth()` — Tracks nested interrupt depth.
+- `irq.dispatch(vector)` — Dispatches an interrupt vector to its registered handler.
 
 ### `metal.vga` — Early VGA Text Mode
 - `vga.init()` — Initializes VGA text mode hardware state and cursor position.
@@ -384,8 +398,19 @@ The `metal` standard library provides low-level drivers for bare-metal execution
 - `serial.uart_flush_rx(port)` / `serial.pl011_flush_rx(base)` — Flushes pending receive buffer bytes.
 
 ### `metal.gpio` — General Purpose I/O
-- `gpio.pin_enable_interrupt(p)` — Enables interrupt triggers for the specified GPIO pin.
-- `gpio.pin_disable_interrupt(pin)` — Disables interrupt generation for the specified GPIO pin.
+- `gpio.gpio_init(base, num_pins)` — Initializes GPIO controller at MMIO base address.
+- `gpio.pin_mode(pin, mode)` / `gpio.pin_get_mode(pin)` — Configures or queries pin mode (`PIN_INPUT`, `PIN_OUTPUT`, `PIN_ALT`, `PIN_ANALOG`).
+- `gpio.pin_pull(pin, pull)` / `gpio.pin_get_pull(pin)` — Configures or queries pull-up / pull-down resistor configuration (`PULL_NONE`, `PULL_UP`, `PULL_DOWN`).
+- `gpio.pin_set_interrupt(pin, mode)` / `gpio.pin_get_interrupt(pin)` — Configures interrupt trigger mode (`INT_DISABLED`, `INT_RISING`, `INT_FALLING`, `INT_BOTH`, `INT_LOW`, `INT_HIGH`).
+- `gpio.pin_enable_interrupt(pin)` / `gpio.pin_disable_interrupt(pin)` — Enables or disables interrupt generation for a pin.
+- `gpio.pin_enable_interrupt_ext(pin, mode)` / `gpio.pin_disable_interrupt_ext(pin)` — Extended interrupt setup and tear-down with trigger mode selection.
+- `gpio.pin_register_handler(pin, handler)` / `gpio.gpio_dispatch(pin)` — Registers and dispatches GPIO pin interrupt handlers.
+- `gpio.digital_write(pin, val)` / `gpio.digital_read(pin)` / `gpio.digital_toggle(pin)` — Writes, reads, or toggles digital pin level (`PIN_LOW`, `PIN_HIGH`).
+- `gpio.pin_set_mask(mask)` / `gpio.pin_clear_mask(mask)` / `gpio.pin_write_masked(mask, values)` — Bitmask GPIO control operations.
+- `gpio.pin_debounce(pin, target_state, samples, delay_ms)` — Debounces digital pin over multiple samples.
+- `gpio.pin_pulse_in(pin, state, timeout_us)` — Measures pulse duration on a pin in microseconds with configurable timeout.
+- `gpio.pin_pulse_out(pin, state, duration_us)` — Generates a timed pulse of specified duration on a pin.
+- `gpio.led_on(pin)` / `gpio.led_off(pin)` / `gpio.led_blink(pin, count, delay)` — Helper procedures for driving LEDs.
 
 ## AVR & Arduino Uno Assembler Support (`core/boards/AVR`)
 

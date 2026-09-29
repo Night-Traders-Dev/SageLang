@@ -625,8 +625,10 @@ Entry point script `core/lib/transpiler/cjs2esm/main.sage` provides CLI command 
 | `atomic` | `import std.atomic` | `atomic_int`, `load`, `store`, `add`, `cas`, `exchange`, `increment`, `create_spinlock` |
 | `rwlock` | `import std.rwlock` | `create`, `read_lock`, `read_unlock`, `write_lock`, `write_unlock`, `try_read_lock`, `try_write_lock`, `is_read_locked`, `is_write_locked`, `reader_count`, `stats`, `with_read`, `with_write` |
 | `dicts` | `import dicts` | `keys`, `values`, `size`, `has`, `get_or`, `entries`, `has_all`, `has_any`, `select_values`, `remove_keys`, `count_missing` |
-| `core` | `import metal.core` | `putchar`, `puts`, `getchar`, `outb`, `inb`, `mmio_read32`, `mmio_write32`, `cli`, `sti`, `hlt`, `dmb`, `dsb`, `isb`, `fence`, `cpu_id`, `critical_section_enter`, `spin_lock` |
+| `core` | `import metal.core` | `putchar`, `puts`, `getchar`, `outb`, `inb`, `mmio_read32`, `mmio_write32`, `cli`, `sti`, `hlt`, `dmb`, `dsb`, `isb`, `fence`, `cpu_id`, `rp2040_cpuid`, `sio_gpio_set_mask`, `sio_fifo_push`, `sio_hw_spinlock`, `critical_section_enter`, `spin_lock` |
 | `vga` | `import metal.vga` | `init`, `clear`, `make_attr`, `putchar_at`, `puts`, `read_char_at`, `read_attr_at`, `draw_progress_bar` |
+| `irq` | `import metal.irq` | `pic_remap`, `pic_eoi`, `pic_mask`, `set_priority`, `register_handler`, `register_handler_safe`, `unregister_handler`, `irq_enter`, `irq_exit`, `dispatch` |
+| `gpio` | `import metal.gpio` | `gpio_init`, `pin_mode`, `pin_pull`, `digital_write`, `digital_read`, `pin_enable_interrupt_ext`, `pin_disable_interrupt_ext`, `pin_pulse_in`, `pin_pulse_out` |
 | `condvar` | `import std.condvar` | `create`, `wait`, `notify`, `notify_all`, `create_barrier`, `create_semaphore`, `acquire` |
 | `debug` | `import std.debug` | `inspect`, `dump`, `trace`, `assert_msg`, `create_watcher`, `watch`, `time_it`, `memory_snapshot` |
 | `profiler` | `import std.profiler` | `create`, `begin`, `end_section`, `profile`, `report`, `hotspots`, `bench` |
