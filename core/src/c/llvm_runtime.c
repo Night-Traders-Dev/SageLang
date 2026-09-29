@@ -1041,7 +1041,8 @@ SageValue sage_rt_readbytes(SageValue path) {
     if (fseek(f, 0, SEEK_END) == 0) {
         long size = ftell(f);
         fseek(f, 0, SEEK_SET);
-        if (size > 0) {
+        // Security: Bound maximum file read size to 100 MB to prevent resource exhaustion (CWE-400/789)
+        if (size > 0 && size <= 100 * 1024 * 1024) {
             unsigned char* buf = (unsigned char*)malloc((size_t)size);
             if (buf) {
                 size_t read = fread(buf, 1, (size_t)size, f);
@@ -1054,13 +1055,19 @@ SageValue sage_rt_readbytes(SageValue path) {
         fclose(f);
         return arr;
     }
-    // Non-seekable file (e.g., /dev/urandom) — read in chunks until EOF
+    // Non-seekable file (e.g., /dev/urandom) — read in chunks up to 100 MB cap
     unsigned char chunk[4096];
     size_t nread;
+    size_t total_read = 0;
     while ((nread = fread(chunk, 1, sizeof(chunk), f)) > 0) {
+        if (total_read + nread > 100 * 1024 * 1024) {
+            nread = (100 * 1024 * 1024) - total_read;
+        }
         for (size_t i = 0; i < nread; i++) {
             sage_rt_array_push(arr, sage_rt_number((double)chunk[i]));
         }
+        total_read += nread;
+        if (total_read >= 100 * 1024 * 1024) break;
     }
     fclose(f);
     return arr;
@@ -1082,7 +1089,9 @@ SageValue sage_rt_load_weights(SageValue path) {
     fseek(f, 0, SEEK_END);
     long fsize = ftell(f);
     fseek(f, 0, SEEK_SET);
-    char* buf = (char*)malloc(fsize + 1);
+    // Security: Validate file size bounds before allocation (CWE-400/789)
+    if (fsize <= 0 || fsize > 100 * 1024 * 1024) { fclose(f); return sage_rt_nil(); }
+    char* buf = (char*)malloc((size_t)fsize + 1);
     if (!buf) { fclose(f); return sage_rt_nil(); }
     size_t rd = fread(buf, 1, fsize, f);
     fclose(f);
