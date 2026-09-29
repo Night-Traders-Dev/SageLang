@@ -291,9 +291,13 @@ SageValue sage_rt_add(SageValue a, SageValue b) {
     if (a.type == SAGE_NUMBER && b.type == SAGE_NUMBER)
         return sage_rt_number(a.as.number + b.as.number);
     if (a.type == SAGE_STRING && b.type == SAGE_STRING) {
+        // Security: Validate non-NULL pointers (CWE-476)
+        if (!a.as.string || !b.as.string) return sage_rt_nil();
         size_t la = strlen(a.as.string), lb = strlen(b.as.string);
+        // Security: Bounds check for integer overflow (CWE-190) and 100 MB max string size limit (CWE-400/789)
+        if (la > 104857599 || lb > 104857599 || la > 104857599 - lb) return sage_rt_nil();
         char* r = malloc(la + lb + 1);
-        if (!r) { fprintf(stderr, "OOM\n"); abort(); }
+        if (!r) return sage_rt_nil();
         memcpy(r, a.as.string, la);
         memcpy(r + la, b.as.string, lb + 1);
         SageValue sv;
