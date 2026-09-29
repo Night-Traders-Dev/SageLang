@@ -362,16 +362,22 @@ static int emit_name_op(BytecodeCompiler* compiler, BytecodeOp op, Token token) 
            emit_u16(compiler, (uint16_t)index, token.line, token.column);
 }
 
-static int emit_define_function(BytecodeCompiler* compiler, Token token, int function_index) {
+static int emit_define_function_ex(BytecodeCompiler* compiler, Token token, int function_index,
+                                  int is_async) {
     int name_index = add_name_constant(compiler, token.start, token.length);
     if (name_index < 0) return 0;
     if (name_index > 0xffff || function_index > 0xffff) {
         set_error(compiler, "Bytecode function table exceeded 65535 entries.");
         return 0;
     }
-    return emit_op(compiler, BC_OP_DEFINE_FUNCTION, token.line, token.column) &&
+    BytecodeOp op = is_async ? BC_OP_DEFINE_ASYNC_FUNCTION : BC_OP_DEFINE_FUNCTION;
+    return emit_op(compiler, op, token.line, token.column) &&
            emit_u16(compiler, (uint16_t)name_index, token.line, token.column) &&
            emit_u16(compiler, (uint16_t)function_index, token.line, token.column);
+}
+
+static int emit_define_function(BytecodeCompiler* compiler, Token token, int function_index) {
+    return emit_define_function_ex(compiler, token, function_index, 0);
 }
 
 static int emit_create_generator(BytecodeCompiler* compiler, Token token, int function_index) {
@@ -533,7 +539,13 @@ static int stmt_requires_ast_fallback(BytecodeCompiler* compiler, Stmt* stmt) {
         case STMT_PROC:
             return compiler->build_function == NULL;
         case STMT_ASYNC_PROC:
-            return 1;
+            /* An async proc used to be forced down the AST path unconditionally,
+             * which is why bytecode mode could not run one: the binding was an
+             * AST function, so the VM saw a function it had no compiled body for.
+             * It now compiles like any other proc -- the async bit travels in
+             * BC_OP_DEFINE_ASYNC_FUNCTION -- and falls back only when there is no
+             * builder to compile a body with, matching STMT_PROC. */
+            return compiler->build_function == NULL;
         default:
             return 0;
     }
@@ -781,9 +793,15 @@ static int compile_expr(BytecodeCompiler* compiler, Expr* expr) {
                     return 0;
             }
         }
-        case EXPR_AWAIT:
-            set_error(compiler, "await expressions are not compiled to bytecode yet.");
-            return 0;
+          case EXPR_AWAIT: {
+              /* Evaluate the operand, then resolve it. The operand is compiled
+               * first so `await f()` starts f() and leaves its future on the
+               * stack for BC_OP_AWAIT to resolve -- the same order the
+               * tree-walking interpreter uses, where the await expression is
+               * evaluated before it is checked for being a thread handle. */
+              if (!compile_expr(compiler, expr->as.await.expression)) return 0;
+              return emit_op(compiler, BC_OP_AWAIT, 0, 0);
+          }
         case EXPR_SUPER:
             set_error(compiler, "super expressions are not compiled to bytecode yet.");
             return 0;
@@ -908,6 +926,23 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             } else {
                 if (!emit_define_function(compiler, stmt->as.proc.name, function_index)) return 0;
             }
+            if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+            return 1;
+        }
+        case STMT_ASYNC_PROC: {
+            /* An `async proc` used to fall through to the default case here and be
+             * skipped entirely: in bytecode mode the binding never existed, so the
+             * name resolved to nothing and calling it reported an unknown name. It
+             * compiles exactly as a proc does, with the async flag carried in the
+             * opcode so the VM knows to spawn it. */
+            int async_index = -1;
+            if (compiler->build_function == NULL) break;
+            if (!compiler->build_function(compiler->build_function_data, &stmt->as.async_proc,
+                                          compiler->error, compiler->error_size, &async_index))
+                return 0;
+            if (async_index < 0) break;
+            if (!emit_define_function_ex(compiler, stmt->as.async_proc.name, async_index, 1))
+                return 0;
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
             return 1;
         }

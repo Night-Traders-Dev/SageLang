@@ -100,7 +100,22 @@ typedef enum {
     BC_OP_GPU_RESET_FENCE,         // gpu.reset_fence(fence)
     BC_OP_GPU_UPDATE_UNIFORM,      // gpu.update_uniform(handle, data)
     BC_OP_GPU_CMD_PUSH_CONST,      // gpu.cmd_push_constants(cmd, layout, stages, data)
-    BC_OP_GPU_CMD_DISPATCH         // gpu.cmd_dispatch(cmd, gx, gy, gz)
+    BC_OP_GPU_CMD_DISPATCH,        // gpu.cmd_dispatch(cmd, gx, gy, gz)
+    // Async/await. Await takes the value on top of the stack and replaces it
+    // with the resolved result: a spawned future is joined, and anything else is
+    // already its own answer. That mirrors the tree-walking interpreter, where
+    // `await v` returns v untouched unless v is a thread handle -- so
+    // `await 42` is 42, and awaiting the same future twice is stable.
+    BC_OP_AWAIT,                   // await (value on stack) -> resolved value
+    // Identical layout to BC_OP_DEFINE_FUNCTION (name index, function index).
+    // The separate opcode is what carries "this proc is async" into the VM:
+    // val_bytecode_function() clears is_async, so without somewhere to record it
+    // the VM would see an ordinary function and run the body synchronously on
+    // the caller's thread, which is the behaviour of the C backend, not of
+    // async. Plumbing a flag through the shared function-object layout or the
+    // build callback would have changed an API used outside this file; one more
+    // opcode is local to the compiler and the VM.
+    BC_OP_DEFINE_ASYNC_FUNCTION     // define an `async proc` binding
 } BytecodeOp;
 
 typedef enum {

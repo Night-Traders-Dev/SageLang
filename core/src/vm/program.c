@@ -54,6 +54,7 @@ static int vm_opcode_width(int op) {
         case BC_OP_SET_LOCAL:
             return 2;
         case BC_OP_DEFINE_FUNCTION:
+        case BC_OP_DEFINE_ASYNC_FUNCTION:
         case BC_OP_CREATE_GENERATOR:
             return 4;
         case BC_OP_CALL_METHOD:
@@ -128,6 +129,8 @@ static int vm_opcode_width(int op) {
         case BC_OP_GPU_UPDATE_UNIFORM:
         case BC_OP_GPU_CMD_PUSH_CONST:
         case BC_OP_GPU_CMD_DISPATCH:
+        /* await carries no operands: the thing awaited is on the stack. */
+        case BC_OP_AWAIT:
             return 0;
         default:
             return -1;
@@ -193,6 +196,7 @@ static int vm_validate_operands(const BytecodeChunk* chunk, int code_count,
                                             error, error_size);
         case BC_OP_CREATE_GENERATOR:
         case BC_OP_DEFINE_FUNCTION:
+        case BC_OP_DEFINE_ASYNC_FUNCTION:
             if (!vm_validate_name_operand(chunk, operand_pos, code, code_count,
                                           error, error_size) ||
                 operand_pos + 4 > code_count) {
@@ -409,6 +413,9 @@ static int vm_instruction_flow(const BytecodeChunk* chunk, int code_count,
         case BC_OP_BIT_NOT:
         case BC_OP_NOT:
         case BC_OP_TRUTHY:
+        /* await resolves its operand in place: one off, one on. The join
+         * inside can block, which does not change the stack shape. */
+        case BC_OP_AWAIT:
         case BC_OP_YIELD:
             flow->pops = 1;
             flow->pushes = 1;
@@ -455,6 +462,7 @@ static int vm_instruction_flow(const BytecodeChunk* chunk, int code_count,
          case BC_OP_PUSH_ENV:
          case BC_OP_POP_ENV:
          case BC_OP_DEFINE_FUNCTION:
+           case BC_OP_DEFINE_ASYNC_FUNCTION:
          case BC_OP_RETURN:
         case BC_OP_BREAK:
         case BC_OP_CONTINUE:
