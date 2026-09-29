@@ -629,5 +629,5 @@ Evidence:
 - `VERSION` file, `README.md` (Recent Updates for v4.2.8 - v4.2.12).
 - Git commit `962b263`
 Documentation Impact:
-- Replaced remaining `v4.2.4` references with `v4.2.12` (bumping to latest) across `SageLang_Guide.md` and `Baremetal_OSDev_UEFI_Guide.md`.
+- Replaced remaining `v4.2.11` references with `v4.2.12` (bumping to latest) across `SageLang_Guide.md` and `Baremetal_OSDev_UEFI_Guide.md`.
 - Documented the UART0 FIFO address (`0x3FF40000`) and the `.bss` limits (`0x3ffce000-0x3ffe6938`), and explicitly mentioned the compiler reordering of volatile markers.
