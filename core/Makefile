@@ -600,13 +600,17 @@ test: $(TARGET)
 	fi
 	@echo ""
 	@echo "Test 23c: Self-host Codegen ASM Assembled + Run (rv64)"
-	@if command -v gcc >/dev/null 2>&1; then \
+	@if command -v riscv64-linux-gnu-gcc >/dev/null 2>&1 && command -v qemu-riscv64 >/dev/null 2>&1; then \
 		cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/emit_rv64_exec.sage >/dev/null && cd ../.. && \
-		gcc -static -o .tmp/sage_codegen_rv64 /tmp/sage_codegen_rv64.s ../testsuite/compiler/asm_runtime.c -lm && \
-		./.tmp/sage_codegen_rv64 > .tmp/sage_codegen_rv64.out && \
-		diff -u ../testsuite/selfhost/rv64_exec.expected .tmp/sage_codegen_rv64.out && echo "✅ Pass (assembled + ran)" || (echo "❌ Fail"; exit 1); \
+		riscv64-linux-gnu-gcc -static -o .tmp/sage_codegen_rv64 /tmp/sage_codegen_rv64.s ../testsuite/compiler/asm_runtime.c -lm && \
+		qemu-riscv64 ./.tmp/sage_codegen_rv64 > .tmp/sage_codegen_rv64.out && \
+		diff -u ../testsuite/selfhost/rv64_exec.expected .tmp/sage_codegen_rv64.out && echo "✅ Pass (cross-assembled + ran under qemu-riscv64)" || (echo "❌ Fail"; exit 1); \
+	elif command -v riscv64-linux-gnu-as >/dev/null 2>&1; then \
+		cd src/sage && ../../$(TARGET) ../../../testsuite/selfhost/emit_rv64_exec.sage >/dev/null && cd ../.. && \
+		riscv64-linux-gnu-as -o .tmp/sage_codegen_rv64.o /tmp/sage_codegen_rv64.s && \
+		echo "✅ Pass (cross-assembled; executing it needs qemu-riscv64, which is absent)" || (echo "❌ Fail"; exit 1); \
 	else \
-		echo "⏭ Skip (gcc not found)"; \
+		echo "⏭ Skip (no RISC-V toolchain: need riscv64-linux-gnu-gcc + qemu-riscv64, or riscv64-linux-gnu-as)"; \
 	fi
 	@echo ""
 	@echo "Test 23d: Native Codegen Differential (3 backends)"
