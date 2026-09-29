@@ -659,6 +659,12 @@ test: $(TARGET)
 	@./$(TARGET) --emit-kotlin .tmp/kt_import_test.sage -o .tmp/kt_import_test.kt 2>&1 && \
 		grep -q 'S.newInstance' .tmp/kt_import_test.kt && echo "✅ Pass (import resolved)" || (echo "❌ Fail (import unresolved)"; exit 1)
 	@echo ""
+	@echo "Test 32: slice() on Bytes"
+	@./$(TARGET) ../testsuite/compiler/compiler_bytes.sage > .tmp/compiler_bytes.out
+	@diff -u ../testsuite/compiler/compiler_bytes.expected .tmp/compiler_bytes.out && echo "✅ Pass" || (echo "❌ Fail"; exit 1)
+	@# Interpreted only: the C backend has no bytes() constructor, so no Bytes
+	@# program can be compiled. Recorded rather than worked around here.
+	@echo ""
 	@echo "Test 26: Formatter"
 	@printf "let   x=1\nlet y =  2\n" > .tmp/fmt_test.sage
 	@./$(TARGET) fmt .tmp/fmt_test.sage && echo "✅ Pass (fmt ran)" || (echo "❌ Fail (fmt)"; exit 1)
