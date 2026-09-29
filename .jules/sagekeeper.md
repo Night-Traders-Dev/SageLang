@@ -626,7 +626,7 @@ Documentation Impact:
 Discovery:
 Addressed documentation sync for v4.2.12 updates missed in the guide.
 Evidence:
-- `VERSION` file, `README.md` (Recent Updates for v4.2.8 - v4.2.11).
+- `VERSION` file, `README.md` (Recent Updates for v4.2.8 - v4.2.12).
 - Git commit `962b263`
 Documentation Impact:
 - Replaced remaining `v4.2.4` references with `v4.2.12` (bumping to latest) across `SageLang_Guide.md` and `Baremetal_OSDev_UEFI_Guide.md`.
