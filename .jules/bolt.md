@@ -1,5 +1,5 @@
 ## 2026-09-22 - [Optimized Standard Library Channel Receiving Operations]
-**Learning:** `recv` in `core/lib/std/channel.sage` was shifting elements left one-by-one with an $O(N)$ interpreted loop (`for i in range(len(buf) - 1): push(new_buf, buf[i + 1])`) on every message receive, resulting in $O(N^2)$ quadratic overhead for processing buffered channel messages. Introducing a `head` offset tracker (`ch["head"]`) and compacting the buffer with native `slice()` only when empty or half-consumed reduced time to receive 5,000 items from ~10.4s to ~0.026s (~390x speedup).
+**Learning:** `recv` in `core/lib/std/channel.sage` was shifting elements left one-by-one with an $O(N)$ interpreted loop (`for i in range(len(buf) - 1): push(new_buf, buf[i + 1])`) on every message receive, resulting in $O(N^2)$ quadratic overhead for processing buffered channel messages. Introducing a `head` offset tracker (`ch["head"]`) and compacting the buffer with native `slice()` only when empty or half-consumed reduced time to receive 5,000 items from ~10.4s to ~0.026s (~400x speedup).
 **Action:** Use a head offset index for FIFO queue/channel implementations in SageLang libraries instead of shifting array elements on every read operation, compacting via native `slice()` periodically.
 
 ## 2026-09-21 - [Optimized Standard Library Database Sorting Operations]
