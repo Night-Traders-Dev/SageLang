@@ -3621,6 +3621,67 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     free(callee_name);
     return sb_take(&sb);
   }
+  if (strcmp(callee_name, "bytes") == 0 && call->arg_count == 1) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_bytes_new(%s)", a0);
+    free(a0);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "bytes_len") == 0 && call->arg_count == 1) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_bytes_len(%s)", a0);
+    free(a0);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "bytes_get") == 0 && call->arg_count == 2) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_bytes_get(%s, %s)", a0, a1);
+    free(a0);
+    free(a1);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "bytes_set") == 0 && call->arg_count == 3) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    char *a2 = emit_expr(compiler, call->args[2]);
+    sb_appendf(&sb, "sage_bytes_set(%s, %s, %s)", a0, a1, a2);
+    free(a0);
+    free(a1);
+    free(a2);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "bytes_push") == 0 && call->arg_count == 2) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_bytes_push(%s, %s)", a0, a1);
+    free(a0);
+    free(a1);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "bytes_slice") == 0 && call->arg_count == 3) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    char *a2 = emit_expr(compiler, call->args[2]);
+    sb_appendf(&sb, "sage_bytes_slice(%s, %s, %s)", a0, a1, a2);
+    free(a0);
+    free(a1);
+    free(a2);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "bytes_to_string") == 0 && call->arg_count == 1) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_bytes_to_string(%s)", a0);
+    free(a0);
+    free(callee_name);
+    return sb_take(&sb);
+  }
   if (strcmp(callee_name, "startswith") == 0 && call->arg_count == 2) {
     char *a = emit_expr(compiler, call->args[0]);
     char *b = emit_expr(compiler, call->args[1]);
@@ -6650,6 +6711,95 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
 
   // chr, ord, type builtins
   fputs(
+      "/* ---- Bytes builtins ----\n"
+      " *\n"
+      " * The interpreter and the bytecode backend both provide these; the native\n"
+      " * backend emitted none of them, so any program that touched a Bytes failed to\n"
+      " * compile with \"unknown name 'bytes' in compiled code\". SageFS hit exactly\n"
+      " * that: sagemake falls back to the SageVM backend because mkfs.sage indexes a\n"
+      " * Bytes, so the shipped binary and the bytecode backend the tests exercise were\n"
+      " * two different toolchains.\n"
+      " *\n"
+      " * Bounds are checked and an out-of-range index returns nil, matching the\n"
+      " * interpreter rather than inventing a second contract for compiled code.\n"
+      " */\n"
+      "static SageValue sage_bytes_new(SageValue n) {\n"
+      "    if (n.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    double raw = n.as.number;\n"
+      "    if (!(raw >= 0.0) || raw != (double)(long long)raw) return sage_nil();\n"
+      "    long len = (long long)raw;\n"
+      "    if (len > 268435456L) return sage_nil();\n"
+      "    SageBytes* b = (SageBytes*)malloc(sizeof(SageBytes));\n"
+      "    if (!b) return sage_nil();\n"
+      "    size_t alloc = len > 0 ? (size_t)len : 1;\n"
+      "    b->data = (unsigned char*)malloc(alloc);\n"
+      "    if (!b->data) { free(b); return sage_nil(); }\n"
+      "    memset(b->data, 0, alloc);\n"
+      "    b->count = (int)len;\n"
+      "    SageValue v; v.type = SAGE_TAG_BYTES; v.as.bytes = b; return v;\n"
+      "}\n"
+      "static SageValue sage_bytes_len(SageValue v) {\n"
+      "    if (v.type != SAGE_TAG_BYTES) return sage_nil();\n"
+      "    return sage_number((double)v.as.bytes->count);\n"
+      "}\n"
+      "static SageValue sage_bytes_get(SageValue v, SageValue i) {\n"
+      "    if (v.type != SAGE_TAG_BYTES || i.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    double raw = i.as.number;\n"
+      "    if (!(raw >= 0.0) || raw != (double)(long long)raw) return sage_nil();\n"
+      "    long idx = (long long)raw;\n"
+      "    if (idx < 0 || idx >= (long)v.as.bytes->count) return sage_nil();\n"
+      "    return sage_number((double)v.as.bytes->data[idx]);\n"
+      "}\n"
+      "static SageValue sage_bytes_set(SageValue v, SageValue i, SageValue n) {\n"
+      "    if (v.type != SAGE_TAG_BYTES || i.type != SAGE_TAG_NUMBER ||\n"
+      "        n.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    double raw = i.as.number;\n"
+      "    if (!(raw >= 0.0) || raw != (double)(long long)raw) return sage_nil();\n"
+      "    long idx = (long long)raw;\n"
+      "    if (idx < 0 || idx >= (long)v.as.bytes->count) return sage_nil();\n"
+      "    v.as.bytes->data[idx] = (unsigned char)n.as.number;\n"
+      "    return sage_bool(1);\n"
+      "}\n"
+      "static SageValue sage_bytes_push(SageValue v, SageValue n) {\n"
+      "    if (v.type != SAGE_TAG_BYTES || n.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    SageBytes* b = v.as.bytes;\n"
+      "    if (b->count >= 268435455) return sage_nil();\n"
+      "    unsigned char* grown = (unsigned char*)realloc(b->data, (size_t)b->count + 1);\n"
+      "    if (!grown) return sage_nil();\n"
+      "    b->data = grown;\n"
+      "    b->data[b->count] = (unsigned char)n.as.number;\n"
+      "    b->count = b->count + 1;\n"
+      "    return sage_nil();\n"
+      "}\n"
+      "static SageValue sage_bytes_slice(SageValue v, SageValue s, SageValue e) {\n"
+      "    if (v.type != SAGE_TAG_BYTES || s.type != SAGE_TAG_NUMBER ||\n"
+      "        e.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    double rs = s.as.number, re = e.as.number;\n"
+      "    if (rs != (double)(long long)rs || re != (double)(long long)re) return sage_nil();\n"
+      "    long a = (long long)rs, b = (long long)re;\n"
+      "    if (a < 0) a = 0;\n"
+      "    if (b > (long)v.as.bytes->count) b = (long)v.as.bytes->count;\n"
+      "    SageBytes* out = (SageBytes*)malloc(sizeof(SageBytes));\n"
+      "    if (!out) return sage_nil();\n"
+      "    size_t alloc = b > a ? (size_t)(b - a) : 1;\n"
+      "    out->data = (unsigned char*)malloc(alloc);\n"
+      "    if (!out->data) { free(out); return sage_nil(); }\n"
+      "    if (b > a) memcpy(out->data, v.as.bytes->data + a, (size_t)(b - a));\n"
+      "    out->count = (int)(b > a ? b - a : 0);\n"
+      "    SageValue r; r.type = SAGE_TAG_BYTES; r.as.bytes = out; return r;\n"
+      "}\n"
+      "static SageValue sage_bytes_to_string(SageValue v) {\n"
+      "    if (v.type != SAGE_TAG_BYTES) return sage_nil();\n"
+      "    size_t n = 0;\n"
+      "    while (n < (size_t)v.as.bytes->count && v.as.bytes->data[n] != 0) n++;\n"
+      "    char* s = (char*)malloc(n + 1);\n"
+      "    if (!s) return sage_nil();\n"
+      "    memcpy(s, v.as.bytes->data, n);\n"
+      "    s[n] = 0;\n"
+      "    SageValue r = sage_string(s);\n"
+      "    free(s);\n"
+      "    return r;\n"
+      "}\n"
       "static SageValue sage_chr(SageValue v) {\n"
       "    if (v.type != SAGE_TAG_NUMBER) return sage_nil();\n"
       "    char buf[2] = { (char)(int)v.as.number, 0 };\n"
@@ -6743,6 +6893,12 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        int i = (int)k.as.number;\n"
         "        if (i >= 0 && i < c.as.array->count) c.as.array->elements[i] "
         "= v;\n"
+        "        return;\n"
+        "    }\n"
+        "    if (c.type == SAGE_TAG_BYTES && k.type == SAGE_TAG_NUMBER) {\n"
+        "        int i = (int)k.as.number;\n"
+        "        if (i >= 0 && i < c.as.bytes->count && v.type == SAGE_TAG_NUMBER)\n"
+        "            c.as.bytes->data[i] = (unsigned char)v.as.number;\n"
         "        return;\n"
         "    }\n"
         "    if (c.type == SAGE_TAG_DICT && k.type == SAGE_TAG_STRING) {\n"
