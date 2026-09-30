@@ -1,3 +1,7 @@
+## 2026-09-22 - [Optimized Standard Library Channel Receiving Operations]
+**Learning:** `recv` in `core/lib/std/channel.sage` was shifting elements left one-by-one with an $O(N)$ interpreted loop (`for i in range(len(buf) - 1): push(new_buf, buf[i + 1])`) on every message receive, resulting in $O(N^2)$ quadratic overhead for processing buffered channel messages. Introducing a `head` offset tracker (`ch["head"]`) and compacting the buffer with native `slice()` only when empty or half-consumed reduced time to receive 5,000 items from ~10.4s to ~0.026s (~390x speedup).
+**Action:** Use a head offset index for FIFO queue/channel implementations in SageLang libraries instead of shifting array elements on every read operation, compacting via native `slice()` periodically.
+
 ## 2026-09-21 - [Optimized Standard Library Database Sorting Operations]
 **Learning:** `order_by` and `order_by_desc` in `core/lib/std/db.sage` were implemented using an $O(N^2)$ insertion sort algorithm and manual element-by-element array reversal. Replacing insertion sort with an $O(N \log N)$ stable merge sort algorithm using native `slice()` extractions and array `push()`, combined with native C built-in `array_reverse()` for descending order, reduced execution time for 1,000 rows from 13.66s to 376ms (~36.3x speedup for `order_by` and ~40.2x speedup for `order_by_desc`).
 **Action:** Use $O(N \log N)$ merge sort with native `slice()` extractions for collection sorting in SageLang libraries and delegate array reversal to native C `array_reverse()`.
