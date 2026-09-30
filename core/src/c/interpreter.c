@@ -3182,8 +3182,8 @@ void init_stdlib(Env* env) {
     env_define_const(env, "mem_alloc", 9, val_native(mem_alloc_native));
     env_define_const(env, "mem_free", 8, val_native(mem_free_native));
     env_define_const(env, "mem_read", 8, val_native(mem_read_native));
-    env_define_const(env, "mem_copy_from_ptr", 18, val_native(mem_copy_from_ptr_native));
-    env_define_const(env, "mem_copy_to_ptr", 16, val_native(mem_copy_to_ptr_native));
+    env_define_const(env, "mem_copy_from_ptr", sizeof("mem_copy_from_ptr") - 1, val_native(mem_copy_from_ptr_native));
+    env_define_const(env, "mem_copy_to_ptr", sizeof("mem_copy_to_ptr") - 1, val_native(mem_copy_to_ptr_native));
     env_define_const(env, "mem_write", 9, val_native(mem_write_native));
     env_define_const(env, "mem_size", 8, val_native(mem_size_native));
     env_define_const(env, "addressof", 9, val_native(addressof_native));
