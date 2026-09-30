@@ -2476,6 +2476,22 @@ static void append_call_argument(Compiler *compiler, StringBuffer *sb,
   sb_append(sb, "sage_nil()");
 }
 
+  /* Modules the native backend implements as flat builtins. `ffi.open(x)` is the
+   * same builtin as `ffi_open(x)`; without this the dotted spelling compiled to
+   * sage_call_any(ffi, ...) and died at runtime with
+   *   no __class__ on instance (method=open class_val_type=0)
+   * instead of reporting anything at compile time. Only these namespaces are
+   * flattened, so an ordinary `obj.method()` on a dict or class still reaches the
+   * generic method-call path. */
+  static int native_builtin_namespace(const char* name) {
+    static const char* known[] = {
+        "ffi", "mem", "io", "sys", "struct", "gc", "ptr", "dict", "string",
+        "file", "time", "math", "os", "json", "net", "async", "vm", NULL};
+    for (int i = 0; known[i] != NULL; i++)
+      if (strcmp(name, known[i]) == 0) return 1;
+    return 0;
+  }
+
 static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
   /* Super call: super.method(args) */
   if (call->callee->type == EXPR_SUPER) {
@@ -2789,7 +2805,27 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     return sb_take(&msb);
   }
 
-  if (call->callee->type != EXPR_VARIABLE) {
+  /* `ffi.open("libc.so.6")` arrives here as EXPR_GET(object=Variable("ffi"),
+   * property="open"). Rewrite it to the flat builtin name and let the ordinary
+   * rules below handle it, including their arity checks. */
+  char *flattened_name = NULL;
+  if (call->callee->type == EXPR_GET) {
+    Expr *obj = call->callee->as.get.object;
+    if (obj != NULL && obj->type == EXPR_VARIABLE) {
+      char *objname = token_to_string(obj->as.variable.name);
+      char *member = token_to_string(call->callee->as.get.property);
+      if (objname != NULL && member != NULL && native_builtin_namespace(objname)) {
+        size_t n = strlen(objname) + strlen(member) + 2;
+        flattened_name = (char*)malloc(n);
+        if (flattened_name != NULL)
+          snprintf(flattened_name, n, "%s_%s", objname, member);
+      }
+      free(objname);
+      free(member);
+    }
+  }
+
+  if (flattened_name == NULL && call->callee->type != EXPR_VARIABLE) {
     char *callee_expr = emit_expr(compiler, call->callee);
     StringBuffer dsb;
     sb_init(&dsb);
@@ -2806,7 +2842,8 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     return sb_take(&dsb);
   }
 
-  char *callee_name = token_to_string(call->callee->as.variable.name);
+  char *callee_name = flattened_name != NULL ? flattened_name
+                                     : token_to_string(call->callee->as.variable.name);
   StringBuffer sb;
   sb_init(&sb);
 
