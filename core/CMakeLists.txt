@@ -335,7 +335,7 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
     )
 
     # Link math, pthread, dl, and optional GPU libraries
-    target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
+    target_link_libraries(sage m dl ffi pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
     
     # Suppress strict build errors for clobbered and overflow warnings
     target_compile_options(sage PRIVATE -Wno-error=clobbered -Wno-error=stringop-overflow)
@@ -354,7 +354,7 @@ if(NOT BUILD_PICO AND NOT BUILD_SAGE)
         target_compile_definitions(sage-lsp PRIVATE
             SAGE_LIB_DIR="${SAGE_LIB_DIR_VALUE}"
         )
-        target_link_libraries(sage-lsp m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
+        target_link_libraries(sage-lsp m dl ffi pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
         message(STATUS "Building LSP server: sage-lsp")
     endif()
 
@@ -381,7 +381,7 @@ if(BUILD_SAGE AND NOT BUILD_PICO)
         SAGE_LIB_DIR="${SAGE_LIB_DIR_VALUE}"
     )
 
-    target_link_libraries(sage m dl pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
+    target_link_libraries(sage m dl ffi pthread ${CURL_LIBRARIES} ${OPENSSL_LIBRARIES} ${VULKAN_LIBRARIES} ${GLFW_LIBRARIES})
 
     # Custom target: run a .sage file through the self-hosted interpreter
     # Usage: cmake --build build -- sage_boot SAGE_FILE=path/to/file.sage

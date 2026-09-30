@@ -35,7 +35,7 @@ CFLAGS = -std=c11 -Wall -Wextra -Wpedantic -O2 -D_POSIX_C_SOURCE=200809L -DSAGE_
 CFLAGS += $(CFLAGS_EXTRA)
 # Platform-conditional linking: pthread only on desktop (not RP2040)
 ifndef PICO_BUILD
-LDFLAGS = -lm -lpthread -ldl
+LDFLAGS = -lm -lpthread -ldl -lffi
 ifndef SAGE_NO_NET
 LDFLAGS += -lcurl -lssl -lcrypto
 endif
