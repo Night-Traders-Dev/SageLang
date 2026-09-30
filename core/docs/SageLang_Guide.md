@@ -1679,9 +1679,9 @@ The C-hosted `sage` binary now supports several runtime selections:
 
 **What still bridges or stays unsupported**:
 
-- In hybrid `--runtime bytecode` mode: class definitions, module imports, exception handling (try/catch/raise), defer, match, yield, and async procs fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. Opcodes are defined for future native support (`BC_OP_CLASS`, `BC_OP_IMPORT`, `BC_OP_SETUP_TRY`, `BC_OP_RAISE`, etc.).
-- In strict `--emit-vm` mode: these constructs fail compilation instead of bridging.
-- `EXPR_AWAIT` is not supported in either mode.
+- In hybrid `--runtime bytecode` mode: class definitions, module imports, exception handling (try/catch/raise), defer, match, and yield fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. Opcodes are defined for future native support (`BC_OP_CLASS`, `BC_OP_IMPORT`, `BC_OP_SETUP_TRY`, `BC_OP_RAISE`, etc.). Compiled `async proc` procedure bodies execute natively on dedicated worker threads in the bytecode VM engine.
+- In strict `--emit-vm` mode: bridged AST constructs fail compilation instead of bridging.
+- `EXPR_AWAIT` is supported in bytecode execution.
 
 **Security**: The VM validates all constant pool accesses (`VM_CHECK_CONST`) and AST statement indices (`VM_CHECK_AST`) to prevent buffer overflow from malformed bytecode. Stack depth is bounded at 1024 entries. All memory allocation uses OOM-safe wrappers.
 
@@ -2862,7 +2862,7 @@ print r1 + r2  # 10
 #### How It Works
 
 1. `async proc` is parsed as `STMT_ASYNC_PROC` and sets `is_async = 1` on the `FunctionValue`
-2. When called, the interpreter pre-evaluates arguments and spawns a thread via `thread_spawn_native`
+2. When called (in both AST interpreter and compiled Bytecode VM execution), the runtime pre-evaluates arguments and spawns a background thread via `thread_spawn_native` (in Bytecode VM mode, call arguments are passed across to the worker via stack slots `[callee slot][args]` on `ActiveVm`)
 3. The call returns a `VAL_THREAD` value (a thread handle)
 4. `await` on a `VAL_THREAD` calls `pthread_join` and returns the thread's result value
 

@@ -631,3 +631,16 @@ Evidence:
 Documentation Impact:
 - Replaced remaining `v4.2.11` references with `v4.2.12` (bumping to latest) across `SageLang_Guide.md` and `Baremetal_OSDev_UEFI_Guide.md`.
 - Documented the UART0 FIFO address (`0x3FF40000`) and the `.bss` limits (`0x3ffce000-0x3ffe6938`), and explicitly mentioned the compiler reordering of volatile markers.
+
+2026-09-29 - [Bytecode VM Compiled Async Worker Execution]
+
+Discovery:
+- `BC_OP_CALL` in the Bytecode VM fast path was previously ignoring `is_async` for compiled functions, executing the function body inline on the caller's thread instead of spawning a worker thread.
+- Compiled function parameters are stack slots (`frame->slots` from `vm.stack`). Worker threads receive call arguments via `ActiveVm.call_args` and `call_arg_count`, laying out the frame as `[callee slot][args]` with `frame->slots` past the callee slot to ensure `BC_OP_RETURN` correctly pops the arguments and callee.
+
+Evidence:
+- Git commit `98a513a` (`actually run compiled async bodies on a worker`).
+- `core/src/vm/vm.c` and unit tests `testsuite/unit/31_bytecode/async_vm.sage` and `async_artifact.sage`.
+
+Documentation Impact:
+- Updated Sections 9.1 and 11.2 of `core/docs/SageLang_Guide.md` and `README.md` Recent Updates section to detail worker-thread async execution and stack slot argument layout for compiled functions in the bytecode VM.
