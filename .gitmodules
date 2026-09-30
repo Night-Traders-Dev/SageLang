@@ -1,6 +1,22 @@
 [submodule "core/src/sage/vm-tools"]
 	path = core/src/sage/vm-tools
 	url = https://github.com/Night-Traders-Dev/SageVM.git
+	## Do not recurse into SageVM.
+	##
+	## SageVM carries its own submodule at .deps/SageLang, pointing back here. So
+	## without this, a recursive clone of SageLang walks SageLang -> SageVM ->
+	## SageLang, and the SageLang it lands on is a *second, independent* checkout:
+	## it has its own vm-tools submodule, so the same walk starts again from a
+	## deeper directory each time. SageVM already sets this on its own side (see
+	## its .gitmodules), so the recursion was only ever stopped in one direction
+	## -- the parent of the cycle had no such guard.
+	##
+	## Current git (2.53) detects the cycle on its own and does not hang, so this
+	## is not fixing an infinite loop. It records the intent, keeps the behaviour
+	## on git versions without that detection, and stops a recursive clone
+	## pulling a duplicate SageLang tree that could then diverge from this one
+	## while SageFS builds against whichever copy it happened to find.
+	fetchRecurseSubmodules = false
 [submodule "core/lib/android"]
 	path = core/lib/android
 	url = https://github.com/Night-Traders-Dev/sagelang-lib-android
