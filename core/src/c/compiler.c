@@ -3621,6 +3621,15 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     free(callee_name);
     return sb_take(&sb);
   }
+  /* bytes() with no argument builds an empty buffer. SageFS calls it in
+   * early returns -- `return bytes()` on a missing file or a failed read --
+   * so the zero-argument form is not a corner case, and matching only the
+   * one-argument form reported it as an unknown name. */
+  if (strcmp(callee_name, "bytes") == 0 && call->arg_count == 0) {
+    sb_appendf(&sb, "sage_bytes_new(sage_number(0))");
+    free(callee_name);
+    return sb_take(&sb);
+  }
   if (strcmp(callee_name, "bytes") == 0 && call->arg_count == 1) {
     char *a0 = emit_expr(compiler, call->args[0]);
     sb_appendf(&sb, "sage_bytes_new(%s)", a0);
