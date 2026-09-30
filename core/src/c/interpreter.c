@@ -2042,6 +2042,50 @@ static Value mem_free_native(int argCount, Value* args) {
 
 // mem_read(ptr, offset, type) -> value
 // type: "byte", "int", "double", "string"
+/* Bulk copies between a mem_alloc buffer and a Bytes: one memcpy instead of one
+ * interpreted mem_read/mem_write per byte, so a multi-megabyte transfer neither
+ * trips the loop-iteration cap nor spends its time crossing the FFI boundary. */
+static Value mem_copy_common(int argCount, Value* args, int into_bytes) {
+    if (sandbox_denied("raw_memory")) return val_nil();
+    if (argCount != 3 || !IS_POINTER(args[0]) || !IS_BYTES(args[1]) ||
+        !IS_NUMBER(args[2])) {
+        fprintf(stderr, "mem_copy_%s() expects (pointer, bytes, count).\n",
+                into_bytes ? "from_ptr" : "to_ptr");
+        return val_nil();
+    }
+    PointerValue* p = AS_POINTER(args[0]);
+    BytesValue* b = AS_BYTES(args[1]);
+    long long n = 0;
+    if (!p->ptr || !b || !finite_integer(AS_NUMBER(args[2]), &n) || n < 0) {
+        fprintf(stderr, "mem_copy_%s(): null pointer, bad bytes, or bad count.\n",
+                into_bytes ? "from_ptr" : "to_ptr");
+        return val_nil();
+    }
+    if ((size_t)n > (size_t)b->length) {
+        fprintf(stderr, "mem_copy_%s(): count %lld exceeds bytes length %d.\n",
+                into_bytes ? "from_ptr" : "to_ptr", n, b->length);
+        return val_nil();
+    }
+    if (!pointer_range_valid(p, 0, (size_t)n)) {
+        fprintf(stderr, "mem_copy_%s(): pointer range is not owned or is out of bounds.\n",
+                into_bytes ? "from_ptr" : "to_ptr");
+        return val_nil();
+    }
+    if (n > 0) {
+        if (into_bytes) memcpy(b->data, p->ptr, (size_t)n);
+        else memcpy(p->ptr, b->data, (size_t)n);
+    }
+    return val_number((double)n);
+}
+
+static Value mem_copy_from_ptr_native(int argCount, Value* args) {
+    return mem_copy_common(argCount, args, 1);
+}
+
+static Value mem_copy_to_ptr_native(int argCount, Value* args) {
+    return mem_copy_common(argCount, args, 0);
+}
+
 static Value mem_read_native(int argCount, Value* args) {
     if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 3 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1]) || !IS_STRING(args[2])) {
@@ -3138,6 +3182,8 @@ void init_stdlib(Env* env) {
     env_define_const(env, "mem_alloc", 9, val_native(mem_alloc_native));
     env_define_const(env, "mem_free", 8, val_native(mem_free_native));
     env_define_const(env, "mem_read", 8, val_native(mem_read_native));
+    env_define_const(env, "mem_copy_from_ptr", 18, val_native(mem_copy_from_ptr_native));
+    env_define_const(env, "mem_copy_to_ptr", 16, val_native(mem_copy_to_ptr_native));
     env_define_const(env, "mem_write", 9, val_native(mem_write_native));
     env_define_const(env, "mem_size", 8, val_native(mem_size_native));
     env_define_const(env, "addressof", 9, val_native(addressof_native));

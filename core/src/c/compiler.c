@@ -714,6 +714,7 @@ static const char *find_name_suggestion(Compiler *compiler, const char *name) {
       "tonumber",    "dict_keys",  "dict_values", "dict_has",   "dict_delete",
       "upper",       "lower",      "strip",       "split",      "join",
       "replace",     "mem_alloc",  "mem_free",    "mem_read",   "mem_write",
+        "mem_copy_from_ptr", "mem_copy_to_ptr",
       "mem_size",    "struct_def", "struct_new",  "struct_get", "struct_set",
       "struct_size", "clock",      "input",       "slice",      "asm_arch",
       "ffi_open",    "ffi_close",  "ffi_call",    "ffi_sym",    "ffi_sym_addr",
@@ -3353,6 +3354,18 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
     return sb_take(&sb);
   }
 
+  if ((strcmp(callee_name, "mem_copy_from_ptr") == 0 ||
+       strcmp(callee_name, "mem_copy_to_ptr") == 0) && call->arg_count == 3) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    char *a2 = emit_expr(compiler, call->args[2]);
+    sb_appendf(&sb, "sage_%s(%s, %s, %s)", callee_name, a0, a1, a2);
+    free(a0);
+    free(a1);
+    free(a2);
+    free(callee_name);
+    return sb_take(&sb);
+  }
   if (strcmp(callee_name, "mem_read") == 0) {
     if (call->arg_count != 3) {
       compiler_builtin_arity_error(
@@ -7174,6 +7187,32 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    free(sp);\n"
         "    return sage_nil();\n"
         "}\n"
+      "static SageValue sage_mem_copy_from_ptr(SageValue ptr_val, SageValue buf_val, SageValue n_val) {\n"
+      "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
+      "    if (sp == NULL || sp->ptr == NULL || buf_val.type != SAGE_TAG_BYTES ||\n"
+      "        n_val.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    double raw = n_val.as.number;\n"
+      "    if (!(raw >= 0.0) || raw != (double)(long long)raw) return sage_nil();\n"
+      "    long n = (long long)raw;\n"
+      "    SageBytes* b = buf_val.as.bytes;\n"
+      "    if (b == NULL || n > (long)b->count) return sage_nil();\n"
+      "    if (!sage_mem_range_valid(sp, 0, (size_t)n)) return sage_nil();\n"
+      "    if (n > 0) memcpy(b->data, sp->ptr, (size_t)n);\n"
+      "    return sage_number((double)n);\n"
+      "}\n"
+      "static SageValue sage_mem_copy_to_ptr(SageValue ptr_val, SageValue buf_val, SageValue n_val) {\n"
+      "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
+      "    if (sp == NULL || sp->ptr == NULL || buf_val.type != SAGE_TAG_BYTES ||\n"
+      "        n_val.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    double raw = n_val.as.number;\n"
+      "    if (!(raw >= 0.0) || raw != (double)(long long)raw) return sage_nil();\n"
+      "    long n = (long long)raw;\n"
+      "    SageBytes* b = buf_val.as.bytes;\n"
+      "    if (b == NULL || n > (long)b->count) return sage_nil();\n"
+      "    if (!sage_mem_range_valid(sp, 0, (size_t)n)) return sage_nil();\n"
+      "    if (n > 0) memcpy(sp->ptr, b->data, (size_t)n);\n"
+      "    return sage_number((double)n);\n"
+      "}\n"
         "\n",
         out);
 

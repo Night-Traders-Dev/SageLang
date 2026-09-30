@@ -786,6 +786,14 @@ proc cc_emit_call_expr(cc, call_expr):
             return "sage_mem_free(" + cc_emit_expr(cc, call_expr.args[0]) + ")"
         cc.failed = true
         return "sage_nil()"
+    if name == "mem_copy_from_ptr" or name == "mem_copy_to_ptr":
+        if argc == 3:
+            let a0 = cc_emit_expr(cc, call_expr.args[0])
+            let a1 = cc_emit_expr(cc, call_expr.args[1])
+            let a2 = cc_emit_expr(cc, call_expr.args[2])
+            return "sage_" + name + "(" + a0 + ", " + a1 + ", " + a2 + ")"
+        cc.failed = true
+        return "sage_nil()"
     if name == "mem_read":
         if argc == 3:
             let a0 = cc_emit_expr(cc, call_expr.args[0])
