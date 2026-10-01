@@ -43,6 +43,9 @@ typedef struct FunctionInfo {
   Stmt *stmt;
   ProcStmt *proc;
   char *c_name;
+  /* Owning module, NULL for the main file. Module procs share a flat name space
+     at source level, so the module is needed to find this body's ProcEntry. */
+  char *module_name;
   int is_nested;
   int is_method;
   StringList locals;
@@ -59,6 +62,11 @@ typedef struct FunctionInfo {
 typedef struct ProcEntry {
   char *sage_name;
   char *c_name;
+  /* Module that owns this proc, or NULL for the main file. Module procs are
+     looked up per module (see find_module_proc_entry); sharing one flat table
+     across modules meant a second module defining `helper` resolved to the first
+     module's c_name, and both bodies were then emitted under that one symbol. */
+  char *module_name;
   int param_count;
   Expr **defaults;
   int required_count;
@@ -67,6 +75,7 @@ typedef struct ProcEntry {
   int adapter_emitted;
   struct ProcEntry *next;
 } ProcEntry;
+
 
 typedef struct ClassInfo {
   char *class_name;
@@ -122,6 +131,21 @@ typedef struct {
   NameEntry *gc_global_return_slot;
   NameEntry *gc_global_match_slot;
 } Compiler;
+
+static ProcEntry *find_module_proc_entry(Compiler *compiler,
+                                         const char *module_name,
+                                         const char *sage_name) {
+  for (ProcEntry *proc = compiler->procs; proc != NULL; proc = proc->next) {
+    const char *owner = proc->module_name;
+    int same_owner = (owner == NULL && module_name == NULL) ||
+                     (owner != NULL && module_name != NULL &&
+                      strcmp(owner, module_name) == 0);
+    if (same_owner && strcmp(proc->sage_name, sage_name) == 0) {
+      return proc;
+    }
+  }
+  return NULL;
+}
 
 int g_sage_verbose = 0;
 
@@ -610,15 +634,18 @@ static NameEntry *add_internal_slot(Compiler *compiler, NameEntry **list,
   return entry;
 }
 
-static ProcEntry *add_proc_entry(Compiler *compiler, const char *sage_name,
-                                 int param_count, int required_count,
-                                 Expr **defaults, const Token *token) {
+static ProcEntry *add_proc_entry_in_module(Compiler *compiler,
+                                          const char *module_name,
+                                          const char *sage_name,
+                                          int param_count, int required_count,
+                                          Expr **defaults, const Token *token) {
   (void)token;
-  ProcEntry *existing = find_proc_entry(compiler->procs, sage_name);
+  ProcEntry *existing =
+      find_module_proc_entry(compiler, module_name, sage_name);
   if (existing != NULL) {
-    /* Silently keep the first definition (module namespace collision is
-       expected when importing multiple modules that define common names like
-       'create') */
+    /* Same module imported twice, or a proc defined twice in one file. Keep the
+       first definition. Two *different* modules defining the same name are not a
+       collision and each gets its own entry. */
     return existing;
   }
 
@@ -629,7 +656,18 @@ static ProcEntry *add_proc_entry(Compiler *compiler, const char *sage_name,
   }
 
   entry->sage_name = str_dup(sage_name);
-  entry->c_name = make_unique_name(compiler, "sage_fn", sage_name);
+  /* Include the module in the symbol so two modules defining the same proc name
+     cannot collide even if the counters line up. */
+  if (module_name != NULL) {
+    size_t n = strlen("sage_fn_") + strlen(module_name) + strlen(sage_name) + 4;
+    char *buf = malloc(n);
+    snprintf(buf, n, "sage_fn_%s_%s_%d", module_name, sage_name,
+             compiler->next_unique_id++);
+    entry->c_name = buf;
+  } else {
+    entry->c_name = make_unique_name(compiler, "sage_fn", sage_name);
+  }
+  entry->module_name = module_name ? str_dup(module_name) : NULL;
   entry->param_count = param_count;
   entry->defaults = defaults;
   entry->required_count = required_count;
@@ -1511,9 +1549,9 @@ mod->ast = ast;
   for (Stmt *s = ast; s != NULL; s = s->next) {
     if (s->type == STMT_PROC || s->type == STMT_ASYNC_PROC) {
       char *name = token_to_string(s->as.proc.name);
-      add_proc_entry(compiler, name, s->as.proc.param_count,
-                     s->as.proc.required_count, s->as.proc.defaults,
-                     &s->as.proc.name);
+      add_proc_entry_in_module(compiler, import->module_name, name,
+                              s->as.proc.param_count, s->as.proc.required_count,
+                              s->as.proc.defaults, &s->as.proc.name);
       free(name);
     }
     if (s->type == STMT_CLASS) {
@@ -1552,9 +1590,10 @@ static void collect_top_level_symbols(Compiler *compiler, Stmt *program) {
   for (Stmt *stmt = program; stmt != NULL; stmt = stmt->next) {
     if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
       char *name = token_to_string(stmt->as.proc.name);
-      add_proc_entry(compiler, name, stmt->as.proc.param_count,
-                     stmt->as.proc.required_count, stmt->as.proc.defaults,
-                     &stmt->as.proc.name);
+      add_proc_entry_in_module(compiler, NULL, name,
+                              stmt->as.proc.param_count,
+                              stmt->as.proc.required_count, stmt->as.proc.defaults,
+                              &stmt->as.proc.name);
       free(name);
     }
     if (stmt->type == STMT_CLASS) {
@@ -1796,7 +1835,8 @@ static void collect_statement_required(Compiler *compiler, FunctionInfo *owner,
 
 static FunctionInfo *create_function_info(Compiler *compiler, Stmt *stmt,
                                           FunctionInfo *parent, int is_nested,
-                                          int is_method) {
+                                          int is_method,
+                                          const char *module_name) {
   FunctionInfo *existing = find_function_info(compiler, stmt);
   if (existing != NULL) {
     return existing;
@@ -1813,6 +1853,8 @@ static FunctionInfo *create_function_info(Compiler *compiler, Stmt *stmt,
   function->is_nested = is_nested;
   function->is_method = is_method;
   function->parent = parent;
+  /* Set before the ProcEntry lookup below, which needs it to find the right one. */
+  function->module_name = module_name ? str_dup(module_name) : NULL;
 
   if (is_nested) {
     char *name = token_to_string(function->proc->name);
@@ -1824,7 +1866,8 @@ static FunctionInfo *create_function_info(Compiler *compiler, Stmt *stmt,
     free(name);
   } else {
     char *name = token_to_string(function->proc->name);
-    ProcEntry *proc = find_proc_entry(compiler->procs, name);
+    ProcEntry *proc =
+        find_module_proc_entry(compiler, function->module_name, name);
     if (proc == NULL) {
       compiler_error_at(compiler, &function->proc->name, NULL,
                         "missing procedure metadata for '%s'", name);
@@ -1869,7 +1912,8 @@ static void discover_nested_functions(Compiler *compiler, FunctionInfo *parent,
   while (stmt != NULL) {
     if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
       FunctionInfo *child =
-          create_function_info(compiler, stmt, parent, 1, 0);
+          create_function_info(compiler, stmt, parent, 1, 0,
+                              parent ? parent->module_name : NULL);
       if (child != NULL) {
         child->next_child = parent->children;
         parent->children = child;
@@ -1972,13 +2016,18 @@ static void discover_root_nested_functions(Compiler *compiler,
 }
 
 static FunctionInfo *create_root_function_info(Compiler *compiler,
-                                                const char *name) {
+                                                const char *name,
+                                                const char *module_name) {
   FunctionInfo *function = calloc(1, sizeof(FunctionInfo));
   if (function == NULL) {
     fprintf(stderr, "Out of memory creating compiler root metadata.\n");
     exit(1);
   }
   function->c_name = str_dup(name);
+  /* Nested procs inside a module body are discovered from this root, so the root
+     carries the module down to them. Without it they looked up their ProcEntry
+     with module_name NULL and failed to find the module's own entry. */
+  function->module_name = module_name ? str_dup(module_name) : NULL;
   for (NameEntry *global = compiler->globals; global != NULL;
        global = global->next) {
     string_list_add(&function->locals, global->sage_name);
@@ -2035,9 +2084,9 @@ static void assign_function_captures(FunctionInfo *function) {
 }
 
 static void build_function_info(Compiler *compiler, Stmt *stmt,
-                                int is_method) {
+                                int is_method, const char *module_name) {
   FunctionInfo *function =
-      create_function_info(compiler, stmt, NULL, 0, is_method);
+      create_function_info(compiler, stmt, NULL, 0, is_method, module_name);
   if (function == NULL) {
     return;
   }
@@ -2054,11 +2103,12 @@ static void build_function_infos(Compiler *compiler, Stmt *program) {
     }
     for (Stmt *stmt = module->ast; stmt != NULL; stmt = stmt->next) {
       if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
-        build_function_info(compiler, stmt, 0);
+        build_function_info(compiler, stmt, 0, module->name);
       }
     }
     module->root_function =
-        create_root_function_info(compiler, module->binding_name);
+        create_root_function_info(compiler, module->binding_name,
+                                  module->name);
     discover_root_nested_functions(compiler, module->root_function,
                                    module->ast);
   }
@@ -2068,18 +2118,18 @@ static void build_function_infos(Compiler *compiler, Stmt *program) {
     for (Stmt *method = class_info->methods; method != NULL;
          method = method->next) {
       if (method->type == STMT_PROC) {
-        build_function_info(compiler, method, 1);
+        build_function_info(compiler, method, 1, NULL);
       }
     }
   }
 
   for (Stmt *stmt = program; stmt != NULL; stmt = stmt->next) {
     if (stmt->type == STMT_PROC || stmt->type == STMT_ASYNC_PROC) {
-      build_function_info(compiler, stmt, 0);
+      build_function_info(compiler, stmt, 0, NULL);
     }
   }
 
-  compiler->main_function = create_root_function_info(compiler, "main");
+  compiler->main_function = create_root_function_info(compiler, "main", NULL);
   discover_root_nested_functions(compiler, compiler->main_function, program);
 
   for (FunctionInfo *function = compiler->functions; function != NULL;
@@ -2120,9 +2170,18 @@ static const char *resolve_slot_name(Compiler *compiler,
     return global->c_name;
   }
 
-  ProcEntry *proc = find_proc_entry(compiler->procs, sage_name);
+  /* Main-file procs first, so a local definition shadows a module's. Then any
+     module, preserving the previous behaviour for single-module programs. */
+  ProcEntry *proc = find_module_proc_entry(compiler, NULL, sage_name);
   if (proc != NULL) {
     return proc->c_name;
+  }
+  for (ProcEntry *candidate = compiler->procs; candidate != NULL;
+       candidate = candidate->next) {
+    if (candidate->module_name != NULL &&
+        strcmp(candidate->sage_name, sage_name) == 0) {
+      return candidate->c_name;
+    }
   }
 
   // Search imported modules
@@ -2138,7 +2197,8 @@ static const char *resolve_slot_name(Compiler *compiler,
         char *name = token_to_string(s->as.proc.name);
         if (strcmp(name, sage_name) == 0) {
           free(name);
-          ProcEntry *pe = find_proc_entry(compiler->procs, sage_name);
+          ProcEntry *pe = find_module_proc_entry(compiler, mod->name,
+                                            sage_name);
           if (pe)
             return pe->c_name;
         }
@@ -2169,7 +2229,7 @@ static const char *resolve_symbol_in_module(Compiler *compiler,
       char *sname = token_to_string(s->as.proc.name);
       if (strcmp(sname, name) == 0) {
         free(sname);
-        ProcEntry *pe = find_proc_entry(compiler->procs, name);
+        ProcEntry *pe = find_module_proc_entry(compiler, mod->name, name);
         return pe ? pe->c_name : NULL;
       }
       free(sname);
@@ -2492,358 +2552,37 @@ static void append_call_argument(Compiler *compiler, StringBuffer *sb,
     return 0;
   }
 
-static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
-  /* Super call: super.method(args) */
-  if (call->callee->type == EXPR_SUPER) {
-    if (compiler->current_class == NULL || compiler->current_class->parent_name == NULL) {
-      compiler_error_at(compiler, expr_token(call->callee),
-                        "restructure to avoid 'super' outside a class with a parent",
-                        "'super' can only be used inside a method of a class with a parent");
-      return str_dup("sage_nil()");
-    }
-
-    int arg_offset = 0;
-    if (call->arg_count > 0 && call->args[0]->type == EXPR_VARIABLE) {
-        char* first_arg_name = token_to_string(call->args[0]->as.variable.name);
-        if (strcmp(first_arg_name, "self") == 0) {
-            arg_offset = 1;
-        }
-        free(first_arg_name);
-    }
-
-    char *method_name = token_to_string(call->callee->as.super_expr.method);
-    size_t c_method_len = strlen(compiler->current_class->parent_name) + strlen(method_name) + 32;
-    char *c_method_name = malloc(c_method_len);
-    if (c_method_name == NULL) {
-      fprintf(stderr, "Out of memory allocating method name.\n");
-      exit(1);
-    }
-    snprintf(c_method_name, c_method_len, "sage_method_%s_%s", compiler->current_class->parent_name, method_name);
-    
-    StringBuffer sb;
-    sb_init(&sb);
-    // Inside a method, '_self' is the current instance.
-    sb_appendf(&sb, "%s(_self, %d, (SageValue[]){", 
-               c_method_name, call->arg_count - arg_offset);
-    
-    for (int i = 0; i < call->arg_count - arg_offset; i++) {
-      if (i > 0) sb_append(&sb, ", ");
-      char *arg = emit_expr(compiler, call->args[i + arg_offset]);
-      sb_append(&sb, arg);
-      free(arg);
-    }
-    if (call->arg_count - arg_offset == 0) sb_append(&sb, "sage_nil()");
-    sb_append(&sb, "})");
-    
-    free(method_name);
-    free(c_method_name);
-    return sb_take(&sb);
+/* `ffi.open("libc.so.6")` parses as EXPR_GET(object=Variable("ffi"),
+ * property="open"). Flatten it to the flat builtin name `ffi_open` so the
+ * ordinary builtin rules below handle it. This has to happen before the
+ * method-call branch: that branch matches any EXPR_GET and emits
+ * sage_call_method, which is what produced
+ *   no __class__ on instance (method=close class_val_type=0)
+ * for ffi.close and ffi.sym while ffi.open happened to work. */
+static char *flatten_builtin_call(Compiler *compiler, CallExpr *call) {
+  if (call->callee->type != EXPR_GET) return NULL;
+  Expr *obj = call->callee->as.get.object;
+  if (obj == NULL || obj->type != EXPR_VARIABLE) return NULL;
+  char *objname = token_to_string(obj->as.variable.name);
+  char *member = token_to_string(call->callee->as.get.property);
+  char *out = NULL;
+  if (objname != NULL && member != NULL && native_builtin_namespace(objname)) {
+    size_t n = strlen(objname) + strlen(member) + 2;
+    out = (char*)malloc(n);
+    if (out != NULL)
+      snprintf(out, n, "%s_%s", objname, member);
   }
+  free(objname);
+  free(member);
+  (void)compiler;
+  return out;
+}
 
-  /* Method call: obj.method(args) */
-  if (call->callee->type == EXPR_GET) {
-    char *obj_name = NULL;
-    if (call->callee->as.get.object->type == EXPR_VARIABLE) {
-      obj_name = token_to_string(call->callee->as.get.object->as.variable.name);
-    }
-
-    int is_module = 0;
-    ImportedModule *target_mod = NULL;
-    if (obj_name) {
-      for (ImportedModule *m = compiler->modules; m != NULL; m = m->next) {
-        if (strcmp(m->binding_name, obj_name) == 0) {
-          is_module = 1;
-          target_mod = m;
-          break;
-        }
-      }
-    }
-
-    if (is_module) {
-      char *method_name = token_to_string(call->callee->as.get.property);
-
-      /* Native module special cases */
-      if (strcmp(target_mod->name, "_math") == 0 || strcmp(target_mod->name, "math") == 0) {
-        StringBuffer sb;
-        sb_init(&sb);
-        if (strcmp(method_name, "random") == 0) {
-          if (call->arg_count == 0)
-            sb_append(&sb, "sage_native_random(");
-          else
-            sb_append(&sb, "sage_native_srandom(");
-        } else if (strcmp(method_name, "sin") == 0) sb_append(&sb, "sage_native_sin(");
-        else if (strcmp(method_name, "cos") == 0) sb_append(&sb, "sage_native_cos(");
-        else if (strcmp(method_name, "tan") == 0) sb_append(&sb, "sage_native_tan(");
-        else if (strcmp(method_name, "floor") == 0) sb_append(&sb, "sage_native_floor(");
-        else if (strcmp(method_name, "ceil") == 0) sb_append(&sb, "sage_native_ceil(");
-        else if (strcmp(method_name, "pow") == 0) sb_append(&sb, "sage_native_pow(");
-        else if (strcmp(method_name, "exp") == 0) sb_append(&sb, "sage_native_exp(");
-        else if (strcmp(method_name, "log") == 0) sb_append(&sb, "sage_native_log(");
-        else if (strcmp(method_name, "sqrt") == 0) sb_append(&sb, "sage_native_sqrt(");
-
-        if (sb.len > 0) {
-          for (int i = 0; i < call->arg_count; i++) {
-            if (i > 0) sb_append(&sb, ", ");
-            char *arg = emit_expr(compiler, call->args[i]);
-            sb_append(&sb, arg);
-            free(arg);
-          }
-          sb_append(&sb, ")");
-          free(obj_name);
-          free(method_name);
-          return sb_take(&sb);
-        }
-        free(sb.data);
-      } else if (strcmp(target_mod->name, "thread") == 0 || strcmp(target_mod->name, "_thread") == 0) {
-        StringBuffer sb;
-        sb_init(&sb);
-        if (strcmp(method_name, "mutex") == 0) sb_append(&sb, "sage_native_thread_mutex(");
-        else if (strcmp(method_name, "lock") == 0) sb_append(&sb, "sage_native_thread_lock(");
-        else if (strcmp(method_name, "unlock") == 0) sb_append(&sb, "sage_native_thread_unlock(");
-        else if (strcmp(method_name, "spawn") == 0) sb_append(&sb, "sage_native_thread_spawn(");
-        else if (strcmp(method_name, "sleep") == 0) sb_append(&sb, "sage_native_thread_sleep(");
-        else if (strcmp(method_name, "id") == 0) sb_append(&sb, "sage_native_thread_id(");
-
-        if (sb.len > 0) {
-          for (int i = 0; i < call->arg_count; i++) {
-            if (i > 0) sb_append(&sb, ", ");
-            char *arg = emit_expr(compiler, call->args[i]);
-            sb_append(&sb, arg);
-            free(arg);
-          }
-          sb_append(&sb, ")");
-          free(obj_name);
-          free(method_name);
-          return sb_take(&sb);
-        }
-        free(sb.data);
-      } else if (strcmp(target_mod->name, "io") == 0 || strcmp(target_mod->name, "_io") == 0) {
-        StringBuffer sb;
-        sb_init(&sb);
-        if (strcmp(method_name, "readbytes") == 0) sb_append(&sb, "sage_native_io_readbytes(");
-        else if (strcmp(method_name, "writebytes") == 0) sb_append(&sb, "sage_native_io_writebytes(");
-        else if (strcmp(method_name, "appendbytes") == 0) sb_append(&sb, "sage_native_io_appendbytes(");
-        else if (strcmp(method_name, "readfile") == 0) sb_append(&sb, "sage_native_io_readfile(");
-        else if (strcmp(method_name, "writefile") == 0) sb_append(&sb, "sage_native_io_writefile(");
-
-        if (sb.len > 0) {
-          for (int i = 0; i < call->arg_count; i++) {
-            if (i > 0) sb_append(&sb, ", ");
-            char *arg = emit_expr(compiler, call->args[i]);
-            sb_append(&sb, arg);
-            free(arg);
-          }
-          sb_append(&sb, ")");
-          free(obj_name);
-          free(method_name);
-          return sb_take(&sb);
-        }
-        free(sb.data);
-        } else if (strcmp(target_mod->name, "sys") == 0 || strcmp(target_mod->name, "_sys") == 0) {
-        StringBuffer sb;
-        sb_init(&sb);
-        if (strcmp(method_name, "args") == 0) sb_append(&sb, "sage_native_sys_args(");
-        else if (strcmp(method_name, "getenv") == 0) sb_append(&sb, "sage_native_sys_getenv(");
-        else if (strcmp(method_name, "clock") == 0) sb_append(&sb, "sage_native_sys_clock(");
-        else if (strcmp(method_name, "exec") == 0) sb_append(&sb, "sage_sys_exec(");
-        else if (strcmp(method_name, "shell_exec") == 0) sb_append(&sb, "sage_sys_shell_exec(");
-
-        if (sb.len > 0) {
-          for (int i = 0; i < call->arg_count; i++) {
-            if (i > 0) sb_append(&sb, ", ");
-            char *arg = emit_expr(compiler, call->args[i]);
-            sb_append(&sb, arg);
-            free(arg);
-          }
-          sb_append(&sb, ")");
-          free(obj_name);
-          free(method_name);
-          return sb_take(&sb);
-        }
-        free(sb.data);
-      } else if (strcmp(target_mod->name, "hw") == 0 || strcmp(target_mod->name, "_hw") == 0) {
-        StringBuffer sb;
-        sb_init(&sb);
-        if (strcmp(method_name, "gpio_init") == 0) sb_append(&sb, "sage_native_hw_gpio_init(");
-        else if (strcmp(method_name, "gpio_set_dir") == 0) sb_append(&sb, "sage_native_hw_gpio_set_dir(");
-        else if (strcmp(method_name, "gpio_put") == 0) sb_append(&sb, "sage_native_hw_gpio_put(");
-        else if (strcmp(method_name, "gpio_get") == 0) sb_append(&sb, "sage_native_hw_gpio_get(");
-        else if (strcmp(method_name, "gpio_set_pull") == 0) sb_append(&sb, "sage_native_hw_gpio_set_pull(");
-        else if (strcmp(method_name, "clock_hz") == 0) sb_append(&sb, "sage_native_hw_clock_hz(");
-        else if (strcmp(method_name, "uptime_ms") == 0) sb_append(&sb, "sage_native_hw_uptime_ms(");
-        else if (strcmp(method_name, "delay_ms") == 0) sb_append(&sb, "sage_native_hw_delay_ms(");
-        else if (strcmp(method_name, "delay_us") == 0) sb_append(&sb, "sage_native_hw_delay_us(");
-        else if (strcmp(method_name, "uart_init") == 0) sb_append(&sb, "sage_native_hw_uart_init(");
-        else if (strcmp(method_name, "uart_putc") == 0) sb_append(&sb, "sage_native_hw_uart_putc(");
-        else if (strcmp(method_name, "uart_puts") == 0) sb_append(&sb, "sage_native_hw_uart_puts(");
-        else if (strcmp(method_name, "uart_getc") == 0) sb_append(&sb, "sage_native_hw_uart_getc(");
-        else if (strcmp(method_name, "adc_init") == 0) sb_append(&sb, "sage_native_hw_adc_init(");
-        else if (strcmp(method_name, "adc_read") == 0) sb_append(&sb, "sage_native_hw_adc_read(");
-        else if (strcmp(method_name, "temp_c") == 0) sb_append(&sb, "sage_native_hw_temp_c(");
-        else if (strcmp(method_name, "rgb_set") == 0) sb_append(&sb, "sage_native_hw_rgb_set(");
-        else if (strcmp(method_name, "spi_init") == 0) sb_append(&sb, "sage_native_hw_spi_init(");
-        else if (strcmp(method_name, "spi_write") == 0) sb_append(&sb, "sage_native_hw_spi_write(");
-        else if (strcmp(method_name, "spi_read") == 0) sb_append(&sb, "sage_native_hw_spi_read(");
-        else if (strcmp(method_name, "lcd_fb_init") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_init(");
-        else if (strcmp(method_name, "lcd_fb_pixel") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_pixel(");
-        else if (strcmp(method_name, "lcd_fb_fill") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_fill(");
-        else if (strcmp(method_name, "lcd_fb_flush_bytes") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_flush_bytes(");
-        else if (strcmp(method_name, "deep_sleep_us") == 0) sb_append(&sb, "sage_native_hw_deep_sleep_us(");
-        /* Bootloader primitives. A second-stage loader has to read the
-         * partition table and the app image header out of memory-mapped
-         * flash and then hand control over, and SageLang cannot do either on
-         * its own: mem_read/mem_write are deliberately confined to mem_alloc
-         * regions by sage_mem_range_valid(), so reaching MMIO through them
-         * would mean weakening a memory-safety check. These are the documented
-         * escape hatch instead -- the hw module is "implementation defined per
-         * target" -- and like every other hw.* name they get no-op stubs on
-         * targets that have no flash of their own to jump into. */
-        else if (strcmp(method_name, "flash_read8") == 0) sb_append(&sb, "sage_native_hw_flash_read8(");
-        else if (strcmp(method_name, "flash_read32") == 0) sb_append(&sb, "sage_native_hw_flash_read32(");
-        else if (strcmp(method_name, "jump") == 0) sb_append(&sb, "sage_native_hw_jump(");
-
-        if (sb.len > 0) {
-          for (int i = 0; i < call->arg_count; i++) {
-            if (i > 0) sb_append(&sb, ", ");
-            char *arg = emit_expr(compiler, call->args[i]);
-            sb_append(&sb, arg);
-            free(arg);
-          }
-          sb_append(&sb, ")");
-          free(obj_name);
-          free(method_name);
-          return sb_take(&sb);
-        }
-        free(sb.data);
-      }
-
-      const char *c_name = resolve_symbol_in_module(compiler, target_mod, method_name);
-      if (c_name != NULL) {
-        if (strncmp(c_name, "sage_fn_", 8) == 0) {
-          StringBuffer sb;
-          sb_init(&sb);
-          ProcEntry *pe = find_proc_entry(compiler->procs, method_name);
-          int emit_count = pe != NULL ? pe->param_count : call->arg_count;
-          if (pe != NULL && call->arg_count < pe->required_count) {
-            compiler_error_at(
-                compiler, expr_token(call->callee), NULL,
-                "call to '%s' passes %d argument%s, but the procedure requires %d",
-                method_name, call->arg_count, call->arg_count == 1 ? "" : "s",
-                pe->required_count);
-          }
-          sb_appendf(&sb, "%s(", c_name);
-          for (int i = 0; i < emit_count; i++) {
-            if (i > 0)
-              sb_append(&sb, ", ");
-            append_call_argument(compiler, &sb, call, i,
-                                 pe != NULL ? pe->defaults : NULL,
-                                 emit_count);
-          }
-          sb_append(&sb, ")");
-          free(obj_name);
-          free(method_name);
-          return sb_take(&sb);
-        } else {
-          /* Check if it's a class constructor */
-          ClassInfo *cls = find_class_info(compiler->classes, c_name);
-          if (cls != NULL) {
-            StringBuffer sb;
-            sb_init(&sb);
-            size_t pn_len = cls->parent_name ? strlen(cls->parent_name) : 0;
-            size_t pb_size = pn_len + 4;
-            if (pb_size < 16) pb_size = 16;
-            char* parent_buf = (char*)malloc(pb_size);
-            if (cls->parent_name) {
-              snprintf(parent_buf, pb_size, "\"%s\"", cls->parent_name);
-            } else {
-              strcpy(parent_buf, "NULL");
-            }
-            sb_appendf(&sb, "sage_construct(\"%s\", %s, %d, (SageValue[]){",
-                       cls->class_name, parent_buf, call->arg_count);
-            for (int i = 0; i < call->arg_count; i++) {
-              if (i > 0)
-                sb_append(&sb, ", ");
-              char *arg = emit_expr(compiler, call->args[i]);
-              sb_append(&sb, arg);
-              free(arg);
-            }
-            if (call->arg_count == 0)
-              sb_append(&sb, "sage_nil()");
-            sb_append(&sb, "})");
-            free(parent_buf);
-            free(obj_name);
-            free(method_name);
-            return sb_take(&sb);
-          }
-        }
-      }
-      free(method_name);
-    }
-
-    char *obj = emit_expr(compiler, call->callee->as.get.object);
-    char *method = token_to_string(call->callee->as.get.property);
-    StringBuffer msb;
-    sb_init(&msb);
-    if (call->arg_count == 0) {
-      sb_appendf(&msb, "sage_call_method(%s, \"%s\", 0, NULL)", obj, method);
-    } else {
-      sb_appendf(&msb, "sage_call_method(%s, \"%s\", %d, (SageValue[]){", obj,
-                 method, call->arg_count);
-      for (int i = 0; i < call->arg_count; i++) {
-        if (i > 0)
-          sb_append(&msb, ", ");
-        char *arg = emit_expr(compiler, call->args[i]);
-        sb_append(&msb, arg);
-        free(arg);
-      }
-      sb_append(&msb, "})");
-    }
-    free(obj);
-    free(method);
-    if (obj_name)
-      free(obj_name);
-    return sb_take(&msb);
-  }
-
-  /* `ffi.open("libc.so.6")` arrives here as EXPR_GET(object=Variable("ffi"),
-   * property="open"). Rewrite it to the flat builtin name and let the ordinary
-   * rules below handle it, including their arity checks. */
-  char *flattened_name = NULL;
-  if (call->callee->type == EXPR_GET) {
-    Expr *obj = call->callee->as.get.object;
-    if (obj != NULL && obj->type == EXPR_VARIABLE) {
-      char *objname = token_to_string(obj->as.variable.name);
-      char *member = token_to_string(call->callee->as.get.property);
-      if (objname != NULL && member != NULL && native_builtin_namespace(objname)) {
-        size_t n = strlen(objname) + strlen(member) + 2;
-        flattened_name = (char*)malloc(n);
-        if (flattened_name != NULL)
-          snprintf(flattened_name, n, "%s_%s", objname, member);
-      }
-      free(objname);
-      free(member);
-    }
-  }
-
-  if (flattened_name == NULL && call->callee->type != EXPR_VARIABLE) {
-    char *callee_expr = emit_expr(compiler, call->callee);
-    StringBuffer dsb;
-    sb_init(&dsb);
-    sb_appendf(&dsb, "sage_call_any(%s, %d, (SageValue[]){", callee_expr, call->arg_count);
-    for (int i = 0; i < call->arg_count; i++) {
-      if (i > 0) sb_append(&dsb, ", ");
-      char *arg = emit_expr(compiler, call->args[i]);
-      sb_append(&dsb, arg);
-      free(arg);
-    }
-    if (call->arg_count == 0) sb_append(&dsb, "sage_nil()");
-    sb_append(&dsb, "})");
-    free(callee_expr);
-    return sb_take(&dsb);
-  }
-
-  char *callee_name = flattened_name != NULL ? flattened_name
-                                     : token_to_string(call->callee->as.variable.name);
+/* The flat-builtin dispatch table, factored out of emit_call_expr so a dotted
+ * builtin (ffi.open) can reach it. Returns NULL when `name` is not a builtin,
+ * which lets the caller fall back to the generic method-call path. */
+static char *emit_flat_builtin(Compiler *compiler, CallExpr *call,
+                               char *callee_name) {
   StringBuffer sb;
   sb_init(&sb);
 
@@ -3682,7 +3421,11 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
   }
   if (strcmp(callee_name, "bytes") == 0 && call->arg_count == 1) {
     char *a0 = emit_expr(compiler, call->args[0]);
-    sb_appendf(&sb, "sage_bytes_new(%s)", a0);
+    /* bytes(str) and bytes([ints]) build from content; only a number is a
+       length. sage_bytes_new took the argument as a count, so bytes("hello")
+       returned nil and every caller that padded a string into a Bytes got nil
+       back with no error. The interpreter has accepted these forms all along. */
+    sb_appendf(&sb, "sage_bytes_ctor(%s)", a0);
     free(a0);
     free(callee_name);
     return sb_take(&sb);
@@ -4039,6 +3782,361 @@ static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
   sb_append(&sb, ")");
   free(callee_name);
   return sb_take(&sb);
+  free(callee_name);
+  return NULL;
+}
+
+static char *emit_call_expr(Compiler *compiler, CallExpr *call) {
+  /* A dotted builtin like ffi.open becomes a flat name; the ordinary builtin
+   * rules further down already dispatch on that name, so fall through to them
+   * with `callee_name` set from it rather than handling it separately. */
+  char *flattened_name = flatten_builtin_call(compiler, call);
+  if (flattened_name != NULL) {
+    /* Dispatch the flattened builtin directly and return: it must not fall into
+     * the method-call branch (sage_call_method) or the generic sage_call_any
+     * fallback, both of which are below. */
+    char *result = emit_flat_builtin(compiler, call, flattened_name);
+    if (result != NULL) return result;
+    free(flattened_name);
+    /* Not a builtin after all (ffi.something_else): fall through to the normal
+     * path, which will treat it as an ordinary method call. */
+  }
+  /* Super call: super.method(args) */
+  if (call->callee->type == EXPR_SUPER) {
+    if (compiler->current_class == NULL || compiler->current_class->parent_name == NULL) {
+      compiler_error_at(compiler, expr_token(call->callee),
+                        "restructure to avoid 'super' outside a class with a parent",
+                        "'super' can only be used inside a method of a class with a parent");
+      return str_dup("sage_nil()");
+    }
+
+    int arg_offset = 0;
+    if (call->arg_count > 0 && call->args[0]->type == EXPR_VARIABLE) {
+        char* first_arg_name = token_to_string(call->args[0]->as.variable.name);
+        if (strcmp(first_arg_name, "self") == 0) {
+            arg_offset = 1;
+        }
+        free(first_arg_name);
+    }
+
+    char *method_name = token_to_string(call->callee->as.super_expr.method);
+    size_t c_method_len = strlen(compiler->current_class->parent_name) + strlen(method_name) + 32;
+    char *c_method_name = malloc(c_method_len);
+    if (c_method_name == NULL) {
+      fprintf(stderr, "Out of memory allocating method name.\n");
+      exit(1);
+    }
+    snprintf(c_method_name, c_method_len, "sage_method_%s_%s", compiler->current_class->parent_name, method_name);
+    
+    StringBuffer sb;
+    sb_init(&sb);
+    // Inside a method, '_self' is the current instance.
+    sb_appendf(&sb, "%s(_self, %d, (SageValue[]){", 
+               c_method_name, call->arg_count - arg_offset);
+    
+    for (int i = 0; i < call->arg_count - arg_offset; i++) {
+      if (i > 0) sb_append(&sb, ", ");
+      char *arg = emit_expr(compiler, call->args[i + arg_offset]);
+      sb_append(&sb, arg);
+      free(arg);
+    }
+    if (call->arg_count - arg_offset == 0) sb_append(&sb, "sage_nil()");
+    sb_append(&sb, "})");
+    
+    free(method_name);
+    free(c_method_name);
+    return sb_take(&sb);
+  }
+
+  /* Method call: obj.method(args) */
+  if (call->callee->type == EXPR_GET) {
+    char *obj_name = NULL;
+    if (call->callee->as.get.object->type == EXPR_VARIABLE) {
+      obj_name = token_to_string(call->callee->as.get.object->as.variable.name);
+    }
+
+    int is_module = 0;
+    ImportedModule *target_mod = NULL;
+    if (obj_name) {
+      for (ImportedModule *m = compiler->modules; m != NULL; m = m->next) {
+        if (strcmp(m->binding_name, obj_name) == 0) {
+          is_module = 1;
+          target_mod = m;
+          break;
+        }
+      }
+    }
+
+    if (is_module) {
+      char *method_name = token_to_string(call->callee->as.get.property);
+
+      /* Native module special cases */
+      if (strcmp(target_mod->name, "_math") == 0 || strcmp(target_mod->name, "math") == 0) {
+        StringBuffer sb;
+        sb_init(&sb);
+        if (strcmp(method_name, "random") == 0) {
+          if (call->arg_count == 0)
+            sb_append(&sb, "sage_native_random(");
+          else
+            sb_append(&sb, "sage_native_srandom(");
+        } else if (strcmp(method_name, "sin") == 0) sb_append(&sb, "sage_native_sin(");
+        else if (strcmp(method_name, "cos") == 0) sb_append(&sb, "sage_native_cos(");
+        else if (strcmp(method_name, "tan") == 0) sb_append(&sb, "sage_native_tan(");
+        else if (strcmp(method_name, "floor") == 0) sb_append(&sb, "sage_native_floor(");
+        else if (strcmp(method_name, "ceil") == 0) sb_append(&sb, "sage_native_ceil(");
+        else if (strcmp(method_name, "pow") == 0) sb_append(&sb, "sage_native_pow(");
+        else if (strcmp(method_name, "exp") == 0) sb_append(&sb, "sage_native_exp(");
+        else if (strcmp(method_name, "log") == 0) sb_append(&sb, "sage_native_log(");
+        else if (strcmp(method_name, "sqrt") == 0) sb_append(&sb, "sage_native_sqrt(");
+
+        if (sb.len > 0) {
+          for (int i = 0; i < call->arg_count; i++) {
+            if (i > 0) sb_append(&sb, ", ");
+            char *arg = emit_expr(compiler, call->args[i]);
+            sb_append(&sb, arg);
+            free(arg);
+          }
+          sb_append(&sb, ")");
+          free(obj_name);
+          free(method_name);
+          return sb_take(&sb);
+        }
+        free(sb.data);
+      } else if (strcmp(target_mod->name, "thread") == 0 || strcmp(target_mod->name, "_thread") == 0) {
+        StringBuffer sb;
+        sb_init(&sb);
+        if (strcmp(method_name, "mutex") == 0) sb_append(&sb, "sage_native_thread_mutex(");
+        else if (strcmp(method_name, "lock") == 0) sb_append(&sb, "sage_native_thread_lock(");
+        else if (strcmp(method_name, "unlock") == 0) sb_append(&sb, "sage_native_thread_unlock(");
+        else if (strcmp(method_name, "spawn") == 0) sb_append(&sb, "sage_native_thread_spawn(");
+        else if (strcmp(method_name, "sleep") == 0) sb_append(&sb, "sage_native_thread_sleep(");
+        else if (strcmp(method_name, "id") == 0) sb_append(&sb, "sage_native_thread_id(");
+
+        if (sb.len > 0) {
+          for (int i = 0; i < call->arg_count; i++) {
+            if (i > 0) sb_append(&sb, ", ");
+            char *arg = emit_expr(compiler, call->args[i]);
+            sb_append(&sb, arg);
+            free(arg);
+          }
+          sb_append(&sb, ")");
+          free(obj_name);
+          free(method_name);
+          return sb_take(&sb);
+        }
+        free(sb.data);
+      } else if (strcmp(target_mod->name, "io") == 0 || strcmp(target_mod->name, "_io") == 0) {
+        StringBuffer sb;
+        sb_init(&sb);
+        if (strcmp(method_name, "readbytes") == 0) sb_append(&sb, "sage_native_io_readbytes(");
+        else if (strcmp(method_name, "writebytes") == 0) sb_append(&sb, "sage_native_io_writebytes(");
+        else if (strcmp(method_name, "appendbytes") == 0) sb_append(&sb, "sage_native_io_appendbytes(");
+        else if (strcmp(method_name, "readfile") == 0) sb_append(&sb, "sage_native_io_readfile(");
+        else if (strcmp(method_name, "writefile") == 0) sb_append(&sb, "sage_native_io_writefile(");
+
+        if (sb.len > 0) {
+          for (int i = 0; i < call->arg_count; i++) {
+            if (i > 0) sb_append(&sb, ", ");
+            char *arg = emit_expr(compiler, call->args[i]);
+            sb_append(&sb, arg);
+            free(arg);
+          }
+          sb_append(&sb, ")");
+          free(obj_name);
+          free(method_name);
+          return sb_take(&sb);
+        }
+        free(sb.data);
+        } else if (strcmp(target_mod->name, "sys") == 0 || strcmp(target_mod->name, "_sys") == 0) {
+        StringBuffer sb;
+        sb_init(&sb);
+        if (strcmp(method_name, "args") == 0) sb_append(&sb, "sage_native_sys_args(");
+        else if (strcmp(method_name, "getenv") == 0) sb_append(&sb, "sage_native_sys_getenv(");
+        else if (strcmp(method_name, "clock") == 0) sb_append(&sb, "sage_native_sys_clock(");
+        else if (strcmp(method_name, "exec") == 0) sb_append(&sb, "sage_sys_exec(");
+        else if (strcmp(method_name, "shell_exec") == 0) sb_append(&sb, "sage_sys_shell_exec(");
+
+        if (sb.len > 0) {
+          for (int i = 0; i < call->arg_count; i++) {
+            if (i > 0) sb_append(&sb, ", ");
+            char *arg = emit_expr(compiler, call->args[i]);
+            sb_append(&sb, arg);
+            free(arg);
+          }
+          sb_append(&sb, ")");
+          free(obj_name);
+          free(method_name);
+          return sb_take(&sb);
+        }
+        free(sb.data);
+      } else if (strcmp(target_mod->name, "hw") == 0 || strcmp(target_mod->name, "_hw") == 0) {
+        StringBuffer sb;
+        sb_init(&sb);
+        if (strcmp(method_name, "gpio_init") == 0) sb_append(&sb, "sage_native_hw_gpio_init(");
+        else if (strcmp(method_name, "gpio_set_dir") == 0) sb_append(&sb, "sage_native_hw_gpio_set_dir(");
+        else if (strcmp(method_name, "gpio_put") == 0) sb_append(&sb, "sage_native_hw_gpio_put(");
+        else if (strcmp(method_name, "gpio_get") == 0) sb_append(&sb, "sage_native_hw_gpio_get(");
+        else if (strcmp(method_name, "gpio_set_pull") == 0) sb_append(&sb, "sage_native_hw_gpio_set_pull(");
+        else if (strcmp(method_name, "clock_hz") == 0) sb_append(&sb, "sage_native_hw_clock_hz(");
+        else if (strcmp(method_name, "uptime_ms") == 0) sb_append(&sb, "sage_native_hw_uptime_ms(");
+        else if (strcmp(method_name, "delay_ms") == 0) sb_append(&sb, "sage_native_hw_delay_ms(");
+        else if (strcmp(method_name, "delay_us") == 0) sb_append(&sb, "sage_native_hw_delay_us(");
+        else if (strcmp(method_name, "uart_init") == 0) sb_append(&sb, "sage_native_hw_uart_init(");
+        else if (strcmp(method_name, "uart_putc") == 0) sb_append(&sb, "sage_native_hw_uart_putc(");
+        else if (strcmp(method_name, "uart_puts") == 0) sb_append(&sb, "sage_native_hw_uart_puts(");
+        else if (strcmp(method_name, "uart_getc") == 0) sb_append(&sb, "sage_native_hw_uart_getc(");
+        else if (strcmp(method_name, "adc_init") == 0) sb_append(&sb, "sage_native_hw_adc_init(");
+        else if (strcmp(method_name, "adc_read") == 0) sb_append(&sb, "sage_native_hw_adc_read(");
+        else if (strcmp(method_name, "temp_c") == 0) sb_append(&sb, "sage_native_hw_temp_c(");
+        else if (strcmp(method_name, "rgb_set") == 0) sb_append(&sb, "sage_native_hw_rgb_set(");
+        else if (strcmp(method_name, "spi_init") == 0) sb_append(&sb, "sage_native_hw_spi_init(");
+        else if (strcmp(method_name, "spi_write") == 0) sb_append(&sb, "sage_native_hw_spi_write(");
+        else if (strcmp(method_name, "spi_read") == 0) sb_append(&sb, "sage_native_hw_spi_read(");
+        else if (strcmp(method_name, "lcd_fb_init") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_init(");
+        else if (strcmp(method_name, "lcd_fb_pixel") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_pixel(");
+        else if (strcmp(method_name, "lcd_fb_fill") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_fill(");
+        else if (strcmp(method_name, "lcd_fb_flush_bytes") == 0) sb_append(&sb, "sage_native_hw_lcd_fb_flush_bytes(");
+        else if (strcmp(method_name, "deep_sleep_us") == 0) sb_append(&sb, "sage_native_hw_deep_sleep_us(");
+        /* Bootloader primitives. A second-stage loader has to read the
+         * partition table and the app image header out of memory-mapped
+         * flash and then hand control over, and SageLang cannot do either on
+         * its own: mem_read/mem_write are deliberately confined to mem_alloc
+         * regions by sage_mem_range_valid(), so reaching MMIO through them
+         * would mean weakening a memory-safety check. These are the documented
+         * escape hatch instead -- the hw module is "implementation defined per
+         * target" -- and like every other hw.* name they get no-op stubs on
+         * targets that have no flash of their own to jump into. */
+        else if (strcmp(method_name, "flash_read8") == 0) sb_append(&sb, "sage_native_hw_flash_read8(");
+        else if (strcmp(method_name, "flash_read32") == 0) sb_append(&sb, "sage_native_hw_flash_read32(");
+        else if (strcmp(method_name, "jump") == 0) sb_append(&sb, "sage_native_hw_jump(");
+
+        if (sb.len > 0) {
+          for (int i = 0; i < call->arg_count; i++) {
+            if (i > 0) sb_append(&sb, ", ");
+            char *arg = emit_expr(compiler, call->args[i]);
+            sb_append(&sb, arg);
+            free(arg);
+          }
+          sb_append(&sb, ")");
+          free(obj_name);
+          free(method_name);
+          return sb_take(&sb);
+        }
+        free(sb.data);
+      }
+
+      const char *c_name = resolve_symbol_in_module(compiler, target_mod, method_name);
+      if (c_name != NULL) {
+        if (strncmp(c_name, "sage_fn_", 8) == 0) {
+          StringBuffer sb;
+          sb_init(&sb);
+          ProcEntry *pe = find_proc_entry(compiler->procs, method_name);
+          int emit_count = pe != NULL ? pe->param_count : call->arg_count;
+          if (pe != NULL && call->arg_count < pe->required_count) {
+            compiler_error_at(
+                compiler, expr_token(call->callee), NULL,
+                "call to '%s' passes %d argument%s, but the procedure requires %d",
+                method_name, call->arg_count, call->arg_count == 1 ? "" : "s",
+                pe->required_count);
+          }
+          sb_appendf(&sb, "%s(", c_name);
+          for (int i = 0; i < emit_count; i++) {
+            if (i > 0)
+              sb_append(&sb, ", ");
+            append_call_argument(compiler, &sb, call, i,
+                                 pe != NULL ? pe->defaults : NULL,
+                                 emit_count);
+          }
+          sb_append(&sb, ")");
+          free(obj_name);
+          free(method_name);
+          return sb_take(&sb);
+        } else {
+          /* Check if it's a class constructor */
+          ClassInfo *cls = find_class_info(compiler->classes, c_name);
+          if (cls != NULL) {
+            StringBuffer sb;
+            sb_init(&sb);
+            size_t pn_len = cls->parent_name ? strlen(cls->parent_name) : 0;
+            size_t pb_size = pn_len + 4;
+            if (pb_size < 16) pb_size = 16;
+            char* parent_buf = (char*)malloc(pb_size);
+            if (cls->parent_name) {
+              snprintf(parent_buf, pb_size, "\"%s\"", cls->parent_name);
+            } else {
+              strcpy(parent_buf, "NULL");
+            }
+            sb_appendf(&sb, "sage_construct(\"%s\", %s, %d, (SageValue[]){",
+                       cls->class_name, parent_buf, call->arg_count);
+            for (int i = 0; i < call->arg_count; i++) {
+              if (i > 0)
+                sb_append(&sb, ", ");
+              char *arg = emit_expr(compiler, call->args[i]);
+              sb_append(&sb, arg);
+              free(arg);
+            }
+            if (call->arg_count == 0)
+              sb_append(&sb, "sage_nil()");
+            sb_append(&sb, "})");
+            free(parent_buf);
+            free(obj_name);
+            free(method_name);
+            return sb_take(&sb);
+          }
+        }
+      }
+      free(method_name);
+    }
+
+    char *obj = emit_expr(compiler, call->callee->as.get.object);
+    char *method = token_to_string(call->callee->as.get.property);
+    StringBuffer msb;
+    sb_init(&msb);
+    if (call->arg_count == 0) {
+      sb_appendf(&msb, "sage_call_method(%s, \"%s\", 0, NULL)", obj, method);
+    } else {
+      sb_appendf(&msb, "sage_call_method(%s, \"%s\", %d, (SageValue[]){", obj,
+                 method, call->arg_count);
+      for (int i = 0; i < call->arg_count; i++) {
+        if (i > 0)
+          sb_append(&msb, ", ");
+        char *arg = emit_expr(compiler, call->args[i]);
+        sb_append(&msb, arg);
+        free(arg);
+      }
+      sb_append(&msb, "})");
+    }
+    free(obj);
+    free(method);
+    if (obj_name)
+      free(obj_name);
+    return sb_take(&msb);
+  }
+
+
+
+  if (call->callee->type != EXPR_VARIABLE) {
+    char *callee_expr = emit_expr(compiler, call->callee);
+    StringBuffer dsb;
+    sb_init(&dsb);
+    sb_appendf(&dsb, "sage_call_any(%s, %d, (SageValue[]){", callee_expr, call->arg_count);
+    for (int i = 0; i < call->arg_count; i++) {
+      if (i > 0) sb_append(&dsb, ", ");
+      char *arg = emit_expr(compiler, call->args[i]);
+      sb_append(&dsb, arg);
+      free(arg);
+    }
+    if (call->arg_count == 0) sb_append(&dsb, "sage_nil()");
+    sb_append(&dsb, "})");
+    free(callee_expr);
+    return sb_take(&dsb);
+  }
+
+  char *callee_name = token_to_string(call->callee->as.variable.name);
+  if (callee_name == NULL) return str_dup("sage_nil()");
+  char *flat = emit_flat_builtin(compiler, call, callee_name);
+  if (flat != NULL) return flat;
+
 }
 
 static char *emit_set_expr(Compiler *compiler, SetExpr *set) {
@@ -6804,6 +6902,36 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    memset(b->data, 0, alloc);\n"
       "    b->count = (int)len;\n"
       "    SageValue v; v.type = SAGE_TAG_BYTES; v.as.bytes = b; return v;\n"
+      "}\n"
+      "static SageValue sage_bytes_from_string(SageValue s) {\n"
+      "    if (s.type != SAGE_TAG_STRING) return sage_nil();\n"
+      "    size_t n = strlen(s.as.string);\n"
+      "    if (n > 268435456L) return sage_nil();\n"
+      "    SageBytes* b = (SageBytes*)sage_gc_alloc(SAGE_GC_BYTES, sizeof(SageBytes));\n"
+      "    b->data = (unsigned char*)malloc(n > 0 ? n : 1);\n"
+      "    if (!b->data) { return sage_nil(); }\n"
+      "    if (n) memcpy(b->data, s.as.string, n);\n"
+      "    b->count = (int)n;\n"
+      "    SageValue v; v.type = SAGE_TAG_BYTES; v.as.bytes = b; return v;\n"
+      "}\n"
+      "static SageValue sage_bytes_from_array(SageValue a) {\n"
+      "    if (a.type != SAGE_TAG_ARRAY) return sage_nil();\n"
+      "    SageValue* el = (SageValue*)a.as.array->elements;\n"
+      "    int n = a.as.array->count;\n"
+      "    SageBytes* b = (SageBytes*)sage_gc_alloc(SAGE_GC_BYTES, sizeof(SageBytes));\n"
+      "    b->data = (unsigned char*)malloc(n > 0 ? (size_t)n : 1);\n"
+      "    if (!b->data) { return sage_nil(); }\n"
+      "    for (int i = 0; i < n; i++) {\n"
+      "        b->data[i] = (el[i].type == SAGE_TAG_NUMBER)\n"
+      "                         ? (unsigned char)(long long)el[i].as.number : 0;\n"
+      "    }\n"
+      "    b->count = n;\n"
+      "    SageValue v; v.type = SAGE_TAG_BYTES; v.as.bytes = b; return v;\n"
+      "}\n"
+      "static SageValue sage_bytes_ctor(SageValue a) {\n"
+      "    if (a.type == SAGE_TAG_STRING) return sage_bytes_from_string(a);\n"
+      "    if (a.type == SAGE_TAG_ARRAY) return sage_bytes_from_array(a);\n"
+      "    return sage_bytes_new(a);\n"
       "}\n"
       "static SageValue sage_bytes_len(SageValue v) {\n"
       "    if (v.type != SAGE_TAG_BYTES) return sage_nil();\n"
