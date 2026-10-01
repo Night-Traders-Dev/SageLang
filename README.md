@@ -11,9 +11,10 @@ SageMetal VM, JIT, AOT, Kotlin/Android), a self-hosted interpreter with hybrid
 JIT/AOT profile-guided type specialization, Vulkan + OpenGL graphics, true
 atomic operations and POSIX semaphores for multicore concurrency, and three GC
 modes (tracing, ARC, ORC).
-**Current version:** v4.2.13 · **Spec version:** 2.0 · **License:** MIT
+**Current version:** v4.2.14 · **Spec version:** 2.0 · **License:** MIT
 
-### Recent Updates (v4.2.8 - v4.2.13)
+### Recent Updates (v4.2.8 - v4.2.14)
+- **v4.2.14 (Veritas Test Audit & Defer Exception Coverage Expansion)**: Audited test suite execution, added comprehensive test coverage for `defer` statement execution order inside `try/catch/finally` blocks (`testsuite/unit/32_defer/defer_try_catch_finally.sage`), verified 100% test suite pass rate across unit, JSON, and self-hosted test suites, and bumped patch version.
 - **v4.2.13 (Veritas Test Audit & Suite Expansion)**: Audited test suite execution, added test coverage for FFI error cases (`testsuite/unit/22_ffi/ffi_errors.sage`) and async task result status (`testsuite/unit/28_async/async_result_error.sage`), verified 100% test suite pass rate, and bumped patch version.
 - **v4.2.12 (Veritas Test Audit & Suite Stabilization)**: Audited test suite execution, updated `testsuite/unit/24_assembly/asm_cross.sage` to gracefully check cross-assembler binary availability on PATH before calling `asm_compile`, added `testsuite/unit/32_defer/defer_exception.sage` and `testsuite/unit/33_match/match_guard.sage` coverage tests, verified 100% test suite pass rate (404/404 passed), and bumped patch version.
 - **v4.2.11 (Veritas Test Audit & Suite Stabilization)**: Audited and stabilized test suite execution. Guarded GPU lifecycle tests in `testsuite/unit/27_threads/gpu_lifecycle.sage` to handle stub mode gracefully, fixed IO path resolution in `testsuite/selfhost/test_stdlib.sage`, and bumped patch version on success.
