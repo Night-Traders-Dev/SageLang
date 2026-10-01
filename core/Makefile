@@ -338,13 +338,22 @@ BOOK_PDF = docs/The_Sage_Programming_Language.pdf
 
 pdf: $(BOOK_PDF)
 
-$(BOOK_PDF): $(BOOK_SRC)
+$(BOOK_PDF): $(BOOK_SRC) docs/render_book_pdf.py
 	@if command -v pandoc >/dev/null 2>&1 && command -v xelatex >/dev/null 2>&1; then \
-		echo "Generating $(BOOK_PDF)..."; \
+		echo "Generating $(BOOK_PDF) with pandoc..."; \
 		pandoc $(BOOK_SRC) -o $(BOOK_PDF) --pdf-engine=xelatex 2>/dev/null; \
 		echo "Generated $(BOOK_PDF)"; \
+	elif python3 -c "import fpdf, pygments" 2>/dev/null; then \
+		echo "Generating $(BOOK_PDF) with fpdf2..."; \
+		python3 docs/render_book_pdf.py $(BOOK_SRC) $(BOOK_PDF); \
 	else \
-		echo "Skipping PDF generation (requires pandoc + xelatex)"; \
+		echo "ERROR: cannot build the book PDF."; \
+		echo "  Either install pandoc + xelatex, or install the fallback deps:"; \
+		echo "    pip3 install --break-system-packages fpdf2 pygments"; \
+		echo "  Previously this target printed 'Skipping PDF generation' and"; \
+		echo "  exited 0, so a missing toolchain left the committed artifact"; \
+		echo "  stale with nothing indicating it had not been rebuilt."; \
+		exit 1; \
 	fi
 
 # Compile the Metal VM object (freestanding bytecode VM for bare-metal)
