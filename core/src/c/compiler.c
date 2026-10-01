@@ -2651,10 +2651,65 @@ static char *emit_flat_builtin(Compiler *compiler, CallExpr *call,
     return sb_take(&sb);
   }
 
+  /* sys.args() flattens to sys_args, which had no dispatch entry. The module-call
+   * branch only runs for an *imported* sys module, so SageFS's `import sys` made
+   * it reachable there but a bare `sys.args()` in a file that did not import sys
+   * compiled to sage_call_any on a module slot and died at run time with
+   * "Cannot call non-function value (type=0)". Dispatch it as a builtin. */
+  if (strcmp(callee_name, "sys_args") == 0) {
+    if (call->arg_count != 0) {
+      compiler_builtin_arity_error(compiler, call, "sys.args", "usage: sys.args()", "0");
+      sb_append(&sb, "sage_nil()");
+    } else {
+      sb_append(&sb, "sage_native_sys_args()");
+    }
+    free(callee_name);
+    return sb_take(&sb);
+  }
   if (strcmp(callee_name, "sys_args_builtin") == 0) {
     if (call->arg_count != 0)
       return str_dup("sage_nil()");
     sb_appendf(&sb, "sage_sys_args()");
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  /* Dotted builtins flatten to <namespace>_<member>, so the flattened name has
+   * to be dispatchable. sys.clock was the visible casualty: sys.clock() compiled
+   * to sage_call_any on a module slot and died at run time with "Cannot call
+   * non-function value (type=0)", while bare clock() worked. The others below
+   * follow the same pattern; each maps to the runtime helper the module-call
+   * branch already used for that namespace. */
+  if (strcmp(callee_name, "sys_clock") == 0) {
+    if (call->arg_count != 0) {
+      compiler_builtin_arity_error(compiler, call, "sys.clock", "usage: sys.clock()", "0");
+      sb_append(&sb, "sage_nil()");
+    } else {
+      sb_append(&sb, "sage_native_sys_clock()");
+    }
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "sys_getenv") == 0) {
+    if (call->arg_count != 1) {
+      compiler_builtin_arity_error(compiler, call, "sys.getenv", "usage: sys.getenv(name)", "1");
+      sb_append(&sb, "sage_nil()");
+    } else {
+      char *arg = emit_expr(compiler, call->args[0]);
+      sb_appendf(&sb, "sage_native_sys_getenv(%s)", arg);
+      free(arg);
+    }
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "sys_shell_exec") == 0) {
+    if (call->arg_count != 1) {
+      compiler_builtin_arity_error(compiler, call, "sys.shell_exec", "usage: sys.shell_exec(cmd)", "1");
+      sb_append(&sb, "sage_nil()");
+    } else {
+      char *arg = emit_expr(compiler, call->args[0]);
+      sb_appendf(&sb, "sage_sys_shell_exec(%s)", arg);
+      free(arg);
+    }
     free(callee_name);
     return sb_take(&sb);
   }
@@ -2723,6 +2778,42 @@ static char *emit_flat_builtin(Compiler *compiler, CallExpr *call,
       return str_dup("sage_nil()");
     char *arg = emit_expr(compiler, call->args[0]);
     sb_appendf(&sb, "sage_io_exists(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "io_filesize") == 0) {
+    if (call->arg_count != 1)
+      return str_dup("sage_nil()");
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_io_filesize(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "io_isdir") == 0) {
+    if (call->arg_count != 1)
+      return str_dup("sage_nil()");
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_io_isdir(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "io_remove") == 0) {
+    if (call->arg_count != 1)
+      return str_dup("sage_nil()");
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_io_remove(%s)", arg);
+    free(arg);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "io_mkdir") == 0) {
+    if (call->arg_count != 1)
+      return str_dup("sage_nil()");
+    char *arg = emit_expr(compiler, call->args[0]);
+    sb_appendf(&sb, "sage_io_mkdir(%s)", arg);
     free(arg);
     free(callee_name);
     return sb_take(&sb);
@@ -4948,6 +5039,8 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
           "#include <string.h>\n"
           "#include <ctype.h>\n"
           "#include <stdint.h>\n"
+          "#include <sys/stat.h>\n"
+          "#include <sys/types.h>\n"
           "#include \"pico/stdlib.h\"\n"
           "#include \"hardware/adc.h\"\n"
           "#include \"hardware/clocks.h\"\n"
@@ -4969,7 +5062,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
           "#include <time.h>\n"
           "#include <unistd.h>\n"
           "#include <pthread.h>\n"
-          "#include <stdint.h>\n",
+          "#include <stdint.h>\n"
+          "#include <sys/stat.h>\n"
+          "#include <sys/types.h>\n",
           out);
   }
 
@@ -6159,9 +6254,14 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "\n"
       "extern int sage_argc;\n"
       "extern char** sage_argv;\n"
+      /* Skip argv[0], the program path. It used to be included, so a compiled
+       * program saw its own binary as the first argument. SageFS's mkfs relies
+       * on the first argument being the image path, and parse_args() had grown a
+       * list of launcher tokens to filter this out -- which could not work
+       * natively because the binary name is not a recognisable token. */
       "static SageValue sage_native_sys_args(void) {\n"
       "    SageValue arr = sage_array();\n"
-      "    for (int i = 0; i < sage_argc; i++) {\n"
+      "    for (int i = 1; i < sage_argc; i++) {\n"
       "        sage_array_push_raw(arr.as.array, sage_string(sage_argv[i]));\n"
       "    }\n"
       "    return arr;\n"
@@ -6575,6 +6675,28 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    return sage_nil();\n"
       "}\n"
       "\n"
+      /* array_contains and array_index_of were dispatched (they appear in the
+       * builtin table and in is_builtin_call) but never defined, so any program
+       * using them failed at cc with "implicit declaration of function
+       * 'sage_array_contains'". `sage-c --emit-c` reported success because it
+       * only generates C and never compiles it, which is how this survived; the
+       * C compiler was the thing that had always known. */
+      "static SageValue sage_array_contains(SageValue array, SageValue needle) {\n"
+      "    if (array.type != SAGE_TAG_ARRAY) return sage_bool(0);\n"
+      "    SageArray* a = array.as.array;\n"
+      "    for (int i = 0; i < a->count; i++) {\n"
+      "        if (sage_values_equal(a->elements[i], needle)) return sage_bool(1);\n"
+      "    }\n"
+      "    return sage_bool(0);\n"
+      "}\n"
+      "static SageValue sage_array_index_of(SageValue array, SageValue needle) {\n"
+      "    if (array.type != SAGE_TAG_ARRAY) return sage_number(-1);\n"
+      "    SageArray* a = array.as.array;\n"
+      "    for (int i = 0; i < a->count; i++) {\n"
+      "        if (sage_values_equal(a->elements[i], needle)) return sage_number(i);\n"
+      "    }\n"
+      "    return sage_number(-1);\n"
+      "}\n"
       "static SageValue sage_array_reverse(SageValue array) {\n"
       "    if (array.type != SAGE_TAG_ARRAY) return sage_nil();\n"
       "    SageArray* src = array.as.array;\n"
@@ -8026,7 +8148,27 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    FILE* f = fopen(p.as.string, \"r\"); if(f){ fclose(f); return "
         "sage_bool(1); } return sage_bool(0);\n"
         "}\n"
-        "static SageValue sage_string_substr(SageValue s, SageValue start, "
+        "static SageValue sage_io_filesize(SageValue p) {\n"
+      "    if(p.type != SAGE_TAG_STRING) return sage_number(-1);\n"
+      "    struct stat st;\n"
+      "    if (stat(p.as.string, &st) != 0) return sage_number(-1);\n"
+      "    return sage_number((double)st.st_size);\n"
+      "}\n"
+      "static SageValue sage_io_isdir(SageValue p) {\n"
+      "    if(p.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+      "    struct stat st;\n"
+      "    if (stat(p.as.string, &st) != 0) return sage_bool(0);\n"
+      "    return sage_bool(S_ISDIR(st.st_mode));\n"
+      "}\n"
+      "static SageValue sage_io_remove(SageValue p) {\n"
+      "    if(p.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+      "    return sage_bool(remove(p.as.string) == 0);\n"
+      "}\n"
+      "static SageValue sage_io_mkdir(SageValue p) {\n"
+      "    if(p.type != SAGE_TAG_STRING) return sage_bool(0);\n"
+      "    return sage_bool(mkdir(p.as.string, 0777) == 0);\n"
+      "}\n"
+      "static SageValue sage_string_substr(SageValue s, SageValue start, "
         "SageValue len) {\n"
         "    if(s.type != SAGE_TAG_STRING || start.type != SAGE_TAG_NUMBER || "
         "len.type != SAGE_TAG_NUMBER) return sage_nil();\n"

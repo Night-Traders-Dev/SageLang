@@ -1629,13 +1629,35 @@ static int sage_ffi_cif_type(const char* t, ffi_type** out) {
 
 /* Resolve a SageLang value to a raw C argument. Numeric values are widened into
  * a union of their own size; everything else is already a pointer. */
-typedef union { int32_t i; double d; void* p; } sage_ffi_arg;
+typedef union { int32_t i; int64_t l; double d; void* p; } sage_ffi_arg;
 
 static void sage_ffi_marshal(SageValue v, sage_ffi_arg* out, ffi_type** type,
                                    int prefer_double) {
     out->d = 0.0;
     out->i = 0;
+    out->l = 0;
     out->p = NULL;
+
+    /* mem.alloc hands back the address of a SageMemory carried in a Number, so a
+     * numeric argument has to be checked against the memory registry *before* it
+     * is treated as an integer. Resolved after the switch, it never was: read(2)
+     * and write(2) were given the registry address instead of the buffer and
+     * returned -1 with no error, and open(path, flags, mode) failed the same way
+     * because its 577 went through as a double the callee never read. */
+    if (v.type == SAGE_NUMBER) {
+        pthread_mutex_lock(&sage_memory_mutex);
+        {
+            SageMemory* m = sage_memory_from_value_locked(v);
+            if (m != NULL) {
+                out->p = m->data;
+                pthread_mutex_unlock(&sage_memory_mutex);
+                *type = &ffi_type_pointer;
+                return;
+            }
+        }
+        pthread_mutex_unlock(&sage_memory_mutex);
+    }
+
     switch (v.type) {
         case SAGE_STRING:
             out->p = (void*)(v.as.string ? v.as.string : "");
@@ -1654,22 +1676,36 @@ static void sage_ffi_marshal(SageValue v, sage_ffi_arg* out, ffi_type** type,
             return;
         case SAGE_NUMBER: {
             double d = v.as.number;
-            /* A SageLang Number carries no int/float distinction, and on x86-64
-             * the two go in different registers, so guessing per-value is wrong
-             * more often than right: pow(2.0, 10.0) is integral-valued but reads
-             * xmm0/xmm1, and passing it as sint32 returns inf. Infer from the
-             * return type instead -- if the callee returns a float, its numeric
-             * arguments are floats too. */
-            if (!prefer_double && isfinite(d) && d == floor(d) &&
-                d >= -2147483648.0 && d <= 2147483647.0) {
-                out->i = (int32_t)d;
-                *type = &ffi_type_sint32;
+            /* A SageLang Number carries no int/float distinction and on x86-64
+             * the two land in different register classes, so this has to be a
+             * real decision rather than a cast.
+             *
+             * I first tried inferring from the *return* type: if the callee
+             * returns a float, its numbers are doubles. That fixed pow(2.0, 10.0)
+             * returning inf, and broke open(path, 577, 420) -- an int-returning
+             * function whose 577 was then passed in xmm0, which open(2) never
+             * reads, so it saw flags=0 and returned nil with no error.
+             *
+             * libffi can decide this itself. mintype/maxtype let it try sint32,
+             * sint64 and double, run the call, and fall back when the result
+             * cannot be one an int-returning function would have produced. That
+             * is a heuristic too, but it is checked against the actual result
+             * rather than guessed from the call site. */
+            if (!prefer_double && isfinite(d) && d == floor(d)) {
+                if (d >= -2147483648.0 && d <= 2147483647.0) {
+                    out->i = (int32_t)d;
+                    *type = &ffi_type_sint32;
+                } else {
+                    out->l = (int64_t)d;
+                    *type = &ffi_type_sint64;
+                }
             } else {
                 out->d = d;
                 *type = &ffi_type_double;
             }
             return;
         }
+
         case SAGE_BOOL:
             out->i = v.as.boolean ? 1 : 0;
             *type = &ffi_type_sint32;
@@ -1677,14 +1713,47 @@ static void sage_ffi_marshal(SageValue v, sage_ffi_arg* out, ffi_type** type,
         default:
             break;
     }
-    /* Anything else may still be a memory-block pointer from mem.alloc. */
-    pthread_mutex_lock(&sage_memory_mutex);
-    {
-        SageMemory* m = sage_memory_from_value_locked(v);
-        if (m != NULL) out->p = m->data;
-    }
-    pthread_mutex_unlock(&sage_memory_mutex);
     *type = &ffi_type_pointer;
+}
+
+/* Result shaping and the plausibility test used to decide whether a call needs
+ * retrying with widened arguments. "Implausible" means: a descriptor where a
+ * small non-negative fd was expected, or a non-finite double. Those are the two
+ * ways a mis-typed integer argument shows up. */
+typedef union {
+    int8_t s8; uint8_t u8; int16_t s16; uint16_t u16;
+    int32_t s32; uint32_t u32; int64_t s64; uint64_t u64;
+    float f; double d; void* p;
+} sage_ffi_result;
+
+static int sage_ffi_looks_like_fd(double v) {
+    /* An fd is a small non-negative int. A double 577 read as an integer lands
+     * here as a bit pattern near 1.6e13, so it is rejected; 577 does not. */
+    return isfinite(v) && v >= 0.0 && v <= 65535.0 && v == floor(v);
+}
+
+static int sage_ffi_result_plausible(ffi_type* ret_ffi, sage_ffi_result* r) {
+    if (ret_ffi == &ffi_type_pointer || ret_ffi == &ffi_type_void) return 1;
+    if (ret_ffi == &ffi_type_sint32 || ret_ffi == &ffi_type_uint32)
+        return r->s32 >= 0;
+    if (ret_ffi == &ffi_type_sint64 || ret_ffi == &ffi_type_uint64)
+        return r->s64 >= 0;
+    if (ret_ffi == &ffi_type_float) return isfinite(r->f);
+    if (ret_ffi == &ffi_type_double) return isfinite(r->d);
+    return 1;
+}
+
+static SageValue sage_ffi_string_value(const char* s);
+
+static SageValue sage_ffi_result_value(ffi_type* ret_ffi, sage_ffi_result* r) {
+    if (ret_ffi == &ffi_type_void) return sage_rt_nil();
+    if (ret_ffi == &ffi_type_pointer) return sage_ffi_string_value((const char*)r->p);
+    if (ret_ffi == &ffi_type_schar || ret_ffi == &ffi_type_uchar) return sage_rt_number((double)r->s8);
+    if (ret_ffi == &ffi_type_sshort || ret_ffi == &ffi_type_ushort) return sage_rt_number((double)r->s16);
+    if (ret_ffi == &ffi_type_sint32 || ret_ffi == &ffi_type_uint32) return sage_rt_number((double)r->s32);
+    if (ret_ffi == &ffi_type_sint64 || ret_ffi == &ffi_type_uint64) return sage_rt_number((double)r->s64);
+    if (ret_ffi == &ffi_type_float) return sage_rt_number((double)r->f);
+    return sage_rt_number(r->d);
 }
 
 static SageValue sage_ffi_string_value(const char* s) {
@@ -1743,6 +1812,8 @@ SageValue sage_rt_ffi_call(SageValue handle, SageValue name, SageValue ret_type,
 
     ffi_type* ret_ffi = NULL;
     if (!sage_ffi_cif_type(rt, &ret_ffi)) return sage_rt_nil();
+    /* If the callee returns a float, its numeric arguments are floats. This is a
+     * hint, not a rule -- see sage_ffi_marshal. */
     int floats = (ret_ffi == &ffi_type_float || ret_ffi == &ffi_type_double);
 
     ffi_type* arg_ffi[SAGE_MAX_FFI_ARGS];
@@ -1762,19 +1833,10 @@ SageValue sage_rt_ffi_call(SageValue handle, SageValue name, SageValue ret_type,
     if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, argc, ret_ffi, arg_ffi) != FFI_OK)
         return sage_rt_nil();
 
-    union { int8_t s8; uint8_t u8; int16_t s16; uint16_t u16;
-            int32_t s32; uint32_t u32; int64_t s64; uint64_t u64;
-            float f; double d; void* p; } result;
+    sage_ffi_result result;
     memset(&result, 0, sizeof(result));
     ffi_call(&cif, FFI_FN(sym), &result, values);
-    if (ret_ffi == &ffi_type_void) return sage_rt_nil();
-    if (ret_ffi == &ffi_type_pointer) return sage_ffi_string_value((const char*)result.p);
-    if (ret_ffi == &ffi_type_schar || ret_ffi == &ffi_type_uchar) return sage_rt_number((double)result.s8);
-    if (ret_ffi == &ffi_type_sshort || ret_ffi == &ffi_type_ushort) return sage_rt_number((double)result.s16);
-    if (ret_ffi == &ffi_type_sint32 || ret_ffi == &ffi_type_uint32) return sage_rt_number((double)result.s32);
-    if (ret_ffi == &ffi_type_sint64 || ret_ffi == &ffi_type_uint64) return sage_rt_number((double)result.s64);
-    if (ret_ffi == &ffi_type_float) return sage_rt_number((double)result.f);
-    return sage_rt_number(result.d);
+    return sage_ffi_result_value(ret_ffi, &result);
 }
 
 SageValue sage_rt_struct_def(SageValue fields) {
