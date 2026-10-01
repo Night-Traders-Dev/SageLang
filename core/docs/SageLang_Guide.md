@@ -808,7 +808,7 @@ print n            # 5
 ffi_close(libc)
 ```
 
-FFI supports return types: `"double"`, `"int"`, `"long"`, `"string"`, `"void"`, with up to 3 arguments (numeric or string). Passing more than 3 arguments returns an error. Library handles are tracked by the GC and properly freed on collection.
+FFI supports return types: `"double"`, `"int"`, `"long"`, `"string"`, `"void"`, with up to 3 arguments (numeric or string). Passing more than 3 arguments returns an error. Library handles are tracked by the GC and properly freed on collection. Since v4.2.14, the C compiler backend (`sage-c`, `--compile`) fully supports `ffi_call` / `ffi.call` natively with proper `argc` routing, automatically decoding `mem_alloc` memory pointers to raw addresses and marshalling integral numeric arguments exceeding `int32` bounds as `sint64`. In addition, native compiled binaries globally dispatch `sys.args`, `sys.clock`, `sys.getenv`, `sys.shell_exec`, `io.filesize`, `io.isdir`, `io.remove`, and `io.mkdir` without explicit module imports, and filter launcher binary tokens from `sys.args`.
 
 **Raw Memory Operations**:
 ```sagelang

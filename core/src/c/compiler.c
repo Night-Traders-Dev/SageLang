@@ -8062,7 +8062,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    if (cmd[0] == '-') return 0;\n"
         "    for (const char* p = cmd; *p; p++) {\n"
         "        if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&\n"
-        "            *p != '-' && *p != '_' && *p != '~' && *p != ' ' && *p != '\\'') {\n"
+        "            *p != '-' && *p != '_' && *p != '~' && *p != ' ') {\n"
         "            return 0;\n"
         "        }\n"
         "    }\n"

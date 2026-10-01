@@ -1,6 +1,6 @@
 # SageLang Reference
 
-> **Version:** 4.2.12 | **Spec Version:** 2.0 | **License:** MIT
+> **Version:** 4.2.14 | **Spec Version:** 2.0 | **License:** MIT
 > **Implementation:** Written in C (C11), self-hosted (Sage compiler written in Sage)  
 > **Repository:** https://github.com/Night-Traders-Dev/SageLang
 
@@ -1339,11 +1339,13 @@ sem_trywait(s)
 
 ```sage
 let lib = ffi_open("libm.so")
-let result = ffi_call(lib, "sqrt", 16.0)
+let result = ffi_call(lib, "sqrt", "double", 16.0)
 ffi_close(lib)
 ```
 
-Max 3 arguments to `ffi_call`.
+Max 3 arguments to `ffi_call`. Supported return/argument types include `"double"`, `"int"`, `"long"`, `"string"`, and `"void"`.
+
+Since v4.2.14, the C backend (`sage-c`, `--compile`, `--emit-c`) natively routes `ffi_call` / `ffi.call` with proper `argc` dispatch. Pointer arguments allocated via `mem_alloc` (carried as Numbers) are automatically decoded to raw addresses prior to type dispatch, and integral numeric arguments exceeding `int32` bounds are marshalled as `sint64`. In addition, native compiled binaries feature global dispatch for flattened builtins (`sys.args`, `sys.clock`, `sys.getenv`, `sys.shell_exec`), native emission of `io.filesize`, `io.isdir`, `io.remove`, and `io.mkdir`, and automatically strip launcher tokens from `sys.args`.
 
 ### 13.2 Raw Memory
 

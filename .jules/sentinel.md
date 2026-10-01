@@ -12,6 +12,7 @@
 **Vulnerability:** Use of simple substring matching (e.g., `contains(code, "io")`) to block dangerous operations in the agent sandbox.
 **Learning:** Overly broad substrings cause significant false positives by matching common English words (e.g., "io" matches "action", "position"). It also remains easy to bypass via obfuscation.
 **Prevention:** Refine blacklists to use specific signatures (e.g., `io.`, `sys.`) or implement a proper lexer-based token check. For high-security sandboxing, an allowlist of safe operations is preferred over a blacklist of dangerous ones.
+
 ## 2026-05-25 - Shell Injection in REPL Commands
 **Vulnerability:** User-provided arguments to REPL commands (:ls, :cat, :edit) were passed directly to the shell via `system()` without sanitization (CWE-78).
 **Learning:** High-level REPL commands that provide convenience features (like listing files) often bypass the language's own security model. Even if the language has a safe mode, these native commands can remain vulnerable if they shell out to system utilities.
@@ -121,3 +122,16 @@
 **Vulnerability:** Standalone LLVM runtime helpers `sage_rt_readbytes` and `sage_rt_load_weights` in `llvm_runtime.c` allocated heap memory and read streams without checking file size bounds or streaming read limits (CWE-400 / CWE-789).
 **Learning:** Independent target runtimes (such as LLVM runtime libraries used for standalone binaries) often re-implement file I/O primitives separately from interpreter standard libraries. Omitting file size bounds checks or streaming read accumulation caps in these standalone libraries exposes compiled binaries to Denial of Service and OOM crashes when processing large files or streams (like `/dev/urandom`).
 **Prevention:** Always enforce global file size bounds checks (`<= 100 * 1024 * 1024`) and streaming read accumulation caps across all execution runtime layers, including compiled LLVM standalone runtimes.
+
+<<<<<<< HEAD
+
+## 2026-10-05 - Unchecked Memory Allocation and Resource Exhaustion in LLVM Runtime String Concatenation
+**Vulnerability:** `sage_rt_add` in `llvm_runtime.c` concatenated string operands without validating pointer non-NULLness, checking integer overflow during string length addition, or enforcing the global 100 MB allocation cap (CWE-476, CWE-190, CWE-400 / CWE-789). It also called `abort()` on allocation failure instead of returning `sage_rt_nil()`.
+**Learning:** Independent target runtimes (such as LLVM runtime helpers) often duplicate string concatenation logic from interpreter or AOT backends. Omitting integer overflow checks and allocation caps allows attacker-controlled string additions in compiled LLVM binaries to cause memory corruption or process crashes.
+**Prevention:** Ensure all string operator runtime helpers in all execution backends (Interpreter, AOT, and LLVM) validate non-NULL string pointers, perform overflow-checked length addition capped at 100 MB (`104857600` bytes), and safely return `nil` or error representations on failure.
+=======
+
+## 2026-09-30 - Single Quote Metacharacter Injection in Command Whitelist Validation
+**Vulnerability:** Command validators `is_safe_command` (`stdlib.c`), `s_is_safe_command` (`aot.c`), and `sage_is_safe_command` (`compiler.c`) permitted single quotes (`'`) in shell execution strings passed to `system()` and `popen()` (CWE-78).
+**Learning:** Allowing single quote metacharacters in character whitelists for shell command execution allows attackers to break out of single-quoted command/argument contexts (e.g. `'foo' || id 'bar'`), leading to command injection despite filtering other metacharacters like `;`, `|`, and `$`.
+**Prevention:** Strictly exclude quotes (`'` and `"`) from character whitelists passed to shell execution APIs (`system()`, `popen()`). When arguments need quotes or complex characters, pass explicit argument vectors to `execvp()` instead of shell invocation.
