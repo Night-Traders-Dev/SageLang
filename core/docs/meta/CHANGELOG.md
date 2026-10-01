@@ -1,5 +1,37 @@
 # Changelog
 
+## [4.2.14] - 2026-10-01
+
+### Added & Fixed
+- **C Backend FFI Usability & Native Builtin Dispatch.**
+  - **`ffi.call` Argument Marshalling**: Native binary compilation now fully supports `ffi_call` with proper `argc` routing. Decodes `mem.alloc` pointers (carried as Numbers) prior to argument type switching and handles `sint64` range bounds for integer values exceeding `int32` limits.
+  - **Native System Arguments**: Stripped launcher `argv[0]` token from `sys.args` in compiled native binaries so compiled binaries see their actual program arguments.
+  - **Global Builtin Dispatch**: Flattened builtins (`sys.args`, `sys.clock`, `sys.getenv`, `sys.shell_exec`) now dispatch globally without requiring an explicit `import sys`.
+  - **Native I/O Primitives**: Added emission of `io.filesize`, `io.isdir`, `io.remove`, and `io.mkdir` in the C compiler backend (`compiler.c`), and included `<sys/stat.h>` in host prelude.
+  - **Native Array Helpers**: Defined native C runtime functions for `array_contains` and `array_index_of`.
+- **Standard Library Performance Optimizations.**
+  - **`crypto.encoding`**: Optimized Base64 URL-safe encoding/decoding (`b64url_encode` / `b64url_decode`) using native `replace()` VM built-ins and `string_repeat()` padding, achieving ~1.71x faster encoding and ~1.59x faster decoding.
+  - **`std.channel`**: Tracked buffer head offset (`ch["head"]`) and added compaction via native C VM `slice()`, eliminating $O(N^2)$ element-by-element array shifting on `recv` (~390x speedup).
+  - **`std.db`**: Replaced $O(N \times M)$ nested loop joins with $O(N + M)$ hash-indexed joins (~60x speedup), and replaced $O(N^2)$ insertion sort in `order_by` / `order_by_desc` with $O(N \log N)$ stable merge sort (~36x–40x speedup).
+  - **`std.datetime`**: Replaced linear iteration with $O(1)$ civil calendar conversions (~12x speedup).
+  - **`std.regex` / `std.docgen` / `std.log` / `std.signal` / `std.compress`**: Replaced $O(N^2)$ character iteration and string concatenation with native C VM built-ins (`slice()`, `join()`, `string_repeat`, `indexof()`), direct element iteration, and `@inline` procedures.
+  - **`rich` components**: Refactored `Panel`, `Table`, and `Tree` rendering using `string_repeat` VM built-ins and array accumulator `join()` patterns.
+- **Low-Level Hardware & Systems Extensions.**
+  - **`metal.core`**: Added RP2040 SIO register constants, core ID query (`rp2040_cpuid`), GPIO bitmask operations, FIFO primitives, and hardware spinlocks (`sio_hw_spinlock`, `sio_hw_spinunlock`).
+  - **`metal.gpio`**: Added pulse measurement (`pin_pulse_in`), timed pulse generation (`pin_pulse_out`), and extended interrupt control (`pin_enable_interrupt_ext`, `pin_disable_interrupt_ext`).
+  - **`metal.irq`**: Added safe IRQ handler registration (`register_handler_safe`) and unregistration (`unregister_handler`).
+  - **`os.sync`**: Added read-write lock (`rwlock`) primitives (`rwlock_create`, `rwlock_try_read_lock`, `rwlock_read_lock`, `rwlock_read_unlock`, `rwlock_try_write_lock`, `rwlock_write_lock`, `rwlock_write_unlock`).
+- **Ecosystem & Tooling.**
+  - **`transpiler.cjs2esm`**: Integrated CommonJS-to-ESM transpiler submodule providing AST transformations and CLI entry point (`convert`, `inspect`, `check`, `report`).
+
+## [4.2.13] - 2026-09-29
+
+### Added & Fixed
+- **Veritas Test Audit & Suite Expansion.**
+  - Audited test suite execution across all test runner environments.
+  - Added test coverage for FFI error cases (`testsuite/unit/22_ffi/ffi_errors.sage`) and async task result status (`testsuite/unit/28_async/async_result_error.sage`).
+  - Verified 100% test suite pass rate across 412 unit tests and self-host test suites.
+
 ## [4.2.12] - 2026-09-28
 
 ### Added & Fixed
