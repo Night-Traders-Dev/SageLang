@@ -5624,7 +5624,13 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
   /* FFI runtime: dlopen/dlsym only for desktop targets.
      Pico/baremetal targets get stubs (platform bridge overrides them). */
   if (target == COMPILER_TARGET_HOST) {
-    fputs("static SageValue sage_ffi_open(SageValue libname) {\n"
+    /* The memory builtins and the registry behind them are emitted after this
+     * block, so IS_PTR needs them declared up front. */
+    fputs("typedef struct SagePointer SagePointer;\n"
+          "static SagePointer* sage_as_pointer(SageValue v);\n"
+          "static void* sage_pointer_data(SageValue v);\n"
+          "static int sage_is_pointer_value(double raw);\n"
+          "static SageValue sage_ffi_open(SageValue libname) {\n"
           "    if (libname.type != SAGE_TAG_STRING) return sage_nil();\n"
           "    void* handle = dlopen(libname.as.string, RTLD_NOW);\n"
           "    if (!handle) return sage_nil();\n"
@@ -5650,14 +5656,27 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        if (call_argc > 3) call_argc = 3;\n"
         "        for (int i = 0; i < call_argc; i++) call_argv[i] = args.as.array->elements[i];\n"
         "    }\n"
-        "    #define IS_NUM(v) ((v).type == SAGE_TAG_NUMBER)\n"
+        /* A live mem.alloc/struct block is carried in a NUMBER, so a bare
+         * IS_NUM matched it and the cast truncated a 64-bit address to int:
+         * read(2)/write(2) were handed a small integer where a buffer was
+         * expected and returned -1 with no error at all. IS_NUM therefore
+         * excludes pointers, and the IS_PTR branches sit ahead of the integer
+         * ones so (int, void*, int) still matches write(2). */
+        "    #define IS_PTR(v) (sage_as_pointer(v) != NULL)\n"
+        "    #define IS_NUM(v) ((v).type == SAGE_TAG_NUMBER && !sage_is_pointer_value((v).as.number))\n"
         "    #define IS_STR(v) ((v).type == SAGE_TAG_STRING)\n"
         "    #pragma GCC diagnostic push\n"
         "    #pragma GCC diagnostic ignored \"-Wpedantic\"\n"
         "    if (strcmp(rt, \"int\") == 0) {\n"
         "        if (call_argc == 0) { int (*fn)(void) = (int(*)(void))sym; return sage_number((double)fn()); }\n"
+        "        if (call_argc == 1 && IS_PTR(call_argv[0])) { int (*fn)(void*) = (int(*)(void*))sym; return sage_number((double)fn(sage_pointer_data(call_argv[0]))); }\n"
+        "        if (call_argc == 2 && IS_PTR(call_argv[1])) { int (*fn)(int,void*) = (int(*)(int,void*))sym; return sage_number((double)fn((int)call_argv[0].as.number, sage_pointer_data(call_argv[1]))); }\n"
+        "        if (call_argc == 2 && IS_PTR(call_argv[0])) { int (*fn)(void*,int) = (int(*)(void*,int))sym; return sage_number((double)fn(sage_pointer_data(call_argv[0]), (int)call_argv[1].as.number)); }\n"
+        "        if (call_argc == 3 && IS_PTR(call_argv[1])) { int (*fn)(int,void*,int) = (int(*)(int,void*,int))sym; return sage_number((double)fn((int)call_argv[0].as.number, sage_pointer_data(call_argv[1]), (int)call_argv[2].as.number)); }\n"
+        "        if (call_argc == 3 && IS_PTR(call_argv[2])) { int (*fn)(int,void*,void*) = (int(*)(int,void*,void*))sym; return sage_number((double)fn((int)call_argv[0].as.number, sage_pointer_data(call_argv[1]), sage_pointer_data(call_argv[2]))); }\n"
         "        if (call_argc == 1 && IS_NUM(call_argv[0])) { int (*fn)(int) = (int(*)(int))sym; return sage_number((double)fn((int)call_argv[0].as.number)); }\n"
         "        if (call_argc == 1 && IS_STR(call_argv[0])) { int (*fn)(const char*) = (int(*)(const char*))sym; return sage_number((double)fn(call_argv[0].as.string)); }\n"
+        "        if (call_argc == 3 && IS_STR(call_argv[0]) && IS_NUM(call_argv[1]) && IS_NUM(call_argv[2])) { int (*fn)(const char*,int,int) = (int(*)(const char*,int,int))sym; return sage_number((double)fn(call_argv[0].as.string, (int)call_argv[1].as.number, (int)call_argv[2].as.number)); }\n"
         "        if (call_argc == 2 && IS_NUM(call_argv[0]) && IS_NUM(call_argv[1])) { int (*fn)(int,int) = (int(*)(int,int))sym; return sage_number((double)fn((int)call_argv[0].as.number,(int)call_argv[1].as.number)); }\n"
         "        if (call_argc == 2 && IS_STR(call_argv[0]) && IS_NUM(call_argv[1])) { int (*fn)(const char*,int) = (int(*)(const char*,int))sym; return sage_number((double)fn(call_argv[0].as.string,(int)call_argv[1].as.number)); }\n"
         "        if (call_argc == 2 && IS_NUM(call_argv[0]) && IS_STR(call_argv[1])) { int (*fn)(int,const char*) = (int(*)(int,const char*))sym; return sage_number((double)fn((int)call_argv[0].as.number,call_argv[1].as.string)); }\n"
@@ -5679,6 +5698,9 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    if (strcmp(rt, \"long\") == 0) {\n"
         "        if (call_argc == 0) { long (*fn)(void) = (long(*)(void))sym; return sage_number((double)fn()); }\n"
         "        if (call_argc == 1 && IS_NUM(call_argv[0])) { long (*fn)(long) = (long(*)(long))sym; return sage_number((double)fn((long)call_argv[0].as.number)); }\n"
+        "        if (call_argc == 3 && IS_NUM(call_argv[0]) && IS_NUM(call_argv[1]) && IS_NUM(call_argv[2])) { long (*fn)(long,long,long) = (long(*)(long,long,long))sym; return sage_number((double)fn((long)call_argv[0].as.number, (long)call_argv[1].as.number, (long)call_argv[2].as.number)); }\n"
+        "        if (call_argc == 3 && IS_NUM(call_argv[0]) && IS_PTR(call_argv[1]) && IS_NUM(call_argv[2])) { long (*fn)(long,void*,long) = (long(*)(long,void*,long))sym; return sage_number((double)fn((long)call_argv[0].as.number, sage_pointer_data(call_argv[1]), (long)call_argv[2].as.number)); }\n"
+        "        if (call_argc == 3 && IS_PTR(call_argv[1])) { long (*fn)(void*,void*,long) = (long(*)(void*,void*,long))sym; return sage_number((double)fn(sage_pointer_data(call_argv[0]), sage_pointer_data(call_argv[1]), (long)call_argv[2].as.number)); }\n"
         "        if (call_argc == 2 && IS_NUM(call_argv[0]) && IS_NUM(call_argv[1])) { long (*fn)(long,long) = (long(*)(long,long))sym; return sage_number((double)fn((long)call_argv[0].as.number,(long)call_argv[1].as.number)); }\n"
         "    }\n"
         "    if (strcmp(rt, \"string\") == 0) {\n"
@@ -7446,11 +7468,25 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
   /* Memory builtins */
   fputs("#include <stdint.h>\n"
         "\n"
-        "typedef struct {\n"
+        "typedef struct SagePointer {\n"
         "    void* ptr;\n"
         "    size_t size;\n"
         "    int owned;\n"
+        "    struct SagePointer* next;\n"
         "} SagePointer;\n"
+        "\n"
+        /* Every live block is on this list. Without it sage_as_pointer() cast any
+         * number to SagePointer*, so ffi.call could not tell a mem.alloc pointer
+         * from a small integer and truncated the address to int. */
+        "static SagePointer* sage_pointer_registry = NULL;\n"
+        "\n"
+        "static int sage_is_pointer_value(double raw) {\n"
+        "    if (!(raw > 0.0) || raw != (double)(uintptr_t)raw) return 0;\n"
+        "    for (SagePointer* p = sage_pointer_registry; p != NULL; p = p->next) {\n"
+        "        if ((double)(uintptr_t)p == raw) return 1;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n"
         "\n"
         "static SageValue sage_mem_alloc(SageValue size_val) {\n"
         "    if (size_val.type != SAGE_TAG_NUMBER) { fputs(\"mem_alloc(): "
@@ -7465,6 +7501,8 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "of memory\"); }\n"
         "    sp->size = size;\n"
         "    sp->owned = 1;\n"
+        "    sp->next = sage_pointer_registry;\n"
+        "    sage_pointer_registry = sp;\n"
         "    SageValue v; v.type = SAGE_TAG_NUMBER; v.as.number = "
         "(double)(uintptr_t)sp;\n"
         "    return v;\n"
@@ -7472,7 +7510,13 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "\n"
         "static SagePointer* sage_as_pointer(SageValue v) {\n"
         "    if (v.type != SAGE_TAG_NUMBER) return NULL;\n"
+        "    if (!sage_is_pointer_value(v.as.number)) return NULL;\n"
         "    return (SagePointer*)(uintptr_t)v.as.number;\n"
+        "}\n"
+        /* The buffer address, or NULL when this is not a live memory block. */
+        "static void* sage_pointer_data(SageValue v) {\n"
+        "    SagePointer* sp = sage_as_pointer(v);\n"
+        "    return sp != NULL ? sp->ptr : NULL;\n"
         "}\n"
         "static int sage_mem_range_valid(SagePointer* sp, size_t offset, size_t needed) {\n"
         "    return sp != NULL && sp->ptr != NULL && needed <= sp->size && offset <= sp->size - needed;\n"
@@ -7484,6 +7528,12 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "stderr); return sage_nil(); }\n"
         "    if (sp->ptr && sp->owned) { free(sp->ptr); sp->ptr = NULL; "
         "sp->size = 0; }\n"
+        /* Unlink before freeing: the registry holds the raw address, so a freed
+         * block left on it could match a number that now belongs to something
+         * else. */
+        "    { SagePointer** link = &sage_pointer_registry;\n"
+        "      while (*link != NULL && *link != sp) link = &(*link)->next;\n"
+        "      if (*link == sp) *link = sp->next; }\n"
         "    free(sp);\n"
         "    return sage_nil();\n"
         "}\n"
@@ -7710,6 +7760,8 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "of memory\"); }\n"
         "    sp->size = size;\n"
         "    sp->owned = 1;\n"
+        "    sp->next = sage_pointer_registry;\n"
+        "    sage_pointer_registry = sp;\n"
         "    SageValue v; v.type = SAGE_TAG_NUMBER; v.as.number = "
         "(double)(uintptr_t)sp;\n"
         "    return v;\n"
