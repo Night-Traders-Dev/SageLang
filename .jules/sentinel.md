@@ -121,3 +121,8 @@
 **Vulnerability:** Standalone LLVM runtime helpers `sage_rt_readbytes` and `sage_rt_load_weights` in `llvm_runtime.c` allocated heap memory and read streams without checking file size bounds or streaming read limits (CWE-400 / CWE-789).
 **Learning:** Independent target runtimes (such as LLVM runtime libraries used for standalone binaries) often re-implement file I/O primitives separately from interpreter standard libraries. Omitting file size bounds checks or streaming read accumulation caps in these standalone libraries exposes compiled binaries to Denial of Service and OOM crashes when processing large files or streams (like `/dev/urandom`).
 **Prevention:** Always enforce global file size bounds checks (`<= 100 * 1024 * 1024`) and streaming read accumulation caps across all execution runtime layers, including compiled LLVM standalone runtimes.
+
+## 2026-08-14 - Option-Injection Bypass via Leading Whitespace
+**Vulnerability:** Whitelist-based path and command validators (`is_safe_path`, `is_safe_command`, `sage_is_safe_command`) checked `cmd[0] == '-'` to prevent option injection, but evaluated string index 0 before skipping leading whitespace.
+**Learning:** When character whitelists include spaces, checking only `str[0]` for flag prefixes (such as `-`) allows attackers to prepend whitespace (e.g. `" -flag"`) to bypass prefix checks while keeping the option intact when passed to shell or system utilities.
+**Prevention:** Always trim or skip leading whitespace (`while (*str && isspace((unsigned char)*str)) str++;`) before performing prefix checks for option indicators like `-`.
