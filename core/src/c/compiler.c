@@ -7684,7 +7684,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    return sage_number((double)(uintptr_t)&val);\n"
       "}\n"
       "static SageValue sage_ptr_add(SageValue ptr_val, SageValue offset) {\n"
-      "    if (ptr_val.type != SAGE_TAG_POINTER || offset.type != SAGE_TAG_NUMBER)\n"
+      "    if (ptr_val.type != SAGE_TAG_NUMBER || offset.type != SAGE_TAG_NUMBER)\n"
       "        return sage_nil();\n"
       "    SagePointer* sp = sage_as_pointer(ptr_val);\n"
       "    if (sp == NULL) return sage_nil();\n"
@@ -7697,7 +7697,20 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    derived->ptr = (void*)((uintptr_t)sp->ptr + delta);\n"
         "    derived->size = sp->size - delta;\n"
         "    derived->owned = 0;\n"
-        "    SageValue v; v.type = SAGE_TAG_POINTER;\n"
+        /* A derived pointer is only usable if sage_as_pointer() can find it. That
+           function walks sage_pointer_registry, so a derived block missing from
+           the list is indistinguishable from an arbitrary number: every mem_read
+           and mem_write through ptr_add() silently returned nil and the data went
+           nowhere. It also left ->next uninitialised. Register it; owned = 0 keeps
+           the base block responsible for the memory. */
+      "    derived->next = sage_pointer_registry;\n"
+      "    sage_pointer_registry = derived;\n"
+        /* Tag it NUMBER, not POINTER. sage_mem_alloc stores a SagePointer* in
+           as.number and tags it NUMBER, and sage_as_pointer() rejects anything
+           whose type is not NUMBER -- so a POINTER-tagged value could never be
+           read back or written through, and ptr_add() produced a pointer that
+           every mem_read and mem_write then treated as an ordinary number. */
+      "    SageValue v; v.type = SAGE_TAG_NUMBER;\n"
         "    v.as.number = (double)(uintptr_t)derived;\n"
         "    return v;\n"
 
