@@ -810,6 +810,8 @@ ffi_close(libc)
 
 FFI supports return types: `"double"`, `"int"`, `"long"`, `"string"`, `"void"`, with up to 3 arguments (numeric or string). Passing more than 3 arguments returns an error. Library handles are tracked by the GC and properly freed on collection.
 
+*(Since v4.2.14, `ffi_call` has been fully stabilized in the C backend, correctly routing `argc` permutations and enabling full compilation of FFI usage into native binaries).*
+
 **Raw Memory Operations**:
 ```sagelang
 # Allocate 32 bytes of raw memory
@@ -2534,7 +2536,7 @@ print(hex_txt)
 
 ### 9.21 ESP32 Board Support (`core/boards/ESP32/`, `core/lib/esp32.sage`)
 
-SageLang v4.2.12 supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32 / DevKitC, 4MB flash): dual-core Xtensa LX6 @ 240MHz with 2.4GHz-only WiFi.
+SageLang v4.2.14 supports the **classic ESP32** (verified on ESP32-D0WD-V3, ESP-WROOM-32 / DevKitC, 4MB flash): dual-core Xtensa LX6 @ 240MHz with 2.4GHz-only WiFi.
 
 This includes:
 - **`core/lib/esp32.sage`**: Board support module with chip constants, GPIO validation rules (pads 0..39 minus absent 20/24/28-31, input-only 34..39, strapping 0/2/5/12/15, flash-bound 6/7/8/11), UART0 TX/RX defaults, standard flash partition offsets, and esptool flashing recipe parameters.
@@ -2716,9 +2718,10 @@ let r = io.readbytes("data.bin")    # Read as Bytes value
 io.appendbytes("log.bin", buf)      # Append Bytes value
 ```
 
-Available functions: `readfile`, `writefile`, `appendfile`, `exists`, `remove`, `rename`, `readbytes`, `writebytes`, `appendbytes`
+Available functions: `readfile`, `writefile`, `appendfile`, `exists`, `remove`, `rename`, `readbytes`, `writebytes`, `appendbytes`, `filesize`, `isdir`, `mkdir`
 
 *Note: `io.readbytes` returns a `Bytes` value (byte buffer), and `io.writebytes`/`io.appendbytes` accept either `Bytes` or `Array` values.*
+*(Note: Since v4.2.14, `io.filesize`, `io.isdir`, `io.remove`, and `io.mkdir` are correctly emitted and fully functional in the C backend).*
 
 ### 10.3 String Module
 
@@ -2747,7 +2750,9 @@ let path = sys.env("HOME")
 print path
 ```
 
-Available functions: `args`, `exit`, `platform`, `version`, `env`, `setenv`
+Available functions: `args`, `exit`, `platform`, `version`, `env`, `setenv`, `clock`, `shell_exec`, `getenv`
+
+*(Note: Since v4.2.14, `sys.args`, `sys.clock`, `sys.getenv`, and `sys.shell_exec` evaluate correctly in the C backend without needing an imported module, preventing "Cannot call non-function value" compilation errors.)*
 
 ### 10.5 FAT Module
 
