@@ -3521,6 +3521,15 @@ static char *emit_flat_builtin(Compiler *compiler, CallExpr *call,
     free(callee_name);
     return sb_take(&sb);
   }
+  if (strcmp(callee_name, "bytes") == 0 && call->arg_count == 2) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_bytes_fill(%s, %s)", a0, a1);
+    free(a0);
+    free(a1);
+    free(callee_name);
+    return sb_take(&sb);
+  }
   if (strcmp(callee_name, "bytes_len") == 0 && call->arg_count == 1) {
     char *a0 = emit_expr(compiler, call->args[0]);
     sb_appendf(&sb, "sage_bytes_len(%s)", a0);
@@ -7076,6 +7085,25 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    if (a.type == SAGE_TAG_STRING) return sage_bytes_from_string(a);\n"
       "    if (a.type == SAGE_TAG_ARRAY) return sage_bytes_from_array(a);\n"
       "    return sage_bytes_new(a);\n"
+      "}\n"
+      "/* bytes(len, fill): a buffer of `len` bytes, each set to `fill`. The\n"
+      "   interpreter has always accepted this form; compiled code rejected it\n"
+      "   outright with 'unknown name bytes', and the interpreter's own\n"
+      "   single-argument path returned an empty Bytes for it, so a caller\n"
+      "   asking for a filled buffer silently got a zero-length one. */\n"
+      "static SageValue sage_bytes_fill(SageValue n, SageValue v) {\n"
+      "    if (n.type != SAGE_TAG_NUMBER || v.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    double raw = n.as.number;\n"
+      "    if (!(raw >= 0.0) || raw != (double)(long long)raw) return sage_nil();\n"
+      "    long len = (long long)raw;\n"
+      "    if (len > 268435456L) return sage_nil();\n"
+      "    SageBytes* b = (SageBytes*)sage_gc_alloc(SAGE_GC_BYTES, sizeof(SageBytes));\n"
+      "    size_t alloc = len > 0 ? (size_t)len : 1;\n"
+      "    b->data = (unsigned char*)malloc(alloc);\n"
+      "    if (!b->data) { free(b); return sage_nil(); }\n"
+      "    memset(b->data, (unsigned char)(int)v.as.number, alloc);\n"
+      "    b->count = (int)len;\n"
+      "    SageValue r; r.type = SAGE_TAG_BYTES; r.as.bytes = b; return r;\n"
       "}\n"
       "static SageValue sage_bytes_len(SageValue v) {\n"
       "    if (v.type != SAGE_TAG_BYTES) return sage_nil();\n"

@@ -1869,6 +1869,17 @@ static int finite_integer(double value, long long* out) {
 // Phase 1.8: Bytes operations
 static Value bytes_new_native(int argCount, Value* args) {
     if (argCount == 0) return val_bytes(NULL, 0);
+    if (argCount == 2 && IS_NUMBER(args[0]) && IS_NUMBER(args[1])) {
+        int len = (int)AS_NUMBER(args[0]);
+        // bytes(len, fill): a buffer of `len` bytes, each set to `fill`.
+        // Security: Enforce global allocation limit (CWE-400)
+        if (len < 0 || len > SAGE_MAX_READ_SIZE) return val_nil();
+        Value b = val_bytes_empty(len);
+        b.as.bytes->length = len;
+        memset(b.as.bytes->data,
+               (unsigned char)(int)AS_NUMBER(args[1]), len);
+        return b;
+    }
     if (argCount == 1 && IS_NUMBER(args[0])) {
         int len = (int)AS_NUMBER(args[0]);
         // Security: Enforce global allocation limit (CWE-400)
