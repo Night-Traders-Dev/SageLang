@@ -3305,6 +3305,8 @@ irq.unmask_irq(irq.IRQ_TIMER) # Arch-neutral helper
 | Function | Description |
 |----------|-------------|
 | `register_handler(v, f)` | Register function `f` for vector `v`. Panics if already registered. |
+| `register_handler_safe(v, f)` | As `register_handler`, but returns `false` on a duplicate and keeps the existing handler instead of panicking. Use when handlers are assembled at runtime and a collision is recoverable. |
+| `unregister_handler(v)` | Remove the handler for `v`, returning `true` if there was one. Returns `false` rather than panicking when there is none, so unregistration is idempotent. |
 | `set_priority(v, l)` | Set interrupt priority level `l` for vector `v`. |
 | `get_priority(v)` | Get current priority level for vector `v`. |
 | `irq_enter()` | Increment nesting depth. |
