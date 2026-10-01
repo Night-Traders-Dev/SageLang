@@ -1159,9 +1159,9 @@ static int is_safe_command(const char* cmd) {
     if (cmd[0] == '-') return 0;
     for (const char* p = cmd; *p; p++) {
         // Allow alphanumeric and safe path/filename characters.
-        // Blocks metacharacters like ; | & > < $ ( ) ` " but allows spaces and single quotes for arguments
+        // Blocks metacharacters like ; | & > < $ ( ) ` " ' but allows spaces for arguments
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~' && *p != ' ' && *p != '\'') {
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ') {
             return 0;
         }
     }
@@ -1729,6 +1729,19 @@ typedef struct {
 static void* sage_thread_entry(void* data) {
     SageThreadData* td = (SageThreadData*)data;
     ProcStmt* proc = (ProcStmt*)td->func->proc;
+
+    /* An async call on a compiled function used to land here with proc == NULL
+     * and be dereferenced straight away. Callers now route is_vm functions to
+     * the VM's spawn, so reaching this with a NULL proc means a new call site
+     * made the same assumption: fail here, loudly, instead of returning a task
+     * that answers with whatever happened to be in memory. */
+    if (proc == NULL) {
+        fprintf(stderr,
+                "Runtime Error: cannot run a compiled function on a plain "
+                "thread.\n");
+        td->result = val_nil();
+        return NULL;
+    }
 
     // Register this thread for GC
     ThreadState ts;

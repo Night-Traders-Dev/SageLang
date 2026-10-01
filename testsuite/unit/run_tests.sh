@@ -152,6 +152,24 @@ capture_test_output() {
                 TEST_OUTPUT=$(cd "$test_dir" && "$SAGE" --runtime bytecode "$test_base" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
             fi
             ;;
+        "vm-artifact")
+            # Round-trip through a real .svm artifact: --emit-vm compiles the whole
+            # program in STRICT mode, so every proc -- async included -- becomes a
+            # compiled function with a BC_OP_DEFINE_* of its own, and --run-vm
+            # executes that artifact with no AST available at all. This is the path
+            # SageOS and SageVM take, and it is the only one that reaches the
+            # compiled branch of the async worker: a plain bytecode-run test has no
+            # BytecodeProgram behind it, so its procs stay AST-backed.
+            mkdir -p "$SCRIPT_DIR/.tmp"
+            tmp_path=$(mktemp "$SCRIPT_DIR/.tmp/test_artifact_XXXXXX.svm")
+            emit_output=$(cd "$test_dir" && "$SAGE" --emit-vm "$test_base" -o "$tmp_path" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
+            if [ "$TEST_EXIT_CODE" -eq 0 ]; then
+                TEST_OUTPUT=$(cd "$test_dir" && "$SAGE" --run-vm "$tmp_path" 2>&1) && TEST_EXIT_CODE=0 || TEST_EXIT_CODE=$?
+            else
+                TEST_OUTPUT="$emit_output"
+            fi
+            rm -f "$tmp_path"
+            ;;
         *)
             TEST_OUTPUT="Unknown # RUN mode '$run_mode' in $test_file"
             TEST_EXIT_CODE=2

@@ -100,7 +100,14 @@ typedef enum {
     BC_OP_GPU_RESET_FENCE,         // gpu.reset_fence(fence)
     BC_OP_GPU_UPDATE_UNIFORM,      // gpu.update_uniform(handle, data)
     BC_OP_GPU_CMD_PUSH_CONST,      // gpu.cmd_push_constants(cmd, layout, stages, data)
-    BC_OP_GPU_CMD_DISPATCH         // gpu.cmd_dispatch(cmd, gx, gy, gz)
+    BC_OP_GPU_CMD_DISPATCH,        // gpu.cmd_dispatch(cmd, gx, gy, gz)
+    /* This enum is duplicated in core/src/vm/bytecode.h, and the two copies
+     * share an include guard, so a translation unit sees whichever it reached
+     * first. These two opcodes have to be added to both or the VM's validator
+     * rejects a program the compiler just produced. Collapsing the duplicate is
+     * the fix; until then, keep the copies identical. */
+    BC_OP_AWAIT,                   // await (value on stack) -> resolved value
+    BC_OP_DEFINE_ASYNC_FUNCTION    // define an `async proc` binding
 } BytecodeOp;
 
 typedef enum {

@@ -2042,6 +2042,50 @@ static Value mem_free_native(int argCount, Value* args) {
 
 // mem_read(ptr, offset, type) -> value
 // type: "byte", "int", "double", "string"
+/* Bulk copies between a mem_alloc buffer and a Bytes: one memcpy instead of one
+ * interpreted mem_read/mem_write per byte, so a multi-megabyte transfer neither
+ * trips the loop-iteration cap nor spends its time crossing the FFI boundary. */
+static Value mem_copy_common(int argCount, Value* args, int into_bytes) {
+    if (sandbox_denied("raw_memory")) return val_nil();
+    if (argCount != 3 || !IS_POINTER(args[0]) || !IS_BYTES(args[1]) ||
+        !IS_NUMBER(args[2])) {
+        fprintf(stderr, "mem_copy_%s() expects (pointer, bytes, count).\n",
+                into_bytes ? "from_ptr" : "to_ptr");
+        return val_nil();
+    }
+    PointerValue* p = AS_POINTER(args[0]);
+    BytesValue* b = AS_BYTES(args[1]);
+    long long n = 0;
+    if (!p->ptr || !b || !finite_integer(AS_NUMBER(args[2]), &n) || n < 0) {
+        fprintf(stderr, "mem_copy_%s(): null pointer, bad bytes, or bad count.\n",
+                into_bytes ? "from_ptr" : "to_ptr");
+        return val_nil();
+    }
+    if ((size_t)n > (size_t)b->length) {
+        fprintf(stderr, "mem_copy_%s(): count %lld exceeds bytes length %d.\n",
+                into_bytes ? "from_ptr" : "to_ptr", n, b->length);
+        return val_nil();
+    }
+    if (!pointer_range_valid(p, 0, (size_t)n)) {
+        fprintf(stderr, "mem_copy_%s(): pointer range is not owned or is out of bounds.\n",
+                into_bytes ? "from_ptr" : "to_ptr");
+        return val_nil();
+    }
+    if (n > 0) {
+        if (into_bytes) memcpy(b->data, p->ptr, (size_t)n);
+        else memcpy(p->ptr, b->data, (size_t)n);
+    }
+    return val_number((double)n);
+}
+
+static Value mem_copy_from_ptr_native(int argCount, Value* args) {
+    return mem_copy_common(argCount, args, 1);
+}
+
+static Value mem_copy_to_ptr_native(int argCount, Value* args) {
+    return mem_copy_common(argCount, args, 0);
+}
+
 static Value mem_read_native(int argCount, Value* args) {
     if (sandbox_denied("raw_memory")) return val_nil();
     if (argCount != 3 || !IS_POINTER(args[0]) || !IS_NUMBER(args[1]) || !IS_STRING(args[2])) {
@@ -2965,7 +3009,7 @@ static int repl_safe_command(const char* cmd) {
     if (*cmd == '-') return 0;
     for (const char* p = cmd; *p != '\0'; p++) {
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~' && *p != ' ' && *p != '\'') {
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ') {
             return 0;
         }
     }
@@ -3138,6 +3182,8 @@ void init_stdlib(Env* env) {
     env_define_const(env, "mem_alloc", 9, val_native(mem_alloc_native));
     env_define_const(env, "mem_free", 8, val_native(mem_free_native));
     env_define_const(env, "mem_read", 8, val_native(mem_read_native));
+    env_define_const(env, "mem_copy_from_ptr", sizeof("mem_copy_from_ptr") - 1, val_native(mem_copy_from_ptr_native));
+    env_define_const(env, "mem_copy_to_ptr", sizeof("mem_copy_to_ptr") - 1, val_native(mem_copy_to_ptr_native));
     env_define_const(env, "mem_write", 9, val_native(mem_write_native));
     env_define_const(env, "mem_size", 8, val_native(mem_size_native));
     env_define_const(env, "addressof", 9, val_native(addressof_native));
@@ -4314,6 +4360,22 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                     AST_GC_POP_N(1 + pushed_args);
                     return EVAL_RESULT(val_nil());
 #else
+                    /* A compiled async function has no ProcStmt and no
+                     * FunctionValue.param_count, so the AST path below would size
+                     * its argument array from 0 and drop every argument, then hand
+                     * the call to a worker that reads the NULL proc. This is the
+                     * normal shape under `sage --run-vm`, where the top level runs
+                     * through this walker but the async proc is compiled, so the
+                     * VM's own spawn is the only one that can run it. */
+                    if (callee_value.as.function->is_vm) {
+                        extern Value sage_vm_spawn_async(Value callee, int arg_count,
+                                                          Value* args);
+                        Value vhandle = sage_vm_spawn_async(callee_value, pushed_args,
+                                                            eval_args);
+                        free(eval_args);
+                        AST_GC_POP_N(1 + pushed_args);
+                        return EVAL_RESULT(vhandle);
+                    }
                     // Async call: spawn thread, return thread handle
                     Value spawn_args[1 + func->param_count];
                     spawn_args[0] = callee_value;

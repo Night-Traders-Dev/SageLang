@@ -1450,6 +1450,11 @@ static void emit_type_definitions(LLVMCompiler* lc) {
     ll_emit(lc, "declare %%SageValue @sage_rt_split(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_join(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_replace(%%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_ffi_open(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_ffi_close(%%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_ffi_call(%%SageValue, %%SageValue, %%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_ffi_sym(%%SageValue, %%SageValue)\n");
+    ll_emit(lc, "declare %%SageValue @sage_rt_ffi_sym_addr(%%SageValue, %%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_mem_alloc(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_mem_free(%%SageValue)\n");
     ll_emit(lc, "declare %%SageValue @sage_rt_mem_read(%%SageValue, %%SageValue, %%SageValue)\n");
@@ -3030,7 +3035,8 @@ static int llvm_is_builtin_call(const char* name) {
         "join", "replace", "mem_alloc", "mem_free", "mem_read", "mem_write",
         "mem_size", "struct_def", "struct_new", "struct_get", "struct_set",
         "struct_size", "asm_arch", "type", "chr", "ord", "input", "gc_disable",
-        "gc_enable", "gc_collect", NULL
+        "gc_enable", "gc_collect",
+          "ffi_open", "ffi_close", "ffi_call", "ffi_sym", "ffi_sym_addr", NULL
     };
     if (name == NULL) return 0;
     for (int i = 0; names[i] != NULL; i++) {
@@ -3554,6 +3560,47 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
 
             int r = -1;
 
+              /* `ffi.open("libc.so.6")` arrives here as
+               * EXPR_GET(object=Variable("ffi"), property="open"). The C backend
+               * flattens these to ffi_open and friends; without the same rewrite
+               * the native backend would send `ffi` to the source-module lookup
+               * below and never reach the sage_rt_ffi_* runtime, which is why
+               * ffi.open compiled natively but then failed at run time. */
+              if (expr->as.call.callee->type == EXPR_GET &&
+                  expr->as.call.callee->as.get.object != NULL &&
+                  expr->as.call.callee->as.get.object->type == EXPR_VARIABLE) {
+                  char* ns = token_to_str(expr->as.call.callee->as.get.object->as.variable.name);
+                  char* member = token_to_str(expr->as.call.callee->as.get.property);
+                  int ac = expr->as.call.arg_count;
+                  if (ns != NULL && member != NULL && strcmp(ns, "ffi") == 0) {
+                      int fr = -1;
+                      if (strcmp(member, "open") == 0 && ac == 1) {
+                          fr = llc_new_reg(lc);
+                          ll_line(lc, "%%%d = call %%SageValue @sage_rt_ffi_open(%%SageValue %%%d)", fr, arg_regs[0]);
+                      } else if (strcmp(member, "close") == 0 && ac == 1) {
+                          fr = llc_new_reg(lc);
+                          ll_line(lc, "%%%d = call %%SageValue @sage_rt_ffi_close(%%SageValue %%%d)", fr, arg_regs[0]);
+                      } else if (strcmp(member, "call") == 0 && ac == 4) {
+                          fr = llc_new_reg(lc);
+                          ll_line(lc, "%%%d = call %%SageValue @sage_rt_ffi_call(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", fr, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3]);
+                      } else if (strcmp(member, "sym") == 0 && ac == 2) {
+                          fr = llc_new_reg(lc);
+                          ll_line(lc, "%%%d = call %%SageValue @sage_rt_ffi_sym(%%SageValue %%%d, %%SageValue %%%d)", fr, arg_regs[0], arg_regs[1]);
+                      } else if (strcmp(member, "sym_addr") == 0 && ac == 2) {
+                          fr = llc_new_reg(lc);
+                          ll_line(lc, "%%%d = call %%SageValue @sage_rt_ffi_sym_addr(%%SageValue %%%d, %%SageValue %%%d)", fr, arg_regs[0], arg_regs[1]);
+                      }
+                      if (fr >= 0) {
+                          free(ns);
+                          free(member);
+                          free(arg_regs);
+                          return fr;
+                      }
+                  }
+                  free(ns);
+                  free(member);
+              }
+
             // Check for builtin calls
             if (expr->as.call.callee->type == EXPR_VARIABLE) {
                 char* name = token_to_str(expr->as.call.callee->as.variable.name);
@@ -3609,6 +3656,16 @@ static int llvm_emit_expr(LLVMCompiler* lc, Expr* expr) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_mem_read(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2]);
                 } else if (strcmp(name, "mem_write") == 0 && expr->as.call.arg_count == 4) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_mem_write(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3]);
+                } else if (strcmp(name, "ffi_open") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_ffi_open(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "ffi_close") == 0 && expr->as.call.arg_count == 1) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_ffi_close(%%SageValue %%%d)", r, arg_regs[0]);
+                } else if (strcmp(name, "ffi_call") == 0 && expr->as.call.arg_count == 4) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_ffi_call(%%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1], arg_regs[2], arg_regs[3]);
+                } else if (strcmp(name, "ffi_sym") == 0 && expr->as.call.arg_count == 2) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_ffi_sym(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
+                } else if (strcmp(name, "ffi_sym_addr") == 0 && expr->as.call.arg_count == 2) {
+                    ll_line(lc, "%%%d = call %%SageValue @sage_rt_ffi_sym_addr(%%SageValue %%%d, %%SageValue %%%d)", r, arg_regs[0], arg_regs[1]);
                 } else if (strcmp(name, "mem_size") == 0 && expr->as.call.arg_count == 1) {
                     ll_line(lc, "%%%d = call %%SageValue @sage_rt_mem_size(%%SageValue %%%d)", r, arg_regs[0]);
                 } else if (strcmp(name, "struct_def") == 0 && expr->as.call.arg_count == 1) {
@@ -5586,7 +5643,7 @@ int compile_source_to_llvm_executable(const char* source, const char* input_path
         }
 
         // Build clang argument list dynamically based on available libraries
-        const char* args[32];
+        const char* args[48];
         int argc = 0;
         args[argc++] = "clang";
         args[argc++] = "-O2";
@@ -5597,6 +5654,11 @@ int compile_source_to_llvm_executable(const char* source, const char* input_path
         args[argc++] = exe_output_path;
         args[argc++] = "-lm";
         args[argc++] = "-lpthread";
+        /* llvm_runtime.o calls dlopen/dlclose and builds every ffi.call signature
+         * at runtime through libffi, so both are required unconditionally -- not
+         * only when a GPU is present, which is where -ldl used to live. */
+        args[argc++] = "-ldl";
+        args[argc++] = "-lffi";
         // Link GPU libraries if gpu_api.o is available
         if (gpu_path) {
             // Vulkan
@@ -5609,7 +5671,6 @@ int compile_source_to_llvm_executable(const char* source, const char* input_path
             #endif
             // OpenGL (always try — linker will skip if unused)
             args[argc++] = "-lGL";
-            args[argc++] = "-ldl";
         }
         args[argc] = NULL;
 

@@ -1679,9 +1679,8 @@ The C-hosted `sage` binary now supports several runtime selections:
 
 **What still bridges or stays unsupported**:
 
-- In hybrid `--runtime bytecode` mode: class definitions, module imports, exception handling (try/catch/raise), defer, match, yield, and async procs fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. Opcodes are defined for future native support (`BC_OP_CLASS`, `BC_OP_IMPORT`, `BC_OP_SETUP_TRY`, `BC_OP_RAISE`, etc.).
+- In hybrid `--runtime bytecode` mode: class definitions, module imports, exception handling (try/catch/raise), defer, match, and yield fall back to the AST interpreter via `BC_OP_EXEC_AST_STMT`. Opcodes are defined for future native support (`BC_OP_CLASS`, `BC_OP_IMPORT`, `BC_OP_SETUP_TRY`, `BC_OP_RAISE`, etc.).
 - In strict `--emit-vm` mode: these constructs fail compilation instead of bridging.
-- `EXPR_AWAIT` is not supported in either mode.
 
 **Security**: The VM validates all constant pool accesses (`VM_CHECK_CONST`) and AST statement indices (`VM_CHECK_AST`) to prevent buffer overflow from malformed bytecode. Stack depth is bounded at 1024 entries. All memory allocation uses OOM-safe wrappers.
 
@@ -2652,9 +2651,9 @@ For self-hosted LLVM codegen specifically (`src/sage/llvm_backend.sage`), `from 
 
 **Delegated to host runtime**: GC control (`gc_collect`, `gc_enable`, `gc_disable`, `gc_stats`), FFI (`ffi_open`, `ffi_close`, `ffi_call`, `ffi_sym`), memory access (`mem_alloc`, `mem_free`, `mem_read`, `mem_write`, `mem_size`, `addressof`), networking (via host `import` of native modules).
 
-**Stub/partial**: async proc (registered with `is_async` flag, executes synchronously), await (evaluates expression directly).
+**Stub/partial**: async threading in the self-hosted interpreter evaluates synchronously (AST-backed path).
 
-**Not implemented**: true coroutine-based generators (uses eager collection instead), actual async threading in self-hosted path, GPU module (uses host `import gpu` directly).
+**Not implemented**: true coroutine-based generators (uses eager collection instead), GPU module (uses host `import gpu` directly).
 
 **Safety**: while loop iteration limit (1M), recursion depth limit (50000 in the self-hosted interpreter, backed by the host's stack-proximity guard), rich error messages with source context via `errors.sage`.
 

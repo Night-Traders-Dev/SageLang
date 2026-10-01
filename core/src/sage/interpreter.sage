@@ -743,6 +743,12 @@ proc _n_mem_write(args):
 proc _n_mem_size(args):
     return mem_size(args[0])
 
+proc _n_mem_copy_from_ptr(args):
+    return mem_copy_from_ptr(args[0], args[1], args[2])
+
+proc _n_mem_copy_to_ptr(args):
+    return mem_copy_to_ptr(args[0], args[1], args[2])
+
 proc _n_addressof(args):
     return addressof(args[0])
 
@@ -816,6 +822,8 @@ _native_dispatch["mem_free"] = _n_mem_free
 _native_dispatch["mem_read"] = _n_mem_read
 _native_dispatch["mem_write"] = _n_mem_write
 _native_dispatch["mem_size"] = _n_mem_size
+_native_dispatch["mem_copy_from_ptr"] = _n_mem_copy_from_ptr
+_native_dispatch["mem_copy_to_ptr"] = _n_mem_copy_to_ptr
 _native_dispatch["addressof"] = _n_addressof
 _native_dispatch["int"] = _n_int
 

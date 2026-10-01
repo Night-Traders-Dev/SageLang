@@ -39,8 +39,28 @@ typedef struct ActiveVm {
     // Generator support: set when executing a generator chunk
     GeneratorValue* current_generator;
     int is_generator_exec;
-    int resume_ip_offset;  // For generator resume: start from this offset
-    int resume_stack_count; // Stack depth to restore on resume
+  int resume_ip_offset;  // For generator resume: start from this offset
+  int resume_stack_count; // Stack depth to restore on resume
+  /* Arguments for a call that has to start a fresh frame chain -- currently the
+   * async worker, which runs a compiled body on its own thread.
+   *
+   * vm_execute_chunk builds its own local ActiveVm and inherits only the resume
+   * fields from previous_vm, so a caller cannot pre-seed vm.stack directly: the
+   * values it wrote are discarded before the frame is set up. Passing the
+   * arguments here is what survives.
+   *
+   * A call lays the stack out as
+   *
+   *     vm.stack[0]              the callee slot, kept in place by BC_OP_CALL
+   *     vm.stack[1]              first argument
+   *     ...
+   *
+   * with frame->slots = vm.stack + 1, so local 0 is the first argument -- the
+   * same layout BC_OP_CALL's fast path produces with sp - arg_count. The callee
+   * slot has to exist because RETURN pops to frame->slots - 1 to drop the
+   * arguments and the callee together. Nothing else writes it, so nil is fine. */
+  const Value* call_args;
+  int call_arg_count;
 } ActiveVm;
 
 static int vm_pop_handler_for_frame(ActiveVm* vm, int frame_depth, int* index_out) {
@@ -229,6 +249,202 @@ static ExecResult call_any_method(Value object, Method* method, int arg_count, V
     return interpret(method_stmt->body, method_env);
 }
 
+/* ===========================================================================
+ * async / await
+ *
+ * Calling an `async proc` starts a thread and hands back a future; `await`
+ * joins it and yields its value. Awaiting anything that is not a future
+ * returns it unchanged, so `await 42` is 42.
+ *
+ * The tree-walking interpreter gets this by calling thread_spawn_native, whose
+ * entry point runs a ProcStmt through the AST evaluator. That cannot run a
+ * compiled chunk, so bytecode needs its own worker. What is shared is the
+ * observable behaviour and the future representation: a VAL_THREAD whose
+ * `joined` field carries the same 0/1/2 protocol the rest of the runtime
+ * already understands, so join, GC and any generic thread code see a sane value
+ * whichever runtime produced it.
+ *
+ * Re-entrancy is what makes this safe. g_active_vm is __thread, so each worker
+ * thread gets its own VM frame chain rather than sharing the caller's, and the
+ * 64K Value stack lives in that frame rather than in file scope.
+ * =========================================================================== */
+
+typedef struct {
+    Value result;               /* written by the worker before ready is set */
+    Value* args;                /* arguments, owned here */
+    int arg_count;
+    FunctionValue* func;        /* the async function, however it is backed */
+    Env* closure;
+    int* ready;                 /* points at ThreadValue.joined */
+} VmFuture;
+
+static void* vm_future_entry(void* data) {
+    VmFuture* fut = (VmFuture*)data;
+    FunctionValue* func = fut->func;
+    ExecResult r;
+
+    if (func->is_vm && func->vm_function != NULL) {
+        /* Compiled body. g_active_vm is __thread, so this thread gets its own VM
+         * frame chain instead of sharing the caller's.
+         *
+         * The arguments cross as call arguments, not as scoped names, because a
+         * compiled function's parameters are stack slots: vm_execute_chunk derives
+         * frame->slots from vm.stack and the body reads them by slot index. It
+         * builds its own local ActiveVm and inherits only the resume fields from
+         * the previous one, so anything else a caller pre-seeds is discarded --
+         * which is why binding the names in an Env was not enough and every
+         * parameter read came back "VM local index is out of bounds". The names are
+         * still defined, so a body reaching a parameter through an upvalue
+         * resolves as well. */
+        BytecodeFunction* bf = func->vm_function;
+        Env* scope = env_create(fut->closure);
+        for (int i = 0; i < bf->param_count; i++) {
+            Value v = (i < fut->arg_count) ? fut->args[i] : val_nil();
+            env_define(scope, bf->params[i], (int)strlen(bf->params[i]), v);
+        }
+
+        ActiveVm task_vm;
+        memset(&task_vm, 0, sizeof(task_vm));
+        task_vm.chunk = &bf->chunk;
+        task_vm.parent = g_active_vm;
+        task_vm.call_args = fut->args;
+        task_vm.call_arg_count = bf->param_count < fut->arg_count ? bf->param_count
+                                                                  : fut->arg_count;
+
+        ActiveVm* previous_vm = g_active_vm;
+        g_active_vm = &task_vm;
+        r = vm_execute_chunk(&bf->chunk, scope);
+        g_active_vm = previous_vm;
+    } else if (func->proc != NULL) {
+        /* AST body. A plain script run under the bytecode runtime has no
+         * BytecodeProgram, so build_function is NULL and every procedure is
+         * defined through the AST walker -- an async one among them. Refusing
+         * those would have left async working only in artifact builds, which is
+         * the opposite of useful. Registering the thread with the GC mirrors what
+         * the interpreter's own thread worker does, and is required: a thread the
+         * collector does not know about can have its allocations swept. */
+        ProcStmt* proc = (ProcStmt*)func->proc;
+        ThreadState ts;
+        memset(&ts, 0, sizeof(ThreadState));
+        ts.thread_id = sage_thread_id();
+        ts.gas_limit = -1;
+        gc_register_thread(&ts);
+
+        gc_lock();
+        Env* scope = env_create(fut->closure);
+        for (int i = 0; i < fut->arg_count && i < proc->param_count; i++) {
+            env_define_const(scope, proc->params[i].start, proc->params[i].length,
+                             fut->args[i]);
+        }
+        gc_unlock();
+
+        r = interpret(proc->body, scope);
+        gc_unregister_thread(&ts);
+    } else {
+        r = vm_normal(val_nil());
+    }
+
+    fut->result = r.value;
+    /* Publish last, and with release ordering: a joiner that observes ready
+     * must be guaranteed to see the result written above. */
+    __atomic_store_n(fut->ready, 1, __ATOMIC_RELEASE);
+    return NULL;
+}
+
+static Value vm_spawn_async(FunctionValue* func, int arg_count, Value* args) {
+    if ((func->is_vm == 0 || func->vm_function == NULL) && func->proc == NULL) {
+        fprintf(stderr,
+                "Runtime Error: async proc has no body to run.\n");
+        return val_nil();
+    }
+
+    ThreadValue* tv = (ThreadValue*)SAGE_ALLOC(sizeof(ThreadValue));
+    VmFuture* fut = (VmFuture*)SAGE_ALLOC(sizeof(VmFuture));
+    memset(tv, 0, sizeof(ThreadValue));
+    memset(fut, 0, sizeof(VmFuture));
+
+    fut->func = func;
+    fut->closure = func->closure;
+    fut->arg_count = arg_count;
+    fut->ready = &tv->joined;
+    if (arg_count > 0) {
+        fut->args = (Value*)SAGE_ALLOC(sizeof(Value) * (size_t)arg_count);
+        memcpy(fut->args, args, sizeof(Value) * (size_t)arg_count);
+    }
+
+    sage_thread_t* handle = (sage_thread_t*)SAGE_ALLOC(sizeof(sage_thread_t));
+    if (sage_thread_create(handle, vm_future_entry, fut) != 0) {
+        fprintf(stderr, "Runtime Error: could not start async task.\n");
+        return val_nil();
+    }
+
+    tv->handle = handle;
+    tv->data = fut;
+    tv->joined = 0;
+    return val_thread(tv);
+}
+
+/* Spawn an async function on behalf of a caller that is not the VM's own
+ * dispatch loop -- currently the tree-walking interpreter.
+ *
+ * An artifact is not homogeneous: `sage --run-vm` runs the top-level statements
+ * through the AST walker and only the functions the VM defined stay compiled. So
+ * a program whose async proc is compiled still has its *call* seen by the
+ * interpreter, and the interpreter's own async path assumed every async function
+ * had an AST body: it sized the argument array from FunctionValue.param_count,
+ * which is 0 for a compiled function, so every argument was dropped, and the
+ * worker it handed off to read FunctionValue.proc, which is NULL for a compiled
+ * function. The result was a task that ran no body and answered with the
+ * caller's own thread id -- and it happened not to crash, which is the worst
+ * version of that bug.
+ *
+ * The two callers cannot both own "start an async function", because they
+ * disagree about which representation the body has. This is the one place that
+ * handles either. */
+Value sage_vm_spawn_async(Value callee, int arg_count, Value* args) {
+    if (callee.type != VAL_FUNCTION || callee.as.function == NULL) {
+        return val_nil();
+    }
+    return vm_spawn_async(callee.as.function, arg_count, args);
+}
+
+static Value vm_await_value(Value v) {
+    /* Not a future: already its own answer. Mirrors the interpreter, where a
+     * non-thread operand is returned directly. */
+    if (!IS_THREAD(v)) return v;
+
+    ThreadValue* tv = AS_THREAD(v);
+    if (tv == NULL) return val_nil();
+
+    int state = __atomic_load_n(&tv->joined, __ATOMIC_ACQUIRE);
+    if (state == 1) {
+        VmFuture* done = (VmFuture*)tv->data;
+        return done == NULL ? val_nil() : done->result;
+    }
+    if (state != 0) {
+        /* Another await got there first and is joining. Wait for it to finish
+         * rather than joining the same thread twice. */
+        do {
+            sage_usleep(100);
+            state = __atomic_load_n(&tv->joined, __ATOMIC_ACQUIRE);
+        } while (state == 2);
+        VmFuture* done = (VmFuture*)tv->data;
+        return done == NULL ? val_nil() : done->result;
+    }
+
+    int expected = 0;
+    if (!__atomic_compare_exchange_n(&tv->joined, &expected, 2, 0,
+                                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        return vm_await_value(v);
+    }
+
+    sage_thread_t handle = *(sage_thread_t*)tv->handle;
+    sage_thread_join(handle, NULL);
+    __atomic_store_n(&tv->joined, 1, __ATOMIC_RELEASE);
+    VmFuture* fut = (VmFuture*)tv->data;
+    return fut == NULL ? val_nil() : fut->result;
+}
+
 static ExecResult call_function_value(Value callee, int arg_count, Value* args, Env* env) {
     if (callee.type == VAL_NATIVE) {
         return vm_normal(callee.as.native(arg_count, args));
@@ -238,13 +454,24 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
         if (callee.as.function == NULL) {
             return vm_error("Invalid function value.");
         }
-        if (callee.as.function->is_async) {
-#if SAGE_PLATFORM_PICO
-            return vm_error("async/await not supported on RP2040.");
-#else
-            return vm_error("async Sage functions are not executed by the bytecode VM yet.");
-#endif
-        }
+          if (callee.as.function->is_async) {
+  #if SAGE_PLATFORM_PICO
+              return vm_error("async/await not supported on RP2040.");
+  #else
+              /* Arity is checked here rather than left to the worker filling in
+               * nils, so a mistyped call reports at the call site like every
+               * other function call instead of producing a task that quietly
+               * returns nil for the missing arguments. */
+              if (callee.as.function->is_vm && callee.as.function->vm_function != NULL &&
+                  arg_count != callee.as.function->vm_function->param_count) {
+                  return vm_error("Arity mismatch.");
+              }
+              /* Start the task and return its future. The call does not block:
+               * the body runs on its own thread and the future is resolved by
+               * the await that eventually consumes it. */
+              return vm_normal(vm_spawn_async(callee.as.function, arg_count, args));
+  #endif
+          }
 
         if (callee.as.function->is_vm) {
             BytecodeFunction* function = callee.as.function->vm_function;
@@ -418,6 +645,10 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
          previous_vm->resume_stack_count < 0 || previous_vm->resume_stack_count > VM_STACK_MAX)) {
         return vm_error("Invalid VM generator resume state.");
     }
+    if (previous_vm != NULL &&
+        (previous_vm->call_arg_count < 0 || previous_vm->call_arg_count + 1 > VM_STACK_MAX)) {
+        return vm_error("Invalid VM call argument state.");
+    }
     
     memset(&vm, 0, sizeof(vm));
     vm.chunk = chunk;
@@ -432,6 +663,8 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
         vm.is_generator_exec = previous_vm->is_generator_exec;
         vm.resume_ip_offset = previous_vm->resume_ip_offset;
         vm.resume_stack_count = previous_vm->resume_stack_count;
+        vm.call_args = previous_vm->call_args;
+        vm.call_arg_count = previous_vm->call_arg_count;
     }
 
     CallFrame frames[MAX_FRAMES];
@@ -441,6 +674,21 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     // Support generator resume: start from saved IP offset
     uint8_t* resume_start = chunk->code;
     int initial_stack_count = 0;
+    /* Arguments for a call that is starting its own frame chain. They are laid
+     * out exactly as BC_OP_CALL leaves them, and the slot base is shifted past
+     * the callee slot, so a body reads local 0 as its first parameter whether it
+     * was called from the fast path or from the async worker. With no call
+     * arguments this is all zero and the slot base is vm.stack, which is what
+     * generators and top-level chunks have always used. */
+    int slots_base_offset = 0;
+    if (vm.call_arg_count > 0 && vm.call_args != NULL) {
+        vm.stack[0] = val_nil();
+        for (int i = 0; i < vm.call_arg_count; i++) {
+            vm.stack[1 + i] = vm.call_args[i];
+        }
+        slots_base_offset = 1;
+        initial_stack_count = vm.call_arg_count;
+    }
     if (vm.resume_ip_offset > 0) {
         resume_start = chunk->code + vm.resume_ip_offset;
         initial_stack_count = vm.resume_stack_count;
@@ -452,10 +700,10 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     frame->chunk = chunk;
     frame->ip = resume_start;
     frame->ip_end = chunk->code + chunk->code_count;
-    frame->slots = vm.stack;
+    frame->slots = vm.stack + slots_base_offset;
     frame->closure = env;
 
-    register Value* sp = vm.stack + initial_stack_count;
+    register Value* sp = frame->slots + initial_stack_count;
     register Value* constants = frame->chunk->constants;
     register uint8_t* ip = frame->ip;
     uint8_t* ip_end = frame->ip_end;
@@ -489,13 +737,24 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
         &&BC_OP_GPU_CMD_DRAW_IDX, &&BC_OP_GPU_SUBMIT_SYNC, &&BC_OP_GPU_ACQUIRE_IMG,
         &&BC_OP_GPU_PRESENT, &&BC_OP_GPU_WAIT_FENCE, &&BC_OP_GPU_RESET_FENCE,
         &&BC_OP_GPU_UPDATE_UNIFORM, &&BC_OP_GPU_CMD_PUSH_CONST,
-        &&BC_OP_GPU_CMD_DISPATCH
+        &&BC_OP_GPU_CMD_DISPATCH,
+          /* Must stay in BytecodeOp order: the table is indexed by opcode value, so an
+           * entry out of step with the enum dispatches to the wrong handler.
+           * BC_OP_AWAIT and BC_OP_DEFINE_ASYNC_FUNCTION are the last two opcodes,
+           * so they go last here too. */
+          &&BC_OP_AWAIT, &&BC_OP_DEFINE_ASYNC_FUNCTION
     };
 
+    /* The bounds test inside DISPATCH compares against the last opcode, because
+     * the table above is indexed by opcode value. The two must move together: a
+     * bound left at the previous last opcode rejects every opcode added since,
+     * which shows up as a program the compiler had just produced failing to
+     * validate. No comments inside this macro -- it is line-continued, and one
+     * without a trailing backslash ends it. */
     #define DISPATCH() \
         do { \
             if (ip >= ip_end) goto done; \
-            if (*ip > BC_OP_GPU_CMD_DISPATCH) { \
+            if (*ip > BC_OP_DEFINE_ASYNC_FUNCTION) { \
                 result = vm_error("VM opcode is out of bounds."); \
                 goto done; \
             } \
@@ -635,6 +894,33 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                     result = vm_error("Undefined variable.");
                     goto done;
                 }
+                DISPATCH();
+            }
+            BC_OP_DEFINE_ASYNC_FUNCTION: {
+                /* Same operands as BC_OP_DEFINE_FUNCTION, with the async bit
+                 * carried in the opcode: val_bytecode_function() builds a plain
+                 * function and clears is_async, so without this the binding would
+                 * be an ordinary proc and its body would run synchronously on the
+                 * caller -- the C backend's behaviour, not async's. */
+                VM_CHECK_IP(2);
+  ;
+                uint16_t aname = READ_U16();
+                VM_CHECK_NAME_CONST(frame->chunk, aname);
+                VM_CHECK_IP(2);
+  ;
+                uint16_t afunc = READ_U16();
+                if (frame->chunk->program == NULL ||
+                    afunc >= frame->chunk->program->function_count) {
+                    result = vm_error("Invalid compiled VM function reference.");
+                    goto done;
+                }
+                Value anamev = constants[aname];
+                SYNC_SP();
+                Value afuncv = val_bytecode_function(
+                    &frame->chunk->program->functions[afunc], env);
+                afuncv.as.function->is_async = 1;
+                env_define(frame->closure, AS_STRING(anamev),
+                           (int)strlen(AS_STRING(anamev)), afuncv);
                 DISPATCH();
             }
             BC_OP_DEFINE_FUNCTION: {
@@ -929,6 +1215,15 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 PUSH(val_bool(!vm_is_truthy(value)));
                 DISPATCH();
             }
+             BC_OP_AWAIT: {
+                 /* Resolve the operand in place. A future is joined, which can
+                  * block here -- that is what await means -- and anything else
+                  * passes straight through, so `await 42` is 42. */
+                 VM_CHECK_STACK(1);
+                 Value value = POP();
+                PUSH(vm_await_value(value));
+                DISPATCH();
+            }
              BC_OP_TRUTHY: {
                  VM_CHECK_STACK(1);
                  Value value = POP();
@@ -973,8 +1268,24 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
 ;
                  int arg_count = (int)READ_U8();
                  VM_CHECK_STACK(arg_count + 1);
-                 Value callee = *(sp - 1 - arg_count);
-                 if (callee.type == VAL_FUNCTION && callee.as.function != NULL && callee.as.function->is_vm) {
+                Value callee = *(sp - 1 - arg_count);
+                /* is_async has to be excluded. This fast path pushes a frame and
+                 * runs the chunk itself, so it never reaches call_function_value,
+                 * which is where an async call becomes a spawned task. An
+                 * `async proc` is a compiled function like any other, so it took
+                 * this path and ran its body inline on the caller's thread -- the C
+                 * backend's behaviour, with async's syntax. The flag was set
+                 * correctly the whole time; there was simply nothing here to read
+                 * it. Correct results hid it, because a synchronous call of the
+                 * same function returns the same values, and the body printing
+                 * before the next statement looks like concurrency when it is in
+                 * fact the signature of the bug.
+                 *
+                 * The interpreter's call path has the mirror-image gap: it assumes
+                 * an async function has an AST body, so it routes compiled ones
+                 * through sage_vm_spawn_async() instead. */
+                if (callee.type == VAL_FUNCTION && callee.as.function != NULL &&
+                    callee.as.function->is_vm && !callee.as.function->is_async) {
                      if (frame_count >= MAX_FRAMES) { result = vm_error("Stack overflow (max frames reached)."); goto done; }
                      BytecodeFunction* bcf = callee.as.function->vm_function;
                      if (bcf == NULL || bcf->chunk.code_count <= 0 || bcf->chunk.code == NULL) {

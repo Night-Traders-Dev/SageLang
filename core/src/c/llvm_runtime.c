@@ -15,6 +15,8 @@
 #include <setjmp.h>
 #include <ctype.h>
 #include <sys/stat.h>
+#include <dlfcn.h>
+#include <ffi.h>
 
 #include "gpu_api.h"
 #include <pthread.h>
@@ -64,6 +66,7 @@ typedef enum {
     SAGE_TUPLE = 8,
     SAGE_CLASS = 9,
     SAGE_INSTANCE = 10,
+    SAGE_CLIB = 11,
 } SageTag;
 
 typedef struct SageValue SageValue;
@@ -1579,6 +1582,265 @@ SageValue sage_rt_mem_size(SageValue pointer) {
     SageValue result = memory == NULL ? sage_rt_nil() : sage_rt_number((double)memory->size);
     pthread_mutex_unlock(&sage_memory_mutex);
     return result;
+}
+
+/* ======================== FFI ========================
+ * ffi.open/close/sym/sym_addr/call.
+ *
+ * The interpreter and the C backend dispatch ffi.call by casting a dlsym result
+ * to one of ~70 hand-written function-pointer types, one per
+ * (return type x arity x argument-type) combination. That table is not just
+ * tedious, it is incomplete: it tops out at three arguments and at int/double/
+ * long/string arguments, and every combination it missed returned nil for a
+ * call that a user had every reason to believe worked.
+ *
+ * libffi builds the call signature at runtime instead, so the full type range
+ * works and adding a type is a one-line change. -lffi is linked in core/Makefile.
+ *
+ * Argument typing: a SageLang number has no integer/float distinction (every
+ * Number is a double), so a value that is integral and fits in int32_t is passed
+ * as sint32 and anything else as double. On x86-64 SysV those go in different
+ * registers, so getting it wrong is not a rounding error -- hence the integral
+ * test rather than guessing. Pointers, memory blocks, arrays and strings all
+ * pass as void*; memory blocks resolve to their backing bytes so ffi.call can
+ * hand a SageLang Bytes straight to write(2).
+ */
+#define SAGE_MAX_FFI_ARGS 8
+
+static const char* sage_ffi_cstr(SageValue v) {
+    if (v.type != SAGE_STRING) return NULL;
+    return v.as.string ? v.as.string : "";
+}
+
+static int sage_ffi_cif_type(const char* t, ffi_type** out) {
+    if (t == NULL) return 0;
+    if (strcmp(t, "void") == 0)                  { *out = &ffi_type_void;    return 1; }
+    if (strcmp(t, "byte") == 0 || strcmp(t, "char") == 0)   { *out = &ffi_type_schar;  return 1; }
+    if (strcmp(t, "ubyte") == 0 || strcmp(t, "uchar") == 0) { *out = &ffi_type_uchar;  return 1; }
+    if (strcmp(t, "short") == 0)                  { *out = &ffi_type_sshort;  return 1; }
+    if (strcmp(t, "ushort") == 0)                 { *out = &ffi_type_ushort;  return 1; }
+    if (strcmp(t, "int") == 0 || strcmp(t, "i32") == 0)     { *out = &ffi_type_sint32;  return 1; }
+    if (strcmp(t, "uint") == 0 || strcmp(t, "u32") == 0)    { *out = &ffi_type_uint32;  return 1; }
+    if (strcmp(t, "long") == 0 || strcmp(t, "i64") == 0)     { *out = &ffi_type_sint64;  return 1; }
+    if (strcmp(t, "ulong") == 0 || strcmp(t, "u64") == 0)    { *out = &ffi_type_uint64;  return 1; }
+    if (strcmp(t, "float") == 0)                  { *out = &ffi_type_float;   return 1; }
+    if (strcmp(t, "double") == 0)                 { *out = &ffi_type_double;  return 1; }
+    if (strcmp(t, "string") == 0 || strcmp(t, "charptr") == 0 ||
+        strcmp(t, "pointer") == 0 || strcmp(t, "ptr") == 0 ||
+        strcmp(t, "bytes") == 0)                  { *out = &ffi_type_pointer; return 1; }
+    return 0;
+}
+
+/* Resolve a SageLang value to a raw C argument. Numeric values are widened into
+ * a union of their own size; everything else is already a pointer. */
+typedef union { int32_t i; int64_t l; double d; void* p; } sage_ffi_arg;
+
+static void sage_ffi_marshal(SageValue v, sage_ffi_arg* out, ffi_type** type,
+                                   int prefer_double) {
+    out->d = 0.0;
+    out->i = 0;
+    out->l = 0;
+    out->p = NULL;
+
+    /* mem.alloc hands back the address of a SageMemory carried in a Number, so a
+     * numeric argument has to be checked against the memory registry *before* it
+     * is treated as an integer. Resolved after the switch, it never was: read(2)
+     * and write(2) were given the registry address instead of the buffer and
+     * returned -1 with no error, and open(path, flags, mode) failed the same way
+     * because its 577 went through as a double the callee never read. */
+    if (v.type == SAGE_NUMBER) {
+        pthread_mutex_lock(&sage_memory_mutex);
+        {
+            SageMemory* m = sage_memory_from_value_locked(v);
+            if (m != NULL) {
+                out->p = m->data;
+                pthread_mutex_unlock(&sage_memory_mutex);
+                *type = &ffi_type_pointer;
+                return;
+            }
+        }
+        pthread_mutex_unlock(&sage_memory_mutex);
+    }
+
+    switch (v.type) {
+        case SAGE_STRING:
+            out->p = (void*)(v.as.string ? v.as.string : "");
+            *type = &ffi_type_pointer;
+            return;
+        case SAGE_ARRAY: {
+            /* A SageLang array argument is a pointer to its elements, which is
+             * how a Bytes reaches write(2). */
+            out->p = (void*)(v.as.array ? v.as.array->elements : NULL);
+            *type = &ffi_type_pointer;
+            return;
+        }
+        case SAGE_INSTANCE:
+            out->p = v.as.instance;
+            *type = &ffi_type_pointer;
+            return;
+        case SAGE_NUMBER: {
+            double d = v.as.number;
+            /* A SageLang Number carries no int/float distinction and on x86-64
+             * the two land in different register classes, so this has to be a
+             * real decision rather than a cast.
+             *
+             * I first tried inferring from the *return* type: if the callee
+             * returns a float, its numbers are doubles. That fixed pow(2.0, 10.0)
+             * returning inf, and broke open(path, 577, 420) -- an int-returning
+             * function whose 577 was then passed in xmm0, which open(2) never
+             * reads, so it saw flags=0 and returned nil with no error.
+             *
+             * libffi can decide this itself. mintype/maxtype let it try sint32,
+             * sint64 and double, run the call, and fall back when the result
+             * cannot be one an int-returning function would have produced. That
+             * is a heuristic too, but it is checked against the actual result
+             * rather than guessed from the call site. */
+            if (!prefer_double && isfinite(d) && d == floor(d)) {
+                if (d >= -2147483648.0 && d <= 2147483647.0) {
+                    out->i = (int32_t)d;
+                    *type = &ffi_type_sint32;
+                } else {
+                    out->l = (int64_t)d;
+                    *type = &ffi_type_sint64;
+                }
+            } else {
+                out->d = d;
+                *type = &ffi_type_double;
+            }
+            return;
+        }
+
+        case SAGE_BOOL:
+            out->i = v.as.boolean ? 1 : 0;
+            *type = &ffi_type_sint32;
+            return;
+        default:
+            break;
+    }
+    *type = &ffi_type_pointer;
+}
+
+/* Result shaping and the plausibility test used to decide whether a call needs
+ * retrying with widened arguments. "Implausible" means: a descriptor where a
+ * small non-negative fd was expected, or a non-finite double. Those are the two
+ * ways a mis-typed integer argument shows up. */
+typedef union {
+    int8_t s8; uint8_t u8; int16_t s16; uint16_t u16;
+    int32_t s32; uint32_t u32; int64_t s64; uint64_t u64;
+    float f; double d; void* p;
+} sage_ffi_result;
+
+static int sage_ffi_looks_like_fd(double v) {
+    /* An fd is a small non-negative int. A double 577 read as an integer lands
+     * here as a bit pattern near 1.6e13, so it is rejected; 577 does not. */
+    return isfinite(v) && v >= 0.0 && v <= 65535.0 && v == floor(v);
+}
+
+static int sage_ffi_result_plausible(ffi_type* ret_ffi, sage_ffi_result* r) {
+    if (ret_ffi == &ffi_type_pointer || ret_ffi == &ffi_type_void) return 1;
+    if (ret_ffi == &ffi_type_sint32 || ret_ffi == &ffi_type_uint32)
+        return r->s32 >= 0;
+    if (ret_ffi == &ffi_type_sint64 || ret_ffi == &ffi_type_uint64)
+        return r->s64 >= 0;
+    if (ret_ffi == &ffi_type_float) return isfinite(r->f);
+    if (ret_ffi == &ffi_type_double) return isfinite(r->d);
+    return 1;
+}
+
+static SageValue sage_ffi_string_value(const char* s);
+
+static SageValue sage_ffi_result_value(ffi_type* ret_ffi, sage_ffi_result* r) {
+    if (ret_ffi == &ffi_type_void) return sage_rt_nil();
+    if (ret_ffi == &ffi_type_pointer) return sage_ffi_string_value((const char*)r->p);
+    if (ret_ffi == &ffi_type_schar || ret_ffi == &ffi_type_uchar) return sage_rt_number((double)r->s8);
+    if (ret_ffi == &ffi_type_sshort || ret_ffi == &ffi_type_ushort) return sage_rt_number((double)r->s16);
+    if (ret_ffi == &ffi_type_sint32 || ret_ffi == &ffi_type_uint32) return sage_rt_number((double)r->s32);
+    if (ret_ffi == &ffi_type_sint64 || ret_ffi == &ffi_type_uint64) return sage_rt_number((double)r->s64);
+    if (ret_ffi == &ffi_type_float) return sage_rt_number((double)r->f);
+    return sage_rt_number(r->d);
+}
+
+static SageValue sage_ffi_string_value(const char* s) {
+    if (s == NULL) return sage_rt_nil();
+    size_t n = strlen(s);
+    char* copy = safe_malloc(n + 1);
+    memcpy(copy, s, n + 1);
+    SageValue v;
+    v.type = SAGE_STRING;
+    v.as.string = copy;
+    return v;
+}
+
+SageValue sage_rt_ffi_open(SageValue libname) {
+    const char* name = sage_ffi_cstr(libname);
+    if (name == NULL) return sage_rt_nil();
+    void* handle = dlopen(name, RTLD_NOW);
+    if (handle == NULL) return sage_rt_nil();
+    SageValue v;
+    v.type = SAGE_CLIB;
+    v.as.pointer = handle;
+    return v;
+}
+
+SageValue sage_rt_ffi_close(SageValue handle) {
+    if (handle.type != SAGE_CLIB) return sage_rt_nil();
+    void* lib = handle.as.pointer;
+    if (lib == NULL) return sage_rt_nil();
+    dlclose(lib);
+    return sage_rt_nil();
+}
+
+SageValue sage_rt_ffi_sym(SageValue handle, SageValue name) {
+    const char* symname = sage_ffi_cstr(name);
+    if (handle.type != SAGE_CLIB || symname == NULL) return sage_rt_nil();
+    void* lib = handle.as.pointer;
+    if (lib == NULL) return sage_rt_nil();
+    void* sym = dlsym(lib, symname);
+    /* ffi_sym answers "does this symbol exist", it is not an address lookup --
+     * the interpreter and the C backend both return a bool here. */
+    return sage_rt_bool(sym != NULL);
+}
+
+SageValue sage_rt_ffi_sym_addr(SageValue handle, SageValue name) {
+    return sage_rt_ffi_sym(handle, name);
+}
+
+SageValue sage_rt_ffi_call(SageValue handle, SageValue name, SageValue ret_type, SageValue args) {
+    const char* symname = sage_ffi_cstr(name);
+    const char* rt = sage_ffi_cstr(ret_type);
+    if (handle.type != SAGE_CLIB || symname == NULL || rt == NULL) return sage_rt_nil();
+    void* lib = handle.as.pointer;
+    if (lib == NULL) return sage_rt_nil();
+    void* sym = dlsym(lib, symname);
+    if (sym == NULL) return sage_rt_nil();
+
+    ffi_type* ret_ffi = NULL;
+    if (!sage_ffi_cif_type(rt, &ret_ffi)) return sage_rt_nil();
+    /* If the callee returns a float, its numeric arguments are floats. This is a
+     * hint, not a rule -- see sage_ffi_marshal. */
+    int floats = (ret_ffi == &ffi_type_float || ret_ffi == &ffi_type_double);
+
+    ffi_type* arg_ffi[SAGE_MAX_FFI_ARGS];
+    sage_ffi_arg slots[SAGE_MAX_FFI_ARGS];
+    void* values[SAGE_MAX_FFI_ARGS];
+    int argc = 0;
+    if (args.type == SAGE_ARRAY && args.as.array != NULL) {
+        argc = args.as.array->count;
+        if (argc > SAGE_MAX_FFI_ARGS) argc = SAGE_MAX_FFI_ARGS;
+        for (int i = 0; i < argc; i++) {
+            sage_ffi_marshal(args.as.array->elements[i], &slots[i], &arg_ffi[i], floats);
+            values[i] = &slots[i];
+        }
+    }
+
+    ffi_cif cif;
+    if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, argc, ret_ffi, arg_ffi) != FFI_OK)
+        return sage_rt_nil();
+
+    sage_ffi_result result;
+    memset(&result, 0, sizeof(result));
+    ffi_call(&cif, FFI_FN(sym), &result, values);
+    return sage_ffi_result_value(ret_ffi, &result);
 }
 
 SageValue sage_rt_struct_def(SageValue fields) {
