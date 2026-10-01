@@ -3009,7 +3009,7 @@ static int repl_safe_command(const char* cmd) {
     if (*cmd == '-') return 0;
     for (const char* p = cmd; *p != '\0'; p++) {
         if (!isalnum((unsigned char)*p) && *p != '/' && *p != '.' &&
-            *p != '-' && *p != '_' && *p != '~' && *p != ' ' && *p != '\'') {
+            *p != '-' && *p != '_' && *p != '~' && *p != ' ') {
             return 0;
         }
     }
