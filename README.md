@@ -164,9 +164,32 @@ authored, non-empty tracked lines; exclude vendored deps and build artifacts).
 
 ![SageLang backend performance comparison](core/assets/charts/backend-compare.svg)
 
-Run `python3 scripts/generate_backend_chart.py` or
-`bash benchmarks/run_backend_compare.sh` to regenerate (12 workloads across all
-native backends).
+Regenerate with `make benchmarks` (equivalently
+`bash testsuite/run_all.sh benchmarks`). The previously documented
+`scripts/generate_backend_chart.py` and `benchmarks/run_backend_compare.sh` no
+longer exist -- both directories were removed in the `70e9ad36` reorganisation,
+so those commands had been failing for anyone following them.
+
+Latest measured run, workload `testsuite/benchmarks/backend_compare.sage`:
+
+| Backend | Total | Build | Run |
+| :--- | ---: | ---: | ---: |
+| AST Interpreter | 540 ms | — | 540 ms |
+| Bytecode VM | 439 ms | — | 439 ms |
+| VM Image (.svm) | 562 ms | 24 ms | 538 ms |
+| Self-Hosted Sage | 104017 ms | — | 104017 ms |
+| C Backend | 1274 ms | 570 ms | 704 ms |
+| C Backend -O3 | 1420 ms | 910 ms | 510 ms |
+| LLVM Backend | 621 ms | 180 ms | 441 ms |
+| JIT Profiled | 586 ms | — | 586 ms |
+| AOT Backend | 856 ms | 419 ms | 437 ms |
+| JIT+AOT Backend | 1369 ms | 931 ms | 438 ms |
+| Kotlin Transpile | 24 ms | 24 ms | emit only |
+| Pico-C Emit | 24 ms | 24 ms | emit only |
+| Android Project Gen | 24 ms | 24 ms | emit only |
+
+The Self-Hosted Sage figure is double interpretation: the Sage-written
+interpreter running under the C interpreter.
 
 The chart reports two independently-scaled sections:
 
