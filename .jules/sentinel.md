@@ -130,3 +130,8 @@
 **Learning:** Independent target runtimes (such as LLVM runtime helpers) often duplicate string concatenation logic from interpreter or AOT backends. Omitting integer overflow checks and allocation caps allows attacker-controlled string additions in compiled LLVM binaries to cause memory corruption or process crashes.
 **Prevention:** Ensure all string operator runtime helpers in all execution backends (Interpreter, AOT, and LLVM) validate non-NULL string pointers, perform overflow-checked length addition capped at 100 MB (`104857600` bytes), and safely return `nil` or error representations on failure.
 =======
+
+## 2026-09-30 - Single Quote Metacharacter Injection in Command Whitelist Validation
+**Vulnerability:** Command validators `is_safe_command` (`stdlib.c`), `s_is_safe_command` (`aot.c`), and `sage_is_safe_command` (`compiler.c`) permitted single quotes (`'`) in shell execution strings passed to `system()` and `popen()` (CWE-78).
+**Learning:** Allowing single quote metacharacters in character whitelists for shell command execution allows attackers to break out of single-quoted command/argument contexts (e.g. `'foo' || id 'bar'`), leading to command injection despite filtering other metacharacters like `;`, `|`, and `$`.
+**Prevention:** Strictly exclude quotes (`'` and `"`) from character whitelists passed to shell execution APIs (`system()`, `popen()`). When arguments need quotes or complex characters, pass explicit argument vectors to `execvp()` instead of shell invocation.
