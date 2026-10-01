@@ -7836,7 +7836,13 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
   fputs("typedef SageValue (*SageMethodFn)(SageValue, int, SageValue*);\n"
         "typedef struct { const char* class_name; const char* method_name; "
         "SageMethodFn fn; } SageMethodEntry;\n"
-        "#define SAGE_MAX_METHODS 256\n"
+        /* Raised from 256 to 4096. The table is populated at load time by
+           the classes a program actually uses, so the larger ceiling costs
+           a few KB of BSS and no startup work. 256 is below what real
+           programs need: SageFS vfs registers 402 methods and fsck 417,
+           and they failed at startup with "too many methods" -- at *run*
+           time, so it looks nothing like a compile error. */
+        "#define SAGE_MAX_METHODS 4096\n"
         "#define SAGE_MAX_CLASSES 64\n"
         "#define SAGE_MAX_FIELDS 64\n"
         "typedef struct { const char* name; const char* parent; "
