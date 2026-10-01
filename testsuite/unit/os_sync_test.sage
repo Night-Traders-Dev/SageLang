@@ -1,4 +1,5 @@
 # EXPECT: Mutex smoke test passed!
+# EXPECT: os.sync RWLock smoke test passed!
 # EXPECT: RWLock smoke test passed!
 import os.sync
 import std.rwlock as rwlock
@@ -24,6 +25,24 @@ sync.mutex_lock(m)
 sync.mutex_unlock(m)
 
 print "Mutex smoke test passed!"
+
+# os.sync Atomic RWLock Tests
+let os_rw = sync.rwlock_create()
+
+assert.assert_true(sync.rwlock_try_read_lock(os_rw), "os.sync first read lock should succeed")
+assert.assert_true(sync.rwlock_try_read_lock(os_rw), "os.sync second read lock should succeed")
+assert.assert_false(sync.rwlock_try_write_lock(os_rw), "os.sync write lock should fail while readers exist")
+
+sync.rwlock_read_unlock(os_rw)
+sync.rwlock_read_unlock(os_rw)
+assert.assert_true(sync.rwlock_try_write_lock(os_rw), "os.sync write lock should succeed after readers gone")
+assert.assert_false(sync.rwlock_try_read_lock(os_rw), "os.sync read lock should fail while writer exists")
+
+sync.rwlock_write_unlock(os_rw)
+assert.assert_true(sync.rwlock_try_read_lock(os_rw), "os.sync read lock should succeed after writer gone")
+sync.rwlock_read_unlock(os_rw)
+
+print "os.sync RWLock smoke test passed!"
 
 # RWLock Tests
 let rw = rwlock.create()
