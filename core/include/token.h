@@ -12,7 +12,7 @@ typedef enum {
     // Phase 7: Advanced Control Flow
     TOKEN_MATCH, TOKEN_CASE, TOKEN_DEFAULT,
     TOKEN_TRY, TOKEN_CATCH, TOKEN_FINALLY, TOKEN_RAISE,
-    TOKEN_DEFER, TOKEN_YIELD, TOKEN_PASS,
+    TOKEN_DEFER, TOKEN_YIELD,
     TOKEN_ASYNC, TOKEN_AWAIT,
     
     // Phase 1.7: Data Modeling
@@ -49,7 +49,11 @@ typedef enum {
     // Structural
     TOKEN_INDENT, TOKEN_DEDENT, TOKEN_NEWLINE,
     TOKEN_DOC_COMMENT, // Phase 1.9: ## doc comments
-    TOKEN_EOF, TOKEN_ERROR
+    TOKEN_EOF, TOKEN_ERROR,
+    /* Appended last on purpose: inserting a new token anywhere earlier
+       renumbers every token after it, and anything that indexes a table by
+       TokenType silently reads the wrong entry. */
+    TOKEN_PASS
 } TokenType;
 
 typedef struct {
