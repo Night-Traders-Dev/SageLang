@@ -384,7 +384,13 @@ Module* load_module(ModuleCache* cache, const char* name) {
 }
 
 // Get the last component of a dotted module name (e.g., "graphics.vulkan" -> "vulkan")
-static const char* module_binding_name(const char* module_name) {
+/* Get the last component of a dotted module name (e.g. "graphics.vulkan" ->
+   "vulkan"). This is the single place that decides what `import os.sync`
+   binds, and it must not be private: the bytecode VM's BC_OP_IMPORT looks the
+   binding up again after calling import_all(), and it was using the full
+   dotted string, so `sync` came back nil. Two runtimes each guessing this
+   rule is exactly how they came to disagree. */
+const char* module_binding_name(const char* module_name) {
     const char* last_dot = strrchr(module_name, '.');
     return last_dot ? last_dot + 1 : module_name;
 }

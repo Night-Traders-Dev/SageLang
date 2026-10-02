@@ -1519,8 +1519,15 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                 SYNC_SP();
                 char* module_name = AS_STRING(constants[name_index]);
                 import_all(frame->closure, module_name);
+                /* Look the binding up under the name import_all actually used --
+                   the last dotted segment. Looking it up under the full string
+                   made `import os.sync` push nil, so the module was imported but
+                   `sync` was unresolvable. Single-segment names such as
+                   `import ffi` were unaffected, which is why this only ever
+                   showed up for packages. */
+                const char* bound = module_binding_name(module_name);
                 Value module_val = val_nil();
-                env_get(frame->closure, module_name, (int)strlen(module_name), &module_val);
+                env_get(frame->closure, bound, (int)strlen(bound), &module_val);
                 PUSH(module_val);
                 DISPATCH();
             }
