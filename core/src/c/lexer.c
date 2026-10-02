@@ -239,7 +239,14 @@ static TokenType identifier_type(void) {
                            a keyword routes it to the statement parser instead of
                            name resolution, so it is a real no-op in both engines
                            rather than an accidental one. */
-                        if (current - start > 3 && start[2] == 's' && start[3] == 's') return check_keyword(1, 3, "ass", TOKEN_PASS);
+                        /* Contextual: `pass` is a keyword only as a bare
+                           statement. There is also a module named pass.sage,
+                           which sage.sage imports and then qualifies as
+                           `pass.run_passes(...)`, so a `pass` immediately
+                           followed by '.' must stay an identifier. */
+                        if (current - start > 3 && start[2] == 's' && start[3] == 's' &&
+                            (current[0] != '.'))
+                            return check_keyword(1, 3, "ass", TOKEN_PASS);
                         break;
                     case 'r':
                         if (current - start > 2 && start[2] == 'i') return check_keyword(3, 2, "nt", TOKEN_PRINT);

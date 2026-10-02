@@ -159,6 +159,9 @@ static void consume_identifier_like(const char* message) {
         current_token.type == TOKEN_STRUCT ||
         current_token.type == TOKEN_TRAIT ||
         current_token.type == TOKEN_MATCH ||
+        /* pass.sage is a real module that sage.sage imports; a keyword used as a
+           module path segment still has to be identifier-like here. */
+        current_token.type == TOKEN_PASS ||
         current_token.type == TOKEN_INIT) {
         advance_parser();
         return;
@@ -441,6 +444,10 @@ static int match_identifier_like(void) {
         current_token.type == TOKEN_TRAIT ||
         current_token.type == TOKEN_MATCH ||
         current_token.type == TOKEN_INIT ||
+        /* `pass` is a statement keyword now, but there is also a module named
+           pass.sage that sage.sage imports, and a module path must still accept
+           it the same way it accepts match/init/print. */
+        current_token.type == TOKEN_PASS ||
         current_token.type == TOKEN_PRINT) {
         advance_parser();
         return 1;
