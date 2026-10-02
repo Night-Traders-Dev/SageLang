@@ -1652,6 +1652,14 @@ static Stmt* trait_declaration() {
 }
 
 static Stmt* statement() {
+    /* `pass` is a placeholder statement, not an expression. Emitted as a nil
+       expression statement so both backends have something to emit; before this
+       it reached name resolution and either raised "Undefined variable 'pass'"
+       in the interpreter or refused to compile at all. */
+    if (match(TOKEN_PASS)) {
+        match(TOKEN_NEWLINE);
+        return new_expr_stmt(new_nil_expr());
+    }
     if (match(TOKEN_PRINT)) return print_statement();
     if (match(TOKEN_IF)) return if_statement();
     if (match(TOKEN_WHILE)) return while_statement();

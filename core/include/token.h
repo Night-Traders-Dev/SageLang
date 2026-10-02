@@ -12,7 +12,7 @@ typedef enum {
     // Phase 7: Advanced Control Flow
     TOKEN_MATCH, TOKEN_CASE, TOKEN_DEFAULT,
     TOKEN_TRY, TOKEN_CATCH, TOKEN_FINALLY, TOKEN_RAISE,
-    TOKEN_DEFER, TOKEN_YIELD,
+    TOKEN_DEFER, TOKEN_YIELD, TOKEN_PASS,
     TOKEN_ASYNC, TOKEN_AWAIT,
     
     // Phase 1.7: Data Modeling

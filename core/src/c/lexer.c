@@ -230,6 +230,17 @@ static TokenType identifier_type(void) {
         case 'p':
             if (current - start > 1) {
                 switch(start[1]) {
+                    case 'a':
+                        /* `pass` was never a keyword. metal/core.sage and other
+                           stub modules use it as a placeholder body, and the
+                           interpreter resolved it as an undefined variable --
+                           printing an error and then carrying on -- while the C
+                           backend refused to compile the file at all. Making it
+                           a keyword routes it to the statement parser instead of
+                           name resolution, so it is a real no-op in both engines
+                           rather than an accidental one. */
+                        if (current - start > 3 && start[2] == 's' && start[3] == 's') return check_keyword(1, 3, "ass", TOKEN_PASS);
+                        break;
                     case 'r':
                         if (current - start > 2 && start[2] == 'i') return check_keyword(3, 2, "nt", TOKEN_PRINT);
                         if (current - start > 2 && start[2] == 'o') return check_keyword(3, 1, "c", TOKEN_PROC);

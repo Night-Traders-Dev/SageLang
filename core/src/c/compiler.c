@@ -659,10 +659,21 @@ static ProcEntry *add_proc_entry_in_module(Compiler *compiler,
   /* Include the module in the symbol so two modules defining the same proc name
      cannot collide even if the counters line up. */
   if (module_name != NULL) {
+    /* Sanitise: a dotted module name went into the C identifier verbatim, so
+       `import metal.core` produced `sage_fn_metal.core_assert_metal_3` and the
+       emitted C failed to compile. Any character that is not a C identifier
+       character becomes '_'. Collisions stay impossible because the trailing
+       unique id is still there. */
     size_t n = strlen("sage_fn_") + strlen(module_name) + strlen(sage_name) + 4;
     char *buf = malloc(n);
-    snprintf(buf, n, "sage_fn_%s_%s_%d", module_name, sage_name,
+    char *safe_mod = str_dup(module_name);
+    char *safe_proc = str_dup(sage_name);
+    for (char *q = safe_mod; *q; q++) if (!isalnum((unsigned char)*q) && *q != '_') *q = '_';
+    for (char *q = safe_proc; *q; q++) if (!isalnum((unsigned char)*q) && *q != '_') *q = '_';
+    snprintf(buf, n, "sage_fn_%s_%s_%d", safe_mod, safe_proc,
              compiler->next_unique_id++);
+    free(safe_mod);
+    free(safe_proc);
     entry->c_name = buf;
   } else {
     entry->c_name = make_unique_name(compiler, "sage_fn", sage_name);
