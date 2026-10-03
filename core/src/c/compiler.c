@@ -2724,15 +2724,39 @@ static char *emit_flat_builtin(Compiler *compiler, CallExpr *call,
     free(callee_name);
     return sb_take(&sb);
   }
-  if (strcmp(callee_name, "sys_exec") == 0) {
-    if (call->arg_count != 1)
-      return str_dup("sage_nil()");
-    char *arg = emit_expr(compiler, call->args[0]);
-    sb_appendf(&sb, "sage_sys_exec(%s)", arg);
-    free(arg);
-    free(callee_name);
-    return sb_take(&sb);
-  }
+if (strcmp(callee_name, "sys_exec") == 0) {
+      if (call->arg_count != 1)
+        return str_dup("sage_nil()");
+      char *arg = emit_expr(compiler, call->args[0]);
+      sb_appendf(&sb, "sage_sys_exec(%s)", arg);
+      free(arg);
+      free(callee_name);
+      return sb_take(&sb);
+    }
+    /* sys.exit() was the next casualty of this same list. With no dispatch
+     * entry it compiled to sage_call_any on a module slot and died with
+     * "Cannot call non-function value (type=0)", then carried on and exited 1 --
+     * so a compiled tool that called sys.exit(1) on failure reported success to
+     * whatever invoked it, while the bytecode build of the same source exited
+     * correctly. Anything checking $? was reading a lie that only appeared in
+     * compiled builds. Takes an optional code; emits the direct exit() call
+     * rather than a helper so control genuinely leaves at that point. */
+    if (strcmp(callee_name, "sys_exit") == 0) {
+      if (call->arg_count > 1) {
+        compiler_builtin_arity_error(compiler, call, "sys.exit",
+                                     "usage: sys.exit([code])", "0..1");
+        sb_append(&sb, "sage_nil()");
+      } else if (call->arg_count == 0) {
+        sb_append(&sb, "exit(0)");
+      } else {
+        char *arg = emit_expr(compiler, call->args[0]);
+        sb_appendf(&sb, "sage_sys_exit(%s)", arg);
+        free(arg);
+      }
+      free(callee_name);
+      return sb_take(&sb);
+    }
+
   if (strcmp(callee_name, "io_readfile") == 0) {
     if (call->arg_count != 1)
       return str_dup("sage_nil()");
@@ -8125,6 +8149,13 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        }\n"
         "    }\n"
         "    return 1;\n"
+        "}\n"
+        "static void sage_sys_exit(SageValue code) {\n"
+        "    int c = 0;\n"
+        "    if (code.type == SAGE_TAG_NUMBER) c = (int)code.as.number;\n"
+        "    fflush(stdout);\n"
+        "    fflush(stderr);\n"
+        "    exit(c);\n"
         "}\n"
         "static SageValue sage_sys_exec(SageValue cmd) {\n"
         "    if(cmd.type != SAGE_TAG_STRING) return sage_number(-1);\n"
