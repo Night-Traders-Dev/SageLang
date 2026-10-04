@@ -3700,25 +3700,70 @@ if (strcmp(callee_name, "sys_exec") == 0) {
     free(callee_name);
     return sb_take(&sb);
   }
-  if (strcmp(callee_name, "ffi_call") == 0 &&
-      (call->arg_count == 3 || call->arg_count == 4)) {
-    char *handle = emit_expr(compiler, call->args[0]);
-    char *name = emit_expr(compiler, call->args[1]);
-    char *ret_type = emit_expr(compiler, call->args[2]);
-    if (call->arg_count == 4) {
-      char *args = emit_expr(compiler, call->args[3]);
-      sb_appendf(&sb, "sage_ffi_call(%s, %s, %s, %s)", handle, name, ret_type, args);
-      free(args);
-    } else {
-      sb_appendf(&sb, "sage_ffi_call(%s, %s, %s, sage_nil())", handle, name, ret_type);
+  /* ffi.call needs its arguments array built *before* its sibling arguments, and
+     * the GC pinned across the whole call.
+     *
+     * Emitting this as one nested expression was a use-after-free. C leaves
+     * argument evaluation order unspecified and gcc evaluates right to left, so
+     *
+     *   sage_ffi_call(lib, sage_string_const("truncate"),
+     *                 sage_string_const("int"), sage_make_array(2, {...}))
+     *
+     * built the args array first and the two string constants second -- and
+     * allocating a string runs the GC, which freed the array before sage_ffi_call
+     * ever read it. Nothing rooted it: it existed only as a nested temporary.
+     *
+     * AddressSanitizer on mkfs.sage caught exactly that: a 4-byte read of a freed
+     * region inside sage_ffi_call.
+     *
+     * Whether it crashed depended on the GC happening to run in that window, which
+     * is why this looked like heap-layout luck rather than a bug. A SHA-256 loop
+     * segfaulted at 63 rounds but not at 40 or 64; a 256 MiB volume scan crashed
+     * on some runs and not others; adding one unrelated allocation to mkfs made a
+     * failing truncate_to succeed. All three were this.
+     *
+     * Both parts are required. The assignment sequences the array ahead of the
+     * sibling arguments -- there is a sequence point at the end of a full
+     * expression, so the array is fully built first -- and the pin stops anything
+     * being collected while the rest are built. The result is assigned while still
+     * pinned, which is what puts it in the frame's root set; unpinning first would
+     * leave the return value as unprotected as the array was.
+     *
+     * sage_gc_pin/sage_gc_unpin rather than sage_gc_disable_fn/enable_fn: the pin
+     * is a counter, so a nested ffi.call -- an argument that is itself an
+     * ffi.open, say -- cannot re-enable collection while an outer one is mid-call.
+     * The disable pair sets a plain flag, so the inner call would clear it.
+     *
+     * Emitted as a GNU statement expression because the pin has to be taken before
+     * any argument is evaluated, and there is no portable way to open a scope from
+     * inside an expression. Hence -std=gnu11 for the emitted C below. gcc and
+     * clang both support statement expressions, and it is the same construct
+     * compilers use to emit their own temporaries, so it is no more of a hazard
+     * than the rest of this emitter. */
+    if (strcmp(callee_name, "ffi_call") == 0 &&
+        (call->arg_count == 3 || call->arg_count == 4)) {
+      char *handle = emit_expr(compiler, call->args[0]);
+      char *name = emit_expr(compiler, call->args[1]);
+      char *ret_type = emit_expr(compiler, call->args[2]);
+      sb_append(&sb, "({ sage_gc_pin(); SageValue _ffi_a; SageValue _ffi_r; ");
+      if (call->arg_count == 4) {
+        char *args = emit_expr(compiler, call->args[3]);
+        sb_appendf(&sb, "_ffi_a = %s; _ffi_r = sage_ffi_call(%s, %s, %s, _ffi_a); ",
+                   args, handle, name, ret_type);
+        free(args);
+      } else {
+        sb_appendf(&sb, "_ffi_a = sage_nil(); _ffi_r = sage_ffi_call(%s, %s, %s, _ffi_a); ",
+                   handle, name, ret_type);
+      }
+      sb_append(&sb, "sage_gc_unpin(); _ffi_r; })");
+      free(handle);
+      free(name);
+      free(ret_type);
+      free(callee_name);
+      return sb_take(&sb);
     }
-    free(handle);
-    free(name);
-    free(ret_type);
-    free(callee_name);
-    return sb_take(&sb);
-  }
-  if (strcmp(callee_name, "ffi_close") == 0 && call->arg_count == 1) {
+
+    if (strcmp(callee_name, "ffi_close") == 0 && call->arg_count == 1) {
     char *arg = emit_expr(compiler, call->args[0]);
     sb_appendf(&sb, "sage_ffi_close(%s)", arg);
     free(arg);
@@ -9423,7 +9468,7 @@ int compile_source_to_executable(const char *source, const char *input_path,
   }
 
   if (pid == 0) {
-    execlp(cc, cc, "-std=c11", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path, "-lm",
+    execlp(cc, cc, "-std=gnu11", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path, "-lm",
            (char *)NULL);
     fprintf(stderr, "Could not execute C compiler \"%s\": %s\n", cc,
             strerror(errno));
@@ -9465,14 +9510,14 @@ int compile_source_to_executable_opt(const char *source, const char *input_path,
 
   if (pid == 0) {
     if (debug_info) {
-      execlp(cc, cc, "-std=c11", "-g", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path,
+      execlp(cc, cc, "-std=gnu11", "-g", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path,
              "-lm", (char *)NULL);
     } else {
       if (opt_level >= 2) {
           execlp(cc, cc, "-std=c11", "-O2", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path, "-lm",
                  (char *)NULL);
       } else {
-          execlp(cc, cc, "-std=c11", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path, "-lm",
+          execlp(cc, cc, "-std=gnu11", "-fno-strict-aliasing", c_output_path, "-o", exe_output_path, "-lm",
                  (char *)NULL);
       }
     }
