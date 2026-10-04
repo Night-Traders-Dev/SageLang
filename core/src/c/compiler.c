@@ -1,3 +1,13 @@
+/* Depth of the per-function expression-temporary pool. Must match the
+ * SAGE_TMP_SLOTS value emitted into generated code.
+ *
+ * Sized for the longest operator chain in the tree rather than for the typical
+ * case: every module in SageFS saturated a 24-slot pool, because a concatenation
+ * like "a=" + str(x) + " b=" + str(y) + ... nests one level per term and the
+ * longest log message in a file sets the floor. Each slot is a pointer in the
+ * frame's root array, so this costs 8 bytes of stack per frame per slot. */
+#define SAGE_TMP_SLOTS 64
+
 #define _DEFAULT_SOURCE
 #include "compiler.h"
 
@@ -119,6 +129,10 @@ typedef struct {
   NameEntry *globals;
   ProcEntry *procs;
   NameEntry *locals;
+  /* Nesting depth of the expression-temporary pool, reset per statement. Each
+   * composite expression claims the next slots so sibling operands cannot
+   * overwrite each other before the parent consumes them. */
+  int tmp_depth;
   FunctionInfo *functions;
   FunctionInfo *current_function;
   FunctionInfo *main_function;
@@ -2520,8 +2534,55 @@ static char *emit_binary_expr(Compiler *compiler, BinaryExpr *binary) {
     return str_dup("sage_nil()");
   }
 
+  /* Spill both operands into the function's rooted temporary slots, then apply the
+   * helper. The slots are in the GC root set, so neither operand can be collected
+   * while the other is being evaluated or while the helper runs.
+   *
+   * This is what the use-after-free needed. gcc evaluates call arguments right to
+   * left, so in "x" + str(a) + "." + str(b) str(b) was produced first and then the
+   * literal "." allocated -- and that allocation collected str(b) before the outer
+   * + read it. AddressSanitizer reported sage_add reading a region freed by a
+   * sibling sage_string_const in the same expression.
+   *
+   * Rooting rather than pinning is deliberate. Pinning the GC across the operands
+   * works too, and I tried it: it silences collection for the callee's Env, which
+   * is the allocation a workload made of calls exists to trigger, and
+   * gc_env_reclaim.sage fails because no collection happens at all. Rooting keeps
+   * the collector running normally.
+   *
+   * Each node claims slots at the current depth and hands its children the depths
+   * above it, so sibling operands never share a slot. Past the pool size this
+   * falls back to the unrooted form, which is no worse than before. */
   StringBuffer sb;
   sb_init(&sb);
+  int d = compiler->tmp_depth;
+  if (d + 2 > SAGE_TMP_SLOTS) {
+    /* Falling back to the unrooted form reintroduces exactly the use-after-free
+     * this exists to prevent, so say so rather than emitting subtly unsafe code
+     * that passes the tests and fails under load. */
+    compiler_error_at(
+        compiler, &binary->op,
+        "expression nests deeper than the temporary pool; operands cannot be kept",
+        "operator expression nests more than %d levels deep",
+        SAGE_TMP_SLOTS);
+  }
+  if (d + 2 <= SAGE_TMP_SLOTS) {
+    compiler->tmp_depth = d + 2;
+    char *l2 = emit_expr(compiler, binary->left);
+    char *r2 = emit_expr(compiler, binary->right);
+    compiler->tmp_depth = d;
+    sb_appendf(&sb,
+               "({ sage_define_slot(&sage_tmp[%d], %s); "
+               "sage_define_slot(&sage_tmp[%d], %s); "
+               "%s(sage_load_slot(&sage_tmp[%d], \"operand\"), "
+               "sage_load_slot(&sage_tmp[%d], \"operand\")); })",
+               d, l2, d + 1, r2, helper, d, d + 1);
+    free(l2);
+    free(r2);
+    free(left);
+    free(right);
+    return sb_take(&sb);
+  }
   sb_appendf(&sb, "%s(%s, %s)", helper, left, right);
   free(left);
   free(right);
@@ -5108,6 +5169,13 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
 
 static void emit_stmt_list(Compiler *compiler, Stmt *stmt) {
   for (Stmt *current = stmt; current != NULL; current = current->next) {
+    /* Reset per statement, not per function. The counter tracks how deep the
+     * current *expression* nests, and each statement's expressions start from
+     * zero -- the temporaries of a finished statement are dead. Resetting only at
+     * the prologue made it climb monotonically until it hit the pool ceiling, at
+     * which point every later expression silently fell back to the unrooted form.
+     */
+    compiler->tmp_depth = 0;
     emit_stmt(compiler, current);
     if (compiler->failed) {
       return;
@@ -5146,7 +5214,7 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
           "#include <string.h>\n"
           "#include <ctype.h>\n"
           "#include <dlfcn.h>\n"
-          "#include <stdatomic.h>\n"
+            "#include <stdatomic.h>\n"
           "#include <semaphore.h>\n"
           "#include <time.h>\n"
           "#include <unistd.h>\n"
@@ -5164,7 +5232,14 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "typedef struct SageValue SageValue;\n"
         "typedef SageValue (*SageProcedureAdapter)(int, SageValue*);\n"
         "typedef struct SageFunction SageFunction;\n"
-        "typedef struct SageSlot SageSlot;\n"
+        "typedef struct SageSlot SageSlot;\n""/* Expression temporaries are spilled into these slots, which are part of the\n"
+      "   * enclosing function's GC root set. Without them a temporary produced for one\n"
+      "   * operand can be collected while a sibling operand is still being evaluated: gcc\n"
+      "   * evaluates call arguments right to left, so in \"x\" + str(a) + \".\" + str(b) the\n"
+      "   * literal \".\" is allocated after str(b) is produced, and that allocation freed\n"
+      "   * str(b) before the outer + read it. Pinning the GC instead silences collection for\n"
+      "   * allocations a call workload depends on, so rooting is the fix. */\n"
+      "#define SAGE_TMP_SLOTS 64\n"
         "typedef struct SageGcHeader SageGcHeader;\n"
         "typedef struct SageGcFrame SageGcFrame;\n"
         "\n"
@@ -8451,34 +8526,43 @@ static void emit_captured_slot_initialization(Compiler *compiler,
 }
 
 static void emit_slot_frame_setup(Compiler *compiler, NameEntry *locals,
-                                  const char *roots_name,
-                                  const char *frame_name) {
-  int count = count_name_entries(locals);
+                                    const char *roots_name,
+                                    const char *frame_name,
+                                    int with_temp_roots) {
+    int count = count_name_entries(locals);
+    /* The temporary pool is rooted alongside the named locals, so a value spilled
+     * while a sibling operand is still being evaluated survives a collection. */
+    int temps = with_temp_roots ? SAGE_TMP_SLOTS : 0;
+    int total = count + temps;
 
-  if (count == 0) {
+    if (total == 0) {
+      emit_line(compiler, "SageGcFrame %s;", frame_name);
+      emit_line(compiler, "sage_gc_push_frame(&%s, NULL, 0);", frame_name);
+      return;
+    }
+
+    emit_indent(compiler);
+    fprintf(compiler->out, "SageSlot* %s[%d] = {", roots_name, total);
+    int index = 0;
+    for (NameEntry *local = locals; local != NULL; local = local->next, index++) {
+      if (index > 0) {
+        fputs(", ", compiler->out);
+      }
+      if (local->captured) {
+        fprintf(compiler->out, "%s", local->storage_name);
+      } else {
+        fprintf(compiler->out, "&%s", local->c_name);
+      }
+    }
+    for (int t = 0; t < temps; t++) {
+      fprintf(compiler->out, ", &sage_tmp[%d]", t);
+    }
+    fputs("};\n", compiler->out);
     emit_line(compiler, "SageGcFrame %s;", frame_name);
-    emit_line(compiler, "sage_gc_push_frame(&%s, NULL, 0);", frame_name);
-    return;
+    emit_line(compiler, "sage_gc_push_frame(&%s, %s, %d);", frame_name,
+              roots_name, total);
   }
 
-  emit_indent(compiler);
-  fprintf(compiler->out, "SageSlot* %s[%d] = {", roots_name, count);
-  int index = 0;
-  for (NameEntry *local = locals; local != NULL; local = local->next, index++) {
-    if (index > 0) {
-      fputs(", ", compiler->out);
-    }
-    if (local->captured) {
-      fprintf(compiler->out, "%s", local->storage_name);
-    } else {
-      fprintf(compiler->out, "&%s", local->c_name);
-    }
-  }
-  fputs("};\n", compiler->out);
-  emit_line(compiler, "SageGcFrame %s;", frame_name);
-  emit_line(compiler, "sage_gc_push_frame(&%s, %s, %d);", frame_name,
-            roots_name, count);
-}
 
 static void emit_procedure_adapter(Compiler *compiler, FunctionInfo *function) {
   if (function->parent != NULL || function->is_method) {
@@ -8527,7 +8611,7 @@ static void emit_procedure_adapter(Compiler *compiler, FunctionInfo *function) {
   compiler->indent++;
   emit_slot_declarations(compiler, compiler->locals);
   emit_slot_frame_setup(compiler, compiler->locals, "sage_adapter_roots",
-                        "sage_adapter_frame");
+                        "sage_adapter_frame", 0);
   emit_line(compiler, "sage_gc_pin();");
   for (int i = 0; i < proc_stmt->param_count; i++) {
     char *param_name = token_to_string(proc_stmt->params[i]);
@@ -8742,8 +8826,14 @@ static void emit_sage_function_definition(Compiler *compiler,
   compiler->indent++;
 
   emit_slot_declarations(compiler, compiler->locals);
+  /* Expression temporaries. Initialised because they are automatic storage: an
+   * undefined SageSlot must not look like a live heap pointer to the collector's
+   * mark loop. */
+  emit_line(compiler, "SageSlot sage_tmp[SAGE_TMP_SLOTS];");
+  emit_line(compiler, "for (int _t = 0; _t < SAGE_TMP_SLOTS; _t++) sage_tmp[_t] = sage_slot_undefined();");
+  compiler->tmp_depth = 0;
   emit_slot_frame_setup(compiler, compiler->locals, "sage_gc_roots",
-                        "sage_gc_frame");
+                        "sage_gc_frame", 1);
   if (environment_slot != NULL) {
     emit_line(compiler,
               "sage_define_slot(&%s, sage_function_value("
@@ -8888,8 +8978,14 @@ static void emit_method_definition(Compiler *compiler, ClassInfo *cls,
   compiler->indent++;
 
   emit_slot_declarations(compiler, compiler->locals);
+  /* Expression temporaries. Initialised because they are automatic storage: an
+   * undefined SageSlot must not look like a live heap pointer to the collector's
+   * mark loop. */
+  emit_line(compiler, "SageSlot sage_tmp[SAGE_TMP_SLOTS];");
+  emit_line(compiler, "for (int _t = 0; _t < SAGE_TMP_SLOTS; _t++) sage_tmp[_t] = sage_slot_undefined();");
+  compiler->tmp_depth = 0;
   emit_slot_frame_setup(compiler, compiler->locals, "sage_gc_roots",
-                        "sage_gc_frame");
+                        "sage_gc_frame", 1);
   emit_captured_slot_initialization(compiler, compiler->locals);
 
   /* Bind self */
@@ -9035,6 +9131,11 @@ static void emit_main_function(Compiler *compiler, Stmt *program,
   emit_line(compiler, "int main(int argc, char** argv) {");
   emit_line(compiler, "    sage_argc = argc; sage_argv = argv;");
   compiler->indent++;
+  /* Same temporary pool the Sage functions use. main is compiled as a function
+   * too, so its operator operands need somewhere to spill. */
+  emit_line(compiler, "SageSlot sage_tmp[SAGE_TMP_SLOTS];");
+  emit_line(compiler, "for (int _t = 0; _t < SAGE_TMP_SLOTS; _t++) sage_tmp[_t] = sage_slot_undefined();");
+  compiler->tmp_depth = 0;
 
   if (target == COMPILER_TARGET_RP2040 || target == COMPILER_TARGET_RP2350_ARM || target == COMPILER_TARGET_RP2350_RISCV) {
     emit_line(compiler, "stdio_init_all();");
@@ -9046,7 +9147,7 @@ static void emit_main_function(Compiler *compiler, Stmt *program,
     emit_line(compiler, "%s = sage_slot_undefined();", global->c_name);
   }
   emit_slot_frame_setup(compiler, compiler->globals, "sage_gc_global_roots",
-                        "sage_gc_main_frame");
+                        "sage_gc_main_frame", 1);
 
   /* Register classes and methods */
   for (ClassInfo *cls = compiler->classes; cls != NULL; cls = cls->next) {
