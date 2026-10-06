@@ -2733,7 +2733,23 @@ static char *emit_flat_builtin(Compiler *compiler, CallExpr *call,
       compiler_builtin_arity_error(compiler, call, "sys.args", "usage: sys.args()", "0");
       sb_append(&sb, "sage_nil()");
     } else {
-      sb_append(&sb, "sage_native_sys_args()");
+      /* sage_sys_args, not sage_native_sys_args.
+       *
+       * The native helper starts its loop at i=1 and so hides argv[0], on the
+       * assumption that argv[0] is an image path rather than a program name. That
+       * holds for a standalone native image and is wrong for an ordinarily
+       * compiled program, where argv[0] is the binary's own path -- and the
+       * bytecode interpreter does include it. A compiled build that disagreed with
+       * the interpreter shifted every argument by one: SageVM's CLI reads args[0]
+       * to tell whether it was invoked as sgvm or sgvmc, so with the program name
+       * missing that dispatch never matched, it printed "Unknown command" and its
+       * entire 153-test suite failed.
+       *
+       * sage_sys_args includes argv[0], matching the interpreter. The native-image
+       * path keeps sage_native_sys_args through the method-call branch further
+       * down, which is where that helper is actually meant to apply.
+       */
+      sb_append(&sb, "sage_sys_args()");
     }
     free(callee_name);
     return sb_take(&sb);
