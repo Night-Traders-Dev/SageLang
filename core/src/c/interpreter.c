@@ -1964,6 +1964,31 @@ static Value bytes_slice_native(int argCount, Value* args) {
     return val_bytes(NULL, 0);
 }
 
+static Value bytes_copy_range_native(int argCount, Value* args) {
+    if (argCount == 5 && args[0].type == VAL_BYTES && IS_NUMBER(args[1]) &&
+        args[2].type == VAL_BYTES && IS_NUMBER(args[3]) && IS_NUMBER(args[4])) {
+        bytes_copy_range(&args[0], (int)AS_NUMBER(args[1]), &args[2],
+                         (int)AS_NUMBER(args[3]), (int)AS_NUMBER(args[4]));
+    }
+    return val_nil();
+}
+
+static Value bytes_fill_range_native(int argCount, Value* args) {
+    if (argCount == 4 && args[0].type == VAL_BYTES && IS_NUMBER(args[1]) &&
+        IS_NUMBER(args[2]) && IS_NUMBER(args[3])) {
+        bytes_fill_range(&args[0], (int)AS_NUMBER(args[1]), (int)AS_NUMBER(args[2]),
+                         (unsigned char)(int)AS_NUMBER(args[3]));
+    }
+    return val_nil();
+}
+
+static Value bytes_resize_native(int argCount, Value* args) {
+    if (argCount == 2 && args[0].type == VAL_BYTES && IS_NUMBER(args[1])) {
+        bytes_resize(&args[0], (int)AS_NUMBER(args[1]));
+    }
+    return val_nil();
+}
+
 static Value bytes_extend_native(int argCount, Value* args) {
     if (argCount == 2 && args[0].type == VAL_BYTES && args[1].type == VAL_BYTES) {
         bytes_extend(&args[0], &args[1]);
@@ -3175,6 +3200,9 @@ void init_stdlib(Env* env) {
     env_define_const(env, "bytes_slice", 11, val_native(bytes_slice_native));
     env_define_const(env, "bytes_push", 10, val_native(bytes_push_native));
     env_define_const(env, "bytes_extend", 12, val_native(bytes_extend_native));
+    env_define_const(env, "bytes_copy_range", 16, val_native(bytes_copy_range_native));
+    env_define_const(env, "bytes_fill_range", 16, val_native(bytes_fill_range_native));
+    env_define_const(env, "bytes_resize", 12, val_native(bytes_resize_native));
 
     // Phase 1.8: sizeof and pointer arithmetic
     env_define_const(env, "sizeof", 6, val_native(sizeof_native));

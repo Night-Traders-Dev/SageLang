@@ -3687,6 +3687,35 @@ if (strcmp(callee_name, "sys_exec") == 0) {
     free(callee_name);
     return sb_take(&sb);
   }
+  if (strcmp(callee_name, "bytes_copy_range") == 0 && call->arg_count == 5) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    char *a2 = emit_expr(compiler, call->args[2]);
+    char *a3 = emit_expr(compiler, call->args[3]);
+    char *a4 = emit_expr(compiler, call->args[4]);
+    sb_appendf(&sb, "sage_bytes_copy_range(%s, %s, %s, %s, %s)", a0, a1, a2, a3, a4);
+    free(a0); free(a1); free(a2); free(a3); free(a4);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "bytes_fill_range") == 0 && call->arg_count == 4) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    char *a2 = emit_expr(compiler, call->args[2]);
+    char *a3 = emit_expr(compiler, call->args[3]);
+    sb_appendf(&sb, "sage_bytes_fill_range(%s, %s, %s, %s)", a0, a1, a2, a3);
+    free(a0); free(a1); free(a2); free(a3);
+    free(callee_name);
+    return sb_take(&sb);
+  }
+  if (strcmp(callee_name, "bytes_resize") == 0 && call->arg_count == 2) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_bytes_resize(%s, %s)", a0, a1);
+    free(a0); free(a1);
+    free(callee_name);
+    return sb_take(&sb);
+  }
   if (strcmp(callee_name, "bytes_slice") == 0 && call->arg_count == 3) {
     char *a0 = emit_expr(compiler, call->args[0]);
     char *a1 = emit_expr(compiler, call->args[1]);
@@ -7330,6 +7359,42 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    b->data = grown;\n"
       "    memcpy(b->data + b->count, o->data, (size_t)o->count);\n"
       "    b->count = need;\n"
+      "    return sage_nil();\n"
+      "}\n"
+      "static SageValue sage_bytes_copy_range(SageValue d, SageValue doff, SageValue src, SageValue soff, SageValue n) {\n"
+      "    if (d.type != SAGE_TAG_BYTES || src.type != SAGE_TAG_BYTES) return sage_nil();\n"
+      "    if (doff.type != SAGE_TAG_NUMBER || soff.type != SAGE_TAG_NUMBER || n.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    long long di = (long long)doff.as.number, si = (long long)soff.as.number, ln = (long long)n.as.number;\n"
+      "    if (di < 0 || si < 0 || ln <= 0) return sage_nil();\n"
+      "    if (di + ln > (long long)d.as.bytes->count) return sage_nil();\n"
+      "    if (si + ln > (long long)src.as.bytes->count) return sage_nil();\n"
+      "    memmove(d.as.bytes->data + di, src.as.bytes->data + si, (size_t)ln);\n"
+      "    return sage_nil();\n"
+      "}\n"
+      "static SageValue sage_bytes_fill_range(SageValue v, SageValue off, SageValue n, SageValue val) {\n"
+      "    if (v.type != SAGE_TAG_BYTES) return sage_nil();\n"
+      "    if (off.type != SAGE_TAG_NUMBER || n.type != SAGE_TAG_NUMBER || val.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    long long o = (long long)off.as.number, ln = (long long)n.as.number;\n"
+      "    if (o < 0 || ln <= 0) return sage_nil();\n"
+      "    if (o + ln > (long long)v.as.bytes->count) return sage_nil();\n"
+      "    memset(v.as.bytes->data + o, (int)val.as.number, (size_t)ln);\n"
+      "    return sage_nil();\n"
+      "}\n"
+      "static SageValue sage_bytes_resize(SageValue v, SageValue n) {\n"
+      "    if (v.type != SAGE_TAG_BYTES || n.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    long long want = (long long)n.as.number;\n"
+      "    if (want < 0 || want > 268435455LL) return sage_nil();\n"
+      "    SageBytes* b = v.as.bytes;\n"
+      "    if (want == (long long)b->count) return sage_nil();\n"
+      "    /* The emitted SageBytes carries no capacity field, so realloc to exactly the\n"
+      "       requested size rather than tracking one out of band. Reading a capacity\n"
+      "       that does not exist reads whatever follows the struct in memory, and using\n"
+      "       that to size a realloc corrupts the heap. */\n"
+      "    unsigned char* grown = (unsigned char*)realloc(b->data, (size_t)want + 1u);\n"
+      "    if (!grown) return sage_nil();\n"
+      "    if (want > (long long)b->count) memset(grown + b->count, 0, (size_t)(want - b->count));\n"
+      "    b->data = grown;\n"
+      "    b->count = (int)want;\n"
       "    return sage_nil();\n"
       "}\n"
       "static SageValue sage_bytes_slice(SageValue v, SageValue s, SageValue e) {\n"

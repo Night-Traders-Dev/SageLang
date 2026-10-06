@@ -267,6 +267,17 @@ void bytes_push(Value* bytes_val, unsigned char byte);
    reassembling a large buffer: a per-byte loop is O(n) interpreted operations,
    which is the difference between a second and four minutes. */
 void bytes_extend(Value* dst, const Value* src);
+/* Copy len bytes from src[src_off..] into dst[dst_off..]. memmove, so overlapping
+   ranges are handled. Bounds-checked against the current length of both buffers: a
+   range that would leave either one is ignored rather than writing out of bounds.
+   Does not grow dst -- resize it first with bytes_resize if it needs to. */
+void bytes_copy_range(Value* dst, int dst_off, const Value* src, int src_off, int len);
+/* Set len bytes of dst starting at off to value. Bounds-checked as above. */
+void bytes_fill_range(Value* dst, int off, int len, unsigned char value);
+/* Grow or truncate dst to exactly new_len bytes, zero-filling anything new.
+   For the "make the buffer this big" pattern, which is otherwise a per-byte
+   append loop. Never shrinks below 0 and never frees on truncate. */
+void bytes_resize(Value* bytes_val, int new_len);
 Value val_native(NativeFn fn);
 Value val_function(void* proc, Env* closure); // ✅ CHANGED: Added closure parameter
 Value val_bytecode_function(struct BytecodeFunction* function, Env* closure);

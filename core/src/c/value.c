@@ -99,6 +99,43 @@ void bytes_extend(Value* dst, const Value* src) {
     d->length += s->length;
 }
 
+void bytes_copy_range(Value* dst, int dst_off, const Value* src, int src_off, int len) {
+    if (dst->type != VAL_BYTES || src->type != VAL_BYTES || len <= 0) return;
+    BytesValue* d = dst->as.bytes;
+    const BytesValue* s = src->as.bytes;
+    if (dst_off < 0 || src_off < 0) return;
+    if (dst_off + len > d->length || src_off + len > s->length) return;
+    memmove(d->data + dst_off, s->data + src_off, (size_t)len);
+}
+
+void bytes_fill_range(Value* dst, int off, int len, unsigned char value) {
+    if (dst->type != VAL_BYTES || len <= 0 || off < 0) return;
+    BytesValue* d = dst->as.bytes;
+    if (off + len > d->length) return;
+    memset(d->data + off, value, (size_t)len);
+}
+
+void bytes_resize(Value* bytes_val, int new_len) {
+    if (bytes_val->type != VAL_BYTES || new_len < 0) return;
+    BytesValue* b = bytes_val->as.bytes;
+    if ((size_t)new_len > (size_t)b->capacity) {
+        size_t old_bytes = (size_t)b->capacity;
+        size_t cap = b->capacity;
+        while (cap < (size_t)new_len) cap = collection_next_capacity(cap, 8);
+        unsigned char* grown = (unsigned char*)SAGE_REALLOC(b->data, cap);
+        if (!grown) return;
+        b->data = grown;
+        b->capacity = cap;
+        gc_track_external_resize(old_bytes, cap);
+    }
+    /* Zero the region between the old length and the new one, so growing never
+       exposes uninitialised bytes. */
+    if ((size_t)new_len > (size_t)b->length) {
+        memset(b->data + b->length, 0, (size_t)new_len - (size_t)b->length);
+    }
+    b->length = (int)new_len;
+}
+
 void bytes_push(Value* bytes_val, unsigned char byte) {
     if (bytes_val->type != VAL_BYTES) return;
     BytesValue* b = bytes_val->as.bytes;
