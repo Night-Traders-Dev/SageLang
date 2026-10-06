@@ -263,6 +263,10 @@ Value val_string_take_len(char* value, int len);
 Value val_bytes(const unsigned char* data, int length);
 Value val_bytes_empty(int capacity);
 void bytes_push(Value* bytes_val, unsigned char byte);
+/* Append every byte of src to dst. Bulk counterpart to bytes_push, for
+   reassembling a large buffer: a per-byte loop is O(n) interpreted operations,
+   which is the difference between a second and four minutes. */
+void bytes_extend(Value* dst, const Value* src);
 Value val_native(NativeFn fn);
 Value val_function(void* proc, Env* closure); // ✅ CHANGED: Added closure parameter
 Value val_bytecode_function(struct BytecodeFunction* function, Env* closure);

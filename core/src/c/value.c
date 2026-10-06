@@ -81,6 +81,24 @@ Value val_bytes_empty(int capacity) {
     return v;
 }
 
+void bytes_extend(Value* dst, const Value* src) {
+    if (dst->type != VAL_BYTES || src->type != VAL_BYTES) return;
+    BytesValue* d = dst->as.bytes;
+    const BytesValue* s = src->as.bytes;
+    if (s->length == 0) return;
+    size_t needed = (size_t)d->length + (size_t)s->length;
+    if (needed > (size_t)d->capacity) {
+        size_t old_bytes = (size_t)d->capacity;
+        size_t cap = d->capacity;
+        while (cap < needed) cap = collection_next_capacity(cap, 8);
+        d->data = SAGE_REALLOC(d->data, cap);
+        gc_track_external_resize(old_bytes, cap);
+        d->capacity = cap;
+    }
+    memcpy(d->data + d->length, s->data, (size_t)s->length);
+    d->length += s->length;
+}
+
 void bytes_push(Value* bytes_val, unsigned char byte) {
     if (bytes_val->type != VAL_BYTES) return;
     BytesValue* b = bytes_val->as.bytes;

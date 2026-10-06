@@ -3678,6 +3678,15 @@ if (strcmp(callee_name, "sys_exec") == 0) {
     free(callee_name);
     return sb_take(&sb);
   }
+  if (strcmp(callee_name, "bytes_extend") == 0 && call->arg_count == 2) {
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    sb_appendf(&sb, "sage_bytes_extend(%s, %s)", a0, a1);
+    free(a0);
+    free(a1);
+    free(callee_name);
+    return sb_take(&sb);
+  }
   if (strcmp(callee_name, "bytes_slice") == 0 && call->arg_count == 3) {
     char *a0 = emit_expr(compiler, call->args[0]);
     char *a1 = emit_expr(compiler, call->args[1]);
@@ -7307,6 +7316,20 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    b->data = grown;\n"
       "    b->data[b->count] = (unsigned char)n.as.number;\n"
       "    b->count = b->count + 1;\n"
+      "    return sage_nil();\n"
+      "}\n"
+      "static SageValue sage_bytes_extend(SageValue d, SageValue src) {\n"
+      "    if (d.type != SAGE_TAG_BYTES || src.type != SAGE_TAG_BYTES) return sage_nil();\n"
+      "    SageBytes* b = d.as.bytes;\n"
+      "    SageBytes* o = src.as.bytes;\n"
+      "    if (o->count == 0) return sage_nil();\n"
+      "    size_t need = (size_t)b->count + (size_t)o->count;\n"
+      "    if (need > 268435455UL) return sage_nil();\n"
+      "    unsigned char* grown = (unsigned char*)realloc(b->data, need);\n"
+      "    if (!grown) return sage_nil();\n"
+      "    b->data = grown;\n"
+      "    memcpy(b->data + b->count, o->data, (size_t)o->count);\n"
+      "    b->count = need;\n"
       "    return sage_nil();\n"
       "}\n"
       "static SageValue sage_bytes_slice(SageValue v, SageValue s, SageValue e) {\n"
