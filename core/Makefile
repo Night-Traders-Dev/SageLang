@@ -428,6 +428,17 @@ install: $(TARGET) $(LSP_TARGET) $(GPU_API_OBJECT)
 	install -d $(BINDIR)
 	install -m 755 $(TARGET) $(BINDIR)
 	install -m 755 $(LSP_TARGET) $(BINDIR)
+	@# sage-c is the original name for this binary and is still what a lot of
+	@# existing tooling invokes -- SageFS's sagemake lists it as a required
+	@# dependency and runs mkfs, vfs and the whole test suite through it. Only
+	@# $(TARGET) is built now, so nothing overwrites an older sage-c left in
+	@# BINDIR by a previous release. That is worse than a missing one: the stale
+	@# binary keeps working, so nothing reports an error, and every program
+	@# compiled through it runs against a release-old runtime. SageFS failed this
+	@# way -- a month-old sage-c lacked mem_copy_to_ptr and four test files died
+	@# on "Undefined variable" while the freshly built sage passed them. Install
+	@# the name as a link to the current binary rather than leaving it to rot.
+	ln -sf $(TARGET) $(BINDIR)/sage-c
 	install -d $(LIBDIR)/lib
 	install -d $(LIBDIR)/obj
 	install -m 644 $(LLVM_RT_OBJECT) $(GPU_API_OBJECT) $(LIBDIR)/obj/
