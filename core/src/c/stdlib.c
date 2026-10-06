@@ -829,6 +829,46 @@ static Value io_filesize_native(int argCount, Value* args) {
 }
 
 // io.readbytes(path) -> Bytes (byte buffer)
+/* io_readbytes_at -- read `length` bytes from `path` starting at `offset`.
+ *
+ * The whole-file read refuses anything over SAGE_MAX_READ_SIZE and returns nil
+ * rather than reporting an error, so bytes_len() of the result is 0 and the caller
+ * cannot tell a refused read from an empty file. Every project that needed a file
+ * bigger than that had grown its own bounded-read workaround: SageFS in
+ * imgio.read_image_range(), SageVM in a module of its own. This is the primitive
+ * they were all reaching for.
+ *
+ * Each call is bounded by `length`, not by the file size, so a caller can walk a
+ * file of any size in chunks. Returns nil when the file cannot be opened or the
+ * offset is not seekable; returns a short Bytes at end of file. */
+static Value io_readbytes_at_native(int argCount, Value* args) {
+    if (stdlib_sandbox_denied("filesystem")) return val_nil();
+    if (argCount < 3 || !IS_STRING(args[0]) || !IS_NUMBER(args[1]) || !IS_NUMBER(args[2]))
+        return val_nil();
+    long long offset = (long long)AS_NUMBER(args[1]);
+    long long length = (long long)AS_NUMBER(args[2]);
+    if (offset < 0 || length < 0) return val_nil();
+    /* Bound a single call so one read cannot exhaust memory. A caller walking a
+     * large file asks for a chunk and loops; it never needs more than this at once. */
+    if (length > SAGE_MAX_READ_SIZE) return val_nil();
+    FILE* f = fopen(AS_STRING(args[0]), "rb");
+    if (!f) return val_nil();
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return val_nil(); }
+    long total = ftell(f);
+    if (total < 0) { fclose(f); return val_nil(); }
+    if (offset > (long long)total) { fclose(f); return val_bytes(NULL, 0); }
+    if (fseek(f, (long)offset, SEEK_SET) != 0) { fclose(f); return val_nil(); }
+    long available = (long)total - (long)offset;
+    size_t want = (size_t)(length < available ? length : available);
+    if (want == 0) { fclose(f); return val_bytes(NULL, 0); }
+    unsigned char* buf = SAGE_ALLOC(want);
+    size_t read = fread(buf, 1, want, f);
+    fclose(f);
+    Value out_val = val_bytes(buf, (int)read);
+    SAGE_FREE(buf);
+    return out_val;
+}
+
 static Value io_readbytes_native(int argCount, Value* args) {
     if (stdlib_sandbox_denied("filesystem")) return val_nil();
     if (argCount < 1 || !IS_STRING(args[0])) return val_nil();
@@ -914,6 +954,7 @@ Module* create_io_module(ModuleCache* cache) {
     env_define_const(e, "mkdir", 5, val_native(io_mkdir_native));
     env_define_const(e, "filesize", 8, val_native(io_filesize_native));
     env_define_const(e, "readbytes", 9, val_native(io_readbytes_native));
+    env_define_const(e, "readbytes_at", 12, val_native(io_readbytes_at_native));
     env_define_const(e, "listdir", 7, val_native(io_listdir_native));
 
     return m;

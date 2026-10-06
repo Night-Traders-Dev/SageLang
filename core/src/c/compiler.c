@@ -2885,6 +2885,17 @@ if (strcmp(callee_name, "sys_exec") == 0) {
     free(callee_name);
     return sb_take(&sb);
   }
+  if (strcmp(callee_name, "io_readbytes_at") == 0) {
+    if (call->arg_count != 3)
+      return str_dup("sage_nil()");
+    char *a0 = emit_expr(compiler, call->args[0]);
+    char *a1 = emit_expr(compiler, call->args[1]);
+    char *a2 = emit_expr(compiler, call->args[2]);
+    sb_appendf(&sb, "sage_native_io_readbytes_at(%s, %s, %s)", a0, a1, a2);
+    free(a0); free(a1); free(a2);
+    free(callee_name);
+    return sb_take(&sb);
+  }
   if (strcmp(callee_name, "io_exists") == 0) {
     if (call->arg_count != 1)
       return str_dup("sage_nil()");
@@ -6433,6 +6444,37 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
       "    fclose(f);\n"
       "    sage_gc_unpin();\n"
       "    return arr;\n"
+      "}\n"
+      "static SageValue sage_bytes_value(unsigned char* data, int count) {\n"
+      "    SageBytes* b = (SageBytes*)malloc(sizeof(SageBytes));\n"
+      "    if (!b) return sage_nil();\n"
+      "    if (count == 0) { b->data = NULL; b->count = 0; }\n"
+      "    else { b->data = data; b->count = count; }\n"
+      "    SageValue v; v.type = SAGE_TAG_BYTES; v.as.bytes = b; return v;\n"
+      "}\n"
+      "static SageValue sage_native_io_readbytes_at(SageValue path, SageValue off, SageValue len) {\n"
+      "    if (path.type != SAGE_TAG_STRING || off.type != SAGE_TAG_NUMBER ||\n"
+      "        len.type != SAGE_TAG_NUMBER) return sage_nil();\n"
+      "    long long o = (long long)off.as.number, n = (long long)len.as.number;\n"
+      "    if (o < 0 || n < 0 || n > SAGE_MAX_READ_SIZE) return sage_nil();\n"
+      "    FILE* f = fopen(path.as.string, \"rb\");\n"
+      "    if (!f) return sage_nil();\n"
+      "    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return sage_nil(); }\n"
+      "    long total = ftell(f);\n"
+      "    if (total < 0) { fclose(f); return sage_nil(); }\n"
+      "    if (o > (long long)total) { fclose(f); return sage_bytes_value(NULL, 0); }\n"
+      "    if (fseek(f, (long)o, SEEK_SET) != 0) { fclose(f); return sage_nil(); }\n"
+      "    long avail = (long)total - (long)o;\n"
+      "    size_t want = (size_t)(n < (long long)avail ? n : (long long)avail);\n"
+      "    if (want == 0) { fclose(f); return sage_bytes_value(NULL, 0); }\n"
+      "    unsigned char* buf = (unsigned char*)malloc(want);\n"
+      "    if (!buf) { fclose(f); return sage_nil(); }\n"
+      "    size_t got = fread(buf, 1, want, f);\n"
+      "    fclose(f);\n"
+      "    SageBytes* bytes = (SageBytes*)malloc(sizeof(SageBytes));\n"
+      "    if (!bytes) { free(buf); fclose(f); return sage_nil(); }\n"
+      "    bytes->data = buf; bytes->count = (int)got;\n"
+      "    SageValue v; v.type = SAGE_TAG_BYTES; v.as.bytes = bytes; return v;\n"
       "}\n"
 "static SageValue sage_native_io_writebytes(SageValue path, SageValue v) {\n"
 "    if (path.type != SAGE_TAG_STRING) return sage_nil();\n"
