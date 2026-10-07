@@ -2,6 +2,7 @@
 # EXPECT: 268435456
 # EXPECT: 1073741824
 # EXPECT: true
+# EXPECT: false
 
 # An explicit buffer allocation is bounded by SAGE_MAX_ALLOC_SIZE, not by
 # SAGE_MAX_READ_SIZE. Reading a file is driven by untrusted input and wants a tight
@@ -28,3 +29,15 @@ print bytes_len(huge)
 
 let over = bytes(2 * 1024 * 1024 * 1024)
 print str(over == nil)
+# mem_alloc() hands back a raw buffer for FFI arguments. Its compiled form capped at
+# a hardcoded 64 MiB while the interpreter allowed 100 MiB and then 1 GiB, so the
+# same program read a 256 MiB buffer correctly under the interpreter and got a short
+# read under the compiler -- SageFS's fileio.read() calls mem_alloc() for every read,
+# so its compiled tools failed on any volume over 64 MiB. Both now use the same
+# ceiling.
+let raw = mem_alloc(100 * 1024 * 1024)
+print str(raw == nil)
+mem_free(raw)
+# The over-limit refusal is not exercised here: mem_alloc writes to stderr on that
+# path and the harness folds stderr into stdout, so the output cannot be asserted.
+# bytes(2 GiB) above covers the same ceiling from the allocation side.
