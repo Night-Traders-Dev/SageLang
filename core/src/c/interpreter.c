@@ -1873,7 +1873,7 @@ static Value bytes_new_native(int argCount, Value* args) {
         int len = (int)AS_NUMBER(args[0]);
         // bytes(len, fill): a buffer of `len` bytes, each set to `fill`.
         // Security: Enforce global allocation limit (CWE-400)
-        if (len < 0 || len > SAGE_MAX_READ_SIZE) return val_nil();
+        if (len < 0 || len > SAGE_MAX_ALLOC_SIZE) return val_nil();
         Value b = val_bytes_empty(len);
         b.as.bytes->length = len;
         memset(b.as.bytes->data,
@@ -1883,7 +1883,7 @@ static Value bytes_new_native(int argCount, Value* args) {
     if (argCount == 1 && IS_NUMBER(args[0])) {
         int len = (int)AS_NUMBER(args[0]);
         // Security: Enforce global allocation limit (CWE-400)
-        if (len < 0 || len > SAGE_MAX_READ_SIZE) return val_nil();
+        if (len < 0 || len > SAGE_MAX_ALLOC_SIZE) return val_nil();
         Value b = val_bytes_empty(len);
         b.as.bytes->length = len;
         memset(b.as.bytes->data, 0, len);
@@ -2052,9 +2052,14 @@ static Value mem_alloc_native(int argCount, Value* args) {
         return val_nil();
     }
     long long requested;
+    /* A raw buffer the program asked for by name, so it is bounded by the
+     * allocation ceiling rather than the read one -- the same distinction
+     * bytes(n) makes. The message used to say "100MB" literally, so raising
+     * SAGE_MAX_ALLOC_SIZE would have left it lying about the limit. */
     if (!finite_integer(AS_NUMBER(args[0]), &requested) || requested <= 0 ||
-        (unsigned long long)requested > SAGE_MAX_READ_SIZE) {
-        fprintf(stderr, "mem_alloc(): invalid size (0 < size <= 100MB).\n");
+        (unsigned long long)requested > SAGE_MAX_ALLOC_SIZE) {
+        fprintf(stderr, "mem_alloc(): size must be between 1 and %ld bytes.\n",
+                (long)SAGE_MAX_ALLOC_SIZE);
         return val_nil();
     }
     size_t size = (size_t)requested;

@@ -112,8 +112,23 @@ typedef struct {
     void* handle;       // pthread_mutex_t* (opaque)
 } MutexValue;
 
-// Security: Global resource limit for I/O operations (100MB)
+// Security: ceiling on how much a single I/O operation may pull into memory.
+// This guards against an untrusted input -- a caller naming a 40 GB file and
+// having the runtime try to hold it. It says nothing about how much a program may
+// deliberately allocate; that is SAGE_MAX_ALLOC_SIZE below.
 #define SAGE_MAX_READ_SIZE (100 * 1024 * 1024)
+
+// Ceiling on an explicit buffer allocation: bytes(n), bytes(n, fill).
+//
+// This used to be SAGE_MAX_READ_SIZE, which conflated the two. Reading a file is
+// driven by untrusted input and wants a tight bound; allocating a buffer is
+// something the program asked for by name, and refusing it silently makes
+// bytes(200 * 1024 * 1024) come back as nil -- which callers then report as
+// "the file is empty", because bytes_len(nil) is 0. SageFS could not mount any
+// volume larger than this for exactly that reason.
+//
+// Kept well inside INT_MAX because a Bytes count is a signed int throughout.
+#define SAGE_MAX_ALLOC_SIZE (1024 * 1024 * 1024)
 
 // Phase 1.8: Binary-safe byte buffer
 typedef struct {
