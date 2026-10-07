@@ -4033,8 +4033,29 @@ if (strcmp(callee_name, "sys_exec") == 0) {
   ProcEntry *proc =
       find_name_entry(compiler->locals, callee_name) == NULL &&
               find_capture_index(compiler->current_function, callee_name) < 0
-          ? find_proc_entry(compiler->procs, callee_name)
+          ? NULL
           : NULL;
+  if (find_name_entry(compiler->locals, callee_name) == NULL &&
+      find_capture_index(compiler->current_function, callee_name) < 0) {
+    /* Prefer the calling module's own proc before the flat namespace.
+     *
+     * Modules are compiled into one flat proc list, so two modules with a proc of
+     * the same name collide, and find_proc_entry() returned whichever came first.
+     * A call to a module's own sibling proc then bound to some other module's
+     * version -- silently, with no error, and only under the C backend; the
+     * interpreter resolves through the importing module's environment and gets it
+     * right. So the same program returned different answers depending on how it was
+     * run. */
+    const char *owner = (compiler->current_function != NULL)
+                            ? compiler->current_function->module_name
+                            : NULL;
+    if (owner != NULL) {
+      proc = find_module_proc_entry(compiler, owner, callee_name);
+    }
+    if (proc == NULL) {
+      proc = find_proc_entry(compiler->procs, callee_name);
+    }
+  }
   if (proc == NULL) {
     /* Not a named proc — try dynamic dispatch for function-valued variables (callbacks, etc.) */
     char *callee_expr = emit_expr(compiler, call->callee);
