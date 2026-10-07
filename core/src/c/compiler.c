@@ -113,6 +113,12 @@ typedef struct {
   size_t cap;
 } StringBuffer;
 
+/* A name holding a class reference, from `let X = SomeClass`. */
+typedef struct ClassRefEntry {
+  char *name;
+  struct ClassRefEntry *next;
+} ClassRefEntry;
+
 typedef struct {
   FILE *out;
   const char *input_path;
@@ -140,6 +146,10 @@ typedef struct {
      Used for __name__, which is "__main__" in the entry program and the module's
      own name inside a module. */
   const char *current_module;
+  /* Names bound to a class reference by `let X = SomeClass`. Classes used to have
+     no value form at all; now they do, and a call through one of these names has to
+     construct rather than dispatch. */
+  ClassRefEntry *class_refs;
   LoopRootEntry *loop_roots;
   ClassInfo *classes;
   ClassInfo *current_class;
@@ -1281,6 +1291,9 @@ static void collect_loop_root_slots(Compiler *compiler, Stmt *stmt,
   }
 }
 
+static void record_class_ref(Compiler *compiler, const char *name);
+static int name_is_class_ref(Compiler *compiler, const char *name);
+
 static void collect_global_lets(Compiler *compiler, Stmt *stmt) {
   while (stmt != NULL) {
     switch (stmt->type) {
@@ -1291,6 +1304,39 @@ static void collect_global_lets(Compiler *compiler, Stmt *stmt) {
                        name);
       } else {
         add_name_entry(compiler, &compiler->globals, name, "sage_global");
+        /* Record class references here, in the collection pass, rather than when
+         * the let is emitted. Procs are emitted before module-level statements, so a
+         * call inside a proc was compiled before the binding that told the call site
+         * it was a class: `Alias(3)` then went to dynamic dispatch and failed with
+         * "Cannot call non-function value". */
+        if (stmt->as.let.initializer != NULL) {
+          Expr *init = stmt->as.let.initializer;
+          int is_class = 0;
+          if (init->type == EXPR_VARIABLE) {
+            char *vn = token_to_string(init->as.variable.name);
+            /* Either the class itself, or another name already holding a class
+               reference -- aliasing an alias has to keep working, since that is the
+               whole point of a value form. */
+            is_class = find_class_info(compiler->classes, vn) != NULL ||
+                       name_is_class_ref(compiler, vn);
+            free(vn);
+          } else if (init->type == EXPR_GET) {
+            Expr *o = init->as.get.object;
+            if (o != NULL && o->type == EXPR_VARIABLE) {
+              char *on = token_to_string(o->as.variable.name);
+              for (ImportedModule *m = compiler->modules; m != NULL && !is_class;
+                   m = m->next) {
+                if (strcmp(m->binding_name, on) == 0) {
+                  char *pn = token_to_string(init->as.get.property);
+                  is_class = find_class_info(compiler->classes, pn) != NULL;
+                  free(pn);
+                }
+              }
+              free(on);
+            }
+          }
+          if (is_class) record_class_ref(compiler, name);
+        }
       }
       free(name);
       break;
@@ -2179,6 +2225,23 @@ static int find_capture_index(FunctionInfo *function, const char *name) {
     }
   }
   return -1;
+}
+
+static int name_is_class_ref(Compiler *compiler, const char *name) {
+  if (compiler == NULL || name == NULL) return 0;
+  for (ClassRefEntry *e = compiler->class_refs; e != NULL; e = e->next) {
+    if (strcmp(e->name, name) == 0) return 1;
+  }
+  return 0;
+}
+
+static void record_class_ref(Compiler *compiler, const char *name) {
+  if (name_is_class_ref(compiler, name)) return;
+  ClassRefEntry *e = (ClassRefEntry*)malloc(sizeof(ClassRefEntry));
+  if (e == NULL) return;
+  e->name = strdup(name);
+  e->next = compiler->class_refs;
+  compiler->class_refs = e;
 }
 
 static const char *resolve_slot_name(Compiler *compiler,
@@ -4058,6 +4121,35 @@ if (strcmp(callee_name, "sys_exec") == 0) {
   }
   if (proc == NULL) {
     /* Not a named proc — try dynamic dispatch for function-valued variables (callbacks, etc.) */
+    /* A name bound to a class reference constructs instead of dispatching. Without
+       this, `let X = SomeClass` followed by `X(...)` falls through to dynamic
+       dispatch, which finds a dict where it expects something callable. */
+    if (call->callee->type == EXPR_VARIABLE) {
+      char *cname = token_to_string(call->callee->as.variable.name);
+      if (name_is_class_ref(compiler, cname) &&
+          find_name_entry(compiler->locals, cname) == NULL) {
+        const char *cr_slot = resolve_slot_name(compiler, cname);
+        if (cr_slot != NULL) {
+          StringBuffer csb;
+          sb_init(&csb);
+          sb_appendf(&csb,
+                     "sage_construct_ref(sage_load_slot(&%s, \"%s\"), %d, "
+                     "(SageValue[]){",
+                     cr_slot, cname, call->arg_count);
+          int ci;
+          for (ci = 0; ci < call->arg_count; ci++) {
+            if (ci > 0) sb_append(&csb, ", ");
+            append_call_argument(compiler, &csb, call, ci, NULL, call->arg_count);
+          }
+          if (call->arg_count == 0) sb_append(&csb, "sage_nil()");
+          sb_append(&csb, "})");
+          free(cname);
+          free(callee_name);
+          return sb_take(&csb);
+        }
+      }
+      free(cname);
+    }
     char *callee_expr = emit_expr(compiler, call->callee);
     StringBuffer dsb;
     sb_init(&dsb);
@@ -4838,9 +4930,108 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
       break;
     }
 
+    /* Resolve a class on the right-hand side before emitting it. emit_expr() on a
+       bare class name fails with "unknown name in compiled code" -- classes have no
+       variable form -- so the check has to come first. */
+    if (stmt->as.let.initializer != NULL) {
+      ClassInfo *pre = NULL;
+      Expr *init = stmt->as.let.initializer;
+      if (init->type == EXPR_VARIABLE) {
+        char *vn = token_to_string(init->as.variable.name);
+        pre = find_class_info(compiler->classes, vn);
+        free(vn);
+      } else if (init->type == EXPR_GET) {
+        Expr *o = init->as.get.object;
+        if (o != NULL && o->type == EXPR_VARIABLE) {
+          char *on = token_to_string(o->as.variable.name);
+          for (ImportedModule *m = compiler->modules; m != NULL && pre == NULL;
+               m = m->next) {
+            if (strcmp(m->binding_name, on) == 0) {
+              char *pn = token_to_string(init->as.get.property);
+              pre = find_class_info(compiler->classes, pn);
+              free(pn);
+            }
+          }
+          free(on);
+        }
+      }
+      if (pre != NULL) {
+        char *pcn = escape_c_string(pre->class_name);
+        char *ppn = pre->parent_name ? escape_c_string(pre->parent_name) : NULL;
+        emit_line(compiler,
+                  "sage_define_slot(&%s, sage_class_ref(\"%s\", %s%s%s));",
+                  slot_name, pcn, ppn ? "\"" : "NULL", ppn ? ppn : "",
+                  ppn ? "\"" : "");
+        record_class_ref(compiler, name);
+        free(pcn);
+        free(ppn);
+        free(name);
+        break;
+      }
+    }
+
     char *expr = stmt->as.let.initializer != NULL
                      ? emit_expr(compiler, stmt->as.let.initializer)
                      : str_dup("sage_nil()");
+
+    /* A class has a value form now, so `let X = SomeClass` binds a class reference
+       rather than trying to load a C identifier that does not exist. Covers both a
+       bare class name in the current module and a qualified one from an import. */
+    if (stmt->as.let.initializer != NULL &&
+        stmt->as.let.initializer->type == EXPR_VARIABLE) {
+      char *vname = token_to_string(stmt->as.let.initializer->as.variable.name);
+      ClassInfo *vcls = find_class_info(compiler->classes, vname);
+      if (vcls != NULL) {
+        char *vcname = escape_c_string(vcls->class_name);
+        char *vpname = vcls->parent_name ? escape_c_string(vcls->parent_name) : NULL;
+        emit_line(compiler,
+                  "sage_define_slot(&%s, sage_class_ref(\"%s\", %s%s%s));",
+                  slot_name, vcname, vpname ? "\"" : "NULL", vpname ? vpname : "",
+                  vpname ? "\"" : "");
+        record_class_ref(compiler, name);
+        free(vcname);
+        free(vpname);
+        free(vname);
+        free(expr);
+        free(name);
+        break;
+      }
+      free(vname);
+    }
+    if (stmt->as.let.initializer != NULL &&
+        stmt->as.let.initializer->type == EXPR_GET) {
+      Expr *obj = stmt->as.let.initializer->as.get.object;
+      if (obj != NULL && obj->type == EXPR_VARIABLE) {
+        char *obj_name = token_to_string(obj->as.variable.name);
+        ClassInfo *cls = NULL;
+        for (ImportedModule *m = compiler->modules; m != NULL && cls == NULL;
+             m = m->next) {
+          if (strcmp(m->binding_name, obj_name) == 0) {
+            char *prop = token_to_string(stmt->as.let.initializer->as.get.property);
+            cls = find_class_info(compiler->classes, prop);
+            free(prop);
+          }
+        }
+        if (cls != NULL) {
+          char *cname = escape_c_string(cls->class_name);
+          char *pname = cls->parent_name ? escape_c_string(cls->parent_name)
+                                         : NULL;
+          emit_line(compiler,
+                    "sage_define_slot(&%s, sage_class_ref(\"%s\", %s%s%s));",
+                    slot_name, cname, pname ? "\"" : "NULL", pname ? pname : "",
+                    pname ? "\"" : "");
+          record_class_ref(compiler, name);
+          free(cname);
+          free(pname);
+          free(obj_name);
+          free(expr);
+          free(name);
+          break;
+        }
+        free(obj_name);
+      }
+    }
+
     emit_line(compiler, "sage_define_slot(&%s, %s);", slot_name, expr);
     free(name);
     free(expr);
@@ -8329,7 +8520,25 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    return sage_nil();\n"
         "}\n"
         "\n"
-        "static SageValue sage_construct(const char* class_name, const char* "
+        "/* A class as a value.\n"
+      "   *\n"
+      "   * Classes were names: sage_construct() looked the class up by string in a\n"
+      "   * method table, and nothing could hold one. So `let X = SomeClass` had no\n"
+      "   * meaning -- it emitted a reference to a C identifier that does not exist,\n"
+      "   * in this module or any other, while the interpreter represented classes as\n"
+      "   * values and accepted it. A class reference is that name packaged as an\n"
+      "   * ordinary value, so it can be stored, passed and aliased; sage_construct_ref\n"
+      "   * unpacks it and calls the same construction path as a direct call. */\n"
+      "static SageValue sage_class_ref(const char* class_name, const char* parent_name) {\n"
+      "    sage_gc_pin();\n"
+      "    SageValue d = sage_make_dict();\n"
+      "    sage_dict_set(d.as.dict, \"__class_ref__\", sage_string(class_name));\n"
+      "    if (parent_name != NULL) sage_dict_set(d.as.dict, \"__parent__\", sage_string(parent_name));\n"
+      "    sage_gc_unpin();\n"
+      "    return d;\n"
+      "}\n"
+      "static SageValue sage_construct_ref(SageValue ref, int argc, SageValue* argv);\n"
+      "static SageValue sage_construct(const char* class_name, const char* "
         "parent_name, int argc, SageValue* argv) {\n"
         "    sage_gc_pin();\n"
         "    SageValue inst = sage_make_dict();\n"
@@ -8378,6 +8587,15 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "    }\n"
         "    sage_gc_unpin();\n"
         "    return inst;\n"
+        "}\n"
+        "/* Construct via a class reference, unpacking the name it carries. */\n"
+        "static SageValue sage_construct_ref(SageValue ref, int argc, SageValue* argv) {\n"
+        "    if (ref.type != SAGE_TAG_DICT) return sage_nil();\n"
+        "    SageValue namev = sage_dict_get(ref.as.dict, \"__class_ref__\");\n"
+        "    if (namev.type != SAGE_TAG_STRING) return sage_nil();\n"
+        "    SageValue parv = sage_dict_get(ref.as.dict, \"__parent__\");\n"
+        "    const char* parent = (parv.type == SAGE_TAG_STRING) ? parv.as.string : NULL;\n"
+        "    return sage_construct(namev.as.string, parent, argc, argv);\n"
         "}\n"
         "\n",
         out);
