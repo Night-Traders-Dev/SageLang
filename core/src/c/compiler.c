@@ -136,6 +136,10 @@ typedef struct {
   FunctionInfo *functions;
   FunctionInfo *current_function;
   FunctionInfo *main_function;
+  /* Module whose body is currently being emitted, NULL for the entry program.
+     Used for __name__, which is "__main__" in the entry program and the module's
+     own name inside a module. */
+  const char *current_module;
   LoopRootEntry *loop_roots;
   ClassInfo *classes;
   ClassInfo *current_class;
@@ -4513,6 +4517,29 @@ static char *emit_expr(Compiler *compiler, Expr *expr) {
     return emit_binary_expr(compiler, &expr->as.binary);
   case EXPR_VARIABLE: {
     char *name = token_to_string(expr->as.variable.name);
+    /* __name__ is not a slot: it is a compile-time constant that differs between
+       the entry program and each module, so it cannot be bound to one. Resolving it
+       here is what lets a module use the usual `if __name__ == "__main__"` guard;
+       without it the compiler fails with "unknown name in compiled code" on a line
+       that works fine interpreted. */
+    if (strcmp(name, "__name__") == 0) {
+      const char *which = NULL;
+      if (compiler->current_function != NULL &&
+          compiler->current_function->module_name != NULL) {
+        which = compiler->current_function->module_name;
+      } else if (compiler->current_module != NULL) {
+        which = compiler->current_module;
+      } else {
+        which = "__main__";
+      }
+      char *which_escaped = escape_c_string(which);
+      StringBuffer nb;
+      sb_init(&nb);
+      sb_appendf(&nb, "sage_string_const(\"%s\")", which_escaped);
+      free(name);
+      free(which_escaped);
+      return sb_take(&nb);
+    }
     const char *slot_name = resolve_slot_name(compiler, name);
     if (slot_name == NULL) {
       char help[256];
@@ -5040,18 +5067,24 @@ static void emit_stmt(Compiler *compiler, Stmt *stmt) {
         continue;
       if (strcmp(m->name, imp->module_name) == 0) {
         FunctionInfo *previous_function = compiler->current_function;
+        const char *previous_module = compiler->current_module;
         compiler->current_function = m->root_function;
+        compiler->current_module = m->name;
         for (Stmt *s = m->ast; s != NULL; s = s->next) {
           if (s->type != STMT_PROC && s->type != STMT_ASYNC_PROC &&
               s->type != STMT_CLASS) {
             emit_stmt(compiler, s);
             if (compiler->failed) {
               compiler->current_function = previous_function;
+              compiler->current_module = previous_module;
               return;
             }
           }
         }
         compiler->current_function = previous_function;
+        /* Restore, or the entry program's own __name__ resolves to the last
+           imported module's name instead of "__main__". */
+        compiler->current_module = previous_module;
         break;
       }
     }

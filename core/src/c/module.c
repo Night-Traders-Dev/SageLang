@@ -301,6 +301,9 @@ bool execute_module(Module* module, Environment* global_env) {
     if (module->env == NULL) {
         // Modules see the shared global scope and stdlib, not the caller's local scope.
         module->env = env_create(module_parent_env(global_env));
+        /* This module's own name, shadowing the "__main__" the entry environment
+         * carries, so a module can tell it was imported. */
+        env_define_const(module->env, "__name__", 8, val_string(module->name));
     }
 
     if (module->ast == NULL) {

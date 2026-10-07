@@ -3095,6 +3095,20 @@ static Value path_is_file_native(int argCount, Value* args) {
 }
 
 void init_stdlib(Env* env) {
+    /* __name__ for the program being run.
+     *
+     * Python's rule, and the useful one: the entry program is "__main__" and every
+     * imported module is its own name. Without it a module cannot tell whether it
+     * was imported or executed, so a file that is both a script and a library --
+     * which is most of a codebase's command-line tools -- has to run its main()
+     * on import. SageFS's mkfs.sage does exactly that: it calls main() at the top
+     * level, so importing it as a library formats a volume. Under the C backend
+     * that is a compile error rather than a surprise, which is why its round-trip
+     * test can only run interpreted.
+     *
+     * Module environments get their own __name__ in load_module(), which shadows
+     * this one, so an imported module does not see "__main__" by inheritance. */
+    env_define_const(env, "__name__", 8, val_string("__main__"));
     // Initialize address salt for secure hashing (CWE-200 prevention)
     if (g_addr_salt == 0) {
         FILE* urand = fopen("/dev/urandom", "r");
