@@ -6176,6 +6176,13 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "        if (call_argc == 3 && IS_NUM(call_argv[0]) && IS_PTR(call_argv[1]) && IS_NUM(call_argv[2])) { long (*fn)(long,void*,long) = (long(*)(long,void*,long))sym; return sage_number((double)fn((long)call_argv[0].as.number, sage_pointer_data(call_argv[1]), (long)call_argv[2].as.number)); }\n"
         "        if (call_argc == 3 && IS_PTR(call_argv[1])) { long (*fn)(void*,void*,long) = (long(*)(void*,void*,long))sym; return sage_number((double)fn(sage_pointer_data(call_argv[0]), sage_pointer_data(call_argv[1]), (long)call_argv[2].as.number)); }\n"
         "        if (call_argc == 2 && IS_NUM(call_argv[0]) && IS_NUM(call_argv[1])) { long (*fn)(long,long) = (long(*)(long,long))sym; return sage_number((double)fn((long)call_argv[0].as.number,(long)call_argv[1].as.number)); }\n"
+        /* truncate(2) is int truncate(const char*, off_t). Reading it as a long
+         * return keeps both the length and the result in 64 bits, which matters
+         * past 2 GiB: as an "int" call the length arrives truncated and a volume
+         * larger than the allocation ceiling cannot be created at all. The
+         * interpreter has this shape and the compiled template did not, so the
+         * same call returned a length on one backend and nil on the other. */
+        "        if (call_argc == 2 && IS_STR(call_argv[0]) && IS_NUM(call_argv[1])) { long (*fn)(const char*,long) = (long(*)(const char*,long))sym; return sage_number((double)fn(call_argv[0].as.string,(long)call_argv[1].as.number)); }\n"
         "    }\n"
         "    if (strcmp(rt, \"string\") == 0) {\n"
         "        if (call_argc == 0) { const char* (*fn)(void) = (const char*(*)(void))sym; const char* r = fn(); return r ? sage_string(r) : sage_nil(); }\n"
