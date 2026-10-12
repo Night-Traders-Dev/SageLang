@@ -8607,6 +8607,28 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "\n",
         out);
 
+  fputs("/* The two backends number their tags differently, and this fallback prints the\n", out);
+  fputs(" * number, so a nested container inside an array rendered as <4> here and <6>\n", out);
+  fputs(" * under the interpreter. Map onto the interpreter numbering so the two agree. */\n", out);
+  fputs("static int sage_str_tag(SageValue v) {\n", out);
+  fputs("    switch (v.type) {\n", out);
+  fputs("        case SAGE_TAG_NUMBER:   return 0;\n", out);
+  fputs("        case SAGE_TAG_BOOL:     return 1;\n", out);
+  fputs("        case SAGE_TAG_NIL:      return 2;\n", out);
+  fputs("        case SAGE_TAG_STRING:   return 3;\n", out);
+  fputs("        case SAGE_TAG_FUNCTION: return 4;\n", out);
+  fputs("        case SAGE_TAG_ARRAY:    return 6;\n", out);
+  fputs("        case SAGE_TAG_DICT:     return 7;\n", out);
+  fputs("        case SAGE_TAG_TUPLE:    return 8;\n", out);
+  fputs("        case SAGE_TAG_CLIB:     return 14;\n", out);
+  fputs("        case SAGE_TAG_POINTER:  return 15;\n", out);
+  fputs("        case SAGE_TAG_THREAD:   return 17;\n", out);
+  fputs("        case SAGE_TAG_MUTEX:    return 18;\n", out);
+  fputs("        case SAGE_TAG_BYTES:    return 19;\n", out);
+  fputs("        default:                return (int)v.type;\n", out);
+  fputs("    }\n", out);
+  fputs("}\n", out);
+  fputs("\n", out);
   fputs("static SageValue sage_str(SageValue value) {\n"
         "    char buffer[64];\n"
         "    switch (value.type) {\n"
@@ -8619,8 +8641,43 @@ static void emit_runtime_prelude(FILE *out, CompilerTarget target) {
         "\"false\");\n"
         "        case SAGE_TAG_NIL:\n"
         "            return sage_string(\"nil\");\n"
-        "        case SAGE_TAG_ARRAY:\n"
-        "            return sage_string(\"<array>\");\n"
+        "        case SAGE_TAG_ARRAY: {\n"
+        "            /* The interpreter renders an array as a bracketed list with its\n"
+        "             * elements joined by a comma and a space, numbers formatted and\n"
+        "             * strings left unquoted. This returned the literal placeholder\n"
+        "             * instead, so str() of a list disagreed between the two backends\n"
+        "             * and printing a list produced the placeholder, not its contents. */\n"
+        "            SageArray* arr = value.as.array;\n"
+        "            size_t buf_size = 1024;\n"
+        "            char* sbuf = (char*)malloc(buf_size);\n"
+        "            if (sbuf == NULL) return sage_string(\"<array>\");\n"
+        "            size_t spos = 0;\n"
+        "            sbuf[spos++] = '[';\n"
+        "            for (int i = 0; i < arr->count && spos < buf_size - 32; i++) {\n"
+        "                if (i > 0) { sbuf[spos++] = ','; sbuf[spos++] = ' '; }\n"
+        "                SageValue elem = arr->elements[i];\n"
+        "                if (elem.type == SAGE_TAG_NUMBER) {\n"
+        "                    char nbuf[64];\n"
+        "                    sage_format_number(elem.as.number, nbuf, sizeof(nbuf));\n"
+        "                    spos += snprintf(sbuf + spos, buf_size - spos, \"%s\", nbuf);\n"
+        "                } else if (elem.type == SAGE_TAG_STRING) {\n"
+        "                    spos += snprintf(sbuf + spos, buf_size - spos, \"%s\", elem.as.string);\n"
+        "                } else if (elem.type == SAGE_TAG_BOOL) {\n"
+        "                    spos += snprintf(sbuf + spos, buf_size - spos, \"%s\",\n"
+        "                                    elem.as.boolean ? \"true\" : \"false\");\n"
+        "                } else if (elem.type == SAGE_TAG_NIL) {\n"
+        "                    spos += snprintf(sbuf + spos, buf_size - spos, \"nil\");\n"
+        "                } else {\n"
+        "                    spos += snprintf(sbuf + spos, buf_size - spos, \"<%d>\", sage_str_tag(elem));\n"
+        "                }\n"
+        "            }\n"
+        "            if (arr->count > 0 && spos >= buf_size - 32) {\n"
+        "                spos += snprintf(sbuf + spos, buf_size - spos, \"...\");\n"
+        "            }\n"
+        "            sbuf[spos++] = ']';\n"
+        "            sbuf[spos] = '\\0';\n"
+        "            return sage_string_take(sbuf);\n"
+        "        }\n"
         "        case SAGE_TAG_DICT: {\n"
         "            if (value.as.dict != NULL) {\n"
         "                SageValue class_value = sage_dict_get(value.as.dict, "
