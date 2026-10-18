@@ -3,11 +3,28 @@
 
 #include <stddef.h>
 
+#include "ast.h"
 #include "bytecode.h"
 
 typedef struct BytecodeFunction {
     char** params;
     int param_count;
+    /* Default arguments, borrowed from the AST the module retains -- the same
+     * lifetime convention as chunk->ast_stmts, so these are never freed here.
+     *
+     * A function carries its own defaults rather than relying on the bytecode
+     * compiler's signature table. The table is keyed by bare name and is reset
+     * per compilation unit, while each module is compiled separately and the
+     * importer is compiled before its imports run -- so a call that crossed a
+     * module boundary never found the callee's signature, had no defaults
+     * substituted, and was rejected with "Arity mismatch". The same source
+     * worked or failed depending only on whether the file had an import.
+     *
+     * NULL defaults mean "no defaults known", which is what a function read back
+     * from a SAGEBC1 artifact gets: the format cannot carry AST, so such a
+     * function demands exact arity rather than inventing one. */
+    int required_count;
+    Expr** defaults;
     BytecodeChunk chunk;
 } BytecodeFunction;
 

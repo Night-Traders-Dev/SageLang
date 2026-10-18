@@ -478,13 +478,42 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
             if (function == NULL) {
                 return vm_error("Invalid VM function.");
             }
-            if (arg_count != function->param_count) {
+            /* Bind any parameter the caller omitted from its default.
+             *
+             * A compiled function carries its own defaults (see program.h), so
+             * this works across module boundaries and does not depend on the
+             * compiler's by-name signature table, which is reset per compilation
+             * unit and so never held the callee when an importer was compiled.
+             *
+             * Defaults are evaluated into the callee's scope as they are bound,
+             * in parameter order, so a default may reference the parameters
+             * before it -- which is the whole point of binding incrementally
+             * rather than filling an array first. That is the same discipline the
+             * method path above uses, for the same reason. */
+            int missing_ok = (arg_count <= function->param_count &&
+                              arg_count >= function->required_count);
+            if (arg_count != function->param_count && !missing_ok) {
                 return vm_error("Arity mismatch.");
             }
 
             Env* scope = env_create(callee.as.function->closure);
-            for (int i = 0; i < function->param_count; i++) {
+            int supplied = arg_count < function->param_count ? arg_count : function->param_count;
+            for (int i = 0; i < supplied; i++) {
                 env_define(scope, function->params[i], (int)strlen(function->params[i]), args[i]);
+            }
+            for (int i = supplied; i < function->param_count; i++) {
+                if (function->defaults == NULL || function->defaults[i] == NULL) {
+                    /* No default for this one. The arity check above already
+                     * rejected a call short enough to reach here in that case, so
+                     * this is defensive; binding nil keeps the frame well-formed. */
+                    env_define(scope, function->params[i], (int)strlen(function->params[i]), val_nil());
+                    continue;
+                }
+                ExecResult def = interpreter_eval_expr(function->defaults[i], scope);
+                if (def.is_throwing) {
+                    return def;
+                }
+                env_define(scope, function->params[i], (int)strlen(function->params[i]), def.value);
             }
 
             return vm_execute_chunk(&function->chunk, scope);
@@ -492,7 +521,59 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
 
         gc_pin();
         ProcStmt* func = (ProcStmt*)AS_FUNCTION(callee);
+        /* Bind parameters the caller omitted from their defaults.
+         *
+         * This is the path a call from compiled code into an interpreted module
+         * takes, so it is where default arguments across a module boundary were
+         * actually lost: the bytecode compiler substitutes defaults at the call
+         * site from a by-name table that is reset per compilation unit and holds
+         * only the importer's own procs, so `lib.f(1)` reached here one argument
+         * short and was rejected. The same source worked or failed depending only
+         * on whether the file had an import.
+         *
+         * Defaults are evaluated into the callee's scope as they are bound, in
+         * parameter order, so a default may reference the parameters before it --
+         * the same discipline the method path uses. A parameter with no default
+         * that the caller omitted falls through to the existing error rather than
+         * being given an invented value. */
+        Value* bound = args;
+        Value* padded = NULL;
+        if (arg_count < func->param_count && arg_count >= func->required_count) {
+            /* The body below binds every parameter from args[], so the defaults
+             * have to be materialised somewhere it can read. They cannot be
+             * written into args[]: the caller passes a pointer into the VM stack
+             * ending at sp, so args[arg_count] and beyond is live stack the
+             * interpreter has not allocated to this call. */
+            padded = SAGE_ALLOC((size_t)func->param_count * sizeof(Value));
+            if (padded == NULL) {
+                gc_unpin();
+                return vm_error("Out of memory binding default arguments.");
+            }
+            memcpy(padded, args, (size_t)arg_count * sizeof(Value));
+            Env* defscope = env_create(callee.as.function->closure);
+            for (int i = 0; i < arg_count; i++) {
+                Token p = func->params[i];
+                env_define(defscope, p.start, p.length, padded[i]);
+            }
+            for (int i = arg_count; i < func->param_count; i++) {
+                if (func->defaults == NULL || func->defaults[i] == NULL) {
+                    break;
+                }
+                Token p = func->params[i];
+                ExecResult d = interpreter_eval_expr(func->defaults[i], defscope);
+                if (d.is_throwing) {
+                    free(padded);
+                    gc_unpin();
+                    return d;
+                }
+                env_define(defscope, p.start, p.length, d.value);
+                padded[i] = d.value;
+            }
+            bound = padded;
+            arg_count = func->param_count;
+        }
         if (arg_count != func->param_count) {
+            free(padded);
             gc_unpin();
             return vm_error("Arity mismatch.");
         }
@@ -500,10 +581,11 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
         Env* scope = env_create(callee.as.function->closure);
         for (int i = 0; i < func->param_count; i++) {
             Token param = func->params[i];
-            env_define(scope, param.start, param.length, args[i]);
+            env_define(scope, param.start, param.length, bound[i]);
         }
 
         ExecResult result = interpret(func->body, scope);
+        free(padded);
         gc_unpin();
         if (result.is_throwing) return result;
         return vm_normal(result.value);
@@ -1291,6 +1373,40 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                      if (bcf == NULL || bcf->chunk.code_count <= 0 || bcf->chunk.code == NULL) {
                          result = vm_error("Invalid compiled VM function.");
                          goto done;
+                     }
+                     /* Pad omitted parameters from their defaults.
+                      *
+                      * The compiler substitutes defaults at the call site when it
+                      * can, but that lookup is by bare name in a table reset per
+                      * compilation unit, and each module compiles separately with
+                      * its importer compiled first -- so a call that crossed a
+                      * module boundary arrived here short and was rejected. The
+                      * defaults are evaluated in a scope built from the supplied
+                      * arguments, in parameter order, so one may reference the
+                      * parameters before it, then pushed before frame->slots is
+                      * computed below -- the frame's locals are exactly the
+                      * argument slots. */
+                     if (arg_count < bcf->param_count && arg_count >= bcf->required_count) {
+                         int want = bcf->param_count - arg_count;
+                         if (want > 0) {
+                             /* PUSH bounds-checks the stack itself. */
+                             Env* defenv = env_create(callee.as.function->closure);
+                             Value* supplied = sp - arg_count;
+                             for (int i = 0; i < arg_count; i++) {
+                                 env_define(defenv, bcf->params[i], (int)strlen(bcf->params[i]), supplied[i]);
+                             }
+                             for (int i = arg_count; i < bcf->param_count; i++) {
+                                 Value dv = val_nil();
+                                 if (bcf->defaults != NULL && bcf->defaults[i] != NULL) {
+                                     ExecResult de = interpreter_eval_expr(bcf->defaults[i], defenv);
+                                     if (de.is_throwing) { result = de; goto done; }
+                                     dv = de.value;
+                                 }
+                                 env_define(defenv, bcf->params[i], (int)strlen(bcf->params[i]), dv);
+                                 PUSH(dv);
+                             }
+                             arg_count = bcf->param_count;
+                         }
                      }
                      if (arg_count != bcf->param_count) { result = vm_error("Arity mismatch."); goto done; }
                      if (!vm_validate_chunk(&bcf->chunk)) {

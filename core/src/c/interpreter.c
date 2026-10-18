@@ -4374,15 +4374,38 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                 // Pre-evaluate all provided arguments
                 Value* eval_args = NULL;
                 int pushed_args = 0;
+                /* Defaults are evaluated in a scope holding the parameters bound
+                 * so far, not in the caller's environment.
+                 *
+                 * They used to be evaluated in `env`, so `proc chain(a, b = a * 2)`
+                 * called as `chain(1)` looked up `a` in the caller, did not find it,
+                 * and raised "Undefined variable 'a'" -- while the same call under
+                 * the bytecode VM, which binds defaults in the callee's scope,
+                 * worked. A default referring to an earlier parameter is ordinary
+                 * and now behaves the same on both runtimes. */
+                Env* defscope = NULL;
                 if (func->param_count > 0) {
                     eval_args = SAGE_ALLOC(sizeof(Value) * func->param_count);
                     for (int i = 0; i < func->param_count; i++) {
                         ExecResult arg_result;
+                        if (i > 0 && (kw_slots == NULL || kw_slots[i] == NULL) &&
+                            func->defaults != NULL && func->defaults[i] != NULL) {
+                            /* About to evaluate a default: make the earlier
+                             * parameters visible to it. */
+                            if (defscope == NULL) {
+                                defscope = env_create(callee_value.as.function->closure);
+                                AST_GC_PUSH_ENV(defscope);
+                                for (int j = 0; j < i; j++) {
+                                    Token pj = func->params[j];
+                                    env_define_const(defscope, pj.start, pj.length, eval_args[j]);
+                                }
+                            }
+                        }
                         if (kw_slots) {
                             if (kw_slots[i] != NULL) {
                                 arg_result = eval_expr(kw_slots[i], env);
                             } else if (func->defaults && func->defaults[i]) {
-                                arg_result = eval_expr(func->defaults[i], env);
+                                arg_result = eval_expr(func->defaults[i], defscope ? defscope : env);
                             } else {
                                 arg_result = (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
                             }
@@ -4394,7 +4417,7 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                                 return arg_result;
                             }
                         } else if (func->defaults && func->defaults[i]) {
-                            arg_result = eval_expr(func->defaults[i], env);
+                            arg_result = eval_expr(func->defaults[i], defscope ? defscope : env);
                             if (arg_result.is_throwing) {
                                 free(eval_args);
                                 AST_GC_POP_N(1 + pushed_args);
@@ -4404,6 +4427,15 @@ static ExecResult eval_expr(Expr* expr, Env* env) {
                             arg_result = (ExecResult){ val_nil(), 0, 0, 0, 0, val_nil(), 0, NULL, 0, 0 };
                         }
                         eval_args[i] = arg_result.value;
+                        /* Keep defscope current as parameters are bound, so a
+                         * later default can reference an earlier *default*:
+                         * `proc chain(a, b = a * 2, c = b + 1)` needs `b`
+                         * visible to `c`. Creating defscope once and never
+                         * updating it fixed `a` and left `b` undefined. */
+                        if (defscope != NULL) {
+                            Token pi = func->params[i];
+                            env_define_const(defscope, pi.start, pi.length, eval_args[i]);
+                        }
                         AST_GC_PUSH(eval_args[i]);
                         pushed_args++;
                     }

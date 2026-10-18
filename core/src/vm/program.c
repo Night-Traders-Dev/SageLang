@@ -972,6 +972,16 @@ static int compile_program_function(void* data, ProcStmt* proc, char* error, siz
     bytecode_chunk_init(&function.chunk);
 
     function.param_count = proc->param_count;
+    /* Borrowed from the AST, which the module retains for as long as any
+     * function or method value can refer to it. */
+    function.required_count = proc->required_count;
+    function.defaults = proc->defaults;
+    if (function.required_count < 0 || function.required_count > function.param_count) {
+        /* Defensive: a signature whose required count is not a prefix length is
+         * not one we can substitute defaults for, so demand exact arity. */
+        function.required_count = function.param_count;
+        function.defaults = NULL;
+    }
     if (function.param_count < 0 || function.param_count > VM_ARTIFACT_MAX_PARAMS ||
         function.param_count > VM_ARTIFACT_MAX_LOCALS ||
         (size_t)function.param_count > SIZE_MAX / sizeof(char*)) {
@@ -1452,6 +1462,13 @@ int bytecode_program_read_file(BytecodeProgram* program, const char* input_path,
                 set_program_error(error, error_size, "Invalid function parameter count in VM artifact.");
                 goto cleanup;
             }
+
+            /* A SAGEBC1 artifact cannot carry default expressions -- they are AST,
+             * not bytecode -- so a function read from one demands exact arity.
+             * Stated explicitly rather than left zeroed, where required_count 0
+             * would read as "every parameter is optional". */
+            function.required_count = function.param_count;
+            function.defaults = NULL;
 
             if (function.param_count > 0) {
                 function.params = SAGE_ALLOC((size_t)function.param_count * sizeof(char*));
