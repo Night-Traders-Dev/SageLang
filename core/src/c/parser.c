@@ -272,6 +272,7 @@ static double parse_number_literal(Token token) {
 // Forward declarations
 static Expr* expression(void);
 static Expr* unary(void);
+static Expr* logical_not(void);
 static Expr* postfix(void);
 static int g_suppressed_lambda_depth = 0;  // multi-stmt suppressed-lambda nesting
 static Stmt* declaration(void);
@@ -751,12 +752,9 @@ static Expr* unary() {
         // Represent -x as (0 - x)
         return new_binary_expr(new_number_expr(0), op, right);
     }
-    if (match(TOKEN_NOT)) {
-        Token op = previous_token;
-        Expr* right = unary();
-        return new_binary_expr(right, op, NULL);
-    }
     // Phase 9: Bitwise NOT (~x)
+    // Logical `not` is NOT handled here; see logical_not(). It binds looser than
+    // every comparison, so it belongs between logical_and() and bitwise_or().
     if (match(TOKEN_TILDE)) {
         Token op = previous_token;
         Expr* right = unary();
@@ -937,11 +935,33 @@ static Expr* bitwise_or() {
     return expr;
 }
 
+// Logical not. Binds looser than every comparison and arithmetic operator, and
+// tighter than `and`, matching Python's grammar where `not` is a logical
+// connective rather than a unary arithmetic operator.
+//
+// It used to be handled in unary() alongside `-` and `~`, recursing into unary(),
+// which made `not a == b` parse as `(not a) == b`: unary() stopped at `a`, and
+// the comparison level then picked up `== b`. The failure is silent, and it is
+// silent in the direction that looks right -- `not x == 2` with x equal to 2 is
+// false under either reading, so hand-checking the suspicious line usually
+// confirms the bug instead of revealing it. The two readings only diverge when
+// the comparison would have been true, and then the result is wrong with no
+// error. Left-binding also produced "Operands must be numbers or strings
+// (bool + number)" for `not 1 + 1 == 3`, which parsed as `(not 1) + 1 == 3`.
+static Expr* logical_not() {
+    if (match(TOKEN_NOT)) {
+        Token op = previous_token;
+        Expr* right = logical_not();  // Right associative: not not x
+        return new_binary_expr(right, op, NULL);
+    }
+    return bitwise_or();
+}
+
 static Expr* logical_and() {
-    Expr* expr = bitwise_or();
+    Expr* expr = logical_not();
     while (match(TOKEN_AND)) {
         Token op = previous_token;
-        Expr* right = bitwise_or();
+        Expr* right = logical_not();
         expr = new_binary_expr(expr, op, right);
     }
     return expr;

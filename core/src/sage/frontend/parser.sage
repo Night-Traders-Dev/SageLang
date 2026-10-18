@@ -115,6 +115,14 @@ proc parser_parse_binary(parser: Parser, min_prec: Int): AST_Expr =
     return lhs
 
 # Parse unary expressions
+#
+# NOTE: this file is not in the build (it calls get_operator_precedence, which is
+# defined nowhere), so nothing here is verified. When it is wired up, note that
+# TOKEN_NOT does not belong in this list -- it is currently here, which is the
+# bug just fixed in ../../parser.sage: `not a == b` parsed as `(not a) == b`
+# because unary() stopped at `a` and the comparison level took `== b`. `not` needs
+# a level between logical AND and the comparisons. Unary minus and bitwise not do
+# belong here.
 proc parser_parse_unary(parser: Parser): AST_Expr =
     let tok = parser_peek(parser)
     if tok.kind in [TOKEN_NOT, TOKEN_TILDE, TOKEN_MINUS, TOKEN_AMP]:

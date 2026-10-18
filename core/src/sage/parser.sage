@@ -360,12 +360,36 @@ class Parser:
         return expr
 
     proc parse_and():
-        let expr = self.parse_bitwise_or()
+        let expr = self.parse_not()
         while self.match_tok(token.TOKEN_AND):
             let op = self.previous()
-            let right = self.parse_bitwise_or()
+            let right = self.parse_not()
             expr = binary_expr(expr, op, right)
         return expr
+
+    # Logical not.
+    #
+    # `not` binds looser than every comparison and arithmetic operator, and
+    # tighter than `and`. It used to be a unary operator, handled in
+    # parse_unary() alongside `-` and `~` and recursing into parse_unary(). That
+    # made `not a == b` parse as `(not a) == b`, because parse_unary() stopped at
+    # `a` and the comparison level then picked up `== b`.
+    #
+    # That is not Python's reading, where `not` is a logical connective sitting
+    # between `and` and the comparisons, and it fails silently. Worse, it fails
+    # in the direction that looks correct: `not x == 2` where x is 2 is false
+    # under either reading, so the bug is invisible in precisely the case a
+    # reader is most likely to check by hand. It only diverges when the
+    # comparison would have been true, and it does so without any error.
+    #
+    # Unary minus and bitwise-not stay where they are; for those the tight
+    # binding is correct.
+    proc parse_not():
+        if self.match_tok(token.TOKEN_NOT):
+            let op = self.previous()
+            let right = self.parse_not()
+            return binary_expr(right, op, nil)
+        return self.parse_bitwise_or()
 
     proc parse_bitwise_or():
         let expr = self.parse_bitwise_xor()
@@ -437,11 +461,6 @@ class Parser:
             let op = self.previous()
             let right = self.parse_unary()
             return binary_expr(number_expr(0), op, right)
-        # Logical not: not x
-        if self.match_tok(token.TOKEN_NOT):
-            let op = self.previous()
-            let right = self.parse_unary()
-            return binary_expr(right, op, nil)
         # Bitwise not: ~x
         if self.match_tok(token.TOKEN_TILDE):
             let op = self.previous()
