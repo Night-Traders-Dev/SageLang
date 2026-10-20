@@ -1062,6 +1062,7 @@ static Value build_info_native(int argCount, Value* args) {
     dict_set_len(&d, "built", 5, sd);
     Value sp = val_string("2.0");
     dict_set_len(&d, "spec", 4, sp);
+    dict_set_len(&d, "crc32c", 6, val_bool(1));
     return d;
 }
 
@@ -2928,6 +2929,31 @@ static unsigned int fnv1a_str(const char* str) {
     return h;
 }
 
+// crc32c_native(bytes) -> CRC-32C (Castagnoli) as a 32-bit unsigned number.
+// The interpreter's per-byte CRC loop costs milliseconds on a 4 KiB block; this
+// is the same polynomial and the same reflected table algorithm, in C.
+static Value crc32c_native(int argCount, Value* args) {
+    if (argCount != 1 || args[0].type != VAL_BYTES) return val_number(0);
+    static unsigned int table[256];
+    static int ready = 0;
+    if (!ready) {
+        for (unsigned int n = 0; n < 256; n++) {
+            unsigned int c = n;
+            for (int k = 0; k < 8; k++) {
+                c = (c & 1u) ? (c >> 1) ^ 0x82F63B78u : (c >> 1);
+            }
+            table[n] = c;
+        }
+        ready = 1;
+    }
+    const BytesValue* b = args[0].as.bytes;
+    unsigned int crc = 0xFFFFFFFFu;
+    for (int i = 0; i < b->length; i++) {
+        crc = (crc >> 8) ^ table[(crc ^ b->data[i]) & 0xFFu];
+    }
+    return val_number((double)(crc ^ 0xFFFFFFFFu));
+}
+
 static Value hash_native(int argCount, Value* args) {
     if (argCount != 1) return val_number(0);
     Value v = args[0];
@@ -3230,6 +3256,7 @@ void init_stdlib(Env* env) {
 
     // Phase 1.9: Hash, doc, and path utilities
     env_define_const(env, "hash", 4, val_native(hash_native));
+    env_define_const(env, "crc32c_native", 13, val_native(crc32c_native));
     env_define_const(env, "doc", 3, val_native(doc_native));
     env_define_const(env, "path_join", 9, val_native(path_join_native));
     env_define_const(env, "path_dirname", 12, val_native(path_dirname_native));
