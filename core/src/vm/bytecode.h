@@ -145,6 +145,10 @@ typedef struct {
     int ast_stmt_count;
     int ast_stmt_capacity;
 
+    struct EnvNode** global_cache;
+    struct Env** global_cache_env;
+    int global_cache_size;
+
     struct BytecodeProgram* program;
 } BytecodeChunk;
 

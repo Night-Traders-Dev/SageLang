@@ -796,6 +796,7 @@ void class_add_method(ClassValue* class_val, const char* name, int name_len, voi
     m->name[name_len] = '\0';
     m->name_len = name_len;
     m->method_stmt = method_stmt;
+    m->is_vm = 0;
     
     class_val->method_count++;
 }

@@ -18,6 +18,8 @@ typedef struct {
     int has_for_cleanup;  // for-loops need extra stack cleanup before break
     int for_pop_count;    // number of extra pops needed for for-loop break
     int local_count_at_entry;
+    int continue_patches[MAX_BREAK_PATCHES];
+    int continue_count;
 } LoopContext;
 
 typedef struct {
@@ -32,6 +34,7 @@ typedef struct {
     BytecodeCompileMode mode;
     BytecodeBuildFunctionFn build_function;
     void* build_function_data;
+    int hoisted_local_count;
     int allow_return;
     char* error;
     size_t error_size;
@@ -242,6 +245,8 @@ void bytecode_chunk_free(BytecodeChunk* chunk) {
     free(chunk->columns);
     free(chunk->constants);
     free(chunk->ast_stmts);
+    free(chunk->global_cache);
+    free(chunk->global_cache_env);
     memset(chunk, 0, sizeof(*chunk));
 }
 
@@ -301,6 +306,60 @@ static int resolve_local(BytecodeCompiler* compiler, Token name) {
         }
     }
     return -1;
+}
+
+/* Sage variables are function-scoped: the self-hosted compiler collects every
+ * let, loop variable, catch binding, and match body declaration in a function
+ * before emitting code. The interpreter behaves the same way (it never creates
+ * a child environment for a block), and SageFS relies on it -- for example a
+ * `var piece` declared inside `if n > 0:` is read after the branch. Compile the
+ * same way: reserve a slot for each name up front, initialise every slot to nil
+ * at function entry, and let assignments write into those fixed slots. */
+static void hoist_local_name(BytecodeCompiler* compiler, Token name) {
+    if (name.start == NULL || name.length <= 0) return;
+    if (resolve_local(compiler, name) != -1) return;
+    add_local(compiler, name);
+    compiler->hoisted_local_count++;
+}
+
+static void collect_function_locals(BytecodeCompiler* compiler, Stmt* stmt) {
+    for (Stmt* current = stmt; current != NULL; current = current->next) {
+        switch (current->type) {
+            case STMT_LET:
+                hoist_local_name(compiler, current->as.let.name);
+                break;
+            case STMT_BLOCK:
+                collect_function_locals(compiler, current->as.block.statements);
+                break;
+            case STMT_IF:
+                collect_function_locals(compiler, current->as.if_stmt.then_branch);
+                collect_function_locals(compiler, current->as.if_stmt.else_branch);
+                break;
+            case STMT_WHILE:
+                collect_function_locals(compiler, current->as.while_stmt.body);
+                break;
+            case STMT_FOR:
+                hoist_local_name(compiler, current->as.for_stmt.variable);
+                collect_function_locals(compiler, current->as.for_stmt.body);
+                break;
+            case STMT_TRY:
+                collect_function_locals(compiler, current->as.try_stmt.try_block);
+                for (int i = 0; i < current->as.try_stmt.catch_count; i++) {
+                    hoist_local_name(compiler, current->as.try_stmt.catches[i]->exception_var);
+                    collect_function_locals(compiler, current->as.try_stmt.catches[i]->body);
+                }
+                collect_function_locals(compiler, current->as.try_stmt.finally_block);
+                break;
+            case STMT_MATCH:
+                for (int i = 0; i < current->as.match_stmt.case_count; i++) {
+                    collect_function_locals(compiler, current->as.match_stmt.cases[i]->body);
+                }
+                collect_function_locals(compiler, current->as.match_stmt.default_case);
+                break;
+            default:
+                break;
+        }
+    }
 }
 
 static void begin_scope(BytecodeCompiler* compiler) {
@@ -820,6 +879,7 @@ static int push_loop(BytecodeCompiler* compiler, int continue_target, int is_for
     }
     LoopContext* loop = &compiler->loops[compiler->loop_depth++];
     loop->break_count = 0;
+    loop->continue_count = 0;
     loop->continue_target = continue_target;
     loop->has_for_cleanup = is_for;
     loop->for_pop_count = for_pop_count;
@@ -842,13 +902,10 @@ static int pop_loop_and_patch_breaks(BytecodeCompiler* compiler) {
 }
 
 static int compile_block(BytecodeCompiler* compiler, Stmt* stmt) {
-    begin_scope(compiler);
+    /* Locals are hoisted to function scope, so a block introduces no slots and
+     * needs no cleanup at exit. */
     for (Stmt* current = stmt->as.block.statements; current != NULL; current = current->next) {
         if (!compile_stmt(compiler, current, 0)) return 0;
-    }
-    int pops = end_scope(compiler);
-    for (int i = 0; i < pops; i++) {
-        if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
     }
     return 1;
 }
@@ -905,8 +962,16 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 return 0;
             }
             if (compiler->locals_valid && compiler->scope_depth > 0) {
-                add_local(compiler, stmt->as.let.name);
-                // The value is already on top of the stack from compile_expr
+                int slot = resolve_local(compiler, stmt->as.let.name);
+                if (slot < 0) {
+                    add_local(compiler, stmt->as.let.name);
+                    slot = compiler->local_count - 1;
+                }
+                if (!emit_op(compiler, BC_OP_SET_LOCAL, 0, 0) ||
+                    !emit_u16(compiler, (uint16_t)slot, 0, 0) ||
+                    !emit_op(compiler, BC_OP_POP, 0, 0)) {
+                    return 0;
+                }
                 if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
                 return 1;
             }
@@ -994,8 +1059,21 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             Token loop_var = stmt->as.for_stmt.variable;
 
             if (!compile_expr(compiler, stmt->as.for_stmt.iterable)) break;
+            /* The iterable and the running index stay on the VM stack for the
+             * whole loop, below the loop variable. Locals are addressed by
+             * stack slot, so both need local entries or resolve_local() gives
+             * the loop variable the iterable's slot (e.g. `for i in range(8)`
+             * made i the range array, and `i * 8` failed with an array
+             * operand). These entries are never looked up by name. */
+            Token hidden = {0};
+            hidden.start = "<for-iterable>";
+            hidden.length = 14;
+            add_local(compiler, hidden);
             if (!emit_op(compiler, BC_OP_PUSH_ENV, loop_var.line, loop_var.column)) return 0;
             if (!emit_constant(compiler, val_number(0), loop_var.line, loop_var.column)) return 0;
+            hidden.start = "<for-index>";
+            hidden.length = 11;
+            add_local(compiler, hidden);
 
             int loop_start = current_offset(compiler);
 
@@ -1017,7 +1095,16 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 return 0;
             }
             if (compiler->locals_valid && compiler->scope_depth > 0) {
-                add_local(compiler, loop_var);
+                int loop_slot = resolve_local(compiler, loop_var);
+                if (loop_slot < 0) {
+                    add_local(compiler, loop_var);
+                    loop_slot = compiler->local_count - 1;
+                }
+                if (!emit_op(compiler, BC_OP_SET_LOCAL, loop_var.line, loop_var.column) ||
+                    !emit_u16(compiler, (uint16_t)loop_slot, loop_var.line, loop_var.column) ||
+                    !emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column)) {
+                    return 0;
+                }
             } else {
                 if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, loop_var)) return 0;
             }
@@ -1025,8 +1112,7 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             // continue_target points to the increment section
             int continue_target_placeholder = current_offset(compiler);
             // for-loop break needs: pop index, pop array, pop_env
-            // If local scope, we also need to account for the local variable
-            int extra_pops = (compiler->locals_valid && compiler->scope_depth > 0) ? 3 : 2;
+            int extra_pops = 2;
             if (!push_loop(compiler, continue_target_placeholder, 1, extra_pops, compiler->local_count)) return 0;
 
             if (!compile_stmt(compiler, stmt->as.for_stmt.body, 0)) {
@@ -1034,14 +1120,15 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 return 0;
             }
 
-            // If we added a local, we must pop it before the next iteration
-            if (compiler->locals_valid && compiler->scope_depth > 0) {
-                if (!emit_op(compiler, BC_OP_POP, loop_var.line, loop_var.column)) return 0;
-                compiler->local_count--; // Remove from local tracking for this iteration
-            }
+            /* The loop variable is a hoisted function local, not a per-iteration
+             * stack slot, so there is nothing to pop here. */
 
             // Patch continue target to the increment section (right here)
-            compiler->loops[compiler->loop_depth - 1].continue_target = current_offset(compiler);
+            LoopContext* loop = &compiler->loops[compiler->loop_depth - 1];
+            loop->continue_target = current_offset(compiler);
+            for (int i = 0; i < loop->continue_count; i++) {
+                if (!patch_jump(compiler, loop->continue_patches[i], loop->continue_target)) return 0;
+            }
 
             if (!emit_constant(compiler, val_number(1), loop_var.line, loop_var.column) ||
                 !emit_op(compiler, BC_OP_ADD, loop_var.line, loop_var.column) ||
@@ -1058,6 +1145,9 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
                 !emit_op(compiler, BC_OP_POP_ENV, loop_var.line, loop_var.column)) {
                 return 0;
             }
+            /* The array/index pairs above were popped; drop their local slots
+             * so later declarations get the right indices. */
+            if (compiler->local_count >= 2) compiler->local_count -= 2;
 
             if (!pop_loop_and_patch_breaks(compiler)) return 0;
 
@@ -1106,8 +1196,26 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             for (int i = 0; i < body_pops; i++) {
                 if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
             }
-            if (!emit_op(compiler, BC_OP_JUMP, 0, 0)) return 0;
-            if (!emit_u16(compiler, (uint16_t)loop->continue_target, 0, 0)) return 0;
+            /* A for-loop's continue target is the increment section, which
+             * expects [iterable, index] on top. The loop variable is a hoisted
+             * local, so there is nothing extra to pop here. */
+            if (loop->has_for_cleanup) {
+                /* A for-loop's continue target is the increment section, which
+                 * is only emitted after the body; record the jump and patch it
+                 * once that offset is known. Jumping to the old placeholder
+                 * (the start of the body) skipped the increment and looped
+                 * forever with a shallower stack. */
+                if (loop->continue_count >= MAX_BREAK_PATCHES) {
+                    set_error(compiler, "Too many continue statements in loop.");
+                    return 0;
+                }
+                int jump_loc = emit_jump(compiler, BC_OP_JUMP, 0, 0);
+                if (jump_loc < 0) return 0;
+                loop->continue_patches[loop->continue_count++] = jump_loc;
+            } else {
+                if (!emit_op(compiler, BC_OP_JUMP, 0, 0)) return 0;
+                if (!emit_u16(compiler, (uint16_t)loop->continue_target, 0, 0)) return 0;
+            }
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
             return 1;
         }
@@ -1141,7 +1249,16 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             if (stmt->as.try_stmt.catch_count > 0) {
                 CatchClause* catch_clause = stmt->as.try_stmt.catches[0];
                 if (!emit_op(compiler, BC_OP_PUSH_ENV, 0, 0)) return 0;
-                if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, catch_clause->exception_var)) return 0;
+                int catch_slot = resolve_local(compiler, catch_clause->exception_var);
+                if (catch_slot >= 0) {
+                    if (!emit_op(compiler, BC_OP_SET_LOCAL, 0, 0) ||
+                        !emit_u16(compiler, (uint16_t)catch_slot, 0, 0) ||
+                        !emit_op(compiler, BC_OP_POP, 0, 0)) {
+                        return 0;
+                    }
+                } else if (!emit_name_op(compiler, BC_OP_DEFINE_GLOBAL, catch_clause->exception_var)) {
+                    return 0;
+                }
                 if (!compile_stmt(compiler, catch_clause->body, 0)) return 0;
                 if (!emit_op(compiler, BC_OP_POP_ENV, 0, 0)) return 0;
             } else {
@@ -1187,6 +1304,80 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
             return 1;
         }
+        case STMT_MATCH: {
+            /* Match is compiled natively because function bodies are compiled in
+             * strict mode: an AST fallback there cannot see stack-slot locals.
+             * The matched value lives in a hidden local for the whole statement;
+             * each case compares against it, optionally tests a guard, and jumps
+             * to the next case on failure. A bare name pattern follows ordinary
+             * expression resolution, which is a value pattern when the name is
+             * in scope (the common case for enum-like constants). `_` is the
+             * wildcard. */
+            if (!compiler->locals_valid || compiler->scope_depth <= 0) break;
+            MatchStmt* match_stmt = &stmt->as.match_stmt;
+            if (!compile_expr(compiler, match_stmt->value)) return 0;
+            Token match_hidden = {0};
+            match_hidden.start = "<match-value>";
+            match_hidden.length = 13;
+            add_local(compiler, match_hidden);
+            int match_slot = compiler->local_count - 1;
+            int match_end_patches[MAX_BREAK_PATCHES];
+            int match_end_count = 0;
+
+            for (int ci = 0; ci < match_stmt->case_count; ci++) {
+                CaseClause* clause = match_stmt->cases[ci];
+                int wildcard = clause->pattern == NULL ||
+                               (clause->pattern->type == EXPR_VARIABLE &&
+                                clause->pattern->as.variable.name.length == 1 &&
+                                clause->pattern->as.variable.name.start[0] == '_');
+                int pattern_false = -1;
+                if (!wildcard) {
+                    if (!emit_op(compiler, BC_OP_GET_LOCAL, 0, 0) ||
+                        !emit_u16(compiler, (uint16_t)match_slot, 0, 0) ||
+                        !compile_expr(compiler, clause->pattern) ||
+                        !emit_op(compiler, BC_OP_EQUAL, 0, 0)) {
+                        return 0;
+                    }
+                    pattern_false = emit_jump(compiler, BC_OP_JUMP_IF_FALSE, 0, 0);
+                    if (pattern_false < 0) return 0;
+                    if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
+                }
+                int guard_false = -1;
+                if (clause->guard != NULL) {
+                    if (!compile_expr(compiler, clause->guard)) return 0;
+                    guard_false = emit_jump(compiler, BC_OP_JUMP_IF_FALSE, 0, 0);
+                    if (guard_false < 0) return 0;
+                    if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
+                }
+                if (!compile_stmt(compiler, clause->body, 0)) return 0;
+                int end_jump = emit_jump(compiler, BC_OP_JUMP, 0, 0);
+                if (end_jump < 0) return 0;
+                if (match_end_count >= MAX_BREAK_PATCHES) {
+                    set_error(compiler, "Too many match cases.");
+                    return 0;
+                }
+                match_end_patches[match_end_count++] = end_jump;
+
+                if (pattern_false >= 0 || guard_false >= 0) {
+                    int next_case = current_offset(compiler);
+                    if (pattern_false >= 0 && !patch_jump(compiler, pattern_false, next_case)) return 0;
+                    if (guard_false >= 0 && !patch_jump(compiler, guard_false, next_case)) return 0;
+                    if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
+                }
+            }
+
+            if (match_stmt->default_case != NULL) {
+                if (!compile_stmt(compiler, match_stmt->default_case, 0)) return 0;
+            }
+            int match_end = current_offset(compiler);
+            for (int i = 0; i < match_end_count; i++) {
+                if (!patch_jump(compiler, match_end_patches[i], match_end)) return 0;
+            }
+            if (!emit_op(compiler, BC_OP_POP, 0, 0)) return 0;
+            compiler->local_count--;
+            if (want_result) return emit_op(compiler, BC_OP_NIL, 0, 0);
+            return 1;
+        }
         case STMT_RETURN:
             if (!compiler->allow_return) break;
             if (stmt->as.ret.value != NULL) {
@@ -1201,7 +1392,14 @@ static int compile_stmt(BytecodeCompiler* compiler, Stmt* stmt, int want_result)
             } else if (!emit_op(compiler, BC_OP_NIL, 0, 0)) {
                 return 0;
             }
-            return emit_op(compiler, BC_OP_YIELD, 0, 0);
+            if (!emit_op(compiler, BC_OP_YIELD, 0, 0)) return 0;
+            /* YIELD leaves the yielded value on the stack so a resumed
+             * generator can use it as an expression. A yield statement
+             * discards it, and without this POP the stack grew by one on
+             * every iteration -- the dataflow validator caught that as a
+             * non-converging loop. */
+            if (!want_result) return emit_op(compiler, BC_OP_POP, 0, 0);
+            return 1;
         default:
             break;
     }
@@ -1280,6 +1478,12 @@ int bytecode_compile_function_body(BytecodeChunk* chunk, Stmt* body,
         t.line = 0;
         t.column = 0;
         add_local(&compiler, t);
+    }
+
+    int params_before_hoist = compiler.local_count;
+    collect_function_locals(&compiler, body);
+    for (int i = params_before_hoist; i < compiler.local_count; i++) {
+        if (!emit_op(&compiler, BC_OP_NIL, 0, 0)) return 0;
     }
 
     if (!compile_stmt(&compiler, body, 0)) {

@@ -32,7 +32,8 @@ typedef struct {
 typedef struct {
     char* name;
     int name_len;
-    void* method_stmt; // Pointer to ProcStmt (avoid circular dependency)
+    void* method_stmt; // Pointer to ProcStmt or FunctionValue (see is_vm)
+    int is_vm;         // 1 when method_stmt is a FunctionValue*
 } Method;
 
 // Class structure

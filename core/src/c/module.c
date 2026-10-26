@@ -12,6 +12,8 @@
 #include <unistd.h>
 #include "gc.h"
 #include "sage_thread.h"
+#include "program.h"
+#include "vm.h"
 
 // Global module cache (mutex-protected for thread safety)
 ModuleCache* global_module_cache = NULL;
@@ -40,6 +42,10 @@ void destroy_module_cache(ModuleCache* cache) {
     Module* current = cache->modules;
     while (current) {
         Module* next = current->next;
+        if (current->vm_program != NULL) {
+            bytecode_program_free(current->vm_program);
+            free(current->vm_program);
+        }
         free_stmt(current->ast);
         free(current->name);
         free(current->path);
@@ -326,19 +332,35 @@ bool execute_module(Module* module, Environment* global_env) {
         }
     }
 
-    gc_pin();
-    for (Stmt* current = module->ast; current != NULL; current = current->next) {
-        ExecResult result = interpret(current, module->env);
-        if (result.is_throwing) {
-            fprintf(stderr, "Error: Exception in module '%s': ", module->name);
-            if (result.exception_value.type == VAL_EXCEPTION) {
-                fprintf(stderr, "%s\n", result.exception_value.as.exception->message);
-            } else {
-                fprintf(stderr, "Unknown error\n");
-            }
-            ok = false;
-            break;
+    if (module->vm_program == NULL) {
+        BytecodeProgram* program = SAGE_ALLOC(sizeof(BytecodeProgram));
+        bytecode_program_init(program);
+        char error[256];
+        bytecode_register_signatures(module->ast);
+        if (!bytecode_compile_program(program, module->ast, BYTECODE_COMPILE_HYBRID,
+                                      error, sizeof(error))) {
+            fprintf(stderr, "Bytecode compile error in module '%s': %s\n",
+                    module->name, error[0] ? error : "unknown error");
+            bytecode_program_free(program);
+            free(program);
+            module->is_loading = false;
+            parser_set_state(saved_parser);
+            lexer_set_state(saved_lexer);
+            return false;
         }
+        module->vm_program = program;
+    }
+
+    gc_pin();
+    ExecResult result = vm_execute_program(module->vm_program, module->env);
+    if (result.is_throwing) {
+        fprintf(stderr, "Error: Exception in module '%s': ", module->name);
+        if (result.exception_value.type == VAL_EXCEPTION) {
+            fprintf(stderr, "%s\n", result.exception_value.as.exception->message);
+        } else {
+            fprintf(stderr, "Unknown error\n");
+        }
+        ok = false;
     }
     gc_unpin();
 
@@ -377,6 +399,7 @@ Module* load_module(ModuleCache* cache, const char* name) {
     module->env = NULL;
     module->is_loaded = false;
     module->is_loading = false;
+    module->vm_program = NULL;
     // Add to cache (thread-safe)
     sage_mutex_lock(&module_mutex);
     module->next = cache->modules;
@@ -523,18 +546,7 @@ bool import_as(Environment* env, const char* module_name, const char* alias) {
 Value module_get_attr(Module* module, const char* name, int length, int* found) {
     Value value = val_nil();
 
-    if (module == NULL) {
-        fprintf(stderr, "[DEBUG] module_get_attr: module is NULL\n");
-        if (found) *found = 0;
-        return value;
-    }
-    if (module->env == NULL) {
-        fprintf(stderr, "[DEBUG] module_get_attr: module '%s' env is NULL\n", module->name ? module->name : "unknown");
-        if (found) *found = 0;
-        return value;
-    }
-    if (name == NULL) {
-        fprintf(stderr, "[DEBUG] module_get_attr: name is NULL\n");
+    if (module == NULL || module->env == NULL || name == NULL) {
         if (found) *found = 0;
         return value;
     }

@@ -848,6 +848,16 @@ static void gc_shade_children(GCHeader* header) {
                 gc_try_shade(cls->parent);
             if (cls->defining_env != NULL)
                 gc_mark_env(cls->defining_env);
+            /* Bytecode classes keep their methods as heap-allocated
+             * FunctionValues in method_stmt (AST classes keep Stmt pointers,
+             * which are not GC objects). Without this the only reference to a
+             * compiled method was the class's raw method table, so the
+             * collector freed it and later calls read a dangling vm_function. */
+            for (int i = 0; i < cls->method_count; i++) {
+                Method* method = &cls->methods[i];
+                if (method->is_vm && method->method_stmt != NULL)
+                    gc_try_shade(method->method_stmt);
+            }
             break;
         }
         case VAL_INSTANCE: {
@@ -1543,6 +1553,11 @@ static void orc_visit_children(void* obj, orc_child_visitor visitor) {
         case VAL_CLASS: {
             ClassValue* cls = (ClassValue*)obj;
             if (cls->parent != NULL) visitor(cls->parent);
+            if (cls->defining_env != NULL) visitor(cls->defining_env);
+            for (int i = 0; i < cls->method_count; i++) {
+                Method* method = &cls->methods[i];
+                if (method->is_vm && method->method_stmt != NULL) visitor(method->method_stmt);
+            }
             break;
         }
         default: break;  // String, exception, pointer, etc.: no heap children

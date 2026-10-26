@@ -47,6 +47,7 @@ jmp_buf g_repl_error_jmp;
 
 static Stmt* g_program_ast = NULL;
 static Stmt* g_program_ast_tail = NULL;
+static BytecodeProgram* g_whole_program = NULL;
 static const char* g_math_work = NULL;
 
 static void retain_program_stmt(Stmt* stmt) {
@@ -63,6 +64,11 @@ static void retain_program_stmt(Stmt* stmt) {
 }
 
 static void cleanup_runtime_state(void) {
+    if (g_whole_program != NULL) {
+        bytecode_program_free(g_whole_program);
+        free(g_whole_program);
+        g_whole_program = NULL;
+    }
     free_stmt(g_program_ast);
     g_program_ast = NULL;
     g_program_ast_tail = NULL;
@@ -2446,9 +2452,33 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
       /* Record every procedure and class signature up front so the compiler can
        * pad calls that omit default arguments. */
       bytecode_register_signatures(g_program_ast);
-  
-      for (Stmt* result = g_program_ast; result != NULL; result = result->next) {
-          ExecResult exec_res = sage_execute_stmt(result, env, runtime_mode);
+
+      if (runtime_mode == SAGE_RUNTIME_BYTECODE) {
+          /* Compile the whole script as one program, not one top-level
+           * statement at a time.  Per-statement compilation had no function
+           * builder, so every top-level proc and class fell back to the AST
+           * walker; calls from a compiled caller then crossed runtimes and paid
+           * interpreter overhead for the hottest code.  A persistent program is
+           * also required for function values: their BytecodeFunction and chunk
+           * live in the program, so freeing it while a binding still refers to a
+           * function would leave a dangling function value. */
+          BytecodeProgram* program = SAGE_ALLOC(sizeof(BytecodeProgram));
+          if (program == NULL) {
+              fprintf(stderr, "Out of memory compiling program.\n");
+              exit(1);
+          }
+          bytecode_program_init(program);
+          char error[256];
+          if (!bytecode_compile_program(program, g_program_ast, BYTECODE_COMPILE_HYBRID,
+                                        error, sizeof(error))) {
+              fprintf(stderr, "Bytecode compile error: %s\n",
+                      error[0] ? error : "unknown error");
+              bytecode_program_free(program);
+              free(program);
+              exit(1);
+          }
+          g_whole_program = program;
+          ExecResult exec_res = vm_execute_program(program, env);
           if (exec_res.is_throwing) {
               const char* msg = "unknown error";
               if (exec_res.exception_value.type == VAL_EXCEPTION &&
@@ -2457,7 +2487,21 @@ static void run_repl(volatile SageRuntimeMode runtime_mode) {
                   msg = exec_res.exception_value.as.exception->message;
               }
               fprintf(stderr, "Unhandled Exception: %s\n", msg);
-              exit(70);  // EX_SOFTWARE: uncaught runtime error
+              exit(70);
+          }
+      } else {
+          for (Stmt* result = g_program_ast; result != NULL; result = result->next) {
+              ExecResult exec_res = sage_execute_stmt(result, env, runtime_mode);
+              if (exec_res.is_throwing) {
+                  const char* msg = "unknown error";
+                  if (exec_res.exception_value.type == VAL_EXCEPTION &&
+                      exec_res.exception_value.as.exception != NULL &&
+                      exec_res.exception_value.as.exception->message != NULL) {
+                      msg = exec_res.exception_value.as.exception->message;
+                  }
+                  fprintf(stderr, "Unhandled Exception: %s\n", msg);
+                  exit(70);  // EX_SOFTWARE: uncaught runtime error
+              }
           }
       }
   }

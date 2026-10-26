@@ -12,6 +12,7 @@
 #include "gc.h"
 #include "gpu_api.h"
 #include "interpreter.h"
+#include "env.h"
 
 extern __thread EnvRootNode* g_gc_root_stack;
 
@@ -125,6 +126,16 @@ void vm_mark_roots(void* active_vm_head) {
         for (int i = 0; i < active->stack_count; i++) {
             gc_mark_value(active->stack[i]);
         }
+        /* A frame chain started by call_function_value keeps its arguments in
+         * the caller's heap vector until vm_execute_chunk copies them into
+         * vm.stack. Mark them as well so a collection during the first opcode
+         * cannot free the receiver of a constructor or method call. */
+        if (active->call_args != NULL && active->call_arg_count > 0) {
+            if (active->call_arg_count > VM_STACK_MAX) return;
+            for (int i = 0; i < active->call_arg_count; i++) {
+                gc_mark_value(active->call_args[i]);
+            }
+        }
 
         if (active->handler_count < 0 || active->handler_count > VM_HANDLER_MAX) return;
         for (int i = 0; i < active->handler_count; i++) {
@@ -186,10 +197,7 @@ static ExecResult call_any_method(Value object, Method* method, int arg_count, V
     void* method_ptr = method->method_stmt;
     if (method_ptr == NULL) return vm_error("Invalid method implementation.");
 
-    // Distinguish Stmt* (AST) from FunctionValue* (VM)
-    Stmt* method_node = (Stmt*)method_ptr;
-    if ((uintptr_t)method_ptr > 100 && ((int)method_node->type < 0 || (int)method_node->type > 100)) {
-        // Likely a FunctionValue*
+    if (method->is_vm) {
         FunctionValue* func = (FunctionValue*)method_ptr;
         Value func_val;
         func_val.type = VAL_FUNCTION;
@@ -204,6 +212,7 @@ static ExecResult call_any_method(Value object, Method* method, int arg_count, V
         return res;
     }
 
+    Stmt* method_node = (Stmt*)method_ptr;
     ProcStmt* method_stmt = (method_node->type == STMT_ASYNC_PROC) ? &method_node->as.async_proc : &method_node->as.proc;
     ClassValue* class_def = IS_INSTANCE(object) ? object.as.instance->class_def : object.as.class_val;
     Env* def_env = class_def->defining_env;
@@ -304,17 +313,26 @@ static void* vm_future_entry(void* data) {
         }
 
         ActiveVm task_vm;
-        memset(&task_vm, 0, sizeof(task_vm));
         task_vm.chunk = &bf->chunk;
+        task_vm.current_env = NULL;
+        task_vm.stack_count = 0;
         task_vm.parent = g_active_vm;
+        task_vm.handler_count = 0;
+        task_vm.current_generator = NULL;
+        task_vm.is_generator_exec = 0;
+        task_vm.resume_ip_offset = 0;
+        task_vm.resume_stack_count = 0;
         task_vm.call_args = fut->args;
         task_vm.call_arg_count = bf->param_count < fut->arg_count ? bf->param_count
                                                                   : fut->arg_count;
 
         ActiveVm* previous_vm = g_active_vm;
         g_active_vm = &task_vm;
+        ThreadState* task_ts = gc_get_thread_state();
+        if (task_ts) task_ts->active_vm = g_active_vm;
         r = vm_execute_chunk(&bf->chunk, scope);
         g_active_vm = previous_vm;
+        if (task_ts) task_ts->active_vm = g_active_vm;
     } else if (func->proc != NULL) {
         /* AST body. A plain script run under the bytecode runtime has no
          * BytecodeProgram, so build_function is NULL and every procedure is
@@ -498,6 +516,12 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
 
             Env* scope = env_create(callee.as.function->closure);
             int supplied = arg_count < function->param_count ? arg_count : function->param_count;
+            Value* stack_args = NULL;
+            if (function->param_count > 0) {
+                stack_args = SAGE_ALLOC((size_t)function->param_count * sizeof(Value));
+                if (stack_args == NULL) return vm_error("Out of memory binding function arguments.");
+                for (int i = 0; i < supplied; i++) stack_args[i] = args[i];
+            }
             for (int i = 0; i < supplied; i++) {
                 env_define(scope, function->params[i], (int)strlen(function->params[i]), args[i]);
             }
@@ -507,16 +531,50 @@ static ExecResult call_function_value(Value callee, int arg_count, Value* args, 
                      * rejected a call short enough to reach here in that case, so
                      * this is defensive; binding nil keeps the frame well-formed. */
                     env_define(scope, function->params[i], (int)strlen(function->params[i]), val_nil());
+                    stack_args[i] = val_nil();
                     continue;
                 }
                 ExecResult def = interpreter_eval_expr(function->defaults[i], scope);
                 if (def.is_throwing) {
+                    free(stack_args);
                     return def;
                 }
                 env_define(scope, function->params[i], (int)strlen(function->params[i]), def.value);
+                stack_args[i] = def.value;
             }
 
-            return vm_execute_chunk(&function->chunk, scope);
+            if (function->param_count == 0) {
+                return vm_execute_chunk(&function->chunk, scope);
+            }
+
+            /* call_function_value can be reached without going through
+             * BC_OP_CALL's frame fast path (module attributes, AST callbacks,
+             * method dispatch). A fresh chunk chain otherwise starts with an
+             * empty VM stack, so every parameter read would be out of bounds.
+             * Pass the argument vector through ActiveVm, whose call_args field
+             * exists for exactly this frame-chain setup. */
+            ActiveVm call_vm;
+            call_vm.chunk = &function->chunk;
+            call_vm.current_env = NULL;
+            call_vm.stack_count = 0;
+            call_vm.parent = g_active_vm;
+            call_vm.handler_count = 0;
+            call_vm.current_generator = NULL;
+            call_vm.is_generator_exec = 0;
+            call_vm.resume_ip_offset = 0;
+            call_vm.resume_stack_count = 0;
+            call_vm.call_args = stack_args;
+            call_vm.call_arg_count = function->param_count;
+
+            ActiveVm* previous_vm = g_active_vm;
+            g_active_vm = &call_vm;
+            ThreadState* call_ts = gc_get_thread_state();
+            if (call_ts) call_ts->active_vm = g_active_vm;
+            ExecResult result = vm_execute_chunk(&function->chunk, scope);
+            g_active_vm = previous_vm;
+            if (call_ts) call_ts->active_vm = g_active_vm;
+            free(stack_args);
+            return result;
         }
 
         gc_pin();
@@ -683,10 +741,15 @@ typedef struct {
     BytecodeChunk* chunk;
     Value* slots;
     Env* closure;
+    /* Where RETURN drops the frame's arguments before pushing its result.
+     * Function calls keep the callee slot just below the arguments, so this is
+     * slots - 1. Method calls have no separate callee slot: the object is
+     * parameter 0, and the result replaces that object in place. */
+    Value* return_base;
 } CallFrame;
 
 #define MAX_FRAMES 1024
-#define VM_MAX_LOOP_ITERATIONS 1000000ULL
+#define VM_MAX_LOOP_ITERATIONS 1000000000ULL
 
 static int vm_consume_gas(long amount) {
     ThreadState* ts = gc_get_thread_state();
@@ -702,7 +765,6 @@ static ExecResult vm_execute_generator(GeneratorValue* gen, Env* caller_env);
 ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     if (chunk == NULL) return vm_error("VM chunk is null.");
     if (env == NULL) return vm_error("VM environment is null.");
-    if (!vm_validate_chunk(chunk)) return vm_error("Invalid VM bytecode artifact.");
     if (chunk->code_count == 0) return vm_normal(val_nil());
     if (sage_stack_danger()) return vm_error("VM call stack depth limit exceeded.");
 
@@ -732,9 +794,16 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
         return vm_error("Invalid VM call argument state.");
     }
     
-    memset(&vm, 0, sizeof(vm));
     vm.chunk = chunk;
+    vm.stack_count = 0;
     vm.parent = previous_vm;
+    vm.handler_count = 0;
+    vm.current_generator = NULL;
+    vm.is_generator_exec = 0;
+    vm.resume_ip_offset = 0;
+    vm.resume_stack_count = 0;
+    vm.call_args = NULL;
+    vm.call_arg_count = 0;
 
     g_active_vm = &vm;
     if (ts) ts->active_vm = g_active_vm;
@@ -784,8 +853,19 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
     frame->ip_end = chunk->code + chunk->code_count;
     frame->slots = vm.stack + slots_base_offset;
     frame->closure = env;
+    frame->return_base = frame->slots - 1;
 
     register Value* sp = frame->slots + initial_stack_count;
+    /* The slots copied from call_args are live roots before the first SYNC_SP,
+     * which is exactly when the first allocating instruction can run. The
+     * callee slot at vm.stack[0] is part of that layout too, so the root range
+     * has to cover one more entry than the argument count; without it the last
+     * argument (the receiver, for a one-parameter method) was left unmarked and
+     * a collection during the body freed the object being called. */
+    vm.stack_count = initial_stack_count;
+    if (vm.call_arg_count > 0 && vm.call_args != NULL) {
+        vm.stack_count = vm.call_arg_count + 1;
+    }
     register Value* constants = frame->chunk->constants;
     register uint8_t* ip = frame->ip;
     uint8_t* ip_end = frame->ip_end;
@@ -944,11 +1024,49 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                  uint16_t name_index = READ_U16();
                 VM_CHECK_NAME_CONST(frame->chunk, name_index);
                 Value name = constants[name_index];
+                const char* gname = AS_STRING(name);
+                int gnamelen = (int)strlen(gname);
                 Value resolved = val_nil();
-                SYNC_SP();
-                if (!env_get(frame->closure, AS_STRING(name), (int)strlen(AS_STRING(name)), &resolved)) {
-                    result = vm_error("Undefined variable.");
-                    goto done;
+                /* Inline cache: avoid env_get (linked-list scan) on repeated
+                 * global lookups, which dominate the interpreter loop. The cache
+                 * is keyed by closure env too, so a chunk reused with a
+                 * different environment (nested function, different module)
+                 * cannot return a stale node. */
+                EnvNode* cached_node = NULL;
+                Env* cached_env = NULL;
+                if (frame->chunk->global_cache != NULL &&
+                    name_index < frame->chunk->global_cache_size) {
+                    cached_node = frame->chunk->global_cache[name_index];
+                    cached_env = frame->chunk->global_cache_env != NULL
+                                     ? frame->chunk->global_cache_env[name_index]
+                                     : NULL;
+                }
+                if (cached_node != NULL && cached_env == frame->closure &&
+                    cached_node->name_length == gnamelen &&
+                    memcmp(cached_node->name, gname, (size_t)gnamelen) == 0) {
+                    resolved = cached_node->value;
+                } else {
+                    Env* owner_env = NULL;
+                    EnvNode* node = NULL;
+                    SYNC_SP();
+                    if (!env_get_node(frame->closure, gname, gnamelen, &owner_env, &node) || node == NULL) {
+                        result = vm_error("Undefined variable.");
+                        goto done;
+                    }
+                    resolved = node->value;
+                    if (frame->chunk->global_cache == NULL) {
+                        int sz = frame->chunk->constant_count > 0 ? frame->chunk->constant_count : 1;
+                        frame->chunk->global_cache = (EnvNode**)calloc((size_t)sz, sizeof(EnvNode*));
+                        frame->chunk->global_cache_env = (Env**)calloc((size_t)sz, sizeof(Env*));
+                        frame->chunk->global_cache_size = frame->chunk->global_cache != NULL ? sz : 0;
+                    }
+                    if (frame->chunk->global_cache != NULL &&
+                        name_index < frame->chunk->global_cache_size) {
+                        frame->chunk->global_cache[name_index] = node;
+                        if (frame->chunk->global_cache_env != NULL) {
+                            frame->chunk->global_cache_env[name_index] = frame->closure;
+                        }
+                    }
                 }
                 PUSH(resolved);
                 DISPATCH();
@@ -1366,7 +1484,13 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                  * The interpreter's call path has the mirror-image gap: it assumes
                  * an async function has an AST body, so it routes compiled ones
                  * through sage_vm_spawn_async() instead. */
-                if (callee.type == VAL_FUNCTION && callee.as.function != NULL &&
+                if (callee.type == VAL_NATIVE) {
+                    SYNC_SP();
+                    Value native_result = callee.as.native(arg_count, sp - arg_count);
+                    sp -= (arg_count + 1);
+                    PUSH(native_result);
+                    DISPATCH();
+                } else if (callee.type == VAL_FUNCTION && callee.as.function != NULL &&
                     callee.as.function->is_vm && !callee.as.function->is_async) {
                      if (frame_count >= MAX_FRAMES) { result = vm_error("Stack overflow (max frames reached)."); goto done; }
                      BytecodeFunction* bcf = callee.as.function->vm_function;
@@ -1409,17 +1533,21 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                          }
                      }
                      if (arg_count != bcf->param_count) { result = vm_error("Arity mismatch."); goto done; }
-                     if (!vm_validate_chunk(&bcf->chunk)) {
-                         result = vm_error("Invalid compiled VM function bytecode.");
-                         goto done;
-                      }
-                      frame->ip = ip;
+                     /* Chunk validation is performed at program/module load time; repeating
+                      * it on every call dominated the profile and is unnecessary
+                      * for bytecode we compiled ourselves. */
+                    /* The collector marks the VM stack only up to stack_count.
+                     * The callee and its arguments are live roots while the new
+                     * frame runs, including any defaults just pushed above. */
+                    SYNC_SP();
+                    frame->ip = ip;
                      frame = &frames[frame_count++];
                      frame->chunk = &bcf->chunk;
                      frame->ip = bcf->chunk.code;
                      frame->ip_end = bcf->chunk.code + bcf->chunk.code_count;
                      frame->slots = sp - arg_count;
                      frame->closure = callee.as.function->closure;
+                     frame->return_base = frame->slots - 1;
                     
                     ip = frame->ip;
                     ip_end = frame->ip_end;
@@ -1466,6 +1594,63 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                  VM_CHECK_STACK(arg_count + 1);
                 Value object = *(sp - 1 - arg_count);
                 Value* args = sp - arg_count;
+                /* Compiled instance methods run on a new VM frame in this
+                 * chunk's stack. Routing them through call_any_method ->
+                 * call_function_value -> vm_execute_chunk worked, but each
+                 * vm_execute_chunk allocates an ActiveVm (about 1 MB) on the C
+                 * stack, so a chain of compiled method calls exhausted the
+                 * native stack and corrupted the collector's root walk. */
+                if (IS_INSTANCE(object)) {
+                    Method* method = class_find_method(object.as.instance->class_def,
+                                                       AS_STRING(constants[name_index]),
+                                                       (int)strlen(AS_STRING(constants[name_index])));
+                    if (method != NULL && method->is_vm && method->method_stmt != NULL) {
+                        FunctionValue* method_fn = (FunctionValue*)method->method_stmt;
+                        BytecodeFunction* bcf = method_fn->vm_function;
+                        int supplied = arg_count + 1;
+                        if (bcf != NULL && bcf->chunk.code_count > 0 && bcf->chunk.code != NULL &&
+                            supplied <= bcf->param_count && supplied >= bcf->required_count) {
+                            if (frame_count >= MAX_FRAMES) {
+                                result = vm_error("Stack overflow (max frames reached).");
+                                goto done;
+                            }
+                            Value* supplied_values = sp - supplied;
+                            for (int i = supplied; i < bcf->param_count; i++) {
+                                Value dv = val_nil();
+                                if (bcf->defaults != NULL && bcf->defaults[i] != NULL) {
+                                    Env* defenv = env_create(method_fn->closure);
+                                    for (int j = 0; j < i; j++) {
+                                        env_define(defenv, bcf->params[j],
+                                                   (int)strlen(bcf->params[j]),
+                                                   supplied_values[j]);
+                                    }
+                                    ExecResult de = interpreter_eval_expr(bcf->defaults[i], defenv);
+                                    if (de.is_throwing) { result = de; goto done; }
+                                    dv = de.value;
+                                }
+                                PUSH(dv);
+                            }
+                            /* Include the object, supplied arguments, and any
+                             * defaults just pushed in the collector's roots
+                             * before the method body can allocate. Without this
+                             * a collection inside the method freed the receiver's
+                             * fields, which later showed up as a nil property. */
+                            SYNC_SP();
+                            frame->ip = ip;
+                            frame = &frames[frame_count++];
+                            frame->chunk = &bcf->chunk;
+                            frame->ip = bcf->chunk.code;
+                            frame->ip_end = bcf->chunk.code + bcf->chunk.code_count;
+                            frame->slots = supplied_values;
+                            frame->closure = method_fn->closure;
+                            frame->return_base = supplied_values;
+                            ip = frame->ip;
+                            ip_end = frame->ip_end;
+                            constants = frame->chunk->constants;
+                            DISPATCH();
+                        }
+                    }
+                }
                 SYNC_SP();
                 ExecResult call_result = call_method_value(object, AS_STRING(constants[name_index]), arg_count, args, frame->closure);
                 sp -= (arg_count + 1);
@@ -1563,10 +1748,12 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                      frame->ip = ip; // Save current IP before popping
 
 
-                    // Drop the frame's args AND the callee slot that sits just
+                    // Drop the frame's args and the callee slot that sits just
                     // below them (the CALL handler keeps it in place), matching
                     // the native-call path which pops (arg_count + 1) values.
-                    sp = frame->slots - 1;
+                    // Method frames use the object slot itself as the result
+                    // base, since the object doubles as parameter 0.
+                    sp = frame->return_base;
                     frame_count--;
                     frame = &frames[frame_count - 1];
                     
@@ -1672,7 +1859,13 @@ ExecResult vm_execute_chunk(BytecodeChunk* chunk, Env* env) {
                      result = vm_error("BC_OP_METHOD expects a class and function.");
                      goto done;
                  }
-                 class_add_method(class_val.as.class_val, AS_STRING(name), (int)strlen(AS_STRING(name)), (void*)AS_FUNCTION(method_val));
+                 /* Store the FunctionValue itself, not AS_FUNCTION()'s proc field:
+                 * compiled methods have proc == NULL and their body in
+                 * vm_function, and call_any_method distinguishes the two by
+                 * the pointer it receives. Storing NULL here made every method
+                 * on a compiled class uninvokable and crashed construction. */
+                 class_add_method(class_val.as.class_val, AS_STRING(name), (int)strlen(AS_STRING(name)), (void*)method_val.as.function);
+                 class_val.as.class_val->methods[class_val.as.class_val->method_count - 1].is_vm = 1;
                 DISPATCH();
             }
              BC_OP_INHERIT: {
@@ -1909,19 +2102,27 @@ static ExecResult vm_execute_generator(GeneratorValue* gen, Env* caller_env) {
     Env* gen_env = gen->gen_env ? gen->gen_env : env_create(gen->closure ? gen->closure : caller_env);
     gen->is_started = 1;
     ActiveVm gen_vm;
-    memset(&gen_vm, 0, sizeof(gen_vm));
     gen_vm.chunk = gen_chunk;
+    gen_vm.stack_count = 0;
     gen_vm.parent = g_active_vm;
+    gen_vm.handler_count = 0;
     gen_vm.current_generator = gen;
     gen_vm.is_generator_exec = 1;
+    gen_vm.resume_ip_offset = 0;
+    gen_vm.resume_stack_count = 0;
+    gen_vm.call_args = NULL;
+    gen_vm.call_arg_count = 0;
     if (gen->has_resume_target && gen->saved_ip_offset > 0) {
         gen_vm.resume_ip_offset = gen->saved_ip_offset;
         gen_vm.resume_stack_count = gen->saved_stack_count;
     }
     ActiveVm* previous_vm = g_active_vm;
     g_active_vm = &gen_vm;
+    ThreadState* gen_ts = gc_get_thread_state();
+    if (gen_ts) gen_ts->active_vm = g_active_vm;
     ExecResult result = vm_execute_chunk(gen_chunk, gen_env);
     g_active_vm = previous_vm;
+    if (gen_ts) gen_ts->active_vm = g_active_vm;
     // YIELD handler saved state directly to gen via vm.current_generator.
     // Detect yield: gen->has_resume_target is set by YIELD handler.
     if (gen->has_resume_target && !result.is_throwing) {
@@ -1935,7 +2136,10 @@ static ExecResult vm_execute_generator(GeneratorValue* gen, Env* caller_env) {
 ExecResult vm_execute_program(BytecodeProgram* program, Env* env) {
     ExecResult result = vm_normal(val_nil());
     if (program == NULL) return vm_error("VM program is null.");
-    if (!bytecode_program_validate(program, NULL, 0)) {
+    char validation_error[256];
+    validation_error[0] = '\0';
+    if (!bytecode_program_validate(program, validation_error, sizeof(validation_error))) {
+        if (validation_error[0] != '\0') fprintf(stderr, "VM validation: %s\n", validation_error);
         return vm_error("Invalid VM bytecode artifact.");
     }
     for (int i = 0; i < program->chunk_count; i++) {

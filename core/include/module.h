@@ -14,6 +14,8 @@
 // Module search paths
 #define MAX_SEARCH_PATHS 64
 
+struct BytecodeProgram;
+
 // Module structure
 typedef struct Module {
     char* name;              // Module name (e.g., "math", "io")
@@ -24,6 +26,7 @@ typedef struct Module {
     Environment* env;        // Module's exported environment
     bool is_loaded;          // Whether module has been loaded
     bool is_loading;         // Circular dependency detection
+    struct BytecodeProgram* vm_program; // Compiled form, retained with the AST
     struct Module* next;     // For module cache linked list
 } Module;
 
