@@ -10,6 +10,9 @@
 #include <math.h>     // isinf, isnan
 #include <unistd.h>   // getpid, unlink
 #include <sys/stat.h> // stat, S_ISDIR, S_ISREG
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+#include <nmmintrin.h> // SSE4.2 CRC32C acceleration
+#endif
 #include "sage_thread.h"  // Phase 11: async/await thread joining
 #ifndef SAGE_NO_FFI
 #include <dlfcn.h>    // Phase 9: FFI (dlopen, dlsym, dlclose)
@@ -2929,6 +2932,23 @@ static unsigned int fnv1a_str(const char* str) {
     return h;
 }
 
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+__attribute__((target("sse4.2")))
+static unsigned int crc32c_hw(const unsigned char* data, int len) {
+    unsigned long long crc = 0xFFFFFFFFFFFFFFFFULL;
+    while (len >= 8) {
+        unsigned long long v;
+        memcpy(&v, data, 8);
+        crc = _mm_crc32_u64(crc, v);
+        data += 8;
+        len -= 8;
+    }
+    unsigned int c = (unsigned int)crc;
+    while (len-- > 0) c = _mm_crc32_u8(c, *data++);
+    return c ^ 0xFFFFFFFFu;
+}
+#endif
+
 // crc32c_native(bytes) -> CRC-32C (Castagnoli) as a 32-bit unsigned number.
 // The interpreter's per-byte CRC loop costs milliseconds on a 4 KiB block; this
 // is the same polynomial and the same reflected table algorithm, in C.
@@ -2947,6 +2967,10 @@ static Value crc32c_native(int argCount, Value* args) {
         ready = 1;
     }
     const BytesValue* b = args[0].as.bytes;
+#if defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+    if (__builtin_cpu_supports("sse4.2"))
+        return val_number((double)crc32c_hw(b->data, b->length));
+#endif
     unsigned int crc = 0xFFFFFFFFu;
     for (int i = 0; i < b->length; i++) {
         crc = (crc >> 8) ^ table[(crc ^ b->data[i]) & 0xFFu];

@@ -165,6 +165,16 @@ static void collect_used_names_stmt(NameSet** used, const Stmt* stmt) {
             collect_used_names_expr(used, stmt->as.ret.value);
             break;
         case STMT_CLASS:
+            for (const Stmt* m = stmt->as.class_stmt.methods; m != NULL; m = m->next) {
+                if (m->type == STMT_PROC) {
+                    int len = m->as.proc.name.length;
+                    char* name = SAGE_ALLOC((size_t)len + 1);
+                    memcpy(name, m->as.proc.name.start, (size_t)len);
+                    name[len] = '\0';
+                    nameset_add(used, name);
+                    free(name);
+                }
+            }
             collect_used_names_list(used, stmt->as.class_stmt.methods);
             break;
         case STMT_MATCH:
